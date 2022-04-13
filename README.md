@@ -43,7 +43,7 @@ Two very rudimentary programs are provided for interactive use;
 'control' controls and displays the status of a selected receiver
 channel.  It can also dynamically create and delete receiver channel
 instances. The 'control' program uses a flexible and extensible
-control/status protocol that could be (and I hope will be) implemented
+metadata protocol that could be (and I hope will be) implemented
 by much more sophisticated user interfaces. Various utilities are
 provided to record or play back signal streams, compress PCM audio
 into Opus, pipe a stream into digital demodulators, etc.
@@ -57,5 +57,4 @@ applications.
 
 Phil Karn, KA9Q
 karn@ka9q.net
-12 April 2022
 
