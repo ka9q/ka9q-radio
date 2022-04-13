@@ -41,16 +41,19 @@ and 'hackrf' (Great Scott Gadgets Hack RF One, receive only).
 Two very rudimentary programs are provided for interactive use;
 'monitor' listens to one or more demodulated audio streams and
 'control' controls and displays the status of a selected demodulator
-instance.  The 'control' program uses a flexible and extensible
+instance.  It can also dynamically create and delete receiver channel
+instances. The 'control' program uses a flexible and extensible
 control/status protocol that could be (and I hope will be) implemented
 by much more sophisticated user interfaces. Various utilities are
-provided to record or play back signal streams, pipe a stream into
-digital demodulators, etc.
+provided to record or play back signal streams, compress PCM audio
+into Opus, pipe a stream into digital demodulators, etc.
 
 Although I've been running all this myself for several years, it is
 NOT yet ready for general use. A LOT of work still remains, especially
 documentation. But you're welcome to look at it, make comments and
-even try it out if you're feeling brave.
+even try it out if you're feeling brave. I would especially like to
+hear from those interested in building it into their own SDR
+applications.
 
 Phil Karn, KA9Q
 karn@ka9q.net
