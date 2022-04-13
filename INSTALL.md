@@ -1,13 +1,12 @@
 This package is designed for Debian Linux, including the Raspberry Pi
-OS). Since I use a Macbook Pro as my desktop, the interactive
-components ('control' and 'monitor') will also compile and run on
-MacOS -- but not all of it. However, I'm interested in fixing any
-unnecessary non-portabilities.
+OS. Since I use a Macbook Pro as my desktop, some of it (e.g., the
+interactive components 'control' and 'monitor') will also compile and
+run on MacOS -- but not all of it. However, I'm interested in fixing
+any unnecessary non-portabilities.
 
 Prerequisites
 
 Building this package on Debian requires the following packages be installed with 'apt install':
-
 
 libusb-1.0-0-dev
 libncurses5-dev
