@@ -13,8 +13,8 @@ on a LAN, to operate on the outputs of other modules, or for
 individual modules to be restarted without restarting everything else.
 
 If you want a user-friendly, interactive, graphics-laden SDR with a
-simple learning curve, then ka9q-radio is *NOT* what you're looking
-for! (At least not yet.) Try one of the many excellent SDRs already
+simple learning curve, then *ka9q-radio is NOT what you're looking
+for!* (At least not yet.) Try one of the many excellent SDRs already
 available like SDR#, Cubic SDR, gqrx, etc.  This is my personal
 experiment in building a very different kind of SDR that runs as a
 component serving other applications.
@@ -40,8 +40,8 @@ and 'hackrf' (Great Scott Gadgets Hack RF One, receive only).
 
 Two very rudimentary programs are provided for interactive use;
 'monitor' listens to one or more demodulated audio streams and
-'control' controls and displays the status of a selected demodulator
-instance.  It can also dynamically create and delete receiver channel
+'control' controls and displays the status of a selected receiver
+channel.  It can also dynamically create and delete receiver channel
 instances. The 'control' program uses a flexible and extensible
 control/status protocol that could be (and I hope will be) implemented
 by much more sophisticated user interfaces. Various utilities are
