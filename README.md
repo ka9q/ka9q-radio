@@ -55,6 +55,21 @@ even try it out if you're feeling brave. I would especially like to
 hear from those interested in building it into their own SDR
 applications.
 
+My big inspiration for the multichannel part of my project was this
+most excellent paper by Mark Borgerding: "Turning Overlap-Save into a
+Multiband Mixing, Downsampling Filter Bank". You probably won't
+understand how it works until you've read it:
+
+https://www.iro.umontreal.ca/~mignotte/IFT3205/Documents/TipsAndTricks/MultibandFilterbank.pdf
+
+Although there are other ways to build efficient multichannel
+receivers, most notably the polyphase filter bank, fast convolution is
+extraordinarily flexible. Each channel is independently tunable with
+its own sample rate and and filter response curve. The only
+requirement is that the impulse response duration of the channel
+filter be less than the (configurable) overlap time in the forward
+FFT.
+
 Phil Karn, KA9Q
 karn@ka9q.net
 
