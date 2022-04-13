@@ -1,0 +1,24 @@
+# $Id: aprsfeed.service,v 1.12 2021/05/04 03:24:48 karn Exp $
+# Systemd startup module for APRS network feed - requires configuration with callsign and authenticator!
+# Phil Karn, KA9Q Feb 2021
+
+[Unit]
+Description=APRS network feeder
+Requires=network-online.target
+
+[Service]
+User=aprsfeed
+SupplementaryGroups=radio
+Type=simple
+PermissionsStartOnly=true
+ExecStartPre=/bin/touch /var/log/aprsfeed.log
+ExecStartPre=/bin/chown aprsfeed /var/log/aprsfeed.log
+# set CALL and SERVER in /etc/radio/aprs.conf
+EnvironmentFile=/etc/radio/aprs.conf
+ExecStart=/usr/local/sbin/aprsfeed -I $AX25 -u $CALL -h $SERVER -f /var/log/aprsfeed.log
+Restart=always
+RestartSec=5
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

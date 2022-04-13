@@ -1,0 +1,20 @@
+# $Id
+# systemd service unit for AX.25 packet decoder
+# Listens to multiple audio groups, sends AX.25 packets to one multicast group distinguished by receiver SSRC
+
+[Unit]
+Description=Packet decoder
+Requires=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/radio/packet.conf
+ExecStart=/usr/local/sbin/packet --ax25-out $AX25 $PCM
+User=radio
+Group=radio
+Restart=always
+RestartSec=5
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

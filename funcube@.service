@@ -1,0 +1,29 @@
+#  funcube.service
+# Systemd unit to start up funcube daemon
+# Phil Karn, KA9Q Feb 2021
+
+[Unit]
+Description=Funcube %i daemon
+After=sound.target
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+Nice=-10
+User=funcube
+SupplementaryGroups=radio plugdev audio users
+Type=simple
+PermissionsStartOnly=true
+RuntimeDirectory=funcube-%i
+RuntimeDirectoryMode=0755
+WorkingDirectory=/tmp
+EnvironmentFile=/etc/radio/funcube-%i.conf
+ReadWritePaths=/var/lib/ka9q-radio /home/funcube
+ExecStart=/usr/local/sbin/funcube --name $ID --device $DEVICE "$ID"
+PIDFile=/run/funcube-%i/pid
+Restart=always
+RestartSec=5
+TimeoutStopSec=5
+
+[Install]
+#WantedBy=multi-user.target

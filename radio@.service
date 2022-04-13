@@ -1,0 +1,21 @@
+# $Id: radio@.service,v 1.6 2022/04/03 03:31:47 karn Exp $
+# systemd unit for radio receiver
+# Phil Karn, KA9Q, Feb 2021
+
+[Unit]
+Description=%i radio receiver
+Requires=network-online.target
+
+[Service]
+Nice=-10
+Type=simple
+User=radio
+Group=radio
+ReadWritePaths=/etc/fftw /var/lib/ka9q-radio
+ExecStart=/usr/local/sbin/radio -N %i /etc/radio/radio@%i.conf
+Restart=always
+RestartSec=5
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

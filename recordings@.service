@@ -1,0 +1,23 @@
+# $Id: recordings@.service,v 1.5 2022/04/03 05:28:08 karn Exp $
+# Systemd unit to record PCM
+# Phil Karn, KA9Q May 2020
+
+[Unit]
+Description=%i recordings
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+Nice=-10
+User=recordings
+Group=radio
+Type=simple
+PermissionsStartOnly=true
+EnvironmentFile=/etc/radio/recordings@%i.conf
+ExecStart=/usr/local/bin/pcmrecord $ARGS
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

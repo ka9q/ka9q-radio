@@ -1,0 +1,341 @@
+# $Id: bandplan.txt,v 1.10 2021/03/06 19:39:45 karn Exp $
+# Ham bandplans, for frequency checking
+# Note: Novices have special mode and power limits not shown here
+# bot   top     description
+0.1357	0.1378	2200m ham General
+
+0.472	0.479	630m ham General
+	
+1.8	2.0	160m ham General
+
+2.3	2.495	120m broadcast
+2.5     b.010   WWV 2.5 MHz
+
+3.2	3.4	90m broadcast
+3.33	3.335	CHU
+
+
+3.5	3.525	80m ham Extra CW
+3.525	3.6	80m ham Novice CW
+3.6	3.7	80m ham Extra Phone
+3.7	3.8	75m ham Advanced Phone
+3.8	4.0	75m ham General Phone
+
+4.75	4.995	60m broadcast
+5.000	b.010	WWV 5 MHz
+
+5.3320  b.003	60m ham chan 1
+5.3480	b.003	60m ham chan 2
+5.3585	b.003	60m ham chan 3
+5.3730	b.003	60m ham chan 4
+5.4050	b.003	60m ham chan 5
+
+5.9	6.2	49m broadcast
+
+7.0	7.025	40m ham Extra CW
+7.025	7.125	40m ham Novice CW
+7.125	7.175	40m ham Advanced Phone
+7.175	7.3	40m ham General Phone
+7.2	7.45	41m broadcast
+
+7.850	7.855	CHU
+
+9.4	9.9	31m broadcast
+10.0    b.010	WWV 10 MHz
+
+10.1	10.15	30m ham General CW
+
+11.6	12.1	25m broadcast
+13.57	13.87	22m broadcast
+
+14.0	14.025	20m ham Extra CW
+14.025	14.15	20m ham General CW
+14.15	14.175	20m ham Extra Phone
+14.175	14.225	20m ham Advanced Phone
+14.225	14.35	20m ham General Phone
+
+14.670	14.675	CHU
+
+15.0    b.010	WWV 15 MHz
+
+15.1	15.8	19m broadcast
+
+17.48	17.9	16m broadcast
+
+18.068	18.11	17m ham General CW
+18.11	18.168	17m ham General Phone
+
+18.9	19.02	15m broadcast
+20.0    b.010	WWV 20 MHz
+
+
+21.0	21.025	15m ham Extra CW
+21.025	21.2	15m ham Novice CW
+21.2	21.225	15m ham Extra Phone
+21.225	21.275	15m ham Advanced Phone
+21.275	21.45	15m ham General Phone
+
+21.45	21.85	13m broadcast
+
+24.89	24.93	12m ham General CW
+24.93	24.99	12m ham General Phone
+
+25.0	b.010	WWV 25 MHz
+
+25.67	26.1	11m broadcast
+
+26.96	26.97	CB channel 1
+26.97	26.98	CB channel 2
+26.98	26.99	CB channel 3
+26.99	27.0	CB channel 3A
+27.0	27.01	CB channel 4
+27.01	27.02	CB channel 5
+27.02	27.03	CB channel 6
+27.03	27.04	CB channel 7
+27.04	27.05	CB channel 7A
+27.05	27.06	CB channel 8
+27.06	27.07	CB channel 9
+27.07	27.08	CB channel 10
+27.08	27.09	CB channel 11
+27.09	27.10	CB channel 11A
+27.10	27.11	CB channel 12
+27.11	27.12	CB channel 13
+27.12	27.13	CB channel 14
+27.13	27.14	CB channel 15
+27.14	27.15	CB channel 15A
+27.15	27.16	CB channel 16
+27.16	27.17	CB channel 17
+27.17	27.18	CB channel 18
+27.18	27.19	CB channel 19
+27.19	27.20	CB channel 19A
+27.20	27.21	CB channel 20
+27.21	27.22	CB channel 21
+27.22	27.23	CB channel 22
+27.23	27.24	CB channel 24
+27.24	27.25	CB channel 25
+27.25	27.26	CB channel 23
+27.26	27.27	CB channel 26
+27.27	27.28	CB channel 27
+27.28	27.29	CB channel 28
+27.29	27.30	CB channel 29
+27.30	27.31	CB channel 30
+27.31	27.32	CB channel 31
+27.32	27.33	CB channel 32
+27.33	27.34	CB channel 33
+27.34	27.35	CB channel 34
+27.35	27.36	CB channel 35
+27.36	27.37	CB channel 36
+27.37	27.38	CB channel 37
+27.38	27.39	CB channel 38
+27.39	27.40	CB channel 39
+27.40	27.41	CB channel 40
+
+28.0	28.3	10m ham Novice CW
+28.3	28.5	10m ham Novice Phone
+28.5	29.7	10m ham General Phone
+
+50.0	50.1	6m ham CW
+50.1	54.0	6m ham Phone
+
+54	60	TV Channel 2
+60	66	TV Channel 3
+66	72	TV Channel 4
+
+76	82	TV Channel 5
+82	88	TV Channel 6
+
+144.0	144.1	2m ham CW
+144.1	148.0	2m ham Phone
+
+156.0	b.025	Marine 0 (ship)	
+156.025 b.025	Marine 60 (ship)
+156.05	b.025	Marine 1 (ship)
+156.075	b.025	Marine 61 (ship non-US)
+156.1	b.025	Marine 2 (ship)
+156.125 b.025	Marine 62 (ship)
+156.15	b.025	Marine 3 (ship non-US)
+156.175 b.025	Marine 63 (ship non-US)
+156.2	b.025	Marine 4 (ship)
+156.225 b.025	Marine 64 (ship non-US)
+156.25	b.025	Marine 5 (ship)
+156.275	b.025	Marine 65 (ship)
+156.3	b.025	Marine 6 (simplex)
+156.325 b.025	Marine 66 (ship)
+156.35  b.025	Marine 7 (ship)
+156.375	b.025	Marine 67 (ship)
+156.4   b.025   Marine 8 (simplex)
+156.425	b.025	Marine 68 (ship)
+156.45  b.025   Marine 9 (simplex)
+156.475	b.025	Marine 69 (ship)
+156.5   b.025   Marine 10 (simplex)
+156.525	b.025	Marine 70 (simplex - Selcal)
+156.55  b.025   Marine 11 (simplex)
+156.575	b.025	Marine 71 (simplex)
+156.6   b.025   Marine 12 (simplex)
+156.625 b.025	Marine 72 (simplex)
+156.65  b.025   Marine 13 (simplex)
+156.675	b.025	Marine 73 (simplex)
+156.7   b.025   Marine 14 (simplex)
+156.725 b.025	Marine 74 (simplex)
+156.75  b.025   Marine 15 (simplex)
+156.775	b.025	Marine 75 (simplex)
+156.8   b.025   Marine 16 (simplex calling & distress)
+156.825	b.025	Marine 76 (simplex)
+156.85  b.025   Marine 17 (simplex)
+156.875	b.025	Marine 77 (simplex)
+156.9   b.025   Marine 18 (ship)
+156.925	b.025	Marine 78 (ship)
+156.95  b.025   Marine 19 (ship)
+156.975	b.025	Marine 79 (ship)
+157.0   b.025   Marine 20 (ship)
+157.025 b.025	Marine 80 (ship)
+157.05  b.025   Marine 21 (ship)
+157.075	b.025	Marine 81 (ship US govt)
+157.1   b.025   Marine 22 (ship)
+157.125	b.025	Marine 82 (ship US govt)
+157.15  b.025 	Marine 23 (ship USCG)
+157.175	b.025	Marine 83 (ship USCG)
+157.2   b.025	Marine 24 (ship)
+157.225	b.025	Marine 84 (ship)
+157.25  b.025	Marine 25 (ship)
+157.275	b.025	Marine 85 (ship)
+157.3   b.025	Marine 26 (ship)
+157.325	b.025	Marine 86 (ship)
+157.35  b.025	Marine 27 (ship)
+157.375	b.025	Marine 87 (simplex)
+157.4   b.025	Marine 28 (ship)
+157.425	b.025	Marine 88 (simplex)
+
+157.55  b.025	Marine 31 (ship)
+
+157.85  b.025	Marine M1/37A (simplex)
+
+160.6	b.025	Marine 0 (land)
+160.625	b.025	Marine 60 (land)
+160.65	b.025	Marine 1 (land)
+160.675	b.025	Marine 61 (land)
+160.7	b.025	Marine 2 (land)
+160.725	b.025	Marine 62 (land)
+160.75	b.025	Marine 3 (land)
+160.775	b.025	Marine 63 (land)
+160.8	b.025	Marine 4 (land)
+160.825	b.025	Marine 64 (land)
+160.85	b.025	Marine 5 (land)
+160.875	b.025	Marine 65 (land)
+
+160.925	b.025	Marine 66 (land)
+160.95	b.025	Marine 7 (land)
+
+161.425	b.025	Marine M2/P4 (simplex)
+
+161.5	b.025	Marine 18 (land)
+161.525	b.025	Marine 78 (land)
+161.55	b.025	Marine 19 (land)
+161.575	b.025	Marine 79 (land)
+161.6	b.025	Marine 20 (land)
+161.625	b.025	Marine 80 (land)
+161.65	b.025	Marine 21/WX8 (land USCG)
+161.675	b.025	Marine 81 (land)
+161.7	b.025	Marine 22 (land USCG working)
+161.725	b.025	Marine 82 (land)
+161.75	b.025	Marine 23 (land USCG)
+161.775	b.025	Marine 83/WX9 (land)
+161.8	b.025	Marine 24 (land)
+161.825	b.025	Marine 84 (land)
+161.85	b.025	Marine 25 (land)
+161.875	b.025	Marine 85 (land)
+161.9	b.025	Marine 26 (land)
+161.925	b.025	Marine 86 (land)
+161.95	b.025	Marine 27 (land)
+161.975	b.025	Marine 87B (simplex AIS)
+162.0	b.025	Marine 28 (land)
+162.025	b.025	Marine 88B (simplex AIS)
+
+162.15	b.025	Marine 31 (land)
+
+
+162.4	b.025	Marine 36B/WX2
+162.425	b.025	Marine 96B/WX4
+162.45  b.025	Marine 37B/WX5
+162.475 b.025	Marine 97B/WX3
+162.5	b.025	Marine 38B/WX6
+162.525	b.025	Marine 98B/WX7
+162.55	b.025	Marine 39B/WX1
+
+163.275	b.025	Marine 113B/WX10
+
+174	180	TV Channel 7
+180	186	TV Channel 8
+186	192	TV Channel 9
+192	198	TV Channel 10
+198	204	TV Channel 11
+204	210	TV Channel 12
+210	216	TV Channel 13
+
+
+219	220	1.25m ham Tech Data only
+222	225	1.25m ham Novice
+
+420	450	70cm ham Tech
+
+470	476	TV Channel 14
+476	482	TV Channel 15
+482	488	TV Channel 16
+488	494	TV Channel 17
+494	500	TV Channel 18
+500	506	TV Channel 19
+506	512	TV Channel 20
+512	518	TV Channel 21
+518	524	TV Channel 22
+524	530	TV Channel 23
+530	536	TV Channel 24
+536	542	TV Channel 25
+542	548	TV Channel 26
+548	554	TV Channel 27
+554	560	TV Channel 28
+560	566	TV Channel 29
+566	572	TV Channel 30
+572	578	TV Channel 31
+578	584	TV Channel 32
+584	590	TV Channel 33
+590	596	TV Channel 34
+596	602	TV Channel 35
+602	608	TV Channel 36
+608	614	TV Channel 37 (radio astronomy)
+614	620	TV Channel 38
+620	626	TV Channel 39
+626	632	TV Channel 40
+632	638	TV Channel 41
+638	644	TV Channel 42
+644	650	TV Channel 43
+650	656	TV Channel 44
+656	662	TV Channel 45
+662	668	TV Channel 46
+668	674	TV Channel 47
+674	680	TV Channel 48
+680	686	TV Channel 49
+686	692	TV Channel 50
+692	698	TV Channel 51
+
+902	928	33cm ham Tech
+
+1240	1270	23cm ham Tech
+1270	1295	23cm ham Novice
+1295	1300	23cm ham Tech
+
+2300	2310	13cm ham Tech
+2390	2450	13cm ham Tech
+
+3300	3500	10cm ham Tech
+5650	5925	5cm ham Tech
+10000	10500	3cm ham Tech
+24000	24250	1cm ham Tech
+47000	47200	47G ham Tech
+76000	81000	76G ham Tech
+122250	123000	122G ham Tech
+134000	141000	134G ham Tech
+241000	250000	241G ham Tech
+275000	999999	275G ham Tech
+
+
+

@@ -1,0 +1,5 @@
+# $Id: 66-hackrf.rules,v 1.2 2018/08/28 21:52:13 karn Exp $
+# run in addition to standard rules to launch KA9Q hackrf daemon
+# Limited to one unit for now
+# Phil Karn, KA9Q, Aug 2018
+ATTR{idVendor}=="1d50", ATTR{idProduct}=="6089", ENV{SYSTEMD_WANTS}="hackrf0.service", TAG+="systemd"

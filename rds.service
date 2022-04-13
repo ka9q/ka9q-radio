@@ -1,0 +1,20 @@
+# $Id: rds.service,v 1.2 2021/05/04 03:24:48 karn Exp $
+# Systemd startup module for FM rds decoder
+# Phil Karn, KA9Q Mar 2021
+[Unit]
+Description=RDS decoder
+Requires=network-online.target
+
+[Service]
+Nice=-10
+Type=simple
+EnvironmentFile=/etc/radio/rds.conf
+ExecStart=/usr/local/sbin/rds --pcm-in $FM_BASEBAND_IN --pcm-out $STEREO_OUT
+User=radio
+SupplementaryGroups=radio
+Restart=always
+RestartSec=5
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

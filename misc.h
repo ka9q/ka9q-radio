@@ -1,0 +1,166 @@
+// $Id: misc.h,v 1.23 2022/03/31 04:14:09 karn Exp $
+// Miscellaneous constants, macros and function prototypes
+// Copyright 2018 Phil Karn, KA9Q
+#ifndef _MISC_H
+#define _MISC_H 1
+
+// Note: files that include <math.h> before us must define _GNU_SOURCE prior to including math.h
+// or Linux will generate warnings about a lack of declarations for sincos and sincosf.
+// Apparently they are defined in math.h only when _GNU_SOURCE is defined.
+// Our re-defining _GNU_SOURCE and re-including math.h doesn't help if it has already been included
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+
+#include <pthread.h>
+#include <stdint.h>
+#include <limits.h>
+#include <complex.h>
+#include <math.h> // Get M_PI
+
+// I *hate* this sort of pointless, stupid, gratuitous incompatibility that
+// makes a lot of code impossible to read and debug
+
+#ifdef __APPLE__
+// OSX doesn't have pthread_barrier_*
+#include <pthread.h>
+
+typedef int pthread_barrierattr_t;
+typedef struct
+{
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    int count;
+    int tripCount;
+} pthread_barrier_t;
+int pthread_barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned int count);
+int pthread_barrier_destroy(pthread_barrier_t *barrier);
+int pthread_barrier_wait(pthread_barrier_t *barrier);
+
+// The Linux version of pthread_setname_np takes two args, the OSx version only one
+// The GNU malloc_usable_size() does exactly the same thing as the BSD/OSX malloc_size()
+// except that the former is defined in <malloc.h>, the latter is in <malloc/malloc.h>
+
+#define pthread_setname(x) pthread_setname_np(x)
+#include <malloc/malloc.h>
+#define malloc_usable_size(x) malloc_size(x)
+#define sincos(x,s,c) __sincos(x,s,c)
+#define sincosf(x,s,c) __sincosf(x,s,c)
+#define sincospi(x,s,c) __sincospi(x,s,c)
+#define sincospif(x,s,c) __sincospif(x,s,c)
+
+#else // !__APPLE__
+
+#include <malloc.h>
+#define pthread_setname(x) pthread_setname_np(pthread_self(),x)
+#define sincospi(x,s,c) sincos(x*M_PI,s,c)
+#define sincospif(x,s,c) sincosf(x*M_PI,s,c)
+
+#endif // ifdef __APPLE__
+
+// Stolen from the Linux kernel -- enforce type matching of arguments
+#define min(x,y) ({			\
+		typeof(x) _x = (x);	\
+		typeof(y) _y = (y);	\
+		(void) (&_x == &_y);	\
+		_x < _y ? _x : _y; })
+
+#define max(x,y) ({ \
+		typeof(x) _x = (x);	\
+		typeof(y) _y = (y);	\
+		(void) (&_x == &_y);	\
+		_x > _y ? _x : _y; })
+
+#define M_1_2PI (0.5 * M_1_PI) // fraction of a rotation in one radian
+#define DEGPRA (180./M_PI)
+#define RAPDEG (M_PI/180.)
+#define GPS_UTC_OFFSET (18) // GPS ahead of utc by 18 seconds - make this a table!
+#define UNIX_EPOCH ((time_t)315964800) // GPS epoch on unix time scale
+
+#define dB2power(x) (powf(10.,(x)/10.))
+#define power2dB(x) (10*log10f(x))
+#define dB2voltage(x) (powf(10.,(x)/20.))
+#define voltage2dB(x) (20*log10f(x))
+
+// Cos(x) + j*sin(x)
+#define cisf(x) csincosf(x)
+#define cispif(x) csincospif(x)
+#define cis(x) csincos(x)
+#define cispi(x) csincospi(x)
+
+extern int Verbose;
+extern char *Months[12];
+
+char *lltime(long long t);
+char *ftime(char * result,int size,long long t);
+double const parse_frequency(const char *);
+uint32_t nextfastfft(uint32_t n);
+int pipefill(int,void *,const int);
+void chomp(char *);
+uint32_t ElfHash(const unsigned char *s,int length);
+uint32_t ElfHashString(const char *s);
+void *avahi_start(char const *service_name,char const *service_type,int service_port,char const *dns_name,int base_address,char const *description);
+
+// Modified Bessel functions
+float i0(float const z); // 0th kind
+float i1(float const z); // 1st kind
+
+float xi(float thetasq);
+float fm_snr(float r);
+
+static int16_t inline scaleclip(float const x){
+  if(x >= 1.0)
+    return SHRT_MAX;
+  else if(x <= -1.0)
+    return SHRT_MIN;
+  return (int16_t)(SHRT_MAX * x);
+}
+
+
+static inline complex float const csincosf(const float x){
+  float s,c;
+
+  sincosf(x,&s,&c);
+  return CMPLXF(c,s);
+}
+static inline complex float const csincospif(const float x){
+  float s,c;
+  sincospif(x,&s,&c);
+  return CMPLXF(c,s);
+
+}
+
+// return unit magnitude complex number with given phase x
+static inline complex double const csincos(const double x){
+  double s,c;
+
+  sincos(x,&s,&c);
+  return CMPLX(c,s);
+}
+static inline complex double const csincospi(const double x){
+  double s,c;
+  sincospi(x,&s,&c);
+  return CMPLX(c,s);
+}
+
+
+// Complex norm (sum of squares of real and imaginary parts)
+static inline float const cnrmf(const complex float x){
+  return crealf(x)*crealf(x) + cimagf(x) * cimagf(x);
+}
+static inline double const cnrm(const complex double x){
+  return creal(x)*creal(x) + cimag(x) * cimag(x);
+}
+// Fast approximate square root, for signal magnitudes
+// https://dspguru.com/dsp/tricks/magnitude-estimator/
+static inline float approx_magf(complex float x){
+  const static float Alpha = 0.947543636291;
+  const static float Beta =  0.392485425092;
+
+  float absr = fabsf(__real__ x);
+  float absi = fabsf(__imag__ x);
+
+  return Alpha * max(absr,absi) + Beta * min(absr,absi);
+}
+
+#endif // _MISC_H

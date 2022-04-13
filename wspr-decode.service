@@ -1,0 +1,23 @@
+#  wspr-decode.service
+# Systemd unit to record and decode WSPR
+# Phil Karn, KA9Q Aug 2021
+
+[Unit]
+Description=wspr-decode
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+Nice=-10
+User=recordings
+Group=radio
+Type=simple
+PermissionsStartOnly=true
+EnvironmentFile=/etc/radio/wspr-decode.conf
+ExecStart=/usr/local/bin/wspr-decode $ARGS
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

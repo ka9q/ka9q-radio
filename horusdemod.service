@@ -1,0 +1,22 @@
+# $Id: horusdemod.service,v 1.2 2022/04/03 08:52:24 karn Exp $
+# Systemd startup module for horus demodulator using ka9q-radio
+# Phil Karn, KA9Q Mar 2022
+
+[Unit]
+Description=horus demodulator
+Requires=network-online.target
+
+[Service]
+Type=simple
+User=radio
+SupplementaryGroups=radio
+EnvironmentFile=/etc/radio/horus.conf
+WorkingDirectory=/home/radio/horusdemodlib
+CacheDirectory=horusdemod
+ExecStart=/usr/local/bin/pcmspawn --pcm-in $STREAM /usr/local/sbin/start-ka9q-horus.sh 
+Restart=always
+RestartSec=5
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target
