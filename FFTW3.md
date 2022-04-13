@@ -22,6 +22,7 @@ fftwf-wisdom -v -T 1 -o nwisdom rof500000 cof36480 cob1920 cob1200 cob960 cob800
 This finds the best way to do the following transforms:
 
 rof500000: Airspy R2, 20 Ms/s real, 20 ms (50 Hz) block time, overlap 5 (20%).
+
 cof36480: Airspy HF+ at 912 ks/s complex, 20 ms (50 Hz), overlap 2 (50%).
 
 cob1920, etc: inverse FFTs for 20 ms (50 Hz) block times, overlap
