@@ -14,10 +14,10 @@ individual modules to be restarted without restarting everything else.
 
 If you want a user-friendly, interactive, graphics-laden SDR with a
 simple learning curve, then *ka9q-radio is NOT what you're looking
-for!* (At least not yet.) Try one of the many excellent SDRs already
-available like SDR#, Cubic SDR, gqrx, etc.  This is my personal
-experiment in building a very different kind of SDR that runs as a
-component serving other applications.
+for!* (At least not yet.) Try one of the many excellent SDR programs
+already available like SDR#, Cubic SDR, gqrx, etc, or the standalone
+Kiwi SDR.  This is my personal experiment in building a very different
+kind of SDR that runs as a component serving other applications.
 
 The core components in ka9q-radio run as Linux 'daemons' (background
 programs) with little (or no) user interaction. Turnkey systems can be
@@ -66,8 +66,8 @@ Although there are other ways to build efficient multichannel
 receivers, most notably the polyphase filter bank, fast convolution is
 extraordinarily flexible. Each channel is independently tunable with
 its own sample rate and filter response curve. The only
-requirement is that the impulse response duration of the channel
-filter be less than the (configurable) overlap time in the forward
+requirement is that the impulse response of the channel
+filters be shorter than the (configurable) overlap interval in the forward
 FFT.
 
 Phil Karn, KA9Q
