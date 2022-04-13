@@ -1,4 +1,4 @@
-# $Id: Makefile.osx,v 1.104 2022/04/05 06:51:03 karn Exp $
+# $Id: Makefile.osx,v 1.104 2022/04/05 06:51:03 karn Exp karn $
 CFLAGS=-g -DNDEBUG=1 -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 #CFLAGS=-g -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 BINDIR=/usr/local/bin
@@ -114,19 +114,19 @@ libradio.a: avahi.o attr.o ax25.o config.o decimate.o filter.o status.o misc.o m
 	ranlib $@
 
 # Main programs
-airspy.o: airspy.c sdr.h misc.h multicast.h decimate.h status.h conf.h config.h
-airspyhf.o: airspyhf.c sdr.h misc.h multicast.h decimate.h status.h config.h
+airspy.o: airspy.c misc.h multicast.h decimate.h status.h conf.h config.h
+airspyhf.o: airspyhf.c misc.h multicast.h decimate.h status.h config.h
 aprs.o: aprs.c ax25.h multicast.h misc.h
 aprsfeed.o: aprsfeed.c ax25.h multicast.h misc.h
 avahi.o: avahi.c misc.h
-control.o: control.c osc.h sdr.h  misc.h filter.h bandplan.h multicast.h status.h modes.h radio.h
-funcube.o: funcube.c fcd.h fcdhidcmd.h hidapi.h sdr.h misc.h multicast.h status.h conf.h
-hackrf.o: hackrf.c sdr.h misc.h multicast.h decimate.h status.h
-iqplay.o: iqplay.c misc.h radio.h osc.h sdr.h multicast.h attr.h modes.h status.h
-iqrecord.o: iqrecord.c radio.h osc.h sdr.h multicast.h attr.h
-main.o: main.c radio.h osc.h sdr.h filter.h misc.h  multicast.h status.h modes.h conf.h
+control.o: control.c osc.h misc.h filter.h bandplan.h multicast.h status.h modes.h radio.h
+funcube.o: funcube.c fcd.h fcdhidcmd.h hidapi.h misc.h multicast.h status.h conf.h
+hackrf.o: hackrf.c misc.h multicast.h decimate.h status.h
+iqplay.o: iqplay.c misc.h radio.h osc.h multicast.h attr.h modes.h status.h
+iqrecord.o: iqrecord.c radio.h osc.h multicast.h attr.h
+main.o: main.c radio.h osc.h filter.h misc.h  multicast.h status.h modes.h conf.h
 metadump.o: metadump.c multicast.h status.h misc.h
-modulate.o: modulate.c misc.h filter.h radio.h osc.h sdr.h conf.h
+modulate.o: modulate.c misc.h filter.h radio.h osc.h conf.h
 monitor.o: monitor.c misc.h multicast.h iir.h conf.h
 opus.o: opus.c misc.h multicast.h iir.h status.h
 opussend.o: opussend.c misc.h multicast.h
@@ -153,20 +153,20 @@ misc.o: misc.c misc.h
 multicast.o: multicast.c multicast.h misc.h
 osc.o: osc.c  osc.h misc.h
 rtcp.o: rtcp.c multicast.h
-status.o: status.c status.h misc.h radio.h modes.h sdr.h multicast.h osc.h filter.h
+status.o: status.c status.h misc.h radio.h modes.h multicast.h osc.h filter.h
 
 
 # modules used in only 1 or 2 main programs
-audio.o: audio.c misc.h multicast.h sdr.h osc.h filter.h radio.h modes.h status.h
-bandplan.o: bandplan.c bandplan.h radio.h modes.h sdr.h multicast.h osc.h status.h filter.h conf.h
-decode_status.o: decode_status.c status.h radio.h misc.h modes.h sdr.h multicast.h osc.h filter.h
+audio.o: audio.c misc.h multicast.h osc.h filter.h radio.h modes.h status.h
+bandplan.o: bandplan.c bandplan.h radio.h modes.h multicast.h osc.h status.h filter.h conf.h
+decode_status.o: decode_status.c status.h radio.h misc.h modes.h multicast.h osc.h filter.h
 dump.o: dump.c misc.h status.h
-fm.o: fm.c misc.h filter.h radio.h osc.h sdr.h multicast.h modes.h status.h iir.h
-linear.o: linear.c misc.h filter.h radio.h osc.h sdr.h multicast.h modes.h status.h
-modes.o: modes.c radio.h sdr.h osc.h misc.h modes.h multicast.h status.h filter.h
-radio.o: radio.c radio.h sdr.h osc.h filter.h misc.h modes.h multicast.h status.h
-radio_status.o: radio_status.c status.h radio.h misc.h filter.h multicast.h sdr.h modes.h osc.h
-wfm.o: wfm.c misc.h filter.h radio.h osc.h sdr.h multicast.h modes.h status.h iir.h
+fm.o: fm.c misc.h filter.h radio.h osc.h multicast.h modes.h status.h iir.h
+linear.o: linear.c misc.h filter.h radio.h osc.h multicast.h modes.h status.h
+modes.o: modes.c radio.h osc.h misc.h modes.h multicast.h status.h filter.h
+radio.o: radio.c radio.h osc.h filter.h misc.h modes.h multicast.h status.h
+radio_status.o: radio_status.c status.h radio.h misc.h filter.h multicast.h modes.h osc.h
+wfm.o: wfm.c misc.h filter.h radio.h osc.h multicast.h modes.h status.h iir.h
 
 
 
