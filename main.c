@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.238 2022/04/11 07:30:16 karn Exp $
+// $Id: main.c,v 1.239 2022/04/13 07:12:22 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -26,7 +26,6 @@
 #include <arpa/inet.h>
 #include <iniparser/iniparser.h>
 
-#include "conf.h"
 #include "misc.h"
 #include "multicast.h"
 #include "radio.h"
@@ -35,8 +34,7 @@
 #include "config.h"
 
 // Config constants & defaults
-static char const *Wisdom_file = VARDIR "/wisdom";
-char const *Libdir = LIBDIR;
+static char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
 
 static int const DEFAULT_IP_TOS = 48;
 static int const DEFAULT_MCAST_TTL = 1;
@@ -120,19 +118,13 @@ int main(int argc,char *argv[]){
 #endif
 
   int c;
-  while((c = getopt(argc,argv,"W:N:L:v")) != -1){
+  while((c = getopt(argc,argv,"N:v")) != -1){
     switch(c){
     case 'v':
       Verbose++;
       break;
-    case 'W':
-      Wisdom_file = optarg;
-      break;
     case 'N':
       Name = optarg;
-      break;
-    case 'L':
-      Libdir = optarg;
       break;
     default:
       fprintf(stdout,"Unknown command line option %c\n",c);
@@ -310,6 +302,8 @@ static int loadconfig(char const * const file){
   }
   char const * const global = "global";
   {
+    if(config_getboolean(Dictionary,global,"verbose",0))
+      Verbose++;
     IP_tos = config_getint(Dictionary,global,"tos",DEFAULT_IP_TOS);
     Mcast_ttl = config_getint(Dictionary,global,"ttl",DEFAULT_MCAST_TTL);
     Blocktime = fabs(config_getdouble(Dictionary,global,"blocktime",DEFAULT_BLOCKTIME));
@@ -321,6 +315,8 @@ static int loadconfig(char const * const file){
     Modefile = config_getstring(Dictionary,global,"mode-file",Modefile);
     Default.data = config_getstring(Dictionary,global,"data",NULL);
     Default.mode = config_getstring(Dictionary,global,"mode",NULL);
+    Wisdom_file = config_getstring(Dictionary,global,"wisdom-file",Wisdom_file);
+
     char const * const input = config_getstring(Dictionary,global,"input",NULL);
     if(input == NULL){
       // Mandatory
