@@ -65,7 +65,7 @@ https://www.iro.umontreal.ca/~mignotte/IFT3205/Documents/TipsAndTricks/Multiband
 Although there are other ways to build efficient multichannel
 receivers, most notably the polyphase filter bank, fast convolution is
 extraordinarily flexible. Each channel is independently tunable with
-its own sample rate and and filter response curve. The only
+its own sample rate and filter response curve. The only
 requirement is that the impulse response duration of the channel
 filter be less than the (configurable) overlap time in the forward
 FFT.
