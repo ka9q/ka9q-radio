@@ -1,4 +1,4 @@
-// $Id: multicast.h,v 1.40 2022/03/14 12:04:05 karn Exp $
+// $Id: multicast.h,v 1.41 2022/04/13 11:31:51 karn Exp $
 // Multicast and RTP functions, constants and structures
 // Not every RTP module uses these yet, they need to be revised
 // Copyright 2018, Phil Karn, KA9Q
@@ -128,7 +128,7 @@ struct rtcp_sdes {
   char message[256];
 };
 
-char *formatsock(void const *);
+char const *formatsock(void const *);
 
 #define PKTSIZE 65536 // Largest possible IP datagram, in case we use jumbograms
 // Incoming RTP packets

@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.66 2022/03/14 12:04:05 karn Exp $
+// $Id: multicast.c,v 1.67 2022/04/13 11:31:51 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -375,7 +375,7 @@ static struct inverse_cache *Inverse_cache_table; // Head of cache linked list
 
 // We actually take a sockaddr *, but can also accept a sockaddr_in *, sockaddr_in6 * and sockaddr_storage *
 // so to make it easier for callers we just take a void * and avoid pointer casts that impair readability
-char *formatsock(void const *s){
+char const *formatsock(void const *s){
   // Determine actual length (and type) of binary socket structure (IPv4/IPv6)
   int slen = 0;
   struct sockaddr const * const sa = (struct sockaddr *)s;

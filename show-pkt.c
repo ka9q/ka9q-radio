@@ -1,4 +1,4 @@
-// $Id: show-pkt.c,v 1.4 2021/11/25 07:41:49 karn Exp $
+// $Id: show-pkt.c,v 1.5 2022/04/13 11:31:51 karn Exp $
 // Display RTP statistics
 // Copyright 2021 Phil Karn, KA9Q
 // Adapted from control.c
@@ -19,7 +19,7 @@
 #include "multicast.h"
 #include "status.h"
 
-char *Libdir = "/usr/local/share/ka9q-radio";
+char const *Libdir = "/usr/local/share/ka9q-radio";
 char Locale[256] = "en_US.UTF-8";
 int decode_rtp_status(unsigned char const *buffer,int length);
 
@@ -29,23 +29,23 @@ int Verbose,Dump;
 struct sockaddr_storage Output_metadata_dest_address;
 struct sockaddr_storage Output_metadata_source_address;
 int Cmd_cnt;
-char *Input_data_source_socket = "";
-char *Input_data_dest_socket = "";
-char *Input_metadata_source_socket = "";
-char *Input_metadata_dest_socket = "";
+char const *Input_data_source_socket = "";
+char const *Input_data_dest_socket = "";
+char const *Input_metadata_source_socket = "";
+char const *Input_metadata_dest_socket = "";
 int Input_SSRC;
 int Input_metadata_packets;
 int Input_data_packets;
 int Input_drops;
 int Input_dupes;
-char *Output_data_source_socket = "";
-char *Output_data_dest_socket = "";
+char const *Output_data_source_socket = "";
+char const *Output_data_dest_socket = "";
 int Output_SSRC;
 int Output_TTL;
 int Output_metadata_packets;
 int Output_data_packets;
-char *Output_metadata_source_socket = "";
-char *Output_metadata_dest_socket = "";
+char const *Output_metadata_source_socket = "";
+char const *Output_metadata_dest_socket = "";
 
 void doscreen(void);
 

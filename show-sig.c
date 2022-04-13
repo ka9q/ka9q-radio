@@ -1,4 +1,4 @@
-// $Id: show-sig.c,v 1.4 2021/11/04 02:36:13 karn Exp $
+// $Id: show-sig.c,v 1.5 2022/04/13 11:31:51 karn Exp $
 // Display signal levels
 // Copyright 2021 Phil Karn, KA9Q
 // Adapted from show-pkt.c
@@ -31,20 +31,20 @@ struct sockaddr_storage Output_metadata_dest_address;
 struct sockaddr_storage Output_metadata_source_address;
 struct sockaddr_storage Input_metadata_dest_address; // needed to listen to front end directly
 
-char *Input_metadata_source_socket = "";
-char *Input_metadata_dest_socket = "";
+char const *Input_metadata_source_socket = "";
+char const *Input_metadata_dest_socket = "";
 char Description[256];
 
-char *Output_data_source_socket = "";
-char *Output_data_dest_socket = "";
+char const *Output_data_source_socket = "";
+char const *Output_data_dest_socket = "";
 float Output_level;
 int LNA_gain;
 int Mixer_gain;
 int IF_gain;
 int Input_SSRC;
 int Output_SSRC;
-char *Output_metadata_source_socket = "";
-char *Output_metadata_dest_socket = "";
+char const *Output_metadata_source_socket = "";
+char const *Output_metadata_dest_socket = "";
 double Frequency;
 float Low_edge,High_edge;
 float IF_power;
