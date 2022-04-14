@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.123 2022/04/09 07:29:29 karn Exp karn $
+// $Id: fm.c,v 1.125 2022/04/14 12:40:08 karn Exp $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -43,8 +43,7 @@ void *demod_fm(void *arg){
   demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
   if(demod->filter.out == NULL){
     fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)demod->output.rtp.ssrc);
-    free_demod(&demod);
-    return NULL;
+    goto quit;
   }
   set_filter(demod->filter.out,
 	     demod->filter.min_IF/demod->output.samprate,
@@ -80,7 +79,7 @@ void *demod_fm(void *arg){
       if(demod->terminate){
 	// Note: relies on periodic front end status messages for polling
 	pthread_mutex_unlock(&Frontend.sdr.status_mutex);
-	return NULL;
+	goto quit;
       }
       // Note: tune.shift ignored in FM mode
       demod->tune.second_LO = Frontend.sdr.frequency - demod->tune.freq;
@@ -201,6 +200,7 @@ void *demod_fm(void *arg){
       demod->fm.pdeviation = demod->output.samprate * max(peak_positive_deviation,-peak_negative_deviation) * M_1_2PI;
     }
   } // while(!demod->terminate)
+ quit:;
   delete_filter_output(&demod->filter.out);
   return NULL;
 }
