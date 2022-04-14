@@ -1,4 +1,4 @@
-// $Id: modes.c,v 1.51 2022/04/09 07:31:03 karn Exp $
+// $Id: modes.c,v 1.51 2022/04/09 07:31:03 karn Exp karn $
 // Load and search mode definition table in /usr/local/share/ka9q-radio/modes.conf
 
 // Copyright 2018, Phil Karn, KA9Q
@@ -153,10 +153,34 @@ int preset_mode(struct demod * const demod,char const * const mode){
   case FM_DEMOD:
     demod->output.channels = 1;
     demod->output.gain = 1; // Gets overridden anyway?
+    {
+      // Default to 530.5 microseconds (1/300 Hz). Set deemph = 0 for flat FM
+      float tc = config_getfloat(Mdict,mode,"deemph-tc",530.5);
+      if(tc != 0.0){
+	demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * demod->output.samprate));
+	demod->deemph.gain = config_getfloat(Mdict,mode,"deemph-gain",4.0); //needs work
+      } else {
+	demod->deemph.rate = 0;
+	demod->deemph.gain = 1.0;
+      }
+    }
     break;
   case WFM_DEMOD:
     demod->output.channels = 2;    
     demod->output.gain = 1;
+    demod->output.samprate = 384000; // forced
+    {
+      // Default 75 microseconds for north american FM broadcasting
+      float tc = config_getfloat(Mdict,mode,"deemph-tc",75.0);
+      if(tc != 0){
+	//	demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * demod->output.samprate));
+	demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * 48000)); // hardwired output sample rate -- needs cleanup
+	demod->deemph.gain = config_getfloat(Mdict,mode,"deemph-gain",4.0);
+      } else {
+	demod->deemph.rate = 0;
+	demod->deemph.gain = 1;
+      }
+    }
     break;
   }
   float squelch_open = config_getfloat(Mdict,mode,"squelch-open",DEFAULT_SQUELCH_OPEN); // defaults to mean "squelch-open"

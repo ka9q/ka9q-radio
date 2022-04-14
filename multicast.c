@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.68 2022/04/13 12:04:44 karn Exp $
+// $Id: multicast.c,v 1.68 2022/04/13 12:04:44 karn Exp karn $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -536,7 +536,7 @@ int channels_from_pt(int const type){
 
 
 
-int pt_from_info(int const samprate,int const channels,int const deemph){
+int pt_from_info(int const samprate,int const channels){
   int s;
   switch(samprate){
   case 8000:
@@ -559,10 +559,8 @@ int pt_from_info(int const samprate,int const channels,int const deemph){
   }
   if(channels < 1 || channels > 2)
     return -1;
-  if(deemph < 0 || deemph >= 2)
-    return -1;
 
-  return pt_table[s][channels-1][deemph];
+  return pt_table[s][channels-1][0];
 }
  
 // Return port number (in HOST order) in a sockaddr structure

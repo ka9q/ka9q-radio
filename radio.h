@@ -1,4 +1,4 @@
-// $Id: radio.h,v 1.136 2022/04/09 07:31:03 karn Exp $
+// $Id: radio.h,v 1.136 2022/04/09 07:31:03 karn Exp karn $
 // Internal structures and functions of the 'radio' program
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
@@ -166,8 +166,20 @@ struct demod {
     int sap_fd;     // Session announcement protocol (SAP) - experimental
     int channels;   // 1 = mono, 2 = stereo (settable)
     float level;    // Output level
+    float deemph_state_left;
+    float deemph_state_right;
     uint64_t samples;
   } output;
+
+  // Used only when FM deemphasis is enabled
+  struct {
+    complex float state; // stereo filter state
+    float gain;     // Empirically set
+    // 'rate' computed from expf(-1.0 / (tc * output.samprate));
+    // tc = 75e-6 sec for North American FM broadcasting
+    // tc = 1 / (2 * M_PI * 300.) = 530.5e-6 sec for NBFM (300 Hz corner freq)
+    float rate;
+  } deemph;
 
   pthread_t sap_thread;
   pthread_t rtcp_thread;
@@ -201,9 +213,10 @@ void free_demod(struct demod **);
 int init_demod(struct demod * restrict demod);
 double set_freq(struct demod * restrict ,double);
 int preset_mode(struct demod * restrict,const char * restrict);
-int compute_tuning(const struct demod * restrict const demod,int * restrict flip,int * restrict rotate,double * restrict remainder, double freq);
+int compute_tuning(int N, int M, int samprate,int *flip,int *rotate,double *remainder, double freq);
+//int compute_tuning(const struct demod * restrict const demod,int * restrict flip,int * restrict rotate,double * restrict remainder, double freq);
 int start_demod(struct demod * restrict demod);
-int kill_demod(struct demod * restrict demod);
+int kill_demod(struct demod ** restrict demod);
 int init_demod_streams(struct demod * restrict demod);
 double set_first_LO(struct demod const * restrict, double);
 

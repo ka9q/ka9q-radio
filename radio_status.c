@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.70 2022/04/09 07:31:03 karn Exp $
+// $Id: radio_status.c,v 1.70 2022/04/09 07:31:03 karn Exp karn $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -88,20 +88,7 @@ void *radio_status(void *arg){
 	demod->tune.freq = 0;
 	demod->lifetime = 20;
 	demod->output.rtp.ssrc = ssrc;
-	int const blocksize = demod->output.samprate * Blocktime / 1000;
-	demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
-	if(demod->filter.out == NULL){
-	  fprintf(stdout,"unable to create filter for dynamic ssrc %u\n",ssrc);
-	  free_demod(&demod);
-	  continue;
-	}
-	set_filter(demod->filter.out,
-		   demod->filter.min_IF/demod->output.samprate,
-		   demod->filter.max_IF/demod->output.samprate,
-		   demod->filter.kaiser_beta);
-	
-	  
-	// Initialization all done, start it up
+
 	set_freq(demod,demod->tune.freq);
 	start_demod(demod);
 	if(Verbose)

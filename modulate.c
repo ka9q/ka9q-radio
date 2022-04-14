@@ -1,4 +1,4 @@
-// $Id: modulate.c,v 1.25 2021/11/01 08:51:31 karn Exp $
+// $Id: modulate.c,v 1.25 2021/11/01 08:51:31 karn Exp karn $
 // Simple I/Q AM modulator - will eventually support other modes
 // Copyright 2017, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -129,8 +129,8 @@ int main(int argc,char *argv[]){
     }
   }
   window_filter(L,M,response,3.0);
-  struct filter_in * const filter_in = create_filter_input(L,M,REAL);
-  struct filter_out * const filter_out = create_filter_output(filter_in,response,L,COMPLEX);
+  struct filter_in * filter_in = create_filter_input(L,M,REAL);
+  struct filter_out * filter_out = create_filter_output(filter_in,response,L,COMPLEX);
   
 
   while(1){
@@ -162,7 +162,7 @@ int main(int argc,char *argv[]){
       }
     }
   }
-  delete_filter_input(filter_in);
-  delete_filter_output(filter_out);
+  delete_filter_input(&filter_in);
+  delete_filter_output(&filter_out);
   exit(0);
 }

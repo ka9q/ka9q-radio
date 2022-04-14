@@ -1,4 +1,4 @@
-// $Id: audio.c,v 1.102 2021/11/19 06:41:27 karn Exp $
+// $Id: audio.c,v 1.102 2021/11/19 06:41:27 karn Exp karn $
 // Audio multicast routines for KA9Q SDR receiver
 // Handles linear 16-bit PCM, mono and stereo
 // Copyright 2017 Phil Karn, KA9Q
@@ -21,15 +21,7 @@
 #define PACKETSIZE 2048        // Somewhat larger than Ethernet MTU
 
 static int pt_from_demod(struct demod *demod){
-  switch(demod->demod_type){
-  default:
-  case LINEAR_DEMOD:
-    return pt_from_info(demod->output.samprate,demod->output.channels,0);
-  case FM_DEMOD:
-    return pt_from_info(demod->output.samprate,demod->output.channels,1);
-  case WFM_DEMOD:
-    return pt_from_info(demod->output.samprate,demod->output.channels,0);
-  }
+  return pt_from_info(demod->output.samprate,demod->output.channels);
 }
 
 

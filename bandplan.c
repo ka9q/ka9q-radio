@@ -1,4 +1,4 @@
-// $Id: bandplan.c,v 1.13 2021/03/06 19:37:09 karn Exp $
+// $Id: bandplan.c,v 1.13 2021/03/06 19:37:09 karn Exp karn $
 // Routines for processing the file /usr/local/share/ka9q-radio/bandplan.txt
 // containing general information about ham radio bandplans, other radio channels, etc
 // This information is displayed in the 'Info' window by the 'radio' program
@@ -18,7 +18,7 @@
 #include "misc.h"
 #include "bandplan.h"
 
-extern char *Libdir;
+extern char const *Libdir;
 
 char Bandplan_file[] = BANDPLAN; 
 #define MAX_BANDPLANS 1000

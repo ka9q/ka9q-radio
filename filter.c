@@ -1,4 +1,4 @@
-// $Id: filter.c,v 1.85 2022/03/18 00:22:34 karn Exp $
+// $Id: filter.c,v 1.85 2022/03/18 00:22:34 karn Exp karn $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -218,7 +218,7 @@ void *run_fft(void *p){
       pthread_cond_wait(&f->filter_cond,&f->filter_mutex);
 #endif
     // Signal listeners that we're done
-    f->blocknum = jobnum;
+    f->blocknum = jobnum + 1;
     pthread_cond_broadcast(&f->filter_cond);
     pthread_mutex_unlock(&f->filter_mutex);
     free(job); job = NULL;
@@ -345,18 +345,18 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   assert(malloc_usable_size(slave->f_fdomain) >= slave->bins * sizeof(*slave->f_fdomain));
 
   // Wait for new block of data
+  // master->blocknum is the next block that the master will produce
   pthread_mutex_lock(&master->filter_mutex); // Protect access to master->blocknum
   while(slave->blocknum == master->blocknum)
     pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
   // We don't modify the master's output data, we create our own
   if((int)(master->blocknum - slave->blocknum) > ND){
-    // Fell behind
+    // Fell behind, catch up
     slave->block_drops += (int)(master->blocknum - slave->blocknum) - ND;
-    slave->blocknum = master->blocknum;
-  } else
-    slave->blocknum++;
-
+    slave->blocknum = master->blocknum - 1;
+  }
   complex float const * const fdomain = master->fdomain[slave->blocknum % ND];
+  slave->blocknum++;
   pthread_mutex_unlock(&master->filter_mutex); 
 
   assert(fdomain != NULL);
@@ -514,9 +514,14 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   return 0;
 }
 
-int delete_filter_input(struct filter_in * const master){
+int delete_filter_input(struct filter_in ** p){
+  if(p == NULL)
+    return -1;
+
+  struct filter_in *master = *p;
+
   if(master == NULL)
-    return 0;
+    return -1;
   
   if(master->fft_thread)
     pthread_cancel(master->fft_thread);
@@ -528,11 +533,16 @@ int delete_filter_input(struct filter_in * const master){
   for(int i=0; i < ND; i++)
     fftwf_free(master->fdomain[i]);
   free(master);
+  *p = NULL;
   return 0;
 }
-int delete_filter_output(struct filter_out * const slave){
+int delete_filter_output(struct filter_out **p){
+  if(p == NULL)
+    return -1;
+  struct filter_out *slave = *p;
+
   if(slave == NULL)
-    return 0;
+    return 1;
   
   pthread_mutex_destroy(&slave->response_mutex);
   fftwf_destroy_plan(slave->rev_plan);  
@@ -540,6 +550,7 @@ int delete_filter_output(struct filter_out * const slave){
   fftwf_free(slave->response);
   fftwf_free(slave->f_fdomain);
   free(slave);
+  *p = NULL;
   return 0;
 }
 

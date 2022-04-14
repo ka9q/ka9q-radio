@@ -1,4 +1,4 @@
-// $Id: linear.c,v 1.100 2022/04/09 07:31:03 karn Exp $
+// $Id: linear.c,v 1.100 2022/04/09 07:31:03 karn Exp karn $
 
 // General purpose linear demodulator
 // Handles USB/IQ/CW/etc, basically all modes but FM and envelope-detected AM
@@ -29,7 +29,7 @@
 
 void *demod_linear(void *arg){
   assert(arg != NULL);
-  struct demod * const demod = arg;
+  struct demod * demod = arg;
 
   {
     char name[100];
@@ -38,6 +38,20 @@ void *demod_linear(void *arg){
   }
   demod->output.gain = dB2voltage(DEFAULT_GAIN); // AGC will bring it down
 
+  int const blocksize = demod->output.samprate * Blocktime / 1000;
+  if(demod->filter.out)
+    delete_filter_output(&demod->filter.out);
+  demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
+  if(demod->filter.out == NULL){
+    fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)demod->output.rtp.ssrc);
+    free_demod(&demod);
+    return NULL;
+  }
+  set_filter(demod->filter.out,
+	     demod->filter.min_IF/demod->output.samprate,
+	     demod->filter.max_IF/demod->output.samprate,
+	     demod->filter.kaiser_beta);
+  
   // Coherent mode parameters
   //  float const snrthresh = DEFAULT_PLL_THRESHOLD;
   float const damping = DEFAULT_PLL_DAMPING;
@@ -98,7 +112,7 @@ void *demod_linear(void *arg){
     int rotate,flip;
 
     // To save CPU time when the front end is completely tuned away from us, block until the front
-    // end status changes rather than process zeroes
+    // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.sdr.status_mutex);
     while(1){
       if(demod->terminate){
@@ -108,12 +122,16 @@ void *demod_linear(void *arg){
       }
       demod->tune.second_LO = Frontend.sdr.frequency - demod->tune.freq;
       double const freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
-      if(compute_tuning(demod,&flip,&rotate,&remainder,freq) == 0)
+      if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
+			Frontend.in->impulse_length,
+			Frontend.sdr.samprate,
+			&flip,&rotate,&remainder,freq) == 0)
 	break; // We can get at least part of the spectrum we want
 
+      // No front end coverage of our passband; wait for it to retune
       demod->sig.bb_power = 0;
       demod->output.level = 0;
-      struct timespec timeout;
+      struct timespec timeout; // Needed to avoid deadlock if no front end is available
       clock_gettime(CLOCK_REALTIME,&timeout);
       timeout.tv_sec += 1; // 1 sec in the future
       pthread_cond_timedwait(&Frontend.sdr.status_cond,&Frontend.sdr.status_mutex,&timeout);
@@ -294,5 +312,6 @@ void *demod_linear(void *arg){
       }
     }
   }
+  delete_filter_output(&demod->filter.out);
   return NULL;
 }

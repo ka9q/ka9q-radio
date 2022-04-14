@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.207 2022/04/09 08:41:59 karn Exp $
+// $Id: radio.c,v 1.207 2022/04/09 08:41:59 karn Exp karn $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -431,7 +431,10 @@ int start_demod(struct demod * demod){
   return 0;
 }
 
-int kill_demod(struct demod *demod){
+int kill_demod(struct demod **p){
+  if(p == NULL)
+    return -1;
+  struct demod *demod = *p;
   if(demod == NULL)
     return -1;
 
@@ -443,7 +446,7 @@ int kill_demod(struct demod *demod){
 #endif
   pthread_join(demod->demod_thread,NULL);
   if(demod->filter.out)
-    delete_filter_output(demod->filter.out);
+    delete_filter_output(&demod->filter.out);
   if(demod->rtcp_thread != (pthread_t)0){
     pthread_cancel(demod->rtcp_thread);
     pthread_join(demod->rtcp_thread,NULL);
@@ -464,7 +467,7 @@ int kill_demod(struct demod *demod){
   if(demod->output.sap_fd > 2)
     close(demod->output.sap_fd);
 #endif
-  free_demod(&demod);
+  free_demod(p);
   return 0;
 }
 
@@ -541,12 +544,16 @@ float const compute_n0(struct demod const * const demod){
 }
 
 // Compute FFT bin shift and time-domain fine tuning offset for specified LO frequency
-int compute_tuning(struct demod const * const demod,int *flip,int *rotate,double *remainder, double freq){
-  assert(demod != NULL);
-
-  int const N = Frontend.in->ilen + Frontend.in->impulse_length - 1; // fft length
-  double const hzperbin = (double)Frontend.sdr.samprate / N;              // hertz per FFT bin
-  int const quantum = N / (Frontend.in->impulse_length - 1);       // rotate by multiples of this number of bins due to overlap-save
+// N = input fft length
+// M = input buffer overlap
+// samprate = input sample rate
+// flip = invert (or not) every baseband sample
+// remainder = fine LO frequency (double)
+// freq = frequency to mix by (double)
+int compute_tuning(int N, int M, int samprate,int *flip,int *rotate,double *remainder, double freq){
+  double const hzperbin = (double)samprate / N;
+  int const quantum = N / (M - 1);       // rotate by multiples of this number of bins due to overlap-save
+                                         // check for non-zero remainder and warn?
   int const r = quantum * round(freq/(hzperbin * quantum));
   if(rotate)
     *rotate = r;
@@ -671,9 +678,9 @@ void *sap_send(void *p){
 #if 1  
     {
       // Demod type can change, but not the sample rate
-      int mono_type = pt_from_info(demod->output.samprate,1,LINEAR_DEMOD);
-      int stereo_type = pt_from_info(demod->output.samprate,2,LINEAR_DEMOD);
-      int fm_type = pt_from_info(demod->output.samprate,1,FM_DEMOD);
+      int mono_type = pt_from_info(demod->output.samprate,1);
+      int stereo_type = pt_from_info(demod->output.samprate,2);
+      int fm_type = pt_from_info(demod->output.samprate,1);
       
       len = snprintf(wp,space,"m=audio 5004/1 RTP/AVP %d %d %d\r\n",mono_type,stereo_type,fm_type);
       wp += len;
@@ -718,7 +725,7 @@ void *demod_reaper(void *arg){
       if(demod->inuse && demod->tune.freq == 0 && demod->lifetime > 0){
 	demod->lifetime--;
 	if(demod->lifetime == 0){
-	  kill_demod(demod);
+	  kill_demod(&demod);
 	}
       }
 

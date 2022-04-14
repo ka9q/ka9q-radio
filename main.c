@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.239 2022/04/13 07:12:22 karn Exp $
+// $Id: main.c,v 1.239 2022/04/13 07:12:22 karn Exp karn $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -549,21 +549,8 @@ static int loadconfig(char const * const file){
 	    }
 	  }
 	}
-	int const blocksize = demod->output.samprate * Blocktime / 1000;
-	demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
-	if(demod->filter.out == NULL){
-	  fprintf(stdout,"unable to create filter for f = %'.3lf Hz\n",f);
-	  free_demod(&demod);
-	  break;
-	}
-	set_filter(demod->filter.out,
-		   demod->filter.min_IF/demod->output.samprate,
-		   demod->filter.max_IF/demod->output.samprate,
-		   demod->filter.kaiser_beta);
-	
-	set_freq(demod,demod->tune.freq);
-	
 	// Initialization all done, start it up
+	set_freq(demod,demod->tune.freq);
 	start_demod(demod);
 	nfreq++;
 	ndemods++;

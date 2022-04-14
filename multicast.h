@@ -1,4 +1,4 @@
-// $Id: multicast.h,v 1.42 2022/04/13 12:04:44 karn Exp $
+// $Id: multicast.h,v 1.42 2022/04/13 12:04:44 karn Exp karn $
 // Multicast and RTP functions, constants and structures
 // Not every RTP module uses these yet, they need to be revised
 // Copyright 2018, Phil Karn, KA9Q
@@ -226,6 +226,6 @@ int samprate_from_pt(int type);
 int channels_from_pt(int type);
 int deemph_from_pt(int type);
 char const *id_from_type(int type);
-int pt_from_info(int samprate,int channels,int deemph);
+int pt_from_info(int samprate,int channels);
 
 #endif
