@@ -10,12 +10,8 @@
 #include <alloca.h>
 #include <string.h>
 #include <assert.h>
-#ifdef __linux__
-#include <attr/xattr.h>
-#else
+#include <sys/types.h>
 #include <sys/xattr.h>
-#endif
-
 #include "attr.h"
 
 // Look for external attribute "name" on an open file and perform scanf on its value
