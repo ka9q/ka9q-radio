@@ -1,4 +1,4 @@
-// $Id: filter.h,v 1.45 2022/03/17 11:23:55 karn Exp karn $
+// $Id: filter.h,v 1.46 2022/04/14 10:50:43 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window

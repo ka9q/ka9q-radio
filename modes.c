@@ -1,4 +1,4 @@
-// $Id: modes.c,v 1.51 2022/04/09 07:31:03 karn Exp karn $
+// $Id: modes.c,v 1.52 2022/04/14 10:50:43 karn Exp $
 // Load and search mode definition table in /usr/local/share/ka9q-radio/modes.conf
 
 // Copyright 2018, Phil Karn, KA9Q

@@ -1,4 +1,4 @@
-// $Id: pcmrecord.c,v 1.15 2021/10/28 20:56:31 karn Exp $ 
+// $Id: pcmrecord.c,v 1.17 2022/04/15 05:06:16 karn Exp $ 
 // Read and record PCM audio streams
 // Adapted from iqrecord.c which is out of date
 // Copyright 2021 Phil Karn, KA9Q
@@ -78,7 +78,7 @@ struct session {
 
   FILE *fp;                    // File being recorded
   void *iobuffer;              // Big buffer to reduce write rate
-  struct timeval last_active;
+  struct timespec last_active;
 
   int SubstantialFile;        // At least one substantial segment has been seen
   int64_t CurrentSegmentSamples; // total samples in this segment without skips in timestamp
@@ -91,7 +91,7 @@ float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're
 
 int Verbose;
 char PCM_mcast_address_text[256];
-char *Recordings = ".";
+char const *Recordings = ".";
 int Subdirs; // Place recordings in subdirectories by SSID
 
 struct sockaddr Sender;
@@ -117,8 +117,7 @@ int main(int argc,char *argv[]){
   if(seteuid(getuid()) != 0)
     perror("seteuid");
 #endif
-  char *locale;
-  locale = getenv("LANG");
+  char const *locale = getenv("LANG");
   setlocale(LC_ALL,locale);
 
   // Defaults
@@ -207,18 +206,18 @@ void closedown(int a){
 void input_loop(){
 
   while(1){
-    struct timeval current_time;
-    gettimeofday(&current_time,NULL);
+    struct timespec current_time;
+    clock_gettime(CLOCK_REALTIME,&current_time);
 
     // Receive data
     fd_set fdset;
     FD_ZERO(&fdset);
     FD_SET(Input_fd,&fdset);
-    struct timeval polltime;
+    struct timespec polltime;
     polltime.tv_sec = 1;
-    polltime.tv_usec = 0; // force return after 1 second max
+    polltime.tv_nsec = 0; // force return after 1 second max
     
-    int n = select(Input_fd + 1,&fdset,NULL,NULL,&polltime);
+    int n = pselect(Input_fd + 1,&fdset,NULL,NULL,&polltime,NULL);
     if(n < 0)
       break; // error of some kind
     if(FD_ISSET(Input_fd,&fdset)){
@@ -287,7 +286,7 @@ void input_loop(){
 	sp->SubstantialFile = 1;
 
       fwrite(samples,1,size,sp->fp);
-      gettimeofday(&sp->last_active,NULL);
+      clock_gettime(CLOCK_REALTIME,&sp->last_active);
     } // end of packet processing
 
     // Walk through list, close idle sessions
@@ -296,8 +295,8 @@ void input_loop(){
     struct session *next;
     for(struct session *sp = Sessions;sp != NULL; sp = next){
       next = sp->next;
-      long long idle = 1000000 * (current_time.tv_sec - sp->last_active.tv_sec) + (current_time.tv_usec - sp->last_active.tv_usec);
-      if(idle > Timeout * 1e6){
+      long long idle = 1000000000 * (current_time.tv_sec - sp->last_active.tv_sec) + (current_time.tv_nsec - sp->last_active.tv_nsec);
+      if(idle > Timeout * 1000000000){
 	// Close idle session
 	if(!sp->SubstantialFile){
 	  unlink(sp->filename);
@@ -323,7 +322,9 @@ void input_loop(){
 	  fflush(sp->fp);
 	}
 	fclose(sp->fp);
+	sp->fp = NULL;
 	free(sp->iobuffer);
+	sp->iobuffer = NULL;
 	if(sp->prev)
 	  sp->prev->next = sp->next;
 	else
@@ -331,6 +332,7 @@ void input_loop(){
 	if(sp->next)
 	  sp->next->prev = sp->prev;
 	free(sp);
+	sp = NULL;
       }
     }
   }
@@ -365,8 +367,8 @@ struct session *create_session(struct rtp_header *rtp){
   
   // Create file
   // Should we append to existing files instead? If we try this, watch out for timestamp wraparound
-  struct timeval current_time;
-  gettimeofday(&current_time,NULL);
+  struct timespec current_time;
+  clock_gettime(CLOCK_REALTIME,&current_time);
   struct tm *tm = gmtime(&current_time.tv_sec);
   // yyyy-mm-dd-hh:mm:ss so it will sort properly
   
@@ -386,7 +388,7 @@ struct session *create_session(struct rtp_header *rtp){
 	     tm->tm_hour,
 	     tm->tm_min,
 	     tm->tm_sec,
-	     (int)(current_time.tv_usec / 100000));
+	     (int)(current_time.tv_nsec / 100000000));
     sp->fp = fopen(sp->filename,"w+");
     if(sp->fp == NULL)
       fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
@@ -402,12 +404,13 @@ struct session *create_session(struct rtp_header *rtp){
 	     tm->tm_hour,
 	     tm->tm_min,
 	     tm->tm_sec,
-	     (int)(current_time.tv_usec / 100000));
+	     (int)(current_time.tv_nsec / 100000000));
     sp->fp = fopen(sp->filename,"w+");
   }    
   if(sp->fp == NULL){
     fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
     free(sp);
+    sp = NULL;
     return NULL;
   }
   // file create succeded, now put us at top of list
@@ -433,18 +436,6 @@ struct session *create_session(struct rtp_header *rtp){
   attrprintf(fd,"ssrc","%u",rtp->ssrc);
   attrprintf(fd,"sampleformat","s16le");
   
-  switch(sp->type){
-  case PCM_MONO_FM_PT:
-  case PCM_STEREO_FM_PT:
-    attrprintf(fd,"emphasis","1");
-    break;
-  case PCM_MONO_PT: // Flat, no de-emphasis needed
-  case PCM_STEREO_PT:
-    break;
-  case OPUS_PT: // No support yet; should put in container
-    break;
-  }
-
   // Write .wav header, skipping size fields
   memcpy(sp->header.ChunkID,"RIFF", 4);
   sp->header.ChunkSize = 0xffffffff; // Temporary
@@ -469,8 +460,8 @@ struct session *create_session(struct rtp_header *rtp){
   attrprintf(fd,"source","%s",sender_text);
   attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
   
-  struct timeval tv;
-  gettimeofday(&tv,NULL);
-  attrprintf(fd,"unixstarttime","%ld.%06ld",(long)tv.tv_sec,(long)tv.tv_usec);
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME,&ts);
+  attrprintf(fd,"unixstarttime","%ld.%09ld",(long)ts.tv_sec,(long)ts.tv_nsec);
   return sp;
 }

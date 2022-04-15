@@ -1,4 +1,4 @@
-// $Id: pcmcat.c,v 1.19 2022/03/14 06:37:10 karn Exp $
+// $Id: pcmcat.c,v 1.20 2022/04/15 03:31:11 karn Exp $
 // Receive and stream PCM RTP data to stdout
 // Should emit .wav format by default to encode sample rate & parameters for subsequent encoding
 
@@ -139,7 +139,6 @@ int main(int argc,char *argv[]){
 
 	switch(rtp.type){
 	case PCM_STEREO_PT:
-	case PCM_STEREO_FM_PT:
 	case PCM_STEREO_24_PT:
 	case PCM_STEREO_16_PT:
 	case PCM_STEREO_12_PT:
@@ -149,15 +148,10 @@ int main(int argc,char *argv[]){
 	    fprintf(stderr,", downmixing to mono");
 	  break;
 	case PCM_MONO_PT:
-	case PCM_MONO_FM_PT:
 	case PCM_MONO_24_PT:
-	case PCM_MONO_24_FM_PT:
 	case PCM_MONO_16_PT:
-	case PCM_MONO_16_FM_PT:
 	case PCM_MONO_12_PT:
-	case PCM_MONO_12_FM_PT:
 	case PCM_MONO_8_PT:
-	case PCM_MONO_8_FM_PT:
 	  fprintf(stderr,", pcm mono");
 	  if(Stereo)
 	    fprintf(stderr,", expanding to pseudo-stereo");	    
@@ -178,7 +172,6 @@ int main(int argc,char *argv[]){
     signed short *sdp = (signed short *)dp;
     switch(rtp.type){
     case PCM_STEREO_PT:
-    case PCM_STEREO_FM_PT:
     case PCM_STEREO_24_PT:
     case PCM_STEREO_16_PT:
     case PCM_STEREO_12_PT:
@@ -200,16 +193,10 @@ int main(int argc,char *argv[]){
       }
       break;
     case PCM_MONO_PT: // Mono
-    case PCM_MONO_FM_PT:
     case PCM_MONO_24_PT:
-    case PCM_MONO_24_FM_PT:
     case PCM_MONO_16_PT:
-    case PCM_MONO_16_FM_PT:
     case PCM_MONO_12_PT:
-    case PCM_MONO_12_FM_PT:
     case PCM_MONO_8_PT:
-    case PCM_MONO_8_FM_PT:
-      
       samples = size / 2;
       while(samples-- > 0){
 	// Swap sample to host order, cat to stdout

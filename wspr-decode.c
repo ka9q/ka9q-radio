@@ -1,4 +1,4 @@
-// $Id: wspr-decode.c,v 1.9 2021/10/28 20:50:42 karn Exp $ 
+// $Id: wspr-decode.c,v 1.11 2022/04/15 05:06:16 karn Exp $ 
 // Read and record PCM audio streams
 // Adapted from iqrecord.c which is out of date
 // Copyright 2021 Phil Karn, KA9Q
@@ -99,7 +99,7 @@ void closedown(int a);
 void input_loop(void);
 void cleanup(void);
 struct session *create_session(struct rtp_header *);
-void close_session(struct session *sp);
+void close_session(struct session **p);
 
 int main(int argc,char *argv[]){
   char const * locale = getenv("LANG");
@@ -191,16 +191,16 @@ void input_loop(){
     fd_set fdset;
     FD_ZERO(&fdset);
     FD_SET(Input_fd,&fdset);
-    struct timeval polltime;
+    struct timespec polltime;
     polltime.tv_sec = 1;
-    polltime.tv_usec = 0; // force return after 1 second max
+    polltime.tv_nsec = 0; // force return after 1 second max
     
-    int n = select(Input_fd + 1,&fdset,NULL,NULL,&polltime);
+    int n = pselect(Input_fd + 1,&fdset,NULL,NULL,&polltime,NULL);
     if(n < 0)
       break; // error of some kind
 
-    struct timeval now;
-    gettimeofday(&now,NULL);
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME,&now);
     int sec = now.tv_sec % 120; // second within 0-120 period
 
     if(sec >= 114){
@@ -227,7 +227,7 @@ void input_loop(){
 	  exit(0);
 	}
 	struct session * const next = sp->next;
-	close_session(sp);
+	close_session(&sp);
 	sp = next;
       }
     }
@@ -325,15 +325,15 @@ struct session *create_session(struct rtp_header *rtp){
   sp->channels = channels_from_pt(sp->type);
   sp->samprate = samprate_from_pt(sp->type);
   
-  struct timeval current_time;
-  gettimeofday(&current_time,NULL);
+  struct timespec current_time;
+  clock_gettime(CLOCK_REALTIME,&current_time);
   // Microsecond within 2-minute (120 sec) period
-  long long const start_offset_usec = (current_time.tv_usec + 1000000 * current_time.tv_sec) % 120000000LL;
+  long long const start_offset_nsec = (current_time.tv_nsec + 1000000000 * current_time.tv_sec) % 120000000000LL;
   
   // Use the previous 120-second point as the start of this file
-  struct timeval start_time;
-  start_time.tv_sec = current_time.tv_sec - (start_offset_usec / 1000000);
-  start_time.tv_usec = start_offset_usec % 1000000;
+  struct timespec start_time;
+  start_time.tv_sec = current_time.tv_sec - (start_offset_nsec / 1000000000);
+  start_time.tv_nsec = start_offset_nsec % 1000000000;
   struct tm const * const tm = gmtime(&start_time.tv_sec);
   
   int fd = -1;
@@ -392,18 +392,6 @@ struct session *create_session(struct rtp_header *rtp){
   attrprintf(fd,"ssrc","%u",rtp->ssrc);
   attrprintf(fd,"sampleformat","s16le");
   
-  switch(sp->type){
-  case PCM_MONO_FM_PT:
-  case PCM_STEREO_FM_PT:
-    attrprintf(fd,"emphasis","1");
-    break;
-  case PCM_MONO_PT: // Flat, no de-emphasis needed
-  case PCM_STEREO_PT:
-    break;
-  case OPUS_PT: // No support yet; should put in container
-    break;
-  }
-
   // Write .wav header, skipping size fields
   memcpy(sp->header.ChunkID,"RIFF", 4);
   sp->header.ChunkSize = 0xffffffff; // Temporary
@@ -427,15 +415,21 @@ struct session *create_session(struct rtp_header *rtp){
   getnameinfo((struct sockaddr *)&Sender,sizeof(Sender),sender_text,sizeof(sender_text),NULL,0,NI_NOFQDN|NI_DGRAM|NI_NUMERICHOST);
   attrprintf(fd,"source","%s",sender_text);
   attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
-  attrprintf(fd,"unixstarttime","%ld.%06ld",(long)start_time.tv_sec,(long)start_time.tv_usec);
+  attrprintf(fd,"unixstarttime","%ld.%09ld",(long)start_time.tv_sec,(long)start_time.tv_nsec);
 
   // Seek into the file for the first write
   // The parentheses are carefully drawn to ensure the result is on a block boundary despite truncations
-  fseeko(sp->fp,((start_offset_usec * sp->samprate)/ 1000000) * sp->header.BlockAlign,SEEK_CUR); // offset is in bytes
+  fseeko(sp->fp,((start_offset_nsec * sp->samprate)/ 1000000000) * sp->header.BlockAlign,SEEK_CUR); // offset is in bytes
   return sp;
 }
 
-void close_session(struct session *sp){
+void close_session(struct session **p){
+  if(p == NULL)
+    return;
+  struct session * const sp = *p;
+  if(sp == NULL)
+    return;
+
   if(Verbose)
     printf("closing %s %'.1f/%'.1f sec\n",sp->filename,
 	   (float)sp->SamplesWritten / sp->samprate,
@@ -451,7 +445,9 @@ void close_session(struct session *sp){
   fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
   fflush(sp->fp);
   fclose(sp->fp);
+  sp->fp = NULL;
   free(sp->iobuffer);
+  sp->iobuffer = NULL;
   if(sp->prev)
     sp->prev->next = sp->next;
   else
@@ -459,4 +455,5 @@ void close_session(struct session *sp){
   if(sp->next)
     sp->next->prev = sp->prev;
   free(sp);
+  *p = NULL;
 }

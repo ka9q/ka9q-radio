@@ -1,4 +1,4 @@
-// $Id: opus.c,v 1.70 2022/04/08 05:38:12 karn Exp $
+// $Id: opus.c,v 1.72 2022/04/15 03:42:07 karn Exp $
 // Opus transcoder
 // Read PCM audio from one or more multicast groups, compress with Opus and retransmit on another with same SSRC
 // Currently subject to memory leaks as old group states aren't yet aged out
@@ -103,7 +103,7 @@ char *Status;
 void closedown(int);
 struct session *lookup_session(const struct sockaddr *,uint32_t);
 struct session *create_session(void);
-int close_session(struct session *);
+int close_session(struct session **);
 int send_samples(struct session *sp);
 void *input(void *arg);
 void *encode(void *arg);
@@ -335,7 +335,7 @@ int main(int argc,char * const argv[]){
       // Span per-SSRC thread, each with its own instance of opus encoder
       if(pthread_create(&sp->thread,NULL,encode,sp) == -1){
 	perror("pthread_create");
-	close_session(sp);
+	close_session(&sp);
 	continue;
       }
     }
@@ -486,7 +486,7 @@ void * status(void *p){
 // Warning! do not use "continue" within the loop as this will cause a memory leak.
 // Jump to "endloop" instead
 void *encode(void *arg){
-  struct session * const sp = (struct session *)arg;
+  struct session *sp = (struct session *)arg;
   assert(sp != NULL);
   {
     char threadname[16];
@@ -523,12 +523,12 @@ void *encode(void *arg){
   while(1){
     struct packet *pkt = NULL;
     {
-      struct timeval tv;
-      gettimeofday(&tv,NULL);
+      struct timespec ts;
+      clock_gettime(CLOCK_REALTIME,&ts);
       // wait 10 seconds for a new packet
       struct timespec waittime;
-      waittime.tv_sec = tv.tv_sec + 10; // 10 seconds in the future
-      waittime.tv_nsec = tv.tv_usec * 1000; // convert microsec to nanosec
+      waittime.tv_sec = ts.tv_sec + 10; // 10 seconds in the future
+      waittime.tv_nsec = ts.tv_nsec;
       { // Mutex-protected segment
 	pthread_mutex_lock(&sp->qmutex);
 	while(!sp->queue){      // Wait for packet to appear on queue
@@ -537,7 +537,7 @@ void *encode(void *arg){
 	  if(ret == ETIMEDOUT){
 	    // Idle timeout after 10 sec; close session and terminate thread
 	    pthread_mutex_unlock(&sp->qmutex);
-	    close_session(sp); 
+	    close_session(&sp); 
 	    return NULL; // exit thread
 	  }
 	}
@@ -559,24 +559,6 @@ void *encode(void *arg){
     
     if(sp->type != pkt->rtp.type){ // Handle transitions both ways
       sp->type = pkt->rtp.type;
-      if(deemph_from_pt(sp->type)){
-	/* De-emphasis needed, use 300 Hz as corner freq for ham NBFM
-	   de_emphasis_time_constant = samprate / (2 * M_PI * corner_freq);
-	   decay_rate = expf(-1.0/de_emphasis_time_constant);
-	   Sample processing:
-	   out = state = (state * rate) + gain * (1-rate) * in; 	*/
-	if(sp->deemph_rate == 0){
-	  sp->deemph_gain = LF_gain; // +12 dB; empirical, keep loudness the same
-	  float const tc = sp->samprate / (2 * M_PI * Corner_freq);
-	  sp->deemph_rate = expf(-1.0 / tc);
-	  sp->deemph_state_left = sp->deemph_state_right = 0;
-	}
-      } else {
-	// De-emphasis not needed, or no longer needed
-	sp->deemph_gain = 1;
-	sp->deemph_rate = 0;
-	sp->deemph_state_left = sp->deemph_state_right = 0;
-      }
     }
     if(sp->channels != channels_from_pt(pkt->rtp.type) || sp->samprate != samprate_from_pt(pkt->rtp.type)){
       // channels or sample rate changed; Re-initialize encoder
@@ -594,17 +576,9 @@ void *encode(void *arg){
     
     for(int i=0; i < frame_size;i++){
       float left = SCALE * (signed short)ntohs(*samples++);
-      if(sp->deemph_rate != 0){
-	  left = sp->deemph_state_left = sp->deemph_state_left * sp->deemph_rate
-	    + sp->deemph_gain * (1 - sp->deemph_rate) * left;
-      }
       sp->audio_buffer[sp->audio_write_index++] = left;
       if(sp->channels == 2){
 	float right = SCALE * (signed short)ntohs(*samples++);
-	if(sp->deemph_rate != 0){
-	  right = sp->deemph_state_right = sp->deemph_state_right * sp->deemph_rate
-	    + sp->deemph_gain * (1 - sp->deemph_rate) * right;
-	}
 	sp->audio_buffer[sp->audio_write_index++] = right;
       }
     }
@@ -661,8 +635,12 @@ struct session *create_session(void){
   return sp;
 }
 
-int close_session(struct session * const sp){
-  assert(sp != NULL);
+int close_session(struct session ** p){
+  if(p == NULL)
+    return -1;
+  struct session *sp = *p;
+  if(sp == NULL)
+    return -1;
   
   if(sp->opus != NULL){
     opus_encoder_destroy(sp->opus);
@@ -678,7 +656,6 @@ int close_session(struct session * const sp){
   }
   pthread_mutex_unlock(&sp->qmutex);
   pthread_mutex_destroy(&sp->qmutex);
-  
 
   // Remove from linked list of sessions
   pthread_mutex_lock(&Session_protect);
@@ -690,6 +667,7 @@ int close_session(struct session * const sp){
     Sessions = sp->next;
   pthread_mutex_unlock(&Session_protect);
   free(sp);
+  *p = NULL;
   return 0;
 }
 void closedown(int s){

@@ -1,4 +1,4 @@
-// $Id: stereo.c,v 1.12 2021/11/19 06:41:48 karn Exp $: opus.c,v 1.51 2021/03/19 03:13:14 karn Exp $
+// $Id: stereo.c,v 1.15 2022/04/15 08:09:41 karn Exp $: opus.c,v 1.51 2021/03/19 03:13:14 karn Exp $
 // Transcoder (multicast in/out) that decodes a FM composite signal @ 384 kHz
 // to a stereo signal @ 48 kHz
 #define _GNU_SOURCE 1
@@ -53,11 +53,12 @@ int const Bufsize = 1540;     // Maximum samples/words per RTP packet - must be 
 // Each block of stereo output @ 48kHz must fit in an ethernet packet
 // 5 ms * 48000 = 240 stereo frames; 240 * 2 * 2 = 960 bytes
 float Blocktime = 5; // milliseconds
-int In_samprate = 384000;         // Composite input rate
-int Out_samprate = 48000;         // stereo output rate
+int const Composite_samprate = 384000;         // Composite input rate
+int const Audio_samprate = 48000;         // stereo output rate
 float Kaiser_beta = 3.5 * M_PI;
 float const SCALE = 1./SHRT_MAX;
 
+float Deemph_tc = 75.0e-6; // De-emphasis time constant. 75us for North America & Korea, 50us elsewhere
 float Deemph_rate;
 float Deemph_gain;
 
@@ -75,14 +76,14 @@ int Output_fd = -1;           // Multicast send socket
 struct session *Audio;
 pthread_mutex_t Audio_protect;
 uint64_t Output_packets;
-char *Input;
-char *Output;
-char *Status;
-char *Name = "stereo";
+char const *Input;
+char const *Output;
+char const *Status;
+char const *Name = "stereo";
 
 struct session *lookup_session(const struct sockaddr *,uint32_t);
 struct session *create_session(void);
-int close_session(struct session *);
+int close_session(struct session **);
 int send_samples(struct session *sp);
 void *decode(void *arg);
 int fetch_socket(int);
@@ -204,7 +205,7 @@ int main(int argc,char * const argv[]){
 
   // Initialize de-emphasis with 75 microseconds
   Deemph_gain = 4; // Check this later empirically
-  Deemph_rate = expf(-1.0 / (75e-6 * Out_samprate));
+  Deemph_rate = expf(-1.0 / (Deemph_tc * Audio_samprate));
 
   signal(SIGPIPE,SIG_IGN);
   
@@ -266,7 +267,7 @@ int main(int argc,char * const argv[]){
       // Span per-SSRC thread
       if(pthread_create(&sp->thread,NULL,decode,sp) == -1){
 	perror("pthread_create");
-	close_session(sp);
+	close_session(&sp);
 	continue;
       }
     }
@@ -347,7 +348,7 @@ int fetch_socket(int status_fd){
 // Warning! do not use "continue" within the loop as this will cause a memory leak.
 // Jump to "endloop" instead
 void *decode(void *arg){
-  struct session * const sp = (struct session *)arg;
+  struct session * sp = (struct session *)arg;
   assert(sp != NULL);
   {
     char threadname[16];
@@ -361,13 +362,13 @@ void *decode(void *arg){
   // Set up audio filters: mono, pilot & stereo difference
   // These blocksizes depend on front end sample rate and blocksize
   // At Blocktime = 5ms and 384 kHz, L = 1920, M = 1921, N = 3840
-  int const L = roundf(In_samprate * Blocktime * .001); // Number of input samples in Blocktime
+  int const L = roundf(Composite_samprate * Blocktime * .001); // Number of input samples in Blocktime
   int const M = L + 1;
   int const N = L + M - 1;
 
   // 'audio_L' stereo samples must fit in an output packet
   // At Blocktime = 5 ms, audio_N = 240
-  int const audio_L = (L * Out_samprate) / In_samprate;
+  int const audio_L = (L * Audio_samprate) / Composite_samprate;
 
   // Baseband signal 50 Hz - 15 kHz contains mono (L+R) signal
   struct filter_in * const baseband = create_filter_input(L,M,REAL);
@@ -379,24 +380,25 @@ void *decode(void *arg){
   if(mono == NULL)
     return NULL;
   // 50 Hz to 15 kHz
-  set_filter(mono,50.0/Out_samprate, 15000.0/Out_samprate, Kaiser_beta);
+  set_filter(mono,50.0/Audio_samprate, 15000.0/Audio_samprate, Kaiser_beta);
 
   // Narrow filter at 19 kHz for stereo pilot
   struct filter_out * const pilot = create_filter_output(baseband,NULL,audio_L, COMPLEX);
   if(pilot == NULL)
     return NULL;
-  set_filter(pilot,-100./Out_samprate, 100./Out_samprate, Kaiser_beta);
+  // FCC says +/- 2 Hz, with +/- 20 Hz protected (73.322)
+  set_filter(pilot,-20./Audio_samprate, 20./Audio_samprate, Kaiser_beta);
 
   // Stereo difference (L-R) information on DSBSC carrier at 38 kHz
   // Extends +/- 15 kHz around 38 kHz
   struct filter_out * const stereo = create_filter_output(baseband,NULL,audio_L, COMPLEX);
   if(stereo == NULL)
     return NULL;
-  set_filter(stereo,-15000./Out_samprate, 15000./Out_samprate, Kaiser_beta);
+  set_filter(stereo,-15000./Audio_samprate, 15000./Audio_samprate, Kaiser_beta);
 
   // Assume the remainder is zero, as it is for clean sample rates @ 200 Hz multiples
   // If not, then a mop-up oscillator has to be provided
-  double const hzperbin = In_samprate / N;              // 100 hertz per FFT bin @ 384 kHz and 5 ms
+  double const hzperbin = Composite_samprate / N;              // 100 hertz per FFT bin @ 384 kHz and 5 ms
   int const quantum = N / (M - 1);       // rotate by multiples of (2) bins due to overlap-save (100 * 2 = 200 Hz)
   int const pilot_rotate = quantum * round(19000./(hzperbin * quantum));
   int const subc_rotate = quantum * round(38000./(hzperbin * quantum));
@@ -405,12 +407,12 @@ void *decode(void *arg){
     struct packet *pkt = NULL;
 
     {
-      struct timeval tv;
-      gettimeofday(&tv,NULL);
+      struct timespec ts;
+      clock_gettime(CLOCK_REALTIME,&ts);
       // wait 10 seconds for a new packet
       struct timespec waittime;
-      waittime.tv_sec = tv.tv_sec + 10; // 10 seconds in the future
-      waittime.tv_nsec = tv.tv_usec * 1000; // convert microsec to nanosec
+      waittime.tv_sec = ts.tv_sec + 10; // 10 seconds in the future
+      waittime.tv_nsec = ts.tv_nsec;
       { // Mutex-protected segment
 	pthread_mutex_lock(&sp->qmutex);
 	while(!sp->queue){      // Wait for packet to appear on queue
@@ -419,7 +421,7 @@ void *decode(void *arg){
 	  if(ret == ETIMEDOUT){
 	    // Idle timeout after 10 sec; close session and terminate thread
 	    pthread_mutex_unlock(&sp->qmutex);
-	    close_session(sp); 
+	    close_session(&sp); 
 	    return NULL; // exit thread
 	  }
 	}
@@ -434,7 +436,6 @@ void *decode(void *arg){
     int frame_size = 0;
     switch(pkt->rtp.type){
     case PCM_MONO_PT:
-    case PCM_MONO_FM_PT:
       frame_size = pkt->len / sizeof(short);
       break;
     default:
@@ -558,8 +559,12 @@ struct session *create_session(void){
   return sp;
 }
 
-int close_session(struct session * const sp){
-  assert(sp != NULL);
+int close_session(struct session ** p){
+  if(p == NULL)
+    return -1;
+  struct session *sp = *p;
+  if(sp == NULL)
+    return -1;
   
   // packet queue should be empty, but just in case
   pthread_mutex_lock(&sp->qmutex);
@@ -582,5 +587,6 @@ int close_session(struct session * const sp){
     Audio = sp->next;
   pthread_mutex_unlock(&Audio_protect);
   free(sp);
+  *p = NULL;
   return 0;
 }

@@ -1,4 +1,4 @@
-// $Id: iqplay.c,v 1.39 2022/04/08 05:38:12 karn Exp $
+// $Id: iqplay.c,v 1.40 2022/04/15 05:06:16 karn Exp $
 // Read from IQ recording, multicast in (hopefully) real time
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1 // allow bind/connect/recvfrom without casting sockaddr_in6
@@ -98,8 +98,8 @@ int main(int argc,char *argv[]){
     setlocale(LC_ALL,locale);
   }
   {
-    struct timeval start_time;
-    gettimeofday(&start_time,NULL);
+    struct timespec start_time;
+    clock_gettime(CLOCK_REALTIME,&start_time);
     Rtp_state.ssrc = start_time.tv_sec; // Default, can be overridden
   }
   int c;
@@ -261,15 +261,15 @@ int playfile(int sock,int fd,int blocksize){
     fprintf(stderr,"unsupported bits per sample %d\n",Bitspersample);
     return -1;
   }
-  struct timeval start_time;
-  gettimeofday(&start_time,NULL);
+  struct timespec start_time;
+  clock_gettime(CLOCK_REALTIME,&start_time);
 
   rtp_header.ssrc = Rtp_state.ssrc;
   
-  // microsec between packets. Double precision is used to avoid small errors that could
+  // nanosec between packets. Double precision is used to avoid small errors that could
   // accumulate over time
-  double dt = (1000000. * blocksize) / Samprate;
-  // Microseconds since start for next scheduled transmission; will transmit first immediately
+  double dt = (1000000000. * blocksize) / Samprate;
+  // Nanoseconds since start for next scheduled transmission; will transmit first immediately
   double sked_time = 0;
 
   while(1){
@@ -279,18 +279,15 @@ int playfile(int sock,int fd,int blocksize){
     
     // Is it time yet?
     while(1){
-      // Microseconds since start
-      struct timeval tv,diff;
-      gettimeofday(&tv,NULL);
-      timersub(&tv,&start_time,&diff);
-      double rt = 1000000. * diff.tv_sec + diff.tv_usec;
+      // Nanoseconds since start
+      struct timespec tv,diff;
+      clock_gettime(CLOCK_REALTIME,&tv);
+      timesub(&diff,&tv,&start_time);
+      double rt = 1000000000. * diff.tv_sec + diff.tv_nsec;
       if(rt >= sked_time)
 	break;
-      if(sked_time > rt + 100){
-	// Use care here, s is unsigned
-	useconds_t s = (sked_time - rt) - 100; // sleep until 100 microseconds before
-	usleep(s);
-      }
+      if(sked_time > rt + 100000)
+	nanosleep(&diff,NULL);
     }
     unsigned char output_buffer[4*blocksize + 256]; // will this allow for largest possible RTP header??
     unsigned char *dp = output_buffer;
@@ -373,11 +370,12 @@ void send_iqplay_status(int full){
   //  encode_int32(&bp,COMMAND_TAG,...);
   encode_int64(&bp,CMD_CNT,Commands);
   
-  struct timeval tp;
-  gettimeofday(&tp,NULL);
-  // Timestamp is in nanoseconds for futureproofing, but time of day is only available in microsec
-  long long timestamp = ((tp.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000LL + tp.tv_usec) * 1000LL;
-  encode_int64(&bp,GPS_TIME,timestamp);
+  {
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME,&now);
+    long long timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
+    encode_int64(&bp,GPS_TIME,timestamp);
+  }
 
   if(Description)
     encode_string(&bp,DESCRIPTION,Description,strlen(Description));

@@ -1,4 +1,4 @@
-// $Id: show-pkt.c,v 1.5 2022/04/13 11:31:51 karn Exp $
+// $Id: show-pkt.c,v 1.6 2022/04/15 05:06:16 karn Exp $
 // Display RTP statistics
 // Copyright 2021 Phil Karn, KA9Q
 // Adapted from control.c
@@ -124,15 +124,15 @@ int main(int argc,char *argv[]){
 
 
   for(;;){
-    struct timeval timeout;
+    struct timespec timeout;
     timeout.tv_sec = 0;
-    timeout.tv_usec = 100000; // 10 Hz
+    timeout.tv_nsec = 100000000; // 10 Hz
 
     fd_set fdset;
     FD_ZERO(&fdset);
     FD_SET(Radio_fd,&fdset);
     int n = Radio_fd + 1;
-    n = select(n,&fdset,NULL,NULL,&timeout);
+    n = pselect(n,&fdset,NULL,NULL,&timeout,NULL);
 
     if(FD_ISSET(Radio_fd,&fdset)){
       // Message from the radio program

@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.68 2022/04/13 12:04:44 karn Exp karn $
+// $Id: multicast.c,v 1.70 2022/04/15 03:31:11 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -25,31 +25,12 @@ static void soptions(int fd,int mcast_ttl,int tos);
 // [samprate][channels][deemph]
 // Not all combinations are supported or useful,
 // e.g., wideband FM is always 48 kHz, FM is always mono
-static int pt_table[5][2][2] = {
-  {
-    {  PCM_MONO_8_PT, PCM_MONO_8_FM_PT },
-    {  PCM_STEREO_8_PT, -1  }
-  },
-
-  {
-    {  PCM_MONO_12_PT, PCM_MONO_12_FM_PT },
-    {  PCM_STEREO_12_PT, -1 }
-  },
-
-  {
-    {  PCM_MONO_16_PT, PCM_MONO_16_FM_PT },
-    {  PCM_STEREO_16_PT, -1 }
-  },
-
-  {
-    {  PCM_MONO_24_PT, PCM_MONO_24_FM_PT, },
-    {  PCM_STEREO_24_PT, -1 }
-  },
-
-  {
-    {  PCM_MONO_PT, PCM_MONO_FM_PT },
-    {  PCM_STEREO_PT, PCM_STEREO_FM_PT }
-  }
+static int pt_table[5][2] = {
+  {  PCM_MONO_8_PT, PCM_STEREO_8_PT  },
+  {  PCM_MONO_12_PT, PCM_STEREO_12_PT },
+  {  PCM_MONO_16_PT, PCM_STEREO_16_PT },
+  {  PCM_MONO_24_PT, PCM_STEREO_24_PT },
+  {  PCM_MONO_PT, PCM_STEREO_PT },
 };
 
 
@@ -430,46 +411,23 @@ char const *id_from_type(int const type){
   switch(type){
   case OPUS_PT:
     return "Opus";
-  case PCM_MONO_FM_PT:
-  case PCM_STEREO_FM_PT:
   case PCM_MONO_PT:
   case PCM_STEREO_PT:
     return "PCM";
   case PCM_STEREO_24_PT:
-  case PCM_MONO_24_FM_PT:
   case PCM_MONO_24_PT:
     return "PCM24";
   case PCM_STEREO_16_PT:
-  case PCM_MONO_16_FM_PT:
   case PCM_MONO_16_PT:
     return "PCM16";
   case PCM_STEREO_12_PT:
-  case PCM_MONO_12_FM_PT:    
   case PCM_MONO_12_PT:
     return "PCM12";
   case PCM_STEREO_8_PT:
-  case PCM_MONO_8_FM_PT:    
   case PCM_MONO_8_PT:
     return "PCM8";
   default:
     return "";
-  }
-}
-
-// Determine need for de-emphasis from RTP payload type
-// Type of de-emphasis has to be determined from context
-int deemph_from_pt(int const type){
-  switch(type){
-  case PCM_MONO_FM_PT:
-  case PCM_STEREO_FM_PT:
-  case PCM_MONO_24_FM_PT:
-  case PCM_MONO_16_FM_PT:
-  case PCM_MONO_12_FM_PT:
-  case PCM_MONO_8_FM_PT:
-    return 1; // de-emphasis needed
-
-  default:
-    return 0; // No de-emphasis needed
   }
 }
 
@@ -479,24 +437,18 @@ int samprate_from_pt(int const type){
   case PCM_MONO_PT:
   case PCM_STEREO_PT:
   case OPUS_PT: // Internally 48 kHz, though not really applicable
-  case PCM_MONO_FM_PT:
-  case PCM_STEREO_FM_PT:
     return 48000;
   case PCM_MONO_24_PT:
   case PCM_STEREO_24_PT:
-  case PCM_MONO_24_FM_PT:
     return 24000;
   case PCM_MONO_16_PT:
   case PCM_STEREO_16_PT:
-  case PCM_MONO_16_FM_PT:
     return 16000;
   case PCM_MONO_12_PT:
   case PCM_STEREO_12_PT:
-  case PCM_MONO_12_FM_PT:
     return 12000;
   case PCM_MONO_8_PT:
   case PCM_STEREO_8_PT:
-  case PCM_MONO_8_FM_PT:
     return 8000;
   default:
     return 0;
@@ -508,21 +460,15 @@ int channels_from_pt(int const type){
   case REAL_PT:
   case REAL_PT8:
   case PCM_MONO_PT:
-  case PCM_MONO_FM_PT:
   case PCM_MONO_24_PT:
-  case PCM_MONO_24_FM_PT:
   case PCM_MONO_16_PT:
-  case PCM_MONO_16_FM_PT:
   case PCM_MONO_12_PT:
-  case PCM_MONO_12_FM_PT:
   case PCM_MONO_8_PT:
-  case PCM_MONO_8_FM_PT:    
     return 1;
   case IQ_PT12:
   case IQ_PT8:
   case PCM_STEREO_PT:
   case OPUS_PT:
-  case PCM_STEREO_FM_PT:
   case PCM_STEREO_24_PT:
   case PCM_STEREO_16_PT:
   case PCM_STEREO_12_PT:
@@ -560,7 +506,7 @@ int pt_from_info(int const samprate,int const channels){
   if(channels < 1 || channels > 2)
     return -1;
 
-  return pt_table[s][channels-1][0];
+  return pt_table[s][channels-1];
 }
  
 // Return port number (in HOST order) in a sockaddr structure

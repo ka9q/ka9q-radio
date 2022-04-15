@@ -1,4 +1,4 @@
-// $Id: modulate.c,v 1.25 2021/11/01 08:51:31 karn Exp karn $
+// $Id: modulate.c,v 1.26 2022/04/14 10:50:43 karn Exp $
 // Simple I/Q AM modulator - will eventually support other modes
 // Copyright 2017, Phil Karn, KA9Q
 #define _GNU_SOURCE 1

@@ -133,7 +133,7 @@ char *decode_string(unsigned char const *,int,char *,int);
 
 void dump_metadata(unsigned char *,int);
 
-void random_time(struct timeval *tv,unsigned int base,unsigned int rrange);
+void random_time(struct timespec *tv,unsigned int base,unsigned int rrange);
 void send_poll(int fd,int ssrc);
 
 #endif

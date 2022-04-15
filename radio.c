@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.207 2022/04/09 08:41:59 karn Exp karn $
+// $Id: radio.c,v 1.210 2022/04/15 08:10:36 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -47,7 +47,9 @@ int Active_demod_count; // Active demods
 
 static float const SCALE12 = 1/2048.;
 static float const SCALE16 = 1./SHRT_MAX; // Scale signed 16-bit int to float in range -1, +1
-static float const SCALE8 = 1./INT8_MAX;       // Scale signed 8-bit int to float in range -1, +1
+static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
+// seconds from January 1 1900 to January 1, 1970 (Unix epoch)
+
 
 struct demod *alloc_demod(void){
   pthread_mutex_lock(&Demod_mutex);
@@ -583,9 +585,9 @@ void *sap_send(void *p){
 
   long long start_time;
   {
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    start_time = tv.tv_sec + 2208988800;
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME,&ts);
+    start_time = ts.tv_sec + NTP_EPOCH;
   }
   // These should change when a change is made elsewhere
   uint16_t const id = random(); // Should be a hash, but it changes every time anyway
@@ -663,9 +665,9 @@ void *sap_send(void *p){
 #if 0 // not currently used
     long long current_time;
     {
-      struct timeval tv;
-      gettimeofday(&tv,NULL);
-      current_time = tv.tv_sec + 2208988800;
+      struct timespec ts;
+      clock_gettime(CLOCK_REALTIME,&ts);
+      current_time = ts.tv_sec + NTP_EPOCH;
     }
 #endif
 

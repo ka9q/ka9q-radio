@@ -1,4 +1,4 @@
-// $Id: airspyhf.c,v 1.42 2022/04/08 05:38:12 karn Exp $
+// $Id: airspyhf.c,v 1.43 2022/04/15 05:06:16 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #define _GNU_SOURCE 1
@@ -582,10 +582,9 @@ void send_airspyhf_status(struct sdrstate *sdr,int full){
   encode_int32(&bp,COMMAND_TAG,sdr->command_tag);
   encode_int64(&bp,CMD_CNT,sdr->commands);
   
-  struct timeval tp;
-  gettimeofday(&tp,NULL);
-  // Timestamp is in nanoseconds for futureproofing, but time of day is only available in microsec
-  long long timestamp = ((tp.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000LL + tp.tv_usec) * 1000LL;
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME,&now);
+  long long timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
   encode_int64(&bp,GPS_TIME,timestamp);
 
   if(sdr->description)

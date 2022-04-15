@@ -1,4 +1,4 @@
-// $Id: multicast.h,v 1.42 2022/04/13 12:04:44 karn Exp karn $
+// $Id: multicast.h,v 1.44 2022/04/15 03:31:11 karn Exp $
 // Multicast and RTP functions, constants and structures
 // Not every RTP module uses these yet, they need to be revised
 // Copyright 2018, Phil Karn, KA9Q
@@ -38,24 +38,18 @@
 #define PCM_MONO_PT (11)          // 48 kHz (or other) flat mono baseband audio OR real-only IF stream
 #define PCM_STEREO_PT (10)        // 48 kHz (or other) flat stereo baseband audio OR I/Q baseband audio OR I/Q IF stream
 #define OPUS_PT (111) // Hard-coded NON-standard payload type for OPUS (should be dynamic with sdp)
-#define PCM_MONO_FM_PT (112)    // 48 kHz Mono PCM from FM receiver that requires de-emphasis
-#define PCM_STEREO_FM_PT (113)  // 48 kHz Stereo PCM from FM receiver that requires de-emphasis
 
 #define PCM_MONO_24_PT (116)      // 24 kHz mono PCM, flat
 #define PCM_STEREO_24_PT (117)    // 24 kHz stereo PCM, flat
-#define PCM_MONO_24_FM_PT (118) // 24 kHz mono PCM, FM emphasis
 
 #define PCM_MONO_16_PT (119)      // 16 kHz mono PCM, flat
 #define PCM_STEREO_16_PT (120)    // 16 kHz stereo PCM, flat
-#define PCM_MONO_16_FM_PT (121) // 16 kHz mono PCM, FM emphasis
 
 #define PCM_MONO_12_PT (122)      // 12 kHz mono PCM, flat
 #define PCM_STEREO_12_PT (123)    // 12 kHz stereo PCM, flat
-#define PCM_MONO_12_FM_PT (124) // 12 kHz mono PCM, FM emphasis
 
 #define PCM_MONO_8_PT (125)       // 8 kHz mono PCM, flat
 #define PCM_STEREO_8_PT (126)     // 8 kHz stereo PCM, flat
-#define PCM_MONO_8_FM_PT (127)  // 8 kHz mono PCM, FM emphasis // 127 is largest allowable value!
 
 
 extern int Mcast_ttl;

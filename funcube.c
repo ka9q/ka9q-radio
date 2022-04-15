@@ -1,4 +1,4 @@
-// $Id: funcube.c,v 1.105 2022/04/08 05:38:12 karn Exp $
+// $Id: funcube.c,v 1.106 2022/04/15 05:06:16 karn Exp $
 // Read from AMSAT UK Funcube Pro and Pro+ dongles
 // Multicast raw 16-bit I/Q samples
 // Accept control commands from UDP socket
@@ -362,11 +362,12 @@ int main(int argc,char *argv[]){
   float gain_i = 1;
   float secphi = 1;
   float tanphi = 0;
-  struct timeval tp;
-  gettimeofday(&tp,NULL);
-  // Timestamp is in nanoseconds for futureproofing, but time of day is only available in microsec
-  sdr->timestamp = ((tp.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000LL + tp.tv_usec) * 1000LL;
 
+  {
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME,&now);
+    sdr->timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
+  }
   float rate_factor = Blocksize/(ADC_samprate * Power_alpha);
 
   int ConsecPaErrs = 0;
@@ -469,9 +470,11 @@ int main(int argc,char *argv[]){
 
 #if 1
     // Get status timestamp from UNIX TOD clock -- but this might skew because of inexact sample rate
-    gettimeofday(&tp,NULL);
-    // Timestamp is in nanoseconds for futureproofing, but time of day is only available in microsec
-    sdr->timestamp = ((tp.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000LL + tp.tv_usec) * 1000LL;
+    {
+      struct timespec now;
+      clock_gettime(CLOCK_REALTIME,&now);
+      sdr->timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
+    }
 #else
     // Simply increment by number of samples
     // But what if we lose some? Then the clock will always be off
@@ -676,11 +679,12 @@ void send_fcd_status(struct sdrstate *sdr,int full){
   encode_int32(&bp,COMMAND_TAG,sdr->command_tag);
   encode_int64(&bp,CMD_CNT,Commands);
   
-  struct timeval tp;
-  gettimeofday(&tp,NULL);
-  // Timestamp is in nanoseconds for futureproofing, but time of day is only available in microsec
-  long long timestamp = ((tp.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000LL + tp.tv_usec) * 1000LL;
-  encode_int64(&bp,GPS_TIME,timestamp);
+  {
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME,&now);
+    long long timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
+    encode_int64(&bp,GPS_TIME,timestamp);
+  }
 
   if(Description)
     encode_string(&bp,DESCRIPTION,Description,strlen(Description));

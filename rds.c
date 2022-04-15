@@ -1,4 +1,4 @@
-// $Id: rds.c,v 1.8 2021/10/28 20:55:35 karn Exp $
+// $Id: rds.c,v 1.10 2022/04/15 05:06:16 karn Exp $
 // FM RDS demodulator/decoder
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -420,12 +420,12 @@ void *decode(void *arg){
     struct packet *pkt = NULL;
 
     {
-      struct timeval tv;
-      gettimeofday(&tv,NULL);
+      struct timespec ts;
+      clock_gettime(CLOCK_REALTIME,&ts);
       // wait 10 seconds for a new packet
       struct timespec waittime;
-      waittime.tv_sec = tv.tv_sec + 10; // 10 seconds in the future
-      waittime.tv_nsec = tv.tv_usec * 1000; // convert microsec to nanosec
+      waittime.tv_sec = ts.tv_sec + 10; // 10 seconds in the future
+      waittime.tv_nsec = ts.tv_nsec;
       { // Mutex-protected segment
 	pthread_mutex_lock(&sp->qmutex);
 	while(!sp->queue){      // Wait for packet to appear on queue
@@ -449,7 +449,6 @@ void *decode(void *arg){
     int frame_size = 0;
     switch(pkt->rtp.type){
     case PCM_MONO_PT:
-    case PCM_MONO_FM_PT:
       frame_size = pkt->len / sizeof(short);
       break;
     default:

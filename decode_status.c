@@ -1,4 +1,4 @@
-// $Id: decode_status.c,v 1.15 2022/04/05 06:34:32 karn Exp $
+// $Id: decode_status.c,v 1.16 2022/04/15 05:06:16 karn Exp $
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
 #endif
@@ -23,15 +23,15 @@ void *sdr_status(void *arg){
   assert(frontend != NULL);
 
   int const random_interval = 50000; // 50 ms
-  struct timeval next_fe_poll;
+  struct timespec next_fe_poll;
   // Pick soon but still random times for the first polls
   random_time(&next_fe_poll,0,random_interval);
   const int fe_poll_interval = 995000;
 
   while(1){
-    struct timeval now;
-    gettimeofday(&now,NULL);
-    if(timercmp(&now,&next_fe_poll,>=)){
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME,&now);
+    if(now.tv_sec >= next_fe_poll.tv_sec || (now.tv_sec == next_fe_poll.tv_sec && now.tv_nsec >= next_fe_poll.tv_nsec)){
       // Poll front end
       if(Frontend.input.ctl_fd > 2)
 	send_poll(Frontend.input.ctl_fd,0);
@@ -44,14 +44,14 @@ void *sdr_status(void *arg){
 
     int n = frontend->input.status_fd + 1;
 
-    struct timeval timeout;
-    timersub(&next_fe_poll,&now,&timeout);
-    // Ensure time isn't negative (return right away if so)
-    if(timeout.tv_sec < 0){
-      timeout.tv_sec = 0;
-      timeout.tv_usec = 0;
+    struct timespec timeout;
+    timeout.tv_sec = next_fe_poll.tv_sec - now.tv_sec;
+    timeout.tv_nsec = next_fe_poll.tv_nsec - now.tv_nsec;
+    if(timeout.tv_nsec < 0){
+      timeout.tv_nsec += 1000000000;
+      timeout.tv_sec -= 1;
     }
-    n = select(n,&fdset,NULL,NULL,&timeout);
+    n = pselect(n,&fdset,NULL,NULL,&timeout,NULL);
 
     if(n <= 0)
       continue;

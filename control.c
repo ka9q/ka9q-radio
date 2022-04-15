@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.141 2022/04/10 00:17:18 karn Exp $
+// $Id: control.c,v 1.142 2022/04/15 05:06:16 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -409,7 +409,7 @@ int main(int argc,char *argv[]){
   // is seen in response to another poll
 
   int const random_interval = 50000; // 50 ms
-  struct timeval next_radio_poll,next_fe_poll;
+  struct timespec next_radio_poll,next_fe_poll;
   // Pick soon but still random times for the first polls
   random_time(&next_radio_poll,0,random_interval);
   random_time(&next_fe_poll,0,random_interval);
@@ -418,14 +418,14 @@ int main(int argc,char *argv[]){
     int const radio_poll_interval  = Refresh_rate * 1e6;
     int const fe_poll_interval = 975000;    // 975 - 1025 ms
 
-    struct timeval now;
-    gettimeofday(&now,NULL);
-    if(timercmp(&now,&next_radio_poll,>=)){
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME,&now);
+    if(timerge(&now,&next_radio_poll)){
       // Time to poll radio
       send_poll(Ctl_fd,Ssrc);
       random_time(&next_radio_poll,radio_poll_interval,random_interval);
     }
-    if(timercmp(&now,&next_fe_poll,>=)){
+    if(timerge(&now,&next_fe_poll)){
       // Time to poll front end
       if(Frontend.input.ctl_fd > 2)
 	send_poll(Frontend.input.ctl_fd,0);
@@ -439,18 +439,29 @@ int main(int argc,char *argv[]){
     int const n = max(Frontend.input.status_fd,Status_fd) + 1;
 
     // Receive timeout at whichever event occurs first
-    struct timeval timeout;
-    if(timercmp(&next_fe_poll,&next_radio_poll,<))
-      timersub(&next_fe_poll,&now,&timeout);
-    else
-      timersub(&next_radio_poll,&now,&timeout);
+    struct timespec timeout;
+    if(timerge(&next_radio_poll,&next_fe_poll)){
+      timeout.tv_sec = next_fe_poll.tv_sec - now.tv_sec;
+      timeout.tv_nsec = next_fe_poll.tv_nsec - now.tv_nsec;
+      if(timeout.tv_nsec < 0){
+	timeout.tv_nsec += 1000000000;
+	timeout.tv_sec -= 1;
+      }
+    } else {
+      timeout.tv_sec = next_radio_poll.tv_sec - now.tv_sec;
+      timeout.tv_nsec = next_radio_poll.tv_nsec - now.tv_nsec;
+      if(timeout.tv_nsec < 0){
+	timeout.tv_nsec += 1000000000;
+	timeout.tv_sec -= 1;
+      }
+    }
 
     // Immediate poll if timeout is negative
     if(timeout.tv_sec < 0){
       timeout.tv_sec = 0;
-      timeout.tv_usec = 0;
+      timeout.tv_nsec = 0;
     }
-    select(n,&fdset,NULL,NULL,&timeout); // Don't really need to check the return
+    pselect(n,&fdset,NULL,NULL,&timeout,NULL); // Don't really need to check the return
     if(Resized){
       Resized = 0;
       setup_windows();

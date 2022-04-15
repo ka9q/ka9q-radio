@@ -1,4 +1,4 @@
-// $Id: misc.h,v 1.23 2022/03/31 04:14:09 karn Exp $
+// $Id: misc.h,v 1.24 2022/04/15 05:06:16 karn Exp $
 // Miscellaneous constants, macros and function prototypes
 // Copyright 2018 Phil Karn, KA9Q
 #ifndef _MISC_H
@@ -57,6 +57,40 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 #define sincospif(x,s,c) sincosf(x*M_PI,s,c)
 
 #endif // ifdef __APPLE__
+
+// Compare timespec values for greater than or equal to
+inline int timerge(struct timespec const *a, struct timespec const *b){
+  if(a->tv_nsec >= 1000000000 || b->tv_nsec >= 1000000000 || a->tv_nsec < 0 || b->tv_nsec < 0){
+    // Input(s) are not normalized
+    long long an = 1000000000LL * (a->tv_sec - b->tv_sec) + (a->tv_nsec - b->tv_nsec);
+    return an >= 0 ? 1 : 0;
+  }
+
+  if(a->tv_sec < b->tv_sec)
+    return 0;
+  if(a->tv_sec > b->tv_sec)
+    return 1;
+  if(a->tv_nsec >= b->tv_nsec)
+    return 1;
+  return 0;
+}
+
+inline void timesub(struct timespec *r,struct timespec const *a, struct timespec const *b){
+  r->tv_sec = a->tv_sec - b->tv_sec;
+  r->tv_nsec = a->tv_nsec - b->tv_nsec;  
+  while(r->tv_nsec < 0){ // Unlikely to loop more than once, we hope
+    r->tv_nsec += 1000000000;
+    r->tv_sec -= 1;
+  }
+}
+inline void timeadd(struct timespec *r,struct timespec const *a, struct timespec const *b){
+  r->tv_sec = a->tv_sec + b->tv_sec;
+  r->tv_nsec = a->tv_nsec + b->tv_nsec;  
+  while(r->tv_nsec > 1000000000){ // Unlikely to loop more than once, we hope
+    r->tv_nsec -= 1000000000;
+    r->tv_sec += 1;
+  }
+}
 
 // Stolen from the Linux kernel -- enforce type matching of arguments
 #define min(x,y) ({			\

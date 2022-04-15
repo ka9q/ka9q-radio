@@ -1,4 +1,4 @@
-// $Id: pcmspawn.c,v 1.6 2022/04/08 05:38:12 karn Exp $
+// $Id: pcmspawn.c,v 1.7 2022/04/15 05:06:16 karn Exp $
 // Receive and demux RTP PCM streams into a command pipeline
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -33,7 +33,7 @@ struct session {
   char port[NI_MAXSERV];    // RTP Sender source port
 
   FILE *pipe;
-  struct timeval last_active;
+  struct timespec last_active;
  
   struct rtp_state rtp_state; // RTP input state
 
@@ -231,7 +231,7 @@ int main(int argc,char * const argv[]){
       }
     }
     sp->packets++; // Count all packets, regardless of type
-    gettimeofday(&sp->last_active,NULL); // for reaping long-idle sessions
+    clock_gettime(CLOCK_REALTIME,&sp->last_active); // for reaping long-idle sessions
 
 
     int const channels = channels_from_pt(sp->type);

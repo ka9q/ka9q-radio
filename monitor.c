@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.161 2022/03/18 00:22:06 karn Exp $
+// $Id: monitor.c,v 1.164 2022/04/15 05:06:16 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -60,7 +60,7 @@ static int Nfds;                     // Number of streams
 static pthread_mutex_t Sess_mutex;
 static PaStream *Pa_Stream;          // Portaudio stream handle
 static int inDevNum;                 // Portaudio's audio output device index
-static struct timeval Start_unix_time;
+static struct timespec Start_unix_time;
 static PaTime Start_pa_time;
 
 static pthread_mutex_t Output_mutex;
@@ -72,7 +72,7 @@ static PaTime Last_callback_time;
 
 static int Invalids;
 static int Help;
-static struct timeval Last_error_time;
+static struct timespec Last_error_time;
 static int Position; // auto-position streams
 static int Auto_sort;
 
@@ -117,10 +117,6 @@ struct session {
   int muted;
   int reset;                // Set to force output timing reset on next packet
   
-  float deemph_rate;
-  float deemph_gain;
-  float deemph_state_left;
-  float deemph_state_right;  
   char id[32];
 };
 #define NSESSIONS 1500
@@ -134,7 +130,7 @@ static void reset_session(struct session *sp,uint32_t timestamp);
 static struct session *lookup_session(const struct sockaddr_storage *,uint32_t);
 static struct session *create_session(struct sockaddr_storage const *,uint32_t);
 static int sort_session_active(void),sort_session_total(void);
-static int close_session(struct session *);
+static int close_session(struct session **);
 static int pa_callback(const void *,void *,unsigned long,const PaStreamCallbackTimeInfo*,PaStreamCallbackFlags,void *);
 static void *decode_task(void *x);
 static void *sockproc(void *arg);
@@ -303,10 +299,8 @@ int main(int argc,char * const argv[]){
     exit(1);
   }
   Start_pa_time = Pa_GetStreamTime(Pa_Stream);
-  gettimeofday(&Start_unix_time,NULL);
+  clock_gettime(CLOCK_REALTIME,&Start_unix_time);
   Last_error_time = Start_unix_time;
-
-
 
   pthread_mutex_init(&Output_mutex,NULL);
   pthread_mutex_init(&Sess_mutex,NULL);
@@ -428,7 +422,7 @@ static void *sockproc(void *arg){
       pthread_cond_init(&sp->qcond,NULL);
       if(pthread_create(&sp->task,NULL,decode_task,sp) == -1){
 	perror("pthread_create");
-	close_session(sp);
+	close_session(&sp);
 	continue;
       }
     }
@@ -494,15 +488,11 @@ static void *decode_task(void *arg){
 
     struct packet *pkt = NULL;
     // Wait for packet to appear on queue
-    struct timespec ts;
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    ts.tv_sec = tv.tv_sec;
-    ts.tv_nsec = tv.tv_usec * 1000 + 100000000L; // 100 ms in the future
-    if(ts.tv_nsec > 1000000000L){
-      ts.tv_nsec -= 1000000000L;
-      ts.tv_sec += 1;
-    }
+    struct timespec ts,increment;
+    clock_gettime(CLOCK_REALTIME,&ts);
+    increment.tv_sec = 0;
+    increment.tv_nsec = 100000000; // 100 ms
+    timeadd(&ts,&ts,&increment);
     pthread_mutex_lock(&sp->qmutex);
     while(!sp->queue){
       int r = pthread_cond_timedwait(&sp->qcond,&sp->qmutex,&ts); // Wait 100 ms max so we pick up terminates
@@ -518,25 +508,9 @@ static void *decode_task(void *arg){
     pkt->next = NULL;
     pthread_mutex_unlock(&sp->qmutex);
     sp->packets++; // Count all packets, regardless of type
-    if(sp->type != pkt->rtp.type){ // Handle transitions both ways
+    if(sp->type != pkt->rtp.type) // Handle transitions both ways
       sp->type = pkt->rtp.type;
-      if(deemph_from_pt(sp->type)){
-	/* De-emphasis needed, use 300 Hz as corner freq for ham NBFM
-	   de_emphasis_time_constant = samprate / (2 * M_PI * corner_freq);
-	   decay_rate = expf(-1.0/de_emphasis_time_constant);
-	   Sample processing:
-	   out = state = (state * rate) + gain * (1-rate) * in; 	*/
-	sp->deemph_gain = 4; // +12 dB; empirical, keep loudness the same
-	float tc = sp->samprate / (2 * M_PI * 300.);
-	sp->deemph_rate = expf(-1.0 / tc);
-	sp->deemph_state_left = sp->deemph_state_right = 0;
-      } else {
-	// De-emphasis not needed, or no longer needed
-	sp->deemph_gain = 1;
-	sp->deemph_rate = 0;
-	sp->deemph_state_left = sp->deemph_state_right = 0;
-      }
-    }
+
     sp->samprate = samprate_from_pt(sp->type);
     int upsample = 1;
     if(sp->samprate != 0)
@@ -545,7 +519,7 @@ static void *decode_task(void *arg){
     if(pkt->rtp.seq != sp->rtp_state.seq){
       if(!pkt->rtp.marker){
 	sp->rtp_state.drops++; // Avoid spurious drops when session is recreated after silence
-	Last_error_time = tv;
+	Last_error_time = ts;
       }
       if(sp->opus)
 	opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
@@ -622,17 +596,9 @@ static void *decode_task(void *arg){
       for(int i=0; i < sp->frame_size && i < MAXSIZE; i++){
 	assert((void *)data_ints >= (void *)&pkt->data[0] && (void *)data_ints < (void *)(&pkt->data[0] + pkt->len));
 	float left = SCALE * (signed short)ntohs(*data_ints++);
-	if(sp->deemph_rate != 0){
-	  left = sp->deemph_state_left = sp->deemph_state_left * sp->deemph_rate
-	    + sp->deemph_gain * (1 - sp->deemph_rate) * left;
-	}
 	float right;
 	if(sp->channels == 2){
 	  right = SCALE * (signed short)ntohs(*data_ints++);
-	  if(sp->deemph_rate != 0){
-	    right = sp->deemph_state_right = sp->deemph_state_right * sp->deemph_rate
-	      + sp->deemph_gain * (1 - sp->deemph_rate) * right;
-	  }
 	} else {
 	  right = left;
 	}
@@ -703,12 +669,11 @@ static void *decode_task(void *arg){
     // Count samples and frames and advance write pointer even when muted
     sp->tot_active += (float)sp->frame_size / sp->samprate;
     sp->active += (float)sp->frame_size / sp->samprate;
-    free(pkt); pkt = NULL;
+    free(pkt);
+    pkt = NULL;
 
     if(sp->frame_size > 0){
       sp->wptr += upsample * sp->frame_size; // increase displayed queue in status screen
-
-
 #if 0
       float queue = (sp->wptr - Rptr) / Samprate;
       // Pause to allow some packet resequencing in the input thread
@@ -872,14 +837,14 @@ static void *display(void *arg){
       
       if(Verbose){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
-	struct timeval tv;
-	gettimeofday(&tv,NULL);
-	double unix_seconds = tv.tv_sec - Start_unix_time.tv_sec + 1e-6*(tv.tv_usec - Start_unix_time.tv_usec);
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME,&ts);
+	double unix_seconds = ts.tv_sec - Start_unix_time.tv_sec + 1e-9*(ts.tv_nsec - Start_unix_time.tv_nsec);
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
 	printw("D/A clock error: %+.3lf ppm ",1e6 * (pa_seconds / unix_seconds - 1));
 	// Time since last packet drop on any channel
 	if(Start_unix_time.tv_sec != Last_error_time.tv_sec)
-	  printw("Error-free seconds: %'.1lf\n",tv.tv_sec - Last_error_time.tv_sec + 0.000001 * (tv.tv_usec - Last_error_time.tv_usec));
+	  printw("Error-free seconds: %'.1lf\n",ts.tv_sec - Last_error_time.tv_sec + 1e-9 * (ts.tv_nsec - Last_error_time.tv_nsec));
 	printw("Initial playout time: %.0f ms\n",Playout);
       }      
     }
@@ -1034,7 +999,7 @@ static void *display(void *arg){
 	sp->terminate = 1;
 	// We have to wait for it to clean up before we close and remove its session
 	pthread_join(sp->task,NULL);
-	close_session(sp); // Decrements Nsessions
+	close_session(&sp); // Decrements Nsessions
 	if(current >= Nsessions)
 	  current = Nsessions-1; // -1 when no sessions
       }
@@ -1047,7 +1012,7 @@ static void *display(void *arg){
   }
   return NULL;
 }
-static void reset_session(struct session *sp,uint32_t timestamp){
+static void reset_session(struct session * const sp,uint32_t timestamp){
   sp->resets++;
   if(sp->opus)
     opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
@@ -1061,9 +1026,8 @@ static void reset_session(struct session *sp,uint32_t timestamp){
 
 // sort callback for sort_session_active() for comparing sessions by most recently active (or currently longest active)
 static int scompare(void const *a, void const *b){
-  struct session const *s1,*s2;
-  s1 = *(struct session **)a;
-  s2 = *(struct session **)b;
+  struct session const * const s1 = *(struct session **)a;
+  struct session const * const s2 = *(struct session **)b;
   
   if(s1->wptr > Rptr && s2->wptr > Rptr){
     // Both active
@@ -1094,9 +1058,8 @@ static int scompare(void const *a, void const *b){
 }
 // sort callback for sort_session() for comparing sessions by total time
 static int tcompare(void const *a, void const *b){
-  struct session const *s1,*s2;
-  s1 = *(struct session **)a;
-  s2 = *(struct session **)b;
+  struct session const * const s1 = *(struct session **)a;
+  struct session const * const s2 = *(struct session **)b;
   
 #if NOFUZZ
   if(fabsf(s1->tot_active - s2->tot_active) < 0.1) // equal within margin
@@ -1130,9 +1093,9 @@ static struct session *lookup_session(const struct sockaddr_storage *sender,cons
 }
 // Create a new session, partly initialize
 static struct session *create_session(struct sockaddr_storage const *sender,uint32_t ssrc){
-  struct session *sp;
+  struct session * const sp = calloc(1,sizeof(*sp));
 
-  if(!(sp = calloc(1,sizeof(*sp))))
+  if(sp == NULL)
     return NULL; // Shouldn't happen on modern machines!
 
   // Initialize entry
@@ -1144,9 +1107,12 @@ static struct session *create_session(struct sockaddr_storage const *sender,uint
   return sp;
 }
 
-static int close_session(struct session *sp){
-  assert(sp);
-  free(sp);
+static int close_session(struct session **p){
+  if(p == NULL)
+    return -1;
+  struct session * const sp = *p;
+  if(sp == NULL)
+    return -1;
   assert(Nsessions > 0);
   
   // Remove from table
@@ -1154,6 +1120,8 @@ static int close_session(struct session *sp){
     if(Sessions[i] == sp){
       Nsessions--;
       memmove(&Sessions[i],&Sessions[i+1],(Nsessions-i) * sizeof(Sessions[0]));
+      free(sp);
+      *p = NULL;
       return 0;
     }
   }
@@ -1176,9 +1144,9 @@ static void cleanup(void){
 }
 
 // Portaudio callback - transfer data (if any) to provided buffer
-static int pa_callback(const void *inputBuffer, void *outputBuffer,
+static int pa_callback(void const *inputBuffer, void *outputBuffer,
 		       unsigned long framesPerBuffer,
-		       const PaStreamCallbackTimeInfo* timeInfo,
+		       PaStreamCallbackTimeInfo const * timeInfo,
 		       PaStreamCallbackFlags statusFlags,
 		       void *userData){
   if(!outputBuffer)
@@ -1227,7 +1195,6 @@ struct idtable {
 static int Nid;
 static struct idtable Idtable[IDSIZE];
 static struct stat Last_stat;
-
 
 static char const *lookupid(uint32_t ssrc){
   char filename[PATH_MAX];

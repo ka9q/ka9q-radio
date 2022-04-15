@@ -1,4 +1,4 @@
-// $Id: wfm.c,v 1.22 2021/11/19 06:42:22 karn Exp karn $
+// $Id: wfm.c,v 1.25 2022/04/15 08:09:26 karn Exp $
 // Wideband FM demodulation and squelch
 // Adapted from narrowband demod
 // Copyright 2020, Phil Karn, KA9Q
@@ -16,9 +16,12 @@
 #include "radio.h"
 #include "status.h"
 
-static const int squelchtail = 1; // Frames to hold open after loss of SNR
+static const int squelchtail = 0; // Frames to hold open after loss of SNR
 static const int squelchzeroes = 2; // Frames of PCM zeroes after squelch closes, to flush downstream filters (eg, packet)
 
+// Forced sample rates; config file values are ignored for now
+// The audio output sample rate can probably eventually be made configurable,
+// but the composite sample rate needs to handle the bandwidth
 int const Composite_samprate = 384000;
 float const Audio_samprate = 48000;
 
@@ -94,7 +97,8 @@ void *demod_wfm(void *arg){
   if((pilot = create_filter_output(composite,NULL,audio_L, COMPLEX)) == NULL)
     goto quit;
 
-  set_filter(pilot,-100./Audio_samprate, 100./Audio_samprate, demod->filter.kaiser_beta);
+  // FCC says +/- 2 Hz, with +/- 20 Hz protected (73.322)
+  set_filter(pilot,-20./Audio_samprate, 20./Audio_samprate, demod->filter.kaiser_beta);
 
   // Stereo difference (L-R) information on DSBSC carrier at 38 kHz
   // Extends +/- 15 kHz around 38 kHz

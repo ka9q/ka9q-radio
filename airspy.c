@@ -1,4 +1,4 @@
-// $Id: airspy.c,v 1.85 2022/04/08 05:38:12 karn Exp $
+// $Id: airspy.c,v 1.87 2022/04/15 08:10:55 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #undef DEBUG_AGC
@@ -214,15 +214,19 @@ int main(int argc,char *argv[]){
 	  continue;
 	if(strcmp(&dp->d_name[len-5],".conf") != 0)
 	  continue; // Name doesn't end in .conf
-	char path[1024];
-	snprintf(path,sizeof(path),"%s/%s",subdir,dp->d_name);
+	char *path = NULL;
+	asprintf(&path,"%s/%s",subdir,dp->d_name);
 	if((Dictionary = iniparser_load(path)) != NULL){
 	  if(iniparser_find_entry(Dictionary,Name) == 1){
 	    printf("Using config file %s section %s\n",path,Name);
+	    free(path);
+	    path = NULL;
 	    break;
 	  } else {
 	    iniparser_freedict(Dictionary);
 	    Dictionary = NULL;
+	    free(path);
+	    path = NULL;
 	  }
 	}
       }
@@ -621,10 +625,9 @@ void send_airspy_status(struct sdrstate *sdr,int full){
   encode_int32(&bp,COMMAND_TAG,sdr->command_tag);
   encode_int64(&bp,CMD_CNT,sdr->commands);
   
-  struct timeval tp;
-  gettimeofday(&tp,NULL);
-  // Timestamp is in nanoseconds for futureproofing, but time of day is only available in microsec
-  long long timestamp = ((tp.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000LL + tp.tv_usec) * 1000LL;
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME,&now);
+  long long timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
   encode_int64(&bp,GPS_TIME,timestamp);
 
   if(sdr->description)

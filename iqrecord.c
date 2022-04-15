@@ -1,4 +1,4 @@
-// $Id: iqrecord.c,v 1.35 2021/11/04 03:29:59 karn Exp $
+// $Id: iqrecord.c,v 1.36 2022/04/15 05:06:16 karn Exp $
 // NOT CURRENTLY USABLE - needs to read status stream to get sample rate, etc
 // Read and record complex I/Q stream or PCM baseband audio
 // This version reverts to file I/O from an unsuccessful experiment to use mmap()
@@ -174,9 +174,9 @@ int main(int argc,char *argv[]){
   getnameinfo((struct sockaddr *)&Sender,sizeof(Sender),sender_text,sizeof(sender_text),NULL,0,NI_NOFQDN|NI_DGRAM|NI_NUMERICHOST);
   attrprintf(fd,"multicast","%s",formatsock(&Frontend.input.data_dest_address));
       
-  struct timeval tv;
-  gettimeofday(&tv,NULL);
-  attrprintf(fd,"unixstarttime","%ld.%06ld",(long)tv.tv_sec,(long)tv.tv_usec);
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME,&ts);
+  attrprintf(fd,"unixstarttime","%ld.%09ld",(long)ts.tv_sec,(long)ts.tv_nsec);
 
   // Graceful signal catch
   signal(SIGPIPE,SIG_IGN);

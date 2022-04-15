@@ -1,4 +1,4 @@
-// $Id: opussend.c,v 1.22 2021/05/30 09:26:54 karn Exp $
+// $Id: opussend.c,v 1.23 2022/04/15 05:06:16 karn Exp $
 // Multicast local audio with Opus
 // Copyright Feb 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -269,9 +269,9 @@ int main(int argc,char * const argv[]){
   // Set up to transmit Opus RTP/UDP/IP
   struct rtp_state rtp_state_out;
   memset(&rtp_state_out,0,sizeof(rtp_state_out));
-  struct timeval tp;
-  gettimeofday(&tp,NULL);
-  rtp_state_out.ssrc = tp.tv_sec;
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME,&ts);
+  rtp_state_out.ssrc = ts.tv_sec;
 
   // Graceful signal catch
   signal(SIGPIPE,closedown);
