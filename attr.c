@@ -1,4 +1,4 @@
-// $Id: attr.c,v 1.5 2018/06/17 20:23:41 karn Exp $
+// $Id: attr.c,v 1.6 2022/04/15 16:14:27 karn Exp $
 // Low-level extended file attribute routines
 // These are in a separate file mainly because they are so OS-dependent. And gratuitously so.
 // Copyright 29 July 2017 Phil Karn, KA9Q
