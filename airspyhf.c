@@ -1,4 +1,4 @@
-// $Id: airspyhf.c,v 1.45 2022/04/16 02:16:59 karn Exp $
+// $Id: airspyhf.c,v 1.46 2022/04/16 02:32:49 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #define _GNU_SOURCE 1
@@ -370,9 +370,6 @@ int main(int argc,char *argv[]){
 
   fprintf(stdout,"Status TTL %d, Data TTL %d, blocksize %'d samples, %'lu bytes\n",
 	  Status_ttl,RTP_ttl,sdr->blocksize,(long unsigned)(sdr->blocksize * sizeof(complex float)));
-
-  // Multicast output interface for both data and status
-  Iface = config_getstring(Dictionary,Name,"iface",NULL);
 
   {
     // Start Avahi client that will maintain our mDNS registrations
