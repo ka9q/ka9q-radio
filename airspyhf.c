@@ -1,4 +1,4 @@
-// $Id: airspyhf.c,v 1.43 2022/04/15 05:06:16 karn Exp $
+// $Id: airspyhf.c,v 1.44 2022/04/16 02:01:28 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #define _GNU_SOURCE 1
@@ -213,19 +213,20 @@ int main(int argc,char *argv[]){
 	  continue;
 	if(strcmp(&dp->d_name[len-5],".conf") != 0)
 	  continue; // Name doesn't end in .conf
-	char *path;
-	asprintf(&path,"%s/%s",subdir,dp->d_name);
+	char path[PATH_MAX];
+	// Checking the return value suppresses a (bogus) gcc warning
+	// about possibly truncating the target. We know it can't
+	// beecause dp->d_name is 256 chars
+	int ret = snprintf(path,sizeof(path),"%s/%s",subdir,dp->d_name);
+	if(ret > sizeof(path))
+	  continue; // bogus entry
 	if((Dictionary = iniparser_load(path)) != NULL){
 	  if(iniparser_find_entry(Dictionary,Name) == 1){
 	    printf("Using config file %s section %s\n",path,Name);
-	    free(path);
-	    path = NULL;
 	    break;
 	  } else {
 	    iniparser_freedict(Dictionary);
 	    Dictionary = NULL;
-	    free(path);
-	    path = NULL;
 	  }
 	}
       }
