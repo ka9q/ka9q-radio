@@ -1,4 +1,4 @@
-// $Id: airspyhf.c,v 1.46 2022/04/16 02:32:49 karn Exp $
+// $Id: airspyhf.c,v 1.47 2022/04/16 03:20:28 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #define _GNU_SOURCE 1
@@ -299,28 +299,30 @@ int main(int argc,char *argv[]){
   }
 
   {
+    // Multicast output interface for both data and status
+    Iface = config_getstring(Dictionary,Name,"iface",NULL);
+
     sdr->data_dest = config_getstring(Dictionary,Name,"data",NULL);
     // Set up output sockets
     if(sdr->data_dest == NULL){
       // Construct from serial number
       // Technically creates a memory leak since we never free it, but it's only once per run
       char *cp;
-      int const ret = asprintf(&cp,"airspy-%016llx-pcm.local",(long long unsigned)sdr->SN);
+      int ret = asprintf(&cp,"airspy-%016llx-pcm.local",(long long unsigned)sdr->SN);
       if(ret == -1)
 	exit(1);
       sdr->data_dest = cp;
     }
+    sdr->metadata_dest = config_getstring(Dictionary,Name,"status",NULL);
     if(sdr->metadata_dest == NULL){
       // Construct from serial number
       // Technically creates a memory leak since we never free it, but it's only once per run
       char *cp;
-      int const ret = asprintf(&cp,"airspy-%016llx-status.local",(long long unsigned)sdr->SN);
+      int ret = asprintf(&cp,"airspy-%016llx-status.local",(long long unsigned)sdr->SN);
       if(ret == -1)
 	exit(1);
       sdr->metadata_dest = cp;
     }
-    // Multicast output interface for both data and status
-    Iface = config_getstring(Dictionary,Name,"iface",NULL);
   }
   sdr->calibration = 0;
   // Hardware device settings
