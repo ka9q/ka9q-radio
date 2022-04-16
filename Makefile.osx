@@ -1,4 +1,4 @@
-# $Id: Makefile.osx,v 1.104 2022/04/05 06:51:03 karn Exp karn $
+# $Id: Makefile.osx,v 1.105 2022/04/14 10:55:35 karn Exp karn $
 CFLAGS=-g -DNDEBUG=1 -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 #CFLAGS=-g -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 BINDIR=/usr/local/bin
@@ -81,7 +81,7 @@ pcmsend: pcmsend.o libradio.a
 pl: pl.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread    
 
-radio: main.o radio.o audio.o fm.o wfm.o linear.o radio_status.o bandplan.o modes.o status.o decode_status.o libradio.a
+radio: main.o radio.o audio.o fm.o wfm.o linear.o radio_status.o modes.o status.o decode_status.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread
 
 rds: rds.o libradio.a
