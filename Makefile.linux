@@ -1,4 +1,4 @@
-# $Id: Makefile.linux,v 1.88 2022/04/05 06:45:04 karn Exp karn $
+# $Id: Makefile.linux,v 1.89 2022/04/16 02:31:43 karn Exp $
 COPTS=-DNDEBUG=1 -O3 -march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
 # Get local versions (e.g., of librtlsdr)
 LDOPTS=-L/usr/local/lib
@@ -22,7 +22,7 @@ SYSTEMD_FILES=airspy@.service airspyhf@.service funcube@.service hackrf@.service
 UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules 69-funcube-ka9q.rules
 
 CONF_FILES=funcube-0.conf \
-			 opus@hf.conf opus@6m.conf opus@2m.conf opus@125cm.conf opus@70cm.conf opus@aviation.conf \
+			 opus@hf.conf opus@hfdl.conf opus@6m.conf opus@2m.conf opus@125cm.conf opus@70cm.conf opus@aviation.conf \
 			 stereo.conf rds.conf \
 			 radio@10m.conf radio@6m.conf radio@fm.conf radio@2m.conf radio@125cm.conf radio@70cm.conf radio@hf.conf radio@aviation.conf radio@horus.conf radio@nws.conf radio@sonde.conf \
 			 recordings@hf.conf recordings@6m.conf recordings@2m.conf recordings@125cm.conf recordings@70cm.conf recordings@aviation.conf \
