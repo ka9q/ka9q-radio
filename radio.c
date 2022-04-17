@@ -54,7 +54,7 @@ static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in 
 struct demod *alloc_demod(void){
   pthread_mutex_lock(&Demod_mutex);
   if(Demod_list == NULL){
-    Demod_list = (struct demod *)malloc(Demod_alloc_quantum*sizeof(struct demod));
+    Demod_list = (struct demod *)calloc(Demod_alloc_quantum,sizeof(struct demod));
     Demod_list_length = Demod_alloc_quantum;
     Active_demod_count = 0;
   }
