@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.210 2022/04/15 08:10:36 karn Exp $
+// $Id: radio.c,v 1.210 2022/04/15 08:10:36 karn Exp karn $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -54,7 +54,7 @@ static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in 
 struct demod *alloc_demod(void){
   pthread_mutex_lock(&Demod_mutex);
   if(Demod_list == NULL){
-    Demod_list = (struct demod *)malloc(Demod_alloc_quantum*sizeof(struct demod));
+    Demod_list = (struct demod *)calloc(Demod_alloc_quantum,sizeof(struct demod));
     Demod_list_length = Demod_alloc_quantum;
     Active_demod_count = 0;
   }
