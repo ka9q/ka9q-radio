@@ -1,4 +1,4 @@
-# $Id: Makefile.linux,v 1.89 2022/04/16 02:31:43 karn Exp $
+# $Id: Makefile.linux,v 1.90 2022/04/18 07:42:05 karn Exp $
 COPTS=-DNDEBUG=1 -O3 -march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
 # Get local versions (e.g., of librtlsdr)
 LDOPTS=-L/usr/local/lib
@@ -11,7 +11,7 @@ DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
-DAEMONS=aprs aprsfeed funcube opus packet radio airspy airspyhf stereo rds rtlsdr start-ka9q-horus.sh
+DAEMONS=aprs aprsfeed funcube opus packet radio airspy airspyhf stereo rds rtlsdr
 
 EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decode setfilt
 
@@ -38,17 +38,17 @@ SRC=airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan
 	   status.c stereo.c wfm.c wspr-decode.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
 	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h modes.h multicast.h osc.h radio.h status.h
 
-all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf
+all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
 
 # Don't overwrite existing config files in /etc/radio
-install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf
+install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
 	/usr/sbin/adduser --quiet --system --group radio
 	/usr/sbin/adduser --quiet --system --ingroup radio airspy
 	/usr/sbin/adduser --quiet --system --ingroup radio funcube
 	/usr/sbin/adduser --quiet --system --ingroup radio recordings
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
 	install -o root -m 0755 -D --target-directory=/etc/sysctl.d 98-sockbuf.conf
-	install -o root -m 0755 -D --target-directory=$(DAEMONDIR) $(DAEMONS)
+	install -o root -m 0755 -D --target-directory=$(DAEMONDIR) $(DAEMONS) start-ka9q-horus.sh
 	install -o root -m 0755 -D --target-directory=$(BINDIR) $(EXECS)
 	install -o root -m 0644 -D --target-directory=$(LIBDIR) $(AFILES)
 	install -o root -m 0644 -D --target-directory=/etc/systemd/system $(SYSTEMD_FILES)
