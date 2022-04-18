@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.70 2022/04/15 03:31:11 karn Exp $
+// $Id: multicast.c,v 1.71 2022/04/18 06:47:54 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -58,12 +58,11 @@ int setup_mcast(char const * const target,struct sockaddr *sock,int const output
     memset(sock,0,sizeof(struct sockaddr_storage));
   }
   char iface[1024];
+  iface[0] = '\0';
   if(target)
     resolve_mcast(target,sock,DEFAULT_RTP_PORT+offset,iface,sizeof(iface));
   if(strlen(iface) == 0 && Default_mcast_iface != NULL)
     strlcpy(iface,Default_mcast_iface,sizeof(iface));
-  else
-    iface[0] = '\0';
 
   if(output == 0)
     return listen_mcast(sock,iface);
