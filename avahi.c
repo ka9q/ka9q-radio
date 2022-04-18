@@ -1,4 +1,4 @@
-// $Id: avahi.c,v 1.13 2022/04/11 07:31:10 karn Exp $
+// $Id: avahi.c,v 1.13 2022/04/11 07:31:10 karn Exp karn $
 // Adapted from avahi's example file client-publish-service.c
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
@@ -335,11 +335,13 @@ static void entry_group_callback(AvahiEntryGroup *g, AvahiEntryGroupState state,
       fprintf(stderr,"avahi_start ready condition signalled\n");
     break;
   case AVAHI_ENTRY_GROUP_COLLISION :
-    fprintf(stderr,"entry_group_callback(COLLIS)\n");
+    if(Verbose > 1)
+      fprintf(stderr,"entry_group_callback(COLLIS)\n");
 #ifdef TRACE
     dump_userdata(userdata);
 #endif
 
+#if 0
     AvahiClient *c = avahi_entry_group_get_client(g);
     char *n = avahi_alternative_service_name(userdata->service_name);
     avahi_free(userdata->service_name);
@@ -349,6 +351,9 @@ static void entry_group_callback(AvahiEntryGroup *g, AvahiEntryGroupState state,
     dump_userdata(userdata);
 #endif
     create_services(c,userdata);
+#else
+    sleep(10); // Just wait in case the other guy goes away, then retry
+#endif
     break;
   case AVAHI_ENTRY_GROUP_FAILURE :
     if(Verbose > 1)
@@ -370,6 +375,9 @@ static void entry_group_callback(AvahiEntryGroup *g, AvahiEntryGroupState state,
 // Wait until the entry group has been established successfully
 // This isn't necessarily a good idea; if the records have been manually created and avahi isn't running
 // we'd block forever unnecessarily
+
+// Removed the wait to avoid a deadlock when the DNS A records are already asserted elsewhere on the nt
+// I *think* this will cause us to wait until the other guy goes away, and then we'll assert them ourselves
 void avahi_ready(struct userdata *userdata){
 #if 1
   if(Verbose > 1){
