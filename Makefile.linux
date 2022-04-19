@@ -1,4 +1,4 @@
-# $Id: Makefile.linux,v 1.90 2022/04/18 07:42:05 karn Exp karn $
+# $Id: Makefile.linux,v 1.91 2022/04/19 22:59:06 karn Exp $
 COPTS=-DNDEBUG=1 -O3 -march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
 # Get local versions (e.g., of librtlsdr)
 LDOPTS=-L/usr/local/lib
