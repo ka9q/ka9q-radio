@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.241 2022/04/15 03:39:20 karn Exp $
+// $Id: main.c,v 1.242 2022/04/19 22:59:26 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -362,11 +362,8 @@ static int loadconfig(char const * const file){
       continue; // Already processed above
 
     fprintf(stdout,"Processing [%s]\n",sname);
-    {
-      int const d = config_getboolean(Dictionary,sname,"disable",0);
-      if(d)
+    if(config_getboolean(Dictionary,sname,"disable",0))
 	continue; // section is disabled
-    }
 
     // Structure is created and initialized before being put on list
     struct demod *demod = alloc_demod();
@@ -386,43 +383,12 @@ static int loadconfig(char const * const file){
       free_demod(&demod);
       continue;
     }
-    
-    // Override any defaults
-    {
-      char const *cp = config_getstring(Dictionary,sname,"samprate",NULL);
-      if(cp)
-	demod->output.samprate = labs(strtol(cp,NULL,0));
-    }
-    demod->output.channels = abs(config_getint(Dictionary,sname,"channels",demod->output.channels)); // value loaded from mode table
-    if(demod->output.channels < 1 || demod->output.channels > 2){
-      fprintf(stdout,"Invalid channel count: %d\n",demod->output.channels);
-      free_demod(&demod);
-      continue;
-    }
-    {
-      char const *cp = config_getstring(Dictionary,sname,"headroom",NULL);
-      if(cp)
-	demod->output.headroom = dB2voltage(-fabs(strtof(cp,NULL)));
-    }
-    demod->tune.shift = config_getdouble(Dictionary,sname,"shift",demod->tune.shift); // value loaded from mode table
-    {
-      char const *cp = config_getstring(Dictionary,sname,"squelch-open",NULL);
-      if(cp)
-	demod->squelch_open = dB2power(strtof(cp,NULL));
-      
-      cp = config_getstring(Dictionary,sname,"squelch-close",NULL);
-      if(cp)
-	demod->squelch_close = dB2power(strtof(cp,NULL));
-      else
-	demod->squelch_close = demod->squelch_open * 0.794; // - 1 dB
-    }
     {
       char const * const status = config_getstring(Dictionary,sname,"status",NULL);
       if(status){
 	fprintf(stdout,"note: 'status =' now set in [global] section only\n");
       }
     }
-
     char const * const data = config_getstring(Dictionary,sname,"data",Default.data);
     if(data == NULL){
       fprintf(stdout,"'data =' missing and not set in [%s]\n",global);
@@ -465,6 +431,19 @@ static int loadconfig(char const * const file){
       else
 	pthread_create(&demod->rtcp_thread,NULL,rtcp_send,demod);
     }
+    demod->output.rtp.ssrc = (uint32_t)config_getdouble(Dictionary,sname,"ssrc",0); // Default to 0 to trigger auto gen from freq
+    // Override any defaults with section-specific settings
+    // Not all apply to every demodulator type, but it doesn't hurt to set them anyway if given
+    {
+      char const *cp = config_getstring(Dictionary,sname,"samprate",NULL);
+      if(cp)
+	demod->output.samprate = labs(strtol(cp,NULL,0));
+    }
+    {
+      const char *cp = config_getstring(Dictionary,sname,"kaiser-beta",NULL);
+      if(cp)
+	demod->filter.kaiser_beta = fabs(strtof(cp,NULL));
+    }
     {
       const char *cp = config_getstring(Dictionary,sname,"low",NULL);
       if(cp)
@@ -475,6 +454,41 @@ static int loadconfig(char const * const file){
       if(cp)
 	demod->filter.max_IF = strtof(cp,NULL);
     }    
+    if(demod->filter.min_IF > demod->filter.max_IF){
+      // Swap
+      float t = demod->filter.min_IF;
+      demod->filter.min_IF = demod->filter.max_IF;
+      demod->filter.max_IF = t;
+    }
+    {
+      char const *cp = config_getstring(Dictionary,sname,"squelch-open",NULL);
+      if(cp)
+	demod->squelch_open = dB2power(strtof(cp,NULL));
+    }      
+    {
+      char const *cp = config_getstring(Dictionary,sname,"squelch-close",NULL);
+      if(cp)
+	demod->squelch_close = dB2power(strtof(cp,NULL)); // Add range check?
+    }
+    if(demod->squelch_close > demod->squelch_open)
+      demod->squelch_close = demod->squelch_open;
+
+    {
+      char const *cp = config_getstring(Dictionary,sname,"squelchtail",NULL);
+      if(cp)
+	demod->squelchtail = abs(strtol(cp,NULL,0));
+    }
+    {
+      char const *cp = config_getstring(Dictionary,sname,"headroom",NULL);
+      if(cp)
+	demod->output.headroom = dB2voltage(-fabs(strtof(cp,NULL)));
+    }
+    {
+      int x = abs(config_getint(Dictionary,sname,"channels",demod->output.channels));
+      if(x == 1 || x == 2)
+	demod->output.channels = x;
+    }
+    demod->tune.shift = config_getdouble(Dictionary,sname,"shift",demod->tune.shift); // value loaded from mode table
     {
       const char *cp = config_getstring(Dictionary,sname,"recover",NULL);
       if(cp)
@@ -496,13 +510,14 @@ static int loadconfig(char const * const file){
 	demod->output.gain = dB2voltage(-fabsf(strtof(cp,NULL)));
     }    
     demod->linear.env = config_getboolean(Dictionary,sname,"envelope",demod->linear.env);
-    demod->output.rtp.ssrc = (uint32_t)config_getdouble(Dictionary,sname,"ssrc",0); // Default to 0 to trigger auto gen from freq
-    demod->linear.loop_bw = fabs(config_getdouble(Dictionary,sname,"loop-bw",demod->linear.loop_bw));
     demod->linear.pll = config_getboolean(Dictionary,sname,"pll",demod->linear.pll);
     demod->linear.square = config_getboolean(Dictionary,sname,"square",demod->linear.square);
     if(demod->linear.square)
       demod->linear.pll = 1; // Square implies PLL on
-    
+    demod->filter.isb = config_getboolean(Dictionary,sname,"conj",demod->filter.isb);
+    demod->linear.loop_bw = fabs(config_getdouble(Dictionary,sname,"pll-bw",demod->linear.loop_bw));
+    demod->linear.agc = config_getboolean(Dictionary,sname,"agc",demod->linear.agc);
+
     // Process frequency/frequencies
     // To work around iniparser's limited line length, we look for multiple keywords
     // "freq", "freq0", "freq1", etc, up to "freq9"
