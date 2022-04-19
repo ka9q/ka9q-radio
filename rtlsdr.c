@@ -1,4 +1,4 @@
-// $Id: rtlsdr.c,v 1.18 2022/04/15 05:06:16 karn Exp $
+// $Id: rtlsdr.c,v 1.18 2022/04/15 05:06:16 karn Exp karn $
 // Read from RTL SDR
 // Accept control commands from UDP socket
 #define _GNU_SOURCE 1
@@ -30,6 +30,11 @@
 #include "multicast.h"
 #include "decimate.h"
 #include "status.h"
+
+// Define USE_NEW_LIBRTLSDR to use my version of librtlsdr with rtlsdr_get_freq()
+// that corrects for synthesizer fractional-N residuals. If not defined, we do the correction
+// here assuming an R820 tuner (the most common)
+#undef USE_NEW_LIBRTLSDR
 
 //#define REMOVE_DC 1
 
@@ -630,11 +635,7 @@ void do_rtlsdr_agc(struct sdrstate *sdr){
   }
 }
 
-#if 1
-double true_freq(uint64_t freq){return freq;}
-
-#elif 0
-
+#if ORIGINAL_TRUE_FREQ
 double true_freq(uint64_t freq){
   // Code extracted from tuner_r82xx.c
   int rc, i;
@@ -702,7 +703,7 @@ double true_freq(uint64_t freq){
   }
   
 }
-#elif 0
+#else // Cleaned up version
 // For a requested frequency, give the actual tuning frequency
 // similar to the code in airspy.c since both use the R820T tuner
 double true_freq(uint64_t freq_hz){
@@ -737,10 +738,6 @@ double true_freq(uint64_t freq_hz){
   // Compute true frequency; the 1/4 step bias is a puzzle
   return ((double)(r + 0.25) * pll_ref) / (double)(1 << (div_num + 16));
 }
-#else
-double true_freq(uint64_t freq_hz){
-  return (double)freq_hz;
-}
 #endif
 
 // set the rtlsdr tuner to the requested frequency applying calibration offset,
@@ -753,8 +750,11 @@ double true_freq(uint64_t freq_hz){
 double set_correct_freq(struct sdrstate *sdr,double freq){
   int64_t intfreq = round(freq / (1 + sdr->calibration));
   rtlsdr_set_center_freq(sdr->device,intfreq);
+#ifdef USE_NEW_LIBRTLSDR
   double tf = rtlsdr_get_freq(sdr->device);
-  //double tf = rtlsdr_get_center_freq(sdr->device); // Original imprecise version
+#else
+  double tf = true_freq(rtlsdr_get_center_freq(sdr->device)); // We correct the original imprecise version
+#endif
 
   sdr->frequency = tf * (1 + sdr->calibration);
   FILE *fp = fopen(sdr->frequency_file,"w");
