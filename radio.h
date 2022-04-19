@@ -1,4 +1,4 @@
-// $Id: radio.h,v 1.137 2022/04/14 10:50:43 karn Exp $
+// $Id: radio.h,v 1.137 2022/04/14 10:50:43 karn Exp karn $
 // Internal structures and functions of the 'radio' program
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
@@ -143,6 +143,7 @@ struct demod {
   
   float squelch_open;  // squelch open threshold, power ratio
   float squelch_close; // squelch close threshold
+  int squelchtail;     // Frames to hold open after loss of SNR
 
   struct {               // Used only in FM demodulator
     float pdeviation;    // Peak frequency deviation Hz (FM)

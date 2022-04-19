@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.125 2022/04/14 12:40:08 karn Exp $
+// $Id: fm.c,v 1.125 2022/04/14 12:40:08 karn Exp karn $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -15,7 +15,6 @@
 #include "radio.h"
 
 // These could be made settable if needed
-static int const squelchtail = 0; // Frames to hold open after loss of SNR
 static int const squelchzeroes = 2; // Frames of PCM zeroes after squelch closes, to flush downstream filters (eg, packet)
 
 
@@ -141,7 +140,7 @@ void *demod_fm(void *arg){
     if(snr >= demod->squelch_open
        || (squelch_state > squelchzeroes && snr >= demod->squelch_close))
       // tail timing is in blocks (usually 10 or 20 ms each)
-      squelch_state = squelchzeroes + squelchtail + 1;
+      squelch_state = squelchzeroes + demod->squelchtail + 1;
     else if(squelch_state > 0)
       squelch_state--;
     else
@@ -158,7 +157,7 @@ void *demod_fm(void *arg){
 	// actual FM demodulation 
 	float const deviation = cargf(buffer[n] * conjf(state));
 	state = buffer[n];
-	if(squelch_state > squelchzeroes + squelchtail){
+	if(squelch_state > squelchzeroes + demod->squelchtail){
 	  // Perform only when squelch is fully open, not during tail
 	  frequency_offset += deviation; // Direct FM for frequency measurement
 	  if(deviation > peak_positive_deviation)
@@ -189,7 +188,7 @@ void *demod_fm(void *arg){
     if(send_mono_output(demod,baseband,N,squelch_state <= 0) < 0)
       break; // no valid output stream; terminate!
 
-    if(squelch_state > squelchzeroes + squelchtail){
+    if(squelch_state > squelchzeroes + demod->squelchtail){
       frequency_offset *= one_over_olen;  // Average FM output is freq offset
       // Update frequency offset and peak deviation
       demod->sig.foffset = demod->output.samprate  * frequency_offset * M_1_2PI;

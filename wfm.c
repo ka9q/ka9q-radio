@@ -1,4 +1,4 @@
-// $Id: wfm.c,v 1.25 2022/04/15 08:09:26 karn Exp $
+// $Id: wfm.c,v 1.25 2022/04/15 08:09:26 karn Exp karn $
 // Wideband FM demodulation and squelch
 // Adapted from narrowband demod
 // Copyright 2020, Phil Karn, KA9Q
@@ -16,7 +16,6 @@
 #include "radio.h"
 #include "status.h"
 
-static const int squelchtail = 0; // Frames to hold open after loss of SNR
 static const int squelchzeroes = 2; // Frames of PCM zeroes after squelch closes, to flush downstream filters (eg, packet)
 
 // Forced sample rates; config file values are ignored for now
@@ -171,7 +170,7 @@ void *demod_wfm(void *arg){
     if(demod->sig.snr >= demod->squelch_open
        || (squelch_state > squelchzeroes && snr >= demod->squelch_close))
       // tail timing is in blocks (usually 10 or 20 ms each)
-      squelch_state = squelchzeroes + squelchtail + 1;
+      squelch_state = squelchzeroes + demod->squelchtail + 1;
     else if(squelch_state > 0)
       squelch_state--;
     else
