@@ -1,4 +1,4 @@
-// $Id: modes.c,v 1.53 2022/04/19 07:26:01 karn Exp $
+// $Id: modes.c,v 1.54 2022/04/19 22:58:33 karn Exp $
 // Load and search mode definition table in /usr/local/share/ka9q-radio/modes.conf
 
 // Copyright 2018, Phil Karn, KA9Q
@@ -22,6 +22,7 @@
 #include "config.h"
 
 
+static int const DEFAULT_SAMPRATE = 24000;
 static float const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
 static float const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
 static float const DEFAULT_HIGH = 5000.0;
@@ -96,7 +97,7 @@ int preset_mode(struct demod * const demod,char const * const mode){
       return -1;
     }
   }
-
+  demod->output.samprate = labs(config_getint(Mdict,mode,"samprate",DEFAULT_SAMPRATE));
   demod->filter.kaiser_beta = config_getfloat(Mdict,mode,"kaiser-beta",DEFAULT_KAISER_BETA);
 
   // Defaults really shouldn't be used
