@@ -1,4 +1,4 @@
-// $Id: radio.h,v 1.137 2022/04/14 10:50:43 karn Exp karn $
+// $Id: radio.h,v 1.138 2022/04/19 07:26:01 karn Exp $
 // Internal structures and functions of the 'radio' program
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
