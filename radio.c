@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.210 2022/04/15 08:10:36 karn Exp karn $
+// $Id: radio.c,v 1.211 2022/04/18 06:47:54 karn Exp karn $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -119,7 +119,6 @@ void *estimate_n0(void *arg){
     pthread_mutex_lock(&master->filter_mutex);
     while(blocknum == master->blocknum)
       pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
-    blocknum = master->blocknum;
     pthread_mutex_unlock(&master->filter_mutex);
 
 #if 0
@@ -161,6 +160,7 @@ void *estimate_n0(void *arg){
 	      master->bins,first_bin,last_bin,
 	      Frontend.n0,power2dB(Frontend.n0));
 #endif
+    blocknum++;
   }
 }
 
