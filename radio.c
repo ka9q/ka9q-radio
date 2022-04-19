@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.211 2022/04/18 06:47:54 karn Exp karn $
+// $Id: radio.c,v 1.212 2022/04/19 05:15:12 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
