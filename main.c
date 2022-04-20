@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.242 2022/04/19 22:59:26 karn Exp $
+// $Id: main.c,v 1.244 2022/04/20 07:01:09 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -33,7 +33,7 @@
 #include "status.h"
 #include "config.h"
 
-// Config constants & defaults
+// Configuration constants & defaults
 static char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
 
 static int const DEFAULT_IP_TOS = 48;
@@ -41,23 +41,33 @@ static int const DEFAULT_MCAST_TTL = 1;
 static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
 static int const DEFAULT_FFT_THREADS = 1;
-static int const DEFAULT_SAMPRATE = 48000;
+static int const DEFAULT_SAMPRATE = 24000;
+static float const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
+static float const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
+static float const DEFAULT_HIGH = 5000.0;
+static float const DEFAULT_HEADROOM = -15.0;     // keep gaussian signals from clipping
+static float const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
+static float const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
+static float const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
+static float const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
+static float const DEFAULT_GAIN = 80.0;          // Unused in FM, usually adjusted automatically in linear
+static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
+static float const DEFAULT_PLL_BW = 100.0;       // Reasonable for AM
+static int const DEFAULT_SQUELCHTAIL = 1;        // close on frame *after* going below threshold, may let partial frame noise through
+static float const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
+static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
+
+
+
 char const *Modefile = "/usr/local/share/ka9q-radio/modes.conf";
 
 // Command line and environ params
 int Verbose;
 static char const *Locale = "en_US.UTF-8";
-dictionary *Dictionary; // Config file descriptor for iniparser
+dictionary *Configtable; // Configtable file descriptor for iniparser
+dictionary *Modetable;
 
 struct demod *Dynamic_demod; // Prototype for dynamically created demods
-
-// Global parameters, can be changed in init file
-struct {
-  int samprate;
-  char const *data;
-  char const *mode;
-  float gain;
-} Default;
 
 int Mcast_ttl;
 int IP_tos; // AF12 left shifted 2 bits
@@ -143,7 +153,7 @@ int main(int argc,char *argv[]){
   
   char const *configfile;
   if(argc <= optind){
-    fprintf(stdout,"Config file missing\n");
+    fprintf(stdout,"Configtable file missing\n");
     exit(1);
   }
   configfile = argv[optind];
@@ -295,39 +305,36 @@ static int loadconfig(char const * const file){
     base_address <<= 8;
     base_address += Name[i];
   }
-  Dictionary = iniparser_load(file);
-  if(Dictionary == NULL){
+  Configtable = iniparser_load(file);
+  if(Configtable == NULL){
     fprintf(stdout,"Can't load config file %s\n",file);
     exit(1);
   }
+  // Process [global] section applying to all demodulator blocks
   char const * const global = "global";
+  if(config_getboolean(Configtable,global,"verbose",0))
+    Verbose++;
+  IP_tos = config_getint(Configtable,global,"tos",DEFAULT_IP_TOS);
+  Mcast_ttl = config_getint(Configtable,global,"ttl",DEFAULT_MCAST_TTL);
+  Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",DEFAULT_BLOCKTIME));
+  Overlap = abs(config_getint(Configtable,global,"overlap",DEFAULT_OVERLAP));
+  Nthreads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFT_THREADS);
+  RTCP_enable = config_getboolean(Configtable,global,"rtcp",0);
+  SAP_enable = config_getboolean(Configtable,global,"sap",0);
+  Modefile = config_getstring(Configtable,global,"mode-file",Modefile);
+  Wisdom_file = config_getstring(Configtable,global,"wisdom-file",Wisdom_file);
+  char const * const input = config_getstring(Configtable,global,"input",NULL);
+  if(input == NULL){
+    // Mandatory
+    fprintf(stdout,"input not specified in [%s]\n",global);
+    exit(1);
+  }
+  if(setup_frontend(input) == -1){
+    fprintf(stdout,"Front end setup of %s failed\n",input);
+    exit(1);
+  }
   {
-    if(config_getboolean(Dictionary,global,"verbose",0))
-      Verbose++;
-    IP_tos = config_getint(Dictionary,global,"tos",DEFAULT_IP_TOS);
-    Mcast_ttl = config_getint(Dictionary,global,"ttl",DEFAULT_MCAST_TTL);
-    Blocktime = fabs(config_getdouble(Dictionary,global,"blocktime",DEFAULT_BLOCKTIME));
-    Overlap = abs(config_getint(Dictionary,global,"overlap",DEFAULT_OVERLAP));
-    Nthreads = config_getint(Dictionary,global,"fft-threads",DEFAULT_FFT_THREADS);
-    RTCP_enable = config_getboolean(Dictionary,global,"rtcp",0);
-    SAP_enable = config_getboolean(Dictionary,global,"sap",0);
-    Default.samprate = config_getint(Dictionary,global,"samprate",DEFAULT_SAMPRATE);
-    Modefile = config_getstring(Dictionary,global,"mode-file",Modefile);
-    Default.data = config_getstring(Dictionary,global,"data",NULL);
-    Default.mode = config_getstring(Dictionary,global,"mode",NULL);
-    Wisdom_file = config_getstring(Dictionary,global,"wisdom-file",Wisdom_file);
-
-    char const * const input = config_getstring(Dictionary,global,"input",NULL);
-    if(input == NULL){
-      // Mandatory
-      fprintf(stdout,"input not specified in [%s]\n",global);
-      exit(1);
-    }
-    if(setup_frontend(input) == -1){
-      fprintf(stdout,"Front end setup of %s failed\n",input);
-      exit(1);
-    }
-    char const * const status = config_getstring(Dictionary,global,"status",NULL); // Status/command thread for all demodulators
+    char const * const status = config_getstring(Configtable,global,"status",NULL); // Status/command thread for all demodulators
     if(status != NULL){
       // Target for status/control stream. Optional.
       strlcpy(Metadata_dest_string,status,sizeof(Metadata_dest_string));
@@ -352,44 +359,162 @@ static int loadconfig(char const * const file){
       }
     }
   }
-
-  // Process sections other than global
-  int const nsect = iniparser_getnsec(Dictionary);
-
+  // Process individual demodulator sections
+  if(Modetable == NULL){
+    Modetable = iniparser_load(Modefile); // Kept open for duration of program
+    if(Modetable == NULL){
+      fprintf(stdout,"Can't load mode file %s\n",Modefile);
+      return -1;
+    }
+  }
+  int const nsect = iniparser_getnsec(Configtable);
   for(int sect = 0; sect < nsect; sect++){
-    char const * const sname = iniparser_getsecname(Dictionary,sect);
+    char const * const sname = iniparser_getsecname(Configtable,sect);
     if(strcmp(sname,global) == 0)
       continue; // Already processed above
 
     fprintf(stdout,"Processing [%s]\n",sname);
-    if(config_getboolean(Dictionary,sname,"disable",0))
+    if(config_getboolean(Configtable,sname,"disable",0))
 	continue; // section is disabled
 
     // Structure is created and initialized before being put on list
     struct demod *demod = alloc_demod();
-    // Set nonzero defaults
     demod->tp1 = demod->tp2 = NAN;
-    demod->output.samprate = Default.samprate;
-    
-    // load presets from mode table, overwriting/merging with defaults
-    char const * const mode = config_getstring(Dictionary,sname,"mode",Default.mode);
-    if(mode == NULL || strlen(mode) == 0){
-      fprintf(stdout,"'mode =' missing and not set in [%s]\n",global);
-      free_demod(&demod);
-      continue;
-    }
-    if(preset_mode(demod,mode) == -1){
-      fprintf(stdout,"'mode = %s' invalid\n",mode);
-      free_demod(&demod);
-      continue;
-    }
+    demod->tune.doppler = 0;
+    demod->tune.doppler_rate = 0;
+    // De-emphasis defaults to off, enabled only in FM modes
+    demod->deemph.rate = 0;
+    demod->deemph.gain = 1.0;
+
+    // fall back to setting in [global] if parameter not specified in individual section
+    // Set parameters even when unused for the current demodulator in case the demod is changed later
+    char const * mode = config2_getstring(Configtable,Configtable,global,sname,"mode",NULL);
+    if(mode == NULL || strlen(mode) == 0)
+      fprintf(stdout,"warning: mode preset not selected, using built-in defaults\n");
+
     {
-      char const * const status = config_getstring(Dictionary,sname,"status",NULL);
-      if(status){
-	fprintf(stdout,"note: 'status =' now set in [global] section only\n");
+      char const * demod_name = config2_getstring(Modetable,Configtable,mode,sname,"demod",NULL);
+      if(demod_name == NULL){
+	fprintf(stdout,"Demodulator name missing\n");
+	free_demod(&demod);
+	continue;
+      }
+      demod->demod_type = demod_type_from_name(demod_name);
+      if(demod->demod_type < 0){
+	fprintf(stderr,"Demodulator '%s' unknown\n",demod_name);
+	free_demod(&demod);
+	continue;
       }
     }
-    char const * const data = config_getstring(Dictionary,sname,"data",Default.data);
+    demod->output.rtp.ssrc = (uint32_t)config_getdouble(Configtable,sname,"ssrc",0); // Default triggers auto gen from freq
+    demod->output.samprate = config2_getint(Modetable,Configtable,mode,global,"samprate",DEFAULT_SAMPRATE);
+    demod->output.samprate = abs(demod->output.samprate);
+    if(demod->output.samprate == 0){
+      fprintf(stdout,"Error! samprate is zero\n");
+      free_demod(&demod);
+      continue;
+    }
+    demod->filter.kaiser_beta = config2_getfloat(Modetable,Configtable,mode,global,"kaiser-beta",DEFAULT_KAISER_BETA);
+    {
+      // Pre-detection filter limits
+      float low = config2_getfloat(Modetable,Configtable,mode,global,"low",DEFAULT_LOW);
+      float high = config2_getfloat(Modetable,Configtable,mode,global,"high",DEFAULT_HIGH);
+      if(low > high){
+	// Ensure high > low
+	float t = low;
+	low = high;
+	high = t;
+      }
+      demod->filter.max_IF = high;
+      demod->filter.min_IF = low;
+    }
+    {
+      float squelch_open = config2_getfloat(Modetable,Configtable,mode,global,"squelch-open",DEFAULT_SQUELCH_OPEN);
+      float squelch_close = config2_getfloat(Modetable,Configtable,mode,global,"squelch-close",DEFAULT_SQUELCH_CLOSE);
+      if(squelch_close > squelch_open){
+	fprintf(stdout,"warning: setting squelch_close = squelch_open\n");
+	squelch_close = squelch_open;
+      }
+      demod->squelch_open = dB2power(squelch_open);
+      demod->squelch_close = dB2power(squelch_close);
+    }
+    demod->squelchtail = config2_getint(Modetable,Configtable,mode,global,"squelchtail",DEFAULT_SQUELCHTAIL);
+    demod->squelchtail = abs(demod->squelchtail); // ensure not negative
+    {
+      float headroom = config2_getfloat(Modetable,Configtable,mode,global,"headroom",DEFAULT_HEADROOM);
+      demod->output.headroom = dB2voltage(-fabsf(headroom)); // always treat as <= 0 dB
+    }
+    {
+      int channels = config2_getint(Modetable,Configtable,mode,global,"channels",1); // Default mono, i.e., not IQ
+      if(config2_getboolean(Modetable,Configtable,mode,global,"stereo",0))
+	channels = 2;
+      if(config2_getboolean(Modetable,Configtable,mode,global,"mono",0))
+	channels = 1;
+      
+      if(channels != 1 && channels != 2){
+	fprintf(stdout,"Invalid channel count %d, forcing to 1\n",demod->output.channels);
+	channels = 1;
+      }
+      demod->output.channels = channels;
+    }
+    demod->tune.shift = config2_getfloat(Modetable,Configtable,mode,sname,"shift",0.0);
+    {
+      // dB/sec -> voltage ratio/block
+      float x = config2_getfloat(Modetable,Configtable,mode,sname,"recovery-rate",DEFAULT_RECOVERY_RATE);
+      demod->linear.recovery_rate = dB2voltage(fabsf(x) * .001f * Blocktime);
+    }
+    {
+      // time in seconds -> time in blocks
+      float x = config2_getfloat(Modetable,Configtable,mode,sname,"hang-time",DEFAULT_HANGTIME);
+      demod->linear.hangtime = fabsf(x) / (.001 * Blocktime); // Always >= 0
+    }
+    {
+      float x = config2_getfloat(Modetable,Configtable,mode,sname,"threshold",DEFAULT_THRESHOLD);
+      demod->linear.threshold = dB2voltage(-fabsf(x)); // Always <= unity
+    }
+    {
+      float x = config2_getfloat(Modetable,Configtable,mode,sname,"gain",DEFAULT_GAIN);
+      demod->output.gain = dB2voltage(x); // Can be more or less than unity
+    }
+    demod->linear.env = config2_getboolean(Modetable,Configtable,mode,sname,"envelope",0);   // default off 
+    demod->linear.pll = config2_getboolean(Modetable,Configtable,mode,sname,"pll",0);        // default off. On also enables squelch!
+    demod->linear.square = config2_getboolean(Modetable,Configtable,mode,sname,"square",0);  // default off. On implies PLL on
+    if(demod->linear.square)
+      demod->linear.pll = 1; // Square implies PLL
+
+    demod->filter.isb = config2_getboolean(Modetable,Configtable,mode,sname,"conj",0);       // default off (unimplemented anyway)
+    demod->linear.loop_bw = config2_getfloat(Modetable,Configtable,mode,sname,"pll-bw",DEFAULT_PLL_BW);
+    demod->linear.agc = config2_getboolean(Modetable,Configtable,mode,sname,"agc",1);        // default ON
+    switch(demod->demod_type){
+    case LINEAR_DEMOD:
+      break;
+    case FM_DEMOD:
+      {
+	float tc = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-tc",DEFAULT_NBFM_TC);
+	if(tc != 0.0){
+	  demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * demod->output.samprate));
+	  demod->deemph.gain = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-gain",4.0); // empirical value, needs work
+	}
+      }
+      break;
+    case WFM_DEMOD:
+      demod->output.channels = 2;      // always stereo
+      demod->output.samprate = 384000; // downconverter samprate forced for FM stereo decoding. Output also forced to 48 kHz
+      {
+	// Default 75 microseconds for north american FM broadcasting
+	float tc = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-tc",DEFAULT_WFM_TC);
+	if(tc != 0){
+	  demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * 48000)); // hardwired output sample rate -- needs cleanup
+	  demod->deemph.gain = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-gain",4.0);  // empirical value, needs work
+	}
+      }
+    }
+    char const * const status = config_getstring(Configtable,sname,"status",NULL);
+    if(status)
+      fprintf(stdout,"note: 'status =' now set in [global] section only\n");
+
+    char const * data = config_getstring(Configtable,global,"data",NULL);
+    data = config_getstring(Configtable,sname,"data",data);
     if(data == NULL){
       fprintf(stdout,"'data =' missing and not set in [%s]\n",global);
       free_demod(&demod);
@@ -431,93 +556,6 @@ static int loadconfig(char const * const file){
       else
 	pthread_create(&demod->rtcp_thread,NULL,rtcp_send,demod);
     }
-    demod->output.rtp.ssrc = (uint32_t)config_getdouble(Dictionary,sname,"ssrc",0); // Default to 0 to trigger auto gen from freq
-    // Override any defaults with section-specific settings
-    // Not all apply to every demodulator type, but it doesn't hurt to set them anyway if given
-    {
-      char const *cp = config_getstring(Dictionary,sname,"samprate",NULL);
-      if(cp)
-	demod->output.samprate = labs(strtol(cp,NULL,0));
-    }
-    {
-      const char *cp = config_getstring(Dictionary,sname,"kaiser-beta",NULL);
-      if(cp)
-	demod->filter.kaiser_beta = fabs(strtof(cp,NULL));
-    }
-    {
-      const char *cp = config_getstring(Dictionary,sname,"low",NULL);
-      if(cp)
-	demod->filter.min_IF = strtof(cp,NULL);
-    }    
-    {
-      const char *cp = config_getstring(Dictionary,sname,"high",NULL);
-      if(cp)
-	demod->filter.max_IF = strtof(cp,NULL);
-    }    
-    if(demod->filter.min_IF > demod->filter.max_IF){
-      // Swap
-      float t = demod->filter.min_IF;
-      demod->filter.min_IF = demod->filter.max_IF;
-      demod->filter.max_IF = t;
-    }
-    {
-      char const *cp = config_getstring(Dictionary,sname,"squelch-open",NULL);
-      if(cp)
-	demod->squelch_open = dB2power(strtof(cp,NULL));
-    }      
-    {
-      char const *cp = config_getstring(Dictionary,sname,"squelch-close",NULL);
-      if(cp)
-	demod->squelch_close = dB2power(strtof(cp,NULL)); // Add range check?
-    }
-    if(demod->squelch_close > demod->squelch_open)
-      demod->squelch_close = demod->squelch_open;
-
-    {
-      char const *cp = config_getstring(Dictionary,sname,"squelchtail",NULL);
-      if(cp)
-	demod->squelchtail = abs(strtol(cp,NULL,0));
-    }
-    {
-      char const *cp = config_getstring(Dictionary,sname,"headroom",NULL);
-      if(cp)
-	demod->output.headroom = dB2voltage(-fabs(strtof(cp,NULL)));
-    }
-    {
-      int x = abs(config_getint(Dictionary,sname,"channels",demod->output.channels));
-      if(x == 1 || x == 2)
-	demod->output.channels = x;
-    }
-    demod->tune.shift = config_getdouble(Dictionary,sname,"shift",demod->tune.shift); // value loaded from mode table
-    {
-      const char *cp = config_getstring(Dictionary,sname,"recover",NULL);
-      if(cp)
-	demod->linear.recovery_rate = dB2voltage(fabsf(strtof(cp,NULL) * .001f * Blocktime));
-    }
-    {
-      const char *cp = config_getstring(Dictionary,sname,"hang-time",NULL);
-      if(cp)
-	demod->linear.hangtime = fabsf(strtof(cp,NULL)) / (.001f * Blocktime);  // time in seconds -> time in blocks
-    }
-    {
-      const char *cp = config_getstring(Dictionary,sname,"threshold",NULL);
-      if(cp)
-	demod->linear.threshold = dB2voltage(-fabsf(strtof(cp,NULL)));
-    }    
-    {
-      const char *cp = config_getstring(Dictionary,sname,"gain",NULL);
-      if(cp)
-	demod->output.gain = dB2voltage(-fabsf(strtof(cp,NULL)));
-    }    
-    demod->linear.env = config_getboolean(Dictionary,sname,"envelope",demod->linear.env);
-    demod->linear.pll = config_getboolean(Dictionary,sname,"pll",demod->linear.pll);
-    demod->linear.square = config_getboolean(Dictionary,sname,"square",demod->linear.square);
-    if(demod->linear.square)
-      demod->linear.pll = 1; // Square implies PLL on
-    demod->filter.isb = config_getboolean(Dictionary,sname,"conj",demod->filter.isb);
-    demod->linear.loop_bw = fabs(config_getdouble(Dictionary,sname,"pll-bw",demod->linear.loop_bw));
-    demod->linear.agc = config_getboolean(Dictionary,sname,"agc",demod->linear.agc);
-
     // Process frequency/frequencies
     // To work around iniparser's limited line length, we look for multiple keywords
     // "freq", "freq0", "freq1", etc, up to "freq9"
@@ -529,7 +567,7 @@ static int loadconfig(char const * const file){
       else
 	snprintf(fname,sizeof(fname),"freq%d",ff);
 
-      char const * const frequencies = config_getstring(Dictionary,sname,fname,NULL);
+      char const * const frequencies = config_getstring(Configtable,sname,fname,NULL);
       if(frequencies == NULL)
 	break; // no more
 
@@ -598,8 +636,8 @@ static int loadconfig(char const * const file){
     pthread_create(&Status_thread,NULL,radio_status,NULL);
     pthread_create(&Demod_reaper_thread,NULL,demod_reaper,NULL);
   }
-  iniparser_freedict(Dictionary);
-  Dictionary = NULL;
+  iniparser_freedict(Configtable);
+  Configtable = NULL;
   return ndemods;
 }
 
