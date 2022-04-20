@@ -1,4 +1,4 @@
-// $Id: wfm.c,v 1.26 2022/04/19 07:26:01 karn Exp $
+// $Id: wfm.c,v 1.27 2022/04/20 11:11:30 karn Exp $
 // Wideband FM demodulation and squelch
 // Adapted from narrowband demod
 // Copyright 2020, Phil Karn, KA9Q
@@ -148,12 +148,13 @@ void *demod_wfm(void *arg){
     // Find average amplitude and variance for SNR estimation
     // Use two passes to avoid possible numerical problems
     float amplitudes[composite_L];
+    complex float * const buffer = demod->filter.out->output.c;
     demod->sig.bb_power = 0;
     float avg_amp = 0;
     for(int n=0; n < composite_L; n++){
-      float const t = cnrmf(demod->filter.out->output.c[n]);
+      float const t = cnrmf(buffer[n]);
       demod->sig.bb_power += t;
-      avg_amp += amplitudes[n] = approx_magf(demod->filter.out->output.c[n]);
+      avg_amp += amplitudes[n] = approx_magf(buffer[n]);
     }
     demod->sig.bb_power /= composite_L;
     avg_amp /= composite_L;
@@ -167,67 +168,67 @@ void *demod_wfm(void *arg){
     const float snr = fm_snr(avg_amp*avg_amp/fm_variance);
     demod->sig.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
 
+    // Hysteresis squelch
+    int const squelch_state_max = squelchzeroes + demod->squelchtail + 1;
     if(demod->sig.snr >= demod->squelch_open
        || (squelch_state > squelchzeroes && snr >= demod->squelch_close))
+      // Squelch is fully open
       // tail timing is in blocks (usually 10 or 20 ms each)
-      squelch_state = squelchzeroes + demod->squelchtail + 1;
+      squelch_state = squelch_state_max;
     else if(squelch_state > 0)
-      squelch_state--;
+      squelch_state--; // Squelch closing
     else
-      squelch_state = 0;
+      squelch_state = 0; // Squelch closed
 
-    if(squelch_state >= squelchzeroes){ // Squelch is (still) open
+    if(squelch_state >= squelchzeroes){ // Squelch is not completely closed
       // Actual FM demodulation
-      float pdev_pos = 0;
-      float pdev_neg = 0;
-      float avg_f = 0;
+      float peak_positive_deviation = 0;
+      float peak_negative_deviation = 0;
+      float frequency_offset = 0;
       float output_level = 0;
 
       for(int n=0; n < composite_L; n++){
-	complex float const p = demod->filter.out->output.c[n] * conjf(state);
-	state = demod->filter.out->output.c[n]; // Remember for next sample
-	// Although p can be zero, argf() is defined as returning 0, not NAN
-	float const ang = cargf(p); // Change in phase angle between samples
-
+	// Although deviation can be zero, argf() is defined as returning 0, not NAN
+	float const deviation = cargf(buffer[n] * conjf(state));
+	state = buffer[n]; // Remember for next sample
 	// If state ever goes NaN, it will permanently pollute the output stream!
 	if(isnan(__real__ state) || isnan(__imag__ state)){
 	  fprintf(stdout,"NaN state!\n");
 	  state = 0;
 	}
-
-	if(demod->sig.snr > demod->squelch_open){
+	if(squelch_state == squelch_state_max){
 	  // Remember deviation peaks only when squelch is fully open, not during tail
-	  avg_f += ang; // Direct FM for frequency measurement
-	  if(ang > pdev_pos)
-	    pdev_pos = ang;
-	  else if(ang < pdev_neg)
-	    pdev_neg = ang;
+	  frequency_offset += deviation; // Direct FM for frequency measurement
+	  if(deviation > peak_positive_deviation)
+	    peak_positive_deviation = deviation;
+	  else if(deviation < peak_negative_deviation)
+	    peak_negative_deviation = deviation;
 	}
 	assert(!isnan(composite->input.r[n])); // Shouldn't happen, but that's what asserts are for
-	composite->input.r[n] = ang * demod->output.gain; // Straight FM, no threshold extension
+	composite->input.r[n] = deviation * demod->output.gain; // Straight FM, no threshold extension
 	output_level += composite->input.r[n] * composite->input.r[n];
       } // for(int n=0; n < composite_L; n++){
       lastaudio = composite->input.r[composite_L - 1]; // Starting point for soft decay if squelch closes
       demod->output.level = output_level / composite_L;
 
-      if(demod->sig.snr > demod->squelch_open){
-	avg_f /= composite_L;  // Average FM output is freq offset
+      if(squelch_state == squelch_state_max){
+	frequency_offset /= composite_L;  // Average FM output is freq offset
 	// Update frequency offset and peak deviation
-	float const offset = demod->output.samprate  * avg_f * M_1_2PI;
+	float const offset = demod->output.samprate  * frequency_offset * M_1_2PI;
 	if(!isfinite(demod->sig.foffset))
 	  demod->sig.foffset = offset;
 	else
-	  demod->sig.foffset += (offset - demod->sig.foffset) * .002; // Smooth it down
+	  demod->sig.foffset += (offset - demod->sig.foffset) * .01; // Smooth it down
       
 	// Remove frequency offset from deviation peaks and scale
-	pdev_pos -= avg_f;
-	pdev_neg -= avg_f;
+	peak_positive_deviation -= frequency_offset;
+	peak_negative_deviation -= frequency_offset;
 	// Fast attack, slow decay
-	float const peak = demod->output.samprate * max(pdev_pos,-pdev_neg) * M_1_2PI;
-	if(!isfinite(demod->fm.pdeviation) || peak > demod->fm.pdeviation)
+	float const peak = demod->output.samprate * max(peak_positive_deviation,-peak_negative_deviation) * M_1_2PI;
+	if(!isfinite(demod->fm.pdeviation) || peak >= demod->fm.pdeviation)
 	  demod->fm.pdeviation = peak;
 	else
-	  demod->fm.pdeviation += (offset - demod->fm.pdeviation) * .002;
+	  demod->fm.pdeviation -= demod->fm.pdeviation * .01;
       }
     } else if(squelch_state >= 0){ // Squelch closed, but emitting padding
       // Exponentially decay padding to avoid squelch-closing thump

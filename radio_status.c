@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.71 2022/04/14 10:50:43 karn Exp $
+// $Id: radio_status.c,v 1.72 2022/04/20 11:10:26 karn Exp $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -163,8 +163,10 @@ static int get_ssrc(unsigned char const *buffer,int length){
 
 // with SSRC selection, should scan entire command for our SSRC before we execute any of it
 static int decode_radio_commands(struct demod *demod,unsigned char const *buffer,int length){
-  unsigned char const *cp = buffer;
+  int restart_needed = 0;
+  int new_filter_needed = 0;
   
+  unsigned char const *cp = buffer;
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
 
@@ -180,6 +182,16 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
       goto done;
     case COMMAND_TAG:
       Command_tag = decode_int(cp,optlen);
+      break;
+    case OUTPUT_SAMPRATE:
+      // Restart the demodulator to recalculate filters, etc
+      {
+	int new_sample_rate = decode_int(cp,optlen);
+	if(new_sample_rate != demod->output.samprate){
+	  demod->output.samprate = new_sample_rate;
+	  restart_needed = 1;
+	}
+      }
       break;
     case RADIO_FREQUENCY: // Hz
       {
@@ -224,12 +236,7 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
 	float const f = decode_float(cp,optlen);
 	if(isfinite(f) && f != demod->filter.min_IF){
 	  demod->filter.min_IF = f;
-	  if(demod->filter.out){
-	    // start_demod already sets up a new filter
-	    set_filter(demod->filter.out,demod->filter.min_IF/demod->output.samprate,
-		       demod->filter.max_IF/demod->output.samprate,
-		       demod->filter.kaiser_beta);
-	  }
+	  new_filter_needed = 1;
 	}
       }
       break;
@@ -238,12 +245,7 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
 	float const f = decode_float(cp,optlen);
 	if(isfinite(f) && demod->filter.max_IF != f){
 	  demod->filter.max_IF = f;
-	  if(demod->filter.out){
-	    // start_demod already sets up a new filter
-	    set_filter(demod->filter.out,demod->filter.min_IF/demod->output.samprate,
-		       demod->filter.max_IF/demod->output.samprate,
-		       demod->filter.kaiser_beta);
-	  }
+	  new_filter_needed = 1;
 	}
       }
       break;
@@ -252,12 +254,7 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
 	  float const f = fabsf(decode_float(cp,optlen));
 	  if(isfinite(f) && demod->filter.kaiser_beta != f)
 	    demod->filter.kaiser_beta = f;
-	  if(demod->filter.out){
-	    // start_demod already sets up a new filter
-	    set_filter(demod->filter.out,demod->filter.min_IF/demod->output.samprate,
-		       demod->filter.max_IF/demod->output.samprate,
-		       demod->filter.kaiser_beta);
-	  }
+	  new_filter_needed = 1;
 	}
       break;
     case DEMOD_TYPE:
@@ -265,11 +262,7 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
 	enum demod_type const i = decode_int(cp,optlen);
 	if(i >= 0 && i < Ndemod && i != demod->demod_type){
 	  demod->demod_type = i;
-	  demod->terminate = 1;
-	  pthread_join(demod->demod_thread,NULL);
-	  demod->terminate = 0;
-	  demod->demod_thread = (pthread_t)0;
-	  start_demod(demod);
+	  restart_needed = 1;
 	}
       }
       break;
@@ -357,7 +350,24 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
     cp += optlen;
   }
  done:;
-  // Handle frequency changes in priority order: RF first
+  if(restart_needed){
+    // Stop demod
+    demod->terminate = 1;
+    pthread_join(demod->demod_thread,NULL);
+    demod->demod_thread = (pthread_t)0;
+    demod->terminate = 0;
+  }
+  if(new_filter_needed){
+    // Set up new filter with demod possibly stopped
+    if(demod->filter.out){
+      // start_demod already sets up a new filter
+      set_filter(demod->filter.out,demod->filter.min_IF/demod->output.samprate,
+		 demod->filter.max_IF/demod->output.samprate,
+		 demod->filter.kaiser_beta);
+    }
+  }    
+  if(restart_needed)
+    start_demod(demod);
 
   return 0;
 }

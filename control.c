@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.143 2022/04/18 02:08:43 karn Exp $
+// $Id: control.c,v 1.146 2022/04/20 11:46:40 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -41,11 +41,31 @@
 #include "config.h"
 
 
-float Headroom = 0.177827941; // -15 dB voltage ratio
+static int const DEFAULT_IP_TOS = 48;
+static int const DEFAULT_MCAST_TTL = 1;
+static int const DEFAULT_SAMPRATE = 24000;
+static float const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
+static float const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
+static float const DEFAULT_HIGH = 5000.0;
+static float const DEFAULT_HEADROOM = -15.0;     // keep gaussian signals from clipping
+static float const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
+static float const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
+static float const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
+static float const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
+static float const DEFAULT_GAIN = 80.0;          // Unused in FM, usually adjusted automatically in linear
+static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
+static float const DEFAULT_PLL_BW = 100.0;       // Reasonable for AM
+
+#if 0 // Not allocated parameters yet
+static int const DEFAULT_SQUELCHTAIL = 1;        // close on frame *after* going below threshold, may let partial frame noise through
+static float const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
+static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
+#endif
+
 
 float Refresh_rate = 0.1;
-int Mcast_ttl = 5;
-int IP_tos = 0;
+int Mcast_ttl = DEFAULT_MCAST_TTL;
+int IP_tos = DEFAULT_IP_TOS;
 char const *Libdir = "/usr/local/share/ka9q-radio";
 char Locale[256] = "en_US.UTF-8";
 char const *Modefile = "/usr/local/share/ka9q-radio/modes.conf"; // make configurable!
@@ -903,7 +923,15 @@ int init_demod(struct demod *demod){
 
 // Set major operating mode
 // Adapted from the version in radio,c, but simpler -- note it's different!!
-// incomplete - needs fleshing out
+
+// Currently, when setting a mode from control, all the parameters are
+// expected in the command, and they are taken from the modes.conf on
+// the *local* system, not the one running 'radio'. What if they're
+// not sent, e.g,. because the local modes.conf is broken?  It might
+// be a lot simpler to just send a mode name so 'radio' can use its
+// own modes.conf file. The user can still modify individual
+// parameters after the new mode is running. This would require a new
+// command parameter
 int control_preset_mode(struct demod *demod,unsigned char **bpp,const char * const mode){
   char const *typename = config_getstring(Mdict,mode,"demod",NULL);
 
@@ -918,12 +946,10 @@ int control_preset_mode(struct demod *demod,unsigned char **bpp,const char * con
   }
 
   encode_byte(bpp,DEMOD_TYPE,type);
-  encode_int(bpp,OUTPUT_CHANNELS,config_getint(Mdict,mode,"channels",1));
-  encode_float(bpp,LOW_EDGE,config_getfloat(Mdict,mode,"low",-5000));
-  encode_float(bpp,HIGH_EDGE,config_getfloat(Mdict,mode,"high",5000));
 
   switch(type){
   case LINEAR_DEMOD:
+    encode_int(bpp,OUTPUT_SAMPRATE,config_getint(Mdict,mode,"samprate",DEFAULT_SAMPRATE));
     // Set parameters that are don't cares in other modes
     {
       float shift = config_getfloat(Mdict,mode,"shift",0);
@@ -942,14 +968,29 @@ int control_preset_mode(struct demod *demod,unsigned char **bpp,const char * con
 
     encode_byte(bpp,PLL_ENABLE,pll);
     encode_byte(bpp,PLL_SQUARE,square);
-    encode_float(bpp,AGC_RECOVERY_RATE,config_getfloat(Mdict,mode,"recovery-rate",0.0));
-    encode_float(bpp,AGC_HANGTIME,config_getfloat(Mdict,mode,"hang-time",1.0));
-    encode_float(bpp,AGC_THRESHOLD,config_getfloat(Mdict,mode,"threshold",-15.0));
+    encode_float(bpp,PLL_BW,DEFAULT_PLL_BW);
+    encode_float(bpp,AGC_RECOVERY_RATE,config_getfloat(Mdict,mode,"recovery-rate",DEFAULT_RECOVERY_RATE));
+    encode_float(bpp,AGC_HANGTIME,config_getfloat(Mdict,mode,"hang-time",DEFAULT_HANGTIME));
+    encode_float(bpp,AGC_THRESHOLD,config_getfloat(Mdict,mode,"threshold",DEFAULT_THRESHOLD));
     encode_byte(bpp,AGC_ENABLE,config_getboolean(Mdict,mode,"agc",1));
+    break;
+  case FM_DEMOD:
+    encode_int(bpp,OUTPUT_SAMPRATE,config_getint(Mdict,mode,"samprate",DEFAULT_SAMPRATE));
+    break;
+  case WFM_DEMOD:
+    encode_int(bpp,OUTPUT_SAMPRATE,config_getint(Mdict,mode,"samprate",384000)); // forced anyway
     break;
   default:
     break;
   }
+  encode_int(bpp,OUTPUT_CHANNELS,config_getint(Mdict,mode,"channels",1));
+  encode_int(bpp,GAIN,config_getfloat(Mdict,mode,"gain",DEFAULT_GAIN));
+  encode_float(bpp,HEADROOM,config_getfloat(Mdict,mode,"headroom",DEFAULT_HEADROOM));
+  encode_float(bpp,KAISER_BETA,config_getfloat(Mdict,mode,"kaiser-beta",DEFAULT_KAISER_BETA));
+  encode_float(bpp,LOW_EDGE,config_getfloat(Mdict,mode,"low",DEFAULT_LOW));
+  encode_float(bpp,HIGH_EDGE,config_getfloat(Mdict,mode,"high",DEFAULT_HIGH));
+  encode_float(bpp,SQUELCH_OPEN,config_getfloat(Mdict,mode,"squelch-open",DEFAULT_SQUELCH_OPEN));
+  encode_float(bpp,SQUELCH_CLOSE,config_getfloat(Mdict,mode,"squelch-close",DEFAULT_SQUELCH_CLOSE));
   return 0;
 }      
 

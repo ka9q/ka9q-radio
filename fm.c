@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.126 2022/04/19 07:26:01 karn Exp $
+// $Id: fm.c,v 1.127 2022/04/20 11:12:29 karn Exp $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -132,32 +132,42 @@ void *demod_fm(void *arg){
     for(int n=0; n < N; n++)
       fm_variance += (amplitudes[n] - avg_amp) * (amplitudes[n] - avg_amp);
 
-    // Compute signal-to-noise, see if we should open the squelch
-    float const snr = fm_snr(avg_amp*avg_amp * (N-1) / fm_variance);
-    demod->sig.snr = snr;
+    {
+      // Compute signal-to-noise, see if we should open the squelch
+      float const snr = fm_snr(avg_amp*avg_amp * (N-1) / fm_variance);
+      demod->sig.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
+    }
 
     // Hysteresis squelch
-    if(snr >= demod->squelch_open
-       || (squelch_state > squelchzeroes && snr >= demod->squelch_close))
+    int const squelch_state_max = squelchzeroes + demod->squelchtail + 1;
+    if(demod->sig.snr >= demod->squelch_open
+       || (squelch_state > squelchzeroes && demod->sig.snr >= demod->squelch_close))
+      // Squelch is fully open
       // tail timing is in blocks (usually 10 or 20 ms each)
-      squelch_state = squelchzeroes + demod->squelchtail + 1;
+      squelch_state = squelch_state_max;
     else if(squelch_state > 0)
       squelch_state--;
     else
       squelch_state = 0;
 
     float baseband[N];    // Demodulated FM baseband
-    float peak_positive_deviation = 0;
-    float peak_negative_deviation = 0;   // peak neg deviation
-    float frequency_offset = 0;      // Average frequency
-    float output_level = 0;
     if(squelch_state > squelchzeroes){ // Squelch is (still) open
       // Actual FM demodulation
+      float peak_positive_deviation = 0;
+      float peak_negative_deviation = 0;   // peak neg deviation
+      float frequency_offset = 0;      // Average frequency
+      float output_level = 0;
+
       for(int n=0; n < N; n++){
-	// actual FM demodulation 
+	// Although deviation can be zero, argf() is defined as returning 0, not NAN
 	float const deviation = cargf(buffer[n] * conjf(state));
 	state = buffer[n];
-	if(squelch_state > squelchzeroes + demod->squelchtail){
+	// If state ever goes NaN, it will permanently pollute the output stream!
+	if(isnan(__real__ state) || isnan(__imag__ state)){
+	  fprintf(stdout,"NaN state!\n");
+	  state = 0;
+	}
+	if(squelch_state == squelch_state_max){
 	  // Perform only when squelch is fully open, not during tail
 	  frequency_offset += deviation; // Direct FM for frequency measurement
 	  if(deviation > peak_positive_deviation)
@@ -179,25 +189,26 @@ void *demod_fm(void *arg){
 	output_level += baseband[n] * baseband[n];
       } // for(int n=0; n < N; n++)
       output_level *= one_over_olen;
+      demod->output.level = output_level;
+      if(squelch_state == squelch_state_max){
+	frequency_offset *= one_over_olen;  // Average FM output is freq offset
+	// Update frequency offset and peak deviation
+	demod->sig.foffset = demod->output.samprate  * frequency_offset * M_1_2PI;
+	
+	// Remove frequency offset from deviation peaks and scale
+	peak_positive_deviation -= frequency_offset;
+	peak_negative_deviation -= frequency_offset;
+	demod->fm.pdeviation = demod->output.samprate * max(peak_positive_deviation,-peak_negative_deviation) * M_1_2PI;
+      }
     } else if(squelch_state > 0){ // Squelch closed, but emitting padding
       state = 0; // Soft-open squelch next time
       memset(baseband,0,sizeof(baseband));
     }
-    demod->output.level = output_level;
+
     // mute output unless time is left on the squelch_state timer
     if(send_mono_output(demod,baseband,N,squelch_state <= 0) < 0)
       break; // no valid output stream; terminate!
 
-    if(squelch_state > squelchzeroes + demod->squelchtail){
-      frequency_offset *= one_over_olen;  // Average FM output is freq offset
-      // Update frequency offset and peak deviation
-      demod->sig.foffset = demod->output.samprate  * frequency_offset * M_1_2PI;
-      
-      // Remove frequency offset from deviation peaks and scale
-      peak_positive_deviation -= frequency_offset;
-      peak_negative_deviation -= frequency_offset;
-      demod->fm.pdeviation = demod->output.samprate * max(peak_positive_deviation,-peak_negative_deviation) * M_1_2PI;
-    }
   } // while(!demod->terminate)
  quit:;
   delete_filter_output(&demod->filter.out);
