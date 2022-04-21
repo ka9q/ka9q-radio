@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.213 2022/04/21 00:18:32 karn Exp $
+// $Id: radio.c,v 1.214 2022/04/21 08:11:30 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -82,6 +82,7 @@ void free_demod(struct demod **demod){
   }
 }
 
+#if 0 // Turned off in favor of per-demod estimation
 void *estimate_n0(void *arg){
   pthread_setname("estn0");
 
@@ -144,8 +145,9 @@ void *estimate_n0(void *arg){
     }
     // Not sure of the math here. Doubling N0 when the front end is real seems to give the right result;
     // it was 3dB low without it, probably because there are only half as many bins as in complex
-    Frontend.n0 = (Frontend.sdr.isreal ? 2 : 1)
-      * 2 * min_bin_power / ((float)master->bins * Frontend.sdr.samprate);
+    // Also adjust for overlap
+    Frontend.n0 = (Frontend.sdr.isreal ? 2 : 1) * ((float)Frontend.in->ilen / (Frontend.in->ilen + Frontend.in->impulse_length - 1))
+      * 2 * min_bin_power / ((float)Frontend.in->bins * Frontend.sdr.samprate);
 #if 0
     if((blocknum & 0xff) == 0)
       fprintf(stdout,"min_IF %.1f max_IF %.1f bins %d first_bin %d last_bin %d Frontend.n0 = %g (%.2f dB)\n",
@@ -155,6 +157,56 @@ void *estimate_n0(void *arg){
 #endif
     blocknum++;
   }
+}
+#endif
+
+// experimental
+// estimate n0 by finding the FFT bin with the least energy
+// in the demod's pre-filter nyquist bandwidth
+// Works better than global estimation when noise floor is not flat
+float estimate_noise(struct demod *demod,int rotate){
+  struct filter_out const * const slave = demod->filter.out;
+  if(demod->filter.energies == NULL)
+    demod->filter.energies = calloc(sizeof(float),slave->bins);
+
+  float * const energies = demod->filter.energies;
+  struct filter_in const * const master = slave->master;
+  // slave->blocknum already incremented by execute_filter_output
+  complex float const * const fdomain = master->fdomain[(slave->blocknum - 1) % ND];
+  int mbin = rotate - slave->bins/2;
+  float min_bin_energy = INFINITY;
+  if(master->in_type == REAL){
+    // Only half as many bins as with complex input
+    for(int i=0; i < slave->bins; i++,mbin++){
+      int n = abs(mbin); // Doesn't really handle the mirror well
+      if(n < master->bins){
+	energies[i] += (cnrmf(fdomain[n]) - energies[i]) * 0.02; // blocknum was already incremented
+	if(min_bin_energy > energies[i])
+	  min_bin_energy = energies[i];
+      } else
+	break;  // off the end
+      mbin++;
+    }
+  } else {
+    // Complex input that often straddles DC
+    if(mbin < 0)
+      mbin += master->bins; // starting in negative frequencies
+    for(int i=0; i < slave->bins; i++,mbin++){	
+      if(mbin >= 0 && mbin < master->bins){
+	energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * 0.02; // blocknum was already incremented
+	if(min_bin_energy > energies[i])
+	  min_bin_energy = energies[i];
+      }
+      mbin++;
+      if(mbin == master->bins)
+	mbin = 0; // wrap around from neg freq to pos freq
+      if(mbin == master->bins/2)
+	break; // fallen off the right edge
+    }
+  }
+  // Don't double-count the energy in the overlap
+  return ((float)master->ilen / (master->ilen + master->impulse_length - 1))
+      * 2 * min_bin_energy / ((float)master->bins * Frontend.sdr.samprate);
 }
 
 
@@ -466,6 +518,8 @@ int kill_demod(struct demod **p){
   if(demod->output.sap_fd > 2)
     close(demod->output.sap_fd);
 #endif
+  if(demod->filter.energies)
+    free(demod->filter.energies);
   free_demod(p);
   return 0;
 }
@@ -536,11 +590,6 @@ double set_first_LO(struct demod const * const demod,double const first_LO){
   send(Frontend.input.ctl_fd,packet,len,0);
   return first_LO;
 }  
-
-// Compute noise spectral density - experimental
-float const compute_n0(struct demod const * const demod){
-  return Frontend.n0;
-}
 
 // Compute FFT bin shift and time-domain fine tuning offset for specified LO frequency
 // N = input fft length

@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.72 2022/04/20 11:10:26 karn Exp $
+// $Id: radio_status.c,v 1.73 2022/04/21 08:11:30 karn Exp $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -431,7 +431,7 @@ static int encode_radio_status(struct frontend *frontend,struct demod const *dem
   encode_float(&bp,IF_POWER,power2dB(frontend->sdr.output_level));
 
   encode_float(&bp,BASEBAND_POWER,power2dB(demod->sig.bb_power)); // power -> dB
-  encode_float(&bp,NOISE_DENSITY,power2dB(frontend->n0)); // power -> dB
+  encode_float(&bp,NOISE_DENSITY,power2dB(demod->sig.n0)); // power -> dB
 
   encode_float(&bp,OUTPUT_LEVEL,power2dB(demod->output.level)); // power ratio -> dB
   encode_int64(&bp,OUTPUT_SAMPLES,demod->output.samples);

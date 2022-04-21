@@ -1,4 +1,4 @@
-// $Id: linear.c,v 1.102 2022/04/14 12:40:08 karn Exp $
+// $Id: linear.c,v 1.103 2022/04/21 08:11:30 karn Exp $
 
 // General purpose linear demodulator
 // Handles USB/IQ/CW/etc, basically all modes but FM and envelope-detected AM
@@ -37,6 +37,7 @@ void *demod_linear(void *arg){
     pthread_setname(name);
   }
   demod->output.gain = dB2voltage(DEFAULT_GAIN); // AGC will bring it down
+
 
   int const blocksize = demod->output.samprate * Blocktime / 1000;
   delete_filter_output(&demod->filter.out);
@@ -151,6 +152,12 @@ void *demod_linear(void *arg){
     float energy = 0;
 
     execute_filter_output(demod->filter.out,-rotate);
+#if 1
+    demod->sig.n0 = estimate_noise(demod,-rotate); // Negative, just like compute_tuning
+#else
+    demod->sig.n0 = Frontend.n0;
+#endif
+
     for(int n=0; n<N; n++){
       complex float s = buffer[n] * flip * step_osc(&demod->fine);
       
@@ -221,7 +228,7 @@ void *demod_linear(void *arg){
     float gain_change = 1; // default to constant gain
     if(demod->linear.agc){
       const float bw = fabsf(demod->filter.min_IF - demod->filter.max_IF);
-      const float bn = sqrtf(bw * compute_n0(demod)); // Noise amplitude
+      const float bn = sqrtf(bw * demod->sig.n0); // Noise amplitude
       const float ampl = sqrtf(energy);
 
       // per-sample gain change is required to avoid sudden gain changes at block boundaries that can

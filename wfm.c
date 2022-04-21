@@ -1,4 +1,4 @@
-// $Id: wfm.c,v 1.27 2022/04/20 11:11:30 karn Exp $
+// $Id: wfm.c,v 1.28 2022/04/21 08:11:30 karn Exp $
 // Wideband FM demodulation and squelch
 // Adapted from narrowband demod
 // Copyright 2020, Phil Karn, KA9Q
@@ -136,6 +136,7 @@ void *demod_wfm(void *arg){
 
     // Wait for next block of frequency domain data
     execute_filter_output(demod->filter.out,-rotate); // Input is complex, so sign of rotate matters
+    demod->sig.n0 = estimate_noise(demod,-rotate);
 
     for(int n=0; n<composite_L; n++)
       demod->filter.out->output.c[n] *= flip; // Is this really necessary?

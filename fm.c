@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.127 2022/04/20 11:12:29 karn Exp $
+// $Id: fm.c,v 1.128 2022/04/21 08:11:30 karn Exp $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -40,6 +40,7 @@ void *demod_fm(void *arg){
   if(demod->filter.out)
     delete_filter_output(&demod->filter.out);
   demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
+
   if(demod->filter.out == NULL){
     fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)demod->output.rtp.ssrc);
     goto quit;
@@ -55,6 +56,8 @@ void *demod_fm(void *arg){
 
   int const N = demod->filter.out->olen;
   float const one_over_olen = 1. / N; // save some divides
+
+
 
   while(!demod->terminate){
     // Constant gain used by FM only; automatically adjusted by AGC in linear modes
@@ -111,6 +114,13 @@ void *demod_fm(void *arg){
     set_osc(&demod->fine,remainder, demod->tune.doppler_rate);
 #endif
     execute_filter_output(demod->filter.out,-rotate);
+
+#if 1
+    demod->sig.n0 = estimate_noise(demod,-rotate); // Negative, just like compute_tuning
+#else
+    demod->sig.n0 = Frontend.n0;
+#endif
+
     for(int n = 0; n < N; n++){
       // Apply frequency shifts
 #if FULL

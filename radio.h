@@ -1,4 +1,4 @@
-// $Id: radio.h,v 1.138 2022/04/19 07:26:01 karn Exp $
+// $Id: radio.h,v 1.139 2022/04/21 08:11:30 karn Exp $
 // Internal structures and functions of the 'radio' program
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
@@ -108,6 +108,7 @@ struct demod {
     // Window shape factor for Kaiser window
     float kaiser_beta;  // settable
     bool isb;           // Independent sideband mode (settable, currently unimplemented)
+    float *energies;    // Vector of smoothed bin energies
   } filter;
 
   enum demod_type demod_type;  // Index into demodulator table (AM, FM, Linear)
@@ -139,6 +140,7 @@ struct demod {
     float bb_power;   // Average power of signal after filter but before digital gain, power ratio
     float foffset;    // Frequency offset Hz (FM, coherent AM, dsb)
     float snr;        // From PLL in linear, moments in FM
+    float n0;         // per-demod N0 (experimental)
   } sig;
   
   float squelch_open;  // squelch open threshold, power ratio
@@ -220,6 +222,7 @@ int start_demod(struct demod * restrict demod);
 int kill_demod(struct demod ** restrict demod);
 int init_demod_streams(struct demod * restrict demod);
 double set_first_LO(struct demod const * restrict, double);
+float estimate_noise(struct demod *demod,int rotate);
 
 void *proc_samples(void *);
 void *estimate_n0(void *);
@@ -228,8 +231,6 @@ void *sap_send(void *);
 void *radio_status(void *);
 void *sdr_status(void *);
 void *demod_reaper(void *);
-
-const float compute_n0(struct demod const * restrict);
 
 // Used by demods to save CPU by bypassing various calculations when we're running without a status channel
 // Demodulator thread entry points

@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.244 2022/04/20 07:01:09 karn Exp $
+// $Id: main.c,v 1.245 2022/04/21 08:11:30 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -286,10 +286,12 @@ static int setup_frontend(char const *arg){
   pthread_t procsamp_thread;
   pthread_create(&procsamp_thread,NULL,proc_samples,NULL);
 
+#if 0 // Turned off in favor of per-demod estimation
   // Launch thread to estimate noise spectral density N0
   // Is this always necessary? It's not always used
   pthread_t n0_thread;
   pthread_create(&n0_thread,NULL,estimate_n0,NULL);
+#endif
 
   Frontend_started++; // Only do this once!!
   return 0;
