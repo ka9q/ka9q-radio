@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.212 2022/04/19 05:15:12 karn Exp $
+// $Id: radio.c,v 1.213 2022/04/21 00:18:32 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -40,16 +40,9 @@ int Demod_list_length; // Length of array
 int Active_demod_count; // Active demods
 
 
-// thread for first half of demodulator
-// Preprocessing of samples performed for all demodulators
-// Pass to input of pre-demodulation filter
-// Update power measurement, estimate noise level
-
 static float const SCALE12 = 1/2048.;
 static float const SCALE16 = 1./SHRT_MAX; // Scale signed 16-bit int to float in range -1, +1
 static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
-// seconds from January 1 1900 to January 1, 1970 (Unix epoch)
-
 
 struct demod *alloc_demod(void){
   pthread_mutex_lock(&Demod_mutex);
@@ -71,8 +64,8 @@ struct demod *alloc_demod(void){
     memset(demod,0,sizeof(struct demod));
     demod->inuse = 1;
     Active_demod_count++;
-    pthread_mutex_unlock(&Demod_mutex);
   }
+  pthread_mutex_unlock(&Demod_mutex);
   return demod;
 }
 
@@ -165,6 +158,10 @@ void *estimate_n0(void *arg){
 }
 
 
+// thread for first half of demodulator
+// Preprocessing of samples performed for all demodulators
+// Pass to input of pre-demodulation filter
+// Update power measurement
 void *proc_samples(void *arg){
   pthread_setname("procsamp");
 
@@ -257,7 +254,7 @@ void *proc_samples(void *arg){
     Frontend.input.samples += sampcount;
 
     switch(pkt.rtp.type){
-    case IQ_FLOAT:
+    case IQ_FLOAT: // E.g., AirspyHF+
       if(Frontend.in->input.c != NULL){
 	float const inv_gain = 1.0 / Frontend.sdr.gain;
 	float f_energy = 0; // energy accumulator
