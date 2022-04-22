@@ -227,7 +227,9 @@ int main(int argc,char *argv[]){
     char *cp = strchr(hostname,'.');
     if(cp != NULL)
       *cp = '\0'; // Strip the domain name
-    asprintf(&Name,"%s-%d",hostname,Device);
+    int const ret = asprintf(&Name,"%s-%d",hostname,Device);
+    if(ret == -1)
+      exit(1);
   }
   {
     snprintf(Metadata_dest,sizeof(Metadata_dest),"funcube-%s-status.local",Name);

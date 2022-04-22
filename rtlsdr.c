@@ -291,7 +291,9 @@ int main(int argc,char *argv[]){
   // argv[optind] is presently just the USB device number, which is rather meaningless
   sdr->description = argv[optind];
   fprintf(stderr,"Rtlsdr handler %s: serial %llx\n",sdr->description,(long long unsigned)sdr->SN);
-  asprintf(&sdr->frequency_file,"%s/tune-rtlsdr.%llx",VARDIR,(unsigned long long)sdr->SN);
+  ret = asprintf(&sdr->frequency_file,"%s/tune-rtlsdr.%llx",VARDIR,(unsigned long long)sdr->SN);
+  if (ret == -1)
+    exit(1);
 
   // Set up output sockets
   if(sdr->data_dest == NULL){

@@ -461,7 +461,10 @@ int main(int argc,char *argv[]){
   if(init_frequency != 0)
     sdr->frequency_lock = 1;
 
-  asprintf(&sdr->frequency_file,"%s/tune-airspy.%llx",VARDIR,(unsigned long long)sdr->SN);
+  ret = asprintf(&sdr->frequency_file,"%s/tune-airspy.%llx",VARDIR,(unsigned long long)sdr->SN);
+  if(ret == -1)
+    exit(1);
+
   if(init_frequency == 0){
     // If not set on command line, load saved frequency
     FILE *fp = fopen(sdr->frequency_file,"r+");
