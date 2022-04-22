@@ -1,5 +1,6 @@
 *.a
 *.o
+Makefile
 .depend
 airspy
 airspyhf
