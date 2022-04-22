@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.245 2022/04/21 08:11:30 karn Exp $
+// $Id: main.c,v 1.246 2022/04/22 04:29:04 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -56,6 +56,8 @@ static float const DEFAULT_PLL_BW = 100.0;       // Reasonable for AM
 static int const DEFAULT_SQUELCHTAIL = 1;        // close on frame *after* going below threshold, may let partial frame noise through
 static float const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
 static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
+static float const DEFAULT_FM_DEEMPH_GAIN = 4.0; // +12 dB to give subjectively equal loudness with deemphsis
+static float const DEFAULT_WFM_DEEMPH_GAIN = 1.0; // +12 dB to give subjectively equal loudness with deemphsis
 
 
 
@@ -495,7 +497,7 @@ static int loadconfig(char const * const file){
 	float tc = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-tc",DEFAULT_NBFM_TC);
 	if(tc != 0.0){
 	  demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * demod->output.samprate));
-	  demod->deemph.gain = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-gain",4.0); // empirical value, needs work
+	  demod->deemph.gain = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-gain",DEFAULT_FM_DEEMPH_GAIN);
 	}
       }
       break;
@@ -507,7 +509,7 @@ static int loadconfig(char const * const file){
 	float tc = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-tc",DEFAULT_WFM_TC);
 	if(tc != 0){
 	  demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * 48000)); // hardwired output sample rate -- needs cleanup
-	  demod->deemph.gain = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-gain",4.0);  // empirical value, needs work
+	  demod->deemph.gain = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-gain",DEFAULT_WFM_DEEMPH_GAIN);
 	}
       }
     }
