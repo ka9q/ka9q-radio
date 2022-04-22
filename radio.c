@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.214 2022/04/21 08:11:30 karn Exp $
+// $Id: radio.c,v 1.215 2022/04/22 07:42:53 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -218,17 +218,14 @@ void *proc_samples(void *arg){
   pthread_setname("procsamp");
 
   while(1){
-    // Packet consists of Ethernet, IP and UDP header (already stripped)
-    // then standard Real Time Protocol (RTP), a status header and the PCM
-    // I/Q data. RTP is an IETF standard, so it uses big endian numbers
-    // The status header and I/Q data (now obsolete) are *not* standard, so we save time
-    // by using machine byte order (almost certainly little endian).
-    // Note this is a portability problem if this system and the one generating
-    // the data have opposite byte orders. But who's big endian anymore?
     // Receive I/Q data from front end
-    // Incoming RTP packets
+    // Packet consists of Ethernet, IP and UDP header (already stripped)
+    // then standard Real Time Protocol (RTP) and the PCM I/Q data.
+    // RTP is an IETF standard, so it uses big endian numbers.
+    // PCM_STEREO and PCM_MONO are IETF types defined to use network (big endian) order
+    // but for speed most sample formats use host byte order, which can be a portability problem.
 
-    struct packet pkt;
+    struct packet pkt;    // Incoming RTP packets
 
     socklen_t socksize = sizeof(Frontend.input.data_source_address);
     int size = recvfrom(Frontend.input.data_fd,pkt.content,sizeof(pkt.content),0,(struct sockaddr *)&Frontend.input.data_source_address,&socksize);
@@ -363,7 +360,7 @@ void *proc_samples(void *arg){
 	  write_rfilter(Frontend.in,s1*inv_gain);
 	  dp += 3;
 	}
-	Frontend.sdr.output_level = 2 * in_energy * SCALE12 * SCALE12 / sampcount;
+	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
       }
       break;
     case PCM_MONO_PT: // 16 bits big-endian integer real
@@ -407,7 +404,7 @@ void *proc_samples(void *arg){
 	  write_cfilter(Frontend.in,samp * inv_gain);
 	  dp += 3;
 	}
-	Frontend.sdr.output_level = in_energy * SCALE12 * SCALE12 / sampcount;
+	Frontend.sdr.output_level = in_energy * SCALE16 * SCALE16 / sampcount;
       }
       break;
     case PCM_STEREO_PT:      // Two 16-bit signed integers, **BIG ENDIAN** (network order)
@@ -445,8 +442,6 @@ void *proc_samples(void *arg){
       }
       break;
     }
-
-    
   } // end of main loop
 }
 
@@ -766,17 +761,24 @@ void *sap_send(void *p){
   }
 }
 
+// Walk through demodulator list culling dynamic demodulators that
+// have become inactive
 void *demod_reaper(void *arg){
+  pthread_setname("dreaper");
   while(1){
-    for(int i=0;i<Demod_list_length;i++){
+    int actives = 0;
+    for(int i=0;i<Demod_list_length && actives < Active_demod_count;i++){
       struct demod *demod = &Demod_list[i];
-      if(demod->inuse && demod->tune.freq == 0 && demod->lifetime > 0){
-	demod->lifetime--;
-	if(demod->lifetime == 0){
-	  kill_demod(&demod);
+      if(demod->inuse){
+	actives++;
+	if(demod->tune.freq == 0 && demod->lifetime > 0){
+	  demod->lifetime--;
+	  if(demod->lifetime == 0){
+	    kill_demod(&demod); // clears demod->inuse
+	    actives--;
+	  }
 	}
       }
-
     }
     sleep(1);
   }
