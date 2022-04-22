@@ -8,11 +8,10 @@ Prerequisites
 
 Building this package on Debian requires the following packages be installed with 'apt install':
 
+build-essential
 libusb-1.0-0-dev
 libncurses5-dev
-libudev-dev
 libfftw3-dev
-libattr1-dev
 libbsd-dev
 libhackrf-dev
 libopus-dev
