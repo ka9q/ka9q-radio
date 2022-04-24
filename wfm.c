@@ -1,4 +1,4 @@
-// $Id: wfm.c,v 1.28 2022/04/21 08:11:30 karn Exp $
+// $Id: wfm.c,v 1.29 2022/04/24 09:08:51 karn Exp $
 // Wideband FM demodulation and squelch
 // Adapted from narrowband demod
 // Copyright 2020, Phil Karn, KA9Q
@@ -119,20 +119,33 @@ void *demod_wfm(void *arg){
   assert(subc_remainder == 0);
 
   while(!demod->terminate){
-    if(demod->tune.freq == 0){
-      // Special case: idle mode
-      execute_filter_output_idle(demod->filter.out);
-      continue;
+    // To save CPU time when the front end is completely tuned away from us, block until the front
+    // end status changes rather than process zeroes
+    pthread_mutex_lock(&Frontend.sdr.status_mutex);
+    int flip,rotate;
+    while(1){
+      if(demod->terminate){
+	pthread_mutex_unlock(&Frontend.sdr.status_mutex);
+	goto quit;
+      }
+      demod->tune.second_LO = Frontend.sdr.frequency - demod->tune.freq;
+      double const freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
+      // Note: fine shift and tune shift both ignored in WFM mode
+      if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
+			Frontend.in->impulse_length,
+			Frontend.sdr.samprate,
+			&flip,&rotate,NULL,freq) == 0)
+	break; // We can get at least part of the spectrum we want
+      
+      // No front end coverage of our passband; wait for it to retune
+      demod->sig.bb_power = 0;
+      demod->output.level = 0;
+      struct timespec timeout; // Needed to avoid deadlock if no front end is available
+      clock_gettime(CLOCK_REALTIME,&timeout);
+      timeout.tv_sec += 1; // 1 sec in the future
+      pthread_cond_timedwait(&Frontend.sdr.status_cond,&Frontend.sdr.status_mutex,&timeout);
     }
-
-    // Note: fine shift and tune shift both ignored in WFM mode
-    demod->tune.second_LO = Frontend.sdr.frequency - demod->tune.freq;
-    double freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
-    double remainder;
-    int rotate,flip;
-    compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
-		 Frontend.in->impulse_length,
-		 Frontend.sdr.samprate,&flip,&rotate,&remainder,freq);
+    pthread_mutex_unlock(&Frontend.sdr.status_mutex);
 
     // Wait for next block of frequency domain data
     execute_filter_output(demod->filter.out,-rotate); // Input is complex, so sign of rotate matters
@@ -299,7 +312,7 @@ void *demod_wfm(void *arg){
       if(send_mono_output(demod,mono->output.r,audio_L,squelch_state < 0) < 0)
 	break; // No output stream! Terminate
     }
-  } // while(1)
+  } // while(!demod->terminate)
  quit:;
   delete_filter_output(&mono);
   delete_filter_output(&stereo);

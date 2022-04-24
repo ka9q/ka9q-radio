@@ -1,4 +1,4 @@
-// $Id: radio.h,v 1.139 2022/04/21 08:11:30 karn Exp $
+// $Id: radio.h,v 1.142 2022/04/24 09:04:37 karn Exp $
 // Internal structures and functions of the 'radio' program
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
@@ -14,12 +14,27 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
+#include <iniparser/iniparser.h>
 
-#include "modes.h"
 #include "multicast.h"
 #include "osc.h"
 #include "status.h"
 #include "filter.h"
+
+enum demod_type {
+  LINEAR_DEMOD = 0,     // Linear demodulation, i.e., everything else: SSB, CW, DSB, CAM, IQ
+  FM_DEMOD,             // Frequency demodulation
+  WFM_DEMOD,            // wideband frequency modulation (broadcast)
+};
+
+struct demodtab {
+  enum demod_type type;
+  char name[16];
+};
+
+extern struct demodtab Demodtab[];
+extern int Ndemod;
+
 
 // Multicast network connection with front end hardware
 // Only one off these, shared with all demod instances
@@ -84,10 +99,49 @@ struct frontend {
 
 extern struct frontend Frontend; // Only one per radio instance
 
+// Control parameters for demod state block
+struct param {
+  pthread_mutex_t mutex;
+  double freq;
+  double shift;
+  double doppler;
+  double doppler_rate;
+  float min_IF;
+  float max_IF;
+  float kaiser_beta;
+  bool isb;
+  enum demod_type demod_type;
+  char preset[32];
+  bool env;            // Envelope detection in linear mode (settable)
+  bool agc;            // Automatic gain control enabled (settable)
+  float hangtime;      // AGC hang time, samples (settable)
+  float recovery_rate; // AGC recovery rate, amplitude ratio/sample  (settable)
+  float threshold;     // AGC threshold above noise, amplitude ratio
+  bool pll;         // Linear mode PLL tracking of carrier (settable)
+  bool square;      // Squarer on PLL input (settable)
+  float loop_bw;    // Loop bw (coherent modes)
+  float squelch_open;  // squelch open threshold, power ratio
+  float squelch_close; // squelch close threshold
+  int squelchtail;     // Frames to hold open after loss of SNR
+  int samprate;      // Audio D/A sample rate (usually 48 kHz)
+  float gain;        // Audio gain to normalize amplitude
+  float headroom;    // Audio level headroom, amplitude ratio (settable)
+  struct sockaddr_storage data_source_address;    // Source address of our data output
+  struct sockaddr_storage data_dest_address;      // Dest of our data outputg (typically multicast)
+  char data_dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
+  int channels;   // 1 = mono, 2 = stereo (settable)
+  // 'rate' computed from expf(-1.0 / (tc * output.samprate));
+  // tc = 75e-6 sec for North American FM broadcasting
+  // tc = 1 / (2 * M_PI * 300.) = 530.5e-6 sec for NBFM (300 Hz corner freq)
+  float rate;
+};
+
 
 // Demodulator state block; there can be many of these
 struct demod {
   int inuse;
+  //  struct param param; // not yet used
+
   int lifetime;          // Remaining lifetime, seconds
   // Tuning parameters
   struct {
@@ -112,6 +166,7 @@ struct demod {
   } filter;
 
   enum demod_type demod_type;  // Index into demodulator table (AM, FM, Linear)
+  char preset[32];       // name of last mode preset
 
   struct {               // Used only in linear demodulator
     bool env;            // Envelope detection in linear mode (settable)
@@ -197,7 +252,7 @@ extern struct demod *Demod_list;
 extern int Demod_list_length;
 extern int Active_demod_count;
 extern int const Demod_alloc_quantum;
-extern pthread_mutex_t Demod_mutex;
+extern pthread_mutex_t Demod_list_mutex;
 
 extern int Status_fd;  // File descriptor for receiver status
 extern int Ctl_fd;     // File descriptor for receiving user commands
@@ -214,10 +269,12 @@ extern uint32_t Command_tag; // Echoed in responses to commands (settable)
 struct demod *alloc_demod(void);
 void free_demod(struct demod **);
 int init_demod(struct demod * restrict demod);
+char const *demod_name_from_type(enum demod_type type);
+int demod_type_from_name(char const *name);
+int loadmode(struct demod *demod,dictionary const *table,char const *mode,int use_defaults);
+
 double set_freq(struct demod * restrict ,double);
-int preset_mode(struct demod * restrict,const char * restrict);
 int compute_tuning(int N, int M, int samprate,int *flip,int *rotate,double *remainder, double freq);
-//int compute_tuning(const struct demod * restrict const demod,int * restrict flip,int * restrict rotate,double * restrict remainder, double freq);
 int start_demod(struct demod * restrict demod);
 int kill_demod(struct demod ** restrict demod);
 int init_demod_streams(struct demod * restrict demod);

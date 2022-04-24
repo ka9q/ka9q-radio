@@ -1,4 +1,4 @@
-// $Id: dump.c,v 1.34 2022/04/18 02:08:43 karn Exp $
+// $Id: dump.c,v 1.35 2022/04/24 02:36:28 karn Exp $
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdio.h>
@@ -9,7 +9,7 @@
 #include "misc.h"
 #include "status.h"
 #include "multicast.h"
-#include "modes.h"
+#include "radio.h"
 
 void dump_metadata(unsigned char *buffer,int length){
   unsigned char *cp = buffer;
@@ -295,10 +295,16 @@ void dump_metadata(unsigned char *buffer,int length){
       printf("output bits/sample %d",(int)decode_int(cp,optlen));
       break;
     case SQUELCH_OPEN:
-      printf("squelch open %.1f",decode_float(cp,optlen));
+      printf("squelch open %.1f dB",decode_float(cp,optlen));
       break;
     case SQUELCH_CLOSE:
-      printf("squelch close %.1f",decode_float(cp,optlen));
+      printf("squelch close %.1f dB",decode_float(cp,optlen));
+      break;
+    case DEEMPH_GAIN:
+      printf("deemph gain %.1f dB",decode_float(cp,optlen));
+      break;
+    case DEEMPH_TC:
+      printf("demph tc %.1f us",1e6*decode_float(cp,optlen));
       break;
     default:
       printf("unknown type %d length %d",type,optlen);

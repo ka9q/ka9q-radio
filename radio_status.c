@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.73 2022/04/21 08:11:30 karn Exp $
+// $Id: radio_status.c,v 1.78 2022/04/24 09:10:46 karn Exp $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -31,6 +31,7 @@ int Status_fd;  // File descriptor for receiver status
 int Ctl_fd;     // File descriptor for receiving user commands
 
 extern struct demod *Dynamic_demod;
+extern dictionary *Modetable;
 
 
 static int send_radio_status(struct frontend *frontend,struct demod *demod,int full);
@@ -47,15 +48,15 @@ void *radio_status(void *arg){
   
 #if 0
   {
-    // We start from loadconfig() after all the slices have been started so we don't contend with it for Demod_mutex
-    pthread_mutex_lock(&Demod_mutex);
+    // We start from loadconfig() after all the slices have been started so we don't contend with it for Demod_list_mutex
+    pthread_mutex_lock(&Demod_list_mutex);
     for(int i = 0; i < Demod_list_length; i++){
       if(Demod_list[i].inuse == 0)
 	continue;
       send_radio_status(&Frontend,&Demod_list[i],1); // Send status in response	
       usleep(5000); // arbitrary 5ms interval to avoid flooding the net
     }
-    pthread_mutex_unlock(&Demod_mutex);
+    pthread_mutex_unlock(&Demod_list_mutex);
   }  
 #endif
   while(1){
@@ -71,14 +72,14 @@ void *radio_status(void *arg){
     if(ssrc != 0){
       // find specific demod instance
       struct demod *demod = NULL;
-      pthread_mutex_lock(&Demod_mutex);
+      pthread_mutex_lock(&Demod_list_mutex);
       for(int i=0; i < Demod_list_length; i++){
 	if(Demod_list[i].inuse && Demod_list[i].output.rtp.ssrc == ssrc){
 	  demod = &Demod_list[i];
 	  break;
 	}
       }
-      pthread_mutex_unlock(&Demod_mutex);
+      pthread_mutex_unlock(&Demod_list_mutex);
       if(demod == NULL && Dynamic_demod != NULL){
 	// SSRC specified but not found; create dynamically
 	demod = alloc_demod();
@@ -104,13 +105,13 @@ void *radio_status(void *arg){
       // Doesn't scale; rethink this
 #if 0
       // Send status for every SSRC
-      pthread_mutex_lock(&Demod_mutex);
+      pthread_mutex_lock(&Demod_list_mutex);
       for(int i=0; i < Demod_list_length; i++){
 	if(Demod_list[i].inuse)
 	  send_radio_status(&Frontend,&Demod_list[i],1); // Send status in response	
 	usleep(5000); // But not too quickly
       }
-      pthread_mutex_unlock(&Demod_mutex);
+      pthread_mutex_unlock(&Demod_list_mutex);
 #endif
     }
   }
@@ -256,6 +257,25 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
 	    demod->filter.kaiser_beta = f;
 	  new_filter_needed = 1;
 	}
+      break;
+    case PRESET:
+      {
+	decode_string(cp,optlen,demod->preset,sizeof(demod->preset));
+	{
+	  enum demod_type const old_type = demod->demod_type;
+	  int const old_samprate = demod->output.samprate;
+	  float const old_low = demod->filter.min_IF;
+	  float const old_high = demod->filter.max_IF;
+	  float const old_kaiser = demod->filter.kaiser_beta;
+
+	  loadmode(demod,Modetable,demod->preset,1);
+	  if(demod->filter.min_IF != old_low || demod->filter.max_IF != old_high || demod->filter.kaiser_beta != old_kaiser)
+	    new_filter_needed = 1;
+
+	  if(demod->demod_type != old_type || demod->output.samprate != old_samprate)
+	    restart_needed = 1; // demod changed, ask for a restart
+	}
+      }
       break;
     case DEMOD_TYPE:
       {
@@ -482,6 +502,8 @@ static int encode_radio_status(struct frontend *frontend,struct demod const *dem
   case FM_DEMOD:
   case WFM_DEMOD:
     encode_float(&bp,PEAK_DEVIATION,demod->fm.pdeviation); // Hz
+    encode_float(&bp,DEEMPH_TC,-1.0/(logf(demod->deemph.rate) * demod->output.samprate));
+    encode_float(&bp,DEEMPH_GAIN,voltage2dB(demod->deemph.gain));
     break;
   }
   // Don't send test points unless they're in use

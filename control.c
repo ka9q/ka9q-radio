@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.146 2022/04/20 11:46:40 karn Exp $
+// $Id: control.c,v 1.150 2022/04/24 04:28:54 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -31,7 +31,6 @@
 #include <iniparser/iniparser.h>
 
 
-#include "modes.h"
 #include "misc.h"
 #include "filter.h"
 #include "multicast.h"
@@ -43,25 +42,6 @@
 
 static int const DEFAULT_IP_TOS = 48;
 static int const DEFAULT_MCAST_TTL = 1;
-static int const DEFAULT_SAMPRATE = 24000;
-static float const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
-static float const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
-static float const DEFAULT_HIGH = 5000.0;
-static float const DEFAULT_HEADROOM = -15.0;     // keep gaussian signals from clipping
-static float const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
-static float const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
-static float const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
-static float const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
-static float const DEFAULT_GAIN = 80.0;          // Unused in FM, usually adjusted automatically in linear
-static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
-static float const DEFAULT_PLL_BW = 100.0;       // Reasonable for AM
-
-#if 0 // Not allocated parameters yet
-static int const DEFAULT_SQUELCHTAIL = 1;        // close on frame *after* going below threshold, may let partial frame noise through
-static float const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
-static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
-#endif
-
 
 float Refresh_rate = 0.1;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
@@ -96,7 +76,6 @@ struct control {
 
 int decode_fe_status(struct frontend *,unsigned char *buffer,int length);
 int pprintw(WINDOW *w,int y, int x, char const *prefix, char const *fmt, ...);
-int control_preset_mode(struct demod *demod,unsigned char **bpp,const char * const mode); // Different from one in radio.c
 
 WINDOW *Tuning_win,*Sig_win,*Info_win,*Filtering_win,*Demodulator_win,
   *Options_win,*Fe_win,*Modes_win,*Debug_win,
@@ -734,7 +713,7 @@ int process_keyboard(struct demod *demod,unsigned char **bpp,int c){
       strlcat(str,"]: ",sizeof(str));
       getentry(str,str,sizeof(str));
       if(strlen(str) > 0)
-	control_preset_mode(demod,bpp,str);
+	encode_string(bpp,PRESET,str,strlen(str));
     }
     break;
   case 'f':   // Tune to new radio frequency
@@ -848,7 +827,7 @@ void process_mouse(struct demod *demod,unsigned char **bpp){
       my--;
       if(my >= 0 && my < iniparser_getnsec(Mdict)){
 	char const *n = iniparser_getsecname(Mdict,my);
-	control_preset_mode(demod,bpp,n);
+	encode_string(bpp,PRESET,n,strlen(n));
       }
 	  
     } else if(Options_win && wmouse_trafo(Options_win,&my,&mx,false)){
@@ -919,80 +898,6 @@ int init_demod(struct demod *demod){
   demod->output.data_fd = demod->output.rtcp_fd = -1;
   return 0;
 }
-
-
-// Set major operating mode
-// Adapted from the version in radio,c, but simpler -- note it's different!!
-
-// Currently, when setting a mode from control, all the parameters are
-// expected in the command, and they are taken from the modes.conf on
-// the *local* system, not the one running 'radio'. What if they're
-// not sent, e.g,. because the local modes.conf is broken?  It might
-// be a lot simpler to just send a mode name so 'radio' can use its
-// own modes.conf file. The user can still modify individual
-// parameters after the new mode is running. This would require a new
-// command parameter
-int control_preset_mode(struct demod *demod,unsigned char **bpp,const char * const mode){
-  char const *typename = config_getstring(Mdict,mode,"demod",NULL);
-
-  if(typename == NULL){
-    fprintf(stdout,"Mode '%s' unknown\n",mode);
-    return -1;
-  }
-  int const type = demod_type_from_name(typename);
-  if(type == -1){
-    fprintf(stdout,"Demodulator '%s' unknown\n",typename);
-    return -1;
-  }
-
-  encode_byte(bpp,DEMOD_TYPE,type);
-
-  switch(type){
-  case LINEAR_DEMOD:
-    encode_int(bpp,OUTPUT_SAMPRATE,config_getint(Mdict,mode,"samprate",DEFAULT_SAMPRATE));
-    // Set parameters that are don't cares in other modes
-    {
-      float shift = config_getfloat(Mdict,mode,"shift",0);
-      if(shift != demod->tune.shift){
-	// Shift changed; adjust tuning frequency
-	encode_double(bpp,RADIO_FREQUENCY,demod->tune.freq + (shift - demod->tune.shift));
-      }
-      encode_double(bpp,SHIFT_FREQUENCY,shift);
-    }
-    encode_byte(bpp,INDEPENDENT_SIDEBAND,config_getboolean(Mdict,mode,"isb",0));
-    encode_byte(bpp,ENVELOPE,config_getboolean(Mdict,mode,"envelope",0));
-    int square = config_getboolean(Mdict,mode,"square",0);
-    int pll = config_getboolean(Mdict,mode,"pll",0);
-    if(square)
-      pll = 1;
-
-    encode_byte(bpp,PLL_ENABLE,pll);
-    encode_byte(bpp,PLL_SQUARE,square);
-    encode_float(bpp,PLL_BW,DEFAULT_PLL_BW);
-    encode_float(bpp,AGC_RECOVERY_RATE,config_getfloat(Mdict,mode,"recovery-rate",DEFAULT_RECOVERY_RATE));
-    encode_float(bpp,AGC_HANGTIME,config_getfloat(Mdict,mode,"hang-time",DEFAULT_HANGTIME));
-    encode_float(bpp,AGC_THRESHOLD,config_getfloat(Mdict,mode,"threshold",DEFAULT_THRESHOLD));
-    encode_byte(bpp,AGC_ENABLE,config_getboolean(Mdict,mode,"agc",1));
-    break;
-  case FM_DEMOD:
-    encode_int(bpp,OUTPUT_SAMPRATE,config_getint(Mdict,mode,"samprate",DEFAULT_SAMPRATE));
-    break;
-  case WFM_DEMOD:
-    encode_int(bpp,OUTPUT_SAMPRATE,config_getint(Mdict,mode,"samprate",384000)); // forced anyway
-    break;
-  default:
-    break;
-  }
-  encode_int(bpp,OUTPUT_CHANNELS,config_getint(Mdict,mode,"channels",1));
-  encode_int(bpp,GAIN,config_getfloat(Mdict,mode,"gain",DEFAULT_GAIN));
-  encode_float(bpp,HEADROOM,config_getfloat(Mdict,mode,"headroom",DEFAULT_HEADROOM));
-  encode_float(bpp,KAISER_BETA,config_getfloat(Mdict,mode,"kaiser-beta",DEFAULT_KAISER_BETA));
-  encode_float(bpp,LOW_EDGE,config_getfloat(Mdict,mode,"low",DEFAULT_LOW));
-  encode_float(bpp,HIGH_EDGE,config_getfloat(Mdict,mode,"high",DEFAULT_HIGH));
-  encode_float(bpp,SQUELCH_OPEN,config_getfloat(Mdict,mode,"squelch-open",DEFAULT_SQUELCH_OPEN));
-  encode_float(bpp,SQUELCH_CLOSE,config_getfloat(Mdict,mode,"squelch-close",DEFAULT_SQUELCH_CLOSE));
-  return 0;
-}      
 
 // Is response for us (1), or for somebody else (-1)?
 static int for_us(struct demod *demod,unsigned char const *buffer,int length,uint32_t ssrc){
@@ -1227,6 +1132,12 @@ int decode_radio_status(struct demod *demod,unsigned char const *buffer,int leng
     case SQUELCH_CLOSE:
       demod->squelch_close = dB2power(decode_float(cp,optlen));
       break;
+    case DEEMPH_GAIN:
+      demod->deemph.gain = decode_float(cp,optlen);
+      break;
+    case DEEMPH_TC:
+      demod->deemph.rate = 1e6*decode_float(cp,optlen);
+      break;
     default: // ignore others
       break;
     }
@@ -1428,6 +1339,9 @@ void display_demodulator(WINDOW *w,struct demod const *demod){
     pprintw(w,row++,col,"Input SNR","%.1f dB",power2dB(demod->sig.snr));
     pprintw(w,row++,col,"Offset","%'+.3f Hz",demod->sig.foffset);
     pprintw(w,row++,col,"Deviation","%.1f Hz",demod->fm.pdeviation);
+    pprintw(w,row++,col,"Deemph gain","%.1f dB",demod->deemph.gain);
+    pprintw(w,row++,col,"Deemph tc","%.1f us",demod->deemph.rate);
+
 #if 0
     // PL decoder moves to separate program
     pprintw(w,row++,col,"PL Tone","%.1f Hz",demod->sig.plfreq);

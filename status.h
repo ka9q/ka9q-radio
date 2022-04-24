@@ -112,6 +112,9 @@ enum status_type {
   OUTPUT_BITS_PER_SAMPLE,
   SQUELCH_OPEN,   // Squelch opening threshold SNR
   SQUELCH_CLOSE,  // and closing
+  PRESET,         // char string containing mode presets
+  DEEMPH_TC,      // De-emphasis time constant (FM only)
+  DEEMPH_GAIN,    // De-emphasis gain (FM only)
 };
 
 int encode_string(unsigned char **bp,enum status_type type,void const *buf,int buflen);

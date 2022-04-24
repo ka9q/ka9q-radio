@@ -1,4 +1,4 @@
-// $Id: linear.c,v 1.103 2022/04/21 08:11:30 karn Exp $
+// $Id: linear.c,v 1.104 2022/04/24 09:07:19 karn Exp $
 
 // General purpose linear demodulator
 // Handles USB/IQ/CW/etc, basically all modes but FM and envelope-detected AM
@@ -38,7 +38,6 @@ void *demod_linear(void *arg){
   }
   demod->output.gain = dB2voltage(DEFAULT_GAIN); // AGC will bring it down
 
-
   int const blocksize = demod->output.samprate * Blocktime / 1000;
   delete_filter_output(&demod->filter.out);
   demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
@@ -52,7 +51,6 @@ void *demod_linear(void *arg){
 	     demod->filter.kaiser_beta);
   
   // Coherent mode parameters
-  //  float const snrthresh = DEFAULT_PLL_THRESHOLD;
   float const damping = DEFAULT_PLL_DAMPING;
   float const lock_time = DEFAULT_PLL_LOCKTIME;
 
@@ -60,62 +58,14 @@ void *demod_linear(void *arg){
   init_pll(&demod->pll.pll,(float)demod->output.samprate);
 
   while(!demod->terminate){
-    const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
-
-    // Force reasonable parameters if they get messed up or aren't set
-#ifdef NDEBUG
-    if(demod->output.channels != 1 && demod->output.channels != 2)
-      demod->output.channels = 1;
-
-    if(!isfinite(demod->tune.doppler_rate))
-      demod->tune.doppler_rate = 0;
-
-    if(!isfinite(demod->tune.shift))
-      demod->tune.shift = DEFAULT_SHIFT;
-
-    if(!isfinite(demod->output.headroom) || demod->output.headroom <= 0 )
-      demod->output.headroom = dB2voltage(DEFAULT_HEADROOM);
-
-    if(!isfinite(demod->linear.hangtime) || demod->linear.hangtime < 0)
-      demod->linear.hangtime = DEFAULT_HANGTIME * (1000./Blocktime);
-
-    if(!isfinite(demod->linear.recovery_rate) || demod->linear.recovery_rate <= 1)
-      demod->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE * (Blocktime/1000.));
-    
-    if(!isfinite(demod->output.gain) || demod->output.gain <= 0)
-      demod->output.gain = dB2voltage(DEFAULT_GAIN); // AGC will bring this down if it's too high
-
-    if(!isfinite(demod->linear.threshold) || demod->linear.threshold <= 0)
-      demod->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
-    
-    if(!isfinite(demod->linear.loop_bw) || demod->linear.loop_bw <= 0)
-      demod->linear.loop_bw = DEFAULT_PLL_BW; // Only used outside the loop right now - fix this!!
-#else
-    assert(demod->output.channels == 1 || demod->output.channels == 2);
-    assert(isfinite(demod->tune.doppler_rate));
-    assert(isfinite(demod->tune.shift));
-    assert(isfinite(demod->output.headroom));
-    assert(demod->output.headroom > 0);
-    assert(isfinite(demod->linear.hangtime));
-    assert(demod->linear.hangtime >= 0);
-    assert(isfinite(demod->linear.recovery_rate));
-    assert(demod->linear.recovery_rate > 1);
-    assert(isfinite(demod->output.gain));
-    assert(demod->output.gain > 0);
-    assert(isfinite(demod->linear.threshold));
-    assert(demod->linear.threshold >= 0);
-    assert(isfinite(demod->linear.loop_bw));
-    assert(demod->linear.loop_bw > 0);
-#endif
-    double remainder;
-    int rotate,flip;
-
     // To save CPU time when the front end is completely tuned away from us, block until the front
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.sdr.status_mutex);
+    double remainder;
+    int rotate,flip;
+
     while(1){
       if(demod->terminate){
-	// Note: relies on periodic front end status messages for polling
 	pthread_mutex_unlock(&Frontend.sdr.status_mutex);
 	goto quit;
       }
@@ -137,6 +87,25 @@ void *demod_linear(void *arg){
     }
     pthread_mutex_unlock(&Frontend.sdr.status_mutex);
 
+    const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
+
+    // Reasonable parameters?
+    assert(demod->output.channels == 1 || demod->output.channels == 2);
+    assert(isfinite(demod->tune.doppler_rate));
+    assert(isfinite(demod->tune.shift));
+    assert(isfinite(demod->output.headroom));
+    assert(demod->output.headroom > 0);
+    assert(isfinite(demod->linear.hangtime));
+    assert(demod->linear.hangtime >= 0);
+    assert(isfinite(demod->linear.recovery_rate));
+    assert(demod->linear.recovery_rate > 1);
+    assert(isfinite(demod->output.gain));
+    assert(demod->output.gain > 0);
+    assert(isfinite(demod->linear.threshold));
+    assert(demod->linear.threshold >= 0);
+    assert(isfinite(demod->linear.loop_bw));
+    assert(demod->linear.loop_bw > 0);
+
     demod->tp1 = rotate;
     demod->tp2 = remainder;
     set_pll_params(&demod->pll.pll,demod->linear.loop_bw,damping);
@@ -151,7 +120,7 @@ void *demod_linear(void *arg){
     float noise = 0;  // PLL only
     float energy = 0;
 
-    execute_filter_output(demod->filter.out,-rotate);
+    execute_filter_output(demod->filter.out,-rotate); // block until new data frame
 #if 1
     demod->sig.n0 = estimate_noise(demod,-rotate); // Negative, just like compute_tuning
 #else

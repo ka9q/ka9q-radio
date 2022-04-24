@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.246 2022/04/22 04:29:04 karn Exp $
+// $Id: main.c,v 1.248 2022/04/24 06:17:02 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -41,23 +41,7 @@ static int const DEFAULT_MCAST_TTL = 1;
 static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
 static int const DEFAULT_FFT_THREADS = 1;
-static int const DEFAULT_SAMPRATE = 24000;
-static float const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
-static float const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
-static float const DEFAULT_HIGH = 5000.0;
-static float const DEFAULT_HEADROOM = -15.0;     // keep gaussian signals from clipping
-static float const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
-static float const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
-static float const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
-static float const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
-static float const DEFAULT_GAIN = 80.0;          // Unused in FM, usually adjusted automatically in linear
-static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
-static float const DEFAULT_PLL_BW = 100.0;       // Reasonable for AM
-static int const DEFAULT_SQUELCHTAIL = 1;        // close on frame *after* going below threshold, may let partial frame noise through
-static float const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
-static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
-static float const DEFAULT_FM_DEEMPH_GAIN = 4.0; // +12 dB to give subjectively equal loudness with deemphsis
-static float const DEFAULT_WFM_DEEMPH_GAIN = 1.0; // +12 dB to give subjectively equal loudness with deemphsis
+
 
 
 
@@ -381,142 +365,17 @@ static int loadconfig(char const * const file){
     if(config_getboolean(Configtable,sname,"disable",0))
 	continue; // section is disabled
 
-    // Structure is created and initialized before being put on list
-    struct demod *demod = alloc_demod();
-    demod->tp1 = demod->tp2 = NAN;
-    demod->tune.doppler = 0;
-    demod->tune.doppler_rate = 0;
-    // De-emphasis defaults to off, enabled only in FM modes
-    demod->deemph.rate = 0;
-    demod->deemph.gain = 1.0;
-
     // fall back to setting in [global] if parameter not specified in individual section
     // Set parameters even when unused for the current demodulator in case the demod is changed later
     char const * mode = config2_getstring(Configtable,Configtable,global,sname,"mode",NULL);
     if(mode == NULL || strlen(mode) == 0)
       fprintf(stdout,"warning: mode preset not selected, using built-in defaults\n");
 
-    {
-      char const * demod_name = config2_getstring(Modetable,Configtable,mode,sname,"demod",NULL);
-      if(demod_name == NULL){
-	fprintf(stdout,"Demodulator name missing\n");
-	free_demod(&demod);
-	continue;
-      }
-      demod->demod_type = demod_type_from_name(demod_name);
-      if(demod->demod_type < 0){
-	fprintf(stderr,"Demodulator '%s' unknown\n",demod_name);
-	free_demod(&demod);
-	continue;
-      }
-    }
+    struct demod *demod = alloc_demod();
+    loadmode(demod,Modetable,mode,1);
+    loadmode(demod,Configtable,sname,0); // Overwrite with config file entries
+
     demod->output.rtp.ssrc = (uint32_t)config_getdouble(Configtable,sname,"ssrc",0); // Default triggers auto gen from freq
-    demod->output.samprate = config2_getint(Modetable,Configtable,mode,global,"samprate",DEFAULT_SAMPRATE);
-    demod->output.samprate = abs(demod->output.samprate);
-    if(demod->output.samprate == 0){
-      fprintf(stdout,"Error! samprate is zero\n");
-      free_demod(&demod);
-      continue;
-    }
-    demod->filter.kaiser_beta = config2_getfloat(Modetable,Configtable,mode,global,"kaiser-beta",DEFAULT_KAISER_BETA);
-    {
-      // Pre-detection filter limits
-      float low = config2_getfloat(Modetable,Configtable,mode,global,"low",DEFAULT_LOW);
-      float high = config2_getfloat(Modetable,Configtable,mode,global,"high",DEFAULT_HIGH);
-      if(low > high){
-	// Ensure high > low
-	float t = low;
-	low = high;
-	high = t;
-      }
-      demod->filter.max_IF = high;
-      demod->filter.min_IF = low;
-    }
-    {
-      float squelch_open = config2_getfloat(Modetable,Configtable,mode,global,"squelch-open",DEFAULT_SQUELCH_OPEN);
-      float squelch_close = config2_getfloat(Modetable,Configtable,mode,global,"squelch-close",DEFAULT_SQUELCH_CLOSE);
-      if(squelch_close > squelch_open){
-	fprintf(stdout,"warning: setting squelch_close = squelch_open\n");
-	squelch_close = squelch_open;
-      }
-      demod->squelch_open = dB2power(squelch_open);
-      demod->squelch_close = dB2power(squelch_close);
-    }
-    demod->squelchtail = config2_getint(Modetable,Configtable,mode,global,"squelchtail",DEFAULT_SQUELCHTAIL);
-    demod->squelchtail = abs(demod->squelchtail); // ensure not negative
-    {
-      float headroom = config2_getfloat(Modetable,Configtable,mode,global,"headroom",DEFAULT_HEADROOM);
-      demod->output.headroom = dB2voltage(-fabsf(headroom)); // always treat as <= 0 dB
-    }
-    {
-      int channels = config2_getint(Modetable,Configtable,mode,global,"channels",1); // Default mono, i.e., not IQ
-      if(config2_getboolean(Modetable,Configtable,mode,global,"stereo",0))
-	channels = 2;
-      if(config2_getboolean(Modetable,Configtable,mode,global,"mono",0))
-	channels = 1;
-      
-      if(channels != 1 && channels != 2){
-	fprintf(stdout,"Invalid channel count %d, forcing to 1\n",demod->output.channels);
-	channels = 1;
-      }
-      demod->output.channels = channels;
-    }
-    demod->tune.shift = config2_getfloat(Modetable,Configtable,mode,sname,"shift",0.0);
-    {
-      // dB/sec -> voltage ratio/block
-      float x = config2_getfloat(Modetable,Configtable,mode,sname,"recovery-rate",DEFAULT_RECOVERY_RATE);
-      demod->linear.recovery_rate = dB2voltage(fabsf(x) * .001f * Blocktime);
-    }
-    {
-      // time in seconds -> time in blocks
-      float x = config2_getfloat(Modetable,Configtable,mode,sname,"hang-time",DEFAULT_HANGTIME);
-      demod->linear.hangtime = fabsf(x) / (.001 * Blocktime); // Always >= 0
-    }
-    {
-      float x = config2_getfloat(Modetable,Configtable,mode,sname,"threshold",DEFAULT_THRESHOLD);
-      demod->linear.threshold = dB2voltage(-fabsf(x)); // Always <= unity
-    }
-    {
-      float x = config2_getfloat(Modetable,Configtable,mode,sname,"gain",DEFAULT_GAIN);
-      demod->output.gain = dB2voltage(x); // Can be more or less than unity
-    }
-    demod->linear.env = config2_getboolean(Modetable,Configtable,mode,sname,"envelope",0);   // default off 
-    demod->linear.pll = config2_getboolean(Modetable,Configtable,mode,sname,"pll",0);        // default off. On also enables squelch!
-    demod->linear.square = config2_getboolean(Modetable,Configtable,mode,sname,"square",0);  // default off. On implies PLL on
-    if(demod->linear.square)
-      demod->linear.pll = 1; // Square implies PLL
-
-    demod->filter.isb = config2_getboolean(Modetable,Configtable,mode,sname,"conj",0);       // default off (unimplemented anyway)
-    demod->linear.loop_bw = config2_getfloat(Modetable,Configtable,mode,sname,"pll-bw",DEFAULT_PLL_BW);
-    demod->linear.agc = config2_getboolean(Modetable,Configtable,mode,sname,"agc",1);        // default ON
-    switch(demod->demod_type){
-    case LINEAR_DEMOD:
-      break;
-    case FM_DEMOD:
-      {
-	float tc = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-tc",DEFAULT_NBFM_TC);
-	if(tc != 0.0){
-	  demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * demod->output.samprate));
-	  demod->deemph.gain = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-gain",DEFAULT_FM_DEEMPH_GAIN);
-	}
-      }
-      break;
-    case WFM_DEMOD:
-      demod->output.channels = 2;      // always stereo
-      demod->output.samprate = 384000; // downconverter samprate forced for FM stereo decoding. Output also forced to 48 kHz
-      {
-	// Default 75 microseconds for north american FM broadcasting
-	float tc = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-tc",DEFAULT_WFM_TC);
-	if(tc != 0){
-	  demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * 48000)); // hardwired output sample rate -- needs cleanup
-	  demod->deemph.gain = config2_getfloat(Modetable,Configtable,mode,sname,"deemph-gain",DEFAULT_WFM_DEEMPH_GAIN);
-	}
-      }
-    }
-    char const * const status = config_getstring(Configtable,sname,"status",NULL);
-    if(status)
-      fprintf(stdout,"note: 'status =' now set in [global] section only\n");
-
     char const * data = config_getstring(Configtable,global,"data",NULL);
     data = config_getstring(Configtable,sname,"data",data);
     if(data == NULL){

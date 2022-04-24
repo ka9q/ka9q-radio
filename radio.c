@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.215 2022/04/22 07:42:53 karn Exp $
+// $Id: radio.c,v 1.216 2022/04/24 09:09:25 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -33,7 +33,7 @@
 float Blocktime;
 struct frontend Frontend;
 
-pthread_mutex_t Demod_mutex;
+pthread_mutex_t Demod_list_mutex;
 int const Demod_alloc_quantum = 1000;
 struct demod *Demod_list; // Contiguous array
 int Demod_list_length; // Length of array
@@ -45,7 +45,7 @@ static float const SCALE16 = 1./SHRT_MAX; // Scale signed 16-bit int to float in
 static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
 
 struct demod *alloc_demod(void){
-  pthread_mutex_lock(&Demod_mutex);
+  pthread_mutex_lock(&Demod_list_mutex);
   if(Demod_list == NULL){
     Demod_list = (struct demod *)calloc(Demod_alloc_quantum,sizeof(struct demod));
     Demod_list_length = Demod_alloc_quantum;
@@ -65,19 +65,19 @@ struct demod *alloc_demod(void){
     demod->inuse = 1;
     Active_demod_count++;
   }
-  pthread_mutex_unlock(&Demod_mutex);
+  pthread_mutex_unlock(&Demod_list_mutex);
   return demod;
 }
 
 // takes pointer to pointer to demod so we can zero it out to avoid use of freed pointer
 void free_demod(struct demod **demod){
   if(demod != NULL && *demod != NULL){
-    pthread_mutex_lock(&Demod_mutex);
+    pthread_mutex_lock(&Demod_list_mutex);
     if((*demod)->inuse){
       (*demod)->inuse = 0;
       Active_demod_count--;
     }
-    pthread_mutex_unlock(&Demod_mutex);  
+    pthread_mutex_unlock(&Demod_list_mutex);  
     *demod = NULL;
   }
 }
