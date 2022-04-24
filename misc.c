@@ -1,4 +1,4 @@
-// $Id: misc.c,v 1.37 2022/04/18 02:08:43 karn Exp $
+// $Id: misc.c,v 1.38 2022/04/24 23:51:16 karn Exp $
 // Miscellaneous low-level routines, mostly time-related
 // Copyright 2018, Phil Karn, KA9Q
 
@@ -171,7 +171,7 @@ char *ftime(char * result,int size,long long t){
 // If no g/m/k and number is too small, make a heuristic guess
 // NB! This assumes radio covers 100 kHz - 2 GHz; should make more general
 double parse_frequency(char const *s){
-  char * const ss = alloca(strlen(s));
+  char * const ss = alloca(strlen(s)+1);
 
   int i;
   for(i=0;i<strlen(s);i++)
