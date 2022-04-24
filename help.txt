@@ -22,5 +22,6 @@ P	     PLL loop bandwidth, s
 k            Set Kaiser window beta parameter
 m            Set demod mode
 o            Set/clear option flag
+r	     Set refresh rate, s
 q            Quit program
 
