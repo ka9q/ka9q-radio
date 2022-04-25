@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.165 2022/04/18 02:08:43 karn Exp $
+// $Id: monitor.c,v 1.166 2022/04/25 04:51:53 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -78,7 +78,7 @@ static int Auto_sort;
 
 struct session {
   struct sockaddr_storage sender;
-  char *dest;
+  char const *dest;
 
   pthread_t task;           // Thread reading from queue and running decoder
   struct packet *queue;     // Incoming RTP packets
@@ -123,6 +123,7 @@ struct session {
 static int Nsessions;
 static struct session *Sessions[NSESSIONS];
 
+static void load_id(void);
 static void cleanup(void);
 static void closedown(int);
 static void *display(void *);
@@ -236,7 +237,7 @@ int main(int argc,char * const argv[]){
     fprintf(stderr,"At least one input group required, exiting\n");
     exit(1);
   }
-
+  load_id();
   char *nextp = NULL;
   int d;
   int numDevices = Pa_GetDeviceCount();
@@ -333,7 +334,7 @@ int main(int argc,char * const argv[]){
 
 static void *sockproc(void *arg){
 
-  char *mcast_address_text = (char *)arg;
+  char const *mcast_address_text = (char *)arg;
 
   {
     char name[100];
@@ -669,8 +670,6 @@ static void *decode_task(void *arg){
     // Count samples and frames and advance write pointer even when muted
     sp->tot_active += (float)sp->frame_size / sp->samprate;
     sp->active += (float)sp->frame_size / sp->samprate;
-    free(pkt);
-    pkt = NULL;
 
     if(sp->frame_size > 0){
       sp->wptr += upsample * sp->frame_size; // increase displayed queue in status screen
@@ -684,6 +683,9 @@ static void *decode_task(void *arg){
 #endif
     }
   endloop:;
+    if(pkt)
+      free(pkt);
+    pkt = NULL;
   }
   sp->terminate = -1; // debug
   pthread_cleanup_pop(1);
@@ -767,11 +769,12 @@ static void *display(void *arg){
       /* This mutex protects Sessions[] and Nsessions. Instead of holding the
 	 lock for the entire display loop, we make a copy.
       */
-      struct session *Sessions_copy[NSESSIONS];
+
       int Nsessions_copy;
       pthread_mutex_lock(&Sess_mutex);
       assert(Nsessions <= NSESSIONS);
       Nsessions_copy = Nsessions;
+      struct session *Sessions_copy[NSESSIONS];
       memcpy(Sessions_copy,Sessions,Nsessions * sizeof(Sessions_copy[0]));
       if(Nsessions == 0)
 	current = -1; // Not sure how this can happen, but in case
@@ -1196,7 +1199,7 @@ static int Nid;
 static struct idtable Idtable[IDSIZE];
 static struct stat Last_stat;
 
-static char const *lookupid(uint32_t ssrc){
+static void load_id(void){
   char filename[PATH_MAX];
   snprintf(filename,sizeof(filename),"%s/%s",LIBDIR,ID);
   struct stat statbuf;
@@ -1208,7 +1211,7 @@ static char const *lookupid(uint32_t ssrc){
     // Load table
     FILE * const fp = fopen(filename,"r");
     if(fp == NULL)
-      return NULL;
+      return;
     
     char line[1024];
     while(fgets(line,sizeof(line),fp)){
@@ -1216,6 +1219,7 @@ static char const *lookupid(uint32_t ssrc){
       char *ptr = NULL;
       if(line[0] == '#' || strlen(line) == 0)
 	continue; // Comment
+      assert(Nid < IDSIZE);
       Idtable[Nid].ssrc = strtol(line,&ptr,0);
       if(ptr == line)
 	continue; // no parseable hex number
@@ -1227,9 +1231,16 @@ static char const *lookupid(uint32_t ssrc){
 	strlcpy(Idtable[Nid].id,ptr,sizeof(Idtable[Nid].id));
       }
       Nid++;
+      if(Nid == IDSIZE){
+	fprintf(stderr,"ID table overlow, size %d\n",Nid);
+	break;
+      }
     }
     fclose(fp);
   }
+}
+
+static char const *lookupid(uint32_t ssrc){
   for(int i=0; i < Nid; i++){
     if(Idtable[i].ssrc == ssrc)
       return Idtable[i].id;
