@@ -18,10 +18,11 @@ R	     Set AGC recover rate, dB/s
 T	     Set AGC hang time, s
 H	     Set headroom, dB
 L	     Set AGC threshold, dB
-P	     PLL loop bandwidth, s
+P	     PLL loop bandwidth, Hz
 k            Set Kaiser window beta parameter
 m            Set demod mode
 o            Set/clear option flag
 r	     Set refresh rate, s
+s	     Set squelch, dB
 q            Quit program
 
