@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.248 2022/04/24 06:17:02 karn Exp $
+// $Id: main.c,v 1.249 2022/04/25 02:08:30 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -450,9 +450,9 @@ static int loadconfig(char const * const file){
 	// If not explicitly specified, generate SSRC in decimal using frequency in Hz
 	if(demod->output.rtp.ssrc == 0){
 	  if(f == 0){
-	    if(Dynamic_demod){
+	    if(Dynamic_demod)
 	      free_demod(&Dynamic_demod);
-	    }
+
 	    // Template for dynamically created demods
 	    Dynamic_demod = demod;
 	    fprintf(stdout,"dynamic demod template created\n");
@@ -467,11 +467,14 @@ static int loadconfig(char const * const file){
 	}
 	// Initialization all done, start it up
 	set_freq(demod,demod->tune.freq);
-	start_demod(demod);
-	nfreq++;
-	ndemods++;
-	if(Verbose)
-	  fprintf(stdout,"started %'.3lf Hz\n",demod->tune.freq);
+	if(demod->tune.freq != 0){ // Don't start dynamic entry
+	  start_demod(demod);
+	
+	  nfreq++;
+	  ndemods++;
+	  if(Verbose)
+	    fprintf(stdout,"started %'.3lf Hz\n",demod->tune.freq);
+	}
 
 	// Set up for next demod
 	struct demod *ndemod = alloc_demod();
@@ -479,7 +482,7 @@ static int loadconfig(char const * const file){
 	  fprintf(stdout,"alloc_demod() failed, quitting\n");
 	  break;
 	}
-	// Copy everything to next demod except filter, demod thread ID, freq and ssrc
+	// Copy everything to next demod except dynamic per-thread stuff
 	memcpy(ndemod,demod,sizeof(*ndemod));
 	ndemod->filter.out = NULL;
 	ndemod->demod_thread = (pthread_t)0;

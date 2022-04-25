@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.128 2022/04/21 08:11:30 karn Exp $
+// $Id: fm.c,v 1.129 2022/04/25 02:08:30 karn Exp $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -221,6 +221,9 @@ void *demod_fm(void *arg){
 
   } // while(!demod->terminate)
  quit:;
+  if(demod->filter.energies)
+    free(demod->filter.energies);
+  demod->filter.energies = NULL;
   delete_filter_output(&demod->filter.out);
   return NULL;
 }

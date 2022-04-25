@@ -1,4 +1,4 @@
-// $Id: linear.c,v 1.104 2022/04/24 09:07:19 karn Exp $
+// $Id: linear.c,v 1.105 2022/04/25 02:09:44 karn Exp $
 
 // General purpose linear demodulator
 // Handles USB/IQ/CW/etc, basically all modes but FM and envelope-detected AM
@@ -287,6 +287,9 @@ void *demod_linear(void *arg){
     }
   }
  quit:;
+  if(demod->filter.energies)
+    free(demod->filter.energies);
+  demod->filter.energies = NULL;
   delete_filter_output(&demod->filter.out);
   return NULL;
 }

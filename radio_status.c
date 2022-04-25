@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.78 2022/04/24 09:10:46 karn Exp $
+// $Id: radio_status.c,v 1.79 2022/04/25 02:08:30 karn Exp $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -83,9 +83,11 @@ void *radio_status(void *arg){
       if(demod == NULL && Dynamic_demod != NULL){
 	// SSRC specified but not found; create dynamically
 	demod = alloc_demod();
-	extern struct demod *Dynamic_demod;
 	memcpy(demod,Dynamic_demod,sizeof(*demod));
+	// clear dynamically created objects
 	demod->demod_thread = (pthread_t)0;
+	demod->filter.out = NULL;
+	demod->filter.energies = NULL;
 	demod->tune.freq = 0;
 	demod->lifetime = 20;
 	demod->output.rtp.ssrc = ssrc;

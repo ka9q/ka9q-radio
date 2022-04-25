@@ -1,4 +1,4 @@
-// $Id: wfm.c,v 1.29 2022/04/24 09:08:51 karn Exp $
+// $Id: wfm.c,v 1.30 2022/04/25 02:08:30 karn Exp $
 // Wideband FM demodulation and squelch
 // Adapted from narrowband demod
 // Copyright 2020, Phil Karn, KA9Q
@@ -318,6 +318,9 @@ void *demod_wfm(void *arg){
   delete_filter_output(&stereo);
   delete_filter_output(&pilot);
   delete_filter_input(&composite);
+  if(demod->filter.energies)
+    free(demod->filter.energies);
+  demod->filter.energies = NULL;
   delete_filter_output(&demod->filter.out);
   return NULL;
 }
