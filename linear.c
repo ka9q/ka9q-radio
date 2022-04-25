@@ -1,4 +1,4 @@
-// $Id: linear.c,v 1.105 2022/04/25 02:09:44 karn Exp $
+// $Id: linear.c,v 1.106 2022/04/25 10:17:05 karn Exp $
 
 // General purpose linear demodulator
 // Handles USB/IQ/CW/etc, basically all modes but FM and envelope-detected AM
@@ -8,7 +8,7 @@
 #define DEFAULT_HEADROOM (-10.0)     // Target average output level, dBFS
 #define DEFAULT_HANGTIME (1.1)       // AGC gain hang time, sec
 #define DEFAULT_RECOVERY_RATE (20.0)  // AGC recovery rate after hang expiration, dB/s
-#define DEFAULT_GAIN (80.)           // Linear gain, dB
+#define DEFAULT_GAIN (0.)           // Linear gain, dB
 #define DEFAULT_THRESHOLD (-15.0)     // AGC threshold, dB (noise will be at HEADROOM + THRESHOLD)
 #define DEFAULT_PLL_BW (500.0)         // PLL loop bandwidth, Hz
 #define DEFAULT_PLL_DAMPING (M_SQRT1_2); // PLL loop damping factor; 1/sqrt(2) is "critical" damping
@@ -36,8 +36,7 @@ void *demod_linear(void *arg){
     snprintf(name,sizeof(name),"lin %u",demod->output.rtp.ssrc);
     pthread_setname(name);
   }
-  demod->output.gain = dB2voltage(DEFAULT_GAIN); // AGC will bring it down
-
+ 
   int const blocksize = demod->output.samprate * Blocktime / 1000;
   delete_filter_output(&demod->filter.out);
   demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);

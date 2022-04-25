@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.150 2022/04/24 04:28:54 karn Exp $
+// $Id: control.c,v 1.151 2022/04/25 10:17:37 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -1275,7 +1275,7 @@ void display_filtering(WINDOW *w,struct demod const *demod){
   float const transition = (2.0 / M_PI) * sqrtf(M_PI*M_PI + beta * beta);
   pprintw(w,row++,col,"transition","%'.1f Hz",transition * Frontend.sdr.samprate / (Frontend.M-1)); // Not N, apparently
 #endif
-  pprintw(w,row++,col,"Drops","%'llu   ",Block_drops);
+  pprintw(w,row++,col,"Drops","%'llu",Block_drops);
   
   box(w,0,0);
   mvwaddstr(w,0,1,"Filtering");
@@ -1341,6 +1341,8 @@ void display_demodulator(WINDOW *w,struct demod const *demod){
     pprintw(w,row++,col,"Deviation","%.1f Hz",demod->fm.pdeviation);
     pprintw(w,row++,col,"Deemph gain","%.1f dB",demod->deemph.gain);
     pprintw(w,row++,col,"Deemph tc","%.1f us",demod->deemph.rate);
+    pprintw(w,row++,col,"Squelch open","%.1f dB  ",power2dB(demod->squelch_open));
+    pprintw(w,row++,col,"Squelch close","%.1f dB  ",power2dB(demod->squelch_close));    
 
 #if 0
     // PL decoder moves to separate program
@@ -1361,17 +1363,17 @@ void display_demodulator(WINDOW *w,struct demod const *demod){
       pprintw(w,row++,col,"Offset","%'+.3f Hz  ",demod->sig.foffset);
       pprintw(w,row++,col,"PLL Phase","%+.1f deg ",demod->linear.cphase*DEGPRA);
       pprintw(w,row++,col,"PLL Lock","%s     ",demod->linear.pll_lock ? "Yes" : "No");
+      pprintw(w,row++,col,"Squelch open","%.1f dB  ",power2dB(demod->squelch_open));
+      pprintw(w,row++,col,"Squelch close","%.1f dB  ",power2dB(demod->squelch_close));    
     }
     break;
   }
-  pprintw(w,row++,col,"Squelch open","%.1f dB  ",power2dB(demod->squelch_open));
-  pprintw(w,row++,col,"Squelch close","%.1f dB  ",power2dB(demod->squelch_close));    
 
   if(!isnan(demod->tp1))
-    pprintw(w,row++,col,"TP1","%+g   ",demod->tp1);
+    pprintw(w,row++,col,"TP1","%+g",demod->tp1);
 
   if(!isnan(demod->tp2))
-    pprintw(w,row++,col,"TP2","%+g   ",demod->tp2);
+    pprintw(w,row++,col,"TP2","%+g",demod->tp2);
 
   box(w,0,0);
   mvwprintw(w,0,1,"%s demodulator",demod_name_from_type(demod->demod_type));

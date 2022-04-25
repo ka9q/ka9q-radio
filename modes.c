@@ -1,4 +1,4 @@
-// $Id: modes.c,v 1.59 2022/04/24 09:07:42 karn Exp $
+// $Id: modes.c,v 1.60 2022/04/25 10:18:25 karn Exp $
 // Load and search mode definition table in /usr/local/share/ka9q-radio/modes.conf
 
 // Copyright 2018, Phil Karn, KA9Q
@@ -31,7 +31,7 @@ static float const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
 static float const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
 static float const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
 static float const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
-static float const DEFAULT_GAIN = 80.0;          // Unused in FM, usually adjusted automatically in linear
+static float const DEFAULT_GAIN = 0.0;          // Unused in FM, usually adjusted automatically in linear
 static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
 static float const DEFAULT_PLL_BW = 100.0;       // Reasonable for AM
 static int const DEFAULT_SQUELCHTAIL = 1;        // close on frame *after* going below threshold, may let partial frame noise through
@@ -86,7 +86,8 @@ static int set_defaults(struct demod *demod){
   demod->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE * .001f * Blocktime);
   demod->linear.hangtime = DEFAULT_HANGTIME / (.001 * Blocktime);
   demod->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
-  demod->output.gain = dB2voltage(DEFAULT_GAIN);
+  if(demod->output.gain <= 0 || isnan(demod->output.gain))
+     demod->output.gain = dB2voltage(DEFAULT_GAIN); // Set only if out of bounds
   demod->linear.env = 0;
   demod->linear.pll = 0;
   demod->linear.square = 0;
