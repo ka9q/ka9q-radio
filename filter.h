@@ -1,4 +1,4 @@
-// $Id: filter.h,v 1.46 2022/04/14 10:50:43 karn Exp $
+// $Id: filter.h,v 1.47 2022/04/25 01:40:17 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -24,6 +24,7 @@ enum filtertype {
 struct fft_job {
   struct fft_job *next;
   void *input;
+  int terminate; // set to tell fft thread to quit
 };
 
 // Input and output arrays can be either complex or real
@@ -49,7 +50,6 @@ struct filter_in {
   pthread_cond_t filter_cond;
 
   pthread_t fft_thread;
-  pthread_t fft_thread2;
   int jobnum;
   struct fft_job *job_queue;         // queue of input block for FFT thread
   pthread_mutex_t queue_mutex;       // Synchronization for input queue

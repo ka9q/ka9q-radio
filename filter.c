@@ -1,4 +1,4 @@
-// $Id: filter.c,v 1.86 2022/04/14 10:50:43 karn Exp $
+// $Id: filter.c,v 1.87 2022/04/25 01:40:17 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -194,7 +194,6 @@ void *run_fft(void *p){
     f->job_queue = job->next;
     int const jobnum = f->jobnum++;
     pthread_mutex_unlock(&f->queue_mutex);
-    
     if(job->input != NULL){
       switch(f->in_type){
       case COMPLEX:
@@ -221,9 +220,12 @@ void *run_fft(void *p){
     f->blocknum = jobnum + 1;
     pthread_cond_broadcast(&f->filter_cond);
     pthread_mutex_unlock(&f->filter_mutex);
+    int const terminate = job->terminate ? 1 : 0;
     free(job); job = NULL;
+    if(terminate)
+      break; // Terminate after this job
   }
-  return NULL; // not reached
+  return NULL;
 }
 
 
@@ -235,13 +237,6 @@ int execute_filter_input(struct filter_in * const f){
   // Start FFT thread if not already running
   if(f->fft_thread == (pthread_t)0)
     pthread_create(&f->fft_thread,NULL,run_fft,f);
-#if DUAL_FFT_THREAD
-  // Experimental: create second FFT processing thread
-  // Only really useful if FFT cannot be completed in one frame time
-  // Otherwise the scheduler usually gives the job to the same thread, and the other sits idle
-  if(f->fft_thread2 == (pthread_t)0)
-    pthread_create(&f->fft_thread2,NULL,run_fft,f);    
-#endif
 
   // We now use the FFTW3 functions that specify the input and output arrays
   // Execute the FFT in a detached thread so we can process more input data while the FFT executes
@@ -514,32 +509,55 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   return 0;
 }
 
+// Send terminate job to FFT thread
+static void terminate_fft(struct filter_in *f){
+  struct fft_job * const job = calloc(1,sizeof(struct fft_job));
+
+  job->input = NULL;
+  job->terminate = 1;
+  // Append job to queue, wake FFT thread
+  pthread_mutex_lock(&f->queue_mutex);
+  struct fft_job *jp_prev = NULL;
+  for(struct fft_job *jp = f->job_queue; jp != NULL; jp = jp->next)
+    jp_prev = jp;
+
+  if(jp_prev)
+    jp_prev->next = job;
+  else
+    f->job_queue = job; // Head of list
+
+  pthread_cond_signal(&f->queue_cond); // Alert FFT thread
+  pthread_mutex_unlock(&f->queue_mutex);
+}
+
 int delete_filter_input(struct filter_in ** p){
   if(p == NULL)
     return -1;
 
   struct filter_in *master = *p;
+  *p = NULL; // Avoid race?
 
   if(master == NULL)
     return -1;
   
-  if(master->fft_thread)
-    pthread_cancel(master->fft_thread);
-  if(master->fft_thread2)
-    pthread_cancel(master->fft_thread2);
+  if(master->fft_thread){
+    terminate_fft(master);
+    pthread_join(master->fft_thread,NULL);
+    master->fft_thread = (pthread_t)0;
+  }
 
   fftwf_destroy_plan(master->fwd_plan);
   fftwf_free(master->input_buffer.c);
   for(int i=0; i < ND; i++)
     fftwf_free(master->fdomain[i]);
   free(master);
-  *p = NULL;
   return 0;
 }
 int delete_filter_output(struct filter_out **p){
   if(p == NULL)
     return -1;
   struct filter_out *slave = *p;
+  *p = NULL; // Avoid race?
 
   if(slave == NULL)
     return 1;
@@ -550,7 +568,6 @@ int delete_filter_output(struct filter_out **p){
   fftwf_free(slave->response);
   fftwf_free(slave->f_fdomain);
   free(slave);
-  *p = NULL;
   return 0;
 }
 

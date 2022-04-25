@@ -1,10 +1,17 @@
-# $Id: Makefile.linux,v 1.92 2022/04/24 02:46:15 karn Exp $
-COPTS=-DNDEBUG=1 -O3 -march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
+# $Id: Makefile.linux,v 1.93 2022/04/24 22:54:53 karn Exp $
+
+# for production
+DOPTS = -DNDEBUG=1 -O3
+# for debugging
+#DOPTS=-g
+
+COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
+
 # Get local versions (e.g., of librtlsdr)
 LDOPTS=-L/usr/local/lib
-#COPTS=-g -march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
-#LDOPTS=-g
-CFLAGS=$(COPTS) $(INCLUDES)
+#LDOPTS=-g -L/usr/local/lib
+
+CFLAGS=$(DOPTS) $(COPTS) $(INCLUDES)
 BINDIR=/usr/local/bin
 LIBDIR=/usr/local/share/ka9q-radio
 DAEMONDIR=/usr/local/sbin
@@ -25,7 +32,7 @@ CONF_FILES=funcube-0.conf \
 			 opus@hf.conf opus@hfdl.conf opus@6m.conf opus@2m.conf opus@125cm.conf opus@70cm.conf opus@aviation.conf opus@packet.conf \
 			 stereo.conf rds.conf \
 			 radio@10m.conf radio@6m.conf radio@fm.conf radio@2m.conf radio@125cm.conf radio@70cm.conf radio@hf.conf radio@aviation.conf radio@horus.conf radio@nws.conf radio@sonde.conf \
-			 recordings@hf.conf recordings@6m.conf recordings@2m.conf recordings@125cm.conf recordings@70cm.conf recordings@aviation.conf \
+			 recordings@hf.conf recordings@6m.conf recordings@2m.conf recordings@125cm.conf recordings@70cm.conf recordings@aviation.conf recordings@pictures.conf \
 			 wspr-decode.conf horus.conf airspy.conf packet.conf aprs.conf
 
 AIRSPY_FILES=
