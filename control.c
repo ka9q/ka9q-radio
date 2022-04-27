@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.151 2022/04/25 10:17:37 karn Exp $
+// $Id: control.c,v 1.151 2022/04/25 10:17:37 karn Exp karn $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -465,7 +465,7 @@ int main(int argc,char *argv[]){
       Resized = 0;
       setup_windows();
     }
-    if(FD_ISSET(Status_fd,&fdset)){
+    if(Status_fd != -1 && FD_ISSET(Status_fd,&fdset)){
       // Message from the radio program (or some transcoders)
       unsigned char buffer[8192];
       socklen_t ssize = sizeof(Metadata_source_address);
@@ -495,7 +495,7 @@ int main(int argc,char *argv[]){
 	}
       }
     }
-    if(FD_ISSET(Frontend.input.status_fd,&fdset)){
+    if(Frontend.input.status_fd != -1 && FD_ISSET(Frontend.input.status_fd,&fdset)){
       // Message from the front end
       unsigned char buffer[8192];
       struct sockaddr_storage sender;
