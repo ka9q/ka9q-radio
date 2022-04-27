@@ -1,4 +1,4 @@
-// $Id: airspyhf.c,v 1.47 2022/04/16 03:20:28 karn Exp $
+// $Id: airspyhf.c,v 1.47 2022/04/16 03:20:28 karn Exp karn $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #define _GNU_SOURCE 1
@@ -413,7 +413,9 @@ int main(int argc,char *argv[]){
   if(init_frequency != 0)
     sdr->frequency_lock = 1;
 
-  asprintf(&sdr->frequency_file,"%s/tune-airspy.%llx",VARDIR,(unsigned long long)sdr->SN);
+  ret = asprintf(&sdr->frequency_file,"%s/tune-airspy.%llx",VARDIR,(unsigned long long)sdr->SN);
+  if(ret == -1)
+    exit(1);
   if(init_frequency == 0){
     // If not set on command line, load saved frequency
     FILE *fp = fopen(sdr->frequency_file,"r+");
