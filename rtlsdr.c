@@ -1,4 +1,4 @@
-// $Id: rtlsdr.c,v 1.19 2022/04/19 10:03:07 karn Exp karn $
+// $Id: rtlsdr.c,v 1.20 2022/04/27 08:56:53 karn Exp $
 // Read from RTL SDR
 // Accept control commands from UDP socket
 #define _GNU_SOURCE 1
