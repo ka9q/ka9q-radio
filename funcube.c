@@ -1,4 +1,4 @@
-// $Id: funcube.c,v 1.106 2022/04/15 05:06:16 karn Exp $
+// $Id: funcube.c,v 1.107 2022/04/27 08:55:30 karn Exp $
 // Read from AMSAT UK Funcube Pro and Pro+ dongles
 // Multicast raw 16-bit I/Q samples
 // Accept control commands from UDP socket
@@ -227,7 +227,9 @@ int main(int argc,char *argv[]){
     char *cp = strchr(hostname,'.');
     if(cp != NULL)
       *cp = '\0'; // Strip the domain name
-    asprintf(&Name,"%s-%d",hostname,Device);
+    int const ret = asprintf(&Name,"%s-%d",hostname,Device);
+    if(ret == -1)
+      exit(1);
   }
   {
     snprintf(Metadata_dest,sizeof(Metadata_dest),"funcube-%s-status.local",Name);
