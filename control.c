@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.151 2022/04/25 10:17:37 karn Exp karn $
+// $Id: control.c,v 1.152 2022/04/27 08:40:54 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
