@@ -1,0 +1,269 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <title>Editing /etc/radio/airspy.conf</title>
+    <meta name="author" content="Phil Karn, KA9Q">
+    <meta name="description" content="Configuring ka9q-radio to use the
+      airspy R2">
+  </head>
+  <body>
+    <h1 align="center">Configuring Airspy devices for ka9q-radio</h1>
+    <h1 align="center">v1.0</h1>
+    <h1 align="center">Phil Karn, KA9Q, May 2022</h1>
+    <br>
+    The configuration file <i>/etc/radio/airspyd.conf</i> (and/or any
+    files under <i>/etc/radio/airspyd.conf.d</i>) specify your Airspy
+    R2, Airspy Mini and Airspy HF+ SDR front end devices to the <b>ka9q-radio</b>
+    package. The Airspy R2 and Airspy Mini use the <b>airspyd </b>daemon
+
+    and the AIrspy HF+ uses <b>airspyhfd </b>but all device types and
+    both daemons use the same configuration file(s).<br>
+    <br>
+    They are in 'ini' format with one section for each device. Here's
+    one from my own station, which you will need to edit for your use:<br>
+    <blockquote>
+      <pre>[2m]
+description = "2m vertical"
+serial = 91d064dc27839fcf
+iface = eth0	           ; force primary interface, avoid wifi
+status = 2m-vertical.local
+data = 2m-vertical-data.local
+linearity = 1              ; default is off<br></pre>
+    </blockquote>
+    <p>The section name [2m] will become the name of the instance of <b>airspyd</b><i>
+      </i>(or <b>airspyhfd</b>) handling it. Each section describes one
+      Airspy device; you can have as many as you want, limited only by
+      your system USB capacity. (The Airspy R2 generates 240 Mb/s, but
+      it's a USB 2.0 -- not 3.0 -- device so each will have to be on its
+      own USB host controller.)<br>
+    </p>
+    As with any Linux system daemon, once configured you may enable it
+    to start automatically on the next reboot with<br>
+    <br>
+    <blockquote>
+      <pre>$ sudo systemctl enable airspyd@2m</pre>
+    </blockquote>
+    <br>
+    You may also start (or stop, or restart) it immediately with the
+    commands<br>
+    <br>
+    <blockquote>
+      <pre>$ sudo systemctl start airspyd@2m</pre>
+      <pre>$ sudo systemctl stop airspyd@2m</pre>
+      <pre>$ sudo systemctl restart airspyd@2m</pre>
+    </blockquote>
+    <p>These manipulate the systemd service files
+      /etc/systemd/system/airspyd@.service and
+      /etc/systemd/system/airspyhfd@.service. By default they will retry
+      every 5 seconds indefinitely to restart a failed daemon until
+      manually stopped (i.e., with systemctl stop). For this reason the
+      daemons themselves generally exit on error (e.g, if the device is
+      unplugged from the USB) rather than attempt to recover.<br>
+    </p>
+    <p>Use the systemctl status command to display the status of an <i>airspyd</i>
+      or <i>airspyhfd</i> instance:<br>
+    </p>
+    <pre>$ systemctl status airspyd@2m<br>● airspyd@2m.service - Airspy-2m daemon<br>     Loaded: loaded (/etc/systemd/system/airspyd@.service; enabled; vendor preset: enabled)<br>     Active: active (running) since Mon 2022-05-02 18:01:20 PDT; 53s ago<br>   Main PID: 304581 (airspyd)<br>      Tasks: 7 (limit: 38341)<br>        CPU: 3.119s<br>     CGroup: /system.slice/system-airspyd.slice/airspyd@2m.service<br>             └─304581 /usr/local/sbin/airspyd 2m<br><br>May 02 18:01:20 brian.ka9q.net airspyd[304581]: Using config file /etc/radio/airspyd.conf<br>May 02 18:01:20 brian.ka9q.net airspyd[304581]: Airspy serial 91d064dc27839fcf, hw version AirSpy NOS v1.0.0-rc10-6-g4008185 2020-05-08, library version 1.0.9<br>May 02 18:01:20 brian.ka9q.net airspyd[304581]: 2 sample rates: 20,000,000 5,000,000<br>May 02 18:01:20 brian.ka9q.net airspyd[304581]: Set sample rate 20,000,000 Hz, offset 5,000,000 Hz<br>May 02 18:01:20 brian.ka9q.net airspyd[304581]: Software AGC 1; LNA AGC 0, Mix AGC 0, LNA gain 14, Mix gain 12, VGA gain 13, gainstep 21, bias tee 0<br>May 02 18:01:20 brian.ka9q.net airspyd[304581]: Status TTL 1, Data TTL 0, blocksize 32,768 samples, 49,152 bytes<br>May 02 18:01:21 brian.ka9q.net airspyd[304581]: avahi service '2m vertical (2m-vertical.local)' successfully established.<br>May 02 18:01:21 brian.ka9q.net airspyd[304581]: avahi service '2m vertical (2m-vertical-data.local)' successfully established.<br>May 02 18:01:21 brian.ka9q.net airspyd[304581]: Using tuner state file /var/lib/ka9q-radio//tune-airspy.91d064dc27839fcf<br>May 02 18:01:21 brian.ka9q.net airspyd[304581]: Setting initial frequency 153,391,009.569 Hz, not locked<br><br></pre>
+    The supported entries in each section are as follows:<br>
+    <br>
+    <i><b>description</b> </i>Optional. Gives free-format text that
+    will be carried through the <b>radiod</b> program to the
+    control/status stream and the <b>control</b><b> </b>program that
+    listens to it. It will also be advertised in DNS SRV (service
+    discovery) records by the Linux mDNS daemon <b>avahi</b>, so keep
+    it short but descriptive.<br>
+    <br>
+    <b><i>serial</i></b> <u>Required</u>. This must exactly match the
+    Airspy R2 64-bit serial number, in hex (the leading 0x is optional).
+    This can be read with the <b>airspy_info</b> utility in the <i>airspy</i>
+    Debian package:<br>
+    <br>
+    <pre>$ airspy_info<br>airspy_lib_version: 1.0.9<br>Found AirSpy board 1<br>Board ID Number: 0 (AIRSPY)<br>Firmware Version: AirSpy NOS v1.0.0-rc10-6-g4008185 2020-05-08<br>Part ID Number: 0x6906002B 0x00000030<br>Serial Number: 0x91D064DC27839FCF<br>Supported sample rates:<br>&nbsp;&nbsp;&nbsp; 10.000000 MSPS<br>&nbsp;&nbsp;&nbsp; 2.500000 MSPS<br>Close board 1</pre>
+    <br>
+    Note that <b>airspy_info</b> will not see the device when any other
+    program (including <b>airspyd</b>) has it open. Any Airspy devices
+    without an entry with a matching serial number are ignored. If an
+    instance is started for a non-existent device the daemon will exit
+    and the Linux system will continually restart it every 5 seconds
+    until the device appears.<br>
+    <br>
+    I found it very helpful to label each of my Airspy devices with
+    their serial numbers.<br>
+    <br>
+    <b><i>iface</i></b> Optional, but recommended. This specifies the
+    network interface to be used for all multicast network traffic from
+    <b>airspyd</b> or <b>airspyhfd</b>. If not specified, the default
+    Linux multicast interface will be used. <u>This may not be what you
+      want!</u> Many computers, including most recent Raspberry Pis have
+    both a wired Ethernet interface (usually eth0) and a WiFi interface
+    (wlan0). If wlan0 comes up before eth0, which can happen if you have
+    a "smart" Ethernet switch with the spanning tree protocol (STP)
+    enabled, the Linux kernel may pick it as the default multicast
+    interface. Since most WiFi networks handle multicast traffic poorly,
+    this will probably result in lost traffic and erratic operation on
+    your entire network, not just for <b>ka9q-radio</b>.<br>
+    <br>
+    <b><i>status</i></b> The status name is passed to <b>radiod</b>
+    (the <b>ka9q-radio</b> down converter/demodulator daemon) through
+    its own config file (e.g., /etc/radio/radio@foo.conf) to use the
+    desired front end. Note that the names of the <b>radiod</b> and <b>airspyd</b>
+    or <b>airspyhfd</b> instances need not be the same.<br>
+    <br>
+    <b><i>data</i></b><u> Required</u>. This specifies the domain name
+    of the multicast group for the raw A/D sample stream. As with <i>status
+
+    </i>the default suffix is ".local" and an IPv4 address in the
+    239.0.0.0/8 block will be generated by hashing. Because this address
+    is included in the status stream it does not need to be manually
+    specified to <b>radiod</b>. A DNS PTR record of type _rtp._udp will
+    be advertised.<br>
+    <br>
+    <b><i>linearity</i></b> Boolean, default off. Like most
+    second-generation SDRs with analog tuners, the Airspy R2 has three
+    stages of analog gain ahead of the A/D converters that any AGC must
+    carefully manage. The airspy library provides separate gain tables
+    optimized for sensitivity and for linearity (i.e. resistance to
+    intermod). airspyd uses the sensitivity table by default, but in
+    areas with strong signals the linearity table may provide better
+    resistance to intermod. I'm about 6 km line of sight from a dozen FM
+    broadcast transmitters so I use the linearity setting.<br>
+    <h2>Other settings</h2>
+    &nbsp;<br>
+    More settings are available but the defaults are sufficient for most
+    situations. Several are taken directly from calls in the airspy and
+    airspyhf+ driver libraries with little documentation, so I don't
+    actually know what they do. (Any details would be welcome.)<br>
+    <br>
+    <i><b>blocksize</b></i> Defaults for <b>airspyd</b>: 32,768 if <i><b>data-ttl</b></i><i>
+    </i> = 0, 960 otherwise; defaults for <b>airspyhfd</b>: 2,048 if <i><b>data-ttl</b></i>
+    = 0, 128 otherwise.<br>
+    <p>Set the number of samples in each data IP packet. The defaults
+      depend on <i><b>data-ttl</b></i> because the 1500 byte Ethernet
+      MTU (Maximum Transmission Unit, aka packet size limit) is relevant
+      only for traffic that actually has to pass through the hardware,
+      and larger packets (up to the 64KB IPv4 datagram limit) are much
+      more efficient when looped back in software. The Airspy R2
+      produces packed 12 bit real integers, so 960 samples occupies
+      1,440 bytes, leaving room for the IP, UDP and RTP headers. When
+      data-ttl=0, the 32,768 samples occupy 49,152 bytes, comfortably
+      within the 64KB limit while cleanly dividing (by 3) the 98,304
+      sample callback buffer inside the Airspy R2 library driver to keep
+      the IP packets the same size.<br>
+    </p>
+    <p>The Airspy HF+ produces complex floating point samples at 8 bytes
+      (64 bits) each. The library callback buffer contains 2,048 samples
+      (16,384 bytes) and this is used when the IP TTL is 0. The default
+      blocksize is reduced to only 128 samples (1,024 bytes) when the IP
+      TTL &gt; 0 to still cleanly divide the callback buffer (by 16).<br>
+      <i><b><br>
+          data-ttl</b></i> Default 0. Sets the Internet Protocol
+      Time-to-Live field, more accurately described as a hop count
+      limit. This limits the number of IP routers through which the A/D
+      data packets may be routed even to hosts actively subscribing to
+      it. Setting <b><i>data-ttl</i></b>=0 means that the data traffic
+      never leaves the host running <b>airspyd </b>or <b>airspyhfd</b>
+      but can still be received by any program (such as <b>radiod</b>)
+      running on the same host. <br>
+    </p>
+    <p>The default is 0 because the A/D stream is a <i>lot</i> of
+      traffic (240 Mb/s for the Airspy R2) and <b>radiod</b> running on
+      the same computer is usually its only consumer. This also sets the
+      default packet size (see <i><b>blocksize</b></i>) to a much
+      larger and much more CPU-efficient value than would be necessary
+      to avoid IP fragmentation if the data traffic actually had to flow
+      out through the physical Ethernet interface. Set a nonzero value
+      here <i>only</i> if you need to send the raw A/D stream over the
+      Ethernet to another host computer, and then only if you're <i>sure</i>
+      that your network can handle it. Be especially careful if you have
+      a WiFi base station on your network; even modest levels of
+      sustained multicast traffic will swamp a WiFi base station even if
+      no client terminals are subscribed to it.<br>
+      <b><i><br>
+          samprate</i></b> Default for <b>airspyd</b>: 20000000 (20
+      MHz). Default for <b>airspyhfd</b>: 912000 (912 kHz). Set the A/D
+      sample rate. Only certain rates are supported by the hardware;
+      they are listed at startup. The default is the maximum for each
+      device.<br>
+    </p>
+    <p><b><i>status-ttl</i></b> Default 1. Sets the Internet Protocol
+      Time-to-Live (hop count limit) field for status traffic. The
+      default is 1 because the control program needs it and there is far
+      less of it than A/D data, so check this setting if it is getting
+      status responses from <b>radiod</b> but not <b>airspyd </b>or <b>airspyhfd</b>.
+      Note that <b><i>status-ttl</i></b>=1 will keep this traffic from
+      passing through any multicast routers, but the most likely use
+      case for the <b>ka9q-radio</b> package is on a single LAN. (Smart
+      Ethernet switches are not routers, so they always pass multicast
+      traffic to any port that subscribes to it.)<br>
+    </p>
+    <p><i><b>ssrc</b></i> Default: derived from the time of day. Sets
+      the 32-bit Real Time Protocol (RTP) Stream Source identifier in
+      the data stream. This normally does not have to be set, as radiod
+      and other consumers automatically accept whatever SSRC is used.<br>
+    </p>
+    <b><i>tos</i></b> Default: 48 (decimal). Sets the IP Type of Service
+    header byte, interpreted by many smart Ethernet switches (and
+    routers) as a priority or queue selector. The default value of 48
+    corresponds to DSCP (Differentiated Services Code Point) AF12, which
+    is one level above "routine" traffic. This should not need to be
+    changed as you should engineer your LAN to have sufficient capacity
+    to carry all this traffic, and then priorities don't matter. However
+    this field might come in handy in configuring your switches to avoid
+    being jammed by multicast traffic should it flow by mistake
+    somewhere it shouldn't (e.g., a 10 Mb/s switch port).<br>
+    <p><br>
+    </p>
+    <h2>Airspyd-only options</h2>
+    <i><b>agc-high-threshold</b></i> Default -10 dBFS. Set the average
+    A/D output level at which the the software AGC will decrease the
+    front end analog gain by one step.<br>
+    <br>
+    <i><b>agc-low-threshold</b></i> Default -40 dBFS. Set the average
+    A/D output level at which the software AGC will increase the front
+    end analog gain by one step. <br>
+    <br>
+    <i><b>bias</b></i> Boolean, default off. Enable the bias tee
+    (preamplifier power).<br>
+    <br>
+    <b><i>lna-agc</i></b> Boolean, default off. Enable the hardware LNA
+    AGC and disable the software AGC. Doesn't seem to keep proper gain
+    distribution, i.e., poor sensitivity and/or excessive
+    intermodulation products seem to result. Use the default (software
+    AGC) instead.<br>
+    <br>
+    <i><b>mixer-agc</b></i> Boolean, default off. Enable the hardware
+    mixer AGC and disable the software AGC. Doesn't seem to keep proper
+    gain distribution, i.e., poor sensitivity and/or excessive
+    intermodulation products seem to result. Use the default (software
+    AGC) instead.<br>
+    <br>
+    <i>l</i><i><b>na-gain, mixer-gain, vga-gain</b></i> Integers,
+    defaults unset. Manually set fixed gains for the LNA, mixer and
+    variable gain (baseband) amplifier stages. The units are supposed to
+    be in decibels but don't seem well calibrated. Use the software AGC
+    instead.<br>
+    <br>
+    <b><i>gainstep</i></b><b> </b>Integer, 0-21 inclusive, default
+    unset. Manually select an entry in the airspy library gain table.
+    The default is to select an entry automatically with a software AGC
+    (in <b>airspyd</b>) based on the average A/D output level and the <i>linearity</i>
+    setting.<br>
+    <h2><b>Airspyhfd-only options</b></h2>
+    <b><i>hf-agc</i></b> Default off. Exact function unknown.<br>
+    <br>
+    <i><b>agc-thresh</b></i> Default off. Exact function unknown. Do not
+    confuse with the <b>airspyd</b> options <i><b>agc-high-threshold </b></i>and<i><b>
+        agc-low-threshold</b></i>.<br>
+    <br>
+    <i><b>hf-att</b></i> Default off. Exact function unknown.<br>
+    <br>
+    <i><b>hf-lna</b></i> Default off. Exact function unknown.<br>
+    <br>
+    <i><b>lib-dsp</b></i> Default on. Exact function unknown.<br>
+    <br>
+    <br>
+    <p><br>
+    </p>
+  </body>
+</html>
