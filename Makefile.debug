@@ -1,4 +1,4 @@
-# $Id: Makefile.debug,v 1.10 2022/05/03 01:57:21 karn Exp $
+# $Id: Makefile.linux,v 1.94 2022/05/03 01:40:38 karn Exp karn $
 
 # for production
 #DOPTS = -DNDEBUG=1 -O3
@@ -18,18 +18,18 @@ DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
-DAEMONS=aprs aprsfeed funcube opus packet radiod airspyd airspyhfd stereo rds rtlsdr
+DAEMONS=aprs aprsfeed funcube opusd packet radiod airspyd airspyhfd stereo rds rtlsdr
 
 EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decode setfilt
 
 AFILES=bandplan.txt help.txt modes.conf id.txt
 
-SYSTEMD_FILES=airspyd@.service airspyhfd@.service funcube@.service hackrf@.service packet.service radiod@.service aprsfeed.service opus@.service recordings@.service stereo.service rds.service wspr-decode.service horusdemod.service
+SYSTEMD_FILES=airspyd@.service airspyhfd@.service funcube@.service hackrf@.service packet.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereo.service rds.service wspr-decode.service horusdemod.service
 
 UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules 69-funcube-ka9q.rules
 
 CONF_FILES=funcube-0.conf \
-			 opus@hf.conf opus@hfdl.conf opus@6m.conf opus@2m.conf opus@125cm.conf opus@70cm.conf opus@aviation.conf opus@packet.conf \
+			 opusd@hf.conf opusd@hfdl.conf opusd@6m.conf opusd@2m.conf opusd@125cm.conf opusd@70cm.conf opusd@aviation.conf opusd@packet.conf \
 			 stereo.conf rds.conf \
 			 radiod@10m.conf radiod@6m.conf radiod@fm.conf radiod@2m.conf radiod@125cm.conf radiod@70cm.conf radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf \
 			 recordings@hf.conf recordings@6m.conf recordings@2m.conf recordings@125cm.conf recordings@70cm.conf recordings@aviation.conf recordings@pictures.conf \
@@ -41,7 +41,7 @@ BLACKLIST=airspy-blacklist.conf
 
 SRC=airspyd.c airspyhfd.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c decimate.c decode_status.c dump.c fcd.c filter.c fm.c \
 	   tune.c funcube.c iir.c iqplay.c iqrecord.c linear.c main.c metadump.c misc.c modes.c modulate.c monitor.c radio.c setfilt.c \
-	   show-sig.c radio_status.c multicast.c opus.c pcmcat.c pcmsend.c osc.c packet.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rds.c rtcp.c rtlsdr.c pcmspawn.c \
+	   show-sig.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packet.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rds.c rtcp.c rtlsdr.c pcmspawn.c \
 	   status.c stereo.c wfm.c wspr-decode.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
 	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h  multicast.h osc.h radio.h status.h
 
@@ -134,7 +134,7 @@ modulate: modulate.o libradio.a
 monitor: monitor.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lncursesw -lbsd -lm -lpthread
 
-opus: opus.o libradio.a
+opusd: opusd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lavahi-client -lavahi-common -lbsd -lm -lpthread
 
 opussend: opussend.o libradio.a
