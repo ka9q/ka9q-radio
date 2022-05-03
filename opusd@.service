@@ -1,4 +1,4 @@
-# $Id: opus@.service,v 1.11 2022/04/03 05:33:28 karn Exp $
+# $Id: opusd@.service,v 1.1 2022/05/03 02:21:50 karn Exp $
 # Systemd startup module for PCM->Opus transcoder
 # Phil Karn, KA9Q May 2022
 
