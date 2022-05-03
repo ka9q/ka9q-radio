@@ -31,3 +31,6 @@ show-sig
 stereo
 tune
 wspr-decode
+old
+RCS
+push.sh
