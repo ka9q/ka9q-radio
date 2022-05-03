@@ -1,4 +1,4 @@
-# $Id: stereo.service,v 1.2 2021/05/04 03:24:48 karn Exp $
+# $Id: stereod.service,v 1.1 2022/05/03 10:14:17 karn Exp $
 # Systemd startup module for FM stereo decoder
 # Phil Karn, KA9Q Mar 2021
 [Unit]

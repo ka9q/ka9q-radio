@@ -1,4 +1,4 @@
-# $Id: rds.service,v 1.2 2021/05/04 03:24:48 karn Exp $
+# $Id: rdsd.service,v 1.1 2022/05/03 13:02:31 karn Exp $
 # Systemd startup module for FM rds decoder
 # Phil Karn, KA9Q Mar 2021
 [Unit]
