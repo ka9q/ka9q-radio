@@ -1,0 +1,26 @@
+# $Id: airspyd@.service,v 1.2 2022/05/03 01:40:24 karn Exp $
+# Systemd service file for KA9Q's airspy daemon
+# Phil Karn, KA9Q, May 2022
+
+[Unit]
+Description=Airspy-%i daemon
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+User=airspy
+Nice=-10
+SupplementaryGroups=plugdev radio
+Type=simple
+PermissionsStartOnly=true
+RuntimeDirectory=airspyd-%i
+RuntimeDirectoryMode=0755
+ReadWritePaths=/var/lib/ka9q-radio
+ExecStart=/usr/local/sbin/airspyd  %i
+PIDFile=/run/airspyd-%i/pid
+Restart=always
+RestartSec=5
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

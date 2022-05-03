@@ -1,0 +1,26 @@
+# $Id: airspyhfd@.service,v 1.2 2022/05/03 01:39:46 karn Exp $
+# Systemd service file for KA9Q's airspyhfd daemon
+# Phil Karn, KA9Q, May 2022
+
+[Unit]
+Description=AirspyHF-%i daemon
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+User=airspy
+Nice=-10
+SupplementaryGroups=plugdev radio
+Type=simple
+PermissionsStartOnly=true
+RuntimeDirectory=airspyhfd-%i
+RuntimeDirectoryMode=0755
+ReadWritePaths=/var/lib/ka9q-radio
+ExecStart=/usr/local/sbin/airspyhfd %i
+PIDFile=/run/airspyhfd-%i/pid
+Restart=always
+RestartSec=5
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target
