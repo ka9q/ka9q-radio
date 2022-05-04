@@ -1,4 +1,4 @@
-#  wspr-decode.service
+# $Id: wspr-decoded.service,v 1.1 2022/05/04 04:57:42 karn Exp $
 # Systemd unit to record and decode WSPR
 # Phil Karn, KA9Q Aug 2021
 
@@ -13,8 +13,8 @@ User=recordings
 Group=radio
 Type=simple
 PermissionsStartOnly=true
-EnvironmentFile=/etc/radio/wspr-decode.conf
-ExecStart=/usr/local/bin/wspr-decode $ARGS
+EnvironmentFile=/etc/radio/wspr-decoded.conf
+ExecStart=/usr/local/bin/wspr-decoded $ARGS
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
