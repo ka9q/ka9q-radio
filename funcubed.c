@@ -1,4 +1,4 @@
-// $Id: funcube.c,v 1.107 2022/04/27 08:55:30 karn Exp $
+// $Id: funcubed.c,v 1.1 2022/05/04 06:00:21 karn Exp $
 // Read from AMSAT UK Funcube Pro and Pro+ dongles
 // Multicast raw 16-bit I/Q samples
 // Accept control commands from UDP socket

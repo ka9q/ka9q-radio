@@ -1,4 +1,4 @@
-# $Id$
+# $Id: funcubed@.service,v 1.1 2022/05/04 06:00:21 karn Exp $
 # Systemd unit to start up funcube daemon
 # Phil Karn, KA9Q May 2022
 
