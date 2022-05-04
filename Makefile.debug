@@ -1,4 +1,4 @@
-# $Id: Makefile.debug,v 1.11 2022/05/03 02:22:39 karn Exp $
+# $Id: Makefile.linux,v 1.99 2022/05/04 06:00:21 karn Exp $
 
 # for production
 #DOPTS = -DNDEBUG=1 -O3
@@ -18,31 +18,31 @@ DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
-DAEMONS=aprs aprsfeed funcube opusd packet radiod airspyd airspyhfd stereo rds rtlsdr
+DAEMONS=aprs aprsfeed funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdr
 
-EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decode setfilt
+EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt
 
 AFILES=bandplan.txt help.txt modes.conf id.txt
 
-SYSTEMD_FILES=airspyd@.service airspyhfd@.service funcube@.service hackrf@.service packet.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereo.service rds.service wspr-decode.service horusdemod.service
+SYSTEMD_FILES=airspyd@.service airspyhfd@.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service
 
-UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules 69-funcube-ka9q.rules
+UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules
 
-CONF_FILES=funcube-0.conf \
-			 opusd@hf.conf opusd@hfdl.conf opusd@6m.conf opusd@2m.conf opusd@125cm.conf opusd@70cm.conf opusd@aviation.conf opusd@packet.conf \
-			 stereo.conf rds.conf \
+CONF_FILES=funcubed-0.conf \
+			 opusd@hf.conf opusd@hfdl.conf opusd@6m.conf opusd@2m.conf opusd@125cm.conf opusd@70cm.conf opusd@aviation.conf opusd@packet.conf opusd@kpbs.conf opusd@ksds.conf \
+			 stereod.conf rdsd.conf \
 			 radiod@10m.conf radiod@6m.conf radiod@fm.conf radiod@2m.conf radiod@125cm.conf radiod@70cm.conf radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf \
 			 recordings@hf.conf recordings@6m.conf recordings@2m.conf recordings@125cm.conf recordings@70cm.conf recordings@aviation.conf recordings@pictures.conf \
-			 wspr-decode.conf horus.conf airspyd.conf packet.conf aprs.conf
+			 wspr-decoded.conf horus.conf airspyd.conf packetd.conf aprs.conf
 
 AIRSPY_FILES=
 
 BLACKLIST=airspy-blacklist.conf
 
 SRC=airspyd.c airspyhfd.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c decimate.c decode_status.c dump.c fcd.c filter.c fm.c \
-	   tune.c funcube.c iir.c iqplay.c iqrecord.c linear.c main.c metadump.c misc.c modes.c modulate.c monitor.c radio.c setfilt.c \
-	   show-sig.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packet.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rds.c rtcp.c rtlsdr.c pcmspawn.c \
-	   status.c stereo.c wfm.c wspr-decode.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
+	   tune.c funcubed.c iir.c iqplay.c iqrecord.c linear.c main.c metadump.c misc.c modes.c modulate.c monitor.c radio.c setfilt.c \
+	   show-sig.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdr.c pcmspawn.c \
+	   status.c stereod.c wfm.c wspr-decoded.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
 	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h  multicast.h osc.h radio.h status.h
 
 all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
@@ -113,7 +113,7 @@ show-pkt: show-pkt.o libradio.a
 show-sig: show-sig.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm
 
-funcube: funcube.o status.o libradio.a libfcd.a
+funcubed: funcubed.o status.o libradio.a libfcd.a
 	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lavahi-client -lavahi-common -lusb-1.0 -lbsd -lm -lpthread
 
 hackrf: hackrf.o status.o decimate.o libradio.a
@@ -140,7 +140,7 @@ opusd: opusd.o libradio.a
 opussend: opussend.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lbsd -lm
 
-packet: packet.o ax25.o libradio.a
+packetd: packetd.o ax25.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 pcmcat: pcmcat.o libradio.a
@@ -161,13 +161,13 @@ pl: pl.o libradio.a
 radiod: main.o audio.o fm.o wfm.o linear.o radio.o rtcp.o radio_status.o modes.o decode_status.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -liniparser -lpthread -lm
 
-rds: rds.o libradio.a
+rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
-stereo: stereo.o libradio.a
+stereod: stereod.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
-wspr-decode: wspr-decode.o libradio.a
+wspr-decoded: wspr-decoded.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 
