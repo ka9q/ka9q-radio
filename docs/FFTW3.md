@@ -1,4 +1,4 @@
-FFTW3 Tuning
+*FFTW3* Tuning
 
 Because it uses fast convolution for frequency mixing and filtering,
 'radiod' makes very heavy use of MIT's FFTW3 (Fastest Fourier Transform
