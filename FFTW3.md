@@ -1,16 +1,16 @@
 FFTW3 Tuning
 
 Because it uses fast convolution for frequency mixing and filtering,
-'radio' makes very heavy use of MIT's FFTW3 (Fastest Fourier Transform
+'radiod' makes very heavy use of MIT's FFTW3 (Fastest Fourier Transform
 in the West) library. By far the single most cpu-intensive operation
-in the entire package is the forward FFT in 'radio'.
+in the entire package is the forward FFT in 'radiod'.
 
 FFTW3 provides a 'wisdom' feature to find and remember the most
 efficient way to perform specific transform types and sizes.  While
-'radio' will probably run in real time without it on faster x86
+'radiod' will probably run in real time without it on faster x86
 systems it is especially recommended on the Raspberry Pi 4. This
 requires that you run FFTW3's 'fftwf-wisdom' utility with the actual
-transform sizes needed by the parameters you use with the 'radio'
+transform sizes needed by the parameters you use with the 'radiod'
 program. This can take hours but is worth the improvement in
 performance.
 
