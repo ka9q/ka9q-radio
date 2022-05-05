@@ -41,6 +41,11 @@ multithreading. That's true even for -T 1 (multithreading with just
 one thread). Do *NOT* omit the -T 1 option, or you may destroy all your
 previous computation work!
 
-As I said earlier, I really need to find an easy way to do all this
-automatically...
+*FFTW3* provides a way to automatically create and cache wisdom at
+runtime, but with a very long startup delay. I need to move wisdom
+generation to a separate process independent of *radiod*. It would be
+nice if *FFTW3* automatically learned as it went, getting faster on
+user data without performing the exhaustive search up front.
+
+
 
