@@ -1,4 +1,5 @@
 *FFTW3* Tuning
+==============
 
 Because it uses fast convolution for frequency mixing and filtering,
 *radiod* makes very heavy use of MIT's *FFTW3* (Fastest Fourier Transform
@@ -9,7 +10,7 @@ in the entire package is the forward FFT in *radiod*.
 efficient way to perform specific transform types and sizes.  While
 *radiod* will probably run in real time without it on faster x86
 systems it is especially recommended on the Raspberry Pi 4. This
-requires that you run *FFTW3*'s 'fftwf-wisdom' utility with the actual
+requires that you run *FFTW3*'s **fftwf-wisdom** utility with the actual
 transform sizes needed by the parameters you use with the *radiod*
 program. This can take hours but is worth the improvement in
 performance.
@@ -29,7 +30,7 @@ cob1920, etc: inverse FFTs for 20 ms (50 Hz) block times, overlap
 factors of 2 and 5, and various common sample rates supported by the
 Opus codec (8/12/16/24/48 kHz).
 
-NB!! fftwf-wisdom isn't careful about permissions checking. Nor does it
+NB!! **fftwf-wisdom** isn't careful about permissions checking. Nor does it
 do any checkpointing. I've had hour-long runs ruined because it
 couldn't write its output file. Write into a temporary file (e.g.,
 nwisdom) and then carefully move that into /etc/fftw/wisdomf after
