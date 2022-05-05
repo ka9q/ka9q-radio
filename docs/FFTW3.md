@@ -36,9 +36,9 @@ nwisdom) and then carefully move that into /etc/fftw/wisdomf after
 backing up previous versions.
 
 Note also that wisdom files computed for the multithreading option
-(which I use) are NOT compatible with wisdom files computed without
+(which I use) are *NOT* compatible with wisdom files computed without
 multithreading. That's true even for -T 1 (multithreading with just
-one thread). Do NOT omit the -T 1 option, or you may destroy all your
+one thread). Do *NOT* omit the -T 1 option, or you may destroy all your
 previous computation work!
 
 As I said earlier, I really need to find an easy way to do all this
