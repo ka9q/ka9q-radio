@@ -40,15 +40,15 @@ commands
 $ sudo systemctl stop airspyd@2m  
 $ sudo systemctl restart airspyd@2m
 
-These manipulate the systemd service files
+These manipulate the Linux *systemd* service unit files
 */etc/systemd/system/airspyd@.service* and
-*/etc/systemd/system/airspyhfd@.service*. By default they will retry
-every 5 seconds indefinitely to restart a failed daemon until manually
-stopped (i.e., with systemctl stop). For this reason the daemons
+*/etc/systemd/system/airspyhfd@.service*. By default *systemd* will try
+to restart a failed daemon every 5 seconds until manually
+stopped (i.e., with *systemctl stop*). For this reason the daemons
 themselves generally exit on error (e.g, if the device is unplugged
 from the USB) rather than attempt to recover.
 
-Use the systemctl status command to display the status of an *airspyd* or
+Use the *systemctl status* command to display the status of an *airspyd* or
 *airspyhfd* instance:
 
 >$ systemctl status airspyd@2m  
