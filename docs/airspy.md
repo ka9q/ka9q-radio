@@ -41,15 +41,15 @@ $ sudo systemctl stop airspyd@2m
 $ sudo systemctl restart airspyd@2m
 
 These manipulate the systemd service files
-/etc/systemd/system/airspyd@.service and
-/etc/systemd/system/airspyhfd@.service. By default they will retry
+*/etc/systemd/system/airspyd@.service* and
+*/etc/systemd/system/airspyhfd@.service*. By default they will retry
 every 5 seconds indefinitely to restart a failed daemon until manually
 stopped (i.e., with systemctl stop). For this reason the daemons
 themselves generally exit on error (e.g, if the device is unplugged
 from the USB) rather than attempt to recover.
 
 Use the systemctl status command to display the status of an *airspyd* or
-*airspyhfd</i> instance:
+*airspyhfd* instance:
 
 >$ systemctl status airspyd@2m  
 ● airspyd@2m.service - Airspy-2m daemon  
@@ -110,7 +110,7 @@ their serial numbers.
 
 **iface**  Optional, but recommended. This specifies the
 network interface to be used for all multicast network traffic from
-**airspyd**  or **airspyhfd** . If not specified, the default
+**airspyd**  or **airspyhfd**. If not specified, the default
 Linux multicast interface will be used. *This may not be what you
 want!* Many computers, including most recent Raspberry Pis have
 both a wired Ethernet interface (usually eth0) and a WiFi interface
@@ -125,7 +125,7 @@ your entire network, not just for **ka9q-radio**.
 (the **ka9q-radio**  downconverter/demodulator daemon) through
 its own config file (e.g., /etc/radio/radio@foo.conf) to use the
 desired front end. Note that the names of the **radiod**  and **airspyd** 
-or **airspyhfd**  instances need not be the same.
+or **airspyhfd** instances need not be the same.
 
 **data** Required. This specifies the domain name
 of the multicast group for the raw A/D sample stream. As with *status*
