@@ -1,4 +1,4 @@
-Configuring *ka9q-radio* to use the Airspy SDRs
+Configuring *ka9q-radio* to use the Airspy SDRs  
 v1.0, May 2022  
 Phil Karn, KA9Q
 ==============================
