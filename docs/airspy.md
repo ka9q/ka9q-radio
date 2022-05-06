@@ -1,5 +1,5 @@
-Editing /etc/radio/airspy.conf 
-v1.0, May 2022 
+Editing /etc/radio/airspy.conf  
+v1.0, May 2022  
 Phil Karn, KA9Q
 ==============================
 
@@ -13,13 +13,13 @@ daemons use the same configuration file(s).
 They are in 'ini' format with one section for each device. Here's
 one from my own station, which you will need to edit for your use:
 
->[2m]
-description = "2m vertical"
-serial = 91d064dc27839fcf
-iface = eth0	           ; force primary interface, avoid wifi
-status = 2m-vertical.local
-data = 2m-vertical-data.local
-linearity = 1              ; default is off
+>[2m]  
+description = "2m vertical"  
+serial = 91d064dc27839fcf  
+iface = eth0	           ; force primary interface, avoid wifi  
+status = 2m-vertical.local  
+data = 2m-vertical-data.local  
+linearity = 1              ; default is off  
 
 The section name [2m] will become the name of the instance of **airspyd**
 (or **airspyhfd**) handling it. Each section describes one
