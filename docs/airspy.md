@@ -1,4 +1,4 @@
-Editing /etc/radio/airspy.conf  
+Configuring *ka9q-radio* to use the Airspy SDRs
 v1.0, May 2022  
 Phil Karn, KA9Q
 ==============================
@@ -36,9 +36,9 @@ to start automatically on the next reboot with
 You may also start (or stop, or restart) it immediately with the
 commands
 
->$ `sudo systemctl start airspyd@2m  `
-$ sudo systemctl stop airspyd@2m  
-$ sudo systemctl restart airspyd@2m
+>$ `sudo systemctl start airspyd@2m`
+>$ `sudo systemctl stop airspyd@2m`
+>$ `sudo systemctl restart airspyd@2m`
 
 These manipulate the Linux *systemd* service unit files
 */etc/systemd/system/airspyd@.service* and
@@ -51,7 +51,7 @@ from the USB) rather than attempt to recover.
 Use the *systemctl status* command to display the status of an *airspyd* or
 *airspyhfd* instance:
 
->$ systemctl status airspyd@2m  
+>$ `systemctl status airspyd@2m`  
 ● airspyd@2m.service - Airspy-2m daemon  
 Loaded: loaded (/etc/systemd/system/airspyd@.service; enabled; vendor preset: enabled)  
 Active: active (running) since Mon 2022-05-02 18:01:20 PDT; 53s ago  
@@ -86,7 +86,7 @@ Airspy R2 64-bit serial number, in hex (the leading 0x is optional).
 This can be read with the *airspy_info*  utility in the *airspy*
 Debian package:
 
->$ airspy_info  
+>$ `airspy_info`  
 airspy_lib_version: 1.0.9  
 Found AirSpy board 1  
 Board ID Number: 0 (AIRSPY)  
