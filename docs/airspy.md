@@ -36,8 +36,8 @@ to start automatically on the next reboot with
 You may also start (or stop, or restart) it immediately with the
 commands
 
->$ sudo systemctl start airspyd@2m
-$ sudo systemctl stop airspyd@2m
+>$ sudo systemctl start airspyd@2m  
+$ sudo systemctl stop airspyd@2m  
 $ sudo systemctl restart airspyd@2m
 
 These manipulate the systemd service files
@@ -51,34 +51,34 @@ from the USB) rather than attempt to recover.
 Use the systemctl status command to display the status of an *airspyd* or
 *airspyhfd</i> instance:
 
->$ systemctl status airspyd@2m
-● airspyd@2m.service - Airspy-2m daemon
-Loaded: loaded (/etc/systemd/system/airspyd@.service; enabled; vendor preset: enabled)
-Active: active (running) since Mon 2022-05-02 18:01:20 PDT; 53s ago
-Main PID: 304581 (airspyd)
-Tasks: 7 (limit: 38341)
-CPU: 3.119s
-CGroup: /system.slice/system-airspyd.slice/airspyd@2m.service
-└─304581 /usr/local/sbin/airspyd 2m
+>$ systemctl status airspyd@2m  
+● airspyd@2m.service - Airspy-2m daemon  
+Loaded: loaded (/etc/systemd/system/airspyd@.service; enabled; vendor preset: enabled)  
+Active: active (running) since Mon 2022-05-02 18:01:20 PDT; 53s ago  
+Main PID: 304581 (airspyd)  
+Tasks: 7 (limit: 38341)  
+CPU: 3.119s  
+CGroup: /system.slice/system-airspyd.slice/airspyd@2m.service  
+└─304581 /usr/local/sbin/airspyd 2m  
 
-May 02 18:01:20 brian.ka9q.net airspyd[304581]: Using config file /etc/radio/airspyd.conf
-May 02 18:01:20 brian.ka9q.net airspyd[304581]: Airspy serial 91d064dc27839fcf, hw version AirSpy NOS v1.0.0-rc10-6-g4008185 2020-05-08, library version 1.0.9
-May 02 18:01:20 brian.ka9q.net airspyd[304581]: 2 sample rates: 20,000,000 5,000,000
-May 02 18:01:20 brian.ka9q.net airspyd[304581]: Set sample rate 20,000,000 Hz, offset 5,000,000 Hz
-May 02 18:01:20 brian.ka9q.net airspyd[304581]: Software AGC 1; LNA AGC 0, Mix AGC 0, LNA gain 14, Mix gain 12, VGA gain 13, gainstep 21, bias tee 0
-May 02 18:01:20 brian.ka9q.net airspyd[304581]: Status TTL 1, Data TTL 0, blocksize 32,768 samples, 49,152 bytes
-May 02 18:01:21 brian.ka9q.net airspyd[304581]: avahi service '2m vertical (2m-vertical.local)' successfully established.
-May 02 18:01:21 brian.ka9q.net airspyd[304581]: avahi service '2m vertical (2m-vertical-data.local)' successfully established.
-May 02 18:01:21 brian.ka9q.net airspyd[304581]: Using tuner state file /var/lib/ka9q-radio//tune-airspy.91d064dc27839fcf
-May 02 18:01:21 brian.ka9q.net airspyd[304581]: Setting initial frequency 153,391,009.569 Hz, not locked
+May 02 18:01:20 brian.ka9q.net airspyd[304581]: Using config file /etc/radio/airspyd.conf  
+May 02 18:01:20 brian.ka9q.net airspyd[304581]: Airspy serial 91d064dc27839fcf, hw version AirSpy NOS v1.0.0-rc10-6-g4008185 2020-05-08, library version 1.0.9  
+May 02 18:01:20 brian.ka9q.net airspyd[304581]: 2 sample rates: 20,000,000 5,000,000  
+May 02 18:01:20 brian.ka9q.net airspyd[304581]: Set sample rate 20,000,000 Hz, offset 5,000,000 Hz  
+May 02 18:01:20 brian.ka9q.net airspyd[304581]: Software AGC 1; LNA AGC 0, Mix AGC 0, LNA gain 14, Mix gain 12, VGA gain 13, gainstep 21, bias tee 0  
+May 02 18:01:20 brian.ka9q.net airspyd[304581]: Status TTL 1, Data TTL 0, blocksize 32,768 samples, 49,152 bytes  
+May 02 18:01:21 brian.ka9q.net airspyd[304581]: avahi service '2m vertical (2m-vertical.local)' successfully established.  
+May 02 18:01:21 brian.ka9q.net airspyd[304581]: avahi service '2m vertical (2m-vertical-data.local)' successfully established.  
+May 02 18:01:21 brian.ka9q.net airspyd[304581]: Using tuner state file /var/lib/ka9q-radio//tune-airspy.91d064dc27839fcf  
+May 02 18:01:21 brian.ka9q.net airspyd[304581]: Setting initial frequency 153,391,009.569 Hz, not locked  
 
 The supported entries in each section are as follows:
 
 **description** Optional. Gives free-format text that
 will be carried through the **radiod**  program to the
-control/status stream and the **control** ** ** program that
+control/status stream and the **control** program that
 listens to it. It will also be advertised in DNS SRV (service
-discovery) records by the Linux mDNS daemon **avahi** , so keep
+discovery) records by the Linux mDNS daemon **avahi**, so keep
 it short but descriptive.
 
 **serial**  Required. This must exactly match the
@@ -86,20 +86,20 @@ Airspy R2 64-bit serial number, in hex (the leading 0x is optional).
 This can be read with the **airspy_info**  utility in the *airspy*
 Debian package:
 
->$ airspy_info
-airspy_lib_version: 1.0.9
-Found AirSpy board 1
-Board ID Number: 0 (AIRSPY)
-Firmware Version: AirSpy NOS v1.0.0-rc10-6-g4008185 2020-05-08
-Part ID Number: 0x6906002B 0x00000030
-Serial Number: 0x91D064DC27839FCF
-Supported sample rates:
-    10.000000 MSPS
-    2.500000 MSPS
+>$ airspy_info  
+airspy_lib_version: 1.0.9  
+Found AirSpy board 1  
+Board ID Number: 0 (AIRSPY)  
+Firmware Version: AirSpy NOS v1.0.0-rc10-6-g4008185 2020-05-08  
+Part ID Number: 0x6906002B 0x00000030  
+Serial Number: 0x91D064DC27839FCF  
+Supported sample rates:  
+    10.000000 MSPS  
+    2.500000 MSPS  
 Close board 1
    
 Note that **airspy_info**  will not see the device when any other
-program (including **airspyd** ) has it open. Any Airspy devices
+program (including **airspyd**) has it open. Any Airspy devices
 without an entry with a matching serial number are ignored. If an
 instance is started for a non-existent device the daemon will exit
 and the Linux system will continually restart it every 5 seconds
@@ -122,7 +122,7 @@ this will probably result in lost traffic and erratic operation on
 your entire network, not just for **ka9q-radio**.
 
 **status**  The status name is passed to **radiod** 
-(the **ka9q-radio**  down converter/demodulator daemon) through
+(the **ka9q-radio**  downconverter/demodulator daemon) through
 its own config file (e.g., /etc/radio/radio@foo.conf) to use the
 desired front end. Note that the names of the **radiod**  and **airspyd** 
 or **airspyhfd**  instances need not be the same.
@@ -181,13 +181,13 @@ limit. This limits the number of IP routers through which the A/D
 data packets may be routed even to hosts actively subscribing to
 it. Setting ***data-ttl*** =0 means that the data traffic
 never leaves the host running **airspyd** or **airspyhfd** 
-but can still be received by any program (such as **radiod** )
+but can still be received by any program (such as **radiod**)
 running on the same host. 
 
 The default is 0 because the A/D stream is a *lot* of traffic (240
 Mb/s for the Airspy R2) and **radiod** running on the same computer is
 usually its only consumer. This also sets the default packet size (see
-***blocksize** *) to a much larger and much more CPU-efficient
+***blocksize**) to a much larger and much more CPU-efficient
 value than would be necessary to avoid IP fragmentation if the data
 traffic actually had to flow out through the physical Ethernet
 interface. Set a nonzero value here *only* if you need to send the
@@ -197,8 +197,8 @@ especially careful if you have a WiFi base station on your network;
 even modest levels of sustained multicast traffic will swamp a WiFi
 base station even if no client terminals are subscribed to it.
 
-**samprate** Default for **airspyd** : 20000000 (20 MHz). Default for
-**airspyhfd** : 912000 (912 kHz). Set the A/D sample rate. Only
+**samprate** Default for **airspyd**: 20000000 (20 MHz). Default for
+**airspyhfd**: 912000 (912 kHz). Set the A/D sample rate. Only
 certain rates are supported by the hardware; they are listed at
 startup. The default is the maximum for each device.
 
@@ -206,7 +206,7 @@ startup. The default is the maximum for each device.
 count limit) field for status traffic. The default is 1 because the
 control program needs it and there is far less of it than A/D data, so
 check this setting if it is getting status responses from **radiod**
-but not **airspyd ** or **airspyhfd** .  Note that ***status-ttl*** =1
+but not **airspyd** or **airspyhfd** .  Note that **status-ttl**=1
 will keep this traffic from passing through any multicast routers, but
 the most likely use case for the **ka9q-radio** package is on a single
 LAN. (Smart Ethernet switches are not routers, so they always pass
@@ -259,7 +259,7 @@ seem well calibrated. Setting any of these values disables the software AGC.
 
 **gainstep** Integer, 0-21 inclusive, default unset. Manually select
 an entry in the airspy library gain table.  The default is to select
-an entry automatically with a software AGC (in **airspyd** ) based on
+an entry automatically with a software AGC (in **airspyd**) based on
 the average A/D output level and the *linearity* setting.
 
 Airspyhfd-only options
