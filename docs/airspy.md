@@ -37,7 +37,9 @@ You may also start (or stop, or restart) it immediately with the
 commands
 
 >$ `sudo systemctl start airspyd@2m`
+
 >$ `sudo systemctl stop airspyd@2m`
+
 >$ `sudo systemctl restart airspyd@2m`
 
 These manipulate the Linux *systemd* service unit files
