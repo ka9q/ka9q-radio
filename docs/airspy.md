@@ -276,4 +276,4 @@ confuse with the *airspyd* options **agc-high-threshold** and
 
 **hf-lna** Default off. Exact function unknown.
 
-**lib-dsp*  Default on. Exact function unknown.
+**lib-dsp**  Default on. Exact function unknown.
