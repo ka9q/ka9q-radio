@@ -1,5 +1,6 @@
-Editing /etc/radio/airspy.conf
-v1.0, May 2022 Phil Karn, KA9Q
+Editing /etc/radio/airspy.conf 
+v1.0, May 2022 
+Phil Karn, KA9Q
 ==============================
 
 The configuration file */etc/radio/airspyd.conf* (and/or any files
