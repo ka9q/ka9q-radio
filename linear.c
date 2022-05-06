@@ -1,8 +1,8 @@
-// $Id: linear.c,v 1.106 2022/04/25 10:17:05 karn Exp $
+// $Id: linear.c,v 1.107 2022/05/06 06:07:52 karn Exp $
 
 // General purpose linear demodulator
-// Handles USB/IQ/CW/etc, basically all modes but FM and envelope-detected AM
-// Copyright Sept 20 2017 Phil Karn, KA9Q
+// Handles USB/IQ/CW/etc, all modes but FM
+// Copyright May 2022 Phil Karn, KA9Q
 
 #define DEFAULT_SHIFT (0.0)          // Post detection frequency shift, Hz
 #define DEFAULT_HEADROOM (-10.0)     // Target average output level, dBFS
@@ -10,9 +10,7 @@
 #define DEFAULT_RECOVERY_RATE (20.0)  // AGC recovery rate after hang expiration, dB/s
 #define DEFAULT_GAIN (0.)           // Linear gain, dB
 #define DEFAULT_THRESHOLD (-15.0)     // AGC threshold, dB (noise will be at HEADROOM + THRESHOLD)
-#define DEFAULT_PLL_BW (500.0)         // PLL loop bandwidth, Hz
 #define DEFAULT_PLL_DAMPING (M_SQRT1_2); // PLL loop damping factor; 1/sqrt(2) is "critical" damping
-//#define DEFAULT_PLL_THRESHOLD (2.);  // PLL lock threshold, power ratio (2 = +3 dB SNR)
 #define DEFAULT_PLL_LOCKTIME (.05);  // time, sec PLL stays above/below threshold SNR to lock/unlock
 
 #define _GNU_SOURCE 1
@@ -126,6 +124,11 @@ void *demod_linear(void *arg){
     demod->sig.n0 = Frontend.n0;
 #endif
 
+    // First pass over sample block.
+    // Perform fine frequency downconversion
+    // Run the PLL (if enabled)
+    // Apply post-downconversion shift (if enabled, e.g. for CW)
+    // Measure energy
     for(int n=0; n<N; n++){
       complex float s = buffer[n] * flip * step_osc(&demod->fine);
       
@@ -150,7 +153,7 @@ void *demod_linear(void *arg){
       buffer[n] = s;
     }
     energy /= N;
-    demod->sig.bb_power = energy;
+    demod->sig.bb_power = energy; // Baseband power, average over block
 
     // Update PLL state, if active
     if(demod->linear.pll){
@@ -204,28 +207,29 @@ void *demod_linear(void *arg){
       // the new gain setting is applied exponentially over the block
       // gain_change is per sample and close to 1, so be careful with numerical precision!
       if(ampl * demod->output.gain > demod->output.headroom){
-	// Strong signal - reduce gain to whatever gets it in range
+	// Strong signal, reduce gain
+	// Don't do it instantly, but by the end of this block
 	float const newgain = demod->output.headroom / ampl;
 	// N-th root of newgain / gain
-	// Do in double precision to avoid imprecision when gain = - epsilon dB
+	// Should this be in double precision to avoid imprecision when gain = - epsilon dB?
 	gain_change = expf(logf(newgain/demod->output.gain) / N);
 	demod->hangcount = demod->linear.hangtime;
       } else if(bn * demod->output.gain > demod->linear.threshold * demod->output.headroom){
-	// Keep noise < threshold
+	// Reduce gain to keep noise < threshold, same as for strong signal
 	float const newgain = demod->linear.threshold * demod->output.headroom / bn;
 	gain_change = expf(logf(newgain/demod->output.gain) / N);
-	//	demod->hangcount = demod->linear.hangtime; // experimental removal
       } else if(demod->hangcount > 0){
 	// Waiting for AGC hang time to expire before increasing gain
-	gain_change = 1;
+	gain_change = 1; // Constant gain
 	demod->hangcount--;
       } else {
-	// Allow gain to slowly recover
-	// Use the set recovery rate unless that would be too much
+	// Allow gain to increase at configured rate, e.g. 20 dB/s
 	gain_change = expf(logf(demod->linear.recovery_rate) / N);
       }
     }
 
+    // Second pass over signal block
+    // Demodulate, apply gain changes, compute output energy
     float output_level = 0;
     if(demod->output.channels == 1){
       float samples[N]; // for mono output
@@ -250,14 +254,14 @@ void *demod_linear(void *arg){
       int mute = 0;
       if(demod->output.level == 0)
 	mute = 1;
-      if(demod->linear.pll && !demod->linear.pll_lock)
+      if(demod->linear.pll && !demod->linear.pll_lock) // Use PLL for AM carrier squelch
 	mute = 1;
 
       if(send_mono_output(demod,samples,N,mute) == -1)
 	break; // No output stream!
     } else { // channels == 2, stereo
       if(demod->linear.env){
-	// I on left, envelope/AM on right
+	// I on left, envelope/AM on right (for experiments in fine SSB tuning)
 	for(int n=0; n < N; n++){      
 	  __imag__ buffer[n] = cabsf(buffer[n]) * 2; // empirical +6dB
 	  buffer[n] *= demod->output.gain;
