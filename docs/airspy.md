@@ -1,7 +1,8 @@
-Configuring *ka9q-radio* to use the Airspy SDRs  
+Configuring *ka9q-radio* to use the Airspy SDRs
+===============================================
 v1.0, May 2022  
 Phil Karn, KA9Q
-==============================
+---------------
 
 The configuration file */etc/radio/airspyd.conf* (and/or any files
 under */etc/radio/airspyd.conf.d*) specify your Airspy R2, Airspy Mini
