@@ -31,12 +31,12 @@ own USB host controller.)
 As with any Linux system daemon, once configured you may enable it
 to start automatically on the next reboot with
 
->$ sudo systemctl enable airspyd@2m
+>$ `sudo systemctl enable airspyd@2m`
 
 You may also start (or stop, or restart) it immediately with the
 commands
 
->$ sudo systemctl start airspyd@2m  
+>$ `sudo systemctl start airspyd@2m  `
 $ sudo systemctl stop airspyd@2m  
 $ sudo systemctl restart airspyd@2m
 
