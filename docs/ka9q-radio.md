@@ -105,7 +105,9 @@ PCM output sample rate for each receiver channel.
 Specifies the DNS name of the multicast
 group to be used for receiver output streams. If not specified in the
 [global] section, it must be individually specified in each subsequent
-section. *radiod* will advertise a SRV DNS record with type _rtp._udp with this name.
+section. *radiod* will deterministically hash this string to generate and advertise
+an IPv4 multicast address in the 239.0.0.0/8 block, along
+with a SRV DNS record of type _rtp._udp advertising this name.
 
 A single output stream can carry many receiver channels, each
 distinguished by its 32-bit RTP SSRC (Real Time Protocol Stream Source
@@ -131,10 +133,12 @@ for a description of the standard definitions.
 domain name of the metadata multicast group.  In a change from earlier
 versions there is now only one status group per instance of *radiod*,
 and status information is multicast only in response to a command
-(which may be empty). Not mandatory, but unset there will
-be no way to dynamically create new receiver channels or to control
-or monitor statically configured channels. *radiod* will advertise a SRV DNS
-record of type _ka9q-ctl._udp with this name.
+(which may be empty). Not mandatory, but unset there will be no way to
+dynamically create new receiver channels or to control or monitor
+statically configured channels. *radiod* will deterministically hash
+this string to generate and advertise an IPv4 multicast address in the
+239.0.0.0/8 block, along with a SRV DNS record of type _ka9q-ctl._udp
+with this name.
 
 **tos** Integer; default 48. Not valid in *modes.conf*.  Sets the
 IP Type of Service (TOS) field used in all outgoing packets. See the
