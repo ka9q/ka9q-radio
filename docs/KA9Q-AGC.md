@@ -43,12 +43,12 @@ ad-hoc manual gain settings.
 The Linear Demodulator AGC in *radiod*
 --------------------------------------
 
-This AGC is similar to those in traditional communications
-receivers. It operates after downconversion and filtering so it
-responds only to in-band signals.
+This AGC is similar to those in traditional communications receivers
+but with some enhancements I believe are novel. It operates after
+downconversion and filtering so it responds only to in-band signals.
 
 The AGC is controlled by signal energy measurements made on each block
-of samples from the filter.  The block length, typically 20ms, is set
+of baseband samples.  The block length, typically 20ms, is set
 by the **blocksize** parameter in the [global] section of the *radiod*
 configuration file; it applies to every receiver channel in that
 *radiod* instance. The energy measurement is converted to an average
@@ -98,20 +98,25 @@ smaller **hang-time** usually preferred for CW is set in
 remove the guesswork from gain setting, these modes set
 **hang-time** = 0 and **recovery-rate** = +50 dB/sec.
 
-Although the AGC recomputes every block, it actually produces a gain
-rate-of-change (some number of decibels per sample) and applies it to
-every sample in the block. This avoids audible gain "stairstepping"
-that would otherwise occur during a rapid change at block boundaries.
+Although the AGC runs once per block, it computes a gain
+rate-of-change (X decibels per sample) that's applied to every sample
+in the block. This avoids audible gain "stairstepping" that would
+otherwise occur during a rapid change at block boundaries. I.e., gain
+is a continuous function, though gain rate-of-change is discontinuous.
 
 I have found that measuring signal amplitude as a per-block average
 eliminates the need for an "attack rate" setting to limit the rate at
-which gain decreases on a strong signal. Averaging eliminates the
-overreaction to short noise impulses that might otherwise occur while
-still reacting quickly to true changes in signal level. Also, the
-average block amplitude is measured and the new AGC gain change rate
-computed before the sample amplitudes are actually changed, so the AGC
-"sees into the future" a little. This also improves performance over
-an AGC that can only react to a signal as it's being heard.
+which gain decreases on a strong signal. Averaging avoids overreacting
+to short noise impulses while still reacting quickly to true changes
+in signal level. Also, the average block amplitude is measured and the
+new AGC gain change rate computed before the sample amplitudes are
+actually changed, so the AGC "sees into the future" a little. This
+also improves performance over an AGC that can only react to a signal
+as it's being heard.
+
+As an aside, the 20 ms AGC cycle in *ka9q-radio* is roughly the same
+as the reaction time (tens of milliseconds) of the human acoustic
+reflex (see Wikipedia). This might just be an interesting coincidence.
 
 (to be continued)
 
