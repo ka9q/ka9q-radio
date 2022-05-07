@@ -308,13 +308,14 @@ loop filter bandwidth of the PLL.
 **agc** Boolean, default on. Linear demodulator only. Enables automatic gain control (AGC).
 
 **deemph-tc** Decimal. Not applicable to the linear
-demodulator. Default: 530.5 (FM demodulaor), 75 (WFM
+demodulator. Default: 530.5 (FM demodulator), 75 (WFM
 demodulator). Sets the time constant, in microseconds, for FM
-demodulation, that controls the transition between a "flat FM" response for lower frequencies to
-phase modulation at higher frequencies (a de-emphasis rate of -6 dB/octave).
+demodulation. This controls the transition between a "flat FM"
+response at lower frequencies to phase modulation (-6 dB/octave
+de-emphasis) at higher frequencies.
 
 The 530.5 microsecond value corresponds to a corner frequency of 300
-Hz, the apparent but unofficial value for amateur narrowband FM, while
+Hz, the apparent unofficial value for amateur narrowband FM, while
 75 microseconds is the official value for FM broadcasting in North
 America and South Korea. Other countries use 50 microseconds.
 
@@ -322,7 +323,7 @@ America and South Korea. Other countries use 50 microseconds.
 demodulator. Default: +12 dB (empirically chosen) for the FM
 demodulator, 0 db for the WFM demodulator. Applies the specified
 amount of gain to the signal after de-emphasis to maintain the same
-objective loudness as the demodulator output with de-emphasis
+objective loudness as with de-emphasis
 off. Needed mainly for NBFM because its 300 Hz corner frequency is
 below the nominal speech band. Not needed for WFM because the 75
 microsecond time constant corresponds to 2123 Hz, above most of the
