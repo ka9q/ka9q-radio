@@ -60,10 +60,11 @@ channel group section, or in *modes.conf*.
 **blocktime** Decimal; default 20 milliseconds (i.e., 50 Hz block
 rate). Valid only in the [global] section.  Specifies the duration of
 the forward FFT shared by all receiver channels.  The actual block
-size in samples is equal to the blocktime times the A/D sample
+size in samples is equal to **blocktime** times the A/D sample
 rate. E.g., the Airspy R2 has a 20 MHz (real) sample rate, so a 20 ms
-blocktime corresponds to a block size of 400,000 samples. The actual
-FFT block size is larger and depends on the **overlap** setting.
+**blocktime** corresponds to a block size of 400,000 samples. The actual
+FFT block is larger because it includes data from the previous block
+depending on the **overlap** setting.
 
 Larger values of **blocktime** permit sharper channel filters and are
 more tolerant to CPU scheduling latencies but add latency and incur
@@ -315,8 +316,6 @@ below the nominal speech band. Not needed for WFM because the 75
 microsecond time constant corresponds to 2123 Hz, above most of the
 power in typical speech or music.
 
-
-
 **freq** Decimal, no default. Set the channel carrier frequency.  If a
 list is specified, a receiver channel will be created for each
 one. Automatically sets the RTP SSRC if not otherwise specified to the
@@ -337,8 +336,19 @@ A frequency of 0 has special meaning: it creates a "prototype"
 receiver channel that will be cloned when the *control* program
 specifies a previously unknown SSRC.
 
+**ssrc** Decimal, default based on frequency as described above. Set
+the RTP (Real Time Protocol) SSRC (Stream Source Identifier). This is
+a 32-bit value placed in every RTP header to identify the stream,
+necessary because many streams may share the same IP multicast group
+from the same originating host.
 
-
+Note that once the SSRC is set for a stream it cannot be changed even
+if the channel is tuned to a different radio frequency, making this
+usage a bit of a hack.  But particularly in VHF/UHF repeater
+monitoring, most *ka9q-radio* channels are statically configured and
+never retuned, so it is nonetheless a useful convention. Also, the
+SSRC can still be used to find the actual radio frequency (and any
+other channel parameters) from the metadata (status) stream.
 
 
 
