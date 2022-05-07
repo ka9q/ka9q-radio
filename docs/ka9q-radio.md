@@ -62,7 +62,7 @@ rate). Valid only in the [global] section.  Specifies the duration of
 the forward FFT shared by all receiver channels.  The actual block
 size in samples is equal to **blocktime** times the A/D sample
 rate. E.g., the Airspy R2 has a 20 MHz (real) sample rate, so a 20 ms
-**blocktime** corresponds to a block size of 400,000 samples. The actual
+**blocktime** corresponds to a block of 400,000 real samples. The actual
 FFT block is larger because it includes data from the previous block
 depending on the **overlap** setting.
 
@@ -101,12 +101,13 @@ the status stream.
 **samprate** Integer; default 24000 (24 kHz). Specifies the default
 PCM output sample rate for each receiver channel.
 
-
 **data** String; no default. Not valid in *modes.conf*.
 Specifies the DNS name of the multicast
 group to be used for receiver output streams. If not specified in the
 [global] section, it must be individually specified in each subsequent
-section. A single output stream can carry many receiver channels, each
+section. *radiod* will advertise a SRV DNS record with type _rtp._udp with this name.
+
+A single output stream can carry many receiver channels, each
 distinguished by its 32-bit RTP SSRC (Real Time Protocol Stream Source
 Identifier), which must be unique for an instance of
 *radiod*. However, consider that Ethernet switches, routers and host
@@ -132,7 +133,8 @@ versions there is now only one status group per instance of *radiod*,
 and status information is multicast only in response to a command
 (which may be empty). Not mandatory, but unset there will
 be no way to dynamically create new receiver channels or to control
-or monitor statically configured channels.
+or monitor statically configured channels. *radiod* will advertise a SRV DNS
+record of type _ka9q-ctl._udp with this name.
 
 **tos** Integer; default 48. Not valid in *modes.conf*.  Sets the
 IP Type of Service (TOS) field used in all outgoing packets. See the
