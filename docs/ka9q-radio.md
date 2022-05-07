@@ -323,9 +323,9 @@ number formed by removing all letters from the frequency string.
 
 Frequencies are specified either as pure decimal numbers, or with a SI scale factor as follows:
 
-123.4k, 123k4 - 123.4 kilohertz
-123.4m, 123m4 - 123m4 Megahertz
-1.234g, 1g234 - 1.234 Gigahertz
+123.4k, 123k4 - 123.4 kilohertz  
+123.4m, 123m4 - 123m4 Megahertz  
+1.234g, 1g234 - 1.234 Gigahertz  
 
 When no scale is given, a heuristic is used to give a "reasonable"
 answer (which may not always be right). e.g., "400" is interpreted as
@@ -347,7 +347,7 @@ if the channel is tuned to a different radio frequency, making this
 usage a bit of a hack.  But particularly in VHF/UHF repeater
 monitoring, most *ka9q-radio* channels are statically configured and
 never retuned, so it is nonetheless a useful convention. Also, the
-SSRC can still be used to find the actual radio frequency (and any
+SSRC can still be used to find the actual radio frequency (and
 other channel parameters) from the metadata (status) stream.
 
 
