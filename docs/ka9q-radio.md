@@ -30,7 +30,7 @@ Here is an excerpt from *radiod@2m.conf* on my system:
 >mode = pm  
 >freq = "145m800 144m490 145m200 145m825 145m990 144m310 144m325 144m340 144m355"  
 
-There must be exactly one [global] section. Parameters here apply to
+There must be exactly one [global] section, which applies to
 the entire *radiod* instance. Some (not all) may be overridden in
 subsequent sections. The parameters in this section are as follows:
 
@@ -50,13 +50,14 @@ increases with the square root of the FFT block size.)
 **overlap** Integer, default 5. This controls the ratio of old to new
 samples in each forward FFT. An overlap of 5 means that 1/5 of each
 FFT input block consists of A/D samples from the previous block and
-4/5 are new A/D samples. The overlap limits the length of the impulse
-response of the filter in each receiver channel. For example, an
-**overlap** of 5 combined with a **blocktime** of 20 milliseconds
-gives an overlap of 20 / 5 = 4 milliseconds, which becomes the maximum
-impulse duration of the per-channel filter. Smaller values of
-**overlap** permit sharper filters at the expense of greater CPU
-overhead since each FFT processes more old data.
+4/5 are new A/D samples. The overlap sets the impulse response
+duration of the filter in each receiver channel, with longer impulse
+responses permitting sharper responses. For example, an **overlap** of
+5 combined with a **blocktime** of 20 milliseconds gives an overlap of
+20 / 5 = 4 milliseconds, which becomes the maximum impulse duration of
+the per-channel filter. Smaller values of **overlap** permit sharper
+filters at the expense of greater CPU overhead since each FFT
+processes more old data.
 
 Only certain values of **overlap** will work properly, so unless
 you're feeling very adventurous stick with the default of 5 until I
