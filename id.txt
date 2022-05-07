@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.47 2022/02/15 05:07:29 karn Exp $
+# $Id: id.txt,v 1.47 2022/02/15 05:07:29 karn Exp karn $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -138,6 +138,7 @@
 147450	W6NUT Sierra Pk
 147495	AA6TL Mt Lukens
 147510	KD6PZB Lakeside ECRA 
+147540  WB6IRC Blueridge
 147570	KI6MGN PAPA D10
 147600	K6VGP in
 147615	KI6JVF
