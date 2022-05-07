@@ -151,7 +151,7 @@ airspy.md.
 **fft-threads** Integer; default 1. Valid only in [global]. Sets the
 number of threads to be used by FFTW3 for the forward FFT shared by
 all the receiver channels.  I added this when I thought multithreading
-was necessary to make *radiod* run in real time on the Raspberry Pi;
+was necessary to make *radiod* run in real time on the Raspberry Pi 4;
 having found other ways to improve performance I recommend the default
 except for experimenting. Multithreading FFTW3 may decrease the
 latency of each FFT, but at the cost of greater total CPU time across
