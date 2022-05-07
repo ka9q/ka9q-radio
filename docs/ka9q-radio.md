@@ -166,12 +166,12 @@ Session Announcement Protocol (SAP). Eventually this will make
 receiver streams visible to session browers in applications such as
 VLC. Leave off for now.
 
-**mode-file** String; default. Valid only in [global].
+**mode-file** String; default */usr/local/share/ka9q-radio/modes.conf*. Valid only in [global].
 Specifies the mode
 description file mentioned in the **mode** parameter above. Use the
-default, i.e., */usr/local/share/ka9q-radio/modes.conf*.
+default.
 
-**wisdom-file** String; default /var/lib/ka9q-radio/wisdom*. Valid only in [global].
+**wisdom-file** String; default */var/lib/ka9q-radio/wisdom*. Valid only in [global].
 Specifies
 where FFTW3 should store accumulated "wisdom" information about the
 fastest ways to perform *radiod*'s specific FFT transforms on this
