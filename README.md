@@ -24,10 +24,10 @@ programs) with little (or no) user interaction. Turnkey systems can be
 configured to, e.g., demodulate and record every FM channel on a band,
 or decode and relay digital messages (e.g., APRS, WSPR, Horus 4FSK,
 radiosondes). These programs are automatically launched by the (new)
-Linux standard system manager program 'systemd'.
+Linux standard system manager program *systemd*.
 
 The core component is the *radiod* daemon. It accepts a (multicast) raw
-I/Q stream from a front end module and executes a configured set of
+A/D stream from a front end module and executes a configured set of
 digital downconverters and simple demodulators for various linear and
 FM modes, including AM, SSB, CW and a raw IQ mode intended mainly for
 use by other programs.
@@ -41,7 +41,7 @@ and *hackrf* (Great Scott Gadgets Hack RF One, receive only).
 Two very rudimentary programs are provided for interactive use;
 *monitor* listens to one or more demodulated audio streams and
 *control* controls and displays the status of a selected receiver
-channel.  It can also dynamically create and delete receiver channel
+channel.  It can also create and delete dynamic channel
 instances. The *control* program uses a flexible and extensible
 metadata protocol that could be (and I hope will be) implemented
 by much more sophisticated user interfaces. Various utilities are
