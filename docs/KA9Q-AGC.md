@@ -23,8 +23,8 @@ Proper gain distribution is essential to optimize overall sensitivity
 and linearity (i.e., susceptibility to intermodulation
 distortion). The vendor-supplied library for the Airspy R2 comes with
 separate gain tables optimized for either sensitivity or linearity,
-but most other SDR front ends do not. These tables probably need to be
-changed with an external preamp.
+but most other SDR front ends do not. These tables probably need
+modification with an external preamp.
 
 The analog gains are passed in the metadata stream to the *radiod*
 module where the signal is digitally attenuated by an equal amount to
