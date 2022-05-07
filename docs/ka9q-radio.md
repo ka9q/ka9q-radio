@@ -208,6 +208,12 @@ right channel.  This is for experimentation with automatic SSB tuning
 algorithms that use envelope detection to determine voice pitch
 frequencies.
 
+**stereo** Boolean. Equivalent to **channels** = 2.
+
+**mono** Boolean. Equivalent to **channels** = 1.
+
+**disable** Boolean, default off. Channel group entry only. Disables a channel group.
+
 **kaiser-beta** Decimal, default 11.0. Sets the Kaiser window beta
 parameter for filter generation. Larger values give better sidelobe
 suppression while smaller values narrow the main lobe (i.e., give
@@ -341,6 +347,10 @@ the scale factor or give the frequency in hertz.
 A frequency of 0 has special meaning: it creates a "prototype"
 receiver channel that will be cloned when the *control* program
 specifies a previously unknown SSRC.
+
+Ten aliases for **freq** are provided, **freq0** through **freq9**. This is strictly to work
+around the line length limitation in the *libiniparser* library so you can have literally
+hundreds of receiver channels in a single *radiod* instance. (The parser only allows one of each key to be present in a section, so repeating **freq** won't work.)
 
 **ssrc** Decimal, default based on frequency as described above. Set
 the RTP (Real Time Protocol) SSRC (Stream Source Identifier). This is
