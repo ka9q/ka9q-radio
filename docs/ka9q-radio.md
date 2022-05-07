@@ -65,6 +65,7 @@ write a more detailed discussion of the considerations. When operating
 on HF, you might try an **overlap** of 2 for sharper filters, as the
 lower A/D sample rates make the extra CPU cost acceptable.
 
+(to be continued)
 
 
 
