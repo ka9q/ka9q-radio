@@ -1,12 +1,12 @@
 Configuring *ka9q-radio*
 ========================
 
-v0.0 (incomplete), May 2022
+v0.0 (incomplete), May 2022  
 Phil Karn, KA9Q
 ---------------
 
-A Linux system can run several copies of the ka9q-radio radio daemon,
-*radiod*, subject to resource limits (CPU and Ethernet capacity).
+A Linux system can run several copies of the ka9q-radio radio daemon
+*radiod* subject to resource limits (CPU and Ethernet capacity).
 
 Each *radiod* instance has a configuration file, e.g.,
 */etc/radio/radiod@2m.conf*, where "2m" is the instance name.  Each
@@ -17,18 +17,18 @@ per front end handling all the channels.
 
 Here is an excerpt from *radiod@2m.conf* on my system:
 
->[global]
->blocktime = 20
->overlap = 5
->input = 2m-vertical.local
->samprate = 24000
->data = 2m-pcm.local
->mode = pm
->status = 2m.local
-
->[2m FM]
->mode = pm
->freq = "145m800 144m490 145m200 145m825 145m990 144m310 144m325 144m340 144m355"
+>[global]  
+>blocktime = 20  
+>overlap = 5  
+>input = 2m-vertical.local  
+>samprate = 24000  
+>data = 2m-pcm.local  
+>mode = pm  
+>status = 2m.local  
+  
+>[2m FM]  
+>mode = pm  
+>freq = "145m800 144m490 145m200 145m825 145m990 144m310 144m325 144m340 144m355"  
 
 There must be exactly one [global] section. Parameters here apply to
 the entire *radiod* instance. Some (not all) may be overridden in
