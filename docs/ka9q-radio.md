@@ -118,7 +118,7 @@ application (e.g., *monitor*) will receive and discard traffic from
 any unwanted SSRCs sharing an IP multicast address with the desired
 traffic. At a 24 kHz sample rate, each 16-bit mono PCM stream is 384
 kb/s plus header overhead, so this can add up when many channels are
-active.  This is usually OK on 1Gb/s Ethernet, but it can a problem
+active.  This is usually OK on 1Gb/s Ethernet, but it can be a problem
 over slower Ethernets or WiFi, especially where the base station does
 not do multicast-to-unicast conversion. In these cases, use the Opus
 transcoder daemon *opusd*.
