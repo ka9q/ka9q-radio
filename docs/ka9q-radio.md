@@ -278,7 +278,7 @@ setting, that the AGC will maintain on noise without signal. With the
 default **headroom** setting of -15 dBFS, noise will thus appear at
 -30 dBFS.
 
-**gain** Decimal, default 0 dB. Linear demodulator only (the FM and
+**gain** Decimal, default 50 dB. Linear demodulator only (the FM and
 WFM demodulators force this to fixed values depending on the
 predetection bandwidth.) This is the gain applied to the output of the
 linear demodulator before transmission to the output data stream. With
