@@ -1,4 +1,4 @@
-# $Id: Makefile.osx,v 1.106 2022/04/24 06:19:04 karn Exp $
+# $Id: Makefile.osx,v 1.107 2022/05/08 21:25:51 karn Exp $
 CFLAGS=-g -DNDEBUG=1 -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 #CFLAGS=-g -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 BINDIR=/usr/local/bin
@@ -17,7 +17,6 @@ install: all
 
 clean:
 	rm -f *.o *.a $(EXECS)
-	rcsclean
 
 # Executables
 airspy: airspy.o libradio.a
