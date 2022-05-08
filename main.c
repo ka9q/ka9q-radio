@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.249 2022/04/25 02:08:30 karn Exp $
+// $Id: main.c,v 1.250 2022/05/08 23:21:14 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -143,9 +143,20 @@ int main(int argc,char *argv[]){
     exit(1);
   }
   configfile = argv[optind];
-  if(Name == NULL)
-    Name = argv[optind];
-  
+  if(Name == NULL){
+    // Extract name from config file pathname
+    char const *cp1 = strrchr(argv[optind],'@');
+    char const *cp2 = strrchr(argv[optind],'.');
+    if(cp1 == NULL || cp2 == NULL || cp2 < cp1){
+      Name = argv[optind]; // Ah, just use whole thing
+    } else {
+      cp1++;
+      int len = cp2 - cp1 + 1;
+      char *foo = calloc(1,len);
+      strlcpy(foo,cp1,len);
+      Name = foo;
+    }
+  }
   fprintf(stdout,"Loading config file %s...\n",configfile);
   fflush(stdout);
   int n = loadconfig(argv[optind]);
