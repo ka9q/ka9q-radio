@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.152 2022/04/27 08:40:54 karn Exp $
+// $Id: control.c,v 1.153 2022/05/08 21:23:12 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -1316,8 +1316,8 @@ void display_sig(WINDOW *w,struct demod const *demod){
   pprintw(w,row++,col,"NBW","%.1f dBHz ",power2dB(noise_bandwidth));
   pprintw(w,row++,col,"SNR","%.1f dB   ",power2dB(sn0/noise_bandwidth));
   pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(demod->output.gain));
-  pprintw(w,row++,col,"Output","%.1lf dB   ",power2dB(demod->output.level));
-  pprintw(w,row++,col,"Headroom","%.1f dB   ",voltage2dB(demod->output.headroom));
+  pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(demod->output.level));
+  pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(demod->output.headroom));
   box(w,0,0);
   mvwaddstr(w,0,1,"Signal");
   wnoutrefresh(w);
