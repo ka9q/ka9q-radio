@@ -1,10 +1,10 @@
-# $Id: Makefile.osx,v 1.107 2022/05/08 21:25:51 karn Exp $
+# $Id: Makefile.osx,v 1.108 2022/05/09 08:07:50 karn Exp $
 CFLAGS=-g -DNDEBUG=1 -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 #CFLAGS=-g -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 BINDIR=/usr/local/bin
 LIBDIR=/usr/local/share/ka9q-radio
 LD_FLAGS=-lpthread -lm
-EXECS=airspy airspyhf aprs aprsfeed funcube iqplay iqrecord modulate monitor opus opussend packet pcmrecord pcmsend pcmcat radio control metadump pl airspy show-pkt show-sig stereo rds tune wspr-decode
+EXECS=airspyd airspyhfd aprs aprsfeed funcubed iqplay iqrecord modulate monitor opusd opussend packetd pcmrecord pcmsend pcmcat radiod control metadump pl show-pkt show-sig stereod rdsd tune wspr-decoded
 AFILES=bandplan.txt help.txt modes.conf id.txt
 
 all: $(EXECS) $(AFILES)
@@ -19,10 +19,10 @@ clean:
 	rm -f *.o *.a $(EXECS)
 
 # Executables
-airspy: airspy.o libradio.a
+airspyd: airspyd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lairspy -liniparser -lm -lpthread
 
-airspyhf: airspyhf.o libradio.a
+airspyhfd: airspyhfd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lairspyhf -liniparser -lm -lpthread
 
 aprs: aprs.o libradio.a
@@ -37,7 +37,7 @@ control: control.o decode_status.o modes.o bandplan.o libradio.a
 dmr: dmr.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
 
-funcube: funcube.o libradio.a libfcd.a
+funcubed: funcubed.o libradio.a libfcd.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lportaudio -lusb-1.0 -liconv -lm -lpthread
 
 hackrf: hackrf.o libradio.a
@@ -58,13 +58,13 @@ modulate: modulate.o libradio.a
 monitor: monitor.o libradio.a
 	$(CC) -g -o $@ $^ -lopus -lportaudio -lncurses -lm -lpthread
 
-opus: opus.o libradio.a
+opusd: opusd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lopus -lm -lpthread
 
 opussend: opussend.o libradio.a
 	$(CC) -g -o $@ $^ -lopus -lportaudio -lm -lpthread
 
-packet: packet.o libradio.a
+packetd: packetd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread 
 
 pcmcat: pcmcat.o libradio.a
@@ -73,17 +73,16 @@ pcmcat: pcmcat.o libradio.a
 pcmrecord: pcmrecord.o libradio.a
 	$(CC) -g -o $@ $^ -lm -lpthread
 
-
 pcmsend: pcmsend.o libradio.a
 	$(CC) -g -o $@ $^ -lportaudio -lm -lpthread
 
 pl: pl.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread    
 
-radio: main.o radio.o audio.o fm.o wfm.o linear.o radio_status.o modes.o status.o decode_status.o libradio.a
+radiod: main.o radio.o audio.o fm.o wfm.o linear.o radio_status.o modes.o status.o decode_status.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread
 
-rds: rds.o libradio.a
+rdsd: rdsd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread
 
 show-pkt: show-pkt.o libradio.a
@@ -92,13 +91,13 @@ show-pkt: show-pkt.o libradio.a
 show-sig: show-sig.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread -lm
 
-stereo: stereo.o libradio.a
+stereod: stereod.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread    
 
 tune: tune.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread    
 
-wspr-decode: wspr-decode.o libradio.a
+wspr-decoded: wspr-decoded.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread    
 
 
@@ -113,13 +112,13 @@ libradio.a: avahi.o attr.o ax25.o config.o decimate.o filter.o status.o misc.o m
 	ranlib $@
 
 # Main programs
-airspy.o: airspy.c misc.h multicast.h decimate.h status.h conf.h config.h
-airspyhf.o: airspyhf.c misc.h multicast.h decimate.h status.h config.h
+airspyd.o: airspyd.c misc.h multicast.h decimate.h status.h conf.h config.h
+airspyhfd.o: airspyhfd.c misc.h multicast.h decimate.h status.h config.h
 aprs.o: aprs.c ax25.h multicast.h misc.h
 aprsfeed.o: aprsfeed.c ax25.h multicast.h misc.h
 avahi.o: avahi.c misc.h
 control.o: control.c osc.h misc.h filter.h bandplan.h multicast.h status.h  radio.h
-funcube.o: funcube.c fcd.h fcdhidcmd.h hidapi.h misc.h multicast.h status.h conf.h
+funcubed.o: funcubed.c fcd.h fcdhidcmd.h hidapi.h misc.h multicast.h status.h conf.h
 hackrf.o: hackrf.c misc.h multicast.h decimate.h status.h
 iqplay.o: iqplay.c misc.h radio.h osc.h multicast.h attr.h  status.h
 iqrecord.o: iqrecord.c radio.h osc.h multicast.h attr.h
@@ -127,9 +126,9 @@ main.o: main.c radio.h osc.h filter.h misc.h  multicast.h status.h  conf.h
 metadump.o: metadump.c multicast.h status.h misc.h
 modulate.o: modulate.c misc.h filter.h radio.h osc.h conf.h
 monitor.o: monitor.c misc.h multicast.h iir.h conf.h
-opus.o: opus.c misc.h multicast.h iir.h status.h
+opusd.o: opusd.c misc.h multicast.h iir.h status.h
 opussend.o: opussend.c misc.h multicast.h
-packet.o: packet.c filter.h misc.h multicast.h ax25.h osc.h status.h
+packetd.o: packetd.c filter.h misc.h multicast.h ax25.h osc.h status.h
 pcmcat.o: pcmcat.c multicast.h
 pcmrecord.o: pcmrecord.c attr.h multicast.h
 pcmsend.o: pcmsend.c misc.h multicast.h
