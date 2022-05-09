@@ -42,15 +42,13 @@ are messages like
 
 I.e., multicast DNS lookups repeatedly fail even after the name is successfully registered with *avahi*.
 
-Here's a (probably incomplete) list of fixes:
-
-1. The resolver built into systemd is used by default, and multicast
+The resolver built into systemd is used by default, and multicast
 DNS is disabled by default. To enable it, see here:
 
 [How to configure systemd-resolved for mdns multicast dns on local network](
 https://unix.stackexchange.com/questions/459991/how-to-configure-systemd-resolved-for-mdns-multicast-dns-on-local-network)
 
-2. The "mdns4_minimal" resolver ignores multicast addresses (this seems
+The "mdns4_minimal" resolver ignores multicast addresses (this seems
 to have been fixed in later versions). To work around this, edit
 */etc/nsswitch.conf* to use the "mdns4" resolver and create the file
 */etc/mdns.allow* with the entries
