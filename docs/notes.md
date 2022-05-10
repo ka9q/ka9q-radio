@@ -1,12 +1,12 @@
 *ka9q-radio* installation notes
-KA9Q, 8 May 2022
+KA9Q, 9 May 2022
 ===============================
 
 The preferred platform is Debian Linux "bullseye" on the x86-64 and
 the 64-bit "bullseye" version of Raspberry Pi OS for the Raspberry Pi
 4. (The Raspberry Pi OS is essentially Debian Linux with
-customizations.)
-Older versions may work, but you may have to fix some problems.
+customizations.)  Older versions may work, but you may have to fix
+some problems.
 
 Here's an incomplete list of nits and gotchas I've run into while
 installing *ka9q-radio* on various systems.
@@ -42,22 +42,17 @@ are messages like
 
 I.e., multicast DNS lookups repeatedly fail even after the name is successfully registered with *avahi*.
 
-The resolver built into systemd is used by default, and multicast
-DNS is disabled by default. To enable it, see here:
-
-[How to configure systemd-resolved for mdns multicast dns on local network](
-https://unix.stackexchange.com/questions/459991/how-to-configure-systemd-resolved-for-mdns-multicast-dns-on-local-network)
-
-The "mdns4_minimal" resolver ignores multicast addresses (this seems
-to have been fixed in later versions). To work around this, edit
-*/etc/nsswitch.conf* to use the "mdns4" resolver and create the file
-*/etc/mdns.allow* with the entries
+The problem is that the "mdns4_minimal" resolver specified in
+/etc/nsswitch.conf ignores multicast addresses (this seems to have
+been fixed in later versions). To work around this, edit
+*/etc/nsswitch.conf* to change "mdns4_minimal" to "mdns4". Then create
+the file */etc/mdns.allow* with the entries
 
 >>.local  
 >>.local.
 
-to restrict it to the mDNS zone ".local", which is what mdns4_minimal
-normally does.
+so it will only try to resolve names in the mDNS zone ".local", which
+is what mdns4_minimal normally does.
 
 
 
