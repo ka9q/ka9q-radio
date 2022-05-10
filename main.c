@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.250 2022/05/08 23:21:14 karn Exp $
+// $Id: main.c,v 1.251 2022/05/10 06:54:58 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -383,7 +383,9 @@ static int loadconfig(char const * const file){
       fprintf(stdout,"warning: mode preset not selected, using built-in defaults\n");
 
     struct demod *demod = alloc_demod();
-    loadmode(demod,Modetable,mode,1);
+    if(loadmode(demod,Modetable,mode,1) != 0)
+      fprintf(stdout,"loadmode(%s,%s) failed\n",Modefile,mode);
+
     loadmode(demod,Configtable,sname,0); // Overwrite with config file entries
 
     demod->output.rtp.ssrc = (uint32_t)config_getdouble(Configtable,sname,"ssrc",0); // Default triggers auto gen from freq

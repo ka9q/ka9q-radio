@@ -1,4 +1,4 @@
-// $Id: modes.c,v 1.61 2022/05/07 10:28:02 karn Exp $
+// $Id: modes.c,v 1.62 2022/05/10 06:54:58 karn Exp $
 // Load and search mode definition table in /usr/local/share/ka9q-radio/modes.conf
 
 // Copyright 2018, Phil Karn, KA9Q
@@ -125,17 +125,15 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
   if(demod == NULL || table == NULL || mode == NULL || strlen(mode) == 0)
     return -1;
 
-  // No default
   char const * demod_name = config_getstring(table,mode,"demod",NULL);
-  if(demod_name == NULL)
-    return -1;
-
-  {
+  if(demod_name){
     int x = demod_type_from_name(demod_name);
     if(demod->demod_type >= 0){
       demod->demod_type = x;
     }
-  }
+  } else if(use_defaults)
+    return -1;  // No default in modes.conf, but allow overlaying options in radiod conf files
+
   if(use_defaults)
     set_defaults(demod); // must be called after demod_type is set
   demod->output.samprate = config_getint(table,mode,"samprate",demod->output.samprate);
