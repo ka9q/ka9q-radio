@@ -1,4 +1,4 @@
-// $Id: pcmspawn.c,v 1.7 2022/04/15 05:06:16 karn Exp $
+// $Id: pcmspawn.c,v 1.8 2022/05/10 04:01:32 karn Exp $
 // Receive and demux RTP PCM streams into a command pipeline
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -298,7 +298,8 @@ void * status(void *p){
     }
 
     // We MUST ignore our own packets, or we'll loop!
-    if(memcmp(&Status_input_source_address, &Local_status_source_address, sizeof(Local_status_source_address)) == 0)
+    if(address_match(&Status_input_source_address, &Local_status_source_address)
+       && getportnumber(&Status_input_source_address) == getportnumber(&Local_status_source_address))
       continue;
 
     // Announce ourselves in response to commands
@@ -326,7 +327,8 @@ void * status(void *p){
 	    struct sockaddr_storage dest_temp;
 	    memset(&dest_temp,0,sizeof(dest_temp));
 	    decode_socket(&dest_temp,cp,optlen);
-	    if(memcmp(&dest_temp,&PCM_dest_address,sizeof(dest_temp)) == 0)
+	    if(address_match(&dest_temp,&PCM_dest_address)
+	       && getportnumber(&dest_temp) == getportnumber(&PCM_dest_address))
 	      break; // nothing changed
 
 	    // new or changed PCM multicast group
@@ -373,8 +375,7 @@ struct session *lookup_session(const struct sockaddr * const sender,const uint32
   struct session *sp;
   pthread_mutex_lock(&Session_protect);
   for(sp = Sessions; sp != NULL; sp = sp->next){
-    if(sp->rtp_state.ssrc == ssrc && memcmp(&sp->sender,sender,sizeof(*sender)) == 0
-       && sp->type == type){
+    if(sp->rtp_state.ssrc == ssrc && address_match(&sp->sender,sender) && sp->type == type){
       // Found it
       if(sp->prev != NULL){
 	// Not at top of list; move it there

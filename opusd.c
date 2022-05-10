@@ -1,4 +1,4 @@
-// $Id: opusd.c,v 1.1 2022/05/03 02:01:52 karn Exp $
+// $Id: opusd.c,v 1.2 2022/05/10 04:01:32 karn Exp $
 // Opus transcoder
 // Read PCM audio from one or more multicast groups, compress with Opus and retransmit on another with same SSRC
 // Currently subject to memory leaks as old group states aren't yet aged out
@@ -400,7 +400,8 @@ void * status(void *p){
     }
 
     // We MUST ignore our own packets, or we'll loop!
-    if(memcmp(&Status_input_source_address, &Local_status_source_address, sizeof(Local_status_source_address)) == 0)
+    if(address_match(&Status_input_source_address,&Local_status_source_address)
+       && getportnumber(&Status_input_source_address) == getportnumber(&Local_status_source_address))
       continue;
 
     // Announce ourselves in response to commands
@@ -441,7 +442,8 @@ void * status(void *p){
 	    struct sockaddr_storage dest_temp;
 	    memset(&dest_temp,0,sizeof(dest_temp));
 	    decode_socket(&dest_temp,cp,optlen);
-	    if(memcmp(&dest_temp,&PCM_dest_address,sizeof(dest_temp)) == 0)
+	    if(address_match(&dest_temp,&PCM_dest_address)
+	       && getportnumber(&dest_temp) == getportnumber(&PCM_dest_address))
 	      break; // nothing changed
 
 	    // new or changed PCM multicast group
@@ -595,7 +597,8 @@ struct session *lookup_session(const struct sockaddr * const sender,const uint32
   struct session *sp;
   pthread_mutex_lock(&Session_protect);
   for(sp = Sessions; sp != NULL; sp = sp->next){
-    if(sp->rtp_state_in.ssrc == ssrc && memcmp(&sp->sender,sender,sizeof(*sender)) == 0){
+    if(sp->rtp_state_in.ssrc == ssrc
+       && address_match(&sp->sender,sender)){
       // Found it
       if(sp->prev != NULL){
 	// Not at top of list; move it there

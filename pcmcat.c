@@ -1,4 +1,4 @@
-// $Id: pcmcat.c,v 1.20 2022/04/15 03:31:11 karn Exp $
+// $Id: pcmcat.c,v 1.21 2022/05/10 04:01:32 karn Exp $
 // Receive and stream PCM RTP data to stdout
 // Should emit .wav format by default to encode sample rate & parameters for subsequent encoding
 
@@ -220,7 +220,7 @@ int main(int argc,char *argv[]){
 struct pcmstream *lookup_session(const struct sockaddr *sender,const uint32_t ssrc){
   struct pcmstream *sp;
   for(sp = Pcmstream; sp != NULL; sp = sp->next){
-    if(sp->ssrc == ssrc && memcmp(&sp->sender,sender,sizeof(*sender)) == 0){
+    if(sp->ssrc == ssrc && address_match(&sp->sender,sender)){
       // Found it
       if(sp->prev != NULL){
 	// Not at top of bucket chain; move it there

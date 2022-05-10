@@ -1,4 +1,4 @@
-// $Id: pl.c,v 1.19 2022/03/12 10:51:41 karn Exp $
+// $Id: pl.c,v 1.20 2022/05/10 04:01:32 karn Exp $
 // PL tone decoder
 // Reads multicast PCM audio (mono only right now)
 // Copyright Jan 2019 Phil Karn, KA9Q
@@ -323,7 +323,7 @@ int main(int argc,char * const argv[]){
 static struct session *lookup_session(const struct sockaddr *sender,const uint32_t ssrc){
   struct session *sp;
   for(sp = Sessions; sp != NULL; sp = sp->next){
-    if(sp->rtp_state_in.ssrc == ssrc && memcmp(&sp->sender,sender,sizeof(*sender)) == 0){
+    if(sp->rtp_state_in.ssrc == ssrc && address_match(&sp->sender,sender)){
       // Found it
       if(sp->prev != NULL){
 	// Not at top of bucket chain; move it there

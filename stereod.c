@@ -1,4 +1,4 @@
-// $Id: stereod.c,v 1.1 2022/05/03 10:14:17 karn Exp $: opus.c,v 1.51 2021/03/19 03:13:14 karn Exp $
+// $Id: stereod.c,v 1.2 2022/05/10 04:01:32 karn Exp $: opus.c,v 1.51 2021/03/19 03:13:14 karn Exp $
 // Transcoder (multicast in/out) that decodes a FM composite signal @ 384 kHz
 // to a stereo signal @ 48 kHz
 #define _GNU_SOURCE 1
@@ -302,7 +302,8 @@ int fetch_socket(int status_fd){
     
     // We MUST ignore our own status packets, or we'll loop!
     // We don't actually use Local_status_source_address yet
-    if(memcmp(&Status_input_source_address, &Local_status_source_address, sizeof(Local_status_source_address)) == 0)
+    if(address_match(&Status_input_source_address,&Local_status_source_address)
+       && getportnumber(&Status_input_source_address) == getportnumber(&Local_status_source_address))
       continue;
     
     if(length <= 0){
@@ -519,7 +520,7 @@ struct session *lookup_session(const struct sockaddr * const sender,const uint32
   struct session *sp;
   pthread_mutex_lock(&Audio_protect);
   for(sp = Audio; sp != NULL; sp = sp->next){
-    if(sp->rtp_state_in.ssrc == ssrc && memcmp(&sp->sender,sender,sizeof(*sender)) == 0){
+    if(sp->rtp_state_in.ssrc == ssrc && address_match(&sp->sender,sender)){
       // Found it
       if(sp->prev != NULL){
 	// Not at top of list; move it there

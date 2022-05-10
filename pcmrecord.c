@@ -1,4 +1,4 @@
-// $Id: pcmrecord.c,v 1.17 2022/04/15 05:06:16 karn Exp $ 
+// $Id: pcmrecord.c,v 1.18 2022/05/10 04:01:32 karn Exp $ 
 // Read and record PCM audio streams
 // Adapted from iqrecord.c which is out of date
 // Copyright 2021 Phil Karn, KA9Q
@@ -250,7 +250,7 @@ void input_loop(){
       for(sp = Sessions;sp != NULL;sp=sp->next){
 	if(sp->ssrc == rtp.ssrc
 	   && rtp.type  == sp->type
-	   && memcmp(&sp->iq_sender,&Sender,sizeof(sp->iq_sender)) == 0)
+	   && address_match(&sp->iq_sender,&Sender))
 	  break;
       }
       if(sp == NULL) // Not found; create new one

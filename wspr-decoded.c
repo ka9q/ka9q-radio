@@ -1,4 +1,4 @@
-// $Id: wspr-decoded.c,v 1.1 2022/05/04 04:57:42 karn Exp $ 
+// $Id: wspr-decoded.c,v 1.2 2022/05/10 04:02:05 karn Exp $ 
 // Read and record PCM audio streams
 // Adapted from iqrecord.c which is out of date
 // Copyright 2021 Phil Karn, KA9Q
@@ -265,7 +265,7 @@ void input_loop(){
       for(sp = Sessions;sp != NULL;sp=sp->next){
 	if(sp->ssrc == rtp.ssrc
 	   && rtp.type == sp->type
-	   && memcmp(&sp->sender,&Sender,sizeof(sp->sender)) == 0)
+	   && address_match(&sp->sender,&Sender))
 	  break;
       }
       if(sp == NULL)

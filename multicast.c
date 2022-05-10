@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.72 2022/05/10 03:14:51 karn Exp $
+// $Id: multicast.c,v 1.73 2022/05/10 04:01:32 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -368,7 +368,7 @@ char const *formatsock(void const *s){
   }
 
   for(struct inverse_cache *ic = Inverse_cache_table; ic != NULL; ic = ic->next){
-    if(memcmp(&ic->sock,sa,slen) == 0){
+    if(address_match(&ic->sock,sa) && getportnumber(&ic->sock) == getportnumber(sa)){
       if(ic->prev == NULL)
 	return ic->hostport; // Already at top of list
 

@@ -1,4 +1,4 @@
-// $Id: packetd.c,v 1.1 2022/05/03 13:01:43 karn Exp $
+// $Id: packetd.c,v 1.2 2022/05/10 04:01:32 karn Exp $
 // AFSK/FM packet demodulator
 // Reads RTP PCM audio stream, emits decoded frames in multicast RTP
 // Copyright 2018, Phil Karn, KA9Q
@@ -255,7 +255,8 @@ n	getsockname(Status_out_fd,(struct sockaddr *)&Local_status_source_address,&len
     int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
 
     // We MUST ignore our own status packets, or we'll loop!
-    if(memcmp(&Status_input_source_address, &Local_status_source_address, sizeof(Local_status_source_address)) == 0)
+    if(address_match(&Status_input_source_address, &Local_status_source_address)
+       && getportnumber(&Status_input_source_address) == getportnumber(&Local_status_source_address))
       continue;
 
     if(length <= 0){
