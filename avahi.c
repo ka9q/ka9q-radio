@@ -1,4 +1,4 @@
-// $Id: avahi.c,v 1.14 2022/04/18 02:08:02 karn Exp $
+// $Id: avahi.c,v 1.15 2022/05/10 05:08:59 karn Exp $
 // Adapted from avahi's example file client-publish-service.c
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
@@ -286,7 +286,7 @@ static int create_services(AvahiClient *c,struct userdata *userdata) {
 	if(iter == 100)
 	  return -1;
 
-	address.data.ipv4.address = htonl(((unsigned int)0xef << 24) + (userdata->base_address & 0xffffff));
+	address.data.ipv4.address = htonl((0xefU << 24) + (userdata->base_address & 0xffffff));
 	userdata->base_address++;
 	char temp[1024];
 	int ret = avahi_entry_group_add_address(userdata->group, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, 0, userdata->dns_name,&address);
