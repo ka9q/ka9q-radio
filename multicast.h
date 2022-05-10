@@ -1,4 +1,4 @@
-// $Id: multicast.h,v 1.45 2022/05/10 03:14:51 karn Exp $
+// $Id: multicast.h,v 1.45 2022/05/10 03:14:51 karn Exp karn $
 // Multicast and RTP functions, constants and structures
 // Not every RTP module uses these yet, they need to be revised
 // Copyright 2018, Phil Karn, KA9Q
@@ -17,7 +17,7 @@
 #define NTP_EPOCH 2208988800UL // Seconds between Jan 1 1900 and Jan 1 1970
 
 #define RTP_MIN_SIZE 12  // min size of RTP header
-#define RTP_VERS 2
+#define RTP_VERS 2U
 #define RTP_MARKER 0x80  // Marker flag in mpt field
 
 // different PCM protocol types are used for flat audio and FM audio requiring de-emphasis
