@@ -1,4 +1,4 @@
-// $Id: multicast.h,v 1.45 2022/05/10 03:14:51 karn Exp karn $
+// $Id: multicast.h,v 1.46 2022/05/10 05:18:16 karn Exp $
 // Multicast and RTP functions, constants and structures
 // Not every RTP module uses these yet, they need to be revised
 // Copyright 2018, Phil Karn, KA9Q
