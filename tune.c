@@ -34,6 +34,7 @@ struct option Options[] = {
     {"radio", required_argument, NULL, 'r'},
     {"locale", required_argument, NULL, 'l'},
     {"verbose", no_argument, NULL, 'v'},
+    {NULL, 0, NULL, 0},
 };
 
 int main(int argc,char *argv[]){
