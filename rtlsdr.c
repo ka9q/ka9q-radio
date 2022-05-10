@@ -709,8 +709,8 @@ double true_freq(uint64_t freq){
 // For a requested frequency, give the actual tuning frequency
 // similar to the code in airspy.c since both use the R820T tuner
 double true_freq(uint64_t freq_hz){
-  const int VCO_MIN=1770000000u; // 1.77 GHz
-  const int VCO_MAX=(VCO_MIN << 1); // 3.54 GHz
+  const uint32_t VCO_MIN=1770000000u; // 1.77 GHz
+  const uint32_t VCO_MAX=(VCO_MIN << 1); // 3.54 GHz
   const int MAX_DIV = 5;
 
   // Clock divider set to 2 for the best resolution

@@ -281,7 +281,7 @@ void const *ntoh_rtp(struct rtp_header * const rtp,void const * const data){
 void *hton_rtp(void * const data, struct rtp_header const * const rtp){
   uint32_t *dp = data;
   int cc = rtp->cc & 0xf; // Ensure in range, <= 15
-  *dp++ = htonl(RTP_VERS << 30 | rtp->pad << 29 | rtp->extension << 28 | cc << 24 | rtp->marker << 23
+  *dp++ = htonl((unsigned int)RTP_VERS << 30 | rtp->pad << 29 | rtp->extension << 28 | cc << 24 | rtp->marker << 23
 		| (rtp->type & 0x7f) << 16 | rtp->seq);
   *dp++ = htonl(rtp->timestamp);
   *dp++ = htonl(rtp->ssrc);

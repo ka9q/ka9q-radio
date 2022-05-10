@@ -781,8 +781,8 @@ int rx_callback(airspy_transfer *transfer){
 // Not easy to fix without knowing the calibration parameters.
 // Best workaround is a GPSDO, which disables the correction
 double true_freq(uint64_t freq_hz){
-  int const VCO_MIN=1770000000u; // 1.77 GHz
-  int const VCO_MAX=(VCO_MIN << 1); // 3.54 GHz
+  uint32_t const VCO_MIN=1770000000u; // 1.77 GHz
+  uint32_t const VCO_MAX=(VCO_MIN << 1); // 3.54 GHz
   int const MAX_DIV = 5;
 
   // Clock divider set to 2 for the best resolution
