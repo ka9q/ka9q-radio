@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.71 2022/04/18 06:47:54 karn Exp $
+// $Id: multicast.c,v 1.72 2022/05/10 03:14:51 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -508,6 +508,36 @@ int pt_from_info(int const samprate,int const channels){
   return pt_table[s][channels-1];
 }
  
+// Compare IP addresses in sockaddr structures for equality
+int address_match(void const *arg1,void const *arg2){
+  struct sockaddr const *s1 = (struct sockaddr *)arg1;
+  struct sockaddr const *s2 = (struct sockaddr *)arg2;
+  if(s1->sa_family != s2->sa_family)
+    return 0;
+
+  switch(s1->sa_family){
+  case AF_INET:
+    {
+      struct sockaddr_in const *sinp1 = (struct sockaddr_in *)arg1;
+      struct sockaddr_in const *sinp2 = (struct sockaddr_in *)arg2;
+      if(memcmp(&sinp1->sin_addr,&sinp2->sin_addr,sizeof(sinp1->sin_addr)) == 0)
+	return 1;
+    }
+    break;
+  case AF_INET6:
+    {
+      struct sockaddr_in6 const *sinp1 = (struct sockaddr_in6 *)arg1;
+      struct sockaddr_in6 const *sinp2 = (struct sockaddr_in6 *)arg2;
+      if(memcmp(&sinp1->sin6_addr,&sinp2->sin6_addr,sizeof(sinp1->sin6_addr)) == 0)
+	return 1;
+    }
+    break;    
+  }
+  return 0;
+}
+
+
+
 // Return port number (in HOST order) in a sockaddr structure
 // Return -1 on error
 int getportnumber(void const *arg){

@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.166 2022/04/25 04:51:53 karn Exp $
+// $Id: monitor.c,v 1.167 2022/05/10 03:14:51 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -129,7 +129,7 @@ static void closedown(int);
 static void *display(void *);
 static void reset_session(struct session *sp,uint32_t timestamp);
 static struct session *lookup_session(const struct sockaddr_storage *,uint32_t);
-static struct session *create_session(struct sockaddr_storage const *,uint32_t);
+static struct session *create_session(void);
 static int sort_session_active(void),sort_session_total(void);
 static int close_session(struct session **);
 static int pa_callback(const void *,void *,unsigned long,const PaStreamCallbackTimeInfo*,PaStreamCallbackFlags,void *);
@@ -397,13 +397,13 @@ static void *sockproc(void *arg){
     if(!sp){
       // Not found
       pthread_mutex_lock(&Sess_mutex); // Protect Nsessions
-      sp = create_session(&sender,pkt->rtp.ssrc);
+      sp = create_session();
       pthread_mutex_unlock(&Sess_mutex); // Protect Nsessions
       if(!sp){
 	fprintf(stderr,"No room!!\n");
 	continue;
       }
-
+      sp->ssrc = pkt->rtp.ssrc;
       char const *id = lookupid(pkt->rtp.ssrc);
       if(id)
 	strlcpy(sp->id,id,sizeof(sp->id));
@@ -427,6 +427,8 @@ static void *sockproc(void *arg){
 	continue;
       }
     }
+    // Copy sender, in case the port number changed
+    memcpy(&sp->sender,&sender,sizeof(sender));
     
     // Insert onto queue sorted by sequence number, wake up thread
     struct packet *q_prev = NULL;
@@ -1087,23 +1089,17 @@ static int sort_session_total(void){
 static struct session *lookup_session(const struct sockaddr_storage *sender,const uint32_t ssrc){
   for(int i = 0; i < Nsessions; i++){
     struct session *sp = Sessions[i];
-    if(sp->ssrc == ssrc && memcmp(&sp->sender,sender,sizeof(*sender)) == 0){
-      // Found it.
+    if(sp->ssrc == ssrc && address_match(sender,&sp->sender))
       return sp;
-    }
   }
   return NULL;
 }
 // Create a new session, partly initialize
-static struct session *create_session(struct sockaddr_storage const *sender,uint32_t ssrc){
+static struct session *create_session(void){
   struct session * const sp = calloc(1,sizeof(*sp));
 
   if(sp == NULL)
     return NULL; // Shouldn't happen on modern machines!
-
-  // Initialize entry
-  memcpy(&sp->sender,sender,sizeof(*sender));
-  sp->ssrc = ssrc;
 
   // Put at end of list
   Sessions[Nsessions++] = sp;

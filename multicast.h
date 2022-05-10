@@ -1,4 +1,4 @@
-// $Id: multicast.h,v 1.44 2022/04/15 03:31:11 karn Exp $
+// $Id: multicast.h,v 1.45 2022/05/10 03:14:51 karn Exp $
 // Multicast and RTP functions, constants and structures
 // Not every RTP module uses these yet, they need to be revised
 // Copyright 2018, Phil Karn, KA9Q
@@ -152,6 +152,7 @@ int listen_mcast(void const *sock,char const *iface);
 int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int iface_len);
 int setportnumber(void *sock,uint16_t port);
 int getportnumber(void const *sock);
+int address_match(void const *arg1,void const *arg2);
 
 // Function to process incoming RTP packet headers
 // Returns number of samples dropped or skipped by silence suppression, if any
