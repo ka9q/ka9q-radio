@@ -53,7 +53,8 @@ by the **blocksize** parameter in the [global] section of the *radiod*
 configuration file; it applies to every receiver channel in that
 *radiod* instance. The energy measurement is converted to an average
 power, with 0 dBFS (decibels full scale) corresponding to a full scale
-peak sine wave at the receiver output.
+sine wave at the receiver output. (A full scale square wave would thus
+be +3 dBFS.)
 
 This averaging avoids exaggerated responses to noise impulses
 while still responding quickly to true signal level changes (20 ms
