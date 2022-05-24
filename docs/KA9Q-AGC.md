@@ -117,4 +117,5 @@ as it's being heard.
 
 As an aside, the 20 ms AGC cycle in *ka9q-radio* is roughly the same
 as the reaction time (tens of milliseconds) of the human acoustic
-reflex [Wikipedia](https://en.wikipedia.org/wiki/Acoustic_reflex). This might just be an interesting coincidence.
+reflex (see [Wikipedia](https://en.wikipedia.org/wiki/Acoustic_reflex)).
+This might just be an interesting coincidence.
