@@ -1,4 +1,4 @@
-// $Id: status.c,v 1.28 2022/04/15 05:06:16 karn Exp $
+// $Id: status.c,v 1.28 2022/04/15 05:06:16 karn Exp karn $
 // encode/decode status packets
 // Copyright 2020 Phil Karn, KA9Q
 
@@ -247,6 +247,10 @@ void send_poll(int fd,int ssrc){
   *bp++ = 1; // Command
   if(ssrc != 0)
     encode_int(&bp,OUTPUT_SSRC,ssrc); // poll specific SSRC
+  
+  uint32_t tag = random();
+  encode_int(&bp,COMMAND_TAG,tag);
+
   encode_eol(&bp);
   int const command_len = bp - cmdbuffer;
   if(send(fd, cmdbuffer, command_len, 0) != command_len)
