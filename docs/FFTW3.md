@@ -51,13 +51,17 @@ user data without performing the exhaustive search up front.
 A Note on the FFT
 -----------------
 
+The [Wikipedia article on the FFT](https://en.wikipedia.org/wiki/Fast_Fourier_transform) is a pretty comprehensive read, with many references.
+
 The original paper by James W Cooley and John W Tukey describing the
 FFT can be found here: [An Algorithm for the Machine Calculation of
 Complex Fourier
 Series](https://www.ams.org/journals/mcom/1965-19-090/S0025-5718-1965-0178586-1/S0025-5718-1965-0178586-1.pdf). It'd
 be hard to find a more widely used numerical algorithm in the modern
 world. Besides its traditional use in spectral analysis, the FFT is
-the basis of orthogonal frequency division multiplex (OFDM), which has
+used in many audio and image compression algorithms. It is also the
+basis of orthogonal frequency division multiplex (OFDM), which has
 pretty much taken over modern terrestrial digital communications. It
-is also heavily used in medical imaging, such as MRI, CT and PET scanners.
+is also heavily used in medical imaging, such as MRI, CT and PET
+scanners.
 
