@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.251 2022/05/10 06:54:58 karn Exp $
+// $Id: main.c,v 1.252 2022/05/25 03:05:31 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -34,8 +34,6 @@
 #include "config.h"
 
 // Configuration constants & defaults
-static char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
-
 static int const DEFAULT_IP_TOS = 48;
 static int const DEFAULT_MCAST_TTL = 1;
 static float const DEFAULT_BLOCKTIME = 20.0;
@@ -114,8 +112,11 @@ int main(int argc,char *argv[]){
 #endif
 
   int c;
-  while((c = getopt(argc,argv,"N:v")) != -1){
+  while((c = getopt(argc,argv,"N:vp:")) != -1){
     switch(c){
+    case 'p':
+      Fftw_plan_timelimit = strtod(optarg,NULL);
+      break;
     case 'v':
       Verbose++;
       break;
@@ -176,13 +177,6 @@ static int setup_frontend(char const *arg){
   if(Frontend_started)
     return 0;  // Only do this once
   Frontend.sdr.gain = 1; // In case it's never sent by front end
-
-  fftwf_init_threads();
-  fftwf_make_planner_thread_safe();
-  int r = fftwf_import_system_wisdom();
-  fprintf(stdout,"fftwf_import_system_wisdom() %s\n",r == 1 ? "succeeded" : "failed");
-  r = fftwf_import_wisdom_from_filename(Wisdom_file);
-  fprintf(stdout,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,r == 1 ? "succeeded" : "failed");
 
   pthread_mutex_init(&Frontend.sdr.status_mutex,NULL);
   pthread_cond_init(&Frontend.sdr.status_cond,NULL);
@@ -599,8 +593,6 @@ void *rtcp_send(void *arg){
 }
 static void closedown(int a){
   fprintf(stdout,"Received signal %d, exiting\n",a);
-  int r = fftwf_export_wisdom_to_filename(Wisdom_file);
-  fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) %s\n",Wisdom_file,r == 1 ? "succeeded" : "failed");
 
   if(a == SIGTERM)
     exit(0); // Return success when terminated by systemd

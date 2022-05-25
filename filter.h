@@ -1,4 +1,4 @@
-// $Id: filter.h,v 1.47 2022/04/25 01:40:17 karn Exp $
+// $Id: filter.h,v 1.48 2022/05/25 03:05:31 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -11,6 +11,10 @@
 #include <pthread.h>
 #include <complex.h>
 #include <fftw3.h>
+
+extern double Fftw_plan_timelimit;
+extern char const *Wisdom_file;
+extern int Nthreads;
 
 // Input can be REAL or COMPLEX
 // Output can be REAL, COMPLEX or CROSS_CONJ, i.e., COMPLEX with special cross conjugation for ISB

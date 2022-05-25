@@ -1,4 +1,4 @@
-// $Id: filter.c,v 1.87 2022/04/25 01:40:17 karn Exp $
+// $Id: filter.c,v 1.88 2022/05/25 03:05:31 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -23,7 +23,11 @@
 #include "misc.h"
 #include "filter.h"
 
+char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
+
+double Fftw_plan_timelimit = 10.0;
 int Nthreads = 1; 
+int Fftw_init = 0;
 
 static inline int modulo(int x,int const m){
   x = x < 0 ? x + m : x;
@@ -88,7 +92,18 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
   pthread_cond_init(&master->queue_cond,NULL);
 
   // Use multithreading (if configured) only for large forward FFTs
-  fftwf_plan_with_nthreads(Nthreads);
+  if(!Fftw_init){
+    fftwf_init_threads();
+    fftwf_plan_with_nthreads(Nthreads);
+    fftwf_make_planner_thread_safe();
+    int r = fftwf_import_system_wisdom();
+    fprintf(stdout,"fftwf_import_system_wisdom() %s\n",r == 1 ? "succeeded" : "failed");
+    r = fftwf_import_wisdom_from_filename(Wisdom_file);
+    fprintf(stdout,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,r == 1 ? "succeeded" : "failed");
+    fftwf_set_timelimit(Fftw_plan_timelimit);
+    Fftw_init = 1;
+  }
+    
 
   switch(in_type){
   default:
@@ -100,7 +115,7 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     assert(malloc_usable_size(master->input_buffer.c) >= N * sizeof(*master->input_buffer.c));
     memset(master->input_buffer.c, 0, (M-1)*sizeof(*master->input_buffer.c)); // Clear earlier state
     master->input.c = master->input_buffer.c + M - 1;
-    master->fwd_plan = fftwf_plan_dft_1d(N, master->input_buffer.c, master->fdomain[0], FFTW_FORWARD, FFTW_ESTIMATE);
+    master->fwd_plan = fftwf_plan_dft_1d(N, master->input_buffer.c, master->fdomain[0], FFTW_FORWARD, FFTW_PATIENT);
     break;
   case REAL:
     master->input_buffer.c = NULL;
@@ -108,9 +123,12 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     assert(malloc_usable_size(master->input_buffer.r) >= N * sizeof(*master->input_buffer.r));
     memset(master->input_buffer.r, 0, (M-1)*sizeof(*master->input_buffer.r)); // Clear earlier state
     master->input.r = master->input_buffer.r + M - 1;
-    master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_buffer.r, master->fdomain[0], FFTW_ESTIMATE);
+    master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_buffer.r, master->fdomain[0], FFTW_PATIENT);
     break;
   }
+  if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
+
   return master;
 }
 // Set up output (slave) side of filter (possibly one of several sharing the same input master)
@@ -154,7 +172,7 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     assert(slave->output_buffer.c != NULL);
     slave->output_buffer.r = NULL; // catch erroneous references
     slave->output.c = slave->output_buffer.c + osize - olen;
-    slave->rev_plan = fftwf_plan_dft_1d(osize,slave->f_fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_ESTIMATE);
+    slave->rev_plan = fftwf_plan_dft_1d(osize,slave->f_fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_PATIENT);
     break;
   case REAL:
     slave->bins = osize / 2 + 1;
@@ -165,10 +183,12 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     assert(slave->output_buffer.r != NULL);
     slave->output_buffer.c = NULL;
     slave->output.r = slave->output_buffer.r + osize - olen;
-    slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->f_fdomain,slave->output_buffer.r,FFTW_ESTIMATE);
+    slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->f_fdomain,slave->output_buffer.r,FFTW_PATIENT);
     break;
   }
   slave->blocknum = master->blocknum;
+  if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
   return slave;
 }
 
@@ -652,8 +672,12 @@ int window_filter(int const L,int const M,complex float * const response,float c
   assert(malloc_usable_size(response) >= N * sizeof(*response));
   // fftw_plan can overwrite its buffers, so we're forced to make a temp. Ugh.
   complex float * const buffer = fftwf_alloc_complex(N);
-  fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_FORWARD,FFTW_ESTIMATE);
-  fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_ESTIMATE);
+  fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_FORWARD,FFTW_PATIENT);
+  assert(fwd_filter_plan != NULL);
+  fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_PATIENT);
+  assert(rev_filter_plan != NULL);
+  if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
 
   // Convert to time domain
   memcpy(buffer,response,N * sizeof(*buffer));
@@ -720,10 +744,13 @@ int window_rfilter(int const L,int const M,complex float * const response,float 
   assert(buffer != NULL);
   float * const timebuf = fftwf_alloc_real(N);
   assert(timebuf != NULL);
-  fftwf_plan fwd_filter_plan = fftwf_plan_dft_r2c_1d(N,timebuf,buffer,FFTW_ESTIMATE);
+  fftwf_plan fwd_filter_plan = fftwf_plan_dft_r2c_1d(N,timebuf,buffer,FFTW_PATIENT);
   assert(fwd_filter_plan != NULL);
-  fftwf_plan rev_filter_plan = fftwf_plan_dft_c2r_1d(N,buffer,timebuf,FFTW_ESTIMATE);
+  fftwf_plan rev_filter_plan = fftwf_plan_dft_c2r_1d(N,buffer,timebuf,FFTW_PATIENT);
   assert(rev_filter_plan != NULL);
+  if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
+
 
   // Convert to time domain
   memcpy(buffer,response,(N/2+1)*sizeof(*buffer));

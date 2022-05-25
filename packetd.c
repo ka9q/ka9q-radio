@@ -1,4 +1,4 @@
-// $Id: packetd.c,v 1.2 2022/05/10 04:01:32 karn Exp $
+// $Id: packetd.c,v 1.3 2022/05/25 03:05:31 karn Exp $
 // AFSK/FM packet demodulator
 // Reads RTP PCM audio stream, emits decoded frames in multicast RTP
 // Copyright 2018, Phil Karn, KA9Q
@@ -114,11 +114,6 @@ int main(int argc,char *argv[]){
     fprintf(stdout,"seteuid: %s\n",strerror(errno));
 
   setlocale(LC_ALL,getenv("LANG"));
-  fftwf_init_threads();
-  fftwf_make_planner_thread_safe();
-  int r = fftwf_import_system_wisdom();
-  fprintf(stdout,"fftwf_import_system_wisdom() returns %d\n",r);
-
 
   FD_ZERO(&Fdset_template);
   // Unlike aprs and aprsfeed, stdout is not line buffered because each packet
