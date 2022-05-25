@@ -1,4 +1,4 @@
-// $Id: status.c,v 1.28 2022/04/15 05:06:16 karn Exp karn $
+// $Id: status.c,v 1.29 2022/05/25 03:04:58 karn Exp $
 // encode/decode status packets
 // Copyright 2020 Phil Karn, KA9Q
 
