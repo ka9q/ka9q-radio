@@ -115,6 +115,8 @@ enum status_type {
   PRESET,         // char string containing mode presets
   DEEMPH_TC,      // De-emphasis time constant (FM only)
   DEEMPH_GAIN,    // De-emphasis gain (FM only)
+  CONVERTER_OFFSET, // Frequency converter shift (if present)
+
 };
 
 int encode_string(unsigned char **bp,enum status_type type,void const *buf,int buflen);

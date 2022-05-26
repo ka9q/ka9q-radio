@@ -1,4 +1,4 @@
-// $Id: dump.c,v 1.35 2022/04/24 02:36:28 karn Exp $
+// $Id: dump.c,v 1.36 2022/05/26 21:10:26 karn Exp $
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdio.h>
@@ -305,6 +305,9 @@ void dump_metadata(unsigned char *buffer,int length){
       break;
     case DEEMPH_TC:
       printf("demph tc %.1f us",1e6*decode_float(cp,optlen));
+      break;
+    case CONVERTER_OFFSET:
+      printf("converter %.1f Hz",decode_float(cp,optlen));
       break;
     default:
       printf("unknown type %d length %d",type,optlen);

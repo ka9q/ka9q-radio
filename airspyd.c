@@ -1,4 +1,4 @@
-// $Id: airspyd.c,v 1.2 2022/05/10 05:07:49 karn Exp $
+// $Id: airspyd.c,v 1.4 2022/05/26 21:12:11 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #undef DEBUG_AGC
@@ -65,6 +65,7 @@ struct sdrstate {
 
   // Tuning
   double frequency;
+  double converter;   // Upconverter base frequency (usually 120 MHz)
   double calibration; // Frequency error
   int frequency_lock;
   int offset; // 1/4 of sample rate in real mode; 0 in complex mode
@@ -313,6 +314,7 @@ int main(int argc,char *argv[]){
   // Default to first (highest) sample rate on list
   sdr->samprate = config_getint(Dictionary,Name,"samprate",sdr->sample_rates[0]);
   sdr->offset = sdr->samprate/4;
+  sdr->converter = config_getfloat(Dictionary,Name,"converter",0);
 
   fprintf(stdout,"Set sample rate %'u Hz, offset %'d Hz\n",sdr->samprate,sdr->offset);
   ret = airspy_set_samplerate(sdr->device,(uint32_t)sdr->samprate);
@@ -668,6 +670,9 @@ void send_airspy_status(struct sdrstate *sdr,int full){
   encode_float(&bp,LOW_EDGE,-0.47 * sdr->samprate); // Should look at the actual filter curves
   encode_int32(&bp,OUTPUT_BITS_PER_SAMPLE,12); // Always
 
+  if(sdr->converter != 0)
+    encode_float(&bp,CONVERTER_OFFSET,sdr->converter);
+
   encode_eol(&bp);
   int len = bp - packet;
   assert(len < sizeof(packet));
@@ -816,20 +821,23 @@ double true_freq(uint64_t freq_hz){
   return (((double)r + offset) * pll_ref) / (double)(1 << (div_num + 16));
 }
 
-// set the airspy tuner to the requested frequency applying calibration offset,
-// 5 MHz offset and true frequency correction model for 820T synthesizer
-// the calibration offset is a holdover from the Funcube dongle and doesn't
+// set the airspy tuner to the requested frequency, applying:
+// Spyverter converter offset (120 MHz, or 0 if not in use)
+// TCXO calibration offset
+// Fs/4 = 5 MHz offset (firmware assumes library real->complex conversion, which we don't use)
+// Apply 820T synthesizer tuning step model
+
+// the TCXO calibration offset is a holdover from the Funcube dongle and doesn't
 // really fit the Airspy with its internal factory calibration
-// All this really works correctly only with a gpsdo
-// Remember, airspy firmware always adds Fs/4 MHz to frequency we give it.
+// All this really works correctly only with a gpsdo, forcing the calibration offset to 0
 
 double set_correct_freq(struct sdrstate *sdr,double freq){
-  int64_t intfreq = round(freq / (1 + sdr->calibration));
+  int64_t intfreq = round((freq + sdr->converter)/ (1 + sdr->calibration));
   int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
   ret = airspy_set_freq(sdr->device,intfreq - sdr->offset);
   assert(ret == AIRSPY_SUCCESS);
   double const tf = true_freq(intfreq);
-  sdr->frequency = tf * (1 + sdr->calibration);
+  sdr->frequency = tf * (1 + sdr->calibration) - sdr->converter;
   FILE *fp = fopen(sdr->frequency_file,"w");
   if(fp){
     if(fprintf(fp,"%lf\n",sdr->frequency) < 0)
