@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.153 2022/05/08 21:23:12 karn Exp $
+// $Id: control.c,v 1.154 2022/05/26 04:46:53 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -419,12 +419,12 @@ int main(int argc,char *argv[]){
 
     struct timespec now;
     clock_gettime(CLOCK_REALTIME,&now);
-    if(time_cmp(&now,&next_radio_poll) == 1){
+    if(time_cmp(&now,&next_radio_poll) > 0){
       // Time to poll radio
       send_poll(Ctl_fd,Ssrc);
       random_time(&next_radio_poll,radio_poll_interval,random_interval);
     }
-    if(time_cmp(&now,&next_fe_poll) == 1){
+    if(time_cmp(&now,&next_fe_poll) > 0){
       // Time to poll front end
       if(Frontend.input.ctl_fd > 2)
 	send_poll(Frontend.input.ctl_fd,0);
@@ -439,21 +439,10 @@ int main(int argc,char *argv[]){
 
     // Receive timeout at whichever event occurs first
     struct timespec timeout;
-    if(time_cmp(&next_radio_poll,&next_fe_poll) == 1){
-      timeout.tv_sec = next_fe_poll.tv_sec - now.tv_sec;
-      timeout.tv_nsec = next_fe_poll.tv_nsec - now.tv_nsec;
-      if(timeout.tv_nsec < 0){
-	timeout.tv_nsec += 1000000000;
-	timeout.tv_sec -= 1;
-      }
-    } else {
-      timeout.tv_sec = next_radio_poll.tv_sec - now.tv_sec;
-      timeout.tv_nsec = next_radio_poll.tv_nsec - now.tv_nsec;
-      if(timeout.tv_nsec < 0){
-	timeout.tv_nsec += 1000000000;
-	timeout.tv_sec -= 1;
-      }
-    }
+    if(time_cmp(&next_radio_poll,&next_fe_poll) > 0)
+      time_sub(&timeout,&next_fe_poll,&now);
+    else
+      time_sub(&timeout,&next_radio_poll,&now);
 
     // Immediate poll if timeout is negative
     if(timeout.tv_sec < 0){

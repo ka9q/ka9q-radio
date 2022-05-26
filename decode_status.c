@@ -1,4 +1,4 @@
-// $Id: decode_status.c,v 1.16 2022/04/15 05:06:16 karn Exp $
+// $Id: decode_status.c,v 1.17 2022/05/26 04:46:53 karn Exp $
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
 #endif
@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include <errno.h>
 #include "misc.h"
 #include "radio.h"
 #include "status.h"
@@ -26,12 +27,12 @@ void *sdr_status(void *arg){
   struct timespec next_fe_poll;
   // Pick soon but still random times for the first polls
   random_time(&next_fe_poll,0,random_interval);
-  const int fe_poll_interval = 995000;
+  const int fe_poll_interval = 975000;
 
   while(1){
     struct timespec now;
     clock_gettime(CLOCK_REALTIME,&now);
-    if(now.tv_sec >= next_fe_poll.tv_sec || (now.tv_sec == next_fe_poll.tv_sec && now.tv_nsec >= next_fe_poll.tv_nsec)){
+    if(time_cmp(&now,&next_fe_poll) > 0){
       // Poll front end
       if(Frontend.input.ctl_fd > 2)
 	send_poll(Frontend.input.ctl_fd,0);
@@ -42,20 +43,15 @@ void *sdr_status(void *arg){
     if(frontend->input.status_fd > 2)
       FD_SET(frontend->input.status_fd,&fdset);
 
-    int n = frontend->input.status_fd + 1;
-
     struct timespec timeout;
-    timeout.tv_sec = next_fe_poll.tv_sec - now.tv_sec;
-    timeout.tv_nsec = next_fe_poll.tv_nsec - now.tv_nsec;
-    if(timeout.tv_nsec < 0){
-      timeout.tv_nsec += 1000000000;
-      timeout.tv_sec -= 1;
-    }
+    time_sub(&timeout,&next_fe_poll,&now);
+    int n = frontend->input.status_fd + 1;
     n = pselect(n,&fdset,NULL,NULL,&timeout,NULL);
 
-    if(n <= 0)
+    if(n <= 0){
+      fprintf(stdout,"sdr_status pselect: %s\n",strerror(errno));
       continue;
-
+    }
     if(FD_ISSET(frontend->input.status_fd,&fdset)){
       // Status Update from SDR
       unsigned char buffer[8192];
