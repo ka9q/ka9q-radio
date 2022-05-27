@@ -1,4 +1,4 @@
-// $Id: decode_status.c,v 1.17 2022/05/26 04:46:53 karn Exp $
+// $Id: decode_status.c,v 1.18 2022/05/27 23:45:15 karn Exp $
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
 #endif
@@ -49,7 +49,8 @@ void *sdr_status(void *arg){
     n = pselect(n,&fdset,NULL,NULL,&timeout,NULL);
 
     if(n <= 0){
-      fprintf(stdout,"sdr_status pselect: %s\n",strerror(errno));
+      if(n < 0)
+	fprintf(stdout,"sdr_status pselect: %s\n",strerror(errno));
       continue;
     }
     if(FD_ISSET(frontend->input.status_fd,&fdset)){

@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.79 2022/04/25 02:08:30 karn Exp $
+// $Id: radio_status.c,v 1.80 2022/05/27 23:45:39 karn Exp $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -269,8 +269,11 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
 	  float const old_low = demod->filter.min_IF;
 	  float const old_high = demod->filter.max_IF;
 	  float const old_kaiser = demod->filter.kaiser_beta;
+	  float const old_shift = demod->tune.shift;
 
 	  loadmode(demod,Modetable,demod->preset,1);
+	  if(old_shift != demod->tune.shift)
+	    set_freq(demod,demod->tune.freq + demod->tune.shift - old_shift);
 	  if(demod->filter.min_IF != old_low || demod->filter.max_IF != old_high || demod->filter.kaiser_beta != old_kaiser)
 	    new_filter_needed = 1;
 
@@ -478,6 +481,8 @@ static int encode_radio_status(struct frontend *frontend,struct demod const *dem
   encode_float(&bp,GAIN,voltage2dB(demod->output.gain)); // linear amplitude -> dB; fixed in FM
   encode_float(&bp,SQUELCH_OPEN,power2dB(demod->squelch_open));
   encode_float(&bp,SQUELCH_CLOSE,power2dB(demod->squelch_close));
+  if(demod->preset && strlen(demod->preset) > 0)
+     encode_string(&bp,PRESET,demod->preset,strlen(demod->preset));
 
   // Mode-specific params
   switch(demod->demod_type){
