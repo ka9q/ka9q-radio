@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.80 2022/05/27 23:45:39 karn Exp $
+// $Id: radio_status.c,v 1.81 2022/05/28 00:07:55 karn Exp $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -481,9 +481,11 @@ static int encode_radio_status(struct frontend *frontend,struct demod const *dem
   encode_float(&bp,GAIN,voltage2dB(demod->output.gain)); // linear amplitude -> dB; fixed in FM
   encode_float(&bp,SQUELCH_OPEN,power2dB(demod->squelch_open));
   encode_float(&bp,SQUELCH_CLOSE,power2dB(demod->squelch_close));
-  if(demod->preset && strlen(demod->preset) > 0)
-     encode_string(&bp,PRESET,demod->preset,strlen(demod->preset));
-
+  {
+    int len = strlen(demod->preset);
+    if(len > 0 && len < sizeof(demod->preset))
+      encode_string(&bp,PRESET,demod->preset,len);
+  }
   // Mode-specific params
   switch(demod->demod_type){
   default:
