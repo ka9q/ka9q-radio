@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.130 2022/06/05 02:28:22 karn Exp $
+// $Id: fm.c,v 1.130 2022/06/05 02:28:22 karn Exp karn $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -51,15 +51,13 @@ void *demod_fm(void *arg){
 	     demod->filter.kaiser_beta);
   
   int squelch_state = 0; // Number of blocks for which squelch remains open
-  // Reasonable starting gain
-  demod->output.gain = (demod->output.headroom *  M_1_PI * demod->output.samprate) / fabsf(demod->filter.min_IF - demod->filter.max_IF);
-
   int const N = demod->filter.out->olen;
   float const one_over_olen = 1. / N; // save some divides
 
-
-
   while(!demod->terminate){
+    if(downconvert(demod) == -1) // received terminate
+      break;
+
     // Constant gain used by FM only; automatically adjusted by AGC in linear modes
     // We do this in the loop because BW can change
     // Force reasonable parameters if they get messed up or aren't initialized
@@ -68,66 +66,11 @@ void *demod_fm(void *arg){
     float bb_power = 0;
     float avg_amp = 0;
     float amplitudes[N];
-    complex float * const buffer = demod->filter.out->output.c;
-
-    double remainder;
-    int flip;
-    int shift;
-
-    // To save CPU time when the front end is completely tuned away from us, block until the front
-    // end status changes rather than process zeroes
-    pthread_mutex_lock(&Frontend.sdr.status_mutex);
-    while(1){
-      if(demod->terminate){
-	// Note: relies on periodic front end status messages for polling
-	pthread_mutex_unlock(&Frontend.sdr.status_mutex);
-	goto quit;
-      }
-      // Note: tune.shift ignored in FM mode
-      demod->tune.second_LO = Frontend.sdr.frequency - demod->tune.freq;
-      double const freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
-      if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
-			Frontend.in->impulse_length,
-			Frontend.sdr.samprate,
-			&flip,&shift,&remainder,freq) == 0)
-	break;      // We can get at least part of the spectrum we want
-
-      // No front end coverage of our passband; wait for it to retune
-      demod->sig.bb_power = 0;
-      demod->output.level = 0;
-      struct timespec timeout;
-      clock_gettime(CLOCK_REALTIME,&timeout);
-      timeout.tv_sec += 1; // 1 sec in the future
-      pthread_cond_timedwait(&Frontend.sdr.status_cond,&Frontend.sdr.status_mutex,&timeout);
-    }
-    pthread_mutex_unlock(&Frontend.sdr.status_mutex);
-    // first pass: measure average power and compute sample amplitudes for variance calculation
-
-#undef FULL
-    /* Save time by not applying the fine frequency shift.  The error
-       will be small if the blocktime is small (100 Hz for 10 ms).
-       This would normally be executed even on round frequency
-       channels because of front end fractional-N and
-       calibration offsets */
-
-#if FULL
-    set_osc(&demod->fine,remainder, demod->tune.doppler_rate);
-#endif
-    execute_filter_output(demod->filter.out,-shift);
-
-#if 1
-    demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning
-#else
-    demod->sig.n0 = Frontend.n0;
-#endif
+    complex float * const buffer = demod->filter.out->output.c; // for convenience
 
     for(int n = 0; n < N; n++){
       // Apply frequency shifts
-#if FULL
-      complex float s = buffer[n] * flip * step_osc(&demod->fine);
-#else
-      complex float s = buffer[n] * flip;
-#endif
+      complex float s = buffer[n] * step_osc(&demod->fine);
       buffer[n] = s;
       bb_power += cnrmf(s);
       avg_amp += amplitudes[n] = approx_magf(s); // Saves a few % CPU on lots of demods vs sqrtf(t)

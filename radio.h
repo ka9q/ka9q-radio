@@ -1,4 +1,4 @@
-// $Id: radio.h,v 1.143 2022/06/05 01:49:43 karn Exp $
+// $Id: radio.h,v 1.143 2022/06/05 01:49:43 karn Exp karn $
 // Internal structures and functions of the 'radio' program
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
@@ -163,6 +163,9 @@ struct demod {
     float kaiser_beta;  // settable
     bool isb;           // Independent sideband mode (settable, currently unimplemented)
     float *energies;    // Vector of smoothed bin energies
+    int bin_shift;      // FFT bin shift for frequency conversion
+    double remainder;   // Frequency remainder for fine tuning
+    complex double phase_adjust; // Block rotation of phase
   } filter;
 
   enum demod_type demod_type;  // Index into demodulator table (AM, FM, Linear)
@@ -280,7 +283,8 @@ int start_demod(struct demod * restrict demod);
 int kill_demod(struct demod ** restrict demod);
 int init_demod_streams(struct demod * restrict demod);
 double set_first_LO(struct demod const * restrict, double);
-float estimate_noise(struct demod *demod,int rotate);
+float estimate_noise(struct demod *demod,int shift);
+int downconvert(struct demod *demod);
 
 void *proc_samples(void *);
 void *estimate_n0(void *);

@@ -54,83 +54,13 @@ void *demod_linear(void *arg){
   const int lock_limit = lock_time * demod->output.samprate;
   init_pll(&demod->pll.pll,(float)demod->output.samprate);
 
-  complex double phase_adjust = 1;
-  int last_shift = 0;
-
   while(!demod->terminate){
-    // To save CPU time when the front end is completely tuned away from us, block until the front
-    // end status changes rather than process zeroes. We must still poll the terminate flag.
-    pthread_mutex_lock(&Frontend.sdr.status_mutex);
-    double remainder;
-    int shift;
+    if(downconvert(demod) == -1) // received terminate
+      break;
 
-    while(1){
-      if(demod->terminate){
-	pthread_mutex_unlock(&Frontend.sdr.status_mutex);
-	goto quit;
-      }
-      demod->tune.second_LO = Frontend.sdr.frequency - demod->tune.freq;
-      double const freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
-      if(new_compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
-			Frontend.in->impulse_length,
-			Frontend.sdr.samprate,
-			&shift,&remainder,freq) == 0)
-	break; // We can get at least part of the spectrum we want
-
-      // No front end coverage of our passband; wait for it to retune
-      demod->sig.bb_power = 0;
-      demod->output.level = 0;
-      struct timespec timeout; // Needed to avoid deadlock if no front end is available
-      clock_gettime(CLOCK_REALTIME,&timeout);
-      timeout.tv_sec += 1; // 1 sec in the future
-      pthread_cond_timedwait(&Frontend.sdr.status_cond,&Frontend.sdr.status_mutex,&timeout);
-    }
-    pthread_mutex_unlock(&Frontend.sdr.status_mutex);
-
-    const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
-
-    // Reasonable parameters?
-    assert(demod->output.channels == 1 || demod->output.channels == 2);
-    assert(isfinite(demod->tune.doppler_rate));
-    assert(isfinite(demod->tune.shift));
-    assert(isfinite(demod->output.headroom));
-    assert(demod->output.headroom > 0);
-    assert(isfinite(demod->linear.hangtime));
-    assert(demod->linear.hangtime >= 0);
-    assert(isfinite(demod->linear.recovery_rate));
-    assert(demod->linear.recovery_rate > 1);
-    assert(isfinite(demod->output.gain));
-    assert(demod->output.gain > 0);
-    assert(isfinite(demod->linear.threshold));
-    assert(demod->linear.threshold >= 0);
-    assert(isfinite(demod->linear.loop_bw));
-    assert(demod->linear.loop_bw > 0);
-
-    demod->tp1 = shift;
-    demod->tp2 = remainder;
     set_pll_params(&demod->pll.pll,demod->linear.loop_bw,damping);
-
-    // set these before execute_filter blocks
-    set_osc(&demod->fine,remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate));
     set_osc(&demod->shift,demod->tune.shift/demod->output.samprate,0);
-
-    execute_filter_output(demod->filter.out,-shift); // block until new data frame
-#if 1
-    demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning
-#else
-    demod->sig.n0 = Frontend.n0;
-#endif
-
-    // Block phase adjustment (folded into the fine tuning osc) is in two parts:
-    // (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
-    // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
-    if(shift != last_shift){
-      const int V = 1 + (Frontend.in->ilen / (Frontend.in->impulse_length - 1)); // Overlap factor
-      phase_adjust = cispi(-2.0*(shift % V)/(float)V); // Amount to rotate on each block for shifts not divisible by V
-      demod->fine.phasor *= cispi((shift - last_shift) / (2.0 * (V-1))); // One time adjust for shift change
-      last_shift = shift;
-    }
-    demod->fine.phasor *= phase_adjust;
+    const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
 
     // First pass over sample block.
     // Perform fine frequency downconversion & block phase correction
@@ -157,16 +87,21 @@ void *demod_linear(void *arg){
 	run_pll(&demod->pll.pll,phase);
 	signal += crealf(s) * crealf(s); // signal in phase with VCO is signal + noise power
 	noise += cimagf(s) * cimagf(s);  // signal in quadrature with VCO is assumed to be noise power
-      }
+      } else
+	energy += cnrmf(s); // With PLL on, derive energy from signal + noise
+
       // Apply frequency shift
       // Must be done after PLL, which operates only on DC
       if(demod->shift.freq != 0)
 	s *= step_osc(&demod->shift);
 
-      energy += cnrmf(s);
       buffer[n] = s;
     }
-    energy /= N;
+    if(demod->linear.pll)
+      energy = (signal + noise) / N;
+    else
+      energy /= N;
+
     demod->sig.bb_power = energy; // Baseband power, average over block
 
 

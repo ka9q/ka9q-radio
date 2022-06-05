@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.217 2022/06/05 01:49:43 karn Exp $
+// $Id: radio.c,v 1.217 2022/06/05 01:49:43 karn Exp karn $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -825,4 +825,87 @@ void *demod_reaper(void *arg){
     sleep(1);
   }
   return NULL;
+}
+// Run digital downconverter, common to all demods
+// 1. Block until front end is in range
+// 2. compute FFT bin shift & fine tuning remainder
+// 3. Set fine tuning oscillator frequency & phase
+// 4. Run output half (IFFT) of filter
+// 5. Update noise estimate
+
+// Baseband samples placed in demod->filter.out->output.c
+int downconvert(struct demod *demod){
+  // To save CPU time when the front end is completely tuned away from us, block until the front
+    // end status changes rather than process zeroes. We must still poll the terminate flag.
+    pthread_mutex_lock(&Frontend.sdr.status_mutex);
+    int shift;
+    double remainder;
+
+    while(1){
+      if(demod->terminate){
+	pthread_mutex_unlock(&Frontend.sdr.status_mutex);
+	return -1;
+      }
+      demod->tune.second_LO = Frontend.sdr.frequency - demod->tune.freq;
+      double const freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
+      if(new_compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
+			Frontend.in->impulse_length,
+			Frontend.sdr.samprate,
+			&shift,&remainder,freq) == 0)
+	break; // We can get at least part of the spectrum we want
+
+      // No front end coverage of our passband; wait for it to retune
+      demod->sig.bb_power = 0;
+      demod->output.level = 0;
+      struct timespec timeout; // Needed to avoid deadlock if no front end is available
+      clock_gettime(CLOCK_REALTIME,&timeout);
+      timeout.tv_sec += 1; // 1 sec in the future
+      pthread_cond_timedwait(&Frontend.sdr.status_cond,&Frontend.sdr.status_mutex,&timeout);
+    }
+    pthread_mutex_unlock(&Frontend.sdr.status_mutex);
+
+    // Reasonable parameters?
+    assert(demod->output.channels == 1 || demod->output.channels == 2);
+    assert(isfinite(demod->tune.doppler_rate));
+    assert(isfinite(demod->tune.shift));
+    assert(isfinite(demod->output.headroom));
+    assert(demod->output.headroom > 0);
+    assert(isfinite(demod->linear.hangtime));
+    assert(demod->linear.hangtime >= 0);
+    assert(isfinite(demod->linear.recovery_rate));
+    assert(demod->linear.recovery_rate > 1);
+    assert(isfinite(demod->output.gain));
+    assert(demod->output.gain > 0);
+    assert(isfinite(demod->linear.threshold));
+    assert(demod->linear.threshold >= 0);
+    assert(isfinite(demod->linear.loop_bw));
+    assert(demod->linear.loop_bw > 0);
+
+    demod->tp1 = shift;
+    demod->tp2 = remainder;
+
+    // set fine tuning frequency & phase. Do before execute_filter blocks (can't remember why)
+    if(remainder != demod->filter.remainder){
+      set_osc(&demod->fine,remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate));
+      demod->filter.remainder = remainder;
+    }
+
+    // Block phase adjustment (folded into the fine tuning osc) is in two parts:
+    // (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
+    // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
+    if(shift != demod->filter.bin_shift){
+      const int V = 1 + (Frontend.in->ilen / (Frontend.in->impulse_length - 1)); // Overlap factor
+      demod->filter.phase_adjust = cispi(-2.0*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
+      demod->fine.phasor *= cispi((shift - demod->filter.bin_shift) / (2.0 * (V-1))); // One time adjust for shift change
+      demod->filter.bin_shift = shift;
+    }
+    demod->fine.phasor *= demod->filter.phase_adjust;
+    execute_filter_output(demod->filter.out,-shift); // block until new data frame
+#if 1
+    demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
+#else
+    demod->sig.n0 = Frontend.n0;
+#endif
+
+    return 0;
 }
