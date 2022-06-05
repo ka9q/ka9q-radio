@@ -1,4 +1,4 @@
-// $Id: linear.c,v 1.110 2022/06/05 02:29:35 karn Exp $
+// $Id: linear.c,v 1.110 2022/06/05 02:29:35 karn Exp karn $
 
 // General purpose linear demodulator
 // Handles USB/IQ/CW/etc, all modes but FM
@@ -114,12 +114,6 @@ void *demod_linear(void *arg){
     set_osc(&demod->fine,remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate));
     set_osc(&demod->shift,demod->tune.shift/demod->output.samprate,0);
 
-    // Apply PLL & frequency shift, measure energy
-    complex float * const buffer = demod->filter.out->output.c; // Working buffer
-    float signal = 0; // PLL only
-    float noise = 0;  // PLL only
-    float energy = 0;
-
     execute_filter_output(demod->filter.out,-shift); // block until new data frame
 #if 1
     demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning
@@ -127,12 +121,11 @@ void *demod_linear(void *arg){
     demod->sig.n0 = Frontend.n0;
 #endif
 
-    // Block phase adjustment is in two parts:
+    // Block phase adjustment (folded into the fine tuning osc) is in two parts:
     // (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
     // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
-    // I found this second term empirically, I don't know why it works!
-    const int V = 1 + (Frontend.in->ilen / (Frontend.in->impulse_length - 1)); // Overlap factor
     if(shift != last_shift){
+      const int V = 1 + (Frontend.in->ilen / (Frontend.in->impulse_length - 1)); // Overlap factor
       phase_adjust = cispi(-2.0*(shift % V)/(float)V); // Amount to rotate on each block for shifts not divisible by V
       demod->fine.phasor *= cispi((shift - last_shift) / (2.0 * (V-1))); // One time adjust for shift change
       last_shift = shift;
@@ -140,10 +133,16 @@ void *demod_linear(void *arg){
     demod->fine.phasor *= phase_adjust;
 
     // First pass over sample block.
-    // Perform fine frequency downconversion
+    // Perform fine frequency downconversion & block phase correction
     // Run the PLL (if enabled)
     // Apply post-downconversion shift (if enabled, e.g. for CW)
     // Measure energy
+    // Apply PLL & frequency shift, measure energy
+    complex float * const buffer = demod->filter.out->output.c; // Working buffer
+    float signal = 0; // PLL only
+    float noise = 0;  // PLL only
+    float energy = 0;
+
     for(int n=0; n<N; n++){
       complex float s = buffer[n] * step_osc(&demod->fine);
       
