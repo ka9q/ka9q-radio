@@ -1,4 +1,4 @@
-// $Id: misc.h,v 1.25 2022/04/18 02:08:43 karn Exp $
+// $Id: misc.h,v 1.26 2022/06/05 22:04:20 karn Exp $
 // Miscellaneous constants, macros and function prototypes
 // Copyright 2018 Phil Karn, KA9Q
 #ifndef _MISC_H
@@ -51,9 +51,11 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 #define sincospif(x,s,c) __sincospif(x,s,c)
 
 #else // !__APPLE__
+// Not apple (Linux, etc)
 
 #include <malloc.h>
 #define pthread_setname(x) pthread_setname_np(pthread_self(),x)
+// Does anyone implement these natively for Linux?
 #define sincospi(x,s,c) sincos(x*M_PI,s,c)
 #define sincospif(x,s,c) sincosf(x*M_PI,s,c)
 
