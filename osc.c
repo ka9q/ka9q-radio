@@ -1,4 +1,4 @@
-// $Id: osc.c,v 1.15 2022/03/27 18:44:19 karn Exp $
+// $Id: osc.c,v 1.16 2022/06/05 22:55:09 karn Exp $
 // Complex oscillator object routines
 
 #define _GNU_SOURCE 1
@@ -50,20 +50,20 @@ void set_osc(struct osc *osc,double f,double r){
 
 static void renorm_osc(struct osc *osc){
   if(!is_phasor_init(osc->phasor))
-     return;
+    osc->phasor = 1; // In case we've been stepping an uninitialized osc
      
   osc->steps = 0;
   osc->phasor /= cabs(osc->phasor);
 
-  if(osc->rate != 0)
+  if(osc->rate != 0){
+    assert(is_phasor_init(osc->phasor_step)); // was init by set_osc()
     osc->phasor_step /= cabs(osc->phasor_step);
+  }
 }
 
 // Step oscillator through one sample, return complex phase
 complex double step_osc(struct osc *osc){
-  complex double r;
-
-  r = osc->phasor;
+  complex double const r = osc->phasor;
   if(osc->rate != 0)
     osc->phasor_step *= osc->phasor_step_step;
 

@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.217 2022/06/05 01:49:43 karn Exp karn $
+// $Id: radio.c,v 1.219 2022/06/05 22:55:53 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -602,7 +602,7 @@ double set_first_LO(struct demod const * const demod,double const first_LO){
 // by Renfors, Yli-Kaakinen & Harris, IEEE Trans on Signal Processing, Aug 2014
 // Note: equation (12) as published appears to be in error; the exponent should have no minus sign
 // Actually we just seem to be using opposite sign conventions for 'shift'
-int new_compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq){
+int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq){
   double const hzperbin = (double)samprate / N;
 #if 0
   // Round to multiples of V (not needed anymore)
@@ -625,37 +625,6 @@ int new_compute_tuning(int N, int M, int samprate,int *shift,double *remainder, 
     return -1; // Demod thread will wait for the front end status to change
   return 0;
 }
-
-// Compute FFT bin shift and time-domain fine tuning offset for specified LO frequency
-// N = input fft length
-// M = input buffer overlap
-// samprate = input sample rate
-// flip = invert (or not) every baseband sample
-// remainder = fine LO frequency (double)
-// freq = frequency to mix by (double)
-int compute_tuning(int N, int M, int samprate,int *flip,int *shift,double *remainder, double freq){
-  double const hzperbin = (double)samprate / N;
-  int const quantum = N / (M - 1);       // rotate by multiples of this number of bins due to overlap-save
-                                         // check for non-zero remainder and warn?
-  int const r = quantum * round(freq/(hzperbin * quantum));
-  if(shift)
-    *shift = r;
-
-  if(remainder)
-    *remainder = freq - (r * hzperbin);
-
-  if(flip)
-    *flip = (r % (2*quantum)) ? -1 : +1; // Flip fine osc phase on every other shift (not sure why, but it works)
-
-  // Check if there's no overlap in the range we want
-  // Intentionally allow real input to go both ways, for front ends with high and low side injection
-  // Even though only one works, this lets us manually check for images
-  // No point in tuning to aliases, though
-  if(abs(r) > N/2)
-    return -1; // Demod thread will wait for the front end status to change
-  return 0;
-}
-
 
 /* Session announcement protocol - highly experimental, off by default
    The whole point was to make it easy to use VLC and similar tools, but they either don't actually implement SAP (e.g. in iOS)
@@ -848,7 +817,7 @@ int downconvert(struct demod *demod){
       }
       demod->tune.second_LO = Frontend.sdr.frequency - demod->tune.freq;
       double const freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
-      if(new_compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
+      if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
 			Frontend.in->impulse_length,
 			Frontend.sdr.samprate,
 			&shift,&remainder,freq) == 0)

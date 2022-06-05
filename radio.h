@@ -1,4 +1,4 @@
-// $Id: radio.h,v 1.143 2022/06/05 01:49:43 karn Exp karn $
+// $Id: radio.h,v 1.145 2022/06/05 22:55:53 karn Exp $
 // Internal structures and functions of the 'radio' program
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
@@ -277,8 +277,7 @@ int demod_type_from_name(char const *name);
 int loadmode(struct demod *demod,dictionary const *table,char const *mode,int use_defaults);
 
 double set_freq(struct demod * restrict ,double);
-int new_compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq);
-int compute_tuning(int N, int M, int samprate,int *flip,int *shift,double *remainder, double freq);
+int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq);
 int start_demod(struct demod * restrict demod);
 int kill_demod(struct demod ** restrict demod);
 int init_demod_streams(struct demod * restrict demod);
