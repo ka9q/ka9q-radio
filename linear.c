@@ -1,4 +1,4 @@
-// $Id: linear.c,v 1.110 2022/06/05 02:29:35 karn Exp karn $
+// $Id: linear.c,v 1.111 2022/06/05 22:06:13 karn Exp karn $
 
 // General purpose linear demodulator
 // Handles USB/IQ/CW/etc, all modes but FM
@@ -47,12 +47,14 @@ void *demod_linear(void *arg){
 	     demod->filter.max_IF/demod->output.samprate,
 	     demod->filter.kaiser_beta);
   
+  set_osc(&demod->fine,0,0); // Ensure initialization
   // Coherent mode parameters
   float const damping = DEFAULT_PLL_DAMPING;
   float const lock_time = DEFAULT_PLL_LOCKTIME;
 
   const int lock_limit = lock_time * demod->output.samprate;
   init_pll(&demod->pll.pll,(float)demod->output.samprate);
+
 
   while(!demod->terminate){
     if(downconvert(demod) == -1) // received terminate

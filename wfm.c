@@ -1,4 +1,4 @@
-// $Id: wfm.c,v 1.32 2022/06/05 22:54:05 karn Exp $
+// $Id: wfm.c,v 1.32 2022/06/05 22:54:05 karn Exp karn $
 // Wideband FM demodulation and squelch
 // Adapted from narrowband demod
 // Copyright 2020, Phil Karn, KA9Q
@@ -62,7 +62,7 @@ void *demod_wfm(void *arg){
 	     demod->filter.min_IF/demod->output.samprate,
 	     demod->filter.max_IF/demod->output.samprate,
 	     demod->filter.kaiser_beta);
-  
+  set_osc(&demod->fine,0,0); // Ensure initialization  
 
   float lastaudio = 0; // state for impulse noise removal
   int squelch_state = 0; // Number of blocks for which squelch remains open

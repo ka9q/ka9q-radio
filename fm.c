@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.130 2022/06/05 02:28:22 karn Exp karn $
+// $Id: fm.c,v 1.131 2022/06/05 22:06:13 karn Exp karn $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -49,6 +49,8 @@ void *demod_fm(void *arg){
 	     demod->filter.min_IF/demod->output.samprate,
 	     demod->filter.max_IF/demod->output.samprate,
 	     demod->filter.kaiser_beta);
+  
+  set_osc(&demod->fine,0,0); // Ensure initialization
   
   int squelch_state = 0; // Number of blocks for which squelch remains open
   int const N = demod->filter.out->olen;
