@@ -1,4 +1,4 @@
-// $Id: wfm.c,v 1.31 2022/06/05 02:28:50 karn Exp $
+// $Id: wfm.c,v 1.32 2022/06/05 22:54:05 karn Exp $
 // Wideband FM demodulation and squelch
 // Adapted from narrowband demod
 // Copyright 2020, Phil Karn, KA9Q
@@ -67,8 +67,6 @@ void *demod_wfm(void *arg){
   float lastaudio = 0; // state for impulse noise removal
   int squelch_state = 0; // Number of blocks for which squelch remains open
 
-  demod->output.gain = (demod->output.headroom *  M_1_PI * demod->output.samprate) / fabsf(demod->filter.min_IF - demod->filter.max_IF);
-  
   // Make these blocksizes depend on front end sample rate and blocksize
   int const composite_L = roundf(demod->output.samprate * Blocktime * .001); // Intermediate sample rate
   int const composite_M = composite_L + 1; // 2:1 overlap (50%)
@@ -106,53 +104,21 @@ void *demod_wfm(void *arg){
 
   set_filter(stereo,-15000./Audio_samprate, 15000./Audio_samprate, demod->filter.kaiser_beta);
 
-  // The remainders should be zero for clean sample rates multiples of 50/100 Hz (20/10 ms)
+  // The asserts should be valid for clean sample rates multiples of 50/100 Hz (20/10 ms)
   // If not, then a mop-up oscillator has to be provided
-  int pilot_flip, pilot_shift;
+  int pilot_shift;
   double pilot_remainder;
-  compute_tuning(composite_N,composite_M,Composite_samprate,&pilot_flip,&pilot_shift,&pilot_remainder,19000.);
-  assert(pilot_remainder == 0);
+  compute_tuning(composite_N,composite_M,Composite_samprate,&pilot_shift,&pilot_remainder,19000.);
+  assert((pilot_shift % 4) == 0 && pilot_remainder == 0);
 
-  int subc_flip, subc_shift;
+  int subc_shift;
   double subc_remainder;
-  compute_tuning(composite_N,composite_M,Composite_samprate,&subc_flip,&subc_shift,&subc_remainder,38000.);
-  assert(subc_remainder == 0);
+  compute_tuning(composite_N,composite_M,Composite_samprate,&subc_shift,&subc_remainder,38000.);
+  assert((subc_shift % 4) == 0 && subc_remainder == 0);
 
   while(!demod->terminate){
-    // To save CPU time when the front end is completely tuned away from us, block until the front
-    // end status changes rather than process zeroes
-    pthread_mutex_lock(&Frontend.sdr.status_mutex);
-    int flip,shift;
-    while(1){
-      if(demod->terminate){
-	pthread_mutex_unlock(&Frontend.sdr.status_mutex);
-	goto quit;
-      }
-      demod->tune.second_LO = Frontend.sdr.frequency - demod->tune.freq;
-      double const freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
-      // Note: fine shift and tune shift both ignored in WFM mode
-      if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
-			Frontend.in->impulse_length,
-			Frontend.sdr.samprate,
-			&flip,&shift,NULL,freq) == 0)
-	break; // We can get at least part of the spectrum we want
-      
-      // No front end coverage of our passband; wait for it to retune
-      demod->sig.bb_power = 0;
-      demod->output.level = 0;
-      struct timespec timeout; // Needed to avoid deadlock if no front end is available
-      clock_gettime(CLOCK_REALTIME,&timeout);
-      timeout.tv_sec += 1; // 1 sec in the future
-      pthread_cond_timedwait(&Frontend.sdr.status_cond,&Frontend.sdr.status_mutex,&timeout);
-    }
-    pthread_mutex_unlock(&Frontend.sdr.status_mutex);
-
-    // Wait for next block of frequency domain data
-    execute_filter_output(demod->filter.out,-shift); // Input is complex, so sign of shift matters
-    demod->sig.n0 = estimate_noise(demod,-shift);
-
-    for(int n=0; n<composite_L; n++)
-      demod->filter.out->output.c[n] *= flip; // Is this really necessary?
+    if(downconvert(demod) == -1)
+      break;
 
     // Constant gain used by FM only; automatically adjusted by AGC in linear modes
     // We do this in the loop because headroom and BW can change
@@ -166,13 +132,15 @@ void *demod_wfm(void *arg){
     demod->sig.bb_power = 0;
     float avg_amp = 0;
     for(int n=0; n < composite_L; n++){
-      float const t = cnrmf(buffer[n]);
-      demod->sig.bb_power += t;
-      avg_amp += amplitudes[n] = approx_magf(buffer[n]);
+      complex float s;
+      buffer[n] = s = buffer[n] * step_osc(&demod->fine); // Apply phase corrections - mandatory with new downconversion
+      demod->sig.bb_power += cnrmf(s);
+      avg_amp += amplitudes[n] = approx_magf(s);
     }
     demod->sig.bb_power /= composite_L;
     avg_amp /= composite_L;
 
+    // Second pass over amplitudes to compute variance
     float fm_variance = 0;
     for(int n=0; n < composite_L; n++)
       fm_variance += (amplitudes[n] - avg_amp) * (amplitudes[n] - avg_amp);
