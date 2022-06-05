@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.129 2022/04/25 02:08:30 karn Exp $
+// $Id: fm.c,v 1.130 2022/06/05 02:28:22 karn Exp $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -72,7 +72,7 @@ void *demod_fm(void *arg){
 
     double remainder;
     int flip;
-    int rotate;
+    int shift;
 
     // To save CPU time when the front end is completely tuned away from us, block until the front
     // end status changes rather than process zeroes
@@ -89,7 +89,7 @@ void *demod_fm(void *arg){
       if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
 			Frontend.in->impulse_length,
 			Frontend.sdr.samprate,
-			&flip,&rotate,&remainder,freq) == 0)
+			&flip,&shift,&remainder,freq) == 0)
 	break;      // We can get at least part of the spectrum we want
 
       // No front end coverage of our passband; wait for it to retune
@@ -113,10 +113,10 @@ void *demod_fm(void *arg){
 #if FULL
     set_osc(&demod->fine,remainder, demod->tune.doppler_rate);
 #endif
-    execute_filter_output(demod->filter.out,-rotate);
+    execute_filter_output(demod->filter.out,-shift);
 
 #if 1
-    demod->sig.n0 = estimate_noise(demod,-rotate); // Negative, just like compute_tuning
+    demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning
 #else
     demod->sig.n0 = Frontend.n0;
 #endif

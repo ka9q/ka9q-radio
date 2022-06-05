@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.216 2022/04/24 09:09:25 karn Exp $
+// $Id: radio.c,v 1.217 2022/06/05 01:49:43 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -521,6 +521,9 @@ int kill_demod(struct demod **p){
 
 
 // Set receiver frequency
+// The new IF is computed here only to determine if the front end needs retuning
+// The second LO frequency is actually set when the new front end frequency is
+// received back from the front end metadata
 double set_freq(struct demod * const demod,double const f){
   assert(demod != NULL);
   if(demod == NULL)
@@ -590,16 +593,53 @@ double set_first_LO(struct demod const * const demod,double const first_LO){
 // N = input fft length
 // M = input buffer overlap
 // samprate = input sample rate
+// adjust = complex value to multiply by each sample to correct phasing
+// remainder = fine LO frequency (double)
+// freq = frequency to mix by (double)
+// This version tunes to arbitrary FFT bin rotations and computes the necessary
+// block phase correction factor described in equation (12) of
+// "Analysis and Design of Efficient and Flexible Fast-Convolution Based Multirate Filter Banks"
+// by Renfors, Yli-Kaakinen & Harris, IEEE Trans on Signal Processing, Aug 2014
+// Note: equation (12) as published appears to be in error; the exponent should have no minus sign
+// Actually we just seem to be using opposite sign conventions for 'shift'
+int new_compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq){
+  double const hzperbin = (double)samprate / N;
+#if 0
+  // Round to multiples of V (not needed anymore)
+  int const V = N / (M-1);
+  int const r = V * round((freq/hzperbin) / V);
+#else
+  int const r = round(freq/hzperbin);
+#endif
+  if(shift)
+    *shift = r;
+
+  if(remainder)
+    *remainder = freq - (r * hzperbin);
+
+  // Check if there's no overlap in the range we want
+  // Intentionally allow real input to go both ways, for front ends with high and low side injection
+  // Even though only one works, this lets us manually check for images
+  // No point in tuning to aliases, though
+  if(abs(r) > N/2)
+    return -1; // Demod thread will wait for the front end status to change
+  return 0;
+}
+
+// Compute FFT bin shift and time-domain fine tuning offset for specified LO frequency
+// N = input fft length
+// M = input buffer overlap
+// samprate = input sample rate
 // flip = invert (or not) every baseband sample
 // remainder = fine LO frequency (double)
 // freq = frequency to mix by (double)
-int compute_tuning(int N, int M, int samprate,int *flip,int *rotate,double *remainder, double freq){
+int compute_tuning(int N, int M, int samprate,int *flip,int *shift,double *remainder, double freq){
   double const hzperbin = (double)samprate / N;
   int const quantum = N / (M - 1);       // rotate by multiples of this number of bins due to overlap-save
                                          // check for non-zero remainder and warn?
   int const r = quantum * round(freq/(hzperbin * quantum));
-  if(rotate)
-    *rotate = r;
+  if(shift)
+    *shift = r;
 
   if(remainder)
     *remainder = freq - (r * hzperbin);
@@ -615,6 +655,8 @@ int compute_tuning(int N, int M, int samprate,int *flip,int *rotate,double *rema
     return -1; // Demod thread will wait for the front end status to change
   return 0;
 }
+
+
 /* Session announcement protocol - highly experimental, off by default
    The whole point was to make it easy to use VLC and similar tools, but they either don't actually implement SAP (e.g. in iOS)
    or implement some vague subset that you have to guess how to use

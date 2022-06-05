@@ -1,4 +1,4 @@
-// $Id: linear.c,v 1.107 2022/05/06 06:07:52 karn Exp $
+// $Id: linear.c,v 1.110 2022/06/05 02:29:35 karn Exp $
 
 // General purpose linear demodulator
 // Handles USB/IQ/CW/etc, all modes but FM
@@ -54,12 +54,15 @@ void *demod_linear(void *arg){
   const int lock_limit = lock_time * demod->output.samprate;
   init_pll(&demod->pll.pll,(float)demod->output.samprate);
 
+  complex double phase_adjust = 1;
+  int last_shift = 0;
+
   while(!demod->terminate){
     // To save CPU time when the front end is completely tuned away from us, block until the front
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.sdr.status_mutex);
     double remainder;
-    int rotate,flip;
+    int shift;
 
     while(1){
       if(demod->terminate){
@@ -68,10 +71,10 @@ void *demod_linear(void *arg){
       }
       demod->tune.second_LO = Frontend.sdr.frequency - demod->tune.freq;
       double const freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
-      if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
+      if(new_compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
 			Frontend.in->impulse_length,
 			Frontend.sdr.samprate,
-			&flip,&rotate,&remainder,freq) == 0)
+			&shift,&remainder,freq) == 0)
 	break; // We can get at least part of the spectrum we want
 
       // No front end coverage of our passband; wait for it to retune
@@ -103,7 +106,7 @@ void *demod_linear(void *arg){
     assert(isfinite(demod->linear.loop_bw));
     assert(demod->linear.loop_bw > 0);
 
-    demod->tp1 = rotate;
+    demod->tp1 = shift;
     demod->tp2 = remainder;
     set_pll_params(&demod->pll.pll,demod->linear.loop_bw,damping);
 
@@ -117,12 +120,24 @@ void *demod_linear(void *arg){
     float noise = 0;  // PLL only
     float energy = 0;
 
-    execute_filter_output(demod->filter.out,-rotate); // block until new data frame
+    execute_filter_output(demod->filter.out,-shift); // block until new data frame
 #if 1
-    demod->sig.n0 = estimate_noise(demod,-rotate); // Negative, just like compute_tuning
+    demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning
 #else
     demod->sig.n0 = Frontend.n0;
 #endif
+
+    // Block phase adjustment is in two parts:
+    // (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
+    // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
+    // I found this second term empirically, I don't know why it works!
+    const int V = 1 + (Frontend.in->ilen / (Frontend.in->impulse_length - 1)); // Overlap factor
+    if(shift != last_shift){
+      phase_adjust = cispi(-2.0*(shift % V)/(float)V); // Amount to rotate on each block for shifts not divisible by V
+      demod->fine.phasor *= cispi((shift - last_shift) / (2.0 * (V-1))); // One time adjust for shift change
+      last_shift = shift;
+    }
+    demod->fine.phasor *= phase_adjust;
 
     // First pass over sample block.
     // Perform fine frequency downconversion
@@ -130,7 +145,7 @@ void *demod_linear(void *arg){
     // Apply post-downconversion shift (if enabled, e.g. for CW)
     // Measure energy
     for(int n=0; n<N; n++){
-      complex float s = buffer[n] * flip * step_osc(&demod->fine);
+      complex float s = buffer[n] * step_osc(&demod->fine);
       
       if(demod->linear.pll){
 	s *= conjf(pll_phasor(&demod->pll.pll));
@@ -154,6 +169,7 @@ void *demod_linear(void *arg){
     }
     energy /= N;
     demod->sig.bb_power = energy; // Baseband power, average over block
+
 
     // Update PLL state, if active
     if(demod->linear.pll){

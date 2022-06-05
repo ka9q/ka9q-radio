@@ -1,4 +1,4 @@
-// $Id: wfm.c,v 1.30 2022/04/25 02:08:30 karn Exp $
+// $Id: wfm.c,v 1.31 2022/06/05 02:28:50 karn Exp $
 // Wideband FM demodulation and squelch
 // Adapted from narrowband demod
 // Copyright 2020, Phil Karn, KA9Q
@@ -108,21 +108,21 @@ void *demod_wfm(void *arg){
 
   // The remainders should be zero for clean sample rates multiples of 50/100 Hz (20/10 ms)
   // If not, then a mop-up oscillator has to be provided
-  int pilot_flip, pilot_rotate;
+  int pilot_flip, pilot_shift;
   double pilot_remainder;
-  compute_tuning(composite_N,composite_M,Composite_samprate,&pilot_flip,&pilot_rotate,&pilot_remainder,19000.);
+  compute_tuning(composite_N,composite_M,Composite_samprate,&pilot_flip,&pilot_shift,&pilot_remainder,19000.);
   assert(pilot_remainder == 0);
 
-  int subc_flip, subc_rotate;
+  int subc_flip, subc_shift;
   double subc_remainder;
-  compute_tuning(composite_N,composite_M,Composite_samprate,&subc_flip,&subc_rotate,&subc_remainder,38000.);
+  compute_tuning(composite_N,composite_M,Composite_samprate,&subc_flip,&subc_shift,&subc_remainder,38000.);
   assert(subc_remainder == 0);
 
   while(!demod->terminate){
     // To save CPU time when the front end is completely tuned away from us, block until the front
     // end status changes rather than process zeroes
     pthread_mutex_lock(&Frontend.sdr.status_mutex);
-    int flip,rotate;
+    int flip,shift;
     while(1){
       if(demod->terminate){
 	pthread_mutex_unlock(&Frontend.sdr.status_mutex);
@@ -134,7 +134,7 @@ void *demod_wfm(void *arg){
       if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
 			Frontend.in->impulse_length,
 			Frontend.sdr.samprate,
-			&flip,&rotate,NULL,freq) == 0)
+			&flip,&shift,NULL,freq) == 0)
 	break; // We can get at least part of the spectrum we want
       
       // No front end coverage of our passband; wait for it to retune
@@ -148,8 +148,8 @@ void *demod_wfm(void *arg){
     pthread_mutex_unlock(&Frontend.sdr.status_mutex);
 
     // Wait for next block of frequency domain data
-    execute_filter_output(demod->filter.out,-rotate); // Input is complex, so sign of rotate matters
-    demod->sig.n0 = estimate_noise(demod,-rotate);
+    execute_filter_output(demod->filter.out,-shift); // Input is complex, so sign of shift matters
+    demod->sig.n0 = estimate_noise(demod,-shift);
 
     for(int n=0; n<composite_L; n++)
       demod->filter.out->output.c[n] *= flip; // Is this really necessary?
@@ -259,9 +259,9 @@ void *demod_wfm(void *arg){
     execute_filter_output(mono,0);    // L+R composite at 48 kHz
     if(demod->output.channels == 2){
       // Stereo multiplex processing
-      // rotate signs for pilot and subcarrier don't matter because the filters are real input with symmetric spectra
-      execute_filter_output(pilot,pilot_rotate); // pilot spun to 0 Hz, 48 kHz rate
-      execute_filter_output(stereo,subc_rotate); // L-R composite spun down to 0 Hz, 48 kHz rate
+      // shift signs for pilot and subcarrier don't matter because the filters are real input with symmetric spectra
+      execute_filter_output(pilot,pilot_shift); // pilot spun to 0 Hz, 48 kHz rate
+      execute_filter_output(stereo,subc_shift); // L-R composite spun down to 0 Hz, 48 kHz rate
 
       float complex stereo_buffer[audio_L];
       for(int n= 0; n < audio_L; n++){
