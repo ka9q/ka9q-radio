@@ -1,4 +1,4 @@
-// $Id: modes.c,v 1.62 2022/05/10 06:54:58 karn Exp $
+// $Id: modes.c,v 1.63 2022/06/06 01:31:53 karn Exp $
 // Load and search mode definition table in /usr/local/share/ka9q-radio/modes.conf
 
 // Copyright 2018, Phil Karn, KA9Q
@@ -33,7 +33,7 @@ static float const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
 static float const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
 static float const DEFAULT_GAIN = 500.0;         // Unused in FM, usually adjusted automatically in linear
 static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
-static float const DEFAULT_PLL_BW = 100.0;       // Reasonable for AM
+static float const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
 static int const DEFAULT_SQUELCHTAIL = 1;        // close on frame *after* going below threshold, may let partial frame noise through
 static float const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
 static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
