@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.154 2022/05/26 04:46:53 karn Exp $
+// $Id: control.c,v 1.155 2022/06/09 03:59:52 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -333,6 +333,11 @@ int main(int argc,char *argv[]){
       }
     }
   }
+  if(Ssrc == 0){
+    fprintf(stdout,"Usage: control -s ssrc control_group\n");
+    exit(1);
+  }
+
 
   {
     // The display thread assumes en_US.UTF-8, or anything with a thousands grouping character
