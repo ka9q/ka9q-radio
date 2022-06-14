@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.133 2022/06/14 07:38:23 karn Exp $
+// $Id: fm.c,v 1.134 2022/06/14 07:57:30 karn Exp $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -36,7 +36,7 @@ void *demod_fm(void *arg){
   if(isnan(demod->squelch_close) || demod->squelch_close == 0)
     demod->squelch_close = 4; // close below ~ +6 dB
 
-  int const blocksize = demod->output.samprate * Blocktime / 1000;
+  int const blocksize = demod->output.samprate * Blocktime / 1000.0f;
   if(demod->filter.out)
     delete_filter_output(&demod->filter.out);
   demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
@@ -52,7 +52,7 @@ void *demod_fm(void *arg){
   
   int squelch_state = 0; // Number of blocks for which squelch remains open
   int const N = demod->filter.out->olen;
-  float const one_over_olen = 1. / N; // save some divides
+  float const one_over_olen = 1.0f / N; // save some divides
 
   while(!demod->terminate){
     if(downconvert(demod) == -1) // received terminate
@@ -73,7 +73,7 @@ void *demod_fm(void *arg){
       avg_amp += amplitudes[n] = cabsf(s); // May give more accurate SNRs
     }
     avg_amp *= one_over_olen;
-    float const noise_reduct_scale = 1 / (0.4 * avg_amp);
+    float const noise_reduct_scale = 1.0f / (0.4f * avg_amp);
 
     // Compute variance in second pass.
     // Two passes are supposed to be more numerically stable, but is it really necessary?
@@ -126,13 +126,13 @@ void *demod_fm(void *arg){
 	}
 	baseband[n] = deviation * demod->output.gain;
 	// Experimental click reduction
-	if(amplitudes[n] < 0.4 * avg_amp)
+	if(amplitudes[n] < 0.4f * avg_amp)
 	  baseband[n] *= amplitudes[n] * noise_reduct_scale;
 
 	// Apply de-emphasis if configured
 	if(demod->deemph.rate != 0){
 	  __real__ demod->deemph.state *= demod->deemph.rate;
-	  __real__ demod->deemph.state += demod->deemph.gain * (1 - demod->deemph.rate) * baseband[n];
+	  __real__ demod->deemph.state += demod->deemph.gain * (1.0f - demod->deemph.rate) * baseband[n];
 	  baseband[n] = __real__ demod->deemph.state;
 	}
 	output_level += baseband[n] * baseband[n];
