@@ -1,4 +1,4 @@
-// $Id: linear.c,v 1.111 2022/06/05 22:06:13 karn Exp karn $
+// $Id: linear.c,v 1.113 2022/06/14 06:30:49 karn Exp karn $
 
 // General purpose linear demodulator
 // Handles USB/IQ/CW/etc, all modes but FM
@@ -164,19 +164,19 @@ void *demod_linear(void *arg){
 	float const newgain = demod->output.headroom / ampl;
 	// N-th root of newgain / gain
 	// Should this be in double precision to avoid imprecision when gain = - epsilon dB?
-	gain_change = expf(logf(newgain/demod->output.gain) / N);
+	gain_change = powf(newgain/demod->output.gain, 1.0F/N);
 	demod->hangcount = demod->linear.hangtime;
       } else if(bn * demod->output.gain > demod->linear.threshold * demod->output.headroom){
 	// Reduce gain to keep noise < threshold, same as for strong signal
 	float const newgain = demod->linear.threshold * demod->output.headroom / bn;
-	gain_change = expf(logf(newgain/demod->output.gain) / N);
+	gain_change = powf(newgain/demod->output.gain, 1.0F/N);
       } else if(demod->hangcount > 0){
 	// Waiting for AGC hang time to expire before increasing gain
 	gain_change = 1; // Constant gain
 	demod->hangcount--;
       } else {
 	// Allow gain to increase at configured rate, e.g. 20 dB/s
-	gain_change = expf(logf(demod->linear.recovery_rate) / N);
+	gain_change = powf(demod->linear.recovery_rate, 1.0F/N);
       }
     }
 
