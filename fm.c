@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.131 2022/06/05 22:06:13 karn Exp karn $
+// $Id: fm.c,v 1.133 2022/06/14 07:38:23 karn Exp $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -50,8 +50,6 @@ void *demod_fm(void *arg){
 	     demod->filter.max_IF/demod->output.samprate,
 	     demod->filter.kaiser_beta);
   
-  set_osc(&demod->fine,0,0); // Ensure initialization
-  
   int squelch_state = 0; // Number of blocks for which squelch remains open
   int const N = demod->filter.out->olen;
   float const one_over_olen = 1. / N; // save some divides
@@ -65,19 +63,15 @@ void *demod_fm(void *arg){
     // Force reasonable parameters if they get messed up or aren't initialized
     demod->output.gain = (demod->output.headroom *  M_1_PI * demod->output.samprate) / fabsf(demod->filter.min_IF - demod->filter.max_IF);
 
-    float bb_power = 0;
     float avg_amp = 0;
     float amplitudes[N];
     complex float * const buffer = demod->filter.out->output.c; // for convenience
 
     for(int n = 0; n < N; n++){
-      // Apply frequency shifts
-      complex float s = buffer[n] * step_osc(&demod->fine);
-      buffer[n] = s;
-      bb_power += cnrmf(s);
-      avg_amp += amplitudes[n] = approx_magf(s); // Saves a few % CPU on lots of demods vs sqrtf(t)
+      complex float s = buffer[n];
+      //      avg_amp += amplitudes[n] = approx_magf(s); // Saves a few % CPU on lots of demods vs sqrtf(t)
+      avg_amp += amplitudes[n] = cabsf(s); // May give more accurate SNRs
     }
-    demod->sig.bb_power = bb_power * one_over_olen;
     avg_amp *= one_over_olen;
     float const noise_reduct_scale = 1 / (0.4 * avg_amp);
 

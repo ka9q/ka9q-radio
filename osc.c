@@ -1,4 +1,4 @@
-// $Id: osc.c,v 1.16 2022/06/05 22:55:09 karn Exp $
+// $Id: osc.c,v 1.17 2022/06/14 07:38:23 karn Exp $
 // Complex oscillator object routines
 
 #define _GNU_SOURCE 1
@@ -32,7 +32,7 @@ static int is_phasor_init(const complex double x){
 void set_osc(struct osc *osc,double f,double r){
   if(!is_phasor_init(osc->phasor)){
     osc->phasor = 1; // Don't jump phase if already initialized
-    osc->steps = 0;
+    osc->steps = Renorm_rate;
     osc->freq = 0;
     osc->rate = 0;
     osc->phasor_step = 1;
@@ -48,11 +48,11 @@ void set_osc(struct osc *osc,double f,double r){
   }
 }
 
-static void renorm_osc(struct osc *osc){
+static void inline renorm_osc(struct osc *osc){
   if(!is_phasor_init(osc->phasor))
     osc->phasor = 1; // In case we've been stepping an uninitialized osc
      
-  osc->steps = 0;
+  osc->steps = Renorm_rate;
   osc->phasor /= cabs(osc->phasor);
 
   if(osc->rate != 0){
@@ -63,13 +63,13 @@ static void renorm_osc(struct osc *osc){
 
 // Step oscillator through one sample, return complex phase
 complex double step_osc(struct osc *osc){
+  if(--osc->steps <= 0)   // do first, in case osc is not initialized
+    renorm_osc(osc);
   complex double const r = osc->phasor;
   if(osc->rate != 0)
     osc->phasor_step *= osc->phasor_step_step;
 
   osc->phasor *= osc->phasor_step;
-  if(++osc->steps == Renorm_rate)
-    renorm_osc(osc);
   return r;
 }
 
@@ -80,14 +80,14 @@ complex double step_osc(struct osc *osc){
 static float Lookup[TABSIZE+1]; // Leave room for == pi/2
 static int Tab_init;
 
-static inline float sinpi(float x){
+static inline float sinpif(float x){
   return sinf(x * M_PI);
 }
 
 // Initialize sine lookup table
 static void dds_init(void){
   for(int i=0; i <= TABSIZE; i++)
-    Lookup[i] = sinpi(0.5 * (float)(i)/TABSIZE);
+    Lookup[i] = sinpif(0.5f * (float)i/TABSIZE);
 
   Tab_init = 1;
 }
@@ -120,7 +120,7 @@ float sine_dds(uint32_t accum){
   float f = Lookup[tab];
   float f1 = Lookup[tab+next];
 
-  float const fscale = 1. / (1 << FRACTBITS);
+  float const fscale = 1.0f / (1 << FRACTBITS);
 
   f += (f1 - f) * (float)fract * fscale;
   return sign ? -f : f;
@@ -133,7 +133,7 @@ void init_pll(struct pll *pll,float samprate){
   assert(samprate != 0);
 
   memset(pll,0,sizeof(*pll));
-  pll->samptime = 1./samprate;
+  pll->samptime = 1.0f/samprate;
 }
 
 // Set PLL loop bandwidth & damping factor
@@ -157,7 +157,7 @@ void set_pll_params(struct pll *pll,float bw,float damping){
   float const tau2 = 2 * damping / natfreq;
 
   pll->prop_gain = tau2 / tau1;
-  pll->integrator_gain = 1 / tau1;
+  pll->integrator_gain = 1.0f / tau1;
   pll->integrator = freq * tau1; // To give specified frequency
 #if 0
   fprintf(stderr,"init_pll(%p,%f,%f,%f,%f)\n",pll,bw,damping,freq,samprate);
@@ -176,7 +176,7 @@ float run_pll(struct pll *pll,float phase){
   float feedback = pll->integrator_gain * pll->integrator + pll->prop_gain * phase;
   pll->integrator += phase;
   
-  feedback = feedback > 0.49 ? 0.49 : feedback < -0.49 ? -0.49 : feedback;
+  feedback = feedback > 0.49f ? 0.49f : feedback < -0.49f ? -0.49f : feedback;
   pll->vco_step = (int32_t)(feedback * (float)(1LL<<32));
   pll->vco_phase += pll->vco_step;
 #if 0

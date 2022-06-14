@@ -1,4 +1,4 @@
-// $Id: wfm.c,v 1.32 2022/06/05 22:54:05 karn Exp karn $
+// $Id: wfm.c,v 1.34 2022/06/14 07:38:23 karn Exp $
 // Wideband FM demodulation and squelch
 // Adapted from narrowband demod
 // Copyright 2020, Phil Karn, KA9Q
@@ -62,7 +62,6 @@ void *demod_wfm(void *arg){
 	     demod->filter.min_IF/demod->output.samprate,
 	     demod->filter.max_IF/demod->output.samprate,
 	     demod->filter.kaiser_beta);
-  set_osc(&demod->fine,0,0); // Ensure initialization  
 
   float lastaudio = 0; // state for impulse noise removal
   int squelch_state = 0; // Number of blocks for which squelch remains open
@@ -129,15 +128,11 @@ void *demod_wfm(void *arg){
     // Use two passes to avoid possible numerical problems
     float amplitudes[composite_L];
     complex float * const buffer = demod->filter.out->output.c;
-    demod->sig.bb_power = 0;
     float avg_amp = 0;
     for(int n=0; n < composite_L; n++){
-      complex float s;
-      buffer[n] = s = buffer[n] * step_osc(&demod->fine); // Apply phase corrections - mandatory with new downconversion
-      demod->sig.bb_power += cnrmf(s);
-      avg_amp += amplitudes[n] = approx_magf(s);
+      //      avg_amp += amplitudes[n] = approx_magf(buffer[n]);
+      avg_amp += amplitudes[n] = cabsf(buffer[n]); // May give more accurate SNRs
     }
-    demod->sig.bb_power /= composite_L;
     avg_amp /= composite_L;
 
     // Second pass over amplitudes to compute variance
@@ -241,7 +236,8 @@ void *demod_wfm(void *arg){
 	// I really need a better pilot detector here so we'll switch back to mono without it
 	// Probably lock a PLL to it and look at the inphase/quadrature power ratio
 	complex float subc_phasor = pilot->output.c[n]; // 19 kHz pilot
-	float subc_mag = approx_magf(subc_phasor);
+	//	float subc_mag = approx_magf(subc_phasor);
+	float subc_mag = cabsf(subc_phasor);
 	if(subc_mag > .001){ // Hack!!
 	  subc_phasor *= subc_phasor;       // double to 38 kHz
 	  subc_phasor /= subc_mag * subc_mag;  // and normalize

@@ -1,4 +1,4 @@
-// $Id: linear.c,v 1.113 2022/06/14 06:30:49 karn Exp karn $
+// $Id: linear.c,v 1.114 2022/06/14 07:38:23 karn Exp $
 
 // General purpose linear demodulator
 // Handles USB/IQ/CW/etc, all modes but FM
@@ -47,7 +47,6 @@ void *demod_linear(void *arg){
 	     demod->filter.max_IF/demod->output.samprate,
 	     demod->filter.kaiser_beta);
   
-  set_osc(&demod->fine,0,0); // Ensure initialization
   // Coherent mode parameters
   float const damping = DEFAULT_PLL_DAMPING;
   float const lock_time = DEFAULT_PLL_LOCKTIME;
@@ -60,8 +59,6 @@ void *demod_linear(void *arg){
     if(downconvert(demod) == -1) // received terminate
       break;
 
-    set_pll_params(&demod->pll.pll,demod->linear.loop_bw,damping);
-    set_osc(&demod->shift,demod->tune.shift/demod->output.samprate,0);
     const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
 
     // First pass over sample block.
@@ -73,13 +70,14 @@ void *demod_linear(void *arg){
     complex float * const buffer = demod->filter.out->output.c; // Working buffer
     float signal = 0; // PLL only
     float noise = 0;  // PLL only
-    float energy = 0;
 
-    for(int n=0; n<N; n++){
-      complex float s = buffer[n] * step_osc(&demod->fine);
+    if(demod->linear.pll){
+      set_pll_params(&demod->pll.pll,demod->linear.loop_bw,damping);
+      for(int n=0; n<N; n++){
+	complex float s = buffer[n];
       
-      if(demod->linear.pll){
 	s *= conjf(pll_phasor(&demod->pll.pll));
+	buffer[n] = s;
 	float phase;
 	if(demod->linear.square){
 	  phase = cargf(s*s);
@@ -89,26 +87,8 @@ void *demod_linear(void *arg){
 	run_pll(&demod->pll.pll,phase);
 	signal += crealf(s) * crealf(s); // signal in phase with VCO is signal + noise power
 	noise += cimagf(s) * cimagf(s);  // signal in quadrature with VCO is assumed to be noise power
-      } else
-	energy += cnrmf(s); // With PLL on, derive energy from signal + noise
-
-      // Apply frequency shift
-      // Must be done after PLL, which operates only on DC
-      if(demod->shift.freq != 0)
-	s *= step_osc(&demod->shift);
-
-      buffer[n] = s;
-    }
-    if(demod->linear.pll)
-      energy = (signal + noise) / N;
-    else
-      energy /= N;
-
-    demod->sig.bb_power = energy; // Baseband power, average over block
-
-
-    // Update PLL state, if active
-    if(demod->linear.pll){
+      }
+      // Update PLL state, if active
       if(!demod->pll.was_on){
 	demod->pll.pll.integrator = 0; // reset oscillator when coming back on
 	demod->pll.was_on = 1;
@@ -144,15 +124,23 @@ void *demod_linear(void *arg){
     } else { // if PLL
       demod->pll.was_on = 0;
     }
-
-    // Run AGC on a block basis to do some forward averaging
+    // Apply frequency shift
+    // Must be done after PLL, which operates only on DC
+    set_osc(&demod->shift,demod->tune.shift/demod->output.samprate,0);
+    if(demod->shift.freq != 0){
+      for(int n=0; n < N; n++){
+	buffer[n] *= step_osc(&demod->shift);
+      }
+    }
+ 
+   // Run AGC on a block basis to do some forward averaging
     // Lots of people seem to have strong opinions how AGCs should work
     // so there's probably a lot of work to do here
     float gain_change = 1; // default to constant gain
     if(demod->linear.agc){
       const float bw = fabsf(demod->filter.min_IF - demod->filter.max_IF);
       const float bn = sqrtf(bw * demod->sig.n0); // Noise amplitude
-      const float ampl = sqrtf(energy);
+      const float ampl = sqrtf(demod->sig.bb_power);
 
       // per-sample gain change is required to avoid sudden gain changes at block boundaries that can
       // cause clicks and pops when a strong signal straddles a block boundary

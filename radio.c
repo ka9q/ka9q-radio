@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.219 2022/06/05 22:55:53 karn Exp $
+// $Id: radio.c,v 1.220 2022/06/14 07:38:23 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -864,17 +864,21 @@ int downconvert(struct demod *demod){
     // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
     if(shift != demod->filter.bin_shift){
       const int V = 1 + (Frontend.in->ilen / (Frontend.in->impulse_length - 1)); // Overlap factor
-      demod->filter.phase_adjust = cispi(-2.0*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
-      demod->fine.phasor *= cispi((shift - demod->filter.bin_shift) / (2.0 * (V-1))); // One time adjust for shift change
+      demod->filter.phase_adjust = cispi(-2.0f*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
+      demod->fine.phasor *= cispi((shift - demod->filter.bin_shift) / (2.0f * (V-1))); // One time adjust for shift change
       demod->filter.bin_shift = shift;
     }
     demod->fine.phasor *= demod->filter.phase_adjust;
     execute_filter_output(demod->filter.out,-shift); // block until new data frame
-#if 1
     demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
-#else
-    demod->sig.n0 = Frontend.n0;
-#endif
 
+    const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
+    complex float * const buffer = demod->filter.out->output.c; // Working buffer
+    float energy = 0;
+    for(int n=0; n < N; n++){
+      buffer[n] *= step_osc(&demod->fine);
+      energy += cnrmf(buffer[n]);
+    }
+    demod->sig.bb_power = energy / N;
     return 0;
 }
