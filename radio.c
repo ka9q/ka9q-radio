@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.220 2022/06/14 07:38:23 karn Exp $
+// $Id: radio.c,v 1.221 2022/06/15 18:50:13 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -801,6 +801,7 @@ void *demod_reaper(void *arg){
 // 3. Set fine tuning oscillator frequency & phase
 // 4. Run output half (IFFT) of filter
 // 5. Update noise estimate
+// 6. Run fine tuning, compute average power
 
 // Baseband samples placed in demod->filter.out->output.c
 int downconvert(struct demod *demod){
