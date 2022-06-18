@@ -1,4 +1,4 @@
-// $Id: misc.h,v 1.27 2022/06/18 08:35:10 karn Exp $
+// $Id: misc.h,v 1.28 2022/06/18 16:54:32 karn Exp $
 // Miscellaneous constants, macros and function prototypes
 // Copyright 2018 Phil Karn, KA9Q
 #ifndef _MISC_H
@@ -45,16 +45,16 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 #define pthread_setname(x) pthread_setname_np(x)
 #include <malloc/malloc.h>
 #define malloc_usable_size(x) malloc_size(x)
-#define sincos(x,s,c) __sincos(x,s,c)
-#define sincosf(x,s,c) __sincosf(x,s,c)
-#define sincospi(x,s,c) __sincospi(x,s,c)
-#define sincospif(x,s,c) __sincospif(x,s,c)
+#define sincos(x,s,c) __sincos((x),(s),(c))
+#define sincosf(x,s,c) __sincosf((x),(s),(c))
+#define sincospi(x,s,c) __sincospi((x),(s),(c))
+#define sincospif(x,s,c) __sincospif((x),(s),(c))
 
 #else // !__APPLE__
 // Not apple (Linux, etc)
 
 #include <malloc.h>
-#define pthread_setname(x) pthread_setname_np(pthread_self(),x)
+#define pthread_setname(x) pthread_setname_np(pthread_self(),(x))
 // Does anyone implement these natively for Linux?
 #define sincospi(x,s,c) sincos((x)*M_PI,(s),(c))
 #define sincospif(x,s,c) sincosf((x)*M_PI,(s),(c))
