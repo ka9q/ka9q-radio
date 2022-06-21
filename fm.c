@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.135 2022/06/15 18:50:40 karn Exp $
+// $Id: fm.c,v 1.136 2022/06/21 00:52:24 karn Exp $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -21,7 +21,7 @@ static int const power_squelch = 1; // Enable experimental pre-squelch to save C
 // FM demodulator thread
 void *demod_fm(void *arg){
   assert(arg != NULL);
-  struct demod * demod = arg;  
+  struct demod * const demod = arg;  
   
   {
     char name[100];
@@ -36,7 +36,7 @@ void *demod_fm(void *arg){
   if(isnan(demod->squelch_close) || demod->squelch_close == 0)
     demod->squelch_close = 4; // close below ~ +6 dB
 
-  int const blocksize = demod->output.samprate * Blocktime / 1000.0f;
+  int const blocksize = demod->output.samprate * Blocktime / 1000.0F;
   if(demod->filter.out)
     delete_filter_output(&demod->filter.out);
   demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
@@ -53,7 +53,7 @@ void *demod_fm(void *arg){
   float deemph_state = 0;
   int squelch_state = 0; // Number of blocks for which squelch remains open
   int const N = demod->filter.out->olen;
-  float const one_over_olen = 1.0f / N; // save some divides
+  float const one_over_olen = 1.0F / N; // save some divides
 
   while(!demod->terminate){
     if(downconvert(demod) == -1) // received terminate
@@ -134,8 +134,8 @@ void *demod_fm(void *arg){
 
       if(demod->sig.snr < 20) { // take 13 dB as "full quieting"
 	// Experimental threshold reduction (pop/click suppression)
-	float const noise_thresh = (0.4f * avg_amp);
-	float const noise_reduct_scale = 1.0f / noise_thresh;
+	float const noise_thresh = (0.4F * avg_amp);
+	float const noise_reduct_scale = 1 / noise_thresh;
 
 	for(int n=0; n < N; n++){
 	  if(amplitudes[n] < noise_thresh)
@@ -144,7 +144,7 @@ void *demod_fm(void *arg){
       }
       if(demod->deemph.rate != 0){
 	// Apply de-emphasis if configured
-	float const r = 1.0f - demod->deemph.rate;
+	float const r = 1 - demod->deemph.rate;
 	for(int n=0; n < N; n++){
 	  deemph_state += r * (baseband[n] - deemph_state);
 	  baseband[n] = deemph_state * demod->deemph.gain;

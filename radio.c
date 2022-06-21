@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.221 2022/06/15 18:50:13 karn Exp $
+// $Id: radio.c,v 1.222 2022/06/21 00:52:24 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -181,8 +181,9 @@ float estimate_noise(struct demod *demod,int rotate){
       int n = abs(mbin); // Doesn't really handle the mirror well
       if(n < master->bins){
 	energies[i] += (cnrmf(fdomain[n]) - energies[i]) * 0.02; // blocknum was already incremented
-	if(min_bin_energy > energies[i])
+	if(min_bin_energy > energies[i]){
 	  min_bin_energy = energies[i];
+	}
       } else
 	break;  // off the end
       mbin++;
@@ -194,8 +195,9 @@ float estimate_noise(struct demod *demod,int rotate){
     for(int i=0; i < slave->bins; i++,mbin++){	
       if(mbin >= 0 && mbin < master->bins){
 	energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * 0.02; // blocknum was already incremented
-	if(min_bin_energy > energies[i])
+	if(min_bin_energy > energies[i]){
 	  min_bin_energy = energies[i];
+	}
       }
       mbin++;
       if(mbin == master->bins)
@@ -600,8 +602,7 @@ double set_first_LO(struct demod const * const demod,double const first_LO){
 // block phase correction factor described in equation (12) of
 // "Analysis and Design of Efficient and Flexible Fast-Convolution Based Multirate Filter Banks"
 // by Renfors, Yli-Kaakinen & Harris, IEEE Trans on Signal Processing, Aug 2014
-// Note: equation (12) as published appears to be in error; the exponent should have no minus sign
-// Actually we just seem to be using opposite sign conventions for 'shift'
+// We seem to be using opposite sign conventions for 'shift'
 int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq){
   double const hzperbin = (double)samprate / N;
 #if 0
@@ -851,8 +852,10 @@ int downconvert(struct demod *demod){
     assert(isfinite(demod->linear.loop_bw));
     assert(demod->linear.loop_bw > 0);
 
+#if 0
     demod->tp1 = shift;
     demod->tp2 = remainder;
+#endif
 
     // set fine tuning frequency & phase. Do before execute_filter blocks (can't remember why)
     if(remainder != demod->filter.remainder){

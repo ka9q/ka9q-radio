@@ -1,4 +1,4 @@
-// $Id: modes.c,v 1.63 2022/06/06 01:31:53 karn Exp $
+// $Id: modes.c,v 1.64 2022/06/21 00:52:24 karn Exp $
 // Load and search mode definition table in /usr/local/share/ka9q-radio/modes.conf
 
 // Copyright 2018, Phil Karn, KA9Q
@@ -9,6 +9,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #if defined(linux)
 #include <bsd/string.h>
 #endif
@@ -21,8 +22,8 @@
 #include "radio.h"
 #include "config.h"
 
-static int const DEFAULT_LINEAR_SAMPRATE = 24000;
-static int const DEFAULT_FM_SAMPRATE = 24000;
+static int   const DEFAULT_LINEAR_SAMPRATE = 24000;
+static int   const DEFAULT_FM_SAMPRATE = 24000;
 static float const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
 static float const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
 static float const DEFAULT_HIGH = 5000.0;
@@ -31,10 +32,10 @@ static float const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
 static float const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
 static float const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
 static float const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
-static float const DEFAULT_GAIN = 500.0;         // Unused in FM, usually adjusted automatically in linear
+static float const DEFAULT_GAIN = 50.0;         // Unused in FM, usually adjusted automatically in linear
 static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
 static float const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
-static int const DEFAULT_SQUELCHTAIL = 1;        // close on frame *after* going below threshold, may let partial frame noise through
+static int   const DEFAULT_SQUELCHTAIL = 1;        // close on frame *after* going below threshold, may let partial frame noise through
 static float const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
 static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
 static float const DEFAULT_FM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
@@ -84,16 +85,16 @@ static int set_defaults(struct demod *demod){
   demod->output.channels = 1;
   demod->tune.shift = 0.0;
   demod->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE * .001f * Blocktime);
-  demod->linear.hangtime = DEFAULT_HANGTIME / (.001 * Blocktime);
+  demod->linear.hangtime = DEFAULT_HANGTIME / (.001f * Blocktime);
   demod->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
   if(demod->output.gain <= 0 || isnan(demod->output.gain))
      demod->output.gain = dB2voltage(DEFAULT_GAIN); // Set only if out of bounds
-  demod->linear.env = 0;
-  demod->linear.pll = 0;
-  demod->linear.square = 0;
-  demod->filter.isb = 0;
+  demod->linear.env = false;
+  demod->linear.pll = false;
+  demod->linear.square = false;
+  demod->filter.isb = false;
   demod->linear.loop_bw = DEFAULT_PLL_BW;
-  demod->linear.agc = 1;
+  demod->linear.agc = true;
   switch(demod->demod_type){
   case LINEAR_DEMOD:
     demod->output.samprate = DEFAULT_LINEAR_SAMPRATE;
@@ -101,8 +102,8 @@ static int set_defaults(struct demod *demod){
   case FM_DEMOD:
     demod->output.samprate = DEFAULT_FM_SAMPRATE;
     {
-      float tc = DEFAULT_NBFM_TC;
-      demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * demod->output.samprate));
+      float tc = DEFAULT_NBFM_TC * 1e-6F;
+      demod->deemph.rate = expf(-1.0F / (tc * demod->output.samprate));
       demod->deemph.gain = dB2voltage(DEFAULT_FM_DEEMPH_GAIN);
     }
     break;
@@ -111,10 +112,14 @@ static int set_defaults(struct demod *demod){
     demod->output.samprate = 384000; // downconverter samprate forced for FM stereo decoding. Output also forced to 48 kHz
     {
       // Default 75 microseconds for north american FM broadcasting
-      float tc = DEFAULT_WFM_TC;
-      demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * 48000)); // hardwired output sample rate -- needs cleanup
+      float tc = DEFAULT_WFM_TC * 1e-6F;
+      demod->deemph.rate = expf(-1.0F / (tc * 48000)); // hardwired output sample rate -- needs cleanup
       demod->deemph.gain = dB2voltage(DEFAULT_WFM_DEEMPH_GAIN);
     }
+  }
+  if(remainderf(Blocktime * demod->output.samprate * .001F,1.0F) != 0){
+    fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz\n",
+	    Blocktime,demod->output.samprate);
   }
   return 0;
 }
@@ -127,7 +132,7 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
 
   char const * demod_name = config_getstring(table,mode,"demod",NULL);
   if(demod_name){
-    int x = demod_type_from_name(demod_name);
+    int const x = demod_type_from_name(demod_name);
     if(demod->demod_type >= 0){
       demod->demod_type = x;
     }
@@ -204,7 +209,7 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
   demod->linear.pll = config_getboolean(table,mode,"pll",demod->linear.pll);
   demod->linear.square = config_getboolean(table,mode,"square",demod->linear.square);  // On implies PLL on
   if(demod->linear.square)
-    demod->linear.pll = 1; // Square implies PLL
+    demod->linear.pll = true; // Square implies PLL
   
   demod->filter.isb = config_getboolean(table,mode,"conj",demod->filter.isb);       // (unimplemented anyway)
   demod->linear.loop_bw = config_getfloat(table,mode,"pll-bw",demod->linear.loop_bw);
@@ -212,14 +217,14 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
   {
     char const *cp = config_getstring(table,mode,"deemph-tc",NULL);
     if(cp){
-      float tc = strtof(cp,NULL);
-      demod->deemph.rate = expf(-1.0 / (tc * 1e-6 * demod->output.samprate));
+      float const tc = strtof(cp,NULL) * 1e-6;
+      demod->deemph.rate = expf(-1.0f / (tc * demod->output.samprate));
     }
   }
   {
     char const *cp = config_getstring(table,mode,"deemph-gain",NULL);
     if(cp){
-      float g = strtof(cp,NULL);
+      float const g = strtof(cp,NULL);
       demod->deemph.gain = dB2voltage(g);
     }
   }

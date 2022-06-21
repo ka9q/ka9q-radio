@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.252 2022/05/25 03:05:31 karn Exp $
+// $Id: main.c,v 1.253 2022/06/21 00:52:24 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <locale.h>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -40,9 +41,6 @@ static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
 static int const DEFAULT_FFT_THREADS = 1;
 
-
-
-
 char const *Modefile = "/usr/local/share/ka9q-radio/modes.conf";
 
 // Command line and environ params
@@ -55,14 +53,16 @@ struct demod *Dynamic_demod; // Prototype for dynamically created demods
 
 int Mcast_ttl;
 int IP_tos; // AF12 left shifted 2 bits
-int RTCP_enable;
-int SAP_enable;
+int RTCP_enable = false;
+int SAP_enable = false;
 static int Overlap;
 char const *Name;
 
 static struct timespec Starttime;      // System clock at timestamp 0, for RTCP
 pthread_t Status_thread;
 pthread_t Demod_reaper_thread;
+pthread_t Procsamp_thread;
+pthread_t N0_thread;
 struct sockaddr_storage Metadata_source_address;   // Source of SDR metadata
 struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)b
 char Metadata_dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
@@ -152,15 +152,15 @@ int main(int argc,char *argv[]){
       Name = argv[optind]; // Ah, just use whole thing
     } else {
       cp1++;
-      int len = cp2 - cp1 + 1;
-      char *foo = calloc(1,len);
+      int const len = cp2 - cp1 + 1;
+      char * const foo = calloc(1,len);
       strlcpy(foo,cp1,len);
       Name = foo;
     }
   }
   fprintf(stdout,"Loading config file %s...\n",configfile);
   fflush(stdout);
-  int n = loadconfig(argv[optind]);
+  int const n = loadconfig(argv[optind]);
   fprintf(stdout,"%d total demodulators started\n",n);
   fflush(stdout);
 
@@ -202,7 +202,7 @@ static int setup_frontend(char const *arg){
   }
   {
     char addrtmp[256];
-    addrtmp[0] = 0;
+    addrtmp[0] = '\0';
     switch(Frontend.input.metadata_dest_address.ss_family){
     case AF_INET:
       {
@@ -232,17 +232,17 @@ static int setup_frontend(char const *arg){
 
   {
     char addrtmp[256];
-    addrtmp[0] = 0;
+    addrtmp[0] = '\0';
     switch(Frontend.input.data_dest_address.ss_family){
     case AF_INET:
       {
-	struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.input.data_dest_address;
+	struct sockaddr_in * const sin = (struct sockaddr_in *)&Frontend.input.data_dest_address;
 	inet_ntop(AF_INET,&sin->sin_addr,addrtmp,sizeof(addrtmp));
       }
       break;
     case AF_INET6:
       {
-	struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&Frontend.input.data_dest_address;
+	struct sockaddr_in6 * const sin = (struct sockaddr_in6 *)&Frontend.input.data_dest_address;
 	inet_ntop(AF_INET6,&sin->sin6_addr,addrtmp,sizeof(addrtmp));
       }
       break;
@@ -250,7 +250,7 @@ static int setup_frontend(char const *arg){
     fprintf(stdout,"Front end data stream %s\n",addrtmp);
   }  
   fprintf(stdout,"Input sample rate %'d Hz, %s; block time %.1f ms, %.1f Hz\n",
-	  Frontend.sdr.samprate,Frontend.sdr.isreal ? "real" : "complex",Blocktime,1000./Blocktime);
+	  Frontend.sdr.samprate,Frontend.sdr.isreal ? "real" : "complex",Blocktime,1000.0f/Blocktime);
   fflush(stdout);
 
   // Input socket for I/Q data from SDR, set from OUTPUT_DEST_SOCKET in SDR metadata
@@ -265,8 +265,12 @@ static int setup_frontend(char const *arg){
   // M = filter impulse response duration
   // N = FFT size = L + M - 1
   // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
-  int L = (long long)llroundf(Frontend.sdr.samprate * Blocktime / 1000); // Blocktime is in milliseconds
-  int M = L / (Overlap - 1) + 1;
+  float const eL = Frontend.sdr.samprate * Blocktime / 1000.0f; // Blocktime is in milliseconds
+  int const L = lroundf(eL);
+  if(L != eL)
+    fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz\n",Blocktime,Frontend.sdr.samprate);
+
+  int const M = L / (Overlap - 1) + 1;
   Frontend.in = create_filter_input(L,M, Frontend.sdr.isreal ? REAL : COMPLEX);
   if(Frontend.in == NULL){
     fprintf(stdout,"Input filter setup failed\n");
@@ -274,17 +278,16 @@ static int setup_frontend(char const *arg){
   }
 
   // Launch procsamp to process incoming samples and execute the forward FFT
-  pthread_t procsamp_thread;
-  pthread_create(&procsamp_thread,NULL,proc_samples,NULL);
+  pthread_create(&Procsamp_thread,NULL,proc_samples,NULL);
 
 #if 0 // Turned off in favor of per-demod estimation
   // Launch thread to estimate noise spectral density N0
   // Is this always necessary? It's not always used
-  pthread_t n0_thread;
-  pthread_create(&n0_thread,NULL,estimate_n0,NULL);
+
+  pthread_create(&N0_thread,NULL,estimate_n0,NULL);
 #endif
 
-  Frontend_started++; // Only do this once!!
+  Frontend_started = true; // Only do this once!!
   return 0;
 }
 

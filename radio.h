@@ -1,4 +1,4 @@
-// $Id: radio.h,v 1.145 2022/06/05 22:55:53 karn Exp $
+// $Id: radio.h,v 1.146 2022/06/21 00:52:24 karn Exp $
 // Internal structures and functions of the 'radio' program
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
@@ -123,7 +123,7 @@ struct param {
   float squelch_open;  // squelch open threshold, power ratio
   float squelch_close; // squelch close threshold
   int squelchtail;     // Frames to hold open after loss of SNR
-  int samprate;      // Audio D/A sample rate (usually 48 kHz)
+  int samprate;      // Audio D/A sample rate
   float gain;        // Audio gain to normalize amplitude
   float headroom;    // Audio level headroom, amplitude ratio (settable)
   struct sockaddr_storage data_source_address;    // Source address of our data output
@@ -211,7 +211,7 @@ struct demod {
 
   // Output
   struct {
-    int samprate;      // Audio D/A sample rate (usually 48 kHz)
+    int samprate;      // Audio D/A sample rate
     float gain;        // Audio gain to normalize amplitude
     float headroom;    // Audio level headroom, amplitude ratio (settable)
     // RTP network streaming
@@ -284,7 +284,9 @@ int init_demod_streams(struct demod * restrict demod);
 double set_first_LO(struct demod const * restrict, double);
 float estimate_noise(struct demod *demod,int shift);
 int downconvert(struct demod *demod);
+int decode_fe_status(struct frontend *frontend,unsigned char const *buffer,int length);
 
+// Helper threads
 void *proc_samples(void *);
 void *estimate_n0(void *);
 void *rtcp_send(void *);
@@ -293,16 +295,15 @@ void *radio_status(void *);
 void *sdr_status(void *);
 void *demod_reaper(void *);
 
-// Used by demods to save CPU by bypassing various calculations when we're running without a status channel
 // Demodulator thread entry points
 void *demod_fm(void *);
 void *demod_wfm(void *);
 void *demod_linear(void *);
 void *demod_null(void *);
 
+// Send output to multicast streams
 int send_mono_output(struct demod * restrict ,const float * restrict,int,int);
 int send_stereo_output(struct demod * restrict ,const float * restrict,int,int);
+
 void output_cleanup(void *);
-
-
 #endif

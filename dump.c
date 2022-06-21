@@ -1,9 +1,8 @@
-// $Id: dump.c,v 1.37 2022/05/27 23:44:36 karn Exp $
+// $Id: dump.c,v 1.38 2022/06/21 00:52:24 karn Exp $
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdio.h>
 #include <math.h>
-#undef I
 #include <netdb.h>
 
 #include "misc.h"
@@ -11,19 +10,16 @@
 #include "multicast.h"
 #include "radio.h"
 
-void dump_metadata(unsigned char *buffer,int length){
-  unsigned char *cp = buffer;
-  struct sockaddr_storage sock;
-  int i;
-  char sbuf[256];
+void dump_metadata(unsigned char const * const buffer,int length){
+  unsigned char const *cp = buffer;
 
   while(cp - buffer < length){
-    enum status_type type = *cp++; // increment cp to length field
+    enum status_type const type = *cp++; // increment cp to length field
     
     if(type == EOL)
       break; // End of list
 
-    unsigned int optlen = *cp++;
+    unsigned int const optlen = *cp++;
     if(cp - buffer + optlen >= length)
       break; // Invalid length
     printf(" (%d) ",type);
@@ -43,19 +39,34 @@ void dump_metadata(unsigned char *buffer,int length){
       }
       break;
     case DESCRIPTION:
-      printf("%s",decode_string(cp,optlen,sbuf,sizeof(sbuf)));
+      {
+	char sbuf[256];
+	printf("%s",decode_string(cp,optlen,sbuf,sizeof(sbuf)));
+      }
       break;
     case INPUT_DATA_SOURCE_SOCKET:
-      printf("in data src %s",formatsock(decode_socket(&sock,cp,optlen)));
+      {
+	struct sockaddr_storage sock;
+	printf("in data src %s",formatsock(decode_socket(&sock,cp,optlen)));
+      }
       break;
     case INPUT_DATA_DEST_SOCKET:
-      printf("in data dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+      {
+	struct sockaddr_storage sock;
+	printf("in data dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+      }
       break;
     case INPUT_METADATA_SOURCE_SOCKET:
-      printf("in metadata src %s",formatsock(decode_socket(&sock,cp,optlen)));
+      {
+	struct sockaddr_storage sock;
+	printf("in metadata src %s",formatsock(decode_socket(&sock,cp,optlen)));
+      }
       break;
     case INPUT_METADATA_DEST_SOCKET:      
-      printf("in metadata dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+      {
+	struct sockaddr_storage sock;
+	printf("in metadata dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+      }
       break;
     case INPUT_SSRC:
       printf("in SSRC %'llu",(long long unsigned)decode_int(cp,optlen));
@@ -79,10 +90,16 @@ void dump_metadata(unsigned char *buffer,int length){
       printf("in dupes %'llu",(long long unsigned)decode_int(cp,optlen));
       break;
     case OUTPUT_DATA_SOURCE_SOCKET:
-      printf("out data src %s",formatsock(decode_socket(&sock,cp,optlen)));
+      {
+	struct sockaddr_storage sock;
+	printf("out data src %s",formatsock(decode_socket(&sock,cp,optlen)));
+      }
       break;
     case OUTPUT_DATA_DEST_SOCKET:
-      printf("out data dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+      {
+	struct sockaddr_storage sock;
+	printf("out data dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+      }
       break;
     case OUTPUT_SSRC:
       printf("out SSRC %'llu",(long long unsigned)decode_int(cp,optlen));
@@ -124,7 +141,7 @@ void dump_metadata(unsigned char *buffer,int length){
       printf("gain imbal %.1f dB",decode_float(cp,optlen));
       break;
     case IQ_PHASE:
-      printf("phase imbal %.1f deg",(180./M_PI)*asinf(decode_float(cp,optlen)));
+      printf("phase imbal %.1f deg",DEGPRA*asinf(decode_float(cp,optlen)));
       break;
     case DIRECT_CONVERSION:
       printf("direct conv %d",(int)decode_int(cp,optlen));
@@ -175,21 +192,23 @@ void dump_metadata(unsigned char *buffer,int length){
       printf("N0 %'.1f dB/Hz",decode_float(cp,optlen));
       break;
     case DEMOD_TYPE:
-      i = (long long unsigned)decode_int(cp,optlen); // ????
-      printf("demod %d ",i);
-      switch(i){
-      case LINEAR_DEMOD:
-	printf("(linear)");
-	break;
-      case FM_DEMOD:
-	printf("(FM)");
-	break;
-      case WFM_DEMOD:
-	printf("(wide FM)");
-	break;
-      default:
-	printf("(unknown)");
-	break;
+      {
+	const int i = (long long unsigned)decode_int(cp,optlen); // ????
+	printf("demod %d ",i);
+	switch(i){
+	case LINEAR_DEMOD:
+	  printf("(linear)");
+	  break;
+	case FM_DEMOD:
+	  printf("(FM)");
+	  break;
+	case WFM_DEMOD:
+	  printf("(wide FM)");
+	  break;
+	default:
+	  printf("(unknown)");
+	  break;
+	}
       }
       break;
     case OUTPUT_CHANNELS:
@@ -208,7 +227,7 @@ void dump_metadata(unsigned char *buffer,int length){
       printf("PLL square %'llu",(long long unsigned)decode_int(cp,optlen));
       break;
     case PLL_PHASE:
-      printf("PLL phase %g deg",(180/M_PI)*decode_float(cp,optlen));
+      printf("PLL phase %g deg",DEGPRA*decode_float(cp,optlen));
       break;
     case PLL_BW:
       printf("PLL loop BW %'.1f Hz",decode_float(cp,optlen));
@@ -259,10 +278,16 @@ void dump_metadata(unsigned char *buffer,int length){
       printf("output samp %'llu",(long long unsigned)decode_int(cp,optlen));
       break;
     case OPUS_SOURCE_SOCKET:
-      printf("opus src %s",formatsock(decode_socket(&sock,cp,optlen)));
+      {
+	struct sockaddr_storage sock;
+	printf("opus src %s",formatsock(decode_socket(&sock,cp,optlen)));
+      }
       break;
     case OPUS_DEST_SOCKET:
-      printf("opus dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+      {
+	struct sockaddr_storage sock;
+	printf("opus dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+      }
       break;
     case OPUS_SSRC:
       printf("opus ssrc %'u",(int)decode_int(cp,optlen));
@@ -304,13 +329,16 @@ void dump_metadata(unsigned char *buffer,int length){
       printf("deemph gain %.1f dB",decode_float(cp,optlen));
       break;
     case DEEMPH_TC:
-      printf("demph tc %.1f us",1e6*decode_float(cp,optlen));
+      printf("demph tc %.1f us",1e6f * decode_float(cp,optlen));
       break;
     case CONVERTER_OFFSET:
       printf("converter %.1f Hz",decode_float(cp,optlen));
       break;
     case PRESET:
-      printf("preset %s",decode_string(cp,optlen,sbuf,sizeof(sbuf)));      
+      {
+	char sbuf[256];
+	printf("preset %s",decode_string(cp,optlen,sbuf,sizeof(sbuf)));      
+      }
       break;
     default:
       printf("unknown type %d length %d",type,optlen);

@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.155 2022/06/09 03:59:52 karn Exp $
+// $Id: control.c,v 1.156 2022/06/21 00:52:24 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <limits.h>
 #include <string.h>
 #if defined(linux)
@@ -30,7 +31,6 @@
 #include <sys/ioctl.h>
 #include <iniparser/iniparser.h>
 
-
 #include "misc.h"
 #include "filter.h"
 #include "multicast.h"
@@ -39,11 +39,10 @@
 #include "radio.h"
 #include "config.h"
 
-
 static int const DEFAULT_IP_TOS = 48;
 static int const DEFAULT_MCAST_TTL = 1;
 
-float Refresh_rate = 0.1;
+float Refresh_rate = 0.1f;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
 int IP_tos = DEFAULT_IP_TOS;
 char const *Libdir = "/usr/local/share/ka9q-radio";
@@ -52,7 +51,7 @@ char const *Modefile = "/usr/local/share/ka9q-radio/modes.conf"; // make configu
 dictionary *Mdict;
 
 struct frontend Frontend;
-int FE_address_set;
+bool FE_address_set;
 struct sockaddr_storage FE_status_address;
 struct sockaddr_storage Metadata_source_address;      // Source of metadata
 int Source_set;
@@ -65,16 +64,15 @@ uint64_t Metadata_packets;
 uint64_t Block_drops;
 
 int Verbose;
-int Resized;
+bool Resized = false;
 
 struct control {
   int item;
-  int lock;
+  bool lock;
   int step;
 } Control;
 
 
-int decode_fe_status(struct frontend *,unsigned char *buffer,int length);
 int pprintw(WINDOW *w,int y, int x, char const *prefix, char const *fmt, ...);
 
 WINDOW *Tuning_win,*Sig_win,*Info_win,*Filtering_win,*Demodulator_win,
@@ -100,11 +98,11 @@ static int for_us(struct demod *demod,unsigned char const *buffer,int length,uin
 // library directory (usually /usr/local/share/ka9q-radio/)
 // then wait for a single keyboard character to clear it
 void popup(char const *filename){
-  static const int maxcols = 256;
+  static int const maxcols = 256;
   char fname[PATH_MAX];
   snprintf(fname,sizeof(fname),"%s/%s",Libdir,filename);
-  FILE *fp;
-  if((fp = fopen(fname,"r")) == NULL)
+  FILE * const fp = fopen(fname,"r");
+  if(fp == NULL)
     return;
   // Determine size of box
   int rows=0, cols=0;
@@ -139,7 +137,7 @@ void popup(char const *filename){
 
 // Pop up a dialog box, issue a prompt and get a response
 void getentry(char const *prompt,char *response,int len){
-  WINDOW *pwin = newwin(5,90,0,0);
+  WINDOW * const pwin = newwin(5,90,0,0);
   box(pwin,0,0);
   mvwaddstr(pwin,1,1,prompt);
   wrefresh(pwin);
@@ -175,14 +173,11 @@ void display_cleanup(void){
   Tty = NULL;
 }
 
-static int Frequency_lock;
-
+static bool Frequency_lock;
 
 // Adjust the selected item up or down one step
 void adjust_item(struct demod *demod,unsigned char **bpp,int direction){
-  double tunestep;
-  
-  tunestep = pow(10., (double)Control.step);
+  double tunestep = pow(10., (double)Control.step);
 
   if(!direction)
     tunestep = - tunestep;
@@ -204,14 +199,14 @@ void adjust_item(struct demod *demod,unsigned char **bpp,int direction){
     break;
   case 3: // Filter low edge (hertz rather than millihertz)
     {
-      float x = min(demod->filter.max_IF,demod->filter.min_IF + (float)tunestep * 1000);
+      float const x = min(demod->filter.max_IF,demod->filter.min_IF + (float)tunestep * 1000);
       demod->filter.min_IF = x;
       encode_float(bpp,LOW_EDGE,x);
     }
     break;
   case 4: // Filter high edge
     {
-      float x = max(demod->filter.min_IF,demod->filter.max_IF + (float)tunestep * 1000);
+      float const x = max(demod->filter.min_IF,demod->filter.max_IF + (float)tunestep * 1000);
       demod->filter.max_IF = x;
       encode_float(bpp,HIGH_EDGE,x);
     }
@@ -266,8 +261,9 @@ void setup_windows(void){
   int col = 0;
   int maxrows = 0;
 
-
-  endwin(); refresh(); clear();
+  endwin();
+  refresh();
+  clear();
 
   struct winsize w;
   ioctl(fileno(Tty),TIOCGWINSZ,&w);
@@ -297,14 +293,14 @@ void setup_windows(void){
     col += Windefs[i].cols;
     maxrows = max(maxrows,Windefs[i].rows);
   }
-  if(Debug_win){
+  if(Debug_win != NULL){
     // A message from our sponsor...
-    wprintw(Debug_win,"KA9Q SDR Receiver controller\nCopyright 2021 Phil Karn, KA9Q\n");
+    wprintw(Debug_win,"KA9Q SDR Receiver controller\nCopyright 2022 Phil Karn, KA9Q\n");
   }
 }
 
 void winch_handler(int num){
-  Resized = 1;
+  Resized = true;
 }
 
 
@@ -456,7 +452,7 @@ int main(int argc,char *argv[]){
     }
     pselect(n,&fdset,NULL,NULL,&timeout,NULL); // Don't really need to check the return
     if(Resized){
-      Resized = 0;
+      Resized = false;
       setup_windows();
     }
     if(Status_fd != -1 && FD_ISSET(Status_fd,&fdset)){
@@ -471,11 +467,11 @@ int main(int argc,char *argv[]){
 	random_time(&next_radio_poll,radio_poll_interval,random_interval);
 
 	if(Frontend.sdr.samprate != 0)
-	  Blocktime = 1000. * Frontend.L / Frontend.sdr.samprate;
+	  Blocktime = 1000.0f * Frontend.L / Frontend.sdr.samprate;
 
 	// Listen directly to the front end once we know its multicast group
 	if(!FE_address_set){
-	  FE_address_set = 1;
+	  FE_address_set = true;
 	  if(Frontend.input.status_fd >= 0){
 	    close(Frontend.input.status_fd);
 	    Frontend.input.status_fd = -1;
@@ -524,7 +520,7 @@ int main(int argc,char *argv[]){
     display_modes(Modes_win,demod);
     display_output(Output_win,demod);
     
-    if(Debug_win){
+    if(Debug_win != NULL){
       touchwin(Debug_win); // since we're not redrawing it every cycle
       wnoutrefresh(Debug_win);
     }    
@@ -625,10 +621,10 @@ int process_keyboard(struct demod *demod,unsigned char **bpp,int c){
     {
       char str[1024],*ptr;
       getentry("Squelch SNR: ",str,sizeof(str));
-      const float x = strtof(str,&ptr);
+      float const x = strtof(str,&ptr);
       if(ptr != str){
 	encode_float(bpp,SQUELCH_OPEN,x);
-	encode_float(bpp,SQUELCH_CLOSE,x-1.0); // Make this a separate command
+	encode_float(bpp,SQUELCH_CLOSE,x - 1); // Make this a separate command
       }
     }
     break;
@@ -636,7 +632,7 @@ int process_keyboard(struct demod *demod,unsigned char **bpp,int c){
     {
       char str[1024],*ptr;
       getentry("Hang time, s: ",str,sizeof(str));
-      const float x = fabsf(strtof(str,&ptr));
+      float const x = fabsf(strtof(str,&ptr));
       if(ptr != str)
 	encode_float(bpp,AGC_HANGTIME,x);
     }
@@ -645,7 +641,7 @@ int process_keyboard(struct demod *demod,unsigned char **bpp,int c){
     {
       char str[1024],*ptr;
       getentry("PLL loop bandwidth, Hz: ",str,sizeof(str));
-      const float x = fabsf(strtof(str,&ptr));
+      float const x = fabsf(strtof(str,&ptr));
       if(ptr != str)
 	encode_float(bpp,PLL_BW,x);
     }
@@ -654,7 +650,7 @@ int process_keyboard(struct demod *demod,unsigned char **bpp,int c){
     {
       char str[1024],*ptr;
       getentry("AGC threshold, dB: ",str,sizeof(str));
-      const float x = strtof(str,&ptr);
+      float const x = strtof(str,&ptr);
       if(ptr != str)
 	encode_float(bpp,AGC_THRESHOLD,x);
     }
@@ -663,7 +659,7 @@ int process_keyboard(struct demod *demod,unsigned char **bpp,int c){
     {
       char str[1024],*ptr;
       getentry("Recovery rate, dB/s: ",str,sizeof(str));
-      const float x = fabsf(strtof(str,&ptr));
+      float const x = fabsf(strtof(str,&ptr));
       if(ptr != str)
 	encode_float(bpp,AGC_RECOVERY_RATE,x);
     }
@@ -672,7 +668,7 @@ int process_keyboard(struct demod *demod,unsigned char **bpp,int c){
     {
       char str[1024],*ptr;
       getentry("Headroom, dB: ",str,sizeof(str));
-      const float x = -fabsf(strtof(str,&ptr));
+      float const x = -fabsf(strtof(str,&ptr));
       if(ptr != str)
 	encode_float(bpp,HEADROOM,x);
     }
@@ -681,7 +677,7 @@ int process_keyboard(struct demod *demod,unsigned char **bpp,int c){
     {
       char str[1024],*ptr;
       getentry("Gain, dB: ",str,sizeof(str));
-      const float x = strtof(str,&ptr);
+      float const x = strtof(str,&ptr);
       if(ptr != str)
 	encode_float(bpp,GAIN,x);
     }
@@ -690,7 +686,7 @@ int process_keyboard(struct demod *demod,unsigned char **bpp,int c){
     {
       char str[1024],*ptr;
       getentry("Refresh rate (s): ",str,sizeof(str));
-      const float x = strtof(str,&ptr);
+      float const x = strtof(str,&ptr);
       Refresh_rate = x;
     }
     break;

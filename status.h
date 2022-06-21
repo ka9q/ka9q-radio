@@ -136,7 +136,7 @@ double decode_double(unsigned char const *,int);
 struct sockaddr *decode_socket(void *sock,unsigned char const *,int);
 char *decode_string(unsigned char const *,int,char *,int);
 
-void dump_metadata(unsigned char *,int);
+void dump_metadata(unsigned char const *,int);
 
 void random_time(struct timespec *tv,unsigned int base,unsigned int rrange);
 void send_poll(int fd,int ssrc);

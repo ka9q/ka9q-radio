@@ -1,4 +1,4 @@
-// $Id: decode_status.c,v 1.18 2022/05/27 23:45:15 karn Exp $
+// $Id: decode_status.c,v 1.19 2022/06/21 00:52:24 karn Exp $
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
 #endif
@@ -13,14 +13,13 @@
 #include "radio.h"
 #include "status.h"
 
-int decode_fe_status(struct frontend *frontend,unsigned char *buffer,int length);
 
 // Process status messages from the front end
 void *sdr_status(void *arg){
   // Solicit immediate full status
   pthread_setname("sdrstat");
 
-  struct frontend *frontend = (struct frontend *)arg;
+  struct frontend * const frontend = (struct frontend *)arg;
   assert(frontend != NULL);
 
   int const random_interval = 50000; // 50 ms
@@ -34,8 +33,8 @@ void *sdr_status(void *arg){
     clock_gettime(CLOCK_REALTIME,&now);
     if(time_cmp(&now,&next_fe_poll) > 0){
       // Poll front end
-      if(Frontend.input.ctl_fd > 2)
-	send_poll(Frontend.input.ctl_fd,0);
+      if(frontend->input.ctl_fd > 2)
+	send_poll(frontend->input.ctl_fd,0);
       random_time(&next_fe_poll,fe_poll_interval,random_interval);
     }
     fd_set fdset;
@@ -57,14 +56,14 @@ void *sdr_status(void *arg){
       // Status Update from SDR
       unsigned char buffer[8192];
       socklen_t socklen = sizeof(frontend->input.metadata_source_address);
-      int len = recvfrom(frontend->input.status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&frontend->input.metadata_source_address,&socklen);
+      int const len = recvfrom(frontend->input.status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&frontend->input.metadata_source_address,&socklen);
       if(len <= 0){
 	perror("sdrstat recvfrom");
 	usleep(100000);
 	continue;
       }
       // Parse entries
-      int cr = buffer[0]; // command-response byte
+      int const cr = buffer[0]; // command-response byte
       
       if(cr == 1)
 	continue; // Ignore commands
@@ -83,15 +82,15 @@ void *sdr_status(void *arg){
 
 // Decode status messages from front end
 // Used by both radio and control
-int decode_fe_status(struct frontend *frontend,unsigned char *buffer,int length){
-  unsigned char *cp = buffer;
+int decode_fe_status(struct frontend *frontend,unsigned char const *buffer,int length){
+  unsigned char const *cp = buffer;
   while(cp - buffer < length){
-    enum status_type type = *cp++; // increment cp to length field
+    enum status_type const type = *cp++; // increment cp to length field
 
     if(type == EOL)
       break; // end of list
 
-    unsigned int optlen = *cp++;
+    unsigned int const optlen = *cp++;
     if(cp - buffer + optlen >= length)
       break; // invalid length; we can't continue to scan
 
@@ -188,7 +187,7 @@ int decode_fe_status(struct frontend *frontend,unsigned char *buffer,int length)
       break;
     case OUTPUT_CHANNELS:
       {
-	int i = decode_int(cp,optlen);
+	int const i = decode_int(cp,optlen);
 	if(i == 1)
 	  frontend->sdr.isreal = 1;
 	else
