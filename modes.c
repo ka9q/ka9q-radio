@@ -1,4 +1,4 @@
-// $Id: modes.c,v 1.64 2022/06/21 00:52:24 karn Exp $
+// $Id: modes.c,v 1.64 2022/06/21 00:52:24 karn Exp karn $
 // Load and search mode definition table in /usr/local/share/ka9q-radio/modes.conf
 
 // Copyright 2018, Phil Karn, KA9Q
@@ -117,9 +117,10 @@ static int set_defaults(struct demod *demod){
       demod->deemph.gain = dB2voltage(DEFAULT_WFM_DEEMPH_GAIN);
     }
   }
-  if(remainderf(Blocktime * demod->output.samprate * .001F,1.0F) != 0){
-    fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz\n",
-	    Blocktime,demod->output.samprate);
+  double r = remainder(Blocktime * demod->output.samprate * .001,1.0);
+  if(r != 0){
+    fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
+	    Blocktime,demod->output.samprate,r);
   }
   return 0;
 }

@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.253 2022/06/21 00:52:24 karn Exp $
+// $Id: main.c,v 1.253 2022/06/21 00:52:24 karn Exp karn $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -265,10 +265,11 @@ static int setup_frontend(char const *arg){
   // M = filter impulse response duration
   // N = FFT size = L + M - 1
   // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
-  float const eL = Frontend.sdr.samprate * Blocktime / 1000.0f; // Blocktime is in milliseconds
-  int const L = lroundf(eL);
+  double const eL = Frontend.sdr.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
+  int const L = lround(eL);
   if(L != eL)
-    fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz\n",Blocktime,Frontend.sdr.samprate);
+    fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
+	    Blocktime,Frontend.sdr.samprate,eL-L);
 
   int const M = L / (Overlap - 1) + 1;
   Frontend.in = create_filter_input(L,M, Frontend.sdr.isreal ? REAL : COMPLEX);
