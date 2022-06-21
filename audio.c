@@ -1,4 +1,4 @@
-// $Id: audio.c,v 1.103 2022/04/14 10:50:43 karn Exp $
+// $Id: audio.c,v 1.104 2022/06/21 07:40:01 karn Exp $
 // Audio multicast routines for KA9Q SDR receiver
 // Handles linear 16-bit PCM, mono and stereo
 // Copyright 2017 Phil Karn, KA9Q
@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -26,12 +27,12 @@ static int pt_from_demod(struct demod *demod){
 
 
 // Send 'size' stereo samples, each in a pair of floats
-int send_stereo_output(struct demod * restrict const demod,float const * restrict buffer,int size,int mute){
+int send_stereo_output(struct demod * restrict const demod,float const * restrict buffer,int size,bool const mute){
 
   if(mute){
     // Increment timestamp
     demod->output.rtp.timestamp += size; // Increase by sample count
-    demod->output.silent = 1;
+    demod->output.silent = true;
     return 0;
   }
 
@@ -50,9 +51,9 @@ int send_stereo_output(struct demod * restrict const demod,float const * restric
     demod->output.rtp.packets++;
     if(demod->output.silent){
       demod->output.silent = 0;
-      rtp.marker = 1;
+      rtp.marker = true;
     } else
-      rtp.marker = 0;
+      rtp.marker = false;
     rtp.seq = demod->output.rtp.seq++;
     unsigned char packet[PACKETSIZE];
     unsigned char *dp = hton_rtp(packet,&rtp);
@@ -73,7 +74,7 @@ int send_stereo_output(struct demod * restrict const demod,float const * restric
 }
 
 // Send 'size' mono samples, each in a float
-int send_mono_output(struct demod * restrict const demod,float const * restrict buffer,int size,int const mute){
+int send_mono_output(struct demod * restrict const demod,float const * restrict buffer,int size,bool const mute){
   if(mute){
     // Increment timestamp
     demod->output.rtp.timestamp += size; // Increase by sample count

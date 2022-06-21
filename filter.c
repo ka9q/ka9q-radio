@@ -1,4 +1,4 @@
-// $Id: filter.c,v 1.88 2022/05/25 03:05:31 karn Exp $
+// $Id: filter.c,v 1.89 2022/06/21 07:40:01 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -11,6 +11,7 @@
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <pthread.h>
 #include <memory.h>
 #include <complex.h>
@@ -27,7 +28,7 @@ char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
 
 double Fftw_plan_timelimit = 10.0;
 int Nthreads = 1; 
-int Fftw_init = 0;
+bool Fftw_init = false;
 
 static inline int modulo(int x,int const m){
   x = x < 0 ? x + m : x;
@@ -240,7 +241,7 @@ void *run_fft(void *p){
     f->blocknum = jobnum + 1;
     pthread_cond_broadcast(&f->filter_cond);
     pthread_mutex_unlock(&f->filter_mutex);
-    int const terminate = job->terminate ? 1 : 0;
+    bool const terminate = job->terminate;
     free(job); job = NULL;
     if(terminate)
       break; // Terminate after this job
@@ -534,7 +535,7 @@ static void terminate_fft(struct filter_in *f){
   struct fft_job * const job = calloc(1,sizeof(struct fft_job));
 
   job->input = NULL;
-  job->terminate = 1;
+  job->terminate = true;
   // Append job to queue, wake FFT thread
   pthread_mutex_lock(&f->queue_mutex);
   struct fft_job *jp_prev = NULL;
@@ -595,7 +596,7 @@ int delete_filter_output(struct filter_out **p){
 
 // Hamming window
 const static float hamming(int const n,int const M){
-  const float alpha = 25./46;
+  const float alpha = 25./46.;
   const float beta = (1-alpha);
 
   return alpha - beta * cosf(2*M_PI*n/(M-1));
@@ -626,7 +627,7 @@ static float const kaiser(int const n,int const M, float const beta){
     old_beta = beta;
     old_inv_denom = 1. / i0(beta);
   }
-  const float p = 2.0*n/(M-1) - 1;
+  float const p = 2.0*n/(M-1) - 1;
   return i0(beta*sqrtf(1-p*p)) * old_inv_denom;
 }
 #endif
@@ -668,7 +669,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
 
   assert(L > 0 && M > 0);
 
-  const int N = L + M - 1;
+  int const N = L + M - 1;
   assert(malloc_usable_size(response) >= N * sizeof(*response));
   // fftw_plan can overwrite its buffers, so we're forced to make a temp. Ugh.
   complex float * const buffer = fftwf_alloc_complex(N);
@@ -737,7 +738,7 @@ int window_rfilter(int const L,int const M,complex float * const response,float 
     return -1;
   assert(L > 0 && M > 0);
 
-  const int N = L + M - 1;
+  int const N = L + M - 1;
 
   assert(malloc_usable_size(response) >= (N/2+1)*sizeof(*response));
   complex float * const buffer = fftwf_alloc_complex(N/2 + 1); // plan destroys its input

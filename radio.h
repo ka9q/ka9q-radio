@@ -1,4 +1,4 @@
-// $Id: radio.h,v 1.146 2022/06/21 00:52:24 karn Exp $
+// $Id: radio.h,v 1.147 2022/06/21 07:40:01 karn Exp $
 // Internal structures and functions of the 'radio' program
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
@@ -139,7 +139,7 @@ struct param {
 
 // Demodulator state block; there can be many of these
 struct demod {
-  int inuse;
+  bool inuse;
   //  struct param param; // not yet used
 
   int lifetime;          // Remaining lifetime, seconds
@@ -247,7 +247,7 @@ struct demod {
   pthread_t demod_thread;
   // Set this flag to ask demod_thread to terminate.
   // pthread_cancel() can't be used because we're usually waiting inside of a mutex, and deadlock will occur
-  int terminate;
+  bool terminate;
   float tp1,tp2; // Spare test points
 };
 
@@ -302,8 +302,8 @@ void *demod_linear(void *);
 void *demod_null(void *);
 
 // Send output to multicast streams
-int send_mono_output(struct demod * restrict ,const float * restrict,int,int);
-int send_stereo_output(struct demod * restrict ,const float * restrict,int,int);
+int send_mono_output(struct demod * restrict ,const float * restrict,int,bool);
+int send_stereo_output(struct demod * restrict ,const float * restrict,int,bool);
 
 void output_cleanup(void *);
 #endif

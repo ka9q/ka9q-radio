@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.222 2022/06/21 00:52:24 karn Exp $
+// $Id: radio.c,v 1.223 2022/06/21 07:40:01 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -62,7 +62,7 @@ struct demod *alloc_demod(void){
     fprintf(stdout,"Warning: out of demod table space (%d)\n",Active_demod_count);
   } else {
     memset(demod,0,sizeof(struct demod));
-    demod->inuse = 1;
+    demod->inuse = true;
     Active_demod_count++;
   }
   pthread_mutex_unlock(&Demod_list_mutex);
@@ -74,7 +74,7 @@ void free_demod(struct demod **demod){
   if(demod != NULL && *demod != NULL){
     pthread_mutex_lock(&Demod_list_mutex);
     if((*demod)->inuse){
-      (*demod)->inuse = 0;
+      (*demod)->inuse = false;
       Active_demod_count--;
     }
     pthread_mutex_unlock(&Demod_list_mutex);  

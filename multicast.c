@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.73 2022/05/10 04:01:32 karn Exp $
+// $Id: multicast.c,v 1.74 2022/06/21 07:40:01 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -306,7 +306,7 @@ int rtp_process(struct rtp_state * const state,struct rtp_header const * const r
     // the caller demuxes the SSRC to multiple instances.
     // But a single-instance, interactive application like 'radio' lets the SSRC
     // change so it doesn't have to restart when the stream sender does.
-    state->init = 0;
+    state->init = false;
     state->ssrc = rtp->ssrc; // Must be filtered elsewhere if you want it
   }
   if(!state->init){
@@ -315,7 +315,7 @@ int rtp_process(struct rtp_state * const state,struct rtp_header const * const r
     state->timestamp = rtp->timestamp;
     state->dupes = 0;
     state->drops = 0;
-    state->init = 1;
+    state->init = true;
   }
   state->packets++;
   // Sequence number check
@@ -476,7 +476,6 @@ int channels_from_pt(int const type){
   default:
     return 0;
   }
-
 }
 
 
@@ -598,7 +597,7 @@ static void soptions(int const fd,int const mcast_ttl,int const tos){
     perror("freebind failed");
 #endif
 
-  int reuse = 1;
+  bool reuse = true;
   if(setsockopt(fd,SOL_SOCKET,SO_REUSEPORT,&reuse,sizeof(reuse)) != 0)
     perror("so_reuseport failed");
   if(setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(reuse)) != 0)

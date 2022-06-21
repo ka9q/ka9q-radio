@@ -1,4 +1,4 @@
-// $Id: multicast.h,v 1.46 2022/05/10 05:18:16 karn Exp $
+// $Id: multicast.h,v 1.47 2022/06/21 07:40:01 karn Exp $
 // Multicast and RTP functions, constants and structures
 // Not every RTP module uses these yet, they need to be revised
 // Copyright 2018, Phil Karn, KA9Q
@@ -6,6 +6,7 @@
 #ifndef _MULTICAST_H
 #define _MULTICAST_H 1
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <assert.h>
@@ -63,9 +64,9 @@ struct rtp_header {
   uint16_t seq;
   uint32_t timestamp;
   uint32_t ssrc;
-  unsigned int marker:1;
-  unsigned int pad:1;
-  unsigned int extension:1;
+  bool marker:1;
+  bool pad:1;
+  bool extension:1;
   int cc;
   uint32_t csrc[15];
 };
@@ -73,7 +74,7 @@ struct rtp_header {
 // RTP sender/receiver state
 struct rtp_state {
   uint32_t ssrc;
-  int init;
+  bool init;
   uint16_t seq;
   uint32_t timestamp;
   long long packets;

@@ -1,4 +1,4 @@
-// $Id: linear.c,v 1.114 2022/06/14 07:38:23 karn Exp $
+// $Id: linear.c,v 1.116 2022/06/21 07:40:01 karn Exp $
 
 // General purpose linear demodulator
 // Handles USB/IQ/CW/etc, all modes but FM
@@ -20,6 +20,7 @@
 #include <fftw3.h>
 #include <pthread.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "misc.h"
 #include "filter.h"
@@ -27,7 +28,7 @@
 
 void *demod_linear(void *arg){
   assert(arg != NULL);
-  struct demod * demod = arg;
+  struct demod * const demod = arg;
 
   {
     char name[100];
@@ -51,15 +52,14 @@ void *demod_linear(void *arg){
   float const damping = DEFAULT_PLL_DAMPING;
   float const lock_time = DEFAULT_PLL_LOCKTIME;
 
-  const int lock_limit = lock_time * demod->output.samprate;
+  int const lock_limit = lock_time * demod->output.samprate;
   init_pll(&demod->pll.pll,(float)demod->output.samprate);
-
 
   while(!demod->terminate){
     if(downconvert(demod) == -1) // received terminate
       break;
 
-    const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
+    int const N = demod->filter.out->olen; // Number of raw samples in filter output buffer
 
     // First pass over sample block.
     // Perform fine frequency downconversion & block phase correction
@@ -72,12 +72,14 @@ void *demod_linear(void *arg){
     float noise = 0;  // PLL only
 
     if(demod->linear.pll){
+      // Update PLL state, if active
+      if(!demod->pll.was_on){
+	demod->pll.pll.integrator = 0; // reset oscillator when coming back on
+	demod->pll.was_on = 1;
+      }
       set_pll_params(&demod->pll.pll,demod->linear.loop_bw,damping);
       for(int n=0; n<N; n++){
-	complex float s = buffer[n];
-      
-	s *= conjf(pll_phasor(&demod->pll.pll));
-	buffer[n] = s;
+	complex float const s = buffer[n] *= conjf(pll_phasor(&demod->pll.pll));
 	float phase;
 	if(demod->linear.square){
 	  phase = cargf(s*s);
@@ -88,11 +90,13 @@ void *demod_linear(void *arg){
 	signal += crealf(s) * crealf(s); // signal in phase with VCO is signal + noise power
 	noise += cimagf(s) * cimagf(s);  // signal in quadrature with VCO is assumed to be noise power
       }
-      // Update PLL state, if active
-      if(!demod->pll.was_on){
-	demod->pll.pll.integrator = 0; // reset oscillator when coming back on
-	demod->pll.was_on = 1;
-      }
+      if(noise != 0){
+	demod->sig.snr = (signal / noise) - 1; // S/N as power ratio; meaningful only in coherent modes
+	if(demod->sig.snr < 0)
+	  demod->sig.snr = 0; // Clamp to 0 so it'll show as -Inf dB
+      } else
+	demod->sig.snr = NAN;
+
       // Loop lock detector with hysteresis
       // If the loop is locked, the SNR must fall below the threshold for a while
       // before we declare it unlocked, and vice versa
@@ -115,12 +119,6 @@ void *demod_linear(void *arg){
 	demod->linear.cphase /= 2; // Squaring doubles the phase
       
       demod->sig.foffset = pll_freq(&demod->pll.pll);
-      if(noise != 0){
-	demod->sig.snr = (signal / noise) - 1; // S/N as power ratio; meaningful only in coherent modes
-	if(demod->sig.snr < 0)
-	  demod->sig.snr = 0; // Clamp to 0 so it'll show as -Inf dB
-      } else
-	demod->sig.snr = NAN;
     } else { // if PLL
       demod->pll.was_on = 0;
     }
@@ -138,9 +136,9 @@ void *demod_linear(void *arg){
     // so there's probably a lot of work to do here
     float gain_change = 1; // default to constant gain
     if(demod->linear.agc){
-      const float bw = fabsf(demod->filter.min_IF - demod->filter.max_IF);
-      const float bn = sqrtf(bw * demod->sig.n0); // Noise amplitude
-      const float ampl = sqrtf(demod->sig.bb_power);
+      float const bw = fabsf(demod->filter.min_IF - demod->filter.max_IF);
+      float const bn = sqrtf(bw * demod->sig.n0); // Noise amplitude
+      float const ampl = sqrtf(demod->sig.bb_power);
 
       // per-sample gain change is required to avoid sudden gain changes at block boundaries that can
       // cause clicks and pops when a strong signal straddles a block boundary
@@ -191,11 +189,11 @@ void *demod_linear(void *arg){
       }
       demod->output.level = output_level / N;
       // Mute if no signal (e.g., outside front end coverage)
-      int mute = 0;
+      bool mute = false;
       if(demod->output.level == 0)
-	mute = 1;
+	mute = true;
       if(demod->linear.pll && !demod->linear.pll_lock) // Use PLL for AM carrier squelch
-	mute = 1;
+	mute = true;
 
       if(send_mono_output(demod,samples,N,mute) == -1)
 	break; // No output stream!
@@ -220,9 +218,9 @@ void *demod_linear(void *arg){
       // Mute if no signal (e.g., outside front end coverage)
       int mute = 0;
       if(demod->output.level == 0)
-	mute = 1;
+	mute = true;
       if(demod->linear.pll && !demod->linear.pll_lock)
-	mute = 1; // AM carrier squelch
+	mute = true; // AM carrier squelch
 
       if(send_stereo_output(demod,(float *)buffer,N,mute)){
 	break; // No output stream! Terminate

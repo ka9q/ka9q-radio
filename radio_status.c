@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.81 2022/05/28 00:07:55 karn Exp $
+// $Id: radio_status.c,v 1.82 2022/06/21 07:40:01 karn Exp $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -51,7 +51,7 @@ void *radio_status(void *arg){
     // We start from loadconfig() after all the slices have been started so we don't contend with it for Demod_list_mutex
     pthread_mutex_lock(&Demod_list_mutex);
     for(int i = 0; i < Demod_list_length; i++){
-      if(Demod_list[i].inuse == 0)
+      if(!Demod_list[i].inuse)
 	continue;
       send_radio_status(&Frontend,&Demod_list[i],1); // Send status in response	
       usleep(5000); // arbitrary 5ms interval to avoid flooding the net
@@ -121,11 +121,10 @@ void *radio_status(void *arg){
 }
 
 static int send_radio_status(struct frontend *frontend,struct demod *demod,int full){
-  int len;
   unsigned char packet[2048];
 
   Metadata_packets++;
-  len = encode_radio_status(frontend,demod,packet,sizeof(packet));
+  int const len = encode_radio_status(frontend,demod,packet,sizeof(packet));
   send(Status_fd,packet,len,0);
 
   return 0;
@@ -377,10 +376,10 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
  done:;
   if(restart_needed){
     // Stop demod
-    demod->terminate = 1;
+    demod->terminate = true;
     pthread_join(demod->demod_thread,NULL);
     demod->demod_thread = (pthread_t)0;
-    demod->terminate = 0;
+    demod->terminate = false;
   }
   if(new_filter_needed){
     // Set up new filter with demod possibly stopped
