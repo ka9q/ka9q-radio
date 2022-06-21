@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.74 2022/06/21 07:40:01 karn Exp $
+// $Id: multicast.c,v 1.74 2022/06/21 07:40:01 karn Exp karn $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -592,12 +592,12 @@ int setportnumber(void *s,uint16_t port){
 static void soptions(int const fd,int const mcast_ttl,int const tos){
   // Failures here are not fatal
 #if defined(linux)
-  int freebind = 1;
+  int freebind = true;
   if(setsockopt(fd,IPPROTO_IP,IP_FREEBIND,&freebind,sizeof(freebind)) != 0)
     perror("freebind failed");
 #endif
 
-  bool reuse = true;
+  int reuse = true; // bool doesn't work for some reason
   if(setsockopt(fd,SOL_SOCKET,SO_REUSEPORT,&reuse,sizeof(reuse)) != 0)
     perror("so_reuseport failed");
   if(setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(reuse)) != 0)
