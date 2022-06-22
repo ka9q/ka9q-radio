@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.82 2022/06/21 07:40:01 karn Exp $
+// $Id: radio_status.c,v 1.83 2022/06/22 18:13:28 karn Exp $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -15,7 +15,6 @@
 #include <complex.h>
 #undef I
 #include <sys/time.h>
-#include <ncurses.h>
 #include <ctype.h>
 #include <sys/socket.h>
 #include <netdb.h>
