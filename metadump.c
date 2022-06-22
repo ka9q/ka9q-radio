@@ -1,4 +1,4 @@
-// $Id: metadump.c,v 1.13 2022/05/21 18:15:44 karn Exp $
+// $Id: metadump.c,v 1.13 2022/05/21 18:15:44 karn Exp karn $
 // Utility to trace multicast SDR metadata
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -16,7 +16,6 @@
 #include <complex.h>
 #undef I
 #include <sys/time.h>
-#include <ncurses.h>
 #include <ctype.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -51,13 +50,13 @@ int main(int argc,char *argv[]){
     }
   }
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
-  fprintf(stderr,"Listening to %s\n",argv[optind]);
+  fprintf(stdout,"Listening to %s\n",argv[optind]);
   struct sockaddr_storage sock;
   char iface[1024];
   iface[0] = '\0';
 
   resolve_mcast(argv[optind],&sock,DEFAULT_STAT_PORT,iface,sizeof(iface));
-  printf("Interface: %s\n",iface);
+  fprintf(stdout,"Interface: %s\n",iface);
   Status_sock = listen_mcast(&sock,iface);
 
   for(;;){
@@ -73,12 +72,11 @@ int main(int argc,char *argv[]){
     }
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME,&ts);
-    time_t clock;
-    clock = ts.tv_sec;
-    struct tm *tm = localtime(&clock);
+    time_t const clock = ts.tv_sec;
+    struct tm const *tm = localtime(&clock);
     
-    int cr = buffer[0]; // Command/response byte
-    printf("%02d:%02d:%02d.%09ld %s: %s",tm->tm_hour,tm->tm_min,tm->tm_sec,(long int)ts.tv_nsec,
+    int const cr = buffer[0]; // Command/response byte
+    fprintf(stdout,"%02d:%02d:%02d.%09ld %s: %s",tm->tm_hour,tm->tm_min,tm->tm_sec,(long int)ts.tv_nsec,
 	   formatsock(&source),cr ? "CMD " : "STAT");
     dump_metadata(buffer+1,length-1);
     fflush(stdout);
