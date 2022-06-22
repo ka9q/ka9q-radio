@@ -1,9 +1,10 @@
-// $Id: metadump.c,v 1.14 2022/06/22 18:12:46 karn Exp $
+// $Id: metadump.c,v 1.15 2022/06/22 18:42:31 karn Exp $
 // Utility to trace multicast SDR metadata
 // Copyright 2018 Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <limits.h>
