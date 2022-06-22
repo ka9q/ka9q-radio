@@ -1,4 +1,4 @@
-// $Id: pl.c,v 1.20 2022/05/10 04:01:32 karn Exp $
+// $Id: pl.c,v 1.22 2022/06/22 18:24:26 karn Exp $
 // PL tone decoder
 // Reads multicast PCM audio (mono only right now)
 // Copyright Jan 2019 Phil Karn, KA9Q
@@ -157,7 +157,7 @@ int main(int argc,char * const argv[]){
       break;
     case 'I':
       if(Nfds == MAX_MCAST){
-	fprintf(stderr,"Too many multicast addresses; max %d\n",MAX_MCAST);
+	fprintf(stdout,"Too many multicast addresses; max %d\n",MAX_MCAST);
       } else 
 	Mcast_address_text[Nfds++] = optarg;
       break;
@@ -176,13 +176,13 @@ int main(int argc,char * const argv[]){
   // Also accept groups without -I option
   for(int i=optind; i < argc; i++){
     if(Nfds == MAX_MCAST){
-      fprintf(stderr,"Too many multicast addresses; max %d\n",MAX_MCAST);
+      fprintf(stdout,"Too many multicast addresses; max %d\n",MAX_MCAST);
     } else 
       Mcast_address_text[Nfds++] = argv[i];
   }
   // Set up multicast
   if(Nfds == 0){
-    fprintf(stderr,"Must specify PCM source group(s)\n");
+    fprintf(stdout,"Must specify PCM source group(s)\n");
     exit(1);
   }
 
@@ -195,7 +195,7 @@ int main(int argc,char * const argv[]){
   for(int i=0;i<Nfds;i++){
     input_fd[i] = setup_mcast_in(Mcast_address_text[i],NULL,0);
     if(input_fd[i] == -1){
-      fprintf(stderr,"Can't set up input %s\n",Mcast_address_text[i]);
+      fprintf(stdout,"Can't set up input %s\n",Mcast_address_text[i]);
       continue;
     }
     if(input_fd[i] > max_fd)
@@ -256,10 +256,10 @@ int main(int argc,char * const argv[]){
       if(sp == NULL){
 	sp = create_session(&sender,rtp_hdr.ssrc,rtp_hdr.seq,rtp_hdr.timestamp);
 	if(sp == NULL){
-	  fprintf(stderr,"No room!!\n");
+	  fprintf(stdout,"No room!!\n");
 	  continue;
 	}
-	fprintf(stdout,"new session: %x %'d Hz\n",rtp_hdr.ssrc,samprate);
+	fprintf(stdout,"new ssrc %u, samprate %'d Hz\n",rtp_hdr.ssrc,samprate);
 	sp->type = rtp_hdr.type;
 	sp->samprate = samprate;
 
@@ -301,7 +301,9 @@ int main(int argc,char * const argv[]){
 	for(int n=0; n < sp->pl_filter_out->olen; n++){
 	  float const pl_tone = process_pl(sp,sp->pl_filter_out->output.c[n]);
 	  if(pl_tone > 0){
-	    printf("SSRC %x PL %.1f Hz\n",sp->rtp_state_in.ssrc,pl_tone);
+#if 0
+	    printf("ssrc %u: PL %.1f Hz\n",sp->rtp_state_in.ssrc,pl_tone);
+#endif
 	    sp->current_pl_tone = pl_tone;
 	  }
 	}
@@ -312,7 +314,9 @@ int main(int argc,char * const argv[]){
       if(dtmf_digit == -1)
 	continue;
       if(dtmf_digit != sp->current_dtmf_digit){
-	printf("SSRC %x DTMF %c\n",sp->rtp_state_in.ssrc,dtmf_digit);
+#if 0
+	printf("ssrc %u: DTMF %c\n",sp->rtp_state_in.ssrc,dtmf_digit);
+#endif
 	sp->current_dtmf_digit = dtmf_digit;
       }
 #endif
@@ -398,10 +402,10 @@ static float process_pl(struct session * const sp,complex float const samp){
   // NBFM nominal bandwidth is 16 kHz, so a (slow) deviation of +/- 8 kHz will give 0 dB audio
   // PL deviation is nominally > 600 Hz or -22.5 dB 
   // Should calculate this analytically from specified minimum tone deviation (500 Hz?) and audio path gain
-  sp->strongest_tone_energy = 0.005;
+  sp->strongest_tone_energy = 0.005 * sp->pl_blocksize; // mininum tone energy in block
   sp->strongest_tone_index = -1;
   for(int n=0; n < N_tones; n++){
-    float const energy = cnrmf(sp->pl_integrators[n]) / sp->pl_blocksize; // per sample
+    float const energy = cnrmf(sp->pl_integrators[n]);
     if(energy > sp->strongest_tone_energy){
       sp->strongest_tone_energy = energy;
       sp->strongest_tone_index = n;
@@ -411,7 +415,7 @@ static float process_pl(struct session * const sp,complex float const samp){
   if(sp->strongest_tone_index == -1)
     return 0; // No tone found
   float const pl_tone = PL_tones[sp->strongest_tone_index];
-  printf("%x: tone %.1f Hz %.1f dB\n",sp->rtp_state_in.ssrc,pl_tone,power2dB(sp->strongest_tone_energy));
+  printf("ssrc %u: tone %.1f Hz %.1f dB\n",sp->rtp_state_in.ssrc,pl_tone,power2dB(sp->strongest_tone_energy/sp->pl_blocksize));
   return pl_tone;
 }
 
@@ -427,7 +431,7 @@ static char process_dtmf(struct session *sp,complex float samp){
     return -1;
 
   sp->dtmf_audio_count = 0;
-  const float min_tone_level = 0.1; // Each tone must be above -10 dBFS
+  const float min_tone_level = 0.1 * sp->dtmf_blocksize; // Each tone must be above -10 dBFS
   
   int low_tone_index = -1;
   float low_tone_snr = 0;
@@ -435,7 +439,7 @@ static char process_dtmf(struct session *sp,complex float samp){
   {
     float total_energy = 0;
     for(int n=0; n < 4; n++){
-      float const energy = cnrmf(sp->dtmf_low_integrators[n]) / sp->dtmf_blocksize; // Per sample
+      float const energy = cnrmf(sp->dtmf_low_integrators[n]);
       sp->dtmf_low_integrators[n] = 0;
       total_energy += energy;
       if(energy >= low_tone_energy){
@@ -453,7 +457,7 @@ static char process_dtmf(struct session *sp,complex float samp){
   {
     float total_energy = 0;
     for(int n=0; n < 4; n++){
-      float const energy = cnrmf(sp->dtmf_high_integrators[n]) / sp->dtmf_blocksize;
+      float const energy = cnrmf(sp->dtmf_high_integrators[n]);
       sp->dtmf_high_integrators[n] = 0;
       total_energy += energy;
       if(energy >= high_tone_energy){
@@ -470,8 +474,10 @@ static char process_dtmf(struct session *sp,complex float samp){
     result = DTMF_matrix[low_tone_index][high_tone_index];
 
 #if 1
-  if(result != sp->current_dtmf_digit)
-    printf("DTMF debug ssrc %x %c low=(%.0f, abs %.1f dB snr %.1f) high=(%.0f, abs %.1f dB, snr %.1f)\n",
+  if(result != sp->current_dtmf_digit){
+    low_tone_energy /= sp->dtmf_blocksize; // scale to per sample
+    high_tone_energy /= sp->dtmf_blocksize;
+    printf("DTMF debug ssrc %u %c low=(%.0f, abs %.1f dB snr %.1f) high=(%.0f, abs %.1f dB, snr %.1f)\n",
 	   sp->rtp_state_in.ssrc, result,
 	   DTMF_low_tones[low_tone_index],power2dB(low_tone_energy),power2dB(low_tone_snr),
 	   DTMF_high_tones[high_tone_index],power2dB(high_tone_energy),power2dB(high_tone_snr));
