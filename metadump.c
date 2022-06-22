@@ -1,4 +1,4 @@
-// $Id: metadump.c,v 1.15 2022/06/22 18:42:31 karn Exp $
+// $Id: metadump.c,v 1.15 2022/06/22 18:42:31 karn Exp karn $
 // Utility to trace multicast SDR metadata
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -36,7 +36,7 @@ int Mcast_ttl = 5;
 int main(int argc,char *argv[]){
   int c;
 
-  while((c = getopt(argc,argv,"vd")) != EOF){
+  while((c = getopt(argc,argv,"vd")) != -1){
     switch(c){
     case 'v':
       Verbose++;
