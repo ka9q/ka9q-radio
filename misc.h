@@ -1,4 +1,4 @@
-// $Id: misc.h,v 1.28 2022/06/18 16:54:32 karn Exp $
+// $Id: misc.h,v 1.29 2022/06/23 22:07:18 karn Exp $
 // Miscellaneous constants, macros and function prototypes
 // Copyright 2018 Phil Karn, KA9Q
 #ifndef _MISC_H
@@ -111,10 +111,10 @@ static inline void time_add(struct timespec *result,struct timespec const *a, st
 #define GPS_UTC_OFFSET (18) // GPS ahead of utc by 18 seconds - make this a table!
 #define UNIX_EPOCH ((time_t)315964800) // GPS epoch on unix time scale
 
-#define dB2power(x) (powf(10.,(x)/10.))
-#define power2dB(x) (10*log10f(x))
-#define dB2voltage(x) (powf(10.,(x)/20.))
-#define voltage2dB(x) (20*log10f(x))
+#define dB2power(x) (powf(10.0f,(x)/10.0f))
+#define power2dB(x) (10.0f * log10f(x))
+#define dB2voltage(x) (powf(10.0f, (x)/20.0f))
+#define voltage2dB(x) (20.0f * log10f(x))
 
 // Cos(x) + j*sin(x)
 #define cisf(x) csincosf(x)
