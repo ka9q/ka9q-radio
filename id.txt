@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.48 2022/05/07 10:45:38 karn Exp karn $
+# $Id: id.txt,v 1.49 2022/06/23 22:01:47 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -133,7 +133,7 @@
 147210	N6VVY Mt Otay
 147240	KA6DAC Mt Laguna
 147270	?
-147285	WA6AIL
+147285	WA6AIL in
 147300	K6VGP Mt Wilson
 147315  W6THC in
 147330	XE2BNC Mt San Antonio
