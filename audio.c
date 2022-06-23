@@ -1,4 +1,4 @@
-// $Id: audio.c,v 1.104 2022/06/21 07:40:01 karn Exp $
+// $Id: audio.c,v 1.105 2022/06/23 22:04:20 karn Exp $
 // Audio multicast routines for KA9Q SDR receiver
 // Handles linear 16-bit PCM, mono and stereo
 // Copyright 2017 Phil Karn, KA9Q
@@ -49,11 +49,8 @@ int send_stereo_output(struct demod * restrict const demod,float const * restric
     demod->output.rtp.timestamp += chunk/2; // Increase by sample count
     demod->output.rtp.bytes += sizeof(signed short) * chunk;
     demod->output.rtp.packets++;
-    if(demod->output.silent){
-      demod->output.silent = 0;
-      rtp.marker = true;
-    } else
-      rtp.marker = false;
+    rtp.marker = demod->output.silent;
+    demod->output.silent = false;
     rtp.seq = demod->output.rtp.seq++;
     unsigned char packet[PACKETSIZE];
     unsigned char *dp = hton_rtp(packet,&rtp);
@@ -78,7 +75,7 @@ int send_mono_output(struct demod * restrict const demod,float const * restrict 
   if(mute){
     // Increment timestamp
     demod->output.rtp.timestamp += size; // Increase by sample count
-    demod->output.silent = 1;
+    demod->output.silent = true;
     return 0;
   }
   struct rtp_header rtp;
@@ -95,12 +92,9 @@ int send_mono_output(struct demod * restrict const demod,float const * restrict 
     demod->output.rtp.timestamp += chunk; // Increase by sample count
     demod->output.rtp.packets++;
     demod->output.rtp.bytes += sizeof(signed short) * chunk;
-    if(demod->output.silent){
-      // Transition from silence, emit a mark bit
-      demod->output.silent = 0;
-      rtp.marker = 1;
-    } else
-      rtp.marker = 0;
+    // Transition from silence emits a mark bit
+    rtp.marker = demod->output.silent;
+    demod->output.silent = false;
     rtp.seq = demod->output.rtp.seq++;
     unsigned char packet[PACKETSIZE];
     unsigned char *dp = hton_rtp(packet,&rtp);
