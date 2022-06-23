@@ -1,4 +1,4 @@
-// $Id: filter.c,v 1.89 2022/06/21 07:40:01 karn Exp $
+// $Id: filter.c,v 1.90 2022/06/23 22:05:26 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -876,3 +876,20 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 }
 
 
+// Initialize goertzel state to fractional frequency f
+void init_goertzel(struct goertzel *gp,float f){
+  reset_goertzel(gp);
+  float s,c;
+  sincospif(2*f,&s,&c);
+  gp->coeff = 2 * c;
+  __real__ gp->cf = c; // exp(-j*2*pi*f/fs)
+  __imag__ gp->cf = -s;
+}
+
+// Produce one sample of filter output
+// The overall gain is such that N samples of an on-frequency sinusoid with peak amplitude 1 (2 units peak-to-peak)
+// gives an output with a magnitude of N/2
+complex float output_goertzel(struct goertzel *gp){
+  update_goertzel(gp,0); // Nth sample must be zero
+  return gp->s0 - gp->cf * gp->s1;
+}
