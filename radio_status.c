@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.83 2022/06/22 18:13:28 karn Exp $
+// $Id: radio_status.c,v 1.84 2022/06/23 22:13:29 karn Exp $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -507,6 +507,10 @@ static int encode_radio_status(struct frontend *frontend,struct demod const *dem
     encode_byte(&bp,INDEPENDENT_SIDEBAND,demod->filter.isb); // bool
     break;
   case FM_DEMOD:
+    if(demod->fm.tone_freq != 0){
+      encode_float(&bp,PL_TONE,demod->fm.tone_freq);
+      encode_float(&bp,PL_DEVIATION,demod->fm.tone_deviation); // Note fall-through
+    }
   case WFM_DEMOD:
     encode_float(&bp,PEAK_DEVIATION,demod->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0/(logf(demod->deemph.rate) * demod->output.samprate));

@@ -81,7 +81,7 @@ enum status_type {
   DEMOD_SNR,      // FM, PLL linear
   FREQ_OFFSET,    // FM, PLL linear
   PEAK_DEVIATION, // FM only
-  PL_TONE,        // FM only
+  PL_TONE,        // PL tone squelch frequency (FM only)
   
   // Settable gain parameters
   AGC_ENABLE,     // boolean, linear modes only
@@ -116,6 +116,7 @@ enum status_type {
   DEEMPH_TC,      // De-emphasis time constant (FM only)
   DEEMPH_GAIN,    // De-emphasis gain (FM only)
   CONVERTER_OFFSET, // Frequency converter shift (if present)
+  PL_DEVIATION,     // Measured PL tone deviation, Hz (FM only)
 
 };
 

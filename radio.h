@@ -1,4 +1,4 @@
-// $Id: radio.h,v 1.147 2022/06/21 07:40:01 karn Exp $
+// $Id: radio.h,v 1.148 2022/06/23 22:13:29 karn Exp $
 // Internal structures and functions of the 'radio' program
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
@@ -207,6 +207,9 @@ struct demod {
 
   struct {               // Used only in FM demodulator
     float pdeviation;    // Peak frequency deviation Hz (FM)
+    float tone_freq;        // PL tone squelch frequency
+    struct goertzel tonedetect;
+    float tone_deviation; // Measured deviation of tone
   } fm;
 
   // Output

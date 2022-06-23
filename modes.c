@@ -1,4 +1,4 @@
-// $Id: modes.c,v 1.65 2022/06/21 08:04:42 karn Exp $
+// $Id: modes.c,v 1.66 2022/06/23 22:13:29 karn Exp $
 // Load and search mode definition table in /usr/local/share/ka9q-radio/modes.conf
 
 // Copyright 2018, Phil Karn, KA9Q
@@ -106,6 +106,7 @@ static int set_defaults(struct demod *demod){
       demod->deemph.rate = expf(-1.0F / (tc * demod->output.samprate));
       demod->deemph.gain = dB2voltage(DEFAULT_FM_DEEMPH_GAIN);
     }
+    demod->fm.tone_freq = 0; // No default PL tone
     break;
   case WFM_DEMOD:
     demod->output.channels = 2;      // always stereo
@@ -229,6 +230,9 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
       demod->deemph.gain = dB2voltage(g);
     }
   }
+  // "pl" and "ctcss" are synonyms
+  demod->fm.tone_freq = config_getfloat(table,mode,"pl",demod->fm.tone_freq);
+  demod->fm.tone_freq = config_getfloat(table,mode,"ctcss",demod->fm.tone_freq);
   return 0;
 }
 

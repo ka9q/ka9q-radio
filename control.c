@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.156 2022/06/21 00:52:24 karn Exp $
+// $Id: control.c,v 1.157 2022/06/23 22:13:29 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -315,7 +315,7 @@ uint32_t Ssrc = 0;
 int main(int argc,char *argv[]){
   {
     int c;
-    while((c = getopt(argc,argv,"vs:")) != EOF){
+    while((c = getopt(argc,argv,"vs:")) != -1){
       switch(c){
       case 'v':
 	Verbose++;
@@ -1128,6 +1128,12 @@ int decode_radio_status(struct demod *demod,unsigned char const *buffer,int leng
     case DEEMPH_TC:
       demod->deemph.rate = 1e6*decode_float(cp,optlen);
       break;
+    case PL_TONE:
+      demod->fm.tone_freq = decode_float(cp,optlen);
+      break;
+    case PL_DEVIATION:
+      demod->fm.tone_deviation = decode_float(cp,optlen);
+      break;
     default: // ignore others
       break;
     }
@@ -1327,17 +1333,18 @@ void display_demodulator(WINDOW *w,struct demod const *demod){
   case FM_DEMOD:
   case WFM_DEMOD:
     pprintw(w,row++,col,"Input SNR","%.1f dB",power2dB(demod->sig.snr));
+    pprintw(w,row++,col,"Squelch open","%.1f dB",power2dB(demod->squelch_open));
+    pprintw(w,row++,col,"Squelch close","%.1f dB",power2dB(demod->squelch_close));    
     pprintw(w,row++,col,"Offset","%'+.3f Hz",demod->sig.foffset);
     pprintw(w,row++,col,"Deviation","%.1f Hz",demod->fm.pdeviation);
-    pprintw(w,row++,col,"Deemph gain","%.1f dB",demod->deemph.gain);
-    pprintw(w,row++,col,"Deemph tc","%.1f us",demod->deemph.rate);
-    pprintw(w,row++,col,"Squelch open","%.1f dB  ",power2dB(demod->squelch_open));
-    pprintw(w,row++,col,"Squelch close","%.1f dB  ",power2dB(demod->squelch_close));    
-
-#if 0
-    // PL decoder moves to separate program
-    pprintw(w,row++,col,"PL Tone","%.1f Hz",demod->sig.plfreq);
-#endif
+    if(!isnan(demod->fm.tone_freq) && demod->fm.tone_freq != 0)
+      pprintw(w,row++,col,"Tone squelch","%.1f Hz",demod->fm.tone_freq);
+    if(!isnan(demod->fm.tone_deviation) && !isnan(demod->fm.tone_freq) && demod->fm.tone_freq != 0)
+      pprintw(w,row++,col,"Tone dev","%.1f Hz",demod->fm.tone_deviation);
+    if(demod->deemph.rate != 0){
+      pprintw(w,row++,col,"Deemph tc","%.1f us",demod->deemph.rate);
+      pprintw(w,row++,col,"Deemph gain","%.1f dB",demod->deemph.gain);
+    }
     break;
   case LINEAR_DEMOD:
     if(!isnan(demod->linear.threshold) && demod->linear.threshold > 0)

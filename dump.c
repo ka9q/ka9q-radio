@@ -1,4 +1,4 @@
-// $Id: dump.c,v 1.38 2022/06/21 00:52:24 karn Exp $
+// $Id: dump.c,v 1.39 2022/06/23 22:13:29 karn Exp $
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdio.h>
@@ -248,7 +248,10 @@ void dump_metadata(unsigned char const * const buffer,int length){
       printf("peak FM dev %'g Hz",decode_float(cp,optlen));
       break;
     case PL_TONE:
-      printf("PL tone %'g Hz",decode_float(cp,optlen));
+      printf("PL tone freq %'g Hz",decode_float(cp,optlen));
+      break;
+    case PL_DEVIATION:
+      printf("PL tone deviation %'g Hz",decode_float(cp,optlen));
       break;
     case AGC_ENABLE:
       printf("agc enab %'llu",(long long unsigned)decode_int(cp,optlen));
