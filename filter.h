@@ -1,4 +1,4 @@
-// $Id: filter.h,v 1.50 2022/06/23 22:05:26 karn Exp $
+// $Id: filter.h,v 1.51 2022/06/24 01:35:20 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -148,7 +148,7 @@ extern int Nthreads;
 
 // Initialize goertzel state to fractional frequency f
 void init_goertzel(struct goertzel *gp,float f);
-void inline reset_goertzel(struct goertzel *gp){
+static inline void reset_goertzel(struct goertzel *gp){
   gp->s0 = gp->s1 = 0;
 }
 
