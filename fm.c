@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.137 2022/06/23 22:13:29 karn Exp $
+// $Id: fm.c,v 1.137 2022/06/23 22:13:29 karn Exp karn $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -28,7 +28,7 @@ void *demod_fm(void *arg){
     pthread_setname(name);
   }
 
-  complex float state = 0;
+  complex float sample_memory = 0;
   demod->output.channels = 1; // Only mono for now
   if(isnan(demod->squelch_open) || demod->squelch_open == 0)
     demod->squelch_open = 6.3;  // open above ~ +8 dB
@@ -58,7 +58,7 @@ void *demod_fm(void *arg){
   int squelch_state = 0; // Number of blocks for which squelch remains open
   int const N = demod->filter.out->olen;
   float const one_over_olen = 1.0F / N; // save some divides
-  int const pl_integrate_samples = demod->output.samprate * 0.2; // 200 milliseconds (spec is < 250 ms)
+  int const pl_integrate_samples = demod->output.samprate * 0.24; // 240 milliseconds (spec is < 250 ms)
   int pl_sample_count = 0;
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
 
@@ -71,12 +71,16 @@ void *demod_fm(void *arg){
       // Variance squelch is still needed to suppress various spurs and QRM
       float const snr = (demod->sig.bb_power / (demod->sig.n0 * fabsf(demod->filter.max_IF - demod->filter.min_IF))) - 1.0f;
       if(snr < demod->squelch_close){
+	// squelch closed, reset everything and mute output
+	sample_memory = 0;
+	squelch_state = 0;
+	pl_sample_count = 0;
+	reset_goertzel(&demod->fm.tonedetect);
 	send_mono_output(demod,NULL,N,true); // Keep track of timestamps and mute state
-	state = 0;
 	continue;
       }
     }
-    complex float * const buffer = demod->filter.out->output.c; // for convenience
+    complex float const * const buffer = demod->filter.out->output.c; // for convenience
     float amplitudes[N];
     float avg_amp = 0;
     for(int n = 0; n < N; n++)
@@ -103,18 +107,20 @@ void *demod_fm(void *arg){
     } else if(--squelch_state > 0) {
       // In tail, squelch still open
     } else {
-      // squelch closed
-      state = 0;
+      // squelch closed, reset everything and mute output
+      sample_memory = 0;
       squelch_state = 0;
+      pl_sample_count = 0;
+      reset_goertzel(&demod->fm.tonedetect);
       send_mono_output(demod,NULL,N,true); // Keep track of timestamps and mute state
       continue;
     }
     float baseband[N];    // Demodulated FM baseband
     // Actual FM demodulation
-    baseband[0] = cargf(buffer[0] * conjf(state));
+    baseband[0] = cargf(buffer[0] * conjf(sample_memory));
     for(int n=1; n < N; n++)
       baseband[n] = cargf(buffer[n] * conjf(buffer[n-1]));
-    state = buffer[N-1];
+    sample_memory = buffer[N-1];
     
     if(squelch_state == squelch_state_max){
       // Squelch fully open; look at deviation peaks
@@ -130,13 +136,18 @@ void *demod_fm(void *arg){
 	  peak_negative_deviation = baseband[n];
       }
       frequency_offset *= one_over_olen;  // Average FM output is freq offset
-      // Update frequency offset and peak deviation
-      demod->sig.foffset = demod->output.samprate  * frequency_offset * M_1_2PI;
+      // Update frequency offset and peak deviation, with smoothing to attenuate PL tones
+      // alpha = blocktime in millisec is an approximation to a 1 sec time constant assuming blocktime << 1 sec
+      // exact value would be 1 - exp(-blocktime/tc)
+      float const alpha = .001f * Blocktime;
+      demod->sig.foffset += alpha * (demod->output.samprate  * frequency_offset * M_1_2PI - demod->sig.foffset);
       
       // Remove frequency offset from deviation peaks and scale
-      peak_positive_deviation -= frequency_offset;
-      peak_negative_deviation -= frequency_offset;
-      demod->fm.pdeviation = demod->output.samprate * max(peak_positive_deviation,-peak_negative_deviation) * M_1_2PI;
+      peak_positive_deviation *= demod->output.samprate * M_1_2PI;
+      peak_negative_deviation *= demod->output.samprate * M_1_2PI;      
+      peak_positive_deviation -= demod->sig.foffset;
+      peak_negative_deviation -= demod->sig.foffset;
+      demod->fm.pdeviation = max(peak_positive_deviation,-peak_negative_deviation);
     }
     if(demod->sig.snr < 20) { // take 13 dB as "full quieting"
       // Experimental threshold reduction (pop/click suppression)
@@ -151,18 +162,21 @@ void *demod_fm(void *arg){
     if(demod->fm.tone_freq != 0){
       // PL/CTCSS tone squelch
       // use samples before de-emphasis and gain scaling
-      for(int n=0; n < N; n++)
-	update_goertzel(&demod->fm.tonedetect,baseband[n]);
-      
-      pl_sample_count += N;
-      if(pl_sample_count >= pl_integrate_samples){
-	// Peak deviation of PL tone
-	// Not sure the calibration is correct
-	demod->fm.tone_deviation = 2 * M_1_PI * demod->output.samprate * cabsf(output_goertzel(&demod->fm.tonedetect)) / pl_sample_count;
-	pl_sample_count = 0;
-	reset_goertzel(&demod->fm.tonedetect);
-	tone_mute = demod->fm.tone_deviation < 200 ? true : false;
-      }
+      if(squelch_state == squelch_state_max){
+	for(int n=0; n < N; n++)
+	  update_goertzel(&demod->fm.tonedetect,baseband[n]);
+	
+	pl_sample_count += N;
+	if(pl_sample_count >= pl_integrate_samples){
+	  // Peak deviation of PL tone in Hz
+	  // Not sure the calibration is correct
+	  demod->fm.tone_deviation = 2 * M_1_PI * demod->output.samprate * cabsf(output_goertzel(&demod->fm.tonedetect)) / pl_sample_count;
+	  pl_sample_count = 0;
+	  reset_goertzel(&demod->fm.tonedetect);
+	  tone_mute = demod->fm.tone_deviation < 250 ? true : false;
+	}
+      } else
+	tone_mute = true; // No squelch tail when tone decoding is active
       if(tone_mute){
 	send_mono_output(demod,NULL,N,true); // Keep track of timestamps and mute state
 	continue;
@@ -189,7 +203,7 @@ void *demod_fm(void *arg){
     }
     output_level *= one_over_olen;
     demod->output.level = output_level;
-    if(send_mono_output(demod,baseband,N,0) < 0)
+    if(send_mono_output(demod,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
   } // while(!demod->terminate)
  quit:;
