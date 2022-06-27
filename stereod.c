@@ -1,4 +1,4 @@
-// $Id: stereod.c,v 1.2 2022/05/10 04:01:32 karn Exp $: opus.c,v 1.51 2021/03/19 03:13:14 karn Exp $
+// $Id: stereod.c,v 1.3 2022/06/27 03:24:55 karn Exp karn $: opus.c,v 1.51 2021/03/19 03:13:14 karn Exp $
 // Transcoder (multicast in/out) that decodes a FM composite signal @ 384 kHz
 // to a stereo signal @ 48 kHz
 #define _GNU_SOURCE 1
@@ -451,7 +451,7 @@ void *decode(void *arg){
     
     for(int i=0; i<frame_size; i++){
       float const s = SCALE * (signed short)ntohs(samples[i]);
-      if(write_rfilter(baseband,s) == 0)
+      if(put_rfilter(baseband,s) == 0)
 	continue;
       // Filter input buffer full
       // Decimate to audio sample rate, do stereo processing
