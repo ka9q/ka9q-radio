@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.50 2022/06/27 06:25:05 karn Exp $
+# $Id: id.txt,v 1.51 2022/06/27 08:01:43 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -204,6 +204,7 @@
 224400	WD6FZA Otay PAPA12 Oat 2
 224420	AA6DP Catalina
 224440	KB3PX Vista
+224480  K6VE Los Angeles
 224520	N7BAR
 224560	K6VGP Mt Disappointment DARN
 224640	K6SOA Santiago SOARA
