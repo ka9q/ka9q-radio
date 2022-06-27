@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.49 2022/06/23 22:01:47 karn Exp $
+# $Id: id.txt,v 1.50 2022/06/27 06:25:05 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -80,7 +80,7 @@
 145380	WA6LA Palos Verdes
 145420	K6NBR Newport Beach
 145540	Simplex
-145725	?
+145725	K6IXQ WINS
 145800  ARISS
 145990	ARISS
 146025	K6SOA SOARA
@@ -418,7 +418,7 @@
 4464200 W6YJ Malibu - Saddle Peak
 4464200 WA6ITC Big Bear City
 4464400 K6QEH Fullerton - Raytheon Bldg 606
-4464600 KI6DYV Mt Disappointment
+4464600 KI6DYV Mt Disappointment WINS
 4464800 K4ELE Claremont - Sunset Ridge
 4465000 ?
 4465400 N6MIK Yorba Linda
@@ -534,7 +534,7 @@
 4475400 KB6CRE Santiago Peak
 4475600 KB6CRE Oat Mountain
 4475600 PAPA11
-4475800 K6JSI Santa Anita Ridge
+4475800 K6JSI Santa Anita Ridge WINS
 4475800 K6KTA Alpine
 4475800 KE6JZS Barstow
 4475800 W6KSN Indio - Chiriaco Smt
@@ -577,7 +577,7 @@
 4480200 K7FY Glendale - Mt Lukens
 4480200 WR6MO Otay Mountain
 4480400 WD6AWP Santiago Peak
-4480600 K6JSI Santiago Peak
+4480600 K6JSI Santiago Peak WINS
 4480800 KD6ZLZ Santiago Peak
 4481000 K6JTH Mt Wilson
 4481200 KA6JRG Santiago Peak
@@ -641,7 +641,7 @@
 4488600 WA6VAW Heaps Peak
 4488800 PAPA19
 4488800 W6JYP Mt Wilson
-4489000 K6JSI Santa Barbara - Santa Ynez Peak
+4489000 K6JSI Santa Ynez Peak WINS
 4489000 K6PNG Victorville - Quartzite Mountain
 4489000 KA6WIN San Pedro
 4489200 N6SLD Santiago Peak DARN
@@ -655,7 +655,7 @@
 4490200 K6UHF Phelan - Blue Ridge
 4490375 KA6P Santiago Peak
 4490600 K6RRR Otay Mountain
-4490800 K6JSI Palomar Mountain
+4490800 K6JSI Palomar Mountain WINS
 4491000 W6KRW Tustin - Loma Ridge
 4491000 WA6TTL Rasnow Peak
 4491200 K6XI Otay Mountain
