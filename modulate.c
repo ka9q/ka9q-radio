@@ -1,4 +1,4 @@
-// $Id: modulate.c,v 1.27 2022/05/25 03:05:31 karn Exp $
+// $Id: modulate.c,v 1.28 2022/06/27 03:24:55 karn Exp $
 // Simple I/Q AM modulator - will eventually support other modes
 // Copyright 2017, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -141,7 +141,7 @@ int main(int argc,char *argv[]){
     }
     // Assume input and output sample rates are same
     for(int j=0;j<L;j++){
-      if(write_rfilter(filter_in,samp[j++] * scale) == 0)
+      if(put_rfilter(filter_in,samp[j++] * scale) == 0)
 	continue;
 
       // Form baseband signal (analytic for SSB, pure real for AM/DSB)

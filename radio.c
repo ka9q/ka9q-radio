@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.223 2022/06/21 07:40:01 karn Exp $
+// $Id: radio.c,v 1.224 2022/06/27 03:24:15 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -245,7 +245,7 @@ void *proc_samples(void *arg){
     if(pkt.rtp.pad){
       // Remove padding
       size -= dp[size-1];
-      pkt.rtp.pad = 0;
+      pkt.rtp.pad = false;
     }
     if(size <= 0)
       continue; // Bogus RTP header?
@@ -295,10 +295,10 @@ void *proc_samples(void *arg){
       Frontend.input.samples += time_step;
       if(Frontend.in->input.r != NULL){
 	for(int i=0;i < time_step; i++)
-	  write_rfilter(Frontend.in,0);
+	  put_rfilter(Frontend.in,0);
       } else if(Frontend.in->input.c != NULL){
 	for(int i=0;i < time_step; i++)
-	  write_cfilter(Frontend.in,0);
+	  put_cfilter(Frontend.in,0);
       }
     }
     // Convert and scale samples to internal float-32 format
@@ -307,13 +307,13 @@ void *proc_samples(void *arg){
     switch(pkt.rtp.type){
     case IQ_FLOAT: // E.g., AirspyHF+
       if(Frontend.in->input.c != NULL){
-	float const inv_gain = 1.0 / Frontend.sdr.gain;
+	float const inv_gain = 1.0f / Frontend.sdr.gain;
 	float f_energy = 0; // energy accumulator
-	complex float const *up = (complex float *)dp;
+	complex float const * restrict up = (complex float *)dp;
 	for(int i=0; i < sampcount; i++){
 	  complex float s = *up++;
 	  f_energy += cnrmf(s);
-	  write_cfilter(Frontend.in,s*inv_gain); // undo front end analog gain
+	  put_cfilter(Frontend.in,s*inv_gain); // undo front end analog gain
 	}
 	Frontend.sdr.output_level = f_energy / sampcount; // average A/D level, not including analog gain
       }
@@ -327,7 +327,7 @@ void *proc_samples(void *arg){
 	// Probably assumes little-endian byte order
 	float const inv_gain = SCALE12 / Frontend.sdr.gain;
 	uint64_t in_energy = 0; // Accumulate as integer for efficiency
-	uint32_t const *up = (uint32_t *)dp;
+	uint32_t const * restrict up = (uint32_t *)dp;
 	for(int i=0; i<sampcount; i+= 8){ // assumes multiple of 8
 	  int s[8];
 	  s[0] =  *up >> 20;
@@ -340,10 +340,11 @@ void *proc_samples(void *arg){
 	  s[5] |= *up >> 24;
 	  s[6] =  *up >> 12;
 	  s[7] =  *up++;
+
 	  for(int j=0; j < 8; j++){
 	    int const x = (s[j] & 0xfff) - 2048; // not actually necessary for s[0]
 	    in_energy += x * x;
-	    write_rfilter(Frontend.in,x*inv_gain);
+	    put_rfilter(Frontend.in,x*inv_gain);
 	  }
 	}
 	Frontend.sdr.output_level = 2 * in_energy * SCALE12 * SCALE12 / sampcount;
@@ -358,8 +359,8 @@ void *proc_samples(void *arg){
 	  int16_t const s1 = ((dp[1] << 8) | dp[2]) << 4;
 	  in_energy += s0 * s0;
 	  in_energy += s1 * s1;
-	  write_rfilter(Frontend.in,s0*inv_gain);
-	  write_rfilter(Frontend.in,s1*inv_gain);
+	  put_rfilter(Frontend.in,s0*inv_gain);
+	  put_rfilter(Frontend.in,s1*inv_gain);
 	  dp += 3;
 	}
 	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
@@ -374,7 +375,7 @@ void *proc_samples(void *arg){
 	  // ntohs() returns UNSIGNED so the cast is necessary!
 	  int const s = (int16_t)ntohs(*sp++);
 	  in_energy += s * s;
-	  write_rfilter(Frontend.in,s * inv_gain);
+	  put_rfilter(Frontend.in,s * inv_gain);
 	}
 	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
       }
@@ -386,7 +387,7 @@ void *proc_samples(void *arg){
 	for(int i=0; i<sampcount; i++){
 	  int16_t const s = (int8_t)*dp++;
 	  in_energy += s * s;
-	  write_rfilter(Frontend.in,s * inv_gain);
+	  put_rfilter(Frontend.in,s * inv_gain);
 	}
 	Frontend.sdr.output_level = 2 * in_energy * SCALE8 * SCALE8 / sampcount;
       }
@@ -403,7 +404,7 @@ void *proc_samples(void *arg){
 	  complex float samp;
 	  __real__ samp = rs;
 	  __imag__ samp = is;
-	  write_cfilter(Frontend.in,samp * inv_gain);
+	  put_cfilter(Frontend.in,samp * inv_gain);
 	  dp += 3;
 	}
 	Frontend.sdr.output_level = in_energy * SCALE16 * SCALE16 / sampcount;
@@ -422,7 +423,7 @@ void *proc_samples(void *arg){
 	  complex float samp;
 	  __real__ samp = rs;
 	  __imag__ samp = is;
-	  write_cfilter(Frontend.in,samp * inv_gain);
+	  put_cfilter(Frontend.in,samp * inv_gain);
 	}
 	Frontend.sdr.output_level = in_energy * SCALE16 * SCALE16 / sampcount;
       }
@@ -438,7 +439,7 @@ void *proc_samples(void *arg){
 	  complex float samp;
 	  __real__ samp = rs;
 	  __imag__ samp = is;
-	  write_cfilter(Frontend.in,samp * inv_gain);
+	  put_cfilter(Frontend.in,samp * inv_gain);
 	}
 	Frontend.sdr.output_level = in_energy * SCALE8 * SCALE8 / sampcount;
       }

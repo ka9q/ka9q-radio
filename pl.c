@@ -1,4 +1,4 @@
-// $Id: pl.c,v 1.22 2022/06/22 18:24:26 karn Exp $
+// $Id: pl.c,v 1.23 2022/06/27 03:24:55 karn Exp $
 // PL tone decoder
 // Reads multicast PCM audio (mono only right now)
 // Copyright Jan 2019 Phil Karn, KA9Q
@@ -292,7 +292,7 @@ int main(int argc,char * const argv[]){
       while(sampcount-- > 0){
 	// For each sample, run the local oscillators and integrators
 	float const samp = SCALE16 * (int16_t)ntohs(*sampp++);
-	if(write_rfilter(sp->filter_in,samp) == 0)
+	if(put_rfilter(sp->filter_in,samp) == 0)
 	  continue;
 
 	int const Rotate = 2 * (PL_Shift * Filter_time);

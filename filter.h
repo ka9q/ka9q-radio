@@ -1,4 +1,4 @@
-// $Id: filter.h,v 1.51 2022/06/24 01:35:20 karn Exp $
+// $Id: filter.h,v 1.52 2022/06/27 03:23:01 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -101,11 +101,12 @@ int make_kaiser(float * restrict,int M,float);
 int set_filter(struct filter_out * restrict,float,float,float);
 float const noise_gain(struct filter_out const * restrict);
 void *run_fft(void *);
-
+int write_cfilter(struct filter_in *, complex float const *,int size);
+int write_rfilter(struct filter_in *, float const *,int size);
 
 
 // Write complex samples to input side of filter
-static inline int write_cfilter(struct filter_in * restrict const f,complex float const s){ // Complex
+static inline int put_cfilter(struct filter_in * restrict const f,complex float const s){ // Complex
   f->input.c[f->wcnt] = s;
   if(++f->wcnt == f->ilen){
     f->wcnt = 0;
@@ -116,7 +117,7 @@ static inline int write_cfilter(struct filter_in * restrict const f,complex floa
 }
 
 // Write real samples
-static inline int write_rfilter(struct filter_in * restrict const f,float const s){
+static inline int put_rfilter(struct filter_in * restrict const f,float const s){
   f->input.r[f->wcnt] = s;
   if(++f->wcnt == f->ilen){
     f->wcnt = 0;

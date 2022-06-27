@@ -1,4 +1,4 @@
-// $Id: packetd.c,v 1.3 2022/05/25 03:05:31 karn Exp $
+// $Id: packetd.c,v 1.4 2022/06/27 03:24:55 karn Exp $
 // AFSK/FM packet demodulator
 // Reads RTP PCM audio stream, emits decoded frames in multicast RTP
 // Copyright 2018, Phil Karn, KA9Q
@@ -531,7 +531,7 @@ static void *decode_task(void *arg){
     assert(filter_in->ilen == AL);
     assert(filter_out->olen == AL);
     for(int n=0; n < AL; n++){
-      if(write_rfilter(filter_in,ntohs(samples[n]) * SCALE) == 0)
+      if(put_rfilter(filter_in,ntohs(samples[n]) * SCALE) == 0)
 	continue;
       execute_filter_output(filter_out,0);    // Shouldn't block
       for(int n=0; n<filter_out->olen; n++){

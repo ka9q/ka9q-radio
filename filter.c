@@ -1,4 +1,4 @@
-// $Id: filter.c,v 1.90 2022/06/23 22:05:26 karn Exp $
+// $Id: filter.c,v 1.91 2022/06/27 03:23:01 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -76,7 +76,6 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
   if(bins < 1)
     return NULL; // Unreasonably small - will segfault. Can happen if sample rate is garbled
 
-
   struct filter_in * const master = calloc(1,sizeof(struct filter_in));
   for(int i=0; i < ND; i++)
     master->fdomain[i] = fftwf_alloc_complex(bins);
@@ -102,7 +101,7 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     r = fftwf_import_wisdom_from_filename(Wisdom_file);
     fprintf(stdout,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,r == 1 ? "succeeded" : "failed");
     fftwf_set_timelimit(Fftw_plan_timelimit);
-    Fftw_init = 1;
+    Fftw_init = true;
   }
     
 
@@ -110,6 +109,7 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
   default:
     assert(0); // shouldn't happen
     return NULL;
+  case CROSS_CONJ:
   case COMPLEX:
     master->input_buffer.c = fftwf_alloc_complex(N);
     master->input_buffer.r = NULL; // Catch erroneous uses
@@ -246,6 +246,7 @@ void *run_fft(void *p){
     if(terminate)
       break; // Terminate after this job
   }
+  f->fft_thread = 0;
   return NULL;
 }
 
@@ -281,6 +282,7 @@ int execute_filter_input(struct filter_in * const f){
   int const N = f->ilen + f->impulse_length - 1;
   switch(f->in_type){
   default:
+  case CROSS_CONJ:
   case COMPLEX:
     {
       complex float * const newbuf = fftwf_alloc_complex(N);
@@ -301,8 +303,8 @@ int execute_filter_input(struct filter_in * const f){
   f->wcnt = 0; // In case it's not already reset to 0
 
   // Append job to queue, wake FFT thread
-  pthread_mutex_lock(&f->queue_mutex);
   struct fft_job *jp_prev = NULL;
+  pthread_mutex_lock(&f->queue_mutex);
   for(struct fft_job *jp = f->job_queue; jp != NULL; jp = jp->next)
     jp_prev = jp;
 
@@ -874,7 +876,42 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 
   return 0;
 }
+int write_cfilter(struct filter_in *f, complex float const *buffer,int size){
+  int written = 0;
 
+  while(size > 0){
+    int chunk = min(size,f->ilen - f->wcnt);
+    memcpy(&f->input.c[f->wcnt],buffer,size * sizeof(*buffer));
+    f->wcnt += size;
+    size -= chunk;
+    buffer += chunk;
+    written += chunk;
+    if(f->wcnt == f->ilen){
+      f->wcnt = 0;
+      execute_filter_input(f);
+    }
+  }
+  return written;
+}
+int write_rfilter(struct filter_in *f, float const *buffer,int size){
+  int written = 0;
+
+  while(size > 0){
+    int chunk = min(size,f->ilen - f->wcnt);
+    memcpy(&f->input.r[f->wcnt],buffer,size * sizeof(*buffer));
+    f->wcnt += size;
+    size -= chunk;
+    buffer += chunk;
+    written += chunk;
+    if(f->wcnt == f->ilen){
+      f->wcnt = 0;
+      execute_filter_input(f);
+    }
+  }
+  return written;
+
+
+};
 
 // Initialize goertzel state to fractional frequency f
 void init_goertzel(struct goertzel *gp,float f){
