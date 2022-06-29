@@ -1,4 +1,4 @@
-// $Id: radio.h,v 1.148 2022/06/23 22:13:29 karn Exp $
+// $Id: radio.h,v 1.149 2022/06/29 08:46:23 karn Exp $
 // Internal structures and functions of the 'radio' program
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
@@ -20,6 +20,7 @@
 #include "osc.h"
 #include "status.h"
 #include "filter.h"
+#include "iir.h"
 
 enum demod_type {
   LINEAR_DEMOD = 0,     // Linear demodulation, i.e., everything else: SSB, CW, DSB, CAM, IQ
