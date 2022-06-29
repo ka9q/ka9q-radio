@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.167 2022/05/10 03:14:51 karn Exp $
+// $Id: monitor.c,v 1.168 2022/06/29 08:50:14 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -32,6 +32,7 @@
 #include "conf.h"
 #include "misc.h"
 #include "multicast.h"
+//#include "osc.h"
 #include "iir.h"
 
 
@@ -45,13 +46,13 @@ static const float Latency = 0.02;    // chunk size for audio output callback
 
 // Command line parameters
 static int Update_interval = 100;    // Default time in ms between display updates
-static int List_audio;               // List audio output devices and exit
+static bool List_audio;               // List audio output devices and exit
 int Verbose;                  // Verbosity flag
-static int Quiet;                    // Disable curses
-static int Quiet_mode;               // Toggle screen activity after starting
+static bool Quiet;                    // Disable curses
+static bool Quiet_mode;               // Toggle screen activity after starting
 static float Playout = 100;
-static int Start_muted;
-static int Auto_position;
+static bool Start_muted;
+static bool Auto_position;
 
 // Global variables
 static char *Mcast_address_text[MAX_MCAST]; // Multicast address(es) we're listening to
@@ -71,10 +72,22 @@ static PaTime Last_callback_time;
 #endif
 
 static int Invalids;
-static int Help;
+static bool Help;
 static struct timespec Last_error_time;
 static int Position; // auto-position streams
-static int Auto_sort;
+static bool Auto_sort;
+
+// All the tones from various groups, including special NATO 150 Hz tone
+static float PL_tones[] = {
+     67.0,  69.3,  71.9,  74.4,  77.0,  79.7,  82.5,  85.4,  88.5,  91.5,
+     94.8,  97.4, 100.0, 103.5, 107.2, 110.9, 114.8, 118.8, 123.0, 127.3,
+    131.8, 136.5, 141.3, 146.2, 150.0, 151.4, 156.7, 159.8, 162.2, 165.5,
+    167.9, 171.3, 173.8, 177.3, 179.9, 183.5, 186.2, 189.9, 192.8, 196.6,
+    199.5, 203.5, 206.5, 210.7, 213.8, 218.1, 221.3, 225.7, 229.1, 233.6,
+    237.1, 241.8, 245.5, 250.3, 254.1
+};
+
+#define N_tones (sizeof(PL_tones)/sizeof(PL_tones[0]))
 
 struct session {
   struct sockaddr_storage sender;
@@ -99,6 +112,9 @@ struct session {
   OpusDecoder *opus;        // Opus codec decoder handle, if needed
   int frame_size;
   int bandwidth;            // Audio bandwidth
+  struct goertzel tone_detector[N_tones];
+  int tone_samples;
+  float current_tone;       // Detected tone frequency
 
   float active;  // Seconds we've been active (only when queue has stuff)
   int samprate;
@@ -113,9 +129,9 @@ struct session {
   unsigned long long earlies;
   unsigned long long resets;
 
-  int terminate;            // Set to cause thread to terminate voluntarily
-  int muted;
-  int reset;                // Set to force output timing reset on next packet
+  bool terminate;            // Set to cause thread to terminate voluntarily
+  bool muted;
+  bool reset;                // Set to force output timing reset on next packet
   
   char id[32];
 };
@@ -171,7 +187,7 @@ int main(int argc,char * const argv[]){
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
     case 'L':
-      List_audio++;
+      List_audio = true;
       break;
     case 'R':
       strlcpy(Audiodev,optarg,sizeof(Audiodev));
@@ -186,7 +202,7 @@ int main(int argc,char * const argv[]){
 	Mcast_address_text[Nfds++] = optarg;
       break;
     case 'q': // No ncurses
-      Quiet++;
+      Quiet = true;
       break;
     case 'u':
       Update_interval = strtol(optarg,NULL,0);
@@ -198,10 +214,10 @@ int main(int argc,char * const argv[]){
       Playout = strtod(optarg,NULL);
       break;
     case 'a':
-      Auto_position++;
+      Auto_position = true;
       break;
     case 'S':
-      Auto_sort++;
+      Auto_sort = true;
       break;
     default:
       fprintf(stderr,"Usage: %s [-a] [-v] [-q] [-L] [-u update] [-R audio_device] [-p|-P playout_delay_ms] [-r samprate] -I mcast_address [-I mcast_address]\n",argv[0]);
@@ -276,7 +292,6 @@ int main(int argc,char * const argv[]){
   // Should already be cleared at startup, but there's often a loud burst of noise after startup
   // So maybe something is polluting it
   memset(Output_buffer,0,sizeof(Output_buffer));
-
 
   r = Pa_OpenStream(&Pa_Stream,
 		    NULL,
@@ -417,7 +432,10 @@ static void *sockproc(void *arg){
       sp->start_rptr = Rptr;
       sp->start_timestamp = pkt->rtp.timestamp;
       sp->rtp_state.seq = pkt->rtp.seq;
-      sp->reset = 1;
+      sp->reset = true;
+      sp->samprate = samprate_from_pt(pkt->rtp.type);
+      for(int j=0; j < N_tones; j++)
+	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
 
       pthread_mutex_init(&sp->qmutex,NULL);
       pthread_cond_init(&sp->qcond,NULL);
@@ -595,7 +613,7 @@ static void *decode_task(void *arg){
       if(sp->frame_size <= 0)
 	goto endloop;
 
-      signed short *data_ints = (signed short *)&pkt->data[0];	
+      signed short const *data_ints = (signed short *)&pkt->data[0];	
       for(int i=0; i < sp->frame_size && i < MAXSIZE; i++){
 	assert((void *)data_ints >= (void *)&pkt->data[0] && (void *)data_ints < (void *)(&pkt->data[0] + pkt->len));
 	float left = SCALE * (signed short)ntohs(*data_ints++);
@@ -608,6 +626,36 @@ static void *decode_task(void *arg){
 	sp->bounce[i][0] = left;
 	sp->bounce[i][1] = right;
       }
+    }
+    // Run PL tone decoders
+    {
+      for(int i=0; i < sp->frame_size; i++){
+	float s = sp->bounce[i][0] + sp->bounce[i][1]; // Mono sum
+	for(int j = 0; j < N_tones; j++){
+	  update_goertzel(&sp->tone_detector[j],s);
+	}
+      }
+      sp->tone_samples += sp->frame_size;
+      if(sp->tone_samples >= 0.24 * sp->samprate){ // 240 millisec (250 is the spec max)
+	sp->tone_samples = 0;
+	int pl_tone_index = -1;
+	float strongest_tone_energy = 0;
+	float total_energy = 0;
+	for(int j=0; j < N_tones; j++){
+	  float energy = cnrmf(output_goertzel(&sp->tone_detector[j]));
+	  total_energy += energy;
+	  reset_goertzel(&sp->tone_detector[j]);
+	  if(energy > strongest_tone_energy){
+	    strongest_tone_energy = energy;
+	    pl_tone_index = j;
+	  }
+	}
+	if(2*strongest_tone_energy > total_energy && pl_tone_index >= 0){
+	  // Tone must be > -3dB relative to total of all tones
+	  sp->current_tone = PL_tones[pl_tone_index];
+	} else
+	  sp->current_tone = 0;
+      } // End of tone observation period
     }
     /* Find where to write in circular output buffer
      * This is updated even when muted so the activity display will work */
@@ -689,7 +737,6 @@ static void *decode_task(void *arg){
       free(pkt);
     pkt = NULL;
   }
-  sp->terminate = -1; // debug
   pthread_cleanup_pop(1);
   return NULL;
 }
@@ -752,13 +799,13 @@ static void *display(void *arg){
       printw("Hit 'q' to resume screen updates\n");
     } else {
       // First header line
-      printw("                                                     ------- Activity --------");
+      printw("                                                           ------- Activity --------");
       if(Verbose)
 	printw(" Play  ----Codec----     ---------------RTP--------------------------");	
       printw("\n");    
       
       // Second header line
-      printw("  dB Pan     SSRC ID                                 Total   Current      Idle");
+      printw("  dB Pan     SSRC  Tone ID                                 Total   Current      Idle");
       if(Verbose)
 	printw(" Queue Type ms ch BW     packets resets drops lates early Source/Dest");
       printw("\n");
@@ -807,8 +854,9 @@ static void *display(void *arg){
 	  // Truncate ID field to 30 places
 	  strlcpy(identifier,sp->id,sizeof(identifier));
 	  
-	  printw("%9u %-30s%10.0f%10.0f%10s",
+	  printw("%9u %5.1f %-30s%10.0f%10.0f%10s",
 		 sp->ssrc,
+		 sp->current_tone,
 		 identifier,
 		 sp->tot_active, // Total active time, sec
 		 sp->active,    // active time in current transmission, sec
@@ -1001,7 +1049,7 @@ static void *display(void *arg){
     case 'd': // Delete current session
       if(Nsessions > 0){
 	struct session *sp = Sessions[current];
-	sp->terminate = 1;
+	sp->terminate = true;
 	// We have to wait for it to clean up before we close and remove its session
 	pthread_join(sp->task,NULL);
 	close_session(&sp); // Decrements Nsessions
