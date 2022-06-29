@@ -1,4 +1,4 @@
-// $Id: filter.h,v 1.52 2022/06/27 03:23:01 karn Exp $
+// $Id: filter.h,v 1.53 2022/06/29 08:25:35 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -79,13 +79,6 @@ struct filter_out {
   int rcnt;                          // Samples read from output buffer
 };
 
-// Goertzel state
-struct goertzel {
-  float coeff; // 2 * cos(2*pi*f/fs) = 2 * creal(cf)
-  complex float cf; // exp(-j*2*pi*f/fs)
-  float s0,s1; // IIR filter state, s0 is the most recent
-};
-
 int window_filter(int L,int M,complex float * restrict response,float beta);
 int window_rfilter(int L,int M,complex float * restrict response,float beta);
 
@@ -144,20 +137,5 @@ static inline complex float read_cfilter(struct filter_out * restrict const f,in
   }
   return f->output.c[f->olen - f->rcnt--];
 }
-
-extern int Nthreads;
-
-// Initialize goertzel state to fractional frequency f
-void init_goertzel(struct goertzel *gp,float f);
-static inline void reset_goertzel(struct goertzel *gp){
-  gp->s0 = gp->s1 = 0;
-}
-
-static void inline update_goertzel(struct goertzel *gp,float x){
-  float s0save = gp->s0;
-  gp->s0 = x + gp->coeff * gp->s0 - gp->s1;
-  gp->s1 = s0save;
-}
-complex float output_goertzel(struct goertzel *gp);
 
 #endif
