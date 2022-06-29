@@ -16,7 +16,7 @@ struct osc {
 };
 
 struct pll {
-  float samptime;
+  float samprate;
   uint32_t vco_phase; // 1 cycle = 2^32
   int32_t vco_step;   // resolution: 1/2^32 cycles
   float integrator_gain;
@@ -24,6 +24,8 @@ struct pll {
   float integrator;
   float bw; // loop bandwidth
   float damping; // Damping factor
+  float lower_limit; // Lower PLL frequency limit, cycles/sample
+  float upper_limit; // Upper PLL frequency limit, cycles/sample
 };
 
 
@@ -48,11 +50,12 @@ static inline complex float comp_dds(uint32_t accum){
 void init_pll(struct pll *pll,float samprate);
 float run_pll(struct pll *pll,float phase);
 void set_pll_params(struct pll *pll,float bw,float damping);
-static inline complex float pll_phasor(struct pll *pll){
+void set_pll_limits(struct pll *pll,float low,float high);
+static inline complex float pll_phasor(struct pll const *pll){
   return comp_dds(pll->vco_phase);
 }
-static inline float pll_freq(struct pll *pll){
-  return (float)pll->vco_step / (pll->samptime * (float)(1LL << 32)); // Hz
+static inline float pll_freq(struct pll const *pll){
+  return (float)pll->vco_step * pll->samprate / (float)(1LL << 32); // Hz
 }
 
 #endif

@@ -1,9 +1,10 @@
-// $Id: osc.c,v 1.17 2022/06/14 07:38:23 karn Exp $
+// $Id: osc.c,v 1.18 2022/06/29 08:44:43 karn Exp $
 // Complex oscillator object routines
 
 #define _GNU_SOURCE 1
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <assert.h>
 #include <math.h>
 #include <complex.h>
@@ -21,10 +22,10 @@ const int Renorm_rate = 16384; // Renormalize oscillators this often
 
 // Return 1 if complex phasor appears to be initialized, 0 if not
 // Uses the heuristic that the amplitude should be close to 1 after initialization.
-static int is_phasor_init(const complex double x){
+static bool is_phasor_init(const complex double x){
   if(isnan(creal(x)) || isnan(cimag(x)) || cnrm(x) < 0.9)
-    return 0;
-  return 1;
+    return false;
+  return true;
 }
 
 // Set oscillator frequency and sweep rate
@@ -78,7 +79,7 @@ complex double step_osc(struct osc *osc){
 
 // sin(x) from 0 to pi/2 (0-90 deg) **inclusive**
 static float Lookup[TABSIZE+1]; // Leave room for == pi/2
-static int Tab_init;
+static bool Tab_init;
 
 static inline float sinpif(float x){
   return sinf(x * M_PI);
@@ -89,7 +90,7 @@ static void dds_init(void){
   for(int i=0; i <= TABSIZE; i++)
     Lookup[i] = sinpif(0.5f * (float)i/TABSIZE);
 
-  Tab_init = 1;
+  Tab_init = true;
 }
 
 
@@ -102,13 +103,13 @@ float sine_dds(uint32_t accum){
   // Sign half   tab index  fraction
   // S    H      TTTTTTTTTT ffffffffffffffffffff
 
-  uint32_t fract = accum & ((1 << FRACTBITS)-1);
+  uint32_t const fract = accum & ((1 << FRACTBITS)-1);
   accum >>= FRACTBITS;
   uint32_t tab = accum & ((1 << TABBITS) - 1);
   accum >>= TABBITS;
-  int half = accum & 1;
+  bool const half = accum & 1;
   accum >>= 1;
-  int sign = accum & 1;
+  bool const sign = accum & 1;
 
   int next = +1;
   if(half){
@@ -118,7 +119,7 @@ float sine_dds(uint32_t accum){
 
   assert(tab <= TABSIZE && tab + next <= TABSIZE);
   float f = Lookup[tab];
-  float f1 = Lookup[tab+next];
+  float const f1 = Lookup[tab+next];
 
   float const fscale = 1.0f / (1 << FRACTBITS);
 
@@ -133,8 +134,23 @@ void init_pll(struct pll *pll,float samprate){
   assert(samprate != 0);
 
   memset(pll,0,sizeof(*pll));
-  pll->samptime = 1.0f/samprate;
+  pll->samprate = samprate;
+  set_pll_limits(pll,-0.5,+0.5);
+  set_pll_params(pll,1.0f,M_SQRT1_2); // 1 Hz, 1/sqrt(2) defaults
 }
+
+void set_pll_limits(struct pll *pll,float low,float high){
+  assert(pll != NULL);
+  assert(pll->samprate != 0);
+  if(low > high){
+    float t = low;
+    low = high;
+    high = t;
+  }
+  pll->lower_limit = low / pll->samprate; // fraction of sample rate
+  pll->upper_limit = high / pll->samprate;
+}
+
 
 // Set PLL loop bandwidth & damping factor
 void set_pll_params(struct pll *pll,float bw,float damping){
@@ -146,7 +162,7 @@ void set_pll_params(struct pll *pll,float bw,float damping){
     return;
 
   pll->bw = bw;
-  bw *= pll->samptime;   // cycles per sample
+  bw /= pll->samprate;   // cycles per sample
   pll->damping = damping;
   float const freq = pll->integrator * pll->integrator_gain; // Keep current frequency
   
@@ -157,7 +173,7 @@ void set_pll_params(struct pll *pll,float bw,float damping){
   float const tau2 = 2 * damping / natfreq;
 
   pll->prop_gain = tau2 / tau1;
-  pll->integrator_gain = 1.0f / tau1;
+  pll->integrator_gain = 1 / tau1;
   pll->integrator = freq * tau1; // To give specified frequency
 #if 0
   fprintf(stderr,"init_pll(%p,%f,%f,%f,%f)\n",pll,bw,damping,freq,samprate);
@@ -176,13 +192,17 @@ float run_pll(struct pll *pll,float phase){
   float feedback = pll->integrator_gain * pll->integrator + pll->prop_gain * phase;
   pll->integrator += phase;
   
-  feedback = feedback > 0.49f ? 0.49f : feedback < -0.49f ? -0.49f : feedback;
+  if(pll->integrator_gain * pll->integrator > pll->upper_limit){
+    pll->integrator = pll->upper_limit / pll->integrator_gain;
+  } else if(pll->integrator_gain * pll->integrator < pll->lower_limit){
+    pll->integrator = pll->lower_limit / pll->integrator_gain;
+  }
   pll->vco_step = (int32_t)(feedback * (float)(1LL<<32));
   pll->vco_phase += pll->vco_step;
 #if 0
   if((random() & 0xffff) == 0){
     fprintf(stderr,"phase %f integrator %g feedback %g pll_freq %g\n",
-	    phase,pll->integrator,feedback,feedback/pll->samptime);
+	    phase,pll->integrator,feedback,feedback * pll->samprate);
   }
 #endif
    
