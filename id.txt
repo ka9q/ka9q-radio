@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.53 2022/06/29 23:05:42 karn Exp $
+# $Id: id.txt,v 1.54 2022/07/02 04:14:16 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -155,6 +155,7 @@
 147690  AA6DP in
 147720	W6LY in
 147730	W6NWG in
+147735	KB6C Oat Mt
 147750  WB6WLV in
 147765	AA6WS Rattlesnake Pk
 147795	K6JCC in
