@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.168 2022/06/29 08:50:14 karn Exp $
+// $Id: monitor.c,v 1.168 2022/06/29 08:50:14 karn Exp karn $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -37,19 +37,20 @@
 
 
 // Global config variables
-static int Samprate = 48000;       // Now applies only to hardware output
+static int Samprate = 48000;  // Now applies only to hardware output
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 #define BUFFERSIZE (1<<19)    // about 10.92 sec at 48 kHz stereo - must be power of 2!!
-#define MAXSIZE  5760        // 120 ms @ 48K for biggest Opus frame
+#define MAXSIZE  5760         // 120 ms @ 48K for biggest Opus frame
 static float const SCALE = 1./SHRT_MAX;
-static const float Latency = 0.02;    // chunk size for audio output callback
+static const float Latency = 0.02; // chunk size for audio output callback
+static const float Tone_period = 0.24; // PL tone integration period
 
 // Command line parameters
-static int Update_interval = 100;    // Default time in ms between display updates
-static bool List_audio;               // List audio output devices and exit
-int Verbose;                  // Verbosity flag
-static bool Quiet;                    // Disable curses
-static bool Quiet_mode;               // Toggle screen activity after starting
+static int Update_interval = 100;  // Default time in ms between display updates
+static bool List_audio;            // List audio output devices and exit
+int Verbose;                       // Verbosity flag
+static bool Quiet;                 // Disable curses
+static bool Quiet_mode;            // Toggle screen activity after starting
 static float Playout = 100;
 static bool Start_muted;
 static bool Auto_position;
@@ -66,7 +67,7 @@ static PaTime Start_pa_time;
 
 static pthread_mutex_t Output_mutex;
 static float Output_buffer[BUFFERSIZE][2]; // Decoded audio output, written by processing thread and read by PA callback
-static volatile long long Rptr;                // Unwrapped read pointer (bug: will overflow in 6 million years)
+static volatile long long Rptr;            // Unwrapped read pointer (bug: will overflow in 6 million years)
 #if 0
 static PaTime Last_callback_time;
 #endif
@@ -173,15 +174,14 @@ static struct  option Options[] = {
 
 
 int main(int argc,char * const argv[]){
-  // Try to improve our priority, then drop root
-  int prio = getpriority(PRIO_PROCESS,0);
-  prio = setpriority(PRIO_PROCESS,0,prio - 15);
-  if(seteuid(getuid()) != 0)
-    perror("seteuid");
-
+  {
+    // Try to improve our priority, then drop root
+    int prio = getpriority(PRIO_PROCESS,0);
+    prio = setpriority(PRIO_PROCESS,0,prio - 15);
+    if(seteuid(getuid()) != 0)
+      perror("seteuid");
+  }    
   setlocale(LC_ALL,getenv("LANG"));
-
-  Samprate = 48000; // default
 
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
@@ -348,9 +348,7 @@ int main(int argc,char * const argv[]){
 }
 
 static void *sockproc(void *arg){
-
   char const *mcast_address_text = (char *)arg;
-
   {
     char name[100];
     snprintf(name,sizeof(name),"mon %s",mcast_address_text);
@@ -467,7 +465,6 @@ static void *sockproc(void *arg){
   }      
   return NULL;
 }
-
 
 static void decode_task_cleanup(void *arg){
   struct session *sp = (struct session *)arg;
@@ -636,7 +633,7 @@ static void *decode_task(void *arg){
 	}
       }
       sp->tone_samples += sp->frame_size;
-      if(sp->tone_samples >= 0.24 * sp->samprate){ // 240 millisec (250 is the spec max)
+      if(sp->tone_samples >= Tone_period * sp->samprate){
 	sp->tone_samples = 0;
 	int pl_tone_index = -1;
 	float strongest_tone_energy = 0;
@@ -671,7 +668,7 @@ static void *decode_task(void *arg){
 	goto endloop; // Drop packet as late
       }
       late_rate = 0;
-      sp->reset = 1;
+      sp->reset = true;
     }
     if(late_rate > 0)
       late_rate--;
@@ -681,7 +678,7 @@ static void *decode_task(void *arg){
 	pthread_mutex_unlock(&Output_mutex);
 	goto endloop;
       }
-      sp->reset = 1;
+      sp->reset = true;
     }
     consec_futures = 0;
     if(sp->reset)
@@ -860,7 +857,7 @@ static void *display(void *arg){
 		 identifier,
 		 sp->tot_active, // Total active time, sec
 		 sp->active,    // active time in current transmission, sec
-		 ftime(id,sizeof(id),idle));                    // Time idle since last transmission
+		 ftime(id,sizeof(id),idle));   // Time idle since last transmission
 	  
 	}
 	if(Verbose){
@@ -923,15 +920,15 @@ static void *display(void *arg){
       for(int i = 0; i < Nsessions; i++){
 	struct session *sp = Sessions[i];
 	if(sp->muted){
-	  sp->reset = 1;
-	  sp->muted = 0;
+	  sp->reset = true;
+	  sp->muted = false;
 	}
       }
       break;
     case 'M': // Mute all sessions
       for(int i = 0; i < Nsessions; i++){
 	struct session *sp = Sessions[i];
-	sp->muted = 1;
+	sp->muted = true;
       }
       break;
     case 'q':
@@ -1016,13 +1013,13 @@ static void *display(void *arg){
       if(Playout >= -100){
 	Playout -= 1;
 	if(current >= 0)
-	  Sessions[current]->reset = 1;
+	  Sessions[current]->reset = true;
       }
       break;
     case KEY_SRIGHT: // Shifted right - increase playout buffer 10 ms
       Playout += 1;
       if(current >= 0)
-	Sessions[current]->reset = 1;
+	Sessions[current]->reset = true;
       else
 	beep();
       break;
@@ -1030,19 +1027,19 @@ static void *display(void *arg){
       if(current >= 0){
 	struct session *sp = Sessions[current];
 	if(sp->muted){
-	  sp->reset = 1;
-	  sp->muted = 0;
+	  sp->reset = true;
+	  sp->muted = false;
 	}
       }
       break;
     case 'm': // Mute current session
       if(current >= 0)
-	Sessions[current]->muted = 1;
+	Sessions[current]->muted = true;
       break;
     case 'r':
       // Reset playout queue
       if(current >= 0)
-	Sessions[current]->reset = 1;
+	Sessions[current]->reset = true;
       break;
     case KEY_DC: // Delete
     case KEY_BACKSPACE:
@@ -1069,7 +1066,7 @@ static void reset_session(struct session * const sp,uint32_t timestamp){
   sp->resets++;
   if(sp->opus)
     opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
-  sp->reset = 0;
+  sp->reset = false;
   sp->start_rptr = Rptr;
   sp->start_timestamp = timestamp; // Resynch as if new stream
   sp->timestamp_upper = 0;
@@ -1204,7 +1201,7 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
     // We've been asleep for >1 sec. Reset everybody
     pthread_mutex_lock(&Sess_mutex);
     for(int i = 0; i < Nsessions; i++)
-      Sessions[i]->reset = 1;
+      Sessions[i]->reset = true;
     memset(Output_buffer,0,sizeof(Output_buffer)); // Wipe clean
     pthread_mutex_unlock(&Sess_mutex);
   }
@@ -1270,7 +1267,7 @@ static void load_id(void){
       
       while(*ptr == ' ' || *ptr == '\t')
 	ptr++;
-      int len = strlen(ptr); // Length of ID field
+      int const len = strlen(ptr); // Length of ID field
       if(len > 0){ // Not null
 	strlcpy(Idtable[Nid].id,ptr,sizeof(Idtable[Nid].id));
       }
