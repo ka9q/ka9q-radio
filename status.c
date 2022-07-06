@@ -1,4 +1,4 @@
-// $Id: status.c,v 1.29 2022/05/25 03:04:58 karn Exp $
+// $Id: status.c,v 1.30 2022/07/06 02:39:39 karn Exp $
 // encode/decode status packets
 // Copyright 2020 Phil Karn, KA9Q
 
@@ -258,6 +258,34 @@ void send_poll(int fd,int ssrc){
 }
 
 
+// Extract SSRC; 0 means not present (reserved value)
+int get_ssrc(unsigned char const *buffer,int length){
+  unsigned char const *cp = buffer;
+  
+  while(cp - buffer < length){
+    enum status_type const type = *cp++; // increment cp to length field
+    
+    if(type == EOL)
+      break; // end of list, no length
+    
+    unsigned int const optlen = *cp++;
+    if(cp - buffer + optlen >= length)
+      break; // invalid length; we can't continue to scan
+    
+    switch(type){
+    case EOL: // Shouldn't get here
+      goto done;
+    case OUTPUT_SSRC:
+      return decode_int(cp,optlen);
+      break;
+    default:
+      break; // Ignore on this pass
+    }
+    cp += optlen;
+  }
+ done:;
+  return 0; // broadcast
+}
 
 
 

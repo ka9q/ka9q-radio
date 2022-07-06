@@ -136,6 +136,7 @@ float decode_float(unsigned char const *,int);
 double decode_double(unsigned char const *,int);
 struct sockaddr *decode_socket(void *sock,unsigned char const *,int);
 char *decode_string(unsigned char const *,int,char *,int);
+int get_ssrc(unsigned char const *buffer,int length);
 
 void dump_metadata(unsigned char const *,int);
 

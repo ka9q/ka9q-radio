@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.158 2022/07/06 02:13:06 karn Exp $
+// $Id: control.c,v 1.159 2022/07/06 02:40:10 karn Exp karn $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -352,8 +352,10 @@ int main(int argc,char *argv[]){
   }
   if(Ssrc == 0){
     // no ssrc specified; send wild-card poll and collect responses
-    fprintf(stdout,"Available SSRCs:");
+    unsigned ssrc_count = 0;
+
     send_poll(Ctl_fd,0);
+    fprintf(stdout,"Available SSRCs:\n");
 
     while(1){
       fd_set fdset;
@@ -369,20 +371,20 @@ int main(int argc,char *argv[]){
       if(c <= 0)
 	break;
       if(Status_fd != -1 && FD_ISSET(Status_fd,&fdset)){
-	// Message from the radio program (or some transcoders)
+	// Message from the radio program
 	unsigned char buffer[8192];
 	socklen_t ssize = sizeof(Metadata_source_address);
 	int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
 	
-	// Ignore our own command packets and responses to other SSIDs
+	// Ignore our own command packets
 	if(length >= 2 && buffer[0] == 0){
-	  struct demod demod;
-	  decode_radio_status(&demod,buffer+1,length-1);
-	  fprintf(stdout," %u",demod.output.rtp.ssrc);
+	  uint32_t ssrc = get_ssrc(buffer+1,length-1);
+	  fprintf(stdout,"%u\n",ssrc);
+	  ssrc_count++;
 	}
       }
     }
-    fprintf(stdout,"\n");
+    fprintf(stdout,"Total SSRCs: %u\n",ssrc_count);
     exit(0);
   }
   Mdict = iniparser_load(Modefile);
