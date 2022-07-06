@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.160 2022/07/06 03:28:51 karn Exp $
+// $Id: control.c,v 1.161 2022/07/06 03:31:13 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -392,7 +392,7 @@ int main(int argc,char *argv[]){
 	if(length >= 2 && buffer[0] == 0){
 	  if(ssrc_count >= demods_size){
 	    demods_size += 1000;
-	    demods = reallocarray(demods,demods_size,sizeof(*demods));
+	    demods = realloc(demods,demods_size * sizeof(*demods));
 	  }
 	  decode_radio_status(&demods[ssrc_count],buffer+1,length-1);
 	  ssrc_count++;
