@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.84 2022/06/23 22:13:29 karn Exp $
+// $Id: radio_status.c,v 1.85 2022/07/06 02:12:00 karn Exp $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -103,14 +103,14 @@ void *radio_status(void *arg){
 	send_radio_status(&Frontend,demod,1); // Send status in response
       }
     } else {
-      // Doesn't scale; rethink this
-#if 0
+#if 1
       // Send status for every SSRC
       pthread_mutex_lock(&Demod_list_mutex);
       for(int i=0; i < Demod_list_length; i++){
-	if(Demod_list[i].inuse)
+	if(Demod_list[i].inuse){
 	  send_radio_status(&Frontend,&Demod_list[i],1); // Send status in response	
-	usleep(5000); // But not too quickly
+	  usleep(5000); // But not too quickly
+	}
       }
       pthread_mutex_unlock(&Demod_list_mutex);
 #endif
