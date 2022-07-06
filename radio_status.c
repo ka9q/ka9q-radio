@@ -1,4 +1,4 @@
-// $Id: radio_status.c,v 1.85 2022/07/06 02:12:00 karn Exp $
+// $Id: radio_status.c,v 1.87 2022/07/06 03:02:05 karn Exp $
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -29,14 +29,14 @@
 int Status_fd;  // File descriptor for receiver status
 int Ctl_fd;     // File descriptor for receiving user commands
 
-extern struct demod *Dynamic_demod;
-extern dictionary *Modetable;
+extern struct demod const *Dynamic_demod;
+extern dictionary const *Modetable;
 
 
-static int send_radio_status(struct frontend *frontend,struct demod *demod,int full);
+static int send_radio_status(struct frontend const *frontend,struct demod const *demod,int full);
 static int decode_radio_commands(struct demod *demod,unsigned char const *buffer,int length);
-static int encode_radio_status(struct frontend *frontend,struct demod const *demod,unsigned char *packet, int len);
-static int get_ssrc(unsigned char const *buffer,int length);
+static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,unsigned char *packet, int len);
+
   
 // Radio status reception and transmission thread
 void *radio_status(void *arg){
@@ -53,7 +53,7 @@ void *radio_status(void *arg){
       if(!Demod_list[i].inuse)
 	continue;
       send_radio_status(&Frontend,&Demod_list[i],1); // Send status in response	
-      usleep(5000); // arbitrary 5ms interval to avoid flooding the net
+      usleep(10000); // arbitrary interval to avoid flooding the net
     }
     pthread_mutex_unlock(&Demod_list_mutex);
   }  
@@ -98,7 +98,7 @@ void *radio_status(void *arg){
       }
       if(demod != NULL){
 	if(demod->lifetime != 0)
-	  demod->lifetime = 20; // Restart self-destruct timer
+	  demod->lifetime = 20; // Restart 20 second self-destruct timer
 	decode_radio_commands(demod,buffer+1,length-1);
 	send_radio_status(&Frontend,demod,1); // Send status in response
       }
@@ -109,7 +109,7 @@ void *radio_status(void *arg){
       for(int i=0; i < Demod_list_length; i++){
 	if(Demod_list[i].inuse){
 	  send_radio_status(&Frontend,&Demod_list[i],1); // Send status in response	
-	  usleep(5000); // But not too quickly
+	  usleep(10000); // But not too quickly
 	}
       }
       pthread_mutex_unlock(&Demod_list_mutex);
@@ -119,7 +119,7 @@ void *radio_status(void *arg){
   return NULL;
 }
 
-static int send_radio_status(struct frontend *frontend,struct demod *demod,int full){
+static int send_radio_status(struct frontend const *frontend,struct demod const *demod,int full){
   unsigned char packet[2048];
 
   Metadata_packets++;
@@ -129,34 +129,6 @@ static int send_radio_status(struct frontend *frontend,struct demod *demod,int f
   return 0;
 }
 
-// Extract SSRC; 0 means not present (reserved value)
-static int get_ssrc(unsigned char const *buffer,int length){
-  unsigned char const *cp = buffer;
-  
-  while(cp - buffer < length){
-    enum status_type const type = *cp++; // increment cp to length field
-    
-    if(type == EOL)
-      break; // end of list, no length
-    
-    unsigned int const optlen = *cp++;
-    if(cp - buffer + optlen >= length)
-      break; // invalid length; we can't continue to scan
-    
-    switch(type){
-    case EOL: // Shouldn't get here
-      goto done;
-    case OUTPUT_SSRC:
-      return decode_int(cp,optlen);
-      break;
-    default:
-      break; // Ignore on this pass
-    }
-    cp += optlen;
-  }
- done:;
-  return 0; // broadcast
-}
 
 // Decode and save incoming status from either SDR front end or from radio program
 // from indicates source of message: from SDR front end or from radio program
@@ -398,7 +370,7 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
 // Encode contents of frontend and demod structures as command or status packet
 // packet argument must be long enough!!
 // Convert values from internal to engineering units
-static int encode_radio_status(struct frontend *frontend,struct demod const *demod,unsigned char *packet, int len){
+static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,unsigned char *packet, int len){
   memset(packet,0,len);
   unsigned char *bp = packet;
 
