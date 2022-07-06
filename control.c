@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.159 2022/07/06 02:40:10 karn Exp karn $
+// $Id: control.c,v 1.160 2022/07/06 03:28:51 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -303,6 +303,16 @@ void winch_handler(int num){
   Resized = true;
 }
 
+static int dcompare(void const *a,void const *b){
+  struct demod const *da = a;
+  struct demod const *db = b;  
+  if(da->output.rtp.ssrc < db->output.rtp.ssrc)
+    return -1;
+  if(da->output.rtp.ssrc > db->output.rtp.ssrc)
+    return +1;
+  return 0;
+}
+
 
 
 uint32_t Ssrc = 0;
@@ -337,6 +347,7 @@ int main(int argc,char *argv[]){
       strlcpy(Locale,cp,sizeof(Locale));
     }
   }
+  setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
   // Dummy filter
   char iface[1024];
   resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
@@ -353,9 +364,10 @@ int main(int argc,char *argv[]){
   if(Ssrc == 0){
     // no ssrc specified; send wild-card poll and collect responses
     unsigned ssrc_count = 0;
+    struct demod *demods = NULL;
+    unsigned demods_size = 0;
 
     send_poll(Ctl_fd,0);
-    fprintf(stdout,"Available SSRCs:\n");
 
     while(1){
       fd_set fdset;
@@ -378,13 +390,25 @@ int main(int argc,char *argv[]){
 	
 	// Ignore our own command packets
 	if(length >= 2 && buffer[0] == 0){
-	  uint32_t ssrc = get_ssrc(buffer+1,length-1);
-	  fprintf(stdout,"%u\n",ssrc);
+	  if(ssrc_count >= demods_size){
+	    demods_size += 1000;
+	    demods = reallocarray(demods,demods_size,sizeof(*demods));
+	  }
+	  decode_radio_status(&demods[ssrc_count],buffer+1,length-1);
 	  ssrc_count++;
 	}
       }
     }
+
+    qsort(demods,ssrc_count,sizeof(*demods),dcompare);
+    fprintf(stdout,"SSRC      Frequency (Hz)\n");
+    for(int i=0; i < ssrc_count; i++){
+      fprintf(stdout,"%-9u %'.3lf\n",demods[i].output.rtp.ssrc,
+	      demods[i].tune.freq);
+    }
     fprintf(stdout,"Total SSRCs: %u\n",ssrc_count);
+    free(demods);
+    demods = NULL;
     exit(0);
   }
   Mdict = iniparser_load(Modefile);
@@ -393,7 +417,7 @@ int main(int argc,char *argv[]){
     exit(1);
   }
 
-  setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
+
   atexit(display_cleanup);
 
   struct sigaction act;
