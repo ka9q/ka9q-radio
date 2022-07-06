@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.162 2022/07/06 05:36:41 karn Exp $
+// $Id: control.c,v 1.162 2022/07/06 05:36:41 karn Exp karn $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -361,7 +361,7 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"connect to mcast control failed\n");
     exit(1);
   }
-  if(Ssrc == 0 || Status_fd != -1){
+  if(Ssrc == 0){
     // no ssrc specified; send wild-card poll and collect responses
     unsigned ssrc_count = 0;
     struct demod *demods = NULL;
