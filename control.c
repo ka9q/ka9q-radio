@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.157 2022/06/23 22:13:29 karn Exp $
+// $Id: control.c,v 1.158 2022/07/06 02:13:06 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -329,12 +329,6 @@ int main(int argc,char *argv[]){
       }
     }
   }
-  if(Ssrc == 0){
-    fprintf(stdout,"Usage: control -s ssrc control_group\n");
-    exit(1);
-  }
-
-
   {
     // The display thread assumes en_US.UTF-8, or anything with a thousands grouping character
     // Otherwise the cursor movements will be wrong
@@ -343,15 +337,6 @@ int main(int argc,char *argv[]){
       strlcpy(Locale,cp,sizeof(Locale));
     }
   }
-  Mdict = iniparser_load(Modefile);
-  if(Mdict == NULL){
-    fprintf(stdout,"Can't load mode file %s\n",Modefile);
-    exit(1);
-  }
-
-  setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
-  atexit(display_cleanup);
-
   // Dummy filter
   char iface[1024];
   resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
@@ -365,7 +350,49 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"connect to mcast control failed\n");
     exit(1);
   }
+  if(Ssrc == 0){
+    // no ssrc specified; send wild-card poll and collect responses
+    fprintf(stdout,"Available SSRCs:");
+    send_poll(Ctl_fd,0);
 
+    while(1){
+      fd_set fdset;
+      FD_ZERO(&fdset);
+      FD_SET(Status_fd,&fdset);
+      int const n = Status_fd + 1;
+      
+      struct timespec timeout;
+      timeout.tv_sec = 1;
+      timeout.tv_nsec = 0;
+      
+      int c = pselect(n,&fdset,NULL,NULL,&timeout,NULL);
+      if(c <= 0)
+	break;
+      if(Status_fd != -1 && FD_ISSET(Status_fd,&fdset)){
+	// Message from the radio program (or some transcoders)
+	unsigned char buffer[8192];
+	socklen_t ssize = sizeof(Metadata_source_address);
+	int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
+	
+	// Ignore our own command packets and responses to other SSIDs
+	if(length >= 2 && buffer[0] == 0){
+	  struct demod demod;
+	  decode_radio_status(&demod,buffer+1,length-1);
+	  fprintf(stdout," %u",demod.output.rtp.ssrc);
+	}
+      }
+    }
+    fprintf(stdout,"\n");
+    exit(0);
+  }
+  Mdict = iniparser_load(Modefile);
+  if(Mdict == NULL){
+    fprintf(stdout,"Can't load mode file %s\n",Modefile);
+    exit(1);
+  }
+
+  setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
+  atexit(display_cleanup);
 
   struct sigaction act;
   memset(&act,0,sizeof(act));
