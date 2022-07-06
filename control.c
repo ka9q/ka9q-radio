@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.161 2022/07/06 03:31:13 karn Exp $
+// $Id: control.c,v 1.162 2022/07/06 05:36:41 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -361,11 +361,17 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"connect to mcast control failed\n");
     exit(1);
   }
-  if(Ssrc == 0){
+  if(Ssrc == 0 || Status_fd != -1){
     // no ssrc specified; send wild-card poll and collect responses
     unsigned ssrc_count = 0;
     struct demod *demods = NULL;
     unsigned demods_size = 0;
+    // The deadline starts at 1 sec in the future
+    // It is reset as long as we keep seeing new SSRCs
+    struct timespec now,deadline;
+    clock_gettime(CLOCK_REALTIME,&now);
+    deadline = now;
+    deadline.tv_sec += 1;
 
     send_poll(Ctl_fd,0);
 
@@ -373,31 +379,48 @@ int main(int argc,char *argv[]){
       fd_set fdset;
       FD_ZERO(&fdset);
       FD_SET(Status_fd,&fdset);
-      int const n = Status_fd + 1;
+      int n = Status_fd + 1;
       
+      clock_gettime(CLOCK_REALTIME,&now);
       struct timespec timeout;
-      timeout.tv_sec = 1;
-      timeout.tv_nsec = 0;
-      
-      int c = pselect(n,&fdset,NULL,NULL,&timeout,NULL);
-      if(c <= 0)
-	break;
-      if(Status_fd != -1 && FD_ISSET(Status_fd,&fdset)){
-	// Message from the radio program
-	unsigned char buffer[8192];
-	socklen_t ssize = sizeof(Metadata_source_address);
-	int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
-	
-	// Ignore our own command packets
-	if(length >= 2 && buffer[0] == 0){
-	  if(ssrc_count >= demods_size){
-	    demods_size += 1000;
-	    demods = realloc(demods,demods_size * sizeof(*demods));
-	  }
-	  decode_radio_status(&demods[ssrc_count],buffer+1,length-1);
-	  ssrc_count++;
-	}
+      time_sub(&timeout,&deadline,&now);
+
+      // Immediate poll if timeout is negative
+      if(timeout.tv_sec < 0){
+	timeout.tv_sec = 0;
+	timeout.tv_nsec = 0;
       }
+      n = pselect(n,&fdset,NULL,NULL,&timeout,NULL);
+      if(n <= 0)
+	break; // Only on a timeout
+      if(!FD_ISSET(Status_fd,&fdset))
+	continue;
+
+      // Message from the radio program
+      unsigned char buffer[8192];
+      socklen_t ssize = sizeof(Metadata_source_address);
+      int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
+      
+      // Ignore our own command packets
+      if(length < 2 || buffer[0] != 0)
+	continue;
+      int const ssrc = get_ssrc(buffer+1,length-1);
+      // See if it's a dupe (e.g., response to another instance of control)
+      for(int i=0; i < ssrc_count; i++){
+	if(demods[i].output.rtp.ssrc == ssrc)
+	  goto ignore;
+      }
+      if(ssrc_count >= demods_size){
+	// Enlarge demods array
+	demods_size += 1000;
+	demods = realloc(demods,demods_size * sizeof(*demods));
+      }
+      decode_radio_status(&demods[ssrc_count],buffer+1,length-1);
+      ssrc_count++;
+      clock_gettime(CLOCK_REALTIME,&now);
+      deadline = now;
+      deadline.tv_sec += 1; // extend deadline as long as we're progressing
+    ignore:;
     }
 
     qsort(demods,ssrc_count,sizeof(*demods),dcompare);
