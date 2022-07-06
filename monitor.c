@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.168 2022/06/29 08:50:14 karn Exp karn $
+// $Id: monitor.c,v 1.169 2022/07/06 02:11:19 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
