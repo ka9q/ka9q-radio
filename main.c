@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.254 2022/06/21 08:04:42 karn Exp $
+// $Id: main.c,v 1.255 2022/07/07 03:29:18 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -51,6 +51,7 @@ dictionary *Modetable;
 
 struct demod *Dynamic_demod; // Prototype for dynamically created demods
 
+char const *Iface;
 int Mcast_ttl;
 int IP_tos; // AF12 left shifted 2 bits
 int RTCP_enable = false;
@@ -187,6 +188,8 @@ static int setup_frontend(char const *arg){
   {
     char iface[1024];
     resolve_mcast(Frontend.input.metadata_dest_string,&Frontend.input.metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
+    if(strlen(iface) == 0 && Iface != NULL)
+      strlcpy(iface,Iface,sizeof(iface));
     Frontend.input.status_fd = listen_mcast(&Frontend.input.metadata_dest_address,iface);
 
     if(Frontend.input.status_fd < 3){
@@ -254,7 +257,7 @@ static int setup_frontend(char const *arg){
   fflush(stdout);
 
   // Input socket for I/Q data from SDR, set from OUTPUT_DEST_SOCKET in SDR metadata
-  Frontend.input.data_fd = listen_mcast(&Frontend.input.data_dest_address,NULL);
+  Frontend.input.data_fd = listen_mcast(&Frontend.input.data_dest_address,Iface);
   if(Frontend.input.data_fd < 3){
     fprintf(stdout,"Can't set up IF input\n");
     return -1;
@@ -311,6 +314,10 @@ static int loadconfig(char const * const file){
   char const * const global = "global";
   if(config_getboolean(Configtable,global,"verbose",0))
     Verbose++;
+  // Default multicast interface
+  Iface = config_getstring(Configtable,global,"iface",NULL);
+  // also set Default_mcast_iface so setup_mcast() sees it
+  Default_mcast_iface = Iface;
   IP_tos = config_getint(Configtable,global,"tos",DEFAULT_IP_TOS);
   Mcast_ttl = config_getint(Configtable,global,"ttl",DEFAULT_MCAST_TTL);
   Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",DEFAULT_BLOCKTIME));
@@ -343,6 +350,8 @@ static int loadconfig(char const * const file){
       base_address += 16;
       char iface[1024];
       resolve_mcast(Metadata_dest_string,&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
+      if(strlen(iface) == 0 && Iface != NULL)
+        strlcpy(iface,Iface,sizeof(iface));
       Status_fd = connect_mcast(&Metadata_dest_address,iface,Mcast_ttl,IP_tos);
       if(Status_fd < 3){
 	fprintf(stdout,"Can't send status to %s\n",Metadata_dest_string);
@@ -404,6 +413,8 @@ static int loadconfig(char const * const file){
     base_address += 16;
     char iface[1024];
     resolve_mcast(demod->output.data_dest_string,&demod->output.data_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
+    if(strlen(iface) == 0 && Iface != NULL)
+      strlcpy(iface,Iface,sizeof(iface));
     demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,iface,Mcast_ttl,IP_tos);
     if(demod->output.data_fd < 3){
       fprintf(stdout,"can't set up PCM output to %s\n",demod->output.data_dest_string);
@@ -476,6 +487,8 @@ static int loadconfig(char const * const file){
 	    }
 	  }
 	}
+	// initialize oscillator
+	set_osc(&demod->fine,demod->filter.remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate));
 	// Initialization all done, start it up
 	set_freq(demod,demod->tune.freq);
 	if(demod->tune.freq != 0){ // Don't start dynamic entry
