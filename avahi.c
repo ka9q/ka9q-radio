@@ -1,4 +1,4 @@
-// $Id: avahi.c,v 1.15 2022/05/10 05:08:59 karn Exp $
+// $Id: avahi.c,v 1.16 2022/07/07 04:34:47 karn Exp $
 // Adapted from avahi's example file client-publish-service.c
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
@@ -73,15 +73,28 @@ extern int Verbose;
 // description is optional; if present, forms a TXT record
 void *avahi_start(char const *service_name,char const *service_type,int service_port,char const *dns_name,int base_address,char const *description){
   struct userdata *userdata = (struct userdata *)calloc(1,sizeof(struct userdata));
-  if(service_name)
-    userdata->service_name = strdup(service_name);
+  if(service_name){
+    // Look for ,iface at end of service_name and remove it, if present.
+    char *ifp = strrchr(service_name,',');
+    if(ifp != NULL){
+      userdata->service_name = strndup(service_name,ifp-service_name+1);
+      userdata->service_name[strlen(userdata->service_name)-1] = service_name[strlen(service_name)-1];
+    } else
+      userdata->service_name = strdup(service_name);
+  }
   if(service_type)
     userdata->service_type = strdup(service_type);
   userdata->service_port = service_port;
   if(description)
     userdata->description = strdup(description); // Becomes TXT record
-  if(dns_name)
-    userdata->dns_name = strdup(dns_name);
+  if(dns_name){
+    // Look for ,iface at end of dns_name and remove it, if present.
+    char *ifp = strrchr(dns_name,',');
+    if(ifp != NULL)
+      userdata->dns_name = strndup(dns_name,ifp-dns_name);
+    else
+      userdata->dns_name = strdup(dns_name);
+  }
   userdata->base_address = base_address;
   pthread_mutex_init(&userdata->avahi_mutex,NULL);
   pthread_cond_init(&userdata->avahi_ready,NULL);
