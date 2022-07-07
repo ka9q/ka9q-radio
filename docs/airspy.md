@@ -104,12 +104,12 @@ Close board 1
 Reading the serial number from the Airspy HF+ requires the
 *airspyhf_info* utility in the *airspyhf* Debian package:
 
->$ `airspyhf_info`
-AirSpy HF library version: 1.6.8
-S/N: 0x3652D65D4ACB39F8
-Part ID: 0x00000002
-Firmware Version: R3.0.7-CD
-Available sample rates: 912 kS/s 768 kS/s 456 kS/s 384 kS/s 256 kS/s 192 kS/s
+>$ `airspyhf_info`  
+AirSpy HF library version: 1.6.8  
+S/N: 0x3652D65D4ACB39F8  
+Part ID: 0x00000002  
+Firmware Version: R3.0.7-CD  
+Available sample rates: 912 kS/s 768 kS/s 456 kS/s 384 kS/s 256 kS/s 192 kS/s  
    
 Note that *airspy_info* (or *airspyhf_info*) will not see the device when any other
 program (including *airspyd*) has it open. Any Airspy devices with
