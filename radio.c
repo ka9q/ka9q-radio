@@ -276,6 +276,9 @@ void *proc_samples(void *arg){
     case IQ_PT12:       // Big endian packed 12 bits, no metadata
       sc = size / (3 * sizeof(int8_t));
       break;
+    case IQ_PT:         // Little endian 16 bits, no metadata
+      sc = size / (2 * sizeof(int16_t));
+      break;
     }
     int const sampcount = sc; // gets used a lot, flag it const
     if(pkt.rtp.ssrc != Frontend.input.rtp.ssrc){
@@ -442,6 +445,23 @@ void *proc_samples(void *arg){
 	  put_cfilter(Frontend.in,samp * inv_gain);
 	}
 	Frontend.sdr.output_level = in_energy * SCALE8 * SCALE8 / sampcount;
+      }
+      break;
+    case IQ_PT:        // two 16-bit signed integers (one complex sample) littleendian
+      if(Frontend.in->input.c != NULL){
+	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only
+	float const inv_gain = SCALE16 / Frontend.sdr.gain;
+	for(int i=0; i<sampcount; i++){
+	  int16_t const rs = (dp[1] << 8) | dp[0];
+	  int16_t const is = (dp[3] << 8) | dp[2];
+	  in_energy += rs * rs + is * is;
+	  complex float samp;
+	  __real__ samp = rs;
+	  __imag__ samp = is;
+	  put_cfilter(Frontend.in,samp * inv_gain);
+	  dp += 4;
+	}
+	Frontend.sdr.output_level = in_energy * SCALE16 * SCALE16 / sampcount;
       }
       break;
     }
