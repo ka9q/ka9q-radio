@@ -84,10 +84,10 @@ listens to it. It will also be advertised in DNS SRV (service
 discovery) records by the Linux mDNS daemon *avahi*, so keep
 it short but descriptive.
 
-**serial**  Required. This must exactly match the
-Airspy R2 64-bit serial number, in hex (the leading 0x is optional).
-This can be read with the *airspy_info*  utility in the *airspy*
-Debian package:
+**serial** Required. This must exactly match the Airspy 64-bit serial
+number, in hex (the leading 0x is optional).  This can be read from
+the Airspy R2 with the *airspy_info* utility in the *airspy* Debian
+package:
 
 >$ `airspy_info`  
 airspy_lib_version: 1.0.9  
@@ -100,8 +100,18 @@ Supported sample rates:
     10.000000 MSPS  
     2.500000 MSPS  
 Close board 1
+
+Reading the serial number from the Airspy HF+ requires the
+*airspyhf_info* utility in the *airspyhf* Debian package:
+
+>$ `airspyhf_info`
+AirSpy HF library version: 1.6.8
+S/N: 0x3652D65D4ACB39F8
+Part ID: 0x00000002
+Firmware Version: R3.0.7-CD
+Available sample rates: 912 kS/s 768 kS/s 456 kS/s 384 kS/s 256 kS/s 192 kS/s
    
-Note that *airspy_info* will not see the device when any other
+Note that *airspy_info* (or *airspyhf_info*) will not see the device when any other
 program (including *airspyd*) has it open. Any Airspy devices with
 serial numbers not in *airspyd.conf* (or in a file under
 *airspyd.conf.d*) are ignored.  If an *airspyd* or *airspyhfd*
