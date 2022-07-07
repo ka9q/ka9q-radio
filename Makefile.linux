@@ -1,4 +1,4 @@
-# $Id: Makefile.linux,v 1.100 2022/07/07 05:15:33 karn Exp $
+# $Id: Makefile.linux,v 1.100 2022/07/07 05:15:33 karn Exp karn $
 
 # for production
 DOPTS = -DNDEBUG=1 -O3
@@ -18,7 +18,8 @@ DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
-DAEMONS=aprs aprsfeed funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdr sdrplayd
+#DAEMONS=aprs aprsfeed funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdr sdrplayd
+DAEMONS=aprs aprsfeed funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdr
 
 EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt
 
