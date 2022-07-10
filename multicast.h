@@ -1,4 +1,4 @@
-// $Id: multicast.h,v 1.47 2022/06/21 07:40:01 karn Exp $
+// $Id: multicast.h,v 1.47 2022/06/21 07:40:01 karn Exp karn $
 // Multicast and RTP functions, constants and structures
 // Not every RTP module uses these yet, they need to be revised
 // Copyright 2018, Phil Karn, KA9Q
@@ -167,6 +167,8 @@ unsigned char *gen_bye(unsigned char *output,int bufsize,uint32_t const *ssrcs,i
 unsigned char *gen_sr(unsigned char *output,int bufsize,struct rtcp_sr const *sr,struct rtcp_rr const *rr,int rc);
 // Generate RTCP receiver report segment
 unsigned char *gen_rr(unsigned char *output,int bufsize,uint32_t ssrc,struct rtcp_rr const *rr,int rc);
+
+void dump_interfaces(void);
 
 // Utility routines for reading from, and writing integers to, network format in char buffers
 static inline unsigned short get8(unsigned char const *dp){

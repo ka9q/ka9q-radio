@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.75 2022/06/23 22:12:11 karn Exp $
+// $Id: multicast.c,v 1.75 2022/06/23 22:12:11 karn Exp karn $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -8,14 +8,18 @@
 #include <netdb.h>
 #include <string.h>
 #include <net/if.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <ifaddrs.h>
 #include <fcntl.h>
+
+#if defined(linux)
+#include <linux/if_packet.h>
+#include <net/ethernet.h>
+#include <bsd/string.h>
+#endif
+
 #include "multicast.h"
 #include "misc.h"
 
@@ -103,6 +107,9 @@ int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
     struct ifaddrs *ifap = NULL;
     struct ifaddrs const *ifp;
     getifaddrs(&ifap);
+
+
+
     for(ifp = ifap; ifp != NULL; ifp = ifp->ifa_next){
       if(strcmp(ifp->ifa_name,iface) == 0 && sock->sa_family == ifp->ifa_addr->sa_family)
 	break;
@@ -356,6 +363,8 @@ char const *formatsock(void const *s){
   // Determine actual length (and type) of binary socket structure (IPv4/IPv6)
   int slen = 0;
   struct sockaddr const * const sa = (struct sockaddr *)s;
+  if(sa == NULL)
+    return NULL;
   switch(sa->sa_family){
   case AF_INET:
     slen = sizeof(struct sockaddr_in);
@@ -722,3 +731,92 @@ static int apple_join_group(int const fd,void const * const sock){
   return 0;
 }
 #endif
+
+
+static struct {
+  int flag;
+  char const *name;
+} flags[] = {{IFF_UP,"UP"},
+	     {IFF_BROADCAST,"BROADCAST"},
+	     {IFF_DEBUG,"DEBUG"},
+	     {IFF_LOOPBACK,"LOOPBACK"},
+	     {IFF_POINTOPOINT,"PTP"},
+	     {IFF_RUNNING,"RUNNING"},
+	     {IFF_NOARP,"NOARP"},
+	     {IFF_PROMISC,"PROMISC"},
+	     {IFF_NOTRAILERS,"NOTRAILERS"},
+	     {IFF_ALLMULTI,"ALLMULTI"},
+	     {IFF_MASTER,"MASTER"},
+	     {IFF_SLAVE,"SLAVE"},
+	     {IFF_MULTICAST,"MULTICAST"},
+	     {IFF_PORTSEL,"PORTSEL"},
+	     {IFF_AUTOMEDIA,"AUTOMEDIA"},
+	     {IFF_DYNAMIC,"DYNAMIC"},
+#ifdef IFF_LOWER_UP
+	     {IFF_LOWER_UP,"LOWER_UP"},
+#endif
+#ifdef IFF_DORMANT
+	     {IFF_DORMANT,"DORMANT"},
+#endif
+#ifdef IFF_ECHO	     
+	     {IFF_ECHO,"ECHO"},
+#endif
+	     {0, NULL},
+};
+
+
+// Dump list of interfaces
+void dump_interfaces(void){
+  struct ifaddrs *ifap = NULL;
+  
+  getifaddrs(&ifap);
+  fprintf(stdout,"Interface list:\n");
+  
+  for(struct ifaddrs const *i = ifap; i != NULL; i = i->ifa_next){
+    int const family = i->ifa_addr->sa_family;
+
+    char const *familyname = NULL;
+    int socksize;
+    switch(family){
+    case AF_INET:
+      familyname = "AF_INET";
+      socksize = sizeof(struct sockaddr_in);
+      break;
+    case AF_INET6:
+      familyname = "AF_INET6";
+      socksize = sizeof(struct sockaddr_in6);
+      break;
+#ifdef AF_PACKET
+    case AF_PACKET:
+      familyname = "AF_PACKET";
+      socksize = sizeof(struct sockaddr_ll);
+      break;
+#endif
+    default:
+      familyname = "?";
+      socksize = 0;
+      break;
+    }
+    fprintf(stdout,"%s %s(%d)",i->ifa_name,familyname,family);
+
+    char host[NI_MAXHOST];
+    
+    if(i->ifa_addr && getnameinfo(i->ifa_addr,socksize,host,NI_MAXHOST,NULL,0,NI_NUMERICHOST) == 0)
+      fprintf(stdout," addr %s",host);
+    if(i->ifa_dstaddr && getnameinfo(i->ifa_dstaddr,socksize,host,NI_MAXHOST,NULL,0,NI_NUMERICHOST) == 0)
+      fprintf(stdout," dstaddr %s",host);
+    if(i->ifa_netmask && getnameinfo(i->ifa_netmask,socksize,host,NI_MAXHOST,NULL,0,NI_NUMERICHOST) == 0)
+      fprintf(stdout," mask %s",host);
+    if(i->ifa_data)
+      fprintf(stdout," data %p",i->ifa_data);
+    const int f = i->ifa_flags;
+    for(int j=0;flags[j].flag != 0; j++){
+      if(f & flags[j].flag)
+	fprintf(stdout," %s",flags[j].name);
+    }
+    fprintf(stdout,"\n");
+  }
+  fprintf(stdout,"end of list\n");
+  freeifaddrs(ifap);
+  ifap = NULL;
+}
