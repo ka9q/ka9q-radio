@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.77 2022/07/10 07:50:47 karn Exp $
+// $Id: multicast.c,v 1.78 2022/07/10 07:58:54 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -796,6 +796,12 @@ void dump_interfaces(void){
       familyname = "AF_INET6";
       socksize = sizeof(struct sockaddr_in6);
       break;
+#ifdef AF_LINK
+    case AF_LINK:
+      familyname = "AF_LINK";
+      socksize = sizeof(struct sockaddr_dl);
+      break;
+#endif
 #ifdef AF_PACKET
     case AF_PACKET:
       familyname = "AF_PACKET";
