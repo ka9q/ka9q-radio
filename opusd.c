@@ -1,4 +1,4 @@
-// $Id: opusd.c,v 1.2 2022/05/10 04:01:32 karn Exp karn $
+// $Id: opusd.c,v 1.3 2022/07/10 07:44:56 karn Exp $
 // Opus transcoder
 // Read PCM audio from one or more multicast groups, compress with Opus and retransmit on another with same SSRC
 // Currently subject to memory leaks as old group states aren't yet aged out
@@ -14,6 +14,9 @@
 #include <unistd.h>
 #include <limits.h>
 #include <string.h>
+#if defined(linux)
+#include <bsd/string.h>
+#endif
 #include <opus/opus.h>
 #include <netdb.h>
 #include <locale.h>
@@ -218,7 +221,9 @@ int main(int argc,char * const argv[]){
   char iface[1024];
   if(Input){
     resolve_mcast(Input,&PCM_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
-    Input_fd = listen_mcast(&PCM_dest_address,NULL); // Port address already in place
+    if(strlen(iface) == 0 && Default_mcast_iface != NULL)
+      strlcpy(iface,Default_mcast_iface,sizeof(iface));
+    Input_fd = listen_mcast(&PCM_dest_address,iface); // Port address already in place
 
     if(Input_fd == -1){
       fprintf(stderr,"Can't resolve input PCM group %s\n",Input);
@@ -251,6 +256,8 @@ int main(int argc,char * const argv[]){
 
   // Can't resolve this until the avahi service is started
   resolve_mcast(Output,&Opus_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
+  if(strlen(iface) == 0 && Default_mcast_iface != NULL)
+    strlcpy(iface,Default_mcast_iface,sizeof(iface));
   Output_fd = connect_mcast(&Opus_dest_address,iface,Mcast_ttl,IP_tos);
 
   if(Output_fd == -1){
@@ -369,6 +376,8 @@ void * status(void *p){
 
   char iface[1024];
   resolve_mcast(Status,&Status_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
+  if(strlen(iface) == 0 && Default_mcast_iface != NULL)
+    strlcpy(iface,Default_mcast_iface,sizeof(iface));
   Status_fd = listen_mcast(&Status_dest_address,iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't set up input on %s: %s\n",Status,strerror(errno));
