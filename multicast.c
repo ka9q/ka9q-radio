@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.78 2022/07/10 07:58:54 karn Exp $
+// $Id: multicast.c,v 1.79 2022/07/10 08:01:34 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -18,6 +18,10 @@
 #include <linux/if_packet.h>
 #include <net/ethernet.h>
 #include <bsd/string.h>
+#endif
+
+#ifdef __APPLE__
+#include <net/if_dl.h>
 #endif
 
 #include "multicast.h"
