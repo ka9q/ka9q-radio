@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.255 2022/07/07 03:29:18 karn Exp $
+// $Id: main.c,v 1.256 2022/07/10 07:47:41 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -113,7 +113,7 @@ int main(int argc,char *argv[]){
 #endif
 
   int c;
-  while((c = getopt(argc,argv,"N:vp:")) != -1){
+  while((c = getopt(argc,argv,"N:vp:I")) != -1){
     switch(c){
     case 'p':
       Fftw_plan_timelimit = strtod(optarg,NULL);
@@ -123,6 +123,9 @@ int main(int argc,char *argv[]){
       break;
     case 'N':
       Name = optarg;
+      break;
+    case 'I':
+      dump_interfaces();
       break;
     default:
       fprintf(stdout,"Unknown command line option %c\n",c);
