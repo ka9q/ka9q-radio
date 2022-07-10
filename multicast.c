@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.76 2022/07/10 07:41:18 karn Exp $
+// $Id: multicast.c,v 1.77 2022/07/10 07:50:47 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -746,12 +746,22 @@ static struct {
 	     {IFF_PROMISC,"PROMISC"},
 	     {IFF_NOTRAILERS,"NOTRAILERS"},
 	     {IFF_ALLMULTI,"ALLMULTI"},
+#ifdef IFF_MASTER
 	     {IFF_MASTER,"MASTER"},
+#endif
+#ifdef IFF_SLAVE
 	     {IFF_SLAVE,"SLAVE"},
+#endif
 	     {IFF_MULTICAST,"MULTICAST"},
+#ifdef IFF_PORTSEL
 	     {IFF_PORTSEL,"PORTSEL"},
+#endif
+#ifdef IFF_AUOMEDIA
 	     {IFF_AUTOMEDIA,"AUTOMEDIA"},
+#endif
+#ifdef IFF_DYNAMIC
 	     {IFF_DYNAMIC,"DYNAMIC"},
+#endif
 #ifdef IFF_LOWER_UP
 	     {IFF_LOWER_UP,"LOWER_UP"},
 #endif
