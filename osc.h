@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <complex.h>
 #include <math.h>
+#include <stdint.h>
 
 struct osc {
   double freq;
