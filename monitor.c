@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.169 2022/07/06 02:11:19 karn Exp $
+// $Id: monitor.c,v 1.170 2022/07/18 06:49:26 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -338,7 +338,12 @@ int main(int argc,char * const argv[]){
   signal(SIGPIPE,SIG_IGN);
 
   // Become the display thread
-  display(NULL);
+  if(!Quiet){
+    display(NULL);
+  } else {
+    while(true)
+      sleep(1000);
+  }
 
   // won't actually get here
   echo();
@@ -625,7 +630,8 @@ static void *decode_task(void *arg){
       }
     }
     // Run PL tone decoders
-    {
+    // Disable if display isn't active, since no other use is made of them
+    if(!Quiet) {
       for(int i=0; i < sp->frame_size; i++){
 	float s = sp->bounce[i][0] + sp->bounce[i][1]; // Mono sum
 	for(int j = 0; j < N_tones; j++){
