@@ -1,4 +1,4 @@
-// $Id: funcubed.c,v 1.2 2022/07/18 03:51:19 karn Exp $
+// $Id: funcubed.c,v 1.3 2022/07/18 06:35:35 karn Exp $
 // Read from AMSAT UK Funcube Pro and Pro+ dongles
 // Multicast raw 16-bit I/Q samples
 // Accept control commands from UDP socket
@@ -96,7 +96,7 @@ int RTP_ttl = 0; // By default, don't leave machine
 int Status_ttl = 1; // Don't send fast IQ streams beyond the local network by default
 int IP_tos = 48; // AF12 left shifted 2 bits
 char *Name;
-char Metadata_dest[HOST_NAME_MAX];
+char Metadata_dest[_POSIX_HOST_NAME_MAX];
 dictionary *Dictionary;
 char const *Conf_file = "/etc/radio/funcubed.conf";
 
@@ -202,7 +202,7 @@ int main(int argc,char *argv[]){
   }
   if(Name == NULL){
     // Name not specified; default to hostname-funcube
-    char hostname[HOST_NAME_MAX];
+    char hostname[_POSIX_HOST_NAME_MAX];
     gethostname(hostname,sizeof(hostname));
     char *cp = strchr(hostname,'.');
     if(cp != NULL)
@@ -245,7 +245,7 @@ int main(int argc,char *argv[]){
     }
   }
   {
-    char dns_name[HOST_NAME_MAX];
+    char dns_name[_POSIX_HOST_NAME_MAX];
     snprintf(dns_name,sizeof(dns_name),"%s-pcm.local",Name);
     avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,dns_name,ElfHashString(dns_name),NULL);
     char iface[IFNAMSIZ];

@@ -1,4 +1,4 @@
-# $Id: Makefile.osx,v 1.108 2022/05/09 08:07:50 karn Exp $
+# $Id: Makefile.osx,v 1.109 2022/07/18 06:35:10 karn Exp $
 CFLAGS=-g -DNDEBUG=1 -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 #CFLAGS=-g -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 BINDIR=/usr/local/bin
@@ -38,7 +38,7 @@ dmr: dmr.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
 
 funcubed: funcubed.o libradio.a libfcd.a
-	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lportaudio -lusb-1.0 -liconv -lm -lpthread
+	$(CC) -g -o $@ $^ -liniparser -lavahi-client -lavahi-common -lportaudio -lusb-1.0 -liconv -lm -lpthread
 
 hackrf: hackrf.o libradio.a
 	$(CC) -g -o $@ $^ -lhackrf -lm -lpthread
@@ -56,7 +56,7 @@ modulate: modulate.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
 
 monitor: monitor.o libradio.a
-	$(CC) -g -o $@ $^ -lopus -lportaudio -lncurses -lm -lpthread
+	$(CC) -g -o $@ $^ -lopus -lportaudio -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread
 
 opusd: opusd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lopus -lm -lpthread
