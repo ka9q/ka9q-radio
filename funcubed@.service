@@ -1,4 +1,4 @@
-# $Id: funcubed@.service,v 1.1 2022/05/04 06:00:21 karn Exp $
+# $Id: funcubed@.service,v 1.2 2022/07/18 03:27:45 karn Exp $
 # Systemd unit to start up funcube daemon
 # Phil Karn, KA9Q May 2022
 
@@ -17,13 +17,11 @@ PermissionsStartOnly=true
 RuntimeDirectory=funcubed-%i
 RuntimeDirectoryMode=0755
 WorkingDirectory=/tmp
-EnvironmentFile=/etc/radio/funcubed-%i.conf
 ReadWritePaths=/var/lib/ka9q-radio /home/funcube
-ExecStart=/usr/local/sbin/funcubed --name $ID --device $DEVICE "$ID"
-PIDFile=/run/funcubed-%i/pid
+ExecStart=/usr/local/sbin/funcubed --name %i
 Restart=always
 RestartSec=5
 TimeoutStopSec=5
 
 [Install]
-#WantedBy=multi-user.target
+WantedBy=multi-user.target

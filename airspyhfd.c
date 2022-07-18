@@ -1,4 +1,4 @@
-// $Id: airspyhfd.c,v 1.1 2022/05/03 01:39:25 karn Exp $
+// $Id: airspyhfd.c,v 1.2 2022/07/18 03:27:45 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #define _GNU_SOURCE 1
@@ -15,6 +15,7 @@
 #include <dirent.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <net/if.h>
 #include <signal.h>
 #include <locale.h>
 #include <sys/time.h>
@@ -377,14 +378,11 @@ int main(int argc,char *argv[]){
     // Start Avahi client that will maintain our mDNS registrations
     // Service name, if present, must be unique
     // Description, if present becomes TXT record if present
-    char service_name[1024];
-    snprintf(service_name,sizeof(service_name),"%s (%s)",sdr->description,sdr->metadata_dest);
-    avahi_start(service_name,"_ka9q-ctl._udp",5006,sdr->metadata_dest,ElfHashString(sdr->metadata_dest),sdr->description);
-    snprintf(service_name,sizeof(service_name),"%s (%s)",sdr->description,sdr->data_dest);
-    avahi_start(service_name,"_rtp._udp",5004,sdr->data_dest,ElfHashString(sdr->data_dest),sdr->description);
+    avahi_start(sdr->description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,sdr->metadata_dest,ElfHashString(sdr->metadata_dest),sdr->description);
+    avahi_start(sdr->description,"_rtp._udp",DEFAULT_RTP_PORT,sdr->data_dest,ElfHashString(sdr->data_dest),sdr->description);
   }
   {
-    char iface[1024];
+    char iface[IFNAMSIZ];
     resolve_mcast(sdr->data_dest,&sdr->output_data_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
     sdr->data_sock = connect_mcast(&sdr->output_data_dest_address,iface,RTP_ttl,IP_tos);
     if(sdr->data_sock == -1){

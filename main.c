@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.256 2022/07/10 07:47:41 karn Exp $
+// $Id: main.c,v 1.257 2022/07/18 03:27:45 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -26,6 +26,7 @@
 #include <ctype.h>
 #include <arpa/inet.h>
 #include <iniparser/iniparser.h>
+#include <net/if.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -345,13 +346,11 @@ static int loadconfig(char const * const file){
     if(status != NULL){
       // Target for status/control stream. Optional.
       strlcpy(Metadata_dest_string,status,sizeof(Metadata_dest_string));
-      char service_name[1024];
-      snprintf(service_name,sizeof(service_name),"%s radio (%s)",Name,status);
       char description[1024];
       snprintf(description,sizeof(description),"input=%s",input);
-      avahi_start(service_name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),description);
+      avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),description);
       base_address += 16;
-      char iface[1024];
+      char iface[IFNAMSIZ];
       resolve_mcast(Metadata_dest_string,&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
       if(strlen(iface) == 0 && Iface != NULL)
         strlcpy(iface,Iface,sizeof(iface));
@@ -408,13 +407,11 @@ static int loadconfig(char const * const file){
     }
     strlcpy(demod->output.data_dest_string,data,sizeof(demod->output.data_dest_string));
     // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
-    char service_name[1024];
-    snprintf(service_name,sizeof(service_name),"%s radio (%s)",sname,data);
     char description[1024];
     snprintf(description,sizeof(description),"pcm-source=%s",formatsock(&Frontend.input.data_dest_address));
-    avahi_start(service_name,"_rtp._udp",5004,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),description);
+    avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),description);
     base_address += 16;
-    char iface[1024];
+    char iface[IFNAMSIZ];
     resolve_mcast(demod->output.data_dest_string,&demod->output.data_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
     if(strlen(iface) == 0 && Iface != NULL)
       strlcpy(iface,Iface,sizeof(iface));
