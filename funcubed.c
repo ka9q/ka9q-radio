@@ -1,4 +1,4 @@
-// $Id: funcubed.c,v 1.1 2022/05/04 06:00:21 karn Exp $
+// $Id: funcubed.c,v 1.2 2022/07/18 03:51:19 karn Exp $
 // Read from AMSAT UK Funcube Pro and Pro+ dongles
 // Multicast raw 16-bit I/Q samples
 // Accept control commands from UDP socket
@@ -21,6 +21,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <net/if.h>
 #include <signal.h>
 #include <locale.h>
 #include <sys/select.h>
@@ -30,12 +31,14 @@
 #include <syslog.h>
 #include <errno.h>
 #include <getopt.h>
+#include <iniparser/iniparser.h>
 
 #include "conf.h"
 #include "fcd.h"
 #include "misc.h"
 #include "status.h"
 #include "multicast.h"
+#include "config.h"
 
 struct sdrstate {
   // Stuff for sending commands
@@ -73,42 +76,39 @@ int const Bufsize = 16384;
 char const *Rundir = "/run/funcube"; // Where 'status' and 'pid' are created
 
 // Empirical: noticeable aliasing beyond this noticed on strong 40m SSB signals
-float LowerEdge = -75000;
-float UpperEdge = +75000;
+float const LowerEdge = -75000;
+float const UpperEdge = +75000;
 
 // Variables set by command line options
-int No_hold_open; // if set, close control between commands
+int Hold_open; // if set, close control between commands
 // A larger blocksize makes more efficient use of each frame, but the receiver generally runs on
 // frames that match the Opus codec: 2.5, 5, 10, 20, 40, 60, 180, 100, 120 ms
 // So to minimize latency, make this a common denominator:
 // 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
 int Blocksize = 240;
+int Blocksize_TTL0 = 16000; // Default blocksize when IP TTL=0
+bool Blocksize_set = false;
 int Device = 0;
 int Verbose;
 char const *Locale = "en_US.UTF-8";
-int Daemonize;
-int Mcast_ttl = 1; // Don't send fast IQ streams beyond the local network by default
+bool Daemonize;
+int RTP_ttl = 0; // By default, don't leave machine
+int Status_ttl = 1; // Don't send fast IQ streams beyond the local network by default
 int IP_tos = 48; // AF12 left shifted 2 bits
 char *Name;
-char Metadata_dest[1024];
+char Metadata_dest[HOST_NAME_MAX];
+dictionary *Dictionary;
+char const *Conf_file = "/etc/radio/funcubed.conf";
 
 struct option const Options[] =
   {
-   {"iface", required_argument, NULL, 'A'},
-   {"device", required_argument, NULL, 'I'},
-   {"name", required_argument, NULL, 'N'},
-   {"ssrc", required_argument, NULL, 'S'},
-   {"ttl", required_argument, NULL, 'T'},
-   {"blocksize", required_argument, NULL, 'b'},
-   {"frequency", required_argument, NULL, 'f'},
-   {"tos", required_argument, NULL, 'p'},
-   {"iptos", required_argument, NULL, 'p'},
-   {"ip-tos", required_argument, NULL, 'p'},    
-   {"verbose", no_argument, NULL, 'v'},
-   {NULL, 0, NULL, 0},
+    {"conf", required_argument, NULL, 'f'},
+    {"name", required_argument, NULL, 'N'},
+    {"verbose", no_argument, NULL, 'v'},
+    {"list-audio",no_argument,NULL,'L'},
+    {NULL, 0, NULL, 0},
   };
-char const Optstring[] = "A:I:N:S:T:b:f:p:v";
-
+char const Optstring[] = "N:f:vL";
 
 // Global variables
 struct rtp_state Rtp;
@@ -120,27 +120,22 @@ struct sockaddr_storage Output_metadata_dest_address; // Multicast output socket
 struct sockaddr_storage Output_data_dest_address; // Multicast output socket
 uint64_t Output_metadata_packets;
 
-char *Description;
+char const *Description;
 
 struct sdrstate FCD;
 pthread_t Display_thread;
 pthread_t Ncmd_thread;
 FILE *Status;
-char const *Status_filename;
-char const *Pid_filename;
-
 uint64_t Commands;
 FILE *Tunestate;
 
 
-void decode_fcd_commands(struct sdrstate *, unsigned char *,int);
-void send_fcd_status(struct sdrstate *,int);
+void decode_fcd_commands(struct sdrstate *, unsigned char const *,int);
+void send_fcd_status(struct sdrstate const *,int);
 void do_fcd_agc(struct sdrstate *);
 void readback(struct sdrstate *);
-int process_fc_command(char *,int);
 double fcd_actual(unsigned int);
 static int front_end_init(struct sdrstate *,int,int);
-int get_adc(short *,int);
 void *display(void *);
 void *ncmd(void *);
 static void closedown(int a);
@@ -148,42 +143,22 @@ static void closedown(int a);
 int main(int argc,char *argv[]){
   struct sdrstate * const sdr = &FCD;
 
-  char *cp;
-  if((cp = getenv("LANG")) != NULL)
-    Locale = cp;
-
+  {
+    char const *cp = getenv("LANG");
+    if(cp != NULL)
+      Locale = cp;
+  }
   int c;
   int List_audio = 0;
   int retval = 1; // Default to an abnormal termination code
 
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
-    case 'A':
-      Default_mcast_iface = optarg;
-      break;
-    case 'b':
-      Blocksize = strtol(optarg,NULL,0);
-      break;
-    case 'c':
-      sdr->calibration = strtod(optarg,NULL) * 1e-6; // Calibration offset in ppm
-      break;
-    case 'd':
-      Daemonize++;
-      Status = NULL;
-      break;
-    case 'o':
-      No_hold_open++; // Close USB control port between commands so fcdpp can be used
-      break;
-    case 'p':
-      IP_tos = strtol(optarg,NULL,0);
+    case 'f':
+      Conf_file = optarg;
       break;
     case 'v':
       Verbose++;
-      if(!Daemonize)
-	Status = stderr; // Could be overridden by status file argument below
-      break;
-    case 'I':
-      Device = strtol(optarg,NULL,0);
       break;
     case 'N':
       Name = optarg;
@@ -191,27 +166,20 @@ int main(int argc,char *argv[]){
     case 'L':
       List_audio++;
       break;
-    case 'S':
-      Rtp.ssrc = strtol(optarg,NULL,0);
-      break;
-    case 'T':
-      Mcast_ttl = strtol(optarg,NULL,0);
-      break;
     default:
     case '?':
-      fprintf(stderr,"Unknown argument %c\n",c);
+      fprintf(stdout,"Unknown argument %c\n",c);
       goto terminate;
       break;
     }
   }
-  Description = argv[optind];
   setlocale(LC_ALL,Locale);
 
   if(List_audio){
     // Just list audio devices and quit
     // On stdout, not stderr, so we can toss ALSA's noisy error messages with, e.g. 2> /dev/null
     Pa_Initialize();
-    int numDevices = Pa_GetDeviceCount();
+    int const numDevices = Pa_GetDeviceCount();
     printf("%d Audio devices:\n",numDevices);
     for(int inDevNum=0; inDevNum < numDevices; inDevNum++){
       const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(inDevNum);
@@ -220,54 +188,77 @@ int main(int argc,char *argv[]){
     retval = 0;
     goto terminate;
   }
-  if(Name == 0){
-    // Name not specified; default to hostname-device
-    char hostname[1024];
+  if(Name == NULL)
+    Name = argv[optind];
+
+  if(Conf_file){
+    if((Dictionary = iniparser_load(Conf_file)) == NULL){
+      fprintf(stdout,"Can't load config file %s\n",Conf_file);
+      exit(1);
+    }
+  } else {
+    fprintf(stdout,"No config file specified\n");
+    exit(1);
+  }
+  if(Name == NULL){
+    // Name not specified; default to hostname-funcube
+    char hostname[HOST_NAME_MAX];
     gethostname(hostname,sizeof(hostname));
     char *cp = strchr(hostname,'.');
     if(cp != NULL)
       *cp = '\0'; // Strip the domain name
-    int const ret = asprintf(&Name,"%s-%d",hostname,Device);
+    int const ret = asprintf(&Name,"%s-funcube",hostname);
     if(ret == -1)
       exit(1);
+    fprintf(stdout,"defaulting to constructed name %s\n",Name);
   }
+  if(iniparser_find_entry(Dictionary,Name) != 1){
+    fprintf(stdout,"No section %s found in %s\n",Name,Conf_file);
+    iniparser_freedict(Dictionary);
+    exit(1);
+  }
+  Device = config_getint(Dictionary,Name,"device",0);
+  Default_mcast_iface = config_getstring(Dictionary,Name,"iface",NULL);
+  RTP_ttl = config_getint(Dictionary,Name,"data-ttl",0); // Default to 0 for data
+  Status_ttl = config_getint(Dictionary,Name,"status-ttl",1);
+  sdr->calibration = config_getdouble(Dictionary,Name,"calibration",0);
+  Hold_open = config_getboolean(Dictionary,Name,"hold-open",true);
+  IP_tos = config_getint(Dictionary,Name,"tos",48);
+  Rtp.ssrc = config_getint(Dictionary,Name,"ssrc",0);
+  Blocksize = config_getint(Dictionary,Name,"blocksize",RTP_ttl == 0 ? Blocksize_TTL0 : Blocksize);
+  Description = config_getstring(Dictionary,Name,"description",NULL);
   {
-    snprintf(Metadata_dest,sizeof(Metadata_dest),"funcube-%s-status.local",Name);
-    char service_name[2048];
-    snprintf(service_name,sizeof(service_name),"%s funcube (%s)",Name,Metadata_dest);
-    avahi_start(service_name,"_ka9q-ctl._udp",5006,Metadata_dest,ElfHashString(Metadata_dest),NULL);
-    char iface[1024];
+    snprintf(Metadata_dest,sizeof(Metadata_dest),"%s-status.local",Name);
+    avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest,ElfHashString(Metadata_dest),NULL);
+    char iface[IFNAMSIZ];
     resolve_mcast(Metadata_dest,&Output_metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
-    Status_sock = connect_mcast(&Output_metadata_dest_address,iface,Mcast_ttl,IP_tos);
+    Status_sock = connect_mcast(&Output_metadata_dest_address,iface,Status_ttl,IP_tos);
     if(Status_sock <= 0){
-      fprintf(stderr,"Can't create status socket %s: %s\n",Metadata_dest,strerror(errno));
+      fprintf(stdout,"Can't create status socket %s: %s\n",Metadata_dest,strerror(errno));
       goto terminate;
     }
-    // Set up new control socket on port 5006
+    // Set up new control socket on port DEFAULT_STAT_PORT
     Nctl_sock = listen_mcast(&Output_metadata_dest_address,iface);
     if(Nctl_sock <= 0){
-      fprintf(stderr,"Can't create control socket %s: %s\n",Metadata_dest,strerror(errno));
+      fprintf(stdout,"Can't create control socket %s: %s\n",Metadata_dest,strerror(errno));
       goto terminate;
     }
   }
   {
-    char dns_name[1024];
-    snprintf(dns_name,sizeof(dns_name),"funcube-%s-pcm.local",Name);
-    char service_name[2048];
-    snprintf(service_name,sizeof(service_name),"%s funcube (%s)",Name,dns_name);
-    avahi_start(service_name,"_rtp._udp",5004,dns_name,ElfHashString(dns_name),NULL);
-    char iface[1024];
+    char dns_name[HOST_NAME_MAX];
+    snprintf(dns_name,sizeof(dns_name),"%s-pcm.local",Name);
+    avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,dns_name,ElfHashString(dns_name),NULL);
+    char iface[IFNAMSIZ];
     resolve_mcast(dns_name,&Output_data_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
-    Rtp_sock = connect_mcast(&Output_data_dest_address,iface,Mcast_ttl,IP_tos);
+    Rtp_sock = connect_mcast(&Output_data_dest_address,iface,RTP_ttl,IP_tos);
 
     if(Rtp_sock == -1){
-      fprintf(stderr,"Can't create data socket %s: %s\n",dns_name,strerror(errno));
+      fprintf(stdout,"Can't create data socket %s: %s\n",dns_name,strerror(errno));
       goto terminate;
     }
   }
   socklen_t len = sizeof(Output_data_source_address);
   getsockname(Rtp_sock,(struct sockaddr *)&Output_data_source_address,&len);
-
 
   // Catch signals so portaudio can be shut down
   signal(SIGALRM,closedown);
@@ -289,7 +280,7 @@ int main(int argc,char *argv[]){
       if(sdr->calibration == 0){
 	if((calfp = fopen(calfilename,"r")) != NULL){
 	  if(fscanf(calfp,"%lg",&sdr->calibration) < 1){
-	    fprintf(stderr,"Can't read calibration from %s\n",calfilename);
+	    fprintf(stdout,"Can't read calibration from %s\n",calfilename);
 	  }
 	}
       } else {
@@ -305,7 +296,7 @@ int main(int argc,char *argv[]){
   sleep(1);
   Pa_Initialize();
   if(front_end_init(sdr,Device,Blocksize) < 0){
-    fprintf(stderr,"front_end_init(%p,%d,%d) failed\n",
+    fprintf(stdout,"front_end_init(%p,%d,%d) failed\n",
 	   sdr,Device,Blocksize);
     goto terminate;
   }
@@ -314,7 +305,7 @@ int main(int argc,char *argv[]){
     snprintf(tmp,sizeof(tmp),"%s/tune-funcube.%d",VARDIR,Device);
     Tunestate = fopen(tmp,"r+");
     if(!Tunestate){
-      fprintf(stderr,"Can't open tuner state file %s: %s\n",tmp,strerror(errno));
+      fprintf(stdout,"Can't open tuner state file %s: %s\n",tmp,strerror(errno));
     } else {
       // restore frequency from state file, if present
       int freq;
@@ -329,7 +320,7 @@ int main(int argc,char *argv[]){
 	    sdr->lna_gain = 24;
 	}
 	if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),Device)) == NULL){
-	  fprintf(stderr,"can't re-open control port: %s\n",strerror(errno));
+	  fprintf(stdout,"can't re-open control port: %s\n",strerror(errno));
 	  return 1; // fatal error
 	}
 	fcdAppSetFreq(sdr->phd,sdr->intfreq);
@@ -341,7 +332,7 @@ int main(int argc,char *argv[]){
     // Recreate for writing
     Tunestate = fopen(tmp,"w+");
     if(Tunestate == NULL)
-      fprintf(stderr,"Can't create tuner state file %s: %s\n",tmp,strerror(errno));
+      fprintf(stdout,"Can't create tuner state file %s: %s\n",tmp,strerror(errno));
     else {
       fprintf(Tunestate,"%d\n",sdr->intfreq);
       fflush(Tunestate); // Leave open for further use
@@ -354,11 +345,11 @@ int main(int argc,char *argv[]){
     pthread_create(&Display_thread,NULL,display,sdr);
 
   if(Rtp.ssrc == 0){
-    time_t tt;
-    time(&tt);
-    Rtp.ssrc = tt & 0xffffffff; // low 32 bits of clock time
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME,&now);
+    Rtp.ssrc = now.tv_sec & 0xffffffff; // low 32 bits of clock time
   }
-  fprintf(stderr,"uid %d; device %d; dest %s; blocksize %d; RTP SSRC %u; status file %s\n",getuid(),Device,Metadata_dest,Blocksize,Rtp.ssrc,Status_filename);
+  fprintf(stdout,"uid %d; device %d; dest %s; blocksize %'d samples; RTP SSRC %u\n",getuid(),Device,Metadata_dest,Blocksize,Rtp.ssrc);
   // Gain and phase corrections. These will be updated every block
   float gain_q = 1;
   float gain_i = 1;
@@ -370,7 +361,7 @@ int main(int argc,char *argv[]){
     clock_gettime(CLOCK_REALTIME,&now);
     sdr->timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
   }
-  float rate_factor = Blocksize/(ADC_samprate * Power_alpha);
+  float const rate_factor = Blocksize/(ADC_samprate * Power_alpha);
 
   int ConsecPaErrs = 0;
   int ConsecSendErrs = 0;
@@ -384,11 +375,12 @@ int main(int argc,char *argv[]){
     rtp.seq = Rtp.seq++;
     rtp.timestamp = Rtp.timestamp;
 
-    unsigned char buffer[16384]; // Pick a better value
+    // Space for the samples (stereo 16-bit samples) + RTP header
+    unsigned char buffer[Blocksize * 2 * sizeof(int16_t) + 100]; // Pick a better value
     unsigned char *dp = buffer;
 
     dp = hton_rtp(dp,&rtp);
-    signed short *sampbuf = (signed short *)dp;
+    int16_t *sampbuf = (int16_t *)dp;
 
     // Read block of I/Q samples from A/D converter
     // The timer is necessary because portaudio will go into a tight loop if the device is unplugged
@@ -399,7 +391,7 @@ int main(int argc,char *argv[]){
       perror("setitimer start");
       goto terminate;
     }
-    int r = Pa_ReadStream(sdr->Pa_Stream,sampbuf,Blocksize);
+    int const r = Pa_ReadStream(sdr->Pa_Stream,sampbuf,Blocksize);
     memset(&itime,0,sizeof(itime));
     if(setitimer(ITIMER_VIRTUAL,&itime,NULL) == -1){
       perror("setitimer stop");
@@ -410,9 +402,9 @@ int main(int argc,char *argv[]){
 	sdr->overflows++; // Not fatal
 	ConsecPaErrs = 0;
       } else if(++ConsecPaErrs < 10){
-	fprintf(stderr,"Pa_ReadStream: %s\n",Pa_GetErrorText(r));
+	fprintf(stdout,"Pa_ReadStream: %s\n",Pa_GetErrorText(r));
       } else {
-	fprintf(stderr,"Pa_ReadStream: %s, exiting\n",Pa_GetErrorText(r));
+	fprintf(stdout,"Pa_ReadStream: %s, exiting\n",Pa_GetErrorText(r));
 	goto terminate;
       }
     } else
@@ -456,9 +448,9 @@ int main(int argc,char *argv[]){
 	continue; // Probably transient, ignore
       }
       if(++ConsecSendErrs < 10)
-	fprintf(stderr,"send: %s\n",strerror(errno));
+	fprintf(stdout,"send: %s\n",strerror(errno));
       else {
-	fprintf(stderr,"send: %s, exiting\n",strerror(errno));
+	fprintf(stdout,"send: %s, exiting\n",strerror(errno));
 	goto terminate;
       }
       // If we're sending to a unicast address without a listener, we'll get ECONNREFUSED
@@ -486,11 +478,11 @@ int main(int argc,char *argv[]){
     // Update every block
     // estimates of DC offset, signal powers and phase error
     sdr->DC += DC_alpha * (samp_sum - Blocksize*sdr->DC);
-    float block_energy = i_energy + q_energy; // Normalize for complex pairs
+    float const block_energy = i_energy + q_energy; // Normalize for complex pairs
     if(block_energy > 0){ // Avoid divisions by 0, etc
       sdr->in_power = block_energy/Blocksize; // Average A/D output power per channel  
       sdr->imbalance += rate_factor * ((i_energy / q_energy) - sdr->imbalance);
-      float dpn = 2 * dotprod / block_energy;
+      float const dpn = 2 * dotprod / block_energy;
       sdr->sinphi += rate_factor * (dpn - sdr->sinphi);
       gain_q = sqrtf(0.5 * (1 + sdr->imbalance));
       gain_i = sqrtf(0.5 * (1 + 1./sdr->imbalance));
@@ -517,7 +509,7 @@ void *ncmd(void *arg){
   assert(arg != NULL);
   struct sdrstate * const sdr = arg;
 
-  // Set up status socket on port 5006
+  // Set up status socket on port DEFAULT_STAT_PORT
   struct timeval tv;
   tv.tv_sec = 0;
   tv.tv_usec = 100000; // 100 ms
@@ -529,9 +521,9 @@ void *ncmd(void *arg){
   int counter = 0;
   while(1){
     unsigned char buffer[Bufsize];
-    int length = recv(Nctl_sock,buffer,sizeof(buffer),0); // Waits up to 100 ms for command
+    int const length = recv(Nctl_sock,buffer,sizeof(buffer),0); // Waits up to 100 ms for command
     if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),Device)) == NULL){
-      fprintf(stderr,"can't re-open control port: %s\n",strerror(errno));
+      fprintf(stdout,"can't re-open control port: %s\n",strerror(errno));
       return NULL;
     }
     if(length > 0){
@@ -545,7 +537,7 @@ void *ncmd(void *arg){
     readback(sdr);
     Output_metadata_packets++;
     send_fcd_status(sdr,counter == 0);
-    if(!No_hold_open){
+    if(!Hold_open){
       do_fcd_agc(sdr);
     } else if(sdr->phd != NULL){
       fcdClose(sdr->phd);
@@ -559,20 +551,19 @@ void *ncmd(void *arg){
 // Status display thread
 void *display(void *arg){
   pthread_setname("funcube-disp");
-  off_t stat_point;
-  char eol;
+
   long messages = 0;
-  struct sdrstate *sdr = (struct sdrstate *)arg;
+  struct sdrstate const *sdr = (struct sdrstate *)arg;
 
   fprintf(Status,"funcube daemon pid %d device %d\n",getpid(),Device);
   fprintf(Status,"               |---Gains dB---|      |----Levels dB --|   |---------Errors---------|           Overflows                messages\n");
   fprintf(Status,"Frequency      LNA  mixer bband          RF   A/D   Out     DC-I   DC-Q  phase  gain                        TCXO\n");
   fprintf(Status,"Hz                                           dBFS  dBFS                    deg    dB                         ppm\n");   
 
-  stat_point = ftello(Status); // Current offset if file, -1 if terminal
+  off_t const stat_point = ftello(Status); // Current offset if file, -1 if terminal
 
   // End lines with return when writing to terminal, newlines when writing to status file
-  eol = stat_point == -1 ? '\r' : '\n';
+  char const eol = stat_point == -1 ? '\r' : '\n';
 
   while(1){
     //    float powerdB = 10*log10f(sdr->in_power) - 90.308734;
@@ -601,25 +592,23 @@ void *display(void *arg){
     fflush(Status);
     usleep(100000);
   }    
-
   return NULL;
 }
 
 
-void decode_fcd_commands(struct sdrstate *sdr, unsigned char *buffer,int length){
-  unsigned char *cp = buffer;
+void decode_fcd_commands(struct sdrstate *sdr, unsigned char const *buffer,int length){
+  unsigned char const *cp = buffer;
 
   while(cp - buffer < length){
-    enum status_type type = *cp++; // increment cp to length field
+    enum status_type const type = *cp++; // increment cp to length field
     
     if(type == EOL)
       break; // End of list
     
-    unsigned int optlen = *cp++;
+    unsigned int const optlen = *cp++;
     if(cp - buffer + optlen >= length)
       break; // Invalid length
 
-    unsigned char val;
     switch(type){
     case EOL: // Shouldn't get here
       break;
@@ -650,13 +639,17 @@ void decode_fcd_commands(struct sdrstate *sdr, unsigned char *buffer,int length)
       break;
     case LNA_GAIN:
       sdr->lna_gain = decode_int(cp,optlen);
-      val = sdr->lna_gain ? 1 : 0;
-      fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
+      {
+	unsigned char val = sdr->lna_gain ? 1 : 0;
+	fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
+      }
       break;
     case MIXER_GAIN:
       sdr->mixer_gain = decode_int(cp,optlen);
-      val = sdr->mixer_gain ? 1 : 0;
-      fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
+      {
+	unsigned char val = sdr->mixer_gain ? 1 : 0;
+	fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
+      }
       break;
     case IF_GAIN:
       sdr->if_gain = decode_int(cp,optlen);
@@ -672,10 +665,10 @@ void decode_fcd_commands(struct sdrstate *sdr, unsigned char *buffer,int length)
   }
 }
 
-void send_fcd_status(struct sdrstate *sdr,int full){
-  unsigned char packet[2048],*bp;
+void send_fcd_status(struct sdrstate const *sdr,int full){
+  unsigned char packet[2048];
   memset(packet,0,sizeof(packet));
-  bp = packet;
+  unsigned char *bp = packet;
   
   *bp++ = 0; // command/response = response
   encode_int32(&bp,COMMAND_TAG,sdr->command_tag);
@@ -684,7 +677,7 @@ void send_fcd_status(struct sdrstate *sdr,int full){
   {
     struct timespec now;
     clock_gettime(CLOCK_REALTIME,&now);
-    long long timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
+    long long const timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
     encode_int64(&bp,GPS_TIME,timestamp);
   }
 
@@ -694,7 +687,7 @@ void send_fcd_status(struct sdrstate *sdr,int full){
   encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&Output_data_source_address);
   encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&Output_data_dest_address);
   encode_int32(&bp,OUTPUT_SSRC,Rtp.ssrc);
-  encode_byte(&bp,OUTPUT_TTL,Mcast_ttl);
+  encode_byte(&bp,OUTPUT_TTL,RTP_ttl);
   encode_int32(&bp,INPUT_SAMPRATE,ADC_samprate);   // Both sample rates are the same
   encode_int32(&bp,OUTPUT_SAMPRATE,ADC_samprate);
   encode_int64(&bp,OUTPUT_DATA_PACKETS,Rtp.packets);
@@ -728,7 +721,7 @@ void send_fcd_status(struct sdrstate *sdr,int full){
   encode_int32(&bp,OUTPUT_CHANNELS,2);
 
   encode_eol(&bp);
-  int len = bp - packet;
+  int const len = bp - packet;
   
   assert(len < sizeof(packet));
   send(Status_sock,packet,len,0);
@@ -756,39 +749,38 @@ void readback(struct sdrstate *sdr){
   sdr->frequency = fcd_actual(sdr->intfreq) * (1 + sdr->calibration);
 }
 static int front_end_init(struct sdrstate *sdr,int device,int L){
-  int r = 0;
-
   if((sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),device)) == NULL){
-    fprintf(stderr,"fcdOpen(%s): %s\n",sdr->sdr_name,strerror(errno));
+    fprintf(stdout,"fcdOpen(%s): %s\n",sdr->sdr_name,strerror(errno));
     return -1;
   }
+  int r;
   if((r = fcdGetMode(sdr->phd)) == FCD_MODE_APP){
     char caps_str[100];
     fcdGetCapsStr(sdr->phd,caps_str);
-    fprintf(stderr,"audio device name '%s', caps '%s'\n",sdr->sdr_name,caps_str);
+    fprintf(stdout,"audio device name '%s', caps '%s'\n",sdr->sdr_name,caps_str);
   } else if(r == FCD_MODE_NONE){
-    fprintf(stderr," No FCD detected!\n");
+    fprintf(stdout," No FCD detected!\n");
     r = -1;
     goto done;
   } else if (r == FCD_MODE_BL){
-    fprintf(stderr," is in bootloader mode\n");
+    fprintf(stdout," is in bootloader mode\n");
     r = -1;
     goto done;
   }
   // Set up sample stream through portaudio subsystem
   // Search audio devices
-  int numDevices = Pa_GetDeviceCount();
+  int const numDevices = Pa_GetDeviceCount();
   int inDevNum = paNoDevice;
   for(int i = 0; i < numDevices; i++){
-    const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
+    PaDeviceInfo const *deviceInfo = Pa_GetDeviceInfo(i);
     if(strstr(deviceInfo->name,sdr->sdr_name) != NULL){
       inDevNum = i;
-      fprintf(stderr,"portaudio name: %s\n",deviceInfo->name);
+      fprintf(stdout,"portaudio name: %s\n",deviceInfo->name);
       break;
     }
   }
   if(inDevNum == paNoDevice){
-    fprintf(stderr,"Can't find portaudio name\n");
+    fprintf(stdout,"Can't find portaudio name\n");
     r = -1;
     goto done;
   }
@@ -802,16 +794,16 @@ static int front_end_init(struct sdrstate *sdr,int device,int L){
 		    paFramesPerBufferUnspecified, 0, NULL, NULL);
 
   if(r < 0){
-    fprintf(stderr,"Pa_OpenStream error: %s\n",Pa_GetErrorText(r));
+    fprintf(stdout,"Pa_OpenStream error: %s\n",Pa_GetErrorText(r));
     goto done;
   }
 
   r = Pa_StartStream(sdr->Pa_Stream);
   if(r < 0)
-    fprintf(stderr,"Pa_StartStream error: %s\n",Pa_GetErrorText(r));
+    fprintf(stdout,"Pa_StartStream error: %s\n",Pa_GetErrorText(r));
 
  done:; // Also the abort target: close handle before returning
-  if(No_hold_open && sdr->phd != NULL){
+  if(!Hold_open && sdr->phd != NULL){
     fcdClose(sdr->phd);
     sdr->phd = NULL;
   }
@@ -821,7 +813,7 @@ static int front_end_init(struct sdrstate *sdr,int device,int L){
 // Executed only if -o option isn't specified; this allows manual control with, e.g., the fcdpp command
 void do_fcd_agc(struct sdrstate *sdr){
 
-  float powerdB = power2dB(sdr->in_power);
+  float const powerdB = power2dB(sdr->in_power);
   
   if(powerdB > AGC_upper){
     if(sdr->if_gain > 0){
@@ -857,12 +849,12 @@ void do_fcd_agc(struct sdrstate *sdr){
 
 // This needs to be generalized since other tuners will be completely different!
 double fcd_actual(unsigned int u32Freq){
-  typedef unsigned int UINT32;
-  typedef unsigned long long UINT64;
+  typedef uint32_t UINT32;
+  typedef uint64_t UINT64;
 
-  const UINT32 u32Thresh = 3250U;
-  const UINT32 u32FRef = 26000000U;
-  double f64FAct;
+  UINT32 const u32Thresh = 3250U;
+  UINT32 const u32FRef = 26000000U;
+
   
   struct
   {
@@ -893,22 +885,22 @@ double fcd_actual(unsigned int u32Freq){
     pts--;
       
   // Frequency of synthesizer before divider - can possibly exceed 32 bits, so it's stored in 64
-  UINT64 u64FSynth = ((UINT64)u32Freq + pts->u32FreqOff) * pts->u32LODiv;
+  UINT64 const u64FSynth = ((UINT64)u32Freq + pts->u32FreqOff) * pts->u32LODiv;
 
   // Integer part of divisor ("INT")
-  UINT32 u32Int = u64FSynth / (u32FRef*4);
+  UINT32 const u32Int = u64FSynth / (u32FRef*4);
 
   // Subtract integer part to get fractional and AFC parts of divisor ("FRAC" and "AFC")
-  UINT32 u32Frac4096 =  (u64FSynth<<12) * u32Thresh/(u32FRef*4) - (u32Int<<12) * u32Thresh;
+  UINT32 const u32Frac4096 =  (u64FSynth<<12) * u32Thresh/(u32FRef*4) - (u32Int<<12) * u32Thresh;
 
   // FRAC is higher 12 bits
-  UINT32 u32Frac = u32Frac4096>>12;
+  UINT32 const u32Frac = u32Frac4096>>12;
 
   // AFC is lower 12 bits
-  UINT32 u32AFC = u32Frac4096 - (u32Frac<<12);
+  UINT32 const u32AFC = u32Frac4096 - (u32Frac<<12);
       
   // Actual tuner frequency, in floating point, given specified parameters
-  f64FAct = (4.0 * u32FRef / (double)pts->u32LODiv) * (u32Int + ((u32Frac * 4096.0 + u32AFC) / (u32Thresh * 4096.))) - pts->u32FreqOff;
+  double const f64FAct = (4.0 * u32FRef / (double)pts->u32LODiv) * (u32Int + ((u32Frac * 4096.0 + u32AFC) / (u32Thresh * 4096.))) - pts->u32FreqOff;
   
   // double f64step = ( (4.0 * u32FRef) / (pts->u32LODiv * (double)u32Thresh) ) / 4096.0;
   //      printf("f64step = %'lf, u32LODiv = %'u, u32Frac = %'d, u32AFC = %'d, u32Int = %'d, u32Thresh = %'d, u32FreqOff = %'d, f64FAct = %'lf err = %'lf\n",
@@ -919,8 +911,7 @@ double fcd_actual(unsigned int u32Freq){
 // If we don't stop the A/D, it'll take several seconds to overflow and stop by itself,
 // and during that time we can't restart
 static void closedown(int a){
-  fprintf(stderr,"funcube: caught signal %d: %s\n",a,strsignal(a));
-  unlink(Pid_filename);
+  fprintf(stdout,"funcube: caught signal %d: %s\n",a,strsignal(a));
   Pa_Terminate();
   if(a == SIGTERM) // sent by systemd when shutting down. Return success
     exit(0);
