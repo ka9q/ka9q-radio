@@ -1,4 +1,4 @@
-# $Id: Makefile.linux,v 1.102 2022/07/18 03:27:45 karn Exp $
+# $Id: Makefile.linux,v 1.103 2022/07/18 03:35:06 karn Exp $
 
 # for production
 DOPTS = -DNDEBUG=1 -O3
@@ -32,7 +32,7 @@ UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-
 CONF_FILES=funcubed.conf \
 			 opusd@hf.conf opusd@hfdl.conf opusd@6m.conf opusd@2m.conf opusd@125cm.conf opusd@70cm.conf opusd@aviation.conf opusd@packet.conf opusd@kpbs.conf opusd@ksds.conf \
 			 stereod.conf rdsd.conf \
-			 radiod@10m.conf radiod@6m.conf radiod@fm.conf radiod@2m.conf radiod@125cm.conf radiod@70cm.conf radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf \
+			 radiod@10m.conf radiod@6m.conf radiod@fm.conf radiod@2m.conf radiod@125cm.conf radiod@70cm.conf radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf radiod@repeater.conf \
 			 recordings@hf.conf recordings@6m.conf recordings@2m.conf recordings@125cm.conf recordings@70cm.conf recordings@aviation.conf recordings@pictures.conf \
 			 wspr-decoded.conf horus.conf airspyd.conf packetd.conf aprs.conf
 
