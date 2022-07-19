@@ -1,4 +1,4 @@
-// $Id: funcubed.c,v 1.3 2022/07/18 06:35:35 karn Exp $
+// $Id: funcubed.c,v 1.4 2022/07/19 00:32:17 karn Exp $
 // Read from AMSAT UK Funcube Pro and Pro+ dongles
 // Multicast raw 16-bit I/Q samples
 // Accept control commands from UDP socket
@@ -221,7 +221,7 @@ int main(int argc,char *argv[]){
   Default_mcast_iface = config_getstring(Dictionary,Name,"iface",NULL);
   RTP_ttl = config_getint(Dictionary,Name,"data-ttl",0); // Default to 0 for data
   Status_ttl = config_getint(Dictionary,Name,"status-ttl",1);
-  sdr->calibration = config_getdouble(Dictionary,Name,"calibration",0);
+
   Hold_open = config_getboolean(Dictionary,Name,"hold-open",true);
   IP_tos = config_getint(Dictionary,Name,"tos",48);
   Rtp.ssrc = config_getint(Dictionary,Name,"ssrc",0);
@@ -293,6 +293,8 @@ int main(int argc,char *argv[]){
       free(calfilename);
     }
   }
+  // Config file overrides state save file
+  sdr->calibration = config_getdouble(Dictionary,Name,"calibration",sdr->calibration);
   sleep(1);
   Pa_Initialize();
   if(front_end_init(sdr,Device,Blocksize) < 0){
@@ -349,7 +351,8 @@ int main(int argc,char *argv[]){
     clock_gettime(CLOCK_REALTIME,&now);
     Rtp.ssrc = now.tv_sec & 0xffffffff; // low 32 bits of clock time
   }
-  fprintf(stdout,"uid %d; device %d; dest %s; blocksize %'d samples; RTP SSRC %u\n",getuid(),Device,Metadata_dest,Blocksize,Rtp.ssrc);
+  fprintf(stdout,"uid %d; device %d; cal %f ppm dest %s; blocksize %'d samples; RTP SSRC %u\n",
+	  getuid(),Device,sdr->calibration * 1e6,Metadata_dest,Blocksize,Rtp.ssrc);
   // Gain and phase corrections. These will be updated every block
   float gain_q = 1;
   float gain_i = 1;
