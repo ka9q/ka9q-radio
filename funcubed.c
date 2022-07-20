@@ -1,4 +1,4 @@
-// $Id: funcubed.c,v 1.4 2022/07/19 00:32:17 karn Exp $
+// $Id: funcubed.c,v 1.4 2022/07/19 00:32:17 karn Exp karn $
 // Read from AMSAT UK Funcube Pro and Pro+ dongles
 // Multicast raw 16-bit I/Q samples
 // Accept control commands from UDP socket
@@ -86,7 +86,7 @@ int Hold_open; // if set, close control between commands
 // So to minimize latency, make this a common denominator:
 // 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
 int Blocksize = 240;
-int Blocksize_TTL0 = 16000; // Default blocksize when IP TTL=0
+int Blocksize_TTL0 = 3840; // Default blocksize when IP TTL=0 (20 ms @ 192 kHz)
 bool Blocksize_set = false;
 int Device = 0;
 int Verbose;
