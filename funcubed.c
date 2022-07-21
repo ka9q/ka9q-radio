@@ -1,4 +1,4 @@
-// $Id: funcubed.c,v 1.4 2022/07/19 00:32:17 karn Exp karn $
+// $Id: funcubed.c,v 1.5 2022/07/21 05:18:42 karn Exp $
 // Read from AMSAT UK Funcube Pro and Pro+ dongles
 // Multicast raw 16-bit I/Q samples
 // Accept control commands from UDP socket
@@ -95,8 +95,9 @@ bool Daemonize;
 int RTP_ttl = 0; // By default, don't leave machine
 int Status_ttl = 1; // Don't send fast IQ streams beyond the local network by default
 int IP_tos = 48; // AF12 left shifted 2 bits
-char *Name;
-char Metadata_dest[_POSIX_HOST_NAME_MAX];
+char const *Name;
+char const *Metadata_dest;
+char const *Data_dest;
 dictionary *Dictionary;
 char const *Conf_file = "/etc/radio/funcubed.conf";
 
@@ -119,7 +120,6 @@ struct sockaddr_storage Output_data_source_address;   // Our socket address for 
 struct sockaddr_storage Output_metadata_dest_address; // Multicast output socket
 struct sockaddr_storage Output_data_dest_address; // Multicast output socket
 uint64_t Output_metadata_packets;
-
 char const *Description;
 
 struct sdrstate FCD;
@@ -207,9 +207,11 @@ int main(int argc,char *argv[]){
     char *cp = strchr(hostname,'.');
     if(cp != NULL)
       *cp = '\0'; // Strip the domain name
-    int const ret = asprintf(&Name,"%s-funcube",hostname);
+    char *foo;
+    int const ret = asprintf(&foo,"%s-funcube",hostname);
     if(ret == -1)
       exit(1);
+    Name = foo;
     fprintf(stdout,"defaulting to constructed name %s\n",Name);
   }
   if(iniparser_find_entry(Dictionary,Name) != 1){
@@ -221,6 +223,16 @@ int main(int argc,char *argv[]){
   Default_mcast_iface = config_getstring(Dictionary,Name,"iface",NULL);
   RTP_ttl = config_getint(Dictionary,Name,"data-ttl",0); // Default to 0 for data
   Status_ttl = config_getint(Dictionary,Name,"status-ttl",1);
+  {
+    char const *cp = config_getstring(Dictionary,Name,"status",NULL);
+    if(cp != NULL)
+      Metadata_dest = cp;
+    else {
+      char *foo;
+      asprintf(&foo,"%s-status.local",Name);
+      Metadata_dest = foo;
+    }
+  }
 
   Hold_open = config_getboolean(Dictionary,Name,"hold-open",true);
   IP_tos = config_getint(Dictionary,Name,"tos",48);
@@ -228,7 +240,6 @@ int main(int argc,char *argv[]){
   Blocksize = config_getint(Dictionary,Name,"blocksize",RTP_ttl == 0 ? Blocksize_TTL0 : Blocksize);
   Description = config_getstring(Dictionary,Name,"description",NULL);
   {
-    snprintf(Metadata_dest,sizeof(Metadata_dest),"%s-status.local",Name);
     avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest,ElfHashString(Metadata_dest),NULL);
     char iface[IFNAMSIZ];
     resolve_mcast(Metadata_dest,&Output_metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
@@ -245,15 +256,24 @@ int main(int argc,char *argv[]){
     }
   }
   {
-    char dns_name[_POSIX_HOST_NAME_MAX];
-    snprintf(dns_name,sizeof(dns_name),"%s-pcm.local",Name);
-    avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,dns_name,ElfHashString(dns_name),NULL);
+    char const *cp = config_getstring(Dictionary,Name,"data",NULL);
+    if(cp != NULL)
+      Data_dest = cp;
+    else {
+      char *foo;
+      asprintf(&foo,"%s-data.local",Name);
+      Data_dest = foo;
+    }
+  }
+
+  {
+    avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data_dest,ElfHashString(Data_dest),NULL);
     char iface[IFNAMSIZ];
-    resolve_mcast(dns_name,&Output_data_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
+    resolve_mcast(Data_dest,&Output_data_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
     Rtp_sock = connect_mcast(&Output_data_dest_address,iface,RTP_ttl,IP_tos);
 
     if(Rtp_sock == -1){
-      fprintf(stdout,"Can't create data socket %s: %s\n",dns_name,strerror(errno));
+      fprintf(stdout,"Can't create data socket %s: %s\n",Data_dest,strerror(errno));
       goto terminate;
     }
   }
