@@ -9,7 +9,7 @@ Requires=network-online.target
 [Service]
 Type=simple
 EnvironmentFile=/etc/radio/packetd.conf
-ExecStart=/usr/local/sbin/packetd --ax25-out $AX25 $PCM
+ExecStart=/usr/local/sbin/packetd --name packet --ax25-out $AX25 $PCM
 User=radio
 Group=radio
 Restart=always
