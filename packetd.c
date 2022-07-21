@@ -1,4 +1,4 @@
-// $Id: packetd.c,v 1.4 2022/06/27 03:24:55 karn Exp $
+// $Id: packetd.c,v 1.5 2022/07/21 04:52:21 karn Exp $
 // AFSK/FM packet demodulator
 // Reads RTP PCM audio stream, emits decoded frames in multicast RTP
 // Copyright 2018, Phil Karn, KA9Q
@@ -103,10 +103,10 @@ static struct option Options[] =
    {NULL, 0, NULL, 0},
   };
 
-static char Optstring[] = "A:I:N:R:S:T:vp:";
-char *Name;
-char *Output;
-char *Input[MAX_MCAST];
+static char const Optstring[] = "A:I:N:R:S:T:vp:";
+char const *Name;
+char const *Output;
+char const *Input[MAX_MCAST];
 
 int main(int argc,char *argv[]){
   // Drop root if we have it
@@ -169,7 +169,7 @@ int main(int argc,char *argv[]){
       {
 	socklen_t len;
 	len = sizeof(Local_status_source_address);
-n	getsockname(Status_out_fd,(struct sockaddr *)&Local_status_source_address,&len);
+	getsockname(Status_out_fd,(struct sockaddr *)&Local_status_source_address,&len);
       }
 #endif
       break;
@@ -188,6 +188,9 @@ n	getsockname(Status_out_fd,(struct sockaddr *)&Local_status_source_address,&len
       exit(1);
     }
   }
+  if(Name == NULL)
+    Name = argv[0]; // Give it a default
+
 
   // Also accept groups without -I option
   for(int i=optind; i < argc; i++){
@@ -213,11 +216,6 @@ n	getsockname(Status_out_fd,(struct sockaddr *)&Local_status_source_address,&len
     exit(1);
   }
   {
-    char service_name[1024];
-    if(Name)
-      snprintf(service_name,sizeof(service_name),"%s packet (%s)",Name,Output);
-    else
-      snprintf(service_name,sizeof(service_name),"packet (%s)",Output);      
     char description[1024];
     memset(description,0,sizeof(description));
     int p = snprintf(description,sizeof(description),"pcm-source=");
@@ -226,7 +224,7 @@ n	getsockname(Status_out_fd,(struct sockaddr *)&Local_status_source_address,&len
 	break; // Too long!
       p += snprintf(&description[p],sizeof(description)-p,"%s%s",i > 0 ? "," : "" ,Input[i]);
     }
-    avahi_start(service_name,"_ax25._udp",DEFAULT_RTP_PORT,Output,ElfHashString(Output),description);
+    avahi_start(Name,"_ax25._udp",DEFAULT_RTP_PORT,Output,ElfHashString(Output),description);
   }
   Output_fd = setup_mcast(Output,NULL,1,Mcast_ttl,IP_tos,0);
   if(Output_fd == -1){
@@ -260,18 +258,18 @@ n	getsockname(Status_out_fd,(struct sockaddr *)&Local_status_source_address,&len
     }
     // Parse entries
     {
-      int cr = buffer[0];
+      int const cr = buffer[0];
       if(cr == 1)
 	continue; // Ignore commands
-      unsigned char *cp = buffer+1;
+      unsigned char const *cp = buffer+1;
 
       while(cp - buffer < length){
-	enum status_type type = *cp++;
+	enum status_type const type = *cp++;
 	
 	if(type == EOL)
 	  break;
 	
-	unsigned int optlen = *cp++;
+	unsigned int const optlen = *cp++;
 	if(cp - buffer + optlen > length)
 	  break;
 	
@@ -317,7 +315,7 @@ static void *input(void *arg){
 
     // Wait for traffic to arrive
     fd_set fdset = Fdset_template;
-    int s = select(Max_fd+1,&fdset,NULL,NULL,NULL);
+    int const s = select(Max_fd+1,&fdset,NULL,NULL,NULL);
     if(s < 0 && errno != EAGAIN && errno != EINTR)
       break;
     if(s == 0)
@@ -384,7 +382,7 @@ static void *input(void *arg){
 	  fflush(stdout);
 	}
       }
-      int sample_count = size / sizeof(signed short); // 16-bit sample count
+      int const sample_count = size / sizeof(signed short); // 16-bit sample count
       int skipped_samples = rtp_process(&sp->rtp_state_in,&rtp_hdr,sample_count);
       if(rtp_hdr.marker)
 	skipped_samples = 0; // Ignore samples skipped before mark
@@ -468,7 +466,7 @@ const float space_tone = 2200;
 
 // AFSK demod
 static void *decode_task(void *arg){
-  const float twist = mark_tone/space_tone; // Scale back upper tone from FM demod
+  float const twist = mark_tone/space_tone; // Scale back upper tone from FM demod
 
   pthread_setname("afsk");
   struct session *sp = (struct session *)arg;
@@ -555,7 +553,7 @@ static void *decode_task(void *arg){
 	  continue;
 	
 	// Finished whole bit
-	float cur_val = cnrmf(mark_accum) - twist * cnrmf(space_accum);
+	float const cur_val = cnrmf(mark_accum) - twist * cnrmf(space_accum);
 	mark_accum = space_accum = 0;
 	
 	if(cur_val * last_val >= 0){ // cur_val and last_val have same sign; no transition
@@ -564,7 +562,7 @@ static void *decode_task(void *arg){
 	  hdlc_process(&sp->hdlc,1); // Frame can't end with 1-bit, so don't check return
 	} else {	// transition occurred --> NRZI zero
 	  symphase = ((cur_val - last_val) * mid_val) > 0 ? +1 : -1;	// Gardner-style clock adjust
-	  int bytes = hdlc_process(&sp->hdlc,0);
+	  int const bytes = hdlc_process(&sp->hdlc,0);
 	  if(Verbose && bytes < 0){
 	    // Lock output to prevent intermingled output
 	    pthread_mutex_lock(&Output_mutex);
@@ -591,7 +589,7 @@ static void *decode_task(void *arg){
 	    sp->rtp_state_out.timestamp += bytes;
 	    rtp_hdr.ssrc = sp->rtp_state_out.ssrc;
 	    
-	    int plen = bytes + 76 + 10; // Max RTP header is 76 bytes; allow a little slack
+	    int const plen = bytes + 76 + 10; // Max RTP header is 76 bytes; allow a little slack
 	    unsigned char packet[plen],*dp;
 	    dp = packet;
 	    dp = hton_rtp(dp,&rtp_hdr);
@@ -621,7 +619,7 @@ static int hdlc_process(struct hdlc *hp,int bit){
   
   if((hp->last_bits & 0xff) == 0x7e){
     // 01111110 - Flag
-    int bytes = (hp->frame_bits - 7) >> 3; // Don't count leading 7 bits of flag
+    int const bytes = (hp->frame_bits - 7) >> 3; // Don't count leading 7 bits of flag
     if(hp->flag_seen && bytes > 2){
       hp->frame_bits = 0;
       if(crc_good(hp->frame,bytes)){
@@ -663,10 +661,9 @@ static int hdlc_process(struct hdlc *hp,int bit){
   return 0;
 }
 void printtime(FILE *fp){
-  time_t t;
-  struct tm *tmp;
-  time(&t);
-  tmp = gmtime(&t);
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME,&now);
+  struct tm const * const tmp = gmtime(&now.tv_sec);
   fprintf(fp,"%d %s %04d %02d:%02d:%02d UTC",tmp->tm_mday,Months[tmp->tm_mon],tmp->tm_year+1900,
 	  tmp->tm_hour,tmp->tm_min,tmp->tm_sec);
 }
