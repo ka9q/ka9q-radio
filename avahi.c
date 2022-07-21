@@ -1,4 +1,4 @@
-// $Id: avahi.c,v 1.16 2022/07/07 04:34:47 karn Exp $
+// $Id: avahi.c,v 1.17 2022/07/21 04:10:42 karn Exp $
 // Adapted from avahi's example file client-publish-service.c
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
@@ -339,7 +339,7 @@ static void entry_group_callback(AvahiEntryGroup *g, AvahiEntryGroupState state,
       fprintf(stderr,"entry_group_callback(ESTAB)\n");
 
     // The entry group has been established successfully
-    fprintf(stderr,"avahi service '%s' successfully established.\n", userdata->service_name);
+    fprintf(stderr,"avahi service '%s' (%s) successfully established.\n", userdata->service_name,userdata->dns_name);
     pthread_mutex_lock(&userdata->avahi_mutex);
     userdata->ready = 1;
     pthread_cond_broadcast(&userdata->avahi_ready);
