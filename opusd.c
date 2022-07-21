@@ -1,4 +1,4 @@
-// $Id: opusd.c,v 1.3 2022/07/10 07:44:56 karn Exp $
+// $Id: opusd.c,v 1.4 2022/07/21 04:29:50 karn Exp $
 // Opus transcoder
 // Read PCM audio from one or more multicast groups, compress with Opus and retransmit on another with same SSRC
 // Currently subject to memory leaks as old group states aren't yet aged out
@@ -248,11 +248,9 @@ int main(int argc,char * const argv[]){
 
   assert(Input_fd != -1);
 
-  char service_name[1024];
-  snprintf(service_name,sizeof(service_name),"%s (%s)",Name,Output);
   char description[1024];
   snprintf(description,sizeof(description),"pcm-source=%s",Input); // what if it changes?
-  avahi_start(service_name,"_opus._udp",5004,Output,ElfHashString(Output),description);
+  avahi_start(Name,"_opus._udp",5004,Output,ElfHashString(Output),description);
 
   // Can't resolve this until the avahi service is started
   resolve_mcast(Output,&Opus_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
