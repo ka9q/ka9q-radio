@@ -51,6 +51,7 @@ int main(int argc,char *argv[]){
       switch(c){
       case 's':
 	Ssrc = strtol(optarg,NULL,0);
+	break;
       case 'v':
 	Verbose++;
 	break;
