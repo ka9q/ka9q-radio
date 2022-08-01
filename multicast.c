@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.79 2022/07/10 08:01:34 karn Exp $
+// $Id: multicast.c,v 1.80 2022/08/01 23:32:18 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -222,7 +222,15 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
   }
 
   struct addrinfo *results;
-  for(int try=0;;try++){
+  int try;
+  // If no domain zone is specified, assume .local (i.e., for multicast DNS)
+  char full_host[PATH_MAX+6];
+  if(strchr(host,'.') == NULL)
+    snprintf(full_host,sizeof(full_host),"%s.local",host);
+  else
+    strlcpy(full_host,host,sizeof(full_host));
+    
+  for(try=0;;try++){
     results = NULL;
     struct addrinfo hints;
     memset(&hints,0,sizeof(hints));
@@ -234,19 +242,16 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
     hints.ai_protocol = IPPROTO_UDP;
     hints.ai_flags = AI_ADDRCONFIG;
     
-    // If no domain zone is specified, assume .local (i.e., for multicast DNS)
-    char full_host[PATH_MAX+6];
-    if(strchr(host,'.') == NULL)
-      snprintf(full_host,sizeof(full_host),"%s.local",host);
-    else
-      strlcpy(full_host,host,sizeof(full_host));
-    
     int const ecode = getaddrinfo(full_host,port,&hints,&results);
     if(ecode == 0)
       break;
-    fprintf(stderr,"resolve_mcast getaddrinfo(%s,%s): %s\n",full_host,port,gai_strerror(ecode));
+    if(try == 0) // Don't pollute the syslog
+      fprintf(stderr,"resolve_mcast getaddrinfo(%s,%s): %s. Retrying.\n",full_host,port,gai_strerror(ecode));
     sleep(10);
   }
+  if(try > 0) // Don't leave them hanging: report success after failure
+    fprintf(stderr,"resolve_mcast getaddrinfo(%s,%s) succeeded\n",full_host,port);
+
   // Use first entry on list -- much simpler
   // I previously tried each entry in turn until one succeeded, but with UDP sockets and
   // flags set to only return supported addresses, how could any of them fail?
