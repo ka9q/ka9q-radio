@@ -1,4 +1,4 @@
-// $Id: cwd.c,v 1.1 2022/08/01 02:50:59 karn Exp $
+// $Id: cwd.c,v 1.1 2022/08/01 02:50:59 karn Exp karn $
 // CW generator for ka9q-radio
 // Runs as daemon, reads from a named pipe, sends audio to a specified multicast group + RTP SSRC
 // Useful for IDs and other messages in repeater mode
@@ -323,8 +323,9 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
     iovec[1].iov_len = sizeof(samples[0]) * chunk;
 
     if(Verbose > 1)
-      fprintf(stdout,"iovec[0] = (%p,%lu) iovec[1] = (%p,%lu)\n",iovec[0].iov_base,iovec[0].iov_len,
-	      iovec[1].iov_base,iovec[1].iov_len);
+      fprintf(stdout,"iovec[0] = (%p,%lu) iovec[1] = (%p,%lu)\n",
+	      iovec[0].iov_base,(unsigned long)iovec[0].iov_len,
+	      iovec[1].iov_base,(unsigned long)iovec[1].iov_len);
 
     int const r = sendmsg(sock,&msghdr,0);
     if(r <= 0){
