@@ -1,4 +1,4 @@
-// $Id: avahi.c,v 1.18 2022/07/21 04:16:32 karn Exp $
+// $Id: avahi.c,v 1.19 2022/08/01 23:31:04 karn Exp $
 // Adapted from avahi's example file client-publish-service.c
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
@@ -294,23 +294,28 @@ static int create_services(AvahiClient *c,struct userdata *userdata) {
       // Add some multicast addresses in the 239.xx.xx.xx range
       AvahiAddress address;
       address.proto = AVAHI_PROTO_INET;
-      for(int iter=0; iter <= 100; iter++){
+      int iter;
+      char temp[1024];
+      for(iter=0; iter <= 100; iter++){
 	// Be really paranoid and limit the number of iterations
 	if(iter == 100)
 	  return -1;
 
 	address.data.ipv4.address = htonl((0xefU << 24) + (userdata->base_address & 0xffffff));
 	userdata->base_address++;
-	char temp[1024];
+
 	int ret = avahi_entry_group_add_address(userdata->group, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, 0, userdata->dns_name,&address);
 	if (ret == 0){
 	  records++;
 	  break;
 	}
-	fprintf(stderr,"Failed to add address record %s->%s: %s(%d)\n", userdata->dns_name,inet_ntop(AF_INET,&address.data.ipv4.address,temp,sizeof(temp)),avahi_strerror(ret),ret);
+	if(iter == 0) // Don't pollute the log
+	  fprintf(stderr,"Failed to add address record %s->%s: %s(%d)\n", userdata->dns_name,inet_ntop(AF_INET,&address.data.ipv4.address,temp,sizeof(temp)),avahi_strerror(ret),ret);
 	if(ret != AVAHI_ERR_COLLISION)
 	  return -1;
       }
+      if(iter != 0)
+	fprintf(stderr,"add address record %s->%s succeeded\n",userdata->dns_name,inet_ntop(AF_INET,&address.data.ipv4.address,temp,sizeof(temp)));
     }
     if(records) {
       // Tell the server to register the service
