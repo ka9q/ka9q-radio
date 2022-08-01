@@ -1,4 +1,4 @@
-// $Id: cwd.c,v 1.1 2022/08/01 02:50:59 karn Exp karn $
+// $Id: cwd.c,v 1.3 2022/08/01 09:09:27 karn Exp $
 // CW generator for ka9q-radio
 // Runs as daemon, reads from a named pipe, sends audio to a specified multicast group + RTP SSRC
 // Useful for IDs and other messages in repeater mode
@@ -14,6 +14,7 @@
 #include <locale.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <string.h>
 #include <errno.h>
 #include "misc.h"
@@ -461,6 +462,7 @@ int main(int argc,char *argv[]){
     fprintf(stdout,"Can't resolve %s\n",Target);
     exit(1);
   }
+  umask(0);
   if(mkfifo(Input,0666) != 0 && errno != EEXIST){
     fprintf(stdout,"Can't make input fifo %s\n",Input);
     exit(1);
@@ -471,7 +473,8 @@ int main(int argc,char *argv[]){
     fprintf(stdout,"Can't open %s\n",Input);
     exit(1);
   }
-  FILE *fp_out = fopen(Input,"w"); // Hold open (and idle) so we won't get EOF
+  // Hold open (and idle) so we won't get EOF
+  int out_fd = open(Input,O_WRONLY);
 
   wint_t cc;
   while((cc = fgetwc(fp)) != WEOF){
@@ -481,6 +484,6 @@ int main(int argc,char *argv[]){
 
   close(fd);
   fclose(fp); fp = NULL;
-  fclose(fp_out); fp_out = NULL;
+  close(out_fd); out_fd = -1;
   exit(0);
 }

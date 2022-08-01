@@ -1,0 +1,26 @@
+# $Id$
+# systemd service file for KA9Q's CW (Morse) sender
+# Phil Karn, KA9Q, August 2022
+
+[Unit]
+Description=CW daemon
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+User=radio
+Nice=-10
+SupplementaryGroups=plugdev radio
+Type=simple
+PermissionsStartOnly=true
+RuntimeDirectory=cwd
+RuntimeDirectoryMode=0755
+ReadWritePaths=/var/lib/ka9q-radio
+ExecStart=/usr/local/sbin/cwd -I /run/cwd/cwfifo -s 100 -R hf-pcm.local -S 18.0 -P 750.0 -L 3000
+PIDFile=/run/cwd/pid
+Restart=always
+RestartSec=5
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

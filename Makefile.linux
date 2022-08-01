@@ -1,4 +1,4 @@
-# $Id: Makefile.linux,v 1.104 2022/08/01 02:52:00 karn Exp $
+# $Id: Makefile.linux,v 1.105 2022/08/01 09:09:04 karn Exp $
 
 # for production
 DOPTS = -DNDEBUG=1 -O3
@@ -25,7 +25,7 @@ EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspaw
 
 AFILES=bandplan.txt help.txt modes.conf id.txt
 
-SYSTEMD_FILES=airspyd@.service airspyhfd@.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service
+SYSTEMD_FILES=airspyd@.service airspyhfd@.service cwd.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service
 
 UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules
 
