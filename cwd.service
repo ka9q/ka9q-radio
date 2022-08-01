@@ -1,4 +1,4 @@
-# $Id$
+# $Id: cwd.service,v 1.1 2022/08/01 09:19:00 karn Exp $
 # systemd service file for KA9Q's CW (Morse) sender
 # Phil Karn, KA9Q, August 2022
 
@@ -9,6 +9,7 @@ Requires=network-online.target
 
 [Service]
 User=radio
+Group=radio
 Nice=-10
 SupplementaryGroups=plugdev radio
 Type=simple
