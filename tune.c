@@ -1,4 +1,4 @@
-// $Id: tune.c,v 1.5 2022/06/16 02:43:47 karn Exp $
+// $Id: tune.c,v 1.6 2022/08/01 23:33:57 karn Exp $
 // Interactive program to tune radio
 
 #define _GNU_SOURCE 1
