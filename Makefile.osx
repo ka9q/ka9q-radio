@@ -1,10 +1,10 @@
-# $Id: Makefile.osx,v 1.109 2022/07/18 06:35:10 karn Exp $
+# $Id: Makefile.osx,v 1.110 2022/08/01 02:54:31 karn Exp $
 CFLAGS=-g -DNDEBUG=1 -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 #CFLAGS=-g -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 BINDIR=/usr/local/bin
 LIBDIR=/usr/local/share/ka9q-radio
 LD_FLAGS=-lpthread -lm
-EXECS=airspyd airspyhfd aprs aprsfeed funcubed iqplay iqrecord modulate monitor opusd opussend packetd pcmrecord pcmsend pcmcat radiod control metadump pl show-pkt show-sig stereod rdsd tune wspr-decoded
+EXECS=airspyd airspyhfd aprs aprsfeed cwd funcubed iqplay iqrecord modulate monitor opusd opussend packetd pcmrecord pcmsend pcmcat radiod control metadump pl show-pkt show-sig stereod rdsd tune wspr-decoded
 AFILES=bandplan.txt help.txt modes.conf id.txt
 
 all: $(EXECS) $(AFILES)
@@ -33,6 +33,9 @@ aprsfeed: aprsfeed.o libradio.a
 
 control: control.o decode_status.o modes.o bandplan.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread -lm
+
+cwd: cwd.o libradio.a
+	$(CC) -g -o $@ $^ -lm
 
 dmr: dmr.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
