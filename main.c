@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.257 2022/07/18 03:27:45 karn Exp $
+// $Id: main.c,v 1.258 2022/08/02 06:49:41 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -209,22 +209,9 @@ static int setup_frontend(char const *arg){
   }
   {
     char addrtmp[256];
-    addrtmp[0] = '\0';
-    switch(Frontend.input.metadata_dest_address.ss_family){
-    case AF_INET:
-      {
-	struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.input.metadata_dest_address;
-	inet_ntop(AF_INET,&sin->sin_addr,addrtmp,sizeof(addrtmp));
-      }
-      break;
-    case AF_INET6:
-      {
-	struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&Frontend.input.metadata_dest_address;
-	inet_ntop(AF_INET6,&sin->sin6_addr,addrtmp,sizeof(addrtmp));
-      }
-      break;
-    }
-    fprintf(stdout,"Front end control stream %s (%s)\n",Frontend.input.metadata_dest_string,addrtmp);
+    fprintf(stdout,"Acquired front end control stream %s (%s)\n",
+	    Frontend.input.metadata_dest_string,
+	    formataddr(addrtmp,sizeof(addrtmp),&Frontend.input.metadata_dest_address));
   }    
   // Start status thread - will also listen for SDR commands
   if(Verbose)
@@ -239,24 +226,11 @@ static int setup_frontend(char const *arg){
 
   {
     char addrtmp[256];
-    addrtmp[0] = '\0';
-    switch(Frontend.input.data_dest_address.ss_family){
-    case AF_INET:
-      {
-	struct sockaddr_in * const sin = (struct sockaddr_in *)&Frontend.input.data_dest_address;
-	inet_ntop(AF_INET,&sin->sin_addr,addrtmp,sizeof(addrtmp));
-      }
-      break;
-    case AF_INET6:
-      {
-	struct sockaddr_in6 * const sin = (struct sockaddr_in6 *)&Frontend.input.data_dest_address;
-	inet_ntop(AF_INET6,&sin->sin6_addr,addrtmp,sizeof(addrtmp));
-      }
-      break;
-    }
-    fprintf(stdout,"Front end data stream %s\n",addrtmp);
+    fprintf(stdout,"Acquired front end data stream %s (%s)\n",
+	    formatsock(&Frontend.input.data_dest_address),
+	    formataddr(addrtmp,sizeof(addrtmp),&Frontend.input.data_dest_address));
   }  
-  fprintf(stdout,"Input sample rate %'d Hz, %s; block time %.1f ms, %.1f Hz\n",
+  fprintf(stdout,"Front end sample rate %'d Hz, %s; block time %.1f ms, %.1f Hz\n",
 	  Frontend.sdr.samprate,Frontend.sdr.isreal ? "real" : "complex",Blocktime,1000.0f/Blocktime);
   fflush(stdout);
 

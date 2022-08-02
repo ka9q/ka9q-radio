@@ -1,4 +1,4 @@
-// $Id: avahi.c,v 1.19 2022/08/01 23:31:04 karn Exp $
+// $Id: avahi.c,v 1.20 2022/08/02 06:49:41 karn Exp $
 // Adapted from avahi's example file client-publish-service.c
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
@@ -27,6 +27,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include "misc.h"
+#include "multicast.h"
 
 struct userdata {
   char *service_name;
@@ -34,7 +35,7 @@ struct userdata {
   int service_port;
   char *dns_name;
   char *description;
-  uint32_t base_address;
+  uint32_t address;
   struct AvahiEntryGroup *group;
   AvahiSimplePoll *simple_poll;
   pthread_t avahi_thread;
@@ -52,7 +53,7 @@ static void dump_userdata(struct userdata const *u){
   fprintf(stderr,"service port %d\n",u->service_port);
   fprintf(stderr,"dns_name %s\n",u->dns_name);
   fprintf(stderr,"description %s\n",u->description);
-  fprintf(stderr,"base address %lu\n",(long unsigned)u->base_address);
+  fprintf(stderr,"address %lu\n",(long unsigned)u->address);
   fprintf(stderr,"group %p\n",u->group);
   fprintf(stderr,"simple_poll %p\n",u->simple_poll);
   fprintf(stderr,"avahi_thread %lu\n",(long unsigned)u->avahi_thread);
@@ -95,7 +96,8 @@ void *avahi_start(char const *service_name,char const *service_type,int service_
     else
       userdata->dns_name = strdup(dns_name);
   }
-  userdata->base_address = base_address;
+  // force address into 239.x.x.x range
+  userdata->address = htonl((0xefU << 24) + (base_address & 0xffffff));
   pthread_mutex_init(&userdata->avahi_mutex,NULL);
   pthread_cond_init(&userdata->avahi_ready,NULL);
   pthread_create(&userdata->avahi_thread,NULL,avahi_register,userdata);
@@ -295,27 +297,31 @@ static int create_services(AvahiClient *c,struct userdata *userdata) {
       AvahiAddress address;
       address.proto = AVAHI_PROTO_INET;
       int iter;
-      char temp[1024];
+
       for(iter=0; iter <= 100; iter++){
 	// Be really paranoid and limit the number of iterations
 	if(iter == 100)
 	  return -1;
 
-	address.data.ipv4.address = htonl((0xefU << 24) + (userdata->base_address & 0xffffff));
-	userdata->base_address++;
-
+	address.data.ipv4.address = userdata->address;
 	int ret = avahi_entry_group_add_address(userdata->group, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, 0, userdata->dns_name,&address);
 	if (ret == 0){
 	  records++;
 	  break;
 	}
-	if(iter == 0) // Don't pollute the log
-	  fprintf(stderr,"Failed to add address record %s->%s: %s(%d)\n", userdata->dns_name,inet_ntop(AF_INET,&address.data.ipv4.address,temp,sizeof(temp)),avahi_strerror(ret),ret);
+	if(iter == 0){
+	  // Don't pollute the log
+	  char temp[1024];
+	  fprintf(stderr,"Failed to add address record %s (%s): %s %d\n", userdata->dns_name,inet_ntop(AF_INET,&address.data.ipv4.address,temp,sizeof(temp)),avahi_strerror(ret),ret);
+	}
 	if(ret != AVAHI_ERR_COLLISION)
 	  return -1;
+	userdata->address = htonl(ntohl(userdata->address) + 1); // Try next address
       }
-      if(iter != 0)
-	fprintf(stderr,"add address record %s->%s succeeded\n",userdata->dns_name,inet_ntop(AF_INET,&address.data.ipv4.address,temp,sizeof(temp)));
+      if(iter != 0){
+	char temp[1024];
+	fprintf(stderr,"Added address record %s (%s)\n",userdata->dns_name,inet_ntop(AF_INET,&address.data.ipv4.address,temp,sizeof(temp)));
+      }
     }
     if(records) {
       // Tell the server to register the service
@@ -344,8 +350,12 @@ static void entry_group_callback(AvahiEntryGroup *g, AvahiEntryGroupState state,
       fprintf(stderr,"entry_group_callback(ESTAB)\n");
 
     // The entry group has been established successfully
-    fprintf(stderr,"avahi service '%s', type %s, dns %s successfully established.\n", userdata->service_name,
-	    userdata->service_type,userdata->dns_name);
+    {
+      char temp[1024];
+      fprintf(stderr,"service '%s.%s' -> %s (%s) established\n", userdata->service_name,
+	    userdata->service_type,userdata->dns_name,
+	    inet_ntop(AF_INET,&userdata->address,temp,sizeof(temp)));
+    }
     pthread_mutex_lock(&userdata->avahi_mutex);
     userdata->ready = 1;
     pthread_cond_broadcast(&userdata->avahi_ready);

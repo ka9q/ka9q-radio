@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.80 2022/08/01 23:32:18 karn Exp $
+// $Id: multicast.c,v 1.81 2022/08/02 06:49:41 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 #include <string.h>
 #include <net/if.h>
 #include <limits.h>
@@ -352,6 +353,29 @@ int rtp_process(struct rtp_state * const state,struct rtp_header const * const r
   state->timestamp = rtp->timestamp + sampcnt;
   return time_step;
 }
+
+// Convert binary sockaddr structure (v4 or v6) to printable numeric string
+
+char *formataddr(char *result,int size,void const *s){
+  struct sockaddr const *sa = (struct sockaddr *)s;
+  result[0] = '\0';
+  switch(sa->sa_family){
+  case AF_INET:
+    {
+      struct sockaddr_in *sin = (struct sockaddr_in *)sa;
+      inet_ntop(AF_INET,&sin->sin_addr,result,size);
+    }
+    break;
+  case AF_INET6:
+    {
+      struct sockaddr_in6 *sin = (struct sockaddr_in6 *)sa;
+      inet_ntop(AF_INET6,&sin->sin6_addr,result,size);
+    }
+    break;
+  }
+  return result;
+}
+
 
 // Convert binary sockaddr structure to printable host:port string
 // cache result, as getnameinfo can be very slow when it doesn't get a reverse DNS hit
