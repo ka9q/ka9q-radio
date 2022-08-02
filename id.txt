@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.54 2022/07/02 04:14:16 karn Exp $
+# $Id: id.txt,v 1.55 2022/08/02 07:06:00 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -399,7 +399,7 @@
 4461400 W6SS San Diego
 4461600 KC6ACS Pomona - ACS Enterprises
 4461800 N6JOJ San Diego - Rattlesnake Peak
-4462000 K6BB Big Bear - E of Snow Summit
+4462000 K6BB Big Bear GRONK
 4462000 WA6TTL Santa Barbara - La Cumbre Peak
 4462200 KI6QK Mt Lukens
 4462400 K6VGP Mt Disappointment
