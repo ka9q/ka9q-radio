@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.170 2022/07/18 06:49:26 karn Exp $
+// $Id: monitor.c,v 1.171 2022/08/03 21:55:29 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -54,6 +54,13 @@ static bool Quiet_mode;            // Toggle screen activity after starting
 static float Playout = 100;
 static bool Start_muted;
 static bool Auto_position;
+static bool PTT_state = false;
+static struct timespec LastAudioTime;
+static pthread_t Repeater_thread;
+static pthread_cond_t PTT_cond;
+static pthread_mutex_t PTT_mutex;
+static struct timespec Repeater_tail;
+
 
 // Global variables
 static char *Mcast_address_text[MAX_MCAST]; // Multicast address(es) we're listening to
@@ -152,11 +159,12 @@ static int close_session(struct session **);
 static int pa_callback(const void *,void *,unsigned long,const PaStreamCallbackTimeInfo*,PaStreamCallbackFlags,void *);
 static void *decode_task(void *x);
 static void *sockproc(void *arg);
+static void *repeater_ctl(void *arg);
 static char const *lookupid(uint32_t ssrc);
 static float make_position(int);
 
 
-static char Optstring[] = "LR:vI:qu:p:ar:S";
+static char Optstring[] = "I:LR:Sap:qr:t:u:v";
 static struct  option Options[] = {
    {"pcm_in", required_argument, NULL, 'I'},
    {"opus_in", required_argument, NULL, 'I'},
@@ -167,8 +175,10 @@ static struct  option Options[] = {
    {"playout", required_argument, NULL, 'p'},
    {"quiet", no_argument, NULL, 'q'},
    {"samprate",required_argument,NULL,'r'},
+   {"repeater", required_argument, NULL, 't'},
    {"update", required_argument, NULL, 'u'},
    {"verbose", no_argument, NULL, 'v'},
+
    {NULL, 0, NULL, 0},
 };
 
@@ -186,6 +196,15 @@ int main(int argc,char * const argv[]){
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
+    case 't':
+      {
+	float tail = fabsf(strtof(optarg,NULL));
+	float ipart;
+	float fract = modff(tail,&ipart);
+	Repeater_tail.tv_sec = ipart;
+	Repeater_tail.tv_nsec = fract * BILLION;
+      }
+      break;
     case 'L':
       List_audio = true;
       break;
@@ -307,6 +326,9 @@ int main(int argc,char * const argv[]){
     fprintf(stderr,"Portaudio error: %s, exiting\n",Pa_GetErrorText(r));      
     exit(1);
   }
+
+  if(Repeater_tail.tv_sec != 0 || Repeater_tail.tv_nsec != 0)
+    pthread_create(&Repeater_thread,NULL,repeater_ctl,NULL); // Repeater mode active
 
   // Do this at the last minute at startup since the upcall will come quickly
   r = Pa_StartStream(Pa_Stream);
@@ -511,14 +533,14 @@ static void *decode_task(void *arg){
 
     struct packet *pkt = NULL;
     // Wait for packet to appear on queue
-    struct timespec ts,increment;
-    clock_gettime(CLOCK_REALTIME,&ts);
+    struct timespec now,increment;
+    clock_gettime(CLOCK_REALTIME,&now);
     increment.tv_sec = 0;
     increment.tv_nsec = 100000000; // 100 ms
-    time_add(&ts,&ts,&increment);
+    time_add(&now,&now,&increment);
     pthread_mutex_lock(&sp->qmutex);
     while(!sp->queue){
-      int r = pthread_cond_timedwait(&sp->qcond,&sp->qmutex,&ts); // Wait 100 ms max so we pick up terminates
+      int r = pthread_cond_timedwait(&sp->qcond,&sp->qmutex,&now); // Wait 100 ms max so we pick up terminates
       if(r != 0){
 	if(r == EINVAL)
 	  Invalids++;
@@ -542,7 +564,7 @@ static void *decode_task(void *arg){
     if(pkt->rtp.seq != sp->rtp_state.seq){
       if(!pkt->rtp.marker){
 	sp->rtp_state.drops++; // Avoid spurious drops when session is recreated after silence
-	Last_error_time = ts;
+	Last_error_time = now;
       }
       if(sp->opus)
 	opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
@@ -718,6 +740,14 @@ static void *decode_task(void *arg){
 	  Output_buffer[right_index++ & (BUFFERSIZE-1)][1] += sp->bounce[i][1] * right_gain;
 	}
       }
+      pthread_mutex_lock(&PTT_mutex);
+      clock_gettime(CLOCK_REALTIME,&LastAudioTime);
+      if(!PTT_state){
+	PTT_state = true;
+	fprintf(stdout,"PTT On\n");
+	pthread_cond_signal(&PTT_cond);
+      }
+      pthread_mutex_unlock(&PTT_mutex);
     }
     pthread_mutex_unlock(&Output_mutex); // Done with Output_buffer and Rptr
     // Count samples and frames and advance write pointer even when muted
@@ -1234,6 +1264,39 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
   pthread_mutex_unlock(&Output_mutex);
   return paContinue;
 }
+
+// Repeater control (optional)
+// Drop PTT some time after last write to audio output ring buffer
+void *repeater_ctl(void *arg){
+  while(1){
+    // Wait for carrier to come up
+    pthread_mutex_lock(&PTT_mutex);
+    while(!PTT_state)
+      pthread_cond_wait(&PTT_cond,&PTT_mutex);
+    pthread_mutex_unlock(&PTT_mutex);
+
+    // When is the earliest it could drop?
+    struct timespec drop_time;
+    time_add(&drop_time,&LastAudioTime,&Repeater_tail);
+
+    // Has that time passed?
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME,&now);
+    if(time_cmp(&now,&drop_time) < 0){
+      // Sleep until possible end of timeout
+      struct timespec sleep_time;
+      time_sub(&sleep_time,&drop_time,&now);
+      //      fprintf(stdout,"nanosleep(%ld + %ld)\n",sleep_time.tv_sec,sleep_time.tv_nsec);
+      nanosleep(&sleep_time,NULL);
+    } else {
+      // Timer expired
+      fprintf(stdout,"PTT Off\n");
+      PTT_state = false;
+    }
+  }    
+  return NULL;
+}
+
 
 // Return an ascii string identifier indexed by ssrc
 // Database in /usr/share/ka9q-radio/id.txt
