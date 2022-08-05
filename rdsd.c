@@ -1,4 +1,4 @@
-// $Id: rdsd.c,v 1.3 2022/06/27 03:24:55 karn Exp $
+// $Id: rdsd.c,v 1.4 2022/08/05 06:35:10 karn Exp $
 // FM RDS demodulator/decoder
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -70,7 +70,7 @@ char *Output;
 char *Status;
 char *Name = "rds";
 struct session *Audio;
-pthread_mutex_t Audio_protect;
+pthread_mutex_t Audio_protect = PTHREAD_MUTEX_INITIALIZER;
 uint64_t Output_packets;
 
 void closedown(int);
@@ -106,7 +106,6 @@ struct sockaddr_storage Stereo_dest_address;
 int main(int argc,char * const argv[]){
 
   setlocale(LC_ALL,getenv("LANG"));
-  pthread_mutex_init(&Audio_protect,NULL);
 
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
@@ -421,12 +420,10 @@ void *decode(void *arg){
     struct packet *pkt = NULL;
 
     {
-      struct timespec ts;
-      clock_gettime(CLOCK_REALTIME,&ts);
-      // wait 10 seconds for a new packet
       struct timespec waittime;
-      waittime.tv_sec = ts.tv_sec + 10; // 10 seconds in the future
-      waittime.tv_nsec = ts.tv_nsec;
+      clock_gettime(CLOCK_REALTIME,&waittime);
+      // wait 10 seconds for a new packet
+      waittime.tv_sec += 10; // 10 seconds in the future
       { // Mutex-protected segment
 	pthread_mutex_lock(&sp->qmutex);
 	while(!sp->queue){      // Wait for packet to appear on queue

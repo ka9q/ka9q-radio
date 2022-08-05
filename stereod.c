@@ -1,4 +1,4 @@
-// $Id: stereod.c,v 1.3 2022/06/27 03:24:55 karn Exp $: opus.c,v 1.51 2021/03/19 03:13:14 karn Exp $
+// $Id: stereod.c,v 1.4 2022/08/05 06:35:10 karn Exp $: opus.c,v 1.51 2021/03/19 03:13:14 karn Exp $
 // Transcoder (multicast in/out) that decodes a FM composite signal @ 384 kHz
 // to a stereo signal @ 48 kHz
 #define _GNU_SOURCE 1
@@ -74,7 +74,7 @@ int Status_out_fd = -1;       // Writing to radio status
 int Input_fd = -1;            // Multicast receive socket
 int Output_fd = -1;           // Multicast send socket
 struct session *Audio;
-pthread_mutex_t Audio_protect;
+pthread_mutex_t Audio_protect = PTHREAD_MUTEX_INITIALIZER;
 uint64_t Output_packets;
 char const *Input;
 char const *Output;
@@ -210,7 +210,6 @@ int main(int argc,char * const argv[]){
   signal(SIGPIPE,SIG_IGN);
   
   // Set up to receive PCM in RTP/UDP/IP
-  pthread_mutex_init(&Audio_protect,NULL);
   // Process incoming RTP packets, demux to per-SSRC thread
   // Warning: we allocate memory for packet buffers and pass them to the decode() threads
   // The decode threads must free these buffers to avoid a memory leak
@@ -408,12 +407,10 @@ void *decode(void *arg){
     struct packet *pkt = NULL;
 
     {
-      struct timespec ts;
-      clock_gettime(CLOCK_REALTIME,&ts);
-      // wait 10 seconds for a new packet
       struct timespec waittime;
-      waittime.tv_sec = ts.tv_sec + 10; // 10 seconds in the future
-      waittime.tv_nsec = ts.tv_nsec;
+      clock_gettime(CLOCK_REALTIME,&waittime);
+      // wait 10 seconds for a new packet
+      waittime.tv_sec += 10; // 10 seconds in the future
       { // Mutex-protected segment
 	pthread_mutex_lock(&sp->qmutex);
 	while(!sp->queue){      // Wait for packet to appear on queue

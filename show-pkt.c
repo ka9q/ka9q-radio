@@ -1,4 +1,4 @@
-// $Id: show-pkt.c,v 1.6 2022/04/15 05:06:16 karn Exp $
+// $Id: show-pkt.c,v 1.7 2022/08/05 06:35:10 karn Exp $
 // Display RTP statistics
 // Copyright 2021 Phil Karn, KA9Q
 // Adapted from control.c
@@ -124,9 +124,7 @@ int main(int argc,char *argv[]){
 
 
   for(;;){
-    struct timespec timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_nsec = 100000000; // 10 Hz
+    struct timespec const timeout = {0, 100000000}; // 100 ms -> 10 Hz
 
     fd_set fdset;
     FD_ZERO(&fdset);

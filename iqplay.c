@@ -1,4 +1,4 @@
-// $Id: iqplay.c,v 1.41 2022/04/18 02:08:43 karn Exp $
+// $Id: iqplay.c,v 1.42 2022/08/05 06:35:10 karn Exp $
 // Read from IQ recording, multicast in (hopefully) real time
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1 // allow bind/connect/recvfrom without casting sockaddr_in6
@@ -97,11 +97,8 @@ int main(int argc,char *argv[]){
     
     setlocale(LC_ALL,locale);
   }
-  {
-    struct timespec start_time;
-    clock_gettime(CLOCK_REALTIME,&start_time);
-    Rtp_state.ssrc = start_time.tv_sec; // Default, can be overridden
-  }
+  Rtp_state.ssrc = gps_time_sec(); // Default, can be overridden
+
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
@@ -261,16 +258,14 @@ int playfile(int sock,int fd,int blocksize){
     fprintf(stderr,"unsupported bits per sample %d\n",Bitspersample);
     return -1;
   }
-  struct timespec start_time;
-  clock_gettime(CLOCK_REALTIME,&start_time);
+  long long start_time = gps_time_ns();
 
   rtp_header.ssrc = Rtp_state.ssrc;
   
-  // nanosec between packets. Double precision is used to avoid small errors that could
-  // accumulate over time
-  double dt = (1000000000. * blocksize) / Samprate;
+  // nanosec between packets.
+  long long dt_ns = (BILLION * blocksize) / Samprate;
   // Nanoseconds since start for next scheduled transmission; will transmit first immediately
-  double sked_time = 0;
+  long long sked_time = 0;
 
   while(1){
     rtp_header.seq = Rtp_state.seq++;
@@ -280,14 +275,14 @@ int playfile(int sock,int fd,int blocksize){
     // Is it time yet?
     while(1){
       // Nanoseconds since start
-      struct timespec tv,diff;
-      clock_gettime(CLOCK_REALTIME,&tv);
-      time_sub(&diff,&tv,&start_time);
-      double rt = 1000000000. * diff.tv_sec + diff.tv_nsec;
-      if(rt >= sked_time)
+      long long diff = gps_time_ns() - start_time;
+      if(diff >= sked_time)
 	break;
-      if(sked_time > rt + 100000)
-	nanosleep(&diff,NULL);
+      if(sked_time > diff + 100000){ // 100 microsec
+	struct timespec ts;
+	ns2ts(&ts,diff);
+	nanosleep(&ts,NULL);
+      }
     }
     unsigned char output_buffer[4*blocksize + 256]; // will this allow for largest possible RTP header??
     unsigned char *dp = output_buffer;
@@ -317,7 +312,7 @@ int playfile(int sock,int fd,int blocksize){
     
     Rtp_state.packets++;
     // Update time of next scheduled transmission
-    sked_time += dt;
+    sked_time += dt_ns;
   }
   return 0;
 }
@@ -369,13 +364,7 @@ void send_iqplay_status(int full){
   *bp++ = 0; // command/response = response
   //  encode_int32(&bp,COMMAND_TAG,...);
   encode_int64(&bp,CMD_CNT,Commands);
-  
-  {
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME,&now);
-    long long timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
-    encode_int64(&bp,GPS_TIME,timestamp);
-  }
+  encode_int64(&bp,GPS_TIME,gps_time_ns());
 
   if(Description)
     encode_string(&bp,DESCRIPTION,Description,strlen(Description));

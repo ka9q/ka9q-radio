@@ -1,4 +1,4 @@
-// $Id: wspr-decoded.c,v 1.2 2022/05/10 04:02:05 karn Exp $ 
+// $Id: wspr-decoded.c,v 1.3 2022/08/05 06:35:10 karn Exp $ 
 // Read and record PCM audio streams
 // Adapted from iqrecord.c which is out of date
 // Copyright 2021 Phil Karn, KA9Q
@@ -26,6 +26,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include "misc.h"
 #include "attr.h"
 #include "multicast.h"
 
@@ -191,17 +192,14 @@ void input_loop(){
     fd_set fdset;
     FD_ZERO(&fdset);
     FD_SET(Input_fd,&fdset);
-    struct timespec polltime;
-    polltime.tv_sec = 1;
-    polltime.tv_nsec = 0; // force return after 1 second max
-    
-    int n = pselect(Input_fd + 1,&fdset,NULL,NULL,&polltime,NULL);
-    if(n < 0)
-      break; // error of some kind
+    {
+      struct timespec const polltime = {1, 0}; // return after 1 sec
+      int n = pselect(Input_fd + 1,&fdset,NULL,NULL,&polltime,NULL);
+      if(n < 0)
+	break; // error of some kind
+    }
 
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME,&now);
-    int sec = now.tv_sec % 120; // second within 0-120 period
+    int const sec = utc_time_sec() % 120; // UTC second within 0-120 period
 
     if(sec >= 114){
       // End of 2-minute frame; process everything
@@ -219,7 +217,7 @@ void input_loop(){
 	  // If running at high priority, drop back to normal
 	  if(getpriority(PRIO_PROCESS,0) < 0)
 	    setpriority(PRIO_PROCESS,0,0);
-	  int r = system(cmd);
+	  int const r = system(cmd);
 	  if(Verbose && r != 0)
 	    fprintf(stderr,"system() returned %d errno %d (%s)\n",r,errno,strerror(errno));
 	  if(!Keep_wav)
@@ -325,16 +323,15 @@ struct session *create_session(struct rtp_header *rtp){
   sp->channels = channels_from_pt(sp->type);
   sp->samprate = samprate_from_pt(sp->type);
   
-  struct timespec current_time;
-  clock_gettime(CLOCK_REALTIME,&current_time);
+  long long now = utc_time_ns();
   // Microsecond within 2-minute (120 sec) period
-  long long const start_offset_nsec = (current_time.tv_nsec + 1000000000 * current_time.tv_sec) % 120000000000LL;
+  long long const start_offset_nsec = now % (120 * BILLION);
   
   // Use the previous 120-second point as the start of this file
-  struct timespec start_time;
-  start_time.tv_sec = current_time.tv_sec - (start_offset_nsec / 1000000000);
-  start_time.tv_nsec = start_offset_nsec % 1000000000;
-  struct tm const * const tm = gmtime(&start_time.tv_sec);
+  long long start_time = now - start_offset_nsec;
+  time_t start_time_sec = start_time / BILLION;
+  
+  struct tm const * const tm = gmtime(&start_time_sec);
   
   int fd = -1;
   char dir[PATH_MAX];
@@ -415,11 +412,11 @@ struct session *create_session(struct rtp_header *rtp){
   getnameinfo((struct sockaddr *)&Sender,sizeof(Sender),sender_text,sizeof(sender_text),NULL,0,NI_NOFQDN|NI_DGRAM|NI_NUMERICHOST);
   attrprintf(fd,"source","%s",sender_text);
   attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
-  attrprintf(fd,"unixstarttime","%ld.%09ld",(long)start_time.tv_sec,(long)start_time.tv_nsec);
+  attrprintf(fd,"unixstarttime","%.9lf",(double)start_time / 1.e9);
 
   // Seek into the file for the first write
   // The parentheses are carefully drawn to ensure the result is on a block boundary despite truncations
-  fseeko(sp->fp,((start_offset_nsec * sp->samprate)/ 1000000000) * sp->header.BlockAlign,SEEK_CUR); // offset is in bytes
+  fseeko(sp->fp,(off_t)((start_offset_nsec * sp->samprate)/ BILLION) * sp->header.BlockAlign,SEEK_CUR); // offset is in bytes
   return sp;
 }
 

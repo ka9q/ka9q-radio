@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.171 2022/08/03 21:55:29 karn Exp $
+// $Id: monitor.c,v 1.172 2022/08/05 06:35:10 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -32,7 +32,6 @@
 #include "conf.h"
 #include "misc.h"
 #include "multicast.h"
-//#include "osc.h"
 #include "iir.h"
 
 
@@ -55,24 +54,24 @@ static float Playout = 100;
 static bool Start_muted;
 static bool Auto_position;
 static bool PTT_state = false;
-static struct timespec LastAudioTime;
+static long long LastAudioTime;
 static pthread_t Repeater_thread;
-static pthread_cond_t PTT_cond;
-static pthread_mutex_t PTT_mutex;
-static struct timespec Repeater_tail;
+static pthread_cond_t PTT_cond = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t PTT_mutex = PTHREAD_MUTEX_INITIALIZER;
+static long long Repeater_tail;
 
 
 // Global variables
 static char *Mcast_address_text[MAX_MCAST]; // Multicast address(es) we're listening to
 static char Audiodev[256];           // Name of audio device; empty means portaudio's default
 static int Nfds;                     // Number of streams
-static pthread_mutex_t Sess_mutex;
+static pthread_mutex_t Sess_mutex = PTHREAD_MUTEX_INITIALIZER;
 static PaStream *Pa_Stream;          // Portaudio stream handle
 static int inDevNum;                 // Portaudio's audio output device index
-static struct timespec Start_unix_time;
+static long long Start_time;
 static PaTime Start_pa_time;
 
-static pthread_mutex_t Output_mutex;
+static pthread_mutex_t Output_mutex = PTHREAD_MUTEX_INITIALIZER;
 static float Output_buffer[BUFFERSIZE][2]; // Decoded audio output, written by processing thread and read by PA callback
 static volatile long long Rptr;            // Unwrapped read pointer (bug: will overflow in 6 million years)
 #if 0
@@ -81,7 +80,7 @@ static PaTime Last_callback_time;
 
 static int Invalids;
 static bool Help;
-static struct timespec Last_error_time;
+static long long Last_error_time;
 static int Position; // auto-position streams
 static bool Auto_sort;
 
@@ -198,11 +197,7 @@ int main(int argc,char * const argv[]){
     switch(c){
     case 't':
       {
-	float tail = fabsf(strtof(optarg,NULL));
-	float ipart;
-	float fract = modff(tail,&ipart);
-	Repeater_tail.tv_sec = ipart;
-	Repeater_tail.tv_nsec = fract * BILLION;
+	Repeater_tail = BILLION * fabsf(strtof(optarg,NULL));
       }
       break;
     case 'L':
@@ -327,7 +322,7 @@ int main(int argc,char * const argv[]){
     exit(1);
   }
 
-  if(Repeater_tail.tv_sec != 0 || Repeater_tail.tv_nsec != 0)
+  if(Repeater_tail != 0)
     pthread_create(&Repeater_thread,NULL,repeater_ctl,NULL); // Repeater mode active
 
   // Do this at the last minute at startup since the upcall will come quickly
@@ -337,11 +332,8 @@ int main(int argc,char * const argv[]){
     exit(1);
   }
   Start_pa_time = Pa_GetStreamTime(Pa_Stream);
-  clock_gettime(CLOCK_REALTIME,&Start_unix_time);
-  Last_error_time = Start_unix_time;
-
-  pthread_mutex_init(&Output_mutex,NULL);
-  pthread_mutex_init(&Sess_mutex,NULL);
+  Start_time = gps_time_ns();
+  Last_error_time = Start_time;
 
   // Spawn one thread per address
   // All have to succeed in resolving their targets or we'll exit
@@ -533,14 +525,13 @@ static void *decode_task(void *arg){
 
     struct packet *pkt = NULL;
     // Wait for packet to appear on queue
-    struct timespec now,increment;
-    clock_gettime(CLOCK_REALTIME,&now);
-    increment.tv_sec = 0;
-    increment.tv_nsec = 100000000; // 100 ms
-    time_add(&now,&now,&increment);
     pthread_mutex_lock(&sp->qmutex);
     while(!sp->queue){
-      int r = pthread_cond_timedwait(&sp->qcond,&sp->qmutex,&now); // Wait 100 ms max so we pick up terminates
+      long long const increment = 100000000; // 100 ns
+      // pthread_cond_timedwait requires UTC clock time! Undefined behavior around a leap second...
+      struct timespec ts;
+      ns2ts(&ts,gps_time_ns() + increment + BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET));
+      int r = pthread_cond_timedwait(&sp->qcond,&sp->qmutex,&ts); // Wait 100 ms max so we pick up terminates
       if(r != 0){
 	if(r == EINVAL)
 	  Invalids++;
@@ -564,7 +555,7 @@ static void *decode_task(void *arg){
     if(pkt->rtp.seq != sp->rtp_state.seq){
       if(!pkt->rtp.marker){
 	sp->rtp_state.drops++; // Avoid spurious drops when session is recreated after silence
-	Last_error_time = now;
+	Last_error_time = gps_time_ns();
       }
       if(sp->opus)
 	opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
@@ -741,10 +732,12 @@ static void *decode_task(void *arg){
 	}
       }
       pthread_mutex_lock(&PTT_mutex);
-      clock_gettime(CLOCK_REALTIME,&LastAudioTime);
-      if(!PTT_state){
+      LastAudioTime = gps_time_ns();
+      if(Repeater_tail != 0 && !PTT_state){
 	PTT_state = true;
-	fprintf(stdout,"PTT On\n");
+	char result[1024];
+	fprintf(stdout,"%s: PTT On\n",
+		format_gpstime(result,sizeof(result),LastAudioTime));
 	pthread_cond_signal(&PTT_cond);
       }
       pthread_mutex_unlock(&PTT_mutex);
@@ -923,14 +916,11 @@ static void *display(void *arg){
       
       if(Verbose){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
-	struct timespec ts;
-	clock_gettime(CLOCK_REALTIME,&ts);
-	double unix_seconds = ts.tv_sec - Start_unix_time.tv_sec + 1e-9*(ts.tv_nsec - Start_unix_time.tv_nsec);
+	double unix_seconds = (gps_time_ns() - Start_time) * 1e-9;
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
 	printw("D/A clock error: %+.3lf ppm ",1e6 * (pa_seconds / unix_seconds - 1));
 	// Time since last packet drop on any channel
-	if(Start_unix_time.tv_sec != Last_error_time.tv_sec)
-	  printw("Error-free seconds: %'.1lf\n",ts.tv_sec - Last_error_time.tv_sec + 1e-9 * (ts.tv_nsec - Last_error_time.tv_nsec));
+	printw("Error-free seconds: %'.1lf\n",(1e-9*(gps_time_ns() - Last_error_time)));
 	printw("Initial playout time: %.0f ms\n",Playout);
       }      
     }
@@ -1276,21 +1266,25 @@ void *repeater_ctl(void *arg){
     pthread_mutex_unlock(&PTT_mutex);
 
     // When is the earliest it could drop?
-    struct timespec drop_time;
-    time_add(&drop_time,&LastAudioTime,&Repeater_tail);
+    long long drop_time = LastAudioTime + Repeater_tail;
 
     // Has that time passed?
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME,&now);
-    if(time_cmp(&now,&drop_time) < 0){
+    if(gps_time_ns() > drop_time){
       // Sleep until possible end of timeout
-      struct timespec sleep_time;
-      time_sub(&sleep_time,&drop_time,&now);
-      //      fprintf(stdout,"nanosleep(%ld + %ld)\n",sleep_time.tv_sec,sleep_time.tv_nsec);
-      nanosleep(&sleep_time,NULL);
+      long long const sleep_time = drop_time - gps_time_ns();
+      //      fprintf(stdout,"nanosleep(%lld)\n",sleep_time);
+      {
+	struct timespec ts;
+	ns2ts(&ts,sleep_time);
+	nanosleep(&ts,NULL);
+      }
     } else {
       // Timer expired
-      fprintf(stdout,"PTT Off\n");
+      {
+	char result[1024];
+	format_gpstime(result,sizeof(result),gps_time_ns());
+	fprintf(stdout,"%s: PTT Off\n",result);
+      }
       PTT_state = false;
     }
   }    

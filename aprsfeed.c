@@ -1,4 +1,4 @@
-// $Id: aprsfeed.c,v 1.30 2021/10/28 20:53:17 karn Exp $
+// $Id: aprsfeed.c,v 1.31 2022/08/05 06:35:10 karn Exp $
 // Process AX.25 frames containing APRS data, feed to APRS2 network
 // Copyright 2018, Phil Karn, KA9Q
 
@@ -110,7 +110,7 @@ int main(int argc,char *argv[]){
     if((cp = strchr(callsign,'-')) != NULL)
       *cp = '\0';
     
-    int len = strlen(callsign);
+    int const len = strlen(callsign);
 
     for(int i=0; i<len; i += 2){
       hash ^= toupper(callsign[i]) << 8;
@@ -199,14 +199,13 @@ int main(int argc,char *argv[]){
       if(rtp_header.type != AX25_PT)
 	continue; // Wrong type
       
-      // Emit local timestamp
-      time_t t;
-      struct tm *tmp;
-      time(&t);
-      tmp = gmtime(&t);
       if(Logfile){
-	fprintf(Logfile,"%d %s %04d %02d:%02d:%02d UTC ssrc %u seq %d",tmp->tm_mday,Months[tmp->tm_mon],tmp->tm_year+1900,
-		tmp->tm_hour,tmp->tm_min,tmp->tm_sec,rtp_header.ssrc,rtp_header.seq);
+	// Emit local timestamp
+	char result[1024];
+
+	fprintf(Logfile,"%s ssrc %u seq %d",
+		format_gpstime(result,sizeof(result),gps_time_ns()),
+		rtp_header.ssrc,rtp_header.seq);
       }
       
       // Parse incoming AX.25 frame
@@ -234,20 +233,20 @@ int main(int argc,char *argv[]){
 	  // if "TCPIP" appears, this frame came off the Internet and should not be sent back to it
 	  if(strcmp(frame.digipeaters[i].name,"TCPIP") == 0)
 	    is_tcpip = 1;
-	  int w = snprintf(cp,sspace,",%s%s",frame.digipeaters[i].name,frame.digipeaters[i].h ? "*" : "");
+	  int const w = snprintf(cp,sspace,",%s%s",frame.digipeaters[i].name,frame.digipeaters[i].h ? "*" : "");
 	  cp += w; sspace -= w;
 	  assert(sspace > 0);
 	}
 	{
 	  // qAR means a bidirectional i-gate, qAO means receive-only
 	  //    w = snprintf(cp,sspace,",qAR,%s",User);
-	  int w = snprintf(cp,sspace,",qAO,%s",User);
+	  int const w = snprintf(cp,sspace,",qAO,%s",User);
 	  cp += w; sspace -= w;
 	  *cp++ = ':'; sspace--;
 	  assert(sspace > 0);
 	}      
 	for(int i=0; i < frame.info_len; i++){
-	  char c = frame.information[i] & 0x7f; // Strip parity in monitor strings
+	  char const c = frame.information[i] & 0x7f; // Strip parity in monitor strings
 	  if(c != '\r' && c != '\n' && c != '\0'){
 	    // Strip newlines, returns and nulls (we'll add a cr-lf later)
 	    *cp++ = c;

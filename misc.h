@@ -1,4 +1,4 @@
-// $Id: misc.h,v 1.29 2022/06/23 22:07:18 karn Exp $
+// $Id: misc.h,v 1.30 2022/08/05 06:35:10 karn Exp $
 // Miscellaneous constants, macros and function prototypes
 // Copyright 2018 Phil Karn, KA9Q
 #ifndef _MISC_H
@@ -61,36 +61,9 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 
 #endif // ifdef __APPLE__
 
-// Compare two timespec structures, assuming normalized
-// a > b: +1
-// a < b: -1
-// a == b: 0
-static inline int time_cmp(struct timespec const *a,struct timespec const *b){
-  if(a->tv_sec > b->tv_sec)
-    return +1;
-  if(a->tv_sec < b->tv_sec)
-    return -1;
-  if(a->tv_nsec > b->tv_nsec)
-    return +1;
-  if(a->tv_nsec < b->tv_nsec)
-    return -1;
-  return 0;
-}
-static int const BILLION = 1000000000;
-void normalize_time(struct timespec *x);
 
-// Result = a - b
-static inline void time_sub(struct timespec *result,struct timespec const *a, struct timespec const *b){
-  result->tv_sec = a->tv_sec - b->tv_sec;
-  result->tv_nsec = a->tv_nsec - b->tv_nsec;
-  normalize_time(result);
-}
-// Result = a + b
-static inline void time_add(struct timespec *result,struct timespec const *a, struct timespec const *b){
-  result->tv_sec = a->tv_sec + b->tv_sec;
-  result->tv_nsec = a->tv_nsec + b->tv_nsec;
-  normalize_time(result);
-}
+
+
 
 // Stolen from the Linux kernel -- enforce type matching of arguments
 #define min(x,y) ({			\
@@ -125,8 +98,10 @@ static inline void time_add(struct timespec *result,struct timespec const *a, st
 extern int Verbose;
 extern char const *Months[12];
 
-char *lltime(char *result,int len,long long t);
+char *format_gpstime(char *result,int len,long long t);
+char *format_utctime(char *result,int len,long long t);
 char *ftime(char *result,int size,long long t);
+void normalize_time(struct timespec *x);
 double parse_frequency(const char *);
 uint32_t nextfastfft(uint32_t n);
 int pipefill(int,void *,int);
@@ -141,6 +116,8 @@ float i1(float const z); // 1st kind
 
 float xi(float thetasq);
 float fm_snr(float r);
+
+
 
 static int16_t inline scaleclip(float const x){
   if(x >= 1.0)
@@ -190,5 +167,76 @@ static inline float approx_magf(complex float x){
 
   return Alpha * max(absr,absi) + Beta * min(absr,absi);
 }
+
+// Result = a - b
+static inline void time_sub(struct timespec *result,struct timespec const *a, struct timespec const *b){
+  result->tv_sec = a->tv_sec - b->tv_sec;
+  result->tv_nsec = a->tv_nsec - b->tv_nsec;
+  normalize_time(result);
+}
+// Result = a + b
+static inline void time_add(struct timespec *result,struct timespec const *a, struct timespec const *b){
+  result->tv_sec = a->tv_sec + b->tv_sec;
+  result->tv_nsec = a->tv_nsec + b->tv_nsec;
+  normalize_time(result);
+}
+
+// Compare two timespec structures, assuming normalized
+// a > b: +1
+// a < b: -1
+// a == b: 0
+static inline int time_cmp(struct timespec const *a,struct timespec const *b){
+  if(a->tv_sec > b->tv_sec)
+    return +1;
+  if(a->tv_sec < b->tv_sec)
+    return -1;
+  if(a->tv_nsec > b->tv_nsec)
+    return +1;
+  if(a->tv_nsec < b->tv_nsec)
+    return -1;
+  return 0;
+}
+static long long const BILLION = 1000000000LL;
+
+// Convert timespec (seconds, nanoseconds) to integer nanoseconds
+// Integer nanoseconds overflows past 584.94242 years. That's probably long enough
+static inline long long ts2ns(struct timespec const *ts){
+  return ts->tv_sec * BILLION + ts->tv_nsec;
+}
+// Convert integer nanosec count to timspec
+static inline void ns2ts(struct timespec *ts,long long ns){
+  lldiv_t r = lldiv(ns,BILLION);
+  ts->tv_sec = r.quot;
+  ts->tv_nsec = r.rem;
+}
+
+// Return time of day as seconds (truncated) from UTC epoch
+static inline time_t utc_time_sec(void){
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME,&now);
+  return (time_t)now.tv_sec;
+}
+// Same from GPS epoch
+static inline time_t gps_time_sec(void){
+  return utc_time_sec() - (UNIX_EPOCH - GPS_UTC_OFFSET);
+}
+
+
+
+// Return time of day as nanosec from UTC epoch
+static inline long long utc_time_ns(void){
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME,&now);
+  return ts2ns(&now);
+}
+
+
+// Return time of day as nanosec from GPS epoch
+// Note: assumes fixed leap second offset
+// Could be better derived direct from a GPS receiver without applying the leap second offset
+static inline long long gps_time_ns(void){
+  return utc_time_ns() - BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET);
+}
+
 
 #endif // _MISC_H

@@ -1,4 +1,4 @@
-// $Id: misc.c,v 1.38 2022/04/24 23:51:16 karn Exp $
+// $Id: misc.c,v 1.39 2022/08/05 06:35:10 karn Exp $
 // Miscellaneous low-level routines, mostly time-related
 // Copyright 2018, Phil Karn, KA9Q
 
@@ -75,13 +75,22 @@ void normalize_time(struct timespec *x){
   }
 }
 
+
+
 char const *Days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 char const *Months[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec" };
 
-// Format a timestamp expressed as nanoseconds from the GPS epoch
-char *lltime(char *result,int len,long long t){
-  time_t utime = (t / 1000000000LL) - GPS_UTC_OFFSET + UNIX_EPOCH;
-  int t_usec = (t % 1000000000LL) / 1000;
+char *format_gpstime(char *result,int len,long long t){
+  return format_utctime(result,len,t - (GPS_UTC_OFFSET - UNIX_EPOCH));
+}
+
+
+// Format, as printed UTC or local, a time measured in nanoseconds from the GPS epoch
+char *format_utctime(char *result,int len,long long t){
+  lldiv_t ut = lldiv(t,BILLION);
+
+  time_t utime = ut.quot - timezone;
+  int t_usec = ut.rem / 1000;
   if(t_usec < 0){
     t_usec += 1000000;
     utime -= 1;
@@ -89,8 +98,16 @@ char *lltime(char *result,int len,long long t){
   struct tm tm;
   gmtime_r(&utime,&tm);
   // Mon Feb 26 14:40:08.123456 UTC 2018
-  snprintf(result,len,"%s %s %d %02d:%02d:%02d.%06d UTC %4d",
-	   Days[tm.tm_wday],Months[tm.tm_mon],tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec,t_usec,tm.tm_year+1900);
+  snprintf(result,len,"%s %s %d %02d:%02d:%02d.%06d %s %4d",
+	   Days[tm.tm_wday],
+	   Months[tm.tm_mon],
+	   tm.tm_mday,
+	   tm.tm_hour,
+	   tm.tm_min,
+	   tm.tm_sec,
+	   t_usec,
+	   tzname[daylight],
+	   tm.tm_year+1900);
   return result;
 
 }

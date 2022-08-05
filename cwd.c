@@ -1,4 +1,4 @@
-// $Id: cwd.c,v 1.3 2022/08/01 09:09:27 karn Exp $
+// $Id: cwd.c,v 1.4 2022/08/05 06:35:10 karn Exp $
 // CW generator for ka9q-radio
 // Runs as daemon, reads from a named pipe, sends audio to a specified multicast group + RTP SSRC
 // Useful for IDs and other messages in repeater mode
@@ -338,11 +338,10 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
     rtp.marker = 0; // Subsequent frames are not marked
     {
       // Sleep pacing - how long will this take to send?
-      long long nanosec = (long long)BILLION * chunk / Samprate;
+      long long const nanosec = BILLION * chunk / Samprate;
       struct timespec delay;
       
-      delay.tv_nsec = nanosec % BILLION;
-      delay.tv_sec = nanosec / BILLION;
+      ns2ts(&delay,nanosec);
       nanosleep(&delay,NULL);
     }
   }

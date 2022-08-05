@@ -1,4 +1,4 @@
-// $Id: funcubed.c,v 1.5 2022/07/21 05:18:42 karn Exp $
+// $Id: funcubed.c,v 1.6 2022/08/05 06:35:10 karn Exp $
 // Read from AMSAT UK Funcube Pro and Pro+ dongles
 // Multicast raw 16-bit I/Q samples
 // Accept control commands from UDP socket
@@ -367,9 +367,7 @@ int main(int argc,char *argv[]){
     pthread_create(&Display_thread,NULL,display,sdr);
 
   if(Rtp.ssrc == 0){
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME,&now);
-    Rtp.ssrc = now.tv_sec & 0xffffffff; // low 32 bits of clock time
+    Rtp.ssrc = gps_time_sec() & 0xffffffff; // low 32 bits of clock time
   }
   fprintf(stdout,"uid %d; device %d; cal %f ppm dest %s; blocksize %'d samples; RTP SSRC %u\n",
 	  getuid(),Device,sdr->calibration * 1e6,Metadata_dest,Blocksize,Rtp.ssrc);
@@ -379,11 +377,7 @@ int main(int argc,char *argv[]){
   float secphi = 1;
   float tanphi = 0;
 
-  {
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME,&now);
-    sdr->timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
-  }
+  sdr->timestamp = gps_time_ns();
   float const rate_factor = Blocksize/(ADC_samprate * Power_alpha);
 
   int ConsecPaErrs = 0;
@@ -487,11 +481,7 @@ int main(int argc,char *argv[]){
 
 #if 1
     // Get status timestamp from UNIX TOD clock -- but this might skew because of inexact sample rate
-    {
-      struct timespec now;
-      clock_gettime(CLOCK_REALTIME,&now);
-      sdr->timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
-    }
+    sdr->timestamp = gps_time_ns();
 #else
     // Simply increment by number of samples
     // But what if we lose some? Then the clock will always be off
@@ -697,12 +687,7 @@ void send_fcd_status(struct sdrstate const *sdr,int full){
   encode_int32(&bp,COMMAND_TAG,sdr->command_tag);
   encode_int64(&bp,CMD_CNT,Commands);
   
-  {
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME,&now);
-    long long const timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
-    encode_int64(&bp,GPS_TIME,timestamp);
-  }
+  encode_int64(&bp,GPS_TIME,gps_time_ns());
 
   if(Description)
     encode_string(&bp,DESCRIPTION,Description,strlen(Description));

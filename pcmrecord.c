@@ -1,4 +1,4 @@
-// $Id: pcmrecord.c,v 1.18 2022/05/10 04:01:32 karn Exp $ 
+// $Id: pcmrecord.c,v 1.19 2022/08/05 06:35:10 karn Exp $ 
 // Read and record PCM audio streams
 // Adapted from iqrecord.c which is out of date
 // Copyright 2021 Phil Karn, KA9Q
@@ -26,6 +26,7 @@
 #include <time.h>
 
 
+#include "misc.h"
 #include "attr.h"
 #include "multicast.h"
 
@@ -78,7 +79,7 @@ struct session {
 
   FILE *fp;                    // File being recorded
   void *iobuffer;              // Big buffer to reduce write rate
-  struct timespec last_active;
+  long long last_active;
 
   int SubstantialFile;        // At least one substantial segment has been seen
   int64_t CurrentSegmentSamples; // total samples in this segment without skips in timestamp
@@ -206,17 +207,13 @@ void closedown(int a){
 void input_loop(){
 
   while(1){
-    struct timespec current_time;
-    clock_gettime(CLOCK_REALTIME,&current_time);
+    long long current_time = gps_time_ns();
 
     // Receive data
     fd_set fdset;
     FD_ZERO(&fdset);
     FD_SET(Input_fd,&fdset);
-    struct timespec polltime;
-    polltime.tv_sec = 1;
-    polltime.tv_nsec = 0; // force return after 1 second max
-    
+    struct timespec const polltime = {1, 0}; // force return after 1 second max
     int n = pselect(Input_fd + 1,&fdset,NULL,NULL,&polltime,NULL);
     if(n < 0)
       break; // error of some kind
@@ -286,7 +283,7 @@ void input_loop(){
 	sp->SubstantialFile = 1;
 
       fwrite(samples,1,size,sp->fp);
-      clock_gettime(CLOCK_REALTIME,&sp->last_active);
+      sp->last_active = gps_time_ns();
     } // end of packet processing
 
     // Walk through list, close idle sessions
@@ -295,8 +292,8 @@ void input_loop(){
     struct session *next;
     for(struct session *sp = Sessions;sp != NULL; sp = next){
       next = sp->next;
-      long long idle = 1000000000 * (current_time.tv_sec - sp->last_active.tv_sec) + (current_time.tv_nsec - sp->last_active.tv_nsec);
-      if(idle > Timeout * 1000000000){
+      long long idle = current_time - sp->last_active;
+      if(idle > Timeout * BILLION){
 	// Close idle session
 	if(!sp->SubstantialFile){
 	  unlink(sp->filename);
@@ -367,9 +364,9 @@ struct session *create_session(struct rtp_header *rtp){
   
   // Create file
   // Should we append to existing files instead? If we try this, watch out for timestamp wraparound
-  struct timespec current_time;
-  clock_gettime(CLOCK_REALTIME,&current_time);
-  struct tm *tm = gmtime(&current_time.tv_sec);
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME,&now);
+  struct tm *tm = gmtime(&now.tv_sec);
   // yyyy-mm-dd-hh:mm:ss so it will sort properly
   
   sp->fp = NULL;
@@ -388,7 +385,7 @@ struct session *create_session(struct rtp_header *rtp){
 	     tm->tm_hour,
 	     tm->tm_min,
 	     tm->tm_sec,
-	     (int)(current_time.tv_nsec / 100000000));
+	     (int)(now.tv_nsec / 100000000));
     sp->fp = fopen(sp->filename,"w+");
     if(sp->fp == NULL)
       fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
@@ -404,7 +401,7 @@ struct session *create_session(struct rtp_header *rtp){
 	     tm->tm_hour,
 	     tm->tm_min,
 	     tm->tm_sec,
-	     (int)(current_time.tv_nsec / 100000000));
+	     (int)(now.tv_nsec / 100000000));
     sp->fp = fopen(sp->filename,"w+");
   }    
   if(sp->fp == NULL){
@@ -460,8 +457,6 @@ struct session *create_session(struct rtp_header *rtp){
   attrprintf(fd,"source","%s",sender_text);
   attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
   
-  struct timespec ts;
-  clock_gettime(CLOCK_REALTIME,&ts);
-  attrprintf(fd,"unixstarttime","%ld.%09ld",(long)ts.tv_sec,(long)ts.tv_nsec);
+  attrprintf(fd,"unixstarttime","%ld.%09ld",(long)now.tv_sec,(long)now.tv_nsec);
   return sp;
 }

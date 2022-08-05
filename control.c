@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.163 2022/07/10 07:42:19 karn Exp $
+// $Id: control.c,v 1.164 2022/08/05 06:35:10 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -368,10 +368,7 @@ int main(int argc,char *argv[]){
     unsigned demods_size = 0;
     // The deadline starts at 1 sec in the future
     // It is reset as long as we keep seeing new SSRCs
-    struct timespec now,deadline;
-    clock_gettime(CLOCK_REALTIME,&now);
-    deadline = now;
-    deadline.tv_sec += 1;
+    long long deadline = gps_time_ns() + BILLION;
 
     send_poll(Ctl_fd,0);
 
@@ -381,16 +378,16 @@ int main(int argc,char *argv[]){
       FD_SET(Status_fd,&fdset);
       int n = Status_fd + 1;
       
-      clock_gettime(CLOCK_REALTIME,&now);
-      struct timespec timeout;
-      time_sub(&timeout,&deadline,&now);
-
+      long long timeout = deadline - gps_time_ns();
       // Immediate poll if timeout is negative
-      if(timeout.tv_sec < 0){
-	timeout.tv_sec = 0;
-	timeout.tv_nsec = 0;
+      if(timeout < 0)
+	timeout = 0;
+
+      {
+	struct timespec ts;
+	ns2ts(&ts,timeout);
+	n = pselect(n,&fdset,NULL,NULL,&ts,NULL);
       }
-      n = pselect(n,&fdset,NULL,NULL,&timeout,NULL);
       if(n <= 0)
 	break; // Only on a timeout
       if(!FD_ISSET(Status_fd,&fdset))
@@ -417,9 +414,7 @@ int main(int argc,char *argv[]){
       }
       decode_radio_status(&demods[ssrc_count],buffer+1,length-1);
       ssrc_count++;
-      clock_gettime(CLOCK_REALTIME,&now);
-      deadline = now;
-      deadline.tv_sec += 1; // extend deadline as long as we're progressing
+      deadline = gps_time_ns() + BILLION; // extend deadline as long as we're progressing
     ignore:;
     }
 
@@ -484,28 +479,25 @@ int main(int argc,char *argv[]){
   // randomize polls over 50 ms and restart our poll timer if an answer
   // is seen in response to another poll
 
-  int const random_interval = 50000; // 50 ms
-  struct timespec next_radio_poll,next_fe_poll;
+  long long const random_interval = 50000000; // 50 ms
   // Pick soon but still random times for the first polls
-  random_time(&next_radio_poll,0,random_interval);
-  random_time(&next_fe_poll,0,random_interval);
+  long long next_radio_poll = random_time(0,random_interval);
+  long long next_fe_poll = random_time(0,random_interval);
   
   for(;;){
-    int const radio_poll_interval  = Refresh_rate * 1e6;
-    int const fe_poll_interval = 975000;    // 975 - 1025 ms
+    long long const radio_poll_interval  = Refresh_rate * BILLION;
+    long long const fe_poll_interval = 975000000;    // 975 - 1025 ms
 
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME,&now);
-    if(time_cmp(&now,&next_radio_poll) > 0){
+    if(gps_time_ns() > next_radio_poll){
       // Time to poll radio
       send_poll(Ctl_fd,Ssrc);
-      random_time(&next_radio_poll,radio_poll_interval,random_interval);
+      next_radio_poll = random_time(radio_poll_interval,random_interval);
     }
-    if(time_cmp(&now,&next_fe_poll) > 0){
+    if(gps_time_ns() > next_fe_poll){
       // Time to poll front end
       if(Frontend.input.ctl_fd > 2)
 	send_poll(Frontend.input.ctl_fd,0);
-      random_time(&next_fe_poll,fe_poll_interval,random_interval);
+      next_fe_poll = random_time(fe_poll_interval,random_interval);
     }
     fd_set fdset;
     FD_ZERO(&fdset);
@@ -515,18 +507,20 @@ int main(int argc,char *argv[]){
     int const n = max(Frontend.input.status_fd,Status_fd) + 1;
 
     // Receive timeout at whichever event occurs first
-    struct timespec timeout;
-    if(time_cmp(&next_radio_poll,&next_fe_poll) > 0)
-      time_sub(&timeout,&next_fe_poll,&now);
+    long long timeout;
+    if(next_radio_poll > next_fe_poll)
+      timeout = next_fe_poll - gps_time_ns();
     else
-      time_sub(&timeout,&next_radio_poll,&now);
+      timeout = next_radio_poll - gps_time_ns();
 
     // Immediate poll if timeout is negative
-    if(timeout.tv_sec < 0){
-      timeout.tv_sec = 0;
-      timeout.tv_nsec = 0;
+    if(timeout < 0)
+      timeout = 0;
+    {
+      struct timespec ts;
+      ns2ts(&ts,timeout);
+      pselect(n,&fdset,NULL,NULL,&ts,NULL); // Don't really need to check the return
     }
-    pselect(n,&fdset,NULL,NULL,&timeout,NULL); // Don't really need to check the return
     if(Resized){
       Resized = false;
       setup_windows();
@@ -540,7 +534,7 @@ int main(int argc,char *argv[]){
       // Ignore our own command packets and responses to other SSIDs
       if(length >= 2 && buffer[0] == 0 && for_us(demod,buffer+1,length-1,Ssrc) >= 0 ){
 	decode_radio_status(demod,buffer+1,length-1);
-	random_time(&next_radio_poll,radio_poll_interval,random_interval);
+	next_radio_poll = random_time(radio_poll_interval,random_interval);
 
 	if(Frontend.sdr.samprate != 0)
 	  Blocktime = 1000.0f * Frontend.L / Frontend.sdr.samprate;
@@ -577,12 +571,12 @@ int main(int argc,char *argv[]){
 	 && length >= 2 && buffer[0] == 0){
 	// Parse entries
 	decode_fe_status(&Frontend,buffer+1,length-1);
-	random_time(&next_fe_poll,fe_poll_interval,random_interval);
+	next_fe_poll = random_time(fe_poll_interval,random_interval);
       }
 #else
       if(length >= 2 && buffer[0] == 0){
 	decode_fe_status(&Frontend,buffer+1,length-1);
-	random_time(&next_fe_poll,fe_poll_interval,random_interval);
+	next_fe_poll = random_time(fe_poll_interval,random_interval);
       }
 #endif
     }
@@ -1463,7 +1457,7 @@ void display_fe(WINDOW *w,struct demod const *demod){
   wmove(w,row,col);
   wclrtobot(w);
   char tbuf[100];
-  mvwaddstr(w,row++,col,lltime(tbuf,sizeof(tbuf),Frontend.sdr.timestamp));
+  mvwaddstr(w,row++,col,format_gpstime(tbuf,sizeof(tbuf),Frontend.sdr.timestamp));
   mvwaddstr(w,row++,col,formatsock(&Frontend.input.metadata_source_address));
   mvwaddstr(w,row++,col,formatsock(&Frontend.input.metadata_dest_address));
   

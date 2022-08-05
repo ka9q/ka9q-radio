@@ -1,4 +1,4 @@
-// $Id: opusd.c,v 1.4 2022/07/21 04:29:50 karn Exp $
+// $Id: opusd.c,v 1.5 2022/08/05 06:35:10 karn Exp $
 // Opus transcoder
 // Read PCM audio from one or more multicast groups, compress with Opus and retransmit on another with same SSRC
 // Currently subject to memory leaks as old group states aren't yet aged out
@@ -88,15 +88,15 @@ const float Latency = 0.02;    // chunk size for audio output callback
 
 // Global variables
 pthread_t Status_thread;
-pthread_mutex_t Input_ready_mutex;
-pthread_cond_t Input_ready_cond;
+pthread_mutex_t Input_ready_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t Input_ready_cond = PTHREAD_COND_INITIALIZER;
 
 int Status_fd = -1;           // Reading from radio status
 int Status_out_fd = -1;       // Writing to radio status
 int Input_fd = -1;            // Multicast receive socket
 int Output_fd = -1;           // Multicast receive socket
 struct session *Sessions;
-pthread_mutex_t Session_protect;
+pthread_mutex_t Session_protect = PTHREAD_MUTEX_INITIALIZER;
 uint64_t Output_packets;
 char *Name;
 char *Output;
@@ -232,8 +232,6 @@ int main(int argc,char * const argv[]){
   }
 
   if(Status){
-    pthread_mutex_init(&Input_ready_mutex,NULL);
-    pthread_cond_init(&Input_ready_cond,NULL);
     pthread_create(&Status_thread,NULL,status,NULL);
 
     // Wait until the status thread discovers the input PCM stream
@@ -275,8 +273,6 @@ int main(int argc,char * const argv[]){
   signal(SIGTERM,closedown);
   signal(SIGPIPE,SIG_IGN);
 
-  pthread_mutex_init(&Session_protect,NULL);
-  
   // Loop forever processing and dispatching incoming PCM packets
   // Process incoming RTP packets, demux to per-SSRC thread
   struct packet *pkt = NULL;
@@ -532,12 +528,9 @@ void *encode(void *arg){
   while(1){
     struct packet *pkt = NULL;
     {
-      struct timespec ts;
-      clock_gettime(CLOCK_REALTIME,&ts);
-      // wait 10 seconds for a new packet
       struct timespec waittime;
-      waittime.tv_sec = ts.tv_sec + 10; // 10 seconds in the future
-      waittime.tv_nsec = ts.tv_nsec;
+      clock_gettime(CLOCK_REALTIME,&waittime);
+      waittime.tv_sec += 10;      // wait 10 seconds for a new packet
       { // Mutex-protected segment
 	pthread_mutex_lock(&sp->qmutex);
 	while(!sp->queue){      // Wait for packet to appear on queue

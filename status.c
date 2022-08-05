@@ -1,4 +1,4 @@
-// $Id: status.c,v 1.30 2022/07/06 02:39:39 karn Exp $
+// $Id: status.c,v 1.31 2022/08/05 06:35:10 karn Exp $
 // encode/decode status packets
 // Copyright 2020 Phil Karn, KA9Q
 
@@ -226,18 +226,10 @@ struct sockaddr *decode_socket(void *sock,unsigned char const *val,int optlen){
 }
 
 
-// Generate random time uniformly distributed between (now + base, now + base + rrange)
-void random_time(struct timespec *tv,unsigned int base,unsigned int rrange){
-  struct timespec now;
-  clock_gettime(CLOCK_REALTIME,&now);
-
-  tv->tv_sec = now.tv_sec;
-  tv->tv_nsec = now.tv_nsec + 1000 * (base + (random() % rrange));
-  if(tv->tv_nsec >= 1000000000){
-    // Reduce to < 1 billion nanoseconds
-    tv->tv_sec += tv->tv_nsec / 1000000000;
-    tv->tv_nsec = tv->tv_nsec % 1000000000;
-  }
+// Generate random GPS time uniformly distributed between (now + base, now + base + rrange)
+// Args are in nanosec
+long long random_time(long long base,long long rrange){
+  return gps_time_ns() + base + random() % rrange;
 }
 
 // Send empty poll command on specified descriptor

@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.225 2022/07/10 07:43:32 karn Exp $
+// $Id: radio.c,v 1.226 2022/08/05 06:35:10 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -33,7 +33,7 @@
 float Blocktime;
 struct frontend Frontend;
 
-pthread_mutex_t Demod_list_mutex;
+pthread_mutex_t Demod_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 int const Demod_alloc_quantum = 1000;
 struct demod *Demod_list; // Contiguous array
 int Demod_list_length; // Length of array
@@ -657,12 +657,8 @@ void *sap_send(void *p){
   struct demod *demod = (struct demod *)p;
   assert(demod != NULL);
 
-  long long start_time;
-  {
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME,&ts);
-    start_time = ts.tv_sec + NTP_EPOCH;
-  }
+  long long start_time = utc_time_sec() + NTP_EPOCH; // NTP uses UTC, not GPS
+
   // These should change when a change is made elsewhere
   uint16_t const id = random(); // Should be a hash, but it changes every time anyway
   int const sess_version = 1;
@@ -737,12 +733,7 @@ void *sap_send(void *p){
     
 
 #if 0 // not currently used
-    long long current_time;
-    {
-      struct timespec ts;
-      clock_gettime(CLOCK_REALTIME,&ts);
-      current_time = ts.tv_sec + NTP_EPOCH;
-    }
+    long long current_time = utc_time_sec() + NTP_EPOCH;
 #endif
 
     // t= (time description)

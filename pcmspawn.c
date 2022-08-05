@@ -1,4 +1,4 @@
-// $Id: pcmspawn.c,v 1.8 2022/05/10 04:01:32 karn Exp $
+// $Id: pcmspawn.c,v 1.9 2022/08/05 06:35:10 karn Exp $
 // Receive and demux RTP PCM streams into a command pipeline
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -33,7 +33,7 @@ struct session {
   char port[NI_MAXSERV];    // RTP Sender source port
 
   FILE *pipe;
-  struct timespec last_active;
+  long long last_active;
  
   struct rtp_state rtp_state; // RTP input state
 
@@ -48,14 +48,14 @@ int Verbose;                  // Verbosity flag (currently unused)
 
 // Global variables
 pthread_t Status_thread;
-pthread_mutex_t Input_ready_mutex;
-pthread_cond_t Input_ready_cond;
+pthread_mutex_t Input_ready_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t Input_ready_cond = PTHREAD_COND_INITIALIZER;
 
 int Status_fd = -1;           // Reading from radio status
 int Status_out_fd = -1;       // Writing to radio status
 int Input_fd = -1;            // Multicast receive socket
 struct session *Sessions;
-pthread_mutex_t Session_protect;
+pthread_mutex_t Session_protect = PTHREAD_MUTEX_INITIALIZER;
 char *Command;
 char *Input;
 char *Status;
@@ -132,8 +132,6 @@ int main(int argc,char * const argv[]){
   }
 
   if(Status){
-    pthread_mutex_init(&Input_ready_mutex,NULL);
-    pthread_cond_init(&Input_ready_cond,NULL);
     pthread_create(&Status_thread,NULL,status,NULL);
 
     // Wait until the status thread discovers the input PCM stream
@@ -156,8 +154,6 @@ int main(int argc,char * const argv[]){
   signal(SIGTERM,closedown);
   signal(SIGPIPE,SIG_IGN);
 
-  pthread_mutex_init(&Session_protect,NULL);
-  
   // Loop forever processing and dispatching incoming PCM packets
   // Process incoming RTP packets, demux to per-SSRC thread
   struct packet *pkt = NULL;
@@ -231,8 +227,7 @@ int main(int argc,char * const argv[]){
       }
     }
     sp->packets++; // Count all packets, regardless of type
-    clock_gettime(CLOCK_REALTIME,&sp->last_active); // for reaping long-idle sessions
-
+    sp->last_active = gps_time_ns(); // for reaping long-idle sessions
 
     int const channels = channels_from_pt(sp->type);
     int const frame_size = pkt->len / (sizeof(int16_t) * channels); // PCM sample times

@@ -692,11 +692,7 @@ void send_sdrplay_status(struct sdrstate *sdr,int full){
 
   encode_int32(&bp,COMMAND_TAG,sdr->command_tag);
   encode_int64(&bp,CMD_CNT,sdr->commands);
-
-  struct timespec now;
-  clock_gettime(CLOCK_REALTIME,&now);
-  long long timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
-  encode_int64(&bp,GPS_TIME,timestamp);
+  encode_int64(&bp,GPS_TIME,gps_time_ns());
 
   if(sdr->description)
     encode_string(&bp,DESCRIPTION,sdr->description,strlen(sdr->description));

@@ -1,4 +1,4 @@
-// $Id: dump.c,v 1.39 2022/06/23 22:13:29 karn Exp $
+// $Id: dump.c,v 1.40 2022/08/05 06:35:10 karn Exp $
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdio.h>
@@ -35,7 +35,7 @@ void dump_metadata(unsigned char const * const buffer,int length){
     case GPS_TIME:
       {
 	char tbuf[100];
-	printf("%s",lltime(tbuf,sizeof(tbuf),(long long unsigned)decode_int(cp,optlen)));
+	printf("%s",format_gpstime(tbuf,sizeof(tbuf),(long long unsigned)decode_int(cp,optlen)));
       }
       break;
     case DESCRIPTION:

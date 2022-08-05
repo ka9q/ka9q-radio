@@ -140,7 +140,7 @@ int get_ssrc(unsigned char const *buffer,int length);
 
 void dump_metadata(unsigned char const *,int);
 
-void random_time(struct timespec *tv,unsigned int base,unsigned int rrange);
+long long random_time(long long base,long long rrange);
 void send_poll(int fd,int ssrc);
 
 #endif

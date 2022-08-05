@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.258 2022/08/02 06:49:41 karn Exp $
+// $Id: main.c,v 1.259 2022/08/05 06:35:10 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -60,7 +60,7 @@ int SAP_enable = false;
 static int Overlap;
 char const *Name;
 
-static struct timespec Starttime;      // System clock at timestamp 0, for RTCP
+static long long Starttime;      // System clock at timestamp 0, for RTCP
 pthread_t Status_thread;
 pthread_t Demod_reaper_thread;
 pthread_t Procsamp_thread;
@@ -95,7 +95,7 @@ int main(int argc,char *argv[]){
     perror("seteuid");
 
   setlinebuf(stdout);
-  clock_gettime(CLOCK_REALTIME,&Starttime);
+  Starttime = gps_time_ns();
 
   // Set up program defaults
   // Some can be overridden by command line args
@@ -529,17 +529,15 @@ void *rtcp_send(void *arg){
     memset(&sr,0,sizeof(sr));
     sr.ssrc = demod->output.rtp.ssrc;
 
-    // Construct NTP timestamp
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME,&ts);
-    double runtime = (ts.tv_sec - Starttime.tv_sec) + (ts.tv_nsec - Starttime.tv_nsec)/1000000000.;
-
-    long long now_time = ((long long)ts.tv_sec + NTP_EPOCH)<< 32;
-    now_time += ((long long)ts.tv_nsec << 32) / 1000000000;
-
-    sr.ntp_timestamp = now_time;
+    // Construct NTP timestamp (NTP uses UTC, ignores leap seconds)
+    {
+      struct timespec now;
+      clock_gettime(CLOCK_REALTIME,&now);
+      sr.ntp_timestamp = ((long long)now.tv_sec + NTP_EPOCH) << 32;
+      sr.ntp_timestamp += ((long long)now.tv_nsec << 32) / BILLION; // NTP timestamps are units of 2^-32 sec
+    }
     // The zero is to remind me that I start timestamps at zero, but they could start anywhere
-    sr.rtp_timestamp = 0 + runtime * demod->output.samprate;
+    sr.rtp_timestamp = (0 + gps_time_ns() - Starttime) / BILLION;
     sr.packet_count = demod->output.rtp.seq;
     sr.byte_count = demod->output.rtp.bytes;
     
@@ -579,7 +577,7 @@ void *rtcp_send(void *arg){
 
     send(demod->output.rtcp_fd,buffer,dp-buffer,0);
   done:;
-    usleep(1000000);
+    sleep(1);
   }
 }
 static void closedown(int a){

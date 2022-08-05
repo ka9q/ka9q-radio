@@ -1,4 +1,4 @@
-// $Id: pcmsend.c,v 1.13 2022/04/15 05:06:16 karn Exp $
+// $Id: pcmsend.c,v 1.14 2022/08/05 06:35:10 karn Exp $
 // Multicast local audio source with PCM
 // Copyright April 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -187,10 +187,7 @@ int main(int argc,char * const argv[]){
   struct rtp_state rtp_state_out;
   memset(&rtp_state_out,0,sizeof(rtp_state_out));
 
-  struct timespec ts;
-  clock_gettime(CLOCK_REALTIME,&ts);
-  rtp_state_out.ssrc = ts.tv_sec;
-
+  rtp_state_out.ssrc = utc_time_sec();
   // Graceful signal catch
   signal(SIGPIPE,closedown);
   signal(SIGINT,closedown);

@@ -1,4 +1,4 @@
-// $Id: packetd.c,v 1.5 2022/07/21 04:52:21 karn Exp $
+// $Id: packetd.c,v 1.6 2022/08/05 06:35:10 karn Exp $
 // AFSK/FM packet demodulator
 // Reads RTP PCM audio stream, emits decoded frames in multicast RTP
 // Copyright 2018, Phil Karn, KA9Q
@@ -69,7 +69,7 @@ static int Status_fd = -1;
 static int Status_out_fd = -1; // Not used yet
 #endif
 static struct session *Session;
-static pthread_mutex_t Output_mutex;
+static pthread_mutex_t Output_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct sockaddr_storage Status_dest_address;
 struct sockaddr_storage Status_input_source_address;
 struct sockaddr_storage Local_status_source_address;
@@ -231,9 +231,6 @@ int main(int argc,char *argv[]){
     fprintf(stdout,"Must specify --ax25-out\n");
     exit(1);
   }
-
-
-  pthread_mutex_init(&Output_mutex,NULL);
 
   if(Nfds > 0)
     pthread_create(&Input_thread,NULL,input,NULL);
@@ -661,11 +658,9 @@ static int hdlc_process(struct hdlc *hp,int bit){
   return 0;
 }
 void printtime(FILE *fp){
-  struct timespec now;
-  clock_gettime(CLOCK_REALTIME,&now);
-  struct tm const * const tmp = gmtime(&now.tv_sec);
-  fprintf(fp,"%d %s %04d %02d:%02d:%02d UTC",tmp->tm_mday,Months[tmp->tm_mon],tmp->tm_year+1900,
-	  tmp->tm_hour,tmp->tm_min,tmp->tm_sec);
+  char result[1024];
+  format_gpstime(result,sizeof(result),gps_time_ns());
+  fputs(result,fp);
 }
 
 

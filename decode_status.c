@@ -1,4 +1,4 @@
-// $Id: decode_status.c,v 1.19 2022/06/21 00:52:24 karn Exp $
+// $Id: decode_status.c,v 1.20 2022/08/05 06:35:10 karn Exp $
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
 #endif
@@ -22,31 +22,32 @@ void *sdr_status(void *arg){
   struct frontend * const frontend = (struct frontend *)arg;
   assert(frontend != NULL);
 
-  int const random_interval = 50000; // 50 ms
-  struct timespec next_fe_poll;
+  long long const random_interval = 50000000; // 50 ms
   // Pick soon but still random times for the first polls
-  random_time(&next_fe_poll,0,random_interval);
-  const int fe_poll_interval = 975000;
+  long long next_fe_poll = random_time(0,random_interval);
+  long long const fe_poll_interval = 975000000;
 
   while(1){
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME,&now);
-    if(time_cmp(&now,&next_fe_poll) > 0){
+    if(gps_time_ns() > next_fe_poll){
       // Poll front end
       if(frontend->input.ctl_fd > 2)
 	send_poll(frontend->input.ctl_fd,0);
-      random_time(&next_fe_poll,fe_poll_interval,random_interval);
+      next_fe_poll = random_time(fe_poll_interval,random_interval);
     }
     fd_set fdset;
     FD_ZERO(&fdset);
     if(frontend->input.status_fd > 2)
       FD_SET(frontend->input.status_fd,&fdset);
 
-    struct timespec timeout;
-    time_sub(&timeout,&next_fe_poll,&now);
+    long long timeout = next_fe_poll - gps_time_ns();
+    if(timeout < 0)
+      timeout = 0;
     int n = frontend->input.status_fd + 1;
-    n = pselect(n,&fdset,NULL,NULL,&timeout,NULL);
-
+    {
+      struct timespec ts;
+      ns2ts(&ts,timeout);
+      n = pselect(n,&fdset,NULL,NULL,&ts,NULL);
+    }
     if(n <= 0){
       if(n < 0)
 	fprintf(stdout,"sdr_status pselect: %s\n",strerror(errno));
@@ -74,7 +75,7 @@ void *sdr_status(void *arg){
       decode_fe_status(frontend,buffer+1,len-1);
       pthread_cond_broadcast(&frontend->sdr.status_cond);
       pthread_mutex_unlock(&frontend->sdr.status_mutex);
-      random_time(&next_fe_poll,fe_poll_interval,random_interval);
+      next_fe_poll = random_time(fe_poll_interval,random_interval);
     }    
   }
 }

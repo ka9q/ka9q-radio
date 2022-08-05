@@ -1,4 +1,4 @@
-// $Id: rtlsdr.c,v 1.21 2022/05/10 05:15:17 karn Exp $
+// $Id: rtlsdr.c,v 1.22 2022/08/05 06:35:10 karn Exp $
 // Read from RTL SDR
 // Accept control commands from UDP socket
 #define _GNU_SOURCE 1
@@ -513,12 +513,7 @@ void send_rtlsdr_status(struct sdrstate *sdr,int full){
   encode_int32(&bp,COMMAND_TAG,sdr->command_tag);
   encode_int64(&bp,CMD_CNT,sdr->commands);
   
-  {
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME,&now);
-    long long timestamp = ((now.tv_sec - UNIX_EPOCH + GPS_UTC_OFFSET) * 1000000000LL + now.tv_nsec);
-    encode_int64(&bp,GPS_TIME,timestamp);
-  }
+  encode_int64(&bp,GPS_TIME,gps_time_ns());
 
   if(sdr->description)
     encode_string(&bp,DESCRIPTION,sdr->description,strlen(sdr->description));
