@@ -1,4 +1,4 @@
-// $Id: airspyd.c,v 1.6 2022/08/05 06:35:10 karn Exp $
+// $Id: airspyd.c,v 1.7 2022/08/07 20:48:01 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #undef DEBUG_AGC
@@ -628,8 +628,7 @@ void send_airspy_status(struct sdrstate *sdr,int full){
   encode_int32(&bp,COMMAND_TAG,sdr->command_tag);
   encode_int64(&bp,CMD_CNT,sdr->commands);
   
-  long long timestamp = gps_time_ns();
-  encode_int64(&bp,GPS_TIME,timestamp);
+  encode_int64(&bp,GPS_TIME,gps_time_ns());
 
   if(sdr->description)
     encode_string(&bp,DESCRIPTION,sdr->description,strlen(sdr->description));

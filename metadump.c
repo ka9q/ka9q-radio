@@ -1,4 +1,4 @@
-// $Id: metadump.c,v 1.17 2022/08/05 06:35:10 karn Exp $
+// $Id: metadump.c,v 1.18 2022/08/07 20:48:44 karn Exp $
 // Utility to trace multicast SDR metadata
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -71,18 +71,12 @@ int main(int argc,char *argv[]){
       sleep(1);
       continue;
     }
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME,&now);
-    struct tm const *tm = localtime(&now.tv_sec);
+    long long now = gps_time_ns();
     
     int const cr = buffer[0]; // Command/response byte
-    fprintf(stdout,"%02d:%02d:%02d.%09ld %s %04d %s: %s",
-	    tm->tm_hour,
-	    tm->tm_min,
-	    tm->tm_sec,
-	    (long int)now.tv_nsec,
-	    tzname[daylight],
-	    tm->tm_year + 1900,
+    char temp[1024];
+    fprintf(stdout,"%s %s %s:",
+	    format_gpstime(temp,sizeof(temp),now),
 	   formatsock(&source),
 	    cr ? "CMD " : "STAT");
     dump_metadata(buffer+1,length-1);
