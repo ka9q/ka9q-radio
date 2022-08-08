@@ -1,4 +1,4 @@
-// $Id: funcubed.c,v 1.7 2022/08/08 10:57:34 karn Exp $
+// $Id: funcubed.c,v 1.8 2022/08/08 11:06:34 karn Exp $
 // Read from AMSAT UK Funcube Pro and Pro+ dongles
 // Multicast raw 16-bit I/Q samples
 // Accept control commands from UDP socket
@@ -371,8 +371,14 @@ int main(int argc,char *argv[]){
   if(Rtp.ssrc == 0){
     Rtp.ssrc = gps_time_sec() & 0xffffffff; // low 32 bits of clock time
   }
-  fprintf(stdout,"uid %d; device %d; cal %f ppm dest %s; blocksize %'d samples; RTP SSRC %u\n",
-	  getuid(),Device,sdr->calibration * 1e6,Metadata_dest,Blocksize,Rtp.ssrc);
+  fprintf(stdout,"uid %d; device %d; cal %f ppm; bias tee %s; dest %s; blocksize %'d samples; RTP SSRC %u\n",
+	  getuid(),
+	  Device,
+	  sdr->calibration * 1e6,
+	  bias ? "On" : "Off",
+	  Metadata_dest,
+	  Blocksize,
+	  Rtp.ssrc);
   // Gain and phase corrections. These will be updated every block
   float gain_q = 1;
   float gain_i = 1;
