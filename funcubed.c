@@ -1,4 +1,4 @@
-// $Id: funcubed.c,v 1.6 2022/08/05 06:35:10 karn Exp $
+// $Id: funcubed.c,v 1.7 2022/08/08 10:57:34 karn Exp $
 // Read from AMSAT UK Funcube Pro and Pro+ dongles
 // Multicast raw 16-bit I/Q samples
 // Accept control commands from UDP socket
@@ -360,6 +360,8 @@ int main(int argc,char *argv[]){
       fflush(Tunestate); // Leave open for further use
     }
   }
+  uint8_t bias = config_getboolean(Dictionary,Name,"bias",false);
+  fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_BIAS_TEE,&bias,sizeof(bias));
 
   pthread_create(&Ncmd_thread,NULL,ncmd,sdr);
 
