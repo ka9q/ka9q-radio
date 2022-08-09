@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.55 2022/08/02 07:06:00 karn Exp $
+# $Id: id.txt,v 1.56 2022/08/09 04:34:30 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -378,6 +378,7 @@
 4459200 KD6AFA Claremont - Sunset Ridge
 4459400 W6CTR Hagador Peak
 4459400 W6CTR Santa Ynez Peak
+4459600 N6ENL Mt Woodson PAPA DMR
 4459800 WZ6A Rancho Palos Verdes
 4460200 W6FNO San Dimas - Johnstone Peak
 4460400 KF6FM Pomona - Sunset Ridge
