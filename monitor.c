@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.172 2022/08/05 06:35:10 karn Exp $
+// $Id: monitor.c,v 1.173 2022/08/14 20:06:25 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 
 #include <limits.h>
 
@@ -59,6 +60,13 @@ static pthread_t Repeater_thread;
 static pthread_cond_t PTT_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t PTT_mutex = PTHREAD_MUTEX_INITIALIZER;
 static long long Repeater_tail;
+static char const *Cwid = "de ka9q/r"; // Make this configurable
+
+
+// IDs must be at least every 10 minutes between IDs as per FCC 97.119(a)
+static long long const MAX_ID_INTERVAL = 660 * BILLION;
+// Try to ID more often when carrier is about to drop, to avoid stepping on users
+static long long const QUIET_ID_INTERVAL = (MAX_ID_INTERVAL / 2);
 
 
 // Global variables
@@ -1255,39 +1263,64 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
   return paContinue;
 }
 
-// Repeater control (optional)
+// Send CWID
+// Use non-blocking IO
+void send_cwid(void){
+  char result[1024];
+  fprintf(stdout,"%s: CW ID sent\n",format_gpstime(result,sizeof(result),gps_time_ns()));
+  int fd = open("/run/cwd/input",O_NONBLOCK|O_WRONLY);
+  write(fd,Cwid,strlen(Cwid));
+  close(fd);
+
+}
+
+
+// Repeater control
+// optional, run only if -t option is given
+// Send CW ID at appropriate times
 // Drop PTT some time after last write to audio output ring buffer
 void *repeater_ctl(void *arg){
+  long long last_id_time = 0;
+
   while(1){
-    // Wait for carrier to come up
+    // Wait for carrier to come up; set in main loop whenever audio buffer is written to
     pthread_mutex_lock(&PTT_mutex);
     while(!PTT_state)
       pthread_cond_wait(&PTT_cond,&PTT_mutex);
     pthread_mutex_unlock(&PTT_mutex);
 
-    // When is the earliest it could drop?
-    long long drop_time = LastAudioTime + Repeater_tail;
-
-    // Has that time passed?
-    if(gps_time_ns() > drop_time){
+    // Has the tail time passed?
+    long long const drop_time = LastAudioTime + Repeater_tail;
+    long long const now = gps_time_ns();
+    if(now < drop_time){
+      // ID on top of users to satisfy FCC max ID interval
+      if(now > last_id_time + MAX_ID_INTERVAL){
+	send_cwid();
+	last_id_time = gps_time_ns();
+      }
       // Sleep until possible end of timeout
-      long long const sleep_time = drop_time - gps_time_ns();
-      //      fprintf(stdout,"nanosleep(%lld)\n",sleep_time);
-      {
-	struct timespec ts;
-	ns2ts(&ts,sleep_time);
-	nanosleep(&ts,NULL);
-      }
-    } else {
-      // Timer expired
-      {
-	char result[1024];
-	format_gpstime(result,sizeof(result),gps_time_ns());
-	fprintf(stdout,"%s: PTT Off\n",result);
-      }
-      PTT_state = false;
+      long long const sleep_time = drop_time - now;
+      struct timespec ts;
+      ns2ts(&ts,sleep_time);
+      nanosleep(&ts,NULL);
+      continue;
     }
-  }    
+    // Tail dropout timer expired
+    // ID more often than 10 minutes to minimize IDing on top of users
+    if(now > last_id_time + QUIET_ID_INTERVAL){
+      // update LastAudioTime here (even though it will be updated in the portaudio upcall)
+      // so the PTT won't momentarily drop
+      LastAudioTime = last_id_time = now;
+      // Send an ID
+      // Use nonblocking I/O so we won't hang if the cwd fails for some reason
+      // Ignore sigpipe signals too?
+      send_cwid();
+    } else {
+      pthread_mutex_lock(&PTT_mutex);
+      PTT_state = false;
+      pthread_mutex_unlock(&PTT_mutex);
+    }
+  }
   return NULL;
 }
 

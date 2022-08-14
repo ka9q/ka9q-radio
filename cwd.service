@@ -1,4 +1,4 @@
-# $Id: cwd.service,v 1.1 2022/08/01 09:19:00 karn Exp $
+# $Id: cwd.service,v 1.2 2022/08/14 20:05:39 karn Exp $
 # systemd service file for KA9Q's CW (Morse) sender
 # Phil Karn, KA9Q, August 2022
 
@@ -17,7 +17,8 @@ PermissionsStartOnly=true
 RuntimeDirectory=cwd
 RuntimeDirectoryMode=0755
 ReadWritePaths=/var/lib/ka9q-radio
-ExecStart=/usr/local/sbin/cwd -I /run/cwd/cwfifo -s 100 -R hf-pcm.local -S 18.0 -P 750.0 -L 3000
+# FCC 97.119(b)(1) Speed must be <= 20 WPM
+ExecStart=/usr/local/sbin/cwd -I /run/cwd/input -s 100 -R hf-pcm.local -S 18.0 -P 750.0 -L 3000
 PIDFile=/run/cwd/pid
 Restart=always
 RestartSec=5
