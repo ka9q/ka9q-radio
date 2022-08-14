@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.174 2022/08/14 20:09:54 karn Exp $
+// $Id: monitor.c,v 1.175 2022/08/14 22:25:16 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -64,9 +64,10 @@ static char const *Cwid = "de ka9q/r"; // Make this configurable
 
 
 // IDs must be at least every 10 minutes between IDs as per FCC 97.119(a)
-static long long const MAX_ID_INTERVAL = 660 * BILLION;
-// Try to ID more often when carrier is about to drop, to avoid stepping on users
-static long long const QUIET_ID_INTERVAL = (MAX_ID_INTERVAL / 2);
+//static long long const MANDATORY_ID_INTERVAL = 660 * BILLION;
+static long long const MANDATORY_ID_INTERVAL = 30 * BILLION; // TESTING
+// ID early when carrier is about to drop, to avoid stepping on users
+static long long const QUIET_ID_INTERVAL = (MANDATORY_ID_INTERVAL / 2);
 
 
 // Global variables
@@ -351,7 +352,7 @@ int main(int argc,char * const argv[]){
     pthread_create(&sockthreads[i],NULL,sockproc,Mcast_address_text[i]);
 
   // Graceful signal catch
-  signal(SIGPIPE,closedown);
+  signal(SIGPIPE,closedown); // keeps repeater thread from crashing if cwd crashes
   signal(SIGINT,closedown);
   signal(SIGKILL,closedown);
   signal(SIGQUIT,closedown);
@@ -1264,14 +1265,15 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
 }
 
 // Send CWID
-// Use non-blocking IO
+// Use non-blocking IO; ignore failures
 void send_cwid(void){
   char result[1024];
-  fprintf(stdout,"%s: CW ID sent\n",format_gpstime(result,sizeof(result),gps_time_ns()));
+  fprintf(stdout,"%s: CW ID started\n",format_gpstime(result,sizeof(result),gps_time_ns()));
   int fd = open("/run/cwd/input",O_NONBLOCK|O_WRONLY);
-  write(fd,Cwid,strlen(Cwid));
-  close(fd);
-
+  if(fd != -1){
+    write(fd,Cwid,strlen(Cwid));
+    close(fd);
+  }
 }
 
 
@@ -1289,17 +1291,17 @@ void *repeater_ctl(void *arg){
       pthread_cond_wait(&PTT_cond,&PTT_mutex);
     pthread_mutex_unlock(&PTT_mutex);
 
-    // Has the tail time passed?
-    long long const drop_time = LastAudioTime + Repeater_tail;
+    // Transmitter is on; are we required to ID?
     long long const now = gps_time_ns();
-    if(now < drop_time){
+    if(now > last_id_time + MANDATORY_ID_INTERVAL){
       // ID on top of users to satisfy FCC max ID interval
-      if(now > last_id_time + MAX_ID_INTERVAL){
-	last_id_time = now;
-	send_cwid();
-      }
-      // Sleep until possible end of timeout
-      long long const sleep_time = drop_time - now;
+      LastAudioTime = last_id_time = now;
+      send_cwid();
+    }
+    long long const drop_time = LastAudioTime + Repeater_tail;
+    if(now < drop_time){
+      // Sleep until possible end of timeout, or next mandatory ID, whichever is first
+      long long const sleep_time = min(drop_time,last_id_time + MANDATORY_ID_INTERVAL) - now;
       struct timespec ts;
       ns2ts(&ts,sleep_time);
       nanosleep(&ts,NULL);
@@ -1316,6 +1318,8 @@ void *repeater_ctl(void *arg){
       // Ignore sigpipe signals too?
       send_cwid();
     } else {
+      char result[1024];
+      fprintf(stdout,"%s: PTT Off\n",format_gpstime(result,sizeof(result),gps_time_ns()));
       pthread_mutex_lock(&PTT_mutex);
       PTT_state = false;
       pthread_mutex_unlock(&PTT_mutex);
