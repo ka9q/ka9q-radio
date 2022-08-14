@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.175 2022/08/14 22:25:16 karn Exp $
+// $Id: monitor.c,v 1.176 2022/08/14 23:25:21 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -64,8 +64,7 @@ static char const *Cwid = "de ka9q/r"; // Make this configurable
 
 
 // IDs must be at least every 10 minutes between IDs as per FCC 97.119(a)
-//static long long const MANDATORY_ID_INTERVAL = 660 * BILLION;
-static long long const MANDATORY_ID_INTERVAL = 30 * BILLION; // TESTING
+static long long const MANDATORY_ID_INTERVAL = 660 * BILLION;
 // ID early when carrier is about to drop, to avoid stepping on users
 static long long const QUIET_ID_INTERVAL = (MANDATORY_ID_INTERVAL / 2);
 
