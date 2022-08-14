@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.173 2022/08/14 20:06:25 karn Exp $
+// $Id: monitor.c,v 1.174 2022/08/14 20:09:54 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -1295,8 +1295,8 @@ void *repeater_ctl(void *arg){
     if(now < drop_time){
       // ID on top of users to satisfy FCC max ID interval
       if(now > last_id_time + MAX_ID_INTERVAL){
+	last_id_time = now;
 	send_cwid();
-	last_id_time = gps_time_ns();
       }
       // Sleep until possible end of timeout
       long long const sleep_time = drop_time - now;
