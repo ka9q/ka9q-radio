@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.178 2022/08/17 08:22:58 karn Exp karn $
+// $Id: monitor.c,v 1.179 2022/08/17 21:45:11 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -261,10 +261,12 @@ int main(int argc,char * const argv[]){
   if(Repeater_tail != 0){
     // Operating as a repeater controller; initialize
     // Make these settable parameters
-    Dit_length = init_morse(18.0,500.0,-15.0,48000.0);
+    // -29 dB is -15 + (-14).
+    // -15 dBFS is the target level of the FM demodulator
+    // -14 dB is 1 kHz ID deviation divided by 5 kHz peak deviation
+    Dit_length = init_morse(18.0,800.0,-29.0,48000.0);
   }    
-
-
+  tzset();
   PaError r = Pa_Initialize();
   if(r != paNoError){
     fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
@@ -695,6 +697,7 @@ static void *decode_task(void *arg){
     /* Find where to write in circular output buffer
      * This is updated even when muted so the activity display will work */
     sp->wptr = sp->start_rptr + upsample * (sp->timestamp_upper + pkt->rtp.timestamp - sp->start_timestamp) + sp->playout;
+    bool keyup = false; // Don't do printf while holding locks
     // Protect Output_buffer and Rptr, which are modified in portaudio callback
     pthread_mutex_lock(&Output_mutex);
 
@@ -751,20 +754,23 @@ static void *decode_task(void *arg){
 	}
       }
       LastAudioTime = gps_time_ns();
+
       pthread_mutex_lock(&PTT_mutex);
       if(Repeater_tail != 0 && !PTT_state){
 	PTT_state = true;
-	if(Quiet){
-	  // debugging only, temp
-	  char result[1024];
-	  fprintf(stdout,"%s: PTT On\n",
-		  format_gpstime(result,sizeof(result),LastAudioTime));
-	}
+	keyup = true;
 	pthread_cond_signal(&PTT_cond);
       }
       pthread_mutex_unlock(&PTT_mutex);
     }
     pthread_mutex_unlock(&Output_mutex); // Done with Output_buffer and Rptr
+    if(Quiet && keyup){
+      // debugging only, temp
+      char result[1024];
+      fprintf(stdout,"%s: PTT On\n",
+	      format_gpstime(result,sizeof(result),LastAudioTime));
+    }
+
     // Count samples and frames and advance write pointer even when muted
     sp->tot_active += (float)sp->frame_size / sp->samprate;
     sp->active += (float)sp->frame_size / sp->samprate;
@@ -1307,6 +1313,12 @@ void send_cwid(void){
 #else
 // stub version that writes directly to local portaudio output buffer
 void send_cwid(void){
+  if(Quiet){
+    // Debug only, temp
+    char result[1024];
+    fprintf(stdout,"%s: CW ID started\n",format_gpstime(result,sizeof(result),gps_time_ns()));
+  }
+
   int16_t * const samples = malloc(60 * Dit_length * sizeof(samples[0]));
   pthread_mutex_lock(&Output_mutex);  
   int wptr = Rptr + (Playout * Samprate)/1000;
