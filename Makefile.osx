@@ -1,4 +1,4 @@
-# $Id: Makefile.osx,v 1.111 2022/08/17 08:22:37 karn Exp $
+# $Id: Makefile.osx,v 1.112 2022/08/17 22:01:58 karn Exp $
 CFLAGS=-g -DNDEBUG=1 -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 #CFLAGS=-g -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 BINDIR=/usr/local/bin
@@ -121,6 +121,7 @@ aprs.o: aprs.c ax25.h multicast.h misc.h
 aprsfeed.o: aprsfeed.c ax25.h multicast.h misc.h
 avahi.o: avahi.c misc.h
 control.o: control.c osc.h misc.h filter.h bandplan.h multicast.h status.h  radio.h
+cwd.o: cwd.c misc.h multicast.h morse.h
 funcubed.o: funcubed.c fcd.h fcdhidcmd.h hidapi.h misc.h multicast.h status.h conf.h
 hackrf.o: hackrf.c misc.h multicast.h decimate.h status.h
 iqplay.o: iqplay.c misc.h radio.h osc.h multicast.h attr.h  status.h
@@ -128,7 +129,7 @@ iqrecord.o: iqrecord.c radio.h osc.h multicast.h attr.h
 main.o: main.c radio.h osc.h filter.h misc.h  multicast.h status.h  conf.h
 metadump.o: metadump.c multicast.h status.h misc.h
 modulate.o: modulate.c misc.h filter.h radio.h osc.h conf.h
-monitor.o: monitor.c misc.h multicast.h iir.h conf.h
+monitor.o: monitor.c misc.h multicast.h iir.h conf.h morse.h
 opusd.o: opusd.c misc.h multicast.h iir.h status.h
 opussend.o: opussend.c misc.h multicast.h
 packetd.o: packetd.c filter.h misc.h multicast.h ax25.h osc.h status.h
