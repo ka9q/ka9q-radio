@@ -1,4 +1,4 @@
-//$Id: morse.c,v 1.1 2022/08/17 08:21:33 karn Exp $
+//$Id: morse.c,v 1.1 2022/08/17 08:21:33 karn Exp karn $
 // Encode Morse code characters as audio samples
 // Aug 2022 Phil Karn, KA9Q
 
@@ -278,17 +278,20 @@ int encode_morse_char(int16_t * const samples,wint_t c){
 }
 
 // Initialize morse encoder, return number of samples in a dit
-int init_morse(float const speed,float const pitch,float const level,float const samprate){
+int init_morse(float const speed,float const pitch,float level,float const samprate){
   qsort(Morse_table,TABSIZE,sizeof(Morse_table[0]),mcompar);
 
   Dit_length = samprate * 1.2 / speed; // Samples per dit
   float const cycles_per_sample = pitch / samprate;
 
   if(Verbose){
-    fprintf(stdout,"speed %.1f wpm, pitch %.1f Hz, level %.1f, samprate %.1f\n",
+    fprintf(stdout,"speed %.1f wpm, pitch %.1f Hz, level %.1f dB, samprate %.1f Hz\n",
 	    speed,pitch,level,samprate);
     fprintf(stdout,"dit length %d samples; cycles per sample %f\n",Dit_length,cycles_per_sample);
   }
+  level = INT16_MAX * dB2voltage(-fabsf(level)); // convert dB to int16 scale
+
+
   // Precompute element audio
   struct osc tone;
   set_osc(&tone,cycles_per_sample,0.0);

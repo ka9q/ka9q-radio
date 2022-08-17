@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.178 2022/08/17 08:22:58 karn Exp $
+// $Id: monitor.c,v 1.178 2022/08/17 08:22:58 karn Exp karn $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -261,7 +261,7 @@ int main(int argc,char * const argv[]){
   if(Repeater_tail != 0){
     // Operating as a repeater controller; initialize
     // Make these settable parameters
-    Dit_length = init_morse(18.0,500.0,12000.0,48000.0);
+    Dit_length = init_morse(18.0,500.0,-15.0,48000.0);
   }    
 
 
