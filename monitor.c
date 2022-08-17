@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.176 2022/08/14 23:25:21 karn Exp $
+// $Id: monitor.c,v 1.177 2022/08/17 04:21:14 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -60,11 +60,12 @@ static pthread_t Repeater_thread;
 static pthread_cond_t PTT_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t PTT_mutex = PTHREAD_MUTEX_INITIALIZER;
 static long long Repeater_tail;
-static char const *Cwid = "de ka9q/r"; // Make this configurable
+static char const *Cwid = "de nocall/r"; // Make this configurable!
+static long long Last_id_time = 0;
 
 
-// IDs must be at least every 10 minutes between IDs as per FCC 97.119(a)
-static long long const MANDATORY_ID_INTERVAL = 660 * BILLION;
+// IDs must be at least every 10 minutes per FCC 97.119(a)
+static long long const MANDATORY_ID_INTERVAL = 600 * BILLION;
 // ID early when carrier is about to drop, to avoid stepping on users
 static long long const QUIET_ID_INTERVAL = (MANDATORY_ID_INTERVAL / 2);
 
@@ -179,6 +180,7 @@ static struct  option Options[] = {
    {"audio-dev", required_argument, NULL, 'R'},
    {"autosort", no_argument, NULL, 'S'},
    {"auto-position", no_argument, NULL, 'a'},
+   {"id", required_argument, NULL, 'i'},
    {"playout", required_argument, NULL, 'p'},
    {"quiet", no_argument, NULL, 'q'},
    {"samprate",required_argument,NULL,'r'},
@@ -194,7 +196,7 @@ int main(int argc,char * const argv[]){
   {
     // Try to improve our priority, then drop root
     int prio = getpriority(PRIO_PROCESS,0);
-    prio = setpriority(PRIO_PROCESS,0,prio - 15);
+    setpriority(PRIO_PROCESS,0,prio - 15);
     if(seteuid(getuid()) != 0)
       perror("seteuid");
   }    
@@ -203,10 +205,11 @@ int main(int argc,char * const argv[]){
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
+    case 'i':
+      Cwid = optarg;
+      break;
     case 't':
-      {
-	Repeater_tail = BILLION * fabsf(strtof(optarg,NULL));
-      }
+      Repeater_tail = BILLION * fabsf(strtof(optarg,NULL));
       break;
     case 'L':
       List_audio = true;
@@ -743,9 +746,12 @@ static void *decode_task(void *arg){
       LastAudioTime = gps_time_ns();
       if(Repeater_tail != 0 && !PTT_state){
 	PTT_state = true;
-	char result[1024];
-	fprintf(stdout,"%s: PTT On\n",
-		format_gpstime(result,sizeof(result),LastAudioTime));
+	if(Quiet){
+	  // debugging only, temp
+	  char result[1024];
+	  fprintf(stdout,"%s: PTT On\n",
+		  format_gpstime(result,sizeof(result),LastAudioTime));
+	}
 	pthread_cond_signal(&PTT_cond);
       }
       pthread_mutex_unlock(&PTT_mutex);
@@ -833,7 +839,18 @@ static void *display(void *arg){
       printw("Hit 'q' to resume screen updates\n");
     } else {
       // First header line
-      printw("                                                           ------- Activity --------");
+      if(Repeater_tail != 0){
+	if(PTT_state)
+	  printw("PTT On;  ");
+	else
+	  printw("PTT Off; ");
+	if(Last_id_time != 0)
+	  printw("Last ID: %lld sec",(gps_time_ns() - Last_id_time) / BILLION);
+      }
+      int y,x;
+      getyx(stdscr,y,x);
+      x = 59; // work around unused variable warning
+      mvprintw(y,x,"------- Activity --------");
       if(Verbose)
 	printw(" Play  ----Codec----     ---------------RTP--------------------------");	
       printw("\n");    
@@ -1266,8 +1283,12 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
 // Send CWID
 // Use non-blocking IO; ignore failures
 void send_cwid(void){
-  char result[1024];
-  fprintf(stdout,"%s: CW ID started\n",format_gpstime(result,sizeof(result),gps_time_ns()));
+
+  if(Quiet){
+    // Debug only, temp
+    char result[1024];
+    fprintf(stdout,"%s: CW ID started\n",format_gpstime(result,sizeof(result),gps_time_ns()));
+  }
   int fd = open("/run/cwd/input",O_NONBLOCK|O_WRONLY);
   if(fd != -1){
     write(fd,Cwid,strlen(Cwid));
@@ -1281,8 +1302,6 @@ void send_cwid(void){
 // Send CW ID at appropriate times
 // Drop PTT some time after last write to audio output ring buffer
 void *repeater_ctl(void *arg){
-  long long last_id_time = 0;
-
   while(1){
     // Wait for carrier to come up; set in main loop whenever audio buffer is written to
     pthread_mutex_lock(&PTT_mutex);
@@ -1292,15 +1311,15 @@ void *repeater_ctl(void *arg){
 
     // Transmitter is on; are we required to ID?
     long long const now = gps_time_ns();
-    if(now > last_id_time + MANDATORY_ID_INTERVAL){
+    if(now > Last_id_time + MANDATORY_ID_INTERVAL){
       // ID on top of users to satisfy FCC max ID interval
-      LastAudioTime = last_id_time = now;
+      LastAudioTime = Last_id_time = now;
       send_cwid();
     }
     long long const drop_time = LastAudioTime + Repeater_tail;
     if(now < drop_time){
       // Sleep until possible end of timeout, or next mandatory ID, whichever is first
-      long long const sleep_time = min(drop_time,last_id_time + MANDATORY_ID_INTERVAL) - now;
+      long long const sleep_time = min(drop_time,Last_id_time + MANDATORY_ID_INTERVAL) - now;
       struct timespec ts;
       ns2ts(&ts,sleep_time);
       nanosleep(&ts,NULL);
@@ -1308,17 +1327,20 @@ void *repeater_ctl(void *arg){
     }
     // Tail dropout timer expired
     // ID more often than 10 minutes to minimize IDing on top of users
-    if(now > last_id_time + QUIET_ID_INTERVAL){
+    if(now > Last_id_time + QUIET_ID_INTERVAL){
       // update LastAudioTime here (even though it will be updated in the portaudio upcall)
       // so the PTT won't momentarily drop
-      LastAudioTime = last_id_time = now;
+      LastAudioTime = Last_id_time = now;
       // Send an ID
       // Use nonblocking I/O so we won't hang if the cwd fails for some reason
       // Ignore sigpipe signals too?
       send_cwid();
     } else {
-      char result[1024];
-      fprintf(stdout,"%s: PTT Off\n",format_gpstime(result,sizeof(result),gps_time_ns()));
+      if(Quiet){
+	// debug only, temp
+	char result[1024];
+	fprintf(stdout,"%s: PTT Off\n",format_gpstime(result,sizeof(result),gps_time_ns()));
+      }
       pthread_mutex_lock(&PTT_mutex);
       PTT_state = false;
       pthread_mutex_unlock(&PTT_mutex);
