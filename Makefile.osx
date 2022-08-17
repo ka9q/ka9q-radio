@@ -1,4 +1,4 @@
-# $Id: Makefile.osx,v 1.110 2022/08/01 02:54:31 karn Exp $
+# $Id: Makefile.osx,v 1.111 2022/08/17 08:22:37 karn Exp $
 CFLAGS=-g -DNDEBUG=1 -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 #CFLAGS=-g -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 BINDIR=/usr/local/bin
@@ -34,7 +34,7 @@ aprsfeed: aprsfeed.o libradio.a
 control: control.o decode_status.o modes.o bandplan.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread -lm
 
-cwd: cwd.o libradio.a
+cwd: cwd.o morse.o libradio.a
 	$(CC) -g -o $@ $^ -lm
 
 dmr: dmr.o libradio.a
@@ -58,7 +58,7 @@ metadump: metadump.o dump.o libradio.a
 modulate: modulate.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
 
-monitor: monitor.o libradio.a
+monitor: monitor.o morse.o libradio.a
 	$(CC) -g -o $@ $^ -lopus -lportaudio -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread
 
 opusd: opusd.o libradio.a
@@ -165,6 +165,7 @@ dump.o: dump.c misc.h status.h
 fm.o: fm.c misc.h filter.h radio.h osc.h multicast.h  status.h iir.h
 linear.o: linear.c misc.h filter.h radio.h osc.h multicast.h  status.h
 modes.o: modes.c radio.h osc.h misc.h  multicast.h status.h filter.h
+morse.o: morse.c morse.h
 radio.o: radio.c radio.h osc.h filter.h misc.h  multicast.h status.h
 radio_status.o: radio_status.c status.h radio.h misc.h filter.h multicast.h  osc.h
 wfm.o: wfm.c misc.h filter.h radio.h osc.h multicast.h  status.h iir.h

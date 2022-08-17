@@ -1,4 +1,4 @@
-# $Id: Makefile.linux,v 1.105 2022/08/01 09:09:04 karn Exp $
+# $Id: Makefile.linux,v 1.106 2022/08/17 08:22:37 karn Exp $
 
 # for production
 DOPTS = -DNDEBUG=1 -O3
@@ -41,7 +41,7 @@ AIRSPY_FILES=
 BLACKLIST=airspy-blacklist.conf
 
 SRC=airspyd.c airspyhfd.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c fcd.c filter.c fm.c \
-	   tune.c funcubed.c iir.c iqplay.c iqrecord.c linear.c main.c metadump.c misc.c modes.c modulate.c monitor.c radio.c setfilt.c \
+	   tune.c funcubed.c iir.c iqplay.c iqrecord.c linear.c main.c metadump.c misc.c modes.c modulate.c monitor.c morse.c radio.c setfilt.c \
 	   show-sig.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdr.c pcmspawn.c \
 	   sdrplayd.c status.c stereod.c wfm.c wspr-decoded.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
 	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h  multicast.h osc.h radio.h status.h
@@ -99,7 +99,7 @@ aprsfeed: aprsfeed.o ax25.o libradio.a
 control: control.o modes.o bandplan.o decode_status.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lncursesw -liniparser -lbsd -lm -lpthread
 
-cwd: cwd.o libradio.a
+cwd: cwd.o morse.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
 
 rtlsdr: rtlsdr.o libradio.a
@@ -135,7 +135,7 @@ metadump: metadump.o dump.o libradio.a
 modulate: modulate.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
 
-monitor: monitor.o libradio.a
+monitor: monitor.o morse.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lncursesw -lbsd -lm -lpthread
 
 opusd: opusd.o libradio.a
