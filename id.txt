@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.57 2022/08/17 06:29:57 karn Exp $
+# $Id: id.txt,v 1.58 2022/08/19 22:47:13 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -87,6 +87,7 @@
 146025	K6SOA SOARA
 146040	WB6WLV in
 146070	KD6AFA in
+146085	K6QM Chula Vista
 146130  W6NWG in 
 146145  K6CHE Signal Hill
 146175	N6FQ Red Mtn Fallbrook
