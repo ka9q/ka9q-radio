@@ -1,7 +1,8 @@
-// $Id: iir.h,v 1.3 2022/06/29 08:25:35 karn Exp $
+// $Id: iir.h,v 1.4 2022/08/24 05:15:06 karn Exp $
 // Various simple IIR filters
 #ifndef _IIR_H
 #define _IIR_H 1
+#define _GNU_SOURCE 1
 #include <complex.h>
 #include <math.h>
 #include <stdlib.h>
@@ -42,5 +43,14 @@ static void inline update_goertzel(struct goertzel *gp,float x){
 }
 complex float output_goertzel(struct goertzel *gp);
 
+// 2-pole IIR notch filter operating on real data
+#define FILT_ORDER 2
 
+struct iir {
+  float a[FILT_ORDER+1]; // test
+  float b[FILT_ORDER+1];
+  float w[FILT_ORDER+1];
+};
+float applyIIRnotch(struct iir *,float);
+void setIIRnotch(struct iir *,float);
 #endif

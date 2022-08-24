@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.179 2022/08/17 21:45:11 karn Exp $
+// $Id: monitor.c,v 1.180 2022/08/24 05:16:02 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -64,6 +64,7 @@ static long long Repeater_tail;
 static char const *Cwid = "de nocall/r"; // Make this configurable!
 static long long Last_id_time = 0;
 static int Dit_length; 
+static bool Autonotch = 0;
 
 // IDs must be at least every 10 minutes per FCC 97.119(a)
 static long long const MANDATORY_ID_INTERVAL = 600 * BILLION;
@@ -151,6 +152,10 @@ struct session {
   bool reset;                // Set to force output timing reset on next packet
   
   char id[32];
+  bool notch_enable;         // Enable PL removal notch
+  struct iir iir_left;
+  struct iir iir_right;  
+  float last_tone;
 };
 #define NSESSIONS 1500
 static int Nsessions;
@@ -173,7 +178,7 @@ static char const *lookupid(uint32_t ssrc);
 static float make_position(int);
 
 
-static char Optstring[] = "I:LR:Sap:qr:t:u:v";
+static char Optstring[] = "I:LR:Sap:qr:t:u:vn";
 static struct  option Options[] = {
    {"pcm_in", required_argument, NULL, 'I'},
    {"opus_in", required_argument, NULL, 'I'},
@@ -188,6 +193,7 @@ static struct  option Options[] = {
    {"repeater", required_argument, NULL, 't'},
    {"update", required_argument, NULL, 'u'},
    {"verbose", no_argument, NULL, 'v'},
+   {"notch", no_argument, NULL, 'n'},
 
    {NULL, 0, NULL, 0},
 };
@@ -206,6 +212,9 @@ int main(int argc,char * const argv[]){
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
+    case 'n':
+      Autonotch = true;
+      break;
     case 'i':
       Cwid = optarg;
       break;
@@ -465,6 +474,7 @@ static void *sockproc(void *arg){
       else
 	sp->pan = 0;     // center by default
       sp->gain = 1;    // 0 dB by default
+      sp->notch_enable = Autonotch;
       sp->muted = Start_muted;
       sp->dest = mcast_address_text;
       sp->start_rptr = Rptr;
@@ -746,11 +756,24 @@ static void *decode_task(void *arg){
       // Mix bounce buffer into output buffer read by portaudio callback
       unsigned int left_index = sp->wptr + left_delay;
       unsigned int right_index = sp->wptr + right_delay;
+      if(sp->current_tone != 0 && sp->last_tone != sp->current_tone){
+	// New or changed tone
+	sp->last_tone = sp->current_tone;
+	setIIRnotch(&sp->iir_right,sp->current_tone/sp->samprate);
+	setIIRnotch(&sp->iir_left,sp->current_tone/sp->samprate);
+      }
+      
       for(int i=0; i < sp->frame_size; i++){
+	float left = sp->bounce[i][0] * left_gain;
+	float right = sp->bounce[i][1] * right_gain;
+	if(sp->notch_enable && sp->last_tone > 0){
+	  left = applyIIRnotch(&sp->iir_left,left);
+	  right = applyIIRnotch(&sp->iir_right,right);
+	}
 	// Not the cleanest way to upsample the sample rate, but it works
 	for(int j=0; j < upsample; j++){
-	  Output_buffer[left_index++ & (BUFFERSIZE-1)][0] += sp->bounce[i][0] * left_gain;
-	  Output_buffer[right_index++ & (BUFFERSIZE-1)][1] += sp->bounce[i][1] * right_gain;
+	  Output_buffer[left_index++ & (BUFFERSIZE-1)][0] += left;
+	  Output_buffer[right_index++ & (BUFFERSIZE-1)][1] += right;
 	}
       }
       LastAudioTime = gps_time_ns();
@@ -836,6 +859,10 @@ static void *display(void *arg){
       printw("M mute all sessions\n");      
       printw("u unmute current session\n");
       printw("U unmute all sessions\n");
+      printw("f turn off PL notch\n");
+      printw("F turn off PL notching, all sessions\n");
+      printw("n turn on PL notch\n");
+      printw("N turn on PL notch, all sessions\n");
       printw("A toggle start all sessions muted\n");
       printw("s sort sessions by most recently active\n");
       printw("t sort sessions by most active\n");
@@ -863,14 +890,14 @@ static void *display(void *arg){
       }
       int y,x;
       getyx(stdscr,y,x);
-      x = 59; // work around unused variable warning
+      x = 60; // work around unused variable warning
       mvprintw(y,x,"------- Activity --------");
       if(Verbose)
 	printw(" Play  ----Codec----     ---------------RTP--------------------------");	
       printw("\n");    
       
       // Second header line
-      printw("  dB Pan     SSRC  Tone ID                                 Total   Current      Idle");
+      printw("  dB Pan     SSRC  Tone  ID                                 Total   Current      Idle");
       if(Verbose)
 	printw(" Queue Type ms ch BW     packets resets drops lates early Source/Dest");
       printw("\n");
@@ -919,9 +946,10 @@ static void *display(void *arg){
 	  // Truncate ID field to 30 places
 	  strlcpy(identifier,sp->id,sizeof(identifier));
 	  
-	  printw("%9u %5.1f %-30s%10.0f%10.0f%10s",
+	  printw("%9u %5.1f%c %-30s%10.0f%10.0f%10s",
 		 sp->ssrc,
 		 sp->current_tone,
+		 (sp->notch_enable && sp->last_tone > 0) ? 'n' : sp->notch_enable ? 'e': ' ',
 		 identifier,
 		 sp->tot_active, // Total active time, sec
 		 sp->active,    // active time in current transmission, sec
@@ -1010,6 +1038,35 @@ static void *display(void *arg){
       break;
     case 't': // Sort sessions by most recently active (or longest active)
       sort_session_total();
+      break;
+    case 'N':
+      for(int i=0; i < Nsessions; i++){
+	struct session *sp = Sessions[i];
+	if(sp != NULL && !sp->notch_enable){
+	  sp->current_tone = 0;
+	  sp->last_tone = 0; // clear last tone, if any
+	  sp->notch_enable = true;
+	}
+      }
+      break;
+    case 'n':
+      if(current >= 0){
+	if(!Sessions[current]->notch_enable){
+	  Sessions[current]->current_tone = 0;
+	  Sessions[current]->last_tone = 0; // Clear last tone
+	  Sessions[current]->notch_enable = true;
+	}
+      }
+      break;
+    case 'f':
+      if(current >= 0)
+	Sessions[current]->notch_enable = false;
+      break;
+    case 'F':
+      for(int i=0; i < Nsessions; i++){
+	struct session *sp = Sessions[i];
+	sp->notch_enable = false;
+      }
       break;
     case KEY_RESIZE:
     case EOF:

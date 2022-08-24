@@ -1,4 +1,8 @@
+
 #include "iir.h"
+#include <string.h>
+#include <assert.h>
+
 // Experimental IIR complex notch filter
 struct notchfilter *notch_create(double const f,float const bw){
   struct notchfilter *nf = calloc(1,sizeof(struct notchfilter));
@@ -40,3 +44,41 @@ complex float output_goertzel(struct goertzel *gp){
   update_goertzel(gp,0); // Nth sample must be zero
   return gp->s0 - gp->cf * gp->s1;
 }
+
+// Simple 2-pole real IIR notch filter, useful for suppressing FM PL tones
+
+// Set notch frequency
+// Note: does not clear filter state
+void setIIRnotch(struct iir * const iir,float rel_freq){
+  if(iir == NULL)
+    return;
+
+  float const r = 0.99; // Sets positions of poles; closer to 1 increases sharpness. MUST be < 1 for stability
+	
+  iir->a[0] = 1;
+  iir->a[1] = -2 * cos(2*M_PI*rel_freq); // Complex zeroes on unit circle
+  iir->a[2] = 1;
+  
+  iir->b[0] = 1;
+  iir->b[1] = iir->a[1] * r; // Complex poles just inside unit circle, same angles as zeroes
+  iir->b[2] = r*r;
+}
+
+// https://eeweb.engineering.nyu.edu/iselesni/EL6113/matlab_examples/notch_filter_demo/html/notch_filter_demo.html
+float applyIIRnotch(struct iir * const iir,float v){
+  memmove(&iir->w[1],&iir->w[0],FILT_ORDER*sizeof(iir->w[0]));
+  // Update w coefficients
+  // Feedback part (poles)
+  float w0 = v;
+  for(int m=1;m <= FILT_ORDER; m++)
+    w0 -= iir->b[m] * iir->w[m];
+  iir->w[0] = w0;
+
+  // Feedforward part (zeroes)
+  float y = 0;
+  for(int m = 0; m <= FILT_ORDER; m++)
+    y += iir->a[m] * iir->w[m];
+
+  return y;
+}
+
