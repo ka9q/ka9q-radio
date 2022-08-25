@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.180 2022/08/24 05:16:02 karn Exp $
+// $Id: monitor.c,v 1.181 2022/08/25 18:15:01 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -850,27 +850,16 @@ static void *display(void *arg){
     printw("\n");
 
     if(Help){
-      printw("\u2191\u2193 select prev/next session\n");
-      printw("\u21f1\u21f2 select first/last session\n");
-      printw("\u21de\u21df select prev/next session page\n");
-      printw("d delete session\n");
-      printw("r reset playout buffer\n");
-      printw("m mute current session\n");
-      printw("M mute all sessions\n");      
-      printw("u unmute current session\n");
-      printw("U unmute all sessions\n");
-      printw("f turn off PL notch\n");
-      printw("F turn off PL notching, all sessions\n");
-      printw("n turn on PL notch\n");
-      printw("N turn on PL notch, all sessions\n");
-      printw("A toggle start all sessions muted\n");
-      printw("s sort sessions by most recently active\n");
-      printw("t sort sessions by most active\n");
-      printw("- + volume -1/+1 dB\n");
-      printw("\u2190 \u2192 stereo position left/right\n");
-      printw("v toggle verbose display\n");
-      printw("h toggle help display\n");
-      printw("q toggle quiet mode\n");
+      FILE *fp = fopen("/usr/local/share/ka9q-radio/monitor-help.txt","r");
+      if(fp != NULL){
+	size_t size = 1024;
+	char *line = malloc(size);
+	while(getline(&line,&size,fp) != -1){
+	  printw(line);
+	}
+	fclose(fp);
+	fp = NULL;
+      }
     }
 
     if(Start_muted)
