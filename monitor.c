@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.181 2022/08/25 18:15:01 karn Exp $
+// $Id: monitor.c,v 1.182 2022/08/25 20:08:22 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -844,10 +844,10 @@ static void *display(void *arg){
 
     move(0,0);
     clrtobot();
-    printw("KA9Q Multicast Audio Monitor:");
+    addstr("KA9Q Multicast Audio Monitor:");
     for(int i=0;i<Nfds;i++)
       printw(" %s",Mcast_address_text[i]);
-    printw("\n");
+    addstr("\n");
 
     if(Help){
       FILE *fp = fopen("/usr/local/share/ka9q-radio/monitor-help.txt","r");
@@ -855,7 +855,7 @@ static void *display(void *arg){
 	size_t size = 1024;
 	char *line = malloc(size);
 	while(getline(&line,&size,fp) != -1){
-	  printw(line);
+	  addstr(line);
 	}
 	fclose(fp);
 	fp = NULL;
@@ -863,33 +863,33 @@ static void *display(void *arg){
     }
 
     if(Start_muted)
-      printw("**Starting new sessions muted**\n");
+      addstr("**Starting new sessions muted**\n");
 
     if(Quiet_mode){
-      printw("Hit 'q' to resume screen updates\n");
+      addstr("Hit 'q' to resume screen updates\n");
     } else {
       // First header line
       if(Repeater_tail != 0){
 	if(PTT_state)
-	  printw("PTT On;  ");
+	  addstr("PTT On;  ");
 	else
-	  printw("PTT Off; ");
+	  addstr("PTT Off; ");
 	if(Last_id_time != 0)
 	  printw("Last ID: %lld sec",(gps_time_ns() - Last_id_time) / BILLION);
       }
       int y,x;
       getyx(stdscr,y,x);
       x = 60; // work around unused variable warning
-      mvprintw(y,x,"------- Activity --------");
+      mvaddstr(y,x,"------- Activity --------");
       if(Verbose)
-	printw(" Play  ----Codec----     ---------------RTP--------------------------");	
-      printw("\n");    
+	addstr(" Play  ----Codec----     ---------------RTP--------------------------");	
+      addstr("\n");    
       
       // Second header line
-      printw("  dB Pan     SSRC  Tone  ID                                 Total   Current      Idle");
+      addstr("  dB Pan     SSRC  Tone  ID                                 Total   Current      Idle");
       if(Verbose)
-	printw(" Queue Type ms ch BW     packets resets drops lates early Source/Dest");
-      printw("\n");
+	addstr(" Queue Type ms ch BW     packets resets drops lates early Source/Dest");
+      addstr("\n");
       
       if(Auto_sort)
 	sort_session_active();
@@ -965,7 +965,7 @@ static void *display(void *arg){
 	  }
 	}
 	attr_off(A_BOLD,NULL); // In case it was on (channel is active)
-	printw("\n");
+	addstr("\n");
 	if(getcury(stdscr) >= LINES-1) // Can't be at beginning, because y will clip at LINES!
 	  break;
       } // end session loop
