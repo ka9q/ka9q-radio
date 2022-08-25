@@ -1,5 +1,5 @@
 ↑ ↓ select prev/next session
-⇱ ⇲ (home/end) select first/last session
+⤒ ⤓ (home/end) select first/last session
 ⇞ ⇟ (page up/down) select prev/next session page
 d delete session
 r reset playout buffer
