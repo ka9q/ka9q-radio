@@ -1,6 +1,6 @@
 ↑ ↓ select prev/next session
-⇱ ⇲ select first/last session
-⇞ ⇟ select prev/next session page
+⇱ ⇲ (home/end) select first/last session
+⇞ ⇟ (page up/down) select prev/next session page
 d delete session
 r reset playout buffer
 m mute current session
@@ -15,7 +15,7 @@ A toggle start all sessions muted
 s sort sessions by most recently active
 t sort sessions by most active
 - + volume -1/+1 dB
-←→ stereo position left/right
+← → stereo position left/right
 v toggle verbose display
 h toggle help display
 q toggle quiet mode
