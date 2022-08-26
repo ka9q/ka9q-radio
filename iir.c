@@ -55,7 +55,13 @@ void setIIRnotch(struct iir * const iir,float rel_freq){
 
   // Sets positions of poles; closer to 1 increases sharpness. MUST be < 1 for stability
   // .999 gives 3 dB bandwidth of about 8 Hz (+/-4 Hz) at 100 Hz
-  float const r = 0.999;
+  // It blocks tones very well, but it's so narrow that it lets through a
+  // short burst at the beginning of a transmission since it doesn't
+  // block the sidebands created by the turn-on transient.
+
+  // .997 gives a 3 dB bandwidth of +/-11.5 Hz @ 100 Hz and seems to be
+  // a good compromise
+  float const r = 0.997;
 	
   iir->a[0] = 1;
   iir->a[1] = -2 * cos(2*M_PI*rel_freq); // Complex zeroes on unit circle
