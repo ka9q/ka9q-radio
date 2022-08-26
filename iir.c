@@ -53,7 +53,9 @@ void setIIRnotch(struct iir * const iir,float rel_freq){
   if(iir == NULL)
     return;
 
-  float const r = 0.99; // Sets positions of poles; closer to 1 increases sharpness. MUST be < 1 for stability
+  // Sets positions of poles; closer to 1 increases sharpness. MUST be < 1 for stability
+  // .999 gives 3 dB bandwidth of about 8 Hz (+/-4 Hz) at 100 Hz
+  float const r = 0.999;
 	
   iir->a[0] = 1;
   iir->a[1] = -2 * cos(2*M_PI*rel_freq); // Complex zeroes on unit circle
