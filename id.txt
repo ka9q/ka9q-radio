@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.59 2022/08/26 01:08:57 karn Exp karn $
+# $Id: id.txt,v 1.60 2022/08/26 23:59:02 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -211,6 +211,7 @@
 224260	AB6DX Otay FILAMARS
 224260	N6VVZ Otay
 224300	K6CPT Altadena
+224320	AD6HK Costa Mesa
 224340  WA6TTL Saddle Peak GRONK
 224360  WA6TTL Contractors Pt GRONK
 224380	KK6KD Palomar
