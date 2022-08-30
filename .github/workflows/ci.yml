@@ -42,6 +42,7 @@ jobs:
         run: |
           brew update
           brew install \
+            glib \
             libusb \
             ncurses \
             fftw \
