@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.183 2022/09/01 21:02:26 karn Exp $
+// $Id: monitor.c,v 1.184 2022/09/01 21:07:59 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -735,6 +735,12 @@ static void *decode_task(void *arg){
     if(sp->reset)
       reset_session(sp,pkt->rtp.timestamp); // Updates sp->wptr
 
+    if(sp->current_tone != 0 && sp->last_tone != sp->current_tone){
+      // New or changed tone
+      sp->last_tone = sp->current_tone;
+      setIIRnotch(&sp->iir_right,sp->current_tone/sp->samprate);
+      setIIRnotch(&sp->iir_left,sp->current_tone/sp->samprate);
+    }
     if(!sp->muted){
       /* Compute gains and delays for stereo imaging
 	 Extreme gain differences can make the source sound like it's inside an ear
@@ -756,12 +762,6 @@ static void *decode_task(void *arg){
       // Mix bounce buffer into output buffer read by portaudio callback
       unsigned int left_index = sp->wptr + left_delay;
       unsigned int right_index = sp->wptr + right_delay;
-      if(sp->current_tone != 0 && sp->last_tone != sp->current_tone){
-	// New or changed tone
-	sp->last_tone = sp->current_tone;
-	setIIRnotch(&sp->iir_right,sp->current_tone/sp->samprate);
-	setIIRnotch(&sp->iir_left,sp->current_tone/sp->samprate);
-      }
       
       for(int i=0; i < sp->frame_size; i++){
 	float left = sp->bounce[i][0] * left_gain;
