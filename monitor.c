@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.182 2022/08/25 20:08:22 karn Exp $
+// $Id: monitor.c,v 1.183 2022/09/01 21:02:26 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -879,14 +879,14 @@ static void *display(void *arg){
       }
       int y,x;
       getyx(stdscr,y,x);
-      x = 60; // work around unused variable warning
+      x = 65; // work around unused variable warning
       mvaddstr(y,x,"------- Activity --------");
       if(Verbose)
 	addstr(" Play  ----Codec----     ---------------RTP--------------------------");	
       addstr("\n");    
       
       // Second header line
-      addstr("  dB Pan     SSRC  Tone  ID                                 Total   Current      Idle");
+      addstr("  dB Pan     SSRC  Tone Notch ID                                 Total   Current      Idle");
       if(Verbose)
 	addstr(" Queue Type ms ch BW     packets resets drops lates early Source/Dest");
       addstr("\n");
@@ -935,10 +935,10 @@ static void *display(void *arg){
 	  // Truncate ID field to 30 places
 	  strlcpy(identifier,sp->id,sizeof(identifier));
 	  
-	  printw("%9u %5.1f%c %-30s%10.0f%10.0f%10s",
+	  printw("%9u %5.1f %5.1f %-30s%10.0f%10.0f%10s",
 		 sp->ssrc,
 		 sp->current_tone,
-		 (sp->notch_enable && sp->last_tone > 0) ? 'n' : sp->notch_enable ? 'e': ' ',
+		 sp->notch_enable ? sp->last_tone : 0,
 		 identifier,
 		 sp->tot_active, // Total active time, sec
 		 sp->active,    // active time in current transmission, sec
