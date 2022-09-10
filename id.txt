@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.61 2022/09/10 03:31:47 karn Exp $
+# $Id: id.txt,v 1.62 2022/09/10 06:51:39 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -179,6 +179,7 @@
 222380  W6YEC in
 222440	KK6BAD in
 222460  WB6WLV in
+222580	WD6FZA Toro in
 222620	WR6AAC in
 222740  WA6TTL in
 222780	KK6KD in
