@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.164 2022/08/05 06:35:10 karn Exp $
+// $Id: control.c,v 1.165 2022/09/16 04:06:55 karn Exp $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -51,6 +51,7 @@ char const *Modefile = "/usr/local/share/ka9q-radio/modes.conf"; // make configu
 dictionary *Mdict;
 
 struct frontend Frontend;
+char Iface[1024]; // Multicast interface to talk to front end
 bool FE_address_set;
 struct sockaddr_storage FE_status_address;
 struct sockaddr_storage Metadata_source_address;      // Source of metadata
@@ -349,14 +350,14 @@ int main(int argc,char *argv[]){
   }
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
   // Dummy filter
-  char iface[1024];
-  resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
-  Status_fd = listen_mcast(&Metadata_dest_address,iface);
+
+  resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,Iface,sizeof(Iface));
+  Status_fd = listen_mcast(&Metadata_dest_address,Iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't listen to mcast status %s\n",argv[optind]);
     exit(1);
   }
-  Ctl_fd = connect_mcast(&Metadata_dest_address,iface,Mcast_ttl,IP_tos);
+  Ctl_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
   if(Ctl_fd < 0){
     fprintf(stderr,"connect to mcast control failed\n");
     exit(1);
@@ -550,8 +551,8 @@ int main(int argc,char *argv[]){
 	    close(Frontend.input.ctl_fd);
 	    Frontend.input.ctl_fd = -1;
 	  }
-	  Frontend.input.status_fd = listen_mcast(&Frontend.input.metadata_dest_address,NULL);
-	  Frontend.input.ctl_fd = connect_mcast(&Frontend.input.metadata_dest_address,NULL,Mcast_ttl,IP_tos);
+	  Frontend.input.status_fd = listen_mcast(&Frontend.input.metadata_dest_address,Iface);
+	  Frontend.input.ctl_fd = connect_mcast(&Frontend.input.metadata_dest_address,Iface,Mcast_ttl,IP_tos);
 	}
       }
     }

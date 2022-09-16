@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.81 2022/08/02 06:49:41 karn Exp $
+// $Id: multicast.c,v 1.82 2022/09/16 04:07:25 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <ifaddrs.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #if defined(linux)
 #include <linux/if_packet.h>
@@ -669,7 +670,7 @@ static void soptions(int const fd,int const mcast_ttl,int const tos){
 }
 
 #if __APPLE__
-static int apple_join_group(int fd,void const * const sock);
+static int apple_join_group(int fd,void const * const sock,char const *iface);
 #endif
 
 // Join a socket to a multicast group
@@ -700,8 +701,7 @@ static int join_group(int const fd,void const * const sock,char const * const if
     return -1; // Unknown address family
   }
 #if __APPLE__
-  if(!iface || strlen(iface) == 0)
-    return apple_join_group(fd,sock); // Apple workaround for default interface
+  return apple_join_group(fd,sock,iface); // Apple workaround for default interface
 #endif  
 
   struct group_req group_req;
@@ -716,7 +716,9 @@ static int join_group(int const fd,void const * const sock,char const * const if
     fprintf(stderr,"group_req.gr_interface = %s(%d), group = %s\n",
 	    iface,group_req.gr_interface,formatsock(sock)); 
     perror("multicast join");
-    return -1;
+    fprintf(stderr,"errno = %d\n",errno); // debug
+    if(errno != 0)
+      return -1;
   }
   return 0;
 }
@@ -724,7 +726,7 @@ static int join_group(int const fd,void const * const sock,char const * const if
 #if __APPLE__
 // Workaround for joins on OSX (and BSD?) for default interface
 // join_group works on apple only when interface explicitly specified
-static int apple_join_group(int const fd,void const * const sock){
+static int apple_join_group(int const fd,void const * const sock,char const *iface){
   struct sockaddr_in const * const sin = (struct sockaddr_in *)sock;
   struct sockaddr_in6 const * const sin6 = (struct sockaddr_in6 *)sock;
 
@@ -737,7 +739,10 @@ static int apple_join_group(int const fd,void const * const sock){
     {
       struct ip_mreq mreq;
       mreq.imr_multiaddr = sin->sin_addr;
-      mreq.imr_interface.s_addr = INADDR_ANY; // Default interface
+      if(iface == NULL || strlen(iface) == 0)
+	mreq.imr_interface.s_addr = INADDR_ANY; // Default interface
+      else
+	mreq.imr_interface.s_addr = htonl(if_nametoindex(iface));
       if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreq,sizeof(mreq)) != 0){
 	perror("apple multicast v4 join");
 	return -1;
@@ -750,7 +755,10 @@ static int apple_join_group(int const fd,void const * const sock){
     {
       struct ipv6_mreq ipv6_mreq;
       ipv6_mreq.ipv6mr_multiaddr = sin6->sin6_addr;
-      ipv6_mreq.ipv6mr_interface = 0; // Default interface
+      if(iface == NULL || strlen(iface) == 0)
+	ipv6_mreq.ipv6mr_interface = 0; // Default interface
+      else
+	ipv6_mreq.ipv6mr_interface = htonl(if_nametoindex(iface));
       
       if(setsockopt(fd,IPPROTO_IP,IPV6_JOIN_GROUP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0){
 	perror("apple multicast v6 join");
