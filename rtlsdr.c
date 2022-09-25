@@ -142,9 +142,10 @@ static struct option Options[] =
     {"samplerate", required_argument, NULL, 'r'},
     {"status-ttl", required_argument, NULL, 't'},
     {"verbose", no_argument, NULL, 'v'},
+    {"help", no_argument, NULL, 'h'},
     {NULL, 0, NULL, 0},
   };
-static char const Optstring[] = "A:D:I:LR:S:T:abc:f:p:r:t:v";
+static char const Optstring[] = "A:D:I:LR:S:T:abc:f:hp:r:t:v";
 
 double set_correct_freq(struct sdrstate *sdr,double freq);
 void decode_rtlsdr_commands(struct sdrstate *,unsigned char *,int);
@@ -231,8 +232,10 @@ int main(int argc,char *argv[]){
       Verbose++;
       break;
     default:
-    case '?':
       fprintf(stderr,"Unknown argument %c\n",c);
+    case 'h':
+      fprintf(stderr,"Usage: %s [-A mcast_ifce] [-D mcast_dest_addr] [-I rtlsdr_dev_index] [-L] [-R metadata_dest] [-S rtp_ssrc] [-T rtp_ttl] [-a] [-b] [-c] [-f freq_hz] [-h] [-p IP_tos] [-r sample_rate] [-t mcast_stat_ttl] [-v]\n",argv[0]);
+      exit(1);
       break;
     }
   }
