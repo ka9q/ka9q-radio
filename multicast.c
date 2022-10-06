@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.82 2022/09/16 04:07:25 karn Exp $
+// $Id: multicast.c,v 1.83 2022/10/06 20:38:05 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -236,10 +236,17 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
     results = NULL;
     struct addrinfo hints;
     memset(&hints,0,sizeof(hints));
+#if 0
     // Using hints.ai_family = AF_UNSPEC generates both A and AAAA queries
     // but even when the A query is answered the library times out and retransmits the AAAA
     // query several times. So do only an A (IPv4) query the first time
     hints.ai_family = (try == 0) ? AF_INET : AF_UNSPEC;
+#else
+    // Doesn't seem to be a problem anymore, and using AF_INET often fails
+    // on loopback.
+    // Did this get changed recently in getaddrinfo()?
+    hints.ai_family = AF_UNSPEC;
+#endif
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = IPPROTO_UDP;
     hints.ai_flags = AI_ADDRCONFIG;
