@@ -1,4 +1,4 @@
-# $Id: Makefile.debug,v 1.15 2022/08/25 18:28:59 karn Exp $
+# $Id: Makefile.debug,v 1.16 2022/10/06 23:24:36 karn Exp $
 
 # for production
 #DOPTS = -DNDEBUG=1 -O3
@@ -9,7 +9,7 @@ COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU
 
 # Get local versions (e.g., of librtlsdr)
 #LDOPTS=-L/usr/local/lib
-LDOPTS=-g -L/usr/local/lib
+#LDOPTS=-g -L/usr/local/lib
 
 CFLAGS=$(DOPTS) $(COPTS) $(INCLUDES)
 BINDIR=/usr/local/bin
@@ -30,11 +30,13 @@ SYSTEMD_FILES=airspyd@.service airspyhfd@.service cwd.service funcubed@.service 
 UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules
 
 CONF_FILES=funcubed.conf \
-			 opusd@hf.conf opusd@hfdl.conf opusd@6m.conf opusd@2m.conf opusd@125cm.conf opusd@70cm.conf opusd@aviation.conf opusd@packet.conf opusd@kpbs.conf opusd@ksds.conf \
+			 opusd@hf.conf opusd@hfdl.conf opusd@fm.conf opusd@aviation.conf opusd@packet.conf opusd@kpbs.conf opusd@ksds.conf \
 			 stereod.conf rdsd.conf \
 			 radiod@10m.conf radiod@6m.conf radiod@fm.conf radiod@2m.conf radiod@125cm.conf radiod@70cm.conf radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf radiod@repeater.conf \
-			 recordings@hf.conf recordings@6m.conf recordings@2m.conf recordings@125cm.conf recordings@70cm.conf recordings@aviation.conf recordings@pictures.conf \
+			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
 			 wspr-decoded.conf horus.conf airspyd.conf packetd.conf aprs.conf
+
+LOGROTATE_FILES = aprsfeed.rotate
 
 AIRSPY_FILES=
 
@@ -46,7 +48,7 @@ SRC=airspyd.c airspyhfd.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandpl
 	   sdrplayd.c status.c stereod.c wfm.c wspr-decoded.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
 	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h
 
-all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
+all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(LOGROTATE_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
 
 # Don't overwrite existing config files in /etc/radio
 install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
@@ -62,6 +64,7 @@ install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FIL
 	install -o root -m 0644 -D --target-directory=/etc/systemd/system $(SYSTEMD_FILES)
 	install -o root -m 0644 -D --target-directory=/etc/udev/rules.d $(UDEV_FILES)
 	install -o root -m 0644 -D --target-directory=/etc/modprobe.d $(BLACKLIST)
+	install -o root -m 0644 -D --target-directory=/etc/logrotate.d $(LOGROTATE_FILES)
 	mkdir -p /etc/fftw /etc/radio $(VARDIR) /etc/radio/airspyd.conf.d
 	chgrp radio $(VARDIR) /etc/radio /etc/fftw
 	chmod g+ws $(VARDIR) /etc/radio /etc/fftw
