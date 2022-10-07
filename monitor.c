@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.184 2022/09/01 21:07:59 karn Exp $
+// $Id: monitor.c,v 1.185 2022/09/29 23:22:40 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -155,7 +155,7 @@ struct session {
   bool notch_enable;         // Enable PL removal notch
   struct iir iir_left;
   struct iir iir_right;  
-  float last_tone;
+  float notch_tone;
 };
 #define NSESSIONS 1500
 static int Nsessions;
@@ -735,9 +735,9 @@ static void *decode_task(void *arg){
     if(sp->reset)
       reset_session(sp,pkt->rtp.timestamp); // Updates sp->wptr
 
-    if(sp->current_tone != 0 && sp->last_tone != sp->current_tone){
+    if(sp->current_tone != 0 && sp->notch_tone != sp->current_tone){
       // New or changed tone
-      sp->last_tone = sp->current_tone;
+      sp->notch_tone = sp->current_tone;
       setIIRnotch(&sp->iir_right,sp->current_tone/sp->samprate);
       setIIRnotch(&sp->iir_left,sp->current_tone/sp->samprate);
     }
@@ -766,7 +766,7 @@ static void *decode_task(void *arg){
       for(int i=0; i < sp->frame_size; i++){
 	float left = sp->bounce[i][0] * left_gain;
 	float right = sp->bounce[i][1] * right_gain;
-	if(sp->notch_enable && sp->last_tone > 0){
+	if(sp->notch_enable && sp->notch_tone > 0){
 	  left = applyIIRnotch(&sp->iir_left,left);
 	  right = applyIIRnotch(&sp->iir_right,right);
 	}
@@ -938,7 +938,7 @@ static void *display(void *arg){
 	  printw("%9u %5.1f %5.1f %-30s%10.0f%10.0f%10s",
 		 sp->ssrc,
 		 sp->current_tone,
-		 sp->notch_enable ? sp->last_tone : 0,
+		 sp->notch_enable ? sp->notch_tone : 0,
 		 identifier,
 		 sp->tot_active, // Total active time, sec
 		 sp->active,    // active time in current transmission, sec
@@ -1032,19 +1032,14 @@ static void *display(void *arg){
       for(int i=0; i < Nsessions; i++){
 	struct session *sp = Sessions[i];
 	if(sp != NULL && !sp->notch_enable){
-	  sp->current_tone = 0;
-	  sp->last_tone = 0; // clear last tone, if any
 	  sp->notch_enable = true;
 	}
       }
       break;
     case 'n':
       if(current >= 0){
-	if(!Sessions[current]->notch_enable){
-	  Sessions[current]->current_tone = 0;
-	  Sessions[current]->last_tone = 0; // Clear last tone
+	if(!Sessions[current]->notch_enable)
 	  Sessions[current]->notch_enable = true;
-	}
       }
       break;
     case 'f':
