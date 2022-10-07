@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.63 2022/09/20 00:01:15 karn Exp $
+# $Id: id.txt,v 1.65 2022/10/07 06:06:09 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -536,6 +536,7 @@
 4473200 WA6ZSN Ventura - South Mtn
 4473200 WB6WLV Kearney Mesa
 4473200 WB6WLV Kearney Mesa
+4473400 KK6BAD San Diego
 4473400 W6FRT Sylmar - Contractors Pt
 4473600 AA4CD San Diego DARN
 4473800 W6YJ Lake Forest - Santiago Peak
@@ -584,6 +585,7 @@
 4478450	KI6KQU Woodso PAPA D15
 4478600 KK6AC Frazier Mountain
 4478600 WR6SP Saddle Pk
+4478800 K6DLP Crestline
 4479000 WD6AML Alpine
 4479000 WD6AML Chuckwalla Mountains
 4479000 WD6AML Johnstone Peak
