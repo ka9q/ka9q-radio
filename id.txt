@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.66 2022/10/12 00:59:30 karn Exp $
+# $Id: id.txt,v 1.67 2022/10/12 01:14:11 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -272,34 +272,20 @@
 4450200 KC6WZU Hollywood - Hollywood Hills
 4450200 N6WZK Bell
 4450200 W6CDF Cactus City
-4450200 W6CDF Cedarpines Park - Jobs Peak
-4450200 WA6HYQ La Mesa
+4450200 WA6HYQ La Mesa / W6CDF Cedarpines Park - Jobs Peak
 4450400 K6HOG Contractors Pt
-4450600 KB6OZX Riverside
-4450600 NO6B Chatsworth Peak
-4450800 KE6UPI Temecula
-4450800 NO6B Diamond Bar
-4451000 KI6DB Aliso Viejo
-4451000 WD6AWP Chatsworth - Oat Mountain
-4451000 WW6Y Lake Arrowhead - Heaps Peak
+4450600 KB6OZX Riverside / NO6B Chatsworth Peak
+4450800 KE6UPI Temecula / NO6B Diamond Bar
+4451000 WD6AWP Chatsworth - Oat Mountain / KI6DB Aliso Viejo / WW6Y Lake Arrowhead - Heaps Peak
 4451200 KK6HS Fullerton - Fullerton Hills
 4451400 W6DXX San Gorgonio PAPA8
-4451600 W6CTR Banning - Snow Peak
-4451600 W6CTR Sylmar - Contractor's Point
-4451600 W6CTR Sylmar - Contractor's Point
-4451800 KJ6QFS Moreno Valley - Reche Peak
-4451800 WB6ZTR Malibu - Saddle Peak
-4452000 W6BJB Oceanside
-4452000 WR6JPL Pasadena - JPL
-4452200 K6NBR Newport Beach
-4452200 KC6HUR Sun Valley
-4452200 KE6PCV Corona
-4452200 KF6ATL Fallbrook - Red Mountain
-4452200 KI6CHH Lancaster
-4452200 WI6Y Anaheim
-4452400 KW6WW Wrightwood
-4452400 WB6VMV El Segundo
+4451600 W6CTR Banning - Snow Peak / 
+4451800 KJ6QFS Moreno Valley - Reche Peak / WB6ZTR Malibu - Saddle Peak
+4452000 W6BJB Oceanside / WR6JPL Pasadena - JPL
+4452200 WI6Y Anaheim / K6NBR Newport Beach / KC6HUR Sun Valley / KE6PCV Corona / KF6ATL Fallbrook - Red Mountain / KI6CHH Lancaster
+4452400 WB6VMV El Segundo / KW6WW Wrightwood
 4452600 K6VGP Verdugo Peak - Verdugo Peak
+4452600 Daniel Peak PAPA 31
 4452800 K6VGP San Pedro Hill DARN
 4453000 AI6BX Redlands
 4453000 K6RH Palos Verdes
@@ -426,6 +412,7 @@
 4463400 KI6WZX Running Springs  - Keller Peak
 4463400	Thousand Oaks PAPA26
 4463600 Mt Woodson PAPA15
+4463600 South Mountain PAPA 30
 4463800 W6XC Chatsworth - Chatsworth Peak
 4463800 WR6TM Baker - Halloran Summit
 4464000 K6TZ Santa Barbara - La Vigia Hill
@@ -480,15 +467,13 @@
 4468800 KJ6HVS Mission Hills
 4468800 KJ6KTV Alta Loma
 4468800 N6LKA Redlands
-4468800 N6LXX Onyx - Onyx Peak
-4468800 WA6ZFT La Mesa
+4468800 
+4468800 WA6ZFT La Mesa / 
 4469000 WD6DIH Irvine - Signal Peak
 4469000 WD6DIH Lake Forest - Santiago Peak
 4469400  Mt Wilson DARN
 4469600 WD6DIH Baker -  Turquoise Mountain
-4469800 KW6HRO Otay PAPA D11
-4469800 WA6WLZ Loop Canyon
-4470000 W6NWG Palomar Mountain
+4469800 KW6HRO Otay PAPA D11 / WA6WLZ Loop Canyon
 4470000 W6NWG Palomar / PAPA21 Redlands
 4470000 WB6CDF Yucca Valley - Paxton Hill
 4470200 KC6IJM Thousand Oaks
@@ -627,6 +612,7 @@
 4484000 KE6PCV Mt Otay
 4484000 N6AJB Banning - Snow Peak
 4484000 N6WZK Bell
+4484000 Low Potosi PAPA 29
 4484200 W6ATN Mt Wilson
 4484600 KK6KD San Miguel Mtn
 4484600 N6RMH Quartzite Mountain
