@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.65 2022/10/07 06:06:09 karn Exp $
+# $Id: id.txt,v 1.66 2022/10/12 00:59:30 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -260,6 +260,7 @@
 5357000 60m channel 3
 5371500 60m channel 4
 5403500	60m channel 5
+4426000 Joaquin Ridge PAPA 32
 4449500 W6PUE Tahoe City
 4449500 W6QWN Red Bluff
 4449750 K6ME Susanville - Inspiration Point
