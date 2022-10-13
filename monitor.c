@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.187 2022/10/13 19:36:44 karn Exp $
+// $Id: monitor.c,v 1.188 2022/10/13 19:41:42 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -1382,8 +1382,10 @@ void send_cwid(void){
     nanosleep(&ts,NULL);
   }
   free(samples);
+  if(Quiet){
+    fprintf(stdout,"CW ID finished\n");
+  }
 }
-
 #endif
 
 
