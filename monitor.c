@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.186 2022/10/13 19:31:04 karn Exp $
+// $Id: monitor.c,v 1.187 2022/10/13 19:36:44 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -178,7 +178,7 @@ static char const *lookupid(uint32_t ssrc);
 static float make_position(int);
 
 
-static char Optstring[] = "I:LR:Sap:qr:t:u:vn";
+static char Optstring[] = "i:I:LR:Sap:qr:t:u:vn";
 static struct  option Options[] = {
    {"pcm_in", required_argument, NULL, 'I'},
    {"opus_in", required_argument, NULL, 'I'},
