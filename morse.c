@@ -1,4 +1,4 @@
-//$Id: morse.c,v 1.2 2022/08/17 21:45:54 karn Exp $
+//$Id: morse.c,v 1.3 2022/10/15 15:34:19 karn Exp $
 // Encode Morse code characters as audio samples
 // Aug 2022 Phil Karn, KA9Q
 
@@ -282,12 +282,12 @@ int init_morse(float const speed,float const pitch,float level,float const sampr
   qsort(Morse_table,TABSIZE,sizeof(Morse_table[0]),mcompar);
 
   Dit_length = samprate * 1.2 / speed; // Samples per dit
-  float const cycles_per_sample = pitch / samprate;
+  double const cycles_per_sample = pitch / samprate;
 
   if(Verbose){
     fprintf(stdout,"speed %.1f wpm, pitch %.1f Hz, level %.1f dB, samprate %.1f Hz\n",
 	    speed,pitch,level,samprate);
-    fprintf(stdout,"dit length %d samples; cycles per sample %f\n",Dit_length,cycles_per_sample);
+    fprintf(stdout,"dit length %d samples; cycles per sample %lf\n",Dit_length,cycles_per_sample);
   }
   level = INT16_MAX * dB2voltage(-fabsf(level)); // convert dB to int16 scale
 
@@ -297,8 +297,8 @@ int init_morse(float const speed,float const pitch,float level,float const sampr
   set_osc(&tone,cycles_per_sample,0.0);
 
   // Exponential envelope shaping to avoid key clicks
-  float const tau = .005; // 5 ms time constant sounds good
-  float const g = -expm1(-1/(samprate * tau)); // -expm1(x) = 1 - exp(x)
+  double const tau = .005; // 5 ms time constant sounds good
+  double const g = -expm1(-1/(samprate * tau)); // -expm1(x) = 1 - exp(x)
 
   if(Dit)
     free(Dit);
@@ -310,7 +310,7 @@ int init_morse(float const speed,float const pitch,float level,float const sampr
 
   // First element of dit and dah are the same
   int k;
-  float envelope = 0;
+  double envelope = 0;
   for(k=0; k < Dit_length; k++){
     float s = level * creal(step_osc(&tone));
     Dah[k] = Dit[k] = s * envelope;
@@ -318,8 +318,8 @@ int init_morse(float const speed,float const pitch,float level,float const sampr
   }
 
   // Second element of dah continues while dit decays
-  float dit_envelope = envelope;
-  float dah_envelope = envelope;
+  double dit_envelope = envelope;
+  double dah_envelope = envelope;
 
   for(; k < 2*Dit_length; k++){
     float s = level * creal(step_osc(&tone));
