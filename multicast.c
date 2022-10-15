@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.83 2022/10/06 20:38:05 karn Exp $
+// $Id: multicast.c,v 1.84 2022/10/15 17:23:40 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -107,6 +107,7 @@ int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
   if(join_group(fd,sock,iface) != 0)
     fprintf(stderr,"connect_mcast join_group failed\n");
 
+#if 0
   // Select output interface - must be done before connect()
   // Is this actually necessary? Or does the join_group() already select an output interface?
   if(iface && strlen(iface) > 0){
@@ -151,6 +152,7 @@ int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
     freeifaddrs(ifap);
     ifap = NULL;
   }
+#endif
   fcntl(fd,F_SETFL,O_NONBLOCK);
   if(connect(fd,sock,sizeof(struct sockaddr)) != 0){
     perror("connect mcast");
@@ -676,99 +678,49 @@ static void soptions(int const fd,int const mcast_ttl,int const tos){
   }
 }
 
-#if __APPLE__
-static int apple_join_group(int fd,void const * const sock,char const *iface);
-#endif
-
 // Join a socket to a multicast group
 static int join_group(int const fd,void const * const sock,char const * const iface){
-  struct sockaddr_in const * const sin = (struct sockaddr_in *)sock;
-  struct sockaddr_in6 const * const sin6 = (struct sockaddr_in6 *)sock;
-
-  if(fd < 0)
+  if(fd < 0 || sock == NULL)
     return -1;
-
-  int socklen = 0;
 
   // Ensure it's a multicast address
   // Is this check really necessary?
   // Maybe the setsockopt would just fail cleanly if it's not
-  switch(sin->sin_family){
+  struct sockaddr const * const sap = (struct sockaddr *)sock;
+  switch(sap->sa_family){
   case PF_INET:
-    socklen = sizeof(struct sockaddr_in);
-    if(!IN_MULTICAST(ntohl(sin->sin_addr.s_addr)))
-      return -1;
-    break;
-  case PF_INET6:
-    socklen = sizeof(struct sockaddr_in6);
-    if(!IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))
-      return -1;
-    break;
-  default:
-    return -1; // Unknown address family
-  }
-#if __APPLE__
-  return apple_join_group(fd,sock,iface); // Apple workaround for default interface
-#endif  
-
-  struct group_req group_req;
-  memcpy(&group_req.gr_group,sock,socklen);
-  
-  if(iface)
-    group_req.gr_interface = if_nametoindex(iface);
-  else
-    group_req.gr_interface = 0; // Default interface    
-
-  if(setsockopt(fd,IPPROTO_IP,MCAST_JOIN_GROUP,&group_req,sizeof(group_req)) != 0){
-    fprintf(stderr,"group_req.gr_interface = %s(%d), group = %s\n",
-	    iface,group_req.gr_interface,formatsock(sock)); 
-    perror("multicast join");
-    fprintf(stderr,"errno = %d\n",errno); // debug
-    if(errno != 0)
-      return -1;
-  }
-  return 0;
-}
-
-#if __APPLE__
-// Workaround for joins on OSX (and BSD?) for default interface
-// join_group works on apple only when interface explicitly specified
-static int apple_join_group(int const fd,void const * const sock,char const *iface){
-  struct sockaddr_in const * const sin = (struct sockaddr_in *)sock;
-  struct sockaddr_in6 const * const sin6 = (struct sockaddr_in6 *)sock;
-
-  if(fd < 0)
-    return -1;
-  switch(sin->sin_family){
-  case PF_INET:
-    if(!IN_MULTICAST(ntohl(sin->sin_addr.s_addr)))
-      return -1;
     {
-      struct ip_mreq mreq;
-      mreq.imr_multiaddr = sin->sin_addr;
+      struct sockaddr_in const * const sin = (struct sockaddr_in *)sock;
+      if(!IN_MULTICAST(ntohl(sin->sin_addr.s_addr)))
+	return -1;
+
+      struct ip_mreqn mreqn;
+      mreqn.imr_multiaddr = sin->sin_addr;
+      mreqn.imr_address.s_addr = INADDR_ANY;
       if(iface == NULL || strlen(iface) == 0)
-	mreq.imr_interface.s_addr = INADDR_ANY; // Default interface
+	mreqn.imr_ifindex = 0;
       else
-	mreq.imr_interface.s_addr = htonl(if_nametoindex(iface));
-      if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreq,sizeof(mreq)) != 0){
-	perror("apple multicast v4 join");
+	mreqn.imr_ifindex = if_nametoindex(iface);
+      if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0){
+	perror("multicast v4 join");
 	return -1;
       }
     }
     break;
   case PF_INET6:
-    if(!IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))
-      return -1;
     {
+      struct sockaddr_in6 const * const sin6 = (struct sockaddr_in6 *)sock;
+      if(!IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))
+	return -1;
       struct ipv6_mreq ipv6_mreq;
       ipv6_mreq.ipv6mr_multiaddr = sin6->sin6_addr;
       if(iface == NULL || strlen(iface) == 0)
 	ipv6_mreq.ipv6mr_interface = 0; // Default interface
       else
-	ipv6_mreq.ipv6mr_interface = htonl(if_nametoindex(iface));
+	ipv6_mreq.ipv6mr_interface = if_nametoindex(iface);
       
       if(setsockopt(fd,IPPROTO_IP,IPV6_JOIN_GROUP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0){
-	perror("apple multicast v6 join");
+	perror("multicast v6 join");
 	return -1;
       }
     }
@@ -778,8 +730,6 @@ static int apple_join_group(int const fd,void const * const sock,char const *ifa
   }
   return 0;
 }
-#endif
-
 
 static struct {
   int flag;
