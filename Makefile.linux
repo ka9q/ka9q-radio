@@ -11,6 +11,7 @@ COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU
 LDOPTS=-L/usr/local/lib
 #LDOPTS=-g -L/usr/local/lib
 
+INCLUDES+=-I/usr/include/iniparser/
 CFLAGS=$(DOPTS) $(COPTS) $(INCLUDES)
 BINDIR=/usr/local/bin
 LIBDIR=/usr/local/share/ka9q-radio

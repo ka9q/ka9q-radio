@@ -27,7 +27,7 @@
 #include <syslog.h>
 #include <sys/stat.h>
 #include <getopt.h>
-#include <iniparser/iniparser.h>
+#include <iniparser.h>
 
 #include "conf.h"
 #include "misc.h"
