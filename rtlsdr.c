@@ -40,7 +40,7 @@
 
 // Internal clock is 28.8 MHz, and 1.8 MHz * 16 = 28.8 MHz
 #define DEFAULT_SAMPRATE (1800000)
-#define DEFAULT_BLOCKSIZE (960)
+#define DEFAULT_BLOCKSIZE (1280)
 
 #define N_serials 20
 uint64_t Serials[N_serials];
