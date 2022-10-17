@@ -39,6 +39,7 @@ float const Samprate = 48000;
 char *Mcast_address_text;
 int Quiet;
 int Stereo;   // Force stereo output; otherwise output mono, downmixing if necessary
+const char *App_path;
 int Verbose;
 
 int Input_fd = -1;
@@ -51,6 +52,7 @@ struct pcmstream *make_session(struct sockaddr const *sender,uint32_t ssrc,uint1
 int close_session(struct pcmstream *sp);
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   setlocale(LC_ALL,getenv("LANG"));
 
   int c;

@@ -44,6 +44,7 @@ struct session {
 
 
 // Command line params
+const char *App_path;
 int Verbose;                  // Verbosity flag (currently unused)
 
 // Global variables
@@ -87,6 +88,7 @@ struct sockaddr_storage PCM_dest_address;
 struct sockaddr_storage PCM_source_address;
 
 int main(int argc,char * const argv[]){
+  App_path = argv[0];
 
   setlocale(LC_ALL,getenv("LANG"));
 

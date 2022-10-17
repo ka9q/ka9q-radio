@@ -49,6 +49,7 @@ static const float Tone_period = 0.24; // PL tone integration period
 // Command line parameters
 static int Update_interval = 100;  // Default time in ms between display updates
 static bool List_audio;            // List audio output devices and exit
+const char *App_path;
 int Verbose;                       // Verbosity flag
 static bool Quiet;                 // Disable curses
 static bool Quiet_mode;            // Toggle screen activity after starting
@@ -200,6 +201,7 @@ static struct  option Options[] = {
 
 
 int main(int argc,char * const argv[]){
+  App_path = argv[0];
   {
     // Try to improve our priority, then drop root
     int prio = getpriority(PRIO_PROCESS,0);
@@ -850,7 +852,9 @@ static void *display(void *arg){
     addstr("\n");
 
     if(Help){
-      FILE *fp = fopen("/usr/local/share/ka9q-radio/monitor-help.txt","r");
+      char path [PATH_MAX];
+      dist_path(path,sizeof(path),"monitor-help.txt");
+      FILE *fp = fopen(path,"r");
       if(fp != NULL){
 	size_t size = 1024;
 	char *line = malloc(size);
@@ -1460,7 +1464,7 @@ static struct stat Last_stat;
 
 static void load_id(void){
   char filename[PATH_MAX];
-  snprintf(filename,sizeof(filename),"%s/%s",LIBDIR,ID);
+  dist_path(filename,sizeof(filename),ID);
   struct stat statbuf;
   stat(filename,&statbuf);
   if(statbuf.st_mtime != Last_stat.st_mtime)

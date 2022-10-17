@@ -264,7 +264,6 @@ extern pthread_mutex_t Demod_list_mutex;
 extern int Status_fd;  // File descriptor for receiver status
 extern int Ctl_fd;     // File descriptor for receiving user commands
 
-extern char const *Libdir;
 extern char const *Modefile;
 extern int Verbose;
 extern float Blocktime; // Common to all receiver slices

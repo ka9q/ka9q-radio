@@ -28,12 +28,14 @@
 
 int Status_sock;
 
+const char *App_path;
 int Verbose,Dump;
 
 char Locale[256] = "en_US.UTF-8";
 int Mcast_ttl = 5;
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   int c;
 
   while((c = getopt(argc,argv,"vd")) != -1){

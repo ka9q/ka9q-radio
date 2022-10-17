@@ -19,11 +19,11 @@
 #include "multicast.h"
 #include "status.h"
 
-char const *Libdir = "/usr/local/share/ka9q-radio";
 char Locale[256] = "en_US.UTF-8";
 int decode_rtp_status(unsigned char const *buffer,int length);
 
 
+const char *App_path;
 int Verbose,Dump;
 
 struct sockaddr_storage Output_metadata_dest_address;
@@ -72,6 +72,7 @@ int Radio_fd;
 // I had been running this at normal priority, but it can start new demodulators
 // so it must also run at preferred priority
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   {
     int c;
 

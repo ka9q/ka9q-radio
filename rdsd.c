@@ -56,6 +56,7 @@ float Kaiser_beta = 3.5 * M_PI;
 float const SCALE = 1./SHRT_MAX;
 
 // Command line params
+const char *App_path;
 int Verbose;                  // Verbosity flag (currently unused)
 int Mcast_ttl = 10;           // our multicast output is frequently routed
 int IP_tos = 48; // AF12 << 2
@@ -104,6 +105,7 @@ struct sockaddr_storage Stereo_source_address;
 struct sockaddr_storage Stereo_dest_address;
 
 int main(int argc,char * const argv[]){
+  App_path = argv[0];
 
   setlocale(LC_ALL,getenv("LANG"));
 

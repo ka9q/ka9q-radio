@@ -89,6 +89,7 @@ int Blocksize = 240;
 int Blocksize_TTL0 = 3840; // Default blocksize when IP TTL=0 (20 ms @ 192 kHz)
 bool Blocksize_set = false;
 int Device = 0;
+const char *App_path;
 int Verbose;
 char const *Locale = "en_US.UTF-8";
 bool Daemonize;
@@ -141,6 +142,7 @@ void *ncmd(void *);
 static void closedown(int a);
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   struct sdrstate * const sdr = &FCD;
 
   {

@@ -42,9 +42,10 @@ static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
 static int const DEFAULT_FFT_THREADS = 1;
 
-char const *Modefile = "/usr/local/share/ka9q-radio/modes.conf";
+char const *Modefile = "modes.conf";
 
 // Command line and environ params
+const char *App_path;
 int Verbose;
 static char const *Locale = "en_US.UTF-8";
 dictionary *Configtable; // Configtable file descriptor for iniparser
@@ -85,6 +86,7 @@ static int loadconfig(char const *file);
 // sets the initial demodulation mode, which starts the demodulator thread
 // catches signals and eventually becomes the user interface/display loop
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   // if we have root, up our priority and drop privileges
   int prio = getpriority(PRIO_PROCESS,0);
   prio = setpriority(PRIO_PROCESS,0,prio - 10);

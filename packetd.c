@@ -52,6 +52,7 @@ static int const AM = 961;
 static float Bitrate = 1200;
 
 // Command line params
+const char *App_path;
 int Verbose;
 int IP_tos = 0;
 int Mcast_ttl = 10;           // Very low intensity output
@@ -109,6 +110,7 @@ char const *Output;
 char const *Input[MAX_MCAST];
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   // Drop root if we have it
   if(seteuid(getuid()) != 0)
     fprintf(stdout,"seteuid: %s\n",strerror(errno));

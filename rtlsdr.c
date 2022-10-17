@@ -62,6 +62,7 @@ char *Locale;
 int RTP_ttl = 1;
 int Status_ttl = 1;
 int IP_tos = 48; // AF12 left shifted 2 bits
+const char *App_path;
 int Verbose;
 int AGC;     // Default to hardware AGC
 int Dev = 0; // Default to device 0
@@ -158,6 +159,7 @@ double true_freq(uint64_t freq);
 static void closedown(int a);
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   umask(02);
 #if 0
   // Dump environment variables

@@ -27,9 +27,11 @@ float const scale = 1./SHRT_MAX;
 
 int Samprate = 192000;
 
+const char *App_path;
 int Verbose = 0;
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   // Set defaults
   double frequency = 48000;
   double amplitude = -20;

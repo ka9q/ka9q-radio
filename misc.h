@@ -95,9 +95,11 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 #define cis(x) csincos(x)
 #define cispi(x) csincospi(x)
 
+extern const char *App_path;
 extern int Verbose;
 extern char const *Months[12];
 
+int dist_path(char *path,int path_len,const char *fname);
 char *format_gpstime(char *result,int len,long long t);
 char *format_utctime(char *result,int len,long long t);
 char *ftime(char *result,int size,long long t);

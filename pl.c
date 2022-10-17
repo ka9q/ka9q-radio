@@ -38,6 +38,7 @@ static const float Filter_time = .200; // 200 ms
 static float const SCALE16 = 1./SHRT_MAX;
 
 // Command line params
+const char *App_path;
 int Verbose;                  // Verbosity flag
 int Mcast_ttl = 10;           // our multicast output is frequently routed
 static char *Mcast_address_text[MAX_MCAST];
@@ -146,6 +147,7 @@ static struct option Options[] =
 static char Optstring[] = "A:I:T:v";
 
 int main(int argc,char * const argv[]){
+  App_path = argv[0];
 
   setlocale(LC_ALL,getenv("LANG"));
 

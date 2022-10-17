@@ -27,6 +27,7 @@ float CW_pitch = 500.0;
 float CW_level = -29.0; // dB
 int const Default_ssrc = 100;
 
+const char *App_path;
 int Verbose = 0;
 
 char const *Input = "/run/cw/input";
@@ -104,6 +105,7 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
 }
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   
   struct rtp_state rtp_state;
   memset(&rtp_state,0,sizeof(rtp_state));

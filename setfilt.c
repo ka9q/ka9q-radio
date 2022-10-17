@@ -22,6 +22,7 @@
 
 int Mcast_ttl = 5;
 int IP_tos = 0;
+const char *App_path;
 int Verbose;
 char *Radio = NULL;
 char *Locale = "en_US.UTF-8";
@@ -39,6 +40,7 @@ struct option Options[] = {
 };
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   {
     char * const cp = getenv("LANG");
     if(cp != NULL)

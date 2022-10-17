@@ -85,6 +85,7 @@ struct session {
 };
 
 
+const char *App_path;
 int Verbose;
 int Keep_wav;
 char PCM_mcast_address_text[256];
@@ -103,6 +104,7 @@ struct session *create_session(struct rtp_header *);
 void close_session(struct session **p);
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   char const * locale = getenv("LANG");
   setlocale(LC_ALL,locale);
 
