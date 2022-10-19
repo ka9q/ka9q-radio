@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.85 2022/10/19 05:09:01 karn Exp $
+// $Id: multicast.c,v 1.86 2022/10/19 05:31:58 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -30,7 +30,8 @@
 #include "misc.h"
 
 static int join_group(int const fd,void const * const sock,char const * const iface);
-static void soptions(int fd,int mcast_ttl,int tos);
+static void ipv4_soptions(int fd,int mcast_ttl,int tos);
+static void ipv6_soptions(int const fd,int const mcast_ttl,int const tos);
 
 // [samprate][channels][deemph]
 // Not all combinations are supported or useful,
@@ -87,13 +88,22 @@ int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
 
   struct sockaddr const *sock = s;
 
-  int fd = -1;
+  int fd = socket(sock->sa_family,SOCK_DGRAM,0);
 
-  if((fd = socket(sock->sa_family,SOCK_DGRAM,0)) == -1){
+  if(fd == -1){
     perror("setup_mcast socket");
     return -1;
   }      
-  soptions(fd,ttl,tos);
+  switch(sock->sa_family){
+  case AF_INET:
+    ipv4_soptions(fd,ttl,tos);
+    break;
+  case AF_INET6:
+    ipv6_soptions(fd,ttl,tos);
+    break;
+  default:
+    return -1;
+  }
   // Strictly speaking, it is not necessary to join a multicast group to which we only send.
   // But this creates a problem with "smart" switches that do IGMP snooping.
   // They have a setting to handle what happens with unregistered
@@ -107,52 +117,7 @@ int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
   if(join_group(fd,sock,iface) != 0)
     fprintf(stderr,"connect_mcast join_group failed\n");
 
-#if 0
-  // Select output interface - must be done before connect()
-  // Is this actually necessary? Or does the join_group() already select an output interface?
-  if(iface && strlen(iface) > 0){
-    struct ifaddrs *ifap = NULL;
-    struct ifaddrs const *ifp;
-    getifaddrs(&ifap);
-
-
-
-    for(ifp = ifap; ifp != NULL; ifp = ifp->ifa_next){
-      if(strcmp(ifp->ifa_name,iface) == 0 && sock->sa_family == ifp->ifa_addr->sa_family)
-	break;
-    }
-    if(ifp != NULL){
-      switch(ifp->ifa_addr->sa_family){
-      case AF_INET:
-	{
-	  struct sockaddr_in const * const sin = (struct sockaddr_in *)ifp->ifa_addr;
-	  if(sin->sin_addr.s_addr == INADDR_ANY || sin->sin_addr.s_addr == INADDR_NONE){ // Are both needed?
-	    perror("connect mcast output: local IPv4 address not set yet");
-	  } else if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_IF,&sin->sin_addr,sizeof(sin->sin_addr)) != 0){
-	    perror("connect mcast setsockopt IP_MULTICAST_IF");
-	  }
-	}
-	break;
-      case AF_INET6:
-	{
-	  struct sockaddr_in6 const * sin6 = (struct sockaddr_in6 *)ifp->ifa_addr;
-	  unsigned char zeroes[16];
-	  memset(zeroes,0,sizeof(zeroes));
-	  if(memcmp(sin6->sin6_addr.s6_addr,zeroes,sizeof(sin6->sin6_addr.s6_addr)) == 0){
-	    perror("connect mcast output: local IPv6 address not set yet");
-	  } else if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_IF,&sin6->sin6_addr,sizeof(sin6->sin6_addr)) != 0){
-	    perror("connect mcast setsockopt IP_MULTICAST_IF");
-	  }
-	}
-	break;
-      }
-    } else {
-      fprintf(stderr,"connect mcast interface %s not found\n",iface);
-    }
-    freeifaddrs(ifap);
-    ifap = NULL;
-  }
-#endif
+  // Better to drop a packet than to block real-time processing
   fcntl(fd,F_SETFL,O_NONBLOCK);
   if(connect(fd,sock,sizeof(struct sockaddr)) != 0){
     perror("connect mcast");
@@ -175,7 +140,16 @@ int listen_mcast(void const *s,char const *iface){
     perror("setup_mcast socket");
     return -1;
   }      
-  soptions(fd,-1,-1);
+  switch(sock->sa_family){
+  case AF_INET:
+    ipv4_soptions(fd,-1,-1);
+    break;
+  case AF_INET6:
+    ipv6_soptions(fd,-1,-1);
+    break;
+  default:
+    return -1;
+  }
   // Strictly speaking, it is not necessary to join a multicast group to which we only send.
   // But this creates a problem with "smart" switches that do IGMP snooping.
   // They have a setting to handle what happens with unregistered
@@ -640,10 +614,10 @@ int setportnumber(void *s,uint16_t port){
   return 0;
 }
 
-// Set options on multicast socket
-static void soptions(int const fd,int const mcast_ttl,int const tos){
+// Set options on IPv4 multicast socket
+static void ipv4_soptions(int const fd,int const mcast_ttl,int const tos){
   // Failures here are not fatal
-#if defined(linux)
+#ifdef IP_FREEBIND
   int freebind = true;
   if(setsockopt(fd,IPPROTO_IP,IP_FREEBIND,&freebind,sizeof(freebind)) != 0)
     perror("freebind failed");
@@ -674,6 +648,38 @@ static void soptions(int const fd,int const mcast_ttl,int const tos){
   if(tos >= 0){
     // Only needed on output
     if(setsockopt(fd,IPPROTO_IP,IP_TOS,&tos,sizeof(tos)) != 0)
+      perror("so_tos failed");
+  }
+}
+// Set options on IPv6 multicast socket
+static void ipv6_soptions(int const fd,int const mcast_ttl,int const tos){
+  // Failures here are not fatal
+
+  int reuse = true; // bool doesn't work for some reason
+  if(setsockopt(fd,SOL_SOCKET,SO_REUSEPORT,&reuse,sizeof(reuse)) != 0)
+    perror("so_reuseport failed");
+  if(setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(reuse)) != 0)
+    perror("so_reuseaddr failed");
+
+  struct linger linger;
+  linger.l_onoff = 0;
+  linger.l_linger = 0;
+  if(setsockopt(fd,SOL_SOCKET,SO_LINGER,&linger,sizeof(linger)) != 0)
+    perror("so_linger failed");
+
+  if(mcast_ttl >= 0){
+    // Only needed on output
+    uint8_t ttl = mcast_ttl;
+    if(setsockopt(fd,IPPROTO_IPV6,IPV6_MULTICAST_HOPS,&ttl,sizeof(ttl)) != 0)
+      perror("so_ttl failed");
+  }
+  uint8_t loop = 1;
+  if(setsockopt(fd,IPPROTO_IPV6,IPV6_MULTICAST_LOOP,&loop,sizeof(loop)) != 0)
+    perror("so_loop failed");
+
+  if(tos >= 0){
+    // Only needed on output
+    if(setsockopt(fd,IPPROTO_IPV6,IPV6_TCLASS,&tos,sizeof(tos)) != 0)
       perror("so_tos failed");
   }
 }
