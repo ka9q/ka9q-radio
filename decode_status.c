@@ -122,9 +122,6 @@ int decode_fe_status(struct frontend *frontend,unsigned char const *buffer,int l
     case INPUT_METADATA_DEST_SOCKET:
       decode_socket(&frontend->input.metadata_dest_address,cp,optlen);
       break;
-    case INPUT_SSRC:
-      frontend->input.rtp.ssrc = decode_int(cp,optlen);
-      break;
     case INPUT_DATA_PACKETS:
       frontend->input.rtp.packets = decode_int(cp,optlen);
       break;
@@ -142,6 +139,9 @@ int decode_fe_status(struct frontend *frontend,unsigned char const *buffer,int l
       break;
     case OUTPUT_DATA_DEST_SOCKET:
       decode_socket(&frontend->input.data_dest_address,cp,optlen);
+      break;
+    case OUTPUT_SSRC:
+      frontend->input.rtp.ssrc = decode_int(cp,optlen);
       break;
     case OUTPUT_SAMPRATE:
       frontend->sdr.samprate = decode_int(cp,optlen);
