@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.86 2022/10/19 05:31:58 karn Exp $
+// $Id: multicast.c,v 1.87 2022/10/19 05:46:27 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -725,6 +725,10 @@ static int join_group(int const fd,void const * const sock,char const * const if
       else
 	ipv6_mreq.ipv6mr_interface = if_nametoindex(iface);
       
+      // Doesn't seem to be defined on Mac OSX, but is supposed to be synonymous with IPV6_JOIN_GROUP
+#ifndef IPV6_ADD_MEMBERSHIP
+#define IPV6_ADD_MEMBERSHIP IPV6_JOIN_GROUP      
+#endif
       if(setsockopt(fd,IPPROTO_IP,IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0){
 	perror("multicast v6 join");
 	return -1;
