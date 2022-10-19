@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.88 2022/10/19 06:07:37 karn Exp $
+// $Id: multicast.c,v 1.89 2022/10/19 06:21:43 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -31,8 +31,8 @@
 
 static int ipv4_join_group(int const fd,void const * const sock,char const * const iface);
 static int ipv6_join_group(int const fd,void const * const sock,char const * const iface);
-static void ipv4_soptions(int fd,int mcast_ttl,int tos);
-static void ipv6_soptions(int const fd,int const mcast_ttl,int const tos);
+static void set_ipv4_options(int fd,int mcast_ttl,int tos);
+static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos);
 
 // [samprate][channels][deemph]
 // Not all combinations are supported or useful,
@@ -107,12 +107,12 @@ int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
   // We avoid that by subscribing to our own multicasts.
   switch(sock->sa_family){
   case AF_INET:
-    ipv4_soptions(fd,ttl,tos);
+    set_ipv4_options(fd,ttl,tos);
     if(ipv4_join_group(fd,sock,iface) != 0)
       fprintf(stderr,"connect_mcast join_group failed\n");
     break;
   case AF_INET6:
-    ipv6_soptions(fd,ttl,tos);
+    set_ipv6_options(fd,ttl,tos);
     if(ipv6_join_group(fd,sock,iface) != 0)
       fprintf(stderr,"connect_mcast join_group failed\n");
     break;
@@ -145,13 +145,13 @@ int listen_mcast(void const *s,char const *iface){
   }      
   switch(sock->sa_family){
   case AF_INET:
-    ipv4_soptions(fd,-1,-1);
+    set_ipv4_options(fd,-1,-1);
     if(ipv4_join_group(fd,sock,iface) != 0)
      fprintf(stderr,"join_group failed\n");
     break;
   case AF_INET6:
-    ipv6_soptions(fd,-1,-1);
-  if(ipv6_join_group(fd,sock,iface) != 0)
+    set_ipv6_options(fd,-1,-1);
+    if(ipv6_join_group(fd,sock,iface) != 0)
      fprintf(stderr,"join_group failed\n");
     break;
   default:
@@ -340,13 +340,13 @@ char *formataddr(char *result,int size,void const *s){
   switch(sa->sa_family){
   case AF_INET:
     {
-      struct sockaddr_in *sin = (struct sockaddr_in *)sa;
+      struct sockaddr_in const *sin = (struct sockaddr_in *)sa;
       inet_ntop(AF_INET,&sin->sin_addr,result,size);
     }
     break;
   case AF_INET6:
     {
-      struct sockaddr_in6 *sin = (struct sockaddr_in6 *)sa;
+      struct sockaddr_in6 const *sin = (struct sockaddr_in6 *)sa;
       inet_ntop(AF_INET6,&sin->sin6_addr,result,size);
     }
     break;
@@ -406,7 +406,7 @@ char const *formatsock(void const *s){
   }
   // Not in list yet, add at top
   struct inverse_cache * const ic = (struct inverse_cache *)calloc(1,sizeof(*ic));
-  assert(ic); // Malloc failures are rare
+  assert(ic != NULL); // Malloc failures are rare
   char host[NI_MAXHOST],port[NI_MAXSERV];
   memset(host,0,sizeof(host));
   memset(port,0,sizeof(port));  
@@ -609,7 +609,7 @@ int setportnumber(void *s,uint16_t port){
 }
 
 // Set options on IPv4 multicast socket
-static void ipv4_soptions(int const fd,int const mcast_ttl,int const tos){
+static void set_ipv4_options(int const fd,int const mcast_ttl,int const tos){
   // Failures here are not fatal
 #ifdef IP_FREEBIND
   int freebind = true;
@@ -646,10 +646,10 @@ static void ipv4_soptions(int const fd,int const mcast_ttl,int const tos){
   }
 }
 // Set options on IPv6 multicast socket
-static void ipv6_soptions(int const fd,int const mcast_ttl,int const tos){
+static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos){
   // Failures here are not fatal
 
-  int reuse = true; // bool doesn't work for some reason
+  int const reuse = true; // bool doesn't work for some reason
   if(setsockopt(fd,SOL_SOCKET,SO_REUSEPORT,&reuse,sizeof(reuse)) != 0)
     perror("so_reuseport failed");
   if(setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(reuse)) != 0)
@@ -663,11 +663,11 @@ static void ipv6_soptions(int const fd,int const mcast_ttl,int const tos){
 
   if(mcast_ttl >= 0){
     // Only needed on output
-    uint8_t ttl = mcast_ttl;
+    uint8_t const ttl = mcast_ttl;
     if(setsockopt(fd,IPPROTO_IPV6,IPV6_MULTICAST_HOPS,&ttl,sizeof(ttl)) != 0)
       perror("so_ttl failed");
   }
-  uint8_t loop = 1;
+  uint8_t const loop = 1;
   if(setsockopt(fd,IPPROTO_IPV6,IPV6_MULTICAST_LOOP,&loop,sizeof(loop)) != 0)
     perror("so_loop failed");
 
