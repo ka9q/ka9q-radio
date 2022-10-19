@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.89 2022/10/19 06:21:43 karn Exp $
+// $Id: multicast.c,v 1.90 2022/10/19 06:27:31 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -612,12 +612,12 @@ int setportnumber(void *s,uint16_t port){
 static void set_ipv4_options(int const fd,int const mcast_ttl,int const tos){
   // Failures here are not fatal
 #ifdef IP_FREEBIND
-  int freebind = true;
+  int const freebind = true;
   if(setsockopt(fd,IPPROTO_IP,IP_FREEBIND,&freebind,sizeof(freebind)) != 0)
     perror("freebind failed");
 #endif
 
-  int reuse = true; // bool doesn't work for some reason
+  int const reuse = true; // bool doesn't work for some reason
   if(setsockopt(fd,SOL_SOCKET,SO_REUSEPORT,&reuse,sizeof(reuse)) != 0)
     perror("so_reuseport failed");
   if(setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(reuse)) != 0)
@@ -631,11 +631,11 @@ static void set_ipv4_options(int const fd,int const mcast_ttl,int const tos){
 
   if(mcast_ttl >= 0){
     // Only needed on output
-    uint8_t ttl = mcast_ttl;
+    uint8_t const ttl = mcast_ttl;
     if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_TTL,&ttl,sizeof(ttl)) != 0)
       perror("so_ttl failed");
   }
-  uint8_t loop = 1;
+  uint8_t const loop = 1;
   if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_LOOP,&loop,sizeof(loop)) != 0)
     perror("so_loop failed");
 
