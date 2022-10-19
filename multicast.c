@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.87 2022/10/19 05:46:27 karn Exp $
+// $Id: multicast.c,v 1.88 2022/10/19 06:07:37 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -29,7 +29,8 @@
 #include "multicast.h"
 #include "misc.h"
 
-static int join_group(int const fd,void const * const sock,char const * const iface);
+static int ipv4_join_group(int const fd,void const * const sock,char const * const iface);
+static int ipv6_join_group(int const fd,void const * const sock,char const * const iface);
 static void ipv4_soptions(int fd,int mcast_ttl,int tos);
 static void ipv6_soptions(int const fd,int const mcast_ttl,int const tos);
 
@@ -94,16 +95,6 @@ int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
     perror("setup_mcast socket");
     return -1;
   }      
-  switch(sock->sa_family){
-  case AF_INET:
-    ipv4_soptions(fd,ttl,tos);
-    break;
-  case AF_INET6:
-    ipv6_soptions(fd,ttl,tos);
-    break;
-  default:
-    return -1;
-  }
   // Strictly speaking, it is not necessary to join a multicast group to which we only send.
   // But this creates a problem with "smart" switches that do IGMP snooping.
   // They have a setting to handle what happens with unregistered
@@ -114,8 +105,20 @@ int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
   // But if the switches are set to pass unregistered multicasts, then IPv4 multicasts
   // that aren't subscribed to by anybody are flooded everywhere!
   // We avoid that by subscribing to our own multicasts.
-  if(join_group(fd,sock,iface) != 0)
-    fprintf(stderr,"connect_mcast join_group failed\n");
+  switch(sock->sa_family){
+  case AF_INET:
+    ipv4_soptions(fd,ttl,tos);
+    if(ipv4_join_group(fd,sock,iface) != 0)
+      fprintf(stderr,"connect_mcast join_group failed\n");
+    break;
+  case AF_INET6:
+    ipv6_soptions(fd,ttl,tos);
+    if(ipv6_join_group(fd,sock,iface) != 0)
+      fprintf(stderr,"connect_mcast join_group failed\n");
+    break;
+  default:
+    return -1;
+  }
 
   // Better to drop a packet than to block real-time processing
   fcntl(fd,F_SETFL,O_NONBLOCK);
@@ -143,26 +146,17 @@ int listen_mcast(void const *s,char const *iface){
   switch(sock->sa_family){
   case AF_INET:
     ipv4_soptions(fd,-1,-1);
+    if(ipv4_join_group(fd,sock,iface) != 0)
+     fprintf(stderr,"join_group failed\n");
     break;
   case AF_INET6:
     ipv6_soptions(fd,-1,-1);
+  if(ipv6_join_group(fd,sock,iface) != 0)
+     fprintf(stderr,"join_group failed\n");
     break;
   default:
     return -1;
   }
-  // Strictly speaking, it is not necessary to join a multicast group to which we only send.
-  // But this creates a problem with "smart" switches that do IGMP snooping.
-  // They have a setting to handle what happens with unregistered
-  // multicast groups (groups to which no IGMP messages are seen.)
-  // Discarding unregistered multicast breaks IPv6 multicast, which breaks ALL of IPv6
-  // because neighbor discovery uses multicast.
-  // It can also break IPv4 mDNS, though hardwiring 224.0.0.251 to flood can fix this.
-  // But if the switches are set to pass unregistered multicasts, then IPv4 multicasts
-  // that aren't subscribed to by anybody are flooded everywhere!
-  // We avoid that by subscribing to our own multicasts.
-  if(join_group(fd,sock,iface) != 0)
-     fprintf(stderr,"join_group failed\n");
-
   if((bind(fd,sock,sizeof(struct sockaddr)) != 0)){
     perror("listen mcast bind");
     close(fd);
@@ -685,58 +679,54 @@ static void ipv6_soptions(int const fd,int const mcast_ttl,int const tos){
 }
 
 // Join a socket to a multicast group
-static int join_group(int const fd,void const * const sock,char const * const iface){
+static int ipv4_join_group(int const fd,void const * const sock,char const * const iface){
   if(fd < 0 || sock == NULL)
     return -1;
 
   // Ensure it's a multicast address
   // Is this check really necessary?
   // Maybe the setsockopt would just fail cleanly if it's not
-  struct sockaddr const * const sap = (struct sockaddr *)sock;
-  switch(sap->sa_family){
-  case PF_INET:
-    {
-      struct sockaddr_in const * const sin = (struct sockaddr_in *)sock;
-      if(!IN_MULTICAST(ntohl(sin->sin_addr.s_addr)))
-	return -1;
+  struct sockaddr_in const * const sin = (struct sockaddr_in *)sock;
+  if(!IN_MULTICAST(ntohl(sin->sin_addr.s_addr)))
+    return -1;
+  
+  struct ip_mreqn mreqn;
+  mreqn.imr_multiaddr = sin->sin_addr;
+  mreqn.imr_address.s_addr = INADDR_ANY;
+  if(iface == NULL || strlen(iface) == 0)
+    mreqn.imr_ifindex = 0;
+  else
+    mreqn.imr_ifindex = if_nametoindex(iface);
+  if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0){
+    perror("multicast v4 join");
+    return -1;
+  }
+  return 0;
+}
+static int ipv6_join_group(int const fd,void const * const sock,char const * const iface){
+  if(fd < 0 || sock == NULL)
+    return -1;
 
-      struct ip_mreqn mreqn;
-      mreqn.imr_multiaddr = sin->sin_addr;
-      mreqn.imr_address.s_addr = INADDR_ANY;
-      if(iface == NULL || strlen(iface) == 0)
-	mreqn.imr_ifindex = 0;
-      else
-	mreqn.imr_ifindex = if_nametoindex(iface);
-      if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0){
-	perror("multicast v4 join");
-	return -1;
-      }
-    }
-    break;
-  case PF_INET6:
-    {
-      struct sockaddr_in6 const * const sin6 = (struct sockaddr_in6 *)sock;
-      if(!IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))
-	return -1;
-      struct ipv6_mreq ipv6_mreq;
-      ipv6_mreq.ipv6mr_multiaddr = sin6->sin6_addr;
-      if(iface == NULL || strlen(iface) == 0)
-	ipv6_mreq.ipv6mr_interface = 0; // Default interface
-      else
-	ipv6_mreq.ipv6mr_interface = if_nametoindex(iface);
-      
-      // Doesn't seem to be defined on Mac OSX, but is supposed to be synonymous with IPV6_JOIN_GROUP
+  // Ensure it's a multicast address
+  // Is this check really necessary?
+  // Maybe the setsockopt would just fail cleanly if it's not
+  struct sockaddr_in6 const * const sin6 = (struct sockaddr_in6 *)sock;
+  if(!IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))
+    return -1;
+  struct ipv6_mreq ipv6_mreq;
+  ipv6_mreq.ipv6mr_multiaddr = sin6->sin6_addr;
+  if(iface == NULL || strlen(iface) == 0)
+    ipv6_mreq.ipv6mr_interface = 0; // Default interface
+  else
+    ipv6_mreq.ipv6mr_interface = if_nametoindex(iface);
+  
+  // Doesn't seem to be defined on Mac OSX, but is supposed to be synonymous with IPV6_JOIN_GROUP
 #ifndef IPV6_ADD_MEMBERSHIP
 #define IPV6_ADD_MEMBERSHIP IPV6_JOIN_GROUP      
 #endif
-      if(setsockopt(fd,IPPROTO_IP,IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0){
-	perror("multicast v6 join");
-	return -1;
-      }
-    }
-    break;
-  default:
-    return -1; // Unknown address family
+  if(setsockopt(fd,IPPROTO_IP,IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0){
+    perror("multicast v6 join");
+    return -1;
   }
   return 0;
 }
@@ -794,7 +784,7 @@ void dump_interfaces(void){
     int const family = i->ifa_addr->sa_family;
 
     char const *familyname = NULL;
-    int socksize;
+    int socksize = 0;
     switch(family){
     case AF_INET:
       familyname = "AF_INET";
@@ -818,7 +808,6 @@ void dump_interfaces(void){
 #endif
     default:
       familyname = "?";
-      socksize = 0;
       break;
     }
     fprintf(stdout,"%s %s(%d)",i->ifa_name,familyname,family);
