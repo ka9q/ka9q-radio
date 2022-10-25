@@ -88,7 +88,7 @@ depend: .depend
 
 # Executables
 set_xcvr: set_xcvr.o
-	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lm -lpthread -lrt
 
 airspyd: airspyd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lairspy -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
