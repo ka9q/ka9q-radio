@@ -1,4 +1,4 @@
-// $Id: multicast.c,v 1.90 2022/10/19 06:27:31 karn Exp $
+// $Id: multicast.c,v 1.91 2022/10/25 01:57:52 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
 
@@ -630,12 +630,10 @@ static void set_ipv4_options(int const fd,int const mcast_ttl,int const tos){
     perror("so_linger failed");
 
   if(mcast_ttl >= 0){
-    // Only needed on output
-    uint8_t const ttl = mcast_ttl;
-    if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_TTL,&ttl,sizeof(ttl)) != 0)
+    if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_TTL,&mcast_ttl,sizeof(mcast_ttl)) != 0)
       perror("so_ttl failed");
   }
-  uint8_t const loop = 1;
+  uint8_t const loop = true;
   if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_LOOP,&loop,sizeof(loop)) != 0)
     perror("so_loop failed");
 
