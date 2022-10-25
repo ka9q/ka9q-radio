@@ -1,4 +1,4 @@
-# $Id: Makefile.linux,v 1.110 2022/10/06 23:14:03 karn Exp $
+# $Id: Makefile.linux,v 1.111 2022/10/25 03:32:55 karn Exp $
 
 # for production
 DOPTS = -DNDEBUG=1 -O3
@@ -87,6 +87,9 @@ depend: .depend
 .PHONY: clean all install depend
 
 # Executables
+set_xcvr: set_xcvr.o
+	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lm -lpthread
+
 airspyd: airspyd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lairspy -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
 
