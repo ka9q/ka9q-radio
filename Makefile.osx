@@ -1,4 +1,4 @@
-# $Id: Makefile.osx,v 1.112 2022/08/17 22:01:58 karn Exp $
+# $Id: Makefile.osx,v 1.112 2022/08/17 22:01:58 karn Exp karn $
 CFLAGS=-g -DNDEBUG=1 -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 #CFLAGS=-g -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `pkg-config --cflags fftw3`
 BINDIR=/usr/local/bin
@@ -102,6 +102,9 @@ tune: tune.o libradio.a
 
 wspr-decoded: wspr-decoded.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread    
+
+set_xcvr: set_xcvr.o
+	  $(CC) -g -o $@ $^ -lpigpio -lpthread
 
 
 # Binary libraries
