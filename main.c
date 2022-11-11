@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.260 2022/10/06 22:54:51 karn Exp $
+// $Id: main.c,v 1.261 2022/11/11 02:51:40 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -345,9 +345,12 @@ static int loadconfig(char const * const file){
   }
   // Process individual demodulator sections
   if(Modetable == NULL){
-    Modetable = iniparser_load(Modefile); // Kept open for duration of program
+    char modefile[PATH_MAX];
+    dist_path(modefile,sizeof(modefile),Modefile);
+
+    Modetable = iniparser_load(modefile); // Kept open for duration of program
     if(Modetable == NULL){
-      fprintf(stdout,"Can't load mode file %s\n",Modefile);
+      fprintf(stdout,"Can't load mode file %s\n",modefile);
       return -1;
     }
   }
