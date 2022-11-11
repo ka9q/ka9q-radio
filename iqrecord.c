@@ -89,7 +89,7 @@ int main(int argc,char *argv[]){
       Verbose++;
       break;
     default:
-      fprintf(stderr,"Usage: %s -I iq multicast address [-l locale] [-d duration][-q][-v]\n",argv[0]);
+      fprintf(stderr,"Usage: %s multicast_addr -S status_addr [-r samp_rate] [-d duration_sec] [-D dir_name] [-l locale] [-d duration] [-q] [-v]\n",argv[0]);
       exit(1);
       break;
     }

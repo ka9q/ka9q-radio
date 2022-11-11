@@ -31,8 +31,9 @@ struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "vl:r:s:";
+char Optstring[] = "hvl:r:s:";
 struct option Options[] = {
+  {"help", no_argument, NULL, 'h'},
   {"ssrc", required_argument, NULL, 's'},
   {"radio", required_argument, NULL, 'r'},
   {"locale", required_argument, NULL, 'l'},
@@ -63,6 +64,11 @@ int main(int argc,char *argv[]){
       case 'r':
 	Radio = optarg;
 	break;
+      default:
+    fprintf(stderr,"Invalid command line option -%c\n",c);
+      case 'h':
+    fprintf(stderr,"Usage: %s [-h] [-l LOCALE] -r/--radio RADIO -s/--ssrc SSRC [-v] FREQUENCY",argv[0]);
+    exit(-1);
       }
     }
   }

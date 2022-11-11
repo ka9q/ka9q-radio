@@ -116,7 +116,7 @@ int main(int argc,char *argv[]){
 #endif
 
   int c;
-  while((c = getopt(argc,argv,"N:vp:I")) != -1){
+  while((c = getopt(argc,argv,"N:hvp:I")) != -1){
     switch(c){
     case 'p':
       Fftw_plan_timelimit = strtod(optarg,NULL);
@@ -132,10 +132,11 @@ int main(int argc,char *argv[]){
       break;
     default:
       fprintf(stdout,"Unknown command line option %c\n",c);
-      break;
+    case 'h':
+      fprintf(stderr,"Usage: %s [-I] [-N name] [-h] [-p fftw_plan_time_limit] [-v [-v] ...] <CONFIG_FILE>\n", argv[0]);
+      exit(0);
     }
   }
-
   
   // Graceful signal catch
   signal(SIGPIPE,closedown);
