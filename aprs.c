@@ -33,6 +33,7 @@ char *Dest = "127.0.0.1:4533";
 double const WGS84_E = 0.081819190842622;  // Eccentricity
 double const WGS84_A = 6378137;         // Equatorial radius, meters
 
+const char *App_path;
 int Verbose;
 int Input_fd = -1;
 
@@ -43,6 +44,7 @@ char *parse_position(char *data,double *latitude,double *longitude,double *altit
 char *parse_mice_position(struct ax25_frame *frame,char *data,double *latitude, double *longitude);
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   setlocale(LC_ALL,getenv("LANG"));
   setlinebuf(stdout);
 

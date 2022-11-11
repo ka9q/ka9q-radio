@@ -1,5 +1,5 @@
 // $Id: bandplan.c,v 1.14 2022/04/14 10:50:43 karn Exp $
-// Routines for processing the file /usr/local/share/ka9q-radio/bandplan.txt
+// Routines for processing the file bandplan.txt
 // containing general information about ham radio bandplans, other radio channels, etc
 // This information is displayed in the 'Info' window by the 'radio' program
 // Copyright 2018, Phil Karn, KA9Q
@@ -17,8 +17,6 @@
 #include "conf.h"
 #include "misc.h"
 #include "bandplan.h"
-
-extern char const *Libdir;
 
 char Bandplan_file[] = BANDPLAN; 
 #define MAX_BANDPLANS 1000
@@ -68,7 +66,8 @@ struct bandplan *lookup_frequency(double f){
 int init_bandplan(){
   char fname[PATH_MAX];
 
-  snprintf(fname,sizeof(fname),"%s/%s",Libdir,Bandplan_file);
+  if (dist_path(fname,sizeof(fname),Bandplan_file) == -1)
+    return -1;
 
   FILE * const fp = fopen(fname,"r");
   if(fp == NULL)

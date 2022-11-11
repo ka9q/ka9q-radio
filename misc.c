@@ -14,13 +14,43 @@
 #include <time.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <libgen.h>
+#include <sys/stat.h>
 
 #ifndef NULL
 #define NULL ((void *)0)
 #endif
 
+#include "conf.h"
 #include "misc.h"
 
+char const *Libdir = LIBDIR;
+
+// Return path to file which is part of the application distribution.
+// This allows to run the program either from build directory or from
+// installation directory.
+int dist_path(char *path,int path_len,const char *fname){
+  char cwd[PATH_MAX];
+  struct stat st;
+
+  if(fname[0] == '/') {
+    strncpy(path, fname, path_len);
+    return 0;
+  }
+
+  dirname(realpath(App_path,cwd));
+  snprintf(path,path_len,"%s/%s",cwd,fname);
+  if(stat(path, &st) == 0) {
+      if((st.st_mode & S_IFMT) == S_IFREG) return 0;
+  }
+
+  snprintf(path,path_len,"%s/%s",Libdir,fname);
+  if(stat(path, &st) == 0) {
+      if((st.st_mode & S_IFMT) == S_IFREG) return 0;
+  }
+
+  return -1;
+}
 
 // Fill buffer from pipe
 // Needed because reads from a pipe can be partial

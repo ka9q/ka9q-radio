@@ -52,6 +52,7 @@ char *Locale;
 int RTP_ttl;
 int Status_ttl;
 int IP_tos;
+const char *App_path;
 int Verbose;
 struct airspyhf_device *Device; // Set for benefit of closedown()
 
@@ -132,6 +133,7 @@ char const *Name;
 char const *Conf_file;
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   umask(02);
 #if 0
   // Dump environment variables

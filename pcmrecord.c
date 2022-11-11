@@ -90,6 +90,7 @@ struct session {
 
 float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
 
+const char *App_path;
 int Verbose;
 char PCM_mcast_address_text[256];
 char const *Recordings = ".";
@@ -108,6 +109,7 @@ struct session *create_session(struct rtp_header *);
 
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
 #if 0 // Better done manually or in systemd?
   // if we have root, up our priority and drop privileges
   int prio = getpriority(PRIO_PROCESS,0);

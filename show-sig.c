@@ -25,6 +25,7 @@ int decode_rtp_status(unsigned char const *buffer,int length);
 int decode_frontend_status(unsigned char const *buffer,int length);
 
 
+const char *App_path;
 int Verbose,Dump;
 
 struct sockaddr_storage Output_metadata_dest_address;
@@ -81,6 +82,7 @@ int FE_fd = -1;
 // I had been running this at normal priority, but it can start new demodulators
 // so it must also run at preferred priority
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   {
     int c;
 

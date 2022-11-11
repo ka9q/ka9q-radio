@@ -45,9 +45,8 @@ static int const DEFAULT_MCAST_TTL = 1;
 float Refresh_rate = 0.1f;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
 int IP_tos = DEFAULT_IP_TOS;
-char const *Libdir = "/usr/local/share/ka9q-radio";
 char Locale[256] = "en_US.UTF-8";
-char const *Modefile = "/usr/local/share/ka9q-radio/modes.conf"; // make configurable!
+char const *Modefile = "modes.conf"; // make configurable!
 dictionary *Mdict;
 
 struct frontend Frontend;
@@ -64,6 +63,7 @@ int Ctl_fd,Status_fd;
 uint64_t Metadata_packets;
 uint64_t Block_drops;
 
+const char *App_path;
 int Verbose;
 bool Resized = false;
 
@@ -94,14 +94,14 @@ static void process_mouse(struct demod *demod,unsigned char **bpp);
 static int decode_radio_status(struct demod *demod,unsigned char const *buffer,int length);
 static int for_us(struct demod *demod,unsigned char const *buffer,int length,uint32_t ssrc);
 
-
 // Pop up a temporary window with the contents of a file in the
 // library directory (usually /usr/local/share/ka9q-radio/)
 // then wait for a single keyboard character to clear it
 void popup(char const *filename){
   static int const maxcols = 256;
   char fname[PATH_MAX];
-  snprintf(fname,sizeof(fname),"%s/%s",Libdir,filename);
+  if (dist_path(fname,sizeof(fname),filename) == -1)
+    return;
   FILE * const fp = fopen(fname,"r");
   if(fp == NULL)
     return;
@@ -324,6 +324,7 @@ uint32_t Ssrc = 0;
 // I had been running this at normal priority, but it can start new demodulators
 // so it must also run at preferred priority
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   {
     int c;
     while((c = getopt(argc,argv,"vs:")) != -1){
@@ -430,9 +431,15 @@ int main(int argc,char *argv[]){
     demods = NULL;
     exit(0);
   }
-  Mdict = iniparser_load(Modefile);
+
+  char modefile_path[PATH_MAX];
+  if (dist_path(modefile_path,sizeof(modefile_path),Modefile) == -1) {
+    fprintf(stderr,"Could not find mode file %s\n", Modefile);
+    exit(1);
+  }
+  Mdict = iniparser_load(modefile_path);
   if(Mdict == NULL){
-    fprintf(stdout,"Can't load mode file %s\n",Modefile);
+    fprintf(stdout,"Can't load mode file %s\n",modefile_path);
     exit(1);
   }
 
@@ -1584,7 +1591,7 @@ void display_modes(WINDOW *w,struct demod const *demod){
   if(w == NULL)
     return;
 
-  // Display list of modes defined in /usr/local/share/ka9q-radio/modes.conf
+  // Display list of modes defined in modes.conf
   // These are now really presets that select a demodulator and parameters,
   // so they're no longer underlined
   // Can be selected with mouse

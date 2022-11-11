@@ -1,5 +1,5 @@
 // $Id: modes.c,v 1.66 2022/06/23 22:13:29 karn Exp $
-// Load and search mode definition table in /usr/local/share/ka9q-radio/modes.conf
+// Load and search mode definition table in modes.conf
 
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1  // Avoid warnings when including dsp.h

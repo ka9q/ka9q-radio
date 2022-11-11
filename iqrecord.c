@@ -41,6 +41,7 @@
 // This should be large to minimize write calls, but how big?
 #define BUFFERSIZE (1<<20)
 
+const char *App_path;
 int Verbose;
 int Quiet;
 double Duration = INFINITY;
@@ -55,6 +56,7 @@ struct frontend Frontend;
 void cleanup(void);
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   char *locale;
   locale = getenv("LANG");
   setlocale(LC_ALL,locale);

@@ -32,6 +32,7 @@ int const Channels = 2;
 // Command line params
 char *Audiodev = "";
 char *Mcast_output_address_text = "";     // Multicast address we're sending to
+const char *App_path;
 int Verbose;                  // Verbosity flag (currently unused)
 int Mcast_ttl = 1;
 int IP_tos = 48; // AF12 << 2
@@ -62,6 +63,7 @@ static inline int signmod(unsigned int const a){
 }
 
 int main(int argc,char * const argv[]){
+  App_path = argv[0];
 #if 0 // Better done manually or in systemd?
   // Try to improve our priority
   int prio = getpriority(PRIO_PROCESS,0);

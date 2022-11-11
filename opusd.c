@@ -75,6 +75,7 @@ float const SCALE = 1./SHRT_MAX;
 // Command line params
 int Mcast_ttl = 1;
 int IP_tos = 48;              // AF12 << 2
+const char *App_path;
 int Verbose;                  // Verbosity flag (currently unused)
 int Opus_bitrate = 32;        // Opus stream audio bandwidth; default 32 kb/s
 int Discontinuous = 0;        // Off by default
@@ -148,6 +149,7 @@ struct sockaddr_storage Opus_dest_address;
 struct sockaddr_storage Opus_source_address;
 
 int main(int argc,char * const argv[]){
+  App_path = argv[0];
 
   setlocale(LC_ALL,getenv("LANG"));
 

@@ -27,6 +27,7 @@
 #include "status.h"
 
 
+const char *App_path;
 int Verbose;
 int Mcast_ttl = 1; // Don't send fast IQ streams beyond the local network by default
 int IP_tos = 48; // AF12 << 2
@@ -79,6 +80,7 @@ char const Optstring[] = "A:D:R:S:T:b:f:vr:";
 
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
 #if 0 // Better done manually?
   // if we have root, up our priority and drop privileges
   int prio = getpriority(PRIO_PROCESS,0);

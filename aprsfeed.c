@@ -32,6 +32,7 @@ char *User;
 char *Passcode;
 char *Logfilename;
 FILE *Logfile;
+const char *App_path;
 int Verbose;
 
 int Input_fd = -1;
@@ -41,6 +42,7 @@ pthread_t Read_thread;
 void *netreader(void *arg);
 
 int main(int argc,char *argv[]){
+  App_path = argv[0];
   // Quickly drop root if we have it
   // The sooner we do this, the fewer options there are for abuse
   if(seteuid(getuid()) != 0)
