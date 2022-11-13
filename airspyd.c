@@ -20,7 +20,7 @@
 #include <signal.h>
 #include <locale.h>
 #include <sys/time.h>
-#include <libairspy/airspy.h>
+#include <airspy.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <errno.h>

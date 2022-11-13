@@ -25,7 +25,7 @@ libopus-dev
 
 Then:
 
-$ ln -s Makefile.linux Makefile
+$ cmake .
 $ make
 $ sudo make install
 

@@ -8,8 +8,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <limits.h>
-#include <string.h>
+#if __linux__
 #include <bsd/string.h>
+#else
+#include <string.h>
+#endif
 #include <netdb.h>
 #include <locale.h>
 #include <sys/time.h>

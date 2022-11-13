@@ -13,7 +13,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <opus/opus.h>
+#include <opus.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <netdb.h>

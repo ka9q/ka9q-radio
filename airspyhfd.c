@@ -19,7 +19,7 @@
 #include <signal.h>
 #include <locale.h>
 #include <sys/time.h>
-#include <libairspyhf/airspyhf.h>
+#include <airspyhf.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <errno.h>

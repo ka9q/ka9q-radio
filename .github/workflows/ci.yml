@@ -5,15 +5,13 @@ on: [push, pull_request]
 jobs:
   ubuntu-build:
     name: Ubuntu CI
-    strategy:
-      matrix:
-        makefile: [Makefile.linux, Makefile.debug]
     runs-on: ubuntu-20.04
     steps:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y \
+            cmake \
             libusb-1.0-0-dev \
             libncurses5-dev \
             libfftw3-dev \
@@ -29,11 +27,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Setup
-        run: ln -s ${{ matrix.makefile }} Makefile
+        run: cmake -S . -B build
       - name: Compile
-        run: make
+        run: make -C build
       - name: Install
-        run: sudo make install
+        run: sudo make -C build install
   macos-build:
     name: MacOS CI
     runs-on: macos-11.0
@@ -42,6 +40,7 @@ jobs:
         run: |
           brew update
           brew install \
+            cmake \
             glib \
             libusb \
             ncurses \
@@ -76,8 +75,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Setup
-        run: ln -s Makefile.osx Makefile
+        run: cmake -S . -B build
       - name: Compile
-        run: make
+        run: make -C build
       - name: Install
-        run: sudo make install
+        run: sudo make -C build install
