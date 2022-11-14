@@ -19,8 +19,8 @@ DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
-#DAEMONS=aprs aprsfeed funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdr sdrplayd
-DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdr
+#DAEMONS=aprs aprsfeed funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd sdrplayd
+DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd
 
 EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt
 
@@ -45,7 +45,7 @@ BLACKLIST=airspy-blacklist.conf
 
 SRC=airspyd.c airspyhfd.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c fcd.c filter.c fm.c \
 	   tune.c funcubed.c iir.c iqplay.c iqrecord.c linear.c main.c metadump.c misc.c modes.c modulate.c monitor.c morse.c radio.c setfilt.c \
-	   show-sig.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdr.c pcmspawn.c \
+	   show-sig.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdrd.c pcmspawn.c \
 	   sdrplayd.c status.c stereod.c wfm.c wspr-decoded.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
 	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h
 
@@ -106,7 +106,7 @@ control: control.o modes.o bandplan.o decode_status.o libradio.a
 cwd: cwd.o morse.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
 
-rtlsdr: rtlsdr.o libradio.a
+rtlsdr: rtlsdrd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lrtlsdr -lavahi-client -lavahi-common -lbsd -lm -lpthread
 
 tune: tune.o libradio.a
