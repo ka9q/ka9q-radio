@@ -27,7 +27,7 @@ pcmspawn
 pl
 radiod
 rdsd
-rtlsdr
+rtlsdrd
 sdrplayd
 setfilt
 show-pkt
