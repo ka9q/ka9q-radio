@@ -35,7 +35,7 @@ use by other programs.
 Separate programs talk directly to several makes of SDR front end
 hardware and generates the I/Q stream for *radiod*. These programs
 currently include *airspyd* (Airspy R2), *airspyhfd* (Airspy HF+),
-*rtlsdr* (generic RTL-SDR dongles), *funcubed* (AMSAT UK Funcube Pro+)
+*rtlsdrd* (generic RTL-SDR dongles), *funcubed* (AMSAT UK Funcube Pro+)
 and *hackrf* (Great Scott Gadgets Hack RF One, receive only).
 
 Two very rudimentary programs are provided for interactive use;
