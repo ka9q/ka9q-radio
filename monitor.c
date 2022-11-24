@@ -12,9 +12,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
 #include <limits.h>
-
 #include <opus/opus.h>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -24,6 +22,7 @@
 #include <locale.h>
 #include <signal.h>
 #include <getopt.h>
+#include <iniparser.h>
 #if __linux__
 #include <bsd/string.h>
 #else
@@ -31,6 +30,7 @@
 #endif
 
 #include "conf.h"
+#include "config.h"
 #include "misc.h"
 #include "multicast.h"
 #include "iir.h"
@@ -51,6 +51,7 @@ static int Update_interval = 100;  // Default time in ms between display updates
 static bool List_audio;            // List audio output devices and exit
 const char *App_path;
 int Verbose;                       // Verbosity flag
+static char const *Config_file;
 static bool Quiet;                 // Disable curses
 static bool Quiet_mode;            // Toggle screen activity after starting
 static float Playout = 100;
@@ -63,14 +64,21 @@ static pthread_cond_t PTT_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t PTT_mutex = PTHREAD_MUTEX_INITIALIZER;
 static long long Repeater_tail;
 static char const *Cwid = "de nocall/r"; // Make this configurable!
+static double ID_pitch = 800.0;
+static double ID_level = -29.0;
+static double ID_speed = 18.0;
+static char *Tx_on = "set_xcvr txon";
+static char *Tx_off = "set_xcvr txoff";
+static char *Init;
+
 static long long Last_id_time = 0;
 static int Dit_length; 
 static bool Autonotch = 0;
 
 // IDs must be at least every 10 minutes per FCC 97.119(a)
-static long long const MANDATORY_ID_INTERVAL = 600 * BILLION;
+static long long Mandatory_ID_interval;
 // ID early when carrier is about to drop, to avoid stepping on users
-static long long const QUIET_ID_INTERVAL = (MANDATORY_ID_INTERVAL / 2);
+static long long Quiet_ID_interval;
 
 
 // Global variables
@@ -178,24 +186,20 @@ static void *repeater_ctl(void *arg);
 static char const *lookupid(uint32_t ssrc);
 static float make_position(int);
 
-
-static char Optstring[] = "i:I:LR:Sap:qr:t:u:vn";
+static char Optstring[] = "I:LR:Saf:p:qr:u:vn";
 static struct  option Options[] = {
-   {"pcm_in", required_argument, NULL, 'I'},
-   {"opus_in", required_argument, NULL, 'I'},
+   {"input", required_argument, NULL, 'I'},
    {"list-audio", no_argument, NULL, 'L'},
    {"audio-dev", required_argument, NULL, 'R'},
    {"autosort", no_argument, NULL, 'S'},
    {"auto-position", no_argument, NULL, 'a'},
-   {"id", required_argument, NULL, 'i'},
+   {"config", required_argument, NULL, 'f'},
    {"playout", required_argument, NULL, 'p'},
    {"quiet", no_argument, NULL, 'q'},
    {"samprate",required_argument,NULL,'r'},
-   {"repeater", required_argument, NULL, 't'},
    {"update", required_argument, NULL, 'u'},
    {"verbose", no_argument, NULL, 'v'},
    {"notch", no_argument, NULL, 'n'},
-
    {NULL, 0, NULL, 0},
 };
 
@@ -217,12 +221,6 @@ int main(int argc,char * const argv[]){
     case 'n':
       Autonotch = true;
       break;
-    case 'i':
-      Cwid = optarg;
-      break;
-    case 't':
-      Repeater_tail = BILLION * fabsf(strtof(optarg,NULL));
-      break;
     case 'L':
       List_audio = true;
       break;
@@ -230,7 +228,7 @@ int main(int argc,char * const argv[]){
       strlcpy(Audiodev,optarg,sizeof(Audiodev));
       break;
     case 'v':
-      Verbose++;
+      Verbose = true;
       break;
     case 'I':
       if(Nfds == MAX_MCAST){
@@ -256,11 +254,52 @@ int main(int argc,char * const argv[]){
     case 'S':
       Auto_sort = true;
       break;
+    case 'f':
+      Config_file = optarg;
+      break;
     default:
       fprintf(stderr,"Usage: %s [-a] [-v] [-q] [-L] [-u update] [-R audio_device] [-p|-P playout_delay_ms] [-r samprate] -I mcast_address [-I mcast_address]\n",argv[0]);
       exit(1);
     }
   }
+  if(Config_file){
+    dictionary *Configtable = iniparser_load(Config_file);
+    if(Configtable == NULL){
+     fprintf(stdout,"Can't load config file %s\n",Config_file);
+      exit(1);
+    }
+    char const *Section = "audio";
+
+    Cwid = strdup(config_getstring(Configtable,Section,"id","NOCALL"));
+    int period = config_getint(Configtable,Section,"period",600);
+    Mandatory_ID_interval = period * BILLION;
+    Quiet_ID_interval = Mandatory_ID_interval / 2;
+    ID_pitch = config_getdouble(Configtable,Section,"pitch",ID_pitch);
+    ID_level = config_getdouble(Configtable,Section,"level",ID_level);
+    Autonotch = config_getboolean(Configtable,Section,"notch",Autonotch);
+    Quiet = config_getboolean(Configtable,Section,"quiet",Quiet);
+    Auto_position = config_getboolean(Configtable,Section,"auto-position",Auto_position);
+    Playout = config_getdouble(Configtable,Section,"playout",Playout);
+    Repeater_tail = config_getdouble(Configtable,Section,"tail",Repeater_tail);
+    Verbose = config_getboolean(Configtable,Section,"verbose",Verbose);
+    char const *txon = config_getstring(Configtable,Section,"txon",NULL);
+    char const *txoff = config_getstring(Configtable,Section,"txoff",NULL);
+    if(txon)
+      Tx_on = strdup(txon);
+    if(txoff)
+      Tx_off = strdup(txoff);
+
+    char const *init = config_getstring(Configtable,Section,"init",NULL);
+    if(init)
+      Init = strdup(init);
+
+    char const *input = config_getstring(Configtable,Section,"input",NULL);
+    if(input)
+      Mcast_address_text[Nfds++] = strdup(input);
+    iniparser_freedict(Configtable);
+  }
+
+
   // Also accept groups without -I option
   for(int i=optind; i < argc; i++){
     if(Nfds == MAX_MCAST){
@@ -268,14 +307,17 @@ int main(int argc,char * const argv[]){
     } else 
       Mcast_address_text[Nfds++] = argv[i];
   }
+  if(Init)
+    system(Init);
 
-  if(Repeater_tail != 0){
+
+  if(Cwid != NULL){
     // Operating as a repeater controller; initialize
     // Make these settable parameters
     // -29 dB is -15 + (-14).
     // -15 dBFS is the target level of the FM demodulator
     // -14 dB is 1 kHz ID deviation divided by 5 kHz peak deviation
-    Dit_length = init_morse(18.0,800.0,-29.0,48000.0);
+    Dit_length = init_morse(ID_speed,ID_pitch,ID_level,Samprate);
   }    
   tzset();
   PaError r = Pa_Initialize();
@@ -783,6 +825,7 @@ static void *decode_task(void *arg){
       pthread_mutex_lock(&PTT_mutex);
       if(Repeater_tail != 0 && !PTT_state){
 	PTT_state = true;
+	system(Tx_on);
 	keyup = true;
 	pthread_cond_signal(&PTT_cond);
       }
@@ -824,6 +867,9 @@ static void *decode_task(void *arg){
 static void *display(void *arg){
 
   pthread_setname("display");
+  // Reset priority in case the monitor program is running at high (important) level, we don't need it
+  setpriority(PRIO_PROCESS,0,0);
+
 
   if(initscr() == NULL){
     fprintf(stderr,"initscr() failed, disabling control/display thread\n");
@@ -1409,16 +1455,16 @@ void *repeater_ctl(void *arg){
 
     // Transmitter is on; are we required to ID?
     long long now = gps_time_ns();
-    if(now > Last_id_time + MANDATORY_ID_INTERVAL){
+    if(now > Last_id_time + Mandatory_ID_interval){
       // must ID on top of users to satisfy FCC max ID interval
       Last_id_time = now;
       send_cwid();
       now = gps_time_ns(); // send_cwid() has delays
     }
-    long long const drop_time = LastAudioTime + Repeater_tail;
+    long long const drop_time = LastAudioTime + BILLION * Repeater_tail;
     if(now < drop_time){
       // Sleep until possible end of timeout, or next mandatory ID, whichever is first
-      long long const sleep_time = min(drop_time,Last_id_time + MANDATORY_ID_INTERVAL) - now;
+      long long const sleep_time = min(drop_time,Last_id_time + Mandatory_ID_interval) - now;
       if(sleep_time > 0){
 	struct timespec ts;
 	ns2ts(&ts,sleep_time);
@@ -1428,7 +1474,7 @@ void *repeater_ctl(void *arg){
     }
     // Tail dropout timer expired
     // ID more often than 10 minutes to minimize IDing on top of users
-    if(now > Last_id_time + QUIET_ID_INTERVAL){
+    if(now > Last_id_time + Quiet_ID_interval){
       // update LastAudioTime here (even though it will be updated in the portaudio upcall)
       // so the PTT won't momentarily drop
       Last_id_time = now;
@@ -1444,6 +1490,7 @@ void *repeater_ctl(void *arg){
       }
       pthread_mutex_lock(&PTT_mutex);
       PTT_state = false;
+      system(Tx_off);
       pthread_mutex_unlock(&PTT_mutex);
     }
   }

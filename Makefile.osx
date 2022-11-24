@@ -59,7 +59,7 @@ modulate: modulate.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
 
 monitor: monitor.o morse.o libradio.a
-	$(CC) -g -o $@ $^ -lopus -lportaudio -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread
+	$(CC) -g -o $@ $^ -lopus -lportaudio -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread
 
 opusd: opusd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lopus -lm -lpthread

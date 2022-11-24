@@ -1,4 +1,4 @@
-# $Id: Makefile.debug,v 1.16 2022/10/06 23:24:36 karn Exp $
+# $Id: Makefile.linux,v 1.111 2022/10/25 03:32:55 karn Exp $
 
 # for production
 #DOPTS = -DNDEBUG=1 -O3
@@ -9,7 +9,7 @@ COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU
 
 # Get local versions (e.g., of librtlsdr)
 #LDOPTS=-L/usr/local/lib
-#LDOPTS=-g -L/usr/local/lib
+LDOPTS=-g -L/usr/local/lib
 
 INCLUDES+=-I/usr/include/iniparser/
 CFLAGS=$(DOPTS) $(COPTS) $(INCLUDES)
@@ -88,6 +88,9 @@ depend: .depend
 .PHONY: clean all install depend
 
 # Executables
+set_xcvr: set_xcvr.o config.o
+	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lm -lpthread -lrt
+
 airspyd: airspyd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lairspy -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
 
@@ -139,8 +142,8 @@ metadump: metadump.o dump.o libradio.a
 modulate: modulate.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
 
-monitor: monitor.o morse.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lncursesw -lbsd -lm -lpthread
+monitor: monitor.o morse.o config.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lncursesw -liniparser -lbsd -lm -lpthread
 
 opusd: opusd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lavahi-client -lavahi-common -lbsd -lm -lpthread
