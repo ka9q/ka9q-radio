@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <opus/opus.h>
+#include <opus.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/resource.h>

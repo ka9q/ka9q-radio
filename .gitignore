@@ -2,12 +2,12 @@
 *~
 *.a
 *.o
-Makefile
 .depend
 airspyd
 airspyhfd
 aprs
 aprsfeed
+build/
 control
 cwd
 funcubed

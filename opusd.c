@@ -17,7 +17,7 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
-#include <opus/opus.h>
+#include <opus.h>
 #include <netdb.h>
 #include <locale.h>
 #include <sys/time.h>
