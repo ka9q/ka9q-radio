@@ -52,7 +52,7 @@ pkg_check_modules(LIBUSB libusb-1.0 IMPORTED_TARGET)
 pkg_check_modules(OPUS opus IMPORTED_TARGET)
 pkg_check_modules(PORTAUDIO portaudio-2.0 REQUIRED IMPORTED_TARGET)
 
-include_directories(${FFTW3_INCLUDE_DIRS} ${INIPARSER_INCLUDE_DIR})
+include_directories(${LIBBSD_INCLUDE_DIRS} ${FFTW3_INCLUDE_DIRS} ${INIPARSER_INCLUDE_DIR})
 
 pkg_check_modules(SYSTEMD "systemd")
 if(SYSTEMD_FOUND AND "${SYSTEMD_UNITDIR}" STREQUAL "")
@@ -68,7 +68,7 @@ set(CURSES_NEED_NCURSES TRUE)
 find_package(Curses)
 
 add_library(daemons_common OBJECT avahi.c config.c misc.c multicast.c status.c)
-target_include_directories(daemons_common PUBLIC ${AVAHI_INCLUDE_DIRS} ${LIBBSD_INCLUDE_DIRS})
+target_include_directories(daemons_common PUBLIC ${AVAHI_INCLUDE_DIRS})
 set(DAEMONS_COMMON_LIBS PkgConfig::AVAHI ${INIPARSER_LIB} ${LIBBSD_LDFLAGS} m)
 
 ## Daemons
@@ -113,15 +113,12 @@ if(OPUS_FOUND)
 endif()
 
 add_executable(packetd ax25.c filter.c osc.c packetd.c $<TARGET_OBJECTS:daemons_common>)
-target_include_directories(packetd PUBLIC ${FFTW3_INCLUDE_DIRS})
 target_link_libraries(packetd ${DAEMONS_COMMON_LIBS} ${FFTW3_THREADS_LIB} PkgConfig::FFTW3)
 
 add_executable(radiod audio.c decode_status.c filter.c fm.c iir.c linear.c main.c modes.c osc.c radio.c radio_status.c rtcp.c wfm.c $<TARGET_OBJECTS:daemons_common>)
-target_include_directories(radiod PUBLIC ${FFTW3_INCLUDE_DIRS})
 target_link_libraries(radiod ${DAEMONS_COMMON_LIBS} ${FFTW3_THREADS_LIB} PkgConfig::FFTW3)
 
 add_executable(rdsd filter.c rdsd.c $<TARGET_OBJECTS:daemons_common>)
-target_include_directories(rdsd PUBLIC ${FFTW3_INCLUDE_DIRS})
 target_link_libraries(rdsd ${DAEMONS_COMMON_LIBS} ${FFTW3_THREADS_LIB} PkgConfig::FFTW3)
 
 if(LIBRTLSDR_FOUND)
@@ -163,59 +160,51 @@ install(
 ## CLI utils
 
 add_executable(control bandplan.c config.c control.c decode_status.c misc.c modes.c multicast.c status.c)
-target_include_directories(control PUBLIC ${CURSES_INCLUDE_DIRS} ${FFTW3_INCLUDE_DIRS} ${LIBBSD_INCLUDE_DIRS})
+target_include_directories(control PUBLIC ${CURSES_INCLUDE_DIRS})
 target_link_libraries(control ${CURSES_LIBRARIES} ${FFTW3_THREADS_LIB} PkgConfig::FFTW3 ${INIPARSER_LIB} ${LIBBSD_LDFLAGS} m)
 
 add_executable(iqplay attr.c avahi.c iqplay.c misc.c multicast.c status.c)
-target_include_directories(iqplay PUBLIC ${AVAHI_INCLUDE_DIRS} ${LIBBSD_INCLUDE_DIRS})
+target_include_directories(iqplay PUBLIC ${AVAHI_INCLUDE_DIRS})
 target_link_libraries(iqplay PkgConfig::AVAHI ${LIBBSD_LDFLAGS} m)
 
 add_executable(iqrecord attr.c decode_status.c iqrecord.c multicast.c status.c)
-target_include_directories(iqrecord PUBLIC ${FFTW3_INCLUDE_DIRS} ${LIBBSD_INCLUDE_DIRS})
 target_link_libraries(iqrecord ${FFTW3_THREADS_LIB} PkgConfig::FFTW3 ${LIBBSD_LDFLAGS} m)
 
 add_executable(metadump dump.c metadump.c misc.c multicast.c status.c)
-target_include_directories(metadump PUBLIC ${FFTW3_INCLUDE_DIRS} ${LIBBSD_INCLUDE_DIRS})
 target_link_libraries(metadump ${FFTW3_THREADS_LIB} PkgConfig::FFTW3 ${LIBBSD_LDFLAGS} m)
 
 add_executable(modulate filter.c misc.c modulate.c osc.c)
-target_include_directories(modulate PUBLIC ${FFTW3_INCLUDE_DIRS})
 target_link_libraries(modulate ${FFTW3_THREADS_LIB} PkgConfig::FFTW3 m)
 
 add_executable(monitor config.c iir.c misc.c monitor.c morse.c multicast.c osc.c)
-target_include_directories(monitor PUBLIC ${CURSES_INCLUDE_DIRS} ${LIBBSD_INCLUDE_DIRS} ${OPUS_INCLUDE_DIRS} ${PORTAUDIO_INCLUDE_DIRS})
+target_include_directories(monitor PUBLIC ${CURSES_INCLUDE_DIRS} ${OPUS_INCLUDE_DIRS} ${PORTAUDIO_INCLUDE_DIRS})
 target_link_libraries(monitor ${CURSES_LIBRARIES} ${INIPARSER_LIB} ${LIBBSD_LDFLAGS} PkgConfig::OPUS PkgConfig::PORTAUDIO m)
 
 add_executable(opussend multicast.c opussend.c)
-target_include_directories(opussend PUBLIC ${LIBBSD_INCLUDE_DIRS} ${OPUS_INCLUDE_DIRS} ${PORTAUDIO_INCLUDE_DIRS})
+target_include_directories(opussend PUBLIC ${OPUS_INCLUDE_DIRS} ${PORTAUDIO_INCLUDE_DIRS})
 target_link_libraries(opussend ${LIBBSD_LDFLAGS} PkgConfig::OPUS PkgConfig::PORTAUDIO m)
 
 add_executable(pcmcat multicast.c pcmcat.c)
-target_include_directories(pcmcat PUBLIC ${LIBBSD_INCLUDE_DIRS})
 target_link_libraries(pcmcat ${LIBBSD_LDFLAGS})
 
 add_executable(pcmrecord attr.c multicast.c pcmrecord.c)
-target_include_directories(pcmrecord PUBLIC ${LIBBSD_INCLUDE_DIRS})
 target_link_libraries(pcmrecord ${LIBBSD_LDFLAGS})
 
 add_executable(pcmsend multicast.c pcmsend.c)
-target_include_directories(pcmsend PUBLIC ${LIBBSD_INCLUDE_DIRS} ${PORTAUDIO_INCLUDE_DIRS})
+target_include_directories(pcmsend PUBLIC ${PORTAUDIO_INCLUDE_DIRS})
 target_link_libraries(pcmsend ${LIBBSD_LDFLAGS} PkgConfig::PORTAUDIO)
 
 add_executable(pcmspawn multicast.c pcmspawn.c status.c)
-target_include_directories(pcmspawn PUBLIC ${LIBBSD_INCLUDE_DIRS})
 target_link_libraries(pcmspawn ${LIBBSD_LDFLAGS})
 
 add_executable(pl filter.c misc.c multicast.c osc.c pl.c)
-target_include_directories(pl PUBLIC ${FFTW3_INCLUDE_DIRS} ${LIBBSD_INCLUDE_DIRS})
 target_link_libraries(pl ${FFTW3_THREADS_LIB} PkgConfig::FFTW3 ${LIBBSD_LDFLAGS} m)
 
 add_executable(show-pkt multicast.c show-pkt.c status.c)
-target_include_directories(show-pkt PUBLIC ${CURSES_INCLUDE_DIRS} ${LIBBSD_INCLUDE_DIRS})
+target_include_directories(show-pkt PUBLIC ${CURSES_INCLUDE_DIRS})
 target_link_libraries(show-pkt ${CURSES_LIBRARIES} ${LIBBSD_LDFLAGS})
 
 add_executable(setfilt multicast.c setfilt.c status.c)
-target_include_directories(setfilt PUBLIC ${LIBBSD_INCLUDE_DIRS})
 target_link_libraries(setfilt ${LIBBSD_LDFLAGS})
 
 if(PIGPIO_INCLUDE_DIR)
@@ -226,15 +215,13 @@ if(PIGPIO_INCLUDE_DIR)
 endif()
 
 add_executable(show-sig multicast.c show-sig.c status.c)
-target_include_directories(show-sig PUBLIC ${CURSES_INCLUDE_DIRS} ${LIBBSD_INCLUDE_DIRS})
+target_include_directories(show-sig PUBLIC ${CURSES_INCLUDE_DIRS})
 target_link_libraries(show-sig ${CURSES_LIBRARIES} ${LIBBSD_LDFLAGS} m)
 
 add_executable(tune misc.c multicast.c status.c tune.c)
-target_include_directories(tune PUBLIC ${LIBBSD_INCLUDE_DIRS})
 target_link_libraries(tune ${LIBBSD_LDFLAGS} m)
 
 add_executable(wspr-decoded attr.c multicast.c wspr-decoded.c)
-target_include_directories(wspr-decoded PUBLIC ${LIBBSD_INCLUDE_DIRS})
 target_link_libraries(wspr-decoded ${LIBBSD_LDFLAGS})
 
 ## Other
