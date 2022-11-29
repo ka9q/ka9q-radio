@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.191 2022/11/29 15:59:21 karn Exp $
+// $Id: monitor.c,v 1.192 2022/11/29 16:09:24 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -56,7 +56,7 @@ static bool Quiet_mode;            // Toggle screen activity after starting
 static float Playout = 100;
 static bool Start_muted;
 static bool Auto_position;
-static bool PTT_state = false;
+static bool PTT_state;
 static long long Audio_callbacks;
 static unsigned long Audio_frames;
 static long long LastAudioTime;
@@ -76,9 +76,9 @@ static char const *Audio = "audio";
 static char const *Repeater = "repeater";
 static char const *Display = "display";
 
-static long long Last_id_time = 0;
+static long long Last_id_time;
 static int Dit_length; 
-static bool Notch = 0;
+static bool Notch;
 static int Channels = 2;
 
 // IDs must be at least every 10 minutes per FCC 97.119(a)
@@ -231,6 +231,7 @@ int main(int argc,char * const argv[]){
       break;
     }
   }
+  optind = 0; // reset getopt()
   if(Config_file){
     dictionary *Configtable = iniparser_load(Config_file);
     if(Configtable == NULL){
