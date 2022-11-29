@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.188 2022/10/13 19:41:42 karn Exp $
+// $Id: monitor.c,v 1.191 2022/11/29 15:59:21 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -89,7 +89,7 @@ static long long Quiet_ID_interval;
 
 // Global variables
 static char *Mcast_address_text[MAX_MCAST]; // Multicast address(es) we're listening to
-static char const *Audiodev;           // Name of audio device; empty means portaudio's default
+static char const *Audiodev = "";    // Name of audio device; empty means portaudio's default
 static int Nfds;                     // Number of streams
 static pthread_mutex_t Sess_mutex = PTHREAD_MUTEX_INITIALIZER;
 static PaStream *Pa_Stream;          // Portaudio stream handle
@@ -385,7 +385,7 @@ int main(int argc,char * const argv[]){
   char *nextp = NULL;
   int d;
   int numDevices = Pa_GetDeviceCount();
-  if(strlen(Audiodev) == 0){
+  if(Audiodev == NULL || strlen(Audiodev) == 0){
     // not specified; use default
     inDevNum = Pa_GetDefaultOutputDevice();
   } else if(d = strtol(Audiodev,&nextp,0),nextp != Audiodev && *nextp == '\0'){
