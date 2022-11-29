@@ -1,4 +1,4 @@
-// $Id: control.c,v 1.165 2022/09/16 04:06:55 karn Exp $
+// $Id: control.c,v 1.166 2022/11/22 23:09:23 karn Exp karn $
 // Interactive program to send commands and display internal state of 'radio'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
@@ -368,13 +368,11 @@ int main(int argc,char *argv[]){
     unsigned ssrc_count = 0;
     struct demod *demods = NULL;
     unsigned demods_size = 0;
-    // The deadline starts at 1 sec in the future
-    // It is reset as long as we keep seeing new SSRCs
-    long long deadline = gps_time_ns() + BILLION;
-
-    send_poll(Ctl_fd,0);
-
     while(1){
+      // The deadline starts at 1 sec in the future
+      // It is reset as long as we keep seeing new SSRCs
+      long long deadline = gps_time_ns() + BILLION;
+      send_poll(Ctl_fd,0);
       fd_set fdset;
       FD_ZERO(&fdset);
       FD_SET(Status_fd,&fdset);
