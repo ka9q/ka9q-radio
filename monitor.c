@@ -41,7 +41,6 @@
 static int Samprate = 48000;  // Now applies only to hardware output
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 #define BUFFERSIZE (1<<19)    // about 10.92 sec at 48 kHz stereo - must be power of 2!!
-#define MAXSIZE  5760         // 120 ms @ 48K for biggest Opus frame
 static float const SCALE = 1./SHRT_MAX;
 static const float Latency = 0.02; // chunk size for audio output callback
 static const float Tone_period = 0.24; // PL tone integration period
@@ -58,6 +57,8 @@ static float Playout = 100;
 static bool Start_muted;
 static bool Auto_position;
 static bool PTT_state = false;
+static long long Audio_callbacks;
+static unsigned long Audio_frames;
 static long long LastAudioTime;
 static pthread_t Repeater_thread;
 static pthread_cond_t PTT_cond = PTHREAD_COND_INITIALIZER;
@@ -67,13 +68,18 @@ static char const *Cwid = "de nocall/r"; // Make this configurable!
 static double ID_pitch = 800.0;
 static double ID_level = -29.0;
 static double ID_speed = 18.0;
-static char *Tx_on = "set_xcvr txon";
-static char *Tx_off = "set_xcvr txoff";
-static char *Init;
+static char const *Tx_on = "set_xcvr txon";
+static char const *Tx_off = "set_xcvr txoff";
+static char const *Init;
+static char const *Radio = "radio";
+static char const *Audio = "audio";
+static char const *Repeater = "repeater";
+static char const *Display = "display";
 
 static long long Last_id_time = 0;
 static int Dit_length; 
-static bool Autonotch = 0;
+static bool Notch = 0;
+static int Channels = 2;
 
 // IDs must be at least every 10 minutes per FCC 97.119(a)
 static long long Mandatory_ID_interval;
@@ -83,7 +89,7 @@ static long long Quiet_ID_interval;
 
 // Global variables
 static char *Mcast_address_text[MAX_MCAST]; // Multicast address(es) we're listening to
-static char Audiodev[256];           // Name of audio device; empty means portaudio's default
+static char const *Audiodev;           // Name of audio device; empty means portaudio's default
 static int Nfds;                     // Number of streams
 static pthread_mutex_t Sess_mutex = PTHREAD_MUTEX_INITIALIZER;
 static PaStream *Pa_Stream;          // Portaudio stream handle
@@ -92,7 +98,7 @@ static long long Start_time;
 static PaTime Start_pa_time;
 
 static pthread_mutex_t Output_mutex = PTHREAD_MUTEX_INITIALIZER;
-static float Output_buffer[BUFFERSIZE][2]; // Decoded audio output, written by processing thread and read by PA callback
+static float *Output_buffer;
 static volatile long long Rptr;            // Unwrapped read pointer (bug: will overflow in 6 million years)
 #if 0
 static PaTime Last_callback_time;
@@ -129,13 +135,10 @@ struct session {
   uint32_t ssrc;            // RTP Sending Source ID
   int type;                 // RTP type (10,11,20,111)
 
-  uint32_t start_timestamp; // First RTP timestamp in stream, or after reset
-  long long start_rptr;     // First output callback read pointer in stream, or after reset
-  long long timestamp_upper; // Upper bits of virtual timestamp (if greater than 2^32)
-  volatile long long wptr;           // current write pointer into output PCM buffer
+  uint32_t next_timestamp;  // Next expected timestamp
+  volatile long long wptr;  // current write pointer into output PCM buffer
   int playout;              // Initial playout delay, samples
 
-  float bounce[MAXSIZE][2]; // This is uncomfortably large for the stack on some machines
   OpusDecoder *opus;        // Opus codec decoder handle, if needed
   int frame_size;
   int bandwidth;            // Audio bandwidth
@@ -186,13 +189,14 @@ static void *repeater_ctl(void *arg);
 static char const *lookupid(uint32_t ssrc);
 static float make_position(int);
 
-static char Optstring[] = "I:LR:Saf:p:qr:u:vn";
+static char Optstring[] = "I:LR:Sac:f:p:qr:u:vn";
 static struct  option Options[] = {
    {"input", required_argument, NULL, 'I'},
    {"list-audio", no_argument, NULL, 'L'},
-   {"audio-dev", required_argument, NULL, 'R'},
+   {"device", required_argument, NULL, 'R'},
    {"autosort", no_argument, NULL, 'S'},
    {"auto-position", no_argument, NULL, 'a'},
+   {"channels", required_argument, NULL, 'c'},
    {"config", required_argument, NULL, 'f'},
    {"playout", required_argument, NULL, 'p'},
    {"quiet", no_argument, NULL, 'q'},
@@ -214,18 +218,87 @@ int main(int argc,char * const argv[]){
       perror("seteuid");
   }    
   setlocale(LC_ALL,getenv("LANG"));
+  tzset();
 
+  // Parse command line for config file, read first so it can be overriden by command line args
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
+    case 'f':
+      Config_file = optarg;
+      break;
+    default:
+      break;
+    }
+  }
+  if(Config_file){
+    dictionary *Configtable = iniparser_load(Config_file);
+    if(Configtable == NULL){
+     fprintf(stdout,"Can't load config file %s\n",Config_file);
+      exit(1);
+    }
+    Samprate = config_getint(Configtable,Audio,"samprate",Samprate);
+    Channels = config_getint(Configtable,Audio,"channels",Channels);
+    char const *audiodev = config_getstring(Configtable,"audio","device",NULL);
+    if(audiodev)
+      Audiodev = strdup(audiodev);
+    // Add validity checking
+
+    Cwid = strdup(config_getstring(Configtable,Repeater,"id","NOCALL"));
+    int period = config_getint(Configtable,Repeater,"period",600);
+    Mandatory_ID_interval = period * BILLION;
+    Quiet_ID_interval = Mandatory_ID_interval / 2;
+    ID_pitch = config_getdouble(Configtable,Repeater,"pitch",ID_pitch);
+    ID_level = config_getdouble(Configtable,Repeater,"level",ID_level);
+    Notch = config_getboolean(Configtable,Audio,"notch",Notch);
+    Quiet = config_getboolean(Configtable,Display,"quiet",Quiet);
+    Auto_position = config_getboolean(Configtable,Display,"auto-position",Auto_position);
+    Auto_sort = config_getboolean(Configtable,Display,"autosort",Auto_sort);
+    Update_interval = config_getint(Configtable,Display,"update",Update_interval);
+    Playout = config_getdouble(Configtable,Audio,"playout",Playout);
+    Repeater_tail = config_getdouble(Configtable,Repeater,"tail",Repeater_tail);
+    Verbose = config_getboolean(Configtable,Display,"verbose",Verbose);
+    char const *txon = config_getstring(Configtable,Radio,"txon",NULL);
+    char const *txoff = config_getstring(Configtable,Radio,"txoff",NULL);
+    if(txon)
+      Tx_on = strdup(txon);
+    if(txoff)
+      Tx_off = strdup(txoff);
+
+    char const *init = config_getstring(Configtable,Radio,"init",NULL);
+    if(init)
+      Init = strdup(init);
+
+    char const *input = config_getstring(Configtable,Audio,"input",NULL);
+    if(input)
+      Mcast_address_text[Nfds++] = strdup(input);
+    iniparser_freedict(Configtable);
+  }
+  // Rescan args to override config file
+  while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
+    switch(c){
+    case 'a':
+      Auto_position = true;
+      break;
+    case 'c':
+      Channels = strtol(optarg,NULL,0);
+      break;
+    case 'f':
+      break; // Ignore this time
     case 'n':
-      Autonotch = true;
+      Notch = true;
       break;
-    case 'L':
-      List_audio = true;
+    case 'p':
+      Playout = strtod(optarg,NULL);
       break;
-    case 'R':
-      strlcpy(Audiodev,optarg,sizeof(Audiodev));
+    case 'q': // No ncurses
+      Quiet = true;
+      break;
+    case 'r':
+      Samprate = strtol(optarg,NULL,0);
+      break;
+    case 'u':
+      Update_interval = strtol(optarg,NULL,0);
       break;
     case 'v':
       Verbose = true;
@@ -236,69 +309,46 @@ int main(int argc,char * const argv[]){
       } else 
 	Mcast_address_text[Nfds++] = optarg;
       break;
-    case 'q': // No ncurses
-      Quiet = true;
+    case 'L':
+      List_audio = true;
       break;
-    case 'u':
-      Update_interval = strtol(optarg,NULL,0);
-      break;
-    case 'r':
-      Samprate = strtol(optarg,NULL,0);
-      break;
-    case 'p':
-      Playout = strtod(optarg,NULL);
-      break;
-    case 'a':
-      Auto_position = true;
+    case 'R':
+      Audiodev = optarg;
       break;
     case 'S':
       Auto_sort = true;
       break;
-    case 'f':
-      Config_file = optarg;
-      break;
     default:
-      fprintf(stderr,"Usage: %s [-a] [-v] [-q] [-L] [-u update] [-R audio_device] [-p|-P playout_delay_ms] [-r samprate] -I mcast_address [-I mcast_address]\n",argv[0]);
+      fprintf(stderr,"Usage: %s -L\n",App_path);
+      fprintf(stderr,"       %s [-a] [-c channels] [-f config_file] [-n] [-p playout] [-q] [-r samprate] [-u update] [-v]\
+[-I mcast_address] [-R audiodev] [-S] [mcast_address ...]\n",App_path);
       exit(1);
     }
   }
-  if(Config_file){
-    dictionary *Configtable = iniparser_load(Config_file);
-    if(Configtable == NULL){
-     fprintf(stdout,"Can't load config file %s\n",Config_file);
-      exit(1);
+  if(List_audio){
+    // On stdout, not stderr, so we can toss ALSA's noisy error messages
+    PaError r = Pa_Initialize();
+    if(r != paNoError){
+      fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
+      return r;
     }
-    char const *Section = "audio";
-
-    Cwid = strdup(config_getstring(Configtable,Section,"id","NOCALL"));
-    int period = config_getint(Configtable,Section,"period",600);
-    Mandatory_ID_interval = period * BILLION;
-    Quiet_ID_interval = Mandatory_ID_interval / 2;
-    ID_pitch = config_getdouble(Configtable,Section,"pitch",ID_pitch);
-    ID_level = config_getdouble(Configtable,Section,"level",ID_level);
-    Autonotch = config_getboolean(Configtable,Section,"notch",Autonotch);
-    Quiet = config_getboolean(Configtable,Section,"quiet",Quiet);
-    Auto_position = config_getboolean(Configtable,Section,"auto-position",Auto_position);
-    Playout = config_getdouble(Configtable,Section,"playout",Playout);
-    Repeater_tail = config_getdouble(Configtable,Section,"tail",Repeater_tail);
-    Verbose = config_getboolean(Configtable,Section,"verbose",Verbose);
-    char const *txon = config_getstring(Configtable,Section,"txon",NULL);
-    char const *txoff = config_getstring(Configtable,Section,"txoff",NULL);
-    if(txon)
-      Tx_on = strdup(txon);
-    if(txoff)
-      Tx_off = strdup(txoff);
-
-    char const *init = config_getstring(Configtable,Section,"init",NULL);
-    if(init)
-      Init = strdup(init);
-
-    char const *input = config_getstring(Configtable,Section,"input",NULL);
-    if(input)
-      Mcast_address_text[Nfds++] = strdup(input);
-    iniparser_freedict(Configtable);
+    printf("Audio devices:\n");
+    int numDevices = Pa_GetDeviceCount();
+    for(int inDevNum=0; inDevNum < numDevices; inDevNum++){
+      const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(inDevNum);
+      printf("%d: %s\n",inDevNum,deviceInfo->name);
+    }
+    exit(0);
   }
 
+  if(Channels != 1 && Channels != 2){
+    fprintf(stderr,"Channels = %d invalid; defaulting to 2\n",Channels);
+    Channels = 2;
+  }
+  if(Auto_position && Channels != 2){
+    fprintf(stderr,"Auto_position requires 2 channels\n");
+    Auto_position = false;
+  }
 
   // Also accept groups without -I option
   for(int i=optind; i < argc; i++){
@@ -319,7 +369,7 @@ int main(int argc,char * const argv[]){
     // -14 dB is 1 kHz ID deviation divided by 5 kHz peak deviation
     Dit_length = init_morse(ID_speed,ID_pitch,ID_level,Samprate);
   }    
-  tzset();
+
   PaError r = Pa_Initialize();
   if(r != paNoError){
     fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
@@ -327,16 +377,6 @@ int main(int argc,char * const argv[]){
   }
   atexit(cleanup);
 
-  if(List_audio){
-    // On stdout, not stderr, so we can toss ALSA's noisy error messages
-    printf("Audio devices:\n");
-    int numDevices = Pa_GetDeviceCount();
-    for(int inDevNum=0; inDevNum < numDevices; inDevNum++){
-      const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(inDevNum);
-      printf("%d: %s\n",inDevNum,deviceInfo->name);
-    }
-    exit(0);
-  }
   if(Nfds == 0){
     fprintf(stderr,"At least one input group required, exiting\n");
     exit(1);
@@ -350,7 +390,7 @@ int main(int argc,char * const argv[]){
     inDevNum = Pa_GetDefaultOutputDevice();
   } else if(d = strtol(Audiodev,&nextp,0),nextp != Audiodev && *nextp == '\0'){
     if(d >= numDevices){
-      fprintf(stderr,"%d is out of range, use %s -L for a list\n",d,argv[0]);
+      fprintf(stderr,"%d is out of range, use %s -L for a list\n",d,App_path);
       exit(1);
     }
     inDevNum = d;
@@ -369,17 +409,14 @@ int main(int argc,char * const argv[]){
   // Create portaudio stream.
   // Runs continuously, playing silence until audio arrives.
   // This allows multiple streams to be played on hosts that only support one
+  Output_buffer = calloc(BUFFERSIZE, Channels*sizeof(*Output_buffer));
+
   PaStreamParameters outputParameters;
   memset(&outputParameters,0,sizeof(outputParameters));
-  outputParameters.channelCount = 2;
+  outputParameters.channelCount = Channels;
   outputParameters.device = inDevNum;
   outputParameters.sampleFormat = paFloat32;
   outputParameters.suggestedLatency = Latency; // 0 doesn't seem to be a good value on OSX, lots of underruns and stutters
-  
-  // Clear output buffer
-  // Should already be cleared at startup, but there's often a loud burst of noise after startup
-  // So maybe something is polluting it
-  memset(Output_buffer,0,sizeof(Output_buffer));
 
   r = Pa_OpenStream(&Pa_Stream,
 		    NULL,
@@ -518,14 +555,14 @@ static void *sockproc(void *arg){
       else
 	sp->pan = 0;     // center by default
       sp->gain = 1;    // 0 dB by default
-      sp->notch_enable = Autonotch;
+      sp->notch_enable = Notch;
       sp->muted = Start_muted;
       sp->dest = mcast_address_text;
-      sp->start_rptr = Rptr;
-      sp->start_timestamp = pkt->rtp.timestamp;
+      sp->next_timestamp = pkt->rtp.timestamp;
       sp->rtp_state.seq = pkt->rtp.seq;
       sp->reset = true;
-      sp->samprate = samprate_from_pt(pkt->rtp.type);
+      sp->type = pkt->rtp.type;
+      sp->samprate = sp->type == OPUS_PT ? Samprate : samprate_from_pt(sp->type);
       for(int j=0; j < N_tones; j++)
 	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
 
@@ -591,13 +628,12 @@ static void *decode_task(void *arg){
   }
   pthread_cleanup_push(decode_task_cleanup,arg);
 
-
   int late_rate = 0;
   int consec_futures = 0;
+  float *bounce = NULL;
 
   // Main loop; run until asked to quit
   while(!sp->terminate){
-
     struct packet *pkt = NULL;
     // Wait for packet to appear on queue
     pthread_mutex_lock(&sp->qmutex);
@@ -622,11 +658,6 @@ static void *decode_task(void *arg){
     if(sp->type != pkt->rtp.type) // Handle transitions both ways
       sp->type = pkt->rtp.type;
 
-    sp->samprate = samprate_from_pt(sp->type);
-    int upsample = 1;
-    if(sp->samprate != 0)
-      upsample = Samprate / sp->samprate; // Upsample lower PCM samprates to 48 kHz output (should be cleaner)
-
     if(pkt->rtp.seq != sp->rtp_state.seq){
       if(!pkt->rtp.marker){
 	sp->rtp_state.drops++; // Avoid spurious drops when session is recreated after silence
@@ -634,21 +665,15 @@ static void *decode_task(void *arg){
       }
       if(sp->opus)
 	opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
-    } else {
-      /* Handle wraparound in timestamp (unlikely but possible in long-lived stream)
-	 This can still fail if there's an outage more than 2^31 samples long without a mark (seems unlikely)
-	 Do only when packet is in sequence as heuristic check */
-      while(sp->timestamp_upper + (int32_t)(pkt->rtp.timestamp - sp->start_timestamp) < 0)
-	sp->timestamp_upper += (1LL << 32);
-
     }
     sp->rtp_state.seq = pkt->rtp.seq + 1;
-    
     if(pkt->rtp.marker){
       // beginning of talk spurt, resync
       sp->active = 0; // reset active
       reset_session(sp,pkt->rtp.timestamp); // Updates sp->wptr
     }
+
+    int upsample = 1;
 
     // decode Opus or PCM into bounce buffer
     if(sp->type == OPUS_PT){
@@ -656,18 +681,32 @@ static void *decode_task(void *arg){
       if(!sp->opus){
 	int error;
 	
-	// Always decode Opus to 48 kHz stereo, ignoring original sample rate
-	sp->opus = opus_decoder_create(Samprate,2,&error);
+	// Decode Opus to the selected sample rate
+	sp->opus = opus_decoder_create(Samprate,Channels,&error);
+	if(error != OPUS_OK)
+	  fprintf(stderr,"opus_decoder_create error %d\n",error);
+
 	assert(sp->opus);
       }
-      sp->channels = 2; // always decode as stereo, 48 kHz
+      sp->channels = Channels;
       sp->samprate = Samprate;
-      int const r1 = opus_packet_get_nb_samples(pkt->data,pkt->len,Samprate);
-      if(r1 == OPUS_INVALID_PACKET)
+      // Opus RTP timestamps always referenced to 48 kHz
+      int const r0 = opus_packet_get_nb_samples(pkt->data,pkt->len,48000);
+      if(r0 == OPUS_INVALID_PACKET || r0 == OPUS_BAD_ARG)
 	goto endloop;
+      // opus timestamps are always 48 kHz regardless of chosen decoder output sample rate
+      if(pkt->rtp.timestamp != sp->next_timestamp)
+	sp->wptr += (pkt->rtp.timestamp - sp->next_timestamp) * Samprate / 48000;
+
+      sp->next_timestamp = pkt->rtp.timestamp + r0;
+
+      int const r1 = opus_packet_get_nb_samples(pkt->data,pkt->len,Samprate);
+      if(r1 == OPUS_INVALID_PACKET || r1 == OPUS_BAD_ARG)
+	goto endloop;
+
       sp->frame_size = r1;
       int const r2 = opus_packet_get_bandwidth(pkt->data);
-      if(r2 == OPUS_INVALID_PACKET)
+      if(r2 == OPUS_INVALID_PACKET || r2 == OPUS_BAD_ARG)
 	goto endloop;
       switch(r2){
       case OPUS_BANDWIDTH_NARROWBAND:
@@ -687,44 +726,47 @@ static void *decode_task(void *arg){
 	sp->bandwidth = 20;
 	break;
       }
-      int samples = opus_decode_float(sp->opus,pkt->data,pkt->len,sp->bounce[0],sizeof(sp->bounce),0); // fec?
-      if(samples != sp->frame_size)
-	fprintf(stderr,"samples %d frame-size %d\n",samples,sp->frame_size);
-
-      assert(samples == r1);
-    } else { // PCM -- should do this only if not muted
+      size_t const bounce_size = sizeof(*bounce) * sp->frame_size * sp->channels;
+      assert(bounce == NULL);
+      bounce = malloc(bounce_size);
+      int samples = opus_decode_float(sp->opus,pkt->data,pkt->len,bounce,bounce_size,0);
+      if(samples != sp->frame_size || samples != r1)
+	fprintf(stderr,"samples %d frame-size %d r1 %d\n",samples,sp->frame_size,r1);
+    } else { // PCM
       // Test for invalidity
       sp->samprate = samprate_from_pt(sp->type);
+      upsample = Samprate / sp->samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
       sp->bandwidth = sp->samprate / 2000;
-      sp->channels = channels_from_pt(sp->type);
+      sp->channels = channels_from_pt(sp->type); // channels in packet (not portaudio output buffer)
+
       if(sp->samprate <= 0 || sp->channels <= 0 || sp->channels > 2)
 	goto endloop;
       sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
       if(sp->frame_size <= 0)
 	goto endloop;
+      if(pkt->rtp.timestamp != sp->next_timestamp)
+	sp->wptr += upsample * (pkt->rtp.timestamp - sp->next_timestamp);
+
+      sp->next_timestamp = pkt->rtp.timestamp + sp->frame_size;
 
       signed short const *data_ints = (signed short *)&pkt->data[0];	
-      for(int i=0; i < sp->frame_size && i < MAXSIZE; i++){
-	assert((void *)data_ints >= (void *)&pkt->data[0] && (void *)data_ints < (void *)(&pkt->data[0] + pkt->len));
-	float left = SCALE * (signed short)ntohs(*data_ints++);
-	float right;
-	if(sp->channels == 2){
-	  right = SCALE * (signed short)ntohs(*data_ints++);
-	} else {
-	  right = left;
-	}
-	sp->bounce[i][0] = left;
-	sp->bounce[i][1] = right;
-      }
+      assert(bounce == NULL);
+      bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
+      for(int i=0; i < sp->channels * sp->frame_size; i++)
+	bounce[i] = SCALE * (signed short)ntohs(*data_ints++);
     }
     // Run PL tone decoders
-    // Disable if display isn't active, since no other use is made of them
-    if(!Quiet) {
+    // Disable if display isn't active and autonotching is off
+    if(sp->notch_enable) {
       for(int i=0; i < sp->frame_size; i++){
-	float s = sp->bounce[i][0] + sp->bounce[i][1]; // Mono sum
-	for(int j = 0; j < N_tones; j++){
+	float s;
+	if(sp->channels == 2)
+	  s = 0.5 * (bounce[2*i] + bounce[2*i+1]); // Mono sum
+	else // sp->channels == 1
+	  s = bounce[i];
+
+	for(int j = 0; j < N_tones; j++)
 	  update_goertzel(&sp->tone_detector[j],s);
-	}
       }
       sp->tone_samples += sp->frame_size;
       if(sp->tone_samples >= Tone_period * sp->samprate){
@@ -747,10 +789,7 @@ static void *decode_task(void *arg){
 	} else
 	  sp->current_tone = 0;
       } // End of tone observation period
-    }
-    /* Find where to write in circular output buffer
-     * This is updated even when muted so the activity display will work */
-    sp->wptr = sp->start_rptr + upsample * (sp->timestamp_upper + pkt->rtp.timestamp - sp->start_timestamp) + sp->playout;
+    } // !Quiet || sp->notch_enable
     bool keyup = false; // Don't do printf while holding locks
     // Protect Output_buffer and Rptr, which are modified in portaudio callback
     pthread_mutex_lock(&Output_mutex);
@@ -767,7 +806,7 @@ static void *decode_task(void *arg){
     }
     if(late_rate > 0)
       late_rate--;
-    if(sp->wptr > Rptr + BUFFERSIZE/2){
+    if(sp->wptr > Rptr + BUFFERSIZE){
       sp->earlies++;
       if(++consec_futures < 3){
 	pthread_mutex_unlock(&Output_mutex);
@@ -786,40 +825,67 @@ static void *decode_task(void *arg){
       setIIRnotch(&sp->iir_left,sp->current_tone/sp->samprate);
     }
     if(!sp->muted){
-      /* Compute gains and delays for stereo imaging
-	 Extreme gain differences can make the source sound like it's inside an ear
-	 This can be uncomfortable in good headphones with extreme panning
-	 -6dB for each channel in the center
-	 when full to one side or the other, that channel is +6 dB and the other is -inf dB */
-      float const left_gain = sp->gain * (1 - sp->pan)/2;
-      float const right_gain = sp->gain * (1 + sp->pan)/2;
-      /* Delay less favored channel 0 - 1.5 ms max (determined
-	 empirically) This is really what drives source localization
-	 in humans The effect is so dramatic even with equal levels
-	 you have to remove one earphone to convince yourself that the
-	 levels really are the same */
-      int const left_delay = (sp->pan > 0) ? round(sp->pan * .0015 * Samprate) : 0; // Delay left channel
-      int const right_delay = (sp->pan < 0) ? round(-sp->pan * .0015 * Samprate) : 0; // Delay right channel
-
-      assert(left_delay >= 0 && right_delay >= 0);
-
-      // Mix bounce buffer into output buffer read by portaudio callback
-      unsigned int left_index = sp->wptr + left_delay;
-      unsigned int right_index = sp->wptr + right_delay;
-      
-      for(int i=0; i < sp->frame_size; i++){
-	float left = sp->bounce[i][0] * left_gain;
-	float right = sp->bounce[i][1] * right_gain;
-	if(sp->notch_enable && sp->notch_tone > 0){
-	  left = applyIIRnotch(&sp->iir_left,left);
-	  right = applyIIRnotch(&sp->iir_right,right);
+      if(Channels == 2){
+	/* Compute gains and delays for stereo imaging
+	   Extreme gain differences can make the source sound like it's inside an ear
+	   This can be uncomfortable in good headphones with extreme panning
+	   -6dB for each channel in the center
+	   when full to one side or the other, that channel is +6 dB and the other is -inf dB */
+	float const left_gain = sp->gain * (1 - sp->pan)/2;
+	float const right_gain = sp->gain * (1 + sp->pan)/2;
+	/* Delay less favored channel 0 - 1.5 ms max (determined
+	   empirically) This is really what drives source localization
+	   in humans. The effect is so dramatic even with equal levels
+	   you have to remove one earphone to convince yourself that the
+	   levels really are the same */
+	int const left_delay = (sp->pan > 0) ? round(sp->pan * .0015 * Samprate) : 0; // Delay left channel
+	int const right_delay = (sp->pan < 0) ? round(-sp->pan * .0015 * Samprate) : 0; // Delay right channel
+	
+	assert(left_delay >= 0 && right_delay >= 0);
+	
+	// Mix bounce buffer into output buffer read by portaudio callback
+	unsigned int left_index = sp->wptr + left_delay;
+	unsigned int right_index = sp->wptr + right_delay;
+	
+	for(int i=0; i < sp->frame_size; i++){
+	  float left,right;
+	  if(sp->channels == 1){
+	    // Mono input
+	    left = bounce[i] * left_gain;
+	    right = bounce[i] * right_gain;
+	  } else {
+	    // stereo input
+	    left = bounce[2*i] * left_gain;
+	    right = bounce[2*i+1] * right_gain;
+	  }
+	  if(sp->notch_enable && sp->notch_tone > 0){
+	    left = applyIIRnotch(&sp->iir_left,left);
+	    right = applyIIRnotch(&sp->iir_right,right);
+	  }
+	  // Not the cleanest way to upsample the sample rate, but it works
+	  for(int j=0; j < upsample; j++){
+	    Output_buffer[2 * (left_index++ & (BUFFERSIZE-1))] += left;
+	    Output_buffer[2 * (right_index++ & (BUFFERSIZE-1))+1] += right;
+	  }
 	}
-	// Not the cleanest way to upsample the sample rate, but it works
-	for(int j=0; j < upsample; j++){
-	  Output_buffer[left_index++ & (BUFFERSIZE-1)][0] += left;
-	  Output_buffer[right_index++ & (BUFFERSIZE-1)][1] += right;
+      } else { // Channels == 1, no panning
+	unsigned int index = sp->wptr;
+	for(int i=0; i < sp->frame_size; i++){
+	  float s;
+	  if(sp->channels == 1){
+	    s = sp->gain * bounce[i];
+	  } else {
+	    // Downmix to mono
+	    s = sp->gain * 0.5 * (bounce[2*i] + bounce[2*i+1]);
+	  }
+	  if(sp->notch_enable && sp->notch_tone > 0)
+	    s = applyIIRnotch(&sp->iir_left,s);
+	  // Not the cleanest way to upsample the sample rate, but it works
+	  for(int j=0; j < upsample; j++){
+	    Output_buffer[index++ & (BUFFERSIZE-1)] += s;
+	  }
 	}
-      }
+      } // Channels == 1
       LastAudioTime = gps_time_ns();
 
       pthread_mutex_lock(&PTT_mutex);
@@ -830,7 +896,7 @@ static void *decode_task(void *arg){
 	pthread_cond_signal(&PTT_cond);
       }
       pthread_mutex_unlock(&PTT_mutex);
-    }
+    } // !sp->muted
     pthread_mutex_unlock(&Output_mutex); // Done with Output_buffer and Rptr
     if(Quiet && keyup){
       // debugging only, temp
@@ -855,10 +921,15 @@ static void *decode_task(void *arg){
 #endif
     }
   endloop:;
-    if(pkt)
+    if(bounce != NULL){
+      free(bounce);
+      bounce = NULL;
+    }
+    if(pkt != NULL){
       free(pkt);
-    pkt = NULL;
-  }
+      pkt = NULL;
+    }
+  } // !sp->terminate
   pthread_cleanup_pop(1);
   return NULL;
 }
@@ -907,6 +978,8 @@ static void *display(void *arg){
 	while(getline(&line,&size,fp) != -1){
 	  addstr(line);
 	}
+	free(line);
+	line = NULL;
 	fclose(fp);
 	fp = NULL;
       }
@@ -976,7 +1049,10 @@ static void *display(void *arg){
 	if(session == current)
 	  attr_on(A_STANDOUT,NULL);
 	
-	printw("%+4.0lf%4d",sp->muted ? -INFINITY : voltage2dB(sp->gain),(int)roundf(100*sp->pan));
+	if(Channels > 1)
+	  printw("%+4.0lf%4d",sp->muted ? -INFINITY : voltage2dB(sp->gain),(int)roundf(100*sp->pan));
+	else
+	  printw("%+4.0lf    ",sp->muted ? -INFINITY : voltage2dB(sp->gain));	  
 	attr_off(A_STANDOUT,NULL);
 	{
 	  char id[100];
@@ -985,15 +1061,22 @@ static void *display(void *arg){
 	  // Truncate ID field to 30 places
 	  strlcpy(identifier,sp->id,sizeof(identifier));
 	  
-	  printw("%9u %5.1f %5.1f %-30s%10.0f%10.0f%10s",
-		 sp->ssrc,
-		 sp->current_tone,
-		 sp->notch_enable ? sp->notch_tone : 0,
-		 identifier,
-		 sp->tot_active, // Total active time, sec
-		 sp->active,    // active time in current transmission, sec
-		 ftime(id,sizeof(id),idle));   // Time idle since last transmission
-	  
+	  if(sp->notch_enable)
+	    printw("%9u %5.1f %5.1f %-30s%10.0f%10.0f%10s",
+		   sp->ssrc,
+		   sp->current_tone,
+		   sp->notch_tone,
+		   identifier,
+		   sp->tot_active, // Total active time, sec
+		   sp->active,    // active time in current transmission, sec
+		   ftime(id,sizeof(id),idle));   // Time idle since last transmission
+	  else
+	    printw("%9u             %-30s%10.0f%10.0f%10s",
+		   sp->ssrc,
+		   identifier,
+		   sp->tot_active, // Total active time, sec
+		   sp->active,    // active time in current transmission, sec
+		   ftime(id,sizeof(id),idle));   // Time idle since last transmission
 	}
 	if(Verbose){
 	  printw("%6d%5s%3d%3d%3d",
@@ -1024,6 +1107,7 @@ static void *display(void *arg){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
 	double unix_seconds = (gps_time_ns() - Start_time) * 1e-9;
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
+	printw("Audio callbacks: %'llu, Rptr %'llu framesPerCallback %'lu\n",Audio_callbacks,Rptr,Audio_frames);
 	printw("D/A clock error: %+.3lf ppm ",1e6 * (pa_seconds / unix_seconds - 1));
 	// Time since last packet drop on any channel
 	printw("Error-free seconds: %'.1lf\n",(1e-9*(gps_time_ns() - Last_error_time)));
@@ -1223,9 +1307,7 @@ static void reset_session(struct session * const sp,uint32_t timestamp){
   if(sp->opus)
     opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
   sp->reset = false;
-  sp->start_rptr = Rptr;
-  sp->start_timestamp = timestamp; // Resynch as if new stream
-  sp->timestamp_upper = 0;
+  sp->next_timestamp = timestamp;
   sp->playout = Playout * Samprate/1000;
   sp->wptr = Rptr + sp->playout;
 }
@@ -1349,6 +1431,9 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
 		       PaStreamCallbackTimeInfo const * timeInfo,
 		       PaStreamCallbackFlags statusFlags,
 		       void *userData){
+  Audio_callbacks++;
+  Audio_frames = framesPerBuffer;
+
   if(!outputBuffer)
     return paAbort; // can this happen??
   
@@ -1370,16 +1455,17 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
   // I know they say you're not supposed to do any locks in the callback, but I don't see any alternative!
   pthread_mutex_lock(&Output_mutex);
   while(framesPerBuffer > 0){
-    // chunk size = lesser of total amount needed or remainder of read buffer before wraparound
+    // chunk size = lesser of total frames needed or remainder of read buffer before wraparound
     unsigned long rptr = Rptr & (BUFFERSIZE-1);
-    long chunk = min(framesPerBuffer,BUFFERSIZE-rptr);
+    long chunk = min(framesPerBuffer,BUFFERSIZE-rptr); 
+
     assert(chunk > 0);
 
     Rptr += chunk;
     framesPerBuffer -= chunk;
-    memcpy(out,Output_buffer[rptr],chunk * sizeof(Output_buffer[0]));
-    memset(Output_buffer[rptr],0,chunk * sizeof(Output_buffer[0]));
-    out += chunk * 2;
+    memcpy(out,&Output_buffer[Channels*rptr],Channels * chunk * sizeof(Output_buffer[0]));
+    memset(&Output_buffer[Channels*rptr],0,Channels * chunk * sizeof(Output_buffer[0]));
+    out += chunk * Channels;
   }
   pthread_mutex_unlock(&Output_mutex);
   return paContinue;
@@ -1412,17 +1498,22 @@ void send_cwid(void){
 
   int16_t * const samples = malloc(60 * Dit_length * sizeof(samples[0]));
   pthread_mutex_lock(&Output_mutex);  
-  int wptr = Rptr + (Playout * Samprate)/1000;
+  unsigned long long wptr = Rptr + (Playout * Samprate)/1000;
   pthread_mutex_unlock(&Output_mutex);
 
-  for(char const *cp = Cwid; *cp != 0; cp++){
+  for(char const *cp = Cwid; *cp != '\0'; cp++){
     int const samplecount = encode_morse_char(samples,(wchar_t)*cp);
     if(samplecount <= 0)
       break;
     pthread_mutex_lock(&Output_mutex);
-    for(int i=0;i<samplecount;i++){
-      Output_buffer[wptr & (BUFFERSIZE-1)][0] += SCALE * samples[i];
-      Output_buffer[wptr++ & (BUFFERSIZE-1)][1] += SCALE * samples[i];
+    if(Channels == 2){
+      for(int i=0;i<samplecount;i++){
+	Output_buffer[2*wptr & (BUFFERSIZE-1)] += SCALE * samples[i];
+	Output_buffer[(2*wptr++ + 1) & (BUFFERSIZE-1)] += SCALE * samples[i];
+      }
+    } else { // Channels == 1
+      for(int i=0;i<samplecount;i++)
+	Output_buffer[wptr++ & (BUFFERSIZE-1)] += SCALE * samples[i];
     }
     pthread_mutex_unlock(&Output_mutex);
     // Wait for it to play out
