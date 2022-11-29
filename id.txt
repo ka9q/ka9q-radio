@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.67 2022/10/12 01:14:11 karn Exp $
+# $Id: id.txt,v 1.67 2022/10/12 01:14:11 karn Exp karn $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
@@ -208,7 +208,7 @@
 224140	N6UKO San Marcos
 224160	WA6HYQ Otay
 224180  WD6FZA Toro Pk PAPA27
-224200  N6ICC Otay PAPA13
+224200  N6ICC Sunset Ridge PAPA13
 224220	WR6AAC Santiago Pk
 224260	AB6DX Otay FILAMARS
 224260	N6VVZ Otay
