@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.193 2022/12/01 02:17:09 karn Exp $
+// $Id: monitor.c,v 1.194 2022/12/01 05:07:31 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -1172,7 +1172,7 @@ static void *display(void *arg){
       sort_session_active();
       break;
     case 'S':
-      Auto_sort = true;
+      Auto_sort = !Auto_sort;
       break;
     case 't': // Sort sessions by most recently active (or longest active)
       sort_session_total();
