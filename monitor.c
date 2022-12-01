@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.192 2022/11/29 16:09:24 karn Exp $
+// $Id: monitor.c,v 1.193 2022/12/01 02:17:09 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -75,6 +75,8 @@ static char const *Radio = "radio";
 static char const *Audio = "audio";
 static char const *Repeater = "repeater";
 static char const *Display = "display";
+static float Gain = 0; // unity gain by default
+
 
 static long long Last_id_time;
 static int Dit_length; 
@@ -189,7 +191,7 @@ static void *repeater_ctl(void *arg);
 static char const *lookupid(uint32_t ssrc);
 static float make_position(int);
 
-static char Optstring[] = "I:LR:Sac:f:p:qr:u:vn";
+static char Optstring[] = "I:LR:Sac:f:g:p:qr:u:vn";
 static struct  option Options[] = {
    {"input", required_argument, NULL, 'I'},
    {"list-audio", no_argument, NULL, 'L'},
@@ -198,6 +200,7 @@ static struct  option Options[] = {
    {"auto-position", no_argument, NULL, 'a'},
    {"channels", required_argument, NULL, 'c'},
    {"config", required_argument, NULL, 'f'},
+   {"gain", required_argument, NULL, 'g'},
    {"playout", required_argument, NULL, 'p'},
    {"quiet", no_argument, NULL, 'q'},
    {"samprate",required_argument,NULL,'r'},
@@ -245,19 +248,24 @@ int main(int argc,char * const argv[]){
       Audiodev = strdup(audiodev);
     // Add validity checking
 
+    Gain = config_getfloat(Configtable,Audio,"gain",Gain);
     Cwid = strdup(config_getstring(Configtable,Repeater,"id","NOCALL"));
-    int period = config_getint(Configtable,Repeater,"period",600);
+    // 600 sec is 10 minutes, max ID interval per FCC 97.119(a)
+    int const period = config_getint(Configtable,Repeater,"period",600);
+    int pperiod = config_getint(Configtable,Repeater,"pperiod",period/2);
+    if(pperiod > period)
+      pperiod = period;
     Mandatory_ID_interval = period * BILLION;
-    Quiet_ID_interval = Mandatory_ID_interval / 2;
-    ID_pitch = config_getdouble(Configtable,Repeater,"pitch",ID_pitch);
-    ID_level = config_getdouble(Configtable,Repeater,"level",ID_level);
+    Quiet_ID_interval = pperiod * BILLION;
+    ID_pitch = config_getfloat(Configtable,Repeater,"pitch",ID_pitch);
+    ID_level = config_getfloat(Configtable,Repeater,"level",ID_level);
     Notch = config_getboolean(Configtable,Audio,"notch",Notch);
     Quiet = config_getboolean(Configtable,Display,"quiet",Quiet);
     Auto_position = config_getboolean(Configtable,Display,"auto-position",Auto_position);
     Auto_sort = config_getboolean(Configtable,Display,"autosort",Auto_sort);
     Update_interval = config_getint(Configtable,Display,"update",Update_interval);
-    Playout = config_getdouble(Configtable,Audio,"playout",Playout);
-    Repeater_tail = config_getdouble(Configtable,Repeater,"tail",Repeater_tail);
+    Playout = config_getfloat(Configtable,Audio,"playout",Playout);
+    Repeater_tail = config_getfloat(Configtable,Repeater,"tail",Repeater_tail);
     Verbose = config_getboolean(Configtable,Display,"verbose",Verbose);
     char const *txon = config_getstring(Configtable,Radio,"txon",NULL);
     char const *txoff = config_getstring(Configtable,Radio,"txoff",NULL);
@@ -286,11 +294,14 @@ int main(int argc,char * const argv[]){
       break;
     case 'f':
       break; // Ignore this time
+    case 'g':
+      Gain = strtof(optarg,NULL);
+      break;
     case 'n':
       Notch = true;
       break;
     case 'p':
-      Playout = strtod(optarg,NULL);
+      Playout = strtof(optarg,NULL);
       break;
     case 'q': // No ncurses
       Quiet = true;
@@ -321,7 +332,7 @@ int main(int argc,char * const argv[]){
       break;
     default:
       fprintf(stderr,"Usage: %s -L\n",App_path);
-      fprintf(stderr,"       %s [-a] [-c channels] [-f config_file] [-n] [-p playout] [-q] [-r samprate] [-u update] [-v]\
+      fprintf(stderr,"       %s [-a] [-c channels] [-f config_file] [-g gain] [-p playout] [-q] [-r samprate] [-u update] [-v]\
 [-I mcast_address] [-R audiodev] [-S] [mcast_address ...]\n",App_path);
       exit(1);
     }
@@ -555,7 +566,7 @@ static void *sockproc(void *arg){
 	sp->pan = make_position(Position++);
       else
 	sp->pan = 0;     // center by default
-      sp->gain = 1;    // 0 dB by default
+      sp->gain = powf(10.,0.05 * Gain);    // Start with global default
       sp->notch_enable = Notch;
       sp->muted = Start_muted;
       sp->dest = mcast_address_text;
@@ -1159,6 +1170,9 @@ static void *display(void *arg){
       break;
     case 's': // Sort sessions by most recently active (or longest active)
       sort_session_active();
+      break;
+    case 'S':
+      Auto_sort = true;
       break;
     case 't': // Sort sessions by most recently active (or longest active)
       sort_session_total();
