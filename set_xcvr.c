@@ -55,9 +55,13 @@ int main(int argc,char *argv[]){
     }
   }
   gpioInitialise();
+  gpioSetMode(18,PI_ALT5); // Mono audio on GPIO18, physical pin 12
+  gpioSetPullUpDown(18, PI_PUD_OFF);
   // Always set GPIO pins to output
   gpioSetMode(21,PI_OUTPUT); // PD; 1 = enable, 0 = power down
+  gpioSetPullUpDown(21, PI_PUD_OFF);
   gpioSetMode(20,PI_OUTPUT); // PTT: 0 = transmit, 1 = receive
+  gpioSetPullUpDown(20, PI_PUD_OFF);
   gpioWrite(21,1); // Enable device
   // Key or unkey transmitter?
   if(argc > optind){
