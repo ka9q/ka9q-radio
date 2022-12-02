@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.194 2022/12/01 05:07:31 karn Exp $
+// $Id: monitor.c,v 1.195 2022/12/02 02:55:01 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -78,6 +78,7 @@ static char const *Display = "display";
 static float Gain = 0; // unity gain by default
 
 
+static long long Last_xmit_time;
 static long long Last_id_time;
 static int Dit_length; 
 static bool Notch;
@@ -1005,12 +1006,12 @@ static void *display(void *arg){
     } else {
       // First header line
       if(Repeater_tail != 0){
-	if(PTT_state)
-	  addstr("PTT On;  ");
-	else
-	  addstr("PTT Off; ");
 	if(Last_id_time != 0)
 	  printw("Last ID: %lld sec",(gps_time_ns() - Last_id_time) / BILLION);
+	if(PTT_state)
+	  addstr(" PTT On");
+	else if(Last_xmit_time != 0)
+	  printw(" PTT Off; Last xmit: %lld sec",(gps_time_ns() - Last_xmit_time) / BILLION);
       }
       int y,x;
       getyx(stdscr,y,x);
@@ -1598,6 +1599,7 @@ void *repeater_ctl(void *arg){
       PTT_state = false;
       system(Tx_off);
       pthread_mutex_unlock(&PTT_mutex);
+      Last_xmit_time = gps_time_ns();
     }
   }
   return NULL;
