@@ -1,3 +1,4 @@
+// $Id: set_xcvr.c,v 1.2 2022/12/03 00:26:00 karn Exp $
 #include <termios.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -101,6 +102,9 @@ int main(int argc,char *argv[]){
     // Sleep in microseconds after each write to serial port
     Sleep_interval = config_getint(Configtable,Section,"sleep",100000);
 
+    // CTCSS tone indices
+    // Note this list skips some tones that the Baofeng radios support
+    // even though they use the same transceiver chip (1846).
     // 0 = no tone
     // 1 = 67.0
     // skipped: 69.3
