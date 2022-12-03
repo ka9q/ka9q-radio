@@ -100,8 +100,62 @@ int main(int argc,char *argv[]){
     double const rxfreq = config_getdouble(Configtable,Section,"rxfreq",146.52);
     // Sleep in microseconds after each write to serial port
     Sleep_interval = config_getint(Configtable,Section,"sleep",100000);
+
     // 0 = no tone
-    // 1-38 CTCSS (PL)
+    // 1 = 67.0
+    // skipped: 69.3
+    // 2 = 71.9
+    // 3 = 74.4
+    // 4 = 77.0
+    // 5 = 79.7
+    // 6 = 82.5
+    // 7 = 85.4
+    // 8 = 88.5
+    // 9 = 91.5
+    // 10 = 94.8
+    // 11 = 97.4
+    // 12 = 100.0
+    // 13 = 103.5
+    // 14 = 107.2
+    // 15 = 110.9
+    // 16 = 114.8
+    // 17 = 118.8
+    // 18 = 123.0
+    // 19 = 127.3
+    // 20 = 131.8
+    // 21 = 136.5
+    // 22 = 141.3
+    // 23 - 146.2
+    // skipped: 150.0 (NATO)
+    // 24 = 151.4
+    // 25 = 156.7
+    // skipped: 159.8
+    // 26 = 162.2
+    // skipped: 165.5
+    // 27 = 167.9
+    // skipped: 171.3
+    // 28 = 173.8
+    // skipped: 177.3
+    // 29 = 179.9
+    // skipped: 183.5
+    // 30 = 186.2
+    // skipped: 189.9
+    // 31 = 192.8
+    // skipped: 196.6, 199.5
+    // 32 = 203.5
+    // skipped: 206.5
+    // 33 = 210.7
+    // skipped: 213.8
+    // 34 = 218.1
+    // skipped: 221.3
+    // 35 = 225.7
+    // skipped: 229.1
+    // 36 = 233.6
+    // skipped: 237.1
+    // 37 = 241.8
+    // skipped: 245.5
+    // 38 = 250.3
+    // skipped: 254.1
     // 39-121 DCS (digital squelch)
     
     int const rxtone = config_getint(Configtable,Section,"rxtone",0);
