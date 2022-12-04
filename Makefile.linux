@@ -1,4 +1,4 @@
-# $Id: Makefile.linux,v 1.111 2022/10/25 03:32:55 karn Exp $
+# $Id: Makefile.linux,v 1.113 2022/12/04 03:45:37 karn Exp $
 
 # for production
 DOPTS = -DNDEBUG=1 -O3
@@ -35,7 +35,7 @@ CONF_FILES=funcubed.conf \
 			 stereod.conf rdsd.conf \
 			 radiod@10m.conf radiod@6m.conf radiod@fm.conf radiod@2m.conf radiod@125cm.conf radiod@70cm.conf radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf radiod@repeater.conf \
 			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
-			 wspr-decoded.conf horus.conf airspyd.conf packetd.conf aprs.conf
+			 wspr-decoded.conf horus.conf airspyd.conf packetd.conf aprs.conf repeater.conf
 
 LOGROTATE_FILES = aprsfeed.rotate
 
