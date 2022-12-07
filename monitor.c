@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.196 2022/12/07 05:30:04 karn Exp $
+// $Id: monitor.c,v 1.197 2022/12/07 06:18:13 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -490,6 +490,9 @@ int main(int argc,char * const argv[]){
   echo();
   nocbreak();
   endwin();
+  if(Tx_off)
+    system(Tx_off);
+    
   exit(0);
 }
 
@@ -1431,6 +1434,9 @@ static int close_session(struct session **p){
 }
 static void closedown(int s){
   fprintf(stderr,"Signal %d, exiting\n",s);
+  if(Tx_off)
+    system(Tx_off);
+  cleanup();
   exit(0);
 }
 
@@ -1447,7 +1453,8 @@ static void cleanup(void){
 // Portaudio finished callback - should be called only on error, so exit
 // If running from systemd, we should be restarted
 static void pa_finished_callback(void *userdata){
-  system(Tx_off);
+  if(Tx_off)
+    system(Tx_off);
   cleanup();
   fprintf(stderr,"pa_finished_callback() called, exiting\n");
   exit(0);
