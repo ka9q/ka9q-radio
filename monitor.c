@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.195 2022/12/02 02:55:01 karn Exp $
+// $Id: monitor.c,v 1.196 2022/12/07 05:30:04 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -185,6 +185,7 @@ static struct session *lookup_session(const struct sockaddr_storage *,uint32_t);
 static struct session *create_session(void);
 static int sort_session_active(void),sort_session_total(void);
 static int close_session(struct session **);
+static void pa_finished_callback(void *);
 static int pa_callback(const void *,void *,unsigned long,const PaStreamCallbackTimeInfo*,PaStreamCallbackFlags,void *);
 static void *decode_task(void *x);
 static void *sockproc(void *arg);
@@ -448,6 +449,8 @@ int main(int argc,char * const argv[]){
 
   if(Repeater_tail != 0)
     pthread_create(&Repeater_thread,NULL,repeater_ctl,NULL); // Repeater mode active
+
+  Pa_SetStreamFinishedCallback(Pa_Stream,pa_finished_callback);
 
   // Do this at the last minute at startup since the upcall will come quickly
   r = Pa_StartStream(Pa_Stream);
@@ -1441,6 +1444,14 @@ static void cleanup(void){
   }
 }
 
+// Portaudio finished callback - should be called only on error, so exit
+// If running from systemd, we should be restarted
+static void pa_finished_callback(void *userdata){
+  system(Tx_off);
+  cleanup();
+  fprintf(stderr,"pa_finished_callback() called, exiting\n");
+  exit(0);
+}
 // Portaudio callback - transfer data (if any) to provided buffer
 static int pa_callback(void const *inputBuffer, void *outputBuffer,
 		       unsigned long framesPerBuffer,
