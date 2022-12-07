@@ -1,4 +1,4 @@
-// $Id: set_xcvr.c,v 1.2 2022/12/03 00:26:00 karn Exp $
+// $Id: set_xcvr.c,v 1.3 2022/12/07 09:55:00 karn Exp $
 #include <termios.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -85,6 +85,10 @@ int main(int argc,char *argv[]){
      fprintf(stdout,"Can't load config file %s\n",Config_file);
       exit(1);
     }
+
+    // route UART pins (already done?)
+    gpioSetMode(14,PI_ALT0);
+    gpioSetMode(15,PI_ALT0);
 
     Port = strdup(config_getstring(Configtable,Section,"serial","/dev/ttyAMA0")); // iniparser storage is dynamic
     int fd = open(Port,O_RDWR);
