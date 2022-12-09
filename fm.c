@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.138 2022/06/27 06:56:20 karn Exp $
+// $Id: fm.c,v 1.139 2022/12/09 11:43:02 karn Exp $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -194,7 +194,7 @@ void *demod_fm(void *arg){
     // Constant gain used by FM only; automatically adjusted by AGC in linear modes
     // We do this in the loop because BW can change
     // Force reasonable parameters if they get messed up or aren't initialized
-    demod->output.gain = (demod->output.headroom *  M_1_PI * demod->output.samprate) / fabsf(demod->filter.min_IF - demod->filter.max_IF);
+    demod->output.gain = (2 * demod->output.headroom *  demod->output.samprate) / (M_PI * fabsf(demod->filter.min_IF - demod->filter.max_IF));
     
     float output_level = 0;
     for(int n=0; n < N; n++){
