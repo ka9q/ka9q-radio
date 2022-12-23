@@ -30,6 +30,7 @@ rdsd
 rtlsdrd
 sdrplayd
 setfilt
+set_xcvr
 show-pkt
 show-sig
 stereod
