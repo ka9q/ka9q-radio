@@ -469,14 +469,23 @@ int main(int argc,char * const argv[]){
   for(int i=0; i<Nfds; i++)
     pthread_create(&sockthreads[i],NULL,sockproc,Mcast_address_text[i]);
 
-  // Graceful signal catch
-  signal(SIGPIPE,closedown); // keeps repeater thread from crashing if cwd crashes
-  signal(SIGINT,closedown);
-  signal(SIGKILL,closedown);
-  signal(SIGQUIT,closedown);
-  signal(SIGTERM,closedown);
-  signal(SIGHUP,closedown);
-  signal(SIGPIPE,SIG_IGN);
+  // Capture signals that would cause termination, but skip any that have been
+  // set to non-default handlers (e.g., gdb breakpoints?)
+  // We make this effort to ensure a repeater transmitter isn't left on if we abort
+  static int const signals[] = { SIGABRT,SIGALRM,SIGBUS,SIGFPE,SIGHUP,SIGILL,SIGINT,
+    SIGIO,SIGKILL,SIGPIPE, SIGPROF,SIGPWR,SIGQUIT,SIGSEGV,SIGSYS,SIGTERM,SIGTRAP,SIGUSR1,SIGUSR2,
+    SIGVTALRM,SIGXCPU,SIGXFSZ };
+
+  for(int i=0;i < sizeof(signals)/sizeof(signals[0]); i++){
+    struct sigaction old_sa;
+    sigaction(signals[i],NULL,&old_sa);
+    if(old_sa.sa_handler == SIG_DFL){
+      struct sigaction new_sa;
+      memset(&new_sa,0,sizeof(new_sa));
+      new_sa.sa_handler = closedown;
+      sigaction(signals[i],&new_sa,NULL);
+    }
+  }
 
   // Become the display thread
   if(!Quiet){
