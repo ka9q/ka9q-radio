@@ -473,7 +473,11 @@ int main(int argc,char * const argv[]){
   // set to non-default handlers (e.g., gdb breakpoints?)
   // We make this effort to ensure a repeater transmitter isn't left on if we abort
   static int const signals[] = { SIGABRT,SIGALRM,SIGBUS,SIGFPE,SIGHUP,SIGILL,SIGINT,
-    SIGIO,SIGKILL,SIGPIPE, SIGPROF,SIGPWR,SIGQUIT,SIGSEGV,SIGSYS,SIGTERM,SIGTRAP,SIGUSR1,SIGUSR2,
+    SIGIO,SIGKILL,SIGPIPE, SIGPROF,
+#ifdef SIGPWR
+    SIGPWR,
+#endif
+SIGQUIT,SIGSEGV,SIGSYS,SIGTERM,SIGTRAP,SIGUSR1,SIGUSR2,
     SIGVTALRM,SIGXCPU,SIGXFSZ };
 
   for(int i=0;i < sizeof(signals)/sizeof(signals[0]); i++){
