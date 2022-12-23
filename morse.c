@@ -1,4 +1,4 @@
-//$Id: morse.c,v 1.3 2022/10/15 15:34:19 karn Exp $
+//$Id: morse.c,v 1.3 2022/10/15 15:34:19 karn Exp karn $
 // Encode Morse code characters as audio samples
 // Aug 2022 Phil Karn, KA9Q
 
@@ -294,6 +294,7 @@ int init_morse(float const speed,float const pitch,float level,float const sampr
 
   // Precompute element audio
   struct osc tone;
+  memset(&tone,0,sizeof(tone));
   set_osc(&tone,cycles_per_sample,0.0);
 
   // Exponential envelope shaping to avoid key clicks
