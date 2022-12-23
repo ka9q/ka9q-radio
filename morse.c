@@ -1,4 +1,4 @@
-//$Id: morse.c,v 1.3 2022/10/15 15:34:19 karn Exp karn $
+//$Id: morse.c,v 1.5 2022/12/23 22:21:44 karn Exp $
 // Encode Morse code characters as audio samples
 // Aug 2022 Phil Karn, KA9Q
 
@@ -230,14 +230,14 @@ static int mcompar(const void *a,const void *b){
 
 // Precomputed dots and dashes, stored in network byte order
 static int Dit_length; // # samples in the key-down period of a dit
-static int16_t *Dit;  // one element key-down, one element key-up
-static int16_t *Dah;  // three elements key-down, one element key-up
+static float *Dit;  // one element key-down, one element key-up
+static float *Dah;  // three elements key-down, one element key-up
 
 
 // Encode a single Morse character as audio samples
 // Return number of samples generated
 // Buffer must be long enough! 60 dit times is recommended
-int encode_morse_char(int16_t * const samples,wint_t c){
+int encode_morse_char(float * const samples,wint_t c){
   if(samples == NULL || Dit_length == 0)
     return 0; // Bad arg, or not initialized
 
@@ -247,7 +247,7 @@ int encode_morse_char(int16_t * const samples,wint_t c){
   if(mp == NULL)
     return 0;
 
-  int16_t *outp = samples;
+  float *outp = samples;
   for(int j=0;mp->code[j] != 0; j++){
     switch(mp->code[j]){
     case ' ':
@@ -289,8 +289,7 @@ int init_morse(float const speed,float const pitch,float level,float const sampr
 	    speed,pitch,level,samprate);
     fprintf(stdout,"dit length %d samples; cycles per sample %lf\n",Dit_length,cycles_per_sample);
   }
-  level = INT16_MAX * dB2voltage(-fabsf(level)); // convert dB to int16 scale
-
+  level = dB2voltage(-fabsf(level)); // convert dB to amplitude
 
   // Precompute element audio
   struct osc tone;
@@ -313,7 +312,7 @@ int init_morse(float const speed,float const pitch,float level,float const sampr
   int k;
   double envelope = 0;
   for(k=0; k < Dit_length; k++){
-    float s = level * creal(step_osc(&tone));
+    float s = level * (float)creal(step_osc(&tone));
     Dah[k] = Dit[k] = s * envelope;
     envelope += g * (1 - envelope);
   }
@@ -323,7 +322,7 @@ int init_morse(float const speed,float const pitch,float level,float const sampr
   double dah_envelope = envelope;
 
   for(; k < 2*Dit_length; k++){
-    float s = level * creal(step_osc(&tone));
+    float s = level * (float)creal(step_osc(&tone));
     Dit[k] = s * dit_envelope;
     Dah[k] = s * dah_envelope;    
     dit_envelope += g * (0 - dit_envelope);
@@ -331,13 +330,13 @@ int init_morse(float const speed,float const pitch,float level,float const sampr
   }
   // Third element of dah continues
   for(; k < 3*Dit_length; k++){
-    float s = level * creal(step_osc(&tone));
+    float s = level * (float)creal(step_osc(&tone));
     Dah[k] = s * dah_envelope;    
     dah_envelope += g * (1 - dah_envelope);    
   }
   // Fourth element of dah decays
   for(; k < 4*Dit_length; k++){
-    float s = level * creal(step_osc(&tone));
+    float s = level * (float)creal(step_osc(&tone));
     Dah[k] = s * dah_envelope;
     dah_envelope += g * (0 - dah_envelope);    
   }

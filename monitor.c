@@ -1,4 +1,4 @@
-// $Id: monitor.c,v 1.197 2022/12/07 06:18:13 karn Exp $
+// $Id: monitor.c,v 1.198 2022/12/23 22:22:58 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -1530,9 +1530,9 @@ void send_cwid(void){
     fprintf(stdout,"%s: CW ID started\n",format_gpstime(result,sizeof(result),gps_time_ns()));
   }
 
-  int16_t * const samples = malloc(60 * Dit_length * sizeof(samples[0]));
+  float samples[60 * Dit_length];
   pthread_mutex_lock(&Output_mutex);  
-  unsigned long long wptr = Rptr + (Playout * Samprate)/1000;
+  unsigned long long wptr = Rptr + ((long)Playout * Samprate)/1000;
   pthread_mutex_unlock(&Output_mutex);
 
   for(char const *cp = Cwid; *cp != '\0'; cp++){
@@ -1542,12 +1542,12 @@ void send_cwid(void){
     pthread_mutex_lock(&Output_mutex);
     if(Channels == 2){
       for(int i=0;i<samplecount;i++){
-	Output_buffer[2*wptr & (BUFFERSIZE-1)] += SCALE * samples[i];
-	Output_buffer[(2*wptr++ + 1) & (BUFFERSIZE-1)] += SCALE * samples[i];
+	Output_buffer[2*wptr & (BUFFERSIZE-1)] += samples[i];
+	Output_buffer[(2*wptr++ + 1) & (BUFFERSIZE-1)] += samples[i];
       }
     } else { // Channels == 1
       for(int i=0;i<samplecount;i++)
-	Output_buffer[wptr++ & (BUFFERSIZE-1)] += SCALE * samples[i];
+	Output_buffer[wptr++ & (BUFFERSIZE-1)] += samples[i];
     }
     pthread_mutex_unlock(&Output_mutex);
     // Wait for it to play out
@@ -1556,7 +1556,6 @@ void send_cwid(void){
     ns2ts(&ts,sleeptime);
     nanosleep(&ts,NULL);
   }
-  free(samples);
   if(Quiet){
     fprintf(stdout,"CW ID finished\n");
   }

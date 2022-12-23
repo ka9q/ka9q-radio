@@ -1,4 +1,4 @@
-// $Id: cwd.c,v 1.5 2022/08/17 21:47:15 karn Exp $
+// $Id: cwd.c,v 1.7 2022/12/23 22:21:44 karn Exp $
 // CW generator for ka9q-radio
 // Runs as daemon, reads from a named pipe, sends audio to a specified multicast group + RTP SSRC
 // Useful for IDs and other messages in repeater mode
@@ -34,11 +34,12 @@ char const *Input = "/run/cw/input";
 char const *Target = NULL;
 
 #define PCM_BUFSIZE 480        // 16-bit sample count per packet; must fit in Ethernet MTU
+#define SCALE16 (1./SHRT_MAX)
 int Dit_length;
 
 int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
   // Should be longer than any character
-  int16_t * const samples = malloc(60 * Dit_length * sizeof(samples[0]));
+  float fsamples[60 * Dit_length];
 
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
@@ -47,10 +48,12 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
   rtp.ssrc = rtp_state->ssrc;
   rtp.marker = true; // Start with marker bit on to reset playout buffer
 
-  int sample_count = encode_morse_char(samples,c);
+  int sample_count = encode_morse_char(fsamples,c);
   // byte swap for network
+  
+  int16_t samples[sample_count];
   for(int i=0; i < sample_count;i++)
-    samples[i] = htons(samples[i]);
+    samples[i] = htons((int16_t)(SCALE16 * fsamples[i]));
   int16_t *outp = samples;
   
   // Use gather-output to avoid copying data
@@ -100,7 +103,6 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
       nanosleep(&delay,NULL);
     }
   }
-  free(samples);
   return 0;
 }
 
