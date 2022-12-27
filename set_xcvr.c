@@ -182,6 +182,8 @@ int main(int argc,char *argv[]){
     
     // Vox threshold, 0 = off, 1 = 12 mV, 5 = 7 mV, 8 = 5 mV
     int const vox = config_getint(Configtable,Section,"vox",8);
+    int const scramble = config_getint(Configtable,Section,"scramble",0);
+
     iniparser_freedict(Configtable); // Done with config file
     
     usleep(1000000); // transceiver should power up in 500 ms
@@ -211,15 +213,16 @@ int main(int argc,char *argv[]){
       exit(1);
     }
     // Not really necessary, but the initial \r\n flushes the serial line
+    // NB: All commands must end with \r\n, not just \n!
     sendcmd("\r\n");
     
 #if DEBUG
     sendcmd("AT+DMOCONNECT\r\n");
     sendcmd("AT+DMOVERQ\r\n");
 #endif
-    sendcmd("AT+DMOSETGROUP=%d,%.4lf,%.4lf,%d,%d,%d,%d\n",
+    sendcmd("AT+DMOSETGROUP=%d,%.4lf,%.4lf,%d,%d,%d,%d\r\n",
 	    wideband,txfreq,rxfreq,rxtone,sq,txtone,flag);
-    sendcmd("AT+DMOSETMIC=%d,0\r\n",gain); // no "scrambling"
+    sendcmd("AT+DMOSETMIC=%d,%d\r\n",gain,scramble); // no "scrambling"
     sendcmd("AT+DMOAUTOPOWCONTR=%d\r\n",!powersave); // negative logic
     sendcmd("AT+DMOSETVOLUME=%d\r\n",volume);
     sendcmd("AT+DMOSETVOX=%d\r\n",vox);
