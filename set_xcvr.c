@@ -1,4 +1,4 @@
-// $Id: set_xcvr.c,v 1.3 2022/12/07 09:55:00 karn Exp $
+// $Id: set_xcvr.c,v 1.4 2022/12/29 05:40:08 karn Exp $
 #include <termios.h>
 #include <sys/types.h>
 #include <sys/stat.h>
