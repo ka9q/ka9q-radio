@@ -1,4 +1,4 @@
-// $Id: airspyd.c,v 1.7 2022/08/07 20:48:01 karn Exp $
+// $Id: airspyd.c,v 1.8 2022/12/29 05:50:35 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #undef DEBUG_AGC

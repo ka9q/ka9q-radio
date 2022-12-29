@@ -1,4 +1,4 @@
-// $Id: pcmsend.c,v 1.14 2022/08/05 06:35:10 karn Exp $
+// $Id: pcmsend.c,v 1.15 2022/12/29 05:58:17 karn Exp $
 // Multicast local audio source with PCM
 // Copyright April 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1

@@ -1,4 +1,4 @@
-// $Id: pcmrecord.c,v 1.19 2022/08/05 06:35:10 karn Exp $ 
+// $Id: pcmrecord.c,v 1.20 2022/12/29 05:58:17 karn Exp $ 
 // Read and record PCM audio streams
 // Adapted from iqrecord.c which is out of date
 // Copyright 2021 Phil Karn, KA9Q

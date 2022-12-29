@@ -1,4 +1,4 @@
-// $Id: iqplay.c,v 1.42 2022/08/05 06:35:10 karn Exp $
+// $Id: iqplay.c,v 1.43 2022/12/29 05:58:17 karn Exp $
 // Read from IQ recording, multicast in (hopefully) real time
 // Copyright 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1 // allow bind/connect/recvfrom without casting sockaddr_in6

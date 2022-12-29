@@ -1,4 +1,4 @@
-// $Id: setfilt.c,v 1.3 2022/05/12 06:32:27 karn Exp $
+// $Id: setfilt.c,v 1.4 2022/12/29 05:58:17 karn Exp $
 // Interactive program to set predetection filters
 
 #define _GNU_SOURCE 1

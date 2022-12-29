@@ -1,4 +1,4 @@
-// $Id: config.c,v 1.4 2022/04/20 05:37:31 karn Exp $
+// $Id: config.c,v 1.5 2022/12/29 05:42:34 karn Exp $
 // Helper functions for iniparser that combine section:key
 // April 2022, Phil Karn, KA9Q
 #include <iniparser.h>

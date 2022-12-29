@@ -1,4 +1,4 @@
-// $Id: modes.c,v 1.66 2022/06/23 22:13:29 karn Exp $
+// $Id: modes.c,v 1.67 2022/12/29 05:43:42 karn Exp $
 // Load and search mode definition table in modes.conf
 
 // Copyright 2018, Phil Karn, KA9Q

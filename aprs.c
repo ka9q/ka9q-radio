@@ -1,4 +1,4 @@
-// $Id: aprs.c,v 1.26 2021/10/28 20:53:06 karn Exp $
+// $Id: aprs.c,v 1.27 2022/12/29 05:58:17 karn Exp $
 // Process AX.25 frames containing APRS data, extract lat/long/altitude, compute az/el
 // INCOMPLETE, doesn't yet drive antenna rotors
 // Should also use RTP for AX.25 frames

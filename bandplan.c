@@ -1,4 +1,4 @@
-// $Id: bandplan.c,v 1.14 2022/04/14 10:50:43 karn Exp $
+// $Id: bandplan.c,v 1.15 2022/12/29 05:58:17 karn Exp $
 // Routines for processing the file bandplan.txt
 // containing general information about ham radio bandplans, other radio channels, etc
 // This information is displayed in the 'Info' window by the 'radio' program

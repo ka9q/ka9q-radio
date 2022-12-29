@@ -1,4 +1,4 @@
-// $Id: misc.c,v 1.40 2022/08/07 20:49:23 karn Exp $
+// $Id: misc.c,v 1.41 2022/12/29 05:56:41 karn Exp $
 // Miscellaneous low-level routines, mostly time-related
 // Copyright 2018, Phil Karn, KA9Q
 

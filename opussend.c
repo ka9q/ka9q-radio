@@ -1,4 +1,4 @@
-// $Id: opussend.c,v 1.24 2022/08/05 06:35:10 karn Exp $
+// $Id: opussend.c,v 1.25 2022/12/29 05:54:59 karn Exp $
 // Multicast local audio with Opus
 // Copyright Feb 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1

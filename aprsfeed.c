@@ -1,4 +1,4 @@
-// $Id: aprsfeed.c,v 1.31 2022/08/05 06:35:10 karn Exp $
+// $Id: aprsfeed.c,v 1.32 2022/12/29 05:58:17 karn Exp $
 // Process AX.25 frames containing APRS data, feed to APRS2 network
 // Copyright 2018, Phil Karn, KA9Q
 

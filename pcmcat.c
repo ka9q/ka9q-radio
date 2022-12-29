@@ -1,4 +1,4 @@
-// $Id: pcmcat.c,v 1.21 2022/05/10 04:01:32 karn Exp $
+// $Id: pcmcat.c,v 1.22 2022/12/29 05:55:43 karn Exp $
 // Receive and stream PCM RTP data to stdout
 // Should emit .wav format by default to encode sample rate & parameters for subsequent encoding
 

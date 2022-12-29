@@ -1,4 +1,4 @@
-// $Id: misc.h,v 1.30 2022/08/05 06:35:10 karn Exp $
+// $Id: misc.h,v 1.31 2022/12/29 05:56:41 karn Exp $
 // Miscellaneous constants, macros and function prototypes
 // Copyright 2018 Phil Karn, KA9Q
 #ifndef _MISC_H

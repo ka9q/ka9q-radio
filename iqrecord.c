@@ -1,4 +1,4 @@
-// $Id: iqrecord.c,v 1.37 2022/08/05 06:35:10 karn Exp $
+// $Id: iqrecord.c,v 1.38 2022/12/29 05:53:07 karn Exp $
 // NOT CURRENTLY USABLE - needs to read status stream to get sample rate, etc
 // Read and record complex I/Q stream or PCM baseband audio
 // This version reverts to file I/O from an unsuccessful experiment to use mmap()

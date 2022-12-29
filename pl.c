@@ -1,4 +1,4 @@
-// $Id: pl.c,v 1.23 2022/06/27 03:24:55 karn Exp $
+// $Id: pl.c,v 1.24 2022/12/29 05:58:17 karn Exp $
 // PL tone decoder
 // Reads multicast PCM audio (mono only right now)
 // Copyright Jan 2019 Phil Karn, KA9Q

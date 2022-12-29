@@ -1,4 +1,4 @@
-// $Id: stereod.c,v 1.4 2022/08/05 06:35:10 karn Exp $: opus.c,v 1.51 2021/03/19 03:13:14 karn Exp $
+// $Id: stereod.c,v 1.5 2022/12/29 05:54:13 karn Exp $: opus.c,v 1.51 2021/03/19 03:13:14 karn Exp $
 // Transcoder (multicast in/out) that decodes a FM composite signal @ 384 kHz
 // to a stereo signal @ 48 kHz
 #define _GNU_SOURCE 1
