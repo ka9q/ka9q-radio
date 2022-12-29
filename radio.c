@@ -1,4 +1,4 @@
-// $Id: radio.c,v 1.226 2022/08/05 06:35:10 karn Exp $
+// $Id: radio.c,v 1.227 2022/12/29 05:39:27 karn Exp $
 // Core of 'radio' program - control LOs, set frequency/mode, etc
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -82,83 +82,6 @@ void free_demod(struct demod **demod){
   }
 }
 
-#if 0 // Turned off in favor of per-demod estimation
-void *estimate_n0(void *arg){
-  pthread_setname("estn0");
-
-  int init = 0;
-  struct filter_in * const master = Frontend.in;
-  unsigned int blocknum = 0;
-
-  // bins is points/2 +1 in case of real input, so min/max IF must both be neg or positive
-  // bins is points in complex input
-  float avg_pwrs[master->bins];
-  memset(avg_pwrs,0,sizeof(avg_pwrs));
-
-  assert(Frontend.sdr.samprate != 0); // main should have waited until it isn't
-  int first_bin = master->bins * Frontend.sdr.min_IF / Frontend.sdr.samprate;
-  int last_bin = master->bins * Frontend.sdr.max_IF / Frontend.sdr.samprate;
-  int bincnt = last_bin - first_bin;
-  if(bincnt < 0)
-    bincnt += master->bins;
-
-  if(first_bin < 0)
-    first_bin += master->bins;
-
-  assert(first_bin >= 0);
-  assert(bincnt >=0 && bincnt <= master->bins);
-
-  while(1){
-    // Wait for new block of frequency domain data from front end
-    pthread_mutex_lock(&master->filter_mutex);
-    while(blocknum == master->blocknum)
-      pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
-    pthread_mutex_unlock(&master->filter_mutex);
-
-#if 0
-    if(master->bins > 10000 && (blocknum & 7) != 0)
-      continue; // HACK!! Do only 8th block to cut CPU consumption to roughly 1 FM demod on airspy
-#endif
-    
-    // Update average bin powers
-    float min_bin_power = INFINITY;
-    complex float * const fdomain = master->fdomain[blocknum % ND];
-    if(init){
-      int bin = first_bin;
-      for(int i=0; i < bincnt; i++){
-	avg_pwrs[i] += (cnrmf(fdomain[bin]) - avg_pwrs[i]) * .02; // tune or auto adjust this?
-	min_bin_power = min(min_bin_power,avg_pwrs[i]);
-	if(++bin == master->bins)
-	  bin = 0;
-      }
-    } else {
-      // Doesn't really help since the main problem is after a retuning
-      // and there can be a time skew between the frequency change and changing data
-      int bin = first_bin;
-      for(int i=0; i < bincnt; i++){
-	avg_pwrs[i] = cnrmf(fdomain[bin]);
-	min_bin_power = min(min_bin_power,avg_pwrs[i]);
-	if(++bin == master->bins)
-	  bin = 0;
-      }
-      init = 1;
-    }
-    // Not sure of the math here. Doubling N0 when the front end is real seems to give the right result;
-    // it was 3dB low without it, probably because there are only half as many bins as in complex
-    // Also adjust for overlap
-    Frontend.n0 = (Frontend.sdr.isreal ? 2 : 1) * ((float)Frontend.in->ilen / (Frontend.in->ilen + Frontend.in->impulse_length - 1))
-      * 2 * min_bin_power / ((float)Frontend.in->bins * Frontend.sdr.samprate);
-#if 0
-    if((blocknum & 0xff) == 0)
-      fprintf(stdout,"min_IF %.1f max_IF %.1f bins %d first_bin %d last_bin %d Frontend.n0 = %g (%.2f dB)\n",
-	      Frontend.sdr.min_IF,Frontend.sdr.max_IF,
-	      master->bins,first_bin,last_bin,
-	      Frontend.n0,power2dB(Frontend.n0));
-#endif
-    blocknum++;
-  }
-}
-#endif
 
 // experimental
 // estimate n0 by finding the FFT bin with the least energy
@@ -171,8 +94,8 @@ float estimate_noise(struct demod *demod,int rotate){
 
   float * const energies = demod->filter.energies;
   struct filter_in const * const master = slave->master;
-  // slave->blocknum already incremented by execute_filter_output
-  complex float const * const fdomain = master->fdomain[(slave->blocknum - 1) % ND];
+  // slave->next_jobnum already incremented by execute_filter_output
+  complex float const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
   int mbin = rotate - slave->bins/2;
   float min_bin_energy = INFINITY;
   if(master->in_type == REAL){
