@@ -1,4 +1,4 @@
-// $Id: filter.h,v 1.53 2022/06/29 08:25:35 karn Exp $
+// $Id: filter.h,v 1.54 2022/12/29 05:38:12 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -26,12 +26,6 @@ enum filtertype {
   REAL,
 };
 
-struct fft_job {
-  struct fft_job *next;
-  void *input;
-  bool terminate; // set to tell fft thread to quit
-};
-
 // Input and output arrays can be either complex or real
 // Used to be a union, but was prone to errors
 struct rc {
@@ -50,18 +44,14 @@ struct filter_in {
   struct rc input;                   // Beginning of user input area, length L
   fftwf_plan fwd_plan;               // FFT (time -> frequency)
 
-  unsigned int blocknum;             // Data sequence number, used to notify slaves of new data
   pthread_mutex_t filter_mutex;      // Synchronization for sequence number
   pthread_cond_t filter_cond;
 
-  pthread_t fft_thread;
-  int jobnum;
-  struct fft_job *job_queue;         // queue of input block for FFT thread
-  pthread_mutex_t queue_mutex;       // Synchronization for input queue
-  pthread_cond_t queue_cond;
-
   complex float *fdomain[ND];
+  unsigned int next_jobnum;
+  unsigned int completed_jobs[ND];
 };
+
 struct filter_out {
   struct filter_in * restrict master;
   enum filtertype out_type;          // REAL, COMPLEX or CROSS_CONJ
@@ -73,7 +63,7 @@ struct filter_out {
   struct rc output_buffer;           // Actual time-domain output buffer, length N/decimate
   struct rc output;                  // Beginning of user output area, length L/decimate
   fftwf_plan rev_plan;               // IFFT (frequency -> time)
-  unsigned int blocknum;             // Last sequence number received from master, used for synchronization
+  unsigned int next_jobnum;
   float noise_gain;                  // Filter gain on uniform noise (ratio < 1)
   int block_drops;                   // Lost frequency domain blocks, e.g., from late scheduling of slave thread
   int rcnt;                          // Samples read from output buffer

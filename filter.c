@@ -1,4 +1,4 @@
-// $Id: filter.c,v 1.92 2022/06/29 08:25:35 karn Exp $
+// $Id: filter.c,v 1.93 2022/12/29 05:38:12 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -27,8 +27,31 @@
 char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
 
 double Fftw_plan_timelimit = 10.0;
-int Nthreads = 1; 
+// Nthreads now applies to FFT worker threads; FFTW itself always executes with 1 thread
+#define Nthreads (2)
 bool Fftw_init = false;
+
+// FFT job queue
+struct fft_job {
+  struct fft_job *next;
+  unsigned int jobnum;
+  enum filtertype type;
+  fftwf_plan plan;
+  void *input;
+  void *output;
+  pthread_mutex_t *completion_mutex; // protects completion_jobnum
+  pthread_cond_t *completion_cond;   // Signaled when job is complete
+  unsigned int *completion_jobnum;   // Written with jobnum when complete
+  bool terminate; // set to tell fft thread to quit
+};
+
+
+static struct {
+  pthread_mutex_t queue_mutex; // protects job_queue
+  pthread_cond_t queue_cond;   // signaled when job put on job_queue
+  struct fft_job *job_queue;
+  pthread_t thread[Nthreads];  // Worker threads
+} FFT;
 
 static inline int modulo(int x,int const m){
   x = x < 0 ? x + m : x;
@@ -77,8 +100,10 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     return NULL; // Unreasonably small - will segfault. Can happen if sample rate is garbled
 
   struct filter_in * const master = calloc(1,sizeof(struct filter_in));
-  for(int i=0; i < ND; i++)
+  for(int i=0; i < ND; i++){
     master->fdomain[i] = fftwf_alloc_complex(bins);
+    master->completed_jobs[i] = (unsigned int)-1; // So startup won't drop any blocks
+  }
 
   assert(master != NULL);
   assert(master != (void *)-1);
@@ -87,23 +112,27 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
   master->ilen = L;
   master->impulse_length = M;
   pthread_mutex_init(&master->filter_mutex,NULL);
-  pthread_mutex_init(&master->queue_mutex,NULL);
   pthread_cond_init(&master->filter_cond,NULL);
-  pthread_cond_init(&master->queue_cond,NULL);
 
-  // Use multithreading (if configured) only for large forward FFTs
+  // FFTW itself always runs with a single thread since multithreading didn't seem to do much good
+  // But we have a set of worker threads operating on a job queue to allow a controlled number
+  // of independent FFTs to execute at the same time
   if(!Fftw_init){
     fftwf_init_threads();
-    fftwf_plan_with_nthreads(Nthreads);
+    fftwf_plan_with_nthreads(1);
     fftwf_make_planner_thread_safe();
     int r = fftwf_import_system_wisdom();
     fprintf(stdout,"fftwf_import_system_wisdom() %s\n",r == 1 ? "succeeded" : "failed");
     r = fftwf_import_wisdom_from_filename(Wisdom_file);
     fprintf(stdout,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,r == 1 ? "succeeded" : "failed");
     fftwf_set_timelimit(Fftw_plan_timelimit);
+    // Start FFT worker thread(s) if not already running
+    for(int i=0;i < Nthreads;i++){
+      if(FFT.thread[i] == (pthread_t)0)
+	pthread_create(&FFT.thread[i],NULL,run_fft,NULL);
+    }
     Fftw_init = true;
   }
-    
 
   switch(in_type){
   default:
@@ -187,66 +216,61 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->f_fdomain,slave->output_buffer.r,FFTW_PATIENT);
     break;
   }
-  slave->blocknum = master->blocknum;
+  slave->next_jobnum = master->next_jobnum;
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
     fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
   return slave;
 }
 
-// Thread that actually performs the forward FFT
-// Allows the thread running execute_filter_input() to continue
-// processing the next input block in parallel on another core
+// Worker thread(s) that actually execute FFTs
+// Used for input FFTs since they tend to be large and CPU-consuming
+// Lets the input thread process the next input block in parallel on another core
 // Frees the input buffer and the job descriptor when done
 void *run_fft(void *p){
   pthread_detach(pthread_self());
   pthread_setname("fft");
 
-  struct filter_in *f = (struct filter_in *)p;
-  assert(f != NULL);
-  assert(f->fwd_plan != NULL);
-
   while(1){
-    // take job descriptor from head of queue
-    pthread_mutex_lock(&f->queue_mutex);
-    while(f->job_queue == NULL)
-      pthread_cond_wait(&f->queue_cond,&f->queue_mutex);
-    
-    struct fft_job *job = f->job_queue;
-    f->job_queue = job->next;
-    int const jobnum = f->jobnum++;
-    pthread_mutex_unlock(&f->queue_mutex);
-    if(job->input != NULL){
-      switch(f->in_type){
+    // Get next job
+    pthread_mutex_lock(&FFT.queue_mutex);
+    while(FFT.job_queue == NULL)
+      pthread_cond_wait(&FFT.queue_cond,&FFT.queue_mutex);
+    struct fft_job *job = FFT.job_queue;
+    FFT.job_queue = job->next;
+    pthread_mutex_unlock(&FFT.queue_mutex);
+
+    if(job->input != NULL && job->output != NULL && job->plan != NULL){
+      switch(job->type){
       case COMPLEX:
       case CROSS_CONJ:
-	fftwf_execute_dft(f->fwd_plan,job->input,f->fdomain[jobnum % ND]);
+	fftwf_execute_dft(job->plan,job->input,job->output);
 	break;
       case REAL:
-	fftwf_execute_dft_r2c(f->fwd_plan,job->input,f->fdomain[jobnum % ND]);
+	fftwf_execute_dft_r2c(job->plan,job->input,job->output);
 	break;
       default:
 	break;
       }
-      free(job->input); job->input = NULL;
     }
+    if(job->input){
+      free(job->input);
+      job->input = NULL; // free input but NOT output
+    }
+    // Signal we're done with this job
+    if(job->completion_mutex)
+      pthread_mutex_lock(job->completion_mutex);
+    if(job->completion_jobnum)
+      *job->completion_jobnum = job->jobnum;
+    if(job->completion_cond)
+      pthread_cond_broadcast(job->completion_cond);
+    if(job->completion_mutex)
+      pthread_mutex_unlock(job->completion_mutex);
 
-    pthread_mutex_lock(&f->filter_mutex);
-#ifdef DUAL_FFT_THREAD
-    // Wait for any previous pending jobs to finish, if they got out of sequence due to scheduling
-    // Still works if only one thread is running, but let's avoid the theoretical deadlock anyway
-    while(jobnum != f->blocknum + 1)
-      pthread_cond_wait(&f->filter_cond,&f->filter_mutex);
-#endif
-    // Signal listeners that we're done
-    f->blocknum = jobnum + 1;
-    pthread_cond_broadcast(&f->filter_cond);
-    pthread_mutex_unlock(&f->filter_mutex);
-    bool const terminate = job->terminate;
+    bool const terminate = job->terminate; // Don't use job pointer after free
     free(job); job = NULL;
     if(terminate)
       break; // Terminate after this job
   }
-  f->fft_thread = 0;
   return NULL;
 }
 
@@ -256,34 +280,26 @@ int execute_filter_input(struct filter_in * const f){
   if(f == NULL)
     return -1;
 
-  // Start FFT thread if not already running
-  if(f->fft_thread == (pthread_t)0)
-    pthread_create(&f->fft_thread,NULL,run_fft,f);
-
-  // We now use the FFTW3 functions that specify the input and output arrays
-  // Execute the FFT in a detached thread so we can process more input data while the FFT executes
+  int const N = f->ilen + f->impulse_length - 1;
+  // We use the FFTW3 functions that specify the input and output arrays
+  // Execute the FFT in separate worker threads
   struct fft_job * const job = calloc(1,sizeof(struct fft_job));
+  job->jobnum = f->next_jobnum++;
+  job->output = f->fdomain[job->jobnum % ND];
+  job->type = f->in_type;
+  job->plan = f->fwd_plan;
+  job->completion_mutex = &f->filter_mutex;
+  job->completion_jobnum = &f->completed_jobs[job->jobnum % ND];
+  job->completion_cond = &f->filter_cond;
 
+  // Set up next input buffer and perform overlap-and-save operation for fast convolution
+  // Although it would decrease latency to notify the fft thead first, that would set up a race condition
+  // since the FFT thread frees its input buffer on completion
   switch(f->in_type){
   default:
   case CROSS_CONJ:
   case COMPLEX:
     job->input = f->input_buffer.c;
-    break;
-  case REAL:
-    job->input = f->input_buffer.r;
-    break;
-  }
-  assert(job->input != NULL); // Should already be allocated in create_filter_input, or in our last call
-
-  // Set up next input buffer and perform overlap-and-save operation for fast convolution
-  // Although it would decrease latency to notify the fft thead first, that would set up a race condition
-  // since the FFT thread frees its input buffer on completion
-  int const N = f->ilen + f->impulse_length - 1;
-  switch(f->in_type){
-  default:
-  case CROSS_CONJ:
-  case COMPLEX:
     {
       complex float * const newbuf = fftwf_alloc_complex(N);
       memmove(newbuf,f->input_buffer.c + f->ilen,(f->impulse_length-1)*sizeof(*f->input_buffer.c));
@@ -292,6 +308,7 @@ int execute_filter_input(struct filter_in * const f){
     }
     break;
   case REAL:
+    job->input = f->input_buffer.r;
     {
       float * const newbuf = fftwf_alloc_real(N);
       memmove(newbuf,f->input_buffer.r + f->ilen,(f->impulse_length-1)*sizeof(*f->input_buffer.r));
@@ -300,21 +317,22 @@ int execute_filter_input(struct filter_in * const f){
     }
     break;
   }
+  assert(job->input != NULL); // Should already be allocated in create_filter_input, or in our last call
   f->wcnt = 0; // In case it's not already reset to 0
 
-  // Append job to queue, wake FFT thread
+  // Append job to worker queue, wake FFT worker thread
   struct fft_job *jp_prev = NULL;
-  pthread_mutex_lock(&f->queue_mutex);
-  for(struct fft_job *jp = f->job_queue; jp != NULL; jp = jp->next)
+  pthread_mutex_lock(&FFT.queue_mutex);
+  for(struct fft_job *jp = FFT.job_queue; jp != NULL; jp = jp->next)
     jp_prev = jp;
 
   if(jp_prev)
     jp_prev->next = job;
   else
-    f->job_queue = job; // Head of list
+    FFT.job_queue = job; // Head of list
 
-  pthread_cond_signal(&f->queue_cond); // Alert FFT thread
-  pthread_mutex_unlock(&f->queue_mutex);
+  pthread_cond_broadcast(&FFT.queue_cond); // Alert FFT thread(s)
+  pthread_mutex_unlock(&FFT.queue_mutex);
 
   return 0;
 }
@@ -326,15 +344,10 @@ int execute_filter_output_idle(struct filter_out * const slave){
   struct filter_in * const master = slave->master;
   assert(master != NULL);
   // Wait for new block of data
-  pthread_mutex_lock(&master->filter_mutex); // Protect access to master->blocknum
-  while(slave->blocknum == master->blocknum)
+  pthread_mutex_lock(&master->filter_mutex);
+  while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
     pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
-  if((int)(master->blocknum - slave->blocknum) > ND){
-    // Fell behind
-    slave->block_drops += (int)(master->blocknum - slave->blocknum) - ND;
-    slave->blocknum = master->blocknum;
-  } else
-    slave->blocknum++;
+  slave->next_jobnum++;
   pthread_mutex_unlock(&master->filter_mutex); 
   return 0;
 }
@@ -345,7 +358,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   if(slave == NULL)
     return -1;
 
-  // We do have to modify date in the master's data structure, notably mutex locks
+  // We do have to modify the master's data structure, notably mutex locks
   // So the derefenced pointer can't be const
   struct filter_in * const master = slave->master;
   assert(master != NULL);
@@ -362,19 +375,13 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   // DC and positive frequencies up to nyquist frequency are same for all types
   assert(malloc_usable_size(slave->f_fdomain) >= slave->bins * sizeof(*slave->f_fdomain));
 
-  // Wait for new block of data
-  // master->blocknum is the next block that the master will produce
-  pthread_mutex_lock(&master->filter_mutex); // Protect access to master->blocknum
-  while(slave->blocknum == master->blocknum)
+  // Wait for new block of output data
+  pthread_mutex_lock(&master->filter_mutex);
+  while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
     pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
   // We don't modify the master's output data, we create our own
-  if((int)(master->blocknum - slave->blocknum) > ND){
-    // Fell behind, catch up
-    slave->block_drops += (int)(master->blocknum - slave->blocknum) - ND;
-    slave->blocknum = master->blocknum - 1;
-  }
-  complex float const * const fdomain = master->fdomain[slave->blocknum % ND];
-  slave->blocknum++;
+  complex float const * const fdomain = master->fdomain[slave->next_jobnum % ND];
+  slave->next_jobnum++;
   pthread_mutex_unlock(&master->filter_mutex); 
 
   assert(fdomain != NULL);
@@ -532,26 +539,27 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   return 0;
 }
 
+#if 0
 // Send terminate job to FFT thread
 static void terminate_fft(struct filter_in *f){
   struct fft_job * const job = calloc(1,sizeof(struct fft_job));
 
-  job->input = NULL;
   job->terminate = true;
   // Append job to queue, wake FFT thread
-  pthread_mutex_lock(&f->queue_mutex);
+  pthread_mutex_lock(&FFT.queue_mutex);
   struct fft_job *jp_prev = NULL;
-  for(struct fft_job *jp = f->job_queue; jp != NULL; jp = jp->next)
+  for(struct fft_job *jp = FFT.job_queue; jp != NULL; jp = jp->next)
     jp_prev = jp;
 
   if(jp_prev)
     jp_prev->next = job;
   else
-    f->job_queue = job; // Head of list
+    FFT.job_queue = job; // Head of list
 
-  pthread_cond_signal(&f->queue_cond); // Alert FFT thread
-  pthread_mutex_unlock(&f->queue_mutex);
+  pthread_cond_broadcast(&FFT.queue_cond); // Alert FFT thread
+  pthread_mutex_unlock(&FFT.queue_mutex);
 }
+#endif
 
 int delete_filter_input(struct filter_in ** p){
   if(p == NULL)
@@ -563,12 +571,6 @@ int delete_filter_input(struct filter_in ** p){
   if(master == NULL)
     return -1;
   
-  if(master->fft_thread){
-    terminate_fft(master);
-    pthread_join(master->fft_thread,NULL);
-    master->fft_thread = (pthread_t)0;
-  }
-
   fftwf_destroy_plan(master->fwd_plan);
   fftwf_free(master->input_buffer.c);
   for(int i=0; i < ND; i++)

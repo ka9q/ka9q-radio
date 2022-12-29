@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.261 2022/11/11 02:51:40 karn Exp $
+// $Id: main.c,v 1.262 2022/12/29 05:38:55 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -40,7 +40,9 @@ static int const DEFAULT_IP_TOS = 48;
 static int const DEFAULT_MCAST_TTL = 1;
 static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
+#if 0
 static int const DEFAULT_FFT_THREADS = 1;
+#endif
 
 char const *Modefile = "modes.conf";
 
@@ -303,7 +305,9 @@ static int loadconfig(char const * const file){
   Mcast_ttl = config_getint(Configtable,global,"ttl",DEFAULT_MCAST_TTL);
   Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",DEFAULT_BLOCKTIME));
   Overlap = abs(config_getint(Configtable,global,"overlap",DEFAULT_OVERLAP));
+#if 0 // Make this configurable again someday
   Nthreads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFT_THREADS);
+#endif
   RTCP_enable = config_getboolean(Configtable,global,"rtcp",0);
   SAP_enable = config_getboolean(Configtable,global,"sap",0);
   Modefile = config_getstring(Configtable,global,"mode-file",Modefile);
