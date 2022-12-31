@@ -1,0 +1,201 @@
+# $Id: Makefile.pi,v 1.2 2022/12/31 05:15:09 karn Exp $
+
+# for production
+DOPTS = -DNDEBUG=1 -O3
+# for debugging
+#DOPTS=-g
+
+COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
+
+# Get local versions (e.g., of librtlsdr)
+LDOPTS=-L/usr/local/lib
+#LDOPTS=-g -L/usr/local/lib
+
+INCLUDES+=-I/usr/include/iniparser/
+CFLAGS=$(DOPTS) $(COPTS) $(INCLUDES)
+BINDIR=/usr/local/bin
+LIBDIR=/usr/local/share/ka9q-radio
+DAEMONDIR=/usr/local/sbin
+VARDIR=/var/lib/ka9q-radio
+LDLIBS=-lpthread -lbsd -lm
+
+#DAEMONS=aprs aprsfeed funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd sdrplayd
+DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd
+
+EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt set_xcvr
+
+AFILES=bandplan.txt help.txt modes.conf id.txt monitor-help.txt
+
+SYSTEMD_FILES=airspyd@.service airspyhfd@.service cwd.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service
+
+UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules
+
+CONF_FILES=funcubed.conf \
+			 opusd@hf.conf opusd@hfdl.conf opusd@fm.conf opusd@aviation.conf opusd@packet.conf opusd@kpbs.conf opusd@ksds.conf \
+			 stereod.conf rdsd.conf \
+			 radiod@10m.conf radiod@6m.conf radiod@fm.conf radiod@2m.conf radiod@125cm.conf radiod@70cm.conf radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf radiod@repeater.conf \
+			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
+			 wspr-decoded.conf horus.conf airspyd.conf packetd.conf aprs.conf repeater.conf
+
+LOGROTATE_FILES = aprsfeed.rotate
+
+AIRSPY_FILES=
+
+BLACKLIST=airspy-blacklist.conf
+
+SRC=airspyd.c airspyhfd.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c fcd.c filter.c fm.c \
+	   tune.c funcubed.c iir.c iqplay.c iqrecord.c linear.c main.c metadump.c misc.c modes.c modulate.c monitor.c morse.c radio.c setfilt.c set_xcvr.c \
+	   show-sig.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdrd.c pcmspawn.c \
+	   sdrplayd.c status.c stereod.c wfm.c wspr-decoded.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
+	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h
+
+all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(LOGROTATE_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
+
+# NB: now overwrites existing .conf files in /etc/radio !
+install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
+	/usr/sbin/adduser --quiet --system --group radio
+	/usr/sbin/adduser --quiet --system --ingroup radio airspy
+	/usr/sbin/adduser --quiet --system --ingroup radio funcube
+	/usr/sbin/adduser --quiet --system --ingroup radio recordings
+	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
+	install -o root -m 0755 -D --target-directory=/etc/sysctl.d 98-sockbuf.conf
+	install -o root -m 0755 -D --target-directory=$(DAEMONDIR) $(DAEMONS) start-ka9q-horus.sh
+	install -o root -m 0755 -D --target-directory=$(BINDIR) $(EXECS)
+	install -o root -m 0644 -D --target-directory=$(LIBDIR) $(AFILES)
+	install -o root -m 0644 -D --target-directory=/etc/systemd/system $(SYSTEMD_FILES)
+	install -o root -m 0644 -D --target-directory=/etc/udev/rules.d $(UDEV_FILES)
+	install -o root -m 0644 -D --target-directory=/etc/modprobe.d $(BLACKLIST)
+	install -o root -m 0644 -D --target-directory=/etc/logrotate.d $(LOGROTATE_FILES)
+	install -o root -m 0644 -D --target-directory=/etc/radio $(CONF_FILES);
+	mkdir -p /etc/fftw /etc/radio $(VARDIR) /etc/radio/airspyd.conf.d
+	chgrp radio $(VARDIR) /etc/radio /etc/fftw
+	chmod g+ws $(VARDIR) /etc/radio /etc/fftw
+#	cp -n -v --target-directory=/etc/radio $(CONF_FILES)
+#	cp -n -v --target-directory=/etc/radio/airspyd.conf.d $(AIRSPY_FILES)
+	systemctl daemon-reload
+
+clean:
+	rm -f *.o *.a .depend $(EXECS) $(DAEMONS)
+
+
+depend: .depend
+
+.depend: $(SRC)
+	rm -f .depend
+	$(CC) $(CFLAGS) -MM $^ > .depend
+
+-include .depend
+
+.PHONY: clean all install depend
+
+# Executables
+set_xcvr: set_xcvr.o config.o
+	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lm -lpthread -lrt
+
+airspyd: airspyd.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lairspy -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
+
+airspyhfd: airspyhfd.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lairspyhf -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
+
+aprs: aprs.o ax25.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+
+aprsfeed: aprsfeed.o ax25.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+
+control: control.o modes.o bandplan.o decode_status.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lncursesw -liniparser -lbsd -lm -lpthread
+
+cwd: cwd.o morse.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+
+rtlsdrd: rtlsdrd.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lrtlsdr -lavahi-client -lavahi-common -lbsd -lm -lpthread
+
+tune: tune.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+
+setfilt: setfilt.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+
+show-pkt: show-pkt.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm
+
+show-sig: show-sig.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm
+
+funcubed: funcubed.o status.o libradio.a libfcd.a
+	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lavahi-client -lavahi-common -lusb-1.0 -liniparser -lbsd -lm -lpthread
+
+hackrf: hackrf.o status.o decimate.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lhackrf -lbsd -lpthread -lm
+
+iqplay: iqplay.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lbsd -lpthread -lm
+
+iqrecord: iqrecord.o decode_status.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+
+metadump: metadump.o dump.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+
+modulate: modulate.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
+
+monitor: monitor.o morse.o config.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lncursesw -liniparser -lbsd -lm -lpthread
+
+opusd: opusd.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lavahi-client -lavahi-common -lbsd -lm -lpthread
+
+opussend: opussend.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lbsd -lm
+
+packetd: packetd.o ax25.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
+
+pcmcat: pcmcat.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lm -lbsd -lpthread 
+
+pcmspawn: pcmspawn.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lm -lbsd -lpthread 
+
+pcmrecord: pcmrecord.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lm -lbsd -lpthread 
+
+pcmsend: pcmsend.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lpthread
+
+pl: pl.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
+
+radiod: main.o audio.o fm.o wfm.o linear.o radio.o rtcp.o radio_status.o modes.o decode_status.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -liniparser -lpthread -lm
+
+rdsd: rdsd.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
+
+sdrplayd: sdrplayd.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lsdrplay_api -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
+
+	  
+stereod: stereod.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
+
+wspr-decoded: wspr-decoded.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
+
+
+# Binary libraries
+libfcd.a: fcd.o hid-libusb.o
+	ar rv $@ $?
+	ranlib $@
+
+# subroutines useful in more than one program
+libradio.a: avahi.o attr.o filter.o iir.o status.o misc.o multicast.o osc.o config.o
+	ar rv $@ $?
+	ranlib $@
+
+
+
