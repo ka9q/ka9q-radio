@@ -250,10 +250,6 @@ void *run_fft(void *p){
 	break;
       }
     }
-    if(job->input){
-      free(job->input);
-      job->input = NULL; // free input but NOT output
-    }
     // Signal we're done with this job
     if(job->completion_mutex)
       pthread_mutex_lock(job->completion_mutex);
@@ -263,6 +259,12 @@ void *run_fft(void *p){
       pthread_cond_broadcast(job->completion_cond);
     if(job->completion_mutex)
       pthread_mutex_unlock(job->completion_mutex);
+
+    // Do this after signaling in case free() takes time
+    if(job->input){
+      free(job->input);
+      job->input = NULL; // free input but NOT output
+    }
 
     bool const terminate = job->terminate; // Don't use job pointer after free
     free(job); job = NULL;
