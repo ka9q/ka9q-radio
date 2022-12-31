@@ -343,6 +343,12 @@ int execute_filter_output_idle(struct filter_out * const slave){
   assert(master != NULL);
   // Wait for new block of data
   pthread_mutex_lock(&master->filter_mutex);
+  int blocks_to_wait = slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND];
+  if(blocks_to_wait <= -ND){
+    // Circular buffer overflow (for us)
+    slave->next_jobnum += blocks_to_wait;
+    slave->block_drops += blocks_to_wait;
+  }
   while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
     pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
   slave->next_jobnum++;
@@ -375,6 +381,12 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 
   // Wait for new block of output data
   pthread_mutex_lock(&master->filter_mutex);
+  int blocks_to_wait = slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND];
+  if(blocks_to_wait <= -ND){
+    // Circular buffer overflow (for us)
+    slave->next_jobnum += blocks_to_wait;
+    slave->block_drops += blocks_to_wait;
+  }
   while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
     pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
   // We don't modify the master's output data, we create our own
