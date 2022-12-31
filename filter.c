@@ -335,8 +335,10 @@ int execute_filter_input(struct filter_in * const f){
   return 0;
 }
 
+#if 0
 // Dummy execution of output filter
 // Simply wait for a block and then exit
+// No longer used?
 int execute_filter_output_idle(struct filter_out * const slave){
   assert(slave != NULL);
   struct filter_in * const master = slave->master;
@@ -355,7 +357,7 @@ int execute_filter_output_idle(struct filter_out * const slave){
   pthread_mutex_unlock(&master->filter_mutex); 
   return 0;
 }
-
+#endif
 
 int execute_filter_output(struct filter_out * const slave,int const rotate){
   assert(slave != NULL);
