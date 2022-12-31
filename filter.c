@@ -1,12 +1,10 @@
-// $Id: filter.c,v 1.93 2022/12/29 05:38:12 karn Exp $
+// $Id: filter.c,v 1.95 2022/12/31 05:15:33 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
 // Optional output decimation by integer factor
 // Complex input and transfer functions, complex or real output
 // Copyright 2017, Phil Karn, KA9Q, karn@ka9q.net
-
-#undef DUAL_FFT_THREAD
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -331,7 +329,7 @@ int execute_filter_input(struct filter_in * const f){
   else
     FFT.job_queue = job; // Head of list
 
-  pthread_cond_broadcast(&FFT.queue_cond); // Alert FFT thread(s)
+  pthread_cond_signal(&FFT.queue_cond); // Alert only one FFT worker
   pthread_mutex_unlock(&FFT.queue_mutex);
 
   return 0;

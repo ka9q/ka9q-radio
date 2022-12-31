@@ -1,4 +1,4 @@
-# $Id: Makefile.linux,v 1.113 2022/12/04 03:45:37 karn Exp $
+# $Id: Makefile.linux,v 1.114 2022/12/31 05:15:09 karn Exp $
 
 # for production
 DOPTS = -DNDEBUG=1 -O3
@@ -51,7 +51,7 @@ SRC=airspyd.c airspyhfd.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandpl
 
 all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(LOGROTATE_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
 
-# Don't overwrite existing config files in /etc/radio
+# NB: now overwrites existing .conf files in /etc/radio !
 install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
 	/usr/sbin/adduser --quiet --system --group radio
 	/usr/sbin/adduser --quiet --system --ingroup radio airspy
@@ -66,10 +66,11 @@ install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FIL
 	install -o root -m 0644 -D --target-directory=/etc/udev/rules.d $(UDEV_FILES)
 	install -o root -m 0644 -D --target-directory=/etc/modprobe.d $(BLACKLIST)
 	install -o root -m 0644 -D --target-directory=/etc/logrotate.d $(LOGROTATE_FILES)
+	install -o root -m 0644 -D --target-directory=/etc/radio $(CONF_FILES);
 	mkdir -p /etc/fftw /etc/radio $(VARDIR) /etc/radio/airspyd.conf.d
 	chgrp radio $(VARDIR) /etc/radio /etc/fftw
 	chmod g+ws $(VARDIR) /etc/radio /etc/fftw
-	cp -n -v --target-directory=/etc/radio $(CONF_FILES)
+#	cp -n -v --target-directory=/etc/radio $(CONF_FILES)
 #	cp -n -v --target-directory=/etc/radio/airspyd.conf.d $(AIRSPY_FILES)
 	systemctl daemon-reload
 

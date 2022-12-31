@@ -1,4 +1,4 @@
-// $Id: avahi.c,v 1.20 2022/08/02 06:49:41 karn Exp $
+// $Id: avahi.c,v 1.21 2022/12/31 04:58:08 karn Exp $
 // Adapted from avahi's example file client-publish-service.c
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
@@ -370,7 +370,7 @@ static void entry_group_callback(AvahiEntryGroup *g, AvahiEntryGroupState state,
     dump_userdata(userdata);
 #endif
 
-#if 0
+#if 1
     AvahiClient *c = avahi_entry_group_get_client(g);
     char *n = avahi_alternative_service_name(userdata->service_name);
     avahi_free(userdata->service_name);
