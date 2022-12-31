@@ -55,7 +55,7 @@ static bool Quiet;                 // Disable curses
 static bool Quiet_mode;            // Toggle screen activity after starting
 static float Playout = 100;
 static bool Start_muted;
-static bool Auto_position;
+static bool Auto_position = true;  // first will be in the center
 static bool PTT_state;
 static long long Audio_callbacks;
 static unsigned long Audio_frames;
@@ -193,13 +193,13 @@ static void *repeater_ctl(void *arg);
 static char const *lookupid(uint32_t ssrc);
 static float make_position(int);
 
-static char Optstring[] = "I:LR:Sac:f:g:p:qr:u:vn";
+static char Optstring[] = "CI:LR:Sac:f:g:p:qr:u:vn";
 static struct  option Options[] = {
+   {"center", no_argument, NULL, 'C'},
    {"input", required_argument, NULL, 'I'},
    {"list-audio", no_argument, NULL, 'L'},
    {"device", required_argument, NULL, 'R'},
    {"autosort", no_argument, NULL, 'S'},
-   {"auto-position", no_argument, NULL, 'a'},
    {"channels", required_argument, NULL, 'c'},
    {"config", required_argument, NULL, 'f'},
    {"gain", required_argument, NULL, 'g'},
@@ -263,7 +263,9 @@ int main(int argc,char * const argv[]){
     ID_level = config_getfloat(Configtable,Repeater,"level",ID_level);
     Notch = config_getboolean(Configtable,Audio,"notch",Notch);
     Quiet = config_getboolean(Configtable,Display,"quiet",Quiet);
-    Auto_position = config_getboolean(Configtable,Display,"auto-position",Auto_position);
+    if(config_getboolean(Configtable,Audio,"center",false))
+      Auto_position = false;
+
     Auto_sort = config_getboolean(Configtable,Display,"autosort",Auto_sort);
     Update_interval = config_getint(Configtable,Display,"update",Update_interval);
     Playout = config_getfloat(Configtable,Audio,"playout",Playout);
@@ -288,9 +290,6 @@ int main(int argc,char * const argv[]){
   // Rescan args to override config file
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
-    case 'a':
-      Auto_position = true;
-      break;
     case 'c':
       Channels = strtol(optarg,NULL,0);
       break;
@@ -1698,6 +1697,7 @@ static char const *lookupid(uint32_t ssrc){
 // Assign pan position by reversing binary bits of counter
 // Returns -1 to +1
 static float make_position(int x){
+  x += 1; // Force first position to be in center, which is the default with a single stream
   // Swap bit order
   int y = 0;
   const int w = 8;
