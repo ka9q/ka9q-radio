@@ -346,8 +346,8 @@ int execute_filter_output_idle(struct filter_out * const slave){
   int blocks_to_wait = slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND];
   if(blocks_to_wait <= -ND){
     // Circular buffer overflow (for us)
-    slave->next_jobnum += blocks_to_wait;
-    slave->block_drops += blocks_to_wait;
+    slave->next_jobnum -= blocks_to_wait;
+    slave->block_drops -= blocks_to_wait;
   }
   while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
     pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
@@ -384,8 +384,8 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   int blocks_to_wait = slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND];
   if(blocks_to_wait <= -ND){
     // Circular buffer overflow (for us)
-    slave->next_jobnum += blocks_to_wait;
-    slave->block_drops += blocks_to_wait;
+    slave->next_jobnum -= blocks_to_wait;
+    slave->block_drops -= blocks_to_wait;
   }
   while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
     pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
