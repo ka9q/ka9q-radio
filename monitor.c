@@ -100,7 +100,6 @@ static int inDevNum;                 // Portaudio's audio output device index
 static long long Start_time;
 static PaTime Start_pa_time;
 
-static pthread_mutex_t Output_mutex = PTHREAD_MUTEX_INITIALIZER;
 static float *Output_buffer;
 static volatile long long Rptr;            // Unwrapped read pointer (bug: will overflow in 6 million years)
 #if 0
@@ -139,7 +138,7 @@ struct session {
   int type;                 // RTP type (10,11,20,111)
 
   uint32_t next_timestamp;  // Next expected timestamp
-  volatile long long wptr;  // current write pointer into output PCM buffer
+  long long wptr;  // current write pointer into output PCM buffer
   int playout;              // Initial playout delay, samples
 
   OpusDecoder *opus;        // Opus codec decoder handle, if needed
@@ -700,10 +699,8 @@ static void *decode_task(void *arg){
     sp->rtp_state.seq = pkt->rtp.seq + 1;
     if(pkt->rtp.marker){
       // beginning of talk spurt, resync
-      sp->active = 0; // reset active
       reset_session(sp,pkt->rtp.timestamp); // Updates sp->wptr
     }
-
     int upsample = 1;
 
     // decode Opus or PCM into bounce buffer
@@ -726,15 +723,18 @@ static void *decode_task(void *arg){
       if(r0 == OPUS_INVALID_PACKET || r0 == OPUS_BAD_ARG)
 	goto endloop;
       // opus timestamps are always 48 kHz regardless of chosen decoder output sample rate
+      // Difference in timestamps might be negative, and since they're unsigned the (int32_t) cast is necessary
       if(pkt->rtp.timestamp != sp->next_timestamp)
-	sp->wptr += (pkt->rtp.timestamp - sp->next_timestamp) * Samprate / 48000;
+	sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->next_timestamp) * Samprate / 48000;
 
+      assert(r0 >= 0);
       sp->next_timestamp = pkt->rtp.timestamp + r0;
 
       int const r1 = opus_packet_get_nb_samples(pkt->data,pkt->len,Samprate);
       if(r1 == OPUS_INVALID_PACKET || r1 == OPUS_BAD_ARG)
 	goto endloop;
 
+      assert(r1 >= 0);
       sp->frame_size = r1;
       int const r2 = opus_packet_get_bandwidth(pkt->data);
       if(r2 == OPUS_INVALID_PACKET || r2 == OPUS_BAD_ARG)
@@ -758,7 +758,7 @@ static void *decode_task(void *arg){
 	break;
       }
       size_t const bounce_size = sizeof(*bounce) * sp->frame_size * sp->channels;
-      assert(bounce == NULL);
+      assert(bounce == NULL); // detect possible memory leaks
       bounce = malloc(bounce_size);
       int samples = opus_decode_float(sp->opus,pkt->data,pkt->len,bounce,bounce_size,0);
       if(samples != sp->frame_size || samples != r1)
@@ -775,8 +775,9 @@ static void *decode_task(void *arg){
       sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
       if(sp->frame_size <= 0)
 	goto endloop;
+      // Difference in timestamps might be negative, and since they're unsigned the (int32_t) cast is necessary
       if(pkt->rtp.timestamp != sp->next_timestamp)
-	sp->wptr += upsample * (pkt->rtp.timestamp - sp->next_timestamp);
+	sp->wptr += upsample * (int32_t)(pkt->rtp.timestamp - sp->next_timestamp);
 
       sp->next_timestamp = pkt->rtp.timestamp + sp->frame_size;
 
@@ -788,6 +789,7 @@ static void *decode_task(void *arg){
     }
     // Run PL tone decoders
     // Disable if display isn't active and autonotching is off
+    // Fed audio that might be discontinuous or out of sequence, but it's a pain to fix
     if(sp->notch_enable) {
       for(int i=0; i < sp->frame_size; i++){
 	float s;
@@ -822,16 +824,12 @@ static void *decode_task(void *arg){
       } // End of tone observation period
     } // !Quiet || sp->notch_enable
     bool keyup = false; // Don't do printf while holding locks
-    // Protect Output_buffer and Rptr, which are modified in portaudio callback
-    pthread_mutex_lock(&Output_mutex);
-
     if(sp->wptr < Rptr){
       sp->lates++;
-      // More than 2 lates in 10 packets triggers a reset
-      if((late_rate += 10) < 20){
-	pthread_mutex_unlock(&Output_mutex);
+      // More than 3 lates in 10 packets triggers a reset
+      if((late_rate += 10) <= 30)
 	goto endloop; // Drop packet as late
-      }
+
       late_rate = 0;
       sp->reset = true;
     }
@@ -839,11 +837,10 @@ static void *decode_task(void *arg){
       late_rate--;
     if(sp->wptr > Rptr + BUFFERSIZE){
       sp->earlies++;
-      if(++consec_futures < 3){
-	pthread_mutex_unlock(&Output_mutex);
-	goto endloop;
-      }
-      sp->reset = true;
+      if(++consec_futures < 3)
+	goto endloop; // Drop if just a few
+
+      sp->reset = true; // Resync to new timestamps
     }
     consec_futures = 0;
     if(sp->reset)
@@ -875,8 +872,8 @@ static void *decode_task(void *arg){
 	assert(left_delay >= 0 && right_delay >= 0);
 	
 	// Mix bounce buffer into output buffer read by portaudio callback
-	unsigned int left_index = sp->wptr + left_delay;
-	unsigned int right_index = sp->wptr + right_delay;
+	long long left_index = sp->wptr + left_delay;
+	long long right_index = sp->wptr + right_delay;
 	
 	for(int i=0; i < sp->frame_size; i++){
 	  float left,right;
@@ -900,7 +897,7 @@ static void *decode_task(void *arg){
 	  }
 	}
       } else { // Channels == 1, no panning
-	unsigned int index = sp->wptr;
+	long long index = sp->wptr;
 	for(int i=0; i < sp->frame_size; i++){
 	  float s;
 	  if(sp->channels == 1){
@@ -918,7 +915,6 @@ static void *decode_task(void *arg){
 	}
       } // Channels == 1
       LastAudioTime = gps_time_ns();
-
       pthread_mutex_lock(&PTT_mutex);
       if(Repeater_tail != 0 && !PTT_state){
 	PTT_state = true;
@@ -928,20 +924,19 @@ static void *decode_task(void *arg){
       }
       pthread_mutex_unlock(&PTT_mutex);
     } // !sp->muted
-    pthread_mutex_unlock(&Output_mutex); // Done with Output_buffer and Rptr
     if(Quiet && keyup){
       // debugging only, temp
       char result[1024];
       fprintf(stdout,"%s: PTT On\n",
 	      format_gpstime(result,sizeof(result),LastAudioTime));
     }
-
     // Count samples and frames and advance write pointer even when muted
     sp->tot_active += (float)sp->frame_size / sp->samprate;
     sp->active += (float)sp->frame_size / sp->samprate;
 
-    if(sp->frame_size > 0){
-      sp->wptr += upsample * sp->frame_size; // increase displayed queue in status screen
+    assert(sp->frame_size >= 0);
+    sp->wptr += upsample * sp->frame_size; // increase displayed queue in status screen
+
 #if 0
       float queue = (sp->wptr - Rptr) / Samprate;
       // Pause to allow some packet resequencing in the input thread
@@ -950,8 +945,7 @@ static void *decode_task(void *arg){
 	usleep(pause_time);
       }
 #endif
-    }
-  endloop:;
+ endloop:;
     if(bounce != NULL){
       free(bounce);
       bounce = NULL;
@@ -971,7 +965,6 @@ static void *display(void *arg){
   pthread_setname("display");
   // Reset priority in case the monitor program is running at high (important) level, we don't need it
   setpriority(PRIO_PROCESS,0,0);
-
 
   if(initscr() == NULL){
     fprintf(stderr,"initscr() failed, disabling control/display thread\n");
@@ -1050,14 +1043,11 @@ static void *display(void *arg){
 
       sessions_per_screen = LINES - getcury(stdscr) - 1;
       
-      /* This mutex protects Sessions[] and Nsessions. Instead of holding the
-	 lock for the entire display loop, we make a copy.
-      */
-
-      int Nsessions_copy;
+      // This mutex protects Sessions[] and Nsessions. Instead of holding the
+      // lock for the entire display loop, we make a copy.
       pthread_mutex_lock(&Sess_mutex);
       assert(Nsessions <= NSESSIONS);
-      Nsessions_copy = Nsessions;
+      int Nsessions_copy = Nsessions;
       struct session *Sessions_copy[NSESSIONS];
       memcpy(Sessions_copy,Sessions,Nsessions * sizeof(Sessions_copy[0]));
       if(Nsessions == 0)
@@ -1498,8 +1488,6 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
 
   assert(framesPerBuffer < BUFFERSIZE/2); // Make sure ring buffer is big enough
   float *out = outputBuffer;
-  // I know they say you're not supposed to do any locks in the callback, but I don't see any alternative!
-  pthread_mutex_lock(&Output_mutex);
   while(framesPerBuffer > 0){
     // chunk size = lesser of total frames needed or remainder of read buffer before wraparound
     unsigned long rptr = Rptr & (BUFFERSIZE-1);
@@ -1513,7 +1501,6 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
     memset(&Output_buffer[Channels*rptr],0,Channels * chunk * sizeof(Output_buffer[0]));
     out += chunk * Channels;
   }
-  pthread_mutex_unlock(&Output_mutex);
   return paContinue;
 }
 
@@ -1543,15 +1530,12 @@ void send_cwid(void){
   }
 
   float samples[60 * Dit_length];
-  pthread_mutex_lock(&Output_mutex);  
   unsigned long long wptr = Rptr + ((long)Playout * Samprate)/1000;
-  pthread_mutex_unlock(&Output_mutex);
 
   for(char const *cp = Cwid; *cp != '\0'; cp++){
     int const samplecount = encode_morse_char(samples,(wchar_t)*cp);
     if(samplecount <= 0)
       break;
-    pthread_mutex_lock(&Output_mutex);
     if(Channels == 2){
       for(int i=0;i<samplecount;i++){
 	Output_buffer[2*wptr & (BUFFERSIZE-1)] += samples[i];
@@ -1561,7 +1545,6 @@ void send_cwid(void){
       for(int i=0;i<samplecount;i++)
 	Output_buffer[wptr++ & (BUFFERSIZE-1)] += samples[i];
     }
-    pthread_mutex_unlock(&Output_mutex);
     // Wait for it to play out
     long long const sleeptime = BILLION * samplecount / Samprate;
     struct timespec ts;
