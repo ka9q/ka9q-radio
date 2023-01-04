@@ -5,7 +5,7 @@ BINDIR=/usr/local/bin
 LIBDIR=/usr/local/share/ka9q-radio
 LD_FLAGS=-lpthread -lm
 EXECS=airspyd airspyhfd aprs aprsfeed cwd funcubed iqplay iqrecord modulate monitor opusd opussend packetd pcmrecord pcmsend pcmcat radiod control metadump pl show-pkt show-sig stereod rdsd tune wspr-decoded
-AFILES=bandplan.txt help.txt modes.conf id.txt
+AFILES=bandplan.txt help.txt monitor-help.txt modes.conf id.txt
 
 all: $(EXECS) $(AFILES)
 
