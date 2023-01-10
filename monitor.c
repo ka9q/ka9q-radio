@@ -1129,6 +1129,8 @@ static void *display(void *arg){
 	double unix_seconds = (gps_time_ns() - Start_time) * 1e-9;
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
 	printw("Audio callbacks: %'llu, Rptr %'llu framesPerCallback %'lu\n",Audio_callbacks,Rptr,Audio_frames);
+	static float avg_err = 0;
+	avg_err += .0001 * (1e6 * (pa_seconds / unix_seconds - 1) - avg_err);
 	printw("D/A clock error: %+.3lf ppm ",1e6 * (pa_seconds / unix_seconds - 1));
 	// Time since last packet drop on any channel
 	printw("Error-free seconds: %'.1lf\n",(1e-9*(gps_time_ns() - Last_error_time)));
