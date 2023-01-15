@@ -1,4 +1,4 @@
-// $Id: opusd.c,v 1.6 2022/12/29 05:56:12 karn Exp $
+// $Id: opusd.c,v 1.7 2023/01/15 05:38:41 karn Exp $
 // Opus transcoder
 // Read PCM audio from one or more multicast groups, compress with Opus and retransmit on another with same SSRC
 // Currently subject to memory leaks as old group states aren't yet aged out
@@ -274,6 +274,25 @@ int main(int argc,char * const argv[]){
   signal(SIGQUIT,closedown);
   signal(SIGTERM,closedown);
   signal(SIGPIPE,SIG_IGN);
+
+  {
+    struct sched_param param;
+    param.sched_priority = sched_get_priority_min(SCHED_FIFO);
+    if(sched_setscheduler(0,SCHED_FIFO,&param) == 0){
+      fprintf(stdout,"Realtime scheduler selected\n");
+    } else {
+      perror("sched_setscheduler");
+      // As an alternative, up our nice priority
+      int prio = getpriority(PRIO_PROCESS,0);
+      errno = 0; // setpriority can return -1
+      prio = setpriority(PRIO_PROCESS,0,prio - 10);
+      if(prio == -1){
+	perror("setpriority");
+      } else {
+	fprintf(stdout,"nice %d set\n",prio);
+      }
+    }
+  }
 
   // Loop forever processing and dispatching incoming PCM packets
   // Process incoming RTP packets, demux to per-SSRC thread
