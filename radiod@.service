@@ -1,4 +1,4 @@
-# $Id: radiod@.service,v 1.1 2022/05/03 01:29:47 karn Exp $
+# $Id: radiod@.service,v 1.2 2023/01/15 05:01:53 karn Exp $
 # systemd unit for radio receiver
 # Phil Karn, KA9Q, May 2022
 
@@ -11,6 +11,7 @@ Nice=-10
 Type=simple
 User=radio
 Group=radio
+AmbientCapabilities=CAP_SYS_NICE
 ReadWritePaths=/etc/fftw /var/lib/ka9q-radio
 ExecStart=/usr/local/sbin/radiod -N %i /etc/radio/radiod@%i.conf
 Restart=always
