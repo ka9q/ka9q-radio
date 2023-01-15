@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.262 2022/12/29 05:38:55 karn Exp $
+// $Id: main.c,v 1.262 2022/12/29 05:38:55 karn Exp karn $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -27,6 +27,7 @@
 #include <arpa/inet.h>
 #include <iniparser.h>
 #include <net/if.h>
+#include <sched.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -89,10 +90,22 @@ static int loadconfig(char const *file);
 // catches signals and eventually becomes the user interface/display loop
 int main(int argc,char *argv[]){
   App_path = argv[0];
-  // if we have root, up our priority and drop privileges
-  int prio = getpriority(PRIO_PROCESS,0);
-  prio = setpriority(PRIO_PROCESS,0,prio - 10);
-
+  {
+    struct sched_param param;
+    param.sched_priority = sched_get_priority_min(SCHED_FIFO);
+    if(sched_setscheduler(0,SCHED_FIFO,&param) == 0){
+      fprintf(stdout,"Realtime scheduler selected\n");
+    } else {
+      perror("sched_setscheduler");
+      // As an alternative, up our nice priority
+      int prio = getpriority(PRIO_PROCESS,0);
+      errno = 0; // setpriority can return -1
+      prio = setpriority(PRIO_PROCESS,0,prio - 10);
+      if(prio == -1){
+	perror("setpriority");
+      }
+    }
+  }
   // Quickly drop root if we have it
   // The sooner we do this, the fewer options there are for abuse
   if(seteuid(getuid()) != 0)
