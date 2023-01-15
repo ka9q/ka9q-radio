@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.263 2023/01/15 05:19:47 karn Exp $
+// $Id: main.c,v 1.264 2023/01/15 05:59:58 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -97,6 +97,8 @@ int main(int argc,char *argv[]){
 #endif
 
   {
+#ifdef __linux__
+    // goddamn macos doesn't implement sched_setscheduler even though it's in posix
     struct sched_param param;
     param.sched_priority = sched_get_priority_min(SCHED_FIFO);
     if(sched_setscheduler(0,SCHED_FIFO,&param) == 0){
@@ -114,6 +116,7 @@ int main(int argc,char *argv[]){
       }
     }
   }
+#endif
   // Quickly drop root if we have it
   // The sooner we do this, the fewer options there are for abuse
   if(seteuid(getuid()) != 0)

@@ -1,4 +1,4 @@
-// $Id: airspyd.c,v 1.10 2023/01/15 05:44:59 karn Exp $
+// $Id: airspyd.c,v 1.11 2023/01/15 05:59:58 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #undef DEBUG_AGC
@@ -498,6 +498,7 @@ int main(int argc,char *argv[]){
     pthread_create(&sdr->display_thread,NULL,display,sdr);
 
   pthread_create(&sdr->ncmd_thread,NULL,ncmd,sdr);
+#ifdef __linux__
   {
     struct sched_param param;
     param.sched_priority = sched_get_priority_min(SCHED_FIFO);
@@ -516,7 +517,7 @@ int main(int argc,char *argv[]){
       }
     }
   }
-
+#endif
   ret = airspy_start_rx(sdr->device,rx_callback,sdr);
   assert(ret == AIRSPY_SUCCESS);
   send_airspy_status(sdr,1); // Tell the world we're alive

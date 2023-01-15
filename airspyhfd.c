@@ -1,4 +1,4 @@
-// $Id: airspyhfd.c,v 1.7 2023/01/15 05:44:59 karn Exp $
+// $Id: airspyhfd.c,v 1.8 2023/01/15 05:59:58 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #define _GNU_SOURCE 1
@@ -448,6 +448,7 @@ int main(int argc,char *argv[]){
     pthread_create(&sdr->display_thread,NULL,display,sdr);
 
   pthread_create(&sdr->ncmd_thread,NULL,ncmd,sdr);
+#ifdef __linux
   {
     struct sched_param param;
     param.sched_priority = sched_get_priority_min(SCHED_FIFO);
@@ -466,6 +467,7 @@ int main(int argc,char *argv[]){
       }
     }
   }
+#endif
 
   ret = airspyhf_start(sdr->device,rx_callback,sdr);
   assert(ret == AIRSPYHF_SUCCESS);
