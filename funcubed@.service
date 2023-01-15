@@ -1,4 +1,4 @@
-# $Id: funcubed@.service,v 1.2 2022/07/18 03:27:45 karn Exp $
+# $Id: funcubed@.service,v 1.3 2023/01/15 05:07:27 karn Exp $
 # Systemd unit to start up funcube daemon
 # Phil Karn, KA9Q May 2022
 
@@ -9,8 +9,8 @@ After=network-online.target
 Requires=network-online.target
 
 [Service]
-Nice=-10
 User=funcube
+AmbientCapabilities=CAP_SYS_NICE
 SupplementaryGroups=radio plugdev audio users
 Type=simple
 PermissionsStartOnly=true

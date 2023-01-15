@@ -1,4 +1,4 @@
-# $Id: radiod@.service,v 1.2 2023/01/15 05:01:53 karn Exp $
+# $Id: radiod@.service,v 1.3 2023/01/15 05:07:27 karn Exp $
 # systemd unit for radio receiver
 # Phil Karn, KA9Q, May 2022
 
@@ -7,7 +7,6 @@ Description=%i radio receiver
 Requires=network-online.target
 
 [Service]
-Nice=-10
 Type=simple
 User=radio
 Group=radio

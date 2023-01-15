@@ -1,4 +1,4 @@
-# $Id: airspyhfd@.service,v 1.2 2022/05/03 01:39:46 karn Exp $
+# $Id: airspyhfd@.service,v 1.3 2023/01/15 05:07:27 karn Exp $
 # Systemd service file for KA9Q's airspyhfd daemon
 # Phil Karn, KA9Q, May 2022
 
@@ -9,7 +9,7 @@ Requires=network-online.target
 
 [Service]
 User=airspy
-Nice=-10
+AmbientCapabilities=CAP_SYS_NICE
 SupplementaryGroups=plugdev radio
 Type=simple
 PermissionsStartOnly=true
