@@ -1,4 +1,4 @@
-// $Id: airspyd.c,v 1.8 2022/12/29 05:50:35 karn Exp $
+// $Id: airspyd.c,v 1.9 2023/01/15 05:41:50 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #undef DEBUG_AGC
@@ -497,6 +497,25 @@ int main(int argc,char *argv[]){
     pthread_create(&sdr->display_thread,NULL,display,sdr);
 
   pthread_create(&sdr->ncmd_thread,NULL,ncmd,sdr);
+  {
+    struct sched_param param;
+    param.sched_priority = sched_get_priority_min(SCHED_FIFO);
+    if(sched_setscheduler(0,SCHED_FIFO,&param) == 0){
+      fprintf(stdout,"Realtime scheduler selected\n");
+    } else {
+      perror("sched_setscheduler");
+      // As an alternative, up our nice priority
+      int prio = getpriority(PRIO_PROCESS,0);
+      errno = 0; // setpriority can return -1
+      prio = setpriority(PRIO_PROCESS,0,prio - 10);
+      if(prio == -1){
+	perror("setpriority");
+      } else {
+	fprintf(stdout,"nice %d set\n",prio);
+      }
+    }
+  }
+
   ret = airspy_start_rx(sdr->device,rx_callback,sdr);
   assert(ret == AIRSPY_SUCCESS);
   send_airspy_status(sdr,1); // Tell the world we're alive
