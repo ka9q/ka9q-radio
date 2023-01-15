@@ -1,4 +1,4 @@
-// $Id: airspyhfd.c,v 1.6 2023/01/15 05:41:50 karn Exp $
+// $Id: airspyhfd.c,v 1.7 2023/01/15 05:44:59 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #define _GNU_SOURCE 1
@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include <getopt.h>
 #include <iniparser.h>
+#include <sched.h>
 
 #include "conf.h"
 #include "misc.h"

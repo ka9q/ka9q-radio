@@ -1,4 +1,4 @@
-// $Id: opusd.c,v 1.7 2023/01/15 05:38:41 karn Exp $
+// $Id: opusd.c,v 1.8 2023/01/15 05:44:59 karn Exp $
 // Opus transcoder
 // Read PCM audio from one or more multicast groups, compress with Opus and retransmit on another with same SSRC
 // Currently subject to memory leaks as old group states aren't yet aged out
@@ -25,6 +25,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <sched.h>
 
 #include "misc.h"
 #include "multicast.h"

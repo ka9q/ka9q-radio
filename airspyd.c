@@ -1,4 +1,4 @@
-// $Id: airspyd.c,v 1.9 2023/01/15 05:41:50 karn Exp $
+// $Id: airspyd.c,v 1.10 2023/01/15 05:44:59 karn Exp $
 // Read from Airspy SDR
 // Accept control commands from UDP socket
 #undef DEBUG_AGC
@@ -28,6 +28,7 @@
 #include <sys/stat.h>
 #include <getopt.h>
 #include <iniparser.h>
+#include <sched.h>
 
 #include "conf.h"
 #include "misc.h"
