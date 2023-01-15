@@ -137,7 +137,7 @@ struct session {
   uint32_t ssrc;            // RTP Sending Source ID
   int type;                 // RTP type (10,11,20,111)
 
-  uint32_t next_timestamp;  // Next expected timestamp
+  uint32_t last_timestamp;  // Last timestamp seen
   long long wptr;  // current write pointer into output PCM buffer
   int playout;              // Initial playout delay, samples
 
@@ -588,7 +588,7 @@ static void *sockproc(void *arg){
       sp->notch_enable = Notch;
       sp->muted = Start_muted;
       sp->dest = mcast_address_text;
-      sp->next_timestamp = pkt->rtp.timestamp;
+      sp->last_timestamp = pkt->rtp.timestamp;
       sp->rtp_state.seq = pkt->rtp.seq;
       sp->reset = true;
       sp->type = pkt->rtp.type;
@@ -658,8 +658,8 @@ static void *decode_task(void *arg){
   }
   pthread_cleanup_push(decode_task_cleanup,arg);
 
-  int late_rate = 0;
-  int consec_futures = 0;
+  int consec_lates = 0;
+  int consec_earlies = 0;
   float *bounce = NULL;
 
   // Main loop; run until asked to quit
@@ -688,7 +688,7 @@ static void *decode_task(void *arg){
     if(sp->type != pkt->rtp.type) // Handle transitions both ways
       sp->type = pkt->rtp.type;
 
-    if(pkt->rtp.seq != sp->rtp_state.seq){
+    if((int16_t)(pkt->rtp.seq - sp->rtp_state.seq) > 0){ // Doesn't really handle resequencing
       if(!pkt->rtp.marker){
 	sp->rtp_state.drops++; // Avoid spurious drops when session is recreated after silence
 	Last_error_time = gps_time_ns();
@@ -722,13 +722,6 @@ static void *decode_task(void *arg){
       int const r0 = opus_packet_get_nb_samples(pkt->data,pkt->len,48000);
       if(r0 == OPUS_INVALID_PACKET || r0 == OPUS_BAD_ARG)
 	goto endloop;
-      // opus timestamps are always 48 kHz regardless of chosen decoder output sample rate
-      // Difference in timestamps might be negative, and since they're unsigned the (int32_t) cast is necessary
-      if(pkt->rtp.timestamp != sp->next_timestamp)
-	sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->next_timestamp) * Samprate / 48000;
-
-      assert(r0 >= 0);
-      sp->next_timestamp = pkt->rtp.timestamp + r0;
 
       int const r1 = opus_packet_get_nb_samples(pkt->data,pkt->len,Samprate);
       if(r1 == OPUS_INVALID_PACKET || r1 == OPUS_BAD_ARG)
@@ -763,6 +756,11 @@ static void *decode_task(void *arg){
       int samples = opus_decode_float(sp->opus,pkt->data,pkt->len,bounce,bounce_size,0);
       if(samples != sp->frame_size || samples != r1)
 	fprintf(stderr,"samples %d frame-size %d r1 %d\n",samples,sp->frame_size,r1);
+
+      // opus timestamps are always 48 kHz regardless of chosen decoder output sample rate
+      // Difference in timestamps might be negative, and since they're unsigned the (int32_t) cast is necessary
+      if(pkt->rtp.timestamp != sp->last_timestamp)
+	sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * Samprate / 48000;
     } else { // PCM
       // Test for invalidity
       sp->samprate = samprate_from_pt(sp->type);
@@ -775,18 +773,16 @@ static void *decode_task(void *arg){
       sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
       if(sp->frame_size <= 0)
 	goto endloop;
-      // Difference in timestamps might be negative, and since they're unsigned the (int32_t) cast is necessary
-      if(pkt->rtp.timestamp != sp->next_timestamp)
-	sp->wptr += upsample * (int32_t)(pkt->rtp.timestamp - sp->next_timestamp);
-
-      sp->next_timestamp = pkt->rtp.timestamp + sp->frame_size;
-
       signed short const *data_ints = (signed short *)&pkt->data[0];	
       assert(bounce == NULL);
       bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
       for(int i=0; i < sp->channels * sp->frame_size; i++)
 	bounce[i] = SCALE * (signed short)ntohs(*data_ints++);
+      // Difference in timestamps might be negative, and since they're unsigned the (int32_t) cast is necessary
+      if(pkt->rtp.timestamp != sp->last_timestamp)
+	sp->wptr += upsample * (int32_t)(pkt->rtp.timestamp - sp->last_timestamp);
     }
+    sp->last_timestamp = pkt->rtp.timestamp;
     // Run PL tone decoders
     // Disable if display isn't active and autonotching is off
     // Fed audio that might be discontinuous or out of sequence, but it's a pain to fix
@@ -826,23 +822,21 @@ static void *decode_task(void *arg){
     bool keyup = false; // Don't do printf while holding locks
     if(sp->wptr < Rptr){
       sp->lates++;
-      // More than 3 lates in 10 packets triggers a reset
-      if((late_rate += 10) <= 30)
+      if(++consec_lates < 3)
 	goto endloop; // Drop packet as late
 
-      late_rate = 0;
+      // 3 or more consecutive lates triggers a reset
       sp->reset = true;
     }
-    if(late_rate > 0)
-      late_rate--;
+    consec_lates = 0;
     if(sp->wptr > Rptr + BUFFERSIZE){
       sp->earlies++;
-      if(++consec_futures < 3)
+      if(++consec_earlies < 3)
 	goto endloop; // Drop if just a few
 
       sp->reset = true; // Resync to new timestamps
     }
-    consec_futures = 0;
+    consec_earlies = 0;
     if(sp->reset)
       reset_session(sp,pkt->rtp.timestamp); // Updates sp->wptr
 
@@ -933,9 +927,6 @@ static void *decode_task(void *arg){
     // Count samples and frames and advance write pointer even when muted
     sp->tot_active += (float)sp->frame_size / sp->samprate;
     sp->active += (float)sp->frame_size / sp->samprate;
-
-    assert(sp->frame_size >= 0);
-    sp->wptr += upsample * sp->frame_size; // increase displayed queue in status screen
 
 #if 0
       float queue = (sp->wptr - Rptr) / Samprate;
@@ -1333,7 +1324,7 @@ static void reset_session(struct session * const sp,uint32_t timestamp){
   if(sp->opus)
     opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
   sp->reset = false;
-  sp->next_timestamp = timestamp;
+  sp->last_timestamp = timestamp;
   sp->playout = Playout * Samprate/1000;
   sp->wptr = Rptr + sp->playout;
 }
