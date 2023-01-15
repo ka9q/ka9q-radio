@@ -1,4 +1,4 @@
-// $Id: main.c,v 1.262 2022/12/29 05:38:55 karn Exp karn $
+// $Id: main.c,v 1.263 2023/01/15 05:19:47 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
@@ -90,6 +90,12 @@ static int loadconfig(char const *file);
 // catches signals and eventually becomes the user interface/display loop
 int main(int argc,char *argv[]){
   App_path = argv[0];
+  fprintf(stdout,"KA9Q Multichannel SDR\n");
+  fprintf(stdout,"Copyright 2018-2022 by Phil Karn, KA9Q; may be used under the terms of the GNU General Public License\n");
+#ifndef NDEBUG
+  fprintf(stdout,"Assertion checking enabled, execution will be slower\n");
+#endif
+
   {
     struct sched_param param;
     param.sched_priority = sched_get_priority_min(SCHED_FIFO);
@@ -103,6 +109,8 @@ int main(int argc,char *argv[]){
       prio = setpriority(PRIO_PROCESS,0,prio - 10);
       if(prio == -1){
 	perror("setpriority");
+      } else {
+	fprintf(stdout,"nice %d set\n",prio);
       }
     }
   }
@@ -124,11 +132,6 @@ int main(int argc,char *argv[]){
       Locale = cp;
   }
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
-  fprintf(stdout,"KA9Q Multichannel SDR\n");
-  fprintf(stdout,"Copyright 2018-2022 by Phil Karn, KA9Q; may be used under the terms of the GNU General Public License\n");
-#ifndef NDEBUG
-  fprintf(stdout,"Assertion checking enabled, execution will be slower\n");
-#endif
 
   int c;
   while((c = getopt(argc,argv,"N:hvp:I")) != -1){
