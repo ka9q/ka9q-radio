@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include <sys/resource.h>
 #include <errno.h>
 #include "misc.h"
 #include "radio.h"
@@ -27,6 +28,24 @@ void *sdr_status(void *arg){
   long long next_fe_poll = random_time(0,random_interval);
   long long const fe_poll_interval = 975000000;
 
+  // No need to run with real time priority
+#ifdef __linux__
+  {
+    // Revert to ordinary round-robin UNIX scheduler
+    // goddamn macos doesn't implement sched_setscheduler even though it's in posix
+    struct sched_param param;
+    param.sched_priority = 0;
+    if(sched_setscheduler(0,SCHED_OTHER,&param) != 0)
+      perror("sched_setscheduler");
+  }
+#endif
+  {
+    // revert to normal nice
+    errno = 0; // setpriority can return -1
+    int prio = setpriority(PRIO_PROCESS,0,0);
+    if(prio == -1)
+      perror("setpriority");
+  }
   while(1){
     if(gps_time_ns() > next_fe_poll){
       // Poll front end

@@ -240,6 +240,7 @@ static int setup_frontend(char const *arg){
   // Start status thread - will also listen for SDR commands
   if(Verbose)
     fprintf(stdout,"Starting front end status thread\n");
+
   pthread_create(&Frontend.status_thread,NULL,sdr_status,&Frontend);
 
   // We must acquire a status stream before we can proceed further
@@ -285,14 +286,6 @@ static int setup_frontend(char const *arg){
 
   // Launch procsamp to process incoming samples and execute the forward FFT
   pthread_create(&Procsamp_thread,NULL,proc_samples,NULL);
-
-#if 0 // Turned off in favor of per-demod estimation
-  // Launch thread to estimate noise spectral density N0
-  // Is this always necessary? It's not always used
-
-  pthread_create(&N0_thread,NULL,estimate_n0,NULL);
-#endif
-
   Frontend_started = true; // Only do this once!!
   return 0;
 }
@@ -533,6 +526,24 @@ void *rtcp_send(void *arg){
   if(demod == NULL)
     pthread_exit(NULL);
 
+  // No need to run with real time priority
+#ifdef __linux__
+  {
+    // Revert to ordinary round-robin UNIX scheduler
+    // goddamn macos doesn't implement sched_setscheduler even though it's in posix
+    struct sched_param param;
+    param.sched_priority = 0;
+    if(sched_setscheduler(0,SCHED_OTHER,&param) != 0)
+      perror("sched_setscheduler");
+  }
+#endif
+  // revert to normal nice
+  errno = 0; // setpriority can return -1
+  {
+    int prio = setpriority(PRIO_PROCESS,0,0);
+    if(prio == -1)
+      perror("setpriority");
+  }
   {
     char name[100];
     snprintf(name,sizeof(name),"rtcp %u",demod->output.rtp.ssrc);

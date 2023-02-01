@@ -9,6 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <errno.h>
 #if defined(linux)
 #include <bsd/string.h>
 #endif
@@ -20,6 +21,7 @@
 
 // For SAP/SDP
 #include <sys/time.h>
+#include <sys/resource.h>
 #include <sys/types.h>
 #include <pwd.h>
 #include <uuid/uuid.h>
@@ -580,6 +582,24 @@ void *sap_send(void *p){
   struct demod *demod = (struct demod *)p;
   assert(demod != NULL);
 
+  // No need to run with real time priority
+#ifdef __linux__
+  {
+    // Revert to ordinary round-robin UNIX scheduler
+    // goddamn macos doesn't implement sched_setscheduler even though it's in posix
+    struct sched_param param;
+    param.sched_priority = 0;
+    if(sched_setscheduler(0,SCHED_OTHER,&param) != 0)
+      perror("sched_setscheduler");
+  }
+#endif
+  {
+    // revert to normal nice
+    errno = 0; // setpriority can return -1
+    int prio = setpriority(PRIO_PROCESS,0,0);
+    if(prio == -1)
+      perror("setpriority");
+  }
   long long start_time = utc_time_sec() + NTP_EPOCH; // NTP uses UTC, not GPS
 
   // These should change when a change is made elsewhere
