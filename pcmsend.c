@@ -64,16 +64,6 @@ static inline int signmod(unsigned int const a){
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
-#if 0 // Better done manually or in systemd?
-  // Try to improve our priority
-  int prio = getpriority(PRIO_PROCESS,0);
-  prio = setpriority(PRIO_PROCESS,0,prio - 15);
-
-  // Drop root if we have it
-  if(seteuid(getuid()) != 0)
-    perror("seteuid");
-#endif
-
   setlocale(LC_ALL,getenv("LANG"));
 
   int c;
@@ -199,6 +189,8 @@ int main(int argc,char * const argv[]){
   signal(SIGPIPE,SIG_IGN);
 
   int rptr = 0;
+
+  realtime();
 
   while(1){
     // Wait for audio input

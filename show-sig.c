@@ -79,8 +79,6 @@ int FE_fd = -1;
 // Thread to display receiver state, updated at 10Hz by default
 // Uses the ancient ncurses text windowing library
 // Also services keyboard, mouse and tuning knob, if present
-// I had been running this at normal priority, but it can start new demodulators
-// so it must also run at preferred priority
 int main(int argc,char *argv[]){
   App_path = argv[0];
   {

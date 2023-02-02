@@ -16,6 +16,11 @@
 #include <ctype.h>
 #include <libgen.h>
 #include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <pthread.h>
+#include <sched.h>
+#include <errno.h>
 
 #ifndef NULL
 #define NULL ((void *)0)
@@ -68,6 +73,38 @@ int pipefill(int const fd,void *buffer,int const cnt){
   return i;
 
 }
+
+// Set realtime priority (if possible)
+void realtime(void){
+#ifdef __linux__
+  {
+
+    struct sched_param param;
+    param.sched_priority = sched_get_priority_min(SCHED_FIFO);
+    if(sched_setscheduler(0,SCHED_FIFO,&param) != 0){
+      char name[25];
+      int err;
+      if((err = pthread_getname_np(pthread_self(),name,sizeof(name))) != 0){
+	fprintf(stdout,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
+      }
+    }
+  }
+#else
+  // As backup, up our nice priority
+  int prio = getpriority(PRIO_PROCESS,0);
+  errno = 0; // setpriority can return -1
+  prio = setpriority(PRIO_PROCESS,0,prio - 10);
+  if(errno != 0){
+    char name[25];
+    memset(name,0,sizeof(name));
+    int err;
+    if((err = pthread_getname_np(pthread_self(),name,sizeof(name)-1)) == 0){
+      fprintf(stdout,"%s: setpriority failed, %s (%d)\n",name,strerror(errno),errno);
+    }
+  }
+#endif
+}
+
 
 // Remove return or newline, if any, from end of string
 void chomp(char *s){

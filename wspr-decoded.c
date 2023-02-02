@@ -216,9 +216,6 @@ void input_loop(){
 	  fprintf(stderr,"%s\n",cmd);
 	
 	if(fork() == 0){
-	  // If running at high priority, drop back to normal
-	  if(getpriority(PRIO_PROCESS,0) < 0)
-	    setpriority(PRIO_PROCESS,0,0);
 	  int const r = system(cmd);
 	  if(Verbose && r != 0)
 	    fprintf(stderr,"system() returned %d errno %d (%s)\n",r,errno,strerror(errno));

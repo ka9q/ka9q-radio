@@ -55,6 +55,8 @@ void *demod_linear(void *arg){
   int const lock_limit = lock_time * demod->output.samprate;
   init_pll(&demod->pll.pll,(float)demod->output.samprate);
 
+  realtime();
+
   while(!demod->terminate){
     if(downconvert(demod) == -1) // received terminate
       break;

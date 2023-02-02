@@ -448,27 +448,7 @@ int main(int argc,char *argv[]){
     pthread_create(&sdr->display_thread,NULL,display,sdr);
 
   pthread_create(&sdr->ncmd_thread,NULL,ncmd,sdr);
-#ifdef __linux
-  {
-    struct sched_param param;
-    param.sched_priority = sched_get_priority_min(SCHED_FIFO);
-    if(sched_setscheduler(0,SCHED_FIFO,&param) == 0){
-      fprintf(stdout,"Realtime scheduler selected\n");
-    } else {
-      perror("sched_setscheduler");
-      // As an alternative, up our nice priority
-      int prio = getpriority(PRIO_PROCESS,0);
-      errno = 0; // setpriority can return -1
-      prio = setpriority(PRIO_PROCESS,0,prio - 10);
-      if(prio == -1){
-	perror("setpriority");
-      } else {
-	fprintf(stdout,"nice %d set\n",prio);
-      }
-    }
-  }
-#endif
-
+  realtime();
   ret = airspyhf_start(sdr->device,rx_callback,sdr);
   assert(ret == AIRSPYHF_SUCCESS);
 

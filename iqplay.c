@@ -81,17 +81,6 @@ char const Optstring[] = "A:D:R:S:T:b:f:vr:";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
-#if 0 // Better done manually?
-  // if we have root, up our priority and drop privileges
-  int prio = getpriority(PRIO_PROCESS,0);
-  prio = setpriority(PRIO_PROCESS,0,prio - 10);
-
-  // Quickly drop root if we have it
-  // The sooner we do this, the fewer options there are for abuse
-  if(seteuid(getuid()) != 0)
-    perror("seteuid");
-#endif
-
   {
     char *locale = getenv("LANG");
     if(locale == NULL)
@@ -269,6 +258,7 @@ int playfile(int sock,int fd,int blocksize){
   // Nanoseconds since start for next scheduled transmission; will transmit first immediately
   long long sked_time = 0;
 
+  realtime();
   while(1){
     rtp_header.seq = Rtp_state.seq++;
     rtp_header.timestamp = Rtp_state.timestamp;

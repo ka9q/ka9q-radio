@@ -62,6 +62,8 @@ void *demod_fm(void *arg){
   int pl_sample_count = 0;
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
 
+  realtime();
+
   while(!demod->terminate){
     if(downconvert(demod) == -1) // received terminate
       break;

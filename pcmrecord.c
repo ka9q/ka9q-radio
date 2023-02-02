@@ -110,16 +110,7 @@ struct session *create_session(struct rtp_header *);
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
-#if 0 // Better done manually or in systemd?
-  // if we have root, up our priority and drop privileges
-  int prio = getpriority(PRIO_PROCESS,0);
-  prio = setpriority(PRIO_PROCESS,0,prio - 10);
 
-  // Quickly drop root if we have it
-  // The sooner we do this, the fewer options there are for abuse
-  if(seteuid(getuid()) != 0)
-    perror("seteuid");
-#endif
   char const *locale = getenv("LANG");
   setlocale(LC_ALL,locale);
 

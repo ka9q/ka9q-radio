@@ -214,13 +214,6 @@ static struct  option Options[] = {
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
-  {
-    // Try to improve our priority, then drop root
-    int prio = getpriority(PRIO_PROCESS,0);
-    setpriority(PRIO_PROCESS,0,prio - 15);
-    if(seteuid(getuid()) != 0)
-      perror("seteuid");
-  }    
   setlocale(LC_ALL,getenv("LANG"));
   tzset();
 
@@ -527,6 +520,7 @@ static void *sockproc(void *arg){
     pthread_exit(NULL);
   struct packet *pkt = NULL;
   
+  realtime();
   // Main loop begins here
   while(1){
 
@@ -954,8 +948,6 @@ static void *decode_task(void *arg){
 static void *display(void *arg){
 
   pthread_setname("display");
-  // Reset priority in case the monitor program is running at high (important) level, we don't need it
-  setpriority(PRIO_PROCESS,0,0);
 
   if(initscr() == NULL){
     fprintf(stderr,"initscr() failed, disabling control/display thread\n");

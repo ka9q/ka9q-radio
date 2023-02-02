@@ -19,6 +19,8 @@
 #include <math.h> // Get M_PI
 #include <stdlib.h> // for ldiv()
 
+void realtime(void);
+
 // I *hate* this sort of pointless, stupid, gratuitous incompatibility that
 // makes a lot of code impossible to read and debug
 

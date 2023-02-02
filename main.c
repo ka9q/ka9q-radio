@@ -96,32 +96,6 @@ int main(int argc,char *argv[]){
   fprintf(stdout,"Assertion checking enabled, execution will be slower\n");
 #endif
 
-#ifdef __linux__
-  {
-    // goddamn macos doesn't implement sched_setscheduler even though it's in posix
-    struct sched_param param;
-    param.sched_priority = sched_get_priority_min(SCHED_FIFO);
-    if(sched_setscheduler(0,SCHED_FIFO,&param) == 0){
-      fprintf(stdout,"Realtime scheduler selected\n");
-    } else {
-      perror("sched_setscheduler");
-      // As an alternative, up our nice priority
-      int prio = getpriority(PRIO_PROCESS,0);
-      errno = 0; // setpriority can return -1
-      prio = setpriority(PRIO_PROCESS,0,prio - 10);
-      if(prio == -1){
-	perror("setpriority");
-      } else {
-	fprintf(stdout,"nice %d set\n",prio);
-      }
-    }
-  }
-#endif
-  // Quickly drop root if we have it
-  // The sooner we do this, the fewer options there are for abuse
-  if(seteuid(getuid()) != 0)
-    perror("seteuid");
-
   setlinebuf(stdout);
   Starttime = gps_time_ns();
 
@@ -526,24 +500,6 @@ void *rtcp_send(void *arg){
   if(demod == NULL)
     pthread_exit(NULL);
 
-  // No need to run with real time priority
-#ifdef __linux__
-  {
-    // Revert to ordinary round-robin UNIX scheduler
-    // goddamn macos doesn't implement sched_setscheduler even though it's in posix
-    struct sched_param param;
-    param.sched_priority = 0;
-    if(sched_setscheduler(0,SCHED_OTHER,&param) != 0)
-      perror("sched_setscheduler");
-  }
-#endif
-  // revert to normal nice
-  errno = 0; // setpriority can return -1
-  {
-    int prio = setpriority(PRIO_PROCESS,0,0);
-    if(prio == -1)
-      perror("setpriority");
-  }
   {
     char name[100];
     snprintf(name,sizeof(name),"rtcp %u",demod->output.rtp.ssrc);

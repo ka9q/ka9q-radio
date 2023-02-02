@@ -228,6 +228,8 @@ void *run_fft(void *p){
   pthread_detach(pthread_self());
   pthread_setname("fft");
 
+  realtime();
+
   while(1){
     // Get next job
     pthread_mutex_lock(&FFT.queue_mutex);
