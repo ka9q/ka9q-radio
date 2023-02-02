@@ -90,25 +90,25 @@ depend: .depend
 
 # Executables
 set_xcvr: set_xcvr.o config.o
-	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lm -lpthread -lrt
+	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lrt -lm -lpthread
 
 airspyd: airspyd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lairspy -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lairspy -lavahi-client -lavahi-common -liniparser -lbsd -lm -lpthread
 
 airspyhfd: airspyhfd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lairspyhf -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lairspyhf -lavahi-client -lavahi-common -liniparser -lbsd -lm -lpthread
 
 aprs: aprs.o ax25.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 aprsfeed: aprsfeed.o ax25.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 control: control.o modes.o bandplan.o decode_status.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lncursesw -liniparser -lbsd -lm -lpthread
 
 cwd: cwd.o morse.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 rtlsdrd: rtlsdrd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lrtlsdr -lavahi-client -lavahi-common -lbsd -lm -lpthread
@@ -129,7 +129,7 @@ funcubed: funcubed.o status.o libradio.a libfcd.a
 	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lavahi-client -lavahi-common -lusb-1.0 -liniparser -lbsd -lm -lpthread
 
 hackrf: hackrf.o status.o decimate.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lhackrf -lbsd -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lhackrf -lbsd -lm -lpthread
 
 iqplay: iqplay.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lbsd -lm -lpthread
@@ -156,13 +156,13 @@ packetd: packetd.o ax25.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 pcmcat: pcmcat.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread 
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pcmspawn: pcmspawn.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread 
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pcmrecord: pcmrecord.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread 
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pcmsend: pcmsend.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lm -lpthread
@@ -171,13 +171,13 @@ pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 radiod: main.o audio.o fm.o wfm.o linear.o radio.o rtcp.o radio_status.o modes.o decode_status.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -liniparser -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lbsd -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 sdrplayd: sdrplayd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lsdrplay_api -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lsdrplay_api -lavahi-client -lavahi-common -liniparser -lbsd -lm -lpthread
 
 	  
 stereod: stereod.o libradio.a
