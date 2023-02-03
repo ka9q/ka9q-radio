@@ -1,4 +1,4 @@
-# $Id: Makefile.debug,v 1.17 2022/12/04 03:46:31 karn Exp $
+# $Id: Makefile.linux,v 1.114 2022/12/31 05:15:09 karn Exp $
 
 # for production
 #DOPTS = -DNDEBUG=1 -O3
@@ -51,7 +51,7 @@ SRC=airspyd.c airspyhfd.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandpl
 
 all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(LOGROTATE_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
 
-# Don't overwrite existing config files in /etc/radio
+# NB: now overwrites existing .conf files in /etc/radio !
 install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
 	/usr/sbin/adduser --quiet --system --group radio
 	/usr/sbin/adduser --quiet --system --ingroup radio airspy
@@ -66,10 +66,11 @@ install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FIL
 	install -o root -m 0644 -D --target-directory=/etc/udev/rules.d $(UDEV_FILES)
 	install -o root -m 0644 -D --target-directory=/etc/modprobe.d $(BLACKLIST)
 	install -o root -m 0644 -D --target-directory=/etc/logrotate.d $(LOGROTATE_FILES)
+	install -o root -m 0644 -D --target-directory=/etc/radio $(CONF_FILES);
 	mkdir -p /etc/fftw /etc/radio $(VARDIR) /etc/radio/airspyd.conf.d
 	chgrp radio $(VARDIR) /etc/radio /etc/fftw
 	chmod g+ws $(VARDIR) /etc/radio /etc/fftw
-	cp -n -v --target-directory=/etc/radio $(CONF_FILES)
+#	cp -n -v --target-directory=/etc/radio $(CONF_FILES)
 #	cp -n -v --target-directory=/etc/radio/airspyd.conf.d $(AIRSPY_FILES)
 	systemctl daemon-reload
 
@@ -89,55 +90,55 @@ depend: .depend
 
 # Executables
 set_xcvr: set_xcvr.o config.o
-	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lm -lpthread -lrt
+	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lrt -lm -lpthread
 
 airspyd: airspyd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lairspy -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lairspy -lavahi-client -lavahi-common -liniparser -lbsd -lm -lpthread
 
 airspyhfd: airspyhfd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lairspyhf -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lairspyhf -lavahi-client -lavahi-common -liniparser -lbsd -lm -lpthread
 
 aprs: aprs.o ax25.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 aprsfeed: aprsfeed.o ax25.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 control: control.o modes.o bandplan.o decode_status.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lncursesw -liniparser -lbsd -lm -lpthread
 
 cwd: cwd.o morse.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 rtlsdrd: rtlsdrd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lrtlsdr -lavahi-client -lavahi-common -lbsd -lm -lpthread
 
 tune: tune.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 setfilt: setfilt.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 show-pkt: show-pkt.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm -lpthread
 
 show-sig: show-sig.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm -lpthread
 
 funcubed: funcubed.o status.o libradio.a libfcd.a
 	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lavahi-client -lavahi-common -lusb-1.0 -liniparser -lbsd -lm -lpthread
 
 hackrf: hackrf.o status.o decimate.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lhackrf -lbsd -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lhackrf -lbsd -lm -lpthread
 
 iqplay: iqplay.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lbsd -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lbsd -lm -lpthread
 
 iqrecord: iqrecord.o decode_status.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 metadump: metadump.o dump.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 modulate: modulate.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
@@ -149,34 +150,34 @@ opusd: opusd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lavahi-client -lavahi-common -lbsd -lm -lpthread
 
 opussend: opussend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lbsd -lm -lpthread
 
 packetd: packetd.o ax25.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 pcmcat: pcmcat.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lm -lbsd -lpthread 
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pcmspawn: pcmspawn.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lm -lbsd -lpthread 
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pcmrecord: pcmrecord.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lm -lbsd -lpthread 
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pcmsend: pcmsend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lm -lpthread
 
 pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 radiod: main.o audio.o fm.o wfm.o linear.o radio.o rtcp.o radio_status.o modes.o decode_status.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -liniparser -lpthread -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lbsd -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 sdrplayd: sdrplayd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lsdrplay_api -lavahi-client -lavahi-common -lbsd -liniparser -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lsdrplay_api -lavahi-client -lavahi-common -liniparser -lbsd -lm -lpthread
 
 	  
 stereod: stereod.o libradio.a
