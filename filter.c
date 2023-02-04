@@ -1,4 +1,4 @@
-// $Id: filter.c,v 1.95 2022/12/31 05:15:33 karn Exp $
+// $Id: filter.c,v 1.98 2023/02/04 11:43:06 karn Exp $
 // General purpose filter package using fast convolution (overlap-save)
 // and the FFTW3 FFT package
 // Generates transfer functions using Kaiser window
@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "misc.h"
 #include "filter.h"
@@ -56,6 +57,9 @@ static inline int modulo(int x,int const m){
   return x > m ? x - m : x;
 }
 
+
+// Custom version of malloc that aligns to a cache line
+void *lmalloc(size_t size);
 
 // Create fast convolution filters
 // The filters are now in two parts, filter_in (the master) and filter_out (the slave)
@@ -99,7 +103,7 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
 
   struct filter_in * const master = calloc(1,sizeof(struct filter_in));
   for(int i=0; i < ND; i++){
-    master->fdomain[i] = fftwf_alloc_complex(bins);
+    master->fdomain[i] = lmalloc(sizeof(complex float) * bins);
     master->completed_jobs[i] = (unsigned int)-1; // So startup won't drop any blocks
   }
 
@@ -138,7 +142,7 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     return NULL;
   case CROSS_CONJ:
   case COMPLEX:
-    master->input_buffer.c = fftwf_alloc_complex(N);
+    master->input_buffer.c = lmalloc(sizeof(complex float) * N);
     master->input_buffer.r = NULL; // Catch erroneous uses
     assert(malloc_usable_size(master->input_buffer.c) >= N * sizeof(*master->input_buffer.c));
     memset(master->input_buffer.c, 0, (M-1)*sizeof(*master->input_buffer.c)); // Clear earlier state
@@ -147,7 +151,7 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     break;
   case REAL:
     master->input_buffer.c = NULL;
-    master->input_buffer.r = fftwf_alloc_real(N);
+    master->input_buffer.r = lmalloc(sizeof(float) * N);
     assert(malloc_usable_size(master->input_buffer.r) >= N * sizeof(*master->input_buffer.r));
     memset(master->input_buffer.r, 0, (M-1)*sizeof(*master->input_buffer.r)); // Clear earlier state
     master->input.r = master->input_buffer.r + M - 1;
@@ -195,8 +199,8 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
   case COMPLEX:
   case CROSS_CONJ:
     slave->bins = osize; // Same as total number of time domain points
-    slave->f_fdomain = fftwf_alloc_complex(slave->bins);
-    slave->output_buffer.c = fftwf_alloc_complex(osize);
+    slave->f_fdomain = lmalloc(sizeof(complex float) * slave->bins);
+    slave->output_buffer.c = lmalloc(sizeof(complex float) * osize);
     assert(slave->output_buffer.c != NULL);
     slave->output_buffer.r = NULL; // catch erroneous references
     slave->output.c = slave->output_buffer.c + osize - olen;
@@ -204,10 +208,10 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     break;
   case REAL:
     slave->bins = osize / 2 + 1;
-    slave->f_fdomain = fftwf_alloc_complex(slave->bins);
+    slave->f_fdomain = lmalloc(sizeof(complex float) * slave->bins);
     assert(slave->f_fdomain != NULL);    
     
-    slave->output_buffer.r = fftwf_alloc_real(osize);
+    slave->output_buffer.r = lmalloc(sizeof(float) * osize);
     assert(slave->output_buffer.r != NULL);
     slave->output_buffer.c = NULL;
     slave->output.r = slave->output_buffer.r + osize - olen;
@@ -303,7 +307,7 @@ int execute_filter_input(struct filter_in * const f){
   case COMPLEX:
     job->input = f->input_buffer.c;
     {
-      complex float * const newbuf = fftwf_alloc_complex(N);
+      complex float * const newbuf = lmalloc(sizeof(complex float) * N);
       memmove(newbuf,f->input_buffer.c + f->ilen,(f->impulse_length-1)*sizeof(*f->input_buffer.c));
       f->input_buffer.c = newbuf;
       f->input.c = f->input_buffer.c + f->impulse_length -1;
@@ -312,7 +316,7 @@ int execute_filter_input(struct filter_in * const f){
   case REAL:
     job->input = f->input_buffer.r;
     {
-      float * const newbuf = fftwf_alloc_real(N);
+      float * const newbuf = lmalloc(sizeof(float) * N);
       memmove(newbuf,f->input_buffer.r + f->ilen,(f->impulse_length-1)*sizeof(*f->input_buffer.r));
       f->input_buffer.r = newbuf;
       f->input.r = f->input_buffer.r + f->impulse_length -1;
@@ -692,7 +696,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
   int const N = L + M - 1;
   assert(malloc_usable_size(response) >= N * sizeof(*response));
   // fftw_plan can overwrite its buffers, so we're forced to make a temp. Ugh.
-  complex float * const buffer = fftwf_alloc_complex(N);
+  complex float * const buffer = lmalloc(sizeof(complex float) * N);
   fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_FORWARD,FFTW_PATIENT);
   assert(fwd_filter_plan != NULL);
   fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_PATIENT);
@@ -761,9 +765,9 @@ int window_rfilter(int const L,int const M,complex float * const response,float 
   int const N = L + M - 1;
 
   assert(malloc_usable_size(response) >= (N/2+1)*sizeof(*response));
-  complex float * const buffer = fftwf_alloc_complex(N/2 + 1); // plan destroys its input
+  complex float * const buffer = lmalloc(sizeof(complex float) * (N/2 + 1)); // plan destroys its input
   assert(buffer != NULL);
-  float * const timebuf = fftwf_alloc_real(N);
+  float * const timebuf = lmalloc(sizeof(float) * N);
   assert(timebuf != NULL);
   fftwf_plan fwd_filter_plan = fftwf_plan_dft_r2c_1d(N,timebuf,buffer,FFTW_PATIENT);
   assert(fwd_filter_plan != NULL);
@@ -862,7 +866,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 
   float const gain = (slave->out_type == COMPLEX ? 1.0 : M_SQRT1_2) / (float)slave->master->bins;
 
-  complex float * const response = fftwf_alloc_complex(slave->bins);
+  complex float * const response = lmalloc(sizeof(complex float) * slave->bins);
   memset(response,0,slave->bins * sizeof(response[0]));
   assert(malloc_usable_size(response) >= (slave->bins) * sizeof(*response));
   for(int n=0; n < slave->bins; n++){
@@ -931,3 +935,14 @@ int write_rfilter(struct filter_in *f, float const *buffer,int size){
 
 };
 
+// Custom version of malloc that aligns to a cache line
+// This is 64 bytes on most modern machines, including the x86 and the ARM 2711 (Pi 4)
+// This is stricter than a complex float or double, which is required by fftwf/fftw
+void *lmalloc(size_t size){
+  void *ptr;
+  int r;
+  if((r = posix_memalign(&ptr,64,size)) == 0)
+    return ptr;
+  errno = r;
+  return NULL;
+}
