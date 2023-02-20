@@ -1,4 +1,4 @@
-# $Id: id.txt,v 1.68 2022/12/29 05:42:08 karn Exp $
+# $Id: id.txt,v 1.69 2023/02/01 23:54:09 karn Exp $
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
