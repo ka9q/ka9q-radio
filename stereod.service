@@ -1,4 +1,4 @@
-# $Id: stereod.service,v 1.1 2022/05/03 10:14:17 karn Exp $
+# $Id: stereod.service,v 1.2 2023/02/01 23:45:39 karn Exp $
 # Systemd startup module for FM stereo decoder
 # Phil Karn, KA9Q Mar 2021
 [Unit]
@@ -6,11 +6,11 @@ Description=FM Stereo decoder
 Requires=network-online.target
 
 [Service]
-Nice=-10
 Type=simple
 EnvironmentFile=/etc/radio/stereod.conf
 ExecStart=/usr/local/sbin/stereod --pcm-in $FM_BASEBAND_IN --pcm-out $STEREO_OUT
 User=radio
+AmbientCapabilities=CAP_SYS_NICE
 SupplementaryGroups=radio
 Restart=always
 RestartSec=5

@@ -568,10 +568,32 @@ void *encode(void *arg){
       sp->type = pkt->rtp.type;
     }
     if(sp->channels != channels_from_pt(pkt->rtp.type) || sp->samprate != samprate_from_pt(pkt->rtp.type)){
-      // channels or sample rate changed; Re-initialize encoder
+      // channels or sample rate changed; Re-create encoder
       sp->channels = channels_from_pt(pkt->rtp.type);
       sp->samprate = samprate_from_pt(pkt->rtp.type);
-      opus_encoder_init(sp->opus,sp->samprate,sp->channels,Application);
+      opus_encoder_destroy(sp->opus);
+      int error = 0;
+      sp->opus = opus_encoder_create(sp->samprate,sp->channels,Application,&error);
+      assert(error == OPUS_OK && sp);
+  
+      error = opus_encoder_ctl(sp->opus,OPUS_SET_DTX(Discontinuous));
+      assert(error == OPUS_OK);
+      
+      error = opus_encoder_ctl(sp->opus,OPUS_SET_BITRATE(Opus_bitrate));
+      assert(error == OPUS_OK);
+  
+      if(Fec_enable){
+	error = opus_encoder_ctl(sp->opus,OPUS_SET_INBAND_FEC(1));
+	assert(error == OPUS_OK);
+	error = opus_encoder_ctl(sp->opus,OPUS_SET_PACKET_LOSS_PERC(Fec_enable));
+	assert(error == OPUS_OK);
+      }
+  
+#if 0 // Is this even necessary?
+      // Always seems to return error -5 even when OK??
+      error = opus_encoder_ctl(sp->opus,OPUS_FRAMESIZE_ARG,Opus_blocktime);
+      assert(1 || error == OPUS_OK);
+#endif
     }
 
     if(pkt->rtp.marker || samples_skipped > 4 * 48000 * Opus_blocktime){ // Opus works on 48 kHz virtual samples
