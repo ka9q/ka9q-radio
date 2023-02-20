@@ -48,12 +48,11 @@ int send_stereo_output(struct demod * restrict const demod,float const * restric
     demod->output.silent = false;
     rtp.seq = demod->output.rtp.seq++;
     unsigned char packet[PACKETSIZE];
-    unsigned char *dp = hton_rtp(packet,&rtp);
-    int16_t *pcm_buf = (int16_t *)dp;
+    int16_t *pcm_buf = (int16_t *)hton_rtp(packet,&rtp);
     for(int i=0; i < chunk; i ++)
       *pcm_buf++ = htons(scaleclip(*buffer++));
 
-    dp = (unsigned char *)pcm_buf;
+    unsigned char *dp = (unsigned char *)pcm_buf;
     int r = send(demod->output.data_fd,&packet,dp - packet,0);
     demod->output.samples += chunk/2; // Count stereo samples
     if(r <= 0){
@@ -92,12 +91,11 @@ int send_mono_output(struct demod * restrict const demod,float const * restrict 
     demod->output.silent = false;
     rtp.seq = demod->output.rtp.seq++;
     unsigned char packet[PACKETSIZE];
-    unsigned char *dp = hton_rtp(packet,&rtp);
-    int16_t *pcm_buf = (int16_t *)dp;
+    int16_t *pcm_buf = (int16_t *)hton_rtp(packet,&rtp);
     for(int i=0; i < chunk; i++)
       *pcm_buf++ = htons(scaleclip(*buffer++));
 
-    dp = (unsigned char *)pcm_buf;
+    unsigned char *dp = (unsigned char *)pcm_buf;
     int r = send(demod->output.data_fd,&packet,dp - packet,0);
     demod->output.samples += chunk;
     if(r <= 0){
