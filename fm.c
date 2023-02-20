@@ -1,4 +1,4 @@
-// $Id: fm.c,v 1.139 2022/12/09 11:43:02 karn Exp $
+// $Id: fm.c,v 1.140 2023/02/20 05:37:54 karn Exp $
 // FM demodulation and squelch
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -28,7 +28,7 @@ void *demod_fm(void *arg){
     pthread_setname(name);
   }
 
-  complex float sample_memory = 0;
+  float phase_memory = 0;
   demod->output.channels = 1; // Only mono for now
   if(isnan(demod->squelch_open) || demod->squelch_open == 0)
     demod->squelch_open = 6.3;  // open above ~ +8 dB
@@ -57,7 +57,7 @@ void *demod_fm(void *arg){
   float deemph_state = 0;
   int squelch_state = 0; // Number of blocks for which squelch remains open
   int const N = demod->filter.out->olen;
-  float const one_over_olen = 1.0F / N; // save some divides
+  float const one_over_olen = 1.0f / N; // save some divides
   int const pl_integrate_samples = demod->output.samprate * 0.24; // 240 milliseconds (spec is < 250 ms)
   int pl_sample_count = 0;
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
@@ -74,7 +74,7 @@ void *demod_fm(void *arg){
       float const snr = (demod->sig.bb_power / (demod->sig.n0 * fabsf(demod->filter.max_IF - demod->filter.min_IF))) - 1.0f;
       if(snr < demod->squelch_close){
 	// squelch closed, reset everything and mute output
-	sample_memory = 0;
+	phase_memory = 0;
 	squelch_state = 0;
 	pl_sample_count = 0;
 	reset_goertzel(&demod->fm.tonedetect);
@@ -110,7 +110,7 @@ void *demod_fm(void *arg){
       // In tail, squelch still open
     } else {
       // squelch closed, reset everything and mute output
-      sample_memory = 0;
+      phase_memory = 0;
       squelch_state = 0;
       pl_sample_count = 0;
       reset_goertzel(&demod->fm.tonedetect);
@@ -119,11 +119,43 @@ void *demod_fm(void *arg){
     }
     float baseband[N];    // Demodulated FM baseband
     // Actual FM demodulation
-    baseband[0] = cargf(buffer[0] * conjf(sample_memory));
-    for(int n=1; n < N; n++)
-      baseband[n] = cargf(buffer[n] * conjf(buffer[n-1]));
-    sample_memory = buffer[N-1];
+    for(int n=0; n < N; n++){
+      float np = M_1_PIf * cargf(buffer[n]); // Scale to -1 to +1 (half rotations)
+      float x = np - phase_memory;
+      phase_memory = np;
+      x = x > 1 ? x - 2 : x < -1 ? x + 2 : x; // reduce to -1 to +1
+      baseband[n] = x;
+    }
     
+    if(demod->sig.snr < 20) { // take 13 dB as "full quieting"
+      // Experimental threshold reduction (popcorn/click suppression)
+#if 0
+      float const noise_thresh = (0.4f * avg_amp);
+      float const noise_reduct_scale = 1 / noise_thresh;
+
+      for(int n=0; n < N; n++){
+	if(amplitudes[n] < noise_thresh)
+	  baseband[n] *= amplitudes[n] * noise_reduct_scale; // Reduce amplitude of weak RF samples
+      }
+#elif 0
+      // New experimental algorithm 2/2023
+      if(demod->filter.isb){
+	for(int n=0; n < N; n++){
+	  if(amplitudes[n] < avg_amp)
+	    baseband[n] *= 2 - (4/M_PIf)*atan2f(avg_amp,amplitudes[n]); // amplitudes always positive
+	}
+      }
+#else
+      // Simple clipper
+      if(demod->filter.isb){
+	for(int n=0; n < N; n++){
+	  if(fabsf(baseband[n]) > 0.5f)
+	    baseband[n] = 0;
+	}
+      }
+
+#endif      
+    }
     if(squelch_state == squelch_state_max){
       // Squelch fully open; look at deviation peaks
       float peak_positive_deviation = 0;
@@ -137,29 +169,19 @@ void *demod_fm(void *arg){
 	else if(baseband[n] < peak_negative_deviation)
 	  peak_negative_deviation = baseband[n];
       }
-      frequency_offset *= one_over_olen;  // Average FM output is freq offset
+      frequency_offset *= demod->output.samprate * 0.5f * one_over_olen;  // scale to Hz
       // Update frequency offset and peak deviation, with smoothing to attenuate PL tones
       // alpha = blocktime in millisec is an approximation to a 1 sec time constant assuming blocktime << 1 sec
       // exact value would be 1 - exp(-blocktime/tc)
       float const alpha = .001f * Blocktime;
-      demod->sig.foffset += alpha * (demod->output.samprate  * frequency_offset * M_1_2PI - demod->sig.foffset);
+      demod->sig.foffset += alpha * (frequency_offset - demod->sig.foffset);
       
-      // Remove frequency offset from deviation peaks and scale
-      peak_positive_deviation *= demod->output.samprate * M_1_2PI;
-      peak_negative_deviation *= demod->output.samprate * M_1_2PI;      
+      // Remove frequency offset from deviation peaks and scale to full cycles
+      peak_positive_deviation *= demod->output.samprate * 0.5f;
+      peak_negative_deviation *= demod->output.samprate * 0.5f;
       peak_positive_deviation -= demod->sig.foffset;
       peak_negative_deviation -= demod->sig.foffset;
       demod->fm.pdeviation = max(peak_positive_deviation,-peak_negative_deviation);
-    }
-    if(demod->sig.snr < 20) { // take 13 dB as "full quieting"
-      // Experimental threshold reduction (pop/click suppression)
-      float const noise_thresh = (0.4F * avg_amp);
-      float const noise_reduct_scale = 1 / noise_thresh;
-
-      for(int n=0; n < N; n++){
-	if(amplitudes[n] < noise_thresh)
-	  baseband[n] *= amplitudes[n] * noise_reduct_scale; // Reduce amplitude of weak RF samples
-      }
     }
     if(demod->fm.tone_freq != 0){
       // PL/CTCSS tone squelch
@@ -172,7 +194,7 @@ void *demod_fm(void *arg){
 	if(pl_sample_count >= pl_integrate_samples){
 	  // Peak deviation of PL tone in Hz
 	  // Not sure the calibration is correct
-	  demod->fm.tone_deviation = 2 * M_1_PI * demod->output.samprate * cabsf(output_goertzel(&demod->fm.tonedetect)) / pl_sample_count;
+	  demod->fm.tone_deviation = 2 * demod->output.samprate * cabsf(output_goertzel(&demod->fm.tonedetect)) / pl_sample_count;
 	  pl_sample_count = 0;
 	  reset_goertzel(&demod->fm.tonedetect);
 	  tone_mute = demod->fm.tone_deviation < 250 ? true : false;
@@ -196,7 +218,7 @@ void *demod_fm(void *arg){
     // Constant gain used by FM only; automatically adjusted by AGC in linear modes
     // We do this in the loop because BW can change
     // Force reasonable parameters if they get messed up or aren't initialized
-    demod->output.gain = (2 * demod->output.headroom *  demod->output.samprate) / (M_PI * fabsf(demod->filter.min_IF - demod->filter.max_IF));
+    demod->output.gain = (2 * demod->output.headroom *  demod->output.samprate) / fabsf(demod->filter.min_IF - demod->filter.max_IF);
     
     float output_level = 0;
     for(int n=0; n < N; n++){
