@@ -21,11 +21,6 @@
 #define PCM_BUFSIZE 480        // 16-bit word count; must fit in Ethernet MTU
 #define PACKETSIZE 2048        // Somewhat larger than Ethernet MTU
 
-static int pt_from_demod(struct demod *demod){
-  return pt_from_info(demod->output.samprate,demod->output.channels);
-}
-
-
 // Send 'size' stereo samples, each in a pair of floats
 int send_stereo_output(struct demod * restrict const demod,float const * restrict buffer,int size,bool const mute){
 
@@ -38,7 +33,7 @@ int send_stereo_output(struct demod * restrict const demod,float const * restric
 
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
-  rtp.type = pt_from_demod(demod);
+  rtp.type = pt_from_info(demod->output.samprate,2);
   rtp.version = RTP_VERS;
   rtp.ssrc = demod->output.rtp.ssrc;
 
@@ -81,7 +76,7 @@ int send_mono_output(struct demod * restrict const demod,float const * restrict 
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
   rtp.version = RTP_VERS;
-  rtp.type = pt_from_demod(demod);
+  rtp.type = pt_from_info(demod->output.samprate,1);
   rtp.ssrc = demod->output.rtp.ssrc;
 
   while(size > 0){
