@@ -19,6 +19,13 @@
 #include <math.h> // Get M_PI
 #include <stdlib.h> // for ldiv()
 
+#ifndef M_PIf
+#define M_PIf ((float)(M_PI))
+#endif
+#ifndef M_1_PIf
+#define M_1_PIf (1 / M_PIf)
+#endif
+
 void realtime(void);
 
 // I *hate* this sort of pointless, stupid, gratuitous incompatibility that
@@ -59,7 +66,7 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 #define pthread_setname(x) pthread_setname_np(pthread_self(),(x))
 // Does anyone implement these natively for Linux?
 #define sincospi(x,s,c) sincos((x)*M_PI,(s),(c))
-#define sincospif(x,s,c) sincosf((x)*M_PI,(s),(c))
+#define sincospif(x,s,c) sincosf((x)*M_PIf,(s),(c))
 
 #endif // ifdef __APPLE__
 
@@ -80,7 +87,8 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 		(void) (&_x == &_y);	\
 		_x > _y ? _x : _y; })
 
-#define M_1_2PI (0.5 * M_1_PI) // fraction of a rotation in one radian
+
+#define M_1_2PIf (0.5f * M_1_PIf) // fraction of a rotation in one radian
 #define DEGPRA (180./M_PI)
 #define RAPDEG (M_PI/180.)
 #define GPS_UTC_OFFSET (18) // GPS ahead of utc by 18 seconds - make this a table!
