@@ -1,4 +1,4 @@
-// $Id: wfm.c,v 1.35 2023/02/20 05:33:50 karn Exp $
+// $Id: wfm.c,v 1.36 2023/02/20 06:59:37 karn Exp $
 // Wideband FM demodulation and squelch
 // Adapted from narrowband demod
 // Copyright 2020, Phil Karn, KA9Q
@@ -273,7 +273,7 @@ void *demod_wfm(void *arg){
 	  output_level += s * s;
 	}
       }
-      demod->output.level /= audio_L;
+      demod->output.level = output_level / audio_L;
       // mute output unless time is left on the squelch_state timer
       if(send_mono_output(demod,mono->output.r,audio_L,false) < 0)
 	break; // No output stream! Terminate
