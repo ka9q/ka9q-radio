@@ -662,7 +662,7 @@ static void *decode_task(void *arg){
     // Wait for packet to appear on queue
     pthread_mutex_lock(&sp->qmutex);
     while(!sp->queue){
-      long long const increment = 100000000; // 100 ns
+      long long const increment = 100000000; // 100 ms
       // pthread_cond_timedwait requires UTC clock time! Undefined behavior around a leap second...
       struct timespec ts;
       ns2ts(&ts,gps_time_ns() + increment + BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET));
@@ -673,6 +673,21 @@ static void *decode_task(void *arg){
 	pthread_mutex_unlock(&sp->qmutex);
 	goto endloop;// restart loop, checking terminate flag
       }
+    }
+    // Peek at first packet on queue; is it in sequence?
+    if(sp->queue->rtp.seq != sp->rtp_state.seq){
+      // No. If we've got plenty in the playout buffer, sleep to allow some packet resequencing in the input thread.
+      // Strictly speaking, we will resequence ourselves below with the RTP timestamp. But that works properly only with stateless
+      // formats like PCM. Opus is stateful, so it's better to resequence input packets (using the RTP sequence #) when possible.
+      float queue = (float)(sp->wptr - Rptr) / Samprate;
+      if(queue > Latency + 0.1){ // 100 ms for scheduling latency?
+	pthread_mutex_unlock(&sp->qmutex);
+	struct timespec ss;
+	ns2ts(&ss,(long long)(1e9 * (queue - (Latency + 0.1))));
+	nanosleep(&ss,NULL);
+	goto endloop;
+      }
+      // else the playout queue is close to draining, accept out of sequence packet anyway
     }
     pkt = sp->queue;
     sp->queue = pkt->next;
@@ -921,16 +936,7 @@ static void *decode_task(void *arg){
     // Count samples and frames and advance write pointer even when muted
     sp->tot_active += (float)sp->frame_size / sp->samprate;
     sp->active += (float)sp->frame_size / sp->samprate;
-
-#if 0
-      float queue = (sp->wptr - Rptr) / Samprate;
-      // Pause to allow some packet resequencing in the input thread
-      if(queue > Latency){
-	useconds_t pause_time = (useconds_t)(1e6 * (queue - Latency) / 2);
-	usleep(pause_time);
-      }
-#endif
- endloop:;
+  endloop:;
     if(bounce != NULL){
       free(bounce);
       bounce = NULL;
