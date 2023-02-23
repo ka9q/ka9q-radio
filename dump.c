@@ -217,6 +217,9 @@ void dump_metadata(unsigned char const * const buffer,int length){
     case INDEPENDENT_SIDEBAND:
       printf("ISB %'llu",(long long unsigned)decode_int(cp,optlen));
       break;
+    case THRESH_EXTEND:
+      printf("Thr Extend %'llu",(long long unsigned)decode_int(cp,optlen));
+      break;
     case PLL_ENABLE:
       printf("PLL enable %'llu",(long long unsigned)decode_int(cp,optlen));
       break;

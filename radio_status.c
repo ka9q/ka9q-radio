@@ -264,6 +264,9 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
     case INDEPENDENT_SIDEBAND: // bool
       demod->filter.isb = decode_int(cp,optlen);
       break;
+    case THRESH_EXTEND: // bool
+      demod->fm.threshold = decode_int(cp,optlen);
+      break;
     case HEADROOM: // dB -> voltage, always negative dB
       {
 	float const f = decode_float(cp,optlen);
@@ -483,6 +486,8 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
       encode_float(&bp,PL_TONE,demod->fm.tone_freq);
       encode_float(&bp,PL_DEVIATION,demod->fm.tone_deviation); // Note fall-through
     }
+    encode_byte(&bp,THRESH_EXTEND,demod->fm.threshold);
+    break;
   case WFM_DEMOD:
     encode_float(&bp,PEAK_DEVIATION,demod->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0/(logf(demod->deemph.rate) * demod->output.samprate));

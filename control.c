@@ -906,6 +906,14 @@ void process_mouse(struct demod *demod,unsigned char **bpp){
 	  break;
 	}
       } else if(demod->demod_type == FM_DEMOD){
+	switch(my){
+	case 1:
+	  encode_int(bpp,THRESH_EXTEND,0);
+	  break;
+	case 2:
+	  encode_int(bpp,THRESH_EXTEND,1);	  
+	  break;
+	}
       } else if(demod->demod_type == LINEAR_DEMOD){
 	switch(my){
 	case 1:
@@ -1162,6 +1170,9 @@ int decode_radio_status(struct demod *demod,unsigned char const *buffer,int leng
       break;
     case INDEPENDENT_SIDEBAND:
       demod->filter.isb = decode_int(cp,optlen);
+      break;
+    case THRESH_EXTEND:
+      demod->fm.threshold = decode_int(cp,optlen);
       break;
     case PLL_ENABLE:
       demod->linear.pll = decode_int(cp,optlen);
@@ -1520,7 +1531,16 @@ void display_options(WINDOW *w,struct demod const *demod){
   wmove(w,row,col);
   wclrtobot(w);
   if(demod->demod_type == FM_DEMOD){ // FM from status.h
-    // No options
+    if(!demod->fm.threshold)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"Th Ext off");
+    wattroff(w,A_UNDERLINE);
+
+    if(demod->fm.threshold)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"Th Ext on");
+    wattroff(w,A_UNDERLINE);
+
   } else if(demod->demod_type == WFM_DEMOD){
     // Mono/stereo are only options
     if(demod->output.channels == 1)

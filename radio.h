@@ -211,6 +211,7 @@ struct demod {
     float tone_freq;        // PL tone squelch frequency
     struct goertzel tonedetect;
     float tone_deviation; // Measured deviation of tone
+    bool threshold;       // Threshold extension
   } fm;
 
   // Output

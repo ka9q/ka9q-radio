@@ -61,6 +61,9 @@ void *demod_fm(void *arg){
   int const pl_integrate_samples = demod->output.samprate * 0.24; // 240 milliseconds (spec is < 250 ms)
   int pl_sample_count = 0;
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
+  int badsegments = 0;
+  int badsamples = 0;
+
 
   realtime();
 
@@ -127,6 +130,7 @@ void *demod_fm(void *arg){
       baseband[n] = x;
     }
     
+
     if(demod->sig.snr < 20) { // take 13 dB as "full quieting"
       // Experimental threshold reduction (popcorn/click suppression)
 #if 0
@@ -137,16 +141,50 @@ void *demod_fm(void *arg){
 	if(amplitudes[n] < noise_thresh)
 	  baseband[n] *= amplitudes[n] * noise_reduct_scale; // Reduce amplitude of weak RF samples
       }
-#elif 0
+#elif 1
       // New experimental algorithm 2/2023
-      if(demod->filter.isb){
-	for(int n=0; n < N; n++){
-	  if(amplitudes[n] < avg_amp)
-	    baseband[n] *= 2 - (4/M_PIf)*atan2f(avg_amp,amplitudes[n]); // amplitudes always positive
+      // Find segments of low amplitude, look for clicks within them, and replace with interpolated values
+      // doesn't yet handle bad samples at beginning and end of buffer, but this gets most of them
+      if(demod->fm.threshold){
+	float const nthresh = 0.4 * avg_amp;
+
+	// start scan at 1 so we can use the 0th sample as the start if necessary
+	for(int i=1; i < N; i++){
+	  // find i = first weak sample
+	  if(amplitudes[i] < nthresh){ // each baseband sample i depends on IF samples i-1 and i
+	    badsegments++;
+	    float const start = baseband[i-1]; // Last good value before bad segment
+	    // Find next good sample
+	    int j;
+	    float finish = 0; // default if we can't find a good sample
+	    int steps = N - i + 1;
+	    for(j=i+2 ; j < N; j++){	 // If amplitude[i] is weak, then both baseband[i] and baseband[i+1] will be bad
+	      // find j = good sample after bad segment
+	      if(amplitudes[j-1] >= nthresh && amplitudes[j] >= nthresh){ // each baseband sample j depends on IF samples j-1 and j
+		finish = baseband[j];
+		steps = j - i + 1;
+		break;
+	      }
+	    }
+	    // Is a click present in the weak segment?
+	    float phase_change = 0;
+	    for(int k=0; k < steps-1; k++)
+	      phase_change += fabsf(baseband[i+k]);
+	    
+	    if(fabsf(phase_change) >= 1.0){
+	      // Linear interpolation
+	      float const increment = (finish - start) / steps;
+	      for(int k=0; k < steps-1; k++)
+		baseband[i+k] = baseband[i+k-1] + increment; // also why i starts at 1
+	      
+	      badsamples += steps-1;
+	    }
+	    i = j; // advance so increment will test the next sample after the last we know is good
+	  }
 	}
       }
 #else
-      // Simple clipper
+      // Simple blanker
       if(demod->filter.isb){
 	for(int n=0; n < N; n++){
 	  if(fabsf(baseband[n]) > 0.5f)
@@ -156,6 +194,9 @@ void *demod_fm(void *arg){
 
 #endif      
     }
+    demod->tp1 = badsegments;
+    demod->tp2 = badsamples;
+
     if(squelch_state == squelch_state_max){
       // Squelch fully open; look at deviation peaks
       float peak_positive_deviation = 0;

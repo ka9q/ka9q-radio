@@ -160,6 +160,7 @@ struct session {
   unsigned long long lates;
   unsigned long long earlies;
   unsigned long long resets;
+  unsigned long long reseqs;
 
   bool terminate;            // Set to cause thread to terminate voluntarily
   bool muted;
@@ -608,6 +609,8 @@ static void *sockproc(void *arg){
     for(qe = sp->queue; qe && pkt->rtp.seq >= qe->rtp.seq; q_prev = qe,qe = qe->next)
       ;
     
+    if(qe)
+      sp->reseqs++;   // Not the last on the list
     pkt->next = qe;
     if(q_prev)
       q_prev->next = pkt;
@@ -1024,7 +1027,7 @@ static void *display(void *arg){
       // Second header line
       addstr("  dB Pan     SSRC  Tone Notch ID                                 Total   Current      Idle");
       if(Verbose)
-	addstr(" Queue Type ms ch BW     packets resets drops lates early Source/Dest");
+	addstr(" Queue Type ms ch BW     packets resets drops lates reseq Source/Dest");
       addstr("\n");
       
       if(Auto_sort)
@@ -1100,7 +1103,7 @@ static void *display(void *arg){
 	  printw("%'7llu",sp->resets);
 	  printw("%'6llu",sp->rtp_state.drops);
 	  printw("%'6llu",sp->lates);
-	  printw("%'6llu",sp->earlies);
+	  printw("%'6llu",sp->reseqs);
 	  
 	  // printable version of socket addresses and ports
 	  if(sp->dest){ // Might not be allocated yet, if we got dispatched during the nameinfo() call

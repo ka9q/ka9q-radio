@@ -117,6 +117,7 @@ enum status_type {
   DEEMPH_GAIN,    // De-emphasis gain (FM only)
   CONVERTER_OFFSET, // Frequency converter shift (if present)
   PL_DEVIATION,     // Measured PL tone deviation, Hz (FM only)
+  THRESH_EXTEND,    // threshold extension enable (FM only)
 
 };
 
