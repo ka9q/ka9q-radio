@@ -183,11 +183,9 @@ void *demod_fm(void *arg){
       }
 #else
       // Simple blanker
-      if(demod->filter.isb){
-	for(int n=0; n < N; n++){
-	  if(fabsf(baseband[n]) > 0.5f)
-	    baseband[n] = 0;
-	}
+      for(int n=0; n < N; n++){
+	if(fabsf(baseband[n]) > 0.5f)
+	  baseband[n] = 0;
       }
 #endif      
     }
