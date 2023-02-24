@@ -131,7 +131,7 @@ void *demod_fm(void *arg){
     }
     
 
-    if(demod->sig.snr < 20) { // take 13 dB as "full quieting"
+    if(demod->sig.snr < 20 && demod->fm.threshold) { // take 13 dB as "full quieting"
       // Experimental threshold reduction (popcorn/click suppression)
 #if 0
       float const noise_thresh = (0.4f * avg_amp);
@@ -145,42 +145,40 @@ void *demod_fm(void *arg){
       // New experimental algorithm 2/2023
       // Find segments of low amplitude, look for clicks within them, and replace with interpolated values
       // doesn't yet handle bad samples at beginning and end of buffer, but this gets most of them
-      if(demod->fm.threshold){
-	float const nthresh = 0.4 * avg_amp;
-
-	// start scan at 1 so we can use the 0th sample as the start if necessary
-	for(int i=1; i < N; i++){
-	  // find i = first weak sample
-	  if(amplitudes[i] < nthresh){ // each baseband sample i depends on IF samples i-1 and i
-	    badsegments++;
-	    float const start = baseband[i-1]; // Last good value before bad segment
-	    // Find next good sample
-	    int j;
-	    float finish = 0; // default if we can't find a good sample
-	    int steps = N - i + 1;
-	    for(j=i+2 ; j < N; j++){	 // If amplitude[i] is weak, then both baseband[i] and baseband[i+1] will be bad
-	      // find j = good sample after bad segment
-	      if(amplitudes[j-1] >= nthresh && amplitudes[j] >= nthresh){ // each baseband sample j depends on IF samples j-1 and j
-		finish = baseband[j];
-		steps = j - i + 1;
-		break;
-	      }
+      float const nthresh = 0.4 * avg_amp;
+      
+      // start scan at 1 so we can use the 0th sample as the start if necessary
+      for(int i=1; i < N; i++){
+	// find i = first weak sample
+	if(amplitudes[i] < nthresh){ // each baseband sample i depends on IF samples i-1 and i
+	  badsegments++;
+	  float const start = baseband[i-1]; // Last good value before bad segment
+	  // Find next good sample
+	  int j;
+	  float finish = 0; // default if we can't find a good sample
+	  int steps = N - i + 1;
+	  for(j=i+2 ; j < N; j++){	 // If amplitude[i] is weak, then both baseband[i] and baseband[i+1] will be bad
+	    // find j = good sample after bad segment
+	    if(amplitudes[j-1] >= nthresh && amplitudes[j] >= nthresh){ // each baseband sample j depends on IF samples j-1 and j
+	      finish = baseband[j];
+	      steps = j - i + 1;
+	      break;
 	    }
-	    // Is a click present in the weak segment?
-	    float phase_change = 0;
-	    for(int k=0; k < steps-1; k++)
-	      phase_change += fabsf(baseband[i+k]);
-	    
-	    if(fabsf(phase_change) >= 1.0){
-	      // Linear interpolation
-	      float const increment = (finish - start) / steps;
-	      for(int k=0; k < steps-1; k++)
-		baseband[i+k] = baseband[i+k-1] + increment; // also why i starts at 1
-	      
-	      badsamples += steps-1;
-	    }
-	    i = j; // advance so increment will test the next sample after the last we know is good
 	  }
+	  // Is a click present in the weak segment?
+	  float phase_change = 0;
+	  for(int k=0; k < steps-1; k++)
+	    phase_change += fabsf(baseband[i+k]);
+	  
+	  if(fabsf(phase_change) >= 1.0){
+	    // Linear interpolation
+	    float const increment = (finish - start) / steps;
+	    for(int k=0; k < steps-1; k++)
+	      baseband[i+k] = baseband[i+k-1] + increment; // also why i starts at 1
+	    
+	    badsamples += steps-1;
+	  }
+	  i = j; // advance so increment will test the next sample after the last we know is good
 	}
       }
 #else
@@ -191,7 +189,6 @@ void *demod_fm(void *arg){
 	    baseband[n] = 0;
 	}
       }
-
 #endif      
     }
     demod->tp1 = badsegments;
