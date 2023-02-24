@@ -216,6 +216,9 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
   demod->filter.isb = config_getboolean(table,mode,"conj",demod->filter.isb);       // (unimplemented anyway)
   demod->linear.loop_bw = config_getfloat(table,mode,"pll-bw",demod->linear.loop_bw);
   demod->linear.agc = config_getboolean(table,mode,"agc",demod->linear.agc);
+  demod->fm.threshold = config_getboolean(table,mode,"threshold",demod->fm.threshold); // FM threshold extension
+  demod->fm.threshold = config_getboolean(table,mode,"threshold-extend",demod->fm.threshold); // FM threshold extension
+
   {
     char const *cp = config_getstring(table,mode,"deemph-tc",NULL);
     if(cp){
