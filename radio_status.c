@@ -484,11 +484,10 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   case FM_DEMOD:
     if(demod->fm.tone_freq != 0){
       encode_float(&bp,PL_TONE,demod->fm.tone_freq);
-      encode_float(&bp,PL_DEVIATION,demod->fm.tone_deviation); // Note fall-through
+      encode_float(&bp,PL_DEVIATION,demod->fm.tone_deviation);
     }
+  case WFM_DEMOD:  // Note fall-through
     encode_byte(&bp,THRESH_EXTEND,demod->fm.threshold);
-    break;
-  case WFM_DEMOD:
     encode_float(&bp,PEAK_DEVIATION,demod->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0/(logf(demod->deemph.rate) * demod->output.samprate));
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(demod->deemph.gain));
