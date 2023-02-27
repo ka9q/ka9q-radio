@@ -61,6 +61,7 @@ install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FIL
 	install -o root -m 0755 -D --target-directory=/etc/sysctl.d 98-sockbuf.conf
 	install -o root -m 0755 -D --target-directory=$(DAEMONDIR) $(DAEMONS) start-ka9q-horus.sh
 	install -o root -m 0755 -D --target-directory=$(BINDIR) $(EXECS)
+	setcap cap_sys_nice=ep $(BINDIR)/monitor
 	install -o root -m 0644 -D --target-directory=$(LIBDIR) $(AFILES)
 	install -o root -m 0644 -D --target-directory=/etc/systemd/system $(SYSTEMD_FILES)
 	install -o root -m 0644 -D --target-directory=/etc/udev/rules.d $(UDEV_FILES)

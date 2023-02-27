@@ -40,7 +40,7 @@
 // Global config variables
 static int Samprate = 48000;  // Now applies only to hardware output
 #define MAX_MCAST 20          // Maximum number of multicast addresses
-#define BUFFERSIZE (1<<19)    // about 10.92 sec at 48 kHz stereo - must be power of 2!!
+#define BUFFERSIZE (1<<17)    // about 2.73 sec at 48 kHz stereo - must be power of 2!!
 static float const SCALE = 1./SHRT_MAX;
 static const float Latency = 0.02; // chunk size for audio output callback
 static const float Tone_period = 0.24; // PL tone integration period
@@ -102,9 +102,7 @@ static PaTime Start_pa_time;
 
 static float *Output_buffer;
 static volatile long long Rptr;            // Unwrapped read pointer (bug: will overflow in 6 million years)
-#if 0
 static PaTime Last_callback_time;
-#endif
 
 static int Invalids;
 static bool Help;
@@ -1127,6 +1125,7 @@ static void *display(void *arg){
 	// Time since last packet drop on any channel
 	printw(" Error-free seconds: %'.1lf",(1e-9*(gps_time_ns() - Last_error_time)));
 	printw(" Initial playout time: %.0f ms",Playout);
+	printw(" Last callback: %.3lf",Last_callback_time);
       }      
     }
 
@@ -1455,6 +1454,8 @@ static void pa_finished_callback(void *userdata){
   fprintf(stderr,"pa_finished_callback() called, exiting\n");
   exit(0);
 }
+
+
 // Portaudio callback - transfer data (if any) to provided buffer
 static int pa_callback(void const *inputBuffer, void *outputBuffer,
 		       unsigned long framesPerBuffer,
@@ -1467,18 +1468,17 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
   if(!outputBuffer)
     return paAbort; // can this happen??
   
-#if 0
+#if 1
   if(Last_callback_time + 1.0 < timeInfo->currentTime){
     // We've been asleep for >1 sec. Reset everybody
     pthread_mutex_lock(&Sess_mutex);
     for(int i = 0; i < Nsessions; i++)
       Sessions[i]->reset = true;
-    memset(Output_buffer,0,sizeof(Output_buffer)); // Wipe clean
+    memset(Output_buffer,0,BUFFERSIZE * Channels * sizeof(*Output_buffer)); // Wipe clean
     pthread_mutex_unlock(&Sess_mutex);
   }
-
-  Last_callback_time = timeInfo->currentTime;
 #endif
+  Last_callback_time = timeInfo->currentTime;
 
   assert(framesPerBuffer < BUFFERSIZE/2); // Make sure ring buffer is big enough
   float *out = outputBuffer;
