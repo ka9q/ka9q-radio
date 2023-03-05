@@ -1,6 +1,7 @@
 // $Id: multicast.c,v 1.91 2022/10/25 01:57:52 karn Exp $
 // Multicast socket and RTP utility routines
 // Copyright 2018 Phil Karn, KA9Q
+#define _DEFAULT_SOURCE
 
 #include <stdio.h>
 #include <unistd.h>
