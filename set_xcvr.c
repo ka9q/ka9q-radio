@@ -1,4 +1,6 @@
 // $Id: set_xcvr.c,v 1.4 2022/12/29 05:40:08 karn Exp $
+#define _GNU_SOURCE 1
+
 #include <termios.h>
 #include <sys/types.h>
 #include <sys/stat.h>
