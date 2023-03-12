@@ -13,6 +13,7 @@
 #include <sys/time.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -42,7 +43,7 @@ int send_stereo_output(struct demod * restrict const demod,float const * restric
     // If packet is all zeroes, don't send it but still increase the timestamp
     rtp.timestamp = demod->output.rtp.timestamp;
     demod->output.rtp.timestamp += chunk/2; // Increase by sample count
-    demod->output.rtp.bytes += sizeof(signed short) * chunk;
+    demod->output.rtp.bytes += sizeof(int16_t) * chunk;
     demod->output.rtp.packets++;
     rtp.marker = demod->output.silent;
     demod->output.silent = false;
@@ -85,7 +86,7 @@ int send_mono_output(struct demod * restrict const demod,float const * restrict 
     rtp.timestamp = demod->output.rtp.timestamp;
     demod->output.rtp.timestamp += chunk; // Increase by sample count
     demod->output.rtp.packets++;
-    demod->output.rtp.bytes += sizeof(signed short) * chunk;
+    demod->output.rtp.bytes += sizeof(int16_t) * chunk;
     // Transition from silence emits a mark bit
     rtp.marker = demod->output.silent;
     demod->output.silent = false;

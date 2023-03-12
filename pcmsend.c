@@ -7,6 +7,7 @@
 #include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <limits.h>
 #include <string.h>
@@ -217,7 +218,7 @@ int main(int argc,char * const argv[]){
     unsigned char buffer[16384]; // Pick better number
     unsigned char *dp = buffer;
     dp = hton_rtp(dp,&rtp_hdr);
-    signed short *samples = (signed short *)dp;
+    int16_t *samples = (int16_t *)dp;
     for(int i=0; i < Channels * FRAMESIZE; i++){
       *samples++ = htons(scaleclip(Audiodata[rptr++]));
       rptr &= (BUFFERSIZE-1);
@@ -225,7 +226,7 @@ int main(int argc,char * const argv[]){
     dp += Channels * FRAMESIZE * sizeof(*samples);
     send(Output_fd,buffer,dp - buffer,0); // should probably check return code
     rtp_state_out.packets++;
-    rtp_state_out.bytes += Channels * FRAMESIZE * sizeof(signed short);
+    rtp_state_out.bytes += Channels * FRAMESIZE * sizeof(int16_t);
     rtp_state_out.seq++;
     rtp_state_out.timestamp += FRAMESIZE;
   }

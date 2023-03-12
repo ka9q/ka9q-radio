@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <fcntl.h>
 #include <locale.h>
 #include <signal.h>
@@ -213,7 +214,7 @@ int main(int argc,char *argv[]){
     if(size <= 0)
       continue; // Bogus RTP header
     
-    signed short *samples = (signed short *)dp;
+    int16_t *samples = (int16_t *)dp;
     size -= (dp - buffer);
 
     int sample_count = (size * 8) /

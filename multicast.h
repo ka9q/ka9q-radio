@@ -132,9 +132,9 @@ char *formataddr(char *result,int size,void const *s);
 struct packet {
   struct packet *next;
   struct rtp_header rtp;
-  unsigned char const *data; // Don't modify a packet through this pointer
+  uint8_t const *data; // Don't modify a packet through this pointer
   int len;
-  unsigned char content[PKTSIZE];
+  uint8_t content[PKTSIZE];
 };
 
 
@@ -161,51 +161,51 @@ int address_match(void const *arg1,void const *arg2);
 int rtp_process(struct rtp_state *state,struct rtp_header const *rtp,int samples);
 
 // Generate RTCP source description segment
-unsigned char *gen_sdes(unsigned char *output,int bufsize,uint32_t ssrc,struct rtcp_sdes const *sdes,int sc);
+uint8_t *gen_sdes(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_sdes const *sdes,int sc);
 // Generate RTCP bye segment
-unsigned char *gen_bye(unsigned char *output,int bufsize,uint32_t const *ssrcs,int sc);
+uint8_t *gen_bye(uint8_t *output,int bufsize,uint32_t const *ssrcs,int sc);
 // Generate RTCP sender report segment
-unsigned char *gen_sr(unsigned char *output,int bufsize,struct rtcp_sr const *sr,struct rtcp_rr const *rr,int rc);
+uint8_t *gen_sr(uint8_t *output,int bufsize,struct rtcp_sr const *sr,struct rtcp_rr const *rr,int rc);
 // Generate RTCP receiver report segment
-unsigned char *gen_rr(unsigned char *output,int bufsize,uint32_t ssrc,struct rtcp_rr const *rr,int rc);
+uint8_t *gen_rr(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_rr const *rr,int rc);
 
 void dump_interfaces(void);
 
 // Utility routines for reading from, and writing integers to, network format in char buffers
-static inline unsigned short get8(unsigned char const *dp){
+static inline uint8_t get8(uint8_t const *dp){
   assert(dp != NULL);
   return *dp;
 }
 
-static inline unsigned short get16(unsigned char const *dp){
+static inline uint16_t get16(uint8_t const *dp){
   assert(dp != NULL);
   return dp[0] << 8 | dp[1];
 }
 
-static inline unsigned long get24(unsigned char const *dp){
+static inline uint32_t get24(uint8_t const *dp){
   assert(dp != NULL);
   return dp[0] << 16 | dp[1] << 8 | dp[2];
 }
 
-static inline unsigned long get32(unsigned char const *dp){
+static inline uint32_t get32(uint8_t const *dp){
   assert(dp != NULL);
   return dp[0] << 24 | dp[1] << 16 | dp[2] << 8 | dp[3];
 }
 
-static inline unsigned char *put8(unsigned char *dp,uint8_t x){
+static inline uint8_t *put8(uint8_t *dp,uint8_t x){
   assert(dp != NULL);
   *dp++ = x;
   return dp;
 }
 
-static inline unsigned char *put16(unsigned char *dp,uint16_t x){
+static inline uint8_t *put16(uint8_t *dp,uint16_t x){
   assert(dp != NULL);
   *dp++ = x >> 8;
   *dp++ = x;
   return dp;
 }
 
-static inline unsigned char *put24(unsigned char *dp,uint32_t x){
+static inline uint8_t *put24(uint8_t *dp,uint32_t x){
   assert(dp != NULL);
   *dp++ = x >> 16;
   *dp++ = x >> 8;
@@ -213,7 +213,7 @@ static inline unsigned char *put24(unsigned char *dp,uint32_t x){
   return dp;
 }
 
-static inline unsigned char *put32(unsigned char *dp,uint32_t x){
+static inline uint8_t *put32(uint8_t *dp,uint32_t x){
   assert(dp != NULL);
   *dp++ = x >> 24;
   *dp++ = x >> 16;

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdint.h>
 
 #include "ax25.h"
 
@@ -140,11 +141,11 @@ int dump_frame(FILE *stream,unsigned char *frame,int bytes){
 int crc_good(unsigned char *frame,int length){
   unsigned int const crc_poly = 0x8408;
 	
-  unsigned short crc = 0xffff;
+  uint16_t crc = 0xffff;
   while(length-- > 0){
     unsigned char byte = *frame++;
     for(int i=0; i < 8; i++){
-      unsigned short feedback = 0;
+      uint16_t feedback = 0;
       if((crc ^ byte) & 1)
 	feedback = crc_poly;
 

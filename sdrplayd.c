@@ -12,6 +12,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -85,7 +86,7 @@ struct sdrstate {
 
   int blocksize;// Number of samples per packet
 
-  complex short *samples;   // samples buffer
+  complex int16_t *samples;   // samples buffer
 
   FILE *status;    // Real-time display in /run (currently unused)
 
@@ -174,7 +175,7 @@ static int set_bulk_transfer_mode(struct sdrstate *sdr,int const transfer_mode_b
 static int set_notch_filters(struct sdrstate *sdr,int const rf_notch,int const dab_notch,int const am_notch);
 static int set_biasT(struct sdrstate *sdr,int const biasT);
 static int start_streaming(struct sdrstate *sdr);
-static void rx_callback(short *xi,short *xq,sdrplay_api_StreamCbParamsT *params,unsigned int numSamples,unsigned int reset,void *cbContext);
+static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *params,unsigned int numSamples,unsigned int reset,void *cbContext);
 static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT tuner,sdrplay_api_EventParamsT *params,void *cbContext);
 static void show_device_params(struct sdrstate *sdr);
 static void close_and_exit(struct sdrstate *sdr,int exit_code);
@@ -515,7 +516,7 @@ int main(int argc,char *argv[]){
 
   pthread_create(&sdr->ncmd_thread,NULL,ncmd,sdr);
 
-  sdr->samples = malloc(sdr->blocksize * sizeof(complex short));
+  sdr->samples = malloc(sdr->blocksize * sizeof(complex int16_t));
   if(start_streaming(sdr) == -1)
     close_and_exit(sdr,1);
 
@@ -1331,7 +1332,7 @@ static int start_streaming(struct sdrstate *sdr){
 
 
 // Callback called with incoming receiver data from A/D
-static void rx_callback(short *xi,short *xq,sdrplay_api_StreamCbParamsT *params,unsigned int numSamples,unsigned int reset,void *cbContext){
+static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *params,unsigned int numSamples,unsigned int reset,void *cbContext){
   static int ThreadnameSet;
   if(!ThreadnameSet){
     pthread_setname("sdrplay-cb");
@@ -1369,7 +1370,7 @@ static void rx_callback(short *xi,short *xq,sdrplay_api_StreamCbParamsT *params,
   msg.msg_iovlen = 2;
 
   int sample_count = numSamples;
-  complex short *idp = sdr->samples;
+  complex int16_t *idp = sdr->samples;
   int idx;
   for(idx = 0; idx < sample_count; idx += 8){
     __real__ idp[idx+0] = xi[idx+0];
@@ -1422,7 +1423,7 @@ static void rx_callback(short *xi,short *xq,sdrplay_api_StreamCbParamsT *params,
 
     iov[0].iov_len = dp - buffer; // length of RTP header
     iov[1].iov_base = idp;
-    iov[1].iov_len = chunk * sizeof(complex short);
+    iov[1].iov_len = chunk * sizeof(complex int16_t);
 
     idp += chunk;
 

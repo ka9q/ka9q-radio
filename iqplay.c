@@ -4,6 +4,7 @@
 #define _GNU_SOURCE 1 // allow bind/connect/recvfrom without casting sockaddr_in6
 #include <assert.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
@@ -276,8 +277,8 @@ int playfile(int sock,int fd,int blocksize){
 	nanosleep(&ts,NULL);
       }
     }
-    unsigned char output_buffer[4*blocksize + 256]; // will this allow for largest possible RTP header??
-    unsigned char *dp = output_buffer;
+    uint8_t output_buffer[4*blocksize + 256]; // will this allow for largest possible RTP header??
+    uint8_t *dp = output_buffer;
     dp = hton_rtp(dp,&rtp_header);
 
     int r = pipefill(fd,dp,4*blocksize);
@@ -287,7 +288,7 @@ int playfile(int sock,int fd,int blocksize){
       break;
     }
     // This depends on the sample format
-    signed short *sp = (signed short *)dp;
+    int16_t *sp = (int16_t *)dp;
     float p = 0;
     for(int n=0; n < 2*blocksize; n ++){
       p += (float)(*sp) * (float)(*sp);
@@ -296,7 +297,7 @@ int playfile(int sock,int fd,int blocksize){
     }
     Power = p / (32767. * 32767. * blocksize);
 
-    dp = (unsigned char *)sp;
+    dp = (uint8_t *)sp;
 
     int length = dp - output_buffer;
     if(send(sock,output_buffer,length,0) == -1)
@@ -325,13 +326,13 @@ void *ncmd(void *arg){
   }
   int counter = 0;
   while(1){
-    unsigned char buffer[Bufsize];
+    uint8_t buffer[Bufsize];
     memset(buffer,0,sizeof(buffer));
     int length = recv(Nctl_sock,buffer,sizeof(buffer),0); // Waits up to 100 ms for command
     if(length > 0){
 
       // Parse entries
-      unsigned char *cp = buffer;
+      uint8_t *cp = buffer;
 
       int cr = *cp++; // Command/response
       if(cr == 0)
@@ -349,7 +350,7 @@ void *ncmd(void *arg){
 
 
 void send_iqplay_status(int full){
-  unsigned char packet[2048],*bp;
+  uint8_t packet[2048],*bp;
   memset(packet,0,sizeof(packet));
   bp = packet;
   

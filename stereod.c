@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <limits.h>
 #include <string.h>
 #include <netdb.h>
@@ -438,7 +439,7 @@ void *decode(void *arg){
     int frame_size = 0;
     switch(pkt->rtp.type){
     case PCM_MONO_PT:
-      frame_size = pkt->len / sizeof(short);
+      frame_size = pkt->len / sizeof(int16_t);
       break;
     default:
       goto endloop; // Discard all but mono PCM to avoid polluting session table
@@ -448,10 +449,10 @@ void *decode(void *arg){
     if(samples_skipped < 0)
       goto endloop; // Old dupe
     
-    signed short const * const samples = (signed short *)pkt->data;
+    int16_t const * const samples = (int16_t *)pkt->data;
     
     for(int i=0; i<frame_size; i++){
-      float const s = SCALE * (signed short)ntohs(samples[i]);
+      float const s = SCALE * (int16_t)ntohs(samples[i]);
       if(put_rfilter(baseband,s) == 0)
 	continue;
       // Filter input buffer full
@@ -469,7 +470,7 @@ void *decode(void *arg){
       dp = hton_rtp(dp,&out_rtp);
 
       sp->rtp_state_out.timestamp += audio_L;
-      sp->rtp_state_out.bytes += 2 * sizeof(signed short) * audio_L;
+      sp->rtp_state_out.bytes += 2 * sizeof(int16_t) * audio_L;
       sp->rtp_state_out.packets++;
 
       execute_filter_output(mono,0);    // L+R baseband output at 48 kHz

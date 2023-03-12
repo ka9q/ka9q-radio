@@ -11,6 +11,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <limits.h>
 #include <string.h>
@@ -601,13 +602,13 @@ void *encode(void *arg){
       opus_encoder_ctl(sp->opus,OPUS_RESET_STATE);
       sp->silence = 1;
     }
-    signed short const *samples = (signed short *)pkt->data;
+    int16_t const *samples = (int16_t *)pkt->data;
     
     for(int i=0; i < frame_size;i++){
-      float left = SCALE * (signed short)ntohs(*samples++);
+      float left = SCALE * (int16_t)ntohs(*samples++);
       sp->audio_buffer[sp->audio_write_index++] = left;
       if(sp->channels == 2){
-	float right = SCALE * (signed short)ntohs(*samples++);
+	float right = SCALE * (int16_t)ntohs(*samples++);
 	sp->audio_buffer[sp->audio_write_index++] = right;
       }
     }

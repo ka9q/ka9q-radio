@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -546,7 +547,7 @@ static void *sockproc(void *arg){
       continue; // Must be big enough for RTP header and at least some data
     
     // Convert RTP header to host format
-    unsigned char const *dp = ntoh_rtp(&pkt->rtp,pkt->content);
+    uint8_t const *dp = ntoh_rtp(&pkt->rtp,pkt->content);
     pkt->data = dp;
     pkt->len = size - (dp - pkt->content);
     if(pkt->rtp.pad){
@@ -783,11 +784,11 @@ static void *decode_task(void *arg){
       sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
       if(sp->frame_size <= 0)
 	goto endloop;
-      signed short const *data_ints = (signed short *)&pkt->data[0];	
+      int16_t const *data_ints = (int16_t *)&pkt->data[0];	
       assert(bounce == NULL);
       bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
       for(int i=0; i < sp->channels * sp->frame_size; i++)
-	bounce[i] = SCALE * (signed short)ntohs(*data_ints++);
+	bounce[i] = SCALE * (int16_t)ntohs(*data_ints++);
       // Difference in timestamps might be negative, and since they're unsigned the (int32_t) cast is necessary
       if(pkt->rtp.timestamp != sp->last_timestamp)
 	sp->wptr += upsample * (int32_t)(pkt->rtp.timestamp - sp->last_timestamp);

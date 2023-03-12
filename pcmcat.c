@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <string.h>
 #include <locale.h>
@@ -171,7 +172,7 @@ int main(int argc,char *argv[]){
     sp->type = rtp.type;
     int samples = 0;
 
-    signed short *sdp = (signed short *)dp;
+    int16_t *sdp = (int16_t *)dp;
     switch(rtp.type){
     case PCM_STEREO_PT:
     case PCM_STEREO_24_PT:
@@ -182,14 +183,14 @@ int main(int argc,char *argv[]){
       samples = size / 4;
       while(samples-- > 0){
 	// Swap sample to host order, cat to stdout
-	signed short left = ntohs(*sdp++);
-	signed short right = ntohs(*sdp++);
+	int16_t left = ntohs(*sdp++);
+	int16_t right = ntohs(*sdp++);
 	if(Stereo){
 	  fwrite(&left,sizeof(left),1,stdout);
 	  fwrite(&right,sizeof(right),1,stdout);
 	} else {
 	  // Downmix to mono
-	  signed short samp = (left + right) / 2;
+	  int16_t samp = (left + right) / 2;
 	  fwrite(&samp,sizeof(samp),1,stdout);
 	}
       }
@@ -202,7 +203,7 @@ int main(int argc,char *argv[]){
       samples = size / 2;
       while(samples-- > 0){
 	// Swap sample to host order, cat to stdout
-	signed short d = ntohs(*sdp++);
+	int16_t d = ntohs(*sdp++);
 	fwrite(&d,sizeof(d),1,stdout);
 	if(Stereo)
 	  fwrite(&d,sizeof(d),1,stdout);   // Force to pseudo-stereo

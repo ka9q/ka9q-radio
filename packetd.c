@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <string.h>
 #include <locale.h>
@@ -381,7 +382,7 @@ static void *input(void *arg){
 	  fflush(stdout);
 	}
       }
-      int const sample_count = size / sizeof(signed short); // 16-bit sample count
+      int const sample_count = size / sizeof(int16_t); // 16-bit sample count
       int skipped_samples = rtp_process(&sp->rtp_state_in,&rtp_hdr,sample_count);
       if(rtp_hdr.marker)
 	skipped_samples = 0; // Ignore samples skipped before mark
@@ -506,7 +507,7 @@ static void *decode_task(void *arg){
   int pad = 0;
 
   while(1){
-    signed short samples[AL];
+    int16_t samples[AL];
 
     if(pad > 0){
       pad--;
