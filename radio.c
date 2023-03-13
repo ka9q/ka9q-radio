@@ -664,7 +664,7 @@ void *sap_send(void *p){
 #endif
 
     // t= (time description)
-    len = snprintf(wp,space,"t=%lld %lld\r\n",start_time,0LL); // unbounded
+    len = snprintf(wp,space,"t=%lld %lld\r\n",(long long)start_time,0LL); // unbounded
     wp += len;
     space -= len;
     
