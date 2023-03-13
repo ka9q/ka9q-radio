@@ -77,10 +77,10 @@ struct rtp_state {
   bool init;
   uint16_t seq;
   uint32_t timestamp;
-  int64_t packets;
-  int64_t bytes;
-  int64_t drops;
-  int64_t dupes;
+  uint64_t packets;
+  uint64_t bytes;
+  uint64_t drops;
+  uint64_t dupes;
 };
 
 // Internal format of sender report segment

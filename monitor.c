@@ -156,10 +156,10 @@ struct session {
   float tot_active; // Total PCM time, sec
   unsigned long packets;    // RTP packets for this session
   unsigned long empties;    // RTP but no data
-  uint64_t lates;
-  uint64_t earlies;
-  uint64_t resets;
-  uint64_t reseqs;
+  unsigned long lates;
+  unsigned long earlies;
+  unsigned long resets;
+  unsigned long reseqs;
 
   bool terminate;            // Set to cause thread to terminate voluntarily
   bool muted;
@@ -1009,11 +1009,11 @@ static void *display(void *arg){
       // First header line
       if(Repeater_tail != 0){
 	if(Last_id_time != 0)
-	  printw("Last ID: %lld sec",(gps_time_ns() - Last_id_time) / BILLION);
+	  printw("Last ID: %lld sec",(long long)((gps_time_ns() - Last_id_time) / BILLION));
 	if(PTT_state)
 	  addstr(" PTT On");
 	else if(Last_xmit_time != 0)
-	  printw(" PTT Off; Last xmit: %lld sec",(gps_time_ns() - Last_xmit_time) / BILLION);
+	  printw(" PTT Off; Last xmit: %lld sec",(long long)((gps_time_ns() - Last_xmit_time) / BILLION));
       }
       int y,x;
       getyx(stdscr,y,x);
@@ -1099,10 +1099,10 @@ static void *display(void *arg){
 		 sp->bandwidth); // Bandwidth, kHz 
 	  
 	  printw("%'12lu",sp->packets);
-	  printw("%'7llu",sp->resets);
-	  printw("%'6llu",sp->rtp_state.drops);
-	  printw("%'6llu",sp->lates);
-	  printw("%'6llu",sp->reseqs);
+	  printw("%'7lu",sp->resets);
+	  printw("%'6llu",(unsigned long long)sp->rtp_state.drops);
+	  printw("%'6lu",sp->lates);
+	  printw("%'6lu",sp->reseqs);
 	  
 	  // printable version of socket addresses and ports
 	  if(sp->dest){ // Might not be allocated yet, if we got dispatched during the nameinfo() call
@@ -1119,7 +1119,7 @@ static void *display(void *arg){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
 	double unix_seconds = (gps_time_ns() - Start_time) * 1e-9;
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
-	printw("Audio callbacks: %'llu, Rptr %'llu framesPerCallback %'llu",Audio_callbacks,Rptr,Audio_frames);
+	printw("Audio callbacks: %'llu, Rptr %'llu framesPerCallback %'llu",(unsigned long long)Audio_callbacks,(unsigned long long)Rptr,(unsigned long long)Audio_frames);
 	static float avg_err = 0;
 	avg_err += .0001 * (1e6 * (pa_seconds / unix_seconds - 1) - avg_err);
 	printw(" D/A clock error: %+.3lf ppm ",1e6 * (pa_seconds / unix_seconds - 1));
