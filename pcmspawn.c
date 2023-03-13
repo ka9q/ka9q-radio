@@ -7,9 +7,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <limits.h>
 #include <string.h>
+#if __linux__
 #include <bsd/string.h>
+#endif
 #include <netdb.h>
 #include <locale.h>
 #include <sys/time.h>
@@ -33,13 +36,13 @@ struct session {
   char port[NI_MAXSERV];    // RTP Sender source port
 
   FILE *pipe;
-  long long last_active;
+  int64_t last_active;
  
   struct rtp_state rtp_state; // RTP input state
 
   unsigned long dropped_samples;  // Dropped samples (stereo samples) replaced with silence
   unsigned long resets; // rtp resets due to too many dropped samples at once
-  long long packets;
+  uint64_t packets;
 };
 
 

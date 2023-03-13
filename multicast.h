@@ -77,16 +77,16 @@ struct rtp_state {
   bool init;
   uint16_t seq;
   uint32_t timestamp;
-  long long packets;
-  long long bytes;
-  long long drops;
-  long long dupes;
+  int64_t packets;
+  int64_t bytes;
+  int64_t drops;
+  int64_t dupes;
 };
 
 // Internal format of sender report segment
 struct rtcp_sr {
   unsigned int ssrc;
-  long long ntp_timestamp;
+  int64_t ntp_timestamp;
   unsigned int rtp_timestamp;
   unsigned int packet_count;
   unsigned int byte_count;

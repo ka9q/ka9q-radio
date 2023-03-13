@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <limits.h>
 #include <pthread.h>
 #include <string.h>
@@ -73,7 +74,7 @@ int main(int argc,char *argv[]){
       sleep(1);
       continue;
     }
-    long long now = gps_time_ns();
+    int64_t now = gps_time_ns();
     
     int const cr = buffer[0]; // Command/response byte
     char temp[1024];

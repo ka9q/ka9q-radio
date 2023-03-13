@@ -9,6 +9,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -562,7 +563,7 @@ void send_rtlsdr_status(struct sdrstate *sdr,int full){
 void rx_callback(unsigned char *buf, uint32_t len, void *ctx){
   int samples = len;
   uint8_t *idp = (uint8_t *)buf;
-  long long output_energy = 0;
+  uint64_t output_energy = 0;
   struct sdrstate * const sdr = (struct sdrstate *)ctx;
   
   struct rtp_header rtp;

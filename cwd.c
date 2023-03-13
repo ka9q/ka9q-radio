@@ -96,7 +96,7 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
     rtp.marker = 0; // Subsequent frames are not marked
     {
       // Sleep pacing - how long will this take to send?
-      long long const nanosec = BILLION * chunk / Samprate;
+      int64_t const nanosec = BILLION * chunk / Samprate;
       struct timespec delay;
       
       ns2ts(&delay,nanosec);

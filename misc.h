@@ -110,9 +110,9 @@ extern int Verbose;
 extern char const *Months[12];
 
 int dist_path(char *path,int path_len,const char *fname);
-char *format_gpstime(char *result,int len,long long t);
-char *format_utctime(char *result,int len,long long t);
-char *ftime(char *result,int size,long long t);
+char *format_gpstime(char *result,int len,int64_t t);
+char *format_utctime(char *result,int len,int64_t t);
+char *ftime(char *result,int size,int64_t t);
 void normalize_time(struct timespec *x);
 double parse_frequency(const char *);
 uint32_t nextfastfft(uint32_t n);
@@ -208,15 +208,15 @@ static inline int time_cmp(struct timespec const *a,struct timespec const *b){
     return -1;
   return 0;
 }
-static long long const BILLION = 1000000000LL;
+static int64_t const BILLION = 1000000000LL;
 
 // Convert timespec (seconds, nanoseconds) to integer nanoseconds
 // Integer nanoseconds overflows past 584.94242 years. That's probably long enough
-static inline long long ts2ns(struct timespec const *ts){
+static inline int64_t ts2ns(struct timespec const *ts){
   return ts->tv_sec * BILLION + ts->tv_nsec;
 }
 // Convert integer nanosec count to timspec
-static inline void ns2ts(struct timespec *ts,long long ns){
+static inline void ns2ts(struct timespec *ts,int64_t ns){
   lldiv_t r = lldiv(ns,BILLION);
   ts->tv_sec = r.quot;
   ts->tv_nsec = r.rem;
@@ -236,7 +236,7 @@ static inline time_t gps_time_sec(void){
 
 
 // Return time of day as nanosec from UTC epoch
-static inline long long utc_time_ns(void){
+static inline int64_t utc_time_ns(void){
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
   return ts2ns(&now);
@@ -246,7 +246,7 @@ static inline long long utc_time_ns(void){
 // Return time of day as nanosec from GPS epoch
 // Note: assumes fixed leap second offset
 // Could be better derived direct from a GPS receiver without applying the leap second offset
-static inline long long gps_time_ns(void){
+static inline int64_t gps_time_ns(void){
   return utc_time_ns() - BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET);
 }
 

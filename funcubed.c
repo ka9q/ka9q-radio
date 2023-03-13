@@ -46,7 +46,7 @@ struct sdrstate {
   uint8_t lna_gain;
   uint8_t mixer_gain;
   uint8_t if_gain;
-  long long timestamp;
+  int64_t timestamp;
   double frequency;
   unsigned int intfreq;    // Nominal (uncorrected) tuner frequency
   float in_power;          // Running estimate of signal power

@@ -1,7 +1,9 @@
 #ifndef _STATUS_H
 #define _STATUS_H 1
 #include <stdint.h>
+#include <stdint.h>
 #include <sys/time.h>
+
 
 enum status_type {
   EOL = 0,	  
@@ -121,27 +123,27 @@ enum status_type {
 
 };
 
-int encode_string(unsigned char **bp,enum status_type type,void const *buf,int buflen);
-int encode_eol(unsigned char **buf);
-int encode_byte(unsigned char **buf,enum status_type type,unsigned char x);
-int encode_int(unsigned char **buf,enum status_type type,int x);
-int encode_int16(unsigned char **buf,enum status_type type,uint16_t x);
-int encode_int32(unsigned char **buf,enum status_type type,uint32_t x);
-int encode_int64(unsigned char **buf,enum status_type type,uint64_t x);
-int encode_float(unsigned char **buf,enum status_type type,float x);
-int encode_double(unsigned char **buf,enum status_type type,double x);
-int encode_socket(unsigned char **buf,enum status_type type,void const *sock);
+int encode_string(uint8_t **bp,enum status_type type,void const *buf,int buflen);
+int encode_eol(uint8_t **buf);
+int encode_byte(uint8_t **buf,enum status_type type,uint8_t x);
+int encode_int(uint8_t **buf,enum status_type type,int x);
+int encode_int16(uint8_t **buf,enum status_type type,uint16_t x);
+int encode_int32(uint8_t **buf,enum status_type type,uint32_t x);
+int encode_int64(uint8_t **buf,enum status_type type,uint64_t x);
+int encode_float(uint8_t **buf,enum status_type type,float x);
+int encode_double(uint8_t **buf,enum status_type type,double x);
+int encode_socket(uint8_t **buf,enum status_type type,void const *sock);
 
-uint64_t decode_int(unsigned char const *,int);
-float decode_float(unsigned char const *,int);
-double decode_double(unsigned char const *,int);
-struct sockaddr *decode_socket(void *sock,unsigned char const *,int);
-char *decode_string(unsigned char const *,int,char *,int);
-int get_ssrc(unsigned char const *buffer,int length);
+uint64_t decode_int(uint8_t const *,int);
+float decode_float(uint8_t const *,int);
+double decode_double(uint8_t const *,int);
+struct sockaddr *decode_socket(void *sock,uint8_t const *,int);
+char *decode_string(uint8_t const *,int,char *,int);
+int get_ssrc(uint8_t const *buffer,int length);
 
-void dump_metadata(unsigned char const *,int);
+void dump_metadata(uint8_t const *,int);
 
-long long random_time(long long base,long long rrange);
+int64_t random_time(int64_t base,int64_t rrange);
 void send_poll(int fd,int ssrc);
 
 #endif

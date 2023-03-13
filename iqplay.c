@@ -250,14 +250,14 @@ int playfile(int sock,int fd,int blocksize){
     fprintf(stderr,"unsupported bits per sample %d\n",Bitspersample);
     return -1;
   }
-  long long start_time = gps_time_ns();
+  int64_t start_time = gps_time_ns();
 
   rtp_header.ssrc = Rtp_state.ssrc;
   
   // nanosec between packets.
-  long long dt_ns = (BILLION * blocksize) / Samprate;
+  int64_t dt_ns = (BILLION * blocksize) / Samprate;
   // Nanoseconds since start for next scheduled transmission; will transmit first immediately
-  long long sked_time = 0;
+  int64_t sked_time = 0;
 
   realtime();
   while(1){
@@ -268,7 +268,7 @@ int playfile(int sock,int fd,int blocksize){
     // Is it time yet?
     while(1){
       // Nanoseconds since start
-      long long diff = gps_time_ns() - start_time;
+      int64_t diff = gps_time_ns() - start_time;
       if(diff >= sked_time)
 	break;
       if(sked_time > diff + 100000){ // 100 microsec

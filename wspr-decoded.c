@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <fcntl.h>
 #include <locale.h>
 #include <signal.h>
@@ -322,12 +323,12 @@ struct session *create_session(struct rtp_header *rtp){
   sp->channels = channels_from_pt(sp->type);
   sp->samprate = samprate_from_pt(sp->type);
   
-  long long now = utc_time_ns();
+  int64_t now = utc_time_ns();
   // Microsecond within 2-minute (120 sec) period
-  long long const start_offset_nsec = now % (120 * BILLION);
+  int64_t const start_offset_nsec = now % (120 * BILLION);
   
   // Use the previous 120-second point as the start of this file
-  long long start_time = now - start_offset_nsec;
+  int64_t start_time = now - start_offset_nsec;
   time_t start_time_sec = start_time / BILLION;
   
   struct tm const * const tm = gmtime(&start_time_sec);

@@ -9,6 +9,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -569,7 +570,7 @@ void send_airspyhf_status(struct sdrstate *sdr,int full){
   encode_int32(&bp,COMMAND_TAG,sdr->command_tag);
   encode_int64(&bp,CMD_CNT,sdr->commands);
   
-  long long timestamp = gps_time_ns();
+  int64_t timestamp = gps_time_ns();
   encode_int64(&bp,GPS_TIME,timestamp);
 
   if(sdr->description)

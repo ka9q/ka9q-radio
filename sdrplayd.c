@@ -77,8 +77,8 @@ struct sdrstate {
   char *frequency_file; // Local file to store frequency in case we restart
 
   // Sample statistics
-  long long sample_count;
-  long long event_count;
+  uint64_t sample_count;
+  uint64_t event_count;
   int clips;  // Sample clips since last reset (???)
   float power;   // Running estimate of A/D signal power (???)
 
@@ -523,14 +523,14 @@ int main(int argc,char *argv[]){
   send_sdrplay_status(sdr,1); // Tell the world we're alive
 
   // Periodically poll status to ensure device hasn't reset
-  long long prev_sample_count = 0;
+  uint64_t prev_sample_count = 0;
   while(1){
     sleep(1);
     if(Terminate){
       fprintf(stderr,"Terminating as requsted by user\n");
       close_and_exit(sdr,Terminate-1);
     }
-    long long curr_sample_count = sdr->sample_count;
+    uint64_t curr_sample_count = sdr->sample_count;
     if(!(curr_sample_count > prev_sample_count))
       break; // Device seems to have bombed. Exit and let systemd restart us
     prev_sample_count = curr_sample_count;

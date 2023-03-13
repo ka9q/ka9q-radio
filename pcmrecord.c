@@ -80,7 +80,7 @@ struct session {
 
   FILE *fp;                    // File being recorded
   void *iobuffer;              // Big buffer to reduce write rate
-  long long last_active;
+  int64_t last_active;
 
   int SubstantialFile;        // At least one substantial segment has been seen
   int64_t CurrentSegmentSamples; // total samples in this segment without skips in timestamp
@@ -101,7 +101,7 @@ struct sockaddr Sender;
 struct sockaddr Input_mcast_sockaddr;
 int Input_fd;
 struct session *Sessions;
-long long Timeout = 20; // 20 seconds max idle time before file close
+int64_t Timeout = 20; // 20 seconds max idle time before file close
 
 void closedown(int a);
 void input_loop(void);
@@ -137,7 +137,7 @@ int main(int argc,char *argv[]){
     case 't':
       {
 	char *ptr;
-	long long x = strtoll(optarg,&ptr,0); 
+	int64_t x = strtoll(optarg,&ptr,0); 
 	if(ptr != optarg)
 	  Timeout = x;
       }
@@ -201,7 +201,7 @@ void closedown(int a){
 void input_loop(){
 
   while(1){
-    long long current_time = gps_time_ns();
+    int64_t current_time = gps_time_ns();
 
     // Receive data
     fd_set fdset;
@@ -286,7 +286,7 @@ void input_loop(){
     struct session *next;
     for(struct session *sp = Sessions;sp != NULL; sp = next){
       next = sp->next;
-      long long idle = current_time - sp->last_active;
+      int64_t idle = current_time - sp->last_active;
       if(idle > Timeout * BILLION){
 	// Close idle session
 	if(!sp->SubstantialFile){

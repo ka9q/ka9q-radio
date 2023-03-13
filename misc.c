@@ -147,13 +147,13 @@ void normalize_time(struct timespec *x){
 char const *Days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 char const *Months[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec" };
 
-char *format_gpstime(char *result,int len,long long t){
+char *format_gpstime(char *result,int len,int64_t t){
   return format_utctime(result,len,t + BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET));
 }
 
 
 // Format, as printed UTC or local, a time measured in nanoseconds from the GPS epoch
-char *format_utctime(char *result,int len,long long t){
+char *format_utctime(char *result,int len,int64_t t){
   lldiv_t ut = lldiv(t,BILLION);
 
   time_t utime = ut.quot - timezone + (daylight ? 3600 : 0);
@@ -179,7 +179,7 @@ char *format_utctime(char *result,int len,long long t){
 
 }
 // Format a seconds count into hh:mm:ss
-char *ftime(char * result,int size,long long t){
+char *ftime(char * result,int size,int64_t t){
   // Init to blanks
   memset(result,0,size);
   char *cp = result;
@@ -193,7 +193,7 @@ char *ftime(char * result,int size,long long t){
   cp++;
   size--;
 
-  long long const hr = t / 3600; // Hours is potentially unlimited
+  int64_t const hr = t / 3600; // Hours is potentially unlimited
   t -= 3600 * hr;
 
   // Show hours and the hour:minute colon only if hr > 0

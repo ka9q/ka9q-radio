@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <netdb.h>
 
 #include "misc.h"
@@ -137,7 +138,7 @@ char *decode_string(unsigned char const *cp,int optlen,char *buf,int buflen){
 
 // Decode encoded variable-length UNSIGNED integers
 // At entry, *bp -> length field (not type!)
-// Works for byte, short, long, long long
+// Works for byte, short/int16_t, long/int32_t, long long/int64_t
 uint64_t decode_int(unsigned char const *cp,int len){
   uint64_t result = 0;
   // cp now points to beginning of abbreviated int
@@ -228,7 +229,7 @@ struct sockaddr *decode_socket(void *sock,unsigned char const *val,int optlen){
 
 // Generate random GPS time uniformly distributed between (now + base, now + base + rrange)
 // Args are in nanosec
-long long random_time(long long base,long long rrange){
+int64_t random_time(int64_t base,int64_t rrange){
   return gps_time_ns() + base + random() % rrange;
 }
 

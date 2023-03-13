@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <stdbool.h>
 #include <limits.h>
@@ -369,14 +370,14 @@ int main(int argc,char *argv[]){
     while(1){
       // The deadline starts at 1 sec in the future
       // It is reset as long as we keep seeing new SSRCs
-      long long deadline = gps_time_ns() + BILLION;
+      int64_t deadline = gps_time_ns() + BILLION;
       send_poll(Ctl_fd,0);
       fd_set fdset;
       FD_ZERO(&fdset);
       FD_SET(Status_fd,&fdset);
       int n = Status_fd + 1;
       
-      long long timeout = deadline - gps_time_ns();
+      int64_t timeout = deadline - gps_time_ns();
       // Immediate poll if timeout is negative
       if(timeout < 0)
 	timeout = 0;
@@ -483,14 +484,14 @@ int main(int argc,char *argv[]){
   // randomize polls over 50 ms and restart our poll timer if an answer
   // is seen in response to another poll
 
-  long long const random_interval = 50000000; // 50 ms
+  int64_t const random_interval = 50000000; // 50 ms
   // Pick soon but still random times for the first polls
-  long long next_radio_poll = random_time(0,random_interval);
-  long long next_fe_poll = random_time(0,random_interval);
+  int64_t next_radio_poll = random_time(0,random_interval);
+  int64_t next_fe_poll = random_time(0,random_interval);
   
   for(;;){
-    long long const radio_poll_interval  = Refresh_rate * BILLION;
-    long long const fe_poll_interval = 975000000;    // 975 - 1025 ms
+    int64_t const radio_poll_interval  = Refresh_rate * BILLION;
+    int64_t const fe_poll_interval = 975000000;    // 975 - 1025 ms
 
     if(gps_time_ns() > next_radio_poll){
       // Time to poll radio
@@ -511,7 +512,7 @@ int main(int argc,char *argv[]){
     int const n = max(Frontend.input.status_fd,Status_fd) + 1;
 
     // Receive timeout at whichever event occurs first
-    long long timeout;
+    int64_t timeout;
     if(next_radio_poll > next_fe_poll)
       timeout = next_fe_poll - gps_time_ns();
     else
@@ -1326,7 +1327,7 @@ void display_filtering(WINDOW *w,struct demod const *demod){
   
   pprintw(w,row++,col,"Block Time","%'.1f ms",Blocktime);
   
-  long long const N = Frontend.L + Frontend.M - 1;
+  int64_t const N = Frontend.L + Frontend.M - 1;
   
   pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.sdr.isreal ? 'r' : 'c');
   

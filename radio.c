@@ -584,7 +584,7 @@ void *sap_send(void *p){
   struct demod *demod = (struct demod *)p;
   assert(demod != NULL);
 
-  long long start_time = utc_time_sec() + NTP_EPOCH; // NTP uses UTC, not GPS
+  int64_t start_time = utc_time_sec() + NTP_EPOCH; // NTP uses UTC, not GPS
 
   // These should change when a change is made elsewhere
   uint16_t const id = random(); // Should be a hash, but it changes every time anyway
@@ -660,7 +660,7 @@ void *sap_send(void *p){
     
 
 #if 0 // not currently used
-    long long current_time = utc_time_sec() + NTP_EPOCH;
+    int64_t current_time = utc_time_sec() + NTP_EPOCH;
 #endif
 
     // t= (time description)

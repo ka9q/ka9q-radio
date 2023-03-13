@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <netdb.h>
+#include <stdint.h>
 
 #include "misc.h"
 #include "status.h"
@@ -35,7 +36,7 @@ void dump_metadata(unsigned char const * const buffer,int length){
     case GPS_TIME:
       {
 	char tbuf[100];
-	printf("%s",format_gpstime(tbuf,sizeof(tbuf),(long long unsigned)decode_int(cp,optlen)));
+	printf("%s",format_gpstime(tbuf,sizeof(tbuf),(uint64_t)decode_int(cp,optlen)));
       }
       break;
     case DESCRIPTION:
@@ -193,7 +194,7 @@ void dump_metadata(unsigned char const * const buffer,int length){
       break;
     case DEMOD_TYPE:
       {
-	const int i = (long long unsigned)decode_int(cp,optlen); // ????
+	const int i = (int)decode_int(cp,optlen); // ????
 	printf("demod %d ",i);
 	switch(i){
 	case LINEAR_DEMOD:

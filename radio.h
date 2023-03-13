@@ -69,7 +69,7 @@ struct frontend {
     uint64_t commands;     // Command counter
     uint32_t command_tag;   // Last received command tag
     int samprate;           // Sample rate on data stream
-    long long timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
+    int64_t timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
     double frequency;
     uint8_t lna_gain;
     uint8_t mixer_gain;

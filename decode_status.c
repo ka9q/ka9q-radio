@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -23,10 +24,10 @@ void *sdr_status(void *arg){
   struct frontend * const frontend = (struct frontend *)arg;
   assert(frontend != NULL);
 
-  long long const random_interval = 50000000; // 50 ms
+  int64_t const random_interval = 50000000; // 50 ms
   // Pick soon but still random times for the first polls
-  long long next_fe_poll = random_time(0,random_interval);
-  long long const fe_poll_interval = 975000000;
+  int64_t next_fe_poll = random_time(0,random_interval);
+  int64_t const fe_poll_interval = 975000000;
 
   while(1){
     if(gps_time_ns() > next_fe_poll){
@@ -40,7 +41,7 @@ void *sdr_status(void *arg){
     if(frontend->input.status_fd > 2)
       FD_SET(frontend->input.status_fd,&fdset);
 
-    long long timeout = next_fe_poll - gps_time_ns();
+    int64_t timeout = next_fe_poll - gps_time_ns();
     if(timeout < 0)
       timeout = 0;
     int n = frontend->input.status_fd + 1;

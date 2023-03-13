@@ -64,7 +64,7 @@ int SAP_enable = false;
 static int Overlap;
 char const *Name;
 
-static long long Starttime;      // System clock at timestamp 0, for RTCP
+static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 pthread_t Status_thread;
 pthread_t Demod_reaper_thread;
 pthread_t Procsamp_thread;
@@ -522,8 +522,8 @@ void *rtcp_send(void *arg){
     {
       struct timespec now;
       clock_gettime(CLOCK_REALTIME,&now);
-      sr.ntp_timestamp = ((long long)now.tv_sec + NTP_EPOCH) << 32;
-      sr.ntp_timestamp += ((long long)now.tv_nsec << 32) / BILLION; // NTP timestamps are units of 2^-32 sec
+      sr.ntp_timestamp = ((int64_t)now.tv_sec + NTP_EPOCH) << 32;
+      sr.ntp_timestamp += ((int64_t)now.tv_nsec << 32) / BILLION; // NTP timestamps are units of 2^-32 sec
     }
     // The zero is to remind me that I start timestamps at zero, but they could start anywhere
     sr.rtp_timestamp = (0 + gps_time_ns() - Starttime) / BILLION;

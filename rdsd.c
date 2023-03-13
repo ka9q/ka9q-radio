@@ -42,7 +42,7 @@ struct session {
   struct rtp_state rtp_state_in; // RTP input state
   struct rtp_state rtp_state_out; // RTP output state
 
-  long long packets;
+  uint64_t packets;
 };
 
 

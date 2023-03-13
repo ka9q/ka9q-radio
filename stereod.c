@@ -45,7 +45,7 @@ struct session {
 
   float deemph_state_left;
   float deemph_state_right;
-  long long packets;
+  uint64_t packets;
 };
 
 

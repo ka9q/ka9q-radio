@@ -58,13 +58,13 @@ static float Playout = 100;
 static bool Start_muted;
 static bool Auto_position = true;  // first will be in the center
 static bool PTT_state;
-static long long Audio_callbacks;
-static unsigned long Audio_frames;
-static long long LastAudioTime;
+static uint64_t Audio_callbacks;
+static uint64_t Audio_frames;
+static int64_t LastAudioTime;
 static pthread_t Repeater_thread;
 static pthread_cond_t PTT_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t PTT_mutex = PTHREAD_MUTEX_INITIALIZER;
-static long long Repeater_tail;
+static int64_t Repeater_tail;
 static char const *Cwid = "de nocall/r"; // Make this configurable!
 static double ID_pitch = 800.0;
 static double ID_level = -29.0;
@@ -79,16 +79,16 @@ static char const *Display = "display";
 static float Gain = 0; // unity gain by default
 
 
-static long long Last_xmit_time;
-static long long Last_id_time;
+static int64_t Last_xmit_time;
+static int64_t Last_id_time;
 static int Dit_length; 
 static bool Notch;
 static int Channels = 2;
 
 // IDs must be at least every 10 minutes per FCC 97.119(a)
-static long long Mandatory_ID_interval;
+static int64_t Mandatory_ID_interval;
 // ID early when carrier is about to drop, to avoid stepping on users
-static long long Quiet_ID_interval;
+static int64_t Quiet_ID_interval;
 
 
 // Global variables
@@ -98,16 +98,16 @@ static int Nfds;                     // Number of streams
 static pthread_mutex_t Sess_mutex = PTHREAD_MUTEX_INITIALIZER;
 static PaStream *Pa_Stream;          // Portaudio stream handle
 static int inDevNum;                 // Portaudio's audio output device index
-static long long Start_time;
+static int64_t Start_time;
 static PaTime Start_pa_time;
 
 static float *Output_buffer;
-static volatile long long Rptr;            // Unwrapped read pointer (bug: will overflow in 6 million years)
+static volatile int64_t Rptr;            // Unwrapped read pointer (bug: will overflow in 6 million years)
 static PaTime Last_callback_time;
 
 static int Invalids;
 static bool Help;
-static long long Last_error_time;
+static int64_t Last_error_time;
 static int Position; // auto-position streams
 static bool Auto_sort;
 
@@ -137,7 +137,7 @@ struct session {
   int type;                 // RTP type (10,11,20,111)
 
   uint32_t last_timestamp;  // Last timestamp seen
-  long long wptr;  // current write pointer into output PCM buffer
+  int64_t wptr;  // current write pointer into output PCM buffer
   int playout;              // Initial playout delay, samples
 
   OpusDecoder *opus;        // Opus codec decoder handle, if needed
@@ -156,10 +156,10 @@ struct session {
   float tot_active; // Total PCM time, sec
   unsigned long packets;    // RTP packets for this session
   unsigned long empties;    // RTP but no data
-  unsigned long long lates;
-  unsigned long long earlies;
-  unsigned long long resets;
-  unsigned long long reseqs;
+  uint64_t lates;
+  uint64_t earlies;
+  uint64_t resets;
+  uint64_t reseqs;
 
   bool terminate;            // Set to cause thread to terminate voluntarily
   bool muted;
@@ -664,7 +664,7 @@ static void *decode_task(void *arg){
     // Wait for packet to appear on queue
     pthread_mutex_lock(&sp->qmutex);
     while(!sp->queue){
-      long long const increment = 100000000; // 100 ms
+      int64_t const increment = 100000000; // 100 ms
       // pthread_cond_timedwait requires UTC clock time! Undefined behavior around a leap second...
       struct timespec ts;
       ns2ts(&ts,gps_time_ns() + increment + BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET));
@@ -685,7 +685,7 @@ static void *decode_task(void *arg){
       if(queue > Latency + 0.1){ // 100 ms for scheduling latency?
 	pthread_mutex_unlock(&sp->qmutex);
 	struct timespec ss;
-	ns2ts(&ss,(long long)(1e9 * (queue - (Latency + 0.1))));
+	ns2ts(&ss,(int64_t)(1e9 * (queue - (Latency + 0.1))));
 	nanosleep(&ss,NULL);
 	goto endloop;
       }
@@ -877,8 +877,8 @@ static void *decode_task(void *arg){
 	assert(left_delay >= 0 && right_delay >= 0);
 	
 	// Mix bounce buffer into output buffer read by portaudio callback
-	long long left_index = sp->wptr + left_delay;
-	long long right_index = sp->wptr + right_delay;
+	int64_t left_index = sp->wptr + left_delay;
+	int64_t right_index = sp->wptr + right_delay;
 	
 	for(int i=0; i < sp->frame_size; i++){
 	  float left,right;
@@ -902,7 +902,7 @@ static void *decode_task(void *arg){
 	  }
 	}
       } else { // Channels == 1, no panning
-	long long index = sp->wptr;
+	int64_t index = sp->wptr;
 	for(int i=0; i < sp->frame_size; i++){
 	  float s;
 	  if(sp->channels == 1){
@@ -1119,7 +1119,7 @@ static void *display(void *arg){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
 	double unix_seconds = (gps_time_ns() - Start_time) * 1e-9;
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
-	printw("Audio callbacks: %'llu, Rptr %'llu framesPerCallback %'lu",Audio_callbacks,Rptr,Audio_frames);
+	printw("Audio callbacks: %'llu, Rptr %'llu framesPerCallback %'llu",Audio_callbacks,Rptr,Audio_frames);
 	static float avg_err = 0;
 	avg_err += .0001 * (1e6 * (pa_seconds / unix_seconds - 1) - avg_err);
 	printw(" D/A clock error: %+.3lf ppm ",1e6 * (pa_seconds / unix_seconds - 1));
@@ -1525,7 +1525,7 @@ void send_cwid(void){
   }
 
   float samples[60 * Dit_length];
-  unsigned long long wptr = Rptr + ((long)Playout * Samprate)/1000;
+  uint64_t wptr = Rptr + ((long)Playout * Samprate)/1000;
 
   for(char const *cp = Cwid; *cp != '\0'; cp++){
     int const samplecount = encode_morse_char(samples,(wchar_t)*cp);
@@ -1541,7 +1541,7 @@ void send_cwid(void){
 	Output_buffer[wptr++ & (BUFFERSIZE-1)] += samples[i];
     }
     // Wait for it to play out
-    long long const sleeptime = BILLION * samplecount / Samprate;
+    int64_t const sleeptime = BILLION * samplecount / Samprate;
     struct timespec ts;
     ns2ts(&ts,sleeptime);
     nanosleep(&ts,NULL);
@@ -1568,17 +1568,17 @@ void *repeater_ctl(void *arg){
     pthread_mutex_unlock(&PTT_mutex);
 
     // Transmitter is on; are we required to ID?
-    long long now = gps_time_ns();
+    int64_t now = gps_time_ns();
     if(now > Last_id_time + Mandatory_ID_interval){
       // must ID on top of users to satisfy FCC max ID interval
       Last_id_time = now;
       send_cwid();
       now = gps_time_ns(); // send_cwid() has delays
     }
-    long long const drop_time = LastAudioTime + BILLION * Repeater_tail;
+    int64_t const drop_time = LastAudioTime + BILLION * Repeater_tail;
     if(now < drop_time){
       // Sleep until possible end of timeout, or next mandatory ID, whichever is first
-      long long const sleep_time = min(drop_time,Last_id_time + Mandatory_ID_interval) - now;
+      int64_t const sleep_time = min(drop_time,Last_id_time + Mandatory_ID_interval) - now;
       if(sleep_time > 0){
 	struct timespec ts;
 	ns2ts(&ts,sleep_time);
