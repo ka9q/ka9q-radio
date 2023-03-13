@@ -630,7 +630,7 @@ void *sap_send(void *p){
       getpwuid_r(getuid(),&pwd,buf,sizeof(buf),&result);
       len = snprintf(wp,space,"o=%s %lld %d IN IP4 %s\r\n",
 		     result ? result->pw_name : "-",
-		     start_time,sess_version,hostname);
+		     (long long)start_time,sess_version,hostname);
       
       wp += len;
       space -= len;
