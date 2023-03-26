@@ -423,6 +423,9 @@ int start_demod(struct demod * demod){
   case LINEAR_DEMOD:
     pthread_create(&demod->demod_thread,NULL,demod_linear,demod);
     break;
+  case SPECT_DEMOD:
+    pthread_create(&demod->demod_thread,NULL,demod_spectrum,demod);
+    break;
   }
   return 0;
 }

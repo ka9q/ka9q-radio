@@ -26,6 +26,7 @@ enum demod_type {
   LINEAR_DEMOD = 0,     // Linear demodulation, i.e., everything else: SSB, CW, DSB, CAM, IQ
   FM_DEMOD,             // Frequency demodulation
   WFM_DEMOD,            // wideband frequency modulation (broadcast)
+  SPECT_DEMOD,          // Spectrum analysis pseudo-demod
 };
 
 struct demodtab {
@@ -100,6 +101,7 @@ struct frontend {
 
 extern struct frontend Frontend; // Only one per radio instance
 
+#if 0
 // Control parameters for demod state block
 struct param {
   pthread_mutex_t mutex;
@@ -136,12 +138,14 @@ struct param {
   // tc = 1 / (2 * M_PI * 300.) = 530.5e-6 sec for NBFM (300 Hz corner freq)
   float rate;
 };
-
+#endif
 
 // Demodulator state block; there can be many of these
 struct demod {
   bool inuse;
-  //  struct param param; // not yet used
+#if 0
+  struct param param; // not yet used
+#endif
 
   int lifetime;          // Remaining lifetime, seconds
   // Tuning parameters
@@ -303,6 +307,7 @@ void *demod_reaper(void *);
 void *demod_fm(void *);
 void *demod_wfm(void *);
 void *demod_linear(void *);
+void *demod_spectrum(void *);
 void *demod_null(void *);
 
 // Send output to multicast streams

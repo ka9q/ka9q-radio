@@ -171,7 +171,7 @@ pcmsend: pcmsend.o libradio.a
 pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
-radiod: main.o audio.o fm.o wfm.o linear.o radio.o rtcp.o radio_status.o modes.o decode_status.o libradio.a
+radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o rtcp.o radio_status.o modes.o decode_status.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lbsd -lm -lpthread
 
 rdsd: rdsd.o libradio.a
@@ -179,7 +179,6 @@ rdsd: rdsd.o libradio.a
 
 sdrplayd: sdrplayd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lsdrplay_api -lavahi-client -lavahi-common -liniparser -lbsd -lm -lpthread
-
 	  
 stereod: stereod.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread

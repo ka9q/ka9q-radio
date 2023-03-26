@@ -1450,6 +1450,8 @@ void display_demodulator(WINDOW *w,struct demod const *demod){
       pprintw(w,row++,col,"Squelch close","%.1f dB  ",power2dB(demod->squelch_close));    
     }
     break;
+  case SPECT_DEMOD:
+    break; // incomplete
   }
 
   if(!isnan(demod->tp1))

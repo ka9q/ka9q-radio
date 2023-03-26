@@ -58,6 +58,8 @@ metadump: metadump.o dump.o libradio.a
 modulate: modulate.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
 
+# should be setuid root to enable renicing to better priority, but this makes me uncomfortable
+# macos doesn't have Linux-style capabilities to enable specific root-like privileges
 monitor: monitor.o morse.o libradio.a
 	$(CC) -g -o $@ $^ -lopus -lportaudio -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread
 
@@ -82,7 +84,7 @@ pcmsend: pcmsend.o libradio.a
 pl: pl.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread    
 
-radiod: main.o radio.o audio.o fm.o wfm.o linear.o radio_status.o modes.o status.o decode_status.o libradio.a
+radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o status.o decode_status.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread
 
 rdsd: rdsd.o libradio.a
@@ -160,7 +162,6 @@ osc.o: osc.c  osc.h misc.h
 rtcp.o: rtcp.c multicast.h
 status.o: status.c status.h misc.h radio.h  multicast.h osc.h filter.h
 
-
 # modules used in only 1 or 2 main programs
 audio.o: audio.c misc.h multicast.h osc.h filter.h radio.h  status.h
 bandplan.o: bandplan.c bandplan.h radio.h  multicast.h osc.h status.h filter.h conf.h
@@ -172,6 +173,7 @@ modes.o: modes.c radio.h osc.h misc.h  multicast.h status.h filter.h
 morse.o: morse.c morse.h
 radio.o: radio.c radio.h osc.h filter.h misc.h  multicast.h status.h
 radio_status.o: radio_status.c status.h radio.h misc.h filter.h multicast.h  osc.h
+spectrum.o: spectrum.c multicast.h misc.h iir.h filter.h radio.h
 wfm.o: wfm.c misc.h filter.h radio.h osc.h multicast.h  status.h iir.h
 
 

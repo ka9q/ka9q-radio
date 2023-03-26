@@ -117,6 +117,11 @@ static int set_defaults(struct demod *demod){
       demod->deemph.rate = expf(-1.0F / (tc * 48000)); // hardwired output sample rate -- needs cleanup
       demod->deemph.gain = dB2voltage(DEFAULT_WFM_DEEMPH_GAIN);
     }
+    break;
+  case SPECT_DEMOD:
+    demod->output.channels = 0;
+    demod->output.samprate = 0;
+    break;
   }
   double r = remainder(Blocktime * demod->output.samprate * .001,1.0);
   if(r != 0){
