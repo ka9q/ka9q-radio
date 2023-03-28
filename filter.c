@@ -81,7 +81,7 @@ void *lmalloc(size_t size);
 //            Must be SIMD-aligned (e.g., allocated with fftw_alloc) and will be freed by delete_filter()
 
 // decimate = input/output sample rate ratio, only tested for powers of 2
-// out_type = REAL, COMPLEX or CROSS_CONJ (COMPLEX with special processing for ISB)
+// out_type = REAL, COMPLEX, CROSS_CONJ (COMPLEX with special processing for ISB) or SPECTRUM (real vector of bin energies)
 
 // All demodulators taking baseband (zero IF) I/Q data require COMPLEX input
 // All but SSB require COMPLEX output, with ISB using the special CROSS_CONJ mode
@@ -207,8 +207,9 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     slave->rev_plan = fftwf_plan_dft_1d(osize,slave->f_fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_PATIENT);
     break;
   case REAL:
+  case SPECTRUM:
     slave->bins = osize / 2 + 1;
-    slave->f_fdomain = lmalloc(sizeof(complex float) * slave->bins);
+    slave->f_fdomain = lmalloc(sizeof(complex float) * slave->bins); // Not really needed for SPECTRUM?
     assert(slave->f_fdomain != NULL);    
     
     slave->output_buffer.r = lmalloc(sizeof(float) * osize);
@@ -382,7 +383,6 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   assert(master->in_type != NONE);
   assert(master->fdomain != NULL);
   assert(slave->f_fdomain != NULL);  
-  assert(slave->response != NULL);
   assert(master->bins > 0);
   assert(slave->bins > 0);
 
@@ -406,11 +406,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 
   assert(fdomain != NULL);
 
-  pthread_mutex_lock(&slave->response_mutex); // Protect access to response[] array
-  assert(malloc_usable_size(slave->response) >= slave->bins * sizeof(*slave->response));
-  assert(malloc_usable_size(slave->f_fdomain) >= slave->bins * sizeof(*slave->f_fdomain));
-
-  // Apply frequency response curve
+  // Copy requested segment of frequency data to output buffer
   // Frequency domain is always complex, but the sizes depend on the time domain input/output being real or complex
   if(master->in_type != REAL && slave->out_type != REAL){    // Complex -> complex
     // Rewritten to avoid modulo computations and complex branches inside loops
@@ -436,8 +432,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
     do {    // At least one master bin is in range
       assert(si >= 0 && si < slave->bins);
       assert(mi >= 0 && mi < master->bins);      
-      slave->f_fdomain[si] = slave->response[si] * fdomain[mi++];
-      si++; // Can't imbed in previous statement; ambiguous
+      slave->f_fdomain[si++] = fdomain[mi++];
       if(mi == master->bins)
 	mi = 0; // Not necessary if it starts positive, and master->bins > slave->bins?
       if(si == slave->bins)
@@ -445,7 +440,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
       if(si == slave->bins/2) 
 	goto mult_done; // All done
     } while(mi != master->bins/2); // Until we hit high end of master
-    for(;si != slave->bins/2;){
+    while(si != slave->bins/2){
       // Above end of master; zero out remainder
       slave->f_fdomain[si++] = 0;
       if(si == slave->bins)
@@ -458,7 +453,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
       int const mi = si + rotate;
       complex float result = 0;
       if(mi >= -master->bins/2 && mi < master->bins/2)
-	result = slave->response[si] * (fdomain[modulo(mi,master->bins)] + conjf(fdomain[modulo(master->bins - mi, master->bins)]));
+	result = (fdomain[modulo(mi,master->bins)] + conjf(fdomain[modulo(master->bins - mi, master->bins)]));
       slave->f_fdomain[si] = result;
     }
   } else if(master->in_type == REAL && slave->out_type == REAL){
@@ -467,7 +462,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
       int const mi = si + rotate;
       complex float result = 0;
       if(mi >= 0 && mi < master->bins)
-	result = slave->response[si] * fdomain[mi];
+	result = fdomain[mi];
 
       slave->f_fdomain[si] = result;
     }
@@ -481,21 +476,21 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
       // Negative half of output
       int mi = rotate - slave->bins/2;
       for(int si = slave->bins/2; si < slave->bins; si++)
-	slave->f_fdomain[si] = slave->response[si] * fdomain[mi++];
+	slave->f_fdomain[si] = fdomain[mi++];
 
       // Positive half of output
       for(int si = 0; si < slave->bins/2; si++)
-	slave->f_fdomain[si] = slave->response[si] * fdomain[mi++];
+	slave->f_fdomain[si] = fdomain[mi++];
     } else if(-rotate >= slave->bins/2 && -rotate <= master->bins - slave->bins/2){
       // Negative input spectrum
       // Negative half of output
       int mi= -(rotate - slave->bins/2);
       for(int si = slave->bins/2; si < slave->bins; si++)
-	slave->f_fdomain[si] = slave->response[si] * conjf(fdomain[mi--]);
+	slave->f_fdomain[si] = conjf(fdomain[mi--]);
 
       // Positive half of output
       for(int si = 0; si < slave->bins/2; si++)
-	slave->f_fdomain[si] = slave->response[si] * conjf(fdomain[mi--]);
+	slave->f_fdomain[si] = conjf(fdomain[mi--]);
     } else {
       // Some of the bins are out of range
       int si = slave->bins/2; // Most negative output frequency
@@ -510,13 +505,13 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 	mi++;
       }
       for(; mi < 0 && i < slave->bins; i++){
-	slave->f_fdomain[si] = slave->response[si] * conjf(fdomain[-mi]); // neg freq component is conjugate of corresponding positive freq      
+	slave->f_fdomain[si] = conjf(fdomain[-mi]); // neg freq component is conjugate of corresponding positive freq      
 	si++;
 	si = (si == slave->bins) ? 0 : si;
 	mi++;
       }
       for(; mi < master->bins && i < slave->bins; i++){
-	slave->f_fdomain[si] = slave->response[si] * fdomain[mi];
+	slave->f_fdomain[si] = fdomain[mi];
 	si++;
 	si = (si == slave->bins) ? 0 : si;
 	mi++;
@@ -531,7 +526,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 	complex float result = 0;
 	if(abs(mi) < master->bins){
 	  // neg freq component is conjugate of corresponding positive freq
-	  result = slave->response[si] * (mi >= 0 ?  fdomain[mi] : conjf(fdomain[-mi]));
+	  result = (mi >= 0 ?  fdomain[mi] : conjf(fdomain[-mi]));
 	}
 	slave->f_fdomain[si] = result;
 	si++;
@@ -543,7 +538,16 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   }
  mult_done:;
 
-  pthread_mutex_unlock(&slave->response_mutex); // release response[]
+  if(slave->response != NULL){
+    assert(malloc_usable_size(slave->response) >= slave->bins * sizeof(*slave->response));
+    assert(malloc_usable_size(slave->f_fdomain) >= slave->bins * sizeof(*slave->f_fdomain));
+
+    pthread_mutex_lock(&slave->response_mutex); // Don't let it change while we're using it
+    for(int i=0; i < slave->bins; i++)
+      slave->f_fdomain[i] *= slave->response[i];
+    pthread_mutex_unlock(&slave->response_mutex); // release response[]
+  }
+
   if(slave->out_type == CROSS_CONJ){
     // hack for ISB; forces negative frequencies onto I, positive onto Q
     assert(malloc_usable_size(slave->f_fdomain) >= slave->bins * sizeof(*slave->f_fdomain));
