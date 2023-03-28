@@ -89,7 +89,7 @@ void free_demod(struct demod **demod){
 // estimate n0 by finding the FFT bin with the least energy
 // in the demod's pre-filter nyquist bandwidth
 // Works better than global estimation when noise floor is not flat
-float estimate_noise(struct demod *demod,int rotate){
+float estimate_noise(struct demod *demod,int shift){
   struct filter_out const * const slave = demod->filter.out;
   if(demod->filter.energies == NULL)
     demod->filter.energies = calloc(sizeof(float),slave->bins);
@@ -98,7 +98,7 @@ float estimate_noise(struct demod *demod,int rotate){
   struct filter_in const * const master = slave->master;
   // slave->next_jobnum already incremented by execute_filter_output
   complex float const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
-  int mbin = rotate - slave->bins/2;
+  int mbin = shift - slave->bins/2;
   float min_bin_energy = INFINITY;
   if(master->in_type == REAL){
     // Only half as many bins as with complex input
@@ -778,53 +778,43 @@ int downconvert(struct demod *demod){
     pthread_mutex_unlock(&Frontend.sdr.status_mutex);
 
     // Reasonable parameters?
-    assert(demod->output.channels == 1 || demod->output.channels == 2);
     assert(isfinite(demod->tune.doppler_rate));
     assert(isfinite(demod->tune.shift));
-    assert(isfinite(demod->output.headroom));
-    assert(demod->output.headroom > 0);
-    assert(isfinite(demod->linear.hangtime));
-    assert(demod->linear.hangtime >= 0);
-    assert(isfinite(demod->linear.recovery_rate));
-    assert(demod->linear.recovery_rate > 1);
-    assert(isfinite(demod->output.gain));
-    assert(demod->output.gain > 0);
-    assert(isfinite(demod->linear.threshold));
-    assert(demod->linear.threshold >= 0);
-    assert(isfinite(demod->linear.loop_bw));
-    assert(demod->linear.loop_bw > 0);
 
 #if 0
     demod->tp1 = shift;
     demod->tp2 = remainder;
 #endif
 
-    // set fine tuning frequency & phase. Do before execute_filter blocks (can't remember why)
-    if(remainder != demod->filter.remainder){
-      set_osc(&demod->fine,remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate));
-      demod->filter.remainder = remainder;
-    }
+    // output filter and fine tuning osc not used in spectrum analysis mode
+    if(demod->filter.out != NULL){
+      // set fine tuning frequency & phase. Do before execute_filter blocks (can't remember why)
+      if(remainder != demod->filter.remainder){
+	set_osc(&demod->fine,remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate));
+	demod->filter.remainder = remainder;
+      }
 
-    // Block phase adjustment (folded into the fine tuning osc) is in two parts:
-    // (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
-    // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
-    if(shift != demod->filter.bin_shift){
-      const int V = 1 + (Frontend.in->ilen / (Frontend.in->impulse_length - 1)); // Overlap factor
-      demod->filter.phase_adjust = cispi(-2.0f*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
-      demod->fine.phasor *= cispi((shift - demod->filter.bin_shift) / (2.0f * (V-1))); // One time adjust for shift change
-      demod->filter.bin_shift = shift;
+      // Block phase adjustment (folded into the fine tuning osc) in two parts:
+      // (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
+      // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
+      if(shift != demod->filter.bin_shift){
+	const int V = 1 + (Frontend.in->ilen / (Frontend.in->impulse_length - 1)); // Overlap factor
+	demod->filter.phase_adjust = cispi(-2.0f*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
+	demod->fine.phasor *= cispi((shift - demod->filter.bin_shift) / (2.0f * (V-1))); // One time adjust for shift change
+      }
+      demod->fine.phasor *= demod->filter.phase_adjust;
+      execute_filter_output(demod->filter.out,-shift); // block until new data frame
+      
+      const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
+      complex float * const buffer = demod->filter.out->output.c; // Working buffer
+      float energy = 0;
+      for(int n=0; n < N; n++){
+	buffer[n] *= step_osc(&demod->fine);
+	energy += cnrmf(buffer[n]);
+      }
+      demod->sig.bb_power = energy / N;
     }
-    demod->fine.phasor *= demod->filter.phase_adjust;
-    execute_filter_output(demod->filter.out,-shift); // block until new data frame
+    demod->filter.bin_shift = shift; // We need this in any case
     demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
-
-    const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
-    complex float * const buffer = demod->filter.out->output.c; // Working buffer
-    float energy = 0;
-    for(int n=0; n < N; n++){
-      buffer[n] *= step_osc(&demod->fine);
-      energy += cnrmf(buffer[n]);
-    }
-    demod->sig.bb_power = energy / N;
     return 0;
 }
