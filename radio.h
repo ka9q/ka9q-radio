@@ -173,7 +173,7 @@ struct demod {
     complex double phase_adjust; // Block rotation of phase
   } filter;
 
-  enum demod_type demod_type;  // Index into demodulator table (AM, FM, Linear)
+  enum demod_type demod_type;  // Index into demodulator table (Linear, FM, FM Stereo, Spectrum)
   char preset[32];       // name of last mode preset
 
   struct {               // Used only in linear demodulator
@@ -217,6 +217,16 @@ struct demod {
     float tone_deviation; // Measured deviation of tone
     bool threshold;       // Threshold extension
   } fm;
+
+  // Used by spectrum analysis only
+  // Coherent bin bandwidth = block rate in Hz
+  // Coherent bin spacing = block rate * 1 - ((M-1)/(L+M-1))
+  struct {
+    float bin_bw;     // Requested bandwidth (hz) of noncoherent integration bin
+    int bin_count;    // Requested bin count
+    float integrate_time; // Noncoherent integration time, s, some multiple of block rate
+    float *bin_data;  // Array of real floats with bin_count elements
+  } spectrum;
 
   // Output
   struct {
@@ -271,7 +281,7 @@ extern int Ctl_fd;     // File descriptor for receiving user commands
 
 extern char const *Modefile;
 extern int Verbose;
-extern float Blocktime; // Common to all receiver slices
+extern float Blocktime; // Common to all receiver slices. NB! Milliseconds, not seconds
 extern uint64_t Metadata_packets;
 extern uint64_t Commands;
 extern uint32_t Command_tag; // Echoed in responses to commands (settable)
