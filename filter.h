@@ -18,12 +18,13 @@ extern char const *Wisdom_file;
 extern int Nthreads;
 
 // Input can be REAL or COMPLEX
-// Output can be REAL, COMPLEX or CROSS_CONJ, i.e., COMPLEX with special cross conjugation for ISB
+// Output can be REAL, COMPLEX, CROSS_CONJ, i.e., COMPLEX with special cross conjugation for ISB, or SPECTRUM (noncoherent power)
 enum filtertype {
   NONE,
   COMPLEX,
   CROSS_CONJ,
   REAL,
+  SPECTRUM,
 };
 
 // Input and output arrays can be either complex or real
