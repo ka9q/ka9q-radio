@@ -461,8 +461,6 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   }
   // Mode-specific params
   switch(demod->demod_type){
-  default:
-    ;
   case LINEAR_DEMOD:
     encode_byte(&bp,PLL_ENABLE,demod->linear.pll); // bool
     if(demod->linear.pll){
@@ -492,6 +490,20 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_float(&bp,DEEMPH_TC,-1.0/(logf(demod->deemph.rate) * demod->output.samprate));
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(demod->deemph.gain));
     break;
+  case SPECT_DEMOD:
+    {
+      float blockrate = 1000.0f / Blocktime; // Hz
+      encode_float(&bp,COHERENT_BIN_BW,blockrate);
+      int N = Frontend.L + Frontend.M - 1;
+      float spacing = (1 - (float)(Frontend.M-1)/N) * blockrate; // Hz
+      encode_float(&bp,COHERENT_BIN_SPACING, spacing);
+      encode_float(&bp,NONCOHERENT_BIN_BW,demod->spectrum.bin_bw); // Hz
+      encode_int(&bp,BIN_COUNT,demod->spectrum.bin_count);
+      encode_float(&bp,INTEGRATE_TIME,demod->spectrum.integrate_time); // sec
+      // encode bin data here?
+    }
+    break;
+
   }
   // Don't send test points unless they're in use
   if(!isnan(demod->tp1))
