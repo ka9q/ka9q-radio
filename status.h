@@ -68,7 +68,7 @@ enum status_type {
   NOISE_DENSITY,
 
   // Demodulation configuration
-  DEMOD_TYPE, // 0 = linear (default), 1 = FM
+  DEMOD_TYPE, // 0 = linear (default), 1 = FM, 2 = WFM/Stereo, 3 = spectrum
   OUTPUT_CHANNELS, // 1 or 2 in Linear, otherwise 1
   INDEPENDENT_SIDEBAND, // Linear only
   PLL_ENABLE,
@@ -120,6 +120,14 @@ enum status_type {
   CONVERTER_OFFSET, // Frequency converter shift (if present)
   PL_DEVIATION,     // Measured PL tone deviation, Hz (FM only)
   THRESH_EXTEND,    // threshold extension enable (FM only)
+
+  // Spectral analysis
+  COHERENT_BIN_BW,  // block rate in Hz
+  COHERENT_BIN_SPACING, // (1-overlap) * block rate = (1 - ((M-1)/(L+M-1))) * block rate
+  NONCOHERENT_BIN_BW, // Bandwidth (Hz) of noncoherent integration bin, some multiple of COHERENT_BIN_SPACING
+  BIN_COUNT,        // Integer number of bins accumulating energy noncoherently
+  INTEGRATE_TIME,   // Time (sec) to accumulate energy noncoherently, some multiple of block time
+  BIN_DATA,         // Vector of relative bin energies, real (I^2 + Q^2)
 
 };
 
