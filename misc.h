@@ -118,7 +118,7 @@ double parse_frequency(const char *);
 uint32_t nextfastfft(uint32_t n);
 int pipefill(int,void *,int);
 void chomp(char *);
-uint32_t ElfHash(unsigned char const *s,int length);
+uint32_t ElfHash(uint8_t const *s,int length);
 uint32_t ElfHashString(char const *s);
 void *avahi_start(char const *service_name,char const *service_type,int service_port,char const *dns_name,int base_address,char const *description);
 

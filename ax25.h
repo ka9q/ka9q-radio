@@ -29,10 +29,10 @@ struct ax25_frame {
 };
 
 
-int ax25_parse(struct ax25_frame *out,unsigned char const *in,int len);
-int dump_frame(FILE *stream,unsigned char *frame,int bytes);
-int crc_good(unsigned char *frame,int length);
-char *get_callsign(char *result,unsigned char const *in);
+int ax25_parse(struct ax25_frame *out,uint8_t const *in,int len);
+int dump_frame(FILE *stream,uint8_t *frame,int bytes);
+int crc_good(uint8_t *frame,int length);
+char *get_callsign(char *result,uint8_t const *in);
 int decode_base91(char *in);
 
 #endif

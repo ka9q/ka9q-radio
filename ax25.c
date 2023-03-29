@@ -13,7 +13,7 @@
 
 // Retrieve callsign field from AX.25 header
 // return pointer to string of form "KA9Q-11" in user-provided buffer which must be at least 10 bytes long
-char *get_callsign(char *result,unsigned char const *in){
+char *get_callsign(char *result,uint8_t const *in){
   char callsign[7],c;
   
   memset(callsign,0,sizeof(callsign));
@@ -36,10 +36,10 @@ char *get_callsign(char *result,unsigned char const *in){
 // show currently transmitting station in UPPER CASE
 // show type and control field
 // dump entire frame in hex/ascii
-int dump_frame(FILE *stream,unsigned char *frame,int bytes){
+int dump_frame(FILE *stream,uint8_t *frame,int bytes){
 
   // By default, no digipeaters; will update if there are any
-  unsigned char *control = frame + 14;
+  uint8_t *control = frame + 14;
 
   // Source address
   // Is this the transmitter?
@@ -138,12 +138,12 @@ int dump_frame(FILE *stream,unsigned char *frame,int bytes){
 
 // Check 16-bit AX.25 standard CRC-CCITT on frame
 // return 1 if good, 0 otherwise
-int crc_good(unsigned char *frame,int length){
+int crc_good(uint8_t *frame,int length){
   unsigned int const crc_poly = 0x8408;
 	
   uint16_t crc = 0xffff;
   while(length-- > 0){
-    unsigned char byte = *frame++;
+    uint8_t byte = *frame++;
     for(int i=0; i < 8; i++){
       uint16_t feedback = 0;
       if((crc ^ byte) & 1)
@@ -166,7 +166,7 @@ int decode_base91(char *in){
 }
 
 // Break an incoming AX.25 frame into its parts
-int ax25_parse(struct ax25_frame *out,unsigned char const *in,int len){
+int ax25_parse(struct ax25_frame *out,uint8_t const *in,int len){
   if(len < 16) // Frame length NOT including CRC
     return -1; // Too short
 

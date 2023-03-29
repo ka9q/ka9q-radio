@@ -302,7 +302,7 @@ int init_demod_streams(struct demod * restrict demod);
 double set_first_LO(struct demod const * restrict, double);
 float estimate_noise(struct demod *demod,int shift);
 int downconvert(struct demod *demod);
-int decode_fe_status(struct frontend *frontend,unsigned char const *buffer,int length);
+int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length);
 
 // Helper threads
 void *proc_samples(void *);

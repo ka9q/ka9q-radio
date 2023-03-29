@@ -57,7 +57,7 @@ void *sdr_status(void *arg){
     }
     if(FD_ISSET(frontend->input.status_fd,&fdset)){
       // Status Update from SDR
-      unsigned char buffer[8192];
+      uint8_t buffer[8192];
       socklen_t socklen = sizeof(frontend->input.metadata_source_address);
       int const len = recvfrom(frontend->input.status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&frontend->input.metadata_source_address,&socklen);
       if(len <= 0){
@@ -85,8 +85,8 @@ void *sdr_status(void *arg){
 
 // Decode status messages from front end
 // Used by both radio and control
-int decode_fe_status(struct frontend *frontend,unsigned char const *buffer,int length){
-  unsigned char const *cp = buffer;
+int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length){
+  uint8_t const *cp = buffer;
   while(cp - buffer < length){
     enum status_type const type = *cp++; // increment cp to length field
 

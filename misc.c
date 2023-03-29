@@ -9,6 +9,7 @@
 #include <math.h>
 #include <assert.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
@@ -61,7 +62,7 @@ int dist_path(char *path,int path_len,const char *fname){
 // Needed because reads from a pipe can be partial
 int pipefill(int const fd,void *buffer,int const cnt){
   int i;
-  unsigned char *bp = buffer;
+  uint8_t *bp = buffer;
   for(i=0;i<cnt;){
     int n = read(fd,bp+i,cnt-i);
     if(n < 0)
@@ -388,7 +389,7 @@ float fm_snr(float r){
 
 // Simple non-crypto hash function
 // Adapted from https://en.wikipedia.org/wiki/PJW_hash_function
-uint32_t ElfHash(const unsigned char *s,int length){
+uint32_t ElfHash(const uint8_t *s,int length){
     uint32_t h = 0;
     while(length-- > 0){
         h = (h << 4) + *s++;
@@ -401,7 +402,7 @@ uint32_t ElfHash(const unsigned char *s,int length){
     return h;
 }
 uint32_t ElfHashString(const char *s){
-  return ElfHash((unsigned char *)s,strlen(s));
+  return ElfHash((uint8_t *)s,strlen(s));
 }
 
 
