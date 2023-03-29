@@ -58,7 +58,7 @@ struct filter_out {
   enum filtertype out_type;          // REAL, COMPLEX or CROSS_CONJ
   int olen;                          // Length of user portion of output buffer (decimated L)
   int bins;                          // Number of frequency bins; == N for complex, == N/2 + 1 for real output
-  complex float * restrict f_fdomain;          // Filtered signal in frequency domain
+  complex float * restrict fdomain;          // Filtered signal in frequency domain
   complex float * restrict response;           // Filter response in frequency domain
   pthread_mutex_t response_mutex;
   struct rc output_buffer;           // Actual time-domain output buffer, length N/decimate

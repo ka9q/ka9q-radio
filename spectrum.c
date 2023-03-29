@@ -64,7 +64,7 @@ void *demod_spectrum(void *arg){
     // Need to break out early for partial tuner coverage *****
     for(int i=0; i < demod->spectrum.bin_count; i++){ // For each noncoherent integration bin
       for(int j=0; j < binsperbin; j++){ // Add energy of each fft bin part of this integration bin
-	demod->spectrum.bin_data[i] += cnrmf(demod->filter.out->f_fdomain[startbin + j*binsperbin]);
+	demod->spectrum.bin_data[i] += cnrmf(demod->filter.out->fdomain[startbin + j*binsperbin]);
       }
     }
     if(++integration_counter >= integration_limit){
