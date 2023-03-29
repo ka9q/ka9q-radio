@@ -3,6 +3,7 @@
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <limits.h>
 #include <pthread.h>
@@ -34,8 +35,8 @@ extern dictionary const *Modetable;
 
 
 static int send_radio_status(struct frontend const *frontend,struct demod const *demod,int full);
-static int decode_radio_commands(struct demod *demod,unsigned char const *buffer,int length);
-static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,unsigned char *packet, int len);
+static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int length);
+static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,uint8_t *packet, int len);
 
   
 // Radio status reception and transmission thread
@@ -60,7 +61,7 @@ void *radio_status(void *arg){
 #endif
   while(1){
     // Command from user
-    unsigned char buffer[8192];
+    uint8_t buffer[8192];
     int const length = recv(Ctl_fd,buffer,sizeof(buffer),0);
     if(length <= 0 || buffer[0] == 0)
       continue; // short packet, or a response; ignore
@@ -120,7 +121,7 @@ void *radio_status(void *arg){
 }
 
 static int send_radio_status(struct frontend const *frontend,struct demod const *demod,int full){
-  unsigned char packet[2048];
+  uint8_t packet[2048];
 
   Metadata_packets++;
   int const len = encode_radio_status(frontend,demod,packet,sizeof(packet));
@@ -135,11 +136,11 @@ static int send_radio_status(struct frontend const *frontend,struct demod const 
 // cmd == 1 means this is a command, only allow certain items
 
 // with SSRC selection, should scan entire command for our SSRC before we execute any of it
-static int decode_radio_commands(struct demod *demod,unsigned char const *buffer,int length){
+static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int length){
   int restart_needed = 0;
   int new_filter_needed = 0;
   
-  unsigned char const *cp = buffer;
+  uint8_t const *cp = buffer;
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
 
@@ -373,9 +374,9 @@ static int decode_radio_commands(struct demod *demod,unsigned char const *buffer
 // Encode contents of frontend and demod structures as command or status packet
 // packet argument must be long enough!!
 // Convert values from internal to engineering units
-static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,unsigned char *packet, int len){
+static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,uint8_t *packet, int len){
   memset(packet,0,len);
-  unsigned char *bp = packet;
+  uint8_t *bp = packet;
 
   *bp++ = 0; // 0 = status, 1 = command
 

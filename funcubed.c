@@ -13,6 +13,7 @@
 #include <math.h>
 #include <complex.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdarg.h>
 #include <portaudio.h>
 #include <sys/types.h>
@@ -131,7 +132,7 @@ uint64_t Commands;
 FILE *Tunestate;
 
 
-void decode_fcd_commands(struct sdrstate *, unsigned char const *,int);
+void decode_fcd_commands(struct sdrstate *, uint8_t const *,int);
 void send_fcd_status(struct sdrstate const *,int);
 void do_fcd_agc(struct sdrstate *);
 void readback(struct sdrstate *);
@@ -405,8 +406,8 @@ int main(int argc,char *argv[]){
     rtp.timestamp = Rtp.timestamp;
 
     // Space for the samples (stereo 16-bit samples) + RTP header
-    unsigned char buffer[Blocksize * 2 * sizeof(int16_t) + 100]; // Pick a better value
-    unsigned char *dp = buffer;
+    uint8_t buffer[Blocksize * 2 * sizeof(int16_t) + 100]; // Pick a better value
+    uint8_t *dp = buffer;
 
     dp = hton_rtp(dp,&rtp);
     int16_t *sampbuf = (int16_t *)dp;
@@ -545,7 +546,7 @@ void *ncmd(void *arg){
   }
   int counter = 0;
   while(1){
-    unsigned char buffer[Bufsize];
+    uint8_t buffer[Bufsize];
     int const length = recv(Nctl_sock,buffer,sizeof(buffer),0); // Waits up to 100 ms for command
     if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),Device)) == NULL){
       fprintf(stdout,"can't re-open control port: %s\n",strerror(errno));
@@ -621,8 +622,8 @@ void *display(void *arg){
 }
 
 
-void decode_fcd_commands(struct sdrstate *sdr, unsigned char const *buffer,int length){
-  unsigned char const *cp = buffer;
+void decode_fcd_commands(struct sdrstate *sdr, uint8_t const *buffer,int length){
+  uint8_t const *cp = buffer;
 
   while(cp - buffer < length){
     enum status_type const type = *cp++; // increment cp to length field
@@ -665,14 +666,14 @@ void decode_fcd_commands(struct sdrstate *sdr, unsigned char const *buffer,int l
     case LNA_GAIN:
       sdr->lna_gain = decode_int(cp,optlen);
       {
-	unsigned char val = sdr->lna_gain ? 1 : 0;
+	uint8_t val = sdr->lna_gain ? 1 : 0;
 	fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
       }
       break;
     case MIXER_GAIN:
       sdr->mixer_gain = decode_int(cp,optlen);
       {
-	unsigned char val = sdr->mixer_gain ? 1 : 0;
+	uint8_t val = sdr->mixer_gain ? 1 : 0;
 	fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
       }
       break;
@@ -691,9 +692,9 @@ void decode_fcd_commands(struct sdrstate *sdr, unsigned char const *buffer,int l
 }
 
 void send_fcd_status(struct sdrstate const *sdr,int full){
-  unsigned char packet[2048];
+  uint8_t packet[2048];
   memset(packet,0,sizeof(packet));
-  unsigned char *bp = packet;
+  uint8_t *bp = packet;
   
   *bp++ = 0; // command/response = response
   encode_int32(&bp,COMMAND_TAG,sdr->command_tag);
@@ -749,7 +750,7 @@ void send_fcd_status(struct sdrstate const *sdr,int full){
 
 void readback(struct sdrstate *sdr){
   // Read back FCD state every iteration, whether or not we processed a command, just in case it was set by another program
-  unsigned char val;
+  uint8_t val;
   fcdAppGetParam(sdr->phd,FCD_CMD_APP_GET_LNA_GAIN,&val,sizeof(val));
   if(val){
     if(sdr->intfreq >= 420000000)
@@ -765,7 +766,7 @@ void readback(struct sdrstate *sdr){
   fcdAppGetParam(sdr->phd,FCD_CMD_APP_GET_IF_GAIN1,&val,sizeof(val));
   sdr->if_gain = val;
   
-  fcdAppGetParam(sdr->phd,FCD_CMD_APP_GET_FREQ_HZ,(unsigned char *)&sdr->intfreq,sizeof(sdr->intfreq));
+  fcdAppGetParam(sdr->phd,FCD_CMD_APP_GET_FREQ_HZ,(uint8_t *)&sdr->intfreq,sizeof(sdr->intfreq));
   sdr->frequency = fcd_actual(sdr->intfreq) * (1 + sdr->calibration);
 }
 static int front_end_init(struct sdrstate *sdr,int device,int L){
@@ -838,26 +839,26 @@ void do_fcd_agc(struct sdrstate *sdr){
   if(powerdB > AGC_upper){
     if(sdr->if_gain > 0){
       // Decrease gain in 10 dB steps, down to 0
-      unsigned char val = sdr->if_gain = max(0,sdr->if_gain - 10);
+      uint8_t val = sdr->if_gain = max(0,sdr->if_gain - 10);
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_IF_GAIN1,&val,sizeof(val));
     } else if(sdr->mixer_gain){
-      unsigned char val = sdr->mixer_gain = 0;
+      uint8_t val = sdr->mixer_gain = 0;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
     } else if(sdr->lna_gain){
-      unsigned char val = sdr->lna_gain = 0;
+      uint8_t val = sdr->lna_gain = 0;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
     }
   } else if(powerdB < AGC_lower){
     if(sdr->lna_gain == 0){
       sdr->lna_gain = 24;
-      unsigned char val = 1;
+      uint8_t val = 1;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
     } else if(sdr->mixer_gain == 0){
       sdr->mixer_gain = 19;
-      unsigned char val = 1;
+      uint8_t val = 1;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
     } else if(sdr->if_gain < 20){ // Limit to 20 dB - seems enough to keep A/D going even on noise
-      unsigned char val = sdr->if_gain = min(20,sdr->if_gain + 10);
+      uint8_t val = sdr->if_gain = min(20,sdr->if_gain + 10);
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_IF_GAIN1,&val,sizeof(val));
     }
   }

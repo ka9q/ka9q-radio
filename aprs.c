@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -206,12 +207,12 @@ int main(int argc,char *argv[]){
 	    Mcast_address_text);
     exit(1);
   }
-  unsigned char packet[2048];
+  uint8_t packet[2048];
   int size;
 
   while((size = recv(Input_fd,packet,sizeof(packet),0)) > 0){
     struct rtp_header rtp_header;
-    unsigned char const *dp = packet;
+    uint8_t const *dp = packet;
 
     dp = ntoh_rtp(&rtp_header,dp);
     size -= dp - packet;

@@ -6,6 +6,7 @@
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <string.h>
 #if defined(linux)
@@ -20,7 +21,7 @@
 #include "status.h"
 
 char Locale[256] = "en_US.UTF-8";
-int decode_rtp_status(unsigned char const *buffer,int length);
+int decode_rtp_status(uint8_t const *buffer,int length);
 
 
 const char *App_path;
@@ -133,7 +134,7 @@ int main(int argc,char *argv[]){
 
     if(FD_ISSET(Radio_fd,&fdset)){
       // Message from the radio program
-      unsigned char buffer[8192];
+      uint8_t buffer[8192];
       memset(buffer,0,sizeof(buffer));
       socklen_t ssize = sizeof(Output_metadata_source_address);
       int length = recvfrom(Radio_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Output_metadata_source_address,&ssize);
@@ -229,8 +230,8 @@ void doscreen(void){
 
 
 // Decode incoming status message from the radio program
-int decode_rtp_status(unsigned char const *buffer,int length){
-  unsigned char const *cp = buffer;
+int decode_rtp_status(uint8_t const *buffer,int length){
+  uint8_t const *cp = buffer;
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
 

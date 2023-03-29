@@ -72,8 +72,8 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
     rtp_state->packets++;
     rtp_state->bytes += sizeof(samples[0]) * chunk;
     
-    unsigned char encoded_rtp_header[128]; // longer than any possible RTP header?
-    int const encoded_rtp_header_size = (unsigned char *)hton_rtp(encoded_rtp_header,&rtp) - encoded_rtp_header;
+    uint8_t encoded_rtp_header[128]; // longer than any possible RTP header?
+    int const encoded_rtp_header_size = (uint8_t *)hton_rtp(encoded_rtp_header,&rtp) - encoded_rtp_header;
 
     iovec[0].iov_base = &encoded_rtp_header;
     iovec[0].iov_len = encoded_rtp_header_size;

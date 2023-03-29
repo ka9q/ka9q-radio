@@ -230,7 +230,7 @@ void input_loop(){
       }
     }
     if(FD_ISSET(Input_fd,&fdset)){
-      unsigned char buffer[MAXPKT];
+      uint8_t buffer[MAXPKT];
       socklen_t socksize = sizeof(Sender);
       int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
 
@@ -245,7 +245,7 @@ void input_loop(){
       if(size < RTP_MIN_SIZE)
 	continue; // Too small for RTP, ignore
       
-      unsigned char const * dp = buffer;
+      uint8_t const * dp = buffer;
       struct rtp_header rtp;
       dp = ntoh_rtp(&rtp,dp);
       if(rtp.pad){

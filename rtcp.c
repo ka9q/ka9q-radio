@@ -3,11 +3,12 @@
 // Sep 2018 Phil Karn, KA9Q
 #include <sys/types.h>
 #include <string.h>
+#include <stdint.h>
 #include "multicast.h"
 
 // Build a RTCP sender report in network order
 // Return pointer to byte after end of written packet
-unsigned char *gen_sr(unsigned char *output,int bufsize,struct rtcp_sr const *sr,struct rtcp_rr const *rr,int rc){
+uint8_t *gen_sr(uint8_t *output,int bufsize,struct rtcp_sr const *sr,struct rtcp_rr const *rr,int rc){
 
   int words = 1 + 6 + 6*rc;
 
@@ -42,7 +43,7 @@ unsigned char *gen_sr(unsigned char *output,int bufsize,struct rtcp_sr const *sr
 }
 // Build a RTCP receiver report in network order
 // Return pointer to byte after end of written packet
-unsigned char *gen_rr(unsigned char *output,int bufsize,uint32_t ssrc,struct rtcp_rr const *rr,int rc){
+uint8_t *gen_rr(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_rr const *rr,int rc){
 
   int words = 2 + 6*rc;
 
@@ -72,7 +73,7 @@ unsigned char *gen_rr(unsigned char *output,int bufsize,uint32_t ssrc,struct rtc
 
 // Build a RTCP source description packet in network order
 // Return pointer to byte after end of written packet
-unsigned char *gen_sdes(unsigned char *output,int bufsize,uint32_t ssrc,struct rtcp_sdes const *sdes,int sc){
+uint8_t *gen_sdes(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_sdes const *sdes,int sc){
   
   if(sc < 0 || sc > 31) // Range check on source count
     return NULL;
@@ -91,7 +92,7 @@ unsigned char *gen_sdes(unsigned char *output,int bufsize,uint32_t ssrc,struct r
     return NULL;
 
   memset(output,0,bufsize); // easist way to guarantee nulls at end
-  unsigned char *dp = output;
+  uint8_t *dp = output;
 
   *dp++ = (2 << 6) | 1; // Only one chunk per message at present
   *dp++ = 202; // SDES
@@ -108,7 +109,7 @@ unsigned char *gen_sdes(unsigned char *output,int bufsize,uint32_t ssrc,struct r
   return output + words*4;
 }
 
-unsigned char *gen_bye(unsigned char *output,int bufsize,uint32_t const *ssrcs,int sc){
+uint8_t *gen_bye(uint8_t *output,int bufsize,uint32_t const *ssrcs,int sc){
   if(sc < 0 || sc > 31) // Range check on source count
     return NULL;
 

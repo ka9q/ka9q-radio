@@ -9,6 +9,7 @@
 #include <complex.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -126,7 +127,7 @@ uint8_t airspy_sensitivity_lna_gains[GAIN_COUNT] = {   14, 14, 14, 14, 14, 14, 1
 
 
 double set_correct_freq(struct sdrstate *sdr,double freq);
-void decode_airspy_commands(struct sdrstate *,unsigned char *,int);
+void decode_airspy_commands(struct sdrstate *,uint8_t *,int);
 void send_airspy_status(struct sdrstate *,int);
 int rx_callback(airspy_transfer *transfer);
 void *display(void *);
@@ -524,7 +525,7 @@ void *ncmd(void *arg){
     return NULL; // Nothing to do
 
   while(1){
-    unsigned char buffer[Bufsize];
+    uint8_t buffer[Bufsize];
     int const length = recv(sdr->nctl_sock,buffer,sizeof(buffer),0);
     if(length > 0){
       // Parse entries
@@ -570,8 +571,8 @@ void *display(void *arg){
   return NULL;
 }
 
-void decode_airspy_commands(struct sdrstate *sdr,unsigned char *buffer,int length){
-  unsigned char *cp = buffer;
+void decode_airspy_commands(struct sdrstate *sdr,uint8_t *buffer,int length){
+  uint8_t *cp = buffer;
 
   while(cp - buffer < length){
     int ret __attribute__((unused)); // Won't be used when asserts are disabled
@@ -624,7 +625,7 @@ void decode_airspy_commands(struct sdrstate *sdr,unsigned char *buffer,int lengt
 void send_airspy_status(struct sdrstate *sdr,int full){
   sdr->output_metadata_packets++;
 
-  unsigned char packet[2048],*bp;
+  uint8_t packet[2048],*bp;
   bp = packet;
   
   *bp++ = 0;   // Command/response = response

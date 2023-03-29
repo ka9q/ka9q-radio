@@ -215,8 +215,8 @@ int main(int argc,char * const argv[]){
     rtp_hdr.ssrc = rtp_state_out.ssrc;
     rtp_hdr.timestamp = rtp_state_out.timestamp;
 
-    unsigned char buffer[16384]; // Pick better number
-    unsigned char *dp = buffer;
+    uint8_t buffer[16384]; // Pick better number
+    uint8_t *dp = buffer;
     dp = hton_rtp(dp,&rtp_hdr);
     int16_t *samples = (int16_t *)dp;
     for(int i=0; i < Channels * FRAMESIZE; i++){

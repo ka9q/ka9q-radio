@@ -186,7 +186,7 @@ int main(int argc,char * const argv[]){
       continue; // Must be big enough for RTP header and at least some data
     
     // Extract and convert RTP header to host format
-    unsigned char const *dp = ntoh_rtp(&pkt->rtp,pkt->content);
+    uint8_t const *dp = ntoh_rtp(&pkt->rtp,pkt->content);
     pkt->data = dp;
     pkt->len = size - (dp - pkt->content);
     if(pkt->rtp.pad){
@@ -289,7 +289,7 @@ void * status(void *p){
 
   while(1){
     socklen_t socklen = sizeof(Status_input_source_address);
-    unsigned char buffer[16384];
+    uint8_t buffer[16384];
     int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
     if(length <= 0){
       if(errno == EAGAIN || errno == ETIMEDOUT)
@@ -306,7 +306,7 @@ void * status(void *p){
     if(buffer[0] == 1){
     } else {
       // Parse radio status for PCM output socket
-      unsigned char const *cp = buffer+1;
+      uint8_t const *cp = buffer+1;
 
       while(cp - buffer < length){
 	enum status_type const type = *cp++;

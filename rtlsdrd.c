@@ -150,10 +150,10 @@ static struct option Options[] =
 static char const Optstring[] = "A:D:I:LR:S:T:abc:f:hp:r:t:v";
 
 double set_correct_freq(struct sdrstate *sdr,double freq);
-void decode_rtlsdr_commands(struct sdrstate *,unsigned char *,int);
+void decode_rtlsdr_commands(struct sdrstate *,uint8_t *,int);
 void send_rtlsdr_status(struct sdrstate *,int);
 void do_rtlsdr_agc(struct sdrstate *);
-void rx_callback(unsigned char *buf,uint32_t len, void *ctx);
+void rx_callback(uint8_t *buf,uint32_t len, void *ctx);
 void *display(void *);
 void *ncmd(void *);
 double true_freq(uint64_t freq);
@@ -403,7 +403,7 @@ void *ncmd(void *arg){
 
   int counter = 0;
   while(1){
-    unsigned char buffer[Bufsize];
+    uint8_t buffer[Bufsize];
     memset(buffer,0,sizeof(buffer));
     struct timeval tv;
     tv.tv_sec = 0;
@@ -417,7 +417,7 @@ void *ncmd(void *arg){
     int length = recv(sdr->nctl_sock,buffer,sizeof(buffer),0);
     if(length > 0){
       // Parse entries
-      unsigned char *cp = buffer;
+      uint8_t *cp = buffer;
 
       int cr = *cp++; // Command/response
       if(cr == 0)
@@ -472,8 +472,8 @@ void *display(void *arg){
   return NULL;
 }
 
-void decode_rtlsdr_commands(struct sdrstate *sdr,unsigned char *buffer,int length){
-  unsigned char *cp = buffer;
+void decode_rtlsdr_commands(struct sdrstate *sdr,uint8_t *buffer,int length){
+  uint8_t *cp = buffer;
 
 
   while(cp - buffer < length){
@@ -510,7 +510,7 @@ void decode_rtlsdr_commands(struct sdrstate *sdr,unsigned char *buffer,int lengt
 }  
 
 void send_rtlsdr_status(struct sdrstate *sdr,int full){
-  unsigned char packet[2048],*bp;
+  uint8_t packet[2048],*bp;
   memset(packet,0,sizeof(packet));
   bp = packet;
   
@@ -560,7 +560,7 @@ void send_rtlsdr_status(struct sdrstate *sdr,int full){
 
 
 // Callback called with incoming receiver data from A/D
-void rx_callback(unsigned char *buf, uint32_t len, void *ctx){
+void rx_callback(uint8_t *buf, uint32_t len, void *ctx){
   int samples = len;
   uint8_t *idp = (uint8_t *)buf;
   uint64_t output_energy = 0;
@@ -578,8 +578,8 @@ void rx_callback(unsigned char *buf, uint32_t len, void *ctx){
     rtp.seq = sdr->rtp.seq++;
     rtp.timestamp = sdr->rtp.timestamp;
     
-    unsigned char buffer[Bufsize];
-    unsigned char *dp = buffer;
+    uint8_t buffer[Bufsize];
+    uint8_t *dp = buffer;
     
     dp = hton_rtp(dp,&rtp);
     

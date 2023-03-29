@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <getopt.h>
 #include <unistd.h>
 #if defined(linux)
@@ -103,8 +104,8 @@ int main(int argc,char *argv[]){
       low = high;
       high = t;
     }
-    unsigned char buffer[8192];
-    unsigned char *bp = buffer;
+    uint8_t buffer[8192];
+    uint8_t *bp = buffer;
     
     *bp++ = 1; // Generate command packet
     sent_tag = random();
@@ -118,7 +119,7 @@ int main(int argc,char *argv[]){
   }
   // Read and process status
   for(;;){
-    unsigned char buffer[8192];
+    uint8_t buffer[8192];
     int length = recvfrom(Status_sock,buffer,sizeof(buffer),0,NULL,NULL);
     if(length <= 0){
       fprintf(stderr,"recvfrom status socket error: %s\n",strerror(errno));
@@ -127,7 +128,7 @@ int main(int argc,char *argv[]){
     }
     // We could check the source address here, but we have no way of verifying it.
     // But there should only be one host sending status to this group anyway
-    unsigned char const * cp = buffer;
+    uint8_t const * cp = buffer;
     if(*cp++ != 0)
       continue; // Look only at status packets
 

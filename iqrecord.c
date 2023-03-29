@@ -192,7 +192,7 @@ int main(int argc,char *argv[]){
 
   while(!isfinite(Duration) || t < Duration){
     // Receive I/Q data from front end
-    unsigned char buffer[MAXPKT];
+    uint8_t buffer[MAXPKT];
     socklen_t socksize = sizeof(Sender);
     int size = recvfrom(Frontend.input.data_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
     if(size <= 0){    // ??
@@ -203,7 +203,7 @@ int main(int argc,char *argv[]){
     if(size < RTP_MIN_SIZE)
       continue; // Too small for RTP, ignore
 
-    unsigned char const *dp = buffer;
+    uint8_t const *dp = buffer;
     struct rtp_header rtp;
     dp = ntoh_rtp(&rtp,dp);
     if(rtp.pad){

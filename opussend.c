@@ -9,6 +9,7 @@
 #include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <string.h>
 #include <opus/opus.h>
@@ -310,8 +311,8 @@ int main(int argc,char * const argv[]){
     rtp_hdr.ssrc = rtp_state_out.ssrc;
     rtp_hdr.timestamp = rtp_state_out.timestamp;
 
-    unsigned char buffer[16384]; // Pick better number
-    unsigned char *dp = buffer;
+    uint8_t buffer[16384]; // Pick better number
+    uint8_t *dp = buffer;
     dp = hton_rtp(dp,&rtp_hdr);
 
     int size = opus_encode_float(Opus,opus_input,Opus_frame_size,dp,sizeof(buffer) - (dp - buffer));

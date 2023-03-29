@@ -99,7 +99,7 @@ int main(int argc,char *argv[]){
   while(1){
     struct sockaddr sender;
     socklen_t socksize = sizeof(sender);
-    unsigned char buffer[Bufsize];
+    uint8_t buffer[Bufsize];
     int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&sender,&socksize);
     if(size == -1){
       if(errno != EINTR){ // Happens routinely
@@ -112,7 +112,7 @@ int main(int argc,char *argv[]){
       continue; // Too small to be valid RTP
 
     struct rtp_header rtp;
-    unsigned char const *dp = ntoh_rtp(&rtp,buffer);
+    uint8_t const *dp = ntoh_rtp(&rtp,buffer);
     size -= dp - buffer;
     if(rtp.pad){
       // Remove padding

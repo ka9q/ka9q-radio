@@ -122,7 +122,7 @@ static struct option Options[] =
 static char Optstring[] = "f:v";
 
 double set_correct_freq(struct sdrstate *sdr,double freq);
-void decode_airspyhf_commands(struct sdrstate *,unsigned char *,int);
+void decode_airspyhf_commands(struct sdrstate *,uint8_t *,int);
 void send_airspyhf_status(struct sdrstate *,int);
 int rx_callback(airspyhf_transfer_t *);
 void *display(void *);
@@ -480,7 +480,7 @@ void *ncmd(void *arg){
     return NULL; // Nothing to do
 
   while(1){
-    unsigned char buffer[Bufsize];
+    uint8_t buffer[Bufsize];
     int const length = recv(sdr->nctl_sock,buffer,sizeof(buffer),0);
     if(length > 0){
       // Parse entries
@@ -523,8 +523,8 @@ void *display(void *arg){
   return NULL;
 }
 
-void decode_airspyhf_commands(struct sdrstate *sdr,unsigned char *buffer,int length){
-  unsigned char *cp = buffer;
+void decode_airspyhf_commands(struct sdrstate *sdr,uint8_t *buffer,int length){
+  uint8_t *cp = buffer;
 
   while(cp - buffer < length){
     int ret __attribute__((unused)); // Won't be used when asserts are disabled
@@ -560,8 +560,8 @@ void decode_airspyhf_commands(struct sdrstate *sdr,unsigned char *buffer,int len
 }  
 
 void send_airspyhf_status(struct sdrstate *sdr,int full){
-  unsigned char packet[2048];
-  unsigned char *bp = packet;
+  uint8_t packet[2048];
+  uint8_t *bp = packet;
   
   sdr->output_metadata_packets++;
 

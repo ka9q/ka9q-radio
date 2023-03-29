@@ -24,7 +24,7 @@
 #include "status.h"
 
 struct hdlc {
-  unsigned char frame[16384];
+  uint8_t frame[16384];
   int frame_bits;
   int flag_seen;
   int last_bits;
@@ -244,7 +244,7 @@ int main(int argc,char *argv[]){
   // Process status messages that may tell us the PCM input
   while(1){
     socklen_t socklen = sizeof(Status_input_source_address);
-    unsigned char buffer[16384];
+    uint8_t buffer[16384];
     int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
 
     // We MUST ignore our own status packets, or we'll loop!
@@ -261,7 +261,7 @@ int main(int argc,char *argv[]){
       int const cr = buffer[0];
       if(cr == 1)
 	continue; // Ignore commands
-      unsigned char const *cp = buffer+1;
+      uint8_t const *cp = buffer+1;
 
       while(cp - buffer < length){
 	enum status_type const type = *cp++;
@@ -325,7 +325,7 @@ static void *input(void *arg){
       if(Input_fd[fd_index] == -1 || !FD_ISSET(Input_fd[fd_index],&fdset))
 	continue;
 
-      unsigned char buffer[PKTSIZE];
+      uint8_t buffer[PKTSIZE];
       socklen_t socksize = sizeof(sender);
       int size = recvfrom(Input_fd[fd_index],buffer,sizeof(buffer),0,&sender,&socksize);
       if(size == -1){
@@ -339,7 +339,7 @@ static void *input(void *arg){
 	continue; // Too small to be valid RTP
 
       // Extract RTP header
-      unsigned char const *dp = buffer;
+      uint8_t const *dp = buffer;
       dp = ntoh_rtp(&rtp_hdr,dp);
       size -= dp - buffer;
       
@@ -590,7 +590,7 @@ static void *decode_task(void *arg){
 	    rtp_hdr.ssrc = sp->rtp_state_out.ssrc;
 	    
 	    int const plen = bytes + 76 + 10; // Max RTP header is 76 bytes; allow a little slack
-	    unsigned char packet[plen],*dp;
+	    uint8_t packet[plen],*dp;
 	    dp = packet;
 	    dp = hton_rtp(dp,&rtp_hdr);
 	    memcpy(dp,sp->hdlc.frame,bytes);

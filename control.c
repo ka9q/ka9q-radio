@@ -90,10 +90,10 @@ static void display_fe(WINDOW *fe,struct demod const *demod);
 static void display_options(WINDOW *options,struct demod const *demod);
 static void display_modes(WINDOW *modes,struct demod const *demod);
 static void display_output(WINDOW *output,struct demod const *demod);
-static int process_keyboard(struct demod *,unsigned char **bpp,int c);
-static void process_mouse(struct demod *demod,unsigned char **bpp);
-static int decode_radio_status(struct demod *demod,unsigned char const *buffer,int length);
-static int for_us(struct demod *demod,unsigned char const *buffer,int length,uint32_t ssrc);
+static int process_keyboard(struct demod *,uint8_t **bpp,int c);
+static void process_mouse(struct demod *demod,uint8_t **bpp);
+static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length);
+static int for_us(struct demod *demod,uint8_t const *buffer,int length,uint32_t ssrc);
 
 // Pop up a temporary window with the contents of a file in the
 // library directory (usually /usr/local/share/ka9q-radio/)
@@ -178,7 +178,7 @@ void display_cleanup(void){
 static bool Frequency_lock;
 
 // Adjust the selected item up or down one step
-void adjust_item(struct demod *demod,unsigned char **bpp,int direction){
+void adjust_item(struct demod *demod,uint8_t **bpp,int direction){
   double tunestep = pow(10., (double)Control.step);
 
   if(!direction)
@@ -222,10 +222,10 @@ void adjust_item(struct demod *demod,unsigned char **bpp,int direction){
 }
 // Hooks for knob.c (experimental)
 // It seems better to just use the Griffin application to turn knob events into keystrokes or mouse events
-void adjust_up(struct demod *demod,unsigned char **bpp){
+void adjust_up(struct demod *demod,uint8_t **bpp){
   adjust_item(demod,bpp,1);
 }
-void adjust_down(struct demod *demod,unsigned char **bpp){
+void adjust_down(struct demod *demod,uint8_t **bpp){
   adjust_item(demod,bpp,0);
 }
 void toggle_lock(void){
@@ -393,7 +393,7 @@ int main(int argc,char *argv[]){
 	continue;
 
       // Message from the radio program
-      unsigned char buffer[8192];
+      uint8_t buffer[8192];
       socklen_t ssize = sizeof(Metadata_source_address);
       int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
       
@@ -532,7 +532,7 @@ int main(int argc,char *argv[]){
     }
     if(Status_fd != -1 && FD_ISSET(Status_fd,&fdset)){
       // Message from the radio program (or some transcoders)
-      unsigned char buffer[8192];
+      uint8_t buffer[8192];
       socklen_t ssize = sizeof(Metadata_source_address);
       int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
 
@@ -562,7 +562,7 @@ int main(int argc,char *argv[]){
     }
     if(Frontend.input.status_fd != -1 && FD_ISSET(Frontend.input.status_fd,&fdset)){
       // Message from the front end
-      unsigned char buffer[8192];
+      uint8_t buffer[8192];
       struct sockaddr_storage sender;
       socklen_t ssize = sizeof(sender);
       int const length = recvfrom(Frontend.input.status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&sender,&ssize);
@@ -602,8 +602,8 @@ int main(int argc,char *argv[]){
     doupdate();      // Update the screen right before we pause
     
     // Set up command buffer in case we want to change something
-    unsigned char cmdbuffer[1024];
-    unsigned char *bp = cmdbuffer;
+    uint8_t cmdbuffer[1024];
+    uint8_t *bp = cmdbuffer;
     *bp++ = 1; // Command
 
     int const c = getch(); // read keyboard with timeout; controls refresh rate
@@ -638,7 +638,7 @@ int main(int argc,char *argv[]){
 }
 
 
-int process_keyboard(struct demod *demod,unsigned char **bpp,int c){
+int process_keyboard(struct demod *demod,uint8_t **bpp,int c){
   // Look for keyboard and mouse events
 
   switch(c){
@@ -855,7 +855,7 @@ int process_keyboard(struct demod *demod,unsigned char **bpp,int c){
   return 0;
 }
 
-void process_mouse(struct demod *demod,unsigned char **bpp){
+void process_mouse(struct demod *demod,uint8_t **bpp){
   // Process mouse events
   // Need to handle the wheel as equivalent to up/down arrows
   MEVENT mouse_event;
@@ -973,8 +973,8 @@ int init_demod(struct demod *demod){
 }
 
 // Is response for us (1), or for somebody else (-1)?
-static int for_us(struct demod *demod,unsigned char const *buffer,int length,uint32_t ssrc){
-  unsigned char const *cp = buffer;
+static int for_us(struct demod *demod,uint8_t const *buffer,int length,uint32_t ssrc){
+  uint8_t const *cp = buffer;
   
   while(cp - buffer < length){
     enum status_type const type = *cp++; // increment cp to length field
@@ -1007,8 +1007,8 @@ static int for_us(struct demod *demod,unsigned char const *buffer,int length,uin
 
 // Decode incoming status message from the radio program, convert and fill in fields in local demod structure
 // Leave all other fields unchanged, as they may have local uses (e.g., file descriptors)
-int decode_radio_status(struct demod *demod,unsigned char const *buffer,int length){
-  unsigned char const *cp = buffer;
+int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
+  uint8_t const *cp = buffer;
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
 
@@ -1634,7 +1634,7 @@ double set_first_LO(struct demod const * const demod,double first_LO){
   if(demod == NULL)
     return NAN;
 
-  unsigned char packet[8192],*bp;
+  uint8_t packet[8192],*bp;
   memset(packet,0,sizeof(packet));
   bp = packet;
   *bp++ = 1; // Command

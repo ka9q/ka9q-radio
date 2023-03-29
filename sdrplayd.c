@@ -182,7 +182,7 @@ static void close_and_exit(struct sdrstate *sdr,int exit_code);
 static void set_terminate(int a);
 
 // handle commands, display status, and ka9q-radio related functions
-static void decode_sdrplay_commands(struct sdrstate *,unsigned char *,int);
+static void decode_sdrplay_commands(struct sdrstate *,uint8_t *,int);
 static void send_sdrplay_status(struct sdrstate *,int);
 static void *display(void *);
 static void *ncmd(void *);
@@ -553,7 +553,7 @@ void *ncmd(void *arg){
     return NULL; // Nothing to do
 
   while(1){
-    unsigned char buffer[Bufsize];
+    uint8_t buffer[Bufsize];
     int const length = recv(sdr->nctl_sock,buffer,sizeof(buffer),0);
     if(length > 0){
       // Parse entries
@@ -629,8 +629,8 @@ void *display(void *arg){
 }
 #endif
 
-void decode_sdrplay_commands(struct sdrstate *sdr,unsigned char *buffer,int length){
-  unsigned char *cp = buffer;
+void decode_sdrplay_commands(struct sdrstate *sdr,uint8_t *buffer,int length){
+  uint8_t *cp = buffer;
 
   while(cp - buffer < length){
     int ret __attribute__((unused)); // Won't be used when asserts are disabled
@@ -686,8 +686,8 @@ void decode_sdrplay_commands(struct sdrstate *sdr,unsigned char *buffer,int leng
 }
 
 void send_sdrplay_status(struct sdrstate *sdr,int full){
-  unsigned char packet[2048];
-  unsigned char *bp = packet;
+  uint8_t packet[2048];
+  uint8_t *bp = packet;
 
   sdr->output_metadata_packets++;
 

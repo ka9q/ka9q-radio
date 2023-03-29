@@ -219,7 +219,7 @@ int main(int argc,char * const argv[]){
 
   while(1){
     socklen_t socklen = sizeof(Status_input_source_address);
-    unsigned char buffer[16384];
+    uint8_t buffer[16384];
     int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
 
     // We MUST ignore our own status packets, or we'll loop!
@@ -236,7 +236,7 @@ int main(int argc,char * const argv[]){
       int cr = buffer[0];
       if(cr == 1)
 	continue; // Ignore commands
-      unsigned char *cp = buffer+1;
+      uint8_t *cp = buffer+1;
 
       while(cp - buffer < length){
 	enum status_type type = *cp++;
@@ -313,7 +313,7 @@ void *input(void *arg){
       continue; // Must be big enough for RTP header and at least some data
     
     // Extract and convert RTP header to host format
-    unsigned char const *dp = ntoh_rtp(&pkt->rtp,pkt->content);
+    uint8_t const *dp = ntoh_rtp(&pkt->rtp,pkt->content);
     pkt->data = dp;
     pkt->len = size - (dp - pkt->content);
     if(pkt->rtp.pad){
@@ -470,7 +470,7 @@ void *decode(void *arg){
       // Decimate to audio sample rate, do stereo processing
 
       // ensure output pkt big enough for output filter buffer size
-      unsigned char packet[PKTSIZE],*dp;
+      uint8_t packet[PKTSIZE],*dp;
       dp = packet;
       struct rtp_header out_rtp;
       out_rtp.type = PCM_STEREO_PT; // 48 kHz stereo PCM
@@ -499,7 +499,7 @@ void *decode(void *arg){
 	*wp++ = htons(scaleclip(__real__ subc_info));
 	*wp++ = htons(scaleclip(__imag__ subc_info));
       }
-      dp = (unsigned char *)wp;
+      dp = (uint8_t *)wp;
       int const r = send(Output_fd,&packet,dp - packet,0);
       if(r <= 0){
 	perror("pcm send");

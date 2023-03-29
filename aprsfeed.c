@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
 
 #include <locale.h>
 #include <errno.h>
@@ -180,11 +181,11 @@ int main(int argc,char *argv[]){
       sleep(600); // 5 minutes;
       continue;
     }
-    unsigned char packet[2048];
+    uint8_t packet[2048];
     int size;
     while((size = recv(Input_fd,packet,sizeof(packet),0)) > 0){
       struct rtp_header rtp_header;
-      unsigned char const *dp = packet;
+      uint8_t const *dp = packet;
       
       dp = ntoh_rtp(&rtp_header,dp);
       size -= dp - packet;

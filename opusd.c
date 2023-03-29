@@ -306,7 +306,7 @@ int main(int argc,char * const argv[]){
       continue; // Must be big enough for RTP header and at least some data
     
     // Extract and convert RTP header to host format
-    unsigned char const *dp = ntoh_rtp(&pkt->rtp,pkt->content);
+    uint8_t const *dp = ntoh_rtp(&pkt->rtp,pkt->content);
     pkt->data = dp;
     pkt->len = size - (dp - pkt->content);
     if(pkt->rtp.pad){
@@ -400,7 +400,7 @@ void * status(void *p){
 
   while(1){
     socklen_t socklen = sizeof(Status_input_source_address);
-    unsigned char buffer[16384];
+    uint8_t buffer[16384];
     int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
     if(length <= 0){
       if(errno == EAGAIN || errno == ETIMEDOUT)
@@ -415,8 +415,8 @@ void * status(void *p){
 
     // Announce ourselves in response to commands
     if(buffer[0] == 1){
-      unsigned char packet[2048];
-      unsigned char *bp = packet;
+      uint8_t packet[2048];
+      uint8_t *bp = packet;
       *bp++ = 0; // Response (not a command)
       encode_socket(&bp,OPUS_SOURCE_SOCKET,&Opus_source_address);
       encode_socket(&bp,OPUS_DEST_SOCKET,&Opus_dest_address);
@@ -430,7 +430,7 @@ void * status(void *p){
 	send(Status_out_fd,packet,len,0);
     } else {
       // Parse radio status for PCM output socket
-      unsigned char const *cp = buffer+1;
+      uint8_t const *cp = buffer+1;
 
       while(cp - buffer < length){
 	enum status_type const type = *cp++;
@@ -764,8 +764,8 @@ int send_samples(struct session * const sp){
     } else
       rtp.marker = 0;
     
-    unsigned char output_buffer[Bufsize]; // to hold RTP header + Opus-encoded frame
-    unsigned char * const opus_write_pointer = hton_rtp(output_buffer,&rtp);
+    uint8_t output_buffer[Bufsize]; // to hold RTP header + Opus-encoded frame
+    uint8_t * const opus_write_pointer = hton_rtp(output_buffer,&rtp);
     int packet_bytes_written = opus_write_pointer - output_buffer;
 
     int const opus_output_bytes = opus_encode_float(sp->opus,

@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <stdbool.h>
 #include <locale.h>
 #include <sys/time.h>
@@ -510,7 +511,7 @@ void *rtcp_send(void *arg){
 
     if(demod->output.rtp.ssrc == 0) // Wait until it's set by output RTP subsystem
       goto done;
-    unsigned char buffer[4096]; // much larger than necessary
+    uint8_t buffer[4096]; // much larger than necessary
     memset(buffer,0,sizeof(buffer));
     
     // Construct sender report
@@ -530,7 +531,7 @@ void *rtcp_send(void *arg){
     sr.packet_count = demod->output.rtp.seq;
     sr.byte_count = demod->output.rtp.bytes;
     
-    unsigned char *dp = gen_sr(buffer,sizeof(buffer),&sr,NULL,0);
+    uint8_t *dp = gen_sr(buffer,sizeof(buffer),&sr,NULL,0);
 
     // Construct SDES
     struct rtcp_sdes sdes[4];

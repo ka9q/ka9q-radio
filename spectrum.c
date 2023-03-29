@@ -28,6 +28,7 @@ void *demod_spectrum(void *arg){
   if(demod->filter.out)
     delete_filter_output(&demod->filter.out);
   int const blocksize = demod->output.samprate * Blocktime / 1000.0F;
+  // Special filter without a response curve or IFFT
   demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,SPECTRUM);
   if(demod->filter.out == NULL){
     fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)demod->output.rtp.ssrc);
@@ -59,15 +60,11 @@ void *demod_spectrum(void *arg){
     if(downconvert(demod) == -1)
       break; // received terminate
 
-
-    // Only one shared set of frequency domain buffers from forward FFT
-    complex float const * const fdomain = Frontend.in->fdomain[next_jobnum++ % ND]; // Walk through circular set of fdomain buffers
     int startbin = 0; // write this ************** compute from demod->filter.bin_shift
-
     // Need to break out early for partial tuner coverage *****
     for(int i=0; i < demod->spectrum.bin_count; i++){ // For each noncoherent integration bin
       for(int j=0; j < binsperbin; j++){ // Add energy of each fft bin part of this integration bin
-	demod->spectrum.bin_data[i] += cnrmf(fdomain[startbin + j*binsperbin]);
+	demod->spectrum.bin_data[i] += cnrmf(demod->filter.out->f_fdomain[startbin + j*binsperbin]);
       }
     }
     if(++integration_counter >= integration_limit){
