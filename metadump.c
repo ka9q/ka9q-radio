@@ -64,7 +64,7 @@ int main(int argc,char *argv[]){
   Status_sock = listen_mcast(&sock,iface);
 
   for(;;){
-    unsigned char buffer[8192];
+    uint8_t buffer[8192];
 
     memset(buffer,0,sizeof(buffer));
     struct sockaddr_storage source;
