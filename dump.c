@@ -357,7 +357,7 @@ void dump_metadata(uint8_t const * const buffer,int length){
       printf("noncoherent bin bandwidth %.1f Hz",decode_float(cp,optlen));
       break;
     case BIN_COUNT:
-      printf("bin count %lld",decode_int(cp,optlen));
+      printf("bin count %d",(int)decode_int(cp,optlen));
       break;
     case INTEGRATE_TIME:
       printf("integrate time %.1f s",decode_float(cp,optlen));
