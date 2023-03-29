@@ -11,8 +11,8 @@
 #include "multicast.h"
 #include "radio.h"
 
-void dump_metadata(unsigned char const * const buffer,int length){
-  unsigned char const *cp = buffer;
+void dump_metadata(uint8_t const * const buffer,int length){
+  uint8_t const *cp = buffer;
 
   while(cp - buffer < length){
     enum status_type const type = *cp++; // increment cp to length field
@@ -345,6 +345,31 @@ void dump_metadata(unsigned char const * const buffer,int length){
       {
 	char sbuf[256];
 	printf("preset %s",decode_string(cp,optlen,sbuf,sizeof(sbuf)));      
+      }
+      break;
+    case COHERENT_BIN_BW:
+      printf("coherent bin bandwidth %.1f Hz",decode_float(cp,optlen));
+      break;
+    case COHERENT_BIN_SPACING:
+      printf("coherent bin spacing %.1f Hz",decode_float(cp,optlen));
+      break;
+    case NONCOHERENT_BIN_BW:
+      printf("noncoherent bin bandwidth %.1f Hz",decode_float(cp,optlen));
+      break;
+    case BIN_COUNT:
+      printf("bin count %lld",decode_int(cp,optlen));
+      break;
+    case INTEGRATE_TIME:
+      printf("integrate time %.1f s",decode_float(cp,optlen));
+      break;
+    case BIN_DATA:
+      {
+	printf("bin data:");
+	int count = optlen/sizeof(float);
+	for(int i=0; i < count; i++){
+	  printf(" %.0f",decode_float(cp,sizeof(float)));
+	  cp += sizeof(float);
+	}
       }
       break;
     default:

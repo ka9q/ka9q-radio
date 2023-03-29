@@ -26,8 +26,13 @@ void *demod_spectrum(void *arg){
   }
 
   if(demod->filter.out)
-    delete_filter_output(&demod->filter.out); // No filter needed, we only look at raw frequency bins
-
+    delete_filter_output(&demod->filter.out);
+  int const blocksize = demod->output.samprate * Blocktime / 1000.0F;
+  demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,SPECTRUM);
+  if(demod->filter.out == NULL){
+    fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)demod->output.rtp.ssrc);
+    goto quit;
+  }
   if(demod->spectrum.bin_data == NULL)
     demod->spectrum.bin_data = calloc(demod->spectrum.bin_count,sizeof(*demod->spectrum.bin_data));
 
@@ -73,5 +78,10 @@ void *demod_spectrum(void *arg){
       memset(demod->spectrum.bin_data,0,integration_limit * sizeof(*demod->spectrum.bin_data));
     }
   }
+ quit:;
+  if(demod->filter.energies)
+    free(demod->filter.energies);
+  demod->filter.energies = NULL;
+  delete_filter_output(&demod->filter.out);
   return NULL;
 }

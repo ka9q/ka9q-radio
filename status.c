@@ -30,8 +30,8 @@ union result {
 
 
 // Encode 64-bit integer, byte swapped, leading zeroes suppressed
-int encode_int64(unsigned char **buf,enum status_type type,uint64_t x){
-  unsigned char *cp = *buf;
+int encode_int64(uint8_t **buf,enum status_type type,uint64_t x){
+  uint8_t *cp = *buf;
 
   *cp++ = type;
 
@@ -60,16 +60,16 @@ int encode_int64(unsigned char **buf,enum status_type type,uint64_t x){
 
 
 // Single null type byte means end of list
-int encode_eol(unsigned char **buf){
-  unsigned char *bp = *buf;
+int encode_eol(uint8_t **buf){
+  uint8_t *bp = *buf;
 
   *bp++ = EOL;
   *buf = bp;
   return 1;
 }
 
-int encode_byte(unsigned char **buf,enum status_type type,unsigned char x){
-  unsigned char *cp = *buf;
+int encode_byte(uint8_t **buf,enum status_type type,uint8_t x){
+  uint8_t *cp = *buf;
   *cp++ = type;
   if(x == 0){
     // Compress zero value to zero length
@@ -83,20 +83,20 @@ int encode_byte(unsigned char **buf,enum status_type type,unsigned char x){
   return 2+sizeof(x);
 }
 
-int encode_int16(unsigned char **buf,enum status_type type,uint16_t x){
+int encode_int16(uint8_t **buf,enum status_type type,uint16_t x){
   return encode_int64(buf,type,(uint64_t)x);
 }
 
-int encode_int32(unsigned char **buf,enum status_type type,uint32_t x){
+int encode_int32(uint8_t **buf,enum status_type type,uint32_t x){
   return encode_int64(buf,type,(uint64_t)x);
 }
 
-int encode_int(unsigned char **buf,enum status_type type,int x){
+int encode_int(uint8_t **buf,enum status_type type,int x){
   return encode_int64(buf,type,(uint64_t)x);
 }
 
 
-int encode_float(unsigned char **buf,enum status_type type,float x){
+int encode_float(uint8_t **buf,enum status_type type,float x){
   if(isnan(x))
     return 0; // Never encode a NAN
 
@@ -105,7 +105,7 @@ int encode_float(unsigned char **buf,enum status_type type,float x){
   return encode_int32(buf,type,r.l);
 }
 
-int encode_double(unsigned char **buf,enum status_type type,double x){
+int encode_double(uint8_t **buf,enum status_type type,double x){
   if(isnan(x))
     return 0; // Never encode a NAN
 
@@ -115,8 +115,8 @@ int encode_double(unsigned char **buf,enum status_type type,double x){
 }
 
 // Encode byte string without byte swapping
-int encode_string(unsigned char **bp,enum status_type type,void const *buf,int buflen){
-  unsigned char *cp = *bp;
+int encode_string(uint8_t **bp,enum status_type type,void const *buf,int buflen){
+  uint8_t *cp = *bp;
   *cp++ = type;
   if(buflen > 255)
     buflen = 255;
@@ -128,7 +128,7 @@ int encode_string(unsigned char **bp,enum status_type type,void const *buf,int b
 
 
 // Decode byte string without byte swapping
-char *decode_string(unsigned char const *cp,int optlen,char *buf,int buflen){
+char *decode_string(uint8_t const *cp,int optlen,char *buf,int buflen){
   int n = min(optlen,buflen-1);
   memcpy(buf,cp,n);
   buf[n] = '\0'; // force null termination
@@ -139,7 +139,7 @@ char *decode_string(unsigned char const *cp,int optlen,char *buf,int buflen){
 // Decode encoded variable-length UNSIGNED integers
 // At entry, *bp -> length field (not type!)
 // Works for byte, short/int16_t, long/int32_t, long long/int64_t
-uint64_t decode_int(unsigned char const *cp,int len){
+uint64_t decode_int(uint8_t const *cp,int len){
   uint64_t result = 0;
   // cp now points to beginning of abbreviated int
   // Byte swap as we accumulate
@@ -150,7 +150,7 @@ uint64_t decode_int(unsigned char const *cp,int len){
 }
 
 
-float decode_float(unsigned char const *cp,int len){
+float decode_float(uint8_t const *cp,int len){
   if(len == 0)
     return 0;
   
@@ -162,7 +162,7 @@ float decode_float(unsigned char const *cp,int len){
   return r.f;
 }
 
-double decode_double(unsigned char const *cp,int len){
+double decode_double(uint8_t const *cp,int len){
   if(len == 0)
     return 0;
   
@@ -175,10 +175,10 @@ double decode_double(unsigned char const *cp,int len){
 }
 
 // The Linux/UNIX socket data structures are a real mess...
-int encode_socket(unsigned char **buf,enum status_type type,void const *sock){
+int encode_socket(uint8_t **buf,enum status_type type,void const *sock){
   struct sockaddr_in const *sin = sock;
   struct sockaddr_in6 const *sin6 = sock;
-  unsigned char *bp = *buf;
+  uint8_t *bp = *buf;
   int optlen = 0;
 
   switch(sin->sin_family){
@@ -208,7 +208,7 @@ int encode_socket(unsigned char **buf,enum status_type type,void const *sock){
 }
 
 
-struct sockaddr *decode_socket(void *sock,unsigned char const *val,int optlen){
+struct sockaddr *decode_socket(void *sock,uint8_t const *val,int optlen){
   struct sockaddr_in *sin = (struct sockaddr_in *)sock;
   struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sock;
 
@@ -235,8 +235,8 @@ int64_t random_time(int64_t base,int64_t rrange){
 
 // Send empty poll command on specified descriptor
 void send_poll(int fd,int ssrc){
-  unsigned char cmdbuffer[128];
-  unsigned char *bp = cmdbuffer;
+  uint8_t cmdbuffer[128];
+  uint8_t *bp = cmdbuffer;
   *bp++ = 1; // Command
   if(ssrc != 0)
     encode_int(&bp,OUTPUT_SSRC,ssrc); // poll specific SSRC
@@ -252,8 +252,8 @@ void send_poll(int fd,int ssrc){
 
 
 // Extract SSRC; 0 means not present (reserved value)
-int get_ssrc(unsigned char const *buffer,int length){
-  unsigned char const *cp = buffer;
+int get_ssrc(uint8_t const *buffer,int length){
+  uint8_t const *cp = buffer;
   
   while(cp - buffer < length){
     enum status_type const type = *cp++; // increment cp to length field

@@ -206,8 +206,13 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     slave->output.c = slave->output_buffer.c + osize - olen;
     slave->rev_plan = fftwf_plan_dft_1d(osize,slave->f_fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_PATIENT);
     break;
+  case SPECTRUM: // Like complex, but no output time domain buffer
+    slave->bins = osize;
+    slave->f_fdomain = lmalloc(sizeof(complex float) * slave->bins);    
+    // Note: No time domain buffer; slave->output, etc, all NULL
+    // Also slave->rev_plan is NULL
+    break;
   case REAL:
-  case SPECTRUM:
     slave->bins = osize / 2 + 1;
     slave->f_fdomain = lmalloc(sizeof(complex float) * slave->bins); // Not really needed for SPECTRUM?
     assert(slave->f_fdomain != NULL);    
@@ -559,7 +564,8 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
       slave->f_fdomain[dn] = neg - conjf(pos);
     }
   }
-  fftwf_execute(slave->rev_plan); // Note: c2r version destroys f_fdomain[]
+  if(slave->out_type != SPECTRUM)
+    fftwf_execute(slave->rev_plan); // Note: c2r version destroys f_fdomain[]
   return 0;
 }
 
