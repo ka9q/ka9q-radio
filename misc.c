@@ -166,7 +166,7 @@ char *format_utctime(char *result,int len,int64_t t){
   struct tm tm;
   gmtime_r(&utime,&tm);
   // Mon Feb 26 2018 14:40:08.123456 UTC
-  snprintf(result,len,"%s %02d %s %4d %02d:%02d:%02d.%06d %s",
+  snprintf(result,len,"%s %02d %s %4d %02d:%02d:%02d.%06d",
 	   Days[tm.tm_wday],
 	   tm.tm_mday,
 	   Months[tm.tm_mon],
@@ -174,8 +174,8 @@ char *format_utctime(char *result,int len,int64_t t){
 	   tm.tm_hour,
 	   tm.tm_min,
 	   tm.tm_sec,
-	   t_usec,
-	   tzname[daylight]);
+	   t_usec);
+
   return result;
 
 }

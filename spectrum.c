@@ -64,14 +64,13 @@ void *demod_spectrum(void *arg){
   set_freq(demod,demod->tune.freq); // retune front end if needed to cover requested bandwidth
 
   while(!demod->terminate){
-    // Determine bin for lowest requested frequency
+    
+    if(downconvert(demod) == -1)
+      break; // received terminate
 
     if(demod->spectrum.integrate_tc <= 0)
       demod->spectrum.integrate_tc = 5; // Force reasonable value of 5 sec
       
-    if(downconvert(demod) == -1)
-      break; // received terminate
-
     // https://en.wikipedia.org/wiki/Exponential_smoothing#Time constant
     // smooth = 1 - exp(-blocktime/tc)
     // expm1(x) = exp(x) - 1 (to preserve precision)

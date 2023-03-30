@@ -524,6 +524,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
       // encode bin data here? maybe change this, it can be a lot
       //      for(int i=0; i < demod->spectrum.bin_count; i++){
       //	for(int j=0; j < 64; j++){ // 256 bytes per TLV, 4 bytes per float
+      // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
       if(demod->spectrum.bin_data != NULL)
 	encode_vector(&bp,BIN_DATA,demod->spectrum.bin_data);
     }

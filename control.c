@@ -1220,6 +1220,17 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
     case PL_DEVIATION:
       demod->fm.tone_deviation = decode_float(cp,optlen);
       break;
+    case NONCOHERENT_BIN_BW:
+      demod->spectrum.bin_bw = decode_float(cp,optlen);
+      break;
+    case BIN_COUNT:
+      demod->spectrum.bin_count = decode_int(cp,optlen);
+      break;
+    case INTEGRATE_TC:
+      demod->spectrum.integrate_tc = decode_float(cp,optlen);
+      break;
+    case BIN_DATA:
+      break;
     default: // ignore others
       break;
     }
@@ -1451,7 +1462,12 @@ void display_demodulator(WINDOW *w,struct demod const *demod){
     }
     break;
   case SPECT_DEMOD:
-    break; // incomplete
+    pprintw(w,row++,col,"Bin width","%.0f Hz",demod->spectrum.bin_bw);
+    pprintw(w,row++,col,"Bins","%d   ",demod->spectrum.bin_count);
+    pprintw(w,row++,col,"Integration time","%.1f s ",demod->spectrum.integrate_tc);
+    if(demod->spectrum.bin_data != NULL)
+      pprintw(w,row++,col,"Bin 0","%.1f   ",demod->spectrum.bin_data[0]);
+    break;
   }
 
   if(!isnan(demod->tp1))
