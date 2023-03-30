@@ -61,6 +61,8 @@ void *demod_spectrum(void *arg){
   if(demod->spectrum.bin_data == NULL)
     demod->spectrum.bin_data = calloc(demod->spectrum.bin_count,sizeof(*demod->spectrum.bin_data));
 
+  set_freq(demod,demod->tune.freq); // retune front end if needed to cover requested bandwidth
+
   while(!demod->terminate){
     // Determine bin for lowest requested frequency
 
