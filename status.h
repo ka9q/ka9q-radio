@@ -141,6 +141,7 @@ int encode_int64(uint8_t **buf,enum status_type type,uint64_t x);
 int encode_float(uint8_t **buf,enum status_type type,float x);
 int encode_double(uint8_t **buf,enum status_type type,double x);
 int encode_socket(uint8_t **buf,enum status_type type,void const *sock);
+int encode_vector(uint8_t **buf,enum status_type type,float *array);
 
 uint64_t decode_int(uint8_t const *,int);
 float decode_float(uint8_t const *,int);

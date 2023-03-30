@@ -343,6 +343,27 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
 	   demod->squelch_close = fabsf(dB2power(x));
       }	
       break;
+    case NONCOHERENT_BIN_BW:
+      {
+	float const x = decode_float(cp,optlen);
+	if(!isnan(x))
+	  demod->spectrum.bin_bw = x;
+      }
+      break;
+    case BIN_COUNT:
+      {
+	int const x = decode_int(cp,optlen);
+	if(x > 0)
+	  demod->spectrum.bin_count = x;
+	}
+      break;
+    case INTEGRATE_TC:
+      {
+	float const x = decode_float(cp,optlen);
+	if(!isnan(x))
+	  demod->spectrum.integrate_tc = x;
+      }
+      break;
     default:
       break;
     }
@@ -398,6 +419,11 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   encode_socket(&bp,INPUT_METADATA_DEST_SOCKET,&frontend->input.metadata_dest_address);
   encode_int32(&bp,INPUT_SSRC,frontend->input.rtp.ssrc);
   encode_int32(&bp,INPUT_SAMPRATE,frontend->sdr.samprate); // integer Hz
+  if(frontend->in){
+    encode_int32(&bp,FILTER_BLOCKSIZE,frontend->in->ilen);
+    encode_int32(&bp,FILTER_FIR_LENGTH,frontend->in->impulse_length);
+  }
+
   encode_int64(&bp,INPUT_METADATA_PACKETS,frontend->input.metadata_packets); // integer
   encode_int64(&bp,INPUT_DATA_PACKETS,frontend->input.rtp.packets);
   encode_int64(&bp,INPUT_SAMPLES,frontend->input.samples);
@@ -411,50 +437,44 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   
   encode_int32(&bp,OUTPUT_SSRC,demod->output.rtp.ssrc);
   encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
-  encode_int32(&bp,OUTPUT_SAMPRATE,demod->output.samprate); // Hz
-  encode_int64(&bp,OUTPUT_DATA_PACKETS,demod->output.rtp.packets);
   encode_int64(&bp,OUTPUT_METADATA_PACKETS,Metadata_packets);
+
   
-  if(frontend->in){
-    encode_int32(&bp,FILTER_BLOCKSIZE,frontend->in->ilen);
-    encode_int32(&bp,FILTER_FIR_LENGTH,frontend->in->impulse_length);
+  // Lots of stuff not relevant in spectrum analysis mode
+  if(demod->demod_type != SPECT_DEMOD){
+    encode_int32(&bp,OUTPUT_SAMPRATE,demod->output.samprate); // Hz
+    encode_int64(&bp,OUTPUT_DATA_PACKETS,demod->output.rtp.packets);
+    encode_float(&bp,KAISER_BETA,demod->filter.kaiser_beta); // Dimensionless
+    encode_float(&bp,BASEBAND_POWER,power2dB(demod->sig.bb_power)); // power -> dB
+    encode_float(&bp,OUTPUT_LEVEL,power2dB(demod->output.level)); // power ratio -> dB
+    encode_int64(&bp,OUTPUT_SAMPLES,demod->output.samples);
+    encode_float(&bp,HEADROOM,voltage2dB(demod->output.headroom)); // amplitude -> dB
+    // Doppler info
+    encode_double(&bp,DOPPLER_FREQUENCY,demod->tune.doppler); // Hz
+    encode_double(&bp,DOPPLER_FREQUENCY_RATE,demod->tune.doppler_rate); // Hz
+    encode_int32(&bp,OUTPUT_CHANNELS,demod->output.channels);
+    encode_float(&bp,DEMOD_SNR,power2dB(demod->sig.snr)); // abs ratio -> dB
+    encode_float(&bp,FREQ_OFFSET,demod->sig.foffset);     // Hz; used differently in linear and fm
+    encode_float(&bp,GAIN,voltage2dB(demod->output.gain)); // linear amplitude -> dB; fixed in FM
+    encode_float(&bp,SQUELCH_OPEN,power2dB(demod->squelch_open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(demod->squelch_close));
   }
-  // Filtering
-  encode_float(&bp,LOW_EDGE,demod->filter.min_IF); // Hz
-  encode_float(&bp,HIGH_EDGE,demod->filter.max_IF); // Hz
-  encode_float(&bp,KAISER_BETA,demod->filter.kaiser_beta); // Dimensionless
-  if(demod->filter.out)
+  if(demod->filter.out != NULL)
     encode_int32(&bp,FILTER_DROPS,demod->filter.out->block_drops);  // count
   
   // Signals - these ALWAYS change
   encode_float(&bp,IF_POWER,power2dB(frontend->sdr.output_level));
-
-  encode_float(&bp,BASEBAND_POWER,power2dB(demod->sig.bb_power)); // power -> dB
   encode_float(&bp,NOISE_DENSITY,power2dB(demod->sig.n0)); // power -> dB
-
-  encode_float(&bp,OUTPUT_LEVEL,power2dB(demod->output.level)); // power ratio -> dB
-  encode_int64(&bp,OUTPUT_SAMPLES,demod->output.samples);
-  encode_float(&bp,HEADROOM,voltage2dB(demod->output.headroom)); // amplitude -> dB
-
 
   // Tuning
   encode_double(&bp,RADIO_FREQUENCY,demod->tune.freq); // Hz
   encode_double(&bp,SECOND_LO_FREQUENCY,demod->tune.second_LO); // Hz
   encode_double(&bp,FIRST_LO_FREQUENCY,frontend->sdr.frequency); // Hz
+  encode_float(&bp,LOW_EDGE,demod->filter.min_IF); // Hz
+  encode_float(&bp,HIGH_EDGE,demod->filter.max_IF); // Hz
 
-  // Doppler info
-  encode_double(&bp,DOPPLER_FREQUENCY,demod->tune.doppler); // Hz
-  encode_double(&bp,DOPPLER_FREQUENCY_RATE,demod->tune.doppler_rate); // Hz
-  
   // Demodulation mode
   encode_byte(&bp,DEMOD_TYPE,demod->demod_type);
-  encode_int32(&bp,OUTPUT_CHANNELS,demod->output.channels);
-
-  encode_float(&bp,DEMOD_SNR,power2dB(demod->sig.snr)); // abs ratio -> dB
-  encode_float(&bp,FREQ_OFFSET,demod->sig.foffset);     // Hz; used differently in linear and fm
-  encode_float(&bp,GAIN,voltage2dB(demod->output.gain)); // linear amplitude -> dB; fixed in FM
-  encode_float(&bp,SQUELCH_OPEN,power2dB(demod->squelch_open));
-  encode_float(&bp,SQUELCH_CLOSE,power2dB(demod->squelch_close));
   {
     int len = strlen(demod->preset);
     if(len > 0 && len < sizeof(demod->preset))
@@ -485,7 +505,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
       encode_float(&bp,PL_TONE,demod->fm.tone_freq);
       encode_float(&bp,PL_DEVIATION,demod->fm.tone_deviation);
     }
-  case WFM_DEMOD:  // Note fall-through
+  case WFM_DEMOD:  // Note fall-through from FM_DEMOD
     encode_byte(&bp,THRESH_EXTEND,demod->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,demod->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0/(logf(demod->deemph.rate) * demod->output.samprate));
@@ -502,17 +522,12 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
       encode_int(&bp,BIN_COUNT,demod->spectrum.bin_count);
       encode_float(&bp,INTEGRATE_TC,demod->spectrum.integrate_tc); // sec
       // encode bin data here? maybe change this, it can be a lot
-      for(int i=0; i < demod->spectrum.bin_count; i++){
-	for(int j=0; j < 64; j++){ // 256 bytes per TLV, 4 bytes per float
-
-	}
-      }
-
-      
-
+      //      for(int i=0; i < demod->spectrum.bin_count; i++){
+      //	for(int j=0; j < 64; j++){ // 256 bytes per TLV, 4 bytes per float
+      if(demod->spectrum.bin_data != NULL)
+	encode_vector(&bp,BIN_DATA,demod->spectrum.bin_data);
     }
     break;
-
   }
   // Don't send test points unless they're in use
   if(!isnan(demod->tp1))

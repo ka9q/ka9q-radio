@@ -125,6 +125,28 @@ int encode_string(uint8_t **bp,enum status_type type,void const *buf,int buflen)
   *bp = cp + buflen;
   return 2+buflen;
 }
+// Unique to spectrum energies, seems like a kludge, may be replaced
+int encode_vector(uint8_t **bp,enum status_type type,float *array){
+  uint8_t *cp = *bp;
+  *cp++ = type;
+  int length = 252; // 63 4-byte floats
+  *cp++ = length;
+
+  for(int i=0; i < 63; i++){ // For each float
+    union {
+      uint32_t u;
+      float f;
+    } d;
+    d.f = array[i];
+    for(int j=0; j < 4; j++){ // for each byte in float, MSB first
+      *cp++ = (d.u >> 24);
+      d.u <<= 24;
+    }
+  }
+  *bp = cp;
+  return length + 2;
+}
+
 
 
 // Decode byte string without byte swapping

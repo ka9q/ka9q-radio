@@ -206,6 +206,9 @@ void dump_metadata(uint8_t const * const buffer,int length){
 	case WFM_DEMOD:
 	  printf("(wide FM)");
 	  break;
+	case SPECT_DEMOD:
+	  printf("(spectrum)");
+	  break;
 	default:
 	  printf("(unknown)");
 	  break;

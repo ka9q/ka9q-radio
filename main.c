@@ -247,13 +247,13 @@ static int setup_frontend(char const *arg){
   // N = FFT size = L + M - 1
   // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
   double const eL = Frontend.sdr.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
-  int const L = lround(eL);
-  if(L != eL)
+  Frontend.L = lround(eL);
+  if(Frontend.L != eL)
     fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
-	    Blocktime,Frontend.sdr.samprate,eL-L);
+	    Blocktime,Frontend.sdr.samprate,eL-Frontend.L);
 
-  int const M = L / (Overlap - 1) + 1;
-  Frontend.in = create_filter_input(L,M, Frontend.sdr.isreal ? REAL : COMPLEX);
+  Frontend.M = Frontend.L / (Overlap - 1) + 1;
+  Frontend.in = create_filter_input(Frontend.L,Frontend.M, Frontend.sdr.isreal ? REAL : COMPLEX);
   if(Frontend.in == NULL){
     fprintf(stdout,"Input filter setup failed\n");
     return -1;
