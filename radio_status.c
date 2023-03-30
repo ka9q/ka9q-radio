@@ -500,8 +500,16 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
       encode_float(&bp,COHERENT_BIN_SPACING, spacing);
       encode_float(&bp,NONCOHERENT_BIN_BW,demod->spectrum.bin_bw); // Hz
       encode_int(&bp,BIN_COUNT,demod->spectrum.bin_count);
-      encode_float(&bp,INTEGRATE_TIME,demod->spectrum.integrate_time); // sec
-      // encode bin data here?
+      encode_float(&bp,INTEGRATE_TC,demod->spectrum.integrate_tc); // sec
+      // encode bin data here? maybe change this, it can be a lot
+      for(int i=0; i < demod->spectrum.bin_count; i++){
+	for(int j=0; j < 64; j++){ // 256 bytes per TLV, 4 bytes per float
+
+	}
+      }
+
+      
+
     }
     break;
 

@@ -21,7 +21,7 @@ void *demod_spectrum(void *arg){
   
   {
     char name[100];
-    snprintf(name,sizeof(name),"spect %u",demod->output.rtp.ssrc);
+    snprintf(name,sizeof(name),"spect %u",demod->output.rtp.ssrc); // SSRC is dummy for ID, there's no RTP stream
     pthread_setname(name);
   }
 
@@ -37,14 +37,7 @@ void *demod_spectrum(void *arg){
   if(demod->spectrum.bin_data == NULL)
     demod->spectrum.bin_data = calloc(demod->spectrum.bin_count,sizeof(*demod->spectrum.bin_data));
 
-  int integration_counter = 0;
-  int next_jobnum = 0;
-
   while(!demod->terminate){
-    int integration_limit = 1000.0f * demod->spectrum.integrate_time / Blocktime; // Truncate to integer
-    if(integration_limit < 1)
-      integration_limit = 1;  // enforce reasonableness
-
     // Although we don't use filter_output, demod->filter.min_IF and max_IF still need to be set
     // so radio.c:set_freq() will set the front end tuner properly
 
@@ -60,19 +53,17 @@ void *demod_spectrum(void *arg){
     if(downconvert(demod) == -1)
       break; // received terminate
 
-    int startbin = 0; // write this ************** compute from demod->filter.bin_shift
-    // Need to break out early for partial tuner coverage *****
+    // https://en.wikipedia.org/wiki/Exponential_smoothing#Time constant
+    // smooth = 1 - exp(-blocktime/tc)
+    // expm1(x) = exp(x) - 1 (to preserve precision)
+     float const smooth = -expm1f(-Blocktime / (1000 * demod->spectrum.integrate_tc)); // Blocktime is in millisec!
     for(int i=0; i < demod->spectrum.bin_count; i++){ // For each noncoherent integration bin
-      for(int j=0; j < binsperbin; j++){ // Add energy of each fft bin part of this integration bin
-	demod->spectrum.bin_data[i] += cnrmf(demod->filter.out->fdomain[startbin + j*binsperbin]);
-      }
-    }
-    if(++integration_counter >= integration_limit){
-      // Dump integrators to network
-      // write this ****************
-      // Reset integrator
-      integration_counter = 0;
-      memset(demod->spectrum.bin_data,0,integration_limit * sizeof(*demod->spectrum.bin_data));
+      float p = 0;
+      for(int j=0; j < binsperbin; j++) // Add energy of each fft bin part of this integration bin
+	p += cnrmf(demod->filter.out->fdomain[i * binsperbin + j]);
+
+      // Exponential smoothing
+      demod->spectrum.bin_data[i] += smooth * (p - demod->spectrum.bin_data[i]);
     }
   }
  quit:;
@@ -81,4 +72,24 @@ void *demod_spectrum(void *arg){
   demod->filter.energies = NULL;
   delete_filter_output(&demod->filter.out);
   return NULL;
+}
+// Unique to spectrum energies, seems like a kludge, may be replaced
+int encode_vector(uint8_t **buf,enum status_type type,float *array){
+  uint8_t *cp = *buf;
+  *cp++ = type;
+  int length = 256; // 64 4-byte floats
+  *cp++ = length;
+
+  for(int i=0; i < 64; i++){ // For each float
+    union {
+      uint32_t u;
+      float f;
+    } d;
+    d.f = array[i];
+    for(int j=0; j < 4; j++){ // for each byte in float, MSB first
+      *cp++ = (d.u >> 24);
+      d.u <<= 24;
+    }
+  }
+  return length + 2;
 }

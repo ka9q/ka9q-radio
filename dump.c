@@ -359,8 +359,8 @@ void dump_metadata(uint8_t const * const buffer,int length){
     case BIN_COUNT:
       printf("bin count %d",(int)decode_int(cp,optlen));
       break;
-    case INTEGRATE_TIME:
-      printf("integrate time %.1f s",decode_float(cp,optlen));
+    case INTEGRATE_TC:
+      printf("integrate tc %.1f s",decode_float(cp,optlen));
       break;
     case BIN_DATA:
       {

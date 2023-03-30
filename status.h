@@ -126,7 +126,7 @@ enum status_type {
   COHERENT_BIN_SPACING, // (1-overlap) * block rate = (1 - ((M-1)/(L+M-1))) * block rate
   NONCOHERENT_BIN_BW, // Bandwidth (Hz) of noncoherent integration bin, some multiple of COHERENT_BIN_SPACING
   BIN_COUNT,        // Integer number of bins accumulating energy noncoherently
-  INTEGRATE_TIME,   // Time (sec) to accumulate energy noncoherently, some multiple of block time
+  INTEGRATE_TC,   // Integration time constant, sec
   BIN_DATA,         // Vector of relative bin energies, real (I^2 + Q^2)
 
 };

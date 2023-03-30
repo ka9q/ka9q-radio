@@ -224,7 +224,7 @@ struct demod {
   struct {
     float bin_bw;     // Requested bandwidth (hz) of noncoherent integration bin
     int bin_count;    // Requested bin count
-    float integrate_time; // Noncoherent integration time, s, some multiple of block rate
+    float integrate_tc; // Exponential time constant (sec)
     float *bin_data;  // Array of real floats with bin_count elements
   } spectrum;
 

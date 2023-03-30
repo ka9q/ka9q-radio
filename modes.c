@@ -45,6 +45,7 @@ struct demodtab Demodtab[] = {
       {LINEAR_DEMOD, "Linear"}, // Coherent demodulation of AM, DSB, BPSK; calibration on WWV/WWVH/CHU carrier
       {FM_DEMOD,     "FM",   }, // NBFM and noncoherent PM
       {WFM_DEMOD,    "WFM",  }, // NBFM and noncoherent PM
+      {SPECT_DEMOD,  "Spectrum", }, // Spectrum analysis
 };
 int Ndemod = sizeof(Demodtab)/sizeof(struct demodtab);
 

@@ -192,8 +192,6 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
   else
     slave->noise_gain = NAN;
   
-  // Usually too small to benefit from multithreading
-  fftwf_plan_with_nthreads(1);
   switch(slave->out_type){
   default:
   case COMPLEX:
@@ -204,29 +202,32 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     assert(slave->output_buffer.c != NULL);
     slave->output_buffer.r = NULL; // catch erroneous references
     slave->output.c = slave->output_buffer.c + osize - olen;
+    fftwf_plan_with_nthreads(1);
     slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_PATIENT);
+    if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+      fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
     break;
   case SPECTRUM: // Like complex, but no IFFT or output time domain buffer
     slave->bins = osize;
     slave->fdomain = lmalloc(sizeof(complex float) * slave->bins); // User reads this directly
     // Note: No time domain buffer; slave->output, etc, all NULL
-    // Also slave->rev_plan is NULL
+    // Also don't set up an IFFT
     break;
   case REAL:
     slave->bins = osize / 2 + 1;
     slave->fdomain = lmalloc(sizeof(complex float) * slave->bins); // Not really needed for SPECTRUM?
     assert(slave->fdomain != NULL);    
-    
     slave->output_buffer.r = lmalloc(sizeof(float) * osize);
     assert(slave->output_buffer.r != NULL);
     slave->output_buffer.c = NULL;
     slave->output.r = slave->output_buffer.r + osize - olen;
+    fftwf_plan_with_nthreads(1);
     slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_PATIENT);
+    if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+      fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
     break;
   }
   slave->next_jobnum = master->next_jobnum;
-  if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
   return slave;
 }
 
