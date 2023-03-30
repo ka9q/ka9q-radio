@@ -2,6 +2,46 @@
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
+26965	CB channel 1
+26975	CB channel 2
+26985	CB channel 3
+27005	CB channel 4
+27015	CB channel 5
+27025	CB channel 6
+27035	CB channel 7
+27055	CB channel 8
+27065	CB channel 9
+27075	CB channel 10
+27085	CB channel 11
+27105	CB channel 12
+27115	CB channel 13
+27125	CB channel 14
+27135	CB channel 15
+27155	CB channel 16
+27165	CB channel 17
+27175	CB channel 18
+27185	CB channel 19
+27205	CB channel 20
+27215	CB channel 21
+27225	CB channel 22
+27255	CB channel 23
+27235	CB channel 24
+27245	CB channel 25
+27265	CB channel 26
+27275	CB channel 27
+27285	CB channel 28
+27295	CB channel 29
+27305	CB channel 30
+27315	CB channel 31
+27325	CB channel 32
+27335	CB channel 33
+27345	CB channel 34
+27355	CB channel 35
+27365	CB channel 36
+27375	CB channel 37
+27385	CB channel 38
+27395	CB channel 39
+27405	CB channel 40
 52100	K6JCC in
 52180	W6NWG in
 52525	Simplex
