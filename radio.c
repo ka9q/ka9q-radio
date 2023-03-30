@@ -786,14 +786,13 @@ int downconvert(struct demod *demod){
     demod->tp2 = remainder;
 #endif
 
-    // output filter and fine tuning osc not used in spectrum analysis mode
-    if(demod->filter.out != NULL){
-      // set fine tuning frequency & phase. Do before execute_filter blocks (can't remember why)
+    complex float * const buffer = demod->filter.out->output.c; // Working output time-domain buffer (if any)
+    // set fine tuning frequency & phase. Do before execute_filter blocks (can't remember why)
+    if(buffer != NULL){ // No output time-domain buffer in spectrum mode
       if(remainder != demod->filter.remainder){
 	set_osc(&demod->fine,remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate));
 	demod->filter.remainder = remainder;
       }
-
       // Block phase adjustment (folded into the fine tuning osc) in two parts:
       // (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
       // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
@@ -803,10 +802,11 @@ int downconvert(struct demod *demod){
 	demod->fine.phasor *= cispi((shift - demod->filter.bin_shift) / (2.0f * (V-1))); // One time adjust for shift change
       }
       demod->fine.phasor *= demod->filter.phase_adjust;
-      execute_filter_output(demod->filter.out,-shift); // block until new data frame
-      
+    }
+    execute_filter_output(demod->filter.out,-shift); // block until new data frame
+
+    if(buffer != NULL){ // No output time-domain buffer in spectral analysis mode
       const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
-      complex float * const buffer = demod->filter.out->output.c; // Working buffer
       float energy = 0;
       for(int n=0; n < N; n++){
 	buffer[n] *= step_osc(&demod->fine);
@@ -814,7 +814,7 @@ int downconvert(struct demod *demod){
       }
       demod->sig.bb_power = energy / N;
     }
-    demod->filter.bin_shift = shift; // We need this in any case
+    demod->filter.bin_shift = shift; // We need this in any case (not really?)
     demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
     return 0;
 }
