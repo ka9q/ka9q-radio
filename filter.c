@@ -384,7 +384,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   struct filter_in * const master = slave->master;
   assert(master != NULL);
 
-  assert(slave->rev_plan != NULL);
+  assert(slave->out_type == SPECTRUM || slave->rev_plan != NULL);
   assert(slave->out_type != NONE);
   assert(master->in_type != NONE);
   assert(master->fdomain != NULL);
