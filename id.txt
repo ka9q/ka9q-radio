@@ -2,6 +2,12 @@
 1	VHF airspy
 4	HF funcube
 70	70cm funcube
+2500	WWV
+5000	WWV
+10000	WWV
+15000	WWV
+20000	WWV
+25000	WWV
 26965	CB channel 1
 26975	CB channel 2
 26985	CB channel 3
