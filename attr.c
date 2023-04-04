@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
+#include "misc.h"
 #include "attr.h"
 
 // Look for external attribute "name" on an open file and perform scanf on its value
@@ -27,7 +28,7 @@ int attrscanf(int fd,char const *name,char const *format, ...){
       fgetxattr(fd,fullname,value,attrlen);
       value[attrlen] = '\0';
     }
-    free(fullname); fullname = NULL;
+    FREE(fullname);
   }
 #else // mainly OSX, probably BSD
   if((attrlen = fgetxattr(fd,name,NULL,0,0,0)) >= 0){
@@ -60,12 +61,12 @@ int attrprintf(int fd,char const *attr,char const *format, ...){
     char *prefix = NULL;
     if(asprintf(&prefix,"user.%s",attr) >= 0){
       r = fsetxattr(fd,prefix,args,argslen,0);
-      free(prefix); prefix = NULL;
+      FREE(prefix);
     }
 #else
     r = fsetxattr(fd,attr,args,argslen,0,0);
 #endif
-    free(args); args = NULL;
+    FREE(args);
   }
   va_end(ap);
   return r;

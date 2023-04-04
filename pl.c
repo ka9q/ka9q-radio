@@ -381,7 +381,7 @@ static int close_session(struct session *sp){
     sp->prev->next = sp->next;
   else
     Sessions = sp->next;
-  free(sp);
+  FREE(sp);
   return 0;
 }
 static void closedown(int s){

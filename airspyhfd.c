@@ -533,7 +533,17 @@ void decode_airspyhf_commands(struct sdrstate *sdr,uint8_t *buffer,int length){
     if(type == EOL)
       break; // End of list
     
-    unsigned int const optlen = *cp++;
+    unsigned int optlen = *cp++;
+    if(optlen & 0x80){
+      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+      int length_of_length = optlen & 0x7f;
+      optlen = 0;
+      while(length_of_length > 0){
+	optlen <<= 8;
+	optlen |= *cp++;
+	length_of_length--;
+      }
+    }
     if(cp - buffer + optlen >= length)
       break; // Invalid length
     

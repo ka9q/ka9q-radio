@@ -274,13 +274,10 @@ void *run_fft(void *p){
       pthread_mutex_unlock(job->completion_mutex);
 
     // Do this after signaling in case free() takes time
-    if(job->input){
-      free(job->input);
-      job->input = NULL; // free input but NOT output
-    }
+    FREE(job->input); // free input but NOT output
 
     bool const terminate = job->terminate; // Don't use job pointer after free
-    free(job); job = NULL;
+    FREE(job);
     if(terminate)
       break; // Terminate after this job
   }
@@ -606,7 +603,7 @@ int delete_filter_input(struct filter_in ** p){
   fftwf_free(master->input_buffer.c);
   for(int i=0; i < ND; i++)
     fftwf_free(master->fdomain[i]);
-  free(master);
+  FREE(master);
   return 0;
 }
 int delete_filter_output(struct filter_out **p){
@@ -623,7 +620,7 @@ int delete_filter_output(struct filter_out **p){
   fftwf_free(slave->output_buffer.c);
   fftwf_free(slave->response);
   fftwf_free(slave->fdomain);
-  free(slave);
+  FREE(slave);
   return 0;
 }
 

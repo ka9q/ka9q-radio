@@ -438,7 +438,17 @@ void * status(void *p){
 	if(type == EOL)
 	  break;
 	
-	unsigned int const optlen = *cp++;
+	unsigned int optlen = *cp++;
+	if(optlen & 0x80){
+	  // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+	  int length_of_length = optlen & 0x7f;
+	  optlen = 0;
+	  while(length_of_length > 0){
+	    optlen <<= 8;
+	    optlen |= *cp++;
+	    length_of_length--;
+	  }
+	}
 	if(cp - buffer + optlen > length)
 	  break;
 
@@ -613,8 +623,7 @@ void *encode(void *arg){
       }
     }
   endloop:;
-    free(pkt);
-    pkt = NULL;
+    FREE(pkt);
 
     // send however many opus frames we can
     send_samples(sp);
@@ -682,7 +691,7 @@ int close_session(struct session ** p){
   pthread_mutex_lock(&sp->qmutex);
   while(sp->queue){
     struct packet *pkt = sp->queue->next;
-    free(sp->queue);
+    FREE(sp->queue);
     sp->queue = pkt;
   }
   pthread_mutex_unlock(&sp->qmutex);
@@ -697,7 +706,7 @@ int close_session(struct session ** p){
   else
     Sessions = sp->next;
   pthread_mutex_unlock(&Session_protect);
-  free(sp);
+  FREE(sp);
   *p = NULL;
   return 0;
 }

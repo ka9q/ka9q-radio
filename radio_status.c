@@ -147,7 +147,17 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
     if(type == EOL)
       break; // end of list, no length
 
-    unsigned int const optlen = *cp++;
+    unsigned int optlen = *cp++;
+    if(optlen & 0x80){
+      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+      int length_of_length = optlen & 0x7f;
+      optlen = 0;
+      while(length_of_length > 0){
+	optlen <<= 8;
+	optlen |= *cp++;
+	length_of_length--;
+      }
+    }
     if(cp - buffer + optlen >= length)
       break; // invalid length; we can't continue to scan
 
@@ -522,11 +532,9 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
       encode_int(&bp,BIN_COUNT,demod->spectrum.bin_count);
       encode_float(&bp,INTEGRATE_TC,demod->spectrum.integrate_tc); // sec
       // encode bin data here? maybe change this, it can be a lot
-      //      for(int i=0; i < demod->spectrum.bin_count; i++){
-      //	for(int j=0; j < 64; j++){ // 256 bytes per TLV, 4 bytes per float
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
       if(demod->spectrum.bin_data != NULL)
-	encode_vector(&bp,BIN_DATA,demod->spectrum.bin_data);
+	encode_vector(&bp,BIN_DATA,demod->spectrum.bin_data,demod->spectrum.bin_count);
     }
     break;
   }

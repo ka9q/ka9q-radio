@@ -186,11 +186,11 @@ static void *avahi_register(void *p){
       break;
   }
   // Get here only on early failure; give up completely
-  free(userdata->service_name);
-  free(userdata->service_type);
-  free(userdata->description);
-  free(userdata->dns_name);
-  free(userdata);
+  FREE(userdata->service_name);
+  FREE(userdata->service_type);
+  FREE(userdata->description);
+  FREE(userdata->dns_name);
+  FREE(userdata);
   pthread_exit(NULL);
 }
 static void client_callback(AvahiClient *c, AvahiClientState state, void *p) {

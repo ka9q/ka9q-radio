@@ -513,8 +513,7 @@ void *decode(void *arg){
       }
     }
   endloop:;
-    free(pkt);
-    pkt = NULL;
+    FREE(pkt);
   }
 }
 
@@ -573,7 +572,7 @@ int close_session(struct session ** p){
   pthread_mutex_lock(&sp->qmutex);
   while(sp->queue){
     struct packet *pkt = sp->queue->next;
-    free(sp->queue);
+    FREE(sp->queue);
     sp->queue = pkt;
   }
   pthread_mutex_unlock(&sp->qmutex);
@@ -589,7 +588,7 @@ int close_session(struct session ** p){
   else
     Audio = sp->next;
   pthread_mutex_unlock(&Audio_protect);
-  free(sp);
+  FREE(sp);
   *p = NULL;
   return 0;
 }

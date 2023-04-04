@@ -20,7 +20,17 @@ void dump_metadata(uint8_t const * const buffer,int length){
     if(type == EOL)
       break; // End of list
 
-    unsigned int const optlen = *cp++;
+    unsigned int optlen = *cp++;
+    if(optlen & 0x80){
+      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+      int length_of_length = optlen & 0x7f;
+      optlen = 0;
+      while(length_of_length > 0){
+	optlen <<= 8;
+	optlen |= *cp++;
+	length_of_length--;
+      }
+    }
     if(cp - buffer + optlen >= length)
       break; // Invalid length
     printf(" (%d) ",type);
@@ -360,14 +370,14 @@ void dump_metadata(uint8_t const * const buffer,int length){
       printf("noncoherent bin bandwidth %.1f Hz",decode_float(cp,optlen));
       break;
     case BIN_COUNT:
-      printf("bin count %d",(int)decode_int(cp,optlen));
+      printf("bins %d",(int)decode_int(cp,optlen));
       break;
     case INTEGRATE_TC:
       printf("integrate tc %.1f s",decode_float(cp,optlen));
       break;
     case BIN_DATA:
       {
-	printf("bin data:");
+	printf("fft bins:");
 	int count = optlen/sizeof(float);
 	for(int i=0; i < count; i++){
 	  printf(" %.0f",decode_float(cp,sizeof(float)));

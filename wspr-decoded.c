@@ -304,15 +304,14 @@ void cleanup(void){
     fflush(Sessions->fp);
     fclose(Sessions->fp);
     Sessions->fp = NULL;
-    free(Sessions->iobuffer);
-    Sessions->iobuffer = NULL;
-    free(Sessions);
+    FREE(Sessions->iobuffer);
+    FREE(Sessions);
     Sessions = next_s;
   }
 }
 struct session *create_session(struct rtp_header *rtp){
 
-  struct session * const sp = calloc(1,sizeof(*sp));
+  struct session *sp = calloc(1,sizeof(*sp));
   if(sp == NULL)
     return NULL; // unlikely
   
@@ -361,7 +360,7 @@ struct session *create_session(struct rtp_header *rtp){
   }    
   if(fd == -1){
     fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
-    free(sp);
+    FREE(sp);
     return NULL;
   }
   // Use fdopen on a file descriptor instead of fopen(,"w+") to avoid the implicit truncation
@@ -423,7 +422,7 @@ struct session *create_session(struct rtp_header *rtp){
 void close_session(struct session **p){
   if(p == NULL)
     return;
-  struct session * const sp = *p;
+  struct session *sp = *p;
   if(sp == NULL)
     return;
 
@@ -443,14 +442,13 @@ void close_session(struct session **p){
   fflush(sp->fp);
   fclose(sp->fp);
   sp->fp = NULL;
-  free(sp->iobuffer);
-  sp->iobuffer = NULL;
+  FREE(sp->iobuffer);
   if(sp->prev)
     sp->prev->next = sp->next;
   else
     Sessions = sp->next;
   if(sp->next)
     sp->next->prev = sp->prev;
-  free(sp);
+  FREE(sp);
   *p = NULL;
 }

@@ -507,8 +507,7 @@ void *decode(void *arg){
       }
     }
   endloop:;
-    free(pkt);
-    pkt = NULL;
+    FREE(pkt);
   }
 }
 
@@ -556,14 +555,14 @@ struct session *create_session(void){
   return sp;
 }
 
-int close_session(struct session * const sp){
+int close_session(struct session *sp){
   assert(sp != NULL);
   
   // packet queue should be empty, but just in case
   pthread_mutex_lock(&sp->qmutex);
   while(sp->queue){
     struct packet *pkt = sp->queue->next;
-    free(sp->queue);
+    FREE(sp->queue);
     sp->queue = pkt;
   }
   pthread_mutex_unlock(&sp->qmutex);
@@ -579,7 +578,7 @@ int close_session(struct session * const sp){
   else
     Audio = sp->next;
   pthread_mutex_unlock(&Audio_protect);
-  free(sp);
+  FREE(sp);
   return 0;
 }
 void closedown(int s){

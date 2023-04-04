@@ -466,8 +466,9 @@ int kill_demod(struct demod **p){
   if(demod->output.sap_fd > 2)
     close(demod->output.sap_fd);
 #endif
-  if(demod->filter.energies)
-    free(demod->filter.energies);
+  FREE(demod->filter.energies);
+  FREE(demod->spectrum.bin_data);
+
   free_demod(p);
   return 0;
 }

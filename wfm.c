@@ -284,9 +284,7 @@ void *demod_wfm(void *arg){
   delete_filter_output(&lminusr);
   delete_filter_output(&pilot);
   delete_filter_input(&composite);
-  if(demod->filter.energies)
-    free(demod->filter.energies);
-  demod->filter.energies = NULL;
+  FREE(demod->filter.energies);
   delete_filter_output(&demod->filter.out);
   return NULL;
 }

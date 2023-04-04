@@ -29,7 +29,10 @@ union result {
 };
 
 
-// Encode 64-bit integer, byte swapped, leading zeroes suppressed
+// Encode 64-bit integer, big endian, leading zeroes suppressed
+// The nice thing about big-endian encoding with suppressed leading zeroes
+// is that all (unsigned) integer types can be easily encoded
+// by simply casting them to uint64_t, without wasted space
 int encode_int64(uint8_t **buf,enum status_type type,uint64_t x){
   uint8_t *cp = *buf;
 
@@ -43,7 +46,7 @@ int encode_int64(uint8_t **buf,enum status_type type,uint64_t x){
   }
 
   int len = sizeof(x);
-  while(len > 0 && (x & 0xff00000000000000LL) == 0){
+  while(len > 0 && ((x >> 56) == 0)){
     x <<= 8;
     len--;
   }
@@ -59,7 +62,7 @@ int encode_int64(uint8_t **buf,enum status_type type,uint64_t x){
 }
 
 
-// Single null type byte means end of list
+// Special case: single null type byte means end of list
 int encode_eol(uint8_t **buf){
   uint8_t *bp = *buf;
 
@@ -96,6 +99,7 @@ int encode_int(uint8_t **buf,enum status_type type,int x){
 }
 
 
+// Floating types are also byte-swapped to big-endian order
 int encode_float(uint8_t **buf,enum status_type type,float x){
   if(isnan(x))
     return 0; // Never encode a NAN
@@ -115,41 +119,87 @@ int encode_double(uint8_t **buf,enum status_type type,double x){
 }
 
 // Encode byte string without byte swapping
-int encode_string(uint8_t **bp,enum status_type type,void const *buf,int buflen){
+int encode_string(uint8_t **bp,enum status_type const type,void const *buf,unsigned int const buflen){
+  uint8_t const *orig_bpp = *bp;
   uint8_t *cp = *bp;
   *cp++ = type;
-  if(buflen > 255)
-    buflen = 255;
-  *cp++ = buflen;
-  memcpy(cp,buf,buflen);
-  *bp = cp + buflen;
-  return 2+buflen;
-}
-// Unique to spectrum energies, seems like a kludge, may be replaced
-int encode_vector(uint8_t **bp,enum status_type type,float *array){
-  uint8_t *cp = *bp;
-  *cp++ = type;
-  int length = 252; // 63 4-byte floats
-  *cp++ = length;
 
-  for(int i=0; i < 63; i++){ // For each float
+  if(buflen < 128){
+    // send length directly
+    *cp++ = buflen;
+  } else if(buflen < 65536){
+    // Length is 2 bytes, big endian
+    *cp++ = 0x80 | 2;
+    *cp++ = buflen >> 8;
+    *cp++ = buflen;
+  } else if(buflen < 16777216){
+    *cp++ = 0x80 | 3;
+    *cp++ = buflen >> 16;
+    *cp++ = buflen >> 8;
+    *cp++ = buflen;
+  } else { // Handle more than 4 GB??
+    *cp++ = 0x80 | 4;
+    *cp++ = buflen >> 24;
+    *cp++ = buflen >> 16;
+    *cp++ = buflen >> 8;
+    *cp++ = buflen;
+  }
+  memcpy(cp,buf,buflen);
+  cp += buflen;
+  *bp = cp;
+  return cp - orig_bpp;
+}
+// Unique to spectrum energies
+// array -> vector of 32-bit floats
+// size = number of floats
+// Sent in big endian order just like other floats
+// Because it can be very long, handle large sizes
+int encode_vector(uint8_t **bp,enum status_type type,float *array,int size){
+  uint8_t const *orig_bp = *bp;
+  uint8_t *cp = *bp;
+  *cp++ = type;
+
+  int const bytes = sizeof(*array) * size; // Number of bytes in data
+  if(bytes < 128){
+    *cp++ = bytes;    // Send length directly
+  } else if(bytes < 65536){
+    *cp++ = 0x80 | 2; // length takes 2 bytes
+    *cp++ = bytes >> 8;
+    *cp++ = bytes;
+  } else if(bytes < 16777216){
+    *cp++ = 0x80 | 3;
+    *cp++ = bytes >> 16;
+    *cp++ = bytes >> 8;
+    *cp++ = bytes;
+  } else {
+    *cp++ = 0x80 | 4;
+    *cp++ = bytes >> 24;
+    *cp++ = bytes >> 16;
+    *cp++ = bytes >> 8;
+    *cp++ = bytes;
+  }
+  // Encode the individual array elements
+  // Right now they're DC....maxpositive maxnegative...minnegative
+  for(int i=0;i < size;i++){
+    // Swap but don't bother compressing leading zeroes for now
     union {
-      uint32_t u;
+      uint32_t i;
       float f;
-    } d;
-    d.f = array[i];
-    for(int j=0; j < 4; j++){ // for each byte in float, MSB first
-      *cp++ = (d.u >> 24);
-      d.u <<= 24;
-    }
+    } foo;
+    foo.f = array[i];
+    *cp++ = foo.i >> 24;
+    *cp++ = foo.i >> 16;
+    *cp++ = foo.i >> 8;
+    *cp++ = foo.i;
   }
   *bp = cp;
-  return length + 2;
+  return cp - orig_bp;
 }
 
 
 
 // Decode byte string without byte swapping
+// NB! optlen has already been 'fixed' by the caller in case it's >= 128
 char *decode_string(uint8_t const *cp,int optlen,char *buf,int buflen){
   int n = min(optlen,buflen-1);
   memcpy(buf,cp,n);
@@ -283,7 +333,17 @@ int get_ssrc(uint8_t const *buffer,int length){
     if(type == EOL)
       break; // end of list, no length
     
-    unsigned int const optlen = *cp++;
+    unsigned int optlen = *cp++;
+    if(optlen & 0x80){
+      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+      int length_of_length = optlen & 0x7f;
+      optlen = 0;
+      while(length_of_length > 0){
+	optlen <<= 8;
+	optlen |= *cp++;
+	length_of_length--;
+      }
+    }
     if(cp - buffer + optlen >= length)
       break; // invalid length; we can't continue to scan
     

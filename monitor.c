@@ -637,8 +637,7 @@ static void decode_task_cleanup(void *arg){
   struct packet *pkt_next;
   for(struct packet *pkt = sp->queue; pkt; pkt = pkt_next){
     pkt_next = pkt->next;
-    free(pkt);
-    pkt = NULL;
+    FREE(pkt);
   }
 }
 
@@ -939,14 +938,8 @@ static void *decode_task(void *arg){
     sp->tot_active += (float)sp->frame_size / sp->samprate;
     sp->active += (float)sp->frame_size / sp->samprate;
   endloop:;
-    if(bounce != NULL){
-      free(bounce);
-      bounce = NULL;
-    }
-    if(pkt != NULL){
-      free(pkt);
-      pkt = NULL;
-    }
+    FREE(bounce);
+    FREE(pkt);
   } // !sp->terminate
   pthread_cleanup_pop(1);
   return NULL;
@@ -993,8 +986,7 @@ static void *display(void *arg){
 	while(getline(&line,&size,fp) != -1){
 	  addstr(line);
 	}
-	free(line);
-	line = NULL;
+	FREE(line);
 	fclose(fp);
 	fp = NULL;
       }
@@ -1410,7 +1402,7 @@ static struct session *create_session(void){
 static int close_session(struct session **p){
   if(p == NULL)
     return -1;
-  struct session * const sp = *p;
+  struct session * sp = *p;
   if(sp == NULL)
     return -1;
   assert(Nsessions > 0);
@@ -1420,7 +1412,7 @@ static int close_session(struct session **p){
     if(Sessions[i] == sp){
       Nsessions--;
       memmove(&Sessions[i],&Sessions[i+1],(Nsessions-i) * sizeof(Sessions[0]));
-      free(sp);
+      FREE(sp);
       *p = NULL;
       return 0;
     }

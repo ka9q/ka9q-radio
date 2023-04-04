@@ -131,7 +131,7 @@ enum status_type {
 
 };
 
-int encode_string(uint8_t **bp,enum status_type type,void const *buf,int buflen);
+int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);
 int encode_eol(uint8_t **buf);
 int encode_byte(uint8_t **buf,enum status_type type,uint8_t x);
 int encode_int(uint8_t **buf,enum status_type type,int x);
@@ -141,7 +141,7 @@ int encode_int64(uint8_t **buf,enum status_type type,uint64_t x);
 int encode_float(uint8_t **buf,enum status_type type,float x);
 int encode_double(uint8_t **buf,enum status_type type,double x);
 int encode_socket(uint8_t **buf,enum status_type type,void const *sock);
-int encode_vector(uint8_t **buf,enum status_type type,float *array);
+int encode_vector(uint8_t **buf,enum status_type type,float *array,int size);
 
 uint64_t decode_int(uint8_t const *,int);
 float decode_float(uint8_t const *,int);

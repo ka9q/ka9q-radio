@@ -312,6 +312,6 @@ void *netreader(void *arg){
     if(Logfile)
       fwrite(line,linelen,1,Logfile);
   }
-  free(line); line = NULL;
+  FREE(line);
   return NULL;
 }

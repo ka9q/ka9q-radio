@@ -86,9 +86,8 @@ void *demod_spectrum(void *arg){
     }
   }
  quit:;
-  if(demod->filter.energies)
-    free(demod->filter.energies);
-  demod->filter.energies = NULL;
+  FREE(demod->spectrum.bin_data);
+  FREE(demod->filter.energies);
   delete_filter_output(&demod->filter.out);
   return NULL;
 }

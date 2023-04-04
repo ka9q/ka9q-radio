@@ -267,9 +267,7 @@ void *demod_fm(void *arg){
       break; // no valid output stream; terminate!
   } // while(!demod->terminate)
  quit:;
-  if(demod->filter.energies)
-    free(demod->filter.energies);
-  demod->filter.energies = NULL;
+  FREE(demod->filter.energies);
   delete_filter_output(&demod->filter.out);
   return NULL;
 }

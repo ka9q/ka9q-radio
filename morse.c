@@ -300,12 +300,10 @@ int init_morse(float const speed,float const pitch,float level,float const sampr
   double const tau = .005; // 5 ms time constant sounds good
   double const g = -expm1(-1/(samprate * tau)); // -expm1(x) = 1 - exp(x)
 
-  if(Dit)
-    free(Dit);
+  FREE(Dit);
   Dit = calloc(2*Dit_length,sizeof(Dit[0]));
 
-  if(Dah)
-    free(Dah);
+  FREE(Dah);
   Dah = calloc(4*Dit_length,sizeof(Dah[0]));
 
   // First element of dit and dah are the same

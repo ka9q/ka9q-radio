@@ -17,6 +17,7 @@
 #include <netdb.h>
 #include <time.h>
 
+#include "misc.h"
 #include "multicast.h"
 
 struct pcmstream {
@@ -270,7 +271,7 @@ int close_session(struct pcmstream *sp){
     sp->prev->next = sp->next;
   else
     Pcmstream = sp->next;
-  free(sp);
+  FREE(sp);
   return 0;
 }
 

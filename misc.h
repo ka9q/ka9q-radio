@@ -17,7 +17,7 @@
 #include <limits.h>
 #include <complex.h>
 #include <math.h> // Get M_PI
-#include <stdlib.h> // for ldiv()
+#include <stdlib.h> // for ldiv(), free()
 
 #ifndef M_PIf
 #define M_PIf ((float)(M_PI))
@@ -69,10 +69,6 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 #define sincospif(x,s,c) sincosf((x)*M_PIf,(s),(c))
 
 #endif // ifdef __APPLE__
-
-
-
-
 
 // Stolen from the Linux kernel -- enforce type matching of arguments
 #define min(x,y) ({			\
@@ -128,8 +124,6 @@ float i1(float const z); // 1st kind
 
 float xi(float thetasq);
 float fm_snr(float r);
-
-
 
 static int16_t inline scaleclip(float const x){
   if(x >= 1.0)
@@ -233,8 +227,6 @@ static inline time_t gps_time_sec(void){
   return utc_time_sec() - (UNIX_EPOCH - GPS_UTC_OFFSET);
 }
 
-
-
 // Return time of day as nanosec from UTC epoch
 static inline int64_t utc_time_ns(void){
   struct timespec now;
@@ -242,13 +234,15 @@ static inline int64_t utc_time_ns(void){
   return ts2ns(&now);
 }
 
-
 // Return time of day as nanosec from GPS epoch
 // Note: assumes fixed leap second offset
 // Could be better derived direct from a GPS receiver without applying the leap second offset
 static inline int64_t gps_time_ns(void){
   return utc_time_ns() - BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET);
 }
+
+// How the free() library routine should have been all along: null the pointer after freeing!
+#define FREE(p) (free(p), p = NULL)
 
 
 #endif // _MISC_H

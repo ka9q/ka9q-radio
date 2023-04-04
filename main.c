@@ -479,8 +479,7 @@ static int loadconfig(char const * const file){
 	demod = ndemod;
 	ndemod = NULL;
       }
-      free(freq_list);
-      freq_list = NULL;
+      FREE(freq_list);
     }
     free_demod(&demod); // last one wasn't needed
     fprintf(stdout,"%d demodulators started\n",nfreq);
@@ -546,9 +545,7 @@ void *rtcp_send(void *arg){
       strlcpy(sdes[0].message,string,sizeof(sdes[0].message));
       sdes[0].mlen = strlen(sdes[0].message);
     }
-    if(string){
-      free(string); string = NULL;
-    }
+    FREE(string);
 
     sdes[1].type = NAME;
     strlcpy(sdes[1].message,"KA9Q Radio Program",sizeof(sdes[1].message));

@@ -314,16 +314,14 @@ void input_loop(){
 	}
 	fclose(sp->fp);
 	sp->fp = NULL;
-	free(sp->iobuffer);
-	sp->iobuffer = NULL;
+	FREE(sp->iobuffer);
 	if(sp->prev)
 	  sp->prev->next = sp->next;
 	else
 	  Sessions = sp->next;
 	if(sp->next)
 	  sp->next->prev = sp->prev;
-	free(sp);
-	sp = NULL;
+	FREE(sp);
       }
     }
   }
@@ -337,9 +335,8 @@ void cleanup(void){
     fflush(Sessions->fp);
     fclose(Sessions->fp);
     Sessions->fp = NULL;
-    free(Sessions->iobuffer);
-    Sessions->iobuffer = NULL;
-    free(Sessions);
+    FREE(Sessions->iobuffer);
+    FREE(Sessions);
     Sessions = next_s;
   }
 }
@@ -400,8 +397,7 @@ struct session *create_session(struct rtp_header *rtp){
   }    
   if(sp->fp == NULL){
     fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
-    free(sp);
-    sp = NULL;
+    FREE(sp);
     return NULL;
   }
   // file create succeded, now put us at top of list

@@ -424,8 +424,7 @@ int main(int argc,char *argv[]){
 	      demods[i].tune.freq);
     }
     fprintf(stdout,"Total SSRCs: %u\n",ssrc_count);
-    free(demods);
-    demods = NULL;
+    FREE(demods);
     exit(0);
   }
 
@@ -982,7 +981,17 @@ static int for_us(struct demod *demod,uint8_t const *buffer,int length,uint32_t 
     if(type == EOL)
       break; // end of list, no length
     
-    unsigned int const optlen = *cp++;
+    unsigned int optlen = *cp++;
+    if(optlen & 0x80){
+      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+      int length_of_length = optlen & 0x7f;
+      optlen = 0;
+      while(length_of_length > 0){
+	optlen <<= 8;
+	optlen |= *cp++;
+	length_of_length--;
+      }
+    }
     if(cp - buffer + optlen >= length)
       break; // invalid length; we can't continue to scan
     
