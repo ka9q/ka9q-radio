@@ -34,12 +34,16 @@ void *demod_spectrum(void *arg){
   if(demod->spectrum.bin_bw <= 0)
     demod->spectrum.bin_bw = 10000; // Force reasonable value of 10 kHz
 
-  float const blockrate = 1000.0f / Blocktime; // Width in Hz of frequency bins (> FFT bin spacing)
+  // Parameters set by system input side
+  float const blockrate = 1000.0f / Blocktime; // Width in Hz of frequency bins (greater than FFT bin spacing due to forward FFT overlap)
   int const N = Frontend.L + Frontend.M - 1;
-  float const fft_bin_spacing = blockrate * (float)Frontend.L/N; // Hz between FFT bins (< FFT bin width)
-  int const fft_bins = demod->spectrum.bin_count * demod->spectrum.bin_bw / fft_bin_spacing;
+  float const fft_bin_spacing = blockrate * (float)Frontend.L/N; // Hz between FFT bins (less than actual FFT bin width due to FFT overlap)
 
-  int const binsperbin = demod->spectrum.bin_bw / fft_bin_spacing;
+  // Parameters set by user, constrained by system input
+  int const t = roundf(demod->spectrum.bin_bw / fft_bin_spacing);
+  int const binsperbin = (t == 0) ? 1 : t;  // Force reasonable value
+  demod->spectrum.bin_bw = binsperbin * fft_bin_spacing; // Force to integer multiple of fft_bin_spacing
+  int const fft_bins = demod->spectrum.bin_count * binsperbin;
 
   // Although we don't use filter_output, demod->filter.min_IF and max_IF still need to be set
   // so radio.c:set_freq() will set the front end tuner properly
@@ -51,7 +55,6 @@ void *demod_spectrum(void *arg){
   // points directly, so we decrease to correct for the overlap factor
   // I know all this can be simplified
   int const olen = fft_bins * (float)Frontend.L / N;
-
   demod->filter.out = create_filter_output(Frontend.in,NULL,olen,SPECTRUM);
   if(demod->filter.out == NULL){
     fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)demod->output.rtp.ssrc);
@@ -76,11 +79,12 @@ void *demod_spectrum(void *arg){
     // expm1(x) = exp(x) - 1 (to preserve precision)
     float const smooth = -expm1f(-Blocktime / (1000 * demod->spectrum.integrate_tc)); // Blocktime is in millisec!
     int binp = 0; 
-    for(int i=0; i < demod->spectrum.bin_count; i++){ // For each noncoherent integration bin
+    for(int i=0; i < demod->spectrum.bin_count; i++){ // For each noncoherent integration bin above center freq
       float p = 0;
-      for(int j=0; j < binsperbin; j++) // Add energy of each fft bin that's part of this user integration bin
+      for(int j=0; j < binsperbin; j++){ // Add energy of each fft bin that's part of this user integration bin
+	assert(binp < demod->filter.out->bins);
 	p += cnrmf(demod->filter.out->fdomain[binp++]);
-
+      }
       // Exponential smoothing
       demod->spectrum.bin_data[i] += smooth * (p - demod->spectrum.bin_data[i]);
     }
