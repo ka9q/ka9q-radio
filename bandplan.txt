@@ -12,7 +12,7 @@
 2.5     b.010   WWV 2.5 MHz
 
 3.2	3.4	90m broadcast
-3.33	3.335	CHU
+3.329	3.335	CHU
 
 
 3.5	3.525	80m ham Extra CW
@@ -24,11 +24,11 @@
 4.75	4.995	60m broadcast
 5.000	b.010	WWV 5 MHz
 
-5.3320  b.003	60m ham chan 1
-5.3480	b.003	60m ham chan 2
-5.3585	b.003	60m ham chan 3
-5.3730	b.003	60m ham chan 4
-5.4050	b.003	60m ham chan 5
+5.3320  b.028	60m ham chan 1
+5.3480	b.028	60m ham chan 2
+5.3585	b.028	60m ham chan 3
+5.3730	b.028	60m ham chan 4
+5.4050	b.028	60m ham chan 5
 
 5.9	6.2	49m broadcast
 
@@ -38,7 +38,7 @@
 7.175	7.3	40m ham General Phone
 7.2	7.45	41m broadcast
 
-7.850	7.855	CHU
+7.849	7.855	CHU
 
 9.4	9.9	31m broadcast
 10.0    b.010	WWV 10 MHz
@@ -54,7 +54,7 @@
 14.175	14.225	20m ham Advanced Phone
 14.225	14.35	20m ham General Phone
 
-14.670	14.675	CHU
+14.669	14.675	CHU
 
 15.0    b.010	WWV 15 MHz
 
@@ -84,51 +84,51 @@
 
 25.67	26.1	11m broadcast
 
-26.96	26.97	CB channel 1
-26.97	26.98	CB channel 2
-26.98	26.99	CB channel 3
-26.99	27.0	CB channel 3A
-27.0	27.01	CB channel 4
-27.01	27.02	CB channel 5
-27.02	27.03	CB channel 6
-27.03	27.04	CB channel 7
-27.04	27.05	CB channel 7A
-27.05	27.06	CB channel 8
-27.06	27.07	CB channel 9
-27.07	27.08	CB channel 10
-27.08	27.09	CB channel 11
-27.09	27.10	CB channel 11A
-27.10	27.11	CB channel 12
-27.11	27.12	CB channel 13
-27.12	27.13	CB channel 14
-27.13	27.14	CB channel 15
-27.14	27.15	CB channel 15A
-27.15	27.16	CB channel 16
-27.16	27.17	CB channel 17
-27.17	27.18	CB channel 18
-27.18	27.19	CB channel 19
-27.19	27.20	CB channel 19A
-27.20	27.21	CB channel 20
-27.21	27.22	CB channel 21
-27.22	27.23	CB channel 22
-27.23	27.24	CB channel 24
-27.24	27.25	CB channel 25
-27.25	27.26	CB channel 23
-27.26	27.27	CB channel 26
-27.27	27.28	CB channel 27
-27.28	27.29	CB channel 28
-27.29	27.30	CB channel 29
-27.30	27.31	CB channel 30
-27.31	27.32	CB channel 31
-27.32	27.33	CB channel 32
-27.33	27.34	CB channel 33
-27.34	27.35	CB channel 34
-27.35	27.36	CB channel 35
-27.36	27.37	CB channel 36
-27.37	27.38	CB channel 37
-27.38	27.39	CB channel 38
-27.39	27.40	CB channel 39
-27.40	27.41	CB channel 40
+26.965	b.010	CB channel 1
+26.975	b.010	CB channel 2
+26.985	b.010	CB channel 3
+26.995	b.010	CB channel 3A
+27.005	b.010	CB channel 4
+27.015	b.010	CB channel 5
+27.025	b.010	CB channel 6
+27.035	b.010	CB channel 7
+27.045	b.010	CB channel 7A
+27.055	b.010	CB channel 8
+27.065	b.010	CB channel 9
+27.075	b.010	CB channel 10
+27.085	b.010	CB channel 11
+27.095	b.010	CB channel 11A
+27.105	b.010	CB channel 12
+27.115	b.010	CB channel 13
+27.125	b.010	CB channel 14
+27.135	b.010	CB channel 15
+27.145	b.010	CB channel 15A
+27.155	b.010	CB channel 16
+27.165	b.010	CB channel 17
+27.175	b.010	CB channel 18
+27.185	b.010	CB channel 19
+27.195	b.010	CB channel 19A
+27.205	b.010	CB channel 20
+27.215	b.010	CB channel 21
+27.225	b.010	CB channel 22
+27.235	b.010	CB channel 24
+27.245	b.010	CB channel 25
+27.255	b.010	CB channel 23
+27.265	b.010	CB channel 26
+27.275	b.010	CB channel 27
+27.285	b.010	CB channel 28
+27.295	b.010	CB channel 29
+27.305	b.010	CB channel 30
+27.315	b.010	CB channel 31
+27.325	b.010	CB channel 32
+27.335	b.010	CB channel 33
+27.345	b.010	CB channel 34
+27.355	b.010	CB channel 35
+27.365	b.010	CB channel 36
+27.375	b.010	CB channel 37
+27.385	b.010	CB channel 38
+27.395	b.010	CB channel 39
+27.405	b.010	CB channel 40
 
 28.0	28.3	10m ham Novice CW
 28.3	28.5	10m ham Novice Phone
@@ -143,6 +143,8 @@
 
 76	82	TV Channel 5
 82	88	TV Channel 6
+
+88	108	FM Broadcast
 
 144.0	144.1	2m ham CW
 144.1	148.0	2m ham Phone
