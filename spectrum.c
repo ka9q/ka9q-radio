@@ -61,23 +61,20 @@ void *demod_spectrum(void *arg){
     goto quit;
   }
 
-  if(demod->spectrum.bin_data == NULL)
-    demod->spectrum.bin_data = calloc(demod->spectrum.bin_count,sizeof(*demod->spectrum.bin_data));
+  // If it's already allocated (why should it be?) we don't know how big it is
+  if(demod->spectrum.bin_data != NULL)
+    FREE(demod->spectrum.bin_data);
+  demod->spectrum.bin_data = calloc(demod->spectrum.bin_count,sizeof(*demod->spectrum.bin_data));
 
   set_freq(demod,demod->tune.freq); // retune front end if needed to cover requested bandwidth
 
+  float tc = 0; // time constant cache, let it be set in the first iteration
+  float smooth = 1;
+  // Do first update with smooth == 1 so we don't have to wait for an initial exponential rise
   while(!demod->terminate){
-    
     if(downconvert(demod) == -1)
       break; // received terminate
 
-    if(demod->spectrum.integrate_tc <= 0)
-      demod->spectrum.integrate_tc = 5; // Force reasonable value of 5 sec
-      
-    // https://en.wikipedia.org/wiki/Exponential_smoothing#Time constant
-    // smooth = 1 - exp(-blocktime/tc)
-    // expm1(x) = exp(x) - 1 (to preserve precision)
-    float const smooth = -expm1f(-Blocktime / (1000 * demod->spectrum.integrate_tc)); // Blocktime is in millisec!
     int binp = 0; 
     for(int i=0; i < demod->spectrum.bin_count; i++){ // For each noncoherent integration bin above center freq
       float p = 0;
@@ -87,6 +84,17 @@ void *demod_spectrum(void *arg){
       }
       // Exponential smoothing
       demod->spectrum.bin_data[i] += smooth * (p - demod->spectrum.bin_data[i]);
+    }
+    if(tc == 0 || demod->spectrum.integrate_tc != tc){
+      // first time through, or value has changed; recalculate smoothing factor
+      if(isnan(demod->spectrum.integrate_tc) || demod->spectrum.integrate_tc <= 0)
+	demod->spectrum.integrate_tc = 5; // Force reasonable value of 5 sec
+
+      tc = demod->spectrum.integrate_tc; // Update cache copy
+      // https://en.wikipedia.org/wiki/Exponential_smoothing#Time constant
+      // smooth = 1 - exp(-blocktime/tc)
+      // expm1(x) = exp(x) - 1 (to preserve precision)
+      smooth = -expm1f(-Blocktime / (1000 * tc)); // Blocktime is in millisec!
     }
   }
  quit:;
