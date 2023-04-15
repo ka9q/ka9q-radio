@@ -82,6 +82,7 @@ int main(int argc,char *argv[]){
   // which is hard to do in one command, as we'd have to stash the ssrc somewhere.
   for(;;){
     // Send poll
+    // need to add randomized wait and avoidance of poll if response elicited by other poller (eg., control) comes in first
     usleep(1000000);
 
     {
@@ -90,7 +91,7 @@ int main(int argc,char *argv[]){
       if(timeout < 0)
 	timeout = 0;
 
-      send_poll(Ctl_fd,0);
+      send_poll(Ctl_fd,Ssrc);
       fd_set fdset;
       FD_ZERO(&fdset);
       FD_SET(Status_fd,&fdset);
@@ -138,23 +139,23 @@ int main(int argc,char *argv[]){
     if(npower & 1){
       // Odd: emit N/2+1....N-1 0....N/2 (division truncating to integer)
       double f = freq - bin_bw * npower / 2;
-      printf(" %.0f, %.0f, %.0f, %d",
-	     f - bin_bw * npower/2, f + bin_bw * npower/2, bin_bw, npower);
+      printf(" %.0f, %.0f, %.0f, %d,",
+	     f - bin_bw * npower/2, f + bin_bw * npower, bin_bw, npower);
  
       for(int i= npower/2; i < npower; i++)
-	printf(" ,%.1f",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
+	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
       for(int i= 0; i < npower/2; i++)
-	printf(" ,%.1f",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
+	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
     } else {
       // Even: emit N/2....N-1 0....N/2-1
       double f = freq - bin_bw * npower / 2;
-      printf(" %.0f, %.0f, %.0f, %d",
-	     f - bin_bw * npower/2, f + bin_bw * npower/2, bin_bw, npower);
+      printf(" %.0f, %.0f, %.0f, %d,",
+	     f - bin_bw * npower/2, f + bin_bw * npower, bin_bw, npower);
  
       for(int i= npower/2; i < npower; i++)
-	printf(" ,%.1f",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
+	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
       for(int i= 0; i < npower/2; i++)
-	printf(" ,%.1f",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
+	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
     }
     printf("\n");
   }
