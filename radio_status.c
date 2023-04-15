@@ -104,7 +104,7 @@ void *radio_status(void *arg){
 	send_radio_status(&Frontend,demod,1); // Send status in response
       }
     } else {
-#if 1
+#if 0
       // Send status for every SSRC
       pthread_mutex_lock(&Demod_list_mutex);
       for(int i=0; i < Demod_list_length; i++){

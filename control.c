@@ -305,6 +305,7 @@ void winch_handler(int num){
   Resized = true;
 }
 
+#if 0
 static int dcompare(void const *a,void const *b){
   struct demod const *da = a;
   struct demod const *db = b;  
@@ -314,6 +315,7 @@ static int dcompare(void const *a,void const *b){
     return +1;
   return 0;
 }
+#endif
 
 
 
@@ -350,6 +352,13 @@ int main(int argc,char *argv[]){
   }
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
   // Dummy filter
+  if(Ssrc == 0 || argc < optind){
+    fprintf(stderr,"Usage: %s -s <ssrc> mcast_group\n",App_path);
+    fprintf(stderr,"<ssrc> is positive decimal number, mcast_group is DNS name or IP address of control multicast group\n");
+    exit(1);
+  }
+
+
 
   resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,Iface,sizeof(Iface));
   Status_fd = listen_mcast(&Metadata_dest_address,Iface);
@@ -362,6 +371,7 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"connect to mcast control failed\n");
     exit(1);
   }
+#if 0 // causes too much congestion
   if(Ssrc == 0){
     // no ssrc specified; send wild-card poll and collect responses
     unsigned ssrc_count = 0;
@@ -427,7 +437,7 @@ int main(int argc,char *argv[]){
     FREE(demods);
     exit(0);
   }
-
+#endif
   char modefile_path[PATH_MAX];
   if (dist_path(modefile_path,sizeof(modefile_path),Modefile) == -1) {
     fprintf(stderr,"Could not find mode file %s\n", Modefile);
