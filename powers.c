@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <string.h>
+#if defined(linux)
+#include <bsd/string.h>
+#endif
 #include <locale.h>
 #include <assert.h>
 #include "misc.h"
