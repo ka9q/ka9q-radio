@@ -108,12 +108,10 @@ int main(int argc,char *argv[]){
       // Immediate poll if timeout is negative
       if(timeout < 0)
 	timeout = 0;
-      printf("timeout %'lld\n",timeout);
       struct timespec ts;
       ns2ts(&ts,timeout);
       n = pselect(n,&fdset,NULL,NULL,&ts,NULL);
       if(n <= 0 && timeout == 0){
-	printf("select returned %d\n",n);
 	usleep(10000); // rate limit, just in case
 	goto again;
       }
