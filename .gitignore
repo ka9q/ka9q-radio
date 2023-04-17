@@ -1,4 +1,4 @@
-#*#
+\#*\#
 *~
 *.a
 *.o
@@ -25,6 +25,7 @@ pcmrecord
 pcmsend
 pcmspawn
 pl
+powers
 radiod
 rdsd
 rtlsdrd

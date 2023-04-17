@@ -35,10 +35,18 @@ int dump_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
+  int count = -1;     // Number of updates. -1 means infinite
+  float interval = 5; // Period between updates, sec
   {
     int c;
-    while((c = getopt(argc,argv,"vs:")) != -1){
+    while((c = getopt(argc,argv,"c:i:vs:")) != -1){
       switch(c){
+      case 'c':
+	count = strtol(optarg,NULL,0);
+	break;
+      case 'i':
+	interval = strtof(optarg,NULL);
+	break;
       case 'v':
 	Verbose++;
 	break;
@@ -62,6 +70,11 @@ int main(int argc,char *argv[]){
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
   // Dummy filter
 
+  if(argc <= optind){
+    fprintf(stderr,"Usage: %s -s ssrc [-v] [-i interval] [-c count] mcast_addr\n",App_path);
+    exit(1);
+
+  }
   resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,Iface,sizeof(Iface));
   Status_fd = listen_mcast(&Metadata_dest_address,Iface);
   if(Status_fd == -1){
@@ -74,59 +87,66 @@ int main(int argc,char *argv[]){
     exit(1);
   }
 
-  // The deadline starts at 1 sec in the future
-  // It is reset as long as we keep seeing our responses
-  int64_t deadline = gps_time_ns() + BILLION;
 
   // Send command to set up the channel?? Or do in a separate command? We'd like to reuse the same demod & ssrc,
   // which is hard to do in one command, as we'd have to stash the ssrc somewhere.
-  for(;;){
-    // Send poll
-    // need to add randomized wait and avoidance of poll if response elicited by other poller (eg., control) comes in first
-    usleep(1000000);
+  while(true){
+    uint32_t tag = send_poll(Ctl_fd,Ssrc);
+    // The deadline starts at 1 sec after a poll
+    int64_t deadline = gps_time_ns() + BILLION;
 
-    {
-      int64_t timeout = deadline - gps_time_ns();
-      // Immediate poll if timeout is negative
-      if(timeout < 0)
-	timeout = 0;
-
-      send_poll(Ctl_fd,Ssrc);
+    int length = 0;
+    uint8_t buffer[8192];
+    while(true){
+      // Wait for a reply to our query
+      // ignore all packets on group without changing deadline
       fd_set fdset;
       FD_ZERO(&fdset);
       FD_SET(Status_fd,&fdset);
       int n = Status_fd + 1;
-      {
-	struct timespec ts;
-	ns2ts(&ts,timeout);
-	n = pselect(n,&fdset,NULL,NULL,&ts,NULL);
+      int64_t timeout = deadline - gps_time_ns();
+      // Immediate poll if timeout is negative
+      if(timeout < 0)
+	timeout = 0;
+      printf("timeout %'lld\n",timeout);
+      struct timespec ts;
+      ns2ts(&ts,timeout);
+      n = pselect(n,&fdset,NULL,NULL,&ts,NULL);
+      if(n <= 0 && timeout == 0){
+	printf("select returned %d\n",n);
+	usleep(10000); // rate limit, just in case
+	goto again;
       }
-      if(n <= 0)
-	continue; // Only on a timeout
       if(!FD_ISSET(Status_fd,&fdset))
 	continue;
-    }      
-    // Message from the radio program
-    uint8_t buffer[8192];
-    socklen_t ssize = sizeof(Metadata_source_address);
-    int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
+      // Read message on the multicast group
+      socklen_t ssize = sizeof(Metadata_source_address);
+      length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
     
-    // Ignore our own command packets
-    if(length < 2 || buffer[0] != 0)
-      continue;
-    int const ssrc = get_ssrc(buffer+1,length-1);
-    if(ssrc != Ssrc)
-      continue; // Not the droid we're looking for
-    deadline = gps_time_ns() + BILLION; // extend deadline as long as we're progressing
-    
+      // Ignore our own command packets
+      if(length < 2 || buffer[0] != 0)
+	continue; // Wait for another one
+      if(Ssrc != get_ssrc(buffer+1,length-1))
+	continue; // Not the droid we're looking for; wait for another one
+
+      // Should we insist on the same command tag, or accept any "recent" status packet, e.g., triggered by the control program?
+      // This is needed because initial delays in joining multicast groups produce bursts of buffered responses; investigate this
+      if(tag != get_tag(buffer+1,length-1))
+	 continue; // Also not the droid we're looking for.
+
+      break;
+    }    
     float powers[65536];
     uint64_t time;
     double freq;
     double bin_bw;
     
-    int npower = dump_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&freq,&bin_bw,ssrc,buffer+1,length-1);
-    if(npower < 0)
+    int npower = dump_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&freq,&bin_bw,Ssrc,buffer+1,length-1);
+    if(npower < 0){
+      printf("Invalid response, length %d\n",npower);
+      
       continue; // Invalid for some reason
+    }
     // Note from VK5QI:
     // the output format from that utility matches that produced by rtl_power, which is: 
     //2022-04-02, 16:24:55, 400050181, 401524819, 450.13, 296, -52.95, -53.27, -53.26, -53.24, -53.40, <many more points here>
@@ -138,30 +158,43 @@ int main(int argc,char *argv[]){
 
     if(npower & 1){
       // Odd: emit N/2+1....N-1 0....N/2 (division truncating to integer)
-      double f = freq - bin_bw * npower / 2;
       printf(" %.0f, %.0f, %.0f, %d,",
-	     f - bin_bw * npower/2, f + bin_bw * npower, bin_bw, npower);
+	     freq - bin_bw * npower/2, freq + bin_bw * npower/2, bin_bw, npower);
  
+      // Frequencies below center
       for(int i= npower/2; i < npower; i++)
 	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
+      // Frequencies above center
       for(int i= 0; i < npower/2; i++)
 	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
     } else {
       // Even: emit N/2....N-1 0....N/2-1
-      double f = freq - bin_bw * npower / 2;
       printf(" %.0f, %.0f, %.0f, %d,",
-	     f - bin_bw * npower/2, f + bin_bw * npower, bin_bw, npower);
+	     freq - bin_bw * npower/2, freq + bin_bw * npower/2, bin_bw, npower);
  
+      // Frequencies below center
       for(int i= npower/2; i < npower; i++)
 	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
+      // Frequencies above center
       for(int i= 0; i < npower/2; i++)
 	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
     }
     printf("\n");
+    // need to add randomized wait and avoidance of poll if response elicited by other poller (eg., control) comes in first
+    usleep((useconds_t)(interval * 1e6));
+
+    if(count == -1)
+      continue;
+    count--;
+    if(count == 0)
+      break;
+  again:;
   }
+  exit(0);
 }
 
 // Decode only those status fields relevant to spectrum measurement
+// Return number of bins
 int dump_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,int length){
 #if 0  // use later
   double l_lo1 = 0,l_lo2 = 0;
