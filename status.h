@@ -153,6 +153,6 @@ int get_ssrc(uint8_t const *buffer,int length);
 void dump_metadata(uint8_t const *,int);
 
 int64_t random_time(int64_t base,int64_t rrange);
-void send_poll(int fd,int ssrc);
+uint32_t send_poll(int fd,int ssrc);
 
 #endif

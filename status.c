@@ -306,7 +306,8 @@ int64_t random_time(int64_t base,int64_t rrange){
 }
 
 // Send empty poll command on specified descriptor
-void send_poll(int fd,int ssrc){
+// Return command tag
+uint32_t send_poll(int fd,int ssrc){
   uint8_t cmdbuffer[128];
   uint8_t *bp = cmdbuffer;
   *bp++ = 1; // Command
@@ -320,6 +321,7 @@ void send_poll(int fd,int ssrc){
   int const command_len = bp - cmdbuffer;
   if(send(fd, cmdbuffer, command_len, 0) != command_len)
     perror("poll command send");
+  return tag;
 }
 
 
