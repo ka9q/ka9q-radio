@@ -128,7 +128,7 @@ int main(int argc,char *argv[]){
     encode_eol(&bp);
     int const command_len = bp - buffer;
     if(Verbose > 1){
-      printf("Sent: ");
+      printf("Sent:");
       dump_metadata(buffer+1,command_len-1);
     }
     if(send(Ctl_fd, buffer, command_len, 0) != command_len){
@@ -171,7 +171,7 @@ int main(int argc,char *argv[]){
     } while(length < 2 || buffer[0] != 0 || Ssrc != get_ssrc(buffer+1,length-1) || tag != get_tag(buffer+1,length-1));
 
     if(Verbose > 1){
-      printf("Received: ");
+      printf("Received:");
       dump_metadata(buffer+1,length-1);
     }
     float powers[65536];
