@@ -380,7 +380,7 @@ void dump_metadata(uint8_t const * const buffer,int length){
 	printf("fft bins:");
 	int count = optlen/sizeof(float);
 	for(int i=0; i < count; i++){
-	  printf(" %.0f",decode_float(cp,sizeof(float)));
+	  printf(" %.1g",decode_float(cp,sizeof(float)));
 	  cp += sizeof(float);
 	}
       }
