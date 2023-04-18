@@ -23,7 +23,7 @@
 
 #define BLOCKSIZE 4096
 
-float const scale = 1./SHRT_MAX;
+float const scale = 1./INT16_MAX;
 
 int Samprate = 192000;
 

@@ -72,7 +72,7 @@ struct session {
 // Global config variables
 int const Bufsize = 1540;     // Maximum samples/words per RTP packet - must be smaller than Ethernet MTU
 
-float const SCALE = 1./SHRT_MAX;
+float const SCALE = 1./INT16_MAX;
 
 // Command line params
 int Mcast_ttl = 1;

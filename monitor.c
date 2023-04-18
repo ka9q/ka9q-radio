@@ -42,7 +42,7 @@
 static int Samprate = 48000;  // Now applies only to hardware output
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 #define BUFFERSIZE (1<<17)    // about 2.73 sec at 48 kHz stereo - must be power of 2!!
-static float const SCALE = 1./SHRT_MAX;
+static float const SCALE = 1./INT16_MAX;
 static const float Latency = 0.02; // chunk size for audio output callback
 static const float Tone_period = 0.24; // PL tone integration period
 

@@ -70,7 +70,7 @@ struct sdrstate {
 float const AGC_upper = -15;
 float const AGC_lower = -50;
 int const ADC_samprate = 192000;
-float const SCALE16 = 1./SHRT_MAX;
+float const SCALE16 = 1./INT16_MAX;
 float const DC_alpha = 1.0e-6;  // high pass filter coefficient for DC offset estimates, per sample
 float const Power_alpha = 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
 int const Bufsize = 16384;

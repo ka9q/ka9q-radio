@@ -57,7 +57,7 @@ float Blocktime = 5; // milliseconds
 int const Composite_samprate = 384000;         // Composite input rate
 int const Audio_samprate = 48000;         // stereo output rate
 float Kaiser_beta = 3.5 * M_PI;
-float const SCALE = 1./SHRT_MAX;
+float const SCALE = 1./INT16_MAX;
 
 float Deemph_tc = 75.0e-6; // De-emphasis time constant. 75us for North America & Korea, 50us elsewhere
 float Deemph_rate;

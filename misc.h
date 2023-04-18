@@ -127,10 +127,10 @@ float fm_snr(float r);
 
 static int16_t inline scaleclip(float const x){
   if(x >= 1.0)
-    return SHRT_MAX;
+    return INT16_MAX;
   else if(x <= -1.0)
-    return SHRT_MIN;
-  return (int16_t)(SHRT_MAX * x);
+    return INT16_MIN;
+  return (int16_t)(INT16_MAX * x);
 }
 static inline complex float const csincosf(float const x){
   float s,c;
@@ -202,15 +202,15 @@ static inline int time_cmp(struct timespec const *a,struct timespec const *b){
     return -1;
   return 0;
 }
-static int64_t const BILLION = 1000000000LL;
+static long long const BILLION = 1000000000LL;
 
 // Convert timespec (seconds, nanoseconds) to integer nanoseconds
 // Integer nanoseconds overflows past 584.94242 years. That's probably long enough
-static inline int64_t ts2ns(struct timespec const *ts){
+static inline long long ts2ns(struct timespec const *ts){
   return ts->tv_sec * BILLION + ts->tv_nsec;
 }
 // Convert integer nanosec count to timspec
-static inline void ns2ts(struct timespec *ts,int64_t ns){
+static inline void ns2ts(struct timespec *ts,long long ns){
   lldiv_t r = lldiv(ns,BILLION);
   ts->tv_sec = r.quot;
   ts->tv_nsec = r.rem;
@@ -228,7 +228,7 @@ static inline time_t gps_time_sec(void){
 }
 
 // Return time of day as nanosec from UTC epoch
-static inline int64_t utc_time_ns(void){
+static inline long long utc_time_ns(void){
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
   return ts2ns(&now);
@@ -237,7 +237,7 @@ static inline int64_t utc_time_ns(void){
 // Return time of day as nanosec from GPS epoch
 // Note: assumes fixed leap second offset
 // Could be better derived direct from a GPS receiver without applying the leap second offset
-static inline int64_t gps_time_ns(void){
+static inline long long gps_time_ns(void){
   return utc_time_ns() - BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET);
 }
 

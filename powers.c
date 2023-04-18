@@ -48,7 +48,7 @@ static struct  option Options[] = {
 int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,int length);
 
 void help(){
-  fprintf(stderr,"Usage: %s [-v|--verbose] -s|--ssrc ssrc [-f|--frequency freq] [-w|--bin-width bin_bw] [-b|--bins bins] [-t|--time-constant time_constant] [-c|--count count [-i|--interval interval]] [-T|--timeout timeout] mcast_addr\n",App_path);
+  fprintf(stderr,"Usage: %s [-v|--verbose [-v|--verbose]] [-f|--frequency freq] [-w|--bin-width bin_bw] [-b|--bins bins] [-t|--time-constant time_constant] [-c|--count count [-i|--interval interval]] [-T|--timeout timeout] -s|--ssrc ssrc mcast_addr\n",App_path);
   exit(1);
 }
 
@@ -140,7 +140,7 @@ int main(int argc,char *argv[]){
     encode_int(&bp,COMMAND_TAG,tag);
     encode_int(&bp,DEMOD_TYPE,SPECT_DEMOD);
     if(frequency >= 0)
-      encode_float(&bp,RADIO_FREQUENCY,frequency);
+      encode_float(&bp,RADIO_FREQUENCY,frequency); // 0 frequency means terminate
     if(bins > 0)
       encode_int(&bp,BIN_COUNT,bins);
     if(bin_bw > 0)
@@ -156,14 +156,12 @@ int main(int argc,char *argv[]){
     }
     if(send(Ctl_fd, buffer, command_len, 0) != command_len){
       perror("command send");
-      usleep(1000000);
+      usleep(1000000); // 1 second
       goto again;
     }
-    // The deadline starts at 1 sec after a poll
+    // The deadline starts at 1 sec after a command
     int64_t deadline = gps_time_ns() + Timeout;
-
     int length = 0;
-
     do {
       // Wait for a reply to our query
       // ignore all packets on group without changing deadline

@@ -34,7 +34,7 @@ char const *Input = "/run/cw/input";
 char const *Target = NULL;
 
 #define PCM_BUFSIZE 480        // 16-bit sample count per packet; must fit in Ethernet MTU
-#define SCALE16 (1./SHRT_MAX)
+#define SCALE16 (1./INT16_MAX)
 int Dit_length;
 
 int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){

@@ -54,7 +54,7 @@ float Blocktime = 5; // milliseconds
 int In_samprate = 384000;         // Composite input rate
 int Out_samprate = 48000;         // stereo output rate
 float Kaiser_beta = 3.5 * M_PI;
-float const SCALE = 1./SHRT_MAX;
+float const SCALE = 1./INT16_MAX;
 
 // Command line params
 const char *App_path;

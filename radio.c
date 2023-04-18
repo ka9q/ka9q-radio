@@ -43,7 +43,7 @@ int Active_demod_count; // Active demods
 
 
 static float const SCALE12 = 1/2048.;
-static float const SCALE16 = 1./SHRT_MAX; // Scale signed 16-bit int to float in range -1, +1
+static float const SCALE16 = 1./INT16_MAX; // Scale signed 16-bit int to float in range -1, +1
 static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
 
 struct demod *alloc_demod(void){
