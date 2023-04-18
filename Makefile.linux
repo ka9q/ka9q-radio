@@ -172,7 +172,7 @@ pcmrecord: pcmrecord.o libradio.a
 pcmsend: pcmsend.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lm -lpthread
 
-powers: powers.o libradio.a
+powers: powers.o dump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pl: pl.o libradio.a
