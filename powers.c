@@ -139,13 +139,13 @@ int main(int argc,char *argv[]){
     uint32_t tag = random();
     encode_int(&bp,COMMAND_TAG,tag);
     encode_int(&bp,DEMOD_TYPE,SPECT_DEMOD);
-    if(frequency != 0)
+    if(frequency >= 0)
       encode_float(&bp,RADIO_FREQUENCY,frequency);
-    if(bins != 0)
+    if(bins > 0)
       encode_int(&bp,BIN_COUNT,bins);
-    if(bin_bw != 0)
+    if(bin_bw > 0)
       encode_float(&bp,NONCOHERENT_BIN_BW,bin_bw);
-    if(tc != 0)
+    if(tc > 0)
       encode_float(&bp,INTEGRATE_TC,tc);
 
     encode_eol(&bp);
