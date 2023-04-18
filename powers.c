@@ -11,27 +11,46 @@
 #endif
 #include <locale.h>
 #include <assert.h>
+#include <getopt.h>
 #include "misc.h"
 #include "status.h"
 #include "multicast.h"
 #include "radio.h"
 
-
 struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
 struct sockaddr_storage Metadata_source_address;      // Source of metadata
 int IP_tos;
 int Mcast_ttl = 1;
-
-
-
 const char *App_path;
+const char *Target;
 int Verbose;
 uint32_t Ssrc;
 char Locale[256] = "en_US.UTF-8";
 char Iface[1024]; // Multicast interface to talk to front end
 int Status_fd,Ctl_fd;
+int64_t Timeout = BILLION; // Retransmission timeout
+static char const Optstring[] = "b:c:f:hi:s:t:T:vw:";
+static struct  option Options[] = {
+  {"bins", required_argument, NULL, 'b'},
+  {"count", required_argument, NULL, 'c'},
+  {"frequency", required_argument, NULL, 'f'},
+  {"help", no_argument, NULL, 'h'},
+  {"interval", required_argument, NULL, 'i'},
+  {"ssrc", required_argument, NULL, 's'},
+  {"time-constant", required_argument, NULL, 't'},
+  {"timeout", required_argument, NULL, 'T'},
+  {"verbose", no_argument, NULL, 'v'},
+  {"bin-width", required_argument, NULL, 'w'},
+  {NULL, 0, NULL, 0},
+};
+
 
 int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,int length);
+
+void help(){
+  fprintf(stderr,"Usage: %s [-v|--verbose] -s|--ssrc ssrc [-f|--frequency freq] [-w|--bin-width bin_bw] [-b|--bins bins] [-t|--time-constant time_constant] [-c|--count count [-i|--interval interval]] [-T|--timeout timeout] mcast_addr\n",App_path);
+  exit(1);
+}
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -43,34 +62,41 @@ int main(int argc,char *argv[]){
   float tc = 0;
   {
     int c;
-    while((c = getopt(argc,argv,"f:w:b:c:i:t:vs:")) != -1){
+    while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
-      case 'f':
-	frequency = strtof(optarg,NULL);
-	break;
-      case 'w':
-	bin_bw = strtof(optarg,NULL);
-	break;
       case 'b':
 	bins = strtol(optarg,NULL,0);
 	break;
       case 'c':
 	count = strtol(optarg,NULL,0);
 	break;
+      case 'f':
+	frequency = strtof(optarg,NULL);
+	break;
+      case 'h':
+	help();
+	break;
       case 'i':
 	interval = strtof(optarg,NULL);
-	break;
-      case 't':
-	tc = strtof(optarg,NULL);
-	break;
-      case 'v':
-	Verbose++;
 	break;
       case 's':
 	Ssrc = strtol(optarg,NULL,0); // Send to specific SSRC
 	break;
+      case 't':
+	tc = strtof(optarg,NULL);
+	break;
+      case 'T':
+	Timeout = (int64_t)(BILLION * strtof(optarg,NULL)); // Retransmission timeout
+	break;
+      case 'v':
+	Verbose++;
+	break;
+      case 'w':
+	bin_bw = strtof(optarg,NULL);
+	break;
       default:
 	fprintf(stdout,"Unknown option %c\n",c);
+	help();
 	break;
       }
     }
@@ -84,20 +110,17 @@ int main(int argc,char *argv[]){
     }
   }
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
-  // Dummy filter
+  if(argc <= optind)
+    help();
 
-  if(argc <= optind){
-    fprintf(stderr,"Usage: %s [-v] -s ssrc [-f freq] [-w bin_bw] [-b bins] [-t time_constant] [-c count [-i interval]] mcast_addr\n",App_path);
-    exit(1);
-
-  }
-  resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,Iface,sizeof(Iface));
+  Target = argv[optind];
+  resolve_mcast(Target,&Metadata_dest_address,DEFAULT_STAT_PORT,Iface,sizeof(Iface));
   if(Verbose)
-    fprintf(stderr,"Resolved %s -> %s\n",argv[optind],formatsock(&Metadata_dest_address));
+    fprintf(stderr,"Resolved %s -> %s\n",Target,formatsock(&Metadata_dest_address));
 
   Status_fd = listen_mcast(&Metadata_dest_address,Iface);
   if(Status_fd == -1){
-    fprintf(stderr,"Can't listen to mcast status %s\n",argv[optind]);
+    fprintf(stderr,"Can't listen to mcast status %s\n",Target);
     exit(1);
   }
   Ctl_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
@@ -137,7 +160,7 @@ int main(int argc,char *argv[]){
       goto again;
     }
     // The deadline starts at 1 sec after a poll
-    int64_t deadline = gps_time_ns() + BILLION;
+    int64_t deadline = gps_time_ns() + Timeout;
 
     int length = 0;
 
