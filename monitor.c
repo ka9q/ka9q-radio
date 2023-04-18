@@ -1043,8 +1043,8 @@ static void *display(void *arg){
 	struct session *sp = Sessions_copy[session];
 	
 	// embolden entire line if active
-	int queue = 1000 * (sp->wptr - Rptr) / Samprate;
-	int idle = sp->wptr < Rptr ? (Rptr - sp->wptr) / Samprate : 0;
+	int const queue = sp->wptr > Rptr ? 1000 * (sp->wptr - Rptr) / Samprate : 0;
+	int const idle = sp->wptr < Rptr ? (Rptr - sp->wptr) / Samprate : 0;
 	
 	if(queue > 0)
 	  attr_on(A_BOLD,NULL);
@@ -1059,7 +1059,7 @@ static void *display(void *arg){
 	  printw("%+4.0lf    ",sp->muted ? -INFINITY : voltage2dB(sp->gain));	  
 	attr_off(A_STANDOUT,NULL);
 	{
-	  char id[100];
+	  char idle_buf[100];
 	  char identifier[31];
 	  
 	  // Truncate ID field to 30 places
@@ -1073,16 +1073,16 @@ static void *display(void *arg){
 		   identifier,
 		   sp->tot_active, // Total active time, sec
 		   sp->active,    // active time in current transmission, sec
-		   ftime(id,sizeof(id),idle),   // Time idle since last transmission
-		   queue > 0 ? queue : 0); // Playout buffer length, fractional sec
+		   ftime(idle_buf,sizeof(idle_buf),idle),   // Time idle since last transmission
+		   queue); // Playout buffer length, fractional sec
 	  else
 	    printw("%9u             %-30s%10.0f%10.0f%10s%6d",
 		   sp->ssrc,
 		   identifier,
 		   sp->tot_active, // Total active time, sec
 		   sp->active,    // active time in current transmission, sec
-		   ftime(id,sizeof(id),idle),   // Time idle since last transmission
-		   queue > 0 ? queue : 0); // Playout buffer length, fractional sec	  
+		   ftime(idle_buf,sizeof(idle_buf),idle),   // Time idle since last transmission
+		   queue); // Playout buffer length, fractional sec	  
 	}
 	if(Verbose){
 	  printw("%5s%3d%3d%3d",
