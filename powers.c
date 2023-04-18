@@ -92,6 +92,8 @@ int main(int argc,char *argv[]){
 
   }
   resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,Iface,sizeof(Iface));
+  if(Verbose)
+    fprintf(stderr,"%s -> %s\n",argv[optind],formatsock(&Metadata_dest_address));
   Status_fd = listen_mcast(&Metadata_dest_address,Iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't listen to mcast status %s\n",argv[optind]);
@@ -124,6 +126,8 @@ int main(int argc,char *argv[]){
 
     encode_eol(&bp);
     int const command_len = bp - buffer;
+    if(Verbose > 1)
+      dump_metadata(buffer+1,command_len-1);
     if(send(Ctl_fd, buffer, command_len, 0) != command_len){
       perror("command send");
       usleep(1000000);
@@ -162,6 +166,9 @@ int main(int argc,char *argv[]){
       // Should we insist on the same command tag, or accept any "recent" status packet, e.g., triggered by the control program?
       // This is needed because an initial delay in joining multicast groups produces a burst of buffered responses; investigate this
     } while(length < 2 || buffer[0] != 0 || Ssrc != get_ssrc(buffer+1,length-1) || tag != get_tag(buffer+1,length-1));
+
+    if(Verbose > 1)
+      dump_metadata(buffer+1,length-1);
 
     float powers[65536];
     uint64_t time;
