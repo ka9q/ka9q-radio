@@ -68,7 +68,6 @@ void *demod_spectrum(void *arg){
 
   set_freq(demod,demod->tune.freq); // retune front end if needed to cover requested bandwidth
 
-  float f = demod->tune.freq; // Cache radio frequency
   float tc = 0; // time constant cache, let it be set in the first iteration
   float smooth = 1;
   // Do first update with smooth == 1 so we don't have to wait for an initial exponential rise
@@ -78,7 +77,7 @@ void *demod_spectrum(void *arg){
       break; // received terminate
 
     // If a user parameter has changed, restart the integrators
-    if(demod->spectrum.integrate_tc != tc || f != demod->tune.freq)
+    if(demod->spectrum.integrate_tc != tc)
       smooth = 1;
 
     int binp = 0; 
@@ -97,7 +96,6 @@ void *demod_spectrum(void *arg){
 	demod->spectrum.integrate_tc = 5; // Force reasonable value of 5 sec
 
       // Update cached copies, recalculate smoothing param
-      f = demod->tune.freq;
       tc = demod->spectrum.integrate_tc;
       // https://en.wikipedia.org/wiki/Exponential_smoothing#Time constant
       // smooth = 1 - exp(-blocktime/tc)

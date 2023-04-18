@@ -137,8 +137,8 @@ static int send_radio_status(struct frontend const *frontend,struct demod const 
 
 // with SSRC selection, should scan entire command for our SSRC before we execute any of it
 static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int length){
-  int restart_needed = 0;
-  int new_filter_needed = 0;
+  bool restart_needed = false;
+  bool new_filter_needed = false;
   
   uint8_t const *cp = buffer;
   while(cp - buffer < length){
@@ -173,15 +173,18 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
 	int new_sample_rate = decode_int(cp,optlen);
 	if(new_sample_rate != demod->output.samprate){
 	  demod->output.samprate = new_sample_rate;
-	  restart_needed = 1;
+	  restart_needed = true;
 	}
       }
       break;
     case RADIO_FREQUENCY: // Hz
       {
 	double const f = fabs(decode_double(cp,optlen));
-	if(isfinite(f))
+	if(isfinite(f)){
 	  set_freq(demod,f);
+	  if(demod->demod_type == SPECT_DEMOD)
+	    restart_needed = true; // Easier than trying to handle it inline
+	}
       }
       break;
     case FIRST_LO_FREQUENCY:
@@ -259,7 +262,7 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
 	    new_filter_needed = 1;
 
 	  if(demod->demod_type != old_type || demod->output.samprate != old_samprate)
-	    restart_needed = 1; // demod changed, ask for a restart
+	    restart_needed = true; // demod changed, ask for a restart
 	}
       }
       break;
@@ -268,7 +271,7 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
 	enum demod_type const i = decode_int(cp,optlen);
 	if(i >= 0 && i < Ndemod && i != demod->demod_type){
 	  demod->demod_type = i;
-	  restart_needed = 1;
+	  restart_needed = true;
 	}
       }
       break;
@@ -356,22 +359,26 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
     case NONCOHERENT_BIN_BW:
       {
 	float const x = decode_float(cp,optlen);
-	if(!isnan(x))
+	if(!isnan(x) && x != demod->spectrum.bin_bw){
 	  demod->spectrum.bin_bw = x;
+	  restart_needed = true;
+	}
       }
       break;
     case BIN_COUNT:
       {
 	int const x = decode_int(cp,optlen);
-	if(x > 0)
+	if(x > 0 && x != demod->spectrum.bin_count){
 	  demod->spectrum.bin_count = x;
+	  restart_needed = true;
 	}
+      }
       break;
     case INTEGRATE_TC:
       {
 	float const x = decode_float(cp,optlen);
 	if(!isnan(x))
-	  demod->spectrum.integrate_tc = x;
+	  demod->spectrum.integrate_tc = x; // No restart needed for this parameter
       }
       break;
     default:

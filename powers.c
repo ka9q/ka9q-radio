@@ -31,21 +31,37 @@ char Locale[256] = "en_US.UTF-8";
 char Iface[1024]; // Multicast interface to talk to front end
 int Status_fd,Ctl_fd;
 
-int dump_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,int length);
+int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,int length);
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
-  int count = -1;     // Number of updates. -1 means infinite
+  int count = 1;     // Number of updates. -1 means infinite
   float interval = 5; // Period between updates, sec
+  float frequency = 0;
+  int bins = 0;
+  float bin_bw = 0;
+  float tc = 0;
   {
     int c;
-    while((c = getopt(argc,argv,"c:i:vs:")) != -1){
+    while((c = getopt(argc,argv,"f:w:b:c:i:t:vs:")) != -1){
       switch(c){
+      case 'f':
+	frequency = strtof(optarg,NULL);
+	break;
+      case 'w':
+	bin_bw = strtof(optarg,NULL);
+	break;
+      case 'b':
+	bins = strtol(optarg,NULL,0);
+	break;
       case 'c':
 	count = strtol(optarg,NULL,0);
 	break;
       case 'i':
 	interval = strtof(optarg,NULL);
+	break;
+      case 't':
+	tc = strtof(optarg,NULL);
 	break;
       case 'v':
 	Verbose++;
@@ -71,7 +87,7 @@ int main(int argc,char *argv[]){
   // Dummy filter
 
   if(argc <= optind){
-    fprintf(stderr,"Usage: %s -s ssrc [-v] [-i interval] [-c count] mcast_addr\n",App_path);
+    fprintf(stderr,"Usage: %s [-v] -s ssrc [-f freq] [-w bin_bw] [-b bins] [-t time_constant] [-c count [-i interval]] mcast_addr\n",App_path);
     exit(1);
 
   }
@@ -86,18 +102,39 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"connect to mcast control failed\n");
     exit(1);
   }
-
-
   // Send command to set up the channel?? Or do in a separate command? We'd like to reuse the same demod & ssrc,
   // which is hard to do in one command, as we'd have to stash the ssrc somewhere.
   while(true){
-    uint32_t tag = send_poll(Ctl_fd,Ssrc);
+    uint8_t buffer[8192];
+    uint8_t *bp = buffer;
+    *bp++ = 1; // Command
+
+    encode_int(&bp,OUTPUT_SSRC,Ssrc);
+    uint32_t tag = random();
+    encode_int(&bp,COMMAND_TAG,tag);
+    encode_int(&bp,DEMOD_TYPE,SPECT_DEMOD);
+    if(frequency != 0)
+      encode_float(&bp,RADIO_FREQUENCY,frequency);
+    if(bins != 0)
+      encode_int(&bp,BIN_COUNT,bins);
+    if(bin_bw != 0)
+      encode_float(&bp,NONCOHERENT_BIN_BW,bin_bw);
+    if(tc != 0)
+      encode_float(&bp,INTEGRATE_TC,tc);
+
+    encode_eol(&bp);
+    int const command_len = bp - buffer;
+    if(send(Ctl_fd, buffer, command_len, 0) != command_len){
+      perror("command send");
+      usleep(1000000);
+      goto again;
+    }
     // The deadline starts at 1 sec after a poll
     int64_t deadline = gps_time_ns() + BILLION;
 
     int length = 0;
-    uint8_t buffer[8192];
-    while(true){
+
+    do {
       // Wait for a reply to our query
       // ignore all packets on group without changing deadline
       fd_set fdset;
@@ -121,28 +158,19 @@ int main(int argc,char *argv[]){
       socklen_t ssize = sizeof(Metadata_source_address);
       length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
     
-      // Ignore our own command packets
-      if(length < 2 || buffer[0] != 0)
-	continue; // Wait for another one
-      if(Ssrc != get_ssrc(buffer+1,length-1))
-	continue; // Not the droid we're looking for; wait for another one
-
+      // Ignore invalid packets, command packets, packets re other SSRCs and packets not in response to our polls
       // Should we insist on the same command tag, or accept any "recent" status packet, e.g., triggered by the control program?
-      // This is needed because initial delays in joining multicast groups produce bursts of buffered responses; investigate this
-      if(tag != get_tag(buffer+1,length-1))
-	 continue; // Also not the droid we're looking for.
+      // This is needed because an initial delay in joining multicast groups produces a burst of buffered responses; investigate this
+    } while(length < 2 || buffer[0] != 0 || Ssrc != get_ssrc(buffer+1,length-1) || tag != get_tag(buffer+1,length-1));
 
-      break;
-    }    
     float powers[65536];
     uint64_t time;
-    double freq;
-    double bin_bw;
+    double r_freq;
+    double r_bin_bw;
     
-    int npower = dump_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&freq,&bin_bw,Ssrc,buffer+1,length-1);
+    int npower = extract_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&r_freq,&r_bin_bw,Ssrc,buffer+1,length-1);
     if(npower < 0){
       printf("Invalid response, length %d\n",npower);
-      
       continue; // Invalid for some reason
     }
     // Note from VK5QI:
@@ -158,21 +186,21 @@ int main(int argc,char *argv[]){
     // npower odd: emit N/2+1....N-1 0....N/2 (division truncating to integer)
     // npower even: emit N/2....N-1 0....N/2-1
     int const first_neg_bin = (npower + 1)/2; // round up, e.g., 64->32, 65 -> 33, 66 -> 33
-    float base = freq - bin_bw * (npower/2); // integer truncation (round down), e.g., 64-> 32, 65 -> 32
+    float base = r_freq - r_bin_bw * (npower/2); // integer truncation (round down), e.g., 64-> 32, 65 -> 32
     printf(" %.0f, %.0f, %.0f, %d,",
-	   base, base + bin_bw * (npower-1), bin_bw, npower);
+	   base, base + r_bin_bw * (npower-1), r_bin_bw, npower);
 
 #if TESTING
     // Frequencies below center
     printf("\n");
     for(int i=first_neg_bin ; i < npower; i++){
       printf("%d %f %.1f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
-      base += bin_bw;
+      base += r_bin_bw;
     }
     // Frequencies above center
     for(int i=0; i < first_neg_bin; i++){
       printf("%d %f %.1f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
-      base += bin_bw;
+      base += r_bin_bw;
     }
 #else
     for(int i= first_neg_bin; i < npower; i++)
@@ -182,14 +210,12 @@ int main(int argc,char *argv[]){
       printf(" %.1f,",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
 #endif
     printf("\n");
-    // need to add randomized wait and avoidance of poll if response elicited by other poller (eg., control) comes in first
-    usleep((useconds_t)(interval * 1e6));
-    
-    if(count == -1)
-      continue;
-    count--;
-    if(count == 0)
+    if(--count == 0)
       break;
+
+    // need to add randomized wait and avoidance of poll if response elicited by other poller (eg., control) comes in first
+    // And if we decide to use those responses (currently blocked by command tag check)
+    usleep((useconds_t)(interval * 1e6));
   again:;
   }
   exit(0);
@@ -197,7 +223,7 @@ int main(int argc,char *argv[]){
 
 // Decode only those status fields relevant to spectrum measurement
 // Return number of bins
-int dump_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,int length){
+int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,int length){
 #if 0  // use later
   double l_lo1 = 0,l_lo2 = 0;
 #endif
