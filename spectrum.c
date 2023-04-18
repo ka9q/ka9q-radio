@@ -29,7 +29,7 @@ void *demod_spectrum(void *arg){
     delete_filter_output(&demod->filter.out);
 
   if(demod->spectrum.bin_count <= 0)
-    demod->spectrum.bin_count = 64; // Force a reasonable number of bins: 64
+    demod->spectrum.bin_count = 64; // Force a reasonable number of bins
 
   if(demod->spectrum.bin_bw <= 0)
     demod->spectrum.bin_bw = 10000; // Force reasonable value of 10 kHz

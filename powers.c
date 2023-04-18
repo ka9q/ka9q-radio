@@ -154,33 +154,37 @@ int main(int argc,char *argv[]){
     char gps[1024];
     printf("%s,",format_gpstime(gps,sizeof(gps),time));
 
-    if(npower & 1){
-      // Odd: emit N/2+1....N-1 0....N/2 (division truncating to integer)
-      printf(" %.0f, %.0f, %.0f, %d,",
-	     freq - bin_bw * npower/2, freq + bin_bw * npower/2, bin_bw, npower);
- 
-      // Frequencies below center
-      for(int i= npower/2; i < npower; i++)
-	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
-      // Frequencies above center
-      for(int i= 0; i < npower/2; i++)
-	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
-    } else {
-      // Even: emit N/2....N-1 0....N/2-1
-      printf(" %.0f, %.0f, %.0f, %d,",
-	     freq - bin_bw * npower/2, freq + bin_bw * npower/2, bin_bw, npower);
- 
-      // Frequencies below center
-      for(int i= npower/2; i < npower; i++)
-	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
-      // Frequencies above center
-      for(int i= 0; i < npower/2; i++)
-	printf(" %.1f,",powers[i] == 0 ? -100.0 : 10*log10(powers[i]));
+    // Frequencies below center; note integer round-up, e.g, 65 -> 33; 64 -> 32
+    // npower odd: emit N/2+1....N-1 0....N/2 (division truncating to integer)
+    // npower even: emit N/2....N-1 0....N/2-1
+    int const first_neg_bin = (npower + 1)/2; // round up, e.g., 64->32, 65 -> 33, 66 -> 33
+    float base = freq - bin_bw * (npower/2); // integer truncation (round down), e.g., 64-> 32, 65 -> 32
+    printf(" %.0f, %.0f, %.0f, %d,",
+	   base, base + bin_bw * (npower-1), bin_bw, npower);
+
+#if TESTING
+    // Frequencies below center
+    printf("\n");
+    for(int i=first_neg_bin ; i < npower; i++){
+      printf("%d %f %.1f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      base += bin_bw;
     }
+    // Frequencies above center
+    for(int i=0; i < first_neg_bin; i++){
+      printf("%d %f %.1f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      base += bin_bw;
+    }
+#else
+    for(int i= first_neg_bin; i < npower; i++)
+      printf(" %.1f,",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+    // Frequencies above center
+    for(int i=0; i < first_neg_bin; i++)
+      printf(" %.1f,",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+#endif
     printf("\n");
     // need to add randomized wait and avoidance of poll if response elicited by other poller (eg., control) comes in first
     usleep((useconds_t)(interval * 1e6));
-
+    
     if(count == -1)
       continue;
     count--;
