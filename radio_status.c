@@ -181,9 +181,10 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
       {
 	double const f = fabs(decode_double(cp,optlen));
 	if(isfinite(f)){
-	  set_freq(demod,f);
-	  if(demod->demod_type == SPECT_DEMOD)
+	  if(f != demod->tune.freq && demod->demod_type == SPECT_DEMOD)
 	    restart_needed = true; // Easier than trying to handle it inline
+	  
+	  set_freq(demod,f);
 	}
       }
       break;
