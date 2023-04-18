@@ -1010,15 +1010,15 @@ static void *display(void *arg){
       int y,x;
       getyx(stdscr,y,x);
       x = 65; // work around unused variable warning
-      mvaddstr(y,x,"------- Activity --------");
+      mvaddstr(y,x,"------- Activity -------- Play");
       if(Verbose)
-	addstr(" Play  ----Codec----     ---------------RTP--------------------------");	
+	addstr("  ----Codec----     ---------------RTP--------------------------");	
       addstr("\n");    
       
       // Second header line
-      addstr("  dB Pan     SSRC  Tone Notch ID                                 Total   Current      Idle");
+      addstr("  dB Pan     SSRC  Tone Notch ID                                 Total   Current      Idle Queue");
       if(Verbose)
-	addstr(" Queue Type ms ch BW     packets resets drops lates reseq Source/Dest");
+	addstr(" Type ms ch BW     packets resets drops lates reseq Source/Dest");
       addstr("\n");
       
       if(Auto_sort)
@@ -1066,25 +1066,26 @@ static void *display(void *arg){
 	  strlcpy(identifier,sp->id,sizeof(identifier));
 	  
 	  if(sp->notch_enable)
-	    printw("%9u %5.1f %5.1f %-30s%10.0f%10.0f%10s",
+	    printw("%9u %5.1f %5.1f %-30s%10.0f%10.0f%10s%6d",
 		   sp->ssrc,
 		   sp->current_tone,
 		   sp->notch_tone,
 		   identifier,
 		   sp->tot_active, // Total active time, sec
 		   sp->active,    // active time in current transmission, sec
-		   ftime(id,sizeof(id),idle));   // Time idle since last transmission
+		   ftime(id,sizeof(id),idle),   // Time idle since last transmission
+		   queue > 0 ? queue : 0); // Playout buffer length, fractional sec
 	  else
-	    printw("%9u             %-30s%10.0f%10.0f%10s",
+	    printw("%9u             %-30s%10.0f%10.0f%10s%6d",
 		   sp->ssrc,
 		   identifier,
 		   sp->tot_active, // Total active time, sec
 		   sp->active,    // active time in current transmission, sec
-		   ftime(id,sizeof(id),idle));   // Time idle since last transmission
+		   ftime(id,sizeof(id),idle),   // Time idle since last transmission
+		   queue > 0 ? queue : 0); // Playout buffer length, fractional sec	  
 	}
 	if(Verbose){
-	  printw("%6d%5s%3d%3d%3d",
-		 queue > 0 ? queue : 0, // Playout buffer length, fractional sec
+	  printw("%5s%3d%3d%3d",
 		 sp->type == OPUS_PT ? "Opus" : "PCM",
 		 (1000 * sp->frame_size/sp->samprate), // frame size, ms
 		 sp->channels,
