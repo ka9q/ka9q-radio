@@ -424,7 +424,8 @@ int start_demod(struct demod * demod){
     pthread_create(&demod->demod_thread,NULL,demod_linear,demod);
     break;
   case SPECT_DEMOD:
-    pthread_create(&demod->demod_thread,NULL,demod_spectrum,demod);
+    if(demod->tune.freq != 0)
+      pthread_create(&demod->demod_thread,NULL,demod_spectrum,demod); // spectrum demod can't change freq, so just don't start it at 0
     break;
   }
   return 0;
