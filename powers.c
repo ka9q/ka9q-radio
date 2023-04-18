@@ -56,7 +56,7 @@ int main(int argc,char *argv[]){
   App_path = argv[0];
   int count = 1;     // Number of updates. -1 means infinite
   float interval = 5; // Period between updates, sec
-  float frequency = 0;
+  float frequency = -1;
   int bins = 0;
   float bin_bw = 0;
   float tc = 0;
