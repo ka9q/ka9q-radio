@@ -86,12 +86,12 @@ struct session {
 };
 
 
-const char *App_path;
+char const *App_path;
 int Verbose;
 int Keep_wav;
 char PCM_mcast_address_text[256];
-char *Recordings = ".";
-char *Wsprd_command = "wsprd -a %s/%u -o 2 -f %.6lf -w -d %s";
+char const *Recordings = ".";
+char const *Wsprd_command = "wsprd -a %s/%u -o 2 -f %.6lf -w -d %s";
 
 struct sockaddr Sender;
 struct sockaddr Input_mcast_sockaddr;
@@ -134,11 +134,13 @@ int main(int argc,char *argv[]){
       break;
     }
   }
+  char const *target;
   if(optind >= argc){
-    fprintf(stderr,"Specify PCM_mcast_address_text_address\n");
+    fprintf(stderr,"Specify PCM Multicast IP address or domain name\n");
     exit(1);
   }
-  strlcpy(PCM_mcast_address_text,argv[optind],sizeof(PCM_mcast_address_text));
+  target = argv[optind];
+  strlcpy(PCM_mcast_address_text,target,sizeof(PCM_mcast_address_text));
   setlocale(LC_ALL,locale);
 
   if(strlen(Recordings) > 0 && chdir(Recordings) != 0){
@@ -245,9 +247,8 @@ void input_loop(){
       if(size < RTP_MIN_SIZE)
 	continue; // Too small for RTP, ignore
       
-      uint8_t const * dp = buffer;
       struct rtp_header rtp;
-      dp = ntoh_rtp(&rtp,dp);
+      uint8_t const *dp = ntoh_rtp(&rtp,buffer);
       if(rtp.pad){
 	// Remove padding
 	size -= dp[size-1];
@@ -369,6 +370,7 @@ struct session *create_session(struct rtp_header *rtp){
   if(Verbose)
     fprintf(stderr,"creating %s\n",sp->filename);
 
+  assert(sp->fp != NULL);
   // file create succeded, now put us at top of list
   sp->prev = NULL;
   sp->next = Sessions;
@@ -431,17 +433,19 @@ void close_session(struct session **p){
 	   (float)sp->SamplesWritten / sp->samprate,
 	   (float)sp->TotalFileSamples / sp->samprate);
   
-  // Get final file size, write .wav header with sizes
-  fflush(sp->fp);
-  struct stat statbuf;
-  fstat(fileno(sp->fp),&statbuf);
-  sp->header.ChunkSize = statbuf.st_size - 8;
-  sp->header.Subchunk2Size = statbuf.st_size - sizeof(sp->header);
-  rewind(sp->fp);
-  fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
-  fflush(sp->fp);
-  fclose(sp->fp);
-  sp->fp = NULL;
+  if(sp->fp != NULL){
+    // Get final file size, write .wav header with sizes
+    fflush(sp->fp);
+    struct stat statbuf;
+    fstat(fileno(sp->fp),&statbuf);
+    sp->header.ChunkSize = statbuf.st_size - 8;
+    sp->header.Subchunk2Size = statbuf.st_size - sizeof(sp->header);
+    rewind(sp->fp);
+    fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
+    fflush(sp->fp);
+    fclose(sp->fp);
+    sp->fp = NULL;
+  }
   FREE(sp->iobuffer);
   if(sp->prev)
     sp->prev->next = sp->next;
