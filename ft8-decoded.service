@@ -1,0 +1,22 @@
+# Systemd unit to record and decode FT-8
+# Phil Karn, KA9Q Apr 2023
+
+[Unit]
+Description=ft8r-decode
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+Nice=-10
+User=recordings
+Group=radio
+Type=simple
+PermissionsStartOnly=true
+EnvironmentFile=/etc/radio/ft8-decoded.conf
+ExecStart=/usr/local/bin/ft8-decoded $ARGS
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
