@@ -10,6 +10,7 @@ Building this package on Debian requires the following packages be installed wit
 
 build-essential
 libusb-1.0-0-dev
+libusb-dev
 libncurses5-dev
 libfftw3-dev
 libbsd-dev
