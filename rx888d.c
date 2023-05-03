@@ -294,9 +294,9 @@ int main(int argc,char *argv[]){
   // Gain Mode low/high, default high
   unsigned int gain = 0x83;
   char const *gainmode = config_getstring(Dictionary,Name,"gainmode","high");
-  if(strcmp(optarg, "high") == 0){
+  if(strcmp(gainmode, "high") == 0){
     gain |= 0x80;
-  }else if(strcmp(optarg, "low") == 0){
+  }else if(strcmp(gainmode, "low") == 0){
     gain &= ~0x80;
   }else{
     fprintf(stdout,"Invalid gain mode %s\n",gainmode);
