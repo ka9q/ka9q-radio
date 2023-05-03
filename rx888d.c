@@ -268,29 +268,8 @@ int main(int argc,char *argv[]){
     iniparser_freedict(Dictionary);
     exit(1);
   }
-  char *full_firmware_file = NULL;  
-  {
-    char *cwd_firmware_file = realpath(firmware,NULL);
-    int fd = open(cwd_firmware_file,O_RDONLY);
-    if(fd != -1){
-      full_firmware_file = cwd_firmware_file;
-      close(fd);
-    } else {
-      // Not found in current directory, Try looking in LIBDIR
-      char *tmp;
-      asprintf(&tmp,"%s/%s",LIBDIR,firmware);
-      full_firmware_file = realpath(tmp,NULL);
-      FREE(tmp);
-      fd = open(full_firmware_file,O_RDONLY);
-      if(fd != -1){
-	close(fd);
-      } else {
-	fprintf(stdout,"Can't read %s or %s\n",cwd_firmware_file,full_firmware_file);
-	exit(1);
-      }
-    }
-  }
-  assert(full_firmware_file != NULL);
+  char full_firmware_file[PATH_MAX];
+  dist_path(full_firmware_file,sizeof(full_firmware_file),firmware);
   fprintf(stdout,"Loading firmware file %s\n",full_firmware_file);
   int ret;
   if((ret = rx888_init(sdr,full_firmware_file,queuedepth,reqsize)) != 0){
