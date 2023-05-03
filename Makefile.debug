@@ -19,14 +19,14 @@ DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
-#DAEMONS=aprs aprsfeed funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd sdrplayd
-DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd
+#DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd sdrplayd
+DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd rx888d
 
 EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded
 
 AFILES=bandplan.txt help.txt modes.conf id.txt monitor-help.txt
 
-SYSTEMD_FILES=airspyd@.service airspyhfd@.service cwd.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service
+SYSTEMD_FILES=airspyd@.service airspyhfd@.service cwd.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service rx888d@.service
 
 UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules
 
@@ -39,7 +39,8 @@ CONF_FILES=funcubed.conf \
 			 radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf \
 			 radiod@repeater.conf \
 			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
-			 wspr-decoded.conf horus.conf airspyd.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf
+			 wspr-decoded.conf horus.conf airspyd.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
+			 rx888d.conf
 
 LOGROTATE_FILES = aprsfeed.rotate
 
@@ -50,8 +51,8 @@ BLACKLIST=airspy-blacklist.conf
 SRC=airspyd.c airspyhfd.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c fcd.c filter.c fm.c \
 	   tune.c funcubed.c iir.c iqplay.c iqrecord.c linear.c main.c metadump.c misc.c modes.c modulate.c monitor.c morse.c radio.c setfilt.c powers.c \
 	   show-sig.c spectrum.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdrd.c pcmspawn.c \
-	   sdrplayd.c status.c stereod.c wfm.c wspr-decoded.c ft8-decoded.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
-	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h
+	   sdrplayd.c status.c stereod.c wfm.c wspr-decoded.c ft8-decoded.c set_xcvr.c rx888d.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
+	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h rx888.h
 
 all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(LOGROTATE_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
 
