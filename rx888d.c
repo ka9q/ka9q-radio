@@ -163,6 +163,10 @@ int main(int argc,char *argv[]){
 
   setlinebuf(stdout);
 
+#if !defined(NDEBUG)
+  fprintf(stderr,"Debugging (asserts) enabled\n");
+#endif
+
   struct sdrstate * const sdr = (struct sdrstate *)calloc(1,sizeof(struct sdrstate));
   sdr_init(sdr);
 
@@ -319,13 +323,13 @@ int main(int argc,char *argv[]){
   // Sample Rate, default 32000000
   unsigned int const samprate = config_getint(Dictionary,Name,"samprate",32000000);
   if(samprate < 1000000){
-    fprintf(stdout,"Invalid sample rate %d\n",samprate);
+    fprintf(stdout,"Invalid sample rate %'d\n",samprate);
     iniparser_freedict(Dictionary);
     exit(1);
   }
   rx888_set_samprate(sdr,samprate);
 
-  fprintf(stdout,"Samprate %d; Gain %d, Attenuation %d, Dithering %d, Randomizer %d, Queue depth %d, Request size %d\n",
+  fprintf(stdout,"Samprate %'d; Gain %d, Attenuation %d, Dithering %d, Randomizer %d, Queue depth %d, Request size %d\n",
 	  sdr->samprate,sdr->gain,sdr->att,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize);
 
   // When the IP TTL is 0, we're not limited by the Ethernet hardware MTU so select a much larger packet size
@@ -339,9 +343,9 @@ int main(int argc,char *argv[]){
     if(x != -1){
       sdr->blocksize = x;
     } else if(RTP_ttl == 0)
-      sdr->blocksize = 32768;
+      sdr->blocksize = 24576;
     else
-      sdr->blocksize = 960;
+      sdr->blocksize = 720;
   }
 
   sdr->description = config_getstring(Dictionary,Name,"description",NULL);
@@ -588,7 +592,7 @@ static void rx_callback(struct libusb_transfer *transfer){
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
     if(Verbose > 1)
-      fprintf(stdout,"Transfer callback status %s received %d bytes.\n",
+      fprintf(stdout,"Transfer %p callback status %s received %d bytes.\n",transfer,
 	      libusb_error_name(transfer->status), transfer->actual_length);
     if(!stop_transfers) {
       if(libusb_submit_transfer(transfer) == 0)
@@ -779,7 +783,7 @@ has_firmware:
 
   sdr->transfers = (struct libusb_transfer **)calloc(queuedepth,sizeof(struct libusb_transfer *));
 
-  fprintf(stdout,"Queue depth: %d, Request size: %d\n",queuedepth,reqsize * sdr->pktsize);
+  fprintf(stdout,"Queue depth: %d, Packet size: %d\n",queuedepth,reqsize * sdr->pktsize);
 
   if((sdr->databuffers != NULL) && (sdr->transfers != NULL)){
     for(unsigned int i = 0; i < queuedepth; i++){
@@ -851,11 +855,17 @@ static void rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
 
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
   unsigned int ep = 1 | LIBUSB_ENDPOINT_IN;
-  int rStatus;
+
+  assert(callback != NULL);
   for(unsigned int i = 0; i < sdr->queuedepth; i++){
+    assert(sdr->transfers[i] != NULL);
+    assert(sdr->databuffers[i] != NULL);
+    assert(sdr->dev_handle != NULL);
+
     libusb_fill_bulk_transfer(sdr->transfers[i],sdr->dev_handle,ep,sdr->databuffers[i],
                   sdr->reqsize * sdr->pktsize,callback,(void *)sdr,0);
-    rStatus = libusb_submit_transfer(sdr->transfers[i]);
+    int rStatus = libusb_submit_transfer(sdr->transfers[i]);
+    assert(rStatus == 0);
     if(rStatus == 0){
       sdr->xfers_in_progress++;
     }
