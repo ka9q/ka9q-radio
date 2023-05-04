@@ -804,6 +804,8 @@ has_firmware:
   if(allocfail) {
     fprintf(stdout,"Failed to allocate buffers and transfers\n");
     free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
+    sdr->databuffers = NULL;
+    sdr->transfers = NULL;
   }
   sdr->queuedepth = queuedepth;
   sdr->reqsize = reqsize;
@@ -891,6 +893,8 @@ static void rx888_stop_rx(struct sdrstate *sdr){
 
   fprintf(stdout,"Transfers completed\n");
   free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
+  sdr->databuffers = NULL;
+  sdr->transfers = NULL;
 
   command_send(sdr->dev_handle,STOPFX3,0);
 }
