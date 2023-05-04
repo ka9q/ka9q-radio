@@ -612,6 +612,12 @@ static void rx_callback(struct libusb_transfer *transfer){
       samples[i] ^= 0xfffe * (samples[i] & 1);
     }
   }
+  // Convert to big endian (this is wasteful)
+  {
+    uint16_t *samples = (uint16_t *)transfer->buffer;
+    for(int i=0; i < size/2; i++)
+      samples[i] = htons(samples[i]);
+  }
 
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
