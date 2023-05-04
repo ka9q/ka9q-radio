@@ -587,17 +587,19 @@ static void rx_callback(struct libusb_transfer *transfer){
 
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
-    if(Verbose)
+    if(Verbose > 1)
       fprintf(stdout,"Transfer callback status %s received %d bytes.\n",
 	      libusb_error_name(transfer->status), transfer->actual_length);
     if(!stop_transfers) {
       if(libusb_submit_transfer(transfer) == 0)
         sdr->xfers_in_progress++;
     }
+    return;
   }
-  return;
 
   // successful USB transfer
+  if(Verbose)
+    fprintf(stdout,"success %d bytes\n",transfer->actual_length);
   size = transfer->actual_length;
   sdr->success_count++;
   if(sdr->randomizer) {
