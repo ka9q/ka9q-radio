@@ -587,8 +587,9 @@ static void rx_callback(struct libusb_transfer *transfer){
 
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
-    fprintf(stdout,"Transfer callback status %s received %d bytes.\n",
-            libusb_error_name(transfer->status), transfer->actual_length);
+    if(Verbose)
+      fprintf(stdout,"Transfer callback status %s received %d bytes.\n",
+	      libusb_error_name(transfer->status), transfer->actual_length);
     if(!stop_transfers) {
       if(libusb_submit_transfer(transfer) == 0)
         sdr->xfers_in_progress++;
@@ -641,7 +642,8 @@ static void rx_callback(struct libusb_transfer *transfer){
     idp += iov[1].iov_len;
 
     if(sendmsg(sdr->data_sock,&msg,0) == -1){
-      fprintf(stdout,"send: %s\n",strerror(errno));
+      if(Verbose)
+	fprintf(stdout,"send: %s\n",strerror(errno));
       //      usleep(100000); // inject a delay to avoid filling the log
     } else {
       sdr->rtp.packets++;
@@ -867,7 +869,8 @@ static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
 
 static void rx888_stop_rx(struct sdrstate *sdr){
   while(sdr->xfers_in_progress != 0){
-    fprintf(stdout,"%d transfers are pending\n",sdr->xfers_in_progress);
+    if(Verbose)
+      fprintf(stdout,"%d transfers are pending\n",sdr->xfers_in_progress);
     libusb_handle_events(NULL);
     usleep(100000);
   }
