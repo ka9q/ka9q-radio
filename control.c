@@ -795,19 +795,7 @@ int process_keyboard(struct demod *demod,uint8_t **bpp,int c){
       char str[160];
       getentry("Carrier frequency: ",str,sizeof(str));
       if(strlen(str) > 0){
-	double const f = fabs(parse_frequency(str)); // Handles funky forms like 147m435
-	
-	// If frequency would be out of range, guess kHz or MHz
-	if(f >= 0.1 && f < 100)
-	  demod->tune.freq = f*1e6; // 0.1 - 99.999 Only MHz can be valid
-	else if(f < 500)         // 100-499.999 could be kHz or MHz, assume MHz
-	  demod->tune.freq = f*1e6;
-	else if(f < 2000)        // 500-1999.999 could be kHz or MHz, assume kHz
-	  demod->tune.freq = f*1e3;
-	else if(f < 100000)      // 2000-99999.999 can only be kHz
-	  demod->tune.freq = f*1e3;
-	else                     // accept directly
-	  demod->tune.freq = f;
+	demod->tune.freq = fabs(parse_frequency(str)); // Handles funky forms like 147m435
 	encode_double(bpp,RADIO_FREQUENCY,demod->tune.freq);
       }
     }
