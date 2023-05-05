@@ -257,16 +257,16 @@ char *ftime(char * result,int size,int64_t t){
 // NB! This assumes radio covers 100 kHz - 2 GHz; should make more general
 double parse_frequency(char const *s){
   char * const ss = alloca(strlen(s)+1);
+  {
+    int i;
+    for(i=0;i<strlen(s);i++)
+      ss[i] = tolower(s[i]);
 
-  int i;
-  for(i=0;i<strlen(s);i++)
-    ss[i] = tolower(s[i]);
-
-  ss[i] = '\0';
-  
+    ss[i] = '\0';
+  }
+  double mult = 1;
   // k, m or g in place of decimal point indicates scaling by 1k, 1M or 1G
   char *sp;
-  double mult;
   if((sp = strchr(ss,'g')) != NULL){
     mult = 1e9;
     *sp = '.';
@@ -276,26 +276,21 @@ double parse_frequency(char const *s){
   } else if((sp = strchr(ss,'k')) != NULL){
     mult = 1e3;
     *sp = '.';
-  } else
-    mult = 1;
-
+  } else if((sp = strchr(ss,'.')) != NULL){ // note explicit radix point
+  }
   char *endptr = NULL;
   double f = strtod(ss,&endptr);
   if(endptr == ss || f == 0)
     return 0; // Empty entry, or nothing decipherable
   
-  if(mult != 1 || f >= 1e5) // If multiplier given, or frequency >= 100 kHz (lower limit), return as-is
+  if(sp != NULL || f >= 1e5) // If multiplier explicitly given, or frequency >= 100 kHz (lower limit), return as-is
     return f * mult;
     
-  // If frequency would be out of range, guess kHz or MHz
-  if(f < 100)
-    f *= 1e6;              // 0.1 - 99.999 Only MHz can be valid
-  else if(f < 500)         // Could be kHz or MHz, arbitrarily assume MHz
+  // no radix specified, empirically guess kHz or MHz
+  if(f < 500)         // Could be kHz or MHz, arbitrarily assume MHz
     f *= 1e6;
-  else if(f < 2000)        // Could be kHz or MHz, arbitarily assume kHz
-    f *= 1e3;
-  else if(f < 100000)      // Can only be kHz
-    f *= 1e3;
+  else
+    f *= 1e3;         // assume kHz
 
   return f;
 }
