@@ -34,9 +34,10 @@ static int ipv6_join_group(int const fd,void const * const sock,char const * con
 static void set_ipv4_options(int fd,int mcast_ttl,int tos);
 static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos);
 
-// [samprate][channels][deemph]
+// [samprate][channels]
 // Not all combinations are supported or useful,
 // e.g., wideband FM is always 48 kHz, FM is always mono
+// PCM_MONO_LE_PT and PCM_STEREO_LE_PT not listed here. This is really ugly, and shows why SDP should be used
 static int pt_table[5][2] = {
   {  PCM_MONO_8_PT, PCM_STEREO_8_PT  },
   {  PCM_MONO_12_PT, PCM_STEREO_12_PT },
