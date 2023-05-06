@@ -400,7 +400,7 @@ int main(int argc,char *argv[]){
     struct rtp_header rtp;
     memset(&rtp,0,sizeof(rtp));
     rtp.version = RTP_VERS;
-    rtp.type = PCM_STEREO_PT;
+    rtp.type = PCM_STEREO_LE_PT;
     rtp.ssrc = Rtp.ssrc;
     rtp.seq = Rtp.seq++;
     rtp.timestamp = Rtp.timestamp;
@@ -467,9 +467,8 @@ int main(int argc,char *argv[]){
       // Correct phase
       __imag__ samp = secphi * cimagf(samp) - tanphi * crealf(samp);
       
-      // Cast is necessary since htons() is a macro!
-      sampbuf[i] = htons(scaleclip(crealf(samp)));
-      sampbuf[i+1] = htons(scaleclip(cimagf(samp)));
+      sampbuf[i] = scaleclip(crealf(samp));
+      sampbuf[i+1] = scaleclip(cimagf(samp));
     }
 
     if(send(Rtp_sock,buffer,dp - buffer,0) == -1){
