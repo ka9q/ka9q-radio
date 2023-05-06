@@ -310,6 +310,19 @@ void *proc_samples(void *arg){
 	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
       }
       break;
+    case PCM_MONO_LE_PT: // 16 bits little endian integer real
+      if(Frontend.in->input.r != NULL){
+	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
+	float const inv_gain = SCALE16 / Frontend.sdr.gain;
+	int16_t const *sp = (int16_t *)dp;
+	for(int i=0; i<sampcount; i++){
+	  int const s = *sp++;
+	  in_energy += s * s;
+	  put_rfilter(Frontend.in,s * inv_gain);
+	}
+	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
+      }
+      break;
     case REAL_PT8: // 8 bit integer real
       if(Frontend.in->input.r != NULL){
 	float const inv_gain = SCALE8 / Frontend.sdr.gain;
@@ -349,6 +362,23 @@ void *proc_samples(void *arg){
 	  // ntohs() returns UNSIGNED
 	  int const rs = (int16_t)ntohs(*sp++);
 	  int const is = (int16_t)ntohs(*sp++);
+	  in_energy += rs * rs + is * is;
+	  complex float samp;
+	  __real__ samp = rs;
+	  __imag__ samp = is;
+	  put_cfilter(Frontend.in,samp * inv_gain);
+	}
+	Frontend.sdr.output_level = in_energy * SCALE16 * SCALE16 / sampcount;
+      }
+      break;
+    case PCM_STEREO_LE_PT:    // 16-bit 48 kHz (or other) dual channel little endian
+      if(Frontend.in->input.c != NULL){
+	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only		
+	float const inv_gain = SCALE16 / Frontend.sdr.gain;
+	int16_t const *sp = (int16_t *)dp;
+	for(int i=0; i<sampcount; i++){
+	  int const rs = *sp++;
+	  int const is = *sp++;
 	  in_energy += rs * rs + is * is;
 	  complex float samp;
 	  __real__ samp = rs;
