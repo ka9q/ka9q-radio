@@ -352,7 +352,7 @@ int main(int argc,char *argv[]){
     time(&tt);
     sdr->rtp.ssrc = config_getint(Dictionary,Name,"ssrc",tt);
   }
-  sdr->rtp_type = PCM_MONO_PT; // 16 bits/sample, mono, *big* endian
+  sdr->rtp_type = PCM_MONO_LE_PT; // 16 bits/sample, mono, little endian
   // Default is AF12 left shifted 2 bits
   IP_tos = config_getint(Dictionary,Name,"tos",48);
   sdr->data_dest = config_getstring(Dictionary,Name,"data",NULL);
@@ -612,13 +612,14 @@ static void rx_callback(struct libusb_transfer *transfer){
       samples[i] ^= 0xfffe * (samples[i] & 1);
     }
   }
+#if 0 // Now using PCM_MONO_LE_PT
   // Convert to big endian (this is wasteful)
   {
     uint16_t *samples = (uint16_t *)transfer->buffer;
     for(int i=0; i < size/2; i++)
       samples[i] = htons(samples[i]);
   }
-
+#endif
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
   rtp.version = RTP_VERS;
