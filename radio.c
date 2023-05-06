@@ -185,6 +185,7 @@ void *proc_samples(void *arg){
     case AIRSPY_PACKED:
       sc = 2 * size / (3 * sizeof(int8_t));
       break;
+    case PCM_MONO_LE_PT:
     case PCM_MONO_PT: // 16-bit real
       sc = size / sizeof(int16_t);
       break;
@@ -197,6 +198,7 @@ void *proc_samples(void *arg){
     case IQ_PT8: // 8-bit ints no metadata
       sc = size / (2 * sizeof(int8_t));
       break;
+    case PCM_STEREO_LE_PT:
     case PCM_STEREO_PT: // Big-endian 16 bits, no metadata header
       sc = size / (2 * sizeof(int16_t));
       break;
