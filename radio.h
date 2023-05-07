@@ -75,6 +75,7 @@ struct frontend {
     uint8_t lna_gain;
     uint8_t mixer_gain;
     uint8_t if_gain;
+    float rf_atten;
     bool direct_conversion; // Avoid 0 Hz if set
     bool isreal;            // Front end stream is real-only
     int bitspersample; // 8, 12 or 16

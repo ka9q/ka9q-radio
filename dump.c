@@ -375,6 +375,9 @@ void dump_metadata(uint8_t const * const buffer,int length){
     case INTEGRATE_TC:
       printf("integrate tc %.1f s",decode_float(cp,optlen));
       break;
+    case RF_ATTEN:
+      printf("rf atten %.1f dB",decode_float(cp,optlen));
+	break;
     case BIN_DATA:
       {
 	printf("fft bins:");

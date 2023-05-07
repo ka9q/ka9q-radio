@@ -81,7 +81,7 @@ struct sdrstate {
   bool randomizer;
   bool dither;
   unsigned int gain;
-  unsigned int att;
+  float rf_atten;
 
   // USB transfer
   unsigned int queuedepth; // Number of requests to queue
@@ -129,7 +129,7 @@ static void *ncmd(void *);
 static void closedown(int a);
 static int rx888_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize);
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
-static void rx888_set_att(struct sdrstate *sdr,unsigned int att);
+static void rx888_set_att(struct sdrstate *sdr,float att);
 static void rx888_set_gain(struct sdrstate *sdr,unsigned int gain);
 static void rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
@@ -289,12 +289,9 @@ int main(int argc,char *argv[]){
   rx888_set_dither_and_randomizer(sdr,dither,randomizer);
 
   // Attenuation, default 0
-  unsigned int const att = config_getint(Dictionary,Name,"att",0);
-  if(att < 0 || att > 127){
-    fprintf(stdout,"Invalid attenuation value %d\n",att);
-    iniparser_freedict(Dictionary);
-    exit(1);
-  }
+  float att = fabsf(config_getfloat(Dictionary,Name,"att",0));
+  if(att > 31.5)
+    att = 31.5;
   rx888_set_att(sdr,att);
 
   // Gain value, default 3
@@ -327,8 +324,8 @@ int main(int argc,char *argv[]){
   }
   rx888_set_samprate(sdr,samprate);
 
-  fprintf(stdout,"Samprate %'d, Gain %d, Attenuation %d, Dithering %d, Randomizer %d, Queue depth %d, Request size %d\n",
-	  sdr->samprate,sdr->gain,sdr->att,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize);
+  fprintf(stdout,"Samprate %'d, Gain %d, Attenuation %.1f dB, Dithering %d, Randomizer %d, Queue depth %d, Request size %d\n",
+	  sdr->samprate,sdr->gain,sdr->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize);
 
   // When the IP TTL is 0, we're not limited by the Ethernet hardware MTU so select a much larger packet size
   // unless one has been set explicitly
@@ -473,9 +470,9 @@ static void *display(void *arg){
     if(stat_point != -1)
       fseeko(sdr->status,stat_point,SEEK_SET);
 
-    fprintf(sdr->status,"%4d%4d%c",
+    fprintf(sdr->status,"%4d%4f.1%c",
 	    sdr->gain,	
-	    sdr->att,
+	    sdr->rf_atten,
 	    eol);
     fflush(sdr->status);
     usleep(100000); // 10 Hz
@@ -486,7 +483,6 @@ static void *display(void *arg){
 static void decode_rx888_commands(struct sdrstate *sdr,uint8_t const *buffer,int length){
   uint8_t const *cp = buffer;
   unsigned int gain;
-  unsigned int att;
 
   while(cp - buffer < length){
     int ret __attribute__((unused)); // Won't be used when asserts are disabled
@@ -515,13 +511,16 @@ static void decode_rx888_commands(struct sdrstate *sdr,uint8_t const *buffer,int
     case COMMAND_TAG:
       sdr->command_tag = decode_int(cp,optlen);
       break;
-    case LNA_GAIN:
+    case IF_GAIN:
       gain = decode_int(cp,optlen);
       rx888_set_gain(sdr,gain);
       break;
-    case IF_GAIN:
-      att = decode_int(cp,optlen);
-      rx888_set_att(sdr,att);
+    case RF_ATTEN:
+      {
+	float a;
+	a = decode_float(cp,optlen);
+	rx888_set_att(sdr,a);
+      }
       break;
     default: // Ignore all others
       break;
@@ -557,8 +556,8 @@ static void send_rx888_status(struct sdrstate *sdr){
   encode_int64(&bp,OUTPUT_METADATA_PACKETS,sdr->output_metadata_packets);
 
   // Front end
-  encode_byte(&bp,LNA_GAIN,sdr->gain);
-  encode_byte(&bp,IF_GAIN,sdr->att);
+  encode_float(&bp,RF_ATTEN,sdr->rf_atten);
+  encode_byte(&bp,IF_GAIN,sdr->gain);
 
   // Tuning
   encode_double(&bp,RADIO_FREQUENCY,0);
@@ -810,10 +809,11 @@ static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,boo
   sdr->randomizer = randomizer;
 }
 
-static void rx888_set_att(struct sdrstate *sdr,unsigned int att){
+static void rx888_set_att(struct sdrstate *sdr,float att){
   usleep(5000);
-  argument_send(sdr->dev_handle,DAT31_ATT,att);
-  sdr->att = att;
+  sdr->rf_atten = att;
+  int arg = (int)(att * 2);
+  argument_send(sdr->dev_handle,DAT31_ATT,arg);
 }
 
 static void rx888_set_gain(struct sdrstate *sdr,unsigned int gain){

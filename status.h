@@ -129,6 +129,8 @@ enum status_type {
   INTEGRATE_TC,   // Integration time constant, sec
   BIN_DATA,         // Vector of relative bin energies, real (I^2 + Q^2)
 
+  RF_ATTEN,       // Front end attenuation (introduced with rx888)
+
 };
 
 int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);
