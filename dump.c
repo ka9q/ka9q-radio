@@ -377,7 +377,10 @@ void dump_metadata(uint8_t const * const buffer,int length){
       break;
     case RF_ATTEN:
       printf("rf atten %.1f dB",decode_float(cp,optlen));
-	break;
+      break;
+    case RF_GAIN:
+      printf("rf gain %.1f dB",decode_float(cp,optlen));
+      break;
     case BIN_DATA:
       {
 	printf("fft bins:");

@@ -130,7 +130,7 @@ enum status_type {
   BIN_DATA,         // Vector of relative bin energies, real (I^2 + Q^2)
 
   RF_ATTEN,       // Front end attenuation (introduced with rx888)
-
+  RF_GAIN,        // Front end gain (introduced with rx888)
 };
 
 int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);

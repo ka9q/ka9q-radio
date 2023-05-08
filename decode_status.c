@@ -216,6 +216,9 @@ int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length)
     case RF_ATTEN:
       frontend->sdr.rf_atten = decode_float(cp,optlen);
       break;
+    case RF_GAIN:
+      frontend->sdr.rf_gain = decode_float(cp,optlen);
+      break;
     default:
       break;
     }
