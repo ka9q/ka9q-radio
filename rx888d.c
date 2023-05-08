@@ -310,7 +310,6 @@ int main(int argc,char *argv[]){
     }
     // Gain value, default +1.5 dB
     float gain = config_getfloat(Dictionary,Name,"gain",1.5);
-    fprintf(stdout,"read gain value of %.1f\n",gain);
     if(gain > 34.0)
       gain = 34.0;
     
