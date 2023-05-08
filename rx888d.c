@@ -137,10 +137,8 @@ static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate *sdr);
 static void rx888_close(struct sdrstate *sdr);
 static void free_transfer_buffers(unsigned char **databuffers,struct libusb_transfer **transfers,unsigned int queuedepth);
-#if 0
-static double val2gain(uint8_t g);
-#endif
-static uint8_t gain2val(int m, double gain);
+static double val2gain(int g);
+static int gain2val(int m, double gain);
 
 dictionary *Dictionary;
 char const *Name;
@@ -294,39 +292,40 @@ int main(int argc,char *argv[]){
   rx888_set_dither_and_randomizer(sdr,dither,randomizer);
 
   // Attenuation, default 0
-  float att = fabsf(config_getfloat(Dictionary,Name,"att",0));
-  if(att > 31.5)
-    att = 31.5;
-  rx888_set_att(sdr,att);
+  {
+    float att = fabsf(config_getfloat(Dictionary,Name,"att",0));
+    if(att > 31.5)
+      att = 31.5;
+    rx888_set_att(sdr,att);
 
-  // Gain Mode low/high, default high
-  char const *gainmode = config_getstring(Dictionary,Name,"gainmode","high");
-  if(strcmp(gainmode, "high") == 0)
-    sdr->gainmode = 1;
-  else if(strcmp(gainmode, "low") == 0)
-    sdr->gainmode = 0;
-  else {
-    fprintf(stdout,"Invalid gain mode %s\n",gainmode);
-    iniparser_freedict(Dictionary);
-    exit(1);
+    // Gain Mode low/high, default high
+    char const *gainmode = config_getstring(Dictionary,Name,"gainmode","high");
+    if(strcmp(gainmode, "high") == 0)
+      sdr->gainmode = 1;
+    else if(strcmp(gainmode, "low") == 0)
+      sdr->gainmode = 0;
+    else {
+      fprintf(stdout,"Invalid gain mode %s, default high\n",gainmode);
+      sdr->gainmode = 1;
+    }
+    // Gain value, default +1.5 dB
+    float gain = config_getfloat(Dictionary,Name,"gain",1.5);
+    fprintf(stdout,"read gain value of %.1f\n",gain);
+    if(gain > 34.0)
+      gain = 34.0;
+    
+    rx888_set_gain(sdr,gain);
+
+    // Sample Rate, default 32000000
+    unsigned int const samprate = config_getint(Dictionary,Name,"samprate",32000000);
+    if(samprate < 1000000){
+      fprintf(stdout,"Invalid sample rate %'d\n",samprate);
+      iniparser_freedict(Dictionary);
+      exit(1);
+    }
+    rx888_set_samprate(sdr,samprate);
   }
-  // Gain value, default +1.5 dB
-  float gain = config_getfloat(Dictionary,Name,"gain",1.5);
-  if(gain > 34.0){
-    gain = 34.0;
-  }
-
-  rx888_set_gain(sdr,gain);
-
-  // Sample Rate, default 32000000
-  unsigned int const samprate = config_getint(Dictionary,Name,"samprate",32000000);
-  if(samprate < 1000000){
-    fprintf(stdout,"Invalid sample rate %'d\n",samprate);
-    iniparser_freedict(Dictionary);
-    exit(1);
-  }
-  rx888_set_samprate(sdr,samprate);
-
+  
   fprintf(stdout,"Samprate %'d, Gain %.1f dB, Attenuation %.1f dB, Dithering %d, Randomizer %d, Queue depth %d, Request size %d\n",
 	  sdr->samprate,sdr->rf_gain,sdr->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize);
 
@@ -581,14 +580,15 @@ static void send_rx888_status(struct sdrstate *sdr){
 }
 
 
-int ThreadnameSet;
+bool ThreadnameSet;
+bool Marker_sent;
 // Callback called with incoming receiver data from A/D
 static void rx_callback(struct libusb_transfer *transfer){
   int size = 0;
 
   if(!ThreadnameSet){
     pthread_setname("rx888-cb");
-    ThreadnameSet = 1;
+    ThreadnameSet = true;
   }
   struct sdrstate * const sdr = (struct sdrstate *)transfer->user_data;
 
@@ -625,6 +625,11 @@ static void rx_callback(struct libusb_transfer *transfer){
 #endif
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
+  if(!Marker_sent){
+    rtp.marker = true;
+    Marker_sent = true;
+  }
+
   rtp.version = RTP_VERS;
   rtp.type = sdr->rtp_type;
   rtp.ssrc = sdr->rtp.ssrc;
@@ -821,10 +826,11 @@ static void rx888_set_att(struct sdrstate *sdr,float att){
 }
 
 static void rx888_set_gain(struct sdrstate *sdr,float gain){
-  uint8_t v = gain2val(gain,sdr->gainmode);
   usleep(5000);
-  argument_send(sdr->dev_handle,AD8340_VGA,v);
-  sdr->rf_gain = gain;
+
+  int arg = gain2val(sdr->gainmode,gain);
+  argument_send(sdr->dev_handle,AD8340_VGA,arg);
+  sdr->rf_gain = val2gain(arg); // Store actual nearest value
 }
 
 static void rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
@@ -917,21 +923,19 @@ static void free_transfer_buffers(unsigned char **databuffers,
 static double const vernier = 0.055744;
 static double const pregain = 7.079458;
 
-#if 0
-static double val2gain(uint8_t g){
+static double val2gain(int g){
   int const msb = g & 128 ? true : false;
   int const gaincode = g & 127;
   double av = gaincode * vernier * (1 + (pregain - 1) * msb);
-  return 20*log10(av); // decibels
+  return voltage2dB(av); // decibels
 }
-#endif
 
-static uint8_t gain2val(int m, double gain){
+static int gain2val(int m, double gain){
   if(m < 0)
     m = 0;
   else if(m > 1)
     m = 1;
-  int g = round(pow(10.,gain/20.) / (vernier * (1 + (pregain - 1)* m)));
+  int g = round(dB2voltage(gain) / (vernier * (1 + (pregain - 1)* m)));
 
   if(g > 127)
     g = 127;

@@ -146,6 +146,8 @@ void *proc_samples(void *arg){
 
   realtime();
 
+  int bad_rtp_count = 0;
+
   while(1){
     // Receive I/Q data from front end
     // Packet consists of Ethernet, IP and UDP header (already stripped)
@@ -210,14 +212,20 @@ void *proc_samples(void *arg){
       break;
     }
     int const sampcount = sc; // gets used a lot, flag it const
-    if(pkt.rtp.ssrc != Frontend.input.rtp.ssrc){
-      // SSRC changed; reset sample count.
+
+    // All front ends should eventually set rtp.marker once at start
+    // RTP marker bits occur routinely in demodulated FM, but here they mean a complete restart
+    if(pkt.rtp.marker || pkt.rtp.ssrc != Frontend.input.rtp.ssrc || bad_rtp_count > 100){
+      // stream restart, SSRC change or excessive unexpected RTP packet/sequence numbers
       // rtp_process will reset packet count
       Frontend.input.samples = 0;
+      Frontend.input.rtp.init = false;
+      bad_rtp_count = 0;
     }
     int const time_step = rtp_process(&Frontend.input.rtp,&pkt.rtp,sampcount);
-    if(time_step < 0 || time_step > 192000){ // NOTE HARDWIRED SAMPRATE
+    if(time_step < 0 || time_step > 192000){ // NOTE HARDWIRED SAMPRATE - fix this
       // Old samples, or too big a jump; drop. Shouldn't happen if sequence number isn't old
+      bad_rtp_count++;
       continue;
     } else if(time_step > 0){
       // Samples were lost. Inject enough zeroes to keep the sample count and LO phase correct

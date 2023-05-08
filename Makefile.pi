@@ -73,7 +73,7 @@ install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FIL
 	install -o root -m 0644 -D --target-directory=/etc/udev/rules.d $(UDEV_FILES)
 	install -o root -m 0644 -D --target-directory=/etc/modprobe.d $(BLACKLIST)
 	install -o root -m 0644 -D --target-directory=/etc/logrotate.d $(LOGROTATE_FILES)
-	install -o root -m 0644 -D --target-directory=/etc/radio $(CONF_FILES);
+	install -o root -m 0664 -D --target-directory=/etc/radio $(CONF_FILES);
 	mkdir -p /etc/fftw /etc/radio $(VARDIR) /etc/radio/airspyd.conf.d
 	chgrp radio $(VARDIR) /etc/radio /etc/fftw
 	chmod g+ws $(VARDIR) /etc/radio /etc/fftw
