@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <net/if.h>
 #include <signal.h>
@@ -353,14 +354,10 @@ int main(int argc,char *argv[]){
   sdr->rtp_type = PCM_MONO_LE_PT; // 16 bits/sample, mono, little endian
   // Default is AF12 left shifted 2 bits
   IP_tos = config_getint(Dictionary,Name,"tos",48);
-  sdr->data_dest = config_getstring(Dictionary,Name,"data",NULL);
+  sdr->data_dest = config_getstring(Dictionary,Name,"data","rx888-pcm.local");
   // Set up output sockets
-  if(sdr->data_dest == NULL)
-    sdr->data_dest = "rx888-pcm.local";
 
-  sdr->metadata_dest = config_getstring(Dictionary,Name,"status",NULL);
-  if(sdr->metadata_dest == NULL)
-    sdr->data_dest = "rx888-status.local";
+  sdr->metadata_dest = config_getstring(Dictionary,Name,"status","rx888-status.local");
 
   // Multicast output interface for both data and status
   Iface = config_getstring(Dictionary,Name,"iface",NULL);
@@ -370,7 +367,9 @@ int main(int argc,char *argv[]){
     // Service name, if present, must be unique
     // Description, if present becomes TXT record if present
     avahi_start(sdr->description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,sdr->metadata_dest,ElfHashString(sdr->metadata_dest),sdr->description);
-    avahi_start(sdr->description,"_rtp._udp",DEFAULT_RTP_PORT,sdr->data_dest,ElfHashString(sdr->data_dest),sdr->description);
+    // don't register data service if using local UNIX socket
+    if(sdr->data_dest[0] != '/') // Don't announce a UNIX local socket
+      avahi_start(sdr->description,"_rtp._udp",DEFAULT_RTP_PORT,sdr->data_dest,ElfHashString(sdr->data_dest),sdr->description);
   }
   {
     // Note: iface as part of address is ignored, and it breaks avahi_start anyway
@@ -547,10 +546,16 @@ static void send_rx888_status(struct sdrstate *sdr){
   if(sdr->description)
     encode_string(&bp,DESCRIPTION,sdr->description,strlen(sdr->description));
 
-  // Source address we're using to send data
-  encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&sdr->output_data_source_address);
   // Where we're sending output
-  encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&sdr->output_data_dest_address);
+
+  if(sdr->data_dest[0] != '/'){
+    // Source address we're using to send data
+    encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&sdr->output_data_source_address);
+    encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&sdr->output_data_dest_address); // IPv4/v6 socket
+  } else {
+    // AF_LINUX local socket, send path name as string
+    encode_string(&bp,OUTPUT_DATA_UNIX_SOCKET,sdr->data_dest,strlen(sdr->data_dest)); // AF_UNIX socket, send local pathname as string
+  }
   encode_int32(&bp,OUTPUT_SSRC,sdr->rtp.ssrc);
   encode_byte(&bp,OUTPUT_TTL,RTP_ttl);
   encode_int32(&bp,INPUT_SAMPRATE,sdr->samprate);

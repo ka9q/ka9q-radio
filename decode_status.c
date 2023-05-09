@@ -219,6 +219,9 @@ int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length)
     case RF_GAIN:
       frontend->sdr.rf_gain = decode_float(cp,optlen);
       break;
+    case OUTPUT_DATA_UNIX_SOCKET:
+      decode_local_socket(&frontend->input.data_dest_address,cp,optlen);
+      break;
     default:
       break;
     }

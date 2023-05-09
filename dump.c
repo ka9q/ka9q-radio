@@ -33,7 +33,7 @@ void dump_metadata(uint8_t const * const buffer,int length){
     }
     if(cp - buffer + optlen >= length)
       break; // Invalid length
-    printf(" (%d) ",type);
+    printf(" (%d) ",type); fflush(stdout); // DEBUG
     switch(type){
     case EOL: // Shouldn't get here
       goto done;
@@ -103,7 +103,7 @@ void dump_metadata(uint8_t const * const buffer,int length){
     case OUTPUT_DATA_SOURCE_SOCKET:
       {
 	struct sockaddr_storage sock;
-	printf("out data src %s",formatsock(decode_socket(&sock,cp,optlen)));
+	printf("out data src %s",formatsock(decode_socket(&sock,cp,optlen))); 
       }
       break;
     case OUTPUT_DATA_DEST_SOCKET:
@@ -380,6 +380,12 @@ void dump_metadata(uint8_t const * const buffer,int length){
       break;
     case RF_GAIN:
       printf("rf gain %.1f dB",decode_float(cp,optlen));
+      break;
+    case OUTPUT_DATA_UNIX_SOCKET:  // For use with local (AF_UNIX) data paths
+      {
+	char buf[PATH_MAX];
+	printf("data dest path %s",decode_string(cp,optlen,buf,sizeof(buf)));
+      }
       break;
     case BIN_DATA:
       {

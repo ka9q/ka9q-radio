@@ -10,6 +10,7 @@
 #endif
 #include <math.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/time.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -250,10 +251,18 @@ double decode_double(uint8_t const *cp,int len){
 int encode_socket(uint8_t **buf,enum status_type type,void const *sock){
   struct sockaddr_in const *sin = sock;
   struct sockaddr_in6 const *sin6 = sock;
+  struct sockaddr_un const *sun = sock;
   uint8_t *bp = *buf;
   int optlen = 0;
 
   switch(sin->sin_family){
+  case AF_UNIX:
+    optlen = strlen(sun->sun_path) + 1;
+    *bp++ = type;
+    *bp++ = optlen; // TEST IF IT's MORE THAN 128 <- fixxs
+    memcpy(bp,&sun->sun_path,optlen);
+    bp += optlen;
+    break;
   case AF_INET:
     optlen = 6;
     *bp++ = type;
@@ -297,7 +306,16 @@ struct sockaddr *decode_socket(void *sock,uint8_t const *val,int optlen){
   }
   return NULL;
 }
+// AF_UNIX (or AF_LOCAL) from a string with the path
+struct sockaddr *decode_local_socket(void *sock,uint8_t const *val,int optlen){
+  struct sockaddr_un *sun = (struct sockaddr_un *)sock;
+  sun->sun_family = AF_UNIX;
+  memcpy(sun->sun_path,val,optlen);
+  if(optlen < sizeof(sun->sun_path))
+    sun->sun_path[optlen] = '\0'; // ensure null termination
 
+  return sock;
+}
 
 // Generate random GPS time uniformly distributed between (now + base, now + base + rrange)
 // Args are in nanosec

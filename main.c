@@ -220,7 +220,7 @@ static int setup_frontend(char const *arg){
 
   // We must acquire a status stream before we can proceed further
   pthread_mutex_lock(&Frontend.sdr.status_mutex);
-  while(Frontend.sdr.samprate == 0 || Frontend.input.data_dest_address.ss_family == 0)
+  while(Frontend.sdr.samprate == 0 || (Frontend.input.data_dest_address.ss_family == 0))
     pthread_cond_wait(&Frontend.sdr.status_cond,&Frontend.sdr.status_mutex);
   pthread_mutex_unlock(&Frontend.sdr.status_mutex);
 

@@ -12,6 +12,7 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <ifaddrs.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -31,6 +32,7 @@
 
 static int ipv4_join_group(int const fd,void const * const sock,char const * const iface);
 static int ipv6_join_group(int const fd,void const * const sock,char const * const iface);
+static void set_local_options(int);
 static void set_ipv4_options(int fd,int mcast_ttl,int tos);
 static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos);
 
@@ -96,6 +98,10 @@ int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
     perror("setup_mcast socket");
     return -1;
   }      
+  // Better to drop a packet than to block real-time processing
+  fcntl(fd,F_SETFL,O_NONBLOCK);
+  set_local_options(fd);
+
   // Strictly speaking, it is not necessary to join a multicast group to which we only send.
   // But this creates a problem with "smart" switches that do IGMP snooping.
   // They have a setting to handle what happens with unregistered
@@ -107,6 +113,18 @@ int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
   // that aren't subscribed to by anybody are flooded everywhere!
   // We avoid that by subscribing to our own multicasts.
   switch(sock->sa_family){
+  case AF_UNIX:
+    // Normally the listener creates the socket pathname, but the sender specifies it so we have to do it here
+    {
+      struct sockaddr_un *sp = (struct sockaddr_un *)sock;
+      unlink(sp->sun_path);
+    }      
+    if((bind(fd,sock,sizeof(struct sockaddr)) != 0)){
+      close(fd);
+      return -1;
+    }
+    return fd;
+    break; // No multicast twiddling necessary
   case AF_INET:
     set_ipv4_options(fd,ttl,tos);
     if(ipv4_join_group(fd,sock,iface) != 0)
@@ -120,11 +138,8 @@ int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
   default:
     return -1;
   }
-
-  // Better to drop a packet than to block real-time processing
-  fcntl(fd,F_SETFL,O_NONBLOCK);
-  if(connect(fd,sock,sizeof(struct sockaddr)) != 0){
-    perror("connect mcast");
+  if(connect(fd,sock,sizeof(struct sockaddr)) == -1){
+    fprintf(stderr,"unix sock fail err %s\n",strerror(errno));
     close(fd);
     return -1;
   }
@@ -139,12 +154,34 @@ int listen_mcast(void const *s,char const *iface){
 
   struct sockaddr const *sock = s;
 
+  char const *local = "/tmp/radiod";
+
   int const fd = socket(sock->sa_family,SOCK_DGRAM,0);
   if(fd == -1){
     perror("setup_mcast socket");
     return -1;
   }      
   switch(sock->sa_family){
+  case AF_UNIX: // No multicast twiddling needed
+    {
+      set_local_options(fd);
+
+      struct sockaddr_un loc;
+      loc.sun_family = AF_UNIX;
+      strncpy((char *)&loc.sun_path,local,sizeof(loc.sun_path));
+      unlink(local);
+      if((bind(fd,(const struct sockaddr *)&loc,sizeof(loc)) != 0)){
+	close(fd);
+	return -1;
+      }
+    }
+    if(connect(fd,sock,sizeof(struct sockaddr_un)) == -1){
+      fprintf(stderr,"unix sock fail err %s\n",strerror(errno));
+      close(fd);
+      return -1;
+    }
+    return fd;
+    break;
   case AF_INET:
     set_ipv4_options(fd,-1,-1);
     if(ipv4_join_group(fd,sock,iface) != 0)
@@ -158,6 +195,7 @@ int listen_mcast(void const *s,char const *iface){
   default:
     return -1;
   }
+
   if((bind(fd,sock,sizeof(struct sockaddr)) != 0)){
     perror("listen mcast bind");
     close(fd);
@@ -172,6 +210,14 @@ int listen_mcast(void const *s,char const *iface){
 int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int iface_len){
   if(target == NULL || strlen(target) == 0 || sock == NULL)
     return -1;
+
+  if(target[0] == '/'){
+    // Target beginning with '/' is of UNIX type
+    struct sockaddr_un *sinp = (struct sockaddr_un *)sock;
+    sinp->sun_family = AF_UNIX;
+    strncpy(sinp->sun_path,target,sizeof(sinp->sun_path)-1);
+    return 0;
+  }
 
   char host[PATH_MAX]; // Maximum legal DNS name length?
   strlcpy(host,target,sizeof(host));
@@ -333,12 +379,17 @@ int rtp_process(struct rtp_state * const state,struct rtp_header const * const r
   return time_step;
 }
 
-// Convert binary sockaddr structure (v4 or v6) to printable numeric string
-
+// Convert binary sockaddr structure (v4 or v6 or unix) to printable numeric string
 char *formataddr(char *result,int size,void const *s){
   struct sockaddr const *sa = (struct sockaddr *)s;
   result[0] = '\0';
   switch(sa->sa_family){
+  case AF_UNIX:
+    {
+      struct sockaddr_un const *sin = (struct sockaddr_un *)sa;
+      strncpy(result,sin->sun_path,size);
+    }
+    break;
   case AF_INET:
     {
       struct sockaddr_in const *sin = (struct sockaddr_in *)sa;
@@ -378,6 +429,11 @@ char const *formatsock(void const *s){
   if(sa == NULL)
     return NULL;
   switch(sa->sa_family){
+  case AF_UNIX:
+    {
+      struct sockaddr_un const *sun = s;
+      return sun->sun_path; // what if there's no terminating null??
+    }
   case AF_INET:
     slen = sizeof(struct sockaddr_in);
     break;
@@ -536,6 +592,15 @@ int address_match(void const *arg1,void const *arg2){
     return 0;
 
   switch(s1->sa_family){
+  case AF_UNIX:
+    break;
+    {
+      struct sockaddr_un const *sinp1 = (struct sockaddr_un *)arg1;
+      struct sockaddr_un const *sinp2 = (struct sockaddr_un *)arg2;
+      if(strncmp(sinp1->sun_path,sinp2->sun_path,sizeof(sinp1->sun_path)))
+	return 1;
+    }
+    break;
   case AF_INET:
     {
       struct sockaddr_in const *sinp1 = (struct sockaddr_in *)arg1;
@@ -566,6 +631,8 @@ int getportnumber(void const *arg){
   struct sockaddr const *sock = (struct sockaddr *)arg;
 
   switch(sock->sa_family){
+  case AF_UNIX:
+    return 0; // No port number on UNIX sockets
   case AF_INET:
     {
       struct sockaddr_in const *sin = (struct sockaddr_in *)sock;
@@ -591,6 +658,8 @@ int setportnumber(void *s,uint16_t port){
   struct sockaddr *sock = s;
 
   switch(sock->sa_family){
+  case AF_UNIX:
+    break; // no port number, ignore
   case AF_INET:
     {
       struct sockaddr_in *sin = (struct sockaddr_in *)sock;
@@ -608,6 +677,24 @@ int setportnumber(void *s,uint16_t port){
   }
   return 0;
 }
+
+// Set options on UNIX socket
+static void set_local_options(int const fd){
+  // Failures here are not fatal
+
+  int const reuse = true; // bool doesn't work for some reason
+  if(setsockopt(fd,SOL_SOCKET,SO_REUSEPORT,&reuse,sizeof(reuse)) != 0)
+    perror("so_reuseport failed");
+  if(setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(reuse)) != 0)
+    perror("so_reuseaddr failed");
+
+  struct linger linger;
+  linger.l_onoff = 0;
+  linger.l_linger = 0;
+  if(setsockopt(fd,SOL_SOCKET,SO_LINGER,&linger,sizeof(linger)) != 0)
+    perror("so_linger failed");
+}
+
 
 // Set options on IPv4 multicast socket
 static void set_ipv4_options(int const fd,int const mcast_ttl,int const tos){
