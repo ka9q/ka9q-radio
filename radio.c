@@ -201,7 +201,7 @@ void *proc_samples(void *arg){
       sc = size / (2 * sizeof(int8_t));
       break;
     case PCM_STEREO_LE_PT:
-    case PCM_STEREO_PT: // Big-endian 16 bits, no metadata header
+    case PCM_STEREO_PT: // 16 bits, no metadata header
       sc = size / (2 * sizeof(int16_t));
       break;
     case IQ_PT12:       // Big endian packed 12 bits, no metadata
@@ -258,7 +258,7 @@ void *proc_samples(void *arg){
 	Frontend.sdr.output_level = f_energy / sampcount; // average A/D level, not including analog gain
       }
       break;
-    case AIRSPY_PACKED:
+    case AIRSPY_PACKED: // e.g., Airspy R2
       if(Frontend.in->input.r != NULL){    // Ensure the data is the right type for the filter to avoid segfaults
 	// idiosyncratic packed format from Airspy-R2
 	// Some tricky optimizations here.
@@ -311,25 +311,29 @@ void *proc_samples(void *arg){
 	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
 	float const inv_gain = SCALE16 / Frontend.sdr.gain;
 	uint16_t const *sp = (uint16_t *)dp;
+	float buf[sampcount];
 	for(int i=0; i<sampcount; i++){
 	  // ntohs() returns UNSIGNED so the cast is necessary!
 	  int const s = (int16_t)ntohs(*sp++);
 	  in_energy += s * s;
-	  put_rfilter(Frontend.in,s * inv_gain);
+	  buf[i] = s * inv_gain;
 	}
+	write_rfilter(Frontend.in,buf,sampcount);
 	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
       }
       break;
-    case PCM_MONO_LE_PT: // 16 bits little endian integer real
+    case PCM_MONO_LE_PT: // 16 bits little endian integer real, e,g., rx888
       if(Frontend.in->input.r != NULL){
 	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
 	float const inv_gain = SCALE16 / Frontend.sdr.gain;
 	int16_t const *sp = (int16_t *)dp;
+	float buf[sampcount];
 	for(int i=0; i<sampcount; i++){
 	  int const s = *sp++;
 	  in_energy += s * s;
-	  put_rfilter(Frontend.in,s * inv_gain);
+	  buf[i] = s * inv_gain;
 	}
+	write_rfilter(Frontend.in,buf,sampcount);
 	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
       }
       break;

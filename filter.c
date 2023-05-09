@@ -910,9 +910,10 @@ int write_cfilter(struct filter_in *f, complex float const *buffer,int size){
   int written = 0;
 
   while(size > 0){
+    assert(f->ilen >= f->wcnt);
     int chunk = min(size,f->ilen - f->wcnt);
-    memcpy(&f->input.c[f->wcnt],buffer,size * sizeof(*buffer));
-    f->wcnt += size;
+    memcpy(&f->input.c[f->wcnt],buffer,chunk * sizeof(*buffer));
+    f->wcnt += chunk;
     size -= chunk;
     buffer += chunk;
     written += chunk;
@@ -927,9 +928,10 @@ int write_rfilter(struct filter_in *f, float const *buffer,int size){
   int written = 0;
 
   while(size > 0){
+    assert(f->ilen >= f->wcnt);
     int chunk = min(size,f->ilen - f->wcnt);
-    memcpy(&f->input.r[f->wcnt],buffer,size * sizeof(*buffer));
-    f->wcnt += size;
+    memcpy(&f->input.r[f->wcnt],buffer,chunk * sizeof(*buffer));
+    f->wcnt += chunk;
     size -= chunk;
     buffer += chunk;
     written += chunk;
@@ -939,8 +941,6 @@ int write_rfilter(struct filter_in *f, float const *buffer,int size){
     }
   }
   return written;
-
-
 };
 
 // Custom version of malloc that aligns to a cache line

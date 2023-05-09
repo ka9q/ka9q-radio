@@ -100,7 +100,6 @@ static inline int put_cfilter(struct filter_in * restrict const f,complex float 
   return 0;
 }
 
-// Write real samples
 static inline int put_rfilter(struct filter_in * restrict const f,float const s){
   f->input.r[f->wcnt] = s;
   if(++f->wcnt == f->ilen){
