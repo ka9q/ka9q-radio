@@ -38,6 +38,7 @@
 #include "config.h"
 
 // Configuration constants & defaults
+static int const DEFAULT_FFT_THREADS = 2;
 static int const DEFAULT_IP_TOS = 48;
 static int const DEFAULT_MCAST_TTL = 1;
 static float const DEFAULT_BLOCKTIME = 20.0;
@@ -64,6 +65,7 @@ int RTCP_enable = false;
 int SAP_enable = false;
 static int Overlap;
 char const *Name;
+extern int Nthreads;
 
 static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 pthread_t Status_thread;
@@ -287,9 +289,7 @@ static int loadconfig(char const * const file){
   Mcast_ttl = config_getint(Configtable,global,"ttl",DEFAULT_MCAST_TTL);
   Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",DEFAULT_BLOCKTIME));
   Overlap = abs(config_getint(Configtable,global,"overlap",DEFAULT_OVERLAP));
-#if 0 // Make this configurable again someday
   Nthreads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFT_THREADS);
-#endif
   RTCP_enable = config_getboolean(Configtable,global,"rtcp",0);
   SAP_enable = config_getboolean(Configtable,global,"sap",0);
   Modefile = config_getstring(Configtable,global,"mode-file",Modefile);

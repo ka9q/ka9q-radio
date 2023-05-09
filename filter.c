@@ -27,7 +27,7 @@ char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
 
 double Fftw_plan_timelimit = 10.0;
 // Nthreads now applies to FFT worker threads; FFTW itself always executes with 1 thread
-#define Nthreads (2)
+int Nthreads = 2;
 bool Fftw_init = false;
 
 // FFT job queue
@@ -45,11 +45,12 @@ struct fft_job {
 };
 
 
+#define NTHREADS_MAX 20  // More than I'll ever need
 static struct {
   pthread_mutex_t queue_mutex; // protects job_queue
   pthread_cond_t queue_cond;   // signaled when job put on job_queue
   struct fft_job *job_queue;
-  pthread_t thread[Nthreads];  // Worker threads
+  pthread_t thread[NTHREADS_MAX];  // Worker threads
 } FFT;
 
 static inline int modulo(int x,int const m){
