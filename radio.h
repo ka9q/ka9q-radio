@@ -14,7 +14,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
-#include <iniparser.h>
+#include <iniparser/iniparser.h>
 
 #include "multicast.h"
 #include "osc.h"

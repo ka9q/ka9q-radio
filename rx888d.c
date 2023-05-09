@@ -11,7 +11,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <complex.h>
-#include <libusb.h>
+#include <libusb-1.0/libusb.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -34,7 +34,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <getopt.h>
-#include <iniparser.h>
+#include <iniparser/iniparser.h>
 #include <sched.h>
 
 #include "conf.h"
@@ -326,7 +326,7 @@ int main(int argc,char *argv[]){
     rx888_set_samprate(sdr,samprate);
   }
   
-  fprintf(stdout,"Samprate %'d, Gain %.1f dB, Attenuation %.1f dB, Dithering %d, Randomizer %d, Queue depth %d, Request size %d\n",
+  fprintf(stdout,"Samprate %'d, Gain %.1f dB, Attenuation %.1f dB, Dithering %d, Randomizer %d, USB Queue depth %d, USB Request size %d\n",
 	  sdr->samprate,sdr->rf_gain,sdr->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize);
 
   // When the IP TTL is 0, we're not limited by the Ethernet hardware MTU so select a much larger packet size
@@ -395,6 +395,10 @@ int main(int argc,char *argv[]){
       exit(1);
     }
   }
+  fprintf(stdout,"%s iface %s status to %s, data to %s (TTL %d TOS %d packetsize %d samples\n",
+	  sdr->description,Iface,formatsock(&sdr->output_metadata_dest_address),formatsock(&sdr->output_data_dest_address),
+	  RTP_ttl,IP_tos,sdr->pktsize);
+	  
 
   signal(SIGPIPE,SIG_IGN);
   signal(SIGINT,closedown);
@@ -766,7 +770,7 @@ static int rx888_init(struct sdrstate *sdr,const char *firmware,unsigned int que
   bool allocfail = false;
   sdr->databuffers = (u_char **)calloc(queuedepth,sizeof(u_char *));
   sdr->transfers = (struct libusb_transfer **)calloc(queuedepth,sizeof(struct libusb_transfer *));
-  fprintf(stdout,"Queue depth: %d, Packet size: %d\n",queuedepth,reqsize * sdr->pktsize);
+  fprintf(stdout,"Queue depth: %d, Packet size: %d bytes\n",queuedepth,reqsize * sdr->pktsize);
   if((sdr->databuffers != NULL) && (sdr->transfers != NULL)){
     for(unsigned int i = 0; i < queuedepth; i++){
       sdr->databuffers[i] = (u_char *)malloc(reqsize * sdr->pktsize);

@@ -28,7 +28,7 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "libusb.h"
+#include <libusb-1.0/libusb.h>
 #include "rx888.h"
 
 #define FX_TYPE_UNDEFINED  -1

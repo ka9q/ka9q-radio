@@ -27,7 +27,6 @@
 #include <stdint.h>
 #include <stdarg.h>
 
-#include "libusb.h"
 #include "ezusb.h"
 
 /*

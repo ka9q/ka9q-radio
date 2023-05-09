@@ -30,7 +30,7 @@
 #include <locale.h>
 #include <signal.h>
 #include <sys/ioctl.h>
-#include <iniparser.h>
+#include <iniparser/iniparser.h>
 
 #include "misc.h"
 #include "filter.h"

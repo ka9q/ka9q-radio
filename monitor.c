@@ -23,7 +23,7 @@
 #include <locale.h>
 #include <signal.h>
 #include <getopt.h>
-#include <iniparser.h>
+#include <iniparser/iniparser.h>
 #if __linux__
 #include <bsd/string.h>
 #else

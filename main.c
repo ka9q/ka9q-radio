@@ -26,7 +26,7 @@
 #include <getopt.h>
 #include <ctype.h>
 #include <arpa/inet.h>
-#include <iniparser.h>
+#include <iniparser/iniparser.h>
 #include <net/if.h>
 #include <sched.h>
 

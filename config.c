@@ -1,7 +1,7 @@
 // $Id: config.c,v 1.5 2022/12/29 05:42:34 karn Exp $
 // Helper functions for iniparser that combine section:key
 // April 2022, Phil Karn, KA9Q
-#include <iniparser.h>
+#include <iniparser/iniparser.h>
 #include "config.h"
 
 int config_getint(dictionary const *d,char const *section,char const *key,int def){

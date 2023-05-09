@@ -32,7 +32,7 @@
 #include <syslog.h>
 #include <errno.h>
 #include <getopt.h>
-#include <iniparser.h>
+#include <iniparser/iniparser.h>
 
 #include "conf.h"
 #include "fcd.h"
