@@ -326,8 +326,8 @@ int main(int argc,char *argv[]){
     rx888_set_samprate(sdr,samprate);
   }
   
-  fprintf(stdout,"Samprate %'d, Gain %.1f dB, Attenuation %.1f dB, Dithering %d, Randomizer %d, USB Queue depth %d, USB Request size %d\n",
-	  sdr->samprate,sdr->rf_gain,sdr->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize);
+  fprintf(stdout,"Samprate %'d, Gain %.1f dB, Attenuation %.1f dB, Dithering %d, Randomizer %d, USB Queue depth %d, USB Request size %d, USB packet size %'d\n",
+	  sdr->samprate,sdr->rf_gain,sdr->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->reqsize * sdr->pktsize);
 
   // When the IP TTL is 0, we're not limited by the Ethernet hardware MTU so select a much larger packet size
   // unless one has been set explicitly
@@ -770,7 +770,7 @@ static int rx888_init(struct sdrstate *sdr,const char *firmware,unsigned int que
   bool allocfail = false;
   sdr->databuffers = (u_char **)calloc(queuedepth,sizeof(u_char *));
   sdr->transfers = (struct libusb_transfer **)calloc(queuedepth,sizeof(struct libusb_transfer *));
-  fprintf(stdout,"Queue depth: %d, Packet size: %d bytes\n",queuedepth,reqsize * sdr->pktsize);
+
   if((sdr->databuffers != NULL) && (sdr->transfers != NULL)){
     for(unsigned int i = 0; i < queuedepth; i++){
       sdr->databuffers[i] = (u_char *)malloc(reqsize * sdr->pktsize);
