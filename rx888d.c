@@ -395,9 +395,9 @@ int main(int argc,char *argv[]){
       exit(1);
     }
   }
-  fprintf(stdout,"%s iface %s status to %s, data to %s (TTL %d TOS %d packetsize %d samples\n",
+  fprintf(stdout,"%s: iface %s; status -> %s, data -> %s (TTL %d, TOS %d, %d samples/packet)\n",
 	  sdr->description,Iface,formatsock(&sdr->output_metadata_dest_address),formatsock(&sdr->output_data_dest_address),
-	  RTP_ttl,IP_tos,sdr->pktsize);
+	  RTP_ttl,IP_tos,sdr->blocksize);
 	  
 
   signal(SIGPIPE,SIG_IGN);
