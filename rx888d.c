@@ -316,12 +316,12 @@ int main(int argc,char *argv[]){
     
     rx888_set_gain(sdr,gain);
 
-    // Sample Rate, default 32000000
-    unsigned int const samprate = config_getint(Dictionary,Name,"samprate",32000000);
+    // Sample Rate, default 32000000 (32 MHz)
+    unsigned int samprate = config_getint(Dictionary,Name,"samprate",32000000);
     if(samprate < 1000000){
-      fprintf(stdout,"Invalid sample rate %'d\n",samprate);
-      iniparser_freedict(Dictionary);
-      exit(1);
+      int const minsamprate = 1000000; // 1 MHz?
+      fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,minsamprate);
+      samprate = minsamprate;
     }
     rx888_set_samprate(sdr,samprate);
   }
@@ -335,18 +335,18 @@ int main(int argc,char *argv[]){
 
   RTP_ttl = config_getint(Dictionary,Name,"data-ttl",0); // Default to TTL=0
   Status_ttl = config_getint(Dictionary,Name,"status-ttl",1); // Default 1 for status; much lower bandwidth
-  {
-    int const x = config_getint(Dictionary,Name,"blocksize",-1);
-    if(x != -1){
-      sdr->blocksize = x;
-    } else if(RTP_ttl == 0)
-      sdr->blocksize = 24576; // * 2 bytes/sample = 49152 bytes/packet
-    else
-      sdr->blocksize = 720;   // * 2 bytes/sample = 1440 bytes/packet
-  }
+
+  // When TTL=0, packets never reach the Ethernet hardware so the usual 1500 byte MTU doesn't apply.
+  // Try to reach the IP max packet size of 65,536 bytes
+  if(RTP_ttl == 0)
+    sdr->blocksize = 24576; // * 2 bytes/sample = 49,152 bytes/packet
+  else
+    sdr->blocksize = 720;   // * 2 bytes/sample = 1440 bytes/packet
+  sdr->blocksize = config_getint(Dictionary,Name,"blocksize",sdr->blocksize);
 
   sdr->description = config_getstring(Dictionary,Name,"description",NULL);
   {
+    // Random based on time of day, if not set
     time_t tt;
     time(&tt);
     sdr->rtp.ssrc = config_getint(Dictionary,Name,"ssrc",tt);
