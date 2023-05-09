@@ -326,8 +326,8 @@ int main(int argc,char *argv[]){
     rx888_set_samprate(sdr,samprate);
   }
   
-  fprintf(stdout,"Samprate %'d, Gain %.1f dB, Attenuation %.1f dB, Dithering %d, Randomizer %d, USB Queue depth %d, USB Request size %d, USB packet size %'d\n",
-	  sdr->samprate,sdr->rf_gain,sdr->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->reqsize * sdr->pktsize);
+  fprintf(stdout,"Samprate %'d, Gain %.1f dB, Attenuation %.1f dB, Dithering %d, Randomizer %d, USB Queue depth %d, USB Request size %d * pktsize %d = %'d bytes\n",
+	  sdr->samprate,sdr->rf_gain,sdr->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize);
 
   // When the IP TTL is 0, we're not limited by the Ethernet hardware MTU so select a much larger packet size
   // unless one has been set explicitly
