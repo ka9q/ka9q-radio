@@ -1,0 +1,3 @@
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTRS{idVendor}=="04b4",ATTRS{idProduct}=="00f1",MODE:="0666"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTRS{idVendor}=="04b4",ATTRS{idProduct}=="00f3",MODE:="0666"
+

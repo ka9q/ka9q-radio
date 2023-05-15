@@ -27,7 +27,7 @@ AFILES=bandplan.txt help.txt modes.conf id.txt monitor-help.txt
 
 SYSTEMD_FILES=airspyd@.service airspyhfd@.service cwd.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service rx888d@.service
 
-UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules
+UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules 99-rx888.rules
 
 CONF_FILES=funcubed.conf \
 			 opusd@hf.conf opusd@hfdl.conf opusd@fm.conf opusd@aviation.conf opusd@packet.conf \
