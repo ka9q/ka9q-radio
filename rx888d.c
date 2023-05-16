@@ -747,6 +747,7 @@ static int rx888_init(struct sdrstate *sdr,const char *firmware,unsigned int que
     }
   }
   struct libusb_device *dev = libusb_get_device(sdr->dev_handle);
+  assert(dev != NULL);
   libusb_get_config_descriptor(dev, 0, &sdr->config);
   {
     int const ret = libusb_claim_interface(sdr->dev_handle, sdr->interface_number);
@@ -759,11 +760,15 @@ static int rx888_init(struct sdrstate *sdr,const char *firmware,unsigned int que
   {
     // All this just to get sdr->pktsize?
     struct libusb_interface_descriptor const *interfaceDesc = &(sdr->config->interface[0].altsetting[0]);
+    assert(interfaceDesc != NULL);
     struct libusb_endpoint_descriptor const *endpointDesc = &interfaceDesc->endpoint[0];
+    assert(endpointDesc != NULL);
     struct libusb_device_descriptor desc;
+    memset(&desc,0,sizeof(desc));
     libusb_get_device_descriptor(dev,&desc);
-    struct libusb_ss_endpoint_companion_descriptor *ep_comp;
+    struct libusb_ss_endpoint_companion_descriptor *ep_comp = NULL;
     libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
+    assert(ep_comp != NULL);
     sdr->pktsize = endpointDesc->wMaxPacketSize * (ep_comp->bMaxBurst + 1);
     libusb_free_ss_endpoint_companion_descriptor(ep_comp);
   }
