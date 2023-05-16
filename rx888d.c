@@ -768,13 +768,27 @@ static int rx888_init(struct sdrstate *sdr,const char *firmware,unsigned int que
     libusb_get_device_descriptor(dev,&desc);
     struct libusb_ss_endpoint_companion_descriptor *ep_comp = NULL;
     // fv
+    //fprintf(stdout,"endpointDesc - bLength=%d bDescriptorType=%d bEndpointAddress=%d bmAttributes=%d extra_length=%d\n",endpointDesc->bLength,endpointDesc->bDescriptorType,endpointDesc->bEndpointAddress,endpointDesc->bmAttributes,endpointDesc->extra_length);
     int rc = libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
+#ifdef ORIGINAL_CODE
     if(rc != 0){
       fprintf(stdout,"libusb_get_ss_endpoint_companion_descriptor returned: %s (%d)\n",libusb_error_name(rc),rc);
       exit(1);
     }
     assert(ep_comp != NULL);
     sdr->pktsize = endpointDesc->wMaxPacketSize * (ep_comp->bMaxBurst + 1);
+#else
+    if(rc == 0){
+      assert(ep_comp != NULL);
+      sdr->pktsize = endpointDesc->wMaxPacketSize * (ep_comp->bMaxBurst + 1);
+    }else if(rc == LIBUSB_ERROR_NOT_FOUND){
+      // hardcode bMaxBurst to 15 for now since the RX888 firmware has ENDPOINT_BURST_LENGTH = 16
+      sdr->pktsize = endpointDesc->wMaxPacketSize * (15 + 1);
+    }else{
+      fprintf(stdout,"libusb_get_ss_endpoint_companion_descriptor returned: %s (%d)\n",libusb_error_name(rc),rc);
+      exit(1);
+    }
+#endif
     libusb_free_ss_endpoint_companion_descriptor(ep_comp);
   }
   bool allocfail = false;
