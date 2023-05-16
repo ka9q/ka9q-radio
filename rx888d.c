@@ -767,7 +767,12 @@ static int rx888_init(struct sdrstate *sdr,const char *firmware,unsigned int que
     memset(&desc,0,sizeof(desc));
     libusb_get_device_descriptor(dev,&desc);
     struct libusb_ss_endpoint_companion_descriptor *ep_comp = NULL;
-    libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
+    // fv
+    int rc = libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
+    if(rc != 0){
+      fprintf(stdout,"libusb_get_ss_endpoint_companion_descriptor returned: %s (%d)\n",libusb_error_name(rc),rc);
+      exit(1);
+    }
     assert(ep_comp != NULL);
     sdr->pktsize = endpointDesc->wMaxPacketSize * (ep_comp->bMaxBurst + 1);
     libusb_free_ss_endpoint_companion_descriptor(ep_comp);
