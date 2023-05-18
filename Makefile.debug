@@ -39,7 +39,7 @@ CONF_FILES=funcubed.conf \
 			 radiod@repeater.conf \
 			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
 			 wspr-decoded.conf horus.conf airspyd.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
-			 rx888d.conf
+			 rx888d.conf radiod@kfs.conf
 
 LOGROTATE_FILES = aprsfeed.rotate
 
