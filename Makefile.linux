@@ -23,7 +23,7 @@ DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereo
 
 EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded
 
-AFILES=bandplan.txt help.txt modes.conf id.txt monitor-help.txt
+AFILES=bandplan.txt help.txt modes.conf id.txt monitor-help.txt SDDC_FX3.img
 
 SYSTEMD_FILES=airspyd@.service airspyhfd@.service cwd.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service rx888d@.service
 
