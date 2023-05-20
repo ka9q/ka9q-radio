@@ -353,13 +353,17 @@ static int loadconfig(char const * const file){
     // fall back to setting in [global] if parameter not specified in individual section
     // Set parameters even when unused for the current demodulator in case the demod is changed later
     char const * mode = config2_getstring(Configtable,Configtable,global,sname,"mode",NULL);
-    if(mode == NULL || strlen(mode) == 0)
-      fprintf(stdout,"warning: mode preset not selected, using built-in defaults\n");
+    if(mode == NULL || strlen(mode) == 0){
+      fprintf(stdout,"warning: mode not specified in section %s or [global], ignoring section\n",sname);
+      continue;
+    }
 
     struct demod *demod = alloc_demod();
-    if(loadmode(demod,Modetable,mode,1) != 0)
-      fprintf(stdout,"loadmode(%s,%s) failed\n",Modefile,mode);
-
+    if(loadmode(demod,Modetable,mode,1) != 0){
+      fprintf(stdout,"loadmode(%s,%s) failed, ignoring section %s\n",Modefile,mode,sname);
+      free_demod(&demod);
+      continue;
+    }
     loadmode(demod,Configtable,sname,0); // Overwrite with config file entries
 
     demod->output.rtp.ssrc = (uint32_t)config_getdouble(Configtable,sname,"ssrc",0); // Default triggers auto gen from freq
