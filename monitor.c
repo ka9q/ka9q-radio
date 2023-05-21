@@ -363,7 +363,7 @@ int main(int argc,char * const argv[]){
       Mcast_address_text[Nfds++] = argv[i];
   }
   if(Init)
-    (void)system(Init);
+    (void) - system(Init);
 
 
   if(Cwid != NULL){
@@ -495,7 +495,7 @@ SIGQUIT,SIGSEGV,SIGSYS,SIGTERM,SIGTRAP,SIGUSR1,SIGUSR2,
   nocbreak();
   endwin();
   if(Tx_off)
-    (void)system(Tx_off);
+    (void) - system(Tx_off);
     
   exit(0);
 }
@@ -922,7 +922,7 @@ static void *decode_task(void *arg){
       pthread_mutex_lock(&PTT_mutex);
       if(Repeater_tail != 0 && !PTT_state){
 	PTT_state = true;
-	system(Tx_on);
+	(void) - system(Tx_on);
 	keyup = true;
 	pthread_cond_signal(&PTT_cond);
       }
@@ -1424,7 +1424,7 @@ static int close_session(struct session **p){
 static void closedown(int s){
   fprintf(stderr,"Signal %d, exiting\n",s);
   if(Tx_off)
-    (void)system(Tx_off);
+    (void) - system(Tx_off);
   cleanup();
   exit(0);
 }
@@ -1443,7 +1443,7 @@ static void cleanup(void){
 // If running from systemd, we should be restarted
 static void pa_finished_callback(void *userdata){
   if(Tx_off)
-    (void)system(Tx_off);
+    (void) - system(Tx_off);
   cleanup();
   fprintf(stderr,"pa_finished_callback() called, exiting\n");
   exit(0);
@@ -1597,7 +1597,7 @@ void *repeater_ctl(void *arg){
       }
       pthread_mutex_lock(&PTT_mutex);
       PTT_state = false;
-      (void)system(Tx_off);
+      (void) - system(Tx_off);
       pthread_mutex_unlock(&PTT_mutex);
       Last_xmit_time = gps_time_ns();
     }
