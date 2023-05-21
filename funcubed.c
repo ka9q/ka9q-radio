@@ -232,7 +232,7 @@ int main(int argc,char *argv[]){
       Metadata_dest = cp;
     else {
       char *foo;
-      asprintf(&foo,"%s-status.local",Name);
+      (void)asprintf(&foo,"%s-status.local",Name);
       Metadata_dest = foo;
     }
   }
@@ -264,7 +264,7 @@ int main(int argc,char *argv[]){
       Data_dest = cp;
     else {
       char *foo;
-      asprintf(&foo,"%s-data.local",Name);
+      (void) asprintf(&foo,"%s-data.local",Name);
       Data_dest = foo;
     }
   }
