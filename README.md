@@ -36,7 +36,7 @@ Separate programs talk directly to several makes of SDR front end
 hardware and generates the I/Q stream for *radiod*. These programs
 currently include *airspyd* (Airspy R2), *airspyhfd* (Airspy HF+),
 *rtlsdrd* (generic RTL-SDR dongles), *funcubed* (AMSAT UK Funcube Pro+),
-*hackrf* (Great Scott Gadgets Hack RF One, receive only) and rx888d (RX-888 Mark II).
+*hackrf* (Great Scott Gadgets Hack RF One, receive only) and *rx888d* (RX-888 Mk II).
 
 Two very rudimentary programs are provided for interactive use;
 *monitor* listens to one or more demodulated audio streams and
