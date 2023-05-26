@@ -25,6 +25,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <libgen.h>
 #include "misc.h"
 #include "attr.h"
 #include "multicast.h"
@@ -240,6 +241,11 @@ void input_loop(){
 	sp = next;
 
 	if(fork() == 0){
+	  // set working directory to the one containing the file
+	  char *dupname = strdup(filename);
+	  chdir(dirname(dupname));
+	  FREE(dupname);
+
 	  int const r = system(cmd);
 	  if(Verbose && r != 0)
 	    fprintf(stderr,"system(%s) returned %d errno %d (%s)\n",cmd,r,errno,strerror(errno));
