@@ -26,7 +26,7 @@ libopus-dev
 
 Then:
 
-$ ln -s Makefile.linux Makefile
+$ ln -s Makefile.[linux|pi] Makefile
 $ make
 $ sudo make install
 
