@@ -155,10 +155,6 @@ int main(int argc,char *argv[]){
   strlcpy(PCM_mcast_address_text,argv[optind],sizeof(PCM_mcast_address_text));
   setlocale(LC_ALL,locale);
 
-  if(strlen(Recordings) > 0 && chdir(Recordings) != 0){
-    fprintf(stderr,"Can't change to directory %s: %s, exiting\n",Recordings,strerror(errno));
-    exit(1);
-  }
 
   // Set up input socket for multicast data stream from front end
   {
@@ -244,8 +240,15 @@ void input_loop(){
 	   && address_match(&sp->iq_sender,&Sender))
 	  break;
       }
-      if(sp == NULL) // Not found; create new one
+      if(sp == NULL){ // Not found; create new one
+	// Repeat this each time we create a session to ensure we're in the right directory.
+	// This might have failed on earlier attempts should we start before the fs is successfully mounted
+	if(strlen(Recordings) > 0 && chdir(Recordings) != 0){
+	  fprintf(stderr,"Can't change to directory %s: %s, exiting\n",Recordings,strerror(errno));
+	  exit(1);
+	}
 	sp = create_session(&rtp);
+      }
       if(sp == NULL || sp->fp == NULL)
 	continue; // Couldn't create new session
 
