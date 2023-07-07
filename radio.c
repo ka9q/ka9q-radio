@@ -233,10 +233,10 @@ void *proc_samples(void *arg){
       // Good enough for the occasional lost packet or two
       // Note: we don't use marker bits since we don't suppress silence
       Frontend.input.samples += time_step;
-      if(Frontend.in->input.r != NULL){
+      if(Frontend.in->in_type == REAL){
 	for(int i=0;i < time_step; i++)
 	  put_rfilter(Frontend.in,0);
-      } else if(Frontend.in->input.c != NULL){
+      } else if(Frontend.in->in_type == COMPLEX){
 	for(int i=0;i < time_step; i++)
 	  put_cfilter(Frontend.in,0);
       }
@@ -246,7 +246,7 @@ void *proc_samples(void *arg){
 
     switch(pkt.rtp.type){
     case IQ_FLOAT: // E.g., AirspyHF+
-      if(Frontend.in->input.c != NULL){
+      if(Frontend.in->in_type == COMPLEX){
 	float const inv_gain = 1.0f / Frontend.sdr.gain;
 	float f_energy = 0; // energy accumulator
 	complex float const * restrict up = (complex float *)dp;
@@ -259,7 +259,7 @@ void *proc_samples(void *arg){
       }
       break;
     case AIRSPY_PACKED: // e.g., Airspy R2
-      if(Frontend.in->input.r != NULL){    // Ensure the data is the right type for the filter to avoid segfaults
+      if(Frontend.in->in_type == REAL){    // Ensure the data is the right type for the filter to avoid segfaults
 	// idiosyncratic packed format from Airspy-R2
 	// Some tricky optimizations here.
 	// Input samples are 12 bits encoded in excess-2048, which makes them
@@ -268,30 +268,65 @@ void *proc_samples(void *arg){
 	float const inv_gain = SCALE12 / Frontend.sdr.gain;
 	uint64_t in_energy = 0; // Accumulate as integer for efficiency
 	uint32_t const * restrict up = (uint32_t *)dp;
+	// Be careful that sampcount isn't too big relative to filter input ring buffer; should add an efficient test
+	float *wptr = Frontend.in->input_write_pointer.r;
 	for(int i=0; i<sampcount; i+= 8){ // assumes multiple of 8
-	  int s[8];
-	  s[0] =  *up >> 20;
-	  s[1] =  *up >> 8;
-	  s[2] =  *up++ << 4;
-	  s[2] |= *up >> 28;
-	  s[3] =  *up >> 16;
-	  s[4] =  *up >> 4;
-	  s[5] =  *up++ << 8;
-	  s[5] |= *up >> 24;
-	  s[6] =  *up >> 12;
-	  s[7] =  *up++;
+	  int x;
+	  x =  *up >> 20;
+	  x -= 2048;
+	  in_energy += x * x;
+	  wptr[i+0] = x * inv_gain;
 
-	  for(int j=0; j < 8; j++){
-	    int const x = (s[j] & 0xfff) - 2048; // not actually necessary for s[0]
-	    in_energy += x * x;
-	    put_rfilter(Frontend.in,x*inv_gain);
-	  }
+	  x =  *up >> 8;
+	  x &= 0xfff;
+	  x -= 2048;
+	  in_energy += x * x;
+	  wptr[i+1] = x * inv_gain;
+
+	  x =  *up++ << 4;
+	  x |= *up >> 28;
+	  x &= 0xfff;
+	  x -= 2048;
+	  in_energy += x * x;
+	  wptr[i+2] = x * inv_gain;
+
+	  x =  *up >> 16;
+	  x &= 0xfff;
+	  x -= 2048;
+	  in_energy += x * x;
+	  wptr[i+3] = x * inv_gain;
+	  
+	  x =  *up >> 4;
+	  x &= 0xfff;
+	  x -= 2048;
+	  in_energy += x * x;
+	  wptr[i+4] = x * inv_gain;
+
+	  x =  *up++ << 8;
+	  x |= *up >> 24;
+	  x &= 0xfff;
+	  x -= 2048;
+	  in_energy += x * x;
+	  wptr[i+5] = x * inv_gain;
+
+	  x =  *up >> 12;
+	  x &= 0xfff;
+	  x -= 2048;
+	  in_energy += x * x;
+	  wptr[i+6] = x * inv_gain;
+	  
+	  x =  *up++;
+	  x &= 0xfff;
+	  x -= 2048;
+	  in_energy += x * x;
+	  wptr[i+7] = x * inv_gain;
 	}
+	write_rfilter(Frontend.in,NULL,sampcount); // Update write count, invoke FFT
 	Frontend.sdr.output_level = 2 * in_energy * SCALE12 * SCALE12 / sampcount;
       }
       break;
     case REAL_PT12: // 12-bit packed integer real
-      if(Frontend.in->input.r != NULL){    // Ensure the data is the right type for the filter to avoid segfaults
+      if(Frontend.in->in_type == REAL){    // Ensure the data is the right type for the filter to avoid segfaults
 	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only
 	float const inv_gain = SCALE12 / Frontend.sdr.gain;
 	for(int i=0; i<sampcount; i+=2){
@@ -307,38 +342,38 @@ void *proc_samples(void *arg){
       }
       break;
     case PCM_MONO_PT: // 16 bits big-endian integer real
-      if(Frontend.in->input.r != NULL){
+      if(Frontend.in->in_type == REAL){
 	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
 	float const inv_gain = SCALE16 / Frontend.sdr.gain;
 	uint16_t const *sp = (uint16_t *)dp;
-	float buf[sampcount];
+	float *wptr = Frontend.in->input_write_pointer.r;
 	for(int i=0; i<sampcount; i++){
 	  // ntohs() returns UNSIGNED so the cast is necessary!
 	  int const s = (int16_t)ntohs(*sp++);
 	  in_energy += s * s;
-	  buf[i] = s * inv_gain;
+	  wptr[i] = s * inv_gain;
 	}
-	write_rfilter(Frontend.in,buf,sampcount);
+	write_rfilter(Frontend.in,NULL,sampcount); // Update write pointer, invoke FFT
 	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
       }
       break;
     case PCM_MONO_LE_PT: // 16 bits little endian integer real, e,g., rx888
-      if(Frontend.in->input.r != NULL){
+      if(Frontend.in->in_type == REAL){
 	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
 	float const inv_gain = SCALE16 / Frontend.sdr.gain;
 	int16_t const *sp = (int16_t *)dp;
-	float buf[sampcount];
+	float *wptr = Frontend.in->input_write_pointer.r;
 	for(int i=0; i<sampcount; i++){
 	  int const s = *sp++;
 	  in_energy += s * s;
-	  buf[i] = s * inv_gain;
+	  wptr[i] = s * inv_gain;
 	}
-	write_rfilter(Frontend.in,buf,sampcount);
+	write_rfilter(Frontend.in,NULL,sampcount); // Update write pointer, invoke FFT
 	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
       }
       break;
     case REAL_PT8: // 8 bit integer real
-      if(Frontend.in->input.r != NULL){
+      if(Frontend.in->in_type == REAL){
 	float const inv_gain = SCALE8 / Frontend.sdr.gain;
 	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only		
 	for(int i=0; i<sampcount; i++){
@@ -351,7 +386,7 @@ void *proc_samples(void *arg){
       break;
     default: // shuts up lint
     case IQ_PT12:      // two 12-bit signed integers (one complex sample) packed big-endian into 3 bytes
-      if(Frontend.in->input.c != NULL){
+      if(Frontend.in->in_type == COMPLEX){
 	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
 	float const inv_gain = SCALE12 / Frontend.sdr.gain;
 	for(int i=0; i<sampcount; i++){
@@ -368,7 +403,7 @@ void *proc_samples(void *arg){
       }
       break;
     case PCM_STEREO_PT:      // Two 16-bit signed integers, **BIG ENDIAN** (network order)
-      if(Frontend.in->input.c != NULL){
+      if(Frontend.in->in_type == COMPLEX){
 	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only		
 	float const inv_gain = SCALE16 / Frontend.sdr.gain;
 	int16_t const *sp = (int16_t *)dp;
@@ -386,7 +421,7 @@ void *proc_samples(void *arg){
       }
       break;
     case PCM_STEREO_LE_PT:    // 16-bit 48 kHz (or other) dual channel little endian
-      if(Frontend.in->input.c != NULL){
+      if(Frontend.in->in_type == COMPLEX){
 	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only		
 	float const inv_gain = SCALE16 / Frontend.sdr.gain;
 	int16_t const *sp = (int16_t *)dp;
@@ -403,7 +438,7 @@ void *proc_samples(void *arg){
       }
       break;
     case IQ_PT8:      // Two signed 8-bit integers
-      if(Frontend.in->input.c != NULL){
+      if(Frontend.in->in_type == COMPLEX){
 	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
 	float const inv_gain = SCALE8 / Frontend.sdr.gain;
 	for(int i=0; i<sampcount; i++){
@@ -419,7 +454,7 @@ void *proc_samples(void *arg){
       }
       break;
     case IQ_PT:        // two 16-bit signed integers (one complex sample) littleendian
-      if(Frontend.in->input.c != NULL){
+      if(Frontend.in->in_type == COMPLEX){
 	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only
 	float const inv_gain = SCALE16 / Frontend.sdr.gain;
 	for(int i=0; i<sampcount; i++){

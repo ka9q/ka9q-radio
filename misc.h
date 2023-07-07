@@ -18,6 +18,7 @@
 #include <complex.h>
 #include <math.h> // Get M_PI
 #include <stdlib.h> // for ldiv(), free()
+#include <assert.h>
 
 #ifndef M_PIf
 #define M_PIf ((float)(M_PI))
@@ -244,5 +245,28 @@ static inline long long gps_time_ns(void){
 // How the free() library routine should have been all along: null the pointer after freeing!
 #define FREE(p) (free(p), p = NULL)
 
+// Create allocation followed immediately by its mirror, useful for ring buffers
+// size is rounded up to next page boundary
+void *mirror_alloc(size_t size);
+void mirror_free(void **p,size_t size);
+
+// Wrap pointer p to keep it in range (base, base + size), where size is in bytes
+// The callers use C casts in a somewhat dodgy fashion, but is OK because size is always a multiple of the page size,
+// and there's an integral number of the objects we're pointing to in a page (we hope!!)
+static inline void mirror_wrap(void const **p, void const * const base,size_t const size){
+  assert(*p >= base); // Shouldn't be THIS low
+  assert(*p < base + 2 * size); // Or this high
+
+#if 0
+  if((uint8_t *)*p >= (uint8_t *)base + size)
+    *p = (uint8_t *)*p - size;
+#else
+  if(*p >= base + size)
+    *p = *p - size;
+#endif
+}
+
+// round argument up to an even number of system pages
+size_t round_to_page(size_t size);
 
 #endif // _MISC_H

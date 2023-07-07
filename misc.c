@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
@@ -20,6 +21,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <pthread.h>
+#include <sys/mman.h>
 #include <sched.h>
 #include <errno.h>
 
@@ -459,4 +461,79 @@ int pthread_barrier_wait(pthread_barrier_t *barrier)
 }
 
 #endif // __APPLE__
+
+// Round 'size' up to next whole number of system pages
+size_t round_to_page(size_t size){
+  assert(getpagesize() != 0);
+  imaxdiv_t const r = imaxdiv(size,(intmax_t)getpagesize());
+  size_t pages = r.quot;
+  if(r.rem != 0)
+    pages++;
+  return pages * getpagesize();
+}
+
+
+// Special version of malloc that allocates a mirrored block
+// The block first appears normally, then is followed by a duplicate mapping
+// Very useful for circular buffers that must be accessed sequentially, without wraparound
+// e.g., fftwf_execute()
+void *mirror_alloc(size_t size){
+  size = round_to_page(size); // mmap requires even number of pages
+
+  // Reserve virtual space for buffer + mirror
+  uint8_t * const base = mmap(NULL,size * 2, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+  if(base == MAP_FAILED){
+    return NULL; // failed
+  }
+  int fd;
+
+#if __linux__  
+  fd = memfd_create("mirror_alloc",0);
+  if(fd < 0){
+    perror("mirror_alloc memfd_create");
+    munmap(base,size * 2);
+    return NULL;
+  }
+#else
+  {
+    char path[] = "/tmp/cb-XXXXXX";
+    fd = mkstemp(path);
+    unlink(path);
+    if(fd < 0){
+      perror("mirror_alloc mkstemp");
+      munmap(base,size * 2);
+      return NULL;
+    }
+  }
+#endif
+
+  if(ftruncate(fd,size) != 0){
+    perror("mirror_alloc ftruncate");
+    close(fd);
+    munmap(base,size * 2);
+    return NULL;
+  }
+
+  // Create first appearance of buffer
+  uint8_t * const nbase = mmap(base, size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
+  if(nbase != base){
+    perror("mirror_alloc first mmap");
+    close(fd);
+    munmap(base,size * 2);
+    return NULL;
+  }
+  // Create mirror immedately after first
+  uint8_t * const mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
+  close(fd);
+  if(mirror != base + size){
+    perror("mirror_alloc second mmap");
+    munmap(base,size * 2);
+    return NULL;
+  }
+  return base;
+}
+void mirror_free(void **p,size_t size){
+  munmap(*p, size * 2);
+  *p = NULL; // Nail pointer
+}
 

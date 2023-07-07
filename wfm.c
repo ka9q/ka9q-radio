@@ -175,7 +175,7 @@ void *demod_wfm(void *arg){
       float np = M_1_PIf * cargf(buffer[n]); // -1 to +1
       float x = np - phase_memory;
       phase_memory = np;
-      composite->input.r[n] = x > 1 ? x - 2 : x < -1 ? x + 2 : x; // reduce difference to -1 to +1
+      composite->input_write_pointer.r[n] = x > 1 ? x - 2 : x < -1 ? x + 2 : x; // reduce difference to -1 to +1
     } // for(int n=0; n < composite_L; n++){
     if(squelch_state == squelch_state_max){
       // Squelch fully open; look at deviation peaks
@@ -184,11 +184,11 @@ void *demod_wfm(void *arg){
       float frequency_offset = 0;
       
       for(int n=0; n < composite_L; n++){
-	frequency_offset += composite->input.r[n];
-	if(composite->input.r[n] > peak_positive_deviation)
-	  peak_positive_deviation = composite->input.r[n];
-	else if(composite->input.r[n] < peak_negative_deviation)
-	  peak_negative_deviation = composite->input.r[n];
+	frequency_offset += composite->input_write_pointer.r[n];
+	if(composite->input_write_pointer.r[n] > peak_positive_deviation)
+	  peak_positive_deviation = composite->input_write_pointer.r[n];
+	else if(composite->input_write_pointer.r[n] < peak_negative_deviation)
+	  peak_negative_deviation = composite->input_write_pointer.r[n];
       }
       frequency_offset *= demod->output.samprate * 0.5f / composite_L;  // scale to Hz
       // Update frequency offset and peak deviation, with smoothing to attenuate PL tones

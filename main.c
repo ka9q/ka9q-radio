@@ -171,6 +171,17 @@ int main(int argc,char *argv[]){
   fflush(stdout);
 
   // all done, but we have to stay alive
+  pthread_setname("radiod-idle");
+
+#if 0
+  // The sleep call can sometimes run the CPU to 100% for unknown reasons,
+  // e.g., with the rx888 on the i7,
+  // so renice to least important nice value
+  int prio = getpriority(PRIO_PROCESS,0);
+  errno = 0; // setpriority can return -1
+  prio = setpriority(PRIO_PROCESS,0,prio +20);
+  fprintf(stdout,"New nice %d\n",prio);
+#endif
   while(1)
     sleep(100);
 
@@ -491,8 +502,8 @@ static int loadconfig(char const * const file){
   // Start the status thread after all the receivers have been created so it doesn't contend for the demod list lock
   if(Ctl_fd >= 3 && Status_fd >= 3){
     pthread_create(&Status_thread,NULL,radio_status,NULL);
-    pthread_create(&Demod_reaper_thread,NULL,demod_reaper,NULL);
   }
+  pthread_create(&Demod_reaper_thread,NULL,demod_reaper,NULL);
   iniparser_freedict(Configtable);
   Configtable = NULL;
   return ndemods;

@@ -12,6 +12,7 @@
 #include <complex.h>
 #include <stdbool.h>
 #include <fftw3.h>
+#include "misc.h"
 
 extern double Fftw_plan_timelimit;
 extern char const *Wisdom_file;
@@ -30,8 +31,8 @@ enum filtertype {
 // Input and output arrays can be either complex or real
 // Used to be a union, but was prone to errors
 struct rc {
-  float * restrict r;
-  complex float * restrict c;
+  float *r;
+  complex float *c;
 };
 
 #define ND 4
@@ -41,8 +42,10 @@ struct filter_in {
   int bins;                          // Total number of frequency bins. Complex: L + M - 1;  Real: (L + M - 1)/2 + 1
   int impulse_length;                // Length of filter impulse response, aka 'M'
   int wcnt;                          // Samples written to unexecuted input buffer
-  struct rc input_buffer;            // Actual time-domain input buffer, length N = L + M - 1
-  struct rc input;                   // Beginning of user input area, length L
+  void *input_buffer;                // Beginning of mirrored ring buffer
+  size_t input_buffer_size;          // size of input buffer in **bytes**
+  struct rc input_write_pointer;     // For incoming samples
+  struct rc input_read_pointer;      // For FFT input
   fftwf_plan fwd_plan;               // FFT (time -> frequency)
 
   pthread_mutex_t filter_mutex;      // Synchronization for sequence number
@@ -89,11 +92,14 @@ int write_cfilter(struct filter_in *, complex float const *,int size);
 int write_rfilter(struct filter_in *, float const *,int size);
 
 
-// Write complex samples to input side of filter
+// Write complex sample to input side of filter
 static inline int put_cfilter(struct filter_in * restrict const f,complex float const s){ // Complex
-  f->input.c[f->wcnt] = s;
-  if(++f->wcnt == f->ilen){
-    f->wcnt = 0;
+  assert((void *)(f->input_write_pointer.c) >= f->input_buffer);
+  assert((void *)(f->input_write_pointer.c) < f->input_buffer + f->input_buffer_size);
+  *f->input_write_pointer.c++ = s;
+  mirror_wrap((void *)&f->input_write_pointer.c, f->input_buffer,f->input_buffer_size);
+  if(++f->wcnt >= f->ilen){
+    f->wcnt -= f->ilen;
     execute_filter_input(f);
     return 1; // may now execute filter output without blocking
   }
@@ -101,9 +107,12 @@ static inline int put_cfilter(struct filter_in * restrict const f,complex float 
 }
 
 static inline int put_rfilter(struct filter_in * restrict const f,float const s){
-  f->input.r[f->wcnt] = s;
-  if(++f->wcnt == f->ilen){
-    f->wcnt = 0;
+  assert((void *)(f->input_write_pointer.r) >= f->input_buffer);
+  assert((void *)(f->input_write_pointer.r) < f->input_buffer + f->input_buffer_size);
+  *f->input_write_pointer.r++ = s;
+  mirror_wrap((void *)&f->input_write_pointer.r, f->input_buffer,f->input_buffer_size);
+  if(++f->wcnt >= f->ilen){
+    f->wcnt -= f->ilen;
     execute_filter_input(f);
     return 1; // may now execute filter output without blocking
   }

@@ -9,6 +9,8 @@
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <pthread.h>
 #include <memory.h>
@@ -143,20 +145,23 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     return NULL;
   case CROSS_CONJ:
   case COMPLEX:
-    master->input_buffer.c = lmalloc(sizeof(complex float) * N);
-    master->input_buffer.r = NULL; // Catch erroneous uses
-    assert(malloc_usable_size(master->input_buffer.c) >= N * sizeof(*master->input_buffer.c));
-    memset(master->input_buffer.c, 0, (M-1)*sizeof(*master->input_buffer.c)); // Clear earlier state
-    master->input.c = master->input_buffer.c + M - 1;
-    master->fwd_plan = fftwf_plan_dft_1d(N, master->input_buffer.c, master->fdomain[0], FFTW_FORWARD, FFTW_PATIENT);
+    master->input_buffer_size = round_to_page(ND * N * sizeof(complex float));
+    // Allocate input_buffer_size bytes immediately followed by its mirror
+    master->input_buffer = mirror_alloc(master->input_buffer_size);
+    master->input_read_pointer.c = master->input_buffer;
+    master->input_write_pointer.c = master->input_read_pointer.c + L; // start writing here
+    master->input_read_pointer.r = NULL;
+    master->input_write_pointer.r = NULL;
+    master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_PATIENT);
     break;
   case REAL:
-    master->input_buffer.c = NULL;
-    master->input_buffer.r = lmalloc(sizeof(float) * N);
-    assert(malloc_usable_size(master->input_buffer.r) >= N * sizeof(*master->input_buffer.r));
-    memset(master->input_buffer.r, 0, (M-1)*sizeof(*master->input_buffer.r)); // Clear earlier state
-    master->input.r = master->input_buffer.r + M - 1;
-    master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_buffer.r, master->fdomain[0], FFTW_PATIENT);
+    master->input_buffer_size = round_to_page(ND * N * sizeof(float));
+    master->input_buffer = mirror_alloc(master->input_buffer_size);
+    master->input_read_pointer.r = master->input_buffer;
+    master->input_write_pointer.r = master->input_read_pointer.r + L; // start writing here
+    master->input_read_pointer.c = NULL;
+    master->input_write_pointer.c = NULL;
+    master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_PATIENT);
     break;
   }
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
@@ -274,9 +279,6 @@ void *run_fft(void *p){
     if(job->completion_mutex)
       pthread_mutex_unlock(job->completion_mutex);
 
-    // Do this after signaling in case free() takes time
-    FREE(job->input); // free input but NOT output
-
     bool const terminate = job->terminate; // Don't use job pointer after free
     FREE(job);
     if(terminate)
@@ -291,7 +293,6 @@ int execute_filter_input(struct filter_in * const f){
   if(f == NULL)
     return -1;
 
-  int const N = f->ilen + f->impulse_length - 1;
   // We use the FFTW3 functions that specify the input and output arrays
   // Execute the FFT in separate worker threads
   struct fft_job * const job = calloc(1,sizeof(struct fft_job));
@@ -303,33 +304,22 @@ int execute_filter_input(struct filter_in * const f){
   job->completion_jobnum = &f->completed_jobs[job->jobnum % ND];
   job->completion_cond = &f->filter_cond;
 
-  // Set up next input buffer and perform overlap-and-save operation for fast convolution
-  // Although it would decrease latency to notify the fft thead first, that would set up a race condition
-  // since the FFT thread frees its input buffer on completion
+  // Set up the job and next input buffer
   switch(f->in_type){
   default:
   case CROSS_CONJ:
   case COMPLEX:
-    job->input = f->input_buffer.c;
-    {
-      complex float * const newbuf = lmalloc(sizeof(complex float) * N);
-      memmove(newbuf,f->input_buffer.c + f->ilen,(f->impulse_length-1)*sizeof(*f->input_buffer.c));
-      f->input_buffer.c = newbuf;
-      f->input.c = f->input_buffer.c + f->impulse_length -1;
-    }
+    job->input = f->input_read_pointer.c;
+    f->input_read_pointer.c += f->ilen;
+    mirror_wrap((void *)&f->input_read_pointer.c,f->input_buffer,f->input_buffer_size);
     break;
   case REAL:
-    job->input = f->input_buffer.r;
-    {
-      float * const newbuf = lmalloc(sizeof(float) * N);
-      memmove(newbuf,f->input_buffer.r + f->ilen,(f->impulse_length-1)*sizeof(*f->input_buffer.r));
-      f->input_buffer.r = newbuf;
-      f->input.r = f->input_buffer.r + f->impulse_length -1;
-    }
+    job->input = f->input_read_pointer.r;
+    f->input_read_pointer.r += f->ilen;
+    mirror_wrap((void *)&f->input_read_pointer.r,f->input_buffer,f->input_buffer_size);
     break;
   }
   assert(job->input != NULL); // Should already be allocated in create_filter_input, or in our last call
-  f->wcnt = 0; // In case it's not already reset to 0
 
   // Append job to worker queue, wake FFT worker thread
   struct fft_job *jp_prev = NULL;
@@ -601,7 +591,8 @@ int delete_filter_input(struct filter_in ** p){
     return -1;
   
   fftwf_destroy_plan(master->fwd_plan);
-  fftwf_free(master->input_buffer.c);
+  mirror_free(&master->input_buffer,2 * master->input_buffer_size); // Free both buffer & mirror
+
   for(int i=0; i < ND; i++)
     fftwf_free(master->fdomain[i]);
   FREE(master);
@@ -903,45 +894,47 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   slave->response = response;
   slave->noise_gain = noise_gain(slave);
   pthread_mutex_unlock(&slave->response_mutex);
-  fftwf_free(tmp);
+   fftwf_free(tmp);
 
   return 0;
 }
+
 int write_cfilter(struct filter_in *f, complex float const *buffer,int size){
-  int written = 0;
+  if(sizeof(*buffer) * (size + f->wcnt) >= f->input_buffer_size)
+    return -1;
 
-  while(size > 0){
-    assert(f->ilen >= f->wcnt);
-    int chunk = min(size,f->ilen - f->wcnt);
-    memcpy(&f->input.c[f->wcnt],buffer,chunk * sizeof(*buffer));
-    f->wcnt += chunk;
-    size -= chunk;
-    buffer += chunk;
-    written += chunk;
-    if(f->wcnt == f->ilen){
-      f->wcnt = 0;
-      execute_filter_input(f);
-    }
+  assert((void *)(f->input_write_pointer.c) >= f->input_buffer);
+  assert((void *)(f->input_write_pointer.c) < f->input_buffer + f->input_buffer_size);
+
+  if(buffer != NULL)
+    memcpy(f->input_write_pointer.c,buffer,size * sizeof(*buffer));
+  f->input_write_pointer.c += size;
+  mirror_wrap((void *)&f->input_write_pointer.c,f->input_buffer,f->input_buffer_size);
+  f->wcnt += size;
+  while(f->wcnt >= f->ilen){
+    f->wcnt -= f->ilen;
+    execute_filter_input(f);
   }
-  return written;
+  return size;
 }
-int write_rfilter(struct filter_in *f, float const *buffer,int size){
-  int written = 0;
 
-  while(size > 0){
-    assert(f->ilen >= f->wcnt);
-    int chunk = min(size,f->ilen - f->wcnt);
-    memcpy(&f->input.r[f->wcnt],buffer,chunk * sizeof(*buffer));
-    f->wcnt += chunk;
-    size -= chunk;
-    buffer += chunk;
-    written += chunk;
-    if(f->wcnt == f->ilen){
-      f->wcnt = 0;
-      execute_filter_input(f);
-    }
+int write_rfilter(struct filter_in *f, float const *buffer,int size){
+  if(sizeof(*buffer) * (f->wcnt + size) >= f->input_buffer_size)
+    return -1;
+
+  assert((void *)(f->input_write_pointer.r) >= f->input_buffer);
+  assert((void *)(f->input_write_pointer.r) < f->input_buffer + f->input_buffer_size);
+
+  if(buffer != NULL)
+    memcpy(f->input_write_pointer.r,buffer,size * sizeof(*buffer));
+  f->input_write_pointer.r += size;
+  mirror_wrap((void *)&f->input_write_pointer.r,f->input_buffer,f->input_buffer_size);
+  f->wcnt += size;
+  while(f->wcnt >= f->ilen){
+    f->wcnt -= f->ilen;
+    execute_filter_input(f);
   }
-  return written;
+  return size;
 };
 
 // Custom version of malloc that aligns to a cache line
