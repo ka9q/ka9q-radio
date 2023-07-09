@@ -197,7 +197,7 @@ int rx888_setup(dictionary *Dictionary,char const *section){
     rx888_set_samprate(sdr,samprate);
   }
   
-  sdr->description = config_getstring(Dictionary,section,"description",NULL);
+  sdr->description = strdup(config_getstring(Dictionary,section,"description",NULL));
 
   if(sdr->description)
     fprintf(stdout,"%s: ",sdr->description);
