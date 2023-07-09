@@ -55,6 +55,9 @@ int Verbose;
 static char const *Locale = "en_US.UTF-8";
 dictionary *Configtable; // Configtable file descriptor for iniparser
 dictionary *Modetable;
+char const *Device;
+char const *Hardware;
+volatile bool Stop_transfers = false; // Request to stop data transfers; how should this get set?
 
 struct demod *Dynamic_demod; // Prototype for dynamically created demods
 
@@ -63,7 +66,7 @@ int Mcast_ttl;
 int IP_tos; // AF12 left shifted 2 bits
 int RTCP_enable = false;
 int SAP_enable = false;
-static int Overlap;
+int Overlap;
 char const *Name;
 extern int Nthreads;
 
@@ -80,8 +83,10 @@ uint32_t Command_tag;
 uint64_t Commands;
 
 static void closedown(int);
-static int setup_frontend(char const *arg);
+static int mcast_setup_frontend(char const *arg);
 static int loadconfig(char const *file);
+int process_hardware(char const *sname);
+int rx888_setup(dictionary *,char const *);
 
 // The main program sets up the demodulator parameter defaults,
 // overwrites them with command-line arguments and/or state file settings,
@@ -170,18 +175,6 @@ int main(int argc,char *argv[]){
   fprintf(stdout,"%d total demodulators started\n",n);
   fflush(stdout);
 
-  // all done, but we have to stay alive
-  pthread_setname("radiod-idle");
-
-#if 0
-  // The sleep call can sometimes run the CPU to 100% for unknown reasons,
-  // e.g., with the rx888 on the i7,
-  // so renice to least important nice value
-  int prio = getpriority(PRIO_PROCESS,0);
-  errno = 0; // setpriority can return -1
-  prio = setpriority(PRIO_PROCESS,0,prio +20);
-  fprintf(stdout,"New nice %d\n",prio);
-#endif
   while(1)
     sleep(100);
 
@@ -190,7 +183,7 @@ int main(int argc,char *argv[]){
 
 static int Frontend_started;
 
-static int setup_frontend(char const *arg){
+static int mcast_setup_frontend(char const *arg){
   if(Frontend_started)
     return 0;  // Only do this once
   Frontend.sdr.gain = 1; // In case it's never sent by front end
@@ -233,7 +226,11 @@ static int setup_frontend(char const *arg){
 
   // We must acquire a status stream before we can proceed further
   pthread_mutex_lock(&Frontend.sdr.status_mutex);
-  while(Frontend.sdr.samprate == 0 || (Frontend.input.data_dest_address.ss_family == 0))
+  
+  // ** When running with linked-in driver, the data dest address won't be set, only the sample rate **
+  // Hopefully this will be enough
+  //  while(Frontend.sdr.samprate == 0 || (Frontend.input.data_dest_address.ss_family == 0))
+  while(Frontend.sdr.samprate == 0)
     pthread_cond_wait(&Frontend.sdr.status_cond,&Frontend.sdr.status_mutex);
   pthread_mutex_unlock(&Frontend.sdr.status_mutex);
 
@@ -306,14 +303,30 @@ static int loadconfig(char const * const file){
   Modefile = config_getstring(Configtable,global,"mode-file",Modefile);
   Wisdom_file = config_getstring(Configtable,global,"wisdom-file",Wisdom_file);
   char const * const input = config_getstring(Configtable,global,"input",NULL);
-  if(input == NULL){
-    // Mandatory
-    fprintf(stdout,"input not specified in [%s]\n",global);
-    exit(1);
-  }
-  if(setup_frontend(input) == -1){
-    fprintf(stdout,"Front end setup of %s failed\n",input);
-    exit(1);
+
+  // Are we using a direct fronte end?
+  Hardware = config_getstring(Configtable,global,"hardware",NULL);
+  if(Hardware){
+    // Look for specified hardware section
+    int const nsect = iniparser_getnsec(Configtable);
+    for(int sect = 0; sect < nsect; sect++){
+      char const * const sname = iniparser_getsecname(Configtable,sect);
+      if(strcasecmp(sname,Hardware) == 0){
+	process_hardware(sname);
+	break;
+      }
+    }
+  } else {
+    // old-style multicast connection to front end
+    if(input == NULL){
+      // Mandatory
+      fprintf(stdout,"input not specified in [%s]\n",global);
+      exit(1);
+    }
+    if(mcast_setup_frontend(input) == -1){
+      fprintf(stdout,"Front end setup of %s failed\n",input);
+      exit(1);
+    }
   }
   {
     char const * const status = config_getstring(Configtable,global,"status",NULL); // Status/command thread for all demodulators
@@ -354,8 +367,10 @@ static int loadconfig(char const * const file){
   int const nsect = iniparser_getnsec(Configtable);
   for(int sect = 0; sect < nsect; sect++){
     char const * const sname = iniparser_getsecname(Configtable,sect);
-    if(strcmp(sname,global) == 0)
+    if(strcasecmp(sname,global) == 0)
       continue; // Already processed above
+    if(config_getstring(Configtable,sname,"device",NULL) != NULL)
+      continue; // It's a front end configuration, ignore
 
     fprintf(stdout,"Processing [%s]\n",sname);
     if(config_getboolean(Configtable,sname,"disable",0))
@@ -509,6 +524,19 @@ static int loadconfig(char const * const file){
   return ndemods;
 }
 
+int process_hardware(char const *sname){
+  Device = config_getstring(Configtable,sname,"device",NULL);
+  if(Device == NULL){
+    fprintf(stdout,"No device= entry in [%s]\n",sname);
+    return -1;
+  }
+  // Do we support it?
+  if(strcasecmp(Device,"rx888") == 0)
+    rx888_setup(Configtable,sname);
+  return 0;
+}
+
+
 // RTP control protocol sender task
 void *rtcp_send(void *arg){
   struct demod const *demod = (struct demod *)arg;
@@ -584,6 +612,8 @@ void *rtcp_send(void *arg){
 }
 static void closedown(int a){
   fprintf(stdout,"Received signal %d, exiting\n",a);
+  Stop_transfers = true;
+  sleep(1); // pause for threads to see it
 
   if(a == SIGTERM)
     exit(0); // Return success when terminated by systemd
