@@ -50,7 +50,7 @@ BLACKLIST=airspy-blacklist.conf
 SRC=airspyd.c airspyhfd.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c fcd.c filter.c fm.c \
 	   tune.c funcubed.c iir.c iqplay.c iqrecord.c linear.c main.c metadump.c misc.c modes.c modulate.c monitor.c morse.c radio.c setfilt.c powers.c \
 	   show-sig.c spectrum.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdrd.c pcmspawn.c \
-	   rx888d.c ezusb.c sdrplayd.c status.c stereod.c wfm.c wspr-decoded.c ft8-decoded.c set_xcvr.c rx888d.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
+	   rx888d.c rx888.c ezusb.c sdrplayd.c status.c stereod.c wfm.c wspr-decoded.c ft8-decoded.c set_xcvr.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
 	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h ezusb.h rx888.h
 
 all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(LOGROTATE_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
@@ -182,8 +182,8 @@ powers: powers.o dump.o libradio.a
 pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
-radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o rtcp.o radio_status.o modes.o decode_status.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lbsd -lm -lpthread
+radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o rtcp.o radio_status.o modes.o decode_status.o rx888.o ezusb.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -lbsd -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread

@@ -87,8 +87,8 @@ pl: pl.o libradio.a
 powers: powers.o dump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lm -lpthread
 
-radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o status.o decode_status.o libradio.a
-	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread
+radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o status.o decode_status.o rx888.o ezusb.o libradio.a
+	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lusb-1.0 -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread
@@ -152,6 +152,7 @@ pcmrecord.o: pcmrecord.c attr.h multicast.h
 pcmsend.o: pcmsend.c misc.h multicast.h
 pl.o: pl.c multicast.h misc.h osc.h
 rx888d.o: rx888d.c conf.h misc.h multicast.h decimate.h status.h config.h rx888.h ezusb.h
+rx888.o: rx888.c conf.h misc.h multicast.h decimate.h status.h radio.h config.h rx888.h ezusb.h
 show-sig.o: show-sig.c misc.h multicast.h status.h 
 show-pkt.o: show-pkt.c misc.h multicast.h status.h 
 tune.o: tune.c misc.h multicast.h status.h
