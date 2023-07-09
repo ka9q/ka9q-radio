@@ -72,6 +72,22 @@
 280675	W1AW
 28095	W1AW
 28590	W1AW
+
+39140	CHP Blue1 Border Base
+39220	CHP White3 South LA
+39240	CHP Blue W Border Base
+39340	CHP Brown1 Temecula
+39360	CHP Green1 Capistrano
+39400	CHP Orange1 San Diego
+39440	CHP Purple1A Santa Ana
+39600	CHP Gold1 Border
+39720	CHP Grey1 Westminster
+39800	CHP Tan1 Oceanside
+39920	CHP TAC Border base
+42340	CHP Blue Border base
+42920	CHP Maroon1 El Centro
+45420	CHP Blue2 South
+
 52100	K6JCC in
 52180	W6NWG in
 52525	Simplex
