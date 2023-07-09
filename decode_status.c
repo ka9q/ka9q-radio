@@ -215,9 +215,11 @@ int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length)
       break;
     case RF_ATTEN:
       frontend->sdr.rf_atten = decode_float(cp,optlen);
+      frontend->sdr.gain = dB2voltage(frontend->sdr.rf_gain - fabsf(frontend->sdr.rf_atten));
       break;
     case RF_GAIN:
       frontend->sdr.rf_gain = decode_float(cp,optlen);
+      frontend->sdr.gain = dB2voltage(frontend->sdr.rf_gain - fabsf(frontend->sdr.rf_atten));
       break;
     case OUTPUT_DATA_UNIX_SOCKET:
       decode_local_socket(&frontend->input.data_dest_address,cp,optlen);
@@ -228,6 +230,8 @@ int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length)
     cp += optlen;
   }
   done:;
+
+
 
   if(frontend->sdr.samprate != 0 && frontend->sdr.min_IF == 0 && frontend->sdr.max_IF == 0){
     // Not initialized; avoid assertion fails by defaulting to +/- Fs/2
