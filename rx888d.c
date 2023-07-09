@@ -46,7 +46,7 @@
 #include "rx888.h"
 #include "ezusb.h"
 
-int ezusb_verbose = 0;
+int Ezusb_verbose = 0;
 static int const Bufsize = 16384;
 
 // Global variables set by config file options
@@ -181,7 +181,7 @@ int main(int argc,char *argv[]){
       break;
     case 'v':
       Verbose++;
-      ezusb_verbose++;
+      Ezusb_verbose++;
       break;
     default:
     case '?':

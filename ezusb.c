@@ -122,7 +122,7 @@ static int ezusb_write(libusb_device_handle *device, const char *label,
 {
 	int status;
 
-	if (ezusb_verbose > 1)
+	if (Ezusb_verbose > 1)
 		logerror("%s, addr 0x%08x len %4u (0x%04x)\n", label, addr, (unsigned)len, (unsigned)len);
 	status = libusb_control_transfer(device,
 		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
@@ -149,7 +149,7 @@ static int ezusb_read(libusb_device_handle *device, const char *label,
 {
 	int status;
 
-	if (ezusb_verbose > 1)
+	if (Ezusb_verbose > 1)
 		logerror("%s, addr 0x%08x len %4u (0x%04x)\n", label, addr, (unsigned)len, (unsigned)len);
 	status = libusb_control_transfer(device,
 		LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
@@ -177,7 +177,7 @@ static bool ezusb_cpucs(libusb_device_handle *device, uint32_t addr, bool doRun)
 	int status;
 	uint8_t data = doRun ? 0x00 : 0x01;
 
-	if (ezusb_verbose)
+	if (Ezusb_verbose)
 		logerror("%s\n", data ? "stop CPU" : "reset CPU");
 	status = libusb_control_transfer(device,
 		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
@@ -205,7 +205,7 @@ static bool ezusb_fx3_jump(libusb_device_handle *device, uint32_t addr)
 {
 	int status;
 
-	if (ezusb_verbose)
+	if (Ezusb_verbose)
 		logerror("transfer execution to Program Entry at 0x%08x\n", addr);
 	status = libusb_control_transfer(device,
 		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
@@ -290,7 +290,7 @@ static int parse_ihex(FILE *image, void *context,
 		if (cp)
 			*cp = 0;
 
-		if (ezusb_verbose >= 3)
+		if (Ezusb_verbose >= 3)
 			logerror("** LINE: %s\n", buf);
 
 		/* Read the length field (up to 16 bytes) */
@@ -319,7 +319,7 @@ static int parse_ihex(FILE *image, void *context,
 
 		/* If this is an EOF record, then make it so. */
 		if (type == 1) {
-			if (ezusb_verbose >= 2)
+			if (Ezusb_verbose >= 2)
 				logerror("EOF on hexfile\n");
 			break;
 		}
@@ -523,7 +523,7 @@ static int ram_poke(void *context, uint32_t addr, bool external,
 		break;
 	case skip_internal:		/* CPU must be running */
 		if (!external) {
-			if (ezusb_verbose >= 2) {
+			if (Ezusb_verbose >= 2) {
 				logerror("SKIP on-chip RAM, %u bytes at 0x%08x\n",
 					(unsigned)len, addr);
 			}
@@ -532,7 +532,7 @@ static int ram_poke(void *context, uint32_t addr, bool external,
 		break;
 	case skip_external:		/* CPU should be stopped */
 		if (external) {
-			if (ezusb_verbose >= 2) {
+			if (Ezusb_verbose >= 2) {
 				logerror("SKIP external RAM, %u bytes at 0x%08x\n",
 					(unsigned)len, addr);
 			}
@@ -580,7 +580,7 @@ static int fx3_load_ram(libusb_device_handle *device, const char *path)
 	if (image == NULL) {
 		logerror("unable to open '%s' for input\n", path);
 		return -2;
-	} else if (ezusb_verbose)
+	} else if (Ezusb_verbose)
 		logerror("open firmware image %s for RAM upload\n", path);
 
 	// Read header
@@ -600,7 +600,7 @@ static int fx3_load_ram(libusb_device_handle *device, const char *path)
 	// Check bImageType
 	switch(hBuf[3]) {
 	case 0xB0:
-		if (ezusb_verbose)
+		if (Ezusb_verbose)
 			logerror("normal FW binary %s image with checksum\n", (hBuf[2]&0x01)?"data":"executable");
 		break;
 	case 0xB1:
@@ -618,7 +618,7 @@ static int fx3_load_ram(libusb_device_handle *device, const char *path)
 	}
 
 	// Read the bootloader version
-	if (ezusb_verbose) {
+	if (Ezusb_verbose) {
 		if ((ezusb_read(device, "read bootloader version", RW_INTERNAL, 0xFFFF0020, blBuf, 4) < 0)) {
 			logerror("Could not read bootloader version\n");
 			ret = -8;
@@ -628,7 +628,7 @@ static int fx3_load_ram(libusb_device_handle *device, const char *path)
 	}
 
 	dCheckSum = 0;
-	if (ezusb_verbose)
+	if (Ezusb_verbose)
 		logerror("writing image...\n");
 	while (1) {
 		if ((fread(&dLength, sizeof(uint32_t), 1, image) != 1) ||  // read dLength
@@ -737,7 +737,7 @@ int ezusb_load_ram(libusb_device_handle *device, const char *path, int fx_type, 
 	if (image == NULL) {
 		logerror("%s: unable to open for input.\n", path);
 		return -2;
-	} else if (ezusb_verbose > 1)
+	} else if (Ezusb_verbose > 1)
 		logerror("open firmware image %s for RAM upload\n", path);
 
 	if (img_type == IMG_TYPE_IIC) {
@@ -783,7 +783,7 @@ int ezusb_load_ram(libusb_device_handle *device, const char *path, int fx_type, 
 		ctx.mode = skip_internal;
 
 		/* let CPU run; overwrite the 2nd stage loader later */
-		if (ezusb_verbose)
+		if (Ezusb_verbose)
 			logerror("2nd stage: write external memory\n");
 	}
 
@@ -811,7 +811,7 @@ int ezusb_load_ram(libusb_device_handle *device, const char *path, int fx_type, 
 
 		/* at least write the interrupt vectors (at 0x0000) for reset! */
 		rewind(image);
-		if (ezusb_verbose)
+		if (Ezusb_verbose)
 			logerror("2nd stage: write on-chip memory\n");
 		status = parse_ihex(image, &ctx, is_external, ram_poke);
 		if (status < 0) {
@@ -821,7 +821,7 @@ int ezusb_load_ram(libusb_device_handle *device, const char *path, int fx_type, 
 		}
 	}
 
-	if (ezusb_verbose && (ctx.count != 0)) {
+	if (Ezusb_verbose && (ctx.count != 0)) {
 		logerror("... WROTE: %d bytes, %d segments, avg %d\n",
 			(int)ctx.total, (int)ctx.count, (int)(ctx.total/ctx.count));
 	}
