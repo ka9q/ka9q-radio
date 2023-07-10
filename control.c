@@ -1499,6 +1499,7 @@ void display_fe(WINDOW *w,struct demod const *demod){
   wclrtobot(w);
   char tbuf[100];
   mvwaddstr(w,row++,col,format_gpstime(tbuf,sizeof(tbuf),Frontend.sdr.timestamp));
+
   mvwaddstr(w,row++,col,formatsock(&Frontend.input.metadata_source_address));
   mvwaddstr(w,row++,col,formatsock(&Frontend.input.metadata_dest_address));
   
@@ -1508,13 +1509,15 @@ void display_fe(WINDOW *w,struct demod const *demod){
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Front end data");  
 
-  mvwaddstr(w,row++,col,formatsock(&Frontend.input.data_source_address));
-  mvwaddstr(w,row++,col,formatsock(&Frontend.input.data_dest_address));
-  pprintw(w,row++,col,"ssrc","%'u",Frontend.input.rtp.ssrc);
-  pprintw(w,row++,col,"pkts","%'llu",Frontend.input.rtp.packets);
+  if(Frontend.input.data_source_address.ss_family != 0){
+    mvwaddstr(w,row++,col,formatsock(&Frontend.input.data_source_address));
+    mvwaddstr(w,row++,col,formatsock(&Frontend.input.data_dest_address));
+    pprintw(w,row++,col,"ssrc","%'u",Frontend.input.rtp.ssrc);
+    pprintw(w,row++,col,"pkts","%'llu",Frontend.input.rtp.packets);
+    pprintw(w,row++,col,"drops","%'llu",Frontend.input.rtp.drops);
+    pprintw(w,row++,col,"dupes","%'llu",Frontend.input.rtp.dupes);
+  }
   pprintw(w,row++,col,"samples","%'llu",Frontend.input.samples);
-  pprintw(w,row++,col,"drops","%'llu",Frontend.input.rtp.drops);
-  pprintw(w,row++,col,"dupes","%'llu",Frontend.input.rtp.dupes);
   box(w,0,0);
   mvwaddstr(w,0,1,"Front end status");
   wnoutrefresh(w);
