@@ -168,6 +168,7 @@ int rx888_setup(dictionary *Dictionary,char const *section){
     }
     rx888_set_samprate(sdr,samprate);
     Frontend.sdr.samprate = samprate;
+    Frontend.sdr.isreal = true;
   }
   Frontend.sdr.gain = dB2voltage(sdr->rf_gain + sdr->rf_atten);
   {
