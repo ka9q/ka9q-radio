@@ -110,14 +110,14 @@ int rx888_setup(dictionary *Dictionary,char const *section){
 
   // Firmware file
   char const *firmware = config_getstring(Dictionary,section,"firmware","SDDC_FX3.img");
-  // Queue depth, default 16
-  int const queuedepth = config_getint(Dictionary,section,"queuedepth",16);
+  // Queue depth, default 32
+  int const queuedepth = config_getint(Dictionary,section,"queuedepth",32);
   if(queuedepth < 1 || queuedepth > 64) {
     fprintf(stdout,"Invalid queue depth %d\n",queuedepth);
     return -1;
   }
-  // Packets per transfer request, default 8
-  int const reqsize = config_getint(Dictionary,section,"reqsize",8);
+  // Packets per transfer request, default 16
+  int const reqsize = config_getint(Dictionary,section,"reqsize",16);
   if(reqsize < 1 || reqsize > 64) {
     fprintf(stdout,"Invalid request size %d\n",reqsize);
     return -1;
