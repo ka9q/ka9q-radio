@@ -9,41 +9,14 @@
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
-#include <string.h>
-#include <complex.h>
 #include <libusb-1.0/libusb.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <stdarg.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <netinet/in.h>
-#include <net/if.h>
-#include <signal.h>
-#include <locale.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <errno.h>
-#include <syslog.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <getopt.h>
 #include <iniparser/iniparser.h>
-#include <sched.h>
 #if defined(linux)
 #include <bsd/string.h>
 #endif
 
-#include "conf.h"
 #include "misc.h"
 #include "multicast.h"
-#include "decimate.h"
 #include "status.h"
 #include "config.h"
 #include "radio.h"
@@ -425,7 +398,7 @@ static void send_rx888_status(struct sdrstate const *sdr){
 
 // Callback called with incoming receiver data from A/D
 static void rx_callback(struct libusb_transfer *transfer){
-  int size = 0;
+  assert(transfer != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)transfer->user_data;
 
   sdr->xfers_in_progress--;
@@ -443,15 +416,15 @@ static void rx_callback(struct libusb_transfer *transfer){
   }
 
   // successful USB transfer
-  size = transfer->actual_length;
+  int const size = transfer->actual_length;
   sdr->success_count++;
 
   // Feed directly into FFT input buffer, accumulate energy
   uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
-  int16_t *samples = (int16_t *)transfer->buffer;
+  int16_t const * const samples = (int16_t *)transfer->buffer;
   float const inv_gain = SCALE16 / Frontend.sdr.gain;
-  float *wptr = Frontend.in->input_write_pointer.r;
-  int sampcount = size/2;
+  float * const wptr = Frontend.in->input_write_pointer.r;
+  int const sampcount = size/2;
   if(sdr->randomizer){
     for(int i=0; i < sampcount; i++){
       int s = samples[i] ^ (-2 * (samples[i] & 1)); // if LSB is set, flip all other bits
@@ -560,7 +533,7 @@ static int rx888_init(struct sdrstate *sdr,const char *firmware,unsigned int que
     memset(&desc,0,sizeof(desc));
     libusb_get_device_descriptor(dev,&desc);
     struct libusb_ss_endpoint_companion_descriptor *ep_comp = NULL;
-    int rc = libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
+    int const rc = libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
     if(rc != 0){
       fprintf(stdout,"libusb_get_ss_endpoint_companion_descriptor returned: %s (%d)\n",libusb_error_name(rc),rc);
       return -1;
