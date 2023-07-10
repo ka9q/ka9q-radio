@@ -85,7 +85,8 @@ uint64_t Commands;
 static void closedown(int);
 static int mcast_setup_frontend(char const *arg);
 static int loadconfig(char const *file);
-int process_hardware(char const *sname);
+static int process_hardware(char const *sname);
+static void *rtcp_send(void *);
 int rx888_setup(dictionary *,char const *);
 
 // The main program sets up the demodulator parameter defaults,
@@ -524,7 +525,7 @@ static int loadconfig(char const * const file){
   return ndemods;
 }
 
-int process_hardware(char const *sname){
+static int process_hardware(char const *sname){
   Device = config_getstring(Configtable,sname,"device",NULL);
   if(Device == NULL){
     fprintf(stdout,"No device= entry in [%s]\n",sname);
@@ -538,7 +539,7 @@ int process_hardware(char const *sname){
 
 
 // RTP control protocol sender task
-void *rtcp_send(void *arg){
+static void *rtcp_send(void *arg){
   struct demod const *demod = (struct demod *)arg;
   if(demod == NULL)
     pthread_exit(NULL);

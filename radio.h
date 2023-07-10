@@ -302,14 +302,11 @@ int start_demod(struct demod * restrict demod);
 int kill_demod(struct demod ** restrict demod);
 int init_demod_streams(struct demod * restrict demod);
 double set_first_LO(struct demod const * restrict, double);
-float estimate_noise(struct demod *demod,int shift);
 int downconvert(struct demod *demod);
 int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length);
 
 // Helper threads
 void *proc_samples(void *);
-void *estimate_n0(void *);
-void *rtcp_send(void *);
 void *sap_send(void *);
 void *radio_status(void *);
 void *sdr_status(void *);
@@ -325,6 +322,4 @@ void *demod_null(void *);
 // Send output to multicast streams
 int send_mono_output(struct demod * restrict ,const float * restrict,int,bool);
 int send_stereo_output(struct demod * restrict ,const float * restrict,int,bool);
-
-void output_cleanup(void *);
 #endif

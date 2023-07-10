@@ -46,6 +46,8 @@ static float const SCALE12 = 1/2048.;
 static float const SCALE16 = 1./INT16_MAX; // Scale signed 16-bit int to float in range -1, +1
 static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
 
+float estimate_noise(struct demod *demod,int shift);
+
 struct demod *alloc_demod(void){
   pthread_mutex_lock(&Demod_list_mutex);
   if(Demod_list == NULL){
