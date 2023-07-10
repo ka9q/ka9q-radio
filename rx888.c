@@ -52,7 +52,6 @@ struct sdrstate {
   unsigned char **databuffers;        // List of data buffers.
   int xfers_in_progress;
 
-  char const *description;
   unsigned int samprate; // True sample rate of single A/D converter
 
   // Hardware
@@ -101,6 +100,7 @@ int rx888_setup(dictionary *Dictionary,char const *section){
   if(strcasecmp(device,"rx888") != 0)
     return -1; // Not for us
 
+  // Hardware-dependent setup
   sdr->interface_number = config_getint(Dictionary,section,"number",0);
   {
     char const *p = config_getstring(Dictionary,section,"status","rx888-status.local");
@@ -122,7 +122,6 @@ int rx888_setup(dictionary *Dictionary,char const *section){
     fprintf(stdout,"Invalid request size %d\n",reqsize);
     return -1;
   }
-
   {
     int ret;
     if((ret = rx888_init(sdr,firmware,queuedepth,reqsize)) != 0){
@@ -168,24 +167,29 @@ int rx888_setup(dictionary *Dictionary,char const *section){
       samprate = minsamprate;
     }
     rx888_set_samprate(sdr,samprate);
+    Frontend.sdr.samprate = samprate;
   }
-  
-  sdr->description = strdup(config_getstring(Dictionary,section,"description",NULL));
-
-  if(sdr->description)
-    fprintf(stdout,"%s: ",sdr->description);
-
+  Frontend.sdr.gain = dB2voltage(sdr->rf_gain + sdr->rf_atten);
+  {
+    char const *p = config_getstring(Dictionary,section,"description",NULL);
+    if(p != NULL){
+      strlcpy(Frontend.sdr.description,p,sizeof(Frontend.sdr.description));
+      fprintf(stdout,"%s: ",Frontend.sdr.description);
+    }
+  }
   fprintf(stdout,"Samprate %'d Hz, Gain %.1f dB, Atten %.1f dB, Dither %d, Randomizer %d, USB Queue depth %d, USB Request size %d * pktsize %d = %'d bytes\n",
 	  sdr->samprate,sdr->rf_gain,sdr->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize);
 
+  // End of hardware-dependent stuff
   {
     // Start Avahi client that will maintain our mDNS registrations
     // Service name, if present, must be unique
     // Description, if present becomes TXT record if present
-    avahi_start(sdr->description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Frontend.input.metadata_dest_string,
-		ElfHashString(Frontend.input.metadata_dest_string),sdr->description);
+    avahi_start(Frontend.sdr.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Frontend.input.metadata_dest_string,
+		ElfHashString(Frontend.input.metadata_dest_string),Frontend.sdr.description);
   }
   {
+    // Set up send socket on control channel, used by both rx888 daemon and radiod
     resolve_mcast(Frontend.input.metadata_dest_string,&Frontend.input.metadata_dest_address,DEFAULT_STAT_PORT,NULL,0);
     Frontend.input.ctl_fd = connect_mcast(&Frontend.input.metadata_dest_address,Iface,Status_ttl,IP_tos); // note use of global default Iface
     if(Frontend.input.ctl_fd <= 0){
@@ -206,9 +210,6 @@ int rx888_setup(dictionary *Dictionary,char const *section){
     }
   }
   
-  // Setup code taken from setup_frontend()
-  Frontend.sdr.gain = dB2voltage(sdr->rf_gain + sdr->rf_atten); // In case it's never sent by front end
-
   pthread_mutex_init(&Frontend.sdr.status_mutex,NULL);
   pthread_cond_init(&Frontend.sdr.status_cond,NULL);
 
@@ -218,18 +219,6 @@ int rx888_setup(dictionary *Dictionary,char const *section){
 
   pthread_create(&Frontend.status_thread,NULL,sdr_status,&Frontend);
   pthread_create(&sdr->rx888_cmd_thread,NULL,rx888_cmd,sdr); // Status server must be running
-
-  // We must acquire a status stream before we can proceed further
-  pthread_mutex_lock(&Frontend.sdr.status_mutex);
-  
-  // ** When running with linked-in driver, the data dest address won't be set, only the sample rate **
-  // Hopefully this will be enough
-  //  while(Frontend.sdr.samprate == 0 || (Frontend.input.data_dest_address.ss_family == 0))
-  while(Frontend.sdr.samprate == 0)
-    pthread_cond_wait(&Frontend.sdr.status_cond,&Frontend.sdr.status_mutex);
-  pthread_mutex_unlock(&Frontend.sdr.status_mutex);
-
-  fprintf(stdout,"Acquired front end, sample rate %'d\n",Frontend.sdr.samprate);
 
   // Create input filter now that we know the parameters
   // FFT and filter sizes now computed from specified block duration and sample rate
@@ -367,8 +356,8 @@ static void send_rx888_status(struct sdrstate const *sdr){
 
   encode_int64(&bp,GPS_TIME,gps_time_ns());
 
-  if(sdr->description)
-    encode_string(&bp,DESCRIPTION,sdr->description,strlen(sdr->description));
+  if(strlen(Frontend.sdr.description) > 0)
+    encode_string(&bp,DESCRIPTION,Frontend.sdr.description,strlen(Frontend.sdr.description));
 
   // Where we're sending output
 
