@@ -26,7 +26,7 @@
 // Global variables set here
 int Ezusb_verbose = 0; // Used by ezusb.c
 static int const Bufsize = 16384; // Incoming commands
-int Status_ttl = 1;
+extern int Status_ttl;
 
 // Global variables set by config file options in main.c
 extern char const *Iface;
@@ -36,38 +36,35 @@ extern int Overlap; // Forward FFT overlap factor, samples
 extern volatile bool Stop_transfers; // Flag to stop receive thread upcalls
 
 // Defined in radio.c
-extern struct frontend Frontend;
-
 struct sdrstate {
+  struct frontend *frontend;  // Avoid references to external globals
+
+  // USB stuff
   struct libusb_device_handle *dev_handle;
   int interface_number;
   struct libusb_config_descriptor *config;
   unsigned int pktsize;
-  unsigned long success_count;  // Number of successful transfers
-  unsigned long failure_count;  // Number of failed transfers
-  unsigned int transfer_size;  // Size of data transfers performed so far
-  unsigned int transfer_index; // Write index into the transfer_size array
-
+  unsigned int transfer_size;  // Size of data transfers performed so far (unused)
+  unsigned int transfer_index; // Write index into the transfer_size array (unused)
   struct libusb_transfer **transfers; // List of transfer structures.
   unsigned char **databuffers;        // List of data buffers.
+
+  // USB transfer
   int xfers_in_progress;
+  unsigned int queuedepth; // Number of requests to queue
+  unsigned int reqsize;    // Request size in number of packets
+  unsigned long success_count;  // Number of successful transfers
+  unsigned long failure_count;  // Number of failed transfers
 
-  unsigned int samprate; // True sample rate of single A/D converter
-
-  // Hardware
+  // RF Hardware
   bool randomizer;
   bool dither;
   float rf_atten;
   float rf_gain;
   bool highgain;
+  unsigned int samprate; // True sample rate of single A/D converter
 
-  // USB transfer
-  unsigned int queuedepth; // Number of requests to queue
-  unsigned int reqsize;    // Request size in number of packets
-
-  int server_side_rx_socket;
-
-  pthread_t rx888_cmd_thread;
+  pthread_t cmd_thread;
   pthread_t proc_thread;  
 };
 
@@ -76,7 +73,7 @@ static void decode_rx888_commands(struct sdrstate *,uint8_t const *,int);
 static void send_rx888_status(struct sdrstate const *);
 static void rx_callback(struct libusb_transfer *transfer);
 static void *rx888_cmd(void *);
-static int rx888_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize);
+static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize);
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
 static void rx888_set_att(struct sdrstate *sdr,float att);
 static void rx888_set_gain(struct sdrstate *sdr,float gain);
@@ -89,22 +86,25 @@ static double val2gain(int g);
 static int gain2val(bool highgain, double gain);
 static void *proc_rx888(void *arg);
 
-struct sdrstate Sdr;
-
-int rx888_setup(dictionary *Dictionary,char const *section){
+int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *section){
   assert(Dictionary != NULL);
 
-  struct sdrstate * const sdr = &Sdr;
+  struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
+  // Cross-link generic and hardware-specific control structures
+  sdr->frontend = frontend;
+  frontend->input.context = sdr;
 
-  char const *device = config_getstring(Dictionary,section,"device",NULL);
-  if(strcasecmp(device,"rx888") != 0)
-    return -1; // Not for us
+  {
+    char const *device = config_getstring(Dictionary,section,"device",NULL);
+    if(strcasecmp(device,"rx888") != 0)
+      return -1; // Not for us
+  }
 
   // Hardware-dependent setup
   sdr->interface_number = config_getint(Dictionary,section,"number",0);
   {
     char const *p = config_getstring(Dictionary,section,"status","rx888-status.local");
-    strlcpy(Frontend.input.metadata_dest_string,p,sizeof(Frontend.input.metadata_dest_string));
+    strlcpy(frontend->input.metadata_dest_string,p,sizeof(frontend->input.metadata_dest_string));
   }
   Status_ttl = config_getint(Dictionary,section,"ttl",Status_ttl);
 
@@ -124,8 +124,8 @@ int rx888_setup(dictionary *Dictionary,char const *section){
   }
   {
     int ret;
-    if((ret = rx888_init(sdr,firmware,queuedepth,reqsize)) != 0){
-      fprintf(stdout,"rx888_init() failed\n");
+    if((ret = rx888_usb_init(sdr,firmware,queuedepth,reqsize)) != 0){
+      fprintf(stdout,"rx888_usb_init() failed\n");
       return -1;
     }
   }
@@ -167,83 +167,31 @@ int rx888_setup(dictionary *Dictionary,char const *section){
       samprate = minsamprate;
     }
     rx888_set_samprate(sdr,samprate);
-    Frontend.sdr.samprate = samprate;
-    Frontend.sdr.isreal = true;
+    frontend->sdr.samprate = samprate;
+    frontend->sdr.isreal = true; // Make sure the right kind of filter gets created!
   }
-  Frontend.sdr.gain = dB2voltage(sdr->rf_gain + sdr->rf_atten);
+  frontend->sdr.gain = dB2voltage(sdr->rf_gain + sdr->rf_atten);
   {
     char const *p = config_getstring(Dictionary,section,"description",NULL);
     if(p != NULL){
-      strlcpy(Frontend.sdr.description,p,sizeof(Frontend.sdr.description));
-      fprintf(stdout,"%s: ",Frontend.sdr.description);
+      strlcpy(frontend->sdr.description,p,sizeof(frontend->sdr.description));
+      fprintf(stdout,"%s: ",frontend->sdr.description);
     }
   }
   fprintf(stdout,"Samprate %'d Hz, Gain %.1f dB, Atten %.1f dB, Dither %d, Randomizer %d, USB Queue depth %d, USB Request size %d * pktsize %d = %'d bytes\n",
 	  sdr->samprate,sdr->rf_gain,sdr->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize);
 
-  // End of hardware-dependent stuff
-  {
-    // Start Avahi client that will maintain our mDNS registrations
-    // Service name, if present, must be unique
-    // Description, if present becomes TXT record if present
-    avahi_start(Frontend.sdr.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Frontend.input.metadata_dest_string,
-		ElfHashString(Frontend.input.metadata_dest_string),Frontend.sdr.description);
-  }
-  {
-    // Set up send socket on control channel, used by both rx888 daemon and radiod
-    resolve_mcast(Frontend.input.metadata_dest_string,&Frontend.input.metadata_dest_address,DEFAULT_STAT_PORT,NULL,0);
-    Frontend.input.ctl_fd = connect_mcast(&Frontend.input.metadata_dest_address,Iface,Status_ttl,IP_tos); // note use of global default Iface
-    if(Frontend.input.ctl_fd <= 0){
-      fprintf(stdout,"Can't create multicast status socket to %s: %s\n",Frontend.input.metadata_dest_string,strerror(errno));
-      return -1;
-    }
-    // Set up new control socket on port 5006 - this one is for radiod
-    Frontend.input.status_fd = listen_mcast(&Frontend.input.metadata_dest_address,Iface); // Note use of global default Iface
-    if(Frontend.input.status_fd <= 0){
-      fprintf(stdout,"Can't create multicast command socket from %s: %s\n",Frontend.input.metadata_dest_string,strerror(errno));
-      return -1;
-    }
-    // Set up new control socket on port 5006 - this is for the rx888 daemon
-    sdr->server_side_rx_socket = listen_mcast(&Frontend.input.metadata_dest_address,Iface); // Note use of global default Iface
-    if(sdr->server_side_rx_socket <= 0){
-      fprintf(stdout,"Can't create multicast command socket from %s: %s\n",Frontend.input.metadata_dest_string,strerror(errno));
-      return -1;
-    }
-  }
-  
-  pthread_mutex_init(&Frontend.sdr.status_mutex,NULL);
-  pthread_cond_init(&Frontend.sdr.status_cond,NULL);
+  return 0;
+}
 
-  // Start status thread - will also listen for SDR commands
-  if(Verbose)
-    fprintf(stdout,"Starting front end status thread\n");
-
-  pthread_create(&Frontend.status_thread,NULL,sdr_status,&Frontend);
-  pthread_create(&sdr->rx888_cmd_thread,NULL,rx888_cmd,sdr); // Status server must be running
-
-  // Create input filter now that we know the parameters
-  // FFT and filter sizes now computed from specified block duration and sample rate
-  // L = input data block size
-  // M = filter impulse response duration
-  // N = FFT size = L + M - 1
-  // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
-  double const eL = Frontend.sdr.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
-  Frontend.L = lround(eL);
-  if(Frontend.L != eL)
-    fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
-	    Blocktime,Frontend.sdr.samprate,eL-Frontend.L);
-
-  Frontend.M = Frontend.L / (Overlap - 1) + 1;
-  Frontend.in = create_filter_input(Frontend.L,Frontend.M, Frontend.sdr.isreal ? REAL : COMPLEX);
-  if(Frontend.in == NULL){
-    fprintf(stdout,"Input filter setup failed\n");
-    return -1;
-  }
+// Come back here after common stuff has been set up (filters, etc)
+int rx888_start(struct frontend *frontend){
+  struct sdrstate *sdr = (struct sdrstate *)frontend->input.context;
+  pthread_create(&sdr->cmd_thread,NULL,rx888_cmd,sdr); // Status server must be running
 
   // Start processing A/D data
   pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
-  if(Verbose)
-    fprintf(stdout,"rx888 setup done");
+  fprintf(stdout,"rx888 running\n");
   return 0;
 
 }
@@ -275,19 +223,21 @@ static void *rx888_cmd(void *arg){
   pthread_setname("rx888_cmd");
   assert(arg != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)arg;
-  if(Frontend.input.ctl_fd == -1 || Frontend.input.status_fd == -1)
+  struct frontend *frontend = sdr->frontend;
+
+  if(frontend->input.ctl_fd == -1 || frontend->input.status_fd == -1)
     return NULL; // Nothing to do
 
   send_rx888_status(sdr); // Tell the world we're alive
   while(1){
     uint8_t buffer[Bufsize];
-    int const length = recv(sdr->server_side_rx_socket,buffer,sizeof(buffer),0);
+    int const length = recv(frontend->input.fe_status_fd,buffer,sizeof(buffer),0);
     if(length > 0){
       // Parse entries
       if(buffer[0] == 0)
 	continue;  // Ignore our own status messages
 
-      Frontend.sdr.commands++;
+      frontend->sdr.commands++;
       decode_rx888_commands(sdr,buffer+1,length-1);
       send_rx888_status(sdr);
     }
@@ -296,6 +246,8 @@ static void *rx888_cmd(void *arg){
 }
 
 static void decode_rx888_commands(struct sdrstate *sdr,uint8_t const *buffer,int length){
+  assert(sdr != NULL);
+  struct frontend *frontend = sdr->frontend;
   uint8_t const *cp = buffer;
 
   while(cp - buffer < length){
@@ -323,7 +275,7 @@ static void decode_rx888_commands(struct sdrstate *sdr,uint8_t const *buffer,int
     case EOL: // Shouldn't get here
       break;
     case COMMAND_TAG:
-      Frontend.sdr.command_tag = decode_int(cp,optlen);
+      frontend->sdr.command_tag = decode_int(cp,optlen);
       break;
     case RF_GAIN:
       {
@@ -345,25 +297,28 @@ static void decode_rx888_commands(struct sdrstate *sdr,uint8_t const *buffer,int
 }
 
 static void send_rx888_status(struct sdrstate const *sdr){
-  Frontend.input.metadata_packets++;
+  assert(sdr != NULL);
+  struct frontend *frontend = sdr->frontend;
+
+  frontend->input.metadata_packets++;
 
   uint8_t packet[2048],*bp;
   bp = packet;
 
   *bp++ = 0;   // Command/response = response
 
-  encode_int32(&bp,COMMAND_TAG,Frontend.sdr.command_tag);
-  encode_int64(&bp,CMD_CNT,Frontend.sdr.commands);
+  encode_int32(&bp,COMMAND_TAG,frontend->sdr.command_tag);
+  encode_int64(&bp,CMD_CNT,frontend->sdr.commands);
 
   encode_int64(&bp,GPS_TIME,gps_time_ns());
 
-  if(strlen(Frontend.sdr.description) > 0)
-    encode_string(&bp,DESCRIPTION,Frontend.sdr.description,strlen(Frontend.sdr.description));
+  if(strlen(frontend->sdr.description) > 0)
+    encode_string(&bp,DESCRIPTION,frontend->sdr.description,strlen(frontend->sdr.description));
 
   // Where we're sending output
 
   encode_int32(&bp,INPUT_SAMPRATE,sdr->samprate);
-  encode_int64(&bp,OUTPUT_METADATA_PACKETS,Frontend.input.metadata_packets);
+  encode_int64(&bp,OUTPUT_METADATA_PACKETS,frontend->input.metadata_packets);
 
   // Front end
   encode_float(&bp,RF_ATTEN,sdr->rf_atten);
@@ -383,13 +338,14 @@ static void send_rx888_status(struct sdrstate const *sdr){
   encode_eol(&bp);
   int const len = bp - packet;
   assert(len < sizeof(packet));
-  send(Frontend.input.ctl_fd,packet,len,0);
+  send(frontend->input.ctl_fd,packet,len,0);
 }
 
 // Callback called with incoming receiver data from A/D
 static void rx_callback(struct libusb_transfer *transfer){
   assert(transfer != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)transfer->user_data;
+  struct frontend *frontend = sdr->frontend;
 
   sdr->xfers_in_progress--;
 
@@ -412,8 +368,8 @@ static void rx_callback(struct libusb_transfer *transfer){
   // Feed directly into FFT input buffer, accumulate energy
   uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
   int16_t const * const samples = (int16_t *)transfer->buffer;
-  float const inv_gain = SCALE16 / Frontend.sdr.gain;
-  float * const wptr = Frontend.in->input_write_pointer.r;
+  float const inv_gain = SCALE16 / frontend->sdr.gain;
+  float * const wptr = frontend->in->input_write_pointer.r;
   int const sampcount = size/2;
   if(sdr->randomizer){
     for(int i=0; i < sampcount; i++){
@@ -428,16 +384,16 @@ static void rx_callback(struct libusb_transfer *transfer){
       wptr[i] = s * inv_gain;
     }
   }
-  write_rfilter(Frontend.in,NULL,sampcount); // Update write pointer, invoke FFT
-  Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
-  Frontend.input.samples += sampcount;
+  write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
+  frontend->sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
+  frontend->input.samples += sampcount;
   if(!Stop_transfers) {
     if(libusb_submit_transfer(transfer) == 0)
       sdr->xfers_in_progress++;
   }
 }
 
-static int rx888_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize){
+static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize){
   {
     int ret = libusb_init(NULL);
     if(ret != 0){
@@ -483,6 +439,15 @@ static int rx888_init(struct sdrstate *sdr,const char *firmware,unsigned int que
   if(!sdr->dev_handle){
     fprintf(stdout,"Error or device could not be found, try loading firmware\n");
     goto close;
+  }
+  // Stop and reopen in case it was left running - KA9Q
+  usleep(5000);
+  command_send(sdr->dev_handle,STOPFX3,0);
+  {
+    int r = libusb_reset_device(sdr->dev_handle);
+    if(r != 0){
+      fprintf(stdout,"reset failed, %d\n",r);
+    }
   }
   {
     int ret = libusb_kernel_driver_active(sdr->dev_handle,0);

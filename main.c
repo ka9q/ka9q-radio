@@ -55,7 +55,7 @@ int Verbose;
 static char const *Locale = "en_US.UTF-8";
 dictionary *Configtable; // Configtable file descriptor for iniparser
 dictionary *Modetable;
-char const *Device;
+
 char const *Hardware;
 volatile bool Stop_transfers = false; // Request to stop data transfers; how should this get set?
 
@@ -63,6 +63,7 @@ struct demod *Dynamic_demod; // Prototype for dynamically created demods
 
 char const *Iface;
 int Mcast_ttl;
+int Status_ttl = 1;
 int IP_tos; // AF12 left shifted 2 bits
 int RTCP_enable = false;
 int SAP_enable = false;
@@ -85,9 +86,10 @@ uint64_t Commands;
 static void closedown(int);
 static int mcast_setup_frontend(char const *arg);
 static int loadconfig(char const *file);
-static int process_hardware(char const *sname);
+static int setup_hardware(char const *sname);
 static void *rtcp_send(void *);
-int rx888_setup(dictionary *,char const *);
+int rx888_setup(struct frontend *,dictionary *,char const *);
+int rx888_start(struct frontend *);
 
 // The main program sets up the demodulator parameter defaults,
 // overwrites them with command-line arguments and/or state file settings,
@@ -313,7 +315,7 @@ static int loadconfig(char const * const file){
     for(int sect = 0; sect < nsect; sect++){
       char const * const sname = iniparser_getsecname(Configtable,sect);
       if(strcasecmp(sname,Hardware) == 0){
-	process_hardware(sname);
+	setup_hardware(sname);
 	break;
       }
     }
@@ -525,15 +527,74 @@ static int loadconfig(char const * const file){
   return ndemods;
 }
 
-static int process_hardware(char const *sname){
-  Device = config_getstring(Configtable,sname,"device",NULL);
-  if(Device == NULL){
+// Set up a local front end device
+static int setup_hardware(char const *sname){
+  char const *device = config_getstring(Configtable,sname,"device",NULL);
+  if(device == NULL){
     fprintf(stdout,"No device= entry in [%s]\n",sname);
     return -1;
   }
   // Do we support it?
-  if(strcasecmp(Device,"rx888") == 0)
-    rx888_setup(Configtable,sname);
+  // This should go into a table somewhere
+  if(strcasecmp(device,"rx888") == 0)
+    rx888_setup(&Frontend,Configtable,sname); // Hardware-dependent initialization
+  else
+    return -1;
+
+  // Common to all devices
+  {
+    // Start Avahi client that will maintain our mDNS registrations
+    // Service name, if present, must be unique
+    // Description, if present becomes TXT record if present
+    avahi_start(Frontend.sdr.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Frontend.input.metadata_dest_string,
+		ElfHashString(Frontend.input.metadata_dest_string),Frontend.sdr.description);
+  }
+  {
+    // Set up send socket on control channel, used by both rx888 daemon and radiod
+    resolve_mcast(Frontend.input.metadata_dest_string,&Frontend.input.metadata_dest_address,DEFAULT_STAT_PORT,NULL,0);
+    Frontend.input.ctl_fd = connect_mcast(&Frontend.input.metadata_dest_address,Iface,Status_ttl,IP_tos); // note use of global default Iface
+    if(Frontend.input.ctl_fd <= 0){
+      fprintf(stdout,"Can't create multicast status socket to %s: %s\n",Frontend.input.metadata_dest_string,strerror(errno));
+      return -1;
+    }
+    // Set up new control socket on port 5006 - this one is for radiod
+    Frontend.input.status_fd = listen_mcast(&Frontend.input.metadata_dest_address,Iface); // Note use of global default Iface
+    if(Frontend.input.status_fd <= 0){
+      fprintf(stdout,"Can't create multicast command socket from %s: %s\n",Frontend.input.metadata_dest_string,strerror(errno));
+      return -1;
+    }
+    // Set up new control socket on port 5006 - this is for the front end control daemon, e.g., rx888
+    Frontend.input.fe_status_fd = listen_mcast(&Frontend.input.metadata_dest_address,Iface); // Note use of global default Iface
+    if(Frontend.input.fe_status_fd <= 0){
+      fprintf(stdout,"Can't create multicast command socket from %s: %s\n",Frontend.input.metadata_dest_string,strerror(errno));
+      return -1;
+    }
+  }
+  // Create input filter now that we know the parameters
+  // FFT and filter sizes now computed from specified block duration and sample rate
+  // L = input data block size
+  // M = filter impulse response duration
+  // N = FFT size = L + M - 1
+  // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
+  double const eL = Frontend.sdr.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
+  Frontend.L = lround(eL);
+  if(Frontend.L != eL)
+    fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
+	    Blocktime,Frontend.sdr.samprate,eL-Frontend.L);
+
+  Frontend.M = Frontend.L / (Overlap - 1) + 1;
+  Frontend.in = create_filter_input(Frontend.L,Frontend.M, Frontend.sdr.isreal ? REAL : COMPLEX);
+  if(Frontend.in == NULL){
+    fprintf(stdout,"Input filter setup failed\n");
+    return -1;
+  }
+  pthread_mutex_init(&Frontend.sdr.status_mutex,NULL);
+  pthread_cond_init(&Frontend.sdr.status_cond,NULL);
+  pthread_create(&Frontend.status_thread,NULL,sdr_status,&Frontend);
+  if(strcasecmp(device,"rx888") == 0)
+    rx888_start(&Frontend);
+  else
+    return -1;
   return 0;
 }
 

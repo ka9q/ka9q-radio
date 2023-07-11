@@ -47,6 +47,9 @@ struct frontend {
     int data_fd;           // Socket for raw incoming I/Q data
     int ctl_fd;            // Socket for commands to front end
     int status_fd;         // Socket for status from front end
+    int fe_status_fd;      // Socket for front end daemon's reception when integrated
+    void *context;         // Stash hardware-dependent control block
+
 
     struct sockaddr_storage metadata_source_address;    // Source of SDR metadata
     struct sockaddr_storage metadata_dest_address;      // Dest of metadata (typically multicast)
