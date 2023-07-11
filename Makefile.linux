@@ -18,14 +18,13 @@ DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
-#DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd sdrplayd
-DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd
+DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyhfd stereod rdsd rtlsdrd
 
 EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded
 
 AFILES=bandplan.txt help.txt modes.conf id.txt monitor-help.txt SDDC_FX3.img
 
-SYSTEMD_FILES=airspyd@.service airspyhfd@.service cwd.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service
+SYSTEMD_FILES=airspyhfd@.service cwd.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service
 
 UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules 99-rx888.rules
 
@@ -38,7 +37,7 @@ CONF_FILES=funcubed.conf \
 			 radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf \
 			 radiod@repeater.conf  radiod@kfs.conf radiod@rx888.conf \
 			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
-			 wspr-decoded.conf horus.conf airspyd.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
+			 wspr-decoded.conf horus.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
 			 rx888d.conf
 
 LOGROTATE_FILES = aprsfeed.rotate
@@ -73,11 +72,10 @@ install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FIL
 	install -o root -m 0644 -D --target-directory=/etc/modprobe.d $(BLACKLIST)
 	install -o root -m 0644 -D --target-directory=/etc/logrotate.d $(LOGROTATE_FILES)
 	install -o root -m 0664 -D --target-directory=/etc/radio $(CONF_FILES);
-	mkdir -p /etc/fftw /etc/radio $(VARDIR) /etc/radio/airspyd.conf.d
+	mkdir -p /etc/fftw /etc/radio $(VARDIR)
 	chgrp radio $(VARDIR) /etc/radio /etc/fftw
 	chmod g+ws $(VARDIR) /etc/radio /etc/fftw
 #	cp -n -v --target-directory=/etc/radio $(CONF_FILES)
-#	cp -n -v --target-directory=/etc/radio/airspyd.conf.d $(AIRSPY_FILES)
 	systemctl daemon-reload
 
 clean:
