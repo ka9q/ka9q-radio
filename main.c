@@ -88,6 +88,8 @@ static int mcast_setup_frontend(char const *arg);
 static int loadconfig(char const *file);
 static int setup_hardware(char const *sname);
 static void *rtcp_send(void *);
+
+// In rx888.c
 int rx888_setup(struct frontend *,dictionary *,char const *);
 int rx888_start(struct frontend *);
 
@@ -307,7 +309,7 @@ static int loadconfig(char const * const file){
   Wisdom_file = config_getstring(Configtable,global,"wisdom-file",Wisdom_file);
   char const * const input = config_getstring(Configtable,global,"input",NULL);
 
-  // Are we using a direct fronte end?
+  // Are we using a direct front end?
   Hardware = config_getstring(Configtable,global,"hardware",NULL);
   if(Hardware){
     // Look for specified hardware section
