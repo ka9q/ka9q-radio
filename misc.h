@@ -27,6 +27,17 @@
 #define M_1_PIf (1 / M_PIf)
 #endif
 
+#define M_1_2PIf (0.5f * M_1_PIf) // fraction of a rotation in one radian
+#define DEGPRA (180./M_PI)
+#define RAPDEG (M_PI/180.)
+#define GPS_UTC_OFFSET (18) // GPS ahead of utc by 18 seconds - make this a table!
+#define UNIX_EPOCH ((time_t)315964800) // GPS epoch on unix time scale
+
+static float const SCALE16 = 1./INT16_MAX;
+static float const SCALE12 = 1/2048.;
+static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
+
+
 void realtime(void);
 
 // I *hate* this sort of pointless, stupid, gratuitous incompatibility that
@@ -84,12 +95,6 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 		(void) (&_x == &_y);	\
 		_x > _y ? _x : _y; })
 
-
-#define M_1_2PIf (0.5f * M_1_PIf) // fraction of a rotation in one radian
-#define DEGPRA (180./M_PI)
-#define RAPDEG (M_PI/180.)
-#define GPS_UTC_OFFSET (18) // GPS ahead of utc by 18 seconds - make this a table!
-#define UNIX_EPOCH ((time_t)315964800) // GPS epoch on unix time scale
 
 #define dB2power(x) (powf(10.0f,(x)/10.0f))
 #define power2dB(x) (10.0f * log10f(x))

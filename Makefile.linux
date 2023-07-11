@@ -182,8 +182,8 @@ powers: powers.o dump.o libradio.a
 pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
-radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o rtcp.o radio_status.o modes.o decode_status.o rx888.o ezusb.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -lbsd -lm -lpthread
+radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o rtcp.o radio_status.o modes.o decode_status.o rx888.o airspy.o ezusb.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lusb-1.0 -lbsd -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread

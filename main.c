@@ -88,8 +88,14 @@ static int mcast_setup_frontend(char const *arg);
 static int loadconfig(char const *file);
 static int setup_hardware(char const *sname);
 static void *rtcp_send(void *);
+
+// In rx888.c
 int rx888_setup(struct frontend *,dictionary *,char const *);
 int rx888_start(struct frontend *);
+
+// In airspy.c
+int airspy_setup(struct frontend *,dictionary *,char const *);
+int airspy_start(struct frontend *);
 
 // The main program sets up the demodulator parameter defaults,
 // overwrites them with command-line arguments and/or state file settings,
@@ -259,6 +265,7 @@ static int mcast_setup_frontend(char const *arg){
   // M = filter impulse response duration
   // N = FFT size = L + M - 1
   // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
+  assert(Frontend.sdr.samprate != 0);
   double const eL = Frontend.sdr.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
   Frontend.L = lround(eL);
   if(Frontend.L != eL)
@@ -307,7 +314,7 @@ static int loadconfig(char const * const file){
   Wisdom_file = config_getstring(Configtable,global,"wisdom-file",Wisdom_file);
   char const * const input = config_getstring(Configtable,global,"input",NULL);
 
-  // Are we using a direct fronte end?
+  // Are we using a direct front end?
   Hardware = config_getstring(Configtable,global,"hardware",NULL);
   if(Hardware){
     // Look for specified hardware section
@@ -538,6 +545,8 @@ static int setup_hardware(char const *sname){
   // This should go into a table somewhere
   if(strcasecmp(device,"rx888") == 0)
     rx888_setup(&Frontend,Configtable,sname); // Hardware-dependent initialization
+  else if(strcasecmp(device,"airspy") == 0)
+    airspy_setup(&Frontend,Configtable,sname);
   else
     return -1;
 
@@ -593,6 +602,8 @@ static int setup_hardware(char const *sname){
   pthread_create(&Frontend.status_thread,NULL,sdr_status,&Frontend);
   if(strcasecmp(device,"rx888") == 0)
     rx888_start(&Frontend);
+  else if(strcasecmp(device,"airspy") == 0)
+    airspy_start(&Frontend);
   else
     return -1;
   return 0;

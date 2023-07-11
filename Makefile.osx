@@ -87,8 +87,8 @@ pl: pl.o libradio.a
 powers: powers.o dump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lm -lpthread
 
-radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o status.o decode_status.o rx888.o ezusb.o libradio.a
-	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lusb-1.0 -lm -lpthread
+radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o status.o decode_status.o rx888.o airspy.o ezusb.o libradio.a
+	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lairspy -lusb-1.0 -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread
@@ -174,6 +174,7 @@ rtcp.o: rtcp.c multicast.h
 status.o: status.c status.h misc.h radio.h  multicast.h osc.h filter.h
 
 # modules used in only 1 or 2 main programs
+airspy.o: airspy.c conf.h misc.h multicast.h status.h config.h radio.h
 audio.o: audio.c misc.h multicast.h osc.h filter.h radio.h  status.h
 bandplan.o: bandplan.c bandplan.h radio.h  multicast.h osc.h status.h filter.h conf.h
 decode_status.o: decode_status.c status.h radio.h misc.h  multicast.h osc.h filter.h

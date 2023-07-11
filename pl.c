@@ -35,8 +35,6 @@ static const float PL_samprate = 500; // Nyquist rate 250 Hz
 static const float Filter_time = .200; // 200 ms
 //static const float Filter_time = .0200; // 20 ms
 
-static float const SCALE16 = 1./INT16_MAX;
-
 // Command line params
 const char *App_path;
 int Verbose;                  // Verbosity flag

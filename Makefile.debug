@@ -2,14 +2,12 @@
 
 # for production
 #DOPTS = -DNDEBUG=1 -O3
+#LDOPTS=-L/usr/local/lib
 # for debugging
 DOPTS=-g
+LDOPTS=-g -L/usr/local/lib
 
 COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
-
-# Get local versions (e.g., of librtlsdr)
-#LDOPTS=-L/usr/local/lib
-LDOPTS=-g -L/usr/local/lib
 
 CFLAGS=$(DOPTS) $(COPTS) $(INCLUDES)
 BINDIR=/usr/local/bin
@@ -19,13 +17,13 @@ VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
 #DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd sdrplayd
-DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd rx888d
+DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod airspyd airspyhfd stereod rdsd rtlsdrd
 
 EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded
 
 AFILES=bandplan.txt help.txt modes.conf id.txt monitor-help.txt SDDC_FX3.img
 
-SYSTEMD_FILES=airspyd@.service airspyhfd@.service cwd.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service rx888d@.service
+SYSTEMD_FILES=airspyd@.service airspyhfd@.service cwd.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service
 
 UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules 99-rx888.rules
 
@@ -36,7 +34,7 @@ CONF_FILES=funcubed.conf \
 			 stereod.conf rdsd.conf \
 			 radiod@10m.conf radiod@6m.conf radiod@fm.conf radiod@2m.conf radiod@125cm.conf radiod@70cm.conf \
 			 radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf \
-			 radiod@repeater.conf  radiod@kfs.conf \
+			 radiod@repeater.conf  radiod@kfs.conf radiod@rx888.conf \
 			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
 			 wspr-decoded.conf horus.conf airspyd.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
 			 rx888d.conf
@@ -182,8 +180,8 @@ powers: powers.o dump.o libradio.a
 pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
-radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o rtcp.o radio_status.o modes.o decode_status.o rx888.o ezusb.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -lbsd -lm -lpthread
+radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o rtcp.o radio_status.o modes.o decode_status.o rx888.o airspy.o ezusb.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lusb-1.0 -lbsd -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread

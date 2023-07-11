@@ -16,7 +16,6 @@
 #endif
 
 #include "misc.h"
-#include "multicast.h"
 #include "status.h"
 #include "config.h"
 #include "radio.h"
@@ -68,7 +67,6 @@ struct sdrstate {
   pthread_t proc_thread;  
 };
 
-static float const SCALE16 = 1./INT16_MAX; // Scale signed 16-bit int to float in range -1, +1
 static void decode_rx888_commands(struct sdrstate *,uint8_t const *,int);
 static void send_rx888_status(struct sdrstate const *);
 static void rx_callback(struct libusb_transfer *transfer);
