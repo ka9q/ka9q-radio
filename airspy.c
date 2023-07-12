@@ -223,6 +223,7 @@ int airspy_setup(struct frontend *frontend,dictionary *Dictionary,char const *se
   sdr->gainstep = -1; // Force update first time
 
   // Hardware device settings
+  sdr->linearity = config_getboolean(Dictionary,section,"linearity",0);
   int const lna_agc = config_getboolean(Dictionary,section,"lna-agc",0); // default off
   airspy_set_lna_agc(sdr->device,lna_agc);
   if(lna_agc)
@@ -273,10 +274,9 @@ int airspy_setup(struct frontend *frontend,dictionary *Dictionary,char const *se
       fprintf(stdout,"%s: ",frontend->sdr.description);
     }
   }
-  fprintf(stdout,"Software AGC %d; LNA AGC %d, Mix AGC %d, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %d\n",
-	  Software_agc,lna_agc,mixer_agc,sdr->lna_gain,sdr->mixer_gain,sdr->if_gain,gainstep,sdr->antenna_bias);
+  fprintf(stdout,"Software AGC %d; linearity %d, LNA AGC %d, Mix AGC %d, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %d\n",
+	  Software_agc,sdr->linearity,lna_agc,mixer_agc,sdr->lna_gain,sdr->mixer_gain,sdr->if_gain,gainstep,sdr->antenna_bias);
 
-  sdr->linearity = config_getboolean(Dictionary,section,"linearity",0);
   {
     float const dh = config_getdouble(Dictionary,section,"agc-high-threshold",-10.0);
     High_threshold = dB2power(-fabs(dh));
