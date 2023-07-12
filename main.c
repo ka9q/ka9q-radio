@@ -322,7 +322,8 @@ static int loadconfig(char const * const file){
     for(int sect = 0; sect < nsect; sect++){
       char const * const sname = iniparser_getsecname(Configtable,sect);
       if(strcasecmp(sname,Hardware) == 0){
-	setup_hardware(sname);
+	if(setup_hardware(sname) != 0)
+	  exit(1);
 	break;
       }
     }
@@ -543,11 +544,13 @@ static int setup_hardware(char const *sname){
   }
   // Do we support it?
   // This should go into a table somewhere
-  if(strcasecmp(device,"rx888") == 0)
-    rx888_setup(&Frontend,Configtable,sname); // Hardware-dependent initialization
-  else if(strcasecmp(device,"airspy") == 0)
-    airspy_setup(&Frontend,Configtable,sname);
-  else
+  if(strcasecmp(device,"rx888") == 0){
+    if(rx888_setup(&Frontend,Configtable,sname) != 0)
+      return -1;
+  } else if(strcasecmp(device,"airspy") == 0){
+    if(airspy_setup(&Frontend,Configtable,sname) != 0)
+      return -1;
+  } else
     return -1;
 
   // Common to all devices

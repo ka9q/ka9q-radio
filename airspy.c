@@ -114,7 +114,6 @@ int airspy_setup(struct frontend *frontend,dictionary *Dictionary,char const *se
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
   frontend->input.context = sdr;
-
   {
     char const *device = config_getstring(Dictionary,section,"device",NULL);
     if(strcasecmp(device,"airspy") != 0)
@@ -148,6 +147,10 @@ int airspy_setup(struct frontend *frontend,dictionary *Dictionary,char const *se
       uint64_t serials[n_serials];
 
       n_serials = airspy_list_devices(serials,n_serials); // Return actual number
+      if(n_serials == 0){
+	fprintf(stdout,"No airspy devices found\n");
+	return -1;
+      }
       fprintf(stdout,"Discovered airspy device serials:");
       for(int i = 0; i < n_serials; i++){
 	fprintf(stdout," %llx",(long long)serials[i]);
