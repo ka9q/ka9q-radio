@@ -54,7 +54,7 @@ extern int Verbose;
 extern int Overlap;
 extern const char *App_path;
 extern int Verbose;
-static int Software_agc = 1; // default
+static bool Software_agc = true; // default
 static float Low_threshold;
 static float High_threshold;
 static int const Bufsize = 16384;
@@ -66,19 +66,19 @@ struct sdrstate {
   uint32_t sample_rates[20];
   uint64_t SN; // Serial number
 
-  int antenna_bias; // Bias tee on/off
+  bool antenna_bias; // Bias tee on/off
 
   // Tuning
   double frequency;
   double converter;   // Upconverter base frequency (usually 120 MHz)
   double calibration; // Frequency error
-  int frequency_lock;
+  bool frequency_lock;
   int offset; // 1/4 of sample rate in real mode; 0 in complex mode
   char const *frequency_file; // Local file to store frequency in case we restart
 
   // AGC
   int holdoff;  // Holdoff counter after automatic change to allow settling
-  int linearity; // Use linearity gain tables; default is sensitivity
+  bool linearity; // Use linearity gain tables; default is sensitivity
   int gainstep; // Airspy gain table steps (0-21), higher numbers == higher gain
   uint8_t lna_gain;
   uint8_t mixer_gain;
@@ -107,7 +107,7 @@ static void *airspy_monitor(void *p);
 static double true_freq(uint64_t freq);
 static void set_gain(struct sdrstate *sdr,int gainstep);
 
-int airspy_setup(struct frontend *frontend,dictionary *Dictionary,char const *section){
+int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,char const * const section){
   assert(Dictionary != NULL);
 
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
@@ -227,30 +227,30 @@ int airspy_setup(struct frontend *frontend,dictionary *Dictionary,char const *se
   int const lna_agc = config_getboolean(Dictionary,section,"lna-agc",0); // default off
   airspy_set_lna_agc(sdr->device,lna_agc);
   if(lna_agc)
-    Software_agc = 0;
+    Software_agc = false;
 
   int const mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",0); // default off
   airspy_set_mixer_agc(sdr->device,mixer_agc);
   if(mixer_agc)
-    Software_agc = 0;
+    Software_agc = false;
   
   int const lna_gain = config_getint(Dictionary,section,"lna-gain",-1);
   if(lna_gain != -1){
     sdr->lna_gain = lna_gain;
     airspy_set_lna_gain(sdr->device,lna_gain);
-    Software_agc = 0;
+    Software_agc = false;
   }      
   int const mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
   if(mixer_gain != -1){
     sdr->mixer_gain = mixer_gain;
     airspy_set_mixer_gain(sdr->device,mixer_gain);
-    Software_agc = 0;
+    Software_agc = false;
   }
   int const vga_gain = config_getint(Dictionary,section,"vga-gain",-1);
   if(vga_gain != -1){
     sdr->if_gain = vga_gain;
     airspy_set_vga_gain(sdr->device,vga_gain);
-    Software_agc = 0;
+    Software_agc = false;
   }
   int gainstep = config_getint(Dictionary,section,"gainstep",-1);
   if(gainstep >= 0){
