@@ -10,6 +10,7 @@ Requires=network-online.target
 Type=simple
 User=radio
 Group=radio
+SupplementaryGroups=plugdev radio
 AmbientCapabilities=CAP_SYS_NICE
 ReadWritePaths=/etc/fftw /var/lib/ka9q-radio
 ExecStart=/usr/local/sbin/radiod -N %i /etc/radio/radiod@%i.conf
