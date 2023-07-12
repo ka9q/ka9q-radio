@@ -34,7 +34,8 @@ extern int Verbose;
 extern int Overlap; // Forward FFT overlap factor, samples
 extern volatile bool Stop_transfers; // Flag to stop receive thread upcalls
 
-// Defined in radio.c
+// Hardware-specific stuff.
+// Anything generic should be moved to 'struct frontend' under sdr in radio.h
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
 
@@ -58,10 +59,7 @@ struct sdrstate {
   // RF Hardware
   bool randomizer;
   bool dither;
-  float rf_atten;
-  float rf_gain;
   bool highgain;
-  unsigned int samprate; // True sample rate of single A/D converter
 
   pthread_t cmd_thread;
   pthread_t proc_thread;  
@@ -90,7 +88,7 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
-  frontend->input.context = sdr;
+  frontend->sdr.context = sdr;
 
   {
     char const *device = config_getstring(Dictionary,section,"device",NULL);
@@ -167,8 +165,9 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
     rx888_set_samprate(sdr,samprate);
     frontend->sdr.samprate = samprate;
     frontend->sdr.isreal = true; // Make sure the right kind of filter gets created!
+    frontend->sdr.calibrate = config_getdouble(Dictionary,section,"calibrate",0);
   }
-  frontend->sdr.gain = dB2voltage(sdr->rf_gain + sdr->rf_atten);
+  frontend->sdr.gain = dB2voltage(frontend->sdr.rf_gain + frontend->sdr.rf_atten);
   {
     char const *p = config_getstring(Dictionary,section,"description",NULL);
     if(p != NULL){
@@ -177,22 +176,22 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
     }
   }
   fprintf(stdout,"Samprate %'d Hz, Gain %.1f dB, Atten %.1f dB, Dither %d, Randomizer %d, USB Queue depth %d, USB Request size %d * pktsize %d = %'d bytes\n",
-	  sdr->samprate,sdr->rf_gain,sdr->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize);
+	  frontend->sdr.samprate,frontend->sdr.rf_gain,frontend->sdr.rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize);
 
   return 0;
 }
 
 // Come back here after common stuff has been set up (filters, etc)
 int rx888_start(struct frontend *frontend){
-  struct sdrstate *sdr = (struct sdrstate *)frontend->input.context;
+  struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
   pthread_create(&sdr->cmd_thread,NULL,rx888_cmd,sdr); // Status server must be running
 
   // Start processing A/D data
   pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
   fprintf(stdout,"rx888 running\n");
   return 0;
-
 }
+
 static void *proc_rx888(void *arg){
   struct sdrstate *sdr = (struct sdrstate *)arg;
   assert(sdr != NULL);
@@ -308,29 +307,29 @@ static void send_rx888_status(struct sdrstate const *sdr){
   encode_int32(&bp,COMMAND_TAG,frontend->sdr.command_tag);
   encode_int64(&bp,CMD_CNT,frontend->sdr.commands);
 
-  encode_int64(&bp,GPS_TIME,gps_time_ns());
+  frontend->sdr.timestamp = gps_time_ns();
+  encode_int64(&bp,GPS_TIME,frontend->sdr.timestamp);
 
   if(strlen(frontend->sdr.description) > 0)
     encode_string(&bp,DESCRIPTION,frontend->sdr.description,strlen(frontend->sdr.description));
 
   // Where we're sending output
-
-  encode_int32(&bp,INPUT_SAMPRATE,sdr->samprate);
+  encode_int32(&bp,INPUT_SAMPRATE,frontend->sdr.samprate);
   encode_int64(&bp,OUTPUT_METADATA_PACKETS,frontend->input.metadata_packets);
 
   // Front end
-  encode_float(&bp,RF_ATTEN,sdr->rf_atten);
-  encode_float(&bp,RF_GAIN,sdr->rf_gain);
+  encode_float(&bp,RF_ATTEN,frontend->sdr.rf_atten);
+  encode_float(&bp,RF_GAIN,frontend->sdr.rf_gain);
 
   // Tuning
   encode_double(&bp,RADIO_FREQUENCY,0);
 
   encode_byte(&bp,DEMOD_TYPE,0); // actually LINEAR_MODE
-  encode_int32(&bp,OUTPUT_SAMPRATE,sdr->samprate);
+  encode_int32(&bp,OUTPUT_SAMPRATE,frontend->sdr.samprate);
   encode_int32(&bp,OUTPUT_CHANNELS,1);
   encode_int32(&bp,DIRECT_CONVERSION,1);
   encode_float(&bp,LOW_EDGE,0);
-  encode_float(&bp,HIGH_EDGE,0.47 * sdr->samprate); // Should look at the actual filter curves
+  encode_float(&bp,HIGH_EDGE,0.47 * frontend->sdr.samprate); // Should look at the actual filter curves
   encode_int32(&bp,OUTPUT_BITS_PER_SAMPLE,16); // Always
 
   encode_eol(&bp);
@@ -557,26 +556,32 @@ static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,boo
 
 static void rx888_set_att(struct sdrstate *sdr,float att){
   assert(sdr != NULL);
+  struct frontend *frontend = sdr->frontend;
+  assert(frontend != NULL);
   usleep(5000);
-  sdr->rf_atten = att;
-  int arg = (int)(att * 2);
+
+  frontend->sdr.rf_atten = att;
+  int const arg = (int)(att * 2);
   argument_send(sdr->dev_handle,DAT31_ATT,arg);
 }
 
 static void rx888_set_gain(struct sdrstate *sdr,float gain){
   assert(sdr != NULL);
+  struct frontend *frontend = sdr->frontend;
+  assert(frontend != NULL);
   usleep(5000);
 
-  int arg = gain2val(sdr->highgain,gain);
+  int const arg = gain2val(sdr->highgain,gain);
   argument_send(sdr->dev_handle,AD8340_VGA,arg);
-  sdr->rf_gain = val2gain(arg); // Store actual nearest value
+  frontend->sdr.rf_gain = val2gain(arg); // Store actual nearest value
 }
 
 static void rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
   assert(sdr != NULL);
+  struct frontend *frontend = sdr->frontend;
   usleep(5000);
   command_send(sdr->dev_handle,STARTADC,samprate);
-  sdr->samprate = samprate;
+  frontend->sdr.samprate = samprate;
 }
 
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){

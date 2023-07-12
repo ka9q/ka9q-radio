@@ -457,6 +457,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
   encode_int64(&bp,OUTPUT_METADATA_PACKETS,Metadata_packets);
 
+  encode_double(&bp,CALIBRATE,frontend->sdr.calibrate);
   
   // Lots of stuff not relevant in spectrum analysis mode
   if(demod->demod_type != SPECT_DEMOD){
@@ -490,6 +491,8 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   encode_double(&bp,FIRST_LO_FREQUENCY,frontend->sdr.frequency); // Hz
   encode_float(&bp,LOW_EDGE,demod->filter.min_IF); // Hz
   encode_float(&bp,HIGH_EDGE,demod->filter.max_IF); // Hz
+  encode_float(&bp,FE_LOW_EDGE,frontend->sdr.min_IF);
+  encode_float(&bp,FE_HIGH_EDGE,frontend->sdr.max_IF);
 
   // Demodulation mode
   encode_byte(&bp,DEMOD_TYPE,demod->demod_type);

@@ -132,6 +132,10 @@ enum status_type {
   RF_ATTEN,       // Front end attenuation (introduced with rx888)
   RF_GAIN,        // Front end gain (introduced with rx888)
   OUTPUT_DATA_UNIX_SOCKET,  // For use with local (AF_UNIX) data paths
+  FE_LOW_EDGE,    // edges of front end filter
+  FE_HIGH_EDGE,
+
+
 };
 
 int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);

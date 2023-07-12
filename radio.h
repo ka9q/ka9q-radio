@@ -48,7 +48,6 @@ struct frontend {
     int ctl_fd;            // Socket for commands to front end
     int status_fd;         // Socket for status from front end
     int fe_status_fd;      // Socket for front end daemon's reception when integrated
-    void *context;         // Stash hardware-dependent control block
 
 
     struct sockaddr_storage metadata_source_address;    // Source of SDR metadata
@@ -75,6 +74,7 @@ struct frontend {
     int samprate;           // Sample rate on data stream
     int64_t timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
     double frequency;
+    double calibrate;
     uint8_t lna_gain;
     uint8_t mixer_gain;
     uint8_t if_gain;
@@ -97,6 +97,12 @@ struct frontend {
     // 'status' is written by the input thread and read by set_first_LO, etc, so it's protected by a mutex
     pthread_mutex_t status_mutex;
     pthread_cond_t status_cond;     // Signalled whenever status changes
+
+    // Entry points for local front end driver
+    void *context;         // Stash hardware-dependent control block
+    int (*setup)(struct frontend *,dictionary *,char const *);
+    int (*start)(struct frontend *);
+    double (*tune)(struct frontend *,double);
   } sdr;
   float tp1;        // Spare test points
   float tp2;

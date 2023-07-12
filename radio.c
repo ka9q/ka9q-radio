@@ -607,6 +607,11 @@ double set_first_LO(struct demod const * const demod,double const first_LO){
   if(first_LO == current_lo1 || first_LO <= 0)
     return first_LO;
 
+  // Direct tuning through local module if available
+  if(Frontend.sdr.tune != NULL){
+    return (*Frontend.sdr.tune)(&Frontend,first_LO);
+  }
+
   uint8_t packet[8192],*bp;
   memset(packet,0,sizeof(packet));
   bp = packet;

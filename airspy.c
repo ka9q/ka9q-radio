@@ -5,35 +5,12 @@
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
-#include <string.h>
-#include <complex.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <net/if.h>
-#include <signal.h>
-#include <locale.h>
-#include <sys/time.h>
 #include <libairspy/airspy.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 #include <errno.h>
-#include <syslog.h>
-#include <sys/stat.h>
-#include <getopt.h>
 #include <iniparser/iniparser.h>
 #if defined(linux)
 #include <bsd/string.h>
 #endif
-
-#include <sched.h>
 
 #include "conf.h"
 #include "misc.h"
@@ -59,6 +36,7 @@ static float Low_threshold;
 static float High_threshold;
 static int const Bufsize = 16384;
 
+// Anything generic should be in 'struct frontend' section 'sdr' in radio.h
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
   struct airspy_device *device;    // Opaque pointer
@@ -69,10 +47,7 @@ struct sdrstate {
   bool antenna_bias; // Bias tee on/off
 
   // Tuning
-  double frequency;
   double converter;   // Upconverter base frequency (usually 120 MHz)
-  double calibration; // Frequency error
-  bool frequency_lock;
   int offset; // 1/4 of sample rate in real mode; 0 in complex mode
   char const *frequency_file; // Local file to store frequency in case we restart
 
@@ -80,9 +55,6 @@ struct sdrstate {
   int holdoff;  // Holdoff counter after automatic change to allow settling
   bool linearity; // Use linearity gain tables; default is sensitivity
   int gainstep; // Airspy gain table steps (0-21), higher numbers == higher gain
-  uint8_t lna_gain;
-  uint8_t mixer_gain;
-  uint8_t if_gain;
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
@@ -113,7 +85,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
-  frontend->input.context = sdr;
+  frontend->sdr.context = sdr;
   {
     char const *device = config_getstring(Dictionary,section,"device",NULL);
     if(strcasecmp(device,"airspy") != 0)
@@ -212,6 +184,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   frontend->sdr.isreal = true;
   sdr->offset = frontend->sdr.samprate/4;
   sdr->converter = config_getfloat(Dictionary,section,"converter",0);
+  frontend->sdr.calibrate = config_getdouble(Dictionary,section,"calibrate",0);
 
   fprintf(stdout,"Set sample rate %'u Hz, offset %'d Hz\n",frontend->sdr.samprate,sdr->offset);
   {
@@ -219,7 +192,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     ret = airspy_set_samplerate(sdr->device,(uint32_t)frontend->sdr.samprate);
     assert(ret == AIRSPY_SUCCESS);
   }
-  sdr->calibration = 0;
+  frontend->sdr.calibrate = 0;
   sdr->gainstep = -1; // Force update first time
 
   // Hardware device settings
@@ -236,19 +209,19 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   
   int const lna_gain = config_getint(Dictionary,section,"lna-gain",-1);
   if(lna_gain != -1){
-    sdr->lna_gain = lna_gain;
+    frontend->sdr.lna_gain = lna_gain;
     airspy_set_lna_gain(sdr->device,lna_gain);
     Software_agc = false;
   }      
   int const mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
   if(mixer_gain != -1){
-    sdr->mixer_gain = mixer_gain;
+    frontend->sdr.mixer_gain = mixer_gain;
     airspy_set_mixer_gain(sdr->device,mixer_gain);
     Software_agc = false;
   }
   int const vga_gain = config_getint(Dictionary,section,"vga-gain",-1);
   if(vga_gain != -1){
-    sdr->if_gain = vga_gain;
+    frontend->sdr.if_gain = vga_gain;
     airspy_set_vga_gain(sdr->device,vga_gain);
     Software_agc = false;
   }
@@ -275,7 +248,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     }
   }
   fprintf(stdout,"Software AGC %d; linearity %d, LNA AGC %d, Mix AGC %d, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %d\n",
-	  Software_agc,sdr->linearity,lna_agc,mixer_agc,sdr->lna_gain,sdr->mixer_gain,sdr->if_gain,gainstep,sdr->antenna_bias);
+	  Software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->sdr.lna_gain,frontend->sdr.mixer_gain,frontend->sdr.if_gain,gainstep,sdr->antenna_bias);
 
   {
     float const dh = config_getdouble(Dictionary,section,"agc-high-threshold",-10.0);
@@ -285,7 +258,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   }
   double init_frequency = config_getdouble(Dictionary,section,"frequency",0);
   if(init_frequency != 0)
-    sdr->frequency_lock = 1;
+    frontend->sdr.lock = 1;
   {
     char *tmp;
     int ret __attribute__ ((unused));
@@ -313,12 +286,12 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     init_frequency = 149e6; // Fallback default
     fprintf(stdout,"Fallback default frequency %'.3lf Hz\n",init_frequency);
   }
-  fprintf(stdout,"Setting initial frequency %'.3lf Hz, %s\n",init_frequency,sdr->frequency_lock ? "locked" : "not locked");
+  fprintf(stdout,"Setting initial frequency %'.3lf Hz, %s\n",init_frequency,frontend->sdr.lock ? "locked" : "not locked");
   set_correct_freq(sdr,init_frequency);
   return 0;
 }
 int airspy_start(struct frontend *frontend){
-  struct sdrstate *sdr = (struct sdrstate *)frontend->input.context;
+  struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
   pthread_create(&sdr->cmd_thread,NULL,airspy_cmd,sdr);
   pthread_create(&sdr->monitor_thread,NULL,airspy_monitor,sdr);
   return 0;
@@ -375,7 +348,6 @@ void *airspy_cmd(void *arg){
 
 static void decode_airspy_commands(struct sdrstate *sdr,uint8_t *buffer,int length){
   struct frontend * const frontend = sdr->frontend;
-  
 
   uint8_t *cp = buffer;
 
@@ -407,25 +379,25 @@ static void decode_airspy_commands(struct sdrstate *sdr,uint8_t *buffer,int leng
       frontend->sdr.command_tag = decode_int(cp,optlen);
       break;
     case CALIBRATE:
-      sdr->calibration = decode_double(cp,optlen);
+      frontend->sdr.calibrate = decode_double(cp,optlen);
       break;
     case RADIO_FREQUENCY:
-      if(!sdr->frequency_lock){
+      if(!frontend->sdr.lock){
 	double const f = decode_double(cp,optlen);
 	set_correct_freq(sdr,f);
       }
       break;
     case LNA_GAIN:
-      sdr->lna_gain = decode_int(cp,optlen);
-      airspy_set_lna_gain(sdr->device,sdr->lna_gain);
+      frontend->sdr.lna_gain = decode_int(cp,optlen);
+      airspy_set_lna_gain(sdr->device,frontend->sdr.lna_gain);
       break;
     case MIXER_GAIN:
-      sdr->mixer_gain = decode_int(cp,optlen);
-      airspy_set_mixer_gain(sdr->device,sdr->mixer_gain);
+      frontend->sdr.mixer_gain = decode_int(cp,optlen);
+      airspy_set_mixer_gain(sdr->device,frontend->sdr.mixer_gain);
       break;
     case IF_GAIN:
-      sdr->if_gain = decode_int(cp,optlen);
-      airspy_set_vga_gain(sdr->device,sdr->if_gain);
+      frontend->sdr.if_gain = decode_int(cp,optlen);
+      airspy_set_vga_gain(sdr->device,frontend->sdr.if_gain);
       break;
     case GAINSTEP:
       sdr->gainstep = decode_int(cp,optlen);
@@ -450,7 +422,8 @@ static void send_airspy_status(struct sdrstate *sdr,int full){
   encode_int32(&bp,COMMAND_TAG,frontend->sdr.command_tag);
   encode_int64(&bp,CMD_CNT,frontend->sdr.commands);
   
-  encode_int64(&bp,GPS_TIME,gps_time_ns());
+  frontend->sdr.timestamp = gps_time_ns();
+  encode_int64(&bp,GPS_TIME,frontend->sdr.timestamp);
 
   if(frontend->sdr.description[0] != '\0')
     encode_string(&bp,DESCRIPTION,frontend->sdr.description,strlen(frontend->sdr.description));
@@ -459,17 +432,17 @@ static void send_airspy_status(struct sdrstate *sdr,int full){
   encode_int64(&bp,OUTPUT_METADATA_PACKETS,frontend->input.metadata_packets);
 
   // Front end
-  encode_double(&bp,CALIBRATE,sdr->calibration);
-  encode_byte(&bp,LNA_GAIN,sdr->lna_gain);
-  encode_byte(&bp,MIXER_GAIN,sdr->mixer_gain);
-  encode_byte(&bp,IF_GAIN,sdr->if_gain);
+  encode_double(&bp,CALIBRATE,frontend->sdr.calibrate);
+  encode_byte(&bp,LNA_GAIN,frontend->sdr.lna_gain);
+  encode_byte(&bp,MIXER_GAIN,frontend->sdr.mixer_gain);
+  encode_byte(&bp,IF_GAIN,frontend->sdr.if_gain);
   if(sdr->gainstep >= 0)
     encode_byte(&bp,GAINSTEP,sdr->gainstep);
-  encode_double(&bp,GAIN,(double)(sdr->lna_gain + sdr->mixer_gain + sdr->if_gain));
+  encode_double(&bp,GAIN,(double)(frontend->sdr.lna_gain + frontend->sdr.mixer_gain + frontend->sdr.if_gain));
 
   // Tuning
-  encode_double(&bp,RADIO_FREQUENCY,sdr->frequency);
-  encode_int32(&bp,LOCK,sdr->frequency_lock);
+  encode_double(&bp,RADIO_FREQUENCY,frontend->sdr.frequency);
+  encode_int32(&bp,LOCK,frontend->sdr.lock);
 
   encode_byte(&bp,DEMOD_TYPE,0); // actually LINEAR_MODE
   encode_int32(&bp,OUTPUT_SAMPRATE,frontend->sdr.samprate);
@@ -609,25 +582,32 @@ static double true_freq(uint64_t freq_hz){
 // the TCXO calibration offset is a holdover from the Funcube dongle and doesn't
 // really fit the Airspy with its internal factory calibration
 // All this really works correctly only with a gpsdo, forcing the calibration offset to 0
-
 static double set_correct_freq(struct sdrstate *sdr,double freq){
-  int64_t intfreq = round((freq + sdr->converter)/ (1 + sdr->calibration));
+  struct frontend *frontend = sdr->frontend;
+  // sdr->converter refers to an upconverter, so it's added to the frequency we request
+  int64_t intfreq = round((freq + sdr->converter)/ (1 + frontend->sdr.calibrate));
   int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
   ret = airspy_set_freq(sdr->device,intfreq - sdr->offset);
   assert(ret == AIRSPY_SUCCESS);
   double const tf = true_freq(intfreq);
-  sdr->frequency = tf * (1 + sdr->calibration) - sdr->converter;
+  frontend->sdr.frequency = tf * (1 + frontend->sdr.calibrate) - sdr->converter;
   FILE *fp = fopen(sdr->frequency_file,"w");
   if(fp){
-    if(fprintf(fp,"%lf\n",sdr->frequency) < 0)
+    if(fprintf(fp,"%lf\n",frontend->sdr.frequency) < 0)
       fprintf(stdout,"Can't write to tuner state file %s: %s\n",sdr->frequency_file,strerror(errno));
     fclose(fp);
     fp = NULL;
   }
-  return sdr->frequency;
+  return frontend->sdr.frequency;
+}
+double airspy_tune(struct frontend *frontend,double f){
+  struct sdrstate *sdr = frontend->sdr.context;
+  return set_correct_freq(sdr,f);
 }
 
+
 static void set_gain(struct sdrstate *sdr,int gainstep){
+  struct frontend *frontend = sdr->frontend;
   if(gainstep < 0)
     gainstep = 0;
   else if(gainstep >= GAIN_COUNT)
@@ -640,21 +620,21 @@ static void set_gain(struct sdrstate *sdr,int gainstep){
       int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
       ret = airspy_set_linearity_gain(sdr->device,sdr->gainstep);
       assert(ret == AIRSPY_SUCCESS);
-      sdr->if_gain = airspy_linearity_vga_gains[tab];
-      sdr->mixer_gain = airspy_linearity_mixer_gains[tab];
-      sdr->lna_gain = airspy_linearity_lna_gains[tab];
+      frontend->sdr.if_gain = airspy_linearity_vga_gains[tab];
+      frontend->sdr.mixer_gain = airspy_linearity_mixer_gains[tab];
+      frontend->sdr.lna_gain = airspy_linearity_lna_gains[tab];
     } else {
       int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
       ret = airspy_set_sensitivity_gain(sdr->device,sdr->gainstep);
       assert(ret == AIRSPY_SUCCESS);
-      sdr->if_gain = airspy_sensitivity_vga_gains[tab];
-      sdr->mixer_gain = airspy_sensitivity_mixer_gains[tab];
-      sdr->lna_gain = airspy_sensitivity_lna_gains[tab];
+      frontend->sdr.if_gain = airspy_sensitivity_vga_gains[tab];
+      frontend->sdr.mixer_gain = airspy_sensitivity_mixer_gains[tab];
+      frontend->sdr.lna_gain = airspy_sensitivity_lna_gains[tab];
     }
     send_airspy_status(sdr,1);
     if(Verbose)
       printf("New gainstep %d: LNA = %d, mixer = %d, vga = %d\n",gainstep,
-	     sdr->lna_gain,sdr->mixer_gain,sdr->if_gain);
+	     frontend->sdr.lna_gain,frontend->sdr.mixer_gain,frontend->sdr.if_gain);
   }
 }
 

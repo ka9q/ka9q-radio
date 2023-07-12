@@ -55,8 +55,6 @@ int Verbose;
 static char const *Locale = "en_US.UTF-8";
 dictionary *Configtable; // Configtable file descriptor for iniparser
 dictionary *Modetable;
-
-char const *Hardware;
 volatile bool Stop_transfers = false; // Request to stop data transfers; how should this get set?
 
 struct demod *Dynamic_demod; // Prototype for dynamically created demods
@@ -96,6 +94,7 @@ int rx888_start(struct frontend *);
 // In airspy.c
 int airspy_setup(struct frontend *,dictionary *,char const *);
 int airspy_start(struct frontend *);
+double airspy_tune(struct frontend *,double);
 
 // The main program sets up the demodulator parameter defaults,
 // overwrites them with command-line arguments and/or state file settings,
@@ -315,15 +314,17 @@ static int loadconfig(char const * const file){
   char const * const input = config_getstring(Configtable,global,"input",NULL);
 
   // Are we using a direct front end?
-  Hardware = config_getstring(Configtable,global,"hardware",NULL);
-  if(Hardware){
+  const char *hardware = config_getstring(Configtable,global,"hardware",NULL);
+  if(hardware != NULL){
     // Look for specified hardware section
     int const nsect = iniparser_getnsec(Configtable);
     for(int sect = 0; sect < nsect; sect++){
       char const * const sname = iniparser_getsecname(Configtable,sect);
-      if(strcasecmp(sname,Hardware) == 0){
-	if(setup_hardware(sname) != 0)
+      if(strcasecmp(sname,hardware) == 0){
+	if(setup_hardware(sname) != 0){
+	  abort();
 	  exit(1);
+	}
 	break;
       }
     }
@@ -545,13 +546,19 @@ static int setup_hardware(char const *sname){
   // Do we support it?
   // This should go into a table somewhere
   if(strcasecmp(device,"rx888") == 0){
-    if(rx888_setup(&Frontend,Configtable,sname) != 0)
-      return -1;
+    Frontend.sdr.setup = rx888_setup;
+    Frontend.sdr.start = rx888_start;
+    Frontend.sdr.tune = NULL; // Only direct sampling for now
   } else if(strcasecmp(device,"airspy") == 0){
-    if(airspy_setup(&Frontend,Configtable,sname) != 0)
-      return -1;
+    Frontend.sdr.setup = airspy_setup;
+    Frontend.sdr.start = airspy_start;
+    Frontend.sdr.tune = airspy_tune;
   } else
     return -1;
+
+  int r = (*Frontend.sdr.setup)(&Frontend,Configtable,sname); 
+  if(r != 0)
+    return r;
 
   // Common to all devices
   {
@@ -603,13 +610,12 @@ static int setup_hardware(char const *sname){
   pthread_mutex_init(&Frontend.sdr.status_mutex,NULL);
   pthread_cond_init(&Frontend.sdr.status_cond,NULL);
   pthread_create(&Frontend.status_thread,NULL,sdr_status,&Frontend);
+  if(Frontend.sdr.start)
+    return (*Frontend.sdr.start)(&Frontend);
   if(strcasecmp(device,"rx888") == 0)
-    rx888_start(&Frontend);
-  else if(strcasecmp(device,"airspy") == 0)
-    airspy_start(&Frontend);
+    return rx888_start(&Frontend);
   else
     return -1;
-  return 0;
 }
 
 
