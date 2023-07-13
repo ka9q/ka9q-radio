@@ -71,8 +71,9 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     else {
       // Default to "fe-" followed by receiver metadata target, e.g., "fe-hf.local"
       char *tmp = NULL;
-      asprintf(&tmp,"fe-%s",Metadata_dest_string);
-      strlcpy(frontend->input.metadata_dest_string,tmp,sizeof(frontend->input.metadata_dest_string));
+      int r = asprintf(&tmp,"fe-%s",Metadata_dest_string);
+      if(r != 0)
+	strlcpy(frontend->input.metadata_dest_string,tmp,sizeof(frontend->input.metadata_dest_string));
       FREE(tmp);
     }
   }
