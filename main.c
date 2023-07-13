@@ -354,19 +354,16 @@ static int loadconfig(char const * const file){
     }
     // Target for status/control stream. Optional.
     strlcpy(Metadata_dest_string,status,sizeof(Metadata_dest_string));
+    int slen = sizeof(Metadata_dest_address);
     if(input != NULL && strlen(input) > 0){
       char description[1024];
       description[0] = '\0';
       snprintf(description,sizeof(description),"input=%s",input);
-      avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),description);
+      avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),description,&Metadata_dest_address,&slen);
     } else {
-      avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),NULL);
+      avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),NULL,&Metadata_dest_address,&slen);
     }
-    char iface[IFNAMSIZ];
-    resolve_mcast(Metadata_dest_string,&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
-    if(strlen(iface) == 0 && Iface != NULL)
-      strlcpy(iface,Iface,sizeof(iface));
-    Status_fd = connect_mcast(&Metadata_dest_address,iface,Mcast_ttl,IP_tos);
+    Status_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
     if(Status_fd < 3){
       fprintf(stdout,"Can't send status to %s\n",Metadata_dest_string);
     } else {
@@ -429,12 +426,9 @@ static int loadconfig(char const * const file){
     // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
     char description[1024];
     snprintf(description,sizeof(description),"pcm-source=%s",formatsock(&Frontend.input.data_dest_address));
-    avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),description);
-    char iface[IFNAMSIZ];
-    resolve_mcast(demod->output.data_dest_string,&demod->output.data_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
-    if(strlen(iface) == 0 && Iface != NULL)
-      strlcpy(iface,Iface,sizeof(iface));
-    demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,iface,Mcast_ttl,IP_tos);
+    int slen = sizeof(demod->output.data_dest_address);
+    avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),description,&demod->output.data_dest_address,&slen);
+    demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,Iface,Mcast_ttl,IP_tos);
     if(demod->output.data_fd < 3){
       fprintf(stdout,"can't set up PCM output to %s\n",demod->output.data_dest_string);
       continue;
@@ -582,12 +576,11 @@ static int setup_hardware(char const *sname){
     // Start Avahi client that will maintain our mDNS registrations
     // Service name, if present, must be unique
     // Description, if present becomes TXT record if present
+    int len = sizeof(Frontend.input.metadata_dest_address);
     avahi_start(Frontend.sdr.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Frontend.input.metadata_dest_string,
-		ElfHashString(Frontend.input.metadata_dest_string),Frontend.sdr.description);
-  }
-  {
+		ElfHashString(Frontend.input.metadata_dest_string),Frontend.sdr.description,&Frontend.input.metadata_dest_address,&len);
+
     // Set up send socket on control channel, used by both rx888 daemon and radiod
-    resolve_mcast(Frontend.input.metadata_dest_string,&Frontend.input.metadata_dest_address,DEFAULT_STAT_PORT,NULL,0);
     Frontend.input.ctl_fd = connect_mcast(&Frontend.input.metadata_dest_address,Iface,Status_ttl,IP_tos); // note use of global default Iface
     if(Frontend.input.ctl_fd <= 0){
       fprintf(stdout,"Can't create multicast status socket to %s: %s\n",Frontend.input.metadata_dest_string,strerror(errno));

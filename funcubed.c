@@ -242,7 +242,7 @@ int main(int argc,char *argv[]){
   Blocksize = config_getint(Dictionary,Name,"blocksize",RTP_ttl == 0 ? Blocksize_TTL0 : Blocksize);
   Description = config_getstring(Dictionary,Name,"description",NULL);
   {
-    avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest,ElfHashString(Metadata_dest),NULL);
+    avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest,ElfHashString(Metadata_dest),NULL,NULL,NULL);
     char iface[IFNAMSIZ];
     resolve_mcast(Metadata_dest,&Output_metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
     Status_sock = connect_mcast(&Output_metadata_dest_address,iface,Status_ttl,IP_tos);
@@ -269,7 +269,7 @@ int main(int argc,char *argv[]){
   }
 
   {
-    avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data_dest,ElfHashString(Data_dest),NULL);
+    avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data_dest,ElfHashString(Data_dest),NULL,NULL,NULL);
     char iface[IFNAMSIZ];
     resolve_mcast(Data_dest,&Output_data_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
     Rtp_sock = connect_mcast(&Output_data_dest_address,iface,RTP_ttl,IP_tos);

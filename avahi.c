@@ -72,7 +72,8 @@ static void *avahi_register(void *p);
 extern int Verbose;
 
 // description is optional; if present, forms a TXT record
-void *avahi_start(char const *service_name,char const *service_type,int service_port,char const *dns_name,int base_address,char const *description){
+// Optionally return a sockaddr_in (through *sock) with the resolved address
+int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,int const base_address,char const *description,void *sock,int *socksize){
   struct userdata *userdata = (struct userdata *)calloc(1,sizeof(struct userdata));
   if(service_name){
     // Look for ,iface at end of service_name and remove it, if present.
@@ -106,7 +107,18 @@ void *avahi_start(char const *service_name,char const *service_type,int service_
   fprintf(stderr,"avahi_start: \n");
   dump_userdata(userdata);
 #endif
-  return userdata;
+  if(sock != NULL && socksize != NULL){
+    // Return sockaddr structure
+    if(*socksize >= sizeof(struct sockaddr_in)){
+      struct sockaddr_in *sin = sock;
+      sin->sin_family = AF_INET;
+      sin->sin_addr.s_addr = htonl(userdata->address);
+      sin->sin_port = htons(service_port);
+      *socksize = sizeof(struct sockaddr_in);
+    } else
+      *socksize = 0;
+  }
+  return 0;
 }
 
 

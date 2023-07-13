@@ -160,10 +160,10 @@ int main(int argc,char *argv[]){
 
     char service_name[1060];
     snprintf(service_name,sizeof(service_name),"iqplay(%s)",metadata_dns_name);
-    avahi_start(service_name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,metadata_dns_name,ElfHashString(metadata_dns_name),NULL);
+    avahi_start(service_name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,metadata_dns_name,ElfHashString(metadata_dns_name),NULL,NULL,NULL);
 
     snprintf(service_name,sizeof(service_name),"iqplay(%s)",data_dns_name);
-    avahi_start(service_name,"_rtp._udp",DEFAULT_RTP_PORT,data_dns_name,ElfHashString(data_dns_name),NULL);
+    avahi_start(service_name,"_rtp._udp",DEFAULT_RTP_PORT,data_dns_name,ElfHashString(data_dns_name),NULL,NULL,NULL);
 
     // Now resolve them back
     resolve_mcast(metadata_dns_name,&Output_metadata_dest_address,DEFAULT_STAT_PORT,NULL,0);

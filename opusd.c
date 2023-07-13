@@ -252,7 +252,7 @@ int main(int argc,char * const argv[]){
 
   char description[1024];
   snprintf(description,sizeof(description),"pcm-source=%s",Input); // what if it changes?
-  avahi_start(Name,"_opus._udp",5004,Output,ElfHashString(Output),description);
+  avahi_start(Name,"_opus._udp",5004,Output,ElfHashString(Output),description,NULL,NULL);
 
   // Can't resolve this until the avahi service is started
   resolve_mcast(Output,&Opus_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));

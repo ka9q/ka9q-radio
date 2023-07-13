@@ -211,14 +211,6 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
   if(target == NULL || strlen(target) == 0 || sock == NULL)
     return -1;
 
-  if(target[0] == '/'){
-    // Target beginning with '/' is of UNIX type
-    struct sockaddr_un *sinp = (struct sockaddr_un *)sock;
-    sinp->sun_family = AF_UNIX;
-    strncpy(sinp->sun_path,target,sizeof(sinp->sun_path)-1);
-    return 0;
-  }
-
   char host[PATH_MAX]; // Maximum legal DNS name length?
   strlcpy(host,target,sizeof(host));
 
@@ -272,7 +264,7 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
     if(ecode == 0)
       break;
     if(try == 0) // Don't pollute the syslog
-      fprintf(stderr,"resolve_mcast getaddrinfo(%s,%s): %s. Retrying.\n",full_host,port,gai_strerror(ecode));
+      fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s): %s. Retrying.\n",full_host,port,gai_strerror(ecode));
     sleep(10);
   }
   if(try > 0) // Don't leave them hanging: report success after failure

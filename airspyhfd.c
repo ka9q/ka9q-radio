@@ -339,8 +339,8 @@ int main(int argc,char *argv[]){
     // Start Avahi client that will maintain our mDNS registrations
     // Service name, if present, must be unique
     // Description, if present becomes TXT record if present
-    avahi_start(sdr->description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,sdr->metadata_dest,ElfHashString(sdr->metadata_dest),sdr->description);
-    avahi_start(sdr->description,"_rtp._udp",DEFAULT_RTP_PORT,sdr->data_dest,ElfHashString(sdr->data_dest),sdr->description);
+    avahi_start(sdr->description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,sdr->metadata_dest,ElfHashString(sdr->metadata_dest),sdr->description,NULL,NULL);
+    avahi_start(sdr->description,"_rtp._udp",DEFAULT_RTP_PORT,sdr->data_dest,ElfHashString(sdr->data_dest),sdr->description,NULL,NULL);
   }
   {
     char iface[IFNAMSIZ];

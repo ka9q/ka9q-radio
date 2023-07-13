@@ -122,7 +122,7 @@ int pipefill(int,void *,int);
 void chomp(char *);
 uint32_t ElfHash(uint8_t const *s,int length);
 uint32_t ElfHashString(char const *s);
-void *avahi_start(char const *service_name,char const *service_type,int service_port,char const *dns_name,int base_address,char const *description);
+int avahi_start(char const *service_name,char const *service_type,int service_port,char const *dns_name,int base_address,char const *description,void *,int *);
 
 // Modified Bessel functions
 float i0(float const z); // 0th kind
