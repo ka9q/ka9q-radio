@@ -243,10 +243,13 @@ void input_loop(){
 	if(fork() == 0){
 	  // set working directory to the one containing the file
 	  char *dupname = strdup(filename);
-	  chdir(dirname(dupname));
+
+	  int r = chdir(dirname(dupname));
+	  if(r != 0)
+	    perror("chdir");
 	  FREE(dupname);
 
-	  int const r = system(cmd);
+	  r = system(cmd);
 	  if(Verbose && r != 0)
 	    fprintf(stderr,"system(%s) returned %d errno %d (%s)\n",cmd,r,errno,strerror(errno));
 	  if(!Keep_wav){
