@@ -106,8 +106,8 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
 
   // Firmware file
   char const *firmware = config_getstring(Dictionary,section,"firmware","SDDC_FX3.img");
-  // Queue depth, default 32
-  int const queuedepth = config_getint(Dictionary,section,"queuedepth",32);
+  // Queue depth, default 16; 32 sometimes overflows
+  int const queuedepth = config_getint(Dictionary,section,"queuedepth",16);
   if(queuedepth < 1 || queuedepth > 64) {
     fprintf(stdout,"Invalid queue depth %d\n",queuedepth);
     return -1;
