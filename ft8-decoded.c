@@ -243,11 +243,8 @@ void input_loop(){
 	if(fork() == 0){
 	  // set working directory to the one containing the file
 	  char *dupname = strdup(filename);
-	  char dir[strlen(dupname) + 1];
-	  dirname_r(dupname,dir);
+	  chdir(dirname(dupname));
 	  FREE(dupname);
-	  chdir(dir);
-
 
 	  int const r = system(cmd);
 	  if(Verbose && r != 0)
