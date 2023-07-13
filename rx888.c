@@ -175,8 +175,9 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
       fprintf(stdout,"%s: ",frontend->sdr.description);
     }
   }
-  fprintf(stdout,"Samprate %'d Hz, Gain %.1f dB, Atten %.1f dB, Dither %d, Randomizer %d, USB Queue depth %d, USB Request size %d * pktsize %d = %'d bytes\n",
-	  frontend->sdr.samprate,frontend->sdr.rf_gain,frontend->sdr.rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize);
+  fprintf(stdout,"Samprate %'d Hz, Gain %.1f dB, Atten %.1f dB, Dither %d, Randomizer %d, USB Queue depth %d, USB Request size %'d * pktsize %d = %'d bytes (%g sec)\n",
+	  frontend->sdr.samprate,frontend->sdr.rf_gain,frontend->sdr.rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
+	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->sdr.samprate));
 
   return 0;
 }
@@ -367,7 +368,7 @@ static void rx_callback(struct libusb_transfer *transfer){
   int16_t const * const samples = (int16_t *)transfer->buffer;
   float const inv_gain = SCALE16 / frontend->sdr.gain;
   float * const wptr = frontend->in->input_write_pointer.r;
-  int const sampcount = size/2;
+  int const sampcount = size / sizeof(int16_t);
   if(sdr->randomizer){
     for(int i=0; i < sampcount; i++){
       int s = samples[i] ^ (-2 * (samples[i] & 1)); // if LSB is set, flip all other bits
