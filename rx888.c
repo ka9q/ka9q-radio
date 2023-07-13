@@ -155,8 +155,8 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
     
     rx888_set_gain(sdr,gain);
 
-    // Sample Rate, default 32000000 (32 MHz)
-    unsigned int samprate = config_getint(Dictionary,section,"samprate",32000000);
+    // Sample Rate, default 129.6 MHz
+    unsigned int samprate = config_getint(Dictionary,section,"samprate",129600000);
     if(samprate < 1000000){
       int const minsamprate = 1000000; // 1 MHz?
       fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,minsamprate);
