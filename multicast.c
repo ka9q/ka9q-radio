@@ -142,8 +142,6 @@ int listen_mcast(void const *s,char const *iface){
 
   struct sockaddr const *sock = s;
 
-  char const *local = "/tmp/radiod";
-
   int const fd = socket(sock->sa_family,SOCK_DGRAM,0);
   if(fd == -1){
     perror("setup_mcast socket");
