@@ -181,6 +181,12 @@ void dump_metadata(uint8_t const * const buffer,int length){
     case HIGH_EDGE:
       printf("filt high %'g Hz",decode_float(cp,optlen));
       break;
+    case FE_LOW_EDGE:
+      printf("fe filt low %'g Hz",decode_float(cp,optlen));
+      break;
+    case FE_HIGH_EDGE:
+      printf("fe filt high %'g Hz",decode_float(cp,optlen));
+      break;
     case KAISER_BETA:
       printf("filter kaiser_beta %g",decode_float(cp,optlen));      
       break;

@@ -161,11 +161,9 @@ int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length)
     case RADIO_FREQUENCY:
       frontend->sdr.frequency = decode_double(cp,optlen);
       break;
-#if 0 // Deprecated
     case OUTPUT_LEVEL:
       frontend->sdr.output_level = dB2power(decode_double(cp,optlen));
       break;
-#endif
     case LOCK:
       frontend->sdr.lock = decode_int(cp,optlen);
       break;

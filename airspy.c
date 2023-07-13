@@ -19,9 +19,6 @@
 #include "radio.h"
 #include "config.h"
 
-#define N_serials 20
-uint64_t Serials[N_serials];
-
 extern int Status_ttl;
 
 // Global variables set by config file options
@@ -290,7 +287,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   set_correct_freq(sdr,init_frequency);
   return 0;
 }
-int airspy_start(struct frontend *frontend){
+int airspy_startup(struct frontend *frontend){
   struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
   pthread_create(&sdr->cmd_thread,NULL,airspy_cmd,sdr);
   pthread_create(&sdr->monitor_thread,NULL,airspy_monitor,sdr);

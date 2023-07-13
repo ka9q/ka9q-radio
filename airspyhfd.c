@@ -4,49 +4,23 @@
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
-#include <string.h>
-#include <complex.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdint.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <sys/types.h>
 #include <dirent.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <net/if.h>
 #include <signal.h>
 #include <locale.h>
-#include <sys/time.h>
 #include <libairspyhf/airspyhf.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 #include <errno.h>
-#include <syslog.h>
 #include <sys/stat.h>
 #include <getopt.h>
 #include <iniparser/iniparser.h>
-#include <sched.h>
 
 #include "conf.h"
 #include "misc.h"
 #include "multicast.h"
-#include "decimate.h"
 #include "status.h"
 #include "config.h"
 
-#define N_serials 20
-uint64_t Serials[N_serials];
-
-// Configurable parameters
-// decibel limits for power
-float const AGC_upper = -20;
-float const AGC_lower = -50;
-
 int const Bufsize = 65536; // should pick more deterministically
-#define BUFFERSIZE  (1<<21) // Upcalls seem to be 256KB; don't make too big or we may blow out of the cache
 
 // Global variables set by command line options
 char const *Iface;
@@ -61,32 +35,20 @@ struct airspyhf_device *Device; // Set for benefit of closedown()
 struct sdrstate {
   struct airspyhf_device *device;    // Opaque pointer
 
-  uint32_t sample_rates[20];
   uint64_t SN; // Serial number
   char const *description;
   int samprate; // True sample rate of single A/D converter
-  int iq; // Working in complex sample mode
 
   // Tuning
   double frequency;
   double calibration; // Frequency error
   int frequency_lock;
-  char *frequency_file; // Local file to store frequency in case we restart
-
-  // AGC
-  int agc; // Use firmware agc when set
-  int linearity; // Use linearity gain tables; default is sensitivity
-  uint8_t lna_gain;
-  uint8_t mixer_gain;
-  uint8_t if_gain;
+  char const *frequency_file; // Local file to store frequency in case we restart
 
   // Sample statistics
-  int clips;  // Sample clips since last reset
   float power;   // Running estimate of A/D signal power
-  float DC;      // DC offset for real samples
 
-  int blocksize;// Number of real samples per packet or twice the number of complex samples per packet
-
+  int blocksize; // Number of real samples per packet or twice the number of complex samples per packet
   FILE *status;    // Real-time display in /run (currently unused)
 
   // Multicast I/O
@@ -110,9 +72,6 @@ struct sdrstate {
   pthread_t ncmd_thread;
 };
 
-// Global state - only one device at the moment
-
-
 static struct option Options[] =
   {
     {"verbose", no_argument, NULL, 'v'},
@@ -121,18 +80,18 @@ static struct option Options[] =
   };
 static char Optstring[] = "f:v";
 
-double set_correct_freq(struct sdrstate *sdr,double freq);
-void decode_airspyhf_commands(struct sdrstate *,uint8_t *,int);
-void send_airspyhf_status(struct sdrstate *,int);
-int rx_callback(airspyhf_transfer_t *);
-void *display(void *);
-void *ncmd(void *arg);
-double true_freq(uint64_t freq);
+static double set_correct_freq(struct sdrstate *sdr,double freq);
+static void decode_airspyhf_commands(struct sdrstate *,uint8_t const *,int);
+static void send_airspyhf_status(struct sdrstate *,int);
+static int rx_callback(airspyhf_transfer_t *);
+static void *display(void *);
+static void *ncmd(void *arg);
+static double true_freq(uint64_t freq);
 static void closedown(int a);
 
-dictionary *Dictionary;
-char const *Name;
-char const *Conf_file;
+static dictionary *Dictionary;
+static char const *Name;
+static char const *Conf_file;
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -148,9 +107,9 @@ int main(int argc,char *argv[]){
   }
 #endif  
 
+  // Global state - only one device at the moment
   struct sdrstate * const sdr = (struct sdrstate *)calloc(1,sizeof(struct sdrstate));
   // Defaults
-  sdr->agc = 1;
   // 2400 packets/sec @ 768 ks/s, 48 packets per 20 ms, 24 pkts/10 ms
   sdr->blocksize = 160;
   sdr->rtp_type = IQ_FLOAT;
@@ -213,7 +172,7 @@ int main(int argc,char *argv[]){
       while((dp = readdir(dir)) != NULL){
 	if(dp->d_type != DT_REG)
 	  continue;
-	int len = strlen(dp->d_name);
+	int const len = strlen(dp->d_name);
 	if(len < 5)
 	  continue;
 	if(strcmp(&dp->d_name[len-5],".conf") != 0)
@@ -222,7 +181,7 @@ int main(int argc,char *argv[]){
 	// Checking the return value suppresses a (bogus) gcc warning
 	// about possibly truncating the target. We know it can't
 	// beecause dp->d_name is 256 chars
-	int ret = snprintf(path,sizeof(path),"%s/%s",subdir,dp->d_name);
+	int const ret = snprintf(path,sizeof(path),"%s/%s",subdir,dp->d_name);
 	if(ret > sizeof(path))
 	  continue; // bogus entry
 	if((Dictionary = iniparser_load(path)) != NULL){
@@ -243,8 +202,6 @@ int main(int argc,char *argv[]){
     fprintf(stdout,"section %s not found in any config file\n",Name);
     exit(1);
   }
-
-  int ret;
   {
     char const *sn = config_getstring(Dictionary,Name,"serial",NULL);
     if(sn == NULL){
@@ -261,6 +218,7 @@ int main(int argc,char *argv[]){
     }
   }
   // Serial number specified, open that one
+  int ret;
   if((ret = airspyhf_open_sn(&sdr->device,sdr->SN)) != AIRSPYHF_SUCCESS){
     fprintf(stderr,"airspyhf_open(%llx) failed: %d\n",(long long unsigned)sdr->SN,ret);
     exit(1);
@@ -302,7 +260,6 @@ int main(int argc,char *argv[]){
     }
     fprintf(stdout,"Set sample rate %'u Hz\n",sdr->samprate);
   }
-
   {
     // Multicast output interface for both data and status
     Iface = config_getstring(Dictionary,Name,"iface",NULL);
@@ -312,7 +269,7 @@ int main(int argc,char *argv[]){
     if(sdr->data_dest == NULL){
       // Construct from serial number
       // Technically creates a memory leak since we never free it, but it's only once per run
-      char *cp;
+      char *cp = NULL;
       int ret = asprintf(&cp,"airspy-%016llx-pcm.local",(long long unsigned)sdr->SN);
       if(ret == -1)
 	exit(1);
@@ -322,7 +279,7 @@ int main(int argc,char *argv[]){
     if(sdr->metadata_dest == NULL){
       // Construct from serial number
       // Technically creates a memory leak since we never free it, but it's only once per run
-      char *cp;
+      char *cp = NULL;
       int ret = asprintf(&cp,"airspy-%016llx-status.local",(long long unsigned)sdr->SN);
       if(ret == -1)
 	exit(1);
@@ -402,7 +359,6 @@ int main(int argc,char *argv[]){
       fprintf(stderr,"Can't create multicast status socket to %s: %s\n",sdr->metadata_dest,strerror(errno));
       exit(1);
     }
-    
     // Set up new control socket on port 5006
     sdr->nctl_sock = listen_mcast(&sdr->output_metadata_dest_address,iface);
     if(sdr->nctl_sock <= 0){
@@ -410,13 +366,11 @@ int main(int argc,char *argv[]){
       exit(1);
     }
   }
-  
   init_frequency = config_getdouble(Dictionary,Name,"frequency",0);
   if(init_frequency != 0)
     sdr->frequency_lock = 1;
-
   {
-    char *tmp;
+    char *tmp = NULL;
     ret = asprintf(&tmp,"%s/tune-airspy.%llx",VARDIR,(unsigned long long)sdr->SN);
     if(ret == -1)
       exit(1);
@@ -434,6 +388,7 @@ int main(int argc,char *argv[]){
       if((r = fscanf(fp,"%lf",&init_frequency)) < 0)
 	fprintf(stderr,"Can't read stored freq. r = %'d: %s\n",r,strerror(errno));
       fclose(fp);
+      fp = NULL;
     }
   }
   if(init_frequency == 0){
@@ -476,7 +431,6 @@ int main(int argc,char *argv[]){
 
 // Thread to send metadata and process commands
 void *ncmd(void *arg){
-
   // Send status, process commands
   pthread_setname("aspyhf-cmd");
   assert(arg != NULL);
@@ -505,8 +459,7 @@ void *display(void *arg){
   struct sdrstate *sdr = (struct sdrstate *)arg;
 
   pthread_setname("aspyhf-disp");
-
-  fprintf(sdr->status,"Frequency     Output     clips\n");
+  fprintf(sdr->status,"Frequency     Output\n");
 
   off_t stat_point = ftello(sdr->status);
   // End lines with return when writing to terminal, newlines when writing to status file
@@ -517,10 +470,9 @@ void *display(void *arg){
     if(stat_point != -1)
       fseeko(sdr->status,stat_point,SEEK_SET);
     
-    fprintf(sdr->status,"%'-14.0lf%'7.1f%'10d    %c",
+    fprintf(sdr->status,"%'-14.0lf%'7.1f%c",
 	    sdr->frequency,
 	    powerdB,
-	    sdr->clips,
 	    eol);
     fflush(sdr->status);
     usleep(100000); // 10 Hz
@@ -528,8 +480,8 @@ void *display(void *arg){
   return NULL;
 }
 
-void decode_airspyhf_commands(struct sdrstate *sdr,uint8_t *buffer,int length){
-  uint8_t *cp = buffer;
+void decode_airspyhf_commands(struct sdrstate *sdr,uint8_t const *buffer,int length){
+  uint8_t const *cp = buffer;
 
   while(cp - buffer < length){
     int ret __attribute__((unused)); // Won't be used when asserts are disabled
@@ -585,7 +537,7 @@ void send_airspyhf_status(struct sdrstate *sdr,int full){
   encode_int32(&bp,COMMAND_TAG,sdr->command_tag);
   encode_int64(&bp,CMD_CNT,sdr->commands);
   
-  int64_t timestamp = gps_time_ns();
+  int64_t const timestamp = gps_time_ns();
   encode_int64(&bp,GPS_TIME,timestamp);
 
   if(sdr->description)
@@ -683,7 +635,6 @@ int rx_callback(airspyhf_transfer_t *transfer){
 
 double true_freq(uint64_t freq_hz){
   return (double)freq_hz; // dummy for now
-
 }
 
 // set the airspy tuner to the requested frequency applying calibration offset,
@@ -693,7 +644,7 @@ double true_freq(uint64_t freq_hz){
 // All this really works correctly only with a gpsdo
 // Remember, airspy firmware always adds 5 MHz to frequency we give it.
 
-double set_correct_freq(struct sdrstate *sdr,double freq){
+double set_correct_freq(struct sdrstate *sdr,double const freq){
   int64_t const intfreq = round(freq / (1 + sdr->calibration));
   int ret __attribute__((unused)) = AIRSPYHF_SUCCESS; // Won't be used when asserts are disabled
   ret = airspyhf_set_freq(sdr->device,intfreq);

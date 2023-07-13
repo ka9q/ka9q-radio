@@ -182,7 +182,7 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
 }
 
 // Come back here after common stuff has been set up (filters, etc)
-int rx888_start(struct frontend *frontend){
+int rx888_startup(struct frontend *frontend){
   struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
   pthread_create(&sdr->cmd_thread,NULL,rx888_cmd,sdr); // Status server must be running
 

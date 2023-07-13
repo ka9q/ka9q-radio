@@ -89,12 +89,18 @@ static void *rtcp_send(void *);
 
 // In rx888.c
 int rx888_setup(struct frontend *,dictionary *,char const *);
-int rx888_start(struct frontend *);
+int rx888_startup(struct frontend *);
 
 // In airspy.c
 int airspy_setup(struct frontend *,dictionary *,char const *);
-int airspy_start(struct frontend *);
+int airspy_startup(struct frontend *);
 double airspy_tune(struct frontend *,double);
+
+// In airspyhf.c
+int airspyhf_setup(struct frontend *,dictionary *,char const *);
+int airspyhf_startup(struct frontend *);
+double airspyhf_tune(struct frontend *,double);
+
 
 // The main program sets up the demodulator parameter defaults,
 // overwrites them with command-line arguments and/or state file settings,
@@ -342,27 +348,34 @@ static int loadconfig(char const * const file){
   }
   {
     char const * const status = config_getstring(Configtable,global,"status",NULL); // Status/command thread for all demodulators
-    if(status != NULL){
-      // Target for status/control stream. Optional.
-      strlcpy(Metadata_dest_string,status,sizeof(Metadata_dest_string));
+    if(status == NULL){
+      fprintf(stdout,"status= missing in [global], e.g, status=hf.local\n");
+      exit(1);
+    }
+    // Target for status/control stream. Optional.
+    strlcpy(Metadata_dest_string,status,sizeof(Metadata_dest_string));
+    if(input != NULL && strlen(input) > 0){
       char description[1024];
+      description[0] = '\0';
       snprintf(description,sizeof(description),"input=%s",input);
       avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),description);
-      char iface[IFNAMSIZ];
-      resolve_mcast(Metadata_dest_string,&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
-      if(strlen(iface) == 0 && Iface != NULL)
-        strlcpy(iface,Iface,sizeof(iface));
-      Status_fd = connect_mcast(&Metadata_dest_address,iface,Mcast_ttl,IP_tos);
-      if(Status_fd < 3){
-	fprintf(stdout,"Can't send status to %s\n",Metadata_dest_string);
-      } else {
-	socklen_t len = sizeof(Metadata_source_address);
-	getsockname(Status_fd,(struct sockaddr *)&Metadata_source_address,&len);  
-	// Same remote socket as status
-	Ctl_fd = setup_mcast(NULL,(struct sockaddr *)&Metadata_dest_address,0,Mcast_ttl,IP_tos,2);
-	if(Ctl_fd < 3)
-	  fprintf(stdout,"can't listen for commands from %s\n",Metadata_dest_string);
-      }
+    } else {
+      avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),NULL);
+    }
+    char iface[IFNAMSIZ];
+    resolve_mcast(Metadata_dest_string,&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
+    if(strlen(iface) == 0 && Iface != NULL)
+      strlcpy(iface,Iface,sizeof(iface));
+    Status_fd = connect_mcast(&Metadata_dest_address,iface,Mcast_ttl,IP_tos);
+    if(Status_fd < 3){
+      fprintf(stdout,"Can't send status to %s\n",Metadata_dest_string);
+    } else {
+      socklen_t len = sizeof(Metadata_source_address);
+      getsockname(Status_fd,(struct sockaddr *)&Metadata_source_address,&len);  
+      // Same remote socket as status
+      Ctl_fd = setup_mcast(NULL,(struct sockaddr *)&Metadata_dest_address,0,Mcast_ttl,IP_tos,2);
+      if(Ctl_fd < 3)
+	fprintf(stdout,"can't listen for commands from %s\n",Metadata_dest_string);
     }
   }
   // Process individual demodulator sections
@@ -547,12 +560,16 @@ static int setup_hardware(char const *sname){
   // This should go into a table somewhere
   if(strcasecmp(device,"rx888") == 0){
     Frontend.sdr.setup = rx888_setup;
-    Frontend.sdr.start = rx888_start;
+    Frontend.sdr.start = rx888_startup;
     Frontend.sdr.tune = NULL; // Only direct sampling for now
   } else if(strcasecmp(device,"airspy") == 0){
     Frontend.sdr.setup = airspy_setup;
-    Frontend.sdr.start = airspy_start;
+    Frontend.sdr.start = airspy_startup;
     Frontend.sdr.tune = airspy_tune;
+  } else if(strcasecmp(device,"airspyhf") == 0){
+    Frontend.sdr.setup = airspyhf_setup;
+    Frontend.sdr.start = airspyhf_startup;
+    Frontend.sdr.tune = airspyhf_tune;
   } else
     return -1;
 
@@ -612,8 +629,6 @@ static int setup_hardware(char const *sname){
   pthread_create(&Frontend.status_thread,NULL,sdr_status,&Frontend);
   if(Frontend.sdr.start)
     return (*Frontend.sdr.start)(&Frontend);
-  if(strcasecmp(device,"rx888") == 0)
-    return rx888_start(&Frontend);
   else
     return -1;
 }

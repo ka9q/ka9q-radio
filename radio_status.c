@@ -464,6 +464,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_int32(&bp,OUTPUT_SAMPRATE,demod->output.samprate); // Hz
     encode_int64(&bp,OUTPUT_DATA_PACKETS,demod->output.rtp.packets);
     encode_float(&bp,KAISER_BETA,demod->filter.kaiser_beta); // Dimensionless
+
     encode_float(&bp,BASEBAND_POWER,power2dB(demod->sig.bb_power)); // power -> dB
     encode_float(&bp,OUTPUT_LEVEL,power2dB(demod->output.level)); // power ratio -> dB
     encode_int64(&bp,OUTPUT_SAMPLES,demod->output.samples);

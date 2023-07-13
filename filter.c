@@ -900,16 +900,16 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 }
 
 int write_cfilter(struct filter_in *f, complex float const *buffer,int size){
-  if(sizeof(*buffer) * (size + f->wcnt) >= f->input_buffer_size)
+  if(sizeof(*buffer) * (f->wcnt + size) >= f->input_buffer_size)
     return -1;
 
   assert((void *)(f->input_write_pointer.c) >= f->input_buffer);
   assert((void *)(f->input_write_pointer.c) < f->input_buffer + f->input_buffer_size);
 
   if(buffer != NULL)
-    memcpy(f->input_write_pointer.c,buffer,size * sizeof(*buffer));
+    memcpy(f->input_write_pointer.c, buffer, size * sizeof(*buffer));
   f->input_write_pointer.c += size;
-  mirror_wrap((void *)&f->input_write_pointer.c,f->input_buffer,f->input_buffer_size);
+  mirror_wrap((void *)&f->input_write_pointer.c, f->input_buffer, f->input_buffer_size);
   f->wcnt += size;
   while(f->wcnt >= f->ilen){
     f->wcnt -= f->ilen;
@@ -926,9 +926,9 @@ int write_rfilter(struct filter_in *f, float const *buffer,int size){
   assert((void *)(f->input_write_pointer.r) < f->input_buffer + f->input_buffer_size);
 
   if(buffer != NULL)
-    memcpy(f->input_write_pointer.r,buffer,size * sizeof(*buffer));
+    memcpy(f->input_write_pointer.r, buffer, size * sizeof(*buffer));
   f->input_write_pointer.r += size;
-  mirror_wrap((void *)&f->input_write_pointer.r,f->input_buffer,f->input_buffer_size);
+  mirror_wrap((void *)&f->input_write_pointer.r, f->input_buffer, f->input_buffer_size);
   f->wcnt += size;
   while(f->wcnt >= f->ilen){
     f->wcnt -= f->ilen;
