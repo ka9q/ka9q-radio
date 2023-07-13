@@ -112,8 +112,8 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
     fprintf(stdout,"Invalid queue depth %d\n",queuedepth);
     return -1;
   }
-  // Packets per transfer request, default 16
-  int const reqsize = config_getint(Dictionary,section,"reqsize",16);
+  // Packets per transfer request, default 32
+  int const reqsize = config_getint(Dictionary,section,"reqsize",32);
   if(reqsize < 1 || reqsize > 64) {
     fprintf(stdout,"Invalid request size %d\n",reqsize);
     return -1;
