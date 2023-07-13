@@ -1,14 +1,14 @@
 # $Id: Makefile.linux,v 1.114 2022/12/31 05:15:09 karn Exp $
 
 # for production
-#DOPTS = -DNDEBUG=1 -O3
+# DOPTS = -DNDEBUG=1 -O3
 # for debugging
 DOPTS=-g
 
 COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
 
 # Get local versions (e.g., of librtlsdr)
-$LDOPTS=-L/usr/local/lib
+# LDOPTS=-L/usr/local/lib
 LDOPTS=-g -L/usr/local/lib
 
 CFLAGS=$(DOPTS) $(COPTS) $(INCLUDES)
