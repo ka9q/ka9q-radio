@@ -112,7 +112,7 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
     if(*socksize >= sizeof(struct sockaddr_in)){
       struct sockaddr_in *sin = sock;
       sin->sin_family = AF_INET;
-      sin->sin_addr.s_addr = htonl(userdata->address);
+      sin->sin_addr.s_addr = userdata->address;
       sin->sin_port = htons(service_port);
       *socksize = sizeof(struct sockaddr_in);
     } else
