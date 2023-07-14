@@ -2,14 +2,13 @@
 
 # for production
 DOPTS = -DNDEBUG=1 -O3
+LDOPTS=-L/usr/local/lib
+
 # for debugging
-#DOPTS=-g
+#LDOPTS=-g
+#LDOPTS=-g -L/usr/local/lib
 
 COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
-
-# Get local versions (e.g., of librtlsdr)
-LDOPTS=-L/usr/local/lib
-#LDOPTS=-g -L/usr/local/lib
 
 CFLAGS=$(DOPTS) $(COPTS) $(INCLUDES)
 BINDIR=/usr/local/bin
@@ -35,7 +34,7 @@ CONF_FILES=funcubed.conf \
 			 stereod.conf rdsd.conf \
 			 radiod@10m.conf radiod@6m.conf radiod@fm.conf radiod@2m.conf radiod@125cm.conf radiod@70cm.conf \
 			 radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf \
-			 radiod@repeater.conf  radiod@kfs.conf radiod@rx888.conf \
+			 radiod@repeater.conf  radiod@kfs.conf radiod@rx888-generic.conf radiod@rx888-ka9q.conf \
 			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
 			 wspr-decoded.conf horus.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
 			 radiod@airspyhf.conf radiod@airspy.conf
