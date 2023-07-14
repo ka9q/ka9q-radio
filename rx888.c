@@ -169,7 +169,7 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
   }
   frontend->sdr.gain = dB2voltage(frontend->sdr.rf_gain + frontend->sdr.rf_atten);
   {
-    char const *p = config_getstring(Dictionary,section,"description",NULL);
+    char const *p = config_getstring(Dictionary,section,"description","rx888");
     if(p != NULL){
       strlcpy(frontend->sdr.description,p,sizeof(frontend->sdr.description));
       fprintf(stdout,"%s: ",frontend->sdr.description);

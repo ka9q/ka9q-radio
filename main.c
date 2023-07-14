@@ -171,17 +171,7 @@ int main(int argc,char *argv[]){
   configfile = argv[optind];
   if(Name == NULL){
     // Extract name from config file pathname
-    char const *cp1 = strrchr(argv[optind],'@');
-    char const *cp2 = strrchr(argv[optind],'.');
-    if(cp1 == NULL || cp2 == NULL || cp2 < cp1){
-      Name = argv[optind]; // Ah, just use whole thing
-    } else {
-      cp1++;
-      int const len = cp2 - cp1 + 1;
-      char * const foo = calloc(1,len);
-      strlcpy(foo,cp1,len);
-      Name = foo;
-    }
+    Name = argv[optind]; // Ah, just use whole thing
   }
   fprintf(stdout,"Loading config file %s...\n",configfile);
   fflush(stdout);
