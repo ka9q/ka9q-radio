@@ -22,8 +22,6 @@
 extern int Status_ttl;
 
 // Global variables set by config file options
-extern char const *Iface;
-extern int IP_tos;
 extern int Verbose;
 extern int Overlap;
 extern const char *App_path;
@@ -84,11 +82,6 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     if(strcasecmp(device,"airspy") != 0)
       return -1; // Not for us
   }
-  {
-    char const *p = config_getstring(Dictionary,section,"status","airspy-status.local");
-    strlcpy(frontend->input.metadata_dest_string,p,sizeof(frontend->input.metadata_dest_string));
-  }
-  Status_ttl = config_getint(Dictionary,section,"ttl",Status_ttl);
   {
     int ret;
     if((ret = airspy_init()) != AIRSPY_SUCCESS){

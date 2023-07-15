@@ -17,12 +17,7 @@
 #include "radio.h"
 #include "config.h"
 
-extern int Status_ttl;
-
 // Global variables set by config file options
-extern char Metadata_dest_string[];
-extern char const *Iface;
-extern int IP_tos;
 extern int Verbose;
 extern int Overlap;
 extern const char *App_path;
@@ -60,20 +55,6 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     if(strcasecmp(device,"airspyhf") != 0)
       return -1; // Not for us
   }
-  {
-    char const *p = config_getstring(Dictionary,section,"status",NULL);
-    if(p != NULL)
-      strlcpy(frontend->input.metadata_dest_string,p,sizeof(frontend->input.metadata_dest_string));
-    else {
-      // Default to "fe-" followed by receiver metadata target, e.g., "fe-hf.local"
-      char *tmp = NULL;
-      int r = asprintf(&tmp,"fe-%s",Metadata_dest_string);
-      if(r != 0)
-	strlcpy(frontend->input.metadata_dest_string,tmp,sizeof(frontend->input.metadata_dest_string));
-      FREE(tmp);
-    }
-  }
-  Status_ttl = config_getint(Dictionary,section,"ttl",Status_ttl);
   {
     char const *sn = config_getstring(Dictionary,section,"serial",NULL);
     if(sn != NULL){

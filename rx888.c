@@ -22,13 +22,8 @@
 #include "rx888.h"
 #include "ezusb.h"
 
-// Global variables set here
 int Ezusb_verbose = 0; // Used by ezusb.c
-extern int Status_ttl;
-
 // Global variables set by config file options in main.c
-extern char const *Iface;
-extern int IP_tos;
 extern int Verbose;
 extern int Overlap; // Forward FFT overlap factor, samples
 extern volatile bool Stop_transfers; // Flag to stop receive thread upcalls
@@ -91,14 +86,8 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
     if(strcasecmp(device,"rx888") != 0)
       return -1; // Not for us
   }
-
   // Hardware-dependent setup
   sdr->interface_number = config_getint(Dictionary,section,"number",0);
-  {
-    char const *p = config_getstring(Dictionary,section,"status","rx888-status.local");
-    strlcpy(frontend->input.metadata_dest_string,p,sizeof(frontend->input.metadata_dest_string));
-  }
-  Status_ttl = config_getint(Dictionary,section,"ttl",Status_ttl);
 
   // Firmware file
   char const *firmware = config_getstring(Dictionary,section,"firmware","SDDC_FX3.img");

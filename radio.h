@@ -43,6 +43,7 @@ extern int Ndemod;
 struct frontend {
 
   // Stuff we maintain about our upstream source
+  // Eventually all this will go away when the multicast linking is removed
   struct {
     int data_fd;           // Socket for raw incoming I/Q data
     int ctl_fd;            // Socket for commands to front end
