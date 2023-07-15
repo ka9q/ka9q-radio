@@ -561,36 +561,8 @@ static int setup_hardware(char const *sname){
   if(r != 0)
     return r;
 
-  // Common to all devices
-  {
-    // Start Avahi client that will maintain our mDNS registrations
-    // Service name, if present, must be unique
-    // Description, if present becomes TXT record if present
-    int len = sizeof(Frontend.input.metadata_dest_address);
-    avahi_start(Frontend.sdr.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Frontend.input.metadata_dest_string,
-		ElfHashString(Frontend.input.metadata_dest_string),Frontend.sdr.description,&Frontend.input.metadata_dest_address,&len);
-
-    // Set up send socket on control channel, used by both rx888 daemon and radiod
-    Frontend.input.ctl_fd = connect_mcast(&Frontend.input.metadata_dest_address,Iface,Status_ttl,IP_tos); // note use of global default Iface
-    if(Frontend.input.ctl_fd <= 0){
-      fprintf(stdout,"Can't create multicast status socket to %s: %s\n",Frontend.input.metadata_dest_string,strerror(errno));
-      return -1;
-    }
-    // Set up new control socket on port 5006 - this one is for radiod
-    Frontend.input.status_fd = listen_mcast(&Frontend.input.metadata_dest_address,Iface); // Note use of global default Iface
-    if(Frontend.input.status_fd <= 0){
-      fprintf(stdout,"Can't create multicast command socket from %s: %s\n",Frontend.input.metadata_dest_string,strerror(errno));
-      return -1;
-    }
-    // Set up new control socket on port 5006 - this is for the front end control daemon, e.g., rx888
-    Frontend.input.fe_status_fd = listen_mcast(&Frontend.input.metadata_dest_address,Iface); // Note use of global default Iface
-    if(Frontend.input.fe_status_fd <= 0){
-      fprintf(stdout,"Can't create multicast command socket from %s: %s\n",Frontend.input.metadata_dest_string,strerror(errno));
-      return -1;
-    }
-  }
   // Create input filter now that we know the parameters
-  // FFT and filter sizes now computed from specified block duration and sample rate
+  // FFT and filter sizes computed from specified block duration and sample rate
   // L = input data block size
   // M = filter impulse response duration
   // N = FFT size = L + M - 1
