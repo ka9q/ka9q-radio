@@ -567,6 +567,7 @@ static int setup_hardware(char const *sname){
   // M = filter impulse response duration
   // N = FFT size = L + M - 1
   // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
+  assert(Frontend.sdr.samprate != 0);
   double const eL = Frontend.sdr.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
   Frontend.L = lround(eL);
   if(Frontend.L != eL)
@@ -574,6 +575,8 @@ static int setup_hardware(char const *sname){
 	    Blocktime,Frontend.sdr.samprate,eL-Frontend.L);
 
   Frontend.M = Frontend.L / (Overlap - 1) + 1;
+  assert(Frontend.M != 0);
+  assert(Frontend.L != 0);
   Frontend.in = create_filter_input(Frontend.L,Frontend.M, Frontend.sdr.isreal ? REAL : COMPLEX);
   if(Frontend.in == NULL){
     fprintf(stdout,"Input filter setup failed\n");
