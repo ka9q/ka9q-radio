@@ -27,7 +27,6 @@ extern int Verbose;
 extern int Overlap;
 extern const char *App_path;
 extern int Verbose;
-static int const Bufsize = 16384;
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
 struct sdrstate {
@@ -45,10 +44,7 @@ struct sdrstate {
 };
 
 static double set_correct_freq(struct sdrstate *sdr,double freq);
-static void decode_airspyhf_commands(struct sdrstate *,uint8_t *,int);
-static void send_airspyhf_status(struct sdrstate *,int);
 static int rx_callback(airspyhf_transfer_t *transfer);
-static void *airspyhf_cmd(void *);
 static void *airspyhf_monitor(void *p);
 static double true_freq(uint64_t freq);
 
@@ -159,6 +155,9 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     ret = airspyhf_set_samplerate(sdr->device,(uint32_t)frontend->sdr.samprate);
     assert(ret == AIRSPYHF_SUCCESS);
   }
+  frontend->sdr.min_IF = -0.43 * frontend->sdr.samprate;
+  frontend->sdr.max_IF = +0.43 * frontend->sdr.samprate;
+
   {
     int const hf_agc = config_getboolean(Dictionary,section,"hf-agc",false); // default off
     airspyhf_set_hf_agc(sdr->device,hf_agc);
@@ -221,7 +220,6 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
 }
 int airspyhf_startup(struct frontend *frontend){
   struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
-  pthread_create(&sdr->cmd_thread,NULL,airspyhf_cmd,sdr);
   pthread_create(&sdr->monitor_thread,NULL,airspyhf_monitor,sdr);
   return 0;
 }
@@ -235,7 +233,6 @@ static void *airspyhf_monitor(void *p){
   int ret __attribute__ ((unused));
   ret = airspyhf_start(sdr->device,rx_callback,sdr);
   assert(ret == AIRSPYHF_SUCCESS);
-  send_airspyhf_status(sdr,1); // Tell the world we're alive
   fprintf(stdout,"airspyhf running\n");
   // Periodically poll status to ensure device hasn't reset
   while(1){
@@ -246,123 +243,6 @@ static void *airspyhf_monitor(void *p){
   fprintf(stdout,"Device is no longer streaming, exiting\n");
   airspyhf_close(sdr->device);
   return NULL;
-}
-
-// Thread to send metadata and process commands
-void *airspyhf_cmd(void *arg){
-  // Send status, process commands
-  pthread_setname("airspyhf-cmd");
-  assert(arg != NULL);
-  struct sdrstate * const sdr = (struct sdrstate *)arg;
-  struct frontend *frontend = sdr->frontend;
-  
-  if(frontend->input.ctl_fd < 3 || frontend->input.fe_status_fd < 3) 
-    return NULL; // Nothing to do
-
-  while(1){
-    uint8_t buffer[Bufsize];
-    int const length = recv(frontend->input.fe_status_fd,buffer,sizeof(buffer),0);
-    if(length > 0){
-      // Parse entries
-      if(buffer[0] == 0)
-	continue;  // Ignore our own status messages
-
-      frontend->sdr.commands++;
-      decode_airspyhf_commands(sdr,buffer+1,length-1);
-      send_airspyhf_status(sdr,1);
-    }
-  }
-}
-
-static void decode_airspyhf_commands(struct sdrstate *sdr,uint8_t *buffer,int length){
-  struct frontend * const frontend = sdr->frontend;
-
-  uint8_t *cp = buffer;
-
-  while(cp - buffer < length){
-    int ret __attribute__((unused)); // Won't be used when asserts are disabled
-    enum status_type const type = *cp++; // increment cp to length field
-    
-    if(type == EOL)
-      break; // End of list
-    
-    unsigned int optlen = *cp++;
-    if(optlen & 0x80){
-      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
-      int length_of_length = optlen & 0x7f;
-      optlen = 0;
-      while(length_of_length > 0){
-	optlen <<= 8;
-	optlen |= *cp++;
-	length_of_length--;
-      }
-    }
-    if(cp - buffer + optlen >= length)
-      break; // Invalid length
-    
-    switch(type){
-    case EOL: // Shouldn't get here
-      break;
-    case COMMAND_TAG:
-      frontend->sdr.command_tag = decode_int(cp,optlen);
-      break;
-    case CALIBRATE:
-      frontend->sdr.calibrate = decode_double(cp,optlen);
-      break;
-    case RADIO_FREQUENCY:
-      if(!frontend->sdr.lock){
-	double const f = decode_double(cp,optlen);
-	set_correct_freq(sdr,f);
-      }
-      break;
-    default: // Ignore all others
-      break;
-    }
-    cp += optlen;
-  }    
-}  
-
-static void send_airspyhf_status(struct sdrstate *sdr,int full){
-  struct frontend * const frontend = sdr->frontend;
-
-  frontend->input.metadata_packets++;
-
-  uint8_t packet[2048],*bp;
-  bp = packet;
-  
-  *bp++ = 0;   // Command/response = response
-  
-  encode_int32(&bp,COMMAND_TAG,frontend->sdr.command_tag);
-  encode_int64(&bp,CMD_CNT,frontend->sdr.commands);
-  
-  frontend->sdr.timestamp = gps_time_ns();
-  encode_int64(&bp,GPS_TIME,frontend->sdr.timestamp);
-
-  if(frontend->sdr.description[0] != '\0')
-    encode_string(&bp,DESCRIPTION,frontend->sdr.description,strlen(frontend->sdr.description));
-
-  encode_int32(&bp,INPUT_SAMPRATE,frontend->sdr.samprate);
-  encode_int64(&bp,OUTPUT_METADATA_PACKETS,frontend->input.metadata_packets);
-
-  // Front end
-  encode_double(&bp,CALIBRATE,frontend->sdr.calibrate);
-
-  // Tuning
-  encode_double(&bp,RADIO_FREQUENCY,frontend->sdr.frequency);
-  encode_int32(&bp,LOCK,frontend->sdr.lock);
-
-  encode_byte(&bp,DEMOD_TYPE,0); // actually LINEAR_MODE
-  encode_int32(&bp,OUTPUT_SAMPRATE,frontend->sdr.samprate);
-  encode_int32(&bp,OUTPUT_CHANNELS,1);
-  encode_int32(&bp,DIRECT_CONVERSION,1);
-  // Receiver inverts spectrum, use lower side
-  encode_float(&bp,HIGH_EDGE,+0.43 * frontend->sdr.samprate); // empirical for airspyhf
-  encode_float(&bp,LOW_EDGE,-0.43 * frontend->sdr.samprate); // Should look at the actual filter curves
-
-  encode_eol(&bp);
-  int len = bp - packet;
-  assert(len < sizeof(packet));
-  send(frontend->input.ctl_fd,packet,len,0);
 }
 
 static bool Name_set = false;

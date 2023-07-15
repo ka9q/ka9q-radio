@@ -31,7 +31,6 @@ extern int Verbose;
 static bool Software_agc = true; // default
 static float Low_threshold;
 static float High_threshold;
-static int const Bufsize = 16384;
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
 struct sdrstate {
@@ -68,10 +67,7 @@ uint8_t airspy_sensitivity_lna_gains[GAIN_COUNT] = {   14, 14, 14, 14, 14, 14, 1
 
 
 static double set_correct_freq(struct sdrstate *sdr,double freq);
-static void decode_airspy_commands(struct sdrstate *,uint8_t *,int);
-static void send_airspy_status(struct sdrstate *,int);
 static int rx_callback(airspy_transfer *transfer);
-static void *airspy_cmd(void *);
 static void *airspy_monitor(void *p);
 static double true_freq(uint64_t freq);
 static void set_gain(struct sdrstate *sdr,int gainstep);
@@ -190,6 +186,9 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     assert(ret == AIRSPY_SUCCESS);
   }
   frontend->sdr.calibrate = 0;
+  frontend->sdr.max_IF = -600000;
+  frontend->sdr.min_IF = -0.47 * frontend->sdr.samprate;
+
   sdr->gainstep = -1; // Force update first time
 
   // Hardware device settings
@@ -289,7 +288,6 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 }
 int airspy_startup(struct frontend *frontend){
   struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
-  pthread_create(&sdr->cmd_thread,NULL,airspy_cmd,sdr);
   pthread_create(&sdr->monitor_thread,NULL,airspy_monitor,sdr);
   return 0;
 }
@@ -303,7 +301,6 @@ static void *airspy_monitor(void *p){
   int ret __attribute__ ((unused));
   ret = airspy_start_rx(sdr->device,rx_callback,sdr);
   assert(ret == AIRSPY_SUCCESS);
-  send_airspy_status(sdr,1); // Tell the world we're alive
   fprintf(stdout,"airspy running\n");
   // Periodically poll status to ensure device hasn't reset
   while(1){
@@ -317,147 +314,6 @@ static void *airspy_monitor(void *p){
   return NULL;
 }
 
-// Thread to send metadata and process commands
-void *airspy_cmd(void *arg){
-  // Send status, process commands
-  pthread_setname("airspy-cmd");
-  assert(arg != NULL);
-  struct sdrstate * const sdr = (struct sdrstate *)arg;
-  struct frontend *frontend = sdr->frontend;
-  
-  if(frontend->input.ctl_fd < 3 || frontend->input.fe_status_fd < 3) 
-    return NULL; // Nothing to do
-
-  while(1){
-    uint8_t buffer[Bufsize];
-    int const length = recv(frontend->input.fe_status_fd,buffer,sizeof(buffer),0);
-    if(length > 0){
-      // Parse entries
-      if(buffer[0] == 0)
-	continue;  // Ignore our own status messages
-
-      frontend->sdr.commands++;
-      decode_airspy_commands(sdr,buffer+1,length-1);
-      send_airspy_status(sdr,1);
-    }
-  }
-}
-
-static void decode_airspy_commands(struct sdrstate *sdr,uint8_t *buffer,int length){
-  struct frontend * const frontend = sdr->frontend;
-
-  uint8_t *cp = buffer;
-
-  while(cp - buffer < length){
-    int ret __attribute__((unused)); // Won't be used when asserts are disabled
-    enum status_type const type = *cp++; // increment cp to length field
-    
-    if(type == EOL)
-      break; // End of list
-    
-    unsigned int optlen = *cp++;
-    if(optlen & 0x80){
-      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
-      int length_of_length = optlen & 0x7f;
-      optlen = 0;
-      while(length_of_length > 0){
-	optlen <<= 8;
-	optlen |= *cp++;
-	length_of_length--;
-      }
-    }
-    if(cp - buffer + optlen >= length)
-      break; // Invalid length
-    
-    switch(type){
-    case EOL: // Shouldn't get here
-      break;
-    case COMMAND_TAG:
-      frontend->sdr.command_tag = decode_int(cp,optlen);
-      break;
-    case CALIBRATE:
-      frontend->sdr.calibrate = decode_double(cp,optlen);
-      break;
-    case RADIO_FREQUENCY:
-      if(!frontend->sdr.lock){
-	double const f = decode_double(cp,optlen);
-	set_correct_freq(sdr,f);
-      }
-      break;
-    case LNA_GAIN:
-      frontend->sdr.lna_gain = decode_int(cp,optlen);
-      airspy_set_lna_gain(sdr->device,frontend->sdr.lna_gain);
-      break;
-    case MIXER_GAIN:
-      frontend->sdr.mixer_gain = decode_int(cp,optlen);
-      airspy_set_mixer_gain(sdr->device,frontend->sdr.mixer_gain);
-      break;
-    case IF_GAIN:
-      frontend->sdr.if_gain = decode_int(cp,optlen);
-      airspy_set_vga_gain(sdr->device,frontend->sdr.if_gain);
-      break;
-    case GAINSTEP:
-      sdr->gainstep = decode_int(cp,optlen);
-      break;
-    default: // Ignore all others
-      break;
-    }
-    cp += optlen;
-  }    
-}  
-
-static void send_airspy_status(struct sdrstate *sdr,int full){
-  struct frontend * const frontend = sdr->frontend;
-
-  frontend->input.metadata_packets++;
-
-  uint8_t packet[2048],*bp;
-  bp = packet;
-  
-  *bp++ = 0;   // Command/response = response
-  
-  encode_int32(&bp,COMMAND_TAG,frontend->sdr.command_tag);
-  encode_int64(&bp,CMD_CNT,frontend->sdr.commands);
-  
-  frontend->sdr.timestamp = gps_time_ns();
-  encode_int64(&bp,GPS_TIME,frontend->sdr.timestamp);
-
-  if(frontend->sdr.description[0] != '\0')
-    encode_string(&bp,DESCRIPTION,frontend->sdr.description,strlen(frontend->sdr.description));
-
-  encode_int32(&bp,INPUT_SAMPRATE,frontend->sdr.samprate);
-  encode_int64(&bp,OUTPUT_METADATA_PACKETS,frontend->input.metadata_packets);
-
-  // Front end
-  encode_double(&bp,CALIBRATE,frontend->sdr.calibrate);
-  encode_byte(&bp,LNA_GAIN,frontend->sdr.lna_gain);
-  encode_byte(&bp,MIXER_GAIN,frontend->sdr.mixer_gain);
-  encode_byte(&bp,IF_GAIN,frontend->sdr.if_gain);
-  if(sdr->gainstep >= 0)
-    encode_byte(&bp,GAINSTEP,sdr->gainstep);
-  encode_double(&bp,GAIN,(double)(frontend->sdr.lna_gain + frontend->sdr.mixer_gain + frontend->sdr.if_gain));
-
-  // Tuning
-  encode_double(&bp,RADIO_FREQUENCY,frontend->sdr.frequency);
-  encode_int32(&bp,LOCK,frontend->sdr.lock);
-
-  encode_byte(&bp,DEMOD_TYPE,0); // actually LINEAR_MODE
-  encode_int32(&bp,OUTPUT_SAMPRATE,frontend->sdr.samprate);
-  encode_int32(&bp,OUTPUT_CHANNELS,1);
-  encode_int32(&bp,DIRECT_CONVERSION,1);
-  // Receiver inverts spectrum, use lower side
-  encode_float(&bp,HIGH_EDGE,-600000);
-  encode_float(&bp,LOW_EDGE,-0.47 * frontend->sdr.samprate); // Should look at the actual filter curves
-  encode_int32(&bp,OUTPUT_BITS_PER_SAMPLE,12); // Always
-
-  if(sdr->converter != 0)
-    encode_float(&bp,CONVERTER_OFFSET,sdr->converter);
-
-  encode_eol(&bp);
-  int len = bp - packet;
-  assert(len < sizeof(packet));
-  send(frontend->input.ctl_fd,packet,len,0);
-}
 
 static bool Name_set = false;
 // Callback called with incoming receiver data from A/D
@@ -628,7 +484,9 @@ static void set_gain(struct sdrstate *sdr,int gainstep){
       frontend->sdr.mixer_gain = airspy_sensitivity_mixer_gains[tab];
       frontend->sdr.lna_gain = airspy_sensitivity_lna_gains[tab];
     }
+#if 0
     send_airspy_status(sdr,1);
+#endif
     if(Verbose)
       printf("New gainstep %d: LNA = %d, mixer = %d, vga = %d\n",gainstep,
 	     frontend->sdr.lna_gain,frontend->sdr.mixer_gain,frontend->sdr.if_gain);

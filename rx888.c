@@ -24,7 +24,6 @@
 
 // Global variables set here
 int Ezusb_verbose = 0; // Used by ezusb.c
-static int const Bufsize = 16384; // Incoming commands
 extern int Status_ttl;
 
 // Global variables set by config file options in main.c
@@ -65,10 +64,7 @@ struct sdrstate {
   pthread_t proc_thread;  
 };
 
-static void decode_rx888_commands(struct sdrstate *,uint8_t const *,int);
-static void send_rx888_status(struct sdrstate const *);
 static void rx_callback(struct libusb_transfer *transfer);
-static void *rx888_cmd(void *);
 static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize);
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
 static void rx888_set_att(struct sdrstate *sdr,float att);
@@ -164,6 +160,8 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
     }
     rx888_set_samprate(sdr,samprate);
     frontend->sdr.samprate = samprate;
+    frontend->sdr.min_IF = 0;
+    frontend->sdr.max_IF = 0.47 * frontend->sdr.samprate; // Just an estimate - get the real number somewhere
     frontend->sdr.isreal = true; // Make sure the right kind of filter gets created!
     frontend->sdr.calibrate = config_getdouble(Dictionary,section,"calibrate",0);
   }
@@ -185,7 +183,6 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
 // Come back here after common stuff has been set up (filters, etc)
 int rx888_startup(struct frontend *frontend){
   struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
-  pthread_create(&sdr->cmd_thread,NULL,rx888_cmd,sdr); // Status server must be running
 
   // Start processing A/D data
   pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
@@ -213,130 +210,6 @@ static void *proc_rx888(void *arg){
   rx888_close(sdr);
   fprintf(stdout,"rx888 is done streaming, proc_rx888 thread exiting\n");
   return NULL;
-}
-
-// Thread to send metadata and process commands
-static void *rx888_cmd(void *arg){
-  // Send status, process commands
-  pthread_setname("rx888_cmd");
-  assert(arg != NULL);
-  struct sdrstate * const sdr = (struct sdrstate *)arg;
-  struct frontend *frontend = sdr->frontend;
-
-  if(frontend->input.ctl_fd == -1 || frontend->input.status_fd == -1)
-    return NULL; // Nothing to do
-
-  send_rx888_status(sdr); // Tell the world we're alive
-  while(1){
-    uint8_t buffer[Bufsize];
-    int const length = recv(frontend->input.fe_status_fd,buffer,sizeof(buffer),0);
-    if(length > 0){
-      // Parse entries
-      if(buffer[0] == 0)
-	continue;  // Ignore our own status messages
-
-      frontend->sdr.commands++;
-      decode_rx888_commands(sdr,buffer+1,length-1);
-      send_rx888_status(sdr);
-    }
-  }
-  return NULL;
-}
-
-static void decode_rx888_commands(struct sdrstate *sdr,uint8_t const *buffer,int length){
-  assert(sdr != NULL);
-  struct frontend *frontend = sdr->frontend;
-  uint8_t const *cp = buffer;
-
-  while(cp - buffer < length){
-    int ret __attribute__((unused)); // Won't be used when asserts are disabled
-    enum status_type const type = *cp++; // increment cp to length field
-
-    if(type == EOL)
-      break; // End of list
-
-    unsigned int optlen = *cp++;
-    if(optlen & 0x80){
-      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
-      int length_of_length = optlen & 0x7f;
-      optlen = 0;
-      while(length_of_length > 0){
-	optlen <<= 8;
-	optlen |= *cp++;
-	length_of_length--;
-      }
-    }
-    if(cp - buffer + optlen >= length)
-      break; // Invalid length
-
-    switch(type){
-    case EOL: // Shouldn't get here
-      break;
-    case COMMAND_TAG:
-      frontend->sdr.command_tag = decode_int(cp,optlen);
-      break;
-    case RF_GAIN:
-      {
-	float gain = decode_float(cp,optlen);
-	rx888_set_gain(sdr,gain);
-      }
-      break;
-    case RF_ATTEN:
-      {
-	float a = decode_float(cp,optlen);
-	rx888_set_att(sdr,a);
-      }
-      break;
-    default: // Ignore all others
-      break;
-    }
-    cp += optlen;
-  }
-}
-
-static void send_rx888_status(struct sdrstate const *sdr){
-  assert(sdr != NULL);
-  struct frontend *frontend = sdr->frontend;
-
-  frontend->input.metadata_packets++;
-
-  uint8_t packet[2048],*bp;
-  bp = packet;
-
-  *bp++ = 0;   // Command/response = response
-
-  encode_int32(&bp,COMMAND_TAG,frontend->sdr.command_tag);
-  encode_int64(&bp,CMD_CNT,frontend->sdr.commands);
-
-  frontend->sdr.timestamp = gps_time_ns();
-  encode_int64(&bp,GPS_TIME,frontend->sdr.timestamp);
-
-  if(strlen(frontend->sdr.description) > 0)
-    encode_string(&bp,DESCRIPTION,frontend->sdr.description,strlen(frontend->sdr.description));
-
-  // Where we're sending output
-  encode_int32(&bp,INPUT_SAMPRATE,frontend->sdr.samprate);
-  encode_int64(&bp,OUTPUT_METADATA_PACKETS,frontend->input.metadata_packets);
-
-  // Front end
-  encode_float(&bp,RF_ATTEN,frontend->sdr.rf_atten);
-  encode_float(&bp,RF_GAIN,frontend->sdr.rf_gain);
-
-  // Tuning
-  encode_double(&bp,RADIO_FREQUENCY,0);
-
-  encode_byte(&bp,DEMOD_TYPE,0); // actually LINEAR_MODE
-  encode_int32(&bp,OUTPUT_SAMPRATE,frontend->sdr.samprate);
-  encode_int32(&bp,OUTPUT_CHANNELS,1);
-  encode_int32(&bp,DIRECT_CONVERSION,1);
-  encode_float(&bp,LOW_EDGE,0);
-  encode_float(&bp,HIGH_EDGE,0.47 * frontend->sdr.samprate); // Should look at the actual filter curves
-  encode_int32(&bp,OUTPUT_BITS_PER_SAMPLE,16); // Always
-
-  encode_eol(&bp);
-  int const len = bp - packet;
-  assert(len < sizeof(packet));
-  send(frontend->input.ctl_fd,packet,len,0);
 }
 
 // Callback called with incoming receiver data from A/D
