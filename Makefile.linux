@@ -19,7 +19,7 @@ LDLIBS=-lpthread -lbsd -lm
 
 DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod stereod rdsd rtlsdrd
 
-EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded
+EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded wd-record
 
 AFILES=bandplan.txt help.txt modes.conf id.txt monitor-help.txt SDDC_FX3.img
 
@@ -196,6 +196,10 @@ wspr-decoded: wspr-decoded.o libradio.a
 
 ft8-decoded: ft8-decoded.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
+
+wd-record: wd-record.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+
 
 # Binary libraries
 libfcd.a: fcd.o hid-libusb.o
