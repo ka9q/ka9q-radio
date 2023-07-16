@@ -2,32 +2,9 @@
 // July 2023 KA9Q
 #define _GNU_SOURCE 1
 
-#include <assert.h>
-#include <limits.h>
 #include <pthread.h>
-#include <string.h>
-#include <math.h>
-#include <complex.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <stdarg.h>
 #include <portaudio.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <net/if.h>
-#include <signal.h>
-#include <locale.h>
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/stat.h>
-#include <syslog.h>
 #include <errno.h>
-#include <getopt.h>
 #include <iniparser/iniparser.h>
 #if defined(linux)
 #include <bsd/string.h>
@@ -36,8 +13,6 @@
 #include "conf.h"
 #include "fcd.h"
 #include "misc.h"
-#include "status.h"
-#include "multicast.h"
 #include "config.h"
 #include "radio.h"
 
@@ -56,6 +31,7 @@ struct sdrstate {
   float imbalance;       // Ratio of I power to Q power
   double calibration;    // TCXO Offset (0 = on frequency)
 
+  uint8_t bias_tee;
   bool agc;             // enable/disable agc
 
   // portaudio parameters
@@ -86,14 +62,11 @@ static float const UpperEdge = +75000;
 static int Blocksize = 3840;
 static bool Hold_open = false;
 
-// Global variables
-
 static void do_fcd_agc(struct sdrstate *);
 static double fcd_actual(unsigned int);
 
 int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const *section){
   assert(dictionary != NULL);
-
   {
     char const *device = config_getstring(dictionary,section,"device",NULL);
     if(strcasecmp(device,"funcube") != 0)
@@ -106,18 +79,16 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
 
   sdr->number = config_getint(dictionary,section,"number",0);
   frontend->sdr.samprate = ADC_samprate;
-  frontend->sdr.isreal = false;
+  frontend->sdr.isreal = false; // Complex sample stream
   frontend->sdr.min_IF = LowerEdge;
   frontend->sdr.max_IF = UpperEdge;
   frontend->sdr.calibrate = config_getdouble(dictionary,section,"calibrate",0);
-
   {
     char const *description = config_getstring(dictionary,section,"description","funcube dongle+");
     strlcpy(frontend->sdr.description,description,sizeof(frontend->sdr.description));
   }
-  fprintf(stdout,"Samprate %'d\n",frontend->sdr.samprate);
-  uint8_t bias = config_getboolean(dictionary,section,"bias",false);
-  fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_BIAS_TEE,&bias,sizeof(bias));
+  sdr->bias_tee = config_getboolean(dictionary,section,"bias",false);
+  fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_BIAS_TEE,&sdr->bias_tee,sizeof(sdr->bias_tee));
   if((sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
     fprintf(stdout,"fcdOpen(%s): %s\n",sdr->sdr_name,strerror(errno));
     return -1;
@@ -171,8 +142,6 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
     fprintf(sdr->tunestate,"%d\n",intfreq);
     fflush(sdr->tunestate); // Leave open for further use
   }
-
-  
   // Set up sample stream through portaudio subsystem
   // Search audio devices
   Pa_Initialize();
@@ -208,6 +177,9 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
   r = Pa_StartStream(sdr->Pa_Stream);
   if(r < 0)
     fprintf(stdout,"Pa_StartStream error: %s\n",Pa_GetErrorText(r));
+
+  fprintf(stdout,"Funcube %d: software AGC %d, samprate %'d, freq %.3f Hz, bias %d, lna_gain %d, mixer gain %d, if_gain %d\n",
+	  sdr->number, sdr->agc, frontend->sdr.samprate, frontend->sdr.frequency, sdr->bias_tee, frontend->sdr.lna_gain, frontend->sdr.mixer_gain, frontend->sdr.if_gain);
 
  done:; // Also the abort target: close handle before returning
   if(!Hold_open && sdr->phd != NULL){
@@ -270,7 +242,7 @@ void *proc_funcube(void *arg){
     complex float samp_sum = 0;
     float dotprod = 0;
     
-    float * const wptr = frontend->in->input_write_pointer.r;
+    complex float * const wptr = frontend->in->input_write_pointer.c;
 
     for(int i=0; i<2*Blocksize; i += 2){
       complex float samp = CMPLXF(sampbuf[i],sampbuf[i+1]) * SCALE16;
@@ -296,6 +268,12 @@ void *proc_funcube(void *arg){
       *wptr = samp;
     }
 
+    frontend->input.samples += Blocksize;
+    write_cfilter(frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
+    frontend->input.samples += Blocksize;
+    float const block_energy = i_energy + q_energy; // Normalize for complex pairs
+    frontend->sdr.output_level = block_energy/Blocksize; // Average A/D output power per channel  
+
 #if 1
     // Get status timestamp from UNIX TOD clock -- but this might skew because of inexact sample rate
     frontend->sdr.timestamp = gps_time_ns();
@@ -308,9 +286,7 @@ void *proc_funcube(void *arg){
     // Update every block
     // estimates of DC offset, signal powers and phase error
     sdr->DC += DC_alpha * (samp_sum - Blocksize*sdr->DC);
-    float const block_energy = i_energy + q_energy; // Normalize for complex pairs
     if(block_energy > 0){ // Avoid divisions by 0, etc
-      frontend->sdr.output_level = block_energy/Blocksize; // Average A/D output power per channel  
       sdr->imbalance += rate_factor * ((i_energy / q_energy) - sdr->imbalance);
       float const dpn = 2 * dotprod / block_energy;
       sdr->sinphi += rate_factor * (dpn - sdr->sinphi);
