@@ -425,8 +425,11 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   if(strlen(frontend->sdr.description) > 0)
     encode_string(&bp,DESCRIPTION,frontend->sdr.description,strlen(frontend->sdr.description));
   
-  // Echo timestamp from source
-  encode_int64(&bp,GPS_TIME,frontend->sdr.timestamp); // integer
+  // Echo timestamp from source or locally (bit of a kludge, eventually will always be local)
+  if(frontend->sdr.timestamp != 0)
+    encode_int64(&bp,GPS_TIME,frontend->sdr.timestamp);
+  else
+    encode_int64(&bp,GPS_TIME,gps_time_ns());
   // Who's sending us I/Q data
   encode_socket(&bp,INPUT_DATA_SOURCE_SOCKET,&frontend->input.data_source_address);
   // Destination address for I/Q data
