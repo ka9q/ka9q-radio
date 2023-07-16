@@ -555,17 +555,19 @@ int main(int argc,char *argv[]){
 
 	// Listen directly to the front end once we know its multicast group
 	if(!FE_address_set){
-	  FE_address_set = true;
-	  if(Frontend.input.status_fd >= 0){
-	    close(Frontend.input.status_fd);
-	    Frontend.input.status_fd = -1;
+	  if(Frontend.input.metadata_dest_address.ss_family != 0){
+	    FE_address_set = true;
+	    if(Frontend.input.status_fd >= 0){
+	      close(Frontend.input.status_fd);
+	      Frontend.input.status_fd = -1;
+	    }
+	    if(Frontend.input.ctl_fd >= 0){
+	      close(Frontend.input.ctl_fd);
+	      Frontend.input.ctl_fd = -1;
+	    }
+	    Frontend.input.status_fd = listen_mcast(&Frontend.input.metadata_dest_address,Iface);
+	    Frontend.input.ctl_fd = connect_mcast(&Frontend.input.metadata_dest_address,Iface,Mcast_ttl,IP_tos);
 	  }
-	  if(Frontend.input.ctl_fd >= 0){
-	    close(Frontend.input.ctl_fd);
-	    Frontend.input.ctl_fd = -1;
-	  }
-	  Frontend.input.status_fd = listen_mcast(&Frontend.input.metadata_dest_address,Iface);
-	  Frontend.input.ctl_fd = connect_mcast(&Frontend.input.metadata_dest_address,Iface,Mcast_ttl,IP_tos);
 	}
       }
     }
@@ -1506,16 +1508,16 @@ void display_fe(WINDOW *w,struct demod const *demod){
   char tbuf[100];
   mvwaddstr(w,row++,col,format_gpstime(tbuf,sizeof(tbuf),Frontend.sdr.timestamp));
 
-  mvwaddstr(w,row++,col,formatsock(&Frontend.input.metadata_source_address));
-  mvwaddstr(w,row++,col,formatsock(&Frontend.input.metadata_dest_address));
+  if(Frontend.input.metadata_dest_address.ss_family != 0){
+    mvwaddstr(w,row++,col,formatsock(&Frontend.input.metadata_source_address));
+    mvwaddstr(w,row++,col,formatsock(&Frontend.input.metadata_dest_address));
   
-  pprintw(w,row++,col,"stat pkts","%'llu",Frontend.input.metadata_packets);
-  pprintw(w,row++,col,"ctl pkts","%'llu",Frontend.sdr.commands);
+    pprintw(w,row++,col,"stat pkts","%'llu",Frontend.input.metadata_packets);
+    pprintw(w,row++,col,"ctl pkts","%'llu",Frontend.sdr.commands);
 
-  mvwhline(w,row,0,0,1000);
-  mvwaddstr(w,row++,1,"Front end data");  
+    mvwhline(w,row,0,0,1000);
+    mvwaddstr(w,row++,1,"Front end data");  
 
-  if(Frontend.input.data_source_address.ss_family != 0){
     mvwaddstr(w,row++,col,formatsock(&Frontend.input.data_source_address));
     mvwaddstr(w,row++,col,formatsock(&Frontend.input.data_dest_address));
     pprintw(w,row++,col,"ssrc","%'u",Frontend.input.rtp.ssrc);
