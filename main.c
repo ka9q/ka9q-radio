@@ -101,6 +101,12 @@ int airspyhf_setup(struct frontend *,dictionary *,char const *);
 int airspyhf_startup(struct frontend *);
 double airspyhf_tune(struct frontend *,double);
 
+// In funcube.c
+int funcube_setup(struct frontend *,dictionary *,char const *);
+int funcube_startup(struct frontend *);
+double funcube_tune(struct frontend *,double);
+
+
 
 // The main program sets up the demodulator parameter defaults,
 // overwrites them with command-line arguments and/or state file settings,
@@ -554,6 +560,10 @@ static int setup_hardware(char const *sname){
     Frontend.sdr.setup = airspyhf_setup;
     Frontend.sdr.start = airspyhf_startup;
     Frontend.sdr.tune = airspyhf_tune;
+  } else if(strcasecmp(device,"funcube") == 0){
+    Frontend.sdr.setup = funcube_setup;
+    Frontend.sdr.start = funcube_startup;
+    Frontend.sdr.tune = airspy_tune;
   } else
     return -1;
 
