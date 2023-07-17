@@ -17,28 +17,28 @@ DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
-DAEMONS=aprs aprsfeed cwd funcubed opusd packetd radiod stereod rdsd rtlsdrd
+DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd rtlsdrd
 
 EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded wd-record
 
 AFILES=bandplan.txt help.txt modes.conf id.txt monitor-help.txt SDDC_FX3.img
 
-SYSTEMD_FILES=cwd.service funcubed@.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service
+SYSTEMD_FILES=cwd.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service
 
 UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules 99-rx888.rules
 
-CONF_FILES=funcubed.conf \
-			 opusd@hf.conf opusd@hfdl.conf opusd@fm.conf opusd@aviation.conf opusd@packet.conf \
+CONF_FILES=		 opusd@hf.conf opusd@hfdl.conf opusd@fm.conf opusd@aviation.conf opusd@packet.conf \
 			 opusd@kpbs.conf opusd@ksds.conf \
 			 opusd@cb-am.conf opusd@cb-lsb.conf opusd@cb-usb.conf \
 			 stereod.conf rdsd.conf \
-			 radiod@10m.conf radiod@6m.conf radiod@fm.conf radiod@2m.conf radiod@125cm.conf radiod@70cm.conf \
-			 radiod@hf.conf radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf \
-			 radiod@repeater.conf  radiod@kfs.conf radiod@rx888-generic.conf radiod@rx888-ka9q.conf \
-			 radiod@funcube.conf \
+			 radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf \
+			 radiod@repeater.conf \
 			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
 			 wspr-decoded.conf horus.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
-			 radiod@airspyhf.conf radiod@airspy.conf
+			 radiod@rx888-generic.conf radiod@airspyhf-generic.conf radiod@airspy-generic.conf radiod@funcube-generic.conf \
+			 radiod@rx888-ka9q.conf radiod@kfs.conf radiod@airspyhf-ka9q.conf radiod@airspy-ka9q-2m.conf radiod@airspy-ka9q-125cm.conf \
+			 radiod@airspy-ka9q-70cm.conf
+
 
 LOGROTATE_FILES = aprsfeed.rotate
 
