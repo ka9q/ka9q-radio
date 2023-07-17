@@ -59,7 +59,7 @@ static float const UpperEdge = +75000;
 // frames that match the Opus codec: 2.5, 5, 10, 20, 40, 60, 180, 100, 120 ms
 // So to minimize latency, make this a common denominator:
 // 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
-static int Blocksize = 3840;
+static int Blocksize;
 static bool Hold_open = false;
 
 static void do_fcd_agc(struct sdrstate *);
@@ -79,6 +79,11 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
 
   sdr->number = config_getint(dictionary,section,"number",0);
   frontend->sdr.samprate = ADC_samprate;
+  {
+    double const eL = frontend->sdr.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
+    Blocksize = lround(eL);
+  }
+
   frontend->sdr.isreal = false; // Complex sample stream
   frontend->sdr.min_IF = LowerEdge;
   frontend->sdr.max_IF = UpperEdge;
@@ -87,12 +92,12 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
     char const *description = config_getstring(dictionary,section,"description","funcube dongle+");
     strlcpy(frontend->sdr.description,description,sizeof(frontend->sdr.description));
   }
-  sdr->bias_tee = config_getboolean(dictionary,section,"bias",false);
-  fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_BIAS_TEE,&sdr->bias_tee,sizeof(sdr->bias_tee));
   if((sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
-    fprintf(stdout,"fcdOpen(%s): %s\n",sdr->sdr_name,strerror(errno));
+    fprintf(stdout,"fcdOpen(%d): %s\n",sdr->number,strerror(errno));
     return -1;
   }
+  sdr->bias_tee = config_getboolean(dictionary,section,"bias",false);
+  fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_BIAS_TEE,&sdr->bias_tee,sizeof(sdr->bias_tee));
   int r;
   if((r = fcdGetMode(sdr->phd)) == FCD_MODE_APP){
     char caps_str[100];
@@ -205,7 +210,7 @@ void *proc_funcube(void *arg){
 
   int ConsecPaErrs = 0;
 
-  uint8_t * sampbuf = malloc(Blocksize * sizeof(*sampbuf));
+  int16_t * sampbuf = malloc(2 * Blocksize * sizeof(*sampbuf)); // complex samples have two integers
 
   realtime();
 
@@ -219,7 +224,7 @@ void *proc_funcube(void *arg){
       perror("setitimer start");
       goto terminate;
     }
-    int const r = Pa_ReadStream(sdr->Pa_Stream,sampbuf,Blocksize);
+    int const r = Pa_ReadStream(sdr->Pa_Stream,sampbuf,2*Blocksize);
     memset(&itime,0,sizeof(itime));
     if(setitimer(ITIMER_VIRTUAL,&itime,NULL) == -1){
       perror("setitimer stop");
@@ -242,7 +247,7 @@ void *proc_funcube(void *arg){
     complex float samp_sum = 0;
     float dotprod = 0;
     
-    complex float * const wptr = frontend->in->input_write_pointer.c;
+    complex float * wptr = frontend->in->input_write_pointer.c;
 
     for(int i=0; i<2*Blocksize; i += 2){
       complex float samp = CMPLXF(sampbuf[i],sampbuf[i+1]) * SCALE16;
@@ -265,7 +270,7 @@ void *proc_funcube(void *arg){
       // Correct phase
       __imag__ samp = secphi * cimagf(samp) - tanphi * crealf(samp);
       
-      *wptr = samp;
+      *wptr++ = samp;
     }
 
     frontend->input.samples += Blocksize;

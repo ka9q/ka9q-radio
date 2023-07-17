@@ -563,13 +563,17 @@ static int setup_hardware(char const *sname){
   } else if(strcasecmp(device,"funcube") == 0){
     Frontend.sdr.setup = funcube_setup;
     Frontend.sdr.start = funcube_startup;
-    Frontend.sdr.tune = airspy_tune;
-  } else
+    Frontend.sdr.tune = funcube_tune;
+  } else {
+    fprintf(stdout,"device %s unrecognized\n",device);
     return -1;
+  }
 
   int r = (*Frontend.sdr.setup)(&Frontend,Configtable,sname); 
-  if(r != 0)
+  if(r != 0){
+    fprintf(stdout,"device setup returned %d\n",r);
     return r;
+  }
 
   // Create input filter now that we know the parameters
   // FFT and filter sizes computed from specified block duration and sample rate
@@ -595,10 +599,16 @@ static int setup_hardware(char const *sname){
   pthread_mutex_init(&Frontend.sdr.status_mutex,NULL);
   pthread_cond_init(&Frontend.sdr.status_cond,NULL);
   pthread_create(&Frontend.status_thread,NULL,sdr_status,&Frontend);
-  if(Frontend.sdr.start)
-    return (*Frontend.sdr.start)(&Frontend);
-  else
+  if(Frontend.sdr.start){
+    int r = (*Frontend.sdr.start)(&Frontend); 
+    if(r != 0)
+      fprintf(stdout,"Front end start returned %d\n",r);
+
+    return r;
+  } else {
+    fprintf(stdout,"No front end start routine?\n");
     return -1;
+  }
 }
 
 
