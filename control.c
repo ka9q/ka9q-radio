@@ -194,8 +194,9 @@ void adjust_item(struct demod *demod,uint8_t **bpp,int direction){
   case 1: // First LO
     if(Control.lock) // Tuner is locked, don't change it
       break;
-    // Send directly to first LO
+    // Send directly to first LO and via radiod
     set_first_LO(demod,Frontend.sdr.frequency+tunestep);
+    encode_float(bpp,FIRST_LO_FREQUENCY,Frontend.sdr.frequency+tunestep);
     break;
   case 2: // IF (not implemented)
     break;
@@ -1668,16 +1669,18 @@ double set_first_LO(struct demod const * const demod,double first_LO){
   if(demod == NULL)
     return NAN;
 
-  uint8_t packet[8192],*bp;
-  memset(packet,0,sizeof(packet));
-  bp = packet;
-  *bp++ = 1; // Command
-  Frontend.sdr.command_tag = random();
-  encode_int32(&bp,COMMAND_TAG,Frontend.sdr.command_tag);
-  encode_double(&bp,RADIO_FREQUENCY,first_LO);
-  encode_eol(&bp);
-  int len = bp - packet;
-  send(Frontend.input.ctl_fd,packet,len,0);
+  if(Frontend.input.ctl_fd >= 3){
+    uint8_t packet[8192],*bp;
+    memset(packet,0,sizeof(packet));
+    bp = packet;
+    *bp++ = 1; // Command
+    Frontend.sdr.command_tag = random();
+    encode_int32(&bp,COMMAND_TAG,Frontend.sdr.command_tag);
+    encode_double(&bp,RADIO_FREQUENCY,first_LO);
+    encode_eol(&bp);
+    int len = bp - packet;
+    send(Frontend.input.ctl_fd,packet,len,0);
+  }
   return first_LO;
 }  
 // Like mvwprintw, but right justify the formatted output on the line and overlay with
