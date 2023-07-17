@@ -95,7 +95,7 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
   Pa_Initialize();
 
   if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
-    fprintf(stdout,"fcdOpen(%d): %s\n",sdr->number,strerror(errno));
+    fprintf(stdout,"fcdOpen(%d) failed\n",sdr->number);
     return -1;
   }
   sdr->bias_tee = config_getboolean(dictionary,section,"bias",false);
@@ -138,7 +138,7 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
 	frontend->sdr.lna_gain = 24;
     }
     if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
-      fprintf(stdout,"can't re-open control port: %s\n",strerror(errno));
+      fprintf(stdout,"fcdOpen(%d): can't re-open control port\n",sdr->number);
       return -1; // fatal error
     }
     fcdAppSetFreq(sdr->phd,intfreq);
@@ -434,7 +434,7 @@ double funcube_tune(struct frontend *frontend,double freq){
     }
   }
   if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
-    fprintf(stdout,"can't re-open control port: %s\n",strerror(errno));
+    fprintf(stdout,"fcdOpen(%d): can't re-open control port\n",sdr->number);
     return frontend->sdr.frequency; // nothing changes
   }
   fcdAppSetFreq(sdr->phd,intfreq);

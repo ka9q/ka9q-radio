@@ -57,9 +57,6 @@ all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_
 # NB: now overwrites existing .conf files in /etc/radio !
 install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
 	/usr/sbin/adduser --quiet --system --group radio
-	/usr/sbin/adduser --quiet --system --ingroup radio airspy
-	/usr/sbin/adduser --quiet --system --ingroup radio funcube
-	/usr/sbin/adduser --quiet --system --ingroup radio rx888
 	/usr/sbin/adduser --quiet --system --ingroup radio recordings
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
 	install -o root -m 0755 -D --target-directory=/etc/sysctl.d 98-sockbuf.conf
