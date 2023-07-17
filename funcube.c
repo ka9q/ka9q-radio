@@ -209,9 +209,7 @@ void *proc_funcube(void *arg){
 
   frontend->sdr.timestamp = gps_time_ns();
   float const rate_factor = Blocksize/(ADC_samprate * Power_alpha);
-
   int ConsecPaErrs = 0;
-
   int16_t * sampbuf = malloc(2 * Blocksize * sizeof(*sampbuf)); // complex samples have two integers
 
   realtime();
@@ -226,7 +224,7 @@ void *proc_funcube(void *arg){
       perror("setitimer start");
       goto terminate;
     }
-    int const r = Pa_ReadStream(sdr->Pa_Stream,sampbuf,2*Blocksize);
+    int const r = Pa_ReadStream(sdr->Pa_Stream,sampbuf,Blocksize);
     memset(&itime,0,sizeof(itime));
     if(setitimer(ITIMER_VIRTUAL,&itime,NULL) == -1){
       perror("setitimer stop");
@@ -275,7 +273,6 @@ void *proc_funcube(void *arg){
       *wptr++ = samp;
     }
 
-    frontend->input.samples += Blocksize;
     write_cfilter(frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
     frontend->input.samples += Blocksize;
     float const block_energy = i_energy + q_energy; // Normalize for complex pairs
