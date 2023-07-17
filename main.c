@@ -348,7 +348,6 @@ static int loadconfig(char const * const file){
       fprintf(stdout,"status= missing in [global], e.g, status=hf.local\n");
       exit(1);
     }
-    // Target for status/control stream. Optional.
     strlcpy(Metadata_dest_string,status,sizeof(Metadata_dest_string));
     int slen = sizeof(Metadata_dest_address);
     if(input != NULL && strlen(input) > 0){
