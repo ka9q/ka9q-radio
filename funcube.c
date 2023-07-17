@@ -92,7 +92,9 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
     char const *description = config_getstring(dictionary,section,"description","funcube dongle+");
     strlcpy(frontend->sdr.description,description,sizeof(frontend->sdr.description));
   }
-  if((sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
+  Pa_Initialize();
+
+  if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
     fprintf(stdout,"fcdOpen(%d): %s\n",sdr->number,strerror(errno));
     return -1;
   }
@@ -149,7 +151,7 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
   }
   // Set up sample stream through portaudio subsystem
   // Search audio devices
-  Pa_Initialize();
+
   int const numDevices = Pa_GetDeviceCount();
   int inDevNum = paNoDevice;
   for(int i = 0; i < numDevices; i++){
