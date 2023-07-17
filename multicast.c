@@ -86,7 +86,7 @@ int setup_mcast(char const * const target,struct sockaddr *sock,int const output
 }
 
 // Create a socket for sending to a multicast group
-int connect_mcast(void const *s,char const *iface,int const ttl,int const tos){
+int connect_mcast(void const * const s,char const * const iface,int const ttl,int const tos){
   if(s == NULL)
     return -1;
 

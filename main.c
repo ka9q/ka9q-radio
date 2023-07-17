@@ -75,7 +75,7 @@ pthread_t Demod_reaper_thread;
 pthread_t Procsamp_thread;
 pthread_t N0_thread;
 struct sockaddr_storage Metadata_source_address;   // Source of SDR metadata
-struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)b
+struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
 char Metadata_dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
 uint64_t Metadata_packets;
 uint32_t Command_tag;
@@ -301,9 +301,14 @@ static int loadconfig(char const * const file){
   if(config_getboolean(Configtable,global,"verbose",0))
     Verbose++;
   // Default multicast interface
-  Iface = config_getstring(Configtable,global,"iface",NULL);
-  // also set Default_mcast_iface so setup_mcast() sees it
-  Default_mcast_iface = Iface;
+  {
+    // The area pointed to by returns from config_getstring() is freed and overwritten when the config dictionary is closed
+    char const *p = config_getstring(Configtable,global,"iface",NULL);
+    if(p != NULL){
+      Iface = strdup(p);
+      Default_mcast_iface = Iface;    
+    }
+  }
   IP_tos = config_getint(Configtable,global,"tos",DEFAULT_IP_TOS);
   Mcast_ttl = config_getint(Configtable,global,"ttl",DEFAULT_MCAST_TTL);
   Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",DEFAULT_BLOCKTIME));
@@ -311,8 +316,16 @@ static int loadconfig(char const * const file){
   Nthreads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFT_THREADS);
   RTCP_enable = config_getboolean(Configtable,global,"rtcp",0);
   SAP_enable = config_getboolean(Configtable,global,"sap",0);
-  Modefile = config_getstring(Configtable,global,"mode-file",Modefile);
-  Wisdom_file = config_getstring(Configtable,global,"wisdom-file",Wisdom_file);
+  {
+    char const *p = config_getstring(Configtable,global,"mode-file",Modefile);
+    if(p != NULL)
+      Modefile = strdup(p);
+  }
+  {
+    char const *p = config_getstring(Configtable,global,"wisdom-file",Wisdom_file);
+    if(p != NULL)
+      Wisdom_file = strdup(p);
+  }
   char const * const input = config_getstring(Configtable,global,"input",NULL);
 
   // Are we using a direct front end?
@@ -345,7 +358,7 @@ static int loadconfig(char const * const file){
   {
     char const * const status = config_getstring(Configtable,global,"status",NULL); // Status/command thread for all demodulators
     if(status == NULL){
-      fprintf(stdout,"status= missing in [global], e.g, status=hf.local\n");
+      fprintf(stdout,"status=<mcast group> missing in [global], e.g, status=hf.local\n");
       exit(1);
     }
     strlcpy(Metadata_dest_string,status,sizeof(Metadata_dest_string));
@@ -358,6 +371,7 @@ static int loadconfig(char const * const file){
     } else {
       avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),NULL,&Metadata_dest_address,&slen);
     }
+    // avahi_start has resolved the target DNS name into Metadata_dest_address and inserted the port number
     Status_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
     if(Status_fd < 3){
       fprintf(stdout,"Can't send status to %s\n",Metadata_dest_string);
@@ -365,7 +379,7 @@ static int loadconfig(char const * const file){
       socklen_t len = sizeof(Metadata_source_address);
       getsockname(Status_fd,(struct sockaddr *)&Metadata_source_address,&len);  
       // Same remote socket as status
-      Ctl_fd = setup_mcast(NULL,(struct sockaddr *)&Metadata_dest_address,0,Mcast_ttl,IP_tos,2);
+      Ctl_fd = listen_mcast(&Metadata_dest_address,Iface);
       if(Ctl_fd < 3)
 	fprintf(stdout,"can't listen for commands from %s\n",Metadata_dest_string);
     }
