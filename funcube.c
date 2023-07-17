@@ -196,11 +196,12 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
   return 0;
 }
 void *proc_funcube(void *arg){
+  pthread_setname("proc_funcube");
   struct sdrstate *sdr = (struct sdrstate *)arg;
   assert(sdr != NULL);
-  pthread_setname("proc_funcube");
-
   struct frontend *frontend = sdr->frontend;
+  assert(frontend != NULL);
+  
   // Gain and phase corrections. These will be updated every block
   float gain_q = 1;
   float gain_i = 1;
@@ -249,8 +250,8 @@ void *proc_funcube(void *arg){
     
     complex float * wptr = frontend->in->input_write_pointer.c;
 
-    for(int i=0; i<2*Blocksize; i += 2){
-      complex float samp = CMPLXF(sampbuf[i],sampbuf[i+1]) * SCALE16;
+    for(int i=0; i<Blocksize; i++){
+      complex float samp = CMPLXF(sampbuf[2*i],sampbuf[2*i+1]) * SCALE16;
 
       samp_sum += samp; // Accumulate average DC values
       samp -= sdr->DC;   // remove smoothed DC offset (which can be fractional)
@@ -270,7 +271,7 @@ void *proc_funcube(void *arg){
       // Correct phase
       __imag__ samp = secphi * cimagf(samp) - tanphi * crealf(samp);
       
-      *wptr++ = samp;
+      wptr[i] = samp;
     }
 
     write_cfilter(frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
@@ -307,7 +308,9 @@ void *proc_funcube(void *arg){
   return 0;
 }
 int funcube_startup(struct frontend *frontend){
+  assert(frontend != NULL);
   struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
+  assert(sdr != NULL);
 
   // Start processing A/D data
   pthread_create(&sdr->proc_thread,NULL,proc_funcube,sdr);
@@ -319,7 +322,7 @@ int funcube_startup(struct frontend *frontend){
 
 // Crude analog AGC just to keep signal roughly within A/D range
 // Executed only if -o option isn't specified; this allows manual control with, e.g., the fcdpp command
-void do_fcd_agc(struct sdrstate *sdr){
+static void do_fcd_agc(struct sdrstate *sdr){
   struct frontend *frontend = sdr->frontend;
   assert(frontend != NULL);
 
@@ -358,7 +361,7 @@ void do_fcd_agc(struct sdrstate *sdr){
 // the *actual* frequency. Of course, we still have to correct it for the TCXO offset.
 
 // This needs to be generalized since other tuners will be completely different!
-double fcd_actual(unsigned int u32Freq){
+static double fcd_actual(unsigned int u32Freq){
   typedef uint32_t UINT32;
   typedef uint64_t UINT64;
 
