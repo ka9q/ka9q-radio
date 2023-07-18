@@ -387,12 +387,6 @@ void dump_metadata(uint8_t const * const buffer,int length){
     case RF_GAIN:
       printf("rf gain %.1f dB",decode_float(cp,optlen));
       break;
-    case OUTPUT_DATA_UNIX_SOCKET:  // For use with local (AF_UNIX) data paths
-      {
-	char buf[PATH_MAX];
-	printf("data dest path %s",decode_string(cp,optlen,buf,sizeof(buf)));
-      }
-      break;
     case BIN_DATA:
       {
 	printf("fft bins:");

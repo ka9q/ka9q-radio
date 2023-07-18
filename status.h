@@ -131,7 +131,7 @@ enum status_type {
 
   RF_ATTEN,       // Front end attenuation (introduced with rx888)
   RF_GAIN,        // Front end gain (introduced with rx888)
-  OUTPUT_DATA_UNIX_SOCKET,  // For use with local (AF_UNIX) data paths
+  OUTPUT_DATA_UNIX_SOCKET,  // For use with local (AF_UNIX) data paths - BAD idea, not used
   FE_LOW_EDGE,    // edges of front end filter
   FE_HIGH_EDGE,
 

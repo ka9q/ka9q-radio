@@ -552,14 +552,9 @@ static void send_rx888_status(struct sdrstate *sdr){
 
   // Where we're sending output
 
-  if(sdr->data_dest[0] != '/'){
-    // Source address we're using to send data
-    encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&sdr->output_data_source_address);
-    encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&sdr->output_data_dest_address); // IPv4/v6 socket
-  } else {
-    // AF_LINUX local socket, send path name as string
-    encode_string(&bp,OUTPUT_DATA_UNIX_SOCKET,sdr->data_dest,strlen(sdr->data_dest)); // AF_UNIX socket, send local pathname as string
-  }
+  // Source address we're using to send data
+  encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&sdr->output_data_source_address);
+  encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&sdr->output_data_dest_address); // IPv4/v6 socket
   encode_int32(&bp,OUTPUT_SSRC,sdr->rtp.ssrc);
   encode_byte(&bp,OUTPUT_TTL,RTP_ttl);
   encode_int32(&bp,INPUT_SAMPRATE,sdr->samprate);
