@@ -1247,6 +1247,12 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
       break;
     case BIN_DATA:
       break;
+    case RF_GAIN:
+      Frontend.sdr.rf_gain = decode_float(cp,optlen);
+      break;
+    case RF_ATTEN:
+      Frontend.sdr.rf_atten = decode_float(cp,optlen);
+      break;
     default: // ignore others
       break;
     }
@@ -1402,8 +1408,13 @@ void display_sig(WINDOW *w,struct demod const *demod){
     sig_power = 0;
   float ad_dB = power2dB(Frontend.sdr.output_level);
   float fe_gain_dB = 0;
+  // This *really* needs to be cleaned up. But the various front ends use different analog gain stages
   if(Frontend.sdr.gain > 0)
     fe_gain_dB = voltage2dB(Frontend.sdr.gain);
+  else if(Frontend.sdr.lna_gain != 0 || Frontend.sdr.mixer_gain != 0 || Frontend.sdr.if_gain != 0)
+    fe_gain_dB = Frontend.sdr.lna_gain + Frontend.sdr.mixer_gain + Frontend.sdr.if_gain;
+ else
+    fe_gain_dB = Frontend.sdr.rf_atten + Frontend.sdr.rf_gain;
 
   int row = 1;
   int col = 1;
