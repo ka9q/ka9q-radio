@@ -162,7 +162,7 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
       fprintf(stdout,"%s: ",frontend->sdr.description);
     }
   }
-  fprintf(stdout,"Samprate %'d Hz, Gain %.1f dB, Atten %.1f dB, Dither %d, Randomizer %d, USB Queue depth %d, USB Request size %'d * pktsize %d = %'d bytes (%g sec)\n",
+  fprintf(stdout,"Samprate %'d Hz, Gain %.1f dB, Atten %.1f dB, Dither %d, Randomizer %d, USB Queue depth %d, USB Request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  frontend->sdr.samprate,frontend->sdr.rf_gain,frontend->sdr.rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
 	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->sdr.samprate));
 
