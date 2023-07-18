@@ -543,11 +543,14 @@ int main(int argc,char *argv[]){
     if(Status_fd != -1 && FD_ISSET(Status_fd,&fdset)){
       // Message from the radio program (or some transcoders)
       uint8_t buffer[8192];
-      socklen_t ssize = sizeof(Metadata_source_address);
-      int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
+      struct sockaddr_storage source_address;
+      socklen_t ssize = sizeof(source_address);
+      int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize);
 
       // Ignore our own command packets and responses to other SSIDs
       if(length >= 2 && buffer[0] == 0 && for_us(demod,buffer+1,length-1,Ssrc) >= 0 ){
+	// Save source only if it's a response
+	memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
 	decode_radio_status(demod,buffer+1,length-1);
 	next_radio_poll = random_time(radio_poll_interval,random_interval);
 
