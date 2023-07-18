@@ -117,43 +117,38 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
   rx888_set_dither_and_randomizer(sdr,sdr->dither,sdr->randomizer);
 
   // Attenuation, default 0
-  {
-    float att = fabsf(config_getfloat(Dictionary,section,"att",0));
-    if(att > 31.5)
-      att = 31.5;
-    rx888_set_att(sdr,att);
-
-    // Gain Mode low/high, default high
-    char const *gainmode = config_getstring(Dictionary,section,"gainmode","high");
-    if(strcmp(gainmode, "high") == 0)
-      sdr->highgain = true;
-    else if(strcmp(gainmode, "low") == 0)
-      sdr->highgain = false;
-    else {
-      fprintf(stdout,"Invalid gain mode %s, default high\n",gainmode);
-      sdr->highgain = true;
-    }
-    // Gain value, default +1.5 dB
-    float gain = config_getfloat(Dictionary,section,"gain",1.5);
-    if(gain > 34.0)
-      gain = 34.0;
-    
-    rx888_set_gain(sdr,gain);
-
-    // Sample Rate, default 129.6 MHz
-    unsigned int samprate = config_getint(Dictionary,section,"samprate",129600000);
-    if(samprate < 1000000){
-      int const minsamprate = 1000000; // 1 MHz?
-      fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,minsamprate);
-      samprate = minsamprate;
-    }
-    rx888_set_samprate(sdr,samprate);
-    frontend->sdr.samprate = samprate;
-    frontend->sdr.min_IF = 0;
-    frontend->sdr.max_IF = 0.47 * frontend->sdr.samprate; // Just an estimate - get the real number somewhere
-    frontend->sdr.isreal = true; // Make sure the right kind of filter gets created!
-    frontend->sdr.calibrate = config_getdouble(Dictionary,section,"calibrate",0);
+  float att = fabsf(config_getfloat(Dictionary,section,"att",0));
+  if(att > 31.5)
+    att = 31.5;
+  rx888_set_att(sdr,att);
+  
+  // Gain Mode low/high, default high
+  char const *gainmode = config_getstring(Dictionary,section,"gainmode","high");
+  if(strcmp(gainmode, "high") == 0)
+    sdr->highgain = true;
+  else if(strcmp(gainmode, "low") == 0)
+    sdr->highgain = false;
+  else {
+    fprintf(stdout,"Invalid gain mode %s, default high\n",gainmode);
+    sdr->highgain = true;
   }
+  // Gain value, default +1.5 dB
+  float gain = config_getfloat(Dictionary,section,"gain",1.5);
+  rx888_set_gain(sdr,gain);
+  
+  // Sample Rate, default 129.6 MHz
+  unsigned int samprate = config_getint(Dictionary,section,"samprate",129600000);
+  if(samprate < 1000000){
+    int const minsamprate = 1000000; // 1 MHz?
+    fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,minsamprate);
+    samprate = minsamprate;
+  }
+  rx888_set_samprate(sdr,samprate);
+  frontend->sdr.samprate = samprate;
+  frontend->sdr.min_IF = 0;
+  frontend->sdr.max_IF = 0.47 * frontend->sdr.samprate; // Just an estimate - get the real number somewhere
+  frontend->sdr.isreal = true; // Make sure the right kind of filter gets created!
+  frontend->sdr.calibrate = config_getdouble(Dictionary,section,"calibrate",0);
   frontend->sdr.gain = dB2voltage(frontend->sdr.rf_gain - frontend->sdr.rf_atten);
   {
     char const *p = config_getstring(Dictionary,section,"description","rx888");
@@ -162,8 +157,9 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
       fprintf(stdout,"%s: ",frontend->sdr.description);
     }
   }
-  fprintf(stdout,"Samprate %'d Hz, Gain %.1f dB, Atten %.1f dB, Dither %d, Randomizer %d, USB Queue depth %d, USB Request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
-	  frontend->sdr.samprate,frontend->sdr.rf_gain,frontend->sdr.rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
+  fprintf(stdout,"Samprate %'d Hz, gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
+	  frontend->sdr.samprate,sdr->highgain ? "high" : "low",
+gain,frontend->sdr.rf_gain,frontend->sdr.rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
 	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->sdr.samprate));
 
   return 0;
@@ -543,6 +539,7 @@ static double val2gain(int g){
 }
 
 static int gain2val(bool highgain, double gain){
+  gain = gain > 34 ? 34 : gain;
   int g = round(dB2voltage(gain) / (Vernier * (1 + (Pregain - 1)* highgain)));
 
   if(g > 127)
