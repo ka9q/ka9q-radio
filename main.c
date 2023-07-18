@@ -1,7 +1,7 @@
 // $Id: main.c,v 1.266 2023/01/31 10:11:08 karn Exp $
 // Read samples from multicast stream
 // downconvert, filter, demodulate, multicast output
-// Copyright 2017-2022, Phil Karn, KA9Q, karn@ka9q.net
+// Copyright 2017-2023, Phil Karn, KA9Q, karn@ka9q.net
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
@@ -119,7 +119,7 @@ double funcube_tune(struct frontend *,double);
 int main(int argc,char *argv[]){
   App_path = argv[0];
   fprintf(stdout,"KA9Q Multichannel SDR\n");
-  fprintf(stdout,"Copyright 2018-2022 by Phil Karn, KA9Q; may be used under the terms of the GNU General Public License\n");
+  fprintf(stdout,"Copyright 2018-2023 by Phil Karn, KA9Q; may be used under the terms of the GNU General Public License\n");
 #ifndef NDEBUG
   fprintf(stdout,"Assertion checking enabled, execution will be slower\n");
 #endif
