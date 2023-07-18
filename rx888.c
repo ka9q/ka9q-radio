@@ -154,7 +154,7 @@ int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *sec
     frontend->sdr.isreal = true; // Make sure the right kind of filter gets created!
     frontend->sdr.calibrate = config_getdouble(Dictionary,section,"calibrate",0);
   }
-  frontend->sdr.gain = dB2voltage(frontend->sdr.rf_gain + frontend->sdr.rf_atten);
+  frontend->sdr.gain = dB2voltage(frontend->sdr.rf_gain - frontend->sdr.rf_atten);
   {
     char const *p = config_getstring(Dictionary,section,"description","rx888");
     if(p != NULL){
@@ -228,20 +228,19 @@ static void rx_callback(struct libusb_transfer *transfer){
   // Feed directly into FFT input buffer, accumulate energy
   uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
   int16_t const * const samples = (int16_t *)transfer->buffer;
-  float const inv_gain = SCALE16 / frontend->sdr.gain;
   float * const wptr = frontend->in->input_write_pointer.r;
   int const sampcount = size / sizeof(int16_t);
   if(sdr->randomizer){
     for(int i=0; i < sampcount; i++){
       int s = samples[i] ^ (-2 * (samples[i] & 1)); // if LSB is set, flip all other bits
       in_energy += s * s;
-      wptr[i] = s * inv_gain;
+      wptr[i] = s * SCALE16;
     }
   } else {
     for(int i=0; i < sampcount; i++){
       int s = samples[i];
       in_energy += s * s;
-      wptr[i] = s * inv_gain;
+      wptr[i] = s * SCALE16;
     }
   }
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT

@@ -8,7 +8,7 @@ After=network-online.target
 Requires=network-online.target
 
 [Service]
-Nice=0
+Nice=10
 User=recordings
 Group=radio
 Type=simple
