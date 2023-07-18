@@ -1426,7 +1426,7 @@ void display_sig(WINDOW *w,struct demod const *demod){
 	    Frontend.sdr.if_gain);
 
   pprintw(w,row++,col,"A/D","%'.1f dBFS ",ad_dB);
-  pprintw(w,row++,col,"In Gain","%.1f dB   ",fe_gain_dB);
+  pprintw(w,row++,col,"FE Gain","%.1f dB   ",fe_gain_dB);
   pprintw(w,row++,col,"Input","%.1f dB   ",ad_dB - fe_gain_dB);
   pprintw(w,row++,col,"Baseband","%.1f dB   ",power2dB(demod->sig.bb_power));
   pprintw(w,row++,col,"N0","%.1f dB/Hz",power2dB(Frontend.n0));
