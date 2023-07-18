@@ -155,7 +155,7 @@ int encode_string(uint8_t **bp,enum status_type const type,void const *buf,unsig
 // size = number of floats
 // Sent in big endian order just like other floats
 // Because it can be very long, handle large sizes
-int encode_vector(uint8_t **bp,enum status_type type,float *array,int size){
+int encode_vector(uint8_t **bp,enum status_type type,float const *array,int size){
   uint8_t const *orig_bp = *bp;
   uint8_t *cp = *bp;
   *cp++ = type;
@@ -251,7 +251,6 @@ double decode_double(uint8_t const *cp,int len){
 int encode_socket(uint8_t **buf,enum status_type type,void const *sock){
   struct sockaddr_in const *sin = sock;
   struct sockaddr_in6 const *sin6 = sock;
-  struct sockaddr_un const *sun = sock;
   uint8_t *bp = *buf;
   int optlen = 0;
 
