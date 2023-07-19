@@ -203,7 +203,7 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
       printf("IF pwr %'.1f dB",decode_float(cp,optlen));
       break;
     case BASEBAND_POWER:
-      printf("BB pwr %'.1f dB",decode_float(cp,optlen));
+      printf("baseband pwr %'.1f dB",decode_float(cp,optlen));
       break;
     case NOISE_DENSITY:
       printf("N0 %'.1f dB/Hz",decode_float(cp,optlen));
