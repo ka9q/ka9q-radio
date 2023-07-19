@@ -480,7 +480,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_double(&bp,DOPPLER_FREQUENCY,demod->tune.doppler); // Hz
     encode_double(&bp,DOPPLER_FREQUENCY_RATE,demod->tune.doppler_rate); // Hz
     encode_int32(&bp,OUTPUT_CHANNELS,demod->output.channels);
-    if(!isnan(demod->sig.snr))
+    if(!isnan(demod->sig.snr) && demod->sig.snr > 0)
       encode_float(&bp,DEMOD_SNR,power2dB(demod->sig.snr)); // abs ratio -> dB
     encode_float(&bp,FREQ_OFFSET,demod->sig.foffset);     // Hz; used differently in linear and fm
     encode_float(&bp,GAIN,voltage2dB(demod->output.gain)); // linear amplitude -> dB; fixed in FM
