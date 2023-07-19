@@ -442,11 +442,10 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_int32(&bp,INPUT_SSRC,frontend->input.rtp.ssrc);
     encode_int64(&bp,INPUT_METADATA_PACKETS,frontend->input.metadata_packets); // integer
     encode_int64(&bp,INPUT_DATA_PACKETS,frontend->input.rtp.packets);
-    encode_int64(&bp,INPUT_SAMPLES,frontend->input.samples);
     encode_int64(&bp,INPUT_DROPS,frontend->input.rtp.drops);
     encode_int64(&bp,INPUT_DUPES,frontend->input.rtp.dupes);
   }
-  
+  encode_int64(&bp,INPUT_SAMPLES,frontend->input.samples);  
   encode_int32(&bp,INPUT_SAMPRATE,frontend->sdr.samprate); // integer Hz
   encode_double(&bp,CALIBRATE,frontend->sdr.calibrate);
   encode_double(&bp,RF_GAIN,frontend->sdr.rf_gain);
