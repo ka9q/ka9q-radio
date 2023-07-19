@@ -31,6 +31,7 @@ int Status_sock;
 
 const char *App_path;
 int Verbose,Dump;
+bool Newline;
 
 char Locale[256] = "en_US.UTF-8";
 int Mcast_ttl = 5;
@@ -39,10 +40,13 @@ int main(int argc,char *argv[]){
   App_path = argv[0];
   int c;
 
-  while((c = getopt(argc,argv,"vd")) != -1){
+  while((c = getopt(argc,argv,"vn")) != -1){
     switch(c){
     case 'v':
       Verbose++;
+      break;
+    case 'n':
+      Newline = true;
       break;
     }
   }
@@ -78,11 +82,8 @@ int main(int argc,char *argv[]){
     
     int const cr = buffer[0]; // Command/response byte
     char temp[1024];
-    fprintf(stdout,"%s %s %s:",
-	    format_gpstime(temp,sizeof(temp),now),
-	   formatsock(&source),
-	    cr ? "CMD " : "STAT");
-    dump_metadata(buffer+1,length-1);
+    fprintf(stdout,"%s %s %s:", format_gpstime(temp,sizeof(temp),now), formatsock(&source), cr ? "CMD" : "STAT");
+    dump_metadata(buffer+1,length-1,Newline);
     fflush(stdout);
   }
 }

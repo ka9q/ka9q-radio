@@ -11,7 +11,7 @@
 #include "multicast.h"
 #include "radio.h"
 
-void dump_metadata(uint8_t const * const buffer,int length){
+void dump_metadata(uint8_t const * const buffer,int length,bool newline){
   uint8_t const *cp = buffer;
 
   while(cp - buffer < length){
@@ -33,12 +33,12 @@ void dump_metadata(uint8_t const * const buffer,int length){
     }
     if(cp - buffer + optlen >= length)
       break; // Invalid length
-    printf(" (%d) ",type); fflush(stdout); // DEBUG
+    printf("%s(%d) ",newline? "\n":" ",type); fflush(stdout); // DEBUG
     switch(type){
     case EOL: // Shouldn't get here
       goto done;
     case COMMAND_TAG:
-      printf("cmd tag %llx",(long long unsigned)decode_int(cp,optlen));
+      printf("cmd tag %0llx",(long long unsigned)decode_int(cp,optlen));
       break;
     case CMD_CNT:
       printf("commands %'llu",(long long unsigned)decode_int(cp,optlen));

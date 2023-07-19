@@ -430,26 +430,32 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_int64(&bp,GPS_TIME,frontend->sdr.timestamp);
   else
     encode_int64(&bp,GPS_TIME,gps_time_ns());
-  // Who's sending us I/Q data
-  encode_socket(&bp,INPUT_DATA_SOURCE_SOCKET,&frontend->input.data_source_address);
-  // Destination address for I/Q data
-  encode_socket(&bp,INPUT_DATA_DEST_SOCKET,&frontend->input.data_dest_address);
-  // Source of metadata
-  encode_socket(&bp,INPUT_METADATA_SOURCE_SOCKET,&frontend->input.metadata_source_address);
-  // Destination address (usually multicast) and port on which we're getting metadata
-  encode_socket(&bp,INPUT_METADATA_DEST_SOCKET,&frontend->input.metadata_dest_address);
-  encode_int32(&bp,INPUT_SSRC,frontend->input.rtp.ssrc);
+  // Who's sending us I/Q data, if any
+  if(frontend->input.data_source_address.ss_family != 0){
+    encode_socket(&bp,INPUT_DATA_SOURCE_SOCKET,&frontend->input.data_source_address);
+    // Destination address for I/Q data
+    encode_socket(&bp,INPUT_DATA_DEST_SOCKET,&frontend->input.data_dest_address);
+    // Source of metadata
+    encode_socket(&bp,INPUT_METADATA_SOURCE_SOCKET,&frontend->input.metadata_source_address);
+    // Destination address (usually multicast) and port on which we're getting metadata
+    encode_socket(&bp,INPUT_METADATA_DEST_SOCKET,&frontend->input.metadata_dest_address);
+    encode_int32(&bp,INPUT_SSRC,frontend->input.rtp.ssrc);
+    encode_int64(&bp,INPUT_METADATA_PACKETS,frontend->input.metadata_packets); // integer
+    encode_int64(&bp,INPUT_DATA_PACKETS,frontend->input.rtp.packets);
+    encode_int64(&bp,INPUT_SAMPLES,frontend->input.samples);
+    encode_int64(&bp,INPUT_DROPS,frontend->input.rtp.drops);
+    encode_int64(&bp,INPUT_DUPES,frontend->input.rtp.dupes);
+  }
+  
   encode_int32(&bp,INPUT_SAMPRATE,frontend->sdr.samprate); // integer Hz
+  encode_double(&bp,CALIBRATE,frontend->sdr.calibrate);
+  encode_double(&bp,RF_GAIN,frontend->sdr.rf_gain);
+  encode_double(&bp,RF_ATTEN,frontend->sdr.rf_atten);
+
   if(frontend->in){
     encode_int32(&bp,FILTER_BLOCKSIZE,frontend->in->ilen);
     encode_int32(&bp,FILTER_FIR_LENGTH,frontend->in->impulse_length);
   }
-
-  encode_int64(&bp,INPUT_METADATA_PACKETS,frontend->input.metadata_packets); // integer
-  encode_int64(&bp,INPUT_DATA_PACKETS,frontend->input.rtp.packets);
-  encode_int64(&bp,INPUT_SAMPLES,frontend->input.samples);
-  encode_int64(&bp,INPUT_DROPS,frontend->input.rtp.drops);
-  encode_int64(&bp,INPUT_DUPES,frontend->input.rtp.dupes);
   
   // Source address we're using to send data
   encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&demod->output.data_source_address);
@@ -459,10 +465,6 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   encode_int32(&bp,OUTPUT_SSRC,demod->output.rtp.ssrc);
   encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
   encode_int64(&bp,OUTPUT_METADATA_PACKETS,Metadata_packets);
-
-  encode_double(&bp,CALIBRATE,frontend->sdr.calibrate);
-  encode_double(&bp,RF_GAIN,frontend->sdr.rf_gain);
-  encode_double(&bp,RF_ATTEN,frontend->sdr.rf_atten);
  
   // Lots of stuff not relevant in spectrum analysis mode
   if(demod->demod_type != SPECT_DEMOD){

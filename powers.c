@@ -152,7 +152,7 @@ int main(int argc,char *argv[]){
     int const command_len = bp - buffer;
     if(Verbose > 1){
       printf("Sent:");
-      dump_metadata(buffer+1,command_len-1);
+      dump_metadata(buffer+1,command_len-1,false);
     }
     if(send(Ctl_fd, buffer, command_len, 0) != command_len){
       perror("command send");
@@ -193,7 +193,7 @@ int main(int argc,char *argv[]){
 
     if(Verbose > 1){
       printf("Received:");
-      dump_metadata(buffer+1,length-1);
+      dump_metadata(buffer+1,length-1,false);
     }
     float powers[65536];
     uint64_t time;
