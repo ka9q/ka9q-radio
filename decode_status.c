@@ -219,6 +219,9 @@ int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length)
       frontend->sdr.rf_gain = decode_float(cp,optlen);
       frontend->sdr.gain = dB2voltage(frontend->sdr.rf_gain - fabsf(frontend->sdr.rf_atten));
       break;
+    case FE_ISREAL:
+      frontend->sdr.isreal = decode_int(cp,optlen) ? true : false; // Needed when via radiod
+      break;
     default:
       break;
     }

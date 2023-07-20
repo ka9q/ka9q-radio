@@ -187,6 +187,9 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
     case FE_HIGH_EDGE:
       printf("fe filt high %'g Hz",decode_float(cp,optlen));
       break;
+    case FE_ISREAL:
+      printf("fe %s",decode_int(cp,optlen) ? "real" : "complex");
+      break;
     case KAISER_BETA:
       printf("filter kaiser_beta %g",decode_float(cp,optlen));      
       break;

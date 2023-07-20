@@ -1115,6 +1115,9 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
     case FE_HIGH_EDGE:
       Frontend.sdr.max_IF = decode_float(cp,optlen);
       break;
+    case FE_ISREAL:
+      Frontend.sdr.isreal = decode_int(cp,optlen) ? true: false;
+      break;
     case KAISER_BETA:
       demod->filter.kaiser_beta = decode_float(cp,optlen);
       break;
