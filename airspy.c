@@ -105,11 +105,11 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
       uint64_t serials[n_serials];
 
       n_serials = airspy_list_devices(serials,n_serials); // Return actual number
-      if(n_serials == 0){
+      if(n_serials <= 0){
 	fprintf(stdout,"No airspy devices found\n");
 	return -1;
       }
-      fprintf(stdout,"Discovered airspy device serials:");
+      fprintf(stdout,"Discovered airspy device serial%s:",n_serials > 1 ? "s" : "");
       for(int i = 0; i < n_serials; i++){
 	fprintf(stdout," %llx",(long long)serials[i]);
       }
@@ -151,11 +151,11 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     ret = airspy_get_samplerates(sdr->device,sdr->sample_rates,0);
     assert(ret == AIRSPY_SUCCESS);
     int const number_sample_rates = sdr->sample_rates[0];
-    fprintf(stdout,"%'d sample rates:",number_sample_rates);
-    if(number_sample_rates == 0){
+    if(number_sample_rates <= 0){
       fprintf(stdout,"error, no valid sample rates!\n");
       return -1;
     }
+    fprintf(stdout,"%'d sample rate%s:",number_sample_rates,number_sample_rates > 1 ? "s":"");
     ret = airspy_get_samplerates(sdr->device,sdr->sample_rates,number_sample_rates);
     assert(ret == AIRSPY_SUCCESS);
     for(int n = 0; n < number_sample_rates; n++){
