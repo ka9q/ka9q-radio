@@ -373,73 +373,6 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"connect to mcast control failed\n");
     exit(1);
   }
-#if 0 // causes too much congestion
-  if(Ssrc == 0){
-    // no ssrc specified; send wild-card poll and collect responses
-    unsigned ssrc_count = 0;
-    struct demod *demods = NULL;
-    unsigned demods_size = 0;
-    while(1){
-      // The deadline starts at 1 sec in the future
-      // It is reset as long as we keep seeing new SSRCs
-      int64_t deadline = gps_time_ns() + BILLION;
-      send_poll(Ctl_fd,0);
-      fd_set fdset;
-      FD_ZERO(&fdset);
-      FD_SET(Status_fd,&fdset);
-      int n = Status_fd + 1;
-      
-      int64_t timeout = deadline - gps_time_ns();
-      // Immediate poll if timeout is negative
-      if(timeout < 0)
-	timeout = 0;
-
-      {
-	struct timespec ts;
-	ns2ts(&ts,timeout);
-	n = pselect(n,&fdset,NULL,NULL,&ts,NULL);
-      }
-      if(n <= 0)
-	break; // Only on a timeout
-      if(!FD_ISSET(Status_fd,&fdset))
-	continue;
-
-      // Message from the radio program
-      uint8_t buffer[8192];
-      socklen_t ssize = sizeof(Metadata_source_address);
-      int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
-      
-      // Ignore our own command packets
-      if(length < 2 || buffer[0] != 0)
-	continue;
-      int const ssrc = get_ssrc(buffer+1,length-1);
-      // See if it's a dupe (e.g., response to another instance of control)
-      for(int i=0; i < ssrc_count; i++){
-	if(demods[i].output.rtp.ssrc == ssrc)
-	  goto ignore;
-      }
-      if(ssrc_count >= demods_size){
-	// Enlarge demods array
-	demods_size += 1000;
-	demods = realloc(demods,demods_size * sizeof(*demods));
-      }
-      decode_radio_status(&demods[ssrc_count],buffer+1,length-1);
-      ssrc_count++;
-      deadline = gps_time_ns() + BILLION; // extend deadline as long as we're progressing
-    ignore:;
-    }
-
-    qsort(demods,ssrc_count,sizeof(*demods),dcompare);
-    fprintf(stdout,"SSRC      Frequency (Hz)\n");
-    for(int i=0; i < ssrc_count; i++){
-      fprintf(stdout,"%-9u %'.3lf\n",demods[i].output.rtp.ssrc,
-	      demods[i].tune.freq);
-    }
-    fprintf(stdout,"Total SSRCs: %u\n",ssrc_count);
-    FREE(demods);
-    exit(0);
-  }
-#endif
   char modefile_path[PATH_MAX];
   if (dist_path(modefile_path,sizeof(modefile_path),Modefile) == -1) {
     fprintf(stderr,"Could not find mode file %s\n", Modefile);
@@ -549,7 +482,7 @@ int main(int argc,char *argv[]){
       int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize);
 
       // Ignore our own command packets and responses to other SSIDs
-      if(length >= 2 && buffer[0] == 0 && for_us(demod,buffer+1,length-1,Ssrc) >= 0 ){
+      if(length >= 2 && (enum pkt_type)buffer[0] == STATUS && for_us(demod,buffer+1,length-1,Ssrc) >= 0 ){
 	// Save source only if it's a response
 	memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
 	decode_radio_status(demod,buffer+1,length-1);
@@ -585,21 +518,10 @@ int main(int argc,char *argv[]){
       socklen_t msize = sizeof(Frontend.input.metadata_source_address);
       msize = min(ssize,msize);
 
-#if 0 // compare fails on MacOS, more trouble than it's worth
-      // Filter possible stray packets from unexpected sources
-      if(FE_address_set // should aways be true here 
-	 && memcmp(&sender,&Frontend.input.metadata_source_address,msize) == 0
-	 && length >= 2 && buffer[0] == 0){
-	// Parse entries
+      if(length >= 2 && (enum pkt_type)buffer[0] == STATUS){
 	decode_fe_status(&Frontend,buffer+1,length-1);
 	next_fe_poll = random_time(fe_poll_interval,random_interval);
       }
-#else
-      if(length >= 2 && buffer[0] == 0){
-	decode_fe_status(&Frontend,buffer+1,length-1);
-	next_fe_poll = random_time(fe_poll_interval,random_interval);
-      }
-#endif
     }
     // socket read timeout every 100 ms; update display windows & poll keyboard and mouse
     display_tuning(Tuning_win,demod);

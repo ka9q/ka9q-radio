@@ -46,24 +46,11 @@ void *radio_status(void *arg){
   snprintf(name,sizeof(name),"radio stat");
   pthread_setname(name);
   
-#if 0
-  {
-    // We start from loadconfig() after all the slices have been started so we don't contend with it for Demod_list_mutex
-    pthread_mutex_lock(&Demod_list_mutex);
-    for(int i = 0; i < Demod_list_length; i++){
-      if(!Demod_list[i].inuse)
-	continue;
-      send_radio_status(&Frontend,&Demod_list[i],1); // Send status in response	
-      usleep(10000); // arbitrary interval to avoid flooding the net
-    }
-    pthread_mutex_unlock(&Demod_list_mutex);
-  }  
-#endif
   while(1){
     // Command from user
     uint8_t buffer[8192];
     int const length = recv(Ctl_fd,buffer,sizeof(buffer),0);
-    if(length <= 0 || buffer[0] == 0)
+    if(length <= 0 || (enum pkt_type)buffer[0] != CMD)
       continue; // short packet, or a response; ignore
 
     Commands++;
@@ -103,18 +90,6 @@ void *radio_status(void *arg){
 	decode_radio_commands(demod,buffer+1,length-1);
 	send_radio_status(&Frontend,demod,1); // Send status in response
       }
-    } else {
-#if 0
-      // Send status for every SSRC
-      pthread_mutex_lock(&Demod_list_mutex);
-      for(int i=0; i < Demod_list_length; i++){
-	if(Demod_list[i].inuse){
-	  send_radio_status(&Frontend,&Demod_list[i],1); // Send status in response	
-	  usleep(10000); // But not too quickly
-	}
-      }
-      pthread_mutex_unlock(&Demod_list_mutex);
-#endif
     }
   }
   return NULL;
@@ -417,7 +392,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   memset(packet,0,len);
   uint8_t *bp = packet;
 
-  *bp++ = 0; // 0 = status, 1 = command
+  *bp++ = STATUS; // 0 = status, 1 = command
 
   // parameters valid in all modes
   encode_int32(&bp,COMMAND_TAG,Command_tag); // at top to make it easier to spot in dumps

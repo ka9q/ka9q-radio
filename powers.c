@@ -186,10 +186,10 @@ int main(int argc,char *argv[]){
       socklen_t ssize = sizeof(Metadata_source_address);
       length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_address,&ssize);
     
-      // Ignore invalid packets, command packets, packets re other SSRCs and packets not in response to our polls
+      // Ignore invalid packets, non-status packets, packets re other SSRCs and packets not in response to our polls
       // Should we insist on the same command tag, or accept any "recent" status packet, e.g., triggered by the control program?
       // This is needed because an initial delay in joining multicast groups produces a burst of buffered responses; investigate this
-    } while(length < 2 || buffer[0] != 0 || Ssrc != get_ssrc(buffer+1,length-1) || tag != get_tag(buffer+1,length-1));
+    } while(length < 2 || (enum pkt_type)buffer[0] != STATUS || Ssrc != get_ssrc(buffer+1,length-1) || tag != get_tag(buffer+1,length-1));
 
     if(Verbose > 1){
       printf("Received:");

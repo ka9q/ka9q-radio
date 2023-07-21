@@ -302,8 +302,7 @@ void * status(void *p){
       continue;
 
     // Announce ourselves in response to commands
-    if(buffer[0] == 1){
-    } else {
+    if((enum pkt_type)buffer[0] == STATUS){
       // Parse radio status for PCM output socket
       uint8_t const *cp = buffer+1;
 

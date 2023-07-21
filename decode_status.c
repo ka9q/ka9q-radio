@@ -66,10 +66,10 @@ void *sdr_status(void *arg){
 	continue;
       }
       // Parse entries
-      int const cr = buffer[0]; // command-response byte
+      enum pkt_type const cr = buffer[0]; // command-response byte
       
-      if(cr == 1)
-	continue; // Ignore commands
+      if(cr != STATUS)
+	continue; // Ignore all but status
 
       frontend->input.metadata_packets++;
       // Protect Frontend structure

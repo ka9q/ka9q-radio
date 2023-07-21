@@ -5,6 +5,13 @@
 #include <sys/time.h>
 #include <stdbool.h>
 
+// Type field, first byte in command/status packets
+enum pkt_type {
+  STATUS = 0,
+  CMD,
+  SSRC_LIST
+};
+
 
 enum status_type {
   EOL = 0,	  

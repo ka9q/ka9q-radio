@@ -414,10 +414,10 @@ void * status(void *p){
       continue;
 
     // Announce ourselves in response to commands
-    if(buffer[0] == 1){
+    if((enum pkt_type)buffer[0] == CMD){
       uint8_t packet[2048];
       uint8_t *bp = packet;
-      *bp++ = 0; // Response (not a command)
+      *bp++ = STATUS; // Response (not a command)
       encode_socket(&bp,OPUS_SOURCE_SOCKET,&Opus_source_address);
       encode_socket(&bp,OPUS_DEST_SOCKET,&Opus_dest_address);
       encode_int(&bp,OPUS_BITRATE,Opus_bitrate);

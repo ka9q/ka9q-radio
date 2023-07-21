@@ -557,7 +557,7 @@ void *ncmd(void *arg){
     int const length = recv(sdr->nctl_sock,buffer,sizeof(buffer),0);
     if(length > 0){
       // Parse entries
-      if(buffer[0] == 0)
+      if((enum pkt_type)buffer[0] != CMD)
 	continue; // Ignore our own status messages
 
       sdr->commands++;

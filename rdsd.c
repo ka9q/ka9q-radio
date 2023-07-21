@@ -233,9 +233,9 @@ int main(int argc,char * const argv[]){
     }
     // Parse entries
     {
-      int cr = buffer[0];
-      if(cr == 1)
-	continue; // Ignore commands
+      enum pkt_type const cr = buffer[0];
+      if(cr != STATUS)
+	continue;
       uint8_t *cp = buffer+1;
 
       while(cp - buffer < length){

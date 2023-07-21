@@ -146,7 +146,7 @@ int main(int argc,char *argv[]){
       Output_metadata_dest_socket = formatsock(&Output_metadata_dest_address);
 
       // Parse entries
-      if(length >= 2 && buffer[0] == 0){ // Ignore our own command packets
+      if(length >= 2 && buffer[0] == STATUS){ // Ignore our own command packets
 	decode_rtp_status(buffer+1,length-1);
 
       }

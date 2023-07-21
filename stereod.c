@@ -316,8 +316,8 @@ int fetch_socket(int status_fd){
     }
     // Parse entries
     {
-      int cr = buffer[0];
-      if(cr == 1)
+      enum pkt_type cr = buffer[0];
+      if(cr != STATUS)
 	continue; // Ignore commands
       uint8_t *cp = buffer+1;
       
