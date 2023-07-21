@@ -181,7 +181,6 @@ char *format_utctime(char *result,int len,int64_t t){
 	   t_usec);
 
   return result;
-
 }
 // Format a seconds count into hh:mm:ss
 char *ftime(char * result,int size,int64_t t){
@@ -270,7 +269,7 @@ double parse_frequency(char const *s){
   }
   double mult = 1;
   // k, m or g in place of decimal point indicates scaling by 1k, 1M or 1G
-  char *sp;
+  char *sp = NULL;
   if((sp = strchr(ss,'g')) != NULL){
     mult = 1e9;
     *sp = '.';
