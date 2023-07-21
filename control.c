@@ -323,6 +323,9 @@ static int dcompare(void const *a,void const *b){
 
 uint32_t Ssrc = 0;
 
+
+struct demod Demod_actual;
+
 // Thread to display receiver state, updated at 10Hz by default
 // Uses the ancient ncurses text windowing library
 // Also services keyboard, mouse and tuning knob, if present
@@ -409,8 +412,7 @@ int main(int argc,char *argv[]){
 
   setup_windows();
 
-  struct demod demod_actual;
-  struct demod *const demod = &demod_actual;
+  struct demod *const demod = &Demod_actual;
   memset(demod,0,sizeof(*demod));
   init_demod(demod);
 
@@ -1492,7 +1494,7 @@ void display_output(WINDOW *w,struct demod const *demod){
   mvwaddstr(w,row++,col,formatsock(&demod->output.data_dest_address));
   
   pprintw(w,row++,col,"ssrc","%'u",demod->output.rtp.ssrc);
-  pprintw(w,row++,col,"pkts","%'ld",demod->output.rtp.packets);
+  pprintw(w,row++,col,"pkts","%'lu",demod->output.rtp.packets);
   
   
   box(w,0,0);
