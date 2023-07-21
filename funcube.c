@@ -429,7 +429,7 @@ double funcube_tune(struct frontend *frontend,double freq){
 
   if(sdr->tunestate == NULL){
     char *tmp = NULL;
-    asprintf(&tmp,sizeof(tmp),"%s/tune-funcube.%d",VARDIR,sdr->number);
+    asprintf(&tmp,"%s/tune-funcube.%d",VARDIR,sdr->number);
     sdr->tunestate = fopen(tmp,"r+");
     if(!sdr->tunestate)
       fprintf(stdout,"Can't open tuner state file %s: %s\n",tmp,strerror(errno));
