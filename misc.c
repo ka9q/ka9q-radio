@@ -42,7 +42,7 @@ int dist_path(char *path,int path_len,const char *fname){
   struct stat st;
 
   if(fname[0] == '/') {
-    strncpy(path, fname, path_len);
+    strlcpy(path, fname, path_len);
     return 0;
   }
 
@@ -87,25 +87,27 @@ void realtime(void){
     if(sched_setscheduler(0,SCHED_FIFO,&param) != 0){
       char name[25];
       int err;
-      if((err = pthread_getname_np(pthread_self(),name,sizeof(name))) != 0){
+      if((err = pthread_getname_np(pthread_self(),name,sizeof(name))) != 0 && errno != EACCES){
+	// Don't bother with permission failures
 	fprintf(stdout,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
       }
-    }
+    } else
+      return;
   }
-#else
+#endif
   // As backup, up our nice priority
   int prio = getpriority(PRIO_PROCESS,0);
   errno = 0; // setpriority can return -1
   prio = setpriority(PRIO_PROCESS,0,prio - 10);
-  if(errno != 0){
+  if(prio != 0 && errno != EACCES){ // Not EPERM!
+    int err = errno;
     char name[25];
     memset(name,0,sizeof(name));
-    int err;
-    if((err = pthread_getname_np(pthread_self(),name,sizeof(name)-1)) == 0){
-      fprintf(stdout,"%s: setpriority failed, %s (%d)\n",name,strerror(errno),errno);
+    if(pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
+      // permission failures happen frequently, don't bother
+      fprintf(stdout,"%s: setpriority failed, %s (%d)\n",name,strerror(err),err);
     }
   }
-#endif
 }
 
 
@@ -412,7 +414,7 @@ uint32_t ElfHashString(const char *s){
 
 #include <errno.h>
 
-int pthread_barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned int count)
+int pthread_barrier_init(pthread_barrier_t *barrier, pthread_barrierattr_t const *attr, unsigned int count)
 {
     if(count == 0)
     {

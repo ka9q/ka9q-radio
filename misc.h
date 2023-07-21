@@ -116,7 +116,7 @@ char *format_gpstime(char *result,int len,int64_t t);
 char *format_utctime(char *result,int len,int64_t t);
 char *ftime(char *result,int size,int64_t t);
 void normalize_time(struct timespec *x);
-double parse_frequency(const char *);
+double parse_frequency(char const *);
 uint32_t nextfastfft(uint32_t n);
 int pipefill(int,void *,int);
 void chomp(char *);

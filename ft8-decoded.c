@@ -234,7 +234,7 @@ void input_loop(){
 	
 	// Save since session will be going away before the decoder fork can delete the file
 	char filename[PATH_MAX];
-	strncpy(filename,sp->filename,sizeof(filename));
+	strlcpy(filename,sp->filename,sizeof(filename));
 
 	struct session * const next = sp->next;
 	close_session(&sp); // Flushes and closes file, but does not delete
