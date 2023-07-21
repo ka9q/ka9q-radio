@@ -43,13 +43,13 @@ static int Samprate = 48000;  // Now applies only to hardware output
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 #define BUFFERSIZE (1<<17)    // about 2.73 sec at 48 kHz stereo - must be power of 2!!
 static float const SCALE = 1./INT16_MAX;
-static const float Latency = 0.02; // chunk size for audio output callback
-static const float Tone_period = 0.24; // PL tone integration period
+static float const Latency = 0.02; // chunk size for audio output callback
+static float const Tone_period = 0.24; // PL tone integration period
 
 // Command line parameters
 static int Update_interval = 100;  // Default time in ms between display updates
 static bool List_audio;            // List audio output devices and exit
-const char *App_path;
+char const *App_path;
 int Verbose;                       // Verbosity flag
 static char const *Config_file;
 static bool Quiet;                 // Disable curses
@@ -61,6 +61,7 @@ static bool PTT_state;
 static uint64_t Audio_callbacks;
 static uint64_t Audio_frames;
 static int64_t LastAudioTime;
+static int32_t Portaudio_delay;
 static pthread_t Repeater_thread;
 static pthread_cond_t PTT_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t PTT_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -139,6 +140,7 @@ struct session {
   uint32_t last_timestamp;  // Last timestamp seen
   int64_t wptr;  // current write pointer into output PCM buffer
   int playout;              // Initial playout delay, samples
+  int queue_time;           // queue delay until output, ms
 
   OpusDecoder *opus;        // Opus codec decoder handle, if needed
   int frame_size;
@@ -180,17 +182,25 @@ static void cleanup(void);
 static void closedown(int);
 static void *display(void *);
 static void reset_session(struct session *sp,uint32_t timestamp);
-static struct session *lookup_session(const struct sockaddr_storage *,uint32_t);
+static struct session *lookup_session(struct sockaddr_storage const *,uint32_t);
 static struct session *create_session(void);
 static int sort_session_active(void),sort_session_total(void);
 static int close_session(struct session **);
 static void pa_finished_callback(void *);
-static int pa_callback(const void *,void *,unsigned long,const PaStreamCallbackTimeInfo*,PaStreamCallbackFlags,void *);
+static int pa_callback(void const *,void *,unsigned long,PaStreamCallbackTimeInfo const *,PaStreamCallbackFlags,void *);
 static void *decode_task(void *x);
 static void *sockproc(void *arg);
 static void *repeater_ctl(void *arg);
 static char const *lookupid(uint32_t ssrc);
 static float make_position(int);
+static inline int modsub(unsigned const a, unsigned const b, unsigned const modulus){
+  int diff = (int)a - (int)b;
+  if(diff > modulus/2)
+    diff -= modulus;
+
+  return diff;
+}
+
 
 static char Optstring[] = "CI:LR:Sac:f:g:p:qr:u:vn";
 static struct  option Options[] = {
@@ -414,7 +424,8 @@ int main(int argc,char * const argv[]){
   // Create portaudio stream.
   // Runs continuously, playing silence until audio arrives.
   // This allows multiple streams to be played on hosts that only support one
-  Output_buffer = calloc(BUFFERSIZE, Channels*sizeof(*Output_buffer));
+  Output_buffer = mirror_alloc(BUFFERSIZE * Channels * sizeof(*Output_buffer));
+  //  Output_buffer = calloc(BUFFERSIZE, Channels*sizeof(*Output_buffer));
 
   PaStreamParameters outputParameters;
   memset(&outputParameters,0,sizeof(outputParameters));
@@ -1043,12 +1054,12 @@ static void *display(void *arg){
 	struct session *sp = Sessions_copy[session];
 	
 	// embolden entire line if active
-	int const queue = sp->wptr > Rptr ? 1000 * (sp->wptr - Rptr) / Samprate : 0;
-	int const idle = sp->wptr < Rptr ? (Rptr - sp->wptr) / Samprate : 0;
+	int queue_ms = sp->wptr > Rptr ? 1000 * (sp->wptr - Rptr) / Samprate : 0; // milliseconds
+	int const idle_sec = sp->wptr < Rptr ? (Rptr - sp->wptr) / Samprate : 0; // seconds
 	
-	if(queue > 0)
+	if(queue_ms > 0)
 	  attr_on(A_BOLD,NULL);
-	
+
 	// Stand out gain and pan on currently selected channel
 	if(session == current)
 	  attr_on(A_STANDOUT,NULL);
@@ -1073,16 +1084,16 @@ static void *display(void *arg){
 		   identifier,
 		   sp->tot_active, // Total active time, sec
 		   sp->active,    // active time in current transmission, sec
-		   ftime(idle_buf,sizeof(idle_buf),idle),   // Time idle since last transmission
-		   queue); // Playout buffer length, fractional sec
+		   ftime(idle_buf,sizeof(idle_buf),idle_sec),   // Time idle since last transmission
+		   queue_ms); // Playout buffer length, fractional sec
 	  else
 	    printw("%9u             %-30s%10.0f%10.0f%10s%6d",
 		   sp->ssrc,
 		   identifier,
 		   sp->tot_active, // Total active time, sec
 		   sp->active,    // active time in current transmission, sec
-		   ftime(idle_buf,sizeof(idle_buf),idle),   // Time idle since last transmission
-		   queue); // Playout buffer length, fractional sec	  
+		   ftime(idle_buf,sizeof(idle_buf),idle_sec),   // Time idle since last transmission
+		   queue_ms); // Playout buffer length, fractional sec	  
 	}
 	if(Verbose){
 	  printw("%5s%3d%3d%3d",
@@ -1115,11 +1126,12 @@ static void *display(void *arg){
 	printw("Audio callbacks: %'llu, Rptr %'llu framesPerCallback %'llu",(unsigned long long)Audio_callbacks,(unsigned long long)Rptr,(unsigned long long)Audio_frames);
 	static float avg_err = 0;
 	avg_err += .0001 * (1e6 * (pa_seconds / unix_seconds - 1) - avg_err);
-	printw(" D/A clock error: %+.3lf ppm ",1e6 * (pa_seconds / unix_seconds - 1));
+	printw(" Portaudio latency %d ms,",Portaudio_delay);
+	printw(" D/A clock error %+.3lf ppm,",1e6 * (pa_seconds / unix_seconds - 1));
 	// Time since last packet drop on any channel
-	printw(" Error-free seconds: %'.1lf",(1e-9*(gps_time_ns() - Last_error_time)));
-	printw(" Initial playout time: %.0f ms",Playout);
-	printw(" Last callback: %.3lf",Last_callback_time);
+	printw(" Error-free seconds %'.1lf,",(1e-9*(gps_time_ns() - Last_error_time)));
+	printw(" Initial playout time %.0f ms,",Playout);
+	printw(" Last callback %.3lf",Last_callback_time);
       }      
     }
 
@@ -1473,8 +1485,16 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
   }
 #endif
   Last_callback_time = timeInfo->currentTime;
+  assert(framesPerBuffer < BUFFERSIZE); // Make sure ring buffer is big enough
+  // Delay within Portaudio in milliseconds
+  Portaudio_delay = 1000. * (timeInfo->outputBufferDacTime - timeInfo->currentTime);
 
-  assert(framesPerBuffer < BUFFERSIZE/2); // Make sure ring buffer is big enough
+#if 1 // Use mirror buffer
+  unsigned long rptr = Rptr & (BUFFERSIZE-1);
+  Rptr += framesPerBuffer;
+  memcpy(outputBuffer,&Output_buffer[Channels*rptr],Channels * framesPerBuffer * sizeof(Output_buffer[0]));
+  memset(&Output_buffer[Channels*rptr],0,Channels * framesPerBuffer * sizeof(Output_buffer[0]));
+#else
   float *out = outputBuffer;
   while(framesPerBuffer > 0){
     // chunk size = lesser of total frames needed or remainder of read buffer before wraparound
@@ -1489,6 +1509,7 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
     memset(&Output_buffer[Channels*rptr],0,Channels * chunk * sizeof(Output_buffer[0]));
     out += chunk * Channels;
   }
+#endif
   return paContinue;
 }
 
