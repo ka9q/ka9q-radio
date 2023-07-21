@@ -359,8 +359,8 @@ int main(int argc,char *argv[]){
     exit(1);
   }
   if(Ssrc == 0){
-    Ssrc = random();
-    fprintf(stderr,"-s ssrc missing, generating randomly: %'d\n",Ssrc);
+    Ssrc = arc4random();
+    fprintf(stderr,"-s missing, generating random ssrc: %'u\n",Ssrc);
   }
   resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,Iface,sizeof(Iface));
   Status_fd = listen_mcast(&Metadata_dest_address,Iface);
