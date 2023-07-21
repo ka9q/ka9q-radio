@@ -17,6 +17,7 @@
 #include <string.h>
 #if defined(linux)
 #include <bsd/string.h>
+#include <bsd/stdlib.h> // for arc4random()
 #endif
 #include <math.h>
 #include <complex.h>
