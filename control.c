@@ -359,7 +359,7 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"<ssrc> is positive decimal number, mcast_group is DNS name or IP address of control multicast group\n");
     exit(1);
   }
-  if(Ssrc == 0){
+  while(Ssrc == 0){
     Ssrc = arc4random();
     fprintf(stderr,"-s missing, generating random ssrc: %'u\n",Ssrc);
   }
