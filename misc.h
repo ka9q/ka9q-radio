@@ -18,6 +18,9 @@
 #include <complex.h>
 #include <math.h> // Get M_PI
 #include <stdlib.h> // for ldiv(), free()
+#ifdef __linux__
+#include <bsd/string.h>
+#endif
 #include <assert.h>
 
 #ifndef M_PIf
