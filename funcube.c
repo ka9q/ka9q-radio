@@ -146,6 +146,7 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
   }
   if(sdr->tunestate != NULL){
     // Recreate for writing
+    rewind(sdr->tunestate);
     fprintf(sdr->tunestate,"%d\n",intfreq);
     fflush(sdr->tunestate); // Leave open for further use
   }
@@ -425,13 +426,15 @@ double funcube_tune(struct frontend *frontend,double freq){
   assert(sdr != NULL);
 
   int intfreq = freq;
-  char tmp[PATH_MAX];
+
   if(sdr->tunestate == NULL){
-    snprintf(tmp,sizeof(tmp),"%s/tune-funcube.%d",VARDIR,sdr->number);
+    char *tmp = NULL;
+    asprintf(&tmp,sizeof(tmp),"%s/tune-funcube.%d",VARDIR,sdr->number);
     sdr->tunestate = fopen(tmp,"r+");
-    if(!sdr->tunestate){
+    if(!sdr->tunestate)
       fprintf(stdout,"Can't open tuner state file %s: %s\n",tmp,strerror(errno));
-    }
+
+    FREE(tmp);
   }
   if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
     fprintf(stdout,"fcdOpen(%d): can't re-open control port\n",sdr->number);
@@ -442,6 +445,7 @@ double funcube_tune(struct frontend *frontend,double freq){
 
   // Recreate for writing
   if(sdr->tunestate != NULL){
+    rewind(sdr->tunestate);
     fprintf(sdr->tunestate,"%d\n",intfreq);
     fflush(sdr->tunestate); // Leave open for further use
   }
