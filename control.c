@@ -353,14 +353,15 @@ int main(int argc,char *argv[]){
   }
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
   // Dummy filter
-  if(Ssrc == 0 || argc < optind){
+  if(argc <= optind){
     fprintf(stderr,"Usage: %s -s <ssrc> mcast_group\n",App_path);
     fprintf(stderr,"<ssrc> is positive decimal number, mcast_group is DNS name or IP address of control multicast group\n");
     exit(1);
   }
-
-
-
+  if(Ssrc == 0){
+    Ssrc = random();
+    fprintf(stderr,"-s ssrc missing, generating randomly: %'d\n",Ssrc);
+  }
   resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,Iface,sizeof(Iface));
   Status_fd = listen_mcast(&Metadata_dest_address,Iface);
   if(Status_fd == -1){
