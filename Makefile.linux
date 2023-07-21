@@ -90,7 +90,7 @@ depend: .depend
 
 # Executables
 set_xcvr: set_xcvr.o config.o
-	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lrt -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lrt -lbsd -lm -lpthread
 
 aprs: aprs.o ax25.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
@@ -132,7 +132,7 @@ metadump: metadump.o dump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 modulate: modulate.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 monitor: monitor.o morse.o config.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lncursesw -liniparser -lbsd -lm -lpthread
