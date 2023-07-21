@@ -1494,7 +1494,7 @@ void display_output(WINDOW *w,struct demod const *demod){
   mvwaddstr(w,row++,col,formatsock(&demod->output.data_dest_address));
   
   pprintw(w,row++,col,"ssrc","%'u",demod->output.rtp.ssrc);
-  pprintw(w,row++,col,"pkts","%'lu",demod->output.rtp.packets);
+  pprintw(w,row++,col,"pkts","%'llu",(long long unsigned)demod->output.rtp.packets);
   
   
   box(w,0,0);
