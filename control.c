@@ -543,7 +543,7 @@ int main(int argc,char *argv[]){
     // Set up command buffer in case we want to change something
     uint8_t cmdbuffer[1024];
     uint8_t *bp = cmdbuffer;
-    *bp++ = 1; // Command
+    *bp++ = CMD; // Command
 
     int const c = getch(); // read keyboard with timeout; controls refresh rate
     if(c == KEY_MOUSE){
@@ -558,7 +558,7 @@ int main(int argc,char *argv[]){
       // Yes
       if(Ssrc != 0)
 	encode_int(&bp,OUTPUT_SSRC,Ssrc); // Specific SSRC
-      encode_int(&bp,COMMAND_TAG,random()); // Append a command tag
+      encode_int(&bp,COMMAND_TAG,arc4random()); // Append a command tag
       encode_eol(&bp);
       int const command_len = bp - cmdbuffer;
       if(send(Ctl_fd, cmdbuffer, command_len, 0) != command_len)
@@ -1614,8 +1614,8 @@ double set_first_LO(struct demod const * const demod,double first_LO){
     uint8_t packet[8192],*bp;
     memset(packet,0,sizeof(packet));
     bp = packet;
-    *bp++ = 1; // Command
-    Frontend.sdr.command_tag = random();
+    *bp++ = CMD; // Command
+    Frontend.sdr.command_tag = arc4random();
     encode_int32(&bp,COMMAND_TAG,Frontend.sdr.command_tag);
     encode_double(&bp,RADIO_FREQUENCY,first_LO);
     encode_eol(&bp);

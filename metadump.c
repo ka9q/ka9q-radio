@@ -83,7 +83,7 @@ int main(int argc,char *argv[]){
     enum pkt_type const cr = buffer[0]; // Command/response byte
     char temp[1024];
     fprintf(stdout,"%s %s", format_gpstime(temp,sizeof(temp),now), formatsock(&source));
-    fprintf(stdout,"%s", cr == STATUS ? "STAT" : cr == CMD ? "CMD" : cr == SSRC_LIST ? "SSRC_LIST" : "unknown");
+    fprintf(stdout," %s", cr == STATUS ? "STAT" : cr == CMD ? "CMD" : cr == SSRC_LIST ? "SSRC_LIST" : "unknown");
     dump_metadata(buffer+1,length-1,Newline);
     fflush(stdout);
   }
