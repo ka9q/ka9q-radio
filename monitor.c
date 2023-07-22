@@ -28,7 +28,7 @@
 
 // Global constants
 #define MAX_MCAST 20          // Maximum number of multicast addresses
-#define BUFFERSIZE (1<<17)    // about 2.73 sec at 48 kHz stereo - must be power of 2!!
+#define BUFFERSIZE (1<<17)    // about 2.73 sec at 48 kHz - must be power of 2 times page size (4k)!
 static float const Latency = 0.02; // chunk size for audio output callback
 static float const Tone_period = 0.24; // PL tone integration period
 #define NSESSIONS 1500
@@ -42,7 +42,7 @@ static char const *Display = "display";
 // Command line/config file/interactive command parameters
 static char const *Tx_on = "set_xcvr txon";
 static char const *Tx_off = "set_xcvr txoff";
-static int Samprate = 48000;  // Now applies only to hardware output
+static int DAC_samprate = 48000;   // Actual hardware output rate
 static int Update_interval = 100;  // Default time in ms between display updates
 char const *App_path;
 int Verbose;                       // Verbosity flag
@@ -75,10 +75,10 @@ static char const *Init;
 static int64_t Last_xmit_time;
 static int64_t Last_id_time;
 static float *Output_buffer;
-static volatile uint32_t Rptr;            // callback read pointer
+static volatile unsigned int Rptr;            // callback read pointer, *frames*
 static bool PTT_state;
 static uint64_t Audio_callbacks;
-static uint64_t Audio_frames;
+static unsigned long Audio_frames;
 static int64_t LastAudioTime;
 static int32_t Portaudio_delay;
 static pthread_t Repeater_thread;
@@ -122,12 +122,12 @@ struct session {
   int type;                 // RTP type (10,11,20,111)
 
   uint32_t last_timestamp;  // Last timestamp seen
-  uint32_t wptr;  // current write pointer into output PCM buffer
-  int playout;              // Initial playout delay, samples
+  unsigned int wptr;        // current write index into output PCM buffer, *frames*
+  int playout;              // Initial playout delay, frames
   long long last_active;    // GPS time last active
   long long last_start;     // GPS time at last transition to active from idle
-  float tot_active; // Total PCM time, ns
-  float active;  // Seconds we've been active (only when queue has stuff)
+  float tot_active;         // Total PCM time, ns
+  float active;             // Seconds we've been active (only when queue has stuff)
 
   OpusDecoder *opus;        // Opus codec decoder handle, if needed
   int frame_size;
@@ -175,10 +175,19 @@ static void *sockproc(void *arg);
 static void *repeater_ctl(void *arg);
 static char const *lookupid(uint32_t ssrc);
 static float make_position(int);
-static inline int modsub(unsigned const a, unsigned const b, unsigned const modulus){
+static inline int modsub(unsigned int const a, unsigned int const b, int const modulus){
   int diff = (int)a - (int)b;
+  if(diff > modulus)
+    return diff % modulus; // Unexpectedly large, just do it the slow way
+
   if(diff > modulus/2)
-    diff -= modulus;
+   return  diff - modulus;
+
+  if(diff < -modulus)
+    return diff % modulus; // Unexpectedly small
+
+  if(diff < -modulus/2)
+    diff += modulus;
 
   return diff;
 }
@@ -227,7 +236,7 @@ int main(int argc,char * const argv[]){
      fprintf(stdout,"Can't load config file %s\n",Config_file);
       exit(1);
     }
-    Samprate = config_getint(Configtable,Audio,"samprate",Samprate);
+    DAC_samprate = config_getint(Configtable,Audio,"samprate",DAC_samprate);
     Channels = config_getint(Configtable,Audio,"channels",Channels);
     char const *audiodev = config_getstring(Configtable,"audio","device",NULL);
     if(audiodev)
@@ -293,7 +302,7 @@ int main(int argc,char * const argv[]){
       Quiet = true;
       break;
     case 'r':
-      Samprate = strtol(optarg,NULL,0);
+      DAC_samprate = strtol(optarg,NULL,0);
       break;
     case 'u':
       Update_interval = strtol(optarg,NULL,0);
@@ -365,7 +374,7 @@ int main(int argc,char * const argv[]){
     // -29 dB is -15 + (-14).
     // -15 dBFS is the target level of the FM demodulator
     // -14 dB is 1 kHz ID deviation divided by 5 kHz peak deviation
-    Dit_length = init_morse(ID_speed,ID_pitch,ID_level,Samprate);
+    Dit_length = init_morse(ID_speed,ID_pitch,ID_level,DAC_samprate);
   }    
 
   PaError r = Pa_Initialize();
@@ -407,7 +416,8 @@ int main(int argc,char * const argv[]){
   // Create portaudio stream.
   // Runs continuously, playing silence until audio arrives.
   // This allows multiple streams to be played on hosts that only support one
-  Output_buffer = mirror_alloc(BUFFERSIZE * Channels * sizeof(*Output_buffer));
+  Output_buffer = mirror_alloc(BUFFERSIZE * Channels * sizeof(*Output_buffer)); // Must be power of 2 times page size
+  memset(Output_buffer,0,BUFFERSIZE * Channels * sizeof(*Output_buffer)); // Does mmap clear its initial memory? Not sure
 
   PaStreamParameters outputParameters;
   memset(&outputParameters,0,sizeof(outputParameters));
@@ -419,7 +429,7 @@ int main(int argc,char * const argv[]){
   r = Pa_OpenStream(&Pa_Stream,
 		    NULL,
 		    &outputParameters,
-		    Samprate,
+		    DAC_samprate,
 		    paFramesPerBufferUnspecified, // seems to be 31 on OSX
 		    //SAMPPCALLBACK,
 		    0,
@@ -582,7 +592,7 @@ static void *sockproc(void *arg){
       sp->rtp_state.seq = pkt->rtp.seq;
       sp->reset = true;
       sp->type = pkt->rtp.type;
-      sp->samprate = sp->type == OPUS_PT ? Samprate : samprate_from_pt(sp->type);
+      sp->samprate = sp->type == OPUS_PT ? DAC_samprate : samprate_from_pt(sp->type);
       for(int j=0; j < N_tones; j++)
 	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
 
@@ -682,7 +692,7 @@ static void *decode_task(void *arg){
       // No. If we've got plenty in the playout buffer, sleep to allow some packet resequencing in the input thread.
       // Strictly speaking, we will resequence ourselves below with the RTP timestamp. But that works properly only with stateless
       // formats like PCM. Opus is stateful, so it's better to resequence input packets (using the RTP sequence #) when possible.
-      float queue = (float)modsub(sp->wptr,Rptr,BUFFERSIZE) / Samprate;
+      float queue = (float)modsub(sp->wptr,Rptr,BUFFERSIZE) / DAC_samprate;
       if(queue > Latency + 0.1){ // 100 ms for scheduling latency?
 	pthread_mutex_unlock(&sp->qmutex);
 	struct timespec ss;
@@ -722,20 +732,20 @@ static void *decode_task(void *arg){
 	int error;
 	
 	// Decode Opus to the selected sample rate
-	sp->opus = opus_decoder_create(Samprate,Channels,&error);
+	sp->opus = opus_decoder_create(DAC_samprate,Channels,&error);
 	if(error != OPUS_OK)
 	  fprintf(stderr,"opus_decoder_create error %d\n",error);
 
 	assert(sp->opus);
       }
       sp->channels = Channels;
-      sp->samprate = Samprate;
+      sp->samprate = DAC_samprate;
       // Opus RTP timestamps always referenced to 48 kHz
       int const r0 = opus_packet_get_nb_samples(pkt->data,pkt->len,48000);
       if(r0 == OPUS_INVALID_PACKET || r0 == OPUS_BAD_ARG)
 	goto endloop;
 
-      int const r1 = opus_packet_get_nb_samples(pkt->data,pkt->len,Samprate);
+      int const r1 = opus_packet_get_nb_samples(pkt->data,pkt->len,DAC_samprate);
       if(r1 == OPUS_INVALID_PACKET || r1 == OPUS_BAD_ARG)
 	goto endloop;
 
@@ -765,21 +775,18 @@ static void *decode_task(void *arg){
       size_t const bounce_size = sizeof(*bounce) * sp->frame_size * sp->channels;
       assert(bounce == NULL); // detect possible memory leaks
       bounce = malloc(bounce_size);
-      int samples = opus_decode_float(sp->opus,pkt->data,pkt->len,bounce,bounce_size,0);
-      if(samples != sp->frame_size || samples != r1)
-	fprintf(stderr,"samples %d frame-size %d r1 %d\n",samples,sp->frame_size,r1);
+      int const samples = opus_decode_float(sp->opus,pkt->data,pkt->len,bounce,bounce_size,0);
+      if(samples != sp->frame_size)
+	fprintf(stderr,"samples %d frame-size %d\n",samples,sp->frame_size);
       
       // opus timestamps are always 48 kHz regardless of chosen decoder output sample rate
-      // Difference in timestamps might be negative, and since they're unsigned the (int32_t) cast is necessary
-      if(pkt->rtp.timestamp != sp->last_timestamp){
-	sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * Samprate / 48000;
-	sp->wptr &= (BUFFERSIZE-1);
-      }
+      // Can difference in timestamps be negative? Cast it anyway
+      sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * DAC_samprate / 48000;
     } else { // PCM
       // Test for invalidity
       sp->samprate = samprate_from_pt(sp->type);
-      upsample = Samprate / sp->samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
-      sp->bandwidth = sp->samprate / 2000;
+      upsample = DAC_samprate / sp->samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
+      sp->bandwidth = sp->samprate / 2000;    // in kHz allowing for Nyquist
       sp->channels = channels_from_pt(sp->type); // channels in packet (not portaudio output buffer)
       
       if(sp->samprate <= 0 || sp->channels <= 0 || sp->channels > 2)
@@ -787,32 +794,29 @@ static void *decode_task(void *arg){
       sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
       if(sp->frame_size <= 0)
 	goto endloop;
-      int16_t const *data_ints = (int16_t *)&pkt->data[0];	
+      int16_t const * const data_ints = (int16_t *)&pkt->data[0];	
       assert(bounce == NULL);
       bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
       for(int i=0; i < sp->channels * sp->frame_size; i++)
-	bounce[i] = SCALE16 * (int16_t)ntohs(*data_ints++);
-      // Difference in timestamps might be negative, and since they're unsigned the (int32_t) cast is necessary
-      if(pkt->rtp.timestamp != sp->last_timestamp){
-	sp->wptr += upsample * (int32_t)(pkt->rtp.timestamp - sp->last_timestamp);
-	sp->wptr &= (BUFFERSIZE-1);
-      }
-      sp->last_timestamp = pkt->rtp.timestamp;
-
-      // Run PL tone decoders
-      // Disable if display isn't active and autonotching is off
-      // Fed audio that might be discontinuous or out of sequence, but it's a pain to fix
-      if(sp->notch_enable) {
-	for(int i=0; i < sp->frame_size; i++){
-	  float s;
-	  if(sp->channels == 2)
-	    s = 0.5 * (bounce[2*i] + bounce[2*i+1]); // Mono sum
-	  else // sp->channels == 1
-	    s = bounce[i];
-	  
-	  for(int j = 0; j < N_tones; j++)
-	    update_goertzel(&sp->tone_detector[j],s);
-	}
+	bounce[i] = SCALE16 * (int16_t)ntohs(data_ints[i]);
+      // Can difference in timestamps be negative? Cast it anyway
+      sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * upsample;
+    }
+    sp->wptr &= (BUFFERSIZE-1);
+    sp->last_timestamp = pkt->rtp.timestamp;
+    // Run PL tone decoders
+    // Disable if display isn't active and autonotching is off
+    // Fed audio that might be discontinuous or out of sequence, but it's a pain to fix
+    if(sp->notch_enable) {
+      for(int i=0; i < sp->frame_size; i++){
+	float s;
+	if(sp->channels == 2)
+	  s = 0.5 * (bounce[2*i] + bounce[2*i+1]); // Mono sum
+	else // sp->channels == 1
+	  s = bounce[i];
+	
+	for(int j = 0; j < N_tones; j++)
+	  update_goertzel(&sp->tone_detector[j],s);
       }
       sp->tone_samples += sp->frame_size;
       if(sp->tone_samples >= Tone_period * sp->samprate){
@@ -835,7 +839,7 @@ static void *decode_task(void *arg){
 	} else
 	  sp->current_tone = 0;
       } // End of tone observation period
-    } // !Quiet || sp->notch_enable
+    } // sp->notch_enable
     bool keyup = false; // Don't do printf while holding locks
     if(modsub(sp->wptr,Rptr,BUFFERSIZE) < 0){
       sp->lates++;
@@ -876,36 +880,40 @@ static void *decode_task(void *arg){
 	   empirically) This is really what drives source localization
 	   in humans. The effect is so dramatic even with equal levels
 	   you have to remove one earphone to convince yourself that the
-	   levels really are the same */
-	int const left_delay = (sp->pan > 0) ? round(sp->pan * .0015 * Samprate) : 0; // Delay left channel
-	int const right_delay = (sp->pan < 0) ? round(-sp->pan * .0015 * Samprate) : 0; // Delay right channel
+	   levels really are the same! */
+	int const left_delay = (sp->pan > 0) ? round(sp->pan * .0015 * DAC_samprate) : 0; // Delay left channel
+	int const right_delay = (sp->pan < 0) ? round(-sp->pan * .0015 * DAC_samprate) : 0; // Delay right channel
 
 	assert(left_delay >= 0 && right_delay >= 0);
 
 	// Mix bounce buffer into output buffer read by portaudio callback
 	// Simplified by mirror buffer wrap
-	int64_t left_index = sp->wptr + left_delay;
-	int64_t right_index = sp->wptr + right_delay;
+	int left_index = 2 * (sp->wptr + left_delay);
+	int right_index = 2 * (sp->wptr + right_delay) + 1;
 
 	for(int i=0; i < sp->frame_size; i++){
 	  float left,right;
 	  if(sp->channels == 1){
-	    // Mono input
-	    left = bounce[i] * left_gain;
-	    right = bounce[i] * right_gain;
+	    // Mono input, put on both channels
+	    left = bounce[i];
+	    if(sp->notch_enable && sp->notch_tone > 0)
+	      left = applyIIRnotch(&sp->iir_left,left);
+	    right = left;
 	  } else {
 	    // stereo input
-	    left = bounce[2*i] * left_gain;
-	    right = bounce[2*i+1] * right_gain;
-	  }
-	  if(sp->notch_enable && sp->notch_tone > 0){
-	    left = applyIIRnotch(&sp->iir_left,left);
-	    right = applyIIRnotch(&sp->iir_right,right);
+	    left = bounce[2*i];
+	    right = bounce[2*i+1];
+	    if(sp->notch_enable && sp->notch_tone > 0){
+	      left = applyIIRnotch(&sp->iir_left,left);
+	      right = applyIIRnotch(&sp->iir_right,right);
+	    }
 	  }
 	  // Not the cleanest way to upsample the sample rate, but it works
 	  for(int j=0; j < upsample; j++){
-	    Output_buffer[2 * left_index++] += left;
-	    Output_buffer[2 * right_index++ + 1] += right;
+	    Output_buffer[left_index] += left * left_gain;
+	    Output_buffer[right_index] += right * right_gain;
+	    left_index += 2;
+	    right_index += 2;
 	  }
 	}
       } else { // Channels == 1, no panning
@@ -913,16 +921,16 @@ static void *decode_task(void *arg){
 	for(int i=0; i < sp->frame_size; i++){
 	  float s;
 	  if(sp->channels == 1){
-	    s = sp->gain * bounce[i];
+	    s = bounce[i];
 	  } else {
 	    // Downmix to mono
-	    s = sp->gain * 0.5 * (bounce[2*i] + bounce[2*i+1]);
+	    s = 0.5 * (bounce[2*i] + bounce[2*i+1]);
 	  }
 	  if(sp->notch_enable && sp->notch_tone > 0)
 	    s = applyIIRnotch(&sp->iir_left,s);
 	  // Not the cleanest way to upsample the sample rate, but it works
 	  for(int j=0; j < upsample; j++){
-	    Output_buffer[index++] += s;
+	    Output_buffer[index++] += s * sp->gain;
 	  }
 	}
       } // Channels == 1
@@ -1061,7 +1069,7 @@ static void *display(void *arg){
 	    // Active within the past 500 ms
 	    attr_on(A_BOLD,NULL);
 	    int d = modsub(sp->wptr,Rptr,BUFFERSIZE); // Unplayed samples on queue
-	    queue_ms = d > 0 ? 1000 * d / Samprate : 0; // milliseconds
+	    queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
 	  } else {
 	    sp->active = 0; // Clear accumulated value
 	    idle_sec = (time - sp->last_active) / BILLION;
@@ -1133,7 +1141,7 @@ static void *display(void *arg){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
 	double unix_seconds = (gps_time_ns() - Start_time) * 1e-9;
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
-	printw("Audio callbacks: %'llu, Rptr %'8u framesPerCallback %'llu",(unsigned long long)Audio_callbacks,Rptr,(unsigned long long)Audio_frames);
+	printw("Audio callbacks: %'llu, Rptr %'8u framesPerCallback %'lu",(unsigned long long)Audio_callbacks,Rptr,Audio_frames);
 	static float avg_err = 0;
 	avg_err += .0001 * (1e6 * (pa_seconds / unix_seconds - 1) - avg_err);
 	printw(" Portaudio latency %d ms,",Portaudio_delay);
@@ -1341,7 +1349,7 @@ static void reset_session(struct session * const sp,uint32_t timestamp){
     opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
   sp->reset = false;
   sp->last_timestamp = timestamp;
-  sp->playout = Playout * Samprate/1000;
+  sp->playout = Playout * DAC_samprate/1000;
   sp->wptr = (Rptr + sp->playout) & (BUFFERSIZE-1);
 }
 
@@ -1493,9 +1501,10 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
   // Delay within Portaudio in milliseconds
   Portaudio_delay = 1000. * (timeInfo->outputBufferDacTime - timeInfo->currentTime);
 
-  // Use mirror buffer to simplify wraparound
-  memcpy(outputBuffer,&Output_buffer[Channels*Rptr],Channels * framesPerBuffer * sizeof(Output_buffer[0]));
-  memset(&Output_buffer[Channels*Rptr],0,Channels * framesPerBuffer * sizeof(Output_buffer[0]));
+  // Use mirror buffer to simplify wraparound. Count is in bytes = Channels * frames * sizeof(float)
+  memcpy(outputBuffer,&Output_buffer[Channels*Rptr],Channels * framesPerBuffer * sizeof(*Output_buffer));
+  // Zero what we just copied
+  memset(&Output_buffer[Channels*Rptr],0,Channels * framesPerBuffer * sizeof(*Output_buffer));
   Rptr += framesPerBuffer;
   Rptr &= (BUFFERSIZE-1);
   return paContinue;
@@ -1527,7 +1536,7 @@ void send_cwid(void){
   }
 
   float samples[60 * Dit_length];
-  uint32_t wptr = (Rptr + ((long)Playout * Samprate))/1000;
+  uint32_t wptr = (Rptr + ((long)Playout * DAC_samprate))/1000;
   wptr &= (BUFFERSIZE-1);
 
   // Don't worry about wrap during write, the mirror will handle it
@@ -1545,7 +1554,7 @@ void send_cwid(void){
 	Output_buffer[wptr++] += samples[i];
     }
     // Wait for it to play out
-    int64_t const sleeptime = BILLION * samplecount / Samprate;
+    int64_t const sleeptime = BILLION * samplecount / DAC_samprate;
     struct timespec ts;
     ns2ts(&ts,sleeptime);
     nanosleep(&ts,NULL);
