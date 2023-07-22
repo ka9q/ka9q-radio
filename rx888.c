@@ -73,6 +73,14 @@ static double val2gain(int g);
 static int gain2val(bool highgain, double gain);
 static void *proc_rx888(void *arg);
 
+
+#define N_USB_SPEEDS 6
+static char const *usb_speeds[N_USB_SPEEDS] =
+  {"unknown", "Low (1.5 Mb/s)", "Full (12 Mb/s)", "High (480 Mb/s)", "Super (5 Gb/s)", "Super+ (10Gb/s)"};
+
+
+
+
 int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *section){
   assert(Dictionary != NULL);
 
@@ -262,6 +270,7 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
     uint16_t const vendor_id = 0x04b4;
     uint16_t const product_id = 0x00f3;
     // does it already have firmware?
+    // (This will have to be changed to select one of multiple devices)
     sdr->dev_handle =
       libusb_open_device_with_vid_pid(NULL,vendor_id,product_id);
     if(sdr->dev_handle){
@@ -271,7 +280,7 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
 	return -1;
       }
       char full_firmware_file[PATH_MAX];
-      full_firmware_file[0] = '\0';
+      memset(full_firmware_file,0,sizeof(full_firmware_file));
       dist_path(full_firmware_file,sizeof(full_firmware_file),firmware);
       fprintf(stdout,"Loading rx888 firmware file %s\n",full_firmware_file);
       struct libusb_device *dev = libusb_get_device(sdr->dev_handle);
@@ -319,29 +328,54 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
   assert(dev != NULL);
   enum libusb_speed usb_speed = libusb_get_device_speed(dev);
   // fv
-  fprintf(stdout,"USB speed: %d\n",usb_speed);
+  if(usb_speed < N_USB_SPEEDS)
+    fprintf(stdout,"USB speed: %s\n",usb_speeds[usb_speed]);
+  else
+    fprintf(stdout,"Unknown USB speed index %d\n",usb_speed);
+
   if(usb_speed < LIBUSB_SPEED_SUPER){
-    fprintf(stdout,"USB device speed (%d) is not at least SuperSpeed\n",usb_speed);
+    fprintf(stdout,"USB device is not at least SuperSpeed; is it plugged into a blue USB jack?\n");
     return -1;
   }
   libusb_get_config_descriptor(dev, 0, &sdr->config);
   {
+    struct libusb_device_descriptor desc;
+    memset(&desc,0,sizeof(desc));
+    libusb_get_device_descriptor(dev,&desc);
+    if(desc.iManufacturer){
+      char string[100];
+      memset(string,0,sizeof(string));
+      int ret = libusb_get_string_descriptor_ascii(sdr->dev_handle,desc.iManufacturer,(unsigned char *)string,sizeof(string));
+      if(ret > 0)
+	fprintf(stdout,"Manufacturer: %s\n",string);
+    }
+    if(desc.iProduct){
+      char string[100];
+      int ret = libusb_get_string_descriptor_ascii(sdr->dev_handle,desc.iProduct,(unsigned char *)string,sizeof(string));
+      if(ret > 0)
+	fprintf(stdout,"Product: %s\n",string);
+    }
+    if(desc.iSerialNumber){
+      char string[100];
+      int ret = libusb_get_string_descriptor_ascii(sdr->dev_handle,desc.iSerialNumber,(unsigned char *)string,sizeof(string));
+      if(ret > 0)
+	fprintf(stdout,"Serial: %s\n",string);
+    }
+  }
+  {
     int const ret = libusb_claim_interface(sdr->dev_handle, sdr->interface_number);
     if(ret != 0){
-      fprintf(stderr, "Error claiming interface\n");
+      fprintf(stderr, "Error claiming USB interface\n");
       goto end;
     }
   }
-  fprintf(stdout,"Successfully claimed interface\n");
   {
     // All this just to get sdr->pktsize?
     struct libusb_interface_descriptor const *interfaceDesc = &(sdr->config->interface[0].altsetting[0]);
     assert(interfaceDesc != NULL);
     struct libusb_endpoint_descriptor const *endpointDesc = &interfaceDesc->endpoint[0];
     assert(endpointDesc != NULL);
-    struct libusb_device_descriptor desc;
-    memset(&desc,0,sizeof(desc));
-    libusb_get_device_descriptor(dev,&desc);
+
     struct libusb_ss_endpoint_companion_descriptor *ep_comp = NULL;
     int const rc = libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
     if(rc != 0){
@@ -375,6 +409,7 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
     free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
     sdr->databuffers = NULL;
     sdr->transfers = NULL;
+    return -1;
   }
   sdr->queuedepth = queuedepth;
   sdr->reqsize = reqsize;
