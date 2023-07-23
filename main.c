@@ -179,10 +179,8 @@ int main(int argc,char *argv[]){
     Name = argv[optind]; // Ah, just use whole thing
   }
   fprintf(stdout,"Loading config file %s...\n",configfile);
-  fflush(stdout);
   int const n = loadconfig(argv[optind]);
   fprintf(stdout,"%d total demodulators started\n",n);
-  fflush(stdout);
 
   while(1)
     sleep(100);
@@ -251,7 +249,6 @@ static int mcast_setup_frontend(char const *arg){
   }  
   fprintf(stdout,"Front end sample rate %'d Hz, %s; block time %.1f ms, %.1f Hz\n",
 	  Frontend.sdr.samprate,Frontend.sdr.isreal ? "real" : "complex",Blocktime,1000.0f/Blocktime);
-  fflush(stdout);
 
   // Input socket for I/Q data from SDR, set from OUTPUT_DEST_SOCKET in SDR metadata
   Frontend.input.data_fd = listen_mcast(&Frontend.input.data_dest_address,Iface);
@@ -405,8 +402,7 @@ static int loadconfig(char const * const file){
     if(config_getboolean(Configtable,sname,"disable",0))
 	continue; // section is disabled
 
-    fprintf(stdout,"Processing [%s]: ",sname); // log only if not disabled
-    fflush(stdout);
+    fprintf(stdout,"Processing [%s]\n",sname); // log only if not disabled
     // fall back to setting in [global] if parameter not specified in individual section
     // Set parameters even when unused for the current demodulator in case the demod is changed later
     char const * mode = config2_getstring(Configtable,Configtable,global,sname,"mode",NULL);
@@ -499,8 +495,7 @@ static int loadconfig(char const * const file){
 
 	    // Template for dynamically created demods
 	    Dynamic_demod = demod;
-	    fprintf(stdout,"dynamic demod template created ");
-	    fflush(stdout);
+	    fprintf(stdout,"dynamic demod template created\n");
 	  } else {
 	    for(char const *cp = tok ; cp != NULL && *cp != '\0' ; cp++){
 	      if(isdigit(*cp)){
