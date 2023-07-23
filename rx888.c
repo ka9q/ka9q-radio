@@ -265,6 +265,7 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
       return -1;
     }
   }
+
   {
     // Temporary ID when device doesn't already have firmware
     // Apparently can also come up as product_id 0x00bc, 0x00b0 or 0x0053. Should check for these too.
