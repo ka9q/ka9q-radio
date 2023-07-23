@@ -118,8 +118,7 @@ double funcube_tune(struct frontend *,double);
 // catches signals and eventually becomes the user interface/display loop
 int main(int argc,char *argv[]){
   App_path = argv[0];
-  fprintf(stdout,"KA9Q Multichannel SDR\n");
-  fprintf(stdout,"Copyright 2018-2023 by Phil Karn, KA9Q; may be used under the terms of the GNU General Public License\n");
+  fprintf(stdout,"KA9Q Multichannel SDR Copyright 2018-2023 by Phil Karn, KA9Q; may be used under the terms of the GNU General Public License\n");
 #ifndef NDEBUG
   fprintf(stdout,"Assertion checking enabled, execution will be slower\n");
 #endif
@@ -403,10 +402,11 @@ static int loadconfig(char const * const file){
     if(config_getstring(Configtable,sname,"device",NULL) != NULL)
       continue; // It's a front end configuration, ignore
 
-    fprintf(stdout,"Processing [%s]\n",sname);
     if(config_getboolean(Configtable,sname,"disable",0))
 	continue; // section is disabled
 
+    fprintf(stdout,"Processing [%s]: ",sname); // log only if not disabled
+    fflush(stdout);
     // fall back to setting in [global] if parameter not specified in individual section
     // Set parameters even when unused for the current demodulator in case the demod is changed later
     char const * mode = config2_getstring(Configtable,Configtable,global,sname,"mode",NULL);
@@ -499,7 +499,8 @@ static int loadconfig(char const * const file){
 
 	    // Template for dynamically created demods
 	    Dynamic_demod = demod;
-	    fprintf(stdout,"dynamic demod template created\n");
+	    fprintf(stdout,"dynamic demod template created ");
+	    fflush(stdout);
 	  } else {
 	    for(char const *cp = tok ; cp != NULL && *cp != '\0' ; cp++){
 	      if(isdigit(*cp)){
