@@ -1,4 +1,8 @@
+# 00F3 is the nominal unprogrammed device, 00F1 is the nominal programmed device. But Cypress forums say that
+# the last three (00bc, 00b0, 0053) can happen if the PMODE pins are changed
 SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTRS{idVendor}=="04b4",ATTRS{idProduct}=="00f1",MODE:="0666",GROUP="plugdev"
 SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTRS{idVendor}=="04b4",ATTRS{idProduct}=="00f3",MODE:="0666",GROUP="plugdev"
-
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTRS{idVendor}=="04b4",ATTRS{idProduct}=="00bc",MODE:="0666",GROUP="plugdev"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTRS{idVendor}=="04b4",ATTRS{idProduct}=="00b0",MODE:="0666",GROUP="plugdev"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTRS{idVendor}=="04b4",ATTRS{idProduct}=="0053",MODE:="0666",GROUP="plugdev"
 
