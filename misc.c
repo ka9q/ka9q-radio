@@ -525,7 +525,7 @@ void *mirror_alloc(size_t size){
   }
   // Create mirror immedately after first
   uint8_t * const mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
-  close(fd);
+  close(fd); // No longer needed after all memory maps are in place
   if(mirror != base + size){
     perror("mirror_alloc second mmap");
     munmap(base,size * 2);

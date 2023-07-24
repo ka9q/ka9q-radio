@@ -42,6 +42,7 @@ struct sdrstate {
   unsigned int transfer_index; // Write index into the transfer_size array (unused)
   struct libusb_transfer **transfers; // List of transfer structures.
   unsigned char **databuffers;        // List of data buffers.
+  long long last_callback_time;
 
   // USB transfer
   int xfers_in_progress;
@@ -193,16 +194,36 @@ static void *proc_rx888(void *arg){
     int ret __attribute__ ((unused));
     ret = rx888_start_rx(sdr,rx_callback);
     assert(ret == 0);
+    sdr->last_callback_time = gps_time_ns();
   }
   do {
-    libusb_handle_events(NULL);
+    // If the USB cable is pulled, libusb_handle_events() simply hangs
+    // so use libusb_handle_events_timeout_completed() instead
+    // Unfortunately it doesn't give any indication that it has timed out
+    // so we check more directly how long it's been since we last got data
+    // sdr->last_callback_time is set in rx_callback()
+    int const maxtime = 5;
+    if(gps_time_ns() > sdr->last_callback_time + maxtime * BILLION){
+      Stop_transfers = true;
+      fprintf(stderr,"No rx888 data for %d seconds, quitting\n",maxtime);
+      break;
+    }
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    int const ret = libusb_handle_events_timeout_completed(NULL,&tv,NULL);
+    if(ret != 0){
+      // Apparent failure
+      fprintf(stderr,"handle_events returned %d\n",ret);
+      Stop_transfers = true;
+    }
   } while (!Stop_transfers);
 
-  fprintf(stderr, "RX888 streaming complete. Stopping transfers\n");
   rx888_stop_rx(sdr);
   rx888_close(sdr);
-  fprintf(stdout,"rx888 is done streaming, proc_rx888 thread exiting\n");
-  return NULL;
+  // Can't do anything without the front end; quit entirely
+  fprintf(stdout,"rx888 has aborted, exiting radiod\n");
+  exit(1);
 }
 
 // Callback called with incoming receiver data from A/D
@@ -212,6 +233,7 @@ static void rx_callback(struct libusb_transfer *transfer){
   struct frontend *frontend = sdr->frontend;
 
   sdr->xfers_in_progress--;
+  sdr->last_callback_time = gps_time_ns();
 
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
@@ -266,17 +288,18 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
     }
   }
 
-  {
-    // Temporary ID when device doesn't already have firmware
-    // Apparently can also come up as product_id 0x00bc, 0x00b0 or 0x0053. Should check for these too.
+  // Look for unitialized device with product_id 0x00f3.
+  // According to AI6VN, it can apparently come up as product_id 0x00bc, 0x00b0 or 0x0053, so look for those too.
+  // Not sure if this happens often or is actually a hardware failure
+  static uint16_t const product_ids[4] = { 0x00bc, 0x00b0, 0x0053, 0x00f3 };
+
+  for(int i=0; i < sizeof(product_ids) / sizeof(product_ids[0]); i++){
     uint16_t const vendor_id = 0x04b4;
-    uint16_t const product_id = 0x00f3;
-    // does it already have firmware?
-    // (This will have to be changed to select one of multiple devices)
+    uint16_t const product_id = product_ids[i];
+    // Look for device
     sdr->dev_handle =
       libusb_open_device_with_vid_pid(NULL,vendor_id,product_id);
     if(sdr->dev_handle){
-      // No, doesn't have firmware
       if(firmware == NULL){
 	fprintf(stdout,"Firmware not loaded and not available\n");
 	return -1;
@@ -289,15 +312,16 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
       
       if(ezusb_load_ram(sdr->dev_handle,full_firmware_file,FX_TYPE_FX3,IMG_TYPE_IMG,1) == 0){
 	fprintf(stdout,"Firmware updated\n");
+	sleep(1); // how long should this be?
       } else {
 	fprintf(stdout,"Firmware upload of %s failed for device %d.%d (logical).\n",
 		full_firmware_file,
 		libusb_get_bus_number(dev),libusb_get_device_address(dev));
 	return -1;
       }
-      sleep(1); // how long should this be?
     }
   }
+
   // Device changes product_id when it has firmware
   uint16_t const vendor_id = 0x04b4;
   uint16_t const product_id = 0x00f1;
