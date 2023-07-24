@@ -543,7 +543,9 @@ static void rx888_stop_rx(struct sdrstate *sdr){
     if(ret != 0)
       fprintf(stdout,"libusb error %d while stopping\n",ret);
 
-    if(gps_time_ns() > stime + BILLION/2){
+    if(gps_time_ns() > stime + BILLION/2){ // taken more than half a second, too slow
+      // Apparently triggers an assertion failure inside libusb but we don't care, we're already aborting
+      // Probably should release a lock or something though
       fprintf(stdout,"libusb_handle_events_timeout_completed() timed out while stopping rx888\n");
       break;
     }
