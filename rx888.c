@@ -535,7 +535,10 @@ static void rx888_stop_rx(struct sdrstate *sdr){
   while(sdr->xfers_in_progress != 0){
     if(Verbose)
       fprintf(stdout,"%d transfers are pending\n",sdr->xfers_in_progress);
-    libusb_handle_events(NULL);
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    int const ret = libusb_handle_events_timeout_completed(NULL,&tv,NULL);
     usleep(100000);
   }
 
