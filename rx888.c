@@ -538,7 +538,12 @@ static void rx888_stop_rx(struct sdrstate *sdr){
     struct timeval tv;
     tv.tv_sec = 1;
     tv.tv_usec = 0;
+    long long stime = gps_time_ns();
     int const ret = libusb_handle_events_timeout_completed(NULL,&tv,NULL);
+    if(gps_time_ns() > gps_time_ns() + BILLION/2){
+      fprintf(stdout,"libusb_handle_events_timeout_completed() timed out while stopping rx888\n");
+      break;
+    }
     usleep(100000);
   }
 
