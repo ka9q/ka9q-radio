@@ -591,7 +591,7 @@ int delete_filter_input(struct filter_in ** p){
     return -1;
   
   fftwf_destroy_plan(master->fwd_plan);
-  mirror_free(&master->input_buffer,2 * master->input_buffer_size); // Free both buffer & mirror
+  mirror_free(&master->input_buffer,master->input_buffer_size);
 
   for(int i=0; i < ND; i++)
     fftwf_free(master->fdomain[i]);
@@ -901,8 +901,9 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 
 int write_cfilter(struct filter_in *f, complex float const *buffer,int size){
   if(sizeof(*buffer) * (f->wcnt + size) >= f->input_buffer_size)
-    return -1;
+    return -1; // Write is so large it wrapped the input buffer. Should handle this more cleanly
 
+  // Even though writes can now wrap past the primary copy of the input buffer, their start should always be in it
   assert((void *)(f->input_write_pointer.c) >= f->input_buffer);
   assert((void *)(f->input_write_pointer.c) < f->input_buffer + f->input_buffer_size);
 
@@ -920,8 +921,9 @@ int write_cfilter(struct filter_in *f, complex float const *buffer,int size){
 
 int write_rfilter(struct filter_in *f, float const *buffer,int size){
   if(sizeof(*buffer) * (f->wcnt + size) >= f->input_buffer_size)
-    return -1;
+    return -1; // Write is so large it wrapped the input buffer. Should handle this more cleanly
 
+  // Even though writes can now wrap past the primary copy of the input buffer, their start should always be in it
   assert((void *)(f->input_write_pointer.r) >= f->input_buffer);
   assert((void *)(f->input_write_pointer.r) < f->input_buffer + f->input_buffer_size);
 
