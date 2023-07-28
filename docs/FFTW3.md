@@ -16,19 +16,19 @@ sizes needed by the parameters you use with the *radiod* program. This
 can take hours but is worth the improvement in performance.
 
 FFTW3 stores its 'wisdom' files in two places: a system-wide file,
-/etc/fftw/fftwf-wisdom, and an application specific (e.g., radiod)
+/etc/fftw/fftwf-wisdom, and an application specific (i.e., radiod)
 file, /var/lib/ka9q-radio/wisdom. *Radiod* first reads the system-wide
-file and then the application specific file. If system-wide wisdom is
+file and then the application specific file. If wisdom is
 not already available for the transforms it needs, it will perform a
-half-hearted search (so as not slow startup too much) and store it in
+half-hearted search (to not slow startup too much) and store it in
 /var/lib/ka9q-radio/wisdom, but I recommend manually generating a full-blown
 system-wide wisdom file with **fftwf-wisdom**.
 
 Until I can figure out how to do all this easily and automatically,
 here's a suggested run:
 
-$ cd /etc/fftw
-$ touch nwisdom # make sure you have write permissions - fftwf-wisdom doesn't check before doing all its work!
+$ cd /etc/fftw  
+$ touch nwisdom # make sure you have write permissions - fftwf-wisdom doesn't check before doing all its work!  
 $ time fftwf-wisdom -v -T 1 -o nwisdom rof3240000 rof1620000 rof500000 cof36480 cob1920 cob1200 cob960 cob800 cob600 cob480 cob320 cob300 cob200 cob160 cob150
 
 This finds the best way to do the following transforms:
