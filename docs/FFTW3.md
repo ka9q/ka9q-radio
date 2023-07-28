@@ -76,7 +76,7 @@ $ sudo addgroup **youruserid** radio
 
 **/etc/fftw** should have been created with group write permission, but check that.
 
-Have *fftwf-wisdom* Write into a temporary file (e.g., **nwisdom**)
+Have *fftwf-wisdom* write into a temporary file (e.g., **nwisdom**)
 and then carefully copy that into **/etc/fftw/wisdomf** after backing
 up previous versions. You might also want to do just one large
 transform at a time, copying its output into **/etc/fftw/wisdomf**,
@@ -90,7 +90,7 @@ each new run so you don't just overwrite the previous run's output
 (yes, I've done it.)
 
 The '-t' option (note, -t not -T) sets a time limit on
-fftwf-wisdom. It is not checked until after completion of the current
+fftwf-wisdom in decimal hours. It is not checked until after completion of the current
 transform, so you won't lose any work because of it. Because of the
 lack of checkpointing I often use it to limit run time and how much
 work I will lose if a single run aborts.
@@ -140,7 +140,7 @@ be hard to find a more widely used numerical algorithm in the modern
 world. Besides its traditional use in spectral analysis, the FFT is
 used in many audio and image compression algorithms. It is also the
 basis of orthogonal frequency division multiplex (OFDM), which has
-pretty much taken over modern terrestrial digital communications. It
+pretty much taken over modern terrestrial digital communications. The FFT
 is also heavily used in medical imaging, such as MRI, CT and PET
 scanners.
 
