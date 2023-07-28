@@ -29,7 +29,8 @@ here's a suggested run:
 
 $ cd /etc/fftw  
 $ touch nwisdom # make sure you have write permissions - fftwf-wisdom doesn't check before doing all its work!  
-$ time fftwf-wisdom -v -T 1 -o nwisdom rof3240000 rof1620000 rof500000 cof36480 cob1920 cob1200 cob960 cob800 cob600 cob480 cob320 cob300 cob200 cob160 cob150
+$ time fftwf-wisdom -v -T 1 -o nwisdom rof3240000 rof1620000 rof500000 cof36480 cob1920 cob1200 cob960 cob800 cob600 cob480 cob320 cob300 cob200 cob160 cob150  
+$ cp -i nwisdom wisdomf # after checking that nwisdom is OK and larger than wisdomf
 
 This finds the best way to do the following transforms:
 
