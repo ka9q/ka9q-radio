@@ -10,10 +10,11 @@ in the entire package is the forward FFT in *radiod*.
 efficient ways to perform specific transform types and sizes on your
 specific CPU.  While *radiod* will probably run in real time without
 it on faster x86 systems it may actually be necessary to run in real
-time on the Raspberry Pi 4. This requires that you manually run
-*FFTW3*'s bundled *fftwf-wisdom* utility with the actual transform
-sizes needed by the parameters you use with the *radiod* program. This
-can take hours but is worth the improvement in performance.
+time at higher sample rates on the Raspberry Pi 4. This requires that
+you manually run *FFTW3*'s bundled *fftwf-wisdom* utility with the
+actual transform sizes needed by the parameters you use with the
+*radiod* program. This can take hours but is worth the improvement in
+performance.
 
 FFTW3 stores its 'wisdom' files in two places: a system-wide file,
 **/etc/fftw/fftwf-wisdom**, and an application specific (i.e., *radiod*)
