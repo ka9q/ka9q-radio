@@ -9,22 +9,21 @@ Prerequisites
 Building this package on Debian requires the following packages be installed with 'apt install':
 
 build-essential
-libusb-1.0-0-dev
-libusb-dev
-libncurses5-dev
-libfftw3-dev
-libbsd-dev
-libhackrf-dev
-libopus-dev
 libairspy-dev
 libairspyhf-dev
-librtlsdr-dev
-libiniparser-dev
 libavahi-client-dev
-portaudio19-dev
+libbsd-dev
+libfftw3-dev
+libhackrf-dev
+libiniparser-dev
+libncurses5-dev
 libopus-dev
-uuid-dev
 libpigpio-dev (Raspberry Pi only)
+librtlsdr-dev
+libusb-1.0-0-dev
+libusb-dev
+portaudio19-dev
+uuid-dev
 
 Then:
 
