@@ -11,18 +11,18 @@ efficient ways to perform specific transform types and sizes on your
 specific CPU.  While *radiod* will probably run in real time without
 it on faster x86 systems it may actually be necessary to run in real
 time on the Raspberry Pi 4. This requires that you manually run
-*FFTW3*'s bundled **fftwf-wisdom** utility with the actual transform
+*FFTW3*'s bundled *fftwf-wisdom* utility with the actual transform
 sizes needed by the parameters you use with the *radiod* program. This
 can take hours but is worth the improvement in performance.
 
 FFTW3 stores its 'wisdom' files in two places: a system-wide file,
-/etc/fftw/fftwf-wisdom, and an application specific (i.e., radiod)
-file, /var/lib/ka9q-radio/wisdom. *Radiod* first reads the system-wide
+**/etc/fftw/fftwf-wisdom**, and an application specific (i.e., *radiod*)
+file, **/var/lib/ka9q-radio/wisdom**. *Radiod* first reads the system-wide
 file and then the application specific file. If wisdom is
 not already available for the transforms it needs, it will perform a
 half-hearted search (to not slow startup too much) and store it in
-/var/lib/ka9q-radio/wisdom, but I recommend manually generating a full-blown
-system-wide wisdom file with **fftwf-wisdom**.
+**/var/lib/ka9q-radio/wisdom**, but I recommend manually generating a full-blown
+system-wide wisdom file with *fftwf-wisdom*.
 
 Until I can figure out how to do all this easily and automatically,
 here's a suggested run:
@@ -53,32 +53,39 @@ a Rx888 Mk II, we've encountered thermal problems at the full sample
 rate (129.6 MHz) so we don't recommend that until the thermal problems
 can be fixed.
 
-Whenever radiod is running you can always determine the block sizes in
-use with the 'control' program. Look in the 'Filtering' window. The
+Whenever *radiod* is running you can always determine the block sizes in
+use with the *control* program. Look in the 'Filtering' window. The
 'FFT in' entry gives the size of the forward FFT; whether it is
-real-to-complex (fftwf-wisdom prefix **rof**) or complex-to-complex
-(fftwf-wisdom prefix **cof**) is denoted by the letter 'r' or 'c' to the
+real-to-complex (*fftwf-wisdom* prefix **rof**) or complex-to-complex
+(prefix **cof**) is denoted by the letter 'r' or 'c' to the
 right.  The 'FFT out' line gives the inverse FFT; it is always
-complex-to-complex (fftwf-wisdom prefix 'cob').
+complex-to-complex (prefix **cob**).
 
 Don't omit the backward transforms. Although small and fairly fast
 even without wisdom, they are used by every receiver channel so they
 can add up if you have a lot of channels. And computing wisdom for
 them takes little time.
 
-NB!! **fftwf-wisdom** isn't careful about permissions checking. Nor
+NB!! *fftwf-wisdom* isn't careful about permissions checking. Nor
 does it do any checkpointing. I've had hour-long runs ruined because
-it couldn't write its output file. Write into a temporary file (e.g.,
-nwisdom) and then carefully move that into /etc/fftw/wisdomf after
-backing up previous versions. You might also want to divide up the
-runs for large transforms by doing just one transform at a time,
-merging its output into the system wisdom file /etc/fftw/wisdomf, and
-re-running with another transform. Make sure the new wisdomf file is
-both non-empty and larger than the previous wisdomf before overwriting
-it!  I like to keep all the previous wisdomf files just in case I need
-back up (wisdomf.0, wisdomf.1, etc). Make sure you change the output
-file name for each new run so you don't just overwrite the previous
-run's output (yes, I've done it.)
+it couldn't write its output file. The directory **/etc/fftw** is owned by group *radio*, and you should make yourself a member of that group with
+
+$ sudo addgroup **youruserid** radio
+
+**/etc/fftw** should have been created with group write permission, but check that.
+
+Have *fftwf-wisdom* Write into a temporary file (e.g., **nwisdom**)
+and then carefully copy that into **/etc/fftw/wisdomf** after backing
+up previous versions. You might also want to do just one large
+transform at a time, copying its output into **/etc/fftw/wisdomf**,
+and re-running with the next. *fftwf-wisdom* reads
+**/etc/fftw/wisdomf** and merges that into its generated output.  Make
+sure the output of *fftwf-wisdom* is larger than the previous
+**wisdomf** before overwriting it!  I like to keep all the previous
+**wisdomf** files just in case I need back up (**wisdomf.0**,
+**wisdomf.1**, etc). Make sure you change the output file name for
+each new run so you don't just overwrite the previous run's output
+(yes, I've done it.)
 
 The '-t' option (note, -t not -T) sets a time limit on
 fftwf-wisdom. It is not checked until after completion of the current
@@ -93,27 +100,28 @@ one thread). Do *NOT* omit the -T 1 option, or you may destroy all
 your previous computation work! Again, keep all your previous wisdomf
 files so you can back up if you make a mistake.
 
-It's tempting, but do *not* just blindly copy /etc/fftw/wisdomf from
-one machine to another. Generate a new one. I once saw radiod run at
-only half speed on a Rasberry Pi 400 after I copied the wisdom file
+It's tempting, but *don't* just blindly copy **/etc/fftw/wisdomf** from
+one machine to another. Generate a new one. I once saw *radiod* run at
+only half speed on a Rasberry Pi 400 after I copied **wisdomf**
 from a regular Pi 4. Apparently the different Broadcom SoC stepping
 (C0 vs B0, I think) changed something in memory or cache layout. Just
-go off and watch Youtube while you rebuild the FFTW wisdom files.
+go off and watch Youtube while you rebuild **/etc/fftw/wisdomf**.
 
 Note also that wisdom files generated by one version of FFTW3 aren't
 good on a different version.  Debian 11.0 (bullseye) uses FFTW version
 3.3.8 while Debian 12.0 (bookworm) uses version 3.3.10. Regenerate
 them.
 
-Yes, all this *really* needs to be automated... Unfortunately, it
-looks like it will require digging into the guts of at least
-fftwf-wisdom.
+I know, I know, all this *really*, *REALLY* needs to be
+automated... Unfortunately, it looks like it will require digging into
+the guts of at least *fftwf-wisdom*.
 
-*FFTW3* provides a way to automatically create and cache wisdom at
-runtime, but with a very long startup delay. I need to move wisdom
-generation to a separate process independent of *radiod*. It would be
-nice if *FFTW3* automatically learned as it went, getting faster on
-user data without performing the exhaustive search up front.
+As mentioned above, *FFTW3* provides a way to automatically create and
+cache wisdom at runtime, but with a very long startup delay. I need to
+move wisdom generation to a separate process independent of
+*radiod*. It would be nice if *FFTW3* automatically learned as it
+went, getting faster on user data without performing the exhaustive
+search up front.
 
 A Note on the FFT
 -----------------
