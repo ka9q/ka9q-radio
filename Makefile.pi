@@ -17,7 +17,7 @@ DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
-DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd rtlsdrd
+DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 
 EXECS=iqplay iqrecord modulate monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded wd-record set_xcvr
 
