@@ -227,7 +227,7 @@ int rtlsdr_startup(struct frontend *frontend){
 
 // Callback called with incoming receiver data from A/D
 static void rx_callback(uint8_t *buf, uint32_t len, void *ctx){
-  int sampcount = len;
+  int sampcount = len/2;
   int16_t * const samples = (int16_t *)buf;
   float energy = 0;
   struct frontend *frontend = ctx;
