@@ -64,7 +64,6 @@ void *demod_linear(void *arg){
     int const N = demod->filter.out->olen; // Number of raw samples in filter output buffer
 
     // First pass over sample block.
-    // Perform fine frequency downconversion & block phase correction
     // Run the PLL (if enabled)
     // Apply post-downconversion shift (if enabled, e.g. for CW)
     // Measure energy
@@ -133,7 +132,7 @@ void *demod_linear(void *arg){
       }
     }
  
-   // Run AGC on a block basis to do some forward averaging
+    // Run AGC on a block basis to do some forward averaging
     // Lots of people seem to have strong opinions how AGCs should work
     // so there's probably a lot of work to do here
     float gain_change = 1; // default to constant gain
