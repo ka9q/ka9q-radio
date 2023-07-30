@@ -228,20 +228,19 @@ int rtlsdr_startup(struct frontend *frontend){
 // Callback called with incoming receiver data from A/D
 static void rx_callback(uint8_t *buf, uint32_t len, void *ctx){
   int sampcount = len/2;
-  int16_t * const samples = (int16_t *)buf;
   float energy = 0;
   struct frontend *frontend = ctx;
   float complex * const wptr = frontend->in->input_write_pointer.c;
   
   for(int i=0; i < sampcount; i++){
     float complex samp;
-    __real__ samp = (float)samples[2*i] * samples[2*i];
-    __imag__ samp = (float)samples[2*i+1] * samples[2*i+1];
-    samp *= SCALE16;
+    __real__ samp = (int)buf[2*i] - 128; // Excess-128
+    __imag__ samp = (int)buf[2*i+1] - 128;
+    samp *= SCALE8;
     energy += samp * samp;
     wptr[i] = samp;
   }
-  write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
+  write_cfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->sdr.output_level = energy / sampcount;
   frontend->input.samples += sampcount;
 }
