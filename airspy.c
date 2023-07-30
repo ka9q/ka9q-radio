@@ -325,30 +325,67 @@ static int rx_callback(airspy_transfer *transfer){
     fprintf(stdout,"dropped %'lld\n",(long long)transfer->dropped_samples);
   }
   assert(transfer->sample_type == AIRSPY_SAMPLE_RAW);
-  int sampcount = transfer->sample_count;
-  float * const wptr = frontend->in->input_write_pointer.r;
+  int const sampcount = transfer->sample_count;
+  float * wptr = frontend->in->input_write_pointer.r;
   uint32_t const *up = (uint32_t *)transfer->samples;
   assert(wptr != NULL);
   assert(up != NULL);
   uint64_t in_energy = 0;
   // Libairspy could do this for us, but this minimizes mem copies
+  // This could probably be vectorized someday
   for(int i=0; i < sampcount; i+= 8){ // assumes multiple of 8
+#if 1
     int s[8];
-    s[0] =  *up >> 20;
-    s[1] =  *up >> 8;
-    s[2] =  *up++ << 4;
-    s[2] |= *up >> 28;
-    s[3] =  *up >> 16;
-    s[4] =  *up >> 4;
-    s[5] =  *up++ << 8;
-    s[5] |= *up >> 24;
-    s[6] =  *up >> 12;
-    s[7] =  *up++;
+    s[0] =  up[0] >> 20;
+    s[1] =  up[0] >> 8;
+    s[2] =  (up[0] << 4) | (up[1] >> 28);
+    s[3] =  up[1] >> 16;
+    s[4] =  up[1] >> 4;
+    s[5] =  (up[1] << 8) | (up[2] >> 24);
+    s[6] =  up[2] >> 12;
+    s[7] =  up[2];
     for(int j=0; j < 8; j++){
       int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
       in_energy += x * x;
-      wptr[i+j] = x * SCALE12;
+      wptr[j] = x * SCALE12;
     }
+#else
+    // Unrolled version, not really faster on Pi
+    int x;
+    x = (int)(up[0] >> 20) - 2048;
+    in_energy += x * x;
+    wptr[0] = x * SCALE12;
+
+    x = (int)((up[0] >> 8) & 0xfff) - 2048;
+    in_energy += x * x;
+    wptr[1] = x * SCALE12;
+
+    x = (int)(((up[0] << 4) | (up[1] >> 28)) & 0xfff) - 2048;
+    in_energy += x * x;
+    wptr[2] = x * SCALE12;
+
+    x = (int)((up[1] >> 16) & 0xfff) - 2048;
+    in_energy += x * x;
+    wptr[3] = x * SCALE12;
+
+    x = (int)((up[1] >> 4) & 0xfff) - 2048;
+    in_energy += x * x;
+    wptr[4] = x * SCALE12;
+
+    x = (int)(((up[1] << 8) | (up[2] >> 24)) & 0xfff) - 2048;
+    in_energy += x * x;
+    wptr[5] = x * SCALE12;
+
+    x = (int)((up[2] >> 12) & 0xfff) - 2048;
+    in_energy += x * x;
+    wptr[6] = x * SCALE12;
+
+    x = (int)(up[2] & 0xfff) - 2048;
+    in_energy += x * x;
+    wptr[7] = x * SCALE12;
+#endif
+    wptr += 8;
+    up += 3;
   }
   frontend->input.samples += sampcount;
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
