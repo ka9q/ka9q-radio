@@ -106,6 +106,13 @@ int funcube_setup(struct frontend *,dictionary *,char const *);
 int funcube_startup(struct frontend *);
 double funcube_tune(struct frontend *,double);
 
+// In rtlsdr.c:
+int rtlsdr_setup(struct frontend *,dictionary *,char const *);
+int rtlsdr_startup(struct frontend *);
+double rtlsdr_tune(struct frontend *,double);
+
+
+
 
 
 // The main program sets up the demodulator parameter defaults,
@@ -573,6 +580,10 @@ static int setup_hardware(char const *sname){
     Frontend.sdr.setup = funcube_setup;
     Frontend.sdr.start = funcube_startup;
     Frontend.sdr.tune = funcube_tune;
+  } else if(strcasecmp(device,"rtlsdr") == 0){
+    Frontend.sdr.setup = rtlsdr_setup;
+    Frontend.sdr.start = rtlsdr_startup;
+    Frontend.sdr.tune = rtlsdr_tune;
   } else {
     fprintf(stdout,"device %s unrecognized\n",device);
     return -1;
