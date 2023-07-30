@@ -2,11 +2,9 @@
 
 # for production
 #DOPTS = -DNDEBUG=1 -O3
-#LDOPTS=-L/usr/local/lib
 
 # for debugging
 DOPTS=-g
-LDOPTS=-g -L/usr/local/lib
 
 COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
 
