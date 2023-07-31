@@ -439,6 +439,7 @@ static int loadconfig(char const * const file){
     snprintf(description,sizeof(description),"pcm-source=%s",formatsock(&Frontend.input.data_dest_address));
     int slen = sizeof(demod->output.data_dest_address);
     avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),description,&demod->output.data_dest_address,&slen);
+    Mcast_ttl = config_getint(Configtable,sname,"ttl",Mcast_ttl); // Read in each section too
     demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,Iface,Mcast_ttl,IP_tos);
     if(demod->output.data_fd < 3){
       fprintf(stdout,"can't set up PCM output to %s\n",demod->output.data_dest_string);
