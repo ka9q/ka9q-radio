@@ -339,10 +339,9 @@ static int loadconfig(char const * const file){
     for(int sect = 0; sect < nsect; sect++){
       char const * const sname = iniparser_getsecname(Configtable,sect);
       if(strcasecmp(sname,hardware) == 0){
-	if(setup_hardware(sname) != 0){
-	  abort();
+	if(setup_hardware(sname) != 0)
 	  exit(1);
-	}
+
 	break;
       }
     }
