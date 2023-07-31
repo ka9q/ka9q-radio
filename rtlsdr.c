@@ -126,7 +126,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     fprintf(stderr,"Found %d RTL-SDR device%s:\n",device_count,device_count > 1 ? "s":"");
     for(int i=0; i < device_count; i++){
       rtlsdr_get_device_usb_strings(i,devices[i].manufacturer,devices[i].product,devices[i].serial);
-      fprintf(stderr,"%d (%s): %s %s %s\n",i,rtlsdr_get_device_name(i),
+      fprintf(stderr,"#%d (%s): %s %s %s\n",i,rtlsdr_get_device_name(i),
 	      devices[i].manufacturer,devices[i].product,devices[i].serial);
     }
     char const * const p = config_getstring(dictionary,section,"serial",NULL);
@@ -146,7 +146,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
       return -1;
     }
     strlcpy(sdr->serial,devices[sdr->dev].serial,sizeof(sdr->serial));
-    fprintf(stderr,"Using RTL-SDR device %d, serial %s\n",sdr->dev,sdr->serial);
+    fprintf(stderr,"Using RTL-SDR #%d, serial %s\n",sdr->dev,sdr->serial);
   }
   {
     int const ret = rtlsdr_open(&sdr->device,sdr->dev);
