@@ -66,7 +66,7 @@ struct sdrstate {
 
   int dev;
   uint32_t sample_rates[20];
-  uint64_t SN; // Serial number
+  char serial[256];
 
   bool bias; // Bias tee on/off
   bool agc;
@@ -74,7 +74,7 @@ struct sdrstate {
   // Tuning
   bool frequency_lock;
   char const *frequency_file; // Local file to store frequency in case we restart
-  double init_frequency;
+
 
   // AGC
   int holdoff_counter; // Time delay when we adjust gains
@@ -107,36 +107,70 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     if(strcasecmp(device,"rtlsdr") != 0)
       return -1; // Not for us
   }
-  // Enumerate devices, take first successful open - seems to require latest version of libusb
-  int device_count = rtlsdr_get_device_count();
+  sdr->dev = -1;
+  strlcpy(frontend->sdr.description,config_getstring(dictionary,section,"description","rtl-sdr"),
+	  sizeof(frontend->sdr.description));
+  {
+    unsigned const device_count = rtlsdr_get_device_count();
+    if(device_count < 1){
+      fprintf(stderr,"No RTL-SDR devices\n");
+      return -1;
+    }
+    struct {
+      char manufacturer[256];
+      char product[256];
+      char serial[256];
+    } devices[device_count];
 
-  for(int i=0; i < device_count; i++){
-    char manufacturer[256],product[256],serial[256];
-    rtlsdr_get_device_usb_strings(i,manufacturer,product,serial);
-    
-    fprintf(stderr,"RTL-SDR %d (%s): %s %s %s\n",i,rtlsdr_get_device_name(i),
-	    manufacturer,product,serial);
-  }      
-  sdr->dev = config_getint(dictionary,section,"number",0);
-
-  // Open
-  int ret = rtlsdr_open(&sdr->device,sdr->dev);
-  if(ret < 0){
-    fprintf(stderr,"rtlsdr_open(%d) failed: %d\n",sdr->dev,ret);
-    exit(1);
+    // List all devices
+    fprintf(stderr,"Found %d RTL-SDR device%s:\n",device_count,device_count > 1 ? "s":"");
+    for(int i=0; i < device_count; i++){
+      rtlsdr_get_device_usb_strings(i,devices[i].manufacturer,devices[i].product,devices[i].serial);
+      fprintf(stderr,"%d (%s): %s %s %s\n",i,rtlsdr_get_device_name(i),
+	      devices[i].manufacturer,devices[i].product,devices[i].serial);
+    }
+    char const * const p = config_getstring(dictionary,section,"serial",NULL);
+    if(p == NULL){
+      // Use first one, if any
+      sdr->dev = 0;
+    } else {
+      for(int i=0; i < device_count; i++){
+	if(strcasecmp(p,devices[i].serial) == 0){
+	  sdr->dev = i;
+	  break;
+	}
+      }
+    }
+    if(sdr->dev < 0){
+      fprintf(stderr,"RTL-SDR serial %s not found\n",p);
+      return -1;
+    }
+    strlcpy(sdr->serial,devices[sdr->dev].serial,sizeof(sdr->serial));
+    fprintf(stderr,"Using RTL-SDR device %d, serial %s\n",sdr->dev,sdr->serial);
   }
-  sdr->device = sdr->device;
-  uint32_t rtl_freq,tuner_freq;
-  ret = rtlsdr_get_xtal_freq(sdr->device,&rtl_freq,&tuner_freq);
-  fprintf(stderr,"RTL freq = %u, tuner freq = %u\n",(unsigned)rtl_freq,(unsigned)tuner_freq);
-  fprintf(stderr,"RTL tuner type %d\n",rtlsdr_get_tuner_type(sdr->device));
-  int ngains = rtlsdr_get_tuner_gains(sdr->device,NULL);
-  int gains[ngains];
-  rtlsdr_get_tuner_gains(sdr->device,gains);
-  fprintf(stderr,"Tuner gains:");
-  for(int i=0; i < ngains; i++)
-    fprintf(stderr," %d",gains[i]);
-  fprintf(stderr,"\n");
+  {
+    int const ret = rtlsdr_open(&sdr->device,sdr->dev);
+    if(ret != 0){
+      fprintf(stderr,"rtlsdr_open(%d) failed: %d\n",sdr->dev,ret);
+      return -1;
+    }
+  }
+  {
+    int ngains = rtlsdr_get_tuner_gains(sdr->device,NULL);
+    int gains[ngains];
+    rtlsdr_get_tuner_gains(sdr->device,gains);
+
+    uint32_t rtl_freq = 0,tuner_freq = 0;
+    int const ret = rtlsdr_get_xtal_freq(sdr->device,&rtl_freq,&tuner_freq);
+    if(ret != 0)
+      fprintf(stderr,"rtlsdr_get_xtal_freq failed\n");
+    fprintf(stderr,"RTL freq %'u, tuner freq %'u, tuner type %'d, tuner gains",(unsigned)rtl_freq,(unsigned)tuner_freq,
+	    rtlsdr_get_tuner_type(sdr->device));
+    for(int i=0; i < ngains; i++)
+      fprintf(stderr," %'d",gains[i]);
+    fprintf(stderr,"\n");
+    
+  }
   rtlsdr_set_freq_correction(sdr->device,0); // don't use theirs, only good to integer ppm
   rtlsdr_set_tuner_bandwidth(sdr->device, 0); // Auto bandwidth
   rtlsdr_set_agc_mode(sdr->device,0);
@@ -151,55 +185,60 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   } else
     rtlsdr_set_tuner_gain_mode(sdr->device,0); // auto gain mode (i.e., the firmware does it)
   
-  sdr->SN = 0; // where should we get this??
-
-  
   sdr->bias = config_getboolean(dictionary,section,"bias",false);
-  ret = rtlsdr_set_bias_tee(sdr->device,sdr->bias);
-
+  {
+    int ret = rtlsdr_set_bias_tee(sdr->device,sdr->bias);
+    if(ret != 0){
+      fprintf(stderr,"rtlsdr_set_bias_tee(%d) failed\n",sdr->bias);
+    }
+  }
   rtlsdr_set_direct_sampling(sdr->device, 0); // That's for HF
   rtlsdr_set_offset_tuning(sdr->device,0); // Leave the DC spike for now
-  sdr->frontend->sdr.samprate = config_getint(dictionary,section,"samprate",2000000);
-  if(sdr->frontend->sdr.samprate == 0){
-    fprintf(stderr,"Select sample rate\n");
-    exit(1);
+  frontend->sdr.samprate = config_getint(dictionary,section,"samprate",DEFAULT_SAMPRATE);
+  if(frontend->sdr.samprate <= 0){
+    fprintf(stderr,"Invalid sample rate, reverting to default\n");
+    frontend->sdr.samprate = DEFAULT_SAMPRATE;
   }
-  ret = rtlsdr_set_sample_rate(sdr->device,(uint32_t)sdr->frontend->sdr.samprate);
-
-  strlcpy(frontend->sdr.description,config_getstring(dictionary,section,"description","rtl-sdr"),
-	  sizeof(frontend->sdr.description));
-  
-  char *tmp = NULL;
-  ret = asprintf(&tmp,"%s/tune-rtlsdr.%llx",VARDIR,(unsigned long long)sdr->SN);
-  if(ret == -1)
-    exit(1);
-
-  sdr->frequency_file = tmp;
-
-  sdr->init_frequency = config_getdouble(dictionary,section,"frequency",0);
-  if(sdr->init_frequency == 0){
+  {
+    int ret = rtlsdr_set_sample_rate(sdr->device,(uint32_t)frontend->sdr.samprate);
+    if(ret != 0){
+      fprintf(stderr,"rtlsdr_set_sample_rate(%d) failed\n",frontend->sdr.samprate);
+    }
+  }
+  {
+    char *tmp = NULL;
+    sdr->frequency_file = NULL;
+    int ret = asprintf(&tmp,"%s/tune-rtlsdr.%s",VARDIR,sdr->serial);
+    if(ret != -1)
+      sdr->frequency_file = tmp;
+  }
+  double init_frequency = config_getdouble(dictionary,section,"frequency",0);
+  if(init_frequency == 0){
     // If not set on command line, load saved frequency
     FILE *fp = fopen(sdr->frequency_file,"r+");
-    if(fp == NULL || fscanf(fp,"%lf",&sdr->init_frequency) < 0)
+    if(fp == NULL || fscanf(fp,"%lf",&init_frequency) < 0)
       fprintf(stderr,"Can't read stored freq from %s: %s\n",sdr->frequency_file,strerror(errno));
     else
-      fprintf(stderr,"Using stored frequency %lf from tuner state file %s\n",sdr->init_frequency,sdr->frequency_file);
+      fprintf(stderr,"Using stored frequency %'.3lf Hz from tuner state file %s\n",init_frequency,sdr->frequency_file);
     if(fp != NULL)
       fclose(fp);
   }
-  if(sdr->init_frequency == 0){
+  if(init_frequency == 0){
     // Not set on command line, and not read from file. Use fallback to cover 2m
-    sdr->init_frequency = 149e6; // Fallback default
-    fprintf(stderr,"Fallback default frequency %'.3lf Hz\n",sdr->init_frequency);
+    init_frequency = 149e6;
+    fprintf(stderr,"Fallback initial frequency %'.3lf Hz\n",init_frequency);
   }
-  fprintf(stdout,"%s: Samprate %'d Hz, agc %d, gain %d, bias %d, init freq %'.3lf Hz\n",
-	  frontend->sdr.description,frontend->sdr.samprate,sdr->agc,sdr->gain,sdr->bias,sdr->init_frequency);
-
-  set_correct_freq(sdr,sdr->init_frequency);
-  frontend->sdr.min_IF = 0;
-  frontend->sdr.max_IF = 0.47 * frontend->sdr.samprate; // Just an estimate - get the real number somewhere
-  frontend->sdr.isreal = false; // Make sure the right kind of filter gets created!
   frontend->sdr.calibrate = config_getdouble(dictionary,section,"calibrate",0);
+  fprintf(stdout,"%s, samprate %'d Hz, agc %d, gain %d, bias %d, init freq %'.3lf Hz, calibrate %.3g\n",
+	  frontend->sdr.description,frontend->sdr.samprate,sdr->agc,sdr->gain,sdr->bias,init_frequency,
+	  frontend->sdr.calibrate);
+
+  set_correct_freq(sdr,init_frequency);
+ // Just estimates - get the real number somewhere
+  frontend->sdr.min_IF = -0.47 * frontend->sdr.samprate;
+  frontend->sdr.max_IF = 0.47 * frontend->sdr.samprate;
+  frontend->sdr.isreal = false; // Make sure the right kind of filter gets created!
+
 
   return 0;
 }
@@ -220,7 +259,7 @@ static void *rtlsdr_read_thread(void *arg){
 int rtlsdr_startup(struct frontend *frontend){
   struct sdrstate *sdr = frontend->sdr.context;
   pthread_create(&sdr->read_thread,NULL,rtlsdr_read_thread,sdr);
-  fprintf(stdout,"rtlsdr running\n");
+  fprintf(stdout,"rtlsdr thread running\n");
   return 0;
 }
 
