@@ -61,7 +61,6 @@ struct demod *Dynamic_demod; // Prototype for dynamically created demods
 
 char const *Iface;
 int Mcast_ttl;
-int Status_ttl = 1;
 int IP_tos; // AF12 left shifted 2 bits
 int RTCP_enable = false;
 int SAP_enable = false;
@@ -301,7 +300,7 @@ static int loadconfig(char const * const file){
   }
   // Process [global] section applying to all demodulator blocks
   char const * const global = "global";
-  if(config_getboolean(Configtable,global,"verbose",0))
+  if(config_getboolean(Configtable,global,"verbose",false))
     Verbose++;
   // Default multicast interface
   {
