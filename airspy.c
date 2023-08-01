@@ -22,7 +22,6 @@
 extern int Status_ttl;
 
 // Global variables set by config file options
-extern int Verbose;
 extern int Overlap;
 extern const char *App_path;
 extern int Verbose;
@@ -185,13 +184,13 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   sdr->gainstep = -1; // Force update first time
 
   // Hardware device settings
-  sdr->linearity = config_getboolean(Dictionary,section,"linearity",0);
-  int const lna_agc = config_getboolean(Dictionary,section,"lna-agc",0); // default off
+  sdr->linearity = config_getboolean(Dictionary,section,"linearity",false);
+  int const lna_agc = config_getboolean(Dictionary,section,"lna-agc",false); // default off
   airspy_set_lna_agc(sdr->device,lna_agc);
   if(lna_agc)
     Software_agc = false;
 
-  int const mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",0); // default off
+  int const mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",false); // default off
   airspy_set_mixer_agc(sdr->device,mixer_agc);
   if(mixer_agc)
     Software_agc = false;
@@ -396,19 +395,21 @@ static int rx_callback(airspy_transfer *transfer){
     // Scale by 2 / 2048^2 = 2^-21 for 0 dBFS = full scale sine wave
     float const power = (float)(in_energy >> 21) / transfer->sample_count;
     if(power < Low_threshold && sdr->holdoff == 0){
-      if(Verbose)
-	printf("Power %.1f dB\n",power2dB(power));
       set_gain(sdr,sdr->gainstep + 1);
+      if(Verbose)
+	printf("Power %.1f dB, gainstep %d->%d\n",power2dB(power),sdr->gainstep-1,sdr->gainstep);
+
       sdr->holdoff = 2; // seems to settle down in 2 blocks
     } else if(power > High_threshold && sdr->holdoff == 0){
-      if(Verbose)
-	printf("Power %.1f dB\n",power2dB(power));
       set_gain(sdr,sdr->gainstep - 1);
+      if(Verbose)
+	printf("Power %.1f dB, gainstep %d->%d\n",power2dB(power),sdr->gainstep+1,sdr->gainstep);
+
       sdr->holdoff = 2;
     } else if(sdr->holdoff > 0){
       sdr->holdoff--;
       if(Verbose > 1)
-	printf("Power %.1f dB\n",power2dB(power));
+	printf("Power %.1f dB, gainstep already %d!\n",power2dB(power),sdr->gainstep);
     }
   }
   return 0;
