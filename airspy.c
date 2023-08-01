@@ -22,7 +22,6 @@
 extern int Status_ttl;
 
 // Global variables set by config file options
-extern int Verbose;
 extern int Overlap;
 extern const char *App_path;
 extern int Verbose;
@@ -46,9 +45,10 @@ struct sdrstate {
   char const *frequency_file; // Local file to store frequency in case we restart
 
   // AGC
-  int holdoff;  // Holdoff counter after automatic change to allow settling
   bool linearity; // Use linearity gain tables; default is sensitivity
   int gainstep; // Airspy gain table steps (0-21), higher numbers == higher gain
+  float energy; // Integrated energy
+  int energy_samples; // Samples represented in energy
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
@@ -242,7 +242,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   {
     float const dh = config_getdouble(Dictionary,section,"agc-high-threshold",-10.0);
     High_threshold = dB2power(-fabs(dh));
-    float const dl = config_getdouble(Dictionary,section,"agc-low-threshold",-40.0);
+    float const dl = config_getdouble(Dictionary,section,"agc-low-threshold",-50.0);
     Low_threshold = dB2power(-fabs(dl));
   }
   double init_frequency = config_getdouble(Dictionary,section,"frequency",0);
@@ -330,11 +330,10 @@ static int rx_callback(airspy_transfer *transfer){
   uint32_t const *up = (uint32_t *)transfer->samples;
   assert(wptr != NULL);
   assert(up != NULL);
-  uint64_t in_energy = 0;
+  float in_energy = 0;
   // Libairspy could do this for us, but this minimizes mem copies
   // This could probably be vectorized someday
   for(int i=0; i < sampcount; i+= 8){ // assumes multiple of 8
-#if 1
     int s[8];
     s[0] =  up[0] >> 20;
     s[1] =  up[0] >> 8;
@@ -346,69 +345,34 @@ static int rx_callback(airspy_transfer *transfer){
     s[7] =  up[2];
     for(int j=0; j < 8; j++){
       int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
-      in_energy += x * x;
       wptr[j] = x * SCALE12;
+      in_energy += wptr[j] * wptr[j];
     }
-#else
-    // Unrolled version, not really faster on Pi
-    int x;
-    x = (int)(up[0] >> 20) - 2048;
-    in_energy += x * x;
-    wptr[0] = x * SCALE12;
-
-    x = (int)((up[0] >> 8) & 0xfff) - 2048;
-    in_energy += x * x;
-    wptr[1] = x * SCALE12;
-
-    x = (int)(((up[0] << 4) | (up[1] >> 28)) & 0xfff) - 2048;
-    in_energy += x * x;
-    wptr[2] = x * SCALE12;
-
-    x = (int)((up[1] >> 16) & 0xfff) - 2048;
-    in_energy += x * x;
-    wptr[3] = x * SCALE12;
-
-    x = (int)((up[1] >> 4) & 0xfff) - 2048;
-    in_energy += x * x;
-    wptr[4] = x * SCALE12;
-
-    x = (int)(((up[1] << 8) | (up[2] >> 24)) & 0xfff) - 2048;
-    in_energy += x * x;
-    wptr[5] = x * SCALE12;
-
-    x = (int)((up[2] >> 12) & 0xfff) - 2048;
-    in_energy += x * x;
-    wptr[6] = x * SCALE12;
-
-    x = (int)(up[2] & 0xfff) - 2048;
-    in_energy += x * x;
-    wptr[7] = x * SCALE12;
-#endif
     wptr += 8;
     up += 3;
   }
   frontend->input.samples += sampcount;
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
+  frontend->sdr.output_level = 2 * in_energy / sampcount;
   frontend->input.samples += sampcount;
-
   if(Software_agc){
-    // Scale by 2 / 2048^2 = 2^-21 for 0 dBFS = full scale sine wave
-    float const power = frontend->sdr.output_level;
-    if(power < Low_threshold && sdr->holdoff == 0){
-      if(Verbose)
-	printf("Power %.1f dB\n",power2dB(power));
-      set_gain(sdr,sdr->gainstep + 1);
-      sdr->holdoff = 2; // seems to settle down in 2 blocks
-    } else if(power > High_threshold && sdr->holdoff == 0){
-      if(Verbose)
-	printf("Power %.1f dB\n",power2dB(power));
-      set_gain(sdr,sdr->gainstep - 1);
-      sdr->holdoff = 2;
-    } else if(sdr->holdoff > 0){
-      sdr->holdoff--;
-      if(Verbose > 1)
-	printf("Power %.1f dB\n",power2dB(power));
+    // Integrate A/D energy
+    sdr->energy += in_energy;
+    sdr->energy_samples += sampcount;
+    if(sdr->energy_samples >= frontend->sdr.samprate/10){ // Time to re-evaluate after 100 ms
+      sdr->energy /= sdr->energy_samples;
+      if(sdr->energy < Low_threshold){
+	if(Verbose)
+	  printf("Power %.1f dB\n",power2dB(sdr->energy));
+	set_gain(sdr,sdr->gainstep + 1);
+      } else if(sdr->energy > High_threshold){
+	if(Verbose)
+	  printf("Power %.1f dB\n",power2dB(sdr->energy));
+	set_gain(sdr,sdr->gainstep - 1);
+      }
+      // Reset integrator
+      sdr->energy = 0;
+      sdr->energy_samples = 0;
     }
   }
   return 0;
