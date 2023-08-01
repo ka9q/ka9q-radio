@@ -460,6 +460,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   case LINEAR_DEMOD:
     encode_byte(&bp,PLL_ENABLE,demod->linear.pll); // bool
     if(demod->linear.pll){
+      encode_float(&bp,FREQ_OFFSET,demod->sig.foffset);     // Hz; used differently in linear and fm
       encode_byte(&bp,PLL_LOCK,demod->linear.pll_lock); // bool
       encode_byte(&bp,PLL_SQUARE,demod->linear.square); //bool
       encode_float(&bp,PLL_PHASE,demod->linear.cphase); // radians
@@ -476,7 +477,9 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
       encode_float(&bp,AGC_THRESHOLD,voltage2dB(demod->linear.threshold)); // amplitude -> dB
       encode_float(&bp,AGC_RECOVERY_RATE,voltage2dB(demod->linear.recovery_rate)/(.001*Blocktime)); // amplitude/block -> dB/sec
     }
-    encode_byte(&bp,INDEPENDENT_SIDEBAND,demod->filter.isb); // bool
+#if 0
+    encode_byte(&bp,INDEPENDENT_SIDEBAND,demod->filter.isb); // bool - maybe reimplement someday
+#endif
     break;
   case FM_DEMOD:
     if(demod->fm.tone_freq != 0){
@@ -485,6 +488,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     }
   case WFM_DEMOD:  // Note fall-through from FM_DEMOD
     // Relevant only when squelches are active
+    encode_float(&bp,FREQ_OFFSET,demod->sig.foffset);     // Hz; used differently in linear and fm
     encode_float(&bp,SQUELCH_OPEN,power2dB(demod->squelch_open));
     encode_float(&bp,SQUELCH_CLOSE,power2dB(demod->squelch_close));
     encode_byte(&bp,THRESH_EXTEND,demod->fm.threshold);
@@ -527,7 +531,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_int32(&bp,OUTPUT_CHANNELS,demod->output.channels);
     if(!isnan(demod->sig.snr) && demod->sig.snr > 0)
       encode_float(&bp,DEMOD_SNR,power2dB(demod->sig.snr)); // abs ratio -> dB
-    encode_float(&bp,FREQ_OFFSET,demod->sig.foffset);     // Hz; used differently in linear and fm
+
     encode_float(&bp,GAIN,voltage2dB(demod->output.gain)); // linear amplitude -> dB; fixed in FM
     // Source address we're using to send data
     encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&demod->output.data_source_address);

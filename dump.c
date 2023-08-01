@@ -155,7 +155,7 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
       printf("phase imbal %.1f deg",DEGPRA*asinf(decode_float(cp,optlen)));
       break;
     case DIRECT_CONVERSION:
-      printf("direct conv %d",(int)decode_int(cp,optlen));
+      printf("direct conv %s",decode_int(cp,optlen) ? "yes" : "no");
       break;
     case RADIO_FREQUENCY:
       printf("RF %'.3lf Hz",decode_double(cp,optlen));
@@ -188,7 +188,7 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
       printf("fe filt high %'g Hz",decode_float(cp,optlen));
       break;
     case FE_ISREAL:
-      printf("fe %s",decode_int(cp,optlen) ? "real" : "complex");
+      printf("fe produces %s samples",decode_int(cp,optlen) ? "real" : "complex");
       break;
     case KAISER_BETA:
       printf("filter kaiser_beta %g",decode_float(cp,optlen));      
@@ -238,19 +238,19 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
       printf("out channels %'llu",(long long unsigned)decode_int(cp,optlen));
       break;
     case INDEPENDENT_SIDEBAND:
-      printf("ISB %'llu",(long long unsigned)decode_int(cp,optlen));
+      printf("ISB %s",decode_int(cp,optlen) ? "on" : "off");
       break;
     case THRESH_EXTEND:
-      printf("Thr Extend %'llu",(long long unsigned)decode_int(cp,optlen));
+      printf("Thr Extend %s",decode_int(cp,optlen) ? "on" : "off");
       break;
     case PLL_ENABLE:
-      printf("PLL enable %'llu",(long long unsigned)decode_int(cp,optlen));
+      printf("PLL %s",decode_int(cp,optlen) ? "enable":"disable");
       break;
     case PLL_LOCK:
-      printf("PLL lock %'llu",(long long unsigned)decode_int(cp,optlen));
+      printf("PLL %s",decode_int(cp,optlen) ? "lock" : "unlock");
       break;
     case PLL_SQUARE:
-      printf("PLL square %'llu",(long long unsigned)decode_int(cp,optlen));
+      printf("PLL square %s",decode_int(cp,optlen) ? "on" : "off");
       break;
     case PLL_PHASE:
       printf("PLL phase %g deg",DEGPRA*decode_float(cp,optlen));
@@ -259,10 +259,7 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
       printf("PLL loop BW %'.1f Hz",decode_float(cp,optlen));
       break;
     case ENVELOPE:
-      printf("Env det %llu",(long long unsigned)decode_int(cp,optlen));      
-      break;
-    case FM_FLAT:
-      printf("FM flat %llu",(long long unsigned)decode_int(cp,optlen));
+      printf("Env det %s",decode_int(cp,optlen) ? "on" : "off");
       break;
     case DEMOD_SNR:
       printf("Demod SNR %.1f dB",decode_float(cp,optlen));
@@ -280,7 +277,7 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
       printf("PL tone deviation %'g Hz",decode_float(cp,optlen));
       break;
     case AGC_ENABLE:
-      printf("agc enab %'llu",(long long unsigned)decode_int(cp,optlen));
+      printf("agc %s",decode_int(cp,optlen) ? "enable" : "disable");
       break;
     case HEADROOM:
       printf("headroom %.1f dB",decode_float(cp,optlen));
@@ -334,7 +331,7 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
       printf("block drops %'llu",(long long unsigned)decode_int(cp,optlen));
       break;
     case LOCK:
-      printf("lock %llu",(long long unsigned)decode_int(cp,optlen));
+      printf("freq %s",decode_int(cp,optlen) ? "locked" : "unlocked");
       break;
     case TP1:
       printf("TP1 %'.1f",decode_float(cp,optlen));
