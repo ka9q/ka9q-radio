@@ -34,7 +34,7 @@ CONF_FILES=		 opusd@hf.conf opusd@hfdl.conf opusd@fm.conf opusd@aviation.conf op
 			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
 			 wspr-decoded.conf horus.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
 			 radiod@rx888-generic.conf radiod@airspyhf-generic.conf radiod@airspy-generic.conf radiod@funcube-generic.conf \
-			 radiod@rx888-ka9q.conf radiod@funcube-ka9q.conf radiod@kfs.conf radiod@airspyhf-ka9q.conf radiod@airspy-ka9q-2m.conf radiod@airspy-ka9q-125cm.conf radiod@airspy-ka9q-70cm.conf
+			 radiod@rx888-ka9q-hf.conf radiod@funcube-ka9q.conf radiod@kfs.conf radiod@airspyhf-ka9q.conf radiod@airspy-ka9q-2m.conf radiod@airspy-ka9q-125cm.conf radiod@airspy-ka9q-70cm.conf
 
 
 LOGROTATE_FILES = aprsfeed.rotate
