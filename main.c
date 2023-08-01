@@ -40,7 +40,7 @@
 // Configuration constants & defaults
 static int const DEFAULT_FFT_THREADS = 2;
 static int const DEFAULT_IP_TOS = 48;
-static int const DEFAULT_MCAST_TTL = 1;
+static int const DEFAULT_MCAST_TTL = 0; // Don't blast LANs with cheap Wifi!
 static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
 #if 0
