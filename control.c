@@ -1044,6 +1044,15 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
     case FE_ISREAL:
       Frontend.sdr.isreal = decode_int(cp,optlen) ? true: false;
       break;
+    case IF_GAIN:
+      Frontend.sdr.if_gain = decode_int(cp,optlen);
+      break;
+    case LNA_GAIN:
+      Frontend.sdr.lna_gain = decode_int(cp,optlen);
+      break;
+    case MIXER_GAIN:
+      Frontend.sdr.mixer_gain = decode_int(cp,optlen);
+      break;
     case KAISER_BETA:
       demod->filter.kaiser_beta = decode_float(cp,optlen);
       break;
