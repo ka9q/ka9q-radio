@@ -429,41 +429,17 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   encode_int32(&bp,LNA_GAIN,frontend->sdr.lna_gain);
   encode_int32(&bp,MIXER_GAIN,frontend->sdr.mixer_gain);
   encode_int32(&bp,IF_GAIN,frontend->sdr.if_gain);
+  encode_float(&bp,FE_LOW_EDGE,frontend->sdr.min_IF);
+  encode_float(&bp,FE_HIGH_EDGE,frontend->sdr.max_IF);
+
+  // Tuning
+  encode_double(&bp,RADIO_FREQUENCY,demod->tune.freq); // Hz
+  encode_double(&bp,FIRST_LO_FREQUENCY,frontend->sdr.frequency); // Hz
+  encode_double(&bp,SECOND_LO_FREQUENCY,demod->tune.second_LO); // Hz
 
   if(frontend->in){
     encode_int32(&bp,FILTER_BLOCKSIZE,frontend->in->ilen);
     encode_int32(&bp,FILTER_FIR_LENGTH,frontend->in->impulse_length);
-  }
-  
-  // Source address we're using to send data
-  encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&demod->output.data_source_address);
-  // Where we're sending PCM output
-  encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&demod->output.data_dest_address);
-  
-  encode_int32(&bp,OUTPUT_SSRC,demod->output.rtp.ssrc);
-  encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
-  encode_int64(&bp,OUTPUT_METADATA_PACKETS,Metadata_packets);
- 
-  // Lots of stuff not relevant in spectrum analysis mode
-  if(demod->demod_type != SPECT_DEMOD){
-    encode_int32(&bp,OUTPUT_SAMPRATE,demod->output.samprate); // Hz
-    encode_int64(&bp,OUTPUT_DATA_PACKETS,demod->output.rtp.packets);
-    encode_float(&bp,KAISER_BETA,demod->filter.kaiser_beta); // Dimensionless
-
-    encode_float(&bp,BASEBAND_POWER,power2dB(demod->sig.bb_power)); // power -> dB
-    encode_float(&bp,OUTPUT_LEVEL,power2dB(demod->output.level)); // power ratio -> dB
-    encode_int64(&bp,OUTPUT_SAMPLES,demod->output.samples);
-    encode_float(&bp,HEADROOM,voltage2dB(demod->output.headroom)); // amplitude -> dB
-    // Doppler info
-    encode_double(&bp,DOPPLER_FREQUENCY,demod->tune.doppler); // Hz
-    encode_double(&bp,DOPPLER_FREQUENCY_RATE,demod->tune.doppler_rate); // Hz
-    encode_int32(&bp,OUTPUT_CHANNELS,demod->output.channels);
-    if(!isnan(demod->sig.snr) && demod->sig.snr > 0)
-      encode_float(&bp,DEMOD_SNR,power2dB(demod->sig.snr)); // abs ratio -> dB
-    encode_float(&bp,FREQ_OFFSET,demod->sig.foffset);     // Hz; used differently in linear and fm
-    encode_float(&bp,GAIN,voltage2dB(demod->output.gain)); // linear amplitude -> dB; fixed in FM
-    encode_float(&bp,SQUELCH_OPEN,power2dB(demod->squelch_open));
-    encode_float(&bp,SQUELCH_CLOSE,power2dB(demod->squelch_close));
   }
   if(demod->filter.out != NULL)
     encode_int32(&bp,FILTER_DROPS,demod->filter.out->block_drops);  // count
@@ -471,15 +447,6 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   // Signals - these ALWAYS change
   encode_float(&bp,IF_POWER,power2dB(frontend->sdr.output_level));
   encode_float(&bp,NOISE_DENSITY,power2dB(demod->sig.n0)); // power -> dB
-
-  // Tuning
-  encode_double(&bp,RADIO_FREQUENCY,demod->tune.freq); // Hz
-  encode_double(&bp,SECOND_LO_FREQUENCY,demod->tune.second_LO); // Hz
-  encode_double(&bp,FIRST_LO_FREQUENCY,frontend->sdr.frequency); // Hz
-  encode_float(&bp,LOW_EDGE,demod->filter.min_IF); // Hz
-  encode_float(&bp,HIGH_EDGE,demod->filter.max_IF); // Hz
-  encode_float(&bp,FE_LOW_EDGE,frontend->sdr.min_IF);
-  encode_float(&bp,FE_HIGH_EDGE,frontend->sdr.max_IF);
 
   // Demodulation mode
   encode_byte(&bp,DEMOD_TYPE,demod->demod_type);
@@ -497,6 +464,9 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
       encode_byte(&bp,PLL_SQUARE,demod->linear.square); //bool
       encode_float(&bp,PLL_PHASE,demod->linear.cphase); // radians
       encode_float(&bp,PLL_BW,demod->linear.loop_bw);   // hz
+      // Relevant only when squelches are active
+      encode_float(&bp,SQUELCH_OPEN,power2dB(demod->squelch_open));
+      encode_float(&bp,SQUELCH_CLOSE,power2dB(demod->squelch_close));
     }
     encode_byte(&bp,ENVELOPE,demod->linear.env); // bool
     encode_double(&bp,SHIFT_FREQUENCY,demod->tune.shift); // Hz
@@ -514,6 +484,9 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
       encode_float(&bp,PL_DEVIATION,demod->fm.tone_deviation);
     }
   case WFM_DEMOD:  // Note fall-through from FM_DEMOD
+    // Relevant only when squelches are active
+    encode_float(&bp,SQUELCH_OPEN,power2dB(demod->squelch_open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(demod->squelch_close));
     encode_byte(&bp,THRESH_EXTEND,demod->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,demod->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0/(logf(demod->deemph.rate) * demod->output.samprate));
@@ -535,6 +508,34 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
 	encode_vector(&bp,BIN_DATA,demod->spectrum.bin_data,demod->spectrum.bin_count);
     }
     break;
+  }
+  // Lots of stuff not relevant in spectrum analysis mode
+  if(demod->demod_type != SPECT_DEMOD){
+    encode_float(&bp,LOW_EDGE,demod->filter.min_IF); // Hz
+    encode_float(&bp,HIGH_EDGE,demod->filter.max_IF); // Hz
+    encode_int32(&bp,OUTPUT_SAMPRATE,demod->output.samprate); // Hz
+    encode_int64(&bp,OUTPUT_DATA_PACKETS,demod->output.rtp.packets);
+    encode_float(&bp,KAISER_BETA,demod->filter.kaiser_beta); // Dimensionless
+
+    encode_float(&bp,BASEBAND_POWER,power2dB(demod->sig.bb_power)); // power -> dB
+    encode_float(&bp,OUTPUT_LEVEL,power2dB(demod->output.level)); // power ratio -> dB
+    encode_int64(&bp,OUTPUT_SAMPLES,demod->output.samples);
+    encode_float(&bp,HEADROOM,voltage2dB(demod->output.headroom)); // amplitude -> dB
+    // Doppler info
+    encode_double(&bp,DOPPLER_FREQUENCY,demod->tune.doppler); // Hz
+    encode_double(&bp,DOPPLER_FREQUENCY_RATE,demod->tune.doppler_rate); // Hz
+    encode_int32(&bp,OUTPUT_CHANNELS,demod->output.channels);
+    if(!isnan(demod->sig.snr) && demod->sig.snr > 0)
+      encode_float(&bp,DEMOD_SNR,power2dB(demod->sig.snr)); // abs ratio -> dB
+    encode_float(&bp,FREQ_OFFSET,demod->sig.foffset);     // Hz; used differently in linear and fm
+    encode_float(&bp,GAIN,voltage2dB(demod->output.gain)); // linear amplitude -> dB; fixed in FM
+    // Source address we're using to send data
+    encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&demod->output.data_source_address);
+    // Where we're sending PCM output
+    encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&demod->output.data_dest_address);
+    encode_int32(&bp,OUTPUT_SSRC,demod->output.rtp.ssrc);
+    encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
+    encode_int64(&bp,OUTPUT_METADATA_PACKETS,Metadata_packets);
   }
   // Don't send test points unless they're in use
   if(!isnan(demod->tp1))
