@@ -426,6 +426,9 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   encode_double(&bp,CALIBRATE,frontend->sdr.calibrate);
   encode_double(&bp,RF_GAIN,frontend->sdr.rf_gain);
   encode_double(&bp,RF_ATTEN,frontend->sdr.rf_atten);
+  encode_int32(&bp,LNA_GAIN,frontend->sdr.lna_gain);
+  encode_int32(&bp,MIXER_GAIN,frontend->sdr.mixer_gain);
+  encode_int32(&bp,IF_GAIN,frontend->sdr.if_gain);
 
   if(frontend->in){
     encode_int32(&bp,FILTER_BLOCKSIZE,frontend->in->ilen);

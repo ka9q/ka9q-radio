@@ -394,7 +394,7 @@ static int rx_callback(airspy_transfer *transfer){
 
   if(Software_agc){
     // Scale by 2 / 2048^2 = 2^-21 for 0 dBFS = full scale sine wave
-    float const power = (float)(in_energy >> 21) / transfer->sample_count;
+    float const power = frontend->sdr.output_level;
     if(power < Low_threshold && sdr->holdoff == 0){
       if(Verbose)
 	printf("Power %.1f dB\n",power2dB(power));
