@@ -29,7 +29,7 @@ CONF_FILES=		 opusd@hf.conf opusd@hfdl.conf opusd@fm.conf opusd@aviation.conf op
 			 opusd@kpbs.conf opusd@ksds.conf \
 			 opusd@cb-am.conf opusd@cb-lsb.conf opusd@cb-usb.conf \
 			 stereod.conf rdsd.conf \
-			 radiod@aviation.conf radiod@horus.conf radiod@nws.conf radiod@sonde.conf \
+			 radiod@aviation.conf radiod@horus.conf radiod@nws.conf \
 			 radiod@repeater.conf \
 			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
 			 wspr-decoded.conf horus.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
