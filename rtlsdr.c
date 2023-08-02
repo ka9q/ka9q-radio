@@ -4,33 +4,12 @@
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
-#include <string.h>
-#include <complex.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdint.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <signal.h>
-#include <locale.h>
-#include <sys/time.h>
 #include <rtl-sdr.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 #include <errno.h>
-#include <syslog.h>
-#include <sys/stat.h>
-#include <getopt.h>
 #include <iniparser/iniparser.h>
 
 #include "conf.h"
 #include "misc.h"
-#include "multicast.h"
-#include "status.h"
 #include "radio.h"
 #include "config.h"
 
@@ -47,7 +26,7 @@
 // Time in 100 ms update intervals to wait between gain steps
 static int const HOLDOFF_TIME = 2;
 
-#if 0
+#if 0 // Reimplement this someday
 // Configurable parameters
 // decibel limits for power
 static float const DC_alpha = 1.0e-6;  // high pass filter coefficient for DC offset estimates, per sample
@@ -59,31 +38,27 @@ static float const AGC_lower = -40;
 extern char const *App_path;
 extern int Verbose;
 
-
 struct sdrstate {
   struct frontend *frontend;
   struct rtlsdr_dev *device;    // Opaque pointer
 
   int dev;
-  uint32_t sample_rates[20];
   char serial[256];
 
   bool bias; // Bias tee on/off
-  bool agc;
 
   // Tuning
   bool frequency_lock;
   char const *frequency_file; // Local file to store frequency in case we restart
 
-
   // AGC
+  bool agc;
   int holdoff_counter; // Time delay when we adjust gains
   int gain;      // Gain passed to manual gain setting
 
   // Sample statistics
-  int clips;  // Sample clips since last reset
-  float power;   // Running estimate of A/D signal power
-  float DC;      // DC offset for real samples
+  //  int clips;  // Sample clips since last reset
+  //  float DC;      // DC offset for real samples
 
   pthread_t read_thread;
 };
@@ -238,8 +213,6 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   frontend->sdr.min_IF = -0.47 * frontend->sdr.samprate;
   frontend->sdr.max_IF = 0.47 * frontend->sdr.samprate;
   frontend->sdr.isreal = false; // Make sure the right kind of filter gets created!
-
-
   return 0;
 }
 
