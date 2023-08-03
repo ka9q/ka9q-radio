@@ -76,13 +76,17 @@ static void *proc_rx888(void *arg);
 
 
 #define N_USB_SPEEDS 6
-static char const *usb_speeds[N_USB_SPEEDS] =
-  {"unknown", "Low (1.5 Mb/s)", "Full (12 Mb/s)", "High (480 Mb/s)", "Super (5 Gb/s)", "Super+ (10Gb/s)"};
+static char const *usb_speeds[N_USB_SPEEDS] = {
+  "unknown",
+  "Low (1.5 Mb/s)",
+  "Full (12 Mb/s)",
+  "High (480 Mb/s)",
+  "Super (5 Gb/s)",
+  "Super+ (10Gb/s)"
+};
 
 
-
-
-int rx888_setup(struct frontend *frontend,dictionary *Dictionary,char const *section){
+int rx888_setup(struct frontend * const frontend,dictionary const * const Dictionary,char const * const section){
   assert(Dictionary != NULL);
 
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
@@ -175,8 +179,8 @@ gain,frontend->sdr.rf_gain,frontend->sdr.rf_atten,sdr->dither,sdr->randomizer,sd
 }
 
 // Come back here after common stuff has been set up (filters, etc)
-int rx888_startup(struct frontend *frontend){
-  struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
+int rx888_startup(struct frontend * const frontend){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->sdr.context;
 
   // Start processing A/D data
   pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
@@ -185,7 +189,7 @@ int rx888_startup(struct frontend *frontend){
 }
 
 static void *proc_rx888(void *arg){
-  struct sdrstate *sdr = (struct sdrstate *)arg;
+  struct sdrstate * const sdr = (struct sdrstate *)arg;
   assert(sdr != NULL);
   pthread_setname("proc_rx888");
 
@@ -227,7 +231,7 @@ static void *proc_rx888(void *arg){
 }
 
 // Callback called with incoming receiver data from A/D
-static void rx_callback(struct libusb_transfer *transfer){
+static void rx_callback(struct libusb_transfer * const transfer){
   assert(transfer != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)transfer->user_data;
   struct frontend *frontend = sdr->frontend;
@@ -278,7 +282,7 @@ static void rx_callback(struct libusb_transfer *transfer){
   }
 }
 
-static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize){
+static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware,unsigned int const queuedepth,unsigned int const reqsize){
   {
     int ret = libusb_init(NULL);
     if(ret != 0){

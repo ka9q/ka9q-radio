@@ -229,8 +229,8 @@ static void *rtlsdr_read_thread(void *arg){
 }
 
 
-int rtlsdr_startup(struct frontend *frontend){
-  struct sdrstate *sdr = frontend->sdr.context;
+int rtlsdr_startup(struct frontend * const frontend){
+  struct sdrstate * const sdr = frontend->sdr.context;
   pthread_create(&sdr->read_thread,NULL,rtlsdr_read_thread,sdr);
   fprintf(stdout,"rtlsdr thread running\n");
   return 0;
@@ -238,7 +238,7 @@ int rtlsdr_startup(struct frontend *frontend){
 
 
 // Callback called with incoming receiver data from A/D
-static void rx_callback(uint8_t *buf, uint32_t len, void *ctx){
+static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
   int sampcount = len/2;
   float energy = 0;
   struct frontend *frontend = ctx;
@@ -257,7 +257,7 @@ static void rx_callback(uint8_t *buf, uint32_t len, void *ctx){
   frontend->input.samples += sampcount;
 }
 #if 0 // use this later
-static void do_rtlsdr_agc(struct sdrstate *sdr){
+static void do_rtlsdr_agc(struct sdrstate * const sdr){
   assert(sdr != NULL);
   if(!sdr->agc)
     return; // Execute only in software AGC mode
@@ -393,8 +393,8 @@ static double true_freq(uint64_t freq_hz){
 // All this really works correctly only with a gpsdo
 // Remember, rtlsdr firmware always adds Fs/4 MHz to frequency we give it.
 
-static double set_correct_freq(struct sdrstate *sdr,double freq){
-  struct frontend *frontend = sdr->frontend;
+static double set_correct_freq(struct sdrstate * const sdr,double freq){
+  struct frontend * const frontend = sdr->frontend;
   int64_t intfreq = round(freq / (1 + frontend->sdr.calibrate));
   rtlsdr_set_center_freq(sdr->device,intfreq);
 #ifdef USE_NEW_LIBRTLSDR
@@ -404,7 +404,7 @@ static double set_correct_freq(struct sdrstate *sdr,double freq){
 #endif
 
   frontend->sdr.frequency = tf * (1 + frontend->sdr.calibrate);
-  FILE *fp = fopen(sdr->frequency_file,"w");
+  FILE * const fp = fopen(sdr->frequency_file,"w");
   if(fp == NULL || fprintf(fp,"%lf\n",frontend->sdr.frequency) < 0)
     fprintf(stderr,"Can't write to tuner state file %s: %sn",sdr->frequency_file,strerror(errno));
   if(fp != NULL)
@@ -412,8 +412,8 @@ static double set_correct_freq(struct sdrstate *sdr,double freq){
   return frontend->sdr.frequency;
 }
 
-double rtlsdr_tune(struct frontend *frontend,double freq){
-  struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
+double rtlsdr_tune(struct frontend * const frontend,double freq){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->sdr.context;
   assert(sdr != NULL);
 
   return set_correct_freq(sdr,freq);

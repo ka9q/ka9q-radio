@@ -65,10 +65,10 @@ static bool Hold_open = false;
 static void do_fcd_agc(struct sdrstate *);
 static double fcd_actual(unsigned int);
 
-int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const *section){
+int funcube_setup(struct frontend * const frontend, dictionary * const dictionary, char const * const section){
   assert(dictionary != NULL);
   {
-    char const *device = config_getstring(dictionary,section,"device",NULL);
+    char const * const device = config_getstring(dictionary,section,"device",NULL);
     if(strcasecmp(device,"funcube") != 0)
       return -1; // Not for us
   }
@@ -89,7 +89,7 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
   frontend->sdr.max_IF = UpperEdge;
   frontend->sdr.calibrate = config_getdouble(dictionary,section,"calibrate",0);
   {
-    char const *description = config_getstring(dictionary,section,"description","funcube dongle+");
+    char const * const description = config_getstring(dictionary,section,"description","funcube dongle+");
     strlcpy(frontend->sdr.description,description,sizeof(frontend->sdr.description));
   }
   Pa_Initialize();
@@ -176,15 +176,15 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
   inputParameters.suggestedLatency = 0.020;
   r = Pa_OpenStream(&sdr->Pa_Stream,&inputParameters,NULL,ADC_samprate,
 		    paFramesPerBufferUnspecified, 0, NULL, NULL);
-
   if(r < 0){
     fprintf(stdout,"Pa_OpenStream error: %s\n",Pa_GetErrorText(r));
     goto done;
   }
-
   r = Pa_StartStream(sdr->Pa_Stream);
-  if(r < 0)
+  if(r < 0){
     fprintf(stdout,"Pa_StartStream error: %s\n",Pa_GetErrorText(r));
+    goto done;
+  }
 
   fprintf(stdout,"Funcube %d: software AGC %d, samprate %'d, freq %.3f Hz, bias %d, lna_gain %d, mixer gain %d, if_gain %d\n",
 	  sdr->number, sdr->agc, frontend->sdr.samprate, frontend->sdr.frequency, sdr->bias_tee, frontend->sdr.lna_gain, frontend->sdr.mixer_gain, frontend->sdr.if_gain);
@@ -194,13 +194,13 @@ int funcube_setup(struct frontend *frontend, dictionary *dictionary, char const 
     fcdClose(sdr->phd);
     sdr->phd = NULL;
   }
-  return 0;
+  return r;
 }
 void *proc_funcube(void *arg){
   pthread_setname("proc_funcube");
-  struct sdrstate *sdr = (struct sdrstate *)arg;
+  struct sdrstate * const sdr = (struct sdrstate *)arg;
   assert(sdr != NULL);
-  struct frontend *frontend = sdr->frontend;
+  struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
   
   // Gain and phase corrections. These will be updated every block
@@ -310,7 +310,7 @@ void *proc_funcube(void *arg){
 }
 int funcube_startup(struct frontend *frontend){
   assert(frontend != NULL);
-  struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->sdr.context;
   assert(sdr != NULL);
 
   // Start processing A/D data
@@ -324,7 +324,7 @@ int funcube_startup(struct frontend *frontend){
 // Crude analog AGC just to keep signal roughly within A/D range
 // Executed only if -o option isn't specified; this allows manual control with, e.g., the fcdpp command
 static void do_fcd_agc(struct sdrstate *sdr){
-  struct frontend *frontend = sdr->frontend;
+  struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
   float const powerdB = power2dB(frontend->sdr.output_level);
@@ -368,15 +368,12 @@ static double fcd_actual(unsigned int u32Freq){
 
   UINT32 const u32Thresh = 3250U;
   UINT32 const u32FRef = 26000000U;
-
   
-  struct
-  {
+  struct {
     UINT32 u32Freq;
     UINT32 u32FreqOff;
     UINT32 u32LODiv;
-  } *pts,ats[]=
-      {
+  } *pts,ats[]= {
 	{4000000U,130000000U,16U},
 	{8000000U,130000000U,16U},
 	{16000000U,130000000U,16U},
@@ -391,7 +388,7 @@ static double fcd_actual(unsigned int u32Freq){
 	{875000000U,0U,4U},
 	{UINT32_MAX,0U,2U},
 	{0U,0U,0U}
-      };
+  };
   for(pts = ats; u32Freq >= pts->u32Freq; pts++)
     ;
 
@@ -421,11 +418,12 @@ static double fcd_actual(unsigned int u32Freq){
   //	     f64step, pts->u32LODiv, u32Frac, u32AFC, u32Int, u32Thresh, pts->u32FreqOff,f64FAct,f64FAct - u32Freq);
   return f64FAct;
 }
-double funcube_tune(struct frontend *frontend,double freq){
-  struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
+
+double funcube_tune(struct frontend * const frontend,double const freq){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->sdr.context;
   assert(sdr != NULL);
 
-  int intfreq = freq;
+  int const intfreq = freq;
 
   if(sdr->tunestate == NULL){
     char *tmp = NULL;

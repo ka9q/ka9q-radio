@@ -90,7 +90,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     }
   }
   {
-    char const *sn = config_getstring(Dictionary,section,"serial",NULL);
+    char const * const sn = config_getstring(Dictionary,section,"serial",NULL);
     if(sn != NULL){
       char *endptr = NULL;
       sdr->SN = 0;
@@ -119,7 +119,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     }
   }
   {
-    int ret = airspy_open_sn(&sdr->device,sdr->SN);
+    int const ret = airspy_open_sn(&sdr->device,sdr->SN);
     if(ret != AIRSPY_SUCCESS){
       fprintf(stdout,"airspy_open(%llx) failed: %s\n",(long long)sdr->SN,airspy_error_name(ret));
       return -1;
@@ -230,7 +230,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     assert(ret == AIRSPY_SUCCESS);
   }  
   {
-    char const *p = config_getstring(Dictionary,section,"description",NULL);
+    char const * const p = config_getstring(Dictionary,section,"description",NULL);
     if(p != NULL){
       strlcpy(frontend->sdr.description,p,sizeof(frontend->sdr.description));
       fprintf(stdout,"%s: ",frontend->sdr.description);
@@ -259,7 +259,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   }
   if(init_frequency == 0){
     // If not set on command line, load saved frequency
-    FILE *fp = fopen(sdr->frequency_file,"r+");
+    FILE * const fp = fopen(sdr->frequency_file,"r+");
     if(fp == NULL)
       fprintf(stdout,"Can't open tuner state file %s: %s\n",sdr->frequency_file,strerror(errno));
     else {
@@ -279,14 +279,14 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   set_correct_freq(sdr,init_frequency);
   return 0;
 }
-int airspy_startup(struct frontend *frontend){
-  struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
+int airspy_startup(struct frontend * const frontend){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->sdr.context;
   pthread_create(&sdr->monitor_thread,NULL,airspy_monitor,sdr);
   return 0;
 }
 
 static void *airspy_monitor(void *p){
-  struct sdrstate *sdr = (struct sdrstate *)p;
+  struct sdrstate * const sdr = (struct sdrstate *)p;
   assert(sdr != NULL);
   pthread_setname("airspy-mon");
 
@@ -429,10 +429,10 @@ static double true_freq(uint64_t freq_hz){
 // the TCXO calibration offset is a holdover from the Funcube dongle and doesn't
 // really fit the Airspy with its internal factory calibration
 // All this really works correctly only with a gpsdo, forcing the calibration offset to 0
-static double set_correct_freq(struct sdrstate *sdr,double freq){
-  struct frontend *frontend = sdr->frontend;
+static double set_correct_freq(struct sdrstate * const sdr,double const freq){
+  struct frontend * const frontend = sdr->frontend;
   // sdr->converter refers to an upconverter, so it's added to the frequency we request
-  int64_t intfreq = round((freq + sdr->converter)/ (1 + frontend->sdr.calibrate));
+  int64_t const intfreq = round((freq + sdr->converter)/ (1 + frontend->sdr.calibrate));
   int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
   ret = airspy_set_freq(sdr->device,intfreq - sdr->offset);
   assert(ret == AIRSPY_SUCCESS);
@@ -447,14 +447,14 @@ static double set_correct_freq(struct sdrstate *sdr,double freq){
   }
   return frontend->sdr.frequency;
 }
-double airspy_tune(struct frontend *frontend,double f){
-  struct sdrstate *sdr = frontend->sdr.context;
+double airspy_tune(struct frontend * const frontend,double const f){
+  struct sdrstate * const sdr = frontend->sdr.context;
   return set_correct_freq(sdr,f);
 }
 
 
-static void set_gain(struct sdrstate *sdr,int gainstep){
-  struct frontend *frontend = sdr->frontend;
+static void set_gain(struct sdrstate * const sdr,int gainstep){
+  struct frontend * const frontend = sdr->frontend;
   if(gainstep < 0)
     gainstep = 0;
   else if(gainstep >= GAIN_COUNT)
