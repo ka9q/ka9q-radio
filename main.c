@@ -304,8 +304,7 @@ static int loadconfig(char const * const file){
   }
   // Process [global] section applying to all demodulator blocks
   char const * const global = "global";
-  if(config_getboolean(Configtable,global,"verbose",false))
-    Verbose++;
+  Verbose = config_getint(Configtable,global,"verbose",Verbose);
   // Default multicast interface
   {
     // The area pointed to by returns from config_getstring() is freed and overwritten when the config dictionary is closed
@@ -718,11 +717,15 @@ static void closedown(int a){
   else
     exit(1);
 }
+
+// Increase or decrease logging level (thanks AI6VN for idea)
 static void verbosity(int a){
   if(a == SIGUSR1)
     Verbose++;
   else if(a == SIGUSR2)
     Verbose = (Verbose <= 0) ? 0 : Verbose - 1;
+  else
+    return;
 
   fprintf(stdout,"Verbose = %d\n",Verbose);
 }
