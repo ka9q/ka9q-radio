@@ -9,6 +9,9 @@
 #include <string.h>
 #if defined(linux)
 #include <bsd/string.h>
+#include <byteswap.h>
+#else // bsd
+#define bswap_16(value) ((((value) & 0xff) << 8) | ((value) >> 8)) // hopefully gets optimized
 #endif
 #include <math.h>
 #include <complex.h>
@@ -25,7 +28,6 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <time.h>
-
 
 #include "misc.h"
 #include "attr.h"
@@ -259,11 +261,6 @@ void input_loop(){
       int frame_count = samp_count / sp->channels; // 1 every sample period (e.g., 4 for stereo 16-bit)
       off_t offset = rtp_process(&sp->rtp_state,&rtp,frame_count); // rtp timestamps refer to frames
       
-      // Flip endianness from network to host; wav wants little endian
-      // So actually should convert from network order to little endian, not host
-      for(int n = 0; n < samp_count; n++)
-	samples[n] = ntohs(samples[n]);
-
       // The seek offset relative to the current position in the file is the signed (modular) difference between
       // the actual and expected RTP timestamps. This should automatically handle
       // 32-bit RTP timestamp wraps, which occur every ~1 days at 48 kHz and only 6 hr @ 192 kHz
@@ -279,7 +276,12 @@ void input_loop(){
       if(sp->CurrentSegmentSamples >= SubstantialFileTime * sp->samprate)
 	sp->SubstantialFile = 1;
 
-      fwrite(samples,1,size,sp->fp);
+      // Flip endianness from big-endian on network to little endian wanted by .wav
+      // byteswap.h is linux-specific; need to find a portable way to get the machine instructions
+      uint16_t wbuffer[samp_count];
+      for(int n = 0; n < samp_count; n++)
+	wbuffer[n] = bswap_16((uint16_t)samples[n]);
+      fwrite(wbuffer,sizeof(*wbuffer),samp_count,sp->fp);
       sp->last_active = gps_time_ns();
     } // end of packet processing
 
