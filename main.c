@@ -81,6 +81,7 @@ uint32_t Command_tag;
 uint64_t Commands;
 
 static void closedown(int);
+static void verbosity(int);
 static int mcast_setup_frontend(char const *arg);
 static int loadconfig(char const *file);
 static int setup_hardware(char const *sname);
@@ -173,6 +174,9 @@ int main(int argc,char *argv[]){
   signal(SIGQUIT,closedown);
   signal(SIGTERM,closedown);        
   signal(SIGPIPE,SIG_IGN);
+  signal(SIGUSR1,verbosity);
+  signal(SIGUSR2,verbosity);
+  
   
   char const *configfile;
   if(argc <= optind){
@@ -714,4 +718,11 @@ static void closedown(int a){
   else
     exit(1);
 }
+static void verbosity(int a){
+  if(a == SIGUSR1)
+    Verbose++;
+  else if(a == SIGUSR2)
+    Verbose = (Verbose <= 0) ? 0 : Verbose - 1;
 
+  fprintf(stdout,"Verbose = %d\n",Verbose);
+}
