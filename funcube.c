@@ -427,12 +427,13 @@ double funcube_tune(struct frontend * const frontend,double const freq){
 
   if(sdr->tunestate == NULL){
     char *tmp = NULL;
-    asprintf(&tmp,"%s/tune-funcube.%d",VARDIR,sdr->number);
-    sdr->tunestate = fopen(tmp,"r+");
-    if(!sdr->tunestate)
-      fprintf(stdout,"Can't open tuner state file %s: %s\n",tmp,strerror(errno));
-
-    FREE(tmp);
+    int r = asprintf(&tmp,"%s/tune-funcube.%d",VARDIR,sdr->number);
+    if(r > 0 && tmp != NULL){
+      sdr->tunestate = fopen(tmp,"r+");
+      if(!sdr->tunestate)
+	fprintf(stdout,"Can't open tuner state file %s: %s\n",tmp,strerror(errno));
+      FREE(tmp);
+    }
   }
   if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
     fprintf(stdout,"fcdOpen(%d): can't re-open control port\n",sdr->number);
