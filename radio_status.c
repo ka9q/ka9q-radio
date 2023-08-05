@@ -101,8 +101,11 @@ static int send_radio_status(struct frontend const *frontend,struct demod *demod
   Metadata_packets++;
   int const len = encode_radio_status(frontend,demod,packet,sizeof(packet));
   send(Status_fd,packet,len,0);
+  // Reset integrators
+  demod->sig.bb_energy = 0;
+  demod->output.energy = 0;
+  demod->output.sum_gain_sq = 0;
   demod->blocks_since_poll = 0;
-
   return 0;
 }
 
@@ -351,13 +354,6 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
 	}
       }
       break;
-    case INTEGRATE_TC:
-      {
-	float const x = decode_float(cp,optlen);
-	if(!isnan(x))
-	  demod->spectrum.integrate_tc = x; // No restart needed for this parameter
-      }
-      break;
     default:
       break;
     }
@@ -506,11 +502,17 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
       encode_float(&bp,COHERENT_BIN_SPACING, spacing);
       encode_float(&bp,NONCOHERENT_BIN_BW,demod->spectrum.bin_bw); // Hz
       encode_int(&bp,BIN_COUNT,demod->spectrum.bin_count);
-      encode_float(&bp,INTEGRATE_TC,demod->spectrum.integrate_tc); // sec
       // encode bin data here? maybe change this, it can be a lot
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
-      if(demod->spectrum.bin_data != NULL)
-	encode_vector(&bp,BIN_DATA,demod->spectrum.bin_data,demod->spectrum.bin_count);
+      if(demod->spectrum.bin_data != NULL){
+	// Average and clear
+	float averages[demod->spectrum.bin_count];
+	for(int i=0; i < demod->spectrum.bin_count; i++)
+	  averages[i] = demod->spectrum.bin_data[i] / demod->blocks_since_poll;
+
+	encode_vector(&bp,BIN_DATA,averages,demod->spectrum.bin_count);
+	memset(demod->spectrum.bin_data,0,demod->spectrum.bin_count * sizeof(*demod->spectrum.bin_data));
+      }
     }
     break;
   }
@@ -523,12 +525,16 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_float(&bp,KAISER_BETA,demod->filter.kaiser_beta); // Dimensionless
 
     // BASEBAND_POWER is now the average since last poll
-    float bb_power = NAN;
-    if(demod->blocks_since_poll > 0)
+    float bb_power = demod->sig.bb_power;
+    if(demod->blocks_since_poll > 0){
       bb_power = demod->sig.bb_energy / demod->blocks_since_poll;
-    
+
+    }
     encode_float(&bp,BASEBAND_POWER,power2dB(bb_power)); // power -> dB
-    encode_float(&bp,OUTPUT_LEVEL,power2dB(demod->output.level)); // power ratio -> dB
+    if(demod->blocks_since_poll > 0){
+      float output_level = demod->output.energy / demod->blocks_since_poll;
+      encode_float(&bp,OUTPUT_LEVEL,power2dB(output_level)); // power ratio -> dB
+    }
     encode_int64(&bp,OUTPUT_SAMPLES,demod->output.samples);
     encode_float(&bp,HEADROOM,voltage2dB(demod->output.headroom)); // amplitude -> dB
     // Doppler info
@@ -538,7 +544,12 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     if(!isnan(demod->sig.snr) && demod->sig.snr > 0)
       encode_float(&bp,DEMOD_SNR,power2dB(demod->sig.snr)); // abs ratio -> dB
 
-    encode_float(&bp,GAIN,voltage2dB(demod->output.gain)); // linear amplitude -> dB; fixed in FM
+    float gain = demod->output.gain; // Use instantaneous amplitude gain if no integration
+    gain *= gain; // square for power ratio
+    if(demod->blocks_since_poll > 0)
+      gain = demod->output.sum_gain_sq / demod->blocks_since_poll;
+      
+    encode_float(&bp,GAIN,power2dB(gain));
     // Source address we're using to send data
     encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&demod->output.data_source_address);
     // Where we're sending PCM output

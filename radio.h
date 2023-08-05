@@ -213,7 +213,7 @@ struct demod {
   // Signal levels & status, common to all demods
   struct {
     float bb_power;   // Average power of signal after filter but before digital gain, power ratio
-    float bb_energy;  // Integrated indefinitely until a status poll
+    float bb_energy;  // Integrated power, reset by poll
     float foffset;    // Frequency offset Hz (FM, coherent AM, dsb)
     float snr;        // From PLL in linear, moments in FM
     float n0;         // per-demod N0 (experimental)
@@ -237,7 +237,6 @@ struct demod {
   struct {
     float bin_bw;     // Requested bandwidth (hz) of noncoherent integration bin
     int bin_count;    // Requested bin count
-    float integrate_tc; // Exponential time constant (sec)
     float *bin_data;  // Array of real floats with bin_count elements
   } spectrum;
 
@@ -245,6 +244,7 @@ struct demod {
   struct {
     int samprate;      // Audio D/A sample rate
     float gain;        // Audio gain to normalize amplitude
+    float sum_gain_sq; // Sum of squared gains, for averaging
     float headroom;    // Audio level headroom, amplitude ratio (settable)
     // RTP network streaming
     bool silent;       // last packet was suppressed (used to generate RTP mark bit)
@@ -258,7 +258,8 @@ struct demod {
     int rtcp_fd;    // File descriptor for RTP control protocol
     int sap_fd;     // Session announcement protocol (SAP) - experimental
     int channels;   // 1 = mono, 2 = stereo (settable)
-    float level;    // Output level
+    float energy;   // Output energy since last poll
+    
     float deemph_state_left;
     float deemph_state_right;
     uint64_t samples;

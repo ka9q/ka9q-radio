@@ -262,7 +262,7 @@ void *demod_fm(void *arg){
       output_level += baseband[n] * baseband[n];
     }
     output_level *= one_over_olen;
-    demod->output.level = output_level;
+    demod->output.energy += output_level;
     if(send_mono_output(demod,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
   } // while(!demod->terminate)

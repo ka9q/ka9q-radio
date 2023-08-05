@@ -1094,7 +1094,7 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
       demod->linear.env = decode_int(cp,optlen);
       break;
     case OUTPUT_LEVEL:
-      demod->output.level = dB2power(decode_float(cp,optlen));
+      demod->output.energy = dB2power(decode_float(cp,optlen));
       break;
     case OUTPUT_SAMPLES:
       demod->output.samples = decode_int(cp,optlen);
@@ -1183,9 +1183,6 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
     case BIN_COUNT:
       demod->spectrum.bin_count = decode_int(cp,optlen);
       break;
-    case INTEGRATE_TC:
-      demod->spectrum.integrate_tc = decode_float(cp,optlen);
-      break;
     case BIN_DATA:
       break;
     case RF_GAIN:
@@ -1193,6 +1190,9 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
       break;
     case RF_ATTEN:
       Frontend.sdr.rf_atten = decode_float(cp,optlen);
+      break;
+    case BLOCKS_SINCE_POLL:
+      demod->blocks_since_poll = decode_int(cp,optlen);
       break;
     default: // ignore others
       break;
@@ -1377,7 +1377,7 @@ void display_sig(WINDOW *w,struct demod const *demod){
   pprintw(w,row++,col,"NBW","%.1f dBHz ",power2dB(noise_bandwidth));
   pprintw(w,row++,col,"SNR","%.1f dB   ",power2dB(sn0/noise_bandwidth));
   pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(demod->output.gain));
-  pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(demod->output.level));
+  pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(demod->output.energy)); // actually level; sender does averaging
   pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(demod->output.headroom));
   box(w,0,0);
   mvwaddstr(w,0,1,"Signal");
@@ -1432,7 +1432,6 @@ void display_demodulator(WINDOW *w,struct demod const *demod){
   case SPECT_DEMOD:
     pprintw(w,row++,col,"Bin width","%.0f Hz",demod->spectrum.bin_bw);
     pprintw(w,row++,col,"Bins","%d   ",demod->spectrum.bin_count);
-    pprintw(w,row++,col,"Integration time","%.1f s ",demod->spectrum.integrate_tc);
     if(demod->spectrum.bin_data != NULL)
       pprintw(w,row++,col,"Bin 0","%.1f   ",demod->spectrum.bin_data[0]);
     break;
@@ -1479,6 +1478,7 @@ void display_fe(WINDOW *w,struct demod const *demod){
     pprintw(w,row++,col,"dupes","%'llu",Frontend.input.rtp.dupes);
   }
   pprintw(w,row++,col,"samples","%'llu",Frontend.input.samples);
+  pprintw(w,row++,col,"blocks since poll","%'llu",demod->blocks_since_poll);
   box(w,0,0);
   mvwaddstr(w,0,1,"Front end status");
   wnoutrefresh(w);

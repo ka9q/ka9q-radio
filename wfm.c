@@ -250,7 +250,8 @@ void *demod_wfm(void *arg){
 	stereo_buffer[n] = s * demod->output.gain;
 	output_level += cnrmf(stereo_buffer[n]);
       }
-      demod->output.level = output_level / (2 * audio_L); // Halve power to get level per channel
+      output_level /= (2 * audio_L); // Halve power to get level per channel
+      demod->output.energy += output_level;
       if(send_stereo_output(demod,(const float *)stereo_buffer,audio_L,false) < 0)
 	break; // No output stream! Terminate
     } else { // stereo_on == false
@@ -273,7 +274,8 @@ void *demod_wfm(void *arg){
 	  output_level += s * s;
 	}
       }
-      demod->output.level = output_level / audio_L;
+      output_level /= audio_L;
+      demod->output.energy += output_level;
       // mute output unless time is left on the squelch_state timer
       if(send_mono_output(demod,mono->output.r,audio_L,false) < 0)
 	break; // No output stream! Terminate

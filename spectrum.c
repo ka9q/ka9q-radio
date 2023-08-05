@@ -68,17 +68,11 @@ void *demod_spectrum(void *arg){
 
   set_freq(demod,demod->tune.freq); // retune front end if needed to cover requested bandwidth
 
-  float tc = 0; // time constant cache, let it be set in the first iteration
-  float smooth = 1;
   // Do first update with smooth == 1 so we don't have to wait for an initial exponential rise
   // Still need to clean up code to force radio freq to be multiple of FFT bin spacing
   while(!demod->terminate){
     if(downconvert(demod) == -1)
       break; // received terminate
-
-    // If a user parameter has changed, restart the integrators
-    if(demod->spectrum.integrate_tc != tc)
-      smooth = 1;
 
     int binp = 0; 
     for(int i=0; i < demod->spectrum.bin_count; i++){ // For each noncoherent integration bin above center freq
@@ -87,20 +81,9 @@ void *demod_spectrum(void *arg){
 	assert(binp < demod->filter.out->bins);
 	p += cnrmf(demod->filter.out->fdomain[binp++]);
       }
-      // Exponential smoothing
-      demod->spectrum.bin_data[i] += smooth * (p - demod->spectrum.bin_data[i]);
-    }
-    if(smooth == 1){
-      // first time through, or value has changed; recalculate smoothing factor
-      if(isnan(demod->spectrum.integrate_tc) || demod->spectrum.integrate_tc <= 0)
-	demod->spectrum.integrate_tc = 5; // Force reasonable value of 5 sec
-
-      // Update cached copies, recalculate smoothing param
-      tc = demod->spectrum.integrate_tc;
-      // https://en.wikipedia.org/wiki/Exponential_smoothing#Time constant
-      // smooth = 1 - exp(-blocktime/tc)
-      // expm1(x) = exp(x) - 1 (to preserve precision)
-      smooth = -expm1f(-Blocktime / (1000 * tc)); // Blocktime is in millisec!
+      // Accumulate energy until next poll
+      // Should this be protected with a mutex?
+      demod->spectrum.bin_data[i] += p;
     }
   }
  quit:;

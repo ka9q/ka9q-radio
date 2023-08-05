@@ -166,32 +166,36 @@ void *demod_linear(void *arg){
 	gain_change = powf(demod->linear.recovery_rate, 1.0F/N);
       }
     }
+    // Accumulate sum of square gains, for averaging in status
+    float start_gain = demod->output.gain;
+
 
     // Second pass over signal block
     // Demodulate, apply gain changes, compute output energy
-    float output_level = 0;
     if(demod->output.channels == 1){
+      float output_power = 0;
       float samples[N]; // for mono output
       // channels == 1, mono
       if(demod->linear.env){
 	// AM envelope detection
 	for(int n=0; n < N; n++){
 	  samples[n] = cabsf(buffer[n]) * demod->output.gain;
-	  output_level += samples[n] * samples[n];
+	  output_power += samples[n] * samples[n];
 	  demod->output.gain *= gain_change;
 	}
       } else {
 	// I channel only (SSB, CW, etc)
 	for(int n=0; n < N; n++){
 	  samples[n] = crealf(buffer[n]) * demod->output.gain;
-	  output_level += samples[n] * samples[n];
+	  output_power += samples[n] * samples[n];
 	  demod->output.gain *= gain_change;
 	}
       }
-      demod->output.level = output_level / N;
+      output_power /= N;
+      demod->output.energy += output_power;
       // Mute if no signal (e.g., outside front end coverage)
       bool mute = false;
-      if(demod->output.level == 0)
+      if(output_power == 0)
 	mute = true;
       if(demod->linear.pll && !demod->linear.pll_lock) // Use PLL for AM carrier squelch
 	mute = true;
@@ -199,26 +203,28 @@ void *demod_linear(void *arg){
       if(send_mono_output(demod,samples,N,mute) == -1)
 	break; // No output stream!
     } else { // channels == 2, stereo
+      float output_power = 0;
       if(demod->linear.env){
 	// I on left, envelope/AM on right (for experiments in fine SSB tuning)
 	for(int n=0; n < N; n++){      
 	  __imag__ buffer[n] = cabsf(buffer[n]) * 2; // empirical +6dB
 	  buffer[n] *= demod->output.gain;
-	  output_level += cnrmf(buffer[n]);
+	  output_power += cnrmf(buffer[n]);
 	  demod->output.gain *= gain_change;
 	}
       } else {	// I/Q mode
 	// I on left, Q on right
 	for(int n=0; n < N; n++){      
 	  buffer[n] *= demod->output.gain;
-	  output_level += cnrmf(buffer[n]);
+	  output_power += cnrmf(buffer[n]);
 	  demod->output.gain *= gain_change;
 	}
       }
-      demod->output.level = output_level / (N * demod->output.channels);
+      output_power /= (N * demod->output.channels);
+      demod->output.energy += output_power;
       // Mute if no signal (e.g., outside front end coverage)
-      int mute = 0;
-      if(demod->output.level == 0)
+      bool mute = false;
+      if(output_power == 0)
 	mute = true;
       if(demod->linear.pll && !demod->linear.pll_lock)
 	mute = true; // AM carrier squelch
@@ -227,6 +233,9 @@ void *demod_linear(void *arg){
 	break; // No output stream! Terminate
       }
     }
+    // When the gain is allowed to vary, the average gain won't be exactly consistent with the
+    // average baseband (input) and output powers. But I still try to make it meaningful.
+    demod->output.sum_gain_sq += start_gain * demod->output.gain; // accumulate square of approx average gain
   }
  quit:;
   FREE(demod->filter.energies);

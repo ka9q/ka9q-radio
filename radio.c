@@ -852,7 +852,8 @@ int downconvert(struct demod *demod){
 
       // No front end coverage of our passband; wait for it to retune
       demod->sig.bb_power = 0;
-      demod->output.level = 0;
+      demod->sig.bb_energy = 0;
+      demod->output.energy = 0;
       struct timespec timeout; // Needed to avoid deadlock if no front end is available
       clock_gettime(CLOCK_REALTIME,&timeout);
       timeout.tv_sec += 1; // 1 sec in the future
@@ -888,6 +889,7 @@ int downconvert(struct demod *demod){
     }
     execute_filter_output(demod->filter.out,-shift); // block until new data frame
 
+    demod->blocks_since_poll++;
     if(buffer != NULL){ // No output time-domain buffer in spectral analysis mode
       const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
       float energy = 0;
@@ -901,6 +903,6 @@ int downconvert(struct demod *demod){
     }
     demod->filter.bin_shift = shift; // We need this in any case (not really?)
     demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
-    demod->blocks_since_poll++;
+
     return 0;
 }
