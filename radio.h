@@ -274,7 +274,7 @@ struct demod {
     float rate;
   } deemph;
 
-  long long blocks_since_poll; // Used for averaging signal levels
+  uint64_t blocks_since_poll; // Used for averaging signal levels
 
   pthread_t sap_thread;
   pthread_t rtcp_thread;

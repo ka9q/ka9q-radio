@@ -43,6 +43,9 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
     case CMD_CNT:
       printf("commands %'llu",(long long unsigned)decode_int(cp,optlen));
       break;
+    case BLOCKS_SINCE_POLL:
+      printf("last poll %'llu blocks",(long long unsigned)decode_int(cp,optlen));
+      break;
     case GPS_TIME:
       {
 	char tbuf[100];

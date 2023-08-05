@@ -24,17 +24,21 @@ int Mcast_ttl = 5;
 int IP_tos = 0;
 const char *App_path;
 int Verbose;
-char *Radio = NULL;
-char *Locale = "en_US.UTF-8";
+char const *Radio = NULL;
+char const *Locale = "en_US.UTF-8";
+char const *Iface;
+char const *Mode = "am";
 uint32_t Ssrc;
 
 struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "hvl:r:s:";
+char Optstring[] = "hi:vl:r:s:";
 struct option Options[] = {
   {"help", no_argument, NULL, 'h'},
+  {"iface", required_argument, NULL, 'i'},
+  {"mode", required_argument, NULL, 'm'},
   {"ssrc", required_argument, NULL, 's'},
   {"radio", required_argument, NULL, 'r'},
   {"locale", required_argument, NULL, 'l'},
@@ -53,6 +57,12 @@ int main(int argc,char *argv[]){
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
+      case 'i':
+	Iface = optarg;
+	break;
+      case 'm':
+	Mode = optarg;
+	break;
       case 's':
 	Ssrc = strtol(optarg,NULL,0);
 	break;
@@ -86,17 +96,18 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"--ssrc not specified\n");
     exit(1);
   }
-
   {
     char iface[1024];
     resolve_mcast(Radio,&Control_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
-    Status_sock = listen_mcast(&Control_address,iface);
+    char const *ifc = (Iface != NULL) ? Iface : iface;
+    
+    Status_sock = listen_mcast(&Control_address,ifc);
 
     if(Status_sock == -1){
       fprintf(stderr,"Can't open Status_sock socket to radio control channel %s: %s\n",Radio,strerror(errno));
       exit(1);
     }
-    Control_sock = connect_mcast(&Control_address,iface,Mcast_ttl,IP_tos);
+    Control_sock = connect_mcast(&Control_address,ifc,Mcast_ttl,IP_tos);
     if(Control_sock == -1){
       fprintf(stderr,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
       exit(1);
@@ -123,6 +134,11 @@ int main(int argc,char *argv[]){
   else if(f < 100000)      // 2000-99999.999 can only be kHz
     f = f*1e3;
   
+  // Begin polling SSRC to ensure the multicast group is up and radiod is listening
+  // Does the ssrc already exist?
+  
+  // Now send command
+
   uint8_t buffer[8192];
   uint8_t *bp = buffer;
   
@@ -130,6 +146,9 @@ int main(int argc,char *argv[]){
   sent_tag = random();
   encode_int(&bp,COMMAND_TAG,sent_tag);
   encode_int(&bp,OUTPUT_SSRC,Ssrc);
+  if(Mode != NULL)
+    encode_string(&bp,PRESET,Mode,strlen(Mode));
+
   sent_freq = f;
   encode_double(&bp,RADIO_FREQUENCY,sent_freq); // Hz
   encode_eol(&bp);

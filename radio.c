@@ -901,5 +901,6 @@ int downconvert(struct demod *demod){
     }
     demod->filter.bin_shift = shift; // We need this in any case (not really?)
     demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
+    demod->blocks_since_poll++;
     return 0;
 }

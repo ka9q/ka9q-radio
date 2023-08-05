@@ -523,7 +523,10 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_float(&bp,KAISER_BETA,demod->filter.kaiser_beta); // Dimensionless
 
     // BASEBAND_POWER is now the average since last poll
-    float bb_power = demod->sig.bb_energy / demod->blocks_since_poll;
+    float bb_power = NAN;
+    if(demod->blocks_since_poll > 0)
+      bb_power = demod->sig.bb_energy / demod->blocks_since_poll;
+    
     encode_float(&bp,BASEBAND_POWER,power2dB(bb_power)); // power -> dB
     encode_float(&bp,OUTPUT_LEVEL,power2dB(demod->output.level)); // power ratio -> dB
     encode_int64(&bp,OUTPUT_SAMPLES,demod->output.samples);
