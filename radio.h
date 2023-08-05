@@ -213,6 +213,7 @@ struct demod {
   // Signal levels & status, common to all demods
   struct {
     float bb_power;   // Average power of signal after filter but before digital gain, power ratio
+    float bb_energy;  // Integrated indefinitely until a status poll
     float foffset;    // Frequency offset Hz (FM, coherent AM, dsb)
     float snr;        // From PLL in linear, moments in FM
     float n0;         // per-demod N0 (experimental)
@@ -272,6 +273,8 @@ struct demod {
     // tc = 1 / (2 * M_PI * 300.) = 530.5e-6 sec for NBFM (300 Hz corner freq)
     float rate;
   } deemph;
+
+  long long blocks_since_poll; // Used for averaging signal levels
 
   pthread_t sap_thread;
   pthread_t rtcp_thread;

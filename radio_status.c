@@ -34,7 +34,7 @@ extern struct demod const *Dynamic_demod;
 extern dictionary const *Modetable;
 
 
-static int send_radio_status(struct frontend const *frontend,struct demod const *demod,int full);
+static int send_radio_status(struct frontend const *frontend,struct demod *demod,int full);
 static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int length);
 static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,uint8_t *packet, int len);
 
@@ -95,12 +95,13 @@ void *radio_status(void *arg){
   return NULL;
 }
 
-static int send_radio_status(struct frontend const *frontend,struct demod const *demod,int full){
+static int send_radio_status(struct frontend const *frontend,struct demod *demod,int full){
   uint8_t packet[2048];
 
   Metadata_packets++;
   int const len = encode_radio_status(frontend,demod,packet,sizeof(packet));
   send(Status_fd,packet,len,0);
+  demod->blocks_since_poll = 0;
 
   return 0;
 }
@@ -521,7 +522,9 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_int64(&bp,OUTPUT_DATA_PACKETS,demod->output.rtp.packets);
     encode_float(&bp,KAISER_BETA,demod->filter.kaiser_beta); // Dimensionless
 
-    encode_float(&bp,BASEBAND_POWER,power2dB(demod->sig.bb_power)); // power -> dB
+    // BASEBAND_POWER is now the average since last poll
+    float bb_power = demod->sig.bb_energy / demod->blocks_since_poll;
+    encode_float(&bp,BASEBAND_POWER,power2dB(bb_power)); // power -> dB
     encode_float(&bp,OUTPUT_LEVEL,power2dB(demod->output.level)); // power ratio -> dB
     encode_int64(&bp,OUTPUT_SAMPLES,demod->output.samples);
     encode_float(&bp,HEADROOM,voltage2dB(demod->output.headroom)); // amplitude -> dB
@@ -546,6 +549,8 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_float(&bp,TP1,demod->tp1);
   if(!isnan(demod->tp2))
     encode_float(&bp,TP2,demod->tp2);
+  encode_int64(&bp,BLOCKS_SINCE_POLL,demod->blocks_since_poll);
+
   encode_eol(&bp);
 
   return bp - packet;

@@ -895,7 +895,9 @@ int downconvert(struct demod *demod){
 	buffer[n] *= step_osc(&demod->fine);
 	energy += cnrmf(buffer[n]);
       }
-      demod->sig.bb_power = energy / N;
+      energy /= N;
+      demod->sig.bb_power = energy;
+      demod->sig.bb_energy += energy;
     }
     demod->filter.bin_shift = shift; // We need this in any case (not really?)
     demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
