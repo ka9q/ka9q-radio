@@ -50,6 +50,7 @@ static char const *Config_file;
 static bool Quiet;                 // Disable curses
 static bool Quiet_mode;            // Toggle screen activity after starting
 static float Playout = 100;
+static bool Constant_delay;
 static bool Start_muted;
 static bool Auto_position = true;  // first will be in the center
 static int64_t Repeater_tail;
@@ -678,7 +679,7 @@ static void *decode_task(void *arg){
       int64_t const increment = 100000000; // 100 ms
       // pthread_cond_timedwait requires UTC clock time! Undefined behavior around a leap second...
       struct timespec ts;
-      ns2ts(&ts,gps_time_ns() + increment + BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET));
+      ns2ts(&ts,utc_time_ns() + increment);
       int r = pthread_cond_timedwait(&sp->qcond,&sp->qmutex,&ts); // Wait 100 ms max so we pick up terminates
       if(r != 0){
 	if(r == EINVAL)
@@ -847,7 +848,8 @@ static void *decode_task(void *arg){
 	goto endloop; // Drop packet as late
       
       // 3 or more consecutive lates triggers a reset
-      sp->reset = true;
+      if(!Constant_delay)
+	sp->reset = true;
     }
     consec_lates = 0;
     if(modsub(sp->wptr,Rptr,BUFFERSIZE) > BUFFERSIZE/4){
@@ -1010,8 +1012,11 @@ static void *display(void *arg){
       }
     }
 
-    if(Start_muted)
-      addstr("**Starting new sessions muted**\n");
+    if(Start_muted){
+      int y,x;
+      getyx(stdscr,y,x);
+      mvaddstr(y,0,"**Starting new sessions muted**");
+    }
 
     if(Quiet_mode){
       addstr("Hit 'q' to resume screen updates\n");
@@ -1027,6 +1032,8 @@ static void *display(void *arg){
       }
       int y,x;
       getyx(stdscr,y,x);
+      if(Constant_delay)
+	mvaddstr(y,34,"Constant delay");
       x = 65; // work around unused variable warning
       mvaddstr(y,x,"------- Activity -------- Play");
       if(Verbose)
@@ -1141,7 +1148,7 @@ static void *display(void *arg){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
 	double unix_seconds = (gps_time_ns() - Start_time) * 1e-9;
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
-	printw("Audio callbacks: %'llu, Rptr %'8u framesPerCallback %'lu",(unsigned long long)Audio_callbacks,Rptr,Audio_frames);
+	printw("Audio callbacks: %'llu, Rptr %'8u, framesPerCallback %'lu,",(unsigned long long)Audio_callbacks,Rptr,Audio_frames);
 	static float avg_err = 0;
 	avg_err += .0001 * (1e6 * (pa_seconds / unix_seconds - 1) - avg_err);
 	printw(" Portaudio latency %d ms,",Portaudio_delay);
@@ -1166,6 +1173,9 @@ static void *display(void *arg){
     switch(c){
     case 'v':
       Verbose = !Verbose;
+      break;
+    case 'C':
+      Constant_delay = !Constant_delay;
       break;
     case 'A': // Start all new sessions muted
       Start_muted = !Start_muted;
@@ -1502,9 +1512,10 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
   Portaudio_delay = 1000. * (timeInfo->outputBufferDacTime - timeInfo->currentTime);
 
   // Use mirror buffer to simplify wraparound. Count is in bytes = Channels * frames * sizeof(float)
-  memcpy(outputBuffer,&Output_buffer[Channels*Rptr],Channels * framesPerBuffer * sizeof(*Output_buffer));
+  int const bytecount = Channels * framesPerBuffer * sizeof(*Output_buffer);
+  memcpy(outputBuffer,&Output_buffer[Channels*Rptr],bytecount);
   // Zero what we just copied
-  memset(&Output_buffer[Channels*Rptr],0,Channels * framesPerBuffer * sizeof(*Output_buffer));
+  memset(&Output_buffer[Channels*Rptr],0,bytecount);
   Rptr += framesPerBuffer;
   Rptr &= (BUFFERSIZE-1);
   return paContinue;

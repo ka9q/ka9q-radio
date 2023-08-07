@@ -12,6 +12,7 @@ F turn off PL notching, all sessions
 n turn on PL notch
 N turn on PL notch, all sessions
 A toggle start all sessions muted
+C toggle constant-delay mode
 s sort sessions by most recently active
 t sort sessions by most active
 - + volume -1/+1 dB

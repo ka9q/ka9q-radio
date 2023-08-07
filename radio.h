@@ -259,7 +259,7 @@ struct demod {
     int sap_fd;     // Session announcement protocol (SAP) - experimental
     int channels;   // 1 = mono, 2 = stereo (settable)
     float energy;   // Output energy since last poll
-    
+
     float deemph_state_left;
     float deemph_state_right;
     uint64_t samples;
