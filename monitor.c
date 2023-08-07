@@ -1013,7 +1013,8 @@ static void *display(void *arg){
     }
 
     if(Start_muted){
-      int y,x;
+      int y;
+      int x __attribute__ ((unused));
       getyx(stdscr,y,x);
       mvaddstr(y,0,"**Starting new sessions muted**");
     }
