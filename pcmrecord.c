@@ -58,7 +58,7 @@ struct wav {
 struct session {
   struct session *prev;
   struct session *next;
-  struct sockaddr iq_sender;   // Sender's IP address and source port
+  struct sockaddr sender;   // Sender's IP address and source port
 
   char filename[PATH_MAX];
   struct wav header;
@@ -89,7 +89,7 @@ char PCM_mcast_address_text[256];
 char const *Recordings = ".";
 int Subdirs; // Place recordings in subdirectories by SSID
 
-struct sockaddr Sender;
+
 struct sockaddr Input_mcast_sockaddr;
 int Input_fd;
 struct session *Sessions;
@@ -98,7 +98,7 @@ int64_t Timeout = 20; // 20 seconds max idle time before file close
 void closedown(int a);
 void input_loop(void);
 void cleanup(void);
-struct session *create_session(struct rtp_header *);
+struct session *create_session(struct rtp_header const *, struct sockaddr const *sender);
 
 
 int main(int argc,char *argv[]){
@@ -188,6 +188,7 @@ void closedown(int a){
 // Read from RTP network socket, assemble blocks of samples
 void input_loop(){
 
+  struct sockaddr sender;
   while(1){
     int64_t current_time = gps_time_ns();
 
@@ -201,8 +202,8 @@ void input_loop(){
       break; // error of some kind
     if(FD_ISSET(Input_fd,&fdset)){
       uint8_t buffer[MAXPKT];
-      socklen_t socksize = sizeof(Sender);
-      int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
+      socklen_t socksize = sizeof(sender);
+      int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&sender,&socksize);
       if(size <= 0){    // ??
 	perror("recvfrom");
 	usleep(50000);
@@ -228,8 +229,9 @@ void input_loop(){
       struct session *sp;
       for(sp = Sessions;sp != NULL;sp=sp->next){
 	if(sp->ssrc == rtp.ssrc
-	   && rtp.type  == sp->type
-	   && address_match(&sp->iq_sender,&Sender))
+	   && rtp.type == sp->type
+	   && address_match(&sp->sender,&sender)
+	   && getportnumber(&sp->sender) == getportnumber(&sender))
 	  break;
       }
       if(sp == NULL){ // Not found; create new one
@@ -239,7 +241,7 @@ void input_loop(){
 	  fprintf(stderr,"Can't change to directory %s: %s, exiting\n",Recordings,strerror(errno));
 	  exit(1);
 	}
-	sp = create_session(&rtp);
+	sp = create_session(&rtp,&sender);
       }
       if(sp == NULL || sp->fp == NULL)
 	continue; // Couldn't create new session
@@ -335,13 +337,13 @@ void cleanup(void){
     Sessions = next_s;
   }
 }
-struct session *create_session(struct rtp_header *rtp){
+struct session *create_session(struct rtp_header const *rtp,struct sockaddr const *sender){
 
   struct session *sp = calloc(1,sizeof(*sp));
   if(sp == NULL)
     return NULL; // unlikely
   
-  memcpy(&sp->iq_sender,&Sender,sizeof(sp->iq_sender));
+  memcpy(&sp->sender,sender,sizeof(sp->sender));
   sp->type = rtp->type;
   sp->ssrc = rtp->ssrc;
   
@@ -438,7 +440,7 @@ struct session *create_session(struct rtp_header *rtp){
 
   char sender_text[NI_MAXHOST];
   // Don't wait for an inverse resolve that might cause us to lose data
-  getnameinfo((struct sockaddr *)&Sender,sizeof(Sender),sender_text,sizeof(sender_text),NULL,0,NI_NOFQDN|NI_DGRAM|NI_NUMERICHOST);
+  getnameinfo((struct sockaddr *)sender,sizeof(*sender),sender_text,sizeof(sender_text),NULL,0,NI_NOFQDN|NI_DGRAM|NI_NUMERICHOST);
   attrprintf(fd,"source","%s",sender_text);
   attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
   
