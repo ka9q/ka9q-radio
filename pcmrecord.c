@@ -13,21 +13,11 @@
 #else // bsd
 #define bswap_16(value) ((((value) & 0xff) << 8) | ((value) >> 8)) // hopefully gets optimized
 #endif
-#include <math.h>
-#include <complex.h>
-#undef I
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
-#include <stdint.h>
 #include <fcntl.h>
 #include <locale.h>
-#include <signal.h>
-#include <netdb.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 #include <sys/stat.h>
-#include <time.h>
 
 #include "misc.h"
 #include "attr.h"
