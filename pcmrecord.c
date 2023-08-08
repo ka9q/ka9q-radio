@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <locale.h>
 #include <sys/stat.h>
+#include <signal.h>
 
 #include "misc.h"
 #include "attr.h"
