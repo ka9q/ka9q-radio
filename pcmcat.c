@@ -166,7 +166,7 @@ int main(int argc,char *argv[]){
       continue;
     } else if(time_step > 0){
       Pcmstream.rtp_state.drops++;
-      fprintf(stderr,"Drops %llu\n",Pcmstream.rtp_state.drops);
+      fprintf(stderr,"Drops %llu\n",(long long unsigned)Pcmstream.rtp_state.drops);
       if(time_step < 48000){	// Arbitrary threshold - clean this up!
 	int16_t zeroes[time_step];
 	memset(zeroes,0,sizeof(zeroes));
