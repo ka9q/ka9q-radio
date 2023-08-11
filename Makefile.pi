@@ -44,7 +44,7 @@ AIRSPY_FILES=
 BLACKLIST=airspy-blacklist.conf
 
 SRC=airspyhf.c airspy.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c cwd.c decimate.c dump.c fcd.c filter.c fm.c \
-	   tune.c iir.c linear.c main.c metadump.c misc.c modes.c modulate.c monitor.c morse.c radio.c setfilt.c powers.c \
+	   tune.c iir.c linear.c main.c metadump.c misc.c modes.c monitor.c morse.c radio.c setfilt.c powers.c \
 	   show-sig.c spectrum.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdr.c pcmspawn.c \
 	   rx888.c ezusb.c sdrplayd.c status.c stereod.c wfm.c wspr-decoded.c ft8-decoded.c set_xcvr.c wd-record.c funcube.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
 	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h ezusb.h rx888.h
