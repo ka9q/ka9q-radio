@@ -130,346 +130,10 @@ static float estimate_noise(struct demod *demod,int shift){
   }
   // Don't double-count the energy in the overlap
   return ((float)master->ilen / (master->ilen + master->impulse_length - 1))
-      * 2 * min_bin_energy / ((float)master->bins * Frontend.sdr.samprate);
+      * 2 * min_bin_energy / ((float)master->bins * Frontend.samprate);
 }
 
 
-// thread for first half of demodulator
-// Preprocessing of samples performed for all demodulators
-// Pass to input of pre-demodulation filter
-// Update power measurement
-void *proc_samples(void *arg){
-  pthread_setname("procsamp");
-
-  realtime();
-
-  int bad_rtp_count = 0;
-
-  while(1){
-    // Receive I/Q data from front end
-    // Packet consists of Ethernet, IP and UDP header (already stripped)
-    // then standard Real Time Protocol (RTP) and the PCM I/Q data.
-    // RTP is an IETF standard, so it uses big endian numbers.
-    // PCM_STEREO and PCM_MONO are IETF types defined to use network (big endian) order
-    // but for speed most sample formats use host byte order, which can be a portability problem.
-
-    struct packet pkt;    // Incoming RTP packets
-
-    socklen_t socksize = sizeof(Frontend.input.data_source_address);
-    int size = recvfrom(Frontend.input.data_fd,pkt.content,sizeof(pkt.content),0,(struct sockaddr *)&Frontend.input.data_source_address,&socksize);
-    if(size <= 0){    // ??
-      perror("recvfrom");
-      usleep(50000);
-      continue;
-    }
-    if(size < RTP_MIN_SIZE)
-      continue; // Too small for RTP, ignore
-
-    uint8_t const * restrict dp = ntoh_rtp(&pkt.rtp,pkt.content);
-    size -= (dp - pkt.content);
-    
-    if(pkt.rtp.pad){
-      // Remove padding
-      size -= dp[size-1];
-      pkt.rtp.pad = false;
-    }
-    if(size <= 0)
-      continue; // Bogus RTP header?
-
-    int sc = 0;
-    switch(pkt.rtp.type){
-    case IQ_FLOAT:
-      sc = size / (sizeof(complex float));
-      break;
-    case AIRSPY_PACKED:
-      sc = 2 * size / (3 * sizeof(int8_t));
-      break;
-    case PCM_MONO_LE_PT:
-    case PCM_MONO_PT: // 16-bit real
-      sc = size / sizeof(int16_t);
-      break;
-    case REAL_PT12: // 12-bit real
-      sc = 2 * size / (3 * sizeof(int8_t));
-      break;
-    case REAL_PT8:  // 8-bit real
-      sc = size / sizeof(int8_t);
-      break;
-    case IQ_PT8: // 8-bit ints no metadata
-      sc = size / (2 * sizeof(int8_t));
-      break;
-    case PCM_STEREO_LE_PT:
-    case PCM_STEREO_PT: // 16 bits, no metadata header
-      sc = size / (2 * sizeof(int16_t));
-      break;
-    case IQ_PT12:       // Big endian packed 12 bits, no metadata
-      sc = size / (3 * sizeof(int8_t));
-      break;
-    case IQ_PT:         // Little endian 16 bits, no metadata
-      sc = size / (2 * sizeof(int16_t));
-      break;
-    }
-    int const sampcount = sc; // gets used a lot, flag it const
-
-    // All front ends should eventually set rtp.marker once at start
-    // RTP marker bits occur routinely in demodulated FM, but here they mean a complete restart
-    if(pkt.rtp.marker || pkt.rtp.ssrc != Frontend.input.rtp.ssrc || bad_rtp_count > 100){
-      // stream restart, SSRC change or excessive unexpected RTP packet/sequence numbers
-      // rtp_process will reset packet count
-      Frontend.input.samples = 0;
-      Frontend.input.rtp.init = false;
-      bad_rtp_count = 0;
-    }
-    int const time_step = rtp_process(&Frontend.input.rtp,&pkt.rtp,sampcount);
-    if(time_step < 0 || time_step > 192000){ // NOTE HARDWIRED SAMPRATE - fix this
-      // Old samples, or too big a jump; drop. Shouldn't happen if sequence number isn't old
-      bad_rtp_count++;
-      continue;
-    } else if(time_step > 0){
-      // Samples were lost. Inject enough zeroes to keep the sample count and LO phase correct
-      // Arbitrary 1 sec limit just to keep things from blowing up
-      // Good enough for the occasional lost packet or two
-      // Note: we don't use marker bits since we don't suppress silence
-      Frontend.input.samples += time_step;
-      if(Frontend.in->in_type == REAL){
-	for(int i=0;i < time_step; i++)
-	  put_rfilter(Frontend.in,0);
-      } else if(Frontend.in->in_type == COMPLEX){
-	for(int i=0;i < time_step; i++)
-	  put_cfilter(Frontend.in,0);
-      }
-    }
-    // Convert and scale samples to internal float-32 format
-    Frontend.input.samples += sampcount;
-
-    switch(pkt.rtp.type){
-    case IQ_FLOAT: // E.g., AirspyHF+
-      if(Frontend.in->in_type == COMPLEX){
-	float const inv_gain = 1.0f / Frontend.sdr.gain;
-	float f_energy = 0; // energy accumulator
-	complex float const * restrict up = (complex float *)dp;
-	for(int i=0; i < sampcount; i++){
-	  complex float s = *up++;
-	  f_energy += cnrmf(s);
-	  put_cfilter(Frontend.in,s*inv_gain); // undo front end analog gain
-	}
-	Frontend.sdr.output_level = f_energy / sampcount; // average A/D level, not including analog gain
-      }
-      break;
-    case AIRSPY_PACKED: // e.g., Airspy R2
-      if(Frontend.in->in_type == REAL){    // Ensure the data is the right type for the filter to avoid segfaults
-	// idiosyncratic packed format from Airspy-R2
-	// Some tricky optimizations here.
-	// Input samples are 12 bits encoded in excess-2048, which makes them
-	// unsigned. 'up' is also unsigned to avoid unwanted sign extension on right shift
-	// Probably assumes little-endian byte order
-	float const inv_gain = SCALE12 / Frontend.sdr.gain;
-	uint64_t in_energy = 0; // Accumulate as integer for efficiency
-	uint32_t const * restrict up = (uint32_t *)dp;
-	// Be careful that sampcount isn't too big relative to filter input ring buffer; should add an efficient test
-	float *wptr = Frontend.in->input_write_pointer.r;
-	for(int i=0; i<sampcount; i+= 8){ // assumes multiple of 8
-	  int x;
-	  x =  *up >> 20;
-	  x -= 2048;
-	  in_energy += x * x;
-	  wptr[i+0] = x * inv_gain;
-
-	  x =  *up >> 8;
-	  x &= 0xfff;
-	  x -= 2048;
-	  in_energy += x * x;
-	  wptr[i+1] = x * inv_gain;
-
-	  x =  *up++ << 4;
-	  x |= *up >> 28;
-	  x &= 0xfff;
-	  x -= 2048;
-	  in_energy += x * x;
-	  wptr[i+2] = x * inv_gain;
-
-	  x =  *up >> 16;
-	  x &= 0xfff;
-	  x -= 2048;
-	  in_energy += x * x;
-	  wptr[i+3] = x * inv_gain;
-	  
-	  x =  *up >> 4;
-	  x &= 0xfff;
-	  x -= 2048;
-	  in_energy += x * x;
-	  wptr[i+4] = x * inv_gain;
-
-	  x =  *up++ << 8;
-	  x |= *up >> 24;
-	  x &= 0xfff;
-	  x -= 2048;
-	  in_energy += x * x;
-	  wptr[i+5] = x * inv_gain;
-
-	  x =  *up >> 12;
-	  x &= 0xfff;
-	  x -= 2048;
-	  in_energy += x * x;
-	  wptr[i+6] = x * inv_gain;
-	  
-	  x =  *up++;
-	  x &= 0xfff;
-	  x -= 2048;
-	  in_energy += x * x;
-	  wptr[i+7] = x * inv_gain;
-	}
-	write_rfilter(Frontend.in,NULL,sampcount); // Update write count, invoke FFT
-	Frontend.sdr.output_level = 2 * in_energy * SCALE12 * SCALE12 / sampcount;
-      }
-      break;
-    case REAL_PT12: // 12-bit packed integer real
-      if(Frontend.in->in_type == REAL){    // Ensure the data is the right type for the filter to avoid segfaults
-	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only
-	float const inv_gain = SCALE12 / Frontend.sdr.gain;
-	for(int i=0; i<sampcount; i+=2){
-	  int16_t const s0 = ((dp[0] << 8) | dp[1]) & 0xfff0;
-	  int16_t const s1 = ((dp[1] << 8) | dp[2]) << 4;
-	  in_energy += s0 * s0;
-	  in_energy += s1 * s1;
-	  put_rfilter(Frontend.in,s0*inv_gain);
-	  put_rfilter(Frontend.in,s1*inv_gain);
-	  dp += 3;
-	}
-	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
-      }
-      break;
-    case PCM_MONO_PT: // 16 bits big-endian integer real
-      if(Frontend.in->in_type == REAL){
-	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
-	float const inv_gain = SCALE16 / Frontend.sdr.gain;
-	uint16_t const *sp = (uint16_t *)dp;
-	float *wptr = Frontend.in->input_write_pointer.r;
-	for(int i=0; i<sampcount; i++){
-	  // ntohs() returns UNSIGNED so the cast is necessary!
-	  int const s = (int16_t)ntohs(*sp++);
-	  in_energy += s * s;
-	  wptr[i] = s * inv_gain;
-	}
-	write_rfilter(Frontend.in,NULL,sampcount); // Update write pointer, invoke FFT
-	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
-      }
-      break;
-    case PCM_MONO_LE_PT: // 16 bits little endian integer real, e,g., rx888
-      if(Frontend.in->in_type == REAL){
-	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
-	float const inv_gain = SCALE16 / Frontend.sdr.gain;
-	int16_t const *sp = (int16_t *)dp;
-	float *wptr = Frontend.in->input_write_pointer.r;
-	for(int i=0; i<sampcount; i++){
-	  int const s = *sp++;
-	  in_energy += s * s;
-	  wptr[i] = s * inv_gain;
-	}
-	write_rfilter(Frontend.in,NULL,sampcount); // Update write pointer, invoke FFT
-	Frontend.sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
-      }
-      break;
-    case REAL_PT8: // 8 bit integer real
-      if(Frontend.in->in_type == REAL){
-	float const inv_gain = SCALE8 / Frontend.sdr.gain;
-	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only		
-	for(int i=0; i<sampcount; i++){
-	  int16_t const s = (int8_t)*dp++;
-	  in_energy += s * s;
-	  put_rfilter(Frontend.in,s * inv_gain);
-	}
-	Frontend.sdr.output_level = 2 * in_energy * SCALE8 * SCALE8 / sampcount;
-      }
-      break;
-    default: // shuts up lint
-    case IQ_PT12:      // two 12-bit signed integers (one complex sample) packed big-endian into 3 bytes
-      if(Frontend.in->in_type == COMPLEX){
-	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
-	float const inv_gain = SCALE12 / Frontend.sdr.gain;
-	for(int i=0; i<sampcount; i++){
-	  int16_t const rs = ((dp[0] << 8) | dp[1]) & 0xfff0;
-	  int16_t const is = ((dp[1] << 8) | dp[2]) << 4;
-	  in_energy += rs * rs + is * is;
-	  complex float samp;
-	  __real__ samp = rs;
-	  __imag__ samp = is;
-	  put_cfilter(Frontend.in,samp * inv_gain);
-	  dp += 3;
-	}
-	Frontend.sdr.output_level = in_energy * SCALE16 * SCALE16 / sampcount;
-      }
-      break;
-    case PCM_STEREO_PT:      // Two 16-bit signed integers, **BIG ENDIAN** (network order)
-      if(Frontend.in->in_type == COMPLEX){
-	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only		
-	float const inv_gain = SCALE16 / Frontend.sdr.gain;
-	int16_t const *sp = (int16_t *)dp;
-	for(int i=0; i<sampcount; i++){
-	  // ntohs() returns UNSIGNED
-	  int const rs = (int16_t)ntohs(*sp++);
-	  int const is = (int16_t)ntohs(*sp++);
-	  in_energy += rs * rs + is * is;
-	  complex float samp;
-	  __real__ samp = rs;
-	  __imag__ samp = is;
-	  put_cfilter(Frontend.in,samp * inv_gain);
-	}
-	Frontend.sdr.output_level = in_energy * SCALE16 * SCALE16 / sampcount;
-      }
-      break;
-    case PCM_STEREO_LE_PT:    // 16-bit 48 kHz (or other) dual channel little endian
-      if(Frontend.in->in_type == COMPLEX){
-	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only		
-	float const inv_gain = SCALE16 / Frontend.sdr.gain;
-	int16_t const *sp = (int16_t *)dp;
-	for(int i=0; i<sampcount; i++){
-	  int const rs = *sp++;
-	  int const is = *sp++;
-	  in_energy += rs * rs + is * is;
-	  complex float samp;
-	  __real__ samp = rs;
-	  __imag__ samp = is;
-	  put_cfilter(Frontend.in,samp * inv_gain);
-	}
-	Frontend.sdr.output_level = in_energy * SCALE16 * SCALE16 / sampcount;
-      }
-      break;
-    case IQ_PT8:      // Two signed 8-bit integers
-      if(Frontend.in->in_type == COMPLEX){
-	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
-	float const inv_gain = SCALE8 / Frontend.sdr.gain;
-	for(int i=0; i<sampcount; i++){
-	  int16_t const rs = (int8_t)*dp++;
-	  int16_t const is = (int8_t)*dp++;
-	  in_energy += rs * rs + is * is;
-	  complex float samp;
-	  __real__ samp = rs;
-	  __imag__ samp = is;
-	  put_cfilter(Frontend.in,samp * inv_gain);
-	}
-	Frontend.sdr.output_level = in_energy * SCALE8 * SCALE8 / sampcount;
-      }
-      break;
-    case IQ_PT:        // two 16-bit signed integers (one complex sample) littleendian
-      if(Frontend.in->in_type == COMPLEX){
-	uint64_t in_energy = 0; // A/D energy accumulator for integer formats only
-	float const inv_gain = SCALE16 / Frontend.sdr.gain;
-	for(int i=0; i<sampcount; i++){
-	  int16_t const rs = (dp[1] << 8) | dp[0];
-	  int16_t const is = (dp[3] << 8) | dp[2];
-	  in_energy += rs * rs + is * is;
-	  complex float samp;
-	  __real__ samp = rs;
-	  __imag__ samp = is;
-	  put_cfilter(Frontend.in,samp * inv_gain);
-	  dp += 4;
-	}
-	Frontend.sdr.output_level = in_energy * SCALE16 * SCALE16 / sampcount;
-      }
-      break;
-    }
-  } // end of main loop
-}
 
 // start demodulator thread on already-initialized demod structure
 int start_demod(struct demod * demod){
@@ -569,19 +233,19 @@ double set_freq(struct demod * const demod,double const f){
     return f;
 
   // Determine new IF
-  double new_if = f - Frontend.sdr.frequency;
+  double new_if = f - Frontend.frequency;
 
   // Flip sign to convert LO2 frequency to IF carrier frequency
   // Tune an extra kHz to account for front end roundoff
   // Ideally the front end would just round in a preferred direction
   // but it doesn't know where our IF will be so it can't make the right choice
   double const fudge = 1000;
-  if(new_if > Frontend.sdr.max_IF - demod->filter.max_IF){
+  if(new_if > Frontend.max_IF - demod->filter.max_IF){
     // Retune LO1 as little as possible
-    new_if = Frontend.sdr.max_IF - demod->filter.max_IF - fudge;
-  } else if(new_if < Frontend.sdr.min_IF - demod->filter.min_IF){
+    new_if = Frontend.max_IF - demod->filter.max_IF - fudge;
+  } else if(new_if < Frontend.min_IF - demod->filter.min_IF){
     // Also retune LO1 as little as possible
-    new_if = Frontend.sdr.min_IF - demod->filter.min_IF + fudge;
+    new_if = Frontend.min_IF - demod->filter.min_IF + fudge;
   } else
     return f; // OK where it is
 
@@ -601,27 +265,16 @@ double set_first_LO(struct demod const * const demod,double const first_LO){
   if(demod == NULL)
     return NAN;
 
-  double const current_lo1 = Frontend.sdr.frequency;
+  double const current_lo1 = Frontend.frequency;
 
   // Just return actual frequency without changing anything
   if(first_LO == current_lo1 || first_LO <= 0)
     return first_LO;
 
   // Direct tuning through local module if available
-  if(Frontend.sdr.tune != NULL){
-    return (*Frontend.sdr.tune)(&Frontend,first_LO);
+  if(Frontend.tune != NULL){
+    return (*Frontend.tune)(&Frontend,first_LO);
   }
-
-  uint8_t packet[8192],*bp;
-  memset(packet,0,sizeof(packet));
-  bp = packet;
-  *bp++ = 1; // Command
-  Frontend.sdr.command_tag = random();
-  encode_int32(&bp,COMMAND_TAG,Frontend.sdr.command_tag);
-  encode_double(&bp,RADIO_FREQUENCY,first_LO);
-  encode_eol(&bp);
-  int len = bp - packet;
-  send(Frontend.input.ctl_fd,packet,len,0);
   return first_LO;
 }  
 
@@ -723,12 +376,12 @@ void *sap_send(void *p){
     }
     
     // s= (session name)
-    len = snprintf(wp,space,"s=radio %s\r\n",Frontend.sdr.description);
+    len = snprintf(wp,space,"s=radio %s\r\n",Frontend.description);
     wp += len;
     space -= len;
     
     // i= (human-readable session information)
-    len = snprintf(wp,space,"i=PCM output stream from ka9q-radio on %s\r\n",Frontend.sdr.description);
+    len = snprintf(wp,space,"i=PCM output stream from ka9q-radio on %s\r\n",Frontend.description);
     wp += len;
     space -= len;
     
@@ -833,20 +486,20 @@ void *demod_reaper(void *arg){
 int downconvert(struct demod *demod){
   // To save CPU time when the front end is completely tuned away from us, block until the front
     // end status changes rather than process zeroes. We must still poll the terminate flag.
-    pthread_mutex_lock(&Frontend.sdr.status_mutex);
+    pthread_mutex_lock(&Frontend.status_mutex);
     int shift;
     double remainder;
 
     while(1){
       if(demod->terminate){
-	pthread_mutex_unlock(&Frontend.sdr.status_mutex);
+	pthread_mutex_unlock(&Frontend.status_mutex);
 	return -1;
       }
-      demod->tune.second_LO = Frontend.sdr.frequency - demod->tune.freq;
+      demod->tune.second_LO = Frontend.frequency - demod->tune.freq;
       double const freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
       if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
 			Frontend.in->impulse_length,
-			Frontend.sdr.samprate,
+			Frontend.samprate,
 			&shift,&remainder,freq) == 0)
 	break; // We can get at least part of the spectrum we want
 
@@ -857,9 +510,9 @@ int downconvert(struct demod *demod){
       struct timespec timeout; // Needed to avoid deadlock if no front end is available
       clock_gettime(CLOCK_REALTIME,&timeout);
       timeout.tv_sec += 1; // 1 sec in the future
-      pthread_cond_timedwait(&Frontend.sdr.status_cond,&Frontend.sdr.status_mutex,&timeout);
+      pthread_cond_timedwait(&Frontend.status_cond,&Frontend.status_mutex,&timeout);
     }
-    pthread_mutex_unlock(&Frontend.sdr.status_mutex);
+    pthread_mutex_unlock(&Frontend.status_mutex);
 
     // Reasonable parameters?
     assert(isfinite(demod->tune.doppler_rate));

@@ -75,22 +75,22 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   // Cross-link generic and hardware-specific control structures
   struct sdrstate * const sdr = calloc(1,sizeof(*sdr));
   sdr->frontend = frontend;
-  frontend->sdr.context = sdr;
+  frontend->context = sdr;
 
   sdr->number = config_getint(dictionary,section,"number",0);
-  frontend->sdr.samprate = ADC_samprate;
+  frontend->samprate = ADC_samprate;
   {
-    double const eL = frontend->sdr.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
+    double const eL = frontend->samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
     Blocksize = lround(eL);
   }
 
-  frontend->sdr.isreal = false; // Complex sample stream
-  frontend->sdr.min_IF = LowerEdge;
-  frontend->sdr.max_IF = UpperEdge;
-  frontend->sdr.calibrate = config_getdouble(dictionary,section,"calibrate",0);
+  frontend->isreal = false; // Complex sample stream
+  frontend->min_IF = LowerEdge;
+  frontend->max_IF = UpperEdge;
+  frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
   {
     char const * const description = config_getstring(dictionary,section,"description","funcube dongle+");
-    strlcpy(frontend->sdr.description,description,sizeof(frontend->sdr.description));
+    strlcpy(frontend->description,description,sizeof(frontend->description));
   }
   Pa_Initialize();
 
@@ -131,18 +131,18 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
       }
     }
     // LNA gain is frequency-dependent
-    if(frontend->sdr.lna_gain){
+    if(frontend->lna_gain){
       if(intfreq >= 420e6)
-	frontend->sdr.lna_gain = 7;
+	frontend->lna_gain = 7;
       else
-	frontend->sdr.lna_gain = 24;
+	frontend->lna_gain = 24;
     }
     if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
       fprintf(stdout,"fcdOpen(%d): can't re-open control port\n",sdr->number);
       return -1; // fatal error
     }
     fcdAppSetFreq(sdr->phd,intfreq);
-    frontend->sdr.frequency = fcd_actual(intfreq) * (1 + frontend->sdr.calibrate);
+    frontend->frequency = fcd_actual(intfreq) * (1 + frontend->calibrate);
   }
   if(sdr->tunestate != NULL){
     // Recreate for writing
@@ -187,7 +187,7 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   }
 
   fprintf(stdout,"Funcube %d: software AGC %d, samprate %'d, freq %.3f Hz, bias %d, lna_gain %d, mixer gain %d, if_gain %d\n",
-	  sdr->number, sdr->agc, frontend->sdr.samprate, frontend->sdr.frequency, sdr->bias_tee, frontend->sdr.lna_gain, frontend->sdr.mixer_gain, frontend->sdr.if_gain);
+	  sdr->number, sdr->agc, frontend->samprate, frontend->frequency, sdr->bias_tee, frontend->lna_gain, frontend->mixer_gain, frontend->if_gain);
 
  done:; // Also the abort target: close handle before returning
   if(!Hold_open && sdr->phd != NULL){
@@ -209,7 +209,7 @@ void *proc_funcube(void *arg){
   float secphi = 1;
   float tanphi = 0;
 
-  frontend->sdr.timestamp = gps_time_ns();
+  frontend->timestamp = gps_time_ns();
   float const rate_factor = Blocksize/(ADC_samprate * Power_alpha);
   int ConsecPaErrs = 0;
   int16_t * sampbuf = malloc(2 * Blocksize * sizeof(*sampbuf)); // complex samples have two integers
@@ -278,15 +278,15 @@ void *proc_funcube(void *arg){
     write_cfilter(frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
     frontend->input.samples += Blocksize;
     float const block_energy = i_energy + q_energy; // Normalize for complex pairs
-    frontend->sdr.output_level = block_energy/Blocksize; // Average A/D output power per channel  
+    frontend->output_level = block_energy/Blocksize; // Average A/D output power per channel  
 
 #if 1
     // Get status timestamp from UNIX TOD clock -- but this might skew because of inexact sample rate
-    frontend->sdr.timestamp = gps_time_ns();
+    frontend->timestamp = gps_time_ns();
 #else
     // Simply increment by number of samples
     // But what if we lose some? Then the clock will always be off
-    frontend->sdr.timestamp += 1.e9 * Blocksize / ADC_samprate;
+    frontend->timestamp += 1.e9 * Blocksize / ADC_samprate;
 #endif
 
     // Update every block
@@ -310,7 +310,7 @@ void *proc_funcube(void *arg){
 }
 int funcube_startup(struct frontend *frontend){
   assert(frontend != NULL);
-  struct sdrstate * const sdr = (struct sdrstate *)frontend->sdr.context;
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
 
   // Start processing A/D data
@@ -327,31 +327,31 @@ static void do_fcd_agc(struct sdrstate *sdr){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
-  float const powerdB = power2dB(frontend->sdr.output_level);
+  float const powerdB = power2dB(frontend->output_level);
   
   if(powerdB > AGC_upper){
-    if(frontend->sdr.if_gain > 0){
+    if(frontend->if_gain > 0){
       // Decrease gain in 10 dB steps, down to 0
-      uint8_t val = frontend->sdr.if_gain = max(0,frontend->sdr.if_gain - 10);
+      uint8_t val = frontend->if_gain = max(0,frontend->if_gain - 10);
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_IF_GAIN1,&val,sizeof(val));
-    } else if(frontend->sdr.mixer_gain){
-      uint8_t val = frontend->sdr.mixer_gain = 0;
+    } else if(frontend->mixer_gain){
+      uint8_t val = frontend->mixer_gain = 0;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
-    } else if(frontend->sdr.lna_gain){
-      uint8_t val = frontend->sdr.lna_gain = 0;
+    } else if(frontend->lna_gain){
+      uint8_t val = frontend->lna_gain = 0;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
     }
   } else if(powerdB < AGC_lower){
-    if(frontend->sdr.lna_gain == 0){
-      frontend->sdr.lna_gain = 24;
+    if(frontend->lna_gain == 0){
+      frontend->lna_gain = 24;
       uint8_t val = 1;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
-    } else if(frontend->sdr.mixer_gain == 0){
-      frontend->sdr.mixer_gain = 19;
+    } else if(frontend->mixer_gain == 0){
+      frontend->mixer_gain = 19;
       uint8_t val = 1;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
-    } else if(frontend->sdr.if_gain < 20){ // Limit to 20 dB - seems enough to keep A/D going even on noise
-      uint8_t val = frontend->sdr.if_gain = min(20,frontend->sdr.if_gain + 10);
+    } else if(frontend->if_gain < 20){ // Limit to 20 dB - seems enough to keep A/D going even on noise
+      uint8_t val = frontend->if_gain = min(20,frontend->if_gain + 10);
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_IF_GAIN1,&val,sizeof(val));
     }
   }
@@ -420,7 +420,7 @@ static double fcd_actual(unsigned int u32Freq){
 }
 
 double funcube_tune(struct frontend * const frontend,double const freq){
-  struct sdrstate * const sdr = (struct sdrstate *)frontend->sdr.context;
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
 
   int const intfreq = freq;
@@ -437,10 +437,10 @@ double funcube_tune(struct frontend * const frontend,double const freq){
   }
   if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
     fprintf(stdout,"fcdOpen(%d): can't re-open control port\n",sdr->number);
-    return frontend->sdr.frequency; // nothing changes
+    return frontend->frequency; // nothing changes
   }
   fcdAppSetFreq(sdr->phd,intfreq);
-  frontend->sdr.frequency = fcd_actual(intfreq) * (1 + frontend->sdr.calibrate);
+  frontend->frequency = fcd_actual(intfreq) * (1 + frontend->calibrate);
 
   // Recreate for writing
   if(sdr->tunestate != NULL){
@@ -448,5 +448,5 @@ double funcube_tune(struct frontend * const frontend,double const freq){
     fprintf(sdr->tunestate,"%d\n",intfreq);
     fflush(sdr->tunestate); // Leave open for further use
   }
-  return frontend->sdr.frequency;
+  return frontend->frequency;
 }  

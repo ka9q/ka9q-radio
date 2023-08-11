@@ -52,7 +52,7 @@ char const *Modefile = "modes.conf"; // make configurable!
 dictionary *Mdict;
 
 struct frontend Frontend;
-char Iface[1024]; // Multicast interface to talk to front end
+char Iface[1024]; // Multicast interface
 bool FE_address_set;
 struct sockaddr_storage FE_status_address;
 struct sockaddr_storage Metadata_source_address;      // Source of metadata
@@ -79,7 +79,7 @@ struct control {
 int pprintw(WINDOW *w,int y, int x, char const *prefix, char const *fmt, ...);
 
 WINDOW *Tuning_win,*Sig_win,*Info_win,*Filtering_win,*Demodulator_win,
-  *Options_win,*Fe_win,*Modes_win,*Debug_win,
+  *Options_win,*Modes_win,*Debug_win,
   *Data_win,*Status_win,*Output_win;
 
 static void display_tuning(WINDOW *tuning,struct demod const *demod);
@@ -87,7 +87,6 @@ static void display_info(WINDOW *w,int row,int col,struct demod const *demod);
 static void display_filtering(WINDOW *filtering,struct demod const *demod);
 static void display_sig(WINDOW *sig,struct demod const *demod);
 static void display_demodulator(WINDOW *demodulator,struct demod const *demod);
-static void display_fe(WINDOW *fe,struct demod const *demod);
 static void display_options(WINDOW *options,struct demod const *demod);
 static void display_modes(WINDOW *modes,struct demod const *demod);
 static void display_output(WINDOW *output,struct demod const *demod);
@@ -195,9 +194,8 @@ void adjust_item(struct demod *demod,uint8_t **bpp,int direction){
   case 1: // First LO
     if(Control.lock) // Tuner is locked, don't change it
       break;
-    // Send directly to first LO and via radiod
-    set_first_LO(demod,Frontend.sdr.frequency+tunestep);
-    encode_float(bpp,FIRST_LO_FREQUENCY,Frontend.sdr.frequency+tunestep);
+    // Send via radiod
+    encode_float(bpp,FIRST_LO_FREQUENCY,Frontend.frequency+tunestep);
     break;
   case 2: // IF (not implemented)
     break;
@@ -253,8 +251,7 @@ struct windef {
   {&Sig_win,15,25},
   {&Demodulator_win,15,26},
   {&Filtering_win,15,22},
-  {&Fe_win,15,45},
-  {&Output_win,11,45},
+  {&Output_win,15,45},
   {&Debug_win,8,109},
 };
 #define NWINS (sizeof(Windefs) / sizeof(Windefs[0]))
@@ -416,12 +413,11 @@ int main(int argc,char *argv[]){
   memset(demod,0,sizeof(*demod));
   init_demod(demod);
 
-  Frontend.sdr.frequency = 
-    Frontend.sdr.min_IF = Frontend.sdr.max_IF = NAN;
-  Frontend.input.data_fd = Frontend.input.status_fd = -1;
+  Frontend.frequency = 
+    Frontend.min_IF = Frontend.max_IF = NAN;
 
   /* Main loop:
-     Read radio/front end status from network with 100 ms timeout to serve as polling rate
+     Read radio status from network with 100 ms timeout to serve as polling rate
      Update local status
      Repaint display windows
      Poll keyboard and process user commands
@@ -434,104 +430,61 @@ int main(int argc,char *argv[]){
   int64_t const random_interval = 50000000; // 50 ms
   // Pick soon but still random times for the first polls
   int64_t next_radio_poll = random_time(0,random_interval);
-  int64_t next_fe_poll = random_time(0,random_interval);
   
   for(;;){
     int64_t const radio_poll_interval  = Refresh_rate * BILLION;
-    int64_t const fe_poll_interval = 975000000;    // 975 - 1025 ms
 
     if(gps_time_ns() > next_radio_poll){
       // Time to poll radio
       send_poll(Ctl_fd,Ssrc);
       next_radio_poll = random_time(radio_poll_interval,random_interval);
     }
-    if(gps_time_ns() > next_fe_poll){
-      // Time to poll front end
-      if(Frontend.input.ctl_fd > 2)
-	send_poll(Frontend.input.ctl_fd,0);
-      next_fe_poll = random_time(fe_poll_interval,random_interval);
-    }
-    fd_set fdset;
-    FD_ZERO(&fdset);
-    if(Frontend.input.status_fd != -1)
-      FD_SET(Frontend.input.status_fd,&fdset);
-    FD_SET(Status_fd,&fdset);
-    int const n = max(Frontend.input.status_fd,Status_fd) + 1;
-
-    // Receive timeout at whichever event occurs first
-    int64_t timeout;
-    if(next_radio_poll > next_fe_poll)
-      timeout = next_fe_poll - gps_time_ns();
-    else
-      timeout = next_radio_poll - gps_time_ns();
-
-    // Immediate poll if timeout is negative
-    if(timeout < 0)
-      timeout = 0;
     {
-      struct timespec ts;
-      ns2ts(&ts,timeout);
-      pselect(n,&fdset,NULL,NULL,&ts,NULL); // Don't really need to check the return
+      fd_set fdset;
+      FD_ZERO(&fdset);
+      assert(Status_fd > 2);
+      FD_SET(Status_fd,&fdset);
+      int const n = Status_fd+1;
+      
+      // Receive timeout
+      int64_t timeout = next_radio_poll - gps_time_ns();
+      
+      // Immediate socket poll if timeout is negative
+      if(timeout < 0)
+	timeout = 0;
+      {
+	struct timespec ts;
+	ns2ts(&ts,timeout);
+	pselect(n,&fdset,NULL,NULL,&ts,NULL); // Don't really need to check the return
+      }
+      if(FD_ISSET(Status_fd,&fdset)){
+	// Message from the radio program (or some transcoders)
+	uint8_t buffer[8192];
+	struct sockaddr_storage source_address;
+	socklen_t ssize = sizeof(source_address);
+	int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize);
+	
+	// Ignore our own command packets and responses to other SSIDs
+	if(length >= 2 && (enum pkt_type)buffer[0] == STATUS && for_us(demod,buffer+1,length-1,Ssrc) >= 0 ){
+	  // Save source only if it's a response
+	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
+	  decode_radio_status(demod,buffer+1,length-1);
+	  next_radio_poll = random_time(radio_poll_interval,random_interval);
+	  
+	  if(Frontend.samprate != 0)
+	    Blocktime = 1000.0f * Frontend.L / Frontend.samprate;
+	}
+      }
     }
     if(Resized){
       Resized = false;
       setup_windows();
-    }
-    if(Status_fd != -1 && FD_ISSET(Status_fd,&fdset)){
-      // Message from the radio program (or some transcoders)
-      uint8_t buffer[8192];
-      struct sockaddr_storage source_address;
-      socklen_t ssize = sizeof(source_address);
-      int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize);
-
-      // Ignore our own command packets and responses to other SSIDs
-      if(length >= 2 && (enum pkt_type)buffer[0] == STATUS && for_us(demod,buffer+1,length-1,Ssrc) >= 0 ){
-	// Save source only if it's a response
-	memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
-	decode_radio_status(demod,buffer+1,length-1);
-	next_radio_poll = random_time(radio_poll_interval,random_interval);
-
-	if(Frontend.sdr.samprate != 0)
-	  Blocktime = 1000.0f * Frontend.L / Frontend.sdr.samprate;
-
-	// Listen directly to the front end once we know its multicast group
-	if(!FE_address_set){
-	  if(Frontend.input.metadata_dest_address.ss_family != 0){
-	    FE_address_set = true;
-	    if(Frontend.input.status_fd >= 0){
-	      close(Frontend.input.status_fd);
-	      Frontend.input.status_fd = -1;
-	    }
-	    if(Frontend.input.ctl_fd >= 0){
-	      close(Frontend.input.ctl_fd);
-	      Frontend.input.ctl_fd = -1;
-	    }
-	    Frontend.input.status_fd = listen_mcast(&Frontend.input.metadata_dest_address,Iface);
-	    Frontend.input.ctl_fd = connect_mcast(&Frontend.input.metadata_dest_address,Iface,Mcast_ttl,IP_tos);
-	  }
-	}
-      }
-    }
-    if(Frontend.input.status_fd != -1 && FD_ISSET(Frontend.input.status_fd,&fdset)){
-      // Message from the front end
-      uint8_t buffer[8192];
-      struct sockaddr_storage sender;
-      socklen_t ssize = sizeof(sender);
-      int const length = recvfrom(Frontend.input.status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&sender,&ssize);
-      socklen_t msize = sizeof(Frontend.input.metadata_source_address);
-      msize = min(ssize,msize);
-
-      if(length >= 2 && (enum pkt_type)buffer[0] == STATUS){
-	decode_fe_status(&Frontend,buffer+1,length-1);
-	next_fe_poll = random_time(fe_poll_interval,random_interval);
-      }
     }
     // socket read timeout every 100 ms; update display windows & poll keyboard and mouse
     display_tuning(Tuning_win,demod);
     display_filtering(Filtering_win,demod);
     display_sig(Sig_win,demod);
     display_demodulator(Demodulator_win,demod);
-    display_fe(Fe_win,demod);
     display_options(Options_win,demod);
     display_modes(Modes_win,demod);
     display_output(Output_win,demod);
@@ -964,43 +917,16 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
       Commands = decode_int(cp,optlen);
       break;
     case DESCRIPTION:
-      decode_string(cp,optlen,Frontend.sdr.description,sizeof(Frontend.sdr.description));
+      decode_string(cp,optlen,Frontend.description,sizeof(Frontend.description));
       break;
     case GPS_TIME:
-      Frontend.sdr.timestamp = decode_int(cp,optlen);
-      break;
-    case INPUT_DATA_SOURCE_SOCKET:
-      decode_socket(&Frontend.input.data_source_address,cp,optlen);
-      break;
-    case INPUT_DATA_DEST_SOCKET:
-      decode_socket(&Frontend.input.data_dest_address,cp,optlen);
-      break;
-    case INPUT_METADATA_SOURCE_SOCKET:
-      decode_socket(&Frontend.input.metadata_source_address,cp,optlen);
-      break;
-    case INPUT_METADATA_DEST_SOCKET:
-      decode_socket(&Frontend.input.metadata_dest_address,cp,optlen);
-      break;
-    case INPUT_SSRC:
-      Frontend.input.rtp.ssrc = decode_int(cp,optlen);
+      Frontend.timestamp = decode_int(cp,optlen);
       break;
     case INPUT_SAMPRATE:
-      Frontend.sdr.samprate = decode_int(cp,optlen);
-      break;
-    case INPUT_METADATA_PACKETS:
-      Frontend.input.metadata_packets = decode_int(cp,optlen);
-      break;
-    case INPUT_DATA_PACKETS:
-      Frontend.input.rtp.packets = decode_int(cp,optlen);
+      Frontend.samprate = decode_int(cp,optlen);
       break;
     case INPUT_SAMPLES:
       Frontend.input.samples = decode_int(cp,optlen);
-      break;
-    case INPUT_DROPS:
-      Frontend.input.rtp.drops = decode_int(cp,optlen);
-      break;
-    case INPUT_DUPES:
-      Frontend.input.rtp.dupes = decode_int(cp,optlen);
       break;
     case OUTPUT_DATA_SOURCE_SOCKET:
       decode_socket(&demod->output.data_source_address,cp,optlen);
@@ -1036,22 +962,22 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
       demod->filter.max_IF = decode_float(cp,optlen);
       break;
     case FE_LOW_EDGE:
-      Frontend.sdr.min_IF = decode_float(cp,optlen);
+      Frontend.min_IF = decode_float(cp,optlen);
       break;
     case FE_HIGH_EDGE:
-      Frontend.sdr.max_IF = decode_float(cp,optlen);
+      Frontend.max_IF = decode_float(cp,optlen);
       break;
     case FE_ISREAL:
-      Frontend.sdr.isreal = decode_int(cp,optlen) ? true: false;
+      Frontend.isreal = decode_int(cp,optlen) ? true: false;
       break;
     case IF_GAIN:
-      Frontend.sdr.if_gain = decode_int(cp,optlen);
+      Frontend.if_gain = decode_int(cp,optlen);
       break;
     case LNA_GAIN:
-      Frontend.sdr.lna_gain = decode_int(cp,optlen);
+      Frontend.lna_gain = decode_int(cp,optlen);
       break;
     case MIXER_GAIN:
-      Frontend.sdr.mixer_gain = decode_int(cp,optlen);
+      Frontend.mixer_gain = decode_int(cp,optlen);
       break;
     case KAISER_BETA:
       demod->filter.kaiser_beta = decode_float(cp,optlen);
@@ -1061,7 +987,7 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
       break;
     case IF_POWER:
       // Can also be filled in by front end, though some don't send it
-      Frontend.sdr.output_level = dB2power(decode_float(cp,optlen));
+      Frontend.output_level = dB2power(decode_float(cp,optlen));
       break;
     case BASEBAND_POWER:
       demod->sig.bb_power = dB2power(decode_float(cp,optlen)); // dB -> power
@@ -1112,7 +1038,7 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
       demod->tune.shift = decode_double(cp,optlen);
       break;
     case FIRST_LO_FREQUENCY:
-      Frontend.sdr.frequency = decode_double(cp,optlen);
+      Frontend.frequency = decode_double(cp,optlen);
       break;
     case DOPPLER_FREQUENCY:
       demod->tune.doppler = decode_double(cp,optlen);
@@ -1186,10 +1112,10 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
     case BIN_DATA:
       break;
     case RF_GAIN:
-      Frontend.sdr.rf_gain = decode_float(cp,optlen);
+      Frontend.rf_gain = decode_float(cp,optlen);
       break;
     case RF_ATTEN:
-      Frontend.sdr.rf_atten = decode_float(cp,optlen);
+      Frontend.rf_atten = decode_float(cp,optlen);
       break;
     case BLOCKS_SINCE_POLL:
       demod->blocks_since_poll = decode_int(cp,optlen);
@@ -1218,16 +1144,16 @@ void display_tuning(WINDOW *w,struct demod const *demod){
   
   // second LO frequency is negative of IF, i.e., a signal at +48 kHz
   // needs a second LO frequency of -48 kHz to bring it to zero
-  if(Frontend.sdr.lock)
+  if(Frontend.lock)
     wattron(w,A_UNDERLINE);
-  pprintw(w,row++,col,"First LO","%'.3f",Frontend.sdr.frequency);
+  pprintw(w,row++,col,"First LO","%'.3f",Frontend.frequency);
   wattroff(w,A_UNDERLINE);
 
   // Wink IF display if out of front end's range
   wattroff(w,A_UNDERLINE);
-  if(-demod->tune.second_LO + demod->filter.min_IF < Frontend.sdr.min_IF)
+  if(-demod->tune.second_LO + demod->filter.min_IF < Frontend.min_IF)
     wattron(w,A_BLINK);
-  if(-demod->tune.second_LO + demod->filter.max_IF > Frontend.sdr.max_IF)
+  if(-demod->tune.second_LO + demod->filter.max_IF > Frontend.max_IF)
     wattron(w,A_BLINK);
   
   pprintw(w,row++,col,"IF","%'.3f",-demod->tune.second_LO);
@@ -1239,8 +1165,8 @@ void display_tuning(WINDOW *w,struct demod const *demod){
   if(!isnan(demod->tune.shift))
     pprintw(w,row++,col,"Shift","%'+.3f",demod->tune.shift);
   
-  pprintw(w,row++,col,"FE filter low","%'+.0f",Frontend.sdr.min_IF);
-  pprintw(w,row++,col,"FE filter high","%'+.0f",Frontend.sdr.max_IF);
+  pprintw(w,row++,col,"FE filter low","%'+.0f",Frontend.min_IF);
+  pprintw(w,row++,col,"FE filter high","%'+.0f",Frontend.max_IF);
 
   // Doppler info displayed only if active
   double dopp = demod->tune.doppler;
@@ -1296,21 +1222,21 @@ void display_filtering(WINDOW *w,struct demod const *demod){
   int col = 1;
   wmove(w,row,col);
   wclrtobot(w);
-  pprintw(w,row++,col,"Fs in","%'d Hz",Frontend.sdr.samprate); // Nominal
+  pprintw(w,row++,col,"Fs in","%'d Hz",Frontend.samprate); // Nominal
   pprintw(w,row++,col,"Fs out","%'d Hz",demod->output.samprate);
   
   pprintw(w,row++,col,"Block Time","%'.1f ms",Blocktime);
   
   int64_t const N = Frontend.L + Frontend.M - 1;
   
-  pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.sdr.isreal ? 'r' : 'c');
+  pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.isreal ? 'r' : 'c');
   
-  if(Frontend.sdr.samprate)
-    pprintw(w,row++,col,"FFT out","%'lld   ",N * demod->output.samprate / Frontend.sdr.samprate);
+  if(Frontend.samprate)
+    pprintw(w,row++,col,"FFT out","%'lld c ",N * demod->output.samprate / Frontend.samprate);
   
   // FFT bin size
   pprintw(w,row++,col,"Overlap","%'.3f %% ",100.*(Frontend.M - 1)/(float)N);
-  pprintw(w,row++,col,"Freq bin","%'.3f Hz",(float)Frontend.sdr.samprate / N);
+  pprintw(w,row++,col,"Freq bin","%'.3f Hz",(float)Frontend.samprate / N);
   
   float const beta = demod->filter.kaiser_beta;
   pprintw(w,row++,col,"Kaiser beta","%'.1f   ",beta);
@@ -1329,9 +1255,9 @@ void display_filtering(WINDOW *w,struct demod const *demod){
   
   //    float firstnull = (1/(2*M_PI)) * sqrtf(M_PI * M_PI + beta*beta); // Eqn (3) to first null
   float const transition = (2.0 / M_PI) * sqrtf(M_PI*M_PI + beta * beta);
-  pprintw(w,row++,col,"transition","%'.1f Hz",transition * Frontend.sdr.samprate / (Frontend.M-1)); // Not N, apparently
+  pprintw(w,row++,col,"transition","%'.1f Hz",transition * Frontend.samprate / (Frontend.M-1)); // Not N, apparently
 #endif
-  pprintw(w,row++,col,"Drops","%'llu",Block_drops);
+  pprintw(w,row++,col,"Drops","%'llu   ",Block_drops);
   
   box(w,0,0);
   mvwaddstr(w,0,1,"Filtering");
@@ -1347,24 +1273,24 @@ void display_sig(WINDOW *w,struct demod const *demod){
   float sig_power = demod->sig.bb_power - noise_bandwidth * Frontend.n0;
   if(sig_power < 0)
     sig_power = 0;
-  float ad_dB = power2dB(Frontend.sdr.output_level);
+  float ad_dB = power2dB(Frontend.output_level);
   float fe_gain_dB = 0;
   // This *really* needs to be cleaned up. But the various front ends use different analog gain stages
-  if(Frontend.sdr.gain > 0)
-    fe_gain_dB = voltage2dB(Frontend.sdr.gain);
-  else if(Frontend.sdr.lna_gain != 0 || Frontend.sdr.mixer_gain != 0 || Frontend.sdr.if_gain != 0)
-    fe_gain_dB = Frontend.sdr.lna_gain + Frontend.sdr.mixer_gain + Frontend.sdr.if_gain;
+  if(Frontend.gain > 0)
+    fe_gain_dB = voltage2dB(Frontend.gain);
+  else if(Frontend.lna_gain != 0 || Frontend.mixer_gain != 0 || Frontend.if_gain != 0)
+    fe_gain_dB = Frontend.lna_gain + Frontend.mixer_gain + Frontend.if_gain;
  else
-    fe_gain_dB = Frontend.sdr.rf_atten + Frontend.sdr.rf_gain;
+    fe_gain_dB = Frontend.rf_atten + Frontend.rf_gain;
 
   int row = 1;
   int col = 1;
   wmove(w,row,col);
   wclrtobot(w);
-  mvwaddstr(w,row++,col,Frontend.sdr.description);
-  pprintw(w,row++,col,"A Gain","%02d+%02d+%02d dB   ",Frontend.sdr.lna_gain,
-	    Frontend.sdr.mixer_gain,
-	    Frontend.sdr.if_gain);
+
+  pprintw(w,row++,col,"A Gain","%02d+%02d+%02d dB   ",Frontend.lna_gain,
+	    Frontend.mixer_gain,
+	    Frontend.if_gain);
 
   pprintw(w,row++,col,"A/D","%'.1f dBFS ",ad_dB);
   pprintw(w,row++,col,"FE Gain","%.1f dB   ",fe_gain_dB);
@@ -1447,42 +1373,7 @@ void display_demodulator(WINDOW *w,struct demod const *demod){
   mvwprintw(w,0,1,"%s demodulator",demod_name_from_type(demod->demod_type));
   wnoutrefresh(w);
 }
-void display_fe(WINDOW *w,struct demod const *demod){
-  if(w == NULL)
-    return;
 
-  // front hardware status: sample rate, tcxo offset, I/Q offset and imbalance, gain settings
-  
-  int row = 1;
-  int col = 1;
-  wmove(w,row,col);
-  wclrtobot(w);
-  char tbuf[100];
-  mvwaddstr(w,row++,col,format_gpstime(tbuf,sizeof(tbuf),Frontend.sdr.timestamp));
-
-  if(Frontend.input.metadata_dest_address.ss_family != 0){
-    mvwaddstr(w,row++,col,formatsock(&Frontend.input.metadata_source_address));
-    mvwaddstr(w,row++,col,formatsock(&Frontend.input.metadata_dest_address));
-  
-    pprintw(w,row++,col,"stat pkts","%'llu",Frontend.input.metadata_packets);
-    pprintw(w,row++,col,"ctl pkts","%'llu",Frontend.sdr.commands);
-
-    mvwhline(w,row,0,0,1000);
-    mvwaddstr(w,row++,1,"Front end data");  
-
-    mvwaddstr(w,row++,col,formatsock(&Frontend.input.data_source_address));
-    mvwaddstr(w,row++,col,formatsock(&Frontend.input.data_dest_address));
-    pprintw(w,row++,col,"ssrc","%'u",Frontend.input.rtp.ssrc);
-    pprintw(w,row++,col,"pkts","%'llu",Frontend.input.rtp.packets);
-    pprintw(w,row++,col,"drops","%'llu",Frontend.input.rtp.drops);
-    pprintw(w,row++,col,"dupes","%'llu",Frontend.input.rtp.dupes);
-  }
-  pprintw(w,row++,col,"samples","%'llu",Frontend.input.samples);
-  pprintw(w,row++,col,"blocks since poll","%'llu",demod->blocks_since_poll);
-  box(w,0,0);
-  mvwaddstr(w,0,1,"Front end status");
-  wnoutrefresh(w);
-}
 void display_output(WINDOW *w,struct demod const *demod){
   if(w == NULL)
     return;
@@ -1491,23 +1382,30 @@ void display_output(WINDOW *w,struct demod const *demod){
   int col = 1;
   wmove(w,row,col);
   wclrtobot(w);
-  mvwaddstr(w,row++,col,formatsock(&Metadata_source_address));
-  mvwaddstr(w,row++,col,formatsock(&Metadata_dest_address));
-  pprintw(w,row++,col,"stat pkts","%'llu",Metadata_packets);
-  pprintw(w,row++,col,"ctl pkts","%'llu",Commands);
+  char tbuf[100];
+  pprintw(w,row++,col,"","%s",format_gpstime(tbuf,sizeof(tbuf),Frontend.timestamp));
+  pprintw(w,row++,col,"Samples","%'llu",Frontend.input.samples);
 
   mvwhline(w,row,0,0,1000);
-  mvwaddstr(w,row++,1,"Output data");  
+  mvwaddstr(w,row++,1,"Status");
+  pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_address),
+	   formatsock(&Metadata_dest_address));
+  pprintw(w,row++,col,"Stat pkts","%'llu",Metadata_packets);
+  pprintw(w,row++,col,"Ctl pkts","%'llu",Commands);
+  pprintw(w,row++,col,"Blocks since poll","%'llu",demod->blocks_since_poll);
 
-  mvwaddstr(w,row++,col,formatsock(&demod->output.data_source_address));
-  mvwaddstr(w,row++,col,formatsock(&demod->output.data_dest_address));
+  mvwhline(w,row,0,0,1000);
+  mvwaddstr(w,row++,1,"Data");  
+
+  pprintw(w,row++,col,"","%s->%s",formatsock(&demod->output.data_source_address),
+	  formatsock(&demod->output.data_dest_address));
   
-  pprintw(w,row++,col,"ssrc","%'u",demod->output.rtp.ssrc);
-  pprintw(w,row++,col,"pkts","%'llu",(long long unsigned)demod->output.rtp.packets);
+  pprintw(w,row++,col,"SSRC","%'u",demod->output.rtp.ssrc);
+  pprintw(w,row++,col,"packets","%'llu",(long long unsigned)demod->output.rtp.packets);
   
   
   box(w,0,0);
-  mvwaddstr(w,0,1,"Output status");
+  mvwaddstr(w,0,1,Frontend.description);
   wnoutrefresh(w);
 }
 
@@ -1612,29 +1510,6 @@ void display_modes(WINDOW *w,struct demod const *demod){
   wnoutrefresh(w);
 }
 
-// Set first (front end tuner) oscillator
-// Note: single precision floating point is not accurate enough at VHF and above
-// demod->first_LO is NOT updated here!
-// It is set by incoming status frames so this will take time
-double set_first_LO(struct demod const * const demod,double first_LO){
-  assert(demod != NULL);
-  if(demod == NULL)
-    return NAN;
-
-  if(Frontend.input.ctl_fd >= 3){
-    uint8_t packet[8192],*bp;
-    memset(packet,0,sizeof(packet));
-    bp = packet;
-    *bp++ = CMD; // Command
-    Frontend.sdr.command_tag = arc4random();
-    encode_int32(&bp,COMMAND_TAG,Frontend.sdr.command_tag);
-    encode_double(&bp,RADIO_FREQUENCY,first_LO);
-    encode_eol(&bp);
-    int len = bp - packet;
-    send(Frontend.input.ctl_fd,packet,len,0);
-  }
-  return first_LO;
-}  
 // Like mvwprintw, but right justify the formatted output on the line and overlay with
 // a left-justified label
 int pprintw(WINDOW *w,int y, int x, char const *label, char const *fmt,...){

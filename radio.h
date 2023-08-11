@@ -37,29 +37,11 @@ struct demodtab {
 extern struct demodtab Demodtab[];
 extern int Ndemod;
 
-
-// Multicast network connection with front end hardware
 // Only one off these, shared with all demod instances
 struct frontend {
 
   // Stuff we maintain about our upstream source
-  // Eventually all this will go away when the multicast linking is removed
   struct {
-    int data_fd;           // Socket for raw incoming I/Q data
-    int ctl_fd;            // Socket for commands to front end
-    int status_fd;         // Socket for status from front end
-    int fe_status_fd;      // Socket for front end daemon's reception when integrated
-
-
-    struct sockaddr_storage metadata_source_address;    // Source of SDR metadata
-    struct sockaddr_storage metadata_dest_address;      // Dest of metadata (typically multicast)
-    char metadata_dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
-    uint64_t metadata_packets;
-    
-    struct sockaddr_storage data_source_address;     // Source of I/Q data
-    struct sockaddr_storage data_dest_address;       // Dest of I/Q data (typically multicast)
-    char data_dest_string[_POSIX_HOST_NAME_MAX+20];  // Allow room for :portnum
-    struct rtp_state rtp; // State of the I/Q RTP receiver
     uint64_t samples;     // Count of raw I/Q samples received
   } input;
 
@@ -68,43 +50,41 @@ struct frontend {
   float n0;         // Noise spectral density esimate (experimemtal), power/Hz ratio
 
   // Stuff maintained by our upstream source and filled in by the status daemon
-  struct {
-    char description[256]; // Free-form text
-    uint64_t commands;     // Command counter
-    uint32_t command_tag;   // Last received command tag
-    int samprate;           // Sample rate on data stream
-    int64_t timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
-    double frequency;
-    double calibrate;
-    uint8_t lna_gain;
-    uint8_t mixer_gain;
-    uint8_t if_gain;
-    float rf_atten;
-    float rf_gain;
-    bool direct_conversion; // Avoid 0 Hz if set
-    bool isreal;            // Front end stream is real-only
-    int bitspersample; // 8, 12 or 16
-    bool lock;              // Tuning is locked; clients cannot change
-    
-    // Limits on usable IF due to aliasing, filtering, etc
-    // Less than or equal to +/- samprate/2
-    // Straddles 0 Hz for complex, will have same sign for real output from a low IF tuner
-    float min_IF;
-    float max_IF;
-
-    float gain;
-    float output_level;
-
-    // 'status' is written by the input thread and read by set_first_LO, etc, so it's protected by a mutex
-    pthread_mutex_t status_mutex;
-    pthread_cond_t status_cond;     // Signalled whenever status changes
-
-    // Entry points for local front end driver
-    void *context;         // Stash hardware-dependent control block
-    int (*setup)(struct frontend *,dictionary *,char const *);
-    int (*start)(struct frontend *);
-    double (*tune)(struct frontend *,double);
-  } sdr;
+  char description[256]; // Free-form text
+  uint64_t commands;     // Command counter
+  uint32_t command_tag;   // Last received command tag
+  int samprate;           // Sample rate on data stream
+  int64_t timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
+  double frequency;
+  double calibrate;
+  uint8_t lna_gain;
+  uint8_t mixer_gain;
+  uint8_t if_gain;
+  float rf_atten;
+  float rf_gain;
+  bool direct_conversion; // Avoid 0 Hz if set
+  bool isreal;            // Front end stream is real-only
+  int bitspersample; // 8, 12 or 16
+  bool lock;              // Tuning is locked; clients cannot change
+  
+  // Limits on usable IF due to aliasing, filtering, etc
+  // Less than or equal to +/- samprate/2
+  // Straddles 0 Hz for complex, will have same sign for real output from a low IF tuner
+  float min_IF;
+  float max_IF;
+  
+  float gain;
+  float output_level;
+  
+  // 'status' is written by the input thread and read by set_first_LO, etc, so it's protected by a mutex
+  pthread_mutex_t status_mutex;
+  pthread_cond_t status_cond;     // Signalled whenever status changes
+  
+  // Entry points for local front end driver
+  void *context;         // Stash hardware-dependent control block
+  int (*setup)(struct frontend *,dictionary *,char const *);
+  int (*start)(struct frontend *);
+  double (*tune)(struct frontend *,double);
   float tp1;        // Spare test points
   float tp2;
   struct filter_in * restrict in;

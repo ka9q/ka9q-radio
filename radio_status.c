@@ -394,44 +394,30 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   // parameters valid in all modes
   encode_int32(&bp,COMMAND_TAG,Command_tag); // at top to make it easier to spot in dumps
   encode_int64(&bp,CMD_CNT,Commands); // integer
-  if(strlen(frontend->sdr.description) > 0)
-    encode_string(&bp,DESCRIPTION,frontend->sdr.description,strlen(frontend->sdr.description));
+  if(strlen(frontend->description) > 0)
+    encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
   
   // Echo timestamp from source or locally (bit of a kludge, eventually will always be local)
-  if(frontend->sdr.timestamp != 0)
-    encode_int64(&bp,GPS_TIME,frontend->sdr.timestamp);
+  if(frontend->timestamp != 0)
+    encode_int64(&bp,GPS_TIME,frontend->timestamp);
   else
     encode_int64(&bp,GPS_TIME,gps_time_ns());
-  // Who's sending us I/Q data, if any
-  if(frontend->input.data_source_address.ss_family != 0){
-    encode_socket(&bp,INPUT_DATA_SOURCE_SOCKET,&frontend->input.data_source_address);
-    // Destination address for I/Q data
-    encode_socket(&bp,INPUT_DATA_DEST_SOCKET,&frontend->input.data_dest_address);
-    // Source of metadata
-    encode_socket(&bp,INPUT_METADATA_SOURCE_SOCKET,&frontend->input.metadata_source_address);
-    // Destination address (usually multicast) and port on which we're getting metadata
-    encode_socket(&bp,INPUT_METADATA_DEST_SOCKET,&frontend->input.metadata_dest_address);
-    encode_int32(&bp,INPUT_SSRC,frontend->input.rtp.ssrc);
-    encode_int64(&bp,INPUT_METADATA_PACKETS,frontend->input.metadata_packets); // integer
-    encode_int64(&bp,INPUT_DATA_PACKETS,frontend->input.rtp.packets);
-    encode_int64(&bp,INPUT_DROPS,frontend->input.rtp.drops);
-    encode_int64(&bp,INPUT_DUPES,frontend->input.rtp.dupes);
-  }
+
   encode_int64(&bp,INPUT_SAMPLES,frontend->input.samples);  
-  encode_int32(&bp,INPUT_SAMPRATE,frontend->sdr.samprate); // integer Hz
-  encode_int32(&bp,FE_ISREAL,frontend->sdr.isreal ? true : false);
-  encode_double(&bp,CALIBRATE,frontend->sdr.calibrate);
-  encode_double(&bp,RF_GAIN,frontend->sdr.rf_gain);
-  encode_double(&bp,RF_ATTEN,frontend->sdr.rf_atten);
-  encode_int32(&bp,LNA_GAIN,frontend->sdr.lna_gain);
-  encode_int32(&bp,MIXER_GAIN,frontend->sdr.mixer_gain);
-  encode_int32(&bp,IF_GAIN,frontend->sdr.if_gain);
-  encode_float(&bp,FE_LOW_EDGE,frontend->sdr.min_IF);
-  encode_float(&bp,FE_HIGH_EDGE,frontend->sdr.max_IF);
+  encode_int32(&bp,INPUT_SAMPRATE,frontend->samprate); // integer Hz
+  encode_int32(&bp,FE_ISREAL,frontend->isreal ? true : false);
+  encode_double(&bp,CALIBRATE,frontend->calibrate);
+  encode_double(&bp,RF_GAIN,frontend->rf_gain);
+  encode_double(&bp,RF_ATTEN,frontend->rf_atten);
+  encode_int32(&bp,LNA_GAIN,frontend->lna_gain);
+  encode_int32(&bp,MIXER_GAIN,frontend->mixer_gain);
+  encode_int32(&bp,IF_GAIN,frontend->if_gain);
+  encode_float(&bp,FE_LOW_EDGE,frontend->min_IF);
+  encode_float(&bp,FE_HIGH_EDGE,frontend->max_IF);
 
   // Tuning
   encode_double(&bp,RADIO_FREQUENCY,demod->tune.freq); // Hz
-  encode_double(&bp,FIRST_LO_FREQUENCY,frontend->sdr.frequency); // Hz
+  encode_double(&bp,FIRST_LO_FREQUENCY,frontend->frequency); // Hz
   encode_double(&bp,SECOND_LO_FREQUENCY,demod->tune.second_LO); // Hz
 
   if(frontend->in){
@@ -442,7 +428,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_int32(&bp,FILTER_DROPS,demod->filter.out->block_drops);  // count
   
   // Signals - these ALWAYS change
-  encode_float(&bp,IF_POWER,power2dB(frontend->sdr.output_level));
+  encode_float(&bp,IF_POWER,power2dB(frontend->output_level));
   encode_float(&bp,NOISE_DENSITY,power2dB(demod->sig.n0)); // power -> dB
 
   // Demodulation mode

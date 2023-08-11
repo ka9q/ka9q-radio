@@ -75,7 +75,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   struct sdrstate * const sdr = (struct sdrstate *)calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
-  frontend->sdr.context = sdr;
+  frontend->context = sdr;
 
   {
     char const *device = config_getstring(dictionary,section,"device",NULL);
@@ -83,8 +83,8 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
       return -1; // Not for us
   }
   sdr->dev = -1;
-  strlcpy(frontend->sdr.description,config_getstring(dictionary,section,"description","rtl-sdr"),
-	  sizeof(frontend->sdr.description));
+  strlcpy(frontend->description,config_getstring(dictionary,section,"description","rtl-sdr"),
+	  sizeof(frontend->description));
   {
     unsigned const device_count = rtlsdr_get_device_count();
     if(device_count < 1){
@@ -169,15 +169,15 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   }
   rtlsdr_set_direct_sampling(sdr->device, 0); // That's for HF
   rtlsdr_set_offset_tuning(sdr->device,0); // Leave the DC spike for now
-  frontend->sdr.samprate = config_getint(dictionary,section,"samprate",DEFAULT_SAMPRATE);
-  if(frontend->sdr.samprate <= 0){
+  frontend->samprate = config_getint(dictionary,section,"samprate",DEFAULT_SAMPRATE);
+  if(frontend->samprate <= 0){
     fprintf(stderr,"Invalid sample rate, reverting to default\n");
-    frontend->sdr.samprate = DEFAULT_SAMPRATE;
+    frontend->samprate = DEFAULT_SAMPRATE;
   }
   {
-    int ret = rtlsdr_set_sample_rate(sdr->device,(uint32_t)frontend->sdr.samprate);
+    int ret = rtlsdr_set_sample_rate(sdr->device,(uint32_t)frontend->samprate);
     if(ret != 0){
-      fprintf(stderr,"rtlsdr_set_sample_rate(%d) failed\n",frontend->sdr.samprate);
+      fprintf(stderr,"rtlsdr_set_sample_rate(%d) failed\n",frontend->samprate);
     }
   }
   {
@@ -203,16 +203,16 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     init_frequency = 149e6;
     fprintf(stderr,"Fallback initial frequency %'.3lf Hz\n",init_frequency);
   }
-  frontend->sdr.calibrate = config_getdouble(dictionary,section,"calibrate",0);
+  frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
   fprintf(stdout,"%s, samprate %'d Hz, agc %d, gain %d, bias %d, init freq %'.3lf Hz, calibrate %.3g\n",
-	  frontend->sdr.description,frontend->sdr.samprate,sdr->agc,sdr->gain,sdr->bias,init_frequency,
-	  frontend->sdr.calibrate);
+	  frontend->description,frontend->samprate,sdr->agc,sdr->gain,sdr->bias,init_frequency,
+	  frontend->calibrate);
 
   set_correct_freq(sdr,init_frequency);
  // Just estimates - get the real number somewhere
-  frontend->sdr.min_IF = -0.47 * frontend->sdr.samprate;
-  frontend->sdr.max_IF = 0.47 * frontend->sdr.samprate;
-  frontend->sdr.isreal = false; // Make sure the right kind of filter gets created!
+  frontend->min_IF = -0.47 * frontend->samprate;
+  frontend->max_IF = 0.47 * frontend->samprate;
+  frontend->isreal = false; // Make sure the right kind of filter gets created!
   return 0;
 }
 
@@ -230,7 +230,7 @@ static void *rtlsdr_read_thread(void *arg){
 
 
 int rtlsdr_startup(struct frontend * const frontend){
-  struct sdrstate * const sdr = frontend->sdr.context;
+  struct sdrstate * const sdr = frontend->context;
   pthread_create(&sdr->read_thread,NULL,rtlsdr_read_thread,sdr);
   fprintf(stdout,"rtlsdr thread running\n");
   return 0;
@@ -253,7 +253,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
     wptr[i] = samp;
   }
   write_cfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->sdr.output_level = energy / sampcount;
+  frontend->output_level = energy / sampcount;
   frontend->input.samples += sampcount;
 }
 #if 0 // use this later
@@ -264,7 +264,7 @@ static void do_rtlsdr_agc(struct sdrstate * const sdr){
     
   if(--sdr->holdoff_counter == 0){
     sdr->holdoff_counter = HOLDOFF_TIME;
-    float powerdB = 10*log10f(frontend->sdr.output_level);
+    float powerdB = 10*log10f(frontend->output_level);
     if(powerdB > AGC_upper && sdr->gain > 0){
       sdr->gain -= 20;    // Reduce gain one step
     } else if(powerdB < AGC_lower){
@@ -395,7 +395,7 @@ static double true_freq(uint64_t freq_hz){
 
 static double set_correct_freq(struct sdrstate * const sdr,double freq){
   struct frontend * const frontend = sdr->frontend;
-  int64_t intfreq = round(freq / (1 + frontend->sdr.calibrate));
+  int64_t intfreq = round(freq / (1 + frontend->calibrate));
   rtlsdr_set_center_freq(sdr->device,intfreq);
 #ifdef USE_NEW_LIBRTLSDR
   double tf = rtlsdr_get_freq(sdr->device);
@@ -403,17 +403,17 @@ static double set_correct_freq(struct sdrstate * const sdr,double freq){
   double tf = true_freq(rtlsdr_get_center_freq(sdr->device)); // We correct the original imprecise version
 #endif
 
-  frontend->sdr.frequency = tf * (1 + frontend->sdr.calibrate);
+  frontend->frequency = tf * (1 + frontend->calibrate);
   FILE * const fp = fopen(sdr->frequency_file,"w");
-  if(fp == NULL || fprintf(fp,"%lf\n",frontend->sdr.frequency) < 0)
+  if(fp == NULL || fprintf(fp,"%lf\n",frontend->frequency) < 0)
     fprintf(stderr,"Can't write to tuner state file %s: %sn",sdr->frequency_file,strerror(errno));
   if(fp != NULL)
     fclose(fp);
-  return frontend->sdr.frequency;
+  return frontend->frequency;
 }
 
 double rtlsdr_tune(struct frontend * const frontend,double freq){
-  struct sdrstate * const sdr = (struct sdrstate *)frontend->sdr.context;
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
 
   return set_correct_freq(sdr,freq);

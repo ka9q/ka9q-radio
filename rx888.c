@@ -92,7 +92,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const Dictio
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
-  frontend->sdr.context = sdr;
+  frontend->context = sdr;
 
   {
     char const *device = config_getstring(Dictionary,section,"device",NULL);
@@ -157,30 +157,31 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const Dictio
     samprate = minsamprate;
   }
   rx888_set_samprate(sdr,samprate);
-  frontend->sdr.samprate = samprate;
-  frontend->sdr.min_IF = 0;
-  frontend->sdr.max_IF = 0.47 * frontend->sdr.samprate; // Just an estimate - get the real number somewhere
-  frontend->sdr.isreal = true; // Make sure the right kind of filter gets created!
-  frontend->sdr.calibrate = config_getdouble(Dictionary,section,"calibrate",0);
-  frontend->sdr.gain = dB2voltage(frontend->sdr.rf_gain - frontend->sdr.rf_atten);
+  frontend->samprate = samprate;
+  frontend->min_IF = 0;
+  frontend->max_IF = 0.47 * frontend->samprate; // Just an estimate - get the real number somewhere
+  frontend->isreal = true; // Make sure the right kind of filter gets created!
+  frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
+  frontend->gain = dB2voltage(frontend->rf_gain - frontend->rf_atten);
+  frontend->lock = true; // Doesn't tune in direct conversion mode
   {
     char const *p = config_getstring(Dictionary,section,"description","rx888");
     if(p != NULL){
-      strlcpy(frontend->sdr.description,p,sizeof(frontend->sdr.description));
-      fprintf(stdout,"%s: ",frontend->sdr.description);
+      strlcpy(frontend->description,p,sizeof(frontend->description));
+      fprintf(stdout,"%s: ",frontend->description);
     }
   }
   fprintf(stdout,"Samprate %'d Hz, gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
-	  frontend->sdr.samprate,sdr->highgain ? "high" : "low",
-gain,frontend->sdr.rf_gain,frontend->sdr.rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
-	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->sdr.samprate));
+	  frontend->samprate,sdr->highgain ? "high" : "low",
+gain,frontend->rf_gain,frontend->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
+	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate));
 
   return 0;
 }
 
 // Come back here after common stuff has been set up (filters, etc)
 int rx888_startup(struct frontend * const frontend){
-  struct sdrstate * const sdr = (struct sdrstate *)frontend->sdr.context;
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
 
   // Start processing A/D data
   pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
@@ -275,7 +276,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
     }
   }
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->sdr.output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
+  frontend->output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
   frontend->input.samples += sampcount;
   if(!Stop_transfers) {
     if(libusb_submit_transfer(transfer) == 0)
@@ -484,7 +485,7 @@ static void rx888_set_att(struct sdrstate *sdr,float att){
   assert(frontend != NULL);
   usleep(5000);
 
-  frontend->sdr.rf_atten = att;
+  frontend->rf_atten = att;
   int const arg = (int)(att * 2);
   argument_send(sdr->dev_handle,DAT31_ATT,arg);
 }
@@ -497,7 +498,7 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain){
 
   int const arg = gain2val(sdr->highgain,gain);
   argument_send(sdr->dev_handle,AD8340_VGA,arg);
-  frontend->sdr.rf_gain = val2gain(arg); // Store actual nearest value
+  frontend->rf_gain = val2gain(arg); // Store actual nearest value
 }
 
 static void rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
@@ -505,7 +506,7 @@ static void rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
   struct frontend *frontend = sdr->frontend;
   usleep(5000);
   command_send(sdr->dev_handle,STARTADC,samprate);
-  frontend->sdr.samprate = samprate;
+  frontend->samprate = samprate;
 }
 
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){

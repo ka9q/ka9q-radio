@@ -49,7 +49,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
-  frontend->sdr.context = sdr;
+  frontend->context = sdr;
   {
     char const *device = config_getstring(Dictionary,section,"device",NULL);
     if(strcasecmp(device,"airspyhf") != 0)
@@ -126,18 +126,18 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     fprintf(stdout,"\n");
   }
   // Default to first (highest) sample rate on list
-  frontend->sdr.samprate = config_getint(Dictionary,section,"samprate",sdr->sample_rates[0]);
-  frontend->sdr.isreal = false;
-  frontend->sdr.calibrate = config_getdouble(Dictionary,section,"calibrate",0);
+  frontend->samprate = config_getint(Dictionary,section,"samprate",sdr->sample_rates[0]);
+  frontend->isreal = false;
+  frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
 
-  fprintf(stdout,"Set sample rate %'u Hz\n",frontend->sdr.samprate);
+  fprintf(stdout,"Set sample rate %'u Hz\n",frontend->samprate);
   {
     int ret __attribute__ ((unused));
-    ret = airspyhf_set_samplerate(sdr->device,(uint32_t)frontend->sdr.samprate);
+    ret = airspyhf_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
     assert(ret == AIRSPYHF_SUCCESS);
   }
-  frontend->sdr.min_IF = -0.43 * frontend->sdr.samprate;
-  frontend->sdr.max_IF = +0.43 * frontend->sdr.samprate;
+  frontend->min_IF = -0.43 * frontend->samprate;
+  frontend->max_IF = +0.43 * frontend->samprate;
 
   {
     int const hf_agc = config_getboolean(Dictionary,section,"hf-agc",false); // default off
@@ -161,13 +161,13 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   {
     char const *p = config_getstring(Dictionary,section,"description",NULL);
     if(p != NULL){
-      strlcpy(frontend->sdr.description,p,sizeof(frontend->sdr.description));
-      fprintf(stdout,"%s: ",frontend->sdr.description);
+      strlcpy(frontend->description,p,sizeof(frontend->description));
+      fprintf(stdout,"%s: ",frontend->description);
     }
   }
   double init_frequency = config_getdouble(Dictionary,section,"frequency",0);
   if(init_frequency != 0)
-    frontend->sdr.lock = 1;
+    frontend->lock = 1;
   {
     char *tmp;
     int ret __attribute__ ((unused));
@@ -195,12 +195,12 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     init_frequency = 10e6; // Fallback default
     fprintf(stdout,"Fallback default frequency %'.3lf Hz\n",init_frequency);
   }
-  fprintf(stdout,"Setting initial frequency %'.3lf Hz, %s\n",init_frequency,frontend->sdr.lock ? "locked" : "not locked");
+  fprintf(stdout,"Setting initial frequency %'.3lf Hz, %s\n",init_frequency,frontend->lock ? "locked" : "not locked");
   set_correct_freq(sdr,init_frequency);
   return 0;
 }
 int airspyhf_startup(struct frontend *frontend){
-  struct sdrstate *sdr = (struct sdrstate *)frontend->sdr.context;
+  struct sdrstate *sdr = (struct sdrstate *)frontend->context;
   pthread_create(&sdr->monitor_thread,NULL,airspyhf_monitor,sdr);
   return 0;
 }
@@ -256,7 +256,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   }
   frontend->input.samples += sampcount;
   write_cfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->sdr.output_level = in_energy / sampcount;
+  frontend->output_level = in_energy / sampcount;
   return 0;
 }
 
@@ -271,22 +271,22 @@ static double true_freq(uint64_t freq_hz){
 // All this really works correctly only with a gpsdo, forcing the calibration offset to 0
 static double set_correct_freq(struct sdrstate *sdr,double freq){
   struct frontend *frontend = sdr->frontend;
-  int64_t intfreq = round((freq)/ (1 + frontend->sdr.calibrate));
+  int64_t intfreq = round((freq)/ (1 + frontend->calibrate));
   int ret __attribute__((unused)) = AIRSPYHF_SUCCESS; // Won't be used when asserts are disabled
   ret = airspyhf_set_freq(sdr->device,intfreq);
   assert(ret == AIRSPYHF_SUCCESS);
   double const tf = true_freq(intfreq);
-  frontend->sdr.frequency = tf * (1 + frontend->sdr.calibrate);
+  frontend->frequency = tf * (1 + frontend->calibrate);
   FILE *fp = fopen(sdr->frequency_file,"w");
   if(fp){
-    if(fprintf(fp,"%lf\n",frontend->sdr.frequency) < 0)
+    if(fprintf(fp,"%lf\n",frontend->frequency) < 0)
       fprintf(stdout,"Can't write to tuner state file %s: %s\n",sdr->frequency_file,strerror(errno));
     fclose(fp);
     fp = NULL;
   }
-  return frontend->sdr.frequency;
+  return frontend->frequency;
 }
 double airspyhf_tune(struct frontend *frontend,double f){
-  struct sdrstate *sdr = frontend->sdr.context;
+  struct sdrstate *sdr = frontend->context;
   return set_correct_freq(sdr,f);
 }

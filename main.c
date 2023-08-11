@@ -82,7 +82,6 @@ uint64_t Commands;
 
 static void closedown(int);
 static void verbosity(int);
-static int mcast_setup_frontend(char const *arg);
 static int loadconfig(char const *file);
 static int setup_hardware(char const *sname);
 static void *rtcp_send(void *);
@@ -110,9 +109,6 @@ double funcube_tune(struct frontend *,double);
 int rtlsdr_setup(struct frontend *,dictionary *,char const *);
 int rtlsdr_startup(struct frontend *);
 double rtlsdr_tune(struct frontend *,double);
-
-
-
 
 
 // The main program sets up the demodulator parameter defaults,
@@ -198,100 +194,6 @@ int main(int argc,char *argv[]){
   exit(0);
 }
 
-static int Frontend_started;
-
-static int mcast_setup_frontend(char const *arg){
-  if(Frontend_started)
-    return 0;  // Only do this once
-  Frontend.sdr.gain = 1; // In case it's never sent by front end
-
-  pthread_mutex_init(&Frontend.sdr.status_mutex,NULL);
-  pthread_cond_init(&Frontend.sdr.status_cond,NULL);
-
-  Frontend.input.status_fd = -1;
-
-  strlcpy(Frontend.input.metadata_dest_string,arg,sizeof(Frontend.input.metadata_dest_string));
-  {
-    char iface[1024];
-    resolve_mcast(Frontend.input.metadata_dest_string,&Frontend.input.metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
-    if(strlen(iface) == 0 && Iface != NULL)
-      strlcpy(iface,Iface,sizeof(iface));
-    Frontend.input.status_fd = listen_mcast(&Frontend.input.metadata_dest_address,iface);
-
-    if(Frontend.input.status_fd < 3){
-      fprintf(stdout,"%s: Can't set up SDR status socket\n",Frontend.input.metadata_dest_string);
-      return -1;
-    }
-    Frontend.input.ctl_fd = connect_mcast(&Frontend.input.metadata_dest_address,iface,Mcast_ttl,IP_tos);
-  }
-
-  if(Frontend.input.ctl_fd < 3){
-    fprintf(stdout,"%s: Can't set up SDR control socket\n",Frontend.input.metadata_dest_string);
-    return -1;
-  }
-  {
-    char addrtmp[256];
-    fprintf(stdout,"Acquired front end control stream %s (%s)\n",
-	    Frontend.input.metadata_dest_string,
-	    formataddr(addrtmp,sizeof(addrtmp),&Frontend.input.metadata_dest_address));
-  }    
-  // Start status thread - will also listen for SDR commands
-  if(Verbose)
-    fprintf(stdout,"Starting front end status thread\n");
-
-  pthread_create(&Frontend.status_thread,NULL,sdr_status,&Frontend);
-
-  // We must acquire a status stream before we can proceed further
-  pthread_mutex_lock(&Frontend.sdr.status_mutex);
-  
-  // ** When running with linked-in driver, the data dest address won't be set, only the sample rate **
-  // Hopefully this will be enough
-  //  while(Frontend.sdr.samprate == 0 || (Frontend.input.data_dest_address.ss_family == 0))
-  while(Frontend.sdr.samprate == 0)
-    pthread_cond_wait(&Frontend.sdr.status_cond,&Frontend.sdr.status_mutex);
-  pthread_mutex_unlock(&Frontend.sdr.status_mutex);
-
-  {
-    char addrtmp[256];
-    fprintf(stdout,"Acquired front end data stream %s (%s)\n",
-	    formatsock(&Frontend.input.data_dest_address),
-	    formataddr(addrtmp,sizeof(addrtmp),&Frontend.input.data_dest_address));
-  }  
-  fprintf(stdout,"Front end sample rate %'d Hz, %s; block time %.1f ms, %.1f Hz\n",
-	  Frontend.sdr.samprate,Frontend.sdr.isreal ? "real" : "complex",Blocktime,1000.0f/Blocktime);
-
-  // Input socket for I/Q data from SDR, set from OUTPUT_DEST_SOCKET in SDR metadata
-  Frontend.input.data_fd = listen_mcast(&Frontend.input.data_dest_address,Iface);
-  if(Frontend.input.data_fd < 3){
-    fprintf(stdout,"Can't set up IF input\n");
-    return -1;
-  }
-  // Create input filter now that we know the parameters
-  // FFT and filter sizes now computed from specified block duration and sample rate
-  // L = input data block size
-  // M = filter impulse response duration
-  // N = FFT size = L + M - 1
-  // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
-  assert(Frontend.sdr.samprate != 0);
-  double const eL = Frontend.sdr.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
-  Frontend.L = lround(eL);
-  if(Frontend.L != eL)
-    fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
-	    Blocktime,Frontend.sdr.samprate,eL-Frontend.L);
-
-  Frontend.M = Frontend.L / (Overlap - 1) + 1;
-  Frontend.in = create_filter_input(Frontend.L,Frontend.M, Frontend.sdr.isreal ? REAL : COMPLEX);
-  if(Frontend.in == NULL){
-    fprintf(stdout,"Input filter setup failed\n");
-    return -1;
-  }
-
-  // Launch procsamp to process incoming samples and execute the forward FFT
-  pthread_create(&Procsamp_thread,NULL,proc_samples,NULL);
-  Frontend_started = true; // Only do this once!!
-  return 0;
-}
-
 static int loadconfig(char const * const file){
   if(file == NULL || strlen(file) == 0)
     return -1;
@@ -331,31 +233,28 @@ static int loadconfig(char const * const file){
     if(p != NULL)
       Wisdom_file = strdup(p);
   }
-  char const * const input = config_getstring(Configtable,global,"input",NULL);
-
   // Are we using a direct front end?
   const char *hardware = config_getstring(Configtable,global,"hardware",NULL);
-  if(hardware != NULL){
-    // Look for specified hardware section
+  if(hardware == NULL){
+    // Hardware now required
+    fprintf(stdout,"Hardware front end now required\n");
+    exit(1);
+  }
+  // Look for specified hardware section
+  {
     int const nsect = iniparser_getnsec(Configtable);
-    for(int sect = 0; sect < nsect; sect++){
+    int sect;
+    for(sect = 0; sect < nsect; sect++){
       char const * const sname = iniparser_getsecname(Configtable,sect);
       if(strcasecmp(sname,hardware) == 0){
 	if(setup_hardware(sname) != 0)
 	  exit(1);
-
+	
 	break;
       }
     }
-  } else {
-    // old-style multicast connection to front end
-    if(input == NULL){
-      // Mandatory
-      fprintf(stdout,"input not specified in [%s]\n",global);
-      exit(1);
-    }
-    if(mcast_setup_frontend(input) == -1){
-      fprintf(stdout,"Front end setup of %s failed\n",input);
+    if(sect == nsect){
+      fprintf(stdout,"no hardware section [%s] found\n",hardware);
       exit(1);
     }
   }
@@ -367,14 +266,7 @@ static int loadconfig(char const * const file){
     }
     strlcpy(Metadata_dest_string,status,sizeof(Metadata_dest_string));
     int slen = sizeof(Metadata_dest_address);
-    if(input != NULL && strlen(input) > 0){
-      char description[1024];
-      description[0] = '\0';
-      snprintf(description,sizeof(description),"input=%s",input);
-      avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),description,&Metadata_dest_address,&slen);
-    } else {
-      avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),NULL,&Metadata_dest_address,&slen);
-    }
+    avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),NULL,&Metadata_dest_address,&slen);
     // avahi_start has resolved the target DNS name into Metadata_dest_address and inserted the port number
     Status_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
     if(Status_fd < 3){
@@ -437,10 +329,8 @@ static int loadconfig(char const * const file){
     }
     strlcpy(demod->output.data_dest_string,data,sizeof(demod->output.data_dest_string));
     // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
-    char description[1024];
-    snprintf(description,sizeof(description),"pcm-source=%s",formatsock(&Frontend.input.data_dest_address));
     int slen = sizeof(demod->output.data_dest_address);
-    avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),description,&demod->output.data_dest_address,&slen);
+    avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),NULL,&demod->output.data_dest_address,&slen);
     Mcast_ttl = config_getint(Configtable,sname,"ttl",Mcast_ttl); // Read in each section too
     demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,Iface,Mcast_ttl,IP_tos);
     if(demod->output.data_fd < 3){
@@ -567,31 +457,31 @@ static int setup_hardware(char const *sname){
   // Do we support it?
   // This should go into a table somewhere
   if(strcasecmp(device,"rx888") == 0){
-    Frontend.sdr.setup = rx888_setup;
-    Frontend.sdr.start = rx888_startup;
-    Frontend.sdr.tune = NULL; // Only direct sampling for now
+    Frontend.setup = rx888_setup;
+    Frontend.start = rx888_startup;
+    Frontend.tune = NULL; // Only direct sampling for now
   } else if(strcasecmp(device,"airspy") == 0){
-    Frontend.sdr.setup = airspy_setup;
-    Frontend.sdr.start = airspy_startup;
-    Frontend.sdr.tune = airspy_tune;
+    Frontend.setup = airspy_setup;
+    Frontend.start = airspy_startup;
+    Frontend.tune = airspy_tune;
   } else if(strcasecmp(device,"airspyhf") == 0){
-    Frontend.sdr.setup = airspyhf_setup;
-    Frontend.sdr.start = airspyhf_startup;
-    Frontend.sdr.tune = airspyhf_tune;
+    Frontend.setup = airspyhf_setup;
+    Frontend.start = airspyhf_startup;
+    Frontend.tune = airspyhf_tune;
   } else if(strcasecmp(device,"funcube") == 0){
-    Frontend.sdr.setup = funcube_setup;
-    Frontend.sdr.start = funcube_startup;
-    Frontend.sdr.tune = funcube_tune;
+    Frontend.setup = funcube_setup;
+    Frontend.start = funcube_startup;
+    Frontend.tune = funcube_tune;
   } else if(strcasecmp(device,"rtlsdr") == 0){
-    Frontend.sdr.setup = rtlsdr_setup;
-    Frontend.sdr.start = rtlsdr_startup;
-    Frontend.sdr.tune = rtlsdr_tune;
+    Frontend.setup = rtlsdr_setup;
+    Frontend.start = rtlsdr_startup;
+    Frontend.tune = rtlsdr_tune;
   } else {
     fprintf(stdout,"device %s unrecognized\n",device);
     return -1;
   }
 
-  int r = (*Frontend.sdr.setup)(&Frontend,Configtable,sname); 
+  int r = (*Frontend.setup)(&Frontend,Configtable,sname); 
   if(r != 0){
     fprintf(stdout,"device setup returned %d\n",r);
     return r;
@@ -603,26 +493,25 @@ static int setup_hardware(char const *sname){
   // M = filter impulse response duration
   // N = FFT size = L + M - 1
   // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
-  assert(Frontend.sdr.samprate != 0);
-  double const eL = Frontend.sdr.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
+  assert(Frontend.samprate != 0);
+  double const eL = Frontend.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
   Frontend.L = lround(eL);
   if(Frontend.L != eL)
     fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
-	    Blocktime,Frontend.sdr.samprate,eL-Frontend.L);
+	    Blocktime,Frontend.samprate,eL-Frontend.L);
 
   Frontend.M = Frontend.L / (Overlap - 1) + 1;
   assert(Frontend.M != 0);
   assert(Frontend.L != 0);
-  Frontend.in = create_filter_input(Frontend.L,Frontend.M, Frontend.sdr.isreal ? REAL : COMPLEX);
+  Frontend.in = create_filter_input(Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
   if(Frontend.in == NULL){
     fprintf(stdout,"Input filter setup failed\n");
     return -1;
   }
-  pthread_mutex_init(&Frontend.sdr.status_mutex,NULL);
-  pthread_cond_init(&Frontend.sdr.status_cond,NULL);
-  pthread_create(&Frontend.status_thread,NULL,sdr_status,&Frontend);
-  if(Frontend.sdr.start){
-    int r = (*Frontend.sdr.start)(&Frontend); 
+  pthread_mutex_init(&Frontend.status_mutex,NULL);
+  pthread_cond_init(&Frontend.status_cond,NULL);
+  if(Frontend.start){
+    int r = (*Frontend.start)(&Frontend); 
     if(r != 0)
       fprintf(stdout,"Front end start returned %d\n",r);
 

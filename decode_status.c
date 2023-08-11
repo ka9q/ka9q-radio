@@ -26,24 +26,12 @@ void *sdr_status(void *arg){
 
   int64_t const random_interval = 50000000; // 50 ms
   // Pick soon but still random times for the first polls
-  int64_t next_fe_poll = random_time(0,random_interval);
-  int64_t const fe_poll_interval = 975000000;
 
   while(1){
-    if(gps_time_ns() > next_fe_poll){
-      // Poll front end
-      if(frontend->input.ctl_fd > 2)
-	send_poll(frontend->input.ctl_fd,0);
-      next_fe_poll = random_time(fe_poll_interval,random_interval);
-    }
+
     fd_set fdset;
     FD_ZERO(&fdset);
-    if(frontend->input.status_fd > 2)
-      FD_SET(frontend->input.status_fd,&fdset);
 
-    int64_t timeout = next_fe_poll - gps_time_ns();
-    if(timeout < 0)
-      timeout = 0;
     int n = frontend->input.status_fd + 1;
     {
       struct timespec ts;

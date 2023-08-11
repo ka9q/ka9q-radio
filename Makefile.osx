@@ -4,7 +4,7 @@ CFLAGS=-g -DNDEBUG=1 -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `
 BINDIR=/usr/local/bin
 LIBDIR=/usr/local/share/ka9q-radio
 LD_FLAGS=-lpthread -lm
-EXECS=aprs aprsfeed cwd iqplay iqrecord modulate monitor opusd opussend packetd pcmrecord pcmsend pcmcat radiod control metadump pl show-pkt show-sig stereod rdsd tune wspr-decoded powers ft8-decoded wd-record
+EXECS=aprs aprsfeed cwd monitor opusd opussend packetd pcmrecord pcmsend pcmcat radiod control metadump pl show-pkt show-sig stereod rdsd tune wspr-decoded powers ft8-decoded wd-record
 AFILES=bandplan.txt help.txt monitor-help.txt modes.conf id.txt
 
 all: $(EXECS) $(AFILES)
@@ -19,19 +19,13 @@ clean:
 	rm -f *.o *.a $(EXECS)
 
 # Executables
-airspyd: airspyd.o libradio.a
-	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lairspy -liniparser -lm -lpthread
-
-airspyhfd: airspyhfd.o libradio.a
-	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lairspyhf -liniparser -lm -lpthread
-
 aprs: aprs.o libradio.a
 	$(CC) -g -o $@ $^ -lm
 
 aprsfeed: aprsfeed.o libradio.a
 	$(CC) -g -o $@ $^ -lm -lpthread
 
-control: control.o decode_status.o modes.o bandplan.o libradio.a
+control: control.o modes.o bandplan.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread -lm
 
 cwd: cwd.o morse.o libradio.a
@@ -40,23 +34,8 @@ cwd: cwd.o morse.o libradio.a
 dmr: dmr.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
 
-funcubed: funcubed.o libradio.a libfcd.a
-	$(CC) -g -o $@ $^ -liniparser -lavahi-client -lavahi-common -lportaudio -lusb-1.0 -liconv -lm -lpthread
-
-hackrf: hackrf.o libradio.a
-	$(CC) -g -o $@ $^ -lhackrf -lm -lpthread
-
-iqplay: iqplay.o libradio.a
-	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lm -lpthread
-
-iqrecord: iqrecord.o decode_status.o libradio.a
-	$(CC) -g -o $@ $^ -lm -lpthread
-
 metadump: metadump.o dump.o libradio.a
 	$(CC) -g -o $@ $^ -lm
-
-modulate: modulate.o libradio.a
-	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lm -lpthread
 
 # should be setuid root to enable renicing to better priority, but this makes me uncomfortable
 # macos doesn't have Linux-style capabilities to enable specific root-like privileges
@@ -87,15 +66,12 @@ pl: pl.o libradio.a
 powers: powers.o dump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lm -lpthread
 
-radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o status.o decode_status.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o ezusb.o libfcd.a libradio.a
+radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o status.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o ezusb.o libfcd.a libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lairspy -lairspyhf -lrtlsdr -lportaudio -liconv -lusb-1.0 -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread
 
-rx888d: rx888d.o ezusb.o libradio.a
-	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -liniparser -lusb-1.0 -lpthread
-	
 show-pkt: show-pkt.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread -lm
 
@@ -132,20 +108,14 @@ libradio.a: avahi.o attr.o ax25.o config.o decimate.o filter.o status.o misc.o m
 	ranlib $@
 
 # Main programs
-airspyd.o: airspyd.c misc.h multicast.h decimate.h status.h conf.h config.h
-airspyhfd.o: airspyhfd.c misc.h multicast.h decimate.h status.h config.h
 aprs.o: aprs.c ax25.h multicast.h misc.h
 aprsfeed.o: aprsfeed.c ax25.h multicast.h misc.h
 avahi.o: avahi.c misc.h
 control.o: control.c osc.h misc.h filter.h bandplan.h multicast.h status.h  radio.h
 cwd.o: cwd.c misc.h multicast.h morse.h
-funcubed.o: funcubed.c fcd.h fcdhidcmd.h hidapi.h misc.h multicast.h status.h conf.h
 hackrf.o: hackrf.c misc.h multicast.h decimate.h status.h
-iqplay.o: iqplay.c misc.h radio.h osc.h multicast.h attr.h  status.h
-iqrecord.o: iqrecord.c radio.h osc.h multicast.h attr.h
 main.o: main.c radio.h osc.h filter.h misc.h  multicast.h status.h  conf.h
 metadump.o: metadump.c multicast.h status.h misc.h
-modulate.o: modulate.c misc.h filter.h radio.h osc.h conf.h
 monitor.o: monitor.c misc.h multicast.h iir.h conf.h morse.h
 opusd.o: opusd.c misc.h multicast.h iir.h status.h
 opussend.o: opussend.c misc.h multicast.h
@@ -155,7 +125,6 @@ pcmrecord.o: pcmrecord.c attr.h multicast.h
 pcmsend.o: pcmsend.c misc.h multicast.h
 pl.o: pl.c multicast.h misc.h osc.h
 rtlsdr.o: rtlsdr.c conf.h misc.h multicast.h decimate.h status.h
-rx888d.o: rx888d.c conf.h misc.h multicast.h decimate.h status.h config.h rx888.h ezusb.h
 rx888.o: rx888.c conf.h misc.h multicast.h decimate.h status.h radio.h config.h rx888.h ezusb.h
 show-sig.o: show-sig.c misc.h multicast.h status.h 
 show-pkt.o: show-pkt.c misc.h multicast.h status.h 
@@ -181,7 +150,6 @@ status.o: status.c status.h misc.h radio.h  multicast.h osc.h filter.h
 airspy.o: airspy.c conf.h misc.h multicast.h status.h config.h radio.h
 audio.o: audio.c misc.h multicast.h osc.h filter.h radio.h  status.h
 bandplan.o: bandplan.c bandplan.h radio.h  multicast.h osc.h status.h filter.h conf.h
-decode_status.o: decode_status.c status.h radio.h misc.h  multicast.h osc.h filter.h
 dump.o: dump.c misc.h status.h
 ezusb.o: ezusb.c
 fm.o: fm.c misc.h filter.h radio.h osc.h multicast.h  status.h iir.h

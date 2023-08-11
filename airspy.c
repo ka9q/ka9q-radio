@@ -76,7 +76,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
-  frontend->sdr.context = sdr;
+  frontend->context = sdr;
   {
     char const *device = config_getstring(Dictionary,section,"device",NULL);
     if(strcasecmp(device,"airspy") != 0)
@@ -166,21 +166,21 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     fprintf(stdout,"\n");
   }
   // Default to first (highest) sample rate on list
-  frontend->sdr.samprate = config_getint(Dictionary,section,"samprate",sdr->sample_rates[0]);
-  frontend->sdr.isreal = true;
-  sdr->offset = frontend->sdr.samprate/4;
+  frontend->samprate = config_getint(Dictionary,section,"samprate",sdr->sample_rates[0]);
+  frontend->isreal = true;
+  sdr->offset = frontend->samprate/4;
   sdr->converter = config_getfloat(Dictionary,section,"converter",0);
-  frontend->sdr.calibrate = config_getdouble(Dictionary,section,"calibrate",0);
+  frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
 
-  fprintf(stdout,"Set sample rate %'u Hz, offset %'d Hz\n",frontend->sdr.samprate,sdr->offset);
+  fprintf(stdout,"Set sample rate %'u Hz, offset %'d Hz\n",frontend->samprate,sdr->offset);
   {
     int ret __attribute__ ((unused));
-    ret = airspy_set_samplerate(sdr->device,(uint32_t)frontend->sdr.samprate);
+    ret = airspy_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
     assert(ret == AIRSPY_SUCCESS);
   }
-  frontend->sdr.calibrate = 0;
-  frontend->sdr.max_IF = -600000;
-  frontend->sdr.min_IF = -0.47 * frontend->sdr.samprate;
+  frontend->calibrate = 0;
+  frontend->max_IF = -600000;
+  frontend->min_IF = -0.47 * frontend->samprate;
 
   sdr->gainstep = -1; // Force update first time
 
@@ -198,19 +198,19 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   
   int const lna_gain = config_getint(Dictionary,section,"lna-gain",-1);
   if(lna_gain != -1){
-    frontend->sdr.lna_gain = lna_gain;
+    frontend->lna_gain = lna_gain;
     airspy_set_lna_gain(sdr->device,lna_gain);
     Software_agc = false;
   }      
   int const mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
   if(mixer_gain != -1){
-    frontend->sdr.mixer_gain = mixer_gain;
+    frontend->mixer_gain = mixer_gain;
     airspy_set_mixer_gain(sdr->device,mixer_gain);
     Software_agc = false;
   }
   int const vga_gain = config_getint(Dictionary,section,"vga-gain",-1);
   if(vga_gain != -1){
-    frontend->sdr.if_gain = vga_gain;
+    frontend->if_gain = vga_gain;
     airspy_set_vga_gain(sdr->device,vga_gain);
     Software_agc = false;
   }
@@ -232,12 +232,12 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   {
     char const * const p = config_getstring(Dictionary,section,"description",NULL);
     if(p != NULL){
-      strlcpy(frontend->sdr.description,p,sizeof(frontend->sdr.description));
-      fprintf(stdout,"%s: ",frontend->sdr.description);
+      strlcpy(frontend->description,p,sizeof(frontend->description));
+      fprintf(stdout,"%s: ",frontend->description);
     }
   }
   fprintf(stdout,"Software AGC %d; linearity %d, LNA AGC %d, Mix AGC %d, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %d\n",
-	  Software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->sdr.lna_gain,frontend->sdr.mixer_gain,frontend->sdr.if_gain,gainstep,sdr->antenna_bias);
+	  Software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,gainstep,sdr->antenna_bias);
 
   {
     float const dh = config_getdouble(Dictionary,section,"agc-high-threshold",-10.0);
@@ -247,7 +247,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   }
   double init_frequency = config_getdouble(Dictionary,section,"frequency",0);
   if(init_frequency != 0)
-    frontend->sdr.lock = 1;
+    frontend->lock = 1;
   {
     char *tmp;
     int ret __attribute__ ((unused));
@@ -275,12 +275,12 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     init_frequency = 149e6; // Fallback default
     fprintf(stdout,"Fallback default frequency %'.3lf Hz\n",init_frequency);
   }
-  fprintf(stdout,"Setting initial frequency %'.3lf Hz, %s\n",init_frequency,frontend->sdr.lock ? "locked" : "not locked");
+  fprintf(stdout,"Setting initial frequency %'.3lf Hz, %s\n",init_frequency,frontend->lock ? "locked" : "not locked");
   set_correct_freq(sdr,init_frequency);
   return 0;
 }
 int airspy_startup(struct frontend * const frontend){
-  struct sdrstate * const sdr = (struct sdrstate *)frontend->sdr.context;
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   pthread_create(&sdr->monitor_thread,NULL,airspy_monitor,sdr);
   return 0;
 }
@@ -353,13 +353,13 @@ static int rx_callback(airspy_transfer *transfer){
   }
   frontend->input.samples += sampcount;
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->sdr.output_level = 2 * in_energy / sampcount;
+  frontend->output_level = 2 * in_energy / sampcount;
   frontend->input.samples += sampcount;
   if(Software_agc){
     // Integrate A/D energy
     sdr->energy += in_energy;
     sdr->energy_samples += sampcount;
-    if(sdr->energy_samples >= frontend->sdr.samprate/10){ // Time to re-evaluate after 100 ms
+    if(sdr->energy_samples >= frontend->samprate/10){ // Time to re-evaluate after 100 ms
       sdr->energy /= sdr->energy_samples;
       if(sdr->energy < Low_threshold){
 	if(Verbose)
@@ -432,23 +432,23 @@ static double true_freq(uint64_t freq_hz){
 static double set_correct_freq(struct sdrstate * const sdr,double const freq){
   struct frontend * const frontend = sdr->frontend;
   // sdr->converter refers to an upconverter, so it's added to the frequency we request
-  int64_t const intfreq = round((freq + sdr->converter)/ (1 + frontend->sdr.calibrate));
+  int64_t const intfreq = round((freq + sdr->converter)/ (1 + frontend->calibrate));
   int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
   ret = airspy_set_freq(sdr->device,intfreq - sdr->offset);
   assert(ret == AIRSPY_SUCCESS);
   double const tf = true_freq(intfreq);
-  frontend->sdr.frequency = tf * (1 + frontend->sdr.calibrate) - sdr->converter;
+  frontend->frequency = tf * (1 + frontend->calibrate) - sdr->converter;
   FILE *fp = fopen(sdr->frequency_file,"w");
   if(fp){
-    if(fprintf(fp,"%lf\n",frontend->sdr.frequency) < 0)
+    if(fprintf(fp,"%lf\n",frontend->frequency) < 0)
       fprintf(stdout,"Can't write to tuner state file %s: %s\n",sdr->frequency_file,strerror(errno));
     fclose(fp);
     fp = NULL;
   }
-  return frontend->sdr.frequency;
+  return frontend->frequency;
 }
 double airspy_tune(struct frontend * const frontend,double const f){
-  struct sdrstate * const sdr = frontend->sdr.context;
+  struct sdrstate * const sdr = frontend->context;
   return set_correct_freq(sdr,f);
 }
 
@@ -467,23 +467,23 @@ static void set_gain(struct sdrstate * const sdr,int gainstep){
       int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
       ret = airspy_set_linearity_gain(sdr->device,sdr->gainstep);
       assert(ret == AIRSPY_SUCCESS);
-      frontend->sdr.if_gain = airspy_linearity_vga_gains[tab];
-      frontend->sdr.mixer_gain = airspy_linearity_mixer_gains[tab];
-      frontend->sdr.lna_gain = airspy_linearity_lna_gains[tab];
+      frontend->if_gain = airspy_linearity_vga_gains[tab];
+      frontend->mixer_gain = airspy_linearity_mixer_gains[tab];
+      frontend->lna_gain = airspy_linearity_lna_gains[tab];
     } else {
       int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
       ret = airspy_set_sensitivity_gain(sdr->device,sdr->gainstep);
       assert(ret == AIRSPY_SUCCESS);
-      frontend->sdr.if_gain = airspy_sensitivity_vga_gains[tab];
-      frontend->sdr.mixer_gain = airspy_sensitivity_mixer_gains[tab];
-      frontend->sdr.lna_gain = airspy_sensitivity_lna_gains[tab];
+      frontend->if_gain = airspy_sensitivity_vga_gains[tab];
+      frontend->mixer_gain = airspy_sensitivity_mixer_gains[tab];
+      frontend->lna_gain = airspy_sensitivity_lna_gains[tab];
     }
 #if 0
     send_airspy_status(sdr,1);
 #endif
     if(Verbose)
       printf("New gainstep %d: LNA = %d, mixer = %d, vga = %d\n",gainstep,
-	     frontend->sdr.lna_gain,frontend->sdr.mixer_gain,frontend->sdr.if_gain);
+	     frontend->lna_gain,frontend->mixer_gain,frontend->if_gain);
   }
 }
 
