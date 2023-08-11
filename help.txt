@@ -13,7 +13,6 @@ Down arrow   Decrease by 1
 ctl+L        Redraw screen
 f            Set frequency (eg: 147m435, 10m0, 760k0, 14313000)
 g	     Set gain, dB
-A	     Set AGC attack rate, dB/s
 R	     Set AGC recover rate, dB/s
 T	     Set AGC hang time, s
 H	     Set headroom, dB
