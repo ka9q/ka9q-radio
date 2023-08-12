@@ -131,6 +131,7 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     r = fftwf_import_wisdom_from_filename(Wisdom_file);
     fprintf(stdout,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,r == 1 ? "succeeded" : "failed");
     fftwf_set_timelimit(Fftw_plan_timelimit);
+
     // Start FFT worker thread(s) if not already running
     for(int i=0;i < Nthreads;i++){
       if(FFT.thread[i] == (pthread_t)0)
@@ -305,6 +306,11 @@ int execute_filter_input(struct filter_in * const f){
   job->completion_cond = &f->filter_cond;
 
   // Set up the job and next input buffer
+  // We're assuming that the time-domain pointers we're passing to the FFT are always aligned the same
+  // as we increment the FFT pointer by f->ilen (L) modulo the mirror buffer size.
+  // They seem to be as long as ilen (L) has several factors of 2. For the real->complex transform,
+  // each element is 4 bytes long, so if L is divisible by 8 then the pointers will be aligned to 64 bytes,
+  // the usual size of a cache line. For complex->complex transforms, L has to be divisible by 4.
   switch(f->in_type){
   default:
   case CROSS_CONJ:
