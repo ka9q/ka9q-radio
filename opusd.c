@@ -53,7 +53,7 @@ struct session {
   int samprate; // PCM sample rate Hz
   int channels;
   OpusEncoder *opus;        // Opus encoder handle
-  int silence;              // Currently suppressing silence
+  bool silence;              // Currently suppressing silence
 
   float audio_buffer[BUFFERSIZE];      // Buffer to accumulate PCM until enough for Opus frame
   int audio_write_index;          // Index of next sample to write into audio_buffer
@@ -80,9 +80,9 @@ int IP_tos = 48;              // AF12 << 2
 const char *App_path;
 int Verbose;                  // Verbosity flag (currently unused)
 int Opus_bitrate = 32;        // Opus stream audio bandwidth; default 32 kb/s
-int Discontinuous = 0;        // Off by default
+bool Discontinuous = false;        // Off by default
 int Opus_blocktime = 20;      // Minimum frame size 20 ms, a reasonable default
-int Fec_enable = 0;                  // Use forward error correction
+bool Fec_enable = false;                  // Use forward error correction
 int Application = OPUS_APPLICATION_AUDIO; // Encoder optimization mode
 const float Corner_freq = 300; // Hz - corner frequency in de-emphasis integrator
 const float LF_gain = 4;       // == 12 dB; empirical to make equal subjective voice loudness with flat FM
@@ -101,10 +101,10 @@ int Output_fd = -1;           // Multicast receive socket
 struct session *Sessions;
 pthread_mutex_t Session_protect = PTHREAD_MUTEX_INITIALIZER;
 uint64_t Output_packets;
-char *Name;
-char *Output;
-char *Input;
-char *Status;
+char const *Name;
+char const *Output;
+char const *Input;
+char const *Status;
 
 void closedown(int);
 struct session *lookup_session(const struct sockaddr *,uint32_t);
@@ -140,7 +140,7 @@ struct option Options[] =
 
   };
    
-char Optstring[] = "A:B:I:N:R:S:T:fo:vxp:";
+char const Optstring[] = "A:B:I:N:R:S:T:fo:vxp:";
 
 struct sockaddr_storage Status_dest_address;
 struct sockaddr_storage Status_input_source_address;
@@ -183,7 +183,7 @@ int main(int argc,char * const argv[]){
       Mcast_ttl = strtol(optarg,NULL,0);
       break;
     case 'f':
-      Fec_enable = 1;
+      Fec_enable = true;
       break;
     case 'o':
       Opus_bitrate = strtol(optarg,NULL,0);
@@ -192,7 +192,7 @@ int main(int argc,char * const argv[]){
       Verbose++;
       break;
     case 'x':
-      Discontinuous = 1;
+      Discontinuous = true;
       break;
     case 'l':
       Application = OPUS_APPLICATION_RESTRICTED_LOWDELAY;
@@ -252,10 +252,10 @@ int main(int argc,char * const argv[]){
 
   char description[1024];
   snprintf(description,sizeof(description),"pcm-source=%s",Input); // what if it changes?
-  avahi_start(Name,"_opus._udp",5004,Output,ElfHashString(Output),description,NULL,NULL);
+  int socksize = sizeof(Opus_dest_address);
+  avahi_start(Name,"_opus._udp",5004,Output,ElfHashString(Output),description,&Opus_dest_address,&socksize);
 
   // Can't resolve this until the avahi service is started
-  resolve_mcast(Output,&Opus_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
   if(strlen(iface) == 0 && Default_mcast_iface != NULL)
     strlcpy(iface,Default_mcast_iface,sizeof(iface));
   Output_fd = connect_mcast(&Opus_dest_address,iface,Mcast_ttl,IP_tos);
@@ -507,7 +507,7 @@ void * status(void *p){
 // Warning! do not use "continue" within the loop as this will cause a memory leak.
 // Jump to "endloop" instead
 void *encode(void *arg){
-  struct session *sp = (struct session *)arg;
+  struct session * sp = (struct session *)arg;
   assert(sp != NULL);
   {
     char threadname[16];
@@ -610,7 +610,7 @@ void *encode(void *arg){
     if(pkt->rtp.marker || samples_skipped > 4 * 48000 * Opus_blocktime){ // Opus works on 48 kHz virtual samples
       // reset encoder state after 4 seconds of skip or a RTP marker bit
       opus_encoder_ctl(sp->opus,OPUS_RESET_STATE);
-      sp->silence = 1;
+      sp->silence = true;
     }
     int16_t const *samples = (int16_t *)pkt->data;
     
@@ -630,7 +630,7 @@ void *encode(void *arg){
   }
 }
 
-struct session *lookup_session(const struct sockaddr * const sender,const uint32_t ssrc){
+struct session *lookup_session(struct sockaddr const * const sender,const uint32_t ssrc){
   struct session *sp;
   pthread_mutex_lock(&Session_protect);
   for(sp = Sessions; sp != NULL; sp = sp->next){
@@ -768,10 +768,10 @@ int send_samples(struct session * const sp){
     
     if(sp->silence){
       // Beginning of talk spurt after silence, set marker bit
-      rtp.marker = 1;
-      sp->silence = 0;
+      rtp.marker = true;
+      sp->silence = false;
     } else
-      rtp.marker = 0;
+      rtp.marker = false;
     
     uint8_t output_buffer[Bufsize]; // to hold RTP header + Opus-encoded frame
     uint8_t * const opus_write_pointer = hton_rtp(output_buffer,&rtp);
@@ -793,7 +793,7 @@ int send_samples(struct session * const sp){
       sp->rtp_state_out.bytes += opus_output_bytes;
       sp->rtp_state_out.packets++;
     } else
-      sp->silence = 1;
+      sp->silence = true;
     
     sp->rtp_state_out.timestamp += frame_size * 48000 / sp->samprate; // Always increase timestamp by virtual 48k sample rate
     const int remaining_bytes = sizeof(sp->audio_buffer[0]) * (sp->audio_write_index - sp->channels * frame_size);
