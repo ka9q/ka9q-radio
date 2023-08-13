@@ -21,11 +21,11 @@ configured for your situation.
 Here is an edited excerpt from *radiod@2m.conf* on my system:
 
 >[global]  
->hardware = airspy
->status = 2m.local  
+>hardware = airspy  
+>status = 2m.local 
 
->[airspy]
->device = airspy
+>[airspy]  
+>device = airspy  
 >description = "2m vertical"
 
 >[2m FM]  
