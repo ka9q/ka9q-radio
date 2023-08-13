@@ -1,38 +1,59 @@
 Configuring *ka9q-radio*
 ========================
 
-v0.1 (in progress), May 2022  
+v0.2 (in progress), August 2023  
 Phil Karn, KA9Q
 ---------------
 
 A Linux system can run any number of instances of *radiod* (the
-ka9q-radio radio daemon) subject to resource limits (CPU and Ethernet
+ka9q-radio radio daemon) subject to resource limits (USB, CPU and Ethernet
 capacity).
 
 Each *radiod* instance has a configuration file, e.g.,
 */etc/radio/radiod@2m.conf*, where "2m" is the instance name.  Each
-*radiod* instance reads a raw A/D sample stream from a front end
-module, e.g., *airspyd*. More than one *radiod* instance can read from
-the same front end, but it is most efficient to have just one instance
-per front end handling all the channels.
+*radiod* instance reads a raw A/D sample stream from a radio
+front end, e.g., the Airspy R2 or RX888 MKii.
 
 *radiod* has (too?) many settable parameters but most have reasonable
 defaults and should not need to be changed. Only a few must be
 configured for your situation.
 
-Here is an excerpt from *radiod@2m.conf* on my system:
+Here is an edited excerpt from *radiod@2m.conf* on my system:
 
 >[global]  
->input = 2m-vertical.local  
+>hardware = airspy
 >status = 2m.local  
-  
+
+>[airspy]
+>device = airspy
+>description = "2m vertical"
+
 >[2m FM]  
 >mode = pm  
 >data = 2m-pcm.local  
 >freq = "145m800 144m490 145m200 145m825 145m990 144m310 144m325 144m340 144m355"  
 
-There must be exactly one [global] section in a config file, and it
-applies to the entire *radiod* instance. This [2m FM] section
+There must be exactly one [global] section, and it applies to the
+entire *radiod* instance. Now that the front end handlers are linked
+directly into *radiod*, the device is also configured in this file.
+
+Five SDR front ends are currently supported:
+
+airspy - Airspy R2  
+airspyhf - Airspy HF+  
+funcube - AMSAT UK Funcube Pro+ dongle  
+rx888 - RX888 Mkii (direct conversion only)  
+rtlsdr - Generic RTL-SDR dongle (VHF/UHF only)
+
+The hardware= line in the [global] section specifies the section
+to configure the front end. In this example the name of this section happens
+to match the hardware type, but it need not.
+
+The remaining section (ie., [2m FM]) defines the individual receiver
+channels to be created.  There can be any number of these
+sections.
+
+This [2m FM] section
 configures nine frequency channels sharing the same mode and output
 multicast group.  (The nine channels are still distinguished by RTP
 SSRCs so they can be individually distinguished by multicast
@@ -44,8 +65,8 @@ to the [global] section because they necessarily apply to the entire
 parameters from */usr/local/share/ka9q-radio/modes.conf* (which might
 be better called a "preset table" for this reason). Parameters set in
 *modes.conf* may in turn be individually overridden by settings in the
-[global] section and/or a channel group, with the latter taking
-precedence.
+[global] and channel group sections. The latter takes top priority,
+followed by the [global] section and finally by the *modes.conf* file.
 
 New "modes" can be easily added to *modes.conf*; this is recommended
 if you find yourself changing them often.
@@ -69,7 +90,7 @@ depending on the **overlap** setting.
 Larger values of **blocktime** permit sharper channel filters and are
 more tolerant to CPU scheduling latencies but add latency and incur
 greater CPU overhead. (The relative per-sample CPU cost of an FFT
-increases with the square root of the FFT block size.)
+increases with the logarithm of the FFT block size.)
 
 **overlap** Integer; default 5. Valid only in the [global]
 section. Sets the ratio of old to new samples in each forward FFT. An
@@ -88,18 +109,9 @@ detailed discussion. An **overlap** of 2 might be good for sharper
 filters on HF, as the extra CPU load isn't a problem with lower A/D
 sample rates.
 
-**input** String. Required, no default. Valid only in the [global]
-section. Specifies the DNS name of the
-control/status group of the SDR front end module, e.g., the **status**
-entry in */etc/radio/airspyd.conf*. The name is resolved to an IP
-address with multicast DNS through the Linux *avahi* daemon, so
-*radiod* will block indefinitely if the front end module isn't
-running. Note that it is not necessary to specify the multicast group
-for the front end data stream; *radiod* gets this information from
-the status stream.
-
 **samprate** Integer; default 24000 (24 kHz). Specifies the default
-PCM output sample rate for each receiver channel.
+PCM output sample rate for each receiver channel. Note this is distinct from the
+**samprate** parameter in the hardware section that specifies the sample rate of the A/D converter.
 
 **data** String; no default. Not valid in *modes.conf*.
 Specifies the DNS name of the multicast
@@ -120,7 +132,8 @@ traffic. At a 24 kHz sample rate, each 16-bit mono PCM stream is 384
 kb/s plus header overhead, so this can add up when many channels are
 active.  This is usually OK on 1Gb/s Ethernet, but it can be a problem
 over slower Ethernets or WiFi, especially where the base station does
-not do multicast-to-unicast conversion. In these cases, use the Opus
+not do multicast-to-unicast conversion. To minimize network bandwidth
+when you're simply listening, use the Opus
 transcoder daemon *opusd*.
 
 **mode** String; no default. Not valid in *modes.conf*. Required in
@@ -145,17 +158,11 @@ IP Type of Service (TOS) field used in all outgoing packets. See the
 discussion in airspy.md for further details.
 
 **ttl** Integer; default 1. Not valid in *modes.conf*. Sets the IP
-Time-to_Live field for all outgoing packets.  See the discussion in
-airspy.md.
+Time-to_Live field for all outgoing packets.
 
-**fft-threads** Integer; default 1. Valid only in [global]. Sets the
-number of threads to be used by FFTW3 for the forward FFT shared by
-all the receiver channels.  I added this when I thought multithreading
-was necessary to make *radiod* run in real time on the Raspberry Pi 4;
-having found other ways to improve performance I recommend the default
-except for experimenting. Multithreading FFTW3 may decrease the
-latency of each FFT, but at the cost of greater total CPU time across
-all cores.
+**fft-threads** Integer; default 2. Valid only in [global]. Sets the
+FFT "worker" threads used for the forward FFT shared by all the
+receiver channels.
 
 **rtcp** Boolean; default off. Valid only in [global]. Enable the Real
 Time Protcol (RTP) Control protocol. Incomplete and experimental;
@@ -172,20 +179,20 @@ description file mentioned in the **mode** parameter above. Use the
 default.
 
 **wisdom-file** String; default */var/lib/ka9q-radio/wisdom*. Valid only in [global].
-Specifies
-where FFTW3 should store accumulated "wisdom" information about the
-fastest ways to perform *radiod*'s specific FFT transforms on this
-specific CPU.  FFTW3 also uses the "global wisdom" file
-*/etc/fftw/wisdomf*. Right now I generate the latter file by hand with a fairly esoteric
-set of commands (see FFTW3.md). FFTW *can* generate this information
-automatically when first run but can take *hours* to
-do so. I am working on a better way, e.g., by
-automatically starting wisdom generation in the background so that
-*radiod* starts immediately, though of course it will run faster after wisdom
+Specifies where FFTW3 should store accumulated "wisdom" information
+about the fastest ways to perform *radiod*'s specific FFT transforms
+on this specific CPU.  FFTW3 also uses the "global wisdom" file
+*/etc/fftw/wisdomf*. Right now I generate the latter file by hand with
+a fairly esoteric set of commands (see FFTW3.md). FFTW *can* generate
+this information automatically when first run but can take *hours* to
+do so. I am working on a better way, e.g., by automatically starting
+wisdom generation in the background so that *radiod* starts
+immediately, though of course it will run faster after wisdom
 generation is complete and *radiod* is restarted to use it.
 
 **demod** 3-valued string: "Linear", "FM" and "WFM". Selects one of
-three demodulators in *radiod*. The "Linear" demodulator is for modes
+three main demodulators. 
+The "Linear" demodulator is for modes
 such as AM (envelope detected or coherent), SSB, CW, IQ and
 DSB-SC. The "FM" demodulator is for general purpose frequency
 modulation, including so-called "NBFM" that is actually phase
@@ -197,7 +204,10 @@ channel composite baseband output of a regular FM demodulator with
 appropriate bandwidth and sample rates, but the WFM demodulator is
 more convenient.)
 
-**samprate** Decimal, default 24000 (24 kHz). Set the output sample rate.
+While **demod** may be specified in each frequency group, it is
+easier to use it only in
+*/usr/local/share/ka9q-radio/modes.conf* and invoke one of those
+entries with the "preset" command.
 
 **channels** Integer, default 1. Number of output channels, must be 1
 or 2. Forced to 1 for FM modes, 2 for WFM (Wideband broadcast FM). In
@@ -228,7 +238,7 @@ use a larger **blocksize** or a smaller **overlap** factor (e.g., 2).
 **high** Decimal, default +5000 (+5 kHz). Sets the upper edge of the predetection filter passband.
 
 Both **low** and **high** are set by every entry in *modes.conf*, so
-these defaults just provide a backstop in case an entry lacks them.
+these defaults just provide a way to override them when necessary.
 
 **squelch-open** Decimal, default 8 dB. Sets the SNR at which the squelch opens.
 
@@ -250,7 +260,8 @@ the specified number of block times (e.g., 20 milliseconds each) after
 the SNR drops below the **squelch-close** threshold. The default of 1
 block keeps the ends of packet transmissions from being chopped off,
 while a value of 0 is suitable to completely eliminate audible squelch
-tails in FM voice operation.
+tails in FM voice operation. Because the preset 'pm' in modes.conf
+is usually used for ordinary voice, it sets this to 0. Preset 'fm' (no de-emphasis) sets it to 1.
 
 **headroom** Decimal, default -15 dBFS. Sets the target output audio
 level. Valid in all modes but relevant mainly to the linear
