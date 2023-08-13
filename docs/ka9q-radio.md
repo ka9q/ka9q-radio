@@ -46,7 +46,7 @@ rx888 - RX888 Mkii (direct conversion only)
 rtlsdr - Generic RTL-SDR dongle (VHF/UHF only)
 
 The hardware= line in the [global] section specifies the section
-to configure the front end. In this example the name of this section happens
+that configures the front end. In this example the name of this section happens
 to match the hardware type, but it need not.
 
 The remaining section (ie., [2m FM]) defines the individual receiver
@@ -109,9 +109,13 @@ detailed discussion. An **overlap** of 2 might be good for sharper
 filters on HF, as the extra CPU load isn't a problem with lower A/D
 sample rates.
 
-**samprate** Integer; default 24000 (24 kHz). Specifies the default
-PCM output sample rate for each receiver channel. Note this is distinct from the
-**samprate** parameter in the hardware section that specifies the sample rate of the A/D converter.
+**samprate** Integer; default 24000 (24 kHz) in the [global] and
+channel group sections; hardware-dependent in the front end section.
+In the former, specifies the default PCM output sample rate for each
+receiver channel. Note! These are two distinct uses of the
+**samprate** keyword; in the hardware section it specifies the sample
+rate of the A/D converter. In most cases you should use the default
+A/D sample rate.
 
 **data** String; no default. Not valid in *modes.conf*.
 Specifies the DNS name of the multicast
@@ -126,8 +130,8 @@ distinguished by its 32-bit RTP SSRC (Real Time Protocol Stream Source
 Identifier), which must be unique for an instance of
 *radiod*. However, consider that Ethernet switches, routers and host
 handle multicast group subscriptions by their IP addresses only, so an
-application (e.g., *monitor*) will receive and discard traffic from
-any unwanted SSRCs sharing an IP multicast address with the desired
+application (e.g., *pcmcat*) will discard traffic from
+any unwanted SSRCs sharing an IP multicast address with desired
 traffic. At a 24 kHz sample rate, each 16-bit mono PCM stream is 384
 kb/s plus header overhead, so this can add up when many channels are
 active.  This is usually OK on 1Gb/s Ethernet, but it can be a problem
@@ -143,15 +147,13 @@ set of parameters from the specified section of
 for a description of the standard definitions.
 
 **status** String; No default. Valid only in [global]. Specifies the
-domain name of the metadata multicast group.  In a change from earlier
-versions there is now only one status group per instance of *radiod*,
-and status information is multicast only in response to a command
-(which may be empty). Not mandatory, but unset there will be no way to
-dynamically create new receiver channels or to control or monitor
-statically configured channels. *radiod* will deterministically hash
-this string to generate and advertise an IPv4 multicast address in the
-239.0.0.0/8 block, along with a SRV DNS record of type _ka9q-ctl._udp
-with this name.
+domain name of the control/status multicast group used for all
+channels in this instance of *radiod8.  Not mandatory, but unset there
+will be no way to dynamically create new receiver channels or to
+control or monitor statically configured channels. *radiod* will
+deterministically hash this string to generate and advertise an IPv4
+multicast address in the 239.0.0.0/8 block, along with a SRV DNS
+record of type _ka9q-ctl._udp with this name.
 
 **tos** Integer; default 48. Not valid in *modes.conf*.  Sets the
 IP Type of Service (TOS) field used in all outgoing packets. See the
@@ -176,7 +178,7 @@ VLC. Leave off for now.
 **mode-file** String; default */usr/local/share/ka9q-radio/modes.conf*. Valid only in [global].
 Specifies the mode
 description file mentioned in the **mode** parameter above. Use the
-default.
+default when possible.
 
 **wisdom-file** String; default */var/lib/ka9q-radio/wisdom*. Valid only in [global].
 Specifies where FFTW3 should store accumulated "wisdom" information
@@ -191,7 +193,8 @@ immediately, though of course it will run faster after wisdom
 generation is complete and *radiod* is restarted to use it.
 
 **demod** 3-valued string: "Linear", "FM" and "WFM". Selects one of
-three main demodulators. 
+three main demodulators built into *radiod*, distinct from the **mode** entries
+that select an entry in */usr/local/share/ka9q-radio/modes.conf*. 
 The "Linear" demodulator is for modes
 such as AM (envelope detected or coherent), SSB, CW, IQ and
 DSB-SC. The "FM" demodulator is for general purpose frequency
