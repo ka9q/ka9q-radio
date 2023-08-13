@@ -7,17 +7,17 @@ Phil Karn, KA9Q
 Note: *ka9q-radio* was substantially restructured during the summer of 2023 to merge the front end
 drivers into *radiod*. The drivers are no longer separate programs using multicast IP to communicate
 with *radiod*. This changes the configuration process considerably; what used to be a separate config file
-(.e.g, */etc/radio/airspyd.conf*) is now a one section in the *radiod* configuration file.
+(e.g., */etc/radio/airspyd.conf*) is now a section in the *radiod* configuration file.
 
-Here is an excerpt of the relevant sections from one of my own *radiod* config files that using the Airspy R2.
+Here is an excerpt of the relevant sections from one of my own *radiod* config files for the Airspy R2.
 It is in 'ini' format.
 
-[global]
-hardware = airspy
+[global]  
+hardware = airspy  
 status = 2m.local
 
-[airspy]
-device = airspy
+[airspy]  
+device = airspy  
 description = "2m vertical"
 
 (The sections defining groups of receiver channels are omitted. See **ka9q-radio.md** for details on the options
