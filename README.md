@@ -76,7 +76,8 @@ requirement is that the impulse response of the channel
 filters be shorter than the (configurable) overlap interval in the forward
 FFT.
 
-Updated August 2023
-Phil Karn, KA9Q
+Updated August 2023  
+Phil Karn, KA9Q  
 karn@ka9q.net
+
 
