@@ -123,6 +123,20 @@ receiver channel. Note! These are two distinct uses of the
 rate of the A/D converter. In most cases you should use the default
 A/D sample rate.
 
+**iface**  [global only, no default] Optional, but recommended. This specifies the
+network interface to be used for all multicast network traffic from
+*radiod*. If not specified, the default
+Linux multicast interface will be used. *This may not be what you
+want!* Many computers, including most recent Raspberry Pis have
+both a wired Ethernet interface (usually eth0) and a WiFi interface
+(wlan0). If wlan0 comes up before eth0, which can happen if you have
+a "smart" Ethernet switch with the spanning tree protocol (STP)
+enabled, the Linux kernel may pick it as the default multicast
+interface. Since most WiFi networks handle multicast traffic poorly,
+this will probably result in lost traffic and erratic operation on
+your entire network, not just for *ka9q-radio*.
+
+
 **data** String; no default. Not valid in *modes.conf*.
 Specifies the DNS name of the multicast
 group to be used for receiver output streams. If not specified in the
