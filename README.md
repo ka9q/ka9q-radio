@@ -5,7 +5,8 @@ several respects:
 1. Efficient multichannel reception. A single Raspberry Pi 4 can
 simultaneously demodulate, in real time, every NBFM channel on a
 VHF/UHF band (i.e., several hundred) with plenty of real time left
-over.
+over. A mid-range x86 can handle the RX888 MkII at full sample rate
+(129.6 MHz).
 
 2. All I/O (both signal and control/status) uses IP multicasting.
 This makes it easy for more than one module, on the same computer or
@@ -26,17 +27,20 @@ or decode and relay digital messages (e.g., APRS, WSPR, Horus 4FSK,
 radiosondes). These programs are automatically launched by the (new)
 Linux standard system manager program *systemd*.
 
-The core component is the *radiod* daemon. It accepts a (multicast) raw
-A/D stream from a front end module and executes a configured set of
-digital downconverters and simple demodulators for various linear and
-FM modes, including AM, SSB, CW and a raw IQ mode intended mainly for
-use by other programs.
+The core component is the *radiod* daemon. It reads an A/D stream from
+a front end and executes a configured set of digital downconverters
+and simple demodulators for various linear and FM modes, including AM,
+SSB, CW and a raw IQ mode intended mainly for use by other programs.
 
-Separate programs talk directly to several makes of SDR front end
-hardware and generates the I/Q stream for *radiod*. These programs
-currently include *airspyd* (Airspy R2), *airspyhfd* (Airspy HF+),
-*rtlsdrd* (generic RTL-SDR dongles), *funcubed* (AMSAT UK Funcube Pro+),
-*hackrf* (Great Scott Gadgets Hack RF One, receive only) and *rx888d* (RX-888 Mk II).
+Previous versions of ka9q-radio had separate programs (e.g.,
+*airspyd*) for talking to several makes of SDR front end hardware and
+generated an I/Q input stream for *radiod*. Because of performance
+problems, configuration complexity and general lack of utility these
+separate programs have been obsoleted and the front end drivers built
+directly into *radiod*. Support is currently provided for generic
+RTL-SDR dongles, the Airspy R2, Airspy HF+, AMSAT UK Funcube Pro+ and
+RX-888 Mk II. Support will be forthcoming for the SDRPlay and the
+HackRF (receive only).
 
 Two very rudimentary programs are provided for interactive use;
 *monitor* listens to one or more demodulated audio streams and
@@ -70,6 +74,7 @@ requirement is that the impulse response of the channel
 filters be shorter than the (configurable) overlap interval in the forward
 FFT.
 
+Updated August 2023
 Phil Karn, KA9Q
 karn@ka9q.net
 
