@@ -6,7 +6,8 @@ several respects:
 simultaneously demodulate, in real time, every NBFM channel on a
 VHF/UHF band (i.e., several hundred) with plenty of real time left
 over. A mid-range x86 can handle the RX888 MkII at full sample rate
-(129.6 MHz).
+(129.6 MHz), receiving multiple channels sumultaneously on all
+LF/MF/HF ham bands (or anything else) plus 6 meters.
 
 2. All I/O (both signal and control/status) uses IP multicasting.
 This makes it easy for more than one module, on the same computer or
@@ -23,24 +24,25 @@ kind of SDR that runs as a component serving other applications.
 The core components in *ka9q-radio* run as Linux 'daemons' (background
 programs) with little (or no) user interaction. Turnkey systems can be
 configured to, e.g., demodulate and record every FM channel on a band,
-or decode and relay digital messages (e.g., APRS, WSPR, Horus 4FSK,
+or decode, log and/or relay digital messages (e.g., APRS, FT-8, WSPR, Horus 4FSK,
 radiosondes). These programs are automatically launched by the (new)
 Linux standard system manager program *systemd*.
 
-The core component is the *radiod* daemon. It reads an A/D stream from
-a front end and executes a configured set of digital downconverters
-and simple demodulators for various linear and FM modes, including AM,
-SSB, CW and a raw IQ mode intended mainly for use by other programs.
+The core component is the *radiod* daemon. It reads an A/D stream
+directly from a front end and executes a configured set of digital
+downconverters and simple demodulators for various linear and FM
+modes, including AM, SSB, CW and a raw IQ mode intended mainly for use
+by other programs.
 
 Previous versions of ka9q-radio had separate programs (e.g.,
 *airspyd*) for talking to several makes of SDR front end hardware and
-generated an I/Q input stream for *radiod*. Because of performance
-problems, configuration complexity and general lack of utility these
-separate programs have been obsoleted and the front end drivers built
-directly into *radiod*. Support is currently provided for generic
-RTL-SDR dongles, the Airspy R2, Airspy HF+, AMSAT UK Funcube Pro+ and
-RX-888 Mk II. Support will be forthcoming for the SDRPlay and the
-HackRF (receive only).
+generated an I/Q multicast stream for *radiod*. Because of performance
+problems, code and configuration complexity and general lack of
+utility these separate programs have been obsoleted and the front end
+drivers built directly into *radiod*. Support is currently provided
+for generic RTL-SDR dongles, the Airspy R2, Airspy HF+, AMSAT UK
+Funcube Pro+ and RX-888 Mk II. Support will be forthcoming for the
+SDRPlay and the HackRF (receive only).
 
 Two very rudimentary programs are provided for interactive use;
 *monitor* listens to one or more demodulated audio streams and
