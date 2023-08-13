@@ -125,7 +125,7 @@ as the reaction time (tens of milliseconds) of the human acoustic
 reflex (see [Wikipedia](https://en.wikipedia.org/wiki/Acoustic_reflex)).
 This might just be an interesting coincidence.
 
-I will probably add a feature to increase gain more rapidly when the
+I will probably increase gain more rapidly when the
 audio output is very low. This will keep the receiver from staying
 deaf for a long time while it recovers from a very loud signal.
 Experimentation here is needed.
