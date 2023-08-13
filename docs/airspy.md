@@ -20,8 +20,8 @@ status = 2m.local
 device = airspy  
 description = "2m vertical"
 
-(The sections defining groups of receiver channels are omitted. See **ka9q-radio.md** for details on the options
-for this section.
+The sections defining groups of receiver channels are omitted. See **ka9q-radio.md** for details on the options
+for those sections.
 
 Multiple instances of *radiod* can run on the same system, provided each has its own front end (they cannot be shared).
 You can have as many as you want, subject to your CPU and USB limits.
@@ -32,18 +32,18 @@ own USB host controller.)
 In the excerpt above, the **hardware** entry in the [global] section specifies the section containing Airspy configuration
 information. (In this example the name of the hardware section happens to be the same as the device type, but it is not essential.)
 
-Only one entry is mandatory: **device**. This specifies the front end hardware type, i.e, "airspy" (which means an Airspy R2).
+Only one entry is mandatory: **device**. This specifies the front end hardware type, i.e, "airspy" (which means an Airspy R2) or "airspyhf" (the Airspy HF+).
 The defaults should be good for most cases, but you can override them as needed.
 
 **description** Optional. Gives free-format text that
-will be advertised through the *radiod*  program to the
+will be advertised through the *radiod* program to the
 control/status stream and the *control* program that
 listens to it. It will also be advertised in DNS SRV (service
 discovery) records by the Linux mDNS daemon *avahi*, so keep
 it short but descriptive.
 
-**serial** Optional. If not specified, *radiod* will use the first Airspy R2 device discovered. Since this is probably
-not what you want, you should explicitly specify the serial number if more than one Airspy is present.
+**serial** Optional. If not specified, *radiod* uses the first Airspy R2 or Airspy HF+ device discovered. Since this is probably
+not what you want, you should explicitly specify the serial number if more than one is present.
 This must exactly match the Airspy 64-bit serial
 number, in hex (the leading 0x is optional).  This can be read from
 the Airspy R2 with the *airspy_info* utility in the *airspy* Debian
