@@ -9,6 +9,8 @@ Prerequisites
 Building this package on Debian requires the following packages be installed with 'apt install':
 
 build-essential
+make
+gcc
 libairspy-dev
 libairspyhf-dev
 libavahi-client-dev
@@ -25,6 +27,19 @@ libusb-dev
 portaudio19-dev
 uuid-dev
 
+Although not needed to build ka9q-radio, I find these additional
+packages useful for working with multicast audio:
+
+sox
+libsox-fmt-all
+opus-tools
+flac
+avahi-utils
+avahi-browse
+molly-guard (if you run your system remotely)
+tcpdump
+
+
 Then:
 
 $ ln -s Makefile.[linux|pi] Makefile
@@ -33,7 +48,7 @@ $ sudo make install
 
 This will write into the following directories:
 
-/usr/local/sbin	     	 	   daemon binaries (e.g., 'radio')
+/usr/local/sbin	     	 	   daemon binaries (e.g., 'radiod')
 /usr/local/bin		 	   application programs (e.g., 'control')
 /usr/local/share/ka9q-radio	   support files (e.g., 'modes.conf')
 /var/lib/ka9q-radio		   application state files (e.g., tune-*)
@@ -43,6 +58,9 @@ This will write into the following directories:
 /etc/fftw			   FFTW "wisdom" files (i.e., wisdomf)
 /etc/radio			   program config files (e.g., radio@2m.conf)
 
-It will also create several special system users and groups.
+It will also create several special system users and groups so that
+the daemons don't have to run with root permissions. I recommend that
+you add your own user ID to the "radio" group, which is applied to
+most of the relevant installed directories and files.
 
 Read the file FFTW3.md on pre-computing efficient transforms for the FFTs in 'radio'.
