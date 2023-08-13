@@ -37,6 +37,12 @@ There must be exactly one [global] section, and it applies to the
 entire *radiod* instance. Now that the front end handlers are linked
 directly into *radiod*, the device is also configured in this file.
 
+This document only describes parameters in the [global] and
+individual channel group sections. Hardware parameters are discussed
+in separate documents (to be written). Be careful with the
+**samprate** parameter as it has a different meaning in a hardware
+section, i.e., it sets the A/D rate rather than the output rate.
+
 Five SDR front ends are currently supported:
 
 airspy - Airspy R2  
@@ -65,8 +71,8 @@ to the [global] section because they necessarily apply to the entire
 parameters from */usr/local/share/ka9q-radio/modes.conf* (which might
 be better called a "preset table" for this reason). Parameters set in
 *modes.conf* may in turn be individually overridden by settings in the
-[global] and channel group sections. The latter takes top priority,
-followed by the [global] section and finally by the *modes.conf* file.
+[global] and channel group sections. The channel group section takes priority,
+followed by the [global] section and finally the *modes.conf* file.
 
 New "modes" can be easily added to *modes.conf*; this is recommended
 if you find yourself changing them often.
@@ -148,7 +154,7 @@ for a description of the standard definitions.
 
 **status** String; No default. Valid only in [global]. Specifies the
 domain name of the control/status multicast group used for all
-channels in this instance of *radiod8.  Not mandatory, but unset there
+channels in this instance of *radiod*.  Not mandatory, but unset there
 will be no way to dynamically create new receiver channels or to
 control or monitor statically configured channels. *radiod* will
 deterministically hash this string to generate and advertise an IPv4
@@ -273,14 +279,14 @@ measurements are averages over a block time (default 20 ms), so this
 setting minimizes clipping on signals with the usual Gaussian (noise like) statistics.
 
 **shift** Decimal, default 0 Hz. Linear demodulator only, applicable
-mainly to CW operation.  Sets the frequency shift to be applied after
+mainly to CW operation.  Sets the frequency shift applied after
 downconversion, baseband filtering and PLL tracking, if enabled. Not
 the same as offsetting the predetection filter and adjusting the
 tuning frequency to compensate because those operations are performed
 before the 0-Hz PLL while the **shift** value is applied last.
 
 **recovery-rate** Decimal, default +20 dB/s. Linear demodulator
-only. Specifies the rate at which gain is to be recovered when the
+only. Specifies the rate at which gain is increased when the
 input signal level has decreased and the **hang-time** has expired.
 
 **hang-time** Decimal, default 1.1 s. Linear demodulator only. Specifies the time to hold
