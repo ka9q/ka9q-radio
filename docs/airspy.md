@@ -30,7 +30,7 @@ it's a USB 2.0 -- not 3.0 -- device so each will have to be on its
 own USB host controller.)
 
 In the excerpt above, the **hardware** entry in the [global] section specifies the section containing Airspy configuration
-information. (The name of the hardware section happens to be the same as the device type, but it is not essential.
+information. (In this example the name of the hardware section happens to be the same as the device type, but it is not essential.)
 
 Only one entry is mandatory: **device**. This specifies the front end hardware type, i.e, "airspy" (which means an Airspy R2).
 The defaults should be good for most cases, but you can override them as needed.
@@ -86,11 +86,11 @@ This sets the A/D sample rate. Note that the Airspy R2 is
 typically described as producing complex samples at 10 MHz. However,
 there's actually only one A/D converter that can sample at 20 MHz; the
 real->complex conversion and half-rate decimation is performed in the airspy library. Since *radiod* performs
-a FFT on its input stream that can be either real or
-complex inputs, it is considerably faster to bypass the library
+a FFT on its input stream that can accept either real or
+complex samples, it is considerably faster to bypass the library
 conversion and accept the raw real-valued samples.
 On the other hand, the current Airspy HF+ library readily supports only complex output samples.
-The supported sample rates are logged in */var/log/syslog* when the device is initialized
+The supported sample rates are logged in */var/log/syslog* when *radiod* starts and the device is initialized
 
 Airspy R2-only options
 --------------------

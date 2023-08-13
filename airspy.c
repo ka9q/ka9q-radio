@@ -242,7 +242,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   {
     float const dh = config_getdouble(Dictionary,section,"agc-high-threshold",-10.0);
     High_threshold = dB2power(-fabs(dh));
-    float const dl = config_getdouble(Dictionary,section,"agc-low-threshold",-50.0);
+    float const dl = config_getdouble(Dictionary,section,"agc-low-threshold",-40.0);
     Low_threshold = dB2power(-fabs(dl));
   }
   double init_frequency = config_getdouble(Dictionary,section,"frequency",0);
