@@ -21,7 +21,7 @@ EXECS=monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl sho
 
 AFILES=bandplan.txt help.txt modes.conf id.txt monitor-help.txt SDDC_FX3.img
 
-SYSTEMD_FILES=cwd.service hackrf@.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service
+SYSTEMD_FILES=cwd.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service sdrplayd@.service ft8-decoded.service
 
 UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules 99-rx888.rules
 
