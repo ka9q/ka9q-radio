@@ -1,5 +1,5 @@
-*ka9q-radio* installation notes
-KA9Q, 13 August 2023
+*ka9q-radio* installation notes  
+13 August 2023
 ===============================
 
 The preferred platform is Debian Linux 12 ("bookworm") on the x86-64 and
