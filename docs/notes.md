@@ -8,6 +8,14 @@ the 64-bit "bullseye" version of Raspberry Pi OS for the Raspberry Pi
 customizations. As of this writing it has not yet incorporated Debian version 12.)
 Older versions may work, but you may have to fix some problems.
 
+Front end drivers now merged into *radiod*
+
+*ka9q-radio* was substantially restructured during the summer of 2023 to merge the front end
+drivers into *radiod*. The drivers are no longer separate programs using multicast IP to communicate
+with *radiod*. This considerably improves performance and simplifies configuration; what used to be a separate config file
+(e.g., */etc/radio/airspyd.conf*) is now a section in the *radiod* configuration file. The separate drivers
+(*airspyd*, etc) are gone.
+
 Here's an incomplete list of nits and gotchas I've run into while
 installing *ka9q-radio* on various systems.
 
