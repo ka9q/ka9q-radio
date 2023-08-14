@@ -1,12 +1,12 @@
 *ka9q-radio* installation notes
-KA9Q, 9 May 2022
+KA9Q, 13 August 2023
 ===============================
 
-The preferred platform is Debian Linux "bullseye" on the x86-64 and
+The preferred platform is Debian Linux 12 ("bookworm") on the x86-64 and
 the 64-bit "bullseye" version of Raspberry Pi OS for the Raspberry Pi
-4. (The Raspberry Pi OS is essentially Debian Linux with
-customizations.)  Older versions may work, but you may have to fix
-some problems.
+4. (The Raspberry Pi OS is essentially Debian Linux 11 with
+customizations. As of this writing it has not yet incorporated Debian version 12.)
+Older versions may work, but you may have to fix some problems.
 
 Here's an incomplete list of nits and gotchas I've run into while
 installing *ka9q-radio* on various systems.
