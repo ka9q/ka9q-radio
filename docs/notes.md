@@ -64,11 +64,11 @@ is still my VHF/UHF workhorse. This may change soon in favor of
 the RX-888 (see below).
 
 The Airspy Mini looks just like an Airspy R2 to software, so it's also
-supported.  Although it advertises a lower sample rate, you can force
-it to the 20 Ms/s (real) rate of the Airspy R2. But it's in a smaller
-package that gets very hot, so that's probably why the specified
-sample rate is lower.  I wouldn't push it without adequate heat
-dissipation.
+supported.  Although it advertises a lower sample rate (12 Ms/s real)
+you can force it to the 20 Ms/s (real) rate of the Airspy R2. But it's
+in a smaller package that gets very hot, so that's probably why the
+specified sample rate is lower.  Don't push it without adequate
+heat dissipation.
 
 The Airspy HF+ works well, with a good built-in AGC and
 wide dynamic range. But it has a maximum sample rate of 912 ks/s
@@ -93,11 +93,24 @@ HF. E.g., a California Highway Patrol repeater near me on 39.8 MHz
 aliases onto WWV at 25 MHz. You'll need an external 30 MHz low pass
 filter (or two).
 
-The RX-888 has a 16-bit A/D. That much dynamic range is almost
-overkill for HF radio, but proper gain setting is still
-important. Right now you can manually set the analog gain and
-attenuation in the config file, but there is as yet no software AGC as
-on the Airspy R2. I usually go for an A/D output level of -25 dBFS RMS.
+The RX-888 has a LTC2208 16-bit A/D. That much dynamic range (about
+100 dB) is probably overkill for HF radio because the thermal noise
+floor of the AD8370 variable gain amplifier swamps the A/D quantizaton
+noise. But proper gain setting is still important to minimize the
+overall noise figure. While background noise is so high on MF and
+lower HF that receiver noise figure (NF) is almost irrelevant, it's
+much more important at high HF where background noise is much
+lower. If you increase gain for good sensitivity on the high end, you
+may be easily overdriven by AM broadcast stations. An AM blocking
+filter will help, but the real answer is a "shelving filter" shaped to
+the entire spectrum seen by the RX-888. I know of one under
+development but I don't want to mention it until the designer is
+ready.
+
+Right now you can manually set the analog gain and attenuation in the
+config file, but there is as yet no software AGC as on the Airspy
+R2. I usually go for an A/D output level of -25 dBFS RMS. More experimentation
+is needed.
 
 The RX-888 MkII includes a VHF/UHF tuner that *should* be able to
 functionally replace the Airspy R2, but I don't support it yet; right
@@ -118,12 +131,12 @@ The low sample rate demands minimal CPU.
 
 The RTL-SDR is very popular because it's cheap, and while I
 support it in *ka9q-radio* I haven't actually used it much myself. Its
-main drawback is its narrow 8-bit A/D and limited dynamic range. Most
+main drawback is a narrow 8-bit A/D and limited dynamic range. Most
 of my front end handlers have (optional) software AGC but there's
-still no substitute for dynamic range, especially if you have strong
+still no substitute for sufficient dynamic range, especially if you have strong
 intermittent signals.
 
-I have a HackRF and I used to use it with *ka9q-radio* but I set it
+I have a HackRF that I used to use with *ka9q-radio* but I set it
 aside when I got the Airspy R2. When I find time I will dust it off
 and re-integrate it into the current package.
 
@@ -136,7 +149,6 @@ don't feel particularly inspired to support a product whose vendor
 goes out of their way to make it so difficult. If someone can provide
 an open-source substitute for the proprietary SDRPlay library, I'll be
 happy to reconsider supporting it.
-
 
 Front end drivers now merged into *radiod*
 ------------------------------------------
