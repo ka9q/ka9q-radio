@@ -162,7 +162,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const Dictio
   frontend->max_IF = 0.47 * frontend->samprate; // Just an estimate - get the real number somewhere
   frontend->isreal = true; // Make sure the right kind of filter gets created!
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
-  frontend->gain = dB2voltage(frontend->rf_gain - frontend->rf_atten);
   frontend->lock = true; // Doesn't tune in direct conversion mode
   {
     char const *p = config_getstring(Dictionary,section,"description","rx888");
@@ -277,7 +276,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
   }
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
-  frontend->input.samples += sampcount;
+  frontend->samples += sampcount;
   if(!Stop_transfers) {
     if(libusb_submit_transfer(transfer) == 0)
       sdr->xfers_in_progress++;
@@ -374,25 +373,28 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     struct libusb_device_descriptor desc;
     memset(&desc,0,sizeof(desc));
     libusb_get_device_descriptor(dev,&desc);
+    char manufacturer[100],product[100],serial[100];
+    memset(manufacturer,0,sizeof(manufacturer));
+    memset(product,0,sizeof(product));
+    memset(serial,0,sizeof(serial));
+	   
     if(desc.iManufacturer){
-      char string[100];
-      memset(string,0,sizeof(string));
-      int ret = libusb_get_string_descriptor_ascii(sdr->dev_handle,desc.iManufacturer,(unsigned char *)string,sizeof(string));
+      int ret = libusb_get_string_descriptor_ascii(sdr->dev_handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer));
       if(ret > 0)
-	fprintf(stdout,"Manufacturer: %s\n",string);
+	fprintf(stdout,"Manufacturer: %s",manufacturer);
     }
     if(desc.iProduct){
-      char string[100];
-      int ret = libusb_get_string_descriptor_ascii(sdr->dev_handle,desc.iProduct,(unsigned char *)string,sizeof(string));
+      int ret = libusb_get_string_descriptor_ascii(sdr->dev_handle,desc.iProduct,(unsigned char *)product,sizeof(product));
       if(ret > 0)
-	fprintf(stdout,"Product: %s\n",string);
+	fprintf(stdout," Product: %s",product);
     }
     if(desc.iSerialNumber){
-      char string[100];
-      int ret = libusb_get_string_descriptor_ascii(sdr->dev_handle,desc.iSerialNumber,(unsigned char *)string,sizeof(string));
+      int ret = libusb_get_string_descriptor_ascii(sdr->dev_handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial));
       if(ret > 0)
-	fprintf(stdout,"Serial: %s\n",string);
+	fprintf(stdout," Serial: %s\n",serial);
     }
+    fprintf(stdout,"\n");
+    
   }
   {
     int const ret = libusb_claim_interface(sdr->dev_handle, sdr->interface_number);

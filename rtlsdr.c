@@ -254,7 +254,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
   }
   write_cfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->output_level = energy / sampcount;
-  frontend->input.samples += sampcount;
+  frontend->samples += sampcount;
 }
 #if 0 // use this later
 static void do_rtlsdr_agc(struct sdrstate * const sdr){

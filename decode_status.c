@@ -129,7 +129,7 @@ int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length)
       frontend->input.metadata_packets = decode_int(cp,optlen);
       break;
     case INPUT_SAMPLES:
-      frontend->input.samples = decode_int(cp,optlen);
+      frontend->samples = decode_int(cp,optlen);
       break;
     case INPUT_DROPS:
       frontend->input.rtp.drops = decode_int(cp,optlen);

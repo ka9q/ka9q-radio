@@ -403,7 +403,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   else
     encode_int64(&bp,GPS_TIME,gps_time_ns());
 
-  encode_int64(&bp,INPUT_SAMPLES,frontend->input.samples);  
+  encode_int64(&bp,INPUT_SAMPLES,frontend->samples);  
   encode_int32(&bp,INPUT_SAMPRATE,frontend->samprate); // integer Hz
   encode_int32(&bp,FE_ISREAL,frontend->isreal ? true : false);
   encode_double(&bp,CALIBRATE,frontend->calibrate);

@@ -254,7 +254,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
     in_energy += x * x;
     wptr[i] = x;
   }
-  frontend->input.samples += sampcount;
+  frontend->samples += sampcount;
   write_cfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->output_level = in_energy / sampcount;
   return 0;

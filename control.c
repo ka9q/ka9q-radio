@@ -42,7 +42,7 @@
 #include "config.h"
 
 static int const DEFAULT_IP_TOS = 48;
-static int const DEFAULT_MCAST_TTL = 1;
+static int const DEFAULT_MCAST_TTL = 1; // LAN only, no routers
 
 float Refresh_rate = 0.1f;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
@@ -52,14 +52,9 @@ char const *Modefile = "modes.conf"; // make configurable!
 dictionary *Mdict;
 
 struct frontend Frontend;
-char Iface[1024]; // Multicast interface
-bool FE_address_set;
-struct sockaddr_storage FE_status_address;
+
 struct sockaddr_storage Metadata_source_address;      // Source of metadata
-int Source_set;
 struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
-uint64_t Commands;
-uint32_t Command_tag;
 float Blocktime;
 int Ctl_fd,Status_fd;
 uint64_t Metadata_packets;
@@ -321,7 +316,7 @@ static int dcompare(void const *a,void const *b){
 uint32_t Ssrc = 0;
 
 
-struct demod Demod_actual;
+struct demod Demod;
 
 // Thread to display receiver state, updated at 10Hz by default
 // Uses the ancient ncurses text windowing library
@@ -363,6 +358,7 @@ int main(int argc,char *argv[]){
     Ssrc = arc4random();
     fprintf(stderr,"-s missing, generating random ssrc: %'u\n",Ssrc);
   }
+  char Iface[1024]; // Multicast interface
   resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,Iface,sizeof(Iface));
   Status_fd = listen_mcast(&Metadata_dest_address,Iface);
   if(Status_fd == -1){
@@ -409,7 +405,7 @@ int main(int argc,char *argv[]){
 
   setup_windows();
 
-  struct demod *const demod = &Demod_actual;
+  struct demod *const demod = &Demod;
   memset(demod,0,sizeof(*demod));
   init_demod(demod);
 
@@ -417,15 +413,15 @@ int main(int argc,char *argv[]){
     Frontend.min_IF = Frontend.max_IF = NAN;
 
   /* Main loop:
-     Read radio status from network with 100 ms timeout to serve as polling rate
-     Update local status
-     Repaint display windows
+     Send poll if we haven't received one in our refresh interval
+     See if anything has arrived (use short timeout)
+     If there's a response, update local status & repaint display windows
      Poll keyboard and process user commands
   */
 
-  // In case there's another control program on the same channel,
-  // randomize polls over 50 ms and restart our poll timer if an answer
-  // is seen in response to another poll
+  // Randomize polls over 50 ms in case someone else is also polling
+  // This avoids possible synchronized back-to-back polls
+  // This is a common technique in multicast protocols (e.g., IGMP queries)
 
   int64_t const random_interval = 50000000; // 50 ms
   // Pick soon but still random times for the first polls
@@ -446,15 +442,12 @@ int main(int argc,char *argv[]){
       FD_SET(Status_fd,&fdset);
       int const n = Status_fd+1;
       
-      // Receive timeout
-      int64_t timeout = next_radio_poll - gps_time_ns();
-      
-      // Immediate socket poll if timeout is negative
-      if(timeout < 0)
-	timeout = 0;
       {
+	// Check receive socket every 100 ms regardless of poll interval,
+	// mainly in case we've sent a command and are getting an (immediate) response
+	// also if some other control program is polling more frequently (might as well use the responses)
 	struct timespec ts;
-	ns2ts(&ts,timeout);
+	ns2ts(&ts,BILLION/10); 
 	pselect(n,&fdset,NULL,NULL,&ts,NULL); // Don't really need to check the return
       }
       if(FD_ISSET(Status_fd,&fdset)){
@@ -469,10 +462,10 @@ int main(int argc,char *argv[]){
 	  // Save source only if it's a response
 	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
 	  decode_radio_status(demod,buffer+1,length-1);
-	  next_radio_poll = random_time(radio_poll_interval,random_interval);
+	  next_radio_poll = random_time(radio_poll_interval,random_interval); // Update poll interval
 	  
-	  if(Frontend.samprate != 0)
-	    Blocktime = 1000.0f * Frontend.L / Frontend.samprate;
+	  if(Blocktime == 0 && Frontend.samprate != 0)
+	    Blocktime = 1000.0f * Frontend.L / Frontend.samprate; // Set the firat time
 	}
       }
     }
@@ -914,7 +907,7 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
     case EOL:
       break;
     case CMD_CNT:
-      Commands = decode_int(cp,optlen);
+      Frontend.commands = decode_int(cp,optlen);
       break;
     case DESCRIPTION:
       decode_string(cp,optlen,Frontend.description,sizeof(Frontend.description));
@@ -926,7 +919,7 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
       Frontend.samprate = decode_int(cp,optlen);
       break;
     case INPUT_SAMPLES:
-      Frontend.input.samples = decode_int(cp,optlen);
+      Frontend.samples = decode_int(cp,optlen);
       break;
     case OUTPUT_DATA_SOURCE_SOCKET:
       decode_socket(&demod->output.data_source_address,cp,optlen);
@@ -1026,7 +1019,7 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
       demod->output.samples = decode_int(cp,optlen);
       break;
     case COMMAND_TAG:
-      Command_tag = decode_int(cp,optlen);
+      Frontend.command_tag = decode_int(cp,optlen);
       break;
     case RADIO_FREQUENCY:
       demod->tune.freq = decode_double(cp,optlen);
@@ -1276,9 +1269,7 @@ void display_sig(WINDOW *w,struct demod const *demod){
   float ad_dB = power2dB(Frontend.output_level);
   float fe_gain_dB = 0;
   // This *really* needs to be cleaned up. But the various front ends use different analog gain stages
-  if(Frontend.gain > 0)
-    fe_gain_dB = voltage2dB(Frontend.gain);
-  else if(Frontend.lna_gain != 0 || Frontend.mixer_gain != 0 || Frontend.if_gain != 0)
+  if(Frontend.lna_gain != 0 || Frontend.mixer_gain != 0 || Frontend.if_gain != 0)
     fe_gain_dB = Frontend.lna_gain + Frontend.mixer_gain + Frontend.if_gain;
  else
     fe_gain_dB = Frontend.rf_atten + Frontend.rf_gain;
@@ -1384,15 +1375,15 @@ void display_output(WINDOW *w,struct demod const *demod){
   wclrtobot(w);
   char tbuf[100];
   pprintw(w,row++,col,"","%s",format_gpstime(tbuf,sizeof(tbuf),Frontend.timestamp));
-  pprintw(w,row++,col,"Samples","%'llu",Frontend.input.samples);
+  pprintw(w,row++,col,"Samples","%'llu",Frontend.samples);
 
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_address),
 	   formatsock(&Metadata_dest_address));
-  pprintw(w,row++,col,"Stat pkts","%'llu",Metadata_packets);
-  pprintw(w,row++,col,"Ctl pkts","%'llu",Commands);
-  pprintw(w,row++,col,"Blocks since poll","%'llu",demod->blocks_since_poll);
+  pprintw(w,row++,col,"Status pkts","%'llu",Metadata_packets);
+  pprintw(w,row++,col,"Control pkts","%'llu",Frontend.commands);
+  pprintw(w,row++,col,"Blocks since last poll","%'llu",demod->blocks_since_poll);
 
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Data");  
@@ -1401,7 +1392,7 @@ void display_output(WINDOW *w,struct demod const *demod){
 	  formatsock(&demod->output.data_dest_address));
   
   pprintw(w,row++,col,"SSRC","%'u",demod->output.rtp.ssrc);
-  pprintw(w,row++,col,"packets","%'llu",(long long unsigned)demod->output.rtp.packets);
+  pprintw(w,row++,col,"Packets","%'llu",(long long unsigned)demod->output.rtp.packets);
   
   
   box(w,0,0);

@@ -41,9 +41,7 @@ extern int Ndemod;
 struct frontend {
 
   // Stuff we maintain about our upstream source
-  struct {
-    uint64_t samples;     // Count of raw I/Q samples received
-  } input;
+  uint64_t samples;     // Count of raw I/Q samples received
 
   int M;            // Impulse length of input filter
   int L;            // Block length of input filter
@@ -56,39 +54,39 @@ struct frontend {
   int samprate;           // Sample rate on data stream
   int64_t timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
   double frequency;
-  double calibrate;
-  uint8_t lna_gain;
+  double calibrate;  // Clock frequency error ratio, e.g, +1e-6 means 1 ppm high
+  // Somewhat hardware-dependent analog gains. Should be more abstract
+  uint8_t lna_gain;  // R820T/828 tuners
   uint8_t mixer_gain;
   uint8_t if_gain;
-  float rf_atten;
+  float rf_atten;    // RX888
   float rf_gain;
-  bool direct_conversion; // Avoid 0 Hz if set
-  bool isreal;            // Front end stream is real-only
+  bool direct_conversion; // Try to avoid DC spike if set
+  bool isreal;            // Use real->complex FFT (otherwise complex->complex)
   int bitspersample; // 8, 12 or 16
   bool lock;              // Tuning is locked; clients cannot change
   
   // Limits on usable IF due to aliasing, filtering, etc
   // Less than or equal to +/- samprate/2
   // Straddles 0 Hz for complex, will have same sign for real output from a low IF tuner
+  // Usually negative for the 820/828 tuners, which are effectively wideband LSB radios
   float min_IF;
   float max_IF;
   
-  float gain;
   float output_level;
   
-  // 'status' is written by the input thread and read by set_first_LO, etc, so it's protected by a mutex
+  // This structure is updated asynchronously by the front end thread, so it's protected
   pthread_mutex_t status_mutex;
   pthread_cond_t status_cond;     // Signalled whenever status changes
   
   // Entry points for local front end driver
   void *context;         // Stash hardware-dependent control block
-  int (*setup)(struct frontend *,dictionary *,char const *);
-  int (*start)(struct frontend *);
-  double (*tune)(struct frontend *,double);
+  int (*setup)(struct frontend *,dictionary *,char const *); // Get front end ready to go
+  int (*start)(struct frontend *);          // Start front end sampling
+  double (*tune)(struct frontend *,double); // Tune front end, return actual frequency
   float tp1;        // Spare test points
   float tp2;
-  struct filter_in * restrict in;
-  pthread_t status_thread;
+  struct filter_in * restrict in; // Input half of fast convolver, shared with all channels
 };
 
 extern struct frontend Frontend; // Only one per radio instance

@@ -351,10 +351,10 @@ static int rx_callback(airspy_transfer *transfer){
     wptr += 8;
     up += 3;
   }
-  frontend->input.samples += sampcount;
+  frontend->samples += sampcount;
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->output_level = 2 * in_energy / sampcount;
-  frontend->input.samples += sampcount;
+  frontend->samples += sampcount;
   if(Software_agc){
     // Integrate A/D energy
     sdr->energy += in_energy;
