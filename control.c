@@ -58,7 +58,7 @@ struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typical
 float Blocktime;
 int Ctl_fd,Status_fd;
 uint64_t Metadata_packets;
-uint64_t Block_drops;
+uint64_t Block_drops; // Stored in output filter on sender, not in demod structure
 
 const char *App_path;
 int Verbose;
@@ -71,11 +71,11 @@ struct control {
 } Control;
 
 
-int pprintw(WINDOW *w,int y, int x, char const *prefix, char const *fmt, ...);
+static int pprintw(WINDOW *w,int y, int x, char const *prefix, char const *fmt, ...);
 
-WINDOW *Tuning_win,*Sig_win,*Info_win,*Filtering_win,*Demodulator_win,
+static WINDOW *Tuning_win,*Sig_win,*Filtering_win,*Demodulator_win,
   *Options_win,*Modes_win,*Debug_win,
-  *Data_win,*Status_win,*Output_win;
+  *Output_win;
 
 static void display_tuning(WINDOW *tuning,struct demod const *demod);
 static void display_info(WINDOW *w,int row,int col,struct demod const *demod);
@@ -89,11 +89,12 @@ static int process_keyboard(struct demod *,uint8_t **bpp,int c);
 static void process_mouse(struct demod *demod,uint8_t **bpp);
 static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length);
 static int for_us(struct demod *demod,uint8_t const *buffer,int length,uint32_t ssrc);
+static int init_demod(struct demod *demod);
 
 // Pop up a temporary window with the contents of a file in the
 // library directory (usually /usr/local/share/ka9q-radio/)
 // then wait for a single keyboard character to clear it
-void popup(char const *filename){
+static void popup(char const *filename){
   static int const maxcols = 256;
   char fname[PATH_MAX];
   if (dist_path(fname,sizeof(fname),filename) == -1)
@@ -133,7 +134,7 @@ void popup(char const *filename){
 
 
 // Pop up a dialog box, issue a prompt and get a response
-void getentry(char const *prompt,char *response,int len){
+static void getentry(char const *prompt,char *response,int len){
   WINDOW * const pwin = newwin(5,90,0,0);
   box(pwin,0,0);
   mvwaddstr(pwin,1,1,prompt);
@@ -155,7 +156,7 @@ void getentry(char const *prompt,char *response,int len){
 static FILE *Tty;
 static SCREEN *Term;
 
-void display_cleanup(void){
+static void display_cleanup(void){
   echo();
   nocbreak();
   if(!isendwin()){
@@ -173,7 +174,7 @@ void display_cleanup(void){
 static bool Frequency_lock;
 
 // Adjust the selected item up or down one step
-void adjust_item(struct demod *demod,uint8_t **bpp,int direction){
+static void adjust_item(struct demod *demod,uint8_t **bpp,int direction){
   double tunestep = pow(10., (double)Control.step);
 
   if(!direction)
@@ -217,13 +218,13 @@ void adjust_item(struct demod *demod,uint8_t **bpp,int direction){
 }
 // Hooks for knob.c (experimental)
 // It seems better to just use the Griffin application to turn knob events into keystrokes or mouse events
-void adjust_up(struct demod *demod,uint8_t **bpp){
+static void adjust_up(struct demod *demod,uint8_t **bpp){
   adjust_item(demod,bpp,1);
 }
-void adjust_down(struct demod *demod,uint8_t **bpp){
+static void adjust_down(struct demod *demod,uint8_t **bpp){
   adjust_item(demod,bpp,0);
 }
-void toggle_lock(void){
+static void toggle_lock(void){
   switch(Control.item){
   case 0:
     Frequency_lock = !Frequency_lock; // Toggle frequency tuning lock
@@ -234,7 +235,7 @@ void toggle_lock(void){
   }
 }
 // List of status windows, in order they'll be created, with sizes
-struct windef {
+static struct windef {
   WINDOW **w;
   int rows;
   int cols;
@@ -251,7 +252,7 @@ struct windef {
 };
 #define NWINS (sizeof(Windefs) / sizeof(Windefs[0]))
 
-void setup_windows(void){
+static void setup_windows(void){
   // First row
   int row = 0;
   int col = 0;
@@ -295,7 +296,7 @@ void setup_windows(void){
   }
 }
 
-void winch_handler(int num){
+static void winch_handler(int num){
   Resized = true;
 }
 
@@ -313,10 +314,10 @@ static int dcompare(void const *a,void const *b){
 
 
 
-uint32_t Ssrc = 0;
+static uint32_t Ssrc = 0;
 
 
-struct demod Demod;
+static struct demod Demod;
 
 // Thread to display receiver state, updated at 10Hz by default
 // Uses the ancient ncurses text windowing library
@@ -417,15 +418,13 @@ int main(int argc,char *argv[]){
      See if anything has arrived (use short timeout)
      If there's a response, update local status & repaint display windows
      Poll keyboard and process user commands
+
+     Randomize polls over 50 ms in case someone else is also polling
+     This avoids possible synchronized back-to-back polls
+     This is a common technique in multicast protocols (e.g., IGMP queries)
   */
-
-  // Randomize polls over 50 ms in case someone else is also polling
-  // This avoids possible synchronized back-to-back polls
-  // This is a common technique in multicast protocols (e.g., IGMP queries)
-
   int64_t const random_interval = 50000000; // 50 ms
-  // Pick soon but still random times for the first polls
-  int64_t next_radio_poll = random_time(0,random_interval);
+  int64_t next_radio_poll = gps_time_ns(); // First poll after 100 ms or so
   
   for(;;){
     int64_t const radio_poll_interval  = Refresh_rate * BILLION;
@@ -433,7 +432,8 @@ int main(int argc,char *argv[]){
     if(gps_time_ns() > next_radio_poll){
       // Time to poll radio
       send_poll(Ctl_fd,Ssrc);
-      next_radio_poll = random_time(radio_poll_interval,random_interval);
+      // Retransmit after 1/10 sec if no response
+      next_radio_poll = random_time(BILLION/10,random_interval);
     }
     {
       fd_set fdset;
@@ -452,7 +452,7 @@ int main(int argc,char *argv[]){
       }
       if(FD_ISSET(Status_fd,&fdset)){
 	// Message from the radio program (or some transcoders)
-	uint8_t buffer[8192];
+	uint8_t buffer[9000];
 	struct sockaddr_storage source_address;
 	socklen_t ssize = sizeof(source_address);
 	int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize);
@@ -462,6 +462,7 @@ int main(int argc,char *argv[]){
 	  // Save source only if it's a response
 	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
 	  decode_radio_status(demod,buffer+1,length-1);
+	  // Postpone next poll to specified interval
 	  next_radio_poll = random_time(radio_poll_interval,random_interval); // Update poll interval
 	  
 	  if(Blocktime == 0 && Frontend.samprate != 0)
@@ -489,7 +490,7 @@ int main(int argc,char *argv[]){
     doupdate();      // Update the screen right before we pause
     
     // Set up command buffer in case we want to change something
-    uint8_t cmdbuffer[1024];
+    uint8_t cmdbuffer[9000];
     uint8_t *bp = cmdbuffer;
     *bp++ = CMD; // Command
 
@@ -525,7 +526,7 @@ int main(int argc,char *argv[]){
 }
 
 
-int process_keyboard(struct demod *demod,uint8_t **bpp,int c){
+static int process_keyboard(struct demod *demod,uint8_t **bpp,int c){
   // Look for keyboard and mouse events
 
   switch(c){
@@ -730,7 +731,7 @@ int process_keyboard(struct demod *demod,uint8_t **bpp,int c){
   return 0;
 }
 
-void process_mouse(struct demod *demod,uint8_t **bpp){
+static void process_mouse(struct demod *demod,uint8_t **bpp){
   // Process mouse events
   // Need to handle the wheel as equivalent to up/down arrows
   MEVENT mouse_event;
@@ -832,7 +833,7 @@ void process_mouse(struct demod *demod,uint8_t **bpp){
 }
 
 // Initialize a new, unused demod instance where fields start non-zero
-int init_demod(struct demod *demod){
+static int init_demod(struct demod *demod){
   memset(demod,0,sizeof(*demod));
   demod->tune.second_LO = NAN;
   demod->tune.freq = demod->tune.shift = NAN;
@@ -1162,7 +1163,7 @@ void display_tuning(WINDOW *w,struct demod const *demod){
   pprintw(w,row++,col,"FE filter high","%'+.0f",Frontend.max_IF);
 
   // Doppler info displayed only if active
-  double dopp = demod->tune.doppler;
+  double const dopp = demod->tune.doppler;
   if(dopp != 0){
     pprintw(w,row++,col,"Doppler","%'.3f",dopp);
     pprintw(w,row++,col,"Dop Rate, Hz/s","%'.3f",demod->tune.doppler_rate);

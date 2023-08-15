@@ -283,7 +283,7 @@ extern uint32_t Command_tag; // Echoed in responses to commands (settable)
 // Functions/methods to control a demod instance
 struct demod *alloc_demod(void);
 void free_demod(struct demod **);
-int init_demod(struct demod * restrict demod);
+//int init_demod(struct demod * restrict demod);
 char const *demod_name_from_type(enum demod_type type);
 int demod_type_from_name(char const *name);
 int loadmode(struct demod *demod,dictionary const *table,char const *mode,int use_defaults);
@@ -292,7 +292,6 @@ double set_freq(struct demod * restrict ,double);
 int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq);
 int start_demod(struct demod * restrict demod);
 int kill_demod(struct demod ** restrict demod);
-int init_demod_streams(struct demod * restrict demod);
 double set_first_LO(struct demod const * restrict, double);
 int downconvert(struct demod *demod);
 int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length);
