@@ -39,11 +39,11 @@ Supported Hardware and System Requirements
 
 At the moment, *ka9q-radio* supports the following SDR front ends:
 
-[Airspy R2/Airspy Mini] (https://airspy.com/airspy-r2/)  
-[Airspy HF+] (https://airspy.com/airspy-hf-discovery/)  
-[Generic RTL-SDR] (https://en.wikipedia.org/wiki/Software-defined_radio#RTL-SDR) (tuner mode only)  
+[Airspy R2/Airspy Mini](https://airspy.com/airspy-r2/)  
+[Airspy HF+](https://airspy.com/airspy-hf-discovery/)  
+[Generic RTL-SDR](https://en.wikipedia.org/wiki/Software-defined_radio#RTL-SDR) (tuner mode only)  
 [AMSAT UK Funcube Pro+ Dongle](http://www.funcubedongle.com/)  
-[RX-888 MkII] (https://www.rtl-sdr.com/techminds-reviewing-the-rx888-mk2-software-defined-radio/)  (direct sampling mode only)
+[RX-888 MkII](https://www.rtl-sdr.com/techminds-reviewing-the-rx888-mk2-software-defined-radio/)  (direct sampling mode only)
 
 Until the recent appearance of the RX-888, my preferred SDRs (and the
 ones I have the most experience with) were the Airspy R2 for VHF/UHF
