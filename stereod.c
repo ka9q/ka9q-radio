@@ -83,7 +83,7 @@ char const *Output;
 char const *Status;
 char const *Name = "stereo";
 
-struct session *lookup_session(const struct sockaddr *,uint32_t);
+struct session *lookup_session(struct sockaddr const *,uint32_t);
 struct session *create_session(void);
 int close_session(struct session **);
 int send_samples(struct session *sp);
