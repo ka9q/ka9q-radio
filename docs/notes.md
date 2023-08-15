@@ -1,4 +1,4 @@
-*ka9q-radio* installation notes  
+*ka9q-radio* Installation Notes  
 14 August 2023
 ===============================
 
@@ -7,6 +7,9 @@ and the 64-bit "bullseye" version of Raspberry Pi OS for the Raspberry
 Pi 4. (Raspberry Pi OS is Debian Linux 11 with customizations. As of
 this writing it has not yet incorporated Debian version 12.)  Older
 versions may work, but you may have to fix some problems.
+
+CPU Requirements
+----------------
 
 Most reasonably modern x86 systems can run *ka9q-radio* just
 fine. Even an Intel i5 can handle the RX888 at its full sample rate of
