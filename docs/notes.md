@@ -1,5 +1,5 @@
 *ka9q-radio* installation notes  
-13 August 2023
+14 August 2023
 ===============================
 
 The preferred platform is Debian Linux 12 ("bookworm") on the x86-64 and
@@ -36,6 +36,26 @@ On a generic Linux system you can set your locale with the
 shell environment variable "LANG", e.g.:
 
 >export LANG=en_US.UTF-8
+
+Multicast Interfaces And Routing
+--------------------------------
+
+Linux multicast routing is still a mystery to me. With hosts having just one Ethernet interface it usually "just works"; multicast traffic goes to the local Ethernet LAN.
+But I sometimes have problems on systems with multiple interfaces
+(e.g, an Ethernet and WiFi).
+My RPis run headless so I usually have both Ethernet and WiFi enabled to ensure that I can get in remotely. Sometimes the WiFi comes up before the Ethernet due to the
+STP forwarding delay in my smart switches. Systemd starts daemons (like radiod) so quickly that if it comes up during this period,
+Linux will route its multicast traffic to WiFi. And it will stay this way even after the Ethernet comes up. This is definitely not what we want.
+
+Sometimes just restarting radiod will fix the problem, but this is messy.
+
+I haven't found a simple, automatic fix to this problem yet, so I added the **iface** option
+to the [global] section of the config file. Say something like **iface**=eth0.
+Problem is, thanks to the brain dead and ridiculously misnamed "predictable interface names" misfeature in some
+versions of Linux the name of the primary Ethernet interface is *not* always "eth0", but something cryptic like "enp0s3".
+So if your primary Ethernet interface isn't "eth0", either remove the **iface** option or make sure the **iface** option specifies it.
+
+
 
 Multicast DNS problems on Ubuntu
 --------------------------------
