@@ -2,24 +2,30 @@
 14 August 2023
 ===============================
 
-The preferred platform is Debian Linux 12 ("bookworm") on the x86-64 and
-the 64-bit "bullseye" version of Raspberry Pi OS for the Raspberry Pi
-4. (The Raspberry Pi OS is essentially Debian Linux 11 with
-customizations. As of this writing it has not yet incorporated Debian version 12.)
-Older versions may work, but you may have to fix some problems.
+The preferred platform is Debian Linux 12 ("bookworm") on the x86-64
+and the 64-bit "bullseye" version of Raspberry Pi OS for the Raspberry
+Pi 4. (Raspberry Pi OS is Debian Linux 11 with customizations. As of
+this writing it has not yet incorporated Debian version 12.)  Older
+versions may work, but you may have to fix some problems.
 
-Most reasonably modern x86 systems will run *ka9q-radio* just
+Most reasonably modern x86 systems can run *ka9q-radio* just
 fine. Even an Intel i5 can handle the RX888 at its full sample rate of
-130 MHz with plenty of time left over.  But be careful with other
-CPU-intensive tasks on the same system, even at a high 'nice' level,
-unless you are running a realtime-enabled version of the Linux
-kernel. *ka9q-radio* can use the Linux real-time scheduling features
-only if the kernel supports them. (Debian provides both realtime and
-standard kernels for each release). The RX888 works fine on the Orange
-Pi **until** you try to run CPU soakers; then *ka9q-radio* begins to
-badly lose data. AI6VN and I believe this is because the standard OPi
-kernel is not real-time enabled, and we can't find and install one
-that is.
+130 MHz with plenty of time left over.  The bigger problem is just
+getting the bits from the front end into the program over USB and in
+ensuring that the front end has enough power. (And to the RPi, if
+you're using one.) It's usually a good idea to dedicate a USB
+controller to a front end to avoid contention with other devices. An
+externally powered hub is often a good idea, especially on the RPi.
+
+Be careful with other CPU-intensive tasks on the same system, even
+at a high 'nice' level, unless you are running a realtime-enabled
+version of the Linux kernel. *ka9q-radio* can use the Linux real-time
+scheduling features only if the kernel supports them. (Debian provides
+both realtime and standard kernels for each release). The RX888 works
+fine at 64 Ms/s on the Orange Pi **until** you try to run CPU soakers;
+then *ka9q-radio* begins to badly lose data. AI6VN and I believe this
+is because the standard OPi kernel is not real-time enabled, and we
+can't find and install one that is.
 
 The Raspberry Pi 4 is sufficient to handle the Airspy R2 (20 Ms/s
 real) even with several hundred channels, but it is *not* fast enough
