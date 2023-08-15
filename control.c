@@ -292,7 +292,7 @@ static void setup_windows(void){
   }
   if(Debug_win != NULL){
     // A message from our sponsor...
-    wprintw(Debug_win,"KA9Q SDR Receiver controller\nCopyright 2022 Phil Karn, KA9Q\n");
+    wprintw(Debug_win,"KA9Q SDR Receiver controller\nCopyright 2023 Phil Karn, KA9Q\n");
   }
 }
 
@@ -313,9 +313,7 @@ static int dcompare(void const *a,void const *b){
 #endif
 
 
-
 static uint32_t Ssrc = 0;
-
 
 static struct demod Demod;
 
@@ -359,14 +357,14 @@ int main(int argc,char *argv[]){
     Ssrc = arc4random();
     fprintf(stderr,"-s missing, generating random ssrc: %'u\n",Ssrc);
   }
-  char Iface[1024]; // Multicast interface
-  resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,Iface,sizeof(Iface));
-  Status_fd = listen_mcast(&Metadata_dest_address,Iface);
+  char iface[1024]; // Multicast interface
+  resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
+  Status_fd = listen_mcast(&Metadata_dest_address,iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't listen to mcast status %s\n",argv[optind]);
     exit(1);
   }
-  Ctl_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
+  Ctl_fd = connect_mcast(&Metadata_dest_address,iface,Mcast_ttl,IP_tos);
   if(Ctl_fd < 0){
     fprintf(stderr,"connect to mcast control failed\n");
     exit(1);
@@ -423,13 +421,14 @@ int main(int argc,char *argv[]){
      This avoids possible synchronized back-to-back polls
      This is a common technique in multicast protocols (e.g., IGMP queries)
   */
-  int64_t const random_interval = 50000000; // 50 ms
-  int64_t next_radio_poll = gps_time_ns(); // First poll after 100 ms or so
+  int64_t const random_interval = BILLION/20; // 50 ms
+  int64_t next_radio_poll = gps_time_ns(); // Immediate first poll
   
   for(;;){
+    bool update_needed = false;
     int64_t const radio_poll_interval  = Refresh_rate * BILLION;
 
-    if(gps_time_ns() > next_radio_poll){
+    if(gps_time_ns() >= next_radio_poll){
       // Time to poll radio
       send_poll(Ctl_fd,Ssrc);
       // Retransmit after 1/10 sec if no response
@@ -459,6 +458,7 @@ int main(int argc,char *argv[]){
 	
 	// Ignore our own command packets and responses to other SSIDs
 	if(length >= 2 && (enum pkt_type)buffer[0] == STATUS && for_us(demod,buffer+1,length-1,Ssrc) >= 0 ){
+	  update_needed = true;
 	  // Save source only if it's a response
 	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
 	  decode_radio_status(demod,buffer+1,length-1);
@@ -472,29 +472,32 @@ int main(int argc,char *argv[]){
     }
     if(Resized){
       Resized = false;
+      update_needed = true;
       setup_windows();
     }
-    // socket read timeout every 100 ms; update display windows & poll keyboard and mouse
-    display_tuning(Tuning_win,demod);
-    display_filtering(Filtering_win,demod);
-    display_sig(Sig_win,demod);
-    display_demodulator(Demodulator_win,demod);
-    display_options(Options_win,demod);
-    display_modes(Modes_win,demod);
-    display_output(Output_win,demod);
-    
-    if(Debug_win != NULL){
-      touchwin(Debug_win); // since we're not redrawing it every cycle
-      wnoutrefresh(Debug_win);
+    if(update_needed){
+      // update display windows
+      display_tuning(Tuning_win,demod);
+      display_filtering(Filtering_win,demod);
+      display_sig(Sig_win,demod);
+      display_demodulator(Demodulator_win,demod);
+      display_options(Options_win,demod);
+      display_modes(Modes_win,demod);
+      display_output(Output_win,demod);
+      
+      if(Debug_win != NULL){
+	touchwin(Debug_win); // since we're not redrawing it every cycle
+	wnoutrefresh(Debug_win);
+      }    
+      doupdate();      // Update the screen right before we pause
     }    
-    doupdate();      // Update the screen right before we pause
-    
     // Set up command buffer in case we want to change something
     uint8_t cmdbuffer[9000];
     uint8_t *bp = cmdbuffer;
     *bp++ = CMD; // Command
 
-    int const c = getch(); // read keyboard with timeout; controls refresh rate
+    // Poll keyboard and mouse
+    int const c = getch();
     if(c == KEY_MOUSE){
       process_mouse(demod,&bp);
     } else if(c != ERR) {
@@ -505,8 +508,8 @@ int main(int argc,char *argv[]){
     // OK, any commands to send?
     if(bp > cmdbuffer+1){
       // Yes
-      if(Ssrc != 0)
-	encode_int(&bp,OUTPUT_SSRC,Ssrc); // Specific SSRC
+      assert(Ssrc != 0);
+      encode_int(&bp,OUTPUT_SSRC,Ssrc); // Specific SSRC
       encode_int(&bp,COMMAND_TAG,arc4random()); // Append a command tag
       encode_eol(&bp);
       int const command_len = bp - cmdbuffer;
@@ -893,7 +896,8 @@ static int for_us(struct demod *demod,uint8_t const *buffer,int length,uint32_t 
 
 // Decode incoming status message from the radio program, convert and fill in fields in local demod structure
 // Leave all other fields unchanged, as they may have local uses (e.g., file descriptors)
-int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
+// Note that we use some fields in demod differently than in the radio (e.g., dB vs ratios)
+static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
   uint8_t const *cp = buffer;
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
@@ -980,7 +984,6 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
       Block_drops = decode_int(cp,optlen);
       break;
     case IF_POWER:
-      // Can also be filled in by front end, though some don't send it
       Frontend.output_level = dB2power(decode_float(cp,optlen));
       break;
     case BASEBAND_POWER:
@@ -1122,7 +1125,7 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
   return 0;
 }
 
-void display_tuning(WINDOW *w,struct demod const *demod){
+static void display_tuning(WINDOW *w,struct demod const *demod){
   // Tuning control window - these can be adjusted by the user
   // using the keyboard or tuning knob, so be careful with formatting
   if(w == NULL)
@@ -1192,7 +1195,7 @@ void display_tuning(WINDOW *w,struct demod const *demod){
 }
 
 // Imbed in tuning window
-void display_info(WINDOW *w,int row,int col,struct demod const *demod){
+static void display_info(WINDOW *w,int row,int col,struct demod const *demod){
   if(w == NULL)
     return;
 
@@ -1207,7 +1210,7 @@ void display_info(WINDOW *w,int row,int col,struct demod const *demod){
     mvwaddstr(w,row++,col,bp_high->description);    
   }
 }
-void display_filtering(WINDOW *w,struct demod const *demod){
+static void display_filtering(WINDOW *w,struct demod const *demod){
   if(w == NULL)
     return;
 
@@ -1259,7 +1262,7 @@ void display_filtering(WINDOW *w,struct demod const *demod){
   wnoutrefresh(w);
 }
 // Signal data window
-void display_sig(WINDOW *w,struct demod const *demod){
+static void display_sig(WINDOW *w,struct demod const *demod){
   if(w == NULL)
     return;
 
@@ -1301,7 +1304,7 @@ void display_sig(WINDOW *w,struct demod const *demod){
   mvwaddstr(w,0,1,"Signal");
   wnoutrefresh(w);
 }
-void display_demodulator(WINDOW *w,struct demod const *demod){
+static void display_demodulator(WINDOW *w,struct demod const *demod){
   if(w == NULL)
     return;
 
@@ -1366,7 +1369,7 @@ void display_demodulator(WINDOW *w,struct demod const *demod){
   wnoutrefresh(w);
 }
 
-void display_output(WINDOW *w,struct demod const *demod){
+static void display_output(WINDOW *w,struct demod const *demod){
   if(w == NULL)
     return;
 
@@ -1374,10 +1377,11 @@ void display_output(WINDOW *w,struct demod const *demod){
   int col = 1;
   wmove(w,row,col);
   wclrtobot(w);
-  char tbuf[100];
-  pprintw(w,row++,col,"","%s",format_gpstime(tbuf,sizeof(tbuf),Frontend.timestamp));
-  pprintw(w,row++,col,"Samples","%'llu",Frontend.samples);
-
+  {
+    char tbuf[100];
+    pprintw(w,row++,col,"","%s",format_gpstime(tbuf,sizeof(tbuf),Frontend.timestamp));
+    pprintw(w,row++,col,"Samples","%'llu",Frontend.samples);
+  }
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_address),
@@ -1401,7 +1405,7 @@ void display_output(WINDOW *w,struct demod const *demod){
   wnoutrefresh(w);
 }
 
-void display_options(WINDOW *w,struct demod const *demod){
+static void display_options(WINDOW *w,struct demod const *demod){
   if(w == NULL)
     return;
 
@@ -1483,7 +1487,7 @@ void display_options(WINDOW *w,struct demod const *demod){
   wnoutrefresh(w);
 }
 
-void display_modes(WINDOW *w,struct demod const *demod){
+static void display_modes(WINDOW *w,struct demod const *demod){
   if(w == NULL)
     return;
 
@@ -1504,7 +1508,7 @@ void display_modes(WINDOW *w,struct demod const *demod){
 
 // Like mvwprintw, but right justify the formatted output on the line and overlay with
 // a left-justified label
-int pprintw(WINDOW *w,int y, int x, char const *label, char const *fmt,...){
+static int pprintw(WINDOW *w,int y, int x, char const *label, char const *fmt,...){
   int maxy __attribute__((unused)); // needed for getmaxyx
   int maxx;
   getmaxyx(w,maxy,maxx);
