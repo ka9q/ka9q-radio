@@ -49,8 +49,6 @@ struct frontend {
 
   // Stuff maintained by our upstream source and filled in by the status daemon
   char description[256]; // Free-form text
-  uint64_t commands;     // Command counter
-  uint32_t command_tag;   // Last received command tag
   int samprate;           // Sample rate on data stream
   int64_t timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
   double frequency;
@@ -253,6 +251,8 @@ struct demod {
     float rate;
   } deemph;
 
+  uint32_t commands;
+  uint32_t command_tag;
   uint64_t blocks_since_poll; // Used for averaging signal levels
 
   pthread_t sap_thread;
@@ -277,8 +277,6 @@ extern char const *Modefile;
 extern int Verbose;
 extern float Blocktime; // Common to all receiver slices. NB! Milliseconds, not seconds
 extern uint64_t Metadata_packets;
-extern uint64_t Commands;
-extern uint32_t Command_tag; // Echoed in responses to commands (settable)
 
 // Functions/methods to control a demod instance
 struct demod *alloc_demod(void);
@@ -294,13 +292,10 @@ int start_demod(struct demod * restrict demod);
 int kill_demod(struct demod ** restrict demod);
 double set_first_LO(struct demod const * restrict, double);
 int downconvert(struct demod *demod);
-int decode_fe_status(struct frontend *frontend,uint8_t const *buffer,int length);
 
 // Helper threads
-void *proc_samples(void *);
 void *sap_send(void *);
 void *radio_status(void *);
-void *sdr_status(void *);
 void *demod_reaper(void *);
 
 // Demodulator thread entry points

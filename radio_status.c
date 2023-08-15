@@ -53,7 +53,6 @@ void *radio_status(void *arg){
     if(length <= 0 || (enum pkt_type)buffer[0] != CMD)
       continue; // short packet, or a response; ignore
 
-    Commands++;
     // for a specific ssrc?
     uint32_t ssrc = get_ssrc(buffer+1,length-1);
     if(ssrc != 0){
@@ -87,6 +86,7 @@ void *radio_status(void *arg){
       if(demod != NULL){
 	if(demod->lifetime != 0)
 	  demod->lifetime = 20; // Restart 20 second self-destruct timer
+	demod->commands++;
 	decode_radio_commands(demod,buffer+1,length-1);
 	send_radio_status(&Frontend,demod,1); // Send status in response
       }
@@ -144,7 +144,7 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
     case EOL: // Shouldn't get here
       goto done;
     case COMMAND_TAG:
-      Command_tag = decode_int(cp,optlen);
+      demod->command_tag = decode_int(cp,optlen);
       break;
     case OUTPUT_SAMPRATE:
       // Restart the demodulator to recalculate filters, etc
@@ -392,8 +392,8 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   *bp++ = STATUS; // 0 = status, 1 = command
 
   // parameters valid in all modes
-  encode_int32(&bp,COMMAND_TAG,Command_tag); // at top to make it easier to spot in dumps
-  encode_int64(&bp,CMD_CNT,Commands); // integer
+  encode_int32(&bp,COMMAND_TAG,demod->command_tag); // at top to make it easier to spot in dumps
+  encode_int64(&bp,CMD_CNT,demod->commands); // integer
   if(strlen(frontend->description) > 0)
     encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
   

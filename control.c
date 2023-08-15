@@ -908,7 +908,7 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
     case EOL:
       break;
     case CMD_CNT:
-      Frontend.commands = decode_int(cp,optlen);
+      demod->commands = decode_int(cp,optlen);
       break;
     case DESCRIPTION:
       decode_string(cp,optlen,Frontend.description,sizeof(Frontend.description));
@@ -1020,7 +1020,7 @@ int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
       demod->output.samples = decode_int(cp,optlen);
       break;
     case COMMAND_TAG:
-      Frontend.command_tag = decode_int(cp,optlen);
+      demod->command_tag = decode_int(cp,optlen);
       break;
     case RADIO_FREQUENCY:
       demod->tune.freq = decode_double(cp,optlen);
@@ -1383,7 +1383,7 @@ void display_output(WINDOW *w,struct demod const *demod){
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_address),
 	   formatsock(&Metadata_dest_address));
   pprintw(w,row++,col,"Status pkts","%'llu",Metadata_packets);
-  pprintw(w,row++,col,"Control pkts","%'llu",Frontend.commands);
+  pprintw(w,row++,col,"Control pkts","%'llu",demod->commands);
   pprintw(w,row++,col,"Blocks since last poll","%'llu",demod->blocks_since_poll);
 
   mvwhline(w,row,0,0,1000);
