@@ -8,7 +8,94 @@ the 64-bit "bullseye" version of Raspberry Pi OS for the Raspberry Pi
 customizations. As of this writing it has not yet incorporated Debian version 12.)
 Older versions may work, but you may have to fix some problems.
 
+Supported Hardware and System Requirements
+------------------------------------------
+
+At the moment, *ka9q-radio* supports the following SDR front ends:
+
+[Airspy R2/Airspy Mini] (https://airspy.com/airspy-r2/)  
+[Airspy HF+] (https://airspy.com/airspy-hf-discovery/)  
+[Generic RTL-SDR] (https://en.wikipedia.org/wiki/Software-defined_radio#RTL-SDR) (tuner mode only)  
+[AMSAT UK Funcube Pro+ Dongle](http://www.funcubedongle.com/)  
+[RX-888 MkII] (https://www.rtl-sdr.com/techminds-reviewing-the-rx888-mk2-software-defined-radio/)  (direct sampling mode only)
+
+Until the recent appearance of the RX-888, my preferred SDRs (and the
+ones I have the most experience with) were the Airspy R2 for VHF/UHF
+and the Airspy HF+ for HF.  They are available at a moderate price and
+work fairly well.
+
+The new RX-888 MkII is rapidly becoming my SDR of choice because it
+can direct sample at up to 130 Ms/s. With *ka9q-radio* it can receive
+literally hundreds of simultaneous channels over all of LF, MF, HF and
+lowband VHF (through 6m).  It does comes out of China and
+documentation is somewhat lacking. Fortuntely, K4VZ, AI6VN and I have
+made it work well on HF, where it is beginning to displace stacks of
+KiwiSDRs for all-band WSPR monitoring.  [http://www.wsprdaemon.org/]
+
+Some RX-888's have thermal problems especially at full sample rate
+(129.6 MHz). Until they can be resolved I've set the default to half
+rate (64.8 MHz).  Because the internal lowpass filter is fixed at 64
+MHz, this may allow some lowband VHF signals to alias into the top of
+HF. E.g., a local California Highway Patrol repeater on 39.8 MHz
+aliases onto WWV at 25 MHz. You'll need an external 30 MHz low pass
+filter.
+
+The RX-888 has a 16-bit A/D. That much dynamic range is almost
+overkill for HF radio, but proper gain setting is still
+important. Right now you can manually set the analog gain and
+attenuation, but there is as yet no software AGC as on the Airspy R2.
+
+The Airspy R2 is still my VHF/UHF workhorse, but this may change soon.
+The RX-888 MkII includes a VHF/UHF tuner that *should* be able to
+functionally replace the Airspy R2 for roughly the same price if you
+get it from China. (It's available through Amazon but for a higher
+price.)  I will support the RX-888's VHF/UHF tuner, but at present I
+only support its direct sample (LF/MF/HF) mode. For VHF/UHF the RX-888
+uses the same type of DVB-T (digital television) tuner as the Airspy
+R2, so it will be limited to the same ~9 MHz or so of bandwidth; there
+will be no benefit to its high sample rate in that mode.
+
+The Airspy Mini looks just like an Airspy R2 to software, so I also
+support it.  Although it advertises a lower sample rate, you can force
+it to 20 Ms/s (real), same as the Airspy R2. However it's in a smaller
+package that gets very hot, so I suspect that's why the rated sample
+rate is lower.  I wouldn't push it without adequate heat dissipation.
+
+The Airspy HF+ still works well with a good built-in AGC and dynamic
+range. But it has a maximum sample rate of 912 ks/s (complex) so it can
+only cover one HF band at a time, tops.  Our focus is definitely
+moving to the RX-888 because of its killer ability to moniter all of
+HF (and more) at once.
+
+I began this project with the AMSAT UK Funcube dongle, but it's long
+obsolete.  Don't bother unless you already have some on hand or can
+get them cheap or free. Although originally designed for VHF/UHF
+satellite reception, it also has good HF coverage and reasonably good
+front end preselectors.  But is severely limited by its 192 ks/s
+(complex) sample rate. That may be OK for some specialized applications
+ike the receive-only APRS i-Gate I've been running for years on a RPi3.
+The low sample rate demands minimal CPU.
+
+The RTL-SDR is very popular because of its very low price, and while I
+support it in *ka9q-radio* I haven't actually used it much myself. Its
+main drawback is its narrow 8-bit A/D and limited dynamic range. Most
+of my front end handlers have (optional) software AGC but there's
+still no substitute for dynamic range, especially if you have strong
+intermittent signals.
+
+Finally, a word about the SDRPlay. I bought one many years ago before
+I discovered that its libraries are proprietary and available only as
+compiled binaries. I consider this unacceptable, especially since its
+competitors all provide open source libraries in the standard Linux
+distributions. So my SDRPlay has been gathering dust on my shelf. I
+don't feel particularly inspired to support a product whose vendor
+goes out of their way to make it so difficult. If someone can provide
+an open-source substitute for the proprietary SDRPlay library, I'll be
+happy to reconsider supporting it.
+
+
 Front end drivers now merged into *radiod*
+------------------------------------------
 
 *ka9q-radio* was substantially restructured during the summer of 2023 to merge the front end
 drivers into *radiod*. The drivers are no longer separate programs using multicast IP to communicate
