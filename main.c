@@ -39,13 +39,21 @@
 
 // Configuration constants & defaults
 static int const DEFAULT_FFT_THREADS = 2;
-static int const DEFAULT_IP_TOS = 48;
+static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
 static int const DEFAULT_MCAST_TTL = 0; // Don't blast LANs with cheap Wifi!
 static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
-#if 0
-static int const DEFAULT_FFT_THREADS = 1;
-#endif
+
+char const *Iface;
+int IP_tos = DEFAULT_IP_TOS;
+int Mcast_ttl = DEFAULT_MCAST_TTL;
+float Blocktime = DEFAULT_BLOCKTIME;
+int Overlap = DEFAULT_OVERLAP;
+int RTCP_enable = false;
+int SAP_enable = false;
+
+char const *Name;
+extern int Nthreads; // owned by filter.c
 
 char const *Modefile = "modes.conf";
 
@@ -59,26 +67,14 @@ volatile bool Stop_transfers = false; // Request to stop data transfers; how sho
 
 struct demod *Dynamic_demod; // Prototype for dynamically created demods
 
-char const *Iface;
-int Mcast_ttl;
-int IP_tos; // AF12 left shifted 2 bits
-int RTCP_enable = false;
-int SAP_enable = false;
-int Overlap;
-char const *Name;
-extern int Nthreads;
 
 static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 pthread_t Status_thread;
 pthread_t Demod_reaper_thread;
-pthread_t Procsamp_thread;
-pthread_t N0_thread;
 struct sockaddr_storage Metadata_source_address;   // Source of SDR metadata
 struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
 char Metadata_dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
 uint64_t Metadata_packets;
-uint32_t Command_tag;
-uint64_t Commands;
 
 static void closedown(int);
 static void verbosity(int);
@@ -86,7 +82,7 @@ static int loadconfig(char const *file);
 static int setup_hardware(char const *sname);
 static void *rtcp_send(void *);
 
-// In sdrplay.c
+// In sdrplay.c (maybe someday)
 int sdrplay_setup(struct frontend *,dictionary *,char const *);
 int sdrplay_startup(struct frontend *);
 double sdrplay_tune(struct frontend *,double);
@@ -215,19 +211,20 @@ static int loadconfig(char const * const file){
   // Default multicast interface
   {
     // The area pointed to by returns from config_getstring() is freed and overwritten when the config dictionary is closed
-    char const *p = config_getstring(Configtable,global,"iface",NULL);
+    char const *p = config_getstring(Configtable,global,"iface",Iface);
     if(p != NULL){
       Iface = strdup(p);
       Default_mcast_iface = Iface;    
     }
   }
-  IP_tos = config_getint(Configtable,global,"tos",DEFAULT_IP_TOS);
-  Mcast_ttl = config_getint(Configtable,global,"ttl",DEFAULT_MCAST_TTL);
-  Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",DEFAULT_BLOCKTIME));
-  Overlap = abs(config_getint(Configtable,global,"overlap",DEFAULT_OVERLAP));
-  Nthreads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFT_THREADS);
-  RTCP_enable = config_getboolean(Configtable,global,"rtcp",0);
-  SAP_enable = config_getboolean(Configtable,global,"sap",0);
+  // Override compiled-in defaults
+  IP_tos = config_getint(Configtable,global,"tos",IP_tos);
+  Mcast_ttl = config_getint(Configtable,global,"ttl",Mcast_ttl);
+  Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",Blocktime));
+  Overlap = abs(config_getint(Configtable,global,"overlap",Overlap));
+  Nthreads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFT_THREADS); // variable owned by filter.c
+  RTCP_enable = config_getboolean(Configtable,global,"rtcp",RTCP_enable);
+  SAP_enable = config_getboolean(Configtable,global,"sap",SAP_enable);
   {
     char const *p = config_getstring(Configtable,global,"mode-file",Modefile);
     if(p != NULL)
@@ -264,7 +261,7 @@ static int loadconfig(char const * const file){
     }
   }
   {
-    char const * const status = config_getstring(Configtable,global,"status",NULL); // Status/command thread for all demodulators
+    char const * const status = config_getstring(Configtable,global,"status",NULL); // Status/command target for all demodulators
     if(status == NULL){
       fprintf(stdout,"status=<mcast group> missing in [global], e.g, status=hf.local\n");
       exit(1);
@@ -304,7 +301,7 @@ static int loadconfig(char const * const file){
     if(config_getstring(Configtable,sname,"device",NULL) != NULL)
       continue; // It's a front end configuration, ignore
 
-    if(config_getboolean(Configtable,sname,"disable",0))
+    if(config_getboolean(Configtable,sname,"disable",false))
 	continue; // section is disabled
 
     fprintf(stdout,"Processing [%s]\n",sname); // log only if not disabled
@@ -324,6 +321,7 @@ static int loadconfig(char const * const file){
     }
     loadmode(demod,Configtable,sname,0); // Overwrite with config file entries
 
+    Mcast_ttl = config_getint(Configtable,sname,"ttl",Mcast_ttl); // Read in each section too
     demod->output.rtp.ssrc = (uint32_t)config_getdouble(Configtable,sname,"ssrc",0); // Default triggers auto gen from freq
     char const * data = config_getstring(Configtable,global,"data",NULL);
     data = config_getstring(Configtable,sname,"data",data);
@@ -336,7 +334,7 @@ static int loadconfig(char const * const file){
     // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
     int slen = sizeof(demod->output.data_dest_address);
     avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),NULL,&demod->output.data_dest_address,&slen);
-    Mcast_ttl = config_getint(Configtable,sname,"ttl",Mcast_ttl); // Read in each section too
+
     demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,Iface,Mcast_ttl,IP_tos);
     if(demod->output.data_fd < 3){
       fprintf(stdout,"can't set up PCM output to %s\n",demod->output.data_dest_string);
