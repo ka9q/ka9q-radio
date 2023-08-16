@@ -153,12 +153,15 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   sdr->agc = config_getboolean(dictionary,section,"agc",false);
 
   if(sdr->agc){
-    rtlsdr_set_tuner_gain_mode(sdr->device,1); // manual gain mode (i.e., we do it)
+    rtlsdr_set_tuner_gain_mode(sdr->device,1);  // auto gain mode (i.e., the firmware does it)
     rtlsdr_set_tuner_gain(sdr->device,0);
     sdr->gain = 0;
     sdr->holdoff_counter = HOLDOFF_TIME;
-  } else
-    rtlsdr_set_tuner_gain_mode(sdr->device,0); // auto gain mode (i.e., the firmware does it)
+  } else {
+    rtlsdr_set_tuner_gain_mode(sdr->device,0); // manual gain mode (i.e., we do it)
+    sdr->gain = config_getint(dictionary,section,"gain",0);
+  }
+
   
   sdr->bias = config_getboolean(dictionary,section,"bias",false);
   {
