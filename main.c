@@ -45,6 +45,7 @@ static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
 
 char const *Iface;
+char const *Data;
 int IP_tos = DEFAULT_IP_TOS;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
 float Blocktime = DEFAULT_BLOCKTIME;
@@ -199,7 +200,7 @@ static int loadconfig(char const * const file){
   if(file == NULL || strlen(file) == 0)
     return -1;
 
-  int ndemods = 0;
+
   Configtable = iniparser_load(file);
   if(Configtable == NULL){
     fprintf(stdout,"Can't load config file %s\n",file);
@@ -218,6 +219,7 @@ static int loadconfig(char const * const file){
     }
   }
   // Override compiled-in defaults
+  Data = config_getstring(Configtable,global,"data",NULL);
   IP_tos = config_getint(Configtable,global,"tos",IP_tos);
   Mcast_ttl = config_getint(Configtable,global,"ttl",Mcast_ttl);
   Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",Blocktime));
@@ -261,6 +263,8 @@ static int loadconfig(char const * const file){
     }
   }
   {
+    // Set up status/command stream, global for all receiver channels
+    // Should probably generate one randomly if not specified
     char const * const status = config_getstring(Configtable,global,"status",NULL); // Status/command target for all demodulators
     if(status == NULL){
       fprintf(stdout,"status=<mcast group> missing in [global], e.g, status=hf.local\n");
@@ -294,6 +298,7 @@ static int loadconfig(char const * const file){
     }
   }
   int const nsect = iniparser_getnsec(Configtable);
+  int ndemods = 0;
   for(int sect = 0; sect < nsect; sect++){
     char const * const sname = iniparser_getsecname(Configtable,sect);
     if(strcasecmp(sname,global) == 0)
@@ -321,21 +326,25 @@ static int loadconfig(char const * const file){
     }
     loadmode(demod,Configtable,sname,0); // Overwrite with config file entries
 
-    Mcast_ttl = config_getint(Configtable,sname,"ttl",Mcast_ttl); // Read in each section too
-    demod->output.rtp.ssrc = (uint32_t)config_getdouble(Configtable,sname,"ssrc",0); // Default triggers auto gen from freq
-    char const * data = config_getstring(Configtable,global,"data",NULL);
-    data = config_getstring(Configtable,sname,"data",data);
+    // Override [global] settings with section settings
+    int const mcast_ttl = config_getint(Configtable,sname,"ttl",Mcast_ttl); // Read in each section too
+    int const ip_tos = config_getint(Configtable,sname,"tos",IP_tos);
+    char const *iface = config_getstring(Configtable,sname,"iface",Iface);
+    char const * const data = config_getstring(Configtable,sname,"data",Data);
     if(data == NULL){
       fprintf(stdout,"'data =' missing and not set in [%s]\n",global);
       free_demod(&demod);
       continue;
     }
     strlcpy(demod->output.data_dest_string,data,sizeof(demod->output.data_dest_string));
+
+    demod->output.rtp.ssrc = (uint32_t)config_getdouble(Configtable,sname,"ssrc",0); // Default triggers auto gen from freq
+
     // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
     int slen = sizeof(demod->output.data_dest_address);
     avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),NULL,&demod->output.data_dest_address,&slen);
 
-    demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,Iface,Mcast_ttl,IP_tos);
+    demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,iface,mcast_ttl,ip_tos);
     if(demod->output.data_fd < 3){
       fprintf(stdout,"can't set up PCM output to %s\n",demod->output.data_dest_string);
       continue;
@@ -347,7 +356,7 @@ static int loadconfig(char const * const file){
     if(SAP_enable){
       // Highly experimental, off by default
       char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
-      demod->output.sap_fd = setup_mcast(sap_dest,NULL,1,Mcast_ttl,IP_tos,0);
+      demod->output.sap_fd = setup_mcast(sap_dest,NULL,1,mcast_ttl,ip_tos,0);
       if(demod->output.sap_fd < 3)
 	fprintf(stdout,"Can't set up SAP output to %s\n",sap_dest);
       else
@@ -355,7 +364,7 @@ static int loadconfig(char const * const file){
     }
      // RTCP Real Time Control Protocol daemon is optional
     if(RTCP_enable){
-      demod->output.rtcp_fd = setup_mcast(demod->output.data_dest_string,NULL,1,Mcast_ttl,IP_tos,1); // RTP port number + 1
+      demod->output.rtcp_fd = setup_mcast(demod->output.data_dest_string,NULL,1,mcast_ttl,ip_tos,1); // RTP port number + 1
       if(demod->output.rtcp_fd < 3)
 	fprintf(stdout,"can't set up RTCP output to %s\n",demod->output.data_dest_string);
       else
@@ -365,6 +374,7 @@ static int loadconfig(char const * const file){
     // To work around iniparser's limited line length, we look for multiple keywords
     // "freq", "freq0", "freq1", etc, up to "freq9"
     int nfreq = 0;
+
     for(int ff = -1; ff < 10; ff++){
       char fname[10];
       if(ff == -1)
@@ -376,9 +386,9 @@ static int loadconfig(char const * const file){
       if(frequencies == NULL)
 	break; // no more
 
-      char *freq_list = strdup(frequencies); // Need writeable copy for strtok
+      char * freq_list = strdup(frequencies); // Need writeable copy for strtok
       char *saveptr = NULL;
-      for(char *tok = strtok_r(freq_list," \t",&saveptr);
+      for(char const *tok = strtok_r(freq_list," \t",&saveptr);
 	  tok != NULL;
 	  tok = strtok_r(NULL," \t",&saveptr)){
 	
@@ -393,11 +403,11 @@ static int loadconfig(char const * const file){
 	if(demod->output.rtp.ssrc == 0){
 	  if(f == 0){
 	    if(Dynamic_demod)
-	      free_demod(&Dynamic_demod);
+	      free_demod(&Dynamic_demod); // Free old one
 
 	    // Template for dynamically created demods
 	    Dynamic_demod = demod;
-	    fprintf(stdout,"dynamic demod template created\n");
+	    fprintf(stdout,"dynamic demod template created, data = %s\n",data);
 	  } else {
 	    for(char const *cp = tok ; cp != NULL && *cp != '\0' ; cp++){
 	      if(isdigit(*cp)){
@@ -407,7 +417,7 @@ static int loadconfig(char const * const file){
 	    }
 	  }
 	}
-	// initialize oscillator
+	// initialize oscillator - is this necessary? done in downconvert()
 	set_osc(&demod->fine,demod->filter.remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate));
 	// Initialization all done, start it up
 	set_freq(demod,demod->tune.freq);

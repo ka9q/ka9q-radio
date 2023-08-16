@@ -166,12 +166,11 @@ set of parameters from the specified section of
 */var/lib/ka9q-radio/modes.conf*. See the documentation for that file
 for a description of the standard definitions.
 
-**status** String; No default. Valid only in [global]. Specifies the
+**status** String; No default. Valid only in [global]. Required. Specifies the
 domain name of the control/status multicast group used for all
-channels in this instance of *radiod*.  Not mandatory, but unset there
-will be no way to dynamically create new receiver channels or to
-control or monitor statically configured channels. *radiod* will
-deterministically hash this string to generate and advertise an IPv4
+channels in this instance of *radiod*. 
+This string is
+deterministically hashed to generate and advertise an IPv4
 multicast address in the 239.0.0.0/8 block, along with a SRV DNS
 record of type _ka9q-ctl._udp with this name.
 
