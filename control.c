@@ -424,8 +424,8 @@ int main(int argc,char *argv[]){
   int64_t const random_interval = BILLION/20; // 50 ms
   int64_t next_radio_poll = gps_time_ns(); // Immediate first poll
   
+  bool update_needed = false;
   for(;;){
-    bool update_needed = false;
     int64_t const radio_poll_interval  = Refresh_rate * BILLION;
 
     if(gps_time_ns() >= next_radio_poll){
@@ -490,6 +490,7 @@ int main(int argc,char *argv[]){
 	wnoutrefresh(Debug_win);
       }    
       doupdate();      // Update the screen right before we pause
+      update_needed = false;
     }    
     // Set up command buffer in case we want to change something
     uint8_t cmdbuffer[9000];
@@ -515,6 +516,7 @@ int main(int argc,char *argv[]){
       int const command_len = bp - cmdbuffer;
       if(send(Ctl_fd, cmdbuffer, command_len, 0) != command_len)
 	perror("command send");
+      update_needed = true; // show local change right away
     }
   }
  quit:;
