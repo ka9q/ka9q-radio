@@ -32,7 +32,7 @@
 #include "filter.h"
 #include "status.h"
 
-float Blocktime;
+extern float Blocktime;
 struct frontend Frontend;
 
 pthread_mutex_t Demod_list_mutex = PTHREAD_MUTEX_INITIALIZER;
