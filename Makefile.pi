@@ -117,7 +117,7 @@ metadump: metadump.o dump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 monitor: monitor.o morse.o config.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lncursesw -liniparser -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lasound -lncursesw -liniparser -lbsd -lm -lpthread
 
 opusd: opusd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lavahi-client -lavahi-common -lbsd -lm -lpthread
