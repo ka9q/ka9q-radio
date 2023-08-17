@@ -15,6 +15,7 @@
 #include <iniparser/iniparser.h>
 #if __linux__
 #include <bsd/string.h>
+#include <alsa/asoundlib.h>
 #else
 #include <string.h>
 #endif
@@ -76,6 +77,7 @@ static char const *Init;
 static int64_t Last_xmit_time;
 static int64_t Last_id_time;
 static float *Output_buffer;
+static int Buffer_length; // Bytes left to play out, max BUFFERSIZE
 static volatile unsigned int Rptr;            // callback read pointer, *frames*
 static bool PTT_state;
 static uint64_t Audio_callbacks;
@@ -90,6 +92,7 @@ static pthread_mutex_t Sess_mutex = PTHREAD_MUTEX_INITIALIZER;
 static PaStream *Pa_Stream;          // Portaudio stream handle
 static int inDevNum;                 // Portaudio's audio output device index
 static int64_t Start_time;
+static pthread_mutex_t Stream_mutex = PTHREAD_MUTEX_INITIALIZER; // Control access to stream start/stop
 static PaTime Start_pa_time;
 static PaTime Last_callback_time;
 static int Invalids;
@@ -176,6 +179,7 @@ static void *sockproc(void *arg);
 static void *repeater_ctl(void *arg);
 static char const *lookupid(uint32_t ssrc);
 static float make_position(int);
+static bool kick_output();
 static inline int modsub(unsigned int const a, unsigned int const b, int const modulus){
   int diff = (int)a - (int)b;
   if(diff > modulus)
@@ -213,6 +217,13 @@ static struct  option Options[] = {
    {NULL, 0, NULL, 0},
 };
 
+
+#ifdef __linux__
+// Get rid of those fucking ALSA error messages that clutter the screen
+static void alsa_error_handler(const char *file, int line, const char *function, int err, const char *fmt, ...){
+  return;
+}
+#endif
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
@@ -377,6 +388,10 @@ int main(int argc,char * const argv[]){
     // -14 dB is 1 kHz ID deviation divided by 5 kHz peak deviation
     Dit_length = init_morse(ID_speed,ID_pitch,ID_level,DAC_samprate);
   }    
+#ifdef __linux__
+  // Get rid of those fucking ALSA error messages that clutter the screen
+  snd_lib_error_set_handler(alsa_error_handler); // Flush those annoying ALSA error messages
+#endif
 
   PaError r = Pa_Initialize();
   if(r != paNoError){
@@ -447,16 +462,6 @@ int main(int argc,char * const argv[]){
 
   Pa_SetStreamFinishedCallback(Pa_Stream,pa_finished_callback);
 
-  // Do this at the last minute at startup since the upcall will come quickly
-  r = Pa_StartStream(Pa_Stream);
-  if(r != paNoError){
-    fprintf(stderr,"Portaudio error: %s, exiting\n",Pa_GetErrorText(r));
-    exit(1);
-  }
-  Start_pa_time = Pa_GetStreamTime(Pa_Stream);
-  Start_time = gps_time_ns();
-  Last_error_time = Start_time;
-
   // Spawn one thread per address
   // All have to succeed in resolving their targets or we'll exit
   // This allows a restart when started automatically from systemd before avahi is fully running
@@ -486,6 +491,8 @@ SIGQUIT,SIGSEGV,SIGSYS,SIGTERM,SIGTRAP,SIGUSR1,SIGUSR2,
     }
   }
 
+  Last_error_time = gps_time_ns();
+
   // Become the display thread
   if(!Quiet){
     display(NULL);
@@ -498,7 +505,7 @@ SIGQUIT,SIGSEGV,SIGSYS,SIGTERM,SIGTRAP,SIGUSR1,SIGUSR2,
   echo();
   nocbreak();
   endwin();
-  if(Tx_off)
+  if(Repeater_tail && Tx_off != NULL)
     (void) - system(Tx_off);
     
   exit(0);
@@ -720,7 +727,7 @@ static void *decode_task(void *arg){
 	opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
     }
     sp->rtp_state.seq = pkt->rtp.seq + 1;
-    if(pkt->rtp.marker){
+    if(!sp->muted && pkt->rtp.marker){
       // beginning of talk spurt, resync
       reset_session(sp,pkt->rtp.timestamp); // Updates sp->wptr
     }
@@ -779,10 +786,6 @@ static void *decode_task(void *arg){
       int const samples = opus_decode_float(sp->opus,pkt->data,pkt->len,bounce,bounce_size,0);
       if(samples != sp->frame_size)
 	fprintf(stderr,"samples %d frame-size %d\n",samples,sp->frame_size);
-      
-      // opus timestamps are always 48 kHz regardless of chosen decoder output sample rate
-      // Can difference in timestamps be negative? Cast it anyway
-      sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * DAC_samprate / 48000;
     } else { // PCM
       // Test for invalidity
       sp->samprate = samprate_from_pt(sp->type);
@@ -800,11 +803,7 @@ static void *decode_task(void *arg){
       bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
       for(int i=0; i < sp->channels * sp->frame_size; i++)
 	bounce[i] = SCALE16 * (int16_t)ntohs(data_ints[i]);
-      // Can difference in timestamps be negative? Cast it anyway
-      sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * upsample;
     }
-    sp->wptr &= (BUFFERSIZE-1);
-    sp->last_timestamp = pkt->rtp.timestamp;
     // Run PL tone decoders
     // Disable if display isn't active and autonotching is off
     // Fed audio that might be discontinuous or out of sequence, but it's a pain to fix
@@ -840,122 +839,121 @@ static void *decode_task(void *arg){
 	} else
 	  sp->current_tone = 0;
       } // End of tone observation period
+      if(sp->current_tone != 0 && sp->notch_tone != sp->current_tone){
+	// New or changed tone
+	sp->notch_tone = sp->current_tone;
+	setIIRnotch(&sp->iir_right,sp->current_tone/sp->samprate);
+	setIIRnotch(&sp->iir_left,sp->current_tone/sp->samprate);
+      }
     } // sp->notch_enable
-    bool keyup = false; // Don't do printf while holding locks
-    if(modsub(sp->wptr,Rptr,BUFFERSIZE) < 0){
-      sp->lates++;
-      if(++consec_lates < 3)
-	goto endloop; // Drop packet as late
-      
-      // 3 or more consecutive lates triggers a reset
-      if(!Constant_delay)
-	sp->reset = true;
-    }
-    consec_lates = 0;
-    if(modsub(sp->wptr,Rptr,BUFFERSIZE) > BUFFERSIZE/4){
-      sp->earlies++;
-      if(++consec_earlies < 3)
-	goto endloop; // Drop if just a few
-      
-      sp->reset = true; // Resync to new timestamps
-    }
-    consec_earlies = 0;
-    if(sp->reset)
-      reset_session(sp,pkt->rtp.timestamp); // Updates sp->wptr
-    
-    if(sp->current_tone != 0 && sp->notch_tone != sp->current_tone){
-      // New or changed tone
-      sp->notch_tone = sp->current_tone;
-      setIIRnotch(&sp->iir_right,sp->current_tone/sp->samprate);
-      setIIRnotch(&sp->iir_left,sp->current_tone/sp->samprate);
-    }
-    if(!sp->muted){
-      if(Channels == 2){
-	/* Compute gains and delays for stereo imaging
-	   Extreme gain differences can make the source sound like it's inside an ear
-	   This can be uncomfortable in good headphones with extreme panning
-	   -6dB for each channel in the center
-	   when full to one side or the other, that channel is +6 dB and the other is -inf dB */
-	float const left_gain = sp->gain * (1 - sp->pan)/2;
-	float const right_gain = sp->gain * (1 + sp->pan)/2;
-	/* Delay less favored channel 0 - 1.5 ms max (determined
-	   empirically) This is really what drives source localization
-	   in humans. The effect is so dramatic even with equal levels
-	   you have to remove one earphone to convince yourself that the
-	   levels really are the same! */
-	int const left_delay = (sp->pan > 0) ? round(sp->pan * .0015 * DAC_samprate) : 0; // Delay left channel
-	int const right_delay = (sp->pan < 0) ? round(-sp->pan * .0015 * DAC_samprate) : 0; // Delay right channel
 
-	assert(left_delay >= 0 && right_delay >= 0);
-
-	// Mix bounce buffer into output buffer read by portaudio callback
-	// Simplified by mirror buffer wrap
-	int left_index = 2 * (sp->wptr + left_delay);
-	int right_index = 2 * (sp->wptr + right_delay) + 1;
-
-	for(int i=0; i < sp->frame_size; i++){
-	  float left,right;
-	  if(sp->channels == 1){
-	    // Mono input, put on both channels
-	    left = bounce[i];
-	    if(sp->notch_enable && sp->notch_tone > 0)
-	      left = applyIIRnotch(&sp->iir_left,left);
-	    right = left;
-	  } else {
-	    // stereo input
-	    left = bounce[2*i];
-	    right = bounce[2*i+1];
-	    if(sp->notch_enable && sp->notch_tone > 0){
-	      left = applyIIRnotch(&sp->iir_left,left);
-	      right = applyIIRnotch(&sp->iir_right,right);
-	    }
-	  }
-	  // Not the cleanest way to upsample the sample rate, but it works
-	  for(int j=0; j < upsample; j++){
-	    Output_buffer[left_index] += left * left_gain;
-	    Output_buffer[right_index] += right * right_gain;
-	    left_index += 2;
-	    right_index += 2;
-	  }
-	}
-      } else { // Channels == 1, no panning
-	int64_t index = sp->wptr;
-	for(int i=0; i < sp->frame_size; i++){
-	  float s;
-	  if(sp->channels == 1){
-	    s = bounce[i];
-	  } else {
-	    // Downmix to mono
-	    s = 0.5 * (bounce[2*i] + bounce[2*i+1]);
-	  }
-	  if(sp->notch_enable && sp->notch_tone > 0)
-	    s = applyIIRnotch(&sp->iir_left,s);
-	  // Not the cleanest way to upsample the sample rate, but it works
-	  for(int j=0; j < upsample; j++){
-	    Output_buffer[index++] += s * sp->gain;
-	  }
-	}
-      } // Channels == 1
-    } // !sp->muted
-    LastAudioTime = gps_time_ns();
-    pthread_mutex_lock(&PTT_mutex);
-    if(Repeater_tail != 0 && !PTT_state){
-      PTT_state = true;
-      (void) - system(Tx_on);
-      keyup = true;
-      pthread_cond_signal(&PTT_cond);
-    }
-    pthread_mutex_unlock(&PTT_mutex);
-    
-    if(Quiet && keyup){
-      // debugging only, temp
-      char result[1024];
-      fprintf(stdout,"%s: PTT On\n",
-	      format_gpstime(result,sizeof(result),LastAudioTime));
-    }
     // Count samples and frames and advance write pointer even when muted
     sp->tot_active += (float)sp->frame_size / sp->samprate;
     sp->active += (float)sp->frame_size / sp->samprate;
+
+    if(sp->muted)
+      goto endloop; // No more to do with this frame
+
+    // Sequence number processing and write pointer updating
+    if(kick_output()){
+      // Output was restarted, reset our wptr to match
+      sp->reset = true;
+    } else {
+      if(modsub(sp->wptr,Rptr,BUFFERSIZE) < 0){
+	sp->lates++;
+	if(++consec_lates < 3 || Constant_delay)
+	  goto endloop; // Drop packet as late
+	// 3 or more consecutive lates triggers a reset
+	sp->reset = true;
+      }
+      consec_lates = 0;
+      if(modsub(sp->wptr,Rptr,BUFFERSIZE) > BUFFERSIZE/4){
+	sp->earlies++;
+	if(++consec_earlies < 3)
+	  goto endloop; // Drop if just a few
+	sp->reset = true; // should this happen if Constant_delay is set?
+      }
+      consec_earlies = 0;
+    }
+    if(sp->reset)
+      reset_session(sp,pkt->rtp.timestamp); // Resets sp->wptr and last_timestamp
+    else {
+      // Normal packet, relative adjustment to write pointer
+      // Can difference in timestamps be negative? Cast it anyway
+      // Opus always counts timestamps at 48 kHz so this breaks when DAC_samprate is not 48 kHz
+      // For opus, sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * DAC_samprate / 48000;
+      sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * upsample;
+      sp->wptr &= (BUFFERSIZE-1);
+      sp->last_timestamp = pkt->rtp.timestamp;
+    }
+    
+    if(Channels == 2){
+      /* Compute gains and delays for stereo imaging
+	 Extreme gain differences can make the source sound like it's inside an ear
+	 This can be uncomfortable in good headphones with extreme panning
+	 -6dB for each channel in the center
+	 when full to one side or the other, that channel is +6 dB and the other is -inf dB */
+      float const left_gain = sp->gain * (1 - sp->pan)/2;
+      float const right_gain = sp->gain * (1 + sp->pan)/2;
+      /* Delay less favored channel 0 - 1.5 ms max (determined
+	 empirically) This is really what drives source localization
+	 in humans. The effect is so dramatic even with equal levels
+	 you have to remove one earphone to convince yourself that the
+	 levels really are the same! */
+      int const left_delay = (sp->pan > 0) ? round(sp->pan * .0015 * DAC_samprate) : 0; // Delay left channel
+      int const right_delay = (sp->pan < 0) ? round(-sp->pan * .0015 * DAC_samprate) : 0; // Delay right channel
+      
+      assert(left_delay >= 0 && right_delay >= 0);
+      
+      // Mix bounce buffer into output buffer read by portaudio callback
+      // Simplified by mirror buffer wrap
+      int left_index = 2 * (sp->wptr + left_delay);
+      int right_index = 2 * (sp->wptr + right_delay) + 1;
+      
+      for(int i=0; i < sp->frame_size; i++){
+	float left,right;
+	if(sp->channels == 1){
+	  // Mono input, put on both channels
+	  left = bounce[i];
+	  if(sp->notch_enable && sp->notch_tone > 0)
+	    left = applyIIRnotch(&sp->iir_left,left);
+	  right = left;
+	} else {
+	  // stereo input
+	  left = bounce[2*i];
+	  right = bounce[2*i+1];
+	  if(sp->notch_enable && sp->notch_tone > 0){
+	    left = applyIIRnotch(&sp->iir_left,left);
+	    right = applyIIRnotch(&sp->iir_right,right);
+	  }
+	}
+	// Not the cleanest way to upsample the sample rate, but it works
+	for(int j=0; j < upsample; j++){
+	  Output_buffer[left_index] += left * left_gain;
+	  Output_buffer[right_index] += right * right_gain;
+	  left_index += 2;
+	  right_index += 2;
+	}
+      }
+    } else { // Channels == 1, no panning
+      int64_t index = sp->wptr;
+      for(int i=0; i < sp->frame_size; i++){
+	float s;
+	if(sp->channels == 1){
+	  s = bounce[i];
+	} else {
+	  // Downmix to mono
+	  s = 0.5 * (bounce[2*i] + bounce[2*i+1]);
+	}
+	if(sp->notch_enable && sp->notch_tone > 0)
+	  s = applyIIRnotch(&sp->iir_left,s);
+	// Not the cleanest way to upsample the sample rate, but it works
+	for(int j=0; j < upsample; j++){
+	  Output_buffer[index++] += s * sp->gain;
+	}
+      }
+    } // Channels == 1
+
   endloop:;
     FREE(bounce);
     FREE(pkt);
@@ -1076,8 +1074,10 @@ static void *display(void *arg){
 	  if(time - sp->last_active < BILLION/2){
 	    // Active within the past 500 ms
 	    attr_on(A_BOLD,NULL);
-	    int d = modsub(sp->wptr,Rptr,BUFFERSIZE); // Unplayed samples on queue
-	    queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
+	    if(!sp->muted){
+	      int d = modsub(sp->wptr,Rptr,BUFFERSIZE); // Unplayed samples on queue
+	      queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
+	    }
 	  } else {
 	    sp->active = 0; // Clear accumulated value
 	    idle_sec = (time - sp->last_active) / BILLION;
@@ -1095,6 +1095,7 @@ static void *display(void *arg){
 	attr_off(A_STANDOUT,NULL);
 	{
 	  char idle_buf[100];
+	  char total_buf[100];
 	  char active_buf[100];
 	  char identifier[31];
 	  
@@ -1103,20 +1104,20 @@ static void *display(void *arg){
 	  
 	  int64_t active_sec = sp->active;
 	  if(sp->notch_enable)
-	    printw("%9u %5.1f %5.1f %-30s%10.0f%10s%10s%6d",
+	    printw("%9u %5.1f %5.1f %-30s%10s%10s%10s%6d",
 		   sp->ssrc,
 		   sp->current_tone,
 		   sp->notch_tone,
 		   identifier,
-		   sp->tot_active, // Total active time, sec
+		   ftime(total_buf,sizeof(total_buf),sp->tot_active),
 		   ftime(active_buf,sizeof(active_buf),active_sec),
 		   ftime(idle_buf,sizeof(idle_buf),idle_sec),   // Time idle since last transmission
 		   queue_ms); // Playout buffer length, fractional sec
 	  else
-	    printw("%9u             %-30s%10.0f%10s%10s%6d",
+	    printw("%9u             %-30s%10s%10s%10s%6d",
 		   sp->ssrc,
 		   identifier,
-		   sp->tot_active, // Total active time, sec
+		   ftime(total_buf,sizeof(total_buf),sp->tot_active),
 		   ftime(active_buf,sizeof(active_buf),active_sec),
 		   ftime(idle_buf,sizeof(idle_buf),idle_sec),   // Time idle since last transmission
 		   queue_ms); // Playout buffer length, fractional sec	  
@@ -1185,7 +1186,7 @@ static void *display(void *arg){
       for(int i = 0; i < Nsessions; i++){
 	struct session *sp = Sessions[i];
 	if(sp->muted){
-	  sp->reset = true;
+	  sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	  sp->muted = false;
 	}
       }
@@ -1319,7 +1320,7 @@ static void *display(void *arg){
       if(current >= 0){
 	struct session *sp = Sessions[current];
 	if(sp->muted){
-	  sp->reset = true;
+	  sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	  sp->muted = false;
 	}
       }
@@ -1329,7 +1330,7 @@ static void *display(void *arg){
 	Sessions[current]->muted = true;
       break;
     case 'r':
-      // Reset playout queue
+      // Manually reset playout queue
       if(current >= 0)
 	Sessions[current]->reset = true;
       break;
@@ -1458,7 +1459,7 @@ static int close_session(struct session **p){
 }
 static void closedown(int s){
   fprintf(stderr,"Signal %d, exiting\n",s);
-  if(Tx_off)
+  if(Repeater_tail != 0 && Tx_off != NULL)
     (void) - system(Tx_off);
   cleanup();
   exit(0);
@@ -1474,14 +1475,9 @@ static void cleanup(void){
   }
 }
 
-// Portaudio finished callback - should be called only on error, so exit
-// If running from systemd, we should be restarted
+// Portaudio finished callback
+// Callback finishes now happen routinely when we go quiet, so this is now a no-op
 static void pa_finished_callback(void *userdata){
-  if(Tx_off)
-    (void) - system(Tx_off);
-  cleanup();
-  fprintf(stderr,"pa_finished_callback() called, exiting\n");
-  exit(0);
 }
 
 
@@ -1519,7 +1515,11 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
   memset(&Output_buffer[Channels*Rptr],0,bytecount);
   Rptr += framesPerBuffer;
   Rptr &= (BUFFERSIZE-1);
-  return paContinue;
+  Buffer_length -= framesPerBuffer;
+  if(Buffer_length <= 0)
+    return paComplete;
+  else
+    return paContinue;
 }
 
 #if 0
@@ -1546,6 +1546,7 @@ void send_cwid(void){
     char result[1024];
     fprintf(stdout,"%s: CW ID started\n",format_gpstime(result,sizeof(result),gps_time_ns()));
   }
+  kick_output();
 
   float samples[60 * Dit_length];
   uint32_t wptr = (Rptr + ((long)Playout * DAC_samprate))/1000;
@@ -1565,6 +1566,7 @@ void send_cwid(void){
       for(int i=0;i<samplecount;i++)
 	Output_buffer[wptr++] += samples[i];
     }
+    kick_output();
     // Wait for it to play out
     int64_t const sleeptime = BILLION * samplecount / DAC_samprate;
     struct timespec ts;
@@ -1710,4 +1712,51 @@ static float make_position(int x){
   }
   // Scale
   return 0.5 * (((float)y / 128) - 1);
+}
+
+// Start output stream if it was off; kick idle timer
+// Return true if it was started
+
+bool kick_output(){
+  bool restarted = false;
+  pthread_mutex_lock(&Stream_mutex);
+  if(!Pa_IsStreamActive(Pa_Stream)){
+    // Start it up
+    Rptr = 0; // Reset play pointer
+    if(!Pa_IsStreamStopped(Pa_Stream))
+      Pa_StopStream(Pa_Stream); // it was in limbo
+    int r = Pa_StartStream(Pa_Stream);
+    if(r != paNoError){
+      fprintf(stderr,"Portaudio error: %s, aborting\n",Pa_GetErrorText(r));
+      abort();
+    }
+    Start_pa_time = Pa_GetStreamTime(Pa_Stream);
+    Start_time = gps_time_ns();
+    restarted = true;
+  }
+  Buffer_length = BUFFERSIZE; // (Continue to) run for at least the length of the ring buffer
+  pthread_mutex_unlock(&Stream_mutex);
+
+  // Key up the repeater if it's not already on
+  LastAudioTime = gps_time_ns();
+  bool keyup = false; // Don't do printf while holding locks
+  pthread_mutex_lock(&PTT_mutex);
+  if(Repeater_tail != 0 && !PTT_state){
+    PTT_state = true;
+    keyup = true;
+    pthread_cond_signal(&PTT_cond);
+  }
+  pthread_mutex_unlock(&PTT_mutex);
+  
+  if(keyup){
+    (void) - system(Tx_on);
+
+    if(Quiet){ // curses display is not on
+      // debugging only, temp
+      char result[1024];
+      fprintf(stdout,"%s: PTT On\n",
+	      format_gpstime(result,sizeof(result),LastAudioTime));
+    }
+  }
+  return restarted;
 }
