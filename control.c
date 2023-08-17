@@ -1233,9 +1233,10 @@ static void display_filtering(WINDOW *w,struct demod const *demod){
   if(Frontend.samprate)
     pprintw(w,row++,col,"FFT out","%'lld c ",N * demod->output.samprate / Frontend.samprate);
   
-  // FFT bin size
-  pprintw(w,row++,col,"Overlap","%'.3f %% ",100.*(Frontend.M - 1)/(float)N);
-  pprintw(w,row++,col,"Freq bin","%'.3f Hz",(float)Frontend.samprate / N);
+  int overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
+  pprintw(w,row++,col,"Overlap","1/%d   ",overlap);
+  pprintw(w,row++,col,"Bin step","%'.3f Hz",(float)Frontend.samprate / N); // frequency between FFT bin centers
+  pprintw(w,row++,col,"Bin width","%'.3f Hz",1000.0/Blocktime); // Just the block rate
   
   float const beta = demod->filter.kaiser_beta;
   pprintw(w,row++,col,"Kaiser beta","%'.1f   ",beta);
@@ -1249,13 +1250,16 @@ static void display_filtering(WINDOW *w,struct demod const *demod){
   // Eq (7) attenuation of first sidelobe
   float const cos_theta_r = 0.217324; // cosine of the first solution of tan(x) = x [really]
   float atten = 20 * log10(sinh(beta) / (cos_theta_r * beta));
-  
   pprintw(w,row++,col,"Sidelobes","%'.1f dB",-atten);
+
   
-  //    float firstnull = (1/(2*M_PI)) * sqrtf(M_PI * M_PI + beta*beta); // Eqn (3) to first null
+  float firstnull = (1/(2*M_PI)) * sqrtf(M_PI * M_PI + beta*beta); // Eqn (3) to first null
   float const transition = (2.0 / M_PI) * sqrtf(M_PI*M_PI + beta * beta);
-  pprintw(w,row++,col,"transition","%'.1f Hz",transition * Frontend.samprate / (Frontend.M-1)); // Not N, apparently
+  pprintw(w,row++,col,"first null","%'.1f Hz",0.5 * transition * Frontend.samprate / (Frontend.M-1)); // Not N, apparently
+  //  pprintw(w,row++,col,"first null","%'.1f Hz",firstnull * 1000. / Blocktime);
 #endif
+
+
   pprintw(w,row++,col,"Drops","%'llu   ",Block_drops);
   
   box(w,0,0);
