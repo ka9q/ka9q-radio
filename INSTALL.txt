@@ -25,6 +25,7 @@ librtlsdr-dev
 libusb-1.0-0-dev
 libusb-dev
 portaudio19-dev
+libasound2-dev
 uuid-dev
 
 Although not needed to build ka9q-radio, I find these additional
