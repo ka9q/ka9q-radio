@@ -306,7 +306,7 @@ void *proc_funcube(void *arg){
   }
  terminate:
   Pa_Terminate();
-  return 0;
+  exit(1); // Let systemd restart us
 }
 int funcube_startup(struct frontend *frontend){
   assert(frontend != NULL);

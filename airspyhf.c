@@ -223,7 +223,7 @@ static void *airspyhf_monitor(void *p){
   }
   fprintf(stdout,"Device is no longer streaming, exiting\n");
   airspyhf_close(sdr->device);
-  return NULL;
+  exit(1); // Let systemd restart us
 }
 
 static bool Name_set = false;

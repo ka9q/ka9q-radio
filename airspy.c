@@ -304,7 +304,7 @@ static void *airspy_monitor(void *p){
   fprintf(stdout,"Device is no longer streaming, exiting\n");
   airspy_close(sdr->device);
   airspy_exit();
-  return NULL;
+  exit(1); // Let systemd restart us
 }
 
 
