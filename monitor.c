@@ -78,11 +78,12 @@ static int64_t Last_xmit_time;
 static int64_t Last_id_time;
 static float *Output_buffer;
 static int Buffer_length; // Bytes left to play out, max BUFFERSIZE
-static volatile unsigned int Rptr;            // callback read pointer, *frames*
-static bool PTT_state;
+static volatile unsigned int Rptr;   // callback thread read pointer, *frames*
+static volatile unsigned int Wptr;   // For monitoring length of output queue
+static volatile bool PTT_state;
 static uint64_t Audio_callbacks;
 static unsigned long Audio_frames;
-static int64_t LastAudioTime;
+static volatile int64_t LastAudioTime;
 static int32_t Portaudio_delay;
 static pthread_t Repeater_thread;
 static pthread_cond_t PTT_cond = PTHREAD_COND_INITIALIZER;
@@ -99,6 +100,7 @@ static int Invalids;
 static int64_t Last_error_time;
 static int Nsessions;
 static struct session *Sessions[NSESSIONS];
+static bool Terminate;
 
 // All the tones from various groups, including special NATO 150 Hz tone
 static float PL_tones[] = {
@@ -165,14 +167,12 @@ struct session {
 
 static void load_id(void);
 static void cleanup(void);
-static void closedown(int);
 static void *display(void *);
 static void reset_session(struct session *sp,uint32_t timestamp);
 static struct session *lookup_session(struct sockaddr_storage const *,uint32_t);
 static struct session *create_session(void);
 static int sort_session_active(void),sort_session_total(void);
 static int close_session(struct session **);
-static void pa_finished_callback(void *);
 static int pa_callback(void const *,void *,unsigned long,PaStreamCallbackTimeInfo const *,PaStreamCallbackFlags,void *);
 static void *decode_task(void *x);
 static void *sockproc(void *arg);
@@ -241,7 +241,6 @@ int main(int argc,char * const argv[]){
       break;
     }
   }
-  optind = 0; // reset getopt()
   if(Config_file){
     dictionary *Configtable = iniparser_load(Config_file);
     if(Configtable == NULL){
@@ -294,6 +293,7 @@ int main(int argc,char * const argv[]){
   }
   // Rescan args to override config file
   bool list_audio = false;
+  optind = 0; // reset getopt()
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
     case 'c':
@@ -357,6 +357,7 @@ int main(int argc,char * const argv[]){
       const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(inDevNum);
       printf("%d: %s\n",inDevNum,deviceInfo->name);
     }
+    Pa_Terminate();
     exit(0);
   }
 
@@ -376,9 +377,13 @@ int main(int argc,char * const argv[]){
     } else 
       Mcast_address_text[Nfds++] = argv[i];
   }
-  if(Init)
-    (void) - system(Init);
+  if(Nfds == 0){
+    fprintf(stderr,"At least one input group required, exiting\n");
+    exit(1);
+  }
 
+  if(Init != NULL)
+    (void) - system(Init);
 
   if(Cwid != NULL){
     // Operating as a repeater controller; initialize
@@ -390,7 +395,7 @@ int main(int argc,char * const argv[]){
   }    
 #ifdef __linux__
   // Get rid of those fucking ALSA error messages that clutter the screen
-  snd_lib_error_set_handler(alsa_error_handler); // Flush those annoying ALSA error messages
+  snd_lib_error_set_handler(alsa_error_handler);
 #endif
 
   PaError r = Pa_Initialize();
@@ -398,12 +403,8 @@ int main(int argc,char * const argv[]){
     fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
     return r;
   }
-  atexit(cleanup);
+  atexit(cleanup); // Make sure Pa_Terminate() gets called
 
-  if(Nfds == 0){
-    fprintf(stderr,"At least one input group required, exiting\n");
-    exit(1);
-  }
   load_id();
   char *nextp = NULL;
   int d;
@@ -460,8 +461,6 @@ int main(int argc,char * const argv[]){
   if(Repeater_tail != 0)
     pthread_create(&Repeater_thread,NULL,repeater_ctl,NULL); // Repeater mode active
 
-  Pa_SetStreamFinishedCallback(Pa_Stream,pa_finished_callback);
-
   // Spawn one thread per address
   // All have to succeed in resolving their targets or we'll exit
   // This allows a restart when started automatically from systemd before avahi is fully running
@@ -469,46 +468,16 @@ int main(int argc,char * const argv[]){
   for(int i=0; i<Nfds; i++)
     pthread_create(&sockthreads[i],NULL,sockproc,Mcast_address_text[i]);
 
-  // Capture signals that would cause termination, but skip any that have been
-  // set to non-default handlers (e.g., gdb breakpoints?)
-  // We make this effort to ensure a repeater transmitter isn't left on if we abort
-  static int const signals[] = { SIGABRT,SIGALRM,SIGBUS,SIGFPE,SIGHUP,SIGILL,SIGINT,
-    SIGIO,SIGKILL,SIGPIPE, SIGPROF,
-#ifdef SIGPWR
-    SIGPWR,
-#endif
-SIGQUIT,SIGSEGV,SIGSYS,SIGTERM,SIGTRAP,SIGUSR1,SIGUSR2,
-    SIGVTALRM,SIGXCPU,SIGXFSZ };
-
-  for(int i=0;i < sizeof(signals)/sizeof(signals[0]); i++){
-    struct sigaction old_sa;
-    sigaction(signals[i],NULL,&old_sa);
-    if(old_sa.sa_handler == SIG_DFL){
-      struct sigaction new_sa;
-      memset(&new_sa,0,sizeof(new_sa));
-      new_sa.sa_handler = closedown;
-      sigaction(signals[i],&new_sa,NULL);
-    }
-  }
-
   Last_error_time = gps_time_ns();
 
   // Become the display thread
   if(!Quiet){
     display(NULL);
   } else {
-    while(true)
-      sleep(1000);
+    while(!Terminate)
+      sleep(1);
   }
-
-  // won't actually get here
-  echo();
-  nocbreak();
-  endwin();
-  if(Repeater_tail && Tx_off != NULL)
-    (void) - system(Tx_off);
-    
-  exit(0);
+  exit(0); // calls cleanup() to clean up Portaudio and ncurses
 }
 
 static void *sockproc(void *arg){
@@ -533,8 +502,7 @@ static void *sockproc(void *arg){
   
   realtime();
   // Main loop begins here
-  while(1){
-
+  while(!Terminate){
     // Need a new packet buffer?
     if(!pkt)
       pkt = malloc(sizeof(*pkt));
@@ -543,6 +511,7 @@ static void *sockproc(void *arg){
     pkt->data = NULL;
     pkt->len = 0;
     
+    // Needs a timeout to poll Terminate
     struct sockaddr_storage sender;
     socklen_t socksize = sizeof(sender);
     int size = recvfrom(input_fd,&pkt->content,sizeof(pkt->content),0,(struct sockaddr *)&sender,&socksize);
@@ -639,7 +608,7 @@ static void *sockproc(void *arg){
     // wake up decoder thread
     pthread_cond_signal(&sp->qcond);
     pthread_mutex_unlock(&sp->qmutex);
-  }      
+  }
   return NULL;
 }
 
@@ -678,7 +647,7 @@ static void *decode_task(void *arg){
   float *bounce = NULL;
 
   // Main loop; run until asked to quit
-  while(!sp->terminate){
+  while(!sp->terminate && !Terminate){
     struct packet *pkt = NULL;
     // Wait for packet to appear on queue
     pthread_mutex_lock(&sp->qmutex);
@@ -692,7 +661,7 @@ static void *decode_task(void *arg){
 	if(r == EINVAL)
 	  Invalids++;
 	pthread_mutex_unlock(&sp->qmutex);
-	goto endloop;// restart loop, checking terminate flag
+	goto endloop;// restart loop, checking terminate flags
       }
     }
     // Peek at first packet on queue; is it in sequence?
@@ -854,27 +823,23 @@ static void *decode_task(void *arg){
     if(sp->muted)
       goto endloop; // No more to do with this frame
 
+    kick_output(); // Ensure Rptr is current
     // Sequence number processing and write pointer updating
-    if(kick_output()){
-      // Output was restarted, reset our wptr to match
+    if(modsub(sp->wptr,Rptr,BUFFERSIZE) < 0){
+      sp->lates++;
+      if(++consec_lates < 3 || Constant_delay)
+	goto endloop; // Drop packet as late
+      // 3 or more consecutive lates triggers a reset
       sp->reset = true;
-    } else {
-      if(modsub(sp->wptr,Rptr,BUFFERSIZE) < 0){
-	sp->lates++;
-	if(++consec_lates < 3 || Constant_delay)
-	  goto endloop; // Drop packet as late
-	// 3 or more consecutive lates triggers a reset
-	sp->reset = true;
-      }
-      consec_lates = 0;
-      if(modsub(sp->wptr,Rptr,BUFFERSIZE) > BUFFERSIZE/4){
-	sp->earlies++;
-	if(++consec_earlies < 3)
-	  goto endloop; // Drop if just a few
-	sp->reset = true; // should this happen if Constant_delay is set?
-      }
-      consec_earlies = 0;
     }
+    consec_lates = 0;
+    if(modsub(sp->wptr,Rptr,BUFFERSIZE) > BUFFERSIZE/4){
+      sp->earlies++;
+      if(++consec_earlies < 3)
+	goto endloop; // Drop if just a few
+      sp->reset = true; // should this happen if Constant_delay is set?
+    }
+    consec_earlies = 0;
     if(sp->reset)
       reset_session(sp,pkt->rtp.timestamp); // Resets sp->wptr and last_timestamp
     else {
@@ -934,6 +899,7 @@ static void *decode_task(void *arg){
 	  left_index += 2;
 	  right_index += 2;
 	}
+	Wptr = right_index / 2; // samples to frames; For verbose mode
       }
     } else { // Channels == 1, no panning
       int64_t index = sp->wptr;
@@ -951,6 +917,7 @@ static void *decode_task(void *arg){
 	for(int j=0; j < upsample; j++){
 	  Output_buffer[index++] += s * sp->gain;
 	}
+	Wptr = index; // For verbose mode
       }
     } // Channels == 1
 
@@ -981,7 +948,7 @@ static void *display(void *arg){
   int current = -1; // No current session
   bool help = false;
 
-  while(1){
+  while(!Terminate){
     assert(first_session >= 0);
     assert(first_session == 0 || first_session < Nsessions);
     assert(current >= -1);
@@ -1001,9 +968,9 @@ static void *display(void *arg){
       if(fp != NULL){
 	size_t size = 1024;
 	char *line = malloc(size);
-	while(getline(&line,&size,fp) != -1){
+	while(getline(&line,&size,fp) != -1)
 	  addstr(line);
-	}
+
 	FREE(line);
 	fclose(fp);
 	fp = NULL;
@@ -1150,29 +1117,36 @@ static void *display(void *arg){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
 	double unix_seconds = (gps_time_ns() - Start_time) * 1e-9;
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
-	printw("Audio callbacks: %'llu, Rptr %'8u, framesPerCallback %'lu,",(unsigned long long)Audio_callbacks,Rptr,Audio_frames);
+	double q = (int)(Wptr - Rptr) & (BUFFERSIZE-1);
+	q /= DAC_samprate;
+	
+	printw("Audio callbacks: %'llu, Rptr %'8u, Wptr %'8u (%.3lf sec), framesPerCallback %'lu,",
+	       (unsigned long long)Audio_callbacks,Rptr,Wptr,q,Audio_frames);
 	static float avg_err = 0;
 	avg_err += .0001 * (1e6 * (pa_seconds / unix_seconds - 1) - avg_err);
-	printw(" Portaudio latency %d ms,",Portaudio_delay);
-	printw(" D/A clock error %+.3lf ppm,",1e6 * (pa_seconds / unix_seconds - 1));
+	printw(" latency %d ms,",Portaudio_delay);
+	printw(" clock er %+.3lf ppm,",1e6 * (pa_seconds / unix_seconds - 1));
 	// Time since last packet drop on any channel
-	printw(" Error-free seconds %'.1lf,",(1e-9*(gps_time_ns() - Last_error_time)));
-	printw(" Initial playout time %.0f ms,",Playout);
+	printw(" Error-free sec %'.1lf,",(1e-9*(gps_time_ns() - Last_error_time)));
+	printw(" Playout %.0f ms,",Playout);
 	printw(" Last callback %.3lf",Last_callback_time);
       }      
     }
 
     // process keyboard commands only if there's something to act on
-    int c = getch(); // Pauses here
+    int c = getch(); // Waits for 'update interval' ms if no input
     
     // Not all of these commands require locking, but it's easier to just always do it
-    pthread_mutex_lock(&Sess_mutex); // Re-lock after time consuming wgetch (which includes a refresh)
+    pthread_mutex_lock(&Sess_mutex); // Re-lock after time consuming getch() (which includes a refresh)
     // Since we unlocked & relocked, Nsessions might have changed (incremented) again
     if(Nsessions == 0)
       current = -1;
     if(Nsessions > 0 && current == -1)
       current = 0;
     switch(c){
+    case 'Q': // quit program
+      Terminate = true;
+      break;
     case 'v':
       Verbose = !Verbose;
       break;
@@ -1457,18 +1431,14 @@ static int close_session(struct session **p){
   assert(0); // get here only if not found, which shouldn't happen
   return -1;
 }
-static void closedown(int s){
-  cleanup();
-  fprintf(stderr,"Signal %d, exiting\n",s);
-  if(Repeater_tail != 0 && Tx_off != NULL)
-    (void) - system(Tx_off);
 
-  exit(0);
-}
-
-
+// passed to atexit, invoked at exit
+// must not call exit() to avoid looping
 static void cleanup(void){
-  // must not call exit() to avoid loop
+  if(Repeater_tail != 0 && Tx_off != NULL)
+    system(Tx_off);
+
+  Pa_StopStream(Pa_Stream);
   Pa_Terminate();
   if(!Quiet){
     echo();
@@ -1476,12 +1446,6 @@ static void cleanup(void){
     endwin();
   }
 }
-
-// Portaudio finished callback
-// Callback finishes now happen routinely when we go quiet, so this is now a no-op
-static void pa_finished_callback(void *userdata){
-}
-
 
 // Portaudio callback - transfer data (if any) to provided buffer
 static int pa_callback(void const *inputBuffer, void *outputBuffer,
@@ -1495,16 +1459,6 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
   if(!outputBuffer)
     return paAbort; // can this happen??
   
-#if 1
-  if(Last_callback_time + 1.0 < timeInfo->currentTime){
-    // We've been asleep for >1 sec. Reset everybody
-    pthread_mutex_lock(&Sess_mutex);
-    for(int i = 0; i < Nsessions; i++)
-      Sessions[i]->reset = true;
-    memset(Output_buffer,0,BUFFERSIZE * Channels * sizeof(*Output_buffer)); // Wipe clean
-    pthread_mutex_unlock(&Sess_mutex);
-  }
-#endif
   Last_callback_time = timeInfo->currentTime;
   assert(framesPerBuffer < BUFFERSIZE); // Make sure ring buffer is big enough
   // Delay within Portaudio in milliseconds
@@ -1518,10 +1472,7 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
   Rptr += framesPerBuffer;
   Rptr &= (BUFFERSIZE-1);
   Buffer_length -= framesPerBuffer;
-  if(Buffer_length <= 0)
-    return paComplete;
-  else
-    return paContinue;
+  return (Buffer_length <= 0) ?  paComplete : paContinue;
 }
 
 #if 0
@@ -1548,9 +1499,8 @@ void send_cwid(void){
     char result[1024];
     fprintf(stdout,"%s: CW ID started\n",format_gpstime(result,sizeof(result),gps_time_ns()));
   }
-  kick_output();
-
   float samples[60 * Dit_length];
+  kick_output(); // Start output stream if it was stopped, so we can get current Rptr
   uint32_t wptr = (Rptr + ((long)Playout * DAC_samprate))/1000;
   wptr &= (BUFFERSIZE-1);
 
@@ -1564,16 +1514,17 @@ void send_cwid(void){
 	Output_buffer[2*wptr] += samples[i];
 	Output_buffer[(2*wptr++ + 1)] += samples[i];
       }
+      Wptr = wptr / 2;
     } else { // Channels == 1
       for(int i=0;i<samplecount;i++)
 	Output_buffer[wptr++] += samples[i];
+      Wptr = wptr;
     }
-    kick_output();
-    // Wait for it to play out
+    kick_output(); // In case it has already drained; the ID could be quite long
     int64_t const sleeptime = BILLION * samplecount / DAC_samprate;
     struct timespec ts;
     ns2ts(&ts,sleeptime);
-    nanosleep(&ts,NULL);
+    nanosleep(&ts,NULL);    // Wait for it to play out
   }
   if(Quiet){
     fprintf(stdout,"CW ID finished\n");
@@ -1589,54 +1540,63 @@ void send_cwid(void){
 // Drop PTT some time after last write to audio output ring buffer
 void *repeater_ctl(void *arg){
   pthread_setname("rptctl");
-  while(1){
-    // Wait for carrier to come up; set in main loop whenever audio buffer is written to
+
+  while(!Terminate){
+    // Wait for audio output; set in kick_output()
     pthread_mutex_lock(&PTT_mutex);
     while(!PTT_state)
       pthread_cond_wait(&PTT_cond,&PTT_mutex);
     pthread_mutex_unlock(&PTT_mutex);
 
-    // Transmitter is on; are we required to ID?
-    int64_t now = gps_time_ns();
-    if(now > Last_id_time + Mandatory_ID_interval){
-      // must ID on top of users to satisfy FCC max ID interval
-      Last_id_time = now;
-      send_cwid();
-      now = gps_time_ns(); // send_cwid() has delays
+    // Turn transmitter on
+    if(Tx_on != NULL)
+      (void) - system(Tx_on);
+    if(Quiet){ // curses display is not on
+      // debugging only, temp
+      char result[1024];
+      fprintf(stdout,"%s: PTT On\n",
+	      format_gpstime(result,sizeof(result),LastAudioTime));
     }
-    int64_t const drop_time = LastAudioTime + BILLION * Repeater_tail;
-    if(now < drop_time){
+    while(1){
+      int64_t now = gps_time_ns();
+      // When are we required to ID?
+      if(now >= Last_id_time + Mandatory_ID_interval){
+	// must ID on top of users to satisfy FCC max ID interval
+	Last_id_time = now;
+	send_cwid();
+	now = gps_time_ns(); // send_cwid() has delays
+      }
+      int64_t const drop_time = LastAudioTime + BILLION * Repeater_tail;
+      if(now >= drop_time)
+	break;
+      
       // Sleep until possible end of timeout, or next mandatory ID, whichever is first
       int64_t const sleep_time = min(drop_time,Last_id_time + Mandatory_ID_interval) - now;
       if(sleep_time > 0){
 	struct timespec ts;
 	ns2ts(&ts,sleep_time);
 	nanosleep(&ts,NULL);
-	continue;
       }
     }
-    // Tail dropout timer expired
-    // ID more often than 10 minutes to minimize IDing on top of users
-    if(now > Last_id_time + Quiet_ID_interval){
-      // update LastAudioTime here (even though it will be updated in the portaudio upcall)
-      // so the PTT won't momentarily drop
+    // Drop transmitter
+    // See if we can ID early before dropping, to avoid sending on top of the next transmission
+    int64_t now = gps_time_ns();
+    if(now > Last_id_time + Mandatory_ID_interval / 2){
       Last_id_time = now;
-      // Send an ID
-      // Use nonblocking I/O so we won't hang if the cwd fails for some reason
-      // Ignore sigpipe signals too?
       send_cwid();
-    } else {
-      if(Quiet){
-	// debug only, temp
-	char result[1024];
-	fprintf(stdout,"%s: PTT Off\n",format_gpstime(result,sizeof(result),gps_time_ns()));
-      }
-      pthread_mutex_lock(&PTT_mutex);
-      PTT_state = false;
-      (void) - system(Tx_off);
-      pthread_mutex_unlock(&PTT_mutex);
-      Last_xmit_time = gps_time_ns();
+      now = gps_time_ns();
     }
+    pthread_mutex_lock(&PTT_mutex);
+    PTT_state = false;
+    pthread_mutex_unlock(&PTT_mutex);
+    Last_xmit_time = gps_time_ns();
+    if(Quiet){
+      // debug only, temp
+      char result[1024];
+      fprintf(stdout,"%s: PTT Off\n",format_gpstime(result,sizeof(result),gps_time_ns()));
+    }
+    if(Tx_off != NULL)
+      (void) - system(Tx_off);
   }
   return NULL;
 }
@@ -1714,51 +1674,48 @@ static float make_position(int x){
   }
   // Scale
   return 0.5 * (((float)y / 128) - 1);
-}
+} 
 
-// Start output stream if it was off; kick idle timer
-// Return true if it was started
-
+// Start output stream if it was off; reset idle timeout on output audio stream activity
+// Return true if we (re)started it
 bool kick_output(){
   bool restarted = false;
   pthread_mutex_lock(&Stream_mutex);
   if(!Pa_IsStreamActive(Pa_Stream)){
     // Start it up
-    Rptr = 0; // Reset play pointer
     if(!Pa_IsStreamStopped(Pa_Stream))
       Pa_StopStream(Pa_Stream); // it was in limbo
-    int r = Pa_StartStream(Pa_Stream);
+
+    Start_time = gps_time_ns();
+    Start_pa_time = Pa_GetStreamTime(Pa_Stream); // Stream Time runs continuously even when stream stopped
+    // Adjust Rptr for the missing time we were asleep, but only
+    // if this isn't the first time
+    // This will break if someone goes back in time and starts this program at precisely 00:00:00 UTC on 1 Jan 1970 :-)
+    if(Last_callback_time != 0){
+      Rptr += DAC_samprate * (Start_pa_time - Last_callback_time);
+      Rptr &= (BUFFERSIZE-1);
+    }
+
+    int r = Pa_StartStream(Pa_Stream); // Immediately triggers the first callback
     if(r != paNoError){
       fprintf(stderr,"Portaudio error: %s, aborting\n",Pa_GetErrorText(r));
       abort();
     }
-    Start_pa_time = Pa_GetStreamTime(Pa_Stream);
-    Start_time = gps_time_ns();
     restarted = true;
   }
   Buffer_length = BUFFERSIZE; // (Continue to) run for at least the length of the ring buffer
   pthread_mutex_unlock(&Stream_mutex);
 
-  // Key up the repeater if it's not already on
-  LastAudioTime = gps_time_ns();
-  bool keyup = false; // Don't do printf while holding locks
-  pthread_mutex_lock(&PTT_mutex);
-  if(Repeater_tail != 0 && !PTT_state){
-    PTT_state = true;
-    keyup = true;
-    pthread_cond_signal(&PTT_cond);
-  }
-  pthread_mutex_unlock(&PTT_mutex);
-  
-  if(keyup){
-    (void) - system(Tx_on);
-
-    if(Quiet){ // curses display is not on
-      // debugging only, temp
-      char result[1024];
-      fprintf(stdout,"%s: PTT On\n",
-	      format_gpstime(result,sizeof(result),LastAudioTime));
+  // Key up the repeater if it's configured and not already on
+  if(Repeater_tail != 0){
+    LastAudioTime = gps_time_ns();
+    pthread_mutex_lock(&PTT_mutex);
+    if(!PTT_state){
+      PTT_state = true;
+      pthread_cond_signal(&PTT_cond); // Notify the repeater control thread to ID and run drop timer
     }
+    pthread_mutex_unlock(&PTT_mutex);
+  
   }
   return restarted;
 }
