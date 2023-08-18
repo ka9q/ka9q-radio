@@ -418,7 +418,7 @@ static int loadconfig(char const * const file){
 	  }
 	}
 	// initialize oscillator - is this necessary? done in downconvert()
-	set_osc(&demod->fine,demod->filter.remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate));
+	//	set_osc(&demod->fine,demod->filter.remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate)); ***TEST****
 	// Initialization all done, start it up
 	set_freq(demod,demod->tune.freq);
 	if(demod->tune.freq != 0){ // Don't start dynamic entry
@@ -450,6 +450,46 @@ static int loadconfig(char const * const file){
     free_demod(&demod); // last one wasn't needed
     fprintf(stdout,"%d demodulators started\n",nfreq);
   }
+  // Create dynamic demod with [global] parameters if it wasn't done in a section
+  if(Dynamic_demod == NULL && Data != NULL){
+    char const * mode = config_getstring(Configtable,global,"mode",NULL);
+    if(mode == NULL || strlen(mode) == 0)
+      goto done_dynamic;
+
+    struct demod *demod = alloc_demod();
+    if(demod == NULL)
+      goto done_dynamic;
+
+    if(loadmode(demod,Modetable,mode,1) != 0){
+      free_demod(&demod);
+      goto done_dynamic;
+    }
+    loadmode(demod,Configtable,"global",0); // Overwrite with config file entries
+
+    char const * const data = Data;
+    strlcpy(demod->output.data_dest_string,data,sizeof(demod->output.data_dest_string));
+    demod->output.rtp.ssrc = 0;
+
+    // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
+    int slen = sizeof(demod->output.data_dest_address);
+    // Use name of radiod
+    avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),NULL,&demod->output.data_dest_address,&slen);
+
+    demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,Iface,Mcast_ttl,IP_tos);
+    if(demod->output.data_fd < 3){
+      free_demod(&demod);
+      goto done_dynamic;
+    } else {
+      socklen_t len = sizeof(demod->output.data_source_address);
+      getsockname(demod->output.data_fd,(struct sockaddr *)&demod->output.data_source_address,&len);
+    }
+    //    set_osc(&demod->fine,demod->filter.remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate)); ***TEST****
+    set_freq(demod,0);
+    Dynamic_demod = demod;
+    fprintf(stdout,"Dynamic demod established from [global]\n");
+  }
+ done_dynamic:;
+
   // Start the status thread after all the receivers have been created so it doesn't contend for the demod list lock
   if(Ctl_fd >= 3 && Status_fd >= 3){
     pthread_create(&Status_thread,NULL,radio_status,NULL);

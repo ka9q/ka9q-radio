@@ -79,6 +79,8 @@ static int set_defaults(struct demod *demod){
   demod->filter.kaiser_beta = DEFAULT_KAISER_BETA;
   demod->filter.min_IF = DEFAULT_LOW;
   demod->filter.max_IF = DEFAULT_HIGH;
+  demod->filter.remainder = NAN;      // Important to force downconvert() to call set_osc() on first call
+  demod->filter.bin_shift = -1000999; // Force initialization here too
   demod->squelch_open = dB2power(DEFAULT_SQUELCH_OPEN);
   demod->squelch_close = dB2power(DEFAULT_SQUELCH_CLOSE);
   demod->squelchtail = DEFAULT_SQUELCHTAIL;

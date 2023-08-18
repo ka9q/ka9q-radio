@@ -526,6 +526,7 @@ int downconvert(struct demod *demod){
     complex float * const buffer = demod->filter.out->output.c; // Working output time-domain buffer (if any)
     // set fine tuning frequency & phase. Do before execute_filter blocks (can't remember why)
     if(buffer != NULL){ // No output time-domain buffer in spectrum mode
+      // avoid them both being 0 at startup; init demod->filter.remainder as NAN
       if(remainder != demod->filter.remainder){
 	set_osc(&demod->fine,remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate));
 	demod->filter.remainder = remainder;
@@ -533,6 +534,7 @@ int downconvert(struct demod *demod){
       // Block phase adjustment (folded into the fine tuning osc) in two parts:
       // (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
       // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
+      // Be sure to Initialize demod->filter.bin_shift at startup to something bizarre to force this inequality on first call
       if(shift != demod->filter.bin_shift){
 	const int V = 1 + (Frontend.in->ilen / (Frontend.in->impulse_length - 1)); // Overlap factor
 	demod->filter.phase_adjust = cispi(-2.0f*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
