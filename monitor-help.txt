@@ -1,3 +1,4 @@
+Q quit monitor entirely
 ↑ ↓ select prev/next session
 ⤒ ⤓ (home/end) select first/last session
 ⇞ ⇟ (page up/down) select prev/next session page
