@@ -1458,15 +1458,17 @@ static int close_session(struct session **p){
   return -1;
 }
 static void closedown(int s){
+  cleanup();
   fprintf(stderr,"Signal %d, exiting\n",s);
   if(Repeater_tail != 0 && Tx_off != NULL)
     (void) - system(Tx_off);
-  cleanup();
+
   exit(0);
 }
 
 
 static void cleanup(void){
+  // must not call exit() to avoid loop
   Pa_Terminate();
   if(!Quiet){
     echo();
