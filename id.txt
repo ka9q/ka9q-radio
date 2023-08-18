@@ -556,6 +556,7 @@
 4468800 WA6ZFT La Mesa / 
 4469000 WD6DIH Irvine - Signal Peak
 4469000 WD6DIH Lake Forest - Santiago Peak
+4469200 W6SCE
 4469400  Mt Wilson DARN
 4469600 WD6DIH Baker -  Turquoise Mountain
 4469800 KW6HRO Otay PAPA D11 / WA6WLZ Loop Canyon
