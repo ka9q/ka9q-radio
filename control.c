@@ -646,8 +646,10 @@ static int process_keyboard(struct demod *demod,uint8_t **bpp,int c){
       char str[1024],*ptr;
       getentry("Gain, dB: ",str,sizeof(str));
       float const x = strtof(str,&ptr);
-      if(ptr != str)
+      if(ptr != str){
 	encode_float(bpp,GAIN,x);
+	encode_byte(bpp,AGC_ENABLE,0); // Also done implicitly in radiod
+      }
     }
     break;
   case 'r':

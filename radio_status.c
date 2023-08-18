@@ -274,8 +274,10 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
     case GAIN:
       {
 	float const f = decode_float(cp,optlen);
-	if(!isnan(f))
+	if(!isnan(f)){
 	  demod->output.gain = dB2voltage(f); // -Inf = 0 gain is OK
+	  demod->linear.agc = false; // Doesn't make sense to change gain and then have the AGC change it again
+	}
       }
       break;
     case AGC_HANGTIME: // seconds -> blocktimes
