@@ -899,7 +899,8 @@ static void *decode_task(void *arg){
 	  left_index += 2;
 	  right_index += 2;
 	}
-	Wptr = right_index / 2; // samples to frames; For verbose mode
+	if(modsub(right_index/2,Wptr,BUFFERSIZE) > 0)
+	   Wptr = right_index / 2; // samples to frames; For verbose mode
       }
     } else { // Channels == 1, no panning
       int64_t index = sp->wptr;
@@ -917,7 +918,8 @@ static void *decode_task(void *arg){
 	for(int j=0; j < upsample; j++){
 	  Output_buffer[index++] += s * sp->gain;
 	}
-	Wptr = index; // For verbose mode
+	if(modsub(index,Wptr,BUFFERSIZE) > 0)
+	   Wptr = index; // For verbose mode
       }
     } // Channels == 1
 
@@ -1115,21 +1117,15 @@ static void *display(void *arg){
       
       if(Verbose){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
-	double unix_seconds = (gps_time_ns() - Start_time) * 1e-9;
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
-	double q = (int)(Wptr - Rptr) & (BUFFERSIZE-1);
-	q /= DAC_samprate;
+	int q = modsub(Wptr,Rptr,BUFFERSIZE);
+	double qd = (double) q / DAC_samprate;
+	double rate = Audio_frames / pa_seconds;
 	
-	printw("Audio callbacks: %'llu, Rptr %'8u, Wptr %'8u (%.3lf sec), framesPerCallback %'lu,",
-	       (unsigned long long)Audio_callbacks,Rptr,Wptr,q,Audio_frames);
-	static float avg_err = 0;
-	avg_err += .0001 * (1e6 * (pa_seconds / unix_seconds - 1) - avg_err);
-	printw(" latency %d ms,",Portaudio_delay);
-	printw(" clock er %+.3lf ppm,",1e6 * (pa_seconds / unix_seconds - 1));
+	printw("Playout %.0f ms, latency %d ms, queue %.3lf sec, D/A rate %'.3lf Hz,",Playout,Portaudio_delay,qd,rate);
+	printw(" (%+.3lf ppm),",1e6 * (rate / DAC_samprate - 1));
 	// Time since last packet drop on any channel
-	printw(" Error-free sec %'.1lf,",(1e-9*(gps_time_ns() - Last_error_time)));
-	printw(" Playout %.0f ms,",Playout);
-	printw(" Last callback %.3lf",Last_callback_time);
+	printw(" Error-free sec %'.1lf",(1e-9*(gps_time_ns() - Last_error_time)));
       }      
     }
 
@@ -1454,7 +1450,7 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
 		       PaStreamCallbackFlags statusFlags,
 		       void *userData){
   Audio_callbacks++;
-  Audio_frames = framesPerBuffer;
+  Audio_frames += framesPerBuffer;
 
   if(!outputBuffer)
     return paAbort; // can this happen??
@@ -1472,7 +1468,13 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
   Rptr += framesPerBuffer;
   Rptr &= (BUFFERSIZE-1);
   Buffer_length -= framesPerBuffer;
+#if 0
+  int q = modsub(Wptr,Rptr,BUFFERSIZE);
+  if(q < 0)
+    return paComplete;
   return (Buffer_length <= 0) ?  paComplete : paContinue;
+#endif
+  return paContinue;
 }
 
 #if 0
@@ -1514,11 +1516,13 @@ void send_cwid(void){
 	Output_buffer[2*wptr] += samples[i];
 	Output_buffer[(2*wptr++ + 1)] += samples[i];
       }
-      Wptr = wptr / 2;
+      if(modsub(wptr/2,Wptr,BUFFERSIZE) > 0)
+	 Wptr = wptr / 2;
     } else { // Channels == 1
       for(int i=0;i<samplecount;i++)
 	Output_buffer[wptr++] += samples[i];
-      Wptr = wptr;
+      if(modsub(wptr,Wptr,BUFFERSIZE) > 0)
+	 Wptr = wptr;
     }
     kick_output(); // In case it has already drained; the ID could be quite long
     int64_t const sleeptime = BILLION * samplecount / DAC_samprate;
@@ -1578,8 +1582,8 @@ void *repeater_ctl(void *arg){
 	nanosleep(&ts,NULL);
       }
     }
-    // Drop transmitter
-    // See if we can ID early before dropping, to avoid sending on top of the next transmission
+    // time to drop transmitter
+    // See if we can ID early before dropping, to avoid a mandatory ID on the next transmission
     int64_t now = gps_time_ns();
     if(now > Last_id_time + Mandatory_ID_interval / 2){
       Last_id_time = now;
@@ -1688,6 +1692,7 @@ bool kick_output(){
 
     Start_time = gps_time_ns();
     Start_pa_time = Pa_GetStreamTime(Pa_Stream); // Stream Time runs continuously even when stream stopped
+    Audio_frames = 0;
     // Adjust Rptr for the missing time we were asleep, but only
     // if this isn't the first time
     // This will break if someone goes back in time and starts this program at precisely 00:00:00 UTC on 1 Jan 1970 :-)
