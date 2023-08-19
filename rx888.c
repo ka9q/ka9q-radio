@@ -44,6 +44,9 @@ struct sdrstate {
   unsigned char **databuffers;        // List of data buffers.
   long long last_callback_time;
 
+  // Stuff/drop samples for frequency adjustment
+  int64_t calcount;
+
   // USB transfer
   int xfers_in_progress;
   unsigned int queuedepth; // Number of requests to queue
@@ -162,6 +165,10 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const Dictio
   frontend->max_IF = 0.47 * frontend->samprate; // Just an estimate - get the real number somewhere
   frontend->isreal = true; // Make sure the right kind of filter gets created!
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
+  if(fabsl(frontend->calibrate) >= 1e-4){
+    fprintf(stdout,"Unreasonable frequency calibration %.3g, setting to 0\n",frontend->calibrate);
+    frontend->calibrate = 0;
+  }
   frontend->lock = true; // Doesn't tune in direct conversion mode
   {
     char const *p = config_getstring(Dictionary,section,"description","rx888");
@@ -191,6 +198,7 @@ int rx888_startup(struct frontend * const frontend){
 static void *proc_rx888(void *arg){
   struct sdrstate * const sdr = (struct sdrstate *)arg;
   assert(sdr != NULL);
+  struct frontend *frontend = sdr->frontend;
   pthread_setname("proc_rx888");
 
   realtime();
@@ -200,6 +208,9 @@ static void *proc_rx888(void *arg){
     assert(ret == 0);
     sdr->last_callback_time = gps_time_ns();
   }
+  if(frontend->calibrate != 0)
+    sdr->calcount = fabsl(1. / frontend->calibrate);
+
   do {
     // If the USB cable is pulled, libusb_handle_events() simply hangs
     // so use libusb_handle_events_timeout_completed() instead
@@ -259,7 +270,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
   uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
   int16_t const * const samples = (int16_t *)transfer->buffer;
   float * const wptr = frontend->in->input_write_pointer.r;
-  int const sampcount = size / sizeof(int16_t);
+  int sampcount = size / sizeof(int16_t);
   if(sdr->randomizer){
     for(int i=0; i < sampcount; i++){
       int m = ((int32_t)samples[i] << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
@@ -272,6 +283,21 @@ static void rx_callback(struct libusb_transfer * const transfer){
       int s = samples[i];
       in_energy += s * s;
       wptr[i] = s * SCALE16;
+    }
+  }
+  // add/drop sample for small sampling clock errors
+  if(frontend->calibrate > 0){
+    // Frequency high, drop samples
+    sdr->calcount -= sampcount;
+    if(sdr->calcount <= 0){
+      sdr->calcount = fabs(1. / frontend->calibrate); // Reset counter
+      sampcount--;
+    }
+  } else if(frontend->calibrate < 0){
+    sdr->calcount -= sampcount;
+    if(sdr->calcount <= 0){
+      sdr->calcount = fabs(1. / frontend->calibrate); // Reset counter
+      wptr[sampcount++] = 0; // Frequency low, stuff a sample at the end
     }
   }
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
