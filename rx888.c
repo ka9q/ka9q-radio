@@ -285,21 +285,6 @@ static void rx_callback(struct libusb_transfer * const transfer){
       wptr[i] = s * SCALE16;
     }
   }
-  // add/drop sample for small sampling clock errors
-  if(frontend->calibrate > 0){
-    // Frequency high, drop samples
-    sdr->calcount -= sampcount;
-    if(sdr->calcount <= 0){
-      sdr->calcount = fabs(1. / frontend->calibrate); // Reset counter
-      sampcount--;
-    }
-  } else if(frontend->calibrate < 0){
-    sdr->calcount -= sampcount;
-    if(sdr->calcount <= 0){
-      sdr->calcount = fabs(1. / frontend->calibrate); // Reset counter
-      wptr[sampcount++] = 0; // Frequency low, stuff a sample at the end
-    }
-  }
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
   frontend->samples += sampcount;
