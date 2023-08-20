@@ -44,8 +44,9 @@ struct sdrstate {
   unsigned char **databuffers;        // List of data buffers.
   long long last_callback_time;
 
-  // Stuff/drop samples for frequency adjustment
-  int64_t calcount;
+  // State for sample rate conversion by interpolation
+  float last;
+  float sample_phase;
 
   // USB transfer
   int xfers_in_progress;
@@ -198,7 +199,6 @@ int rx888_startup(struct frontend * const frontend){
 static void *proc_rx888(void *arg){
   struct sdrstate * const sdr = (struct sdrstate *)arg;
   assert(sdr != NULL);
-  struct frontend *frontend = sdr->frontend;
   pthread_setname("proc_rx888");
 
   realtime();
@@ -208,9 +208,6 @@ static void *proc_rx888(void *arg){
     assert(ret == 0);
     sdr->last_callback_time = gps_time_ns();
   }
-  if(frontend->calibrate != 0)
-    sdr->calcount = fabsl(1. / frontend->calibrate);
-
   do {
     // If the USB cable is pulled, libusb_handle_events() simply hangs
     // so use libusb_handle_events_timeout_completed() instead
@@ -270,24 +267,60 @@ static void rx_callback(struct libusb_transfer * const transfer){
   uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
   int16_t const * const samples = (int16_t *)transfer->buffer;
   float * const wptr = frontend->in->input_write_pointer.r;
-  int sampcount = size / sizeof(int16_t);
-  if(sdr->randomizer){
-    for(int i=0; i < sampcount; i++){
-      int m = ((int32_t)samples[i] << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
-      int s = samples[i] ^ m;
-      in_energy += s * s;
-      wptr[i] = s * SCALE16;
+  int const sampcount = size / sizeof(int16_t);
+
+  int output_count = 0;
+  if(frontend->calibrate == 0){
+    if(sdr->randomizer){
+      for(int i=0; i < sampcount; i++){
+	int m = ((int32_t)samples[i] << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
+	int s = samples[i] ^ m;
+	in_energy += s * s;
+	wptr[i] = s * SCALE16;
+      }
+    } else {
+      for(int i=0; i < sampcount; i++){
+	int s = samples[i];
+	in_energy += s * s;
+	wptr[i] = s * SCALE16;
+      }
     }
+    output_count = sampcount;
   } else {
+    // Correct sample rate by interpolation
     for(int i=0; i < sampcount; i++){
       int s = samples[i];
+      if(sdr->randomizer){
+	int m = ((int32_t)s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
+	s ^= m;
+      }	
+
       in_energy += s * s;
-      wptr[i] = s * SCALE16;
+      float const f = s * SCALE16;
+      wptr[output_count++] = sdr->last * (1 - sdr->sample_phase) + f * sdr->sample_phase;
+      sdr->last = f;
+      sdr->sample_phase += frontend->calibrate;
+      if(sdr->sample_phase >= 1.0){
+	// Sample clock is fast
+	// retard one output cycle
+	sdr->sample_phase -= 1.0;
+	output_count--;
+      } else if(sdr->sample_phase < 0){
+	// Sample clock is slow
+	// Retard one input cycle
+	sdr->sample_phase += 1.0;
+	i--;
+      }
     }
   }
-  write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->output_level = 2 * in_energy * SCALE16 * SCALE16 / sampcount;
-  frontend->samples += sampcount;
+  write_rfilter(frontend->in,NULL,output_count); // Update write pointer, invoke FFT
+
+  // real-only signals lack the power in an imaginary component, so to normalize with a complex signal we increase by 3 dB (2x)
+  // 0 dBFS = full range peak-to-peak for real-only, magnitude = 1 for complex
+  // The rest of the signal chain is complex until a converson to AM or SSB so I'm not sure about how things should be normalized
+  // to make the displayed signal levels work out
+  frontend->output_level = 2 * in_energy * SCALE16 * SCALE16 / output_count;
+  frontend->samples += sampcount; // Count original samples
   if(!Stop_transfers) {
     if(libusb_submit_transfer(transfer) == 0)
       sdr->xfers_in_progress++;
