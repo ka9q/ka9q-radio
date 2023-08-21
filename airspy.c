@@ -414,6 +414,8 @@ static double set_correct_freq(struct sdrstate * const sdr,double const freq){
   return frontend->frequency;
 }
 double airspy_tune(struct frontend * const frontend,double const f){
+  if(frontend->lock)
+    return frontend->frequency;
   struct sdrstate * const sdr = frontend->context;
   return set_correct_freq(sdr,f);
 }
