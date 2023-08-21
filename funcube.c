@@ -116,10 +116,10 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
     goto done;
   }
   // Set initial frequency
-  int intfreq = config_getint(dictionary,section,"frequency",0);
-  if(intfreq != 0){
+  double initfreq = config_getint(dictionary,section,"frequency",0);
+  if(initfreq != 0){
+    funcube_tune(frontend,initfreq);
     frontend->lock = true;
-    funcube_tune(frontend,(double)intfreq);
   }
   // Set up sample stream through portaudio subsystem
   // Search audio devices
@@ -393,6 +393,10 @@ static double fcd_actual(unsigned int u32Freq){
 double funcube_tune(struct frontend * const frontend,double const freq){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
+
+  if(frontend->lock)
+    return freq; // Don't change if locked
+
 
   int const intfreq = freq;
 
