@@ -46,7 +46,7 @@ struct sdrstate {
 
   // State for sample rate conversion by interpolation
   float last;
-  float sample_phase;
+  double sample_phase; // must be double precision - phase increments are small
 
   // USB transfer
   int xfers_in_progress;
@@ -287,35 +287,41 @@ static void rx_callback(struct libusb_transfer * const transfer){
     }
     output_count = sampcount;
   } else {
-    // Correct sample rate by interpolation
+    /* Correct sample rate by linear interpolation. Creates "chugging"
+     artifacts in noise at low levels and consumes a lot of CPU. So I
+     don't recommend using unless you need more precision and you
+     can't use an external GPSDO */
+    
     for(int i=0; i < sampcount; i++){
       int s = samples[i];
-      if(sdr->randomizer){
-	int m = ((int32_t)s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
-	s ^= m;
-      }	
+      if(sdr->randomizer)
+	s ^= ((int32_t)s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
 
       in_energy += s * s;
       float const f = s * SCALE16;
-      wptr[output_count++] = sdr->last * (1 - sdr->sample_phase) + f * sdr->sample_phase;
-      sdr->last = f;
-      sdr->sample_phase += frontend->calibrate;
-      if(sdr->sample_phase >= 1.0){
-	// Sample clock is fast
-	// retard one output cycle
+
+      if(sdr->sample_phase < 1.0){
+	// Usual case
+	assert(sdr->sample_phase >= 0 && sdr->sample_phase < 1);
+	wptr[output_count++] = sdr->last * (1 - sdr->sample_phase) + f * sdr->sample_phase;
+      } else {
+	// Sample clock is fast, don't generate an output sample this time
 	sdr->sample_phase -= 1.0;
-	output_count--;
-      } else if(sdr->sample_phase < 0){
-	// Sample clock is slow
-	// Retard one input cycle
-	sdr->sample_phase += 1.0;
-	i--;
       }
+      sdr->sample_phase += frontend->calibrate;
+      if(sdr->sample_phase < 0){
+	// Clock is slow; generate another from the same pair
+	sdr->sample_phase += 1.0;
+	assert(sdr->sample_phase >= 0 && sdr->sample_phase < 1);
+	wptr[output_count++] = sdr->last * (1 - sdr->sample_phase) + f * sdr->sample_phase;	  
+      }
+      sdr->last = f;
     }
   }
+
   write_rfilter(frontend->in,NULL,output_count); // Update write pointer, invoke FFT
 
-  // real-only signals lack the power in an imaginary component, so to normalize with a complex signal we increase by 3 dB (2x)
+  // real-only signals lack power in an imaginary component, so to normalize with a complex signal we increase by 3 dB (2x)
   // 0 dBFS = full range peak-to-peak for real-only, magnitude = 1 for complex
   // The rest of the signal chain is complex until a converson to AM or SSB so I'm not sure about how things should be normalized
   // to make the displayed signal levels work out
