@@ -246,9 +246,9 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   }
   double init_frequency = config_getdouble(Dictionary,section,"frequency",0);
   if(init_frequency != 0){
+    set_correct_freq(sdr,init_frequency);
     frontend->lock = true;
     fprintf(stdout,"Locked tuner frequency %'.3lf Hz\n",init_frequency);
-    set_correct_freq(sdr,init_frequency);
   }
   return 0;
 }
