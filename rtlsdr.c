@@ -47,10 +47,6 @@ struct sdrstate {
 
   bool bias; // Bias tee on/off
 
-  // Tuning
-  bool frequency_lock;
-  char const *frequency_file; // Local file to store frequency in case we restart
-
   // AGC
   bool agc;
   int holdoff_counter; // Time delay when we adjust gains
@@ -183,35 +179,19 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
       fprintf(stderr,"rtlsdr_set_sample_rate(%d) failed\n",frontend->samprate);
     }
   }
-  {
-    char *tmp = NULL;
-    sdr->frequency_file = NULL;
-    int ret = asprintf(&tmp,"%s/tune-rtlsdr.%s",VARDIR,sdr->serial);
-    if(ret != -1)
-      sdr->frequency_file = tmp;
-  }
+
   double init_frequency = config_getdouble(dictionary,section,"frequency",0);
-  if(init_frequency == 0){
-    // If not set on command line, load saved frequency
-    FILE *fp = fopen(sdr->frequency_file,"r+");
-    if(fp == NULL || fscanf(fp,"%lf",&init_frequency) < 0)
-      fprintf(stderr,"Can't read stored freq from %s: %s\n",sdr->frequency_file,strerror(errno));
-    else
-      fprintf(stderr,"Using stored frequency %'.3lf Hz from tuner state file %s\n",init_frequency,sdr->frequency_file);
-    if(fp != NULL)
-      fclose(fp);
+  if(init_frequency != 0){
+    frontend->lock = true;
+    set_correct_freq(sdr,init_frequency);
   }
-  if(init_frequency == 0){
-    // Not set on command line, and not read from file. Use fallback to cover 2m
-    init_frequency = 149e6;
-    fprintf(stderr,"Fallback initial frequency %'.3lf Hz\n",init_frequency);
-  }
+
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
   fprintf(stdout,"%s, samprate %'d Hz, agc %d, gain %d, bias %d, init freq %'.3lf Hz, calibrate %.3g\n",
 	  frontend->description,frontend->samprate,sdr->agc,sdr->gain,sdr->bias,init_frequency,
 	  frontend->calibrate);
 
-  set_correct_freq(sdr,init_frequency);
+
  // Just estimates - get the real number somewhere
   frontend->min_IF = -0.47 * frontend->samprate;
   frontend->max_IF = 0.47 * frontend->samprate;
@@ -407,11 +387,6 @@ static double set_correct_freq(struct sdrstate * const sdr,double freq){
 #endif
 
   frontend->frequency = tf * (1 + frontend->calibrate);
-  FILE * const fp = fopen(sdr->frequency_file,"w");
-  if(fp == NULL || fprintf(fp,"%lf\n",frontend->frequency) < 0)
-    fprintf(stderr,"Can't write to tuner state file %s: %sn",sdr->frequency_file,strerror(errno));
-  if(fp != NULL)
-    fclose(fp);
   return frontend->frequency;
 }
 

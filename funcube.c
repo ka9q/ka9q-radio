@@ -23,7 +23,6 @@ struct sdrstate {
   void *phd;               // Opaque pointer to type hid_device
 
   int number;
-  FILE *tunestate;
 
   // Smoothed error estimates
   complex float DC;      // DC offset
@@ -64,6 +63,8 @@ static bool Hold_open = false;
 
 static void do_fcd_agc(struct sdrstate *);
 static double fcd_actual(unsigned int);
+
+double funcube_tune(struct frontend * const frontend,double const freq);
 
 int funcube_setup(struct frontend * const frontend, dictionary * const dictionary, char const * const section){
   assert(dictionary != NULL);
@@ -115,40 +116,10 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
     goto done;
   }
   // Set initial frequency
-  int intfreq = 10000000; // 10 MHz
-  {
-    char tmp[PATH_MAX];
-    snprintf(tmp,sizeof(tmp),"%s/tune-funcube.%d",VARDIR,sdr->number);
-    sdr->tunestate = fopen(tmp,"r+");
-    if(!sdr->tunestate){
-      fprintf(stdout,"Can't open tuner state file %s: %s\n",tmp,strerror(errno));
-    } else {
-      // restore frequency from state file, if present
-      int freq;
-      rewind(sdr->tunestate);
-      if(fscanf(sdr->tunestate,"%d",&freq) > 0){
-	intfreq = freq;
-      }
-    }
-    // LNA gain is frequency-dependent
-    if(frontend->lna_gain){
-      if(intfreq >= 420e6)
-	frontend->lna_gain = 7;
-      else
-	frontend->lna_gain = 24;
-    }
-    if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
-      fprintf(stdout,"fcdOpen(%d): can't re-open control port\n",sdr->number);
-      return -1; // fatal error
-    }
-    fcdAppSetFreq(sdr->phd,intfreq);
-    frontend->frequency = fcd_actual(intfreq) * (1 + frontend->calibrate);
-  }
-  if(sdr->tunestate != NULL){
-    // Recreate for writing
-    rewind(sdr->tunestate);
-    fprintf(sdr->tunestate,"%d\n",intfreq);
-    fflush(sdr->tunestate); // Leave open for further use
+  int intfreq = config_getint(dictionary,section,"frequency",0);
+  if(intfreq != 0){
+    frontend->lock = true;
+    funcube_tune(frontend,(double)intfreq);
   }
   // Set up sample stream through portaudio subsystem
   // Search audio devices
@@ -425,28 +396,18 @@ double funcube_tune(struct frontend * const frontend,double const freq){
 
   int const intfreq = freq;
 
-  if(sdr->tunestate == NULL){
-    char *tmp = NULL;
-    int r = asprintf(&tmp,"%s/tune-funcube.%d",VARDIR,sdr->number);
-    if(r > 0 && tmp != NULL){
-      sdr->tunestate = fopen(tmp,"r+");
-      if(!sdr->tunestate)
-	fprintf(stdout,"Can't open tuner state file %s: %s\n",tmp,strerror(errno));
-      FREE(tmp);
-    }
-  }
   if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
     fprintf(stdout,"fcdOpen(%d): can't re-open control port\n",sdr->number);
     return frontend->frequency; // nothing changes
   }
   fcdAppSetFreq(sdr->phd,intfreq);
   frontend->frequency = fcd_actual(intfreq) * (1 + frontend->calibrate);
-
-  // Recreate for writing
-  if(sdr->tunestate != NULL){
-    rewind(sdr->tunestate);
-    fprintf(sdr->tunestate,"%d\n",intfreq);
-    fflush(sdr->tunestate); // Leave open for further use
+  // LNA gain is frequency-dependent
+  if(frontend->lna_gain){
+    if(intfreq >= 420e6)
+      frontend->lna_gain = 7;
+    else
+      frontend->lna_gain = 24;
   }
   return frontend->frequency;
 }  

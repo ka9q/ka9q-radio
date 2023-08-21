@@ -42,7 +42,6 @@ struct sdrstate {
   // Tuning
   double converter;   // Upconverter base frequency (usually 120 MHz)
   int offset; // 1/4 of sample rate in real mode; 0 in complex mode
-  char const *frequency_file; // Local file to store frequency in case we restart
 
   // AGC
   bool linearity; // Use linearity gain tables; default is sensitivity
@@ -246,37 +245,11 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     Low_threshold = dB2power(-fabs(dl));
   }
   double init_frequency = config_getdouble(Dictionary,section,"frequency",0);
-  if(init_frequency != 0)
-    frontend->lock = 1;
-  {
-    char *tmp;
-    int ret __attribute__ ((unused));
-    // space is malloc'ed by asprintf but not freed
-    ret = asprintf(&tmp,"%s/tune-airspy.%llx",VARDIR,(unsigned long long)sdr->SN);
-    if(ret != -1){
-      sdr->frequency_file = tmp;
-    }
+  if(init_frequency != 0){
+    frontend->lock = true;
+    fprintf(stdout,"Locked tuner frequency %'.3lf Hz\n",init_frequency);
+    set_correct_freq(sdr,init_frequency);
   }
-  if(init_frequency == 0){
-    // If not set on command line, load saved frequency
-    FILE * const fp = fopen(sdr->frequency_file,"r+");
-    if(fp == NULL)
-      fprintf(stdout,"Can't open tuner state file %s: %s\n",sdr->frequency_file,strerror(errno));
-    else {
-      fprintf(stdout,"Using tuner state file %s\n",sdr->frequency_file);
-      int r;
-      if((r = fscanf(fp,"%lf",&init_frequency)) < 0)
-	fprintf(stdout,"Can't read stored freq. r = %'d: %s\n",r,strerror(errno));
-      fclose(fp);
-    }
-  }
-  if(init_frequency == 0){
-    // Not set in config file or from cache file. Use fallback to cover 2m
-    init_frequency = 149e6; // Fallback default
-    fprintf(stdout,"Fallback default frequency %'.3lf Hz\n",init_frequency);
-  }
-  fprintf(stdout,"Setting initial frequency %'.3lf Hz, %s\n",init_frequency,frontend->lock ? "locked" : "not locked");
-  set_correct_freq(sdr,init_frequency);
   return 0;
 }
 int airspy_startup(struct frontend * const frontend){
@@ -438,13 +411,6 @@ static double set_correct_freq(struct sdrstate * const sdr,double const freq){
   assert(ret == AIRSPY_SUCCESS);
   double const tf = true_freq(intfreq);
   frontend->frequency = tf * (1 + frontend->calibrate) - sdr->converter;
-  FILE *fp = fopen(sdr->frequency_file,"w");
-  if(fp){
-    if(fprintf(fp,"%lf\n",frontend->frequency) < 0)
-      fprintf(stdout,"Can't write to tuner state file %s: %s\n",sdr->frequency_file,strerror(errno));
-    fclose(fp);
-    fp = NULL;
-  }
   return frontend->frequency;
 }
 double airspy_tune(struct frontend * const frontend,double const f){
