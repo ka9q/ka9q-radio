@@ -164,9 +164,9 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   }
   double init_frequency = config_getdouble(Dictionary,section,"frequency",0);
   if(init_frequency != 0){
+    set_correct_freq(sdr,init_frequency);
     frontend->lock = true;
     fprintf(stdout,"Locked tuner frequency %'.3lf Hz\n",init_frequency);
-    set_correct_freq(sdr,init_frequency);
   }
   return 0;
 }
@@ -232,7 +232,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
 }
 
 static double true_freq(uint64_t freq_hz){
-  return (double)freq_hz; // Placeholder
+  return (double)freq_hz; // Placeholder; the library seems to do frequency correction
 }
 
 // set the airspyhf tuner to the requested frequency, applying:
@@ -252,5 +252,7 @@ static double set_correct_freq(struct sdrstate *sdr,double freq){
 }
 double airspyhf_tune(struct frontend *frontend,double f){
   struct sdrstate *sdr = frontend->context;
+  if(frontend->lock)
+    return frontend->frequency; // Don't change it
   return set_correct_freq(sdr,f);
 }
