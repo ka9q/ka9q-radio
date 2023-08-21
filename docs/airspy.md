@@ -1,5 +1,5 @@
-Configuring *ka9q-radio* to use the Airspy SDRs
-===============================================
+Configuring *ka9q-radio* to use the Airspy R2 and HF+ SDRs
+==========================================================
 v2.0, August 2023
 Phil Karn, KA9Q
 ---------------
@@ -88,10 +88,10 @@ On the other hand, the current Airspy HF+ library readily supports only complex 
 The supported sample rates are logged in */var/log/syslog* when *radiod* starts and the device is initialized
 
 Airspy R2-only options
---------------------
+----------------------
 
 **linearity** Boolean, default off. Like most second-generation SDRs
-with analog tuners, the Airspy R2 has three stages of analog gain
+with Mirics (or similar) analog tuners, the Airspy R2 has three stages of analog gain
 ahead of the A/D converters that any AGC must carefully manage. The
 Airspy library provides separate gain tables optimized for sensitivity
 and for linearity (i.e. resistance to intermod). The
