@@ -182,8 +182,8 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
 
   double init_frequency = config_getdouble(dictionary,section,"frequency",0);
   if(init_frequency != 0){
-    frontend->lock = true;
     set_correct_freq(sdr,init_frequency);
+    frontend->lock = true;
   }
 
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
@@ -393,6 +393,8 @@ static double set_correct_freq(struct sdrstate * const sdr,double freq){
 double rtlsdr_tune(struct frontend * const frontend,double freq){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
+  if(frontend->lock)
+    return frontend->frequency; // Don't change frequency
 
   return set_correct_freq(sdr,freq);
 }  
