@@ -681,3 +681,8 @@ static int gain2val(bool highgain, double gain){
   g |= (highgain << 7);
   return g;
 }
+double rx888_tune(struct frontend *frontend,double freq){
+  if(frontend->lock)
+    return frontend->frequency;
+  return 0; // No tuning implemented (direct sampling only)
+}

@@ -91,6 +91,7 @@ double sdrplay_tune(struct frontend *,double);
 // In rx888.c
 int rx888_setup(struct frontend *,dictionary *,char const *);
 int rx888_startup(struct frontend *);
+double rx888_tune(struct frontend *,double);
 
 // In airspy.c
 int airspy_setup(struct frontend *,dictionary *,char const *);
