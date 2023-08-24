@@ -59,4 +59,4 @@ listens to it. It will also be advertised in DNS SRV (service
 discovery) records by the Linux mDNS daemon *avahi*, so keep
 it short but descriptive.
 
-Part 3 describes the configuration of channel groups.
+[Part 3](ka9q-radio-3.md) describes the configuration of channel groups.
