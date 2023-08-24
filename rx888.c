@@ -273,8 +273,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
   if(frontend->calibrate == 0){
     if(sdr->randomizer){
       for(int i=0; i < sampcount; i++){
-	int m = ((int32_t)samples[i] << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
-	int s = samples[i] ^ m;
+	int s = samples[i] ^ (((int32_t)samples[i] << 31) >> 30); // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
 	in_energy += s * s;
 	wptr[i] = s * SCALE16;
       }
