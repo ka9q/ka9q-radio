@@ -292,7 +292,7 @@ starts, but to avoid long startup times only minimal effort is expended.
 FFTW3 also uses the "global wisdom" file */etc/fftw/wisdomf*, which
 can be created with significantly more effort (and CPU time). Right
 now I generate the latter file by hand with a fairly esoteric set of
-commands, (see [FFTW3.md](FFTW3.md). FFTW *can* generate this information
+commands, see [FFTW3.md](FFTW3.md). FFTW *can* generate this information
 automatically when first run but can take *hours* to do so. I am
 working on a better way, e.g., by automatically starting wisdom
 generation in the background so that *radiod* starts immediately,
