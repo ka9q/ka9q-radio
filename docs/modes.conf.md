@@ -1,7 +1,11 @@
 *modes.conf* summary
 ====================
 
-The following modes (presets) are defined in the current version of */usr/local/share/ka9q-radio/modes.conf*. See the file itself for complete details
+The following modes (presets) are defined in the current version of
+*/usr/local/share/ka9q-radio/modes.conf*. See the file itself for
+complete details. You may add or delete entries in this file as
+needed, but be careful as it will be overwritten by the next "make
+install". (This needs to be fixed).
 
 *pm* - Phase modulation, i.e, standard amateur narrowband FM, 16 kHz
 bandwidth, 6 dB/octave de-emphasis.

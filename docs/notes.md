@@ -1,6 +1,9 @@
-*ka9q-radio* Installation Notes  
-14 August 2023
+*ka9q-radio* Miscellaneous Installation Notes  
+23 August 2023
 ===============================
+
+Software Platform
+-----------------
 
 The preferred platform is Debian Linux 12 ("bookworm") on the x86-64
 and the 64-bit "bullseye" version of Raspberry Pi OS for the Raspberry

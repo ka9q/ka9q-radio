@@ -4,7 +4,7 @@ v2.0, August 2023
 Phil Karn, KA9Q
 ---------------
 
-Here is an excerpt of the relevant sections from one of my own *radiod* config files for the Airspy R2.
+Here is an excerpt from one of my own *radiod* config files for the Airspy R2.
 It is in 'ini' format.
 
 [global]  
@@ -29,13 +29,6 @@ information. (In this example the name of the hardware section happens to be the
 
 Only one entry is mandatory: **device**. This specifies the front end hardware type, i.e, "airspy" (which means an Airspy R2) or "airspyhf" (the Airspy HF+).
 The defaults should be good for most cases, but you can override them as needed.
-
-**description** Optional. Gives free-format text that
-will be advertised through the *radiod* program to the
-control/status stream and the *control* program that
-listens to it. It will also be advertised in DNS SRV (service
-discovery) records by the Linux mDNS daemon *avahi*, so keep
-it short but descriptive.
 
 **serial** Optional. If not specified, *radiod* uses the first Airspy R2 or Airspy HF+ device discovered. Since this is probably
 not what you want, you should explicitly specify the serial number if more than one is present.
