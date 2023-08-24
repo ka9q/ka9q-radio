@@ -139,4 +139,10 @@ confuse with the *airspy* options **agc-high-threshold** and
 
 **hf-lna** Default off. Exact function unknown.
 
-**lib-dsp**  Default on. Exact function unknown.
+**lib-dsp** Default on. Enables the Airspy HF+ library to correct fine
+frequency errors and I/Q gain and phase imbalances. This library seems
+a little inefficient (it doesn't use FFTW3, and it consumes more than
+the rest of *radiod* combined) but is acceptable because of the
+relatively low HF+ sample rate (912 kHz).
+
+
