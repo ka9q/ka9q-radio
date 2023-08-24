@@ -12,12 +12,12 @@ This document describes the hardware definition section in a *radiod*
 config file.  The section name must match the **hardware** entry in
 the [global] section, e.g.,
 
-[global]
-hardware = airspy
+[global]  
+hardware = airspy  
 ...
 
-[airspy]
-device = airspy
+[airspy]  
+device = airspy  
 description = "airspy on 2m antenna"
 
 
