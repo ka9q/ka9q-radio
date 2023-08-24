@@ -56,16 +56,34 @@ install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FIL
 	/usr/sbin/adduser --quiet --system --group radio
 	/usr/sbin/adduser --quiet --system --ingroup radio recordings
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
-	install -o root -m 0755 -D --target-directory=/etc/sysctl.d 98-sockbuf.conf
-	install -o root -m 0755 -D --target-directory=$(DAEMONDIR) $(DAEMONS) start-ka9q-horus.sh
-	install -o root -m 0755 -D --target-directory=$(BINDIR) $(EXECS)
+#	install -o root -m 0755 -D --target-directory=/etc/sysctl.d 98-sockbuf.conf
+	rsync -va config/98-sockbuf.conf /etc/sysctl.d
+
+#	install -o root -m 0755 -D --target-directory=$(DAEMONDIR) $(DAEMONS) start-ka9q-horus.sh
+	rsync -va config/$(DAEMONS) config/start-ka9q-horus.sh $(DAEMONDIR)
+	
+#	install -o root -m 0755 -D --target-directory=$(BINDIR) $(EXECS)
+	rsync -va $(EXECS) $(BINDIR)
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
-	install -o root -m 0644 -D --target-directory=$(LIBDIR) $(AFILES)
-	install -o root -m 0644 -D --target-directory=/etc/systemd/system $(SYSTEMD_FILES)
-	install -o root -m 0644 -D --target-directory=/etc/udev/rules.d $(UDEV_FILES)
-	install -o root -m 0644 -D --target-directory=/etc/modprobe.d $(BLACKLIST)
-	install -o root -m 0644 -D --target-directory=/etc/logrotate.d $(LOGROTATE_FILES)
+
+#	install -o root -m 0644 -D --target-directory=$(LIBDIR) $(AFILES)
+	rsync -va aux/$(AFILES) $(LIBDIR)
+	
+#	install -o root -m 0644 -D --target-directory=/etc/systemd/system $(SYSTEMD_FILES)
+	rsync -va service/$(SYSTEMD_FILES) /etc/systemd/system
+	
+#	install -o root -m 0644 -D --target-directory=/etc/udev/rules.d $(UDEV_FILES)
+	rsync -va rules/$(UDEV_FILES) /etc/udev/rules.d
+
+#	install -o root -m 0644 -D --target-directory=/etc/modprobe.d $(BLACKLIST)
+	rsync -va config/$(BLACKLIST) /etc/modprobe.d
+
+#	install -o root -m 0644 -D --target-directory=/etc/logrotate.d $(LOGROTATE_FILES)
+	rsync -va config/$(LOGROTATE_FILES) /etc/logrotate.d
+
 #	install -o root -m 0664 -D --target-directory=/etc/radio $(CONF_FILES);
+	rsync -va config/$(CONF_FILES) /etc/radio
+
 	mkdir -p /etc/fftw /etc/radio $(VARDIR)
 	chgrp radio $(VARDIR) /etc/radio /etc/fftw
 	chmod g+ws $(VARDIR) /etc/radio /etc/fftw
