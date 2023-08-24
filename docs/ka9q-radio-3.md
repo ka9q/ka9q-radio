@@ -67,6 +67,33 @@ channel composite baseband output of a regular FM demodulator with
 appropriate bandwidth and sample rates, but the WFM demodulator is
 more convenient.)
 
+### samprate =
+
+Set the output sample rate in Hz. A good value for communications
+FM/PM is 24000 (24 KHz); for linear modes, 12000 (12 kHz). WFM (FM
+stereo broadcast) should use 48000 (48 kHz). (These values are used on
+**modes.conf**.)
+
+Remember the Nyquist theorem: the sample rate must be at least twice
+the highest frequency. For real signals, such as mono audio,
+a sample rate of 12 kHz can handle audio up to 6 kHz, but you must allow
+room for filter skirts so don't push the filters beyond about +/-5 kHz.
+If you need more, increase the sample rate.
+
+FM is a little different; the sample rate is constrained by the
+pre-demodulation bandwidth of the signal, not the audio output. NBFM
+is typically 16-20 kHz wide and is handled internally as a *complex*
+sample stream, so a sample rate of 24 kHz is sufficient.  (Since the
+demodulated audio output has at most a bandwidth of 5 kHz, it doesn't
+need such a high sample rate. A future enhancement of *ka9q-radio* may
+lower the sample rate of the FM demodulator output to save network
+capacity.)
+
+*ka9q-radio* supports any output sample rate that is a multiple of the
+FFT bin spacing.  This is equal to (overlap - 1) / (overlap *
+blocktime).  For the default of block time = 20 ms and overlap = 5,
+that's 4/(5 * 20 ms) = 40 Hz. This covers all the usual standard sample rates.
+
 ### channels = 1|2
 
 Set the number of output channels. Forced to 1 for FM modes, 2 for WFM
