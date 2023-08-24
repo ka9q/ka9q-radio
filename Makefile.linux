@@ -60,7 +60,7 @@ install: $(DAEMONS) $(EXECS) start-ka9q-horus.sh
 	rsync -va config/98-sockbuf.conf /etc/sysctl.d
 
 #	install -o root -m 0755 -D --target-directory=$(DAEMONDIR) $(DAEMONS) start-ka9q-horus.sh
-	(cd config;rsync -va $(DAEMONS) start-ka9q-horus.sh $(DAEMONDIR))
+	rsync -va $(DAEMONS) start-ka9q-horus.sh $(DAEMONDIR)
 	
 #	install -o root -m 0755 -D --target-directory=$(BINDIR) $(EXECS)
 	rsync -va $(EXECS) $(BINDIR)
