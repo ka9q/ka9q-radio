@@ -49,7 +49,7 @@ SRC=airspyhf.c airspy.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan
 	   rx888.c ezusb.c status.c stereod.c wfm.c wspr-decoded.c ft8-decoded.c set_xcvr.c wd-record.c funcube.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
 	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h ezusb.h rx888.h
 
-all: depend $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(LOGROTATE_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
+all: depend $(DAEMONS) $(EXECS) start-ka9q-horus.sh
 
 # NB: now overwrites existing .conf files in /etc/radio !
 install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
