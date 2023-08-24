@@ -1,4 +1,4 @@
-Configuring and Running *ka9q-radio - Part 1
+Configuring and Running *ka9q-radio* - Part 1
 ============================================
 
 v1.0 (in progress), August 2023  
@@ -222,7 +222,7 @@ modest hardware. Fast convolution is based on the Fast Fourier
 Transform (FFT), which processes incoming sample data in blocks. This
 parameter sets that block size in milliseconds.  The default of 20 ms
 (50 Hz) seems to be a good balance between efficiency, signal
-latency and kernel scheduling. I generally use only block times
+I/O delay and kernel scheduling. I generally use only block times
 supported by the Opus codec to ease transcoding the PCM output of
 *radiod* to Opus by the *opusd* daemon; this is optional.
 
