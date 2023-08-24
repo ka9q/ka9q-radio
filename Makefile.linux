@@ -52,7 +52,7 @@ SRC=airspyhf.c airspy.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan
 all: depend $(DAEMONS) $(EXECS) start-ka9q-horus.sh
 
 # NB: now overwrites existing .conf files in /etc/radio !
-install: $(DAEMONS) $(EXECS) $(AFILES) $(SYSTEMD_FILES) $(UDEV_FILES) $(CONF_FILES) $(AIRSPY_FILES) $(BLACKLIST) 98-sockbuf.conf start-ka9q-horus.sh
+install: $(DAEMONS) $(EXECS) start-ka9q-horus.sh
 	/usr/sbin/adduser --quiet --system --group radio
 	/usr/sbin/adduser --quiet --system --ingroup radio recordings
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
