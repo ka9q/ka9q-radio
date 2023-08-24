@@ -5,15 +5,16 @@ BINDIR=/usr/local/bin
 LIBDIR=/usr/local/share/ka9q-radio
 LD_FLAGS=-lpthread -lm
 EXECS=aprs aprsfeed cwd monitor opusd opussend packetd pcmrecord pcmsend pcmcat radiod control metadump pl show-pkt show-sig stereod rdsd tune wspr-decoded powers ft8-decoded wd-record
-AFILES=bandplan.txt help.txt monitor-help.txt modes.conf id.txt
-
-all: $(EXECS) $(AFILES)
+AFILES=bandplan.txt help.txt monitor-help.txt id.txt
+CONF_FILES=modes.conf
+all: $(EXECS)
 
 install: all
 	install -d $(LIBDIR)
 	install -d $(BINDIR)
 	install -o root -m 0755 $(EXECS) $(BINDIR)
-	install $(AFILES) $(LIBDIR)
+	(cd aux;rsync -a $(AFILES) $(LIBDIR))
+	(cd config;rsync -a $(CONF_FILES) $(LIBDIR))
 
 clean:
 	rm -f *.o *.a $(EXECS)
