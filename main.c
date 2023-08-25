@@ -279,6 +279,7 @@ static int loadconfig(char const * const file){
     Status_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
     if(Status_fd < 3){
       fprintf(stdout,"Can't send status to %s\n",Metadata_dest_string);
+      exit(EX_IOERR); // Let systemd retry us
     } else {
       socklen_t len = sizeof(Metadata_source_address);
       getsockname(Status_fd,(struct sockaddr *)&Metadata_source_address,&len);  
@@ -349,7 +350,7 @@ static int loadconfig(char const * const file){
     demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,iface,mcast_ttl,ip_tos);
     if(demod->output.data_fd < 3){
       fprintf(stdout,"can't set up PCM output to %s\n",demod->output.data_dest_string);
-      continue;
+      exit(EX_IOERR); // Let systemd retry us
     } else {
       socklen_t len = sizeof(demod->output.data_source_address);
       getsockname(demod->output.data_fd,(struct sockaddr *)&demod->output.data_source_address,&len);
@@ -479,8 +480,12 @@ static int loadconfig(char const * const file){
 
     demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,Iface,Mcast_ttl,IP_tos);
     if(demod->output.data_fd < 3){
+#if 1
+      exit(EX_IOERR); // Let systemd retry us
+#else
       free_demod(&demod);
       goto done_dynamic;
+#endif
     } else {
       socklen_t len = sizeof(demod->output.data_source_address);
       getsockname(demod->output.data_fd,(struct sockaddr *)&demod->output.data_source_address,&len);
