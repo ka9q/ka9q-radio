@@ -195,7 +195,7 @@ int main(int argc,char *argv[]){
   while(1)
     sleep(100);
 
-  exit(0); // Can't happen
+  exit(EX_OK); // Can't happen
 }
 
 static int loadconfig(char const * const file){
@@ -254,7 +254,7 @@ static int loadconfig(char const * const file){
       char const * const sname = iniparser_getsecname(Configtable,sect);
       if(strcasecmp(sname,hardware) == 0){
 	if(setup_hardware(sname) != 0)
-	  exit(EX_USAGE);
+	  exit(EX_NOINPUT);
 	
 	break;
       }

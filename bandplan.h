@@ -24,6 +24,6 @@ struct bandplan {
   char description[160];
 };
 
-struct bandplan *lookup_frequency(double);
+struct bandplan const *lookup_frequency(double);
 
 #endif

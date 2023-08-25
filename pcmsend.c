@@ -17,6 +17,7 @@
 #include <portaudio.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -91,7 +92,7 @@ int main(int argc,char * const argv[]){
       break;
     default:
       fprintf(stderr,"Usage: %s [-v] -I device [-R output_mcast_address][-T mcast_ttl]\n",argv[0]);
-      exit(1);
+      exit(EX_USAGE);
     }
   }
   // Set up audio input
@@ -111,7 +112,7 @@ int main(int argc,char * const argv[]){
       const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(inDevNum);
       printf("%d: %s\n",inDevNum,deviceInfo->name);
     }
-    exit(0);
+    exit(EX_OK);
   }
 
   int inDevNum,d;
@@ -123,7 +124,7 @@ int main(int argc,char * const argv[]){
   } else if(d = strtol(Audiodev,&nextp,0),nextp != Audiodev && *nextp == '\0'){
     if(d >= numDevices){
       fprintf(stderr,"%d is out of range, use %s -L for a list\n",d,argv[0]);
-      exit(1);
+      exit(EX_IOERR);
     }
     inDevNum = d;
   } else {
@@ -159,13 +160,13 @@ int main(int argc,char * const argv[]){
   if(r != paNoError){
     fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));      
     close(Output_fd);
-    exit(1);
+    exit(EX_IOERR);
   }
   r = Pa_StartStream(Pa_Stream);
   if(r != paNoError){
     fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
     close(Output_fd);
-    exit(1);
+    exit(EX_IOERR);
   }
 
 
@@ -173,7 +174,7 @@ int main(int argc,char * const argv[]){
   Output_fd = setup_mcast(Mcast_output_address_text,NULL,1,Mcast_ttl,IP_tos,0);
   if(Output_fd == -1){
     fprintf(stderr,"Can't set up output on %s: %s\n",Mcast_output_address_text,strerror(errno));
-    exit(1);
+    exit(EX_IOERR);
   }
   // Set up to transmit RTP/UDP/IP
 
@@ -231,7 +232,7 @@ int main(int argc,char * const argv[]){
     rtp_state_out.timestamp += FRAMESIZE;
   }
   close(Output_fd);
-  exit(0);
+  exit(EX_OK);
 }
 
 // Portaudio callback - encode and transmit audio
@@ -265,7 +266,7 @@ void cleanup(void){
 
 void closedown(int s){
   fprintf(stderr,"signal %d\n",s);
-  exit(0);
+  exit(EX_OK);
 }
 
 

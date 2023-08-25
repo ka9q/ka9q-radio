@@ -13,6 +13,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <limits.h>
+#include <stdbool.h>
 
 #include "conf.h"
 #include "misc.h"
@@ -36,26 +37,26 @@ static int compar(void const *a,void const *b){
     return 0;
 }
 
-static int Bandplan_init;
+static bool Bandplan_init;
 extern int init_bandplan(void);
 static double Cache_freq;
-static struct bandplan *Cache_bandplan;
+static struct bandplan const *Cache_bandplan;
 
 
 // Look up a given frequency, return pointer to appropriate entry
-struct bandplan *lookup_frequency(double f){
+struct bandplan const *lookup_frequency(double f){
   // we get repeatedly called with the same frequency, so cache the last key/entry pair
   if(f == Cache_freq)
     return Cache_bandplan;
 
   double key;
-  key = round(f) / 1.0e6;
+  key = round(f) *  1.0e-6;
 
   if(!Bandplan_init){
     init_bandplan();
-    Bandplan_init = 1;
+    Bandplan_init = true;
   }
-  struct bandplan *result = bsearch(&key,Bandplans,Nbandplans,sizeof(struct bandplan),compar);
+  struct bandplan const *result = bsearch(&key,Bandplans,Nbandplans,sizeof(struct bandplan),compar);
   Cache_freq = f;
   Cache_bandplan = result;
   return result;
