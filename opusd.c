@@ -386,6 +386,10 @@ void * status(void *p){
   }
   // We will also emit our status to the radio status group
   Status_out_fd = connect_mcast(&Status_dest_address,iface,Mcast_ttl,IP_tos);
+  if(Status_out_fd == -1){
+    fprintf(stderr,"Can't set up output on %s: %s\n",Status,strerror(errno));
+    return NULL;
+  }
   {
     socklen_t len;
     len = sizeof(Local_status_source_address);
