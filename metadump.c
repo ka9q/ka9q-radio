@@ -22,6 +22,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <locale.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -66,6 +67,10 @@ int main(int argc,char *argv[]){
   resolve_mcast(argv[optind],&sock,DEFAULT_STAT_PORT,iface,sizeof(iface));
   fprintf(stdout,"Interface: %s\n",iface);
   Status_sock = listen_mcast(&sock,iface);
+  if(Status_sock < 0){
+    fprintf(stdout,"Can't set up multicast input\n");
+    exit(EX_IOERR);
+  }
 
   for(;;){
     uint8_t buffer[8192];
@@ -87,6 +92,7 @@ int main(int argc,char *argv[]){
     dump_metadata(buffer+1,length-1,Newline);
     fflush(stdout);
   }
+  exit(EX_OK); // can't reach
 }
 
 

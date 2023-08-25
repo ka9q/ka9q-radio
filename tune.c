@@ -15,6 +15,7 @@
 #include <sys/socket.h>
 #include <locale.h>
 #include <errno.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -79,7 +80,7 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"Invalid command line option -%c\n",c);
       case 'h':
     fprintf(stderr,"Usage: %s [-h] [-l LOCALE] -r/--radio RADIO -s/--ssrc SSRC [-v] FREQUENCY",argv[0]);
-    exit(-1);
+    exit(EX_USAGE);
       }
     }
   }
@@ -90,11 +91,11 @@ int main(int argc,char *argv[]){
 
   if(Radio == NULL){
     fprintf(stderr,"--radio not specified and $RADIO not set\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   if(Ssrc == 0){
     fprintf(stderr,"--ssrc not specified\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   {
     char iface[1024];
@@ -105,12 +106,12 @@ int main(int argc,char *argv[]){
 
     if(Status_sock == -1){
       fprintf(stderr,"Can't open Status_sock socket to radio control channel %s: %s\n",Radio,strerror(errno));
-      exit(1);
+      exit(EX_IOERR);
     }
     Control_sock = connect_mcast(&Control_address,ifc,Mcast_ttl,IP_tos);
     if(Control_sock == -1){
       fprintf(stderr,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
-      exit(1);
+      exit(EX_IOERR);
     }
   }
     
@@ -118,7 +119,7 @@ int main(int argc,char *argv[]){
   uint32_t sent_tag = 0; // Used only if sent_freq != 0
   if(argc <= optind){
     fprintf(stderr,"freq not specified\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   // Frequency specified; generate a command
 
@@ -212,6 +213,6 @@ int main(int argc,char *argv[]){
     printf("Frequency %'.3lf Hz\n",received_freq);
     break;
   }
-  exit(0);
+  exit(EX_OK);
 }
 

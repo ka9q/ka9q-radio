@@ -26,6 +26,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <libgen.h>
+#include <sysexits.h>
+
 #include "misc.h"
 #include "attr.h"
 #include "multicast.h"
@@ -107,7 +109,7 @@ void close_session(struct session **p);
 
 void usage(){
   fprintf(stderr,"Usage: %s [-L locale] [-v] [-k] [-d recording_dir] -t cycle_time -c decode_command -l transmission_length PCM_multicast_address\n",App_path);
-  exit(1);
+  exit(EX_USAGE);
 }
 
 int main(int argc,char *argv[]){
@@ -162,7 +164,7 @@ int main(int argc,char *argv[]){
 
   if(strlen(Recordings) > 0 && chdir(Recordings) != 0){
     fprintf(stderr,"Can't change to directory %s: %s, exiting\n",Recordings,strerror(errno));
-    exit(1);
+    exit(EX_CANTCREAT);
   }
 
   // Set up input socket for multicast data stream from front end
@@ -175,7 +177,7 @@ int main(int argc,char *argv[]){
 
   if(Input_fd == -1){
     fprintf(stderr,"Can't set up PCM input from %s, exiting\n",PCM_mcast_address_text);
-    exit(1);
+    exit(EX_IOERR);
   }
   int const n = 1 << 20; // 1 MB
   if(setsockopt(Input_fd,SOL_SOCKET,SO_RCVBUF,&n,sizeof(n)) == -1)
@@ -197,14 +199,14 @@ int main(int argc,char *argv[]){
 
   input_loop();
 
-  exit(0);
+  exit(EX_OK);
 }
 
 void closedown(int a){
   if(Verbose)
     fprintf(stderr,"iqrecord: caught signal %d: %s\n",a,strsignal(a));
 
-  exit(1);  // Will call cleanup()
+  exit(EX_SOFTWARE);  // Will call cleanup()
 }
 
 // Read from RTP network socket, assemble blocks of samples
@@ -257,7 +259,7 @@ void input_loop(){
 	      fprintf(stderr,"unlink(%s)\n",filename);
 	    unlink(filename);
 	  }
-	  exit(0);
+	  exit(EX_OK);
 	}
       }
     }

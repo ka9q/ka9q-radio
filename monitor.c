@@ -19,6 +19,7 @@
 #else
 #include <string.h>
 #endif
+#include <sysexits.h>
 
 #include "conf.h"
 #include "config.h"
@@ -245,7 +246,7 @@ int main(int argc,char * const argv[]){
     dictionary *Configtable = iniparser_load(Config_file);
     if(Configtable == NULL){
      fprintf(stdout,"Can't load config file %s\n",Config_file);
-      exit(1);
+      exit(EX_NOINPUT);
     }
     DAC_samprate = config_getint(Configtable,Audio,"samprate",DAC_samprate);
     Channels = config_getint(Configtable,Audio,"channels",Channels);
@@ -341,7 +342,7 @@ int main(int argc,char * const argv[]){
       fprintf(stderr,"Usage: %s -L\n",App_path);
       fprintf(stderr,"       %s [-a] [-c channels] [-f config_file] [-g gain] [-p playout] [-q] [-r samprate] [-u update] [-v]\
 [-I mcast_address] [-R audiodev] [-S] [mcast_address ...]\n",App_path);
-      exit(1);
+      exit(EX_USAGE);
     }
   }
   if(list_audio){
@@ -358,7 +359,7 @@ int main(int argc,char * const argv[]){
       printf("%d: %s\n",inDevNum,deviceInfo->name);
     }
     Pa_Terminate();
-    exit(0);
+    exit(EX_OK);
   }
 
   if(Channels != 1 && Channels != 2){
@@ -379,7 +380,7 @@ int main(int argc,char * const argv[]){
   }
   if(Nfds == 0){
     fprintf(stderr,"At least one input group required, exiting\n");
-    exit(1);
+    exit(EX_USAGE);
   }
 
   if(Init != NULL)
@@ -415,7 +416,7 @@ int main(int argc,char * const argv[]){
   } else if(d = strtol(Audiodev,&nextp,0),nextp != Audiodev && *nextp == '\0'){
     if(d >= numDevices){
       fprintf(stderr,"%d is out of range, use %s -L for a list\n",d,App_path);
-      exit(1);
+      exit(EX_USAGE);
     }
     inDevNum = d;
   } else {
@@ -427,7 +428,7 @@ int main(int argc,char * const argv[]){
   }
   if(inDevNum == paNoDevice){
     fprintf(stderr,"Portaudio: no available devices, exiting\n");
-    exit(1);
+    exit(EX_IOERR);
   }
 
   // Create portaudio stream.
@@ -455,7 +456,7 @@ int main(int argc,char * const argv[]){
 
   if(r != paNoError){
     fprintf(stderr,"Portaudio error: %s, exiting\n",Pa_GetErrorText(r));      
-    exit(1);
+    exit(EX_IOERR);
   }
 
   if(Repeater_tail != 0)
@@ -477,7 +478,7 @@ int main(int argc,char * const argv[]){
     while(!Terminate)
       sleep(1);
   }
-  exit(0); // calls cleanup() to clean up Portaudio and ncurses
+  exit(EX_OK); // calls cleanup() to clean up Portaudio and ncurses. Can't happen...
 }
 
 static void *sockproc(void *arg){

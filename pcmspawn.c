@@ -20,6 +20,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -115,12 +116,12 @@ int main(int argc,char * const argv[]){
       break;
     default:
       fprintf(stderr,"Usage: \n");
-      exit(1);
+      exit(EX_USAGE);
     }
   }
   if(optind >= argc){
     fprintf(stderr,"Missing command\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   // This needs to be a proper macro expansion
   Command = argv[optind];
@@ -146,7 +147,7 @@ int main(int argc,char * const argv[]){
     pthread_mutex_unlock(&Input_ready_mutex);
   } else if(Input == NULL){
     fprintf(stderr,"Must specify either --status-in or --pcm-in\n");
-    exit(1);
+    exit(EX_USAGE);
   }
 
   assert(Input_fd != -1);
@@ -449,5 +450,5 @@ void closedown(int s){
 #endif
 
   pthread_mutex_destroy(&Session_protect);
-  exit(0);
+  exit(EX_SOFTWARE);
 }

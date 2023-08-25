@@ -13,6 +13,8 @@
 #include <pigpio.h>
 #include <iniparser/iniparser.h>
 #include <stdarg.h>
+#include <sysexits.h>
+
 #include "config.h"
 
 FILE *Term_stream;
@@ -73,7 +75,7 @@ int main(int argc,char *argv[]){
     } else {
       fprintf(stdout,"Unknown command %s\n",argv[optind]);
     }
-    exit(0);
+    exit(EX_OK);
   }
 
   gpioWrite(20,1); // receive mode (PTT off)
@@ -83,7 +85,7 @@ int main(int argc,char *argv[]){
     Configtable = iniparser_load(Config_file);
     if(Configtable == NULL){
      fprintf(stdout,"Can't load config file %s\n",Config_file);
-      exit(1);
+      exit(EX_USAGE);
     }
 
     // route UART pins (already done?)
@@ -94,7 +96,7 @@ int main(int argc,char *argv[]){
     int fd = open(Port,O_RDWR);
     if(fd == -1){
       fprintf(stdout,"Can't open serial port %s: %s\n",Port,strerror(errno));
-      exit(1);
+      exit(EX_NOINPUT);
     }
 
     // wideband = 5 kHz deviation, !wideband = 2.5 kHz
@@ -210,7 +212,7 @@ int main(int argc,char *argv[]){
     Term_stream = fdopen(fd,"r+");
     if(Term_stream == NULL){
       fprintf(stdout,"Can't fdopen(%d,r+)\n",fd);
-      exit(1);
+      exit(EX_IOERR);
     }
     // Not really necessary, but the initial \r\n flushes the serial line
     // NB: All commands must end with \r\n, not just \n!
@@ -241,5 +243,5 @@ int main(int argc,char *argv[]){
 #endif  
   }
   gpioTerminate();
-  exit(0);
+  exit(EX_OK);
 }

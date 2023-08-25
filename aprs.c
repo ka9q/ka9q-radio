@@ -22,6 +22,7 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -98,7 +99,7 @@ int main(int argc,char *argv[]){
       fprintf(stdout,"Usage: %s [-L latitude] [-M longitude] [-A altitude] [-s sourcecall] [-v] [-I mcast_address]\n",argv[0]);
       fprintf(stdout,"Defaults: %s -L %lf -M %lf -A %lf -s %s -I %s\n",argv[0],
 	      latitude,longitude,altitude,Source,Mcast_address_text);
-      exit(1);
+      exit(EX_USAGE);
     }
   }
   fprintf(stdout,"APRS az/el program by KA9Q\n");
@@ -132,7 +133,7 @@ int main(int argc,char *argv[]){
     int const ecode = getaddrinfo(full_host,port,&hints,&results);
     if(ecode != 0){
       fprintf(stderr,"rotctl connect getaddrinfo(%s,%s): %s\n",full_host,port,gai_strerror(ecode));
-      exit(1);
+      exit(EX_NOHOST);
     }
     // Use first entry on list -- much simpler
     // I previously tried each entry in turn until one succeeded, but with UDP sockets and
@@ -154,7 +155,7 @@ int main(int argc,char *argv[]){
     rot_fp = fdopen(rot_fd,"w+");
     if(rot_fp == NULL){
       perror("rotor fdopen");
-      exit(1);
+      exit(EX_CANTCREAT);
     }
   }
   if(Source){
@@ -205,7 +206,7 @@ int main(int argc,char *argv[]){
   if(Input_fd == -1){
     fprintf(stdout,"Can't set up input from %s\n",
 	    Mcast_address_text);
-    exit(1);
+    exit(EX_NOINPUT);
   }
   uint8_t packet[2048];
   int size;

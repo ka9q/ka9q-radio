@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -148,12 +149,12 @@ int main(int argc,char * const argv[]){
       break;
     default:
       fprintf(stderr,"Usage: %s [-v] [-T mcast_ttl] [-S status_address | -I input_mcast_address]\n",argv[0]);
-      exit(1);
+      exit(EX_USAGE);
     }
   }
   if(!Output){
     fprintf(stderr,"Must specify --pcm-out or -R\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   if(Input) {
     char iface[1024];
@@ -161,7 +162,7 @@ int main(int argc,char * const argv[]){
     Input_fd = listen_mcast(&PCM_dest_address,iface);
     if(Input_fd == -1){
       fprintf(stderr,"Can't set up PCM input on %s: %sn",Input,strerror(errno));
-      exit(1);
+      exit(EX_USAGE);
     }
   } else if(Status){
     char iface[1024];
@@ -169,7 +170,7 @@ int main(int argc,char * const argv[]){
     Status_fd = listen_mcast(&Status_dest_address,iface);
     if(Status_fd == -1){
       fprintf(stderr,"Can't set up status input on %s: %sn",Status,strerror(errno));      
-      exit(1);
+      exit(EX_USAGE);
     }
     // Read from status stream until we learn the data stream
     Input_fd = fetch_socket(Status_fd);
@@ -180,7 +181,7 @@ int main(int argc,char * const argv[]){
     Status_fd = -1;
   } else {
     fprintf(stderr,"Must specify either --pcm-in/-I or --status-in/-S\n");
-    exit(1);
+    exit(EX_USAGE);
   }
 
   {
@@ -195,7 +196,7 @@ int main(int argc,char * const argv[]){
     Output_fd = connect_mcast(&Stereo_dest_address,NULL,Mcast_ttl,IP_tos);
     if(Output_fd == -1){
       fprintf(stderr,"Can't set up output on %s: %s\n",Output,strerror(errno));
-      exit(1);
+      exit(EX_IOERR);
     }
     // Not used yet
     socklen_t len = sizeof(Stereo_source_address);

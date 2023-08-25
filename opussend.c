@@ -18,6 +18,7 @@
 #include <sys/resource.h>
 #include <signal.h>
 #include <portaudio.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -114,7 +115,7 @@ int main(int argc,char * const argv[]){
     default:
       fprintf(stderr,"Usage: %s [-x] [-v] [-o bitrate] [-B blocktime] [-I input_mcast_address] [-R output_mcast_address][-T mcast_ttl]\n",argv[0]);
       fprintf(stderr,"Defaults: %s -o %d -B %.1f -I %s -R %s -T %d\n",argv[0],Opus_bitrate,Opus_blocktime,Audiodev,Mcast_output_address_text,Mcast_ttl);
-      exit(1);
+      exit(EX_USAGE);
     }
   }
   // Compute opus parameters
@@ -125,7 +126,7 @@ int main(int argc,char * const argv[]){
      && Opus_blocktime != 120){
     fprintf(stderr,"opus block time must be 2.5/5/10/20/40/60/80/100/120 ms\n");
     fprintf(stderr,"80/100/120 supported only on opus 1.2 and later\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   int Opus_frame_size = round(Opus_blocktime * Samprate / 1000.);
 
@@ -148,7 +149,7 @@ int main(int argc,char * const argv[]){
       const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(inDevNum);
       printf("%d: %s\n",inDevNum,deviceInfo->name);
     }
-    exit(0);
+    exit(EX_OK);
   }
 
   int inDevNum,d;
@@ -160,7 +161,7 @@ int main(int argc,char * const argv[]){
   } else if(d = strtol(Audiodev,&nextp,0),nextp != Audiodev && *nextp == '\0'){
     if(d >= numDevices){
       fprintf(stderr,"%d is out of range, use %s -L for a list\n",d,argv[0]);
-      exit(1);
+      exit(EX_IOERR);
     }
     inDevNum = d;
   } else {
@@ -196,13 +197,13 @@ int main(int argc,char * const argv[]){
   if(r != paNoError){
     fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));      
     close(Output_fd);
-    exit(1);
+    exit(EX_IOERR);
   }
   r = Pa_StartStream(Pa_Stream);
   if(r != paNoError){
     fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
     close(Output_fd);
-    exit(1);
+    exit(EX_IOERR);
   }
 
 
@@ -253,12 +254,12 @@ int main(int argc,char * const argv[]){
   // Set up multicast transmit socket
   if(!Mcast_output_address_text){
     fprintf(stderr,"Must specify -R mcast_output_address\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   Output_fd = setup_mcast(Mcast_output_address_text,NULL,1,Mcast_ttl,IP_tos,0);
   if(Output_fd == -1){
     fprintf(stderr,"Can't set up output on %s: %s\n",Mcast_output_address_text,strerror(errno));
-    exit(1);
+    exit(EX_IOERR);
   }
   // Set up to transmit Opus RTP/UDP/IP
   struct rtp_state rtp_state_out;
@@ -327,7 +328,7 @@ int main(int argc,char * const argv[]){
   }
   opus_encoder_destroy(Opus);
   close(Output_fd);
-  exit(0);
+  exit(EX_OK);
 }
 
 // Portaudio callback - encode and transmit audio
@@ -364,6 +365,6 @@ void cleanup(void){
 void closedown(int s){
   fprintf(stderr,"Signal %d\n",s);
 
-  exit(0);
+  exit(EX_OK);
 }
 

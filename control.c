@@ -32,6 +32,7 @@
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <iniparser/iniparser.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "filter.h"
@@ -351,7 +352,7 @@ int main(int argc,char *argv[]){
   if(argc <= optind){
     fprintf(stderr,"Usage: %s -s <ssrc> mcast_group\n",App_path);
     fprintf(stderr,"<ssrc> is positive decimal number, mcast_group is DNS name or IP address of control multicast group\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   while(Ssrc == 0){
     Ssrc = arc4random();
@@ -362,22 +363,22 @@ int main(int argc,char *argv[]){
   Status_fd = listen_mcast(&Metadata_dest_address,iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't listen to mcast status %s\n",argv[optind]);
-    exit(1);
+    exit(EX_IOERR);
   }
   Ctl_fd = connect_mcast(&Metadata_dest_address,iface,Mcast_ttl,IP_tos);
   if(Ctl_fd < 0){
     fprintf(stderr,"connect to mcast control failed\n");
-    exit(1);
+    exit(EX_IOERR);
   }
   char modefile_path[PATH_MAX];
   if (dist_path(modefile_path,sizeof(modefile_path),Modefile) == -1) {
     fprintf(stderr,"Could not find mode file %s\n", Modefile);
-    exit(1);
+    exit(EX_NOINPUT);
   }
   Mdict = iniparser_load(modefile_path);
   if(Mdict == NULL){
     fprintf(stdout,"Can't load mode file %s\n",modefile_path);
-    exit(1);
+    exit(EX_NOINPUT);
   }
 
 
@@ -527,7 +528,7 @@ int main(int argc,char *argv[]){
   //  if(Tty != NULL)
   //    fclose(Tty);
   
-  exit(0);
+  exit(EX_OK);
 }
 
 

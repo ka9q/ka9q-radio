@@ -19,6 +19,7 @@
 #include <locale.h>
 #include <sys/stat.h>
 #include <signal.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "attr.h"
@@ -137,13 +138,13 @@ int main(int argc,char *argv[]){
       break;
     default:
       fprintf(stderr,"Usage: %s [-l locale] [-t timeout] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
-      exit(1);
+      exit(EX_USAGE);
       break;
     }
   }
   if(optind >= argc){
     fprintf(stderr,"Specify PCM_mcast_address_text_address\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   strlcpy(PCM_mcast_address_text,argv[optind],sizeof(PCM_mcast_address_text));
   setlocale(LC_ALL,locale);
@@ -158,7 +159,7 @@ int main(int argc,char *argv[]){
   }
   if(Input_fd == -1){
     fprintf(stderr,"Can't set up PCM input, exiting\n");
-    exit(1);
+    exit(EX_IOERR);
   }
   int n = 1 << 20; // 1 MB
   if(setsockopt(Input_fd,SOL_SOCKET,SO_RCVBUF,&n,sizeof(n)) == -1)
@@ -176,14 +177,14 @@ int main(int argc,char *argv[]){
 
   input_loop(); // Doesn't return
 
-  exit(0);
+  exit(EX_OK);
 }
 
 void closedown(int a){
   if(Verbose)
     fprintf(stderr,"iqrecord: caught signal %d: %s\n",a,strsignal(a));
 
-  exit(1);  // Will call cleanup()
+  exit(EX_SOFTWARE);  // Will call cleanup()
 }
 
 // Read from RTP network socket, assemble blocks of samples
@@ -240,7 +241,7 @@ void input_loop(){
 	// This might have failed on earlier attempts should we start before the fs is successfully mounted
 	if(strlen(Recordings) > 0 && chdir(Recordings) != 0){
 	  fprintf(stderr,"Can't change to directory %s: %s, exiting\n",Recordings,strerror(errno));
-	  exit(1);
+	  exit(EX_CANTCREAT);
 	}
 	sp = create_session(&rtp,&sender);
       }

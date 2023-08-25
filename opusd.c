@@ -27,6 +27,7 @@
 #include <getopt.h>
 #include <pthread.h>
 #include <sched.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -202,7 +203,7 @@ int main(int argc,char * const argv[]){
       break;
     default:
       fprintf(stderr,"Usage: %s [-l|-V] [-x] [-v] [-f] [-p tos] [-o bitrate] [-B blocktime] [-N name] [-T ttl] [-A iface] [-I input_mcast_address | -S input_status_address] -R output_mcast_address\n",argv[0]);
-      exit(1);
+      exit(EX_USAGE);
     }
   }
   if(Opus_blocktime != 2.5 && Opus_blocktime != 5
@@ -212,14 +213,14 @@ int main(int argc,char * const argv[]){
      && Opus_blocktime != 120){
     fprintf(stderr,"opus block time must be 2.5/5/10/20/40/60/80/100/120 ms\n");
     fprintf(stderr,"80/100/120 supported only on opus 1.2 and later\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   if(Opus_bitrate < 500)
     Opus_bitrate *= 1000; // Assume it was given in kb/s
 
   if(!Output){
     fprintf(stderr,"Must specify --opus-out\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   
   char iface[1024];
@@ -245,7 +246,7 @@ int main(int argc,char * const argv[]){
     pthread_mutex_unlock(&Input_ready_mutex);
   } else if(Input == NULL){
     fprintf(stderr,"Must specify either --status-in or --pcm-in\n");
-    exit(1);
+    exit(EX_USAGE);
   }
 
   assert(Input_fd != -1);
@@ -262,7 +263,7 @@ int main(int argc,char * const argv[]){
 
   if(Output_fd == -1){
     fprintf(stderr,"Can't set up output on %s: %s\n",Output,strerror(errno));
-    exit(1);
+    exit(EX_IOERR);
   }
   {
     socklen_t len = sizeof(Opus_source_address);
@@ -722,7 +723,7 @@ void closedown(int s){
 #endif
 
   pthread_mutex_destroy(&Session_protect);
-  exit(0);
+  exit(EX_OK);
 }
 // Encode and send one or more Opus frames when we have enough
 int send_samples(struct session * const sp){

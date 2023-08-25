@@ -27,6 +27,8 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sysexits.h>
+
 #include "misc.h"
 #include "attr.h"
 #include "multicast.h"
@@ -130,14 +132,14 @@ int main(int argc,char *argv[]){
       break;
     default:
       fprintf(stderr,"Usage: %s [-l locale] [-v] [-k] [-d recdir] PCM_multicast_address\n",argv[0]);
-      exit(1);
+      exit(EX_USAGE);
       break;
     }
   }
   char const *target;
   if(optind >= argc){
     fprintf(stderr,"Specify PCM Multicast IP address or domain name\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   target = argv[optind];
   strlcpy(PCM_mcast_address_text,target,sizeof(PCM_mcast_address_text));
@@ -145,7 +147,7 @@ int main(int argc,char *argv[]){
 
   if(strlen(Recordings) > 0 && chdir(Recordings) != 0){
     fprintf(stderr,"Can't change to directory %s: %s, exiting\n",Recordings,strerror(errno));
-    exit(1);
+    exit(EX_CANTCREAT);
   }
 
   // Set up input socket for multicast data stream from front end
@@ -158,7 +160,7 @@ int main(int argc,char *argv[]){
 
   if(Input_fd == -1){
     fprintf(stderr,"Can't set up PCM input from %s, exiting\n",PCM_mcast_address_text);
-    exit(1);
+    exit(EX_IOERR);
   }
   int const n = 1 << 20; // 1 MB
   if(setsockopt(Input_fd,SOL_SOCKET,SO_RCVBUF,&n,sizeof(n)) == -1)
@@ -180,14 +182,14 @@ int main(int argc,char *argv[]){
 
   input_loop();
 
-  exit(0);
+  exit(EX_OK);
 }
 
 void closedown(int a){
   if(Verbose)
     fprintf(stderr,"iqrecord: caught signal %d: %s\n",a,strsignal(a));
 
-  exit(1);  // Will call cleanup()
+  exit(EX_SOFTWARE);  // Will call cleanup()
 }
 
 // Read from RTP network socket, assemble blocks of samples
@@ -224,7 +226,7 @@ void input_loop(){
 	    fprintf(stderr,"system() returned %d errno %d (%s)\n",r,errno,strerror(errno));
 	  if(!Keep_wav)
 	    unlink(sp->filename);
-	  exit(0);
+	  exit(EX_OK);
 	}
 	struct session * const next = sp->next;
 	close_session(&sp);

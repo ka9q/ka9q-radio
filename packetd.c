@@ -15,6 +15,7 @@
 #include <locale.h>
 #include <netdb.h>
 #include <getopt.h>
+#include <sysexits.h>
 
 #include "osc.h"
 #include "filter.h"
@@ -165,7 +166,7 @@ int main(int argc,char *argv[]){
       Status_fd = setup_mcast_in(optarg,(struct sockaddr *)&Status_dest_address,2);
       if(Status_fd == -1){
 	fprintf(stdout,"Can't set up status input on %s: %s\n",optarg,strerror(errno));
-	exit(1);
+	exit(EX_USAGE);
       }
 #if 0 // Later use?
       Status_out_fd = setup_mcast(NULL,(struct sockaddr *)&Status_dest_address,1,Mcast_ttl,IP_tos,2);
@@ -188,7 +189,7 @@ int main(int argc,char *argv[]){
       break;
     default:
       fprintf(stdout,"Usage: %s [--verbose|-v] [--ttl|-T mcast_ttl] [--pcm-in|-I input_mcast_address [--pcm-in|-I address2]] [--ax25-out|-R output_mcast_address] [input_address ...]\n",argv[0]);
-      exit(1);
+      exit(EX_USAGE);
     }
   }
   if(Name == NULL)
@@ -216,7 +217,7 @@ int main(int argc,char *argv[]){
 
   if(Nfds == 0  && Status_fd == -1){
     fprintf(stdout,"Must specify either --status-in or --pcm-in\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   {
     char description[1024];
@@ -232,7 +233,7 @@ int main(int argc,char *argv[]){
   Output_fd = setup_mcast(Output,NULL,1,Mcast_ttl,IP_tos,0);
   if(Output_fd == -1){
     fprintf(stdout,"Must specify --ax25-out\n");
-    exit(1);
+    exit(EX_USAGE);
   }
 
   if(Nfds > 0)

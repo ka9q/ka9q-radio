@@ -17,6 +17,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <time.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -87,7 +88,7 @@ int main(int argc,char *argv[]){
   if(Input_fd == -1){
     fprintf(stderr,"Can't set up input from %s\n",
 	    Mcast_address_text);
-    exit(1);
+    exit(EX_USAGE);
   }
 
 
@@ -206,7 +207,7 @@ int main(int argc,char *argv[]){
     Pcmstream.rtp_state.timestamp += framecount;
     Pcmstream.rtp_state.seq = rtp.seq + 1;
   }
-  exit(0);
+  exit(0); // Not reached
 }
 static int init(struct pcmstream *pc,struct rtp_header const *rtp,struct sockaddr const *sender){
   // First packet on stream, initialize
