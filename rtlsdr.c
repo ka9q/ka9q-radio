@@ -207,7 +207,7 @@ static void *rtlsdr_read_thread(void *arg){
   rtlsdr_reset_buffer(sdr->device);
   rtlsdr_read_async(sdr->device,rx_callback,frontend,0,16*16384); // blocks
 
-  exit(1); // return from read_async is an abort?
+  exit(EX_NOINPUT); // return from read_async is an abort?
   return NULL;
 }
 

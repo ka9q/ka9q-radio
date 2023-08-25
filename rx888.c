@@ -14,6 +14,7 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
+#include <sysexits.h>
 
 #include "misc.h"
 #include "status.h"
@@ -235,7 +236,7 @@ static void *proc_rx888(void *arg){
   rx888_close(sdr);
   // Can't do anything without the front end; quit entirely
   fprintf(stdout,"rx888 has aborted, exiting radiod\n");
-  exit(1);
+  exit(EX_NOINPUT);
 }
 
 // Callback called with incoming receiver data from A/D
@@ -273,7 +274,8 @@ static void rx_callback(struct libusb_transfer * const transfer){
   if(frontend->calibrate == 0){
     if(sdr->randomizer){
       for(int i=0; i < sampcount; i++){
-	int s = samples[i] ^ (((int32_t)samples[i] << 31) >> 30); // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
+	int32_t s = samples[i];
+	s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
 	in_energy += s * s;
 	wptr[i] = s * SCALE16;
       }
@@ -292,9 +294,9 @@ static void rx_callback(struct libusb_transfer * const transfer){
      can't use an external GPSDO */
     
     for(int i=0; i < sampcount; i++){
-      int s = samples[i];
+      int32_t s = samples[i];
       if(sdr->randomizer)
-	s ^= ((int32_t)s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
+	s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
 
       in_energy += s * s;
       float const f = s * SCALE16;

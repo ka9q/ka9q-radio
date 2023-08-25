@@ -29,6 +29,7 @@
 #include <iniparser/iniparser.h>
 #include <net/if.h>
 #include <sched.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -162,7 +163,7 @@ int main(int argc,char *argv[]){
       fprintf(stdout,"Unknown command line option %c\n",c);
     case 'h':
       fprintf(stderr,"Usage: %s [-I] [-N name] [-h] [-p fftw_plan_time_limit] [-v [-v] ...] <CONFIG_FILE>\n", argv[0]);
-      exit(0);
+      exit(EX_USAGE);
     }
   }
   
@@ -180,7 +181,7 @@ int main(int argc,char *argv[]){
   char const *configfile;
   if(argc <= optind){
     fprintf(stdout,"Configtable file missing\n");
-    exit(1);
+    exit(EX_NOINPUT);
   }
   configfile = argv[optind];
   if(Name == NULL){
@@ -194,7 +195,7 @@ int main(int argc,char *argv[]){
   while(1)
     sleep(100);
 
-  exit(0);
+  exit(0); // Can't happen
 }
 
 static int loadconfig(char const * const file){
@@ -205,7 +206,7 @@ static int loadconfig(char const * const file){
   Configtable = iniparser_load(file);
   if(Configtable == NULL){
     fprintf(stdout,"Can't load config file %s\n",file);
-    exit(1);
+    exit(EX_NOINPUT);
   }
   // Process [global] section applying to all demodulator blocks
   char const * const global = "global";
@@ -243,7 +244,7 @@ static int loadconfig(char const * const file){
   if(hardware == NULL){
     // Hardware now required
     fprintf(stdout,"Hardware front end now required\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   // Look for specified hardware section
   {
@@ -253,14 +254,14 @@ static int loadconfig(char const * const file){
       char const * const sname = iniparser_getsecname(Configtable,sect);
       if(strcasecmp(sname,hardware) == 0){
 	if(setup_hardware(sname) != 0)
-	  exit(1);
+	  exit(EX_USAGE);
 	
 	break;
       }
     }
     if(sect == nsect){
       fprintf(stdout,"no hardware section [%s] found\n",hardware);
-      exit(1);
+      exit(EX_USAGE);
     }
   }
   {
@@ -269,7 +270,7 @@ static int loadconfig(char const * const file){
     char const * const status = config_getstring(Configtable,global,"status",NULL); // Status/command target for all demodulators
     if(status == NULL){
       fprintf(stdout,"status=<mcast group> missing in [global], e.g, status=hf.local\n");
-      exit(1);
+      exit(EX_USAGE);
     }
     strlcpy(Metadata_dest_string,status,sizeof(Metadata_dest_string));
     int slen = sizeof(Metadata_dest_address);
@@ -665,9 +666,9 @@ static void closedown(int a){
   sleep(1); // pause for threads to see it
 
   if(a == SIGTERM)
-    exit(0); // Return success when terminated by systemd
+    exit(EX_OK); // Return success when terminated by systemd
   else
-    exit(1);
+    exit(EX_SOFTWARE);
 }
 
 // Increase or decrease logging level (thanks AI6VN for idea)
