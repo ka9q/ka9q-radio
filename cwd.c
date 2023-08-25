@@ -17,6 +17,8 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <sysexits.h>
+
 #include "misc.h"
 #include "multicast.h"
 #include "morse.h"
@@ -144,7 +146,7 @@ int main(int argc,char *argv[]){
   }
   if(Target == NULL){
     fprintf(stdout,"Must specify -R mcast_group\n");
-    exit(1);
+    exit(EX_USAGE);
   }
 
   setlocale(LC_ALL,""); // Accept all characters, not just the English subset of Latin
@@ -153,18 +155,18 @@ int main(int argc,char *argv[]){
   int const fd = setup_mcast(Target,&sock,1,1,0,0);
   if(fd == -1){
     fprintf(stdout,"Can't resolve %s\n",Target);
-    exit(1);
+    exit(EX_IOERR);
   }
   umask(0);
   if(mkfifo(Input,0666) != 0 && errno != EEXIST){
     fprintf(stdout,"Can't make input fifo %s\n",Input);
-    exit(1);
+    exit(EX_CANTCREAT);
   }
 
   FILE *fp = fopen(Input,"r");
   if(fp == NULL){
     fprintf(stdout,"Can't open %s\n",Input);
-    exit(1);
+    exit(EX_NOINPUT);
   }
   // Hold open (and idle) so we won't get EOF
   int out_fd = open(Input,O_WRONLY);
@@ -178,5 +180,5 @@ int main(int argc,char *argv[]){
   close(fd);
   fclose(fp); fp = NULL;
   close(out_fd); out_fd = -1;
-  exit(0);
+  exit(EX_OK);
 }

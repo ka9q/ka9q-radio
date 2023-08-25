@@ -21,6 +21,7 @@
 #else
 #include <string.h>
 #endif
+#include <sysexits.h>
 
 #include "multicast.h"
 #include "ax25.h"
@@ -77,7 +78,7 @@ int main(int argc,char *argv[]){
       break;
     default:
       fprintf(stderr,"Usage: %s -u user [-p passcode] [-v] [-I mcast_address][-h host]\n",argv[0]);
-      exit(1);
+      exit(EX_USAGE);
     }
   }
   // Set up multicast input
@@ -88,7 +89,7 @@ int main(int argc,char *argv[]){
   }
   if(Input_fd == -1){
     fprintf(stderr,"Can't set up multicast input from %s\n",Mcast_address_text);
-    exit(1);
+    exit(EX_IOERR);
   }
 
   if(Logfilename)
@@ -102,7 +103,7 @@ int main(int argc,char *argv[]){
   }
   if(User == NULL){
     fprintf(stderr,"Must specify -u User\n");
-    exit(1);
+    exit(EX_USAGE);
   }
   if(!Passcode){
     // Calculate trivial hash authenticator
@@ -122,7 +123,7 @@ int main(int argc,char *argv[]){
     hash &= 0x7fff;
     if(asprintf(&Passcode,"%d",hash) < 0){
       fprintf(stderr,"Unexpected error in computing passcode\n");
-      exit(1);
+      exit(EX_SOFTWARE);
     }
   }
 
