@@ -11,6 +11,7 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
+#include <sysexits.h>
 
 #include "conf.h"
 #include "misc.h"
@@ -277,7 +278,7 @@ static void *airspy_monitor(void *p){
   fprintf(stdout,"Device is no longer streaming, exiting\n");
   airspy_close(sdr->device);
   airspy_exit();
-  exit(1); // Let systemd restart us
+  exit(EX_NOINPUT); // Let systemd restart us
 }
 
 

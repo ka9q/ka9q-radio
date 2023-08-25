@@ -9,6 +9,7 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
+#include <sysexits.h>
 
 #include "conf.h"
 #include "misc.h"
@@ -194,7 +195,7 @@ static void *airspyhf_monitor(void *p){
   }
   fprintf(stdout,"Device is no longer streaming, exiting\n");
   airspyhf_close(sdr->device);
-  exit(1); // Let systemd restart us
+  exit(EX_NOINPUT); // Let systemd restart us
 }
 
 static bool Name_set = false;

@@ -9,6 +9,7 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
+#include <sysexits.h>
 
 #include "conf.h"
 #include "fcd.h"
@@ -277,7 +278,7 @@ void *proc_funcube(void *arg){
   }
  terminate:
   Pa_Terminate();
-  exit(1); // Let systemd restart us
+  exit(EX_NOINPUT); // Let systemd restart us
 }
 int funcube_startup(struct frontend *frontend){
   assert(frontend != NULL);

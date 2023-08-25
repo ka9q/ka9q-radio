@@ -7,6 +7,7 @@
 #include <rtl-sdr.h>
 #include <errno.h>
 #include <iniparser/iniparser.h>
+#include <sysexits.h>
 
 #include "conf.h"
 #include "misc.h"
