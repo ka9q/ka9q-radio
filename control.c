@@ -1281,14 +1281,7 @@ static void display_sig(WINDOW *w,struct demod const *demod){
   float const noise_bandwidth = fabsf(demod->filter.max_IF - demod->filter.min_IF);
   float sig_power = demod->sig.bb_power - noise_bandwidth * Frontend.n0;
   if(sig_power < 0)
-    sig_power = 0;
-  float ad_dB = power2dB(Frontend.if_power);
-  float fe_gain_dB = 0;
-  // This *really* needs to be cleaned up. But the various front ends use different analog gain stages
-  if(Frontend.lna_gain != 0 || Frontend.mixer_gain != 0 || Frontend.if_gain != 0)
-    fe_gain_dB = Frontend.lna_gain + Frontend.mixer_gain + Frontend.if_gain;
- else
-    fe_gain_dB = Frontend.rf_atten + Frontend.rf_gain;
+    sig_power = 0; // can happen due to smoothing
 
   int row = 1;
   int col = 1;
@@ -1299,16 +1292,17 @@ static void display_sig(WINDOW *w,struct demod const *demod){
 	    Frontend.mixer_gain,
 	    Frontend.if_gain);
 
-  pprintw(w,row++,col,"A/D","%'.1f dBFS ",ad_dB);
-  pprintw(w,row++,col,"FE Gain","%.1f dB   ",fe_gain_dB);
-  pprintw(w,row++,col,"Input","%.1f dB   ",ad_dB - fe_gain_dB);
+  pprintw(w,row++,col,"Input","%.1f dBFS ",power2dB(Frontend.if_power));
+  pprintw(w,row++,col,"FE Gain","%.1f dB   ",Frontend.rf_atten + Frontend.rf_gain);
   pprintw(w,row++,col,"Baseband","%.1f dB   ",power2dB(demod->sig.bb_power));
   pprintw(w,row++,col,"N0","%.1f dB/Hz",power2dB(Frontend.n0));
   
+  // Derived numbers
   float sn0 = sig_power/Frontend.n0;
   pprintw(w,row++,col,"S/N0","%.1f dBHz ",power2dB(sn0));
   pprintw(w,row++,col,"NBW","%.1f dBHz ",power2dB(noise_bandwidth));
   pprintw(w,row++,col,"SNR","%.1f dB   ",power2dB(sn0/noise_bandwidth));
+
   pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(demod->output.gain));
   pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(demod->output.energy)); // actually level; sender does averaging
   pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(demod->output.headroom));
@@ -1392,8 +1386,9 @@ static void display_output(WINDOW *w,struct demod const *demod){
   {
     char tbuf[100];
     pprintw(w,row++,col,"","%s",format_gpstime(tbuf,sizeof(tbuf),Frontend.timestamp));
-    pprintw(w,row++,col,"Samples","%'llu",Frontend.samples);
   }
+  pprintw(w,row++,col,"Samples","%'llu",Frontend.samples);
+  pprintw(w,row++,col,"Update interval","%'.1f sec",Refresh_rate);
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_address),
