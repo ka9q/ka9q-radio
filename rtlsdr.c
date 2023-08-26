@@ -153,10 +153,12 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     rtlsdr_set_tuner_gain_mode(sdr->device,1);  // auto gain mode (i.e., the firmware does it)
     rtlsdr_set_tuner_gain(sdr->device,0);
     sdr->gain = 0;
+    frontend->rf_gain = 0; // needs conversion to dB
     sdr->holdoff_counter = HOLDOFF_TIME;
   } else {
     rtlsdr_set_tuner_gain_mode(sdr->device,0); // manual gain mode (i.e., we do it)
     sdr->gain = config_getint(dictionary,section,"gain",0);
+    frontend->rf_gain = sdr->gain; // Needs conversion to dB?
   }
 
   
@@ -262,6 +264,7 @@ static void do_rtlsdr_agc(struct sdrstate * const sdr){
     int r = rtlsdr_set_tuner_gain(sdr->device,sdr->gain);
     if(r != 0)
       printf("rtlsdr_set_tuner_gain returns %d\n",r);
+    frontend->rf_gain = sdr->gain; // Convert to dB?
   }
 }
 #endif

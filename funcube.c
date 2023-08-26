@@ -329,6 +329,8 @@ static void do_fcd_agc(struct sdrstate *sdr){
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_IF_GAIN1,&val,sizeof(val));
     }
   }
+  frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
+
 }
 
 // The funcube device uses the Mirics MSi001 tuner. It has a fractional N synthesizer that can't actually do integer frequency steps.
@@ -415,6 +417,7 @@ double funcube_tune(struct frontend * const frontend,double const freq){
       frontend->lna_gain = 7;
     else
       frontend->lna_gain = 24;
+    frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
   }
   return frontend->frequency;
 }  

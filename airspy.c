@@ -224,6 +224,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     gainstep = GAIN_COUNT-1;
     set_gain(sdr,gainstep); // Start AGC with max gain step
   }
+  frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
   sdr->antenna_bias = config_getboolean(Dictionary,section,"bias",false);
   {
     int ret __attribute__ ((unused));
@@ -449,6 +450,7 @@ static void set_gain(struct sdrstate * const sdr,int gainstep){
       frontend->mixer_gain = airspy_sensitivity_mixer_gains[tab];
       frontend->lna_gain = airspy_sensitivity_lna_gains[tab];
     }
+    frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
 #if 0
     send_airspy_status(sdr,1);
 #endif
