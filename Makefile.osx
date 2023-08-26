@@ -70,7 +70,7 @@ pl: pl.o libradio.a
 powers: powers.o dump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lm -lpthread
 
-radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o status.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o ezusb.o libfcd.a libradio.a
+radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o status.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o libfcd.a libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lairspy -lairspyhf -lrtlsdr -lportaudio -liconv -lusb-1.0 -lm -lpthread
 
 rdsd: rdsd.o libradio.a
@@ -162,6 +162,7 @@ modes.o: modes.c radio.h osc.h misc.h  multicast.h status.h filter.h
 morse.o: morse.c morse.h
 radio.o: radio.c radio.h osc.h filter.h misc.h  multicast.h status.h
 radio_status.o: radio_status.c status.h radio.h misc.h filter.h multicast.h  osc.h
+sig_gen.o: sig_gen.c conf.h misc.h multicast.h status.h config.h radio.h
 spectrum.o: spectrum.c multicast.h misc.h iir.h filter.h radio.h
 wfm.o: wfm.c misc.h filter.h radio.h osc.h multicast.h  status.h iir.h
 
