@@ -33,6 +33,7 @@ CONF_FILES=		 opusd@hf.conf opusd@hfdl.conf opusd@fm.conf opusd@aviation.conf op
 			 radiod@repeater.conf \
 			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
 			 wspr-decoded.conf horus.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
+			 radiod@siggen.conf \
 			 radiod@rx888-generic.conf radiod@airspyhf-generic.conf radiod@airspy-generic.conf radiod@funcube-generic.conf \
 			 radiod@rx888-ka9q-hf.conf radiod@funcube-ka9q.conf radiod@kfs.conf radiod@airspyhf-ka9q.conf radiod@airspy-ka9q-2m.conf radiod@airspy-ka9q-125cm.conf radiod@airspy-ka9q-70cm.conf modes.conf
 
@@ -46,7 +47,7 @@ BLACKLIST=airspy-blacklist.conf
 SRC=airspyhf.c airspy.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c cwd.c decimate.c dump.c fcd.c filter.c fm.c \
 	   tune.c iir.c linear.c main.c metadump.c misc.c modes.c monitor.c morse.c radio.c setfilt.c powers.c \
 	   show-sig.c spectrum.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdr.c pcmspawn.c \
-	   rx888.c ezusb.c status.c stereod.c wfm.c wspr-decoded.c ft8-decoded.c set_xcvr.c wd-record.c funcube.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
+	   rx888.c ezusb.c sig_gen.c status.c stereod.c wfm.c wspr-decoded.c ft8-decoded.c set_xcvr.c wd-record.c funcube.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
 	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h ezusb.h rx888.h
 
 all: depend $(DAEMONS) $(EXECS)
@@ -81,8 +82,9 @@ install: $(DAEMONS) $(EXECS) start-ka9q-horus.sh
 #	install -o root -m 0644 -D --target-directory=/etc/logrotate.d $(LOGROTATE_FILES)
 	(cd config;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d)
 
+# Don't copy to avoid overwriting existing configs that might have been modified locally
 #	install -o root -m 0664 -D --target-directory=/etc/radio $(CONF_FILES);
-	(cd config;rsync -a $(CONF_FILES) /etc/radio)
+	(cd config;rsync --ignore-existing -a $(CONF_FILES) /etc/radio)
 
 	mkdir -p /etc/fftw /etc/radio $(VARDIR)
 	chgrp radio $(VARDIR) /etc/radio /etc/fftw
@@ -164,7 +166,7 @@ powers: powers.o dump.o libradio.a
 pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
-radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o rtcp.o radio_status.o modes.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o ezusb.o libfcd.a libradio.a
+radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o rtcp.o radio_status.o modes.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o libfcd.a libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lportaudio -lusb-1.0 -lbsd -lm -lpthread
 
 rdsd: rdsd.o libradio.a
