@@ -212,6 +212,8 @@ static inline int time_cmp(struct timespec const *a,struct timespec const *b){
   return 0;
 }
 static long long const BILLION = 1000000000LL;
+static long const MILLION = 1000000L;
+static int const THOUSAND = 1000;
 
 // Convert timespec (seconds, nanoseconds) to integer nanoseconds
 // Integer nanoseconds overflows past 584.94242 years. That's probably long enough
