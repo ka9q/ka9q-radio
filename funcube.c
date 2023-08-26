@@ -252,7 +252,7 @@ void *proc_funcube(void *arg){
     frontend->samples += Blocksize;
     float const block_energy = i_energy + q_energy; // Normalize for complex pairs
     frontend->if_power = block_energy/Blocksize; // Average A/D output power per channel  
-    frontend->if_energy += frontend->if_power;
+    frontend->if_energy += block_energy;
 
 #if 1
     // Get status timestamp from UNIX TOD clock -- but this might skew because of inexact sample rate

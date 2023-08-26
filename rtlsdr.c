@@ -238,7 +238,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
   }
   write_cfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->if_power = energy / sampcount;
-  frontend->if_energy += frontend->if_power;
+  frontend->if_energy += energy;
   frontend->samples += sampcount;
 }
 #if 0 // use this later

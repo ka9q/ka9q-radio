@@ -71,8 +71,18 @@ struct frontend {
   float min_IF;
   float max_IF;
   
+  /* For efficiency, signal levels now scaled to full A/D range, e.g.,
+     16 bit real:    0 dBFS = +87.2984 dB = 32767/sqrt(2) units RMS
+     16 bit complex: 0 dBFS = +90.3087 dB = 32767 units RMS
+     12 bit real:    0 dBFS = +63.2121 dB = 2047/sqrt(2) units RMS
+     12 bit complex: 0 dBFS = +66.2224 dB = 2047 units RMS
+      8 bit complex: 0 dBFS = +42.0761 dB = 127 units RMS
+
+      so full A/D range now corresponds to different levels internally, and are scaled
+      in radio_status.c when sending status messages
+  */
   float if_power;
-  float if_energy; // Accumulated between polls
+  float if_energy; // if_power accumulated until reset by a poll
   
   // This structure is updated asynchronously by the front end thread, so it's protected
   pthread_mutex_t status_mutex;

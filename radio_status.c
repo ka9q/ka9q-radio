@@ -394,7 +394,12 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
 
   *bp++ = STATUS; // 0 = status, 1 = command
 
-  float const power_scale = voltage2dB(1 << (frontend->bitspersample - 1)); // Scaling for A/D width
+  // Scale amplitudes allowing for width of A/D converter
+  float power_scale = voltage2dB(1 << (frontend->bitspersample - 1)); // Scaling for A/D width
+
+  // Real A/Ds have only half the power of complex A/Ds, but we still want 0 dBFS to indicate saturation
+  if(frontend->isreal)
+    power_scale += 3.01023;
 
   // parameters valid in all modes
   encode_int32(&bp,COMMAND_TAG,demod->command_tag); // at top to make it easier to spot in dumps
@@ -435,7 +440,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   
   // Adjust for for A/D width
   if(demod->blocks_since_poll > 0){
-    float level = frontend->if_energy / demod->blocks_since_poll; // Average since last poll
+    float level = frontend->if_energy / (frontend->L * demod->blocks_since_poll); // Average per sample since last poll
     encode_float(&bp,IF_POWER,power2dB(level) - power_scale);
   } else {
     encode_float(&bp,IF_POWER,power2dB(frontend->if_power) - power_scale);
@@ -541,10 +546,11 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
       encode_float(&bp,DEMOD_SNR,power2dB(demod->sig.snr)); // abs ratio -> dB
 
     if(demod->demod_type == LINEAR_DEMOD){ // Gain not really meaningful in FM modes
-      float gain = demod->output.gain; // Use instantaneous amplitude gain if no integration
-      gain *= gain; // square for power ratio
+      float gain;
       if(demod->blocks_since_poll > 0)
 	gain = demod->output.sum_gain_sq / demod->blocks_since_poll;
+      else
+	gain = demod->output.gain * demod->output.gain; // Use instantaneous amplitude gain if no integration
       
       if(demod->output.channels == 1)
 	gain *= 0.5; // Conversion from complex to real removes half the output power

@@ -283,8 +283,8 @@ static void rx_callback(struct libusb_transfer * const transfer){
     } else {
       for(int i=0; i < sampcount; i++){
 	int s = samples[i];
-	in_energy += s * s;
 	wptr[i] = s;
+	in_energy += s * s;
       }
     }
     output_count = sampcount;
@@ -292,8 +292,8 @@ static void rx_callback(struct libusb_transfer * const transfer){
     /* Correct sample rate by linear interpolation. Creates "chugging"
      artifacts in noise at low levels and consumes a lot of CPU. So I
      don't recommend using unless you need more precision and you
-     can't use an external GPSDO */
-    
+     can't use an external GPSDO
+    */
     for(int i=0; i < sampcount; i++){
       int32_t s = samples[i];
       if(sdr->randomizer)
@@ -321,11 +321,13 @@ static void rx_callback(struct libusb_transfer * const transfer){
     }
   }
 
-  write_rfilter(frontend->in,NULL,output_count); // Update write pointer, invoke FFT
+  write_rfilter(frontend->in,NULL,output_count); // Update write pointer, invoke FFT if block is complete
 
-  // Send raw, unnormalized signal power, apply corrections later
+  // Save raw, unnormalized signal power, apply corrections later
   frontend->if_power = (float)in_energy / output_count;
-  frontend->if_energy += frontend->if_power;
+  // accumulate raw sample emergy since these upcalls are not synchronous with FFT blocks
+  // radio_status will normalize by samples per block
+  frontend->if_energy += (float)in_energy;
   frontend->samples += sampcount; // Count original samples
   if(!Stop_transfers) {
     if(libusb_submit_transfer(transfer) == 0)

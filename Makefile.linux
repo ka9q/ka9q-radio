@@ -81,8 +81,9 @@ install: $(DAEMONS) $(EXECS) start-ka9q-horus.sh
 #	install -o root -m 0644 -D --target-directory=/etc/logrotate.d $(LOGROTATE_FILES)
 	(cd config;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d)
 
+# Don't copy to avoid overwriting existing configs that might have been modified locally
 #	install -o root -m 0664 -D --target-directory=/etc/radio $(CONF_FILES);
-	(cd config;rsync -a $(CONF_FILES) /etc/radio)
+	(cd config;rsync --ignore-existing -a $(CONF_FILES) /etc/radio)
 
 	mkdir -p /etc/fftw /etc/radio $(VARDIR)
 	chgrp radio $(VARDIR) /etc/radio /etc/fftw
