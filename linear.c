@@ -191,7 +191,8 @@ void *demod_linear(void *arg){
 	  demod->output.gain *= gain_change;
 	}
       }
-      output_power /= N;
+      output_power /= N; // Per sample
+      output_power *= 2; // +3 dB for mono since 0 dBFS = 1 unit peak, not RMS
       demod->output.energy += output_power;
       // Mute if no signal (e.g., outside front end coverage)
       bool mute = false;
@@ -220,8 +221,8 @@ void *demod_linear(void *arg){
 	  demod->output.gain *= gain_change;
 	}
       }
-      output_power /= (N * demod->output.channels);
-      demod->output.energy += output_power;
+      output_power /= N; // Per sample
+      demod->output.energy += output_power; // 0 dBFS = 1 unit RMS (I and Q both contribute)
       // Mute if no signal (e.g., outside front end coverage)
       bool mute = false;
       if(output_power == 0)
