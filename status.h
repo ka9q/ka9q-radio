@@ -119,7 +119,7 @@ enum status_type {
   TP2,
 
   GAINSTEP,
-  OUTPUT_BITS_PER_SAMPLE,
+  AD_BITS_PER_SAMPLE, // Front end A/D width, used for gain scaling
   SQUELCH_OPEN,   // Squelch opening threshold SNR
   SQUELCH_CLOSE,  // and closing
   PRESET,         // char string containing mode presets

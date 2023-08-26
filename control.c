@@ -973,6 +973,9 @@ static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int len
     case FE_ISREAL:
       Frontend.isreal = decode_int(cp,optlen) ? true: false;
       break;
+    case AD_BITS_PER_SAMPLE:
+      Frontend.bitspersample = decode_int(cp,optlen);
+      break;
     case IF_GAIN:
       Frontend.if_gain = decode_int(cp,optlen);
       break;
@@ -989,7 +992,7 @@ static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int len
       Block_drops = decode_int(cp,optlen);
       break;
     case IF_POWER:
-      Frontend.output_level = dB2power(decode_float(cp,optlen));
+      Frontend.if_power = dB2power(decode_float(cp,optlen));
       break;
     case BASEBAND_POWER:
       demod->sig.bb_power = dB2power(decode_float(cp,optlen)); // dB -> power
@@ -1279,7 +1282,7 @@ static void display_sig(WINDOW *w,struct demod const *demod){
   float sig_power = demod->sig.bb_power - noise_bandwidth * Frontend.n0;
   if(sig_power < 0)
     sig_power = 0;
-  float ad_dB = power2dB(Frontend.output_level);
+  float ad_dB = power2dB(Frontend.if_power);
   float fe_gain_dB = 0;
   // This *really* needs to be cleaned up. But the various front ends use different analog gain stages
   if(Frontend.lna_gain != 0 || Frontend.mixer_gain != 0 || Frontend.if_gain != 0)

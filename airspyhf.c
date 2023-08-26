@@ -126,6 +126,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   // Default to first (highest) sample rate on list
   frontend->samprate = config_getint(Dictionary,section,"samprate",sdr->sample_rates[0]);
   frontend->isreal = false;
+  frontend->bitspersample = 0; // Already floating point
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
 
   fprintf(stdout,"Set sample rate %'u Hz\n",frontend->samprate);
@@ -228,7 +229,8 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   }
   frontend->samples += sampcount;
   write_cfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->output_level = in_energy / sampcount;
+  frontend->if_power = in_energy / sampcount;
+  frontend->if_energy += frontend->if_power;
   return 0;
 }
 

@@ -345,8 +345,8 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
     case GAINSTEP:
       printf("gain step %'llu",(long long unsigned)decode_int(cp,optlen));
       break;
-    case OUTPUT_BITS_PER_SAMPLE:
-      printf("output bits/sample %d",(int)decode_int(cp,optlen));
+    case AD_BITS_PER_SAMPLE:
+      printf("A/D bits/sample %d",(int)decode_int(cp,optlen));
       break;
     case SQUELCH_OPEN:
       printf("squelch open %.1f dB",decode_float(cp,optlen));

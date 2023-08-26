@@ -34,7 +34,7 @@ extern struct demod const *Dynamic_demod;
 extern dictionary const *Modetable;
 
 
-static int send_radio_status(struct frontend const *frontend,struct demod *demod,int full);
+static int send_radio_status(struct frontend *frontend,struct demod *demod,int full);
 static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int length);
 static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,uint8_t *packet, int len);
 
@@ -95,7 +95,7 @@ void *radio_status(void *arg){
   return NULL;
 }
 
-static int send_radio_status(struct frontend const *frontend,struct demod *demod,int full){
+static int send_radio_status(struct frontend *frontend,struct demod *demod,int full){
   uint8_t packet[2048];
 
   Metadata_packets++;
@@ -105,6 +105,7 @@ static int send_radio_status(struct frontend const *frontend,struct demod *demod
   demod->sig.bb_energy = 0;
   demod->output.energy = 0;
   demod->output.sum_gain_sq = 0;
+  frontend->if_energy = 0;
   demod->blocks_since_poll = 0;
   return 0;
 }
@@ -393,6 +394,8 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
 
   *bp++ = STATUS; // 0 = status, 1 = command
 
+  float const power_scale = voltage2dB(1 << (frontend->bitspersample - 1)); // Scaling for A/D width
+
   // parameters valid in all modes
   encode_int32(&bp,COMMAND_TAG,demod->command_tag); // at top to make it easier to spot in dumps
   encode_int64(&bp,CMD_CNT,demod->commands); // integer
@@ -416,6 +419,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   encode_int32(&bp,IF_GAIN,frontend->if_gain);
   encode_float(&bp,FE_LOW_EDGE,frontend->min_IF);
   encode_float(&bp,FE_HIGH_EDGE,frontend->max_IF);
+  encode_int32(&bp,AD_BITS_PER_SAMPLE,frontend->bitspersample);
 
   // Tuning
   encode_double(&bp,RADIO_FREQUENCY,demod->tune.freq); // Hz
@@ -429,9 +433,14 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   if(demod->filter.out != NULL)
     encode_int32(&bp,FILTER_DROPS,demod->filter.out->block_drops);  // count
   
-  // Signals - these ALWAYS change
-  encode_float(&bp,IF_POWER,power2dB(frontend->output_level));
-  encode_float(&bp,NOISE_DENSITY,power2dB(demod->sig.n0)); // power -> dB
+  // Adjust for for A/D width
+  if(demod->blocks_since_poll > 0){
+    float level = frontend->if_energy / demod->blocks_since_poll; // Average since last poll
+    encode_float(&bp,IF_POWER,power2dB(level) - power_scale);
+  } else {
+    encode_float(&bp,IF_POWER,power2dB(frontend->if_power) - power_scale);
+  }
+  encode_float(&bp,NOISE_DENSITY,power2dB(demod->sig.n0) - power_scale); // power -> dB
 
   // Demodulation mode
   encode_byte(&bp,DEMOD_TYPE,demod->demod_type);
@@ -514,14 +523,13 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
 
     // BASEBAND_POWER is now the average since last poll
     float bb_power = demod->sig.bb_power;
-    if(demod->blocks_since_poll > 0){
+    if(demod->blocks_since_poll > 0)
       bb_power = demod->sig.bb_energy / demod->blocks_since_poll;
 
-    }
-    encode_float(&bp,BASEBAND_POWER,power2dB(bb_power)); // power -> dB
+    encode_float(&bp,BASEBAND_POWER,power2dB(bb_power) - power_scale); // power -> dB
     if(demod->blocks_since_poll > 0){
-      float output_level = demod->output.energy / demod->blocks_since_poll;
-      encode_float(&bp,OUTPUT_LEVEL,power2dB(output_level)); // power ratio -> dB
+      float output_power = demod->output.energy / demod->blocks_since_poll;
+      encode_float(&bp,OUTPUT_LEVEL,power2dB(output_power)); // power ratio -> dB
     }
     encode_int64(&bp,OUTPUT_SAMPLES,demod->output.samples);
     encode_float(&bp,HEADROOM,voltage2dB(demod->output.headroom)); // amplitude -> dB
@@ -532,12 +540,17 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     if(!isnan(demod->sig.snr) && demod->sig.snr > 0)
       encode_float(&bp,DEMOD_SNR,power2dB(demod->sig.snr)); // abs ratio -> dB
 
-    float gain = demod->output.gain; // Use instantaneous amplitude gain if no integration
-    gain *= gain; // square for power ratio
-    if(demod->blocks_since_poll > 0)
-      gain = demod->output.sum_gain_sq / demod->blocks_since_poll;
+    if(demod->demod_type == LINEAR_DEMOD){ // Gain not really meaningful in FM modes
+      float gain = demod->output.gain; // Use instantaneous amplitude gain if no integration
+      gain *= gain; // square for power ratio
+      if(demod->blocks_since_poll > 0)
+	gain = demod->output.sum_gain_sq / demod->blocks_since_poll;
       
-    encode_float(&bp,GAIN,power2dB(gain));
+      if(demod->output.channels == 1)
+	gain *= 0.5; // Conversion from complex to real removes half the output power
+      
+      encode_float(&bp,GAIN,power2dB(gain) + power_scale);
+    }
     // Source address we're using to send data
     encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&demod->output.data_source_address);
     // Where we're sending PCM output

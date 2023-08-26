@@ -168,6 +168,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   // Default to first (highest) sample rate on list
   frontend->samprate = config_getint(Dictionary,section,"samprate",sdr->sample_rates[0]);
   frontend->isreal = true;
+  frontend->bitspersample = 12;
   sdr->offset = frontend->samprate/4;
   sdr->converter = config_getfloat(Dictionary,section,"converter",0);
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
@@ -319,7 +320,7 @@ static int rx_callback(airspy_transfer *transfer){
     s[7] =  up[2];
     for(int j=0; j < 8; j++){
       int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
-      wptr[j] = x * SCALE12;
+      wptr[j] = x;
       in_energy += wptr[j] * wptr[j];
     }
     wptr += 8;
@@ -327,7 +328,8 @@ static int rx_callback(airspy_transfer *transfer){
   }
   frontend->samples += sampcount;
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->output_level = 2 * in_energy / sampcount;
+  frontend->if_power = (float)in_energy / sampcount;
+  frontend->if_energy += frontend->if_power;
   frontend->samples += sampcount;
   if(Software_agc){
     // Integrate A/D energy

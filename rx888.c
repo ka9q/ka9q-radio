@@ -166,6 +166,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const Dictio
   frontend->min_IF = 0;
   frontend->max_IF = 0.47 * frontend->samprate; // Just an estimate - get the real number somewhere
   frontend->isreal = true; // Make sure the right kind of filter gets created!
+  frontend->bitspersample = 16;
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
   if(fabsl(frontend->calibrate) >= 1e-4){
     fprintf(stdout,"Unreasonable frequency calibration %.3g, setting to 0\n",frontend->calibrate);
@@ -277,13 +278,13 @@ static void rx_callback(struct libusb_transfer * const transfer){
 	int32_t s = samples[i];
 	s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
 	in_energy += s * s;
-	wptr[i] = s * SCALE16;
+	wptr[i] = s;
       }
     } else {
       for(int i=0; i < sampcount; i++){
 	int s = samples[i];
 	in_energy += s * s;
-	wptr[i] = s * SCALE16;
+	wptr[i] = s;
       }
     }
     output_count = sampcount;
@@ -299,7 +300,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
 	s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
 
       in_energy += s * s;
-      float const f = s * SCALE16;
+      float const f = s;
 
       if(sdr->sample_phase < 1.0){
 	// Usual case
@@ -322,11 +323,9 @@ static void rx_callback(struct libusb_transfer * const transfer){
 
   write_rfilter(frontend->in,NULL,output_count); // Update write pointer, invoke FFT
 
-  // real-only signals lack power in an imaginary component, so to normalize with a complex signal we increase by 3 dB (2x)
-  // 0 dBFS = full range peak-to-peak for real-only, magnitude = 1 for complex
-  // The rest of the signal chain is complex until a converson to AM or SSB so I'm not sure about how things should be normalized
-  // to make the displayed signal levels work out
-  frontend->output_level = 2 * in_energy * SCALE16 * SCALE16 / output_count;
+  // Send raw, unnormalized signal power, apply corrections later
+  frontend->if_power = (float)in_energy / output_count;
+  frontend->if_energy += frontend->if_power;
   frontend->samples += sampcount; // Count original samples
   if(!Stop_transfers) {
     if(libusb_submit_transfer(transfer) == 0)

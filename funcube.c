@@ -87,6 +87,7 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   }
 
   frontend->isreal = false; // Complex sample stream
+  frontend->bitspersample = 16;
   frontend->min_IF = LowerEdge;
   frontend->max_IF = UpperEdge;
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
@@ -224,7 +225,7 @@ void *proc_funcube(void *arg){
     complex float * wptr = frontend->in->input_write_pointer.c;
 
     for(int i=0; i<Blocksize; i++){
-      complex float samp = CMPLXF(sampbuf[2*i],sampbuf[2*i+1]) * SCALE16;
+      complex float samp = CMPLXF(sampbuf[2*i],sampbuf[2*i+1]);
 
       samp_sum += samp; // Accumulate average DC values
       samp -= sdr->DC;   // remove smoothed DC offset (which can be fractional)
@@ -250,7 +251,8 @@ void *proc_funcube(void *arg){
     write_cfilter(frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
     frontend->samples += Blocksize;
     float const block_energy = i_energy + q_energy; // Normalize for complex pairs
-    frontend->output_level = block_energy/Blocksize; // Average A/D output power per channel  
+    frontend->if_power = block_energy/Blocksize; // Average A/D output power per channel  
+    frontend->if_energy += frontend->if_power;
 
 #if 1
     // Get status timestamp from UNIX TOD clock -- but this might skew because of inexact sample rate
@@ -299,7 +301,7 @@ static void do_fcd_agc(struct sdrstate *sdr){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
-  float const powerdB = power2dB(frontend->output_level);
+  float const powerdB = power2dB(frontend->if_power);
   
   if(powerdB > AGC_upper){
     if(frontend->if_gain > 0){

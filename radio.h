@@ -71,7 +71,8 @@ struct frontend {
   float min_IF;
   float max_IF;
   
-  float output_level;
+  float if_power;
+  float if_energy; // Accumulated between polls
   
   // This structure is updated asynchronously by the front end thread, so it's protected
   pthread_mutex_t status_mutex;
@@ -82,8 +83,6 @@ struct frontend {
   int (*setup)(struct frontend *,dictionary *,char const *); // Get front end ready to go
   int (*start)(struct frontend *);          // Start front end sampling
   double (*tune)(struct frontend *,double); // Tune front end, return actual frequency
-  float tp1;        // Spare test points
-  float tp2;
   struct filter_in * restrict in; // Input half of fast convolver, shared with all channels
 };
 
