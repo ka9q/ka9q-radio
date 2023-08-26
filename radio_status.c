@@ -394,13 +394,6 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
 
   *bp++ = STATUS; // 0 = status, 1 = command
 
-  // Scale amplitudes allowing for width of A/D converter
-  float power_scale = voltage2dB(1 << (frontend->bitspersample - 1)); // Scaling for A/D width
-
-  // Real A/Ds have only half the power of complex A/Ds, but we still want 0 dBFS to indicate saturation
-  if(frontend->isreal)
-    power_scale += 3.01023;
-
   // parameters valid in all modes
   encode_int32(&bp,COMMAND_TAG,demod->command_tag); // at top to make it easier to spot in dumps
   encode_int64(&bp,CMD_CNT,demod->commands); // integer
@@ -439,13 +432,14 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_int32(&bp,FILTER_DROPS,demod->filter.out->block_drops);  // count
   
   // Adjust for for A/D width
+  // Level is absolute relative to A/D saturation, so +3dB for real vs complex
   if(demod->blocks_since_poll > 0){
-    float level = frontend->if_energy / (frontend->L * demod->blocks_since_poll); // Average per sample since last poll
-    encode_float(&bp,IF_POWER,power2dB(level) - power_scale);
-  } else {
-    encode_float(&bp,IF_POWER,power2dB(frontend->if_power) - power_scale);
+    float level;
+    level = frontend->if_energy / (frontend->L * demod->blocks_since_poll); // Average per sample since last poll
+    level /= (1 << (frontend->bitspersample-1)) * (1 << (frontend->bitspersample-1));
+    encode_float(&bp,IF_POWER,power2dB(level));
   }
-  encode_float(&bp,NOISE_DENSITY,power2dB(demod->sig.n0) - power_scale); // power -> dB
+  encode_float(&bp,NOISE_DENSITY,power2dB(demod->sig.n0));
 
   // Demodulation mode
   encode_byte(&bp,DEMOD_TYPE,demod->demod_type);
@@ -527,12 +521,12 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_float(&bp,KAISER_BETA,demod->filter.kaiser_beta); // Dimensionless
 
     // BASEBAND_POWER is now the average since last poll
-    float bb_power = demod->sig.bb_power;
-    if(demod->blocks_since_poll > 0)
-      bb_power = demod->sig.bb_energy / demod->blocks_since_poll;
-
-    encode_float(&bp,BASEBAND_POWER,power2dB(bb_power) - power_scale); // power -> dB
     if(demod->blocks_since_poll > 0){
+      float bb_power = demod->sig.bb_energy / demod->blocks_since_poll;
+      encode_float(&bp,BASEBAND_POWER,power2dB(bb_power));
+    }
+    if(demod->blocks_since_poll > 0){
+      // Output levels are already normalized since they scaled by a fixed 32767 for conversion to int16_t
       float output_power = demod->output.energy / demod->blocks_since_poll;
       encode_float(&bp,OUTPUT_LEVEL,power2dB(output_power)); // power ratio -> dB
     }
@@ -547,15 +541,10 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
 
     if(demod->demod_type == LINEAR_DEMOD){ // Gain not really meaningful in FM modes
       float gain;
-      if(demod->blocks_since_poll > 0)
+      if(demod->blocks_since_poll > 0){
 	gain = demod->output.sum_gain_sq / demod->blocks_since_poll;
-      else
-	gain = demod->output.gain * demod->output.gain; // Use instantaneous amplitude gain if no integration
-      
-      if(demod->output.channels == 1)
-	gain *= 0.5; // Conversion from complex to real removes half the output power
-      
-      encode_float(&bp,GAIN,power2dB(gain) + power_scale);
+	encode_float(&bp,GAIN,power2dB(gain));
+      }
     }
     // Source address we're using to send data
     encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&demod->output.data_source_address);
