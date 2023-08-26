@@ -114,6 +114,12 @@ int rtlsdr_setup(struct frontend *,dictionary *,char const *);
 int rtlsdr_startup(struct frontend *);
 double rtlsdr_tune(struct frontend *,double);
 
+// In sig_gen.c:
+int sig_gen_setup(struct frontend *,dictionary *,char const *);
+int sig_gen_startup(struct frontend *);
+double sig_gen_tune(struct frontend *,double);
+
+
 
 // The main program sets up the demodulator parameter defaults,
 // overwrites them with command-line arguments and/or state file settings,
@@ -361,7 +367,7 @@ static int loadconfig(char const * const file){
       char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
       demod->output.sap_fd = setup_mcast(sap_dest,NULL,1,mcast_ttl,ip_tos,0);
       if(demod->output.sap_fd < 3)
-	fprintf(stdout,"Can't set up SAP output to %s\n",sap_dest);
+	fprintf(stdout,"Can't set up SAP output to %s\n",sap_dest); // not fatal
       else
 	pthread_create(&demod->sap_thread,NULL,sap_send,demod);
     }
@@ -369,7 +375,7 @@ static int loadconfig(char const * const file){
     if(RTCP_enable){
       demod->output.rtcp_fd = setup_mcast(demod->output.data_dest_string,NULL,1,mcast_ttl,ip_tos,1); // RTP port number + 1
       if(demod->output.rtcp_fd < 3)
-	fprintf(stdout,"can't set up RTCP output to %s\n",demod->output.data_dest_string);
+	fprintf(stdout,"can't set up RTCP output to %s\n",demod->output.data_dest_string); // not fatal
       else
 	pthread_create(&demod->rtcp_thread,NULL,rtcp_send,demod);
     }
@@ -536,6 +542,10 @@ static int setup_hardware(char const *sname){
     Frontend.setup = rtlsdr_setup;
     Frontend.start = rtlsdr_startup;
     Frontend.tune = rtlsdr_tune;
+  } else if(strcasecmp(device,"sig_gen") == 0){
+    Frontend.setup = sig_gen_setup;
+    Frontend.start = sig_gen_startup;
+    Frontend.tune = sig_gen_tune;
 #if 0
     // The sdrplay library is still proprietary and object-only, so I can't bundle it in ka9q-radio
     // Everything else either has a standard Debian package or I have information to program them directly.
