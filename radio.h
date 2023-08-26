@@ -53,12 +53,13 @@ struct frontend {
   int64_t timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
   double frequency;
   double calibrate;  // Clock frequency error ratio, e.g, +1e-6 means 1 ppm high
-  // Somewhat hardware-dependent analog gains. Should be more abstract
-  uint8_t lna_gain;  // R820T/828 tuners
+  // R820T/828 tuner gains, dB. Informational only; total is reported in rf_gain
+  uint8_t lna_gain;
   uint8_t mixer_gain;
   uint8_t if_gain;
-  float rf_atten;    // RX888
-  float rf_gain;
+
+  float rf_atten;    // dB (RX888 only)
+  float rf_gain;     // dB gain (RX888) or lna_gain + mixer_gain + if_gain
   bool direct_conversion; // Try to avoid DC spike if set
   bool isreal;            // Use real->complex FFT (otherwise complex->complex)
   int bitspersample; // 8, 12 or 16
@@ -81,6 +82,7 @@ struct frontend {
       so full A/D range now corresponds to different levels internally, and are scaled
       in radio_status.c when sending status messages
   */
+  float reference;  // Reference amplitude (== 0 dB)
   float if_power;
   float if_energy; // if_power accumulated until reset by a poll
   
@@ -301,6 +303,7 @@ int start_demod(struct demod * restrict demod);
 int kill_demod(struct demod ** restrict demod);
 double set_first_LO(struct demod const * restrict, double);
 int downconvert(struct demod *demod);
+int set_reference_level(struct frontend *frontend);
 
 // Helper threads
 void *sap_send(void *);

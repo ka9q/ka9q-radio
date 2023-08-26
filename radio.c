@@ -128,6 +128,7 @@ static float estimate_noise(struct demod *demod,int shift){
 	break; // fallen off the right edge
     }
   }
+  // Normalize
   // Don't double-count the energy in the overlap
   return ((float)master->ilen / (master->ilen + master->impulse_length - 1))
       * 2 * min_bin_energy / ((float)master->bins * Frontend.samprate);
@@ -495,6 +496,7 @@ int downconvert(struct demod *demod){
 	pthread_mutex_unlock(&Frontend.status_mutex);
 	return -1;
       }
+
       demod->tune.second_LO = Frontend.frequency - demod->tune.freq;
       double const freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
       if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
@@ -543,13 +545,14 @@ int downconvert(struct demod *demod){
       demod->fine.phasor *= demod->filter.phase_adjust;
     }
     execute_filter_output(demod->filter.out,-shift); // block until new data frame
-
     demod->blocks_since_poll++;
+    set_reference_level(&Frontend); // May have changed
+    float level_normalize = 1. / Frontend.reference;
     if(buffer != NULL){ // No output time-domain buffer in spectral analysis mode
       const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
       float energy = 0;
       for(int n=0; n < N; n++){
-	buffer[n] *= step_osc(&demod->fine);
+	buffer[n] *= level_normalize * step_osc(&demod->fine);
 	energy += cnrmf(buffer[n]);
       }
       energy /= N;
@@ -558,6 +561,16 @@ int downconvert(struct demod *demod){
     }
     demod->filter.bin_shift = shift; // We need this in any case (not really?)
     demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
+    demod->sig.n0 /= Frontend.reference * Frontend.reference; // noise estimate is prior to normalization
 
     return 0;
+}
+
+// Set internal level equivalent to 0 dB
+ // I think the real vs complex difference is (or should be) handled in the filter
+int set_reference_level(struct frontend *frontend){
+  frontend->reference = 1 << (frontend->bitspersample - 1);
+  float analog_gain = frontend->rf_gain - frontend->rf_atten; // net analog gain, dB
+  frontend->reference *= pow(10.,analog_gain / 20); // Front end gain as amplitude ratio
+  return 0;
 }
