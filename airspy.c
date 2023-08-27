@@ -322,7 +322,7 @@ static int rx_callback(airspy_transfer *transfer){
     for(int j=0; j < 8; j++){
       int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
       wptr[j] = x;
-      in_energy += wptr[j] * wptr[j];
+      in_energy += x * x;
     }
     wptr += 8;
     up += 3;
