@@ -102,7 +102,7 @@ static float estimate_noise(struct demod *demod,int shift){
     for(int i=0; i < slave->bins; i++,mbin++){
       int n = abs(mbin); // Doesn't really handle the mirror well
       if(n < master->bins){
-	energies[i] += (cnrmf(fdomain[n]) - energies[i]) * 0.02; // blocknum was already incremented
+	energies[i] += (cnrmf(fdomain[n]) - energies[i]) * 0.005; // blocknum was already incremented
 	if(min_bin_energy > energies[i]){
 	  min_bin_energy = energies[i];
 	}
@@ -114,9 +114,14 @@ static float estimate_noise(struct demod *demod,int shift){
     // Complex input that often straddles DC
     if(mbin < 0)
       mbin += master->bins; // starting in negative frequencies
+    // TEST *************
+    if(isnan(demod->tp1))
+      demod->tp1 = 0;
+    demod->tp1 += .002 * (cnrmf(fdomain[mbin]) - demod->tp1);
+
     for(int i=0; i < slave->bins; i++,mbin++){	
       if(mbin >= 0 && mbin < master->bins){
-	energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * 0.02; // blocknum was already incremented
+	energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * 0.005; // blocknum was already incremented
 	if(min_bin_energy > energies[i]){
 	  min_bin_energy = energies[i];
 	}
@@ -129,9 +134,10 @@ static float estimate_noise(struct demod *demod,int shift){
     }
   }
   // Normalize
-  // Don't double-count the energy in the overlap
-  return ((float)master->ilen / (master->ilen + master->impulse_length - 1))
-      * 2 * min_bin_energy / ((float)master->bins * Frontend.samprate);
+  // A round trip through IFFT(FFT(x)) scales amplitude by N, power by N^2
+  // So the FFT alone scales power by N (see Parseval's theorem for the DFT)
+  min_bin_energy *= 1.0 / master->bins;
+  return min_bin_energy / Frontend.samprate; // Scale to 1 Hz
 }
 
 
@@ -571,6 +577,6 @@ int downconvert(struct demod *demod){
 int set_reference_level(struct frontend *frontend){
   frontend->reference = 1 << (frontend->bitspersample - 1);
   float analog_gain = frontend->rf_gain - frontend->rf_atten; // net analog gain, dB
-  frontend->reference *= pow(10.,analog_gain / 20); // Front end gain as amplitude ratio
+  frontend->reference *= dB2voltage(analog_gain); // Front end gain as amplitude ratio
   return 0;
 }
