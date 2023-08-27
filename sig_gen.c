@@ -1,7 +1,8 @@
 // signal generator - looks like a pseudo-front-end
 // Aug 2023 KA9Q
 #define _GNU_SOURCE 1
-
+#include <complex.h>
+#include <math.h>
 #include <pthread.h>
 #include <portaudio.h>
 #include <errno.h>
@@ -21,6 +22,7 @@ struct sdrstate {
   struct frontend *frontend;
   double tone; // Tone frequency to generate
   float amplitude; // Amplitude of tone
+  float noise; // Amplitude of noise
 
   pthread_t proc_thread;
 };
@@ -33,6 +35,15 @@ struct sdrstate {
 static int Blocksize;
 extern bool Stop_transfers;
 
+static int const Random_samples = 30000000;
+
+
+// One second of noise in requested format
+complex float *Complex_noise;
+float *Real_noise;
+
+complex float complex_gaussian(void);
+float real_gaussian(void);
 
 double sig_gen_tune(struct frontend * const frontend,double const freq);
 
@@ -78,19 +89,37 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   frontend->frequency = 0;
   frontend->lock = true;
 
-
   // Generate a single tone at specified frequency and amplitude
   sdr->tone = config_getdouble(dictionary,section,"tone",10000000.0); // Tone to generate, default 10 MHz
   sdr->amplitude = config_getfloat(dictionary,section,"amplitude",-10.0); // Tone amplitude, default -10 dBFS
-  sdr->amplitude = pow(10.0,sdr->amplitude / 20.0); // Convert from dBFS to peak amplitude
+  sdr->amplitude = dB2voltage(sdr->amplitude); // Convert from dBFS to peak amplitude
+  sdr->noise = config_getfloat(dictionary,section,"noise",101.0); // Noise amplitude dBFS, default off
+  if(sdr->noise == 101.0)
+    sdr->noise = 0;
+  else
+    sdr->noise = dB2voltage(sdr->noise);
 
-  fprintf(stdout,"Sig gen %s, samprate %'d, %s, LO freq %'.3f Hz, tone %'.3lf Hz, amplitude %.1f dB\n",
+  fprintf(stdout,"Sig gen %s, samprate %'d, %s, LO freq %'.3f Hz, tone %'.3lf Hz, amplitude %.1f dBFS, noise %'.1lf dBFS\n",
 	  frontend->description, frontend->samprate, frontend->isreal ? "real":"complex",frontend->frequency,
 	  sdr->tone,
-	  voltage2dB(sdr->amplitude)
+	  voltage2dB(sdr->amplitude),
+	  voltage2dB(sdr->noise)
 	  );
 
 
+  // Generate noise to be played repeatedly
+  if(sdr->noise != 0){
+    if(frontend->isreal){
+      Real_noise = malloc(sizeof(*Real_noise) * Random_samples);
+      for(int i = 0; i < Random_samples; i++)
+	Real_noise[i] = M_SQRT1_2 * real_gaussian() * sdr->noise; // 
+    } else {
+      Complex_noise = malloc(sizeof(*Complex_noise) * Random_samples);
+      for(int i = 0; i < Random_samples; i++)
+	Complex_noise[i] = complex_gaussian() * sdr->noise * M_SQRT1_2; // Power in both I and Q
+    }
+    fprintf(stdout,"Noise generated\n");
+  }
   return 0;
 }
 void *proc_sig_gen(void *arg){
@@ -120,24 +149,43 @@ void *proc_sig_gen(void *arg){
       blocksize = Blocksize + Blocksize / 2;
     frontend->timestamp = now;
 
+    // Pick a random starting point in the noise buffer
+    int noise_index = arc4random_uniform(Random_samples - blocksize);
+    float if_energy = 0;
     if(frontend->isreal){
-      // Real tone
+      // Real signal
       float * wptr = frontend->in->input_write_pointer.r;
-      for(int i=0; i < blocksize; i++)
-	wptr[i] = creal(step_osc(&tone) * sdr->amplitude * scale);
-
+      if(Real_noise != NULL){
+	for(int i=0; i < blocksize; i++){
+	  wptr[i] = (Real_noise[noise_index+i] + sdr->amplitude * creal(step_osc(&tone))) * scale;
+	  frontend->if_energy += wptr[i] * wptr[i];
+	}
+      } else {
+	for(int i=0; i < blocksize; i++){
+	  wptr[i] = (sdr->amplitude * creal(step_osc(&tone))) * scale;
+	  frontend->if_energy += wptr[i] * wptr[i];
+	}
+      }
       write_rfilter(frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
     } else {
-      // Complex tone
+      // Complex signal
       complex float * wptr = frontend->in->input_write_pointer.c;
-      for(int i=0; i < blocksize; i++)
-	wptr[i] = step_osc(&tone) * sdr->amplitude * scale;
-
+      if(Complex_noise != NULL){
+	for(int i=0; i < blocksize; i++){
+	  wptr[i] = (Complex_noise[noise_index+i] + sdr->amplitude * step_osc(&tone)) * scale;
+	  frontend->if_energy += cnrmf(wptr[i]);
+	}
+      } else {
+	for(int i=0; i < blocksize; i++){
+	  wptr[i] = (sdr->amplitude * step_osc(&tone)) * scale;
+	  frontend->if_energy += cnrmf(wptr[i]);
+	}
+      }
       write_cfilter(frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
     }
     frontend->samples += blocksize;    
-    frontend->if_power = (sdr->amplitude * scale) * (sdr->amplitude * scale); // normalized to 1.0 = 0 dB
-    frontend->if_energy += frontend->if_power * (float)blocksize; // Total energy in all samples
+    frontend->if_power = if_energy / blocksize;
+    frontend->if_energy += if_energy;
     // Get status timestamp from UNIX TOD clock
     // Request a half block sleep since this is only the minimum
     {
@@ -169,3 +217,31 @@ double sig_gen_tune(struct frontend * const frontend,double const freq){
   return frontend->frequency; // Not implemented anyway
 }
 
+complex float complex_gaussian(void){
+
+  complex float result;
+  float u,v,s;
+  do {
+    // Generate pair of gaussians using polar method
+    u = (float)arc4random() / (float)UINT32_MAX;
+    v = (float)arc4random() / (float)UINT32_MAX;
+    s = u*u + v*v;
+  } while(s >= 1);
+  float a = sqrt(-2 * log(s) / s);
+  __real__ result = a * u;
+  __imag__ result = a * v;
+  return result;
+}
+
+float real_gaussian(void){
+  static float saved;
+  static bool got_saved;
+  if(got_saved){
+    got_saved = false;
+    return saved;
+  }
+  complex float r = complex_gaussian();
+  got_saved = true;
+  saved = __imag__ r;
+  return __real__ r;
+}
