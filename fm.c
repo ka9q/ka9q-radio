@@ -64,6 +64,8 @@ void *demod_fm(void *arg){
   int badsegments = 0;
   int badsamples = 0;
 
+  // Initialize
+  demod->output.gain = (2 * demod->output.headroom *  demod->output.samprate) / fabsf(demod->filter.min_IF - demod->filter.max_IF);
 
   realtime();
 
