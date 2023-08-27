@@ -9,9 +9,11 @@
 #include <iniparser/iniparser.h>
 #if defined(linux)
 #include <bsd/string.h>
+#include <bsd/stdlib.h>
+#else
+#include <stdlib.h>
 #endif
 #include <sysexits.h>
-#include <stdlib.h>
 
 #include "conf.h"
 #include "fcd.h"
