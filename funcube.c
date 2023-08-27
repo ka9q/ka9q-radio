@@ -301,7 +301,7 @@ static void do_fcd_agc(struct sdrstate *sdr){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
-  float const powerdB = power2dB(frontend->if_power);
+  float const powerdB = power2dB(frontend->if_power / (1 << (frontend->bitspersample-1)));
   
   if(powerdB > AGC_upper){
     if(frontend->if_gain > 0){
