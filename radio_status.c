@@ -437,6 +437,10 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     float level;
     level = frontend->if_energy / (frontend->L * demod->blocks_since_poll); // Average per sample since last poll
     level /= (1 << (frontend->bitspersample-1)) * (1 << (frontend->bitspersample-1));
+    // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
+    // Complex signals carry twice as much power, divided between I and Q
+    if(frontend->isreal)
+      level *= 2;
     encode_float(&bp,IF_POWER,power2dB(level));
   }
   encode_float(&bp,NOISE_DENSITY,power2dB(demod->sig.n0));
