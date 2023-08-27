@@ -334,6 +334,8 @@ static int rx_callback(airspy_transfer *transfer){
   frontend->samples += sampcount;
   if(Software_agc){
     // Integrate A/D energy
+    in_energy /= (1 << (frontend->bitspersample-1));
+    in_energy /= (1 << (frontend->bitspersample-1));    
     sdr->energy += in_energy;
     sdr->energy_samples += sampcount;
     if(sdr->energy_samples >= frontend->samprate/10){ // Time to re-evaluate after 100 ms
