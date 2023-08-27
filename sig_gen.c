@@ -11,6 +11,7 @@
 #include <bsd/string.h>
 #endif
 #include <sysexits.h>
+#include <stdlib.h>
 
 #include "conf.h"
 #include "fcd.h"
