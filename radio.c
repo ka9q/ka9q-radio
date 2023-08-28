@@ -82,6 +82,8 @@ void free_demod(struct demod **demod){
 }
 
 
+static const float n0_smooth = .001; // exponential smoothing rate for (noisy) bin noise
+
 // experimental
 // estimate n0 by finding the FFT bin with the least energy
 // in the demod's pre-filter nyquist bandwidth
@@ -99,10 +101,10 @@ static float estimate_noise(struct demod *demod,int shift){
   float min_bin_energy = INFINITY;
   if(master->in_type == REAL){
     // Only half as many bins as with complex input
-    for(int i=0; i < slave->bins; i++,mbin++){
+    for(int i=0; i < slave->bins; i++){
       int n = abs(mbin); // Doesn't really handle the mirror well
       if(n < master->bins){
-	energies[i] += (cnrmf(fdomain[n]) - energies[i]) * 0.005; // blocknum was already incremented
+	energies[i] += (cnrmf(fdomain[n]) - energies[i]) * n0_smooth; // blocknum was already incremented
 	if(min_bin_energy > energies[i]){
 	  min_bin_energy = energies[i];
 	}
@@ -115,15 +117,14 @@ static float estimate_noise(struct demod *demod,int shift){
     if(mbin < 0)
       mbin += master->bins; // starting in negative frequencies
 
-    for(int i=0; i < slave->bins; i++,mbin++){	
+    for(int i=0; i < slave->bins; i++){
       if(mbin >= 0 && mbin < master->bins){
-	energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * 0.005; // blocknum was already incremented
+	energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * n0_smooth; // blocknum was already incremented
 	if(min_bin_energy > energies[i]){
 	  min_bin_energy = energies[i];
 	}
       }
-      mbin++;
-      if(mbin == master->bins)
+      if(++mbin == master->bins)
 	mbin = 0; // wrap around from neg freq to pos freq
       if(mbin == master->bins/2)
 	break; // fallen off the right edge
@@ -132,16 +133,17 @@ static float estimate_noise(struct demod *demod,int shift){
   // Normalize
   // A round trip through IFFT(FFT(x)) scales amplitude by N, power by N^2
   // So the FFT alone scales power by N (see Parseval's theorem for the DFT)
-  // For a real input FFT, the power is spread over only half the sample rate so increase by 3dB
-  if(master->in_type == REAL)
-    min_bin_energy *= 2.0 / master->bins;
-  else
-    min_bin_energy *= 1.0 / master->bins;
+  min_bin_energy *= 1.0 / master->bins;
 
   // Increase by overlap factor, e.g., 5/4 for overlap factor = 5 (20% overlap)
   // Determined empirically, I have to think about why this is
   min_bin_energy *= 1.0 + (float)(master->impulse_length - 1) / master->ilen;
-  return min_bin_energy / Frontend.samprate; // Scale to 1 Hz
+
+  // For a real input FFT, the power is spread over only half the sample rate so increase by 3dB
+  if(master->in_type == REAL)
+    return min_bin_energy / Frontend.samprate; // Scale to 1 Hz
+  else
+    return 2 * min_bin_energy / Frontend.samprate; // Scale to 1 Hz
 }
 
 
