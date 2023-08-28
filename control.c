@@ -502,7 +502,9 @@ int main(int argc,char *argv[]){
     int const c = getch();
     if(c == KEY_MOUSE){
       process_mouse(demod,&bp);
+      update_needed = true;
     } else if(c != ERR) {
+      update_needed = true;
       if(process_keyboard(demod,&bp,c) == -1)
 	goto quit;
     }
