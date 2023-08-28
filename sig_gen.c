@@ -238,14 +238,28 @@ complex float complex_gaussian(void){
 }
 #else
 // Box-Mueller method that avoids rejection
+// Seems faster on i7
+inline complex float expif(float x){
+  float s,c;
+  s = sin(x);
+  c = cos(x);
+  return c + I*s;
+}
+
 complex float complex_gaussian(void){
   float u,v,s;
 
   // Range 0,1
+#if 0
   u = (float)arc4random() / (float)UINT32_MAX;
   v = (float)arc4random() / (float)UINT32_MAX;  
-  s = sqrtf(-2 * log(u));
-  return s * cexpf(I*2*M_PI*v);
+#else
+  // Not crypto quality (who cares?) but vastly faster.
+  u = (float)random() / (float)INT32_MAX;
+  v = (float)random() / (float)INT32_MAX;  
+#endif  
+  s = sqrtf(-2 * logf(u));
+  return s * expif(2*M_PI*v);
 }
 
 #endif
