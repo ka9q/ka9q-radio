@@ -220,14 +220,14 @@ double sig_gen_tune(struct frontend * const frontend,double const freq){
   return frontend->frequency; // Not implemented anyway
 }
 
+// Marsaglia polar method for generating gaussian RVs
 complex float complex_gaussian(void){
-
   complex float result;
   float u,v,s;
   do {
     // Generate pair of gaussians using polar method
-    u = (float)arc4random() / (float)UINT32_MAX;
-    v = (float)arc4random() / (float)UINT32_MAX;
+    u = 2 * (float)arc4random() / (float)UINT32_MAX - 1.0;
+    v = 2 * (float)arc4random() / (float)UINT32_MAX - 1.0;
     s = u*u + v*v;
   } while(s >= 1);
   float a = sqrtf(-2 * logf(s) / s);
