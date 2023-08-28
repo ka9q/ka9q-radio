@@ -19,7 +19,7 @@ DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 
 EXECS=monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded wd-record set_xcvr
 
-AFILES=bandplan.txt help.txt id.txt monitor-help.txt SDDC_FX3.img
+AFILES=bandplan.txt help.txt id.txt monitor-help.txt SDDC_FX3.img modes.conf
 
 SYSTEMD_FILES=cwd.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service ft8-decoded.service
 
@@ -35,7 +35,7 @@ CONF_FILES=		 opusd@hf.conf opusd@hfdl.conf opusd@fm.conf opusd@aviation.conf op
 			 wspr-decoded.conf horus.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
 			 radiod@siggen.conf \
 			 radiod@rx888-generic.conf radiod@airspyhf-generic.conf radiod@airspy-generic.conf radiod@funcube-generic.conf \
-			 radiod@rx888-ka9q-hf.conf radiod@funcube-ka9q.conf radiod@kfs.conf radiod@airspyhf-ka9q.conf radiod@airspy-ka9q-2m.conf radiod@airspy-ka9q-125cm.conf radiod@airspy-ka9q-70cm.conf modes.conf
+			 radiod@rx888-ka9q-hf.conf radiod@funcube-ka9q.conf radiod@kfs.conf radiod@airspyhf-ka9q.conf radiod@airspy-ka9q-2m.conf radiod@airspy-ka9q-125cm.conf radiod@airspy-ka9q-70cm.conf
 
 
 LOGROTATE_FILES = aprsfeed.rotate
