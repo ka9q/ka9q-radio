@@ -230,7 +230,7 @@ complex float complex_gaussian(void){
     v = (float)arc4random() / (float)UINT32_MAX;
     s = u*u + v*v;
   } while(s >= 1);
-  float a = sqrt(-2 * log(s) / s);
+  float a = sqrtf(-2 * logf(s) / s);
   __real__ result = a * u;
   __imag__ result = a * v;
   return result;
