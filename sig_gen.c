@@ -220,12 +220,13 @@ double sig_gen_tune(struct frontend * const frontend,double const freq){
   return frontend->frequency; // Not implemented anyway
 }
 
+#if 0
 // Marsaglia polar method for generating gaussian RVs
 complex float complex_gaussian(void){
   complex float result;
   float u,v,s;
   do {
-    // Generate pair of gaussians using polar method
+    // range -1, +1
     u = 2 * (float)arc4random() / (float)UINT32_MAX - 1.0;
     v = 2 * (float)arc4random() / (float)UINT32_MAX - 1.0;
     s = u*u + v*v;
@@ -235,7 +236,20 @@ complex float complex_gaussian(void){
   __imag__ result = a * v;
   return result;
 }
+#else
+// Box-Mueller method that avoids rejection
+complex float complex_gaussian(void){
+  complex float result;
+  float u,v,s;
 
+  // Range 0,1
+  u = (float)arc4random() / (float)UINT32_MAX;
+  v = (float)arc4random() / (float)UINT32_MAX;  
+  s = sqrtf(-2 * log(u));
+  return cexpf(I*2*M_PI*v);
+}
+
+#endif
 float real_gaussian(void){
   static float saved;
   static bool got_saved;
