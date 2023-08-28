@@ -161,12 +161,12 @@ void *proc_sig_gen(void *arg){
       if(Real_noise != NULL){
 	for(int i=0; i < blocksize; i++){
 	  wptr[i] = (Real_noise[noise_index+i] + sdr->amplitude * creal(step_osc(&tone))) * scale;
-	  frontend->if_energy += wptr[i] * wptr[i];
+	  if_energy += wptr[i] * wptr[i];
 	}
       } else {
 	for(int i=0; i < blocksize; i++){
 	  wptr[i] = (sdr->amplitude * creal(step_osc(&tone))) * scale;
-	  frontend->if_energy += wptr[i] * wptr[i];
+	  if_energy += wptr[i] * wptr[i];
 	}
       }
       write_rfilter(frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
@@ -176,12 +176,12 @@ void *proc_sig_gen(void *arg){
       if(Complex_noise != NULL){
 	for(int i=0; i < blocksize; i++){
 	  wptr[i] = (Complex_noise[noise_index+i] + sdr->amplitude * step_osc(&tone)) * scale;
-	  frontend->if_energy += cnrmf(wptr[i]);
+	  if_energy += cnrmf(wptr[i]);
 	}
       } else {
 	for(int i=0; i < blocksize; i++){
 	  wptr[i] = (sdr->amplitude * step_osc(&tone)) * scale;
-	  frontend->if_energy += cnrmf(wptr[i]);
+	  if_energy += cnrmf(wptr[i]);
 	}
       }
       write_cfilter(frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
