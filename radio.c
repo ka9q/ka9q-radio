@@ -114,10 +114,6 @@ static float estimate_noise(struct demod *demod,int shift){
     // Complex input that often straddles DC
     if(mbin < 0)
       mbin += master->bins; // starting in negative frequencies
-    // TEST *************
-    if(isnan(demod->tp1))
-      demod->tp1 = 0;
-    demod->tp1 += .002 * (cnrmf(fdomain[mbin]) - demod->tp1);
 
     for(int i=0; i < slave->bins; i++,mbin++){	
       if(mbin >= 0 && mbin < master->bins){
@@ -136,7 +132,15 @@ static float estimate_noise(struct demod *demod,int shift){
   // Normalize
   // A round trip through IFFT(FFT(x)) scales amplitude by N, power by N^2
   // So the FFT alone scales power by N (see Parseval's theorem for the DFT)
-  min_bin_energy *= 1.0 / master->bins;
+  // For a real input FFT, the power is spread over only half the sample rate so increase by 3dB
+  if(master->in_type == REAL)
+    min_bin_energy *= 2.0 / master->bins;
+  else
+    min_bin_energy *= 1.0 / master->bins;
+
+  // Increase by overlap factor, e.g., 5/4 for overlap factor = 5 (20% overlap)
+  // Determined empirically, I have to think about why this is
+  min_bin_energy *= 1.0 + (float)(master->impulse_length - 1) / master->ilen;
   return min_bin_energy / Frontend.samprate; // Scale to 1 Hz
 }
 
