@@ -239,14 +239,13 @@ complex float complex_gaussian(void){
 #else
 // Box-Mueller method that avoids rejection
 complex float complex_gaussian(void){
-  complex float result;
   float u,v,s;
 
   // Range 0,1
   u = (float)arc4random() / (float)UINT32_MAX;
   v = (float)arc4random() / (float)UINT32_MAX;  
   s = sqrtf(-2 * log(u));
-  return cexpf(I*2*M_PI*v);
+  return s * cexpf(I*2*M_PI*v);
 }
 
 #endif
