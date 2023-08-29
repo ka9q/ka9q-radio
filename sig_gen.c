@@ -110,8 +110,8 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   // Generate a single carrier at specified frequency and amplitude
   sdr->carrier = 10e6; // Default 10 MHz
   {
-    char const *p = config_getstring(dictionary,section,"carrier",p);
-    if(p)
+    char const *p = config_getstring(dictionary,section,"carrier",NULL);
+    if(p != NULL)
       sdr->carrier = parse_frequency(p);
   }
   sdr->amplitude = config_getfloat(dictionary,section,"amplitude",-10.0); // Carrier amplitude, default -10 dBFS
