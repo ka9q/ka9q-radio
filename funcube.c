@@ -118,7 +118,12 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
     goto done;
   }
   // Set initial frequency
-  double initfreq = config_getint(dictionary,section,"frequency",0);
+  double initfreq = 0;
+  {
+    char const *p = config_getstring(dictionary,section,"frequency",NULL);
+    if(p != NULL)
+      initfreq = parse_frequency(p);
+  }
   if(initfreq != 0){
     funcube_tune(frontend,initfreq);
     frontend->lock = true;

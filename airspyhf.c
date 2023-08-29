@@ -125,6 +125,12 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   }
   // Default to first (highest) sample rate on list
   frontend->samprate = config_getint(Dictionary,section,"samprate",sdr->sample_rates[0]);
+  {
+    char const *p = config_getstring(Dictionary,section,"samprate",NULL);
+    if(p != NULL)
+      frontend->samprate = parse_frequency(p);
+  }
+
   frontend->isreal = false;
   frontend->bitspersample = 0; // Already floating point
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
@@ -164,7 +170,12 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
       fprintf(stdout,"%s: ",frontend->description);
     }
   }
-  double init_frequency = config_getdouble(Dictionary,section,"frequency",0);
+  double init_frequency = 0;
+  {
+    char const *p = config_getstring(Dictionary,section,"frequency",NULL);
+    if(p != NULL)
+      init_frequency = parse_frequency(p);
+  }
   if(init_frequency != 0){
     set_correct_freq(sdr,init_frequency);
     frontend->lock = true;

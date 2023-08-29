@@ -91,8 +91,8 @@ static char const *usb_speeds[N_USB_SPEEDS] = {
 };
 
 
-int rx888_setup(struct frontend * const frontend,dictionary const * const Dictionary,char const * const section){
-  assert(Dictionary != NULL);
+int rx888_setup(struct frontend * const frontend,dictionary const * const dictionary,char const * const section){
+  assert(dictionary != NULL);
 
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
@@ -100,23 +100,23 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const Dictio
   frontend->context = sdr;
 
   {
-    char const *device = config_getstring(Dictionary,section,"device",NULL);
+    char const *device = config_getstring(dictionary,section,"device",NULL);
     if(strcasecmp(device,"rx888") != 0)
       return -1; // Not for us
   }
   // Hardware-dependent setup
-  sdr->interface_number = config_getint(Dictionary,section,"number",0);
+  sdr->interface_number = config_getint(dictionary,section,"number",0);
 
   // Firmware file
-  char const *firmware = config_getstring(Dictionary,section,"firmware","SDDC_FX3.img");
+  char const *firmware = config_getstring(dictionary,section,"firmware","SDDC_FX3.img");
   // Queue depth, default 16; 32 sometimes overflows
-  int const queuedepth = config_getint(Dictionary,section,"queuedepth",16);
+  int const queuedepth = config_getint(dictionary,section,"queuedepth",16);
   if(queuedepth < 1 || queuedepth > 64) {
     fprintf(stdout,"Invalid queue depth %d\n",queuedepth);
     return -1;
   }
   // Packets per transfer request, default 32
-  int const reqsize = config_getint(Dictionary,section,"reqsize",32);
+  int const reqsize = config_getint(dictionary,section,"reqsize",32);
   if(reqsize < 1 || reqsize > 64) {
     fprintf(stdout,"Invalid request size %d\n",reqsize);
     return -1;
@@ -129,19 +129,19 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const Dictio
     }
   }
   // Enable/disable dithering
-  sdr->dither = config_getboolean(Dictionary,section,"dither",false);
+  sdr->dither = config_getboolean(dictionary,section,"dither",false);
   // Enable/output output randomization
-  sdr->randomizer = config_getboolean(Dictionary,section,"rand",false);
+  sdr->randomizer = config_getboolean(dictionary,section,"rand",false);
   rx888_set_dither_and_randomizer(sdr,sdr->dither,sdr->randomizer);
 
   // Attenuation, default 0
-  float att = fabsf(config_getfloat(Dictionary,section,"att",0));
+  float att = fabsf(config_getfloat(dictionary,section,"att",0));
   if(att > 31.5)
     att = 31.5;
   rx888_set_att(sdr,att);
   
   // Gain Mode low/high, default high
-  char const *gainmode = config_getstring(Dictionary,section,"gainmode","high");
+  char const *gainmode = config_getstring(dictionary,section,"gainmode","high");
   if(strcmp(gainmode, "high") == 0)
     sdr->highgain = true;
   else if(strcmp(gainmode, "low") == 0)
@@ -151,11 +151,11 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const Dictio
     sdr->highgain = true;
   }
   // Gain value, default +1.5 dB
-  float gain = config_getfloat(Dictionary,section,"gain",1.5);
+  float gain = config_getfloat(dictionary,section,"gain",1.5);
   rx888_set_gain(sdr,gain);
   
   // Sample Rate, default 64.8
-  unsigned int samprate = config_getint(Dictionary,section,"samprate",64800000);
+  unsigned int samprate = config_getint(dictionary,section,"samprate",64800000);
   if(samprate < 1000000){
     int const minsamprate = 1000000; // 1 MHz?
     fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,minsamprate);
@@ -167,14 +167,14 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const Dictio
   frontend->max_IF = 0.47 * frontend->samprate; // Just an estimate - get the real number somewhere
   frontend->isreal = true; // Make sure the right kind of filter gets created!
   frontend->bitspersample = 16;
-  frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
+  frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
   if(fabsl(frontend->calibrate) >= 1e-4){
     fprintf(stdout,"Unreasonable frequency calibration %.3g, setting to 0\n",frontend->calibrate);
     frontend->calibrate = 0;
   }
   frontend->lock = true; // Doesn't tune in direct conversion mode
   {
-    char const *p = config_getstring(Dictionary,section,"description","rx888");
+    char const *p = config_getstring(dictionary,section,"description","rx888");
     if(p != NULL){
       strlcpy(frontend->description,p,sizeof(frontend->description));
       fprintf(stdout,"%s: ",frontend->description);

@@ -426,8 +426,6 @@ static int loadconfig(char const * const file){
 	    }
 	  }
 	}
-	// initialize oscillator - is this necessary? done in downconvert()
-	//	set_osc(&demod->fine,demod->filter.remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate)); ***TEST****
 	// Initialization all done, start it up
 	set_freq(demod,demod->tune.freq);
 	if(demod->tune.freq != 0){ // Don't start dynamic entry
@@ -496,7 +494,6 @@ static int loadconfig(char const * const file){
       socklen_t len = sizeof(demod->output.data_source_address);
       getsockname(demod->output.data_fd,(struct sockaddr *)&demod->output.data_source_address,&len);
     }
-    //    set_osc(&demod->fine,demod->filter.remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate)); ***TEST****
     set_freq(demod,0);
     Dynamic_demod = demod;
     fprintf(stdout,"Dynamic demod established from [global]\n");

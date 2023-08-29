@@ -183,7 +183,13 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     }
   }
 
-  double init_frequency = config_getdouble(dictionary,section,"frequency",0);
+  double init_frequency = 0;
+  {
+    char const *p = config_getstring(dictionary,section,"frequency",NULL);
+    if(p != NULL)
+      init_frequency = parse_frequency(p);
+  }
+
   if(init_frequency != 0){
     set_correct_freq(sdr,init_frequency);
     frontend->lock = true;

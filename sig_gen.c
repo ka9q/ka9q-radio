@@ -108,22 +108,23 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   frontend->lock = true;
 
   // Generate a single carrier at specified frequency and amplitude
+  sdr->carrier = 10e6; // Default 10 MHz
   {
-    char const *p = config_getstring(dictionary,section,"carrier",NULL);
-    p = config_getstring(dictionary,section,"carrier",p);
+    char const *p = config_getstring(dictionary,section,"carrier",p);
     if(p)
       sdr->carrier = parse_frequency(p);
   }
   sdr->amplitude = config_getfloat(dictionary,section,"amplitude",-10.0); // Carrier amplitude, default -10 dBFS
   sdr->amplitude = dB2voltage(sdr->amplitude); // Convert from dBFS to peak amplitude
+  sdr->modulation = CW; // Default
   {
     char const *m = config_getstring(dictionary,section,"modulation","CW");
     if(strcasecmp(m,"AM") == 0)
       sdr->modulation = AM;
+    else if(strcasecmp(m,"DSB") == 0)
+      sdr->modulation = DSB;
     else if(strcasecmp(m,"FM") == 0)
       sdr->modulation = FM;
-    else
-      sdr->modulation = CW; // Default
   }
   {
     char const *p = config_getstring(dictionary,section,"source",NULL);

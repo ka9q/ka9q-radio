@@ -152,7 +152,7 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
   if(use_defaults)
     set_defaults(demod); // must be called after demod_type is set
   {
-    char *p = config_getstring(table,mode,"samprate",NULL);
+    char const *p = config_getstring(table,mode,"samprate",NULL);
     if(p != NULL)
       demod->output.samprate = parse_frequency(p);
   }
