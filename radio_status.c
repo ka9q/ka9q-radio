@@ -431,7 +431,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   if(demod->filter.out != NULL)
     encode_int32(&bp,FILTER_DROPS,demod->filter.out->block_drops);  // count
   
-  // Adjust for for A/D width
+  // Adjust for A/D width
   // Level is absolute relative to A/D saturation, so +3dB for real vs complex
   if(demod->blocks_since_poll > 0){
     float level;
