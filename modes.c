@@ -198,7 +198,12 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
     if(cp)
       demod->output.headroom = dB2voltage(-fabsf(strtof(cp,NULL))); // always treat as <= 0 dB
   }
-  demod->tune.shift = config_getfloat(table,mode,"shift",demod->tune.shift);
+  demod->tune.shift = 0;
+  {
+    char const *p = config_getstring(table,mode,"shift",NULL);
+    if(p != NULL)
+      demod->tune.shift = parse_frequency(p);
+  }
   {
     char const *cp = config_getstring(table,mode,"recovery-rate",NULL);
     if(cp){
