@@ -21,11 +21,21 @@
 #include "config.h"
 #include "radio.h"
 
+enum modulation {
+  CW = 0, // No modulation
+  DSB, // AM without a carrier
+  AM,
+  FM // Not yet implemented
+};
+
+
 struct sdrstate {
   struct frontend *frontend;
-  double tone; // Tone frequency to generate
-  float amplitude; // Amplitude of tone
+  double carrier; // Carrier frequency to generate
+  float amplitude; // Amplitude of carrier
   float noise; // Amplitude of noise
+  enum modulation modulation;
+  char *source;
 
   pthread_t proc_thread;
 };
@@ -38,7 +48,6 @@ static int Blocksize;
 extern bool Stop_transfers;
 
 static int const Random_samples = 30000000;
-
 
 // One second of noise in requested format
 // Will be played with a random starting point every block
@@ -62,7 +71,12 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   sdr->frontend = frontend;
   frontend->context = sdr;
 
-  frontend->samprate = config_getint(dictionary,section,"samprate",60000000); // Default 60 MHz
+  {
+    frontend->samprate = 30e6; // Default 30 MHz
+    char const *p = config_getstring(dictionary,section,"samprate",NULL);
+    if(p != NULL)
+      frontend->samprate = parse_frequency(p);
+  }
   {
     double const eL = frontend->samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
     Blocksize = lround(eL);
@@ -93,20 +107,41 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   // Not implemented for now
   frontend->lock = true;
 
-  // Generate a single tone at specified frequency and amplitude
-  sdr->tone = config_getdouble(dictionary,section,"tone",10000000.0); // Tone to generate, default 10 MHz
-  sdr->amplitude = config_getfloat(dictionary,section,"amplitude",-10.0); // Tone amplitude, default -10 dBFS
+  // Generate a single carrier at specified frequency and amplitude
+  {
+    char const *p = config_getstring(dictionary,section,"carrier",NULL);
+    p = config_getstring(dictionary,section,"carrier",p);
+    if(p)
+      sdr->carrier = parse_frequency(p);
+  }
+  sdr->amplitude = config_getfloat(dictionary,section,"amplitude",-10.0); // Carrier amplitude, default -10 dBFS
   sdr->amplitude = dB2voltage(sdr->amplitude); // Convert from dBFS to peak amplitude
+  {
+    char const *m = config_getstring(dictionary,section,"modulation","CW");
+    if(strcasecmp(m,"AM") == 0)
+      sdr->modulation = AM;
+    else if(strcasecmp(m,"FM") == 0)
+      sdr->modulation = FM;
+    else
+      sdr->modulation = CW; // Default
+  }
+  {
+    char const *p = config_getstring(dictionary,section,"source",NULL);
+    if(p != NULL)
+      sdr->source = strdup(p);
+  }
   sdr->noise = config_getfloat(dictionary,section,"noise",101.0); // Noise amplitude dBFS, default off
   if(sdr->noise == 101.0)
     sdr->noise = 0;
   else
     sdr->noise = dB2voltage(sdr->noise);
 
-  fprintf(stdout,"Sig gen %s, samprate %'d, %s, LO freq %'.3f Hz, tone %'.3lf Hz, amplitude %.1f dBFS, noise %'.1lf dBFS\n",
+  fprintf(stdout,"Sig gen %s, samprate %'d, %s, LO freq %'.3f Hz, carrier %'.3lf Hz, amplitude %.1f dBFS, modulation %s, source %s, noise %'.1lf dBFS\n",
 	  frontend->description, frontend->samprate, frontend->isreal ? "real":"complex",frontend->frequency,
-	  sdr->tone,
+	  sdr->carrier,
 	  voltage2dB(sdr->amplitude),
+	  sdr->modulation == CW ? "none" : sdr->modulation == AM ? "AM" : sdr->modulation == FM ? "FM" : "?",
+	  sdr->source,
 	  voltage2dB(sdr->noise)
 	  );
 
@@ -138,13 +173,26 @@ static void *proc_sig_gen(void *arg){
 
   realtime();
 
-  struct osc tone;
-  memset(&tone,0,sizeof(tone));
+  struct osc carrier;
+  memset(&carrier,0,sizeof(carrier));
   if(frontend->isreal)
-    set_osc(&tone,sdr->tone / frontend->samprate,0.0); // No sweep just yet
+    set_osc(&carrier,sdr->carrier / frontend->samprate,0.0); // No sweep just yet
   else
-    set_osc(&tone,(sdr->tone - frontend->frequency)/frontend->samprate,0.0); // Offset down
+    set_osc(&carrier,(sdr->carrier - frontend->frequency)/frontend->samprate,0.0); // Offset down
 
+
+  FILE *src = NULL;
+
+  if(sdr->source != NULL){
+    src = popen(sdr->source,"r");
+    if(src == NULL)
+      perror("popen");
+  }
+  if(src == NULL)
+    sdr->modulation = CW; // Turn it off
+
+  const int mod_samprate = 48000; // Fixed for now
+  const int samps_per_samp = frontend->samprate / mod_samprate;
 
   while(!Stop_transfers){
     // How long since last call?
@@ -160,34 +208,77 @@ static void *proc_sig_gen(void *arg){
     // Pick a random starting point in the noise buffer
     int noise_index = arc4random_uniform(Random_samples - blocksize);
     float if_energy = 0;
+    int modcount = samps_per_samp;
+    float modsample = 0;
     if(frontend->isreal){
       // Real signal
       float * wptr = frontend->in->input_write_pointer.r;
-      if(Real_noise != NULL){
-	for(int i=0; i < blocksize; i++){
-	  wptr[i] = (Real_noise[noise_index+i] + sdr->amplitude * creal(step_osc(&tone))) * scale;
-	  if_energy += wptr[i] * wptr[i];
+      for(int i=0; i < blocksize; i++){
+	wptr[i] = sdr->amplitude * creal(step_osc(&carrier));
+	switch(sdr->modulation){
+	case CW:
+	  break;
+	case DSB:
+	  if(modcount-- == 0){
+	    int16_t s = getc(src);
+	    s += getc(src) << 8;
+	    modsample = (float)s * SCALE16;
+	    modcount = samps_per_samp;
+	  }
+	  wptr[i] *= modsample;
+	  break;
+	case AM:
+	  if(modcount-- == 0){
+	    int16_t s = getc(src);
+	    s += getc(src) << 8;
+	    modsample = (float)s * SCALE16;
+	    modcount = samps_per_samp;
+	  }
+	  wptr[i] *= 1 + (modsample/2); // Add carrier
+	  break;
+	case FM: // to be done
+	  break;
 	}
-      } else {
-	for(int i=0; i < blocksize; i++){
-	  wptr[i] = (sdr->amplitude * creal(step_osc(&tone))) * scale;
-	  if_energy += wptr[i] * wptr[i];
-	}
+	if(Real_noise != NULL)
+	  wptr[i] += Real_noise[noise_index+i];
+	wptr [i] *= scale;
+	if_energy += wptr[i] * wptr[i];
       }
       write_rfilter(frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
     } else {
       // Complex signal
       complex float * wptr = frontend->in->input_write_pointer.c;
-      if(Complex_noise != NULL){
-	for(int i=0; i < blocksize; i++){
-	  wptr[i] = (Complex_noise[noise_index+i] + sdr->amplitude * step_osc(&tone)) * scale;
-	  if_energy += cnrmf(wptr[i]);
+      for(int i=0; i < blocksize; i++){
+	wptr[i] = sdr->amplitude * step_osc(&carrier);
+	switch(sdr->modulation){
+	case CW:
+	  break;
+	case DSB:
+	  if(modcount-- == 0){
+	    int16_t s = getc(src);
+	    s += getc(src) << 8;
+	    modsample = (float)s / 32767;
+	    modsample = 1 + modsample/2; // Add carrier
+	    modcount = samps_per_samp;
+	  }
+	  wptr[i] *= modsample;
+	  break;
+	case AM:
+	  if(modcount-- == 0){
+	    int16_t s = getc(src);
+	    s += getc(src) << 8;
+	    modsample = (float)s / 32767;
+	    modcount = samps_per_samp;
+	  }
+	  wptr[i] *= 1 + modsample/2; // Add carrier
+	  break;
+	case FM: // to be done
+	  break;
 	}
-      } else {
-	for(int i=0; i < blocksize; i++){
-	  wptr[i] = (sdr->amplitude * step_osc(&tone)) * scale;
-	  if_energy += cnrmf(wptr[i]);
-	}
+	if(Complex_noise != NULL)
+	  wptr[i] += Complex_noise[noise_index+i];
+	wptr [i] *= scale;
+	if_energy += cnrmf(wptr[i]);
       }
       write_cfilter(frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
     }
