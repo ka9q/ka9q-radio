@@ -168,13 +168,13 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
   demod->filter.min_IF = DEFAULT_LOW;
   demod->filter.max_IF = DEFAULT_HIGH;
   {
-    char const *p = config_getstring(table,mode,"low",NULL);
-    if(p != NULL)
-      demod->filter.min_IF = parse_frequency(p);
+    char const *low = config_getstring(table,mode,"low",NULL);
+    if(low != NULL)
+      demod->filter.min_IF = parse_frequency(low);
 
-    char const *p = config_getstring(table,mode,"high",NULL);
-    if(p != NULL)
-      demod->filter.max_IF = parse_frequency(p);
+    char const *high = config_getstring(table,mode,"high",NULL);
+    if(high != NULL)
+      demod->filter.max_IF = parse_frequency(high);
   }
   if(demod->filter.min_IF > demod->filter.max_IF){
     // Ensure max >= min
