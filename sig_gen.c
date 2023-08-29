@@ -220,7 +220,7 @@ static void *proc_sig_gen(void *arg){
 	case CW:
 	  break;
 	case DSB:
-	  if(modcount-- == 0){
+	  if(modcount-- <= 0){
 	    int16_t s = getc(src);
 	    s += getc(src) << 8;
 	    modsample = (float)s * SCALE16;
@@ -229,7 +229,7 @@ static void *proc_sig_gen(void *arg){
 	  wptr[i] *= modsample;
 	  break;
 	case AM:
-	  if(modcount-- == 0){
+	  if(modcount-- <= 0){
 	    int16_t s = getc(src);
 	    s += getc(src) << 8;
 	    modsample = (float)s * SCALE16;
@@ -255,7 +255,7 @@ static void *proc_sig_gen(void *arg){
 	case CW:
 	  break;
 	case DSB:
-	  if(modcount-- == 0){
+	  if(modcount-- <= 0){
 	    int16_t s = getc(src);
 	    s += getc(src) << 8;
 	    modsample = (float)s / 32767;
@@ -265,7 +265,7 @@ static void *proc_sig_gen(void *arg){
 	  wptr[i] *= modsample;
 	  break;
 	case AM:
-	  if(modcount-- == 0){
+	  if(modcount-- <= 0){
 	    int16_t s = getc(src);
 	    s += getc(src) << 8;
 	    modsample = (float)s / 32767;
