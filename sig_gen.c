@@ -30,7 +30,6 @@ struct sdrstate {
   pthread_t proc_thread;
 };
 
-// Variables set by command line options
 // A larger blocksize makes more efficient use of each frame, but the receiver generally runs on
 // frames that match the Opus codec: 2.5, 5, 10, 20, 40, 60, 180, 100, 120 ms
 // So to minimize latency, make this a common denominator:
@@ -42,11 +41,12 @@ static int const Random_samples = 30000000;
 
 
 // One second of noise in requested format
+// Will be played with a random starting point every block
 complex float *Complex_noise;
 float *Real_noise;
 
-complex float complex_gaussian(void);
-float real_gaussian(void);
+static complex float complex_gaussian(void);
+static float real_gaussian(void);
 
 double sig_gen_tune(struct frontend * const frontend,double const freq);
 
@@ -78,9 +78,11 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   if(frontend->isreal){
     frontend->min_IF = 0;
     frontend->max_IF = frontend->samprate / 2;
+    frontend->frequency = 0;
   } else {
     frontend->min_IF = -frontend->samprate/2;
-    frontend->max_IF = -frontend->min_IF;
+    frontend->max_IF = +frontend->samprate/2;
+    frontend->frequency = frontend->samprate/2;
   }
   {
     char const * const description = config_getstring(dictionary,section,"description","funcube dongle+");
@@ -88,8 +90,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   }
 
   //  double initfreq = config_getint(dictionary,section,"frequency",0);
-  // Direct sampling only for now
-  frontend->frequency = 0;
+  // Not implemented for now
   frontend->lock = true;
 
   // Generate a single tone at specified frequency and amplitude
@@ -125,7 +126,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   }
   return 0;
 }
-void *proc_sig_gen(void *arg){
+static void *proc_sig_gen(void *arg){
   pthread_setname("proc_siggen");
   struct sdrstate * const sdr = (struct sdrstate *)arg;
   assert(sdr != NULL);
@@ -139,13 +140,17 @@ void *proc_sig_gen(void *arg){
 
   struct osc tone;
   memset(&tone,0,sizeof(tone));
-  set_osc(&tone,sdr->tone / frontend->samprate,0.0); // No sweep just yet
+  if(frontend->isreal)
+    set_osc(&tone,sdr->tone / frontend->samprate,0.0); // No sweep just yet
+  else
+    set_osc(&tone,(sdr->tone - frontend->frequency)/frontend->samprate,0.0); // Offset down
 
 
   while(!Stop_transfers){
     // How long since last call?
     int64_t now = gps_time_ns();
     int64_t interval = now - frontend->timestamp;
+
     int blocksize = (interval * frontend->samprate) / BILLION;
     // Limit how much we can do in one iteration after a long delay so we don't overwrite the buffer and its mirror
     if(blocksize > Blocksize + Blocksize / 2)
@@ -186,6 +191,9 @@ void *proc_sig_gen(void *arg){
       }
       write_cfilter(frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
     }
+    // The variability in blocksize due to scheduling variability causes the energy integrated into frontend->if_energy
+    // to vary, causing the reported input level to bobble around the nominal value. Long refresh intervals with 'control'
+    // will smooth this out, but it's annoying
     frontend->samples += blocksize;    
     frontend->if_power = if_energy / blocksize;
     frontend->if_energy += if_energy;
@@ -222,7 +230,8 @@ double sig_gen_tune(struct frontend * const frontend,double const freq){
 
 #if 0
 // Marsaglia polar method for generating gaussian RVs
-complex float complex_gaussian(void){
+// Slow on modern machines because of random branch and pipeline stalls
+static complex float complex_gaussian(void){
   complex float result;
   float u,v,s;
   do {
@@ -238,32 +247,30 @@ complex float complex_gaussian(void){
 }
 #else
 // Box-Mueller method that avoids rejection
-// Seems faster on i7
+// Seems faster on i7 despite sincos call
 inline complex float expif(float x){
-  float s,c;
-  s = sin(x);
-  c = cos(x);
+  float s = sin(x);
+  float c = cos(x);
   return c + I*s;
 }
 
-complex float complex_gaussian(void){
-  float u,v,s;
-
-  // Range 0,1
+static complex float complex_gaussian(void){
+  // RVs uniformly distributed over (0,1)
 #if 0
-  u = (float)arc4random() / (float)UINT32_MAX;
-  v = (float)arc4random() / (float)UINT32_MAX;  
+  float u = (float)arc4random() / (float)UINT32_MAX;
+  float v = (float)arc4random() / (float)UINT32_MAX;  
 #else
   // Not crypto quality (who cares?) but vastly faster.
-  u = (float)random() / (float)INT32_MAX;
-  v = (float)random() / (float)INT32_MAX;  
+  float u = (float)random() / (float)INT32_MAX;
+  float v = (float)random() / (float)INT32_MAX;  
 #endif  
-  s = sqrtf(-2 * logf(u));
-  return s * expif(2*M_PI*v);
+  float s = sqrtf(-2 * logf(u));
+  return s * expif(2 * M_PI * v);
 }
-
 #endif
-float real_gaussian(void){
+
+// Not thread safe
+static float real_gaussian(void){
   static float saved;
   static bool got_saved;
   if(got_saved){
