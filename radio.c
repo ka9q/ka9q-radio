@@ -89,6 +89,8 @@ static const float n0_smooth = .001; // exponential smoothing rate for (noisy) b
 // in the demod's pre-filter nyquist bandwidth
 // Works better than global estimation when noise floor is not flat
 static float estimate_noise(struct demod *demod,int shift){
+
+
   struct filter_out const * const slave = demod->filter.out;
   if(demod->filter.energies == NULL)
     demod->filter.energies = calloc(sizeof(float),slave->bins);
@@ -97,6 +99,18 @@ static float estimate_noise(struct demod *demod,int shift){
   struct filter_in const * const master = slave->master;
   // slave->next_jobnum already incremented by execute_filter_output
   complex float const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
+
+#undef PARSEVAL
+#ifdef PARSEVAL // Test code to sum all bins, verify Parseval's theorem
+  {
+    float total_energy = 0;
+    for(int i=0; i < master->bins; i++)
+      total_energy += cnrmf(fdomain[i]);
+    // Compute average power per sample, should match input level calculated in time domain
+    demod->tp1 = power2dB(total_energy) - voltage2dB((float)master->bins + Frontend.reference);
+  }
+#endif  
+
   int mbin = shift - slave->bins/2;
   float min_bin_energy = INFINITY;
   if(master->in_type == REAL){
@@ -133,17 +147,15 @@ static float estimate_noise(struct demod *demod,int shift){
   // Normalize
   // A round trip through IFFT(FFT(x)) scales amplitude by N, power by N^2
   // So the FFT alone scales power by N (see Parseval's theorem for the DFT)
-  min_bin_energy *= 1.0 / master->bins;
+  min_bin_energy /= master->bins;
 
   // Increase by overlap factor, e.g., 5/4 for overlap factor = 5 (20% overlap)
   // Determined empirically, I have to think about why this is
   min_bin_energy *= 1.0 + (float)(master->impulse_length - 1) / master->ilen;
 
-  // For a real input FFT, the power is spread over only half the sample rate so increase by 3dB
-  if(master->in_type == REAL)
-    return min_bin_energy / Frontend.samprate; // Scale to 1 Hz
-  else
-    return 2 * min_bin_energy / Frontend.samprate; // Scale to 1 Hz
+  // For real mode the sample rate is double for the same power, but there are
+  // only half as many bins so it cancels
+  return min_bin_energy / Frontend.samprate; // Scale to 1 Hz
 }
 
 
