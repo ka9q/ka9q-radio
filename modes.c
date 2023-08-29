@@ -151,7 +151,7 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
 
   if(use_defaults)
     set_defaults(demod); // must be called after demod_type is set
-  demod->output.samprate = 48000; // Default
+  demod->output.samprate = DEFAULT_LINEAR_SAMPRATE; // Default
   {
     char const *p = config_getstring(table,mode,"samprate",NULL);
     if(p != NULL)
