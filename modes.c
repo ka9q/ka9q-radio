@@ -151,7 +151,11 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
 
   if(use_defaults)
     set_defaults(demod); // must be called after demod_type is set
-  demod->output.samprate = config_getint(table,mode,"samprate",demod->output.samprate);
+  {
+    char *p = config_getstring(table,mode,"samprate",NULL);
+    if(p != NULL)
+      demod->output.samprate = parse_frequency(p);
+  }
   demod->output.channels = config_getint(table,mode,"channels",demod->output.channels);
   if(config_getboolean(table,mode,"mono",0))
     demod->output.channels = 1;
