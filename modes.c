@@ -165,8 +165,17 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
   demod->filter.kaiser_beta = config_getfloat(table,mode,"kaiser-beta",demod->filter.kaiser_beta);
 
   // Pre-detection filter limits
-  demod->filter.min_IF = config_getfloat(table,mode,"low",demod->filter.min_IF);
-  demod->filter.max_IF = config_getfloat(table,mode,"high",demod->filter.max_IF);
+  demod->filter.min_IF = DEFAULT_LOW;
+  demod->filter.max_IF = DEFAULT_HIGH;
+  {
+    char const *p = config_getstring(table,mode,"low",NULL);
+    if(p != NULL)
+      demod->filter.min_IF = parse_frequency(p);
+
+    char const *p = config_getstring(table,mode,"high",NULL);
+    if(p != NULL)
+      demod->filter.max_IF = parse_frequency(p);
+  }
   if(demod->filter.min_IF > demod->filter.max_IF){
     // Ensure max >= min
     float t = demod->filter.min_IF;
