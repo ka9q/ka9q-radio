@@ -341,7 +341,7 @@ void input_loop(){
                     if ( verbosity > 0 ) {
                         fprintf(stderr, "wd-record->input_loop(): ERROR: failed to open new wav file\n");
                     }
-                    continue;
+                    exit(1);
                 }   
                  if ( verbosity > 1 ) { 
                     fprintf(stderr, "input_loop(): opened  new wav file\n");
