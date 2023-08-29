@@ -119,9 +119,8 @@ static float estimate_noise(struct demod *demod,int shift){
       int n = abs(mbin); // Doesn't really handle the mirror well
       if(n < master->bins){
 	energies[i] += (cnrmf(fdomain[n]) - energies[i]) * n0_smooth; // blocknum was already incremented
-	if(min_bin_energy > energies[i]){
+	if(min_bin_energy > energies[i])
 	  min_bin_energy = energies[i];
-	}
       } else
 	break;  // off the end
       mbin++;
@@ -134,9 +133,8 @@ static float estimate_noise(struct demod *demod,int shift){
     for(int i=0; i < slave->bins; i++){
       if(mbin >= 0 && mbin < master->bins){
 	energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * n0_smooth; // blocknum was already incremented
-	if(min_bin_energy > energies[i]){
+	if(min_bin_energy > energies[i])
 	  min_bin_energy = energies[i];
-	}
       }
       if(++mbin == master->bins)
 	mbin = 0; // wrap around from neg freq to pos freq
