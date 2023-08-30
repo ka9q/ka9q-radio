@@ -22,7 +22,7 @@
 #include "radio.h"
 #include "config.h"
 
-static int   const DEFAULT_LINEAR_SAMPRATE = 24000;
+static int   const DEFAULT_LINEAR_SAMPRATE = 12000;
 static int   const DEFAULT_FM_SAMPRATE = 24000;
 static float const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
 static float const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
