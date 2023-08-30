@@ -128,7 +128,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   {
     char const *p = config_getstring(Dictionary,section,"samprate",NULL);
     if(p != NULL)
-      frontend->samprate = parse_frequency(p);
+      frontend->samprate = parse_frequency(p,false);
   }
 
   frontend->isreal = false;
@@ -174,7 +174,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   {
     char const *p = config_getstring(Dictionary,section,"frequency",NULL);
     if(p != NULL)
-      init_frequency = parse_frequency(p);
+      init_frequency = parse_frequency(p,false);
   }
   if(init_frequency != 0){
     set_correct_freq(sdr,init_frequency);

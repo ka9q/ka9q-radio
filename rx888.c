@@ -159,7 +159,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   {
     char const *p = config_getstring(dictionary,section,"samprate",NULL);
     if(p != NULL)
-      samprate = parse_frequency(p);
+      samprate = parse_frequency(p,false);
   }
 
   if(samprate < 1000000){

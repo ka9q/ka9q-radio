@@ -18,6 +18,7 @@
 #include <complex.h>
 #include <math.h> // Get M_PI
 #include <stdlib.h> // for ldiv(), free()
+#include <stdbool.h>
 #ifdef __linux__
 #include <bsd/string.h>
 #endif
@@ -119,7 +120,7 @@ char *format_gpstime(char *result,int len,int64_t t);
 char *format_utctime(char *result,int len,int64_t t);
 char *ftime(char *result,int size,int64_t t);
 void normalize_time(struct timespec *x);
-double parse_frequency(char const *);
+double parse_frequency(char const *,bool);
 uint32_t nextfastfft(uint32_t n);
 int pipefill(int,void *,int);
 void chomp(char *);

@@ -75,7 +75,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
     frontend->samprate = 30e6; // Default 30 MHz
     char const *p = config_getstring(dictionary,section,"samprate",NULL);
     if(p != NULL)
-      frontend->samprate = parse_frequency(p);
+      frontend->samprate = parse_frequency(p,false);
   }
   {
     double const eL = frontend->samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
@@ -112,7 +112,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   {
     char const *p = config_getstring(dictionary,section,"carrier",NULL);
     if(p != NULL)
-      sdr->carrier = parse_frequency(p);
+      sdr->carrier = parse_frequency(p,false);
   }
   sdr->amplitude = config_getfloat(dictionary,section,"amplitude",-10.0); // Carrier amplitude, default -10 dBFS
   sdr->amplitude = dB2voltage(sdr->amplitude); // Convert from dBFS to peak amplitude

@@ -187,7 +187,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   {
     char const *p = config_getstring(dictionary,section,"frequency",NULL);
     if(p != NULL)
-      init_frequency = parse_frequency(p);
+      init_frequency = parse_frequency(p,false);
   }
 
   if(init_frequency != 0){

@@ -259,7 +259,7 @@ char *ftime(char * result,int size,int64_t t){
 // 12g345 (12.345 GHz)
 // If no g/m/k and number is too small, make a heuristic guess
 // NB! This assumes radio covers 100 kHz - 2 GHz; should make more general
-double parse_frequency(char const *s){
+double parse_frequency(char const *s,bool heuristics){
   char * const ss = alloca(strlen(s)+1);
   {
     int i;
@@ -286,17 +286,16 @@ double parse_frequency(char const *s){
   double f = strtod(ss,&endptr);
   if(endptr == ss || f == 0)
     return 0; // Empty entry, or nothing decipherable
-  
-  if(sp != NULL || f >= 1e5) // If multiplier explicitly given, or frequency >= 100 kHz (lower limit), return as-is
+    
+  if(!heuristics || sp != NULL || f >= 1e5) // If multiplier explicitly given, or frequency >= 100 kHz (lower limit), return as-is
     return f * mult;
     
-  // no radix specified, empirically guess kHz or MHz
+  // no radix specified & heuristics enabled: empirically guess kHz or MHz
   if(f < 500)         // Could be kHz or MHz, arbitrarily assume MHz
-    f *= 1e6;
-  else
-    f *= 1e3;         // assume kHz
-
-  return f;
+    return f * 1e6;
+  else if(f < 100000)
+    return f * 1e3;         // assume kHz
+  else return f;
 }
 
 // Return smallest integer greater than N with no factors > 7

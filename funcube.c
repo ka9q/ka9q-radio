@@ -122,7 +122,7 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   {
     char const *p = config_getstring(dictionary,section,"frequency",NULL);
     if(p != NULL)
-      initfreq = parse_frequency(p);
+      initfreq = parse_frequency(p,false);
   }
   if(initfreq != 0){
     funcube_tune(frontend,initfreq);

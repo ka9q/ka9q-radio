@@ -169,7 +169,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     frontend->samprate = sdr->sample_rates[0];  // Default to first (highest) sample rate on list
     char const *p = config_getstring(Dictionary,section,"samprate",NULL);
     if(p != NULL)
-      frontend->samprate = parse_frequency(p);
+      frontend->samprate = parse_frequency(p,false);
   }
   frontend->isreal = true;
   frontend->bitspersample = 12;
@@ -255,7 +255,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   {
     char const *p = config_getstring(Dictionary,section,"frequency",NULL);
     if(p != NULL)
-      init_frequency = parse_frequency(p);
+      init_frequency = parse_frequency(p,false);
   }
   if(init_frequency != 0){
     set_correct_freq(sdr,init_frequency);

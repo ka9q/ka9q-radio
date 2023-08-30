@@ -123,17 +123,8 @@ int main(int argc,char *argv[]){
   }
   // Frequency specified; generate a command
 
-  double f = parse_frequency(argv[optind]);
+  double f = parse_frequency(argv[optind],true);
   f = fabs(f);
-  // If frequency would be out of range, guess kHz or MHz
-  if(f >= 0.1 && f < 100)
-    f = f*1e6; // 0.1 - 99.999 Only MHz can be valid
-  else if(f < 500)         // 100-499.999 could be kHz or MHz, assume MHz
-    f = f*1e6;
-  else if(f < 2000)        // 500-1999.999 could be kHz or MHz, assume kHz
-    f = f*1e3;
-  else if(f < 100000)      // 2000-99999.999 can only be kHz
-    f = f*1e3;
   
   // Begin polling SSRC to ensure the multicast group is up and radiod is listening
   // Does the ssrc already exist?

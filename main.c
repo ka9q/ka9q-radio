@@ -401,7 +401,7 @@ static int loadconfig(char const * const file){
 	  tok != NULL;
 	  tok = strtok_r(NULL," \t",&saveptr)){
 	
-	double const f = parse_frequency(tok);
+	double const f = parse_frequency(tok,true);
 	if(f < 0){
 	  fprintf(stdout,"can't parse frequency %s\n",tok);
 	  continue;

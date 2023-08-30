@@ -684,7 +684,7 @@ static int process_keyboard(struct demod *demod,uint8_t **bpp,int c){
       char str[160];
       getentry("Carrier frequency: ",str,sizeof(str));
       if(strlen(str) > 0){
-	demod->tune.freq = fabs(parse_frequency(str)); // Handles funky forms like 147m435
+	demod->tune.freq = fabs(parse_frequency(str,true)); // Handles funky forms like 147m435
 	encode_double(bpp,RADIO_FREQUENCY,demod->tune.freq);
       }
     }

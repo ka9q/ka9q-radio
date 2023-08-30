@@ -155,7 +155,7 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
   {
     char const *p = config_getstring(table,mode,"samprate",NULL);
     if(p != NULL)
-      demod->output.samprate = parse_frequency(p);
+      demod->output.samprate = parse_frequency(p,false);
   }
   demod->output.channels = config_getint(table,mode,"channels",demod->output.channels);
   if(config_getboolean(table,mode,"mono",0))
@@ -170,11 +170,11 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
   {
     char const *low = config_getstring(table,mode,"low",NULL);
     if(low != NULL)
-      demod->filter.min_IF = parse_frequency(low);
+      demod->filter.min_IF = parse_frequency(low,false);
 
     char const *high = config_getstring(table,mode,"high",NULL);
     if(high != NULL)
-      demod->filter.max_IF = parse_frequency(high);
+      demod->filter.max_IF = parse_frequency(high,false);
   }
   if(demod->filter.min_IF > demod->filter.max_IF){
     // Ensure max >= min
@@ -202,7 +202,7 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
   {
     char const *p = config_getstring(table,mode,"shift",NULL);
     if(p != NULL)
-      demod->tune.shift = parse_frequency(p);
+      demod->tune.shift = parse_frequency(p,false);
   }
   {
     char const *cp = config_getstring(table,mode,"recovery-rate",NULL);
