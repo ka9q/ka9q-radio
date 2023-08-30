@@ -340,7 +340,7 @@ static complex float complex_gaussian(void){
 #else
 // Box-Mueller method that avoids rejection
 // Seems faster on i7 despite sincos call
-inline complex float expif(float x){
+static complex float expif(float x){
   float s = sin(x);
   float c = cos(x);
   return c + I*s;
