@@ -83,9 +83,8 @@ void realtime(void){
   {
 
     struct sched_param param;
-    //    param.sched_priority = sched_get_priority_min(SCHED_FIFO);
     param.sched_priority = (sched_get_priority_max(SCHED_FIFO) + sched_get_priority_min(SCHED_FIFO)) / 2; // midway?
-    if(sched_setscheduler(0,SCHED_FIFO,&param) != 0){
+    if(sched_setscheduler(0,SCHED_FIFO|SCHED_RESET_ON_FORK,&param) != 0){
       char name[25];
       int err;
       if((err = pthread_getname_np(pthread_self(),name,sizeof(name))) != 0 && errno != EACCES){
@@ -110,7 +109,6 @@ void realtime(void){
     }
   }
 }
-
 
 // Remove return or newline, if any, from end of string
 void chomp(char *s){
