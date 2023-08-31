@@ -227,7 +227,7 @@ void input_loop(){
             int n = pselect(Input_fd + 1,&fdset,NULL,NULL,&polltime,NULL);
             if(n < 0) {
                 fprintf(stderr, "input_loop(): ERROR: unexpected pselect() => %d\n.  Timeout waiting for audio from stream", n);
-                break; 
+                exit(1); 
             }
         }
 
@@ -430,6 +430,7 @@ struct session *create_session(
             fprintf(stderr,"wd-record->create_session(): ERROR: can't create/write file %s: %s\n",sp->filename,strerror(errno));
         }
         FREE(sp);
+        exit(1);
         return NULL;
     }
     // Use fdopen on a file descriptor instead of fopen(,"w+") to avoid the implicit truncation
