@@ -42,7 +42,7 @@ struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "fghi:vl:r:s:";
+char Optstring[] = "fg:hi:vl:r:s:";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"frequency", required_argument, NULL, 'f'},
