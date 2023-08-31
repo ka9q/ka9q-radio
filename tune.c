@@ -9,7 +9,7 @@
 #include <getopt.h>
 #include <unistd.h>
 #if defined(linux)
-#include <stdlib.h>
+#include <bsd/stdlib.h>
 #include <bsd/string.h>
 #else
 #include <stdlib.h>
