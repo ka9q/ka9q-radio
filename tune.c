@@ -16,27 +16,34 @@
 #include <locale.h>
 #include <errno.h>
 #include <sysexits.h>
+#include <poll.h>
 
 #include "misc.h"
 #include "multicast.h"
 #include "status.h"
 
-int Mcast_ttl = 5;
+int Mcast_ttl = 1;
 int IP_tos = 0;
 const char *App_path;
 int Verbose;
 char const *Radio = NULL;
 char const *Locale = "en_US.UTF-8";
 char const *Iface;
-char const *Mode = "am";
+char const *Mode;
 uint32_t Ssrc;
+float Gain = INFINITY;
+double Frequency = INFINITY;
+int Agc = -1;
 
 struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "hi:vl:r:s:";
+char Optstring[] = "fghi:vl:r:s:";
 struct option Options[] = {
+  {"agc", no_argument, NULL, 'a'},
+  {"frequency", required_argument, NULL, 'f'},
+  {"gain", required_argument, NULL, 'g'},
   {"help", no_argument, NULL, 'h'},
   {"iface", required_argument, NULL, 'i'},
   {"mode", required_argument, NULL, 'm'},
@@ -46,6 +53,8 @@ struct option Options[] = {
   {"verbose", no_argument, NULL, 'v'},
   {NULL, 0, NULL, 0},
 };
+
+void usage(void);
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -58,6 +67,12 @@ int main(int argc,char *argv[]){
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
+      case 'f':
+	Frequency = parse_frequency(optarg,true);
+	break;
+      case 'g':
+	Gain = strtod(optarg,NULL);
+	break;
       case 'i':
 	Iface = optarg;
 	break;
@@ -76,11 +91,14 @@ int main(int argc,char *argv[]){
       case 'r':
 	Radio = optarg;
 	break;
-      default:
-    fprintf(stderr,"Invalid command line option -%c\n",c);
+      case 'a':
+	Agc = 1;
+	break;
       case 'h':
-    fprintf(stderr,"Usage: %s [-h] [-l LOCALE] -r/--radio RADIO -s/--ssrc SSRC [-v] FREQUENCY",argv[0]);
-    exit(EX_USAGE);
+      default:
+	fprintf(stdout,"Invalid command line option -%c\n",c);
+	usage();
+	exit(EX_USAGE);
       }
     }
   }
@@ -90,91 +108,117 @@ int main(int argc,char *argv[]){
     Radio = getenv("RADIO");
 
   if(Radio == NULL){
-    fprintf(stderr,"--radio not specified and $RADIO not set\n");
+    fprintf(stdout,"--radio not specified and $RADIO not set\n");
+    usage();
     exit(EX_USAGE);
   }
   if(Ssrc == 0){
-    fprintf(stderr,"--ssrc not specified\n");
+    fprintf(stdout,"--ssrc not specified\n");
+    usage();
     exit(EX_USAGE);
   }
   {
+    if(Verbose)
+      fprintf(stdout,"Resolving %s\n",Radio);
     char iface[1024];
     resolve_mcast(Radio,&Control_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
     char const *ifc = (Iface != NULL) ? Iface : iface;
     
+
+    if(Verbose)
+      fprintf(stdout,"Listening\n");
     Status_sock = listen_mcast(&Control_address,ifc);
 
     if(Status_sock == -1){
-      fprintf(stderr,"Can't open Status_sock socket to radio control channel %s: %s\n",Radio,strerror(errno));
+      fprintf(stdout,"Can't open Status_sock socket to radio control channel %s: %s\n",Radio,strerror(errno));
       exit(EX_IOERR);
     }
+    if(Verbose)
+      fprintf(stdout,"Connecting\n");
     Control_sock = connect_mcast(&Control_address,ifc,Mcast_ttl,IP_tos);
     if(Control_sock == -1){
-      fprintf(stderr,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
+      fprintf(stdout,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
       exit(EX_IOERR);
     }
   }
-    
-  double sent_freq = 0;
-  uint32_t sent_tag = 0; // Used only if sent_freq != 0
-  if(argc <= optind){
-    fprintf(stderr,"freq not specified\n");
-    exit(EX_USAGE);
-  }
-  // Frequency specified; generate a command
-
-  double f = parse_frequency(argv[optind],true);
-  f = fabs(f);
-  
   // Begin polling SSRC to ensure the multicast group is up and radiod is listening
-  // Does the ssrc already exist?
-  
-  // Now send command
-
-  uint8_t buffer[8192];
-  uint8_t *bp = buffer;
-  
-  *bp++ = 1; // Generate command packet
-  sent_tag = random();
-  encode_int(&bp,COMMAND_TAG,sent_tag);
-  encode_int(&bp,OUTPUT_SSRC,Ssrc);
-  if(Mode != NULL)
-    encode_string(&bp,PRESET,Mode,strlen(Mode));
-
-  sent_freq = f;
-  encode_double(&bp,RADIO_FREQUENCY,sent_freq); // Hz
-  encode_eol(&bp);
-  int cmd_len = bp - buffer;
-  if(send(Control_sock, buffer, cmd_len, 0) != cmd_len)
-    perror("command send");
+  long long last_command_time = 0;
 
 
-  // Read and process status
-  for(;;){
-    uint8_t buffer[8192];
-    int length = recvfrom(Status_sock,buffer,sizeof(buffer),0,NULL,NULL);
-    if(length <= 0){
-      fprintf(stderr,"recvfrom status socket error: %s\n",strerror(errno));
-      sleep(1);
-      continue;
+  uint32_t received_tag = 0;
+  double received_freq = INFINITY;
+  uint32_t received_ssrc = 0;
+  int received_agc_enable = -1;
+  float received_gain = INFINITY;
+  char preset[256];
+  memset(preset,0,sizeof(preset));
+
+
+  while(1){
+    // (re)send command until we get a response;
+    uint32_t sent_tag;
+    if(gps_time_ns() >= last_command_time + BILLION/10){ // Rate limit command packets to 10 Hz
+      uint8_t cmd_buffer[9000];
+      uint8_t *bp = cmd_buffer;
+      *bp++ = 1; // Generate command packet
+      sent_tag = arc4random();
+      encode_int(&bp,COMMAND_TAG,sent_tag);
+      encode_int(&bp,OUTPUT_SSRC,Ssrc);
+      if(Mode != NULL)
+	encode_string(&bp,PRESET,Mode,strlen(Mode));
+      
+      if(Frequency != INFINITY)
+	encode_double(&bp,RADIO_FREQUENCY,Frequency); // Hz
+      if(Gain != INFINITY){
+	encode_float(&bp,GAIN,Gain);
+	encode_int(&bp,AGC_ENABLE,false); // Turn off AGC for manual gain
+      } else if(Agc != -1)
+	encode_int(&bp,AGC_ENABLE,Agc);
+      encode_eol(&bp);
+      int cmd_len = bp - cmd_buffer;
+      if(send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len)
+	perror("command send");
+
+      last_command_time = gps_time_ns();
+      if(Verbose)
+	fprintf(stdout,"Command sent\n");
     }
-    // We could check the source address here, but we have no way of verifying it.
-    // But there should only be one host sending status to this group anyway
-    uint8_t const * cp = buffer;
+    // Look for response
+    // Set 100 ms timeout for response
+    struct pollfd fds[1];
+    fds[0].fd = Status_sock;
+    fds[0].events = POLLIN;
+    int event = poll(fds,1,100);
+    if(event == 0)
+      break; // Timeout; go back and resend
+    
+    if(event < 0){
+      fprintf(stdout,"poll error: %s\n",strerror(errno));
+      exit(1);
+    }
+    
+    // Incoming packet should be ready
+    uint8_t response_buffer[9000];
+    uint8_t const * cp = response_buffer; // make response read-only
+    int length = recvfrom(Status_sock,response_buffer,sizeof(response_buffer),0,NULL,NULL);
+    
+    if(length <= 0){
+      fprintf(stdout,"recvfrom status socket error: %s\n",strerror(errno));
+      exit(1);
+    }
+    if(Verbose)
+      fprintf(stdout,"Message received, %d bytes, type %d\n",length,*cp);
+    
     if(*cp++ != 0)
-      continue; // Look only at status packets
-
-    uint32_t received_tag = 0;
-    double received_freq = 0;
-    int freq_seen = 0;
-    uint32_t received_ssrc = 0;
-
-    while(cp - buffer < length){
+      continue; // ignore non-response; go back and receive again
+    
+    // Process response
+    while(cp - response_buffer < length){
       enum status_type type = *cp++;
       if(type == EOL)
 	break;
       unsigned int optlen = *cp++;
-      if(cp - buffer + optlen > length)
+      if(cp - response_buffer + optlen > length)
 	break; // Invalid length
       switch(type){
       default:
@@ -184,26 +228,42 @@ int main(int argc,char *argv[]){
 	break;
       case RADIO_FREQUENCY:
 	received_freq = decode_double(cp,optlen);
-	freq_seen = 1;
 	break;
       case OUTPUT_SSRC:
 	received_ssrc = decode_int(cp,optlen);
 	break;
+      case AGC_ENABLE:
+	received_agc_enable = decode_int(cp,optlen);
+	break;
+      case GAIN:
+	received_gain = decode_float(cp,optlen);
+	  break;
+      case PRESET:
+	decode_string(cp,optlen,preset,sizeof(preset));
+	break;
       }
       cp += optlen;
     }
-    // Ignore compressed status packets omitting frequency
-    // We may see these if we didn't send a command
-    if(!freq_seen)
-      continue;
-
-    // If we sent a command, wait for its acknowledgement
-    // Otherwise, just display the current frequency
-    if(received_tag != sent_tag || received_ssrc != Ssrc)
-      continue;
-    printf("Frequency %'.3lf Hz\n",received_freq);
-    break;
+    if(received_ssrc == Ssrc && received_tag == sent_tag)
+      break; // For us; we're done
+    if(Verbose)
+      fprintf(stdout,"Not for us: ssrc %u, tag %u\n",(int)received_ssrc,(int)received_tag);
   }
-  exit(EX_OK);
+
+  // Show responses
+  if(strlen(preset) > 0)
+    printf("Preset %s\n",preset);
+  if(received_freq != INFINITY)
+    printf("Frequency %'.3lf Hz\n",received_freq);
+  if(received_agc_enable != -1)
+    printf("AGC %s\n",received_agc_enable ? "on" : "off");
+  if(received_gain != INFINITY)
+    printf("Gain %.3f dB\n",received_gain);
+  
+  exit(EX_OK); // We're done
 }
 
+void usage(void){
+  fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-i|--iface <iface>] [-l|--locale LOCALE]  \
+[-f|- FREQUENCY]frequency] [[-a|--agc] | [-g|--Gain <gain dB>]] [-m|--mode <mode>]\n" ,App_path);
+}
