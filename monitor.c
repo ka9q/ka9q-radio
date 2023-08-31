@@ -1432,9 +1432,10 @@ static int close_session(struct session **p){
 // passed to atexit, invoked at exit
 // must not call exit() to avoid looping
 static void cleanup(void){
-  if(Repeater_tail != 0 && Tx_off != NULL)
-    system(Tx_off);
-
+  if(Repeater_tail != 0 && Tx_off != NULL){
+    int r __attribute__((unused));
+    r = system(Tx_off);
+  }
   Pa_StopStream(Pa_Stream);
   Pa_Terminate();
   if(!Quiet){
