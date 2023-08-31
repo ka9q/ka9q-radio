@@ -38,7 +38,7 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
     case EOL: // Shouldn't get here
       goto done;
     case COMMAND_TAG:
-      printf("cmd tag %0llx",(long long unsigned)decode_int(cp,optlen));
+      printf("cmd tag %08x",(uint32_t)decode_int(cp,optlen));
       break;
     case CMD_CNT:
       printf("commands %'llu",(long long unsigned)decode_int(cp,optlen));
