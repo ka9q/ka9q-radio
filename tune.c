@@ -159,8 +159,8 @@ int main(int argc,char *argv[]){
 
   while(1){
     // (re)send command until we get a response;
-    uint32_t sent_tag;
-    if(gps_time_ns() >= last_command_time + BILLION/10){ // Rate limit command packets to 10 Hz
+    uint32_t sent_tag = 0;
+    if(sent_tag == 0 || gps_time_ns() >= last_command_time + BILLION/10){ // Rate limit command packets to 10 Hz
       uint8_t cmd_buffer[9000];
       uint8_t *bp = cmd_buffer;
       *bp++ = 1; // Generate command packet
