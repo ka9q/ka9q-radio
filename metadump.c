@@ -5,7 +5,6 @@
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <limits.h>
@@ -13,6 +12,9 @@
 #include <string.h>
 #if defined(linux)
 #include <bsd/string.h>
+#include <bsd/stdlib.h>
+#else
+#include <stdlib.h>
 #endif
 #include <math.h>
 #include <complex.h>
@@ -32,9 +34,10 @@
 #include "status.h"
 
 
+pthread_t Input_thread;
 
 const char *App_path;
-int Verbose,Dump;
+int Verbose;
 bool Newline;
 float Interval = 0.1;
 int Control_sock;
@@ -43,6 +46,9 @@ int Count;
 char *Radio;
 uint32_t Ssrc;
 int IP_tos;
+int Status_packets;
+
+long long Last_status_time;
 
 char Locale[256] = "en_US.UTF-8";
 int Mcast_ttl = 5;
@@ -60,6 +66,7 @@ struct option Options[] = {
 };
 
 void usage(void);
+void *input_thread(void *);
 
 
 int main(int argc,char *argv[]){
@@ -134,45 +141,58 @@ int main(int argc,char *argv[]){
       exit(EX_IOERR);
     }
   }
-  int status_packets = 0;
+
   if(Verbose){
     fprintf(stdout,"Polling interval %'llu nanoseconds\n",(long long)(Interval * BILLION));
   }
+
+  pthread_create(&Input_thread,NULL,input_thread,NULL);
+
+  if(Interval == 0 || Ssrc == 0)
+    while(1)
+      sleep(1000);
+
+  // Begin active polling SSRC to ensure the multicast group is up and radiod is listening
+  // Time for a rate-limited poll?
+
   long long last_command_time = 0;
-  while(Count == 0 || status_packets < Count){ // Count = 0 means infinite
-    // Begin polling SSRC to ensure the multicast group is up and radiod is listening
-    if(Ssrc != 0 && Control_sock > 2){
-      // Time for a rate-limited poll?
-      if(gps_time_ns() >= last_command_time + (long long)(Interval* BILLION)){
-	uint8_t cmd_buffer[9000];
-	uint8_t *bp = cmd_buffer;
-	*bp++ = 1; // Generate command packet
-	uint32_t sent_tag = arc4random();
-	encode_int(&bp,COMMAND_TAG,sent_tag);
-	encode_int(&bp,OUTPUT_SSRC,Ssrc);
-	encode_eol(&bp);
-	int cmd_len = bp - cmd_buffer;
-	if(send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len)
-	  perror("command send");
-	
-	last_command_time = gps_time_ns();
-	if(Verbose)
-	  fprintf(stdout,"Command sent\n");
-      }
-      // Look for response
-      // Set 100 ms timeout for response
-      struct pollfd fds[1];
-      fds[0].fd = Status_sock;
-      fds[0].events = POLLIN;
-      int event = poll(fds,1,100);
-      if(event == 0)
-	continue; // Timeout; go back and resend
-      
-      if(event < 0){
-	fprintf(stdout,"poll error: %s\n",strerror(errno));
+  while(1){
+    long long now = gps_time_ns();
+    long long latest = max(Last_status_time,last_command_time); // Time of latest event
+    if(now >= latest + (long long)(Interval* BILLION)){
+      // Haven't gotten a status nor sent a poll in Interval seconds
+      uint8_t cmd_buffer[9000];
+      uint8_t *bp = cmd_buffer;
+      *bp++ = 1; // Generate command packet
+      uint32_t sent_tag = arc4random();
+      encode_int(&bp,COMMAND_TAG,sent_tag);
+      encode_int(&bp,OUTPUT_SSRC,Ssrc);
+      encode_eol(&bp);
+      int cmd_len = bp - cmd_buffer;
+      if(Verbose)
+	fprintf(stdout,"Command sent\n");
+
+      if(send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len){
+	perror("command send");
 	exit(1);
       }      
+      latest = last_command_time = now;
     }
+    // Sleep for Interval seconds past after the later of the last command and last status messages
+    useconds_t sleep_time = (latest + (long long)(Interval * BILLION) - now)/ 1000;
+    usleep(sleep_time);
+  }
+  exit(EX_OK); // can't reach
+}
+
+
+void usage(void){
+  fprintf(stdout,"%s [-s|--ssrc <ssrc>] [-c|--count n] [-i|--interval f] [-v|--verbose] [-n|--newline] [-l|--locale] [ -r|--radio] control-channel\n",App_path);
+}
+
+// Process incoming packets
+void *input_thread(void *p){
+  while(Count == 0 || Status_packets < Count){
     uint8_t buffer[9000];
     struct sockaddr_storage source;
     socklen_t len = sizeof(source);
@@ -191,14 +211,9 @@ int main(int argc,char *argv[]){
     dump_metadata(buffer+1,length-1,Newline);
     fflush(stdout);
     if(cr == STATUS){
-      status_packets++; // Don't count our own responses
-      last_command_time = gps_time_ns(); // Reset poll timeout
+      Status_packets++; // Don't count our own responses
+      Last_status_time = gps_time_ns(); // Reset poll timeout
     }
   }
-  exit(EX_OK); // can't reach
-}
-
-
-void usage(void){
-  fprintf(stdout,"%s [-s|--ssrc <ssrc>] [-c|--count n] [-i|--interval f] [-v|--verbose] [-n|--newline] [-l|--locale] [ -r|--radio] control-channel\n",App_path);
+  exit(EX_OK);
 }
