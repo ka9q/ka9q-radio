@@ -157,10 +157,10 @@ int main(int argc,char *argv[]){
   memset(preset,0,sizeof(preset));
 
 
+  uint32_t sent_tag = 0;
   while(1){
     // (re)send command until we get a response;
-    uint32_t sent_tag = 0;
-    if(sent_tag == 0 || gps_time_ns() >= last_command_time + BILLION/10){ // Rate limit command packets to 10 Hz
+    if(gps_time_ns() >= last_command_time + BILLION/10){ // Rate limit command packets to 10 Hz
       uint8_t cmd_buffer[9000];
       uint8_t *bp = cmd_buffer;
       *bp++ = 1; // Generate command packet
@@ -193,7 +193,7 @@ int main(int argc,char *argv[]){
     fds[0].events = POLLIN;
     int event = poll(fds,1,100);
     if(event == 0)
-      break; // Timeout; go back and resend
+      continue; // Timeout; go back and resend
     
     if(event < 0){
       fprintf(stdout,"poll error: %s\n",strerror(errno));
@@ -250,10 +250,11 @@ int main(int argc,char *argv[]){
     if(received_ssrc == Ssrc && received_tag == sent_tag)
       break; // For us; we're done
     if(Verbose)
-      fprintf(stdout,"Not for us: ssrc %u, tag %u\n",(int)received_ssrc,(int)received_tag);
+      fprintf(stdout,"Not for us: ssrc %'u, tag %'u\n",(int)received_ssrc,(int)received_tag);
   }
 
   // Show responses
+  printf("SSRC %'u\n",Ssrc);
   if(strlen(preset) > 0)
     printf("Preset %s\n",preset);
   if(received_freq != INFINITY)
