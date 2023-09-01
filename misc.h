@@ -1,6 +1,5 @@
-// $Id: misc.h,v 1.31 2022/12/29 05:56:41 karn Exp $
-// Miscellaneous constants, macros and function prototypes
-// Copyright 2018 Phil Karn, KA9Q
+// Miscellaneous constants, macros and function prototypes for ka9q-radio
+// Copyright 2018-2023 Phil Karn, KA9Q
 #ifndef _MISC_H
 #define _MISC_H 1
 
@@ -23,6 +22,11 @@
 #include <bsd/string.h>
 #endif
 #include <assert.h>
+
+// Must be a macro so __FILE__ and __TIMESTAMP__ will substitute correctly
+#define VERSION() { fprintf(stdout,"KA9Q Multichannel SDR %s last modified %s\n",__FILE__,__TIMESTAMP__); \
+		    fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");}
+
 
 #ifndef M_PIf
 #define M_PIf ((float)(M_PI))

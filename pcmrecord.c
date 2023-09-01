@@ -1,6 +1,4 @@
-// $Id: pcmrecord.c,v 1.20 2022/12/29 05:58:17 karn Exp $ 
 // Read and record PCM audio streams
-// Adapted from iqrecord.c which is out of date
 // Copyright 2021 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -137,8 +135,7 @@ int main(int argc,char *argv[]){
       }
       break;
     case 'V':
-      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
-      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      VERSION();
       exit(EX_OK);
     default:
       fprintf(stderr,"Usage: %s [-l locale] [-t timeout] [-v] [-m sec] PCM_multicast_address\n",argv[0]);

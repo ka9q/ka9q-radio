@@ -1,3 +1,6 @@
+// General purpose oscillator (complex quadrature and PLL) subroutines for ka9q-radio
+// Cpoyright 2022-2023, Phil Karn, KA9Q
+
 #ifndef _OSC_H
 #define _OSC_H 1
 

@@ -1,6 +1,6 @@
-// $Id: bandplan.h,v 1.7 2021/03/06 19:37:38 karn Exp $
-// Bandplan routine data structures and definitions
-// Copyright 2018, Phil Karn, KA9Q
+// Bandplan routine data structures and definitions for ka9q-radio
+// Fairly primitive, needs to be revised with a more general database
+// Copyright 2018-2023, Phil Karn, KA9Q
 
 #ifndef _BANDPLAN_H
 #define _BANDPLAN_H 1

@@ -1,6 +1,5 @@
-// $Id: aprsfeed.c,v 1.32 2022/12/29 05:58:17 karn Exp $
 // Process AX.25 frames containing APRS data, feed to APRS2 network
-// Copyright 2018, Phil Karn, KA9Q
+// Copyright 2018-2023, Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -54,7 +53,7 @@ int main(int argc,char *argv[]){
   setlinebuf(stdout);
 
   int c;
-  while((c = getopt(argc,argv,"u:p:I:vh:f:")) != EOF){
+  while((c = getopt(argc,argv,"u:p:I:vh:f:V")) != EOF){
     switch(c){
     case 'f':
       Logfilename = optarg;
@@ -76,6 +75,9 @@ int main(int argc,char *argv[]){
     case 'I':
       Mcast_address_text = optarg;
       break;
+    case 'V':
+      VERSION();
+      exit(EX_OK);
     default:
       fprintf(stderr,"Usage: %s -u user [-p passcode] [-v] [-I mcast_address][-h host]\n",argv[0]);
       exit(EX_USAGE);

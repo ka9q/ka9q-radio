@@ -1,10 +1,9 @@
-// $Id: control.c,v 1.168 2023/02/23 23:46:21 karn Exp $
-// Interactive program to send commands and display internal state of 'radio'
+// Interactive program to send commands and display internal state of 'radiod'
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
 
-// Copyright 2017 Phil Karn, KA9Q
-// Major revisions fall 2020
+// Copyright 2017-2023 Phil Karn, KA9Q
+// Major revisions fall 2020 (really continuous revisions!)
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -329,8 +328,7 @@ int main(int argc,char *argv[]){
     while((c = getopt(argc,argv,"vVs:")) != -1){
       switch(c){
       case 'V':
-	fprintf(stdout,"KA9Q-radio %s last modified %s\n",__FILE__,__TIMESTAMP__);
-	fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+	VERSION();
 	exit(EX_OK);
       case 'v':
 	Verbose++;

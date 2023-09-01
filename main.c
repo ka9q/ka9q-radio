@@ -1,5 +1,4 @@
-// $Id: main.c,v 1.266 2023/01/31 10:11:08 karn Exp $
-// Read samples from multicast stream
+// Core of KA9Q radiod
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2023, Phil Karn, KA9Q, karn@ka9q.net
 #define _GNU_SOURCE 1
@@ -132,8 +131,7 @@ double sig_gen_tune(struct frontend *,double);
 int main(int argc,char *argv[]){
   App_path = argv[0];
 
-  fprintf(stdout,"KA9Q Multichannel SDR %s last modified %s\n",__FILE__,__TIMESTAMP__);
-  fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+  VERSION();
 #ifndef NDEBUG
   fprintf(stdout,"Assertion checking enabled, execution will be slower\n");
 #endif

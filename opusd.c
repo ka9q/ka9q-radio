@@ -1,10 +1,11 @@
-// $Id: opusd.c,v 1.9 2023/01/15 05:59:58 karn Exp $
 // Opus transcoder
 // Read PCM audio from one or more multicast groups, compress with Opus and retransmit on another with same SSRC
 // Currently subject to memory leaks as old group states aren't yet aged out
-// Copyright Jan 2018 Phil Karn, KA9Q
+
 // Major rewrite Nov 2020 for multithreaded encoding with one Opus encoder per thread
 // Makes better use of multicore CPUs under heavy load (like encoding the entire 2m band at once)
+// Copyright Jan 2018-2023 Phil Karn, KA9Q
+
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
@@ -133,15 +134,17 @@ struct option Options[] =
    {"discontinuous", no_argument, NULL, 'x'},
    {"lowdelay",no_argument, NULL, 'l'},
    {"low-delay",no_argument, NULL, 'l'},
-   {"voice", no_argument, NULL, 'V'},
+   {"voice", no_argument, NULL, 's'},
+   {"speech", no_argument, NULL, 's'},   
    {"tos", required_argument, NULL, 'p'},
    {"iptos", required_argument, NULL, 'p'},
    {"ip-tos", required_argument, NULL, 'p'},    
+   {"version", no_argument, NULL, 'V'},
    {NULL, 0, NULL, 0},
 
   };
    
-char const Optstring[] = "A:B:I:N:R:S:T:fo:vxp:";
+char const Optstring[] = "A:B:I:N:R:S:T:fo:vxp:V";
 
 struct sockaddr_storage Status_dest_address;
 struct sockaddr_storage Status_input_source_address;
@@ -187,7 +190,7 @@ int main(int argc,char * const argv[]){
       Fec_enable = true;
       break;
     case 'o':
-      Opus_bitrate = strtol(optarg,NULL,0);
+     Opus_bitrate = strtol(optarg,NULL,0);
       break;
     case 'v':
       Verbose++;
@@ -198,11 +201,18 @@ int main(int argc,char * const argv[]){
     case 'l':
       Application = OPUS_APPLICATION_RESTRICTED_LOWDELAY;
       break;
-    case 'V':
+    case 's':
       Application = OPUS_APPLICATION_VOIP;
       break;
+    case 'V':
+      VERSION();
+      exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-l|-V] [-x] [-v] [-f] [-p tos] [-o bitrate] [-B blocktime] [-N name] [-T ttl] [-A iface] [-I input_mcast_address | -S input_status_address] -R output_mcast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-V|--version] [-l |--lowdelay|--low-delay |-s | --speech | --voice] \
+[-x|--discontinuous] [-v|--verbose] [-f|--fec] [-p|--iptos|--tos|--ip-tos tos|] \
+[-o|--bitrate|--bit-rate bitrate] [-B|--blocktime|--block-time --blocktime] [-N|--name name] \
+[-T|--ttl ttl] [-A|--iface iface] [-I|--pcm-in input_mcast_address | -S|--status-in input_status_address] \
+-R|--opus-out output_mcast_address\n",argv[0]);
       exit(EX_USAGE);
     }
   }

@@ -1,4 +1,3 @@
-// $Id: packetd.c,v 1.7 2022/12/29 05:55:18 karn Exp $
 // AFSK/FM packet demodulator
 // Reads RTP PCM audio stream, emits decoded frames in multicast RTP
 // Copyright 2018, Phil Karn, KA9Q
@@ -103,10 +102,11 @@ static struct option Options[] =
    {"tos", required_argument, NULL, 'p'},
    {"iptos", required_argument, NULL, 'p'},
    {"ip-tos", required_argument, NULL, 'p'},    
+   {"version", required_argument, NULL, 'V'},
    {NULL, 0, NULL, 0},
   };
 
-static char const Optstring[] = "A:I:N:R:S:T:vp:";
+static char const Optstring[] = "A:I:N:R:S:T:vp:V";
 char const *Name;
 char const *Output;
 char const *Input[MAX_MCAST];
@@ -187,13 +187,16 @@ int main(int argc,char *argv[]){
       Verbose++;
       break;
       break;
+    case 'V':
+      VERSION();
+      exit(EX_OK);
     default:
-      fprintf(stdout,"Usage: %s [--verbose|-v] [--ttl|-T mcast_ttl] [--pcm-in|-I input_mcast_address [--pcm-in|-I address2]] [--ax25-out|-R output_mcast_address] [input_address ...]\n",argv[0]);
+      fprintf(stdout,"Usage: %s [-V|--version] [--verbose|-v] [--ttl|-T mcast_ttl] [--pcm-in|-I input_mcast_address [--pcm-in|-I address2]] [--ax25-out|-R output_mcast_address] [input_address ...]\n",App_path);
       exit(EX_USAGE);
     }
   }
   if(Name == NULL)
-    Name = argv[0]; // Give it a default
+    Name = App_path; // Give it a default
 
 
   // Also accept groups without -I option

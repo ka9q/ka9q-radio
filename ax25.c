@@ -1,4 +1,3 @@
-// $Id: ax25.c,v 1.8 2021/03/01 21:54:29 karn Exp $
 // AX.25 frame header decoding (this takes me wayyyyy back)
 // Copyright 2018, Phil Karn, KA9Q
 #define _GNU_SOURCE 1

@@ -1,6 +1,4 @@
-// $Id: wspr-decoded.c,v 1.4 2022/12/29 05:54:37 karn Exp $ 
 // Read and record PCM audio streams
-// Adapted from iqrecord.c which is out of date
 // Copyright 2021 Phil Karn, KA9Q
 //
 // Modified "wspr-decoded" to "wd-record" to record 1 minute .wav files, synchronized to the UTC
@@ -127,8 +125,9 @@ int main(int argc,char *argv[]){
   while((c = getopt(argc,argv,"d:l:s:vk1V")) != EOF){
     switch(c){
     case 'V':
-      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
-      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q, and Rob Robinett, AI6VN. May be used under the terms of the GNU Public License\n");
+      VERSION();
+      fprintf(stdout,"Copyright 2023, Clint Turner, KA7OEI\n");
+      fprintf(stdout,"Copyright 2023, Rob Robinett, AI6VN\n");
       exit(EX_OK);
     case 'd':
       Recordings = optarg;

@@ -1,6 +1,5 @@
-// $Id: rtcp.c,v 1.2 2018/09/05 08:18:22 karn Exp $
-// Real Time Control Protocol (RTCP)
-// Sep 2018 Phil Karn, KA9Q
+// Real Time Control Protocol (RTCP) for ka9q-radio - very primitive and not yet complete or tested
+// Sep 2018-2023 Phil Karn, KA9Q
 #include <sys/types.h>
 #include <string.h>
 #include <stdint.h>

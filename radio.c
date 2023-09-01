@@ -1,6 +1,5 @@
-// $Id: radio.c,v 1.227 2022/12/29 05:39:27 karn Exp $
-// Core of 'radio' program - control LOs, set frequency/mode, etc
-// Copyright 2018, Phil Karn, KA9Q
+// Core of 'radiod' program - control LOs, set frequency/mode, etc
+// Copyright 2018-2023, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>

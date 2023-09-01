@@ -1,6 +1,5 @@
-// $Id: status.c,v 1.31 2022/08/05 06:35:10 karn Exp $
-// encode/decode status packets
-// Copyright 2020 Phil Karn, KA9Q
+// Low-level encode/decode routines for TLV status packets from/to ka9q-radio's radiod
+// Copyright 2020-2023 Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <assert.h>

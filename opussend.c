@@ -1,4 +1,3 @@
-// $Id: opussend.c,v 1.25 2022/12/29 05:54:59 karn Exp $
 // Multicast local audio with Opus
 // Copyright Feb 2018 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
@@ -113,8 +112,7 @@ int main(int argc,char * const argv[]){
       Fec = strtol(optarg,NULL,0);
       break;
     case 'V':
-      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
-      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      VERSION();
       exit(EX_OK);
     default:
       fprintf(stderr,"Usage: %s [-V] [-x] [-v] [-o bitrate] [-B blocktime] [-I input_mcast_address] [-R output_mcast_address][-T mcast_ttl]\n",argv[0]);

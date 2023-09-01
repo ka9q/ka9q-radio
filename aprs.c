@@ -1,9 +1,8 @@
-// $Id: aprs.c,v 1.27 2022/12/29 05:58:17 karn Exp $
 // Process AX.25 frames containing APRS data, extract lat/long/altitude, compute az/el
 // INCOMPLETE, doesn't yet drive antenna rotors
 // Should also use RTP for AX.25 frames
 // Should get station location from a GPS receiver
-// Copyright 2018, Phil Karn, KA9Q
+// Copyright 2018-2023, Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -72,7 +71,7 @@ int main(int argc,char *argv[]){
 #endif
     
   int c;
-  while((c = getopt(argc,argv,"L:M:A:I:vs:R:")) != EOF){
+  while((c = getopt(argc,argv,"L:M:A:I:vs:R:V")) != EOF){
     switch(c){
     case 'L':
       latitude = strtod(optarg,NULL);
@@ -95,6 +94,9 @@ int main(int argc,char *argv[]){
     case 'R':
       Dest = optarg;
       break;
+    case 'V':
+      VERSION();
+      exit(EX_OK);
     default:
       fprintf(stdout,"Usage: %s [-L latitude] [-M longitude] [-A altitude] [-s sourcecall] [-v] [-I mcast_address]\n",argv[0]);
       fprintf(stdout,"Defaults: %s -L %lf -M %lf -A %lf -s %s -I %s\n",argv[0],

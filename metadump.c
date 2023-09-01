@@ -1,6 +1,5 @@
-// $Id: metadump.c,v 1.19 2022/12/29 05:58:17 karn Exp $
-// Utility to trace multicast SDR metadata
-// Copyright 2018 Phil Karn, KA9Q
+// Utility to trace ka9q-radio multicast SDR metadata
+// Copyright 2018-2023 Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -76,8 +75,7 @@ int main(int argc,char *argv[]){
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
     case 'V':
-      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
-      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      VERSION();
       exit(EX_OK);
     case 's':
       Ssrc = strtol(optarg,NULL,0);

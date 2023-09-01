@@ -1,6 +1,6 @@
-// $Id$
-// read FFT bin energies from spectrum pseudo-demod and format similar to rtl_power
+// read FFT bin energies from spectrum pseudo-demod and format similar to rtl_power - out of date
 // Copyright 2023 Phil Karn, KA9Q
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -98,8 +98,7 @@ int main(int argc,char *argv[]){
 	bin_bw = strtof(optarg,NULL);
 	break;
       case 'V':
-	fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
-	fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+	VERSION();
 	exit(EX_OK);
       default:
 	fprintf(stdout,"Unknown option %c\n",c);

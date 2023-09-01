@@ -1,4 +1,3 @@
-// $Id: ax25.h,v 1.6 2021/03/01 22:00:43 karn Exp $
 // Functions defined in ax25.c
 // Copyright 2018, Phil Karn, KA9Q
 

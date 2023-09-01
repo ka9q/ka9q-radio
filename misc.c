@@ -1,5 +1,4 @@
-// $Id: misc.c,v 1.41 2022/12/29 05:56:41 karn Exp $
-// Miscellaneous low-level routines, mostly time-related
+// Miscellaneous low-level routines for ka9q-radio
 // Copyright 2018, Phil Karn, KA9Q
 
 #ifndef _GNU_SOURCE

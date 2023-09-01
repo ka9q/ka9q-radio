@@ -1,8 +1,6 @@
-// $Id: linear.c,v 1.116 2022/06/21 07:40:01 karn Exp $
-
-// General purpose linear demodulator
+// General purpose linear demodulator for ka9q-radio
 // Handles USB/IQ/CW/etc, all modes but FM
-// Copyright May 2022 Phil Karn, KA9Q
+// Copyright May 2022-2023 Phil Karn, KA9Q
 
 #define DEFAULT_SHIFT (0.0)          // Post detection frequency shift, Hz
 #define DEFAULT_HEADROOM (-10.0)     // Target average output level, dBFS

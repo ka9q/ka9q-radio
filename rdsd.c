@@ -1,5 +1,6 @@
 // $Id: rdsd.c,v 1.5 2022/12/29 05:58:17 karn Exp $
-// FM RDS demodulator/decoder
+// FM RDS demodulator/decoder for ka9q-radio - rather primitive, not tested much
+// Copyright 2022-2023, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>

@@ -1,5 +1,5 @@
-// $Id: tune.c,v 1.7 2022/12/29 05:53:26 karn Exp $
-// Interactive program to tune radio
+// Interactive program to tune radiod in ka9q-radio
+// Copyright 2023 Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <stdio.h>
@@ -99,8 +99,7 @@ int main(int argc,char *argv[]){
 	Agc = 1;
 	break;
       case 'V':
-	fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
-	fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+	VERSION();
 	exit(EX_OK);
       case 'h':
       default:

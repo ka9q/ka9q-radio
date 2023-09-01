@@ -1,7 +1,8 @@
-// $Id: decimate.c,v 1.9 2018/12/09 12:12:20 karn Exp $
-// half-band filters for sample rate decimation by powers of 2
+// Simple sample rate decimators & half-band filters by powers of 2
+// Not currently used in ka9q-radio, but here for reference or possible future use
+// Copyright 2017-2023, Phil Karn, KA9Q
+
 // Note: filters have unity middle tap, which usually results in overall gain of +6 dB
-// Copyright July 2018, Phil Karn, KA9Q
 
 #include <string.h>
 #include <assert.h>

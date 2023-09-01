@@ -1,5 +1,5 @@
-// $Id: osc.c,v 1.18 2022/06/29 08:44:43 karn Exp $
-// Complex oscillator object routines
+// General purpose oscillator (complex quadrature and PLL) subroutines for ka9q-radio
+// Cpoyright 2022-2023, Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <stdio.h>

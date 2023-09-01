@@ -1,9 +1,8 @@
-// $Id: radio.h,v 1.151 2023/02/23 23:51:06 karn Exp $
-// Internal structures and functions of the 'radio' program
+// Internal structures and functions of the 'ka9q-radio' package
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
 // but so far it seems easier to just run separate instances of the 'radio' program.
-// Copyright 2018, Phil Karn, KA9Q
+// Copyright 2018-2023, Phil Karn, KA9Q
 #ifndef _RADIO_H
 #define _RADIO_H 1
 

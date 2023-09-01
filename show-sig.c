@@ -1,5 +1,4 @@
-// $Id: show-sig.c,v 1.8 2022/12/29 05:53:51 karn Exp $
-// Display signal levels
+// Display radiod signal levels -- Out of date
 // Copyright 2021 Phil Karn, KA9Q
 // Adapted from show-pkt.c
 
@@ -92,8 +91,7 @@ int main(int argc,char *argv[]){
 	Verbose++;
 	break;
       case 'V':
-	fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
-	fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+	VERSION();
 	exit(EX_OK);
       }
     }

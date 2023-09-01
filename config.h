@@ -1,3 +1,6 @@
+// Helper functions for iniparser that combine section:key
+// Copyright 2022-2023, Phil Karn, KA9Q
+
 #ifndef _CONFIG_H
 #define _CONFIG_H 1
 

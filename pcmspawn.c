@@ -1,5 +1,5 @@
-// $Id: pcmspawn.c,v 1.10 2022/12/29 05:58:17 karn Exp $
 // Receive and demux RTP PCM streams into a command pipeline
+// Copyright 2023 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
@@ -79,7 +79,7 @@ struct option Options[] =
    {"name", required_argument, NULL, 'N'},
    {"status-in", required_argument, NULL, 'S'},
    {"verbose", no_argument, NULL, 'v'},
-   {"Version", no_argument, NULL, 'V'},
+   {"version", no_argument, NULL, 'V'},
    {NULL, 0, NULL, 0},
 
   };
@@ -101,8 +101,7 @@ int main(int argc,char * const argv[]){
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
     case 'V':
-      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
-      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      VERSION();
       exit(EX_OK);
     case 'A':
       Default_mcast_iface = optarg;

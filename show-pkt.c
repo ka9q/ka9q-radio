@@ -1,7 +1,6 @@
-// $Id: show-pkt.c,v 1.8 2022/12/29 05:58:17 karn Exp $
 // Display RTP statistics
-// Copyright 2021 Phil Karn, KA9Q
 // Adapted from control.c
+// Copyright 2021 Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -79,8 +78,7 @@ int main(int argc,char *argv[]){
     while((c = getopt(argc,argv,"vdV")) != EOF){
       switch(c){
       case 'V':
-	fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
-	fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+	VERSION();
 	exit(EX_OK);
       case 'v':
 	Verbose++;

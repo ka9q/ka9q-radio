@@ -1,3 +1,6 @@
+// Type definitions for TLV encodings of status and commands from/to ka9q-radio radiod program
+// Copyright 2017-2023, Phil Karn, KA9Q
+
 #ifndef _STATUS_H
 #define _STATUS_H 1
 #include <stdint.h>
@@ -12,7 +15,8 @@ enum pkt_type {
   SSRC_LIST
 };
 
-
+// I try not to delete or rearrange these entries since that makes the different programs incompatible
+// with each other until they are all recompiled
 enum status_type {
   EOL = 0,	  
   COMMAND_TAG,    // Echoes tag from requester

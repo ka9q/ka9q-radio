@@ -1,5 +1,5 @@
-// signal generator - looks like a pseudo-front-end
-// Aug 2023 KA9Q
+// signal generator - looks like a pseudo-front-end to radiod
+// Copyright Phil Karn, KA9Q, Aug 2023 KA9Q
 #define _GNU_SOURCE 1
 #include <complex.h>
 #include <math.h>

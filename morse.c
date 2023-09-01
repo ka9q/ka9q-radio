@@ -1,7 +1,5 @@
-//$Id: morse.c,v 1.5 2022/12/23 22:21:44 karn Exp $
-// Encode Morse code characters as audio samples
-// Aug 2022 Phil Karn, KA9Q
-
+// Morse code generation
+// Copyright 2022-2023, Phil Karn, KA9Q
 #include <stdio.h>
 #include <wchar.h>
 #include <wctype.h>

@@ -1,7 +1,7 @@
-// $Id: attr.c,v 1.6 2022/04/15 16:14:27 karn Exp $
 // Low-level extended file attribute routines
 // These are in a separate file mainly because they are so OS-dependent. And gratuitously so.
-// Copyright 29 July 2017 Phil Karn, KA9Q
+// 29 July 2017 Phil Karn
+// Copyright 2017-2023  Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <stdio.h>

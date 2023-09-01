@@ -1,6 +1,7 @@
-// $Id: stereod.c,v 1.6 2023/01/15 06:20:00 karn Exp $: opus.c,v 1.51 2021/03/19 03:13:14 karn Exp $
 // Transcoder (multicast in/out) that decodes a FM composite signal @ 384 kHz
 // to a stereo signal @ 48 kHz
+// Part of ka9q-radio. This is a standalone daemon, an alternative to the (very similar) built-in decoder
+// Copyright 2020-2023 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>

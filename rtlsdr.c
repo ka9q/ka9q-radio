@@ -1,6 +1,6 @@
 // Built-in driver for RTL-SDR in radiod
 // Adapted from old rtlsdrd.c
-// Phil Karn, KA9Q, July 2023
+// Copyright July 2023, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>

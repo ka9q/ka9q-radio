@@ -1,7 +1,6 @@
-// $Id: wfm.c,v 1.36 2023/02/20 06:59:37 karn Exp $
-// Wideband FM demodulation and squelch
+// Wideband FM demodulation and squelch for ka9q-radio's radiod.
 // Adapted from narrowband demod
-// Copyright 2020, Phil Karn, KA9Q
+// Copyright 2020-2023, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>

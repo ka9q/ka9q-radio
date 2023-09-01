@@ -1,5 +1,5 @@
-// $Id: iir.h,v 1.4 2022/08/24 05:15:06 karn Exp $
 // Various simple IIR filters
+// Copyright 2022-2023, Phil Karn, KA9Q
 #ifndef _IIR_H
 #define _IIR_H 1
 #define _GNU_SOURCE 1

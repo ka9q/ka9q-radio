@@ -1,6 +1,6 @@
-// Read from Airspy SDR
-// Accept control commands from UDP socket
-// Version linked into radiod
+// Front end driver for Airspy R2 and Airspy Mini, linked into ka9q-radio's radiod
+// Copyright 2023, Phil Karn, KA9Q
+
 #undef DEBUG_AGC
 #define _GNU_SOURCE 1
 #include <assert.h>

@@ -1,5 +1,4 @@
-// $Id$
-// Spectral analysis service - far from complete!
+// Spectral analysis service - far from complete - for ka9q-radio's radiod
 // Copyright 2023, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>

@@ -1,6 +1,5 @@
-// $Id: multicast.c,v 1.91 2022/10/25 01:57:52 karn Exp $
-// Multicast socket and RTP utility routines
-// Copyright 2018 Phil Karn, KA9Q
+// Multicast socket and RTP utility routines for ka9q-radio
+// Copyright 2018-2023 Phil Karn, KA9Q
 
 #include <stdio.h>
 #include <unistd.h>

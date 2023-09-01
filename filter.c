@@ -1,10 +1,9 @@
-// $Id: filter.c,v 1.98 2023/02/04 11:43:06 karn Exp $
-// General purpose filter package using fast convolution (overlap-save)
-// and the FFTW3 FFT package
+// filter using fast convolution (overlap-save) and the FFTW3 FFT package
+// for the ka9q-radio 'radiod' program
 // Generates transfer functions using Kaiser window
 // Optional output decimation by integer factor
 // Complex input and transfer functions, complex or real output
-// Copyright 2017, Phil Karn, KA9Q, karn@ka9q.net
+// Copyright 2017-2023, Phil Karn, KA9Q, karn@ka9q.net
 
 #define _GNU_SOURCE 1
 #include <assert.h>

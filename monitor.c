@@ -1,6 +1,6 @@
-// $Id: monitor.c,v 1.202 2023/02/23 23:49:09 karn Exp $
 // Listen to multicast group(s), send audio to local sound device via portaudio
-// Copyright 2018 Phil Karn, KA9Q
+// Copyright 2018-2023 Phil Karn, KA9Q
+
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
@@ -240,8 +240,7 @@ int main(int argc,char * const argv[]){
       Config_file = optarg;
       break;
     case 'V':
-      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
-      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      VERSION();
       exit(EX_OK);
     default:
       break;

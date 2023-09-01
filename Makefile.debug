@@ -1,4 +1,5 @@
-# $Id: Makefile.linux,v 1.114 2022/12/31 05:15:09 karn Exp $
+# Debug Linux makefile for ka9q-radio package
+# Copyright 2017-2023, Phil Karn, KA9Q
 
 # for production
 #DOPTS = -DNDEBUG=1 -O3

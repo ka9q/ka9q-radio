@@ -1,4 +1,5 @@
-// $Id: radio_status.c,v 1.88 2023/02/23 23:51:40 karn Exp $
+// Generate UDP status messages from radiod, accept incoming commands to radiod in same format
+// Copyright 2023 Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <assert.h>

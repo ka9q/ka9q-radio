@@ -1,4 +1,4 @@
-// Linked-in module for rx888 Mk ii
+// linked-in module for rx888 Mk ii for ka9q-radio's radiod
 // Accept control commands from UDP socket
 //
 // Copyright (c)  2021 Ruslan Migirov <trapi78@gmail.com>

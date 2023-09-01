@@ -1,8 +1,7 @@
-// $Id: cwd.c,v 1.7 2022/12/23 22:21:44 karn Exp $
 // CW generator for ka9q-radio
 // Runs as daemon, reads from a named pipe, sends audio to a specified multicast group + RTP SSRC
 // Useful for IDs and other messages in repeater mode
-// Phil Karn, KA9Q, July 31, 2022
+// Copyright Phil Karn, KA9Q, July 31, 2022 - 2023
 
 #include <stdio.h>
 #include <wchar.h>

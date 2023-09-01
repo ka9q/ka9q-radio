@@ -1,3 +1,6 @@
+// Morse code generation
+// Copyright 2022-2023, Phil Karn, KA9Q
+
 #ifndef _MORSE_H
 #define _MORSE_H 1
 #include <stdint.h>

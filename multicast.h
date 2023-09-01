@@ -1,7 +1,5 @@
-// $Id: multicast.h,v 1.49 2022/08/02 06:49:41 karn Exp $
-// Multicast and RTP functions, constants and structures
-// Not every RTP module uses these yet, they need to be revised
-// Copyright 2018, Phil Karn, KA9Q
+// Multicast and RTP functions, constants and structures for ka9q-radio
+// Copyright 2018-2023, Phil Karn, KA9Q
 
 #ifndef _MULTICAST_H
 #define _MULTICAST_H 1

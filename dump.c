@@ -1,4 +1,6 @@
-// $Id: dump.c,v 1.41 2023/02/23 23:46:49 karn Exp $
+// Decode status packets from radiod into something human readable
+// Copyright 2017-2023 Phil Karn, KA9Q
+
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdio.h>

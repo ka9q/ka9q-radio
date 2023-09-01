@@ -1,7 +1,7 @@
-// $Id: pcmcat.c,v 1.22 2022/12/29 05:55:43 karn Exp $
 // Receive and stream PCM RTP data to stdout
 // Should emit .wav format by default to encode sample rate & parameters for subsequent encoding
 // Revised Aug 2023 to more cleanly handle sender restarts
+// Copyright 2023 Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -59,8 +59,7 @@ int main(int argc,char *argv[]){
   while((c = getopt(argc,argv,"qhs:2V")) != EOF){
     switch(c){
     case 'V':
-      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
-      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      VERSION();
       exit(EX_OK);
     case '2': // Force stereo
       Channels = 2;

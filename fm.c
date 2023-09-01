@@ -1,6 +1,5 @@
-// $Id: fm.c,v 1.141 2023/02/23 23:48:25 karn Exp $
-// FM demodulation and squelch
-// Copyright 2018, Phil Karn, KA9Q
+// FM demodulation and squelch for ka9q-radio
+// Copyright 2018-2023, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>

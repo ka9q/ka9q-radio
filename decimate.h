@@ -1,3 +1,6 @@
+// Simple sample rate decimators & half-band filters by powers of 2
+// Not currently used in ka9q-radio, but here for reference or possible future use
+// Copyright 2017-2023, Phil Karn, KA9Q
 #ifndef _DECIMATE_H
 #define _DECIMATE_H 1
 
