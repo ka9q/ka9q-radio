@@ -153,8 +153,10 @@ int main(int argc,char *argv[]){
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
 
   int c;
-  while((c = getopt(argc,argv,"N:hvp:I")) != -1){
+  while((c = getopt(argc,argv,"N:hvp:IV")) != -1){
     switch(c){
+    case 'V': // Already shown above
+      exit(EX_OK); 
     case 'p':
       Fftw_plan_timelimit = strtod(optarg,NULL);
       break;
