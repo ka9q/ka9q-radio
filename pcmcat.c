@@ -56,8 +56,12 @@ int main(int argc,char *argv[]){
   setlocale(LC_ALL,getenv("LANG"));
 
   int c;
-  while((c = getopt(argc,argv,"qhs:2")) != EOF){
+  while((c = getopt(argc,argv,"qhs:2V")) != EOF){
     switch(c){
+    case 'V':
+      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      exit(EX_OK);
     case '2': // Force stereo
       Channels = 2;
       break;

@@ -79,11 +79,12 @@ struct option Options[] =
    {"name", required_argument, NULL, 'N'},
    {"status-in", required_argument, NULL, 'S'},
    {"verbose", no_argument, NULL, 'v'},
+   {"Version", no_argument, NULL, 'V'},
    {NULL, 0, NULL, 0},
 
   };
    
-char Optstring[] = "A:I:N:S:v";
+char Optstring[] = "A:I:N:S:vV";
 
 struct sockaddr_storage Status_dest_address;
 struct sockaddr_storage Status_input_source_address;
@@ -99,6 +100,10 @@ int main(int argc,char * const argv[]){
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
+    case 'V':
+      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      exit(EX_OK);
     case 'A':
       Default_mcast_iface = optarg;
       break;

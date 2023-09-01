@@ -113,7 +113,7 @@ int main(int argc,char *argv[]){
 
   // Defaults
   int c;
-  while((c = getopt(argc,argv,"c:d:l:vk")) != EOF){
+  while((c = getopt(argc,argv,"c:d:l:vkV")) != EOF){
     switch(c){
     case 'c':
       Wsprd_command = optarg;
@@ -130,6 +130,10 @@ int main(int argc,char *argv[]){
     case 'k':
       Keep_wav = 1;
       break;
+    case 'V':
+      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      exit(EX_OK);
     default:
       fprintf(stderr,"Usage: %s [-l locale] [-v] [-k] [-d recdir] PCM_multicast_address\n",argv[0]);
       exit(EX_USAGE);
