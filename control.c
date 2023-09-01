@@ -293,7 +293,8 @@ static void setup_windows(void){
   }
   if(Debug_win != NULL){
     // A message from our sponsor...
-    wprintw(Debug_win,"KA9Q SDR Receiver controller\nCopyright 2023 Phil Karn, KA9Q\n");
+    wprintw(Debug_win,"KA9Q-radio %s last modified %s\n",__FILE__,__TIMESTAMP__);
+    wprintw(Debug_win,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
   }
 }
 
