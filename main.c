@@ -131,7 +131,9 @@ double sig_gen_tune(struct frontend *,double);
 // catches signals and eventually becomes the user interface/display loop
 int main(int argc,char *argv[]){
   App_path = argv[0];
-  fprintf(stdout,"KA9Q Multichannel SDR Copyright 2018-2023 by Phil Karn, KA9Q; may be used under the terms of the GNU General Public License\n");
+
+  fprintf(stdout,"KA9Q Multichannel SDR %s last modified %s\n",__FILE__,__TIMESTAMP__);
+  fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
 #ifndef NDEBUG
   fprintf(stdout,"Assertion checking enabled, execution will be slower\n");
 #endif

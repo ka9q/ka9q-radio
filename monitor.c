@@ -199,7 +199,7 @@ static inline int modsub(unsigned int const a, unsigned int const b, int const m
 }
 
 
-static char Optstring[] = "CI:LR:Sac:f:g:p:qr:u:vn";
+static char Optstring[] = "CI:LR:Sac:f:g:p:qr:u:vnV";
 static struct  option Options[] = {
    {"center", no_argument, NULL, 'C'},
    {"input", required_argument, NULL, 'I'},
@@ -215,6 +215,7 @@ static struct  option Options[] = {
    {"update", required_argument, NULL, 'u'},
    {"verbose", no_argument, NULL, 'v'},
    {"notch", no_argument, NULL, 'n'},
+   {"version", no_argument, NULL, 'V'},
    {NULL, 0, NULL, 0},
 };
 
@@ -238,6 +239,10 @@ int main(int argc,char * const argv[]){
     case 'f':
       Config_file = optarg;
       break;
+    case 'V':
+      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      exit(EX_OK);
     default:
       break;
     }

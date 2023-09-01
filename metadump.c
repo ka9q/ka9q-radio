@@ -52,7 +52,7 @@ long long Last_status_time;
 
 char Locale[256] = "en_US.UTF-8";
 int Mcast_ttl = 5;
-char Optstring[] = "s:c:i:vnr:l:";
+char Optstring[] = "s:c:i:vnr:l:V";
 struct option Options[] = {
   {"ssrc", required_argument, NULL, 's'},
   {"count", required_argument, NULL, 'c'},
@@ -61,7 +61,7 @@ struct option Options[] = {
   {"newline", no_argument, NULL, 'n'},
   {"radio", required_argument, NULL, 'r'},
   {"locale", required_argument, NULL, 'l'},
-
+  {"version", no_argument, NULL, 'V'},
   {NULL, 0, NULL, 0},
 };
 
@@ -73,8 +73,12 @@ int main(int argc,char *argv[]){
   App_path = argv[0];
   int c;
 
-  while((c = getopt(argc,argv,"s:c:i:vnr:")) != -1){
+  while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
+    case 'V':
+      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      exit(EX_OK);
     case 's':
       Ssrc = strtol(optarg,NULL,0);
       break;

@@ -36,6 +36,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sysexits.h>
 #include "misc.h"
 #include "attr.h"
 #include "multicast.h"
@@ -123,8 +124,12 @@ int main(int argc,char *argv[]){
 
   // Defaults
   int c;
-  while((c = getopt(argc,argv,"d:l:s:vk1")) != EOF){
+  while((c = getopt(argc,argv,"d:l:s:vk1V")) != EOF){
     switch(c){
+    case 'V':
+      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q, and Rob Robinett, AI6VN. May be used under the terms of the GNU Public License\n");
+      exit(EX_OK);
     case 'd':
       Recordings = optarg;
       break;
