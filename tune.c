@@ -109,6 +109,9 @@ int main(int argc,char *argv[]){
 	exit(EX_USAGE);
       }
     }
+    // -r option not specified, see if it was given as an additional arg
+    if(Radio == NULL && argc >= optind)
+	Radio = argv[optind];
   }
   setlocale(LC_ALL,Locale);
 
