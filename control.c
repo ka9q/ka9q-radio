@@ -329,7 +329,7 @@ int main(int argc,char *argv[]){
     while((c = getopt(argc,argv,"vVs:")) != -1){
       switch(c){
       case 'V':
-	fprintf(stdout,"KA9Q Multichannel SDR %s last modified %s\n",__FILE__,__TIMESTAMP__);
+	fprintf(stdout,"KA9Q-radio %s last modified %s\n",__FILE__,__TIMESTAMP__);
 	fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
 	exit(EX_OK);
       case 'v':
