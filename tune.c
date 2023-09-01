@@ -42,7 +42,7 @@ struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "fg:hi:vl:r:s:";
+char Optstring[] = "fg:hi:vl:r:s:V";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"frequency", required_argument, NULL, 'f'},
@@ -54,6 +54,7 @@ struct option Options[] = {
   {"radio", required_argument, NULL, 'r'},
   {"locale", required_argument, NULL, 'l'},
   {"verbose", no_argument, NULL, 'v'},
+  {"version", no_argument, NULL, 'V'},
   {NULL, 0, NULL, 0},
 };
 
@@ -97,6 +98,10 @@ int main(int argc,char *argv[]){
       case 'a':
 	Agc = 1;
 	break;
+      case 'V':
+	fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+	fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+	exit(EX_OK);
       case 'h':
       default:
 	fprintf(stdout,"Invalid command line option -%c\n",c);
