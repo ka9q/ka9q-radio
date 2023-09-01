@@ -80,7 +80,7 @@ int main(int argc,char * const argv[]){
   int c;
   int List_audio = 0;
   Mcast_ttl = 10; // By default, let Opus be routed
-  while((c = getopt(argc,argv,"I:vR:B:o:xT:Lf:p:")) != EOF){
+  while((c = getopt(argc,argv,"I:vR:B:o:xT:Lf:p:V")) != EOF){
     switch(c){
     case 'L':
       List_audio++;
@@ -112,8 +112,12 @@ int main(int argc,char * const argv[]){
     case 'f':
       Fec = strtol(optarg,NULL,0);
       break;
+    case 'V':
+      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-x] [-v] [-o bitrate] [-B blocktime] [-I input_mcast_address] [-R output_mcast_address][-T mcast_ttl]\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-V] [-x] [-v] [-o bitrate] [-B blocktime] [-I input_mcast_address] [-R output_mcast_address][-T mcast_ttl]\n",argv[0]);
       fprintf(stderr,"Defaults: %s -o %d -B %.1f -I %s -R %s -T %d\n",argv[0],Opus_bitrate,Opus_blocktime,Audiodev,Mcast_output_address_text,Mcast_ttl);
       exit(EX_USAGE);
     }

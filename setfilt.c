@@ -16,6 +16,7 @@
 #include <locale.h>
 #include <errno.h>
 #include <ctype.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -32,11 +33,12 @@ struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "vl:r:";
+char Optstring[] = "vl:r:V";
 struct option Options[] = {
     {"radio", required_argument, NULL, 'r'},
     {"locale", required_argument, NULL, 'l'},
     {"verbose", no_argument, NULL, 'v'},
+    {"version", no_argument, NULL, 'V'},
     {NULL, 0, NULL, 0},
 };
 
@@ -51,6 +53,10 @@ int main(int argc,char *argv[]){
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
+      case 'V':
+	fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+	fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+	exit(EX_OK);
       case 'v':
 	Verbose++;
 	break;

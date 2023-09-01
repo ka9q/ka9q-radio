@@ -12,6 +12,8 @@
 #include <locale.h>
 #include <assert.h>
 #include <getopt.h>
+#include <sysexits.h>
+
 #include "misc.h"
 #include "status.h"
 #include "multicast.h"
@@ -29,7 +31,7 @@ char Locale[256] = "en_US.UTF-8";
 char Iface[1024]; // Multicast interface to talk to front end
 int Status_fd,Ctl_fd;
 int64_t Timeout = BILLION; // Retransmission timeout
-static char const Optstring[] = "b:c:f:hi:s:t:T:vw:";
+static char const Optstring[] = "b:c:f:hi:s:t:T:vw:V";
 static struct  option Options[] = {
   {"bins", required_argument, NULL, 'b'},
   {"count", required_argument, NULL, 'c'},
@@ -40,6 +42,7 @@ static struct  option Options[] = {
   {"time-constant", required_argument, NULL, 't'},
   {"timeout", required_argument, NULL, 'T'},
   {"verbose", no_argument, NULL, 'v'},
+  {"version", no_argument, NULL, 'V'},
   {"bin-width", required_argument, NULL, 'w'},
   {NULL, 0, NULL, 0},
 };
@@ -94,6 +97,10 @@ int main(int argc,char *argv[]){
       case 'w':
 	bin_bw = strtof(optarg,NULL);
 	break;
+      case 'V':
+	fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+	fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+	exit(EX_OK);
       default:
 	fprintf(stdout,"Unknown option %c\n",c);
 	help();

@@ -70,7 +70,7 @@ int main(int argc,char * const argv[]){
 
   int c;
   int List_audio = 0;
-  while((c = getopt(argc,argv,"LT:vI:R:")) != EOF){
+  while((c = getopt(argc,argv,"LT:vI:R:V")) != EOF){
     switch(c){
     case 'L':
       List_audio++;
@@ -90,6 +90,10 @@ int main(int argc,char * const argv[]){
     case 'R':
       Mcast_output_address_text = optarg;
       break;
+    case 'V':
+      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      exit(EX_OK);
     default:
       fprintf(stderr,"Usage: %s [-v] -I device [-R output_mcast_address][-T mcast_ttl]\n",argv[0]);
       exit(EX_USAGE);

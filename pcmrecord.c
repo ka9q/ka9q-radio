@@ -111,7 +111,7 @@ int main(int argc,char *argv[]){
 
   // Defaults
   int c;
-  while((c = getopt(argc,argv,"d:l:vt:m:s")) != EOF){
+  while((c = getopt(argc,argv,"d:l:vt:m:sV")) != EOF){
     switch(c){
     case 's':
       Subdirs = 1;
@@ -136,6 +136,10 @@ int main(int argc,char *argv[]){
 	  Timeout = x;
       }
       break;
+    case 'V':
+      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      exit(EX_OK);
     default:
       fprintf(stderr,"Usage: %s [-l locale] [-t timeout] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
       exit(EX_USAGE);

@@ -15,6 +15,7 @@
 #include <locale.h>
 #include <signal.h>
 #include <getopt.h>
+#include <sysexits.h>
 
 #include "filter.h"
 #include "misc.h"
@@ -139,10 +140,11 @@ static struct option Options[] =
    {"pcm-in", required_argument, NULL, 'I'},
    {"ttl", required_argument, NULL, 'T'},
    {"verbose", no_argument, NULL, 'v'},
+   {"Version", no_argument, NULL, 'V'},
    {NULL, 0, NULL, 0},
 };
 
-static char Optstring[] = "A:I:T:v";
+static char Optstring[] = "A:I:T:vV";
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
@@ -167,6 +169,10 @@ int main(int argc,char * const argv[]){
     case 'v':
       Verbose++;
       break;
+    case 'V':
+      fprintf(stdout,"%s last modified %s\n",__FILE__,__TIMESTAMP__);
+      fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+      exit(EX_OK);
     default:
       break;
     }

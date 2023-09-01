@@ -4,7 +4,7 @@ CFLAGS=-g -DNDEBUG=1 -O3 -std=gnu11 -pthread -Wall -funsafe-math-optimizations `
 BINDIR=/usr/local/bin
 LIBDIR=/usr/local/share/ka9q-radio
 LD_FLAGS=-lpthread -lm
-EXECS=aprs aprsfeed cwd monitor opusd opussend packetd pcmrecord pcmsend pcmcat radiod control metadump pl show-pkt show-sig stereod rdsd tune wspr-decoded powers ft8-decoded wd-record pcmspawn
+EXECS=aprs aprsfeed cwd monitor opusd opussend packetd pcmrecord pcmsend pcmcat radiod control metadump pl show-pkt show-sig stereod rdsd tune wspr-decoded powers ft8-decoded wd-record pcmspawn setfilt
 AFILES=bandplan.txt help.txt monitor-help.txt id.txt modes.conf
 CONF_FILES=
 all: $(EXECS)
@@ -75,6 +75,9 @@ radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o mod
 
 rdsd: rdsd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread
+
+setfilt: setfilt.o libradio.a
+	$(CC) -g -o $@ $^ -lm -lpthread -lm
 
 show-pkt: show-pkt.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread -lm
