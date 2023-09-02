@@ -20,18 +20,11 @@
 #include "radio.h"
 #include "config.h"
 
-static const float power_smooth = 0.05;
+static const float power_smooth = 0.05; // Arbitrary exponential smoothing factor
 
-
-extern int Status_ttl;
 
 // Global variables set by config file options
-extern int Overlap;
-extern const char *App_path;
 extern int Verbose;
-static bool Software_agc = true; // default
-static float Low_threshold;
-static float High_threshold;
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
 struct sdrstate {
@@ -48,10 +41,13 @@ struct sdrstate {
   int offset; // 1/4 of sample rate in real mode; 0 in complex mode
 
   // AGC
+  bool software_agc;
   bool linearity; // Use linearity gain tables; default is sensitivity
   int gainstep; // Airspy gain table steps (0-21), higher numbers == higher gain
   float energy; // Integrated energy
   int energy_samples; // Samples represented in energy
+  float high_threshold;
+  float low_threshold;
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
@@ -194,40 +190,41 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 
   // Hardware device settings
   sdr->linearity = config_getboolean(Dictionary,section,"linearity",false);
+  sdr->software_agc = true; // On by default unless one of the hardware AGCs is turned on
   int const lna_agc = config_getboolean(Dictionary,section,"lna-agc",false); // default off
   airspy_set_lna_agc(sdr->device,lna_agc);
   if(lna_agc)
-    Software_agc = false;
+    sdr->software_agc = false;
 
   int const mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",false); // default off
   airspy_set_mixer_agc(sdr->device,mixer_agc);
   if(mixer_agc)
-    Software_agc = false;
+    sdr->software_agc = false;
   
   int const lna_gain = config_getint(Dictionary,section,"lna-gain",-1);
   if(lna_gain != -1){
     frontend->lna_gain = lna_gain;
     airspy_set_lna_gain(sdr->device,lna_gain);
-    Software_agc = false;
+    sdr->software_agc = false;
   }      
   int const mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
   if(mixer_gain != -1){
     frontend->mixer_gain = mixer_gain;
     airspy_set_mixer_gain(sdr->device,mixer_gain);
-    Software_agc = false;
+    sdr->software_agc = false;
   }
   int const vga_gain = config_getint(Dictionary,section,"vga-gain",-1);
   if(vga_gain != -1){
     frontend->if_gain = vga_gain;
     airspy_set_vga_gain(sdr->device,vga_gain);
-    Software_agc = false;
+    sdr->software_agc = false;
   }
   int gainstep = config_getint(Dictionary,section,"gainstep",-1);
   if(gainstep >= 0){
     if(gainstep > GAIN_COUNT-1)
       gainstep = GAIN_COUNT-1;
     set_gain(sdr,gainstep); // Start AGC with max gain step
-  } else if(Software_agc){
+  } else if(sdr->software_agc){
     gainstep = GAIN_COUNT-1;
     set_gain(sdr,gainstep); // Start AGC with max gain step
   }
@@ -246,13 +243,14 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     }
   }
   fprintf(stdout,"Software AGC %d; linearity %d, LNA AGC %d, Mix AGC %d, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %d\n",
-	  Software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,gainstep,sdr->antenna_bias);
+	  sdr->software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,gainstep,sdr->antenna_bias);
 
-  {
+  if(sdr->software_agc){
     float const dh = config_getdouble(Dictionary,section,"agc-high-threshold",-10.0);
-    High_threshold = dB2power(-fabs(dh));
+    sdr->high_threshold = dB2power(-fabs(dh));
     float const dl = config_getdouble(Dictionary,section,"agc-low-threshold",-40.0);
-    Low_threshold = dB2power(-fabs(dl));
+    sdr->low_threshold = dB2power(-fabs(dl));
+    fprintf(stdout,"AGC thresholds: high %.1f dBFS, low %.1lf dBFS\n",dh,dl);
   }
   double init_frequency = 0;
   {
@@ -342,20 +340,18 @@ static int rx_callback(airspy_transfer *transfer){
   frontend->samples += sampcount;
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->if_power = power_smooth * ((float)in_energy / sampcount - frontend->if_power);
-  frontend->samples += sampcount;
-  if(Software_agc){
+  if(sdr->software_agc){
     // Integrate A/D energy
-    in_energy /= (1 << (frontend->bitspersample-1));
-    in_energy /= (1 << (frontend->bitspersample-1));    
+    in_energy /= (1 << (2*(frontend->bitspersample-1))); // 2048^2 for 12 bits
     sdr->energy += in_energy;
     sdr->energy_samples += sampcount;
     if(sdr->energy_samples >= frontend->samprate/10){ // Time to re-evaluate after 100 ms
       sdr->energy /= sdr->energy_samples;
-      if(sdr->energy < Low_threshold){
+      if(sdr->energy < sdr->low_threshold){
 	if(Verbose)
 	  printf("Power %.1f dB\n",power2dB(sdr->energy));
 	set_gain(sdr,sdr->gainstep + 1);
-      } else if(sdr->energy > High_threshold){
+      } else if(sdr->energy > sdr->high_threshold){
 	if(Verbose)
 	  printf("Power %.1f dB\n",power2dB(sdr->energy));
 	set_gain(sdr,sdr->gainstep - 1);
@@ -464,9 +460,6 @@ static void set_gain(struct sdrstate * const sdr,int gainstep){
       frontend->lna_gain = airspy_sensitivity_lna_gains[tab];
     }
     frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
-#if 0
-    send_airspy_status(sdr,1);
-#endif
     if(Verbose)
       printf("New gainstep %d: LNA = %d, mixer = %d, vga = %d\n",gainstep,
 	     frontend->lna_gain,frontend->mixer_gain,frontend->if_gain);
