@@ -20,6 +20,9 @@
 #include "radio.h"
 #include "config.h"
 
+static const float power_smooth = 0.05;
+
+
 extern int Status_ttl;
 
 // Global variables set by config file options
@@ -338,8 +341,7 @@ static int rx_callback(airspy_transfer *transfer){
   }
   frontend->samples += sampcount;
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->if_power = (float)in_energy / sampcount;
-  frontend->if_energy += in_energy;
+  frontend->if_power = power_smooth * ((float)in_energy / sampcount - frontend->if_power);
   frontend->samples += sampcount;
   if(Software_agc){
     // Integrate A/D energy

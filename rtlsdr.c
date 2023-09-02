@@ -14,6 +14,9 @@
 #include "radio.h"
 #include "config.h"
 
+static float const power_smooth = 0.05; // arbitrary smoothing factor
+
+
 // Define USE_NEW_LIBRTLSDR to use my version of librtlsdr with rtlsdr_get_freq()
 // that corrects for synthesizer fractional-N residuals. If not defined, we do the correction
 // here assuming an R820 tuner (the most common)
@@ -245,8 +248,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
     wptr[i] = samp;
   }
   write_cfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->if_power = energy / sampcount;
-  frontend->if_energy += energy;
+  frontend->if_power += power_smooth * (energy / sampcount - frontend->if_power);
   frontend->samples += sampcount;
 }
 #if 0 // use this later

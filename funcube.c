@@ -17,6 +17,8 @@
 #include "config.h"
 #include "radio.h"
 
+static float const power_smooth = 0.05;
+
 struct sdrstate {
   struct frontend *frontend;
 
@@ -256,8 +258,7 @@ void *proc_funcube(void *arg){
     write_cfilter(frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
     frontend->samples += Blocksize;
     float const block_energy = i_energy + q_energy; // Normalize for complex pairs
-    frontend->if_power = block_energy/Blocksize; // Average A/D output power per channel  
-    frontend->if_energy += block_energy;
+    frontend->if_power += power_smooth * (block_energy/Blocksize - frontend->if_power); // Average A/D output power per channel  
 
 #if 1
     // Get status timestamp from UNIX TOD clock -- but this might skew because of inexact sample rate

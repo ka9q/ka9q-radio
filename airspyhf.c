@@ -20,6 +20,8 @@
 #include "radio.h"
 #include "config.h"
 
+static float const power_smooth = 0.05;
+
 // Global variables set by config file options
 extern int Verbose;
 extern int Overlap;
@@ -242,8 +244,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   }
   frontend->samples += sampcount;
   write_cfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->if_power = in_energy / sampcount;
-  frontend->if_energy += in_energy;
+  frontend->if_power += power_smooth * (in_energy / sampcount - frontend->if_power);
   return 0;
 }
 

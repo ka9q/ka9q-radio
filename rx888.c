@@ -23,6 +23,8 @@
 #include "rx888.h"
 #include "ezusb.h"
 
+static float const power_smooth = 0.05;
+
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
@@ -329,11 +331,12 @@ static void rx_callback(struct libusb_transfer * const transfer){
 
   write_rfilter(frontend->in,NULL,output_count); // Update write pointer, invoke FFT if block is complete
 
-  // Save raw, unnormalized signal power, apply corrections later
-  frontend->if_power = (float)in_energy / output_count;
-  // accumulate raw sample emergy since these upcalls are not synchronous with FFT blocks
-  // radio_status will normalize by samples per block
-  frontend->if_energy += (float)in_energy;
+  // temp fix for a previous bug: was resetting integrator each time it was read, so more than on reader
+  // would cause premature resets. Go back to a single exponential smoother
+  {
+    float energy = (float)in_energy / output_count;
+    frontend->if_power += power_smooth * (energy - frontend->if_power);
+  }
   frontend->samples += sampcount; // Count original samples
   if(!Stop_transfers) {
     if(libusb_submit_transfer(transfer) == 0)

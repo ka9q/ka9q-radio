@@ -106,7 +106,6 @@ static int send_radio_status(struct frontend *frontend,struct demod *demod,int f
   demod->sig.bb_energy = 0;
   demod->output.energy = 0;
   demod->output.sum_gain_sq = 0;
-  frontend->if_energy = 0;
   demod->blocks_since_poll = 0;
   return 0;
 }
@@ -435,8 +434,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   // Adjust for A/D width
   // Level is absolute relative to A/D saturation, so +3dB for real vs complex
   if(demod->blocks_since_poll > 0){
-    float level;
-    level = frontend->if_energy / (frontend->L * demod->blocks_since_poll); // Average per sample since last poll
+    float level = frontend->if_power;
     level /= (1 << (frontend->bitspersample-1)) * (1 << (frontend->bitspersample-1));
     // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
     // Complex signals carry twice as much power, divided between I and Q

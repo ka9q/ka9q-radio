@@ -83,7 +83,6 @@ struct frontend {
   */
   float reference;  // Reference amplitude (== 0 dB)
   float if_power;
-  float if_energy; // if_power accumulated until reset by a poll
   
   // This structure is updated asynchronously by the front end thread, so it's protected
   pthread_mutex_t status_mutex;
