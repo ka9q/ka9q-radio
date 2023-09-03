@@ -44,7 +44,6 @@ struct frontend {
 
   int M;            // Impulse length of input filter
   int L;            // Block length of input filter
-  float n0;         // Noise spectral density esimate (experimemtal), power/Hz ratio
 
   // Stuff maintained by our upstream source and filled in by the status daemon
   char description[256]; // Free-form text
