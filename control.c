@@ -1003,7 +1003,7 @@ static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int len
       demod->sig.bb_power = dB2power(decode_float(cp,optlen)); // dB -> power
       break;
     case NOISE_DENSITY:
-      Frontend.n0 = dB2power(decode_float(cp,optlen));
+      demod->sig.n0 = dB2power(decode_float(cp,optlen));
       break;
     case DEMOD_SNR:
       demod->sig.snr = dB2power(decode_float(cp,optlen));
@@ -1284,7 +1284,7 @@ static void display_sig(WINDOW *w,struct demod const *demod){
     return;
 
   float const noise_bandwidth = fabsf(demod->filter.max_IF - demod->filter.min_IF);
-  float sig_power = demod->sig.bb_power - noise_bandwidth * Frontend.n0;
+  float sig_power = demod->sig.bb_power - noise_bandwidth * demod->sig.n0;
   if(sig_power < 0)
     sig_power = 0; // can happen due to smoothing
 
@@ -1300,10 +1300,10 @@ static void display_sig(WINDOW *w,struct demod const *demod){
   pprintw(w,row++,col,"Input","%.1f dBFS ",power2dB(Frontend.if_power));
   pprintw(w,row++,col,"FE Gain","%.1f dB   ",Frontend.rf_atten + Frontend.rf_gain);
   pprintw(w,row++,col,"Baseband","%.1f dB   ",power2dB(demod->sig.bb_power));
-  pprintw(w,row++,col,"N0","%.1f dB/Hz",power2dB(Frontend.n0));
+  pprintw(w,row++,col,"N0","%.1f dB/Hz",power2dB(demod->sig.n0));
   
   // Derived numbers
-  float sn0 = sig_power/Frontend.n0;
+  float sn0 = sig_power/demod->sig.n0;
   pprintw(w,row++,col,"S/N0","%.1f dBHz ",power2dB(sn0));
   pprintw(w,row++,col,"NBW","%.1f dBHz ",power2dB(noise_bandwidth));
   pprintw(w,row++,col,"SNR","%.1f dB   ",power2dB(sn0/noise_bandwidth));
