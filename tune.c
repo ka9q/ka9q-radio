@@ -42,7 +42,7 @@ struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "fg:hi:vl:r:s:V";
+char Optstring[] = "f:g:hi:vl:r:s:V";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"frequency", required_argument, NULL, 'f'},
@@ -161,6 +161,10 @@ int main(int argc,char *argv[]){
   int received_agc_enable = -1;
   float received_gain = INFINITY;
   char preset[256];
+  float noise_density = INFINITY;
+  float baseband_level = INFINITY;
+  float low_edge = INFINITY;
+  float high_edge = INFINITY;
   memset(preset,0,sizeof(preset));
 
 
@@ -251,6 +255,18 @@ int main(int argc,char *argv[]){
       case PRESET:
 	decode_string(cp,optlen,preset,sizeof(preset));
 	break;
+      case LOW_EDGE:
+	low_edge = decode_float(cp,optlen);
+	break;
+      case HIGH_EDGE:
+	high_edge = decode_float(cp,optlen);
+	break;
+      case NOISE_DENSITY:
+	noise_density = decode_float(cp,optlen);
+	break;
+      case BASEBAND_POWER:
+	baseband_level = decode_float(cp,optlen);
+	break;
       }
       cp += optlen;
     }
@@ -268,9 +284,29 @@ int main(int argc,char *argv[]){
     printf("Frequency %'.3lf Hz\n",received_freq);
   if(received_agc_enable != -1)
     printf("AGC %s\n",received_agc_enable ? "on" : "off");
+
   if(received_gain != INFINITY)
-    printf("Gain %.3f dB\n",received_gain);
+    printf("Gain %.1f dB\n",received_gain);
+
+  if(baseband_level != INFINITY)
+    printf("Baseband power %.1f dB\n",baseband_level);
+
+  if(low_edge != INFINITY && high_edge != INFINITY)
+    printf("Passband %.1f Hz to %.1f Hz (%.1f dB-Hz)\n",low_edge,high_edge,10*log10(fabsf(high_edge - low_edge)));
+
+  if(noise_density != INFINITY)
+    printf("N0 %.1f dB/Hz\n",noise_density);
   
+  if(baseband_level != INFINITY && 
+     low_edge != INFINITY &&
+     high_edge != INFINITY &&
+     noise_density != INFINITY){
+
+    float noise_power = dB2power(noise_density) * fabsf(high_edge - low_edge);
+    float signal_plus_noise_power = dB2power(baseband_level);
+
+    printf("SNR %.1f dB\n",power2dB(signal_plus_noise_power / noise_power - 1));
+  }
   exit(EX_OK); // We're done
 }
 
