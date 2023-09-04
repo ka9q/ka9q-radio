@@ -101,9 +101,9 @@ int main(int argc,char *argv[]){
       case 'V':
 	VERSION();
 	exit(EX_OK);
-      case 'h':
       default:
 	fprintf(stdout,"Invalid command line option -%c\n",c);
+      case 'h':
 	usage();
 	exit(EX_USAGE);
       }
