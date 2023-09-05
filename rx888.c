@@ -274,26 +274,42 @@ static void rx_callback(struct libusb_transfer * const transfer){
   sdr->success_count++;
 
   // Feed directly into FFT input buffer, accumulate energy
-  uint64_t in_energy = 0; // A/D energy accumulator for integer formats only	
+  float in_energy = 0; // A/D energy accumulator
   int16_t const * const samples = (int16_t *)transfer->buffer;
   float * const wptr = frontend->in->input_write_pointer.r;
   int const sampcount = size / sizeof(int16_t);
-
   int output_count = 0;
   if(frontend->calibrate == 0){
     if(sdr->randomizer){
       for(int i=0; i < sampcount; i++){
 	int32_t s = samples[i];
 	s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
-	in_energy += s * s;
 	wptr[i] = s;
+	in_energy += wptr[i] * wptr[i];
       }
     } else {
+#if 1
       for(int i=0; i < sampcount; i++){
-	int s = samples[i];
-	wptr[i] = s;
-	in_energy += s * s;
+	wptr[i] = samples[i];
+	in_energy += wptr[i] * wptr[i];
       }
+#else
+      // Apparently no faster, at least on i7
+      typedef float v8sf __attribute__ ((vector_size (32)));
+      typedef short v8si __attribute__ ((vector_size (16)));
+
+      v8si *in = (v8si *)samples;
+      v8sf *out = (v8sf *)wptr; // 8 32-bit floats
+
+      v8sf prod = {0,0,0,0,0,0,0,0};
+      int cnt = sampcount / 8;
+      for(int i=0; i < cnt; i++){
+	out[i] = __builtin_convertvector(in[i],v8sf);
+	prod += out[i] * out[i];
+      }
+      for(int i = 0; i < 8; i++)
+	in_energy += prod[i];
+#endif
     }
     output_count = sampcount;
   } else {
@@ -307,9 +323,8 @@ static void rx_callback(struct libusb_transfer * const transfer){
       if(sdr->randomizer)
 	s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
 
-      in_energy += s * s;
       float const f = s;
-
+      in_energy += f * f;
       if(sdr->sample_phase < 1.0){
 	// Usual case
 	assert(sdr->sample_phase >= 0 && sdr->sample_phase < 1);
