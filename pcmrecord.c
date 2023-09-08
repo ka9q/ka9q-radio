@@ -74,14 +74,16 @@ struct session {
   void *iobuffer;              // Big buffer to reduce write rate
   int64_t last_active;
 
-  int SubstantialFile;        // At least one substantial segment has been seen
-  int64_t CurrentSegmentSamples; // total samples in this segment without skips in timestamp
-  int64_t SamplesWritten;
-  int64_t TotalFileSamples;
+  bool substantial_file;        // At least one substantial segment has been seen
+  int64_t current_segment_samples; // total samples in this segment without skips in timestamp
+  int64_t samples_written;
+  int64_t total_file_samples;
+  int64_t samples_remaining;     // Samples remaining before file is closed
 };
 
 
 float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
+float FileLengthLimit = 0; // Length of file in seconds; 0 = unlimited
 
 const char *App_path;
 int Verbose;
@@ -95,10 +97,11 @@ int Input_fd;
 struct session *Sessions;
 int64_t Timeout = 20; // 20 seconds max idle time before file close
 
-void closedown(int a);
-void input_loop(void);
-void cleanup(void);
-struct session *create_session(struct rtp_header const *, struct sockaddr const *sender);
+static void closedown(int a);
+static void input_loop(void);
+static void cleanup(void);
+static struct session *create_session(struct rtp_header const *, struct sockaddr const *sender);
+static int close_file(struct session **spp);
 
 
 int main(int argc,char *argv[]){
@@ -109,7 +112,7 @@ int main(int argc,char *argv[]){
 
   // Defaults
   int c;
-  while((c = getopt(argc,argv,"d:l:vt:m:sV")) != EOF){
+  while((c = getopt(argc,argv,"d:l:vt:m:sVL:")) != EOF){
     switch(c){
     case 's':
       Subdirs = 1;
@@ -133,6 +136,9 @@ int main(int argc,char *argv[]){
 	if(ptr != optarg)
 	  Timeout = x;
       }
+      break;
+    case 'L':
+      FileLengthLimit = strtof(optarg,NULL);
       break;
     case 'V':
       VERSION();
@@ -181,7 +187,7 @@ int main(int argc,char *argv[]){
   exit(EX_OK);
 }
 
-void closedown(int a){
+static void closedown(int a){
   if(Verbose)
     fprintf(stderr,"iqrecord: caught signal %d: %s\n",a,strsignal(a));
 
@@ -189,7 +195,7 @@ void closedown(int a){
 }
 
 // Read from RTP network socket, assemble blocks of samples
-void input_loop(){
+static void input_loop(){
 
   struct sockaddr sender;
   while(1){
@@ -263,13 +269,13 @@ void input_loop(){
       if(offset){
 	fseeko(sp->fp,offset * sizeof(*samples) * sp->channels,SEEK_CUR); // offset is in bytes
 	if(offset > 0)
-	  sp->CurrentSegmentSamples = 0;
+	  sp->current_segment_samples = 0;
       }
-      sp->TotalFileSamples += samp_count + offset;
-      sp->CurrentSegmentSamples += samp_count;
-      sp->SamplesWritten += samp_count;
-      if(sp->CurrentSegmentSamples >= SubstantialFileTime * sp->samprate)
-	sp->SubstantialFile = 1;
+      sp->total_file_samples += samp_count + offset;
+      sp->current_segment_samples += samp_count;
+      sp->samples_written += samp_count;
+      if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
+	sp->substantial_file = true;
 
       // Flip endianness from big-endian on network to little endian wanted by .wav
       // byteswap.h is linux-specific; need to find a portable way to get the machine instructions
@@ -278,6 +284,11 @@ void input_loop(){
 	wbuffer[n] = bswap_16((uint16_t)samples[n]);
       fwrite(wbuffer,sizeof(*wbuffer),samp_count,sp->fp);
       sp->last_active = gps_time_ns();
+
+      if(sp->samples_remaining > 0 && (sp->samples_remaining -= samp_count) <= 0){
+	cleanup(); // Close all files
+	exit(EX_OK);
+      }
     } // end of packet processing
 
     // Walk through list, close idle sessions
@@ -285,62 +296,26 @@ void input_loop(){
     // Could be in a separate thread, but that creates synchronization issues
     struct session *next;
     for(struct session *sp = Sessions;sp != NULL; sp = next){
-      next = sp->next;
+      next = sp->next; // save in case sp is closed
       int64_t idle = current_time - sp->last_active;
       if(idle > Timeout * BILLION){
+	close_file(&sp); // sp will be NULL
 	// Close idle session
-	if(!sp->SubstantialFile){
-	  unlink(sp->filename);
-	  if(Verbose)
-	    printf("deleting %s %'.1f/%'.1f sec\n",sp->filename,
-		   (float)sp->SamplesWritten / sp->samprate,
-		   (float)sp->TotalFileSamples / sp->samprate);
-	} else
-	  if(Verbose)
-	    printf("closing %s %'.1f/%'.1f sec\n",sp->filename,
-		   (float)sp->SamplesWritten / sp->samprate,
-		   (float)sp->TotalFileSamples / sp->samprate);
-	
-	if(sp->SubstantialFile){ // Don't bother for non-substantial files
-	  // Get final file size, write .wav header with sizes
-	  fflush(sp->fp);
-	  struct stat statbuf;
-	  fstat(fileno(sp->fp),&statbuf);
-	  sp->header.ChunkSize = statbuf.st_size - 8;
-	  sp->header.Subchunk2Size = statbuf.st_size - sizeof(sp->header);
-	  rewind(sp->fp);
-	  fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
-	  fflush(sp->fp);
-	}
-	fclose(sp->fp);
-	sp->fp = NULL;
-	FREE(sp->iobuffer);
-	if(sp->prev)
-	  sp->prev->next = sp->next;
-	else
-	  Sessions = sp->next;
-	if(sp->next)
-	  sp->next->prev = sp->prev;
-	FREE(sp);
       }
     }
   }
 }
  
-void cleanup(void){
+static void cleanup(void){
   while(Sessions){
     // Flush and close each write stream
     // Be anal-retentive about freeing and clearing stuff even though we're about to exit
     struct session *next_s = Sessions->next;
-    fflush(Sessions->fp);
-    fclose(Sessions->fp);
-    Sessions->fp = NULL;
-    FREE(Sessions->iobuffer);
-    FREE(Sessions);
+    close_file(&Sessions); // Sessions will be NULL
     Sessions = next_s;
   }
 }
-struct session *create_session(struct rtp_header const *rtp,struct sockaddr const *sender){
+static struct session *create_session(struct rtp_header const *rtp,struct sockaddr const *sender){
 
   struct session *sp = calloc(1,sizeof(*sp));
   if(sp == NULL)
@@ -352,6 +327,7 @@ struct session *create_session(struct rtp_header const *rtp,struct sockaddr cons
   
   sp->channels = channels_from_pt(sp->type);
   sp->samprate = samprate_from_pt(sp->type);
+  sp->samples_remaining = sp->samprate * FileLengthLimit; // If file is being limited in length
   
   // Create file
   // Should we append to existing files instead? If we try this, watch out for timestamp wraparound
@@ -449,4 +425,47 @@ struct session *create_session(struct rtp_header const *rtp,struct sockaddr cons
   
   attrprintf(fd,"unixstarttime","%ld.%09ld",(long)now.tv_sec,(long)now.tv_nsec);
   return sp;
+}
+
+// Close a session, update .wav header, remove from session table
+// If the file is not "substantial", just delete it
+static int close_file(struct session **spp){
+  struct session *sp = *spp;
+
+  if(sp->substantial_file){ // Don't bother for non-substantial files
+    if(Verbose)
+      printf("closing %s %'.1f/%'.1f sec\n",sp->filename,
+	     (float)sp->samples_written / sp->samprate,
+	     (float)sp->total_file_samples / sp->samprate);
+
+    // Get final file size, write .wav header with sizes
+    fflush(sp->fp);
+    struct stat statbuf;
+    if(fstat(fileno(sp->fp),&statbuf) != 0){
+      printf("fstat(%d) [%s] failed! %s\n",fileno(sp->fp),sp->filename,strerror(errno));
+      abort();
+    }
+    sp->header.ChunkSize = statbuf.st_size - 8;
+    sp->header.Subchunk2Size = statbuf.st_size - sizeof(sp->header);
+    rewind(sp->fp);
+    fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
+    fflush(sp->fp);
+  } else {
+    unlink(sp->filename);
+    if(Verbose)
+      printf("deleting %s %'.1f/%'.1f sec\n",sp->filename,
+	     (float)sp->samples_written / sp->samprate,
+	     (float)sp->total_file_samples / sp->samprate);
+  }
+  fclose(sp->fp);
+  sp->fp = NULL;
+  FREE(sp->iobuffer);
+  if(sp->prev)
+    sp->prev->next = sp->next;
+  else
+    Sessions = sp->next;
+  if(sp->next)
+    sp->next->prev = sp->prev;
+  FREE(*spp);
+  return 0;
 }
