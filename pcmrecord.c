@@ -16,7 +16,7 @@
 #include <fcntl.h>
 #include <locale.h>
 #include <sys/stat.h>
-#include <signal.h>
+#include <poll.h>
 #include <sysexits.h>
 
 #include "misc.h"
@@ -58,7 +58,7 @@ struct wav {
 struct session {
   struct session *prev;
   struct session *next;
-  struct sockaddr sender;   // Sender's IP address and source port
+  struct sockaddr sender;      // Sender's IP address and source port
 
   char filename[PATH_MAX];
   struct wav header;
@@ -72,30 +72,29 @@ struct session {
 
   FILE *fp;                    // File being recorded
   void *iobuffer;              // Big buffer to reduce write rate
-  int64_t last_active;
+  int64_t last_active;         // gps time of last activity
 
-  bool substantial_file;        // At least one substantial segment has been seen
+  bool substantial_file;       // At least one substantial segment has been seen
   int64_t current_segment_samples; // total samples in this segment without skips in timestamp
   int64_t samples_written;
   int64_t total_file_samples;
-  int64_t samples_remaining;     // Samples remaining before file is closed
+  int64_t samples_remaining;   // Samples remaining before file is closed; 0 means indefinite
 };
 
 
-float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
-float FileLengthLimit = 0; // Length of file in seconds; 0 = unlimited
+static float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
+static float FileLengthLimit = 0; // Length of file in seconds; 0 = unlimited
 
 const char *App_path;
 int Verbose;
-char PCM_mcast_address_text[256];
-char const *Recordings = ".";
-int Subdirs; // Place recordings in subdirectories by SSID
+static char PCM_mcast_address_text[256];
+static char const *Recordings = ".";
+static int Subdirs; // Place recordings in subdirectories by SSID
 
 
-struct sockaddr Input_mcast_sockaddr;
-int Input_fd;
-struct session *Sessions;
-int64_t Timeout = 20; // 20 seconds max idle time before file close
+static int Input_fd;
+static struct session *Sessions;
+static int64_t Timeout = 20; // 20 seconds max idle time before file close
 
 static void closedown(int a);
 static void input_loop(void);
@@ -144,7 +143,7 @@ int main(int argc,char *argv[]){
       VERSION();
       exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-l locale] [-t timeout] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-l locale] [-L maxtime] [-t timeout] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
       exit(EX_USAGE);
       break;
     }
@@ -191,6 +190,7 @@ static void closedown(int a){
   if(Verbose)
     fprintf(stderr,"iqrecord: caught signal %d: %s\n",a,strsignal(a));
 
+  cleanup();
   exit(EX_SOFTWARE);  // Will call cleanup()
 }
 
@@ -202,21 +202,20 @@ static void input_loop(){
     int64_t current_time = gps_time_ns();
 
     // Receive data
-    fd_set fdset;
-    FD_ZERO(&fdset);
-    FD_SET(Input_fd,&fdset);
-    struct timespec const polltime = {1, 0}; // force return after 1 second max
-    int n = pselect(Input_fd + 1,&fdset,NULL,NULL,&polltime,NULL);
+    struct pollfd pfd[1];
+    pfd[0].fd = Input_fd;
+    pfd[0].events = POLLIN;
+    pfd[0].revents = 0;
+    int const n = poll(pfd,sizeof(pfd)/sizeof(pfd[0]),1000); // Wait 1 sec max so we can scan active session list
     if(n < 0)
       break; // error of some kind
-    if(FD_ISSET(Input_fd,&fdset)){
+    if(pfd[0].revents & (POLLIN|POLLPRI)){
       uint8_t buffer[MAXPKT];
       socklen_t socksize = sizeof(sender);
       int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&sender,&socksize);
       if(size <= 0){    // ??
 	perror("recvfrom");
-	usleep(50000);
-	continue;
+	break; // Some sort of error, quit
       }
       if(size < RTP_MIN_SIZE)
 	continue; // Too small for RTP, ignore
@@ -232,7 +231,7 @@ static void input_loop(){
       if(size <= 0)
 	continue; // Bogus RTP header
       
-      int16_t *samples = (int16_t *)dp;
+      int16_t const * const samples = (int16_t *)dp;
       size -= (dp - buffer);
       
       struct session *sp;
@@ -258,15 +257,15 @@ static void input_loop(){
 
       // A "sample" is a single audio sample, usually 16 bits.
       // A "frame" is the same as a sample for mono. It's two audio samples for stereo
-      int samp_count = size / sizeof(*samples); // number of individual audio samples (not frames)
-      int frame_count = samp_count / sp->channels; // 1 every sample period (e.g., 4 for stereo 16-bit)
-      off_t offset = rtp_process(&sp->rtp_state,&rtp,frame_count); // rtp timestamps refer to frames
+      int const samp_count = size / sizeof(*samples); // number of individual audio samples (not frames)
+      int const frame_count = samp_count / sp->channels; // 1 every sample period (e.g., 4 for stereo 16-bit)
+      off_t const offset = rtp_process(&sp->rtp_state,&rtp,frame_count); // rtp timestamps refer to frames
       
       // The seek offset relative to the current position in the file is the signed (modular) difference between
       // the actual and expected RTP timestamps. This should automatically handle
       // 32-bit RTP timestamp wraps, which occur every ~1 days at 48 kHz and only 6 hr @ 192 kHz
       // Should I limit the range on this?
-      if(offset){
+      if(offset != 0){
 	fseeko(sp->fp,offset * sizeof(*samples) * sp->channels,SEEK_CUR); // offset is in bytes
 	if(offset > 0)
 	  sp->current_segment_samples = 0;
