@@ -1,5 +1,5 @@
 Installing ka9q-radio  
-Aug 2023, KA9Q
+September 7, 2023, KA9Q
 =====================
 This package is designed for Debian Linux, including the Raspberry Pi
 OS. Since I use a Macbook Pro as my desktop, some of it (e.g., the
@@ -10,41 +10,21 @@ any unnecessary non-portabilities.
 Prerequisites
 -------------
 
-Building and installing this package on Debian requires the following packages be installed with 'apt install':
+To build and install this package on Debian, install the prerequisite packages:
 
-build-essential  
-make  
-gcc  
-libairspy-dev  
-libairspyhf-dev  
-libavahi-client-dev  
-libbsd-dev  
-libfftw3-dev  
-libhackrf-dev  
-libiniparser-dev  
-libncurses5-dev  
-libopus-dev  
-libpigpio-dev (Raspberry Pi only)  
-librtlsdr-dev  
-libusb-1.0-0-dev  
-libusb-dev  
-portaudio19-dev  
-libasound2-dev  
-uuid-dev  
-rsync
+sudo apt install build-essential make gcc libairspy-dev libairspyhf-dev libavahi-client-dev libbsd-dev libfftw3-dev libhackrf-dev libiniparser-dev libncurses5-dev libopus-dev librtlsdr-dev libusb-1.0-0-dev libusb-dev portaudio19-dev libasound2-dev uuid-dev rsync
 
-Although not needed to build ka9q-radio, I find these additional
-packages useful for working with multicast audio:
+And on the Raspberry Pi:
 
-sox  
-libsox-fmt-all  
-opus-tools  
-flac  
-avahi-utils  
-avahi-browse  
-molly-guard (if you run your system remotely)  
-tcpdump  
-wireshark__
+sudo apt install libpigpio-dev
+
+Although not needed to build ka9q-radio, I find it useful to install the following:
+
+sudo apt install sox libsox-fmt-all opus-tools flac avahi-utils avahi-utils tcpdump wireshark
+
+And if your system is in a remote location, I strongly recommend this one:
+
+sudo apt install molly-guard
 
 
 Compiling and Installing
