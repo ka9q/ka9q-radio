@@ -332,7 +332,7 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
   // Should we append to existing files instead? If we try this, watch out for timestamp wraparound
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
-  struct tm *tm = gmtime(&now.tv_sec);
+  struct tm const * const tm = gmtime(&now.tv_sec);
   // yyyy-mm-dd-hh:mm:ss so it will sort properly
   
   sp->fp = NULL;
@@ -351,7 +351,7 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
 	     tm->tm_hour,
 	     tm->tm_min,
 	     tm->tm_sec,
-	     (int)(now.tv_nsec / 100000000));
+	     (int)(now.tv_nsec / 100000000)); // 100 million, i.e., convert to tenths of a sec
     sp->fp = fopen(sp->filename,"w+");
     if(sp->fp == NULL)
       fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
