@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <poll.h>
 #include <sysexits.h>
+#include <signal.h>
 
 #include "misc.h"
 #include "attr.h"
