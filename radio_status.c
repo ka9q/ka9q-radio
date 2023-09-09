@@ -31,14 +31,12 @@
 int Status_fd;  // File descriptor for receiver status
 int Ctl_fd;     // File descriptor for receiving user commands
 
-extern struct demod const *Dynamic_demod;
-extern dictionary const *Modetable;
 
+extern dictionary const *Modetable;
 
 static int send_radio_status(struct frontend *frontend,struct demod *demod,int full);
 static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int length);
 static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,uint8_t *packet, int len);
-
   
 // Radio status reception and transmission thread
 void *radio_status(void *arg){
@@ -58,39 +56,24 @@ void *radio_status(void *arg){
     uint32_t ssrc = get_ssrc(buffer+1,length-1);
     if(ssrc != 0){
       // find specific demod instance
-      struct demod *demod = NULL;
-      pthread_mutex_lock(&Demod_list_mutex);
-      for(int i=0; i < Demod_list_length; i++){
-	if(Demod_list[i].inuse && Demod_list[i].output.rtp.ssrc == ssrc){
-	  demod = &Demod_list[i];
-	  break;
+      struct demod *demod = lookup_demod(ssrc);
+      if(demod == NULL){
+	if((demod = setup_demod(ssrc)) == NULL){ // possible race here?
+	  // Creation failed, e.g., no output stream
+	  fprintf(stdout,"Dynamic create of ssrc %u failed\n",ssrc);
+	  continue;    // Should this be fatal?
+	} else {
+	  start_demod(demod);
+	  if(Verbose)
+	    fprintf(stdout,"dynamically started ssrc %u\n",ssrc);
 	}
       }
-      pthread_mutex_unlock(&Demod_list_mutex);
-      if(demod == NULL && Dynamic_demod != NULL){
-	// SSRC specified but not found; create dynamically
-	demod = alloc_demod();
-	memcpy(demod,Dynamic_demod,sizeof(*demod));
-	// clear dynamically created objects
-	demod->demod_thread = (pthread_t)0;
-	demod->filter.out = NULL;
-	demod->filter.energies = NULL;
-	demod->tune.freq = 0;
-	demod->lifetime = 20;
-	demod->output.rtp.ssrc = ssrc;
-
-	set_freq(demod,demod->tune.freq);
-	start_demod(demod);
-	if(Verbose)
-	  fprintf(stdout,"dynamically started ssrc %u\n",ssrc);
-      }
-      if(demod != NULL){
-	if(demod->lifetime != 0)
-	  demod->lifetime = 20; // Restart 20 second self-destruct timer
-	demod->commands++;
-	decode_radio_commands(demod,buffer+1,length-1);
-	send_radio_status(&Frontend,demod,1); // Send status in response
-      }
+      // demod now != NULL
+      if(demod->lifetime != 0)
+	demod->lifetime = 20; // Restart 20 second self-destruct timer
+      demod->commands++;
+      decode_radio_commands(demod,buffer+1,length-1);
+      send_radio_status(&Frontend,demod,1); // Send status in response
     }
   }
   return NULL;
@@ -119,6 +102,7 @@ static int send_radio_status(struct frontend *frontend,struct demod *demod,int f
 static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int length){
   bool restart_needed = false;
   bool new_filter_needed = false;
+  uint32_t const ssrc = demod->output.rtp.ssrc;
   
   uint8_t const *cp = buffer;
   while(cp - buffer < length){
@@ -164,6 +148,9 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
 	  if(f != demod->tune.freq && demod->demod_type == SPECT_DEMOD)
 	    restart_needed = true; // Easier than trying to handle it inline
 	  
+	  if(Verbose > 1)
+	    fprintf(stdout,"set ssrc %u freq = %.3lf\n",ssrc,f);
+
 	  set_freq(demod,f);
 	}
       }
@@ -227,7 +214,9 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
       break;
     case PRESET:
       {
-	decode_string(cp,optlen,demod->preset,sizeof(demod->preset));
+	char *p = decode_string(cp,optlen);
+	strlcpy(demod->preset,p,sizeof(demod->preset));
+	FREE(p); // decode_string now allocs memory
 	{
 	  enum demod_type const old_type = demod->demod_type;
 	  int const old_samprate = demod->output.samprate;
@@ -236,7 +225,13 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
 	  float const old_kaiser = demod->filter.kaiser_beta;
 	  float const old_shift = demod->tune.shift;
 
-	  loadmode(demod,Modetable,demod->preset,1);
+	  if(Verbose > 1)
+	    fprintf(stdout,"command loadmode(ssrc=%u) mode=%s\n",ssrc,demod->preset);
+	  if(loadmode(demod,Modetable,demod->preset) != 0){
+	    if(Verbose)
+	      fprintf(stdout,"commanded loadmode(ssrc=%u) mode=%sfailed!\n",ssrc,demod->preset);
+	    break;
+	  }
 	  if(old_shift != demod->tune.shift)
 	    set_freq(demod,demod->tune.freq + demod->tune.shift - old_shift);
 	  if(demod->filter.min_IF != old_low || demod->filter.max_IF != old_high || demod->filter.kaiser_beta != old_kaiser)
@@ -364,6 +359,8 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
   }
  done:;
   if(restart_needed){
+    if(Verbose > 1)
+      fprintf(stdout,"terminating demod thread for ssrc %u\n",ssrc);
     // Stop demod
     demod->terminate = true;
     pthread_join(demod->demod_thread,NULL);
@@ -373,15 +370,21 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
   if(new_filter_needed){
     // Set up new filter with demod possibly stopped
     if(demod->filter.out){
+      if(Verbose > 1)
+	fprintf(stdout,"new filer for demod %u: IF=[%.0f,%.0f], samprate %d, kaiser beta %.1f\n",
+		ssrc, demod->filter.min_IF, demod->filter.max_IF,
+		demod->output.samprate, demod->filter.kaiser_beta);
       // start_demod already sets up a new filter
       set_filter(demod->filter.out,demod->filter.min_IF/demod->output.samprate,
 		 demod->filter.max_IF/demod->output.samprate,
 		 demod->filter.kaiser_beta);
     }
   }    
-  if(restart_needed)
+  if(restart_needed){
+    if(Verbose > 1)
+      fprintf(stdout,"starting demod type %d for ssrc %u\n",demod->demod_type,ssrc);
     start_demod(demod);
-
+  }
   return 0;
 }
   

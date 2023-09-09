@@ -38,6 +38,7 @@
 #include "config.h"
 
 // Configuration constants & defaults
+static char const DEFAULT_MODE[] = "am";
 static int const DEFAULT_FFT_THREADS = 2;
 static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
 static int const DEFAULT_MCAST_TTL = 0; // Don't blast LANs with cheap Wifi!
@@ -46,12 +47,16 @@ static int const DEFAULT_OVERLAP = 5;
 
 char const *Iface;
 char const *Data;
+char const *Mode = DEFAULT_MODE;
 int IP_tos = DEFAULT_IP_TOS;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
 float Blocktime = DEFAULT_BLOCKTIME;
 int Overlap = DEFAULT_OVERLAP;
 int RTCP_enable = false;
 int SAP_enable = false;
+struct sockaddr_storage Data_dest_address;
+int Data_fd;
+struct demod *Template;
 
 char const *Name;
 extern int Nthreads; // owned by filter.c
@@ -62,19 +67,16 @@ char const *Modefile = "modes.conf";
 const char *App_path;
 int Verbose;
 static char const *Locale = "en_US.UTF-8";
-dictionary *Configtable; // Configtable file descriptor for iniparser
-dictionary *Modetable;
+dictionary *Configtable; // Configtable file descriptor for iniparser for main radiod config file
+dictionary *Modetable;   // Table of modes, usually in /usr/local/share/ka9q-radio/modes.conf
 volatile bool Stop_transfers = false; // Request to stop data transfers; how should this get set?
-
-struct demod *Dynamic_demod; // Prototype for dynamically created demods
-
 
 static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 pthread_t Status_thread;
 pthread_t Demod_reaper_thread;
 struct sockaddr_storage Metadata_source_address;   // Source of SDR metadata
 struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
-char Metadata_dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
+char const *Metadata_dest_string; // DNS name of default multicast group for ostatus/commands
 uint64_t Metadata_packets;
 
 static void closedown(int);
@@ -198,6 +200,10 @@ int main(int argc,char *argv[]){
   }
   fprintf(stdout,"Loading config file %s...\n",configfile);
   int const n = loadconfig(argv[optind]);
+  if(n < 0){
+    fprintf(stdout,"Can't load config file %s\n",argv[optind]);
+    exit(EX_NOINPUT);
+  }
   fprintf(stdout,"%d total demodulators started\n",n);
 
   while(1)
@@ -206,16 +212,15 @@ int main(int argc,char *argv[]){
   exit(EX_OK); // Can't happen
 }
 
+// Load the radiod config file, e.g., /etc/radio/radiod@rx888-ka9q-hf.conf
 static int loadconfig(char const * const file){
   if(file == NULL || strlen(file) == 0)
     return -1;
 
-
   Configtable = iniparser_load(file);
-  if(Configtable == NULL){
-    fprintf(stdout,"Can't load config file %s\n",file);
-    exit(EX_NOINPUT);
-  }
+  if(Configtable == NULL)
+    return -1;
+
   // Process [global] section applying to all demodulator blocks
   char const * const global = "global";
   Verbose = config_getint(Configtable,global,"verbose",Verbose);
@@ -228,30 +233,44 @@ static int loadconfig(char const * const file){
       Default_mcast_iface = Iface;    
     }
   }
-  // Override compiled-in defaults
+  // Overrides in [global] of compiled-in defaults 
   Data = config_getstring(Configtable,global,"data",NULL);
   IP_tos = config_getint(Configtable,global,"tos",IP_tos);
   Mcast_ttl = config_getint(Configtable,global,"ttl",Mcast_ttl);
+  if(Data != NULL){
+    // Set up default output stream file descriptor and socket
+    // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
+    {
+      int slen = sizeof(Data_dest_address);
+      avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data,ElfHashString(Data),NULL,&Data_dest_address,&slen);
+    }
+    Data_fd = connect_mcast(&Data_dest_address,Iface,Mcast_ttl,IP_tos);
+    if(Data_fd < 0){
+      fprintf(stdout,"connect_mcast(%s = %s) failed: %s\n",
+	      Data,formatsock(&Data_dest_address),strerror(errno));
+      exit(EX_NOHOST); // let systemd restart us, or have the user remove data =
+    }
+  }
   Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",Blocktime));
   Overlap = abs(config_getint(Configtable,global,"overlap",Overlap));
   Nthreads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFT_THREADS); // variable owned by filter.c
   RTCP_enable = config_getboolean(Configtable,global,"rtcp",RTCP_enable);
   SAP_enable = config_getboolean(Configtable,global,"sap",SAP_enable);
   {
-    char const *p = config_getstring(Configtable,global,"mode-file",Modefile);
+    char const *p = config_getstring(Configtable,global,"mode-file",NULL);
     if(p != NULL)
-      Modefile = strdup(p);
+      Modefile = strdup(p); // config_getstring returns a pointer to internal memory that goes away when the dictionary is closed
   }
   {
-    char const *p = config_getstring(Configtable,global,"wisdom-file",Wisdom_file);
+    char const *p = config_getstring(Configtable,global,"wisdom-file",NULL);
     if(p != NULL)
       Wisdom_file = strdup(p);
   }
   // Are we using a direct front end?
   const char *hardware = config_getstring(Configtable,global,"hardware",NULL);
   if(hardware == NULL){
-    // Hardware now required
-    fprintf(stdout,"Hardware front end now required\n");
+    // 'hardware =' now required, no default
+    fprintf(stdout,"'hardware = [sectionname]' now required to specify front end configuration\n");
     exit(EX_USAGE);
   }
   // Look for specified hardware section
@@ -268,7 +287,7 @@ static int loadconfig(char const * const file){
       }
     }
     if(sect == nsect){
-      fprintf(stdout,"no hardware section [%s] found\n",hardware);
+      fprintf(stdout,"no hardware section [%s] found, please create it\n",hardware);
       exit(EX_USAGE);
     }
   }
@@ -280,24 +299,25 @@ static int loadconfig(char const * const file){
       fprintf(stdout,"status=<mcast group> missing in [global], e.g, status=hf.local\n");
       exit(EX_USAGE);
     }
-    strlcpy(Metadata_dest_string,status,sizeof(Metadata_dest_string));
+    Metadata_dest_string = strdup(status);
     int slen = sizeof(Metadata_dest_address);
     avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),NULL,&Metadata_dest_address,&slen);
     // avahi_start has resolved the target DNS name into Metadata_dest_address and inserted the port number
     Status_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
-    if(Status_fd < 3){
-      fprintf(stdout,"Can't send status to %s\n",Metadata_dest_string);
-      exit(EX_IOERR); // Let systemd retry us
+    if(Status_fd < 0){
+      fprintf(stdout,"Can't send status to %s: %s\n",Metadata_dest_string,strerror(errno));
+      exit(EX_NOHOST); // Let systemd retry us
     } else {
       socklen_t len = sizeof(Metadata_source_address);
       getsockname(Status_fd,(struct sockaddr *)&Metadata_source_address,&len);  
       // Same remote socket as status
       Ctl_fd = listen_mcast(&Metadata_dest_address,Iface);
-      if(Ctl_fd < 3)
-	fprintf(stdout,"can't listen for commands from %s\n",Metadata_dest_string);
+      if(Ctl_fd < 0){
+	fprintf(stdout,"can't listen for commands from %s: %s\n",Metadata_dest_string,strerror(errno));
+	exit(EX_NOHOST);
+      }
     }
   }
-  // Process individual demodulator sections
   if(Modetable == NULL){
     char modefile[PATH_MAX];
     dist_path(modefile,sizeof(modefile),Modefile);
@@ -305,9 +325,29 @@ static int loadconfig(char const * const file){
     Modetable = iniparser_load(modefile); // Kept open for duration of program
     if(Modetable == NULL){
       fprintf(stdout,"Can't load mode file %s\n",modefile);
-      return -1;
+      exit(EX_UNAVAILABLE); // Can't really continue without fixing
     }
   }
+  // Set up template for dynamically created demods
+  if(Data != NULL){
+    char const * mode = config_getstring(Configtable,global,"mode",NULL); // Must be specified to create a dynamic demod
+    if(mode != NULL){
+      Template = create_demod(0);
+      if(Template == NULL){
+	fprintf(stdout,"can't create dynamic demodulator template??\n");
+      } else {
+	set_defaults(Template);
+	if(loadmode(Template,Modetable,mode) != 0)
+	  fprintf(stdout,"warning: loadmode(%s,%s) in [global]\n",Modefile,mode);
+	
+	loadmode(Template,Configtable,global); // Overwrite with other entries from this section, without overwriting those
+	memcpy(&Template->output.data_dest_address,&Data_dest_address,sizeof(Template->output.data_dest_address));
+	strlcpy(Template->output.data_dest_string,Data,sizeof(Template->output.data_dest_string));
+	Template->output.data_fd = Data_fd;
+      }
+    }
+  }
+  // Process individual demodulator sections
   int const nsect = iniparser_getnsec(Configtable);
   int ndemods = 0;
   for(int sect = 0; sect < nsect; sect++){
@@ -324,64 +364,39 @@ static int loadconfig(char const * const file){
     // fall back to setting in [global] if parameter not specified in individual section
     // Set parameters even when unused for the current demodulator in case the demod is changed later
     char const * mode = config2_getstring(Configtable,Configtable,global,sname,"mode",NULL);
-    if(mode == NULL || strlen(mode) == 0){
-      fprintf(stdout,"warning: mode not specified in section %s or [global], ignoring section\n",sname);
-      continue;
-    }
-
-    struct demod *demod = alloc_demod();
-    if(loadmode(demod,Modetable,mode,1) != 0){
-      fprintf(stdout,"loadmode(%s,%s) failed, ignoring section %s\n",Modefile,mode,sname);
-      free_demod(&demod);
-      continue;
-    }
-    loadmode(demod,Configtable,sname,0); // Overwrite with config file entries
+    if(mode == NULL || strlen(mode) == 0)
+      fprintf(stdout,"warning: mode not specified in [%s] or [global], all parameters must be explicitly set\n",sname);
 
     // Override [global] settings with section settings
-    int const mcast_ttl = config_getint(Configtable,sname,"ttl",Mcast_ttl); // Read in each section too
-    int const ip_tos = config_getint(Configtable,sname,"tos",IP_tos);
-    char const *iface = config_getstring(Configtable,sname,"iface",Iface);
-    char const * const data = config_getstring(Configtable,sname,"data",Data);
-    if(data == NULL){
+    char const * const data = config_getstring(Configtable,sname,"data",NULL);
+    if(data == NULL && Data == NULL){
       fprintf(stdout,"'data =' missing and not set in [%s]\n",global);
-      free_demod(&demod);
       continue;
     }
-    strlcpy(demod->output.data_dest_string,data,sizeof(demod->output.data_dest_string));
-
-    demod->output.rtp.ssrc = (uint32_t)config_getdouble(Configtable,sname,"ssrc",0); // Default triggers auto gen from freq
-
-    // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
-    int slen = sizeof(demod->output.data_dest_address);
-    avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),NULL,&demod->output.data_dest_address,&slen);
-
-    demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,iface,mcast_ttl,ip_tos);
-    if(demod->output.data_fd < 3){
-      fprintf(stdout,"can't set up PCM output to %s\n",demod->output.data_dest_string);
-      exit(EX_IOERR); // Let systemd retry us
-    } else {
-      socklen_t len = sizeof(demod->output.data_source_address);
-      getsockname(demod->output.data_fd,(struct sockaddr *)&demod->output.data_source_address,&len);
-    }
+    // Override global defaults
+    int const mcast_ttl = config_getint(Configtable,sname,"ttl",Mcast_ttl);
+    int const ip_tos = config_getint(Configtable,sname,"tos",IP_tos);
+    char const *iface = config_getstring(Configtable,sname,"iface",Iface);
     
-    if(SAP_enable){
-      // Highly experimental, off by default
-      char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
-      demod->output.sap_fd = setup_mcast(sap_dest,NULL,1,mcast_ttl,ip_tos,0);
-      if(demod->output.sap_fd < 3)
-	fprintf(stdout,"Can't set up SAP output to %s\n",sap_dest); // not fatal
-      else
-	pthread_create(&demod->sap_thread,NULL,sap_send,demod);
-    }
-     // RTCP Real Time Control Protocol daemon is optional
-    if(RTCP_enable){
-      demod->output.rtcp_fd = setup_mcast(demod->output.data_dest_string,NULL,1,mcast_ttl,ip_tos,1); // RTP port number + 1
-      if(demod->output.rtcp_fd < 3)
-	fprintf(stdout,"can't set up RTCP output to %s\n",demod->output.data_dest_string); // not fatal
-      else
-	pthread_create(&demod->rtcp_thread,NULL,rtcp_send,demod);
+    struct sockaddr_storage data_dest_address;
+    int data_fd = -1;
+    
+    if(data != NULL){
+      // 'data =' is specified in this section
+      memcpy(&data_dest_address,data,sizeof(data_dest_address));
+      // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
+      {
+	int slen = sizeof(data_dest_address);
+	avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,ElfHashString(data),NULL,&data_dest_address,&slen);
+      }
+      data_fd = connect_mcast(&data_dest_address,iface,mcast_ttl,ip_tos);
+    } else {
+      // Data cannot be null or we wouldn't have gotten here
+      memcpy(&data_dest_address,&Data_dest_address,sizeof(data_dest_address));
+      data_fd = Data_fd;
     }
     // Process frequency/frequencies
+    // We need to do this first to ensure the resulting SSRCs are unique
     // To work around iniparser's limited line length, we look for multiple keywords
     // "freq", "freq0", "freq1", etc, up to "freq9"
     int nfreq = 0;
@@ -397,7 +412,8 @@ static int loadconfig(char const * const file){
       if(frequencies == NULL)
 	break; // no more
 
-      char * freq_list = strdup(frequencies); // Need writeable copy for strtok
+      // Parse the frequency list(s)
+      char *freq_list = strdup(frequencies); // Need writeable copy for strtok
       char *saveptr = NULL;
       for(char const *tok = strtok_r(freq_list," \t",&saveptr);
 	  tok != NULL;
@@ -408,104 +424,86 @@ static int loadconfig(char const * const file){
 	  fprintf(stdout,"can't parse frequency %s\n",tok);
 	  continue;
 	}
-	demod->tune.freq = f;
-
-	// If not explicitly specified, generate SSRC in decimal using frequency in Hz
-	if(demod->output.rtp.ssrc == 0){
-	  if(f == 0){
-	    if(Dynamic_demod)
-	      free_demod(&Dynamic_demod); // Free old one
-
-	    // Template for dynamically created demods
-	    Dynamic_demod = demod;
-	    fprintf(stdout,"dynamic demod template created, data = %s\n",data);
-	  } else {
-	    for(char const *cp = tok ; cp != NULL && *cp != '\0' ; cp++){
-	      if(isdigit(*cp)){
-		demod->output.rtp.ssrc *= 10;
-		demod->output.rtp.ssrc += *cp - '0';
-	      }
-	    }
+	uint32_t ssrc = 0;
+	// Generate default ssrc from frequency string
+	for(char const *cp = tok ; cp != NULL && *cp != '\0' ; cp++){
+	  if(isdigit(*cp)){
+	    ssrc *= 10;
+	    ssrc += *cp - '0';
 	  }
 	}
-	// Initialization all done, start it up
-	set_freq(demod,demod->tune.freq);
-	if(demod->tune.freq != 0){ // Don't start dynamic entry
-	  start_demod(demod);
+	ssrc = config_getint(Configtable,sname,"ssrc",ssrc); // Explicitly set?
+	if(ssrc == 0)
+	  continue; // Reserved ssrc
+
+	struct demod *demod = NULL;
+	// Try to create it, incrementing in case of collision
+	int const max_collisions = 100;
+	for(int i=0; i < max_collisions; i++){
+	  demod = create_demod(ssrc+i);
+	  if(demod != NULL){
+	    ssrc += i;
+	    break;
+	  }
+	}
+	if(demod == NULL){
+	  fprintf(stdout,"Can't allocate requested ssrc %u-%u\n",ssrc,ssrc + max_collisions);
+	  continue;
+	}
+	// Set reasonable compiled-in defaults just to keep things from blowing up
+	set_defaults(demod);
+	if(mode != NULL && loadmode(demod,Modetable,mode) != 0)
+	  fprintf(stdout,"warning: in [%s], loadmode(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Modefile,mode);
 	
-	  nfreq++;
-	  ndemods++;
-	  if(Verbose)
-	    fprintf(stdout,"started %'.3lf Hz\n",demod->tune.freq);
+	loadmode(demod,Configtable,sname); // Overwrite with other entries from this section, without overwriting those
+	
+	memcpy(&demod->output.data_dest_address,&data_dest_address,sizeof(demod->output.data_dest_address));
+	strlcpy(demod->output.data_dest_string,data,sizeof(demod->output.data_dest_string));
+	demod->output.data_fd = data_fd;
+	
+	if(demod->output.data_fd <= 0){
+	  fprintf(stdout,"can't set up PCM output to %s: %s\n",data,strerror(errno));
+	  exit(EX_IOERR); // Let systemd retry us
 	}
-
-	// Set up for next demod
-	struct demod *ndemod = alloc_demod();
-	if(ndemod == NULL){
-	  fprintf(stdout,"alloc_demod() failed, quitting\n");
-	  break;
+	// Get the local socket for the output stream
+	struct sockaddr_storage data_source_address;
+	{
+	  socklen_t len = sizeof(data_source_address);
+	  getsockname(demod->output.data_fd,(struct sockaddr *)&demod->output.data_source_address,&len);
 	}
-	// Copy everything to next demod except dynamic per-thread stuff
-	memcpy(ndemod,demod,sizeof(*ndemod));
-	ndemod->filter.out = NULL;
-	ndemod->demod_thread = (pthread_t)0;
-	ndemod->tune.freq = 0;
-	ndemod->output.rtp.ssrc = 0;
-	demod = ndemod;
-	ndemod = NULL;
+	// Time to start it -- ssrc is stashed by create_demod()
+	set_freq(demod,f);
+	start_demod(demod);
+	nfreq++;
+	ndemods++;
+	
+	if(SAP_enable){
+	  // Highly experimental, off by default
+	  char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
+	  demod->output.sap_fd = setup_mcast(sap_dest,NULL,1,mcast_ttl,ip_tos,0);
+	  if(demod->output.sap_fd < 3)
+	    fprintf(stdout,"Can't set up SAP output to %s\n",sap_dest); // not fatal
+	  else
+	    pthread_create(&demod->sap_thread,NULL,sap_send,demod);
+	}
+	// RTCP Real Time Control Protocol daemon is optional
+	if(RTCP_enable){
+	  demod->output.rtcp_fd = setup_mcast(demod->output.data_dest_string,NULL,1,mcast_ttl,ip_tos,1); // RTP port number + 1
+	  if(demod->output.rtcp_fd < 3)
+	    fprintf(stdout,"can't set up RTCP output to %s\n",demod->output.data_dest_string); // not fatal
+	  else
+	    pthread_create(&demod->rtcp_thread,NULL,rtcp_send,demod);
+	}
       }
+      // Done processing frequency list(s) and creating demods
       FREE(freq_list);
+      fprintf(stdout,"%d demodulators started\n",nfreq);
     }
-    free_demod(&demod); // last one wasn't needed
-    fprintf(stdout,"%d demodulators started\n",nfreq);
   }
-  // Create dynamic demod with [global] parameters if it wasn't done in a section
-  if(Dynamic_demod == NULL && Data != NULL){
-    char const * mode = config_getstring(Configtable,global,"mode",NULL);
-    if(mode == NULL || strlen(mode) == 0)
-      goto done_dynamic;
-
-    struct demod *demod = alloc_demod();
-    if(demod == NULL)
-      goto done_dynamic;
-
-    if(loadmode(demod,Modetable,mode,1) != 0){
-      free_demod(&demod);
-      goto done_dynamic;
-    }
-    loadmode(demod,Configtable,"global",0); // Overwrite with config file entries
-
-    char const * const data = Data;
-    strlcpy(demod->output.data_dest_string,data,sizeof(demod->output.data_dest_string));
-    demod->output.rtp.ssrc = 0;
-
-    // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
-    int slen = sizeof(demod->output.data_dest_address);
-    // Use name of radiod
-    avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,demod->output.data_dest_string,ElfHashString(demod->output.data_dest_string),NULL,&demod->output.data_dest_address,&slen);
-
-    demod->output.data_fd = connect_mcast(&demod->output.data_dest_address,Iface,Mcast_ttl,IP_tos);
-    if(demod->output.data_fd < 3){
-#if 1
-      exit(EX_IOERR); // Let systemd retry us
-#else
-      free_demod(&demod);
-      goto done_dynamic;
-#endif
-    } else {
-      socklen_t len = sizeof(demod->output.data_source_address);
-      getsockname(demod->output.data_fd,(struct sockaddr *)&demod->output.data_source_address,&len);
-    }
-    set_freq(demod,0);
-    Dynamic_demod = demod;
-    fprintf(stdout,"Dynamic demod established from [global]\n");
-  }
- done_dynamic:;
-
   // Start the status thread after all the receivers have been created so it doesn't contend for the demod list lock
-  if(Ctl_fd >= 3 && Status_fd >= 3){
+  if(Ctl_fd >= 3 && Status_fd >= 3)
     pthread_create(&Status_thread,NULL,radio_status,NULL);
-  }
+
   pthread_create(&Demod_reaper_thread,NULL,demod_reaper,NULL);
   iniparser_freedict(Configtable);
   Configtable = NULL;

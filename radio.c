@@ -39,11 +39,34 @@ int const Demod_alloc_quantum = 1000;
 struct demod *Demod_list; // Contiguous array
 int Demod_list_length; // Length of array
 int Active_demod_count; // Active demods
+extern struct demod const *Template;
 
 static float estimate_noise(struct demod *demod,int shift);
 
-struct demod *alloc_demod(void){
+// Find demod by ssrc
+struct demod *lookup_demod(uint32_t ssrc){
+  struct demod *demod = NULL;
   pthread_mutex_lock(&Demod_list_mutex);
+  for(int i=0; i < Demod_list_length; i++){
+    if(Demod_list[i].inuse && Demod_list[i].output.rtp.ssrc == ssrc){
+      demod = &Demod_list[i];
+      break;
+    }
+  }
+  pthread_mutex_unlock(&Demod_list_mutex);
+  return demod;
+}
+
+
+// Atomically create demod only if the ssrc doesn't already exist
+struct demod *create_demod(uint32_t ssrc){
+  pthread_mutex_lock(&Demod_list_mutex);
+  for(int i=0; i < Demod_list_length; i++){
+    if(Demod_list[i].inuse && Demod_list[i].output.rtp.ssrc == ssrc){
+      pthread_mutex_unlock(&Demod_list_mutex);
+      return NULL; // sorry, already taken
+    }
+  }
   if(Demod_list == NULL){
     Demod_list = (struct demod *)calloc(Demod_alloc_quantum,sizeof(struct demod));
     Demod_list_length = Demod_alloc_quantum;
@@ -58,14 +81,37 @@ struct demod *alloc_demod(void){
   }
   if(demod == NULL){
     fprintf(stdout,"Warning: out of demod table space (%d)\n",Active_demod_count);
+    // Abort here? Or keep going?
   } else {
     memset(demod,0,sizeof(struct demod));
     demod->inuse = true;
+    demod->output.rtp.ssrc = ssrc; // Stash it
     Active_demod_count++;
   }
   pthread_mutex_unlock(&Demod_list_mutex);
   return demod;
 }
+
+// Set up newly created dynamic demodulator
+struct demod *setup_demod(uint32_t ssrc){
+  struct demod *demod = create_demod(ssrc);
+  if(demod != NULL){
+    // Copy dynamic template
+    // Although there are some pointers in here (filter.out, filter.energies), they're all NULL until the demod actually starts
+    memcpy(demod,Template,sizeof(*demod));
+    demod->output.rtp.ssrc = ssrc; // Put it back after getting smashed to 0 by memcpy
+    demod->lifetime = 20; // If freq == 0, goes away 20 sec after last command
+
+    // Get the local socket for the output stream
+    struct sockaddr_storage data_source_address;
+    {
+      socklen_t len = sizeof(data_source_address);
+      getsockname(demod->output.data_fd,(struct sockaddr *)&demod->output.data_source_address,&len);
+    }
+  }
+  return demod;
+}
+
 
 // takes pointer to pointer to demod so we can zero it out to avoid use of freed pointer
 void free_demod(struct demod **demod){
@@ -162,9 +208,13 @@ int start_demod(struct demod * demod){
   if(demod == NULL)
     return -1;
 
+  if(Verbose){
+    fprintf(stdout,"start_demod: ssrc %u, output %s, demod %d, freq %.3lf, preset %s, filter %.0f - %.0f\n",
+	    demod->output.rtp.ssrc, demod->output.data_dest_string, demod->demod_type, demod->tune.freq, demod->preset, demod->filter.min_IF, demod->filter.max_IF);
+  }
   // Stop previous demodulator, if any
   if(demod->demod_thread != (pthread_t)0){
-#if 1
+#if 1 // Invoke thread apoptosis
     demod->terminate = 1;
     pthread_join(demod->demod_thread,NULL);
     demod->terminate = 0;
@@ -408,8 +458,7 @@ void *sap_send(void *p){
     space -= len;
     
     {
-      char mcast[128];
-      strlcpy(mcast,formatsock(&demod->output.data_dest_address),sizeof(mcast));
+      char *mcast = strdup(formatsock(&demod->output.data_dest_address));
       // Remove :port field, confuses the vlc listener
       char *cp = strchr(mcast,':');
       if(cp)
@@ -417,6 +466,7 @@ void *sap_send(void *p){
       len = snprintf(wp,space,"c=IN IP4 %s/%d\r\n",mcast,Mcast_ttl);
       wp += len;
       space -= len;
+      FREE(mcast);
     }  
     
 
@@ -595,3 +645,4 @@ int set_reference_level(struct frontend *frontend){
   frontend->reference *= dB2voltage(analog_gain); // Front end gain as amplitude ratio
   return 0;
 }
+
