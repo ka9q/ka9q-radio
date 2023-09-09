@@ -93,10 +93,9 @@ int connect_mcast(void const * const s,char const * const iface,int const ttl,in
 
   int fd = socket(sock->sa_family,SOCK_DGRAM,0);
 
-  if(fd == -1){
-    perror("setup_mcast socket");
+  if(fd == -1)
     return -1;
-  }      
+
   // Better to drop a packet than to block real-time processing
   fcntl(fd,F_SETFL,O_NONBLOCK);
   set_local_options(fd);
@@ -126,7 +125,6 @@ int connect_mcast(void const * const s,char const * const iface,int const ttl,in
     return -1;
   }
   if(connect(fd,sock,sizeof(struct sockaddr)) == -1){
-    fprintf(stderr,"unix sock fail err %s\n",strerror(errno));
     close(fd);
     return -1;
   }
