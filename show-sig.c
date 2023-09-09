@@ -35,7 +35,7 @@ struct sockaddr_storage Input_metadata_dest_address; // needed to listen to fron
 
 char const *Input_metadata_source_socket = "";
 char const *Input_metadata_dest_socket = "";
-char Description[256];
+char *Description = NULL;
 
 char const *Output_data_source_socket = "";
 char const *Output_data_dest_socket = "";
@@ -301,9 +301,9 @@ int decode_rtp_status(uint8_t const *buffer,int length){
 
     switch(type){
     case DESCRIPTION:
-      decode_string(cp,optlen,Description,sizeof(Description));
+      FREE(Description);
+      Description = decode_string(cp,optlen);
       break;
-
     case INPUT_METADATA_SOURCE_SOCKET:
       {
 	struct sockaddr_storage tmp;
