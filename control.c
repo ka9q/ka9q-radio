@@ -44,7 +44,7 @@
 static int const DEFAULT_IP_TOS = 48;
 static int const DEFAULT_MCAST_TTL = 1; // LAN only, no routers
 
-float Refresh_rate = 0.1f;
+float Refresh_rate = 0.25f;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
 int IP_tos = DEFAULT_IP_TOS;
 char Locale[256] = "en_US.UTF-8";
@@ -325,7 +325,7 @@ int main(int argc,char *argv[]){
   App_path = argv[0];
   {
     int c;
-    while((c = getopt(argc,argv,"vVs:")) != -1){
+    while((c = getopt(argc,argv,"vVs:r:")) != -1){
       switch(c){
       case 'V':
 	VERSION();
@@ -335,6 +335,9 @@ int main(int argc,char *argv[]){
 	break;
       case 's':
 	Ssrc = strtol(optarg,NULL,0); // Send to specific SSRC
+	break;
+      case 'r':
+	Refresh_rate = strtod(optarg,NULL);
 	break;
       default:
 	fprintf(stdout,"Unknown option %c\n",c);
@@ -523,6 +526,8 @@ int main(int argc,char *argv[]){
       if(send(Ctl_fd, cmdbuffer, command_len, 0) != command_len)
 	perror("command send");
       update_needed = true; // show local change right away
+      // This will elicit an answer, don't need to send a poll for a while
+      next_radio_poll = random_time(BILLION/10,random_interval);
     }
   }
  quit:;
@@ -925,7 +930,8 @@ static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int len
       demod->commands = decode_int(cp,optlen);
       break;
     case DESCRIPTION:
-      decode_string(cp,optlen,Frontend.description,sizeof(Frontend.description));
+      FREE(Frontend.description);
+      Frontend.description = decode_string(cp,optlen);
       break;
     case GPS_TIME:
       Frontend.timestamp = decode_int(cp,optlen);
@@ -1393,7 +1399,7 @@ static void display_output(WINDOW *w,struct demod const *demod){
     pprintw(w,row++,col,"","%s",format_gpstime(tbuf,sizeof(tbuf),Frontend.timestamp));
   }
   pprintw(w,row++,col,"Samples","%'llu",Frontend.samples);
-  pprintw(w,row++,col,"Update interval","%'.1f sec",Refresh_rate);
+  pprintw(w,row++,col,"Update interval","%'.2f sec",Refresh_rate);
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_address),
