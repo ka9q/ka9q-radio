@@ -160,12 +160,11 @@ int main(int argc,char *argv[]){
   uint32_t received_ssrc = 0;
   int received_agc_enable = -1;
   float received_gain = INFINITY;
-  char preset[256];
+  char *preset = NULL;
   float noise_density = INFINITY;
   float baseband_level = INFINITY;
   float low_edge = INFINITY;
   float high_edge = INFINITY;
-  memset(preset,0,sizeof(preset));
 
 
   uint32_t sent_tag = 0;
@@ -253,7 +252,8 @@ int main(int argc,char *argv[]){
 	received_gain = decode_float(cp,optlen);
 	  break;
       case PRESET:
-	decode_string(cp,optlen,preset,sizeof(preset));
+	FREE(preset); // Unlikely, but just in case
+	preset = decode_string(cp,optlen);
 	break;
       case LOW_EDGE:
 	low_edge = decode_float(cp,optlen);
@@ -280,6 +280,7 @@ int main(int argc,char *argv[]){
   printf("SSRC %'u\n",Ssrc);
   if(strlen(preset) > 0)
     printf("Preset %s\n",preset);
+  FREE(preset);
   if(received_freq != INFINITY)
     printf("Frequency %'.3lf Hz\n",received_freq);
   if(received_agc_enable != -1)
