@@ -167,7 +167,7 @@ float decode_float(uint8_t const *,int);
 double decode_double(uint8_t const *,int);
 struct sockaddr *decode_socket(void *,uint8_t const *,int);
 struct sockaddr *decode_local_socket(void *,uint8_t const *,int);
-char *decode_string(uint8_t const *,int,char *,int);
+char *decode_string(uint8_t const *,int);
 uint32_t get_ssrc(uint8_t const *buffer,int length);
 uint32_t get_tag(uint8_t const *buffer,int length);
 
