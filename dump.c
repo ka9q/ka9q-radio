@@ -56,8 +56,9 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
       break;
     case DESCRIPTION:
       {
-	char sbuf[256];
-	printf("%s",decode_string(cp,optlen,sbuf,sizeof(sbuf)));
+	char *d = decode_string(cp,optlen);
+	printf("%s",d);
+	FREE(d);
       }
       break;
     case INPUT_DATA_SOURCE_SOCKET:
@@ -367,8 +368,9 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
       break;
     case PRESET:
       {
-	char sbuf[256];
-	printf("preset %s",decode_string(cp,optlen,sbuf,sizeof(sbuf)));      
+	char *p = decode_string(cp,optlen);
+	printf("preset %s",p);
+	FREE(p);
       }
       break;
     case COHERENT_BIN_BW:
