@@ -200,11 +200,14 @@ int encode_vector(uint8_t **bp,enum status_type type,float const *array,int size
 
 // Decode byte string without byte swapping
 // NB! optlen has already been 'fixed' by the caller in case it's >= 128
-char *decode_string(uint8_t const *cp,int optlen,char *buf,int buflen){
-  int n = min(optlen,buflen-1);
-  memcpy(buf,cp,n);
-  buf[n] = '\0'; // force null termination
-  return buf;
+// Now allocates the result from the heap, the caller must free.
+// OTOH, the caller doesn't have to figure out a buffer size anymore
+char *decode_string(uint8_t const *cp,int optlen){
+  char *result = malloc(optlen+1);
+  if(result != NULL)
+    memcpy(result,cp,optlen);
+  result[optlen] = '\0'; // force null termination
+  return result;
 }
 
 
