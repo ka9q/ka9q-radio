@@ -170,7 +170,8 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   {
     char const *p = config_getstring(Dictionary,section,"description",NULL);
     if(p != NULL){
-      strlcpy(frontend->description,p,sizeof(frontend->description));
+      FREE(frontend->description);
+      frontend->description = strdup(p);
       fprintf(stdout,"%s: ",frontend->description);
     }
   }

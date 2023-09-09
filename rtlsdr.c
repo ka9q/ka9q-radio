@@ -83,8 +83,8 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
       return -1; // Not for us
   }
   sdr->dev = -1;
-  strlcpy(frontend->description,config_getstring(dictionary,section,"description","rtl-sdr"),
-	  sizeof(frontend->description));
+  FREE(frontend->description);
+  frontend->description = strdup(config_getstring(dictionary,section,"description","rtl-sdr"));
   {
     unsigned const device_count = rtlsdr_get_device_count();
     if(device_count < 1){

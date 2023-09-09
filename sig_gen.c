@@ -101,8 +101,8 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
     frontend->frequency = frontend->samprate/2;
   }
   {
-    char const * const description = config_getstring(dictionary,section,"description","funcube dongle+");
-    strlcpy(frontend->description,description,sizeof(frontend->description));
+    char const * const p = config_getstring(dictionary,section,"description","funcube dongle+");
+    frontend->description = strdup(p);
   }
 
   //  double initfreq = config_getint(dictionary,section,"frequency",0);

@@ -183,10 +183,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   frontend->lock = true; // Doesn't tune in direct conversion mode
   {
     char const *p = config_getstring(dictionary,section,"description","rx888");
-    if(p != NULL){
-      strlcpy(frontend->description,p,sizeof(frontend->description));
-      fprintf(stdout,"%s: ",frontend->description);
-    }
+    FREE(frontend->description);
+    frontend->description = strdup(p);
+    fprintf(stdout,"%s: ",frontend->description);
   }
   fprintf(stdout,"Samprate %'d Hz, calibrate %.3g, gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  frontend->samprate,frontend->calibrate,sdr->highgain ? "high" : "low",

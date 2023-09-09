@@ -46,8 +46,8 @@ struct frontend {
   int L;            // Block length of input filter
 
   // Stuff maintained by our upstream source and filled in by the status daemon
-  char description[256]; // Free-form text
-  int samprate;           // Sample rate on data stream
+  char *description;  // free-form text
+  int samprate;      // Sample rate on raw input data stream
   int64_t timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
   double frequency;
   double calibrate;  // Clock frequency error ratio, e.g, +1e-6 means 1 ppm high
@@ -80,8 +80,8 @@ struct frontend {
       so full A/D range now corresponds to different levels internally, and are scaled
       in radio_status.c when sending status messages
   */
-  float reference;  // Reference amplitude (== 0 dB)
-  float if_power;
+  float reference;  // Reference amplitude defined as 0 dB
+  float if_power;   // Exponentially smoothed power measurement in A/D units (not normalized)
   
   // This structure is updated asynchronously by the front end thread, so it's protected
   pthread_mutex_t status_mutex;
@@ -287,12 +287,15 @@ extern float Blocktime; // Common to all receiver slices. NB! Milliseconds, not 
 extern uint64_t Metadata_packets;
 
 // Functions/methods to control a demod instance
-struct demod *alloc_demod(void);
+struct demod *create_demod(uint32_t ssrc);
+struct demod *lookup_demod(uint32_t ssrc);
+struct demod *setup_demod(uint32_t ssrc);
 void free_demod(struct demod **);
-//int init_demod(struct demod * restrict demod);
+
 char const *demod_name_from_type(enum demod_type type);
 int demod_type_from_name(char const *name);
-int loadmode(struct demod *demod,dictionary const *table,char const *mode,int use_defaults);
+int loadmode(struct demod *demod,dictionary const *table,char const *mode);
+int set_defaults(struct demod *demod);
 
 double set_freq(struct demod * restrict ,double);
 int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq);

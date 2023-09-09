@@ -94,8 +94,9 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   frontend->max_IF = UpperEdge;
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
   {
-    char const * const description = config_getstring(dictionary,section,"description","funcube dongle+");
-    strlcpy(frontend->description,description,sizeof(frontend->description));
+    char const * const p = config_getstring(dictionary,section,"description","funcube dongle+");
+    FREE(frontend->description);
+    frontend->description = strdup(p);
   }
   Pa_Initialize();
 
