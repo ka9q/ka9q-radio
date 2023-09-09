@@ -21,6 +21,15 @@
 #include "radio.h"
 #include "config.h"
 
+struct demodtab Demodtab[] = {
+      {LINEAR_DEMOD, "Linear"}, // Coherent demodulation of AM, DSB, BPSK; calibration on WWV/WWVH/CHU carrier
+      {FM_DEMOD,     "FM",   }, // NBFM and noncoherent PM
+      {WFM_DEMOD,    "WFM",  }, // NBFM and noncoherent PM
+      {SPECT_DEMOD,  "Spectrum", }, // Spectrum analysis
+};
+int Ndemod = sizeof(Demodtab)/sizeof(struct demodtab);
+
+static enum demod_type DEFAULT_DEMOD = LINEAR_DEMOD;
 static int   const DEFAULT_LINEAR_SAMPRATE = 12000;
 static int   const DEFAULT_FM_SAMPRATE = 24000;
 static float const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
@@ -40,13 +49,6 @@ static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadca
 static float const DEFAULT_FM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
 static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 
-struct demodtab Demodtab[] = {
-      {LINEAR_DEMOD, "Linear"}, // Coherent demodulation of AM, DSB, BPSK; calibration on WWV/WWVH/CHU carrier
-      {FM_DEMOD,     "FM",   }, // NBFM and noncoherent PM
-      {WFM_DEMOD,    "WFM",  }, // NBFM and noncoherent PM
-      {SPECT_DEMOD,  "Spectrum", }, // Spectrum analysis
-};
-int Ndemod = sizeof(Demodtab)/sizeof(struct demodtab);
 
 int demod_type_from_name(char const *name){
   for(int n = 0; n < Ndemod; n++){
@@ -64,10 +66,12 @@ char const *demod_name_from_type(enum demod_type type){
 }
 
 // Set reasonable defaults before reading mode or config tables
-static int set_defaults(struct demod *demod){
+int set_defaults(struct demod *demod){
   if(demod == NULL)
     return -1;
 
+  
+  demod->output.data_fd = -1; // Force error if it's not set
   demod->tp1 = demod->tp2 = NAN;
   demod->tune.doppler = 0;
   demod->tune.doppler_rate = 0;
@@ -75,6 +79,7 @@ static int set_defaults(struct demod *demod){
   demod->deemph.rate = 0;
   demod->deemph.gain = 1.0;
 
+  demod->demod_type = DEFAULT_DEMOD;
   demod->filter.kaiser_beta = DEFAULT_KAISER_BETA;
   demod->filter.min_IF = DEFAULT_LOW;
   demod->filter.max_IF = DEFAULT_HIGH;
@@ -135,7 +140,7 @@ static int set_defaults(struct demod *demod){
 
 // Set selected section of specified config file into current demod structure
 // Caller must (re) initialize pre-demod filter and (re)start demodulator thread
-int loadmode(struct demod *demod,dictionary const *table,char const *mode,int use_defaults){
+int loadmode(struct demod *demod,dictionary const *table,char const *mode){
   if(demod == NULL || table == NULL || mode == NULL || strlen(mode) == 0)
     return -1;
 
@@ -145,11 +150,7 @@ int loadmode(struct demod *demod,dictionary const *table,char const *mode,int us
     if(demod->demod_type >= 0){
       demod->demod_type = x;
     }
-  } else if(use_defaults)
-    return -1;  // No default in modes.conf, but allow overlaying options in radiod conf files
-
-  if(use_defaults)
-    set_defaults(demod); // must be called after demod_type is set
+  }
   demod->output.samprate = DEFAULT_LINEAR_SAMPRATE; // Make sure it gets set to *something*
   {
     char const *p = config_getstring(table,mode,"samprate",NULL);
