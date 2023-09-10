@@ -41,8 +41,14 @@ problems, code and configuration complexity and general lack of
 utility these separate programs have been obsoleted and the front end
 drivers built directly into *radiod*. Support is currently provided
 for generic RTL-SDR dongles, the Airspy R2, Airspy HF+, AMSAT UK
-Funcube Pro+ and RX-888 Mk II. Support will be forthcoming for the
-SDRPlay and the HackRF (receive only).
+Funcube Pro+ and RX-888 Mk II. A synthetic front end, *sig_gen*, is
+also provided. It simulates a front end, either complex or real,
+producing gaussian noise and single carrier at specified amplitudes.
+It can also transmit my WWV/H simulator *wwvsim*, but it's not yet
+well integrated, mainly because of the need for an external speech synthesizer.
+
+Support will be forthcoming for the SDRPlay and the HackRF (receive
+only).
 
 Two very rudimentary programs are provided for interactive use;
 *monitor* listens to one or more demodulated audio streams and
@@ -76,7 +82,7 @@ requirement is that the impulse response of the channel
 filters be shorter than the (configurable) overlap interval in the forward
 FFT.
 
-Updated August 2023  
+Updated 10 September 2023  
 Phil Karn, KA9Q  
 karn@ka9q.net
 
