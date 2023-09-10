@@ -368,7 +368,7 @@ static int loadconfig(char const * const file){
       fprintf(stdout,"warning: mode not specified in [%s] or [global], all parameters must be explicitly set\n",sname);
 
     // Override [global] settings with section settings
-    char const * const data = config_getstring(Configtable,sname,"data",NULL);
+    char const *data = config_getstring(Configtable,sname,"data",NULL);
     if(data == NULL && Data == NULL){
       fprintf(stdout,"'data =' missing and not set in [%s]\n",global);
       continue;
@@ -394,6 +394,7 @@ static int loadconfig(char const * const file){
       // Data cannot be null or we wouldn't have gotten here
       memcpy(&data_dest_address,&Data_dest_address,sizeof(data_dest_address));
       data_fd = Data_fd;
+      data = Data;
     }
     // Process frequency/frequencies
     // We need to do this first to ensure the resulting SSRCs are unique
