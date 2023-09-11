@@ -12,7 +12,6 @@
 enum pkt_type {
   STATUS = 0,
   CMD,
-  SSRC_LIST
 };
 
 // I try not to delete or rearrange these entries since that makes the different programs incompatible
@@ -162,7 +161,12 @@ int encode_double(uint8_t **buf,enum status_type type,double x);
 int encode_socket(uint8_t **buf,enum status_type type,void const *sock);
 int encode_vector(uint8_t **buf,enum status_type type,float const *array,int size);
 
-uint64_t decode_int(uint8_t const *,int);
+uint64_t decode_int64(uint8_t const *,int);
+uint32_t decode_int32(uint8_t const *,int);
+uint16_t decode_int16(uint8_t const *,int);
+uint8_t decode_int8(uint8_t const *,int);
+int decode_int(uint8_t const *,int);
+
 float decode_float(uint8_t const *,int);
 double decode_double(uint8_t const *,int);
 struct sockaddr *decode_socket(void *,uint8_t const *,int);
