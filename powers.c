@@ -199,7 +199,7 @@ int main(int argc,char *argv[]){
 
     if(Verbose > 1){
       printf("Received:");
-      dump_metadata(buffer+1,length-1,false);
+      dump_metadata(stdout,buffer+1,length-1,false);
     }
     float powers[65536];
     uint64_t time;
