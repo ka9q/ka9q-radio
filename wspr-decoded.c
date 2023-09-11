@@ -88,7 +88,7 @@ struct session {
 
 char const *App_path;
 int Verbose;
-int Keep_wav;
+bool Keep_wav;
 char PCM_mcast_address_text[256];
 char const *Recordings = ".";
 char const *Wsprd_command = "wsprd -a %s/%u -o 2 -f %.6lf -w -d %s";
@@ -126,7 +126,7 @@ int main(int argc,char *argv[]){
       Verbose = 1;
       break;
     case 'k':
-      Keep_wav = 1;
+      Keep_wav = true;
       break;
     case 'V':
       VERSION();
