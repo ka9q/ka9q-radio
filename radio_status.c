@@ -3,7 +3,7 @@
 
 #define _GNU_SOURCE 1
 #include <assert.h>
-#include <stdlib.h>
+
 #include <stdint.h>
 #include <unistd.h>
 #include <limits.h>
@@ -12,6 +12,9 @@
 #include <pthread.h>
 #if defined(linux)
 #include <bsd/string.h>
+#include <bsd/stdlib.h>
+#else
+#include <stdlib.h>
 #endif
 #include <math.h>
 #include <complex.h>
