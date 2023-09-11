@@ -46,6 +46,7 @@ static pthread_t status_dump_thread;
 static pthread_cond_t Status_dump_cond;
 static pthread_mutex_t Status_dump_mutex;
 static bool Status_kick_flag;
+static uint32_t Tag;
 
 // Radio status reception and transmission thread
 void *radio_status(void *arg){
@@ -73,6 +74,7 @@ void *radio_status(void *arg){
       // Kick separate thread to dump all chans in a rate-limited manner
       pthread_mutex_lock(&Status_dump_mutex);
       Status_kick_flag = true;
+      Tag = get_tag(buffer+1,length-1);
       pthread_cond_signal(&Status_dump_cond);
       pthread_mutex_unlock(&Status_dump_mutex);
       break;
@@ -106,24 +108,32 @@ void *radio_status(void *arg){
 
 // Dump all statuses, with rate limiting
 static void *radio_status_dump(void *p){
+  pthread_setname("statusdump");
   pthread_detach(pthread_self());
 
   while(1){
+    // Wait to be notified by radio_status thread that we've received a request to
+    // dump the entire channel table.
     pthread_mutex_lock(&Status_dump_mutex);
     while(Status_kick_flag == false)
       pthread_cond_wait(&Status_dump_cond,&Status_dump_mutex);
     Status_kick_flag = false;
     pthread_mutex_unlock(&Status_dump_mutex);
 
+    // Walk through the channel table dumping each status
+    // Wait a random time before continuing to avoid flooding the net with back-to-back packets
+    // This is why we have to be a separate thread
+    // While the list can change while we're walking it, this isn't terribly serious
+    // because it's a table, not a linked list. At the worst we emit a stale entry or miss a new one
+    // Otherwise we
     for(int i=0; i < Channel_list_length; i++){
       struct channel *chan = &Channel_list[i];
       if(!chan->inuse)
-	continue; 
+	continue;
       if(chan->output.rtp.ssrc == 0xffffffff || chan->output.rtp.ssrc == 0)
-	continue; // Reserved for template or all-call polling
+	continue; // Reserved for dynamic channel template or all-call polling
       chan->commands++;
-      // I could copy the tag from the poll packet into all the chan sessions but I'm not sure it's a good idea
-      // since individual control sessions might be watching for their own. But we do increment the command count
+      chan->command_tag = Tag;
       send_radio_status(&Frontend,chan);
 
       // Rate limit to 200/sec on average by randomly delaying 0-10 ms
