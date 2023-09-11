@@ -86,7 +86,7 @@ struct rtp_state {
 
 // Internal format of sender report segment
 struct rtcp_sr {
-  unsigned int ssrc;
+  uint32_t ssrc;
   int64_t ntp_timestamp;
   unsigned int rtp_timestamp;
   unsigned int packet_count;
@@ -95,7 +95,7 @@ struct rtcp_sr {
 
 // Internal format of receiver report segment
 struct rtcp_rr {
-  unsigned int ssrc;
+  uint32_t ssrc;
   int lost_fract;
   int lost_packets;
   int highest_seq;
