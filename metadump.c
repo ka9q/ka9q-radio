@@ -39,7 +39,7 @@ const char *App_path;
 int Verbose;
 bool Newline;
 bool All;
-float Interval = 0.1;
+int64_t Interval; // nanosec, converted from float seconds
 int Control_sock;
 int Status_sock;
 int Count;
@@ -48,7 +48,7 @@ uint32_t Ssrc;
 int IP_tos;
 int Status_packets;
 
-long long Last_status_time;
+int64_t Last_status_time;
 
 char Locale[256] = "en_US.UTF-8";
 int Mcast_ttl = 5;
@@ -90,7 +90,7 @@ int main(int argc,char *argv[]){
       Count = strtol(optarg,NULL,0);
       break;
     case 'i':
-      Interval = strtod(optarg,NULL);
+      Interval = fabs(strtod(optarg,NULL)) * BILLION; // ensure it's not negative
       break;
     case 'v':
       Verbose++;
@@ -110,8 +110,9 @@ int main(int argc,char *argv[]){
     }
   }
   if(All){
-    Ssrc = 0xffffffff; // All 1's means poll every channel no faster than 1 Hz
-    Interval = max(1.0f,Interval);
+    Ssrc = 0xffffffff; // All 1's means poll every channel
+    Interval = min(BILLION,Interval); // No more than 1/sec, since the responses will be rate limited
+    Count = max(1,Count); // Force at least one poll
   }
   if(Radio == NULL){
     if(argc <= optind){
@@ -144,7 +145,7 @@ int main(int argc,char *argv[]){
     fprintf(stdout,"Can't set up multicast input\n");
     exit(EX_IOERR);
   }
-  if(Count != 0 || Interval != 0){
+  if(Count != 0){
     if(Verbose)
       fprintf(stdout,"Connecting\n");
     Control_sock = connect_mcast(&sock,iface,Mcast_ttl,IP_tos);
@@ -154,46 +155,46 @@ int main(int argc,char *argv[]){
     }
   }
 
-  if(Verbose){
-    fprintf(stdout,"Polling interval %'llu nanoseconds\n",(long long)(Interval * BILLION));
+  if(Verbose && Interval != 0){
+    fprintf(stdout,"Polling %u interval %'lld nanoseconds count %llu\n",(unsigned)Ssrc,(long long)Interval,(long long)Count);
   }
 
   pthread_create(&Input_thread,NULL,input_thread,NULL);
-
-  if(Ssrc == 0 || Interval == 0)
+  if(Ssrc == 0)
     while(1)
-      sleep(1000);
+      sleep(1000); // passive mode indefinitely
 
-  // Begin active polling SSRC to ensure the multicast group is up and radiod is listening
-  // Time for a rate-limited poll?
+  int64_t last_command_time = 0;
+  for(int i=0; i < Count;i++){
+    // Send poll
+    uint8_t cmd_buffer[9000];
+    uint8_t *bp = cmd_buffer;
+    *bp++ = 1; // Generate command packet
+    uint32_t sent_tag = arc4random();
+    encode_int(&bp,COMMAND_TAG,sent_tag);
+    encode_int(&bp,OUTPUT_SSRC,Ssrc);
+    encode_eol(&bp);
+    int cmd_len = bp - cmd_buffer;
+    
+    if(send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len){
+      perror("command send");
+      exit(1);
+    }      
+    last_command_time = gps_time_ns();
+    useconds_t sleep_time = Interval / 1000;
 
-  long long last_command_time = 0;
-  while(1){
-    long long now = gps_time_ns();
-    long long latest = max(Last_status_time,last_command_time); // Time of latest event
-    if(now >= latest + (long long)(Interval* BILLION)){
-      // Haven't gotten a status nor sent a poll in Interval seconds
-      uint8_t cmd_buffer[9000];
-      uint8_t *bp = cmd_buffer;
-      *bp++ = 1; // Generate command packet
-      uint32_t sent_tag = arc4random();
-      encode_int(&bp,COMMAND_TAG,sent_tag);
-      encode_int(&bp,OUTPUT_SSRC,Ssrc);
-      encode_eol(&bp);
-      int cmd_len = bp - cmd_buffer;
-      if(Verbose)
-	fprintf(stdout,"Command sent\n");
-
-      if(send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len){
-	perror("command send");
-	exit(1);
-      }      
-      latest = last_command_time = now;
+    while(sleep_time > 0){
+      usleep(sleep_time); // Sleeps at least this long
+      // sleep Interval beyond latest event
+      if(Last_status_time > last_command_time)
+	sleep_time = (Last_status_time + Interval - gps_time_ns()) / 1000;
+      else
+	sleep_time = (last_command_time + Interval - gps_time_ns()) / 1000;	
     }
-    // Sleep for Interval seconds past after the later of the last command and last status messages
-    useconds_t sleep_time = (latest + (long long)(Interval * BILLION) - now)/ 1000;
-    usleep(sleep_time);
   }
+  while(1)
+    sleep(1000); // sleep forever while receive thread runs
+
   exit(EX_OK); // can't reach
 }
 
@@ -204,7 +205,7 @@ void usage(void){
 
 // Process incoming packets
 void *input_thread(void *p){
-  while(Count == 0 || Status_packets < Count){
+  while(1){
     uint8_t buffer[9000];
     struct sockaddr_storage source;
     socklen_t len = sizeof(source);
@@ -223,8 +224,8 @@ void *input_thread(void *p){
       Status_packets++; // Don't count our own responses
       Last_status_time = now; // Reset poll timeout
     }
-    dump_metadata(buffer+1,length-1,Newline);
+    dump_metadata(stdout,buffer+1,length-1,Newline);
     fflush(stdout);
   }
-  exit(EX_OK);
+  exit(EX_OK); // can't reach
 }

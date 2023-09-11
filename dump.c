@@ -13,7 +13,7 @@
 #include "multicast.h"
 #include "radio.h"
 
-void dump_metadata(uint8_t const * const buffer,int length,bool newline){
+void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline){
   uint8_t const *cp = buffer;
 
   while(cp - buffer < length){
@@ -35,381 +35,381 @@ void dump_metadata(uint8_t const * const buffer,int length,bool newline){
     }
     if(cp - buffer + optlen >= length)
       break; // Invalid length
-    printf("%s(%d) ",newline? "\n":" ",type); fflush(stdout); // DEBUG
+    fprintf(fp,"%s(%d) ",newline? "\n":" ",type); fflush(stdout); // DEBUG
     switch(type){
     case EOL: // Shouldn't get here
       goto done;
     case COMMAND_TAG:
-      printf("cmd tag %08x",(uint32_t)decode_int32(cp,optlen));
+      fprintf(fp,"cmd tag %08x",(uint32_t)decode_int32(cp,optlen));
       break;
     case CMD_CNT:
-      printf("commands %'llu",(long long unsigned)decode_int32(cp,optlen));
+      fprintf(fp,"commands %'llu",(long long unsigned)decode_int32(cp,optlen));
       break;
     case BLOCKS_SINCE_POLL:
-      printf("last poll %'llu blocks",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"last poll %'llu blocks",(long long unsigned)decode_int64(cp,optlen));
       break;
     case GPS_TIME:
       {
 	char tbuf[100];
-	printf("%s",format_gpstime(tbuf,sizeof(tbuf),(uint64_t)decode_int64(cp,optlen)));
+	fprintf(fp,"%s",format_gpstime(tbuf,sizeof(tbuf),(uint64_t)decode_int64(cp,optlen)));
       }
       break;
     case DESCRIPTION:
       {
 	char *d = decode_string(cp,optlen);
-	printf("%s",d);
+	fprintf(fp,"%s",d);
 	FREE(d);
       }
       break;
     case INPUT_DATA_SOURCE_SOCKET:
       {
 	struct sockaddr_storage sock;
-	printf("in data src %s",formatsock(decode_socket(&sock,cp,optlen)));
+	fprintf(fp,"in data src %s",formatsock(decode_socket(&sock,cp,optlen)));
       }
       break;
     case INPUT_DATA_DEST_SOCKET:
       {
 	struct sockaddr_storage sock;
-	printf("in data dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+	fprintf(fp,"in data dst %s",formatsock(decode_socket(&sock,cp,optlen)));
       }
       break;
     case INPUT_METADATA_SOURCE_SOCKET:
       {
 	struct sockaddr_storage sock;
-	printf("in metadata src %s",formatsock(decode_socket(&sock,cp,optlen)));
+	fprintf(fp,"in metadata src %s",formatsock(decode_socket(&sock,cp,optlen)));
       }
       break;
     case INPUT_METADATA_DEST_SOCKET:      
       {
 	struct sockaddr_storage sock;
-	printf("in metadata dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+	fprintf(fp,"in metadata dst %s",formatsock(decode_socket(&sock,cp,optlen)));
       }
       break;
     case INPUT_SSRC:
-      printf("in SSRC %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"in SSRC %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case INPUT_SAMPRATE:
-      printf("in samprate %'llu Hz",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"in samprate %'llu Hz",(long long unsigned)decode_int64(cp,optlen));
       break;
     case INPUT_METADATA_PACKETS:
-      printf("in metadata packets %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"in metadata packets %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case INPUT_DATA_PACKETS:
-      printf("in data packets %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"in data packets %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case INPUT_SAMPLES:
-      printf("in samples %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"in samples %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case INPUT_DROPS:
-      printf("in drops %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"in drops %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case INPUT_DUPES:
-      printf("in dupes %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"in dupes %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case OUTPUT_DATA_SOURCE_SOCKET:
       {
 	struct sockaddr_storage sock;
-	printf("data src %s",formatsock(decode_socket(&sock,cp,optlen))); 
+	fprintf(fp,"data src %s",formatsock(decode_socket(&sock,cp,optlen))); 
       }
       break;
     case OUTPUT_DATA_DEST_SOCKET:
       {
 	struct sockaddr_storage sock;
-	printf("data dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+	fprintf(fp,"data dst %s",formatsock(decode_socket(&sock,cp,optlen)));
       }
       break;
     case OUTPUT_SSRC:
-      printf("SSRC %'u",(unsigned int)decode_int32(cp,optlen));
+      fprintf(fp,"SSRC %'u",(unsigned int)decode_int32(cp,optlen));
       break;
     case OUTPUT_TTL:
-      printf("TTL %'u",(unsigned)decode_int8(cp,optlen));
+      fprintf(fp,"TTL %'u",(unsigned)decode_int8(cp,optlen));
       break;
     case OUTPUT_SAMPRATE:
-      printf("samprate %'u Hz",(unsigned int)decode_int(cp,optlen));
+      fprintf(fp,"samprate %'u Hz",(unsigned int)decode_int(cp,optlen));
       break;
     case OUTPUT_METADATA_PACKETS:
-      printf("metadata pkts %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"metadata pkts %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case OUTPUT_DATA_PACKETS:
-      printf("data pkts %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"data pkts %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case AD_LEVEL:
-      printf("A/D level %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"A/D level %.1f dB",decode_float(cp,optlen));
       break;
     case CALIBRATE:
-      printf("calibration %'lg",decode_double(cp,optlen));
+      fprintf(fp,"calibration %'lg",decode_double(cp,optlen));
       break;
     case LNA_GAIN:
-      printf("lna gain %'d dB",decode_int(cp,optlen));
+      fprintf(fp,"lna gain %'d dB",decode_int(cp,optlen));
       break;
     case MIXER_GAIN:
-      printf("mixer gain %'d dB",decode_int(cp,optlen));
+      fprintf(fp,"mixer gain %'d dB",decode_int(cp,optlen));
       break;
     case IF_GAIN:
-      printf("if gain %'d dB",decode_int(cp,optlen));
+      fprintf(fp,"if gain %'d dB",decode_int(cp,optlen));
       break;
     case DC_I_OFFSET:
-      printf("DC I offset %g",decode_float(cp,optlen));
+      fprintf(fp,"DC I offset %g",decode_float(cp,optlen));
       break;
     case DC_Q_OFFSET:
-      printf("DC Q offset %g",decode_float(cp,optlen));
+      fprintf(fp,"DC Q offset %g",decode_float(cp,optlen));
       break;
     case IQ_IMBALANCE:
-      printf("gain imbal %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"gain imbal %.1f dB",decode_float(cp,optlen));
       break;
     case IQ_PHASE:
-      printf("phase imbal %.1f deg",DEGPRA*asinf(decode_float(cp,optlen)));
+      fprintf(fp,"phase imbal %.1f deg",DEGPRA*asinf(decode_float(cp,optlen)));
       break;
     case DIRECT_CONVERSION:
-      printf("direct conv %s",decode_int8(cp,optlen) ? "yes" : "no");
+      fprintf(fp,"direct conv %s",decode_int8(cp,optlen) ? "yes" : "no");
       break;
     case RADIO_FREQUENCY:
-      printf("RF %'.3lf Hz",decode_double(cp,optlen));
+      fprintf(fp,"RF %'.3lf Hz",decode_double(cp,optlen));
       break;
     case FIRST_LO_FREQUENCY:
-      printf("first LO %'.3lf Hz",decode_double(cp,optlen));
+      fprintf(fp,"first LO %'.3lf Hz",decode_double(cp,optlen));
       break;
     case SECOND_LO_FREQUENCY:
-      printf("second LO %'.3lf Hz",decode_double(cp,optlen));
+      fprintf(fp,"second LO %'.3lf Hz",decode_double(cp,optlen));
       break;
     case SHIFT_FREQUENCY:
-      printf("shift %'.3lf Hz",decode_double(cp,optlen));
+      fprintf(fp,"shift %'.3lf Hz",decode_double(cp,optlen));
       break;
     case DOPPLER_FREQUENCY:
-      printf("doppler %'.3lf Hz",decode_double(cp,optlen));
+      fprintf(fp,"doppler %'.3lf Hz",decode_double(cp,optlen));
       break;
     case DOPPLER_FREQUENCY_RATE:
-      printf("doppler rate %'.3lf Hz/s",decode_double(cp,optlen));
+      fprintf(fp,"doppler rate %'.3lf Hz/s",decode_double(cp,optlen));
       break;
     case LOW_EDGE:
-      printf("filt low %'g Hz",decode_float(cp,optlen));
+      fprintf(fp,"filt low %'g Hz",decode_float(cp,optlen));
       break;
     case HIGH_EDGE:
-      printf("filt high %'g Hz",decode_float(cp,optlen));
+      fprintf(fp,"filt high %'g Hz",decode_float(cp,optlen));
       break;
     case FE_LOW_EDGE:
-      printf("fe filt low %'g Hz",decode_float(cp,optlen));
+      fprintf(fp,"fe filt low %'g Hz",decode_float(cp,optlen));
       break;
     case FE_HIGH_EDGE:
-      printf("fe filt high %'g Hz",decode_float(cp,optlen));
+      fprintf(fp,"fe filt high %'g Hz",decode_float(cp,optlen));
       break;
     case FE_ISREAL:
-      printf("fe produces %s samples",decode_int8(cp,optlen) ? "real" : "complex");
+      fprintf(fp,"fe produces %s samples",decode_int8(cp,optlen) ? "real" : "complex");
       break;
     case KAISER_BETA:
-      printf("filter kaiser_beta %g",decode_float(cp,optlen));      
+      fprintf(fp,"filter kaiser_beta %g",decode_float(cp,optlen));      
       break;
     case FILTER_BLOCKSIZE:
-      printf("filter L %'d",decode_int(cp,optlen));
+      fprintf(fp,"filter L %'d",decode_int(cp,optlen));
       break;
     case FILTER_FIR_LENGTH:
-      printf("filter M %'d",decode_int(cp,optlen));
+      fprintf(fp,"filter M %'d",decode_int(cp,optlen));
       break;
     case NOISE_BANDWIDTH:
-      printf("noise BW %'g Hz",decode_float(cp,optlen));
+      fprintf(fp,"noise BW %'g Hz",decode_float(cp,optlen));
       break;
     case IF_POWER:
-      printf("IF pwr %'.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"IF pwr %'.1f dB",decode_float(cp,optlen));
       break;
     case BASEBAND_POWER:
-      printf("baseband pwr %'.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"baseband pwr %'.1f dB",decode_float(cp,optlen));
       break;
     case NOISE_DENSITY:
-      printf("N0 %'.1f dB/Hz",decode_float(cp,optlen));
+      fprintf(fp,"N0 %'.1f dB/Hz",decode_float(cp,optlen));
       break;
     case DEMOD_TYPE:
       {
 	const int i = decode_int(cp,optlen); // ????
-	printf("demod %d ",i);
+	fprintf(fp,"demod %d ",i);
 	switch(i){
 	case LINEAR_DEMOD:
-	  printf("(linear)");
+	  fprintf(fp,"(linear)");
 	  break;
 	case FM_DEMOD:
-	  printf("(FM)");
+	  fprintf(fp,"(FM)");
 	  break;
 	case WFM_DEMOD:
-	  printf("(wide FM)");
+	  fprintf(fp,"(wide FM)");
 	  break;
 	case SPECT_DEMOD:
-	  printf("(spectrum)");
+	  fprintf(fp,"(spectrum)");
 	  break;
 	default:
-	  printf("(unknown)");
+	  fprintf(fp,"(unknown)");
 	  break;
 	}
       }
       break;
     case OUTPUT_CHANNELS:
-      printf("out channels %'d",decode_int(cp,optlen));
+      fprintf(fp,"out channels %'d",decode_int(cp,optlen));
       break;
     case INDEPENDENT_SIDEBAND:
-      printf("ISB %s",decode_int8(cp,optlen) ? "on" : "off");
+      fprintf(fp,"ISB %s",decode_int8(cp,optlen) ? "on" : "off");
       break;
     case THRESH_EXTEND:
-      printf("Thr Extend %s",decode_int8(cp,optlen) ? "on" : "off");
+      fprintf(fp,"Thr Extend %s",decode_int8(cp,optlen) ? "on" : "off");
       break;
     case PLL_ENABLE:
-      printf("PLL %s",decode_int8(cp,optlen) ? "enable":"disable");
+      fprintf(fp,"PLL %s",decode_int8(cp,optlen) ? "enable":"disable");
       break;
     case PLL_LOCK:
-      printf("PLL %s",decode_int8(cp,optlen) ? "lock" : "unlock");
+      fprintf(fp,"PLL %s",decode_int8(cp,optlen) ? "lock" : "unlock");
       break;
     case PLL_SQUARE:
-      printf("PLL square %s",decode_int8(cp,optlen) ? "on" : "off");
+      fprintf(fp,"PLL square %s",decode_int8(cp,optlen) ? "on" : "off");
       break;
     case PLL_PHASE:
-      printf("PLL phase %g deg",DEGPRA*decode_float(cp,optlen));
+      fprintf(fp,"PLL phase %g deg",DEGPRA*decode_float(cp,optlen));
       break;
     case PLL_BW:
-      printf("PLL loop BW %'.1f Hz",decode_float(cp,optlen));
+      fprintf(fp,"PLL loop BW %'.1f Hz",decode_float(cp,optlen));
       break;
     case ENVELOPE:
-      printf("Env det %s",decode_int8(cp,optlen) ? "on" : "off");
+      fprintf(fp,"Env det %s",decode_int8(cp,optlen) ? "on" : "off");
       break;
     case DEMOD_SNR:
-      printf("Demod SNR %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"Demod SNR %.1f dB",decode_float(cp,optlen));
       break;
     case FREQ_OFFSET:
-      printf("freq offset %'g Hz",decode_float(cp,optlen));
+      fprintf(fp,"freq offset %'g Hz",decode_float(cp,optlen));
       break;
     case PEAK_DEVIATION:
-      printf("peak FM dev %'g Hz",decode_float(cp,optlen));
+      fprintf(fp,"peak FM dev %'g Hz",decode_float(cp,optlen));
       break;
     case PL_TONE:
-      printf("PL tone freq %'g Hz",decode_float(cp,optlen));
+      fprintf(fp,"PL tone freq %'g Hz",decode_float(cp,optlen));
       break;
     case PL_DEVIATION:
-      printf("PL tone deviation %'g Hz",decode_float(cp,optlen));
+      fprintf(fp,"PL tone deviation %'g Hz",decode_float(cp,optlen));
       break;
     case AGC_ENABLE:
-      printf("agc %s",decode_int8(cp,optlen) ? "enable" : "disable");
+      fprintf(fp,"agc %s",decode_int8(cp,optlen) ? "enable" : "disable");
       break;
     case HEADROOM:
-      printf("headroom %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"headroom %.1f dB",decode_float(cp,optlen));
       break;
     case AGC_HANGTIME:
-      printf("hangtime %'g s",decode_float(cp,optlen));
+      fprintf(fp,"hangtime %'g s",decode_float(cp,optlen));
       break;
     case AGC_RECOVERY_RATE:
-      printf("recovery rate %.1f dB/s",decode_float(cp,optlen));
+      fprintf(fp,"recovery rate %.1f dB/s",decode_float(cp,optlen));
       break;
     case AGC_ATTACK_RATE:
-      printf("attack rate %.1f dB/s",decode_float(cp,optlen));
+      fprintf(fp,"attack rate %.1f dB/s",decode_float(cp,optlen));
       break;
     case AGC_THRESHOLD:
-      printf("threshold %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"threshold %.1f dB",decode_float(cp,optlen));
       break;
     case GAIN:
-      printf("gain %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"gain %.1f dB",decode_float(cp,optlen));
       break;
     case OUTPUT_LEVEL:
-      printf("output level %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"output level %.1f dB",decode_float(cp,optlen));
       break;
     case OUTPUT_SAMPLES:
-      printf("output samp %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"output samp %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case OPUS_SOURCE_SOCKET:
       {
 	struct sockaddr_storage sock;
-	printf("opus src %s",formatsock(decode_socket(&sock,cp,optlen)));
+	fprintf(fp,"opus src %s",formatsock(decode_socket(&sock,cp,optlen)));
       }
       break;
     case OPUS_DEST_SOCKET:
       {
 	struct sockaddr_storage sock;
-	printf("opus dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+	fprintf(fp,"opus dst %s",formatsock(decode_socket(&sock,cp,optlen)));
       }
       break;
     case OPUS_SSRC:
-      printf("opus ssrc %'u",decode_int32(cp,optlen));
+      fprintf(fp,"opus ssrc %'u",decode_int32(cp,optlen));
       break;
     case OPUS_TTL:
-      printf("opus ttl %d",decode_int(cp,optlen));
+      fprintf(fp,"opus ttl %d",decode_int(cp,optlen));
       break;
     case OPUS_BITRATE:
-      printf("opus rate %'d bps",decode_int(cp,optlen));
+      fprintf(fp,"opus rate %'d bps",decode_int(cp,optlen));
       break;
     case OPUS_PACKETS:
-      printf("opus pkts %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"opus pkts %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case FILTER_DROPS:
-      printf("block drops %'u",(unsigned int)decode_int(cp,optlen));
+      fprintf(fp,"block drops %'u",(unsigned int)decode_int(cp,optlen));
       break;
     case LOCK:
-      printf("freq %s",decode_int8(cp,optlen) ? "locked" : "unlocked");
+      fprintf(fp,"freq %s",decode_int8(cp,optlen) ? "locked" : "unlocked");
       break;
     case TP1:
-      printf("TP1 %'.1f",decode_float(cp,optlen));
+      fprintf(fp,"TP1 %'.1f",decode_float(cp,optlen));
       break;
     case TP2:
-      printf("TP2 %'.1f",decode_float(cp,optlen));
+      fprintf(fp,"TP2 %'.1f",decode_float(cp,optlen));
       break;
     case GAINSTEP:
-      printf("gain step %'d",decode_int(cp,optlen));
+      fprintf(fp,"gain step %'d",decode_int(cp,optlen));
       break;
     case AD_BITS_PER_SAMPLE:
-      printf("A/D bits/sample %d",decode_int(cp,optlen));
+      fprintf(fp,"A/D bits/sample %d",decode_int(cp,optlen));
       break;
     case SQUELCH_OPEN:
-      printf("squelch open %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"squelch open %.1f dB",decode_float(cp,optlen));
       break;
     case SQUELCH_CLOSE:
-      printf("squelch close %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"squelch close %.1f dB",decode_float(cp,optlen));
       break;
     case DEEMPH_GAIN:
-      printf("deemph gain %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"deemph gain %.1f dB",decode_float(cp,optlen));
       break;
     case DEEMPH_TC:
-      printf("demph tc %.1f us",1e6f * decode_float(cp,optlen));
+      fprintf(fp,"demph tc %.1f us",1e6f * decode_float(cp,optlen));
       break;
     case CONVERTER_OFFSET:
-      printf("converter %.1f Hz",decode_float(cp,optlen));
+      fprintf(fp,"converter %.1f Hz",decode_float(cp,optlen));
       break;
     case PRESET:
       {
 	char *p = decode_string(cp,optlen);
-	printf("preset %s",p);
+	fprintf(fp,"preset %s",p);
 	FREE(p);
       }
       break;
     case COHERENT_BIN_BW:
-      printf("coherent bin bandwidth %.1f Hz",decode_float(cp,optlen));
+      fprintf(fp,"coherent bin bandwidth %.1f Hz",decode_float(cp,optlen));
       break;
     case COHERENT_BIN_SPACING:
-      printf("coherent bin spacing %.1f Hz",decode_float(cp,optlen));
+      fprintf(fp,"coherent bin spacing %.1f Hz",decode_float(cp,optlen));
       break;
     case NONCOHERENT_BIN_BW:
-      printf("noncoherent bin bandwidth %.1f Hz",decode_float(cp,optlen));
+      fprintf(fp,"noncoherent bin bandwidth %.1f Hz",decode_float(cp,optlen));
       break;
     case BIN_COUNT:
-      printf("bins %d",decode_int(cp,optlen));
+      fprintf(fp,"bins %d",decode_int(cp,optlen));
       break;
     case INTEGRATE_TC:
-      printf("integrate tc %.1f s",decode_float(cp,optlen));
+      fprintf(fp,"integrate tc %.1f s",decode_float(cp,optlen));
       break;
     case RF_ATTEN:
-      printf("rf atten %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"rf atten %.1f dB",decode_float(cp,optlen));
       break;
     case RF_GAIN:
-      printf("rf gain %.1f dB",decode_float(cp,optlen));
+      fprintf(fp,"rf gain %.1f dB",decode_float(cp,optlen));
       break;
     case BIN_DATA:
       {
-	printf("fft bins:");
+	fprintf(fp,"fft bins:");
 	int count = optlen/sizeof(float);
 	for(int i=0; i < count; i++){
-	  printf(" %.1g",decode_float(cp,sizeof(float)));
+	  fprintf(fp," %.1g",decode_float(cp,sizeof(float)));
 	  cp += sizeof(float);
 	}
       }
       break;
     default:
-      printf("unknown type %d length %d",type,optlen);
+      fprintf(fp,"unknown type %d length %d",type,optlen);
       break;
     }
     cp += optlen;
   }
  done:;
-  printf("\n");
+  fprintf(fp,"\n");
 }

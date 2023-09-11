@@ -3,6 +3,7 @@
 
 #ifndef _STATUS_H
 #define _STATUS_H 1
+#include <stdio.h>
 #include <stdint.h>
 #include <stdint.h>
 #include <sys/time.h>
@@ -175,7 +176,7 @@ char *decode_string(uint8_t const *,int);
 uint32_t get_ssrc(uint8_t const *buffer,int length);
 uint32_t get_tag(uint8_t const *buffer,int length);
 
-void dump_metadata(uint8_t const *,int,bool);
+void dump_metadata(FILE *,uint8_t const *,int,bool);
 
 int64_t random_time(int64_t base,int64_t rrange);
 uint32_t send_poll(int fd,int ssrc);
