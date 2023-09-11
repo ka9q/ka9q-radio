@@ -66,150 +66,150 @@ char const *demod_name_from_type(enum demod_type type){
 }
 
 // Set reasonable defaults before reading mode or config tables
-int set_defaults(struct channel *demod){
-  if(demod == NULL)
+int set_defaults(struct channel *chan){
+  if(chan == NULL)
     return -1;
 
   
-  demod->output.data_fd = -1; // Force error if it's not set
-  demod->tp1 = demod->tp2 = NAN;
-  demod->tune.doppler = 0;
-  demod->tune.doppler_rate = 0;
+  chan->output.data_fd = -1; // Force error if it's not set
+  chan->tp1 = chan->tp2 = NAN;
+  chan->tune.doppler = 0;
+  chan->tune.doppler_rate = 0;
   // De-emphasis defaults to off, enabled only in FM modes
-  demod->deemph.rate = 0;
-  demod->deemph.gain = 1.0;
+  chan->deemph.rate = 0;
+  chan->deemph.gain = 1.0;
 
-  demod->demod_type = DEFAULT_DEMOD;
-  demod->filter.kaiser_beta = DEFAULT_KAISER_BETA;
-  demod->filter.min_IF = DEFAULT_LOW;
-  demod->filter.max_IF = DEFAULT_HIGH;
-  demod->filter.remainder = NAN;      // Important to force downconvert() to call set_osc() on first call
-  demod->filter.bin_shift = -1000999; // Force initialization here too
-  demod->squelch_open = dB2power(DEFAULT_SQUELCH_OPEN);
-  demod->squelch_close = dB2power(DEFAULT_SQUELCH_CLOSE);
-  demod->squelchtail = DEFAULT_SQUELCHTAIL;
-  demod->output.headroom = dB2voltage(DEFAULT_HEADROOM);
-  demod->output.channels = 1;
-  demod->tune.shift = 0.0;
-  demod->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE * .001f * Blocktime);
-  demod->linear.hangtime = DEFAULT_HANGTIME / (.001f * Blocktime);
-  demod->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
-  if(demod->output.gain <= 0 || isnan(demod->output.gain))
-     demod->output.gain = dB2voltage(DEFAULT_GAIN); // Set only if out of bounds
-  demod->linear.env = false;
-  demod->linear.pll = false;
-  demod->linear.square = false;
-  demod->filter.isb = false;
-  demod->linear.loop_bw = DEFAULT_PLL_BW;
-  demod->linear.agc = true;
-  switch(demod->demod_type){
+  chan->demod_type = DEFAULT_DEMOD;
+  chan->filter.kaiser_beta = DEFAULT_KAISER_BETA;
+  chan->filter.min_IF = DEFAULT_LOW;
+  chan->filter.max_IF = DEFAULT_HIGH;
+  chan->filter.remainder = NAN;      // Important to force downconvert() to call set_osc() on first call
+  chan->filter.bin_shift = -1000999; // Force initialization here too
+  chan->squelch_open = dB2power(DEFAULT_SQUELCH_OPEN);
+  chan->squelch_close = dB2power(DEFAULT_SQUELCH_CLOSE);
+  chan->squelchtail = DEFAULT_SQUELCHTAIL;
+  chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
+  chan->output.channels = 1;
+  chan->tune.shift = 0.0;
+  chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE * .001f * Blocktime);
+  chan->linear.hangtime = DEFAULT_HANGTIME / (.001f * Blocktime);
+  chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
+  if(chan->output.gain <= 0 || isnan(chan->output.gain))
+     chan->output.gain = dB2voltage(DEFAULT_GAIN); // Set only if out of bounds
+  chan->linear.env = false;
+  chan->linear.pll = false;
+  chan->linear.square = false;
+  chan->filter.isb = false;
+  chan->linear.loop_bw = DEFAULT_PLL_BW;
+  chan->linear.agc = true;
+  switch(chan->demod_type){
   case LINEAR_DEMOD:
-    demod->output.samprate = DEFAULT_LINEAR_SAMPRATE;
+    chan->output.samprate = DEFAULT_LINEAR_SAMPRATE;
     break;
   case FM_DEMOD:
-    demod->output.samprate = DEFAULT_FM_SAMPRATE;
+    chan->output.samprate = DEFAULT_FM_SAMPRATE;
     {
       float tc = DEFAULT_NBFM_TC * 1e-6F;
-      demod->deemph.rate = expf(-1.0F / (tc * demod->output.samprate));
-      demod->deemph.gain = dB2voltage(DEFAULT_FM_DEEMPH_GAIN);
+      chan->deemph.rate = expf(-1.0F / (tc * chan->output.samprate));
+      chan->deemph.gain = dB2voltage(DEFAULT_FM_DEEMPH_GAIN);
     }
-    demod->fm.tone_freq = 0; // No default PL tone
+    chan->fm.tone_freq = 0; // No default PL tone
     break;
   case WFM_DEMOD:
-    demod->output.channels = 2;      // always stereo
-    demod->output.samprate = 384000; // downconverter samprate forced for FM stereo decoding. Output also forced to 48 kHz
+    chan->output.channels = 2;      // always stereo
+    chan->output.samprate = 384000; // downconverter samprate forced for FM stereo decoding. Output also forced to 48 kHz
     {
       // Default 75 microseconds for north american FM broadcasting
       float tc = DEFAULT_WFM_TC * 1e-6F;
-      demod->deemph.rate = expf(-1.0F / (tc * 48000)); // hardwired output sample rate -- needs cleanup
-      demod->deemph.gain = dB2voltage(DEFAULT_WFM_DEEMPH_GAIN);
+      chan->deemph.rate = expf(-1.0F / (tc * 48000)); // hardwired output sample rate -- needs cleanup
+      chan->deemph.gain = dB2voltage(DEFAULT_WFM_DEEMPH_GAIN);
     }
     break;
   case SPECT_DEMOD:
-    demod->output.channels = 0;
-    demod->output.samprate = 0;
+    chan->output.channels = 0;
+    chan->output.samprate = 0;
     break;
   }
-  double r = remainder(Blocktime * demod->output.samprate * .001,1.0);
+  double r = remainder(Blocktime * chan->output.samprate * .001,1.0);
   if(r != 0){
     fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
-	    Blocktime,demod->output.samprate,r);
+	    Blocktime,chan->output.samprate,r);
   }
   return 0;
 }
 
-// Set selected section of specified config file into current demod structure
+// Set selected section of specified config file into current chan structure
 // Caller must (re) initialize pre-demod filter and (re)start demodulator thread
-int loadmode(struct channel *demod,dictionary const *table,char const *mode){
-  if(demod == NULL || table == NULL || mode == NULL || strlen(mode) == 0)
+int loadmode(struct channel *chan,dictionary const *table,char const *mode){
+  if(chan == NULL || table == NULL || mode == NULL || strlen(mode) == 0)
     return -1;
 
   char const * demod_name = config_getstring(table,mode,"demod",NULL);
   if(demod_name){
     int const x = demod_type_from_name(demod_name);
-    if(demod->demod_type >= 0){
-      demod->demod_type = x;
+    if(chan->demod_type >= 0){
+      chan->demod_type = x;
     }
   }
-  demod->output.samprate = DEFAULT_LINEAR_SAMPRATE; // Make sure it gets set to *something*
+  chan->output.samprate = DEFAULT_LINEAR_SAMPRATE; // Make sure it gets set to *something*
   {
     char const *p = config_getstring(table,mode,"samprate",NULL);
     if(p != NULL)
-      demod->output.samprate = parse_frequency(p,false);
+      chan->output.samprate = parse_frequency(p,false);
   }
-  demod->output.channels = config_getint(table,mode,"channels",demod->output.channels);
+  chan->output.channels = config_getint(table,mode,"channels",chan->output.channels);
   if(config_getboolean(table,mode,"mono",0))
-    demod->output.channels = 1;
+    chan->output.channels = 1;
   if(config_getboolean(table,mode,"stereo",0))
-    demod->output.channels = 2;
-  demod->filter.kaiser_beta = config_getfloat(table,mode,"kaiser-beta",demod->filter.kaiser_beta);
+    chan->output.channels = 2;
+  chan->filter.kaiser_beta = config_getfloat(table,mode,"kaiser-beta",chan->filter.kaiser_beta);
 
   // Pre-detection filter limits
-  demod->filter.min_IF = DEFAULT_LOW;
-  demod->filter.max_IF = DEFAULT_HIGH;
+  chan->filter.min_IF = DEFAULT_LOW;
+  chan->filter.max_IF = DEFAULT_HIGH;
   {
     char const *low = config_getstring(table,mode,"low",NULL);
     if(low != NULL)
-      demod->filter.min_IF = parse_frequency(low,false);
+      chan->filter.min_IF = parse_frequency(low,false);
 
     char const *high = config_getstring(table,mode,"high",NULL);
     if(high != NULL)
-      demod->filter.max_IF = parse_frequency(high,false);
+      chan->filter.max_IF = parse_frequency(high,false);
   }
-  if(demod->filter.min_IF > demod->filter.max_IF){
+  if(chan->filter.min_IF > chan->filter.max_IF){
     // Ensure max >= min
-    float t = demod->filter.min_IF;
-    demod->filter.min_IF = demod->filter.max_IF;
-    demod->filter.max_IF = t;
+    float t = chan->filter.min_IF;
+    chan->filter.min_IF = chan->filter.max_IF;
+    chan->filter.max_IF = t;
   }
   {
     char const *cp = config_getstring(table,mode,"squelch-open",NULL);
     if(cp)
-      demod->squelch_open = dB2power(strtof(cp,NULL));
+      chan->squelch_open = dB2power(strtof(cp,NULL));
   }
   {
     char const *cp = config_getstring(table,mode,"squelch-close",NULL);
     if(cp)
-      demod->squelch_close = dB2power(strtof(cp,NULL));
+      chan->squelch_close = dB2power(strtof(cp,NULL));
   }
-  demod->squelchtail = config_getint(table,mode,"squelchtail",demod->squelchtail);
+  chan->squelchtail = config_getint(table,mode,"squelchtail",chan->squelchtail);
   {
     char const *cp = config_getstring(table,mode,"headroom",NULL);
     if(cp)
-      demod->output.headroom = dB2voltage(-fabsf(strtof(cp,NULL))); // always treat as <= 0 dB
+      chan->output.headroom = dB2voltage(-fabsf(strtof(cp,NULL))); // always treat as <= 0 dB
   }
-  demod->tune.shift = 0;
+  chan->tune.shift = 0;
   {
     char const *p = config_getstring(table,mode,"shift",NULL);
     if(p != NULL)
-      demod->tune.shift = parse_frequency(p,false);
+      chan->tune.shift = parse_frequency(p,false);
   }
   {
     char const *cp = config_getstring(table,mode,"recovery-rate",NULL);
     if(cp){
       // dB/sec -> voltage ratio/block
       float x = strtof(cp,NULL);
-      demod->linear.recovery_rate = dB2voltage(fabsf(x) * .001f * Blocktime);
+      chan->linear.recovery_rate = dB2voltage(fabsf(x) * .001f * Blocktime);
     }
   }
   {
@@ -217,52 +217,52 @@ int loadmode(struct channel *demod,dictionary const *table,char const *mode){
     char const *cp = config_getstring(table,mode,"hang-time",NULL);
     if(cp){
       float x = strtof(cp,NULL);
-      demod->linear.hangtime = fabsf(x) / (.001 * Blocktime); // Always >= 0
+      chan->linear.hangtime = fabsf(x) / (.001 * Blocktime); // Always >= 0
     }
   }
   {
     char const *cp = config_getstring(table,mode,"threshold",NULL);
     if(cp){
       float x = strtof(cp,NULL);
-      demod->linear.threshold = dB2voltage(-fabsf(x)); // Always <= unity
+      chan->linear.threshold = dB2voltage(-fabsf(x)); // Always <= unity
     }
   }
   {
     char const *cp = config_getstring(table,mode,"gain",NULL);
     if(cp){
       float x = strtof(cp,NULL);
-      demod->output.gain = dB2voltage(x); // Can be more or less than unity
+      chan->output.gain = dB2voltage(x); // Can be more or less than unity
     }
   }
-  demod->linear.env = config_getboolean(table,mode,"envelope",demod->linear.env);
-  demod->linear.pll = config_getboolean(table,mode,"pll",demod->linear.pll);
-  demod->linear.square = config_getboolean(table,mode,"square",demod->linear.square);  // On implies PLL on
-  if(demod->linear.square)
-    demod->linear.pll = true; // Square implies PLL
+  chan->linear.env = config_getboolean(table,mode,"envelope",chan->linear.env);
+  chan->linear.pll = config_getboolean(table,mode,"pll",chan->linear.pll);
+  chan->linear.square = config_getboolean(table,mode,"square",chan->linear.square);  // On implies PLL on
+  if(chan->linear.square)
+    chan->linear.pll = true; // Square implies PLL
   
-  demod->filter.isb = config_getboolean(table,mode,"conj",demod->filter.isb);       // (unimplemented anyway)
-  demod->linear.loop_bw = config_getfloat(table,mode,"pll-bw",demod->linear.loop_bw);
-  demod->linear.agc = config_getboolean(table,mode,"agc",demod->linear.agc);
-  demod->fm.threshold = config_getboolean(table,mode,"extend",demod->fm.threshold); // FM threshold extension
-  demod->fm.threshold = config_getboolean(table,mode,"threshold-extend",demod->fm.threshold); // FM threshold extension
+  chan->filter.isb = config_getboolean(table,mode,"conj",chan->filter.isb);       // (unimplemented anyway)
+  chan->linear.loop_bw = config_getfloat(table,mode,"pll-bw",chan->linear.loop_bw);
+  chan->linear.agc = config_getboolean(table,mode,"agc",chan->linear.agc);
+  chan->fm.threshold = config_getboolean(table,mode,"extend",chan->fm.threshold); // FM threshold extension
+  chan->fm.threshold = config_getboolean(table,mode,"threshold-extend",chan->fm.threshold); // FM threshold extension
 
   {
     char const *cp = config_getstring(table,mode,"deemph-tc",NULL);
     if(cp){
       float const tc = strtof(cp,NULL) * 1e-6;
-      demod->deemph.rate = expf(-1.0f / (tc * demod->output.samprate));
+      chan->deemph.rate = expf(-1.0f / (tc * chan->output.samprate));
     }
   }
   {
     char const *cp = config_getstring(table,mode,"deemph-gain",NULL);
     if(cp){
       float const g = strtof(cp,NULL);
-      demod->deemph.gain = dB2voltage(g);
+      chan->deemph.gain = dB2voltage(g);
     }
   }
   // "pl" and "ctcss" are synonyms
-  demod->fm.tone_freq = config_getfloat(table,mode,"pl",demod->fm.tone_freq);
-  demod->fm.tone_freq = config_getfloat(table,mode,"ctcss",demod->fm.tone_freq);
+  chan->fm.tone_freq = config_getfloat(table,mode,"pl",chan->fm.tone_freq);
+  chan->fm.tone_freq = config_getfloat(table,mode,"ctcss",chan->fm.tone_freq);
   return 0;
 }
 

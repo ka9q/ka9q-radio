@@ -73,7 +73,7 @@ volatile bool Stop_transfers = false; // Request to stop data transfers; how sho
 
 static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 pthread_t Status_thread;
-pthread_t Demod_reaper_thread;
+pthread_t chan_reaper_thread;
 struct sockaddr_storage Metadata_source_address;   // Source of SDR metadata
 struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
 char const *Metadata_dest_string; // DNS name of default multicast group for ostatus/commands
@@ -330,11 +330,11 @@ static int loadconfig(char const * const file){
   }
   // Set up template for dynamically created demods
   if(Data != NULL){
-    char const * mode = config_getstring(Configtable,global,"mode",NULL); // Must be specified to create a dynamic demod
+    char const * mode = config_getstring(Configtable,global,"mode",NULL); // Must be specified to create a dynamic channel
     if(mode != NULL){
-      Template = create_demod(0);
+      Template = create_chan(0);
       if(Template == NULL){
-	fprintf(stdout,"can't create dynamic demodulator template??\n");
+	fprintf(stdout,"can't create dynamic channel template??\n");
       } else {
 	set_defaults(Template);
 	if(loadmode(Template,Modetable,mode) != 0)
@@ -349,7 +349,7 @@ static int loadconfig(char const * const file){
   }
   // Process individual demodulator sections
   int const nsect = iniparser_getnsec(Configtable);
-  int ndemods = 0;
+  int nchans = 0;
   for(int sect = 0; sect < nsect; sect++){
     char const * const sname = iniparser_getsecname(Configtable,sect);
     if(strcasecmp(sname,global) == 0)
@@ -437,32 +437,32 @@ static int loadconfig(char const * const file){
 	if(ssrc == 0)
 	  continue; // Reserved ssrc
 
-	struct channel *demod = NULL;
+	struct channel *chan = NULL;
 	// Try to create it, incrementing in case of collision
 	int const max_collisions = 100;
 	for(int i=0; i < max_collisions; i++){
-	  demod = create_demod(ssrc+i);
-	  if(demod != NULL){
+	  chan = create_chan(ssrc+i);
+	  if(chan != NULL){
 	    ssrc += i;
 	    break;
 	  }
 	}
-	if(demod == NULL){
+	if(chan == NULL){
 	  fprintf(stdout,"Can't allocate requested ssrc %u-%u\n",ssrc,ssrc + max_collisions);
 	  continue;
 	}
 	// Set reasonable compiled-in defaults just to keep things from blowing up
-	set_defaults(demod);
-	if(mode != NULL && loadmode(demod,Modetable,mode) != 0)
+	set_defaults(chan);
+	if(mode != NULL && loadmode(chan,Modetable,mode) != 0)
 	  fprintf(stdout,"warning: in [%s], loadmode(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Modefile,mode);
 	
-	loadmode(demod,Configtable,sname); // Overwrite with other entries from this section, without overwriting those
+	loadmode(chan,Configtable,sname); // Overwrite with other entries from this section, without overwriting those
 	
-	memcpy(&demod->output.data_dest_address,&data_dest_address,sizeof(demod->output.data_dest_address));
-	strlcpy(demod->output.data_dest_string,data,sizeof(demod->output.data_dest_string));
-	demod->output.data_fd = data_fd;
+	memcpy(&chan->output.data_dest_address,&data_dest_address,sizeof(chan->output.data_dest_address));
+	strlcpy(chan->output.data_dest_string,data,sizeof(chan->output.data_dest_string));
+	chan->output.data_fd = data_fd;
 	
-	if(demod->output.data_fd <= 0){
+	if(chan->output.data_fd <= 0){
 	  fprintf(stdout,"can't set up PCM output to %s: %s\n",data,strerror(errno));
 	  exit(EX_IOERR); // Let systemd retry us
 	}
@@ -470,45 +470,45 @@ static int loadconfig(char const * const file){
 	struct sockaddr_storage data_source_address;
 	{
 	  socklen_t len = sizeof(data_source_address);
-	  getsockname(demod->output.data_fd,(struct sockaddr *)&demod->output.data_source_address,&len);
+	  getsockname(chan->output.data_fd,(struct sockaddr *)&chan->output.data_source_address,&len);
 	}
-	// Time to start it -- ssrc is stashed by create_demod()
-	set_freq(demod,f);
-	start_demod(demod);
+	// Time to start it -- ssrc is stashed by create_chan()
+	set_freq(chan,f);
+	start_demod(chan);
 	nfreq++;
-	ndemods++;
+	nchans++;
 	
 	if(SAP_enable){
 	  // Highly experimental, off by default
 	  char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
-	  demod->output.sap_fd = setup_mcast(sap_dest,NULL,1,mcast_ttl,ip_tos,0);
-	  if(demod->output.sap_fd < 3)
+	  chan->output.sap_fd = setup_mcast(sap_dest,NULL,1,mcast_ttl,ip_tos,0);
+	  if(chan->output.sap_fd < 3)
 	    fprintf(stdout,"Can't set up SAP output to %s\n",sap_dest); // not fatal
 	  else
-	    pthread_create(&demod->sap_thread,NULL,sap_send,demod);
+	    pthread_create(&chan->sap_thread,NULL,sap_send,chan);
 	}
 	// RTCP Real Time Control Protocol daemon is optional
 	if(RTCP_enable){
-	  demod->output.rtcp_fd = setup_mcast(demod->output.data_dest_string,NULL,1,mcast_ttl,ip_tos,1); // RTP port number + 1
-	  if(demod->output.rtcp_fd < 3)
-	    fprintf(stdout,"can't set up RTCP output to %s\n",demod->output.data_dest_string); // not fatal
+	  chan->output.rtcp_fd = setup_mcast(chan->output.data_dest_string,NULL,1,mcast_ttl,ip_tos,1); // RTP port number + 1
+	  if(chan->output.rtcp_fd < 3)
+	    fprintf(stdout,"can't set up RTCP output to %s\n",chan->output.data_dest_string); // not fatal
 	  else
-	    pthread_create(&demod->rtcp_thread,NULL,rtcp_send,demod);
+	    pthread_create(&chan->rtcp_thread,NULL,rtcp_send,chan);
 	}
       }
-      // Done processing frequency list(s) and creating demods
+      // Done processing frequency list(s) and creating chans
       FREE(freq_list);
-      fprintf(stdout,"%d demodulators started\n",nfreq);
+      fprintf(stdout,"%d channels started\n",nfreq);
     }
   }
-  // Start the status thread after all the receivers have been created so it doesn't contend for the demod list lock
+  // Start the status thread after all the receivers have been created so it doesn't contend for the chan list lock
   if(Ctl_fd >= 3 && Status_fd >= 3)
     pthread_create(&Status_thread,NULL,radio_status,NULL);
 
-  pthread_create(&Demod_reaper_thread,NULL,demod_reaper,NULL);
+  pthread_create(&chan_reaper_thread,NULL,chan_reaper,NULL);
   iniparser_freedict(Configtable);
   Configtable = NULL;
-  return ndemods;
+  return nchans;
 }
 
 // Set up a local front end device
@@ -602,19 +602,19 @@ static int setup_hardware(char const *sname){
 
 // RTP control protocol sender task
 static void *rtcp_send(void *arg){
-  struct channel const *demod = (struct channel *)arg;
-  if(demod == NULL)
+  struct channel const *chan = (struct channel *)arg;
+  if(chan == NULL)
     pthread_exit(NULL);
 
   {
     char name[100];
-    snprintf(name,sizeof(name),"rtcp %u",demod->output.rtp.ssrc);
+    snprintf(name,sizeof(name),"rtcp %u",chan->output.rtp.ssrc);
     pthread_setname(name);
   }
 
   while(1){
 
-    if(demod->output.rtp.ssrc == 0) // Wait until it's set by output RTP subsystem
+    if(chan->output.rtp.ssrc == 0) // Wait until it's set by output RTP subsystem
       goto done;
     uint8_t buffer[4096]; // much larger than necessary
     memset(buffer,0,sizeof(buffer));
@@ -622,7 +622,7 @@ static void *rtcp_send(void *arg){
     // Construct sender report
     struct rtcp_sr sr;
     memset(&sr,0,sizeof(sr));
-    sr.ssrc = demod->output.rtp.ssrc;
+    sr.ssrc = chan->output.rtp.ssrc;
 
     // Construct NTP timestamp (NTP uses UTC, ignores leap seconds)
     {
@@ -633,8 +633,8 @@ static void *rtcp_send(void *arg){
     }
     // The zero is to remind me that I start timestamps at zero, but they could start anywhere
     sr.rtp_timestamp = (0 + gps_time_ns() - Starttime) / BILLION;
-    sr.packet_count = demod->output.rtp.seq;
-    sr.byte_count = demod->output.rtp.bytes;
+    sr.packet_count = chan->output.rtp.seq;
+    sr.byte_count = chan->output.rtp.bytes;
     
     uint8_t *dp = gen_sr(buffer,sizeof(buffer),&sr,NULL,0);
 
@@ -665,10 +665,10 @@ static void *rtcp_send(void *arg){
     strlcpy(sdes[3].message,"KA9Q Radio Program",sizeof(sdes[3].message));
     sdes[3].mlen = strlen(sdes[3].message);
     
-    dp = gen_sdes(dp,sizeof(buffer) - (dp-buffer),demod->output.rtp.ssrc,sdes,4);
+    dp = gen_sdes(dp,sizeof(buffer) - (dp-buffer),chan->output.rtp.ssrc,sdes,4);
 
 
-    send(demod->output.rtcp_fd,buffer,dp-buffer,0);
+    send(chan->output.rtcp_fd,buffer,dp-buffer,0);
   done:;
     sleep(1);
   }

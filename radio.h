@@ -272,11 +272,11 @@ struct channel {
   float tp1,tp2; // Spare test points
 };
 
-extern struct channel *Demod_list;
-extern int Demod_list_length;
-extern int Active_demod_count;
-extern int const Demod_alloc_quantum;
-extern pthread_mutex_t Demod_list_mutex;
+extern struct channel *Channel_list;
+extern int Channel_list_length;
+extern int Active_channel_count;
+extern int const Channel_alloc_quantum;
+extern pthread_mutex_t Channel_list_mutex;
 
 extern int Status_fd;  // File descriptor for receiver status
 extern int Ctl_fd;     // File descriptor for receiving user commands
@@ -286,29 +286,29 @@ extern int Verbose;
 extern float Blocktime; // Common to all receiver slices. NB! Milliseconds, not seconds
 extern uint64_t Metadata_packets;
 
-// Functions/methods to control a demod instance
-struct channel *create_demod(uint32_t ssrc);
-struct channel *lookup_demod(uint32_t ssrc);
-struct channel *setup_demod(uint32_t ssrc);
-void free_demod(struct channel **);
+// Functions/methods to control a channel instance
+struct channel *create_chan(uint32_t ssrc);
+struct channel *lookup_chan(uint32_t ssrc);
+struct channel *setup_chan(uint32_t ssrc);
+void free_chan(struct channel **);
 
 char const *demod_name_from_type(enum demod_type type);
 int demod_type_from_name(char const *name);
-int loadmode(struct channel *demod,dictionary const *table,char const *mode);
-int set_defaults(struct channel *demod);
+int loadmode(struct channel *chan,dictionary const *table,char const *mode);
+int set_defaults(struct channel *chan);
 
 double set_freq(struct channel * restrict ,double);
 int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq);
-int start_demod(struct channel * restrict demod);
-int kill_demod(struct channel ** restrict demod);
+int start_demod(struct channel * restrict chan);
+int kill_demod(struct channel ** restrict chan);
 double set_first_LO(struct channel const * restrict, double);
-int downconvert(struct channel *demod);
+int downconvert(struct channel *chan);
 int set_reference_level(struct frontend *frontend);
 
 // Helper threads
 void *sap_send(void *);
 void *radio_status(void *);
-void *demod_reaper(void *);
+void *chan_reaper(void *);
 
 // Demodulator thread entry points
 void *demod_fm(void *);

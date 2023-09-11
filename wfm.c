@@ -27,11 +27,11 @@ static int const power_squelch = 1; // Enable experimental pre-squelch to save C
 // FM demodulator thread
 void *demod_wfm(void *arg){
   assert(arg != NULL);
-  struct channel * demod = arg;
+  struct channel * chan = arg;
 
   {
     char name[100];
-    snprintf(name,sizeof(name),"wfm %u",demod->output.rtp.ssrc);
+    snprintf(name,sizeof(name),"wfm %u",chan->output.rtp.ssrc);
     pthread_setname(name);
   }
 
@@ -45,28 +45,28 @@ void *demod_wfm(void *arg){
 
   // NB: this is the sample rate from the FM demodulator, which is much faster than the actual audio output sample rate
   // forced to be fast enough for 200 kHz broadcast channel
-  demod->output.samprate = Composite_samprate;
+  chan->output.samprate = Composite_samprate;
 
-  if(demod->output.channels == 0)
-    demod->output.channels = 2; // Default to stereo
+  if(chan->output.channels == 0)
+    chan->output.channels = 2; // Default to stereo
 
-  int const blocksize = demod->output.samprate * Blocktime / 1000;
-  delete_filter_output(&demod->filter.out);
-  demod->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
-  if(demod->filter.out == NULL){
-    fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)demod->output.rtp.ssrc);
-    free_demod(&demod);
+  int const blocksize = chan->output.samprate * Blocktime / 1000;
+  delete_filter_output(&chan->filter.out);
+  chan->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
+  if(chan->filter.out == NULL){
+    fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)chan->output.rtp.ssrc);
+    free_chan(&chan);
     return NULL;
   }
-  set_filter(demod->filter.out,
-	     demod->filter.min_IF/demod->output.samprate,
-	     demod->filter.max_IF/demod->output.samprate,
-	     demod->filter.kaiser_beta);
+  set_filter(chan->filter.out,
+	     chan->filter.min_IF/chan->output.samprate,
+	     chan->filter.max_IF/chan->output.samprate,
+	     chan->filter.kaiser_beta);
 
   int squelch_state = 0; // Number of blocks for which squelch remains open
 
   // Make these blocksizes depend on front end sample rate and blocksize
-  int const composite_L = roundf(demod->output.samprate * Blocktime * .001); // Intermediate sample rate
+  int const composite_L = roundf(chan->output.samprate * Blocktime * .001); // Intermediate sample rate
   int const composite_M = composite_L + 1; // 2:1 overlap (50%)
   int const composite_N = composite_L + composite_M - 1;
 
@@ -77,7 +77,7 @@ void *demod_wfm(void *arg){
   if((composite = create_filter_input(composite_L,composite_M,REAL)) == NULL)
     goto quit;
 
-  assert(composite->ilen == demod->filter.out->olen);
+  assert(composite->ilen == chan->filter.out->olen);
 
   if(composite_L < audio_L)
     goto quit; // Front end sample rate is too low - should probably fix filter to allow interpolation
@@ -86,21 +86,21 @@ void *demod_wfm(void *arg){
   if((mono = create_filter_output(composite,NULL,audio_L, REAL)) == NULL)
     goto quit;
 
-  set_filter(mono,50.0/Audio_samprate, 15000.0/Audio_samprate, demod->filter.kaiser_beta);
+  set_filter(mono,50.0/Audio_samprate, 15000.0/Audio_samprate, chan->filter.kaiser_beta);
 
   // Narrow filter at 19 kHz for stereo pilot
   if((pilot = create_filter_output(composite,NULL,audio_L, COMPLEX)) == NULL)
     goto quit;
 
   // FCC says +/- 2 Hz, with +/- 20 Hz protected (73.322)
-  set_filter(pilot,-20./Audio_samprate, 20./Audio_samprate, demod->filter.kaiser_beta);
+  set_filter(pilot,-20./Audio_samprate, 20./Audio_samprate, chan->filter.kaiser_beta);
 
   // Stereo difference (L-R) information on DSBSC carrier at 38 kHz
   // Extends +/- 15 kHz around 38 kHz
   if((lminusr = create_filter_output(composite,NULL,audio_L, COMPLEX)) == NULL)
     goto quit;
 
-  set_filter(lminusr,-15000./Audio_samprate, 15000./Audio_samprate, demod->filter.kaiser_beta);
+  set_filter(lminusr,-15000./Audio_samprate, 15000./Audio_samprate, chan->filter.kaiser_beta);
 
   // The asserts should be valid for clean sample rates multiples of 50/100 Hz (20/10 ms)
   // If not, then a mop-up oscillator has to be provided
@@ -116,15 +116,15 @@ void *demod_wfm(void *arg){
 
   realtime();
 
-  while(!demod->terminate){
-    if(downconvert(demod) == -1)
+  while(!chan->terminate){
+    if(downconvert(chan) == -1)
       break;
 
     if(power_squelch && squelch_state == 0){
       // quick check SNR from raw signal power to save time on variance-based squelch
       // Variance squelch is still needed to suppress various spurs and QRM
-      float const snr = (demod->sig.bb_power / (demod->sig.n0 * fabsf(demod->filter.max_IF - demod->filter.min_IF))) - 1;
-      if(snr < demod->squelch_close){
+      float const snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1;
+      if(snr < chan->squelch_close){
 	// squelch closed, reset everything and mute output
 	phase_memory = 0;
 	squelch_state = 0;
@@ -135,7 +135,7 @@ void *demod_wfm(void *arg){
     // Find average amplitude and variance for SNR estimation
     // Use two passes to avoid possible numerical problems
     float amplitudes[composite_L];
-    complex float * const buffer = demod->filter.out->output.c;
+    complex float * const buffer = chan->filter.out->output.c;
     float avg_amp = 0;
     for(int n=0; n < composite_L; n++){
       //      avg_amp += amplitudes[n] = approx_magf(buffer[n]);
@@ -151,12 +151,12 @@ void *demod_wfm(void *arg){
     fm_variance /= (composite_L - 1);
 
     const float snr = fm_snr(avg_amp*avg_amp/fm_variance);
-    demod->sig.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
+    chan->sig.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
 
     // Hysteresis squelch
-    int const squelch_state_max = demod->squelchtail + 1;
-    if(demod->sig.snr >= demod->squelch_open
-       || (squelch_state > 0 && snr >= demod->squelch_close))
+    int const squelch_state_max = chan->squelchtail + 1;
+    if(chan->sig.snr >= chan->squelch_open
+       || (squelch_state > 0 && snr >= chan->squelch_close))
       // Squelch is fully open
       // tail timing is in blocks (usually 10 or 20 ms each)
       squelch_state = squelch_state_max;
@@ -165,10 +165,10 @@ void *demod_wfm(void *arg){
     } else {
       squelch_state = 0; // Squelch closed
       phase_memory = 0;
-      send_mono_output(demod,NULL,audio_L,true); // Keep track of timestamps and mute state
+      send_mono_output(chan,NULL,audio_L,true); // Keep track of timestamps and mute state
       continue;
     }
-    // Actual FM demodulation
+    // Actual FM chanulation
     for(int n=0; n < composite_L; n++){
       // Although deviation can be zero, argf() is defined as returning 0, not NAN
       float np = M_1_PIf * cargf(buffer[n]); // -1 to +1
@@ -189,19 +189,19 @@ void *demod_wfm(void *arg){
 	else if(composite->input_write_pointer.r[n] < peak_negative_deviation)
 	  peak_negative_deviation = composite->input_write_pointer.r[n];
       }
-      frequency_offset *= demod->output.samprate * 0.5f / composite_L;  // scale to Hz
+      frequency_offset *= chan->output.samprate * 0.5f / composite_L;  // scale to Hz
       // Update frequency offset and peak deviation, with smoothing to attenuate PL tones
       // alpha = blocktime in millisec is an approximation to a 1 sec time constant assuming blocktime << 1 sec
       // exact value would be 1 - exp(-blocktime/tc)
       float const alpha = .001f * Blocktime;
-      demod->sig.foffset += alpha * (frequency_offset - demod->sig.foffset);
+      chan->sig.foffset += alpha * (frequency_offset - chan->sig.foffset);
       
       // Remove frequency offset from deviation peaks and scale to full cycles
-      peak_positive_deviation *= demod->output.samprate * 0.5f;
-      peak_negative_deviation *= demod->output.samprate * 0.5f;
-      peak_positive_deviation -= demod->sig.foffset;
-      peak_negative_deviation -= demod->sig.foffset;
-      demod->fm.pdeviation = max(peak_positive_deviation,-peak_negative_deviation);
+      peak_positive_deviation *= chan->output.samprate * 0.5f;
+      peak_negative_deviation *= chan->output.samprate * 0.5f;
+      peak_positive_deviation -= chan->sig.foffset;
+      peak_negative_deviation -= chan->sig.foffset;
+      chan->fm.pdeviation = max(peak_positive_deviation,-peak_negative_deviation);
     }
     // Filter & decimate to audio output sample rate
     execute_filter_input(composite);  // Composite at 384 kHz
@@ -210,10 +210,10 @@ void *demod_wfm(void *arg){
     // Constant gain used by FM only; automatically adjusted by AGC in linear modes
     // We do this in the loop because headroom and BW can change
     // Force reasonable parameters if they get messed up or aren't initialized
-    demod->output.gain = (2 * demod->output.headroom * demod->output.samprate) / fabsf(demod->filter.min_IF - demod->filter.max_IF);
+    chan->output.gain = (2 * chan->output.headroom * chan->output.samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
 
     bool stereo_on = false;
-    if(demod->output.channels == 2){
+    if(chan->output.channels == 2){
       // See if a subcarrier is present
       // shift signs for pilot and subcarrier don't matter because the filters are real input with symmetric spectra
       execute_filter_output(pilot,pilot_shift); // pilot spun to 0 Hz, 48 kHz rate
@@ -240,52 +240,52 @@ void *demod_wfm(void *arg){
 	assert(!isnan(subc_info));
 	assert(!isnan(mono->output.r[n]));
 	float complex s = mono->output.r[n] + subc_info + I * (mono->output.r[n] - subc_info);
-	if(demod->deemph.rate != 0){
-	  assert(!isnan(__real__ demod->deemph.state));
-	  assert(!isnan(__imag__ demod->deemph.state));
-	  demod->deemph.state *= demod->deemph.rate;
-	  s = demod->deemph.state += demod->deemph.gain * (1 - demod->deemph.rate) * s;
+	if(chan->deemph.rate != 0){
+	  assert(!isnan(__real__ chan->deemph.state));
+	  assert(!isnan(__imag__ chan->deemph.state));
+	  chan->deemph.state *= chan->deemph.rate;
+	  s = chan->deemph.state += chan->deemph.gain * (1 - chan->deemph.rate) * s;
 	}
-	stereo_buffer[n] = s * demod->output.gain;
+	stereo_buffer[n] = s * chan->output.gain;
 	output_level += cnrmf(stereo_buffer[n]);
       }
       output_level /= (2 * audio_L); // Halve power to get level per channel
-      demod->output.energy += output_level;
-      if(send_stereo_output(demod,(const float *)stereo_buffer,audio_L,false) < 0)
+      chan->output.energy += output_level;
+      if(send_stereo_output(chan,(const float *)stereo_buffer,audio_L,false) < 0)
 	break; // No output stream! Terminate
     } else { // stereo_on == false
       // Mono processing
       float output_level = 0;
-      if(demod->deemph.rate != 0){
+      if(chan->deemph.rate != 0){
 	// Apply deemphasis
-	assert(!isnan(__real__ demod->deemph.state));
+	assert(!isnan(__real__ chan->deemph.state));
 	for(int n=0; n < audio_L; n++){
 	  float s = mono->output.r[n];
-	  __real__ demod->deemph.state *= demod->deemph.rate;
-	  s = __real__ demod->deemph.state += demod->deemph.gain * (1 - demod->deemph.rate) * s; 
-	  s *= demod->output.gain;
+	  __real__ chan->deemph.state *= chan->deemph.rate;
+	  s = __real__ chan->deemph.state += chan->deemph.gain * (1 - chan->deemph.rate) * s; 
+	  s *= chan->output.gain;
 	  mono->output.r[n] = s;
 	  output_level += s * s;
 	}
       } else {
 	for(int n=0; n < audio_L; n++){
-	  float s = mono->output.r[n] *= demod->output.gain;
+	  float s = mono->output.r[n] *= chan->output.gain;
 	  output_level += s * s;
 	}
       }
       output_level /= audio_L;
-      demod->output.energy += output_level;
+      chan->output.energy += output_level;
       // mute output unless time is left on the squelch_state timer
-      if(send_mono_output(demod,mono->output.r,audio_L,false) < 0)
+      if(send_mono_output(chan,mono->output.r,audio_L,false) < 0)
 	break; // No output stream! Terminate
     }
-  } // while(!demod->terminate)
+  } // while(!chan->terminate)
  quit:;
   delete_filter_output(&mono);
   delete_filter_output(&lminusr);
   delete_filter_output(&pilot);
   delete_filter_input(&composite);
-  FREE(demod->filter.energies);
-  delete_filter_output(&demod->filter.out);
+  FREE(chan->filter.energies);
+  delete_filter_output(&chan->filter.out);
   return NULL;
 }

@@ -37,9 +37,9 @@ int Ctl_fd;     // File descriptor for receiving user commands
 
 extern dictionary const *Modetable;
 
-static int send_radio_status(struct frontend *frontend,struct channel *demod);
-static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int length);
-static int encode_radio_status(struct frontend const *frontend,struct channel const *demod,uint8_t *packet, int len);
+static int send_radio_status(struct frontend *frontend,struct channel *chan);
+static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
+static int encode_radio_status(struct frontend const *frontend,struct channel const *chan,uint8_t *packet, int len);
 static void *radio_status_dump(void *);
   
 static pthread_t status_dump_thread;
@@ -70,7 +70,7 @@ void *radio_status(void *arg){
       // Ignore; reserved for dynamic channel template
       break;
     case 0xffffffff:
-      // Kick separate thread to dump all demods in a rate-limited manner
+      // Kick separate thread to dump all chans in a rate-limited manner
       pthread_mutex_lock(&Status_dump_mutex);
       Status_kick_flag = true;
       pthread_cond_signal(&Status_dump_cond);
@@ -78,25 +78,25 @@ void *radio_status(void *arg){
       break;
     default:
       {
-	// find specific demod instance
-	struct channel *demod = lookup_demod(ssrc);
-	if(demod == NULL){
-	  if((demod = setup_demod(ssrc)) == NULL){ // possible race here?
+	// find specific chan instance
+	struct channel *chan = lookup_chan(ssrc);
+	if(chan == NULL){
+	  if((chan = setup_chan(ssrc)) == NULL){ // possible race here?
 	    // Creation failed, e.g., no output stream
 	    fprintf(stdout,"Dynamic create of ssrc %u failed\n",ssrc);
 	    continue;    // Should this be fatal?
 	  } else {
-	    start_demod(demod);
+	    start_demod(chan);
 	    if(Verbose)
 	      fprintf(stdout,"dynamically started ssrc %u\n",ssrc);
 	  }
 	}
-	// demod now != NULL
-	if(demod->lifetime != 0)
-	  demod->lifetime = 20; // Restart 20 second self-destruct timer
-	demod->commands++;
-	decode_radio_commands(demod,buffer+1,length-1);
-	send_radio_status(&Frontend,demod); // Send status in response
+	// chan now != NULL
+	if(chan->lifetime != 0)
+	  chan->lifetime = 20; // Restart 20 second self-destruct timer
+	chan->commands++;
+	decode_radio_commands(chan,buffer+1,length-1);
+	send_radio_status(&Frontend,chan); // Send status in response
       }
       break;
     }
@@ -115,16 +115,16 @@ static void *radio_status_dump(void *p){
     Status_kick_flag = false;
     pthread_mutex_unlock(&Status_dump_mutex);
 
-    for(int i=0; i < Demod_list_length; i++){
-      struct channel *demod = &Demod_list[i];
-      if(!demod->inuse)
+    for(int i=0; i < Channel_list_length; i++){
+      struct channel *chan = &Channel_list[i];
+      if(!chan->inuse)
 	continue; 
-      if(demod->output.rtp.ssrc == 0xffffffff || demod->output.rtp.ssrc == 0)
+      if(chan->output.rtp.ssrc == 0xffffffff || chan->output.rtp.ssrc == 0)
 	continue; // Reserved for template or all-call polling
-      demod->commands++;
-      // I could copy the tag from the poll packet into all the demod sessions but I'm not sure it's a good idea
+      chan->commands++;
+      // I could copy the tag from the poll packet into all the chan sessions but I'm not sure it's a good idea
       // since individual control sessions might be watching for their own. But we do increment the command count
-      send_radio_status(&Frontend,demod);
+      send_radio_status(&Frontend,chan);
 
       // Rate limit to 200/sec on average by randomly delaying 0-10 ms
       struct timespec sleeptime;
@@ -137,17 +137,17 @@ static void *radio_status_dump(void *p){
 }
 
 
-static int send_radio_status(struct frontend *frontend,struct channel *demod){
+static int send_radio_status(struct frontend *frontend,struct channel *chan){
   uint8_t packet[2048];
 
   Metadata_packets++;
-  int const len = encode_radio_status(frontend,demod,packet,sizeof(packet));
+  int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
   send(Status_fd,packet,len,0);
   // Reset integrators
-  demod->sig.bb_energy = 0;
-  demod->output.energy = 0;
-  demod->output.sum_gain_sq = 0;
-  demod->blocks_since_poll = 0;
+  chan->sig.bb_energy = 0;
+  chan->output.energy = 0;
+  chan->output.sum_gain_sq = 0;
+  chan->blocks_since_poll = 0;
   return 0;
 }
 
@@ -157,10 +157,10 @@ static int send_radio_status(struct frontend *frontend,struct channel *demod){
 // cmd == 1 means this is a command, only allow certain items
 
 // with SSRC selection, should scan entire command for our SSRC before we execute any of it
-static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int length){
+static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length){
   bool restart_needed = false;
   bool new_filter_needed = false;
-  uint32_t const ssrc = demod->output.rtp.ssrc;
+  uint32_t const ssrc = chan->output.rtp.ssrc;
   
   uint8_t const *cp = buffer;
   while(cp - buffer < length){
@@ -187,14 +187,14 @@ static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int
     case EOL: // Shouldn't get here
       goto done;
     case COMMAND_TAG:
-      demod->command_tag = decode_int32(cp,optlen);
+      chan->command_tag = decode_int32(cp,optlen);
       break;
     case OUTPUT_SAMPRATE:
       // Restart the demodulator to recalculate filters, etc
       {
 	int new_sample_rate = decode_int(cp,optlen);
-	if(new_sample_rate != demod->output.samprate){
-	  demod->output.samprate = new_sample_rate;
+	if(new_sample_rate != chan->output.samprate){
+	  chan->output.samprate = new_sample_rate;
 	  restart_needed = true;
 	}
       }
@@ -203,13 +203,13 @@ static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int
       {
 	double const f = fabs(decode_double(cp,optlen));
 	if(isfinite(f)){
-	  if(f != demod->tune.freq && demod->demod_type == SPECT_DEMOD)
+	  if(f != chan->tune.freq && chan->demod_type == SPECT_DEMOD)
 	    restart_needed = true; // Easier than trying to handle it inline
 	  
 	  if(Verbose > 1)
 	    fprintf(stdout,"set ssrc %u freq = %.3lf\n",ssrc,f);
 
-	  set_freq(demod,f);
+	  set_freq(chan,f);
 	}
       }
       break;
@@ -217,7 +217,7 @@ static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int
       {
 	double const f = fabs(decode_double(cp,optlen));
 	if(isfinite(f) && f != 0)
-	  set_first_LO(demod,f); // Will ignore it if there's no change
+	  set_first_LO(chan,f); // Will ignore it if there's no change
       }
       break;
     case SECOND_LO_FREQUENCY: // Hz
@@ -226,28 +226,28 @@ static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int
       {
 	double const f = decode_double(cp,optlen);
 	if(isfinite(f))
-	  demod->tune.shift = f;
+	  chan->tune.shift = f;
       }
       break;
     case DOPPLER_FREQUENCY: // Hz
       {
 	double const f = decode_double(cp,optlen);
 	if(isfinite(f))
-	  demod->tune.doppler = f;
+	  chan->tune.doppler = f;
       }
       break;
     case DOPPLER_FREQUENCY_RATE: // Hz
       {
 	double const f = decode_double(cp,optlen);
 	if(isfinite(f))
-	  demod->tune.doppler_rate = f;
+	  chan->tune.doppler_rate = f;
       }
       break;
     case LOW_EDGE: // Hz
       {
 	float const f = decode_float(cp,optlen);
-	if(isfinite(f) && f != demod->filter.min_IF){
-	  demod->filter.min_IF = f;
+	if(isfinite(f) && f != chan->filter.min_IF){
+	  chan->filter.min_IF = f;
 	  new_filter_needed = 1;
 	}
       }
@@ -255,8 +255,8 @@ static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int
     case HIGH_EDGE: // Hz
       {
 	float const f = decode_float(cp,optlen);
-	if(isfinite(f) && demod->filter.max_IF != f){
-	  demod->filter.max_IF = f;
+	if(isfinite(f) && chan->filter.max_IF != f){
+	  chan->filter.max_IF = f;
 	  new_filter_needed = 1;
 	}
       }
@@ -264,72 +264,72 @@ static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int
       case KAISER_BETA: // dimensionless, always 0 or positive
         {
 	  float const f = fabsf(decode_float(cp,optlen));
-	  if(isfinite(f) && demod->filter.kaiser_beta != f)
-	    demod->filter.kaiser_beta = f;
+	  if(isfinite(f) && chan->filter.kaiser_beta != f)
+	    chan->filter.kaiser_beta = f;
 	  new_filter_needed = 1;
 	}
       break;
     case PRESET:
       {
 	char *p = decode_string(cp,optlen);
-	strlcpy(demod->preset,p,sizeof(demod->preset));
+	strlcpy(chan->preset,p,sizeof(chan->preset));
 	FREE(p); // decode_string now allocs memory
 	{
-	  enum demod_type const old_type = demod->demod_type;
-	  int const old_samprate = demod->output.samprate;
-	  float const old_low = demod->filter.min_IF;
-	  float const old_high = demod->filter.max_IF;
-	  float const old_kaiser = demod->filter.kaiser_beta;
-	  float const old_shift = demod->tune.shift;
+	  enum demod_type const old_type = chan->demod_type;
+	  int const old_samprate = chan->output.samprate;
+	  float const old_low = chan->filter.min_IF;
+	  float const old_high = chan->filter.max_IF;
+	  float const old_kaiser = chan->filter.kaiser_beta;
+	  float const old_shift = chan->tune.shift;
 
 	  if(Verbose > 1)
-	    fprintf(stdout,"command loadmode(ssrc=%u) mode=%s\n",ssrc,demod->preset);
-	  if(loadmode(demod,Modetable,demod->preset) != 0){
+	    fprintf(stdout,"command loadmode(ssrc=%u) mode=%s\n",ssrc,chan->preset);
+	  if(loadmode(chan,Modetable,chan->preset) != 0){
 	    if(Verbose)
-	      fprintf(stdout,"commanded loadmode(ssrc=%u) mode=%sfailed!\n",ssrc,demod->preset);
+	      fprintf(stdout,"commanded loadmode(ssrc=%u) mode=%sfailed!\n",ssrc,chan->preset);
 	    break;
 	  }
-	  if(old_shift != demod->tune.shift)
-	    set_freq(demod,demod->tune.freq + demod->tune.shift - old_shift);
-	  if(demod->filter.min_IF != old_low || demod->filter.max_IF != old_high || demod->filter.kaiser_beta != old_kaiser)
+	  if(old_shift != chan->tune.shift)
+	    set_freq(chan,chan->tune.freq + chan->tune.shift - old_shift);
+	  if(chan->filter.min_IF != old_low || chan->filter.max_IF != old_high || chan->filter.kaiser_beta != old_kaiser)
 	    new_filter_needed = 1;
 
-	  if(demod->demod_type != old_type || demod->output.samprate != old_samprate)
-	    restart_needed = true; // demod changed, ask for a restart
+	  if(chan->demod_type != old_type || chan->output.samprate != old_samprate)
+	    restart_needed = true; // chan changed, ask for a restart
 	}
       }
       break;
     case DEMOD_TYPE:
       {
 	enum demod_type const i = decode_int(cp,optlen);
-	if(i >= 0 && i < Ndemod && i != demod->demod_type){
-	  demod->demod_type = i;
+	if(i >= 0 && i < Ndemod && i != chan->demod_type){
+	  chan->demod_type = i;
 	  restart_needed = true;
 	}
       }
       break;
     case INDEPENDENT_SIDEBAND: // bool
-      demod->filter.isb = decode_int8(cp,optlen); // will reimplement someday
+      chan->filter.isb = decode_int8(cp,optlen); // will reimplement someday
       break;
     case THRESH_EXTEND: // bool
-      demod->fm.threshold = decode_int8(cp,optlen);
+      chan->fm.threshold = decode_int8(cp,optlen);
       break;
     case HEADROOM: // dB -> voltage, always negative dB
       {
 	float const f = decode_float(cp,optlen);
 	if(isfinite(f))
-	  demod->output.headroom = dB2voltage(-fabsf(f));
+	  chan->output.headroom = dB2voltage(-fabsf(f));
       }
       break;
     case AGC_ENABLE: // bool
-      demod->linear.agc = decode_int8(cp,optlen);
+      chan->linear.agc = decode_int8(cp,optlen);
       break;
     case GAIN:
       {
 	float const f = decode_float(cp,optlen);
 	if(!isnan(f)){
-	  demod->output.gain = dB2voltage(f); // -Inf = 0 gain is OK
-	  demod->linear.agc = false; // Doesn't make sense to change gain and then have the AGC change it again
+	  chan->output.gain = dB2voltage(f); // -Inf = 0 gain is OK
+	  chan->linear.agc = false; // Doesn't make sense to change gain and then have the AGC change it again
 	}
       }
       break;
@@ -337,65 +337,65 @@ static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int
       {
 	float const f = decode_float(cp,optlen);
 	if(isfinite(f))
-	  demod->linear.hangtime = fabsf(f) / (.001 * Blocktime);
+	  chan->linear.hangtime = fabsf(f) / (.001 * Blocktime);
       }
       break;
     case AGC_RECOVERY_RATE: // dB/sec -> amplitude / block times, always positive
       {
 	float const f = decode_float(cp,optlen);
 	if(!isnan(f))
-	  demod->linear.recovery_rate = dB2voltage(fabsf(f) * .001 * Blocktime);
+	  chan->linear.recovery_rate = dB2voltage(fabsf(f) * .001 * Blocktime);
       }
       break;
     case AGC_THRESHOLD: // dB -> amplitude
       {
 	float const f = decode_float(cp,optlen);
 	if(isfinite(f))
-	  demod->linear.threshold = dB2voltage(-fabsf(f));
+	  chan->linear.threshold = dB2voltage(-fabsf(f));
       }
       break;
     case PLL_ENABLE: // bool
-      demod->linear.pll = decode_int8(cp,optlen);
+      chan->linear.pll = decode_int8(cp,optlen);
       break;
     case PLL_BW:
       {
 	float const f = decode_float(cp,optlen); // Always 0 or positive
 	if(isfinite(f))
-	  demod->linear.loop_bw = fabsf(f);
+	  chan->linear.loop_bw = fabsf(f);
       }
       break;
     case PLL_SQUARE: // bool
-      demod->linear.square = decode_int8(cp,optlen);
+      chan->linear.square = decode_int8(cp,optlen);
       break;
     case ENVELOPE: // bool
-      demod->linear.env = decode_int8(cp,optlen);
+      chan->linear.env = decode_int8(cp,optlen);
       break;
     case OUTPUT_CHANNELS: // int
       {
 	int const i = decode_int(cp,optlen);
 	if(i == 1 || i == 2)
-	  demod->output.channels = i;
+	  chan->output.channels = i;
       }
       break;
     case SQUELCH_OPEN:
       {
 	float const x = decode_float(cp,optlen);
 	if(!isnan(x))
-	  demod->squelch_open = fabsf(dB2power(x));
+	  chan->squelch_open = fabsf(dB2power(x));
       }	
       break;
     case SQUELCH_CLOSE:
       {
 	float const x = decode_float(cp,optlen);
 	if(!isnan(x))
-	   demod->squelch_close = fabsf(dB2power(x));
+	   chan->squelch_close = fabsf(dB2power(x));
       }	
       break;
     case NONCOHERENT_BIN_BW:
       {
 	float const x = decode_float(cp,optlen);
-	if(!isnan(x) && x != demod->spectrum.bin_bw){
-	  demod->spectrum.bin_bw = x;
+	if(!isnan(x) && x != chan->spectrum.bin_bw){
+	  chan->spectrum.bin_bw = x;
 	  restart_needed = true;
 	}
       }
@@ -403,8 +403,8 @@ static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int
     case BIN_COUNT:
       {
 	int const x = decode_int(cp,optlen);
-	if(x > 0 && x != demod->spectrum.bin_count){
-	  demod->spectrum.bin_count = x;
+	if(x > 0 && x != chan->spectrum.bin_count){
+	  chan->spectrum.bin_count = x;
 	  restart_needed = true;
 	}
       }
@@ -417,47 +417,47 @@ static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int
  done:;
   if(restart_needed){
     if(Verbose > 1)
-      fprintf(stdout,"terminating demod thread for ssrc %u\n",ssrc);
-    // Stop demod
-    demod->terminate = true;
-    pthread_join(demod->demod_thread,NULL);
-    demod->demod_thread = (pthread_t)0;
-    demod->terminate = false;
+      fprintf(stdout,"terminating chan thread for ssrc %u\n",ssrc);
+    // Stop chan
+    chan->terminate = true;
+    pthread_join(chan->demod_thread,NULL);
+    chan->demod_thread = (pthread_t)0;
+    chan->terminate = false;
   }
   if(new_filter_needed){
-    // Set up new filter with demod possibly stopped
-    if(demod->filter.out){
+    // Set up new filter with chan possibly stopped
+    if(chan->filter.out){
       if(Verbose > 1)
-	fprintf(stdout,"new filer for demod %u: IF=[%.0f,%.0f], samprate %d, kaiser beta %.1f\n",
-		ssrc, demod->filter.min_IF, demod->filter.max_IF,
-		demod->output.samprate, demod->filter.kaiser_beta);
+	fprintf(stdout,"new filer for chan %u: IF=[%.0f,%.0f], samprate %d, kaiser beta %.1f\n",
+		ssrc, chan->filter.min_IF, chan->filter.max_IF,
+		chan->output.samprate, chan->filter.kaiser_beta);
       // start_demod already sets up a new filter
-      set_filter(demod->filter.out,demod->filter.min_IF/demod->output.samprate,
-		 demod->filter.max_IF/demod->output.samprate,
-		 demod->filter.kaiser_beta);
+      set_filter(chan->filter.out,chan->filter.min_IF/chan->output.samprate,
+		 chan->filter.max_IF/chan->output.samprate,
+		 chan->filter.kaiser_beta);
     }
   }    
   if(restart_needed){
     if(Verbose > 1)
-      fprintf(stdout,"starting demod type %d for ssrc %u\n",demod->demod_type,ssrc);
-    start_demod(demod);
+      fprintf(stdout,"starting chan type %d for ssrc %u\n",chan->demod_type,ssrc);
+    start_demod(chan);
   }
   return 0;
 }
   
-// Encode contents of frontend and demod structures as command or status packet
+// Encode contents of frontend and chan structures as command or status packet
 // packet argument must be long enough!!
 // Convert values from internal to engineering units
-static int encode_radio_status(struct frontend const *frontend,struct channel const *demod,uint8_t *packet, int len){
+static int encode_radio_status(struct frontend const *frontend,struct channel const *chan,uint8_t *packet, int len){
   memset(packet,0,len);
   uint8_t *bp = packet;
 
   *bp++ = STATUS; // 0 = status, 1 = command
 
   // parameters valid in all modes
-  encode_int32(&bp,OUTPUT_SSRC,demod->output.rtp.ssrc); // Now used as channel ID, so present in all modes
-  encode_int32(&bp,COMMAND_TAG,demod->command_tag); // at top to make it easier to spot in dumps
-  encode_int64(&bp,CMD_CNT,demod->commands); // integer
+  encode_int32(&bp,OUTPUT_SSRC,chan->output.rtp.ssrc); // Now used as channel ID, so present in all modes
+  encode_int32(&bp,COMMAND_TAG,chan->command_tag); // at top to make it easier to spot in dumps
+  encode_int64(&bp,CMD_CNT,chan->commands); // integer
   if(strlen(frontend->description) > 0)
     encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
   
@@ -481,20 +481,20 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   encode_int32(&bp,AD_BITS_PER_SAMPLE,frontend->bitspersample);
 
   // Tuning
-  encode_double(&bp,RADIO_FREQUENCY,demod->tune.freq); // Hz
+  encode_double(&bp,RADIO_FREQUENCY,chan->tune.freq); // Hz
   encode_double(&bp,FIRST_LO_FREQUENCY,frontend->frequency); // Hz
-  encode_double(&bp,SECOND_LO_FREQUENCY,demod->tune.second_LO); // Hz
+  encode_double(&bp,SECOND_LO_FREQUENCY,chan->tune.second_LO); // Hz
 
   if(frontend->in){
     encode_int32(&bp,FILTER_BLOCKSIZE,frontend->in->ilen);
     encode_int32(&bp,FILTER_FIR_LENGTH,frontend->in->impulse_length);
   }
-  if(demod->filter.out != NULL)
-    encode_int32(&bp,FILTER_DROPS,demod->filter.out->block_drops);  // count
+  if(chan->filter.out != NULL)
+    encode_int32(&bp,FILTER_DROPS,chan->filter.out->block_drops);  // count
   
   // Adjust for A/D width
   // Level is absolute relative to A/D saturation, so +3dB for real vs complex
-  if(demod->blocks_since_poll > 0){
+  if(chan->blocks_since_poll > 0){
     float level = frontend->if_power;
     level /= (1 << (frontend->bitspersample-1)) * (1 << (frontend->bitspersample-1));
     // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
@@ -503,55 +503,55 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       level *= 2;
     encode_float(&bp,IF_POWER,power2dB(level));
   }
-  encode_float(&bp,NOISE_DENSITY,power2dB(demod->sig.n0));
+  encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
 
-  // Demodulation mode
-  encode_byte(&bp,DEMOD_TYPE,demod->demod_type);
+  // Chanulation mode
+  encode_byte(&bp,DEMOD_TYPE,chan->demod_type);
   {
-    int len = strlen(demod->preset);
-    if(len > 0 && len < sizeof(demod->preset))
-      encode_string(&bp,PRESET,demod->preset,len);
+    int len = strlen(chan->preset);
+    if(len > 0 && len < sizeof(chan->preset))
+      encode_string(&bp,PRESET,chan->preset,len);
   }
   // Mode-specific params
-  switch(demod->demod_type){
+  switch(chan->demod_type){
   case LINEAR_DEMOD:
-    encode_byte(&bp,PLL_ENABLE,demod->linear.pll); // bool
-    if(demod->linear.pll){
-      encode_float(&bp,FREQ_OFFSET,demod->sig.foffset);     // Hz; used differently in linear and fm
-      encode_byte(&bp,PLL_LOCK,demod->linear.pll_lock); // bool
-      encode_byte(&bp,PLL_SQUARE,demod->linear.square); //bool
-      encode_float(&bp,PLL_PHASE,demod->linear.cphase); // radians
-      encode_float(&bp,PLL_BW,demod->linear.loop_bw);   // hz
+    encode_byte(&bp,PLL_ENABLE,chan->linear.pll); // bool
+    if(chan->linear.pll){
+      encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
+      encode_byte(&bp,PLL_LOCK,chan->linear.pll_lock); // bool
+      encode_byte(&bp,PLL_SQUARE,chan->linear.square); //bool
+      encode_float(&bp,PLL_PHASE,chan->linear.cphase); // radians
+      encode_float(&bp,PLL_BW,chan->linear.loop_bw);   // hz
       // Relevant only when squelches are active
-      encode_float(&bp,SQUELCH_OPEN,power2dB(demod->squelch_open));
-      encode_float(&bp,SQUELCH_CLOSE,power2dB(demod->squelch_close));
+      encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
+      encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
     }
-    encode_byte(&bp,ENVELOPE,demod->linear.env); // bool
-    encode_double(&bp,SHIFT_FREQUENCY,demod->tune.shift); // Hz
-    encode_byte(&bp,AGC_ENABLE,demod->linear.agc); // bool
-    if(demod->linear.agc){
-      encode_float(&bp,AGC_HANGTIME,demod->linear.hangtime*(.001 * Blocktime)); // samples -> sec
-      encode_float(&bp,AGC_THRESHOLD,voltage2dB(demod->linear.threshold)); // amplitude -> dB
-      encode_float(&bp,AGC_RECOVERY_RATE,voltage2dB(demod->linear.recovery_rate)/(.001*Blocktime)); // amplitude/block -> dB/sec
+    encode_byte(&bp,ENVELOPE,chan->linear.env); // bool
+    encode_double(&bp,SHIFT_FREQUENCY,chan->tune.shift); // Hz
+    encode_byte(&bp,AGC_ENABLE,chan->linear.agc); // bool
+    if(chan->linear.agc){
+      encode_float(&bp,AGC_HANGTIME,chan->linear.hangtime*(.001 * Blocktime)); // samples -> sec
+      encode_float(&bp,AGC_THRESHOLD,voltage2dB(chan->linear.threshold)); // amplitude -> dB
+      encode_float(&bp,AGC_RECOVERY_RATE,voltage2dB(chan->linear.recovery_rate)/(.001*Blocktime)); // amplitude/block -> dB/sec
     }
 #if 0
-    encode_byte(&bp,INDEPENDENT_SIDEBAND,demod->filter.isb); // bool - maybe reimplement someday
+    encode_byte(&bp,INDEPENDENT_SIDEBAND,chan->filter.isb); // bool - maybe reimplement someday
 #endif
     break;
   case FM_DEMOD:
-    if(demod->fm.tone_freq != 0){
-      encode_float(&bp,PL_TONE,demod->fm.tone_freq);
-      encode_float(&bp,PL_DEVIATION,demod->fm.tone_deviation);
+    if(chan->fm.tone_freq != 0){
+      encode_float(&bp,PL_TONE,chan->fm.tone_freq);
+      encode_float(&bp,PL_DEVIATION,chan->fm.tone_deviation);
     }
   case WFM_DEMOD:  // Note fall-through from FM_DEMOD
     // Relevant only when squelches are active
-    encode_float(&bp,FREQ_OFFSET,demod->sig.foffset);     // Hz; used differently in linear and fm
-    encode_float(&bp,SQUELCH_OPEN,power2dB(demod->squelch_open));
-    encode_float(&bp,SQUELCH_CLOSE,power2dB(demod->squelch_close));
-    encode_byte(&bp,THRESH_EXTEND,demod->fm.threshold);
-    encode_float(&bp,PEAK_DEVIATION,demod->fm.pdeviation); // Hz
-    encode_float(&bp,DEEMPH_TC,-1.0/(logf(demod->deemph.rate) * demod->output.samprate));
-    encode_float(&bp,DEEMPH_GAIN,voltage2dB(demod->deemph.gain));
+    encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
+    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
+    encode_byte(&bp,THRESH_EXTEND,chan->fm.threshold);
+    encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
+    encode_float(&bp,DEEMPH_TC,-1.0/(logf(chan->deemph.rate) * chan->output.samprate));
+    encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->deemph.gain));
     break;
   case SPECT_DEMOD:
     {
@@ -560,69 +560,69 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       int N = Frontend.L + Frontend.M - 1;
       float spacing = (1 - (float)(Frontend.M-1)/N) * blockrate; // Hz
       encode_float(&bp,COHERENT_BIN_SPACING, spacing);
-      encode_float(&bp,NONCOHERENT_BIN_BW,demod->spectrum.bin_bw); // Hz
-      encode_int(&bp,BIN_COUNT,demod->spectrum.bin_count);
+      encode_float(&bp,NONCOHERENT_BIN_BW,chan->spectrum.bin_bw); // Hz
+      encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
       // encode bin data here? maybe change this, it can be a lot
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
-      if(demod->spectrum.bin_data != NULL){
+      if(chan->spectrum.bin_data != NULL){
 	// Average and clear
-	float averages[demod->spectrum.bin_count];
-	for(int i=0; i < demod->spectrum.bin_count; i++)
-	  averages[i] = demod->spectrum.bin_data[i] / demod->blocks_since_poll;
+	float averages[chan->spectrum.bin_count];
+	for(int i=0; i < chan->spectrum.bin_count; i++)
+	  averages[i] = chan->spectrum.bin_data[i] / chan->blocks_since_poll;
 
-	encode_vector(&bp,BIN_DATA,averages,demod->spectrum.bin_count);
-	memset(demod->spectrum.bin_data,0,demod->spectrum.bin_count * sizeof(*demod->spectrum.bin_data));
+	encode_vector(&bp,BIN_DATA,averages,chan->spectrum.bin_count);
+	memset(chan->spectrum.bin_data,0,chan->spectrum.bin_count * sizeof(*chan->spectrum.bin_data));
       }
     }
     break;
   }
   // Lots of stuff not relevant in spectrum analysis mode
-  if(demod->demod_type != SPECT_DEMOD){
-    encode_float(&bp,LOW_EDGE,demod->filter.min_IF); // Hz
-    encode_float(&bp,HIGH_EDGE,demod->filter.max_IF); // Hz
-    encode_int32(&bp,OUTPUT_SAMPRATE,demod->output.samprate); // Hz
-    encode_int64(&bp,OUTPUT_DATA_PACKETS,demod->output.rtp.packets);
-    encode_float(&bp,KAISER_BETA,demod->filter.kaiser_beta); // Dimensionless
+  if(chan->demod_type != SPECT_DEMOD){
+    encode_float(&bp,LOW_EDGE,chan->filter.min_IF); // Hz
+    encode_float(&bp,HIGH_EDGE,chan->filter.max_IF); // Hz
+    encode_int32(&bp,OUTPUT_SAMPRATE,chan->output.samprate); // Hz
+    encode_int64(&bp,OUTPUT_DATA_PACKETS,chan->output.rtp.packets);
+    encode_float(&bp,KAISER_BETA,chan->filter.kaiser_beta); // Dimensionless
 
     // BASEBAND_POWER is now the average since last poll
-    if(demod->blocks_since_poll > 0){
-      float bb_power = demod->sig.bb_energy / demod->blocks_since_poll;
+    if(chan->blocks_since_poll > 0){
+      float bb_power = chan->sig.bb_energy / chan->blocks_since_poll;
       encode_float(&bp,BASEBAND_POWER,power2dB(bb_power));
     }
-    if(demod->blocks_since_poll > 0){
+    if(chan->blocks_since_poll > 0){
       // Output levels are already normalized since they scaled by a fixed 32767 for conversion to int16_t
-      float output_power = demod->output.energy / demod->blocks_since_poll;
+      float output_power = chan->output.energy / chan->blocks_since_poll;
       encode_float(&bp,OUTPUT_LEVEL,power2dB(output_power)); // power ratio -> dB
     }
-    encode_int64(&bp,OUTPUT_SAMPLES,demod->output.samples);
-    encode_float(&bp,HEADROOM,voltage2dB(demod->output.headroom)); // amplitude -> dB
+    encode_int64(&bp,OUTPUT_SAMPLES,chan->output.samples);
+    encode_float(&bp,HEADROOM,voltage2dB(chan->output.headroom)); // amplitude -> dB
     // Doppler info
-    encode_double(&bp,DOPPLER_FREQUENCY,demod->tune.doppler); // Hz
-    encode_double(&bp,DOPPLER_FREQUENCY_RATE,demod->tune.doppler_rate); // Hz
-    encode_int32(&bp,OUTPUT_CHANNELS,demod->output.channels);
-    if(!isnan(demod->sig.snr) && demod->sig.snr > 0)
-      encode_float(&bp,DEMOD_SNR,power2dB(demod->sig.snr)); // abs ratio -> dB
+    encode_double(&bp,DOPPLER_FREQUENCY,chan->tune.doppler); // Hz
+    encode_double(&bp,DOPPLER_FREQUENCY_RATE,chan->tune.doppler_rate); // Hz
+    encode_int32(&bp,OUTPUT_CHANNELS,chan->output.channels);
+    if(!isnan(chan->sig.snr) && chan->sig.snr > 0)
+      encode_float(&bp,DEMOD_SNR,power2dB(chan->sig.snr)); // abs ratio -> dB
 
-    if(demod->demod_type == LINEAR_DEMOD){ // Gain not really meaningful in FM modes
+    if(chan->demod_type == LINEAR_DEMOD){ // Gain not really meaningful in FM modes
       float gain;
-      if(demod->blocks_since_poll > 0){
-	gain = demod->output.sum_gain_sq / demod->blocks_since_poll;
+      if(chan->blocks_since_poll > 0){
+	gain = chan->output.sum_gain_sq / chan->blocks_since_poll;
 	encode_float(&bp,GAIN,power2dB(gain));
       }
     }
     // Source address we're using to send data
-    encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&demod->output.data_source_address);
+    encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&chan->output.data_source_address);
     // Where we're sending PCM output
-    encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&demod->output.data_dest_address);
+    encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&chan->output.data_dest_address);
     encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
     encode_int64(&bp,OUTPUT_METADATA_PACKETS,Metadata_packets);
   }
   // Don't send test points unless they're in use
-  if(!isnan(demod->tp1))
-    encode_float(&bp,TP1,demod->tp1);
-  if(!isnan(demod->tp2))
-    encode_float(&bp,TP2,demod->tp2);
-  encode_int64(&bp,BLOCKS_SINCE_POLL,demod->blocks_since_poll);
+  if(!isnan(chan->tp1))
+    encode_float(&bp,TP1,chan->tp1);
+  if(!isnan(chan->tp2))
+    encode_float(&bp,TP2,chan->tp2);
+  encode_int64(&bp,BLOCKS_SINCE_POLL,chan->blocks_since_poll);
 
   encode_eol(&bp);
 

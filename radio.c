@@ -34,97 +34,97 @@
 extern float Blocktime;
 struct frontend Frontend;
 
-pthread_mutex_t Demod_list_mutex = PTHREAD_MUTEX_INITIALIZER;
-int const Demod_alloc_quantum = 1000;
-struct channel *Demod_list; // Contiguous array
-int Demod_list_length; // Length of array
-int Active_demod_count; // Active demods
+pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+int const Channelalloc_quantum = 1000;
+struct channel *Channel_list; // Contiguous array
+int Channel_list_length; // Length of array
+int Active_channel_count; // Active channels
 extern struct channel const *Template;
 
-static float estimate_noise(struct channel *demod,int shift);
+static float estimate_noise(struct channel *chan,int shift);
 
-// Find demod by ssrc
-struct channel *lookup_demod(uint32_t ssrc){
-  struct channel *demod = NULL;
-  pthread_mutex_lock(&Demod_list_mutex);
-  for(int i=0; i < Demod_list_length; i++){
-    if(Demod_list[i].inuse && Demod_list[i].output.rtp.ssrc == ssrc){
-      demod = &Demod_list[i];
+// Find chan by ssrc
+struct channel *lookup_chan(uint32_t ssrc){
+  struct channel *chan = NULL;
+  pthread_mutex_lock(&Channel_list_mutex);
+  for(int i=0; i < Channel_list_length; i++){
+    if(Channel_list[i].inuse && Channel_list[i].output.rtp.ssrc == ssrc){
+      chan = &Channel_list[i];
       break;
     }
   }
-  pthread_mutex_unlock(&Demod_list_mutex);
-  return demod;
+  pthread_mutex_unlock(&Channel_list_mutex);
+  return chan;
 }
 
 
-// Atomically create demod only if the ssrc doesn't already exist
-struct channel *create_demod(uint32_t ssrc){
+// Atomically create chan only if the ssrc doesn't already exist
+struct channel *create_chan(uint32_t ssrc){
   if(ssrc == 0xffffffff)
     return NULL; // reserved
-  pthread_mutex_lock(&Demod_list_mutex);
-  for(int i=0; i < Demod_list_length; i++){
-    if(Demod_list[i].inuse && Demod_list[i].output.rtp.ssrc == ssrc){
-      pthread_mutex_unlock(&Demod_list_mutex);
+  pthread_mutex_lock(&Channel_list_mutex);
+  for(int i=0; i < Channel_list_length; i++){
+    if(Channel_list[i].inuse && Channel_list[i].output.rtp.ssrc == ssrc){
+      pthread_mutex_unlock(&Channel_list_mutex);
       return NULL; // sorry, already taken
     }
   }
-  if(Demod_list == NULL){
-    Demod_list = (struct channel *)calloc(Demod_alloc_quantum,sizeof(struct channel));
-    Demod_list_length = Demod_alloc_quantum;
-    Active_demod_count = 0;
+  if(Channel_list == NULL){
+    Channel_list = (struct channel *)calloc(Channelalloc_quantum,sizeof(struct channel));
+    Channel_list_length = Channelalloc_quantum;
+    Active_channel_count = 0;
   }
-  struct channel *demod = NULL;
-  for(int i=0; i < Demod_list_length; i++){
-    if(!Demod_list[i].inuse){
-      demod = &Demod_list[i];
+  struct channel *chan = NULL;
+  for(int i=0; i < Channel_list_length; i++){
+    if(!Channel_list[i].inuse){
+      chan = &Channel_list[i];
       break;
     }
   }
-  if(demod == NULL){
-    fprintf(stdout,"Warning: out of demod table space (%d)\n",Active_demod_count);
+  if(chan == NULL){
+    fprintf(stdout,"Warning: out of chan table space (%d)\n",Active_channel_count);
     // Abort here? Or keep going?
   } else {
-    memset(demod,0,sizeof(struct channel));
-    demod->inuse = true;
-    demod->output.rtp.ssrc = ssrc; // Stash it
-    Active_demod_count++;
+    memset(chan,0,sizeof(struct channel));
+    chan->inuse = true;
+    chan->output.rtp.ssrc = ssrc; // Stash it
+    Active_channel_count++;
   }
-  pthread_mutex_unlock(&Demod_list_mutex);
-  return demod;
+  pthread_mutex_unlock(&Channel_list_mutex);
+  return chan;
 }
 
-// Set up newly created dynamic demodulator
-struct channel *setup_demod(uint32_t ssrc){
-  struct channel *demod = create_demod(ssrc);
-  if(demod != NULL){
+// Set up newly created dynamic channel
+struct channel *setup_chan(uint32_t ssrc){
+  struct channel *chan = create_chan(ssrc);
+  if(chan != NULL){
     // Copy dynamic template
-    // Although there are some pointers in here (filter.out, filter.energies), they're all NULL until the demod actually starts
-    memcpy(demod,Template,sizeof(*demod));
-    demod->output.rtp.ssrc = ssrc; // Put it back after getting smashed to 0 by memcpy
-    demod->lifetime = 20; // If freq == 0, goes away 20 sec after last command
+    // Although there are some pointers in here (filter.out, filter.energies), they're all NULL until the chan actually starts
+    memcpy(chan,Template,sizeof(*chan));
+    chan->output.rtp.ssrc = ssrc; // Put it back after getting smashed to 0 by memcpy
+    chan->lifetime = 20; // If freq == 0, goes away 20 sec after last command
 
     // Get the local socket for the output stream
     struct sockaddr_storage data_source_address;
     {
       socklen_t len = sizeof(data_source_address);
-      getsockname(demod->output.data_fd,(struct sockaddr *)&demod->output.data_source_address,&len);
+      getsockname(chan->output.data_fd,(struct sockaddr *)&chan->output.data_source_address,&len);
     }
   }
-  return demod;
+  return chan;
 }
 
 
-// takes pointer to pointer to demod so we can zero it out to avoid use of freed pointer
-void free_demod(struct channel **demod){
-  if(demod != NULL && *demod != NULL){
-    pthread_mutex_lock(&Demod_list_mutex);
-    if((*demod)->inuse){
-      (*demod)->inuse = false;
-      Active_demod_count--;
+// takes pointer to pointer to chan so we can zero it out to avoid use of freed pointer
+void free_chan(struct channel **chan){
+  if(chan != NULL && *chan != NULL){
+    pthread_mutex_lock(&Channel_list_mutex);
+    if((*chan)->inuse){
+      (*chan)->inuse = false;
+      Active_channel_count--;
     }
-    pthread_mutex_unlock(&Demod_list_mutex);  
-    *demod = NULL;
+    pthread_mutex_unlock(&Channel_list_mutex);  
+    *chan = NULL;
   }
 }
 
@@ -133,16 +133,16 @@ static const float n0_smooth = .001; // exponential smoothing rate for (noisy) b
 
 // experimental
 // estimate n0 by finding the FFT bin with the least energy
-// in the demod's pre-filter nyquist bandwidth
+// in the chan's pre-filter nyquist bandwidth
 // Works better than global estimation when noise floor is not flat
-static float estimate_noise(struct channel *demod,int shift){
+static float estimate_noise(struct channel *chan,int shift){
 
 
-  struct filter_out const * const slave = demod->filter.out;
-  if(demod->filter.energies == NULL)
-    demod->filter.energies = calloc(sizeof(float),slave->bins);
+  struct filter_out const * const slave = chan->filter.out;
+  if(chan->filter.energies == NULL)
+    chan->filter.energies = calloc(sizeof(float),slave->bins);
 
-  float * const energies = demod->filter.energies;
+  float * const energies = chan->filter.energies;
   struct filter_in const * const master = slave->master;
   // slave->next_jobnum already incremented by execute_filter_output
   complex float const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
@@ -154,7 +154,7 @@ static float estimate_noise(struct channel *demod,int shift){
     for(int i=0; i < master->bins; i++)
       total_energy += cnrmf(fdomain[i]);
     // Compute average power per sample, should match input level calculated in time domain
-    demod->tp1 = power2dB(total_energy) - voltage2dB((float)master->bins + Frontend.reference);
+    chan->tp1 = power2dB(total_energy) - voltage2dB((float)master->bins + Frontend.reference);
   }
 #endif  
 
@@ -205,86 +205,86 @@ static float estimate_noise(struct channel *demod,int shift){
 
 
 
-// start demodulator thread on already-initialized demod structure
-int start_demod(struct channel * demod){
-  if(demod == NULL)
+// start demod thread on already-initialized chan structure
+int start_demod(struct channel * chan){
+  if(chan == NULL)
     return -1;
 
   if(Verbose){
-    fprintf(stdout,"start_demod: ssrc %u, output %s, demod %d, freq %.3lf, preset %s, filter %.0f - %.0f\n",
-	    demod->output.rtp.ssrc, demod->output.data_dest_string, demod->demod_type, demod->tune.freq, demod->preset, demod->filter.min_IF, demod->filter.max_IF);
+    fprintf(stdout,"start_demod: ssrc %u, output %s, chan %d, freq %.3lf, preset %s, filter %.0f - %.0f\n",
+	    chan->output.rtp.ssrc, chan->output.data_dest_string, chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
   }
-  // Stop previous demodulator, if any
-  if(demod->demod_thread != (pthread_t)0){
+  // Stop previous channel, if any
+  if(chan->demod_thread != (pthread_t)0){
 #if 1 // Invoke thread apoptosis
-    demod->terminate = 1;
-    pthread_join(demod->demod_thread,NULL);
-    demod->terminate = 0;
+    chan->terminate = 1;
+    pthread_join(chan->demod_thread,NULL);
+    chan->terminate = 0;
 #else
-    pthread_cancel(demod->demod_thread);
-    pthread_join(demod->demod_thread,NULL);
+    pthread_cancel(chan->demod_thread);
+    pthread_join(chan->demod_thread,NULL);
 #endif    
   }
 
-  // Start demodulators; only one actually runs at a time
-  switch(demod->demod_type){
+  // Start channels; only one actually runs at a time
+  switch(chan->demod_type){
   case WFM_DEMOD:
-    pthread_create(&demod->demod_thread,NULL,demod_wfm,demod);
+    pthread_create(&chan->demod_thread,NULL,demod_wfm,chan);
     break;
   case FM_DEMOD:
-    pthread_create(&demod->demod_thread,NULL,demod_fm,demod);
+    pthread_create(&chan->demod_thread,NULL,demod_fm,chan);
     break;
   case LINEAR_DEMOD:
-    pthread_create(&demod->demod_thread,NULL,demod_linear,demod);
+    pthread_create(&chan->demod_thread,NULL,demod_linear,chan);
     break;
   case SPECT_DEMOD:
-    if(demod->tune.freq != 0)
-      pthread_create(&demod->demod_thread,NULL,demod_spectrum,demod); // spectrum demod can't change freq, so just don't start it at 0
+    if(chan->tune.freq != 0)
+      pthread_create(&chan->demod_thread,NULL,demod_spectrum,chan); // spectrum chan can't change freq, so just don't start it at 0
     break;
   }
   return 0;
 }
 
-int kill_demod(struct channel **p){
+int kill_chan(struct channel **p){
   if(p == NULL)
     return -1;
-  struct channel *demod = *p;
-  if(demod == NULL)
+  struct channel *chan = *p;
+  if(chan == NULL)
     return -1;
 
 #if 1
-  demod->terminate = 1;
+  chan->terminate = 1;
 #else
-  if(demod->demod_thread != (pthread_t)0)
-    pthread_cancel(demod->demod_thread);
+  if(chan->demod_thread != (pthread_t)0)
+    pthread_cancel(chan->demod_thread);
 #endif
-  pthread_join(demod->demod_thread,NULL);
-  if(demod->filter.out)
-    delete_filter_output(&demod->filter.out);
-  if(demod->rtcp_thread != (pthread_t)0){
-    pthread_cancel(demod->rtcp_thread);
-    pthread_join(demod->rtcp_thread,NULL);
+  pthread_join(chan->demod_thread,NULL);
+  if(chan->filter.out)
+    delete_filter_output(&chan->filter.out);
+  if(chan->rtcp_thread != (pthread_t)0){
+    pthread_cancel(chan->rtcp_thread);
+    pthread_join(chan->rtcp_thread,NULL);
   }
-  if(demod->sap_thread != (pthread_t)0){
-    pthread_cancel(demod->sap_thread);
-    pthread_join(demod->sap_thread,NULL);
+  if(chan->sap_thread != (pthread_t)0){
+    pthread_cancel(chan->sap_thread);
+    pthread_join(chan->sap_thread,NULL);
   }
     
 #if 0
-  // Don't close these as they're often shared across demods
+  // Don't close these as they're often shared across chans
   // Really should keep a reference count so they can be closed when
-  // the last demod using them closes
-  if(demod->output.rtcp_fd > 2)
-    close(demod->output.rtcp_fd);
-  if(demod->output.data_fd > 2)
-    close(demod->output.data_fd);
-  if(demod->output.sap_fd > 2)
-    close(demod->output.sap_fd);
+  // the last chan using them closes
+  if(chan->output.rtcp_fd > 2)
+    close(chan->output.rtcp_fd);
+  if(chan->output.data_fd > 2)
+    close(chan->output.data_fd);
+  if(chan->output.sap_fd > 2)
+    close(chan->output.sap_fd);
 #endif
-  FREE(demod->filter.energies);
-  FREE(demod->spectrum.bin_data);
+  FREE(chan->filter.energies);
+  FREE(chan->spectrum.bin_data);
 
-  free_demod(p);
+  free_chan(p);
   return 0;
 }
 
@@ -293,16 +293,16 @@ int kill_demod(struct channel **p){
 // The new IF is computed here only to determine if the front end needs retuning
 // The second LO frequency is actually set when the new front end frequency is
 // received back from the front end metadata
-double set_freq(struct channel * const demod,double const f){
-  assert(demod != NULL);
-  if(demod == NULL)
+double set_freq(struct channel * const chan,double const f){
+  assert(chan != NULL);
+  if(chan == NULL)
     return NAN;
 
   assert(!isnan(f));
-  demod->tune.freq = f;
+  chan->tune.freq = f;
 
   // Tuning to 0 Hz is a special case, don't move front end
-  // Essentially disables a demod
+  // Essentially disables a chan
   if(f == 0)
     return f;
 
@@ -314,29 +314,29 @@ double set_freq(struct channel * const demod,double const f){
   // Ideally the front end would just round in a preferred direction
   // but it doesn't know where our IF will be so it can't make the right choice
   double const fudge = 1000;
-  if(new_if > Frontend.max_IF - demod->filter.max_IF){
+  if(new_if > Frontend.max_IF - chan->filter.max_IF){
     // Retune LO1 as little as possible
-    new_if = Frontend.max_IF - demod->filter.max_IF - fudge;
-  } else if(new_if < Frontend.min_IF - demod->filter.min_IF){
+    new_if = Frontend.max_IF - chan->filter.max_IF - fudge;
+  } else if(new_if < Frontend.min_IF - chan->filter.min_IF){
     // Also retune LO1 as little as possible
-    new_if = Frontend.min_IF - demod->filter.min_IF + fudge;
+    new_if = Frontend.min_IF - chan->filter.min_IF + fudge;
   } else
     return f; // OK where it is
 
   double const new_lo1 = f - new_if;
   // the front end will send its actual new frequency in its status stream,
-  // the front end status decoder will pick it up, and the demods will recalculate their new LOs
-  set_first_LO(demod,new_lo1);
+  // the front end status decoder will pick it up, and the chans will recalculate their new LOs
+  set_first_LO(chan,new_lo1);
   return f;
 }
 
 // Set first (front end tuner) oscillator
 // Note: single precision floating point is not accurate enough at VHF and above
-// demod->first_LO is NOT updated here!
+// chan->first_LO is NOT updated here!
 // It is set by incoming status frames so this will take time
-double set_first_LO(struct channel const * const demod,double const first_LO){
-  assert(demod != NULL);
-  if(demod == NULL)
+double set_first_LO(struct channel const * const chan,double const first_LO){
+  assert(chan != NULL);
+  if(chan == NULL)
     return NAN;
 
   double const current_lo1 = Frontend.frequency;
@@ -384,7 +384,7 @@ int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, doub
   // Even though only one works, this lets us manually check for images
   // No point in tuning to aliases, though
   if(abs(r) > N/2)
-    return -1; // Demod thread will wait for the front end status to change
+    return -1; // Chan thread will wait for the front end status to change
   return 0;
 }
 
@@ -394,8 +394,8 @@ int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, doub
    Will probably work better with Opus streams from the opus transcoder, since they're always 48000 Hz stereo; no switching midstream
 */
 void *sap_send(void *p){
-  struct channel *demod = (struct channel *)p;
-  assert(demod != NULL);
+  struct channel *chan = (struct channel *)p;
+  assert(chan != NULL);
 
   int64_t start_time = utc_time_sec() + NTP_EPOCH; // NTP uses UTC, not GPS
 
@@ -415,7 +415,7 @@ void *sap_send(void *p){
     space -= 4;
     
     // our sending ipv4 address
-    struct sockaddr_in const *sin = (struct sockaddr_in *)&demod->output.data_source_address;
+    struct sockaddr_in const *sin = (struct sockaddr_in *)&chan->output.data_source_address;
     uint32_t *src = (uint32_t *)wp;
     *src = sin->sin_addr.s_addr; // network byte order
     wp += 4;
@@ -460,7 +460,7 @@ void *sap_send(void *p){
     space -= len;
     
     {
-      char *mcast = strdup(formatsock(&demod->output.data_dest_address));
+      char *mcast = strdup(formatsock(&chan->output.data_dest_address));
       // Remove :port field, confuses the vlc listener
       char *cp = strchr(mcast,':');
       if(cp)
@@ -484,24 +484,24 @@ void *sap_send(void *p){
     // m = media description
 #if 1  
     {
-      // Demod type can change, but not the sample rate
-      int mono_type = pt_from_info(demod->output.samprate,1);
-      int stereo_type = pt_from_info(demod->output.samprate,2);
-      int fm_type = pt_from_info(demod->output.samprate,1);
+      // Chan type can change, but not the sample rate
+      int mono_type = pt_from_info(chan->output.samprate,1);
+      int stereo_type = pt_from_info(chan->output.samprate,2);
+      int fm_type = pt_from_info(chan->output.samprate,1);
       
       len = snprintf(wp,space,"m=audio 5004/1 RTP/AVP %d %d %d\r\n",mono_type,stereo_type,fm_type);
       wp += len;
       space -= len;
       
-      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",mono_type,demod->output.samprate,1);
+      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",mono_type,chan->output.samprate,1);
       wp += len;
       space -= len;
       
-      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",stereo_type,demod->output.samprate,2);
+      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",stereo_type,chan->output.samprate,2);
       wp += len;
       space -= len;
       
-      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",fm_type,demod->output.samprate,1);
+      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",fm_type,chan->output.samprate,1);
       wp += len;
       space -= len;
     }
@@ -509,36 +509,36 @@ void *sap_send(void *p){
     {
       // set from current state. This will require changing the session version and IDs, and
       // it's not clear that clients like VLC will do the right thing anyway
-      int type = pt_from_info(demod->output.samprate,demod->output.channels,demod->demod_type);
+      int type = pt_from_info(chan->output.samprate,chan->output.channels,chan->chan_type);
 
       len = snprintf(wp,space,"m=audio 5004/1 RTP/AVP %d\r\n",type);
       wp += len;
       space -= len;
       
-      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",type,demod->output.samprate,demod->output.channels);
+      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",type,chan->output.samprate,chan->output.channels);
       wp += len;
       space -= len;
     }
 #endif    
-    send(demod->output.sap_fd,message,wp - message,0);
+    send(chan->output.sap_fd,message,wp - message,0);
     sleep(5);
   }
 }
 
-// Walk through demodulator list culling dynamic demodulators that
+// Walk through channel list culling dynamic channels that
 // have become inactive
-void *demod_reaper(void *arg){
+void *chan_reaper(void *arg){
   pthread_setname("dreaper");
   while(1){
     int actives = 0;
-    for(int i=0;i<Demod_list_length && actives < Active_demod_count;i++){
-      struct channel *demod = &Demod_list[i];
-      if(demod->inuse){
+    for(int i=0;i<Channel_list_length && actives < Active_channel_count;i++){
+      struct channel *chan = &Channel_list[i];
+      if(chan->inuse){
 	actives++;
-	if(demod->tune.freq == 0 && demod->lifetime > 0){
-	  demod->lifetime--;
-	  if(demod->lifetime == 0){
-	    kill_demod(&demod); // clears demod->inuse
+	if(chan->tune.freq == 0 && chan->lifetime > 0){
+	  chan->lifetime--;
+	  if(chan->lifetime == 0){
+	    kill_chan(&chan); // clears chan->inuse
 	    actives--;
 	  }
 	}
@@ -548,7 +548,7 @@ void *demod_reaper(void *arg){
   }
   return NULL;
 }
-// Run digital downconverter, common to all demods
+// Run digital downconverter, common to all chans
 // 1. Block until front end is in range
 // 2. compute FFT bin shift & fine tuning remainder
 // 3. Set fine tuning oscillator frequency & phase
@@ -556,8 +556,8 @@ void *demod_reaper(void *arg){
 // 5. Update noise estimate
 // 6. Run fine tuning, compute average power
 
-// Baseband samples placed in demod->filter.out->output.c
-int downconvert(struct channel *demod){
+// Baseband samples placed in chan->filter.out->output.c
+int downconvert(struct channel *chan){
   // To save CPU time when the front end is completely tuned away from us, block until the front
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);
@@ -565,13 +565,13 @@ int downconvert(struct channel *demod){
     double remainder;
 
     while(1){
-      if(demod->terminate){
+      if(chan->terminate){
 	pthread_mutex_unlock(&Frontend.status_mutex);
 	return -1;
       }
 
-      demod->tune.second_LO = Frontend.frequency - demod->tune.freq;
-      double const freq = demod->tune.doppler + demod->tune.second_LO; // Total logical oscillator frequency
+      chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
+      double const freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
       if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
 			Frontend.in->impulse_length,
 			Frontend.samprate,
@@ -579,9 +579,9 @@ int downconvert(struct channel *demod){
 	break; // We can get at least part of the spectrum we want
 
       // No front end coverage of our passband; wait for it to retune
-      demod->sig.bb_power = 0;
-      demod->sig.bb_energy = 0;
-      demod->output.energy = 0;
+      chan->sig.bb_power = 0;
+      chan->sig.bb_energy = 0;
+      chan->output.energy = 0;
       struct timespec timeout; // Needed to avoid deadlock if no front end is available
       clock_gettime(CLOCK_REALTIME,&timeout);
       timeout.tv_sec += 1; // 1 sec in the future
@@ -590,51 +590,51 @@ int downconvert(struct channel *demod){
     pthread_mutex_unlock(&Frontend.status_mutex);
 
     // Reasonable parameters?
-    assert(isfinite(demod->tune.doppler_rate));
-    assert(isfinite(demod->tune.shift));
+    assert(isfinite(chan->tune.doppler_rate));
+    assert(isfinite(chan->tune.shift));
 
 #if 0
-    demod->tp1 = shift;
-    demod->tp2 = remainder;
+    chan->tp1 = shift;
+    chan->tp2 = remainder;
 #endif
 
-    complex float * const buffer = demod->filter.out->output.c; // Working output time-domain buffer (if any)
+    complex float * const buffer = chan->filter.out->output.c; // Working output time-domain buffer (if any)
     // set fine tuning frequency & phase. Do before execute_filter blocks (can't remember why)
     if(buffer != NULL){ // No output time-domain buffer in spectrum mode
-      // avoid them both being 0 at startup; init demod->filter.remainder as NAN
-      if(remainder != demod->filter.remainder){
-	set_osc(&demod->fine,remainder/demod->output.samprate,demod->tune.doppler_rate/(demod->output.samprate * demod->output.samprate));
-	demod->filter.remainder = remainder;
+      // avoid them both being 0 at startup; init chan->filter.remainder as NAN
+      if(remainder != chan->filter.remainder){
+	set_osc(&chan->fine,remainder/chan->output.samprate,chan->tune.doppler_rate/(chan->output.samprate * chan->output.samprate));
+	chan->filter.remainder = remainder;
       }
       // Block phase adjustment (folded into the fine tuning osc) in two parts:
       // (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
       // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
-      // Be sure to Initialize demod->filter.bin_shift at startup to something bizarre to force this inequality on first call
-      if(shift != demod->filter.bin_shift){
+      // Be sure to Initialize chan->filter.bin_shift at startup to something bizarre to force this inequality on first call
+      if(shift != chan->filter.bin_shift){
 	const int V = 1 + (Frontend.in->ilen / (Frontend.in->impulse_length - 1)); // Overlap factor
-	demod->filter.phase_adjust = cispi(-2.0f*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
-	demod->fine.phasor *= cispi((shift - demod->filter.bin_shift) / (2.0f * (V-1))); // One time adjust for shift change
+	chan->filter.phase_adjust = cispi(-2.0f*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
+	chan->fine.phasor *= cispi((shift - chan->filter.bin_shift) / (2.0f * (V-1))); // One time adjust for shift change
       }
-      demod->fine.phasor *= demod->filter.phase_adjust;
+      chan->fine.phasor *= chan->filter.phase_adjust;
     }
-    execute_filter_output(demod->filter.out,-shift); // block until new data frame
-    demod->blocks_since_poll++;
+    execute_filter_output(chan->filter.out,-shift); // block until new data frame
+    chan->blocks_since_poll++;
     set_reference_level(&Frontend); // May have changed
     float level_normalize = 1. / Frontend.reference;
     if(buffer != NULL){ // No output time-domain buffer in spectral analysis mode
-      const int N = demod->filter.out->olen; // Number of raw samples in filter output buffer
+      const int N = chan->filter.out->olen; // Number of raw samples in filter output buffer
       float energy = 0;
       for(int n=0; n < N; n++){
-	buffer[n] *= level_normalize * step_osc(&demod->fine);
+	buffer[n] *= level_normalize * step_osc(&chan->fine);
 	energy += cnrmf(buffer[n]);
       }
       energy /= N;
-      demod->sig.bb_power = energy;
-      demod->sig.bb_energy += energy; // Added once per block
+      chan->sig.bb_power = energy;
+      chan->sig.bb_energy += energy; // Added once per block
     }
-    demod->filter.bin_shift = shift; // We need this in any case (not really?)
-    demod->sig.n0 = estimate_noise(demod,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
-    demod->sig.n0 /= Frontend.reference * Frontend.reference; // noise estimate is prior to normalization
+    chan->filter.bin_shift = shift; // We need this in any case (not really?)
+    chan->sig.n0 = estimate_noise(chan,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
+    chan->sig.n0 /= Frontend.reference * Frontend.reference; // noise estimate is prior to normalization
 
     return 0;
 }

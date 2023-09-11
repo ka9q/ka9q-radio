@@ -22,39 +22,39 @@
 #define PACKETSIZE 2048        // Somewhat larger than Ethernet MTU
 
 // Send 'size' stereo samples, each in a pair of floats
-int send_stereo_output(struct channel * restrict const demod,float const * restrict buffer,int size,bool const mute){
+int send_stereo_output(struct channel * restrict const chan,float const * restrict buffer,int size,bool const mute){
 
   if(mute){
     // Increment timestamp
-    demod->output.rtp.timestamp += size; // Increase by sample count
-    demod->output.silent = true;
+    chan->output.rtp.timestamp += size; // Increase by sample count
+    chan->output.silent = true;
     return 0;
   }
 
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
-  rtp.type = pt_from_info(demod->output.samprate,2);
+  rtp.type = pt_from_info(chan->output.samprate,2);
   rtp.version = RTP_VERS;
-  rtp.ssrc = demod->output.rtp.ssrc;
+  rtp.ssrc = chan->output.rtp.ssrc;
 
   while(size > 0){
     int chunk = min(PCM_BUFSIZE,2*size);
     // If packet is all zeroes, don't send it but still increase the timestamp
-    rtp.timestamp = demod->output.rtp.timestamp;
-    demod->output.rtp.timestamp += chunk/2; // Increase by sample count
-    demod->output.rtp.bytes += sizeof(int16_t) * chunk;
-    demod->output.rtp.packets++;
-    rtp.marker = demod->output.silent;
-    demod->output.silent = false;
-    rtp.seq = demod->output.rtp.seq++;
+    rtp.timestamp = chan->output.rtp.timestamp;
+    chan->output.rtp.timestamp += chunk/2; // Increase by sample count
+    chan->output.rtp.bytes += sizeof(int16_t) * chunk;
+    chan->output.rtp.packets++;
+    rtp.marker = chan->output.silent;
+    chan->output.silent = false;
+    rtp.seq = chan->output.rtp.seq++;
     uint8_t packet[PACKETSIZE];
     int16_t *pcm_buf = (int16_t *)hton_rtp(packet,&rtp);
     for(int i=0; i < chunk; i ++)
       *pcm_buf++ = htons(scaleclip(*buffer++));
 
     uint8_t *dp = (uint8_t *)pcm_buf;
-    int r = send(demod->output.data_fd,&packet,dp - packet,0);
-    demod->output.samples += chunk/2; // Count stereo samples
+    int r = send(chan->output.data_fd,&packet,dp - packet,0);
+    chan->output.samples += chunk/2; // Count stereo samples
     if(r <= 0){
       perror("pcm send");
       return -1;
@@ -65,39 +65,39 @@ int send_stereo_output(struct channel * restrict const demod,float const * restr
 }
 
 // Send 'size' mono samples, each in a float
-int send_mono_output(struct channel * restrict const demod,float const * restrict buffer,int size,bool const mute){
+int send_mono_output(struct channel * restrict const chan,float const * restrict buffer,int size,bool const mute){
   if(mute){
     // Increment timestamp
-    demod->output.rtp.timestamp += size; // Increase by sample count
-    demod->output.silent = true;
+    chan->output.rtp.timestamp += size; // Increase by sample count
+    chan->output.silent = true;
     return 0;
   }
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
   rtp.version = RTP_VERS;
-  rtp.type = pt_from_info(demod->output.samprate,1);
-  rtp.ssrc = demod->output.rtp.ssrc;
+  rtp.type = pt_from_info(chan->output.samprate,1);
+  rtp.ssrc = chan->output.rtp.ssrc;
 
   while(size > 0){
     int chunk = min(PCM_BUFSIZE,size); // # of mono samples (frames)
 
     // If packet is muted, don't send it but still increase the timestamp
-    rtp.timestamp = demod->output.rtp.timestamp;
-    demod->output.rtp.timestamp += chunk; // Increase by sample count
-    demod->output.rtp.packets++;
-    demod->output.rtp.bytes += sizeof(int16_t) * chunk;
+    rtp.timestamp = chan->output.rtp.timestamp;
+    chan->output.rtp.timestamp += chunk; // Increase by sample count
+    chan->output.rtp.packets++;
+    chan->output.rtp.bytes += sizeof(int16_t) * chunk;
     // Transition from silence emits a mark bit
-    rtp.marker = demod->output.silent;
-    demod->output.silent = false;
-    rtp.seq = demod->output.rtp.seq++;
+    rtp.marker = chan->output.silent;
+    chan->output.silent = false;
+    rtp.seq = chan->output.rtp.seq++;
     uint8_t packet[PACKETSIZE];
     int16_t *pcm_buf = (int16_t *)hton_rtp(packet,&rtp);
     for(int i=0; i < chunk; i++)
       *pcm_buf++ = htons(scaleclip(*buffer++));
 
     uint8_t *dp = (uint8_t *)pcm_buf;
-    int r = send(demod->output.data_fd,&packet,dp - packet,0);
-    demod->output.samples += chunk;
+    int r = send(chan->output.data_fd,&packet,dp - packet,0);
+    chan->output.samples += chunk;
     if(r <= 0){
       perror("pcm send");
       return -1;
@@ -109,13 +109,13 @@ int send_mono_output(struct channel * restrict const demod,float const * restric
 
 #if 0 // Not currently used
 void output_cleanup(void *p){
-  struct channel * const demod = p;
-  if(demod == NULL)
+  struct channel * const chan = p;
+  if(chan == NULL)
     return;
 
-  if(demod->output.data_fd > 0){
-    close(demod->output.data_fd);
-    demod->output.data_fd = -1;
+  if(chan->output.data_fd > 0){
+    close(chan->output.data_fd);
+    chan->output.data_fd = -1;
   }
 }
 #endif

@@ -58,7 +58,7 @@ struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typical
 float Blocktime;
 int Ctl_fd,Status_fd;
 uint64_t Metadata_packets;
-uint64_t Block_drops; // Stored in output filter on sender, not in demod structure
+uint64_t Block_drops; // Stored in output filter on sender, not in channel structure
 
 const char *App_path;
 int Verbose;
@@ -77,19 +77,19 @@ static WINDOW *Tuning_win,*Sig_win,*Filtering_win,*Demodulator_win,
   *Options_win,*Modes_win,*Debug_win,
   *Output_win;
 
-static void display_tuning(WINDOW *tuning,struct channel const *demod);
-static void display_info(WINDOW *w,int row,int col,struct channel const *demod);
-static void display_filtering(WINDOW *filtering,struct channel const *demod);
-static void display_sig(WINDOW *sig,struct channel const *demod);
-static void display_demodulator(WINDOW *demodulator,struct channel const *demod);
-static void display_options(WINDOW *options,struct channel const *demod);
-static void display_modes(WINDOW *modes,struct channel const *demod);
-static void display_output(WINDOW *output,struct channel const *demod);
+static void display_tuning(WINDOW *tuning,struct channel const *channel);
+static void display_info(WINDOW *w,int row,int col,struct channel const *channel);
+static void display_filtering(WINDOW *filtering,struct channel const *channel);
+static void display_sig(WINDOW *sig,struct channel const *channel);
+static void display_demodulator(WINDOW *demodulator,struct channel const *channel);
+static void display_options(WINDOW *options,struct channel const *channel);
+static void display_modes(WINDOW *modes,struct channel const *channel);
+static void display_output(WINDOW *output,struct channel const *channel);
 static int process_keyboard(struct channel *,uint8_t **bpp,int c);
-static void process_mouse(struct channel *demod,uint8_t **bpp);
-static int decode_radio_status(struct channel *demod,uint8_t const *buffer,int length);
-static int for_us(struct channel *demod,uint8_t const *buffer,int length,uint32_t ssrc);
-static int init_demod(struct channel *demod);
+static void process_mouse(struct channel *channel,uint8_t **bpp);
+static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int length);
+static int for_us(struct channel *channel,uint8_t const *buffer,int length,uint32_t ssrc);
+static int init_demod(struct channel *channel);
 
 // Pop up a temporary window with the contents of a file in the
 // library directory (usually /usr/local/share/ka9q-radio/)
@@ -174,7 +174,7 @@ static void display_cleanup(void){
 static bool Frequency_lock;
 
 // Adjust the selected item up or down one step
-static void adjust_item(struct channel *demod,uint8_t **bpp,int direction){
+static void adjust_item(struct channel *channel,uint8_t **bpp,int direction){
   double tunestep = pow(10., (double)Control.step);
 
   if(!direction)
@@ -183,8 +183,8 @@ static void adjust_item(struct channel *demod,uint8_t **bpp,int direction){
   switch(Control.item){
   case 0: // Carrier frequency
     if(!Frequency_lock){ // Ignore if locked
-      demod->tune.freq += tunestep;
-      encode_double(bpp,RADIO_FREQUENCY,demod->tune.freq);
+      channel->tune.freq += tunestep;
+      encode_double(bpp,RADIO_FREQUENCY,channel->tune.freq);
     }
     break;
   case 1: // First LO
@@ -197,32 +197,32 @@ static void adjust_item(struct channel *demod,uint8_t **bpp,int direction){
     break;
   case 3: // Filter low edge (hertz rather than millihertz)
     {
-      float const x = min(demod->filter.max_IF,demod->filter.min_IF + (float)tunestep * 1000);
-      demod->filter.min_IF = x;
+      float const x = min(channel->filter.max_IF,channel->filter.min_IF + (float)tunestep * 1000);
+      channel->filter.min_IF = x;
       encode_float(bpp,LOW_EDGE,x);
     }
     break;
   case 4: // Filter high edge
     {
-      float const x = max(demod->filter.min_IF,demod->filter.max_IF + (float)tunestep * 1000);
-      demod->filter.max_IF = x;
+      float const x = max(channel->filter.min_IF,channel->filter.max_IF + (float)tunestep * 1000);
+      channel->filter.max_IF = x;
       encode_float(bpp,HIGH_EDGE,x);
     }
     break;
   case 5: // Post-detection audio frequency shift
-    demod->tune.shift += tunestep;
-    encode_double(bpp,SHIFT_FREQUENCY,demod->tune.shift);
+    channel->tune.shift += tunestep;
+    encode_double(bpp,SHIFT_FREQUENCY,channel->tune.shift);
     break;
 
   }
 }
 // Hooks for knob.c (experimental)
 // It seems better to just use the Griffin application to turn knob events into keystrokes or mouse events
-static void adjust_up(struct channel *demod,uint8_t **bpp){
-  adjust_item(demod,bpp,1);
+static void adjust_up(struct channel *channel,uint8_t **bpp){
+  adjust_item(channel,bpp,1);
 }
-static void adjust_down(struct channel *demod,uint8_t **bpp){
-  adjust_item(demod,bpp,0);
+static void adjust_down(struct channel *channel,uint8_t **bpp){
+  adjust_item(channel,bpp,0);
 }
 static void toggle_lock(void){
   switch(Control.item){
@@ -316,7 +316,7 @@ static int dcompare(void const *a,void const *b){
 
 static uint32_t Ssrc = 0;
 
-static struct channel Demod;
+static struct channel Channel;
 
 // Thread to display receiver state, updated at 10Hz by default
 // Uses the ancient ncurses text windowing library
@@ -411,9 +411,9 @@ int main(int argc,char *argv[]){
 
   setup_windows();
 
-  struct channel *const demod = &Demod;
-  memset(demod,0,sizeof(*demod));
-  init_demod(demod);
+  struct channel *const channel = &Channel;
+  memset(channel,0,sizeof(*channel));
+  init_demod(channel);
 
   Frontend.frequency = 
     Frontend.min_IF = Frontend.max_IF = NAN;
@@ -464,11 +464,11 @@ int main(int argc,char *argv[]){
 	int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize);
 	
 	// Ignore our own command packets and responses to other SSIDs
-	if(length >= 2 && (enum pkt_type)buffer[0] == STATUS && for_us(demod,buffer+1,length-1,Ssrc) >= 0 ){
+	if(length >= 2 && (enum pkt_type)buffer[0] == STATUS && for_us(channel,buffer+1,length-1,Ssrc) >= 0 ){
 	  update_needed = true;
 	  // Save source only if it's a response
 	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
-	  decode_radio_status(demod,buffer+1,length-1);
+	  decode_radio_status(channel,buffer+1,length-1);
 	  // Postpone next poll to specified interval
 	  next_radio_poll = random_time(radio_poll_interval,random_interval); // Update poll interval
 	  
@@ -484,13 +484,13 @@ int main(int argc,char *argv[]){
     }
     if(update_needed){
       // update display windows
-      display_tuning(Tuning_win,demod);
-      display_filtering(Filtering_win,demod);
-      display_sig(Sig_win,demod);
-      display_demodulator(Demodulator_win,demod);
-      display_options(Options_win,demod);
-      display_modes(Modes_win,demod);
-      display_output(Output_win,demod);
+      display_tuning(Tuning_win,channel);
+      display_filtering(Filtering_win,channel);
+      display_sig(Sig_win,channel);
+      display_demodulator(Demodulator_win,channel);
+      display_options(Options_win,channel);
+      display_modes(Modes_win,channel);
+      display_output(Output_win,channel);
       
       if(Debug_win != NULL){
 	touchwin(Debug_win); // since we're not redrawing it every cycle
@@ -507,11 +507,11 @@ int main(int argc,char *argv[]){
     // Poll keyboard and mouse
     int const c = getch();
     if(c == KEY_MOUSE){
-      process_mouse(demod,&bp);
+      process_mouse(channel,&bp);
       update_needed = true;
     } else if(c != ERR) {
       update_needed = true;
-      if(process_keyboard(demod,&bp,c) == -1)
+      if(process_keyboard(channel,&bp,c) == -1)
 	goto quit;
     }
 
@@ -542,7 +542,7 @@ int main(int argc,char *argv[]){
 }
 
 
-static int process_keyboard(struct channel *demod,uint8_t **bpp,int c){
+static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   // Look for keyboard and mouse events
 
   switch(c){
@@ -588,10 +588,10 @@ static int process_keyboard(struct channel *demod,uint8_t **bpp,int c){
     Control.step--;
     break;
   case KEY_UP:        // Increase whatever digit we're tuning
-    adjust_up(demod,bpp);
+    adjust_up(channel,bpp);
     break;
   case KEY_DOWN:      // Decrease whatever we're tuning
-    adjust_down(demod,bpp);
+    adjust_down(channel,bpp);
     break;
   case '\f':  // Screen repaint (formfeed, aka control-L)
     clearok(curscr,TRUE);
@@ -652,7 +652,7 @@ static int process_keyboard(struct channel *demod,uint8_t **bpp,int c){
 	encode_float(bpp,HEADROOM,x);
     }
     break;
-  case 'g': // Manually set linear demod gain, dB (positive or negative)
+  case 'g': // Manually set linear channel gain, dB (positive or negative)
     {
       char str[1024],*ptr;
       getentry("Gain, dB: ",str,sizeof(str));
@@ -692,8 +692,8 @@ static int process_keyboard(struct channel *demod,uint8_t **bpp,int c){
       char str[160];
       getentry("Carrier frequency: ",str,sizeof(str));
       if(strlen(str) > 0){
-	demod->tune.freq = fabs(parse_frequency(str,true)); // Handles funky forms like 147m435
-	encode_double(bpp,RADIO_FREQUENCY,demod->tune.freq);
+	channel->tune.freq = fabs(parse_frequency(str,true)); // Handles funky forms like 147m435
+	encode_double(bpp,RADIO_FREQUENCY,channel->tune.freq);
       }
     }
     break;
@@ -749,7 +749,7 @@ static int process_keyboard(struct channel *demod,uint8_t **bpp,int c){
   return 0;
 }
 
-static void process_mouse(struct channel *demod,uint8_t **bpp){
+static void process_mouse(struct channel *channel,uint8_t **bpp){
   // Process mouse events
   // Need to handle the wheel as equivalent to up/down arrows
   MEVENT mouse_event;
@@ -791,7 +791,7 @@ static void process_mouse(struct channel *demod,uint8_t **bpp){
 	  
     } else if(Options_win && wmouse_trafo(Options_win,&my,&mx,false)){
       // In the options window
-      if(demod->demod_type == WFM_DEMOD){
+      if(channel->demod_type == WFM_DEMOD){
 	switch(my){
 	case 1:
 	  encode_int(bpp,OUTPUT_CHANNELS,1);
@@ -800,7 +800,7 @@ static void process_mouse(struct channel *demod,uint8_t **bpp){
 	  encode_int(bpp,OUTPUT_CHANNELS,2);
 	  break;
 	}
-      } else if(demod->demod_type == FM_DEMOD){
+      } else if(channel->demod_type == FM_DEMOD){
 	switch(my){
 	case 1:
 	  encode_int(bpp,THRESH_EXTEND,0);
@@ -809,7 +809,7 @@ static void process_mouse(struct channel *demod,uint8_t **bpp){
 	  encode_int(bpp,THRESH_EXTEND,1);	  
 	  break;
 	}
-      } else if(demod->demod_type == LINEAR_DEMOD){
+      } else if(channel->demod_type == LINEAR_DEMOD){
 	switch(my){
 	case 1:
 	  encode_int(bpp,ENVELOPE,1);
@@ -850,24 +850,24 @@ static void process_mouse(struct channel *demod,uint8_t **bpp){
   } // end of mouse processing
 }
 
-// Initialize a new, unused demod instance where fields start non-zero
-static int init_demod(struct channel *demod){
-  memset(demod,0,sizeof(*demod));
-  demod->tune.second_LO = NAN;
-  demod->tune.freq = demod->tune.shift = NAN;
-  demod->filter.min_IF = demod->filter.max_IF = demod->filter.kaiser_beta = NAN;
-  demod->output.headroom = demod->linear.hangtime = demod->linear.recovery_rate = NAN;
-  demod->sig.bb_power = demod->sig.snr = demod->sig.foffset = NAN;
-  demod->fm.pdeviation = demod->linear.cphase = demod->linear.lock_timer = NAN;
-  demod->output.gain = NAN;
-  demod->tp1 = demod->tp2 = NAN;
+// Initialize a new, unused channel instance where fields start non-zero
+static int init_demod(struct channel *channel){
+  memset(channel,0,sizeof(*channel));
+  channel->tune.second_LO = NAN;
+  channel->tune.freq = channel->tune.shift = NAN;
+  channel->filter.min_IF = channel->filter.max_IF = channel->filter.kaiser_beta = NAN;
+  channel->output.headroom = channel->linear.hangtime = channel->linear.recovery_rate = NAN;
+  channel->sig.bb_power = channel->sig.snr = channel->sig.foffset = NAN;
+  channel->fm.pdeviation = channel->linear.cphase = channel->linear.lock_timer = NAN;
+  channel->output.gain = NAN;
+  channel->tp1 = channel->tp2 = NAN;
 
-  demod->output.data_fd = demod->output.rtcp_fd = -1;
+  channel->output.data_fd = channel->output.rtcp_fd = -1;
   return 0;
 }
 
 // Is response for us (1), or for somebody else (-1)?
-static int for_us(struct channel *demod,uint8_t const *buffer,int length,uint32_t ssrc){
+static int for_us(struct channel *channel,uint8_t const *buffer,int length,uint32_t ssrc){
   uint8_t const *cp = buffer;
   
   while(cp - buffer < length){
@@ -909,10 +909,10 @@ static int for_us(struct channel *demod,uint8_t const *buffer,int length,uint32_
   return 0; // not specified
 }
 
-// Decode incoming status message from the radio program, convert and fill in fields in local demod structure
+// Decode incoming status message from the radio program, convert and fill in fields in local channel structure
 // Leave all other fields unchanged, as they may have local uses (e.g., file descriptors)
-// Note that we use some fields in demod differently than in the radio (e.g., dB vs ratios)
-static int decode_radio_status(struct channel *demod,uint8_t const *buffer,int length){
+// Note that we use some fields in channel differently than in the radio (e.g., dB vs ratios)
+static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int length){
   uint8_t const *cp = buffer;
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
@@ -927,7 +927,7 @@ static int decode_radio_status(struct channel *demod,uint8_t const *buffer,int l
     case EOL:
       break;
     case CMD_CNT:
-      demod->commands = decode_int32(cp,optlen);
+      channel->commands = decode_int32(cp,optlen);
       break;
     case DESCRIPTION:
       FREE(Frontend.description);
@@ -943,22 +943,22 @@ static int decode_radio_status(struct channel *demod,uint8_t const *buffer,int l
       Frontend.samples = decode_int64(cp,optlen);
       break;
     case OUTPUT_DATA_SOURCE_SOCKET:
-      decode_socket(&demod->output.data_source_address,cp,optlen);
+      decode_socket(&channel->output.data_source_address,cp,optlen);
       break;
     case OUTPUT_DATA_DEST_SOCKET:
-      decode_socket(&demod->output.data_dest_address,cp,optlen);
+      decode_socket(&channel->output.data_dest_address,cp,optlen);
       break;
     case OUTPUT_SSRC:
-      demod->output.rtp.ssrc = decode_int32(cp,optlen);
+      channel->output.rtp.ssrc = decode_int32(cp,optlen);
       break;
     case OUTPUT_TTL:
       Mcast_ttl = decode_int8(cp,optlen);
       break;
     case OUTPUT_SAMPRATE:
-      demod->output.samprate = decode_int(cp,optlen);
+      channel->output.samprate = decode_int(cp,optlen);
       break;
     case OUTPUT_DATA_PACKETS:
-      demod->output.rtp.packets = decode_int64(cp,optlen);
+      channel->output.rtp.packets = decode_int64(cp,optlen);
       break;
     case OUTPUT_METADATA_PACKETS:
       Metadata_packets = decode_int64(cp,optlen);      
@@ -970,10 +970,10 @@ static int decode_radio_status(struct channel *demod,uint8_t const *buffer,int l
       Frontend.M = decode_int(cp,optlen);
       break;
     case LOW_EDGE:
-      demod->filter.min_IF = decode_float(cp,optlen);
+      channel->filter.min_IF = decode_float(cp,optlen);
       break;
     case HIGH_EDGE:
-      demod->filter.max_IF = decode_float(cp,optlen);
+      channel->filter.max_IF = decode_float(cp,optlen);
       break;
     case FE_LOW_EDGE:
       Frontend.min_IF = decode_float(cp,optlen);
@@ -997,7 +997,7 @@ static int decode_radio_status(struct channel *demod,uint8_t const *buffer,int l
       Frontend.mixer_gain = decode_int8(cp,optlen);
       break;
     case KAISER_BETA:
-      demod->filter.kaiser_beta = decode_float(cp,optlen);
+      channel->filter.kaiser_beta = decode_float(cp,optlen);
       break;
     case FILTER_DROPS:
       Block_drops = decode_int(cp,optlen);
@@ -1006,124 +1006,124 @@ static int decode_radio_status(struct channel *demod,uint8_t const *buffer,int l
       Frontend.if_power = dB2power(decode_float(cp,optlen));
       break;
     case BASEBAND_POWER:
-      demod->sig.bb_power = dB2power(decode_float(cp,optlen)); // dB -> power
+      channel->sig.bb_power = dB2power(decode_float(cp,optlen)); // dB -> power
       break;
     case NOISE_DENSITY:
-      demod->sig.n0 = dB2power(decode_float(cp,optlen));
+      channel->sig.n0 = dB2power(decode_float(cp,optlen));
       break;
     case DEMOD_SNR:
-      demod->sig.snr = dB2power(decode_float(cp,optlen));
+      channel->sig.snr = dB2power(decode_float(cp,optlen));
       break;
     case FREQ_OFFSET:
-      demod->sig.foffset = decode_float(cp,optlen);
+      channel->sig.foffset = decode_float(cp,optlen);
       break;
     case PEAK_DEVIATION:
-      demod->fm.pdeviation = decode_float(cp,optlen);
+      channel->fm.pdeviation = decode_float(cp,optlen);
       break;
     case PLL_LOCK:
-      demod->linear.pll_lock = decode_int8(cp,optlen);
+      channel->linear.pll_lock = decode_int8(cp,optlen);
       break;
     case PLL_BW:
-      demod->linear.loop_bw = decode_float(cp,optlen);
+      channel->linear.loop_bw = decode_float(cp,optlen);
       break;
     case PLL_SQUARE:
-      demod->linear.square = decode_int8(cp,optlen);
+      channel->linear.square = decode_int8(cp,optlen);
       break;
     case PLL_PHASE:
-      demod->linear.cphase = decode_float(cp,optlen);
+      channel->linear.cphase = decode_float(cp,optlen);
       break;
     case ENVELOPE:
-      demod->linear.env = decode_int8(cp,optlen);
+      channel->linear.env = decode_int8(cp,optlen);
       break;
     case OUTPUT_LEVEL:
-      demod->output.energy = dB2power(decode_float(cp,optlen));
+      channel->output.energy = dB2power(decode_float(cp,optlen));
       break;
     case OUTPUT_SAMPLES:
-      demod->output.samples = decode_int64(cp,optlen);
+      channel->output.samples = decode_int64(cp,optlen);
       break;
     case COMMAND_TAG:
-      demod->command_tag = decode_int32(cp,optlen);
+      channel->command_tag = decode_int32(cp,optlen);
       break;
     case RADIO_FREQUENCY:
-      demod->tune.freq = decode_double(cp,optlen);
+      channel->tune.freq = decode_double(cp,optlen);
       break;
     case SECOND_LO_FREQUENCY:
-      demod->tune.second_LO = decode_double(cp,optlen);
+      channel->tune.second_LO = decode_double(cp,optlen);
       break;
     case SHIFT_FREQUENCY:
-      demod->tune.shift = decode_double(cp,optlen);
+      channel->tune.shift = decode_double(cp,optlen);
       break;
     case FIRST_LO_FREQUENCY:
       Frontend.frequency = decode_double(cp,optlen);
       break;
     case DOPPLER_FREQUENCY:
-      demod->tune.doppler = decode_double(cp,optlen);
+      channel->tune.doppler = decode_double(cp,optlen);
       break;
     case DOPPLER_FREQUENCY_RATE:
-      demod->tune.doppler_rate = decode_double(cp,optlen);
+      channel->tune.doppler_rate = decode_double(cp,optlen);
       break;
     case DEMOD_TYPE:
-      demod->demod_type = decode_int(cp,optlen);
+      channel->demod_type = decode_int(cp,optlen);
       break;
     case OUTPUT_CHANNELS:
-      demod->output.channels = decode_int(cp,optlen);
+      channel->output.channels = decode_int(cp,optlen);
       break;
     case INDEPENDENT_SIDEBAND:
-      demod->filter.isb = decode_int8(cp,optlen);
+      channel->filter.isb = decode_int8(cp,optlen);
       break;
     case THRESH_EXTEND:
-      demod->fm.threshold = decode_int8(cp,optlen);
+      channel->fm.threshold = decode_int8(cp,optlen);
       break;
     case PLL_ENABLE:
-      demod->linear.pll = decode_int8(cp,optlen);
+      channel->linear.pll = decode_int8(cp,optlen);
       break;
     case GAIN:              // dB to voltage
-      demod->output.gain = dB2voltage(decode_float(cp,optlen));
+      channel->output.gain = dB2voltage(decode_float(cp,optlen));
       break;
     case AGC_ENABLE:
-      demod->linear.agc = decode_int8(cp,optlen);
+      channel->linear.agc = decode_int8(cp,optlen);
       break;
     case HEADROOM:          // db to voltage
-      demod->output.headroom = dB2voltage(decode_float(cp,optlen));
+      channel->output.headroom = dB2voltage(decode_float(cp,optlen));
       break;
     case AGC_HANGTIME:      // s to samples
-      demod->linear.hangtime = decode_float(cp,optlen);
+      channel->linear.hangtime = decode_float(cp,optlen);
       break;
     case AGC_RECOVERY_RATE: // dB/s to dB/sample to voltage/sample
-      demod->linear.recovery_rate = dB2voltage(decode_float(cp,optlen));
+      channel->linear.recovery_rate = dB2voltage(decode_float(cp,optlen));
       break;
     case AGC_THRESHOLD:   // dB to voltage
-      demod->linear.threshold = dB2voltage(decode_float(cp,optlen));
+      channel->linear.threshold = dB2voltage(decode_float(cp,optlen));
       break;
     case TP1: // Test point
-      demod->tp1 = decode_float(cp,optlen);
+      channel->tp1 = decode_float(cp,optlen);
       break;
     case TP2:
-      demod->tp2 = decode_float(cp,optlen);
+      channel->tp2 = decode_float(cp,optlen);
       break;
     case SQUELCH_OPEN:
-      demod->squelch_open = dB2power(decode_float(cp,optlen));
+      channel->squelch_open = dB2power(decode_float(cp,optlen));
       break;
     case SQUELCH_CLOSE:
-      demod->squelch_close = dB2power(decode_float(cp,optlen));
+      channel->squelch_close = dB2power(decode_float(cp,optlen));
       break;
     case DEEMPH_GAIN:
-      demod->deemph.gain = decode_float(cp,optlen);
+      channel->deemph.gain = decode_float(cp,optlen);
       break;
     case DEEMPH_TC:
-      demod->deemph.rate = 1e6*decode_float(cp,optlen);
+      channel->deemph.rate = 1e6*decode_float(cp,optlen);
       break;
     case PL_TONE:
-      demod->fm.tone_freq = decode_float(cp,optlen);
+      channel->fm.tone_freq = decode_float(cp,optlen);
       break;
     case PL_DEVIATION:
-      demod->fm.tone_deviation = decode_float(cp,optlen);
+      channel->fm.tone_deviation = decode_float(cp,optlen);
       break;
     case NONCOHERENT_BIN_BW:
-      demod->spectrum.bin_bw = decode_float(cp,optlen);
+      channel->spectrum.bin_bw = decode_float(cp,optlen);
       break;
     case BIN_COUNT:
-      demod->spectrum.bin_count = decode_int(cp,optlen);
+      channel->spectrum.bin_count = decode_int(cp,optlen);
       break;
     case BIN_DATA:
       break;
@@ -1134,7 +1134,7 @@ static int decode_radio_status(struct channel *demod,uint8_t const *buffer,int l
       Frontend.rf_atten = decode_float(cp,optlen);
       break;
     case BLOCKS_SINCE_POLL:
-      demod->blocks_since_poll = decode_int64(cp,optlen);
+      channel->blocks_since_poll = decode_int64(cp,optlen);
       break;
     default: // ignore others
       break;
@@ -1144,7 +1144,7 @@ static int decode_radio_status(struct channel *demod,uint8_t const *buffer,int l
   return 0;
 }
 
-static void display_tuning(WINDOW *w,struct channel const *demod){
+static void display_tuning(WINDOW *w,struct channel const *channel){
   // Tuning control window - these can be adjusted by the user
   // using the keyboard or tuning knob, so be careful with formatting
   if(w == NULL)
@@ -1156,7 +1156,7 @@ static void display_tuning(WINDOW *w,struct channel const *demod){
   int col = 1;
   if(Frequency_lock)
     wattron(w,A_UNDERLINE); // Underscore means the frequency is locked
-  pprintw(w,row++,col,"Carrier","%'.3f",demod->tune.freq); // RF carrier frequency
+  pprintw(w,row++,col,"Carrier","%'.3f",channel->tune.freq); // RF carrier frequency
   
   // second LO frequency is negative of IF, i.e., a signal at +48 kHz
   // needs a second LO frequency of -48 kHz to bring it to zero
@@ -1167,31 +1167,31 @@ static void display_tuning(WINDOW *w,struct channel const *demod){
 
   // Wink IF display if out of front end's range
   wattroff(w,A_UNDERLINE);
-  if(-demod->tune.second_LO + demod->filter.min_IF < Frontend.min_IF)
+  if(-channel->tune.second_LO + channel->filter.min_IF < Frontend.min_IF)
     wattron(w,A_BLINK);
-  if(-demod->tune.second_LO + demod->filter.max_IF > Frontend.max_IF)
+  if(-channel->tune.second_LO + channel->filter.max_IF > Frontend.max_IF)
     wattron(w,A_BLINK);
   
-  pprintw(w,row++,col,"IF","%'.3f",-demod->tune.second_LO);
+  pprintw(w,row++,col,"IF","%'.3f",-channel->tune.second_LO);
   wattroff(w,A_BLINK);
   
-  pprintw(w,row++,col,"Filter low","%'+.0f",demod->filter.min_IF);
-  pprintw(w,row++,col,"Filter high","%'+.0f",demod->filter.max_IF);
+  pprintw(w,row++,col,"Filter low","%'+.0f",channel->filter.min_IF);
+  pprintw(w,row++,col,"Filter high","%'+.0f",channel->filter.max_IF);
   
-  if(!isnan(demod->tune.shift))
-    pprintw(w,row++,col,"Shift","%'+.3f",demod->tune.shift);
+  if(!isnan(channel->tune.shift))
+    pprintw(w,row++,col,"Shift","%'+.3f",channel->tune.shift);
   
   pprintw(w,row++,col,"FE filter low","%'+.0f",Frontend.min_IF);
   pprintw(w,row++,col,"FE filter high","%'+.0f",Frontend.max_IF);
 
   // Doppler info displayed only if active
-  double const dopp = demod->tune.doppler;
+  double const dopp = channel->tune.doppler;
   if(dopp != 0){
     pprintw(w,row++,col,"Doppler","%'.3f",dopp);
-    pprintw(w,row++,col,"Dop Rate, Hz/s","%'.3f",demod->tune.doppler_rate);
+    pprintw(w,row++,col,"Dop Rate, Hz/s","%'.3f",channel->tune.doppler_rate);
   }
   row++; // Blank line between frequency & band info
-  display_info(w,row,col,demod); // moved to bottom of tuning window
+  display_info(w,row,col,channel); // moved to bottom of tuning window
   box(w,0,0);
   mvwaddstr(w,0,1,"Tuning Hz");
   // Highlight cursor for tuning step
@@ -1214,13 +1214,13 @@ static void display_tuning(WINDOW *w,struct channel const *demod){
 }
 
 // Imbed in tuning window
-static void display_info(WINDOW *w,int row,int col,struct channel const *demod){
+static void display_info(WINDOW *w,int row,int col,struct channel const *channel){
   if(w == NULL)
     return;
 
   struct bandplan const *bp_low,*bp_high;
-  bp_low = lookup_frequency(demod->tune.freq + demod->filter.min_IF);
-  bp_high = lookup_frequency(demod->tune.freq + demod->filter.max_IF);
+  bp_low = lookup_frequency(channel->tune.freq + channel->filter.min_IF);
+  bp_high = lookup_frequency(channel->tune.freq + channel->filter.max_IF);
   // Make sure entire receiver passband is in the band
   if(bp_low != NULL && bp_high != NULL){
     if(bp_low)
@@ -1229,7 +1229,7 @@ static void display_info(WINDOW *w,int row,int col,struct channel const *demod){
     mvwaddstr(w,row++,col,bp_high->description);    
   }
 }
-static void display_filtering(WINDOW *w,struct channel const *demod){
+static void display_filtering(WINDOW *w,struct channel const *channel){
   if(w == NULL)
     return;
 
@@ -1239,7 +1239,7 @@ static void display_filtering(WINDOW *w,struct channel const *demod){
   wmove(w,row,col);
   wclrtobot(w);
   pprintw(w,row++,col,"Fs in","%'d Hz",Frontend.samprate); // Nominal
-  pprintw(w,row++,col,"Fs out","%'d Hz",demod->output.samprate);
+  pprintw(w,row++,col,"Fs out","%'d Hz",channel->output.samprate);
   
   pprintw(w,row++,col,"Block Time","%'.1f ms",Blocktime);
   
@@ -1248,14 +1248,14 @@ static void display_filtering(WINDOW *w,struct channel const *demod){
   pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.isreal ? 'r' : 'c');
   
   if(Frontend.samprate)
-    pprintw(w,row++,col,"FFT out","%'lld c ",N * demod->output.samprate / Frontend.samprate);
+    pprintw(w,row++,col,"FFT out","%'lld c ",N * channel->output.samprate / Frontend.samprate);
   
   int overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
   pprintw(w,row++,col,"Overlap","1/%d   ",overlap);
   pprintw(w,row++,col,"Bin step","%'.3f Hz",(float)Frontend.samprate / N); // frequency between FFT bin centers
   pprintw(w,row++,col,"Bin width","%'.3f Hz",1000.0/Blocktime); // Just the block rate
   
-  float const beta = demod->filter.kaiser_beta;
+  float const beta = channel->filter.kaiser_beta;
   pprintw(w,row++,col,"Kaiser beta","%'.1f   ",beta);
   
   
@@ -1285,12 +1285,12 @@ static void display_filtering(WINDOW *w,struct channel const *demod){
   wnoutrefresh(w);
 }
 // Signal data window
-static void display_sig(WINDOW *w,struct channel const *demod){
+static void display_sig(WINDOW *w,struct channel const *channel){
   if(w == NULL)
     return;
 
-  float const noise_bandwidth = fabsf(demod->filter.max_IF - demod->filter.min_IF);
-  float sig_power = demod->sig.bb_power - noise_bandwidth * demod->sig.n0;
+  float const noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
+  float sig_power = channel->sig.bb_power - noise_bandwidth * channel->sig.n0;
   if(sig_power < 0)
     sig_power = 0; // can happen due to smoothing
 
@@ -1305,23 +1305,23 @@ static void display_sig(WINDOW *w,struct channel const *demod){
 
   pprintw(w,row++,col,"Input","%.1f dBFS ",power2dB(Frontend.if_power));
   pprintw(w,row++,col,"FE Gain","%.1f dB   ",Frontend.rf_atten + Frontend.rf_gain);
-  pprintw(w,row++,col,"Baseband","%.1f dB   ",power2dB(demod->sig.bb_power));
-  pprintw(w,row++,col,"N0","%.1f dB/Hz",power2dB(demod->sig.n0));
+  pprintw(w,row++,col,"Baseband","%.1f dB   ",power2dB(channel->sig.bb_power));
+  pprintw(w,row++,col,"N0","%.1f dB/Hz",power2dB(channel->sig.n0));
   
   // Derived numbers
-  float sn0 = sig_power/demod->sig.n0;
+  float sn0 = sig_power/channel->sig.n0;
   pprintw(w,row++,col,"S/N0","%.1f dBHz ",power2dB(sn0));
   pprintw(w,row++,col,"NBW","%.1f dBHz ",power2dB(noise_bandwidth));
   pprintw(w,row++,col,"SNR","%.1f dB   ",power2dB(sn0/noise_bandwidth));
 
-  pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(demod->output.gain));
-  pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(demod->output.energy)); // actually level; sender does averaging
-  pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(demod->output.headroom));
+  pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(channel->output.gain));
+  pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(channel->output.energy)); // actually level; sender does averaging
+  pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(channel->output.headroom));
   box(w,0,0);
   mvwaddstr(w,0,1,"Signal");
   wnoutrefresh(w);
 }
-static void display_demodulator(WINDOW *w,struct channel const *demod){
+static void display_demodulator(WINDOW *w,struct channel const *channel){
   if(w == NULL)
     return;
 
@@ -1332,61 +1332,61 @@ static void display_demodulator(WINDOW *w,struct channel const *demod){
   int col = 1;
 
   // Display only if used by current mode
-  switch(demod->demod_type){
+  switch(channel->demod_type){
   case FM_DEMOD:
   case WFM_DEMOD:
-    pprintw(w,row++,col,"Input SNR","%.1f dB",power2dB(demod->sig.snr));
-    pprintw(w,row++,col,"Squelch open","%.1f dB",power2dB(demod->squelch_open));
-    pprintw(w,row++,col,"Squelch close","%.1f dB",power2dB(demod->squelch_close));    
-    pprintw(w,row++,col,"Offset","%'+.3f Hz",demod->sig.foffset);
-    pprintw(w,row++,col,"Deviation","%.1f Hz",demod->fm.pdeviation);
-    if(!isnan(demod->fm.tone_freq) && demod->fm.tone_freq != 0)
-      pprintw(w,row++,col,"Tone squelch","%.1f Hz",demod->fm.tone_freq);
-    if(!isnan(demod->fm.tone_deviation) && !isnan(demod->fm.tone_freq) && demod->fm.tone_freq != 0)
-      pprintw(w,row++,col,"Tone dev","%.1f Hz",demod->fm.tone_deviation);
-    if(demod->deemph.rate != 0){
-      pprintw(w,row++,col,"Deemph tc","%.1f us",demod->deemph.rate);
-      pprintw(w,row++,col,"Deemph gain","%.1f dB",demod->deemph.gain);
+    pprintw(w,row++,col,"Input SNR","%.1f dB",power2dB(channel->sig.snr));
+    pprintw(w,row++,col,"Squelch open","%.1f dB",power2dB(channel->squelch_open));
+    pprintw(w,row++,col,"Squelch close","%.1f dB",power2dB(channel->squelch_close));    
+    pprintw(w,row++,col,"Offset","%'+.3f Hz",channel->sig.foffset);
+    pprintw(w,row++,col,"Deviation","%.1f Hz",channel->fm.pdeviation);
+    if(!isnan(channel->fm.tone_freq) && channel->fm.tone_freq != 0)
+      pprintw(w,row++,col,"Tone squelch","%.1f Hz",channel->fm.tone_freq);
+    if(!isnan(channel->fm.tone_deviation) && !isnan(channel->fm.tone_freq) && channel->fm.tone_freq != 0)
+      pprintw(w,row++,col,"Tone dev","%.1f Hz",channel->fm.tone_deviation);
+    if(channel->deemph.rate != 0){
+      pprintw(w,row++,col,"Deemph tc","%.1f us",channel->deemph.rate);
+      pprintw(w,row++,col,"Deemph gain","%.1f dB",channel->deemph.gain);
     }
     break;
   case LINEAR_DEMOD:
-    if(!isnan(demod->linear.threshold) && demod->linear.threshold > 0)
-      pprintw(w,row++,col,"Threshold","%.1f dB  ",voltage2dB(demod->linear.threshold));
-    if(!isnan(demod->linear.recovery_rate) && demod->linear.recovery_rate > 0)
-      pprintw(w,row++,col,"Recovery rate","%.1f dB/s",voltage2dB(demod->linear.recovery_rate));
-    if(!isnan(demod->linear.hangtime))
-      pprintw(w,row++,col,"Hang time","%.1f s   ",demod->linear.hangtime);
+    if(!isnan(channel->linear.threshold) && channel->linear.threshold > 0)
+      pprintw(w,row++,col,"Threshold","%.1f dB  ",voltage2dB(channel->linear.threshold));
+    if(!isnan(channel->linear.recovery_rate) && channel->linear.recovery_rate > 0)
+      pprintw(w,row++,col,"Recovery rate","%.1f dB/s",voltage2dB(channel->linear.recovery_rate));
+    if(!isnan(channel->linear.hangtime))
+      pprintw(w,row++,col,"Hang time","%.1f s   ",channel->linear.hangtime);
     
-    if(demod->linear.pll){
-      pprintw(w,row++,col,"PLL BW","%.1f Hz  ",demod->linear.loop_bw);
-      pprintw(w,row++,col,"PLL SNR","%.1f dB  ",power2dB(demod->sig.snr));
-      pprintw(w,row++,col,"Offset","%'+.3f Hz  ",demod->sig.foffset);
-      pprintw(w,row++,col,"PLL Phase","%+.1f deg ",demod->linear.cphase*DEGPRA);
-      pprintw(w,row++,col,"PLL Lock","%s     ",demod->linear.pll_lock ? "Yes" : "No");
-      pprintw(w,row++,col,"Squelch open","%.1f dB  ",power2dB(demod->squelch_open));
-      pprintw(w,row++,col,"Squelch close","%.1f dB  ",power2dB(demod->squelch_close));    
+    if(channel->linear.pll){
+      pprintw(w,row++,col,"PLL BW","%.1f Hz  ",channel->linear.loop_bw);
+      pprintw(w,row++,col,"PLL SNR","%.1f dB  ",power2dB(channel->sig.snr));
+      pprintw(w,row++,col,"Offset","%'+.3f Hz  ",channel->sig.foffset);
+      pprintw(w,row++,col,"PLL Phase","%+.1f deg ",channel->linear.cphase*DEGPRA);
+      pprintw(w,row++,col,"PLL Lock","%s     ",channel->linear.pll_lock ? "Yes" : "No");
+      pprintw(w,row++,col,"Squelch open","%.1f dB  ",power2dB(channel->squelch_open));
+      pprintw(w,row++,col,"Squelch close","%.1f dB  ",power2dB(channel->squelch_close));    
     }
     break;
   case SPECT_DEMOD:
-    pprintw(w,row++,col,"Bin width","%.0f Hz",demod->spectrum.bin_bw);
-    pprintw(w,row++,col,"Bins","%d   ",demod->spectrum.bin_count);
-    if(demod->spectrum.bin_data != NULL)
-      pprintw(w,row++,col,"Bin 0","%.1f   ",demod->spectrum.bin_data[0]);
+    pprintw(w,row++,col,"Bin width","%.0f Hz",channel->spectrum.bin_bw);
+    pprintw(w,row++,col,"Bins","%d   ",channel->spectrum.bin_count);
+    if(channel->spectrum.bin_data != NULL)
+      pprintw(w,row++,col,"Bin 0","%.1f   ",channel->spectrum.bin_data[0]);
     break;
   }
 
-  if(!isnan(demod->tp1))
-    pprintw(w,row++,col,"TP1","%+g",demod->tp1);
+  if(!isnan(channel->tp1))
+    pprintw(w,row++,col,"TP1","%+g",channel->tp1);
 
-  if(!isnan(demod->tp2))
-    pprintw(w,row++,col,"TP2","%+g",demod->tp2);
+  if(!isnan(channel->tp2))
+    pprintw(w,row++,col,"TP2","%+g",channel->tp2);
 
   box(w,0,0);
-  mvwprintw(w,0,1,"%s demodulator",demod_name_from_type(demod->demod_type));
+  mvwprintw(w,0,1,"%s demodulator",demod_name_from_type(channel->demod_type));
   wnoutrefresh(w);
 }
 
-static void display_output(WINDOW *w,struct channel const *demod){
+static void display_output(WINDOW *w,struct channel const *channel){
   if(w == NULL)
     return;
 
@@ -1405,17 +1405,17 @@ static void display_output(WINDOW *w,struct channel const *demod){
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_address),
 	   formatsock(&Metadata_dest_address));
   pprintw(w,row++,col,"Status pkts","%'llu",Metadata_packets);
-  pprintw(w,row++,col,"Control pkts","%'llu",demod->commands);
-  pprintw(w,row++,col,"Blocks since last poll","%'llu",demod->blocks_since_poll);
+  pprintw(w,row++,col,"Control pkts","%'llu",channel->commands);
+  pprintw(w,row++,col,"Blocks since last poll","%'llu",channel->blocks_since_poll);
 
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Data");  
 
-  pprintw(w,row++,col,"","%s->%s",formatsock(&demod->output.data_source_address),
-	  formatsock(&demod->output.data_dest_address));
+  pprintw(w,row++,col,"","%s->%s",formatsock(&channel->output.data_source_address),
+	  formatsock(&channel->output.data_dest_address));
   
-  pprintw(w,row++,col,"SSRC","%'u",demod->output.rtp.ssrc);
-  pprintw(w,row++,col,"Packets","%'llu",(long long unsigned)demod->output.rtp.packets);
+  pprintw(w,row++,col,"SSRC","%'u",channel->output.rtp.ssrc);
+  pprintw(w,row++,col,"Packets","%'llu",(long long unsigned)channel->output.rtp.packets);
   
   
   box(w,0,0);
@@ -1423,7 +1423,7 @@ static void display_output(WINDOW *w,struct channel const *demod){
   wnoutrefresh(w);
 }
 
-static void display_options(WINDOW *w,struct channel const *demod){
+static void display_options(WINDOW *w,struct channel const *channel){
   if(w == NULL)
     return;
 
@@ -1432,69 +1432,69 @@ static void display_options(WINDOW *w,struct channel const *demod){
   int col = 1;
   wmove(w,row,col);
   wclrtobot(w);
-  if(demod->demod_type == FM_DEMOD){ // FM from status.h
-    if(!demod->fm.threshold)
+  if(channel->demod_type == FM_DEMOD){ // FM from status.h
+    if(!channel->fm.threshold)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Th Ext off");
     wattroff(w,A_UNDERLINE);
 
-    if(demod->fm.threshold)
+    if(channel->fm.threshold)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Th Ext on");
     wattroff(w,A_UNDERLINE);
 
-  } else if(demod->demod_type == WFM_DEMOD){
+  } else if(channel->demod_type == WFM_DEMOD){
     // Mono/stereo are only options
-    if(demod->output.channels == 1)
+    if(channel->output.channels == 1)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Mono");    
     wattroff(w,A_UNDERLINE);
     
-    if(demod->output.channels == 2)
+    if(channel->output.channels == 2)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Stereo");    
     wattroff(w,A_UNDERLINE);
-  } else if(demod->demod_type == LINEAR_DEMOD){
-    if(demod->linear.env && demod->output.channels == 1)
+  } else if(channel->demod_type == LINEAR_DEMOD){
+    if(channel->linear.env && channel->output.channels == 1)
       wattron(w,A_UNDERLINE);	
     mvwaddstr(w,row++,col,"Envelope");
     wattroff(w,A_UNDERLINE);
     
-    if(demod->linear.env && demod->output.channels == 2)
+    if(channel->linear.env && channel->output.channels == 2)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Linear+Envelope");
     wattroff(w,A_UNDERLINE);
     
-    if(!demod->linear.env && demod->output.channels == 1)
+    if(!channel->linear.env && channel->output.channels == 1)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Linear");
     wattroff(w,A_UNDERLINE);
     
-    if(!demod->linear.env && demod->output.channels == 2)
+    if(!channel->linear.env && channel->output.channels == 2)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"I/Q");    
     wattroff(w,A_UNDERLINE);
     
-    if(!demod->linear.pll)
+    if(!channel->linear.pll)
       wattron(w,A_UNDERLINE);      
     mvwaddstr(w,row++,col,"PLL Off");
     wattroff(w,A_UNDERLINE);
     
-    if(demod->linear.pll && !demod->linear.square)
+    if(channel->linear.pll && !channel->linear.square)
       wattron(w,A_UNDERLINE);      
     mvwaddstr(w,row++,col,"PLL On");
     wattroff(w,A_UNDERLINE);
     
-    if(demod->linear.pll && demod->linear.square)
+    if(channel->linear.pll && channel->linear.square)
       wattron(w,A_UNDERLINE);            
     mvwaddstr(w,row++,col,"PLL Square");
     wattroff(w,A_UNDERLINE);
     
-    if(!demod->linear.agc)
+    if(!channel->linear.agc)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"AGC Off");
     wattroff(w,A_UNDERLINE);     
-    if(demod->linear.agc)
+    if(channel->linear.agc)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"AGC On");
     wattroff(w,A_UNDERLINE);
@@ -1505,7 +1505,7 @@ static void display_options(WINDOW *w,struct channel const *demod){
   wnoutrefresh(w);
 }
 
-static void display_modes(WINDOW *w,struct channel const *demod){
+static void display_modes(WINDOW *w,struct channel const *channel){
   if(w == NULL)
     return;
 
