@@ -214,7 +214,7 @@ char *decode_string(uint8_t const *cp,int optlen){
 // Decode encoded variable-length UNSIGNED integers
 // At entry, *bp -> length field (not type!)
 // Works for byte, short/int16_t, long/int32_t, long long/int64_t
-uint64_t decode_int(uint8_t const *cp,int len){
+uint64_t decode_int64(uint8_t const *cp,int len){
   uint64_t result = 0;
   // cp now points to beginning of abbreviated int
   // Byte swap as we accumulate
@@ -222,6 +222,19 @@ uint64_t decode_int(uint8_t const *cp,int len){
     result = (result << 8) | *cp++;
 
   return result;
+}
+uint32_t decode_int32(uint8_t const *cp,int len){
+  return decode_int64(cp,len) & 0xffffffff;
+}
+uint16_t decode_int16(uint8_t const *cp,int len){
+  return decode_int64(cp,len) & 0xffff;
+}
+
+uint8_t decode_int8(uint8_t const *cp,int len){
+  return decode_int64(cp,len) & 0xff;
+}
+int decode_int(uint8_t const *cp,int len){
+  return decode_int64(cp,len) & UINT_MAX; // mask to the size of an int
 }
 
 
@@ -233,7 +246,7 @@ float decode_float(uint8_t const *cp,int len){
     return (float)decode_double(cp,len);
 
   union result r;
-  r.ll = decode_int(cp,len);
+  r.ll = decode_int64(cp,len);
   return r.f;
 }
 
@@ -245,7 +258,7 @@ double decode_double(uint8_t const *cp,int len){
     return (double)decode_float(cp,len);
 
   union result r;
-  r.ll = decode_int(cp,len);
+  r.ll = decode_int64(cp,len);
   return r.d;
 }
 
@@ -312,12 +325,10 @@ uint32_t send_poll(int fd,int ssrc){
   uint8_t cmdbuffer[128];
   uint8_t *bp = cmdbuffer;
   *bp++ = 1; // Command
-  if(ssrc != 0)
-    encode_int(&bp,OUTPUT_SSRC,ssrc); // poll specific SSRC
-  
+
   uint32_t tag = random();
   encode_int(&bp,COMMAND_TAG,tag);
-
+  encode_int(&bp,OUTPUT_SSRC,ssrc); // poll specific SSRC, or request ssrc list with ssrc = 0
   encode_eol(&bp);
   int const command_len = bp - cmdbuffer;
   if(send(fd, cmdbuffer, command_len, 0) != command_len)
@@ -354,7 +365,7 @@ uint32_t get_ssrc(uint8_t const *buffer,int length){
     case EOL: // Shouldn't get here
       goto done;
     case OUTPUT_SSRC:
-      return decode_int(cp,optlen);
+      return decode_int32(cp,optlen);
       break;
     default:
       break; // Ignore on this pass
@@ -392,7 +403,7 @@ uint32_t get_tag(uint8_t const *buffer,int length){
     case EOL: // Shouldn't get here
       goto done;
     case COMMAND_TAG:
-      return decode_int(cp,optlen);
+      return decode_int32(cp,optlen);
       break;
     default:
       break; // Ignore on this pass
