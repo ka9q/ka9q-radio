@@ -158,7 +158,7 @@ int main(int argc,char *argv[]){
     int const command_len = bp - buffer;
     if(Verbose > 1){
       printf("Sent:");
-      dump_metadata(buffer+1,command_len-1,false);
+      dump_metadata(stdout,buffer+1,command_len-1,false);
     }
     if(send(Ctl_fd, buffer, command_len, 0) != command_len){
       perror("command send");
