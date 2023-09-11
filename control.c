@@ -895,7 +895,7 @@ static int for_us(struct demod *demod,uint8_t const *buffer,int length,uint32_t 
       goto done;
     case OUTPUT_SSRC: // If we've specified a SSRC, it must match it
       if(ssrc != 0){
-	if(decode_int(cp,optlen) == ssrc)
+	if(decode_int32(cp,optlen) == ssrc)
 	  return 1; // For us
 	return -1; // For someone else
       }
@@ -927,20 +927,20 @@ static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int len
     case EOL:
       break;
     case CMD_CNT:
-      demod->commands = decode_int(cp,optlen);
+      demod->commands = decode_int32(cp,optlen);
       break;
     case DESCRIPTION:
       FREE(Frontend.description);
       Frontend.description = decode_string(cp,optlen);
       break;
     case GPS_TIME:
-      Frontend.timestamp = decode_int(cp,optlen);
+      Frontend.timestamp = decode_int64(cp,optlen);
       break;
     case INPUT_SAMPRATE:
       Frontend.samprate = decode_int(cp,optlen);
       break;
     case INPUT_SAMPLES:
-      Frontend.samples = decode_int(cp,optlen);
+      Frontend.samples = decode_int64(cp,optlen);
       break;
     case OUTPUT_DATA_SOURCE_SOCKET:
       decode_socket(&demod->output.data_source_address,cp,optlen);
@@ -949,19 +949,19 @@ static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int len
       decode_socket(&demod->output.data_dest_address,cp,optlen);
       break;
     case OUTPUT_SSRC:
-      demod->output.rtp.ssrc = decode_int(cp,optlen);
+      demod->output.rtp.ssrc = decode_int32(cp,optlen);
       break;
     case OUTPUT_TTL:
-      Mcast_ttl = decode_int(cp,optlen);
+      Mcast_ttl = decode_int8(cp,optlen);
       break;
     case OUTPUT_SAMPRATE:
       demod->output.samprate = decode_int(cp,optlen);
       break;
     case OUTPUT_DATA_PACKETS:
-      demod->output.rtp.packets = decode_int(cp,optlen);
+      demod->output.rtp.packets = decode_int64(cp,optlen);
       break;
     case OUTPUT_METADATA_PACKETS:
-      Metadata_packets = decode_int(cp,optlen);      
+      Metadata_packets = decode_int64(cp,optlen);      
       break;
     case FILTER_BLOCKSIZE:
       Frontend.L = decode_int(cp,optlen);
@@ -982,19 +982,19 @@ static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int len
       Frontend.max_IF = decode_float(cp,optlen);
       break;
     case FE_ISREAL:
-      Frontend.isreal = decode_int(cp,optlen) ? true: false;
+      Frontend.isreal = decode_int8(cp,optlen) ? true: false;
       break;
     case AD_BITS_PER_SAMPLE:
       Frontend.bitspersample = decode_int(cp,optlen);
       break;
     case IF_GAIN:
-      Frontend.if_gain = decode_int(cp,optlen);
+      Frontend.if_gain = decode_int8(cp,optlen);
       break;
     case LNA_GAIN:
-      Frontend.lna_gain = decode_int(cp,optlen);
+      Frontend.lna_gain = decode_int8(cp,optlen);
       break;
     case MIXER_GAIN:
-      Frontend.mixer_gain = decode_int(cp,optlen);
+      Frontend.mixer_gain = decode_int8(cp,optlen);
       break;
     case KAISER_BETA:
       demod->filter.kaiser_beta = decode_float(cp,optlen);
@@ -1021,28 +1021,28 @@ static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int len
       demod->fm.pdeviation = decode_float(cp,optlen);
       break;
     case PLL_LOCK:
-      demod->linear.pll_lock = decode_int(cp,optlen);
+      demod->linear.pll_lock = decode_int8(cp,optlen);
       break;
     case PLL_BW:
       demod->linear.loop_bw = decode_float(cp,optlen);
       break;
     case PLL_SQUARE:
-      demod->linear.square = decode_int(cp,optlen);
+      demod->linear.square = decode_int8(cp,optlen);
       break;
     case PLL_PHASE:
       demod->linear.cphase = decode_float(cp,optlen);
       break;
     case ENVELOPE:
-      demod->linear.env = decode_int(cp,optlen);
+      demod->linear.env = decode_int8(cp,optlen);
       break;
     case OUTPUT_LEVEL:
       demod->output.energy = dB2power(decode_float(cp,optlen));
       break;
     case OUTPUT_SAMPLES:
-      demod->output.samples = decode_int(cp,optlen);
+      demod->output.samples = decode_int64(cp,optlen);
       break;
     case COMMAND_TAG:
-      demod->command_tag = decode_int(cp,optlen);
+      demod->command_tag = decode_int32(cp,optlen);
       break;
     case RADIO_FREQUENCY:
       demod->tune.freq = decode_double(cp,optlen);
@@ -1069,19 +1069,19 @@ static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int len
       demod->output.channels = decode_int(cp,optlen);
       break;
     case INDEPENDENT_SIDEBAND:
-      demod->filter.isb = decode_int(cp,optlen);
+      demod->filter.isb = decode_int8(cp,optlen);
       break;
     case THRESH_EXTEND:
-      demod->fm.threshold = decode_int(cp,optlen);
+      demod->fm.threshold = decode_int8(cp,optlen);
       break;
     case PLL_ENABLE:
-      demod->linear.pll = decode_int(cp,optlen);
+      demod->linear.pll = decode_int8(cp,optlen);
       break;
     case GAIN:              // dB to voltage
       demod->output.gain = dB2voltage(decode_float(cp,optlen));
       break;
     case AGC_ENABLE:
-      demod->linear.agc = decode_int(cp,optlen);
+      demod->linear.agc = decode_int8(cp,optlen);
       break;
     case HEADROOM:          // db to voltage
       demod->output.headroom = dB2voltage(decode_float(cp,optlen));
@@ -1134,7 +1134,7 @@ static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int len
       Frontend.rf_atten = decode_float(cp,optlen);
       break;
     case BLOCKS_SINCE_POLL:
-      demod->blocks_since_poll = decode_int(cp,optlen);
+      demod->blocks_since_poll = decode_int64(cp,optlen);
       break;
     default: // ignore others
       break;

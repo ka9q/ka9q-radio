@@ -237,16 +237,16 @@ int main(int argc,char *argv[]){
       default:
 	break;
       case COMMAND_TAG:
-	received_tag = (uint32_t)decode_int(cp,optlen);
+	received_tag = decode_int32(cp,optlen);
 	break;
       case RADIO_FREQUENCY:
 	received_freq = decode_double(cp,optlen);
 	break;
       case OUTPUT_SSRC:
-	received_ssrc = decode_int(cp,optlen);
+	received_ssrc = decode_int32(cp,optlen);
 	break;
       case AGC_ENABLE:
-	received_agc_enable = decode_int(cp,optlen);
+	received_agc_enable = decode_int8(cp,optlen);
 	break;
       case GAIN:
 	received_gain = decode_float(cp,optlen);

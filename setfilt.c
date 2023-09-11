@@ -152,7 +152,7 @@ int main(int argc,char *argv[]){
       default:
 	break;
       case COMMAND_TAG:
-	received_tag = (uint32_t)decode_int(cp,optlen);
+	received_tag = decode_int32(cp,optlen);
 	break;
       case LOW_EDGE:
 	low = decode_float(cp,optlen);

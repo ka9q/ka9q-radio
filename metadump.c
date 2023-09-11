@@ -38,6 +38,7 @@ pthread_t Input_thread;
 const char *App_path;
 int Verbose;
 bool Newline;
+bool All;
 float Interval = 0.1;
 int Control_sock;
 int Status_sock;
@@ -51,8 +52,9 @@ long long Last_status_time;
 
 char Locale[256] = "en_US.UTF-8";
 int Mcast_ttl = 5;
-char Optstring[] = "s:c:i:vnr:l:V";
+char Optstring[] = "as:c:i:vnr:l:V";
 struct option Options[] = {
+  {"all", no_argument, NULL, 'a'},
   {"ssrc", required_argument, NULL, 's'},
   {"count", required_argument, NULL, 'c'},
   {"interval", required_argument, NULL, 'i'},
@@ -77,6 +79,10 @@ int main(int argc,char *argv[]){
     case 'V':
       VERSION();
       exit(EX_OK);
+      break;
+    case 'a':
+      All = true; // Dump every SSRC
+      break;
     case 's':
       Ssrc = strtol(optarg,NULL,0);
       break;
@@ -102,6 +108,10 @@ int main(int argc,char *argv[]){
       usage();
       break;
     }
+  }
+  if(All){
+    Ssrc = 0xffffffff; // All 1's means poll every channel no faster than 1 Hz
+    Interval = max(1.0f,Interval);
   }
   if(Radio == NULL){
     if(argc <= optind){
@@ -150,7 +160,7 @@ int main(int argc,char *argv[]){
 
   pthread_create(&Input_thread,NULL,input_thread,NULL);
 
-  if(Interval == 0 || Ssrc == 0)
+  if(Ssrc == 0 || Interval == 0)
     while(1)
       sleep(1000);
 
@@ -189,7 +199,7 @@ int main(int argc,char *argv[]){
 
 
 void usage(void){
-  fprintf(stdout,"%s [-s|--ssrc <ssrc>] [-c|--count n] [-i|--interval f] [-v|--verbose] [-n|--newline] [-l|--locale] [ -r|--radio] control-channel\n",App_path);
+  fprintf(stdout,"%s [-s|--ssrc <ssrc>|-a|--all] [-c|--count n] [-i|--interval f] [-v|--verbose] [-n|--newline] [-l|--locale] [ -r|--radio] control-channel\n",App_path);
 }
 
 // Process incoming packets
@@ -205,17 +215,16 @@ void *input_thread(void *p){
       continue;
     }
     int64_t now = gps_time_ns();
-    
-    enum pkt_type const cr = buffer[0]; // Command/response byte
     char temp[1024];
     fprintf(stdout,"%s %s", format_gpstime(temp,sizeof(temp),now), formatsock(&source));
-    fprintf(stdout," %s", cr == STATUS ? "STAT" : cr == CMD ? "CMD" : cr == SSRC_LIST ? "SSRC_LIST" : "unknown");
-    dump_metadata(buffer+1,length-1,Newline);
-    fflush(stdout);
+    enum pkt_type const cr = buffer[0]; // Command/response byte
+    fprintf(stdout," %s", cr == STATUS ? "STAT" : "CMD");
     if(cr == STATUS){
       Status_packets++; // Don't count our own responses
-      Last_status_time = gps_time_ns(); // Reset poll timeout
+      Last_status_time = now; // Reset poll timeout
     }
+    dump_metadata(buffer+1,length-1,Newline);
+    fflush(stdout);
   }
   exit(EX_OK);
 }

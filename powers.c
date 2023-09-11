@@ -292,15 +292,15 @@ int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *b
     case EOL: // Shouldn't get here
       goto done;
     case GPS_TIME:
-      *time = (uint64_t)decode_int(cp,optlen);
+      *time = decode_int64(cp,optlen);
       break;
     case OUTPUT_SSRC: // Don't really need this, it's already been checked
-      if(decode_int(cp,optlen) != ssrc)
+      if(decode_int32(cp,optlen) != ssrc)
 	return -1; // Not what we want
       break;
     case DEMOD_TYPE:
       {
-	const int i = (int)decode_int(cp,optlen);
+	const int i = decode_int(cp,optlen);
 	if(i != SPECT_DEMOD)
 	  return -1; // Not what we want
       }

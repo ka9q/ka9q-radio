@@ -60,6 +60,8 @@ struct demod *lookup_demod(uint32_t ssrc){
 
 // Atomically create demod only if the ssrc doesn't already exist
 struct demod *create_demod(uint32_t ssrc){
+  if(ssrc == 0xffffffff)
+    return NULL; // reserved
   pthread_mutex_lock(&Demod_list_mutex);
   for(int i=0; i < Demod_list_length; i++){
     if(Demod_list[i].inuse && Demod_list[i].output.rtp.ssrc == ssrc){

@@ -34,10 +34,16 @@ int Ctl_fd;     // File descriptor for receiving user commands
 
 extern dictionary const *Modetable;
 
-static int send_radio_status(struct frontend *frontend,struct demod *demod,int full);
+static int send_radio_status(struct frontend *frontend,struct demod *demod);
 static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int length);
 static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,uint8_t *packet, int len);
+static void *radio_status_dump(void *);
   
+static pthread_t status_dump_thread;
+static pthread_cond_t Status_dump_cond;
+static pthread_mutex_t Status_dump_mutex;
+static bool Status_kick_flag;
+
 // Radio status reception and transmission thread
 void *radio_status(void *arg){
 
@@ -45,6 +51,8 @@ void *radio_status(void *arg){
   snprintf(name,sizeof(name),"radio stat");
   pthread_setname(name);
   
+  pthread_create(&status_dump_thread,NULL,radio_status_dump,NULL);
+
   while(1){
     // Command from user
     uint8_t buffer[8192];
@@ -54,32 +62,79 @@ void *radio_status(void *arg){
 
     // for a specific ssrc?
     uint32_t ssrc = get_ssrc(buffer+1,length-1);
-    if(ssrc != 0){
-      // find specific demod instance
-      struct demod *demod = lookup_demod(ssrc);
-      if(demod == NULL){
-	if((demod = setup_demod(ssrc)) == NULL){ // possible race here?
-	  // Creation failed, e.g., no output stream
-	  fprintf(stdout,"Dynamic create of ssrc %u failed\n",ssrc);
-	  continue;    // Should this be fatal?
-	} else {
-	  start_demod(demod);
-	  if(Verbose)
-	    fprintf(stdout,"dynamically started ssrc %u\n",ssrc);
+    switch(ssrc){
+    case 0:
+      // Ignore; reserved for dynamic channel template
+      break;
+    case 0xffffffff:
+      // Kick separate thread to dump all demods in a rate-limited manner
+      pthread_mutex_lock(&Status_dump_mutex);
+      Status_kick_flag = true;
+      pthread_cond_signal(&Status_dump_cond);
+      pthread_mutex_unlock(&Status_dump_mutex);
+      break;
+    default:
+      {
+	// find specific demod instance
+	struct demod *demod = lookup_demod(ssrc);
+	if(demod == NULL){
+	  if((demod = setup_demod(ssrc)) == NULL){ // possible race here?
+	    // Creation failed, e.g., no output stream
+	    fprintf(stdout,"Dynamic create of ssrc %u failed\n",ssrc);
+	    continue;    // Should this be fatal?
+	  } else {
+	    start_demod(demod);
+	    if(Verbose)
+	      fprintf(stdout,"dynamically started ssrc %u\n",ssrc);
+	  }
 	}
+	// demod now != NULL
+	if(demod->lifetime != 0)
+	  demod->lifetime = 20; // Restart 20 second self-destruct timer
+	demod->commands++;
+	decode_radio_commands(demod,buffer+1,length-1);
+	send_radio_status(&Frontend,demod); // Send status in response
       }
-      // demod now != NULL
-      if(demod->lifetime != 0)
-	demod->lifetime = 20; // Restart 20 second self-destruct timer
-      demod->commands++;
-      decode_radio_commands(demod,buffer+1,length-1);
-      send_radio_status(&Frontend,demod,1); // Send status in response
+      break;
     }
   }
   return NULL;
 }
 
-static int send_radio_status(struct frontend *frontend,struct demod *demod,int full){
+// Dump all statuses, with rate limiting
+static void *radio_status_dump(void *p){
+  pthread_detach(pthread_self());
+
+  while(1){
+    pthread_mutex_lock(&Status_dump_mutex);
+    while(Status_kick_flag == false)
+      pthread_cond_wait(&Status_dump_cond,&Status_dump_mutex);
+    Status_kick_flag = false;
+    pthread_mutex_unlock(&Status_dump_mutex);
+
+    for(int i=0; i < Demod_list_length; i++){
+      struct demod *demod = &Demod_list[i];
+      if(!demod->inuse)
+	continue; 
+      if(demod->output.rtp.ssrc == 0xffffffff || demod->output.rtp.ssrc == 0)
+	continue; // Reserved for template or all-call polling
+      demod->commands++;
+      // I could copy the tag from the poll packet into all the demod sessions but I'm not sure it's a good idea
+      // since individual control sessions might be watching for their own. But we do increment the command count
+      send_radio_status(&Frontend,demod);
+
+      // Rate limit to 200/sec on average by randomly delaying 0-10 ms
+      struct timespec sleeptime;
+      sleeptime.tv_sec = 0;
+      sleeptime.tv_nsec = arc4random_uniform(10000000); // 10 million ns
+      nanosleep(&sleeptime,NULL);
+    }
+  }
+  return NULL;
+}
+
+
+static int send_radio_status(struct frontend *frontend,struct demod *demod){
   uint8_t packet[2048];
 
   Metadata_packets++;
@@ -129,7 +184,7 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
     case EOL: // Shouldn't get here
       goto done;
     case COMMAND_TAG:
-      demod->command_tag = decode_int(cp,optlen);
+      demod->command_tag = decode_int32(cp,optlen);
       break;
     case OUTPUT_SAMPRATE:
       // Restart the demodulator to recalculate filters, etc
@@ -156,7 +211,6 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
       }
       break;
     case FIRST_LO_FREQUENCY:
-      // control.c also sends direct to front end; do we need to do it here?
       {
 	double const f = fabs(decode_double(cp,optlen));
 	if(isfinite(f) && f != 0)
@@ -164,7 +218,7 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
       }
       break;
     case SECOND_LO_FREQUENCY: // Hz
-      break; // No longer settable
+      break; // No longer directly settable; change the first LO to do it indirectly
     case SHIFT_FREQUENCY: // Hz
       {
 	double const f = decode_double(cp,optlen);
@@ -252,10 +306,10 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
       }
       break;
     case INDEPENDENT_SIDEBAND: // bool
-      demod->filter.isb = decode_int(cp,optlen);
+      demod->filter.isb = decode_int8(cp,optlen); // will reimplement someday
       break;
     case THRESH_EXTEND: // bool
-      demod->fm.threshold = decode_int(cp,optlen);
+      demod->fm.threshold = decode_int8(cp,optlen);
       break;
     case HEADROOM: // dB -> voltage, always negative dB
       {
@@ -265,7 +319,7 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
       }
       break;
     case AGC_ENABLE: // bool
-      demod->linear.agc = decode_int(cp,optlen);
+      demod->linear.agc = decode_int8(cp,optlen);
       break;
     case GAIN:
       {
@@ -298,7 +352,7 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
       }
       break;
     case PLL_ENABLE: // bool
-      demod->linear.pll = decode_int(cp,optlen);
+      demod->linear.pll = decode_int8(cp,optlen);
       break;
     case PLL_BW:
       {
@@ -308,10 +362,10 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
       }
       break;
     case PLL_SQUARE: // bool
-      demod->linear.square = decode_int(cp,optlen);
+      demod->linear.square = decode_int8(cp,optlen);
       break;
     case ENVELOPE: // bool
-      demod->linear.env = decode_int(cp,optlen);
+      demod->linear.env = decode_int8(cp,optlen);
       break;
     case OUTPUT_CHANNELS: // int
       {
@@ -398,6 +452,7 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
   *bp++ = STATUS; // 0 = status, 1 = command
 
   // parameters valid in all modes
+  encode_int32(&bp,OUTPUT_SSRC,demod->output.rtp.ssrc); // Now used as channel ID, so present in all modes
   encode_int32(&bp,COMMAND_TAG,demod->command_tag); // at top to make it easier to spot in dumps
   encode_int64(&bp,CMD_CNT,demod->commands); // integer
   if(strlen(frontend->description) > 0)
@@ -556,7 +611,6 @@ static int encode_radio_status(struct frontend const *frontend,struct demod cons
     encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&demod->output.data_source_address);
     // Where we're sending PCM output
     encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&demod->output.data_dest_address);
-    encode_int32(&bp,OUTPUT_SSRC,demod->output.rtp.ssrc);
     encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
     encode_int64(&bp,OUTPUT_METADATA_PACKETS,Metadata_packets);
   }
