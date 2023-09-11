@@ -77,19 +77,19 @@ static WINDOW *Tuning_win,*Sig_win,*Filtering_win,*Demodulator_win,
   *Options_win,*Modes_win,*Debug_win,
   *Output_win;
 
-static void display_tuning(WINDOW *tuning,struct demod const *demod);
-static void display_info(WINDOW *w,int row,int col,struct demod const *demod);
-static void display_filtering(WINDOW *filtering,struct demod const *demod);
-static void display_sig(WINDOW *sig,struct demod const *demod);
-static void display_demodulator(WINDOW *demodulator,struct demod const *demod);
-static void display_options(WINDOW *options,struct demod const *demod);
-static void display_modes(WINDOW *modes,struct demod const *demod);
-static void display_output(WINDOW *output,struct demod const *demod);
-static int process_keyboard(struct demod *,uint8_t **bpp,int c);
-static void process_mouse(struct demod *demod,uint8_t **bpp);
-static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length);
-static int for_us(struct demod *demod,uint8_t const *buffer,int length,uint32_t ssrc);
-static int init_demod(struct demod *demod);
+static void display_tuning(WINDOW *tuning,struct channel const *demod);
+static void display_info(WINDOW *w,int row,int col,struct channel const *demod);
+static void display_filtering(WINDOW *filtering,struct channel const *demod);
+static void display_sig(WINDOW *sig,struct channel const *demod);
+static void display_demodulator(WINDOW *demodulator,struct channel const *demod);
+static void display_options(WINDOW *options,struct channel const *demod);
+static void display_modes(WINDOW *modes,struct channel const *demod);
+static void display_output(WINDOW *output,struct channel const *demod);
+static int process_keyboard(struct channel *,uint8_t **bpp,int c);
+static void process_mouse(struct channel *demod,uint8_t **bpp);
+static int decode_radio_status(struct channel *demod,uint8_t const *buffer,int length);
+static int for_us(struct channel *demod,uint8_t const *buffer,int length,uint32_t ssrc);
+static int init_demod(struct channel *demod);
 
 // Pop up a temporary window with the contents of a file in the
 // library directory (usually /usr/local/share/ka9q-radio/)
@@ -174,7 +174,7 @@ static void display_cleanup(void){
 static bool Frequency_lock;
 
 // Adjust the selected item up or down one step
-static void adjust_item(struct demod *demod,uint8_t **bpp,int direction){
+static void adjust_item(struct channel *demod,uint8_t **bpp,int direction){
   double tunestep = pow(10., (double)Control.step);
 
   if(!direction)
@@ -218,10 +218,10 @@ static void adjust_item(struct demod *demod,uint8_t **bpp,int direction){
 }
 // Hooks for knob.c (experimental)
 // It seems better to just use the Griffin application to turn knob events into keystrokes or mouse events
-static void adjust_up(struct demod *demod,uint8_t **bpp){
+static void adjust_up(struct channel *demod,uint8_t **bpp){
   adjust_item(demod,bpp,1);
 }
-static void adjust_down(struct demod *demod,uint8_t **bpp){
+static void adjust_down(struct channel *demod,uint8_t **bpp){
   adjust_item(demod,bpp,0);
 }
 static void toggle_lock(void){
@@ -303,8 +303,8 @@ static void winch_handler(int num){
 
 #if 0
 static int dcompare(void const *a,void const *b){
-  struct demod const *da = a;
-  struct demod const *db = b;  
+  struct channel const *da = a;
+  struct channel const *db = b;  
   if(da->output.rtp.ssrc < db->output.rtp.ssrc)
     return -1;
   if(da->output.rtp.ssrc > db->output.rtp.ssrc)
@@ -316,7 +316,7 @@ static int dcompare(void const *a,void const *b){
 
 static uint32_t Ssrc = 0;
 
-static struct demod Demod;
+static struct channel Demod;
 
 // Thread to display receiver state, updated at 10Hz by default
 // Uses the ancient ncurses text windowing library
@@ -411,7 +411,7 @@ int main(int argc,char *argv[]){
 
   setup_windows();
 
-  struct demod *const demod = &Demod;
+  struct channel *const demod = &Demod;
   memset(demod,0,sizeof(*demod));
   init_demod(demod);
 
@@ -542,7 +542,7 @@ int main(int argc,char *argv[]){
 }
 
 
-static int process_keyboard(struct demod *demod,uint8_t **bpp,int c){
+static int process_keyboard(struct channel *demod,uint8_t **bpp,int c){
   // Look for keyboard and mouse events
 
   switch(c){
@@ -749,7 +749,7 @@ static int process_keyboard(struct demod *demod,uint8_t **bpp,int c){
   return 0;
 }
 
-static void process_mouse(struct demod *demod,uint8_t **bpp){
+static void process_mouse(struct channel *demod,uint8_t **bpp){
   // Process mouse events
   // Need to handle the wheel as equivalent to up/down arrows
   MEVENT mouse_event;
@@ -851,7 +851,7 @@ static void process_mouse(struct demod *demod,uint8_t **bpp){
 }
 
 // Initialize a new, unused demod instance where fields start non-zero
-static int init_demod(struct demod *demod){
+static int init_demod(struct channel *demod){
   memset(demod,0,sizeof(*demod));
   demod->tune.second_LO = NAN;
   demod->tune.freq = demod->tune.shift = NAN;
@@ -867,7 +867,7 @@ static int init_demod(struct demod *demod){
 }
 
 // Is response for us (1), or for somebody else (-1)?
-static int for_us(struct demod *demod,uint8_t const *buffer,int length,uint32_t ssrc){
+static int for_us(struct channel *demod,uint8_t const *buffer,int length,uint32_t ssrc){
   uint8_t const *cp = buffer;
   
   while(cp - buffer < length){
@@ -912,7 +912,7 @@ static int for_us(struct demod *demod,uint8_t const *buffer,int length,uint32_t 
 // Decode incoming status message from the radio program, convert and fill in fields in local demod structure
 // Leave all other fields unchanged, as they may have local uses (e.g., file descriptors)
 // Note that we use some fields in demod differently than in the radio (e.g., dB vs ratios)
-static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int length){
+static int decode_radio_status(struct channel *demod,uint8_t const *buffer,int length){
   uint8_t const *cp = buffer;
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
@@ -1144,7 +1144,7 @@ static int decode_radio_status(struct demod *demod,uint8_t const *buffer,int len
   return 0;
 }
 
-static void display_tuning(WINDOW *w,struct demod const *demod){
+static void display_tuning(WINDOW *w,struct channel const *demod){
   // Tuning control window - these can be adjusted by the user
   // using the keyboard or tuning knob, so be careful with formatting
   if(w == NULL)
@@ -1214,7 +1214,7 @@ static void display_tuning(WINDOW *w,struct demod const *demod){
 }
 
 // Imbed in tuning window
-static void display_info(WINDOW *w,int row,int col,struct demod const *demod){
+static void display_info(WINDOW *w,int row,int col,struct channel const *demod){
   if(w == NULL)
     return;
 
@@ -1229,7 +1229,7 @@ static void display_info(WINDOW *w,int row,int col,struct demod const *demod){
     mvwaddstr(w,row++,col,bp_high->description);    
   }
 }
-static void display_filtering(WINDOW *w,struct demod const *demod){
+static void display_filtering(WINDOW *w,struct channel const *demod){
   if(w == NULL)
     return;
 
@@ -1285,7 +1285,7 @@ static void display_filtering(WINDOW *w,struct demod const *demod){
   wnoutrefresh(w);
 }
 // Signal data window
-static void display_sig(WINDOW *w,struct demod const *demod){
+static void display_sig(WINDOW *w,struct channel const *demod){
   if(w == NULL)
     return;
 
@@ -1321,7 +1321,7 @@ static void display_sig(WINDOW *w,struct demod const *demod){
   mvwaddstr(w,0,1,"Signal");
   wnoutrefresh(w);
 }
-static void display_demodulator(WINDOW *w,struct demod const *demod){
+static void display_demodulator(WINDOW *w,struct channel const *demod){
   if(w == NULL)
     return;
 
@@ -1386,7 +1386,7 @@ static void display_demodulator(WINDOW *w,struct demod const *demod){
   wnoutrefresh(w);
 }
 
-static void display_output(WINDOW *w,struct demod const *demod){
+static void display_output(WINDOW *w,struct channel const *demod){
   if(w == NULL)
     return;
 
@@ -1423,7 +1423,7 @@ static void display_output(WINDOW *w,struct demod const *demod){
   wnoutrefresh(w);
 }
 
-static void display_options(WINDOW *w,struct demod const *demod){
+static void display_options(WINDOW *w,struct channel const *demod){
   if(w == NULL)
     return;
 
@@ -1505,7 +1505,7 @@ static void display_options(WINDOW *w,struct demod const *demod){
   wnoutrefresh(w);
 }
 
-static void display_modes(WINDOW *w,struct demod const *demod){
+static void display_modes(WINDOW *w,struct channel const *demod){
   if(w == NULL)
     return;
 

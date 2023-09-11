@@ -66,7 +66,7 @@ char const *demod_name_from_type(enum demod_type type){
 }
 
 // Set reasonable defaults before reading mode or config tables
-int set_defaults(struct demod *demod){
+int set_defaults(struct channel *demod){
   if(demod == NULL)
     return -1;
 
@@ -140,7 +140,7 @@ int set_defaults(struct demod *demod){
 
 // Set selected section of specified config file into current demod structure
 // Caller must (re) initialize pre-demod filter and (re)start demodulator thread
-int loadmode(struct demod *demod,dictionary const *table,char const *mode){
+int loadmode(struct channel *demod,dictionary const *table,char const *mode){
   if(demod == NULL || table == NULL || mode == NULL || strlen(mode) == 0)
     return -1;
 

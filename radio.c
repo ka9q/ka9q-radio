@@ -36,16 +36,16 @@ struct frontend Frontend;
 
 pthread_mutex_t Demod_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 int const Demod_alloc_quantum = 1000;
-struct demod *Demod_list; // Contiguous array
+struct channel *Demod_list; // Contiguous array
 int Demod_list_length; // Length of array
 int Active_demod_count; // Active demods
-extern struct demod const *Template;
+extern struct channel const *Template;
 
-static float estimate_noise(struct demod *demod,int shift);
+static float estimate_noise(struct channel *demod,int shift);
 
 // Find demod by ssrc
-struct demod *lookup_demod(uint32_t ssrc){
-  struct demod *demod = NULL;
+struct channel *lookup_demod(uint32_t ssrc){
+  struct channel *demod = NULL;
   pthread_mutex_lock(&Demod_list_mutex);
   for(int i=0; i < Demod_list_length; i++){
     if(Demod_list[i].inuse && Demod_list[i].output.rtp.ssrc == ssrc){
@@ -59,7 +59,7 @@ struct demod *lookup_demod(uint32_t ssrc){
 
 
 // Atomically create demod only if the ssrc doesn't already exist
-struct demod *create_demod(uint32_t ssrc){
+struct channel *create_demod(uint32_t ssrc){
   if(ssrc == 0xffffffff)
     return NULL; // reserved
   pthread_mutex_lock(&Demod_list_mutex);
@@ -70,11 +70,11 @@ struct demod *create_demod(uint32_t ssrc){
     }
   }
   if(Demod_list == NULL){
-    Demod_list = (struct demod *)calloc(Demod_alloc_quantum,sizeof(struct demod));
+    Demod_list = (struct channel *)calloc(Demod_alloc_quantum,sizeof(struct channel));
     Demod_list_length = Demod_alloc_quantum;
     Active_demod_count = 0;
   }
-  struct demod *demod = NULL;
+  struct channel *demod = NULL;
   for(int i=0; i < Demod_list_length; i++){
     if(!Demod_list[i].inuse){
       demod = &Demod_list[i];
@@ -85,7 +85,7 @@ struct demod *create_demod(uint32_t ssrc){
     fprintf(stdout,"Warning: out of demod table space (%d)\n",Active_demod_count);
     // Abort here? Or keep going?
   } else {
-    memset(demod,0,sizeof(struct demod));
+    memset(demod,0,sizeof(struct channel));
     demod->inuse = true;
     demod->output.rtp.ssrc = ssrc; // Stash it
     Active_demod_count++;
@@ -95,8 +95,8 @@ struct demod *create_demod(uint32_t ssrc){
 }
 
 // Set up newly created dynamic demodulator
-struct demod *setup_demod(uint32_t ssrc){
-  struct demod *demod = create_demod(ssrc);
+struct channel *setup_demod(uint32_t ssrc){
+  struct channel *demod = create_demod(ssrc);
   if(demod != NULL){
     // Copy dynamic template
     // Although there are some pointers in here (filter.out, filter.energies), they're all NULL until the demod actually starts
@@ -116,7 +116,7 @@ struct demod *setup_demod(uint32_t ssrc){
 
 
 // takes pointer to pointer to demod so we can zero it out to avoid use of freed pointer
-void free_demod(struct demod **demod){
+void free_demod(struct channel **demod){
   if(demod != NULL && *demod != NULL){
     pthread_mutex_lock(&Demod_list_mutex);
     if((*demod)->inuse){
@@ -135,7 +135,7 @@ static const float n0_smooth = .001; // exponential smoothing rate for (noisy) b
 // estimate n0 by finding the FFT bin with the least energy
 // in the demod's pre-filter nyquist bandwidth
 // Works better than global estimation when noise floor is not flat
-static float estimate_noise(struct demod *demod,int shift){
+static float estimate_noise(struct channel *demod,int shift){
 
 
   struct filter_out const * const slave = demod->filter.out;
@@ -206,7 +206,7 @@ static float estimate_noise(struct demod *demod,int shift){
 
 
 // start demodulator thread on already-initialized demod structure
-int start_demod(struct demod * demod){
+int start_demod(struct channel * demod){
   if(demod == NULL)
     return -1;
 
@@ -245,10 +245,10 @@ int start_demod(struct demod * demod){
   return 0;
 }
 
-int kill_demod(struct demod **p){
+int kill_demod(struct channel **p){
   if(p == NULL)
     return -1;
-  struct demod *demod = *p;
+  struct channel *demod = *p;
   if(demod == NULL)
     return -1;
 
@@ -293,7 +293,7 @@ int kill_demod(struct demod **p){
 // The new IF is computed here only to determine if the front end needs retuning
 // The second LO frequency is actually set when the new front end frequency is
 // received back from the front end metadata
-double set_freq(struct demod * const demod,double const f){
+double set_freq(struct channel * const demod,double const f){
   assert(demod != NULL);
   if(demod == NULL)
     return NAN;
@@ -334,7 +334,7 @@ double set_freq(struct demod * const demod,double const f){
 // Note: single precision floating point is not accurate enough at VHF and above
 // demod->first_LO is NOT updated here!
 // It is set by incoming status frames so this will take time
-double set_first_LO(struct demod const * const demod,double const first_LO){
+double set_first_LO(struct channel const * const demod,double const first_LO){
   assert(demod != NULL);
   if(demod == NULL)
     return NAN;
@@ -394,7 +394,7 @@ int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, doub
    Will probably work better with Opus streams from the opus transcoder, since they're always 48000 Hz stereo; no switching midstream
 */
 void *sap_send(void *p){
-  struct demod *demod = (struct demod *)p;
+  struct channel *demod = (struct channel *)p;
   assert(demod != NULL);
 
   int64_t start_time = utc_time_sec() + NTP_EPOCH; // NTP uses UTC, not GPS
@@ -532,7 +532,7 @@ void *demod_reaper(void *arg){
   while(1){
     int actives = 0;
     for(int i=0;i<Demod_list_length && actives < Active_demod_count;i++){
-      struct demod *demod = &Demod_list[i];
+      struct channel *demod = &Demod_list[i];
       if(demod->inuse){
 	actives++;
 	if(demod->tune.freq == 0 && demod->lifetime > 0){
@@ -557,7 +557,7 @@ void *demod_reaper(void *arg){
 // 6. Run fine tuning, compute average power
 
 // Baseband samples placed in demod->filter.out->output.c
-int downconvert(struct demod *demod){
+int downconvert(struct channel *demod){
   // To save CPU time when the front end is completely tuned away from us, block until the front
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);

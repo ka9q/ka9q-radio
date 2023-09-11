@@ -19,7 +19,7 @@ static int const power_squelch = 1; // Enable experimental pre-squelch to save C
 // FM demodulator thread
 void *demod_fm(void *arg){
   assert(arg != NULL);
-  struct demod * const demod = arg;  
+  struct channel * const demod = arg;  
   
   {
     char name[100];

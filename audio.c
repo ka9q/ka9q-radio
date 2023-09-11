@@ -22,7 +22,7 @@
 #define PACKETSIZE 2048        // Somewhat larger than Ethernet MTU
 
 // Send 'size' stereo samples, each in a pair of floats
-int send_stereo_output(struct demod * restrict const demod,float const * restrict buffer,int size,bool const mute){
+int send_stereo_output(struct channel * restrict const demod,float const * restrict buffer,int size,bool const mute){
 
   if(mute){
     // Increment timestamp
@@ -65,7 +65,7 @@ int send_stereo_output(struct demod * restrict const demod,float const * restric
 }
 
 // Send 'size' mono samples, each in a float
-int send_mono_output(struct demod * restrict const demod,float const * restrict buffer,int size,bool const mute){
+int send_mono_output(struct channel * restrict const demod,float const * restrict buffer,int size,bool const mute){
   if(mute){
     // Increment timestamp
     demod->output.rtp.timestamp += size; // Increase by sample count
@@ -109,7 +109,7 @@ int send_mono_output(struct demod * restrict const demod,float const * restrict 
 
 #if 0 // Not currently used
 void output_cleanup(void *p){
-  struct demod * const demod = p;
+  struct channel * const demod = p;
   if(demod == NULL)
     return;
 

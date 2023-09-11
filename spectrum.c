@@ -16,7 +16,7 @@
 // Spectrum analysis thread
 void *demod_spectrum(void *arg){
   assert(arg != NULL);
-  struct demod * const demod = arg;  
+  struct channel * const demod = arg;  
   
   {
     char name[100];

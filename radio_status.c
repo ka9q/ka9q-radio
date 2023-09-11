@@ -37,9 +37,9 @@ int Ctl_fd;     // File descriptor for receiving user commands
 
 extern dictionary const *Modetable;
 
-static int send_radio_status(struct frontend *frontend,struct demod *demod);
-static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int length);
-static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,uint8_t *packet, int len);
+static int send_radio_status(struct frontend *frontend,struct channel *demod);
+static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int length);
+static int encode_radio_status(struct frontend const *frontend,struct channel const *demod,uint8_t *packet, int len);
 static void *radio_status_dump(void *);
   
 static pthread_t status_dump_thread;
@@ -79,7 +79,7 @@ void *radio_status(void *arg){
     default:
       {
 	// find specific demod instance
-	struct demod *demod = lookup_demod(ssrc);
+	struct channel *demod = lookup_demod(ssrc);
 	if(demod == NULL){
 	  if((demod = setup_demod(ssrc)) == NULL){ // possible race here?
 	    // Creation failed, e.g., no output stream
@@ -116,7 +116,7 @@ static void *radio_status_dump(void *p){
     pthread_mutex_unlock(&Status_dump_mutex);
 
     for(int i=0; i < Demod_list_length; i++){
-      struct demod *demod = &Demod_list[i];
+      struct channel *demod = &Demod_list[i];
       if(!demod->inuse)
 	continue; 
       if(demod->output.rtp.ssrc == 0xffffffff || demod->output.rtp.ssrc == 0)
@@ -137,7 +137,7 @@ static void *radio_status_dump(void *p){
 }
 
 
-static int send_radio_status(struct frontend *frontend,struct demod *demod){
+static int send_radio_status(struct frontend *frontend,struct channel *demod){
   uint8_t packet[2048];
 
   Metadata_packets++;
@@ -157,7 +157,7 @@ static int send_radio_status(struct frontend *frontend,struct demod *demod){
 // cmd == 1 means this is a command, only allow certain items
 
 // with SSRC selection, should scan entire command for our SSRC before we execute any of it
-static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int length){
+static int decode_radio_commands(struct channel *demod,uint8_t const *buffer,int length){
   bool restart_needed = false;
   bool new_filter_needed = false;
   uint32_t const ssrc = demod->output.rtp.ssrc;
@@ -448,7 +448,7 @@ static int decode_radio_commands(struct demod *demod,uint8_t const *buffer,int l
 // Encode contents of frontend and demod structures as command or status packet
 // packet argument must be long enough!!
 // Convert values from internal to engineering units
-static int encode_radio_status(struct frontend const *frontend,struct demod const *demod,uint8_t *packet, int len){
+static int encode_radio_status(struct frontend const *frontend,struct channel const *demod,uint8_t *packet, int len){
   memset(packet,0,len);
   uint8_t *bp = packet;
 

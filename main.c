@@ -56,7 +56,7 @@ int RTCP_enable = false;
 int SAP_enable = false;
 struct sockaddr_storage Data_dest_address;
 int Data_fd;
-struct demod *Template;
+struct channel *Template;
 
 char const *Name;
 extern int Nthreads; // owned by filter.c
@@ -437,7 +437,7 @@ static int loadconfig(char const * const file){
 	if(ssrc == 0)
 	  continue; // Reserved ssrc
 
-	struct demod *demod = NULL;
+	struct channel *demod = NULL;
 	// Try to create it, incrementing in case of collision
 	int const max_collisions = 100;
 	for(int i=0; i < max_collisions; i++){
@@ -602,7 +602,7 @@ static int setup_hardware(char const *sname){
 
 // RTP control protocol sender task
 static void *rtcp_send(void *arg){
-  struct demod const *demod = (struct demod *)arg;
+  struct channel const *demod = (struct channel *)arg;
   if(demod == NULL)
     pthread_exit(NULL);
 

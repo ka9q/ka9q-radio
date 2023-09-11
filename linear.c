@@ -26,7 +26,7 @@
 
 void *demod_linear(void *arg){
   assert(arg != NULL);
-  struct demod * const demod = arg;
+  struct channel * const demod = arg;
 
   {
     char name[100];

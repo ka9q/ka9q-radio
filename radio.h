@@ -136,8 +136,8 @@ struct param {
 };
 #endif
 
-// Demodulator state block; there can be many of these
-struct demod {
+// Channel state block; there can be many of these
+struct channel {
   bool inuse;
 #if 0
   struct param param; // not yet used
@@ -272,7 +272,7 @@ struct demod {
   float tp1,tp2; // Spare test points
 };
 
-extern struct demod *Demod_list;
+extern struct channel *Demod_list;
 extern int Demod_list_length;
 extern int Active_demod_count;
 extern int const Demod_alloc_quantum;
@@ -287,22 +287,22 @@ extern float Blocktime; // Common to all receiver slices. NB! Milliseconds, not 
 extern uint64_t Metadata_packets;
 
 // Functions/methods to control a demod instance
-struct demod *create_demod(uint32_t ssrc);
-struct demod *lookup_demod(uint32_t ssrc);
-struct demod *setup_demod(uint32_t ssrc);
-void free_demod(struct demod **);
+struct channel *create_demod(uint32_t ssrc);
+struct channel *lookup_demod(uint32_t ssrc);
+struct channel *setup_demod(uint32_t ssrc);
+void free_demod(struct channel **);
 
 char const *demod_name_from_type(enum demod_type type);
 int demod_type_from_name(char const *name);
-int loadmode(struct demod *demod,dictionary const *table,char const *mode);
-int set_defaults(struct demod *demod);
+int loadmode(struct channel *demod,dictionary const *table,char const *mode);
+int set_defaults(struct channel *demod);
 
-double set_freq(struct demod * restrict ,double);
+double set_freq(struct channel * restrict ,double);
 int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq);
-int start_demod(struct demod * restrict demod);
-int kill_demod(struct demod ** restrict demod);
-double set_first_LO(struct demod const * restrict, double);
-int downconvert(struct demod *demod);
+int start_demod(struct channel * restrict demod);
+int kill_demod(struct channel ** restrict demod);
+double set_first_LO(struct channel const * restrict, double);
+int downconvert(struct channel *demod);
 int set_reference_level(struct frontend *frontend);
 
 // Helper threads
@@ -318,6 +318,6 @@ void *demod_spectrum(void *);
 void *demod_null(void *);
 
 // Send output to multicast streams
-int send_mono_output(struct demod * restrict ,const float * restrict,int,bool);
-int send_stereo_output(struct demod * restrict ,const float * restrict,int,bool);
+int send_mono_output(struct channel * restrict ,const float * restrict,int,bool);
+int send_stereo_output(struct channel * restrict ,const float * restrict,int,bool);
 #endif
