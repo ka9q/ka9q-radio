@@ -80,8 +80,8 @@ struct frontend {
       so full A/D range now corresponds to different levels internally, and are scaled
       in radio_status.c when sending status messages
   */
-  float reference;  // Reference amplitude defined as 0 dB
   float if_power;   // Exponentially smoothed power measurement in A/D units (not normalized)
+  float if_power_max;
   
   // This structure is updated asynchronously by the front end thread, so it's protected
   pthread_mutex_t status_mutex;
@@ -303,7 +303,10 @@ int start_demod(struct channel * restrict chan);
 int kill_demod(struct channel ** restrict chan);
 double set_first_LO(struct channel const * restrict, double);
 int downconvert(struct channel *chan);
-int set_reference_level(struct frontend *frontend);
+float scale_voltage_out2FS(struct frontend *frontend);
+float scale_power_out2FS(struct frontend *frontend);
+float scale_ADvoltage2FS(struct frontend const *frontend);
+float scale_ADpower2FS(struct frontend const *frontend);
 
 // Helper threads
 void *sap_send(void *);

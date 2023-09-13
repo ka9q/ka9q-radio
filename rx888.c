@@ -345,11 +345,24 @@ static void rx_callback(struct libusb_transfer * const transfer){
 
   write_rfilter(frontend->in,NULL,output_count); // Update write pointer, invoke FFT if block is complete
 
-  // temp fix for a previous bug: was resetting integrator each time it was read, so more than on reader
+  // temp fix for a previous bug: was resetting integrator each time it was read, so more than one reader
   // would cause premature resets. Go back to a single exponential smoother
   {
-    float energy = (float)in_energy / output_count;
-    frontend->if_power += power_smooth * (energy - frontend->if_power);
+    float power  = (float)in_energy / output_count;
+    frontend->if_power += power_smooth * (power - frontend->if_power);
+    if(power > frontend->if_power_max){
+      if(Verbose){
+	float scaled_old_power = frontend->if_power_max * scale_ADpower2FS(frontend);
+	float scaled_new_power = power * scale_ADpower2FS(frontend);
+
+	// Don't print a message unless the increase is > 0.1 dB, the precision of the printf
+	float new_dBFS = power2dB(scaled_new_power);
+	float old_dBFS = power2dB(scaled_old_power);
+	if(new_dBFS >= old_dBFS + 0.1)
+	  fprintf(stdout,"New input power high watermark: %.1f dBFS\n",new_dBFS);
+      }
+      frontend->if_power_max = power;
+    }
   }
   frontend->samples += sampcount; // Count original samples
   if(!Stop_transfers) {

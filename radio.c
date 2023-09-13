@@ -619,8 +619,7 @@ int downconvert(struct channel *chan){
     }
     execute_filter_output(chan->filter.out,-shift); // block until new data frame
     chan->blocks_since_poll++;
-    set_reference_level(&Frontend); // May have changed
-    float level_normalize = 1. / Frontend.reference;
+    float level_normalize = scale_voltage_out2FS(&Frontend);
     if(buffer != NULL){ // No output time-domain buffer in spectral analysis mode
       const int N = chan->filter.out->olen; // Number of raw samples in filter output buffer
       float energy = 0;
@@ -633,18 +632,37 @@ int downconvert(struct channel *chan){
       chan->sig.bb_energy += energy; // Added once per block
     }
     chan->filter.bin_shift = shift; // We need this in any case (not really?)
-    chan->sig.n0 = estimate_noise(chan,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
-    chan->sig.n0 /= Frontend.reference * Frontend.reference; // noise estimate is prior to normalization
-
+    chan->sig.n0 = scale_power_out2FS(&Frontend) * estimate_noise(chan,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
     return 0;
 }
 
-// Set internal level equivalent to 0 dB
- // I think the real vs complex difference is (or should be) handled in the filter
-int set_reference_level(struct frontend *frontend){
-  frontend->reference = 1 << (frontend->bitspersample - 1);
+// Return multiplicative factor for converting A/D samples to full scale (FS) prior to filtering
+// Unlike the corresponding function scale_voltage_out2FS(), this is not corrected for front end gain since we're interested in keeping the A/D converter happy
+float scale_ADvoltage2FS(struct frontend const *frontend){
+  float scale = 1.0f / (1 << (frontend->bitspersample - 1)); // Important to force the numerator to float, otherwise the divide produces zero!
+  // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
+  // Complex signals carry twice as much power, divided between I and Q
+  if(frontend->isreal)
+    scale *= M_SQRT2;
+  return scale;
+}
+// scale_ADvoltage() squared, for RMS power measurements (sums of voltages squared)
+float scale_ADpower2FS(struct frontend const *frontend){
+  float scale = scale_ADvoltage2FS(frontend);
+  return scale * scale;
+
+}
+// Corresponding functions for baseband signals AFTER filter
+// Returns multiplicative factor for converting raw floats to dBFS
+// Scales for bits per sample AND compensates for front end analog gain
+// Real vs complex difference is (I think) handled in the filter with a 3dB boost, so there's no sqrt(2) correction here
+float scale_voltage_out2FS(struct frontend *frontend){
+  float scale = 1.0f / (1 << (frontend->bitspersample - 1));
   float analog_gain = frontend->rf_gain - frontend->rf_atten; // net analog gain, dB
-  frontend->reference *= dB2voltage(analog_gain); // Front end gain as amplitude ratio
-  return 0;
+  return scale * dB2voltage(-analog_gain); // Front end gain as amplitude ratio
 }
 
+float scale_power_out2FS(struct frontend *frontend){
+  float scale = scale_voltage_out2FS(frontend);
+  return scale * scale;
+}

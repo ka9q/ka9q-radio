@@ -340,21 +340,22 @@ static int rx_callback(airspy_transfer *transfer){
   }
   frontend->samples += sampcount;
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->if_power = power_smooth * ((float)in_energy / sampcount - frontend->if_power);
+  float const in_power = (float)in_energy / sampcount;
+  frontend->if_power = power_smooth * (in_power - frontend->if_power);
   if(sdr->software_agc){
     // Integrate A/D energy
-    in_energy /= (1 << (2*(frontend->bitspersample-1))); // 2048^2 for 12 bits
-    sdr->energy += in_energy;
+    float const scaled_in_energy = in_power * scale_ADpower2FS(frontend);
+    sdr->energy += scaled_in_energy;
     sdr->energy_samples += sampcount;
     if(sdr->energy_samples >= frontend->samprate/10){ // Time to re-evaluate after 100 ms
       sdr->energy /= sdr->energy_samples;
       if(sdr->energy < sdr->low_threshold){
 	if(Verbose)
-	  printf("Power %.1f dB\n",power2dB(sdr->energy));
+	  printf("AGC power %.1f dBFS\n",power2dB(sdr->energy));
 	set_gain(sdr,sdr->gainstep + 1);
       } else if(sdr->energy > sdr->high_threshold){
 	if(Verbose)
-	  printf("Power %.1f dB\n",power2dB(sdr->energy));
+	  printf("AGC power %.1f dBFS\n",power2dB(sdr->energy));
 	set_gain(sdr,sdr->gainstep - 1);
       }
       // Reset integrator

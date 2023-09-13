@@ -90,7 +90,6 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
     fprintf(stdout,"unreasonable bits per sample %d, setting to 16\n",frontend->bitspersample);
     frontend->bitspersample = 16;
   }
-  frontend->reference = 1 << (frontend->bitspersample-1);
   if(frontend->isreal){
     frontend->min_IF = 0;
     frontend->max_IF = frontend->samprate / 2;

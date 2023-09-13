@@ -308,32 +308,44 @@ static void do_fcd_agc(struct sdrstate *sdr){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
-  float const powerdB = power2dB(frontend->if_power) - voltage2dB(1 << (frontend->bitspersample-1));
+  float const powerdB = power2dB(frontend->if_power * scale_ADpower2FS(frontend));
   
   if(powerdB > AGC_upper){
     if(frontend->if_gain > 0){
       // Decrease gain in 10 dB steps, down to 0
       uint8_t val = frontend->if_gain = max(0,frontend->if_gain - 10);
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_IF_GAIN1,&val,sizeof(val));
-    } else if(frontend->mixer_gain){
-      uint8_t val = frontend->mixer_gain = 0;
+      if(Verbose)
+	fprintf(stdout,"AGC power %.1f dBFS, new lower if gain = %d\n",powerdB,val);
+    } else if(frontend->mixer_gain > 0){
+      uint8_t val = frontend->mixer_gain = 0; // mixer gain is on or off?
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
-    } else if(frontend->lna_gain){
+      if(Verbose)
+	fprintf(stdout,"AGC power %.1f dBFS, new lower mixer gain = %d\n",powerdB,val);
+    } else if(frontend->lna_gain > 0){
       uint8_t val = frontend->lna_gain = 0;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
+      if(Verbose)
+	fprintf(stdout,"AGC power %.1f dBFS, new lower lna gain = %d\n",powerdB,val);
     }
   } else if(powerdB < AGC_lower){
     if(frontend->lna_gain == 0){
       frontend->lna_gain = 24;
       uint8_t val = 1;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
+      if(Verbose)
+	fprintf(stdout,"AGC power %.1f dBFS, new higher if gain = %d\n",powerdB,val);
     } else if(frontend->mixer_gain == 0){
       frontend->mixer_gain = 19;
       uint8_t val = 1;
+      if(Verbose)
+	fprintf(stdout,"AGC power %.1f dBFS, new higher mixer gain = %d\n",powerdB,val);
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
     } else if(frontend->if_gain < 20){ // Limit to 20 dB - seems enough to keep A/D going even on noise
       uint8_t val = frontend->if_gain = min(20,frontend->if_gain + 10);
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_IF_GAIN1,&val,sizeof(val));
+      if(Verbose)
+	fprintf(stdout,"AGC power %.1f dBFS, new higher lna gain = %d\n",powerdB,val);
     }
   }
   frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;

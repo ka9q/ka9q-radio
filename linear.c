@@ -99,11 +99,21 @@ void *demod_linear(void *arg){
       // Loop lock detector with hysteresis
       // If the loop is locked, the SNR must fall below the threshold for a while
       // before we declare it unlocked, and vice versa
+#if 0
       if(chan->sig.snr < chan->squelch_close){
 	chan->pll.lock_count -= N;
       } else if(chan->sig.snr > chan->squelch_open){
 	chan->pll.lock_count += N;
       }
+#else
+      // Relax the required SNR for lock. If there's more I signal than Q signal, declare it locked
+      // The squelch settings are really for FM, not for us
+      if(chan->sig.snr < 0){
+	chan->pll.lock_count -= N;
+      } else if(chan->sig.snr > 0){
+	chan->pll.lock_count += N;
+      }
+#endif
       if(chan->pll.lock_count >= lock_limit){
 	chan->pll.lock_count = lock_limit;
 	chan->linear.pll_lock = 1;
