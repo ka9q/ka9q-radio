@@ -43,28 +43,25 @@
 
 static int const DEFAULT_IP_TOS = 48;
 static int const DEFAULT_MCAST_TTL = 1; // LAN only, no routers
+static float Refresh_rate = 0.25f;
+static char Locale[256] = "en_US.UTF-8";
+static char const *Presets_file = "presets.conf"; // make configurable!
+static dictionary *Mdict;
+struct frontend Frontend;
+static struct sockaddr_storage Metadata_source_address;      // Source of metadata
+static struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
+static uint64_t Block_drops; // Stored in output filter on sender, not in channel structure
+static bool Resized = false;
 
-float Refresh_rate = 0.25f;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
 int IP_tos = DEFAULT_IP_TOS;
-char Locale[256] = "en_US.UTF-8";
-char const *Modefile = "modes.conf"; // make configurable!
-dictionary *Mdict;
-
-struct frontend Frontend;
-
-struct sockaddr_storage Metadata_source_address;      // Source of metadata
-struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
 float Blocktime;
 int Ctl_fd,Status_fd;
 uint64_t Metadata_packets;
-uint64_t Block_drops; // Stored in output filter on sender, not in channel structure
-
 const char *App_path;
 int Verbose;
-bool Resized = false;
 
-struct control {
+static struct control {
   int item;
   bool lock;
   int step;
@@ -377,8 +374,8 @@ int main(int argc,char *argv[]){
     exit(EX_IOERR);
   }
   char modefile_path[PATH_MAX];
-  if (dist_path(modefile_path,sizeof(modefile_path),Modefile) == -1) {
-    fprintf(stderr,"Could not find mode file %s\n", Modefile);
+  if (dist_path(modefile_path,sizeof(modefile_path),Presets_file) == -1) {
+    fprintf(stderr,"Could not find mode file %s\n", Presets_file);
     exit(EX_NOINPUT);
   }
   Mdict = iniparser_load(modefile_path);
@@ -386,8 +383,6 @@ int main(int argc,char *argv[]){
     fprintf(stdout,"Can't load mode file %s\n",modefile_path);
     exit(EX_NOINPUT);
   }
-
-
   atexit(display_cleanup);
 
   struct sigaction act;
@@ -405,18 +400,15 @@ int main(int argc,char *argv[]){
   timeout(0); // Don't block in getch()
   cbreak();
   noecho();
-
   mmask_t const mask = ALL_MOUSE_EVENTS;
   mousemask(mask,NULL);
-
   setup_windows();
 
   struct channel *const channel = &Channel;
   memset(channel,0,sizeof(*channel));
   init_demod(channel);
 
-  Frontend.frequency = 
-    Frontend.min_IF = Frontend.max_IF = NAN;
+  Frontend.frequency = Frontend.min_IF = Frontend.max_IF = NAN;
 
   /* Main loop:
      Send poll if we haven't received one in our refresh interval
@@ -458,7 +450,7 @@ int main(int argc,char *argv[]){
       }
       if(FD_ISSET(Status_fd,&fdset)){
 	// Message from the radio program (or some transcoders)
-	uint8_t buffer[9000];
+	uint8_t buffer[PKTSIZE];
 	struct sockaddr_storage source_address;
 	socklen_t ssize = sizeof(source_address);
 	int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize);
@@ -500,7 +492,7 @@ int main(int argc,char *argv[]){
       update_needed = false;
     }    
     // Set up command buffer in case we want to change something
-    uint8_t cmdbuffer[9000];
+    uint8_t cmdbuffer[PKTSIZE];
     uint8_t *bp = cmdbuffer;
     *bp++ = CMD; // Command
 

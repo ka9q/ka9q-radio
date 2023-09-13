@@ -1,4 +1,4 @@
-// Load and search ka9q-radio mode definition table in modes.conf
+// Load and search ka9q-radio preset definition table in modes.conf
 // Copyright 2018-2023, Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1  // Avoid warnings when including dsp.h
@@ -65,7 +65,7 @@ char const *demod_name_from_type(enum demod_type type){
   return NULL;
 }
 
-// Set reasonable defaults before reading mode or config tables
+// Set reasonable defaults before reading preset or config tables
 int set_defaults(struct channel *chan){
   if(chan == NULL)
     return -1;
@@ -140,11 +140,11 @@ int set_defaults(struct channel *chan){
 
 // Set selected section of specified config file into current chan structure
 // Caller must (re) initialize pre-demod filter and (re)start demodulator thread
-int loadmode(struct channel *chan,dictionary const *table,char const *mode){
-  if(chan == NULL || table == NULL || mode == NULL || strlen(mode) == 0)
+int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
+  if(chan == NULL || table == NULL || sname == NULL || strlen(sname) == 0)
     return -1;
 
-  char const * demod_name = config_getstring(table,mode,"demod",NULL);
+  char const * demod_name = config_getstring(table,sname,"demod",NULL);
   if(demod_name){
     int const x = demod_type_from_name(demod_name);
     if(chan->demod_type >= 0){
@@ -153,26 +153,26 @@ int loadmode(struct channel *chan,dictionary const *table,char const *mode){
   }
   chan->output.samprate = DEFAULT_LINEAR_SAMPRATE; // Make sure it gets set to *something*
   {
-    char const *p = config_getstring(table,mode,"samprate",NULL);
+    char const *p = config_getstring(table,sname,"samprate",NULL);
     if(p != NULL)
       chan->output.samprate = parse_frequency(p,false);
   }
-  chan->output.channels = config_getint(table,mode,"channels",chan->output.channels);
-  if(config_getboolean(table,mode,"mono",0))
+  chan->output.channels = config_getint(table,sname,"channels",chan->output.channels);
+  if(config_getboolean(table,sname,"mono",0))
     chan->output.channels = 1;
-  if(config_getboolean(table,mode,"stereo",0))
+  if(config_getboolean(table,sname,"stereo",0))
     chan->output.channels = 2;
-  chan->filter.kaiser_beta = config_getfloat(table,mode,"kaiser-beta",chan->filter.kaiser_beta);
+  chan->filter.kaiser_beta = config_getfloat(table,sname,"kaiser-beta",chan->filter.kaiser_beta);
 
   // Pre-detection filter limits
   chan->filter.min_IF = DEFAULT_LOW;
   chan->filter.max_IF = DEFAULT_HIGH;
   {
-    char const *low = config_getstring(table,mode,"low",NULL);
+    char const *low = config_getstring(table,sname,"low",NULL);
     if(low != NULL)
       chan->filter.min_IF = parse_frequency(low,false);
 
-    char const *high = config_getstring(table,mode,"high",NULL);
+    char const *high = config_getstring(table,sname,"high",NULL);
     if(high != NULL)
       chan->filter.max_IF = parse_frequency(high,false);
   }
@@ -183,29 +183,29 @@ int loadmode(struct channel *chan,dictionary const *table,char const *mode){
     chan->filter.max_IF = t;
   }
   {
-    char const *cp = config_getstring(table,mode,"squelch-open",NULL);
+    char const *cp = config_getstring(table,sname,"squelch-open",NULL);
     if(cp)
       chan->squelch_open = dB2power(strtof(cp,NULL));
   }
   {
-    char const *cp = config_getstring(table,mode,"squelch-close",NULL);
+    char const *cp = config_getstring(table,sname,"squelch-close",NULL);
     if(cp)
       chan->squelch_close = dB2power(strtof(cp,NULL));
   }
-  chan->squelchtail = config_getint(table,mode,"squelchtail",chan->squelchtail);
+  chan->squelchtail = config_getint(table,sname,"squelchtail",chan->squelchtail);
   {
-    char const *cp = config_getstring(table,mode,"headroom",NULL);
+    char const *cp = config_getstring(table,sname,"headroom",NULL);
     if(cp)
       chan->output.headroom = dB2voltage(-fabsf(strtof(cp,NULL))); // always treat as <= 0 dB
   }
   chan->tune.shift = 0;
   {
-    char const *p = config_getstring(table,mode,"shift",NULL);
+    char const *p = config_getstring(table,sname,"shift",NULL);
     if(p != NULL)
       chan->tune.shift = parse_frequency(p,false);
   }
   {
-    char const *cp = config_getstring(table,mode,"recovery-rate",NULL);
+    char const *cp = config_getstring(table,sname,"recovery-rate",NULL);
     if(cp){
       // dB/sec -> voltage ratio/block
       float x = strtof(cp,NULL);
@@ -214,55 +214,55 @@ int loadmode(struct channel *chan,dictionary const *table,char const *mode){
   }
   {
     // time in seconds -> time in blocks
-    char const *cp = config_getstring(table,mode,"hang-time",NULL);
+    char const *cp = config_getstring(table,sname,"hang-time",NULL);
     if(cp){
       float x = strtof(cp,NULL);
       chan->linear.hangtime = fabsf(x) / (.001 * Blocktime); // Always >= 0
     }
   }
   {
-    char const *cp = config_getstring(table,mode,"threshold",NULL);
+    char const *cp = config_getstring(table,sname,"threshold",NULL);
     if(cp){
       float x = strtof(cp,NULL);
       chan->linear.threshold = dB2voltage(-fabsf(x)); // Always <= unity
     }
   }
   {
-    char const *cp = config_getstring(table,mode,"gain",NULL);
+    char const *cp = config_getstring(table,sname,"gain",NULL);
     if(cp){
       float x = strtof(cp,NULL);
       chan->output.gain = dB2voltage(x); // Can be more or less than unity
     }
   }
-  chan->linear.env = config_getboolean(table,mode,"envelope",chan->linear.env);
-  chan->linear.pll = config_getboolean(table,mode,"pll",chan->linear.pll);
-  chan->linear.square = config_getboolean(table,mode,"square",chan->linear.square);  // On implies PLL on
+  chan->linear.env = config_getboolean(table,sname,"envelope",chan->linear.env);
+  chan->linear.pll = config_getboolean(table,sname,"pll",chan->linear.pll);
+  chan->linear.square = config_getboolean(table,sname,"square",chan->linear.square);  // On implies PLL on
   if(chan->linear.square)
     chan->linear.pll = true; // Square implies PLL
   
-  chan->filter.isb = config_getboolean(table,mode,"conj",chan->filter.isb);       // (unimplemented anyway)
-  chan->linear.loop_bw = config_getfloat(table,mode,"pll-bw",chan->linear.loop_bw);
-  chan->linear.agc = config_getboolean(table,mode,"agc",chan->linear.agc);
-  chan->fm.threshold = config_getboolean(table,mode,"extend",chan->fm.threshold); // FM threshold extension
-  chan->fm.threshold = config_getboolean(table,mode,"threshold-extend",chan->fm.threshold); // FM threshold extension
+  chan->filter.isb = config_getboolean(table,sname,"conj",chan->filter.isb);       // (unimplemented anyway)
+  chan->linear.loop_bw = config_getfloat(table,sname,"pll-bw",chan->linear.loop_bw);
+  chan->linear.agc = config_getboolean(table,sname,"agc",chan->linear.agc);
+  chan->fm.threshold = config_getboolean(table,sname,"extend",chan->fm.threshold); // FM threshold extension
+  chan->fm.threshold = config_getboolean(table,sname,"threshold-extend",chan->fm.threshold); // FM threshold extension
 
   {
-    char const *cp = config_getstring(table,mode,"deemph-tc",NULL);
+    char const *cp = config_getstring(table,sname,"deemph-tc",NULL);
     if(cp){
       float const tc = strtof(cp,NULL) * 1e-6;
       chan->deemph.rate = expf(-1.0f / (tc * chan->output.samprate));
     }
   }
   {
-    char const *cp = config_getstring(table,mode,"deemph-gain",NULL);
+    char const *cp = config_getstring(table,sname,"deemph-gain",NULL);
     if(cp){
       float const g = strtof(cp,NULL);
       chan->deemph.gain = dB2voltage(g);
     }
   }
   // "pl" and "ctcss" are synonyms
-  chan->fm.tone_freq = config_getfloat(table,mode,"pl",chan->fm.tone_freq);
-  chan->fm.tone_freq = config_getfloat(table,mode,"ctcss",chan->fm.tone_freq);
+  chan->fm.tone_freq = config_getfloat(table,sname,"pl",chan->fm.tone_freq);
+  chan->fm.tone_freq = config_getfloat(table,sname,"ctcss",chan->fm.tone_freq);
   return 0;
 }
 

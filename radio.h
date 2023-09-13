@@ -281,7 +281,7 @@ extern pthread_mutex_t Channel_list_mutex;
 extern int Status_fd;  // File descriptor for receiver status
 extern int Ctl_fd;     // File descriptor for receiving user commands
 
-extern char const *Modefile;
+extern char const *Presetfile;
 extern int Verbose;
 extern float Blocktime; // Common to all receiver slices. NB! Milliseconds, not seconds
 extern uint64_t Metadata_packets;
@@ -294,7 +294,7 @@ void free_chan(struct channel **);
 
 char const *demod_name_from_type(enum demod_type type);
 int demod_type_from_name(char const *name);
-int loadmode(struct channel *chan,dictionary const *table,char const *mode);
+int loadpreset(struct channel *chan,dictionary const *table,char const *preset);
 int set_defaults(struct channel *chan);
 
 double set_freq(struct channel * restrict ,double);

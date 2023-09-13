@@ -47,14 +47,12 @@ int dist_path(char *path,int path_len,const char *fname){
 
   dirname(realpath(App_path,cwd));
   snprintf(path,path_len,"%s/%s",cwd,fname);
-  if(stat(path, &st) == 0) {
-      if((st.st_mode & S_IFMT) == S_IFREG) return 0;
-  }
+  if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
+    return 0;
 
   snprintf(path,path_len,"%s/%s",Libdir,fname);
-  if(stat(path, &st) == 0) {
-      if((st.st_mode & S_IFMT) == S_IFREG) return 0;
-  }
+  if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
+    return 0;
 
   return -1;
 }

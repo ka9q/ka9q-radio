@@ -33,27 +33,25 @@
 #include "status.h"
 
 
-pthread_t Input_thread;
-
+static pthread_t Input_thread;
 const char *App_path;
+static bool Newline;
+static bool All;
+static int64_t Interval; // nanosec, converted from float seconds
+static int Control_sock;
+static int Status_sock;
+static int Count;
+static char const *Radio;
+static uint32_t Ssrc;
+static int Status_packets;
+static int64_t Last_status_time;
+
+static char Locale[256] = "en_US.UTF-8";
 int Verbose;
-bool Newline;
-bool All;
-int64_t Interval; // nanosec, converted from float seconds
-int Control_sock;
-int Status_sock;
-int Count;
-char *Radio;
-uint32_t Ssrc;
 int IP_tos;
-int Status_packets;
-
-int64_t Last_status_time;
-
-char Locale[256] = "en_US.UTF-8";
 int Mcast_ttl = 5;
-char Optstring[] = "as:c:i:vnr:l:V";
-struct option Options[] = {
+static char Optstring[] = "as:c:i:vnr:l:V";
+static struct option Options[] = {
   {"all", no_argument, NULL, 'a'},
   {"ssrc", required_argument, NULL, 's'},
   {"count", required_argument, NULL, 'c'},
@@ -167,7 +165,7 @@ int main(int argc,char *argv[]){
   int64_t last_command_time = 0;
   for(int i=0; i < Count;i++){
     // Send poll
-    uint8_t cmd_buffer[9000];
+    uint8_t cmd_buffer[PKTSIZE];
     uint8_t *bp = cmd_buffer;
     *bp++ = 1; // Generate command packet
     uint32_t sent_tag = arc4random();
@@ -206,7 +204,7 @@ void usage(void){
 // Process incoming packets
 void *input_thread(void *p){
   while(1){
-    uint8_t buffer[9000];
+    uint8_t buffer[PKTSIZE];
     struct sockaddr_storage source;
     socklen_t len = sizeof(source);
     int length = recvfrom(Status_sock,buffer,sizeof(buffer),0,(struct sockaddr *)&source,&len);

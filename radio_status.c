@@ -35,7 +35,7 @@ int Status_fd;  // File descriptor for receiver status
 int Ctl_fd;     // File descriptor for receiving user commands
 
 
-extern dictionary const *Modetable;
+extern dictionary const *Preset_table;
 
 static int send_radio_status(struct frontend *frontend,struct channel *chan);
 static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
@@ -148,7 +148,7 @@ static void *radio_status_dump(void *p){
 
 
 static int send_radio_status(struct frontend *frontend,struct channel *chan){
-  uint8_t packet[2048];
+  uint8_t packet[PKTSIZE];
 
   Metadata_packets++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
@@ -258,7 +258,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	float const f = decode_float(cp,optlen);
 	if(isfinite(f) && f != chan->filter.min_IF){
 	  chan->filter.min_IF = f;
-	  new_filter_needed = 1;
+	  new_filter_needed = true;
 	}
       }
       break;
@@ -267,7 +267,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	float const f = decode_float(cp,optlen);
 	if(isfinite(f) && chan->filter.max_IF != f){
 	  chan->filter.max_IF = f;
-	  new_filter_needed = 1;
+	  new_filter_needed = true;
 	}
       }
       break;
@@ -276,7 +276,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	  float const f = fabsf(decode_float(cp,optlen));
 	  if(isfinite(f) && chan->filter.kaiser_beta != f)
 	    chan->filter.kaiser_beta = f;
-	  new_filter_needed = 1;
+	  new_filter_needed = true;
 	}
       break;
     case PRESET:
@@ -293,16 +293,16 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	  float const old_shift = chan->tune.shift;
 
 	  if(Verbose > 1)
-	    fprintf(stdout,"command loadmode(ssrc=%u) mode=%s\n",ssrc,chan->preset);
-	  if(loadmode(chan,Modetable,chan->preset) != 0){
+	    fprintf(stdout,"command loadpreset(ssrc=%u) mode=%s\n",ssrc,chan->preset);
+	  if(loadpreset(chan,Preset_table,chan->preset) != 0){
 	    if(Verbose)
-	      fprintf(stdout,"commanded loadmode(ssrc=%u) mode=%sfailed!\n",ssrc,chan->preset);
+	      fprintf(stdout,"command loadpreset(ssrc=%u) mode=%sfailed!\n",ssrc,chan->preset);
 	    break;
 	  }
 	  if(old_shift != chan->tune.shift)
 	    set_freq(chan,chan->tune.freq + chan->tune.shift - old_shift);
 	  if(chan->filter.min_IF != old_low || chan->filter.max_IF != old_high || chan->filter.kaiser_beta != old_kaiser)
-	    new_filter_needed = 1;
+	    new_filter_needed = true;
 
 	  if(chan->demod_type != old_type || chan->output.samprate != old_samprate)
 	    restart_needed = true; // chan changed, ask for a restart
@@ -515,7 +515,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   }
   encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
 
-  // Chanulation mode
+  // Modulation mode
   encode_byte(&bp,DEMOD_TYPE,chan->demod_type);
   {
     int len = strlen(chan->preset);

@@ -35,19 +35,16 @@ struct pcmstream {
   
 };
 
-// Config constants
-int const Bufsize = 9000; // allow for jumbograms
-
 // Command line params
-char const *Mcast_address_text;
-int Quiet;
-int Channels = 1;   // Output channels
+static char const *Mcast_address_text;
+static int Quiet;
+static int Channels = 1;   // Output channels
 const char *App_path;
 int Verbose;
 
-int Input_fd = -1;
-struct pcmstream Pcmstream;
-uint32_t Ssrc; // Requested SSRC
+static int Input_fd = -1;
+static struct pcmstream Pcmstream;
+static uint32_t Ssrc; // Requested SSRC
 
 static int init(struct pcmstream *pc,struct rtp_header const *rtp,struct sockaddr const *sender);
 
@@ -101,7 +98,7 @@ int main(int argc,char *argv[]){
   while(1){
     struct sockaddr sender;
     socklen_t socksize = sizeof(sender);
-    uint8_t buffer[Bufsize];
+    uint8_t buffer[PKTSIZE];
     // Gets all packets to multicast destination address, regardless of sender IP, sender port, dest port, ssrc
     int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&sender,&socksize);
     if(size == -1){

@@ -38,7 +38,7 @@
 #include "config.h"
 
 // Configuration constants & defaults
-static char const DEFAULT_MODE[] = "am";
+static char const DEFAULT_PRESET[] = "am";
 static int const DEFAULT_FFT_THREADS = 2;
 static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
 static int const DEFAULT_MCAST_TTL = 0; // Don't blast LANs with cheap Wifi!
@@ -47,7 +47,9 @@ static int const DEFAULT_OVERLAP = 5;
 
 char const *Iface;
 char const *Data;
-char const *Mode = DEFAULT_MODE;
+char const *Preset = DEFAULT_PRESET;
+char Preset_file[PATH_MAX];
+
 int IP_tos = DEFAULT_IP_TOS;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
 float Blocktime = DEFAULT_BLOCKTIME;
@@ -61,14 +63,12 @@ struct channel *Template;
 char const *Name;
 extern int Nthreads; // owned by filter.c
 
-char const *Modefile = "modes.conf";
-
 // Command line and environ params
 const char *App_path;
 int Verbose;
 static char const *Locale = "en_US.UTF-8";
 dictionary *Configtable; // Configtable file descriptor for iniparser for main radiod config file
-dictionary *Modetable;   // Table of modes, usually in /usr/local/share/ka9q-radio/modes.conf
+dictionary *Preset_table;   // Table of presets, usually in /usr/local/share/ka9q-radio/modes.conf or presets.conf
 volatile bool Stop_transfers = false; // Request to stop data transfers; how should this get set?
 
 static int64_t Starttime;      // System clock at timestamp 0, for RTCP
@@ -257,10 +257,18 @@ static int loadconfig(char const * const file){
   RTCP_enable = config_getboolean(Configtable,global,"rtcp",RTCP_enable);
   SAP_enable = config_getboolean(Configtable,global,"sap",SAP_enable);
   {
-    char const *p = config_getstring(Configtable,global,"mode-file",NULL);
-    if(p != NULL)
-      Modefile = strdup(p); // config_getstring returns a pointer to internal memory that goes away when the dictionary is closed
+
+    // Accept either keyword; "preset" is more descriptive than the old (but still accepted) "mode"
+    char const *p = config_getstring(Configtable,global,"mode-file","presets.conf");
+    p = config_getstring(Configtable,global,"presets-file",p);
+    dist_path(Preset_file,sizeof(Preset_file),p);
+    Preset_table = iniparser_load(Preset_file); // Kept open for duration of program
+    if(Preset_table == NULL){
+      fprintf(stdout,"Can't load preset file %s\n",Preset_file);
+      exit(EX_UNAVAILABLE); // Can't really continue without fixing
+    }
   }
+
   {
     char const *p = config_getstring(Configtable,global,"wisdom-file",NULL);
     if(p != NULL)
@@ -318,29 +326,23 @@ static int loadconfig(char const * const file){
       }
     }
   }
-  if(Modetable == NULL){
-    char modefile[PATH_MAX];
-    dist_path(modefile,sizeof(modefile),Modefile);
-
-    Modetable = iniparser_load(modefile); // Kept open for duration of program
-    if(Modetable == NULL){
-      fprintf(stdout,"Can't load mode file %s\n",modefile);
-      exit(EX_UNAVAILABLE); // Can't really continue without fixing
-    }
-  }
   // Set up template for dynamically created demods
   if(Data != NULL){
-    char const * mode = config_getstring(Configtable,global,"mode",NULL); // Must be specified to create a dynamic channel
-    if(mode != NULL){
+    // Preset/mode must be specified to create a dynamic channel
+    // (Trying to switch from term "mode" to term "preset" as more descriptive)
+    char const * p = config_getstring(Configtable,global,"preset",NULL);
+    char const * preset = config_getstring(Configtable,global,"mode",p); // Must be specified to create a dynamic channel
+    if(preset != NULL){
       Template = create_chan(0);
       if(Template == NULL){
 	fprintf(stdout,"can't create dynamic channel template??\n");
       } else {
 	set_defaults(Template);
-	if(loadmode(Template,Modetable,mode) != 0)
-	  fprintf(stdout,"warning: loadmode(%s,%s) in [global]\n",Modefile,mode);
+	if(loadpreset(Template,Preset_table,preset) != 0)
+	  fprintf(stdout,"warning: loadpreset(%s,%s) in [global]\n",Preset_file,preset);
+	strlcpy(Template->preset,preset,sizeof(Template->preset));
 	
-	loadmode(Template,Configtable,global); // Overwrite with other entries from this section, without overwriting those
+	loadpreset(Template,Configtable,global); // Overwrite with other entries from this section, without overwriting those
 	memcpy(&Template->output.data_dest_address,&Data_dest_address,sizeof(Template->output.data_dest_address));
 	strlcpy(Template->output.data_dest_string,Data,sizeof(Template->output.data_dest_string));
 	Template->output.data_fd = Data_fd;
@@ -363,9 +365,10 @@ static int loadconfig(char const * const file){
     fprintf(stdout,"Processing [%s]\n",sname); // log only if not disabled
     // fall back to setting in [global] if parameter not specified in individual section
     // Set parameters even when unused for the current demodulator in case the demod is changed later
-    char const * mode = config2_getstring(Configtable,Configtable,global,sname,"mode",NULL);
-    if(mode == NULL || strlen(mode) == 0)
-      fprintf(stdout,"warning: mode not specified in [%s] or [global], all parameters must be explicitly set\n",sname);
+    char const * preset = config2_getstring(Configtable,Configtable,global,sname,"mode",NULL);
+    preset = config2_getstring(Configtable,Configtable,global,sname,"preset",preset);
+    if(preset == NULL || strlen(preset) == 0)
+      fprintf(stdout,"warning: preset/mode not specified in [%s] or [global], all parameters must be explicitly set\n",sname);
 
     // Override [global] settings with section settings
     char const *data = config_getstring(Configtable,sname,"data",NULL);
@@ -453,10 +456,11 @@ static int loadconfig(char const * const file){
 	}
 	// Set reasonable compiled-in defaults just to keep things from blowing up
 	set_defaults(chan);
-	if(mode != NULL && loadmode(chan,Modetable,mode) != 0)
-	  fprintf(stdout,"warning: in [%s], loadmode(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Modefile,mode);
+	if(preset != NULL && loadpreset(chan,Preset_table,preset) != 0)
+	  fprintf(stdout,"warning: in [%s], loadpreset(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Preset_file,preset);
 	
-	loadmode(chan,Configtable,sname); // Overwrite with other entries from this section, without overwriting those
+	strlcpy(chan->preset,preset,sizeof(chan->preset));
+	loadpreset(chan,Configtable,sname); // Overwrite with other entries from this section, without overwriting those
 	
 	memcpy(&chan->output.data_dest_address,&data_dest_address,sizeof(chan->output.data_dest_address));
 	strlcpy(chan->output.data_dest_string,data,sizeof(chan->output.data_dest_string));

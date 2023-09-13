@@ -48,14 +48,13 @@ struct session {
 
 
 // Global config variables
-int const Bufsize = 1540;     // Maximum samples/words per RTP packet - must be smaller than Ethernet MTU
 // Each block of stereo output @ 48kHz must fit in an ethernet packet
 // 5 ms * 48000 = 240 stereo frames; 240 * 2 * 2 = 960 bytes
-float Blocktime = 5; // milliseconds
-int In_samprate = 384000;         // Composite input rate
-int Out_samprate = 48000;         // stereo output rate
-float Kaiser_beta = 3.5 * M_PI;
-float const SCALE = 1./INT16_MAX;
+static float Blocktime = 5; // milliseconds
+static int In_samprate = 384000;         // Composite input rate
+static int Out_samprate = 48000;         // stereo output rate
+static float Kaiser_beta = 3.5 * M_PI;
+static float const SCALE = 1./INT16_MAX;
 
 // Command line params
 const char *App_path;
@@ -64,17 +63,17 @@ int Mcast_ttl = 10;           // our multicast output is frequently routed
 int IP_tos = 48; // AF12 << 2
 
 // Global variables
-int Status_fd = -1;           // Reading from radio status
-int Status_out_fd = -1;       // Writing to radio status
-int Input_fd = -1;            // Multicast receive socket
-int Output_fd = -1;           // Multicast send socket
-char *Input;
-char *Output;
-char *Status;
-char *Name = "rds";
-struct session *Audio;
-pthread_mutex_t Audio_protect = PTHREAD_MUTEX_INITIALIZER;
-uint64_t Output_packets;
+static int Status_fd = -1;           // Reading from radio status
+static int Status_out_fd = -1;       // Writing to radio status
+static int Input_fd = -1;            // Multicast receive socket
+static int Output_fd = -1;           // Multicast send socket
+static char const *Input;
+//static char const *Output;
+static char const *Status;
+static char const *Name = "rds";
+static struct session *Audio;
+static pthread_mutex_t Audio_protect = PTHREAD_MUTEX_INITIALIZER;
+static uint64_t Output_packets;
 
 void closedown(int);
 struct session *lookup_session(const struct sockaddr *,uint32_t);
@@ -84,7 +83,7 @@ int send_samples(struct session *sp);
 void *input(void *arg);
 void *decode(void *arg);
 
-struct option Options[] =
+static struct option Options[] =
   {
    {"iface", required_argument, NULL, 'A'},
    {"pcm-in", required_argument, NULL, 'I'},
@@ -97,14 +96,14 @@ struct option Options[] =
    {NULL, 0, NULL, 0},
   };
    
-char Optstring[] = "A:I:N:S:T:vp:";
+static char Optstring[] = "A:I:N:S:T:vp:";
 
-struct sockaddr_storage Status_dest_address;
-struct sockaddr_storage Status_input_source_address;
-struct sockaddr_storage Local_status_source_address;
-struct sockaddr_storage PCM_dest_address;
-struct sockaddr_storage Stereo_source_address;
-struct sockaddr_storage Stereo_dest_address;
+static struct sockaddr_storage Status_dest_address;
+static struct sockaddr_storage Status_input_source_address;
+static struct sockaddr_storage Local_status_source_address;
+static struct sockaddr_storage PCM_dest_address;
+static struct sockaddr_storage Stereo_source_address;
+static struct sockaddr_storage Stereo_dest_address;
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
@@ -274,13 +273,12 @@ int main(int argc,char * const argv[]){
   }
 }
 
-
 // There's one of these threads per input multicast group, possibly with many SSRCs
 // Process incoming RTP packets, demux to per-SSRC thread
 // Warning: the input() thread allocates memory for packet buffers and passes them to the decode() thread
 // The decode thread must free these buffers to avoid a memory leak
 void *input(void *arg){
-  char *mcast_address_text = (char *)arg;
+  char const *mcast_address_text = (char *)arg;
   
   {
     char pname[16];
@@ -502,6 +500,7 @@ void *decode(void *arg){
       }
       dp = (uint8_t *)wp;
       int const r = send(Output_fd,&packet,dp - packet,0);
+      Output_packets++;
       if(r <= 0){
 	perror("pcm send");
 	abort();
