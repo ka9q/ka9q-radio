@@ -448,12 +448,12 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   enum libusb_speed usb_speed = libusb_get_device_speed(dev);
   // fv
   if(usb_speed < N_USB_SPEEDS)
-    fprintf(stdout,"USB speed: %s\n",usb_speeds[usb_speed]);
+    fprintf(stdout,"rx888 USB speed: %s\n",usb_speeds[usb_speed]);
   else
-    fprintf(stdout,"Unknown USB speed index %d\n",usb_speed);
+    fprintf(stdout,"Unknown rx888 USB speed index %d\n",usb_speed);
 
   if(usb_speed < LIBUSB_SPEED_SUPER){
-    fprintf(stdout,"USB device is not at least SuperSpeed; is it plugged into a blue USB jack?\n");
+    fprintf(stdout,"rx888 USB device is not at least SuperSpeed; is it plugged into a blue USB jack?\n");
     return -1;
   }
   libusb_get_config_descriptor(dev, 0, &sdr->config);
