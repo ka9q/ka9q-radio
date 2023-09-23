@@ -98,24 +98,24 @@ that's 4/(5 * 20 ms) = 40 Hz. This covers all the usual standard sample rates.
 
 Set the number of output channels. Forced to 1 for FM modes, 2 for WFM
 (Wideband broadcast FM). In linear mode with envelope detection
-disabled, 2 implies I/Q output. With envelope detection enabled, 2
-channels places the linear output on the left channel and the evelope
+disabled, ***channels = 2*** implies I/Q output. With envelope detection enabled,
+***channels = 2*** places the linear output on the left channel and the evelope
 detector output on the right channel.  This is for experimentation
 with automatic SSB tuning algorithms that use envelope detection to
 determine voice pitch frequencies.
 
-### stereo = y|n
+### stereo = y
 
 Equivalent to **channels = 2**.
 
-### mono = y|n
+### mono = y
 
 Equivalent to **channels = 1**.
 
 ### kaiser-beta = 11.0
 
-Sets the Kaiser window beta
-parameter for filter generation. Larger values give better sidelobe
+Sets the [Kaiser window](https://en.wikipedia.org/wiki/Kaiser_window)
+beta parameter for filter generation. Larger values give better sidelobe
 suppression while smaller values narrow the main lobe (i.e., give
 faster transitions between passband and stopband). Don't be tempted to
 lower this parameter too much, as windowing also prevents aliasing
@@ -127,7 +127,7 @@ use a larger **blocksize** or a smaller **overlap** factor (e.g., 2) in the [glo
 
 Sets the lower edge of the predetection filter passband.
 
-### high = +5000)
+### high = +5000
 
 Sets the upper edge of the predetection filter passband.
 
