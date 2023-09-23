@@ -85,8 +85,8 @@ void *radio_status(void *arg){
 	if(chan == NULL){
 	  if((chan = setup_chan(ssrc)) == NULL){ // possible race here?
 	    // Creation failed, e.g., no output stream
-	    fprintf(stdout,"Dynamic create of ssrc %u failed\n",ssrc);
-	    continue;    // Should this be fatal?
+	    fprintf(stdout,"Dynamic create of ssrc %u failed; is 'data =' set in [global]?\n",ssrc);
+	    continue;
 	  } else {
 	    start_demod(chan);
 	    if(Verbose)
