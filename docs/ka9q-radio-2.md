@@ -34,7 +34,7 @@ Six SDR front ends are currently supported in *ka9q-radio*:
 [funcube](funcube.md) - AMSAT UK Funcube Pro+ dongle  
 [rx888](rx888.md) - RX888 Mkii (direct conversion only)  
 [rtlsdr](rtlsdr.md) - Generic RTL-SDR dongle (VHF/UHF only)  
-[sig_gen][sig_gen.md] - synthetic front end with signal generator (to be documented)
+[sig_gen](sig_gen.md) - synthetic front end with signal generator (to be documented)
 
 The configuration of each device type is necessarily
 hardware-dependent, so separate documents describe the options unique
