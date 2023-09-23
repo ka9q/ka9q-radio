@@ -27,9 +27,7 @@ the device type, but this is not required.
 Supported Hardware
 ------------------
 
-Six devices are currently supported in *ka9q-radio*:
-
-The following SDR front ends are currently supported:
+Six SDR front ends are currently supported in *ka9q-radio*:
 
 [airspy](airspy.md) - Airspy R2, Airspy Mini]  
 [airspyhf](airspy.md) - Airspy HF+  
