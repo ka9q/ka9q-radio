@@ -173,7 +173,7 @@ setting minimizes clipping on signals with the usual Gaussian (noise like) stati
 
 ### shift = 0
 
-** Sets the frequency shift applied after
+Sets the frequency shift applied after
 downconversion, baseband filtering and PLL tracking, if enabled. Not
 the same as offsetting the predetection filter and adjusting the
 tuning frequency to compensate because those operations are performed
