@@ -27,7 +27,7 @@ the device type, but this is not required.
 Supported Hardware
 ------------------
 
-Five devices are currently supported in *ka9q-radio*:
+Six devices are currently supported in *ka9q-radio*:
 
 The following SDR front ends are currently supported:
 
@@ -35,19 +35,26 @@ The following SDR front ends are currently supported:
 [airspyhf](airspy.md) - Airspy HF+  
 [funcube](funcube.md) - AMSAT UK Funcube Pro+ dongle  
 [rx888](rx888.md) - RX888 Mkii (direct conversion only)  
-[rtlsdr](rtlsdr.md) - Generic RTL-SDR dongle (VHF/UHF only)
+[rtlsdr](rtlsdr.md) - Generic RTL-SDR dongle (VHF/UHF only)  
+[sig_gen][sig_gen.md] - synthetic front end with signal generator (to be documented)
 
 The configuration of each device type is necessarily
 hardware-dependent, so separate documents describe the options unique
 to each one. Only the parameters common to all of them are described
 here. In most cases, the default hardware-specific options need not be changed.
 
-### device = (airspy|airspyhf|funcube|rx888|rtlsdr, no default, required)
+### device = {airspy|airspyhf|funcube|rx888|rtlsdr|sig_gen} (no default, required)
 
 Select the front end hardware type. If there is only one such device
 on a system, it will automatically be selected. If there's more than one,
-it can usually be selected by serial number. Some devices do not have serial
+it can usually be selected by serial number.
+
+The funcube does not have serial
 numbers so this is not possible.
+
+Support for multiple rx888s (which has serial numbers) is not yet supported.
+I don't recommend more than one per system because of the heavy load they place on the USB controller.
+Each rx888 running at full sample rate generates a little over 2 Gb/s of data.x
 
 
 ### description = (no default, optional but recommended)
