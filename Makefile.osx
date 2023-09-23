@@ -77,13 +77,13 @@ rdsd: rdsd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread
 
 setfilt: setfilt.o libradio.a
-	$(CC) -g -o $@ $^ -lm -lpthread -lm
+	$(CC) -g -o $@ $^ -lm -lpthread
 
 show-pkt: show-pkt.o libradio.a
-	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread -lm
+	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread
 
 show-sig: show-sig.o libradio.a
-	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread -lm
+	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread
 
 stereod: stereod.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread    
