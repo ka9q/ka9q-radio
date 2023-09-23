@@ -203,7 +203,7 @@ default **headroom** setting of -15 dBFS, noise will thus appear at
 
 Linear demodulator only (the FM and
 WFM demodulators force this to fixed values depending on the
-predetection bandwidth.) This is the gain in dB applied to the output of the
+predetection bandwidth and the ***headroom*** setting.) This is the gain in dB applied to the output of the
 linear demodulator before transmission to the output data stream. With
 the AGC on, this value only sets the initial value before the AGC
 operates. It should be chosen to avoid either loud momentary bursts (from being set too high) or
