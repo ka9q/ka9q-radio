@@ -96,20 +96,24 @@ struct channel *create_chan(uint32_t ssrc){
 
 // Set up newly created dynamic channel
 struct channel *setup_chan(uint32_t ssrc){
-  struct channel *chan = create_chan(ssrc);
-  if(chan != NULL){
-    // Copy dynamic template
-    // Although there are some pointers in here (filter.out, filter.energies), they're all NULL until the chan actually starts
-    memcpy(chan,Template,sizeof(*chan));
-    chan->output.rtp.ssrc = ssrc; // Put it back after getting smashed to 0 by memcpy
-    chan->lifetime = 20; // If freq == 0, goes away 20 sec after last command
+  if(Template == NULL)
+    return NULL; // No dynamic channel template was created
 
-    // Get the local socket for the output stream
-    struct sockaddr_storage data_source_address;
-    {
-      socklen_t len = sizeof(data_source_address);
-      getsockname(chan->output.data_fd,(struct sockaddr *)&chan->output.data_source_address,&len);
-    }
+  struct channel * const chan = create_chan(ssrc);
+  if(chan == NULL)
+    return NULL;
+
+  // Copy dynamic template
+  // Although there are some pointers in here (filter.out, filter.energies), they're all NULL until the chan actually starts
+  memcpy(chan,Template,sizeof(*chan));
+  chan->output.rtp.ssrc = ssrc; // Put it back after getting smashed to 0 by memcpy
+  chan->lifetime = 20; // If freq == 0, goes away 20 sec after last command
+  
+  // Get the local socket for the output stream
+  struct sockaddr_storage data_source_address;
+  {
+    socklen_t len = sizeof(data_source_address);
+    getsockname(chan->output.data_fd,(struct sockaddr *)&chan->output.data_source_address,&len);
   }
   return chan;
 }
