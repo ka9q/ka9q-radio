@@ -1,7 +1,7 @@
 Configuring and Running *ka9q-radio - Part 2
 ============================================
 
-v1.0 (in progress), August 2023  
+v1.0 (in progress), September 2023  
 Phil Karn, KA9Q
 ---------------
 
