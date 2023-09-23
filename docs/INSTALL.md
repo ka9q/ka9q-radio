@@ -1,5 +1,5 @@
 Installing ka9q-radio  
-September 7, 2023, KA9Q
+September 22, 2023, KA9Q
 =====================
 This package is designed for Debian Linux, including the Raspberry Pi
 OS. Since I use a Macbook Pro as my desktop, some of it (e.g., the
@@ -45,7 +45,7 @@ This will write into the following directories:
 /etc/sysctl.d	    		   system configuration files (e.g., 98-sockbuf.conf)  
 /etc/udev/rules.d		   device daemon rule files (e.g., 52-airspy.rules)  
 /etc/fftw			   FFTW "wisdom" files (i.e., wisdomf)  
-/etc/radio			   program config files (e.g., radio@2m.conf)
+/etc/radio			   program config files (e.g., radio@2m.conf - but *will not* overwrite existing files)
 
 It will also create several special system users and groups so that
 the daemons don't have to run with root permissions. I recommend that
@@ -57,8 +57,8 @@ $ sudo addgroup your_user_name radio
 
 Membership in a few other groups can minimize the need to run as root:
 
-**adm** Look at */var/log/syslog
-**plugdev** Run *radiod* under a debugger with most devices
+**adm** Look at */var/log/syslog  
+**plugdev** Run *radiod* under a debugger with most devices  
 **users** Run *radiod* under a debugger with the Funcube dongle
 
 And of course you need to be a member of the **sudo** group to execute programs as root.
