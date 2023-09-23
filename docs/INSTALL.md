@@ -78,6 +78,7 @@ The configuration options, including the rarely used esoteric ones,  are fully d
 [ka9q-radio-3.md](ka9q-radio-3.md) - Setting up static radio channels
 
 Running *radiod*
+----------------
 
 (Move *systemd* control command descriptions from ka9q-radio.md to here.)
 
