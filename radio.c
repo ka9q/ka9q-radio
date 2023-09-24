@@ -215,7 +215,7 @@ int start_demod(struct channel * chan){
     return -1;
 
   if(Verbose){
-    fprintf(stdout,"start_demod: ssrc %u, output %s, chan %d, freq %.3lf, preset %s, filter %.0f - %.0f\n",
+    fprintf(stdout,"start_demod: ssrc %u, output %s, demod %d, freq %.3lf, preset %s, filter %+.0f - %+.0f\n",
 	    chan->output.rtp.ssrc, chan->output.data_dest_string, chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
   }
   // Stop previous channel, if any
