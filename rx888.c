@@ -445,21 +445,15 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
 	fprintf(stdout,", serial '%s'",serial);
       }
     }
-    // Is this the droid we're looking for?
-    uint64_t serialnum = strtoll(serial,NULL,16);
-    if(sdr->serial == 0 || sdr->serial == serialnum){
-      // Either the user didn't specify a serial, or this is the one he did; use it
-      fprintf(stdout,", selected\nloading rx888 firmware file %s",full_firmware_file);
-      if(ezusb_load_ram(handle,full_firmware_file,FX_TYPE_FX3,IMG_TYPE_IMG,1) == 0){
-	fprintf(stdout,", done\n");
-	sleep(1); // how long should this be?
-      } else {
-	fprintf(stdout,", failed for device %d.%d (logical)\n",
-		libusb_get_bus_number(device),libusb_get_device_address(device));
-      }
-    } else
-      fprintf(stdout,"\n");
-
+    // The proper serial number doesn't appear until the device is loaded with firmware, so load all we find
+    fprintf(stdout,", loading rx888 firmware file %s",full_firmware_file);
+    if(ezusb_load_ram(handle,full_firmware_file,FX_TYPE_FX3,IMG_TYPE_IMG,1) == 0){
+      fprintf(stdout,", done\n");
+      sleep(1); // how long should this be?
+    } else {
+      fprintf(stdout,", failed for device %d.%d (logical)\n",
+	      libusb_get_bus_number(device),libusb_get_device_address(device));
+    }
     libusb_close(handle);
     handle = NULL;
   }
