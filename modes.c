@@ -139,8 +139,6 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   chan->filter.kaiser_beta = config_getfloat(table,sname,"kaiser-beta",chan->filter.kaiser_beta);
 
   // Pre-detection filter limits
-  chan->filter.min_IF = DEFAULT_LOW;
-  chan->filter.max_IF = DEFAULT_HIGH;
   {
     char const *low = config_getstring(table,sname,"low",NULL);
     if(low != NULL)
@@ -172,7 +170,6 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     if(cp)
       chan->output.headroom = dB2voltage(-fabsf(strtof(cp,NULL))); // always treat as <= 0 dB
   }
-  chan->tune.shift = 0;
   {
     char const *p = config_getstring(table,sname,"shift",NULL);
     if(p != NULL)

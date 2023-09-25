@@ -27,7 +27,7 @@ aprsfeed: aprsfeed.o libradio.a
 	$(CC) -g -o $@ $^ -lm -lpthread
 
 control: control.o modes.o bandplan.o libradio.a
-	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread -lm
+	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread
 
 cwd: cwd.o morse.o libradio.a
 	$(CC) -g -o $@ $^ -lm
