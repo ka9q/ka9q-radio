@@ -467,9 +467,10 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   device_list = NULL;
   
   // Scan list again, looking for a loaded device
+  libusb_device *device = NULL;
   dev_count = libusb_get_device_list(NULL,&device_list);
   for(int i=0; i < dev_count; i++){
-    libusb_device *device = device_list[i];
+    device = device_list[i];
     if(device == NULL)
       break; // End of list
 
@@ -516,16 +517,29 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       fprintf(stdout,", selected\n");
       sdr->dev_handle = handle;
       break;
-    } else {
-      fprintf(stdout,"\n");
-      fprintf(stdout,"Error or device could not be found\n");
-      libusb_close(handle);
-      handle = NULL;
-      goto close;
     }
+    fprintf(stdout,"\n"); // Not selected; close and keep looking
+    libusb_close(handle);
+    handle = NULL;
   }
   libusb_free_device_list(device_list,1);
   device_list = NULL;
+
+  // If a device has been found, device and dev_handle will be non-NULL
+  if(device == NULL || sdr->dev_handle == NULL){
+    fprintf(stdout,"Error or device could not be found\n");
+    goto end;
+  }
+  enum libusb_speed usb_speed = libusb_get_device_speed(device);
+  if(usb_speed < N_USB_SPEEDS)
+    fprintf(stdout,"rx888 USB speed: %s\n",usb_speeds[usb_speed]);
+  else
+    fprintf(stdout,"Unknown rx888 USB speed index %d\n",usb_speed);
+
+  if(usb_speed < LIBUSB_SPEED_SUPER){
+    fprintf(stdout,"rx888 USB device is not at least SuperSpeed; is it plugged into a blue USB jack?\n");
+    return -1;
+  }
 
   // Stop and reopen in case it was left running - KA9Q
   usleep(5000);
@@ -543,24 +557,11 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       ret = libusb_detach_kernel_driver(sdr->dev_handle,0);
       if(ret != 0){
 	fprintf(stdout,"Could not detach kernel driver from an interface\n");
-	goto close;
+	goto end;
       }
     }
   }
-  struct libusb_device *dev = libusb_get_device(sdr->dev_handle);
-  assert(dev != NULL);
-  enum libusb_speed usb_speed = libusb_get_device_speed(dev);
-  // fv
-  if(usb_speed < N_USB_SPEEDS)
-    fprintf(stdout,"rx888 USB speed: %s\n",usb_speeds[usb_speed]);
-  else
-    fprintf(stdout,"Unknown rx888 USB speed index %d\n",usb_speed);
-
-  if(usb_speed < LIBUSB_SPEED_SUPER){
-    fprintf(stdout,"rx888 USB device is not at least SuperSpeed; is it plugged into a blue USB jack?\n");
-    return -1;
-  }
-  libusb_get_config_descriptor(dev, 0, &sdr->config);
+  libusb_get_config_descriptor(device, 0, &sdr->config);
   {
     int const ret = libusb_claim_interface(sdr->dev_handle, 0);
     if(ret != 0){
@@ -585,44 +586,40 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     sdr->pktsize = endpointDesc->wMaxPacketSize * (ep_comp->bMaxBurst + 1);
     libusb_free_ss_endpoint_companion_descriptor(ep_comp);
   }
-  bool allocfail = false;
   sdr->databuffers = (u_char **)calloc(queuedepth,sizeof(u_char *));
-  sdr->transfers = (struct libusb_transfer **)calloc(queuedepth,sizeof(struct libusb_transfer *));
-
-  if((sdr->databuffers != NULL) && (sdr->transfers != NULL)){
-    for(unsigned int i = 0; i < queuedepth; i++){
-      sdr->databuffers[i] = (u_char *)malloc(reqsize * sdr->pktsize);
-      sdr->transfers[i] = libusb_alloc_transfer(0);
-      if((sdr->databuffers[i] == NULL) || (sdr->transfers[i] == NULL)) {
-        allocfail = true;
-        break;
-      }
-    }
-  } else {
-    allocfail = true;
+  if(sdr->databuffers == NULL){
+    fprintf(stdout,"Failed to allocate data buffers\n");
+    goto end;
   }
-
-  if(allocfail) {
-    fprintf(stdout,"Failed to allocate buffers and transfers\n");
-    // Is it OK if one or both of these is already null?
-    free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
-    sdr->databuffers = NULL;
-    sdr->transfers = NULL;
-    return -1;
+  sdr->transfers = (struct libusb_transfer **)calloc(queuedepth,sizeof(struct libusb_transfer *));
+  if(sdr->transfers == NULL){
+    fprintf(stdout,"Failed to allocate transfer buffers\n");
+    goto end;
+  }
+  for(unsigned int i = 0; i < queuedepth; i++){
+    sdr->databuffers[i] = (u_char *)malloc(reqsize * sdr->pktsize);
+    if(sdr->databuffers[i] == NULL)
+      goto end;
+    sdr->transfers[i] = libusb_alloc_transfer(0);
   }
   sdr->queuedepth = queuedepth;
   sdr->reqsize = reqsize;
   return 0;
 
-end:
-  if(sdr->dev_handle)
+end:;
+  free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
+
+  FREE(sdr->transfers);
+  FREE(sdr->databuffers);
+
+  if(sdr->dev_handle != NULL)
     libusb_release_interface(sdr->dev_handle,0);
+  sdr->dev_handle = NULL;
 
   if(sdr->config)
     libusb_free_config_descriptor(sdr->config);
   sdr->config = NULL;
 
-close:
   if(sdr->dev_handle)
     libusb_close(sdr->dev_handle);
   sdr->dev_handle = NULL;
