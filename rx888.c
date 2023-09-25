@@ -538,7 +538,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
 
   if(usb_speed < LIBUSB_SPEED_SUPER){
     fprintf(stdout,"rx888 USB device is not at least SuperSpeed; is it plugged into a blue USB jack?\n");
-    return -1;
+    goto end;
   }
 
   // Stop and reopen in case it was left running - KA9Q
@@ -580,7 +580,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     int const rc = libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
     if(rc != 0){
       fprintf(stdout,"libusb_get_ss_endpoint_companion_descriptor returned: %s (%d)\n",libusb_error_name(rc),rc);
-      return -1;
+      goto end;
     }
     assert(ep_comp != NULL);
     sdr->pktsize = endpointDesc->wMaxPacketSize * (ep_comp->bMaxBurst + 1);
