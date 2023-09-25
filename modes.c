@@ -31,7 +31,6 @@ int Ndemod = sizeof(Demodtab)/sizeof(struct demodtab);
 
 static enum demod_type DEFAULT_DEMOD = LINEAR_DEMOD;
 static int   const DEFAULT_LINEAR_SAMPRATE = 12000;
-static int   const DEFAULT_FM_SAMPRATE = 24000;
 static float const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
 static float const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
 static float const DEFAULT_HIGH = 5000.0;
@@ -44,10 +43,13 @@ static float const DEFAULT_GAIN = 50.0;         // Unused in FM, usually adjuste
 static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
 static float const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
 static int   const DEFAULT_SQUELCHTAIL = 1;        // close on frame *after* going below threshold, may let partial frame noise through
+#if 0
+static int   const DEFAULT_FM_SAMPRATE = 24000;
 static float const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
 static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
 static float const DEFAULT_FM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
 static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
+#endif
 
 
 int demod_type_from_name(char const *name){
@@ -69,7 +71,6 @@ char const *demod_name_from_type(enum demod_type type){
 int set_defaults(struct channel *chan){
   if(chan == NULL)
     return -1;
-
   
   chan->output.data_fd = -1; // Force error if it's not set
   chan->tp1 = chan->tp2 = NAN;
@@ -102,34 +103,7 @@ int set_defaults(struct channel *chan){
   chan->filter.isb = false;
   chan->linear.loop_bw = DEFAULT_PLL_BW;
   chan->linear.agc = true;
-  switch(chan->demod_type){
-  case LINEAR_DEMOD:
-    chan->output.samprate = DEFAULT_LINEAR_SAMPRATE;
-    break;
-  case FM_DEMOD:
-    chan->output.samprate = DEFAULT_FM_SAMPRATE;
-    {
-      float tc = DEFAULT_NBFM_TC * 1e-6F;
-      chan->deemph.rate = expf(-1.0F / (tc * chan->output.samprate));
-      chan->deemph.gain = dB2voltage(DEFAULT_FM_DEEMPH_GAIN);
-    }
-    chan->fm.tone_freq = 0; // No default PL tone
-    break;
-  case WFM_DEMOD:
-    chan->output.channels = 2;      // always stereo
-    chan->output.samprate = 384000; // downconverter samprate forced for FM stereo decoding. Output also forced to 48 kHz
-    {
-      // Default 75 microseconds for north american FM broadcasting
-      float tc = DEFAULT_WFM_TC * 1e-6F;
-      chan->deemph.rate = expf(-1.0F / (tc * 48000)); // hardwired output sample rate -- needs cleanup
-      chan->deemph.gain = dB2voltage(DEFAULT_WFM_DEEMPH_GAIN);
-    }
-    break;
-  case SPECT_DEMOD:
-    chan->output.channels = 0;
-    chan->output.samprate = 0;
-    break;
-  }
+  chan->output.samprate = DEFAULT_LINEAR_SAMPRATE;
   double r = remainder(Blocktime * chan->output.samprate * .001,1.0);
   if(r != 0){
     fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
@@ -147,16 +121,16 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   char const * demod_name = config_getstring(table,sname,"demod",NULL);
   if(demod_name){
     int const x = demod_type_from_name(demod_name);
-    if(chan->demod_type >= 0){
+    if(chan->demod_type >= 0)
       chan->demod_type = x;
-    }
   }
-  chan->output.samprate = DEFAULT_LINEAR_SAMPRATE; // Make sure it gets set to *something*
   {
     char const *p = config_getstring(table,sname,"samprate",NULL);
     if(p != NULL)
       chan->output.samprate = parse_frequency(p,false);
   }
+  if(chan->output.samprate == 0)
+      chan->output.samprate = DEFAULT_LINEAR_SAMPRATE; // Make sure it gets set to *something*, even if wrong (e.g. for FM)
   chan->output.channels = config_getint(table,sname,"channels",chan->output.channels);
   if(config_getboolean(table,sname,"mono",0))
     chan->output.channels = 1;
