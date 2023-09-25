@@ -20,7 +20,7 @@ DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 
 EXECS=monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded wd-record
 
-AFILES=bandplan.txt help.txt id.txt monitor-help.txt SDDC_FX3.img modes.conf
+AFILES=bandplan.txt help.txt id.txt monitor-help.txt SDDC_FX3.img presets.conf
 
 SYSTEMD_FILES=cwd.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service ft8-decoded.service
 

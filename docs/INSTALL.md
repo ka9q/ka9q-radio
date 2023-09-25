@@ -1,5 +1,5 @@
 Installing ka9q-radio  
-September 22, 2023, KA9Q
+September 24, 2023, KA9Q
 =====================
 This package is designed for Debian Linux, including the Raspberry Pi
 OS. Since I use a Macbook Pro as my desktop, some of it (e.g., the
@@ -40,7 +40,7 @@ This will write into the following directories:
 /usr/local/sbin	     	 	   daemon binaries (e.g., 'radiod')  
 /usr/local/bin		 	   application programs (e.g., 'control')  
 /usr/local/share/ka9q-radio	   support files (e.g., 'modes.conf')  
-/var/lib/ka9q-radio		   application state files (e.g., tune-*)  
+/var/lib/ka9q-radio		   application state files (e.g., tune-\*)  
 /etc/systemd/system  		   systemd unit files (e.g., radio@.service)  
 /etc/sysctl.d	    		   system configuration files (e.g., 98-sockbuf.conf)  
 /etc/udev/rules.d		   device daemon rule files (e.g., 52-airspy.rules)  
