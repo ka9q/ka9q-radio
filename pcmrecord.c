@@ -450,7 +450,7 @@ static int close_file(struct session **spp){
     fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
     fflush(sp->fp);
     if(Verbose && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
-      printf("file %s dupes %llu drops %llu\n",sp->filename,sp->rtp_state.dupes,sp->rtp_state.drops);
+      printf("file %s dupes %llu drops %llu\n",sp->filename,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
   } else {
     unlink(sp->filename);
     if(Verbose)
