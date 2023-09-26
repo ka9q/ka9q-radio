@@ -19,6 +19,7 @@
 #include <poll.h>
 #include <sysexits.h>
 #include <signal.h>
+#include <getopt.h>
 
 #include "misc.h"
 #include "attr.h"
@@ -90,7 +91,7 @@ const char *App_path;
 int Verbose;
 static char PCM_mcast_address_text[256];
 static char const *Recordings = ".";
-static int Subdirs; // Place recordings in subdirectories by SSID
+static bool Subdirs; // Place recordings in subdirectories by SSID
 
 
 static int Input_fd;
@@ -103,6 +104,20 @@ static void cleanup(void);
 static struct session *create_session(struct rtp_header const *, struct sockaddr const *sender);
 static int close_file(struct session **spp);
 
+static struct option Options[] = {
+    {"directory", required_argument, NULL, 'd'},
+    {"subdirectories", no_argument, NULL, 's'},
+    {"minfiletime", required_argument, NULL, 'm'},
+    {"locale", required_argument, NULL, 'l'},
+    {"verbose", no_argument, NULL, 'v'},
+    {"timeout", required_argument, NULL, 't'},
+    {"lengthlimit", required_argument, NULL, 'L'},
+    {"version", no_argument, NULL, 'V'},
+    {NULL, no_argument, NULL, 0},
+};
+static char Optstring[] = "d:l:vt:m:sVL:";
+
+
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -110,12 +125,13 @@ int main(int argc,char *argv[]){
   char const *locale = getenv("LANG");
   setlocale(LC_ALL,locale);
 
+
   // Defaults
   int c;
-  while((c = getopt(argc,argv,"d:l:vt:m:sVL:")) != EOF){
+  while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != EOF){
     switch(c){
     case 's':
-      Subdirs = 1;
+      Subdirs = true;
       break;
     case 'd':
       Recordings = optarg;
@@ -144,7 +160,7 @@ int main(int argc,char *argv[]){
       VERSION();
       exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-l locale] [-L maxtime] [-t timeout] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
       exit(EX_USAGE);
       break;
     }
