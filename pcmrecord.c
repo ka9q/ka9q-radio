@@ -205,7 +205,7 @@ int main(int argc,char *argv[]){
 
 static void closedown(int a){
   if(Verbose)
-    fprintf(stderr,"iqrecord: caught signal %d: %s\n",a,strsignal(a));
+    fprintf(stderr,"%s: caught signal %d: %s\n",App_path,a,strsignal(a));
 
   cleanup();
   exit(EX_SOFTWARE);  // Will call cleanup()

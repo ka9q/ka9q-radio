@@ -19,17 +19,26 @@
 #include "radio.h"
 
 #define PCM_BUFSIZE 480        // 16-bit word count; must fit in Ethernet MTU
-#define PACKETSIZE 2048        // Somewhat larger than Ethernet MTU
+#define PACKETSIZE 65536        // Somewhat larger than Ethernet MTU
 
 // Send 'size' stereo samples, each in a pair of floats
 int send_stereo_output(struct channel * restrict const chan,float const * restrict buffer,int size,bool const mute){
-
   if(mute){
     // Increment timestamp
     chan->output.rtp.timestamp += size; // Increase by sample count
     chan->output.silent = true;
     return 0;
   }
+
+  int pcm_bufsize = PCM_BUFSIZE; // Default for non-linux systems
+#ifdef IP_MTU
+  {
+    int mtu;
+    socklen_t size = sizeof(mtu);
+    getsockopt(chan->output.data_fd,IPPROTO_IP,IP_MTU,&mtu,&size);
+    pcm_bufsize = (mtu - 100) / 2; // allow 100 bytes for headers
+  }
+#endif
 
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
@@ -38,7 +47,7 @@ int send_stereo_output(struct channel * restrict const chan,float const * restri
   rtp.ssrc = chan->output.rtp.ssrc;
 
   while(size > 0){
-    int chunk = min(PCM_BUFSIZE,2*size);
+    int chunk = min(pcm_bufsize,2*size);
     // If packet is all zeroes, don't send it but still increase the timestamp
     rtp.timestamp = chan->output.rtp.timestamp;
     chan->output.rtp.timestamp += chunk/2; // Increase by sample count
@@ -72,6 +81,16 @@ int send_mono_output(struct channel * restrict const chan,float const * restrict
     chan->output.silent = true;
     return 0;
   }
+  int pcm_bufsize = PCM_BUFSIZE; // Default for non-linux systems
+#ifdef IP_MTU
+  {
+    int mtu;
+    socklen_t size = sizeof(mtu);
+    getsockopt(chan->output.data_fd,IPPROTO_IP,IP_MTU,&mtu,&size);
+    pcm_bufsize = (mtu - 100) / 2; // allow 100 bytes for headers
+  }
+#endif
+
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
   rtp.version = RTP_VERS;
@@ -79,7 +98,7 @@ int send_mono_output(struct channel * restrict const chan,float const * restrict
   rtp.ssrc = chan->output.rtp.ssrc;
 
   while(size > 0){
-    int chunk = min(PCM_BUFSIZE,size); // # of mono samples (frames)
+    int chunk = min(pcm_bufsize,size); // # of mono samples (frames)
 
     // If packet is muted, don't send it but still increase the timestamp
     rtp.timestamp = chan->output.rtp.timestamp;
