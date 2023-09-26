@@ -221,9 +221,8 @@ static void input_loop(){
       if(size < RTP_MIN_SIZE)
 	continue; // Too small for RTP, ignore
       
-      uint8_t const *dp = buffer;
       struct rtp_header rtp;
-      dp = ntoh_rtp(&rtp,dp);
+      uint8_t const * const dp = ntoh_rtp(&rtp,buffer);
       if(rtp.pad){
 	// Remove padding
 	size -= dp[size-1];
@@ -450,6 +449,8 @@ static int close_file(struct session **spp){
     rewind(sp->fp);
     fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
     fflush(sp->fp);
+    if(Verbose && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
+      printf("file %s dupes %llu drops %llu\n",sp->filename,sp->rtp_state.dupes,sp->rtp_state.drops);
   } else {
     unlink(sp->filename);
     if(Verbose)
