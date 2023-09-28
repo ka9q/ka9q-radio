@@ -35,8 +35,11 @@ int send_stereo_output(struct channel * restrict const chan,float const * restri
   {
     int mtu;
     socklen_t size = sizeof(mtu);
-    getsockopt(chan->output.data_fd,IPPROTO_IP,IP_MTU,&mtu,&size);
-    pcm_bufsize = (mtu - 100) / 2; // allow 100 bytes for headers
+    int r = getsockopt(chan->output.data_fd,IPPROTO_IP,IP_MTU,&mtu,&size);
+    if(r != 0){
+      perror("send stereo getsockopt mtu");
+    } else
+      pcm_bufsize = (mtu - 100) / 2; // allow 100 bytes for headers
   }
 #endif
 
@@ -86,11 +89,13 @@ int send_mono_output(struct channel * restrict const chan,float const * restrict
   {
     int mtu;
     socklen_t size = sizeof(mtu);
-    getsockopt(chan->output.data_fd,IPPROTO_IP,IP_MTU,&mtu,&size);
-    pcm_bufsize = (mtu - 100) / 2; // allow 100 bytes for headers
+    int r = getsockopt(chan->output.data_fd,IPPROTO_IP,IP_MTU,&mtu,&size);
+    if(r != 0){
+      perror("send mono getsockopt mtu");
+    } else
+      pcm_bufsize = (mtu - 100) / 2; // allow 100 bytes for headers
   }
 #endif
-
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
   rtp.version = RTP_VERS;
