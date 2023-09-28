@@ -19,7 +19,7 @@
 #include "radio.h"
 
 #define PCM_BUFSIZE 480        // 16-bit word count; must fit in Ethernet MTU
-#define PACKETSIZE 65536        // Somewhat larger than Ethernet MTU
+#define PACKETSIZE 65536       // plus overhead is larger than biggest IPv4 datagram
 
 // Send 'size' stereo samples, each in a pair of floats
 int send_stereo_output(struct channel * restrict const chan,float const * restrict buffer,int size,bool const mute){

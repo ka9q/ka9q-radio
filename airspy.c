@@ -44,8 +44,8 @@ struct sdrstate {
   bool software_agc;
   bool linearity; // Use linearity gain tables; default is sensitivity
   int gainstep; // Airspy gain table steps (0-21), higher numbers == higher gain
-  float energy; // Integrated energy
-  int energy_samples; // Samples represented in energy
+  float agc_energy; // Integrated energy
+  int agc_samples; // Samples represented in energy
   float high_threshold;
   float low_threshold;
 
@@ -343,24 +343,23 @@ static int rx_callback(airspy_transfer *transfer){
   float const in_power = (float)in_energy / sampcount;
   frontend->if_power = power_smooth * (in_power - frontend->if_power);
   if(sdr->software_agc){
-    // Integrate A/D energy
-    float const scaled_in_energy = in_power * scale_ADpower2FS(frontend);
-    sdr->energy += scaled_in_energy;
-    sdr->energy_samples += sampcount;
-    if(sdr->energy_samples >= frontend->samprate/10){ // Time to re-evaluate after 100 ms
-      sdr->energy /= sdr->energy_samples;
-      if(sdr->energy < sdr->low_threshold){
+    // Integrate A/D energy over A/D averaging period
+    sdr->agc_energy += in_energy;
+    sdr->agc_samples += sampcount;
+    if(sdr->agc_samples >= frontend->samprate/10){ // Time to re-evaluate after 100 ms
+      float avg_agc_power = scale_ADpower2FS(sdr->frontend) * sdr->agc_energy / sdr->agc_samples;
+      if(avg_agc_power < sdr->low_threshold){
 	if(Verbose)
-	  printf("AGC power %.1f dBFS\n",power2dB(sdr->energy));
+	  printf("AGC power %.1f dBFS\n",power2dB(avg_agc_power));
 	set_gain(sdr,sdr->gainstep + 1);
-      } else if(sdr->energy > sdr->high_threshold){
+      } else if(avg_agc_power > sdr->high_threshold){
 	if(Verbose)
-	  printf("AGC power %.1f dBFS\n",power2dB(sdr->energy));
+	  printf("AGC power %.1f dBFS\n",power2dB(avg_agc_power));
 	set_gain(sdr,sdr->gainstep - 1);
       }
       // Reset integrator
-      sdr->energy = 0;
-      sdr->energy_samples = 0;
+      sdr->agc_energy = 0;
+      sdr->agc_samples = 0;
     }
   }
   return 0;
