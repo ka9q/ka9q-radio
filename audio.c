@@ -23,11 +23,18 @@
 
 // Send 'size' stereo samples, each in a pair of floats
 int send_stereo_output(struct channel * restrict const chan,float const * restrict buffer,int size,bool const mute){
+  assert(chan != NULL);
+  assert(chan->output.data_fd >= 0);
+
   if(mute){
     // Increment timestamp
     chan->output.rtp.timestamp += size; // Increase by sample count
     chan->output.silent = true;
     return 0;
+  }
+  if(chan->output.data_fd < 0){
+    fprintf(stdout,"ssrc %d: invalid output descriptor %d!\n",chan->output.rtp.ssrc,chan->output.data_fd);
+    return -1;
   }
 
   int pcm_bufsize = PCM_BUFSIZE; // Default for non-linux systems
@@ -78,12 +85,20 @@ int send_stereo_output(struct channel * restrict const chan,float const * restri
 
 // Send 'size' mono samples, each in a float
 int send_mono_output(struct channel * restrict const chan,float const * restrict buffer,int size,bool const mute){
+  assert(chan != NULL);
+  assert(chan->output.data_fd >= 0);
+
   if(mute){
     // Increment timestamp
     chan->output.rtp.timestamp += size; // Increase by sample count
     chan->output.silent = true;
     return 0;
   }
+  if(chan->output.data_fd < 0){
+    fprintf(stdout,"ssrc %d: invalid output descriptor %d!\n",chan->output.rtp.ssrc,chan->output.data_fd);
+    return -1;
+  }
+
   int pcm_bufsize = PCM_BUFSIZE; // Default for non-linux systems
 #ifdef IP_MTU
   {

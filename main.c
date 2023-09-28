@@ -57,7 +57,7 @@ int Overlap = DEFAULT_OVERLAP;
 int RTCP_enable = false;
 int SAP_enable = false;
 struct sockaddr_storage Data_dest_address;
-int Data_fd;
+int Data_fd = -1;
 struct channel *Template;
 
 char const *Name;
@@ -327,7 +327,7 @@ static int loadconfig(char const * const file){
     }
   }
   // Set up template for dynamically created demods
-  if(Data != NULL){
+  if(Data != NULL && Data_fd != -1){
     // Preset/mode must be specified to create a dynamic channel
     // (Trying to switch from term "mode" to term "preset" as more descriptive)
     char const * p = config_getstring(Configtable,global,"preset",NULL);
