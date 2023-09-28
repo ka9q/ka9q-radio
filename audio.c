@@ -55,6 +55,8 @@ int send_stereo_output(struct channel * restrict const chan,float const * restri
   rtp.type = pt_from_info(chan->output.samprate,2);
   rtp.version = RTP_VERS;
   rtp.ssrc = chan->output.rtp.ssrc;
+  rtp.marker = chan->output.silent;
+  chan->output.silent = false;
 
   while(size > 0){
     int chunk = min(pcm_bufsize,2*size);
@@ -63,8 +65,6 @@ int send_stereo_output(struct channel * restrict const chan,float const * restri
     chan->output.rtp.timestamp += chunk/2; // Increase by sample count
     chan->output.rtp.bytes += sizeof(int16_t) * chunk;
     chan->output.rtp.packets++;
-    rtp.marker = chan->output.silent;
-    chan->output.silent = false;
     rtp.seq = chan->output.rtp.seq++;
     uint8_t packet[PACKETSIZE];
     int16_t *pcm_buf = (int16_t *)hton_rtp(packet,&rtp);
@@ -116,6 +116,8 @@ int send_mono_output(struct channel * restrict const chan,float const * restrict
   rtp.version = RTP_VERS;
   rtp.type = pt_from_info(chan->output.samprate,1);
   rtp.ssrc = chan->output.rtp.ssrc;
+  rtp.marker = chan->output.silent;
+  chan->output.silent = false;
 
   while(size > 0){
     int chunk = min(pcm_bufsize,size); // # of mono samples (frames)
@@ -126,8 +128,6 @@ int send_mono_output(struct channel * restrict const chan,float const * restrict
     chan->output.rtp.packets++;
     chan->output.rtp.bytes += sizeof(int16_t) * chunk;
     // Transition from silence emits a mark bit
-    rtp.marker = chan->output.silent;
-    chan->output.silent = false;
     rtp.seq = chan->output.rtp.seq++;
     uint8_t packet[PACKETSIZE];
     int16_t *pcm_buf = (int16_t *)hton_rtp(packet,&rtp);
