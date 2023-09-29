@@ -46,7 +46,7 @@ static int const DEFAULT_MCAST_TTL = 1; // LAN only, no routers
 static float Refresh_rate = 0.25f;
 static char Locale[256] = "en_US.UTF-8";
 static char const *Presets_file = "presets.conf"; // make configurable!
-static dictionary *Mdict;
+static dictionary *Pdict;
 struct frontend Frontend;
 static struct sockaddr_storage Metadata_source_address;      // Source of metadata
 static struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
@@ -71,7 +71,7 @@ static struct control {
 static int pprintw(WINDOW *w,int y, int x, char const *prefix, char const *fmt, ...);
 
 static WINDOW *Tuning_win,*Sig_win,*Filtering_win,*Demodulator_win,
-  *Options_win,*Modes_win,*Debug_win,
+  *Options_win,*Presets_win,*Debug_win,
   *Output_win;
 
 static void display_tuning(WINDOW *tuning,struct channel const *channel);
@@ -80,7 +80,7 @@ static void display_filtering(WINDOW *filtering,struct channel const *channel);
 static void display_sig(WINDOW *sig,struct channel const *channel);
 static void display_demodulator(WINDOW *demodulator,struct channel const *channel);
 static void display_options(WINDOW *options,struct channel const *channel);
-static void display_modes(WINDOW *modes,struct channel const *channel);
+static void display_presets(WINDOW *modes,struct channel const *channel);
 static void display_output(WINDOW *output,struct channel const *channel);
 static int process_keyboard(struct channel *,uint8_t **bpp,int c);
 static void process_mouse(struct channel *channel,uint8_t **bpp);
@@ -239,8 +239,8 @@ static struct windef {
 } Windefs[] = {
   {&Tuning_win, 15, 30},
   {&Options_win, 15, 12},  
-  //  {&Modes_win,Npresets+2,9}, // Npresets is not a static initializer
-  {&Modes_win,15,9},
+  //  {&Presets_win,Npresets+2,9}, // Npresets is not a static initializer
+  {&Presets_win,15,9},
   {&Sig_win,15,25},
   {&Demodulator_win,15,26},
   {&Filtering_win,15,22},
@@ -378,8 +378,8 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"Could not find mode file %s\n", Presets_file);
     exit(EX_NOINPUT);
   }
-  Mdict = iniparser_load(modefile_path);
-  if(Mdict == NULL){
+  Pdict = iniparser_load(modefile_path);
+  if(Pdict == NULL){
     fprintf(stdout,"Can't load mode file %s\n",modefile_path);
     exit(EX_NOINPUT);
   }
@@ -481,7 +481,7 @@ int main(int argc,char *argv[]){
       display_sig(Sig_win,channel);
       display_demodulator(Demodulator_win,channel);
       display_options(Options_win,channel);
-      display_modes(Modes_win,channel);
+      display_presets(Presets_win,channel);
       display_output(Output_win,channel);
       
       if(Debug_win != NULL){
@@ -663,14 +663,14 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       Refresh_rate = x;
     }
     break;
-  case 'm': // Manually set modulation mode
+  case 'm': // Manual preset
     {
       char str[1024];
-      snprintf(str,sizeof(str),"Mode [ ");
-      int const nsec = iniparser_getnsec(Mdict);
+      snprintf(str,sizeof(str),"Mode/Preset [ ");
+      int const nsec = iniparser_getnsec(Pdict);
 
       for(int i=0;i < nsec;i++){
-	strlcat(str,iniparser_getsecname(Mdict,i),sizeof(str));
+	strlcat(str,iniparser_getsecname(Pdict,i),sizeof(str));
 	strlcat(str," ",sizeof(str));
       }
       strlcat(str,"]: ",sizeof(str));
@@ -773,12 +773,12 @@ static void process_mouse(struct channel *channel,uint8_t **bpp){
       if(Control.step > 9)
 	Control.step = 9;
 	  
-    } else if(Modes_win && wmouse_trafo(Modes_win,&my,&mx,false)){
-      // In the modes window?
+    } else if(Presets_win && wmouse_trafo(Presets_win,&my,&mx,false)){
+      // In the presets window?
       my--;
-      if(my >= 0 && my < iniparser_getnsec(Mdict)){
-	char const *n = iniparser_getsecname(Mdict,my);
-	encode_string(bpp,PRESET,n,strlen(n));
+      if(my >= 0 && my < iniparser_getnsec(Pdict)){
+	char const *preset = iniparser_getsecname(Pdict,my);
+	encode_string(bpp,PRESET,preset,strlen(preset));
       }
 	  
     } else if(Options_win && wmouse_trafo(Options_win,&my,&mx,false)){
@@ -1128,6 +1128,12 @@ static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int
     case BLOCKS_SINCE_POLL:
       channel->blocks_since_poll = decode_int64(cp,optlen);
       break;
+    case PRESET:
+      {
+	char *p = decode_string(cp,optlen);
+	strlcpy(channel->preset,p,sizeof(channel->preset));
+	FREE(p);
+      }
     default: // ignore others
       break;
     }
@@ -1497,20 +1503,24 @@ static void display_options(WINDOW *w,struct channel const *channel){
   wnoutrefresh(w);
 }
 
-static void display_modes(WINDOW *w,struct channel const *channel){
+static void display_presets(WINDOW *w,struct channel const *channel){
   if(w == NULL)
     return;
 
-  // Display list of modes defined in modes.conf
-  // These are now really presets that select a demodulator and parameters,
-  // so they're no longer underlined
+  // Display list of presets defined in presets.conf
   // Can be selected with mouse
   int row = 1;
   int col = 1;
-  int npresets = iniparser_getnsec(Mdict);
+  int npresets = iniparser_getnsec(Pdict);
 
-  for(int i=0;i<npresets;i++)
-    mvwaddstr(w,row++,col,iniparser_getsecname(Mdict,i));
+  for(int i=0;i<npresets;i++){
+    char const * const cp = iniparser_getsecname(Pdict,i);
+    if(strncmp(cp,channel->preset,sizeof(channel->preset)) == 0)
+      wattron(w,A_UNDERLINE);
+    else
+      wattroff(w,A_UNDERLINE);      
+    mvwaddstr(w,row++,col,cp);
+  }
   box(w,0,0);
   mvwaddstr(w,0,1,"Presets");
   wnoutrefresh(w);
