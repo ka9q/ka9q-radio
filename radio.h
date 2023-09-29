@@ -247,6 +247,7 @@ struct channel {
     float deemph_state_left;
     float deemph_state_right;
     uint64_t samples;
+    bool pacing;     // Pace output packets
   } output;
 
   // Used only when FM deemphasis is enabled

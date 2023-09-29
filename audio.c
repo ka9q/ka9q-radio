@@ -57,6 +57,7 @@ int send_stereo_output(struct channel * restrict const chan,float const * restri
   rtp.ssrc = chan->output.rtp.ssrc;
   rtp.marker = chan->output.silent;
   chan->output.silent = false;
+  useconds_t pacing = 1000 * Blocktime * pcm_bufsize / (2*size); // for optional pacing, in microseconds
 
   while(size > 0){
     int chunk = min(pcm_bufsize,2*size);
@@ -71,7 +72,7 @@ int send_stereo_output(struct channel * restrict const chan,float const * restri
     for(int i=0; i < chunk; i ++)
       *pcm_buf++ = htons(scaleclip(*buffer++));
 
-    uint8_t *dp = (uint8_t *)pcm_buf;
+    uint8_t const *dp = (uint8_t *)pcm_buf;
     int r = send(chan->output.data_fd,&packet,dp - packet,0);
     chan->output.samples += chunk/2; // Count stereo samples
     if(r <= 0){
@@ -79,6 +80,8 @@ int send_stereo_output(struct channel * restrict const chan,float const * restri
       return -1;
     }
     size -= chunk/2;
+    if(chan->output.pacing && size > 0)
+      usleep(pacing);
   }
   return 0;
 }
@@ -118,6 +121,7 @@ int send_mono_output(struct channel * restrict const chan,float const * restrict
   rtp.ssrc = chan->output.rtp.ssrc;
   rtp.marker = chan->output.silent;
   chan->output.silent = false;
+  useconds_t pacing = 1000 * Blocktime * pcm_bufsize / size; // for optional pacing, in microseconds
 
   while(size > 0){
     int chunk = min(pcm_bufsize,size); // # of mono samples (frames)
@@ -134,7 +138,7 @@ int send_mono_output(struct channel * restrict const chan,float const * restrict
     for(int i=0; i < chunk; i++)
       *pcm_buf++ = htons(scaleclip(*buffer++));
 
-    uint8_t *dp = (uint8_t *)pcm_buf;
+    uint8_t const *dp = (uint8_t *)pcm_buf;
     int r = send(chan->output.data_fd,&packet,dp - packet,0);
     chan->output.samples += chunk;
     if(r <= 0){
@@ -142,6 +146,8 @@ int send_mono_output(struct channel * restrict const chan,float const * restrict
       return -1;
     }
     size -= chunk;
+    if(chan->output.pacing && size > 0)
+      usleep(pacing);
   }
   return 0;
 }
