@@ -32,12 +32,6 @@
 #include "attr.h"
 #include "multicast.h"
 
-// Largest Ethernet packet
-// Normally this would be <1500,
-// but what about Ethernet interfaces that can reassemble fragments?
-// 65536 should be safe since that's the largest IPv4 datagram.
-// But what about IPv6?
-#define MAXPKT 65535
 
 // size of stdio buffer for disk I/O
 // This should be large to minimize write calls, but how big?
@@ -267,7 +261,7 @@ void input_loop(){
       }
     }
     if(FD_ISSET(Input_fd,&fdset)){
-      uint8_t buffer[MAXPKT];
+      uint8_t buffer[PKTSIZE];
       socklen_t socksize = sizeof(Sender);
       int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
 

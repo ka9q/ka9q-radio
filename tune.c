@@ -171,7 +171,7 @@ int main(int argc,char *argv[]){
   while(1){
     // (re)send command until we get a response;
     if(gps_time_ns() >= last_command_time + BILLION/10){ // Rate limit command packets to 10 Hz
-      uint8_t cmd_buffer[9000];
+      uint8_t cmd_buffer[PKTSIZE];
       uint8_t *bp = cmd_buffer;
       *bp++ = 1; // Generate command packet
       sent_tag = arc4random();
@@ -211,7 +211,7 @@ int main(int argc,char *argv[]){
     }
     
     // Incoming packet should be ready
-    uint8_t response_buffer[9000];
+    uint8_t response_buffer[PKTSIZE];
     uint8_t const * cp = response_buffer; // make response read-only
     int length = recvfrom(Status_sock,response_buffer,sizeof(response_buffer),0,NULL,NULL);
     

@@ -137,7 +137,7 @@ int main(int argc,char *argv[]){
   // Send command to set up the channel?? Or do in a separate command? We'd like to reuse the same demod & ssrc,
   // which is hard to do in one command, as we'd have to stash the ssrc somewhere.
   while(true){
-    uint8_t buffer[8192];
+    uint8_t buffer[PKTSIZE];
     uint8_t *bp = buffer;
     *bp++ = 1; // Command
 
@@ -201,7 +201,7 @@ int main(int argc,char *argv[]){
       printf("Received:");
       dump_metadata(stdout,buffer+1,length-1,false);
     }
-    float powers[65536];
+    float powers[PKTSIZE / sizeof(float)]; // floats in a max size IP packet
     uint64_t time;
     double r_freq;
     double r_bin_bw;

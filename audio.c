@@ -18,17 +18,18 @@
 #include "multicast.h"
 #include "radio.h"
 
-#define PCM_BUFSIZE 480        // 16-bit word count; must fit in Ethernet MTU
-#define PACKETSIZE 65536       // plus overhead is larger than biggest IPv4 datagram
+#define SAMPLES_PER_PKT 480        // 16-bit word count; must fit in Ethernet MTU
 
-// Send 'size' stereo samples, each in a pair of floats
-int send_stereo_output(struct channel * restrict const chan,float const * restrict buffer,int size,bool const mute){
+// Send PCM output on stream; # of channels implicit in chan->output.channels
+int send_output(struct channel * restrict const chan,float const * restrict buffer,int frames,bool const mute){
   assert(chan != NULL);
   assert(chan->output.data_fd >= 0);
+  if(frames <= 0)
+    return 0;
 
   if(mute){
     // Increment timestamp
-    chan->output.rtp.timestamp += size; // Increase by sample count
+    chan->output.rtp.timestamp += frames; // Increase by frame count
     chan->output.silent = true;
     return 0;
   }
@@ -36,117 +37,53 @@ int send_stereo_output(struct channel * restrict const chan,float const * restri
     fprintf(stdout,"ssrc %d: invalid output descriptor %d!\n",chan->output.rtp.ssrc,chan->output.data_fd);
     return -1;
   }
-
-  int pcm_bufsize = PCM_BUFSIZE; // Default for non-linux systems
+  int frames_per_pkt = 0;
 #ifdef IP_MTU
   {
+    // We can get the MTU of the outbound interface, use it to calculate maximum packet size
     int mtu;
-    socklen_t size = sizeof(mtu);
-    int r = getsockopt(chan->output.data_fd,IPPROTO_IP,IP_MTU,&mtu,&size);
+    socklen_t intsize = sizeof(mtu);
+    int r = getsockopt(chan->output.data_fd,IPPROTO_IP,IP_MTU,&mtu,&intsize);
     if(r != 0){
-      perror("send stereo getsockopt mtu");
-    } else
-      pcm_bufsize = (mtu - 100) / 2; // allow 100 bytes for headers
+      perror("send getsockopt mtu");
+      frames_per_pkt = SAMPLES_PER_PKT / chan->output.channels; // Default frames per packet for non-linux systems
+    } else {
+      frames_per_pkt = (mtu - 100) / (chan->output.channels * sizeof(int16_t)); // allow 100 bytes for headers
+    }
   }
+# else
+  frames_per_pkt = SAMPLES_PER_PKT / chan->output.channels; // Default frames per packet for non-linux systems
 #endif
-
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
-  rtp.type = pt_from_info(chan->output.samprate,2);
+  rtp.type = pt_from_info(chan->output.samprate,chan->output.channels);
   rtp.version = RTP_VERS;
   rtp.ssrc = chan->output.rtp.ssrc;
   rtp.marker = chan->output.silent;
   chan->output.silent = false;
-  useconds_t pacing = 1000 * Blocktime * pcm_bufsize / (2*size); // for optional pacing, in microseconds
+  useconds_t pacing = 1000 * Blocktime * frames_per_pkt / frames; // for optional pacing, in microseconds
 
-  while(size > 0){
-    int chunk = min(pcm_bufsize,2*size);
-    // If packet is all zeroes, don't send it but still increase the timestamp
+  while(frames > 0){
+    int chunk = min(frames_per_pkt,frames);
     rtp.timestamp = chan->output.rtp.timestamp;
-    chan->output.rtp.timestamp += chunk/2; // Increase by sample count
-    chan->output.rtp.bytes += sizeof(int16_t) * chunk;
+    chan->output.rtp.timestamp += chunk; // Increase by frame count
+    chan->output.rtp.bytes += sizeof(int16_t) * chunk * chan->output.channels;
     chan->output.rtp.packets++;
     rtp.seq = chan->output.rtp.seq++;
-    uint8_t packet[PACKETSIZE];
+    uint8_t packet[PKTSIZE];
     int16_t *pcm_buf = (int16_t *)hton_rtp(packet,&rtp);
-    for(int i=0; i < chunk; i ++)
+    for(int i=0; i < chunk * chan->output.channels; i++)
       *pcm_buf++ = htons(scaleclip(*buffer++));
 
     uint8_t const *dp = (uint8_t *)pcm_buf;
     int r = send(chan->output.data_fd,&packet,dp - packet,0);
-    chan->output.samples += chunk/2; // Count stereo samples
+    chan->output.samples += chunk * chan->output.channels; // Count frames
     if(r <= 0){
       perror("pcm send");
       return -1;
     }
-    size -= chunk/2;
-    if(chan->output.pacing && size > 0)
-      usleep(pacing);
-  }
-  return 0;
-}
-
-// Send 'size' mono samples, each in a float
-int send_mono_output(struct channel * restrict const chan,float const * restrict buffer,int size,bool const mute){
-  assert(chan != NULL);
-  assert(chan->output.data_fd >= 0);
-
-  if(mute){
-    // Increment timestamp
-    chan->output.rtp.timestamp += size; // Increase by sample count
-    chan->output.silent = true;
-    return 0;
-  }
-  if(chan->output.data_fd < 0){
-    fprintf(stdout,"ssrc %d: invalid output descriptor %d!\n",chan->output.rtp.ssrc,chan->output.data_fd);
-    return -1;
-  }
-
-  int pcm_bufsize = PCM_BUFSIZE; // Default for non-linux systems
-#ifdef IP_MTU
-  {
-    int mtu;
-    socklen_t size = sizeof(mtu);
-    int r = getsockopt(chan->output.data_fd,IPPROTO_IP,IP_MTU,&mtu,&size);
-    if(r != 0){
-      perror("send mono getsockopt mtu");
-    } else
-      pcm_bufsize = (mtu - 100) / 2; // allow 100 bytes for headers
-  }
-#endif
-  struct rtp_header rtp;
-  memset(&rtp,0,sizeof(rtp));
-  rtp.version = RTP_VERS;
-  rtp.type = pt_from_info(chan->output.samprate,1);
-  rtp.ssrc = chan->output.rtp.ssrc;
-  rtp.marker = chan->output.silent;
-  chan->output.silent = false;
-  useconds_t pacing = 1000 * Blocktime * pcm_bufsize / size; // for optional pacing, in microseconds
-
-  while(size > 0){
-    int chunk = min(pcm_bufsize,size); // # of mono samples (frames)
-
-    // If packet is muted, don't send it but still increase the timestamp
-    rtp.timestamp = chan->output.rtp.timestamp;
-    chan->output.rtp.timestamp += chunk; // Increase by sample count
-    chan->output.rtp.packets++;
-    chan->output.rtp.bytes += sizeof(int16_t) * chunk;
-    // Transition from silence emits a mark bit
-    rtp.seq = chan->output.rtp.seq++;
-    uint8_t packet[PACKETSIZE];
-    int16_t *pcm_buf = (int16_t *)hton_rtp(packet,&rtp);
-    for(int i=0; i < chunk; i++)
-      *pcm_buf++ = htons(scaleclip(*buffer++));
-
-    uint8_t const *dp = (uint8_t *)pcm_buf;
-    int r = send(chan->output.data_fd,&packet,dp - packet,0);
-    chan->output.samples += chunk;
-    if(r <= 0){
-      perror("pcm send");
-      return -1;
-    }
-    size -= chunk;
-    if(chan->output.pacing && size > 0)
+    frames -= chunk;
+    if(chan->output.pacing && frames > 0)
       usleep(pacing);
   }
   return 0;

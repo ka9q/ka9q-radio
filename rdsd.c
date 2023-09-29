@@ -25,8 +25,6 @@
 #include "filter.h"
 #include "iir.h"
 
-#define BUFFERSIZE 16384  // Tune this
-
 struct session {
   struct session *prev;       // Linked list pointers
   struct session *next; 

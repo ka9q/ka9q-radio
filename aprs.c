@@ -210,7 +210,7 @@ int main(int argc,char *argv[]){
 	    Mcast_address_text);
     exit(EX_NOINPUT);
   }
-  uint8_t packet[2048];
+  uint8_t packet[PKTSIZE];
   int size;
 
   while((size = recv(Input_fd,packet,sizeof(packet),0)) > 0){

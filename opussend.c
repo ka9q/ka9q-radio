@@ -314,7 +314,7 @@ int main(int argc,char * const argv[]){
     rtp_hdr.ssrc = rtp_state_out.ssrc;
     rtp_hdr.timestamp = rtp_state_out.timestamp;
 
-    uint8_t buffer[16384]; // Pick better number
+    uint8_t buffer[PKTSIZE]; // Biggest IP packet possible
     uint8_t *dp = buffer;
     dp = hton_rtp(dp,&rtp_hdr);
 

@@ -82,7 +82,7 @@ void *demod_fm(void *arg){
 	squelch_state = 0;
 	pl_sample_count = 0;
 	reset_goertzel(&chan->fm.tonedetect);
-	send_mono_output(chan,NULL,N,true); // Keep track of timestamps and mute state
+	send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
 	continue;
       }
     }
@@ -118,7 +118,7 @@ void *demod_fm(void *arg){
       squelch_state = 0;
       pl_sample_count = 0;
       reset_goertzel(&chan->fm.tonedetect);
-      send_mono_output(chan,NULL,N,true); // Keep track of timestamps and mute state
+      send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
       continue;
     }
     float baseband[N];    // Chanulated FM baseband
@@ -239,7 +239,7 @@ void *demod_fm(void *arg){
       } else
 	tone_mute = true; // No squelch tail when tone decoding is active
       if(tone_mute){
-	send_mono_output(chan,NULL,N,true); // Keep track of timestamps and mute state
+	send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
 	continue;
       }
     }
@@ -264,7 +264,7 @@ void *demod_fm(void *arg){
     }
     output_level *= one_over_olen;
     chan->output.energy += output_level;
-    if(send_mono_output(chan,baseband,N,false) < 0)
+    if(send_output(chan,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
   } // while(!chan->terminate)
  quit:;

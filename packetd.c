@@ -248,7 +248,7 @@ int main(int argc,char *argv[]){
   // Process status messages that may tell us the PCM input
   while(1){
     socklen_t socklen = sizeof(Status_input_source_address);
-    uint8_t buffer[16384];
+    uint8_t buffer[PKTSIZE];
     int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
 
     // We MUST ignore our own status packets, or we'll loop!

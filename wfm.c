@@ -165,7 +165,7 @@ void *demod_wfm(void *arg){
     } else {
       squelch_state = 0; // Squelch closed
       phase_memory = 0;
-      send_mono_output(chan,NULL,audio_L,true); // Keep track of timestamps and mute state
+      send_output(chan,NULL,audio_L,true); // Keep track of timestamps and mute state
       continue;
     }
     // Actual FM chanulation
@@ -212,7 +212,7 @@ void *demod_wfm(void *arg){
     // Force reasonable parameters if they get messed up or aren't initialized
     chan->output.gain = (2 * chan->output.headroom * chan->output.samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
 
-    bool stereo_on = false;
+    bool pilot_present = false;
     if(chan->output.channels == 2){
       // See if a subcarrier is present
       // shift signs for pilot and subcarrier don't matter because the filters are real input with symmetric spectra
@@ -225,9 +225,9 @@ void *demod_wfm(void *arg){
 
       subc_amp /= audio_L;
       if(subc_amp > 1e-6) // empirical constant, test this some more
-	stereo_on = true;
+	pilot_present = true;
     }
-    if(stereo_on){
+    if(pilot_present){
       // Stereo multiplex processing
       execute_filter_output(lminusr,subc_shift); // L-R composite spun down to 0 Hz, 48 kHz rate
 
@@ -251,9 +251,10 @@ void *demod_wfm(void *arg){
       }
       output_level /= (2 * audio_L); // Halve power to get level per channel
       chan->output.energy += output_level;
-      if(send_stereo_output(chan,(const float *)stereo_buffer,audio_L,false) < 0)
+      assert(chan->output.channels == 2); // Has to be, to get here
+      if(send_output(chan,(const float *)stereo_buffer,audio_L,false) < 0)
 	break; // No output stream! Terminate
-    } else { // stereo_on == false
+    } else { // pilot_present == false
       // Mono processing
       float output_level = 0;
       if(chan->deemph.rate != 0){
@@ -275,9 +276,13 @@ void *demod_wfm(void *arg){
       }
       output_level /= audio_L;
       chan->output.energy += output_level;
-      // mute output unless time is left on the squelch_state timer
-      if(send_mono_output(chan,mono->output.r,audio_L,false) < 0)
+
+      // stash channel count in case user is requesting stereo when it's not available
+      int channels_save = chan->output.channels;
+      chan->output.channels = 1;
+      if(send_output(chan,mono->output.r,audio_L,false) < 0)
 	break; // No output stream! Terminate
+      chan->output.channels = channels_save;
     }
   } // while(!chan->terminate)
  quit:;
