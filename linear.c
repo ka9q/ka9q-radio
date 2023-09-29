@@ -209,7 +209,7 @@ void *demod_linear(void *arg){
       if(chan->linear.pll && !chan->linear.pll_lock) // Use PLL for AM carrier squelch
 	mute = true;
 
-      if(send_mono_output(chan,samples,N,mute) == -1)
+      if(send_output(chan,samples,N,mute) == -1)
 	break; // No output stream!
     } else { // channels == 2, stereo
       float output_power = 0;
@@ -238,7 +238,7 @@ void *demod_linear(void *arg){
       if(chan->linear.pll && !chan->linear.pll_lock)
 	mute = true; // AM carrier squelch
 
-      if(send_stereo_output(chan,(float *)buffer,N,mute)){
+      if(send_output(chan,(float *)buffer,N,mute)){
 	break; // No output stream! Terminate
       }
     }

@@ -71,9 +71,6 @@ struct session {
 };
 
 
-// Global config variables
-int const Bufsize = 1540;     // Maximum samples/words per RTP packet - must be smaller than Ethernet MTU
-
 float const SCALE = 1./INT16_MAX;
 
 // Command line params
@@ -788,7 +785,7 @@ int send_samples(struct session * const sp){
     } else
       rtp.marker = false;
     
-    uint8_t output_buffer[Bufsize]; // to hold RTP header + Opus-encoded frame
+    uint8_t output_buffer[PKTSIZE]; // to hold RTP header + Opus-encoded frame
     uint8_t * const opus_write_pointer = hton_rtp(output_buffer,&rtp);
     int packet_bytes_written = opus_write_pointer - output_buffer;
 
@@ -796,7 +793,7 @@ int send_samples(struct session * const sp){
 						    sp->audio_buffer,
 						    frame_size,  // Number of uncompressed *stereo* samples per frame
 						    opus_write_pointer,
-						    Bufsize - packet_bytes_written); // Max # bytes in compressed output buffer
+						    sizeof(output_buffer) - packet_bytes_written); // Max # bytes in compressed output buffer
     packet_bytes_written += opus_output_bytes;
     
     if(!Discontinuous || opus_output_bytes > 2){

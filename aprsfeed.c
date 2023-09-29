@@ -184,7 +184,7 @@ int main(int argc,char *argv[]){
       sleep(600); // 5 minutes;
       continue;
     }
-    uint8_t packet[2048];
+    uint8_t packet[PKTSIZE];
     int size;
     while((size = recv(Input_fd,packet,sizeof(packet),0)) > 0){
       struct rtp_header rtp_header;

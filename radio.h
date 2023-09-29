@@ -322,6 +322,5 @@ void *demod_spectrum(void *);
 void *demod_null(void *);
 
 // Send output to multicast streams
-int send_mono_output(struct channel * restrict ,const float * restrict,int,bool);
-int send_stereo_output(struct channel * restrict ,const float * restrict,int,bool);
+int send_output(struct channel * restrict ,const float * restrict,int,bool);
 #endif
