@@ -109,6 +109,7 @@ int set_defaults(struct channel *chan){
     fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
 	    Blocktime,chan->output.samprate,r);
   }
+  chan->output.pacing = false;
   return 0;
 }
 
@@ -234,6 +235,9 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   // "pl" and "ctcss" are synonyms
   chan->fm.tone_freq = config_getfloat(table,sname,"pl",chan->fm.tone_freq);
   chan->fm.tone_freq = config_getfloat(table,sname,"ctcss",chan->fm.tone_freq);
+
+  chan->output.pacing = config_getboolean(table,sname,"pacing",chan->output.pacing);
+
   return 0;
 }
 
