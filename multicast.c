@@ -231,7 +231,7 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
     sleep(10);
   }
   if(try > 0) // Don't leave them hanging: report success after failure
-    fprintf(stderr,"resolve_mcast getaddrinfo(%s,%s) succeeded\n",full_host,port);
+    fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s) succeeded\n",full_host,port);
 
   // Use first entry on list -- much simpler
   // I previously tried each entry in turn until one succeeded, but with UDP sockets and
