@@ -3,7 +3,7 @@
 // Written as one big polling loop because ncurses is **not** thread safe
 
 // Copyright 2017-2023 Phil Karn, KA9Q
-// Major revisions fall 2020 (really continuous revisions!)
+// Major revisions fall 2020, 2023 (really continuous revisions!)
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -21,6 +21,7 @@
 #include <math.h>
 #include <complex.h>
 #undef I
+#include <poll.h>
 #include <sys/time.h>
 #include <sys/select.h>
 #include <ncurses.h>
@@ -32,6 +33,7 @@
 #include <sys/ioctl.h>
 #include <iniparser/iniparser.h>
 #include <sysexits.h>
+#include <errno.h>
 
 #include "misc.h"
 #include "filter.h"
@@ -51,7 +53,6 @@ struct frontend Frontend;
 static struct sockaddr_storage Metadata_source_address;      // Source of metadata
 static struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
 static uint64_t Block_drops; // Stored in output filter on sender, not in channel structure
-static bool Resized = false;
 
 int Mcast_ttl = DEFAULT_MCAST_TTL;
 int IP_tos = DEFAULT_IP_TOS;
@@ -213,7 +214,7 @@ static void adjust_item(struct channel *channel,uint8_t **bpp,int direction){
 
   }
 }
-// Hooks for knob.c (experimental)
+
 // It seems better to just use the Griffin application to turn knob events into keystrokes or mouse events
 static void adjust_up(struct channel *channel,uint8_t **bpp){
   adjust_item(channel,bpp,1);
@@ -245,7 +246,6 @@ static struct windef {
   {&Demodulator_win,15,26},
   {&Filtering_win,15,22},
   {&Output_win,15,45},
-  {&Debug_win,8,109},
 };
 #define NWINS (sizeof(Windefs) / sizeof(Windefs[0]))
 
@@ -287,15 +287,18 @@ static void setup_windows(void){
     col += Windefs[i].cols;
     maxrows = max(maxrows,Windefs[i].rows);
   }
-  if(Debug_win != NULL){
-    // A message from our sponsor...
-    wprintw(Debug_win,"KA9Q-radio %s last modified %s\n",__FILE__,__TIMESTAMP__);
-    wprintw(Debug_win,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+  // Specially set up debug window
+  // Minimum of 45 cols for debug window, otherwise go to next row
+  if(col + 45 > COLS){
+    row += maxrows;
+    col = 0;
   }
-}
-
-static void winch_handler(int num){
-  Resized = true;
+  if(row < LINES && col < COLS)
+    Debug_win = newwin(LINES - row,COLS-col,row,col); // Only if room is left
+  // A message from our sponsor...
+  scrollok(Debug_win,TRUE); // This one scrolls so it can be written to with wprintw(...\n)
+  wprintw(Debug_win,"KA9Q-radio %s last modified %s\n",__FILE__,__TIMESTAMP__);
+  wprintw(Debug_win,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
 }
 
 #if 0
@@ -373,22 +376,17 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"connect to mcast control failed\n");
     exit(EX_IOERR);
   }
-  char modefile_path[PATH_MAX];
-  if (dist_path(modefile_path,sizeof(modefile_path),Presets_file) == -1) {
+  char presetsfile_path[PATH_MAX];
+  if (dist_path(presetsfile_path,sizeof(presetsfile_path),Presets_file) == -1) {
     fprintf(stderr,"Could not find mode file %s\n", Presets_file);
     exit(EX_NOINPUT);
   }
-  Pdict = iniparser_load(modefile_path);
+  Pdict = iniparser_load(presetsfile_path);
   if(Pdict == NULL){
-    fprintf(stdout,"Can't load mode file %s\n",modefile_path);
+    fprintf(stdout,"Can't load mode file %s\n",presetsfile_path);
     exit(EX_NOINPUT);
   }
   atexit(display_cleanup);
-
-  struct sigaction act;
-  memset(&act,0,sizeof(act));
-  act.sa_handler = winch_handler;
-  sigaction(SIGWINCH,&act,NULL);
 
   // Set up display subwindows
   Tty = fopen("/dev/tty","r+");
@@ -405,7 +403,6 @@ int main(int argc,char *argv[]){
   setup_windows();
 
   struct channel *const channel = &Channel;
-  memset(channel,0,sizeof(*channel));
   init_demod(channel);
 
   Frontend.frequency = Frontend.min_IF = Frontend.max_IF = NAN;
@@ -416,65 +413,103 @@ int main(int argc,char *argv[]){
      If there's a response, update local status & repaint display windows
      Poll keyboard and process user commands
 
-     Randomize polls over 50 ms in case someone else is also polling
+     Randomize polls over +/- 32 ms in case someone else is also polling
      This avoids possible synchronized back-to-back polls
      This is a common technique in multicast protocols (e.g., IGMP queries)
   */
-  int64_t const random_interval = BILLION/20; // 50 ms
-  int64_t next_radio_poll = gps_time_ns(); // Immediate first poll
-  
-  bool update_needed = false;
-  for(;;){
-    int64_t const radio_poll_interval  = Refresh_rate * BILLION;
+  int const random_interval = 64 << 20; // power of 2 makes it easier for arc4random_uniform()
 
-    if(gps_time_ns() >= next_radio_poll){
+  int64_t now = gps_time_ns();
+  int64_t next_radio_poll = now; // Immediate first poll
+  bool screen_update_needed = false;
+  for(;;){
+    int64_t const radio_poll_interval = Refresh_rate * BILLION; // Can change from the keyboard
+    if(now >= next_radio_poll){
       // Time to poll radio
       send_poll(Ctl_fd,Ssrc);
+#ifdef DEBUG_POLL
+      wprintw(Debug_win,"poll sent %lld\n",now);
+#endif
       // Retransmit after 1/10 sec if no response
-      next_radio_poll = random_time(BILLION/10,random_interval);
+      next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
     }
-    {
-      fd_set fdset;
-      FD_ZERO(&fdset);
-      assert(Status_fd > 2);
-      FD_SET(Status_fd,&fdset);
-      int const n = Status_fd+1;
-      
-      {
-	// Check receive socket every 100 ms regardless of poll interval,
-	// mainly in case we've sent a command and are getting an (immediate) response
-	// also if some other control program is polling more frequently (might as well use the responses)
-	struct timespec ts;
-	ns2ts(&ts,BILLION/10); 
-	pselect(n,&fdset,NULL,NULL,&ts,NULL); // Don't really need to check the return
+    // Poll the input socket
+    // This paces keyboard polling so wait no more than 100 ms, even for long refresh intervals
+    int const recv_timeout = BILLION/10;    
+    int64_t start_of_recv_poll = now;
+    uint8_t buffer[PKTSIZE];
+    int length = 0;
+    do {
+      int const npoll = 1;
+      struct pollfd pollfd[npoll];
+      pollfd[0].fd = Status_fd;
+      pollfd[0].events = POLLIN;
+
+      int n = poll(pollfd,npoll,100);
+      now = gps_time_ns(); // poll() blocks, so update the time of day (only place we block)
+      if(n < 0){
+	wprintw(Debug_win,"poll() failure, %s\n",strerror(errno));
+	screen_update_needed = true;
       }
-      if(FD_ISSET(Status_fd,&fdset)){
+      if(pollfd[0].revents & POLLIN){
 	// Message from the radio program (or some transcoders)
-	uint8_t buffer[PKTSIZE];
 	struct sockaddr_storage source_address;
 	socklen_t ssize = sizeof(source_address);
-	int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize);
-	
+	length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize); // should not block
 	// Ignore our own command packets and responses to other SSIDs
 	if(length >= 2 && (enum pkt_type)buffer[0] == STATUS && for_us(channel,buffer+1,length-1,Ssrc) >= 0 ){
-	  update_needed = true;
 	  // Save source only if it's a response
 	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
-	  decode_radio_status(channel,buffer+1,length-1);
-	  // Postpone next poll to specified interval
-	  next_radio_poll = random_time(radio_poll_interval,random_interval); // Update poll interval
-	  
-	  if(Blocktime == 0 && Frontend.samprate != 0)
-	    Blocktime = 1000.0f * Frontend.L / Frontend.samprate; // Set the firat time
+	  break; // Got a response
 	}
       }
+    } while(now < start_of_recv_poll + recv_timeout);
+    if(length > 0){
+      screen_update_needed = true;
+#ifdef DEBUG_POLL 
+      wprintw(Debug_win,"got response length %d\n",length);
+#endif
+      decode_radio_status(channel,buffer+1,length-1);
+      // Postpone next poll to specified interval
+      next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
+      if(Blocktime == 0 && Frontend.samprate != 0)
+	Blocktime = 1000.0f * Frontend.L / Frontend.samprate; // Set the firat time
+    }      
+    // Set up command buffer in case we want to change something
+    uint8_t cmdbuffer[PKTSIZE];
+    uint8_t *bp = cmdbuffer;
+    *bp++ = CMD; // Command
+
+    // Poll keyboard and mouse
+    int const c = getch();
+    if(c == KEY_MOUSE){
+      process_mouse(channel,&bp);
+      screen_update_needed = true;
+    } else if(c != ERR) {
+      screen_update_needed = true;
+      if(process_keyboard(channel,&bp,c) == -1)
+	goto quit;
     }
-    if(Resized){
-      Resized = false;
-      update_needed = true;
-      setup_windows();
+    // Any commands to send?
+    if(bp > cmdbuffer+1){
+      // Yes
+      assert(Ssrc != 0);
+      encode_int(&bp,OUTPUT_SSRC,Ssrc); // Specific SSRC
+      encode_int(&bp,COMMAND_TAG,arc4random()); // Append a command tag
+      encode_eol(&bp);
+      int const command_len = bp - cmdbuffer;
+#ifdef DEBUG_POLL
+      wprintw(Debug_win,"sent command len %d\n",command_len);
+      screen_update_needed = true; // show local change right away
+#endif
+      if(send(Ctl_fd, cmdbuffer, command_len, 0) != command_len){
+	wprintw(Debug_win,"command send error: %s\n",strerror(errno));
+	screen_update_needed = true; // show local change right away
+      }	
+      // This will elicit an answer, defer the next poll
+      next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
     }
-    if(update_needed){
+    if(screen_update_needed){
       // update display windows
       display_tuning(Tuning_win,channel);
       display_filtering(Filtering_win,channel);
@@ -489,47 +524,16 @@ int main(int argc,char *argv[]){
 	wnoutrefresh(Debug_win);
       }    
       doupdate();      // Update the screen right before we pause
-      update_needed = false;
+      screen_update_needed = false;
     }    
-    // Set up command buffer in case we want to change something
-    uint8_t cmdbuffer[PKTSIZE];
-    uint8_t *bp = cmdbuffer;
-    *bp++ = CMD; // Command
-
-    // Poll keyboard and mouse
-    int const c = getch();
-    if(c == KEY_MOUSE){
-      process_mouse(channel,&bp);
-      update_needed = true;
-    } else if(c != ERR) {
-      update_needed = true;
-      if(process_keyboard(channel,&bp,c) == -1)
-	goto quit;
-    }
-
-    // OK, any commands to send?
-    if(bp > cmdbuffer+1){
-      // Yes
-      assert(Ssrc != 0);
-      encode_int(&bp,OUTPUT_SSRC,Ssrc); // Specific SSRC
-      encode_int(&bp,COMMAND_TAG,arc4random()); // Append a command tag
-      encode_eol(&bp);
-      int const command_len = bp - cmdbuffer;
-      if(send(Ctl_fd, cmdbuffer, command_len, 0) != command_len)
-	perror("command send");
-      update_needed = true; // show local change right away
-      // This will elicit an answer, don't need to send a poll for a while
-      next_radio_poll = random_time(BILLION/10,random_interval);
-    }
   }
  quit:;
   endwin();
   set_term(NULL);
   if(Term != NULL)
     delscreen(Term);
-  //  if(Tty != NULL)
-  //    fclose(Tty);
-  
+  if(Tty != NULL)
+    fclose(Tty);
   exit(EX_OK);
 }
 
@@ -541,7 +545,8 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   case ERR:
     break;
   case KEY_RESIZE:
-    break; // Ignore
+    setup_windows();
+    break;
   case 0x3: // ^C
   case 'q':   // Exit entire radio program. Should this be removed? ^C also works.
     return -1;
@@ -1266,14 +1271,12 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   float const cos_theta_r = 0.217324; // cosine of the first solution of tan(x) = x [really]
   float atten = 20 * log10(sinh(beta) / (cos_theta_r * beta));
   pprintw(w,row++,col,"Sidelobes","%'.1f dB",-atten);
-
   
   float firstnull = (1/(2*M_PI)) * sqrtf(M_PI * M_PI + beta*beta); // Eqn (3) to first null
   float const transition = (2.0 / M_PI) * sqrtf(M_PI*M_PI + beta * beta);
   pprintw(w,row++,col,"first null","%'.1f Hz",0.5 * transition * Frontend.samprate / (Frontend.M-1)); // Not N, apparently
   //  pprintw(w,row++,col,"first null","%'.1f Hz",firstnull * 1000. / Blocktime);
 #endif
-
 
   pprintw(w,row++,col,"Drops","%'llu   ",Block_drops);
   
@@ -1297,7 +1300,8 @@ static void display_sig(WINDOW *w,struct channel const *channel){
   wmove(w,row,col);
   wclrtobot(w);
 
-  pprintw(w,row++,col,"A Gain","%02d+%02d+%02d dB   ",Frontend.lna_gain,
+  if(Frontend.lna_gain != 0 || Frontend.mixer_gain != 0 || Frontend.if_gain != 0)
+    pprintw(w,row++,col,"A Gain","%02d+%02d+%02d dB   ",Frontend.lna_gain,
 	    Frontend.mixer_gain,
 	    Frontend.if_gain);
 
@@ -1515,7 +1519,7 @@ static void display_presets(WINDOW *w,struct channel const *channel){
 
   for(int i=0;i<npresets;i++){
     char const * const cp = iniparser_getsecname(Pdict,i);
-    if(strncmp(cp,channel->preset,sizeof(channel->preset)) == 0)
+    if(strncasecmp(cp,channel->preset,sizeof(channel->preset)) == 0)
       wattron(w,A_UNDERLINE);
     else
       wattroff(w,A_UNDERLINE);      
