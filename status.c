@@ -313,15 +313,9 @@ struct sockaddr *decode_socket(void *sock,uint8_t const *val,int optlen){
   }
   return NULL;
 }
-// Generate random GPS time uniformly distributed between (now + base, now + base + rrange)
-// Args are in nanosec
-int64_t random_time(int64_t base,int64_t rrange){
-  return gps_time_ns() + base + random() % rrange;
-}
 
 // Send empty poll command on specified descriptor
-// Return command tag
-uint32_t send_poll(int fd,int ssrc){
+int send_poll(int fd,int ssrc){
   uint8_t cmdbuffer[128];
   uint8_t *bp = cmdbuffer;
   *bp++ = 1; // Command
@@ -332,8 +326,9 @@ uint32_t send_poll(int fd,int ssrc){
   encode_eol(&bp);
   int const command_len = bp - cmdbuffer;
   if(send(fd, cmdbuffer, command_len, 0) != command_len)
-    perror("poll command send");
-  return tag;
+    return -1;
+
+  return 0;
 }
 
 
