@@ -177,11 +177,10 @@ void *demod_linear(void *arg){
     // Accumulate sum of square gains, for averaging in status
     float start_gain = chan->output.gain;
 
-
     // Second pass over signal block
-    // Chanulate, apply gain changes, compute output energy
+    // Demodulate, apply gain changes, compute output energy
+    float output_power = 0;
     if(chan->output.channels == 1){
-      float output_power = 0;
       float samples[N]; // for mono output
       // channels == 1, mono
       if(chan->linear.env){
@@ -212,7 +211,6 @@ void *demod_linear(void *arg){
       if(send_output(chan,samples,N,mute) == -1)
 	break; // No output stream!
     } else { // channels == 2, stereo
-      float output_power = 0;
       if(chan->linear.env){
 	// I on left, envelope/AM on right (for experiments in fine SSB tuning)
 	for(int n=0; n < N; n++){      
