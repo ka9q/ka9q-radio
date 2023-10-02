@@ -177,12 +177,14 @@ void *demod_linear(void *arg){
     // Accumulate sum of square gains, for averaging in status
     float start_gain = chan->output.gain;
 
-    // Second pass over signal block
+    // Final pass over signal block
     // Demodulate, apply gain changes, compute output energy
     float output_power = 0;
     if(chan->output.channels == 1){
-      float samples[N]; // for mono output
-      // channels == 1, mono
+      // Complex input buffer is I0 Q0 I1 Q1 ...
+      // Real output will be R0 R1 R2 R3 ...
+      // Help cache use by overlaying output on input; ok as long as we index it from low to high
+      float *samples = (float *)buffer;
       if(chan->linear.env){
 	// AM envelope detection
 	for(int n=0; n < N; n++){
@@ -198,48 +200,42 @@ void *demod_linear(void *arg){
 	  chan->output.gain *= gain_change;
 	}
       }
-      output_power /= N; // Per sample
-      output_power *= 2; // +3 dB for mono since 0 dBFS = 1 unit peak, not RMS
-      chan->output.energy += output_power;
-      // Mute if no signal (e.g., outside front end coverage)
-      bool mute = false;
-      if(output_power == 0)
-	mute = true;
-      if(chan->linear.pll && !chan->linear.pll_lock) // Use PLL for AM carrier squelch
-	mute = true;
-
-      if(send_output(chan,samples,N,mute) == -1)
-	break; // No output stream!
-    } else { // channels == 2, stereo
+    } else {
+      // Complex input buffer is I0 Q0 I1 Q1 ...
+      // Real output will be L0 R0 L1 R1  ...
+      // Overlay input with output
       if(chan->linear.env){
 	// I on left, envelope/AM on right (for experiments in fine SSB tuning)
 	for(int n=0; n < N; n++){      
-	  __imag__ buffer[n] = cabsf(buffer[n]) * 2; // empirical +6dB
+	  __imag__ buffer[n] = cabsf(buffer[n]) * 2; // empirical +6dB for AM to match SSB
 	  buffer[n] *= chan->output.gain;
 	  output_power += cnrmf(buffer[n]);
 	  chan->output.gain *= gain_change;
 	}
-      } else {	// I/Q mode
-	// I on left, Q on right
+      } else {
+	// Simplest case: I/Q output with I on left, Q on right
 	for(int n=0; n < N; n++){      
 	  buffer[n] *= chan->output.gain;
 	  output_power += cnrmf(buffer[n]);
 	  chan->output.gain *= gain_change;
 	}
       }
-      output_power /= N; // Per sample
-      chan->output.energy += output_power; // 0 dBFS = 1 unit RMS (I and Q both contribute)
-      // Mute if no signal (e.g., outside front end coverage)
-      bool mute = false;
-      if(output_power == 0)
-	mute = true;
-      if(chan->linear.pll && !chan->linear.pll_lock)
-	mute = true; // AM carrier squelch
-
-      if(send_output(chan,(float *)buffer,N,mute)){
-	break; // No output stream! Terminate
-      }
     }
+    output_power /= N; // Per sample
+    if(chan->output.channels == 1)
+      output_power *= 2; // +3 dB for mono since 0 dBFS = 1 unit peak, not RMS
+    chan->output.energy += output_power;
+    // Mute if no signal (e.g., outside front end coverage)
+    bool mute = false;
+    if(output_power == 0)
+      mute = true;
+    if(chan->linear.pll && !chan->linear.pll_lock) // Use PLL for AM carrier squelch
+      mute = true;
+
+    // send_output() knows if the buffer is mono or stereo
+    if(send_output(chan,(float *)buffer,N,mute) == -1)
+      break; // No output stream!
+
     // When the gain is allowed to vary, the average gain won't be exactly consistent with the
     // average baseband (input) and output powers. But I still try to make it meaningful.
     chan->output.sum_gain_sq += start_gain * chan->output.gain; // accumulate square of approx average gain

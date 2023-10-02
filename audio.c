@@ -61,7 +61,9 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   rtp.ssrc = chan->output.rtp.ssrc;
   rtp.marker = chan->output.silent;
   chan->output.silent = false;
-  useconds_t pacing = 1000 * Blocktime * frames_per_pkt / frames; // for optional pacing, in microseconds
+  useconds_t pacing = 0;
+  if(chan->output.pacing)
+    pacing = 1000 * Blocktime * frames_per_pkt / frames; // for optional pacing, in microseconds
 
   while(frames > 0){
     int chunk = min(frames_per_pkt,frames);

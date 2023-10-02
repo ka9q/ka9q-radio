@@ -139,12 +139,9 @@ float i1(float const z); // 1st kind
 float xi(float thetasq);
 float fm_snr(float r);
 
+// Convert floating point sample to 16-bit integer, with clipping
 static int16_t inline scaleclip(float const x){
-  if(x >= 1.0)
-    return INT16_MAX;
-  else if(x <= -1.0)
-    return INT16_MIN;
-  return (int16_t)(INT16_MAX * x);
+  return (x >= 1.0) ? INT16_MAX : (x <= -1.0) ? INT16_MIN : (int16_t)(INT16_MAX * x);
 }
 static inline complex float const csincosf(float const x){
   float s,c;
@@ -206,15 +203,12 @@ static inline void time_add(struct timespec *result,struct timespec const *a, st
 // a < b: -1
 // a == b: 0
 static inline int time_cmp(struct timespec const *a,struct timespec const *b){
-  if(a->tv_sec > b->tv_sec)
-    return +1;
-  if(a->tv_sec < b->tv_sec)
-    return -1;
-  if(a->tv_nsec > b->tv_nsec)
-    return +1;
-  if(a->tv_nsec < b->tv_nsec)
-    return -1;
-  return 0;
+  // Will this long conditional help the optimizer?
+  return (a->tv_sec > b->tv_sec) ? 1
+    : (a->tv_sec < b->tv_sec) ? -1
+    : (a->tv_nsec > b->tv_nsec) ? +1
+    : (a->tv_nsec < b->tv_nsec) ? -1
+    : 0;
 }
 static long long const BILLION = 1000000000LL;
 static long const MILLION = 1000000L;
@@ -272,13 +266,8 @@ static inline void mirror_wrap(void const **p, void const * const base,size_t co
   assert(*p >= base); // Shouldn't be THIS low
   assert(*p < base + 2 * size); // Or this high
 
-#if 0
   if((uint8_t *)*p >= (uint8_t *)base + size)
     *p = (uint8_t *)*p - size;
-#else
-  if(*p >= base + size)
-    *p = *p - size;
-#endif
 }
 
 // round argument up to an even number of system pages
