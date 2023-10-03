@@ -130,10 +130,10 @@ static void popup(char const *filename){
   delwin(pop);
 }
 
-
 // Pop up a dialog box, issue a prompt and get a response
 static void getentry(char const *prompt,char *response,int len){
-  WINDOW * const pwin = newwin(5,90,0,0);
+  int boxwidth = strlen(prompt) + len;
+  WINDOW * const pwin = newwin(5,boxwidth+2,0,0);
   box(pwin,0,0);
   mvwaddstr(pwin,1,1,prompt);
   wrefresh(pwin);
@@ -142,7 +142,9 @@ static void getentry(char const *prompt,char *response,int len){
   // Manpage for wgetnstr doesn't say whether a terminating
   // null is stashed. Hard to believe it isn't, but this is to be sure
   memset(response,0,len);
-  wgetnstr(pwin,response,len);
+  int r = wgetnstr(pwin,response,len);
+  if(r != OK)
+    memset(response,0,len); // Zero out the read buffer
   chomp(response);
   timeout(0);
   noecho();
@@ -537,6 +539,7 @@ int main(int argc,char *argv[]){
   exit(EX_OK);
 }
 
+int const Entry_width = 15;
 
 static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   // Look for keyboard and mouse events
@@ -595,7 +598,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     break;
   case 's': // Squelch threshold for current mode
     {
-      char str[1024],*ptr;
+      char str[Entry_width],*ptr;
       getentry("Squelch SNR: ",str,sizeof(str));
       float const x = strtof(str,&ptr);
       if(ptr != str){
@@ -606,16 +609,16 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     break;
   case 'T': // Hang time, s (always taken as positive)
     {
-      char str[1024],*ptr;
+      char str[Entry_width],*ptr;
       getentry("Hang time, s: ",str,sizeof(str));
       float const x = fabsf(strtof(str,&ptr));
       if(ptr != str)
 	encode_float(bpp,AGC_HANGTIME,x);
     }
     break;
-  case 'P': // PLL loop bandwidth
+  case 'P': // PLL loop bandwidth, always positive
     {
-      char str[1024],*ptr;
+      char str[Entry_width],*ptr;
       getentry("PLL loop bandwidth, Hz: ",str,sizeof(str));
       float const x = fabsf(strtof(str,&ptr));
       if(ptr != str)
@@ -624,7 +627,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     break;
   case 'L': // AGC threshold, dB relative to headroom
     {
-      char str[1024],*ptr;
+      char str[Entry_width],*ptr;
       getentry("AGC threshold, dB: ",str,sizeof(str));
       float const x = strtof(str,&ptr);
       if(ptr != str)
@@ -633,16 +636,16 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     break;
   case 'R': // Recovery rate, dB/s (always taken as positive)
     {
-      char str[1024],*ptr;
+      char str[Entry_width],*ptr;
       getentry("Recovery rate, dB/s: ",str,sizeof(str));
       float const x = fabsf(strtof(str,&ptr));
       if(ptr != str)
 	encode_float(bpp,AGC_RECOVERY_RATE,x);
     }
     break;
-  case 'H': // Headroom, dB (taken as negative)
+  case 'H': // Target AGC output level (headroom), dB, taken as negative
     {
-      char str[1024],*ptr;
+      char str[Entry_width],*ptr;
       getentry("Headroom, dB: ",str,sizeof(str));
       float const x = -fabsf(strtof(str,&ptr));
       if(ptr != str)
@@ -651,7 +654,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     break;
   case 'g': // Manually set linear channel gain, dB (positive or negative)
     {
-      char str[1024],*ptr;
+      char str[Entry_width],*ptr;
       getentry("Gain, dB: ",str,sizeof(str));
       float const x = strtof(str,&ptr);
       if(ptr != str){
@@ -660,33 +663,35 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       }
     }
     break;
-  case 'r':
+  case 'r': // Poll/refresh rate
     {
-      char str[1024],*ptr;
+      char str[Entry_width],*ptr;
       getentry("Refresh rate (s): ",str,sizeof(str));
       float const x = strtof(str,&ptr);
       Refresh_rate = x;
     }
     break;
-  case 'm': // Manual preset
+  case 'p':
+  case 'm': // Manual mode preset
     {
-      char str[1024];
-      snprintf(str,sizeof(str),"Mode/Preset [ ");
+      char str[Entry_width];
+      char prompt[1024];
+      snprintf(prompt,sizeof(prompt),"Mode/Preset [ ");
       int const nsec = iniparser_getnsec(Pdict);
 
       for(int i=0;i < nsec;i++){
-	strlcat(str,iniparser_getsecname(Pdict,i),sizeof(str));
-	strlcat(str," ",sizeof(str));
+	strlcat(prompt,iniparser_getsecname(Pdict,i),sizeof(prompt));
+	strlcat(prompt," ",sizeof(prompt));
       }
-      strlcat(str,"]: ",sizeof(str));
-      getentry(str,str,sizeof(str));
+      strlcat(prompt,"]: ",sizeof(prompt));
+      getentry(prompt,str,sizeof(str));
       if(strlen(str) > 0)
 	encode_string(bpp,PRESET,str,strlen(str));
     }
     break;
   case 'f':   // Tune to new radio frequency
     {
-      char str[160];
+      char str[Entry_width];
       getentry("Carrier frequency: ",str,sizeof(str));
       if(strlen(str) > 0){
 	channel->tune.freq = fabs(parse_frequency(str,true)); // Handles funky forms like 147m435
@@ -696,7 +701,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     break;
   case 'k': // Kaiser window parameter
     {
-      char str[160],*ptr;
+      char str[Entry_width],*ptr;
       getentry("Kaiser window beta: ",str,sizeof(str));
       double const b = strtod(str,&ptr);
       if(ptr == str)
@@ -710,7 +715,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     break;
   case 'o': // Set/clear option flags, most apply only to linear detector
     {
-      char str[160];
+      char str[Entry_width];
       getentry("[isb pll square stereo mono agc], '!' prefix disables: ",str,sizeof(str));
       if(strcasecmp(str,"mono") == 0){
 	encode_int(bpp,OUTPUT_CHANNELS,1);

@@ -133,9 +133,9 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   if(chan->output.samprate == 0)
       chan->output.samprate = DEFAULT_LINEAR_SAMPRATE; // Make sure it gets set to *something*, even if wrong (e.g. for FM)
   chan->output.channels = config_getint(table,sname,"channels",chan->output.channels);
-  if(config_getboolean(table,sname,"mono",0))
+  if(config_getboolean(table,sname,"mono",false))
     chan->output.channels = 1;
-  if(config_getboolean(table,sname,"stereo",0))
+  if(config_getboolean(table,sname,"stereo",false))
     chan->output.channels = 2;
   chan->filter.kaiser_beta = config_getfloat(table,sname,"kaiser-beta",chan->filter.kaiser_beta);
 

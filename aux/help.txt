@@ -12,16 +12,17 @@ Up arrow     Increase by 1
 Down arrow   Decrease by 1
 ctl+L        Redraw screen
 f            Set frequency (eg: 147m435, 10m0, 760k0, 14313000)
-g	     Set gain, dB
-R	     Set AGC recover rate, dB/s
-T	     Set AGC hang time, s
-H	     Set headroom, dB
-L	     Set AGC threshold, dB
-P	     PLL loop bandwidth, Hz
+g            Set gain, dB
+R            Set AGC recover rate, dB/s
+T            Set AGC hang time, s
+H            Set output headroom, dB
+L            Set AGC threshold, dB
+P            PLL loop bandwidth, Hz
 k            Set Kaiser window beta parameter
-m            Set demod mode
+m/p          Preset demod mode
 o            Set/clear option flag
-r	     Set refresh rate, s
-s	     Set squelch, dB
+r            Set refresh rate, s
+s            Set squelch, dB
 q            Quit program
+
 
