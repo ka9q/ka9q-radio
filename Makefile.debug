@@ -1,11 +1,11 @@
-# Debug Linux makefile for ka9q-radio package
+# Primary Linux makefile for ka9q-radio package
 # Copyright 2017-2023, Phil Karn, KA9Q
 
 # for production
-#DOPTS = -DNDEBUG=1 -O3
+DOPTS = -DNDEBUG=1 -O3
 
 # for debugging
-DOPTS=-g
+#DOPTS=-g
 
 COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
 
@@ -20,28 +20,7 @@ DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 
 EXECS=monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded wd-record
 
-AFILES=bandplan.txt help.txt id.txt monitor-help.txt SDDC_FX3.img presets.conf
-
-SYSTEMD_FILES=cwd.service packetd.service radiod@.service aprsfeed.service opusd@.service recordings@.service stereod.service rdsd.service wspr-decoded.service horusdemod.service ft8-decoded.service
-
-UDEV_FILES=20-rtlsdr.rules 52-airspy.rules 52-airspyhf.rules 66-hackrf.rules 68-funcube-dongle-proplus.rules 68-funcube-dongle.rules 99-rx888.rules
-
-CONF_FILES=		 opusd@hf.conf opusd@hfdl.conf opusd@fm.conf opusd@aviation.conf opusd@packet.conf \
-			 opusd@kpbs.conf opusd@ksds.conf \
-			 opusd@cb-am.conf opusd@cb-lsb.conf opusd@cb-usb.conf \
-			 stereod.conf rdsd.conf \
-			 radiod@aviation.conf radiod@horus.conf radiod@nws.conf \
-			 radiod@repeater.conf \
-			 recordings@hf.conf recordings@fm.conf recordings@aviation.conf recordings@pictures.conf \
-			 wspr-decoded.conf horus.conf packetd.conf aprs.conf repeater.conf ft8-decoded.conf \
-			 radiod@siggen.conf \
-			 radiod@rx888-generic.conf radiod@airspyhf-generic.conf radiod@airspy-generic.conf radiod@funcube-generic.conf \
-			 radiod@rx888-ka9q-hf.conf radiod@funcube-ka9q.conf radiod@kfs.conf radiod@airspyhf-ka9q.conf radiod@airspy-ka9q-2m.conf radiod@airspy-ka9q-125cm.conf radiod@airspy-ka9q-70cm.conf
-
-
 LOGROTATE_FILES = aprsfeed.rotate
-
-AIRSPY_FILES=
 
 BLACKLIST=airspy-blacklist.conf
 
@@ -58,35 +37,17 @@ install: $(DAEMONS) $(EXECS) start-ka9q-horus.sh
 	/usr/sbin/adduser --quiet --system --group radio
 	/usr/sbin/adduser --quiet --system --ingroup radio recordings
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
-#	install -o root -m 0755 -D --target-directory=/etc/sysctl.d 98-sockbuf.conf
-	rsync -a config/98-sockbuf.conf /etc/sysctl.d
-
-#	install -o root -m 0755 -D --target-directory=$(DAEMONDIR) $(DAEMONS) start-ka9q-horus.sh
+	rsync -a aux/98-sockbuf.conf /etc/sysctl.d
 	rsync -a $(DAEMONS) start-ka9q-horus.sh $(DAEMONDIR)
-	
-#	install -o root -m 0755 -D --target-directory=$(BINDIR) $(EXECS)
 	rsync -a $(EXECS) $(BINDIR)
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
-
-#	install -o root -m 0644 -D --target-directory=$(LIBDIR) $(AFILES)
-	(cd aux;rsync -a $(AFILES) $(LIBDIR))
-	
-#	install -o root -m 0644 -D --target-directory=/etc/systemd/system $(SYSTEMD_FILES)
-	(cd service;rsync -a $(SYSTEMD_FILES) /etc/systemd/system)
-	
-#	install -o root -m 0644 -D --target-directory=/etc/udev/rules.d $(UDEV_FILES)
-	(cd rules;rsync -a $(UDEV_FILES) /etc/udev/rules.d)
-
-#	install -o root -m 0644 -D --target-directory=/etc/modprobe.d $(BLACKLIST)
-	(cd config;rsync -a $(BLACKLIST) /etc/modprobe.d)
-
-#	install -o root -m 0644 -D --target-directory=/etc/logrotate.d $(LOGROTATE_FILES)
-	(cd config;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d)
-
-# Don't copy to avoid overwriting existing configs that might have been modified locally
-#	install -o root -m 0664 -D --target-directory=/etc/radio $(CONF_FILES);
-	(cd config;rsync --ignore-existing -a $(CONF_FILES) /etc/radio)
-
+	(cd share;rsync -a . $(LIBDIR))
+	(cd service;rsync -a . /etc/systemd/system)
+	(cd rules;rsync -a . /etc/udev/rules.d)
+	(cd aux;rsync -a $(BLACKLIST) /etc/modprobe.d)
+	(cd aux;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d)
+# Don't overwrite existing configs that might have been modified locally. Run this manually without the '--ignore-existing' if you want to overwrite them all
+	(cd config;rsync --ignore-existing -a . /etc/radio)
 	mkdir -p /etc/fftw /etc/radio $(VARDIR)
 	chgrp radio $(VARDIR) /etc/radio /etc/fftw
 	chmod g+ws $(VARDIR) /etc/radio /etc/fftw
@@ -94,7 +55,6 @@ install: $(DAEMONS) $(EXECS) start-ka9q-horus.sh
 
 clean:
 	rm -f *.o *.a .depend $(EXECS) $(DAEMONS)
-
 
 depend: .depend
 

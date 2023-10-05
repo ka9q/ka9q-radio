@@ -5,16 +5,15 @@ BINDIR=/usr/local/bin
 LIBDIR=/usr/local/share/ka9q-radio
 LD_FLAGS=-lpthread -lm
 EXECS=aprs aprsfeed cwd monitor opusd opussend packetd pcmrecord pcmsend pcmcat radiod control metadump pl show-pkt show-sig stereod rdsd tune wspr-decoded powers ft8-decoded wd-record pcmspawn setfilt powers
-AFILES=bandplan.txt help.txt monitor-help.txt id.txt presets.conf
-CONF_FILES=
 all: $(EXECS)
 
 install: all
 	install -d $(LIBDIR)
 	install -d $(BINDIR)
 	install -o root -m 0755 $(EXECS) $(BINDIR)
-	(cd aux;rsync -a $(AFILES) $(LIBDIR))
-#	(cd config;rsync -a $(CONF_FILES) $(LIBDIR))
+	(cd share;rsync -a . $(LIBDIR))
+# Don't overwrite existing configs that might have been modified locally. Run this manually without the '--ignore-existing' if you want to overwrite them all
+	(cd config;rsync --ignore-existing -a . /etc/radio)
 
 clean:
 	rm -f *.o *.a $(EXECS)
