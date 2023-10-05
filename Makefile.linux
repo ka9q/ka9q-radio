@@ -16,7 +16,7 @@ DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
-DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd start-ka9q-horus.sh
+DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 
 EXECS=control ft8-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record wspr-decoded
 
@@ -38,7 +38,7 @@ install: $(DAEMONS) $(EXECS)
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
 	rsync -a aux/98-sockbuf.conf /etc/sysctl.d
 	rsync -a $(DAEMONS) $(DAEMONDIR)
-	rsync -a $(EXECS) $(BINDIR)
+	rsync -a $(EXECS) start-ka9q-horus.sh $(BINDIR)
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
 	(cd share;rsync -a . $(LIBDIR))
 	(cd service;rsync -a . /etc/systemd/system)
