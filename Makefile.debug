@@ -59,7 +59,7 @@ depend: .depend
 
 .depend: $(CFILES) $(HFILES)
 	rm -f .depend
-	$(CC) $(CFLAGS) -MM $^ > .depend
+	$(CC) $(CFLAGS) -MM $(CFILES) > .depend
 
 -include .depend
 
