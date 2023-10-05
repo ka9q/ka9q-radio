@@ -5,18 +5,33 @@ BINDIR=/usr/local/bin
 LIBDIR=/usr/local/share/ka9q-radio
 LD_FLAGS=-lpthread -lm
 EXECS=aprs aprsfeed cwd monitor opusd opussend packetd pcmrecord pcmsend pcmcat radiod control metadump pl show-pkt show-sig stereod rdsd tune wspr-decoded powers ft8-decoded wd-record pcmspawn setfilt powers
+
+CFILES = airspyhf.c airspy.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c cwd.c decimate.c dump.c fcd.c filter.c fm.c tune.c iir.c linear.c main.c metadump.c misc.c modes.c monitor.c morse.c radio.c setfilt.c powers.c show-sig.c spectrum.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdr.c pcmspawn.c rx888.c ezusb.c sig_gen.c status.c stereod.c wfm.c wspr-decoded.c ft8-decoded.c wd-record.c funcube.c
+
+HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h ezusb.h rx888.h
+
 all: $(EXECS)
 
-install: all
+install: $(EXECS)
 	install -d $(LIBDIR)
 	install -d $(BINDIR)
-	install -o root -m 0755 $(EXECS) $(BINDIR)
+	rsync -a $(EXECS) $(BINDIR)
 	(cd share;rsync -a . $(LIBDIR))
 # Don't overwrite existing configs that might have been modified locally. Run this manually without the '--ignore-existing' if you want to overwrite them all
 	(cd config;rsync --ignore-existing -a . /etc/radio)
 
 clean:
-	rm -f *.o *.a $(EXECS)
+	rm -f *.o *.a .depend $(EXECS)
+
+depend: .depend
+
+.depend: $(CFILES) $(HFILES)
+	rm -f .depend
+	$(CC) $(CFLAGS) -MM $^ > .depend
+
+-include .depend
+
+.PHONY: clean all install depend
 
 # Executables
 aprs: aprs.o libradio.a
