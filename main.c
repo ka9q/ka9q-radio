@@ -62,6 +62,7 @@ struct channel *Template;
 
 char const *Name;
 extern int Nthreads; // owned by filter.c
+extern double Fftw_plan_timelimit; // defined in filter.c
 
 // Command line and environ params
 const char *App_path;
@@ -224,6 +225,9 @@ static int loadconfig(char const * const file){
   // Process [global] section applying to all demodulator blocks
   char const * const global = "global";
   Verbose = config_getint(Configtable,global,"verbose",Verbose);
+  Fftw_plan_timelimit = config_getdouble(Configtable,global,"fft-time-limit",Fftw_plan_timelimit);
+
+
   // Default multicast interface
   {
     // The area pointed to by returns from config_getstring() is freed and overwritten when the config dictionary is closed
