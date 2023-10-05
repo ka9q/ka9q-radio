@@ -2,10 +2,10 @@
 # Copyright 2017-2023, Phil Karn, KA9Q
 
 # for production
-DOPTS = -DNDEBUG=1 -O3
+#DOPTS = -DNDEBUG=1 -O3
 
 # for debugging
-#DOPTS=-g
+DOPTS=-g
 
 COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
 
@@ -16,29 +16,28 @@ DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-lpthread -lbsd -lm
 
-DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
+DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd start-ka9q-horus.sh
 
-EXECS=monitor opussend pcmsend pcmcat pcmrecord pcmspawn control metadump pl show-pkt show-sig tune wspr-decoded setfilt powers ft8-decoded wd-record
+EXECS=control ft8-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record wspr-decoded
+
 
 LOGROTATE_FILES = aprsfeed.rotate
 
 BLACKLIST=airspy-blacklist.conf
 
-SRC=airspyhf.c airspy.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c cwd.c decimate.c dump.c fcd.c filter.c fm.c \
-	   tune.c iir.c linear.c main.c metadump.c misc.c modes.c monitor.c morse.c radio.c setfilt.c powers.c \
-	   show-sig.c spectrum.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdr.c pcmspawn.c \
-	   rx888.c ezusb.c sig_gen.c status.c stereod.c wfm.c wspr-decoded.c ft8-decoded.c set_xcvr.c wd-record.c funcube.c attr.h ax25.h bandplan.h conf.h config.h decimate.h \
-	   fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h ezusb.h rx888.h
+CFILES = airspyhf.c airspy.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c bandplan.c config.c control.c cwd.c decimate.c dump.c fcd.c filter.c fm.c tune.c iir.c linear.c main.c metadump.c misc.c modes.c monitor.c morse.c radio.c setfilt.c powers.c show-sig.c spectrum.c radio_status.c multicast.c opusd.c pcmcat.c pcmsend.c osc.c packetd.c hid-libusb.c opussend.c show-pkt.c pcmrecord.c pl.c rdsd.c rtcp.c rtlsdr.c pcmspawn.c rx888.c ezusb.c sig_gen.c status.c stereod.c wfm.c wspr-decoded.c ft8-decoded.c wd-record.c funcube.c
+
+HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h status.h ezusb.h rx888.h
 
 all: depend $(DAEMONS) $(EXECS)
 
 # NB: now overwrites existing .conf files in /etc/radio !
-install: $(DAEMONS) $(EXECS) start-ka9q-horus.sh
+install: $(DAEMONS) $(EXECS)
 	/usr/sbin/adduser --quiet --system --group radio
 	/usr/sbin/adduser --quiet --system --ingroup radio recordings
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
 	rsync -a aux/98-sockbuf.conf /etc/sysctl.d
-	rsync -a $(DAEMONS) start-ka9q-horus.sh $(DAEMONDIR)
+	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) $(BINDIR)
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
 	(cd share;rsync -a . $(LIBDIR))
@@ -58,7 +57,7 @@ clean:
 
 depend: .depend
 
-.depend: $(SRC)
+.depend: $(CFILES) $(HFILES)
 	rm -f .depend
 	$(CC) $(CFLAGS) -MM $^ > .depend
 
