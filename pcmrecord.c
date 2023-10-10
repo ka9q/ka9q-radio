@@ -79,13 +79,14 @@ struct session {
 
 static float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
 static float FileLengthLimit = 0; // Length of file in seconds; 0 = unlimited
-
 const char *App_path;
 int Verbose;
 static char PCM_mcast_address_text[256];
 static char const *Recordings = ".";
 static bool Subdirs; // Place recordings in subdirectories by SSID
-
+static char const *Locale;
+static int Samprate;
+static int Channels;
 
 static int Input_fd;
 static struct session *Sessions;
@@ -98,48 +99,50 @@ static struct session *create_session(struct rtp_header const *, struct sockaddr
 static int close_file(struct session **spp);
 
 static struct option Options[] = {
-    {"directory", required_argument, NULL, 'd'},
-    {"subdirectories", no_argument, NULL, 's'},
-    {"subdirs", no_argument, NULL, 's'},    
-    {"minfiletime", required_argument, NULL, 'm'},
-    {"mintime", required_argument, NULL, 'm'},
-    {"locale", required_argument, NULL, 'l'},
-    {"verbose", no_argument, NULL, 'v'},
-    {"timeout", required_argument, NULL, 't'},
-    {"lengthlimit", required_argument, NULL, 'L'},
-    {"limit", required_argument, NULL, 'L'},
-    {"version", no_argument, NULL, 'V'},
-    {NULL, no_argument, NULL, 0},
+  {"channels", required_argument, NULL, 'c'},
+  {"directory", required_argument, NULL, 'd'},
+  {"locale", required_argument, NULL, 'l'},
+  {"minfiletime", required_argument, NULL, 'm'},
+  {"mintime", required_argument, NULL, 'm'},
+  {"samprate", required_argument, NULL, 'r'},
+  {"subdirectories", no_argument, NULL, 's'},
+  {"subdirs", no_argument, NULL, 's'},    
+  {"timeout", required_argument, NULL, 't'},
+  {"verbose", no_argument, NULL, 'v'},
+  {"lengthlimit", required_argument, NULL, 'L'},
+  {"limit", required_argument, NULL, 'L'},
+  {"version", no_argument, NULL, 'V'},
+  {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = "d:l:vt:m:sVL:";
-
-
+static char Optstring[] = "c:d:l:m:r:st:vL:V";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
 
-  char const *locale = getenv("LANG");
-  setlocale(LC_ALL,locale);
-
-
   // Defaults
+  Locale = getenv("LANG");
+
   int c;
+  char *ptr;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != EOF){
     switch(c){
-    case 's':
-      Subdirs = true;
+    case 'c':
+      Channels = strtol(optarg,&ptr,0);
       break;
     case 'd':
       Recordings = optarg;
       break;
+    case 'l':
+      Locale = optarg;
+      break;
     case 'm':
       SubstantialFileTime = strtof(optarg,NULL);
       break;
-    case 'l':
-      locale = optarg;
+    case 'r':
+      Samprate = strtol(optarg,&ptr,0);
       break;
-    case 'v':
-      Verbose = 1;
+    case 's':
+      Subdirs = true;
       break;
     case 't':
       {
@@ -148,6 +151,9 @@ int main(int argc,char *argv[]){
 	if(ptr != optarg)
 	  Timeout = x;
       }
+      break;
+    case 'v':
+      Verbose = 1;
       break;
     case 'L':
       FileLengthLimit = strtof(optarg,NULL);
@@ -161,12 +167,13 @@ int main(int argc,char *argv[]){
       break;
     }
   }
+  setlocale(LC_ALL,Locale);
   if(optind >= argc){
     fprintf(stderr,"Specify PCM_mcast_address_text_address\n");
     exit(EX_USAGE);
   }
   strlcpy(PCM_mcast_address_text,argv[optind],sizeof(PCM_mcast_address_text));
-  setlocale(LC_ALL,locale);
+  setlocale(LC_ALL,Locale);
 
 
   // Set up input socket for multicast data stream from front end
@@ -417,8 +424,15 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
   memcpy(sp->header.Subchunk1ID,"fmt ",4);
   sp->header.Subchunk1Size = 16;
   sp->header.AudioFormat = 1;
-  sp->header.NumChannels = sp->channels;
-  sp->header.SampleRate = sp->samprate;
+  if(Channels != 0)
+    sp->header.NumChannels = Channels;
+  else
+    sp->header.NumChannels = sp->channels;
+
+  if(Samprate != 0)
+    sp->header.SampleRate = Samprate;
+  else
+    sp->header.SampleRate = sp->samprate;
   
   sp->header.ByteRate = sp->samprate * sp->channels * 16/8;
   sp->header.BlockAlign = sp->channels * 16/8;
