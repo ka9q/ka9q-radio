@@ -597,11 +597,6 @@ int downconvert(struct channel *chan){
     assert(isfinite(chan->tune.doppler_rate));
     assert(isfinite(chan->tune.shift));
 
-#if 0
-    chan->tp1 = shift;
-    chan->tp2 = remainder;
-#endif
-
     complex float * const buffer = chan->filter.out->output.c; // Working output time-domain buffer (if any)
     // set fine tuning frequency & phase. Do before execute_filter blocks (can't remember why)
     if(buffer != NULL){ // No output time-domain buffer in spectrum mode
