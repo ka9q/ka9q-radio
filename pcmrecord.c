@@ -100,11 +100,14 @@ static int close_file(struct session **spp);
 static struct option Options[] = {
     {"directory", required_argument, NULL, 'd'},
     {"subdirectories", no_argument, NULL, 's'},
+    {"subdirs", no_argument, NULL, 's'},    
     {"minfiletime", required_argument, NULL, 'm'},
+    {"mintime", required_argument, NULL, 'm'},
     {"locale", required_argument, NULL, 'l'},
     {"verbose", no_argument, NULL, 'v'},
     {"timeout", required_argument, NULL, 't'},
     {"lengthlimit", required_argument, NULL, 'L'},
+    {"limit", required_argument, NULL, 'L'},
     {"version", no_argument, NULL, 'V'},
     {NULL, no_argument, NULL, 0},
 };
