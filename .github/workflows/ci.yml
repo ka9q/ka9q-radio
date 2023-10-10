@@ -8,7 +8,7 @@ jobs:
     strategy:
       matrix:
         makefile: [Makefile.linux, Makefile.debug]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
         run: |
@@ -37,7 +37,7 @@ jobs:
         run: sudo make install
   macos-build:
     name: MacOS CI
-    runs-on: macos-11.0
+    runs-on: macos-latest
     steps:
       - name: Install dependencies
         run: |
