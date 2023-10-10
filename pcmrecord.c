@@ -348,8 +348,8 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
   sp->type = rtp->type;
   sp->ssrc = rtp->ssrc;
   
-  sp->channels = channels_from_pt(sp->type);
-  sp->samprate = samprate_from_pt(sp->type);
+  sp->channels = Channels ? Channels : channels_from_pt(sp->type);
+  sp->samprate = Samprate ? Samprate : samprate_from_pt(sp->type);
   sp->samples_remaining = sp->samprate * FileLengthLimit; // If file is being limited in length
   
   // Create file
@@ -429,15 +429,8 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
   memcpy(sp->header.Subchunk1ID,"fmt ",4);
   sp->header.Subchunk1Size = 16;
   sp->header.AudioFormat = 1;
-  if(Channels != 0)
-    sp->header.NumChannels = Channels;
-  else
-    sp->header.NumChannels = sp->channels;
-
-  if(Samprate != 0)
-    sp->header.SampleRate = Samprate;
-  else
-    sp->header.SampleRate = sp->samprate;
+  sp->header.NumChannels = sp->channels;
+  sp->header.SampleRate = sp->samprate;
   
   sp->header.ByteRate = sp->samprate * sp->channels * 16/8;
   sp->header.BlockAlign = sp->channels * 16/8;
