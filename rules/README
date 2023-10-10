@@ -1,0 +1,2 @@
+This directory contains rules for the Linux udev daemon, installed into /etc/udev/rules.d. They
+control the creation of device nodes for the various SDR front end devices.
