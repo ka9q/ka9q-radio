@@ -28,7 +28,7 @@ jobs:
             libavahi-client-dev \
             portaudio19-dev
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup
         run: ln -s ${{ matrix.makefile }} Makefile
       - name: Compile
@@ -75,7 +75,7 @@ jobs:
           make -j4
           sudo make install
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup
         run: ln -s Makefile.osx Makefile
       - name: Compile
