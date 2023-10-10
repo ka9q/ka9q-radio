@@ -172,6 +172,11 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"Specify PCM_mcast_address_text_address\n");
     exit(EX_USAGE);
   }
+  if(Channels != 1 && Channels != 2){
+    fprintf(stderr,"Channels %d invalid\n",Channels);
+    Channels = 0;
+  }
+
   strlcpy(PCM_mcast_address_text,argv[optind],sizeof(PCM_mcast_address_text));
   setlocale(LC_ALL,Locale);
 
