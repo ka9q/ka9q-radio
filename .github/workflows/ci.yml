@@ -1,0 +1,84 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  ubuntu-build:
+    name: Ubuntu CI
+    strategy:
+      matrix:
+        makefile: [Makefile.linux, Makefile.debug]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libusb-dev \
+            libusb-1.0-0-dev \
+            libncurses5-dev \
+            libfftw3-dev \
+            libbsd-dev \
+            libhackrf-dev \
+            libopus-dev \
+            libairspy-dev \
+            libairspyhf-dev \
+            librtlsdr-dev \
+            libiniparser-dev \
+            libavahi-client-dev \
+            portaudio19-dev
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Setup
+        run: ln -s ${{ matrix.makefile }} Makefile
+      - name: Compile
+        run: make
+      - name: Install
+        run: sudo make install
+  macos-build:
+    name: MacOS CI
+    runs-on: macos-latest
+    steps:
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install \
+            glib \
+            libusb \
+            ncurses \
+            fftw \
+            hackrf \
+            opus \
+            airspy \
+            airspyhf \
+            librtlsdr \
+            iniparser \
+            portaudio \
+            dbus
+          ln -s /usr/local/Cellar/iniparser/*/include /usr/local/include/iniparser
+
+          cd /tmp
+          curl https://avahi.org/download/avahi-0.8.tar.gz > avahi-0.8.tar.gz
+          tar xvpf avahi-0.8.tar.gz
+          cd avahi-0.8
+          sed -i '' 's/"\/run"/"\/var\/run"/' configure
+          CFLAGS="-D__APPLE_USE_RFC_2292" ./configure \
+            --with-distro=darwin \
+            --disable-autoipd \
+            --disable-gtk3 \
+            --disable-libdaemon \
+            --disable-mono \
+            --disable-python \
+            --disable-qt5 \
+            --disable-silent-rules \
+            --disable-tests
+          make -j4
+          sudo make install
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Setup
+        run: ln -s Makefile.osx Makefile
+      - name: Compile
+        run: make
+      - name: Install
+        run: sudo make install
