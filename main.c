@@ -61,7 +61,7 @@ int Data_fd = -1;
 struct channel *Template;
 
 char const *Name;
-extern int Nthreads; // owned by filter.c
+extern int N_worker_threads; // owned by filter.c
 extern double Fftw_plan_timelimit; // defined in filter.c
 
 // Command line and environ params
@@ -142,6 +142,10 @@ int main(int argc,char *argv[]){
   setlinebuf(stdout);
   Starttime = gps_time_ns();
 
+  struct timespec start_realtime;
+  clock_gettime(CLOCK_MONOTONIC,&start_realtime);
+
+
   // Set up program defaults
   // Some can be overridden by command line args
   {
@@ -207,9 +211,38 @@ int main(int argc,char *argv[]){
   }
   fprintf(stdout,"%d total demodulators started\n",n);
 
-  while(1)
-    sleep(100);
+  // Measure CPU usage
+  struct timespec last_realtime = start_realtime;
+  struct timespec last_cputime = {0};
+  int sleep_period = 60;
+  while(1){
+    sleep(sleep_period);
+    struct timespec new_realtime;
+    clock_gettime(CLOCK_MONOTONIC,&new_realtime);
+    double total_real = new_realtime.tv_sec - start_realtime.tv_sec
+      + 1e-9 * (new_realtime.tv_nsec - start_realtime.tv_nsec);
 
+    struct timespec new_cputime;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID,&new_cputime);
+    double total_cpu = new_cputime.tv_sec + 1e-9 * (new_cputime.tv_nsec);
+
+    double total_percent = 100. * total_cpu / total_real;
+
+    double period_real = new_realtime.tv_sec - last_realtime.tv_sec
+      + 1e-9 * (new_realtime.tv_nsec - last_realtime.tv_nsec);
+
+    double period_cpu =  new_cputime.tv_sec - last_cputime.tv_sec
+      + 1e-9 * (new_cputime.tv_nsec - last_cputime.tv_nsec);
+
+    double period_percent = 100. * period_cpu / period_real;
+
+    last_realtime = new_realtime;
+    last_cputime = new_cputime;
+
+    if(Verbose)
+      fprintf(stdout,"CPU usage: %.1lf%% since start, %.1lf%% in last %.1lf sec\n",
+	      total_percent, period_percent,period_real);
+  }
   exit(EX_OK); // Can't happen
 }
 
@@ -257,7 +290,7 @@ static int loadconfig(char const * const file){
   }
   Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",Blocktime));
   Overlap = abs(config_getint(Configtable,global,"overlap",Overlap));
-  Nthreads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFT_THREADS); // variable owned by filter.c
+  N_worker_threads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFT_THREADS); // variable owned by filter.c
   RTCP_enable = config_getboolean(Configtable,global,"rtcp",RTCP_enable);
   SAP_enable = config_getboolean(Configtable,global,"sap",SAP_enable);
   {
