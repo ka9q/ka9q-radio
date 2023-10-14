@@ -141,7 +141,7 @@ float fm_snr(float r);
 
 // Convert floating point sample to 16-bit integer, with clipping
 static int16_t inline scaleclip(float const x){
-  return (x >= 1.0) ? INT16_MAX : (x <= -1.0) ? INT16_MIN : (int16_t)(INT16_MAX * x);
+  return (x >= 1.0) ? INT16_MAX : (x <= -1.0) ? -INT16_MAX : (int16_t)(INT16_MAX * x);
 }
 static inline complex float const csincosf(float const x){
   float s,c;
