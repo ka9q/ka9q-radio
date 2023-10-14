@@ -72,7 +72,7 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
 static void rx888_set_att(struct sdrstate *sdr,float att);
 static void rx888_set_gain(struct sdrstate *sdr,float gain);
-static void rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate);
+static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate *sdr);
 static void rx888_close(struct sdrstate *sdr);
@@ -80,6 +80,7 @@ static void free_transfer_buffers(unsigned char **databuffers,struct libusb_tran
 static double val2gain(int g);
 static int gain2val(bool highgain, double gain);
 static void *proc_rx888(void *arg);
+static double actual_freq(double frequency);
 
 
 #define N_USB_SPEEDS 6
@@ -174,7 +175,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,minsamprate);
     samprate = minsamprate;
   }
-  rx888_set_samprate(sdr,samprate);
+  double actual = rx888_set_samprate(sdr,samprate);
   frontend->samprate = samprate;
   frontend->min_IF = 0;
   frontend->max_IF = 0.47 * frontend->samprate; // Just an estimate - get the real number somewhere
@@ -192,9 +193,11 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     frontend->description = strdup(p);
     fprintf(stdout,"%s: ",frontend->description);
   }
-  fprintf(stdout,"rx888 samprate %'d Hz, calibrate %.3g, gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
-	  frontend->samprate,frontend->calibrate,sdr->highgain ? "high" : "low",
-gain,frontend->rf_gain,frontend->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
+  double ferror = actual - frontend->samprate;
+  fprintf(stdout,"rx888 samprate requested %'d Hz, actual %.3lf Hz (err %.3lf Hz; %.3lf ppm), calibrate %.3g, gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
+	  frontend->samprate,actual,ferror, 1e6 * ferror / frontend->samprate,
+	  frontend->calibrate,sdr->highgain ? "high" : "low",
+	  gain,frontend->rf_gain,frontend->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
 	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate));
 
   return 0;
@@ -659,12 +662,13 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain){
   frontend->rf_gain = val2gain(arg); // Store actual nearest value
 }
 
-static void rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
+static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
   usleep(5000);
   command_send(sdr->dev_handle,STARTADC,samprate);
   frontend->samprate = samprate;
+  return actual_freq((double)samprate);
 }
 
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
@@ -792,3 +796,53 @@ double rx888_tune(struct frontend *frontend,double freq){
     return frontend->frequency;
   return 0; // No tuning implemented (direct sampling only)
 }
+
+
+// Determine actual (vs requested) clock frequency
+// Adapted from code by Franco Venturi, K4VZ
+
+static const uint32_t xtalFreq = 27000000;
+
+static double actual_freq(double frequency){
+    while (frequency < 1000000)
+        frequency = frequency * 2;
+
+    // Calculate the division ratio. 900,000,000 is the maximum internal
+    // PLL frequency: 900MHz
+    uint32_t divider = 900000000UL / frequency;
+    // Ensure an even integer division ratio
+    if (divider % 2) divider--;
+
+    // Calculate the pllFrequency: the divider * desired output frequency
+    uint32_t pllFreq = divider * frequency;
+#if 0    
+    fprintf(stderr, "pllA Freq %d\n", pllFreq);
+#endif
+
+    // Determine the multiplier to get to the required pllFrequency
+    uint8_t mult = pllFreq / xtalFreq;
+    // It has three parts:
+    //    mult is an integer that must be in the range 15..90
+    //    num and denom are the fractional parts, the numerator and denominator
+    //    each is 20 bits (range 0..1048575)
+    //    the actual multiplier is  mult + num / denom
+    uint32_t l = pllFreq % xtalFreq;
+    double f = (double)l;
+    f *= 1048575;
+    f /= xtalFreq;
+    uint32_t num = (uint32_t)f;
+    // For simplicity we set the denominator to the maximum 1048575
+    uint32_t denom = 1048575;
+
+    double actualPllFreq = (double) xtalFreq * (mult + (double) num / (double) denom);
+#if 0
+    fprintf(stderr, "actual PLL frequency: %d * (%d + %d / %d) = %lf\n", xtalFreq, mult, num, denom,actualPllFreq);
+#endif
+
+    double actualAdcFreq = actualPllFreq / (double) divider;
+#if 0
+    fprintf(stderr, "actual ADC frequency: %lf / %d = %lf\n", actualPllFreq, divider, actualAdcFreq);
+#endif
+    return actualAdcFreq;
+}
+
