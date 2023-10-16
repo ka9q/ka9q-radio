@@ -409,7 +409,7 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
   Sessions = sp;
 
   if(Verbose)
-    fprintf(stderr,"creating %s\n",sp->filename);
+    fprintf(stdout,"creating %s\n",sp->filename);
   
   sp->iobuffer = malloc(BUFFERSIZE);
   setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
