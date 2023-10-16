@@ -179,7 +179,7 @@ int main(int argc,char *argv[]){
 
   strlcpy(PCM_mcast_address_text,argv[optind],sizeof(PCM_mcast_address_text));
   setlocale(LC_ALL,Locale);
-
+  setlinebuf(stdout); // In case we're redirected to a file
 
   // Set up input socket for multicast data stream from front end
   {
@@ -456,11 +456,11 @@ static int close_file(struct session **spp){
   struct session *sp = *spp;
 
   if(sp->substantial_file){ // Don't bother for non-substantial files
-    if(Verbose)
-      printf("closing %s %'.1f/%'.1f sec\n",sp->filename,
+    if(Verbose){
+      fprintf(stdout,"closing %s %'.1f/%'.1f sec\n",sp->filename,
 	     (float)sp->samples_written / sp->samprate,
 	     (float)sp->total_file_samples / sp->samprate);
-
+    }
     // Get final file size, write .wav header with sizes
     fflush(sp->fp);
     struct stat statbuf;

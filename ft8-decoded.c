@@ -158,6 +158,7 @@ int main(int argc,char *argv[]){
   char const * const target = argv[optind];
   strlcpy(PCM_mcast_address_text,target,sizeof(PCM_mcast_address_text));
   setlocale(LC_ALL,locale);
+  setlinebuf(stdout); // In case we're redirected to a file
 
   if(strlen(Recordings) > 0 && chdir(Recordings) != 0){
     fprintf(stderr,"Can't change to directory %s: %s, exiting\n",Recordings,strerror(errno));
@@ -229,7 +230,7 @@ void input_loop(){
 	snprintf(cmd,sizeof(cmd),Decode_command,sp->filename);
 
 	if(Verbose)
-	  fprintf(stderr,"%s\n",cmd);
+	  fprintf(stdout,"%s\n",cmd);
 	
 	// Save since session will be going away before the decoder fork can delete the file
 	char filename[PATH_MAX];
@@ -250,10 +251,10 @@ void input_loop(){
 
 	  r = system(cmd);
 	  if(Verbose && r != 0)
-	    fprintf(stderr,"system(%s) returned %d errno %d (%s)\n",cmd,r,errno,strerror(errno));
+	    fprintf(stdout,"system(%s) returned %d errno %d (%s)\n",cmd,r,errno,strerror(errno));
 	  if(!Keep_wav){
 	    if(Verbose)
-	      fprintf(stderr,"unlink(%s)\n",filename);
+	      fprintf(stdout,"unlink(%s)\n",filename);
 	    unlink(filename);
 	  }
 	  exit(EX_OK);
@@ -400,7 +401,7 @@ struct session *create_session(struct rtp_header *rtp){
   // This allows testing where we're killed and rapidly restarted in the same cycle
   sp->fp = fdopen(fd,"w+");
   if(Verbose)
-    fprintf(stderr,"creating %s\n",sp->filename);
+    fprintf(stdout,"creating %s\n",sp->filename);
 
   assert(sp->fp != NULL);
   // file create succeded, now put us at top of list
@@ -466,7 +467,7 @@ void close_session(struct session **p){
 
   if(sp->fp != NULL){
     if(Verbose)
-      printf("closing %s %'.1f/%'.1f sec\n",sp->filename,
+      fprintf(stdout,"closing %s %'.1f/%'.1f sec\n",sp->filename,
 	   (float)sp->SamplesWritten / sp->samprate,
 	   (float)sp->TotalFileSamples / sp->samprate);
   

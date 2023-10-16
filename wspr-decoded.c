@@ -143,6 +143,7 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"Can't change to directory %s: %s, exiting\n",Recordings,strerror(errno));
     exit(EX_CANTCREAT);
   }
+  setlinebuf(stdout); // In case we're redirected to a file
 
   // Set up input socket for multicast data stream from front end
   {
@@ -212,7 +213,7 @@ void input_loop(){
 		 Recordings,sp->ssrc,(double)sp->ssrc * 1e-6,sp->filename);
 
 	if(Verbose)
-	  fprintf(stderr,"%s\n",cmd);
+	  fprintf(stdout,"%s\n",cmd);
 	
 	if(fork() == 0){
 	  int const r = system(cmd);
@@ -364,7 +365,7 @@ struct session *create_session(struct rtp_header *rtp){
   // This allows testing where we're killed and rapidly restarted in the same cycle
   sp->fp = fdopen(fd,"w+");
   if(Verbose)
-    fprintf(stderr,"creating %s\n",sp->filename);
+    fprintf(stdout,"creating %s\n",sp->filename);
 
   assert(sp->fp != NULL);
   // file create succeded, now put us at top of list
@@ -425,7 +426,7 @@ void close_session(struct session **p){
     return;
 
   if(Verbose)
-    printf("closing %s %'.1f/%'.1f sec\n",sp->filename,
+    fprintf(stdout,"closing %s %'.1f/%'.1f sec\n",sp->filename,
 	   (float)sp->SamplesWritten / sp->samprate,
 	   (float)sp->TotalFileSamples / sp->samprate);
   
