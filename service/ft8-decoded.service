@@ -7,11 +7,13 @@ After=network-online.target
 Requires=network-online.target
 
 [Service]
-Nice=0
+Nice=10
 User=recordings
 Group=radio
 Type=simple
 PermissionsStartOnly=true
+StandardOutput=append:/recordings/ft8.log
+StandardError=journal
 EnvironmentFile=/etc/radio/ft8-decoded.conf
 ExecStart=/usr/local/bin/ft8-decoded $ARGS
 Restart=always
