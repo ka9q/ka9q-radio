@@ -113,7 +113,7 @@ int main(int argc,char *argv[]){
 
 #if 1
   for(int i=0; i < argc; i++)
-    fprintf(stderr," %s",argv[i]);
+    fprintf(stderr," [%d]%s",i,argv[i]);
   fprintf(stderr,"\n");
 #endif
 
@@ -236,9 +236,10 @@ void input_loop(){
 	char cmd[16384];
 	snprintf(cmd,sizeof(cmd),Decode_command,sp->filename);
 
-	if(Verbose)
+	if(Verbose){
 	  fprintf(stdout,"%s\n",cmd);
-	
+	  fprintf(stderr,"%s\n",cmd);
+	}
 	// Save since session will be going away before the decoder fork can delete the file
 	char filename[PATH_MAX];
 	strlcpy(filename,sp->filename,sizeof(filename));
