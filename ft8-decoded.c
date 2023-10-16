@@ -233,13 +233,6 @@ void input_loop(){
     if(nsec >= Transmission_length * BILLION){
       // End of frame; process everything
       for(struct session *sp = Sessions;sp != NULL;){
-	char cmd[16384];
-	snprintf(cmd,sizeof(cmd),Decode_command,sp->filename);
-
-	if(Verbose){
-	  fprintf(stdout,"%s\n",cmd);
-	  fprintf(stderr,"%s\n",cmd);
-	}
 	// Save since session will be going away before the decoder fork can delete the file
 	char filename[PATH_MAX];
 	strlcpy(filename,sp->filename,sizeof(filename));
@@ -249,17 +242,23 @@ void input_loop(){
 	sp = next;
 
 	if(fork() == 0){
-	  // set working directory to the one containing the file
-	  char *dupname = strdup(filename);
-
-	  int r = chdir(dirname(dupname));
-	  if(r != 0)
-	    perror("chdir");
-	  FREE(dupname);
-
-	  r = system(cmd);
-	  if(Verbose && r != 0)
-	    fprintf(stdout,"system(%s) returned %d errno %d (%s)\n",cmd,r,errno,strerror(errno));
+	  {
+	    // set working directory to the one containing the file
+	    char *dupname = strdup(filename);
+	    int r = chdir(dirname(dupname));
+	    if(r != 0)
+	      perror("chdir");
+	    FREE(dupname);
+	  }
+	  // Fork decoder, wait for it
+	  int child = 0;
+	  if((child = fork()) == 0){
+	    execlp(Decode_command,sp->filename,(char *)NULL);
+	    fprintf(stdout,"execlp(%s,%s) returned errno %d (%s)\n",Decode_command,sp->filename,errno,strerror(errno));
+	  }
+	  int status = 0;
+	  wait(&status);
+	  fprintf(stdout,"PID %d Wait status %d\n",child,status);
 	  if(!Keep_wav){
 	    if(Verbose)
 	      fprintf(stdout,"unlink(%s)\n",filename);
