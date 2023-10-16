@@ -253,10 +253,10 @@ void input_loop(){
 	  // Fork decoder, wait for it
 	  int child = 0;
 	  if((child = fork()) == 0){
-	    fprintf(stdout,"execlp(%s, %s)\n",Decode_command,sp->filename);
+	    fprintf(stdout,"execlp(%s, %s)\n",Decode_command,filename);
 
-	    execlp(Decode_command,sp->filename,(char *)NULL);
-	    fprintf(stdout,"execlp(%s,%s) returned errno %d (%s)\n",Decode_command,sp->filename,errno,strerror(errno));
+	    execlp(Decode_command,filename,(char *)NULL);
+	    fprintf(stdout,"execlp(%s,%s) returned errno %d (%s)\n",Decode_command,filename,errno,strerror(errno));
 	  }
 	  int status = 0;
 	  wait(&status);
