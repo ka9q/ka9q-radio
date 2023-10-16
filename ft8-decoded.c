@@ -111,6 +111,10 @@ int main(int argc,char *argv[]){
   char const * locale = getenv("LANG");
   setlocale(LC_ALL,locale);
 
+  for(int i=0; i < argc; i++)
+    fprintf(stderr," %s",argv[i]);
+  fprintf(stderr,"\n");
+
   // Defaults
   int c;
   while((c = getopt(argc,argv,"t:c:d:l:L:vkV")) != EOF){
@@ -143,6 +147,7 @@ int main(int argc,char *argv[]){
       break;
     }
   }
+
   if(Transmission_length == 0 || Cycle_time == 0 || Decode_command == NULL)
     usage();
 
