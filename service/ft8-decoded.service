@@ -2,7 +2,7 @@
 # Phil Karn, KA9Q Apr 2023
 
 [Unit]
-Description=ft8r-decode
+Description=ft8-decode
 After=network-online.target
 Requires=network-online.target
 
@@ -15,7 +15,7 @@ PermissionsStartOnly=true
 StandardOutput=append:/recordings/ft8.log
 StandardError=journal
 EnvironmentFile=/etc/radio/ft8-decoded.conf
-ExecStart=/usr/local/bin/ft8-decoded $ARGS
+ExecStart=/usr/local/bin/ft8-decoded -c $COMMAND -l $DURATION -t $CYCLE_TIME -d $DIRECTORY $MCAST
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
