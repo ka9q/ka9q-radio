@@ -292,7 +292,7 @@ void input_loop(){
       }
       // Reap children so they won't become zombies
       int status;
-      while(waitpid(-1,&status,WNOHANG) != 0);
+      while(waitpid(-1,&status,WNOHANG) > 0);
     }
     if(FD_ISSET(Input_fd,&fdset)){
       uint8_t buffer[PKTSIZE];
