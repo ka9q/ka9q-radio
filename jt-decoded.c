@@ -279,7 +279,7 @@ void input_loop(){
 	    fprintf(stdout,"wait for grandchild %d: errno %d (%s)\n",
 		    grandchild,errno,strerror(errno));
 	  }
-	  if(!WIFEXITED(status))
+	  if(WIFEXITED(status))
 	    fprintf(stdout,"grandchild pid %d returned %d\n",grandchild,WEXITSTATUS(status));
 
 	  if(!Keep_wav){
