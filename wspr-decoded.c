@@ -216,6 +216,7 @@ void input_loop(){
 	// Save since session will be going away before the decoder fork can delete the file
 	char filename[PATH_MAX];
 	strlcpy(filename,sp->filename,sizeof(filename));
+	int ssrc = sp->ssrc;
 
 	struct session * const next = sp->next;
 	close_session(&sp); // Flushes and closes file, but does not delete
@@ -235,11 +236,11 @@ void input_loop(){
 	  int child = 0;
 	  if((child = fork()) == 0){
 	    char freq[100];
-	    snprintf(freq,sizeof(freq),"%lf",(double)sp->ssrc * 1e-6);
+	    snprintf(freq,sizeof(freq),"%lf",(double)ssrc * 1e-6);
 	    if(Verbose)
-	      fprintf(stdout,"%s,%s,%s,%s,%s\n",Wsprd_command,"-f",freq,"-w",sp->filename);
+	      fprintf(stdout,"%s,%s,%s,%s,%s\n",Wsprd_command,"-f",freq,"-w",filename);
 
-	    execlp(Wsprd_command,Wsprd_command,"-f",freq,"-w",sp->filename,(char *)NULL);
+	    execlp(Wsprd_command,Wsprd_command,"-f",freq,"-w",filename,(char *)NULL);
 	    fprintf(stdout,"execlp returned errno %d (%s)\n",errno,strerror(errno));
 	  }
 	  int status = 0;
