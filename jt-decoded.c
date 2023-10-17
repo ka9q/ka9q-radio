@@ -235,7 +235,8 @@ void input_loop(){
 	close_session(&sp); // Flushes and closes file, but does not delete
 	sp = next;
 
-	if(fork() == 0){
+	int child = 0;
+	if((child = fork()) == 0){
 	  {
 	    // set working directory to the one containing the file
 	    // dirname_r() is only available on MacOS, so we can't use it here
@@ -246,32 +247,29 @@ void input_loop(){
 	    if(r != 0)
 	      perror("chdir");
 	  }
-	  // Fork decoder, wait for it
-	  int child = 0;
-	  if((child = fork()) == 0){
-	    char freq[100];
-	    snprintf(freq,sizeof(freq),"%lf",(double)ssrc * 1e-6);
+	  char freq[100];
+	  snprintf(freq,sizeof(freq),"%lf",(double)ssrc * 1e-6);
 
-	    switch(Mode){
-	    case WSPR:
-	      if(Verbose)
-		fprintf(stdout,"%s %s %s %s %s\n",Modetab[Mode].decode,"-f",freq,"-w",filename);
-	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",filename,(char *)NULL);
-	      break;
-	    case FT8:
-	      // Note: requires my version of decode_ft8 that accepts -f basefreq
-	      if(Verbose)
-		fprintf(stdout,"%s -f %s %s\n",Modetab[Mode].decode,freq,filename);
-	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,filename,(char *)NULL);
-	      break;
-	    default:
-	      assert(false); // can't happen - trigger abort
-	      break;
-	    }
-	    // Gets here only if exec fails
-	    fprintf(stdout,"execlp returned errno %d (%s)\n",errno,strerror(errno));
-	    exit(EX_SOFTWARE);
+	  switch(Mode){
+	  case WSPR:
+	    if(Verbose)
+	      fprintf(stdout,"%s %s %s %s %s\n",Modetab[Mode].decode,"-f",freq,"-w",filename);
+	    execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",filename,(char *)NULL);
+	    break;
+	  case FT8:
+	    // Note: requires my version of decode_ft8 that accepts -f basefreq
+	    if(Verbose)
+	      fprintf(stdout,"%s -f %s %s\n",Modetab[Mode].decode,freq,filename);
+	    execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,filename,(char *)NULL);
+	    break;
+	  default:
+	    assert(false); // can't happen - trigger abort
+	    break;
 	  }
+	  // Gets here only if exec fails
+	  fprintf(stdout,"execlp returned errno %d (%s)\n",errno,strerror(errno));
+	  exit(EX_SOFTWARE);
+	} else {
 	  int status = 0;
 	  wait(&status);
 	  if(Verbose)
