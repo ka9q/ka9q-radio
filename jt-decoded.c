@@ -238,8 +238,11 @@ void input_loop(){
 	if(fork() == 0){
 	  {
 	    // set working directory to the one containing the file
-	    char dname[PATH_MAX];
-	    int r = chdir(dirname_r(filename,dname));
+	    // dirname_r() is only available on MacOS, so we can't use it here
+	    char *fname_dup = strdup(filename); // in case dirname modifies its arg
+	    int r = chdir(dirname(filename));
+	    FREE(fname_dup);
+			  
 	    if(r != 0)
 	      perror("chdir");
 	  }
