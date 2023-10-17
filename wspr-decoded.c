@@ -99,7 +99,7 @@ struct session *create_session(struct rtp_header *);
 void close_session(struct session **p);
 
 int main(int argc,char *argv[]){
-#if 1
+#if 0
   for(int i=0; i < argc; i++)
     fprintf(stderr," [%d]%s",i,argv[i]);
   fprintf(stderr,"\n");
