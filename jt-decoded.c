@@ -200,7 +200,7 @@ int main(int argc,char *argv[]){
 }
 
 void closedown(int a){
-  fprintf(stdout,"iqrecord: caught signal %d: %s\n",a,strsignal(a));
+  fprintf(stdout,"%s: caught signal %d: %s\n",App_path,a,strsignal(a));
   exit(EX_SOFTWARE);  // Will call cleanup()
 }
 
