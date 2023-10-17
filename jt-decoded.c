@@ -112,7 +112,7 @@ struct session *create_session(struct rtp_header *);
 void close_session(struct session **p);
 
 void usage(){
-  fprintf(stderr,"Usage: %s [-L locale] [-v] [-k] [-d recording_dir] [-8|-w] PCM_multicast_address\n",App_path);
+  fprintf(stdout,"Usage: %s [-L locale] [-v] [-k] [-d recording_dir] [-8|-w] PCM_multicast_address\n",App_path);
   exit(EX_USAGE);
 }
 
@@ -120,7 +120,6 @@ int main(int argc,char *argv[]){
   App_path = argv[0];
   char const * locale = getenv("LANG");
   setlocale(LC_ALL,locale);
-  setlinebuf(stdout); // In case we're redirected to a file
 
   // Defaults
   int c;
@@ -152,13 +151,13 @@ int main(int argc,char *argv[]){
     }
   }
   setlocale(LC_ALL,locale);
-  if(Verbose){
+  if(Verbose > 1){
     for(int i=0; i < argc; i++)
-      fprintf(stderr," [%d]%s",i,argv[i]);
-    fprintf(stderr,"\n");
+      fprintf(stdout," [%d]%s",i,argv[i]);
+    fprintf(stdout,"\n");
   }
   if(optind >= argc){
-    fprintf(stderr,"Specify PCM Multicast IP address or domain name\n");
+    fprintf(stdout,"Specify PCM Multicast IP address or domain name\n");
     usage();
   }
 
@@ -166,7 +165,7 @@ int main(int argc,char *argv[]){
   strlcpy(PCM_mcast_address_text,target,sizeof(PCM_mcast_address_text));
 
   if(strlen(Recordings) > 0 && chdir(Recordings) != 0){
-    fprintf(stderr,"Can't change to directory %s: %s, exiting\n",Recordings,strerror(errno));
+    fprintf(stdout,"Can't change to directory %s: %s, exiting\n",Recordings,strerror(errno));
     exit(EX_CANTCREAT);
   }
 
@@ -179,7 +178,7 @@ int main(int argc,char *argv[]){
   }
 
   if(Input_fd == -1){
-    fprintf(stderr,"Can't set up PCM input from %s, exiting\n",PCM_mcast_address_text);
+    fprintf(stdout,"Can't set up PCM input from %s, exiting\n",PCM_mcast_address_text);
     exit(EX_IOERR);
   }
   int const n = 1 << 20; // 1 MB
@@ -201,9 +200,7 @@ int main(int argc,char *argv[]){
 }
 
 void closedown(int a){
-  if(Verbose)
-    fprintf(stderr,"iqrecord: caught signal %d: %s\n",a,strsignal(a));
-
+  fprintf(stdout,"iqrecord: caught signal %d: %s\n",a,strsignal(a));
   exit(EX_SOFTWARE);  // Will call cleanup()
 }
 
@@ -238,7 +235,7 @@ void input_loop(){
 	int child;
 	if((child = fork()) == 0){
 	  // Double fork so we don't have to wait. Seems ugly, is there a better way??
-	  int grandchild;
+	  int grandchild = 0;
 	  if((grandchild = fork()) == 0){
 	    {
 	      // set working directory to the one containing the file
@@ -271,22 +268,28 @@ void input_loop(){
 	    }
 	    // Gets here only if exec fails
 	    fprintf(stdout,"execlp(%s) returned errno %d (%s)\n",Modetab[Mode].decode,errno,strerror(errno));
+	    fflush(stdout);
 	    exit(EX_SOFTWARE);
 	  }
 	  // Wait for decoder to finish, then remove its input file
 	  int status = 0;
-	  if(waitpid(grandchild,&status,0) != 0){
-	    fprintf(stdout,"wait for grandchild %d: errno %d (%s)\n",
-		    grandchild,errno,strerror(errno));
+	  if(waitpid(-1,&status,0) == -1){
+	    fprintf(stdout,"error waiting for grandchild: errno %d (%s)\n",
+		    errno,strerror(errno));
+	    fflush(stdout);
+	    exit(EXIT_FAILURE);
 	  }
-	  if(WIFEXITED(status))
-	    fprintf(stdout,"grandchild pid %d returned %d\n",grandchild,WEXITSTATUS(status));
-
+	  if(WIFEXITED(status)){
+	    int rval = WEXITSTATUS(status);
+	    if(rval != 0)
+	      fprintf(stdout,"grandchild pid %d returned %d\n",grandchild,rval);
+	  }
 	  if(!Keep_wav){
-	    if(Verbose)
+	    if(Verbose > 1)
 	      fprintf(stdout,"unlink(%s)\n",filename);
 	    unlink(filename);
 	  }
+	  fflush(stdout);
 	  exit(EX_OK);
 	}
       }
@@ -400,7 +403,7 @@ struct session *create_session(struct rtp_header *rtp){
   char dir[PATH_MAX];
   snprintf(dir,sizeof(dir),"%u",sp->ssrc);
   if(mkdir(dir,0777) == -1 && errno != EEXIST)
-    fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
+    fprintf(stdout,"can't create directory %s: %s\n",dir,strerror(errno));
   // Try to create file in directory whether or not the mkdir succeeded
   snprintf(sp->filename,sizeof(sp->filename),"%s/%u/%02d%02d%02d_%02d%02d%02d.wav",
 	   Recordings,
@@ -415,7 +418,7 @@ struct session *create_session(struct rtp_header *rtp){
   fd = open(sp->filename,O_RDWR|O_CREAT,0777);
   if(fd == -1){
     // couldn't create directory or create file in directory; create in current dir
-    fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
+    fprintf(stdout,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
     snprintf(sp->filename,sizeof(sp->filename),"%02d%02d%02d_%02d%02d%02d.wav",
 	     (tm->tm_year+1900) % 100,
 	     tm->tm_mon+1,
@@ -426,14 +429,14 @@ struct session *create_session(struct rtp_header *rtp){
     fd = open(sp->filename,O_RDWR|O_CREAT,0777);
   }    
   if(fd == -1){
-    fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
+    fprintf(stdout,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
     FREE(sp);
     return NULL;
   }
   // Use fdopen on a file descriptor instead of fopen(,"w+") to avoid the implicit truncation
   // This allows testing where we're killed and rapidly restarted in the same cycle
   sp->fp = fdopen(fd,"w+");
-  if(Verbose)
+  if(Verbose > 1)
     fprintf(stdout,"creating %s\n",sp->filename);
 
   assert(sp->fp != NULL);
@@ -499,7 +502,7 @@ void close_session(struct session **p){
     return;
 
   if(sp->fp != NULL){
-    if(Verbose)
+    if(Verbose > 1)
       fprintf(stdout,"closing %s %'.1f/%'.1f sec\n",sp->filename,
 	   (float)sp->SamplesWritten / sp->samprate,
 	   (float)sp->TotalFileSamples / sp->samprate);
