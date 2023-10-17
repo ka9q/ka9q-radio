@@ -236,7 +236,8 @@ void input_loop(){
 	  if((child = fork()) == 0){
 	    char freq[100];
 	    snprintf(freq,sizeof(freq),"%lf",(double)sp->ssrc * 1e-6);
-	    fprintf(stdout,"%s,%s,%s,%s,%s\n",Wsprd_command,"-f",freq,"-w",sp->filename);
+	    if(Verbose)
+	      fprintf(stdout,"%s,%s,%s,%s,%s\n",Wsprd_command,"-f",freq,"-w",sp->filename);
 
 	    execlp(Wsprd_command,Wsprd_command,"-f",freq,"-w",sp->filename,(char *)NULL);
 	    fprintf(stdout,"execlp returned errno %d (%s)\n",errno,strerror(errno));
