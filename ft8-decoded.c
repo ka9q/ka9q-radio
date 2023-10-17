@@ -255,7 +255,7 @@ void input_loop(){
 	  if((child = fork()) == 0){
 	    fprintf(stdout,"execlp(%s, %s)\n",Decode_command,filename);
 
-	    execlp(Decode_command,filename,(char *)NULL);
+	    execlp(Decode_command,Decode_command,filename,(char *)NULL);
 	    fprintf(stdout,"execlp(%s,%s) returned errno %d (%s)\n",Decode_command,filename,errno,strerror(errno));
 	  }
 	  int status = 0;
