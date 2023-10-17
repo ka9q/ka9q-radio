@@ -259,9 +259,10 @@ void input_loop(){
 	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",filename,(char *)NULL);
 	      break;
 	    case FT8:
+	      // Note: requires my version of decode_ft8 that accepts -f basefreq
 	      if(Verbose)
-		fprintf(stdout,"%s %s\n",Modetab[Mode].decode,filename);
-	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,filename,(char *)NULL);
+		fprintf(stdout,"%s -f %s %s\n",Modetab[Mode].decode,freq,filename);
+	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,filename,(char *)NULL);
 	      break;
 	    default:
 	      assert(false); // can't happen - trigger abort
