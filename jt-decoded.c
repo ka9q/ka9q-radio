@@ -240,7 +240,7 @@ void input_loop(){
 	    // set working directory to the one containing the file
 	    // dirname_r() is only available on MacOS, so we can't use it here
 	    char *fname_dup = strdup(filename); // in case dirname modifies its arg
-	    int r = chdir(dirname(filename));
+	    int r = chdir(dirname(fname_dup));
 	    FREE(fname_dup);
 			  
 	    if(r != 0)
