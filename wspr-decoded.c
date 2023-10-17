@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <libgen.h>
 #include <fcntl.h>
 #include <locale.h>
 #include <signal.h>
@@ -206,26 +207,43 @@ void input_loop(){
     if(sec >= 114){
       // End of 2-minute frame; process everything
       for(struct session *sp = Sessions;sp != NULL;){
+	// Save since session will be going away before the decoder fork can delete the file
+	char filename[PATH_MAX];
+	strlcpy(filename,sp->filename,sizeof(filename));
+
+	struct session * const next = sp->next;
+	close_session(&sp); // Flushes and closes file, but does not delete
+	sp = next;
 
 	// Finished current period, decode
-	char cmd[16384];
-	snprintf(cmd,sizeof(cmd),Wsprd_command,
-		 Recordings,sp->ssrc,(double)sp->ssrc * 1e-6,sp->filename);
-
-	if(Verbose)
-	  fprintf(stdout,"%s\n",cmd);
-	
 	if(fork() == 0){
-	  int const r = system(cmd);
-	  if(Verbose && r != 0)
-	    fprintf(stderr,"system() returned %d errno %d (%s)\n",r,errno,strerror(errno));
-	  if(!Keep_wav)
-	    unlink(sp->filename);
+	  {
+	    // set working directory to the one containing the file
+	    char *dupname = strdup(filename);
+	    int r = chdir(dirname(dupname));
+	    if(r != 0)
+	      perror("chdir");
+	    FREE(dupname);
+	  }
+	  // Fork decoder, wait for it
+	  int child = 0;
+	  if((child = fork()) == 0){
+	    char freq[100];
+	    snprintf(freq,sizeof(freq),"%lf",(double)sp->ssrc * 1e-6);
+	    execlp(Wsprd_command,Wsprd_command,"-f",freq,"-w",sp->filename,(char *)NULL);
+	    fprintf(stdout,"execlp returned errno %d (%s)\n",errno,strerror(errno));
+	  }
+	  int status = 0;
+	  wait(&status);
+	  if(Verbose)
+	    fprintf(stdout,"PID %d Wait status %d\n",child,status);
+	  if(!Keep_wav){
+	    if(Verbose)
+	      fprintf(stdout,"unlink(%s)\n",filename);
+	    unlink(filename);
+	  }
 	  exit(EX_OK);
 	}
-	struct session * const next = sp->next;
-	close_session(&sp);
-	sp = next;
       }
     }
     if(FD_ISSET(Input_fd,&fdset)){
