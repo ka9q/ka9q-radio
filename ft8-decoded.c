@@ -111,7 +111,7 @@ int main(int argc,char *argv[]){
   char const * locale = getenv("LANG");
   setlocale(LC_ALL,locale);
 
-#if 1
+#if 0
   for(int i=0; i < argc; i++)
     fprintf(stderr," [%d]%s",i,argv[i]);
   fprintf(stderr,"\n");
