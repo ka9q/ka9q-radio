@@ -235,45 +235,53 @@ void input_loop(){
 	close_session(&sp); // Flushes and closes file, but does not delete
 	sp = next;
 
-	int child = 0;
+	int child;
 	if((child = fork()) == 0){
-	  {
-	    // set working directory to the one containing the file
-	    // dirname_r() is only available on MacOS, so we can't use it here
-	    char *fname_dup = strdup(filename); // in case dirname modifies its arg
-	    int r = chdir(dirname(fname_dup));
-	    FREE(fname_dup);
-			  
-	    if(r != 0)
-	      perror("chdir");
-	  }
-	  char freq[100];
-	  snprintf(freq,sizeof(freq),"%lf",(double)ssrc * 1e-6);
+	  // Double fork so we don't have to wait. Seems ugly, is there a better way??
+	  int grandchild;
+	  if((grandchild = fork()) == 0){
+	    {
+	      // set working directory to the one containing the file
+	      // dirname_r() is only available on MacOS, so we can't use it here
+	      char *fname_dup = strdup(filename); // in case dirname modifies its arg
+	      int r = chdir(dirname(fname_dup));
+	      FREE(fname_dup);
+	      
+	      if(r != 0)
+		perror("chdir");
+	    }
+	    char freq[100];
+	    snprintf(freq,sizeof(freq),"%lf",(double)ssrc * 1e-6);
 
-	  switch(Mode){
-	  case WSPR:
-	    if(Verbose)
-	      fprintf(stdout,"%s %s %s %s %s\n",Modetab[Mode].decode,"-f",freq,"-w",filename);
-	    execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",filename,(char *)NULL);
-	    break;
-	  case FT8:
-	    // Note: requires my version of decode_ft8 that accepts -f basefreq
-	    if(Verbose)
-	      fprintf(stdout,"%s -f %s %s\n",Modetab[Mode].decode,freq,filename);
-	    execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,filename,(char *)NULL);
-	    break;
-	  default:
-	    assert(false); // can't happen - trigger abort
-	    break;
+	    switch(Mode){
+	    case WSPR:
+	      if(Verbose)
+		fprintf(stdout,"%s %s %s %s %s\n",Modetab[Mode].decode,"-f",freq,"-w",filename);
+	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",filename,(char *)NULL);
+	      break;
+	    case FT8:
+	      // Note: requires my version of decode_ft8 that accepts -f basefreq
+	      if(Verbose)
+		fprintf(stdout,"%s -f %s %s\n",Modetab[Mode].decode,freq,filename);
+	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,filename,(char *)NULL);
+	      break;
+	    default:
+	      assert(false); // can't happen - trigger abort
+	      break;
+	    }
+	    // Gets here only if exec fails
+	    fprintf(stdout,"execlp(%s) returned errno %d (%s)\n",Modetab[Mode].decode,errno,strerror(errno));
+	    exit(EX_SOFTWARE);
 	  }
-	  // Gets here only if exec fails
-	  fprintf(stdout,"execlp returned errno %d (%s)\n",errno,strerror(errno));
-	  exit(EX_SOFTWARE);
-	} else {
+	  // Wait for decoder to finish, then remove its input file
 	  int status = 0;
-	  wait(&status);
-	  if(Verbose)
-	    fprintf(stdout,"PID %d Wait status %d\n",child,status);
+	  if(waitpid(grandchild,&status,0) != 0){
+	    fprintf(stdout,"wait for grandchild %d: errno %d (%s)\n",
+		    grandchild,errno,strerror(errno));
+	  }
+	  if(!WIFEXITED(status))
+	    fprintf(stdout,"grandchild pid %d returned %d\n",grandchild,WEXITSTATUS(status));
+
 	  if(!Keep_wav){
 	    if(Verbose)
 	      fprintf(stdout,"unlink(%s)\n",filename);
@@ -282,6 +290,9 @@ void input_loop(){
 	  exit(EX_OK);
 	}
       }
+      // Reap children so they won't become zombies
+      int status;
+      while(waitpid(-1,&status,WNOHANG) != 0);
     }
     if(FD_ISSET(Input_fd,&fdset)){
       uint8_t buffer[PKTSIZE];
