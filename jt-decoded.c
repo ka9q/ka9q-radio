@@ -252,18 +252,18 @@ void input_loop(){
 
 	    switch(Mode){
 	    case WSPR:
-	      if(Verbose){
+	      if(Verbose)
 		fprintf(stdout,"%s %s %s %s %s\n",Modetab[Mode].decode,"-f",freq,"-w",filename);
-		fflush(stdout); // Would otherwise be lost in the exec
-	      }
+
+	      fflush(stdout); // Would otherwise be lost in the exec
 	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",filename,(char *)NULL);
 	      break;
 	    case FT8:
 	      // Note: requires my version of decode_ft8 that accepts -f basefreq
-	      if(Verbose){
+	      if(Verbose)
 		fprintf(stdout,"%s -f %s %s\n",Modetab[Mode].decode,freq,filename);
-		fflush(stdout); // Would otherwise be lost in the exec
-	      }
+
+	      fflush(stdout); // Would otherwise be lost in the exec
 	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,filename,(char *)NULL);
 	      break;
 	    default:
