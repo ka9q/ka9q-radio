@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <libgen.h>
 #include <fcntl.h>
 #include <locale.h>
 #include <signal.h>
@@ -25,7 +26,6 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <libgen.h>
 #include <sysexits.h>
 
 #include "misc.h"
@@ -80,15 +80,25 @@ struct session {
   int64_t TotalFileSamples;
 };
 
-
 char const *App_path;
 int Verbose;
 bool Keep_wav;
 char PCM_mcast_address_text[256];
 char const *Recordings = ".";
-char const *Decode_command = "decode_ft8 %s";
-double Cycle_time;
-double Transmission_length;
+
+struct {
+  double cycle_time;
+  double transmission_time;
+  char const *decode;
+} Modetab[] = {
+  { 120, 114, "wsprd"},
+  { 15, 12.64, "decode_ft8"},
+  { 0, 0, NULL},
+};
+enum {
+  WSPR,
+  FT8,
+} Mode;
 
 struct sockaddr Sender;
 struct sockaddr Input_mcast_sockaddr;
@@ -102,7 +112,7 @@ struct session *create_session(struct rtp_header *);
 void close_session(struct session **p);
 
 void usage(){
-  fprintf(stderr,"Usage: %s [-L locale] [-v] [-k] [-d recording_dir] -t cycle_time -c decode_command -l transmission_length PCM_multicast_address\n",App_path);
+  fprintf(stderr,"Usage: %s [-L locale] [-v] [-k] [-d recording_dir] [-8|-w] PCM_multicast_address\n",App_path);
   exit(EX_USAGE);
 }
 
@@ -110,28 +120,20 @@ int main(int argc,char *argv[]){
   App_path = argv[0];
   char const * locale = getenv("LANG");
   setlocale(LC_ALL,locale);
-
-#if 0
-  for(int i=0; i < argc; i++)
-    fprintf(stderr," [%d]%s",i,argv[i]);
-  fprintf(stderr,"\n");
-#endif
+  setlinebuf(stdout); // In case we're redirected to a file
 
   // Defaults
   int c;
-  while((c = getopt(argc,argv,"t:c:d:l:L:vkV")) != EOF){
+  while((c = getopt(argc,argv,"w8d:L:vkV")) != EOF){
     switch(c){
-    case 't':
-      Cycle_time = strtod(optarg,NULL); // 120 for WSPR, 15 for FT8, etc
+    case 'w':
+      Mode = WSPR;
       break;
-    case 'c':
-      Decode_command = optarg;
+    case '8':
+      Mode = FT8;
       break;
     case 'd':
       Recordings = optarg;
-      break;
-    case 'l':
-      Transmission_length = strtod(optarg,NULL); // 114 for WSPR, 12.64 for FT8
       break;
     case 'L':
       locale = optarg;
@@ -149,23 +151,19 @@ int main(int argc,char *argv[]){
       break;
     }
   }
-
-  if(Transmission_length == 0 || Cycle_time == 0 || Decode_command == NULL)
-    usage();
-
-  if(Transmission_length > Cycle_time){
-    fprintf(stderr,"cycle time (%lf) must be greater than transmission length (%lf)\n",Cycle_time,Transmission_length);
-    usage();
+  setlocale(LC_ALL,locale);
+  if(Verbose){
+    for(int i=0; i < argc; i++)
+      fprintf(stderr," [%d]%s",i,argv[i]);
+    fprintf(stderr,"\n");
   }
-
   if(optind >= argc){
     fprintf(stderr,"Specify PCM Multicast IP address or domain name\n");
     usage();
   }
+
   char const * const target = argv[optind];
   strlcpy(PCM_mcast_address_text,target,sizeof(PCM_mcast_address_text));
-  setlocale(LC_ALL,locale);
-  setlinebuf(stdout); // In case we're redirected to a file
 
   if(strlen(Recordings) > 0 && chdir(Recordings) != 0){
     fprintf(stderr,"Can't change to directory %s: %s, exiting\n",Recordings,strerror(errno));
@@ -188,11 +186,6 @@ int main(int argc,char *argv[]){
   if(setsockopt(Input_fd,SOL_SOCKET,SO_RCVBUF,&n,sizeof(n)) == -1)
     perror("setsockopt");
 
-  // Graceful signal catch
-#if 1 // Ignoring child death signals causes system() inside fork() to return errno 10
-  signal(SIGCHLD,SIG_IGN); // Don't let children become zombies
-#endif
-  
   signal(SIGPIPE,closedown);
   signal(SIGINT,closedown);
   signal(SIGKILL,closedown);
@@ -228,14 +221,15 @@ void input_loop(){
 	break; // error of some kind
     }
 
-    int64_t const nsec = utc_time_ns() % (int64_t)(Cycle_time * BILLION); // UTC nanosecond within cycle time
+    int64_t const nsec = utc_time_ns() % (int64_t)(Modetab[Mode].cycle_time * BILLION); // UTC nanosecond within cycle time
 
-    if(nsec >= Transmission_length * BILLION){
+    if(nsec >= Modetab[Mode].transmission_time * BILLION){
       // End of frame; process everything
       for(struct session *sp = Sessions;sp != NULL;){
-	// Save since session will be going away before the decoder fork can delete the file
+	// Save filename and ssrc since session will be going away before the decoder fork can delete the file
 	char filename[PATH_MAX];
 	strlcpy(filename,sp->filename,sizeof(filename));
+	int ssrc = sp->ssrc;
 
 	struct session * const next = sp->next;
 	close_session(&sp); // Flushes and closes file, but does not delete
@@ -244,20 +238,35 @@ void input_loop(){
 	if(fork() == 0){
 	  {
 	    // set working directory to the one containing the file
-	    char *dupname = strdup(filename);
-	    int r = chdir(dirname(dupname));
+	    char dname[PATH_MAX];
+	    int r = chdir(dirname_r(filename,dname));
 	    if(r != 0)
 	      perror("chdir");
-	    FREE(dupname);
 	  }
 	  // Fork decoder, wait for it
 	  int child = 0;
 	  if((child = fork()) == 0){
-	    if(Verbose)
-	      fprintf(stdout,"execlp(%s, %s)\n",Decode_command,filename);
+	    char freq[100];
+	    snprintf(freq,sizeof(freq),"%lf",(double)ssrc * 1e-6);
 
-	    execlp(Decode_command,Decode_command,filename,(char *)NULL);
-	    fprintf(stdout,"execlp(%s,%s) returned errno %d (%s)\n",Decode_command,filename,errno,strerror(errno));
+	    switch(Mode){
+	    case WSPR:
+	      if(Verbose)
+		fprintf(stdout,"%s %s %s %s %s\n",Modetab[Mode].decode,"-f",freq,"-w",filename);
+	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",filename,(char *)NULL);
+	      break;
+	    case FT8:
+	      if(Verbose)
+		fprintf(stdout,"%s %s\n",Modetab[Mode].decode,filename);
+	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,filename,(char *)NULL);
+	      break;
+	    default:
+	      assert(false); // can't happen - trigger abort
+	      break;
+	    }
+	    // Gets here only if exec fails
+	    fprintf(stdout,"execlp returned errno %d (%s)\n",errno,strerror(errno));
+	    exit(EX_SOFTWARE);
 	  }
 	  int status = 0;
 	  wait(&status);
@@ -277,7 +286,7 @@ void input_loop(){
       socklen_t socksize = sizeof(Sender);
       int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
 
-      if(nsec >= Transmission_length * BILLION)
+      if(nsec >= Modetab[Mode].transmission_time * BILLION)
 	continue; // Discard all data until the next cycle
 
       if(size <= 0){    // ??
@@ -366,7 +375,7 @@ struct session *create_session(struct rtp_header *rtp){
   
   int64_t now = utc_time_ns();
   // Microsecond within cycle period
-  int64_t const start_offset_nsec = now % (int64_t)(Cycle_time * BILLION);
+  int64_t const start_offset_nsec = now % (int64_t)(Modetab[Mode].cycle_time * BILLION);
   
   // Use the previous start point as the start of this file
   int64_t start_time = now - start_offset_nsec;
