@@ -47,6 +47,8 @@ install: $(DAEMONS) $(EXECS)
 	(cd aux;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d)
 # Don't overwrite existing configs that might have been modified locally. Run this manually without the '--ignore-existing' if you want to overwrite them all
 	(cd config;rsync --ignore-existing -a . /etc/radio)
+# these changed recently in incompatible ways. Hopefully won't overwrite anything local
+	(cd config;rsync -a wspr-decoded.conf ft8-decoded.conf /etc/radio)
 	mkdir -p /etc/fftw /etc/radio $(VARDIR)
 	chgrp radio $(VARDIR) /etc/radio /etc/fftw
 	chmod g+ws $(VARDIR) /etc/radio /etc/fftw
