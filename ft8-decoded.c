@@ -261,7 +261,8 @@ void input_loop(){
 	  }
 	  int status = 0;
 	  wait(&status);
-	  fprintf(stdout,"PID %d Wait status %d\n",child,status);
+	  if(Verbose)
+	    fprintf(stdout,"PID %d Wait status %d\n",child,status);
 	  if(!Keep_wav){
 	    if(Verbose)
 	      fprintf(stdout,"unlink(%s)\n",filename);
