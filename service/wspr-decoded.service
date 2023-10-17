@@ -1,9 +1,8 @@
-# $Id: wspr-decoded.service,v 1.1 2022/05/04 04:57:42 karn Exp $
 # Systemd unit to record and decode WSPR
-# Phil Karn, KA9Q Aug 2021
+# Phil Karn, KA9Q Oct 2023
 
 [Unit]
-Description=wspr-decode
+Description=wspr-decoder
 After=network-online.target
 Requires=network-online.target
 
@@ -15,8 +14,8 @@ Type=simple
 PermissionsStartOnly=true
 StandardOutput=append:/recordings/wspr.log
 StandardError=inherit
-EnvironmentFile=/etc/radio/wspr-decoded.conf
-ExecStart=/usr/local/bin/wspr-decoded -c $COMMAND -d $DIRECTORY $MCAST
+EnvironmentFile=/etc/radio/wspr-decode.conf
+ExecStart=/usr/local/bin/jt-decoded -w -d "$DIRECTORY" $MCAST
 Restart=always
 RestartSec=5
 TimeoutStopSec=10

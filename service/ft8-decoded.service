@@ -1,8 +1,8 @@
 # Systemd unit to record and decode FT-8
-# Phil Karn, KA9Q Apr 2023
+# Phil Karn, KA9Q Oct 2023
 
 [Unit]
-Description=ft8-decode
+Description=ft8-decoder
 After=network-online.target
 Requires=network-online.target
 
@@ -14,8 +14,8 @@ Type=simple
 PermissionsStartOnly=true
 StandardOutput=append:/recordings/ft8.log
 StandardError=inherit
-EnvironmentFile=/etc/radio/ft8-decoded.conf
-ExecStart=/usr/local/bin/ft8-decoded -c "$COMMAND" -l "$DURATION" -t "$CYCLE_TIME" -d "$DIRECTORY" $MCAST
+EnvironmentFile=/etc/radio/ft8-decode.conf
+ExecStart=/usr/local/bin/jt-decoded -8 -d "$DIRECTORY" $MCAST
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
