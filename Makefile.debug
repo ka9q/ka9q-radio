@@ -2,10 +2,10 @@
 # Copyright 2017-2023, Phil Karn, KA9Q
 
 # for production
-DOPTS = -DNDEBUG=1 -O3
+#DOPTS = -DNDEBUG=1 -O3
 
 # for debugging
-#DOPTS=-g
+DOPTS=-g
 
 COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -D_GNU_SOURCE=1
 
