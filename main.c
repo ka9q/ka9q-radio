@@ -278,8 +278,11 @@ static int loadconfig(char const * const file){
     // Set up default output stream file descriptor and socket
     // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
     {
+      char ttlmsg[100];
+      snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
+
       int slen = sizeof(Data_dest_address);
-      avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data,ElfHashString(Data),NULL,&Data_dest_address,&slen);
+      avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data,ElfHashString(Data),ttlmsg,&Data_dest_address,&slen);
     }
     Data_fd = connect_mcast(&Data_dest_address,Iface,Mcast_ttl,IP_tos);
     if(Data_fd < 0){
@@ -345,8 +348,12 @@ static int loadconfig(char const * const file){
       exit(EX_USAGE);
     }
     Metadata_dest_string = strdup(status);
-    int slen = sizeof(Metadata_dest_address);
-    avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),NULL,&Metadata_dest_address,&slen);
+    {
+      char ttlmsg[100];
+      snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
+      int slen = sizeof(Metadata_dest_address);
+      avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),ttlmsg,&Metadata_dest_address,&slen);
+    }
     // avahi_start has resolved the target DNS name into Metadata_dest_address and inserted the port number
     Status_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
     if(Status_fd < 0){
