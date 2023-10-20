@@ -18,7 +18,7 @@ LDLIBS=-lpthread -lbsd -lm
 
 DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 
-EXECS=control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record wspr-decoded
+EXECS=control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record
 
 
 LOGROTATE_FILES = aprsfeed.rotate
