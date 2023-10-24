@@ -141,7 +141,7 @@ void *demod_linear(void *arg){
     }
  
     // Run AGC on a block basis to do some forward averaging
-    // Lots of people seem to have strong opinions how AGCs should work
+    // Lots of people seem to have strong opinions on how AGCs should work
     // so there's probably a lot of work to do here
     float gain_change = 1; // default to constant gain
     if(chan->linear.agc){

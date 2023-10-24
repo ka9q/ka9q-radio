@@ -433,8 +433,11 @@ static int loadconfig(char const * const file){
       memcpy(&data_dest_address,data,sizeof(data_dest_address));
       // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
       {
+	char ttlmsg[100];
+	snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
+
 	int slen = sizeof(data_dest_address);
-	avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,ElfHashString(data),NULL,&data_dest_address,&slen);
+	avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,ElfHashString(data),ttlmsg,&data_dest_address,&slen);
       }
       data_fd = connect_mcast(&data_dest_address,iface,mcast_ttl,ip_tos);
     } else {
