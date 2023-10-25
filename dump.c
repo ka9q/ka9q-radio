@@ -136,6 +136,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case AD_LEVEL:
       fprintf(fp,"A/D level %.1f dB",decode_float(cp,optlen));
       break;
+    case AD_OVER:
+      fprintf(fp,"A/D overrange: %llu",decode_int64(cp,optlen));
+      break;
     case CALIBRATE:
       fprintf(fp,"calibration %'lg",decode_double(cp,optlen));
       break;

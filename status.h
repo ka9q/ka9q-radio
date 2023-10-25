@@ -148,6 +148,7 @@ enum status_type {
   FE_HIGH_EDGE,
   FE_ISREAL,        // Boolean, true -> front end uses real sampling, false -> front end uses complex
   BLOCKS_SINCE_POLL,  // Blocks since last poll
+  AD_OVER,          // A/D full scale samples
 };
 
 int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);
