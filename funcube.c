@@ -233,6 +233,9 @@ void *proc_funcube(void *arg){
     complex float * wptr = frontend->in->input_write_pointer.c;
 
     for(int i=0; i<Blocksize; i++){
+      frontend->overloads += (sampbuf[2*i] == 32767) || (sampbuf[2*i] <= -32767);
+      frontend->overloads += (sampbuf[2*i+1] == 32767) || (sampbuf[2*i+1] <= -32767);
+
       complex float samp = CMPLXF(sampbuf[2*i],sampbuf[2*i+1]);
 
       samp_sum += samp; // Accumulate average DC values

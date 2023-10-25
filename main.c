@@ -314,7 +314,6 @@ static int loadconfig(char const * const file){
     if(p != NULL)
       Wisdom_file = strdup(p);
   }
-  // Are we using a direct front end?
   const char *hardware = config_getstring(Configtable,global,"hardware",NULL);
   if(hardware == NULL){
     // 'hardware =' now required, no default
