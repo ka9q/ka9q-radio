@@ -41,7 +41,7 @@ struct frontend {
 
   // Stuff we maintain about our upstream source
   uint64_t samples;     // Count of raw I/Q samples received
-  uint64_t overloads;   // Count of full scale A/D samples
+  uint64_t overranges;  // Count of full scale A/D samples
 
   int M;            // Impulse length of input filter
   int L;            // Block length of input filter

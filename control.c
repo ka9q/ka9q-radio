@@ -1406,7 +1406,7 @@ static void display_output(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"","%s",format_gpstime(tbuf,sizeof(tbuf),Frontend.timestamp));
   }
   pprintw(w,row++,col,"Samples","%'llu",Frontend.samples);
-  pprintw(w,row++,col,"Overrange","%'llu",Frontend.overloads);
+  pprintw(w,row++,col,"Overrange","%'llu",Frontend.overranges);
   pprintw(w,row++,col,"Update interval","%'.2f sec",Refresh_rate);
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");

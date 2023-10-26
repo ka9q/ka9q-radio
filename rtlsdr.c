@@ -242,8 +242,8 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
   
   for(int i=0; i < sampcount; i++){
     float complex samp;
-    frontend->overloads += (buf[2*i] == 0) || (buf[2*i] == 255);
-    frontend->overloads += (buf[2*i+1] == 0) || (buf[2*i+1] == 255);
+    frontend->overranges += (buf[2*i] == 0) || (buf[2*i] == 255);
+    frontend->overranges += (buf[2*i+1] == 0) || (buf[2*i+1] == 255);
     __real__ samp = (int)buf[2*i] - 128; // Excess-128
     __imag__ samp = (int)buf[2*i+1] - 128;
     energy += cnrmf(samp);

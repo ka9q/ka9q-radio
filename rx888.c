@@ -291,14 +291,14 @@ static void rx_callback(struct libusb_transfer * const transfer){
       for(int i=0; i < sampcount; i++){
 	int32_t s = samples[i];
 	s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
-	frontend->overloads += (s == 32767) || (s <= -32767);
+	frontend->overranges += (s == 32767) || (s <= -32767);
 	wptr[i] = s;
 	in_energy += wptr[i] * wptr[i];
       }
     } else {
 #if 1
       for(int i=0; i < sampcount; i++){
-	frontend->overloads += (samples[i] == 32767) || (samples[i] <= -32767);
+	frontend->overranges += (samples[i] == 32767) || (samples[i] <= -32767);
 	wptr[i] = samples[i];
 	in_energy += wptr[i] * wptr[i];
       }
@@ -317,7 +317,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
 	prod += out[i] * out[i];
       }
       for(int i = 0; i < 8; i++)
-	frontend->overloads += (prod[i] == 32767) || (prod[i] <= -32767);
+	frontend->overranges += (prod[i] == 32767) || (prod[i] <= -32767);
 	in_energy += prod[i];
 #endif
     }
@@ -333,7 +333,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
       if(sdr->randomizer)
 	s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
 
-      frontend->overloads += (s == 32767) || (s <= -32767);
+      frontend->overranges += (s == 32767) || (s <= -32767);
       float const f = s;
       in_energy += f * f;
       if(sdr->sample_phase < 1.0){
