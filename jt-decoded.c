@@ -404,38 +404,53 @@ struct session *create_session(struct rtp_header *rtp){
   struct tm const * const tm = gmtime(&start_time_sec);
   
   int fd = -1;
-  char dir[PATH_MAX];
-  snprintf(dir,sizeof(dir),"%u",sp->ssrc);
-  if(mkdir(dir,0777) == -1 && errno != EEXIST)
-    fprintf(stdout,"can't create directory %s: %s\n",dir,strerror(errno));
-  // Try to create file in directory whether or not the mkdir succeeded
-  snprintf(sp->filename,sizeof(sp->filename),"%s/%u/%02d%02d%02d_%02d%02d%02d.wav",
-	   Recordings,
-	   sp->ssrc,
-	   (tm->tm_year+1900) % 100,
-	   tm->tm_mon+1,
-	   tm->tm_mday,
-	   tm->tm_hour,
-	   tm->tm_min,
-	   tm->tm_sec);
-
-  fd = open(sp->filename,O_RDWR|O_CREAT,0777);
-  if(fd == -1){
-    // couldn't create directory or create file in directory; create in current dir
-    fprintf(stdout,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
-    snprintf(sp->filename,sizeof(sp->filename),"%02d%02d%02d_%02d%02d%02d.wav",
-	     (tm->tm_year+1900) % 100,
-	     tm->tm_mon+1,
-	     tm->tm_mday,
-	     tm->tm_hour,
-	     tm->tm_min,
-	     tm->tm_sec);
-    fd = open(sp->filename,O_RDWR|O_CREAT,0777);
-  }    
-  if(fd == -1){
-    fprintf(stdout,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
-    FREE(sp);
-    return NULL;
+  {
+    {
+      char dir[PATH_MAX];
+      snprintf(dir,sizeof(dir),"%u",sp->ssrc);
+      if(mkdir(dir,0777) == -1 && errno != EEXIST)
+	fprintf(stdout,"can't create directory %s: %s\n",dir,strerror(errno));
+    }
+    // Try to create file in directory whether or not the mkdir succeeded
+    char filename[PATH_MAX];
+    switch(Mode){
+    case FT8:
+      snprintf(filename,sizeof(filename),"%s/%u/%02d%02d%02d_%02d%02d%02d.wav",
+	       Recordings,
+	       sp->ssrc,
+	       (tm->tm_year+1900) % 100,
+	       tm->tm_mon+1,
+	       tm->tm_mday,
+	       tm->tm_hour,
+	       tm->tm_min,
+	       tm->tm_sec);
+      break;
+    case WSPR:
+      snprintf(filename,sizeof(filename),"%s/%u/%02d%02d%02d_%02d%02d.wav",
+	       Recordings,
+	       sp->ssrc,
+	       (tm->tm_year+1900) % 100,
+	       tm->tm_mon+1,
+	       tm->tm_mday,
+	       tm->tm_hour,
+	       tm->tm_min);
+      break;
+    }    
+    if((fd = open(filename,O_RDWR|O_CREAT,0777)) != -1){
+      strlcpy(sp->filename,filename,sizeof(sp->filename));
+    } else {
+      // couldn't create directory or create file in directory; create in current dir
+      fprintf(stdout,"can't create/write file %s: %s\n",filename,strerror(errno));
+      char const *bn = basename(filename);
+      
+      if((fd = open(bn,O_RDWR|O_CREAT,0777)) != -1){
+	strlcpy(sp->filename,bn,sizeof(sp->filename));
+      } else {
+	fprintf(stdout,"can't create/write file %s: %s, can't create session\n",bn,strerror(errno));
+	FREE(sp);
+	return NULL;
+      }
+    }
   }
   // Use fdopen on a file descriptor instead of fopen(,"w+") to avoid the implicit truncation
   // This allows testing where we're killed and rapidly restarted in the same cycle
