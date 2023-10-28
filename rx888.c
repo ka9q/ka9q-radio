@@ -476,17 +476,19 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       break; // End of list
 
     struct libusb_device_descriptor desc = {0};
-    int rc __attribute__ ((unused));
-    rc = libusb_get_device_descriptor(device,&desc);
-    assert(rc == 0);
+    int rc = libusb_get_device_descriptor(device,&desc);
+    if(rc != 0){
+      fprintf(stdout," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
+      continue;
+    }
     if(desc.idVendor != vendor_id || desc.idProduct != loaded_product_id)
       continue;
 
     fprintf(stdout,"found rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
     libusb_device_handle *handle = NULL;
-    libusb_open(device,&handle);
-    if(handle == NULL){
-      fprintf(stdout," libusb_open() failed\n");
+    rc = libusb_open(device,&handle);
+    if(rc != 0 || handle == NULL){
+      fprintf(stdout," libusb_open() failed: %s\n",libusb_strerror(rc));
       continue;
     }
     if(desc.iManufacturer){
