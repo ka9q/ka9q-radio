@@ -298,6 +298,7 @@ void *run_fft(void *p){
 }
 
 
+// Execute the input side of a filter: set up a job for the FFT worker threads and enqueue it
 int execute_filter_input(struct filter_in * const f){
   assert(f != NULL);
   if(f == NULL)
@@ -353,30 +354,12 @@ int execute_filter_input(struct filter_in * const f){
   return 0;
 }
 
-#if 0
-// Dummy execution of output filter
-// Simply wait for a block and then exit
-// No longer used?
-int execute_filter_output_idle(struct filter_out * const slave){
-  assert(slave != NULL);
-  struct filter_in * const master = slave->master;
-  assert(master != NULL);
-  // Wait for new block of data
-  pthread_mutex_lock(&master->filter_mutex);
-  int blocks_to_wait = slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND];
-  if(blocks_to_wait <= -ND){
-    // Circular buffer overflow (for us)
-    slave->next_jobnum -= blocks_to_wait;
-    slave->block_drops -= blocks_to_wait;
-  }
-  while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
-    pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
-  slave->next_jobnum++;
-  pthread_mutex_unlock(&master->filter_mutex); 
-  return 0;
-}
-#endif
-
+// Execute the output side of a filter:
+// 1 - wait for a forward FFT job to complete
+//     frequency domain data is in a circular queue ND buffers deep to tolerate scheduling jitter
+// 2 - multiply the selected frequency bin range by the filter frequency response
+//     This is the hard part; handle all combinations of real/complex input/output, wraparound, etc
+// 3 - convert back to time domain with IFFT
 int execute_filter_output(struct filter_out * const slave,int const rotate){
   assert(slave != NULL);
   if(slave == NULL)
@@ -415,8 +398,14 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 
   assert(fdomain != NULL);
 
-  // Copy requested segment of frequency data to output buffer
-  // Frequency domain is always complex, but the sizes depend on the time domain input/output being real or complex
+  // Copy the requested frequency segment in preparation for multiplication by the filter response
+  // Although frequency domain data is always complex, this is complicated because
+  // we have to handle the four combinations of the filter input and output time domain data
+  // being either real or complex.
+
+  // In ka9q-radio the input depends on the SDR front end, while the output is complex
+  // (even for SSB) because of the fine tuning frequency shift after conversion
+  // back to the time domain. So while real output is supported it is not well tested.
   if(master->in_type != REAL && slave->out_type != REAL){    // Complex -> complex
     // Rewritten to avoid modulo computations and complex branches inside loops
     int si = slave->bins/2;
@@ -425,7 +414,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
     if(mi >= master->bins/2 || mi <= -master->bins/2 - slave->bins){
       // Completely out of range of master; blank output
       memset(slave->fdomain,0,slave->bins * sizeof(slave->fdomain[0]));
-      goto mult_done;
+      goto copy_done;
     }
     while(mi < -master->bins/2){
       // Below start of master; zero output
@@ -447,7 +436,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
       if(si == slave->bins)
 	si = 0;
       if(si == slave->bins/2) 
-	goto mult_done; // All done
+	goto copy_done; // All done
     } while(mi != master->bins/2); // Until we hit high end of master
     while(si != slave->bins/2){
       // Above end of master; zero out remainder
@@ -493,7 +482,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
     } else if(-rotate >= slave->bins/2 && -rotate <= master->bins - slave->bins/2){
       // Negative input spectrum
       // Negative half of output
-      int mi= -(rotate - slave->bins/2);
+      int mi = -(rotate - slave->bins/2);
       for(int si = slave->bins/2; si < slave->bins; si++)
 	slave->fdomain[si] = conjf(fdomain[mi--]);
 
@@ -514,7 +503,8 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 	mi++;
       }
       for(; mi < 0 && i < slave->bins; i++){
-	slave->fdomain[si] = conjf(fdomain[-mi]); // neg freq component is conjugate of corresponding positive freq      
+	// neg freq component is conjugate of corresponding positive freq      
+	slave->fdomain[si] = conjf(fdomain[-mi]);
 	si++;
 	si = (si == slave->bins) ? 0 : si;
 	mi++;
@@ -545,8 +535,9 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 #endif
     }
   }
- mult_done:;
+ copy_done:;
 
+  // Apply channel filter response
   if(slave->response != NULL){
     assert(malloc_usable_size(slave->response) >= slave->bins * sizeof(*slave->response));
     assert(malloc_usable_size(slave->fdomain) >= slave->bins * sizeof(*slave->fdomain));
@@ -559,6 +550,8 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 
   if(slave->out_type == CROSS_CONJ){
     // hack for ISB; forces negative frequencies onto I, positive onto Q
+    // Don't really know how to use this anymore; it's incompatible with fine tuning in the time domain
+    // Re-implementing ISB will probably require a filter for each sideband
     assert(malloc_usable_size(slave->fdomain) >= slave->bins * sizeof(*slave->fdomain));
     for(int p=1,dn=slave->bins-1; p < slave->bins; p++,dn--){
       complex float const pos = slave->fdomain[p];
@@ -568,6 +561,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
       slave->fdomain[dn] = neg - conjf(pos);
     }
   }
+  // And finally back to the time domain (except in spectrum mode)
   if(slave->out_type != SPECTRUM)
     fftwf_execute(slave->rev_plan); // Note: c2r version destroys fdomain[]
   return 0;
