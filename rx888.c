@@ -118,16 +118,16 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // Firmware file
   char const *firmware = config_getstring(dictionary,section,"firmware","SDDC_FX3.img");
   // Queue depth, default 16; 32 sometimes overflows
-  int const queuedepth = config_getint(dictionary,section,"queuedepth",16);
+  int queuedepth = config_getint(dictionary,section,"queuedepth",16);
   if(queuedepth < 1 || queuedepth > 64) {
-    fprintf(stdout,"Invalid queue depth %d\n",queuedepth);
-    return -1;
+    fprintf(stdout,"Invalid queue depth %d, using 16\n",queuedepth);
+    queuedepth = 16;
   }
   // Packets per transfer request, default 32
-  int const reqsize = config_getint(dictionary,section,"reqsize",32);
+  int reqsize = config_getint(dictionary,section,"reqsize",32);
   if(reqsize < 1 || reqsize > 64) {
-    fprintf(stdout,"Invalid request size %d\n",reqsize);
-    return -1;
+    fprintf(stdout,"Invalid request size %d, using 32\n",reqsize);
+    reqsize = 32;
   }
   {
     int ret;
@@ -170,8 +170,8 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
       samprate = parse_frequency(p,false);
   }
 
-  if(samprate < 1000000){
-    int const minsamprate = 1000000; // 1 MHz?
+  int const minsamprate = 1000000; // 1 MHz, in ltc2208 spec
+  if(samprate < minsamprate){
     fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,minsamprate);
     samprate = minsamprate;
   }
@@ -180,13 +180,13 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   frontend->min_IF = 0;
   frontend->max_IF = 0.47 * frontend->samprate; // Just an estimate - get the real number somewhere
   frontend->isreal = true; // Make sure the right kind of filter gets created!
-  frontend->bitspersample = 16;
+  frontend->bitspersample = 16; // For gain scaling
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
   if(fabsl(frontend->calibrate) >= 1e-4){
     fprintf(stdout,"Unreasonable frequency calibration %.3g, setting to 0\n",frontend->calibrate);
     frontend->calibrate = 0;
   }
-  frontend->lock = true; // Doesn't tune in direct conversion mode
+  frontend->lock = true; // Doesn't tune in direct sampling mode
   {
     char const *p = config_getstring(dictionary,section,"description","rx888");
     FREE(frontend->description);
@@ -428,7 +428,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     fprintf(stdout,"found rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
     libusb_device_handle *handle = NULL;
     rc = libusb_open(device,&handle);
-    if(rc == 0 || handle == NULL){
+    if(rc != 0 || handle == NULL){
       fprintf(stdout,", libusb_open() failed: %s\n",libusb_strerror(rc));
       continue;
     }
