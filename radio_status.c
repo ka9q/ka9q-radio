@@ -85,12 +85,12 @@ void *radio_status(void *arg){
 	if(chan == NULL){
 	  if((chan = setup_chan(ssrc)) == NULL){ // possible race here?
 	    // Creation failed, e.g., no output stream
-	    fprintf(stdout,"Dynamic create of ssrc %u failed; is 'data =' set in [global]?\n",ssrc);
+	    fprintf(stdout,"Dynamic create of ssrc %'u failed; is 'data =' set in [global]?\n",ssrc);
 	    continue;
 	  } else {
 	    start_demod(chan);
 	    if(Verbose)
-	      fprintf(stdout,"dynamically started ssrc %u\n",ssrc);
+	      fprintf(stdout,"dynamically started ssrc %'u\n",ssrc);
 	  }
 	}
 	// chan now != NULL
@@ -217,7 +217,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	    restart_needed = true; // Easier than trying to handle it inline
 	  
 	  if(Verbose > 1)
-	    fprintf(stdout,"set ssrc %u freq = %.3lf\n",ssrc,f);
+	    fprintf(stdout,"set ssrc %'u freq = %'.3lf\n",ssrc,f);
 
 	  set_freq(chan,f);
 	}
@@ -427,7 +427,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
  done:;
   if(restart_needed){
     if(Verbose > 1)
-      fprintf(stdout,"terminating chan thread for ssrc %u\n",ssrc);
+      fprintf(stdout,"terminating chan thread for ssrc %'u\n",ssrc);
     // Stop chan
     chan->terminate = true;
     pthread_join(chan->demod_thread,NULL);
@@ -438,7 +438,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
     // Set up new filter with chan possibly stopped
     if(chan->filter.out){
       if(Verbose > 1)
-	fprintf(stdout,"new filer for chan %u: IF=[%.0f,%.0f], samprate %d, kaiser beta %.1f\n",
+	fprintf(stdout,"new filter for chan %'u: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
 		ssrc, chan->filter.min_IF, chan->filter.max_IF,
 		chan->output.samprate, chan->filter.kaiser_beta);
       // start_demod already sets up a new filter
@@ -449,7 +449,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
   }    
   if(restart_needed){
     if(Verbose > 1)
-      fprintf(stdout,"starting chan type %d for ssrc %u\n",chan->demod_type,ssrc);
+      fprintf(stdout,"starting chan type %d for ssrc %'u\n",chan->demod_type,ssrc);
     start_demod(chan);
   }
   return 0;

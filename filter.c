@@ -28,13 +28,14 @@
 
 // Settable from main
 char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
-double Fftw_plan_timelimit = 30.0;
+double FFTW_plan_timelimit = 30.0;
 int N_worker_threads = 2;
 int N_internal_threads = 1; // Usually most efficient
+int FFTW_planning_level = FFTW_MEASURE; // Default FFTW planning level
 
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
-static pthread_mutex_t FFT_planning_mutex;
-static bool Fftw_init = false;
+static pthread_mutex_t FFTW_planning_mutex;
+static bool FFTW_init = false;
 
 // FFT job queue
 struct fft_job {
@@ -126,31 +127,31 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
   // FFTW itself always runs with a single thread since multithreading didn't seem to do much good
   // But we have a set of worker threads operating on a job queue to allow a controlled number
   // of independent FFTs to execute at the same time
-  if(!Fftw_init){
+  if(!FFTW_init){
     fftwf_init_threads();
-    pthread_mutex_init(&FFT_planning_mutex,NULL);
+    pthread_mutex_init(&FFTW_planning_mutex,NULL);
     bool sr = fftwf_import_system_wisdom();
     fprintf(stdout,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
     bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
     fprintf(stdout,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
-    fftwf_set_timelimit(Fftw_plan_timelimit);
+    fftwf_set_timelimit(FFTW_plan_timelimit);
     if(!sr && !lr)
-      fprintf(stdout,"No wisdom read, planning FFTs may take up to %.0lf sec\n",Fftw_plan_timelimit);
+      fprintf(stdout,"No wisdom read, planning FFTs may take up to %'.0lf sec\n",FFTW_plan_timelimit);
 
     // Start FFT worker thread(s) if not already running
     for(int i=0;i < N_worker_threads;i++){
       if(FFT.thread[i] == (pthread_t)0)
 	pthread_create(&FFT.thread[i],NULL,run_fft,NULL);
     }
-    Fftw_init = true;
+    FFTW_init = true;
 
   }
-  pthread_mutex_lock(&FFT_planning_mutex);
+  pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(N_internal_threads);
 
   switch(in_type){
   default:
-    pthread_mutex_unlock(&FFT_planning_mutex);
+    pthread_mutex_unlock(&FFTW_planning_mutex);
     assert(0); // shouldn't happen
     return NULL;
   case CROSS_CONJ:
@@ -162,7 +163,7 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     master->input_write_pointer.c = master->input_read_pointer.c + L; // start writing here
     master->input_read_pointer.r = NULL;
     master->input_write_pointer.r = NULL;
-    master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_PATIENT);
+    master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_planning_level);
     break;
   case REAL:
     master->input_buffer_size = round_to_page(ND * N * sizeof(float));
@@ -171,12 +172,12 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     master->input_write_pointer.r = master->input_read_pointer.r + L; // start writing here
     master->input_read_pointer.c = NULL;
     master->input_write_pointer.c = NULL;
-    master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_PATIENT);
+    master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_planning_level);
     break;
   }
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
     fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
-  pthread_mutex_unlock(&FFT_planning_mutex);
+  pthread_mutex_unlock(&FFTW_planning_mutex);
 
   return master;
 }
@@ -209,7 +210,7 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
   else
     slave->noise_gain = NAN;
   
-  pthread_mutex_lock(&FFT_planning_mutex);
+  pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1); // IFFTs are always small, use only one internal thread
   switch(slave->out_type){
   default:
@@ -221,7 +222,7 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     assert(slave->output_buffer.c != NULL);
     slave->output_buffer.r = NULL; // catch erroneous references
     slave->output.c = slave->output_buffer.c + osize - olen;
-    slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_PATIENT);
+    slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_planning_level);
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
     break;
@@ -239,13 +240,13 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     assert(slave->output_buffer.r != NULL);
     slave->output_buffer.c = NULL;
     slave->output.r = slave->output_buffer.r + osize - olen;
-    slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_PATIENT);
+    slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_planning_level);
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
     break;
   }
   slave->next_jobnum = master->next_jobnum;
-  pthread_mutex_unlock(&FFT_planning_mutex);
+  pthread_mutex_unlock(&FFTW_planning_mutex);
   return slave;
 }
 
@@ -699,16 +700,16 @@ int window_filter(int const L,int const M,complex float * const response,float c
   assert(malloc_usable_size(response) >= N * sizeof(*response));
   // fftw_plan can overwrite its buffers, so we're forced to make a temp. Ugh.
   complex float * const buffer = lmalloc(sizeof(complex float) * N);
-  pthread_mutex_lock(&FFT_planning_mutex);
+  pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_FORWARD,FFTW_PATIENT);
+  fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_FORWARD,FFTW_planning_level);
   assert(fwd_filter_plan != NULL);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_PATIENT);
+  fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_planning_level);
   assert(rev_filter_plan != NULL);
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
     fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
-  pthread_mutex_unlock(&FFT_planning_mutex);
+  pthread_mutex_unlock(&FFTW_planning_mutex);
 
   // Convert to time domain
   memcpy(buffer,response,N * sizeof(*buffer));
@@ -775,16 +776,16 @@ int window_rfilter(int const L,int const M,complex float * const response,float 
   assert(buffer != NULL);
   float * const timebuf = lmalloc(sizeof(float) * N);
   assert(timebuf != NULL);
-  pthread_mutex_lock(&FFT_planning_mutex);
+  pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan fwd_filter_plan = fftwf_plan_dft_r2c_1d(N,timebuf,buffer,FFTW_PATIENT);
+  fftwf_plan fwd_filter_plan = fftwf_plan_dft_r2c_1d(N,timebuf,buffer,FFTW_planning_level);
   assert(fwd_filter_plan != NULL);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan rev_filter_plan = fftwf_plan_dft_c2r_1d(N,buffer,timebuf,FFTW_PATIENT);
+  fftwf_plan rev_filter_plan = fftwf_plan_dft_c2r_1d(N,buffer,timebuf,FFTW_planning_level);
   assert(rev_filter_plan != NULL);
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
     fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
-  pthread_mutex_unlock(&FFT_planning_mutex);
+  pthread_mutex_unlock(&FFTW_planning_mutex);
 
 
   // Convert to time domain

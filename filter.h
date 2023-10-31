@@ -17,6 +17,8 @@
 extern double Fftw_plan_timelimit;
 extern char const *Wisdom_file;
 extern int Nthreads;
+extern int FFTW_planning_level;
+extern double FFTW_plan_timelimit;
 
 // Input can be REAL or COMPLEX
 // Output can be REAL, COMPLEX, CROSS_CONJ, i.e., COMPLEX with special cross conjugation for ISB, or SPECTRUM (noncoherent power)

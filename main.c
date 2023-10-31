@@ -39,7 +39,7 @@
 
 // Configuration constants & defaults
 static char const DEFAULT_PRESET[] = "am";
-static int const DEFAULT_FFT_THREADS = 2;
+static int const DEFAULT_FFTW_THREADS = 2;
 static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
 static int const DEFAULT_MCAST_TTL = 0; // Don't blast LANs with cheap Wifi!
 static float const DEFAULT_BLOCKTIME = 20.0;
@@ -62,7 +62,7 @@ struct channel *Template;
 
 char const *Name;
 extern int N_worker_threads; // owned by filter.c
-extern double Fftw_plan_timelimit; // defined in filter.c
+
 
 // Command line and environ params
 const char *App_path;
@@ -163,7 +163,7 @@ int main(int argc,char *argv[]){
     case 'V': // Already shown above
       exit(EX_OK); 
     case 'p':
-      Fftw_plan_timelimit = strtod(optarg,NULL);
+      FFTW_plan_timelimit = strtod(optarg,NULL);
       break;
     case 'v':
       Verbose++;
@@ -258,8 +258,21 @@ static int loadconfig(char const * const file){
   // Process [global] section applying to all demodulator blocks
   char const * const global = "global";
   Verbose = config_getint(Configtable,global,"verbose",Verbose);
-  Fftw_plan_timelimit = config_getdouble(Configtable,global,"fft-time-limit",Fftw_plan_timelimit);
-
+  FFTW_plan_timelimit = config_getdouble(Configtable,global,"fft-time-limit",FFTW_plan_timelimit);
+  {
+    char const *cp = config_getstring(Configtable,global,"fft-plan-level","measure");
+    if(strcasecmp(cp,"estimate") == 0){
+      FFTW_planning_level = FFTW_ESTIMATE;
+    } else if(strcasecmp(cp,"measure") == 0){
+      FFTW_planning_level = FFTW_MEASURE;
+    } else if(strcasecmp(cp,"patient") == 0){
+      FFTW_planning_level = FFTW_PATIENT;
+    } else if(strcasecmp(cp,"exhaustive") == 0){
+      FFTW_planning_level = FFTW_EXHAUSTIVE;
+    } else if(strcasecmp(cp,"wisdom-only") == 0){
+      FFTW_planning_level = FFTW_WISDOM_ONLY;
+    }
+  }
 
   // Default multicast interface
   {
@@ -293,7 +306,7 @@ static int loadconfig(char const * const file){
   }
   Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",Blocktime));
   Overlap = abs(config_getint(Configtable,global,"overlap",Overlap));
-  N_worker_threads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFT_THREADS); // variable owned by filter.c
+  N_worker_threads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
   RTCP_enable = config_getboolean(Configtable,global,"rtcp",RTCP_enable);
   SAP_enable = config_getboolean(Configtable,global,"sap",SAP_enable);
   {
