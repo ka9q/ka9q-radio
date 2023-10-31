@@ -24,6 +24,8 @@
 #include "misc.h"
 #include "filter.h"
 
+//#define FILTER_DEBUG 1 # turn on lots of printfs in the window creation code
+
 // Settable from main
 char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
 double Fftw_plan_timelimit = 30.0;
@@ -496,41 +498,32 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 
 #if 1 // faster!
       int i;
-      for(i = 0; -mi >= master->bins && i < slave->bins; i++){
-	slave->fdomain[si] = 0;
-	si++;
+      for(i = 0; -mi >= master->bins && i < slave->bins; i++,mi++){
+	slave->fdomain[si++] = 0;
 	si = (si == slave->bins) ? 0 : si;
-	mi++;
       }
-      for(; mi < 0 && i < slave->bins; i++){
+      for(; mi < 0 && i < slave->bins; i++,mi++){
 	// neg freq component is conjugate of corresponding positive freq      
-	slave->fdomain[si] = conjf(fdomain[-mi]);
-	si++;
+	slave->fdomain[si++] = conjf(fdomain[-mi]);
 	si = (si == slave->bins) ? 0 : si;
-	mi++;
       }
-      for(; mi < master->bins && i < slave->bins; i++){
-	slave->fdomain[si] = fdomain[mi];
-	si++;
+      for(; mi < master->bins && i < slave->bins; i++,mi++){
+	slave->fdomain[si++] = fdomain[mi];
 	si = (si == slave->bins) ? 0 : si;
-	mi++;
       }
       for(; i < slave->bins; i++){
-	slave->fdomain[si] = 0;
-	si++;
+	slave->fdomain[si++] = 0;
 	si = (si == slave->bins) ? 0 : si;
       }    
 #else    // slower
-      for(int i = 0; i < slave->bins; i++){
+      for(int i = 0; i < slave->bins; i++,mi++){
 	complex float result = 0;
 	if(abs(mi) < master->bins){
 	  // neg freq component is conjugate of corresponding positive freq
 	  result = (mi >= 0 ?  fdomain[mi] : conjf(fdomain[-mi]));
 	}
-	slave->fdomain[si] = result;
-	si++;
+	slave->fdomain[si++] = result;
 	si = (si == slave->bins) ? 0 : si;
-	mi++;
       }	  
 #endif
     }
@@ -569,6 +562,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 
 #if 0
 // Send terminate job to FFT thread
+// We never actually kill a FFT thread (which is why it's turned off) but it's here if we ever do
 static void terminate_fft(struct filter_in *f){
   struct fft_job * const job = calloc(1,sizeof(struct fft_job));
 
@@ -721,7 +715,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
   memcpy(buffer,response,N * sizeof(*buffer));
   fftwf_execute(rev_filter_plan);
   fftwf_destroy_plan(rev_filter_plan);
-#if 0
+#ifdef FILTER_DEBUG
   fprintf(stderr,"window_filter raw time domain\n");
   for(int n=0; n < N; n++){
     fprintf(stderr,"%d %lg %lg\n",n,crealf(buffer[n]),cimagf(buffer[n]));
@@ -731,7 +725,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
   float kaiser_window[M];
   make_kaiser(kaiser_window,M,beta);
 
-#if 0
+#ifdef FILTER_DEBUG
   for(int m = 0; m < M; m++)
     fprintf(stderr,"kaiser[%d] = %g\n",m,kaiser_window[m]);
 #endif  
@@ -744,7 +738,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
   // Pad with zeroes on right side
   memset(buffer+M,0,(N-M)*sizeof(*buffer));
 
-#if 0
+#ifdef FILTER_DEBUG
   fprintf(stderr,"window_filter filter impulse response, shifted, windowed and zero padded\n");
   for(int n=0;n< M;n++)
     fprintf(stderr,"%d %lg %lg\n",n,crealf(buffer[n]),cimagf(buffer[n]));
@@ -754,7 +748,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
   fftwf_execute(fwd_filter_plan);
   fftwf_destroy_plan(fwd_filter_plan);
 
-#if 0
+#ifdef FILTER_DEBUG
   fprintf(stderr,"window_filter filter response amplitude\n");
   for(int n=0;n<N;n++)
     fprintf(stderr,"%d %g %g (%.1f dB)\n",n,crealf(buffer[n]),cimagf(buffer[n]),power2dB(cnrmf(buffer[n])));
@@ -798,7 +792,7 @@ int window_rfilter(int const L,int const M,complex float * const response,float 
   memcpy(buffer,response,(N/2+1)*sizeof(*buffer));
   fftwf_execute(rev_filter_plan);
   fftwf_destroy_plan(rev_filter_plan);
-#if 0
+#ifdef FILTER_DEBUG
   fprintf(stderr,"window_rfilter impulse response after IFFT before windowing\n");
   for(int n=0;n< M;n++)
     fprintf(stderr,"%d %lg\n",n,timebuf[n]);
@@ -815,7 +809,7 @@ int window_rfilter(int const L,int const M,complex float * const response,float 
   
   // Pad with zeroes on right side
   memset(timebuf+M,0,(N-M)*sizeof(*timebuf));
-#if 0
+#ifdef FILTER_DEBUG
   printf("window_rfilter impulse response, shifted, windowed and zero padded\n");
   for(int n=0;n< M;n++)
     printf("%d %lg\n",n,timebuf[n]);
@@ -827,7 +821,7 @@ int window_rfilter(int const L,int const M,complex float * const response,float 
   fftwf_free(timebuf);
   memcpy(response,buffer,(N/2+1)*sizeof(*response));
   fftwf_free(buffer);
-#if 0
+#ifdef FILTER_DEBUG
   printf("window_rfilter frequency response\n");
   for(int n=0; n < N/2 + 1; n++)
     printf("%d %g %g (%.1f dB)\n",n,crealf(response[n]),cimagf(response[n]),power2dB(cnrmf(response[n])));
