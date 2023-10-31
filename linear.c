@@ -173,6 +173,7 @@ void *demod_linear(void *arg){
 	// Allow gain to increase at configured rate, e.g. 20 dB/s
 	gain_change = powf(chan->linear.recovery_rate, 1.0F/N);
       }
+      chan->tp1 = gain_change; // Monitor this
     }
     // Accumulate sum of square gains, for averaging in status
     float start_gain = chan->output.gain;

@@ -446,7 +446,6 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
       if(si == slave->bins)
 	si = 0;
     }
-
   } else if(master->in_type != REAL && slave->out_type == REAL){
     // Complex -> real UNTESTED!
     for(int si=0; si < slave->bins; si++){
