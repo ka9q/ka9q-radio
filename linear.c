@@ -159,13 +159,15 @@ void *demod_linear(void *arg){
 	float const newgain = chan->output.headroom / ampl;
 	// N-th root of newgain / gain
 	// Should this be in double precision to avoid imprecision when gain = - epsilon dB?
-	gain_change = powf(newgain/chan->output.gain, 1.0F/N);
+	if(newgain > 0)
+	  gain_change = powf(newgain/chan->output.gain, 1.0F/N);
 	assert(gain_change != 0);
 	chan->hangcount = chan->linear.hangtime;
       } else if(bn * chan->output.gain > chan->linear.threshold * chan->output.headroom){
 	// Reduce gain to keep noise < threshold, same as for strong signal
 	float const newgain = chan->linear.threshold * chan->output.headroom / bn;
-	gain_change = powf(newgain/chan->output.gain, 1.0F/N);
+	if(newgain > 0)
+	  gain_change = powf(newgain/chan->output.gain, 1.0F/N);
 	assert(gain_change != 0);
       } else if(chan->hangcount > 0){
 	// Waiting for AGC hang time to expire before increasing gain

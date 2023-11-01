@@ -193,6 +193,8 @@ static float estimate_noise(struct channel *chan,int shift){
 	break; // fallen off the right edge
     }
   }
+  if(!isfinite(min_bin_energy)) // Never got set!
+    return 0;
   // Normalize
   // A round trip through IFFT(FFT(x)) scales amplitude by N, power by N^2
   // So the FFT alone scales power by N (see Parseval's theorem for the DFT)
