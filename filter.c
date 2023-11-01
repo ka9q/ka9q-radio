@@ -28,6 +28,7 @@
 
 // Settable from main
 char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
+char const *System_wisdom_file = "/etc/fftw/wisdomf"; // only valid for float version
 double FFTW_plan_timelimit = 30.0;
 int N_worker_threads = 2;
 int N_internal_threads = 1; // Usually most efficient
@@ -132,8 +133,23 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     pthread_mutex_init(&FFTW_planning_mutex,NULL);
     bool sr = fftwf_import_system_wisdom();
     fprintf(stdout,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
+    if(!sr){
+      if(access(System_wisdom_file,AT_EACCESS|R_OK) == -1){
+	fprintf(stdout,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
+      }
+    }
+
     bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
     fprintf(stdout,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
+    if(!lr){
+      if(access(Wisdom_file,AT_EACCESS|R_OK) == -1){
+	fprintf(stdout,"%s not readable: %s\n",Wisdom_file,strerror(errno));
+      }
+    }
+    if(access(Wisdom_file,AT_EACCESS|W_OK) == -1){
+      fprintf(stdout,"Warning: %s not writeable, exports will fail: %s\n",Wisdom_file,strerror(errno));
+    }
+
     fftwf_set_timelimit(FFTW_plan_timelimit);
     if(!sr && !lr)
       fprintf(stdout,"No wisdom read, planning FFTs may take up to %'.0lf sec\n",FFTW_plan_timelimit);
