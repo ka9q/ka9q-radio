@@ -134,7 +134,7 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     bool sr = fftwf_import_system_wisdom();
     fprintf(stdout,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
     if(!sr){
-      if(access(System_wisdom_file,AT_EACCESS|R_OK) == -1){
+      if(access(System_wisdom_file,R_OK) == -1){ // Would really like to use AT_EACCESS flag
 	fprintf(stdout,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
       }
     }
@@ -142,11 +142,11 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
     fprintf(stdout,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
     if(!lr){
-      if(access(Wisdom_file,AT_EACCESS|R_OK) == -1){
+      if(access(Wisdom_file,R_OK) == -1){
 	fprintf(stdout,"%s not readable: %s\n",Wisdom_file,strerror(errno));
       }
     }
-    if(access(Wisdom_file,AT_EACCESS|W_OK) == -1){
+    if(access(Wisdom_file,W_OK) == -1){
       fprintf(stdout,"Warning: %s not writeable, exports will fail: %s\n",Wisdom_file,strerror(errno));
     }
 
