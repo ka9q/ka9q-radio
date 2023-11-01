@@ -159,7 +159,7 @@ int main(int argc,char *argv[]){
 
   pthread_create(&Input_thread,NULL,input_thread,NULL);
   if(Ssrc == 0)
-    while(1)
+    while(true)
       sleep(1000); // passive mode indefinitely
 
   int64_t last_command_time = 0;
@@ -190,7 +190,7 @@ int main(int argc,char *argv[]){
 	sleep_time = (last_command_time + Interval - gps_time_ns()) / 1000;	
     }
   }
-  while(1)
+  while(true)
     sleep(1000); // sleep forever while receive thread runs
 
   exit(EX_OK); // can't reach
@@ -203,7 +203,7 @@ void usage(void){
 
 // Process incoming packets
 void *input_thread(void *p){
-  while(1){
+  while(true){
     uint8_t buffer[PKTSIZE];
     struct sockaddr_storage source;
     socklen_t len = sizeof(source);

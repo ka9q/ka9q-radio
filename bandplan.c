@@ -142,7 +142,7 @@ int main(){
   double f;
   struct bandplan const *bp;
 
-  while(1){
+  while(true){
     scanf("%lf",&f);
     bp = lookup_frequency(f);
     if(bp == NULL)

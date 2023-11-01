@@ -167,7 +167,7 @@ int main(int argc,char * const argv[]){
   // Loop forever processing and dispatching incoming PCM packets
   // Process incoming RTP packets, demux to per-SSRC thread
   struct packet *pkt = NULL;
-  while(1){
+  while(true){
     // Need a new packet buffer?
     if(!pkt)
       pkt = malloc(sizeof(*pkt));
@@ -291,7 +291,7 @@ void * status(void *p){
     setsockopt(Status_fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
   }
 
-  while(1){
+  while(true){
     socklen_t socklen = sizeof(Status_input_source_address);
     uint8_t buffer[16384];
     int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);

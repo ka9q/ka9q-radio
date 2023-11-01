@@ -290,7 +290,7 @@ int main(int argc,char * const argv[]){
   // Loop forever processing and dispatching incoming PCM packets
   // Process incoming RTP packets, demux to per-SSRC thread
   struct packet *pkt = NULL;
-  while(1){
+  while(true){
     // Need a new packet buffer?
     if(!pkt)
       pkt = malloc(sizeof(*pkt));
@@ -410,7 +410,7 @@ void * status(void *p){
     setsockopt(Status_fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
   }
 
-  while(1){
+  while(true){
     socklen_t socklen = sizeof(Status_input_source_address);
     uint8_t buffer[16384];
     int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
@@ -553,7 +553,7 @@ void *encode(void *arg){
   assert(1 || error == OPUS_OK);
 #endif
 
-  while(1){
+  while(true){
     struct packet *pkt = NULL;
     {
       struct timespec waittime;
@@ -741,7 +741,7 @@ int send_samples(struct session * const sp){
   assert(sp != NULL);
 
   int pcm_samples_written = 0;
-  while(1){
+  while(true){
     float const ms_in_buffer = 1000.0 * sp->audio_write_index / (sp->channels * sp->samprate);
     if(ms_in_buffer < Opus_blocktime)
       break; // Less than minimum allowable Opus block size; wait

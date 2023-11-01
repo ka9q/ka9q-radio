@@ -524,7 +524,7 @@ int main(int argc,char *argv[]){
 
   // Periodically poll status to ensure device hasn't reset
   uint64_t prev_sample_count = 0;
-  while(1){
+  while(true){
     sleep(1);
     if(Terminate){
       fprintf(stderr,"Terminating as requsted by user\n");
@@ -552,7 +552,7 @@ void *ncmd(void *arg){
   if(sdr->status_sock == -1 || sdr->nctl_sock == -1)
     return NULL; // Nothing to do
 
-  while(1){
+  while(true){
     uint8_t buffer[Bufsize];
     int const length = recv(sdr->nctl_sock,buffer,sizeof(buffer),0);
     if(length > 0){
@@ -579,7 +579,7 @@ void *display(void *arg){
   off_t stat_point = ftello(sdr->status);
   // End lines with return when writing to terminal, newlines when writing to status file
   char const  eol = stat_point == -1 ? '\r' : '\n';
-  while(1){
+  while(true){
     float powerdB = power2dB(sdr->power);
 
     if(stat_point != -1)
@@ -610,7 +610,7 @@ void *display(void *arg){
   off_t stat_point = ftello(sdr->status);
   // End lines with return when writing to terminal, newlines when writing to status file
   char   eol = stat_point == -1 ? '\r' : '\n';
-  while(1){
+  while(true){
 
     if(stat_point != -1)
       fseeko(sdr->status,stat_point,SEEK_SET);

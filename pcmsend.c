@@ -196,7 +196,7 @@ int main(int argc,char * const argv[]){
 
   realtime();
 
-  while(1){
+  while(true){
     // Wait for audio input
     // I'd rather use pthread condition variables and signaling, but the portaudio people
     // say you shouldn't do that in a callback. So we poll.

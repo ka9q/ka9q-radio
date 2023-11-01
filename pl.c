@@ -215,7 +215,7 @@ int main(int argc,char * const argv[]){
   signal(SIGTERM,closedown);
   signal(SIGPIPE,SIG_IGN);
 
-  while(1){
+  while(true){
     // Wait for traffic to arrive
     fd_set fdset = fdset_template;
     int const s = select(max_fd+1,&fdset,NULL,NULL,NULL);

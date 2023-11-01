@@ -129,7 +129,7 @@ int main(int argc,char *argv[]){
     }
   }
 
-  while(1) {
+  while(true) {
     // Resolve the APRS network server
     struct addrinfo hints;
     memset(&hints,0,sizeof(hints));

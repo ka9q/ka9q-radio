@@ -246,7 +246,7 @@ int main(int argc,char *argv[]){
     sleep(10000); // Status channel not specified; sleep indefinitely
 
   // Process status messages that may tell us the PCM input
-  while(1){
+  while(true){
     socklen_t socklen = sizeof(Status_input_source_address);
     uint8_t buffer[PKTSIZE];
     int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
@@ -323,7 +323,7 @@ int main(int argc,char *argv[]){
 // Receive audio multicasts, multiplex into sessions
 static void *input(void *arg){
 
-  while(1){
+  while(true){
     struct rtp_header rtp_hdr;
     struct sockaddr sender;
 
@@ -520,7 +520,7 @@ static void *decode_task(void *arg){
 
   int pad = 0;
 
-  while(1){
+  while(true){
     int16_t samples[AL];
 
     if(pad > 0){

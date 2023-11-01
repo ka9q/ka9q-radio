@@ -168,7 +168,7 @@ int main(int argc,char *argv[]){
 
 
   uint32_t sent_tag = 0;
-  while(1){
+  while(true){
     // (re)send command until we get a response;
     if(gps_time_ns() >= last_command_time + BILLION/10){ // Rate limit command packets to 10 Hz
       uint8_t cmd_buffer[PKTSIZE];

@@ -215,7 +215,7 @@ int main(int argc,char *argv[]){
   struct timespec last_realtime = start_realtime;
   struct timespec last_cputime = {0};
   int sleep_period = 60;
-  while(1){
+  while(true){
     sleep(sleep_period);
     struct timespec new_realtime;
     clock_gettime(CLOCK_MONOTONIC,&new_realtime);
@@ -675,7 +675,7 @@ static void *rtcp_send(void *arg){
     pthread_setname(name);
   }
 
-  while(1){
+  while(true){
 
     if(chan->output.rtp.ssrc == 0) // Wait until it's set by output RTP subsystem
       goto done;

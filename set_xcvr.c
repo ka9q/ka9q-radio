@@ -232,7 +232,7 @@ int main(int argc,char *argv[]){
     sendcmd("AT+DMOSETVOX=%d\r\n",vox);
 #if DEBUG
     bool cr_seen = false;
-    while(1){
+    while(true){
       char const c = fgetc(Term_stream);
       if(cr_seen && c != '\n')	 
 	fputc('\n',stdout); // ensure new line after cr

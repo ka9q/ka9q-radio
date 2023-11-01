@@ -205,7 +205,7 @@ static void *airspyhf_monitor(void *p){
   assert(ret == AIRSPYHF_SUCCESS);
   fprintf(stdout,"airspyhf running\n");
   // Periodically poll status to ensure device hasn't reset
-  while(1){
+  while(true){
     sleep(1);
     if(!airspyhf_is_streaming(sdr->device))
       break; // Device seems to have bombed. Exit and let systemd restart us

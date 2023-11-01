@@ -260,7 +260,7 @@ void *run_fft(void *p){
 
   realtime();
 
-  while(1){
+  while(true){
     // Get next job
     pthread_mutex_lock(&FFT.queue_mutex);
     while(FFT.job_queue == NULL)

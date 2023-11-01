@@ -222,7 +222,7 @@ int main(int argc,char * const argv[]){
   // The decode threads must free these buffers to avoid a memory leak
   // Main loop begins here
   struct packet *pkt = NULL;
-  while(1){
+  while(true){
     // Need a new packet buffer?
     if(!pkt)
       pkt = malloc(sizeof(*pkt));
@@ -301,7 +301,7 @@ int main(int argc,char * const argv[]){
 }
 // Read status stream looking for the socket address of the PCM output stream
 int fetch_socket(int status_fd){
-  while(1){
+  while(true){
     socklen_t socklen = sizeof(Status_input_source_address);
     uint8_t buffer[16384];
     int length = recvfrom(status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
@@ -410,7 +410,7 @@ void *decode(void *arg){
   int const pilot_rotate = quantum * round(19000./(hzperbin * quantum));
   int const subc_rotate = quantum * round(38000./(hzperbin * quantum));
 
-  while(1){
+  while(true){
     struct packet *pkt = NULL;
 
     {

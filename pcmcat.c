@@ -95,7 +95,7 @@ int main(int argc,char *argv[]){
   // audio input thread
   // Receive audio multicasts, multiplex into sessions, send to output
   // What do we do if we get different streams?? think about this
-  while(1){
+  while(true){
     struct sockaddr sender;
     socklen_t socksize = sizeof(sender);
     uint8_t buffer[PKTSIZE];

@@ -197,7 +197,7 @@ void *proc_funcube(void *arg){
 
   realtime();
 
-  while(1){
+  while(true){
     // Read block of I/Q samples from A/D converter
     // The timer is necessary because portaudio will go into a tight loop if the device is unplugged
     struct itimerval itime;

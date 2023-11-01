@@ -57,7 +57,7 @@ void *radio_status(void *arg){
   
   pthread_create(&status_dump_thread,NULL,radio_status_dump,NULL);
 
-  while(1){
+  while(true){
     // Command from user
     uint8_t buffer[8192];
     int const length = recv(Ctl_fd,buffer,sizeof(buffer),0);
@@ -111,7 +111,7 @@ static void *radio_status_dump(void *p){
   pthread_setname("statusdump");
   pthread_detach(pthread_self());
 
-  while(1){
+  while(true){
     // Wait to be notified by radio_status thread that we've received a request to
     // dump the entire channel table.
     pthread_mutex_lock(&Status_dump_mutex);

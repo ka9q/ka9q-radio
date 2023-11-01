@@ -223,7 +223,7 @@ static void closedown(int a){
 static void input_loop(){
 
   struct sockaddr sender;
-  while(1){
+  while(true){
     int64_t current_time = gps_time_ns();
 
     // Receive data

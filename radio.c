@@ -535,7 +535,7 @@ void *sap_send(void *p){
 // have become inactive
 void *chan_reaper(void *arg){
   pthread_setname("dreaper");
-  while(1){
+  while(true){
     int actives = 0;
     for(int i=0;i<Channel_list_length && actives < Active_channel_count;i++){
       struct channel *chan = &Channel_list[i];
@@ -570,7 +570,7 @@ int downconvert(struct channel *chan){
     int shift;
     double remainder;
 
-    while(1){
+    while(true){
       if(chan->terminate){
 	pthread_mutex_unlock(&Frontend.status_mutex);
 	return -1;
@@ -582,9 +582,9 @@ int downconvert(struct channel *chan){
 			Frontend.in->impulse_length,
 			Frontend.samprate,
 			&shift,&remainder,freq) == 0)
-	break; // We can get at least part of the spectrum we want
+	break; // The carrier is in range
 
-      // No front end coverage of our passband; wait for it to retune
+      // No front end coverage of our carrier; wait for it to retune
       chan->sig.bb_power = 0;
       chan->sig.bb_energy = 0;
       chan->output.energy = 0;

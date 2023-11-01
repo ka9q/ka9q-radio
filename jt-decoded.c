@@ -206,7 +206,7 @@ void closedown(int a){
 
 // Read from RTP network socket, assemble blocks of samples
 void input_loop(){
-  while(1){
+  while(true){
     // Receive network data
     fd_set fdset;
     FD_ZERO(&fdset);

@@ -1567,7 +1567,7 @@ void *repeater_ctl(void *arg){
       fprintf(stdout,"%s: PTT On\n",
 	      format_gpstime(result,sizeof(result),LastAudioTime));
     }
-    while(1){
+    while(true){
       int64_t now = gps_time_ns();
       // When are we required to ID?
       if(now >= Last_id_time + Mandatory_ID_interval){

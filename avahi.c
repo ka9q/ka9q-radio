@@ -129,7 +129,7 @@ static void *avahi_register(void *p){
 
   struct userdata *userdata = (struct userdata *)p;
 
-  while(1){
+  while(true){
     AvahiClient *client;
     int error;
     
