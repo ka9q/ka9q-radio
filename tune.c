@@ -37,12 +37,13 @@ uint32_t Ssrc;
 float Gain = INFINITY;
 double Frequency = INFINITY;
 int Agc = -1;
+int Samprate = 0;
 
 struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "f:g:hi:vl:r:s:V";
+char Optstring[] = "f:g:hi:vl:r:s:R:V";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"frequency", required_argument, NULL, 'f'},
@@ -50,6 +51,7 @@ struct option Options[] = {
   {"help", no_argument, NULL, 'h'},
   {"iface", required_argument, NULL, 'i'},
   {"mode", required_argument, NULL, 'm'},
+  {"samprate", required_argument, NULL, 'R'},
   {"ssrc", required_argument, NULL, 's'},
   {"radio", required_argument, NULL, 'r'},
   {"locale", required_argument, NULL, 'l'},
@@ -97,6 +99,9 @@ int main(int argc,char *argv[]){
 	break;
       case 'a':
 	Agc = 1;
+	break;
+      case 'R':
+	Samprate = strtol(optarg,NULL,0);
 	break;
       case 'V':
 	VERSION();
@@ -165,7 +170,7 @@ int main(int argc,char *argv[]){
   float baseband_level = INFINITY;
   float low_edge = INFINITY;
   float high_edge = INFINITY;
-
+  int samprate = 0;
 
   uint32_t sent_tag = 0;
   while(true){
@@ -180,6 +185,9 @@ int main(int argc,char *argv[]){
       if(Mode != NULL)
 	encode_string(&bp,PRESET,Mode,strlen(Mode));
       
+      if(Samprate != 0)
+	encode_int(&bp,OUTPUT_SAMPRATE,Samprate);
+
       if(Frequency != INFINITY)
 	encode_double(&bp,RADIO_FREQUENCY,Frequency); // Hz
       if(Gain != INFINITY){
@@ -267,6 +275,10 @@ int main(int argc,char *argv[]){
       case BASEBAND_POWER:
 	baseband_level = decode_float(cp,optlen);
 	break;
+      case OUTPUT_SAMPRATE:
+	samprate = decode_int(cp,optlen);
+	break;
+
       }
       cp += optlen;
     }
@@ -281,6 +293,9 @@ int main(int argc,char *argv[]){
   if(strlen(preset) > 0)
     printf("Preset %s\n",preset);
   FREE(preset);
+  if(samprate != 0)
+    printf("Sample rate %'d Hz\n",samprate);
+    
   if(received_freq != INFINITY)
     printf("Frequency %'.3lf Hz\n",received_freq);
   if(received_agc_enable != -1)
@@ -293,7 +308,7 @@ int main(int argc,char *argv[]){
     printf("Baseband power %.1f dB\n",baseband_level);
 
   if(low_edge != INFINITY && high_edge != INFINITY)
-    printf("Passband %.1f Hz to %.1f Hz (%.1f dB-Hz)\n",low_edge,high_edge,10*log10(fabsf(high_edge - low_edge)));
+    printf("Passband %'.1f Hz to %'.1f Hz (%.1f dB-Hz)\n",low_edge,high_edge,10*log10(fabsf(high_edge - low_edge)));
 
   if(noise_density != INFINITY)
     printf("N0 %.1f dB/Hz\n",noise_density);
