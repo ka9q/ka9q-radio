@@ -38,6 +38,7 @@ float Gain = INFINITY;
 double Frequency = INFINITY;
 int Agc = -1;
 int Samprate = 0;
+bool Quiet = false;
 
 struct sockaddr_storage Control_address;
 int Status_sock = -1;
@@ -51,6 +52,7 @@ struct option Options[] = {
   {"help", no_argument, NULL, 'h'},
   {"iface", required_argument, NULL, 'i'},
   {"mode", required_argument, NULL, 'm'},
+  {"quiet", no_argument, NULL, 'q'},
   {"samprate", required_argument, NULL, 'R'},
   {"ssrc", required_argument, NULL, 's'},
   {"radio", required_argument, NULL, 'r'},
@@ -99,6 +101,9 @@ int main(int argc,char *argv[]){
 	break;
       case 'a':
 	Agc = 1;
+	break;
+      case 'q':
+	Quiet = true;
 	break;
       case 'R':
 	Samprate = strtol(optarg,NULL,0);
@@ -288,40 +293,42 @@ int main(int argc,char *argv[]){
       fprintf(stdout,"Not for us: ssrc %'u, tag %'u\n",(int)received_ssrc,(int)received_tag);
   }
 
-  // Show responses
-  printf("SSRC %'u\n",Ssrc);
-  if(strlen(preset) > 0)
-    printf("Preset %s\n",preset);
-  FREE(preset);
-  if(samprate != 0)
-    printf("Sample rate %'d Hz\n",samprate);
+  // Show responses unless quiet
+  if(!Quiet){
+    printf("SSRC %'u\n",Ssrc);
+    if(strlen(preset) > 0)
+      printf("Preset %s\n",preset);
+    FREE(preset);
+    if(samprate != 0)
+      printf("Sample rate %'d Hz\n",samprate);
     
-  if(received_freq != INFINITY)
-    printf("Frequency %'.3lf Hz\n",received_freq);
-  if(received_agc_enable != -1)
-    printf("AGC %s\n",received_agc_enable ? "on" : "off");
-
-  if(received_gain != INFINITY)
-    printf("Gain %.1f dB\n",received_gain);
-
-  if(baseband_level != INFINITY)
-    printf("Baseband power %.1f dB\n",baseband_level);
-
-  if(low_edge != INFINITY && high_edge != INFINITY)
-    printf("Passband %'.1f Hz to %'.1f Hz (%.1f dB-Hz)\n",low_edge,high_edge,10*log10(fabsf(high_edge - low_edge)));
-
-  if(noise_density != INFINITY)
-    printf("N0 %.1f dB/Hz\n",noise_density);
-  
-  if(baseband_level != INFINITY && 
-     low_edge != INFINITY &&
-     high_edge != INFINITY &&
-     noise_density != INFINITY){
-
-    float noise_power = dB2power(noise_density) * fabsf(high_edge - low_edge);
-    float signal_plus_noise_power = dB2power(baseband_level);
-
-    printf("SNR %.1f dB\n",power2dB(signal_plus_noise_power / noise_power - 1));
+    if(received_freq != INFINITY)
+      printf("Frequency %'.3lf Hz\n",received_freq);
+    if(received_agc_enable != -1)
+      printf("AGC %s\n",received_agc_enable ? "on" : "off");
+    
+    if(received_gain != INFINITY)
+      printf("Gain %.1f dB\n",received_gain);
+    
+    if(baseband_level != INFINITY)
+      printf("Baseband power %.1f dB\n",baseband_level);
+    
+    if(low_edge != INFINITY && high_edge != INFINITY)
+      printf("Passband %'.1f Hz to %'.1f Hz (%.1f dB-Hz)\n",low_edge,high_edge,10*log10(fabsf(high_edge - low_edge)));
+    
+    if(noise_density != INFINITY)
+      printf("N0 %.1f dB/Hz\n",noise_density);
+    
+    if(baseband_level != INFINITY && 
+       low_edge != INFINITY &&
+       high_edge != INFINITY &&
+       noise_density != INFINITY){
+      
+      float noise_power = dB2power(noise_density) * fabsf(high_edge - low_edge);
+      float signal_plus_noise_power = dB2power(baseband_level);
+      
+      printf("SNR %.1f dB\n",power2dB(signal_plus_noise_power / noise_power - 1));
+    }
   }
   exit(EX_OK); // We're done
 }
