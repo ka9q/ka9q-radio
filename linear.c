@@ -178,7 +178,6 @@ void *demod_linear(void *arg){
 	gain_change = powf(chan->linear.recovery_rate, 1.0F/N);
 	assert(gain_change != 0);
       }
-      chan->tp1 = gain_change; // Monitor this
     }
     // Accumulate sum of square gains, for averaging in status
     float start_gain = chan->output.gain;
