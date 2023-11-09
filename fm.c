@@ -121,8 +121,8 @@ void *demod_fm(void *arg){
       send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
       continue;
     }
-    float baseband[N];    // Chanulated FM baseband
-    // Actual FM chanulation
+    float baseband[N];    // Demodulated FM baseband
+    // Actual FM demodulation
     for(int n=0; n < N; n++){
       float np = M_1_PIf * cargf(buffer[n]); // Scale to -1 to +1 (half rotations)
       float x = np - phase_memory;
@@ -130,8 +130,6 @@ void *demod_fm(void *arg){
       x = x > 1 ? x - 2 : x < -1 ? x + 2 : x; // reduce to -1 to +1
       baseband[n] = x;
     }
-    
-
     if(chan->sig.snr < 20 && chan->fm.threshold) { // take 13 dB as "full quieting"
       // Experimental threshold reduction (popcorn/click suppression)
 #if 0
