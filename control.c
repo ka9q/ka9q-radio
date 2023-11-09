@@ -716,30 +716,26 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   case 'o': // Set/clear option flags, most apply only to linear detector
     {
       char str[Entry_width];
+
       getentry("[isb pll square stereo mono agc], '!' prefix disables: ",str,sizeof(str));
-      // ! entries must be compared first to prevent spurious matches
-      if(strcasestr(str,"!mono") != NULL){
-	encode_int(bpp,OUTPUT_CHANNELS,2);
-      } else if(strcasestr(str,"mono") != NULL){
-	encode_int(bpp,OUTPUT_CHANNELS,1);
-      } else if(strcasestr(str,"!isb") != NULL){
-	encode_byte(bpp,INDEPENDENT_SIDEBAND,0);
+      bool enable = true;
+      if(strchr(str,'!') != NULL)
+	enable = false;
+
+      if(strcasestr(str,"mono") != NULL){
+	encode_int(bpp,OUTPUT_CHANNELS,enable ? 1 : 2);
+      } else if(strcasestr(str,"stereo") != NULL){
+	encode_int(bpp,OUTPUT_CHANNELS,enable ? 2 : 1);	
       } else if(strcasestr(str,"isb") != NULL){
-	encode_byte(bpp,INDEPENDENT_SIDEBAND,1);
-      } else if(strcasestr(str,"!pll") != NULL){
-	encode_byte(bpp,PLL_ENABLE,0);
-	encode_byte(bpp,PLL_SQUARE,0);	
+	encode_byte(bpp,INDEPENDENT_SIDEBAND,enable);
       } else if(strcasestr(str,"pll") != NULL){
-	encode_byte(bpp,PLL_ENABLE,1);
-      } else if(strcasestr(str,"!square") != NULL){	  
-	encode_byte(bpp,PLL_SQUARE,0);	
+	encode_byte(bpp,PLL_ENABLE,enable);
       } else if(strcasestr(str,"square") != NULL){
-	encode_byte(bpp,PLL_ENABLE,1);
-	encode_byte(bpp,PLL_SQUARE,1);	
-      } else if(strcasestr(str,"!agc") != NULL){
-	encode_byte(bpp,AGC_ENABLE,0);
+	encode_byte(bpp,PLL_SQUARE,enable);	
+	if(enable)
+	  encode_byte(bpp,PLL_ENABLE,enable);
       } else if(strcasestr(str,"agc") != NULL){
-	encode_byte(bpp,AGC_ENABLE,1);
+	encode_byte(bpp,AGC_ENABLE,enable);
       }
     }
     break;
