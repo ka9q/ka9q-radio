@@ -939,6 +939,9 @@ static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int
     case INPUT_SAMPLES:
       Frontend.samples = decode_int64(cp,optlen);
       break;
+    case AD_OVER:
+      Frontend.overranges = decode_int64(cp,optlen);
+      break;
     case OUTPUT_DATA_SOURCE_SOCKET:
       decode_socket(&channel->output.data_source_address,cp,optlen);
       break;
