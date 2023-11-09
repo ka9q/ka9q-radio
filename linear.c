@@ -74,7 +74,7 @@ void *demod_linear(void *arg){
       // Update PLL state, if active
       if(!chan->pll.was_on){
 	chan->pll.pll.integrator = 0; // reset oscillator when coming back on
-	chan->pll.was_on = 1;
+	chan->pll.was_on = true;
       }
       set_pll_params(&chan->pll.pll,chan->linear.loop_bw,damping);
       for(int n=0; n<N; n++){
@@ -116,11 +116,11 @@ void *demod_linear(void *arg){
 #endif
       if(chan->pll.lock_count >= lock_limit){
 	chan->pll.lock_count = lock_limit;
-	chan->linear.pll_lock = 1;
+	chan->linear.pll_lock = true;
       }
       if(chan->pll.lock_count <= -lock_limit){
 	chan->pll.lock_count = -lock_limit;
-	chan->linear.pll_lock = 0;
+	chan->linear.pll_lock = false;
       }
       chan->linear.lock_timer = chan->pll.lock_count;
       chan->linear.cphase = carg(pll_phasor(&chan->pll.pll));
@@ -129,7 +129,7 @@ void *demod_linear(void *arg){
       
       chan->sig.foffset = pll_freq(&chan->pll.pll);
     } else { // if PLL
-      chan->pll.was_on = 0;
+      chan->pll.was_on = false;
     }
     // Apply frequency shift
     // Must be done after PLL, which operates only on DC
