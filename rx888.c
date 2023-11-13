@@ -342,9 +342,10 @@ static void rx_callback(struct libusb_transfer * const transfer){
 	out[i] = __builtin_convertvector(in[i],v8sf);
 	prod += out[i] * out[i];
       }
-      for(int i = 0; i < 8; i++)
+      for(int i = 0; i < 8; i++){
 	frontend->overranges += (prod[i] == 32767) || (prod[i] <= -32767);
 	in_energy += prod[i];
+      }
 #endif
     }
     output_count = sampcount;
