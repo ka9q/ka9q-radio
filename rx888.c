@@ -23,6 +23,8 @@
 #include "rx888.h"
 #include "ezusb.h"
 
+// Reference frequency, default 27MHz
+static unsigned int const Default_reference = 27000000;
 static float const power_smooth = 0.05;
 
 int Ezusb_verbose = 0; // Used by ezusb.c
@@ -72,7 +74,7 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
 static void rx888_set_att(struct sdrstate *sdr,float att);
 static void rx888_set_gain(struct sdrstate *sdr,float gain);
-static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate);
+static double rx888_set_samprate(struct sdrstate *sdr,unsigned int reference,double ppm,unsigned int samprate);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate *sdr);
 static void rx888_close(struct sdrstate *sdr);
@@ -81,6 +83,7 @@ static double val2gain(int g);
 static int gain2val(bool highgain, double gain);
 static void *proc_rx888(void *arg);
 static double actual_freq(double frequency);
+static void rational_approximation(double value, uint32_t max_denominator, uint32_t *a, uint32_t *b, uint32_t *c);
 
 
 #define N_USB_SPEEDS 6
@@ -161,7 +164,28 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // Gain value, default +1.5 dB
   float gain = config_getfloat(dictionary,section,"gain",1.5);
   rx888_set_gain(sdr,gain);
-  
+
+  unsigned int reference = Default_reference;
+  {
+    char const *p = config_getstring(dictionary,section,"reference",NULL);
+    if(p != NULL)
+      reference = parse_frequency(p,false);
+  }
+
+  int const minreference = 10000000;  //  10 MHz
+  int const maxreference = 100000000; // 100 MHz
+  if(reference < minreference || reference > maxreference){
+    fprintf(stdout,"Invalid reference frequency %'d, forcing %'d\n",reference,Default_reference);
+    reference = Default_reference;
+  }
+
+  double ppm = config_getdouble(dictionary,section,"ppm",0);
+  double const maxppm = 1000.0;
+  if(fabs(ppm) > maxppm) {
+    fprintf(stdout,"Unreasonable frequency correction ppm=%.3g, setting to 0\n",ppm);
+    ppm = 0;
+  }
+
   // Sample Rate, default 64.8
   unsigned int samprate = 64800000;
   {
@@ -175,7 +199,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,minsamprate);
     samprate = minsamprate;
   }
-  double actual = rx888_set_samprate(sdr,samprate);
+  double actual = rx888_set_samprate(sdr,reference,ppm,samprate);
+  frontend->reference = reference;
+  frontend->ppm = ppm;
   frontend->samprate = samprate;
   frontend->min_IF = 0;
   frontend->max_IF = 0.47 * frontend->samprate; // Just an estimate - get the real number somewhere
@@ -670,13 +696,107 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain){
   frontend->rf_gain = val2gain(arg); // Store actual nearest value
 }
 
-static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
+// see: SiLabs Application Note AN619 - Manually Generating an Si5351 Register Map (https://www.silabs.com/documents/public/application-notes/AN619.pdf)
+static double rx888_set_samprate(struct sdrstate *sdr,unsigned int reference,double ppm,unsigned int samprate){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
   usleep(5000);
-  command_send(sdr->dev_handle,STARTADC,samprate);
+  if(reference == Default_reference && ppm == 0){
+    // Use firmware to set sample rate
+    command_send(sdr->dev_handle,STARTADC,samprate);
+    frontend->samprate = samprate;
+    return actual_freq((double)samprate);
+  }
+  if(samprate == 0){
+    // power off clock 0
+    control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_CLK_BASE+0,SI5351_VALUE_CLK_PDN);
+    return 0;
+  }
+
+  /* if the requested sample rate is below 1MHz, use an R divider */
+  double r_samprate = samprate;
+  uint8_t rdiv = 0;
+  while (r_samprate < 1e6 && rdiv <= 7) {
+    r_samprate *= 2.0;
+    rdiv += 1;
+  }
+  if (r_samprate < 1e6) {
+    fprintf(stdout,"ERROR - requested sample rate is too low: %'d\n",samprate);
+    return -1;
+  }
+
+  /* choose an even integer for the output MS */
+  uint32_t output_ms = ((uint32_t)(SI5351_MAX_VCO_FREQ / r_samprate));
+  output_ms -= output_ms % 2;
+  if (output_ms < 4 || output_ms > 900) {
+    fprintf(stdout,"ERROR - invalid output MS: %d  (samprate=%'d)\n",output_ms,samprate);
+    return -1;
+  }
+  double const vco_frequency = r_samprate * output_ms;
+
+  /* feedback MS */
+  double const reference_corrected = reference * (1.0 + 1e-6 * ppm);
+  double const feedback_ms = vco_frequency / reference_corrected;
+  /* find a good rational approximation for feedback_ms */
+  uint32_t a;
+  uint32_t b;
+  uint32_t c;
+  rational_approximation(feedback_ms,SI5351_MAX_DENOMINATOR,&a,&b,&c);
+
+  double const actual_ratio = a + (double)b / (double)c;
+  double const actual_samprate = reference_corrected * actual_ratio / output_ms / (1 << rdiv);
+  fprintf(stdout,"Samprate %'d, Reference %'d, Ppm %'g, A=%d B=%d C=%d output_ms=%d rdiv=%d Actual Samprate %'lf\n",
+	  frontend->samprate,frontend->reference,frontend->ppm,a,b,c,output_ms,rdiv,actual_samprate);
+
+  /* configure clock input and PLL */
+  uint32_t const b_over_c = 128 * b / c;
+  uint32_t const msn_p1 = 128 * a + b_over_c - 512;
+  uint32_t const msn_p2 = 128 * b  - c * b_over_c;
+  uint32_t const msn_p3 = c;
+
+  uint8_t data_clkin[] = {
+    (msn_p3 & 0x0000ff00) >>  8,
+    (msn_p3 & 0x000000ff) >>  0,
+    (msn_p1 & 0x00030000) >> 16,
+    (msn_p1 & 0x0000ff00) >>  8,
+    (msn_p1 & 0x000000ff) >>  0,
+    (msn_p3 & 0x000f0000) >> 12 | (msn_p2 & 0x000f0000) >> 16,
+    (msn_p2 & 0x0000ff00) >>  8,
+    (msn_p2 & 0x000000ff) >>  0
+  };
+
+  control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
+
+  /* configure clock output */
+  /* since the output divider is an even integer a = output_ms, b = 0, c = 1 */
+  uint32_t const ms_p1 = 128 * output_ms - 512;
+  uint32_t const ms_p2 = 0;
+  uint32_t const ms_p3 = 1;
+
+  uint8_t data_clkout[] = {
+    (ms_p3 & 0x0000ff00) >>  8,
+    (ms_p3 & 0x000000ff) >>  0,
+    rdiv << 5 | (ms_p1 & 0x00030000) >> 16,
+    (ms_p1 & 0x0000ff00) >>  8,
+    (ms_p1 & 0x000000ff) >>  0,
+    (ms_p3 & 0x000f0000) >> 12 | (ms_p2 & 0x000f0000) >> 16,
+    (ms_p2 & 0x0000ff00) >>  8,
+    (ms_p2 & 0x000000ff) >>  0
+  };
+
+  control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
+
+  // start clock
+  control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
+  // power on clock 0
+  uint8_t const clock_control = SI5351_VALUE_MS_INT | SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
+  control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_CLK_BASE+0,clock_control);
+
+  usleep(1000000); // 1s - see SDDC_FX3 firmware
+  frontend->reference = reference;
+  frontend->ppm = ppm;
   frontend->samprate = samprate;
-  return actual_freq((double)samprate);
+  return actual_samprate;
 }
 
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
@@ -805,7 +925,55 @@ double rx888_tune(struct frontend *frontend,double freq){
   return 0; // No tuning implemented (direct sampling only)
 }
 
+/* best rational approximation:
+ *
+ *     value ~= a + b/c     (where c <= max_denominator)
+ *
+ * References:
+ * - https://en.wikipedia.org/wiki/Continued_fraction#Best_rational_approximations
+ */
+static void rational_approximation(double value, uint32_t max_denominator,
+                                   uint32_t *a, uint32_t *b, uint32_t *c)
+{
+  const double epsilon = 1e-5;
 
+  double af;
+  double f0 = modf(value, &af);
+  *a = (uint32_t) af;
+  *b = 0;
+  *c = 1;
+  double f = f0;
+  double delta = f0;
+  /* we need to take into account that the fractional part has a_0 = 0 */
+  uint32_t h[] = {1, 0};
+  uint32_t k[] = {0, 1};
+  for(int i = 0; i < 100; ++i){
+    if(f <= epsilon){
+      break;
+    }
+    double anf;
+    f = modf(1.0 / f,&anf);
+    uint32_t an = (uint32_t) anf;
+    for(uint32_t m = (an + 1) / 2; m <= an; ++m){
+      uint32_t hm = m * h[1] + h[0];
+      uint32_t km = m * k[1] + k[0];
+      if(km > max_denominator){
+        break;
+      }
+      double d = fabs((double) hm / (double) km - f0);
+      if(d < delta){
+        delta = d;
+        *b = hm;
+        *c = km;
+      }
+    }
+    uint32_t hn = an * h[1] + h[0];
+    uint32_t kn = an * k[1] + k[0];
+    h[0] = h[1]; h[1] = hn;
+    k[0] = k[1]; k[1] = kn;
+  }
+  return;
+}
 // Determine actual (vs requested) clock frequency
 // Adapted from code by Franco Venturi, K4VZ
 
@@ -853,4 +1021,3 @@ static double actual_freq(double frequency){
 #endif
     return actualAdcFreq;
 }
-

@@ -41,8 +41,6 @@ int Channel_list_length; // Length of array
 int Active_channel_count; // Active channels
 extern struct channel const *Template;
 
-static float estimate_noise(struct channel *chan,int shift);
-
 // Find chan by ssrc
 struct channel *lookup_chan(uint32_t ssrc){
   struct channel *chan = NULL;
@@ -138,10 +136,8 @@ static const float n0_smooth = .001; // exponential smoothing rate for (noisy) b
 // experimental
 // estimate n0 by finding the FFT bin with the least energy
 // in the chan's pre-filter nyquist bandwidth
-// Works better than global estimation when noise floor is not flat
+// Works better than global estimation when noise floor is not flat, e.g., on HF
 static float estimate_noise(struct channel *chan,int shift){
-
-
   struct filter_out const * const slave = chan->filter.out;
   if(chan->filter.energies == NULL)
     chan->filter.energies = calloc(sizeof(float),slave->bins);
@@ -169,7 +165,10 @@ static float estimate_noise(struct channel *chan,int shift){
     for(int i=0; i < slave->bins; i++){
       int n = abs(mbin); // Doesn't really handle the mirror well
       if(n < master->bins){
-	energies[i] += (cnrmf(fdomain[n]) - energies[i]) * n0_smooth; // blocknum was already incremented
+	if(energies[i] == 0)
+	  energies[i] = cnrmf(fdomain[n]); // Quick startup
+	else
+	  energies[i] += (cnrmf(fdomain[n]) - energies[i]) * n0_smooth; // blocknum was already incremented
 	if(min_bin_energy > energies[i])
 	  min_bin_energy = energies[i];
       } else
@@ -183,7 +182,10 @@ static float estimate_noise(struct channel *chan,int shift){
 
     for(int i=0; i < slave->bins; i++){
       if(mbin >= 0 && mbin < master->bins){
-	energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * n0_smooth; // blocknum was already incremented
+	if(energies[i] == 0)
+	  energies[i] = cnrmf(fdomain[mbin]); // Quick startup
+	else
+	  energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * n0_smooth; // blocknum was already incremented
 	if(min_bin_energy > energies[i])
 	  min_bin_energy = energies[i];
       }

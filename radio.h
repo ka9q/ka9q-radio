@@ -48,6 +48,8 @@ struct frontend {
 
   // Stuff maintained by our upstream source and filled in by the status daemon
   char *description;  // free-form text
+  int reference;     // Reference frequency
+  double ppm;        // Reference frequency correction in ppm
   int samprate;      // Sample rate on raw input data stream
   int64_t timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
   double frequency;

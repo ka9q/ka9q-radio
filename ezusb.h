@@ -4,6 +4,7 @@
  * Copyright © 2001 Stephen Williams (steve@icarus.com)
  * Copyright © 2002 David Brownell (dbrownell@users.sourceforge.net)
  * Copyright © 2013 Federico Manzan (f.manzan@gmail.com)
+ * Copyright © 2023 Franco Venturi
  *
  *    This source code is free software; you can redistribute it
  *    and/or modify it in source code form under the terms of the GNU
@@ -112,6 +113,12 @@ int command_send(struct libusb_device_handle *dev_handle, enum FX3Command cmd,
                  uint32_t data);
 int argument_send(struct libusb_device_handle *dev_handle, enum ArgumentList cmd,
                  uint32_t data);
+int control_send(struct libusb_device_handle *dev_handle, enum FX3Command cmd,
+                 uint16_t value, uint16_t index, unsigned char *data,
+                 uint16_t length);
+int control_send_byte(struct libusb_device_handle *dev_handle,
+                 enum FX3Command cmd,
+                 uint16_t value, uint16_t index, uint8_t data);
 
 #ifdef __cplusplus
 }

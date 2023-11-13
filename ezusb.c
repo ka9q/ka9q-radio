@@ -4,6 +4,7 @@
  * Copyright © 2008 Roger Williams (rawqux@users.sourceforge.net)
  * Copyright © 2012 Pete Batard (pete@akeo.ie)
  * Copyright © 2013 Federico Manzan (f.manzan@gmail.com)
+ * Copyright © 2023 Franco Venturi
  *
  *    This source code is free software; you can redistribute it
  *    and/or modify it in source code form under the terms of the GNU
@@ -882,3 +883,43 @@ int argument_send(struct libusb_device_handle *dev_handle, enum ArgumentList cmd
   return 0;
 }
 
+int control_send(struct libusb_device_handle *dev_handle, enum FX3Command cmd,
+                 uint16_t value, uint16_t index, unsigned char *data,
+                 uint16_t length) {
+
+  int ret;
+
+  /* Send the control message. */
+  ret = libusb_control_transfer(
+      dev_handle, LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_OUT, cmd, value,
+      index, data, length, 0);
+
+  if (ret < 0) {
+    fprintf(stderr, "Could not send control: 0x%X with value: 0x%X, index: 0x%X, length: %d. Error : %s.\n",
+            cmd, value, index, length, libusb_error_name(ret));
+    return -1;
+  }
+
+  return 0;
+}
+
+int control_send_byte(struct libusb_device_handle *dev_handle,
+                 enum FX3Command cmd,
+                 uint16_t value, uint16_t index, uint8_t data) {
+
+  int ret;
+
+  /* Send the control message. */
+  uint8_t ldata = data;
+  ret = libusb_control_transfer(
+      dev_handle, LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_OUT, cmd, value,
+      index, &ldata, sizeof(ldata), 0);
+
+  if (ret < 0) {
+    fprintf(stderr, "Could not send byte control: 0x%X with value: 0x%X, index: 0x%X, data: 0x%X. Error : %s.\n",
+            cmd, value, index, data, libusb_error_name(ret));
+    return -1;
+  }
+
+  return 0;
+}
