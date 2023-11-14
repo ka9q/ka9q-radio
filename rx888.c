@@ -213,9 +213,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stdout,"%s: ",frontend->description);
   }
   double ferror = actual - frontend->samprate;
-  fprintf(stdout,"rx888 nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), reference calibrate %.3g, gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
+  fprintf(stdout,"rx888 nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  frontend->samprate,actual,ferror, 1e6 * ferror / frontend->samprate,
-	  frontend->calibrate,sdr->highgain ? "high" : "low",
+	  sdr->highgain ? "high" : "low",
 	  gain,frontend->rf_gain,frontend->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
 	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate));
 
@@ -663,7 +663,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
   }
   if (r_samprate < 1e6) {
     fprintf(stdout,"ERROR - requested sample rate is too low: %'d\n",samprate);
-    return -1;
+    return 0;
   }
 
   /* choose an even integer for the output MS */
@@ -671,7 +671,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
   output_ms -= output_ms % 2;
   if (output_ms < 4 || output_ms > 900) {
     fprintf(stdout,"ERROR - invalid output MS: %d  (samprate=%'d)\n",output_ms,samprate);
-    return -1;
+    return 0;
   }
   double const vco_frequency = r_samprate * output_ms;
 
