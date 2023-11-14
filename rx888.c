@@ -313,6 +313,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
       wptr[i] = s;
       in_energy += wptr[i] * wptr[i];
     }
+    output_count = sampcount;
   } else {
     for(int i=0; i < sampcount; i++){
       frontend->overranges += (samples[i] == 32767) || (samples[i] <= -32767);
