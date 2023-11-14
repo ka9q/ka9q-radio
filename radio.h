@@ -48,9 +48,7 @@ struct frontend {
 
   // Stuff maintained by our upstream source and filled in by the status daemon
   char *description;  // free-form text
-  int reference;     // Reference frequency
-  double ppm;        // Reference frequency correction in ppm
-  int samprate;      // Sample rate on raw input data stream
+  int samprate;      // Nominal (requested) sample rate on raw input data stream, needs to be integer for filter stuff
   int64_t timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
   double frequency;
   double calibrate;  // Clock frequency error ratio, e.g, +1e-6 means 1 ppm high
