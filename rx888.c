@@ -304,7 +304,6 @@ static void rx_callback(struct libusb_transfer * const transfer){
   int16_t const * const samples = (int16_t *)transfer->buffer;
   float * const wptr = frontend->in->input_write_pointer.r;
   int const sampcount = size / sizeof(int16_t);
-  int output_count = 0;
   if(sdr->randomizer){
     for(int i=0; i < sampcount; i++){
       int32_t s = samples[i];
@@ -313,22 +312,19 @@ static void rx_callback(struct libusb_transfer * const transfer){
       wptr[i] = s;
       in_energy += wptr[i] * wptr[i];
     }
-    output_count = sampcount;
   } else {
     for(int i=0; i < sampcount; i++){
       frontend->overranges += (samples[i] == 32767) || (samples[i] <= -32767);
       wptr[i] = samples[i];
       in_energy += wptr[i] * wptr[i];
     }
-    output_count = sampcount;
   }
 
-  write_rfilter(frontend->in,NULL,output_count); // Update write pointer, invoke FFT if block is complete
+  write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
 
-  // temp fix for a previous bug: was resetting integrator each time it was read, so more than one reader
-  // would cause premature resets. Go back to a single exponential smoother
+  // These blocks are kinda small, so exponentially smooth the power readings
   {
-    float power  = (float)in_energy / output_count;
+    float power  = (float)in_energy / sampcount;
     frontend->if_power += power_smooth * (power - frontend->if_power);
     if(power > frontend->if_power_max){
       if(Verbose){
