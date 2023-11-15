@@ -16,6 +16,7 @@ PermissionsStartOnly=true
 StandardOutput=append:/recordings/pcmrecord@%i.log
 StandardError=journal
 EnvironmentFile=/etc/radio/recordings@%i.conf
+UMask = 002
 ExecStart=/usr/local/bin/pcmrecord $ARGS
 Restart=always
 RestartSec=5

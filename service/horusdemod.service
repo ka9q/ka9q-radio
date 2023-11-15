@@ -13,6 +13,7 @@ SupplementaryGroups=radio
 EnvironmentFile=/etc/radio/horus.conf
 WorkingDirectory=/home/radio/horusdemodlib
 CacheDirectory=horusdemod
+UMask=002
 ExecStart=/usr/local/bin/pcmspawn --pcm-in $STREAM /usr/local/sbin/start-ka9q-horus.sh 
 Restart=always
 RestartSec=5

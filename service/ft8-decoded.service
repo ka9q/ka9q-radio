@@ -15,6 +15,7 @@ PermissionsStartOnly=true
 StandardOutput=append:/recordings/ft8.log
 StandardError=inherit
 EnvironmentFile=/etc/radio/ft8-decode.conf
+UMask = 002
 ExecStart=/usr/local/bin/jt-decoded -8 -d "$DIRECTORY" $MCAST
 Restart=always
 RestartSec=5

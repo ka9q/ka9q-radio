@@ -15,6 +15,7 @@ PermissionsStartOnly=true
 StandardOutput=append:/recordings/wspr.log
 StandardError=inherit
 EnvironmentFile=/etc/radio/wspr-decode.conf
+UMask=002
 ExecStart=/usr/local/bin/jt-decoded -w -d "$DIRECTORY" $MCAST
 Restart=always
 RestartSec=5

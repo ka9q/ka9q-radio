@@ -13,6 +13,7 @@ Group=radio
 SupplementaryGroups=plugdev radio users
 AmbientCapabilities=CAP_SYS_NICE
 ReadWritePaths=/etc/fftw /var/lib/ka9q-radio
+UMask=002
 ExecStart=/usr/local/sbin/radiod -N %i /etc/radio/radiod@%i.conf
 Restart=always
 RestartSec=5
