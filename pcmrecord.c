@@ -91,6 +91,8 @@ static int Channels;
 static int Input_fd;
 static struct session *Sessions;
 static int64_t Timeout = 20; // 20 seconds max idle time before file close
+static time_t Last_error_message;
+
 
 static void closedown(int a);
 static void input_loop(void);
@@ -276,8 +278,12 @@ static void input_loop(){
 	sp = create_session(&rtp,&sender);
       }
       if(sp == NULL || sp->fp == NULL)
+#if 1
+	// Let systemd restart us after a delay instead of rapidly filling the log with, e.g., disk full errors
+	exit(EX_CANTCREAT);
+#else
 	continue; // Couldn't create new session
-
+#endif
 
       // A "sample" is a single audio sample, usually 16 bits.
       // A "frame" is the same as a sample for mono. It's two audio samples for stereo
@@ -379,6 +385,7 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
     sp->fp = fopen(sp->filename,"w+");
     if(sp->fp == NULL)
       fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
+
   }
   // (1) Subdirs not specified, or
   // (2) Subdirs specified but couldn't create directory or create file in directory; create in current dir

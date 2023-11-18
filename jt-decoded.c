@@ -341,7 +341,12 @@ void input_loop(){
 	sp = create_session(&rtp);	// create new session only if we're not in the dead time
 
       if(!sp)
+#if 1
+	// Let systemd restart us after a delay instead of rapidly filling the log with, e.g., disk full errors
+	exit(EX_CANTCREAT);
+#else
 	continue;
+#endif
 
       // A "sample" is a single audio sample, usually 16 bits.
       // A "frame" is the same as a sample for mono. It's two audio samples for stereo

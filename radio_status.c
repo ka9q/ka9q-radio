@@ -31,6 +31,10 @@
 #include "multicast.h"
 #include "status.h"
 
+// If a dynamic channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
+static const int Channel_idle_timeout = 20;
+
+
 int Status_fd;  // File descriptor for receiver status
 int Ctl_fd;     // File descriptor for receiving user commands
 
@@ -93,9 +97,10 @@ void *radio_status(void *arg){
 	      fprintf(stdout,"dynamically started ssrc %'u\n",ssrc);
 	  }
 	}
-	// chan now != NULL
+	assert(chan != NULL);
+	// lifetime != 0 indicates a dynamic channel
 	if(chan->lifetime != 0)
-	  chan->lifetime = 20; // Restart 20 second self-destruct timer
+	  chan->lifetime = Channel_idle_timeout; // restart self-destruct timer
 	chan->commands++;
 	decode_radio_commands(chan,buffer+1,length-1);
 	send_radio_status(&Frontend,chan); // Send status in response
@@ -125,7 +130,6 @@ static void *radio_status_dump(void *p){
     // This is why we have to be a separate thread
     // While the list can change while we're walking it, this isn't terribly serious
     // because it's a table, not a linked list. At the worst we emit a stale entry or miss a new one
-    // Otherwise we
     for(int i=0; i < Channel_list_length; i++){
       struct channel *chan = &Channel_list[i];
       if(!chan->inuse)
