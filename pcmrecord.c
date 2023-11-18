@@ -91,8 +91,6 @@ static int Channels;
 static int Input_fd;
 static struct session *Sessions;
 static int64_t Timeout = 20; // 20 seconds max idle time before file close
-static time_t Last_error_message;
-
 
 static void closedown(int a);
 static void input_loop(void);
