@@ -1,0 +1,9 @@
+/var/log/ft8.log
+{
+	rotate 10
+	daily
+	missingok
+	notifempty
+	compress
+	delaycompress
+}

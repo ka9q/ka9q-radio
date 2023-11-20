@@ -1,0 +1,9 @@
+/var/log/wspr.log
+{
+	rotate 10
+	daily
+	missingok
+	notifempty
+	compress
+	delaycompress
+}
