@@ -2,7 +2,7 @@
 # Copyright 2017-2023, Phil Karn, KA9Q
 
 # for production
-#DOPTS = -DNDEBUG=1 -O3
+# DOPTS = -DNDEBUG=1 -O3
 
 # for debugging
 DOPTS=-g
@@ -21,7 +21,7 @@ DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 EXECS=control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record
 
 
-LOGROTATE_FILES = aprsfeed.rotate
+LOGROTATE_FILES = aprsfeed.rotate ft8.rotate wspr.rotate
 
 BLACKLIST=airspy-blacklist.conf
 
