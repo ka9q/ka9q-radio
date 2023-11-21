@@ -534,8 +534,10 @@ int main(int argc,char *argv[]){
   set_term(NULL);
   if(Term != NULL)
     delscreen(Term);
+#if 0 // double free error, not really needed anyway
   if(Tty != NULL)
     fclose(Tty);
+#endif
   exit(EX_OK);
 }
 
