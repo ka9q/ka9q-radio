@@ -23,8 +23,17 @@
 #include "rx888.h"
 #include "ezusb.h"
 
-// Reference frequency, default 27MHz
+static int const Min_samprate =      1000000; // 1 MHz, in ltc2208 spec
+static int const Max_samprate =    130000000; // 130 MHz, in ltc2208 spec
+static int const Default_samprate = 64800000; // Synthesizes cleanly from 27 MHz reference
+static double Nyquist = 0.47;  // Upper end of usable bandwidth, relative to 1/2 sample rate
+
+// Reference frequency for Si5351 clock generator
+static double const Min_reference = 10e6;  //  10 MHz
+static double const Max_reference = 100e6; // 100 MHz
 static double const Default_reference = 27e6;
+// Max allowable error on reference; 1e-4 = 100 ppm. Mainly to catch entry scaling errors
+static double const Max_calibrate = 1e-4;
 static float const power_smooth = 0.05;
 
 int Ezusb_verbose = 0; // Used by ezusb.c
@@ -172,37 +181,36 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     if(p != NULL)
       reference = parse_frequency(p,false);
   }
-
-  double const minreference = 10e6;  //  10 MHz
-  double const maxreference = 100e6; // 100 MHz
-  if(reference < minreference || reference > maxreference){
+  if(reference < Min_reference || reference > Max_reference){
     fprintf(stdout,"Invalid reference frequency %'lf, forcing %'lf\n",reference,Default_reference);
     reference = Default_reference;
   }
   sdr->reference = reference;
 
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
-  if(fabsl(frontend->calibrate) >= 1e-4){
+  if(fabsl(frontend->calibrate) >= Max_calibrate){
     fprintf(stdout,"Unreasonable frequency calibration %.3g, setting to 0\n",frontend->calibrate);
     frontend->calibrate = 0;
   }
-
-  // Sample Rate, default 64.8
-  unsigned int samprate = 64800000;
+  unsigned int samprate = Default_samprate;
   {
     char const *p = config_getstring(dictionary,section,"samprate",NULL);
     if(p != NULL)
       samprate = parse_frequency(p,false);
   }
 
-  int const minsamprate = 1000000; // 1 MHz, in ltc2208 spec
-  if(samprate < minsamprate){
-    fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,minsamprate);
-    samprate = minsamprate;
+  if(samprate < Min_samprate){
+    fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,Min_samprate);
+    samprate = Min_samprate;
   }
+  if(samprate > Max_samprate){
+    fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,Max_samprate);
+    samprate = Max_samprate;
+  }
+
   double actual = rx888_set_samprate(sdr,samprate);
   frontend->min_IF = 0;
-  frontend->max_IF = 0.47 * frontend->samprate; // Just an estimate - get the real number somewhere
+  frontend->max_IF = Nyquist * frontend->samprate; // Just an estimate - get the real number somewhere
   frontend->isreal = true; // Make sure the right kind of filter gets created!
   frontend->bitspersample = 16; // For gain scaling
   frontend->lock = true; // Doesn't tune in direct sampling mode
