@@ -37,11 +37,10 @@ static pthread_t Input_thread;
 const char *App_path;
 static bool Newline;
 static bool All;
-static int64_t Interval; // nanosec, converted from float seconds
+static int64_t Interval = 1 * BILLION; // Default 1 sec
 static int Control_sock;
 static int Status_sock;
 static int Count;
-static int Runounce;
 static char const *Radio;
 static uint32_t Ssrc;
 static int Status_packets;
@@ -51,7 +50,7 @@ static char Locale[256] = "en_US.UTF-8";
 int Verbose;
 int IP_tos;
 int Mcast_ttl = 5;
-static char Optstring[] = "as:c:i:vnr:l:VXx";
+static char Optstring[] = "as:c:i:vnr:l:Vx::";
 static struct option Options[] = {
   {"all", no_argument, NULL, 'a'},
   {"ssrc", required_argument, NULL, 's'},
@@ -67,8 +66,6 @@ static struct option Options[] = {
 
 void usage(void);
 void *input_thread(void *);
-
-Runonce=0;
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -104,9 +101,6 @@ int main(int argc,char *argv[]){
     case 'l':
       strlcpy(Locale,optarg,sizeof(Locale));
       break;
-    case 'x':
-      Runonce=1;
-      break;
      default:
       usage();
       break;
@@ -115,7 +109,6 @@ int main(int argc,char *argv[]){
   if(All){
     Ssrc = 0xffffffff; // All 1's means poll every channel
     Interval = min((int64_t)BILLION,Interval); // No more than 1/sec, since the responses will be rate limited
-    Count = max(1,Count); // Force at least one poll
   }
   if(Radio == NULL){
     if(argc <= optind){
@@ -148,29 +141,27 @@ int main(int argc,char *argv[]){
     fprintf(stdout,"Can't set up multicast input\n");
     exit(EX_IOERR);
   }
-  if(Count != 0){
-    if(Verbose)
-      fprintf(stdout,"Connecting\n");
-    Control_sock = connect_mcast(&sock,iface,Mcast_ttl,IP_tos);
-    if(Control_sock == -1){
-      fprintf(stdout,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
-      exit(EX_IOERR);
-    }
+  if(Verbose)
+    fprintf(stdout,"Connecting\n");
+  Control_sock = connect_mcast(&sock,iface,Mcast_ttl,IP_tos);
+  if(Control_sock == -1){
+    fprintf(stdout,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
+    exit(EX_IOERR);
   }
 
-  if(Verbose && Interval != 0){
-    fprintf(stdout,"Polling %u interval %'lld nanoseconds count %llu\n",(unsigned)Ssrc,(long long)Interval,(long long)Count);
-  }
+  if(Verbose && Interval != 0)
+    fprintf(stdout,"Polling %u interval %'.1f sec count %llu\n",(unsigned)Ssrc,(float)Interval * 1e-9,(long long)Count);
 
   pthread_create(&Input_thread,NULL,input_thread,NULL);
-  if(Ssrc == 0)
+  if(Ssrc == 0){
+    fprintf(stdout,"No ssrc specified, waiting passively for responses\n");
     while(true)
       sleep(1000); // passive mode indefinitely
-
+  }
   int64_t last_command_time = 0;
 
-  for(int i=0; i < Count;i++){
-    // Send poll
+  while(Interval != 0){
+    // Send polls
     uint8_t cmd_buffer[PKTSIZE];
     uint8_t *bp = cmd_buffer;
     *bp++ = 1; // Generate command packet
@@ -180,12 +171,15 @@ int main(int argc,char *argv[]){
     encode_eol(&bp);
     int cmd_len = bp - cmd_buffer;
     
+    if(Verbose)
+      fprintf(stdout,"Send poll\n");
     if(send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len){
       perror("command send");
       exit(1);
     }      
     last_command_time = gps_time_ns();
-    useconds_t sleep_time = Interval / 1000;
+    // usleep takes usleep_t but it's unsigned and the while loop will hang
+    int32_t sleep_time = Interval / 1000; // nanosec -> microsec
 
     while(sleep_time > 0){
       usleep(sleep_time); // Sleeps at least this long
@@ -196,15 +190,6 @@ int main(int argc,char *argv[]){
 	sleep_time = (last_command_time + Interval - gps_time_ns()) / 1000;	
     }
   }
-
-  if(Runonce) {
-     usleep(100000);
-     exit(EX_OK);
-  }
-
-  while(true)
-    sleep(1000); // sleep forever while receive thread runs
-
   exit(EX_OK); // can't reach
 }
 
@@ -215,7 +200,7 @@ void usage(void){
 
 // Process incoming packets
 void *input_thread(void *p){
-  while(true){
+  for(int i=0; i < Count; i++){
     uint8_t buffer[PKTSIZE];
     struct sockaddr_storage source;
     socklen_t len = sizeof(source);
@@ -237,5 +222,5 @@ void *input_thread(void *p){
     dump_metadata(stdout,buffer+1,length-1,Newline);
     fflush(stdout);
   }
-  exit(EX_OK); // can't reach
+  exit(EX_OK);
 }

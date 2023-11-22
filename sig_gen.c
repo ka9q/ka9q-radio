@@ -374,3 +374,41 @@ static float real_gaussian(void){
   saved = __imag__ r;
   return __real__ r;
 }
+
+#if 0
+// From https://www.reddit.com/r/algorithms/comments/yyz59u/fast_approximate_gaussian_generator/
+// Double changed to float
+static float real_gaussian(void){
+  // input: ulong get_random_uniform() - gets 64 stochastic bits from a prng
+  // output: double x - normal deviate (mean 0.0 stdev 1.0) (**more at bottom)
+
+  const float delta = (1.0 / 4294967296.0); // (1 / 2^32)
+
+#if 0
+ ulong u = get_random_uniform(); // fast generator that returns 64 randomized bits
+  
+  uint major = (uint)(u >> 32);	// split into 2 x 32 bits
+  uint minor = (uint)u;		// the sus bits of lcgs end up in minor
+#else
+  uint32_t major = mrand48();
+  uint32_t minor = mrand48();
+#endif  
+  
+  float x = PopCount(major);     // x = random binomially distributed integer 0 to 32
+  x += minor * delta; 		// linearly fill the gaps between integers
+  x -= 16.5;			// re-center around 0 (the mean should be 16+0.5)
+  x *= 0.3535534;			// scale to ~1 standard deviation
+  return x;
+  
+  // x now has a mean of 0.0
+  // a standard deviation of approximately 1.0
+  // and is strictly within +/- 5.833631
+  //
+  // a good long sampling will reveal that the distribution is approximated 
+  // via 33 equally spaced intervals and each interval is itself divided 
+  // into 2^32 equally spaced points
+  //
+  // there are exactly 33 * 2^32 possible outputs (about 37 bits of entropy)
+  // the special values -inf, +inf, and NaN are not among the outputs
+}
+#endif
