@@ -378,6 +378,7 @@ static float real_gaussian(void){
 #if 0
 // From https://www.reddit.com/r/algorithms/comments/yyz59u/fast_approximate_gaussian_generator/
 // Double changed to float
+// Incomplete and untested
 static float real_gaussian(void){
   // input: ulong get_random_uniform() - gets 64 stochastic bits from a prng
   // output: double x - normal deviate (mean 0.0 stdev 1.0) (**more at bottom)

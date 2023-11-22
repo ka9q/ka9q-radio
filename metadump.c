@@ -40,7 +40,7 @@ static bool All;
 static int64_t Interval = 1 * BILLION; // Default 1 sec
 static int Control_sock;
 static int Status_sock;
-static int Count;
+static int Count = 2;
 static char const *Radio;
 static uint32_t Ssrc;
 static int Status_packets;
