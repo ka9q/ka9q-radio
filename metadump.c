@@ -41,6 +41,7 @@ static int64_t Interval; // nanosec, converted from float seconds
 static int Control_sock;
 static int Status_sock;
 static int Count;
+static int Runounce;
 static char const *Radio;
 static uint32_t Ssrc;
 static int Status_packets;
@@ -50,7 +51,7 @@ static char Locale[256] = "en_US.UTF-8";
 int Verbose;
 int IP_tos;
 int Mcast_ttl = 5;
-static char Optstring[] = "as:c:i:vnr:l:V";
+static char Optstring[] = "as:c:i:vnr:l:VXx";
 static struct option Options[] = {
   {"all", no_argument, NULL, 'a'},
   {"ssrc", required_argument, NULL, 's'},
@@ -67,6 +68,7 @@ static struct option Options[] = {
 void usage(void);
 void *input_thread(void *);
 
+Runonce=0;
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -101,6 +103,9 @@ int main(int argc,char *argv[]){
       break;
     case 'l':
       strlcpy(Locale,optarg,sizeof(Locale));
+      break;
+    case 'x':
+      Runonce=1;
       break;
      default:
       usage();
@@ -163,6 +168,7 @@ int main(int argc,char *argv[]){
       sleep(1000); // passive mode indefinitely
 
   int64_t last_command_time = 0;
+
   for(int i=0; i < Count;i++){
     // Send poll
     uint8_t cmd_buffer[PKTSIZE];
@@ -190,6 +196,12 @@ int main(int argc,char *argv[]){
 	sleep_time = (last_command_time + Interval - gps_time_ns()) / 1000;	
     }
   }
+
+  if(Runonce) {
+     usleep(100000);
+     exit(EX_OK);
+  }
+
   while(true)
     sleep(1000); // sleep forever while receive thread runs
 
