@@ -1407,11 +1407,11 @@ static void display_output(WINDOW *w,struct channel const *channel){
   }
   pprintw(w,row++,col,"Samples","%'llu",Frontend.samples);
   pprintw(w,row++,col,"Overrange","%'llu",Frontend.overranges);
-  pprintw(w,row++,col,"Update interval","%'.2f sec",Refresh_rate);
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_address),
 	   formatsock(&Metadata_dest_address));
+  pprintw(w,row++,col,"Update interval","%'.2f sec",Refresh_rate);
   pprintw(w,row++,col,"Status pkts","%'llu",Metadata_packets);
   pprintw(w,row++,col,"Control pkts","%'llu",channel->commands);
   pprintw(w,row++,col,"Blocks since last poll","%'llu",channel->blocks_since_poll);
