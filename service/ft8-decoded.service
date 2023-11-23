@@ -16,6 +16,7 @@ PermissionsStartOnly=true
 StandardOutput=append:/var/log/ft8.log
 StandardError=inherit
 UMask = 002
+CPUSchedulingPolicy=batch
 ExecStart=/usr/local/bin/jt-decoded -8 -d "$DIRECTORY" $MCAST
 Restart=always
 RestartSec=5
