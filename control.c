@@ -598,6 +598,17 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   case '\f':  // Screen repaint (formfeed, aka control-L)
     clearok(curscr,TRUE);
     break;
+  case 'S':
+    {
+      char str[Entry_width],*ptr;
+      getentry("Output sample rate, Hz: ",str,sizeof(str));
+      int samprate = strtol(str,&ptr,0);
+      if(ptr != str){
+	channel->output.samprate = samprate;
+	encode_int(bpp,OUTPUT_SAMPRATE,channel->output.samprate);
+      }
+    }
+    break;
   case 's': // Squelch threshold for current mode
     {
       char str[Entry_width],*ptr;

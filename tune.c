@@ -334,6 +334,6 @@ int main(int argc,char *argv[]){
 }
 
 void usage(void){
-  fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-i|--iface <iface>] [-l|--locale LOCALE]  \
+  fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-R|--samprate sample_rate] [-i|--iface <iface>] [-l|--locale LOCALE]  \
 [-f|- FREQUENCY]frequency] [[-a|--agc] | [-g|--Gain <gain dB>]] [-m|--mode <mode>]\n" ,App_path);
 }
