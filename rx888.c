@@ -328,6 +328,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
     }
   }
 
+  frontend->timestamp = gps_time_ns();
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
 
   // These blocks are kinda small, so exponentially smooth the power readings

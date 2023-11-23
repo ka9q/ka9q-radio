@@ -148,16 +148,17 @@ void normalize_time(struct timespec *x){
 char const *Days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 char const *Months[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec" };
 
+// Format, as UTC, a time measured in nanoseconds from the GPS epoch
 char *format_gpstime(char *result,int len,int64_t t){
   return format_utctime(result,len,t + BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET));
 }
 
 
-// Format, as printed UTC or local, a time measured in nanoseconds from the GPS epoch
+// Format, as UTC, a time measured in nanoseconds from the UNIX epoch
 char *format_utctime(char *result,int len,int64_t t){
-  lldiv_t ut = lldiv(t,BILLION);
+  lldiv_t const ut = lldiv(t,BILLION);
 
-  time_t utime = ut.quot - timezone + (daylight ? 3600 : 0);
+  time_t utime = ut.quot;
   int t_usec = ut.rem / 1000;
   if(t_usec < 0){
     t_usec += 1000000;
@@ -166,7 +167,7 @@ char *format_utctime(char *result,int len,int64_t t){
   struct tm tm;
   gmtime_r(&utime,&tm);
   // Mon Feb 26 2018 14:40:08.123456 UTC
-  snprintf(result,len,"%s %02d %s %4d %02d:%02d:%02d.%06d",
+  snprintf(result,len,"%s %02d %s %4d %02d:%02d:%02d.%06d UTC",
 	   Days[tm.tm_wday],
 	   tm.tm_mday,
 	   Months[tm.tm_mon],

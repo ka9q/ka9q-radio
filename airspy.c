@@ -340,6 +340,7 @@ static int rx_callback(airspy_transfer *transfer){
     up += 3;
   }
   frontend->samples += sampcount;
+  frontend->timestamp = gps_time_ns();
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   float const in_power = (float)in_energy / sampcount;
   frontend->if_power = power_smooth * (in_power - frontend->if_power);
