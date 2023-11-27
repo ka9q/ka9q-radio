@@ -34,7 +34,6 @@ static double const Max_reference = 100e6; // 100 MHz
 static double const Default_reference = 27e6;
 // Max allowable error on reference; 1e-4 = 100 ppm. Mainly to catch entry scaling errors
 static double const Max_calibrate = 1e-4;
-static float const power_smooth = 0.05;
 
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
@@ -333,12 +332,12 @@ static void rx_callback(struct libusb_transfer * const transfer){
 
   // These blocks are kinda small, so exponentially smooth the power readings
   {
-    float power  = (float)in_energy / sampcount;
-    frontend->if_power += power_smooth * (power - frontend->if_power);
-    if(power > frontend->if_power_max){
+    frontend->if_power_instant  = (float)in_energy / sampcount;
+    frontend->if_power += Power_smooth * (frontend->if_power_instant - frontend->if_power);
+    if(frontend->if_power_instant > frontend->if_power_max){
       if(Verbose){
 	float scaled_old_power = frontend->if_power_max * scale_ADpower2FS(frontend);
-	float scaled_new_power = power * scale_ADpower2FS(frontend);
+	float scaled_new_power = frontend->if_power_instant * scale_ADpower2FS(frontend);
 
 	// Don't print a message unless the increase is > 0.1 dB, the precision of the printf
 	float new_dBFS = power2dB(scaled_new_power);
@@ -346,7 +345,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
 	if(new_dBFS >= old_dBFS + 0.1)
 	  fprintf(stdout,"New input power high watermark: %.1f dBFS\n",new_dBFS);
       }
-      frontend->if_power_max = power;
+      frontend->if_power_max = frontend->if_power_instant;
     }
   }
   frontend->samples += sampcount; // Count original samples

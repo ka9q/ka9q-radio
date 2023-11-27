@@ -81,6 +81,7 @@ struct frontend {
       so full A/D range now corresponds to different levels internally, and are scaled
       in radio_status.c when sending status messages
   */
+  float if_power_instant; // instantaneous receive power
   float if_power;   // Exponentially smoothed power measurement in A/D units (not normalized)
   float if_power_max;
   
@@ -274,6 +275,7 @@ struct channel {
   float tp1,tp2; // Spare test points
 };
 
+extern float Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
 extern struct channel *Channel_list;
 extern int Channel_list_length;
 extern int Active_channel_count;
