@@ -637,7 +637,11 @@ int downconvert(struct channel *chan){
     }
     chan->filter.bin_shift = shift; // We need this in any case (not really?)
 
-    // The N0 noise estimator has a long smoothing time constant, so clamp it if the front end is saturated, e.g. by a local transmitter
+    // The N0 noise estimator has a long smoothing time constant, so clamp it when the front end is saturated, e.g. by a local transmitter
+    // This works well for channels tuned well away from the transmitter, but not when a channel is tuned near or to the transmit frequency
+    // because the transmitted noise is enough to severely increase the estimate even before it begins to transmit
+    // enough power to saturate the A/D. I still need a better, more general way of adjusting N0 smoothing rate,
+    // e.g. for when the channel is retuned by a lot
     float maxpower = (1 << (Frontend.bitspersample - 1));
     maxpower *= maxpower * 0.5; // 0 dBFS
     if(Frontend.if_power < maxpower)
