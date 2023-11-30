@@ -39,6 +39,7 @@ int const Channelalloc_quantum = 1000;
 struct channel *Channel_list; // Contiguous array
 int Channel_list_length; // Length of array
 int Active_channel_count; // Active channels
+float Power_smooth = 0.05; // Arbitrary exponential smoothing factor
 extern struct channel const *Template;
 
 // Find chan by ssrc
@@ -131,7 +132,7 @@ void free_chan(struct channel **chan){
 }
 
 
-static const float n0_smooth = .001; // exponential smoothing rate for (noisy) bin noise
+static const float N0_smooth = .001; // exponential smoothing rate for (noisy) bin noise
 
 // experimental
 // estimate n0 by finding the FFT bin with the least energy
@@ -168,7 +169,7 @@ static float estimate_noise(struct channel *chan,int shift){
 	if(energies[i] == 0)
 	  energies[i] = cnrmf(fdomain[n]); // Quick startup
 	else
-	  energies[i] += (cnrmf(fdomain[n]) - energies[i]) * n0_smooth; // blocknum was already incremented
+	  energies[i] += (cnrmf(fdomain[n]) - energies[i]) * N0_smooth; // blocknum was already incremented
 	if(min_bin_energy > energies[i])
 	  min_bin_energy = energies[i];
       } else
@@ -185,7 +186,7 @@ static float estimate_noise(struct channel *chan,int shift){
 	if(energies[i] == 0)
 	  energies[i] = cnrmf(fdomain[mbin]); // Quick startup
 	else
-	  energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * n0_smooth; // blocknum was already incremented
+	  energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * N0_smooth; // blocknum was already incremented
 	if(min_bin_energy > energies[i])
 	  min_bin_energy = energies[i];
       }
@@ -635,7 +636,16 @@ int downconvert(struct channel *chan){
       chan->sig.bb_energy += energy; // Added once per block
     }
     chan->filter.bin_shift = shift; // We need this in any case (not really?)
-    chan->sig.n0 = scale_power_out2FS(&Frontend) * estimate_noise(chan,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
+
+    // The N0 noise estimator has a long smoothing time constant, so clamp it when the front end is saturated, e.g. by a local transmitter
+    // This works well for channels tuned well away from the transmitter, but not when a channel is tuned near or to the transmit frequency
+    // because the transmitted noise is enough to severely increase the estimate even before it begins to transmit
+    // enough power to saturate the A/D. I still need a better, more general way of adjusting N0 smoothing rate,
+    // e.g. for when the channel is retuned by a lot
+    float maxpower = (1 << (Frontend.bitspersample - 1));
+    maxpower *= maxpower * 0.5; // 0 dBFS
+    if(Frontend.if_power < maxpower)
+      chan->sig.n0 = scale_power_out2FS(&Frontend) * estimate_noise(chan,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
     return 0;
 }
 

@@ -20,9 +20,6 @@
 #include "radio.h"
 #include "config.h"
 
-static const float power_smooth = 0.05; // Arbitrary exponential smoothing factor
-
-
 // Global variables set by config file options
 extern int Verbose;
 
@@ -342,8 +339,8 @@ static int rx_callback(airspy_transfer *transfer){
   frontend->samples += sampcount;
   frontend->timestamp = gps_time_ns();
   write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  float const in_power = (float)in_energy / sampcount;
-  frontend->if_power = power_smooth * (in_power - frontend->if_power);
+  frontend->if_power_instant = (float)in_energy / sampcount;
+  frontend->if_power = Power_smooth * (frontend->if_power_instant - frontend->if_power);
   if(sdr->software_agc){
     // Integrate A/D energy over A/D averaging period
     sdr->agc_energy += in_energy;

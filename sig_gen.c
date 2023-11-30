@@ -23,8 +23,6 @@
 #include "config.h"
 #include "radio.h"
 
-static float const power_smooth = 0.05;
-
 enum modulation {
   CW = 0, // No modulation
   DSB, // AM without a carrier
@@ -290,7 +288,8 @@ static void *proc_sig_gen(void *arg){
     // to vary, causing the reported input level to bobble around the nominal value. Long refresh intervals with 'control'
     // will smooth this out, but it's annoying
     frontend->samples += blocksize;    
-    frontend->if_power = power_smooth * (if_energy / blocksize - frontend->if_power);
+    frontend->if_power_instant = if_energy / blocksize;
+    frontend->if_power = Power_smooth * (frontend->if_power_instant - frontend->if_power);
     // Get status timestamp from UNIX TOD clock
     // Request a half block sleep since this is only the minimum
     {
