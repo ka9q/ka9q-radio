@@ -1,3 +1,5 @@
+
+
 // signal generator - looks like a pseudo-front-end to radiod
 // Copyright Phil Karn, KA9Q, Aug 2023 KA9Q
 #define _GNU_SOURCE 1
@@ -411,5 +413,16 @@ static float real_gaussian(void){
   //
   // there are exactly 33 * 2^32 possible outputs (about 37 bits of entropy)
   // the special values -inf, +inf, and NaN are not among the outputs
+}
+
+
+// Even faster version from same discussion thread
+static inline double
+dist_normal_fast(uint64_t u){
+	double x = __builtin_popcountll(u*0x2c1b3c6dU) +
+	           __builtin_popcountll(u*0x297a2d39U) - 64;
+	x += (int64_t)u * (1 / 9223372036854775808.);
+	x *= 0.1765469659009499; /* sqrt(1/(32 + 4/12)) */
+	return x;
 }
 #endif
