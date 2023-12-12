@@ -35,7 +35,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   }
   if(chan->output.data_fd < 0){
     fprintf(stdout,"ssrc %d: invalid output descriptor %d!\n",chan->output.rtp.ssrc,chan->output.data_fd);
-    return -1;
+    return 0;
   }
   int frames_per_pkt = 0;
 #ifdef IP_MTU
@@ -82,7 +82,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     chan->output.samples += chunk * chan->output.channels; // Count frames
     if(r <= 0){
       perror("pcm send");
-      return -1;
+      return 0; // Treat as soft failure
     }
     frames -= chunk;
     if(chan->output.pacing && frames > 0)
