@@ -44,19 +44,19 @@ struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "f:g:hi:vl:r:s:R:V";
+char Optstring[] = "af:g:hi:l:m:qr:R:s:vV";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"frequency", required_argument, NULL, 'f'},
   {"gain", required_argument, NULL, 'g'},
   {"help", no_argument, NULL, 'h'},
   {"iface", required_argument, NULL, 'i'},
+  {"locale", required_argument, NULL, 'l'},
   {"mode", required_argument, NULL, 'm'},
   {"quiet", no_argument, NULL, 'q'},
+  {"radio", required_argument, NULL, 'r'},
   {"samprate", required_argument, NULL, 'R'},
   {"ssrc", required_argument, NULL, 's'},
-  {"radio", required_argument, NULL, 'r'},
-  {"locale", required_argument, NULL, 'l'},
   {"verbose", no_argument, NULL, 'v'},
   {"version", no_argument, NULL, 'V'},
   {NULL, 0, NULL, 0},
