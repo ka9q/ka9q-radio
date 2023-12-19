@@ -491,44 +491,16 @@ void *sap_send(void *p){
     space -= len;
     
     // m = media description
-#if 1  
-    {
-      // Chan type can change, but not the sample rate
-      int mono_type = pt_from_info(chan->output.samprate,1);
-      int stereo_type = pt_from_info(chan->output.samprate,2);
-      int fm_type = pt_from_info(chan->output.samprate,1);
-      
-      len = snprintf(wp,space,"m=audio 5004/1 RTP/AVP %d %d %d\r\n",mono_type,stereo_type,fm_type);
-      wp += len;
-      space -= len;
-      
-      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",mono_type,chan->output.samprate,1);
-      wp += len;
-      space -= len;
-      
-      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",stereo_type,chan->output.samprate,2);
-      wp += len;
-      space -= len;
-      
-      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",fm_type,chan->output.samprate,1);
-      wp += len;
-      space -= len;
-    }
-#else
-    {
-      // set from current state. This will require changing the session version and IDs, and
-      // it's not clear that clients like VLC will do the right thing anyway
-      int type = pt_from_info(chan->output.samprate,chan->output.channels,chan->chan_type);
+    // set from current state. This will require changing the session version and IDs, and
+    // it's not clear that clients like VLC will do the right thing anyway
+    len = snprintf(wp,space,"m=audio 5004/1 RTP/AVP %d\r\n",chan->output.rtp.type);
+    wp += len;
+    space -= len;
 
-      len = snprintf(wp,space,"m=audio 5004/1 RTP/AVP %d\r\n",type);
-      wp += len;
-      space -= len;
-      
-      len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",type,chan->output.samprate,chan->output.channels);
-      wp += len;
-      space -= len;
-    }
-#endif    
+    len = snprintf(wp,space,"a=rtpmap:%d L16/%d/%d\r\n",chan->output.rtp.type,chan->output.samprate,chan->output.channels);
+    wp += len;
+    space -= len;
+
     send(chan->output.sap_fd,message,wp - message,0);
     sleep(5);
   }

@@ -75,6 +75,7 @@ struct rtp_header {
 // RTP sender/receiver state
 struct rtp_state {
   uint32_t ssrc;
+  uint8_t type;
   bool init;
   uint16_t seq;
   uint32_t timestamp;

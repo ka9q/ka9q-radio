@@ -631,6 +631,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&chan->output.data_dest_address);
     encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
     encode_int64(&bp,OUTPUT_METADATA_PACKETS,Metadata_packets);
+    encode_byte(&bp,RTP_PT,chan->output.rtp.type);
   }
   // Don't send test points unless they're in use
   if(!isnan(chan->tp1))

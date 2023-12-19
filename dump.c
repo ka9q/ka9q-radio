@@ -407,6 +407,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
 	}
       }
       break;
+    case RTP_PT:
+      fprintf(fp,"RTP PT %u",decode_int(cp,optlen));
+      break;
     default:
       fprintf(fp,"unknown type %d length %d",type,optlen);
       break;

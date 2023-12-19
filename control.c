@@ -247,7 +247,7 @@ static struct windef {
   {&Sig_win,15,25},
   {&Demodulator_win,15,26},
   {&Filtering_win,15,22},
-  {&Output_win,15,45},
+  {&Output_win,16,45},
 };
 #define NWINS (sizeof(Windefs) / sizeof(Windefs[0]))
 
@@ -1434,6 +1434,7 @@ static void display_output(WINDOW *w,struct channel const *channel){
 	  formatsock(&channel->output.data_dest_address));
   
   pprintw(w,row++,col,"SSRC","%'u",channel->output.rtp.ssrc);
+  pprintw(w,row++,col,"Type","%u",channel->output.rtp.type);
   pprintw(w,row++,col,"Packets","%'llu",(long long unsigned)channel->output.rtp.packets);
   
   

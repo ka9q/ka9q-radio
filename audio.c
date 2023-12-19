@@ -56,8 +56,8 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
 #endif
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
-  rtp.type = pt_from_info(chan->output.samprate,chan->output.channels);
   rtp.version = RTP_VERS;
+  rtp.type = chan->output.rtp.type;
   rtp.ssrc = chan->output.rtp.ssrc;
   rtp.marker = chan->output.silent;
   chan->output.silent = false;

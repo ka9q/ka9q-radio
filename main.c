@@ -535,6 +535,10 @@ static int loadconfig(char const * const file){
 	  socklen_t len = sizeof(data_source_address);
 	  getsockname(chan->output.data_fd,(struct sockaddr *)&chan->output.data_source_address,&len);
 	}
+	// Set RTP payload type from static table specific to ka9q-radio
+	// Should assign dynamically, but requires completion of SDP 
+	chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels);
+
 	// Time to start it -- ssrc is stashed by create_chan()
 	set_freq(chan,f);
 	start_demod(chan);
