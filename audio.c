@@ -24,8 +24,10 @@
 int send_output(struct channel * restrict const chan,float const * restrict buffer,int frames,bool const mute){
   assert(chan != NULL);
   assert(chan->output.data_fd >= 0);
-  if(frames <= 0)
+  if(frames <= 0 || chan->output.channels == 0 || chan->output.samprate == 0)
     return 0;
+
+  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels);  // It might have changed
 
   if(mute){
     // Increment timestamp
