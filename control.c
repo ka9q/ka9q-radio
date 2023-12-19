@@ -1155,6 +1155,10 @@ static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int
 	strlcpy(channel->preset,p,sizeof(channel->preset));
 	FREE(p);
       }
+      break;
+    case RTP_PT:
+      channel->output.rtp.type = decode_int(cp,optlen);
+      break;
     default: // ignore others
       break;
     }
