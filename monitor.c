@@ -763,6 +763,8 @@ static void *decode_task(void *arg){
     } else { // PCM
       // Test for invalidity
       sp->samprate = samprate_from_pt(sp->type);
+      if(sp->samprate == 0)
+	goto endloop;
       upsample = DAC_samprate / sp->samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
       sp->bandwidth = sp->samprate / 2000;    // in kHz allowing for Nyquist
       sp->channels = channels_from_pt(sp->type); // channels in packet (not portaudio output buffer)
