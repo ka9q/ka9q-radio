@@ -574,6 +574,8 @@ static void *sockproc(void *arg){
       sp->rtp_state.seq = pkt->rtp.seq;
       sp->reset = true;
       sp->type = pkt->rtp.type;
+      if(sp->type < 0 || sp->type > 127)
+	continue; // Invalid payload type?
       sp->samprate = PT_table[sp->type].samprate;
       if(PT_table[sp->type].encoding == OPUS)
 	sp->samprate = DAC_samprate;
@@ -765,9 +767,10 @@ static void *decode_task(void *arg){
 	fprintf(stderr,"samples %d frame-size %d\n",samples,sp->frame_size);
     } else { // PCM
       // Test for invalidity
-      sp->samprate = samprate_from_pt(sp->type);
-      if(sp->samprate == 0)
+      int const samprate = samprate_from_pt(sp->type);
+      if(samprate == 0)
 	goto endloop;
+      sp->samprate = samprate;
       upsample = DAC_samprate / sp->samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
       sp->bandwidth = sp->samprate / 2000;    // in kHz allowing for Nyquist
       sp->channels = channels_from_pt(sp->type); // channels in packet (not portaudio output buffer)
@@ -1101,7 +1104,7 @@ static void *display(void *arg){
 		   ftime(idle_buf,sizeof(idle_buf),idle_sec),   // Time idle since last transmission
 		   queue_ms); // Playout buffer length, fractional sec	  
 	}
-	if(Verbose){
+	if(Verbose && sp->samprate != 0){ // avoid divide by zero
 	  printw("%5s%3d%3d%3d",
 		 PT_table[sp->type].encoding == OPUS ? "Opus" : "PCM",
 		 (1000 * sp->frame_size/sp->samprate), // frame size, ms

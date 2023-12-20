@@ -165,8 +165,8 @@ struct pt_table PT_table[128] = {
 { 8000, 2, 2 }, // 126
 { 0, 0, 0 }, // 127
 };
-int Opus_pt = -1;
-int AX25_pt = -1;
+int Opus_pt = OPUS_PT;
+int AX25_pt = AX25_PT;
 
 
 #ifdef BOOT // bootstrap new payload type table - take out eventually
