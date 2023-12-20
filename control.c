@@ -916,7 +916,7 @@ static int for_us(struct channel *channel,uint8_t const *buffer,int length,uint3
     cp += optlen;
   }
  done:;
-  return 0; // not specified
+  return -1; // not specified, so not for us
 }
 
 // Decode incoming status message from the radio program, convert and fill in fields in local channel structure
