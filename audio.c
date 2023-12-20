@@ -28,7 +28,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     return 0;
 
   int const type = pt_from_info(chan->output.samprate,chan->output.channels);  // It might have changed
-  if(type == -1)
+  if(type < 0)
     return 0; // Can't allocate a payload type!
 
   chan->output.rtp.type = type;

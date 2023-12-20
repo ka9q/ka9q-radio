@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -416,6 +417,12 @@ void *decode(void *arg){
   int const pilot_rotate = quantum * round(19000./(hzperbin * quantum));
   int const subc_rotate = quantum * round(57000./(hzperbin * quantum));
 
+  int const payload_type = pt_from_info(Out_samprate,2);
+  if(payload_type < 0){
+    fprintf(stderr,"Can't allocate RTP payload type for samprate = %'d, channels = %d\n",Out_samprate,2);
+    exit(EX_SOFTWARE);
+  }
+
   while(true){
     struct packet *pkt = NULL;
 
@@ -471,7 +478,7 @@ void *decode(void *arg){
       uint8_t packet[PKTSIZE],*dp;
       dp = packet;
       struct rtp_header out_rtp;
-      out_rtp.type = pt_from_info(Out_samprate,2);
+      out_rtp.type = payload_type;
       out_rtp.version = RTP_VERS;
       out_rtp.ssrc = sp->rtp_state_in.ssrc;
       out_rtp.timestamp = sp->rtp_state_out.timestamp;

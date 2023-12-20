@@ -196,6 +196,12 @@ int main(int argc,char * const argv[]){
 
   realtime();
 
+  int const payload_type = pt_from_info(Samprate,Channels);
+  if(payload_type < 0){
+    fprintf(stderr,"Can't allocate RTP payload type for samprate = %'d, channels = %d\n",Samprate,Channels);
+    exit(EX_SOFTWARE);
+  }
+
   while(true){
     // Wait for audio input
     // I'd rather use pthread condition variables and signaling, but the portaudio people
@@ -213,7 +219,7 @@ int main(int argc,char * const argv[]){
     struct rtp_header rtp_hdr;
     memset(&rtp_hdr,0,sizeof(rtp_hdr));
     rtp_hdr.version = RTP_VERS;
-    rtp_hdr.type = pt_from_info(Samprate,Channels);
+    rtp_hdr.type = payload_type;
     rtp_hdr.seq = rtp_state_out.seq;
     rtp_hdr.ssrc = rtp_state_out.ssrc;
     rtp_hdr.timestamp = rtp_state_out.timestamp;

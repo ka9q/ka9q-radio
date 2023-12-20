@@ -538,7 +538,7 @@ static int loadconfig(char const * const file){
 	// Set RTP payload type from static table specific to ka9q-radio
 	// Should assign dynamically, but requires completion of SDP 
 	int const type = pt_from_info(chan->output.samprate,chan->output.channels);
-	if(type == -1){
+	if(type < 0){
 	  fprintf(stdout,"can't allocate RTP payload type for samprate %'d, channels %d\n",chan->output.samprate,chan->output.channels);
 	  free_chan(&chan);
 	  continue;

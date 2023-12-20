@@ -45,7 +45,7 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
   int const type = pt_from_info(Samprate,1);
-  if(type == -1)
+  if(type < 0)
     return 0; // Can't allocate!
   rtp.type = type;
   rtp.version = RTP_VERS;

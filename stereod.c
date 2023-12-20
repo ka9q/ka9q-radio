@@ -455,6 +455,10 @@ void *decode(void *arg){
     int16_t const * const samples = (int16_t *)pkt->data;
     
     int rtp_type = pt_from_info(Audio_samprate,2); // 48 kHz stereo PCM
+    if(rtp_type < 0){
+      fprintf(stderr,"Can't allocate RTP payload type for samprate = %'d, channels = %d\n",Audio_samprate,2);
+      exit(EX_SOFTWARE);
+    }
 
     for(int i=0; i<frame_size; i++){
       float const s = SCALE * (int16_t)ntohs(samples[i]);
