@@ -439,8 +439,9 @@ void *decode(void *arg){
     sp->packets++; // Count all packets, regardless of type
       
     int frame_size = 0;
-    switch(pkt->rtp.type){
-    case PCM_MONO_PT:
+    int channels = channels_from_pt(pkt->rtp.type);
+    switch(channels){
+    case 1:
       frame_size = pkt->len / sizeof(int16_t);
       break;
     default:
@@ -453,6 +454,8 @@ void *decode(void *arg){
     
     int16_t const * const samples = (int16_t *)pkt->data;
     
+    int rtp_type = pt_from_info(Audio_samprate,2); // 48 kHz stereo PCM
+
     for(int i=0; i<frame_size; i++){
       float const s = SCALE * (int16_t)ntohs(samples[i]);
       if(put_rfilter(baseband,s) == 0)
@@ -463,7 +466,7 @@ void *decode(void *arg){
       uint8_t packet[PKTSIZE],*dp;
       dp = packet;
       struct rtp_header out_rtp;
-      out_rtp.type = PCM_STEREO_PT; // 48 kHz stereo PCM
+      out_rtp.type = rtp_type;
       out_rtp.version = RTP_VERS;
       out_rtp.ssrc = sp->rtp_state_in.ssrc;
       out_rtp.timestamp = sp->rtp_state_out.timestamp;

@@ -35,16 +35,6 @@ static void set_local_options(int);
 static void set_ipv4_options(int fd,int mcast_ttl,int tos);
 static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos);
 
-struct pt_table {
-  int samprate;
-  int channels;
-  enum {
-    S16LE = 1,
-    S16BE,
-    OPUS,
-    F32,
-  } encoding;
-};
 struct pt_table PT_table[128] = {
 { 0, 0, 0 }, // 0
 { 0, 0, 0 }, // 1
@@ -175,8 +165,28 @@ struct pt_table PT_table[128] = {
 { 8000, 2, 2 }, // 126
 { 0, 0, 0 }, // 127
 };
+int Opus_pt = -1;
+int AX25_pt = -1;
+
 
 #ifdef BOOT // bootstrap new payload type table - take out eventually
+
+// Moved here from multicast.h so applications can't see them
+// Eventually phase all these out in favor of dynamic allocation
+#define PCM_STEREO_PT (10)        // 48 kHz (or other) flat stereo baseband audio OR I/Q baseband audio OR I/Q IF stream
+#define PCM_MONO_PT (11)          // 48 kHz (or other) flat mono baseband audio OR real-only IF stream
+#define AX25_PT (96)  // NON-standard payload type for my raw AX.25 frames - clean this up and remove
+#define OPUS_PT (111) // Hard-coded NON-standard payload type for OPUS (should be dynamic with sdp)
+#define PCM_MONO_24_PT (116)      // 24 kHz mono PCM, flat
+#define PCM_STEREO_24_PT (117)    // 24 kHz stereo PCM, flat
+#define PCM_MONO_16_PT (119)      // 16 kHz mono PCM, flat
+#define PCM_STEREO_16_PT (120)    // 16 kHz stereo PCM, flat
+#define PCM_MONO_12_PT (122)      // 12 kHz mono PCM, flat
+#define PCM_STEREO_12_PT (123)    // 12 kHz stereo PCM, flat
+#define PCM_MONO_8_PT (125)       // 8 kHz mono PCM, flat
+#define PCM_STEREO_8_PT (126)     // 8 kHz stereo PCM, flat
+
+
 static int old_channels_from_pt(int const type);
 static int old_samprate_from_pt(int const type);
 static int old_pt_from_info(int const samprate,int const channels);
@@ -281,6 +291,9 @@ void init_new_pt(void){
     }
   }
   PT_table[OPUS_PT].encoding = OPUS;
+  Opus_pt = OPUS_PT;
+  PT_table[AX25_PT].encoding = AX25;
+  AX25_pt = AX25_PT;
 
   pt_init = true;
   printf("struct pt_table PT_table[128] = {\n");
@@ -672,13 +685,13 @@ char const *formatsock(void const *s){
 
 int samprate_from_pt(int const type){
   if(type < 0 || type > 127)
-    return -1;
+    return 0;
   return PT_table[type].samprate;
 }
 
 int channels_from_pt(int const type){
   if(type < 0 || type > 127)
-    return -1;
+    return 0;
   return PT_table[type].channels;
 }
  
@@ -701,8 +714,6 @@ int pt_from_info(int const samprate,int const channels){
   }
   return -1;
 }
-
-
 
 // Compare IP addresses in sockaddr structures for equality
 int address_match(void const *arg1,void const *arg2){

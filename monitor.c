@@ -574,7 +574,10 @@ static void *sockproc(void *arg){
       sp->rtp_state.seq = pkt->rtp.seq;
       sp->reset = true;
       sp->type = pkt->rtp.type;
-      sp->samprate = sp->type == OPUS_PT ? DAC_samprate : samprate_from_pt(sp->type);
+      sp->samprate = PT_table[sp->type].samprate;
+      if(PT_table[sp->type].encoding == OPUS)
+	sp->samprate = DAC_samprate;
+
       for(int j=0; j < N_tones; j++)
 	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
 
@@ -708,7 +711,7 @@ static void *decode_task(void *arg){
     int upsample = 1;
 
     // decode Opus or PCM into bounce buffer
-    if(sp->type == OPUS_PT){
+    if(PT_table[sp->type].encoding == OPUS){
       // Execute Opus decoder even when muted to keep its state updated
       if(!sp->opus){
 	int error;
@@ -1100,7 +1103,7 @@ static void *display(void *arg){
 	}
 	if(Verbose){
 	  printw("%5s%3d%3d%3d",
-		 sp->type == OPUS_PT ? "Opus" : "PCM",
+		 PT_table[sp->type].encoding == OPUS ? "Opus" : "PCM",
 		 (1000 * sp->frame_size/sp->samprate), // frame size, ms
 		 sp->channels,
 		 sp->bandwidth); // Bandwidth, kHz 

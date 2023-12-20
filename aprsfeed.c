@@ -202,7 +202,7 @@ int main(int argc,char *argv[]){
       if(size <= 0)
 	continue;  // Bogus RTP header?
       
-      if(rtp_header.type != AX25_PT)
+      if(rtp_header.type != AX25_pt)
 	continue; // Wrong type
       
       if(Logfile){

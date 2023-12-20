@@ -19,33 +19,23 @@
 #define RTP_VERS 2U
 #define RTP_MARKER 0x80  // Marker flag in mpt field
 
-// different PCM protocol types are used for flat audio and FM audio requiring de-emphasis
-// De-emphasis is not done in the FM demodulators to make straight baseband FM available for digital demodulators
-// Linear is flat, so it uses the standard PCM protocol types
-// NBFM isn't standardized so it empirically uses a corner at 300 Hz (PL tones are below this) or 530.5 microsec
-// WFM broadcast audio in the US formally requires de-emphasis with a 75 microsecond time constant
-// WFM broadcast audio in Europe uses a 50 microsec time constant - not sure how to handle this
-#define PCM_STEREO_PT (10)        // 48 kHz (or other) flat stereo baseband audio OR I/Q baseband audio OR I/Q IF stream
-#define PCM_MONO_PT (11)          // 48 kHz (or other) flat mono baseband audio OR real-only IF stream
-#define AX25_PT (96)  // NON-standard payload type for my raw AX.25 frames
-
-#define OPUS_PT (111) // Hard-coded NON-standard payload type for OPUS (should be dynamic with sdp)
-
-#define PCM_MONO_24_PT (116)      // 24 kHz mono PCM, flat
-#define PCM_STEREO_24_PT (117)    // 24 kHz stereo PCM, flat
-
-#define PCM_MONO_16_PT (119)      // 16 kHz mono PCM, flat
-#define PCM_STEREO_16_PT (120)    // 16 kHz stereo PCM, flat
-
-#define PCM_MONO_12_PT (122)      // 12 kHz mono PCM, flat
-#define PCM_STEREO_12_PT (123)    // 12 kHz stereo PCM, flat
-
-#define PCM_MONO_8_PT (125)       // 8 kHz mono PCM, flat
-#define PCM_STEREO_8_PT (126)     // 8 kHz stereo PCM, flat
-
 extern int Mcast_ttl;
 extern int IP_tos;
 
+struct pt_table {
+  int samprate;
+  int channels;
+  enum {
+    S16LE = 1,
+    S16BE,
+    OPUS,
+    F32,
+    AX25,
+  } encoding;
+};
+extern struct pt_table PT_table[];
+extern int Opus_pt; // Allow dynamic setting in the future
+extern int AX25_pt;
 
 // Internal representation of RTP header -- NOT what's on wire!
 struct rtp_header {
@@ -214,7 +204,6 @@ static inline uint8_t *put32(uint8_t *dp,uint32_t x){
 }
 int samprate_from_pt(int type);
 int channels_from_pt(int type);
-int deemph_from_pt(int type);
 int pt_from_info(int samprate,int channels);
 
 #endif

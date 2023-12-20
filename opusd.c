@@ -229,7 +229,6 @@ int main(int argc,char * const argv[]){
     fprintf(stderr,"Must specify --opus-out\n");
     exit(EX_USAGE);
   }
-  
   char iface[1024];
   if(Input){
     resolve_mcast(Input,&PCM_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
@@ -773,7 +772,7 @@ int send_samples(struct session * const sp){
     struct rtp_header rtp;
     memset(&rtp,0,sizeof(rtp));
     rtp.version = RTP_VERS;
-    rtp.type = OPUS_PT; // Opus
+    rtp.type = Opus_pt; // Opus
     rtp.seq = sp->rtp_state_out.seq;
     rtp.timestamp = sp->rtp_state_out.timestamp;
     rtp.ssrc = sp->rtp_state_out.ssrc;

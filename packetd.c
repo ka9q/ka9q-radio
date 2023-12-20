@@ -596,7 +596,7 @@ static void *decode_task(void *arg){
 	    struct rtp_header rtp_hdr;
 	    memset(&rtp_hdr,0,sizeof(rtp_hdr));
 	    rtp_hdr.version = 2;
-	    rtp_hdr.type = AX25_PT;
+	    rtp_hdr.type = AX25_pt;
 	    rtp_hdr.seq = sp->rtp_state_out.seq++;
 	    // RTP timestamp??
 	    rtp_hdr.timestamp = sp->rtp_state_out.timestamp;

@@ -44,7 +44,10 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
 
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
-  rtp.type = PCM_MONO_PT;
+  int const type = pt_from_info(Samprate,1);
+  if(type == -1)
+    return 0; // Can't allocate!
+  rtp.type = type;
   rtp.version = RTP_VERS;
   rtp.ssrc = rtp_state->ssrc;
   rtp.marker = true; // Start with marker bit on to reset playout buffer

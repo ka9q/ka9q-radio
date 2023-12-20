@@ -213,7 +213,7 @@ int main(int argc,char * const argv[]){
     struct rtp_header rtp_hdr;
     memset(&rtp_hdr,0,sizeof(rtp_hdr));
     rtp_hdr.version = RTP_VERS;
-    rtp_hdr.type = PCM_STEREO_PT;
+    rtp_hdr.type = pt_from_info(Samprate,Channels);
     rtp_hdr.seq = rtp_state_out.seq;
     rtp_hdr.ssrc = rtp_state_out.ssrc;
     rtp_hdr.timestamp = rtp_state_out.timestamp;
