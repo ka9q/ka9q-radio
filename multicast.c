@@ -165,6 +165,11 @@ struct pt_table PT_table[128] = {
 { 8000, 2, 2 }, // 126
 { 0, 0, 0 }, // 127
 };
+
+#define AX25_PT (96)  // NON-standard payload type for my raw AX.25 frames - clean this up and remove
+#define OPUS_PT (111) // Hard-coded NON-standard payload type for OPUS (should be dynamic with sdp)
+
+
 int Opus_pt = OPUS_PT;
 int AX25_pt = AX25_PT;
 
@@ -175,8 +180,6 @@ int AX25_pt = AX25_PT;
 // Eventually phase all these out in favor of dynamic allocation
 #define PCM_STEREO_PT (10)        // 48 kHz (or other) flat stereo baseband audio OR I/Q baseband audio OR I/Q IF stream
 #define PCM_MONO_PT (11)          // 48 kHz (or other) flat mono baseband audio OR real-only IF stream
-#define AX25_PT (96)  // NON-standard payload type for my raw AX.25 frames - clean this up and remove
-#define OPUS_PT (111) // Hard-coded NON-standard payload type for OPUS (should be dynamic with sdp)
 #define PCM_MONO_24_PT (116)      // 24 kHz mono PCM, flat
 #define PCM_STEREO_24_PT (117)    // 24 kHz stereo PCM, flat
 #define PCM_MONO_16_PT (119)      // 16 kHz mono PCM, flat
