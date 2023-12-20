@@ -35,11 +35,156 @@ static void set_local_options(int);
 static void set_ipv4_options(int fd,int mcast_ttl,int tos);
 static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos);
 
+struct pt_table {
+  int samprate;
+  int channels;
+  enum {
+    S16LE = 1,
+    S16BE,
+    OPUS,
+    F32,
+  } encoding;
+};
+struct pt_table PT_table[128] = {
+{ 0, 0, 0 }, // 0
+{ 0, 0, 0 }, // 1
+{ 0, 0, 0 }, // 2
+{ 0, 0, 0 }, // 3
+{ 0, 0, 0 }, // 4
+{ 0, 0, 0 }, // 5
+{ 0, 0, 0 }, // 6
+{ 0, 0, 0 }, // 7
+{ 0, 0, 0 }, // 8
+{ 0, 0, 0 }, // 9
+{ 48000, 2, 2 }, // 10
+{ 48000, 1, 2 }, // 11
+{ 0, 0, 0 }, // 12
+{ 0, 0, 0 }, // 13
+{ 0, 0, 0 }, // 14
+{ 0, 0, 0 }, // 15
+{ 0, 0, 0 }, // 16
+{ 0, 0, 0 }, // 17
+{ 0, 0, 0 }, // 18
+{ 0, 0, 0 }, // 19
+{ 0, 0, 0 }, // 20
+{ 0, 0, 0 }, // 21
+{ 0, 0, 0 }, // 22
+{ 0, 0, 0 }, // 23
+{ 0, 0, 0 }, // 24
+{ 0, 0, 0 }, // 25
+{ 0, 0, 0 }, // 26
+{ 0, 0, 0 }, // 27
+{ 0, 0, 0 }, // 28
+{ 0, 0, 0 }, // 29
+{ 0, 0, 0 }, // 30
+{ 0, 0, 0 }, // 31
+{ 0, 0, 0 }, // 32
+{ 0, 0, 0 }, // 33
+{ 0, 0, 0 }, // 34
+{ 0, 0, 0 }, // 35
+{ 0, 0, 0 }, // 36
+{ 0, 0, 0 }, // 37
+{ 0, 0, 0 }, // 38
+{ 0, 0, 0 }, // 39
+{ 0, 0, 0 }, // 40
+{ 0, 0, 0 }, // 41
+{ 0, 0, 0 }, // 42
+{ 0, 0, 0 }, // 43
+{ 0, 0, 0 }, // 44
+{ 0, 0, 0 }, // 45
+{ 0, 0, 0 }, // 46
+{ 0, 0, 0 }, // 47
+{ 0, 0, 0 }, // 48
+{ 0, 0, 0 }, // 49
+{ 0, 0, 0 }, // 50
+{ 0, 0, 0 }, // 51
+{ 0, 0, 0 }, // 52
+{ 0, 0, 0 }, // 53
+{ 0, 0, 0 }, // 54
+{ 0, 0, 0 }, // 55
+{ 0, 0, 0 }, // 56
+{ 0, 0, 0 }, // 57
+{ 0, 0, 0 }, // 58
+{ 0, 0, 0 }, // 59
+{ 0, 0, 0 }, // 60
+{ 0, 0, 0 }, // 61
+{ 0, 0, 0 }, // 62
+{ 0, 0, 0 }, // 63
+{ 0, 0, 0 }, // 64
+{ 0, 0, 0 }, // 65
+{ 0, 0, 0 }, // 66
+{ 0, 0, 0 }, // 67
+{ 0, 0, 0 }, // 68
+{ 0, 0, 0 }, // 69
+{ 0, 0, 0 }, // 70
+{ 0, 0, 0 }, // 71
+{ 0, 0, 0 }, // 72
+{ 0, 0, 0 }, // 73
+{ 0, 0, 0 }, // 74
+{ 0, 0, 0 }, // 75
+{ 0, 0, 0 }, // 76
+{ 0, 0, 0 }, // 77
+{ 0, 0, 0 }, // 78
+{ 0, 0, 0 }, // 79
+{ 0, 0, 0 }, // 80
+{ 0, 0, 0 }, // 81
+{ 0, 0, 0 }, // 82
+{ 0, 0, 0 }, // 83
+{ 0, 0, 0 }, // 84
+{ 0, 0, 0 }, // 85
+{ 0, 0, 0 }, // 86
+{ 0, 0, 0 }, // 87
+{ 0, 0, 0 }, // 88
+{ 0, 0, 0 }, // 89
+{ 0, 0, 0 }, // 90
+{ 0, 0, 0 }, // 91
+{ 0, 0, 0 }, // 92
+{ 0, 0, 0 }, // 93
+{ 0, 0, 0 }, // 94
+{ 0, 0, 0 }, // 95
+{ 0, 0, 0 }, // 96
+{ 0, 0, 0 }, // 97
+{ 0, 0, 0 }, // 98
+{ 0, 0, 0 }, // 99
+{ 0, 0, 0 }, // 100 
+{ 0, 0, 0 }, // 101
+{ 0, 0, 0 }, // 102
+{ 0, 0, 0 }, // 103
+{ 0, 0, 0 }, // 104
+{ 0, 0, 0 }, // 105
+{ 0, 0, 0 }, // 106
+{ 0, 0, 0 }, // 107
+{ 0, 0, 0 }, // 108
+{ 0, 0, 0 }, // 109
+{ 0, 0, 0 }, // 110
+{ 48000, 2, 3 }, // 111  Opus always uses a 48K virtual sample rate
+{ 0, 0, 0 }, // 112
+{ 0, 0, 0 }, // 113
+{ 0, 0, 0 }, // 114
+{ 0, 0, 0 }, // 115
+{ 24000, 1, 2 }, // 116
+{ 24000, 2, 2 }, // 117 
+{ 0, 0, 0 }, // 118
+{ 16000, 1, 2 }, // 119
+{ 16000, 2, 2 }, // 120 
+{ 0, 0, 0 }, // 121
+{ 12000, 1, 2 }, // 122
+{ 12000, 2, 2 }, // 123
+{ 0, 0, 0 }, // 124
+{ 8000, 1, 2 }, // 125
+{ 8000, 2, 2 }, // 126
+{ 0, 0, 0 }, // 127
+};
+
+#ifdef BOOT // bootstrap new payload type table
+static int old_channels_from_pt(int const type);
+static int old_samprate_from_pt(int const type);
+static int old_pt_from_info(int const samprate,int const channels);
+
 // [samprate][channels]
 // Not all combinations are supported or useful,
 // e.g., wideband FM is always 48 kHz, FM is always mono
-// PCM_MONO_LE_PT and PCM_STEREO_LE_PT not listed here. This is really ugly, and shows why SDP should be used
-static int pt_table[5][2] = {
+static int old_pt_table[5][2] = {
   {  PCM_MONO_8_PT, PCM_STEREO_8_PT  },
   {  PCM_MONO_12_PT, PCM_STEREO_12_PT },
   {  PCM_MONO_16_PT, PCM_STEREO_16_PT },
@@ -47,6 +192,105 @@ static int pt_table[5][2] = {
   {  PCM_MONO_PT, PCM_STEREO_PT },
 };
 
+
+static bool pt_init = false;
+// Determine sample rate from RTP payload type
+static int old_samprate_from_pt(int const type){
+  switch(type){
+  case PCM_MONO_PT:
+  case PCM_STEREO_PT:
+  case OPUS_PT: // Internally 48 kHz, though not really applicable
+    return 48000;
+  case PCM_MONO_24_PT:
+  case PCM_STEREO_24_PT:
+    return 24000;
+  case PCM_MONO_16_PT:
+  case PCM_STEREO_16_PT:
+    return 16000;
+  case PCM_MONO_12_PT:
+  case PCM_STEREO_12_PT:
+    return 12000;
+  case PCM_MONO_8_PT:
+  case PCM_STEREO_8_PT:
+    return 8000;
+  default:
+    return 0;
+  }
+}
+
+static int old_channels_from_pt(int const type){
+  switch(type){
+  case PCM_MONO_PT:
+  case PCM_MONO_24_PT:
+  case PCM_MONO_16_PT:
+  case PCM_MONO_12_PT:
+  case PCM_MONO_8_PT:
+    return 1;
+  case PCM_STEREO_PT:
+  case OPUS_PT:
+  case PCM_STEREO_24_PT:
+  case PCM_STEREO_16_PT:
+  case PCM_STEREO_12_PT:
+  case PCM_STEREO_8_PT:
+    return 2;
+  default:
+    return 0;
+  }
+}
+
+static int old_pt_from_info(int const samprate,int const channels){
+  int s;
+  switch(samprate){
+  case 8000:
+    s = 0;
+    break;
+  case 12000:
+    s = 1;
+    break;
+  case 16000:
+    s = 2;
+    break;
+  case 24000:
+    s = 3;
+    break;
+    // other sample rates also use the original RTP definitions, so it's really "unspecified"
+  case 48000:
+  default:
+    s = 4;
+    break;
+  }
+  if(channels < 1 || channels > 2)
+    return -1;
+
+  return old_pt_table[s][channels-1];
+}
+
+void init_new_pt(void){
+  if(pt_init)
+     return;
+
+  int samprates[] = { 8000, 12000, 16000, 24000, 48000};
+  for(int chan = 1;chan <= 2; chan++){
+    for(int i= 0; i < 5;i++){
+      int type = old_pt_from_info(samprates[i],chan);
+      if(type >= 0){
+	PT_table[type].channels = old_channels_from_pt(type);
+	PT_table[type].samprate = old_samprate_from_pt(type);
+	PT_table[type].encoding = S16BE; // default 16-bit linear PCM big endian
+      }
+    }
+  }
+  PT_table[OPUS_PT].encoding = OPUS;
+  
+
+  pt_init = true;
+  printf("struct pt_table PT_table[128] = {\n");
+  for(int i=0; i < 128; i++){
+    printf("{ %d, %d, %d }, // %d \n",PT_table[i].samprate,PT_table[i].channels,PT_table[i].encoding,i);
+  }
+  printf("};\n");
+}
+#endif
 
 // This is a bit messy. Is there a better way?
 char const *Default_mcast_iface;
@@ -451,83 +695,43 @@ char const *id_from_type(int const type){
   }
 }
 
-// Determine sample rate from RTP payload type
+
 int samprate_from_pt(int const type){
-  switch(type){
-  case PCM_MONO_PT:
-  case PCM_STEREO_PT:
-  case OPUS_PT: // Internally 48 kHz, though not really applicable
-    return 48000;
-  case PCM_MONO_24_PT:
-  case PCM_STEREO_24_PT:
-    return 24000;
-  case PCM_MONO_16_PT:
-  case PCM_STEREO_16_PT:
-    return 16000;
-  case PCM_MONO_12_PT:
-  case PCM_STEREO_12_PT:
-    return 12000;
-  case PCM_MONO_8_PT:
-  case PCM_STEREO_8_PT:
-    return 8000;
-  default:
-    return 0;
-  }
+  if(type < 0 || type > 127)
+    return -1;
+  return PT_table[type].samprate;
 }
+
 int channels_from_pt(int const type){
-  switch(type){
-  case REAL_PT12:
-  case REAL_PT:
-  case REAL_PT8:
-  case PCM_MONO_PT:
-  case PCM_MONO_24_PT:
-  case PCM_MONO_16_PT:
-  case PCM_MONO_12_PT:
-  case PCM_MONO_8_PT:
-    return 1;
-  case IQ_PT12:
-  case IQ_PT8:
-  case PCM_STEREO_PT:
-  case OPUS_PT:
-  case PCM_STEREO_24_PT:
-  case PCM_STEREO_16_PT:
-  case PCM_STEREO_12_PT:
-  case PCM_STEREO_8_PT:
-    return 2;
-  default:
-    return 0;
-  }
+  if(type < 0 || type > 127)
+    return -1;
+  return PT_table[type].channels;
 }
 
 
-
+ 
 int pt_from_info(int const samprate,int const channels){
-  int s;
-  switch(samprate){
-  case 8000:
-    s = 0;
-    break;
-  case 12000:
-    s = 1;
-    break;
-  case 16000:
-    s = 2;
-    break;
-  case 24000:
-    s = 3;
-    break;
-    // other sample rates also use the original RTP definitions, so it's really "unspecified"
-  case 48000:
-  default:
-    s = 4;
-    break;
-  }
-  if(channels < 1 || channels > 2)
+  if(samprate <= 0 || channels <= 0 || channels > 2)
     return -1;
 
-  return pt_table[s][channels-1];
+  // Search table for existing entry, otherwise create new entry
+  for(int type=0; type < 128; type++)
+    if(PT_table[type].samprate == samprate && PT_table[type].channels == channels)
+      return type;
+
+  for(int type=0; type < 128; type++){
+    if(PT_table[type].samprate == 0){
+      // allocate it
+      PT_table[type].samprate = samprate;
+      PT_table[type].channels = channels;
+      return type;
+    }
+  }
+  return -1;
 }
- 
+
+
+
 // Compare IP addresses in sockaddr structures for equality
 int address_match(void const *arg1,void const *arg2){
   struct sockaddr const *s1 = (struct sockaddr *)arg1;

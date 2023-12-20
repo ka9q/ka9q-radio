@@ -27,20 +27,9 @@
 // WFM broadcast audio in Europe uses a 50 microsec time constant - not sure how to handle this
 #define PCM_STEREO_PT (10)        // 48 kHz (or other) flat stereo baseband audio OR I/Q baseband audio OR I/Q IF stream
 #define PCM_MONO_PT (11)          // 48 kHz (or other) flat mono baseband audio OR real-only IF stream
-#define AIRSPY_PACKED (91) // Airspy packed format - eight 12 bit offset-2048 int samples in 3 32-bit ints
-#define REAL_PT12 (92) // Non-standard payload types for real-only data
-#define REAL_PT (93)
-#define REAL_PT8 (94)
-#define IQ_PT12 (95)  // NON-standard payload for 12-bit packed integers, BIG ENDIAN
 #define AX25_PT (96)  // NON-standard payload type for my raw AX.25 frames
-#define IQ_PT (97)    // NON-standard payload type for my raw I/Q stream - 16 bit little endian
-#define IQ_PT8 (98)   // NON-standard payload type for my raw I/Q stream - 8 bit version
-#define IQ_FLOAT (99) // 32-bit float complex
 
 #define OPUS_PT (111) // Hard-coded NON-standard payload type for OPUS (should be dynamic with sdp)
-
-#define PCM_MONO_LE_PT (114)      // 48 kHz (or other) single channel little endian
-#define PCM_STEREO_LE_PT (115)    // 48 kHz (or other) dual channel little endian
 
 #define PCM_MONO_24_PT (116)      // 24 kHz mono PCM, flat
 #define PCM_STEREO_24_PT (117)    // 24 kHz stereo PCM, flat
