@@ -671,31 +671,6 @@ char const *formatsock(void const *s){
   return ic->hostport;
 }
 
-char const *id_from_type(int const type){
-  switch(type){
-  case OPUS_PT:
-    return "Opus";
-  case PCM_MONO_PT:
-  case PCM_STEREO_PT:
-    return "PCM";
-  case PCM_STEREO_24_PT:
-  case PCM_MONO_24_PT:
-    return "PCM24";
-  case PCM_STEREO_16_PT:
-  case PCM_MONO_16_PT:
-    return "PCM16";
-  case PCM_STEREO_12_PT:
-  case PCM_MONO_12_PT:
-    return "PCM12";
-  case PCM_STEREO_8_PT:
-  case PCM_MONO_8_PT:
-    return "PCM8";
-  default:
-    return "";
-  }
-}
-
-
 int samprate_from_pt(int const type){
   if(type < 0 || type > 127)
     return -1;
@@ -707,8 +682,6 @@ int channels_from_pt(int const type){
     return -1;
   return PT_table[type].channels;
 }
-
-
  
 int pt_from_info(int const samprate,int const channels){
   if(samprate <= 0 || channels <= 0 || channels > 2)
