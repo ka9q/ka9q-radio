@@ -176,7 +176,7 @@ struct pt_table PT_table[128] = {
 { 0, 0, 0 }, // 127
 };
 
-#ifdef BOOT // bootstrap new payload type table
+#ifdef BOOT // bootstrap new payload type table - take out eventually
 static int old_channels_from_pt(int const type);
 static int old_samprate_from_pt(int const type);
 static int old_pt_from_info(int const samprate,int const channels);
@@ -192,8 +192,6 @@ static int old_pt_table[5][2] = {
   {  PCM_MONO_PT, PCM_STEREO_PT },
 };
 
-
-static bool pt_init = false;
 // Determine sample rate from RTP payload type
 static int old_samprate_from_pt(int const type){
   switch(type){
@@ -265,6 +263,8 @@ static int old_pt_from_info(int const samprate,int const channels){
   return old_pt_table[s][channels-1];
 }
 
+static bool pt_init = false;
+
 void init_new_pt(void){
   if(pt_init)
      return;
@@ -281,12 +281,11 @@ void init_new_pt(void){
     }
   }
   PT_table[OPUS_PT].encoding = OPUS;
-  
 
   pt_init = true;
   printf("struct pt_table PT_table[128] = {\n");
   for(int i=0; i < 128; i++){
-    printf("{ %d, %d, %d }, // %d \n",PT_table[i].samprate,PT_table[i].channels,PT_table[i].encoding,i);
+    printf("{ %d, %d, %d }, // %d\n",PT_table[i].samprate,PT_table[i].channels,PT_table[i].encoding,i);
   }
   printf("};\n");
 }
