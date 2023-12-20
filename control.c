@@ -460,23 +460,20 @@ int main(int argc,char *argv[]){
 	length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize); // should not block
 	// Ignore our own command packets and responses to other SSIDs
 	if(length >= 2 && (enum pkt_type)buffer[0] == STATUS && for_us(channel,buffer+1,length-1,Ssrc) >= 0 ){
-	  // Save source only if it's a response
+	  // Process only if it's a response to our SSRC
 	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
-	  break; // Got a response
-	}
+	  screen_update_needed = true;
+#ifdef DEBUG_POLL 
+	  wprintw(Debug_win,"got response length %d\n",length);
+#endif
+	  decode_radio_status(channel,buffer+1,length-1);
+	  // Postpone next poll to specified interval
+	  next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
+	  if(Blocktime == 0 && Frontend.samprate != 0)
+	    Blocktime = 1000.0f * Frontend.L / Frontend.samprate; // Set the firat time
+	}      
       }
     } while(now < start_of_recv_poll + recv_timeout);
-    if(length > 0){
-      screen_update_needed = true;
-#ifdef DEBUG_POLL 
-      wprintw(Debug_win,"got response length %d\n",length);
-#endif
-      decode_radio_status(channel,buffer+1,length-1);
-      // Postpone next poll to specified interval
-      next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
-      if(Blocktime == 0 && Frontend.samprate != 0)
-	Blocktime = 1000.0f * Frontend.L / Frontend.samprate; // Set the firat time
-    }      
     // Set up command buffer in case we want to change something
     uint8_t cmdbuffer[PKTSIZE];
     uint8_t *bp = cmdbuffer;
