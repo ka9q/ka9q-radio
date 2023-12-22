@@ -341,7 +341,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
     case GAIN:
       {
 	float const f = decode_float(cp,optlen);
-	if(!isnan(f)){
+	if(isfinite(f)){
 	  chan->output.gain = dB2voltage(f); // -Inf = 0 gain is OK
 	  chan->linear.agc = false; // Doesn't make sense to change gain and then have the AGC change it again
 	}
@@ -357,7 +357,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
     case AGC_RECOVERY_RATE: // dB/sec -> amplitude / block times, always positive
       {
 	float const f = decode_float(cp,optlen);
-	if(!isnan(f))
+	if(isfinite(f) && )
 	  chan->linear.recovery_rate = dB2voltage(fabsf(f) * .001 * Blocktime);
       }
       break;
@@ -394,21 +394,21 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
     case SQUELCH_OPEN:
       {
 	float const x = decode_float(cp,optlen);
-	if(!isnan(x))
+	if(isfinite(x))
 	  chan->squelch_open = fabsf(dB2power(x));
       }	
       break;
     case SQUELCH_CLOSE:
       {
 	float const x = decode_float(cp,optlen);
-	if(!isnan(x))
+	if(isfinite(x))
 	   chan->squelch_close = fabsf(dB2power(x));
       }	
       break;
     case NONCOHERENT_BIN_BW:
       {
 	float const x = decode_float(cp,optlen);
-	if(!isnan(x) && x != chan->spectrum.bin_bw){
+	if(isfinite(x) && x != chan->spectrum.bin_bw){
 	  chan->spectrum.bin_bw = x;
 	  restart_needed = true;
 	}
