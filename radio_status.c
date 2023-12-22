@@ -357,7 +357,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
     case AGC_RECOVERY_RATE: // dB/sec -> amplitude / block times, always positive
       {
 	float const f = decode_float(cp,optlen);
-	if(isfinite(f) && )
+	if(isfinite(f))
 	  chan->linear.recovery_rate = dB2voltage(fabsf(f) * .001 * Blocktime);
       }
       break;
