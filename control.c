@@ -611,7 +611,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Squelch SNR: ",str,sizeof(str));
       float const x = strtof(str,&ptr);
-      if(ptr != str){
+      if(ptr != str && isfinite(x)){
 	encode_float(bpp,SQUELCH_OPEN,x);
 	encode_float(bpp,SQUELCH_CLOSE,x - 1); // Make this a separate command
       }
@@ -622,7 +622,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Hang time, s: ",str,sizeof(str));
       float const x = fabsf(strtof(str,&ptr));
-      if(ptr != str)
+      if(ptr != str && isfinite(x))
 	encode_float(bpp,AGC_HANGTIME,x);
     }
     break;
@@ -631,7 +631,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("PLL loop bandwidth, Hz: ",str,sizeof(str));
       float const x = fabsf(strtof(str,&ptr));
-      if(ptr != str)
+      if(ptr != str && isfinite(x))
 	encode_float(bpp,PLL_BW,x);
     }
     break;
@@ -640,7 +640,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("AGC threshold, dB: ",str,sizeof(str));
       float const x = strtof(str,&ptr);
-      if(ptr != str)
+      if(ptr != str && isfinite(x))
 	encode_float(bpp,AGC_THRESHOLD,x);
     }
     break;
@@ -649,7 +649,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Recovery rate, dB/s: ",str,sizeof(str));
       float const x = fabsf(strtof(str,&ptr));
-      if(ptr != str)
+      if(ptr != str && isfinite(x))
 	encode_float(bpp,AGC_RECOVERY_RATE,x);
     }
     break;
@@ -658,7 +658,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Headroom, dB: ",str,sizeof(str));
       float const x = -fabsf(strtof(str,&ptr));
-      if(ptr != str)
+      if(ptr != str && isfinite(x))
 	encode_float(bpp,HEADROOM,x);
     }
     break;
@@ -667,7 +667,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Gain, dB: ",str,sizeof(str));
       float const x = strtof(str,&ptr);
-      if(ptr != str){
+      if(ptr != str && isfinite(x)){
 	encode_float(bpp,GAIN,x);
 	encode_byte(bpp,AGC_ENABLE,0); // Also done implicitly in radiod
       }
@@ -677,8 +677,9 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     {
       char str[Entry_width],*ptr;
       getentry("Refresh rate (s): ",str,sizeof(str));
-      float const x = strtof(str,&ptr);
-      Refresh_rate = x;
+      float const x = fabsf(strtof(str,&ptr));
+      if(ptr != str && isfinite(x))
+	Refresh_rate = x;
     }
     break;
   case 'p':
@@ -704,8 +705,11 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       char str[Entry_width];
       getentry("Carrier frequency: ",str,sizeof(str));
       if(strlen(str) > 0){
-	channel->tune.freq = fabs(parse_frequency(str,true)); // Handles funky forms like 147m435
-	encode_double(bpp,RADIO_FREQUENCY,channel->tune.freq);
+	double const x = fabs(parse_frequency(str,true)); // Handles funky forms like 147m435
+	if(isfinite(x)){
+	  channel->tune.freq = x;
+	  encode_double(bpp,RADIO_FREQUENCY,channel->tune.freq);
+	}
       }
     }
     break;
@@ -713,14 +717,14 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     {
       char str[Entry_width],*ptr;
       getentry("Kaiser window beta: ",str,sizeof(str));
-      double const b = strtod(str,&ptr);
-      if(ptr == str)
-	break; // nothing entered
-      if(b < 0 || b >= 100){
-	beep();
-	break; // beyond limits
+      float const b = strtof(str,&ptr);
+      if(ptr != str && isfinite(b)){
+	if(b < 0 || b >= 100){
+	  beep(); // beyond limits
+	} else {
+	  encode_float(bpp,KAISER_BETA,b);
+	}
       }
-      encode_float(bpp,KAISER_BETA,b);
     }
     break;
   case 'o': // Set/clear option flags, most apply only to linear detector
