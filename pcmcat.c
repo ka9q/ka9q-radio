@@ -29,18 +29,19 @@ struct pcmstream {
   struct sockaddr sender;
   char addr[NI_MAXHOST];    // RTP Sender IP address
   char port[NI_MAXSERV];    // RTP Sender source port
+  int framesize;            // Bytes per timestamp increment
 
-  struct rtp_state rtp_state;
-  int channels;
-  
+  long long bytes_received;
+  struct rtp_header last_header;
+  int last_size;
 };
 
 // Command line params
 static char const *Mcast_address_text;
 static int Quiet;
-static int Channels = 1;   // Output channels
 const char *App_path;
 int Verbose;
+bool Byteswap = true;
 
 static int Input_fd = -1;
 static struct pcmstream Pcmstream;
@@ -53,14 +54,11 @@ int main(int argc,char *argv[]){
   setlocale(LC_ALL,getenv("LANG"));
 
   int c;
-  while((c = getopt(argc,argv,"qhs:2V")) != EOF){
+  while((c = getopt(argc,argv,"qhs:bV")) != EOF){
     switch(c){
     case 'V':
       VERSION();
       exit(EX_OK);
-    case '2': // Force stereo
-      Channels = 2;
-      break;
     case 'v':
       Verbose++;
       break;
@@ -70,9 +68,12 @@ int main(int argc,char *argv[]){
     case 's':
       Ssrc = strtol(optarg,NULL,0);
       break;
+    case 'b':
+      Byteswap = false;
+      break;
     case 'h':
     default:
-      fprintf(stderr,"Usage: %s [-v] [-s ssrc] mcast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-h] [-v] [-q] [-s ssrc] mcast_address\n",argv[0]);
       fprintf(stderr,"       hex ssrc requires 0x prefix\n");
       exit(1);
     }
@@ -131,10 +132,11 @@ int main(int argc,char *argv[]){
       init(&Pcmstream,&rtp,&sender);
       
       if(!Quiet){
-	fprintf(stderr,"New session from %u@%s:%s, type %d, channels %d\n",
+	fprintf(stderr,"New session from %u@%s:%s, payload type %d\n",
 		Pcmstream.ssrc,
 		Pcmstream.addr,
-		Pcmstream.port,rtp.type,Pcmstream.channels);
+		Pcmstream.port,
+		rtp.type);
       }
     } else if(rtp.ssrc != Pcmstream.ssrc)
       continue; // unwanted SSRC, ignore
@@ -149,63 +151,49 @@ int main(int argc,char *argv[]){
 		Pcmstream.port);
       }
     }
-    if(rtp.marker)
-      Pcmstream.rtp_state.timestamp = rtp.timestamp;      // Resynch
+    if(!rtp.marker){
+      // Should we detect and drop recent duplicates?
 
-    if(Pcmstream.channels != channels_from_pt(rtp.type)){
-      if(!Quiet)
-	fprintf(stderr,"Channel count changed from %d to %d\n",Pcmstream.channels,channels_from_pt(rtp.type));
-      Pcmstream.channels = channels_from_pt(rtp.type); 
-    }
-    if(Pcmstream.channels != 1 && Pcmstream.channels != 2)
-      continue; // Invalid
-
-    int const time_step = (int32_t)(rtp.timestamp - Pcmstream.rtp_state.timestamp);
-    if(time_step < 0){
-      // Old dupe
-      Pcmstream.rtp_state.dupes++;
-      continue;
-    } else if(time_step > 0){
-      Pcmstream.rtp_state.drops++;
-      fprintf(stderr,"Drops %llu\n",(long long unsigned)Pcmstream.rtp_state.drops);
-      if(time_step < 48000){	// Arbitrary threshold - clean this up!
-	int16_t zeroes[time_step];
-	memset(zeroes,0,sizeof(zeroes));
-	fwrite(zeroes,sizeof(*zeroes),time_step,stdout);
-	if(Channels == 2)
-	  fwrite(zeroes,sizeof(*zeroes),time_step,stdout); // Write it twice
+      if((int16_t)(rtp.seq - Pcmstream.last_header.seq) > 1){
+	// Something got dropped. Emit some padding if it's not too much and we know the framesize
+	// This will get invoked on the first packet, but nothing will happen because Pcmstream.framesize == 0
+	int time_step = (int32_t)(rtp.timestamp - Pcmstream.last_header.timestamp);
+	if(time_step >= 0 && time_step < 48000){  // arbitrary, make this a parameter
+	  if(Pcmstream.framesize != 0){
+	    char zeroes[Pcmstream.framesize * time_step];
+	    memset(zeroes,0,sizeof(zeroes));
+	    fwrite(zeroes,1,sizeof(zeroes),stdout);
+	  }
+	}
+      } else {
+	// Normal case: next expected packet in sequence
+	if(rtp.timestamp != Pcmstream.last_header.timestamp){
+	  // There's no marker, this packet is in sequence after the last one, we now know bytes per timestamp count
+	  int new_framesize = Pcmstream.last_size / (int32_t)(rtp.timestamp - Pcmstream.last_header.timestamp);
+	  if(new_framesize != Pcmstream.framesize){
+	    Pcmstream.framesize = new_framesize;
+	    if(!Quiet){
+	      fprintf(stderr,"%d bytes/Timestamp count\n",Pcmstream.framesize);
+	    }
+	  }
+	}
       }
-      // Resync
-      Pcmstream.rtp_state.timestamp = rtp.timestamp; // Bring up to date?
     }
-    Pcmstream.rtp_state.bytes += size;
-    
-    int const sampcount = size / sizeof(int16_t); // # of 16-bit samples, regardless of mono or stereo
-    int const framecount = sampcount / Pcmstream.channels; // == sampcount for mono, sampcount/2 for stereo
-    int16_t * const sdp = (int16_t *)dp;
-
-    // Byte swap incoming buffer, regardless of channels
-    for(int i=0; i < sampcount; i++)
-      sdp[i] = ntohs(sdp[i]);
-    
-    if(Channels == Pcmstream.channels) {
-      fwrite(sdp,sizeof(*sdp),sampcount,stdout); // Both mono or stereo, no expansion/mixing needed
-    } else if(Channels == 1 && Pcmstream.channels == 2) {
-      for(int i=0; i < framecount; i++) // Downmix to mono
-	sdp[i] = (sdp[2*i] + sdp[2*i + 1]) / 2;
-
-      fwrite(sdp,sizeof(*sdp),framecount,stdout);
-    } else {
-      // Expand to pseudo-stereo
-      int16_t output[2*sampcount];
+    if(Byteswap){
+      // Byte swap incoming buffer
+      int16_t *sdp = (int16_t *)dp;
+      int sampcount = size / 2;
       for(int i=0; i < sampcount; i++)
-	output[2*i] = output[2*i+1] = sdp[i];
+	sdp[i] = ntohs(sdp[i]);
+      fwrite(sdp,sizeof(*sdp),sampcount,stdout);
+    } else
+      fwrite(dp,size,1,stdout);
 
-      fwrite(output,sizeof(*output),sampcount*2,stdout);
-    }
     fflush(stdout);
-    Pcmstream.rtp_state.timestamp += framecount;
-    Pcmstream.rtp_state.seq = rtp.seq + 1;
+    Pcmstream.bytes_received += size;
+
+    Pcmstream.last_header = rtp;
+    Pcmstream.last_size = size;
   }
   exit(0); // Not reached
 }
@@ -213,18 +201,12 @@ static int init(struct pcmstream *pc,struct rtp_header const *rtp,struct sockadd
   // First packet on stream, initialize
   pc->ssrc = rtp->ssrc;
   pc->type = rtp->type;
-  pc->channels = channels_from_pt(rtp->type);
+  pc->framesize = 0; // unknown
   
   memcpy(&pc->sender,sender,sizeof(pc->sender)); // Remember sender
   getnameinfo((struct sockaddr *)&pc->sender,sizeof(pc->sender),
 	      pc->addr,sizeof(pc->addr),
 	      pc->port,sizeof(pc->port),NI_NOFQDN|NI_DGRAM);
-  pc->rtp_state.timestamp = rtp->timestamp;
-  pc->rtp_state.seq = rtp->seq;
-  pc->rtp_state.packets = 0;
-  pc->rtp_state.bytes = 0;
-  pc->rtp_state.drops = 0;
-  pc->rtp_state.dupes = 0;
   return 0;
 }
 
