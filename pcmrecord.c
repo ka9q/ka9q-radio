@@ -355,7 +355,7 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
   sp->channels = Channels ? Channels : channels_from_pt(sp->type);
   sp->samprate = Samprate ? Samprate : samprate_from_pt(sp->type);
   if(sp->channels == 0 || sp->samprate == 0){
-    fprintf(stderr,"Unknown payload type %d\n",sp->type);
+    fprintf(stderr,"Unknown payload type %d and channels/samprate not specified on command line\n",sp->type);
     return NULL;
   }
   sp->samples_remaining = sp->samprate * FileLengthLimit; // If file is being limited in length
