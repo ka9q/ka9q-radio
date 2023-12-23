@@ -1266,6 +1266,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Fs out","%'d Hz",channel->output.samprate);
   
   pprintw(w,row++,col,"Block Time","%'.1f ms",Blocktime);
+  pprintw(w,row++,col,"Block rate","%'.3f Hz",1000.0/Blocktime); // Just the block rate
   
   int64_t const N = Frontend.L + Frontend.M - 1;
   
@@ -1276,8 +1277,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   
   int overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
   pprintw(w,row++,col,"Overlap","1/%d   ",overlap);
-  pprintw(w,row++,col,"Bin step","%'.3f Hz",(float)Frontend.samprate / N); // frequency between FFT bin centers
-  pprintw(w,row++,col,"Bin width","%'.3f Hz",1000.0/Blocktime); // Just the block rate
+  pprintw(w,row++,col,"Bin width","%'.3f Hz",(float)Frontend.samprate / N);
   
   float const beta = channel->filter.kaiser_beta;
   pprintw(w,row++,col,"Kaiser beta","%'.1f   ",beta);
