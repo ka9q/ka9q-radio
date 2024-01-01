@@ -1,0 +1,26 @@
+# Systemd unit to record and decode FT-4
+# Phil Karn, KA9Q 1 Jan 2024
+
+[Unit]
+Description=ft4-decoder
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+Nice=10
+User=recordings
+Group=radio
+Type=simple
+EnvironmentFile=/etc/radio/ft4-decode.conf
+PermissionsStartOnly=true
+StandardOutput=append:/var/log/ft4.log
+StandardError=inherit
+UMask = 002
+CPUSchedulingPolicy=batch
+ExecStart=/usr/local/bin/jt-decoded -4 -d "$DIRECTORY" $MCAST
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

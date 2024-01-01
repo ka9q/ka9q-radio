@@ -93,11 +93,13 @@ struct {
 } Modetab[] = {
   { 120, 114, "wsprd"},
   { 15, 12.64, "decode_ft8"},
+  { 6, 4.48, "decode_ft8"},  
   { 0, 0, NULL},
 };
 enum {
   WSPR,
   FT8,
+  FT4,
 } Mode;
 
 struct sockaddr Sender;
@@ -112,7 +114,7 @@ struct session *create_session(struct rtp_header *);
 void close_session(struct session **p);
 
 void usage(){
-  fprintf(stdout,"Usage: %s [-L locale] [-v] [-k] [-d recording_dir] [-8|-w] PCM_multicast_address\n",App_path);
+  fprintf(stdout,"Usage: %s [-L locale] [-v] [-k] [-d recording_dir] [-4|-8|-w] PCM_multicast_address\n",App_path);
   exit(EX_USAGE);
 }
 
@@ -123,10 +125,13 @@ int main(int argc,char *argv[]){
 
   // Defaults
   int c;
-  while((c = getopt(argc,argv,"w8d:L:vkV")) != EOF){
+  while((c = getopt(argc,argv,"w84d:L:vkV")) != EOF){
     switch(c){
     case 'w':
       Mode = WSPR;
+      break;
+    case '4':
+      Mode = FT4;
       break;
     case '8':
       Mode = FT8;
@@ -266,8 +271,13 @@ void input_loop(){
 	      fflush(stdout); // Would otherwise be lost in the exec
 	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,filename,(char *)NULL);
 	      break;
-	    default:
-	      assert(false); // can't happen - trigger abort
+	    case FT4:
+	      // Note: requires my version of decode_ft8 that accepts -f basefreq
+	      if(Verbose)
+		fprintf(stdout,"%s -f %s -4 %s\n",Modetab[Mode].decode,freq,filename);
+
+	      fflush(stdout); // Would otherwise be lost in the exec
+	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-4",filename,(char *)NULL);
 	      break;
 	    }
 	    // Gets here only if exec fails
@@ -419,6 +429,7 @@ struct session *create_session(struct rtp_header *rtp){
     // Try to create file in directory whether or not the mkdir succeeded
     char filename[PATH_MAX];
     switch(Mode){
+    case FT4:
     case FT8:
       snprintf(filename,sizeof(filename),"%s/%u/%02d%02d%02d_%02d%02d%02d.wav",
 	       Recordings,

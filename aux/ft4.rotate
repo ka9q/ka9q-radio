@@ -1,0 +1,10 @@
+/var/log/ft4.log
+{
+	rotate 10
+	daily
+	missingok
+	notifempty
+	compress
+	delaycompress
+	copytruncate
+}
