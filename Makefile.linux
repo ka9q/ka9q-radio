@@ -44,7 +44,7 @@ install: $(DAEMONS) $(EXECS)
 	(cd service;rsync -a . /etc/systemd/system)
 	(cd rules;rsync -a . /etc/udev/rules.d)
 	(cd aux;rsync -a $(BLACKLIST) /etc/modprobe.d)
-	(cd aux;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d)
+	(cd aux;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d;chown root:root /etc/logrotate.d/*)
 # Don't overwrite existing configs that might have been modified locally. Run this manually without the '--ignore-existing' if you want to overwrite them all
 	(cd config;rsync --ignore-existing -a . /etc/radio)
 	mkdir -p /etc/fftw /etc/radio $(VARDIR)
