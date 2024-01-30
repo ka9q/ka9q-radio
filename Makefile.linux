@@ -40,7 +40,7 @@ install: $(DAEMONS) $(EXECS)
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) start-ka9q-horus.sh $(BINDIR)
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
-	(cd share;rsync -a . $(LIBDIR))
+	(cd share;rsync -a --ignore-existing . $(LIBDIR))
 	(cd service;rsync -a . /etc/systemd/system)
 	(cd rules;rsync -a . /etc/udev/rules.d)
 	(cd aux;rsync -a $(BLACKLIST) /etc/modprobe.d)
