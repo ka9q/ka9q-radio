@@ -17,7 +17,7 @@ install: $(EXECS)
 	install -d $(LIBDIR)
 	install -d $(BINDIR)
 	rsync -a $(EXECS) $(BINDIR)
-	(cd share;rsync -a . $(LIBDIR))
+	(cd share;rsync --ignore-existing -a . $(LIBDIR))
 # Don't overwrite existing configs that might have been modified locally. Run this manually without the '--ignore-existing' if you want to overwrite them all
 	(cd config;rsync --ignore-existing -a . /etc/radio)
 

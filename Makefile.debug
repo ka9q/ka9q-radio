@@ -2,7 +2,7 @@
 # Copyright 2017-2023, Phil Karn, KA9Q
 
 # for production
-# DOPTS = -DNDEBUG=1 -O3
+#DOPTS = -DNDEBUG=1 -O3
 
 # for debugging
 DOPTS=-g
@@ -21,7 +21,7 @@ DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 EXECS=control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record
 
 
-LOGROTATE_FILES = aprsfeed.rotate ft8.rotate wspr.rotate
+LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate
 
 BLACKLIST=airspy-blacklist.conf
 
@@ -40,11 +40,11 @@ install: $(DAEMONS) $(EXECS)
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) start-ka9q-horus.sh $(BINDIR)
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
-	(cd share;rsync -a . $(LIBDIR))
+	(cd share;rsync -a --ignore-existing . $(LIBDIR))
 	(cd service;rsync -a . /etc/systemd/system)
 	(cd rules;rsync -a . /etc/udev/rules.d)
 	(cd aux;rsync -a $(BLACKLIST) /etc/modprobe.d)
-	(cd aux;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d)
+	(cd aux;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d;chown root:root /etc/logrotate.d/*)
 # Don't overwrite existing configs that might have been modified locally. Run this manually without the '--ignore-existing' if you want to overwrite them all
 	(cd config;rsync --ignore-existing -a . /etc/radio)
 	mkdir -p /etc/fftw /etc/radio $(VARDIR)
