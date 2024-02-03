@@ -20,7 +20,7 @@ sudo apt install libpigpio-dev
 
 Although not needed to build ka9q-radio, I find it useful to install the following:
 
-sudo apt install sox libsox-fmt-all opus-tools flac avahi-utils avahi-utils tcpdump wireshark
+sudo apt install sox libsox-fmt-all opus-tools flac tcpdump wireshark
 
 And if your system is in a remote location, I strongly recommend this one:
 
