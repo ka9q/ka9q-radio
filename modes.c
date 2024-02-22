@@ -62,7 +62,7 @@ int demod_type_from_name(char const *name){
 
 
 char const *demod_name_from_type(enum demod_type type){
-  if(type >= 0 && Ndemod)
+  if(type >= 0 && type < Ndemod)
     return Demodtab[type].name;
   return NULL;
 }
