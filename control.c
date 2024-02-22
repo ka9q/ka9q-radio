@@ -1274,7 +1274,8 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   wmove(w,row,col);
   wclrtobot(w);
   pprintw(w,row++,col,"Fs in","%'d Hz",Frontend.samprate); // Nominal
-  pprintw(w,row++,col,"Fs out","%'d Hz",channel->output.samprate);
+  if(channel->output.samprate)
+    pprintw(w,row++,col,"Fs out","%'d Hz",channel->output.samprate);
   
   pprintw(w,row++,col,"Block Time","%'.1f ms",Blocktime);
   pprintw(w,row++,col,"Block rate","%'.3f Hz",1000.0/Blocktime); // Just the block rate
@@ -1283,7 +1284,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   
   pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.isreal ? 'r' : 'c');
   
-  if(Frontend.samprate)
+  if(Frontend.samprate && channel->output.samprate)
     pprintw(w,row++,col,"FFT out","%'lld c ",N * channel->output.samprate / Frontend.samprate);
   
   int overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
@@ -1291,7 +1292,8 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Bin width","%'.3f Hz",(float)Frontend.samprate / N);
   
   float const beta = channel->filter.kaiser_beta;
-  pprintw(w,row++,col,"Kaiser beta","%'.1f   ",beta);
+  if(!isnan(beta))
+    pprintw(w,row++,col,"Kaiser beta","%'.1f   ",beta);
   
   
 #if 0 // Doesn't really give accurate results
@@ -1339,18 +1341,26 @@ static void display_sig(WINDOW *w,struct channel const *channel){
 
   pprintw(w,row++,col,"Input","%.1f dBFS ",power2dB(Frontend.if_power));
   pprintw(w,row++,col,"FE Gain","%.1f dB   ",Frontend.rf_atten + Frontend.rf_gain);
-  pprintw(w,row++,col,"Baseband","%.1f dB   ",power2dB(channel->sig.bb_power));
-  pprintw(w,row++,col,"N0","%.1f dB/Hz",power2dB(channel->sig.n0));
+  if(!isnan(channel->sig.bb_power))
+    pprintw(w,row++,col,"Baseband","%.1f dB   ",power2dB(channel->sig.bb_power));
+  if(!isnan(channel->sig.n0))
+     pprintw(w,row++,col,"N0","%.1f dB/Hz",power2dB(channel->sig.n0));
   
   // Derived numbers
   float sn0 = sig_power/channel->sig.n0;
-  pprintw(w,row++,col,"S/N0","%.1f dBHz ",power2dB(sn0));
-  pprintw(w,row++,col,"NBW","%.1f dBHz ",power2dB(noise_bandwidth));
-  pprintw(w,row++,col,"SNR","%.1f dB   ",power2dB(sn0/noise_bandwidth));
+  if(!isnan(sn0))
+    pprintw(w,row++,col,"S/N0","%.1f dBHz ",power2dB(sn0));
+  if(!isnan(noise_bandwidth))
+    pprintw(w,row++,col,"NBW","%.1f dBHz ",power2dB(noise_bandwidth));
+  if(!isnan(sn0) && !isnan(noise_bandwidth))
+    pprintw(w,row++,col,"SNR","%.1f dB   ",power2dB(sn0/noise_bandwidth));
 
-  pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(channel->output.gain));
-  pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(channel->output.energy)); // actually level; sender does averaging
-  pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(channel->output.headroom));
+  if(!isnan(channel->output.gain))
+    pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(channel->output.gain));
+  if(!isnan(channel->output.energy))
+    pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(channel->output.energy)); // actually level; sender does averaging
+  if(!isnan(channel->output.headroom))
+    pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(channel->output.headroom));
   box(w,0,0);
   mvwaddstr(w,0,1,"Signal");
   wnoutrefresh(w);
