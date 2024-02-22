@@ -932,6 +932,16 @@ static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int
       break; // end of list
     
     unsigned int optlen = *cp++;
+    if(optlen & 0x80){
+      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+      int length_of_length = optlen & 0x7f;
+      optlen = 0;
+      while(length_of_length > 0){
+	optlen <<= 8;
+	optlen |= *cp++;
+	length_of_length--;
+      }
+    }
     if(cp - buffer + optlen >= length)
       break; // invalid length; we can't continue to scan
     switch(type){
@@ -1060,6 +1070,7 @@ static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int
       break;
     case RADIO_FREQUENCY:
       channel->tune.freq = decode_double(cp,optlen);
+      assert(channel->tune.freq == 7850000); // TEST ******************
       break;
     case SECOND_LO_FREQUENCY:
       channel->tune.second_LO = decode_double(cp,optlen);
