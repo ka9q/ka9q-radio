@@ -52,7 +52,11 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     int r = getsockopt(chan->output.data_fd,IPPROTO_IP,IP_MTU,&mtu,&intsize);
     if(r != 0){
       perror("send getsockopt mtu");
+#if 1
+      abort(); // error apparently won't go away, abort
+#else
       frames_per_pkt = SAMPLES_PER_PKT / chan->output.channels; // Default frames per packet for non-linux systems
+#endif
     } else {
       frames_per_pkt = (mtu - 100) / (chan->output.channels * sizeof(int16_t)); // allow 100 bytes for headers
     }
@@ -88,7 +92,11 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     chan->output.samples += chunk * chan->output.channels; // Count frames
     if(r <= 0){
       perror("pcm send");
+#if 1
+      abort();
+#else
       return 0; // Treat as soft failure
+#endif
     }
     frames -= chunk;
     if(chan->output.pacing && frames > 0)
