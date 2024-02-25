@@ -66,6 +66,7 @@ void *demod_fm(void *arg){
   // Initialize
   chan->output.gain = (2 * chan->output.headroom *  chan->output.samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
 
+  pthread_mutex_lock(&chan->lock); // don't read while status is being read
   realtime();
 
   while(!chan->terminate){
@@ -266,6 +267,7 @@ void *demod_fm(void *arg){
       break; // no valid output stream; terminate!
   } // while(!chan->terminate)
  quit:;
+  pthread_mutex_unlock(&chan->lock);
   FREE(chan->filter.energies);
   delete_filter_output(&chan->filter.out);
   return NULL;

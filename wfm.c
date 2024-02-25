@@ -114,6 +114,7 @@ void *demod_wfm(void *arg){
   compute_tuning(composite_N,composite_M,Composite_samprate,&subc_shift,&subc_remainder,38000.);
   assert((subc_shift % 4) == 0 && subc_remainder == 0);
 
+  pthread_mutex_lock(&chan->lock);
   realtime();
 
   while(!chan->terminate){
@@ -286,6 +287,7 @@ void *demod_wfm(void *arg){
     }
   } // while(!chan->terminate)
  quit:;
+  pthread_mutex_unlock(&chan->lock);
   delete_filter_output(&mono);
   delete_filter_output(&lminusr);
   delete_filter_output(&pilot);

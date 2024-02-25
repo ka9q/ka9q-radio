@@ -264,6 +264,7 @@ struct channel {
 
   uint32_t commands;
   uint32_t command_tag;
+  pthread_mutex_t lock;       // Protect statistics during updates and reads
   uint64_t blocks_since_poll; // Used for averaging signal levels
 
   pthread_t sap_thread;

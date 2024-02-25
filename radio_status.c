@@ -43,7 +43,7 @@ extern dictionary const *Preset_table;
 
 static int send_radio_status(struct frontend *frontend,struct channel *chan);
 static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
-static int encode_radio_status(struct frontend const *frontend,struct channel const *chan,uint8_t *packet, int len);
+static int encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, int len);
 static void *radio_status_dump(void *);
   
 static pthread_t status_dump_thread;
@@ -154,14 +154,17 @@ static void *radio_status_dump(void *p){
 static int send_radio_status(struct frontend *frontend,struct channel *chan){
   uint8_t packet[PKTSIZE];
 
+  // Wait while the channel thread is active since values could be changing
+  pthread_mutex_lock(&chan->lock);
   Metadata_packets++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
-  send(Status_fd,packet,len,0);
   // Reset integrators
   chan->sig.bb_energy = 0;
   chan->output.energy = 0;
   chan->output.sum_gain_sq = 0;
   chan->blocks_since_poll = 0;
+  pthread_mutex_unlock(&chan->lock);
+  send(Status_fd,packet,len,0);
   return 0;
 }
 
@@ -177,6 +180,8 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
   uint32_t const ssrc = chan->output.rtp.ssrc;
   
   uint8_t const *cp = buffer;
+  pthread_mutex_lock(&chan->lock);
+
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
 
@@ -428,6 +433,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
     }
     cp += optlen;
   }
+  pthread_mutex_unlock(&chan->lock);
  done:;
   if(restart_needed){
     if(Verbose > 1)
@@ -446,9 +452,11 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 		ssrc, chan->filter.min_IF, chan->filter.max_IF,
 		chan->output.samprate, chan->filter.kaiser_beta);
       // start_demod already sets up a new filter
+      pthread_mutex_lock(&chan->lock);
       set_filter(chan->filter.out,chan->filter.min_IF/chan->output.samprate,
 		 chan->filter.max_IF/chan->output.samprate,
 		 chan->filter.kaiser_beta);
+      pthread_mutex_unlock(&chan->lock);
     }
   }    
   if(restart_needed){
@@ -462,7 +470,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 // Encode contents of frontend and chan structures as command or status packet
 // packet argument must be long enough!!
 // Convert values from internal to engineering units
-static int encode_radio_status(struct frontend const *frontend,struct channel const *chan,uint8_t *packet, int len){
+static int encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, int len){
   memset(packet,0,len);
   uint8_t *bp = packet;
 
@@ -603,11 +611,13 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     if(chan->blocks_since_poll > 0){
       float bb_power = chan->sig.bb_energy / chan->blocks_since_poll;
       encode_float(&bp,BASEBAND_POWER,power2dB(bb_power));
-    }
-    if(chan->blocks_since_poll > 0){
       // Output levels are already normalized since they scaled by a fixed 32767 for conversion to int16_t
       float output_power = chan->output.energy / chan->blocks_since_poll;
       encode_float(&bp,OUTPUT_LEVEL,power2dB(output_power)); // power ratio -> dB
+      if(chan->demod_type == LINEAR_DEMOD){ // Gain not really meaningful in FM modes
+	float gain = chan->output.sum_gain_sq / chan->blocks_since_poll;
+	encode_float(&bp,GAIN,power2dB(gain));
+      }
     }
     encode_int64(&bp,OUTPUT_SAMPLES,chan->output.samples);
     encode_float(&bp,HEADROOM,voltage2dB(chan->output.headroom)); // amplitude -> dB
@@ -618,13 +628,6 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     if(!isnan(chan->sig.snr) && chan->sig.snr > 0)
       encode_float(&bp,DEMOD_SNR,power2dB(chan->sig.snr)); // abs ratio -> dB
 
-    if(chan->demod_type == LINEAR_DEMOD){ // Gain not really meaningful in FM modes
-      float gain;
-      if(chan->blocks_since_poll > 0){
-	gain = chan->output.sum_gain_sq / chan->blocks_since_poll;
-	encode_float(&bp,GAIN,power2dB(gain));
-      }
-    }
     // Source address we're using to send data
     encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&chan->output.data_source_address);
     // Where we're sending PCM output

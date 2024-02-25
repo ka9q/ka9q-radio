@@ -69,6 +69,7 @@ void *demod_spectrum(void *arg){
 
   // Do first update with smooth == 1 so we don't have to wait for an initial exponential rise
   // Still need to clean up code to force radio freq to be multiple of FFT bin spacing
+  pthread_mutex_lock(&chan->lock);
   while(!chan->terminate){
     if(downconvert(chan) == -1)
       break; // received terminate
@@ -81,11 +82,12 @@ void *demod_spectrum(void *arg){
 	p += cnrmf(chan->filter.out->fdomain[binp++]);
       }
       // Accumulate energy until next poll
-      // Should this be protected with a mutex?
+      // Should this be protected with a mutex? - yes
       chan->spectrum.bin_data[i] += p;
     }
   }
  quit:;
+  pthread_mutex_unlock(&chan->lock);
   FREE(chan->spectrum.bin_data);
   FREE(chan->filter.energies);
   delete_filter_output(&chan->filter.out);

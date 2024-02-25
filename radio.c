@@ -542,6 +542,8 @@ void *chan_reaper(void *arg){
 // 6. Run fine tuning, compute average power
 
 // Baseband samples placed in chan->filter.out->output.c
+// It's assumed we have chan->lock
+
 int downconvert(struct channel *chan){
   // To save CPU time when the front end is completely tuned away from us, block until the front
     // end status changes rather than process zeroes. We must still poll the terminate flag.
@@ -570,7 +572,9 @@ int downconvert(struct channel *chan){
       struct timespec timeout; // Needed to avoid deadlock if no front end is available
       clock_gettime(CLOCK_REALTIME,&timeout);
       timeout.tv_sec += 1; // 1 sec in the future
+      pthread_mutex_unlock(&chan->lock); // Unlock before sleeping
       pthread_cond_timedwait(&Frontend.status_cond,&Frontend.status_mutex,&timeout);
+      pthread_mutex_lock(&chan->lock); // recover lock
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
 
@@ -597,7 +601,9 @@ int downconvert(struct channel *chan){
       }
       chan->fine.phasor *= chan->filter.phase_adjust;
     }
+    pthread_mutex_unlock(&chan->lock); // release lock, we're about to sleep
     execute_filter_output(chan->filter.out,-shift); // block until new data frame
+    pthread_mutex_lock(&chan->lock); // grab it back. hopefully we won't ever have to worry about priority inversion
     chan->blocks_since_poll++;
     float level_normalize = scale_voltage_out2FS(&Frontend);
     if(buffer != NULL){ // No output time-domain buffer in spectral analysis mode

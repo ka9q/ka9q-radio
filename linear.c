@@ -53,6 +53,7 @@ void *demod_linear(void *arg){
   int const lock_limit = lock_time * chan->output.samprate;
   init_pll(&chan->pll.pll,(float)chan->output.samprate);
 
+  pthread_mutex_lock(&chan->lock);
   realtime();
 
   while(!chan->terminate){
@@ -246,6 +247,7 @@ void *demod_linear(void *arg){
     chan->output.sum_gain_sq += start_gain * chan->output.gain; // accumulate square of approx average gain
   }
  quit:;
+  pthread_mutex_unlock(&chan->lock);
   FREE(chan->filter.energies);
   delete_filter_output(&chan->filter.out);
   return NULL;
