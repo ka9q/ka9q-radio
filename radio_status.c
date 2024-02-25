@@ -154,7 +154,7 @@ static void *radio_status_dump(void *p){
 static int send_radio_status(struct frontend *frontend,struct channel *chan){
   uint8_t packet[PKTSIZE];
 
-  // Wait while the channel thread is active since values could be changing
+  // Don't read status while channel thread is active
   pthread_mutex_lock(&chan->lock);
   Metadata_packets++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
@@ -180,7 +180,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
   uint32_t const ssrc = chan->output.rtp.ssrc;
   
   uint8_t const *cp = buffer;
-  pthread_mutex_lock(&chan->lock);
+  pthread_mutex_lock(&chan->lock); // Grab lock for entire set of commands
 
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
