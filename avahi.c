@@ -53,7 +53,9 @@ static void dump_userdata(struct userdata const *u){
   fprintf(stderr,"service port %d\n",u->service_port);
   fprintf(stderr,"dns_name %s\n",u->dns_name);
   fprintf(stderr,"description %s\n",u->description);
-  fprintf(stderr,"address %lu\n",(long unsigned)u->address);
+  char buffer[128];
+  inet_ntop(AF_INET,&u->address,buffer,sizeof(buffer));
+  fprintf(stderr,"address %s\n",buffer);
   fprintf(stderr,"group %p\n",u->group);
   fprintf(stderr,"simple_poll %p\n",u->simple_poll);
   fprintf(stderr,"avahi_thread %lu\n",(long unsigned)u->avahi_thread);
@@ -74,6 +76,10 @@ extern int Verbose;
 // description is optional; if present, forms a TXT record
 // Optionally return a sockaddr_in (through *sock) with the resolved address
 int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,int const base_address,char const *description,void *sock,int *socksize){
+#if TRACE
+  fprintf(stderr,"avahi_start(service_name = %s, service_type = %s, service_port = %d, dns_name = %s, base address = 0x%x, description = %s, sock = %p, socksize = %d\n",
+	  service_name,service_type,service_port,dns_name,base_address,description,sock,*socksize);
+#endif
   struct userdata *userdata = (struct userdata *)calloc(1,sizeof(struct userdata));
   if(service_name){
     // Look for ,iface at end of service_name and remove it, if present.
