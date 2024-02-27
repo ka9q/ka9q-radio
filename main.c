@@ -473,7 +473,7 @@ static int loadconfig(char const * const file){
 
       char const * const frequencies = config_getstring(Configtable,sname,fname,NULL);
       if(frequencies == NULL)
-	break; // no more
+	continue; // none with this prefix; look for more
 
       // Parse the frequency list(s)
       char *freq_list = strdup(frequencies); // Need writeable copy for strtok
