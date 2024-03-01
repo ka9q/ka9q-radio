@@ -353,18 +353,27 @@ static int loadconfig(char const * const file){
   }
   {
     // Set up status/command stream, global for all receiver channels
-    // Should probably generate one randomly if not specified
     char const * const status = config_getstring(Configtable,global,"status",NULL); // Status/command target for all demodulators
-    if(status == NULL){
-      fprintf(stdout,"status=<mcast group> missing in [global], e.g, status=hf.local\n");
-      exit(EX_USAGE);
+    if(status != NULL) {
+      Metadata_dest_string = strdup(status);
+    } else {
+      // Not specified; form domain name from hostname-configfilename
+      char hostname[1024];
+      gethostname(hostname,sizeof(hostname));
+      // Edit off .domain, .local, etc
+      char *cp = strchr(hostname,'.');
+      if(cp != NULL)
+	*cp = '\0';
+      char buffer[strlen(hostname) + strlen(Name) + 20]; // Enough room for snprintf
+
+      snprintf(buffer,sizeof(buffer),"%s-%s.local",hostname,Name);
+      Metadata_dest_string = strdup(buffer);
     }
-    Metadata_dest_string = strdup(status);
     {
       char ttlmsg[100];
       snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
       int slen = sizeof(Metadata_dest_address);
-      avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),ttlmsg,&Metadata_dest_address,&slen);
+      avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),ttlmsg,&Metadata_dest_address,&slen);
     }
     // avahi_start has resolved the target DNS name into Metadata_dest_address and inserted the port number
     Status_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
