@@ -192,7 +192,13 @@ int main(int argc,char *argv[]){
     if(Byteswap){
       // Byte swap incoming buffer
       int16_t *sdp = (int16_t *)dp;
+      if(!Quiet){
+	if(size & 1){
+	  fprintf(stderr,"size %d not even!\n",size);
+	}
+      }
       int sampcount = size / 2;
+
       for(int i=0; i < sampcount; i++)
 	sdp[i] = ntohs(sdp[i]);
       fwrite(sdp,sizeof(*sdp),sampcount,stdout);
