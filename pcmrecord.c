@@ -86,7 +86,7 @@ static char const *Recordings = ".";
 static bool Subdirs; // Place recordings in subdirectories by SSID
 static char const *Locale;
 static int Samprate;
-static int Channels;
+static int Channels = 1;
 
 static int Input_fd;
 static struct session *Sessions;
