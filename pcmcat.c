@@ -152,20 +152,10 @@ int main(int argc,char *argv[]){
       }
     }
     if(!rtp.marker){
-      // Should we detect and drop recent duplicates?
+      // Change in sequence number from last RTP packet
+      int seq_change = (int16_t)(rtp.seq - Pcmstream.last_header.seq);
 
-      if((int16_t)(rtp.seq - Pcmstream.last_header.seq) > 1){
-	// Something got dropped. Emit some padding if it's not too much and we know the framesize
-	// This will get invoked on the first packet, but nothing will happen because Pcmstream.framesize == 0
-	int time_step = (int32_t)(rtp.timestamp - Pcmstream.last_header.timestamp);
-	if(time_step >= 0 && time_step < 48000){  // arbitrary, make this a parameter
-	  if(Pcmstream.framesize != 0){
-	    char zeroes[Pcmstream.framesize * time_step];
-	    memset(zeroes,0,sizeof(zeroes));
-	    fwrite(zeroes,1,sizeof(zeroes),stdout);
-	  }
-	}
-      } else {
+      if(seq_change == 1){
 	// Normal case: next expected packet in sequence
 	if(rtp.timestamp != Pcmstream.last_header.timestamp){
 	  // There's no marker, this packet is in sequence after the last one, we now know bytes per timestamp count
@@ -177,6 +167,26 @@ int main(int argc,char *argv[]){
 	    }
 	  }
 	}
+      } else if(seq_change > 1){
+	// Something got dropped. Emit some padding if it's not too much and we know the framesize
+	// This will get invoked on the first packet, but nothing will happen because Pcmstream.framesize == 0
+	int time_step = (int32_t)(rtp.timestamp - Pcmstream.last_header.timestamp) - Pcmstream.last_size;
+	if(!Quiet && Pcmstream.framesize != 0)
+	  fprintf(stderr,"dropped packet, expected seq %d, got seq %d, lost %d frames\n",
+		  (int16_t)(Pcmstream.last_header.seq+1),rtp.seq,
+		  time_step);
+
+	if(Pcmstream.framesize != 0 && time_step >= 0 && time_step < 48000){  // arbitrary, make this a parameter
+	  char zeroes[Pcmstream.framesize * time_step];
+	  memset(zeroes,0,sizeof(zeroes));
+	  fwrite(zeroes,1,sizeof(zeroes),stdout);
+	}
+      } else {
+	// Else drop duplicate or old out of sequence - should buffer these under user control
+	if(!Quiet)
+	  fprintf(stderr,"Discarding old packet, expected seq %d, got seq %d, timestamp %ul, size %d bytes, %d frames\n",
+		  (int16_t)(Pcmstream.last_header.seq+1), rtp.seq, rtp.timestamp, size,size*Pcmstream.last_size);
+	goto done;
       }
     }
     if(Byteswap){
@@ -190,8 +200,8 @@ int main(int argc,char *argv[]){
       fwrite(dp,size,1,stdout);
 
     fflush(stdout);
+  done:;
     Pcmstream.bytes_received += size;
-
     Pcmstream.last_header = rtp;
     Pcmstream.last_size = size;
   }
