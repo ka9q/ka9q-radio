@@ -35,6 +35,10 @@ depend: .depend
 .PHONY: clean all install depend
 
 # Executables
+# TEMPORARY FOR DEVELOPMENT
+avahi_browse: avahi_browse.o
+	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lopus -lm -lpthread
+
 aprs: aprs.o libradio.a
 	$(CC) -g -o $@ $^ -lm
 

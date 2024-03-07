@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include "conf.h"
 #include "misc.h"
 #include "filter.h"
 
@@ -32,7 +33,10 @@ char const *System_wisdom_file = "/etc/fftw/wisdomf"; // only valid for float ve
 double FFTW_plan_timelimit = 30.0;
 int N_worker_threads = 2;
 int N_internal_threads = 1; // Usually most efficient
-int FFTW_planning_level = FFTW_MEASURE; // Default FFTW planning level
+
+// Desired FFTW planning level
+// If wisdom at this level is not present for some filter, the command to generate it will be logged and FFTW_MEASURE wisdom will be generated at runtime
+int FFTW_planning_level = FFTW_PATIENT;
 
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
 static pthread_mutex_t FFTW_planning_mutex;
@@ -69,6 +73,8 @@ static inline int modulo(int x,int const m){
 
 // Custom version of malloc that aligns to a cache line
 void *lmalloc(size_t size);
+
+static void suggest(int level,int size,int dir,int clex);
 
 // Create fast convolution filters
 // The filters are now in two parts, filter_in (the master) and filter_out (the slave)
@@ -179,7 +185,11 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     master->input_write_pointer.c = master->input_read_pointer.c + L; // start writing here
     master->input_read_pointer.r = NULL;
     master->input_write_pointer.r = NULL;
-    master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_planning_level);
+    master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_WISDOM_ONLY|FFTW_planning_level);
+    if(master->fwd_plan == NULL){
+      suggest(FFTW_planning_level,N,FFTW_FORWARD,COMPLEX);
+      master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_ESTIMATE);
+    }
     break;
   case REAL:
     master->input_buffer_size = round_to_page(ND * N * sizeof(float));
@@ -188,7 +198,11 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     master->input_write_pointer.r = master->input_read_pointer.r + L; // start writing here
     master->input_read_pointer.c = NULL;
     master->input_write_pointer.c = NULL;
-    master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_planning_level);
+    master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_WISDOM_ONLY|FFTW_planning_level);
+    if(master->fwd_plan == NULL){
+      suggest(FFTW_planning_level,N,FFTW_FORWARD,REAL);
+      master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_ESTIMATE);
+    }
     break;
   }
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
@@ -238,7 +252,10 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     assert(slave->output_buffer.c != NULL);
     slave->output_buffer.r = NULL; // catch erroneous references
     slave->output.c = slave->output_buffer.c + osize - olen;
-    slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_planning_level);
+    if((slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
+      suggest(FFTW_planning_level,osize,FFTW_BACKWARD,COMPLEX);
+      slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_planning_level);
+    }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
     break;
@@ -256,7 +273,10 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     assert(slave->output_buffer.r != NULL);
     slave->output_buffer.c = NULL;
     slave->output.r = slave->output_buffer.r + osize - olen;
-    slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_planning_level);
+    if((slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
+      suggest(FFTW_planning_level,osize,FFTW_BACKWARD,REAL);
+      slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level);
+    }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
     break;
@@ -977,3 +997,29 @@ void *lmalloc(size_t size){
   errno = r;
   return NULL;
 }
+// Suggest running fftwf-wisdom to generate some FFTW3 wisdom
+static void suggest(int level,int size,int dir,int clex){
+  const char *opt = "";
+
+  switch(level){
+  case FFTW_ESTIMATE:
+    opt = "-e";
+    break;
+  case FFTW_MEASURE:
+    opt = "-m";
+    break;
+  case FFTW_PATIENT: // is the default
+    break;
+  case FFTW_EXHAUSTIVE:
+    opt = "-x";
+    break;
+  }
+  fprintf(stdout,"suggest running \"fftwf-wisdom -v %s -T 1 -w %s/wisdom -o /tmp/wisdomf %co%c%d\"\n",
+	  opt,
+	  VARDIR,
+	  clex == COMPLEX ? 'c' : 'r',
+	  dir == FFTW_FORWARD ? 'f' : 'b',
+	  size);
+  fprintf(stdout,"then mv /tmp/wisdomf /etc/fftw/wisdomf *if* larger than current file\n");
+}
+
