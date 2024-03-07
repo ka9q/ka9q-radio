@@ -165,7 +165,7 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
     goto done;
   }
 
-  fprintf(stdout,"Funcube %d: software AGC %d, samprate %'d, freq %.3f Hz, bias %d, lna_gain %d, mixer gain %d, if_gain %d\n",
+  fprintf(stdout,"Funcube %d: software AGC %d, samprate %'d, freq %'.3f Hz, bias %d, lna_gain %d, mixer gain %d, if_gain %d\n",
 	  sdr->number, sdr->agc, frontend->samprate, frontend->frequency, sdr->bias_tee, frontend->lna_gain, frontend->mixer_gain, frontend->if_gain);
 
  done:; // Also the abort target: close handle before returning
