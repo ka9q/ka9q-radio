@@ -254,7 +254,7 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     slave->output.c = slave->output_buffer.c + osize - olen;
     if((slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
       suggest(FFTW_planning_level,osize,FFTW_BACKWARD,COMPLEX);
-      slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_planning_level);
+      slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_ESTIMATE);
     }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
@@ -275,7 +275,7 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     slave->output.r = slave->output_buffer.r + osize - olen;
     if((slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
       suggest(FFTW_planning_level,osize,FFTW_BACKWARD,REAL);
-      slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level);
+      slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_ESTIMATE);
     }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
@@ -738,10 +738,10 @@ int window_filter(int const L,int const M,complex float * const response,float c
   complex float * const buffer = lmalloc(sizeof(complex float) * N);
   pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_FORWARD,FFTW_planning_level);
+  fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_FORWARD,FFTW_ESTIMATE);
   assert(fwd_filter_plan != NULL);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_planning_level);
+  fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_ESTIMATE);
   assert(rev_filter_plan != NULL);
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
     fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
@@ -814,10 +814,10 @@ int window_rfilter(int const L,int const M,complex float * const response,float 
   assert(timebuf != NULL);
   pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan fwd_filter_plan = fftwf_plan_dft_r2c_1d(N,timebuf,buffer,FFTW_planning_level);
+  fftwf_plan fwd_filter_plan = fftwf_plan_dft_r2c_1d(N,timebuf,buffer,FFTW_ESTIMATE);
   assert(fwd_filter_plan != NULL);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan rev_filter_plan = fftwf_plan_dft_c2r_1d(N,buffer,timebuf,FFTW_planning_level);
+  fftwf_plan rev_filter_plan = fftwf_plan_dft_c2r_1d(N,buffer,timebuf,FFTW_ESTIMATE);
   assert(rev_filter_plan != NULL);
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
     fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
