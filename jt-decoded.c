@@ -467,8 +467,8 @@ struct session * init_session(struct session *sp,struct rtp_header *rtp){
   sp->t0 = (start_offset_nsec * sp->samprate * sp->channels) / BILLION;
 
   if(Verbose > 1)
-    fprintf(stdout,"creating %s, cycle start offset %'.3f sec, %'ld bytes\n",
-	    sp->filename,(float)start_offset_nsec/BILLION,sp->t0);
+    fprintf(stdout,"creating %s, cycle start offset %'.3f sec, %'lld bytes\n",
+	    sp->filename,(float)start_offset_nsec/BILLION,(long long)sp->t0);
 
   assert(sp->fp != NULL);
   sp->iobuffer = malloc(BUFFERSIZE);
