@@ -67,7 +67,8 @@ struct session {
   struct wav header;
 
   uint32_t ssrc;               // RTP stream source ID
-  struct rtp_state rtp_state;
+  uint32_t start_timestamp;    // Starting RTP timestamp
+  int64_t t0;                  // cycle time at first packet
   
   int type;                    // RTP payload type (with marker stripped)
   int channels;                // 1 (PCM_MONO) or 2 (PCM_STEREO)
@@ -110,8 +111,8 @@ struct session *Sessions;
 void closedown(int a);
 void input_loop(void);
 void cleanup(void);
-struct session *create_session(struct rtp_header *);
-void close_session(struct session **p);
+struct session *init_session(struct session *sp,struct rtp_header *rtp);
+void close_file(struct session *p);
 
 void usage(){
   fprintf(stdout,"Usage: %s [-L locale] [-v] [-k] [-d recording_dir] [-4|-8|-w] PCM_multicast_address\n",App_path);
@@ -122,6 +123,7 @@ int main(int argc,char *argv[]){
   App_path = argv[0];
   char const * locale = getenv("LANG");
   setlocale(LC_ALL,locale);
+  setlinebuf(stdout);
 
   // Defaults
   int c;
@@ -156,6 +158,10 @@ int main(int argc,char *argv[]){
     }
   }
   setlocale(LC_ALL,locale);
+  // Stdout should already be in append mode, just make sure
+  if(fcntl(1,F_SETFL,O_APPEND) == -1)
+    fprintf(stdout,"fcntl of stdout to set O_APPEND failed: %s\n",strerror(errno));
+
   if(Verbose > 1){
     for(int i=0; i < argc; i++)
       fprintf(stdout," [%d]%s",i,argv[i]);
@@ -210,177 +216,163 @@ void closedown(int a){
 }
 
 // Read from RTP network socket, assemble blocks of samples
+// As currently written, requires data from a new frame to flush out and execute finished ones
+// This doesn't seem like a big problem
 void input_loop(){
   while(true){
-    // Receive network data
-    fd_set fdset;
-    FD_ZERO(&fdset);
-    FD_SET(Input_fd,&fdset);
-    {
-      struct timespec const polltime = {1, 0}; // return after 1 sec
-      int n = pselect(Input_fd + 1,&fdset,NULL,NULL,&polltime,NULL);
-      if(n < 0)
-	break; // error of some kind
+    uint8_t buffer[PKTSIZE];
+    socklen_t socksize = sizeof(Sender);
+    int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
+
+    if(size <= 0){    // ??
+      perror("recvfrom");
+      usleep(50000);
+      continue;
     }
+    if(size < RTP_MIN_SIZE)
+      continue; // Too small for RTP, ignore
 
-    int64_t const nsec = utc_time_ns() % (int64_t)(Modetab[Mode].cycle_time * BILLION); // UTC nanosecond within cycle time
-
-    if(nsec >= Modetab[Mode].transmission_time * BILLION){
-      // End of frame; process everything
-      for(struct session *sp = Sessions;sp != NULL;){
-	// Save filename and ssrc since session will be going away before the decoder fork can delete the file
-	char filename[PATH_MAX];
-	strlcpy(filename,sp->filename,sizeof(filename));
-	int ssrc = sp->ssrc;
-
-	struct session * const next = sp->next;
-	close_session(&sp); // Flushes and closes file, but does not delete
-	sp = next;
-
-	int child;
-	if((child = fork()) == 0){
-	  // Double fork so we don't have to wait. Seems ugly, is there a better way??
-	  int grandchild = 0;
-	  if((grandchild = fork()) == 0){
-	    {
-	      // set working directory to the one containing the file
-	      // dirname_r() is only available on MacOS, so we can't use it here
-	      char *fname_dup = strdup(filename); // in case dirname modifies its arg
-	      int r = chdir(dirname(fname_dup));
-	      FREE(fname_dup);
-	      
-	      if(r != 0)
-		perror("chdir");
-	    }
-	    char freq[100];
-	    snprintf(freq,sizeof(freq),"%lf",(double)ssrc * 1e-6);
-
-	    switch(Mode){
-	    case WSPR:
-	      if(Verbose)
-		fprintf(stdout,"%s %s %s %s %s\n",Modetab[Mode].decode,"-f",freq,"-w",filename);
-
-	      fflush(stdout); // Would otherwise be lost in the exec
-	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",filename,(char *)NULL);
-	      break;
-	    case FT8:
-	      // Note: requires my version of decode_ft8 that accepts -f basefreq
-	      if(Verbose)
-		fprintf(stdout,"%s -f %s %s\n",Modetab[Mode].decode,freq,filename);
-
-	      fflush(stdout); // Would otherwise be lost in the exec
-	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,filename,(char *)NULL);
-	      break;
-	    case FT4:
-	      // Note: requires my version of decode_ft8 that accepts -f basefreq
-	      if(Verbose)
-		fprintf(stdout,"%s -f %s -4 %s\n",Modetab[Mode].decode,freq,filename);
-
-	      fflush(stdout); // Would otherwise be lost in the exec
-	      execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-4",filename,(char *)NULL);
-	      break;
-	    }
-	    // Gets here only if exec fails
-	    fprintf(stdout,"execlp(%s) returned errno %d (%s)\n",Modetab[Mode].decode,errno,strerror(errno));
-	    fflush(stdout);
-	    exit(EX_SOFTWARE);
-	  }
-	  // Wait for decoder to finish, then remove its input file
-	  int status = 0;
-	  if(waitpid(-1,&status,0) == -1){
-	    fprintf(stdout,"error waiting for grandchild: errno %d (%s)\n",
-		    errno,strerror(errno));
-	    fflush(stdout);
-	    exit(EXIT_FAILURE);
-	  }
-	  if(WIFEXITED(status)){
-	    int rval = WEXITSTATUS(status);
-	    if(rval != 0)
-	      fprintf(stdout,"grandchild pid %d returned %d\n",grandchild,rval);
-	  }
-	  if(!Keep_wav){
-	    if(Verbose > 1)
-	      fprintf(stdout,"unlink(%s)\n",filename);
-	    unlink(filename);
-	  }
-	  fflush(stdout);
-	  exit(EX_OK);
-	}
-      }
-      // Reap children so they won't become zombies
-      int status;
-      while(waitpid(-1,&status,WNOHANG) > 0);
+    struct rtp_header rtp;
+    uint8_t const *dp = ntoh_rtp(&rtp,buffer);
+    if(rtp.pad){
+      // Remove padding
+      size -= dp[size-1];
+      rtp.pad = 0;
     }
-    if(FD_ISSET(Input_fd,&fdset)){
-      uint8_t buffer[PKTSIZE];
-      socklen_t socksize = sizeof(Sender);
-      int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
+    if(size <= 0)
+      continue; // Bogus RTP header
 
-      if(nsec >= Modetab[Mode].transmission_time * BILLION)
-	continue; // Discard all data until the next cycle
+    int16_t const * const samples = (int16_t *)dp;
+    size -= (dp - buffer);
 
-      if(size <= 0){    // ??
-	perror("recvfrom");
-	usleep(50000);
-	continue;
-      }
-      if(size < RTP_MIN_SIZE)
-	continue; // Too small for RTP, ignore
-      
-      struct rtp_header rtp;
-      uint8_t const *dp = ntoh_rtp(&rtp,buffer);
-      if(rtp.pad){
-	// Remove padding
-	size -= dp[size-1];
-	rtp.pad = 0;
-      }
-      if(size <= 0)
-	continue; // Bogus RTP header
-      
-      int16_t const * const samples = (int16_t *)dp;
-      size -= (dp - buffer);
-
-      struct session *sp;
-      for(sp = Sessions;sp != NULL;sp=sp->next){
-	if(sp->ssrc == rtp.ssrc
-	   && rtp.type == sp->type
-	   && address_match(&sp->sender,&Sender))
-	  break;
-      }
-      if(sp == NULL)
-	sp = create_session(&rtp);	// create new session only if we're not in the dead time
-
+    struct session *sp;
+    for(sp = Sessions;sp != NULL;sp=sp->next){
+      if(sp->ssrc == rtp.ssrc
+	 && rtp.type == sp->type
+	 && address_match(&sp->sender,&Sender))
+	break;
+    }
+    if(sp == NULL){
+      // New session; create empty descriptor
+      sp = calloc(1,sizeof(*sp));
       if(!sp)
-#if 1
 	// Let systemd restart us after a delay instead of rapidly filling the log with, e.g., disk full errors
 	exit(EX_CANTCREAT);
-#else
-	continue;
-#endif
 
-      // A "sample" is a single audio sample, usually 16 bits.
-      // A "frame" is the same as a sample for mono. It's two audio samples for stereo
-      int const samp_count = size / sizeof(*samples); // number of individual audio samples (not frames)
-      int const frame_count = samp_count / sp->channels; // 1 every sample period (e.g., 4 for stereo 16-bit)
-      off_t const offset = rtp_process(&sp->rtp_state,&rtp,frame_count); // rtp timestamps refer to frames
-      
-      // The seek offset relative to the current position in the file is the signed (modular) difference between
-      // the actual and expected RTP timestamps. This should automatically handle
-      // 32-bit RTP timestamp wraps, which occur every ~1 days at 48 kHz and only 6 hr @ 192 kHz
-      // Should I limit the range on this?
-      if(offset)
-	fseeko(sp->fp,offset * sizeof(*samples) * sp->channels,SEEK_CUR); // offset is in bytes
-
-      sp->TotalFileSamples += samp_count + offset;
-      sp->SamplesWritten += samp_count;
-      
-      // Packet samples are in big-endian order; write to .wav file in little-endian order
-      for(int n = 0; n < samp_count; n++){
-	fputc(samples[n] >> 8,sp->fp);
-	fputc(samples[n],sp->fp);
+      sp->prev = NULL;
+      sp->next = Sessions;
+      if(sp->next)
+	sp->next->prev = sp;
+      Sessions = sp;
+    }
+    // Where are we in the transmission cycle?
+    int64_t const nsec = utc_time_ns() % (int64_t)(Modetab[Mode].cycle_time * BILLION); // UTC nanosecond within cycle time
+    if(sp->fp == NULL){
+      if(nsec < Modetab[Mode].transmission_time * BILLION){
+	// In active interval, but needs new file
+	sp = init_session(sp,&rtp);
+      } else {
+	continue; // In transmission gap, ignore
       }
-    } // end of packet processing
-  }      
+    }
+    // Write data into current file
+    // A "sample" is a single audio sample, usually 16 bits.
+    // A "frame" is the same as a sample for mono. It's two audio samples for stereo
+    int const samp_count = size / sizeof(*samples); // number of individual audio samples (not frames)
+
+    // The seek offset relative to the current position in the file is the signed (modular) difference between
+    // the actual and expected RTP timestamps. This should automatically handle
+    // 32-bit RTP timestamp wraps, which occur every ~1 days at 48 kHz and only 6 hr @ 192 kHz
+    // Should I limit the range on this?
+    int const offset = (int32_t)(rtp.timestamp - sp->start_timestamp) * sizeof(uint16_t) * sp->channels + sp->t0;
+    fseek(sp->fp,offset,SEEK_SET);
+
+    sp->TotalFileSamples += samp_count;
+    sp->SamplesWritten += samp_count;
+
+    // Packet samples are in big-endian order; write to .wav file in little-endian order
+    for(int n = 0; n < samp_count; n++){
+      fputc(samples[n] >> 8,sp->fp);
+      fputc(samples[n],sp->fp);
+    }
+    if(nsec < Modetab[Mode].transmission_time * BILLION)
+      continue;  // In transmission, nothing more to do
+
+    // We've reached the end of the current transmission.
+    // Close current file, hand it to the decoder
+    close_file(sp);
+
+    int child;
+    if((child = fork()) == 0){
+      // Double fork so we don't have to wait. Seems ugly, is there a better way??
+      int grandchild = 0;
+      if((grandchild = fork()) == 0){
+	{
+	  // set working directory to the one containing the file
+	  // dirname_r() is only available on MacOS, so we can't use it here
+	  char *fname_dup = strdup(sp->filename); // in case dirname modifies its arg
+	  int r = chdir(dirname(fname_dup));
+	  FREE(fname_dup);
+
+	  if(r != 0)
+	    perror("chdir");
+	}
+	char freq[100];
+	snprintf(freq,sizeof(freq),"%lf",(double)sp->ssrc * 1e-6);
+
+	switch(Mode){
+	case WSPR:
+	  if(Verbose)
+	    fprintf(stdout,"%s %s %s %s %s\n",Modetab[Mode].decode,"-f",freq,"-w",sp->filename);
+
+	  execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",sp->filename,(char *)NULL);
+	  break;
+	case FT8:
+	  // Note: requires my version of decode_ft8 that accepts -f basefreq
+	  if(Verbose)
+	    fprintf(stdout,"%s -f %s %s\n",Modetab[Mode].decode,freq,sp->filename);
+
+	  execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,sp->filename,(char *)NULL);
+	  break;
+	case FT4:
+	  // Note: requires my version of decode_ft8 that accepts -f basefreq
+	  if(Verbose)
+	    fprintf(stdout,"%s -f %s -4 %s\n",Modetab[Mode].decode,freq,sp->filename);
+
+	  execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-4",sp->filename,(char *)NULL);
+	  break;
+	}
+	// Gets here only if exec fails
+	fprintf(stdout,"execlp(%s) returned errno %d (%s)\n",Modetab[Mode].decode,errno,strerror(errno));
+	exit(EX_SOFTWARE);
+      }
+      // Wait for decoder to finish, then remove its input file
+      int status = 0;
+      if(waitpid(-1,&status,0) == -1){
+	fprintf(stdout,"error waiting for grandchild: errno %d (%s)\n",
+		errno,strerror(errno));
+	exit(EXIT_FAILURE);
+      }
+      if(WIFEXITED(status)){
+#if 0 // reduce some noise
+	int rval = WEXITSTATUS(status);
+	if(rval != 0)
+	  fprintf(stdout,"grandchild pid %d returned %d\n",grandchild,rval);
+#endif
+      }
+      if(!Keep_wav){
+	if(Verbose > 1)
+	  fprintf(stdout,"unlink(%s)\n",sp->filename);
+	unlink(sp->filename);
+	sp->filename[0] = '\0';
+      }
+      exit(EX_OK);
+    }
+    // Reap children so they won't become zombies
+    int status;
+    while(waitpid(-1,&status,WNOHANG) > 0)
+      ;
+  }
 }
 void cleanup(void){
   while(Sessions){
@@ -395,21 +387,16 @@ void cleanup(void){
     Sessions = next_s;
   }
 }
-struct session *create_session(struct rtp_header *rtp){
-
-  struct session *sp = calloc(1,sizeof(*sp));
-  if(sp == NULL)
-    return NULL; // unlikely
-  
+struct session * init_session(struct session *sp,struct rtp_header *rtp){
   memcpy(&sp->sender,&Sender,sizeof(sp->sender));
   sp->type = rtp->type;
   sp->ssrc = rtp->ssrc;
   
   sp->channels = channels_from_pt(sp->type);
   sp->samprate = samprate_from_pt(sp->type);
-  
+
   int64_t now = utc_time_ns();
-  // Microsecond within cycle period
+  // Nanosecond within cycle period
   int64_t const start_offset_nsec = now % (int64_t)(Modetab[Mode].cycle_time * BILLION);
   
   // Use the previous start point as the start of this file
@@ -417,7 +404,13 @@ struct session *create_session(struct rtp_header *rtp){
   time_t start_time_sec = start_time / BILLION;
   
   struct tm const * const tm = gmtime(&start_time_sec);
+  if(sp->fp != NULL)
+    return sp; // File already open, no more to do
   
+  // Remember the starting RTP timestamp
+  sp->start_timestamp = rtp->timestamp;
+
+  // Open a new file and initialize
   int fd = -1;
   {
     {
@@ -463,30 +456,23 @@ struct session *create_session(struct rtp_header *rtp){
 	strlcpy(sp->filename,bn,sizeof(sp->filename));
       } else {
 	fprintf(stdout,"can't create/write file %s: %s, can't create session\n",bn,strerror(errno));
-	FREE(sp);
-	return NULL;
+	return sp;
       }
     }
   }
   // Use fdopen on a file descriptor instead of fopen(,"w+") to avoid the implicit truncation
   // This allows testing where we're killed and rapidly restarted in the same cycle
   sp->fp = fdopen(fd,"w+");
+  // Initial seek point
+  sp->t0 = (start_offset_nsec * sp->samprate * sp->channels) / BILLION;
+
   if(Verbose > 1)
-    fprintf(stdout,"creating %s\n",sp->filename);
+    fprintf(stdout,"creating %s, cycle start offset %'.3f sec, %'ld bytes\n",
+	    sp->filename,(float)start_offset_nsec/BILLION,sp->t0);
 
   assert(sp->fp != NULL);
-  // file create succeded, now put us at top of list
-  sp->prev = NULL;
-  sp->next = Sessions;
-  
-  if(sp->next)
-    sp->next->prev = sp;
-  
-  Sessions = sp;
-  
   sp->iobuffer = malloc(BUFFERSIZE);
   setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
-  
   fcntl(fd,F_SETFL,O_NONBLOCK); // Let's see if this keeps us from losing data
   
 #if 0 // Not really needed for a short-lived temp file
@@ -523,16 +509,11 @@ struct session *create_session(struct rtp_header *rtp){
   attrprintf(fd,"unixstarttime","%.9lf",(double)start_time / 1.e9);
 #endif
 
-  // Seek into the file for the first write
-  // The parentheses are carefully drawn to ensure the result is on a block boundary despite truncations
-  fseeko(sp->fp,(off_t)((start_offset_nsec * sp->samprate)/ BILLION) * sp->header.BlockAlign,SEEK_CUR); // offset is in bytes
   return sp;
 }
 
-void close_session(struct session **p){
-  if(p == NULL)
-    return;
-  struct session *sp = *p;
+// Close (but do not delete) current file
+void close_file(struct session *sp){
   if(sp == NULL)
     return;
 
@@ -541,7 +522,7 @@ void close_session(struct session **p){
       fprintf(stdout,"closing %s %'.1f/%'.1f sec\n",sp->filename,
 	   (float)sp->SamplesWritten / sp->samprate,
 	   (float)sp->TotalFileSamples / sp->samprate);
-  
+
     // Get final file size, write .wav header with sizes
     fflush(sp->fp);
     struct stat statbuf;
@@ -554,13 +535,8 @@ void close_session(struct session **p){
     fclose(sp->fp);
     sp->fp = NULL;
   }
+
   FREE(sp->iobuffer);
-  if(sp->prev)
-    sp->prev->next = sp->next;
-  else
-    Sessions = sp->next;
-  if(sp->next)
-    sp->next->prev = sp->prev;
-  FREE(sp);
-  *p = NULL;
+  sp->TotalFileSamples = 0;
+  sp->SamplesWritten = 0;
 }
