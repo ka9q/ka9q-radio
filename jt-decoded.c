@@ -67,8 +67,7 @@ struct session {
   struct wav header;
 
   uint32_t ssrc;               // RTP stream source ID
-  uint32_t start_timestamp;    // Starting RTP timestamp
-  int64_t t0;                  // cycle time at first packet
+  uint32_t next_timestamp;     // Next expected RTP timestamp
   
   int type;                    // RTP payload type (with marker stripped)
   int channels;                // 1 (PCM_MONO) or 2 (PCM_STEREO)
@@ -110,8 +109,9 @@ struct session *Sessions;
 
 void input_loop(void);
 void cleanup(void);
-struct session *init_session(struct session *sp,struct rtp_header *rtp);
-void close_file(struct session *p);
+struct session *init_session(struct session *sp,struct rtp_header *rtp,int size);
+void process_file(struct session *sp);
+void create_new_file(struct session *sp,time_t);
 
 void usage(){
   fprintf(stdout,"Usage: %s [-L locale] [-v] [-k] [-d recording_dir] [-4|-8|-w] PCM_multicast_address\n",App_path);
@@ -210,6 +210,8 @@ void input_loop(){
     uint8_t buffer[PKTSIZE];
     socklen_t socksize = sizeof(Sender);
     int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
+    // stash time now in case we are slowed by the code below
+    int64_t const now = utc_time_ns();
 
     if(size <= 0){    // ??
       perror("recvfrom");
@@ -252,28 +254,61 @@ void input_loop(){
 	sp->next->prev = sp;
       Sessions = sp;
     }
-    // Where are we in the transmission cycle?
-    int64_t const nsec = utc_time_ns() % (int64_t)(Modetab[Mode].cycle_time * BILLION); // UTC nanosecond within cycle time
+    memcpy(&sp->sender,&Sender,sizeof(sp->sender));
+    sp->type = rtp.type;
+    sp->ssrc = rtp.ssrc;
+  
+    sp->channels = channels_from_pt(sp->type);
+    sp->samprate = samprate_from_pt(sp->type);
+    int64_t modtime = now % (int64_t)(Modetab[Mode].cycle_time * BILLION); // where we are in the cycle
+
     if(sp->fp == NULL){
-      if(nsec < Modetab[Mode].transmission_time * BILLION){
-	// In active interval, but needs new file
-	sp = init_session(sp,&rtp);
-      } else {
-	continue; // In transmission gap, ignore
+      if(modtime >= Modetab[Mode].transmission_time * BILLION){
+	// In dead time and file already processed, drop data and wait for new data frame
+	continue;
       }
+      // Start of new data frame, create new file
+      // Use UTC at start of this cycle as name for new file
+      int64_t const start_time = now - modtime;
+      time_t const start_time_sec = start_time / BILLION;
+      create_new_file(sp,start_time_sec);
+      assert(sp->fp != NULL);
+
+      if(Verbose > 1)
+	fprintf(stdout,"creating %s, cycle start offset %'.3f sec\n",
+		sp->filename,(float)modtime/BILLION);
+      
+      // Remember the starting RTP timestamp
+      sp->next_timestamp = rtp.timestamp;
+      
+      // Write .wav header, skipping size fields
+      memcpy(sp->header.ChunkID,"RIFF", 4);
+      sp->header.ChunkSize = 0xffffffff; // Temporary
+      memcpy(sp->header.Format,"WAVE",4);
+      memcpy(sp->header.Subchunk1ID,"fmt ",4);
+      sp->header.Subchunk1Size = 16;
+      sp->header.AudioFormat = 1;
+      sp->header.NumChannels = sp->channels;
+      sp->header.SampleRate = sp->samprate;
+      
+      sp->header.ByteRate = sp->samprate * sp->channels * 16/8;
+      sp->header.BlockAlign = sp->channels * 16/8;
+      sp->header.BitsPerSample = 16;
+      memcpy(sp->header.SubChunk2ID,"data",4);
+      sp->header.Subchunk2Size = 0xffffffff; // Temporary
+      fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
+      fflush(sp->fp); // get at least the header out there
     }
-    assert(sp != NULL);
+    assert(sp->fp != NULL);
+    // File is open and ready for writing
     // Write data into current file
     // A "sample" is a single audio sample, usually 16 bits.
     // A "frame" is the same as a sample for mono. It's two audio samples for stereo
     int const samp_count = size / sizeof(*samples); // number of individual audio samples (not frames)
 
-    // The seek offset relative to the current position in the file is the signed (modular) difference between
-    // the actual and expected RTP timestamps. This should automatically handle
-    // 32-bit RTP timestamp wraps, which occur every ~1 days at 48 kHz and only 6 hr @ 192 kHz
-    // Should I limit the range on this?
-    int const offset = (int32_t)(rtp.timestamp - sp->start_timestamp) * sizeof(uint16_t) * sp->channels + sp->t0;
-    fseek(sp->fp,offset,SEEK_SET);
+    // Seek to the proper place based on RTP timestamp
+    off_t const offset = (int32_t)(rtp.timestamp - sp->next_timestamp) * sizeof(uint16_t) * sp->channels;
+    fseeko(sp->fp,offset,SEEK_CUR);
 
     sp->TotalFileSamples += samp_count;
     sp->SamplesWritten += samp_count;
@@ -283,93 +318,69 @@ void input_loop(){
       fputc(samples[n] >> 8,sp->fp);
       fputc(samples[n],sp->fp);
     }
-    if(nsec < Modetab[Mode].transmission_time * BILLION)
-      continue;  // In transmission, nothing more to do
-
-    // We've reached the end of the current transmission.
-    // Close current file, hand it to the decoder
-    close_file(sp);
-
-    int child;
-    if((child = fork()) == 0){
-      // Double fork so we don't have to wait. Seems ugly, is there a better way??
-      int grandchild = 0;
-      if((grandchild = fork()) == 0){
-	{
-	  // set working directory to the one containing the file
-	  // dirname_r() is only available on MacOS, so we can't use it here
-	  char *fname_dup = strdup(sp->filename); // in case dirname modifies its arg
-	  int r = chdir(dirname(fname_dup));
-	  FREE(fname_dup);
-
-	  if(r != 0)
-	    perror("chdir");
-	}
-	char freq[100];
-	snprintf(freq,sizeof(freq),"%lf",(double)sp->ssrc * 1e-6);
-
-	switch(Mode){
-	case WSPR:
-	  if(Verbose)
-	    fprintf(stdout,"%s %s %s %s %s\n",Modetab[Mode].decode,"-f",freq,"-w",sp->filename);
-
-	  execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",sp->filename,(char *)NULL);
-	  break;
-	case FT8:
-	  // Note: requires my version of decode_ft8 that accepts -f basefreq
-	  if(Verbose)
-	    fprintf(stdout,"%s -f %s %s\n",Modetab[Mode].decode,freq,sp->filename);
-
-	  execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,sp->filename,(char *)NULL);
-	  break;
-	case FT4:
-	  // Note: requires my version of decode_ft8 that accepts -f basefreq
-	  if(Verbose)
-	    fprintf(stdout,"%s -f %s -4 %s\n",Modetab[Mode].decode,freq,sp->filename);
-
-	  execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-4",sp->filename,(char *)NULL);
-	  break;
-	}
-	// Gets here only if exec fails
-	fprintf(stdout,"execlp(%s) returned errno %d (%s)\n",Modetab[Mode].decode,errno,strerror(errno));
-	exit(EX_SOFTWARE);
-      }
-      if(Verbose > 1)
-	fprintf(stdout,"forked grandchild %d\n",grandchild);
-      // Wait for decoder to finish, then remove its input file
-      int status = 0;
-      if(waitpid(grandchild,&status,0) == -1){
-	fprintf(stdout,"error waiting for grandchild: errno %d (%s)\n",
-		errno,strerror(errno));
-	exit(EXIT_FAILURE);
-      }
-      if(Verbose > 1)
-	fprintf(stdout,"grandchild %d waitpid status %d\n",grandchild,status);
-
-      if(!WIFEXITED(status)){
-	if(Verbose > 1){
-	  if(WIFSIGNALED(status))
-	    fprintf(stdout,"grandchild %d terminated by signal %d\n",grandchild,WTERMSIG(status));
-	}
-      }
-      if(!Keep_wav){
-	if(Verbose)
-	  fprintf(stdout,"unlink(%s)\n",sp->filename);
-	unlink(sp->filename);
-	sp->filename[0] = '\0';
-      }
-      exit(EX_OK);
+    sp->next_timestamp = rtp.timestamp + size / (sizeof(uint16_t) * sp->channels);
+    if(modtime >= Modetab[Mode].transmission_time * BILLION){
+      // We've reached the end of the current transmission.
+      // Close current file, hand it to the decoder
+      process_file(sp);
     }
-    if(Verbose > 1)
-      fprintf(stdout,"spawned child %d\n",child);
-
-    // Reap children so they won't become zombies
-    int status;
-    while(waitpid(child,&status,WNOHANG) > 0)
-      ;
-    if(Verbose > 1)
-      fprintf(stdout,"child wait status %d\n",status);
   }
+}
+// Set up new file on session with name derived from start_time_sec
+void create_new_file(struct session *sp,time_t start_time_sec){
+  struct tm const * const tm = gmtime(&start_time_sec);
+  int fd = -1;
+  char dir[PATH_MAX];
+  snprintf(dir,sizeof(dir),"%u",sp->ssrc);
+  if(mkdir(dir,0777) == -1 && errno != EEXIST)
+    fprintf(stdout,"can't create directory %s: %s\n",dir,strerror(errno));
+
+  // Try to create file in directory whether or not the mkdir succeeded
+  char filename[PATH_MAX];
+  switch(Mode){
+  case FT4:
+  case FT8:
+    snprintf(filename,sizeof(filename),"%s/%u/%02d%02d%02d_%02d%02d%02d.wav",
+	     Recordings,
+	     sp->ssrc,
+	     (tm->tm_year+1900) % 100,
+	     tm->tm_mon+1,
+	     tm->tm_mday,
+	     tm->tm_hour,
+	     tm->tm_min,
+	     tm->tm_sec);
+    break;
+  case WSPR:
+    snprintf(filename,sizeof(filename),"%s/%u/%02d%02d%02d_%02d%02d.wav",
+	     Recordings,
+	     sp->ssrc,
+	     (tm->tm_year+1900) % 100,
+	     tm->tm_mon+1,
+	     tm->tm_mday,
+	     tm->tm_hour,
+	     tm->tm_min);
+    break;
+  }    
+  if((fd = open(filename,O_RDWR|O_CREAT,0777)) != -1){
+    strlcpy(sp->filename,filename,sizeof(sp->filename));
+  } else {
+    // couldn't create directory or create file in directory; create in current dir
+    fprintf(stdout,"can't create/write file %s: %s\n",filename,strerror(errno));
+    char const *bn = basename(filename);
+    
+    if((fd = open(bn,O_RDWR|O_CREAT,0777)) != -1){
+      strlcpy(sp->filename,bn,sizeof(sp->filename));
+    } else {
+      fprintf(stdout,"can't create/write file %s: %s, can't create session\n",bn,strerror(errno));
+      exit(EX_CANTCREAT);
+    }      
+  }
+  // Use fdopen on a file descriptor instead of fopen(,"w+") to avoid the implicit truncation
+  // This allows testing where we're killed and rapidly restarted in the same cycle
+  sp->fp = fdopen(fd,"w+");
+  sp->iobuffer = malloc(BUFFERSIZE);
+  setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
+  fcntl(fd,F_SETFL,O_NONBLOCK); // Let's see if this keeps us from losing data
 }
 void cleanup(void){
   while(Sessions){
@@ -386,156 +397,110 @@ void cleanup(void){
     Sessions = next_s;
   }
 }
-struct session * init_session(struct session *sp,struct rtp_header *rtp){
-  memcpy(&sp->sender,&Sender,sizeof(sp->sender));
-  sp->type = rtp->type;
-  sp->ssrc = rtp->ssrc;
-  
-  sp->channels = channels_from_pt(sp->type);
-  sp->samprate = samprate_from_pt(sp->type);
 
-  int64_t now = utc_time_ns();
-  // Nanosecond within cycle period
-  int64_t const start_offset_nsec = now % (int64_t)(Modetab[Mode].cycle_time * BILLION);
-  
-  // Use the previous start point as the start of this file
-  int64_t start_time = now - start_offset_nsec;
-  time_t start_time_sec = start_time / BILLION;
-  
-  struct tm const * const tm = gmtime(&start_time_sec);
-  if(sp->fp != NULL)
-    return sp; // File already open, no more to do
-  
-  // Remember the starting RTP timestamp
-  sp->start_timestamp = rtp->timestamp;
-
-  // Open a new file and initialize
-  int fd = -1;
-  {
-    {
-      char dir[PATH_MAX];
-      snprintf(dir,sizeof(dir),"%u",sp->ssrc);
-      if(mkdir(dir,0777) == -1 && errno != EEXIST)
-	fprintf(stdout,"can't create directory %s: %s\n",dir,strerror(errno));
-    }
-    // Try to create file in directory whether or not the mkdir succeeded
-    char filename[PATH_MAX];
-    switch(Mode){
-    case FT4:
-    case FT8:
-      snprintf(filename,sizeof(filename),"%s/%u/%02d%02d%02d_%02d%02d%02d.wav",
-	       Recordings,
-	       sp->ssrc,
-	       (tm->tm_year+1900) % 100,
-	       tm->tm_mon+1,
-	       tm->tm_mday,
-	       tm->tm_hour,
-	       tm->tm_min,
-	       tm->tm_sec);
-      break;
-    case WSPR:
-      snprintf(filename,sizeof(filename),"%s/%u/%02d%02d%02d_%02d%02d.wav",
-	       Recordings,
-	       sp->ssrc,
-	       (tm->tm_year+1900) % 100,
-	       tm->tm_mon+1,
-	       tm->tm_mday,
-	       tm->tm_hour,
-	       tm->tm_min);
-      break;
-    }    
-    if((fd = open(filename,O_RDWR|O_CREAT,0777)) != -1){
-      strlcpy(sp->filename,filename,sizeof(sp->filename));
-    } else {
-      // couldn't create directory or create file in directory; create in current dir
-      fprintf(stdout,"can't create/write file %s: %s\n",filename,strerror(errno));
-      char const *bn = basename(filename);
-      
-      if((fd = open(bn,O_RDWR|O_CREAT,0777)) != -1){
-	strlcpy(sp->filename,bn,sizeof(sp->filename));
-      } else {
-	fprintf(stdout,"can't create/write file %s: %s, can't create session\n",bn,strerror(errno));
-	return sp;
-      }
-    }
-  }
-  // Use fdopen on a file descriptor instead of fopen(,"w+") to avoid the implicit truncation
-  // This allows testing where we're killed and rapidly restarted in the same cycle
-  sp->fp = fdopen(fd,"w+");
-  // Initial seek point
-  sp->t0 = (start_offset_nsec * sp->samprate * sp->channels) / BILLION;
-
-  if(Verbose > 1)
-    fprintf(stdout,"creating %s, cycle start offset %'.3f sec, %'lld bytes\n",
-	    sp->filename,(float)start_offset_nsec/BILLION,(long long)sp->t0);
-
-  assert(sp->fp != NULL);
-  sp->iobuffer = malloc(BUFFERSIZE);
-  setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
-  fcntl(fd,F_SETFL,O_NONBLOCK); // Let's see if this keeps us from losing data
-  
-#if 0 // Not really needed for a short-lived temp file
-  attrprintf(fd,"samplerate","%lu",(unsigned long)sp->samprate);
-  attrprintf(fd,"channels","%d",sp->channels);
-  attrprintf(fd,"ssrc","%u",rtp->ssrc);
-  attrprintf(fd,"sampleformat","s16le");
-#endif
-  
-  // Write .wav header, skipping size fields
-  memcpy(sp->header.ChunkID,"RIFF", 4);
-  sp->header.ChunkSize = 0xffffffff; // Temporary
-  memcpy(sp->header.Format,"WAVE",4);
-  memcpy(sp->header.Subchunk1ID,"fmt ",4);
-  sp->header.Subchunk1Size = 16;
-  sp->header.AudioFormat = 1;
-  sp->header.NumChannels = sp->channels;
-  sp->header.SampleRate = sp->samprate;
-  
-  sp->header.ByteRate = sp->samprate * sp->channels * 16/8;
-  sp->header.BlockAlign = sp->channels * 16/8;
-  sp->header.BitsPerSample = 16;
-  memcpy(sp->header.SubChunk2ID,"data",4);
-  sp->header.Subchunk2Size = 0xffffffff; // Temporary
-  fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
-  fflush(sp->fp); // get at least the header out there
-
-#if 0 // Not really needed for a short-lived temp file
-  char sender_text[NI_MAXHOST];
-  // Don't wait for an inverse resolve that might cause us to lose data
-  getnameinfo((struct sockaddr *)&Sender,sizeof(Sender),sender_text,sizeof(sender_text),NULL,0,NI_NOFQDN|NI_DGRAM|NI_NUMERICHOST);
-  attrprintf(fd,"source","%s",sender_text);
-  attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
-  attrprintf(fd,"unixstarttime","%.9lf",(double)start_time / 1.e9);
-#endif
-
-  return sp;
-}
-
-// Close (but do not delete) current file
-void close_file(struct session *sp){
-  if(sp == NULL)
+// Close and process file
+void process_file(struct session *sp){
+  if(sp == NULL || sp->fp == NULL)
     return;
 
-  if(sp->fp != NULL){
-    if(Verbose)
-      fprintf(stdout,"closing %s %'.1f/%'.1f sec\n",sp->filename,
-	   (float)sp->SamplesWritten / sp->samprate,
-	   (float)sp->TotalFileSamples / sp->samprate);
-
-    // Get final file size, write .wav header with sizes
-    fflush(sp->fp);
-    struct stat statbuf;
-    fstat(fileno(sp->fp),&statbuf);
-    sp->header.ChunkSize = statbuf.st_size - 8;
-    sp->header.Subchunk2Size = statbuf.st_size - sizeof(sp->header);
-    rewind(sp->fp);
-    fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
-    fflush(sp->fp);
-    fclose(sp->fp);
-    sp->fp = NULL;
-  }
+  if(Verbose)
+    fprintf(stdout,"closing %s %'.1f/%'.1f sec\n",sp->filename,
+	    (float)sp->SamplesWritten / sp->samprate,
+	    (float)sp->TotalFileSamples / sp->samprate);
+  
+  // Get final file size, write .wav header with sizes
+  fflush(sp->fp);
+  struct stat statbuf;
+  fstat(fileno(sp->fp),&statbuf);
+  sp->header.ChunkSize = statbuf.st_size - 8;
+  sp->header.Subchunk2Size = statbuf.st_size - sizeof(sp->header);
+  rewind(sp->fp);
+  fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
+  fflush(sp->fp);
+  fclose(sp->fp);
+  sp->fp = NULL;
 
   FREE(sp->iobuffer);
   sp->TotalFileSamples = 0;
   sp->SamplesWritten = 0;
+
+  int child;
+  if((child = fork()) == 0){
+    // Double fork so we don't have to wait. Seems ugly, is there a better way??
+    int grandchild = 0;
+    if((grandchild = fork()) == 0){
+      {
+	// set working directory to the one containing the file
+	// dirname_r() is only available on MacOS, so we can't use it here
+	char *fname_dup = strdup(sp->filename); // in case dirname modifies its arg
+	int r = chdir(dirname(fname_dup));
+	FREE(fname_dup);
+	
+	if(r != 0)
+	  perror("chdir");
+      }
+      char freq[100];
+      snprintf(freq,sizeof(freq),"%lf",(double)sp->ssrc * 1e-6);
+      
+      switch(Mode){
+      case WSPR:
+	if(Verbose)
+	  fprintf(stdout,"%s %s %s %s %s\n",Modetab[Mode].decode,"-f",freq,"-w",sp->filename);
+	
+	execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",sp->filename,(char *)NULL);
+	break;
+      case FT8:
+	// Note: requires my version of decode_ft8 that accepts -f basefreq
+	if(Verbose)
+	  fprintf(stdout,"%s -f %s %s\n",Modetab[Mode].decode,freq,sp->filename);
+	
+	execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,sp->filename,(char *)NULL);
+	break;
+      case FT4:
+	// Note: requires my version of decode_ft8 that accepts -f basefreq
+	if(Verbose)
+	  fprintf(stdout,"%s -f %s -4 %s\n",Modetab[Mode].decode,freq,sp->filename);
+	
+	execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-4",sp->filename,(char *)NULL);
+	break;
+      }
+      // Gets here only if exec fails
+      fprintf(stdout,"execlp(%s) returned errno %d (%s)\n",Modetab[Mode].decode,errno,strerror(errno));
+      exit(EX_SOFTWARE);
+    }
+    if(Verbose > 1)
+      fprintf(stdout,"forked grandchild %d\n",grandchild);
+    // Wait for decoder to finish, then remove its input file
+    int status = 0;
+    if(waitpid(grandchild,&status,0) == -1){
+      fprintf(stdout,"error waiting for grandchild: errno %d (%s)\n",
+	      errno,strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+    if(Verbose > 1)
+      fprintf(stdout,"grandchild %d waitpid status %d\n",grandchild,status);
+    
+    if(!WIFEXITED(status)){
+      if(Verbose > 1){
+	if(WIFSIGNALED(status))
+	  fprintf(stdout,"grandchild %d terminated by signal %d\n",grandchild,WTERMSIG(status));
+      }
+    }
+    if(!Keep_wav){
+      if(Verbose)
+	fprintf(stdout,"unlink(%s)\n",sp->filename);
+      unlink(sp->filename);
+      sp->filename[0] = '\0';
+    }
+    exit(EX_OK);
+  }
+  if(Verbose > 1)
+    fprintf(stdout,"spawned child %d\n",child);
+  
+  // Reap children so they won't become zombies
+  int status;
+  while(waitpid(child,&status,WNOHANG) > 0)
+    ;
+  if(Verbose > 1)
+    fprintf(stdout,"child wait status %d\n",status);
 }
