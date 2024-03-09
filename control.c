@@ -1070,7 +1070,6 @@ static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int
       break;
     case RADIO_FREQUENCY:
       channel->tune.freq = decode_double(cp,optlen);
-      assert(channel->tune.freq == 7850000); // TEST ******************
       break;
     case SECOND_LO_FREQUENCY:
       channel->tune.second_LO = decode_double(cp,optlen);
