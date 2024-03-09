@@ -162,7 +162,7 @@ int main(int argc,char *argv[]){
   if(fcntl(1,F_SETFL,O_APPEND) == -1)
     fprintf(stdout,"fcntl of stdout to set O_APPEND failed: %s\n",strerror(errno));
 
-  if(Verbose > 1){
+  if(Verbose){
     for(int i=0; i < argc; i++)
       fprintf(stdout," [%d]%s",i,argv[i]);
     fprintf(stdout,"\n");
@@ -275,6 +275,7 @@ void input_loop(){
 	continue; // In transmission gap, ignore
       }
     }
+    assert(sp != NULL);
     // Write data into current file
     // A "sample" is a single audio sample, usually 16 bits.
     // A "frame" is the same as a sample for mono. It's two audio samples for stereo
@@ -346,32 +347,41 @@ void input_loop(){
 	fprintf(stdout,"execlp(%s) returned errno %d (%s)\n",Modetab[Mode].decode,errno,strerror(errno));
 	exit(EX_SOFTWARE);
       }
+      if(Verbose > 1)
+	fprintf(stdout,"forked grandchild %d\n",grandchild);
       // Wait for decoder to finish, then remove its input file
       int status = 0;
-      if(waitpid(-1,&status,0) == -1){
+      if(waitpid(grandchild,&status,0) == -1){
 	fprintf(stdout,"error waiting for grandchild: errno %d (%s)\n",
 		errno,strerror(errno));
 	exit(EXIT_FAILURE);
       }
-      if(WIFEXITED(status)){
-#if 0 // reduce some noise
-	int rval = WEXITSTATUS(status);
-	if(rval != 0)
-	  fprintf(stdout,"grandchild pid %d returned %d\n",grandchild,rval);
-#endif
+      if(Verbose > 1)
+	fprintf(stdout,"grandchild %d waitpid status %d\n",grandchild,status);
+
+      if(!WIFEXITED(status)){
+	if(Verbose > 1){
+	  if(WIFSIGNALED(status))
+	    fprintf(stdout,"grandchild %d terminated by signal %d\n",grandchild,WTERMSIG(status));
+	}
       }
       if(!Keep_wav){
-	if(Verbose > 1)
+	if(Verbose)
 	  fprintf(stdout,"unlink(%s)\n",sp->filename);
 	unlink(sp->filename);
 	sp->filename[0] = '\0';
       }
       exit(EX_OK);
     }
+    if(Verbose > 1)
+      fprintf(stdout,"spawned child %d\n",child);
+
     // Reap children so they won't become zombies
     int status;
-    while(waitpid(-1,&status,WNOHANG) > 0)
+    while(waitpid(child,&status,WNOHANG) > 0)
       ;
+    if(Verbose > 1)
+      fprintf(stdout,"child wait status %d\n",status);
   }
 }
 void cleanup(void){
@@ -379,9 +389,11 @@ void cleanup(void){
     // Flush and close each write stream
     // Be anal-retentive about freeing and clearing stuff even though we're about to exit
     struct session * const next_s = Sessions->next;
-    fflush(Sessions->fp);
-    fclose(Sessions->fp);
-    Sessions->fp = NULL;
+    if(Sessions->fp){
+      fflush(Sessions->fp);
+      fclose(Sessions->fp);
+      Sessions->fp = NULL;
+    }
     FREE(Sessions->iobuffer);
     FREE(Sessions);
     Sessions = next_s;
@@ -466,7 +478,7 @@ struct session * init_session(struct session *sp,struct rtp_header *rtp){
   // Initial seek point
   sp->t0 = (start_offset_nsec * sp->samprate * sp->channels) / BILLION;
 
-  if(Verbose > 1)
+  if(Verbose)
     fprintf(stdout,"creating %s, cycle start offset %'.3f sec, %'ld bytes\n",
 	    sp->filename,(float)start_offset_nsec/BILLION,sp->t0);
 
@@ -518,7 +530,7 @@ void close_file(struct session *sp){
     return;
 
   if(sp->fp != NULL){
-    if(Verbose > 1)
+    if(Verbose)
       fprintf(stdout,"closing %s %'.1f/%'.1f sec\n",sp->filename,
 	   (float)sp->SamplesWritten / sp->samprate,
 	   (float)sp->TotalFileSamples / sp->samprate);
