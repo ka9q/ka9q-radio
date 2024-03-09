@@ -108,7 +108,6 @@ struct sockaddr Input_mcast_sockaddr;
 int Input_fd;
 struct session *Sessions;
 
-void closedown(int a);
 void input_loop(void);
 void cleanup(void);
 struct session *init_session(struct session *sp,struct rtp_header *rtp);
@@ -196,23 +195,11 @@ int main(int argc,char *argv[]){
   if(setsockopt(Input_fd,SOL_SOCKET,SO_RCVBUF,&n,sizeof(n)) == -1)
     perror("setsockopt");
 
-  signal(SIGPIPE,closedown);
-  signal(SIGINT,closedown);
-  signal(SIGKILL,closedown);
-  signal(SIGQUIT,closedown);
-  signal(SIGTERM,closedown);        
-  signal(SIGPIPE,SIG_IGN);
-
   atexit(cleanup);
 
   input_loop();
 
   exit(EX_OK);
-}
-
-void closedown(int a){
-  fprintf(stdout,"%s: caught signal %d: %s\n",App_path,a,strsignal(a));
-  exit(EX_SOFTWARE);  // Will call cleanup()
 }
 
 // Read from RTP network socket, assemble blocks of samples
