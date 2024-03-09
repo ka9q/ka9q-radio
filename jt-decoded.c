@@ -318,7 +318,7 @@ void input_loop(){
       fputc(samples[n] >> 8,sp->fp);
       fputc(samples[n],sp->fp);
     }
-    sp->next_timestamp = rtp.timestamp + size / (sizeof(uint16_t) * sp->channels);
+    sp->next_timestamp = rtp.timestamp + samp_count / sp->channels;
     if(modtime >= Modetab[Mode].transmission_time * BILLION){
       // We've reached the end of the current transmission.
       // Close current file, hand it to the decoder
