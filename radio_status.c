@@ -433,8 +433,9 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
     }
     cp += optlen;
   }
-  pthread_mutex_unlock(&chan->lock);
  done:;
+  pthread_mutex_unlock(&chan->lock);
+
   if(restart_needed){
     if(Verbose > 1)
       fprintf(stdout,"terminating chan thread for ssrc %'u\n",ssrc);
@@ -589,11 +590,11 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
       if(chan->spectrum.bin_data != NULL){
 	// Average and clear
-	float averages[chan->spectrum.bin_count];
+	float const scale = 1.f / chan->blocks_since_poll;
 	for(int i=0; i < chan->spectrum.bin_count; i++)
-	  averages[i] = chan->spectrum.bin_data[i] / chan->blocks_since_poll;
+	  chan->spectrum.bin_data[i] *= scale;
 
-	encode_vector(&bp,BIN_DATA,averages,chan->spectrum.bin_count);
+	encode_vector(&bp,BIN_DATA,chan->spectrum.bin_data,chan->spectrum.bin_count);
 	memset(chan->spectrum.bin_data,0,chan->spectrum.bin_count * sizeof(*chan->spectrum.bin_data));
       }
     }
