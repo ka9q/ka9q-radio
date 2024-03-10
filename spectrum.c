@@ -67,7 +67,6 @@ void *demod_spectrum(void *arg){
 
   set_freq(chan,chan->tune.freq); // retune front end if needed to cover requested bandwidth
 
-  // Do first update with smooth == 1 so we don't have to wait for an initial exponential rise
   // Still need to clean up code to force radio freq to be multiple of FFT bin spacing
   pthread_mutex_lock(&chan->lock);
   while(!chan->terminate){
@@ -78,11 +77,9 @@ void *demod_spectrum(void *arg){
     for(int i=0; i < chan->spectrum.bin_count; i++){ // For each noncoherent integration bin above center freq
       float p = 0;
       for(int j=0; j < binsperbin; j++){ // Add energy of each fft bin that's part of this user integration bin
-	assert(binp < chan->filter.out->bins);
 	p += cnrmf(chan->filter.out->fdomain[binp++]);
       }
       // Accumulate energy until next poll
-      // Should this be protected with a mutex? - yes
       chan->spectrum.bin_data[i] += p;
     }
   }
