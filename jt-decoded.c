@@ -324,6 +324,14 @@ void input_loop(){
       // Close current file, hand it to the decoder
       process_file(sp);
     }
+    // Continuously reap children so they won't become zombies
+    // They can finish in any order
+    int status;
+    int pid;
+    while((pid = waitpid(-1,&status,WNOHANG)) > 0)
+      ;
+    if(Verbose > 1 && pid > 0)
+      fprintf(stdout,"child %d wait status %d\n",pid,status);
   }
 }
 // Set up new file on session with name derived from start_time_sec
@@ -429,6 +437,7 @@ void process_file(struct session *sp){
     // Double fork so we don't have to wait. Seems ugly, is there a better way??
     int grandchild = 0;
     if((grandchild = fork()) == 0){
+      // Grandchild context; actual execution of decoder here
       {
 	// set working directory to the one containing the file
 	// dirname_r() is only available on MacOS, so we can't use it here
@@ -468,17 +477,19 @@ void process_file(struct session *sp){
       fprintf(stdout,"execlp(%s) returned errno %d (%s)\n",Modetab[Mode].decode,errno,strerror(errno));
       exit(EX_SOFTWARE);
     }
+    // Child context; wait for decoder to finish, then remove its input file
     if(Verbose > 1)
       fprintf(stdout,"forked grandchild %d\n",grandchild);
-    // Wait for decoder to finish, then remove its input file
+
     int status = 0;
-    if(waitpid(grandchild,&status,0) == -1){
-      fprintf(stdout,"error waiting for grandchild: errno %d (%s)\n",
-	      errno,strerror(errno));
+    int pid;
+    if((pid = waitpid(-1,&status,0)) == -1){
+      fprintf(stdout,"error waiting for grandchild %d: errno %d (%s)\n",
+	      pid,errno,strerror(errno));
       exit(EXIT_FAILURE);
     }
     if(Verbose > 1)
-      fprintf(stdout,"grandchild %d waitpid status %d\n",grandchild,status);
+      fprintf(stdout,"grandchild %d waitpid status %d\n",pid,status);
     
     if(!WIFEXITED(status)){
       if(Verbose > 1){
@@ -492,15 +503,9 @@ void process_file(struct session *sp){
       unlink(sp->filename);
       sp->filename[0] = '\0';
     }
-    exit(EX_OK);
+    exit(EX_OK); // child exits
   }
+  // Parent context; return immediately so we don't delay things
   if(Verbose > 1)
     fprintf(stdout,"spawned child %d\n",child);
-  
-  // Reap children so they won't become zombies
-  int status;
-  while(waitpid(child,&status,WNOHANG) > 0)
-    ;
-  if(Verbose > 1)
-    fprintf(stdout,"child wait status %d\n",status);
 }
