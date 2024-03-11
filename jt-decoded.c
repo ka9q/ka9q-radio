@@ -246,7 +246,7 @@ void input_loop(){
       sp = calloc(1,sizeof(*sp));
       if(!sp)
 	// Let systemd restart us after a delay instead of rapidly filling the log with, e.g., disk full errors
-	exit(EX_CANTCREAT);
+	exit(EX_TEMPFAIL);
 
       sp->prev = NULL;
       sp->next = Sessions;
@@ -306,7 +306,7 @@ void input_loop(){
     // A "frame" is the same as a sample for mono. It's two audio samples for stereo
     int const samp_count = size / sizeof(*samples); // number of individual audio samples (not frames)
 
-    // Seek to the proper place based on RTP timestamp
+    // Seek to the proper place based on RTP timestamp. Normally offset = 0 when packets are in order
     off_t const offset = (int32_t)(rtp.timestamp - sp->next_timestamp) * sizeof(uint16_t) * sp->channels;
     fseeko(sp->fp,offset,SEEK_CUR);
 
@@ -326,7 +326,7 @@ void input_loop(){
     }
     // Continuously reap children so they won't become zombies
     // They can finish in any order
-    int status;
+    int status = 0;
     int pid;
     while((pid = waitpid(-1,&status,WNOHANG)) > 0)
       ;
@@ -376,16 +376,17 @@ void create_new_file(struct session *sp,time_t start_time_sec){
     fprintf(stdout,"can't create/write file %s: %s\n",filename,strerror(errno));
     char const *bn = basename(filename);
     
-    if((fd = open(bn,O_RDWR|O_CREAT,0777)) != -1){
-      strlcpy(sp->filename,bn,sizeof(sp->filename));
-    } else {
+    if((fd = open(bn,O_RDWR|O_CREAT,0777)) == -1){
       fprintf(stdout,"can't create/write file %s: %s, can't create session\n",bn,strerror(errno));
       exit(EX_CANTCREAT);
-    }      
+    }
+    strlcpy(sp->filename,bn,sizeof(sp->filename));
   }
   // Use fdopen on a file descriptor instead of fopen(,"w+") to avoid the implicit truncation
   // This allows testing where we're killed and rapidly restarted in the same cycle
+  assert(fd != -1);
   sp->fp = fdopen(fd,"w+");
+  assert(sp->fp != NULL);
   sp->iobuffer = malloc(BUFFERSIZE);
   setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
   fcntl(fd,F_SETFL,O_NONBLOCK); // Let's see if this keeps us from losing data
@@ -408,6 +409,7 @@ void cleanup(void){
 
 // Close and process file
 void process_file(struct session *sp){
+  assert(sp != NULL && sp->fp != NULL);
   if(sp == NULL || sp->fp == NULL)
     return;
 
@@ -432,12 +434,11 @@ void process_file(struct session *sp){
   sp->TotalFileSamples = 0;
   sp->SamplesWritten = 0;
 
-  int child;
-  if((child = fork()) == 0){
+  int child = fork();
+  if(child == 0){
     // Double fork so we don't have to wait. Seems ugly, is there a better way??
-    int grandchild = 0;
-    if((grandchild = fork()) == 0){
-      // Grandchild context; actual execution of decoder here
+    int grandchild = fork();
+    if(grandchild == 0){
       {
 	// set working directory to the one containing the file
 	// dirname_r() is only available on MacOS, so we can't use it here
@@ -475,21 +476,20 @@ void process_file(struct session *sp){
       }
       // Gets here only if exec fails
       fprintf(stdout,"execlp(%s) returned errno %d (%s)\n",Modetab[Mode].decode,errno,strerror(errno));
-      exit(EX_SOFTWARE);
+      exit(EX_SOFTWARE); // Exit from grandchild context
     }
-    // Child context; wait for decoder to finish, then remove its input file
+    // In child context
     if(Verbose > 1)
       fprintf(stdout,"forked grandchild %d\n",grandchild);
-
+    // Wait for decoder to finish, then remove its input file
     int status = 0;
-    int pid;
-    if((pid = waitpid(-1,&status,0)) == -1){
-      fprintf(stdout,"error waiting for grandchild %d: errno %d (%s)\n",
-	      pid,errno,strerror(errno));
+    if(waitpid(-1,&status,0) == -1){
+      fprintf(stdout,"error waiting for grandchild: errno %d (%s)\n",
+	      errno,strerror(errno));
       exit(EXIT_FAILURE);
     }
     if(Verbose > 1)
-      fprintf(stdout,"grandchild %d waitpid status %d\n",pid,status);
+      fprintf(stdout,"grandchild %d waitpid status %d\n",grandchild,status);
     
     if(!WIFEXITED(status)){
       if(Verbose > 1){
@@ -505,7 +505,6 @@ void process_file(struct session *sp){
     }
     exit(EX_OK); // child exits
   }
-  // Parent context; return immediately so we don't delay things
   if(Verbose > 1)
     fprintf(stdout,"spawned child %d\n",child);
 }
