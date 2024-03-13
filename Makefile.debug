@@ -38,6 +38,7 @@ install: $(DAEMONS) $(EXECS)
 	/usr/sbin/adduser --quiet --system --ingroup radio recordings
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
 	rsync -a aux/98-sockbuf.conf /etc/sysctl.d
+	sysctl -p /etc/sysctl.d/98-sockbuf.conf
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) start-ka9q-horus.sh $(BINDIR)
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
