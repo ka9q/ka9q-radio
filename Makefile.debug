@@ -30,7 +30,7 @@ CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c ax25.c ban
 
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h morse.h multicast.h osc.h radio.h rx888.h status.h
 
-all: depend $(DAEMONS) $(EXECS)
+all: $(DAEMONS) $(EXECS)
 
 # NB: now overwrites existing .conf files in /etc/radio !
 install: $(DAEMONS) $(EXECS)
@@ -55,17 +55,17 @@ install: $(DAEMONS) $(EXECS)
 	systemctl daemon-reload
 
 clean:
-	rm -f *.o *.a .depend $(EXECS) $(DAEMONS)
+	-rm -f *.o *.a .depend $(EXECS) $(DAEMONS)
 
-depend: .depend
+.PHONY: clean all install
+
+ifeq (,$(findstring $(MAKECMDGOALS),clean))
+     -include .depend
+endif
 
 .depend: $(CFILES) $(HFILES)
 	rm -f .depend
 	$(CC) $(CFLAGS) -MM $(CFILES) > .depend
-
--include .depend
-
-.PHONY: clean all install depend
 
 # Executables
 set_xcvr: set_xcvr.o config.o
