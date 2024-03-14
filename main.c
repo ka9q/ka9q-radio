@@ -49,6 +49,7 @@ char const *Iface;
 char const *Data;
 char const *Preset = DEFAULT_PRESET;
 char Preset_file[PATH_MAX];
+char const *Config_file;
 
 int IP_tos = DEFAULT_IP_TOS;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
@@ -192,21 +193,19 @@ int main(int argc,char *argv[]){
   signal(SIGUSR1,verbosity);
   signal(SIGUSR2,verbosity);
   
-  
-  char const *configfile;
   if(argc <= optind){
     fprintf(stdout,"Configtable file missing\n");
     exit(EX_NOINPUT);
   }
-  configfile = argv[optind];
+  Config_file = argv[optind];
   if(Name == NULL){
     // Extract name from config file pathname
     Name = argv[optind]; // Ah, just use whole thing
   }
-  fprintf(stdout,"Loading config file %s...\n",configfile);
-  int const n = loadconfig(argv[optind]);
+  fprintf(stdout,"Loading config file %s...\n",Config_file);
+  int const n = loadconfig(Config_file);
   if(n < 0){
-    fprintf(stdout,"Can't load config file %s\n",argv[optind]);
+    fprintf(stdout,"Can't load config file %s\n",Config_file);
     exit(EX_NOINPUT);
   }
   fprintf(stdout,"%d total demodulators started\n",n);
