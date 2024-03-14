@@ -57,7 +57,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     if(r != 0){
       if(!GetSockOptFailed){
 	frames_per_pkt = SAMPLES_PER_PKT / chan->output.channels; // Default frames per packet for non-linux systems
-	fprintf(stdout,"Can't get socket MTU (%s), using default %d samples\n",strerror(errno),frames_per_packet);
+	fprintf(stdout,"Can't get socket MTU (%s), using default %d samples\n",strerror(errno),frames_per_pkt);
 	GetSockOptFailed = true;
       }
 
