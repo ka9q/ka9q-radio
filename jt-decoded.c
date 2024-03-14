@@ -260,7 +260,7 @@ void input_loop(){
   
     sp->channels = channels_from_pt(sp->type);
     sp->samprate = samprate_from_pt(sp->type);
-    int64_t modtime = now % (int64_t)(Modetab[Mode].cycle_time * BILLION); // where we are in the cycle
+    int64_t const modtime = now % (int64_t)(Modetab[Mode].cycle_time * BILLION); // where we are in the cycle
 
     if(sp->fp == NULL){
       if(modtime >= Modetab[Mode].transmission_time * BILLION){
@@ -324,8 +324,8 @@ void input_loop(){
       // Close current file, hand it to the decoder
       process_file(sp);
     }
-    // Continuously reap children so they won't become zombies
-    // They can finish in any order
+    // Continuously reap children (decoders) at any time so they won't become zombies
+    // They can take tens of seconds and finish in any order
     int status = 0;
     int pid;
     while((pid = waitpid(-1,&status,WNOHANG)) > 0)
@@ -337,7 +337,7 @@ void input_loop(){
 // Set up new file on session with name derived from start_time_sec
 void create_new_file(struct session *sp,time_t start_time_sec){
   struct tm const * const tm = gmtime(&start_time_sec);
-  int fd = -1;
+
   char dir[PATH_MAX];
   snprintf(dir,sizeof(dir),"%u",sp->ssrc);
   if(mkdir(dir,0777) == -1 && errno != EEXIST)
@@ -369,6 +369,7 @@ void create_new_file(struct session *sp,time_t start_time_sec){
 	     tm->tm_min);
     break;
   }    
+  int fd = -1;
   if((fd = open(filename,O_RDWR|O_CREAT,0777)) != -1){
     strlcpy(sp->filename,filename,sizeof(sp->filename));
   } else {
