@@ -302,7 +302,8 @@ static int create_services(AvahiClient *c,struct userdata *userdata) {
       snprintf(pideq,sizeof(pideq),"pid=%d",getpid());
       pideq[sizeof(pideq)-1] = '\0';
 
-      int ret = avahi_entry_group_add_service(userdata->group, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, 0, userdata->service_name, userdata->service_type, NULL, userdata->dns_name,
+      // Don't advertise on IPv6 for now since multicast addresses are IPv4-specific
+      int ret = avahi_entry_group_add_service(userdata->group, AVAHI_IF_UNSPEC, AVAHI_PROTO_INET, 0, userdata->service_name, userdata->service_type, NULL, userdata->dns_name,
 					      userdata->service_port,hosteq,pideq,userdata->description,NULL);
       if (ret < 0) {
 	fprintf(stderr,"Failed to add service %s.%s: %s(%d)\n", userdata->service_name,userdata->service_type,avahi_strerror(ret),ret);
@@ -322,7 +323,8 @@ static int create_services(AvahiClient *c,struct userdata *userdata) {
 	  return -1;
 
 	address.data.ipv4.address = userdata->address;
-	int ret = avahi_entry_group_add_address(userdata->group, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, 0, userdata->dns_name,&address);
+	// Don't advertise on IPv6 for now since multicast addresses are IPv4-specific
+	int ret = avahi_entry_group_add_address(userdata->group, AVAHI_IF_UNSPEC, address.proto, 0, userdata->dns_name,&address);
 	if (ret == 0){
 	  records++;
 	  break;
