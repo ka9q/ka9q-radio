@@ -583,8 +583,6 @@ static void *sockproc(void *arg){
       for(int j=0; j < N_tones; j++)
 	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
 
-      pthread_mutex_init(&sp->qmutex,NULL);
-      pthread_cond_init(&sp->qcond,NULL);
       if(pthread_create(&sp->task,NULL,decode_task,sp) == -1){
 	perror("pthread_create");
 	close_session(&sp);
@@ -1432,6 +1430,8 @@ static int close_session(struct session **p){
     if(Sessions[i] == sp){
       Nsessions--;
       memmove(&Sessions[i],&Sessions[i+1],(Nsessions-i) * sizeof(Sessions[0]));
+      pthread_cond_destroy(&sp->qcond);
+      pthread_mutex_destroy(&sp->qmutex);
       FREE(sp);
       *p = NULL;
       return 0;

@@ -47,8 +47,8 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
 static void *radio_status_dump(void *);
   
 static pthread_t status_dump_thread;
-static pthread_cond_t Status_dump_cond;
-static pthread_mutex_t Status_dump_mutex;
+static pthread_cond_t Status_dump_cond = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t Status_dump_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool Status_kick_flag;
 static uint32_t Tag;
 

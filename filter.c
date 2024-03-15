@@ -39,7 +39,7 @@ int N_internal_threads = 1; // Usually most efficient
 int FFTW_planning_level = FFTW_PATIENT;
 
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
-static pthread_mutex_t FFTW_planning_mutex;
+static pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool FFTW_init = false;
 
 // FFT job queue
@@ -161,6 +161,8 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
       fprintf(stdout,"No wisdom read, planning FFTs may take up to %'.0lf sec\n",FFTW_plan_timelimit);
 
     // Start FFT worker thread(s) if not already running
+    pthread_mutex_init(&FFT.queue_mutex,NULL);
+    pthread_cond_init(&FFT.queue_cond,NULL);
     for(int i=0;i < N_worker_threads;i++){
       if(FFT.thread[i] == (pthread_t)0)
 	pthread_create(&FFT.thread[i],NULL,run_fft,NULL);
@@ -329,6 +331,8 @@ void *run_fft(void *p){
       pthread_mutex_unlock(job->completion_mutex);
 
     bool const terminate = job->terminate; // Don't use job pointer after free
+    pthread_mutex_destroy(job->completion_mutex);
+    pthread_cond_destroy(job->completion_cond);
     FREE(job);
     if(terminate)
       break; // Terminate after this job
@@ -346,6 +350,7 @@ int execute_filter_input(struct filter_in * const f){
   // We use the FFTW3 functions that specify the input and output arrays
   // Execute the FFT in separate worker threads
   struct fft_job * const job = calloc(1,sizeof(struct fft_job));
+  pthread_mutex_init(job->completion_mutex,NULL);
   job->jobnum = f->next_jobnum++;
   job->output = f->fdomain[job->jobnum % ND];
   job->type = f->in_type;
