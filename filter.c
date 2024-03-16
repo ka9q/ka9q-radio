@@ -350,7 +350,6 @@ int execute_filter_input(struct filter_in * const f){
   // We use the FFTW3 functions that specify the input and output arrays
   // Execute the FFT in separate worker threads
   struct fft_job * const job = calloc(1,sizeof(struct fft_job));
-  pthread_mutex_init(job->completion_mutex,NULL);
   job->jobnum = f->next_jobnum++;
   job->output = f->fdomain[job->jobnum % ND];
   job->type = f->in_type;
