@@ -20,7 +20,7 @@ struct db {
   char *txt;
   AvahiLookupResultFlags flags;
 };
-struct db *Database;
+extern struct db *Database;
 
 
 void *avahi_browser_thread(void *);
