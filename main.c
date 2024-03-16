@@ -36,6 +36,7 @@
 #include "filter.h"
 #include "status.h"
 #include "config.h"
+#include "avahi.h"
 
 // Configuration constants & defaults
 static char const DEFAULT_PRESET[] = "am";

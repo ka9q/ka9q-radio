@@ -26,6 +26,7 @@
 #include "status.h"
 #include "filter.h"
 #include "iir.h"
+#include "avahi.h"
 
 #define BUFFERSIZE 16384  // Tune this
 

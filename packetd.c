@@ -22,6 +22,7 @@
 #include "multicast.h"
 #include "ax25.h"
 #include "status.h"
+#include "avahi.h"
 
 struct hdlc {
   uint8_t frame[16384];

@@ -34,6 +34,7 @@
 #include "multicast.h"
 #include "status.h"
 #include "iir.h"
+#include "avahi.h"
 
 #define BUFFERSIZE 16384  // Big enough for 120 ms @ 48 kHz stereo (11,520 16-bit samples)
 

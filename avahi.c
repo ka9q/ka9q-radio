@@ -26,6 +26,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include "avahi.h"
 #include "misc.h"
 #include "multicast.h"
 

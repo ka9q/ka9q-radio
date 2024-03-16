@@ -25,6 +25,7 @@
 #include "status.h"
 #include "filter.h"
 #include "iir.h"
+#include "avahi.h"
 
 struct session {
   struct session *prev;       // Linked list pointers

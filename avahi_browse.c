@@ -34,24 +34,13 @@
 #include <avahi-common/malloc.h>
 #include <avahi-common/error.h>
 
-struct db {
-  struct db *next;
-  struct db *prev;
-  char *name;
-  char *type;
-  char *domain;
-  char *host_name;
-  AvahiAddress address;
-  uint16_t port;
-  char *txt;
-  AvahiLookupResultFlags flags;
-};
+#include "avahi.h"
+
 struct db *Database;
 
 
 static pthread_mutex_t Browser_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t Browser_cond = PTHREAD_COND_INITIALIZER;
-void *avahi_browser_thread(void *);
 
 static AvahiSimplePoll *simple_poll = NULL;
 static void resolve_callback(
