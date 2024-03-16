@@ -68,7 +68,7 @@ static void dump_userdata(struct userdata const *u){
 static int create_services(AvahiClient *c,struct userdata *userdata);
 static void client_callback(AvahiClient *c, AvahiClientState state,void * userdata);
 static void entry_group_callback(AvahiEntryGroup *g, AvahiEntryGroupState state,void *userdata);
-void avahi_ready(struct userdata *);
+static void avahi_ready(struct userdata *);
 static void *avahi_register(void *p);
 
 extern int Verbose;
@@ -430,7 +430,7 @@ static void entry_group_callback(AvahiEntryGroup *g, AvahiEntryGroupState state,
 
 // Removed the wait to avoid a deadlock when the DNS A records are already asserted elsewhere on the nt
 // I *think* this will cause us to wait until the other guy goes away, and then we'll assert them ourselves
-void avahi_ready(struct userdata *userdata){
+static void avahi_ready(struct userdata *userdata){
 #if 1
   if(Verbose > 1){
     fprintf(stderr,"NOT waiting for %p to become ready\n",userdata);
