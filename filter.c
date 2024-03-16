@@ -330,8 +330,6 @@ void *run_fft(void *p){
       pthread_mutex_unlock(job->completion_mutex);
 
     bool const terminate = job->terminate; // Don't use job pointer after free
-    pthread_mutex_destroy(job->completion_mutex);
-    pthread_cond_destroy(job->completion_cond);
     FREE(job);
     if(terminate)
       break; // Terminate after this job
