@@ -573,6 +573,7 @@ int close_session(struct session *sp){
   }
   pthread_mutex_unlock(&sp->qmutex);
   pthread_mutex_destroy(&sp->qmutex);
+  pthread_cond_destroy(&sp->qcond);
   
 
   // Remove from linked list of sessions
