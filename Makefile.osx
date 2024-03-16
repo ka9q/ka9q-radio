@@ -24,15 +24,15 @@ install: $(EXECS)
 clean:
 	rm -f *.o *.a .depend $(EXECS)
 
-depend: .depend
-
 .depend: $(CFILES) $(HFILES)
 	rm -f .depend
 	$(CC) $(CFLAGS) -MM $(CFILES) > .depend
 
--include .depend
+ifeq (,$(findstring $(MAKECMDGOALS),clean))
+     -include .depend
+endif
 
-.PHONY: clean all install depend
+.PHONY: clean all install .depend
 
 # Executables
 # TEMPORARY FOR DEVELOPMENT
