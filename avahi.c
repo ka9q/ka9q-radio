@@ -151,7 +151,8 @@ static void *avahi_register(void *p){
       // This will happen if avahi-daemon isn't running; sleep and retry indefinitely
       fprintf(stderr,"Failed to create client: %s\n", avahi_strerror(error));
       assert(userdata->simple_poll);
-      avahi_simple_poll_free(userdata->simple_poll);  userdata->simple_poll = NULL;
+      avahi_simple_poll_free(userdata->simple_poll);
+      userdata->simple_poll = NULL;
       sleep(5);
       continue;
     }
@@ -204,6 +205,8 @@ static void *avahi_register(void *p){
       break;
   }
   // Get here only on early failure; give up completely
+  pthread_mutex_destroy(&userdata->avahi_mutex);
+  pthread_cond_destroy(&userdata->avahi_ready);
   FREE(userdata->service_name);
   FREE(userdata->service_type);
   FREE(userdata->description);
