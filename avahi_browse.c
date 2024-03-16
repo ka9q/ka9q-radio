@@ -36,7 +36,7 @@
 
 #include "avahi.h"
 
-struct db *Database;
+struct db *Avahi_database;
 
 
 static pthread_mutex_t Browser_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -95,7 +95,7 @@ static void resolve_callback(
 	pthread_mutex_lock(&Browser_lock);
 	// Already in list?
 	struct db *db;
-	for(db = Database; db != NULL; db = db->next){
+	for(db = Avahi_database; db != NULL; db = db->next){
 	  if(strcmp(db->name,name) == 0 && strcmp(db->type,type) == 0 && strcmp(db->domain,domain) == 0)
 	    break;
 	}
@@ -103,11 +103,11 @@ static void resolve_callback(
 	  // Not already in database; add it
 	  struct db *db = calloc(1,sizeof(*db));
 	  db->prev = NULL; // First on list
-	  db->next = Database;
+	  db->next = Avahi_database;
 	  if(db->next)
 	    db->next->prev = db;
 	  
-	  Database = db;
+	  Avahi_database = db;
 	  db->name = strdup(name);
 	  db->type = strdup(type);
 	  db->domain = strdup(domain);
@@ -162,7 +162,7 @@ static void browse_callback(
 	// Remove record from our database
 	pthread_mutex_lock(&Browser_lock);
 	struct db *db;
-	for(db = Database; db != NULL; db = db->next){
+	for(db = Avahi_database; db != NULL; db = db->next){
 	  if(strcmp(db->name,name) == 0 && strcmp(db->type,type) == 0 && strcmp(db->domain,domain) == 0)
 	    break;
 	}
@@ -172,7 +172,7 @@ static void browse_callback(
 	  if(db->prev)
 	    db->prev->next = db->next;
 	  else
-	    Database = db->next;
+	    Avahi_database = db->next;
 	  free(db);
 	  db = NULL;
 	  pthread_cond_broadcast(&Browser_cond);
