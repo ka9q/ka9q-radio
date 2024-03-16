@@ -50,6 +50,7 @@ struct db *Database;
 
 
 static pthread_mutex_t Browser_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t Browser_cond = PTHREAD_COND_INITIALIZER;
 void *avahi_browser_thread(void *);
 
 static AvahiSimplePoll *simple_poll = NULL;
@@ -126,6 +127,7 @@ static void resolve_callback(
 	  db->port = port;
 	  db->txt = strdup(t);
 	  db->flags = flags;
+	  pthread_cond_broadcast(&Browser_cond);
 	}
 	pthread_mutex_unlock(&Browser_lock);
 	avahi_free(t);
@@ -184,6 +186,7 @@ static void browse_callback(
 	    Database = db->next;
 	  free(db);
 	  db = NULL;
+	  pthread_cond_broadcast(&Browser_cond);
 	}
 	pthread_mutex_unlock(&Browser_lock);
       }
