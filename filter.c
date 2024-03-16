@@ -136,7 +136,6 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
   // of independent FFTs to execute at the same time
   if(!FFTW_init){
     fftwf_init_threads();
-    pthread_mutex_init(&FFTW_planning_mutex,NULL);
     bool sr = fftwf_import_system_wisdom();
     fprintf(stdout,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
     if(!sr){
