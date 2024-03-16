@@ -32,7 +32,7 @@ ifeq (,$(findstring $(MAKECMDGOALS),clean))
      -include .depend
 endif
 
-.PHONY: clean all install .depend
+.PHONY: clean all install
 
 # Executables
 # TEMPORARY FOR DEVELOPMENT
