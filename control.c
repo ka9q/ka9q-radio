@@ -35,6 +35,7 @@
 #include <sysexits.h>
 #include <errno.h>
 
+#include "avahi.h"
 #include "misc.h"
 #include "filter.h"
 #include "multicast.h"
@@ -320,6 +321,8 @@ static uint32_t Ssrc = 0;
 
 static struct channel Channel;
 
+static bool Use_browser = false;
+
 // Thread to display receiver state, updated at 10Hz by default
 // Uses the ancient ncurses text windowing library
 // Also services keyboard, mouse and tuning knob, if present
@@ -356,18 +359,57 @@ int main(int argc,char *argv[]){
     }
   }
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
-  // Dummy filter
-  if(argc <= optind){
-    fprintf(stderr,"Usage: %s -s <ssrc> mcast_group\n",App_path);
-    fprintf(stderr,"<ssrc> is positive decimal number, mcast_group is DNS name or IP address of control multicast group\n");
-    exit(EX_USAGE);
-  }
+  char *target = NULL;
+
+  if(argc > optind)
+    target = argv[optind];
+  else
+    Use_browser = true;
+
   while(Ssrc == 0){
     Ssrc = arc4random();
     fprintf(stderr,"-s missing, generating random ssrc: %'u\n",Ssrc);
   }
+  if(Use_browser){
+    // Use avahi browser to find a radiod instance to control
+    pthread_t avahi_browser_thread;
+    pthread_create(&avahi_browser_thread,NULL,avahi_browser,NULL);
+    fprintf(stdout,"Scanning for radiod instances...\n");
+    sleep(5); // Wait for the entries to appear
+    pthread_mutex_lock(&Avahi_browser_mutex);
+    if(Avahi_database == NULL){
+      // Nothing out there, quit
+      fprintf(stderr,"No radiod target specified, and nothing running\n");
+      exit(0);
+    }
+
+    int radiod_count = 0;
+    for(struct avahi_db *db = Avahi_database; db != NULL; db = db->next,radiod_count++)
+      ;
+    if(radiod_count == 1){
+      // Only one, use it
+      target = Avahi_database->host_name;      // Redo this to avoid the call to resolve_mcast
+    } else {
+      int i = 0;
+      for(struct avahi_db *db = Avahi_database; db != NULL; db = db->next,i++)
+	fprintf(stdout,"%d - %s\n",i,db->host_name);
+      fprintf(stdout,"Select index: ");
+      fflush(stdout);
+      char line[1024];
+      fgets(line,sizeof(line),stdin);
+      char *endptr = NULL;
+      int n = strtol(line,&endptr,0);
+      struct avahi_db *db;
+      for(db = Avahi_database; db != NULL; db = db->next,i++)      
+	if(i == n)
+	  break;
+      target = db->host_name;
+    }
+    pthread_mutex_unlock(&Avahi_browser_mutex);
+    pthread_cancel(avahi_browser_thread); // will it be a zombie now?
+  }
   char iface[1024]; // Multicast interface
-  resolve_mcast(argv[optind],&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
+  resolve_mcast(target,&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
   Status_fd = listen_mcast(&Metadata_dest_address,iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't listen to mcast status %s\n",argv[optind]);
