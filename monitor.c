@@ -30,7 +30,7 @@
 
 // Global constants
 #define MAX_MCAST 20          // Maximum number of multicast addresses
-#define BUFFERSIZE (1<<17)    // about 2.73 sec at 48 kHz - must be power of 2 times page size (4k)!
+#define BUFFERSIZE (1<<19)    // about 10.92 sec at 48 kHz - must be power of 2 times page size (4k)!
 static float const Latency = 0.02; // chunk size for audio output callback
 static float const Tone_period = 0.24; // PL tone integration period
 #define NSESSIONS 1500
