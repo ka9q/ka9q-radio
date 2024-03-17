@@ -146,7 +146,9 @@ static void browse_callback(
       avahi_simple_poll_quit(simple_poll);
       return;
     case AVAHI_BROWSER_NEW:
+#if !NDEBUG
       fprintf(stderr, "(Browser) NEW: service '%s' of type '%s' in domain '%s'\n", name, type, domain);
+#endif
       /* We ignore the returned resolver object. In the callback
 	 function we free it. If the server is terminated before
 	 the callback function is called the server will free
