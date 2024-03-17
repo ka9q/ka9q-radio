@@ -36,11 +36,11 @@
 
 #include "avahi.h"
 
-struct db *Avahi_database;
+struct avahi_db *Avahi_database;
 
 
-static pthread_mutex_t Browser_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t Browser_cond = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t Avahi_browser_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t Avahi_browser_cond = PTHREAD_COND_INITIALIZER;
 
 static AvahiSimplePoll *simple_poll = NULL;
 static void resolve_callback(
@@ -92,16 +92,16 @@ static void resolve_callback(
 		!!(flags & AVAHI_LOOKUP_RESULT_MULTICAST),
 		!!(flags & AVAHI_LOOKUP_RESULT_CACHED));
 #endif
-	pthread_mutex_lock(&Browser_lock);
+	pthread_mutex_lock(&Avahi_browser_mutex);
 	// Already in list?
-	struct db *db;
+	struct avahi_db *db;
 	for(db = Avahi_database; db != NULL; db = db->next){
 	  if(strcmp(db->name,name) == 0 && strcmp(db->type,type) == 0 && strcmp(db->domain,domain) == 0)
 	    break;
 	}
 	if(db == NULL){
 	  // Not already in database; add it
-	  struct db *db = calloc(1,sizeof(*db));
+	  struct avahi_db *db = calloc(1,sizeof(*db));
 	  db->prev = NULL; // First on list
 	  db->next = Avahi_database;
 	  if(db->next)
@@ -116,9 +116,9 @@ static void resolve_callback(
 	  db->port = port;
 	  db->txt = strdup(t);
 	  db->flags = flags;
-	  pthread_cond_broadcast(&Browser_cond);
+	  pthread_cond_broadcast(&Avahi_browser_cond);
 	}
-	pthread_mutex_unlock(&Browser_lock);
+	pthread_mutex_unlock(&Avahi_browser_mutex);
 	avahi_free(t);
 	break;
       }
@@ -160,8 +160,8 @@ static void browse_callback(
 #endif
       {
 	// Remove record from our database
-	pthread_mutex_lock(&Browser_lock);
-	struct db *db;
+	pthread_mutex_lock(&Avahi_browser_mutex);
+	struct avahi_db *db;
 	for(db = Avahi_database; db != NULL; db = db->next){
 	  if(strcmp(db->name,name) == 0 && strcmp(db->type,type) == 0 && strcmp(db->domain,domain) == 0)
 	    break;
@@ -175,9 +175,9 @@ static void browse_callback(
 	    Avahi_database = db->next;
 	  free(db);
 	  db = NULL;
-	  pthread_cond_broadcast(&Browser_cond);
+	  pthread_cond_broadcast(&Avahi_browser_cond);
 	}
-	pthread_mutex_unlock(&Browser_lock);
+	pthread_mutex_unlock(&Avahi_browser_mutex);
       }
       break;
     case AVAHI_BROWSER_ALL_FOR_NOW:
@@ -215,7 +215,7 @@ int main(AVAHI_GCC_UNUSED int argc, AVAHI_GCC_UNUSED char*argv[]) {
 }
 #endif
 
-void *avahi_browser_thread(void *p){
+void *avahi_browser(void *p){
     AvahiClient *client = NULL;
     AvahiServiceBrowser *sb = NULL;
     int error;
@@ -256,7 +256,7 @@ void *avahi_browser_thread(void *p){
       avahi_client_free(client);
     if (simple_poll)
       avahi_simple_poll_free(simple_poll);
-    pthread_mutex_destroy(&Browser_lock);
+    pthread_mutex_destroy(&Avahi_browser_mutex);
 #if !NDEBUG
     printf("avahi_thread returns %d\n",ret);
 #endif

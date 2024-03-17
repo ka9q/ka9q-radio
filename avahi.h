@@ -7,10 +7,9 @@
 #include <avahi-common/error.h>
 #include <avahi-common/timeval.h>
 
-void *avahi_browser_thread(void *p);
-struct db {
-  struct db *next;
-  struct db *prev;
+struct avahi_db {
+  struct avahi_db *next;
+  struct avahi_db *prev;
   char *name;
   char *type;
   char *domain;
@@ -20,10 +19,12 @@ struct db {
   char *txt;
   AvahiLookupResultFlags flags;
 };
-extern struct db *Avahi_database;
+extern struct avahi_db *Avahi_database;
+extern pthread_mutex_t Avahi_browser_mutex;
+extern pthread_cond_t Avahi_browser_cond;
 
 
-void *avahi_browser_thread(void *);
+void *avahi_browser(void *);
 int avahi_start(char const *service_name,char const *service_type,int service_port,char const *dns_name,int base_address,char const *description,void *,int *);
 #define AVAHI_H 1
 #endif
