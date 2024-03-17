@@ -400,7 +400,7 @@ int main(int argc,char *argv[]){
       char *endptr = NULL;
       int n = strtol(line,&endptr,0);
       struct avahi_db *db;
-      for(db = Avahi_database; db != NULL && i != n; db = db->next,i++)      
+      for(i=0,db = Avahi_database; db != NULL && i != n; db = db->next,i++)      
 	;
       target = strdup(db->host_name);
     }
