@@ -388,7 +388,7 @@ int main(int argc,char *argv[]){
       ;
     if(radiod_count == 1){
       // Only one, use it
-      target = Avahi_database->host_name;      // Redo this to avoid the call to resolve_mcast
+      target = strdup(Avahi_database->host_name);      // Redo this to avoid the call to resolve_mcast
     } else {
       int i = 0;
       for(struct avahi_db *db = Avahi_database; db != NULL; db = db->next,i++)
@@ -400,10 +400,9 @@ int main(int argc,char *argv[]){
       char *endptr = NULL;
       int n = strtol(line,&endptr,0);
       struct avahi_db *db;
-      for(db = Avahi_database; db != NULL; db = db->next,i++)      
-	if(i == n)
-	  break;
-      target = db->host_name;
+      for(db = Avahi_database; db != NULL && i != n; db = db->next,i++)      
+	;
+      target = strdup(db->host_name);
     }
     pthread_mutex_unlock(&Avahi_browser_mutex);
     pthread_cancel(avahi_browser_thread); // will it be a zombie now?
