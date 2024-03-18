@@ -393,7 +393,7 @@ int main(int argc,char *argv[]){
     } else {
       int i = 0;
       for(struct avahi_db *db = Avahi_database; db != NULL; db = db->next,i++)
-	fprintf(stdout,"%d - %s\n",i,db->host_name);
+	fprintf(stdout,"%d: %s (%s)\n",i,db->name,db->host_name);
       fprintf(stdout,"Select index: ");
       fflush(stdout);
       char line[1024];
