@@ -20,11 +20,9 @@ struct avahi_db {
   AvahiLookupResultFlags flags;
 };
 extern struct avahi_db *Avahi_database;
-extern pthread_mutex_t Avahi_browser_mutex;
-extern pthread_cond_t Avahi_browser_cond;
 
 
-void *avahi_browser(void *);
+int avahi_browse(char *);
 int avahi_start(char const *service_name,char const *service_type,int service_port,char const *dns_name,int base_address,char const *description,void *,int *);
 #define AVAHI_H 1
 #endif

@@ -39,9 +39,6 @@
 struct avahi_db *Avahi_database;
 
 
-pthread_mutex_t Avahi_browser_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t Avahi_browser_cond = PTHREAD_COND_INITIALIZER;
-
 static AvahiSimplePoll *simple_poll = NULL;
 static void resolve_callback(
     AvahiServiceResolver *r,
@@ -67,8 +64,7 @@ static void resolve_callback(
       break;
     case AVAHI_RESOLVER_FOUND:
       {
-	char *t;
-	t = avahi_string_list_to_string(txt);
+	char *t = avahi_string_list_to_string(txt);
 #if !NDEBUG
 	fprintf(stderr, "Service '%s' of type '%s' in domain '%s':\n", name, type, domain);
 	char a[AVAHI_ADDRESS_STR_MAX];
@@ -92,7 +88,6 @@ static void resolve_callback(
 		!!(flags & AVAHI_LOOKUP_RESULT_MULTICAST),
 		!!(flags & AVAHI_LOOKUP_RESULT_CACHED));
 #endif
-	pthread_mutex_lock(&Avahi_browser_mutex);
 	// Already in list?
 	struct avahi_db *db;
 	for(db = Avahi_database; db != NULL; db = db->next){
@@ -116,9 +111,7 @@ static void resolve_callback(
 	  db->port = port;
 	  db->txt = strdup(t);
 	  db->flags = flags;
-	  pthread_cond_broadcast(&Avahi_browser_cond);
 	}
-	pthread_mutex_unlock(&Avahi_browser_mutex);
 	avahi_free(t);
 	break;
       }
@@ -162,7 +155,6 @@ static void browse_callback(
 #endif
       {
 	// Remove record from our database
-	pthread_mutex_lock(&Avahi_browser_mutex);
 	struct avahi_db *db;
 	for(db = Avahi_database; db != NULL; db = db->next){
 	  if(strcmp(db->name,name) == 0 && strcmp(db->type,type) == 0 && strcmp(db->domain,domain) == 0)
@@ -177,15 +169,14 @@ static void browse_callback(
 	    Avahi_database = db->next;
 	  free(db);
 	  db = NULL;
-	  pthread_cond_broadcast(&Avahi_browser_cond);
 	}
-	pthread_mutex_unlock(&Avahi_browser_mutex);
       }
       break;
     case AVAHI_BROWSER_ALL_FOR_NOW:
 #if !NDEBUG
       fprintf(stderr, "(Browser) ALL_FOR_NOW\n");
 #endif
+      avahi_simple_poll_quit(simple_poll);
       break;
     case AVAHI_BROWSER_CACHE_EXHAUSTED:
 #if !NDEBUG
@@ -204,20 +195,8 @@ static void client_callback(AvahiClient *c, AvahiClientState state, AVAHI_GCC_UN
       avahi_simple_poll_quit(simple_poll);
     }
 }
-#if 0 // testing only
-int main(AVAHI_GCC_UNUSED int argc, AVAHI_GCC_UNUSED char*argv[]) {
-  pthread_t av_thread;
 
-  pthread_create(&av_thread,NULL,avahi_browser_thread,NULL);
-  printf("avahi thread created");
-  while(true)
-    sleep(1);
-
-
-}
-#endif
-
-void *avahi_browser(void *p){
+int avahi_browse(char *service){
     AvahiClient *client = NULL;
     AvahiServiceBrowser *sb = NULL;
     int error;
@@ -240,7 +219,7 @@ void *avahi_browser(void *p){
       goto fail;
     }
     /* Create the service browser */
-    if (!(sb = avahi_service_browser_new(client, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, "_ka9q-ctl._udp", NULL, 0, browse_callback, client))) {
+    if (!(sb = avahi_service_browser_new(client, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, service, NULL, 0, browse_callback, client))) {
 #if !NDEBUG
       fprintf(stderr, "Failed to create service browser: %s\n", avahi_strerror(avahi_client_errno(client)));
 #endif
@@ -258,10 +237,9 @@ void *avahi_browser(void *p){
       avahi_client_free(client);
     if (simple_poll)
       avahi_simple_poll_free(simple_poll);
-    pthread_mutex_destroy(&Avahi_browser_mutex);
 #if !NDEBUG
     printf("avahi_thread returns %d\n",ret);
 #endif
-    return NULL;
+    return ret;
 }
 

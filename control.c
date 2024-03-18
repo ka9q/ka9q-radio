@@ -372,11 +372,12 @@ int main(int argc,char *argv[]){
   }
   if(Use_browser){
     // Use avahi browser to find a radiod instance to control
-    pthread_t avahi_browser_thread;
-    pthread_create(&avahi_browser_thread,NULL,avahi_browser,NULL);
     fprintf(stdout,"Scanning for radiod instances...\n");
-    sleep(5); // Wait for the entries to appear
-    pthread_mutex_lock(&Avahi_browser_mutex);
+    int ret = avahi_browse("_ka9q-ctl._udp"); // Returns list in global when cache is emptied
+    if(ret != 0){
+      fprintf(stdout,"Avahi not running; specify control channel manually\n");
+      exit(0);
+    }
     if(Avahi_database == NULL){
       // Nothing out there, quit
       fprintf(stderr,"No radiod target specified, and nothing running\n");
@@ -404,8 +405,6 @@ int main(int argc,char *argv[]){
 	;
       target = strdup(db->host_name);
     }
-    pthread_mutex_unlock(&Avahi_browser_mutex);
-    pthread_cancel(avahi_browser_thread); // will it be a zombie now?
   }
   char iface[1024]; // Multicast interface
   resolve_mcast(target,&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
