@@ -1,5 +1,5 @@
 Installing ka9q-radio  
-February 3, 2024, KA9Q
+March 18, KA9Q
 =====================
 This package is designed for Debian Linux, including the Raspberry Pi
 OS. Since I use a Macbook Pro as my desktop, some of it (e.g., the
@@ -10,11 +10,11 @@ any unnecessary non-portabilities.
 Prerequisites
 -------------
 
-To build and install this package on Debian, install the prerequisite packages:
+To build and install this package on Debian (including the Raspberry Pi), install the prerequisite packages:
 
 sudo apt install avahi-utils build-essential make gcc libairspy-dev libairspyhf-dev libavahi-client-dev libbsd-dev libfftw3-dev libhackrf-dev libiniparser-dev libncurses5-dev libopus-dev librtlsdr-dev libusb-1.0-0-dev libusb-dev portaudio19-dev libasound2-dev uuid-dev rsync
 
-And on the Raspberry Pi:
+And additionally on the Raspberry Pi:
 
 sudo apt install libpigpio-dev
 
