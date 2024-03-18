@@ -295,7 +295,9 @@ static int loadconfig(char const * const file){
       snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
 
       int slen = sizeof(Data_dest_address);
-      avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data,ElfHashString(Data),ttlmsg,&Data_dest_address,&slen);
+      uint32_t addr = ElfHashString(Data);
+      addr = (239 << 24) | (addr & 0xffffff); // Force into site-local multicast space
+      avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data,addr,ttlmsg,&Data_dest_address,&slen);
     }
     Data_fd = connect_mcast(&Data_dest_address,Iface,Mcast_ttl,IP_tos);
     if(Data_fd < 0){
@@ -373,7 +375,9 @@ static int loadconfig(char const * const file){
       char ttlmsg[100];
       snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
       int slen = sizeof(Metadata_dest_address);
-      avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,ElfHashString(Metadata_dest_string),ttlmsg,&Metadata_dest_address,&slen);
+      uint32_t addr = ElfHashString(Metadata_dest_string);
+      addr = (239 << 24) | (addr & 0xffffff); // Force into site-local multicast space
+      avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,addr,ttlmsg,&Metadata_dest_address,&slen);
     }
     // avahi_start has resolved the target DNS name into Metadata_dest_address and inserted the port number
     Status_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
@@ -458,7 +462,9 @@ static int loadconfig(char const * const file){
 	snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
 
 	int slen = sizeof(data_dest_address);
-	avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,ElfHashString(data),ttlmsg,&data_dest_address,&slen);
+	uint32_t addr = ElfHashString(data);
+	addr = (239 << 24) | (addr & 0xffffff); // Force into site-local multicast space
+	avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_address,&slen);
       }
       data_fd = connect_mcast(&data_dest_address,iface,mcast_ttl,ip_tos);
     } else {
