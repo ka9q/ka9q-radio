@@ -460,17 +460,18 @@ int main(int argc,char *argv[]){
 	}
       }
     }
-    while(true){
-      fprintf(stdout,"Choose SSRC or create new: ");
-      fflush(stdout);
-      char line[128];
-      fgets(line,sizeof(line),stdin);
-      int n = strtol(line,NULL,0);
-      if(n <= 0){
-	fprintf(stdout,"Try again\n");
-      }
+    fprintf(stdout,"Choose SSRC or create new: ");
+    fflush(stdout);
+    char line[128];
+    if(fgets(line,sizeof(line),stdin) == NULL || feof(stdin) || ferror(stdin)){
+      fprintf(stdout,"EOF on input, exiting\n");
+      exit(EX_USAGE);
+    }
+    int n = strtol(line,NULL,0);
+    if(n <= 0){
+      fprintf(stdout,"Try again\n");
+    } else {
       Ssrc = n;
-      break;
     }
   } while(Ssrc == 0);
   // Set up display subwindows
