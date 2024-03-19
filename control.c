@@ -378,7 +378,7 @@ int main(int argc,char *argv[]){
     int radiod_count = avahi_browse(table,1000,"_ka9q-ctl._udp"); // Returns list in global when cache is emptied
     if(radiod_count == 0){
       fprintf(stdout,"No radiod targets, or Avahi not running, ; specify control channel manually\n");
-      exit(0);
+      exit(EX_UNAVAILABLE);
     }
     if(radiod_count == 1){
       // Only one, use it
@@ -390,24 +390,30 @@ int main(int argc,char *argv[]){
       fflush(stdout);
       char line[1024];
       fgets(line,sizeof(line),stdin);
-      char *endptr = NULL;
-      int n = strtol(line,&endptr,0);
-      if(n < radiod_count)
-	target = strdup(table[n].dns_name);
-      else {
+      int n = strtol(line,NULL,0);
+      if(n < 0 || n >= radiod_count){
 	fprintf(stdout,"Index %d out of range, try again\n",n);
-	exit(1);
+	exit(EX_USAGE);
       }
+      int port = strtol(table[n].port,NULL,0);
+      // 'avahi-browse' returns the IP address, port and interface so we don't have to resolve them
+      // So this call to resolve_mcast() could be a direct conversion using a sockaddr utility
+      resolve_mcast(table[n].dns_name,&Metadata_dest_address,port,NULL,0);
+      Status_fd = listen_mcast(&Metadata_dest_address,table[n].interface);
+      Ctl_fd = connect_mcast(&Metadata_dest_address,table[n].interface,Mcast_ttl,IP_tos);
     }
+  } else {
+    // Use resolv_mcast to resolve a manually entered domain name, using default port and parsing possible interface
+    char iface[1024]; // Multicast interface
+    resolve_mcast(target,&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
+    Status_fd = listen_mcast(&Metadata_dest_address,iface);
+    Ctl_fd = connect_mcast(&Metadata_dest_address,iface,Mcast_ttl,IP_tos);
   }
-  char iface[1024]; // Multicast interface
-  resolve_mcast(target,&Metadata_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
-  Status_fd = listen_mcast(&Metadata_dest_address,iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't listen to mcast status %s\n",argv[optind]);
     exit(EX_IOERR);
   }
-  Ctl_fd = connect_mcast(&Metadata_dest_address,iface,Mcast_ttl,IP_tos);
+
   if(Ctl_fd < 0){
     fprintf(stderr,"connect to mcast control failed\n");
     exit(EX_IOERR);
