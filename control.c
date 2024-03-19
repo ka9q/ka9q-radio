@@ -398,7 +398,7 @@ int main(int argc,char *argv[]){
       int port = strtol(table[n].port,NULL,0);
       // 'avahi-browse' returns the IP address, port and interface so we don't have to resolve them
       // So this call to resolve_mcast() could be a direct conversion using a sockaddr utility
-      resolve_mcast(table[n].dns_name,&Metadata_dest_address,port,NULL,0);
+      resolve_mcast(table[n].address,&Metadata_dest_address,port,NULL,0);
       Status_fd = listen_mcast(&Metadata_dest_address,table[n].interface);
       Ctl_fd = connect_mcast(&Metadata_dest_address,table[n].interface,Mcast_ttl,IP_tos);
     }
