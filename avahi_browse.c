@@ -86,8 +86,7 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
     struct service_tab *tp = &table[line_count];
     char *line = malloc(linesize);
     tp->buffer = line; // so it can be freed later
-    fgets(line,linesize,fp);
-    if(feof(fp))
+    if(fgets(line,linesize,fp) == NULL || feof(fp) || ferror(fp))
       break;
 
     tp->line_type = strsep(&line,";");

@@ -389,7 +389,10 @@ int main(int argc,char *argv[]){
       fprintf(stdout,"Select index: ");
       fflush(stdout);
       char line[1024];
-      fgets(line,sizeof(line),stdin);
+      if(fgets(line,sizeof(line),stdin) == NULL || feof(stdin) || ferror(stdin)){
+	fprintf(stdout,"EOF on input\n");
+	exit(EX_USAGE);
+      }
       int n = strtol(line,NULL,0);
       if(n < 0 || n >= radiod_count){
 	fprintf(stdout,"Index %d out of range, try again\n",n);
