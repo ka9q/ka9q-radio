@@ -7,22 +7,23 @@
 #include <avahi-common/error.h>
 #include <avahi-common/timeval.h>
 
-struct avahi_db {
-  struct avahi_db *next;
-  struct avahi_db *prev;
+struct service_tab {
+  void *buffer;
+  char *line_type;
+  char *interface;
+  char *protocol;
   char *name;
   char *type;
   char *domain;
-  char *host_name;
-  AvahiAddress address;
-  uint16_t port;
+  char *dns_name;
+  char *address;
+  char *port;
   char *txt;
-  AvahiLookupResultFlags flags;
 };
-extern struct avahi_db *Avahi_database;
 
+int avahi_browse(struct service_tab *table,int tabsize,char const *service_name);
+void avahi_free_service_table(struct service_tab *table,int tabsize);
 
-int avahi_browse(char *);
 int avahi_start(char const *service_name,char const *service_type,int service_port,char const *dns_name,int base_address,char const *description,void *,int *);
 #define AVAHI_H 1
 #endif

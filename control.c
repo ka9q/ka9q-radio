@@ -373,37 +373,31 @@ int main(int argc,char *argv[]){
   if(Use_browser){
     // Use avahi browser to find a radiod instance to control
     fprintf(stdout,"Scanning for radiod instances...\n");
-    int ret = avahi_browse("_ka9q-ctl._udp"); // Returns list in global when cache is emptied
-    if(ret != 0){
-      fprintf(stdout,"Avahi not running; specify control channel manually\n");
-      exit(0);
-    }
-    if(Avahi_database == NULL){
-      // Nothing out there, quit
-      fprintf(stderr,"No radiod target specified, and nothing running\n");
-      exit(0);
-    }
+    struct service_tab table[1000];
 
-    int radiod_count = 0;
-    for(struct avahi_db *db = Avahi_database; db != NULL; db = db->next,radiod_count++)
-      ;
+    int radiod_count = avahi_browse(table,1000,"_ka9q-ctl._udp"); // Returns list in global when cache is emptied
+    if(radiod_count == 0){
+      fprintf(stdout,"No radiod targets, or Avahi not running, ; specify control channel manually\n");
+      exit(0);
+    }
     if(radiod_count == 1){
       // Only one, use it
-      target = strdup(Avahi_database->host_name);      // Redo this to avoid the call to resolve_mcast
+      target = table[0].dns_name;      // Redo this to avoid the call to resolve_mcast
     } else {
-      int i = 0;
-      for(struct avahi_db *db = Avahi_database; db != NULL; db = db->next,i++)
-	fprintf(stdout,"%d: %s (%s)\n",i,db->name,db->host_name);
+      for(int i=0; i < radiod_count; i++)
+	fprintf(stdout,"%d: %s (%s)\n",i,table[i].name,table[i].dns_name);
       fprintf(stdout,"Select index: ");
       fflush(stdout);
       char line[1024];
       fgets(line,sizeof(line),stdin);
       char *endptr = NULL;
       int n = strtol(line,&endptr,0);
-      struct avahi_db *db;
-      for(i=0,db = Avahi_database; db != NULL && i != n; db = db->next,i++)      
-	;
-      target = strdup(db->host_name);
+      if(n < radiod_count)
+	target = strdup(table[n].dns_name);
+      else {
+	fprintf(stdout,"Index %d out of range, try again\n",n);
+	exit(1);
+      }
     }
   }
   char iface[1024]; // Multicast interface
