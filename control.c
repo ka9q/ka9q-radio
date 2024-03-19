@@ -409,13 +409,12 @@ int main(int argc,char *argv[]){
     Status_fd = listen_mcast(&Metadata_dest_address,iface);
     Ctl_fd = connect_mcast(&Metadata_dest_address,iface,Mcast_ttl,IP_tos);
   }
-  if(Status_fd == -1){
-    fprintf(stderr,"Can't listen to mcast status %s\n",argv[optind]);
+  if(Status_fd < 0){
+    fprintf(stderr,"Can't listen to mcast status channel: %s\n",strerror(errno));
     exit(EX_IOERR);
   }
-
   if(Ctl_fd < 0){
-    fprintf(stderr,"connect to mcast control failed\n");
+    fprintf(stderr,"Can't send to mcast control channel: %s\n",strerror(errno));
     exit(EX_IOERR);
   }
   char presetsfile_path[PATH_MAX];
