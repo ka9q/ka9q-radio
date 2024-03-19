@@ -101,6 +101,7 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
     tp->txt =   strsep(&line,";");
 
     if(strcmp(tp->line_type,"=") == 0 // Only full lines with resolved addresses
+       && strcmp(tp->interface,"lo") != 0  // Ignore loopback interface
        && strcmp(tp->protocol,"IPv4") == 0 // Only IPv4 for now
        && strcmp(tp->type,service_name) == 0){ // Should always match, but to be sure
       // Keep this line and the pointers into it
