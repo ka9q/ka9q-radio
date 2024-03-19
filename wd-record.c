@@ -10,7 +10,7 @@
 //  - Cleanup from previous "wspr-decoded" version (e.g. remove unneeded variables/code)
 //
 
-char const * wd_record_version = "This is wd-record version 0.2 which ensures that all wav files have the same number of samples and sample times are derived from the SDR (i.e RX-888) clock";
+char const * wd_record_version = "This is wd-record version 0.3 which recovers from restarts of radiod";
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -128,7 +128,7 @@ int main(int argc,char *argv[]){
     case 'V':
       VERSION();
       fprintf(stdout,"Copyright 2023, Clint Turner, KA7OEI\n");
-      fprintf(stdout,"Copyright 2023, Rob Robinett, AI6VN\n");
+      fprintf(stdout,"Copyright 2023-2024, Rob Robinett, AI6VN\n");
       fprintf(stdout,"%s\n", wd_record_version);
       exit(EX_OK);
     case 'd':
@@ -274,7 +274,7 @@ void input_loop(){
    test_calculateAbsoluteDifference();
    // exit (0);
 
-    while ( loop_count > 0 ) {
+    while ( loop_count > 0 ) {        /// In effect this is a forever() loop
         --loop_count;
 
         // Wait for data or timeout after one second
@@ -308,9 +308,17 @@ void input_loop(){
         last_flush_second = current_second;
 
         if(FD_ISSET(Input_fd,&fdset) == 0 ){
+            // After waiting for one second we received no packets, so close any open sessions and search for the begining of a new one minute stream 
             if(verbosity > 1) {
-                fprintf(stderr, "input_loop(): FD_ISSET() => 0\n");
+                fprintf(stderr, "input_loop(): FD_ISSET() => 0, so close current file and search for start of next minute\n");
             }
+            for(struct session *sp = Sessions; sp != NULL;){
+                struct session * const next = sp->next;
+                close_session(&sp);
+                sp = next;
+            }
+            Searching_for_first_minute = 1;
+            continue;
         } else {
             if ( verbosity > 3 ) {
                 fprintf(stderr, "input_loop(): FD_ISSET() => %d\n", FD_ISSET(Input_fd,&fdset));
@@ -388,8 +396,11 @@ void input_loop(){
                     sample_offset_in_current_wav_file = calculateAbsoluteDifference( rtp.timestamp, sp->first_sample_number );
                     if ( sample_offset_in_current_wav_file < 0 ) {
                         if ( verbosity > 1 ) {
-                            fprintf(stderr, "input_loop(): WARNING: tossing late arriving RTP packet with timestamp rtp.timestam=%u which is less than the timestamp=%u of the first sample of the curent wav file\n", rtp.timestamp, sp->first_sample_number);
+                            fprintf(stderr, "input_loop(): WARNING: RTP packet with timestamp rtp.timestamp=%u which is less than the timestamp=%u of the first sample of the current wav file. Open new wav file.\n", rtp.timestamp, sp->first_sample_number);
                         }
+                        close_session(&sp);
+                        sp = NULL;
+                        Searching_for_first_minute = 1;
                         continue;
                     }
                     int      samples_per_minute =  sp->samprate * 60;
@@ -397,8 +408,8 @@ void input_loop(){
                     if ( sample_offset_in_current_wav_file >= samples_per_minute ) {
                         int sample_offset_in_next_wav_file = sample_offset_in_current_wav_file - samples_per_minute;
                         if ( verbosity > 2 ) {
-                            fprintf(stderr, "input_loop(): after writing %7lld samples to wav file which should have %d samples in it, closing wav file because this new rtp packet is for offset %d in the next wav file.  rtp.timestamp=%u >= sample_number_of_first_sample_in_current_wav_file=%u\n",
-                                    (long long)sp->SamplesWritten, samples_per_minute, sample_offset_in_next_wav_file, rtp.timestamp, sample_number_of_first_sample_in_current_wav_file );
+                            fprintf(stderr, "input_loop(): after writing %7ld samples to wav file which should have %d samples in it, closing wav file because this new rtp packet is for offset %d in the next wav file.  rtp.timestamp=%u >= sample_number_of_first_sample_in_current_wav_file=%u\n",
+                                    sp->SamplesWritten, samples_per_minute, sample_offset_in_next_wav_file, rtp.timestamp, sample_number_of_first_sample_in_current_wav_file );
                         }
                         close_session(&sp);
                         sp = NULL;
