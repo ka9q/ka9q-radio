@@ -366,10 +366,6 @@ int main(int argc,char *argv[]){
   else
     Use_browser = true;
 
-  while(Ssrc == 0){
-    Ssrc = arc4random();
-    fprintf(stderr,"-s missing, generating random ssrc: %'u\n",Ssrc);
-  }
   if(Use_browser){
     // Use avahi browser to find a radiod instance to control
     fprintf(stdout,"Scanning for radiod instances...\n");
@@ -431,7 +427,52 @@ int main(int argc,char *argv[]){
     exit(EX_NOINPUT);
   }
   atexit(display_cleanup);
-
+  do {
+    // None specified, get a list, let user choose
+    struct channel *const channel = &Channel;
+    init_demod(channel);
+    send_poll(Ctl_fd,0xffffffff);
+    // Read responses
+    fprintf(stdout,"Channel list:\n");
+    fprintf(stdout,"%13s %6s %13s\n","SSRC","preset","freq, Hz");
+    while(true){
+      int const npoll = 1;
+      struct pollfd pollfd[npoll];
+      pollfd[0].fd = Status_fd;
+      pollfd[0].events = POLLIN;
+      
+      int n = poll(pollfd,npoll,100);
+      if(n <= 0)
+	break; // Timeout or failure
+      
+      if(pollfd[0].revents & POLLIN){
+	struct sockaddr_storage source_address;
+	socklen_t ssize = sizeof(source_address);
+	uint8_t buffer[PKTSIZE];	
+	int length;
+	length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize); // should not block
+	// Ignore our own command packets
+	if(length >= 2 && (enum pkt_type)buffer[0] == STATUS){
+	  // Process only if it's a response to our SSRC
+	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
+	  decode_radio_status(channel,buffer+1,length-1);
+	  fprintf(stdout,"%'13u %6s %'13.f\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq);
+	}
+      }
+    }
+    while(true){
+      fprintf(stdout,"Choose SSRC or create new: ");
+      fflush(stdout);
+      char line[128];
+      fgets(line,sizeof(line),stdin);
+      int n = strtol(line,NULL,0);
+      if(n <= 0){
+	fprintf(stdout,"Try again\n");
+      }
+      Ssrc = n;
+      break;
+    }
+  } while(Ssrc == 0);
   // Set up display subwindows
   Tty = fopen("/dev/tty","r+");
   Term = newterm(NULL,Tty,Tty);
