@@ -114,7 +114,6 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
     }
   }
   pclose(fp); // What to do with return code?
-  printf("%d valid lines read\n",line_count);
   // Sort by instance entity name
   qsort(table,line_count,sizeof(table[0]),table_compare);
   return line_count;
