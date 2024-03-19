@@ -408,7 +408,7 @@ void input_loop(){
                     if ( sample_offset_in_current_wav_file >= samples_per_minute ) {
                         int sample_offset_in_next_wav_file = sample_offset_in_current_wav_file - samples_per_minute;
                         if ( verbosity > 2 ) {
-                            fprintf(stderr, "input_loop(): after writing %7ld samples to wav file which should have %d samples in it, closing wav file because this new rtp packet is for offset %d in the next wav file.  rtp.timestamp=%u >= sample_number_of_first_sample_in_current_wav_file=%u\n",
+                            fprintf(stderr, "input_loop(): after writing %7lld samples to wav file which should have %d samples in it, closing wav file because this new rtp packet is for offset %d in the next wav file.  rtp.timestamp=%u >= sample_number_of_first_sample_in_current_wav_file=%u\n",
                                     sp->SamplesWritten, samples_per_minute, sample_offset_in_next_wav_file, rtp.timestamp, sample_number_of_first_sample_in_current_wav_file );
                         }
                         close_session(&sp);
