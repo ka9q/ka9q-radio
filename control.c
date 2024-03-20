@@ -427,14 +427,14 @@ int main(int argc,char *argv[]){
     exit(EX_NOINPUT);
   }
   atexit(display_cleanup);
-  do {
+  while(Ssrc == 0){
     // None specified, get a list, let user choose
     struct channel *const channel = &Channel;
     init_demod(channel);
     send_poll(Ctl_fd,0xffffffff);
     // Read responses
     fprintf(stdout,"Channel list:\n");
-    fprintf(stdout,"%13s %6s %13s\n","SSRC","preset","freq, Hz");
+    fprintf(stdout,"%13s %6s %13s %5s\n","SSRC","preset","freq, Hz","SNR");
     while(true){
       int const npoll = 1;
       struct pollfd pollfd[npoll];
@@ -456,7 +456,14 @@ int main(int argc,char *argv[]){
 	  // Process only if it's a response to our SSRC
 	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
 	  decode_radio_status(channel,buffer+1,length-1);
-	  fprintf(stdout,"%'13u %6s %'13.f\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq);
+	  float snr;
+	  {
+	    float const noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
+	    float sig_power = channel->sig.bb_power - noise_bandwidth * channel->sig.n0;
+	    float sn0 = sig_power/channel->sig.n0;
+	    snr = power2dB(sn0/noise_bandwidth);
+	  }
+	  fprintf(stdout,"%'13u %6s %'13.f %5.1f\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr);
 	}
       }
     }
@@ -473,7 +480,7 @@ int main(int argc,char *argv[]){
     } else {
       Ssrc = n;
     }
-  } while(Ssrc == 0);
+  }
   // Set up display subwindows
   Tty = fopen("/dev/tty","r+");
   Term = newterm(NULL,Tty,Tty);
