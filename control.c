@@ -304,23 +304,20 @@ static void setup_windows(void){
   wprintw(Debug_win,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
 }
 
-#if 0
-static int dcompare(void const *a,void const *b){
-  struct channel const *da = a;
-  struct channel const *db = b;  
-  if(da->output.rtp.ssrc < db->output.rtp.ssrc)
+static int chan_compare(void const *a,void const *b){
+  struct channel const *da = *(struct channel **)a;
+  struct channel const *db = *(struct channel **)b;
+  if(da->output.rtp.ssrc < db->output.rtp.ssrc){
     return -1;
-  if(da->output.rtp.ssrc > db->output.rtp.ssrc)
+  }
+  if(da->output.rtp.ssrc > db->output.rtp.ssrc){
     return +1;
+  }
   return 0;
 }
-#endif
 
 
 static uint32_t Ssrc = 0;
-
-static struct channel Channel;
-
 static bool Use_browser = false;
 
 // Thread to display receiver state, updated at 10Hz by default
@@ -429,13 +426,13 @@ int main(int argc,char *argv[]){
   atexit(display_cleanup);
   while(Ssrc == 0){
     // None specified, get a list, let user choose
-    struct channel *const channel = &Channel;
-    init_demod(channel);
+
     send_poll(Ctl_fd,0xffffffff);
     // Read responses
-    fprintf(stdout,"Channel list:\n");
-    fprintf(stdout,"%13s %6s %13s %5s\n","SSRC","preset","freq, Hz","SNR");
-    while(true){
+    struct channel **channels = (struct channel **)calloc(1024,sizeof(struct channel *));
+
+    int chan_count;
+    for(chan_count = 0; chan_count < 1024;){
       int const npoll = 1;
       struct pollfd pollfd[npoll];
       pollfd[0].fd = Status_fd;
@@ -449,23 +446,34 @@ int main(int argc,char *argv[]){
 	struct sockaddr_storage source_address;
 	socklen_t ssize = sizeof(source_address);
 	uint8_t buffer[PKTSIZE];	
-	int length;
-	length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize); // should not block
+	int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize); // should not block
 	// Ignore our own command packets
 	if(length >= 2 && (enum pkt_type)buffer[0] == STATUS){
-	  // Process only if it's a response to our SSRC
+	  // What to do with the source addresses?
 	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
+	  struct channel * const channel = calloc(1,sizeof(struct channel));
+	  init_demod(channel);
 	  decode_radio_status(channel,buffer+1,length-1);
-	  float snr;
-	  {
-	    float const noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
-	    float sig_power = channel->sig.bb_power - noise_bandwidth * channel->sig.n0;
-	    float sn0 = sig_power/channel->sig.n0;
-	    snr = power2dB(sn0/noise_bandwidth);
-	  }
-	  fprintf(stdout,"%'13u %6s %'13.f %5.1f\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr);
+	  channels[chan_count++] = channel;
 	}
       }
+    }
+    fprintf(stdout,"%d channels\n",chan_count);
+    qsort(channels,chan_count,sizeof(channels[0]),chan_compare);
+    fprintf(stdout,"%13s %6s %13s %5s\n","SSRC","preset","freq, Hz","SNR");
+
+    fprintf(stdout,"Channel list:\n");
+    for(int i=0; i < chan_count;i++){
+      struct channel *channel = channels[i];
+      if(channel == NULL)
+	continue;
+
+      float snr;
+      float const noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
+      float sig_power = channel->sig.bb_power - noise_bandwidth * channel->sig.n0;
+      float sn0 = sig_power/channel->sig.n0;
+      snr = power2dB(sn0/noise_bandwidth);
+      fprintf(stdout,"%'13u %6s %'13.f %5.1f\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr);
     }
     fprintf(stdout,"Choose SSRC or create new: ");
     fflush(stdout);
@@ -480,7 +488,15 @@ int main(int argc,char *argv[]){
     } else {
       Ssrc = n;
     }
+    for(int i=0; i < chan_count; i++){
+      if(channels[i] != NULL)
+	FREE(channels[i]);
+    }
+    FREE(channels);
   }
+  struct channel Channel;
+  struct channel *channel = &Channel;
+
   // Set up display subwindows
   Tty = fopen("/dev/tty","r+");
   Term = newterm(NULL,Tty,Tty);
@@ -495,8 +511,7 @@ int main(int argc,char *argv[]){
   mousemask(mask,NULL);
   setup_windows();
 
-  struct channel *const channel = &Channel;
-  init_demod(channel);
+
 
   Frontend.frequency = Frontend.min_IF = Frontend.max_IF = NAN;
 
