@@ -460,7 +460,9 @@ int main(int argc,char *argv[]){
     }
     fprintf(stdout,"%d channels\n",chan_count);
     qsort(channels,chan_count,sizeof(channels[0]),chan_compare);
-    fprintf(stdout,"%13s %9s %13s %5s\n","SSRC","preset","freq, Hz","SNR");
+
+
+    fprintf(stdout,"%13s %9s %13s %5s %s\n","SSRC","preset","freq, Hz","SNR","data");
 
     fprintf(stdout,"Channel list:\n");
     uint32_t last_ssrc = 0;
@@ -474,7 +476,10 @@ int main(int argc,char *argv[]){
       float sig_power = channel->sig.bb_power - noise_bandwidth * channel->sig.n0;
       float sn0 = sig_power/channel->sig.n0;
       snr = power2dB(sn0/noise_bandwidth);
-      fprintf(stdout,"%'13u %9s %'13.f %5.1f\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr);
+      // Should also call avahi-resolve-address to find dns name, but cache results since many are the same
+      char ip_addr_string[128];
+      formataddr(ip_addr_string,sizeof(ip_addr_string),&channel->output.data_dest_address);
+      fprintf(stdout,"%'13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr,ip_addr_string);
       last_ssrc = channel->output.rtp.ssrc;
     }
     fprintf(stdout,"Choose SSRC or create new: ");
