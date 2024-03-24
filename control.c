@@ -460,12 +460,13 @@ int main(int argc,char *argv[]){
     }
     fprintf(stdout,"%d channels\n",chan_count);
     qsort(channels,chan_count,sizeof(channels[0]),chan_compare);
-    fprintf(stdout,"%13s %6s %13s %5s\n","SSRC","preset","freq, Hz","SNR");
+    fprintf(stdout,"%13s %9s %13s %5s\n","SSRC","preset","freq, Hz","SNR");
 
     fprintf(stdout,"Channel list:\n");
+    uint32_t last_ssrc = 0;
     for(int i=0; i < chan_count;i++){
       struct channel *channel = channels[i];
-      if(channel == NULL)
+      if(channel == NULL || channel->output.rtp.ssrc == last_ssrc) // Skip dupes
 	continue;
 
       float snr;
@@ -473,7 +474,8 @@ int main(int argc,char *argv[]){
       float sig_power = channel->sig.bb_power - noise_bandwidth * channel->sig.n0;
       float sn0 = sig_power/channel->sig.n0;
       snr = power2dB(sn0/noise_bandwidth);
-      fprintf(stdout,"%'13u %6s %'13.f %5.1f\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr);
+      fprintf(stdout,"%'13u %9s %'13.f %5.1f\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr);
+      last_ssrc = channel->output.rtp.ssrc;
     }
     fprintf(stdout,"Choose SSRC or create new: ");
     fflush(stdout);
