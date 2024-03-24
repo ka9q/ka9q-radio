@@ -461,25 +461,39 @@ int main(int argc,char *argv[]){
     fprintf(stdout,"%d channels\n",chan_count);
     qsort(channels,chan_count,sizeof(channels[0]),chan_compare);
 
-
-    fprintf(stdout,"%13s %9s %13s %5s %s\n","SSRC","preset","freq, Hz","SNR","data");
-
     fprintf(stdout,"Channel list:\n");
+    fprintf(stdout,"%13s %9s %13s %5s %s\n","SSRC","preset","freq, Hz","SNR","output channel");
     uint32_t last_ssrc = 0;
     for(int i=0; i < chan_count;i++){
       struct channel *channel = channels[i];
       if(channel == NULL || channel->output.rtp.ssrc == last_ssrc) // Skip dupes
 	continue;
 
-      float snr;
       float const noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
-      float sig_power = channel->sig.bb_power - noise_bandwidth * channel->sig.n0;
-      float sn0 = sig_power/channel->sig.n0;
-      snr = power2dB(sn0/noise_bandwidth);
-      // Should also call avahi-resolve-address to find dns name, but cache results since many are the same
-      char ip_addr_string[128];
-      formataddr(ip_addr_string,sizeof(ip_addr_string),&channel->output.data_dest_address);
-      fprintf(stdout,"%'13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr,ip_addr_string);
+      float const sig_power = channel->sig.bb_power - noise_bandwidth * channel->sig.n0;
+      float const sn0 = sig_power/channel->sig.n0;
+      float const snr = power2dB(sn0/noise_bandwidth);
+      char const *ip_addr_string = formatsock(&channel->output.data_dest_address);
+      char resolve_command[256];
+      snprintf(resolve_command,sizeof(resolve_command),"avahi-resolve-address %s",ip_addr_string);
+      {
+	char *cp = strchr(resolve_command,':'); // Remove :port field
+	if(cp != NULL)
+	  *cp = '\0';
+      }
+      FILE *fp = popen(resolve_command,"r");
+      char addr_and_name[256];
+      if(fp != NULL)
+	fgets(addr_and_name,sizeof(addr_and_name),fp);
+      else
+	strlcpy(addr_and_name,ip_addr_string,sizeof(addr_and_name));
+      pclose(fp);
+      {
+	char *cp = strchr(addr_and_name,'\n'); // eliminate newline at end of command output
+	if(cp != NULL)
+	  *cp = '\0';
+      }
+      fprintf(stdout,"%'13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr,addr_and_name);
       last_ssrc = channel->output.rtp.ssrc;
     }
     fprintf(stdout,"Choose SSRC or create new: ");
