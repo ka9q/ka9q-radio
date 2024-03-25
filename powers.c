@@ -39,7 +39,6 @@ static struct  option Options[] = {
   {"help", no_argument, NULL, 'h'},
   {"interval", required_argument, NULL, 'i'},
   {"ssrc", required_argument, NULL, 's'},
-  {"time-constant", required_argument, NULL, 't'},
   {"timeout", required_argument, NULL, 'T'},
   {"verbose", no_argument, NULL, 'v'},
   {"version", no_argument, NULL, 'V'},
@@ -62,7 +61,6 @@ int main(int argc,char *argv[]){
   float frequency = -1;
   int bins = 0;
   float bin_bw = 0;
-  float tc = 0;
   {
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
@@ -84,9 +82,6 @@ int main(int argc,char *argv[]){
 	break;
       case 's':
 	Ssrc = strtol(optarg,NULL,0); // Send to specific SSRC
-	break;
-      case 't':
-	tc = strtof(optarg,NULL);
 	break;
       case 'T':
 	Timeout = (int64_t)(BILLION * strtof(optarg,NULL)); // Retransmission timeout
@@ -151,8 +146,6 @@ int main(int argc,char *argv[]){
       encode_int(&bp,BIN_COUNT,bins);
     if(bin_bw > 0)
       encode_float(&bp,NONCOHERENT_BIN_BW,bin_bw);
-    if(tc > 0)
-      encode_float(&bp,INTEGRATE_TC,tc);
 
     encode_eol(&bp);
     int const command_len = bp - buffer;

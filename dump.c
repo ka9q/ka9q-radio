@@ -61,50 +61,11 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
 	FREE(d);
       }
       break;
-    case INPUT_DATA_SOURCE_SOCKET:
-      {
-	struct sockaddr_storage sock;
-	fprintf(fp,"in data src %s",formatsock(decode_socket(&sock,cp,optlen)));
-      }
-      break;
-    case INPUT_DATA_DEST_SOCKET:
-      {
-	struct sockaddr_storage sock;
-	fprintf(fp,"in data dst %s",formatsock(decode_socket(&sock,cp,optlen)));
-      }
-      break;
-    case INPUT_METADATA_SOURCE_SOCKET:
-      {
-	struct sockaddr_storage sock;
-	fprintf(fp,"in metadata src %s",formatsock(decode_socket(&sock,cp,optlen)));
-      }
-      break;
-    case INPUT_METADATA_DEST_SOCKET:      
-      {
-	struct sockaddr_storage sock;
-	fprintf(fp,"in metadata dst %s",formatsock(decode_socket(&sock,cp,optlen)));
-      }
-      break;
-    case INPUT_SSRC:
-      fprintf(fp,"in SSRC %'llu",(long long unsigned)decode_int64(cp,optlen));
-      break;
     case INPUT_SAMPRATE:
       fprintf(fp,"in samprate %'llu Hz",(long long unsigned)decode_int64(cp,optlen));
       break;
-    case INPUT_METADATA_PACKETS:
-      fprintf(fp,"in metadata packets %'llu",(long long unsigned)decode_int64(cp,optlen));
-      break;
-    case INPUT_DATA_PACKETS:
-      fprintf(fp,"in data packets %'llu",(long long unsigned)decode_int64(cp,optlen));
-      break;
     case INPUT_SAMPLES:
       fprintf(fp,"in samples %'llu",(long long unsigned)decode_int64(cp,optlen));
-      break;
-    case INPUT_DROPS:
-      fprintf(fp,"in drops %'llu",(long long unsigned)decode_int64(cp,optlen));
-      break;
-    case INPUT_DUPES:
-      fprintf(fp,"in dupes %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case OUTPUT_DATA_SOURCE_SOCKET:
       {
@@ -208,9 +169,6 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case FILTER_FIR_LENGTH:
       fprintf(fp,"filter M %'d",decode_int(cp,optlen));
       break;
-    case NOISE_BANDWIDTH:
-      fprintf(fp,"noise BW %'g Hz",decode_float(cp,optlen));
-      break;
     case IF_POWER:
       fprintf(fp,"IF pwr %'.1f dB",decode_float(cp,optlen));
       break;
@@ -297,9 +255,6 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case AGC_RECOVERY_RATE:
       fprintf(fp,"recovery rate %.1f dB/s",decode_float(cp,optlen));
       break;
-    case AGC_ATTACK_RATE:
-      fprintf(fp,"attack rate %.1f dB/s",decode_float(cp,optlen));
-      break;
     case AGC_THRESHOLD:
       fprintf(fp,"threshold %.1f dB",decode_float(cp,optlen));
       break;
@@ -311,30 +266,6 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
       break;
     case OUTPUT_SAMPLES:
       fprintf(fp,"output samp %'llu",(long long unsigned)decode_int64(cp,optlen));
-      break;
-    case OPUS_SOURCE_SOCKET:
-      {
-	struct sockaddr_storage sock;
-	fprintf(fp,"opus src %s",formatsock(decode_socket(&sock,cp,optlen)));
-      }
-      break;
-    case OPUS_DEST_SOCKET:
-      {
-	struct sockaddr_storage sock;
-	fprintf(fp,"opus dst %s",formatsock(decode_socket(&sock,cp,optlen)));
-      }
-      break;
-    case OPUS_SSRC:
-      fprintf(fp,"opus ssrc %'u",decode_int32(cp,optlen));
-      break;
-    case OPUS_TTL:
-      fprintf(fp,"opus ttl %d",decode_int(cp,optlen));
-      break;
-    case OPUS_BITRATE:
-      fprintf(fp,"opus rate %'d bps",decode_int(cp,optlen));
-      break;
-    case OPUS_PACKETS:
-      fprintf(fp,"opus pkts %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
     case FILTER_DROPS:
       fprintf(fp,"block drops %'u",(unsigned int)decode_int(cp,optlen));
@@ -376,9 +307,6 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
 	FREE(p);
       }
       break;
-    case COHERENT_BIN_BW:
-      fprintf(fp,"coherent bin bandwidth %.1f Hz",decode_float(cp,optlen));
-      break;
     case COHERENT_BIN_SPACING:
       fprintf(fp,"coherent bin spacing %.1f Hz",decode_float(cp,optlen));
       break;
@@ -387,9 +315,6 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
       break;
     case BIN_COUNT:
       fprintf(fp,"bins %d",decode_int(cp,optlen));
-      break;
-    case INTEGRATE_TC:
-      fprintf(fp,"integrate tc %.1f s",decode_float(cp,optlen));
       break;
     case RF_ATTEN:
       fprintf(fp,"rf atten %.1f dB",decode_float(cp,optlen));

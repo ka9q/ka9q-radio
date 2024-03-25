@@ -304,21 +304,6 @@ int decode_rtp_status(uint8_t const *buffer,int length){
       FREE(Description);
       Description = decode_string(cp,optlen);
       break;
-    case INPUT_METADATA_SOURCE_SOCKET:
-      {
-	struct sockaddr_storage tmp;
-	Input_metadata_source_socket = formatsock(decode_socket(&tmp,cp,optlen));
-      }	
-      break;
-    case INPUT_METADATA_DEST_SOCKET:
-      {
-	// this is the metadata from the front end. We'll create a socket of our own to monitor it
-	Input_metadata_dest_socket =formatsock(decode_socket(&Input_metadata_dest_address,cp,optlen));
-      }	
-      break;
-    case INPUT_SSRC:
-      Input_SSRC = decode_int(cp,optlen);
-      break;
     case OUTPUT_SSRC:
       Output_SSRC = decode_int(cp,optlen);
       break;

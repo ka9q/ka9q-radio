@@ -249,45 +249,6 @@ int decode_rtp_status(uint8_t const *buffer,int length){
     case CMD_CNT:
       Cmd_cnt = decode_int(cp,optlen);
       break;
-    case INPUT_DATA_SOURCE_SOCKET:
-      {
-	struct sockaddr_storage tmp;
-	Input_data_source_socket = formatsock(decode_socket(&tmp,cp,optlen));
-      }	
-      break;
-    case INPUT_DATA_DEST_SOCKET:
-      {
-	struct sockaddr_storage tmp;
-	Input_data_dest_socket = formatsock(decode_socket(&tmp,cp,optlen));
-      }	
-      break;
-    case INPUT_METADATA_SOURCE_SOCKET:
-      {
-	struct sockaddr_storage tmp;
-	Input_metadata_source_socket = formatsock(decode_socket(&tmp,cp,optlen));
-      }	
-      break;
-    case INPUT_METADATA_DEST_SOCKET:
-      {
-	struct sockaddr_storage tmp;
-	Input_metadata_dest_socket =formatsock(decode_socket(&tmp,cp,optlen));
-      }	
-      break;
-    case INPUT_SSRC:
-      Input_SSRC = decode_int(cp,optlen);
-      break;
-    case INPUT_METADATA_PACKETS:
-      Input_metadata_packets = decode_int(cp,optlen);
-      break;
-    case INPUT_DATA_PACKETS:
-      Input_data_packets = decode_int(cp,optlen);
-      break;
-    case INPUT_DROPS:
-      Input_drops = decode_int(cp,optlen);
-      break;
-    case INPUT_DUPES:
-      Input_dupes = decode_int(cp,optlen);
-      break;
     case OUTPUT_DATA_SOURCE_SOCKET:
       {
 	struct sockaddr_storage tmp;

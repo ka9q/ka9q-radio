@@ -378,6 +378,9 @@ int main(int argc,char * const argv[]){
 
 
 // Monitor and report to radio status channel (only if specified)
+// This code isn't finished, but we'll eventually accept a radiod command/status channel + SSRC
+// so we'll have to poll for the output stream address
+
 void * status(void *p){
   pthread_detach(pthread_self());
   pthread_setname("opstat");
@@ -391,7 +394,7 @@ void * status(void *p){
     fprintf(stderr,"Can't set up input on %s: %s\n",Status,strerror(errno));
     return NULL;
   }
-  // We will also emit our status to the radio status group
+  // We will poll the radio status group at a slow rate until we get our answer
   Status_out_fd = connect_mcast(&Status_dest_address,iface,Mcast_ttl,IP_tos);
   if(Status_out_fd == -1){
     fprintf(stderr,"Can't set up output on %s: %s\n",Status,strerror(errno));
@@ -426,90 +429,77 @@ void * status(void *p){
       continue;
 
     // Announce ourselves in response to commands
-    if((enum pkt_type)buffer[0] == CMD){
-      uint8_t packet[2048];
-      uint8_t *bp = packet;
-      *bp++ = STATUS; // Response (not a command)
-      encode_socket(&bp,OPUS_SOURCE_SOCKET,&Opus_source_address);
-      encode_socket(&bp,OPUS_DEST_SOCKET,&Opus_dest_address);
-      encode_int(&bp,OPUS_BITRATE,Opus_bitrate);
-      encode_int(&bp,OPUS_PACKETS,Output_packets);
-      encode_int(&bp,OPUS_TTL,Mcast_ttl);
-      // Add more later
-      encode_eol(&bp);
-      int const len = bp - packet;
-      if(len > 2)
-	send(Status_out_fd,packet,len,0);
-    } else {
-      // Parse radio status for PCM output socket
-      uint8_t const *cp = buffer+1;
+    if((enum pkt_type)buffer[0] != STATUS)
+      continue;
 
-      while(cp - buffer < length){
-	enum status_type const type = *cp++;
-	
-	if(type == EOL)
-	  break;
-	
-	unsigned int optlen = *cp++;
-	if(optlen & 0x80){
-	  // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
-	  int length_of_length = optlen & 0x7f;
-	  optlen = 0;
-	  while(length_of_length > 0){
-	    optlen <<= 8;
-	    optlen |= *cp++;
-	    length_of_length--;
-	  }
+    // Parse radio status for PCM output socket
+    uint8_t const *cp = buffer+1;
+    
+    while(cp - buffer < length){
+      enum status_type const type = *cp++;
+      
+      if(type == EOL)
+	break;
+      
+      unsigned int optlen = *cp++;
+      if(optlen & 0x80){
+	// length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+	int length_of_length = optlen & 0x7f;
+	optlen = 0;
+	while(length_of_length > 0){
+	  optlen <<= 8;
+	  optlen |= *cp++;
+	  length_of_length--;
 	}
-	if(cp - buffer + optlen > length)
-	  break;
-
-	// Should probably extract sample rate too, though we get it from the RTP payload type
-	switch(type){
-	case EOL:
-	  goto done;
-	case OUTPUT_DATA_DEST_SOCKET:
-	  {
-	    struct sockaddr_storage dest_temp;
-	    memset(&dest_temp,0,sizeof(dest_temp));
-	    decode_socket(&dest_temp,cp,optlen);
-	    if(address_match(&dest_temp,&PCM_dest_address)
-	       && getportnumber(&dest_temp) == getportnumber(&PCM_dest_address))
-	      break; // nothing changed
-
-	    // new or changed PCM multicast group
-	    if(Verbose)
-	      fprintf(stderr,"Listening for PCM on %s\n",formatsock(&dest_temp));
-
-	    int const fd = listen_mcast(&dest_temp,NULL); // Port address already in place
-	    if(fd == -1){
-	      if(Verbose){
-		fprintf(stderr,"Multicast listen on %s failed\n",formatsock(&dest_temp));
-	      }
-	      break;
-	    }
-	    pthread_mutex_lock(&Input_ready_mutex);
-	    if(Input_fd != -1)
-	      close(Input_fd);
-	    Input_fd = fd;
-	    memcpy(&PCM_dest_address,&dest_temp,sizeof(dest_temp));
-	    pthread_cond_broadcast(&Input_ready_cond);
-	    pthread_mutex_unlock(&Input_ready_mutex);
-	    
-	    // Cancel timeouts and polls
-	    struct timeval timeout;
-	    timeout.tv_sec = 0;
-	    timeout.tv_usec = 0;
-	    setsockopt(Status_fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
-	  }
-	  break;
-	default:  // Ignore all others for now
-	  break;
-	}
-	cp += optlen;
       }
+      if(cp - buffer + optlen > length)
+	break;
+      
+      // Should probably extract sample rate too, though we get it from the RTP payload type
+      switch(type){
+      case EOL:
+	goto done;
+      case OUTPUT_DATA_DEST_SOCKET:
+	{
+	  struct sockaddr_storage dest_temp;
+	  memset(&dest_temp,0,sizeof(dest_temp));
+	  decode_socket(&dest_temp,cp,optlen);
+	  if(address_match(&dest_temp,&PCM_dest_address)
+	     && getportnumber(&dest_temp) == getportnumber(&PCM_dest_address))
+	    break; // nothing changed
+	  
+	  // new or changed PCM multicast group
+	  if(Verbose)
+	    fprintf(stderr,"Listening for PCM on %s\n",formatsock(&dest_temp));
+	  
+	  int const fd = listen_mcast(&dest_temp,NULL); // Port address already in place
+	  if(fd == -1){
+	    if(Verbose){
+	      fprintf(stderr,"Multicast listen on %s failed\n",formatsock(&dest_temp));
+	    }
+	    break;
+	  }
+	  pthread_mutex_lock(&Input_ready_mutex);
+	  if(Input_fd != -1)
+	    close(Input_fd);
+	  Input_fd = fd;
+	  memcpy(&PCM_dest_address,&dest_temp,sizeof(dest_temp));
+	  pthread_cond_broadcast(&Input_ready_cond);
+	  pthread_mutex_unlock(&Input_ready_mutex);
+	  
+	  // Cancel timeouts and polls
+	  struct timeval timeout;
+	  timeout.tv_sec = 0;
+	  timeout.tv_usec = 0;
+	  setsockopt(Status_fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
+	}
+	break;
+      default:  // Ignore all others for now
+	break;
+      }
+      cp += optlen;
     }
-    done:;
+ done:;
   }
   return NULL;
 }

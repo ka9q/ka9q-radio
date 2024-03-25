@@ -579,11 +579,6 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
     break;
   case SPECT_DEMOD:
     {
-      float blockrate = 1000.0f / Blocktime; // Hz
-      encode_float(&bp,COHERENT_BIN_BW,blockrate);
-      int N = Frontend.L + Frontend.M - 1;
-      float spacing = (1 - (float)(Frontend.M-1)/N) * blockrate; // Hz
-      encode_float(&bp,COHERENT_BIN_SPACING, spacing);
       encode_float(&bp,NONCOHERENT_BIN_BW,chan->spectrum.bin_bw); // Hz
       encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
       // encode bin data here? maybe change this, it can be a lot
