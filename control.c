@@ -473,6 +473,8 @@ int main(int argc,char *argv[]){
       float const sn0 = sig_power/channel->sig.n0;
       float const snr = power2dB(sn0/noise_bandwidth);
       char const *ip_addr_string = formatsock(&channel->output.data_dest_address);
+      char addr_and_name[256];
+#if 0 // Clean this up before enabling
       char resolve_command[256];
       snprintf(resolve_command,sizeof(resolve_command),"avahi-resolve-address %s",ip_addr_string);
       {
@@ -481,7 +483,6 @@ int main(int argc,char *argv[]){
 	  *cp = '\0';
       }
       FILE *fp = popen(resolve_command,"r");
-      char addr_and_name[256];
       if(fp != NULL)
 	fgets(addr_and_name,sizeof(addr_and_name),fp);
       else
@@ -492,6 +493,9 @@ int main(int argc,char *argv[]){
 	if(cp != NULL)
 	  *cp = '\0';
       }
+#else
+      strlcpy(addr_and_name,ip_addr_string,sizeof(addr_and_name));
+#endif
       fprintf(stdout,"%13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr,addr_and_name);
       last_ssrc = channel->output.rtp.ssrc;
     }
