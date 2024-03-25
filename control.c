@@ -458,7 +458,6 @@ int main(int argc,char *argv[]){
 	}
       }
     }
-    fprintf(stdout,"%d channels\n",chan_count);
     qsort(channels,chan_count,sizeof(channels[0]),chan_compare);
 
     fprintf(stdout,"Channel list:\n");
@@ -493,7 +492,7 @@ int main(int argc,char *argv[]){
 	if(cp != NULL)
 	  *cp = '\0';
       }
-      fprintf(stdout,"%'13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr,addr_and_name);
+      fprintf(stdout,"%13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr,addr_and_name);
       last_ssrc = channel->output.rtp.ssrc;
     }
     fprintf(stdout,"Choose SSRC or create new: ");
