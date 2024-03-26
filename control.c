@@ -366,11 +366,12 @@ int main(int argc,char *argv[]){
   if(Use_browser){
     // Use avahi browser to find a radiod instance to control
     fprintf(stdout,"Scanning for radiod instances...\n");
-    struct service_tab table[1000];
+    int const table_size = 1000;
+    struct service_tab table[table_size];
 
-    int radiod_count = avahi_browse(table,1000,"_ka9q-ctl._udp"); // Returns list in global when cache is emptied
+    int radiod_count = avahi_browse(table,table_size,"_ka9q-ctl._udp"); // Returns list in global when cache is emptied
     if(radiod_count == 0){
-      fprintf(stdout,"No radiod targets, or Avahi not running, ; specify control channel manually\n");
+      fprintf(stdout,"No radiod instances or Avahi not running; specify control channel manually\n");
       exit(EX_UNAVAILABLE);
     }
     if(radiod_count == 1){
