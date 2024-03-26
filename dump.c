@@ -94,9 +94,6 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case OUTPUT_DATA_PACKETS:
       fprintf(fp,"data pkts %'llu",(long long unsigned)decode_int64(cp,optlen));
       break;
-    case AD_LEVEL:
-      fprintf(fp,"A/D level %.1f dB",decode_float(cp,optlen));
-      break;
     case AD_OVER:
       fprintf(fp,"A/D overrange: %llu",(long long unsigned)decode_int64(cp,optlen));
       break;

@@ -45,7 +45,7 @@ enum status_type {
   OUTPUT_DATA_PACKETS,
 
   // Hardware
-  AD_LEVEL,    // NO LONGER USED - use IF_POWER instead
+  UNUSED22,
   CALIBRATE,
   // Hardware-specific analog gains
   LNA_GAIN,
