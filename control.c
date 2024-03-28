@@ -392,10 +392,23 @@ int main(int argc,char *argv[]){
 	fprintf(stdout,"Index %d out of range, try again\n",n);
 	exit(EX_USAGE);
       }
-      int port = strtol(table[n].port,NULL,0);
-      // 'avahi-browse' returns the IP address, port and interface so we don't have to resolve them
-      // So this call to resolve_mcast() could be a direct conversion using a sockaddr utility
-      resolve_mcast(table[n].address,&Metadata_dest_address,port,NULL,0);
+      struct addrinfo *results = NULL;
+      struct addrinfo hints;
+      memset(&hints,0,sizeof(hints));
+      hints.ai_family = AF_INET; // IPv4 for now
+      hints.ai_socktype = SOCK_DGRAM;
+      hints.ai_protocol = IPPROTO_UDP;
+      hints.ai_flags = AI_ADDRCONFIG | AI_NUMERICHOST | AI_NUMERICSERV;
+      int const ecode = getaddrinfo(table[n].address,table[n].port,&hints,&results);
+      if(ecode != 0){
+	fprintf(stdout,"getaddrinfo: %s\n",gai_strerror(ecode));
+	exit(EX_IOERR);
+      }
+      // Use first entry on list -- much simpler
+      // I previously tried each entry in turn until one succeeded, but with UDP sockets and
+      // flags set to only return supported addresses, how could any of them fail?
+      memcpy(&Metadata_dest_address,results->ai_addr,sizeof(Metadata_dest_address));
+      freeaddrinfo(results); results = NULL;
       Status_fd = listen_mcast(&Metadata_dest_address,table[n].interface);
       Ctl_fd = connect_mcast(&Metadata_dest_address,table[n].interface,Mcast_ttl,IP_tos);
     }
@@ -430,20 +443,21 @@ int main(int argc,char *argv[]){
 
     send_poll(Ctl_fd,0xffffffff);
     // Read responses
-    struct channel **channels = (struct channel **)calloc(1024,sizeof(struct channel *));
+    int const chan_max = 1024;
+    struct channel **channels = (struct channel **)calloc(chan_max,sizeof(struct channel *));
 
     int chan_count;
-    for(chan_count = 0; chan_count < 1024;){
+    for(chan_count = 0; chan_count < chan_max;){
       int const npoll = 1;
       struct pollfd pollfd[npoll];
       pollfd[0].fd = Status_fd;
       pollfd[0].events = POLLIN;
       
-      int n = poll(pollfd,npoll,100);
+      int n = poll(pollfd,npoll,100); // 100 ms timeout
       if(n <= 0)
 	break; // Timeout or failure
       
-      if(pollfd[0].revents & POLLIN){
+      if(pollfd[0].revents & POLLIN){ // Should be true; do we need to test?
 	struct sockaddr_storage source_address;
 	socklen_t ssize = sizeof(source_address);
 	uint8_t buffer[PKTSIZE];	
@@ -470,35 +484,13 @@ int main(int argc,char *argv[]){
 	continue;
 
       float const noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
-      float const sig_power = channel->sig.bb_power - noise_bandwidth * channel->sig.n0;
+      float sig_power = channel->sig.bb_power - noise_bandwidth * channel->sig.n0;
+      if(sig_power < 0)
+	sig_power = 0; // Avoid log(-x) = nan
       float const sn0 = sig_power/channel->sig.n0;
       float const snr = power2dB(sn0/noise_bandwidth);
       char const *ip_addr_string = formatsock(&channel->output.data_dest_address);
-
-#if 0 // Clean this up before enabling
-      char resolve_command[256];
-      snprintf(resolve_command,sizeof(resolve_command),"avahi-resolve-address %s",ip_addr_string);
-      {
-	char *cp = strchr(resolve_command,':'); // Remove :port field
-	if(cp != NULL)
-	  *cp = '\0';
-      }
-      FILE *fp = popen(resolve_command,"r");
-      char addr_and_name[256];
-      if(fp != NULL)
-	fgets(addr_and_name,sizeof(addr_and_name),fp);
-      else
-	strlcpy(addr_and_name,ip_addr_string,sizeof(addr_and_name));
-      pclose(fp);
-      {
-	char *cp = strchr(addr_and_name,'\n'); // eliminate newline at end of command output
-	if(cp != NULL)
-	  *cp = '\0';
-      }
-      fprintf(stdout,"%13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr,addr_and_name);
-#else
       fprintf(stdout,"%13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr,ip_addr_string);
-#endif
       last_ssrc = channel->output.rtp.ssrc;
     }
     fprintf(stdout,"Choose SSRC or create new: ");
@@ -522,6 +514,7 @@ int main(int argc,char *argv[]){
   }
   struct channel Channel;
   struct channel *channel = &Channel;
+  init_demod(channel);
 
   // Set up display subwindows
   Tty = fopen("/dev/tty","r+");
