@@ -41,7 +41,7 @@ int Ctl_fd;     // File descriptor for receiving user commands
 
 extern dictionary const *Preset_table;
 
-static int send_radio_status(struct frontend *frontend,struct channel *chan);
+static int send_radio_status(int fd,struct frontend *frontend,struct channel *chan);
 static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
 static int encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, int len);
 static void *radio_status_dump(void *);
@@ -103,7 +103,7 @@ void *radio_status(void *arg){
 	  chan->lifetime = Channel_idle_timeout; // restart self-destruct timer
 	chan->commands++;
 	decode_radio_commands(chan,buffer+1,length-1);
-	send_radio_status(&Frontend,chan); // Send status in response
+	send_radio_status(Status_fd,&Frontend,chan); // Send status in response
       }
       break;
     }
@@ -138,7 +138,7 @@ static void *radio_status_dump(void *p){
 	continue; // Reserved for dynamic channel template or all-call polling
       chan->commands++;
       chan->command_tag = Tag;
-      send_radio_status(&Frontend,chan);
+      send_radio_status(Status_fd,&Frontend,chan);
 
       // Rate limit to 200/sec on average by randomly delaying 0-10 ms
       struct timespec sleeptime;
@@ -151,7 +151,7 @@ static void *radio_status_dump(void *p){
 }
 
 
-static int send_radio_status(struct frontend *frontend,struct channel *chan){
+static int send_radio_status(int fd,struct frontend *frontend,struct channel *chan){
   uint8_t packet[PKTSIZE];
 
   // Don't read status while channel thread is active
@@ -164,7 +164,7 @@ static int send_radio_status(struct frontend *frontend,struct channel *chan){
   chan->output.sum_gain_sq = 0;
   chan->blocks_since_poll = 0;
   pthread_mutex_unlock(&chan->lock);
-  send(Status_fd,packet,len,0);
+  send(fd,packet,len,0);
   return 0;
 }
 
