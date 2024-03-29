@@ -27,7 +27,6 @@ bool TempSendFailure = false;
 // Send PCM output on stream; # of channels implicit in chan->output.channels
 int send_output(struct channel * restrict const chan,float const * restrict buffer,int frames,bool const mute){
   assert(chan != NULL);
-  assert(chan->output.data_fd >= 0);
   if(frames <= 0 || chan->output.channels == 0 || chan->output.samprate == 0)
     return 0;
 
@@ -43,17 +42,13 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     chan->output.silent = true;
     return 0;
   }
-  if(chan->output.data_fd < 0){
-    fprintf(stdout,"ssrc %d: invalid output descriptor %d!\n",chan->output.rtp.ssrc,chan->output.data_fd);
-    return 0;
-  }
   int frames_per_pkt = 0;
-#ifdef IP_MTU
+#if 0 // IP_MTU // Broken by use of disconnected sockets, but no big deal
   {
     // We can get the MTU of the outbound interface, use it to calculate maximum packet size
     int mtu;
     socklen_t intsize = sizeof(mtu);
-    int r = getsockopt(chan->output.data_fd,IPPROTO_IP,IP_MTU,&mtu,&intsize);
+    int r = getsockopt(Output_fd,IPPROTO_IP,IP_MTU,&mtu,&intsize);
     if(r != 0){
       if(!GetSockOptFailed){
 	frames_per_pkt = SAMPLES_PER_PKT / chan->output.channels; // Default frames per packet for non-linux systems
@@ -92,7 +87,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
       *pcm_buf++ = htons(scaleclip(*buffer++));
 
     uint8_t const *dp = (uint8_t *)pcm_buf;
-    int r = send(chan->output.data_fd,&packet,dp - packet,0);
+    int r = sendto(Output_fd,&packet,dp - packet,0,(struct sockaddr *)&chan->output.data_dest_address,sizeof(chan->output.data_dest_address));
     chan->output.samples += chunk * chan->output.channels; // Count frames
     if(r <= 0){
       if(errno == EAGAIN && !TempSendFailure){
@@ -116,10 +111,5 @@ void output_cleanup(void *p){
   struct channel * const chan = p;
   if(chan == NULL)
     return;
-
-  if(chan->output.data_fd > 0){
-    close(chan->output.data_fd);
-    chan->output.data_fd = -1;
-  }
 }
 #endif

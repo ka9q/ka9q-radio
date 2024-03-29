@@ -245,6 +245,10 @@ void *demod_linear(void *arg){
     // When the gain is allowed to vary, the average gain won't be exactly consistent with the
     // average baseband (input) and output powers. But I still try to make it meaningful.
     chan->output.sum_gain_sq += start_gain * chan->output.gain; // accumulate square of approx average gain
+
+    // Periodically send status to data channel if configured and we're not muted
+    if(!mute)
+      data_channel_status(chan);
   }
  quit:;
   pthread_mutex_unlock(&chan->lock);

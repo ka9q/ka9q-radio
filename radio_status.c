@@ -34,14 +34,10 @@
 // If a dynamic channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
 static const int Channel_idle_timeout = 20;
 
-
-int Status_fd;  // File descriptor for receiver status
 int Ctl_fd;     // File descriptor for receiving user commands
-
 
 extern dictionary const *Preset_table;
 
-static int send_radio_status(int fd,struct frontend *frontend,struct channel *chan);
 static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
 static int encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, int len);
 static void *radio_status_dump(void *);
@@ -99,11 +95,13 @@ void *radio_status(void *arg){
 	}
 	assert(chan != NULL);
 	// lifetime != 0 indicates a dynamic channel
+	pthread_mutex_lock(&chan->lock);
 	if(chan->lifetime != 0)
 	  chan->lifetime = Channel_idle_timeout; // restart self-destruct timer
 	chan->commands++;
 	decode_radio_commands(chan,buffer+1,length-1);
-	send_radio_status(Status_fd,&Frontend,chan); // Send status in response
+	send_radio_status((struct sockaddr *)&Metadata_dest_address,&Frontend,chan); // Send status in response
+	pthread_mutex_unlock(&chan->lock);
       }
       break;
     }
@@ -136,9 +134,11 @@ static void *radio_status_dump(void *p){
 	continue;
       if(chan->output.rtp.ssrc == 0xffffffff || chan->output.rtp.ssrc == 0)
 	continue; // Reserved for dynamic channel template or all-call polling
+      pthread_mutex_lock(&chan->lock);
       chan->commands++;
       chan->command_tag = Tag;
-      send_radio_status(Status_fd,&Frontend,chan);
+      send_radio_status((struct sockaddr *)&Metadata_dest_address,&Frontend,chan);
+      pthread_mutex_unlock(&chan->lock);
 
       // Rate limit to 200/sec on average by randomly delaying 0-10 ms
       struct timespec sleeptime;
@@ -150,12 +150,35 @@ static void *radio_status_dump(void *p){
   return NULL;
 }
 
+// Send periodic status on *data* multicast group, if enabled
+int data_channel_status(struct channel *chan){
+  if(chan->status_rate != 0 && ++chan->status_counter >= chan->status_rate){
+    chan->status_counter = 0;
+    struct sockaddr_storage temp;
+    memcpy(&temp,&chan->output.data_dest_address,sizeof(temp));
+    switch(temp.ss_family){
+    case AF_INET:
+      {
+	struct sockaddr_in *sock = (struct sockaddr_in *)&temp;
+	sock->sin_port = htons(DEFAULT_STAT_PORT);
+      }
+      break;
+    case AF_INET6:
+      {
+	struct sockaddr_in6 *sock = (struct sockaddr_in6 *)&temp;
+	sock->sin6_port = htons(DEFAULT_STAT_PORT);
+      }
+      break;
+    }
+    send_radio_status((struct sockaddr *)&temp,&Frontend,chan);
+  }
+  return 0;
+}
 
-static int send_radio_status(int fd,struct frontend *frontend,struct channel *chan){
+
+int send_radio_status(struct sockaddr *sock,struct frontend *frontend,struct channel *chan){
   uint8_t packet[PKTSIZE];
 
-  // Don't read status while channel thread is active
-  pthread_mutex_lock(&chan->lock);
   Metadata_packets++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
   // Reset integrators
@@ -163,8 +186,7 @@ static int send_radio_status(int fd,struct frontend *frontend,struct channel *ch
   chan->output.energy = 0;
   chan->output.sum_gain_sq = 0;
   chan->blocks_since_poll = 0;
-  pthread_mutex_unlock(&chan->lock);
-  send(fd,packet,len,0);
+  sendto(Output_fd,packet,len,0,sock,sizeof(struct sockaddr));
   return 0;
 }
 
@@ -180,7 +202,6 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
   uint32_t const ssrc = chan->output.rtp.ssrc;
   
   uint8_t const *cp = buffer;
-  pthread_mutex_lock(&chan->lock); // Grab lock for entire set of commands
 
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
@@ -428,14 +449,18 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	}
       }
       break;
+    case STATUS_RATE:
+      {
+	int const x = decode_int(cp,optlen);
+	if(x >= 0)
+	  chan->status_rate = x;
+      }
     default:
       break;
     }
     cp += optlen;
   }
  done:;
-  pthread_mutex_unlock(&chan->lock);
-
   if(restart_needed){
     if(Verbose > 1)
       fprintf(stdout,"terminating chan thread for ssrc %'u\n",ssrc);
@@ -631,6 +656,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
     encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
     encode_int64(&bp,OUTPUT_METADATA_PACKETS,Metadata_packets);
     encode_byte(&bp,RTP_PT,chan->output.rtp.type);
+    encode_int32(&bp,STATUS_RATE,chan->status_rate);
   }
   // Don't send test points unless they're in use
   if(!isnan(chan->tp1))

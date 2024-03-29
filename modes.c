@@ -42,7 +42,8 @@ static float const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -
 static float const DEFAULT_GAIN = 50.0;         // Unused in FM, usually adjusted automatically in linear
 static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
 static float const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
-static int   const DEFAULT_SQUELCHTAIL = 1;        // close on frame *after* going below threshold, may let partial frame noise through
+static int   const DEFAULT_SQUELCHTAIL = 1;     // close on frame *after* going below threshold, may let partial frame noise through
+static int   const DEFAULT_UPDATE = 50;         // 1 Hz for a 20 ms frame time
 #if 0
 static int   const DEFAULT_FM_SAMPRATE = 24000;
 static float const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
@@ -72,7 +73,6 @@ int set_defaults(struct channel *chan){
   if(chan == NULL)
     return -1;
   
-  chan->output.data_fd = -1; // Force error if it's not set
   chan->tp1 = chan->tp2 = NAN;
   chan->tune.doppler = 0;
   chan->tune.doppler_rate = 0;
@@ -110,6 +110,7 @@ int set_defaults(struct channel *chan){
 	    Blocktime,chan->output.samprate,r);
   }
   chan->output.pacing = false;
+  chan->status_rate = DEFAULT_UPDATE;
   return 0;
 }
 

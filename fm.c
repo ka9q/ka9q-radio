@@ -265,6 +265,9 @@ void *demod_fm(void *arg){
     chan->output.energy += output_level;
     if(send_output(chan,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
+
+    // We're not muted; periodically send status to data channel if configured
+    data_channel_status(chan);
   } // while(!chan->terminate)
  quit:;
   pthread_mutex_unlock(&chan->lock);

@@ -343,6 +343,32 @@ int setup_mcast(char const * const target,struct sockaddr *sock,int const output
     return connect_mcast(sock,iface,ttl,tos);
 }
 
+// Join an existing socket to a multicast group without connecting it
+// Primarily useful for solving the smart switch problem described in connect_mcast() with unconnected sockets used with sendto()
+// Since many channels may send to the same multicast group, the joins can often fail with harmless "address already in use" messages
+// Note: only the IP address is significant, the port number is ignored
+int join_group(int fd,struct sockaddr const * const sock, char const * const iface,int const ttl,int const tos){
+  if(fd == -1 || sock == NULL)
+    return -1;
+
+  switch(sock->sa_family){
+  case AF_INET:
+    set_ipv4_options(fd,ttl,tos);
+    if(ipv4_join_group(fd,sock,iface) != 0)
+      fprintf(stderr,"connect_mcast join_group failed\n");
+    break;
+  case AF_INET6:
+    set_ipv6_options(fd,ttl,tos);
+    if(ipv6_join_group(fd,sock,iface) != 0)
+      fprintf(stderr,"connect_mcast join_group failed\n");
+    break;
+  default:
+    return -1;
+  }
+  return 0;
+}
+
+
 // Create a socket for sending to a multicast group
 int connect_mcast(void const * const s,char const * const iface,int const ttl,int const tos){
   if(s == NULL)
@@ -369,20 +395,9 @@ int connect_mcast(void const * const s,char const * const iface,int const ttl,in
   // But if the switches are set to pass unregistered multicasts, then IPv4 multicasts
   // that aren't subscribed to by anybody are flooded everywhere!
   // We avoid that by subscribing to our own multicasts.
-  switch(sock->sa_family){
-  case AF_INET:
-    set_ipv4_options(fd,ttl,tos);
-    if(ipv4_join_group(fd,sock,iface) != 0)
-      fprintf(stderr,"connect_mcast join_group failed\n");
-    break;
-  case AF_INET6:
-    set_ipv6_options(fd,ttl,tos);
-    if(ipv6_join_group(fd,sock,iface) != 0)
-      fprintf(stderr,"connect_mcast join_group failed\n");
-    break;
-  default:
+  if(join_group(fd,sock,iface,ttl,tos) == -1)
     return -1;
-  }
+
   if(connect(fd,sock,sizeof(struct sockaddr)) == -1){
     close(fd);
     return -1;
@@ -904,7 +919,7 @@ static int ipv4_join_group(int const fd,void const * const sock,char const * con
     mreqn.imr_ifindex = 0;
   else
     mreqn.imr_ifindex = if_nametoindex(iface);
-  if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0){
+  if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
     perror("multicast v4 join");
     return -1;
   }
@@ -931,7 +946,7 @@ static int ipv6_join_group(int const fd,void const * const sock,char const * con
 #ifndef IPV6_ADD_MEMBERSHIP
 #define IPV6_ADD_MEMBERSHIP IPV6_JOIN_GROUP      
 #endif
-  if(setsockopt(fd,IPPROTO_IP,IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0){
+  if(setsockopt(fd,IPPROTO_IP,IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
     perror("multicast v6 join");
     return -1;
   }

@@ -23,6 +23,7 @@ m/p          Preset demod mode
 o            Set/clear option flag
 r            Set refresh rate, s
 s            Set squelch, dB
+u	     Set data channel status update interval, frames, 0=off
 q            Quit program
 
 

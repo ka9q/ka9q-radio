@@ -112,7 +112,7 @@ struct channel *setup_chan(uint32_t ssrc){
   struct sockaddr_storage data_source_address;
   {
     socklen_t len = sizeof(data_source_address);
-    getsockname(chan->output.data_fd,(struct sockaddr *)&chan->output.data_source_address,&len);
+    getsockname(Output_fd,(struct sockaddr *)&chan->output.data_source_address,&len);
   }
   return chan;
 }
@@ -283,12 +283,14 @@ int kill_chan(struct channel **p){
   // Don't close these as they're often shared across chans
   // Really should keep a reference count so they can be closed when
   // the last chan using them closes
-  if(chan->output.rtcp_fd > 2)
+  if(chan->output.rtcp_fd > 2){
     close(chan->output.rtcp_fd);
-  if(chan->output.data_fd > 2)
-    close(chan->output.data_fd);
-  if(chan->output.sap_fd > 2)
+    chan->output.rtcp_fd = -1;
+  }
+  if(chan->output.sap_fd > 2){
     close(chan->output.sap_fd);
+    chan->output.sap_fd = -1;
+  }
 #endif
   FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);

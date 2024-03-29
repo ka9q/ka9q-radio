@@ -240,7 +240,6 @@ struct channel {
     struct sockaddr_storage data_dest_address;      // Dest of our data outputg (typically multicast)
     char data_dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
     
-    int data_fd;    // File descriptor for multicast output
     int rtcp_fd;    // File descriptor for RTP control protocol
     int sap_fd;     // Session announcement protocol (SAP) - experimental
     int channels;   // 1 = mono, 2 = stereo (settable)
@@ -266,6 +265,8 @@ struct channel {
   uint32_t command_tag;
   pthread_mutex_t lock;       // Protect statistics during updates and reads
   uint64_t blocks_since_poll; // Used for averaging signal levels
+  int status_rate;            // Automatically send status every "status_rate" frames to output multicast gropu
+  int status_counter;         // Count down from status_rate
 
   pthread_t sap_thread;
   pthread_t rtcp_thread;
@@ -283,8 +284,9 @@ extern int Active_channel_count;
 extern int const Channel_alloc_quantum;
 extern pthread_mutex_t Channel_list_mutex;
 
-extern int Status_fd;  // File descriptor for receiver status
 extern int Ctl_fd;     // File descriptor for receiving user commands
+extern int Output_fd;
+extern struct sockaddr_storage Metadata_dest_address;   // Source of SDR metadata
 
 extern char const *Presetfile;
 extern int Verbose;
@@ -325,6 +327,10 @@ void *demod_linear(void *);
 void *demod_spectrum(void *);
 void *demod_null(void *);
 
-// Send output to multicast streams
+// Send output to multicast group
 int send_output(struct channel * restrict ,const float * restrict,int,bool);
+// Send channel status to multicast group
+int send_radio_status(struct sockaddr *sock,struct frontend *frontend,struct channel *chan);
+// Send periodic status on *data* multicast group, if enabled
+int data_channel_status(struct channel *chan);
 #endif

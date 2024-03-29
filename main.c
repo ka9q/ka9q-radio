@@ -29,6 +29,7 @@
 #include <net/if.h>
 #include <sched.h>
 #include <sysexits.h>
+#include <fcntl.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -45,9 +46,10 @@ static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
 static int const DEFAULT_MCAST_TTL = 0; // Don't blast LANs with cheap Wifi!
 static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
+static int const DEFAULT_UPDATE = 50; // 1 Hz for 20 ms blocktime (50 Hz frame rate)
 
 char const *Iface;
-char const *Data;
+char *Data;
 char const *Preset = DEFAULT_PRESET;
 char Preset_file[PATH_MAX];
 char const *Config_file;
@@ -56,10 +58,10 @@ int IP_tos = DEFAULT_IP_TOS;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
 float Blocktime = DEFAULT_BLOCKTIME;
 int Overlap = DEFAULT_OVERLAP;
+int Update = DEFAULT_UPDATE;
 int RTCP_enable = false;
 int SAP_enable = false;
 struct sockaddr_storage Data_dest_address;
-int Data_fd = -1;
 struct channel *Template;
 
 char const *Name;
@@ -77,10 +79,10 @@ volatile bool Stop_transfers = false; // Request to stop data transfers; how sho
 static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 pthread_t Status_thread;
 pthread_t chan_reaper_thread;
-struct sockaddr_storage Metadata_source_address;   // Source of SDR metadata
 struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
 char const *Metadata_dest_string; // DNS name of default multicast group for ostatus/commands
 uint64_t Metadata_packets;
+int Output_fd = -1; // Unconnected socket used for all multicast output
 
 static void closedown(int);
 static void verbosity(int);
@@ -284,9 +286,25 @@ static int loadconfig(char const * const file){
     }
   }
   // Overrides in [global] of compiled-in defaults 
-  Data = config_getstring(Configtable,global,"data",NULL);
+  {
+    char const *data = config_getstring(Configtable,global,"data",NULL);
+    if(data != NULL)
+      Data = strdup(data);
+    else {
+      // Create a default from the instance name
+      // Let's hope it's unique! (Should test this)
+      asprintf(&Data,"%s-pcm",Name);
+    }
+  }
+  Update = config_getint(Configtable,global,"update",Update);
   IP_tos = config_getint(Configtable,global,"tos",IP_tos);
   Mcast_ttl = config_getint(Configtable,global,"ttl",Mcast_ttl);
+  Output_fd = socket(AF_INET,SOCK_DGRAM,0); // Eventually intended for all output with sendto()
+  if(Output_fd < 0){
+    fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
+    exit(EX_NOHOST); // let systemd restart us
+  }
+  fcntl(Output_fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
   if(Data != NULL){
     // Set up default output stream file descriptor and socket
     // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
@@ -299,12 +317,7 @@ static int loadconfig(char const * const file){
       addr = (239 << 24) | (addr & 0xffffff); // Force into site-local multicast space
       avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data,addr,ttlmsg,&Data_dest_address,&slen);
     }
-    Data_fd = connect_mcast(&Data_dest_address,Iface,Mcast_ttl,IP_tos);
-    if(Data_fd < 0){
-      fprintf(stdout,"connect_mcast(%s = %s) failed: %s\n",
-	      Data,formatsock(&Data_dest_address),strerror(errno));
-      exit(EX_NOHOST); // let systemd restart us, or have the user remove data =
-    }
+    join_group(Output_fd,(struct sockaddr *)&Data_dest_address,Iface,Mcast_ttl,IP_tos); // Work around snooping switch problem
   }
   Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",Blocktime));
   Overlap = abs(config_getint(Configtable,global,"overlap",Overlap));
@@ -312,7 +325,6 @@ static int loadconfig(char const * const file){
   RTCP_enable = config_getboolean(Configtable,global,"rtcp",RTCP_enable);
   SAP_enable = config_getboolean(Configtable,global,"sap",SAP_enable);
   {
-
     // Accept either keyword; "preset" is more descriptive than the old (but still accepted) "mode"
     char const *p = config_getstring(Configtable,global,"mode-file","presets.conf");
     p = config_getstring(Configtable,global,"presets-file",p);
@@ -323,7 +335,6 @@ static int loadconfig(char const * const file){
       exit(EX_UNAVAILABLE); // Can't really continue without fixing
     }
   }
-
   {
     char const *p = config_getstring(Configtable,global,"wisdom-file",NULL);
     if(p != NULL)
@@ -380,23 +391,16 @@ static int loadconfig(char const * const file){
       avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,addr,ttlmsg,&Metadata_dest_address,&slen);
     }
     // avahi_start has resolved the target DNS name into Metadata_dest_address and inserted the port number
-    Status_fd = connect_mcast(&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
-    if(Status_fd < 0){
-      fprintf(stdout,"Can't send status to %s: %s\n",Metadata_dest_string,strerror(errno));
-      exit(EX_NOHOST); // Let systemd retry us
-    } else {
-      socklen_t len = sizeof(Metadata_source_address);
-      getsockname(Status_fd,(struct sockaddr *)&Metadata_source_address,&len);  
-      // Same remote socket as status
-      Ctl_fd = listen_mcast(&Metadata_dest_address,Iface);
-      if(Ctl_fd < 0){
-	fprintf(stdout,"can't listen for commands from %s: %s\n",Metadata_dest_string,strerror(errno));
-	exit(EX_NOHOST);
-      }
+    join_group(Output_fd,(struct sockaddr *)&Metadata_dest_address,Iface,Mcast_ttl,IP_tos);
+    // Same remote socket as status
+    Ctl_fd = listen_mcast(&Metadata_dest_address,Iface);
+    if(Ctl_fd < 0){
+      fprintf(stdout,"can't listen for commands from %s: %s\n",Metadata_dest_string,strerror(errno));
+      exit(EX_NOHOST);
     }
   }
   // Set up template for dynamically created demods
-  if(Data != NULL && Data_fd != -1){
+  if(Data != NULL){
     // Preset/mode must be specified to create a dynamic channel
     // (Trying to switch from term "mode" to term "preset" as more descriptive)
     char const * p = config_getstring(Configtable,global,"preset",NULL);
@@ -414,7 +418,6 @@ static int loadconfig(char const * const file){
 	loadpreset(Template,Configtable,global); // Overwrite with other entries from this section, without overwriting those
 	memcpy(&Template->output.data_dest_address,&Data_dest_address,sizeof(Template->output.data_dest_address));
 	strlcpy(Template->output.data_dest_string,Data,sizeof(Template->output.data_dest_string));
-	Template->output.data_fd = Data_fd;
       }
     }
   }
@@ -449,9 +452,9 @@ static int loadconfig(char const * const file){
     int const mcast_ttl = config_getint(Configtable,sname,"ttl",Mcast_ttl);
     int const ip_tos = config_getint(Configtable,sname,"tos",IP_tos);
     char const *iface = config_getstring(Configtable,sname,"iface",Iface);
+    int const update = config_getint(Configtable,sname,"update",Update);
     
     struct sockaddr_storage data_dest_address;
-    int data_fd = -1;
     
     if(data != NULL){
       // 'data =' is specified in this section
@@ -466,11 +469,10 @@ static int loadconfig(char const * const file){
 	addr = (239 << 24) | (addr & 0xffffff); // Force into site-local multicast space
 	avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_address,&slen);
       }
-      data_fd = connect_mcast(&data_dest_address,iface,mcast_ttl,ip_tos);
+      join_group(Output_fd,(struct sockaddr *)&data_dest_address,iface,mcast_ttl,ip_tos);
     } else {
       // Data cannot be null or we wouldn't have gotten here
       memcpy(&data_dest_address,&Data_dest_address,sizeof(data_dest_address));
-      data_fd = Data_fd;
       data = Data;
     }
     // Process frequency/frequencies
@@ -538,17 +540,18 @@ static int loadconfig(char const * const file){
 	
 	memcpy(&chan->output.data_dest_address,&data_dest_address,sizeof(chan->output.data_dest_address));
 	strlcpy(chan->output.data_dest_string,data,sizeof(chan->output.data_dest_string));
-	chan->output.data_fd = data_fd;
 	
-	if(chan->output.data_fd <= 0){
-	  fprintf(stdout,"can't set up PCM output to %s: %s\n",data,strerror(errno));
-	  exit(EX_IOERR); // Let systemd retry us
-	}
+	// Set up socket for periodic automatic status messages to *output data* multicast group (distinct from global status on control/status group)
+	join_group(Output_fd,(struct sockaddr *)&chan->output.data_dest_address,iface,mcast_ttl,ip_tos);
+
 	// Get the local socket for the output stream
 	struct sockaddr_storage data_source_address;
 	{
+	  // Going connectionless with Output_fd broke this. The source port is filled in, but the source address is all zeroes because
+	  // it depends on the specific output address, which is only known from a routing table lookup. Oh well.
 	  socklen_t len = sizeof(data_source_address);
-	  getsockname(chan->output.data_fd,(struct sockaddr *)&chan->output.data_source_address,&len);
+	  if(getsockname(Output_fd,(struct sockaddr *)&chan->output.data_source_address,&len) == -1)
+	    perror("getsockname");
 	}
 	// Set RTP payload type from static table specific to ka9q-radio
 	// Should assign dynamically, but requires completion of SDP 
@@ -559,6 +562,7 @@ static int loadconfig(char const * const file){
 	  continue;
 	}
 	chan->output.rtp.type = type;
+	chan->status_rate = update;
 
 	// Time to start it -- ssrc is stashed by create_chan()
 	set_freq(chan,f);
@@ -590,7 +594,7 @@ static int loadconfig(char const * const file){
     }
   }
   // Start the status thread after all the receivers have been created so it doesn't contend for the chan list lock
-  if(Ctl_fd >= 3 && Status_fd >= 3)
+  if(Ctl_fd >= 3)
     pthread_create(&Status_thread,NULL,radio_status,NULL);
 
   pthread_create(&chan_reaper_thread,NULL,chan_reaper,NULL);

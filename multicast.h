@@ -130,6 +130,7 @@ int setup_mcast(char const *target,struct sockaddr *,int output,int ttl,int tos,
 static inline int setup_mcast_in(char const *target,struct sockaddr *sock,int offset){
   return setup_mcast(target,sock,0,0,0,offset);
 }
+int join_group(int fd,struct sockaddr const * const sock, char const * const iface,int const ttl,int const tos);
 int connect_mcast(void const *sock,char const *iface,int const ttl,int const tos);
 int listen_mcast(void const *sock,char const *iface);
 int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int iface_len);

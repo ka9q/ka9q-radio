@@ -51,8 +51,8 @@ static char Locale[256] = "en_US.UTF-8";
 static char const *Presets_file = "presets.conf"; // make configurable!
 static dictionary *Pdict;
 struct frontend Frontend;
-static struct sockaddr_storage Metadata_source_address;      // Source of metadata
-static struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
+struct sockaddr_storage Metadata_source_address;      // Source of metadata
+struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
 static uint64_t Block_drops; // Stored in output filter on sender, not in channel structure
 
 int Mcast_ttl = DEFAULT_MCAST_TTL;
@@ -248,7 +248,7 @@ static struct windef {
   {&Sig_win,15,25},
   {&Demodulator_win,15,26},
   {&Filtering_win,15,22},
-  {&Output_win,16,45},
+  {&Output_win,17,45},
 };
 #define NWINS (sizeof(Windefs) / sizeof(Windefs[0]))
 
@@ -878,6 +878,15 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       }
     }
     break;
+  case 'u':
+    {
+      char str[Entry_width],*ptr;
+      getentry("Data channel status rate ",str,sizeof(str));
+      int const b = strtol(str,&ptr,0);
+      if(ptr != str && b >= 0)
+	encode_int(bpp,STATUS_RATE,b);
+    }
+    break;
   default:
     beep();
     break;
@@ -997,8 +1006,6 @@ static int init_demod(struct channel *channel){
   channel->fm.pdeviation = channel->linear.cphase = channel->linear.lock_timer = NAN;
   channel->output.gain = NAN;
   channel->tp1 = channel->tp2 = NAN;
-
-  channel->output.data_fd = channel->output.rtcp_fd = -1;
   return 0;
 }
 
@@ -1295,6 +1302,9 @@ static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int
     case RTP_PT:
       channel->output.rtp.type = decode_int(cp,optlen);
       break;
+    case STATUS_RATE:
+      channel->status_rate = decode_int(cp,optlen);
+      break;
     default: // ignore others
       break;
     }
@@ -1573,6 +1583,7 @@ static void display_output(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_address),
 	   formatsock(&Metadata_dest_address));
   pprintw(w,row++,col,"Update interval","%'.2f sec",Refresh_rate);
+  pprintw(w,row++,col,"Status on data channel","%u",channel->status_rate);
   pprintw(w,row++,col,"Status pkts","%'llu",Metadata_packets);
   pprintw(w,row++,col,"Control pkts","%'llu",channel->commands);
   pprintw(w,row++,col,"Blocks since last poll","%'llu",channel->blocks_since_poll);
