@@ -179,7 +179,7 @@ int data_channel_status(struct channel *chan){
 int send_radio_status(struct sockaddr const *sock,struct frontend const *frontend,struct channel *chan){
   uint8_t packet[PKTSIZE];
 
-  Metadata_packets++;
+  chan->metadata_packets++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
   // Reset integrators
   chan->sig.bb_energy = 0;
@@ -646,7 +646,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     // Where we're sending PCM output
     encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&chan->output.data_dest_address);
     encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
-    encode_int64(&bp,OUTPUT_METADATA_PACKETS,Metadata_packets);
+    encode_int64(&bp,OUTPUT_METADATA_PACKETS,chan->metadata_packets);
     encode_byte(&bp,RTP_PT,chan->output.rtp.type);
     encode_int32(&bp,STATUS_RATE,chan->status_rate);
   }

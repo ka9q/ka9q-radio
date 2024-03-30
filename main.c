@@ -81,7 +81,6 @@ pthread_t Status_thread;
 pthread_t chan_reaper_thread;
 struct sockaddr_storage Metadata_dest_address;      // Dest of metadata (typically multicast)
 char const *Metadata_dest_string; // DNS name of default multicast group for ostatus/commands
-uint64_t Metadata_packets;
 int Output_fd = -1; // Unconnected socket used for all multicast output
 
 static void closedown(int);

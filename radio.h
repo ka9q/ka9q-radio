@@ -188,7 +188,7 @@ struct channel {
     float loop_bw;    // Loop bw (coherent modes)
     float cphase;     // Carrier phase change radians (DSB/PSK)
   } linear;
-  int hangcount;
+  int hangcount;      // AGC hang timer before gain recovery starts
 
   struct {
     struct pll pll;
@@ -266,7 +266,8 @@ struct channel {
   pthread_mutex_t lock;       // Protect statistics during updates and reads
   uint64_t blocks_since_poll; // Used for averaging signal levels
   int status_rate;            // Automatically send status every "status_rate" frames to output multicast gropu
-  int status_counter;         // Count down from status_rate
+  int status_counter;         // Counter up to status_rate
+  uint64_t metadata_packets;
 
   pthread_t sap_thread;
   pthread_t rtcp_thread;
