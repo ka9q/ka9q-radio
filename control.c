@@ -89,7 +89,7 @@ static void display_output(WINDOW *output,struct channel const *channel);
 static int process_keyboard(struct channel *,uint8_t **bpp,int c);
 static void process_mouse(struct channel *channel,uint8_t **bpp);
 static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int length);
-static int for_us(struct channel *channel,uint8_t const *buffer,int length,uint32_t ssrc);
+static bool for_us(struct channel *channel,uint8_t const *buffer,int length,uint32_t ssrc);
 static int init_demod(struct channel *channel);
 
 // Pop up a temporary window with the contents of a file in the
@@ -427,6 +427,15 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"Can't listen to mcast status channel: %s\n",strerror(errno));
     exit(EX_IOERR);
   }
+  {
+    // All reads from the status channel will have a timeout
+    // Should this be configurable?
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 200000; // 200k microsec = 200 millisec
+    if(setsockopt(Status_fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout)) == -1)
+      perror("setsock timeout");
+  }
   char presetsfile_path[PATH_MAX];
   if (dist_path(presetsfile_path,sizeof(presetsfile_path),Presets_file) == -1) {
     fprintf(stderr,"Could not find mode file %s\n", Presets_file);
@@ -449,30 +458,22 @@ int main(int argc,char *argv[]){
 
     int chan_count;
     for(chan_count = 0; chan_count < chan_max;){
-      int const npoll = 1;
-      struct pollfd pollfd[npoll];
-      pollfd[0].fd = Status_fd;
-      pollfd[0].events = POLLIN;
+      struct sockaddr_storage source_address;
+      socklen_t ssize = sizeof(source_address);
+      uint8_t buffer[PKTSIZE];	
+      int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize); // should not block
+      if(length == -1 && errno == EAGAIN)
+	break; // Timeout; we're done
+      // Ignore our own command packets
+      if(length < 2 || (enum pkt_type)buffer[0] != STATUS)
+	continue; // recvfrom timeout will return length = -1 and errno = EAGAIN
       
-      int n = poll(pollfd,npoll,100); // 100 ms timeout
-      if(n <= 0)
-	break; // Timeout or failure
-      
-      if(pollfd[0].revents & POLLIN){ // Should be true; do we need to test?
-	struct sockaddr_storage source_address;
-	socklen_t ssize = sizeof(source_address);
-	uint8_t buffer[PKTSIZE];	
-	int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize); // should not block
-	// Ignore our own command packets
-	if(length >= 2 && (enum pkt_type)buffer[0] == STATUS){
-	  // What to do with the source addresses?
-	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
-	  struct channel * const channel = calloc(1,sizeof(struct channel));
-	  init_demod(channel);
-	  decode_radio_status(channel,buffer+1,length-1);
-	  channels[chan_count++] = channel;
-	}
-      }
+      // What to do with the source addresses?
+      memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
+      struct channel * const channel = calloc(1,sizeof(struct channel));
+      init_demod(channel);
+      decode_radio_status(channel,buffer+1,length-1);
+      channels[chan_count++] = channel;
     }
     qsort(channels,chan_count,sizeof(channels[0]),chan_compare);
 
@@ -531,8 +532,6 @@ int main(int argc,char *argv[]){
   mousemask(mask,NULL);
   setup_windows();
 
-
-
   Frontend.frequency = Frontend.min_IF = Frontend.max_IF = NAN;
 
   /* Main loop:
@@ -568,37 +567,26 @@ int main(int argc,char *argv[]){
     uint8_t buffer[PKTSIZE];
     int length = 0;
     do {
-      int const npoll = 1;
-      struct pollfd pollfd[npoll];
-      pollfd[0].fd = Status_fd;
-      pollfd[0].events = POLLIN;
-
-      int n = poll(pollfd,npoll,100);
       now = gps_time_ns(); // poll() blocks, so update the time of day (only place we block)
-      if(n < 0){
-	wprintw(Debug_win,"poll() failure, %s\n",strerror(errno));
-	screen_update_needed = true;
-      }
-      if(pollfd[0].revents & POLLIN){
-	// Message from the radio program (or some transcoders)
-	struct sockaddr_storage source_address;
-	socklen_t ssize = sizeof(source_address);
-	length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize); // should not block
-	// Ignore our own command packets and responses to other SSIDs
-	if(length >= 2 && (enum pkt_type)buffer[0] == STATUS && for_us(channel,buffer+1,length-1,Ssrc) >= 0 ){
-	  // Process only if it's a response to our SSRC
-	  memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
-	  screen_update_needed = true;
+      // Message from the radio program (or some transcoders)
+      struct sockaddr_storage source_address;
+      socklen_t ssize = sizeof(source_address);
+      length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_address,&ssize); // should not block
+      // Ignore our own command packets and responses to other SSIDs
+      if(length < 2 || (enum pkt_type)buffer[0] != STATUS || !for_us(channel,buffer+1,length-1,Ssrc))
+	continue; // Can include a timeout
+
+      // Process only if it's a response to our SSRC
+      memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
+      screen_update_needed = true;
 #ifdef DEBUG_POLL 
-	  wprintw(Debug_win,"got response length %d\n",length);
+      wprintw(Debug_win,"got response length %d\n",length);
 #endif
-	  decode_radio_status(channel,buffer+1,length-1);
-	  // Postpone next poll to specified interval
-	  next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
-	  if(Blocktime == 0 && Frontend.samprate != 0)
-	    Blocktime = 1000.0f * Frontend.L / Frontend.samprate; // Set the firat time
-	}      
-      }
+      decode_radio_status(channel,buffer+1,length-1);
+      // Postpone next poll to specified interval
+      next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
+      if(Blocktime == 0 && Frontend.samprate != 0)
+	Blocktime = 1000.0f * Frontend.L / Frontend.samprate; // Set the firat time
     } while(now < start_of_recv_poll + recv_timeout);
     // Set up command buffer in case we want to change something
     uint8_t cmdbuffer[PKTSIZE];
@@ -1010,8 +998,8 @@ static int init_demod(struct channel *channel){
   return 0;
 }
 
-// Is response for us (1), or for somebody else (-1)?
-static int for_us(struct channel *channel,uint8_t const *buffer,int length,uint32_t ssrc){
+// Is response for us?
+static bool for_us(struct channel *channel,uint8_t const *buffer,int length,uint32_t ssrc){
   uint8_t const *cp = buffer;
   
   while(cp - buffer < length){
@@ -1040,8 +1028,8 @@ static int for_us(struct channel *channel,uint8_t const *buffer,int length,uint3
     case OUTPUT_SSRC: // If we've specified a SSRC, it must match it
       if(ssrc != 0){
 	if(decode_int32(cp,optlen) == ssrc)
-	  return 1; // For us
-	return -1; // For someone else
+	  return true; // For us
+	return false; // For someone else
       }
       break;
     default:
@@ -1050,7 +1038,7 @@ static int for_us(struct channel *channel,uint8_t const *buffer,int length,uint3
     cp += optlen;
   }
  done:;
-  return -1; // not specified, so not for us
+  return false; // not specified, so not for us
 }
 
 // Decode incoming status message from the radio program, convert and fill in fields in local channel structure
@@ -1118,7 +1106,7 @@ static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int
       channel->output.rtp.packets = decode_int64(cp,optlen);
       break;
     case OUTPUT_METADATA_PACKETS:
-      Metadata_packets = decode_int64(cp,optlen);      
+      channel->metadata_packets = decode_int64(cp,optlen);
       break;
     case FILTER_BLOCKSIZE:
       Frontend.L = decode_int(cp,optlen);
