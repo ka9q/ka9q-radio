@@ -431,7 +431,7 @@ int main(int argc,char *argv[]){
     // Should this be configurable?
     struct timeval timeout;
     timeout.tv_sec = 0;
-    timeout.tv_usec = 200000; // 200k microsec = 200 millisec
+    timeout.tv_usec = 100000; // 100k microsec = 100 millisec
     if(setsockopt(Status_fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout)) == -1)
       perror("setsock timeout");
   }
@@ -447,16 +447,20 @@ int main(int argc,char *argv[]){
   }
   atexit(display_cleanup);
   
+  struct channel **channels = NULL;
+  int chan_count = 0;
   while(Ssrc == 0){
-    // None specified, get a list, let user choose
-
+    // No channel specified; poll radiod for a list, sort and let user choose
+    // If responses are lost or delayed and the user gets an incomplete list, just hit return
+    // and we'll poll again. New entries will be added & existing entries will be updated
+    // though any that disappear from radiod will remain on the list (not a big deal here)
     send_poll(0xffffffff);
     // Read responses
     int const chan_max = 1024;
-    struct channel **channels = (struct channel **)calloc(chan_max,sizeof(struct channel *));
+    if(channels == NULL)
+      channels = (struct channel **)calloc(chan_max,sizeof(struct channel *));
 
-    int chan_count;
-    for(chan_count = 0; chan_count < chan_max;){
+    while(chan_count < chan_max){
       struct sockaddr_storage source_address;
       socklen_t ssize = sizeof(source_address);
       uint8_t buffer[PKTSIZE];	
@@ -465,18 +469,28 @@ int main(int argc,char *argv[]){
 	break; // Timeout; we're done
       // Ignore our own command packets
       if(length < 2 || (enum pkt_type)buffer[0] != STATUS)
-	continue; // recvfrom timeout will return length = -1 and errno = EAGAIN
+	continue;
       
       // What to do with the source addresses?
       memcpy(&Metadata_source_address,&source_address,sizeof(Metadata_source_address));
       struct channel * const channel = calloc(1,sizeof(struct channel));
       init_demod(channel);
       decode_radio_status(channel,buffer+1,length-1);
-      channels[chan_count++] = channel;
+      // Do we already have it?
+      int i;
+      for(i=0; i < chan_count; i++)
+	if(channels[i]->output.rtp.ssrc == channel->output.rtp.ssrc)
+	  break;
+      if(i < chan_count){
+	// Already in table, replace
+	assert(channels[i] != NULL);
+	FREE(channels[i]);
+	channels[i] = channel;
+      } else {
+	channels[chan_count++] = channel; // New one, add
+      }
     }
     qsort(channels,chan_count,sizeof(channels[0]),chan_compare);
-
-    fprintf(stdout,"Channel list:\n");
     fprintf(stdout,"%13s %9s %13s %5s %s\n","SSRC","preset","freq, Hz","SNR","output channel");
     uint32_t last_ssrc = 0;
     for(int i=0; i < chan_count;i++){
@@ -494,25 +508,24 @@ int main(int argc,char *argv[]){
       fprintf(stdout,"%13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr,ip_addr_string);
       last_ssrc = channel->output.rtp.ssrc;
     }
-    fprintf(stdout,"Choose SSRC or create new: ");
+    fprintf(stdout,"%d channels; choose SSRC, create new SSRC, or hit return to look for more: ",chan_count);
     fflush(stdout);
     char line[128];
     if(fgets(line,sizeof(line),stdin) == NULL || feof(stdin) || ferror(stdin)){
       fprintf(stdout,"EOF on input, exiting\n");
       exit(EX_USAGE);
     }
-    int n = strtol(line,NULL,0);
-    if(n <= 0){
-      fprintf(stdout,"Try again\n");
-    } else {
-      Ssrc = n;
-    }
-    for(int i=0; i < chan_count; i++){
-      if(channels[i] != NULL)
-	FREE(channels[i]);
-    }
-    FREE(channels);
+    int const n = strtol(line,NULL,0);
+    if(n > 0)
+      Ssrc = n; // Will cause a break from this loop
   }
+  // Free channel structures and pointer array, if they were used
+  for(int i=0; i < chan_count; i++){
+    if(channels[i] != NULL)
+      FREE(channels[i]);
+  }
+  FREE(channels);
+
   struct channel Channel;
   struct channel *channel = &Channel;
   init_demod(channel);
@@ -566,7 +579,7 @@ int main(int argc,char *argv[]){
     uint8_t buffer[PKTSIZE];
     int length = 0;
     do {
-      now = gps_time_ns(); // poll() blocks, so update the time of day (only place we block)
+      now = gps_time_ns();
       // Message from the radio program (or some transcoders)
       struct sockaddr_storage source_address;
       socklen_t ssize = sizeof(source_address);
