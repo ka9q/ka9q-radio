@@ -29,6 +29,7 @@
 #include <pthread.h>
 #include <sched.h>
 #include <sysexits.h>
+#include <fcntl.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -95,7 +96,6 @@ pthread_mutex_t Input_ready_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t Input_ready_cond = PTHREAD_COND_INITIALIZER;
 
 int Status_fd = -1;           // Reading from radio status
-int Status_out_fd = -1;       // Writing to radio status
 int Input_fd = -1;            // Multicast receive socket
 int Output_fd = -1;           // Multicast receive socket
 struct session *Sessions;
@@ -104,7 +104,6 @@ uint64_t Output_packets;
 char const *Name;
 char const *Output;
 char const *Input;
-char const *Status;
 
 void closedown(int);
 struct session *lookup_session(const struct sockaddr *,uint32_t);
@@ -113,8 +112,6 @@ int close_session(struct session **);
 int send_samples(struct session *sp);
 void *input(void *arg);
 void *encode(void *arg);
-void *status(void *);
-static int send_poll(int fd,int ssrc);
 
 struct option Options[] =
   {
@@ -123,7 +120,6 @@ struct option Options[] =
    {"block-time", required_argument, NULL, 'B'},
    {"pcm-in", required_argument, NULL, 'I'},
    {"name", required_argument, NULL, 'N'},
-   {"status-in", required_argument, NULL, 'S'},
    {"opus-out", required_argument, NULL, 'R'},
    {"ttl", required_argument, NULL, 'T'},
    {"fec", no_argument, NULL, 'f'},
@@ -143,15 +139,11 @@ struct option Options[] =
 
   };
    
-char const Optstring[] = "A:B:I:N:R:S:T:fo:vxp:V";
+char const Optstring[] = "A:B:I:N:R:T:fo:vxp:V";
 
-struct sockaddr_storage Status_dest_address;
-struct sockaddr_storage Status_input_source_address;
-struct sockaddr_storage Local_status_source_address;
 struct sockaddr_storage PCM_dest_address;
 struct sockaddr_storage PCM_source_address;
 struct sockaddr_storage Opus_dest_address;
-struct sockaddr_storage Opus_source_address;
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
@@ -176,9 +168,6 @@ int main(int argc,char * const argv[]){
     case 'R':
       Output = optarg;
       break;
-    case 'S':
-      Status = optarg;
-      break;
     case 'p':
       IP_tos = strtol(optarg,NULL,0);
       break;
@@ -189,7 +178,7 @@ int main(int argc,char * const argv[]){
       Fec_enable = true;
       break;
     case 'o':
-     Opus_bitrate = strtol(optarg,NULL,0);
+      Opus_bitrate = strtol(optarg,NULL,0);
       break;
     case 'v':
       Verbose++;
@@ -210,7 +199,7 @@ int main(int argc,char * const argv[]){
       fprintf(stderr,"Usage: %s [-V|--version] [-l |--lowdelay|--low-delay |-s | --speech | --voice] \
 [-x|--discontinuous] [-v|--verbose] [-f|--fec] [-p|--iptos|--tos|--ip-tos tos|] \
 [-o|--bitrate|--bit-rate bitrate] [-B|--blocktime|--block-time --blocktime] [-N|--name name] \
-[-T|--ttl ttl] [-A|--iface iface] [-I|--pcm-in input_mcast_address | -S|--status-in input_status_address] \
+[-T|--ttl ttl] [-A|--iface iface] [-I|--pcm-in input_mcast_address ] \
 -R|--opus-out output_mcast_address\n",argv[0]);
       exit(EX_USAGE);
     }
@@ -244,16 +233,8 @@ int main(int argc,char * const argv[]){
     }
   }
 
-  if(Status){
-    pthread_create(&Status_thread,NULL,status,NULL);
-
-    // Wait until the status thread discovers the input PCM stream
-    pthread_mutex_lock(&Input_ready_mutex);
-    while(Input_fd == -1)
-      pthread_cond_wait(&Input_ready_cond,&Input_ready_mutex);
-    pthread_mutex_unlock(&Input_ready_mutex);
-  } else if(Input == NULL){
-    fprintf(stderr,"Must specify either --status-in or --pcm-in\n");
+  if(Input == NULL){
+    fprintf(stderr,"Must specify --pcm-in\n");
     exit(EX_USAGE);
   }
 
@@ -267,16 +248,14 @@ int main(int argc,char * const argv[]){
   // Can't resolve this until the avahi service is started
   if(strlen(iface) == 0 && Default_mcast_iface != NULL)
     strlcpy(iface,Default_mcast_iface,sizeof(iface));
-  Output_fd = connect_mcast(&Opus_dest_address,iface,Mcast_ttl,IP_tos);
-
-  if(Output_fd == -1){
-    fprintf(stderr,"Can't set up output on %s: %s\n",Output,strerror(errno));
-    exit(EX_IOERR);
+  
+  Output_fd = socket(AF_INET,SOCK_DGRAM,0); // Eventually intended for all output with sendto()
+  if(Output_fd < 0){
+    fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
+    exit(EX_OSERR); // let systemd restart us
   }
-  {
-    socklen_t len = sizeof(Opus_source_address);
-    getsockname(Output_fd,(struct sockaddr *)&Opus_source_address,&len);
-  }
+  fcntl(Output_fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
+  join_group(Output_fd,(struct sockaddr *)&Opus_dest_address,iface,Mcast_ttl,IP_tos);
 
   // Graceful signal catch
   signal(SIGPIPE,closedown);
@@ -376,135 +355,6 @@ int main(int argc,char * const argv[]){
     }
   }      
 }
-
-
-// Monitor and report to radio status channel (only if specified)
-// This code isn't finished, but we'll eventually accept a radiod command/status channel + SSRC
-// so we'll have to poll for the output stream address
-
-void * status(void *p){
-  pthread_detach(pthread_self());
-  pthread_setname("opstat");
-
-  char iface[1024];
-  resolve_mcast(Status,&Status_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
-  if(strlen(iface) == 0 && Default_mcast_iface != NULL)
-    strlcpy(iface,Default_mcast_iface,sizeof(iface));
-  Status_fd = listen_mcast(&Status_dest_address,iface);
-  if(Status_fd == -1){
-    fprintf(stderr,"Can't set up input on %s: %s\n",Status,strerror(errno));
-    return NULL;
-  }
-  // We will poll the radio status group at a slow rate until we get our answer
-  Status_out_fd = connect_mcast(&Status_dest_address,iface,Mcast_ttl,IP_tos);
-  if(Status_out_fd == -1){
-    fprintf(stderr,"Can't set up output on %s: %s\n",Status,strerror(errno));
-    return NULL;
-  }
-  {
-    socklen_t len;
-    len = sizeof(Local_status_source_address);
-    getsockname(Status_out_fd,(struct sockaddr *)&Local_status_source_address,&len);
-  }
-  if(Input_fd == -1){
-    // Timeout reads so we'll poll until we get a radio status message wth the PCM stream socket
-    struct timeval timeout;
-    timeout.tv_sec = 1;
-    timeout.tv_usec = 0;
-    setsockopt(Status_fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
-  }
-
-  while(true){
-    socklen_t socklen = sizeof(Status_input_source_address);
-    uint8_t buffer[16384];
-    int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
-    if(length <= 0){
-      if(errno == EAGAIN || errno == ETIMEDOUT)
-	send_poll(Status_out_fd,0); // Timeout; send poll
-      continue;
-    }
-
-    // We MUST ignore our own packets, or we'll loop!
-    if(address_match(&Status_input_source_address,&Local_status_source_address)
-       && getportnumber(&Status_input_source_address) == getportnumber(&Local_status_source_address))
-      continue;
-
-    // Announce ourselves in response to commands
-    if((enum pkt_type)buffer[0] != STATUS)
-      continue;
-
-    // Parse radio status for PCM output socket
-    uint8_t const *cp = buffer+1;
-    
-    while(cp - buffer < length){
-      enum status_type const type = *cp++;
-      
-      if(type == EOL)
-	break;
-      
-      unsigned int optlen = *cp++;
-      if(optlen & 0x80){
-	// length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
-	int length_of_length = optlen & 0x7f;
-	optlen = 0;
-	while(length_of_length > 0){
-	  optlen <<= 8;
-	  optlen |= *cp++;
-	  length_of_length--;
-	}
-      }
-      if(cp - buffer + optlen > length)
-	break;
-      
-      // Should probably extract sample rate too, though we get it from the RTP payload type
-      switch(type){
-      case EOL:
-	goto done;
-      case OUTPUT_DATA_DEST_SOCKET:
-	{
-	  struct sockaddr_storage dest_temp;
-	  memset(&dest_temp,0,sizeof(dest_temp));
-	  decode_socket(&dest_temp,cp,optlen);
-	  if(address_match(&dest_temp,&PCM_dest_address)
-	     && getportnumber(&dest_temp) == getportnumber(&PCM_dest_address))
-	    break; // nothing changed
-	  
-	  // new or changed PCM multicast group
-	  if(Verbose)
-	    fprintf(stderr,"Listening for PCM on %s\n",formatsock(&dest_temp));
-	  
-	  int const fd = listen_mcast(&dest_temp,NULL); // Port address already in place
-	  if(fd == -1){
-	    if(Verbose){
-	      fprintf(stderr,"Multicast listen on %s failed\n",formatsock(&dest_temp));
-	    }
-	    break;
-	  }
-	  pthread_mutex_lock(&Input_ready_mutex);
-	  if(Input_fd != -1)
-	    close(Input_fd);
-	  Input_fd = fd;
-	  memcpy(&PCM_dest_address,&dest_temp,sizeof(dest_temp));
-	  pthread_cond_broadcast(&Input_ready_cond);
-	  pthread_mutex_unlock(&Input_ready_mutex);
-	  
-	  // Cancel timeouts and polls
-	  struct timeval timeout;
-	  timeout.tv_sec = 0;
-	  timeout.tv_usec = 0;
-	  setsockopt(Status_fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
-	}
-	break;
-      default:  // Ignore all others for now
-	break;
-      }
-      cp += optlen;
-    }
- done:;
-  }
-  return NULL;
-}
-
 
 // Per-SSRC thread - does actual Opus encoding
 // Warning! do not use "continue" within the loop as this will cause a memory leak.
@@ -789,7 +639,7 @@ int send_samples(struct session * const sp){
     
     if(!Discontinuous || opus_output_bytes > 2){
       // ship it
-      if(send(Output_fd,output_buffer,packet_bytes_written,0) < 0)
+      if(sendto(Output_fd,output_buffer,packet_bytes_written,0,(struct sockaddr *)&Opus_dest_address,sizeof(struct sockaddr)) < 0)
 	return -1;
       Output_packets++; // all sessions
       sp->rtp_state_out.seq++; // Increment only if packet is sent
@@ -806,20 +656,4 @@ int send_samples(struct session * const sp){
     pcm_samples_written += frame_size * sp->channels;
   }
   return pcm_samples_written;
-}
-// Send empty poll command on specified descriptor
-static int send_poll(int fd,int ssrc){
-  uint8_t cmdbuffer[128];
-  uint8_t *bp = cmdbuffer;
-  *bp++ = 1; // Command
-
-  uint32_t tag = random();
-  encode_int(&bp,COMMAND_TAG,tag);
-  encode_int(&bp,OUTPUT_SSRC,ssrc); // poll specific SSRC, or request ssrc list with ssrc = 0
-  encode_eol(&bp);
-  int const command_len = bp - cmdbuffer;
-  if(send(fd, cmdbuffer, command_len, 0) != command_len)
-    return -1;
-
-  return 0;
 }
