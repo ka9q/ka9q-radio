@@ -22,20 +22,23 @@
 extern int Mcast_ttl;
 extern int IP_tos;
 
+enum encoding {
+  S16LE = 1,
+  S16BE,
+  OPUS,
+  F32,
+  AX25,
+};
+
 struct pt_table {
   int samprate;
   int channels;
-  enum {
-    S16LE = 1,
-    S16BE,
-    OPUS,
-    F32,
-    AX25,
-  } encoding;
+  enum encoding encoding;
 };
+
 extern struct pt_table PT_table[];
-extern int Opus_pt; // Allow dynamic setting in the future
-extern int AX25_pt;
+extern int const Opus_pt; // Allow dynamic setting in the future
+extern int const AX25_pt;
 
 // Internal representation of RTP header -- NOT what's on wire!
 struct rtp_header {
@@ -137,6 +140,8 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
 int setportnumber(void *sock,uint16_t port);
 int getportnumber(void const *sock);
 int address_match(void const *arg1,void const *arg2);
+
+int add_pt(int type, int samprate, int channels, enum encoding encoding);
 
 // Function to process incoming RTP packet headers
 // Returns number of samples dropped or skipped by silence suppression, if any

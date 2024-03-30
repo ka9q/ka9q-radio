@@ -330,7 +330,7 @@ void *demod_null(void *);
 // Send output to multicast group
 int send_output(struct channel * restrict ,const float * restrict,int,bool);
 // Send channel status to multicast group
-int send_radio_status(struct sockaddr *sock,struct frontend *frontend,struct channel *chan);
+int send_radio_status(struct sockaddr const *sock,struct frontend const *frontend,struct channel *chan);
 // Send periodic status on *data* multicast group, if enabled
 int data_channel_status(struct channel *chan);
 #endif

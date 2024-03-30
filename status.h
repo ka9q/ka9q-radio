@@ -169,6 +169,7 @@ uint64_t decode_int64(uint8_t const *,int);
 uint32_t decode_int32(uint8_t const *,int);
 uint16_t decode_int16(uint8_t const *,int);
 uint8_t decode_int8(uint8_t const *,int);
+bool decode_bool(uint8_t const *,int);
 int decode_int(uint8_t const *,int);
 
 float decode_float(uint8_t const *,int);
@@ -180,6 +181,5 @@ uint32_t get_ssrc(uint8_t const *buffer,int length);
 uint32_t get_tag(uint8_t const *buffer,int length);
 
 void dump_metadata(FILE *,uint8_t const *,int,bool);
-int send_poll(int fd,int ssrc);
 
 #endif

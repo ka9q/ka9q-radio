@@ -233,6 +233,10 @@ uint16_t decode_int16(uint8_t const *cp,int len){
 uint8_t decode_int8(uint8_t const *cp,int len){
   return decode_int64(cp,len) & 0xff;
 }
+bool decode_bool(uint8_t const *cp,int len){
+  return decode_int64(cp,len) ? true : false;
+}
+
 int decode_int(uint8_t const *cp,int len){
   return decode_int64(cp,len) & UINT_MAX; // mask to the size of an int
 }

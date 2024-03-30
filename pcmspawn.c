@@ -71,6 +71,7 @@ struct session *create_session(void);
 int close_session(struct session *);
 int send_samples(struct session *sp);
 void *status(void *);
+static int send_poll(int fd,int ssrc);
 
 struct option Options[] =
   {
@@ -455,4 +456,20 @@ void closedown(int s){
 
   pthread_mutex_destroy(&Session_protect);
   exit(EX_SOFTWARE);
+}
+// Send empty poll command on specified descriptor
+static int send_poll(int fd,int ssrc){
+  uint8_t cmdbuffer[128];
+  uint8_t *bp = cmdbuffer;
+  *bp++ = 1; // Command
+
+  uint32_t tag = random();
+  encode_int(&bp,COMMAND_TAG,tag);
+  encode_int(&bp,OUTPUT_SSRC,ssrc); // poll specific SSRC, or request ssrc list with ssrc = 0
+  encode_eol(&bp);
+  int const command_len = bp - cmdbuffer;
+  if(send(fd, cmdbuffer, command_len, 0) != command_len)
+    return -1;
+
+  return 0;
 }

@@ -255,10 +255,7 @@ void *demod_wfm(void *arg){
       assert(chan->output.channels == 2); // Has to be, to get here
       if(send_output(chan,(const float *)stereo_buffer,audio_L,false) < 0)
 	break; // No output stream! Terminate
-      if(chan->status_rate != 0 && ++chan->status_counter >= chan->status_rate){
-	chan->status_counter = 0;
-	send_radio_status((struct sockaddr *)&chan->output.data_dest_address,&Frontend,chan);
-      }
+      data_channel_status(chan);
     } else { // pilot_present == false
       // Mono processing
       float output_level = 0;

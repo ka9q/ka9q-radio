@@ -39,7 +39,7 @@ int Ctl_fd;     // File descriptor for receiving user commands
 extern dictionary const *Preset_table;
 
 static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
-static int encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, int len);
+static int encode_radio_status(struct frontend const *frontend,struct channel const *chan,uint8_t *packet, int len);
 static void *radio_status_dump(void *);
   
 static pthread_t status_dump_thread;
@@ -59,7 +59,7 @@ void *radio_status(void *arg){
 
   while(true){
     // Command from user
-    uint8_t buffer[8192];
+    uint8_t buffer[PKTSIZE];
     int const length = recv(Ctl_fd,buffer,sizeof(buffer),0);
     if(length <= 0 || (enum pkt_type)buffer[0] != CMD)
       continue; // short packet, or a response; ignore
@@ -176,7 +176,7 @@ int data_channel_status(struct channel *chan){
 }
 
 
-int send_radio_status(struct sockaddr *sock,struct frontend *frontend,struct channel *chan){
+int send_radio_status(struct sockaddr const *sock,struct frontend const *frontend,struct channel *chan){
   uint8_t packet[PKTSIZE];
 
   Metadata_packets++;
@@ -190,12 +190,6 @@ int send_radio_status(struct sockaddr *sock,struct frontend *frontend,struct cha
   return 0;
 }
 
-
-// Decode and save incoming status from either SDR front end or from radio program
-// from indicates source of message: from SDR front end or from radio program
-// cmd == 1 means this is a command, only allow certain items
-
-// with SSRC selection, should scan entire command for our SSRC before we execute any of it
 static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length){
   bool restart_needed = false;
   bool new_filter_needed = false;
@@ -204,7 +198,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
   uint8_t const *cp = buffer;
 
   while(cp - buffer < length){
-    enum status_type type = *cp++; // increment cp to length field
+    enum status_type const type = *cp++; // increment cp to length field
 
     if(type == EOL)
       break; // end of list, no length
@@ -232,7 +226,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
     case OUTPUT_SAMPRATE:
       // Restart the demodulator to recalculate filters, etc
       {
-	int new_sample_rate = decode_int(cp,optlen);
+	int const new_sample_rate = decode_int(cp,optlen);
 	if(new_sample_rate != chan->output.samprate){
 	  chan->output.samprate = new_sample_rate;
 	  restart_needed = true;
@@ -260,8 +254,6 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	  set_first_LO(chan,f); // Will ignore it if there's no change
       }
       break;
-    case SECOND_LO_FREQUENCY: // Hz
-      break; // No longer directly settable; change the first LO to do it indirectly
     case SHIFT_FREQUENCY: // Hz
       {
 	double const f = decode_double(cp,optlen);
@@ -348,11 +340,11 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	}
       }
       break;
-    case INDEPENDENT_SIDEBAND: // bool
-      chan->filter.isb = decode_int8(cp,optlen); // will reimplement someday
+    case INDEPENDENT_SIDEBAND:
+      chan->filter.isb = decode_bool(cp,optlen); // will reimplement someday
       break;
-    case THRESH_EXTEND: // bool
-      chan->fm.threshold = decode_int8(cp,optlen);
+    case THRESH_EXTEND:
+      chan->fm.threshold = decode_bool(cp,optlen);
       break;
     case HEADROOM: // dB -> voltage, always negative dB
       {
@@ -361,8 +353,8 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	  chan->output.headroom = dB2voltage(-fabsf(f));
       }
       break;
-    case AGC_ENABLE: // bool
-      chan->linear.agc = decode_int8(cp,optlen);
+    case AGC_ENABLE:
+      chan->linear.agc = decode_bool(cp,optlen);
       break;
     case GAIN:
       {
@@ -394,8 +386,8 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	  chan->linear.threshold = dB2voltage(-fabsf(f));
       }
       break;
-    case PLL_ENABLE: // bool
-      chan->linear.pll = decode_int8(cp,optlen);
+    case PLL_ENABLE:
+      chan->linear.pll = decode_bool(cp,optlen);
       break;
     case PLL_BW:
       {
@@ -404,11 +396,11 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	  chan->linear.loop_bw = fabsf(f);
       }
       break;
-    case PLL_SQUARE: // bool
-      chan->linear.square = decode_int8(cp,optlen);
+    case PLL_SQUARE:
+      chan->linear.square = decode_bool(cp,optlen);
       break;
-    case ENVELOPE: // bool
-      chan->linear.env = decode_int8(cp,optlen);
+    case ENVELOPE:
+      chan->linear.env = decode_bool(cp,optlen);
       break;
     case OUTPUT_CHANNELS: // int
       {
@@ -496,7 +488,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 // Encode contents of frontend and chan structures as command or status packet
 // packet argument must be long enough!!
 // Convert values from internal to engineering units
-static int encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, int len){
+static int encode_radio_status(struct frontend const *frontend,struct channel const *chan,uint8_t *packet, int len){
   memset(packet,0,len);
   uint8_t *bp = packet;
 
