@@ -60,7 +60,6 @@ int Mcast_ttl = DEFAULT_MCAST_TTL;
 int IP_tos = DEFAULT_IP_TOS;
 float Blocktime;
 int Output_fd,Status_fd;
-uint64_t Metadata_packets;
 const char *App_path;
 int Verbose;
 
@@ -1573,7 +1572,7 @@ static void display_output(WINDOW *w,struct channel const *channel){
 	   formatsock(&Metadata_dest_address));
   pprintw(w,row++,col,"Update interval","%'.2f sec",Refresh_rate);
   pprintw(w,row++,col,"Status on data channel","%u",channel->status_rate);
-  pprintw(w,row++,col,"Status pkts","%'llu",Metadata_packets);
+  pprintw(w,row++,col,"Status pkts","%'llu",channel->metadata_packets);
   pprintw(w,row++,col,"Control pkts","%'llu",channel->commands);
   pprintw(w,row++,col,"Blocks since last poll","%'llu",channel->blocks_since_poll);
 

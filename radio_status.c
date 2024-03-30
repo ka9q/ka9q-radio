@@ -137,6 +137,7 @@ static void *radio_status_dump(void *p){
       pthread_mutex_lock(&chan->lock);
       chan->commands++;
       chan->command_tag = Tag;
+      chan->metadata_packets++;
       send_radio_status((struct sockaddr *)&Metadata_dest_address,&Frontend,chan);
       pthread_mutex_unlock(&chan->lock);
 
