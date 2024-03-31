@@ -507,7 +507,7 @@ int downconvert(struct channel *chan){
       send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
       chan->status.global_timer = 0; // to make sure
     }
-    if(chan->status.output_interval != 0 && chan->status.output_timer-- <= 0){
+    if(!chan->output.silent && chan->status.output_interval != 0 && chan->status.output_timer-- <= 0){
       // Send status on output channel
       send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
       chan->status.output_timer = chan->status.output_interval; // Reload
