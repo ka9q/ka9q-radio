@@ -58,7 +58,7 @@ void *radio_status(void *arg){
 	struct channel *chan = &Channel_list[i];
 	pthread_mutex_lock(&chan->status.lock);
 	if(chan->inuse && chan->output.rtp.ssrc != 0xffffffff && chan->output.rtp.ssrc != 0)
-	  chan->status.global_timer = i;
+	  chan->status.global_timer = i >> 1; // two at a time
 	pthread_mutex_unlock(&chan->status.lock);
       }
       break;
