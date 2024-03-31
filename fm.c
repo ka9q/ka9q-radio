@@ -21,23 +21,21 @@ void *demod_fm(void *arg){
   assert(arg != NULL);
   struct channel * const chan = arg;  
   
+ restart:;
   {
     char name[100];
     snprintf(name,sizeof(name),"fm %u",chan->output.rtp.ssrc);
     pthread_setname(name);
   }
-
-  float phase_memory = 0;
-  chan->output.channels = 1; // Only mono for now
-  if(isnan(chan->fm.squelch_open) || chan->fm.squelch_open == 0)
-    chan->fm.squelch_open = 6.3;  // open above ~ +8 dB
-  if(isnan(chan->fm.squelch_close) || chan->fm.squelch_close == 0)
-    chan->fm.squelch_close = 4; // close below ~ +6 dB
-
-  int const blocksize = chan->output.samprate * Blocktime / 1000.0F;
-  if(chan->filter.out)
-    delete_filter_output(&chan->filter.out);
+  pthread_mutex_init(&chan->status.lock,NULL);
+  pthread_mutex_lock(&chan->status.lock);
+  FREE(chan->status.command);
+  FREE(chan->filter.energies);
+  FREE(chan->spectrum.bin_data);
+  int const blocksize = chan->output.samprate * Blocktime / 1000;
+  delete_filter_output(&chan->filter.out);
   chan->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
+  pthread_mutex_unlock(&chan->status.lock);
 
   if(chan->filter.out == NULL){
     fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)chan->output.rtp.ssrc);
@@ -48,6 +46,13 @@ void *demod_fm(void *arg){
 	     chan->filter.max_IF/chan->output.samprate,
 	     chan->filter.kaiser_beta);
   
+  float phase_memory = 0;
+  chan->output.channels = 1; // Only mono for now
+  if(isnan(chan->fm.squelch_open) || chan->fm.squelch_open == 0)
+    chan->fm.squelch_open = 6.3;  // open above ~ +8 dB
+  if(isnan(chan->fm.squelch_close) || chan->fm.squelch_close == 0)
+    chan->fm.squelch_close = 4; // close below ~ +6 dB
+
   if(chan->fm.tone_freq != 0){
     // Set up PL tone squelch
     init_goertzel(&chan->fm.tone_detect,chan->fm.tone_freq/chan->output.samprate);
@@ -62,15 +67,16 @@ void *demod_fm(void *arg){
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
   int badsegments = 0;
   int badsamples = 0;
-
-  // Initialize
   chan->output.gain = (2 * chan->output.headroom *  chan->output.samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
 
   realtime();
 
   while(!chan->terminate){
-    if(downconvert(chan) == -1) // received terminate
+    int rval = downconvert(chan);
+    if(rval == -1)
       break;
+    else if(rval == +1)
+      goto restart;
 
     if(power_squelch && squelch_state == 0){
       // quick check SNR from raw signal power to save time on variance-based squelch

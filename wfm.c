@@ -35,6 +35,22 @@ void *demod_wfm(void *arg){
     pthread_setname(name);
   }
 
+ restart:;
+  pthread_mutex_init(&chan->status.lock,NULL);
+  pthread_mutex_lock(&chan->status.lock);
+  FREE(chan->status.command);
+  FREE(chan->filter.energies);
+  FREE(chan->spectrum.bin_data);
+  int const blocksize = chan->output.samprate * Blocktime / 1000;
+  delete_filter_output(&chan->filter.out);
+  chan->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
+  pthread_mutex_unlock(&chan->status.lock);
+
+  if(chan->filter.out == NULL){
+    fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)chan->output.rtp.ssrc);
+    goto quit;
+  }
+  
   // Set null here in case we quit early and try to free them
   struct filter_in *composite = NULL;
   struct filter_out *mono = NULL;
@@ -50,13 +66,6 @@ void *demod_wfm(void *arg){
   if(chan->output.channels == 0)
     chan->output.channels = 2; // Default to stereo
 
-  int const blocksize = chan->output.samprate * Blocktime / 1000;
-  delete_filter_output(&chan->filter.out);
-  chan->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
-  if(chan->filter.out == NULL){
-    fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)chan->output.rtp.ssrc);
-    goto quit;
-  }
   set_filter(chan->filter.out,
 	     chan->filter.min_IF/chan->output.samprate,
 	     chan->filter.max_IF/chan->output.samprate,
@@ -116,8 +125,11 @@ void *demod_wfm(void *arg){
   realtime();
 
   while(!chan->terminate){
-    if(downconvert(chan) == -1)
+    int rval = downconvert(chan);
+    if(rval == -1)
       break;
+    else if(rval == +1)
+      goto restart;
 
     if(power_squelch && squelch_state == 0){
       // quick check SNR from raw signal power to save time on variance-based squelch

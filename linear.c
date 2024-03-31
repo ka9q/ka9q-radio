@@ -28,15 +28,22 @@ void *demod_linear(void *arg){
   assert(arg != NULL);
   struct channel * const chan = arg;
 
+ restart:;
   {
     char name[100];
     snprintf(name,sizeof(name),"lin %u",chan->output.rtp.ssrc);
     pthread_setname(name);
   }
- 
+  pthread_mutex_init(&chan->status.lock,NULL);
+  pthread_mutex_lock(&chan->status.lock);
+  FREE(chan->status.command);
+  FREE(chan->filter.energies);
+  FREE(chan->spectrum.bin_data);
   int const blocksize = chan->output.samprate * Blocktime / 1000;
   delete_filter_output(&chan->filter.out);
   chan->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
+  pthread_mutex_unlock(&chan->status.lock);
+
   if(chan->filter.out == NULL){
     fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)chan->output.rtp.ssrc);
     goto quit;
@@ -56,8 +63,11 @@ void *demod_linear(void *arg){
   realtime();
 
   while(!chan->terminate){
-    if(downconvert(chan) == -1) // received terminate
+    int rval = downconvert(chan);
+    if(rval == -1)
       break;
+    else if(rval == +1)
+      goto restart;
 
     int const N = chan->filter.out->olen; // Number of raw samples in filter output buffer
 

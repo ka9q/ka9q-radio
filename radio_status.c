@@ -32,7 +32,6 @@
 #include "status.h"
 
 extern dictionary const *Preset_table;
-static uint32_t Tag;
 static int encode_radio_status(struct frontend const *frontend,struct channel const *chan,uint8_t *packet, int len);
 
 // Radio status reception and transmission thread
@@ -66,34 +65,36 @@ void *radio_status(void *arg){
       {
 	// find specific chan instance
 	struct channel *chan = lookup_chan(ssrc);
-	if(chan == NULL){
+	if(chan != NULL){
+	  // Channel already exists; queue the command for it to execute
+	  uint8_t *cmd = malloc(length-1);
+	  memcpy(cmd,buffer+1,length-1);
+	  pthread_mutex_lock(&chan->status.lock);
+	  bool oops = false;
+	  if(chan->status.command){
+	    // An entry already exists. Drop ours, until we make this a queue
+	    oops = true;
+	  } else {
+	    chan->status.command = cmd;
+	    chan->status.length = length-1;
+	  }
+	  pthread_mutex_unlock(&chan->status.lock);
+	  if(oops)
+	    FREE(cmd);
+	} else {
+	  // Channel doesn't yet exist. Create, execute the rest of this command here, and then start the new demod
 	  if((chan = create_chan(ssrc)) == NULL){ // possible race here?
 	    // Creation failed, e.g., no output stream
 	    fprintf(stdout,"Dynamic create of ssrc %'u failed; is 'data =' set in [global]?\n",ssrc);
-	    continue;
 	  } else {
+	    decode_radio_commands(chan,buffer+1,length-1);
+	    send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
+	    chan->status.global_timer = 0; // Just sent one
 	    start_demod(chan);
 	    if(Verbose)
 	      fprintf(stdout,"dynamically started ssrc %'u\n",ssrc);
 	  }
 	}
-	assert(chan != NULL);
-
-	uint8_t *cmd = malloc(length-1);
-	memcpy(cmd,buffer+1,length-1);
-	pthread_mutex_lock(&chan->status.lock);
-	bool oops = false;
-	if(chan->status.command){
-	  // An entry already exists. Drop ours, until we make this a queue
-	  oops = true;
-	} else {
-	  chan->status.command = cmd;
-	  chan->status.length = length-1;
-	}
-	pthread_mutex_unlock(&chan->status.lock);
-	if(oops)
-	  FREE(cmd);
-
       }
       break;
     }
@@ -104,7 +105,6 @@ void *radio_status(void *arg){
 int send_radio_status(struct sockaddr const *sock,struct frontend const *frontend,struct channel *chan){
   uint8_t packet[PKTSIZE];
 
-  chan->status.tag = Tag; // Use whatever tag was last received
   chan->status.packets_out++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
   // Reset integrators
@@ -116,7 +116,8 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
   return 0;
 }
 
-int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length){
+// Return TRUE if a restart is needed, false otherwise
+bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length){
   bool restart_needed = false;
   bool new_filter_needed = false;
   uint32_t const ssrc = chan->output.rtp.ssrc;
@@ -171,7 +172,7 @@ int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length)
 	    restart_needed = true; // Easier than trying to handle it inline
 	  
 	  if(Verbose > 1)
-	    fprintf(stdout,"set ssrc %'u freq = %'.3lf\n",ssrc,f);
+	    fprintf(stdout,"set ssrc %u freq = %'.3lf\n",ssrc,f);
 
 	  set_freq(chan,f);
 	}
@@ -385,13 +386,8 @@ int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length)
  done:;
   if(restart_needed){
     if(Verbose > 1)
-      fprintf(stdout,"terminating chan thread for ssrc %'u\n",ssrc);
-    // Stop chan
-    chan->terminate = true;
-    pthread_mutex_unlock(&chan->status.lock); // we're destroying the thread
-    pthread_join(chan->demod_thread,NULL);
-    chan->demod_thread = (pthread_t)0;
-    chan->terminate = false;
+      fprintf(stdout,"restarting thread for ssrc %u\n",ssrc);
+    return true;
   }
   if(new_filter_needed){
     // Set up new filter with chan possibly stopped
@@ -406,12 +402,7 @@ int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length)
 		 chan->filter.kaiser_beta);
     }
   }    
-  if(restart_needed){
-    if(Verbose > 1)
-      fprintf(stdout,"starting chan type %d for ssrc %'u\n",chan->demod_type,ssrc);
-    start_demod(chan);
-  }
-  return 0;
+  return false;
 }
   
 // Encode contents of frontend and chan structures as command or status packet
