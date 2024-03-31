@@ -55,8 +55,7 @@ void *demod_wfm(void *arg){
   chan->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
   if(chan->filter.out == NULL){
     fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)chan->output.rtp.ssrc);
-    free_chan(&chan);
-    return NULL;
+    goto quit;
   }
   set_filter(chan->filter.out,
 	     chan->filter.min_IF/chan->output.samprate,
@@ -114,7 +113,6 @@ void *demod_wfm(void *arg){
   compute_tuning(composite_N,composite_M,Composite_samprate,&subc_shift,&subc_remainder,38000.);
   assert((subc_shift % 4) == 0 && subc_remainder == 0);
 
-  pthread_mutex_lock(&chan->lock);
   realtime();
 
   while(!chan->terminate){
@@ -125,7 +123,7 @@ void *demod_wfm(void *arg){
       // quick check SNR from raw signal power to save time on variance-based squelch
       // Variance squelch is still needed to suppress various spurs and QRM
       float const snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1;
-      if(snr < chan->squelch_close){
+      if(snr < chan->fm.squelch_close){
 	// squelch closed, reset everything and mute output
 	phase_memory = 0;
 	squelch_state = 0;
@@ -155,9 +153,9 @@ void *demod_wfm(void *arg){
     chan->sig.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
 
     // Hysteresis squelch
-    int const squelch_state_max = chan->squelchtail + 1;
-    if(chan->sig.snr >= chan->squelch_open
-       || (squelch_state > 0 && snr >= chan->squelch_close))
+    int const squelch_state_max = chan->fm.squelch_tail + 1;
+    if(chan->sig.snr >= chan->fm.squelch_open
+       || (squelch_state > 0 && snr >= chan->fm.squelch_close))
       // Squelch is fully open
       // tail timing is in blocks (usually 10 or 20 ms each)
       squelch_state = squelch_state_max;
@@ -241,11 +239,11 @@ void *demod_wfm(void *arg){
 	assert(!isnan(subc_info));
 	assert(!isnan(mono->output.r[n]));
 	float complex s = mono->output.r[n] + subc_info + I * (mono->output.r[n] - subc_info);
-	if(chan->deemph.rate != 0){
-	  assert(!isnan(__real__ chan->deemph.state));
-	  assert(!isnan(__imag__ chan->deemph.state));
-	  chan->deemph.state *= chan->deemph.rate;
-	  s = chan->deemph.state += chan->deemph.gain * (1 - chan->deemph.rate) * s;
+	if(chan->fm.rate != 0){
+	  assert(!isnan(__real__ chan->fm.state));
+	  assert(!isnan(__imag__ chan->fm.state));
+	  chan->fm.state *= chan->fm.rate;
+	  s = chan->fm.state += chan->fm.gain * (1 - chan->fm.rate) * s;
 	}
 	stereo_buffer[n] = s * chan->output.gain;
 	output_level += cnrmf(stereo_buffer[n]);
@@ -255,17 +253,16 @@ void *demod_wfm(void *arg){
       assert(chan->output.channels == 2); // Has to be, to get here
       if(send_output(chan,(const float *)stereo_buffer,audio_L,false) < 0)
 	break; // No output stream! Terminate
-      data_channel_status(chan);
     } else { // pilot_present == false
       // Mono processing
       float output_level = 0;
-      if(chan->deemph.rate != 0){
+      if(chan->fm.rate != 0){
 	// Apply deemphasis
-	assert(!isnan(__real__ chan->deemph.state));
+	assert(!isnan(__real__ chan->fm.state));
 	for(int n=0; n < audio_L; n++){
 	  float s = mono->output.r[n];
-	  __real__ chan->deemph.state *= chan->deemph.rate;
-	  s = __real__ chan->deemph.state += chan->deemph.gain * (1 - chan->deemph.rate) * s; 
+	  __real__ chan->fm.state *= chan->fm.rate;
+	  s = __real__ chan->fm.state += chan->fm.gain * (1 - chan->fm.rate) * s; 
 	  s *= chan->output.gain;
 	  mono->output.r[n] = s;
 	  output_level += s * s;
@@ -285,16 +282,13 @@ void *demod_wfm(void *arg){
       if(send_output(chan,mono->output.r,audio_L,false) < 0)
 	break; // No output stream! Terminate
       chan->output.channels = channels_save;
-      data_channel_status(chan);
     }
   } // while(!chan->terminate)
  quit:;
-  pthread_mutex_unlock(&chan->lock);
   delete_filter_output(&mono);
   delete_filter_output(&lminusr);
   delete_filter_output(&pilot);
   delete_filter_input(&composite);
-  FREE(chan->filter.energies);
-  delete_filter_output(&chan->filter.out);
+  close_chan(chan);
   return NULL;
 }

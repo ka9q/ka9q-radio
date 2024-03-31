@@ -31,32 +31,14 @@
 #include "multicast.h"
 #include "status.h"
 
-// If a dynamic channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
-static const int Channel_idle_timeout = 20;
-
-int Ctl_fd;     // File descriptor for receiving user commands
-
 extern dictionary const *Preset_table;
-
-static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
-static int encode_radio_status(struct frontend const *frontend,struct channel const *chan,uint8_t *packet, int len);
-static void *radio_status_dump(void *);
-  
-static pthread_t status_dump_thread;
-static pthread_cond_t Status_dump_cond = PTHREAD_COND_INITIALIZER;
-static pthread_mutex_t Status_dump_mutex = PTHREAD_MUTEX_INITIALIZER;
-static bool Status_kick_flag;
 static uint32_t Tag;
+static int encode_radio_status(struct frontend const *frontend,struct channel const *chan,uint8_t *packet, int len);
 
 // Radio status reception and transmission thread
 void *radio_status(void *arg){
-
-  char name[100];
-  snprintf(name,sizeof(name),"radio stat");
-  pthread_setname(name);
+  pthread_setname("radio stat");
   
-  pthread_create(&status_dump_thread,NULL,radio_status_dump,NULL);
-
   while(true){
     // Command from user
     uint8_t buffer[PKTSIZE];
@@ -71,19 +53,21 @@ void *radio_status(void *arg){
       // Ignore; reserved for dynamic channel template
       break;
     case 0xffffffff:
-      // Kick separate thread to dump all chans in a rate-limited manner
-      pthread_mutex_lock(&Status_dump_mutex);
-      Status_kick_flag = true;
-      Tag = get_tag(buffer+1,length-1);
-      pthread_cond_signal(&Status_dump_cond);
-      pthread_mutex_unlock(&Status_dump_mutex);
+      // Ask all threads to dump their status in a staggered manner
+      for(int i=0; i < Channel_list_length; i++){
+	struct channel *chan = &Channel_list[i];
+	pthread_mutex_lock(&chan->status.lock);
+	if(chan->inuse && chan->output.rtp.ssrc != 0xffffffff && chan->output.rtp.ssrc != 0)
+	  chan->status.global_timer = i;
+	pthread_mutex_unlock(&chan->status.lock);
+      }
       break;
     default:
       {
 	// find specific chan instance
 	struct channel *chan = lookup_chan(ssrc);
 	if(chan == NULL){
-	  if((chan = setup_chan(ssrc)) == NULL){ // possible race here?
+	  if((chan = create_chan(ssrc)) == NULL){ // possible race here?
 	    // Creation failed, e.g., no output stream
 	    fprintf(stdout,"Dynamic create of ssrc %'u failed; is 'data =' set in [global]?\n",ssrc);
 	    continue;
@@ -94,108 +78,53 @@ void *radio_status(void *arg){
 	  }
 	}
 	assert(chan != NULL);
-	// lifetime != 0 indicates a dynamic channel
-	pthread_mutex_lock(&chan->lock);
-	if(chan->lifetime != 0)
-	  chan->lifetime = Channel_idle_timeout; // restart self-destruct timer
-	chan->commands++;
-	decode_radio_commands(chan,buffer+1,length-1);
-	send_radio_status((struct sockaddr *)&Metadata_dest_address,&Frontend,chan); // Send status in response
-	pthread_mutex_unlock(&chan->lock);
+
+	uint8_t *cmd = malloc(length-1);
+	memcpy(cmd,buffer+1,length-1);
+	pthread_mutex_lock(&chan->status.lock);
+	bool oops = false;
+	if(chan->status.command){
+	  // An entry already exists. Drop ours, until we make this a queue
+	  oops = true;
+	} else {
+	  chan->status.command = cmd;
+	  chan->status.length = length-1;
+	}
+	pthread_mutex_unlock(&chan->status.lock);
+	if(oops)
+	  FREE(cmd);
+
       }
       break;
     }
   }
   return NULL;
 }
-
-// Dump all statuses, with rate limiting
-static void *radio_status_dump(void *p){
-  pthread_setname("statusdump");
-  pthread_detach(pthread_self());
-
-  while(true){
-    // Wait to be notified by radio_status thread that we've received a request to
-    // dump the entire channel table.
-    pthread_mutex_lock(&Status_dump_mutex);
-    while(Status_kick_flag == false)
-      pthread_cond_wait(&Status_dump_cond,&Status_dump_mutex);
-    Status_kick_flag = false;
-    pthread_mutex_unlock(&Status_dump_mutex);
-
-    // Walk through the channel table dumping each status
-    // Wait a random time before continuing to avoid flooding the net with back-to-back packets
-    // This is why we have to be a separate thread
-    // While the list can change while we're walking it, this isn't terribly serious
-    // because it's a table, not a linked list. At the worst we emit a stale entry or miss a new one
-    for(int i=0; i < Channel_list_length; i++){
-      struct channel *chan = &Channel_list[i];
-      if(!chan->inuse)
-	continue;
-      if(chan->output.rtp.ssrc == 0xffffffff || chan->output.rtp.ssrc == 0)
-	continue; // Reserved for dynamic channel template or all-call polling
-      pthread_mutex_lock(&chan->lock);
-      chan->commands++;
-      chan->command_tag = Tag;
-      chan->metadata_packets++;
-      send_radio_status((struct sockaddr *)&Metadata_dest_address,&Frontend,chan);
-      pthread_mutex_unlock(&chan->lock);
-
-      // Rate limit to 200/sec on average by randomly delaying 0-10 ms
-      struct timespec sleeptime;
-      sleeptime.tv_sec = 0;
-      sleeptime.tv_nsec = arc4random_uniform(10000000); // 10 million ns
-      nanosleep(&sleeptime,NULL);
-    }
-  }
-  return NULL;
-}
-
-// Send periodic status on *data* multicast group, if enabled
-int data_channel_status(struct channel *chan){
-  if(chan->status_rate != 0 && ++chan->status_counter >= chan->status_rate){
-    chan->status_counter = 0;
-    struct sockaddr_storage temp;
-    memcpy(&temp,&chan->output.data_dest_address,sizeof(temp));
-    switch(temp.ss_family){
-    case AF_INET:
-      {
-	struct sockaddr_in *sock = (struct sockaddr_in *)&temp;
-	sock->sin_port = htons(DEFAULT_STAT_PORT);
-      }
-      break;
-    case AF_INET6:
-      {
-	struct sockaddr_in6 *sock = (struct sockaddr_in6 *)&temp;
-	sock->sin6_port = htons(DEFAULT_STAT_PORT);
-      }
-      break;
-    }
-    send_radio_status((struct sockaddr *)&temp,&Frontend,chan);
-  }
-  return 0;
-}
-
 
 int send_radio_status(struct sockaddr const *sock,struct frontend const *frontend,struct channel *chan){
   uint8_t packet[PKTSIZE];
 
-  chan->metadata_packets++;
+  chan->status.tag = Tag; // Use whatever tag was last received
+  chan->status.packets_out++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
   // Reset integrators
   chan->sig.bb_energy = 0;
   chan->output.energy = 0;
   chan->output.sum_gain_sq = 0;
-  chan->blocks_since_poll = 0;
+  chan->status.blocks_since_poll = 0;
   sendto(Output_fd,packet,len,0,sock,sizeof(struct sockaddr));
   return 0;
 }
 
-static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length){
+int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length){
   bool restart_needed = false;
   bool new_filter_needed = false;
   uint32_t const ssrc = chan->output.rtp.ssrc;
   
+  if(chan->lifetime != 0)
+    chan->lifetime = Channel_idle_timeout; // restart self-destruct timer
+  chan->status.packets_in++;
+
   uint8_t const *cp = buffer;
 
   while(cp - buffer < length){
@@ -222,7 +151,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
     case EOL: // Shouldn't get here
       goto done;
     case COMMAND_TAG:
-      chan->command_tag = decode_int32(cp,optlen);
+      chan->status.tag = decode_int32(cp,optlen);
       break;
     case OUTPUT_SAMPRATE:
       // Restart the demodulator to recalculate filters, etc
@@ -414,14 +343,14 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
       {
 	float const x = decode_float(cp,optlen);
 	if(isfinite(x))
-	  chan->squelch_open = fabsf(dB2power(x));
+	  chan->fm.squelch_open = fabsf(dB2power(x));
       }	
       break;
     case SQUELCH_CLOSE:
       {
 	float const x = decode_float(cp,optlen);
 	if(isfinite(x))
-	   chan->squelch_close = fabsf(dB2power(x));
+	   chan->fm.squelch_close = fabsf(dB2power(x));
       }	
       break;
     case NONCOHERENT_BIN_BW:
@@ -442,11 +371,11 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 	}
       }
       break;
-    case STATUS_RATE:
+    case STATUS_INTERVAL:
       {
 	int const x = decode_int(cp,optlen);
 	if(x >= 0)
-	  chan->status_rate = x;
+	  chan->status.output_interval = x;
       }
     default:
       break;
@@ -459,6 +388,7 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
       fprintf(stdout,"terminating chan thread for ssrc %'u\n",ssrc);
     // Stop chan
     chan->terminate = true;
+    pthread_mutex_unlock(&chan->status.lock); // we're destroying the thread
     pthread_join(chan->demod_thread,NULL);
     chan->demod_thread = (pthread_t)0;
     chan->terminate = false;
@@ -471,11 +401,9 @@ static int decode_radio_commands(struct channel *chan,uint8_t const *buffer,int 
 		ssrc, chan->filter.min_IF, chan->filter.max_IF,
 		chan->output.samprate, chan->filter.kaiser_beta);
       // start_demod already sets up a new filter
-      pthread_mutex_lock(&chan->lock);
       set_filter(chan->filter.out,chan->filter.min_IF/chan->output.samprate,
 		 chan->filter.max_IF/chan->output.samprate,
 		 chan->filter.kaiser_beta);
-      pthread_mutex_unlock(&chan->lock);
     }
   }    
   if(restart_needed){
@@ -497,8 +425,8 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
 
   // parameters valid in all modes
   encode_int32(&bp,OUTPUT_SSRC,chan->output.rtp.ssrc); // Now used as channel ID, so present in all modes
-  encode_int32(&bp,COMMAND_TAG,chan->command_tag); // at top to make it easier to spot in dumps
-  encode_int64(&bp,CMD_CNT,chan->commands); // integer
+  encode_int32(&bp,COMMAND_TAG,chan->status.tag); // at top to make it easier to spot in dumps
+  encode_int64(&bp,CMD_CNT,chan->status.packets_in); // integer
   if(strlen(frontend->description) > 0)
     encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
   
@@ -535,7 +463,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   
   // Adjust for A/D width
   // Level is absolute relative to A/D saturation, so +3dB for real vs complex
-  if(chan->blocks_since_poll > 0){
+  if(chan->status.blocks_since_poll > 0){
     float level = frontend->if_power;
     level /= (1 << (frontend->bitspersample-1)) * (1 << (frontend->bitspersample-1));
     // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
@@ -565,8 +493,8 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       encode_float(&bp,PLL_PHASE,chan->linear.cphase); // radians
       encode_float(&bp,PLL_BW,chan->linear.loop_bw);   // hz
       // Relevant only when squelches are active
-      encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
-      encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
+      encode_float(&bp,SQUELCH_OPEN,power2dB(chan->fm.squelch_open));
+      encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->fm.squelch_close));
     }
     encode_byte(&bp,ENVELOPE,chan->linear.env); // bool
     encode_double(&bp,SHIFT_FREQUENCY,chan->tune.shift); // Hz
@@ -588,12 +516,12 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   case WFM_DEMOD:  // Note fall-through from FM_DEMOD
     // Relevant only when squelches are active
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
-    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
-    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
+    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->fm.squelch_open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->fm.squelch_close));
     encode_byte(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
-    encode_float(&bp,DEEMPH_TC,-1.0/(logf(chan->deemph.rate) * chan->output.samprate));
-    encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->deemph.gain));
+    encode_float(&bp,DEEMPH_TC,-1.0/(logf(chan->fm.rate) * chan->output.samprate));
+    encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     break;
   case SPECT_DEMOD:
     {
@@ -603,7 +531,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
       if(chan->spectrum.bin_data != NULL){
 	// Average and clear
-	float const scale = 1.f / chan->blocks_since_poll;
+	float const scale = 1.f / chan->status.blocks_since_poll;
 	for(int i=0; i < chan->spectrum.bin_count; i++)
 	  chan->spectrum.bin_data[i] *= scale;
 
@@ -622,14 +550,14 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_float(&bp,KAISER_BETA,chan->filter.kaiser_beta); // Dimensionless
 
     // BASEBAND_POWER is now the average since last poll
-    if(chan->blocks_since_poll > 0){
-      float bb_power = chan->sig.bb_energy / chan->blocks_since_poll;
+    if(chan->status.blocks_since_poll > 0){
+      float bb_power = chan->sig.bb_energy / chan->status.blocks_since_poll;
       encode_float(&bp,BASEBAND_POWER,power2dB(bb_power));
       // Output levels are already normalized since they scaled by a fixed 32767 for conversion to int16_t
-      float output_power = chan->output.energy / chan->blocks_since_poll;
+      float output_power = chan->output.energy / chan->status.blocks_since_poll;
       encode_float(&bp,OUTPUT_LEVEL,power2dB(output_power)); // power ratio -> dB
       if(chan->demod_type == LINEAR_DEMOD){ // Gain not really meaningful in FM modes
-	float gain = chan->output.sum_gain_sq / chan->blocks_since_poll;
+	float gain = chan->output.sum_gain_sq / chan->status.blocks_since_poll;
 	encode_float(&bp,GAIN,power2dB(gain));
       }
     }
@@ -643,20 +571,20 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       encode_float(&bp,DEMOD_SNR,power2dB(chan->sig.snr)); // abs ratio -> dB
 
     // Source address we're using to send data
-    encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&chan->output.data_source_address);
+    encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&chan->output.source_socket);
     // Where we're sending PCM output
-    encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&chan->output.data_dest_address);
+    encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&chan->output.dest_socket);
     encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
-    encode_int64(&bp,OUTPUT_METADATA_PACKETS,chan->metadata_packets);
+    encode_int64(&bp,OUTPUT_METADATA_PACKETS,chan->status.packets_out);
     encode_byte(&bp,RTP_PT,chan->output.rtp.type);
-    encode_int32(&bp,STATUS_RATE,chan->status_rate);
+    encode_int32(&bp,STATUS_INTERVAL,chan->status.output_interval);
   }
   // Don't send test points unless they're in use
   if(!isnan(chan->tp1))
     encode_float(&bp,TP1,chan->tp1);
   if(!isnan(chan->tp2))
     encode_float(&bp,TP2,chan->tp2);
-  encode_int64(&bp,BLOCKS_SINCE_POLL,chan->blocks_since_poll);
+  encode_int64(&bp,BLOCKS_SINCE_POLL,chan->status.blocks_since_poll);
 
   encode_eol(&bp);
 

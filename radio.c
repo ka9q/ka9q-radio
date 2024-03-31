@@ -40,7 +40,7 @@ struct channel *Channel_list; // Contiguous array
 int Channel_list_length; // Length of array
 int Active_channel_count; // Active channels
 float Power_smooth = 0.05; // Arbitrary exponential smoothing factor
-extern struct channel const *Template;
+
 
 // Find chan by ssrc
 struct channel *lookup_chan(uint32_t ssrc){
@@ -84,53 +84,27 @@ struct channel *create_chan(uint32_t ssrc){
     fprintf(stdout,"Warning: out of chan table space (%'d)\n",Active_channel_count);
     // Abort here? Or keep going?
   } else {
-    memset(chan,0,sizeof(struct channel));
+    // Because the memcpy clobbers the ssrc, we must keep the lock held on Channel_list_mutex
+    memcpy(chan,&Template,sizeof(*chan));
     chan->inuse = true;
     chan->output.rtp.ssrc = ssrc; // Stash it
     Active_channel_count++;
   }
+  // Copy template
+  // Although there are some pointers in here (filter.out, filter.energies), they're all NULL until the chan actually starts
+  chan->lifetime = 20 * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
+  
+  // Get the local socket for the output stream
+  // Going connectionless with Output_fd broke this. The source port is filled in, but the source address is all zeroes because
+  // it depends on the specific output address, which is only known from a routing table lookup. Oh well.
+  {
+    socklen_t len = sizeof(chan->output.source_socket);
+    getsockname(Output_fd,(struct sockaddr *)&chan->output.source_socket,&len);
+  }
+
   pthread_mutex_unlock(&Channel_list_mutex);
   return chan;
 }
-
-// Set up newly created dynamic channel
-struct channel *setup_chan(uint32_t ssrc){
-  if(Template == NULL)
-    return NULL; // No dynamic channel template was created
-
-  struct channel * const chan = create_chan(ssrc);
-  if(chan == NULL)
-    return NULL;
-
-  // Copy dynamic template
-  // Although there are some pointers in here (filter.out, filter.energies), they're all NULL until the chan actually starts
-  memcpy(chan,Template,sizeof(*chan));
-  chan->output.rtp.ssrc = ssrc; // Put it back after getting smashed to 0 by memcpy
-  chan->lifetime = 20; // If freq == 0, goes away 20 sec after last command
-  
-  // Get the local socket for the output stream
-  struct sockaddr_storage data_source_address;
-  {
-    socklen_t len = sizeof(data_source_address);
-    getsockname(Output_fd,(struct sockaddr *)&chan->output.data_source_address,&len);
-  }
-  return chan;
-}
-
-
-// takes pointer to pointer to chan so we can zero it out to avoid use of freed pointer
-void free_chan(struct channel **chan){
-  if(chan != NULL && *chan != NULL){
-    pthread_mutex_lock(&Channel_list_mutex);
-    if((*chan)->inuse){
-      (*chan)->inuse = false;
-      Active_channel_count--;
-    }
-    pthread_mutex_unlock(&Channel_list_mutex);  
-    *chan = NULL;
-  }
-}
-
 
 static const float N0_smooth = .001; // exponential smoothing rate for (noisy) bin noise
 
@@ -221,7 +195,7 @@ int start_demod(struct channel * chan){
 
   if(Verbose){
     fprintf(stdout,"start_demod: ssrc %'u, output %s, demod %d, freq %'.3lf, preset %s, filter (%'+.0f,%'+.0f)\n",
-	    chan->output.rtp.ssrc, chan->output.data_dest_string, chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
+	    chan->output.rtp.ssrc, chan->output.dest_string, chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
   }
   // Stop previous channel, if any
   if(chan->demod_thread != (pthread_t)0){
@@ -254,48 +228,34 @@ int start_demod(struct channel * chan){
   return 0;
 }
 
-int kill_chan(struct channel **p){
-  if(p == NULL)
-    return -1;
-  struct channel *chan = *p;
+// Called by a demodulator to clean up its own resources
+int close_chan(struct channel *chan){
   if(chan == NULL)
     return -1;
 
-#if 1
-  chan->terminate = 1;
-#else
-  if(chan->demod_thread != (pthread_t)0)
-    pthread_cancel(chan->demod_thread);
-#endif
-  pthread_join(chan->demod_thread,NULL);
-  if(chan->filter.out)
-    delete_filter_output(&chan->filter.out);
-  if(chan->rtcp_thread != (pthread_t)0){
-    pthread_cancel(chan->rtcp_thread);
-    pthread_join(chan->rtcp_thread,NULL);
+  if(chan->rtcp.thread != (pthread_t)0){
+    pthread_cancel(chan->rtcp.thread);
+    pthread_join(chan->rtcp.thread,NULL);
   }
-  if(chan->sap_thread != (pthread_t)0){
-    pthread_cancel(chan->sap_thread);
-    pthread_join(chan->sap_thread,NULL);
+  if(chan->sap.thread != (pthread_t)0){
+    pthread_cancel(chan->sap.thread);
+    pthread_join(chan->sap.thread,NULL);
   }
-    
-#if 0
-  // Don't close these as they're often shared across chans
-  // Really should keep a reference count so they can be closed when
-  // the last chan using them closes
-  if(chan->output.rtcp_fd > 2){
-    close(chan->output.rtcp_fd);
-    chan->output.rtcp_fd = -1;
-  }
-  if(chan->output.sap_fd > 2){
-    close(chan->output.sap_fd);
-    chan->output.sap_fd = -1;
-  }
-#endif
+  pthread_mutex_lock(&chan->status.lock);
+  FREE(chan->status.command);
   FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);
+  if(chan->filter.out)
+    delete_filter_output(&chan->filter.out);
 
-  free_chan(p);
+  pthread_mutex_unlock(&chan->status.lock);
+  pthread_mutex_lock(&Channel_list_mutex);
+  if(chan->inuse){
+    // Should be set, but check just in case to avoid messing up Active_channel_count
+    chan->inuse = false;
+    Active_channel_count--;
+  }
+  pthread_mutex_unlock(&Channel_list_mutex);  
   return 0;
 }
 
@@ -426,7 +386,7 @@ void *sap_send(void *p){
     space -= 4;
     
     // our sending ipv4 address
-    struct sockaddr_in const *sin = (struct sockaddr_in *)&chan->output.data_source_address;
+    struct sockaddr_in const *sin = (struct sockaddr_in *)&chan->output.source_socket;
     uint32_t *src = (uint32_t *)wp;
     *src = sin->sin_addr.s_addr; // network byte order
     wp += 4;
@@ -471,7 +431,7 @@ void *sap_send(void *p){
     space -= len;
     
     {
-      char *mcast = strdup(formatsock(&chan->output.data_dest_address));
+      char *mcast = strdup(formatsock(&chan->output.dest_socket));
       // Remove :port field, confuses the vlc listener
       char *cp = strchr(mcast,':');
       if(cp)
@@ -507,47 +467,54 @@ void *sap_send(void *p){
     wp += len;
     space -= len;
 
-    send(chan->output.sap_fd,message,wp - message,0);
+    sendto(Output_fd,message,wp - message,0,(struct sockaddr *)&chan->sap.dest_socket,sizeof(chan->sap.dest_socket));
     sleep(5);
   }
 }
 
-// Walk through channel list culling dynamic channels that
-// have become inactive
-void *chan_reaper(void *arg){
-  pthread_setname("dreaper");
-  while(true){
-    int actives = 0;
-    for(int i=0;i<Channel_list_length && actives < Active_channel_count;i++){
-      struct channel *chan = &Channel_list[i];
-      if(chan->inuse){
-	actives++;
-	if(chan->tune.freq == 0 && chan->lifetime > 0){
-	  chan->lifetime--;
-	  if(chan->lifetime == 0){
-	    kill_chan(&chan); // clears chan->inuse
-	    actives--;
-	  }
-	}
-      }
-    }
-    sleep(1);
-  }
-  return NULL;
-}
-// Run digital downconverter, common to all chans
-// 1. Block until front end is in range
-// 2. compute FFT bin shift & fine tuning remainder
-// 3. Set fine tuning oscillator frequency & phase
-// 4. Run output half (IFFT) of filter
-// 5. Update noise estimate
-// 6. Run fine tuning, compute average power
+// Run digital downconverter and other stuff common to all demod types
+// 1. If dynamic and sufficiently idle, terminate
+// 2. Process any commands from the common command/status channel
+// 3. Send any requested delayed status to the common status channel
+// 4. Send any status to the output channel
+// 5. Block until front end is in range
+// 6. compute FFT bin shift & fine tuning remainder
+// 7. Set fine tuning oscillator frequency & phase
+// 8. Run output half (IFFT) of filter
+// 9. Update noise estimate
+// 10. Run fine tuning, compute average power
 
 // Baseband samples placed in chan->filter.out->output.c
-// It's assumed we have chan->lock
+// It's assumed we have chan->status.lock
 
 int downconvert(struct channel *chan){
-  // To save CPU time when the front end is completely tuned away from us, block until the front
+    // Should we die?
+    if(chan->tune.freq == 0 && chan->lifetime > 0){
+      chan->lifetime--;
+      if(chan->lifetime == 0){
+	return -1;
+      }
+    }
+    pthread_mutex_lock(&chan->status.lock);
+    // Look on the single-entry command queue and grab it atomically
+    if(chan->status.command != NULL){
+      decode_radio_commands(chan,chan->status.command,chan->status.length);
+      send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
+      chan->status.global_timer = 0; // Just sent one
+      FREE(chan->status.command);
+    } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
+      // Delayed status request, used mainly by all-channel polls to avoid big bursts
+      send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
+      chan->status.global_timer = 0; // to make sure
+    }
+    if(chan->status.output_interval != 0 && chan->status.output_timer-- <= 0){
+      // Send status on output channel
+      send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
+      chan->status.output_timer = chan->status.output_interval; // Reload
+    }
+    pthread_mutex_unlock(&chan->status.lock);
+
+    // To save CPU time when the front end is completely tuned away from us, block until the front
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);
     int shift;
@@ -574,9 +541,7 @@ int downconvert(struct channel *chan){
       struct timespec timeout; // Needed to avoid deadlock if no front end is available
       clock_gettime(CLOCK_REALTIME,&timeout);
       timeout.tv_sec += 1; // 1 sec in the future
-      pthread_mutex_unlock(&chan->lock); // Unlock before sleeping
       pthread_cond_timedwait(&Frontend.status_cond,&Frontend.status_mutex,&timeout);
-      pthread_mutex_lock(&chan->lock); // recover lock
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
 
@@ -603,10 +568,8 @@ int downconvert(struct channel *chan){
       }
       chan->fine.phasor *= chan->filter.phase_adjust;
     }
-    pthread_mutex_unlock(&chan->lock); // release lock, we're about to sleep
     execute_filter_output(chan->filter.out,-shift); // block until new data frame
-    pthread_mutex_lock(&chan->lock); // grab it back. hopefully we won't ever have to worry about priority inversion
-    chan->blocks_since_poll++;
+    chan->status.blocks_since_poll++;
     float level_normalize = scale_voltage_out2FS(&Frontend);
     if(buffer != NULL){ // No output time-domain buffer in spectral analysis mode
       const int N = chan->filter.out->olen; // Number of raw samples in filter output buffer

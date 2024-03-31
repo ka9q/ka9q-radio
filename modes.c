@@ -42,7 +42,7 @@ static float const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -
 static float const DEFAULT_GAIN = 50.0;         // Unused in FM, usually adjusted automatically in linear
 static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
 static float const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
-static int   const DEFAULT_SQUELCHTAIL = 1;     // close on frame *after* going below threshold, may let partial frame noise through
+static int   const DEFAULT_SQUELCH_TAIL = 1;     // close on frame *after* going below threshold, may let partial frame noise through
 static int   const DEFAULT_UPDATE = 50;         // 1 Hz for a 20 ms frame time
 #if 0
 static int   const DEFAULT_FM_SAMPRATE = 24000;
@@ -77,8 +77,8 @@ int set_defaults(struct channel *chan){
   chan->tune.doppler = 0;
   chan->tune.doppler_rate = 0;
   // De-emphasis defaults to off, enabled only in FM modes
-  chan->deemph.rate = 0;
-  chan->deemph.gain = 1.0;
+  chan->fm.rate = 0;
+  chan->fm.gain = 1.0;
 
   chan->demod_type = DEFAULT_DEMOD;
   chan->filter.kaiser_beta = DEFAULT_KAISER_BETA;
@@ -86,9 +86,9 @@ int set_defaults(struct channel *chan){
   chan->filter.max_IF = DEFAULT_HIGH;
   chan->filter.remainder = NAN;      // Important to force downconvert() to call set_osc() on first call
   chan->filter.bin_shift = -1000999; // Force initialization here too
-  chan->squelch_open = dB2power(DEFAULT_SQUELCH_OPEN);
-  chan->squelch_close = dB2power(DEFAULT_SQUELCH_CLOSE);
-  chan->squelchtail = DEFAULT_SQUELCHTAIL;
+  chan->fm.squelch_open = dB2power(DEFAULT_SQUELCH_OPEN);
+  chan->fm.squelch_close = dB2power(DEFAULT_SQUELCH_CLOSE);
+  chan->fm.squelch_tail = DEFAULT_SQUELCH_TAIL;
   chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
   chan->output.channels = 1;
   chan->tune.shift = 0.0;
@@ -110,7 +110,7 @@ int set_defaults(struct channel *chan){
 	    Blocktime,chan->output.samprate,r);
   }
   chan->output.pacing = false;
-  chan->status_rate = DEFAULT_UPDATE;
+  chan->status.output_interval = DEFAULT_UPDATE;
   return 0;
 }
 
@@ -159,14 +159,15 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   {
     char const *cp = config_getstring(table,sname,"squelch-open",NULL);
     if(cp)
-      chan->squelch_open = dB2power(strtof(cp,NULL));
+      chan->fm.squelch_open = dB2power(strtof(cp,NULL));
   }
   {
     char const *cp = config_getstring(table,sname,"squelch-close",NULL);
     if(cp)
-      chan->squelch_close = dB2power(strtof(cp,NULL));
+      chan->fm.squelch_close = dB2power(strtof(cp,NULL));
   }
-  chan->squelchtail = config_getint(table,sname,"squelchtail",chan->squelchtail);
+  chan->fm.squelch_tail = config_getint(table,sname,"squelchtail",chan->fm.squelch_tail); // historical
+  chan->fm.squelch_tail = config_getint(table,sname,"squelch-tail",chan->fm.squelch_tail);
   {
     char const *cp = config_getstring(table,sname,"headroom",NULL);
     if(cp)
@@ -223,14 +224,14 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     char const *cp = config_getstring(table,sname,"deemph-tc",NULL);
     if(cp){
       float const tc = strtof(cp,NULL) * 1e-6;
-      chan->deemph.rate = expf(-1.0f / (tc * chan->output.samprate));
+      chan->fm.rate = expf(-1.0f / (tc * chan->output.samprate));
     }
   }
   {
     char const *cp = config_getstring(table,sname,"deemph-gain",NULL);
     if(cp){
       float const g = strtof(cp,NULL);
-      chan->deemph.gain = dB2voltage(g);
+      chan->fm.gain = dB2voltage(g);
     }
   }
   // "pl" and "ctcss" are synonyms

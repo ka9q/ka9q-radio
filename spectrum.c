@@ -68,7 +68,6 @@ void *demod_spectrum(void *arg){
   set_freq(chan,chan->tune.freq); // retune front end if needed to cover requested bandwidth
 
   // Still need to clean up code to force radio freq to be multiple of FFT bin spacing
-  pthread_mutex_lock(&chan->lock);
   while(!chan->terminate){
     if(downconvert(chan) == -1)
       break; // received terminate
@@ -84,9 +83,6 @@ void *demod_spectrum(void *arg){
     }
   }
  quit:;
-  pthread_mutex_unlock(&chan->lock);
-  FREE(chan->spectrum.bin_data);
-  FREE(chan->filter.energies);
-  delete_filter_output(&chan->filter.out);
+  close_chan(chan);
   return NULL;
 }

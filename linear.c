@@ -53,7 +53,6 @@ void *demod_linear(void *arg){
   int const lock_limit = lock_time * chan->output.samprate;
   init_pll(&chan->pll.pll,(float)chan->output.samprate);
 
-  pthread_mutex_lock(&chan->lock);
   realtime();
 
   while(!chan->terminate){
@@ -98,23 +97,13 @@ void *demod_linear(void *arg){
 	chan->sig.snr = NAN;
 
       // Loop lock detector with hysteresis
-      // If the loop is locked, the SNR must fall below the threshold for a while
-      // before we declare it unlocked, and vice versa
-#if 0
-      if(chan->sig.snr < chan->squelch_close){
-	chan->pll.lock_count -= N;
-      } else if(chan->sig.snr > chan->squelch_open){
-	chan->pll.lock_count += N;
-      }
-#else
-      // Relax the required SNR for lock. If there's more I signal than Q signal, declare it locked
+      // If there's more I signal than Q signal, declare it locked
       // The squelch settings are really for FM, not for us
       if(chan->sig.snr < 0){
 	chan->pll.lock_count -= N;
       } else if(chan->sig.snr > 0){
 	chan->pll.lock_count += N;
       }
-#endif
       if(chan->pll.lock_count >= lock_limit){
 	chan->pll.lock_count = lock_limit;
 	chan->linear.pll_lock = true;
@@ -245,14 +234,8 @@ void *demod_linear(void *arg){
     // When the gain is allowed to vary, the average gain won't be exactly consistent with the
     // average baseband (input) and output powers. But I still try to make it meaningful.
     chan->output.sum_gain_sq += start_gain * chan->output.gain; // accumulate square of approx average gain
-
-    // Periodically send status to data channel if configured and we're not muted
-    if(!mute)
-      data_channel_status(chan);
   }
  quit:;
-  pthread_mutex_unlock(&chan->lock);
-  FREE(chan->filter.energies);
-  delete_filter_output(&chan->filter.out);
+  close_chan(chan);
   return NULL;
 }
