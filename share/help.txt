@@ -1,6 +1,6 @@
 KA9Q DSP receiver program -- single-key commands
 ?/h          (this help screen)
-l            Lock/unlock frequency/tuner
+l            Lock/unlock frequency
 Tab, PgDn    Move cursor down
 sh+Tab,PgUp  Move cursor up
 HOME         Move cursor to top
@@ -11,19 +11,19 @@ Right arrow  Move cursor right one digit
 Up arrow     Increase by 1
 Down arrow   Decrease by 1
 ctl+L        Redraw screen
-f            Set frequency (eg: 147m435, 10m0, 760k0, 14313000)
-g            Set gain, dB
-R            Set AGC recover rate, dB/s
-T            Set AGC hang time, s
-H            Set output headroom, dB
-L            Set AGC threshold, dB
-P            PLL loop bandwidth, Hz
-k            Set Kaiser window beta parameter
-m/p          Preset demod mode
-o            Set/clear option flag
-r            Set refresh rate, s
-s            Set squelch, dB
-u	     Set data channel status update interval, frames, 0=off
-q            Quit program
+f    Set frequency (eg: 147m435, 10m0, 760k0, 14313000)
+g    Set gain, dB
+R    Set AGC recover rate, dB/s
+T    Set AGC hang time, s
+H    Set output headroom, dB
+L    Set AGC threshold, dB
+P    PLL loop bandwidth, Hz
+k    Set Kaiser window beta parameter
+m/p  Preset demod mode
+o    Set/clear option flag
+r    Set refresh rate, s
+s    Set squelch, dB
+u    Set output status update interval, frames
+q    Quit program
 
 
