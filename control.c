@@ -454,6 +454,7 @@ int main(int argc,char *argv[]){
     // If responses are lost or delayed and the user gets an incomplete list, just hit return
     // and we'll poll again. New entries will be added & existing entries will be updated
     // though any that disappear from radiod will remain on the list (not a big deal here)
+    // Need to add a second timeout here to guarantee the loop exits in a reasonable time when there's a lot of activity, e.g., from ka9q-web
     send_poll(0xffffffff);
     // Read responses
     int const chan_max = 1024;
