@@ -187,6 +187,41 @@ static float estimate_noise(struct channel *chan,int shift){
 }
 
 
+void *demod_thread(void *p){
+  assert(p != NULL);
+  struct channel *chan = (struct channel *)p;
+  if(chan == NULL)
+    return NULL;
+
+  pthread_detach(pthread_self());
+
+  // Repeatedly invoke appropriate demodulator
+  // When a demod exits, the appropriate one is started,
+  // which can be the same one if demod_type hasn't changed
+  // A demod can terminate completely by setting an invalid demod_type and exiting
+  while(true){
+    switch(chan->demod_type){
+    case LINEAR_DEMOD:
+      demod_linear(p);
+      break;
+    case FM_DEMOD:
+      demod_fm(p);
+      break;
+    case WFM_DEMOD:
+      demod_wfm(p);
+      break;
+    case SPECT_DEMOD:
+      demod_spectrum(p);
+      break;
+    default:
+      goto done;
+      break;
+    }
+  }
+ done:;
+  close_chan(chan);
+  return NULL;
+}
 
 // start demod thread on already-initialized chan structure
 int start_demod(struct channel * chan){
@@ -197,34 +232,13 @@ int start_demod(struct channel * chan){
     fprintf(stdout,"start_demod: ssrc %'u, output %s, demod %d, freq %'.3lf, preset %s, filter (%'+.0f,%'+.0f)\n",
 	    chan->output.rtp.ssrc, chan->output.dest_string, chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
   }
-  // Stop previous channel, if any
-  if(chan->demod_thread != (pthread_t)0){
-#if 1 // Invoke thread apoptosis
-    chan->terminate = 1;
-    pthread_join(chan->demod_thread,NULL);
-    chan->terminate = 0;
-#else
-    pthread_cancel(chan->demod_thread);
-    pthread_join(chan->demod_thread,NULL);
-#endif    
-  }
+  pthread_create(&chan->demod_thread,NULL,demod_thread,chan);
 
-  // Start channels; only one actually runs at a time
-  switch(chan->demod_type){
-  case WFM_DEMOD:
-    pthread_create(&chan->demod_thread,NULL,demod_wfm,chan);
-    break;
-  case FM_DEMOD:
-    pthread_create(&chan->demod_thread,NULL,demod_fm,chan);
-    break;
-  case LINEAR_DEMOD:
-    pthread_create(&chan->demod_thread,NULL,demod_linear,chan);
-    break;
-  case SPECT_DEMOD:
-    if(chan->tune.freq != 0)
-      pthread_create(&chan->demod_thread,NULL,demod_spectrum,chan); // spectrum chan can't change freq, so just don't start it at 0
-    break;
-  }
+  /* ????
+     case SPECT_DEMOD:
+     if(chan->tune.freq != 0)
+     pthread_create(&chan->demod_thread,NULL,demod_spectrum,chan); // spectrum chan can't change freq, so just don't start it at 0
+  */
   return 0;
 }
 
@@ -492,6 +506,7 @@ int downconvert(struct channel *chan){
   if(chan->tune.freq == 0 && chan->lifetime > 0){
     chan->lifetime--;
     if(chan->lifetime <= 0){
+      chan->demod_type = -1;  // No demodulator
       return -1; // terminate needed
     }
   }

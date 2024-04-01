@@ -18,7 +18,6 @@ void *demod_spectrum(void *arg){
   assert(arg != NULL);
   struct channel * const chan = arg;  
   
- restart:;
   {
     char name[100];
     snprintf(name,sizeof(name),"spect %u",chan->output.rtp.ssrc); // SSRC is dummy for ID, there's no RTP stream
@@ -75,10 +74,8 @@ void *demod_spectrum(void *arg){
   // Still need to clean up code to force radio freq to be multiple of FFT bin spacing
   while(!chan->terminate){
     int rval = downconvert(chan);
-    if(rval == -1)
-      break; // received terminate
-    else if(rval == +1)
-      goto restart;
+    if(rval != 0)
+      break;
 
     int binp = 0; 
     for(int i=0; i < chan->spectrum.bin_count; i++){ // For each noncoherent integration bin above center freq
@@ -91,6 +88,5 @@ void *demod_spectrum(void *arg){
     }
   }
  quit:;
-  close_chan(chan);
   return NULL;
 }

@@ -34,8 +34,6 @@ void *demod_wfm(void *arg){
     snprintf(name,sizeof(name),"wfm %u",chan->output.rtp.ssrc);
     pthread_setname(name);
   }
-
- restart:;
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   FREE(chan->status.command);
@@ -126,10 +124,8 @@ void *demod_wfm(void *arg){
 
   while(!chan->terminate){
     int rval = downconvert(chan);
-    if(rval == -1)
+    if(rval != 0)
       break;
-    else if(rval == +1)
-      goto restart;
 
     if(power_squelch && squelch_state == 0){
       // quick check SNR from raw signal power to save time on variance-based squelch
@@ -301,6 +297,5 @@ void *demod_wfm(void *arg){
   delete_filter_output(&lminusr);
   delete_filter_output(&pilot);
   delete_filter_input(&composite);
-  close_chan(chan);
   return NULL;
 }

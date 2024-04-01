@@ -21,7 +21,6 @@ void *demod_fm(void *arg){
   assert(arg != NULL);
   struct channel * const chan = arg;  
   
- restart:;
   {
     char name[100];
     snprintf(name,sizeof(name),"fm %u",chan->output.rtp.ssrc);
@@ -73,10 +72,8 @@ void *demod_fm(void *arg){
 
   while(!chan->terminate){
     int rval = downconvert(chan);
-    if(rval == -1)
+    if(rval != 0)
       break;
-    else if(rval == +1)
-      goto restart;
 
     if(power_squelch && squelch_state == 0){
       // quick check SNR from raw signal power to save time on variance-based squelch
@@ -272,6 +269,5 @@ void *demod_fm(void *arg){
       break; // no valid output stream; terminate!
   } // while(!chan->terminate)
  quit:;
-  close_chan(chan);
   return NULL;
 }

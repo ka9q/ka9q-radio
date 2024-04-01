@@ -28,7 +28,6 @@ void *demod_linear(void *arg){
   assert(arg != NULL);
   struct channel * const chan = arg;
 
- restart:;
   {
     char name[100];
     snprintf(name,sizeof(name),"lin %u",chan->output.rtp.ssrc);
@@ -64,10 +63,8 @@ void *demod_linear(void *arg){
 
   while(!chan->terminate){
     int rval = downconvert(chan);
-    if(rval == -1)
+    if(rval != 0)
       break;
-    else if(rval == +1)
-      goto restart;
 
     int const N = chan->filter.out->olen; // Number of raw samples in filter output buffer
 
@@ -246,6 +243,5 @@ void *demod_linear(void *arg){
     chan->output.sum_gain_sq += start_gain * chan->output.gain; // accumulate square of approx average gain
   }
  quit:;
-  close_chan(chan);
   return NULL;
 }
