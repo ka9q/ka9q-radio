@@ -315,7 +315,16 @@ static int loadconfig(char const * const file){
     int slen = sizeof(Template.output.dest_socket);
     uint32_t addr = (239 << 24) | (ElfHashString(Data) & 0xffffff); // Force into site-local multicast space
     avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data,addr,ttlmsg,&Template.output.dest_socket,&slen);
+#if 0
     avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Data,addr,ttlmsg,&Template.status.dest_socket,&slen); // same length
+#else
+    {
+      struct sockaddr_in *sin = (struct sockaddr_in *)&Template.status.dest_socket;
+      sin->sin_family = AF_INET;
+      sin->sin_addr.s_addr = htonl(addr);
+      sin->sin_port = htons(DEFAULT_STAT_PORT);
+    }
+#endif
   }
   join_group(Output_fd,(struct sockaddr *)&Template.output.dest_socket,Iface,Mcast_ttl,IP_tos); // Work around snooping switch problem
 
@@ -365,8 +374,8 @@ static int loadconfig(char const * const file){
       exit(EX_USAGE);
     }
   }
+  // Set up status/command stream, global for all receiver channels
   {
-    // Set up status/command stream, global for all receiver channels
     // Form default status dns name
     char hostname[1024];
     gethostname(hostname,sizeof(hostname));
@@ -450,7 +459,16 @@ static int loadconfig(char const * const file){
       int slen = sizeof(data_dest_socket);
       uint32_t addr = (239 << 24) | (ElfHashString(data) & 0xffffff); // Force into site-local multicast space
       avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_socket,&slen);
+#if 0
       avahi_start(sname,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,data,addr,ttlmsg,&metadata_dest_socket,&slen); // sockets are same size
+#else
+      {
+	struct sockaddr_in *sin = (struct sockaddr_in *)&metadata_dest_socket;
+	sin->sin_family = AF_INET;
+	sin->sin_addr.s_addr = htonl(addr);
+	sin->sin_port = htons(DEFAULT_STAT_PORT);
+      }
+#endif
     }
     join_group(Output_fd,(struct sockaddr *)&data_dest_socket,iface,mcast_ttl,ip_tos);
     // No need to also join group for status socket, since the IP addresses are the same
