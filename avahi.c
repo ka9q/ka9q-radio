@@ -35,9 +35,6 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
     perror("exec avahi publish service");
     return -1;
   }
-  // force address into 239.x.x.x range
-  address = (239 << 24) | (address & 0x00ffffff);
-
   char ip_address_string[1024];
   snprintf(ip_address_string,sizeof(ip_address_string),"%d.%d.%d.%d",(address >> 24) & 0xff, (address >> 16) & 0xff, (address >> 8) & 0xff, address & 0xff);
 #if 0
