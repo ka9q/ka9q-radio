@@ -454,13 +454,15 @@ int main(int argc,char *argv[]){
     // If responses are lost or delayed and the user gets an incomplete list, just hit return
     // and we'll poll again. New entries will be added & existing entries will be updated
     // though any that disappear from radiod will remain on the list (not a big deal here)
-    // Need to add a second timeout here to guarantee the loop exits in a reasonable time when there's a lot of activity, e.g., from ka9q-web
+    // The search exits after either a 100 ms timeout waiting for any incoming message OR 1 sec with no new channels seen
+    // The second test is important when monitoring a status channel busy with 'control' polls or ka9q-web spectrum data
     send_poll(0xffffffff);
     // Read responses
     int const chan_max = 1024;
     if(channels == NULL)
       channels = (struct channel **)calloc(chan_max,sizeof(struct channel *));
 
+    int64_t last_new_entry = gps_time_ns();
     while(chan_count < chan_max){
       struct sockaddr_storage source_socket;
       socklen_t ssize = sizeof(source_socket);
@@ -487,8 +489,11 @@ int main(int argc,char *argv[]){
 	assert(channels[i] != NULL);
 	FREE(channels[i]);
 	channels[i] = channel;
+	if(gps_time_ns() > last_new_entry + BILLION)
+	  break; // Give up after 1 sec with no new channels
       } else {
 	channels[chan_count++] = channel; // New one, add
+	last_new_entry = gps_time_ns();
       }
     }
     qsort(channels,chan_count,sizeof(channels[0]),chan_compare);
