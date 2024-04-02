@@ -1,5 +1,5 @@
 Installing ka9q-radio  
-March 18, KA9Q
+April 2, 2024, KA9Q
 =====================
 This package is designed for Debian Linux, including the Raspberry Pi
 OS. Since I use a Macbook Pro as my desktop, some of it (e.g., the

@@ -1,4 +1,5 @@
 *FFTW3* Tuning
+April 2, 2024, KA9Q
 ==============
 
 Because it uses fast convolution for frequency mixing and filtering,
@@ -16,17 +17,33 @@ actual transform sizes needed by the parameters you use with the
 *radiod* program. This can take hours but is worth the improvement in
 performance.
 
+FFTW3 wisdom is particularly important on the Pi5 when using an
+RX888. Without wisdom, ka9q-radio cannot run the forward FFT in real
+time, but can easily do so after creating wisdom for the 1,620,000
+real point forward FFT at the "patient" level. Wisdom makes a
+difference!
+
 FFTW3 stores its 'wisdom' files in two places: a system-wide file,
 **/etc/fftw/fftwf-wisdom**, and an application specific (i.e., *radiod*)
 file, **/var/lib/ka9q-radio/wisdom**. *Radiod* first reads the system-wide
 file and then the application specific file. If wisdom is
 not already available for the transforms it needs, it will perform a
-half-hearted search (to not slow startup too much) and store it in
+half-hearted search at the "measure" level (to not slow startup too much) and store it in
 **/var/lib/ka9q-radio/wisdom**, but I recommend manually generating a full-blown
-system-wide wisdom file with *fftwf-wisdom*.
+system-wide wisdom file with *fftwf-wisdom* at the default "patient" setting.
 
-Until I can figure out how to do all this easily and automatically,
-here's a suggested run:
+The *radiod* daemon checks to see if "patient" wisdom is already generated for each transform it needs.
+If not, it logs a message (beginning with "suggest running") with the command needed to generate it
+manually. Since wisdom generation takes a long time to run (hours for the big forward FFT) and is
+ideally run on an idle machine to avoid cache and scheduler contention, I have not yet come up
+with an easy way to do all this automatically.
+
+Grepping the log for these "suggest" messages is the easiest way to find the commands you need to run.
+But you can also generate these commands yourself. For the default parameters, the formula is:
+
+sample rate * .02 * 5/4
+
+where .02 is the block time (20 ms default) and 5/4 comes from the overlap parameter of 1/5.
 
 $ cd /etc/fftw  
 $ touch nwisdom # make sure you have write permissions - fftwf-wisdom doesn't check before doing all its work!  
@@ -36,7 +53,8 @@ $ cp -i nwisdom wisdomf
 
 This finds the best way to do the following transforms:
 
-**rof3240000**: RX888 MkII at 129.6 MHz real, 20 ms (50 Hz) block, overlap 5 (20%).
+**rof3240000**: RX888 MkII at 129.6 MHz real, 20 ms (50 Hz) block, overlap 5 (20%). You probably don't need this one since the RX888 is usually run at half clock speed
+to cover HF.
 
 **rof1620000**: RX888 MkII at 64.8 MHz real, 20 ms (50 Hz) block, overlap 5 (20%).
 
@@ -101,6 +119,12 @@ multithreading. That's true even for -T 1 (multithreading with just
 one thread). Do *NOT* omit the -T 1 option, or you may destroy all
 your previous computation work! Again, keep all your previous wisdomf
 files so you can back up if you make a mistake.
+
+FFTW's internal multithreading option (that I use with 1 thread) is
+distinct from my use of what I call *external multithreading*. This is
+controlled by the **fft-threads** option in the config file. I found
+it easier and faster to just run multiple independent copies of FFTW
+on different blocks of data.
 
 It's tempting, but *don't* just blindly copy **/etc/fftw/wisdomf** from
 one machine to another. Generate a new one. I once saw *radiod* run at
