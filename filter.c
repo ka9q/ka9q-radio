@@ -1001,27 +1001,27 @@ void *lmalloc(size_t size){
 }
 // Suggest running fftwf-wisdom to generate some FFTW3 wisdom
 static void suggest(int level,int size,int dir,int clex){
-  const char *opt = "";
+  const char *opt = NULL;
 
   switch(level){
   case FFTW_ESTIMATE:
-    opt = "-e";
+    opt = " -e";
     break;
   case FFTW_MEASURE:
-    opt = "-m";
+    opt = " -m";
     break;
   case FFTW_PATIENT: // is the default
+    opt = "";
     break;
   case FFTW_EXHAUSTIVE:
-    opt = "-x";
+    opt = " -x";
     break;
   }
-  fprintf(stdout,"suggest running \"fftwf-wisdom -v %s -T 1 -w %s/wisdom -o /tmp/wisdomf %co%c%d\"\n",
+  fprintf(stdout,"suggest running \"fftwf-wisdom -v%s -T 1 -w %s/wisdom -o /tmp/wisdomf %co%c%d\", then \"mv /tmp/wisdomf /etc/fftw/wisdomf\" *if* larger than current file. This will take time.\n",
 	  opt,
 	  VARDIR,
 	  clex == COMPLEX ? 'c' : 'r',
 	  dir == FFTW_FORWARD ? 'f' : 'b',
 	  size);
-  fprintf(stdout,"then mv /tmp/wisdomf /etc/fftw/wisdomf *if* larger than current file\n");
 }
 
