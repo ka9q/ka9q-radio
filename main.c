@@ -267,7 +267,7 @@ static int loadconfig(char const * const file){
   Verbose = config_getint(Configtable,global,"verbose",Verbose);
   FFTW_plan_timelimit = config_getdouble(Configtable,global,"fft-time-limit",FFTW_plan_timelimit);
   {
-    char const *cp = config_getstring(Configtable,global,"fft-plan-level","measure");
+    char const *cp = config_getstring(Configtable,global,"fft-plan-level","patient");
     if(strcasecmp(cp,"estimate") == 0){
       FFTW_planning_level = FFTW_ESTIMATE;
     } else if(strcasecmp(cp,"measure") == 0){
