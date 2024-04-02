@@ -19,9 +19,9 @@ performance.
 
 FFTW3 wisdom is particularly important on the Pi5 when using an
 RX888. Without wisdom, ka9q-radio cannot run the forward FFT in real
-time, but can easily do so after creating wisdom for the 1,620,000
-real point forward FFT at the "patient" level. Wisdom makes a
-difference!
+time even with four threads (the number of processore cores), but can
+easily do so with only two threads after creating wisdom for the 1,620,000 real point
+forward FFT at the "patient" level. Wisdom makes a difference!
 
 FFTW3 stores its 'wisdom' files in two places: a system-wide file,
 **/etc/fftw/fftwf-wisdom**, and an application specific (i.e., *radiod*)
