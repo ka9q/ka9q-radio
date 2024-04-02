@@ -501,6 +501,6 @@ static int close_file(struct session **spp){
   if(sp->next)
     sp->next->prev = sp->prev;
   FREE(sp);
-  sp=0;
+  
   return 0;
 }
