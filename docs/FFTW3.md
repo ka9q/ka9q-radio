@@ -1,5 +1,4 @@
 *FFTW3* Tuning
-April 2, 2024, KA9Q
 ==============
 
 Because it uses fast convolution for frequency mixing and filtering,
@@ -27,8 +26,8 @@ FFTW3 stores its 'wisdom' files in two places: a system-wide file,
 **/etc/fftw/fftwf-wisdom**, and an application specific (i.e., *radiod*)
 file, **/var/lib/ka9q-radio/wisdom**. *Radiod* first reads the system-wide
 file and then the application specific file. If wisdom is
-not already available for the transforms it needs, it will perform a
-half-hearted search at the "measure" level (to not slow startup too much) and store it in
+not already available for the transforms it needs, it will perform a time-limited
+search at the "measure" level (to not slow startup too much) and store it in
 **/var/lib/ka9q-radio/wisdom**, but I recommend manually generating a full-blown
 system-wide wisdom file with *fftwf-wisdom* at the default "patient" setting.
 
@@ -39,11 +38,13 @@ ideally run on an idle machine to avoid cache and scheduler contention, I have n
 with an easy way to do all this automatically.
 
 Grepping the log for these "suggest" messages is the easiest way to find the commands you need to run.
-But you can also generate these commands yourself. For the default parameters, the formula is:
+But you can also generate these commands yourself. For the default parameters, the formula for the FFT blocksize is:
 
 sample rate * .02 * 5/4
 
 where .02 is the block time (20 ms default) and 5/4 comes from the overlap parameter of 1/5.
+
+You may not need all these block sizes; see the notes below.
 
 $ cd /etc/fftw  
 $ touch nwisdom # make sure you have write permissions - fftwf-wisdom doesn't check before doing all its work!  
@@ -53,8 +54,8 @@ $ cp -i nwisdom wisdomf
 
 This finds the best way to do the following transforms:
 
-**rof3240000**: RX888 MkII at 129.6 MHz real, 20 ms (50 Hz) block, overlap 5 (20%). You probably don't need this one since the RX888 is usually run at half clock speed
-to cover HF.
+**rof3240000**: RX888 MkII at 129.6 MHz real, 20 ms (50 Hz) block, overlap 5 (20%). **Note!** You probably don't need this one since the RX888 is usually run at half clock speed
+to cover HF, and it takes a *long* time to run.
 
 **rof1620000**: RX888 MkII at 64.8 MHz real, 20 ms (50 Hz) block, overlap 5 (20%).
 
@@ -169,4 +170,5 @@ is also heavily used in medical imaging, such as MRI, CT and PET
 scanners.
 
 Phil Karn, KA9Q
-July 2023
+April 2, 2024
+
