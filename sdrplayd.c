@@ -468,9 +468,11 @@ int main(int argc,char *argv[]){
     // Description, if present becomes TXT record if present
     char service_name[1024];
     snprintf(service_name,sizeof(service_name),"%s (%s)",sdr->description,sdr->metadata_dest);
-    avahi_start(service_name,"_ka9q-ctl._udp",5006,sdr->metadata_dest,ElfHashString(sdr->metadata_dest),sdr->description);
+    uint32_t addr = (239 << 24) | (ElfHashString(sdr->metadata_dest) & 0xffffff);
+    avahi_start(service_name,"_ka9q-ctl._udp",5006,sdr->metadata_dest,addr,sdr->description);
     snprintf(service_name,sizeof(service_name),"%s (%s)",sdr->description,sdr->data_dest);
-    avahi_start(service_name,"_rtp._udp",5004,sdr->data_dest,ElfHashString(sdr->data_dest),sdr->description);
+    addr = (239 << 24) | (ElfHashString(sdr->data_dest) & 0xffffff);
+    avahi_start(service_name,"_rtp._udp",5004,sdr->data_dest,addr,sdr->description);
   }
   {
     char iface[1024];
