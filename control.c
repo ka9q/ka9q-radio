@@ -377,9 +377,10 @@ int main(int argc,char *argv[]){
       fprintf(stdout,"No radiod instances or Avahi not running; specify control channel manually\n");
       exit(EX_UNAVAILABLE);
     }
+    int n = 0;
     if(radiod_count == 1){
       // Only one, use it
-      target = table[0].dns_name;      // Redo this to avoid the call to resolve_mcast
+      fprintf(stdout,"Using %s (%s)\n",table[n].name,table[n].dns_name);
     } else {
       for(int i=0; i < radiod_count; i++)
 	fprintf(stdout,"%d: %s (%s)\n",i,table[i].name,table[i].dns_name);
@@ -390,31 +391,31 @@ int main(int argc,char *argv[]){
 	fprintf(stdout,"EOF on input\n");
 	exit(EX_USAGE);
       }
-      int const n = strtol(line,NULL,0);
+      n = strtol(line,NULL,0);
       if(n < 0 || n >= radiod_count){
 	fprintf(stdout,"Index %d out of range, try again\n",n);
 	exit(EX_USAGE);
       }
-      struct addrinfo *results = NULL;
-      struct addrinfo hints;
-      memset(&hints,0,sizeof(hints));
-      hints.ai_family = AF_INET; // IPv4 for now
-      hints.ai_socktype = SOCK_DGRAM;
-      hints.ai_protocol = IPPROTO_UDP;
-      hints.ai_flags = AI_ADDRCONFIG | AI_NUMERICHOST | AI_NUMERICSERV;
-      int const ecode = getaddrinfo(table[n].address,table[n].port,&hints,&results);
-      if(ecode != 0){
-	fprintf(stdout,"getaddrinfo: %s\n",gai_strerror(ecode));
-	exit(EX_IOERR);
-      }
-      // Use first entry on list -- much simpler
-      // I previously tried each entry in turn until one succeeded, but with UDP sockets and
-      // flags set to only return supported addresses, how could any of them fail?
-      memcpy(&Metadata_dest_socket,results->ai_addr,sizeof(Metadata_dest_socket));
-      freeaddrinfo(results); results = NULL;
-      Status_fd = listen_mcast(&Metadata_dest_socket,table[n].interface);
-      join_group(Output_fd,(struct sockaddr *)&Metadata_dest_socket,table[n].interface,Mcast_ttl,IP_tos);
     }
+    struct addrinfo *results = NULL;
+    struct addrinfo hints;
+    memset(&hints,0,sizeof(hints));
+    hints.ai_family = AF_INET; // IPv4 for now
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
+    hints.ai_flags = AI_ADDRCONFIG | AI_NUMERICHOST | AI_NUMERICSERV;
+    int const ecode = getaddrinfo(table[n].address,table[n].port,&hints,&results);
+    if(ecode != 0){
+      fprintf(stdout,"getaddrinfo: %s\n",gai_strerror(ecode));
+      exit(EX_IOERR);
+    }
+    // Use first entry on list -- much simpler
+    // I previously tried each entry in turn until one succeeded, but with UDP sockets and
+    // flags set to only return supported addresses, how could any of them fail?
+    memcpy(&Metadata_dest_socket,results->ai_addr,sizeof(Metadata_dest_socket));
+    freeaddrinfo(results); results = NULL;
+    Status_fd = listen_mcast(&Metadata_dest_socket,table[n].interface);
+    join_group(Output_fd,(struct sockaddr *)&Metadata_dest_socket,table[n].interface,Mcast_ttl,IP_tos);
   } else {
     // Use resolv_mcast to resolve a manually entered domain name, using default port and parsing possible interface
     char iface[1024]; // Multicast interface
