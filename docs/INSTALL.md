@@ -57,7 +57,7 @@ $ sudo addgroup your_user_name radio
 
 Membership in a few other groups can minimize the need to run as root:
 
-**adm** Look at */var/log/syslog  
+**adm** Look at */var/log/syslog*  
 **plugdev** Run *radiod* under a debugger with most devices  
 **users** Run *radiod* under a debugger with the Funcube dongle
 

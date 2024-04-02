@@ -559,6 +559,7 @@ static void *sockproc(void *arg){
       pthread_mutex_init(&sp->qmutex,NULL);
 
       sp->ssrc = pkt->rtp.ssrc;
+      memcpy(&sp->sender,&sender,sizeof(sender)); // Bind to specific host and sending port
       char const *id = lookupid(pkt->rtp.ssrc);
       if(id)
 	strlcpy(sp->id,id,sizeof(sp->id));
@@ -589,9 +590,6 @@ static void *sockproc(void *arg){
 	continue;
       }
     }
-    // Copy sender, in case the port number changed
-    memcpy(&sp->sender,&sender,sizeof(sender));
-    
     // Insert onto queue sorted by sequence number, wake up thread
     struct packet *q_prev = NULL;
     struct packet *qe = NULL;
