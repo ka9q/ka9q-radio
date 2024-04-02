@@ -141,9 +141,8 @@ struct option Options[] =
    
 char const Optstring[] = "A:B:I:N:R:T:fo:vxp:V";
 
-struct sockaddr_storage PCM_dest_address;
-struct sockaddr_storage PCM_source_address;
-struct sockaddr_storage Opus_dest_address;
+struct sockaddr_storage PCM_dest_socket;
+struct sockaddr_storage Opus_dest_socket;
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
@@ -222,10 +221,10 @@ int main(int argc,char * const argv[]){
   }
   char iface[1024];
   if(Input){
-    resolve_mcast(Input,&PCM_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
+    resolve_mcast(Input,&PCM_dest_socket,DEFAULT_RTP_PORT,iface,sizeof(iface));
     if(strlen(iface) == 0 && Default_mcast_iface != NULL)
       strlcpy(iface,Default_mcast_iface,sizeof(iface));
-    Input_fd = listen_mcast(&PCM_dest_address,iface); // Port address already in place
+    Input_fd = listen_mcast(&PCM_dest_socket,iface); // Port address already in place
 
     if(Input_fd == -1){
       fprintf(stderr,"Can't resolve input PCM group %s\n",Input);
@@ -242,8 +241,9 @@ int main(int argc,char * const argv[]){
 
   char description[1024];
   snprintf(description,sizeof(description),"pcm-source=%s",Input); // what if it changes?
-  int socksize = sizeof(Opus_dest_address);
-  avahi_start(Name,"_opus._udp",5004,Output,ElfHashString(Output),description,&Opus_dest_address,&socksize);
+  int socksize = sizeof(Opus_dest_socket);
+  uint32_t addr = (239 << 24) | (ElfHashString(Output) & 0xffffff);
+  avahi_start(Name,"_opus._udp",5004,Output,addr,description,&Opus_dest_socket,&socksize);
 
   // Can't resolve this until the avahi service is started
   if(strlen(iface) == 0 && Default_mcast_iface != NULL)
@@ -255,7 +255,7 @@ int main(int argc,char * const argv[]){
     exit(EX_OSERR); // let systemd restart us
   }
   fcntl(Output_fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
-  join_group(Output_fd,(struct sockaddr *)&Opus_dest_address,iface,Mcast_ttl,IP_tos);
+  join_group(Output_fd,(struct sockaddr *)&Opus_dest_socket,iface,Mcast_ttl,IP_tos);
 
   // Graceful signal catch
   signal(SIGPIPE,closedown);
@@ -639,7 +639,7 @@ int send_samples(struct session * const sp){
     
     if(!Discontinuous || opus_output_bytes > 2){
       // ship it
-      if(sendto(Output_fd,output_buffer,packet_bytes_written,0,(struct sockaddr *)&Opus_dest_address,sizeof(struct sockaddr)) < 0)
+      if(sendto(Output_fd,output_buffer,packet_bytes_written,0,(struct sockaddr *)&Opus_dest_socket,sizeof(struct sockaddr)) < 0)
 	return -1;
       Output_packets++; // all sessions
       sp->rtp_state_out.seq++; // Increment only if packet is sent
