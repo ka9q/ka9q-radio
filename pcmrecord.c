@@ -500,6 +500,7 @@ static int close_file(struct session **spp){
     Sessions = sp->next;
   if(sp->next)
     sp->next->prev = sp->prev;
-  FREE(*spp);
+  FREE(sp);
+  sp=0;
   return 0;
 }
