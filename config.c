@@ -3,6 +3,7 @@
 // Copyright 2022-2023, Phil Karn, KA9Q
 
 #include <iniparser/iniparser.h>
+#include <stdlib.h>
 #include "config.h"
 
 int config_getint(dictionary const *d,char const *section,char const *key,int def){

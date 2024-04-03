@@ -15,6 +15,7 @@
 #include <bsd/string.h>
 #endif
 #include <sysexits.h>
+#include <unistd.h>
 
 #include "misc.h"
 #include "status.h"

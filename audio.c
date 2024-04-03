@@ -87,7 +87,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
       *pcm_buf++ = htons(scaleclip(*buffer++));
 
     uint8_t const *dp = (uint8_t *)pcm_buf;
-    int r = sendto(Output_fd,&packet,dp - packet,0,(struct sockaddr *)&chan->output.data_dest_address,sizeof(chan->output.data_dest_address));
+    int r = sendto(Output_fd,&packet,dp - packet,0,(struct sockaddr *)&chan->output.dest_socket,sizeof(chan->output.dest_socket));
     chan->output.samples += chunk * chan->output.channels; // Count frames
     if(r <= 0){
       if(errno == EAGAIN && !TempSendFailure){

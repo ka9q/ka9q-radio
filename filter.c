@@ -189,7 +189,7 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_WISDOM_ONLY|FFTW_planning_level);
     if(master->fwd_plan == NULL){
       suggest(FFTW_planning_level,N,FFTW_FORWARD,COMPLEX);
-      master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_ESTIMATE);
+      master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_MEASURE);
     }
     break;
   case REAL:
@@ -202,7 +202,7 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
     master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_WISDOM_ONLY|FFTW_planning_level);
     if(master->fwd_plan == NULL){
       suggest(FFTW_planning_level,N,FFTW_FORWARD,REAL);
-      master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_ESTIMATE);
+      master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_MEASURE);
     }
     break;
   }
@@ -255,7 +255,7 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     slave->output.c = slave->output_buffer.c + osize - olen;
     if((slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
       suggest(FFTW_planning_level,osize,FFTW_BACKWARD,COMPLEX);
-      slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_ESTIMATE);
+      slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_MEASURE);
     }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
@@ -276,7 +276,7 @@ struct filter_out *create_filter_output(struct filter_in * master,complex float 
     slave->output.r = slave->output_buffer.r + osize - olen;
     if((slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
       suggest(FFTW_planning_level,osize,FFTW_BACKWARD,REAL);
-      slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_ESTIMATE);
+      slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_MEASURE);
     }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
@@ -1001,27 +1001,27 @@ void *lmalloc(size_t size){
 }
 // Suggest running fftwf-wisdom to generate some FFTW3 wisdom
 static void suggest(int level,int size,int dir,int clex){
-  const char *opt = "";
+  const char *opt = NULL;
 
   switch(level){
   case FFTW_ESTIMATE:
-    opt = "-e";
+    opt = " -e";
     break;
   case FFTW_MEASURE:
-    opt = "-m";
+    opt = " -m";
     break;
   case FFTW_PATIENT: // is the default
+    opt = "";
     break;
   case FFTW_EXHAUSTIVE:
-    opt = "-x";
+    opt = " -x";
     break;
   }
-  fprintf(stdout,"suggest running \"fftwf-wisdom -v %s -T 1 -w %s/wisdom -o /tmp/wisdomf %co%c%d\"\n",
+  fprintf(stdout,"suggest running \"fftwf-wisdom -v%s -T 1 -w %s/wisdom -o /tmp/wisdomf %co%c%d\", then \"mv /tmp/wisdomf /etc/fftw/wisdomf\" *if* larger than current file. This will take time.\n",
 	  opt,
 	  VARDIR,
 	  clex == COMPLEX ? 'c' : 'r',
 	  dir == FFTW_FORWARD ? 'f' : 'b',
 	  size);
-  fprintf(stdout,"then mv /tmp/wisdomf /etc/fftw/wisdomf *if* larger than current file\n");
 }
 

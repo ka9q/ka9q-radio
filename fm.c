@@ -26,18 +26,15 @@ void *demod_fm(void *arg){
     snprintf(name,sizeof(name),"fm %u",chan->output.rtp.ssrc);
     pthread_setname(name);
   }
-
-  float phase_memory = 0;
-  chan->output.channels = 1; // Only mono for now
-  if(isnan(chan->squelch_open) || chan->squelch_open == 0)
-    chan->squelch_open = 6.3;  // open above ~ +8 dB
-  if(isnan(chan->squelch_close) || chan->squelch_close == 0)
-    chan->squelch_close = 4; // close below ~ +6 dB
-
-  int const blocksize = chan->output.samprate * Blocktime / 1000.0F;
-  if(chan->filter.out)
-    delete_filter_output(&chan->filter.out);
+  pthread_mutex_init(&chan->status.lock,NULL);
+  pthread_mutex_lock(&chan->status.lock);
+  FREE(chan->status.command);
+  FREE(chan->filter.energies);
+  FREE(chan->spectrum.bin_data);
+  int const blocksize = chan->output.samprate * Blocktime / 1000;
+  delete_filter_output(&chan->filter.out);
   chan->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
+  pthread_mutex_unlock(&chan->status.lock);
 
   if(chan->filter.out == NULL){
     fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)chan->output.rtp.ssrc);
@@ -48,9 +45,16 @@ void *demod_fm(void *arg){
 	     chan->filter.max_IF/chan->output.samprate,
 	     chan->filter.kaiser_beta);
   
+  float phase_memory = 0;
+  chan->output.channels = 1; // Only mono for now
+  if(isnan(chan->fm.squelch_open) || chan->fm.squelch_open == 0)
+    chan->fm.squelch_open = 6.3;  // open above ~ +8 dB
+  if(isnan(chan->fm.squelch_close) || chan->fm.squelch_close == 0)
+    chan->fm.squelch_close = 4; // close below ~ +6 dB
+
   if(chan->fm.tone_freq != 0){
     // Set up PL tone squelch
-    init_goertzel(&chan->fm.tonedetect,chan->fm.tone_freq/chan->output.samprate);
+    init_goertzel(&chan->fm.tone_detect,chan->fm.tone_freq/chan->output.samprate);
   }
 
   float deemph_state = 0;
@@ -62,27 +66,25 @@ void *demod_fm(void *arg){
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
   int badsegments = 0;
   int badsamples = 0;
-
-  // Initialize
   chan->output.gain = (2 * chan->output.headroom *  chan->output.samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
 
-  pthread_mutex_lock(&chan->lock); // don't read while status is being read
   realtime();
 
   while(!chan->terminate){
-    if(downconvert(chan) == -1) // received terminate
+    int rval = downconvert(chan);
+    if(rval != 0)
       break;
 
     if(power_squelch && squelch_state == 0){
       // quick check SNR from raw signal power to save time on variance-based squelch
       // Variance squelch is still needed to suppress various spurs and QRM
       float const snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1.0f;
-      if(snr < chan->squelch_close){
+      if(snr < chan->fm.squelch_close){
 	// squelch closed, reset everything and mute output
 	phase_memory = 0;
 	squelch_state = 0;
 	pl_sample_count = 0;
-	reset_goertzel(&chan->fm.tonedetect);
+	reset_goertzel(&chan->fm.tone_detect);
 	send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
 	continue;
       }
@@ -105,9 +107,9 @@ void *demod_fm(void *arg){
       chan->sig.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
     }
     // Hysteresis squelch
-    int const squelch_state_max = chan->squelchtail + 1;
-    if(chan->sig.snr >= chan->squelch_open
-       || (squelch_state > 0 && chan->sig.snr >= chan->squelch_close)){
+    int const squelch_state_max = chan->fm.squelch_tail + 1;
+    if(chan->sig.snr >= chan->fm.squelch_open
+       || (squelch_state > 0 && chan->sig.snr >= chan->fm.squelch_close)){
       // Squelch is fully open
       // tail timing is in blocks (usually 10 or 20 ms each)
       squelch_state = squelch_state_max;
@@ -118,7 +120,7 @@ void *demod_fm(void *arg){
       phase_memory = 0;
       squelch_state = 0;
       pl_sample_count = 0;
-      reset_goertzel(&chan->fm.tonedetect);
+      reset_goertzel(&chan->fm.tone_detect);
       send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
       continue;
     }
@@ -224,15 +226,15 @@ void *demod_fm(void *arg){
       // use samples before de-emphasis and gain scaling
       if(squelch_state == squelch_state_max){
 	for(int n=0; n < N; n++)
-	  update_goertzel(&chan->fm.tonedetect,baseband[n]);
+	  update_goertzel(&chan->fm.tone_detect,baseband[n]);
 	
 	pl_sample_count += N;
 	if(pl_sample_count >= pl_integrate_samples){
 	  // Peak deviation of PL tone in Hz
 	  // Not sure the calibration is correct
-	  chan->fm.tone_deviation = 2 * chan->output.samprate * cabsf(output_goertzel(&chan->fm.tonedetect)) / pl_sample_count;
+	  chan->fm.tone_deviation = 2 * chan->output.samprate * cabsf(output_goertzel(&chan->fm.tone_detect)) / pl_sample_count;
 	  pl_sample_count = 0;
-	  reset_goertzel(&chan->fm.tonedetect);
+	  reset_goertzel(&chan->fm.tone_detect);
 	  tone_mute = chan->fm.tone_deviation < 250 ? true : false;
 	}
       } else
@@ -242,12 +244,12 @@ void *demod_fm(void *arg){
 	continue;
       }
     }
-    if(chan->deemph.rate != 0){
+    if(chan->fm.rate != 0){
       // Apply de-emphasis if configured
-      float const r = 1 - chan->deemph.rate;
+      float const r = 1 - chan->fm.rate;
       for(int n=0; n < N; n++){
 	deemph_state += r * (baseband[n] - deemph_state);
-	baseband[n] = deemph_state * chan->deemph.gain;
+	baseband[n] = deemph_state * chan->fm.gain;
       }
     }
     // Compute audio output level
@@ -265,13 +267,7 @@ void *demod_fm(void *arg){
     chan->output.energy += output_level;
     if(send_output(chan,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
-
-    // We're not muted; periodically send status to data channel if configured
-    data_channel_status(chan);
   } // while(!chan->terminate)
  quit:;
-  pthread_mutex_unlock(&chan->lock);
-  FREE(chan->filter.energies);
-  delete_filter_output(&chan->filter.out);
   return NULL;
 }

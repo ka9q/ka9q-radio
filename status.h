@@ -150,7 +150,7 @@ enum status_type {
   BLOCKS_SINCE_POLL,  // Blocks since last poll
   AD_OVER,          // A/D full scale samples, proxy for overranges
   RTP_PT,           // Real Time Protocol Payload Type
-  STATUS_RATE,      // Automatically send channel status over *data* channel every STATUS_RATE frames
+  STATUS_INTERVAL,      // Automatically send channel status over *data* channel every STATUS_RATE frames
 };
 
 int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);

@@ -1,5 +1,5 @@
 Installing ka9q-radio  
-March 18, KA9Q
+April 2, 2024, KA9Q
 =====================
 This package is designed for Debian Linux, including the Raspberry Pi
 OS. Since I use a Macbook Pro as my desktop, some of it (e.g., the
@@ -57,7 +57,7 @@ $ sudo addgroup your_user_name radio
 
 Membership in a few other groups can minimize the need to run as root:
 
-**adm** Look at */var/log/syslog  
+**adm** Look at */var/log/syslog*  
 **plugdev** Run *radiod* under a debugger with most devices  
 **users** Run *radiod* under a debugger with the Funcube dongle
 

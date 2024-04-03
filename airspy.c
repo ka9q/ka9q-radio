@@ -12,6 +12,7 @@
 #include <bsd/string.h>
 #endif
 #include <sysexits.h>
+#include <unistd.h>
 
 #include "conf.h"
 #include "misc.h"

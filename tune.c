@@ -36,6 +36,8 @@ char const *Mode;
 uint32_t Ssrc;
 float Gain = INFINITY;
 double Frequency = INFINITY;
+float Low = INFINITY;
+float High = INFINITY;
 int Agc = -1;
 int Samprate = 0;
 bool Quiet = false;
@@ -44,7 +46,7 @@ struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "af:g:hi:l:m:qr:R:s:vV";
+char Optstring[] = "af:g:H:hi:L:l:m:qr:R:s:vV";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"frequency", required_argument, NULL, 'f'},
@@ -52,6 +54,8 @@ struct option Options[] = {
   {"help", no_argument, NULL, 'h'},
   {"iface", required_argument, NULL, 'i'},
   {"locale", required_argument, NULL, 'l'},
+  {"low", required_argument, NULL, 'L'},
+  {"high", required_argument, NULL, 'H'},
   {"mode", required_argument, NULL, 'm'},
   {"quiet", no_argument, NULL, 'q'},
   {"radio", required_argument, NULL, 'r'},
@@ -107,6 +111,12 @@ int main(int argc,char *argv[]){
 	break;
       case 'R':
 	Samprate = strtol(optarg,NULL,0);
+	break;
+      case 'L':
+	Low = strtod(optarg,NULL);
+	break;
+      case 'H':
+	High = strtod(optarg,NULL);
 	break;
       case 'V':
 	VERSION();
@@ -164,7 +174,11 @@ int main(int argc,char *argv[]){
   // Begin polling SSRC to ensure the multicast group is up and radiod is listening
   long long last_command_time = 0;
 
-
+  if(Low > High){
+    float temp = Low;
+    Low = High;
+    High = temp;
+  }
   uint32_t received_tag = 0;
   double received_freq = INFINITY;
   uint32_t received_ssrc = 0;
@@ -192,6 +206,12 @@ int main(int argc,char *argv[]){
       
       if(Samprate != 0)
 	encode_int(&bp,OUTPUT_SAMPRATE,Samprate);
+
+      if(Low != INFINITY)
+	encode_float(&bp,LOW_EDGE,Low);
+
+      if(High != INFINITY)
+	encode_float(&bp,HIGH_EDGE,High);	
 
       if(Frequency != INFINITY)
 	encode_double(&bp,RADIO_FREQUENCY,Frequency); // Hz
@@ -259,11 +279,11 @@ int main(int argc,char *argv[]){
 	received_ssrc = decode_int32(cp,optlen);
 	break;
       case AGC_ENABLE:
-	received_agc_enable = decode_int8(cp,optlen);
+	received_agc_enable = decode_bool(cp,optlen);
 	break;
       case GAIN:
 	received_gain = decode_float(cp,optlen);
-	  break;
+	break;
       case PRESET:
 	FREE(preset); // Unlikely, but just in case
 	preset = decode_string(cp,optlen);
@@ -335,5 +355,5 @@ int main(int argc,char *argv[]){
 
 void usage(void){
   fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-R|--samprate sample_rate] [-i|--iface <iface>] [-l|--locale LOCALE]  \
-[-f|- FREQUENCY]frequency] [[-a|--agc] | [-g|--Gain <gain dB>]] [-m|--mode <mode>]\n" ,App_path);
+[-f|- FREQUENCY]frequency] [-L|--low lower-edge] [-H|--high higher-edge] [[-a|--agc] | [-g|--Gain <gain dB>]] [-m|--mode <mode>]\n" ,App_path);
 }

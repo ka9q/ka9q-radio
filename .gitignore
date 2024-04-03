@@ -5,18 +5,14 @@
 *.o
 Makefile
 .depend
-airspyd
-airspyhfd
 aprs
 aprsfeed
 control
 cwd
 ft8-decoded
-funcubed
 hackrf
-iqplay
-iqrecord
 jt-decoded
+junk
 metadump
 modulate
 monitor
@@ -31,9 +27,6 @@ pl
 powers
 radiod
 rdsd
-rtlsdrd
-rx888d
-sdrplayd
 setfilt
 set_xcvr
 show-pkt
@@ -42,11 +35,5 @@ stereod
 tune
 wd-record
 wspr-decoded
-old
-RCS
-push.sh
-experiment
 docs/notes
-docs/monitor-screenshot.png
-stash/*
 

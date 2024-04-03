@@ -389,8 +389,7 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
     fprintf(stderr,"Unknown payload type %d and channels/samprate not specified on command line\n",sp->type);
     return NULL;
   }
-  sp->samples_remaining = sp->samprate * FileLengthLimit; // If file is being limited in length
-
+  sp->samples_remaining = sp->samprate * FileLengthLimit * Channels; // If file is being limited in length
   // Create file
   // Should we append to existing files instead? If we try this, watch out for timestamp wraparound
   struct timespec now;
@@ -513,8 +512,8 @@ static int close_file(struct session **spp){
   if(sp->substantial_file){ // Don't bother for non-substantial files
     if(Verbose){
       fprintf(stdout,"closing %s %'.1f/%'.1f sec\n",sp->filename,
-	     (float)sp->samples_written / sp->samprate,
-	     (float)sp->total_file_samples / sp->samprate);
+            (float)sp->samples_written / (sp->samprate * Channels),
+            (float)sp->total_file_samples / (sp->samprate *Channels));
     }
     // Get final file size, write .wav header with sizes
     fflush(sp->fp);
@@ -548,8 +547,8 @@ static int close_file(struct session **spp){
     unlink(sp->filename);
     if(Verbose)
       printf("deleting %s %'.1f/%'.1f sec\n",sp->filename,
-	     (float)sp->samples_written / sp->samprate,
-	     (float)sp->total_file_samples / sp->samprate);
+            (float)sp->samples_written / (sp->samprate * Channels),
+            (float)sp->total_file_samples / (sp->samprate * Channels));
   }
   fclose(sp->fp);
   sp->fp = NULL;
@@ -560,6 +559,7 @@ static int close_file(struct session **spp){
     Sessions = sp->next;
   if(sp->next)
     sp->next->prev = sp->prev;
-  FREE(*spp);
+  FREE(sp);
+  
   return 0;
 }

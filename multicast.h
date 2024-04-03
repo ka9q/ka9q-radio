@@ -11,6 +11,7 @@
 
 #define DEFAULT_MCAST_PORT (5004)
 #define DEFAULT_RTP_PORT (5004)
+#define DEFAULT_RTCP_PORT (5005)
 #define DEFAULT_STAT_PORT (5006)
 
 #define NTP_EPOCH 2208988800UL // Seconds between Jan 1 1900 and Jan 1 1970
