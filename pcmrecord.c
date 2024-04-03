@@ -45,6 +45,31 @@ struct wav {
   int16_t BlockAlign;
   int16_t BitsPerSample;
 
+   // 'auxi' chunk to pass center frequency to SDR Console
+   // http://www.moetronix.com/files/spectravue.pdf had some details on this chunk
+   // and https://sdrplay.com/resources/IQ/ft4.zip
+   // has some .wav files with a center frequency that SDR Console can use
+   char AuxID[4];
+   int32_t AuxSize;
+   int16_t StartYear;
+   int16_t StartMon;
+   int16_t StartDOW;
+   int16_t StartDay;
+   int16_t StartHour;
+   int16_t StartMinute;
+   int16_t StartSecond;
+   int16_t StartMillis;
+   int16_t StopYear;
+   int16_t StopMon;
+   int16_t StopDOW;
+   int16_t StopDay;
+   int16_t StopHour;
+   int16_t StopMinute;
+   int16_t StopSecond;
+   int16_t StopMillis;
+   int32_t CenterFrequency;
+   char AuxUknown[128];
+
   char SubChunk2ID[4];
   int32_t Subchunk2Size;
 };
@@ -88,6 +113,8 @@ static char const *Locale;
 static int Samprate;
 static int Channels = 1;
 
+static uint32_t CenterFrequency=1115000;
+
 static int Input_fd;
 static struct session *Sessions;
 static int64_t Timeout = 20; // 20 seconds max idle time before file close
@@ -111,10 +138,11 @@ static struct option Options[] = {
   {"verbose", no_argument, NULL, 'v'},
   {"lengthlimit", required_argument, NULL, 'L'},
   {"limit", required_argument, NULL, 'L'},
+  {"frequency", required_argument, NULL, 'f'},
   {"version", no_argument, NULL, 'V'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = "c:d:l:m:r:st:vL:V";
+static char Optstring[] = "c:d:l:m:r:st:vL:f:V";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -158,11 +186,14 @@ int main(int argc,char *argv[]){
     case 'L':
       FileLengthLimit = strtof(optarg,NULL);
       break;
+    case 'f':
+       CenterFrequency = strtoul(optarg,NULL,0);
+      break;
     case 'V':
       VERSION();
       exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-v] [-m sec] [-f freq] PCM_multicast_address\n",argv[0]);
       exit(EX_USAGE);
       break;
     }
@@ -359,7 +390,6 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
     return NULL;
   }
   sp->samples_remaining = sp->samprate * FileLengthLimit * Channels; // If file is being limited in length
-
   // Create file
   // Should we append to existing files instead? If we try this, watch out for timestamp wraparound
   struct timespec now;
@@ -446,6 +476,21 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
   sp->header.BitsPerSample = 16;
   memcpy(sp->header.SubChunk2ID,"data",4);
   sp->header.Subchunk2Size = 0xffffffff; // Temporary
+
+  // fill in the auxi chunk (start time, center frequency)
+  memcpy(sp->header.AuxID, "auxi", 4);
+  sp->header.AuxSize=164;
+  sp->header.StartYear=tm->tm_year+1900;
+  sp->header.StartMon=tm->tm_mon+1;
+  sp->header.StartDOW=tm->tm_wday;
+  sp->header.StartDay=tm->tm_mday;
+  sp->header.StartHour=tm->tm_hour;
+  sp->header.StartMinute=tm->tm_min;
+  sp->header.StartSecond=tm->tm_sec;
+  sp->header.StartMillis=(int16_t)(now.tv_nsec / 1000000);
+  sp->header.CenterFrequency=CenterFrequency;
+  memset(sp->header.AuxUknown, 0, 128);
+
   fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
   fflush(sp->fp); // get at least the header out there
 
@@ -479,6 +524,20 @@ static int close_file(struct session **spp){
     }
     sp->header.ChunkSize = statbuf.st_size - 8;
     sp->header.Subchunk2Size = statbuf.st_size - sizeof(sp->header);
+
+    // write end time into the auxi chunk
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME,&now);
+    struct tm const * const tm = gmtime(&now.tv_sec);
+    sp->header.StopYear=tm->tm_year+1900;
+    sp->header.StopMon=tm->tm_mon+1;
+    sp->header.StopDOW=tm->tm_wday;
+    sp->header.StopDay=tm->tm_mday;
+    sp->header.StopHour=tm->tm_hour;
+    sp->header.StopMinute=tm->tm_min;
+    sp->header.StopSecond=tm->tm_sec;
+    sp->header.StopMillis=(int16_t)(now.tv_nsec / 1000000);
+
     rewind(sp->fp);
     fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
     fflush(sp->fp);
