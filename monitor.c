@@ -355,6 +355,7 @@ int main(int argc,char * const argv[]){
       break;
     case 's':
       Voting = true;
+      Auto_position = false; // Disables 
       break;
     default:
       fprintf(stderr,"Usage: %s -L\n",App_path);
@@ -1057,6 +1058,7 @@ static void *display(void *arg){
   int sessions_per_screen = 0;
   int current = -1; // No current session
   bool help = false;
+  int last_best_session = 0;
 
   while(!Terminate){
     assert(first_session >= 0);
@@ -1150,6 +1152,7 @@ static void *display(void *arg){
 	// Time since last packet drop on any channel
 	printw(" Error-free sec %'.1lf\n",(1e-9*(gps_time_ns() - Last_error_time)));
       }
+      // Show channel statuses
       getyx(stdscr,y,x);
       int row_save = y;
       int col_save = x;
@@ -1162,16 +1165,16 @@ static void *display(void *arg){
       }
       x += 5;
       y = row_save;
-      if(Channels > 1){
+      if(Auto_position){
 	// Pan column
 	mvprintw(y++,x," Pan");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
 	  struct session *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%4d",(int)roundf(100*sp->pan));
 	}
+	x += 4;
+	y = row_save;
       }
-      x += 4;
-      y = row_save;
 
       // SSRC
       mvprintw(y++,x,"%9s","SSRC");
@@ -1223,9 +1226,8 @@ static void *display(void *arg){
       y = row_save;
 
       mvprintw(y++,x,"%5s","SNR");
-      float best_snr = -INFINITY;
-      int best_session = 0;
-
+      int best_session = last_best_session;
+      float snrs[Nsessions_copy]; // Keep SNRs for voting decisions
       for(int session = first_session; session < Nsessions_copy; session++,y++){
 	struct session *sp = Sessions_copy[session];
 	struct channel *chan = &sp->chan;
@@ -1235,13 +1237,17 @@ static void *display(void *arg){
 	  sig_power = 0; // Avoid log(-x) = nan
 	float const sn0 = sig_power/chan->sig.n0;
 	float const snr = power2dB(sn0/noise_bandwidth);
+	snrs[session] = snr;
 	if(!isnan(snr))
 	  mvprintw(y,x,"%5.1f",snr);
-	if(snr > best_snr){
-	  best_snr = snr;
-	  best_session = session;
-	}
       }
+      // Find the best with 1 dB hysteresis - should it be configurable?
+      for(int i = 0; i < Nsessions_copy; i++){
+	if(snrs[i] > snrs[last_best_session] + 1.0)
+	   best_session = i;
+      }
+      last_best_session = best_session;
+
       x += 6;
       y = row_save;
 
@@ -1397,7 +1403,7 @@ static void *display(void *arg){
 	attr |= sp->now_active ? A_BOLD : 0;
 
 	// 1 adjusts for the titles
-	// only underscore to the end of actual text
+	// only underscore to just before the socket entry since it's variable length
 	mvchgat(1 + row_save + session,col_save,x,attr,pair,NULL);
       }
       // End of display writing
@@ -1407,7 +1413,6 @@ static void *display(void *arg){
 	  struct session *sp = Sessions_copy[session];
 	  sp->muted = (session == best_session) ? false : true;
 	}
-	current = best_session;
       }
     }
 
