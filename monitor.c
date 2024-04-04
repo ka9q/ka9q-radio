@@ -1226,7 +1226,6 @@ static void *display(void *arg){
       y = row_save;
 
       mvprintw(y++,x,"%5s","SNR");
-      int best_session = last_best_session;
       float snrs[Nsessions_copy]; // Keep SNRs for voting decisions
       for(int session = first_session; session < Nsessions_copy; session++,y++){
 	struct session *sp = Sessions_copy[session];
@@ -1237,11 +1236,12 @@ static void *display(void *arg){
 	  sig_power = 0; // Avoid log(-x) = nan
 	float const sn0 = sig_power/chan->sig.n0;
 	float const snr = power2dB(sn0/noise_bandwidth);
-	snrs[session] = snr;
+	snrs[session] = sp->now_active ? snr : -INFINITY;
 	if(!isnan(snr))
 	  mvprintw(y,x,"%5.1f",snr);
       }
       // Find the best with 1 dB hysteresis - should it be configurable?
+      int best_session = last_best_session;
       for(int i = 0; i < Nsessions_copy; i++){
 	if(snrs[i] > snrs[last_best_session] + 1.0)
 	   best_session = i;
