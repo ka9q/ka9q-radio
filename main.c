@@ -313,7 +313,7 @@ static int loadconfig(char const * const file){
     snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
 
     int slen = sizeof(Template.output.dest_socket);
-    uint32_t addr = (239 << 24) | (ElfHashString(Data) & 0xffffff); // Force into site-local multicast space
+    uint32_t addr = (239U << 24) | (ElfHashString(Data) & 0xffffff); // Force into site-local multicast space
     avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data,addr,ttlmsg,&Template.output.dest_socket,&slen);
 #if 0
     avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Data,addr,ttlmsg,&Template.status.dest_socket,&slen); // same length
@@ -392,7 +392,7 @@ static int loadconfig(char const * const file){
     snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
     int slen = sizeof(Metadata_socket);
     uint32_t addr = ElfHashString(Metadata_string);
-    addr = (239 << 24) | (addr & 0xffffff); // Force into site-local multicast space
+    addr = (239U << 24) | (addr & 0xffffff); // Force into site-local multicast space
     avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_string,addr,ttlmsg,&Metadata_socket,&slen);
   }
   // avahi_start has resolved the target DNS name into Metadata_socket and inserted the port number
@@ -457,7 +457,7 @@ static int loadconfig(char const * const file){
       snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
 
       int slen = sizeof(data_dest_socket);
-      uint32_t addr = (239 << 24) | (ElfHashString(data) & 0xffffff); // Force into site-local multicast space
+      uint32_t addr = (239U << 24) | (ElfHashString(data) & 0xffffff); // Force into site-local multicast space
       avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_socket,&slen);
 #if 0
       avahi_start(sname,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,data,addr,ttlmsg,&metadata_dest_socket,&slen); // sockets are same size

@@ -242,7 +242,7 @@ int main(int argc,char * const argv[]){
   char description[1024];
   snprintf(description,sizeof(description),"pcm-source=%s",Input); // what if it changes?
   int socksize = sizeof(Opus_dest_socket);
-  uint32_t addr = (239 << 24) | (ElfHashString(Output) & 0xffffff);
+  uint32_t addr = (239U << 24) | (ElfHashString(Output) & 0xffffff);
   avahi_start(Name,"_opus._udp",5004,Output,addr,description,&Opus_dest_socket,&socksize);
 
   // Can't resolve this until the avahi service is started
