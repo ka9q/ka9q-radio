@@ -39,15 +39,10 @@ void *demod_linear(void *arg){
   FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);
   int const blocksize = chan->output.samprate * Blocktime / 1000;
-  delete_filter_output(&chan->filter.out);
-  chan->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
+  create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
   pthread_mutex_unlock(&chan->status.lock);
 
-  if(chan->filter.out == NULL){
-    fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)chan->output.rtp.ssrc);
-    goto quit;
-  }
-  set_filter(chan->filter.out,
+  set_filter(&chan->filter.out,
 	     chan->filter.min_IF/chan->output.samprate,
 	     chan->filter.max_IF/chan->output.samprate,
 	     chan->filter.kaiser_beta);
@@ -66,14 +61,14 @@ void *demod_linear(void *arg){
     if(rval != 0)
       break;
 
-    int const N = chan->filter.out->olen; // Number of raw samples in filter output buffer
+    int const N = chan->filter.out.olen; // Number of raw samples in filter output buffer
 
     // First pass over sample block.
     // Run the PLL (if enabled)
     // Apply post-downconversion shift (if enabled, e.g. for CW)
     // Measure energy
     // Apply PLL & frequency shift, measure energy
-    complex float * const buffer = chan->filter.out->output.c; // Working buffer
+    complex float * const buffer = chan->filter.out.output.c; // Working buffer
     float signal = 0; // PLL only
     float noise = 0;  // PLL only
 
@@ -242,6 +237,5 @@ void *demod_linear(void *arg){
     // average baseband (input) and output powers. But I still try to make it meaningful.
     chan->output.sum_gain_sq += start_gain * chan->output.gain; // accumulate square of approx average gain
   }
- quit:;
   return NULL;
 }

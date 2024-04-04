@@ -78,14 +78,13 @@ struct filter_out {
 int window_filter(int L,int M,complex float * restrict response,float beta);
 int window_rfilter(int L,int M,complex float * restrict response,float beta);
 
-struct filter_in *create_filter_input(int const L,int const M, enum filtertype const in_type);
-struct filter_in *create_filter_input_file(int const L,int const M, enum filtertype const in_type,char * restrict file);
-struct filter_out *create_filter_output(struct filter_in * restrict master,complex float * restrict response,int olen, enum filtertype out_type);
+struct filter_in *create_filter_input(struct filter_in *,int const L,int const M, enum filtertype const in_type);
+struct filter_out *create_filter_output(struct filter_out *slave,struct filter_in * restrict master,complex float * restrict response,int olen, enum filtertype out_type);
 int execute_filter_input(struct filter_in * restrict);
 int execute_filter_output(struct filter_out * restrict ,int);
 int execute_filter_output_idle(struct filter_out * const slave);
-int delete_filter_input(struct filter_in ** restrict);
-int delete_filter_output(struct filter_out ** restrict);
+int delete_filter_input(struct filter_in * restrict);
+int delete_filter_output(struct filter_out * restrict);
 int make_kaiser(float * restrict,int M,float);
 int set_filter(struct filter_out * restrict,float,float,float);
 float const noise_gain(struct filter_out const * restrict);

@@ -235,7 +235,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
   int sampcount = len/2;
   float energy = 0;
   struct frontend *frontend = ctx;
-  float complex * const wptr = frontend->in->input_write_pointer.c;
+  float complex * const wptr = frontend->in.input_write_pointer.c;
   
   for(int i=0; i < sampcount; i++){
     float complex samp;
@@ -247,7 +247,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
     wptr[i] = samp;
   }
   frontend->timestamp = gps_time_ns();
-  write_cfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
+  write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->if_power_instant = energy / sampcount;
   frontend->if_power += Power_smooth * (frontend->if_power_instant - frontend->if_power);
   frontend->samples += sampcount;

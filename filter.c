@@ -108,7 +108,7 @@ static void suggest(int level,int size,int dir,int clex);
 // The set_filter() function uses Kaiser windowing for this purpose
 
 // Set up input (master) half of filter
-struct filter_in *create_filter_input(int const L,int const M, enum filtertype const in_type){
+struct filter_in *create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type){
   assert(L > 0);
   assert(M > 0);
   int const N = L + M - 1;
@@ -116,7 +116,8 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
   if(bins < 1)
     return NULL; // Unreasonably small - will segfault. Can happen if sample rate is garbled
 
-  struct filter_in * const master = calloc(1,sizeof(struct filter_in));
+  if(master == NULL)
+    return NULL;
   for(int i=0; i < ND; i++){
     master->fdomain[i] = lmalloc(sizeof(complex float) * bins);
     master->completed_jobs[i] = (unsigned int)-1; // So startup won't drop any blocks
@@ -215,18 +216,20 @@ struct filter_in *create_filter_input(int const L,int const M, enum filtertype c
 // Set up output (slave) side of filter (possibly one of several sharing the same input master)
 // These output filters should be deleted before their masters
 // Segfault will occur if filter_in is deleted and execute_filter_output is executed
-struct filter_out *create_filter_output(struct filter_in * master,complex float * const response,int const olen, enum filtertype const out_type){
+struct filter_out *create_filter_output(struct filter_out *slave,struct filter_in * master,complex float * const response,int const olen, enum filtertype const out_type){
   assert(master != NULL);
   if(master == NULL)
     return NULL;
+
+  assert(slave != NULL);
+  if(slave == NULL)
+    return NULL;
+    
 
   assert(olen > 0);
   if(olen > master->ilen)
     return NULL; // Interpolation not yet supported
   
-  struct filter_out * const slave = calloc(1,sizeof(*slave));
-  if(slave == NULL)
-    return NULL;
   // Share all but output fft bins, response, output and output type
   slave->master = master;
   slave->out_type = out_type;
@@ -621,13 +624,7 @@ static void terminate_fft(struct filter_in *f){
 }
 #endif
 
-int delete_filter_input(struct filter_in ** p){
-  if(p == NULL)
-    return -1;
-
-  struct filter_in *master = *p;
-  *p = NULL; // Avoid race?
-
+int delete_filter_input(struct filter_in * master){
   if(master == NULL)
     return -1;
   
@@ -636,15 +633,9 @@ int delete_filter_input(struct filter_in ** p){
 
   for(int i=0; i < ND; i++)
     fftwf_free(master->fdomain[i]);
-  FREE(master);
   return 0;
 }
-int delete_filter_output(struct filter_out **p){
-  if(p == NULL)
-    return -1;
-  struct filter_out *slave = *p;
-  *p = NULL; // Avoid race?
-
+int delete_filter_output(struct filter_out *slave){
   if(slave == NULL)
     return 1;
   
@@ -653,7 +644,6 @@ int delete_filter_output(struct filter_out **p){
   fftwf_free(slave->output_buffer.c);
   fftwf_free(slave->response);
   fftwf_free(slave->fdomain);
-  FREE(slave);
   return 0;
 }
 

@@ -20,11 +20,13 @@
 #include <string.h>
 #endif
 #include <sysexits.h>
+#include <poll.h>
 
 #include "conf.h"
 #include "config.h"
 #include "misc.h"
 #include "multicast.h"
+#include "radio.h"
 #include "iir.h"
 #include "morse.h"
 
@@ -102,6 +104,10 @@ static int64_t Last_error_time;
 static int Nsessions;
 static struct session *Sessions[NSESSIONS];
 static bool Terminate;
+static bool Voting;
+
+int Mcast_ttl; // for decode_radio_status(); not really needed here
+
 
 // All the tones from various groups, including special NATO 150 Hz tone
 static float PL_tones[] = {
@@ -158,12 +164,16 @@ struct session {
   bool terminate;            // Set to cause thread to terminate voluntarily
   bool muted;
   bool reset;                // Set to force output timing reset on next packet
+  bool now_active;           // for convenience of painting output
   
   char id[32];
   bool notch_enable;         // Enable PL removal notch
   struct iir iir_left;
   struct iir iir_right;  
   float notch_tone;
+  struct channel chan;
+  struct frontend frontend;
+
 };
 
 static void load_id(void);
@@ -199,7 +209,7 @@ static inline int modsub(unsigned int const a, unsigned int const b, int const m
 }
 
 
-static char Optstring[] = "CI:LR:Sac:f:g:p:qr:u:vnV";
+static char Optstring[] = "CI:LR:Sac:f:g:p:qr:su:vnV";
 static struct  option Options[] = {
    {"center", no_argument, NULL, 'C'},
    {"input", required_argument, NULL, 'I'},
@@ -216,6 +226,7 @@ static struct  option Options[] = {
    {"verbose", no_argument, NULL, 'v'},
    {"notch", no_argument, NULL, 'n'},
    {"version", no_argument, NULL, 'V'},
+   {"voting", no_argument, NULL, 's'},
    {NULL, 0, NULL, 0},
 };
 
@@ -341,6 +352,9 @@ int main(int argc,char * const argv[]){
       break;
     case 'S':
       Auto_sort = true;
+      break;
+    case 's':
+      Voting = true;
       break;
     default:
       fprintf(stderr,"Usage: %s -L\n",App_path);
@@ -503,11 +517,100 @@ static void *sockproc(void *arg){
 
   if(input_fd == -1)
     pthread_exit(NULL);
+
+  int status_fd;
+  {
+    char iface[1024];
+    struct sockaddr sock;
+    resolve_mcast(mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface));
+    status_fd = listen_mcast(&sock,iface);
+  }
   struct packet *pkt = NULL;
   
   realtime();
   // Main loop begins here
   while(!Terminate){
+    int const nfds = 2;
+    struct pollfd fds[nfds];
+    fds[0].fd = input_fd;
+    fds[0].events = POLLIN;
+    fds[0].revents = 0;
+    fds[1].fd = status_fd;
+    fds[1].events = POLLIN;
+    fds[1].revents = 0;
+    int n = poll(fds,nfds,100); // timeout to poll terminate flag
+    if(n < 0)
+      perror("poll");
+    if(n <= 0)
+      continue;
+
+    struct sockaddr_storage sender;
+    socklen_t socksize = sizeof(sender);
+
+    if(fds[1].revents & (POLLIN|POLLPRI)){
+      // Got a status packet
+      uint8_t buffer[PKTSIZE];
+      int length = recvfrom(status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&sender,&socksize);
+      if(buffer[0] != STATUS) // not status, ignore
+	continue;
+
+      struct channel chan;
+      struct frontend frontend;
+      decode_radio_status(&frontend,&chan,buffer+1,length-1);
+      uint32_t ssrc = chan.output.rtp.ssrc;
+      pthread_mutex_lock(&Sess_mutex); // Protect Nsessions
+      struct session *sp = lookup_session(&sender,ssrc);
+      pthread_mutex_unlock(&Sess_mutex);
+      if(!sp){
+	// Status arrived before first RTP; create and init session
+	pthread_mutex_lock(&Sess_mutex); // Protect Nsessions
+	sp = create_session();
+	pthread_mutex_unlock(&Sess_mutex); // Protect Nsessions
+	if(!sp){
+	  fprintf(stderr,"No room!!\n");
+	  continue;
+	}
+	char const *id = lookupid(ssrc); // rather than freq? resolve this.
+	if(id)
+	  strlcpy(sp->id,id,sizeof(sp->id));
+	if(Auto_position)
+	  sp->pan = make_position(Position++);
+	else
+	  sp->pan = 0;     // center by default
+	pthread_cond_init(&sp->qcond,NULL);
+	pthread_mutex_init(&sp->qmutex,NULL);
+	sp->ssrc = chan.output.rtp.ssrc;
+	memcpy(&sp->sender,&sender,sizeof(sender)); // Bind to specific host and sending port
+	sp->gain = powf(10.,0.05 * Gain);    // Start with global default
+	sp->notch_enable = Notch;
+	sp->muted = Start_muted;
+	sp->dest = mcast_address_text;
+	sp->last_timestamp = chan.output.rtp.timestamp;
+	sp->rtp_state.seq = chan.output.rtp.seq;
+	sp->reset = true;
+	sp->active = 0;
+	sp->type = chan.output.rtp.type; // Check range 0-127?
+	sp->samprate = chan.output.samprate;
+	if(PT_table[chan.output.rtp.type].encoding == OPUS)
+	  sp->samprate = DAC_samprate;
+	
+	for(int j=0; j < N_tones; j++)
+	  init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
+	
+	if(pthread_create(&sp->task,NULL,decode_task,sp) == -1){
+	  perror("pthread_create");
+	  close_session(&sp);
+	  continue;
+	}
+      }
+      memcpy(&sp->chan,&chan,sizeof(sp->chan));
+      sp->chan.inuse = true;
+      memcpy(&sp->frontend,&frontend,sizeof(sp->frontend));
+      continue; // next packet
+    }
+
+    if(!(fds[0].revents & (POLLIN|POLLPRI)))
+      continue; // Not ready to receive a data packet
     // Need a new packet buffer?
     if(!pkt)
       pkt = malloc(sizeof(*pkt));
@@ -516,11 +619,7 @@ static void *sockproc(void *arg){
     pkt->data = NULL;
     pkt->len = 0;
     
-    // Needs a timeout to poll Terminate
-    struct sockaddr_storage sender;
-    socklen_t socksize = sizeof(sender);
     int size = recvfrom(input_fd,&pkt->content,sizeof(pkt->content),0,(struct sockaddr *)&sender,&socksize);
-    
     if(size == -1){
       if(errno != EINTR){ // Happens routinely, e.g., when window resized
 	perror("recvfrom");
@@ -965,6 +1064,7 @@ static void *display(void *arg){
     assert(current >= -1);
     assert(current == -1 || current < Nsessions); // in case Nsessions is 0
 
+    // Start screen update
     move(0,0);
     clrtobot();
     addstr("KA9Q Multicast Audio Monitor:");
@@ -988,13 +1088,6 @@ static void *display(void *arg){
       }
     }
 
-    if(Start_muted){
-      int y;
-      int x __attribute__ ((unused));
-      getyx(stdscr,y,x);
-      mvaddstr(y,0,"**Starting new sessions muted**");
-    }
-
     if(Quiet_mode){
       addstr("Hit 'q' to resume screen updates\n");
     } else {
@@ -1006,23 +1099,22 @@ static void *display(void *arg){
 	  addstr(" PTT On");
 	else if(Last_xmit_time != 0)
 	  printw(" PTT Off; Last xmit: %lld sec",(long long)((gps_time_ns() - Last_xmit_time) / BILLION));
+	printw("\n");
       }
+      if(Constant_delay)
+	printw("Constant delay ");
+
+      if(Start_muted)
+	printw("**Starting new sessions muted** ");
+
+      if(Voting)
+	printw("SNR Voting enabled ");
+
       int y,x;
       getyx(stdscr,y,x);
-      if(Constant_delay)
-	mvaddstr(y,34,"Constant delay");
-      x = 65; // work around unused variable warning
-      mvaddstr(y,x,"------- Activity -------- Play");
-      if(Verbose)
-	addstr("  ----Codec----     ---------------RTP--------------------------");	
-      addstr("\n");    
-      
-      // Second header line
-      addstr("  dB Pan     SSRC  Tone Notch ID                                 Total   Current      Idle Queue");
-      if(Verbose)
-	addstr(" Type ms ch BW     packets resets drops lates reseq Source/Dest");
-      addstr("\n");
-      
+      if(x != 0)
+	printw("\n");
+
       if(Auto_sort)
 	sort_session_active();
 
@@ -1041,89 +1133,11 @@ static void *display(void *arg){
 	current = 0; // Session got created, make it current
       pthread_mutex_unlock(&Sess_mutex);
       
+      long long time = gps_time_ns();
       for(int session = first_session; session < Nsessions_copy; session++){
 	struct session *sp = Sessions_copy[session];
-	
-	// embolden entire line if active
-	int idle_sec = 0;
-	int queue_ms = 0;
-	{
-	  long long time = gps_time_ns();
-	  if(time - sp->last_active < BILLION/2){
-	    // Active within the past 500 ms
-	    attr_on(A_BOLD,NULL);
-	    if(!sp->muted){
-	      int d = modsub(sp->wptr,Rptr,BUFFERSIZE); // Unplayed samples on queue
-	      queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
-	    }
-	  } else {
-	    sp->active = 0; // Clear accumulated value
-	    idle_sec = (time - sp->last_active) / BILLION;
-	  }
-	}
-
-	// Stand out gain and pan on currently selected channel
-	if(session == current)
-	  attr_on(A_STANDOUT,NULL);
-	
-	if(Channels > 1)
-	  printw("%+4.0lf%4d",sp->muted ? -INFINITY : voltage2dB(sp->gain),(int)roundf(100*sp->pan));
-	else
-	  printw("%+4.0lf    ",sp->muted ? -INFINITY : voltage2dB(sp->gain));	  
-	attr_off(A_STANDOUT,NULL);
-	{
-	  char idle_buf[100];
-	  char total_buf[100];
-	  char active_buf[100];
-	  char identifier[31];
-	  
-	  // Truncate ID field to 30 places
-	  strlcpy(identifier,sp->id,sizeof(identifier));
-	  
-	  int64_t active_sec = sp->active;
-	  if(sp->notch_enable)
-	    printw("%9u %5.1f %5.1f %-30s%10s%10s%10s%6d",
-		   sp->ssrc,
-		   sp->current_tone,
-		   sp->notch_tone,
-		   identifier,
-		   ftime(total_buf,sizeof(total_buf),sp->tot_active),
-		   ftime(active_buf,sizeof(active_buf),active_sec),
-		   ftime(idle_buf,sizeof(idle_buf),idle_sec),   // Time idle since last transmission
-		   queue_ms); // Playout buffer length, fractional sec
-	  else
-	    printw("%9u             %-30s%10s%10s%10s%6d",
-		   sp->ssrc,
-		   identifier,
-		   ftime(total_buf,sizeof(total_buf),sp->tot_active),
-		   ftime(active_buf,sizeof(active_buf),active_sec),
-		   ftime(idle_buf,sizeof(idle_buf),idle_sec),   // Time idle since last transmission
-		   queue_ms); // Playout buffer length, fractional sec	  
-	}
-	if(Verbose && sp->samprate != 0){ // avoid divide by zero
-	  printw("%5s%3d%3d%3d",
-		 PT_table[sp->type].encoding == OPUS ? "Opus" : "PCM",
-		 (1000 * sp->frame_size/sp->samprate), // frame size, ms
-		 sp->channels,
-		 sp->bandwidth); // Bandwidth, kHz 
-	  
-	  printw("%'12lu",sp->packets);
-	  printw("%'7lu",sp->resets);
-	  printw("%'6llu",(unsigned long long)sp->rtp_state.drops);
-	  printw("%'6lu",sp->lates);
-	  printw("%'6lu",sp->reseqs);
-	  
-	  // printable version of socket addresses and ports
-	  if(sp->dest){ // Might not be allocated yet, if we got dispatched during the nameinfo() call
-	    printw(" %s -> %s",formatsock(&sp->sender),sp->dest);
-	  }
-	}
-	attr_off(A_BOLD,NULL); // In case it was on (channel is active)
-	addstr("\n");
-	if(getcury(stdscr) >= LINES-1) // Can't be at beginning, because y will clip at LINES!
-	  break;
-      } // end session loop
-      
+	sp->now_active = (time - sp->last_active) < BILLION/2;
+      }
       if(Verbose){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
@@ -1134,8 +1148,267 @@ static void *display(void *arg){
 	printw("Playout %.0f ms, latency %d ms, queue %.3lf sec, D/A rate %'.3lf Hz,",Playout,Portaudio_delay,qd,rate);
 	printw(" (%+.3lf ppm),",1e6 * (rate / DAC_samprate - 1));
 	// Time since last packet drop on any channel
-	printw(" Error-free sec %'.1lf",(1e-9*(gps_time_ns() - Last_error_time)));
-      }      
+	printw(" Error-free sec %'.1lf\n",(1e-9*(gps_time_ns() - Last_error_time)));
+      }
+      getyx(stdscr,y,x);
+      int row_save = y;
+      int col_save = x;
+
+      // dB column
+      mvprintw(y++,x,"%4s","dB");
+      for(int session = first_session; session < Nsessions_copy; session++,y++){
+	struct session *sp = Sessions_copy[session];
+	mvprintw(y,x,"%+4.0lf",sp->muted ? -INFINITY : voltage2dB(sp->gain));
+      }
+      x += 5;
+      y = row_save;
+      if(Channels > 1){
+	// Pan column
+	mvprintw(y++,x," Pan");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%4d",(int)roundf(100*sp->pan));
+	}
+      }
+      x += 4;
+      y = row_save;
+
+      // SSRC
+      mvprintw(y++,x,"%9s","SSRC");
+      for(int session = first_session; session < Nsessions_copy; session++,y++){
+	struct session *sp = Sessions_copy[session];
+	mvprintw(y,x,"%9d",sp->ssrc);
+      }
+      x += 10;
+      y = row_save;
+
+      if(Notch){
+	mvprintw(y++,x,"%5s","Tone");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  if(sp->notch_enable == false || sp->current_tone == 0)
+	    continue;
+	  
+	  mvprintw(y,x,"%5.1f",sp->current_tone);
+	}
+	x += 6;
+	y = row_save;
+	
+	mvprintw(y++,x,"%5s","Notch");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  if(sp->notch_enable == false || sp->notch_tone == 0)
+	    continue;
+	  
+	  mvprintw(y,x,"%5.1f",sp->notch_tone);
+	}
+	x += 6;
+	y = row_save;
+      }
+      mvprintw(y++,x,"%12s","Freq");
+      for(int session = first_session; session < Nsessions_copy; session++,y++){
+	struct session *sp = Sessions_copy[session];
+	if(sp->chan.tune.freq != 0)
+	  mvprintw(y,x,"%'12.0lf",sp->chan.tune.freq);
+      }
+      x += 13;
+      y = row_save;
+      
+      mvprintw(y++,x,"%5s","Mode");
+      for(int session = first_session; session < Nsessions_copy; session++,y++){
+	struct session *sp = Sessions_copy[session];
+	mvprintw(y,x,"%5s",sp->chan.preset);
+      }
+      x += 6;
+      y = row_save;
+
+      mvprintw(y++,x,"%5s","SNR");
+      float best_snr = -INFINITY;
+      int best_session = 0;
+
+      for(int session = first_session; session < Nsessions_copy; session++,y++){
+	struct session *sp = Sessions_copy[session];
+	struct channel *chan = &sp->chan;
+	float const noise_bandwidth = fabsf(chan->filter.max_IF - chan->filter.min_IF);
+	float sig_power = chan->sig.bb_power - noise_bandwidth * chan->sig.n0;
+	if(sig_power < 0)
+	  sig_power = 0; // Avoid log(-x) = nan
+	float const sn0 = sig_power/chan->sig.n0;
+	float const snr = power2dB(sn0/noise_bandwidth);
+	if(!isnan(snr))
+	  mvprintw(y,x,"%5.1f",snr);
+	if(snr > best_snr){
+	  best_snr = snr;
+	  best_session = session;
+	}
+      }
+      x += 6;
+      y = row_save;
+
+      int longest = 0;
+      mvprintw(y++,x,"%-30s","ID");
+      for(int session = first_session; session < Nsessions_copy; session++,y++){
+	struct session *sp = Sessions_copy[session];
+	int len = strlen(sp->id);
+	if(len > longest)
+	  longest = len;
+	mvprintw(y,x,"%-30s",sp->id);
+      }
+      x += longest;
+      y = row_save;
+
+      mvprintw(y++,x,"%10s","Total");
+      for(int session = first_session; session < Nsessions_copy; session++,y++){
+	struct session *sp = Sessions_copy[session];
+	char total_buf[100];
+	mvprintw(y,x,"%10s",ftime(total_buf,sizeof(total_buf),sp->tot_active));
+      }
+      x += 11;
+      y = row_save;
+
+      mvprintw(y++,x,"%10s","Cur/idle");
+      for(int session = first_session; session < Nsessions_copy; session++,y++){
+	struct session *sp = Sessions_copy[session];
+	char buf[100];
+	if(sp->now_active)
+	  mvprintw(y,x,"%10s",ftime(buf,sizeof(buf),sp->active));
+	else {
+	  sp->active = 0; // Clear accumulated value
+	  float idle_sec = (time - sp->last_active) / BILLION;
+	  mvprintw(y,x,"%10s",ftime(buf,sizeof(buf),idle_sec));   // Time idle since last transmission
+	}
+      }
+      x += 11;
+      y = row_save;
+
+      mvprintw(y++,x,"%6s","Queue");
+      for(int session = first_session; session < Nsessions_copy; session++,y++){
+	struct session *sp = Sessions_copy[session];
+	if(!sp->now_active)
+	  continue;
+
+	int d = modsub(sp->wptr,Rptr,BUFFERSIZE); // Unplayed samples on queue
+	int queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
+	if(sp->now_active && !sp->muted)
+	  mvprintw(y,x,"%6d",queue_ms);   // Time idle since last transmission
+      }
+      x += 7;
+      y = row_save;
+
+      if(Verbose){
+	// Opus/pcm
+	mvprintw(y++,x,"Type");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  
+	  if(sp->samprate != 0)
+	    mvprintw(y,x,"%4s",PT_table[sp->type].encoding == OPUS ? "Opus" : "PCM");
+	}
+	x += 5;
+	y = row_save;
+	// frame size, ms
+	mvprintw(y++,x,"%3s","ms");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%3d",(1000 * sp->frame_size/sp->samprate)); // frame size, ms
+	}
+	x += 6;
+	y = row_save;
+	  
+	// channels
+	mvprintw(y++,x,"%3s","ch");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%3d",sp->channels);
+	}
+	x += 4;
+	y = row_save;
+
+	// BW
+	mvprintw(y++,x,"%3s","bw");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%3d",sp->bandwidth);
+	}
+	x += 4;
+	y = row_save;
+	
+	// Packets
+	mvprintw(y++,x,"%12s","Packets");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%12lu",sp->packets);
+	}
+	x += 13;
+	y = row_save;
+	
+	// Resets
+	mvprintw(y++,x,"%7s","resets");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%7lu",sp->resets);
+	}
+	x += 8;
+	y = row_save;
+	
+	// BW
+	mvprintw(y++,x,"%6s","drops");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%'6llu",(unsigned long long)sp->rtp_state.drops);
+	}
+	x += 7;
+	y = row_save;
+	
+	// Lates
+	mvprintw(y++,x,"%6s","lates");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%6lu",sp->lates);
+	}
+	x += 7;
+	y = row_save;
+	
+	// BW
+	mvprintw(y++,x,"%6s","reseq");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%6lu",sp->reseqs);
+	}
+	x += 7;
+	y = row_save;
+
+	// Sockets
+	mvprintw(y++,x,"%s","sockets");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%s -> %s",formatsock(&sp->sender),sp->dest);
+	}
+      }
+      // Embolden the active lines
+      attr_t attrs;
+      short pair;
+      attr_get(&attrs, &pair, NULL);
+      for(int session = first_session; session < Nsessions_copy; session++){
+	struct session *sp = Sessions_copy[session];
+	
+	attr_t attr = A_NORMAL;
+	attr |= session == current ? A_UNDERLINE : 0;
+	attr |= sp->now_active ? A_BOLD : 0;
+
+	// 1 adjusts for the titles
+	// only underscore to the end of actual text
+	mvchgat(1 + row_save + session,col_save,x,attr,pair,NULL);
+      }
+      // End of display writing
+      // Experimental voting feature - mute all but best SNR
+      if(Voting){
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  sp->muted = (session == best_session) ? false : true;
+	}
+	current = best_session;
+      }
     }
 
     // process keyboard commands only if there's something to act on
@@ -1195,6 +1468,7 @@ static void *display(void *arg){
       sort_session_total();
       break;
     case 'N':
+      Notch = true;
       for(int i=0; i < Nsessions; i++){
 	struct session *sp = Sessions[i];
 	if(sp != NULL && !sp->notch_enable){
@@ -1203,16 +1477,22 @@ static void *display(void *arg){
       }
       break;
     case 'n':
+      Notch = true;
       if(current >= 0){
 	if(!Sessions[current]->notch_enable)
 	  Sessions[current]->notch_enable = true;
       }
       break;
+    case 'R': // Reset all sessions
+      for(int i=0; i < Nsessions;i++)
+	Sessions[i]->reset = true;
+      break;	
     case 'f':
       if(current >= 0)
 	Sessions[current]->notch_enable = false;
       break;
     case 'F':
+      Notch = false;
       for(int i=0; i < Nsessions; i++){
 	struct session *sp = Sessions[i];
 	sp->notch_enable = false;
@@ -1334,6 +1614,7 @@ static void *display(void *arg){
   }
   return NULL;
 }
+
 static void reset_session(struct session * const sp,uint32_t timestamp){
   sp->resets++;
   if(sp->opus)

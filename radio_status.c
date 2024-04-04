@@ -391,16 +391,14 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
   }
   if(new_filter_needed){
     // Set up new filter with chan possibly stopped
-    if(chan->filter.out){
-      if(Verbose > 1)
-	fprintf(stdout,"new filter for chan %'u: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
-		ssrc, chan->filter.min_IF, chan->filter.max_IF,
-		chan->output.samprate, chan->filter.kaiser_beta);
-      // start_demod already sets up a new filter
-      set_filter(chan->filter.out,chan->filter.min_IF/chan->output.samprate,
-		 chan->filter.max_IF/chan->output.samprate,
-		 chan->filter.kaiser_beta);
-    }
+    if(Verbose > 1)
+      fprintf(stdout,"new filter for chan %'u: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
+	      ssrc, chan->filter.min_IF, chan->filter.max_IF,
+	      chan->output.samprate, chan->filter.kaiser_beta);
+    // start_demod already sets up a new filter
+    set_filter(&chan->filter.out,chan->filter.min_IF/chan->output.samprate,
+	       chan->filter.max_IF/chan->output.samprate,
+	       chan->filter.kaiser_beta);
   }    
   return false;
 }
@@ -445,12 +443,9 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   encode_double(&bp,FIRST_LO_FREQUENCY,frontend->frequency); // Hz
   encode_double(&bp,SECOND_LO_FREQUENCY,chan->tune.second_LO); // Hz
 
-  if(frontend->in){
-    encode_int32(&bp,FILTER_BLOCKSIZE,frontend->in->ilen);
-    encode_int32(&bp,FILTER_FIR_LENGTH,frontend->in->impulse_length);
-  }
-  if(chan->filter.out != NULL)
-    encode_int32(&bp,FILTER_DROPS,chan->filter.out->block_drops);  // count
+  encode_int32(&bp,FILTER_BLOCKSIZE,frontend->in.ilen);
+  encode_int32(&bp,FILTER_FIR_LENGTH,frontend->in.impulse_length);
+  encode_int32(&bp,FILTER_DROPS,chan->filter.out.block_drops);  // count
   
   // Adjust for A/D width
   // Level is absolute relative to A/D saturation, so +3dB for real vs complex

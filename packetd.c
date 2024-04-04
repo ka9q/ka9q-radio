@@ -488,11 +488,13 @@ static void *decode_task(void *arg){
   struct session *sp = (struct session *)arg;
   assert(sp != NULL);
 
-  struct filter_in *filter_in = create_filter_input(AL,AM,REAL);
-  struct filter_out *filter_out = create_filter_output(filter_in,NULL,AL,COMPLEX);
+  struct filter_in filter_in;
+  create_filter_input(&filter_in,AL,AM,REAL);
+  struct filter_out filter_out;
+  create_filter_output(&filter_out,&filter_in,NULL,AL,COMPLEX);
   const float filter_low = min(mark_tone,space_tone) - Bitrate/4;
   const float filter_high = max(mark_tone,space_tone) + Bitrate/4;
-  set_filter(filter_out,filter_low/sp->samprate,filter_high/sp->samprate,3.0); // Creates analytic, band-limited signal
+  set_filter(&filter_out,filter_low/sp->samprate,filter_high/sp->samprate,3.0); // Creates analytic, band-limited signal
 
   // Tone replica generators (-1200 and -2200 Hz)
   struct osc mark;
@@ -542,21 +544,21 @@ static void *decode_task(void *arg){
 	pad = 5; // flush filters with 5 blocks of padding
     }
 
-    assert(filter_in->ilen == AL);
-    assert(filter_out->olen == AL);
+    assert(filter_in.ilen == AL);
+    assert(filter_out.olen == AL);
     for(int n=0; n < AL; n++){
-      if(put_rfilter(filter_in,ntohs(samples[n]) * SCALE) == 0)
+      if(put_rfilter(&filter_in,ntohs(samples[n]) * SCALE) == 0)
 	continue;
-      execute_filter_output(filter_out,0);    // Shouldn't block
-      for(int n=0; n<filter_out->olen; n++){
+      execute_filter_output(&filter_out,0);    // Shouldn't block
+      for(int n=0; n<filter_out.olen; n++){
 	// Spin down by mark and space frequencies, accumulate each in boxcar (comb) filters
 	// Mark and space each have in-phase and offset integrators for timing recovery
 	float complex s;
-	s = filter_out->output.c[n] * step_osc(&mark);
+	s = filter_out.output.c[n] * step_osc(&mark);
 	mark_accum += s;
 	mark_offset_accum += s;
 	
-	s = filter_out->output.c[n] * step_osc(&space);
+	s = filter_out.output.c[n] * step_osc(&space);
 	space_accum += s;
 	space_offset_accum += s;
 	

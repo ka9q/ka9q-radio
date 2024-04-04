@@ -228,7 +228,7 @@ void *proc_funcube(void *arg){
     complex float samp_sum = 0;
     float dotprod = 0;
     
-    complex float * wptr = frontend->in->input_write_pointer.c;
+    complex float * wptr = frontend->in.input_write_pointer.c;
 
     for(int i=0; i<Blocksize; i++){
       frontend->overranges += (sampbuf[2*i] == 32767) || (sampbuf[2*i] <= -32767);
@@ -257,7 +257,7 @@ void *proc_funcube(void *arg){
       wptr[i] = samp;
     }
 
-    write_cfilter(frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
+    write_cfilter(&frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
     frontend->samples += Blocksize;
     float const block_energy = i_energy + q_energy; // Normalize for complex pairs
     frontend->if_power_instant = block_energy / Blocksize;

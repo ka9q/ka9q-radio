@@ -231,7 +231,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
     fprintf(stdout,"dropped %'lld\n",(long long)transfer->dropped_samples);
   }
   int const sampcount = transfer->sample_count;
-  float complex * const wptr = frontend->in->input_write_pointer.c;
+  float complex * const wptr = frontend->in.input_write_pointer.c;
   float complex * const up = (float complex *)transfer->samples;
   assert(wptr != NULL);
   assert(up != NULL);
@@ -244,7 +244,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   }
   frontend->samples += sampcount;
   frontend->timestamp = gps_time_ns();
-  write_cfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
+  write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->if_power_instant = in_energy / sampcount;
   frontend->if_power += Power_smooth * (frontend->if_power_instant - frontend->if_power);
   return 0;

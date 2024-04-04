@@ -98,7 +98,7 @@ struct frontend {
   int (*setup)(struct frontend *,dictionary *,char const *); // Get front end ready to go
   int (*start)(struct frontend *);          // Start front end sampling
   double (*tune)(struct frontend *,double); // Tune front end, return actual frequency
-  struct filter_in * restrict in; // Input half of fast convolver, shared with all channels
+  struct filter_in in; // Input half of fast convolver, shared with all channels
 };
 
 extern struct frontend Frontend; // Only one per radio instance
@@ -120,7 +120,7 @@ struct channel {
 
   // Zero IF pre-demod filter params
   struct {
-    struct filter_out *out;
+    struct filter_out out;
     float min_IF;          // Edges of filter (settable)
     float max_IF;         // (settable)
     // Window shape factor for Kaiser window
@@ -291,5 +291,6 @@ void *demod_spectrum(void *);
 int send_output(struct channel * restrict ,const float * restrict,int,bool);
 int send_radio_status(struct sockaddr const *,struct frontend const *, struct channel *);
 bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
+int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,int length);
 
 #endif

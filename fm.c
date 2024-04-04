@@ -32,15 +32,10 @@ void *demod_fm(void *arg){
   FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);
   int const blocksize = chan->output.samprate * Blocktime / 1000;
-  delete_filter_output(&chan->filter.out);
-  chan->filter.out = create_filter_output(Frontend.in,NULL,blocksize,COMPLEX);
+  create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
   pthread_mutex_unlock(&chan->status.lock);
 
-  if(chan->filter.out == NULL){
-    fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)chan->output.rtp.ssrc);
-    goto quit;
-  }
-  set_filter(chan->filter.out,
+  set_filter(&chan->filter.out,
 	     chan->filter.min_IF/chan->output.samprate,
 	     chan->filter.max_IF/chan->output.samprate,
 	     chan->filter.kaiser_beta);
@@ -59,7 +54,7 @@ void *demod_fm(void *arg){
 
   float deemph_state = 0;
   int squelch_state = 0; // Number of blocks for which squelch remains open
-  int const N = chan->filter.out->olen;
+  int const N = chan->filter.out.olen;
   float const one_over_olen = 1.0f / N; // save some divides
   int const pl_integrate_samples = chan->output.samprate * 0.24; // 240 milliseconds (spec is < 250 ms)
   int pl_sample_count = 0;
@@ -89,7 +84,7 @@ void *demod_fm(void *arg){
 	continue;
       }
     }
-    complex float const * const buffer = chan->filter.out->output.c; // for convenience
+    complex float const * const buffer = chan->filter.out.output.c; // for convenience
     float amplitudes[N];
     float avg_amp = 0;
     for(int n = 0; n < N; n++)
@@ -268,6 +263,5 @@ void *demod_fm(void *arg){
     if(send_output(chan,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
   } // while(!chan->terminate)
- quit:;
   return NULL;
 }

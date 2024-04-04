@@ -117,11 +117,9 @@ struct session {
 
   char current_dtmf_digit;
   float current_pl_tone;
-  struct filter_in *filter_in;
+  struct filter_in filter_in;
   int in_cnt;
-  struct filter_out *pl_filter_out;
-  struct filter_out *dtmf_low_filter_out;
-  struct filter_out *dtmf_high_filter_out;
+  struct filter_out pl_filter_out;
 };
 
 static void closedown(int);
@@ -270,7 +268,7 @@ int main(int argc,char * const argv[]){
 	// Set up input side of audio baseband filter
 	// 4800 samples @ 24 kHz = 200 ms
 	int const Filter_block = roundf(Filter_time * sp->samprate);
-	sp->filter_in = create_filter_input(Filter_block,Filter_block+1,REAL);
+	create_filter_input(&sp->filter_in,Filter_block,Filter_block+1,REAL);
 
 	// Set up PL tone detector
 	sp->pl_blocksize = PL_samprate / PL_blockrate;
@@ -282,10 +280,10 @@ int main(int argc,char * const argv[]){
 
 	//  200 ms @ 1500 Hz = 300 samples x 2 = 600 point FFT, 2.5 Hz bins, rotate by 10 hz increments
 	int pl_Filter_block = roundf(PL_samprate * Filter_time);
-	sp->pl_filter_out = create_filter_output(sp->filter_in,NULL,pl_Filter_block,COMPLEX);
+	create_filter_output(&sp->pl_filter_out,&sp->filter_in,NULL,pl_Filter_block,COMPLEX);
 	// Pass 50-300 Hz
 	// Kaiser beta = 11; kaiser alpha = 11/pi = 3.5; first null @ sqrt(1+alpha^2) = 3.64 bins * 5 Hz = 18.2 Hz
-	set_filter(sp->pl_filter_out,(50. - PL_Shift)/PL_samprate,(300. - PL_Shift)/PL_samprate,Kaiser_beta);
+	set_filter(&sp->pl_filter_out,(50. - PL_Shift)/PL_samprate,(300. - PL_Shift)/PL_samprate,Kaiser_beta);
       }
       int sampcount = size / sizeof(int16_t);
       int const samples_skipped = rtp_process(&sp->rtp_state_in,&rtp_hdr,sampcount);
@@ -296,14 +294,14 @@ int main(int argc,char * const argv[]){
       while(sampcount-- > 0){
 	// For each sample, run the local oscillators and integrators
 	float const samp = SCALE16 * (int16_t)ntohs(*sampp++);
-	if(put_rfilter(sp->filter_in,samp) == 0)
+	if(put_rfilter(&sp->filter_in,samp) == 0)
 	  continue;
 
 	int const Rotate = 2 * (PL_Shift * Filter_time);
-	execute_filter_output(sp->pl_filter_out,Rotate);
+	execute_filter_output(&sp->pl_filter_out,Rotate);
 	// Process for PL tone
-	for(int n=0; n < sp->pl_filter_out->olen; n++){
-	  float const pl_tone = process_pl(sp,sp->pl_filter_out->output.c[n]);
+	for(int n=0; n < sp->pl_filter_out.olen; n++){
+	  float const pl_tone = process_pl(sp,sp->pl_filter_out.output.c[n]);
 	  if(pl_tone > 0){
 #if 0
 	    printf("ssrc %u: PL %.1f Hz\n",sp->rtp_state_in.ssrc,pl_tone);

@@ -311,7 +311,7 @@ static int rx_callback(airspy_transfer *transfer){
   }
   assert(transfer->sample_type == AIRSPY_SAMPLE_RAW);
   int const sampcount = transfer->sample_count;
-  float * wptr = frontend->in->input_write_pointer.r;
+  float * wptr = frontend->in.input_write_pointer.r;
   uint32_t const *up = (uint32_t *)transfer->samples;
   assert(wptr != NULL);
   assert(up != NULL);
@@ -339,7 +339,7 @@ static int rx_callback(airspy_transfer *transfer){
   }
   frontend->samples += sampcount;
   frontend->timestamp = gps_time_ns();
-  write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
+  write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->if_power_instant = (float)in_energy / sampcount;
   frontend->if_power = Power_smooth * (frontend->if_power_instant - frontend->if_power);
   if(sdr->software_agc){

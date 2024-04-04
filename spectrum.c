@@ -58,11 +58,7 @@ void *demod_spectrum(void *arg){
   // points directly, so we decrease to correct for the overlap factor
   // I know all this can be simplified
   int const olen = fft_bins * (float)Frontend.L / N;
-  chan->filter.out = create_filter_output(Frontend.in,NULL,olen,SPECTRUM);
-  if(chan->filter.out == NULL){
-    fprintf(stdout,"unable to create filter for ssrc %lu\n",(unsigned long)chan->output.rtp.ssrc);
-    goto quit;
-  }
+  create_filter_output(&chan->filter.out,&Frontend.in,NULL,olen,SPECTRUM);
 
   // If it's already allocated (why should it be?) we don't know how big it is
   if(chan->spectrum.bin_data != NULL)
@@ -81,12 +77,12 @@ void *demod_spectrum(void *arg){
     for(int i=0; i < chan->spectrum.bin_count; i++){ // For each noncoherent integration bin above center freq
       float p = 0;
       for(int j=0; j < binsperbin; j++){ // Add energy of each fft bin that's part of this user integration bin
-	p += cnrmf(chan->filter.out->fdomain[binp++]);
+	p += cnrmf(chan->filter.out.fdomain[binp++]);
       }
       // Accumulate energy until next poll
       chan->spectrum.bin_data[i] += p;
     }
   }
- quit:;
+  delete_filter_output(&chan->filter.out);
   return NULL;
 }

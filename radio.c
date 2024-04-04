@@ -113,7 +113,7 @@ static const float N0_smooth = .001; // exponential smoothing rate for (noisy) b
 // in the chan's pre-filter nyquist bandwidth
 // Works better than global estimation when noise floor is not flat, e.g., on HF
 static float estimate_noise(struct channel *chan,int shift){
-  struct filter_out const * const slave = chan->filter.out;
+  struct filter_out *slave = &chan->filter.out;
   if(chan->filter.energies == NULL)
     chan->filter.energies = calloc(sizeof(float),slave->bins);
 
@@ -517,6 +517,9 @@ int downconvert(struct channel *chan){
     restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
     send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
     chan->status.global_timer = 0; // Just sent one
+    // Also send to output stream
+    send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
+    chan->status.output_timer = chan->status.output_interval; // Reload
     FREE(chan->status.command);
   } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
     // Delayed status request, used mainly by all-channel polls to avoid big bursts
@@ -546,8 +549,8 @@ int downconvert(struct channel *chan){
 
     chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
     double const freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
-    if(compute_tuning(Frontend.in->ilen + Frontend.in->impulse_length - 1,
-		      Frontend.in->impulse_length,
+    if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
+		      Frontend.in.impulse_length,
 		      Frontend.samprate,
 		      &shift,&remainder,freq) == 0)
       break; // The carrier is in range
@@ -567,16 +570,9 @@ int downconvert(struct channel *chan){
   assert(isfinite(chan->tune.doppler_rate));
   assert(isfinite(chan->tune.shift));
 
-  // If an output filter doesn't exist yet, will segfault
   // Yet we rely on the wait inside execute_filter_output for timing
   // When not debugging, just delay a blocktime and issue an error before returning
-  assert(chan->filter.out != NULL);
-  if(chan->filter.out == NULL){
-    printf("chan %d has no output filter!\n",chan->output.rtp.ssrc);
-    usleep((useconds_t)(Blocktime * 1000)); // Blocktime is in milliseconds
-    return 0;
-  }
-  complex float * const buffer = chan->filter.out->output.c; // Working output time-domain buffer (if any)
+  complex float * const buffer = chan->filter.out.output.c; // Working output time-domain buffer (if any)
   // set fine tuning frequency & phase. Do before execute_filter blocks (can't remember why)
   if(buffer != NULL){ // No output time-domain buffer in spectrum mode
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
@@ -589,17 +585,17 @@ int downconvert(struct channel *chan){
     // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
     // Be sure to Initialize chan->filter.bin_shift at startup to something bizarre to force this inequality on first call
     if(shift != chan->filter.bin_shift){
-      const int V = 1 + (Frontend.in->ilen / (Frontend.in->impulse_length - 1)); // Overlap factor
+      const int V = 1 + (Frontend.in.ilen / (Frontend.in.impulse_length - 1)); // Overlap factor
       chan->filter.phase_adjust = cispi(-2.0f*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
       chan->fine.phasor *= cispi((shift - chan->filter.bin_shift) / (2.0f * (V-1))); // One time adjust for shift change
     }
     chan->fine.phasor *= chan->filter.phase_adjust;
   }
-  execute_filter_output(chan->filter.out,-shift); // block until new data frame
+  execute_filter_output(&chan->filter.out,-shift); // block until new data frame
   chan->status.blocks_since_poll++;
   float level_normalize = scale_voltage_out2FS(&Frontend);
   if(buffer != NULL){ // No output time-domain buffer in spectral analysis mode
-    const int N = chan->filter.out->olen; // Number of raw samples in filter output buffer
+    const int N = chan->filter.out.olen; // Number of raw samples in filter output buffer
     float energy = 0;
     for(int n=0; n < N; n++){
       buffer[n] *= level_normalize * step_osc(&chan->fine);

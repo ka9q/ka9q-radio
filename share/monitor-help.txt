@@ -4,6 +4,7 @@ Q quit monitor entirely
 ⇞ ⇟ (page up/down) select prev/next session page
 d delete session
 r reset playout buffer
+R reset all playout buffers
 m mute current session
 M mute all sessions      
 u unmute current session
@@ -18,6 +19,8 @@ s sort sessions by most recently active
 t sort sessions by most active
 - + volume -1/+1 dB
 ← → stereo position left/right
+shift ← playout buffer -1 ms
+shift → playout buffer +1 ms
 v toggle verbose display
 h toggle help display
 q toggle quiet mode

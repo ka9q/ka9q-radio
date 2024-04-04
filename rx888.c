@@ -310,7 +310,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
   // Feed directly into FFT input buffer, accumulate energy
   float in_energy = 0; // A/D energy accumulator
   int16_t const * const samples = (int16_t *)transfer->buffer;
-  float * const wptr = frontend->in->input_write_pointer.r;
+  float * const wptr = frontend->in.input_write_pointer.r;
   int const sampcount = size / sizeof(int16_t);
   if(sdr->randomizer){
     for(int i=0; i < sampcount; i++){
@@ -329,7 +329,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
   }
 
   frontend->timestamp = gps_time_ns();
-  write_rfilter(frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
+  write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
 
   // These blocks are kinda small, so exponentially smooth the power readings
   {

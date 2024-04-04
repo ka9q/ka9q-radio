@@ -671,11 +671,7 @@ static int setup_hardware(char const *sname){
   Frontend.M = Frontend.L / (Overlap - 1) + 1;
   assert(Frontend.M != 0);
   assert(Frontend.L != 0);
-  Frontend.in = create_filter_input(Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
-  if(Frontend.in == NULL){
-    fprintf(stdout,"Input filter setup failed\n");
-    return -1;
-  }
+  create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
   pthread_mutex_init(&Frontend.status_mutex,NULL);
   pthread_cond_init(&Frontend.status_cond,NULL);
   if(Frontend.start){

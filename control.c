@@ -54,7 +54,6 @@ static dictionary *Pdict;
 struct frontend Frontend;
 struct sockaddr_storage Metadata_source_socket;      // Source of metadata
 struct sockaddr_storage Metadata_dest_socket;      // Dest of metadata (typically multicast)
-static uint64_t Block_drops; // Stored in output filter on sender, not in channel structure
 
 int Mcast_ttl = DEFAULT_MCAST_TTL;
 int IP_tos = DEFAULT_IP_TOS;
@@ -87,7 +86,6 @@ static void display_presets(WINDOW *modes,struct channel const *channel);
 static void display_output(WINDOW *output,struct channel const *channel);
 static int process_keyboard(struct channel *,uint8_t **bpp,int c);
 static void process_mouse(struct channel *channel,uint8_t **bpp);
-static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int length);
 static bool for_us(struct channel *channel,uint8_t const *buffer,int length,uint32_t ssrc);
 static int init_demod(struct channel *channel);
 
@@ -479,7 +477,7 @@ int main(int argc,char *argv[]){
       memcpy(&Metadata_source_socket,&source_socket,sizeof(Metadata_source_socket));
       struct channel * const channel = calloc(1,sizeof(struct channel));
       init_demod(channel);
-      decode_radio_status(channel,buffer+1,length-1);
+      decode_radio_status(&Frontend,channel,buffer+1,length-1);
       // Do we already have it?
       int i;
       for(i=0; i < chan_count; i++)
@@ -601,7 +599,7 @@ int main(int argc,char *argv[]){
 #ifdef DEBUG_POLL 
       wprintw(Debug_win,"got response length %d\n",length);
 #endif
-      decode_radio_status(channel,buffer+1,length-1);
+      decode_radio_status(&Frontend,channel,buffer+1,length-1);
       // Postpone next poll to specified interval
       next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
       if(Blocktime == 0 && Frontend.samprate != 0)
@@ -1060,266 +1058,6 @@ static bool for_us(struct channel *channel,uint8_t const *buffer,int length,uint
   return false; // not specified, so not for us
 }
 
-// Decode incoming status message from the radio program, convert and fill in fields in local channel structure
-// Leave all other fields unchanged, as they may have local uses (e.g., file descriptors)
-// Note that we use some fields in channel differently than in radiod (e.g., dB vs ratios)
-static int decode_radio_status(struct channel *channel,uint8_t const *buffer,int length){
-  uint8_t const *cp = buffer;
-  while(cp - buffer < length){
-    enum status_type type = *cp++; // increment cp to length field
-
-    if(type == EOL)
-      break; // end of list
-    
-    unsigned int optlen = *cp++;
-    if(optlen & 0x80){
-      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
-      int length_of_length = optlen & 0x7f;
-      optlen = 0;
-      while(length_of_length > 0){
-	optlen <<= 8;
-	optlen |= *cp++;
-	length_of_length--;
-      }
-    }
-    if(cp - buffer + optlen >= length)
-      break; // invalid length; we can't continue to scan
-    switch(type){
-    case EOL:
-      break;
-    case CMD_CNT:
-      channel->status.packets_in = decode_int32(cp,optlen);
-      break;
-    case DESCRIPTION:
-      FREE(Frontend.description);
-      Frontend.description = decode_string(cp,optlen);
-      break;
-    case GPS_TIME:
-      Frontend.timestamp = decode_int64(cp,optlen);
-      break;
-    case INPUT_SAMPRATE:
-      Frontend.samprate = decode_int(cp,optlen);
-      break;
-    case INPUT_SAMPLES:
-      Frontend.samples = decode_int64(cp,optlen);
-      break;
-    case AD_OVER:
-      Frontend.overranges = decode_int64(cp,optlen);
-      break;
-    case OUTPUT_DATA_SOURCE_SOCKET:
-      decode_socket(&channel->output.source_socket,cp,optlen);
-      break;
-    case OUTPUT_DATA_DEST_SOCKET:
-      decode_socket(&channel->output.dest_socket,cp,optlen);
-      break;
-    case OUTPUT_SSRC:
-      channel->output.rtp.ssrc = decode_int32(cp,optlen);
-      break;
-    case OUTPUT_TTL:
-      Mcast_ttl = decode_int8(cp,optlen);
-      break;
-    case OUTPUT_SAMPRATE:
-      channel->output.samprate = decode_int(cp,optlen);
-      break;
-    case OUTPUT_DATA_PACKETS:
-      channel->output.rtp.packets = decode_int64(cp,optlen);
-      break;
-    case OUTPUT_METADATA_PACKETS:
-      channel->status.packets_out = decode_int64(cp,optlen);
-      break;
-    case FILTER_BLOCKSIZE:
-      Frontend.L = decode_int(cp,optlen);
-      break;
-    case FILTER_FIR_LENGTH:
-      Frontend.M = decode_int(cp,optlen);
-      break;
-    case LOW_EDGE:
-      channel->filter.min_IF = decode_float(cp,optlen);
-      break;
-    case HIGH_EDGE:
-      channel->filter.max_IF = decode_float(cp,optlen);
-      break;
-    case FE_LOW_EDGE:
-      Frontend.min_IF = decode_float(cp,optlen);
-      break;
-    case FE_HIGH_EDGE:
-      Frontend.max_IF = decode_float(cp,optlen);
-      break;
-    case FE_ISREAL:
-      Frontend.isreal = decode_bool(cp,optlen);
-      break;
-    case AD_BITS_PER_SAMPLE:
-      Frontend.bitspersample = decode_int(cp,optlen);
-      break;
-    case IF_GAIN:
-      Frontend.if_gain = decode_int8(cp,optlen);
-      break;
-    case LNA_GAIN:
-      Frontend.lna_gain = decode_int8(cp,optlen);
-      break;
-    case MIXER_GAIN:
-      Frontend.mixer_gain = decode_int8(cp,optlen);
-      break;
-    case KAISER_BETA:
-      channel->filter.kaiser_beta = decode_float(cp,optlen);
-      break;
-    case FILTER_DROPS:
-      Block_drops = decode_int(cp,optlen);
-      break;
-    case IF_POWER:
-      Frontend.if_power = dB2power(decode_float(cp,optlen));
-      break;
-    case BASEBAND_POWER:
-      channel->sig.bb_power = dB2power(decode_float(cp,optlen)); // dB -> power
-      break;
-    case NOISE_DENSITY:
-      channel->sig.n0 = dB2power(decode_float(cp,optlen));
-      break;
-    case DEMOD_SNR:
-      channel->sig.snr = dB2power(decode_float(cp,optlen));
-      break;
-    case FREQ_OFFSET:
-      channel->sig.foffset = decode_float(cp,optlen);
-      break;
-    case PEAK_DEVIATION:
-      channel->fm.pdeviation = decode_float(cp,optlen);
-      break;
-    case PLL_LOCK:
-      channel->linear.pll_lock = decode_bool(cp,optlen);
-      break;
-    case PLL_BW:
-      channel->linear.loop_bw = decode_float(cp,optlen);
-      break;
-    case PLL_SQUARE:
-      channel->linear.square = decode_bool(cp,optlen);
-      break;
-    case PLL_PHASE:
-      channel->linear.cphase = decode_float(cp,optlen);
-      break;
-    case ENVELOPE:
-      channel->linear.env = decode_bool(cp,optlen);
-      break;
-    case OUTPUT_LEVEL:
-      channel->output.energy = dB2power(decode_float(cp,optlen));
-      break;
-    case OUTPUT_SAMPLES:
-      channel->output.samples = decode_int64(cp,optlen);
-      break;
-    case COMMAND_TAG:
-      channel->status.tag = decode_int32(cp,optlen);
-      break;
-    case RADIO_FREQUENCY:
-      channel->tune.freq = decode_double(cp,optlen);
-      break;
-    case SECOND_LO_FREQUENCY:
-      channel->tune.second_LO = decode_double(cp,optlen);
-      break;
-    case SHIFT_FREQUENCY:
-      channel->tune.shift = decode_double(cp,optlen);
-      break;
-    case FIRST_LO_FREQUENCY:
-      Frontend.frequency = decode_double(cp,optlen);
-      break;
-    case DOPPLER_FREQUENCY:
-      channel->tune.doppler = decode_double(cp,optlen);
-      break;
-    case DOPPLER_FREQUENCY_RATE:
-      channel->tune.doppler_rate = decode_double(cp,optlen);
-      break;
-    case DEMOD_TYPE:
-      channel->demod_type = decode_int(cp,optlen);
-      break;
-    case OUTPUT_CHANNELS:
-      channel->output.channels = decode_int(cp,optlen);
-      break;
-    case INDEPENDENT_SIDEBAND:
-      channel->filter.isb = decode_bool(cp,optlen);
-      break;
-    case THRESH_EXTEND:
-      channel->fm.threshold = decode_bool(cp,optlen);
-      break;
-    case PLL_ENABLE:
-      channel->linear.pll = decode_bool(cp,optlen);
-      break;
-    case GAIN:              // dB to voltage
-      channel->output.gain = dB2voltage(decode_float(cp,optlen));
-      break;
-    case AGC_ENABLE:
-      channel->linear.agc = decode_bool(cp,optlen);
-      break;
-    case HEADROOM:          // db to voltage
-      channel->output.headroom = dB2voltage(decode_float(cp,optlen));
-      break;
-    case AGC_HANGTIME:      // s to samples
-      channel->linear.hangtime = decode_float(cp,optlen);
-      break;
-    case AGC_RECOVERY_RATE: // dB/s to dB/sample to voltage/sample
-      channel->linear.recovery_rate = dB2voltage(decode_float(cp,optlen));
-      break;
-    case AGC_THRESHOLD:   // dB to voltage
-      channel->linear.threshold = dB2voltage(decode_float(cp,optlen));
-      break;
-    case TP1: // Test point
-      channel->tp1 = decode_float(cp,optlen);
-      break;
-    case TP2:
-      channel->tp2 = decode_float(cp,optlen);
-      break;
-    case SQUELCH_OPEN:
-      channel->fm.squelch_open = dB2power(decode_float(cp,optlen));
-      break;
-    case SQUELCH_CLOSE:
-      channel->fm.squelch_close = dB2power(decode_float(cp,optlen));
-      break;
-    case DEEMPH_GAIN:
-      channel->fm.gain = decode_float(cp,optlen);
-      break;
-    case DEEMPH_TC:
-      channel->fm.rate = 1e6*decode_float(cp,optlen);
-      break;
-    case PL_TONE:
-      channel->fm.tone_freq = decode_float(cp,optlen);
-      break;
-    case PL_DEVIATION:
-      channel->fm.tone_deviation = decode_float(cp,optlen);
-      break;
-    case NONCOHERENT_BIN_BW:
-      channel->spectrum.bin_bw = decode_float(cp,optlen);
-      break;
-    case BIN_COUNT:
-      channel->spectrum.bin_count = decode_int(cp,optlen);
-      break;
-    case BIN_DATA:
-      break;
-    case RF_GAIN:
-      Frontend.rf_gain = decode_float(cp,optlen);
-      break;
-    case RF_ATTEN:
-      Frontend.rf_atten = decode_float(cp,optlen);
-      break;
-    case BLOCKS_SINCE_POLL:
-      channel->status.blocks_since_poll = decode_int64(cp,optlen);
-      break;
-    case PRESET:
-      {
-	char *p = decode_string(cp,optlen);
-	strlcpy(channel->preset,p,sizeof(channel->preset));
-	FREE(p);
-      }
-      break;
-    case RTP_PT:
-      channel->output.rtp.type = decode_int(cp,optlen);
-      break;
-    case STATUS_INTERVAL:
-      channel->status.output_interval = decode_int(cp,optlen);
-      break;
-    default: // ignore others
-      break;
-    }
-    cp += optlen;
-  }
-  return 0;
-}
 
 static void display_tuning(WINDOW *w,struct channel const *channel){
   // Tuning control window - these can be adjusted by the user
@@ -1454,7 +1192,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   //  pprintw(w,row++,col,"first null","%'.1f Hz",firstnull * 1000. / Blocktime);
 #endif
 
-  pprintw(w,row++,col,"Drops","%'llu   ",Block_drops);
+  pprintw(w,row++,col,"Drops","%'llu   ",channel->filter.out.block_drops);
   
   box(w,0,0);
   mvwaddstr(w,0,1,"Filtering");
