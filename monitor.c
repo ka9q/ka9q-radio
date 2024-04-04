@@ -1135,6 +1135,7 @@ static void *display(void *arg){
 	current = 0; // Session got created, make it current
       pthread_mutex_unlock(&Sess_mutex);
       
+      // Flag active sessions
       long long time = gps_time_ns();
       for(int session = first_session; session < Nsessions_copy; session++){
 	struct session *sp = Sessions_copy[session];
@@ -1417,7 +1418,9 @@ static void *display(void *arg){
     }
 
     // process keyboard commands only if there's something to act on
-    int c = getch(); // Waits for 'update interval' ms if no input
+    int const c = getch(); // Waits for 'update interval' ms if no input
+    if(c == EOF)
+      continue; // No key hit; don't lock and unlock Sess_mutex
     
     // Not all of these commands require locking, but it's easier to just always do it
     pthread_mutex_lock(&Sess_mutex); // Re-lock after time consuming getch() (which includes a refresh)
