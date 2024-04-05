@@ -104,6 +104,13 @@ struct frontend {
 extern struct frontend Frontend; // Only one per radio instance
 
 // Channel state block; there can be many of these
+// This is primarily for radiod, but it is also used by 'control' and 'monitor' to shadow
+// radiod's state, encoded for network transmission by send_radio_status and decoded by decode_radio_status().
+// The transfer protocol uses a series of TLV-encoded tuples that do *not* send every element of this
+// structure, so shadow copies can be incomplete.
+
+// Be careful with memcpy(): there are a few pointers (filter.energies, spectrum.bin_data, status.command, etc)
+// If you use these in shadow copies you must malloc these arrays yourself.
 struct channel {
   bool inuse;
   int lifetime;          // Remaining lifetime, frames
