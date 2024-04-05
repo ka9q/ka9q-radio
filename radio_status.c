@@ -384,7 +384,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     cp += optlen;
   }
  done:;
-  if(chan->demod_type == SPECTRUM)
+  if(chan->demod_type == SPECT_DEMOD)
     memset(chan->preset,0,sizeof(chan->preset)); // No presets in this mode
 
   if(restart_needed){
