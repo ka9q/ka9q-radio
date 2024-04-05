@@ -593,6 +593,7 @@ int channels_from_pt(int const type){
   return PT_table[type].channels;
 }
  
+// Should dynamically create a new one if not found
 int pt_from_info(int const samprate,int const channels){
   if(samprate <= 0 || channels <= 0 || channels > 2)
     return -1;
