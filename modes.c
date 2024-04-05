@@ -111,6 +111,7 @@ int set_defaults(struct channel *chan){
   }
   chan->output.pacing = false;
   chan->status.output_interval = DEFAULT_UPDATE;
+  chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
   return 0;
 }
 
