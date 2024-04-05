@@ -29,6 +29,7 @@
 #include "radio.h"
 #include "iir.h"
 #include "morse.h"
+#include "status.h"
 
 // Global constants
 #define MAX_MCAST 20          // Maximum number of multicast addresses
@@ -72,7 +73,7 @@ static bool Auto_sort;
 static int64_t Mandatory_ID_interval;
 // ID early when carrier is about to drop, to avoid stepping on users
 static int64_t Quiet_ID_interval;
-static int Dit_length; 
+static int Dit_length;
 static int Channels = 2;
 static char const *Init;
 
@@ -122,6 +123,7 @@ static float PL_tones[] = {
 #define N_tones (sizeof(PL_tones)/sizeof(PL_tones[0]))
 
 struct session {
+  bool init;               // Fully initialized by first RTP packet
   struct sockaddr_storage sender;
   char const *dest;
 
@@ -132,12 +134,12 @@ struct session {
 
   struct rtp_state rtp_state; // Incoming RTP session state
   uint32_t ssrc;            // RTP Sending Source ID
-  int type;                 // RTP type (10,11,20,111)
+  int type;                 // RTP type (10,11,20,111,etc)
 
   uint32_t last_timestamp;  // Last timestamp seen
   unsigned int wptr;        // current write index into output PCM buffer, *frames*
   int playout;              // Initial playout delay, frames
-  long long last_active;    // GPS time last active
+  long long last_active;    // GPS time last active with data traffic
   long long last_start;     // GPS time at last transition to active from idle
   float tot_active;         // Total PCM time, ns
   float active;             // Seconds we've been active (only when queue has stuff)
@@ -164,16 +166,15 @@ struct session {
   bool terminate;            // Set to cause thread to terminate voluntarily
   bool muted;
   bool reset;                // Set to force output timing reset on next packet
-  bool now_active;           // for convenience of painting output
-  
+  bool now_active;           // for convenience of painting output with bold colors
+
   char id[32];
   bool notch_enable;         // Enable PL removal notch
   struct iir iir_left;
-  struct iir iir_right;  
+  struct iir iir_right;
   float notch_tone;
-  struct channel chan;
-  struct frontend frontend;
-
+  struct channel chan;       // Partial copy of radiod's channel structure, filled in by status protocol
+  struct frontend frontend;  // Partial copy of radiod's front end structure, ditto
 };
 
 static void load_id(void);
@@ -341,7 +342,7 @@ int main(int argc,char * const argv[]){
     case 'I':
       if(Nfds == MAX_MCAST){
 	fprintf(stderr,"Too many multicast addresses; max %d\n",MAX_MCAST);
-      } else 
+      } else
 	Mcast_address_text[Nfds++] = optarg;
       break;
     case 'L':
@@ -355,7 +356,7 @@ int main(int argc,char * const argv[]){
       break;
     case 's':
       Voting = true;
-      Auto_position = false; // Disables 
+      Auto_position = false; // Disables
       break;
     default:
       fprintf(stderr,"Usage: %s -L\n",App_path);
@@ -394,7 +395,7 @@ int main(int argc,char * const argv[]){
   for(int i=optind; i < argc; i++){
     if(Nfds == MAX_MCAST){
       fprintf(stderr,"Too many multicast addresses; max %d\n",MAX_MCAST);
-    } else 
+    } else
       Mcast_address_text[Nfds++] = argv[i];
   }
   if(Nfds == 0){
@@ -412,7 +413,7 @@ int main(int argc,char * const argv[]){
     // -15 dBFS is the target level of the FM demodulator
     // -14 dB is 1 kHz ID deviation divided by 5 kHz peak deviation
     Dit_length = init_morse(ID_speed,ID_pitch,ID_level,DAC_samprate);
-  }    
+  }
 #ifdef __linux__
   // Get rid of those fucking ALSA error messages that clutter the screen
   snd_lib_error_set_handler(alsa_error_handler);
@@ -474,7 +475,7 @@ int main(int argc,char * const argv[]){
 		    NULL);
 
   if(r != paNoError){
-    fprintf(stderr,"Portaudio error: %s, exiting\n",Pa_GetErrorText(r));      
+    fprintf(stderr,"Portaudio error: %s, exiting\n",Pa_GetErrorText(r));
     exit(EX_IOERR);
   }
 
@@ -490,16 +491,20 @@ int main(int argc,char * const argv[]){
 
   Last_error_time = gps_time_ns();
 
-  // Become the display thread
+  // Spawn the display thread so it isn't charged with everybody's CPU time
+  // This seems to be a change in recent Linux kernels and/or the 'top' command
+  // Drove me up the wall trying to find out why this thread was spending so much CPU doing nothing!
   if(!Quiet){
-    display(NULL);
-  } else {
-    while(!Terminate)
-      sleep(1);
+    pthread_t display_thread;
+    pthread_create(&display_thread,NULL,display,NULL);
   }
+  while(!Terminate)
+    sleep(1);
+
   exit(EX_OK); // calls cleanup() to clean up Portaudio and ncurses. Can't happen...
 }
 
+// Receive from data and status multicast streams, update local states, multiplex to decoder threads
 static void *sockproc(void *arg){
   char const *mcast_address_text = (char *)arg;
   {
@@ -523,13 +528,14 @@ static void *sockproc(void *arg){
   {
     char iface[1024];
     struct sockaddr sock;
+    // Could just change the port number from the RTP resolve above since the IP addresses are the same
     resolve_mcast(mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface));
     status_fd = listen_mcast(&sock,iface);
   }
   struct packet *pkt = NULL;
-  
+
   realtime();
-  // Main loop begins here
+  // Main loop begins here - poll input status and data UDP sockets
   while(!Terminate){
     int const nfds = 2;
     struct pollfd fds[nfds];
@@ -545,71 +551,43 @@ static void *sockproc(void *arg){
     if(n <= 0)
       continue;
 
-    struct sockaddr_storage sender;
-    socklen_t socksize = sizeof(sender);
 
     if(fds[1].revents & (POLLIN|POLLPRI)){
       // Got a status packet
       uint8_t buffer[PKTSIZE];
+      struct sockaddr_storage sender;
+      socklen_t socksize = sizeof(sender);
       int length = recvfrom(status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&sender,&socksize);
       if(buffer[0] != STATUS) // not status, ignore
 	continue;
 
-      struct channel chan;
-      struct frontend frontend;
-      decode_radio_status(&frontend,&chan,buffer+1,length-1);
-      uint32_t ssrc = chan.output.rtp.ssrc;
+      // Extract just the SSRC to see if the session exists
+      // NB! Assumes same IP address *and port* for status and data
+      // This is only true for recent versions of radiod, after the switch to unconnected output sockets
+      // But older versions don't send status on the output channel anyway, so no problem
+      uint32_t ssrc = get_ssrc(buffer+1,length-1);
       pthread_mutex_lock(&Sess_mutex); // Protect Nsessions
       struct session *sp = lookup_session(&sender,ssrc);
-      pthread_mutex_unlock(&Sess_mutex);
       if(!sp){
 	// Status arrived before first RTP; create and init session
-	pthread_mutex_lock(&Sess_mutex); // Protect Nsessions
 	sp = create_session();
-	pthread_mutex_unlock(&Sess_mutex); // Protect Nsessions
 	if(!sp){
+	  pthread_mutex_unlock(&Sess_mutex);
 	  fprintf(stderr,"No room!!\n");
 	  continue;
 	}
-	char const *id = lookupid(ssrc); // rather than freq? resolve this.
-	if(id)
-	  strlcpy(sp->id,id,sizeof(sp->id));
-	if(Auto_position)
-	  sp->pan = make_position(Position++);
-	else
-	  sp->pan = 0;     // center by default
-	pthread_cond_init(&sp->qcond,NULL);
-	pthread_mutex_init(&sp->qmutex,NULL);
-	sp->ssrc = chan.output.rtp.ssrc;
-	memcpy(&sp->sender,&sender,sizeof(sender)); // Bind to specific host and sending port
-	sp->gain = powf(10.,0.05 * Gain);    // Start with global default
-	sp->notch_enable = Notch;
-	sp->muted = Start_muted;
-	sp->dest = mcast_address_text;
-	sp->last_timestamp = chan.output.rtp.timestamp;
-	sp->rtp_state.seq = chan.output.rtp.seq;
-	sp->reset = true;
-	sp->active = 0;
-	sp->type = chan.output.rtp.type; // Check range 0-127?
-	sp->samprate = chan.output.samprate;
-	if(PT_table[chan.output.rtp.type].encoding == OPUS)
-	  sp->samprate = DAC_samprate;
-	
-	for(int j=0; j < N_tones; j++)
-	  init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
-	
-	if(pthread_create(&sp->task,NULL,decode_task,sp) == -1){
-	  perror("pthread_create");
-	  close_session(&sp);
-	  continue;
-	}
+	sp->chan.inuse = true; // Not sent in status update
+	sp->ssrc = ssrc;
       }
-      memcpy(&sp->chan,&chan,sizeof(sp->chan));
-      sp->chan.inuse = true;
-      memcpy(&sp->frontend,&frontend,sizeof(sp->frontend));
+      // Always decode directly into local copy, as not every parameter is updated in every status message
+      // Decoding into a temp copy and then memcpy would write zeroes into unsent parameters
+      decode_radio_status(&sp->frontend,&sp->chan,buffer+1,length-1);
+      memcpy(&sp->sender,&sender,sizeof(sp->sender));
+      sp->last_active = gps_time_ns(); // Keep active time calc from blowing up before data packet arrives
+      sp->samprate = sp->chan.output.samprate;
+      pthread_mutex_unlock(&Sess_mutex);
       continue; // next packet
     }
-
     if(!(fds[0].revents & (POLLIN|POLLPRI)))
       continue; // Not ready to receive a data packet
     // Need a new packet buffer?
@@ -619,7 +597,9 @@ static void *sockproc(void *arg){
     pkt->next = NULL;
     pkt->data = NULL;
     pkt->len = 0;
-    
+
+    struct sockaddr_storage sender;
+    socklen_t socksize = sizeof(sender);
     int size = recvfrom(input_fd,&pkt->content,sizeof(pkt->content),0,(struct sockaddr *)&sender,&socksize);
     if(size == -1){
       if(errno != EINTR){ // Happens routinely, e.g., when window resized
@@ -630,7 +610,7 @@ static void *sockproc(void *arg){
     }
     if(size <= RTP_MIN_SIZE)
       continue; // Must be big enough for RTP header and at least some data
-    
+
     // Convert RTP header to host format
     uint8_t const *dp = ntoh_rtp(&pkt->rtp,pkt->content);
     pkt->data = dp;
@@ -641,25 +621,35 @@ static void *sockproc(void *arg){
     }
     if(pkt->len <= 0)
       continue; // Used to be an assert, but would be triggered by bogus packets
-    
+
     // Find appropriate session; create new one if necessary
     pthread_mutex_lock(&Sess_mutex); // Protect Nsessions
     struct session *sp = lookup_session(&sender,pkt->rtp.ssrc);
-    pthread_mutex_unlock(&Sess_mutex);
-    if(!sp){
+    if(sp){
+      pthread_mutex_unlock(&Sess_mutex);
+    } else {
       // Not found
-      pthread_mutex_lock(&Sess_mutex); // Protect Nsessions
       sp = create_session();
-      pthread_mutex_unlock(&Sess_mutex); // Protect Nsessions
       if(!sp){
 	fprintf(stderr,"No room!!\n");
+	pthread_mutex_unlock(&Sess_mutex); // Protect Nsessions
 	continue;
       }
+      // Keep the lock while we initialize
       pthread_cond_init(&sp->qcond,NULL);
       pthread_mutex_init(&sp->qmutex,NULL);
-
       sp->ssrc = pkt->rtp.ssrc;
       memcpy(&sp->sender,&sender,sizeof(sender)); // Bind to specific host and sending port
+      sp->type = pkt->rtp.type;
+      // backward compatibility
+      // Ideally the sample rate always comes from the status message, but if there is none then
+      // we must use my old kludge of oveloading the payload type
+      // If status comes later, it will overwrite this anyway
+      if(sp->samprate == 0 && sp->type >= 0 && sp->type < 128)
+	sp->samprate = PT_table[sp->type].samprate;
+      pthread_mutex_unlock(&Sess_mutex);
+
+      // status reception doesn't write below this point
       char const *id = lookupid(pkt->rtp.ssrc);
       if(id)
 	strlcpy(sp->id,id,sizeof(sp->id));
@@ -674,12 +664,6 @@ static void *sockproc(void *arg){
       sp->last_timestamp = pkt->rtp.timestamp;
       sp->rtp_state.seq = pkt->rtp.seq;
       sp->reset = true;
-      sp->type = pkt->rtp.type;
-      if(sp->type < 0 || sp->type > 127)
-	continue; // Invalid payload type?
-      sp->samprate = PT_table[sp->type].samprate;
-      if(PT_table[sp->type].encoding == OPUS)
-	sp->samprate = DAC_samprate;
 
       for(int j=0; j < N_tones; j++)
 	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
@@ -696,7 +680,7 @@ static void *sockproc(void *arg){
     pthread_mutex_lock(&sp->qmutex);
     for(qe = sp->queue; qe && pkt->rtp.seq >= qe->rtp.seq; q_prev = qe,qe = qe->next)
       ;
-    
+
     if(qe)
       sp->reseqs++;   // Not the last on the list
     pkt->next = qe;
@@ -707,7 +691,7 @@ static void *sockproc(void *arg){
     pkt = NULL;        // force new packet to be allocated
     long long t = gps_time_ns();
     if(t - sp->last_active > BILLION){
-      // Transition from idle to active 
+      // Transition from idle to active
       sp->last_start = t;
     }
     sp->last_active = t;
@@ -717,7 +701,6 @@ static void *sockproc(void *arg){
   }
   return NULL;
 }
-
 static void decode_task_cleanup(void *arg){
   struct session *sp = (struct session *)arg;
   assert(sp);
@@ -736,7 +719,8 @@ static void decode_task_cleanup(void *arg){
   }
 }
 
-// Thread to decode incoming RTP packets for each session
+// Per-session thread to decode incoming RTP packets
+// Not needed for PCM, but Opus can be slow
 static void *decode_task(void *arg){
   struct session *sp = (struct session *)arg;
   assert(sp);
@@ -813,7 +797,7 @@ static void *decode_task(void *arg){
       // Execute Opus decoder even when muted to keep its state updated
       if(!sp->opus){
 	int error;
-	
+
 	// Decode Opus to the selected sample rate
 	sp->opus = opus_decoder_create(DAC_samprate,Channels,&error);
 	if(error != OPUS_OK)
@@ -870,13 +854,13 @@ static void *decode_task(void *arg){
       upsample = DAC_samprate / sp->samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
       sp->bandwidth = sp->samprate / 2000;    // in kHz allowing for Nyquist
       sp->channels = channels_from_pt(sp->type); // channels in packet (not portaudio output buffer)
-      
+
       if(sp->samprate <= 0 || sp->channels <= 0 || sp->channels > 2)
 	goto endloop;
       sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
       if(sp->frame_size <= 0)
 	goto endloop;
-      int16_t const * const data_ints = (int16_t *)&pkt->data[0];	
+      int16_t const * const data_ints = (int16_t *)&pkt->data[0];
       assert(bounce == NULL);
       bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
       for(int i=0; i < sp->channels * sp->frame_size; i++)
@@ -892,7 +876,7 @@ static void *decode_task(void *arg){
 	  s = 0.5 * (bounce[2*i] + bounce[2*i+1]); // Mono sum
 	else // sp->channels == 1
 	  s = bounce[i];
-	
+
 	for(int j = 0; j < N_tones; j++)
 	  update_goertzel(&sp->tone_detector[j],s);
       }
@@ -960,7 +944,7 @@ static void *decode_task(void *arg){
       sp->wptr &= (BUFFERSIZE-1);
       sp->last_timestamp = pkt->rtp.timestamp;
     }
-    
+
     if(Channels == 2){
       /* Compute gains and delays for stereo imaging
 	 Extreme gain differences can make the source sound like it's inside an ear
@@ -976,14 +960,14 @@ static void *decode_task(void *arg){
 	 levels really are the same! */
       int const left_delay = (sp->pan > 0) ? round(sp->pan * .0015 * DAC_samprate) : 0; // Delay left channel
       int const right_delay = (sp->pan < 0) ? round(-sp->pan * .0015 * DAC_samprate) : 0; // Delay right channel
-      
+
       assert(left_delay >= 0 && right_delay >= 0);
-      
+
       // Mix bounce buffer into output buffer read by portaudio callback
       // Simplified by mirror buffer wrap
       int left_index = 2 * (sp->wptr + left_delay);
       int right_index = 2 * (sp->wptr + right_delay) + 1;
-      
+
       for(int i=0; i < sp->frame_size; i++){
 	float left,right;
 	if(sp->channels == 1){
@@ -1059,7 +1043,6 @@ static void *display(void *arg){
   int current = -1; // No current session
   bool help = false;
   int last_best_session = 0;
-
   while(!Terminate){
     assert(first_session >= 0);
     assert(first_session == 0 || first_session < Nsessions);
@@ -1121,7 +1104,7 @@ static void *display(void *arg){
 	sort_session_active();
 
       sessions_per_screen = LINES - getcury(stdscr) - 1;
-      
+
       // This mutex protects Sessions[] and Nsessions. Instead of holding the
       // lock for the entire display loop, we make a copy.
       pthread_mutex_lock(&Sess_mutex);
@@ -1134,7 +1117,7 @@ static void *display(void *arg){
       if(current == -1 && Nsessions > 0)
 	current = 0; // Session got created, make it current
       pthread_mutex_unlock(&Sess_mutex);
-      
+
       // Flag active sessions
       long long time = gps_time_ns();
       for(int session = first_session; session < Nsessions_copy; session++){
@@ -1147,7 +1130,7 @@ static void *display(void *arg){
 	int q = modsub(Wptr,Rptr,BUFFERSIZE);
 	double qd = (double) q / DAC_samprate;
 	double rate = Audio_frames / pa_seconds;
-	
+
 	printw("Playout %.0f ms, latency %d ms, queue %.3lf sec, D/A rate %'.3lf Hz,",Playout,Portaudio_delay,qd,rate);
 	printw(" (%+.3lf ppm),",1e6 * (rate / DAC_samprate - 1));
 	// Time since last packet drop on any channel
@@ -1190,23 +1173,12 @@ static void *display(void *arg){
 	mvprintw(y++,x,"%5s","Tone");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
 	  struct session *sp = Sessions_copy[session];
-	  if(sp->notch_enable == false || sp->current_tone == 0)
-	    continue;
-	  
-	  mvprintw(y,x,"%5.1f",sp->current_tone);
-	}
-	x += 6;
-	y = row_save;
-	
-	mvprintw(y++,x,"%5s","Notch");
-	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
 	  if(sp->notch_enable == false || sp->notch_tone == 0)
 	    continue;
-	  
-	  mvprintw(y,x,"%5.1f",sp->notch_tone);
+
+	  mvprintw(y,x,"%5.1f%c",sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
 	}
-	x += 6;
+	x += 7;
 	y = row_save;
       }
       mvprintw(y++,x,"%12s","Freq");
@@ -1217,7 +1189,7 @@ static void *display(void *arg){
       }
       x += 13;
       y = row_save;
-      
+
       mvprintw(y++,x,"%5s","Mode");
       for(int session = first_session; session < Nsessions_copy; session++,y++){
 	struct session *sp = Sessions_copy[session];
@@ -1307,39 +1279,40 @@ static void *display(void *arg){
 	mvprintw(y++,x,"Type");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
 	  struct session *sp = Sessions_copy[session];
-	  
+
 	  if(sp->samprate != 0)
 	    mvprintw(y,x,"%4s",PT_table[sp->type].encoding == OPUS ? "Opus" : "PCM");
 	}
 	x += 5;
 	y = row_save;
+
 	// frame size, ms
 	mvprintw(y++,x,"%3s","ms");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
 	  struct session *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%3d",(1000 * sp->frame_size/sp->samprate)); // frame size, ms
 	}
-	x += 6;
-	y = row_save;
-	  
-	// channels
-	mvprintw(y++,x,"%3s","ch");
-	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
-	  mvprintw(y,x,"%3d",sp->channels);
-	}
 	x += 4;
 	y = row_save;
 
-	// BW
-	mvprintw(y++,x,"%3s","bw");
+	// channels
+	mvprintw(y++,x,"%2s","ch");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
 	  struct session *sp = Sessions_copy[session];
-	  mvprintw(y,x,"%3d",sp->bandwidth);
+	  mvprintw(y,x,"%2d",sp->channels);
 	}
-	x += 4;
+	x += 3;
 	y = row_save;
-	
+
+	// BW
+	mvprintw(y++,x,"%2s","bw");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%2d",sp->bandwidth);
+	}
+	x += 3;
+	y = row_save;
+
 	// Packets
 	mvprintw(y++,x,"%12s","Packets");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
@@ -1348,7 +1321,7 @@ static void *display(void *arg){
 	}
 	x += 13;
 	y = row_save;
-	
+
 	// Resets
 	mvprintw(y++,x,"%7s","resets");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
@@ -1357,7 +1330,7 @@ static void *display(void *arg){
 	}
 	x += 8;
 	y = row_save;
-	
+
 	// BW
 	mvprintw(y++,x,"%6s","drops");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
@@ -1366,7 +1339,7 @@ static void *display(void *arg){
 	}
 	x += 7;
 	y = row_save;
-	
+
 	// Lates
 	mvprintw(y++,x,"%6s","lates");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
@@ -1375,7 +1348,7 @@ static void *display(void *arg){
 	}
 	x += 7;
 	y = row_save;
-	
+
 	// BW
 	mvprintw(y++,x,"%6s","reseq");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
@@ -1398,7 +1371,7 @@ static void *display(void *arg){
       attr_get(&attrs, &pair, NULL);
       for(int session = first_session; session < Nsessions_copy; session++){
 	struct session *sp = Sessions_copy[session];
-	
+
 	attr_t attr = A_NORMAL;
 	attr |= session == current ? A_UNDERLINE : 0;
 	attr |= sp->now_active ? A_BOLD : 0;
@@ -1416,12 +1389,10 @@ static void *display(void *arg){
 	}
       }
     }
-
-    // process keyboard commands only if there's something to act on
     int const c = getch(); // Waits for 'update interval' ms if no input
     if(c == EOF)
       continue; // No key hit; don't lock and unlock Sess_mutex
-    
+
     // Not all of these commands require locking, but it's easier to just always do it
     pthread_mutex_lock(&Sess_mutex); // Re-lock after time consuming getch() (which includes a refresh)
     // Since we unlocked & relocked, Nsessions might have changed (incremented) again
@@ -1494,7 +1465,7 @@ static void *display(void *arg){
     case 'R': // Reset all sessions
       for(int i=0; i < Nsessions;i++)
 	Sessions[i]->reset = true;
-      break;	
+      break;
     case 'f':
       if(current >= 0)
 	Sessions[current]->notch_enable = false;
@@ -1637,7 +1608,7 @@ static void reset_session(struct session * const sp,uint32_t timestamp){
 static int scompare(void const *a, void const *b){
   struct session const * const s1 = *(struct session **)a;
   struct session const * const s2 = *(struct session **)b;
-  
+
   if(s1->active > 0 && s2->active > 0){
     // Fuzz needed because active sessions are updated when packets arrive
     if(fabsf(s1->active - s2->active) < 0.5)
@@ -1663,7 +1634,7 @@ static int scompare(void const *a, void const *b){
 static int tcompare(void const *a, void const *b){
   struct session const * const s1 = *(struct session **)a;
   struct session const * const s2 = *(struct session **)b;
-  
+
 #if NOFUZZ
   if(fabsf(s1->tot_active - s2->tot_active) < 0.1) // equal within margin
     return 0;
@@ -1711,14 +1682,23 @@ static int close_session(struct session **p){
   if(sp == NULL)
     return -1;
   assert(Nsessions > 0);
-  
+
   // Remove from table
   for(int i = 0; i < Nsessions; i++){
     if(Sessions[i] == sp){
       Nsessions--;
       memmove(&Sessions[i],&Sessions[i+1],(Nsessions-i) * sizeof(Sessions[0]));
+      struct channel *chan = &sp->chan;
+      struct frontend *frontend = &sp->frontend;
       pthread_cond_destroy(&sp->qcond);
       pthread_mutex_destroy(&sp->qmutex);
+      // Just in case anything was allocated for these arrays
+      FREE(chan->filter.energies);
+      FREE(chan->spectrum.bin_data);
+      FREE(chan->status.command);
+
+      FREE(frontend->description);
+
       FREE(sp);
       *p = NULL;
       return 0;
@@ -1755,7 +1735,7 @@ static int pa_callback(void const *inputBuffer, void *outputBuffer,
 
   if(!outputBuffer)
     return paAbort; // can this happen??
-  
+
   Last_callback_time = timeInfo->currentTime;
   assert(framesPerBuffer < BUFFERSIZE); // Make sure ring buffer is big enough
   // Delay within Portaudio in milliseconds
@@ -1874,7 +1854,7 @@ void *repeater_ctl(void *arg){
       int64_t const drop_time = LastAudioTime + BILLION * Repeater_tail;
       if(now >= drop_time)
 	break;
-      
+
       // Sleep until possible end of timeout, or next mandatory ID, whichever is first
       int64_t const sleep_time = min(drop_time,Last_id_time + Mandatory_ID_interval) - now;
       if(sleep_time > 0){
@@ -1931,7 +1911,7 @@ static void load_id(void){
     FILE * const fp = fopen(filename,"r");
     if(fp == NULL)
       return;
-    
+
     char line[1024];
     while(fgets(line,sizeof(line),fp)){
       chomp(line);
@@ -1942,7 +1922,7 @@ static void load_id(void){
       Idtable[Nid].ssrc = strtol(line,&ptr,0);
       if(ptr == line)
 	continue; // no parseable hex number
-      
+
       while(*ptr == ' ' || *ptr == '\t')
 	ptr++;
       int const len = strlen(ptr); // Length of ID field
@@ -1979,7 +1959,7 @@ static float make_position(int x){
   }
   // Scale
   return 0.5 * (((float)y / 128) - 1);
-} 
+}
 
 // Start output stream if it was off; reset idle timeout on output audio stream activity
 // Return true if we (re)started it
@@ -2021,7 +2001,7 @@ bool kick_output(){
       pthread_cond_signal(&PTT_cond); // Notify the repeater control thread to ID and run drop timer
     }
     pthread_mutex_unlock(&PTT_mutex);
-  
+
   }
   return restarted;
 }
