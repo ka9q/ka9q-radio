@@ -245,7 +245,7 @@ int decode_int(uint8_t const *cp,int len){
 float decode_float(uint8_t const *cp,int len){
   if(len == 0)
     return 0;
-  
+
   if(len == 8)
     return (float)decode_double(cp,len);
 
@@ -257,7 +257,7 @@ float decode_float(uint8_t const *cp,int len){
 double decode_double(uint8_t const *cp,int len){
   if(len == 0)
     return 0;
-  
+
   if(len == 4)
     return (double)decode_float(cp,len);
 
@@ -317,85 +317,3 @@ struct sockaddr *decode_socket(void *sock,uint8_t const *val,int optlen){
   }
   return NULL;
 }
-
-
-
-// Extract SSRC; 0 means not present (reserved value)
-uint32_t get_ssrc(uint8_t const *buffer,int length){
-  uint8_t const *cp = buffer;
-  
-  while(cp - buffer < length){
-    enum status_type const type = *cp++; // increment cp to length field
-    
-    if(type == EOL)
-      break; // end of list, no length
-    
-    unsigned int optlen = *cp++;
-    if(optlen & 0x80){
-      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
-      int length_of_length = optlen & 0x7f;
-      optlen = 0;
-      while(length_of_length > 0){
-	optlen <<= 8;
-	optlen |= *cp++;
-	length_of_length--;
-      }
-    }
-    if(cp - buffer + optlen >= length)
-      break; // invalid length; we can't continue to scan
-    
-    switch(type){
-    case EOL: // Shouldn't get here
-      goto done;
-    case OUTPUT_SSRC:
-      return decode_int32(cp,optlen);
-      break;
-    default:
-      break; // Ignore on this pass
-    }
-    cp += optlen;
-  }
- done:;
-  return 0;
-}
-// Extract command tag
-uint32_t get_tag(uint8_t const *buffer,int length){
-  uint8_t const *cp = buffer;
-  
-  while(cp - buffer < length){
-    enum status_type const type = *cp++; // increment cp to length field
-    
-    if(type == EOL)
-      break; // end of list, no length
-    
-    unsigned int optlen = *cp++;
-    if(optlen & 0x80){
-      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
-      int length_of_length = optlen & 0x7f;
-      optlen = 0;
-      while(length_of_length > 0){
-	optlen <<= 8;
-	optlen |= *cp++;
-	length_of_length--;
-      }
-    }
-    if(cp - buffer + optlen >= length)
-      break; // invalid length; we can't continue to scan
-    
-    switch(type){
-    case EOL: // Shouldn't get here
-      goto done;
-    case COMMAND_TAG:
-      return decode_int32(cp,optlen);
-      break;
-    default:
-      break; // Ignore on this pass
-    }
-    cp += optlen;
-  }
- done:;
-  return 0; // broadcast
-}
-
-
-
