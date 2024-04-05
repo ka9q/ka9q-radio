@@ -42,6 +42,9 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     chan->output.silent = true;
     return 0;
   }
+  if(chan->output.silent)
+    chan->status.output_timer = 0;    // Coming out of a silent (squelched?) period, trigger a channel status
+
   int frames_per_pkt = 0;
 #if 0 // IP_MTU // Broken by use of disconnected sockets, but no big deal
   {
