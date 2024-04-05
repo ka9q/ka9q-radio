@@ -384,6 +384,9 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     cp += optlen;
   }
  done:;
+  if(chan->demod_type == SPECTRUM)
+    memset(chan->preset,0,sizeof(chan->preset)); // No presets in this mode
+
   if(restart_needed){
     if(Verbose > 1)
       fprintf(stdout,"restarting thread for ssrc %u\n",ssrc);
