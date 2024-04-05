@@ -224,26 +224,25 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
   assert(slave != NULL);
   if(slave == NULL)
     return NULL;
-    
 
   assert(olen > 0);
   if(olen > master->ilen)
     return NULL; // Interpolation not yet supported
-  
+
   // Share all but output fft bins, response, output and output type
   slave->master = master;
   slave->out_type = out_type;
   slave->olen = olen;
-  
+
   float const overlap = (float)(master->ilen + master->impulse_length - 1) / master->ilen; // Total FFT time points / used time points
   int const osize = round(olen * overlap); // Total number of time-domain FFT points including overlap
-  
+
   slave->response = response;
   if(response != NULL)
     slave->noise_gain = noise_gain(slave);
   else
     slave->noise_gain = NAN;
-  
+
   pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1); // IFFTs are always small, use only one internal thread
   switch(slave->out_type){
@@ -272,7 +271,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
   case REAL:
     slave->bins = osize / 2 + 1;
     slave->fdomain = lmalloc(sizeof(complex float) * slave->bins); // Not really needed for SPECTRUM?
-    assert(slave->fdomain != NULL);    
+    assert(slave->fdomain != NULL);
     slave->output_buffer.r = lmalloc(sizeof(float) * osize);
     assert(slave->output_buffer.r != NULL);
     slave->output_buffer.c = NULL;
@@ -418,7 +417,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   assert(slave->out_type != NONE);
   assert(master->in_type != NONE);
   assert(master->fdomain != NULL);
-  assert(slave->fdomain != NULL);  
+  assert(slave->fdomain != NULL);
   assert(master->bins > 0);
   assert(slave->bins > 0);
 
@@ -438,7 +437,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   // We don't modify the master's output data, we create our own
   complex float const * const fdomain = master->fdomain[slave->next_jobnum % ND];
   slave->next_jobnum++;
-  pthread_mutex_unlock(&master->filter_mutex); 
+  pthread_mutex_unlock(&master->filter_mutex);
 
   assert(fdomain != NULL);
 
@@ -473,13 +472,13 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
       mi += master->bins; // start in neg region of master
     do {    // At least one master bin is in range
       assert(si >= 0 && si < slave->bins);
-      assert(mi >= 0 && mi < master->bins);      
+      assert(mi >= 0 && mi < master->bins);
       slave->fdomain[si++] = fdomain[mi++];
       if(mi == master->bins)
 	mi = 0; // Not necessary if it starts positive, and master->bins > slave->bins?
       if(si == slave->bins)
 	si = 0;
-      if(si == slave->bins/2) 
+      if(si == slave->bins/2)
 	goto copy_done; // All done
     } while(mi != master->bins/2); // Until we hit high end of master
     while(si != slave->bins/2){
@@ -508,7 +507,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
       slave->fdomain[si] = result;
     }
   } else if(master->in_type == REAL && slave->out_type != REAL){
-    // Real->complex 
+    // Real->complex
     // This can be tricky. We treat the input as complex with Hermitian symmetry (both positive and negative spectra)
     // We don't allow the output to span the zero input frequency range as this doesn't seem useful
     // The most common case is that m is entirely in range and always < 0 or > 0
@@ -544,7 +543,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 	si = (si == slave->bins) ? 0 : si;
       }
       for(; mi < 0 && i < slave->bins; i++,mi++){
-	// neg freq component is conjugate of corresponding positive freq      
+	// neg freq component is conjugate of corresponding positive freq
 	slave->fdomain[si++] = conjf(fdomain[-mi]);
 	si = (si == slave->bins) ? 0 : si;
       }
@@ -555,7 +554,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
       for(; i < slave->bins; i++){
 	slave->fdomain[si++] = 0;
 	si = (si == slave->bins) ? 0 : si;
-      }    
+      }
 #else    // slower
       for(int i = 0; i < slave->bins; i++,mi++){
 	complex float result = 0;
@@ -565,7 +564,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 	}
 	slave->fdomain[si++] = result;
 	si = (si == slave->bins) ? 0 : si;
-      }	  
+      }
 #endif
     }
   }
@@ -590,7 +589,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
     for(int p=1,dn=slave->bins-1; p < slave->bins; p++,dn--){
       complex float const pos = slave->fdomain[p];
       complex float const neg = slave->fdomain[dn];
-      
+
       slave->fdomain[p]  = pos + conjf(neg);
       slave->fdomain[dn] = neg - conjf(pos);
     }
@@ -627,23 +626,23 @@ static void terminate_fft(struct filter_in *f){
 int delete_filter_input(struct filter_in * master){
   if(master == NULL)
     return -1;
-  
+
   fftwf_destroy_plan(master->fwd_plan);
   mirror_free(&master->input_buffer,master->input_buffer_size);
 
   for(int i=0; i < ND; i++)
-    fftwf_free(master->fdomain[i]);
+    free(master->fdomain[i]);
   return 0;
 }
 int delete_filter_output(struct filter_out *slave){
   if(slave == NULL)
     return 1;
-  
+
   pthread_mutex_destroy(&slave->response_mutex);
-  fftwf_destroy_plan(slave->rev_plan);  
-  fftwf_free(slave->output_buffer.c);
-  fftwf_free(slave->response);
-  fftwf_free(slave->fdomain);
+  fftwf_destroy_plan(slave->rev_plan);
+  FREE(slave->output_buffer.c);
+  FREE(slave->response);
+  FREE(slave->fdomain);
   return 0;
 }
 
@@ -748,7 +747,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
   for(int n=0; n < N; n++){
     fprintf(stderr,"%d %lg %lg\n",n,crealf(buffer[n]),cimagf(buffer[n]));
   }
-#endif  
+#endif
 
   float kaiser_window[M];
   make_kaiser(kaiser_window,M,beta);
@@ -756,7 +755,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
 #ifdef FILTER_DEBUG
   for(int m = 0; m < M; m++)
     fprintf(stderr,"kaiser[%d] = %g\n",m,kaiser_window[m]);
-#endif  
+#endif
 
   // Round trip through FFT/IFFT scales by N
   float const gain = 1./N;
@@ -771,7 +770,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
   for(int n=0;n< M;n++)
     fprintf(stderr,"%d %lg %lg\n",n,crealf(buffer[n]),cimagf(buffer[n]));
 #endif
-  
+
   // Now back to frequency domain
   fftwf_execute(fwd_filter_plan);
   fftwf_destroy_plan(fwd_filter_plan);
@@ -784,7 +783,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
   fprintf(stderr,"\n");
 #endif
   memcpy(response,buffer,N*sizeof(*response));
-  fftwf_free(buffer);
+  free(buffer);
   return 0;
 }
 // Real-only counterpart to window_filter()
@@ -834,7 +833,7 @@ int window_rfilter(int const L,int const M,complex float * const response,float 
   float const gain = 1./N;
   for(int n = M - 1; n >= 0; n--)
     timebuf[n] = timebuf[(n-M/2+N)%N] * kaiser_window[n] * gain;
-  
+
   // Pad with zeroes on right side
   memset(timebuf+M,0,(N-M)*sizeof(*timebuf));
 #ifdef FILTER_DEBUG
@@ -842,13 +841,13 @@ int window_rfilter(int const L,int const M,complex float * const response,float 
   for(int n=0;n< M;n++)
     printf("%d %lg\n",n,timebuf[n]);
 #endif
-  
+
   // Now back to frequency domain
   fftwf_execute(fwd_filter_plan);
   fftwf_destroy_plan(fwd_filter_plan);
-  fftwf_free(timebuf);
+  free(timebuf);
   memcpy(response,buffer,(N/2+1)*sizeof(*response));
-  fftwf_free(buffer);
+  free(buffer);
 #ifdef FILTER_DEBUG
   printf("window_rfilter frequency response\n");
   for(int n=0; n < N/2 + 1; n++)
@@ -933,8 +932,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   slave->response = response;
   slave->noise_gain = noise_gain(slave);
   pthread_mutex_unlock(&slave->response_mutex);
-   fftwf_free(tmp);
-
+  free(tmp);
   return 0;
 }
 
@@ -1014,4 +1012,3 @@ static void suggest(int level,int size,int dir,int clex){
 	  dir == FFTW_FORWARD ? 'f' : 'b',
 	  size);
 }
-
