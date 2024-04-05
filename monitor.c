@@ -1184,8 +1184,7 @@ static void *display(void *arg){
       mvprintw(y++,x,"%12s","Freq");
       for(int session = first_session; session < Nsessions_copy; session++,y++){
 	struct session *sp = Sessions_copy[session];
-	if(sp->chan.tune.freq != 0)
-	  mvprintw(y,x,"%'12.0lf",sp->chan.tune.freq);
+	mvprintw(y,x,"%'12.0lf",sp->chan.tune.freq);
       }
       x += 13;
       y = row_save;
