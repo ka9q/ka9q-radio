@@ -290,7 +290,7 @@ int main(int argc,char * const argv[]){
     fds[1].fd = Status_fd;
     fds[1].events = POLLIN;
     fds[1].revents = 0;
-    int n = poll(fds,2,0); // Wait indefinitely for either stat or pcm data
+    int n = poll(fds,2,-1); // Wait indefinitely for either stat or pcm data
     if(n < 0)
       break; // Error of some kind
     if(n == 0)
