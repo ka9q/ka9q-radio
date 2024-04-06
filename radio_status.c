@@ -89,6 +89,7 @@ void *radio_status(void *arg){
 	  } else {
 	    decode_radio_commands(chan,buffer+1,length-1);
 	    send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
+	    reset_radio_status(chan);
 	    chan->status.global_timer = 0; // Just sent one
 	    start_demod(chan);
 	    if(Verbose)
@@ -104,15 +105,17 @@ void *radio_status(void *arg){
 
 int send_radio_status(struct sockaddr const *sock,struct frontend const *frontend,struct channel *chan){
   uint8_t packet[PKTSIZE];
-
   chan->status.packets_out++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
+  sendto(Output_fd,packet,len,0,sock,sizeof(struct sockaddr));
+  return 0;
+}
+int reset_radio_status(struct channel *chan){
   // Reset integrators
   chan->sig.bb_energy = 0;
   chan->output.energy = 0;
   chan->output.sum_gain_sq = 0;
   chan->status.blocks_since_poll = 0;
-  sendto(Output_fd,packet,len,0,sock,sizeof(struct sockaddr));
   return 0;
 }
 

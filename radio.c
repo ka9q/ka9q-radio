@@ -521,15 +521,17 @@ int downconvert(struct channel *chan){
     send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
     chan->status.output_timer = chan->status.output_interval; // Reload
     FREE(chan->status.command);
+    reset_radio_status(chan); // After both are sent
   } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
     // Delayed status request, used mainly by all-channel polls to avoid big bursts
     send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
     chan->status.global_timer = 0; // to make sure
-  }
-  if(!chan->output.silent && chan->status.output_interval != 0 && chan->status.output_timer-- <= 0){
+    reset_radio_status(chan); // After both are sent
+  } else if(!chan->output.silent && chan->status.output_interval != 0 && chan->status.output_timer-- <= 0){
     // Send status on output channel
     send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
     chan->status.output_timer = chan->status.output_interval; // Reload
+    reset_radio_status(chan); // After both are sent
   }
   pthread_mutex_unlock(&chan->status.lock);
   if(restart_needed)
