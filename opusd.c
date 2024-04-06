@@ -279,8 +279,8 @@ int main(int argc,char * const argv[]){
 
   realtime();
 
-  // Loop forever processing and dispatching incoming PCM packets
-  // Process incoming RTP packets, demux to per-SSRC thread
+  // Loop forever processing and dispatching incoming PCM and status packets
+
   struct packet *pkt = NULL;
   while(true){
     struct pollfd fds[2];
@@ -297,16 +297,16 @@ int main(int argc,char * const argv[]){
       continue; // Possible with 0 timeout?
 
     if(fds[1].revents & POLLIN){
+      // Simply copy status on output
       struct sockaddr_storage sender;
       socklen_t socksize = sizeof(sender);
       uint8_t buffer[PKTSIZE];
       int size = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&sender,&socksize);
-
-      // Simply repeat status on output
       if(sendto(Output_fd,buffer,size,0,(struct sockaddr *)&Metadata_out_socket,sizeof(struct sockaddr)) < 0)
 	perror("status sendto");
     }
     if(fds[0].revents & POLLIN){
+      // Process incoming RTP packets, demux to per-SSRC thread
       // Need a new packet buffer?
       if(!pkt)
 	pkt = malloc(sizeof(*pkt));
