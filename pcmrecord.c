@@ -247,7 +247,7 @@ static void closedown(int a){
     fprintf(stderr,"%s: caught signal %d: %s\n",App_path,a,strsignal(a));
 
   cleanup();
-  exit(EX_SOFTWARE);  // Will call cleanup()
+  exit(EX_OK);  // Will call cleanup()
 }
 
 // Read from RTP network socket, assemble blocks of samples
