@@ -192,7 +192,7 @@ int main(int argc,char * const argv[]){
     snprintf(service_name,sizeof(service_name),"%s (%s)",Name,Output);
     char description[1024];
     snprintf(description,sizeof(description),"pcm-source=%s",formatsock(&PCM_dest_address));
-    uint32_t addr = (239 << 24) | (ElfHashString(Output) & 0xffffff);
+    uint32_t addr = (239U << 24) | (ElfHashString(Output) & 0xffffff);
     avahi_start(service_name,"_rtp._udp",DEFAULT_RTP_PORT,Output,addr,description,NULL,NULL);
     resolve_mcast(Output,&Stereo_dest_address,DEFAULT_RTP_PORT,NULL,0);
     Output_fd = connect_mcast(&Stereo_dest_address,NULL,Mcast_ttl,IP_tos);
