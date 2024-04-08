@@ -44,7 +44,7 @@ aprsfeed: aprsfeed.o libradio.a
 control: control.o modes.o bandplan.o decode_status.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread
 
-cwd: cwd.o morse.o libradio.a
+cwd: cwd.o libradio.a
 	$(CC) -g -o $@ $^ -lm
 
 dmr: dmr.o libradio.a
@@ -55,7 +55,7 @@ metadump: metadump.o dump.o libradio.a
 
 # should be setuid root to enable renicing to better priority, but this makes me uncomfortable
 # macos doesn't have Linux-style capabilities to enable specific root-like privileges
-monitor: monitor.o decode_status.o morse.o libradio.a
+monitor: monitor.o libradio.a
 	$(CC) -g -o $@ $^ -lopus -lportaudio -lfftw3f_threads -lfftw3f -lncurses -liniparser -lm -lpthread
 
 opusd: opusd.o libradio.a
@@ -85,7 +85,7 @@ pl: pl.o libradio.a
 powers: powers.o dump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lm -lpthread
 
-radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o status.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o libfcd.a libradio.a
+radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o libfcd.a libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lairspy -lairspyhf -lrtlsdr -lportaudio -liconv -lusb-1.0 -lm -lpthread
 
 rdsd: rdsd.o libradio.a
@@ -122,12 +122,9 @@ libfcd.a: fcd.o hid-libusb.o
 	ranlib $@
 
 # subroutines useful in more than one program
-libradio.a: avahi.o avahi_browse.o attr.o ax25.o config.o decimate.o filter.o status.o misc.o multicast.o rtcp.o osc.o iir.o
+libradio.a: morse.o avahi.o avahi_browse.o attr.o ax25.o config.o decimate.o filter.o status.o decode_status.o misc.o multicast.o rtcp.o osc.o iir.o
 	ar rv $@ $?
 	ranlib $@
-
-
-
 
 
 

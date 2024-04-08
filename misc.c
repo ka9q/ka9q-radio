@@ -204,7 +204,6 @@ char *ftime(char * result,int size,int64_t t){
   else
     r = snprintf(cp,size,"    ");
     
-  assert(r == 4);
   if(r < 0)
     return NULL;
   cp += r;

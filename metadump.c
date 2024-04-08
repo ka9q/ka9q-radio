@@ -56,7 +56,7 @@ static struct option Options[] = {
   {"ssrc", required_argument, NULL, 's'},
   {"count", required_argument, NULL, 'c'},
   {"interval", required_argument, NULL, 'i'},
-  {"verbose", no_argument, NULL, 'v'},  
+  {"verbose", no_argument, NULL, 'v'},
   {"newline", no_argument, NULL, 'n'},
   {"radio", required_argument, NULL, 'r'},
   {"locale", required_argument, NULL, 'l'},
@@ -170,13 +170,13 @@ int main(int argc,char *argv[]){
     encode_int(&bp,OUTPUT_SSRC,Ssrc);
     encode_eol(&bp);
     int cmd_len = bp - cmd_buffer;
-    
+
     if(Verbose)
       fprintf(stdout,"Send poll\n");
     if(send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len){
       perror("command send");
       exit(1);
-    }      
+    }
     last_command_time = gps_time_ns();
     // usleep takes usleep_t but it's unsigned and the while loop will hang
     int32_t sleep_time = Interval / 1000; // nanosec -> microsec
@@ -187,7 +187,7 @@ int main(int argc,char *argv[]){
       if(Last_status_time > last_command_time)
 	sleep_time = (Last_status_time + Interval - gps_time_ns()) / 1000;
       else
-	sleep_time = (last_command_time + Interval - gps_time_ns()) / 1000;	
+	sleep_time = (last_command_time + Interval - gps_time_ns()) / 1000;
     }
   }
   exit(EX_OK); // can't reach
@@ -200,7 +200,7 @@ void usage(void){
 
 // Process incoming packets
 void *input_thread(void *p){
-  for(int i=0; i < Count; i++){
+  for(int i=0; i < Count;){
     uint8_t buffer[PKTSIZE];
     struct sockaddr_storage source;
     socklen_t len = sizeof(source);
@@ -209,6 +209,12 @@ void *input_thread(void *p){
       fprintf(stderr,"Recvfrom error %s\n",strerror(errno));
       sleep(1);
       continue;
+    }
+    if(Ssrc != 0){
+      // ssrc specified, ignore others
+      uint32_t ssrc = get_ssrc(buffer+1,length-1);
+      if(ssrc != Ssrc)
+	continue;
     }
     int64_t now = gps_time_ns();
     char temp[1024];
@@ -221,6 +227,7 @@ void *input_thread(void *p){
     }
     dump_metadata(stdout,buffer+1,length-1,Newline);
     fflush(stdout);
+    i++;
   }
   exit(EX_OK);
 }

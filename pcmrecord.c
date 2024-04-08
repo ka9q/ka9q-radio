@@ -193,7 +193,7 @@ int main(int argc,char *argv[]){
       VERSION();
       exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-v] [-m sec] [-f freq] PCM_multicast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-c 1|2] [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-v] [-m sec] [-f freq] PCM_multicast_address\n",argv[0]);
       exit(EX_USAGE);
       break;
     }
@@ -247,7 +247,7 @@ static void closedown(int a){
     fprintf(stderr,"%s: caught signal %d: %s\n",App_path,a,strsignal(a));
 
   cleanup();
-  exit(EX_SOFTWARE);  // Will call cleanup()
+  exit(EX_OK);  // Will call cleanup()
 }
 
 // Read from RTP network socket, assemble blocks of samples
