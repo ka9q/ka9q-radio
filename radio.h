@@ -246,9 +246,6 @@ struct channel {
   } sap;
 
   pthread_t demod_thread;
-  // Set this flag to ask demod_thread to terminate.
-  // pthread_cancel() can't be used because we're usually waiting inside of a mutex, and deadlock will occur
-  bool terminate;
   float tp1,tp2; // Spare test points that can be read on the status channel
 };
 

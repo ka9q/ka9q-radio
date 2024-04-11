@@ -56,11 +56,7 @@ void *demod_linear(void *arg){
 
   realtime();
 
-  while(!chan->terminate){
-    int rval = downconvert(chan);
-    if(rval != 0)
-      break;
-
+  while(downconvert(chan) == 0){
     int const N = chan->filter.out.olen; // Number of raw samples in filter output buffer
 
     // First pass over sample block.

@@ -112,11 +112,7 @@ void *demod_wfm(void *arg){
 
   realtime();
 
-  while(!chan->terminate){
-    int rval = downconvert(chan);
-    if(rval != 0)
-      break;
-
+  while(downconvert(chan) == 0){
     if(power_squelch && squelch_state == 0){
       // quick check SNR from raw signal power to save time on variance-based squelch
       // Variance squelch is still needed to suppress various spurs and QRM
@@ -281,7 +277,7 @@ void *demod_wfm(void *arg){
 	break; // No output stream! Terminate
       chan->output.channels = channels_save;
     }
-  } // while(!chan->terminate)
+  }
  quit:;
   delete_filter_output(&mono);
   delete_filter_output(&lminusr);

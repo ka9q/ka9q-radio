@@ -505,11 +505,10 @@ int downconvert(struct channel *chan){
 
   while(true){
     // Should we die?
-    // Won't work correctly if 0 Hz is outside front end coverage
-    // Should make this cleaner
+    // Will be slower if 0 Hz is outside front end coverage because of slow timed wait below
+    // But at least it will eventually go away
     if(chan->tune.freq == 0 && chan->lifetime > 0){
-      chan->lifetime--;
-      if(chan->lifetime <= 0){
+      if(--chan->lifetime <= 0){
 	chan->demod_type = -1;  // No demodulator
 	return -1; // terminate needed
       }
@@ -547,10 +546,6 @@ int downconvert(struct channel *chan){
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);
 
-    if(chan->terminate){
-      pthread_mutex_unlock(&Frontend.status_mutex);
-      return -1;
-    }
     chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
     double const freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,

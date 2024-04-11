@@ -65,11 +65,7 @@ void *demod_fm(void *arg){
 
   realtime();
 
-  while(!chan->terminate){
-    int rval = downconvert(chan);
-    if(rval != 0)
-      break;
-
+  while(downconvert(chan) == 0){
     if(power_squelch && squelch_state == 0){
       // quick check SNR from raw signal power to save time on variance-based squelch
       // Variance squelch is still needed to suppress various spurs and QRM
@@ -262,6 +258,6 @@ void *demod_fm(void *arg){
     chan->output.energy += output_level;
     if(send_output(chan,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
-  } // while(!chan->terminate)
+  }
   return NULL;
 }

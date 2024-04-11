@@ -68,11 +68,7 @@ void *demod_spectrum(void *arg){
   set_freq(chan,chan->tune.freq); // retune front end if needed to cover requested bandwidth
 
   // Still need to clean up code to force radio freq to be multiple of FFT bin spacing
-  while(!chan->terminate){
-    int rval = downconvert(chan);
-    if(rval != 0)
-      break;
-
+  while(downconvert(chan) == 0){
     int binp = 0; 
     for(int i=0; i < chan->spectrum.bin_count; i++){ // For each noncoherent integration bin above center freq
       float p = 0;
