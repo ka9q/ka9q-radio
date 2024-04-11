@@ -377,7 +377,7 @@ static int loadconfig(char const * const file){
   // Set up status/command stream, global for all receiver channels
   {
     // Form default status dns name
-    char hostname[1024];
+    char hostname[sysconf(_SC_HOST_NAME_MAX)];
     gethostname(hostname,sizeof(hostname));
     // Edit off .domain, .local, etc
     char *cp = strchr(hostname,'.');

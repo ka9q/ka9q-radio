@@ -1,5 +1,5 @@
-// Core of 'radiod' program - control LOs, set frequency/mode, etc
-// Copyright 2018-2023, Phil Karn, KA9Q
+// Core of 'radiod' program - create/delete channels, control LOs, set frequency/mode, etc
+// Copyright 2018-2024, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
@@ -388,7 +388,7 @@ void *sap_send(void *p){
   int const sess_version = 1;
 
   for(;;){
-    char message[1500],*wp;
+    char message[PKTSIZE],*wp;
     int space = sizeof(message);
     wp = message;
     
@@ -418,7 +418,7 @@ void *sap_send(void *p){
     
     {
       // Originator o=
-      char hostname[128];
+      char hostname[sysconf(_SC_HOST_NAME_MAX)];
       gethostname(hostname,sizeof(hostname));
       
       struct passwd pwd,*result = NULL;

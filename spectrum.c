@@ -1,5 +1,5 @@
 // Spectral analysis service - far from complete - for ka9q-radio's radiod
-// Copyright 2023, Phil Karn, KA9Q
+// Copyright 2023-2024, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
@@ -20,7 +20,7 @@ void *demod_spectrum(void *arg){
   
   {
     char name[100];
-    snprintf(name,sizeof(name),"spect %u",chan->output.rtp.ssrc); // SSRC is dummy for ID, there's no RTP stream
+    snprintf(name,sizeof(name),"spect %u",chan->output.rtp.ssrc);
     pthread_setname(name);
   }
   pthread_mutex_init(&chan->status.lock,NULL);

@@ -1,5 +1,5 @@
 // Read and record PCM audio streams
-// Copyright 2021 Phil Karn, KA9Q
+// Copyright 2021-2024 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>

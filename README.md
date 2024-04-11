@@ -5,9 +5,16 @@ several respects:
 1. Efficient multichannel reception. A single Raspberry Pi 4 can
 simultaneously demodulate, in real time, every NBFM channel on a
 VHF/UHF band (i.e., several hundred) with plenty of real time left
-over. A mid-range x86 can handle the RX888 MkII at full sample rate
+over.
+
+A mid-range x86 can handle the RX888 MkII at full sample rate
 (129.6 MHz), receiving multiple channels sumultaneously on all
 LF/MF/HF ham bands (or anything else) plus 6 meters.
+
+A Raspberry Pi 5 can handle the RX888 MkII at half sample rate (64.8
+MHz), enough to receive up to 30 MHz. (An external hardware anti-alias
+filter is required, and "FFTW Wisdom" must be generated for the Pi5 to
+run this fast.)
 
 2. All I/O (both signal and control/status) uses IP multicasting.
 This makes it easy for more than one module, on the same computer or
@@ -34,7 +41,7 @@ downconverters and simple demodulators for various linear and FM
 modes, including AM, SSB, CW and a raw IQ mode intended mainly for use
 by other programs.
 
-Previous versions of ka9q-radio had separate programs (e.g.,
+Previous versions (before mid-2023) of ka9q-radio had separate programs (e.g.,
 *airspyd*) for talking to several makes of SDR front end hardware and
 generated an I/Q multicast stream for *radiod*. Because of performance
 problems, code and configuration complexity and general lack of
@@ -60,6 +67,11 @@ by much more sophisticated user interfaces. Various utilities are
 provided to record or play back signal streams, compress PCM audio
 into Opus, pipe a stream into digital demodulators, etc.
 
+*Radiod* now periodically multicasts ("beacons") status information on
+each output stream and user programs are being enhanced to make
+use of it. For example, *monitor* now displays the frequency, mode and
+signal-to-noise ratio of each channe.
+
 Although I've been running all this myself for several years, it is
 NOT yet ready for general use. A LOT of work still remains, especially
 documentation. But you're welcome to look at it, make comments and
@@ -82,7 +94,7 @@ requirement is that the impulse response of the channel
 filters be shorter than the (configurable) overlap interval in the forward
 FFT.
 
-Updated 10 September 2023  
+Updated 11 April 2024  
 Phil Karn, KA9Q  
 karn@ka9q.net
 

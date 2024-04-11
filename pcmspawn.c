@@ -48,7 +48,7 @@ struct session {
 
 
 // Command line params
-const char *App_path;
+char const *App_path;
 int Verbose;                  // Verbosity flag (currently unused)
 
 // Global variables
@@ -61,9 +61,9 @@ int Status_out_fd = -1;       // Writing to radio status
 int Input_fd = -1;            // Multicast receive socket
 struct session *Sessions;
 pthread_mutex_t Session_protect = PTHREAD_MUTEX_INITIALIZER;
-char *Command;
-char *Input;
-char *Status;
+char const *Command;
+char const *Input;
+char const *Status;
 
 void closedown(int);
 struct session *lookup_session(const struct sockaddr *,uint32_t,int);
@@ -223,7 +223,7 @@ int main(int argc,char * const argv[]){
       // sample rate
       // sending IP address & port
       
-      char command_line[2048];
+      char command_line[4096]; // I think that's the longest shell command
       int const samprate = samprate_from_pt(sp->type);
       int const channels = channels_from_pt(sp->type);
 
@@ -294,7 +294,7 @@ void * status(void *p){
 
   while(true){
     socklen_t socklen = sizeof(Status_input_source_address);
-    uint8_t buffer[16384];
+    uint8_t buffer[PKTSIZE];
     int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
     if(length <= 0){
       if(errno == EAGAIN || errno == ETIMEDOUT)
@@ -459,7 +459,7 @@ void closedown(int s){
 }
 // Send empty poll command on specified descriptor
 static int send_poll(int fd,int ssrc){
-  uint8_t cmdbuffer[128];
+  uint8_t cmdbuffer[PKTSIZE];
   uint8_t *bp = cmdbuffer;
   *bp++ = 1; // Command
 

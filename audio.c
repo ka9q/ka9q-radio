@@ -1,6 +1,6 @@
 // Audio multicast routines for ka9q-radio
 // Handles linear 16-bit PCM, mono and stereo
-// Copyright 2017-2023 Phil Karn, KA9Q
+// Copyright 2017-2024 Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -90,14 +90,16 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     int r = sendto(Output_fd,&packet,dp - packet,0,(struct sockaddr *)&chan->output.dest_socket,sizeof(chan->output.dest_socket));
     chan->output.samples += chunk * chan->output.channels; // Count frames
     if(r <= 0){
-      if(errno == EAGAIN && !TempSendFailure){
-	fprintf(stdout,"Temporary send failure, suggest increased buffering (see sysctl net.core.wmem_max, net.core.wmem_default\n");
-	fprintf(stdout,"Additional messages suppressed\n");
-	TempSendFailure = true;
-	return 0; // Treat as soft failure
+      if(errno == EAGAIN){
+	if(!TempSendFailure){
+	  fprintf(stdout,"Temporary send failure, suggest increased buffering (see sysctl net.core.wmem_max, net.core.wmem_default\n");
+	  fprintf(stdout,"Additional messages suppressed\n");
+	  TempSendFailure = true;
+	}
+      } else {
+	fprintf(stdout,"audio send failure: %s\n",strerror(errno));
+	abort(); // Probably more serious, like the loss of an interface or route
       }
-      fprintf(stdout,"audio send failure: %s\n",strerror(errno));
-      abort(); // Probably more serious, like the loss of an interface or route
     }
     frames -= chunk;
     if(chan->output.pacing && frames > 0)
