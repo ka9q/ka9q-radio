@@ -93,7 +93,7 @@ struct channel *create_chan(uint32_t ssrc){
   // Copy template
   // Although there are some pointers in here (filter.out, filter.energies), they're all NULL until the chan actually starts
   chan->lifetime = 20 * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
-  
+
   // Get the local socket for the output stream
   // Going connectionless with Output_fd broke this. The source port is filled in, but the source address is all zeroes because
   // it depends on the specific output address, which is only known from a routing table lookup. Oh well.
@@ -131,7 +131,7 @@ static float estimate_noise(struct channel *chan,int shift){
     // Compute average power per sample, should match input level calculated in time domain
     chan->tp1 = power2dB(total_energy) - voltage2dB((float)master->bins + Frontend.reference);
   }
-#endif  
+#endif
 
   int mbin = shift - slave->bins/2;
   float min_bin_energy = INFINITY;
@@ -268,7 +268,7 @@ int close_chan(struct channel *chan){
     chan->inuse = false;
     Active_channel_count--;
   }
-  pthread_mutex_unlock(&Channel_list_mutex);  
+  pthread_mutex_unlock(&Channel_list_mutex);
   return 0;
 }
 
@@ -334,7 +334,7 @@ double set_first_LO(struct channel const * const chan,double const first_LO){
     return (*Frontend.tune)(&Frontend,first_LO);
   }
   return first_LO;
-}  
+}
 
 // Compute FFT bin shift and time-domain fine tuning offset for specified LO frequency
 // N = input fft length
@@ -391,58 +391,58 @@ void *sap_send(void *p){
     char message[PKTSIZE],*wp;
     int space = sizeof(message);
     wp = message;
-    
+
     *wp++ = 0x20; // SAP version 1, ipv4 address, announce, not encrypted, not compressed
     *wp++ = 0; // No authentication
     *wp++ = id >> 8;
     *wp++ = id & 0xff;
     space -= 4;
-    
+
     // our sending ipv4 address
     struct sockaddr_in const *sin = (struct sockaddr_in *)&chan->output.source_socket;
     uint32_t *src = (uint32_t *)wp;
     *src = sin->sin_addr.s_addr; // network byte order
     wp += 4;
     space -= 4;
-    
+
     int len = snprintf(wp,space,"application/sdp");
     wp += len + 1; // allow space for the trailing null
     space -= (len + 1);
-    
+
     // End of SAP header, beginning of SDP
-    
+
     // Version v=0 (always)
     len = snprintf(wp,space,"v=0\r\n");
     wp += len;
     space -= len;
-    
+
     {
       // Originator o=
       char hostname[sysconf(_SC_HOST_NAME_MAX)];
       gethostname(hostname,sizeof(hostname));
-      
+
       struct passwd pwd,*result = NULL;
       char buf[1024];
-      
+
       getpwuid_r(getuid(),&pwd,buf,sizeof(buf),&result);
       len = snprintf(wp,space,"o=%s %lld %d IN IP4 %s\r\n",
 		     result ? result->pw_name : "-",
 		     (long long)start_time,sess_version,hostname);
-      
+
       wp += len;
       space -= len;
     }
-    
+
     // s= (session name)
     len = snprintf(wp,space,"s=radio %s\r\n",Frontend.description);
     wp += len;
     space -= len;
-    
+
     // i= (human-readable session information)
     len = snprintf(wp,space,"i=PCM output stream from ka9q-radio on %s\r\n",Frontend.description);
     wp += len;
     space -= len;
-    
+
     {
       char *mcast = strdup(formatsock(&chan->output.dest_socket));
       // Remove :port field, confuses the vlc listener
@@ -453,8 +453,8 @@ void *sap_send(void *p){
       wp += len;
       space -= len;
       FREE(mcast);
-    }  
-    
+    }
+
 
 #if 0 // not currently used
     int64_t current_time = utc_time_sec() + NTP_EPOCH;
@@ -464,7 +464,7 @@ void *sap_send(void *p){
     len = snprintf(wp,space,"t=%lld %lld\r\n",(long long)start_time,0LL); // unbounded
     wp += len;
     space -= len;
-    
+
     // m = media description
     // set from current state. This will require changing the session version and IDs, and
     // it's not clear that clients like VLC will do the right thing anyway
@@ -500,63 +500,66 @@ void *sap_send(void *p){
 
 // Baseband samples placed in chan->filter.out->output.c
 int downconvert(struct channel *chan){
-  // Should we die?
-  // Won't work correctly if 0 Hz is outside front end coverage
-  // Should make this cleaner
-  if(chan->tune.freq == 0 && chan->lifetime > 0){
-    chan->lifetime--;
-    if(chan->lifetime <= 0){
-      chan->demod_type = -1;  // No demodulator
-      return -1; // terminate needed
-    }
-  }
-  bool restart_needed = false;
-  pthread_mutex_lock(&chan->status.lock);
-  // Look on the single-entry command queue and grab it atomically
-  if(chan->status.command != NULL){
-    restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
-    send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
-    chan->status.global_timer = 0; // Just sent one
-    // Also send to output stream
-    send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
-    chan->status.output_timer = chan->status.output_interval; // Reload
-    FREE(chan->status.command);
-    reset_radio_status(chan); // After both are sent
-  } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
-    // Delayed status request, used mainly by all-channel polls to avoid big bursts
-    send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
-    chan->status.global_timer = 0; // to make sure
-    reset_radio_status(chan); // After both are sent
-  } else if(!chan->output.silent && chan->status.output_interval != 0 && chan->status.output_timer-- <= 0){
-    // Send status on output channel
-    send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
-    chan->status.output_timer = chan->status.output_interval; // Reload
-    reset_radio_status(chan); // After both are sent
-  }
-  pthread_mutex_unlock(&chan->status.lock);
-  if(restart_needed)
-    return +1; // Restart needed
+  int shift = 0;
+  double remainder = 0;
 
-  // To save CPU time when the front end is completely tuned away from us, block (with timeout) until the front
-  // end status changes rather than process zeroes. We must still poll the terminate flag.
-  pthread_mutex_lock(&Frontend.status_mutex);
-  int shift;
-  double remainder;
-  
   while(true){
+    // Should we die?
+    // Won't work correctly if 0 Hz is outside front end coverage
+    // Should make this cleaner
+    if(chan->tune.freq == 0 && chan->lifetime > 0){
+      chan->lifetime--;
+      if(chan->lifetime <= 0){
+	chan->demod_type = -1;  // No demodulator
+	return -1; // terminate needed
+      }
+    }
+
+    // Process any commands and return status
+    bool restart_needed = false;
+    pthread_mutex_lock(&chan->status.lock);
+    // Look on the single-entry command queue and grab it atomically
+    if(chan->status.command != NULL){
+      restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
+      send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
+      chan->status.global_timer = 0; // Just sent one
+      // Also send to output stream
+      send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
+      chan->status.output_timer = chan->status.output_interval; // Reload
+      FREE(chan->status.command);
+      reset_radio_status(chan); // After both are sent
+    } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
+      // Delayed status request, used mainly by all-channel polls to avoid big bursts
+      send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
+      chan->status.global_timer = 0; // to make sure
+      reset_radio_status(chan); // After both are sent
+    } else if(!chan->output.silent && chan->status.output_interval != 0 && chan->status.output_timer-- <= 0){
+      // Send status on output channel
+      send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
+      chan->status.output_timer = chan->status.output_interval; // Reload
+      reset_radio_status(chan); // After both are sent
+    }
+    pthread_mutex_unlock(&chan->status.lock);
+    if(restart_needed)
+      return +1; // Restart needed
+
+    // To save CPU time when the front end is completely tuned away from us, block (with timeout) until the front
+    // end status changes rather than process zeroes. We must still poll the terminate flag.
+    pthread_mutex_lock(&Frontend.status_mutex);
+
     if(chan->terminate){
       pthread_mutex_unlock(&Frontend.status_mutex);
       return -1;
     }
-
     chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
     double const freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
 		      Frontend.in.impulse_length,
 		      Frontend.samprate,
-		      &shift,&remainder,freq) == 0)
-      break; // The carrier is in range
-    
+		      &shift,&remainder,freq) == 0){
+      pthread_mutex_unlock(&Frontend.status_mutex);
+      break;
+    }
     // No front end coverage of our carrier; wait for it to retune
     chan->sig.bb_power = 0;
     chan->sig.bb_energy = 0;
@@ -565,9 +568,8 @@ int downconvert(struct channel *chan){
     clock_gettime(CLOCK_REALTIME,&timeout);
     timeout.tv_sec += 1; // 1 sec in the future
     pthread_cond_timedwait(&Frontend.status_cond,&Frontend.status_mutex,&timeout);
+    pthread_mutex_unlock(&Frontend.status_mutex);
   }
-  pthread_mutex_unlock(&Frontend.status_mutex);
-
   // Reasonable parameters?
   assert(isfinite(chan->tune.doppler_rate));
   assert(isfinite(chan->tune.shift));
