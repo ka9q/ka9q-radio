@@ -48,14 +48,12 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
     return -1;
   }
   if(fork() == 0){
+    // run "avahi-publish-address dns_name address"
     char *ip_address_string;    // No need to free, we're calling exec
     asprintf(&ip_address_string,"%d.%d.%d.%d",(address >> 24) & 0xff, (address >> 16) & 0xff, (address >> 8) & 0xff, address & 0xff);
 #if 0
     fprintf(stdout,"avahi start: ip address string = %s\n",ip_address_string);
-#endif
     fprintf(stdout,"avahi-publish-address child pid %d\n",getpid());
-    // run "avahi-publish-address dns_name address"
-#if 0
     fprintf(stdout,"%s %s %s %s\n",
 	    "avahi-publish-address", "avahi-publish-address",dns_name,ip_address_string);
 #endif
