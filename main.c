@@ -590,8 +590,8 @@ static int loadconfig(char const * const file){
       }
       // Done processing frequency list(s) and creating chans
       FREE(freq_list);
-      fprintf(stdout,"%s: %d channels started\n",fname,nfreq);
     }
+    fprintf(stdout,"[%s] %d channels started\n",sname,nfreq);
   }
   // Start the status thread after all the receivers have been created so it doesn't contend for the chan list lock
   if(Ctl_fd >= 3)
