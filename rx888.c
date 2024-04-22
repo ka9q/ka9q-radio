@@ -243,14 +243,15 @@ static void *proc_rx888(void *arg){
   assert(sdr != NULL);
   pthread_setname("proc_rx888");
 
+  int64_t const now = gps_time_ns();
+  sdr->last_callback_time = now;
+  sdr->last_count_time = now;
+  
   realtime();
   {
     int ret __attribute__ ((unused));
     ret = rx888_start_rx(sdr,rx_callback);
     assert(ret == 0);
-    int64_t const now = gps_time_ns();
-    sdr->last_callback_time = now;
-    sdr->last_count_time = now;
   }
   do {
     // If the USB cable is pulled, libusb_handle_events() simply hangs
@@ -286,7 +287,7 @@ static void *proc_rx888(void *arg){
 static void rx_callback(struct libusb_transfer * const transfer){
   assert(transfer != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)transfer->user_data;
-  struct frontend *frontend = sdr->frontend;
+  struct frontend * const frontend = sdr->frontend;
   int64_t const now = gps_time_ns();
 
   sdr->xfers_in_progress--;
