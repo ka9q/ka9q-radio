@@ -58,10 +58,6 @@ struct sdrstate {
   unsigned char **databuffers;        // List of data buffers.
   long long last_callback_time;
 
-  // State for sample rate conversion by interpolation
-  float last;
-  double sample_phase; // must be double precision - phase increments are small
-
   // USB transfer
   int xfers_in_progress;
   unsigned int queuedepth; // Number of requests to queue
@@ -74,9 +70,11 @@ struct sdrstate {
   bool randomizer;
   bool dither;
   bool highgain;
+  uint64_t last_sample_count; // Used to verify sample rate
+  int64_t last_count_time;
 
   pthread_t cmd_thread;
-  pthread_t proc_thread;  
+  pthread_t proc_thread;
 };
 
 static void rx_callback(struct libusb_transfer *transfer);
@@ -160,7 +158,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   if(att > 31.5)
     att = 31.5;
   rx888_set_att(sdr,att);
-  
+
   // Gain Mode low/high, default high
   char const *gainmode = config_getstring(dictionary,section,"gainmode","high");
   if(strcmp(gainmode, "high") == 0)
@@ -287,9 +285,10 @@ static void rx_callback(struct libusb_transfer * const transfer){
   assert(transfer != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)transfer->user_data;
   struct frontend *frontend = sdr->frontend;
+  int64_t const now = gps_time_ns();
 
   sdr->xfers_in_progress--;
-  sdr->last_callback_time = gps_time_ns();
+  sdr->last_callback_time = now;
 
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
@@ -328,7 +327,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
     }
   }
 
-  frontend->timestamp = gps_time_ns();
+  frontend->timestamp = now;
   write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
 
   // These blocks are kinda small, so exponentially smooth the power readings
@@ -350,6 +349,17 @@ static void rx_callback(struct libusb_transfer * const transfer){
     }
   }
   frontend->samples += sampcount; // Count original samples
+  if(now >= sdr->last_count_time + 60 * BILLION){
+    // Verify approximate sample rate once per minute
+    int64_t const sampcount = frontend->samples - sdr->last_sample_count;
+    double const rate = BILLION * (double)sampcount / (now - sdr->last_count_time);
+    double const error = fabs((rate - frontend->samprate) / (double)frontend->samprate);
+    if(error > 0.01)
+      fprintf(stdout,"RX888 measured sample rate error: %.1lf Hz vs nominal %d Hz\n",
+	      rate,frontend->samprate);
+    sdr->last_count_time = now;
+    sdr->last_sample_count = frontend->samples;
+  }
   if(!Stop_transfers) {
     if(libusb_submit_transfer(transfer) == 0)
       sdr->xfers_in_progress++;
@@ -364,7 +374,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   char full_firmware_file[PATH_MAX];
   memset(full_firmware_file,0,sizeof(full_firmware_file));
   dist_path(full_firmware_file,sizeof(full_firmware_file),firmware);
-  
+
   {
     int ret = libusb_init(NULL);
     if(ret != 0){
@@ -441,7 +451,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   }
   libusb_free_device_list(device_list,1);
   device_list = NULL;
-  
+
   // Scan list again, looking for a loaded device
   libusb_device *device = NULL;
   dev_count = libusb_get_device_list(NULL,&device_list);
@@ -935,7 +945,7 @@ static double actual_freq(double frequency){
 
     // Calculate the pllFrequency: the divider * desired output frequency
     uint32_t pllFreq = divider * frequency;
-#if 0    
+#if 0
     fprintf(stderr, "pllA Freq %d\n", pllFreq);
 #endif
 
