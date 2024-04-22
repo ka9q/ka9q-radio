@@ -243,12 +243,12 @@ static void *proc_rx888(void *arg){
   assert(sdr != NULL);
   pthread_setname("proc_rx888");
 
-  int64_t const now = gps_time_ns();
-  sdr->last_callback_time = now;
-  sdr->last_count_time = now;
-  
   realtime();
   {
+    int64_t const now = gps_time_ns();
+    sdr->last_callback_time = now;
+    sdr->last_count_time = now;
+
     int ret __attribute__ ((unused));
     ret = rx888_start_rx(sdr,rx_callback);
     assert(ret == 0);
@@ -358,7 +358,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
     double const rate = BILLION * (double)sampcount / (now - sdr->last_count_time);
     double const error = fabs((rate - frontend->samprate) / (double)frontend->samprate);
     if(error > 0.01)
-      fprintf(stdout,"RX888 measured sample rate error: %.1lf Hz vs nominal %d Hz\n",
+      fprintf(stdout,"RX888 measured sample rate error: %'.1lf Hz vs nominal %'d Hz\n",
 	      rate,frontend->samprate);
     sdr->last_count_time = now;
     sdr->last_sample_count = frontend->samples;
