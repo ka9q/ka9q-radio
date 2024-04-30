@@ -260,8 +260,11 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  if(chan->filter.min_IF != old_low || chan->filter.max_IF != old_high || chan->filter.kaiser_beta != old_kaiser)
 	    new_filter_needed = true;
 
-	  if(chan->demod_type != old_type || chan->output.samprate != old_samprate)
+	  if(chan->demod_type != old_type || chan->output.samprate != old_samprate){
+	    if(Verbose > 1)
+	      fprintf(stdout,"demod %d -> %d, samprate %d -> %d\n",old_type,chan->demod_type,old_samprate,chan->output.samprate);
 	    restart_needed = true; // chan changed, ask for a restart
+	  }
 	}
       }
       break;
@@ -269,6 +272,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       {
 	enum demod_type const i = decode_int(cp,optlen);
 	if(i >= 0 && i < Ndemod && i != chan->demod_type){
+	  if(Verbose > 1)
+	    fprintf(stdout,"Demod change %d -> %d\n",chan->demod_type,i);
 	  chan->demod_type = i;
 	  restart_needed = true;
 	}
@@ -361,6 +366,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       {
 	float const x = decode_float(cp,optlen);
 	if(isfinite(x) && x != chan->spectrum.bin_bw){
+	  if(Verbose > 1)
+	    fprintf(stdout,"bin bw %f -> %f\n",chan->spectrum.bin_bw,x);
 	  chan->spectrum.bin_bw = x;
 	  restart_needed = true;
 	}
@@ -370,6 +377,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       {
 	int const x = decode_int(cp,optlen);
 	if(x > 0 && x != chan->spectrum.bin_count){
+	  if(Verbose > 1)
+	    fprintf(stdout,"bin count %d -> %d\n",chan->spectrum.bin_count,x);
 	  chan->spectrum.bin_count = x;
 	  restart_needed = true;
 	}
