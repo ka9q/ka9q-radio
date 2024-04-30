@@ -216,7 +216,7 @@ struct filter_in *create_filter_input(struct filter_in *master,int const L,int c
 // Set up output (slave) side of filter (possibly one of several sharing the same input master)
 // These output filters should be deleted before their masters
 // Segfault will occur if filter_in is deleted and execute_filter_output is executed
-struct filter_out *create_filter_output(struct filter_out *slave,struct filter_in * master,complex float * const response,int const olen, enum filtertype const out_type){
+struct filter_out *create_filter_output(struct filter_out *slave,struct filter_in * master,complex float * const response,int olen, enum filtertype const out_type){
   assert(master != NULL);
   if(master == NULL)
     return NULL;
@@ -227,7 +227,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
 
   assert(olen > 0);
   if(olen > master->ilen)
-    return NULL; // Interpolation not yet supported
+    olen = master->ilen; // Interpolation not yet supported - are callers prepared for this?
 
   // Share all but output fft bins, response, output and output type
   slave->master = master;
@@ -265,6 +265,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
   case SPECTRUM: // Like complex, but no IFFT or output time domain buffer
     slave->bins = osize;
     slave->fdomain = lmalloc(sizeof(complex float) * slave->bins); // User reads this directly
+    assert(slave->fdomain != NULL);
     // Note: No time domain buffer; slave->output, etc, all NULL
     // Also don't set up an IFFT
     break;
@@ -627,22 +628,30 @@ int delete_filter_input(struct filter_in * master){
   if(master == NULL)
     return -1;
 
+  pthread_mutex_destroy(&master->filter_mutex);
+  pthread_cond_destroy(&master->filter_cond);
   fftwf_destroy_plan(master->fwd_plan);
-  mirror_free(&master->input_buffer,master->input_buffer_size);
+  master->fwd_plan = NULL;
+  mirror_free(&master->input_buffer,master->input_buffer_size); // Don't use free() !
 
   for(int i=0; i < ND; i++)
-    free(master->fdomain[i]);
+    FREE(master->fdomain[i]);
+  memset(master,0,sizeof(*master)); // Wipe it all
   return 0;
+
 }
 int delete_filter_output(struct filter_out *slave){
   if(slave == NULL)
-    return 1;
+    return -1;
 
   pthread_mutex_destroy(&slave->response_mutex);
   fftwf_destroy_plan(slave->rev_plan);
+  slave->rev_plan = NULL;
   FREE(slave->output_buffer.c);
+  FREE(slave->output_buffer.r);
   FREE(slave->response);
   FREE(slave->fdomain);
+  memset(slave,0,sizeof(*slave)); // Wipe it all
   return 0;
 }
 
@@ -982,9 +991,12 @@ int write_rfilter(struct filter_in *f, float const *buffer,int size){
 void *lmalloc(size_t size){
   void *ptr;
   int r;
-  if((r = posix_memalign(&ptr,64,size)) == 0)
+  if((r = posix_memalign(&ptr,64,size)) == 0){
+    assert(ptr != NULL);
     return ptr;
+  }
   errno = r;
+  assert(0);
   return NULL;
 }
 // Suggest running fftwf-wisdom to generate some FFTW3 wisdom
