@@ -510,6 +510,8 @@ int downconvert(struct channel *chan){
     if(chan->tune.freq == 0 && chan->lifetime > 0){
       if(--chan->lifetime <= 0){
 	chan->demod_type = -1;  // No demodulator
+	if(Verbose > 1)
+	  fprintf(stdout,"chan %d terminate needed\n",chan->output.rtp.ssrc);
 	return -1; // terminate needed
       }
     }
@@ -539,9 +541,11 @@ int downconvert(struct channel *chan){
       reset_radio_status(chan); // After both are sent
     }
     pthread_mutex_unlock(&chan->status.lock);
-    if(restart_needed)
+    if(restart_needed){
+      if(Verbose > 1)
+	fprintf(stdout,"chan %d restart needed\n",chan->output.rtp.ssrc);
       return +1; // Restart needed
-
+    }
     // To save CPU time when the front end is completely tuned away from us, block (with timeout) until the front
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);
