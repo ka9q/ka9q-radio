@@ -216,7 +216,8 @@ struct filter_in *create_filter_input(struct filter_in *master,int const L,int c
 // Set up output (slave) side of filter (possibly one of several sharing the same input master)
 // These output filters should be deleted before their masters
 // Segfault will occur if filter_in is deleted and execute_filter_output is executed
-struct filter_out *create_filter_output(struct filter_out *slave,struct filter_in * master,complex float * const response,int olen, enum filtertype const out_type){
+// Special case: for type == SPECTRUM, 'len' is the number of FFT bins, not the number of output time domain points (since there aren't any)
+struct filter_out *create_filter_output(struct filter_out *slave,struct filter_in * master,complex float * const response,int len, enum filtertype const out_type){
   assert(master != NULL);
   if(master == NULL)
     return NULL;
@@ -225,23 +226,16 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
   if(slave == NULL)
     return NULL;
 
-  assert(olen > 0);
-  if(olen > master->ilen)
-    olen = master->ilen; // Interpolation not yet supported - are callers prepared for this?
+  assert(len > 0);
 
   // Share all but output fft bins, response, output and output type
   slave->master = master;
   slave->out_type = out_type;
-  slave->olen = olen;
 
-  float const overlap = (float)(master->ilen + master->impulse_length - 1) / master->ilen; // Total FFT time points / used time points
-  int const osize = round(olen * overlap); // Total number of time-domain FFT points including overlap
-
+  // N / L = Total FFT points / time domain points
+  float const overlap = (float)(master->ilen + master->impulse_length - 1) / master->ilen;
   slave->response = response;
-  if(response != NULL)
-    slave->noise_gain = noise_gain(slave);
-  else
-    slave->noise_gain = NAN;
+  slave->noise_gain = (response == NULL) ? NAN : noise_gain(slave);
 
   pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1); // IFFTs are always small, use only one internal thread
@@ -249,37 +243,46 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
   default:
   case COMPLEX:
   case CROSS_CONJ:
-    slave->bins = osize; // Same as total number of time domain points
-    slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
-    slave->output_buffer.c = lmalloc(sizeof(complex float) * osize);
-    assert(slave->output_buffer.c != NULL);
-    slave->output_buffer.r = NULL; // catch erroneous references
-    slave->output.c = slave->output_buffer.c + osize - olen;
-    if((slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
-      suggest(FFTW_planning_level,osize,FFTW_BACKWARD,COMPLEX);
-      slave->rev_plan = fftwf_plan_dft_1d(osize,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_MEASURE);
+    {
+      slave->olen = len;
+      slave->bins = round(len * overlap); // Total number of time-domain FFT points including overlap
+      slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
+      slave->output_buffer.c = lmalloc(sizeof(complex float) * slave->bins);
+      assert(slave->output_buffer.c != NULL);
+      slave->output_buffer.r = NULL; // catch erroneous references
+      slave->output.c = slave->output_buffer.c + slave->bins - len;
+      if((slave->rev_plan = fftwf_plan_dft_1d(slave->bins,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
+	suggest(FFTW_planning_level,slave->bins,FFTW_BACKWARD,COMPLEX);
+	slave->rev_plan = fftwf_plan_dft_1d(slave->bins,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_MEASURE);
+      }
     }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
     break;
   case SPECTRUM: // Like complex, but no IFFT or output time domain buffer
-    slave->bins = osize;
-    slave->fdomain = lmalloc(sizeof(complex float) * slave->bins); // User reads this directly
-    assert(slave->fdomain != NULL);
-    // Note: No time domain buffer; slave->output, etc, all NULL
-    // Also don't set up an IFFT
+    {
+      slave->olen = 0;
+      slave->bins = len;
+      slave->fdomain = lmalloc(sizeof(complex float) * slave->bins); // User reads this directly
+      assert(slave->fdomain != NULL);
+      // Note: No time domain buffer; slave->output, etc, all NULL
+      // Also don't set up an IFFT
+    }
     break;
   case REAL:
-    slave->bins = osize / 2 + 1;
-    slave->fdomain = lmalloc(sizeof(complex float) * slave->bins); // Not really needed for SPECTRUM?
-    assert(slave->fdomain != NULL);
-    slave->output_buffer.r = lmalloc(sizeof(float) * osize);
-    assert(slave->output_buffer.r != NULL);
-    slave->output_buffer.c = NULL;
-    slave->output.r = slave->output_buffer.r + osize - olen;
-    if((slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
-      suggest(FFTW_planning_level,osize,FFTW_BACKWARD,REAL);
-      slave->rev_plan = fftwf_plan_dft_c2r_1d(osize,slave->fdomain,slave->output_buffer.r,FFTW_MEASURE);
+    {
+      slave->olen = len;
+      slave->bins = round(len * overlap) / 2 + 1;
+      slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
+      assert(slave->fdomain != NULL);
+      slave->output_buffer.r = lmalloc(sizeof(float) * slave->bins);
+      assert(slave->output_buffer.r != NULL);
+      slave->output_buffer.c = NULL;
+      slave->output.r = slave->output_buffer.r + slave->bins - len;
+      if((slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->bins,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
+	suggest(FFTW_planning_level,slave->bins,FFTW_BACKWARD,REAL);
+	slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->bins,slave->fdomain,slave->output_buffer.r,FFTW_MEASURE);
+      }
     }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
@@ -751,6 +754,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
   memcpy(buffer,response,N * sizeof(*buffer));
   fftwf_execute(rev_filter_plan);
   fftwf_destroy_plan(rev_filter_plan);
+  rev_filter_plan = NULL;
 #ifdef FILTER_DEBUG
   fprintf(stderr,"window_filter raw time domain\n");
   for(int n=0; n < N; n++){
@@ -783,7 +787,7 @@ int window_filter(int const L,int const M,complex float * const response,float c
   // Now back to frequency domain
   fftwf_execute(fwd_filter_plan);
   fftwf_destroy_plan(fwd_filter_plan);
-
+  fwd_filter_plan = NULL;
 #ifdef FILTER_DEBUG
   fprintf(stderr,"window_filter filter response amplitude\n");
   for(int n=0;n<N;n++)
