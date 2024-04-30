@@ -39,6 +39,7 @@ void *demod_linear(void *arg){
   FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);
   int const blocksize = chan->output.samprate * Blocktime / 1000;
+  delete_filter_output(&chan->filter.out);
   create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
   pthread_mutex_unlock(&chan->status.lock);
 
