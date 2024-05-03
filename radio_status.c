@@ -171,9 +171,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       {
 	double const f = fabs(decode_double(cp,optlen));
 	if(isfinite(f)){
-	  if(f != chan->tune.freq && chan->demod_type == SPECT_DEMOD)
-	    restart_needed = true; // Easier than trying to handle it inline
-	  
 	  if(Verbose > 1)
 	    fprintf(stdout,"set ssrc %u freq = %'.3lf\n",ssrc,f);
 
