@@ -72,6 +72,7 @@ struct sdrstate {
   bool highgain;
   uint64_t last_sample_count; // Used to verify sample rate
   int64_t last_count_time;
+  bool message_posted; // Clock rate error posted last time around
 
   pthread_t cmd_thread;
   pthread_t proc_thread;
@@ -357,9 +358,12 @@ static void rx_callback(struct libusb_transfer * const transfer){
     int64_t const sampcount = frontend->samples - sdr->last_sample_count;
     double const rate = BILLION * (double)sampcount / (now - sdr->last_count_time);
     double const error = fabs((rate - frontend->samprate) / (double)frontend->samprate);
-    if(error > 0.01)
+    if(error > 0.01 || sdr->message_posted){
+      // Post message every time the clock is off by 1% or more, or if it has just returned to nominal
       fprintf(stdout,"RX888 measured sample rate error: %'.1lf Hz vs nominal %'d Hz\n",
 	      rate,frontend->samprate);
+      sdr->message_posted = (error > 0.01);
+    }
     sdr->last_count_time = now;
     sdr->last_sample_count = frontend->samples;
   }
