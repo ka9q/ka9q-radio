@@ -1278,9 +1278,7 @@ static void *display(void *arg){
 	mvprintw(y++,x,"Type");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
 	  struct session *sp = Sessions_copy[session];
-
-	  if(sp->samprate != 0)
-	    mvprintw(y,x,"%4s",PT_table[sp->type].encoding == OPUS ? "Opus" : "PCM");
+	  mvprintw(y,x,"%4s",PT_table[sp->type].encoding == OPUS ? "Opus" : "PCM");
 	}
 	x += 5;
 	y = row_save;
@@ -1289,7 +1287,8 @@ static void *display(void *arg){
 	mvprintw(y++,x,"%3s","ms");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
 	  struct session *sp = Sessions_copy[session];
-	  mvprintw(y,x,"%3d",(1000 * sp->frame_size/sp->samprate)); // frame size, ms
+	  if(sp->samprate != 0)
+	    mvprintw(y,x,"%3d",(1000 * sp->frame_size/sp->samprate)); // frame size, ms
 	}
 	x += 4;
 	y = row_save;
