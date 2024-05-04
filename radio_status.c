@@ -395,6 +395,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	if(x >=0 && x < 128)
 	  chan->output.rtp.type = x;
       }
+      break;
     case OUTPUT_ENCODING:
       {
 	int const x = decode_int(cp,optlen);
