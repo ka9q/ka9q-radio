@@ -339,7 +339,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
       {
 	int e = decode_int(cp,optlen);
 	fprintf(fp,"encoding %d ",e);
-	if(e >= NONE && e < UNUSED_ENCODING){
+	if(e >= NO_ENCODING && e < UNUSED_ENCODING){
 	  switch(e){
 	  case NO_ENCODING:
 	    fprintf(fp,"none");

@@ -397,11 +397,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       }
       break;
     case OUTPUT_ENCODING:
-      {
-	int const x = decode_int(cp,optlen);
-	if(x >= S16LE && x < UNUSED_ENCODING)
-	  chan->output.encoding = x;
-      }
+      chan->output.encoding = decode_int(cp,optlen);
       break;
     default:
       break;
