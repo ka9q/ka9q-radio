@@ -250,6 +250,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case RTP_PT:
       channel->output.rtp.type = decode_int(cp,optlen);
       break;
+    case OUTPUT_ENCODING:
+      channel->output.encoding = decode_int(cp,optlen);
+      break;
     case STATUS_INTERVAL:
       channel->status.output_interval = decode_int(cp,optlen);
       break;
