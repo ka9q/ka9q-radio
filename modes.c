@@ -104,6 +104,7 @@ int set_defaults(struct channel *chan){
   chan->linear.loop_bw = DEFAULT_PLL_BW;
   chan->linear.agc = true;
   chan->output.samprate = DEFAULT_LINEAR_SAMPRATE;
+  chan->output.encoding = S16BE;
   double r = remainder(Blocktime * chan->output.samprate * .001,1.0);
   if(r != 0){
     fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
