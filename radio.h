@@ -67,14 +67,14 @@ struct frontend {
   bool isreal;            // Use real->complex FFT (otherwise complex->complex)
   int bitspersample; // 8, 12 or 16
   bool lock;              // Tuning is locked; clients cannot change
-  
+
   // Limits on usable IF due to aliasing, filtering, etc
   // Less than or equal to +/- samprate/2
   // Straddles 0 Hz for complex, will have same sign for real output from a low IF tuner
   // Usually negative for the 820/828 tuners, which are effectively wideband LSB radios
   float min_IF;
   float max_IF;
-  
+
   /* For efficiency, signal levels now scaled to full A/D range, e.g.,
      16 bit real:    0 dBFS = +87.2984 dB = 32767/sqrt(2) units RMS
      16 bit complex: 0 dBFS = +90.3087 dB = 32767 units RMS
@@ -88,11 +88,11 @@ struct frontend {
   float if_power_instant; // instantaneous receive power
   float if_power;   // Exponentially smoothed power measurement in A/D units (not normalized)
   float if_power_max;
-  
+
   // This structure is updated asynchronously by the front end thread, so it's protected
   pthread_mutex_t status_mutex;
   pthread_cond_t status_cond;     // Signalled whenever status changes
-  
+
   // Entry points for local front end driver
   void *context;         // Stash hardware-dependent control block
   int (*setup)(struct frontend *,dictionary *,char const *); // Get front end ready to go
@@ -207,11 +207,11 @@ struct channel {
     // RTP network streaming
     bool silent;       // last packet was suppressed (used to generate RTP mark bit)
     struct rtp_state rtp;
-    
+
     struct sockaddr_storage source_socket;    // Source address of our data output
     struct sockaddr_storage dest_socket;      // Dest of our data outputg (typically multicast)
     char dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
-    
+
     int channels;   // 1 = mono, 2 = stereo (settable)
     float energy;   // Output energy since last poll
 
@@ -219,6 +219,7 @@ struct channel {
     float deemph_state_right;
     uint64_t samples;
     bool pacing;     // Pace output packets
+    enum encoding encoding;
   } output;
 
   struct {

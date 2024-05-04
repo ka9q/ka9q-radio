@@ -24,11 +24,13 @@ extern int Mcast_ttl;
 extern int IP_tos;
 
 enum encoding {
-  S16LE = 1,
+  NO_ENCODING = 0,
+  S16LE,
   S16BE,
   OPUS,
   F32,
   AX25,
+  UNUSED_ENCODING, // Sentinel, not used
 };
 
 struct pt_table {

@@ -551,12 +551,15 @@ static void *statproc(void *arg){
 	fprintf(stderr,"No room!!\n");
 	continue;
       }
-      sp->chan.inuse = true; // Not sent in status update
       sp->ssrc = ssrc;
     }
-    // Always decode directly into local copy, as not every parameter is updated in every status message
+    memcpy(&sp->sender,&sender,sizeof(sp->sender));
+    sp->last_active = gps_time_ns(); // Keep active time calc from blowing up before data packet arrives
+
+    // Decode directly into local copy, as not every parameter is updated in every status message
     // Decoding into a temp copy and then memcpy would write zeroes into unsent parameters
     decode_radio_status(&sp->frontend,&sp->chan,buffer+1,length-1);
+
     // Update SNR calculation (not sent explicitly)
     float const noise_bandwidth = fabsf(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
     float sig_power = sp->chan.sig.bb_power - noise_bandwidth * sp->chan.sig.n0;
@@ -565,9 +568,16 @@ static void *statproc(void *arg){
     float const sn0 = sig_power/sp->chan.sig.n0;
     float const snr = power2dB(sn0/noise_bandwidth);
     sp->snr = sp->now_active ? snr : -INFINITY;
-    memcpy(&sp->sender,&sender,sizeof(sp->sender));
-    sp->last_active = gps_time_ns(); // Keep active time calc from blowing up before data packet arrives
     sp->samprate = sp->chan.output.samprate;
+    int const type = sp->chan.output.rtp.type;
+
+    if(type >= 0 && type < 128){
+      // NO_ENCODING check so we won't break with radiod that doesn't send it yet
+      if(sp->chan.output.encoding != NO_ENCODING)
+	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,sp->chan.output.encoding);
+      else if(type != Opus_pt)
+	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,S16BE); // Heuristic; remove this eventually
+    }
     pthread_mutex_unlock(&Sess_mutex);
   }
   return NULL;

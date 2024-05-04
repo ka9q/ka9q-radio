@@ -37,7 +37,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
 // Radio status reception and transmission thread
 void *radio_status(void *arg){
   pthread_setname("radio stat");
-  
+
   while(true){
     // Command from user
     uint8_t buffer[PKTSIZE];
@@ -124,7 +124,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
   bool restart_needed = false;
   bool new_filter_needed = false;
   uint32_t const ssrc = chan->output.rtp.ssrc;
-  
+
   if(chan->lifetime != 0)
     chan->lifetime = Channel_idle_timeout; // restart self-destruct timer
   chan->status.packets_in++;
@@ -350,14 +350,14 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	float const x = decode_float(cp,optlen);
 	if(isfinite(x))
 	  chan->fm.squelch_open = fabsf(dB2power(x));
-      }	
+      }
       break;
     case SQUELCH_CLOSE:
       {
 	float const x = decode_float(cp,optlen);
 	if(isfinite(x))
 	   chan->fm.squelch_close = fabsf(dB2power(x));
-      }	
+      }
       break;
     case NONCOHERENT_BIN_BW:
       {
@@ -387,6 +387,21 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	if(x >= 0)
 	  chan->status.output_interval = x;
       }
+      break;
+    case RTP_PT:
+      // Also sent in RTP data streams; sent explictly here to link with OUTPUT_SAMPRATE and OUTPUT_CHANNELS in receiver table
+      {
+	int const x = decode_int(cp,optlen);
+	if(x >=0 && x < 128)
+	  chan->output.rtp.type = x;
+      }
+    case OUTPUT_ENCODING:
+      {
+	int const x = decode_int(cp,optlen);
+	if(x >= S16LE && x < UNUSED_ENCODING)
+	  chan->output.encoding = x;
+      }
+      break;
     default:
       break;
     }
@@ -411,10 +426,10 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     set_filter(&chan->filter.out,chan->filter.min_IF/chan->output.samprate,
 	       chan->filter.max_IF/chan->output.samprate,
 	       chan->filter.kaiser_beta);
-  }    
+  }
   return false;
 }
-  
+
 // Encode contents of frontend and chan structures as command or status packet
 // packet argument must be long enough!!
 // Convert values from internal to engineering units
@@ -430,14 +445,14 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   encode_int64(&bp,CMD_CNT,chan->status.packets_in); // integer
   if(strlen(frontend->description) > 0)
     encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
-  
+
   // Echo timestamp from source or locally (bit of a kludge, eventually will always be local)
   if(frontend->timestamp != 0)
     encode_int64(&bp,GPS_TIME,frontend->timestamp);
   else
     encode_int64(&bp,GPS_TIME,gps_time_ns());
 
-  encode_int64(&bp,INPUT_SAMPLES,frontend->samples);  
+  encode_int64(&bp,INPUT_SAMPLES,frontend->samples);
   encode_int32(&bp,INPUT_SAMPRATE,frontend->samprate); // integer Hz
   encode_int32(&bp,FE_ISREAL,frontend->isreal ? true : false);
   encode_double(&bp,CALIBRATE,frontend->calibrate);
@@ -458,7 +473,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   encode_int32(&bp,FILTER_BLOCKSIZE,frontend->in.ilen);
   encode_int32(&bp,FILTER_FIR_LENGTH,frontend->in.impulse_length);
   encode_int32(&bp,FILTER_DROPS,chan->filter.out.block_drops);  // count
-  
+
   // Adjust for A/D width
   // Level is absolute relative to A/D saturation, so +3dB for real vs complex
   if(chan->status.blocks_since_poll > 0){
@@ -576,6 +591,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_int64(&bp,OUTPUT_METADATA_PACKETS,chan->status.packets_out);
     encode_byte(&bp,RTP_PT,chan->output.rtp.type);
     encode_int32(&bp,STATUS_INTERVAL,chan->status.output_interval);
+    encode_int(&bp,OUTPUT_ENCODING,chan->output.encoding);
   }
   // Don't send test points unless they're in use
   if(!isnan(chan->tp1))
