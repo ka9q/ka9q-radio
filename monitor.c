@@ -150,6 +150,7 @@ struct session {
   struct goertzel tone_detector[N_tones];
   int tone_samples;
   float current_tone;       // Detected tone frequency
+  float snr;
 
   int samprate;
   int channels;             // Channels (1 or 2)
@@ -187,7 +188,7 @@ static int sort_session_active(void),sort_session_total(void);
 static int close_session(struct session **);
 static int pa_callback(void const *,void *,unsigned long,PaStreamCallbackTimeInfo const *,PaStreamCallbackFlags,void *);
 static void *decode_task(void *x);
-static void *sockproc(void *arg);
+static void *dataproc(void *arg);
 static void *repeater_ctl(void *arg);
 static char const *lookupid(uint32_t ssrc);
 static float make_position(int);
@@ -487,7 +488,7 @@ int main(int argc,char * const argv[]){
   // This allows a restart when started automatically from systemd before avahi is fully running
   pthread_t sockthreads[Nfds];
   for(int i=0; i<Nfds; i++)
-    pthread_create(&sockthreads[i],NULL,sockproc,Mcast_address_text[i]);
+    pthread_create(&sockthreads[i],NULL,dataproc,Mcast_address_text[i]);
 
   Last_error_time = gps_time_ns();
 
@@ -505,7 +506,7 @@ int main(int argc,char * const argv[]){
 }
 
 // Receive from data and status multicast streams, update local states, multiplex to decoder threads
-static void *sockproc(void *arg){
+static void *dataproc(void *arg){
   char const *mcast_address_text = (char *)arg;
   {
     char name[100];
@@ -535,8 +536,9 @@ static void *sockproc(void *arg){
   struct packet *pkt = NULL;
 
   realtime();
-  // Main loop begins here - poll input status and data UDP sockets
+  // Main loop begins here
   while(!Terminate){
+    // poll input status and data UDP sockets on same IP multicast group
     int const nfds = 2;
     struct pollfd fds[nfds];
     fds[0].fd = input_fd;
@@ -550,7 +552,6 @@ static void *sockproc(void *arg){
       perror("poll");
     if(n <= 0)
       continue;
-
 
     if(fds[1].revents & (POLLIN|POLLPRI)){
       // Got a status packet
@@ -582,6 +583,14 @@ static void *sockproc(void *arg){
       // Always decode directly into local copy, as not every parameter is updated in every status message
       // Decoding into a temp copy and then memcpy would write zeroes into unsent parameters
       decode_radio_status(&sp->frontend,&sp->chan,buffer+1,length-1);
+      // Update SNR calculation (not sent explicitly)
+      float const noise_bandwidth = fabsf(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
+      float sig_power = sp->chan.sig.bb_power - noise_bandwidth * sp->chan.sig.n0;
+      if(sig_power < 0)
+	sig_power = 0; // Avoid log(-x) = nan
+      float const sn0 = sig_power/sp->chan.sig.n0;
+      sp->snr = power2dB(sn0/noise_bandwidth);
+      sp->snr = sp->now_active ? sp->snr : -INFINITY;
       memcpy(&sp->sender,&sender,sizeof(sp->sender));
       sp->last_active = gps_time_ns(); // Keep active time calc from blowing up before data packet arrives
       sp->samprate = sp->chan.output.samprate;
@@ -1092,9 +1101,6 @@ static void *display(void *arg){
       if(Start_muted)
 	printw("**Starting new sessions muted** ");
 
-      if(Voting)
-	printw("SNR Voting enabled ");
-
       int y,x;
       getyx(stdscr,y,x);
       if(x != 0)
@@ -1118,11 +1124,29 @@ static void *display(void *arg){
 	current = 0; // Session got created, make it current
       pthread_mutex_unlock(&Sess_mutex);
 
+      if(Voting){
+	printw("SNR Voting enabled\n");
+	// Find the best with 1 dB hysteresis - should it be configurable?
+	int best_session = last_best_session;
+	for(int i = 0; i < Nsessions_copy; i++){
+	  struct session const *sp = Sessions_copy[i];
+	  if(sp->snr > Sessions_copy[last_best_session]->snr + 1.0)
+	    best_session = i;
+	}
+	last_best_session = best_session;
+	// mute all but best SNR
+	for(int session = 0; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  sp->muted = (session == best_session) ? false : true;
+	}
+      }
       // Flag active sessions
       long long time = gps_time_ns();
       for(int session = first_session; session < Nsessions_copy; session++){
 	struct session *sp = Sessions_copy[session];
 	sp->now_active = (time - sp->last_active) < BILLION/2;
+	if(!sp->now_active)
+	  sp->active = 0; // reset counter
       }
       if(Verbose){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
@@ -1144,7 +1168,7 @@ static void *display(void *arg){
       // dB column
       mvprintw(y++,x,"%4s","dB");
       for(int session = first_session; session < Nsessions_copy; session++,y++){
-	struct session *sp = Sessions_copy[session];
+	struct session const *sp = Sessions_copy[session];
 	mvprintw(y,x,"%+4.0lf",sp->muted ? -INFINITY : voltage2dB(sp->gain));
       }
       x += 5;
@@ -1153,7 +1177,7 @@ static void *display(void *arg){
 	// Pan column
 	mvprintw(y++,x," Pan");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%4d",(int)roundf(100*sp->pan));
 	}
 	x += 4;
@@ -1163,7 +1187,7 @@ static void *display(void *arg){
       // SSRC
       mvprintw(y++,x,"%9s","SSRC");
       for(int session = first_session; session < Nsessions_copy; session++,y++){
-	struct session *sp = Sessions_copy[session];
+	struct session const *sp = Sessions_copy[session];
 	mvprintw(y,x,"%9d",sp->ssrc);
       }
       x += 10;
@@ -1172,7 +1196,7 @@ static void *display(void *arg){
       if(Notch){
 	mvprintw(y++,x,"%5s","Tone");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  if(sp->notch_enable == false || sp->notch_tone == 0)
 	    continue;
 
@@ -1183,7 +1207,7 @@ static void *display(void *arg){
       }
       mvprintw(y++,x,"%12s","Freq");
       for(int session = first_session; session < Nsessions_copy; session++,y++){
-	struct session *sp = Sessions_copy[session];
+	struct session const *sp = Sessions_copy[session];
 	mvprintw(y,x,"%'12.0lf",sp->chan.tune.freq);
       }
       x += 13;
@@ -1191,53 +1215,36 @@ static void *display(void *arg){
 
       mvprintw(y++,x,"%5s","Mode");
       for(int session = first_session; session < Nsessions_copy; session++,y++){
-	struct session *sp = Sessions_copy[session];
+	struct session const *sp = Sessions_copy[session];
 	mvprintw(y,x,"%5s",sp->chan.preset);
       }
       x += 6;
       y = row_save;
 
       mvprintw(y++,x,"%5s","SNR");
-      float snrs[Nsessions_copy]; // Keep SNRs for voting decisions
       for(int session = first_session; session < Nsessions_copy; session++,y++){
-	struct session *sp = Sessions_copy[session];
-	struct channel *chan = &sp->chan;
-	float const noise_bandwidth = fabsf(chan->filter.max_IF - chan->filter.min_IF);
-	float sig_power = chan->sig.bb_power - noise_bandwidth * chan->sig.n0;
-	if(sig_power < 0)
-	  sig_power = 0; // Avoid log(-x) = nan
-	float const sn0 = sig_power/chan->sig.n0;
-	float const snr = power2dB(sn0/noise_bandwidth);
-	snrs[session] = sp->now_active ? snr : -INFINITY;
-	if(!isnan(snr))
-	  mvprintw(y,x,"%5.1f",snr);
+	struct session const *sp = Sessions_copy[session];
+	if(!isnan(sp->snr))
+	  mvprintw(y,x,"%5.1f",sp->snr);
       }
-      // Find the best with 1 dB hysteresis - should it be configurable?
-      int best_session = last_best_session;
-      for(int i = 0; i < Nsessions_copy; i++){
-	if(snrs[i] > snrs[last_best_session] + 1.0)
-	   best_session = i;
-      }
-      last_best_session = best_session;
-
       x += 6;
       y = row_save;
 
       int longest = 0;
-      mvprintw(y++,x,"%-30s","ID");
+      mvprintw(y++,x,"%s","ID");
       for(int session = first_session; session < Nsessions_copy; session++,y++){
-	struct session *sp = Sessions_copy[session];
+	struct session const *sp = Sessions_copy[session];
 	int len = strlen(sp->id);
 	if(len > longest)
 	  longest = len;
-	mvprintw(y,x,"%-30s",sp->id);
+	mvprintw(y,x,"%s",sp->id);
       }
       x += longest;
       y = row_save;
 
       mvprintw(y++,x,"%10s","Total");
       for(int session = first_session; session < Nsessions_copy; session++,y++){
-	struct session *sp = Sessions_copy[session];
+	struct session const *sp = Sessions_copy[session];
 	char total_buf[100];
 	mvprintw(y,x,"%10s",ftime(total_buf,sizeof(total_buf),sp->tot_active));
       }
@@ -1251,7 +1258,6 @@ static void *display(void *arg){
 	if(sp->now_active)
 	  mvprintw(y,x,"%10s",ftime(buf,sizeof(buf),sp->active));
 	else {
-	  sp->active = 0; // Clear accumulated value
 	  float idle_sec = (time - sp->last_active) / BILLION;
 	  mvprintw(y,x,"%10s",ftime(buf,sizeof(buf),idle_sec));   // Time idle since last transmission
 	}
@@ -1261,7 +1267,7 @@ static void *display(void *arg){
 
       mvprintw(y++,x,"%6s","Queue");
       for(int session = first_session; session < Nsessions_copy; session++,y++){
-	struct session *sp = Sessions_copy[session];
+	struct session const *sp = Sessions_copy[session];
 	if(!sp->now_active)
 	  continue;
 
@@ -1277,7 +1283,7 @@ static void *display(void *arg){
 	// Opus/pcm
 	mvprintw(y++,x,"Type");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%4s",PT_table[sp->type].encoding == OPUS ? "Opus" : "PCM");
 	}
 	x += 5;
@@ -1286,7 +1292,7 @@ static void *display(void *arg){
 	// frame size, ms
 	mvprintw(y++,x,"%3s","ms");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  if(sp->samprate != 0)
 	    mvprintw(y,x,"%3d",(1000 * sp->frame_size/sp->samprate)); // frame size, ms
 	}
@@ -1296,7 +1302,7 @@ static void *display(void *arg){
 	// channels
 	mvprintw(y++,x,"%2s","ch");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%2d",sp->channels);
 	}
 	x += 3;
@@ -1305,7 +1311,7 @@ static void *display(void *arg){
 	// BW
 	mvprintw(y++,x,"%2s","bw");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%2d",sp->bandwidth);
 	}
 	x += 3;
@@ -1314,7 +1320,7 @@ static void *display(void *arg){
 	// Packets
 	mvprintw(y++,x,"%12s","Packets");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%12lu",sp->packets);
 	}
 	x += 13;
@@ -1323,7 +1329,7 @@ static void *display(void *arg){
 	// Resets
 	mvprintw(y++,x,"%7s","resets");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%7lu",sp->resets);
 	}
 	x += 8;
@@ -1332,7 +1338,7 @@ static void *display(void *arg){
 	// BW
 	mvprintw(y++,x,"%6s","drops");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%'6llu",(unsigned long long)sp->rtp_state.drops);
 	}
 	x += 7;
@@ -1341,7 +1347,7 @@ static void *display(void *arg){
 	// Lates
 	mvprintw(y++,x,"%6s","lates");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%6lu",sp->lates);
 	}
 	x += 7;
@@ -1350,7 +1356,7 @@ static void *display(void *arg){
 	// BW
 	mvprintw(y++,x,"%6s","reseq");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%6lu",sp->reseqs);
 	}
 	x += 7;
@@ -1359,7 +1365,7 @@ static void *display(void *arg){
 	// Sockets
 	mvprintw(y++,x,"%s","sockets");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
+	  struct session const *sp = Sessions_copy[session];
 	  mvprintw(y,x,"%s -> %s",formatsock(&sp->sender),sp->dest);
 	}
       }
@@ -1368,7 +1374,7 @@ static void *display(void *arg){
       short pair;
       attr_get(&attrs, &pair, NULL);
       for(int session = first_session; session < Nsessions_copy; session++){
-	struct session *sp = Sessions_copy[session];
+	struct session const *sp = Sessions_copy[session];
 
 	attr_t attr = A_NORMAL;
 	attr |= session == current ? A_UNDERLINE : 0;
@@ -1379,13 +1385,6 @@ static void *display(void *arg){
 	mvchgat(1 + row_save + session,col_save,x,attr,pair,NULL);
       }
       // End of display writing
-      // Experimental voting feature - mute all but best SNR
-      if(Voting){
-	for(int session = first_session; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
-	  sp->muted = (session == best_session) ? false : true;
-	}
-      }
     }
     int const c = getch(); // Waits for 'update interval' ms if no input
     if(c == EOF)
