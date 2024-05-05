@@ -87,6 +87,7 @@ void *radio_status(void *arg){
 	    // Creation failed, e.g., no output stream
 	    fprintf(stdout,"Dynamic create of ssrc %'u failed; is 'data =' set in [global]?\n",ssrc);
 	  } else {
+	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels); // make sure it's initialized
 	    decode_radio_commands(chan,buffer+1,length-1);
 	    send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
 	    reset_radio_status(chan);
