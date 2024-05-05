@@ -214,7 +214,7 @@ int main(int argc,char *argv[]){
 	encode_float(&bp,GAIN,Gain);
 	encode_int(&bp,AGC_ENABLE,false); // Turn off AGC for manual gain
       } else
-	encode_int(&bp,AGC_ENABLE,Agc);
+	encode_int(&bp,AGC_ENABLE,true);
       encode_eol(&bp);
       int cmd_len = bp - cmd_buffer;
       if(send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len)
