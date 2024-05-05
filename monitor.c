@@ -568,13 +568,12 @@ static void *statproc(void *arg){
     float const sn0 = sig_power/sp->chan.sig.n0;
     float const snr = power2dB(sn0/noise_bandwidth);
     sp->snr = sp->now_active ? snr : -INFINITY;
-    sp->samprate = sp->chan.output.samprate;
     int const type = sp->chan.output.rtp.type;
 
     if(type >= 0 && type < 128){
-      // NO_ENCODING check so we won't break with radiod that doesn't send it yet
+      // check so we won't break with radiod that doesn't send it yet
       if(sp->chan.output.encoding != NO_ENCODING)
-	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,sp->chan.output.encoding);
+<	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,sp->chan.output.encoding);
       else if(type != Opus_pt)
 	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,S16BE); // Heuristic; remove this eventually
     }
@@ -656,13 +655,6 @@ static void *dataproc(void *arg){
       // Keep the lock while we initialize
       sp->ssrc = pkt->rtp.ssrc;
       memcpy(&sp->sender,&sender,sizeof(sender)); // Bind to specific host and sending port
-      sp->type = pkt->rtp.type;
-      // backward compatibility
-      // Ideally the sample rate always comes from the status message, but if there is none then
-      // we must use my old kludge of oveloading the payload type
-      // If status comes later, it will overwrite this anyway
-      if(sp->samprate == 0 && sp->type >= 0 && sp->type < 128)
-	sp->samprate = PT_table[sp->type].samprate;
       pthread_mutex_unlock(&Sess_mutex);
 
       // status reception doesn't write below this point
@@ -680,9 +672,6 @@ static void *dataproc(void *arg){
       sp->last_timestamp = pkt->rtp.timestamp;
       sp->rtp_state.seq = pkt->rtp.seq;
       sp->reset = true;
-
-      for(int j=0; j < N_tones; j++)
-	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
 
       if(pthread_create(&sp->task,NULL,decode_task,sp) == -1){
 	perror("pthread_create");
@@ -789,27 +778,39 @@ static void *decode_task(void *arg){
     sp->queue = pkt->next;
     pkt->next = NULL;
     pthread_mutex_unlock(&sp->qmutex);
-    sp->packets++; // Count all packets, regardless of type
-    if(sp->type != pkt->rtp.type) // Handle transitions both ways
-      sp->type = pkt->rtp.type;
 
+    sp->packets++; // Count all packets, regardless of type
     if((int16_t)(pkt->rtp.seq - sp->rtp_state.seq) > 0){ // Doesn't really handle resequencing
       if(!pkt->rtp.marker){
 	sp->rtp_state.drops++; // Avoid spurious drops when session is recreated after silence
 	Last_error_time = gps_time_ns();
       }
       if(sp->opus)
-	opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
+	opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder when there's a jump
     }
-    sp->rtp_state.seq = pkt->rtp.seq + 1;
+    sp->rtp_state.seq = pkt->rtp.seq + 1; // Expect the next seq # next time
+
     if(!sp->muted && pkt->rtp.marker){
       // beginning of talk spurt, resync
       reset_session(sp,pkt->rtp.timestamp); // Updates sp->wptr
     }
+    if(pkt->rtp.type >= 0 && pkt->rtp.type < 128)
+      sp->type = pkt->rtp.type; // Save only if valid
+
+    int const samprate = samprate_from_pt(sp->type);
+    if(samprate == 0)
+      goto endloop; // Unknown sample rate, drop until we know
+
+    if(samprate != sp->samprate){
+      // Reinit tone detectors whenever sample rate changes
+      sp->samprate = samprate;
+      for(int j=0; j < N_tones; j++)
+	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)samprate);
+    }
     int upsample = 1;
 
     // decode Opus or PCM into bounce buffer
-    if(PT_table[sp->type].encoding == OPUS){
+    if(encoding_from_pt(sp->type) == OPUS){
       // Execute Opus decoder even when muted to keep its state updated
       if(!sp->opus){
 	int error;
@@ -821,6 +822,7 @@ static void *decode_task(void *arg){
 
 	assert(sp->opus);
       }
+      // Decode Opus to the local hardware settings, typically stereo @ 48 kHz
       sp->channels = Channels;
       sp->samprate = DAC_samprate;
       // Opus RTP timestamps always referenced to 48 kHz
@@ -867,11 +869,11 @@ static void *decode_task(void *arg){
       if(samprate == 0)
 	goto endloop;
       sp->samprate = samprate;
-      upsample = DAC_samprate / sp->samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
-      sp->bandwidth = sp->samprate / 2000;    // in kHz allowing for Nyquist
+      upsample = DAC_samprate / samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
+      sp->bandwidth = samprate / 2000;    // in kHz allowing for Nyquist
       sp->channels = channels_from_pt(sp->type); // channels in packet (not portaudio output buffer)
 
-      if(sp->samprate <= 0 || sp->channels <= 0 || sp->channels > 2)
+      if(samprate <= 0 || sp->channels <= 0 || sp->channels > 2)
 	goto endloop;
       sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
       if(sp->frame_size <= 0)
@@ -1324,6 +1326,15 @@ static void *display(void *arg){
 	  mvprintw(y,x,"%2d",sp->bandwidth);
 	}
 	x += 3;
+	y = row_save;
+
+	// RTP payload type
+	mvprintw(y++,x,"%3s","pt");
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session const *sp = Sessions_copy[session];
+	  mvprintw(y,x,"%3d",sp->type);
+	}
+	x += 4;
 	y = row_save;
 
 	// Packets
