@@ -441,7 +441,6 @@ static int loadconfig(char const * const file){
     // Override [global] settings with section settings
     char const *data = config_getstring(Configtable,sname,"data",Data);
     // Override global defaults
-    int const mcast_ttl = config_getint(Configtable,sname,"ttl",Mcast_ttl);
     int const ip_tos = config_getint(Configtable,sname,"tos",IP_tos);
     char const *iface = config_getstring(Configtable,sname,"iface",Iface);
     int const update = config_getint(Configtable,sname,"update",Update);
@@ -470,7 +469,7 @@ static int loadconfig(char const * const file){
       }
 #endif
     }
-    join_group(Output_fd,(struct sockaddr *)&data_dest_socket,iface,mcast_ttl,ip_tos);
+    join_group(Output_fd,(struct sockaddr *)&data_dest_socket,iface,Mcast_ttl,ip_tos);
     // No need to also join group for status socket, since the IP addresses are the same
 
     // Process frequency/frequencies
@@ -555,7 +554,7 @@ static int loadconfig(char const * const file){
 	  // Highly experimental, off by default
 	  char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
 	  resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0);
-	  join_group(Output_fd,(struct sockaddr *)&chan->sap.dest_socket,iface,mcast_ttl,ip_tos);
+	  join_group(Output_fd,(struct sockaddr *)&chan->sap.dest_socket,iface,Mcast_ttl,ip_tos);
 	  pthread_create(&chan->sap.thread,NULL,sap_send,chan);
 	}
 	// RTCP Real Time Control Protocol daemon is optional
