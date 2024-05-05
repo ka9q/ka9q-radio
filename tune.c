@@ -38,7 +38,6 @@ float Gain = INFINITY;
 double Frequency = INFINITY;
 float Low = INFINITY;
 float High = INFINITY;
-int Agc = -1;
 int Samprate = 0;
 bool Quiet = false;
 
@@ -46,9 +45,8 @@ struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "af:g:H:hi:L:l:m:qr:R:s:vV";
+char Optstring[] = "f:g:H:hi:L:l:m:qr:R:s:vV";
 struct option Options[] = {
-  {"agc", no_argument, NULL, 'a'},
   {"frequency", required_argument, NULL, 'f'},
   {"gain", required_argument, NULL, 'g'},
   {"help", no_argument, NULL, 'h'},
@@ -103,20 +101,17 @@ int main(int argc,char *argv[]){
       case 'r':
 	Radio = optarg;
 	break;
-      case 'a':
-	Agc = 1;
-	break;
       case 'q':
 	Quiet = true;
 	break;
       case 'R':
-	Samprate = strtol(optarg,NULL,0);
+	Samprate = parse_frequency(optarg,false);
 	break;
       case 'L':
-	Low = strtod(optarg,NULL);
+	Low = parse_frequency(optarg,false);
 	break;
       case 'H':
-	High = strtod(optarg,NULL);
+	High = parse_frequency(optarg,false);
 	break;
       case 'V':
 	VERSION();
@@ -153,7 +148,7 @@ int main(int argc,char *argv[]){
     char iface[1024];
     resolve_mcast(Radio,&Control_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
     char const *ifc = (Iface != NULL) ? Iface : iface;
-    
+
 
     if(Verbose)
       fprintf(stdout,"Listening\n");
@@ -203,7 +198,7 @@ int main(int argc,char *argv[]){
       encode_int(&bp,OUTPUT_SSRC,Ssrc);
       if(Mode != NULL)
 	encode_string(&bp,PRESET,Mode,strlen(Mode));
-      
+
       if(Samprate != 0)
 	encode_int(&bp,OUTPUT_SAMPRATE,Samprate);
 
@@ -211,14 +206,14 @@ int main(int argc,char *argv[]){
 	encode_float(&bp,LOW_EDGE,Low);
 
       if(High != INFINITY)
-	encode_float(&bp,HIGH_EDGE,High);	
+	encode_float(&bp,HIGH_EDGE,High);
 
       if(Frequency != INFINITY)
 	encode_double(&bp,RADIO_FREQUENCY,Frequency); // Hz
       if(Gain != INFINITY){
 	encode_float(&bp,GAIN,Gain);
 	encode_int(&bp,AGC_ENABLE,false); // Turn off AGC for manual gain
-      } else if(Agc != -1)
+      } else
 	encode_int(&bp,AGC_ENABLE,Agc);
       encode_eol(&bp);
       int cmd_len = bp - cmd_buffer;
@@ -237,27 +232,27 @@ int main(int argc,char *argv[]){
     int event = poll(fds,1,100);
     if(event == 0)
       continue; // Timeout; go back and resend
-    
+
     if(event < 0){
       fprintf(stdout,"poll error: %s\n",strerror(errno));
       exit(1);
     }
-    
+
     // Incoming packet should be ready
     uint8_t response_buffer[PKTSIZE];
     uint8_t const * cp = response_buffer; // make response read-only
     int length = recvfrom(Status_sock,response_buffer,sizeof(response_buffer),0,NULL,NULL);
-    
+
     if(length <= 0){
       fprintf(stdout,"recvfrom status socket error: %s\n",strerror(errno));
       exit(1);
     }
     if(Verbose)
       fprintf(stdout,"Message received, %d bytes, type %d\n",length,*cp);
-    
+
     if(*cp++ != 0)
       continue; // ignore non-response; go back and receive again
-    
+
     // Process response
     while(cp - response_buffer < length){
       enum status_type type = *cp++;
@@ -321,32 +316,33 @@ int main(int argc,char *argv[]){
     FREE(preset);
     if(samprate != 0)
       printf("Sample rate %'d Hz\n",samprate);
-    
+
     if(received_freq != INFINITY)
       printf("Frequency %'.3lf Hz\n",received_freq);
+
     if(received_agc_enable != -1)
       printf("AGC %s\n",received_agc_enable ? "on" : "off");
-    
+
     if(received_gain != INFINITY)
       printf("Gain %.1f dB\n",received_gain);
-    
+
     if(baseband_level != INFINITY)
       printf("Baseband power %.1f dB\n",baseband_level);
-    
+
     if(low_edge != INFINITY && high_edge != INFINITY)
       printf("Passband %'.1f Hz to %'.1f Hz (%.1f dB-Hz)\n",low_edge,high_edge,10*log10(fabsf(high_edge - low_edge)));
-    
+
     if(noise_density != INFINITY)
       printf("N0 %.1f dB/Hz\n",noise_density);
-    
-    if(baseband_level != INFINITY && 
+
+    if(baseband_level != INFINITY &&
        low_edge != INFINITY &&
        high_edge != INFINITY &&
        noise_density != INFINITY){
-      
+
       float noise_power = dB2power(noise_density) * fabsf(high_edge - low_edge);
       float signal_plus_noise_power = dB2power(baseband_level);
-      
+
       printf("SNR %.1f dB\n",power2dB(signal_plus_noise_power / noise_power - 1));
     }
   }
@@ -354,6 +350,6 @@ int main(int argc,char *argv[]){
 }
 
 void usage(void){
-  fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-R|--samprate sample_rate] [-i|--iface <iface>] [-l|--locale LOCALE]  \
-[-f|- FREQUENCY]frequency] [-L|--low lower-edge] [-H|--high higher-edge] [[-a|--agc] | [-g|--Gain <gain dB>]] [-m|--mode <mode>]\n" ,App_path);
+  fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-R|--samprate <sample_rate>] [-i|--iface <iface>] [-l|--locale LOCALE]  \
+[-f|--frequency <frequency>] [-L|--low <low-edge>] [-H|--high <high-edge>] [[-a|--agc] [-g|--gain <gain dB>]] [-m|--mode <mode>]\n" ,App_path);
 }
