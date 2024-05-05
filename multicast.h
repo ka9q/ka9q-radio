@@ -215,5 +215,6 @@ int samprate_from_pt(int type);
 int channels_from_pt(int type);
 enum encoding encoding_from_pt(int type);
 int pt_from_info(int samprate,int channels);
+char const *encoding_string(enum encoding);
 
 #endif

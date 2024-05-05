@@ -338,32 +338,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case OUTPUT_ENCODING:
       {
 	int e = decode_int(cp,optlen);
-	fprintf(fp,"encoding %d ",e);
-	if(e >= NO_ENCODING && e < UNUSED_ENCODING){
-	  switch(e){
-	  case NO_ENCODING:
-	    fprintf(fp,"none");
-	    break;
-	  case S16LE:
-	    fprintf(fp,"signed 16-bit little endian");
-	    break;
-	  case S16BE:
-	    fprintf(fp,"signed 16-bit big endian");
-	    break;
-	  case OPUS:
-	    fprintf(fp,"Opus");
-	    break;
-	  case F32:
-	    fprintf(fp,"32-bit floating point");
-	    break;
-	  case AX25:
-	    fprintf(fp,"AX.25 packet");
-	    break;
-	  default:
-	    fprintf(fp,"unknown");
-	  }
-	}
-	fprintf(fp,"\n");
+	fprintf(fp,"encoding %d (%s)",e,encoding_string(e));
       }
       break;
     default:

@@ -944,3 +944,20 @@ void dump_interfaces(void){
   freeifaddrs(ifap);
   ifap = NULL;
 }
+char const *encoding_string(enum encoding e){
+  switch(e){
+  default:
+  case NO_ENCODING:
+    return "none";
+  case S16LE:
+    return "signed 16-bit little endian";
+  case S16BE:
+    return "signed 16-bit big endian";    
+  case OPUS:
+    return "Opus";
+  case F32:
+    return "32 bit floating point";
+  case AX25:
+    return "AX.25";
+  }
+}
