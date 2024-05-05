@@ -573,7 +573,7 @@ static void *statproc(void *arg){
     if(type >= 0 && type < 128){
       // check so we won't break with radiod that doesn't send it yet
       if(sp->chan.output.encoding != NO_ENCODING)
-<	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,sp->chan.output.encoding);
+	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,sp->chan.output.encoding);
       else if(type != Opus_pt)
 	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,S16BE); // Heuristic; remove this eventually
     }
