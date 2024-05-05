@@ -728,13 +728,11 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     break;
   case 'S':
     {
-      char str[Entry_width],*ptr;
+      char str[Entry_width];
       getentry("Output sample rate, Hz: ",str,sizeof(str));
-      int samprate = strtol(str,&ptr,0);
-      if(ptr != str){
-	channel->output.samprate = samprate;
-	encode_int(bpp,OUTPUT_SAMPRATE,channel->output.samprate);
-      }
+      int samprate = parse_frequency(str,false);
+      channel->output.samprate = samprate;
+      encode_int(bpp,OUTPUT_SAMPRATE,channel->output.samprate);
     }
     break;
   case 's': // Squelch threshold for current mode
