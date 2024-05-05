@@ -213,6 +213,7 @@ static inline uint8_t *put32(uint8_t *dp,uint32_t x){
 }
 int samprate_from_pt(int type);
 int channels_from_pt(int type);
+enum encoding encoding_from_pt(int type);
 int pt_from_info(int samprate,int channels);
 
 #endif
