@@ -163,6 +163,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	int const new_sample_rate = decode_int(cp,optlen);
 	if(new_sample_rate != chan->output.samprate){
 	  chan->output.samprate = new_sample_rate;
+	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels);
 	  restart_needed = true;
 	}
       }
@@ -341,8 +342,10 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     case OUTPUT_CHANNELS: // int
       {
 	int const i = decode_int(cp,optlen);
-	if(i == 1 || i == 2)
+	if(i != chan->output.channels && (i == 1 || i == 2)){
 	  chan->output.channels = i;
+	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels);
+	}
       }
       break;
     case SQUELCH_OPEN:
@@ -387,17 +390,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	if(x >= 0)
 	  chan->status.output_interval = x;
       }
-      break;
-    case RTP_PT:
-      // Also sent in RTP data streams; sent explictly here to link with OUTPUT_SAMPRATE and OUTPUT_CHANNELS in receiver table
-      {
-	int const x = decode_int(cp,optlen);
-	if(x >=0 && x < 128)
-	  chan->output.rtp.type = x;
-      }
-      break;
-    case OUTPUT_ENCODING:
-      chan->output.encoding = decode_int(cp,optlen);
       break;
     default:
       break;

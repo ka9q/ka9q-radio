@@ -542,15 +542,7 @@ static int loadconfig(char const * const file){
 	strlcpy(chan->output.dest_string,data,sizeof(chan->output.dest_string));
 	memcpy(&chan->status.dest_socket,&metadata_dest_socket,sizeof(chan->status.dest_socket));
 
-	// Set RTP payload type from static table specific to ka9q-radio
-	// Should assign dynamically, but requires completion of SDP
-	int const type = pt_from_info(chan->output.samprate,chan->output.channels);
-	if(type < 0){
-	  fprintf(stdout,"can't allocate RTP payload type for samprate %'d, channels %d\n",chan->output.samprate,chan->output.channels);
-	  close_chan(chan); // OK to call here outside demod, since it's not running yet
-	  continue;
-	}
-	chan->output.rtp.type = type;
+	chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels);
 	chan->status.output_interval = update;
 
 	// Time to start it -- ssrc is stashed by create_chan()

@@ -30,12 +30,6 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   if(frames <= 0 || chan->output.channels == 0 || chan->output.samprate == 0)
     return 0;
 
-  int const type = pt_from_info(chan->output.samprate,chan->output.channels);  // It might have changed
-  if(type < 0)
-    return 0; // Can't allocate a payload type!
-
-  chan->output.rtp.type = type;
-
   if(mute){
     // Increment timestamp
     chan->output.rtp.timestamp += frames; // Increase by frame count
