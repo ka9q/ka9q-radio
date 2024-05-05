@@ -161,7 +161,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     case OUTPUT_SAMPRATE:
       // Restart the demodulator to recalculate filters, etc
       {
-	int const new_sample_rate = decode_int(cp,optlen);
+	int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
 	if(new_sample_rate != chan->output.samprate){
 	  chan->output.samprate = new_sample_rate;
 	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels);

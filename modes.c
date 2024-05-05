@@ -103,7 +103,7 @@ int set_defaults(struct channel *chan){
   chan->filter.isb = false;
   chan->linear.loop_bw = DEFAULT_PLL_BW;
   chan->linear.agc = true;
-  chan->output.samprate = DEFAULT_LINEAR_SAMPRATE;
+  chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
   chan->output.encoding = S16BE;
   double r = remainder(Blocktime * chan->output.samprate * .001,1.0);
   if(r != 0){
@@ -130,11 +130,14 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   }
   {
     char const *p = config_getstring(table,sname,"samprate",NULL);
-    if(p != NULL)
-      chan->output.samprate = parse_frequency(p,false);
+    if(p != NULL){
+      int s = parse_frequency(p,false);
+      chan->output.samprate = round_samprate(s);
+    }
   }
+  // This test can't fail since round_samprate() forces it to a minimium of the blockrate; not sure what is ideal here
   if(chan->output.samprate == 0)
-      chan->output.samprate = DEFAULT_LINEAR_SAMPRATE; // Make sure it gets set to *something*, even if wrong (e.g. for FM)
+    chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Make sure it gets set to *something*, even if wrong (e.g. for FM)
   chan->output.channels = config_getint(table,sname,"channels",chan->output.channels);
   if(config_getboolean(table,sname,"mono",false))
     chan->output.channels = 1;
@@ -245,3 +248,17 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   return 0;
 }
 
+// force an output sample rate to a nonzero multiple of the block rate
+// Should we limit the sample rate? In principle it could be greater than the input sample rate,
+// and the filter should just interpolate. But there should be practical limits
+
+// Should sample rates be integers when the block rate could in principle not be?
+// Usually Blocktime = 20.0000 ms (50.00000 Hz), which avoids the problem
+int round_samprate(int x){
+  float const blockrate = 1000. / Blocktime; // In Hz
+
+  if(x < blockrate)
+    return roundf(blockrate); // Output one iFFT bin minimum, i.e., blockrate
+
+  return blockrate * roundf(x / blockrate); // Nearest multiple of blck rate
+}
