@@ -73,7 +73,7 @@ static int send_poll(int ssrc);
 static int pprintw(WINDOW *w,int y, int x, char const *prefix, char const *fmt, ...);
 
 static WINDOW *Tuning_win,*Sig_win,*Filtering_win,*Demodulator_win,
-  *Options_win,*Presets_win,*Debug_win,
+  *Options_win,*Presets_win,*Debug_win,*Input_win,
   *Output_win;
 
 static void display_tuning(WINDOW *tuning,struct channel const *channel);
@@ -83,6 +83,7 @@ static void display_sig(WINDOW *sig,struct channel const *channel);
 static void display_demodulator(WINDOW *demodulator,struct channel const *channel);
 static void display_options(WINDOW *options,struct channel const *channel);
 static void display_presets(WINDOW *modes,struct channel const *channel);
+static void display_input(WINDOW *input,struct channel const *channel);
 static void display_output(WINDOW *output,struct channel const *channel);
 static int process_keyboard(struct channel *,uint8_t **bpp,int c);
 static void process_mouse(struct channel *channel,uint8_t **bpp);
@@ -247,7 +248,8 @@ static struct windef {
   {&Sig_win,15,25},
   {&Demodulator_win,15,26},
   {&Filtering_win,15,22},
-  {&Output_win,18,45},
+  {&Input_win,15,45},
+  {&Output_win,8,45},
 };
 #define NWINS (sizeof(Windefs) / sizeof(Windefs[0]))
 
@@ -647,6 +649,7 @@ int main(int argc,char *argv[]){
       display_demodulator(Demodulator_win,channel);
       display_options(Options_win,channel);
       display_presets(Presets_win,channel);
+      display_input(Input_win,channel);
       display_output(Output_win,channel);
 
       if(Debug_win != NULL){
@@ -1308,7 +1311,7 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
   wnoutrefresh(w);
 }
 
-static void display_output(WINDOW *w,struct channel const *channel){
+static void display_input(WINDOW *w,struct channel const *channel){
   if(w == NULL)
     return;
 
@@ -1331,21 +1334,29 @@ static void display_output(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Status pkts","%'llu",channel->status.packets_out);
   pprintw(w,row++,col,"Control pkts","%'llu",channel->status.packets_in);
   pprintw(w,row++,col,"Blocks since last poll","%'llu",channel->status.blocks_since_poll);
+  box(w,0,0);
+  mvwaddstr(w,0,1,Frontend.description);
+  wnoutrefresh(w);
+}
 
-  mvwhline(w,row,0,0,1000);
-  mvwaddstr(w,row++,1,"Data");
+static void display_output(WINDOW *w,struct channel const *channel){
+  if(w == NULL)
+    return;
 
+  int row = 1;
+  int col = 1;
+  wmove(w,row,col);
+  wclrtobot(w);
   pprintw(w,row++,col,"","%s->%s",formatsock(&channel->output.source_socket),
 	  formatsock(&channel->output.dest_socket));
 
   pprintw(w,row++,col,"SSRC","%'u",channel->output.rtp.ssrc);
-  pprintw(w,row++,col,"Type","%u",channel->output.rtp.type);
-  pprintw(w,row++,col,"Encoding","%u",channel->output.encoding);
+  pprintw(w,row++,col,"Payload Type","%u",channel->output.rtp.type);
+  pprintw(w,row++,col,"Encoding","%s",encoding_string(channel->output.encoding));
+  pprintw(w,row++,col,"Channels","%d",channel->output.channels);
   pprintw(w,row++,col,"Packets","%'llu",(long long unsigned)channel->output.rtp.packets);
-
-
   box(w,0,0);
-  mvwaddstr(w,0,1,Frontend.description);
+  mvwaddstr(w,0,1,"RTP output");
   wnoutrefresh(w);
 }
 
