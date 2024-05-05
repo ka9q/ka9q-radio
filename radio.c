@@ -90,8 +90,6 @@ struct channel *create_chan(uint32_t ssrc){
     chan->output.rtp.ssrc = ssrc; // Stash it
     Active_channel_count++;
   }
-  // Copy template
-  // Although there are some pointers in here (filter.out, filter.energies), they're all NULL until the chan actually starts
   chan->lifetime = 20 * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
 
   // Get the local socket for the output stream
@@ -233,12 +231,6 @@ int start_demod(struct channel * chan){
 	    chan->output.rtp.ssrc, chan->output.dest_string, chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
   }
   pthread_create(&chan->demod_thread,NULL,demod_thread,chan);
-
-  /* ????
-     case SPECT_DEMOD:
-     if(chan->tune.freq != 0)
-     pthread_create(&chan->demod_thread,NULL,demod_spectrum,chan); // spectrum chan can't change freq, so just don't start it at 0
-  */
   return 0;
 }
 
