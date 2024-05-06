@@ -362,14 +362,13 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
     results = NULL;
     struct addrinfo hints;
     memset(&hints,0,sizeof(hints));
-#if 0
+#if 1
     // Using hints.ai_family = AF_UNSPEC generates both A and AAAA queries
     // but even when the A query is answered the library times out and retransmits the AAAA
     // query several times. So do only an A (IPv4) query the first time
     hints.ai_family = (try == 0) ? AF_INET : AF_UNSPEC;
 #else
-    // Doesn't seem to be a problem anymore, and using AF_INET often fails
-    // on loopback.
+    // using AF_INET often fails on loopback.
     // Did this get changed recently in getaddrinfo()?
     hints.ai_family = AF_UNSPEC;
 #endif
