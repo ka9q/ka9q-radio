@@ -507,7 +507,6 @@ int downconvert(struct channel *chan){
 	return -1; // terminate needed
       }
     }
-
     // Process any commands and return status
     bool restart_needed = false;
     pthread_mutex_lock(&chan->status.lock);
@@ -551,13 +550,17 @@ int downconvert(struct channel *chan){
       pthread_mutex_unlock(&Frontend.status_mutex);
       break;
     }
-    // No front end coverage of our carrier; wait for it to retune
+    // No front end coverage of our carrier; wait one block time for it to retune
     chan->sig.bb_power = 0;
     chan->sig.bb_energy = 0;
     chan->output.energy = 0;
     struct timespec timeout; // Needed to avoid deadlock if no front end is available
     clock_gettime(CLOCK_REALTIME,&timeout);
-    timeout.tv_sec += 1; // 1 sec in the future
+    timeout.tv_nsec += Blocktime * MILLION; // milliseconds to nanoseconds
+    if(timeout.tv_nsec > BILLION){
+      timeout.tv_sec += 1; // 1 sec in the future
+      timeout.tv_nsec -= BILLION;
+    }
     pthread_cond_timedwait(&Frontend.status_cond,&Frontend.status_mutex,&timeout);
     pthread_mutex_unlock(&Frontend.status_mutex);
   }
