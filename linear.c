@@ -220,11 +220,9 @@ void *demod_linear(void *arg){
       output_power *= 2; // +3 dB for mono since 0 dBFS = 1 unit peak, not RMS
     chan->output.energy += output_power;
     // Mute if no signal (e.g., outside front end coverage)
-    bool mute = false;
-    if(output_power == 0)
-      mute = true;
-    if(chan->linear.pll && !chan->linear.pll_lock) // Use PLL for AM carrier squelch
-      mute = true;
+    // or if no PLL lock (AM squelch)
+    // or if zero frequency
+    bool mute = (output_power == 0) || (chan->linear.pll && !chan->linear.pll_lock) || (chan->tune.freq == 0);
 
     // send_output() knows if the buffer is mono or stereo
     if(send_output(chan,(float *)buffer,N,mute) == -1)
