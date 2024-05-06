@@ -552,6 +552,7 @@ static void *statproc(void *arg){
 	continue;
       }
       sp->ssrc = ssrc;
+      sp->init = false; // Wait for first RTP packet to set the rest up
     }
     memcpy(&sp->sender,&sender,sizeof(sp->sender));
     sp->last_active = gps_time_ns(); // Keep active time calc from blowing up before data packet arrives
@@ -657,6 +658,8 @@ static void *dataproc(void *arg){
       memcpy(&sp->sender,&sender,sizeof(sender)); // Bind to specific host and sending port
       pthread_mutex_unlock(&Sess_mutex);
 
+    }
+    if(!sp->init){
       // status reception doesn't write below this point
       char const *id = lookupid(pkt->rtp.ssrc);
       if(id)
@@ -672,6 +675,7 @@ static void *dataproc(void *arg){
       sp->last_timestamp = pkt->rtp.timestamp;
       sp->rtp_state.seq = pkt->rtp.seq;
       sp->reset = true;
+      sp->init = true;
 
       if(pthread_create(&sp->task,NULL,decode_task,sp) == -1){
 	perror("pthread_create");
