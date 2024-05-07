@@ -106,6 +106,8 @@ static int Nsessions;
 static struct session *Sessions[NSESSIONS];
 static bool Terminate;
 static bool Voting;
+static struct session *Best_session; // Session with highest SNR
+
 
 int Mcast_ttl; // for decode_radio_status(); not really needed here
 
@@ -569,8 +571,22 @@ static void *statproc(void *arg){
     float const sn0 = sig_power/sp->chan.sig.n0;
     float const snr = power2dB(sn0/noise_bandwidth);
     sp->snr = sp->now_active ? snr : -INFINITY;
+    if(Voting){
+      if(Best_session == NULL){
+	// Grab the crown by default
+	Best_session = sp;
+	sp->reset = true;
+	sp->muted = false;
+      } else if(sp->snr > Best_session->snr + 1.0){
+	// Displaced the top dog
+	Best_session->muted = true;
+	sp->reset = true;
+	sp->muted = false;
+	Best_session = sp;
+      } else if(Best_session != sp)
+	sp->muted = true; // We've lost, stay silent
+    }
     int const type = sp->chan.output.rtp.type;
-
     if(type >= 0 && type < 128){
       // check so we won't break with radiod that doesn't send it yet
       if(sp->chan.output.encoding != NO_ENCODING)
@@ -940,32 +956,30 @@ static void *decode_task(void *arg){
 
     kick_output(); // Ensure Rptr is current
     // Sequence number processing and write pointer updating
-    if(modsub(sp->wptr,Rptr,BUFFERSIZE) < 0){
+    if(sp->reset){
+      reset_session(sp,pkt->rtp.timestamp); // Resets sp->wptr and last_timestamp      
+    } else if(modsub(sp->wptr,Rptr,BUFFERSIZE) < 0){
       sp->lates++;
       if(++consec_lates < 3 || Constant_delay)
-	goto endloop; // Drop packet as late
-      // 3 or more consecutive lates triggers a reset
-      sp->reset = true;
-    }
-    consec_lates = 0;
-    if(modsub(sp->wptr,Rptr,BUFFERSIZE) > BUFFERSIZE/4){
+	goto endloop;
+      // 3 or more consecutive lates triggers a reset, unless constant delay is selected
+      reset_session(sp,pkt->rtp.timestamp);
+    } else if(modsub(sp->wptr,Rptr,BUFFERSIZE) > BUFFERSIZE/4){
       sp->earlies++;
       if(++consec_earlies < 3)
-	goto endloop; // Drop if just a few
-      sp->reset = true; // should this happen if Constant_delay is set?
+	goto endloop;
+      reset_session(sp,pkt->rtp.timestamp);
     }
+    consec_lates = 0;
     consec_earlies = 0;
-    if(sp->reset)
-      reset_session(sp,pkt->rtp.timestamp); // Resets sp->wptr and last_timestamp
-    else {
-      // Normal packet, relative adjustment to write pointer
-      // Can difference in timestamps be negative? Cast it anyway
-      // Opus always counts timestamps at 48 kHz so this breaks when DAC_samprate is not 48 kHz
-      // For opus, sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * DAC_samprate / 48000;
-      sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * upsample;
-      sp->wptr &= (BUFFERSIZE-1);
-      sp->last_timestamp = pkt->rtp.timestamp;
-    }
+
+    // Normal packet, relative adjustment to write pointer
+    // Can difference in timestamps be negative? Cast it anyway
+    // Opus always counts timestamps at 48 kHz so this breaks when DAC_samprate is not 48 kHz
+    // For opus, sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * DAC_samprate / 48000;
+    sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * upsample;
+    sp->wptr &= (BUFFERSIZE-1);
+    sp->last_timestamp = pkt->rtp.timestamp;
 
     if(Channels == 2){
       /* Compute gains and delays for stereo imaging
@@ -1048,6 +1062,17 @@ static void *decode_task(void *arg){
   return NULL;
 }
 
+static void reset_session(struct session * const sp,uint32_t timestamp){
+  sp->resets++;
+  if(sp->opus)
+    opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
+  sp->reset = false;
+  sp->last_timestamp = timestamp;
+  sp->playout = Playout * DAC_samprate/1000;
+  sp->wptr = (Rptr + sp->playout) & (BUFFERSIZE-1);
+}
+
+
 // Use ncurses to display streams
 static void *display(void *arg){
 
@@ -1066,7 +1091,6 @@ static void *display(void *arg){
   int sessions_per_screen = 0;
   int current = -1; // No current session
   bool help = false;
-  int last_best_session = 0;
   while(!Terminate){
     assert(first_session >= 0);
     assert(first_session == 0 || first_session < Nsessions);
@@ -1116,6 +1140,9 @@ static void *display(void *arg){
       if(Start_muted)
 	printw("**Starting new sessions muted** ");
 
+      if(Voting)
+	printw("SNR Voting enabled\n");
+
       int y,x;
       getyx(stdscr,y,x);
       if(x != 0)
@@ -1139,27 +1166,11 @@ static void *display(void *arg){
 	current = 0; // Session got created, make it current
       pthread_mutex_unlock(&Sess_mutex);
 
-      if(Voting){
-	printw("SNR Voting enabled\n");
-	// Find the best with 1 dB hysteresis - should it be configurable?
-	int best_session = last_best_session;
-	for(int i = 0; i < Nsessions_copy; i++){
-	  struct session const *sp = Sessions_copy[i];
-	  if(sp->snr > Sessions_copy[last_best_session]->snr + 1.0)
-	    best_session = i;
-	}
-	last_best_session = best_session;
-	// mute all but best SNR
-	for(int session = 0; session < Nsessions_copy; session++,y++){
-	  struct session *sp = Sessions_copy[session];
-	  sp->muted = (session == best_session) ? false : true;
-	}
-      }
       // Flag active sessions
       long long time = gps_time_ns();
       for(int session = first_session; session < Nsessions_copy; session++){
 	struct session *sp = Sessions_copy[session];
-	sp->now_active = (time - sp->last_active) < BILLION/2;
+	sp->now_active = (time - sp->last_active) < BILLION/2; // boolean
 	if(!sp->now_active)
 	  sp->active = 0; // reset counter
       }
@@ -1212,7 +1223,7 @@ static void *display(void *arg){
 	mvprintw(y++,x,"%5s","Tone");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
 	  struct session const *sp = Sessions_copy[session];
-	  if(sp->notch_enable == false || sp->notch_tone == 0)
+	  if(!sp->notch_enable || sp->notch_tone == 0)
 	    continue;
 
 	  mvprintw(y,x,"%5.1f%c",sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
@@ -1615,16 +1626,6 @@ static void *display(void *arg){
   return NULL;
 }
 
-static void reset_session(struct session * const sp,uint32_t timestamp){
-  sp->resets++;
-  if(sp->opus)
-    opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
-  sp->reset = false;
-  sp->last_timestamp = timestamp;
-  sp->playout = Playout * DAC_samprate/1000;
-  sp->wptr = (Rptr + sp->playout) & (BUFFERSIZE-1);
-}
-
 // sort callback for sort_session_active() for comparing sessions by most recently active (or currently longest active)
 static int scompare(void const *a, void const *b){
   struct session const * const s1 = *(struct session **)a;
@@ -1708,6 +1709,8 @@ static int close_session(struct session **p){
     return -1;
   assert(Nsessions > 0);
 
+  if(sp == Best_session)
+    Best_session = NULL;
   // Remove from table
   for(int i = 0; i < Nsessions; i++){
     if(Sessions[i] == sp){
@@ -2026,7 +2029,6 @@ bool kick_output(){
       pthread_cond_signal(&PTT_cond); // Notify the repeater control thread to ID and run drop timer
     }
     pthread_mutex_unlock(&PTT_mutex);
-
   }
   return restarted;
 }
