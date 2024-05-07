@@ -209,7 +209,7 @@ struct channel {
     struct rtp_state rtp;
 
     struct sockaddr_storage source_socket;    // Source address of our data output
-    struct sockaddr_storage dest_socket;      // Dest of our data outputg (typically multicast)
+    struct sockaddr_storage dest_socket;      // Dest of our data output (typically multicast)
     char dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
 
     int channels;   // 1 = mono, 2 = stereo (settable)
