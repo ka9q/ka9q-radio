@@ -92,14 +92,6 @@ struct channel *create_chan(uint32_t ssrc){
   }
   chan->lifetime = 20 * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
 
-  // Get the local socket for the output stream
-  // Going connectionless with Output_fd broke this. The source port is filled in, but the source address is all zeroes because
-  // it depends on the specific output address, which is only known from a routing table lookup. Oh well.
-  {
-    socklen_t len = sizeof(chan->output.source_socket);
-    getsockname(Output_fd,(struct sockaddr *)&chan->output.source_socket,&len);
-  }
-
   pthread_mutex_unlock(&Channel_list_mutex);
   return chan;
 }

@@ -574,6 +574,14 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       encode_float(&bp,DEMOD_SNR,power2dB(chan->sig.snr)); // abs ratio -> dB
 
     // Source address we're using to send data
+    // Get the local socket for the output stream
+    // Going connectionless with Output_fd broke this. The source port is filled in, but the source address is all zeroes because
+    // it depends on the specific output address, which is only known from a routing table lookup. Oh well.
+    // Also this doesn't return anything until the socket is first transmitted on
+    {
+      socklen_t len = sizeof(chan->output.source_socket);
+      getsockname(Output_fd,(struct sockaddr *)&chan->output.source_socket,&len);
+    }
     encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&chan->output.source_socket);
     // Where we're sending PCM output
     encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&chan->output.dest_socket);
