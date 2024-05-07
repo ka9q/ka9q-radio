@@ -1166,7 +1166,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.isreal ? 'r' : 'c');
 
   if(Frontend.samprate && channel->output.samprate)
-    pprintw(w,row++,col,"FFT out","%'lld c ",N * channel->output.samprate / Frontend.samprate);
+    pprintw(w,row++,col,"FFT out","%'lld c ",(int)ceilf((float)N * channel->output.samprate / Frontend.samprate));
 
   int overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
   pprintw(w,row++,col,"Overlap","1/%d   ",overlap);

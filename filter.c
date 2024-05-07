@@ -245,7 +245,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
   case CROSS_CONJ:
     {
       slave->olen = len;
-      slave->bins = round(len * overlap); // Total number of time-domain FFT points including overlap
+      slave->bins = ceilf(len * overlap); // Total number of time-domain FFT points including overlap
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
       slave->output_buffer.c = lmalloc(sizeof(complex float) * slave->bins);
       assert(slave->output_buffer.c != NULL);
@@ -272,7 +272,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
   case REAL:
     {
       slave->olen = len;
-      slave->bins = round(len * overlap) / 2 + 1;
+      slave->bins = ceilf(len * overlap) / 2 + 1;
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
       assert(slave->fdomain != NULL);
       slave->output_buffer.r = lmalloc(sizeof(float) * slave->bins);
