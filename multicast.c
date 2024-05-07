@@ -46,8 +46,8 @@ struct pt_table PT_table[128] = {
 { 0, 0, 0 }, // 7
 { 0, 0, 0 }, // 8
 { 0, 0, 0 }, // 9
-{ 48000, 2, S16BE }, // 10
-{ 48000, 1, S16BE }, // 11
+{ 44100, 2, S16BE }, // 10
+{ 44100, 1, S16BE }, // 11
 { 0, 0, 0 }, // 12
 { 0, 0, 0 }, // 13
 { 0, 0, 0 }, // 14
@@ -148,8 +148,8 @@ struct pt_table PT_table[128] = {
 { 0, 0, 0 }, // 109
 { 0, 0, 0 }, // 110
 { 48000, 2, OPUS }, // 111  Opus always uses a 48K virtual sample rate
-{ 0, 0, 0 }, // 112
-{ 0, 0, 0 }, // 113
+{ 48000, 1, S16BE }, // 112
+{ 48000, 2, S16BE }, // 113
 { 0, 0, 0 }, // 114
 { 0, 0, 0 }, // 115
 { 24000, 1, S16BE }, // 116
@@ -601,6 +601,7 @@ enum encoding encoding_from_pt(int const type){
 
 // Dynamically create a new one if not found
 // Should lock the table when it's modified
+// Should add encoding to this parameter list
 int pt_from_info(int const samprate,int const channels){
   if(samprate <= 0 || channels <= 0 || channels > 2)
     return -1;
@@ -610,7 +611,7 @@ int pt_from_info(int const samprate,int const channels){
     if(PT_table[type].samprate == samprate && PT_table[type].channels == channels)
       return type;
 
-  for(int type=0; type < 128; type++){
+  for(int type=96; type < 128; type++){ // Dynamic range
     if(PT_table[type].samprate == 0){
       // allocate it
       PT_table[type].samprate = samprate;
