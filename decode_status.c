@@ -1,3 +1,4 @@
+#include <string.h>
 #include "radio.h"
 
 // Decode incoming status message from the radio program, convert and fill in fields in local channel structure

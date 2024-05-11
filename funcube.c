@@ -10,6 +10,7 @@
 #include <bsd/string.h>
 #endif
 #include <sysexits.h>
+#include <strings.h>
 
 #include "conf.h"
 #include "fcd.h"
