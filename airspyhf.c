@@ -242,6 +242,8 @@ static int rx_callback(airspyhf_transfer_t *transfer){
     in_energy += x * x;
     wptr[i] = x;
   }
+  if(!isfinite(in_energy))
+    in_energy = 0;  // Don't let an infinite or NAN sample pollute the power integrator
   frontend->samples += sampcount;
   frontend->timestamp = gps_time_ns();
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
