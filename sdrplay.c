@@ -1108,6 +1108,8 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
     in_energy += cnrmf(samp);
     wptr[i] = samp;
   }
+  if(!isfinite(in_energy))
+    in_energy = 0;  // Don't let an infinite or NAN sample pollute the power integrator
   frontend->samples += sampcount;
   frontend->timestamp = gps_time_ns();
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
