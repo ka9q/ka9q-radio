@@ -19,7 +19,7 @@
 #include "multicast.h"
 #include "radio.h"
 
-#define SAMPLES_PER_PKT 480        // 16-bit word count; must fit in Ethernet MTU
+#define BYTES_PER_PKT 960        // byte count to fit in Ethernet MTU
 
 bool GetSockOptFailed = false;     // Have we issued this log message yet?
 bool TempSendFailure = false;
@@ -31,32 +31,25 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     return 0;
 
   if(mute){
-    // Increment timestamp
-    chan->output.rtp.timestamp += frames; // Increase by frame count
+    // Still increment timestamp
+    chan->output.rtp.timestamp += frames;
     chan->output.silent = true;
     return 0;
   }
-  int frames_per_pkt = 0;
-#if 0 // IP_MTU // Broken by use of disconnected sockets, but no big deal
-  {
-    // We can get the MTU of the outbound interface, use it to calculate maximum packet size
-    int mtu;
-    socklen_t intsize = sizeof(mtu);
-    int r = getsockopt(Output_fd,IPPROTO_IP,IP_MTU,&mtu,&intsize);
-    if(r != 0){
-      if(!GetSockOptFailed){
-	frames_per_pkt = SAMPLES_PER_PKT / chan->output.channels; // Default frames per packet for non-linux systems
-	fprintf(stdout,"Can't get socket MTU (%s), using default %d samples\n",strerror(errno),frames_per_pkt);
-	GetSockOptFailed = true;
-      }
-
-    } else {
-      frames_per_pkt = (mtu - 100) / (chan->output.channels * sizeof(int16_t)); // allow 100 bytes for headers
-    }
+  int max_frames_per_pkt = 0;
+  switch(chan->output.encoding){
+  case S16BE:
+  case S16LE:
+    max_frames_per_pkt = BYTES_PER_PKT / (sizeof(int16_t) * chan->output.channels);
+    break;
+  case F32:
+    max_frames_per_pkt = BYTES_PER_PKT / (sizeof(float) * chan->output.channels);
+    break;
+  default:
+    return 0; // Don't send anything
+    break;
   }
-# else
-  frames_per_pkt = SAMPLES_PER_PKT / chan->output.channels; // Default frames per packet for non-linux systems
-#endif
+
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
   rtp.version = RTP_VERS;
@@ -66,22 +59,48 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   chan->output.silent = false;
   useconds_t pacing = 0;
   if(chan->output.pacing)
-    pacing = 1000 * Blocktime * frames_per_pkt / frames; // for optional pacing, in microseconds
+    pacing = 1000 * Blocktime * max_frames_per_pkt / frames; // for optional pacing, in microseconds
 
   while(frames > 0){
-    int chunk = min(frames_per_pkt,frames);
+    int chunk = min(max_frames_per_pkt,frames);
     rtp.timestamp = chan->output.rtp.timestamp;
     chan->output.rtp.timestamp += chunk; // Increase by frame count
-    chan->output.rtp.bytes += sizeof(int16_t) * chunk * chan->output.channels;
     chan->output.rtp.packets++;
     rtp.seq = chan->output.rtp.seq++;
     uint8_t packet[PKTSIZE];
-    int16_t *pcm_buf = (int16_t *)hton_rtp(packet,&rtp);
-    for(int i=0; i < chunk * chan->output.channels; i++)
-      *pcm_buf++ = htons(scaleclip(*buffer++));
+    uint8_t *dp = (uint8_t *)hton_rtp(packet,&rtp); // First byte after RTP header
+    int bytes = 0;
+    switch(chan->output.encoding){
+    case S16BE:
+      {
+	int16_t *pcm_buf = (int16_t *)dp;
+	for(int i=0; i < chunk * chan->output.channels; i++)
+	  *pcm_buf++ = htons(scaleclip(*buffer++)); // Byte swap
 
-    uint8_t const *dp = (uint8_t *)pcm_buf;
-    int r = sendto(Output_fd,&packet,dp - packet,0,(struct sockaddr *)&chan->output.dest_socket,sizeof(chan->output.dest_socket));
+	bytes = chunk * chan->output.channels * sizeof(int16_t);
+      }
+      break;
+    case S16LE:
+      {
+	int16_t *pcm_buf = (int16_t *)dp;
+	for(int i=0; i < chunk * chan->output.channels; i++)
+	  *pcm_buf++ = scaleclip(*buffer++); // No byte swap
+
+	bytes = chunk * chan->output.channels * sizeof(int16_t);
+      }
+      break;
+    case F32:
+      {
+	// Could use sendmsg() to avoid copy here since there's no conversion, but this doesn't use much
+	memcpy(dp,buffer,chunk * chan->output.channels * sizeof(float));
+	bytes = chunk * chan->output.channels * sizeof(float);
+      }
+      break;
+    default:
+      break;
+    }
+    int r = sendto(Output_fd,&packet,bytes + (dp - packet),0,(struct sockaddr *)&chan->output.dest_socket,sizeof(chan->output.dest_socket));
+    chan->output.rtp.bytes += bytes;
     chan->output.samples += chunk * chan->output.channels; // Count frames
     if(r <= 0){
       if(errno == EAGAIN){
