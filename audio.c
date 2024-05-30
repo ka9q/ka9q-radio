@@ -42,7 +42,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   case S16LE:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(int16_t) * chan->output.channels);
     break;
-  case F32:
+  case F32LE:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(float) * chan->output.channels);
     break;
   default:
@@ -89,7 +89,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
 	bytes = chunk * chan->output.channels * sizeof(int16_t);
       }
       break;
-    case F32:
+    case F32LE:
       {
 	// Could use sendmsg() to avoid copy here since there's no conversion, but this doesn't use much
 	memcpy(dp,buffer,chunk * chan->output.channels * sizeof(float));

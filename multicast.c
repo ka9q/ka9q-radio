@@ -950,13 +950,13 @@ char const *encoding_string(enum encoding e){
   case NO_ENCODING:
     return "none";
   case S16LE:
-    return "signed 16-bit little endian";
+    return "s16le";
   case S16BE:
-    return "signed 16-bit big endian";    
+    return "s16be";
   case OPUS:
     return "Opus";
-  case F32:
-    return "32 bit floating point";
+  case F32LE:
+    return "f32le";
   case AX25:
     return "AX.25";
   }

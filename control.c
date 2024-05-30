@@ -894,6 +894,18 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
 	encode_int(bpp,STATUS_INTERVAL,b);
     }
     break;
+  case 'e':
+    {
+      char str[Entry_width];
+      getentry("Output encoding [s16le s16be f32le]: ",str,sizeof(str));
+      if(strcasecmp(str,"S16BE") == 0)
+	encode_byte(bpp,OUTPUT_ENCODING,S16BE);
+      else if(strcasecmp(str,"S16LE") == 0)
+	encode_byte(bpp,OUTPUT_ENCODING,S16LE);
+      else if(strcasecmp(str,"F32") == 0 || strcasecmp(str,"float") == 0 || strcasecmp(str,"F32LE") == 0)
+	encode_byte(bpp,OUTPUT_ENCODING,F32LE);
+    }
+    break;
   default:
     beep();
     break;

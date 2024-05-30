@@ -28,7 +28,7 @@ enum encoding {
   S16LE,
   S16BE,
   OPUS,
-  F32,
+  F32LE,
   AX25,
   UNUSED_ENCODING, // Sentinel, not used
 };

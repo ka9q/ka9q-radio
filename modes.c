@@ -245,7 +245,18 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
 
   chan->output.pacing = config_getboolean(table,sname,"pacing",chan->output.pacing);
 
+  {
+    char const *cp = config_getstring(table,sname,"encoding","s16be");
+    if(strcasecmp(cp,"S16BE") == 0)
+      chan->output.encoding = S16BE;
+    else if(strcasecmp(cp,"S16LE") == 0)
+      chan->output.encoding = S16LE;
+    else if(strcasecmp(cp,"F32") == 0 || strcasecmp(cp,"float") == 0 || strcasecmp(cp,"F32LE") == 0)
+      chan->output.encoding = F32LE;
+  }
   return 0;
+
+
 }
 
 // force an output sample rate to a nonzero multiple of the block rate

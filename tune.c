@@ -40,13 +40,15 @@ float Low = INFINITY;
 float High = INFINITY;
 int Samprate = 0;
 bool Quiet = false;
+enum encoding Encoding = NO_ENCODING;
 
 struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "f:g:H:hi:L:l:m:qr:R:s:vV";
+char Optstring[] = "e:f:g:H:hi:L:l:m:qr:R:s:vV";
 struct option Options[] = {
+  {"encoding", required_argument, NULL, 'e'},
   {"frequency", required_argument, NULL, 'f'},
   {"gain", required_argument, NULL, 'g'},
   {"help", no_argument, NULL, 'h'},
@@ -77,6 +79,18 @@ int main(int argc,char *argv[]){
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
+      case 'e':
+	if(strcasecmp(optarg,"S16BE") == 0)
+	  Encoding = S16BE;
+	else if(strcasecmp(optarg,"S16LE") == 0)
+	  Encoding = S16LE;
+	else if(strcasecmp(optarg,"F32") == 0 || strcasecmp(optarg,"float") == 0 || strcasecmp(optarg,"F32LE") == 0)
+	  Encoding = F32LE;
+	else {
+	  fprintf(stdout,"Unknown encoding %s\n",optarg);
+	  fprintf(stdout,"Encodings: S16BE S16LE F32\n");
+	}
+	break;
       case 'f':
 	Frequency = parse_frequency(optarg,true);
 	break;
@@ -184,6 +198,7 @@ int main(int argc,char *argv[]){
   float baseband_level = INFINITY;
   float low_edge = INFINITY;
   float high_edge = INFINITY;
+  enum encoding received_encoding = NO_ENCODING;
   int samprate = 0;
 
   uint32_t sent_tag = 0;
@@ -215,6 +230,9 @@ int main(int argc,char *argv[]){
 	encode_int(&bp,AGC_ENABLE,false); // Turn off AGC for manual gain
       } else
 	encode_int(&bp,AGC_ENABLE,true);
+      if(Encoding != NO_ENCODING)
+	encode_int(&bp,OUTPUT_ENCODING,Encoding);
+
       encode_eol(&bp);
       int cmd_len = bp - cmd_buffer;
       if(send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len)
@@ -298,7 +316,9 @@ int main(int argc,char *argv[]){
       case OUTPUT_SAMPRATE:
 	samprate = decode_int(cp,optlen);
 	break;
-
+      case OUTPUT_ENCODING:
+	received_encoding = decode_int(cp,optlen);
+	break;
       }
       cp += optlen;
     }
@@ -316,6 +336,9 @@ int main(int argc,char *argv[]){
     FREE(preset);
     if(samprate != 0)
       printf("Sample rate %'d Hz\n",samprate);
+
+    if(received_encoding != NO_ENCODING)
+      printf("Encoding %s\n",encoding_string(received_encoding));
 
     if(received_freq != INFINITY)
       printf("Frequency %'.3lf Hz\n",received_freq);

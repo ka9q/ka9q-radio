@@ -827,83 +827,107 @@ static void *decode_task(void *arg){
       for(int j=0; j < N_tones; j++)
 	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)samprate);
     }
-    int upsample = 1;
+    // Test for invalidity
+    sp->channels = channels_from_pt(sp->type); // channels in packet (not portaudio output buffer)
+    sp->samprate = samprate_from_pt(sp->type);
+    if(sp->samprate <= 0 || sp->channels <= 0 || sp->channels > 2)
+      goto endloop;
+    int upsample = DAC_samprate / samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
+    sp->bandwidth = samprate / 2000;    // in kHz allowing for Nyquist
 
     // decode Opus or PCM into bounce buffer
-    if(encoding_from_pt(sp->type) == OPUS){
-      // Execute Opus decoder even when muted to keep its state updated
-      if(!sp->opus){
-	int error;
+    enum encoding const encoding = encoding_from_pt(sp->type);
+    switch(encoding){
+    case OPUS:
+      {
+	// Execute Opus decoder even when muted to keep its state updated
+	if(!sp->opus){
+	  int error;
 
-	// Decode Opus to the selected sample rate
-	sp->opus = opus_decoder_create(DAC_samprate,Channels,&error);
-	if(error != OPUS_OK)
-	  fprintf(stderr,"opus_decoder_create error %d\n",error);
+	  // Decode Opus to the selected sample rate
+	  sp->opus = opus_decoder_create(DAC_samprate,Channels,&error);
+	  if(error != OPUS_OK)
+	    fprintf(stderr,"opus_decoder_create error %d\n",error);
 
-	assert(sp->opus);
+	  assert(sp->opus);
+	}
+	// Force Opus to decode to the local hardware settings, typically stereo @ 48 kHz
+	sp->channels = Channels;
+	sp->samprate = DAC_samprate;
+	upsample = 1;
+	// Opus RTP timestamps always referenced to 48 kHz
+	int const r0 = opus_packet_get_nb_samples(pkt->data,pkt->len,48000);
+	if(r0 == OPUS_INVALID_PACKET || r0 == OPUS_BAD_ARG)
+	  goto endloop;
+
+	int const r1 = opus_packet_get_nb_samples(pkt->data,pkt->len,DAC_samprate);
+	if(r1 == OPUS_INVALID_PACKET || r1 == OPUS_BAD_ARG)
+	  goto endloop;
+
+	assert(r1 >= 0);
+	sp->frame_size = r1;
+	int const r2 = opus_packet_get_bandwidth(pkt->data);
+	if(r2 == OPUS_INVALID_PACKET || r2 == OPUS_BAD_ARG)
+	  goto endloop;
+	switch(r2){
+	case OPUS_BANDWIDTH_NARROWBAND:
+	  sp->bandwidth = 4;
+	  break;
+	case OPUS_BANDWIDTH_MEDIUMBAND:
+	  sp->bandwidth = 6;
+	  break;
+	case OPUS_BANDWIDTH_WIDEBAND:
+	  sp->bandwidth = 8;
+	  break;
+	case OPUS_BANDWIDTH_SUPERWIDEBAND:
+	  sp->bandwidth = 12;
+	  break;
+	default:
+	case OPUS_BANDWIDTH_FULLBAND:
+	  sp->bandwidth = 20;
+	  break;
+	}
+	size_t const bounce_size = sizeof(*bounce) * sp->frame_size * sp->channels;
+	assert(bounce == NULL); // detect possible memory leaks
+	bounce = malloc(bounce_size);
+	int const samples = opus_decode_float(sp->opus,pkt->data,pkt->len,bounce,bounce_size,0);
+	if(samples != sp->frame_size)
+	  fprintf(stderr,"samples %d frame-size %d\n",samples,sp->frame_size);
       }
-      // Decode Opus to the local hardware settings, typically stereo @ 48 kHz
-      sp->channels = Channels;
-      sp->samprate = DAC_samprate;
-      // Opus RTP timestamps always referenced to 48 kHz
-      int const r0 = opus_packet_get_nb_samples(pkt->data,pkt->len,48000);
-      if(r0 == OPUS_INVALID_PACKET || r0 == OPUS_BAD_ARG)
-	goto endloop;
-
-      int const r1 = opus_packet_get_nb_samples(pkt->data,pkt->len,DAC_samprate);
-      if(r1 == OPUS_INVALID_PACKET || r1 == OPUS_BAD_ARG)
-	goto endloop;
-
-      assert(r1 >= 0);
-      sp->frame_size = r1;
-      int const r2 = opus_packet_get_bandwidth(pkt->data);
-      if(r2 == OPUS_INVALID_PACKET || r2 == OPUS_BAD_ARG)
-	goto endloop;
-      switch(r2){
-      case OPUS_BANDWIDTH_NARROWBAND:
-	sp->bandwidth = 4;
-	break;
-      case OPUS_BANDWIDTH_MEDIUMBAND:
-	sp->bandwidth = 6;
-	break;
-      case OPUS_BANDWIDTH_WIDEBAND:
-	sp->bandwidth = 8;
-	break;
-      case OPUS_BANDWIDTH_SUPERWIDEBAND:
-	sp->bandwidth = 12;
-	break;
-      default:
-      case OPUS_BANDWIDTH_FULLBAND:
-	sp->bandwidth = 20;
-	break;
+      break;
+    case S16LE:
+    case S16BE:
+      {
+	sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
+	if(sp->frame_size <= 0)
+	  goto endloop;
+	int16_t const * const data = (int16_t *)&pkt->data[0];
+	assert(bounce == NULL);
+	bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
+	if(encoding == S16BE){
+	  for(int i=0; i < sp->channels * sp->frame_size; i++)
+	    bounce[i] = SCALE16 * (int16_t)ntohs(data[i]); // Cast is necessary
+	} else {
+	  for(int i=0; i < sp->channels * sp->frame_size; i++)
+	    bounce[i] = SCALE16 * data[i];
+	}
       }
-      size_t const bounce_size = sizeof(*bounce) * sp->frame_size * sp->channels;
-      assert(bounce == NULL); // detect possible memory leaks
-      bounce = malloc(bounce_size);
-      int const samples = opus_decode_float(sp->opus,pkt->data,pkt->len,bounce,bounce_size,0);
-      if(samples != sp->frame_size)
-	fprintf(stderr,"samples %d frame-size %d\n",samples,sp->frame_size);
-    } else { // PCM
-      // Test for invalidity
-      int const samprate = samprate_from_pt(sp->type);
-      if(samprate == 0)
-	goto endloop;
-      sp->samprate = samprate;
-      upsample = DAC_samprate / samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
-      sp->bandwidth = samprate / 2000;    // in kHz allowing for Nyquist
-      sp->channels = channels_from_pt(sp->type); // channels in packet (not portaudio output buffer)
-
-      if(samprate <= 0 || sp->channels <= 0 || sp->channels > 2)
-	goto endloop;
-      sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
-      if(sp->frame_size <= 0)
-	goto endloop;
-      int16_t const * const data_ints = (int16_t *)&pkt->data[0];
-      assert(bounce == NULL);
-      bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
-      for(int i=0; i < sp->channels * sp->frame_size; i++)
-	bounce[i] = SCALE16 * (int16_t)ntohs(data_ints[i]);
-    }
+      break;
+    case F32LE:
+      {
+	sp->frame_size = pkt->len / (sizeof(float) * sp->channels); // mono/stereo samples in frame
+	if(sp->frame_size <= 0) // Check here because it might truncate to zero
+	  goto endloop;
+	float const * const data = (float *)&pkt->data[0];
+	assert(bounce == NULL);
+	bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
+	for(int i=0; i < sp->channels * sp->frame_size; i++)
+	  bounce[i] = data[i];
+      }
+      break;
+    default:
+      goto endloop; // Unknown, ignore
+    } // end of switch
     // Run PL tone decoders
     // Disable if display isn't active and autonotching is off
     // Fed audio that might be discontinuous or out of sequence, but it's a pain to fix
@@ -957,7 +981,7 @@ static void *decode_task(void *arg){
     kick_output(); // Ensure Rptr is current
     // Sequence number processing and write pointer updating
     if(sp->reset){
-      reset_session(sp,pkt->rtp.timestamp); // Resets sp->wptr and last_timestamp      
+      reset_session(sp,pkt->rtp.timestamp); // Resets sp->wptr and last_timestamp
     } else if(modsub(sp->wptr,Rptr,BUFFERSIZE) < 0){
       sp->lates++;
       if(++consec_lates < 3 || Constant_delay)

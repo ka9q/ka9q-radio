@@ -392,6 +392,13 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  chan->status.output_interval = x;
       }
       break;
+    case OUTPUT_ENCODING:
+      {
+	enum encoding encoding = decode_int(cp,optlen);
+	if(encoding >= NO_ENCODING && encoding < UNUSED_ENCODING)
+	  chan->output.encoding = encoding;
+      }
+
     default:
       break;
     }
