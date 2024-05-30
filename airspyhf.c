@@ -135,7 +135,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   }
 
   frontend->isreal = false;
-  frontend->bitspersample = 0; // Already floating point
+  frontend->bitspersample = 1; // Already floating point
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
 
   fprintf(stdout,"Set sample rate %'u Hz\n",frontend->samprate);
@@ -232,23 +232,21 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   }
   int const sampcount = transfer->sample_count;
   float complex * const wptr = frontend->in.input_write_pointer.c;
-  float complex * const up = (float complex *)transfer->samples;
+  float complex const * const up = (float complex *)transfer->samples;
   assert(wptr != NULL);
   assert(up != NULL);
   float in_energy = 0;
   for(int i=0; i < sampcount; i++){
-    float complex x;
-    x = up[i];
-    in_energy += x * x;
-    wptr[i] = x;
+    in_energy += cnrmf(up[i]);
+    wptr[i] = up[i];
   }
-  if(!isfinite(in_energy))
-    in_energy = 0;  // Don't let an infinite or NAN sample pollute the power integrator
   frontend->samples += sampcount;
   frontend->timestamp = gps_time_ns();
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->if_power_instant = in_energy / sampcount;
-  frontend->if_power += Power_smooth * (frontend->if_power_instant - frontend->if_power);
+  if(isfinite(in_energy)){
+    frontend->if_power_instant = in_energy / sampcount;
+    frontend->if_power += Power_smooth * (frontend->if_power_instant - frontend->if_power);
+  }
   return 0;
 }
 
