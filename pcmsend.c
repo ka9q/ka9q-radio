@@ -196,7 +196,7 @@ int main(int argc,char * const argv[]){
 
   realtime();
 
-  int const payload_type = pt_from_info(Samprate,Channels);
+  int const payload_type = pt_from_info(Samprate,Channels,S16BE); // fixed encoding for now
   if(payload_type < 0){
     fprintf(stderr,"Can't allocate RTP payload type for samprate = %'d, channels = %d\n",Samprate,Channels);
     exit(EX_SOFTWARE);

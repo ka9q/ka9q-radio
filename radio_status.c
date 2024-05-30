@@ -87,7 +87,7 @@ void *radio_status(void *arg){
 	    // Creation failed, e.g., no output stream
 	    fprintf(stdout,"Dynamic create of ssrc %'u failed; is 'data =' set in [global]?\n",ssrc);
 	  } else {
-	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels); // make sure it's initialized
+	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	    decode_radio_commands(chan,buffer+1,length-1);
 	    send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
 	    reset_radio_status(chan);
@@ -164,7 +164,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
 	if(new_sample_rate != chan->output.samprate){
 	  chan->output.samprate = new_sample_rate;
-	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels);
+	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	  restart_needed = true;
 	}
       }
@@ -345,7 +345,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	int const i = decode_int(cp,optlen);
 	if(i != chan->output.channels && (i == 1 || i == 2)){
 	  chan->output.channels = i;
-	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels);
+	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	}
       }
       break;
@@ -395,8 +395,10 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     case OUTPUT_ENCODING:
       {
 	enum encoding encoding = decode_int(cp,optlen);
-	if(encoding >= NO_ENCODING && encoding < UNUSED_ENCODING)
+	if(encoding >= NO_ENCODING && encoding < UNUSED_ENCODING){
 	  chan->output.encoding = encoding;
+	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	}
       }
 
     default:

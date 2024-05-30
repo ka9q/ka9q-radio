@@ -602,13 +602,13 @@ enum encoding encoding_from_pt(int const type){
 // Dynamically create a new one if not found
 // Should lock the table when it's modified
 // Should add encoding to this parameter list
-int pt_from_info(int const samprate,int const channels){
-  if(samprate <= 0 || channels <= 0 || channels > 2)
+int pt_from_info(int const samprate,int const channels,enum encoding encoding){
+  if(samprate <= 0 || channels <= 0 || channels > 2 || encoding == NO_ENCODING || encoding >= UNUSED_ENCODING)
     return -1;
 
   // Search table for existing entry, otherwise create new entry
   for(int type=0; type < 128; type++)
-    if(PT_table[type].samprate == samprate && PT_table[type].channels == channels)
+    if(PT_table[type].samprate == samprate && PT_table[type].channels == channels && PT_table[type].encoding == encoding)
       return type;
 
   for(int type=96; type < 128; type++){ // Dynamic range
@@ -616,6 +616,7 @@ int pt_from_info(int const samprate,int const channels){
       // allocate it
       PT_table[type].samprate = samprate;
       PT_table[type].channels = channels;
+      PT_table[type].encoding = encoding;
       return type;
     }
   }

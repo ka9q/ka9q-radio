@@ -541,7 +541,7 @@ static int loadconfig(char const * const file){
 	strlcpy(chan->output.dest_string,data,sizeof(chan->output.dest_string));
 	memcpy(&chan->status.dest_socket,&metadata_dest_socket,sizeof(chan->status.dest_socket));
 
-	chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels);
+	chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	chan->status.output_interval = update;
 
 	// Time to start it -- ssrc is stashed by create_chan()
