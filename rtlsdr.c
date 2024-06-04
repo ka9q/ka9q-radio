@@ -141,7 +141,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     for(int i=0; i < ngains; i++)
       fprintf(stderr," %'d",gains[i]);
     fprintf(stderr,"\n");
-    
+
   }
   rtlsdr_set_freq_correction(sdr->device,0); // don't use theirs, only good to integer ppm
   rtlsdr_set_tuner_bandwidth(sdr->device, 0); // Auto bandwidth
@@ -161,7 +161,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     frontend->rf_gain = sdr->gain; // Needs conversion to dB?
   }
 
-  
+
   sdr->bias = config_getboolean(dictionary,section,"bias",false);
   {
     int ret = rtlsdr_set_bias_tee(sdr->device,sdr->bias);
@@ -236,11 +236,20 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
   float energy = 0;
   struct frontend *frontend = ctx;
   float complex * const wptr = frontend->in.input_write_pointer.c;
-  
+
   for(int i=0; i < sampcount; i++){
     float complex samp;
-    frontend->overranges += (buf[2*i] == 0) || (buf[2*i] == 255);
-    frontend->overranges += (buf[2*i+1] == 0) || (buf[2*i+1] == 255);
+    if(buf[2*i] == 0 || buf[2*i] == 255){
+      frontend->overranges++;
+      frontend->samp_since_over = 0;
+    } else
+      frontend->samp_since_over++;
+
+    if(buf[2*i+1] == 0 || buf[2*i+1] == 255){
+      frontend->overranges++;
+      frontend->samp_since_over = 0;
+    } else
+      frontend->samp_since_over++;
     __real__ samp = (int)buf[2*i] - 128; // Excess-128
     __imag__ samp = (int)buf[2*i+1] - 128;
     energy += cnrmf(samp);
@@ -257,7 +266,7 @@ static void do_rtlsdr_agc(struct sdrstate * const sdr){
   assert(sdr != NULL);
   if(!sdr->agc)
     return; // Execute only in software AGC mode
-    
+
   if(--sdr->holdoff_counter == 0){
     sdr->holdoff_counter = HOLDOFF_TIME;
     float powerdB = 10*log10f(frontend->output_level);
@@ -297,13 +306,13 @@ static double true_freq(uint64_t freq){
   uint8_t refdiv2 = 0;
   uint8_t ni, si, nint, vco_fine_tune, val;
   uint8_t data[5];
-  
+
   /* Frequency in kHz */
   freq_khz = (freq + 500) / 1000;
   //  pll_ref = priv->cfg->xtal;
   pll_ref = 28800000;
   pll_ref_khz = (pll_ref + 500) / 1000;
-  
+
   /* Calculate divider */
   while (mix_div <= 64) {
     if (((freq_khz * mix_div) >= vco_min) &&
@@ -317,14 +326,14 @@ static double true_freq(uint64_t freq){
     }
     mix_div = mix_div << 1;
   }
-  
+
   vco_freq = (uint64_t)freq * (uint64_t)mix_div;
   nint = vco_freq / (2 * pll_ref);
   vco_fra = (vco_freq - 2 * pll_ref * nint) / 1000;
 
   ni = (nint - 13) / 4;
   si = nint - 4 * ni - 13;
-  
+
   /* sdm calculator */
   while (vco_fra > 1) {
     if (vco_fra > (2 * pll_ref_khz / n_sdm)) {
@@ -335,7 +344,7 @@ static double true_freq(uint64_t freq){
     }
     n_sdm <<= 1;
   }
-  
+
   double f;
   {
     int ntot = (nint << 16) + sdm;
@@ -344,7 +353,7 @@ static double true_freq(uint64_t freq){
     f = vco / mix_div;
     return f;
   }
-  
+
 }
 #else // Cleaned up version
 // For a requested frequency, give the actual tuning frequency
@@ -356,7 +365,7 @@ static double true_freq(uint64_t freq_hz){
 
   // Clock divider set to 2 for the best resolution
   const uint32_t pll_ref = 28800000u / 2; // 14.4 MHz
-  
+
   // Find divider to put VCO = f*2^(d+1) in range VCO_MIN to VCO_MAX (for ref freq 26 MHz)
   //          MHz             step, Hz
   // 0: 885.0     1770.0      190.735
@@ -373,7 +382,7 @@ static double true_freq(uint64_t freq_hz){
   }
   if(div_num > MAX_DIV)
     return 0; // Frequency out of range
-  
+
   // PLL programming bits: Nint in upper 16 bits, Nfract in lower 16 bits
   // Freq steps are pll_ref / 2^(16 + div_num) Hz
   // Note the '+ (pll_ref >> 1)' term simply rounds the division to the nearest integer
@@ -411,7 +420,4 @@ double rtlsdr_tune(struct frontend * const frontend,double freq){
     return frontend->frequency; // Don't change frequency
 
   return set_correct_freq(sdr,freq);
-}  
-
-
-
+}

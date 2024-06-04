@@ -1337,6 +1337,7 @@ static void display_input(WINDOW *w,struct channel const *channel){
   }
   pprintw(w,row++,col,"Samples","%'llu",Frontend.samples);
   pprintw(w,row++,col,"Overrange","%'llu",Frontend.overranges);
+  pprintw(w,row++,col,"Samp since over","%'llu",Frontend.samp_since_over);
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_socket),

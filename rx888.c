@@ -319,13 +319,23 @@ static void rx_callback(struct libusb_transfer * const transfer){
     for(int i=0; i < sampcount; i++){
       int32_t s = samples[i];
       s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
-      frontend->overranges += (s == 32767) || (s <= -32767);
+      if(s == 32767 || s <= -32767){
+	frontend->overranges++;
+	frontend->samp_since_over = 0;
+      } else {
+	frontend->samp_since_over++;
+      }
       wptr[i] = s;
       in_energy += wptr[i] * wptr[i];
     }
   } else {
     for(int i=0; i < sampcount; i++){
-      frontend->overranges += (samples[i] == 32767) || (samples[i] <= -32767);
+      if(samples[i] == 32767 || samples[i] <= -32767){
+	frontend->overranges++;
+	frontend->samp_since_over = 0;
+      } else {
+	frontend->samp_since_over++;
+      }
       wptr[i] = samples[i];
       in_energy += wptr[i] * wptr[i];
     }

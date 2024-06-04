@@ -120,7 +120,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     if(ret != AIRSPY_SUCCESS){
       fprintf(stdout,"airspy_open(%llx) failed: %s\n",(long long)sdr->SN,airspy_error_name(ret));
       return -1;
-    } 
+    }
   }
   {
     airspy_lib_version_t version;
@@ -140,7 +140,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     int ret __attribute__ ((unused));
     ret = airspy_set_packing(sdr->device,1);
     assert(ret == AIRSPY_SUCCESS);
-    
+
     // Set this now, as it affects the list of supported sample rates
     ret = airspy_set_sample_type(sdr->device,AIRSPY_SAMPLE_RAW);
     assert(ret == AIRSPY_SUCCESS);
@@ -198,13 +198,13 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   airspy_set_mixer_agc(sdr->device,mixer_agc);
   if(mixer_agc)
     sdr->software_agc = false;
-  
+
   int const lna_gain = config_getint(Dictionary,section,"lna-gain",-1);
   if(lna_gain != -1){
     frontend->lna_gain = lna_gain;
     airspy_set_lna_gain(sdr->device,lna_gain);
     sdr->software_agc = false;
-  }      
+  }
   int const mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
   if(mixer_gain != -1){
     frontend->mixer_gain = mixer_gain;
@@ -232,7 +232,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     int ret __attribute__ ((unused));
     ret = airspy_set_rf_bias(sdr->device,sdr->antenna_bias);
     assert(ret == AIRSPY_SUCCESS);
-  }  
+  }
   {
     char const * const p = config_getstring(Dictionary,section,"description",NULL);
     if(p != NULL){
@@ -330,6 +330,12 @@ static int rx_callback(airspy_transfer *transfer){
     s[7] =  up[2];
     for(int j=0; j < 8; j++){
       int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
+      if(x == 32767 || x <= -32767){
+	frontend->overranges++;
+	frontend->samp_since_over = 0;
+      } else {
+	frontend->samp_since_over++;
+      }
       frontend->overranges += (x == 2047) || (x <= -2047);
       wptr[j] = x;
       in_energy += x * x;
@@ -378,7 +384,7 @@ static double true_freq(uint64_t freq_hz){
 
   // Clock divider set to 2 for the best resolution
   uint32_t const pll_ref = 25000000u / 2; // 12.5 MHz
-  
+
   // Find divider to put VCO = f*2^(d+1) in range VCO_MIN to VCO_MAX
   //          MHz             step, Hz
   // 0: 885.0     1770.0      190.735
@@ -395,12 +401,12 @@ static double true_freq(uint64_t freq_hz){
   }
   if(div_num > MAX_DIV)
     return 0; // Frequency out of range
-  
+
   // r = PLL programming bits: Nint in upper 16 bits, Nfract in lower 16 bits
   // Freq steps are pll_ref / 2^(16 + div_num) Hz
   // Note the '+ (pll_ref >> 1)' term simply rounds the division to the nearest integer
   uint32_t const r = ((freq_hz << (div_num + 16)) + (pll_ref >> 1)) / pll_ref;
-  
+
   // This is a puzzle; is it related to spur suppression?
   double const offset = 0.25;
   // Compute true frequency
@@ -466,5 +472,3 @@ static void set_gain(struct sdrstate * const sdr,int gainstep){
 	     frontend->lna_gain,frontend->mixer_gain,frontend->if_gain);
   }
 }
-
-

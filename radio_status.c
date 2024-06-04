@@ -485,6 +485,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_float(&bp,IF_POWER,power2dB(level));
   }
   encode_int64(&bp,AD_OVER,frontend->overranges);
+  encode_int64(&bp,SAMPLES_SINCE_OVER,frontend->samp_since_over);
   encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
 
   // Modulation mode

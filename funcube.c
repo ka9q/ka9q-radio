@@ -181,7 +181,7 @@ void *proc_funcube(void *arg){
   assert(sdr != NULL);
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
-  
+
   // Gain and phase corrections. These will be updated every block
   float gain_q = 1;
   float gain_i = 1;
@@ -227,12 +227,21 @@ void *proc_funcube(void *arg){
     float i_energy=0, q_energy=0;
     complex float samp_sum = 0;
     float dotprod = 0;
-    
+
     complex float * wptr = frontend->in.input_write_pointer.c;
 
     for(int i=0; i<Blocksize; i++){
-      frontend->overranges += (sampbuf[2*i] == 32767) || (sampbuf[2*i] <= -32767);
-      frontend->overranges += (sampbuf[2*i+1] == 32767) || (sampbuf[2*i+1] <= -32767);
+      if(sampbuf[2*i] == 32767 || sampbuf[2*i] <= -32767){
+	frontend->overranges++;
+	frontend->samp_since_over = 0;
+      } else
+	frontend->samp_since_over++;
+
+      if(sampbuf[2*i+1] == 32767 || sampbuf[2*i+1] <= -32767){
+	frontend->overranges++;
+	frontend->samp_since_over = 0;
+      } else
+	frontend->samp_since_over++;
 
       complex float samp = CMPLXF(sampbuf[2*i],sampbuf[2*i+1]);
 
@@ -243,17 +252,17 @@ void *proc_funcube(void *arg){
       // accumulate I and Q energies before gain correction
       i_energy += crealf(samp) * crealf(samp);
       q_energy += cimagf(samp) * cimagf(samp);
-    
+
       // Balance gains, keeping constant total energy
       __real__ samp *= gain_i;
       __imag__ samp *= gain_q;
-    
+
       // Accumulate phase error
       dotprod += crealf(samp) * cimagf(samp);
 
       // Correct phase
       __imag__ samp = secphi * cimagf(samp) - tanphi * crealf(samp);
-      
+
       wptr[i] = samp;
     }
 
@@ -261,7 +270,7 @@ void *proc_funcube(void *arg){
     frontend->samples += Blocksize;
     float const block_energy = i_energy + q_energy; // Normalize for complex pairs
     frontend->if_power_instant = block_energy / Blocksize;
-    frontend->if_power += Power_smooth * (frontend->if_power_instant - frontend->if_power); // Average A/D output power per channel  
+    frontend->if_power += Power_smooth * (frontend->if_power_instant - frontend->if_power); // Average A/D output power per channel
 
 #if 1
     // Get status timestamp from UNIX TOD clock -- but this might skew because of inexact sample rate
@@ -311,7 +320,7 @@ static void do_fcd_agc(struct sdrstate *sdr){
   assert(frontend != NULL);
 
   float const powerdB = power2dB(frontend->if_power * scale_ADpower2FS(frontend));
-  
+
   if(powerdB > AGC_upper){
     if(frontend->if_gain > 0){
       // Decrease gain in 10 dB steps, down to 0
@@ -365,7 +374,7 @@ static double fcd_actual(unsigned int u32Freq){
 
   UINT32 const u32Thresh = 3250U;
   UINT32 const u32FRef = 26000000U;
-  
+
   struct {
     UINT32 u32Freq;
     UINT32 u32FreqOff;
@@ -391,7 +400,7 @@ static double fcd_actual(unsigned int u32Freq){
 
   if (pts->u32Freq == 0)
     pts--;
-      
+
   // Frequency of synthesizer before divider - can possibly exceed 32 bits, so it's stored in 64
   UINT64 const u64FSynth = ((UINT64)u32Freq + pts->u32FreqOff) * pts->u32LODiv;
 
@@ -406,10 +415,10 @@ static double fcd_actual(unsigned int u32Freq){
 
   // AFC is lower 12 bits
   UINT32 const u32AFC = u32Frac4096 - (u32Frac<<12);
-      
+
   // Actual tuner frequency, in floating point, given specified parameters
   double const f64FAct = (4.0 * u32FRef / (double)pts->u32LODiv) * (u32Int + ((u32Frac * 4096.0 + u32AFC) / (u32Thresh * 4096.))) - pts->u32FreqOff;
-  
+
   // double f64step = ( (4.0 * u32FRef) / (pts->u32LODiv * (double)u32Thresh) ) / 4096.0;
   //      printf("f64step = %'lf, u32LODiv = %'u, u32Frac = %'d, u32AFC = %'d, u32Int = %'d, u32Thresh = %'d, u32FreqOff = %'d, f64FAct = %'lf err = %'lf\n",
   //	     f64step, pts->u32LODiv, u32Frac, u32AFC, u32Int, u32Thresh, pts->u32FreqOff,f64FAct,f64FAct - u32Freq);
@@ -441,4 +450,4 @@ double funcube_tune(struct frontend * const frontend,double const freq){
     frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
   }
   return frontend->frequency;
-}  
+}

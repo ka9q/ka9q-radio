@@ -46,6 +46,7 @@ struct frontend {
   // Stuff we maintain about our upstream source
   uint64_t samples;     // Count of raw I/Q samples received
   uint64_t overranges;  // Count of full scale A/D samples
+  uint64_t samp_since_over; // Samples since last overrange
 
   int M;            // Impulse length of input filter
   int L;            // Block length of input filter
@@ -61,11 +62,11 @@ struct frontend {
   uint8_t mixer_gain;
   uint8_t if_gain;
 
-  float rf_atten;    // dB (RX888 only)
-  float rf_gain;     // dB gain (RX888) or lna_gain + mixer_gain + if_gain
+  float rf_atten;         // dB (RX888 only)
+  float rf_gain;          // dB gain (RX888) or lna_gain + mixer_gain + if_gain
   bool direct_conversion; // Try to avoid DC spike if set
   bool isreal;            // Use real->complex FFT (otherwise complex->complex)
-  int bitspersample; // 8, 12 or 16
+  int bitspersample;      // 1, 8, 12 or 16
   bool lock;              // Tuning is locked; clients cannot change
 
   // Limits on usable IF due to aliasing, filtering, etc

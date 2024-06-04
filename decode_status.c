@@ -46,6 +46,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case AD_OVER:
       frontend->overranges = decode_int64(cp,optlen);
       break;
+    case SAMPLES_SINCE_OVER:
+      frontend->samp_since_over = decode_int64(cp,optlen);
+      break;
     case OUTPUT_DATA_SOURCE_SOCKET:
       decode_socket(&channel->output.source_socket,cp,optlen);
       break;
