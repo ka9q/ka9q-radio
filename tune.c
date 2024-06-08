@@ -86,9 +86,11 @@ int main(int argc,char *argv[]){
 	  Encoding = S16LE;
 	else if(strcasecmp(optarg,"F32") == 0 || strcasecmp(optarg,"float") == 0 || strcasecmp(optarg,"F32LE") == 0)
 	  Encoding = F32LE;
+	else if(strcasecmp(optarg,"f16") == 0)
+	  Encoding = F16LE;
 	else {
 	  fprintf(stdout,"Unknown encoding %s\n",optarg);
-	  fprintf(stdout,"Encodings: S16BE S16LE F32\n");
+	  fprintf(stdout,"Encodings: S16BE S16LE F32 F16\n");
 	}
 	break;
       case 'f':

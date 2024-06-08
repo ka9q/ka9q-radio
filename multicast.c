@@ -960,5 +960,7 @@ char const *encoding_string(enum encoding e){
     return "f32le";
   case AX25:
     return "AX.25";
+  case F16LE:
+    return "f16le";
   }
 }

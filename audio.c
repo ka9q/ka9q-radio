@@ -77,7 +77,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
 	for(int i=0; i < chunk * chan->output.channels; i++)
 	  *pcm_buf++ = htons(scaleclip(*buffer++)); // Byte swap
 
-	bytes = chunk * chan->output.channels * sizeof(int16_t);
+	bytes = chunk * chan->output.channels * sizeof(*pcm_buf);
       }
       break;
     case S16LE:
@@ -86,7 +86,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
 	for(int i=0; i < chunk * chan->output.channels; i++)
 	  *pcm_buf++ = scaleclip(*buffer++); // No byte swap
 
-	bytes = chunk * chan->output.channels * sizeof(int16_t);
+	bytes = chunk * chan->output.channels * sizeof(*pcm_buf);
       }
       break;
     case F32LE:
@@ -94,6 +94,15 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
 	// Could use sendmsg() to avoid copy here since there's no conversion, but this doesn't use much
 	memcpy(dp,buffer,chunk * chan->output.channels * sizeof(float));
 	bytes = chunk * chan->output.channels * sizeof(float);
+      }
+      break;
+    case F16LE:
+      {
+	_Float16 *pcm_buf = (_Float16 *)dp;
+	for(int i=0; i < chunk * chan->output.channels; i++)
+	  *pcm_buf++ = *buffer++;
+
+	bytes = chunk * chan->output.channels * sizeof(*pcm_buf);
       }
       break;
     default:

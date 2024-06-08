@@ -925,6 +925,18 @@ static void *decode_task(void *arg){
 	  bounce[i] = data[i];
       }
       break;
+    case F16LE: // 16-bit floats
+      {
+	sp->frame_size = pkt->len / (sizeof(_Float16) * sp->channels); // mono/stereo samples in frame
+	if(sp->frame_size <= 0) // Check here because it might truncate to zero
+	  goto endloop;
+	_Float16 const * const data = (_Float16 *)&pkt->data[0];
+	assert(bounce == NULL);
+	bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
+	for(int i=0; i < sp->channels * sp->frame_size; i++)
+	  bounce[i] = data[i];
+      }
+      break;
     default:
       goto endloop; // Unknown, ignore
     } // end of switch
