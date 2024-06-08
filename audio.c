@@ -45,6 +45,9 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   case F32LE:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(float) * chan->output.channels);
     break;
+  case F16LE:
+    max_frames_per_pkt = BYTES_PER_PKT / (sizeof(_Float16) * chan->output.channels);
+    break;
   default:
     return 0; // Don't send anything
     break;
@@ -68,7 +71,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     chan->output.rtp.packets++;
     rtp.seq = chan->output.rtp.seq++;
     uint8_t packet[PKTSIZE];
-    uint8_t *dp = (uint8_t *)hton_rtp(packet,&rtp); // First byte after RTP header
+    uint8_t * const dp = (uint8_t *)hton_rtp(packet,&rtp); // First byte after RTP header
     int bytes = 0;
     switch(chan->output.encoding){
     case S16BE:
