@@ -239,7 +239,8 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
       chan->fm.gain = dB2voltage(g);
     }
   }
-  // "pl" and "ctcss" are synonyms
+  // "tone", "pl" and "ctcss" are synonyms
+  chan->fm.tone_freq = config_getfloat(table,sname,"tone",chan->fm.tone_freq);
   chan->fm.tone_freq = config_getfloat(table,sname,"pl",chan->fm.tone_freq);
   chan->fm.tone_freq = config_getfloat(table,sname,"ctcss",chan->fm.tone_freq);
 
