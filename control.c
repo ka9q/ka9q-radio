@@ -1338,8 +1338,11 @@ static void display_input(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"","%s",format_gpstime(tbuf,sizeof(tbuf),Frontend.timestamp));
   }
   pprintw(w,row++,col,"Samples","%'llu",Frontend.samples);
-  pprintw(w,row++,col,"Overrange","%'llu",Frontend.overranges);
-  pprintw(w,row++,col,"Samp since over","%'llu",Frontend.samp_since_over);
+  char tmp[100];
+  pprintw(w,row++,col,"","%s",ftime(tmp,sizeof(tmp),Frontend.samples/Frontend.samprate));
+  pprintw(w,row++,col,"Overranges","%'llu",Frontend.overranges);
+  pprintw(w,row++,col,"Last overrange","%'llu",Frontend.samp_since_over);
+  pprintw(w,row++,col,"","%s",ftime(tmp,sizeof(tmp),Frontend.samp_since_over/Frontend.samprate));
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_socket),
