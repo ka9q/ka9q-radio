@@ -2,7 +2,7 @@
 // Why are user interfaces always the biggest, ugliest and buggiest part of any program?
 // Written as one big polling loop because ncurses is **not** thread safe
 
-// Copyright 2017-2023 Phil Karn, KA9Q
+// Copyright 2017-2024 Phil Karn, KA9Q
 // Major revisions fall 2020, 2023 (really continuous revisions!)
 
 #define _GNU_SOURCE 1
@@ -302,7 +302,7 @@ static void setup_windows(void){
   // A message from our sponsor...
   scrollok(Debug_win,TRUE); // This one scrolls so it can be written to with wprintw(...\n)
   wprintw(Debug_win,"KA9Q-radio %s last modified %s\n",__FILE__,__TIMESTAMP__);
-  wprintw(Debug_win,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+  wprintw(Debug_win,"Copyright 2024, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
 }
 
 // Comparison for sorting by SSRC
@@ -1337,12 +1337,10 @@ static void display_input(WINDOW *w,struct channel const *channel){
     char tbuf[100];
     pprintw(w,row++,col,"","%s",format_gpstime(tbuf,sizeof(tbuf),Frontend.timestamp));
   }
-  pprintw(w,row++,col,"Samples","%'llu",Frontend.samples);
   char tmp[100];
-  pprintw(w,row++,col,"","%s",ftime(tmp,sizeof(tmp),Frontend.samples/Frontend.samprate));
+  pprintw(w,row++,col,"Uptime","%s",ftime(tmp,sizeof(tmp),Frontend.samples/Frontend.samprate));
   pprintw(w,row++,col,"Overranges","%'llu",Frontend.overranges);
-  pprintw(w,row++,col,"Last overrange","%'llu",Frontend.samp_since_over);
-  pprintw(w,row++,col,"","%s",ftime(tmp,sizeof(tmp),Frontend.samp_since_over/Frontend.samprate));
+  pprintw(w,row++,col,"Last overrange","%s",ftime(tmp,sizeof(tmp),Frontend.samp_since_over/Frontend.samprate));
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_socket),
