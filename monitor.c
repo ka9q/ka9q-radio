@@ -925,6 +925,7 @@ static void *decode_task(void *arg){
 	  bounce[i] = data[i];
       }
       break;
+#ifdef FLOAT16
     case F16LE: // 16-bit floats
       {
 	sp->frame_size = pkt->len / (sizeof(_Float16) * sp->channels); // mono/stereo samples in frame
@@ -937,6 +938,7 @@ static void *decode_task(void *arg){
 	  bounce[i] = data[i];
       }
       break;
+#endif
     default:
       goto endloop; // Unknown, ignore
     } // end of switch
