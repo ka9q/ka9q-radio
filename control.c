@@ -905,7 +905,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       else if(strcasecmp(str,"F32") == 0 || strcasecmp(str,"float") == 0 || strcasecmp(str,"F32LE") == 0)
 	encode_byte(bpp,OUTPUT_ENCODING,F32LE);
       else if(strcasecmp(str,"F16") == 0)
-	encode_byte(bpp,OUTPUT_ENCODING,F16LE);	
+	encode_byte(bpp,OUTPUT_ENCODING,F16LE);
     }
     break;
   default:
@@ -1169,8 +1169,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   wmove(w,row,col);
   wclrtobot(w);
   pprintw(w,row++,col,"Fs in","%'d Hz",Frontend.samprate); // Nominal
-  if(channel->output.samprate)
-    pprintw(w,row++,col,"Fs out","%'d Hz",channel->output.samprate);
+  pprintw(w,row++,col,"Fs out","%'d Hz",channel->output.samprate);
 
   pprintw(w,row++,col,"Block Time","%'.1f ms",Blocktime);
   pprintw(w,row++,col,"Block rate","%'.3f Hz",1000.0/Blocktime); // Just the block rate
@@ -1179,8 +1178,8 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
 
   pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.isreal ? 'r' : 'c');
 
-  if(Frontend.samprate && channel->output.samprate)
-    pprintw(w,row++,col,"FFT out","%'lld c ",(int)ceil((double)N * channel->output.samprate / Frontend.samprate));
+  if(Frontend.samprate != 0)
+    pprintw(w,row++,col,"FFT out","%'lld c ",(long long)N * channel->output.samprate / Frontend.samprate);
 
   int overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
   pprintw(w,row++,col,"Overlap","1/%d   ",overlap);
@@ -1333,14 +1332,13 @@ static void display_input(WINDOW *w,struct channel const *channel){
   int col = 1;
   wmove(w,row,col);
   wclrtobot(w);
-  {
-    char tbuf[100];
-    pprintw(w,row++,col,"","%s",format_gpstime(tbuf,sizeof(tbuf),Frontend.timestamp));
-  }
   char tmp[100];
-  pprintw(w,row++,col,"Uptime","%s",ftime(tmp,sizeof(tmp),Frontend.samples/Frontend.samprate));
+  pprintw(w,row++,col,"","%s",format_gpstime(tmp,sizeof(tmp),Frontend.timestamp));
+  if(Frontend.samprate != 0)
+    pprintw(w,row++,col,"Uptime","%s",ftime(tmp,sizeof(tmp),Frontend.samples/Frontend.samprate));
   pprintw(w,row++,col,"Overranges","%'llu",Frontend.overranges);
-  pprintw(w,row++,col,"Last overrange","%s",ftime(tmp,sizeof(tmp),Frontend.samp_since_over/Frontend.samprate));
+  if(Frontend.samprate != 0)
+    pprintw(w,row++,col,"Last overrange","%s",ftime(tmp,sizeof(tmp),Frontend.samp_since_over/Frontend.samprate));
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
   pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_socket),
@@ -1385,7 +1383,8 @@ static void display_options(WINDOW *w,struct channel const *channel){
   int col = 1;
   wmove(w,row,col);
   wclrtobot(w);
-  if(channel->demod_type == FM_DEMOD){ // FM from status.h
+  switch(channel->demod_type){
+  case FM_DEMOD:
     if(!channel->fm.threshold)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Th Ext off");
@@ -1395,8 +1394,8 @@ static void display_options(WINDOW *w,struct channel const *channel){
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Th Ext on");
     wattroff(w,A_UNDERLINE);
-
-  } else if(channel->demod_type == WFM_DEMOD){
+break;
+  case WFM_DEMOD:
     // Mono/stereo are only options
     if(channel->output.channels == 1)
       wattron(w,A_UNDERLINE);
@@ -1407,7 +1406,8 @@ static void display_options(WINDOW *w,struct channel const *channel){
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Stereo");
     wattroff(w,A_UNDERLINE);
-  } else if(channel->demod_type == LINEAR_DEMOD){
+    break;
+  case LINEAR_DEMOD:
     if(channel->linear.env && channel->output.channels == 1)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Envelope");
@@ -1451,7 +1451,9 @@ static void display_options(WINDOW *w,struct channel const *channel){
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"AGC On");
     wattroff(w,A_UNDERLINE);
-
+    break;
+  default:
+    break;
   }
   box(w,0,0);
   mvwaddstr(w,0,1,"Options");
