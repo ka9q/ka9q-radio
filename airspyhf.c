@@ -13,6 +13,7 @@
 #endif
 #include <sysexits.h>
 #include <unistd.h>
+#include <strings.h>
 
 #include "conf.h"
 #include "misc.h"

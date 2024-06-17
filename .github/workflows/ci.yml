@@ -28,7 +28,7 @@ jobs:
             libavahi-client-dev \
             portaudio19-dev
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup
         run: ln -s ${{ matrix.makefile }} Makefile
       - name: Compile
@@ -55,14 +55,15 @@ jobs:
             iniparser \
             portaudio \
             dbus
-          ln -s /usr/local/Cellar/iniparser/*/include /usr/local/include/iniparser
+          mkdir -p "$(brew --prefix)/include/iniparser"
+          ln -s "$(brew --prefix)/include/iniparser.h" "$(brew --prefix)/include/iniparser/iniparser.h"
 
           cd /tmp
           curl https://avahi.org/download/avahi-0.8.tar.gz > avahi-0.8.tar.gz
           tar xvpf avahi-0.8.tar.gz
           cd avahi-0.8
           sed -i '' 's/"\/run"/"\/var\/run"/' configure
-          CFLAGS="-D__APPLE_USE_RFC_2292" ./configure \
+          CFLAGS="-D__APPLE_USE_RFC_2292 -I$(brew --prefix)/include" LDFLAGS="-L$(brew --prefix)/lib" ./configure \
             --with-distro=darwin \
             --disable-autoipd \
             --disable-gtk3 \
@@ -75,10 +76,10 @@ jobs:
           make -j4
           sudo make install
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup
         run: ln -s Makefile.osx Makefile
       - name: Compile
-        run: make
+        run: C_INCLUDE_PATH="$(brew --prefix)/include" LIBRARY_PATH="$(brew --prefix)/lib" make
       - name: Install
         run: sudo make install
