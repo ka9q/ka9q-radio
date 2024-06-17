@@ -1348,7 +1348,7 @@ static void *display(void *arg){
 	mvprintw(y++,x,"Type");
 	for(int session = first_session; session < Nsessions_copy; session++,y++){
 	  struct session const *sp = Sessions_copy[session];
-	  mvprintw(y,x,"%4s",PT_table[sp->type].encoding == OPUS ? "Opus" : "PCM");
+	  mvprintw(y,x,"%4s",encoding_string(PT_table[sp->type].encoding));
 	}
 	x += 5;
 	y = row_save;
