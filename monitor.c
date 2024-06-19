@@ -193,7 +193,7 @@ static void *decode_task(void *x);
 static void *dataproc(void *arg);
 static void *statproc(void *arg);
 static void *repeater_ctl(void *arg);
-static char const *lookupid(uint32_t ssrc);
+static char const *lookupid(double freq);
 static float make_position(int);
 static bool kick_output();
 static inline int modsub(unsigned int const a, unsigned int const b, int const modulus){
@@ -563,6 +563,10 @@ static void *statproc(void *arg){
     // Decoding into a temp copy and then memcpy would write zeroes into unsent parameters
     decode_radio_status(&sp->frontend,&sp->chan,buffer+1,length-1);
 
+    char const *id = lookupid(sp->chan.tune.freq);
+    if(id)
+      strlcpy(sp->id,id,sizeof(sp->id));
+
     // Update SNR calculation (not sent explicitly)
     float const noise_bandwidth = fabsf(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
     float sig_power = sp->chan.sig.bb_power - noise_bandwidth * sp->chan.sig.n0;
@@ -677,9 +681,6 @@ static void *dataproc(void *arg){
     }
     if(!sp->init){
       // status reception doesn't write below this point
-      char const *id = lookupid(pkt->rtp.ssrc);
-      if(id)
-	strlcpy(sp->id,id,sizeof(sp->id));
       if(Auto_position)
 	sp->pan = make_position(Position++);
       else
@@ -1956,7 +1957,7 @@ void *repeater_ctl(void *arg){
 // Return an ascii string identifier indexed by ssrc
 // Database in /usr/share/ka9q-radio/id.txt
 struct idtable {
-  uint32_t ssrc;
+  double freq;
   char id[128];
 };
 #define IDSIZE 1024
@@ -1981,13 +1982,14 @@ static void load_id(void){
     char line[1024];
     while(fgets(line,sizeof(line),fp)){
       chomp(line);
-      char *ptr = NULL;
+
       if(line[0] == '#' || strlen(line) == 0)
 	continue; // Comment
       assert(Nid < IDSIZE);
-      Idtable[Nid].ssrc = strtol(line,&ptr,0);
+      char *ptr = NULL;
+      Idtable[Nid].freq = strtod(line,&ptr);
       if(ptr == line)
-	continue; // no parseable hex number
+	continue; // no parseable number
 
       while(*ptr == ' ' || *ptr == '\t')
 	ptr++;
@@ -2005,9 +2007,9 @@ static void load_id(void){
   }
 }
 
-static char const *lookupid(uint32_t ssrc){
+static char const *lookupid(double freq){
   for(int i=0; i < Nid; i++){
-    if(Idtable[i].ssrc == ssrc)
+    if(Idtable[i].freq == freq)
       return Idtable[i].id;
   }
   return NULL;
