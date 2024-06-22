@@ -162,10 +162,13 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       // Restart the demodulator to recalculate filters, etc
       {
 	int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
+	// If using Opus, ignore unsupported sample rates
 	if(new_sample_rate != chan->output.samprate){
-	  chan->output.samprate = new_sample_rate;
-	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
-	  restart_needed = true;
+	  if(chan->output.encoding != OPUS || new_sample_rate == 48000 || new_sample_rate == 24000 || new_sample_rate == 16000 || new_sample_rate == 12000 || new_sample_rate == 8000){
+	    chan->output.samprate = new_sample_rate;
+	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	    restart_needed = true;
+	  }
 	}
       }
       break;
