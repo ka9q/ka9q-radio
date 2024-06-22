@@ -177,6 +177,11 @@ int const AX25_pt = AX25_PT;
 // The mappings are typically extracted from a radiod status channel and kept in a table so they can
 // be changed midstream without losing anything
 int add_pt(int type, int samprate, int channels, enum encoding encoding){
+  if(encoding == OPUS){
+    // Force Opus to fixed values
+    samprate = 48000;
+    channels = 2;
+  }
   if(type >= 0 && type < 128){
     PT_table[type].channels = channels;
     PT_table[type].samprate = samprate;
@@ -601,15 +606,18 @@ enum encoding encoding_from_pt(int const type){
 
 // Dynamically create a new one if not found
 // Should lock the table when it's modified
-// Should add encoding to this parameter list
-int pt_from_info(int const samprate,int const channels,enum encoding encoding){
+int pt_from_info(int samprate,int channels,enum encoding encoding){
   if(samprate <= 0 || channels <= 0 || channels > 2 || encoding == NO_ENCODING || encoding >= UNUSED_ENCODING)
     return -1;
 
+  if(encoding == OPUS){
+    // Force Opus to fixed values
+    channels = 2;
+    samprate = 48000;
+  }
+
   // Search table for existing entry, otherwise create new entry
   for(int type=0; type < 128; type++){
-    if(encoding == OPUS && PT_table[type].encoding == encoding)
-      return type; // Samprate and channels don't need to match, decoder gets it in-band
     if(PT_table[type].samprate == samprate && PT_table[type].channels == channels && PT_table[type].encoding == encoding)
       return type;
   }
@@ -957,11 +965,11 @@ char const *encoding_string(enum encoding e){
   case S16BE:
     return "s16be";
   case OPUS:
-    return "Opus";
+    return "opus";
   case F32LE:
     return "f32le";
   case AX25:
-    return "AX.25";
+    return "ax.25";
   case F16LE:
     return "f16le";
   }

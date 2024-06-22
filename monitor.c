@@ -592,11 +592,9 @@ static void *statproc(void *arg){
     }
     int const type = sp->chan.output.rtp.type;
     if(type >= 0 && type < 128){
-      // check so we won't break with radiod that doesn't send it yet
+      // Don't overwrite existing 
       if(sp->chan.output.encoding != NO_ENCODING)
-	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,sp->chan.output.encoding);
-      else if(type != Opus_pt)
-	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,S16BE); // Heuristic; remove this eventually
+	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,sp->chan.output.encoding); // Opus will get forced to stereo 48 kHz
     }
     pthread_mutex_unlock(&Sess_mutex);
   }
@@ -827,10 +825,10 @@ static void *decode_task(void *arg){
       sp->samprate = samprate;
       for(int j=0; j < N_tones; j++)
 	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)samprate);
+      sp->notch_tone = 0; // force it to be re-detected at new sample rate
     }
     // Test for invalidity
     sp->channels = channels_from_pt(sp->type); // channels in packet (not portaudio output buffer)
-    sp->samprate = samprate_from_pt(sp->type);
     if(sp->samprate <= 0 || sp->channels <= 0 || sp->channels > 2)
       goto endloop;
     int upsample = DAC_samprate / samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
