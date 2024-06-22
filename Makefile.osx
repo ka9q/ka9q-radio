@@ -86,7 +86,7 @@ powers: powers.o dump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lm -lpthread
 
 radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o libfcd.a libradio.a
-	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lairspy -lairspyhf -lrtlsdr -lportaudio -liconv -lusb-1.0 -lm -lpthread
+	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -liniparser -lairspy -lairspyhf -lrtlsdr -lopus -lportaudio -liconv -lusb-1.0 -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncurses -lm -lpthread

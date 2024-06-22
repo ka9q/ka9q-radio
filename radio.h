@@ -14,6 +14,7 @@
 #include <stdbool.h>
 #include <limits.h>
 #include <iniparser/iniparser.h>
+#include <opus/opus.h>
 
 #include "multicast.h"
 #include "osc.h"
@@ -221,6 +222,9 @@ struct channel {
     uint64_t samples;
     bool pacing;     // Pace output packets
     enum encoding encoding;
+    OpusEncoder *opus;
+    int opus_channels;
+    int opus_bitrate;
   } output;
 
   struct {

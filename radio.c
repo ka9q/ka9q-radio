@@ -244,7 +244,10 @@ int close_chan(struct channel *chan){
   FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);
   delete_filter_output(&chan->filter.out);
-
+  if(chan->output.opus != NULL){
+    opus_encoder_destroy(chan->output.opus);
+    chan->output.opus = NULL;
+  }
   pthread_mutex_unlock(&chan->status.lock);
   pthread_mutex_lock(&Channel_list_mutex);
   if(chan->inuse){
@@ -314,9 +317,9 @@ double set_first_LO(struct channel const * const chan,double const first_LO){
     return first_LO;
 
   // Direct tuning through local module if available
-  if(Frontend.tune != NULL){
+  if(Frontend.tune != NULL)
     return (*Frontend.tune)(&Frontend,first_LO);
-  }
+
   return first_LO;
 }
 

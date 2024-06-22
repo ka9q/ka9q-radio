@@ -39,6 +39,11 @@ void *demod_wfm(void *arg){
   FREE(chan->status.command);
   FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);
+  if(chan->output.opus != NULL){
+    opus_encoder_destroy(chan->output.opus);
+    chan->output.opus = NULL;
+  }
+
   int const blocksize = chan->output.samprate * Blocktime / 1000;
   delete_filter_output(&chan->filter.out);
   create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);

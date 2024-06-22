@@ -51,6 +51,7 @@ static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadca
 static float const DEFAULT_FM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
 static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 #endif
+static int   const DEFAULT_BITRATE = 32000;       // Default Opus compressed bit rate
 
 
 int demod_type_from_name(char const *name){
@@ -105,6 +106,7 @@ int set_defaults(struct channel *chan){
   chan->linear.agc = true;
   chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
   chan->output.encoding = S16BE;
+  chan->output.opus_bitrate = DEFAULT_BITRATE;
   double r = remainder(Blocktime * chan->output.samprate * .001,1.0);
   if(r != 0){
     fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
@@ -248,13 +250,10 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
 
   {
     char const *cp = config_getstring(table,sname,"encoding","s16be");
-    if(strcasecmp(cp,"S16BE") == 0)
-      chan->output.encoding = S16BE;
-    else if(strcasecmp(cp,"S16LE") == 0)
-      chan->output.encoding = S16LE;
-    else if(strcasecmp(cp,"F32") == 0 || strcasecmp(cp,"float") == 0 || strcasecmp(cp,"F32LE") == 0)
-      chan->output.encoding = F32LE;
+    chan->output.encoding = parse_encoding(cp);
   }
+  chan->output.opus_bitrate = config_getint(table,sname,"bitrate",chan->output.opus_bitrate);
+
   return 0;
 
 

@@ -29,6 +29,11 @@ void *demod_spectrum(void *arg){
   FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);
   delete_filter_output(&chan->filter.out);
+  if(chan->output.opus != NULL){
+    opus_encoder_destroy(chan->output.opus);
+    chan->output.opus = NULL;
+  }
+
   pthread_mutex_unlock(&chan->status.lock);
 
   // Parameters set by system input side

@@ -607,10 +607,12 @@ int pt_from_info(int const samprate,int const channels,enum encoding encoding){
     return -1;
 
   // Search table for existing entry, otherwise create new entry
-  for(int type=0; type < 128; type++)
+  for(int type=0; type < 128; type++){
+    if(encoding == OPUS && PT_table[type].encoding == encoding)
+      return type; // Samprate and channels don't need to match, decoder gets it in-band
     if(PT_table[type].samprate == samprate && PT_table[type].channels == channels && PT_table[type].encoding == encoding)
       return type;
-
+  }
   for(int type=96; type < 128; type++){ // Dynamic range
     if(PT_table[type].samprate == 0){
       // allocate it
@@ -963,4 +965,20 @@ char const *encoding_string(enum encoding e){
   case F16LE:
     return "f16le";
   }
+}
+enum encoding parse_encoding(char const *str){
+  if(strcasecmp(str,"s16be") == 0 || strcasecmp(str,"s16") == 0 || strcasecmp(str,"int") == 0)
+    return S16BE;
+  else if(strcasecmp(str,"s16le") == 0)
+    return S16LE;
+  else if(strcasecmp(str,"f32") == 0 || strcasecmp(str,"float") == 0 || strcasecmp(str,"f32le") == 0)
+    return F32LE;
+  else if(strcasecmp(str,"f16") == 0 || strcasecmp(str,"f16le") == 0)
+    return F16LE;
+  else if(strcasecmp(str,"opus") == 0)
+    return OPUS;
+  else if(strcasecmp(str,"ax25") == 0 || strcasecmp(str,"ax.25") == 0)
+    return AX25;
+  else
+    return NO_ENCODING;
 }

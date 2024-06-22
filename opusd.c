@@ -80,7 +80,7 @@ int Mcast_ttl = 1;
 int IP_tos = 48;              // AF12 << 2
 const char *App_path;
 int Verbose;                  // Verbosity flag (currently unused)
-int Opus_bitrate = 32;        // Opus stream audio bandwidth; default 32 kb/s
+int Opus_bitrate = 32000;        // Opus stream audio bandwidth; default 32 kb/s
 bool Discontinuous = false;        // Off by default
 int Opus_blocktime = 20;      // Minimum frame size 20 ms, a reasonable default
 bool Fec_enable = false;                  // Use forward error correction
