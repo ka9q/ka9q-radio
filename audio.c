@@ -107,13 +107,11 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
       }
       break;
     case F32LE:
-      {
-	// Could use sendmsg() to avoid copy here since there's no conversion, but this doesn't use much
-	memcpy(dp,buffer,chunk * chan->output.channels * sizeof(float));
-	chan->output.rtp.timestamp += chunk;
-	buffer += chunk * chan->output.channels;
-	bytes = chunk * chan->output.channels * sizeof(float);
-      }
+      // Could use sendmsg() to avoid copy here since there's no conversion, but this doesn't use much
+      memcpy(dp,buffer,chunk * chan->output.channels * sizeof(float));
+      chan->output.rtp.timestamp += chunk;
+      buffer += chunk * chan->output.channels;
+      bytes = chunk * chan->output.channels * sizeof(float);
       break;
 #ifdef FLOAT16
     case F16LE:
