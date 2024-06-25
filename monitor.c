@@ -184,8 +184,7 @@ static void load_id(void);
 static void cleanup(void);
 static void *display(void *);
 static void reset_session(struct session *sp,uint32_t timestamp);
-static struct session *lookup_session(struct sockaddr_storage const *,uint32_t);
-static struct session *create_session(void);
+static struct session *lookup_or_create_session(struct sockaddr_storage const *,uint32_t);
 static int sort_session_active(void),sort_session_total(void);
 static int close_session(struct session **);
 static int pa_callback(void const *,void *,unsigned long,PaStreamCallbackTimeInfo const *,PaStreamCallbackFlags,void *);
@@ -543,20 +542,11 @@ static void *statproc(void *arg){
     // This is only true for recent versions of radiod, after the switch to unconnected output sockets
     // But older versions don't send status on the output channel anyway, so no problem
     uint32_t ssrc = get_ssrc(buffer+1,length-1);
-    pthread_mutex_lock(&Sess_mutex); // Protect Nsessions
-    struct session *sp = lookup_session(&sender,ssrc);
+    struct session *sp = lookup_or_create_session(&sender,ssrc);
     if(!sp){
-      // Status arrived before first RTP; create and init session
-      sp = create_session();
-      if(!sp){
-	pthread_mutex_unlock(&Sess_mutex);
-	fprintf(stderr,"No room!!\n");
-	continue;
-      }
-      sp->ssrc = ssrc;
-      sp->init = false; // Wait for first RTP packet to set the rest up
+      fprintf(stderr,"No room!!\n");
+      continue;
     }
-    memcpy(&sp->sender,&sender,sizeof(sp->sender));
     sp->last_active = gps_time_ns(); // Keep active time calc from blowing up before data packet arrives
 
     // Decode directly into local copy, as not every parameter is updated in every status message
@@ -566,6 +556,8 @@ static void *statproc(void *arg){
     char const *id = lookupid(sp->chan.tune.freq);
     if(id)
       strlcpy(sp->id,id,sizeof(sp->id));
+    else
+      sp->id[0] = '\0';
 
     // Update SNR calculation (not sent explicitly)
     float const noise_bandwidth = fabsf(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
@@ -592,7 +584,7 @@ static void *statproc(void *arg){
     }
     int const type = sp->chan.output.rtp.type;
     if(type >= 0 && type < 128){
-      // Don't overwrite existing 
+      // Don't overwrite existing
       if(sp->chan.output.encoding != NO_ENCODING)
 	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,sp->chan.output.encoding); // Opus will get forced to stereo 48 kHz
     }
@@ -659,23 +651,10 @@ static void *dataproc(void *arg){
       continue; // Used to be an assert, but would be triggered by bogus packets
 
     // Find appropriate session; create new one if necessary
-    pthread_mutex_lock(&Sess_mutex); // Protect Nsessions
-    struct session *sp = lookup_session(&sender,pkt->rtp.ssrc);
-    if(sp){
-      pthread_mutex_unlock(&Sess_mutex);
-    } else {
-      // Not found
-      sp = create_session();
-      if(!sp){
-	fprintf(stderr,"No room!!\n");
-	pthread_mutex_unlock(&Sess_mutex); // Protect Nsessions
-	continue;
-      }
-      // Keep the lock while we initialize
-      sp->ssrc = pkt->rtp.ssrc;
-      memcpy(&sp->sender,&sender,sizeof(sender)); // Bind to specific host and sending port
-      pthread_mutex_unlock(&Sess_mutex);
-
+    struct session *sp = lookup_or_create_session(&sender,pkt->rtp.ssrc);
+    if(!sp){
+      fprintf(stderr,"No room!!\n");
+      continue;
     }
     if(!sp->init){
       // status reception doesn't write below this point
@@ -1460,11 +1439,8 @@ static void *display(void *arg){
     }
     int const c = getch(); // Waits for 'update interval' ms if no input
     if(c == EOF)
-      continue; // No key hit; don't lock and unlock Sess_mutex
+      continue; // No key hit
 
-    // Not all of these commands require locking, but it's easier to just always do it
-    pthread_mutex_lock(&Sess_mutex); // Re-lock after time consuming getch() (which includes a refresh)
-    // Since we unlocked & relocked, Nsessions might have changed (incremented) again
     if(Nsessions == 0)
       current = -1;
     if(Nsessions > 0 && current == -1)
@@ -1485,7 +1461,7 @@ static void *display(void *arg){
     case 'U': // Unmute all sessions, resetting any that were muted
       for(int i = 0; i < Nsessions; i++){
 	struct session *sp = Sessions[i];
-	if(sp->muted){
+	if(sp && sp->muted){
 	  sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	  sp->muted = false;
 	}
@@ -1494,7 +1470,8 @@ static void *display(void *arg){
     case 'M': // Mute all sessions
       for(int i = 0; i < Nsessions; i++){
 	struct session *sp = Sessions[i];
-	sp->muted = true;
+	if(sp)
+	  sp->muted = true;
       }
       break;
     case 'q':
@@ -1519,7 +1496,7 @@ static void *display(void *arg){
       Notch = true;
       for(int i=0; i < Nsessions; i++){
 	struct session *sp = Sessions[i];
-	if(sp != NULL && !sp->notch_enable){
+	if(sp != NULL){
 	  sp->notch_enable = true;
 	}
       }
@@ -1527,23 +1504,31 @@ static void *display(void *arg){
     case 'n':
       Notch = true;
       if(current >= 0){
-	if(!Sessions[current]->notch_enable)
-	  Sessions[current]->notch_enable = true;
+	struct session *sp = Sessions[current];
+	if(sp)
+	  sp->notch_enable = true;
       }
       break;
     case 'R': // Reset all sessions
-      for(int i=0; i < Nsessions;i++)
-	Sessions[i]->reset = true;
+      for(int i=0; i < Nsessions;i++){
+	struct session *sp = Sessions[i];
+	if(sp)
+	  sp->reset = true;
+      }
       break;
-    case 'f':
-      if(current >= 0)
-	Sessions[current]->notch_enable = false;
+    case 'f': // Turn off tone notching
+      if(current >= 0){
+	struct session *sp = Sessions[current];
+	if(sp)
+	  sp->notch_enable = false;
+      }
       break;
     case 'F':
       Notch = false;
       for(int i=0; i < Nsessions; i++){
 	struct session *sp = Sessions[i];
-	sp->notch_enable = false;
+	if(sp)
+	  sp->notch_enable = false;
       }
       break;
     case KEY_RESIZE:
@@ -1593,63 +1578,88 @@ static void *display(void *arg){
       break;
     case '=': // If the user doesn't hit the shift key (on a US keyboard) take it as a '+'
     case '+':
-      if(current >= 0)
-	Sessions[current]->gain *= 1.122018454; // +1 dB
+      if(current >= 0){
+	struct session *sp = Sessions[current];
+	if(sp)
+	  sp->gain *= 1.122018454; // +1 dB
+      }
       break;
     case '_': // Underscore is shifted minus
     case '-':
-      if(current >= 0)
-	Sessions[current]->gain /= 1.122018454; // -1 dB
+      if(current >= 0){
+	struct session *sp = Sessions[current];
+	if(sp)
+	  sp->gain /= 1.122018454; // -1 dB
+      }
       break;
     case KEY_LEFT:
-      if(current >= 0)
-	Sessions[current]->pan = max(Sessions[current]->pan - .01,-1.0);
+      if(current >= 0){
+	struct session *sp = Sessions[current];
+	if(sp)
+	  sp->pan = max(sp->pan - .01,-1.0);
+      }
       break;
     case KEY_RIGHT:
-      if(current >= 0)
-	Sessions[current]->pan = min(Sessions[current]->pan + .01,+1.0);
+      if(current >= 0){
+	struct session *sp = Sessions[current];
+	if(sp)
+	  sp->pan = min(sp->pan + .01,+1.0);
+      }
       break;
     case KEY_SLEFT: // Shifted left - decrease playout buffer 10 ms
       if(Playout >= -100){
 	Playout -= 1;
-	if(current >= 0)
-	  Sessions[current]->reset = true;
+	if(current >= 0){
+	  struct session *sp = Sessions[current];
+	  if(sp)
+	    sp->reset = true;
+	}
       }
       break;
     case KEY_SRIGHT: // Shifted right - increase playout buffer 10 ms
       Playout += 1;
-      if(current >= 0)
-	Sessions[current]->reset = true;
-      else
+      if(current >= 0){
+	struct session *sp = Sessions[current];
+	if(sp)
+	  sp->reset = true;
+      }	else
 	beep();
       break;
     case 'u': // Unmute and reset current session
       if(current >= 0){
 	struct session *sp = Sessions[current];
-	if(sp->muted){
+	if(sp && sp->muted){
 	  sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	  sp->muted = false;
 	}
       }
       break;
     case 'm': // Mute current session
-      if(current >= 0)
-	Sessions[current]->muted = true;
+      if(current >= 0){
+	struct session *sp = Sessions[current];
+	if(sp)
+	  sp->muted = true;
+      }
       break;
     case 'r':
       // Manually reset playout queue
-      if(current >= 0)
-	Sessions[current]->reset = true;
+      if(current >= 0){
+	struct session *sp = Sessions[current];
+	if(sp)
+	  sp->reset = true;
+      }
       break;
     case KEY_DC: // Delete
     case KEY_BACKSPACE:
     case 'd': // Delete current session
       if(Nsessions > 0){
 	struct session *sp = Sessions[current];
-	sp->terminate = true;
-	// We have to wait for it to clean up before we close and remove its session
-	pthread_join(sp->task,NULL);
-	close_session(&sp); // Decrements Nsessions
+	if(sp){
+	  sp->terminate = true;
+	  // We have to wait for it to clean up before we close and remove its session
+	  pthread_join(sp->task,NULL);
+	  close_session(&sp); // Decrements Nsessions
+	}
 	if(current >= Nsessions)
 	  current = Nsessions-1; // -1 when no sessions
       }
@@ -1658,7 +1668,6 @@ static void *display(void *arg){
       beep();
       break;
     }
-    pthread_mutex_unlock(&Sess_mutex);
   }
   return NULL;
 }
@@ -1714,38 +1723,45 @@ static int sort_session_total(void){
 }
 
 
-static struct session *lookup_session(const struct sockaddr_storage *sender,const uint32_t ssrc){
+static struct session *lookup_or_create_session(const struct sockaddr_storage *sender,const uint32_t ssrc){
+  pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < Nsessions; i++){
-    struct session *sp = Sessions[i];
-    if(sp->ssrc == ssrc && address_match(sender,&sp->sender))
+    struct session * const sp = Sessions[i];
+    if(sp->ssrc == ssrc && address_match(sender,&sp->sender)){
+      pthread_mutex_unlock(&Sess_mutex);
       return sp;
+    }
   }
-  return NULL;
-}
-// Create a new session, partly initialize
-static struct session *create_session(void){
   struct session * const sp = calloc(1,sizeof(*sp));
-
-  if(sp == NULL)
-    return NULL; // Shouldn't happen on modern machines!
+  if(sp == NULL){ // Shouldn't happen on modern machines!
+    pthread_mutex_unlock(&Sess_mutex);
+    return NULL;
+  }
 
   // Put at end of list
   Sessions[Nsessions++] = sp;
   sp->chan.inuse = true;
+  sp->init = false; // Wait for first RTP packet to set the rest up
+  sp->ssrc = ssrc;
+  memcpy(&sp->sender,sender,sizeof(sp->sender));
+
   pthread_cond_init(&sp->qcond,NULL);
   pthread_mutex_init(&sp->qmutex,NULL);
+  pthread_mutex_unlock(&Sess_mutex);
 
   return sp;
 }
-
 static int close_session(struct session **p){
+  assert(p != NULL);
   if(p == NULL)
     return -1;
   struct session * sp = *p;
+  assert(sp != NULL);
   if(sp == NULL)
     return -1;
   assert(Nsessions > 0);
 
+  pthread_mutex_lock(&Sess_mutex);
   if(sp == Best_session)
     Best_session = NULL;
   // Remove from table
@@ -1753,23 +1769,37 @@ static int close_session(struct session **p){
     if(Sessions[i] == sp){
       Nsessions--;
       memmove(&Sessions[i],&Sessions[i+1],(Nsessions-i) * sizeof(Sessions[0]));
-      struct channel *chan = &sp->chan;
-      struct frontend *frontend = &sp->frontend;
+      if(sp->opus)
+	opus_decoder_destroy(sp->opus);
+      sp->opus = NULL;
+
+      pthread_mutex_lock(&sp->qmutex);
+      while(sp->queue != NULL){
+	struct packet *next = sp->queue->next;
+	free(sp->queue);
+	sp->queue = next;
+      }
       pthread_cond_destroy(&sp->qcond);
       pthread_mutex_destroy(&sp->qmutex);
+
+      struct frontend * const frontend = &sp->frontend;
+      FREE(frontend->description);
+
       // Just in case anything was allocated for these arrays
+      struct channel * const chan = &sp->chan;
       FREE(chan->filter.energies);
       FREE(chan->spectrum.bin_data);
       FREE(chan->status.command);
 
-      FREE(frontend->description);
-
       FREE(sp);
       *p = NULL;
+      pthread_mutex_unlock(&Sess_mutex);
       return 0;
     }
   }
-  assert(0); // get here only if not found, which shouldn't happen
+  // get here only if not found, which shouldn't happen
+  pthread_mutex_unlock(&Sess_mutex);
+  assert(false);
   return -1;
 }
 
