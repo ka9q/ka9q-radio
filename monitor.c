@@ -1089,6 +1089,13 @@ static void reset_session(struct session * const sp,uint32_t timestamp){
 }
 
 
+static inline struct session *sptr(int index){
+  if(index >= 0 && index < Nsessions)
+    return Sessions[index];
+  return NULL;
+}
+
+
 // Use ncurses to display streams
 static void *display(void *arg){
 
@@ -1460,7 +1467,7 @@ static void *display(void *arg){
       break;
     case 'U': // Unmute all sessions, resetting any that were muted
       for(int i = 0; i < Nsessions; i++){
-	struct session *sp = Sessions[i];
+	struct session *sp = sptr(i);
 	if(sp && sp->muted){
 	  sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	  sp->muted = false;
@@ -1469,7 +1476,7 @@ static void *display(void *arg){
       break;
     case 'M': // Mute all sessions
       for(int i = 0; i < Nsessions; i++){
-	struct session *sp = Sessions[i];
+	struct session *sp = sptr(i);
 	if(sp)
 	  sp->muted = true;
       }
@@ -1495,7 +1502,7 @@ static void *display(void *arg){
     case 'N':
       Notch = true;
       for(int i=0; i < Nsessions; i++){
-	struct session *sp = Sessions[i];
+	struct session *sp = sptr(i);
 	if(sp != NULL){
 	  sp->notch_enable = true;
 	}
@@ -1504,21 +1511,21 @@ static void *display(void *arg){
     case 'n':
       Notch = true;
       if(current >= 0){
-	struct session *sp = Sessions[current];
+	struct session *sp = sptr(current);
 	if(sp)
 	  sp->notch_enable = true;
       }
       break;
     case 'R': // Reset all sessions
       for(int i=0; i < Nsessions;i++){
-	struct session *sp = Sessions[i];
+	struct session *sp = sptr(i);
 	if(sp)
 	  sp->reset = true;
       }
       break;
     case 'f': // Turn off tone notching
       if(current >= 0){
-	struct session *sp = Sessions[current];
+	struct session *sp = sptr(current);
 	if(sp)
 	  sp->notch_enable = false;
       }
@@ -1526,7 +1533,7 @@ static void *display(void *arg){
     case 'F':
       Notch = false;
       for(int i=0; i < Nsessions; i++){
-	struct session *sp = Sessions[i];
+	struct session *sp = sptr(i);
 	if(sp)
 	  sp->notch_enable = false;
       }
@@ -1578,30 +1585,30 @@ static void *display(void *arg){
       break;
     case '=': // If the user doesn't hit the shift key (on a US keyboard) take it as a '+'
     case '+':
-      if(current >= 0){
-	struct session *sp = Sessions[current];
+      {
+	struct session *sp = sptr(current);
 	if(sp)
 	  sp->gain *= 1.122018454; // +1 dB
       }
       break;
     case '_': // Underscore is shifted minus
     case '-':
-      if(current >= 0){
-	struct session *sp = Sessions[current];
+      {
+	struct session *sp = sptr(current);
 	if(sp)
 	  sp->gain /= 1.122018454; // -1 dB
       }
       break;
     case KEY_LEFT:
-      if(current >= 0){
-	struct session *sp = Sessions[current];
+      {
+	struct session *sp = sptr(current);
 	if(sp)
 	  sp->pan = max(sp->pan - .01,-1.0);
       }
       break;
     case KEY_RIGHT:
-      if(current >= 0){
-	struct session *sp = Sessions[current];
+      {
+	struct session *sp = sptr(current);
 	if(sp)
 	  sp->pan = min(sp->pan + .01,+1.0);
       }
@@ -1609,25 +1616,24 @@ static void *display(void *arg){
     case KEY_SLEFT: // Shifted left - decrease playout buffer 10 ms
       if(Playout >= -100){
 	Playout -= 1;
-	if(current >= 0){
-	  struct session *sp = Sessions[current];
-	  if(sp)
-	    sp->reset = true;
-	}
+	struct session *sp = sptr(current);
+	if(sp)
+	  sp->reset = true;
       }
       break;
     case KEY_SRIGHT: // Shifted right - increase playout buffer 10 ms
       Playout += 1;
-      if(current >= 0){
-	struct session *sp = Sessions[current];
+      {
+	struct session *sp = sptr(current);
 	if(sp)
 	  sp->reset = true;
-      }	else
-	beep();
+	else
+	  beep();
+      }
       break;
     case 'u': // Unmute and reset current session
-      if(current >= 0){
-	struct session *sp = Sessions[current];
+      {
+	struct session *sp = sptr(current);
 	if(sp && sp->muted){
 	  sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	  sp->muted = false;
@@ -1635,16 +1641,16 @@ static void *display(void *arg){
       }
       break;
     case 'm': // Mute current session
-      if(current >= 0){
-	struct session *sp = Sessions[current];
+      {
+	struct session *sp = sptr(current);
 	if(sp)
 	  sp->muted = true;
       }
       break;
     case 'r':
       // Manually reset playout queue
-      if(current >= 0){
-	struct session *sp = Sessions[current];
+      {
+	struct session *sp = sptr(current);
 	if(sp)
 	  sp->reset = true;
       }
@@ -1652,8 +1658,8 @@ static void *display(void *arg){
     case KEY_DC: // Delete
     case KEY_BACKSPACE:
     case 'd': // Delete current session
-      if(Nsessions > 0){
-	struct session *sp = Sessions[current];
+      {
+	struct session *sp = sptr(current);
 	if(sp){
 	  sp->terminate = true;
 	  // We have to wait for it to clean up before we close and remove its session
@@ -1726,8 +1732,8 @@ static int sort_session_total(void){
 static struct session *lookup_or_create_session(const struct sockaddr_storage *sender,const uint32_t ssrc){
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < Nsessions; i++){
-    struct session * const sp = Sessions[i];
-    if(sp->ssrc == ssrc && address_match(sender,&sp->sender)){
+    struct session * const sp = sptr(i);
+    if(sp && sp->ssrc == ssrc && address_match(sender,&sp->sender)){
       pthread_mutex_unlock(&Sess_mutex);
       return sp;
     }
