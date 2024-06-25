@@ -568,7 +568,7 @@ static void *statproc(void *arg){
     float const snr = power2dB(sn0/noise_bandwidth);
     sp->snr = sp->now_active ? snr : -INFINITY;
     if(Voting){
-      if(Best_session == NULL){
+      if(Best_session == NULL || !Best_session->now_active){
 	// Grab the crown by default
 	Best_session = sp;
 	sp->reset = true;
