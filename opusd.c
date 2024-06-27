@@ -250,7 +250,7 @@ int main(int argc,char * const argv[]){
     char description[1024];
     snprintf(description,sizeof(description),"pcm-source=%s",Input); // what if it changes?
     int socksize = sizeof(Opus_out_socket);
-    uint32_t addr = (239U << 24) | (ElfHashString(Output) & 0xffffff);
+    uint32_t addr = make_maddr(Output);
     avahi_start(Name,"_opus._udp",DEFAULT_RTP_PORT,Output,addr,description,&Opus_out_socket,&socksize);
     struct sockaddr_in *sin = (struct sockaddr_in *)&Metadata_out_socket;
     sin->sin_family = AF_INET;

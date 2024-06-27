@@ -990,3 +990,18 @@ enum encoding parse_encoding(char const *str){
   else
     return NO_ENCODING;
 }
+// Generate a multicast address in the 239.0.0.0/8 administratively scoped block
+// avoiding 239.0.0.0/24 and 239.128.0.0/24 since these map at the link layer
+// into the same Ethernet multicast MAC addresses as the 224.0.0.0/8 multicast control block
+// that is not snooped by switches
+uint32_t make_maddr(char const *arg){
+  uint32_t addr = (239U << 24) | (ElfHashString(arg) & 0xffffff);
+  // avoid 239.0.0.0/24 and 239.128.0.0/24 since they map to the same
+  // Ethernet multicast MAC addresses as 224.0.0.0/24, the internet control block
+  // This increases the risk of collision slightly (512 out of 16 M)
+  if((addr & 0x007fff00) == 0)
+    addr |= (addr & 0xff) << 8;
+  if((addr & 0x007fff00) == 0)
+    addr |= 0x00100000; // Small chance of this for a random address
+  return addr;
+}

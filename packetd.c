@@ -232,7 +232,7 @@ int main(int argc,char *argv[]){
 	break; // Too long!
       p += snprintf(&description[p],sizeof(description)-p,"%s%s",i > 0 ? "," : "" ,Input[i]);
     }
-    uint32_t addr = (239U << 24) | (ElfHashString(Output) & 0xffffff);
+    uint32_t addr = make_maddr(Output);
     avahi_start(Name,"_ax25._udp",DEFAULT_RTP_PORT,Output,addr,description,NULL,NULL);
   }
   Output_fd = setup_mcast(Output,NULL,1,Mcast_ttl,IP_tos,0);
