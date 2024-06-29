@@ -157,6 +157,7 @@ struct channel {
     bool pll_lock;    // PLL is locked
     float loop_bw;    // Loop bw (coherent modes)
     float cphase;     // Carrier phase change radians (DSB/PSK)
+    int64_t rotations; // Integer counts of cphase wraps through -PI, +PI
   } linear;
   int hangcount;      // AGC hang timer before gain recovery starts
 

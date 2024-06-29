@@ -139,6 +139,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case PLL_PHASE:
       channel->linear.cphase = decode_float(cp,optlen);
       break;
+    case PLL_WRAPS:
+      channel->linear.rotations = (int64_t)decode_int64(cp,optlen);
+      break;
     case ENVELOPE:
       channel->linear.env = decode_bool(cp,optlen);
       break;

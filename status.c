@@ -214,6 +214,7 @@ char *decode_string(uint8_t const *cp,int optlen){
 // Decode encoded variable-length UNSIGNED integers
 // At entry, *bp -> length field (not type!)
 // Works for byte, short/int16_t, long/int32_t, long long/int64_t
+// If used for signed values, must be cast
 uint64_t decode_int64(uint8_t const *cp,int len){
   uint64_t result = 0;
   // cp now points to beginning of abbreviated int
@@ -224,14 +225,14 @@ uint64_t decode_int64(uint8_t const *cp,int len){
   return result;
 }
 uint32_t decode_int32(uint8_t const *cp,int len){
-  return decode_int64(cp,len) & 0xffffffff;
+  return decode_int64(cp,len) & UINT32_MAX;
 }
 uint16_t decode_int16(uint8_t const *cp,int len){
-  return decode_int64(cp,len) & 0xffff;
+  return decode_int64(cp,len) & UINT16_MAX;
 }
 
 uint8_t decode_int8(uint8_t const *cp,int len){
-  return decode_int64(cp,len) & 0xff;
+  return decode_int64(cp,len) & UINT8_MAX;
 }
 bool decode_bool(uint8_t const *cp,int len){
   return decode_int64(cp,len) ? true : false;

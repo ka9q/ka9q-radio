@@ -1295,6 +1295,7 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
       pprintw(w,row++,col,"PLL SNR","%.1f dB  ",power2dB(channel->sig.snr));
       pprintw(w,row++,col,"Offset","%'+.3f Hz  ",channel->sig.foffset);
       pprintw(w,row++,col,"PLL Phase","%+.1f deg ",channel->linear.cphase*DEGPRA);
+      pprintw(w,row++,col,"PLL wraps","%'lld     ",(long long)channel->linear.rotations);
       pprintw(w,row++,col,"PLL Lock","%s     ",channel->linear.pll_lock ? "Yes" : "No");
       pprintw(w,row++,col,"Squelch open","%.1f dB  ",power2dB(channel->fm.squelch_open));
       pprintw(w,row++,col,"Squelch close","%.1f dB  ",power2dB(channel->fm.squelch_close));

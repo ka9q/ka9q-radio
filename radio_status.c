@@ -514,6 +514,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       encode_byte(&bp,PLL_SQUARE,chan->linear.square); //bool
       encode_float(&bp,PLL_PHASE,chan->linear.cphase); // radians
       encode_float(&bp,PLL_BW,chan->linear.loop_bw);   // hz
+      encode_int64(&bp,PLL_WRAPS,chan->linear.rotations); // count of complete 360-deg rotations of PLL phase
       // Relevant only when squelches are active
       encode_float(&bp,SQUELCH_OPEN,power2dB(chan->fm.squelch_open));
       encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->fm.squelch_close));

@@ -77,6 +77,8 @@ void *demod_linear(void *arg){
     if(chan->linear.pll){
       // Update PLL state, if active
       if(!chan->pll.was_on){
+	// Just turned on, reset stuff
+	chan->linear.rotations = 0;
 	chan->pll.pll.integrator = 0; // reset oscillator when coming back on
 	chan->pll.was_on = true;
       }
@@ -103,24 +105,29 @@ void *demod_linear(void *arg){
       // Loop lock detector with hysteresis
       // If there's more I signal than Q signal, declare it locked
       // The squelch settings are really for FM, not for us
-      if(chan->sig.snr < 0){
+      if(chan->sig.snr < chan->fm.squelch_close){
 	chan->pll.lock_count -= N;
-      } else if(chan->sig.snr > 0){
+	if(chan->pll.lock_count <= -lock_limit){
+	  chan->pll.lock_count = -lock_limit;
+	  chan->linear.pll_lock = false;
+	}
+      } else if(chan->sig.snr > chan->fm.squelch_open){
 	chan->pll.lock_count += N;
-      }
-      if(chan->pll.lock_count >= lock_limit){
-	chan->pll.lock_count = lock_limit;
-	chan->linear.pll_lock = true;
-      }
-      if(chan->pll.lock_count <= -lock_limit){
-	chan->pll.lock_count = -lock_limit;
-	chan->linear.pll_lock = false;
+	if(chan->pll.lock_count >= lock_limit){
+	  chan->pll.lock_count = lock_limit;
+	  chan->linear.pll_lock = true;
+	}
       }
       chan->linear.lock_timer = chan->pll.lock_count;
-      chan->linear.cphase = carg(pll_phasor(&chan->pll.pll));
-      if(chan->linear.square)
-	chan->linear.cphase /= 2; // Squaring doubles the phase
-      
+      double phase = carg(pll_phasor(&chan->pll.pll));
+
+      double phase_diff = phase - chan->linear.cphase;
+      chan->linear.cphase = phase;
+      if(phase_diff > M_PI){
+	chan->linear.rotations--;
+      } else if(phase_diff < -M_PI){
+	chan->linear.rotations++;
+      }
       chan->sig.foffset = pll_freq(&chan->pll.pll);
     } else { // if PLL
       chan->pll.was_on = false;
