@@ -226,7 +226,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
       fprintf(fp,"PLL loop BW %'.1f Hz",decode_float(cp,optlen));
       break;
     case PLL_WRAPS:
-      fprintf(fp,"PLL phase wraps %'lld",(int64_t)decode_int64(cp,optlen));
+      fprintf(fp,"PLL phase wraps %'lld",(long long)decode_int64(cp,optlen));
       break;
     case ENVELOPE:
       fprintf(fp,"Env det %s",decode_int8(cp,optlen) ? "on" : "off");
