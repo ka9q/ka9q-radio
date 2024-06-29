@@ -848,7 +848,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   case 'k': // Kaiser window parameter
     {
       char str[Entry_width],*ptr;
-      getentry("Kaiser window beta: ",str,sizeof(str));
+      getentry("Kaiser window β: ",str,sizeof(str));
       float const b = strtof(str,&ptr);
       if(ptr != str && isfinite(b)){
 	if(b < 0 || b >= 100){
@@ -1182,7 +1182,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
 
   float const beta = channel->filter.kaiser_beta;
   if(!isnan(beta))
-    pprintw(w,row++,col,"Kaiser beta","%'.1f   ",beta);
+    pprintw(w,row++,col,"Kaiser β","%'.1f   ",beta);
 
 
 #if 0 // Doesn't really give accurate results
@@ -1233,16 +1233,16 @@ static void display_sig(WINDOW *w,struct channel const *channel){
   if(!isnan(channel->sig.bb_power))
     pprintw(w,row++,col,"Baseband","%.1f dB   ",power2dB(channel->sig.bb_power));
   if(!isnan(channel->sig.n0))
-     pprintw(w,row++,col,"N0","%.1f dB/Hz",power2dB(channel->sig.n0));
+     pprintw(w,row++,col,"N₀","%.1f dB/Hz",power2dB(channel->sig.n0));
 
   // Derived numbers
   float sn0 = sig_power/channel->sig.n0;
   if(!isnan(sn0))
-    pprintw(w,row++,col,"S/N0","%.1f dBHz ",power2dB(sn0));
+    pprintw(w,row++,col,"S/N₀","%.1f dBHz ",power2dB(sn0));
   if(!isnan(noise_bandwidth))
     pprintw(w,row++,col,"NBW","%.1f dBHz ",power2dB(noise_bandwidth));
   if(!isnan(sn0) && !isnan(noise_bandwidth))
-    pprintw(w,row++,col,"SNR","%.1f dB   ",power2dB(sn0/noise_bandwidth));
+    pprintw(w,row++,col,"S/N","%.1f dB   ",power2dB(sn0/noise_bandwidth));
 
   if(!isnan(channel->output.gain))
     pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(channel->output.gain));
@@ -1268,7 +1268,7 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
   switch(channel->demod_type){
   case FM_DEMOD:
   case WFM_DEMOD:
-    pprintw(w,row++,col,"Input SNR","%.1f dB",power2dB(channel->sig.snr));
+    pprintw(w,row++,col,"Input S/N","%.1f dB",power2dB(channel->sig.snr));
     pprintw(w,row++,col,"Squelch open","%.1f dB",power2dB(channel->fm.squelch_open));
     pprintw(w,row++,col,"Squelch close","%.1f dB",power2dB(channel->fm.squelch_close));
     pprintw(w,row++,col,"Offset","%'+.3f Hz",channel->sig.foffset);
@@ -1278,25 +1278,27 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
     if(!isnan(channel->fm.tone_deviation) && !isnan(channel->fm.tone_freq) && channel->fm.tone_freq != 0)
       pprintw(w,row++,col,"Tone dev","%.1f Hz",channel->fm.tone_deviation);
     if(channel->fm.rate != 0){
-      pprintw(w,row++,col,"Deemph tc","%.1f us",channel->fm.rate);
+      pprintw(w,row++,col,"Deemph τ","%.1f μs",channel->fm.rate);
       pprintw(w,row++,col,"Deemph gain","%.1f dB",channel->fm.gain);
     }
     break;
   case LINEAR_DEMOD:
     if(!isnan(channel->linear.threshold) && channel->linear.threshold > 0)
-      pprintw(w,row++,col,"Threshold","%.1f dB  ",voltage2dB(channel->linear.threshold));
+      pprintw(w,row++,col,"AGC Threshold","%.1f dB  ",voltage2dB(channel->linear.threshold));
     if(!isnan(channel->linear.recovery_rate) && channel->linear.recovery_rate > 0)
       pprintw(w,row++,col,"Recovery rate","%.1f dB/s",voltage2dB(channel->linear.recovery_rate));
     if(!isnan(channel->linear.hangtime))
       pprintw(w,row++,col,"Hang time","%.1f s   ",channel->linear.hangtime);
 
     if(channel->linear.pll){
-      pprintw(w,row++,col,"PLL BW","%.1f Hz  ",channel->linear.loop_bw);
-      pprintw(w,row++,col,"PLL SNR","%.1f dB  ",power2dB(channel->sig.snr));
-      pprintw(w,row++,col,"PLL offset","%'+.3f Hz  ",channel->sig.foffset);
-      pprintw(w,row++,col,"PLL phase","%+.1f deg ",channel->linear.cphase*DEGPRA);
-      pprintw(w,row++,col,"PLL int","%+.1f deg ",channel->linear.cphase * DEGPRA + 360 * (long long)channel->linear.rotations);
-      pprintw(w,row++,col,"PLL lock","%s     ",channel->linear.pll_lock ? "Yes" : "No");
+      mvwhline(w,row,0,0,1000);
+      mvwaddstr(w,row++,1,"PLL");
+      pprintw(w,row++,col,"BW","%.1f Hz  ",channel->linear.loop_bw);
+      pprintw(w,row++,col,"S/N","%.1f dB  ",power2dB(channel->sig.snr));
+      pprintw(w,row++,col,"Δf","%'+.3f Hz  ",channel->sig.foffset);
+      pprintw(w,row++,col,"φ","%+.1f °  ",channel->linear.cphase*DEGPRA);
+      pprintw(w,row++,col,"φ unwrap","%+.1f °  ",channel->linear.cphase * DEGPRA + 360 * (long long)channel->linear.rotations);
+      mvwprintw(w,row++,col,"%-s",channel->linear.pll_lock ? "Lock" : "Unlock");
       pprintw(w,row++,col,"Squelch open","%.1f dB  ",power2dB(channel->fm.squelch_open));
       pprintw(w,row++,col,"Squelch close","%.1f dB  ",power2dB(channel->fm.squelch_close));
     }
