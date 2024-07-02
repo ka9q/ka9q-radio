@@ -69,6 +69,15 @@ static struct control {
 } Control;
 
 
+static struct {
+  float noise_bandwidth;
+  float sig_power;
+  float sn0;
+  float snr;
+  int64_t pll_start_time;
+  double pll_start_phase;
+} Local;
+
 static int send_poll(int ssrc);
 static int pprintw(WINDOW *w,int y, int x, char const *prefix, char const *fmt, ...);
 
@@ -89,6 +98,16 @@ static int process_keyboard(struct channel *,uint8_t **bpp,int c);
 static void process_mouse(struct channel *channel,uint8_t **bpp);
 static bool for_us(struct channel *channel,uint8_t const *buffer,int length,uint32_t ssrc);
 static int init_demod(struct channel *channel);
+
+// Fill in set of locally generated variables from channel structure
+static void gen_locals(struct frontend *frontend,struct channel *channel){
+  Local.noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
+  Local.sig_power = channel->sig.bb_power - Local.noise_bandwidth * channel->sig.n0;
+  if(Local.sig_power < 0)
+    Local.sig_power = 0; // Avoid log(-x) = nan
+  Local.sn0 = Local.sig_power/channel->sig.n0;
+  Local.snr = power2dB(Local.sn0/Local.noise_bandwidth);
+}
 
 // Pop up a temporary window with the contents of a file in the
 // library directory (usually /usr/local/share/ka9q-radio/)
@@ -480,6 +499,7 @@ int main(int argc,char *argv[]){
       struct channel * const channel = calloc(1,sizeof(struct channel));
       init_demod(channel);
       decode_radio_status(&Frontend,channel,buffer+1,length-1);
+
       // Do we already have it?
       int i;
       for(i=0; i < chan_count; i++)
@@ -505,14 +525,9 @@ int main(int argc,char *argv[]){
       if(channel == NULL || channel->output.rtp.ssrc == last_ssrc) // Skip dupes
 	continue;
 
-      float const noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
-      float sig_power = channel->sig.bb_power - noise_bandwidth * channel->sig.n0;
-      if(sig_power < 0)
-	sig_power = 0; // Avoid log(-x) = nan
-      float const sn0 = sig_power/channel->sig.n0;
-      float const snr = power2dB(sn0/noise_bandwidth);
       char const *ip_addr_string = formatsock(&channel->output.dest_socket);
-      fprintf(stdout,"%13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,snr,ip_addr_string);
+      gen_locals(&Frontend,channel);
+      fprintf(stdout,"%13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,Local.snr,ip_addr_string);
       last_ssrc = channel->output.rtp.ssrc;
     }
     fprintf(stdout,"%d channels; choose SSRC, create new SSRC, or hit return to look for more: ",chan_count);
@@ -602,6 +617,8 @@ int main(int argc,char *argv[]){
       wprintw(Debug_win,"got response length %d\n",length);
 #endif
       decode_radio_status(&Frontend,channel,buffer+1,length-1);
+      gen_locals(&Frontend,channel);
+
       // Postpone next poll to specified interval
       next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
       if(Blocktime == 0 && Frontend.samprate != 0)
@@ -1019,7 +1036,7 @@ static int init_demod(struct channel *channel){
   channel->filter.min_IF = channel->filter.max_IF = channel->filter.kaiser_beta = NAN;
   channel->output.headroom = channel->linear.hangtime = channel->linear.recovery_rate = NAN;
   channel->sig.bb_power = channel->sig.snr = channel->sig.foffset = NAN;
-  channel->fm.pdeviation = channel->linear.cphase = channel->linear.lock_timer = NAN;
+  channel->fm.pdeviation = channel->linear.cphase = NAN;
   channel->output.gain = NAN;
   channel->tp1 = channel->tp2 = NAN;
   return 0;
@@ -1236,13 +1253,12 @@ static void display_sig(WINDOW *w,struct channel const *channel){
      pprintw(w,row++,col,"N₀","%.1f dB/Hz",power2dB(channel->sig.n0));
 
   // Derived numbers
-  float sn0 = sig_power/channel->sig.n0;
-  if(!isnan(sn0))
-    pprintw(w,row++,col,"S/N₀","%.1f dBHz ",power2dB(sn0));
-  if(!isnan(noise_bandwidth))
-    pprintw(w,row++,col,"NBW","%.1f dBHz ",power2dB(noise_bandwidth));
-  if(!isnan(sn0) && !isnan(noise_bandwidth))
-    pprintw(w,row++,col,"S/N","%.1f dB   ",power2dB(sn0/noise_bandwidth));
+  if(!isnan(Local.sn0))
+    pprintw(w,row++,col,"S/N₀","%.1f dBHz ",power2dB(Local.sn0));
+  if(!isnan(Local.noise_bandwidth))
+    pprintw(w,row++,col,"NBW","%.1f dBHz ",power2dB(Local.noise_bandwidth));
+  if(!isnan(Local.sn0) && !isnan(Local.noise_bandwidth))
+    pprintw(w,row++,col,"S/N","%.1f dB   ",power2dB(Local.sn0/Local.noise_bandwidth));
 
   if(!isnan(channel->output.gain))
     pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(channel->output.gain));
@@ -1250,6 +1266,11 @@ static void display_sig(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(channel->output.energy)); // actually level; sender does averaging
   if(!isnan(channel->output.headroom))
     pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(channel->output.headroom));
+  if(channel->demod_type == LINEAR_DEMOD){
+    pprintw(w,row++,col,"Squel open","%.1f dB   ",power2dB(channel->fm.squelch_open)); // should move these
+    pprintw(w,row++,col,"Squel close","%.1f dB   ",power2dB(channel->fm.squelch_close));
+  }
+
   box(w,0,0);
   mvwaddstr(w,0,1,"Signal");
   wnoutrefresh(w);
@@ -1293,14 +1314,25 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
     if(channel->linear.pll){
       mvwhline(w,row,0,0,1000);
       mvwaddstr(w,row++,1,"PLL");
-      pprintw(w,row++,col,"BW","%.1f Hz  ",channel->linear.loop_bw);
-      pprintw(w,row++,col,"S/N","%.1f dB  ",power2dB(channel->sig.snr));
-      pprintw(w,row++,col,"Δf","%'+.3f Hz  ",channel->sig.foffset);
-      pprintw(w,row++,col,"φ","%+.1f °  ",channel->linear.cphase*DEGPRA);
-      pprintw(w,row++,col,"φ unwrap","%+.1f °  ",channel->linear.cphase * DEGPRA + 360 * (long long)channel->linear.rotations);
       mvwprintw(w,row++,col,"%-s",channel->linear.pll_lock ? "Lock" : "Unlock");
-      pprintw(w,row++,col,"Squelch open","%.1f dB  ",power2dB(channel->fm.squelch_open));
-      pprintw(w,row++,col,"Squelch close","%.1f dB  ",power2dB(channel->fm.squelch_close));
+      pprintw(w,row++,col,"BW","%.1f Hz",channel->linear.loop_bw);
+      pprintw(w,row++,col,"S/N","%.1f dB",power2dB(channel->sig.snr));
+      pprintw(w,row++,col,"Δf","%'+.3f Hz",channel->sig.foffset);
+      pprintw(w,row++,col,"φ","%+.1f °",channel->linear.cphase*DEGPRA);
+      if(Local.pll_start_time == 0){
+	Local.pll_start_time = gps_time_ns();
+	Local.pll_start_phase = channel->linear.cphase * DEGPRA + 360 * channel->linear.rotations;
+      } else {
+	  double delta_t = 1e-9 * (gps_time_ns() - Local.pll_start_time);
+	  double phase = channel->linear.cphase * DEGPRA + 360 * channel->linear.rotations;
+	  double delta_ph = phase - Local.pll_start_phase;
+	  pprintw(w,row++,col,"ΔT","%.1lf s ",delta_t);
+	  pprintw(w,row++,col,"Δφ","%+.1f °",channel->linear.cphase * DEGPRA + 360 * (long long)channel->linear.rotations - Local.pll_start_phase);
+	  pprintw(w,row++,col,"μ Δf/f","%g",delta_ph / (360 * delta_t * channel->tune.freq));
+      }
+    } else {
+      Local.pll_start_time = 0;
+      Local.pll_start_phase = 0;
     }
     break;
   case SPECT_DEMOD:
