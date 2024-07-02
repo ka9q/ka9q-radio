@@ -153,7 +153,6 @@ struct channel {
 
     bool pll;         // Linear mode PLL tracking of carrier (settable)
     bool square;      // Squarer on PLL input (settable)
-    float lock_timer; // PLL lock timer
     bool pll_lock;    // PLL is locked
     float loop_bw;    // Loop bw (coherent modes)
     float cphase;     // Carrier phase change radians (DSB/PSK)
