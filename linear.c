@@ -118,18 +118,17 @@ void *demod_linear(void *arg){
 	  chan->linear.pll_lock = true;
 	}
       }
-      chan->linear.lock_timer = chan->pll.lock_count;
       double phase = carg(pll_phasor(&chan->pll.pll));
-
       double phase_diff = phase - chan->linear.cphase;
       chan->linear.cphase = phase;
-      if(phase_diff > M_PI){
-	chan->linear.rotations--;
-      } else if(phase_diff < -M_PI){
-	chan->linear.rotations++;
+      if(chan->linear.pll_lock){
+	if(phase_diff > M_PI)
+	  chan->linear.rotations--;
+	else if(phase_diff < -M_PI)
+	  chan->linear.rotations++;
       }
       chan->sig.foffset = pll_freq(&chan->pll.pll);
-    } else { // if PLL
+    } else { // linear.pll is false
       chan->pll.was_on = false;
     }
     // Apply frequency shift
