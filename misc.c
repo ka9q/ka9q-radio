@@ -382,6 +382,7 @@ float fm_snr(float r){
 
 // Simple non-crypto hash function
 // Adapted from https://en.wikipedia.org/wiki/PJW_hash_function
+// This needs replacing -- last 4 bits are usually 0xc because the last character of the DNS name is usually a '.'
 uint32_t ElfHash(const uint8_t *s,int length){
     uint32_t h = 0;
     while(length-- > 0){
@@ -397,6 +398,17 @@ uint32_t ElfHash(const uint8_t *s,int length){
 uint32_t ElfHashString(const char *s){
   return ElfHash((uint8_t *)s,strlen(s));
 }
+
+// FNV-1 hash (https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function)
+uint32_t fnv1hash(const uint8_t *s,int length){
+  uint32_t hash = 0x811c9dc5;
+  while(length-- > 0){
+    hash *= 0x01000193;
+    hash ^= *s++;
+  }
+  return hash;
+}
+
 
 
 

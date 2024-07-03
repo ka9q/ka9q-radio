@@ -995,7 +995,8 @@ enum encoding parse_encoding(char const *str){
 // into the same Ethernet multicast MAC addresses as the 224.0.0.0/8 multicast control block
 // that is not snooped by switches
 uint32_t make_maddr(char const *arg){
-  uint32_t addr = (239U << 24) | (ElfHashString(arg) & 0xffffff);
+  //  uint32_t addr = (239U << 24) | (ElfHashString(arg) & 0xffffff); // poor performance when last byte is always the same (.)
+  uint32_t addr = (239U << 24) | fnv1hash((uint8_t *)arg,strlen(arg));
   // avoid 239.0.0.0/24 and 239.128.0.0/24 since they map to the same
   // Ethernet multicast MAC addresses as 224.0.0.0/24, the internet control block
   // This increases the risk of collision slightly (512 out of 16 M)
