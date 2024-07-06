@@ -1,0 +1,5 @@
+SHELL=/bin/sh
+PATH=/usr/bin:/bin
+# delete any stale audio files for ft8, ft4 and wspr decoders
+10 * * * * root	   cd /var/lib/ka9q-radio; find ft4 ft8 wspr -name '*.wav' -mmin +5 -delete
+
