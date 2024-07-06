@@ -35,7 +35,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     }
     if(cp - buffer + optlen >= length)
       break; // Invalid length
-    fprintf(fp,"%s(%d) ",newline? "\n":" ",type); fflush(stdout); // DEBUG
+    fprintf(fp,"%s[%d] ",newline? "\n":" ",type);
     switch(type){
     case EOL: // Shouldn't get here
       goto done;
