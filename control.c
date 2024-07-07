@@ -1318,21 +1318,20 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
       pprintw(w,row++,col,"BW","%.1f Hz",channel->linear.loop_bw);
       pprintw(w,row++,col,"S/N","%.1f dB",power2dB(channel->sig.snr));
       pprintw(w,row++,col,"Δf","%'+.3f Hz",channel->sig.foffset);
+      double phase = channel->linear.cphase * DEGPRA + 360 * channel->linear.rotations;
+
       pprintw(w,row++,col,"φ","%+.1f °",channel->linear.cphase*DEGPRA);
       if(Local.pll_start_time == 0){
 	Local.pll_start_time = gps_time_ns();
-	Local.pll_start_phase = channel->linear.cphase * DEGPRA + 360 * channel->linear.rotations;
-      } else {
-	  double delta_t = 1e-9 * (gps_time_ns() - Local.pll_start_time);
-	  double phase = channel->linear.cphase * DEGPRA + 360 * channel->linear.rotations;
-	  double delta_ph = phase - Local.pll_start_phase;
-	  pprintw(w,row++,col,"ΔT","%.1lf s ",delta_t);
-	  pprintw(w,row++,col,"Δφ","%+.1f °",channel->linear.cphase * DEGPRA + 360 * (long long)channel->linear.rotations - Local.pll_start_phase);
-	  pprintw(w,row++,col,"μ Δf/f","%g",delta_ph / (360 * delta_t * channel->tune.freq));
+	Local.pll_start_phase = phase;
       }
+      double delta_t = 1e-9 * (gps_time_ns() - Local.pll_start_time);
+      double delta_ph = phase - Local.pll_start_phase;
+      pprintw(w,row++,col,"ΔT","%.1lf s ",delta_t);
+      pprintw(w,row++,col,"Δφ","%+.1f °",delta_ph);
+      pprintw(w,row++,col,"μ Δf/f","%g",delta_ph / (360 * delta_t * channel->tune.freq));
     } else {
       Local.pll_start_time = 0;
-      Local.pll_start_phase = 0;
     }
     break;
   case SPECT_DEMOD:

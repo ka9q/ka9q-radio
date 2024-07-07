@@ -75,13 +75,14 @@ void *demod_linear(void *arg){
     float noise = 0;  // PLL only
 
     if(chan->linear.pll){
-      // Update PLL state, if active
       if(!chan->pll.was_on){
 	// Just turned on, reset stuff
 	chan->linear.rotations = 0;
 	chan->pll.pll.integrator = 0; // reset oscillator when coming back on
-	chan->pll.was_on = true;
+	chan->pll.lock_count = -lock_limit;
+	chan->linear.pll_lock = false;
       }
+      // Update PLL state, if active
       set_pll_params(&chan->pll.pll,chan->linear.loop_bw,damping);
       for(int n=0; n<N; n++){
 	complex float const s = buffer[n] *= conjf(pll_phasor(&chan->pll.pll));
@@ -119,18 +120,19 @@ void *demod_linear(void *arg){
 	}
       }
       double phase = carg(pll_phasor(&chan->pll.pll));
-      double phase_diff = phase - chan->linear.cphase;
-      chan->linear.cphase = phase;
       if(chan->linear.pll_lock){
+	// Try to avoid counting cycle slips during loss of lock
+	double phase_diff = phase - chan->linear.cphase;
 	if(phase_diff > M_PI)
 	  chan->linear.rotations--;
 	else if(phase_diff < -M_PI)
 	  chan->linear.rotations++;
       }
+      chan->linear.cphase = phase;
       chan->sig.foffset = pll_freq(&chan->pll.pll);
-    } else { // linear.pll is false
-      chan->pll.was_on = false;
     }
+    chan->pll.was_on = chan->linear.pll;
+
     // Apply frequency shift
     // Must be done after PLL, which operates only on DC
     set_osc(&chan->shift,chan->tune.shift/chan->output.samprate,0);
