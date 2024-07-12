@@ -387,6 +387,7 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
   sp->samprate = Samprate ? Samprate : samprate_from_pt(sp->type);
   if(sp->channels == 0 || sp->samprate == 0){
     fprintf(stderr,"Unknown payload type %d and channels/samprate not specified on command line\n",sp->type);
+    FREE(sp);
     return NULL;
   }
   sp->samples_remaining = sp->samprate * FileLengthLimit * Channels; // If file is being limited in length
@@ -399,13 +400,34 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
 
   sp->fp = NULL;
   if(Subdirs){
+    // Create directory path
     char dir[PATH_MAX];
     snprintf(dir,sizeof(dir),"%u",sp->ssrc);
-    if(mkdir(dir,0777) == -1 && errno != EEXIST)
+    if(mkdir(dir,0777) == -1 && errno != EEXIST){
       fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
-    // Try to create file in directory whether or not the mkdir succeeded
-    snprintf(sp->filename,sizeof(sp->filename),"%u/%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ.wav",
+      return NULL;
+    }
+    snprintf(dir,sizeof(dir),"%u/%d",sp->ssrc,tm->tm_year+1900);
+    if(mkdir(dir,0777) == -1 && errno != EEXIST){
+      fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
+      return NULL;
+    }
+    snprintf(dir,sizeof(dir),"%u/%d/%d",sp->ssrc,tm->tm_year+1900,tm->tm_mon+1);
+    if(mkdir(dir,0777) == -1 && errno != EEXIST){
+      fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
+      return NULL;
+    }
+    snprintf(dir,sizeof(dir),"%u/%d/%d/%d",sp->ssrc,tm->tm_year+1900,tm->tm_mon+1,tm->tm_mday);
+    if(mkdir(dir,0777) == -1 && errno != EEXIST){
+      fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
+      FREE(sp);
+      return NULL;
+    }
+    snprintf(sp->filename,sizeof(sp->filename),"%u/%d/%d/%d/%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ.wav",
 	     sp->ssrc,
+	     tm->tm_year+1900,
+	     tm->tm_mon+1,
+	     tm->tm_mday,
 	     sp->ssrc,
 	     tm->tm_year+1900,
 	     tm->tm_mon+1,
@@ -414,14 +436,8 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
 	     tm->tm_min,
 	     tm->tm_sec,
 	     (int)(now.tv_nsec / 100000000)); // 100 million, i.e., convert to tenths of a sec
-    sp->fp = fopen(sp->filename,"w+");
-    if(sp->fp == NULL)
-      fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
-
-  }
-  // (1) Subdirs not specified, or
-  // (2) Subdirs specified but couldn't create directory or create file in directory; create in current dir
-  if(!sp->fp){
+  } else {
+    // create file in current directory
     snprintf(sp->filename,sizeof(sp->filename),"%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ.wav",
 	     sp->ssrc,
 	     tm->tm_year+1900,
@@ -431,12 +447,13 @@ static struct session *create_session(struct rtp_header const *rtp,struct sockad
 	     tm->tm_min,
 	     tm->tm_sec,
 	     (int)(now.tv_nsec / 100000000));
-    sp->fp = fopen(sp->filename,"w+");
   }
+  sp->fp = fopen(sp->filename,"w+");
   if(sp->fp == NULL){
     fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
     FREE(sp);
     return NULL;
+
   }
   // file create succeded, now put us at top of list
   sp->prev = NULL;
