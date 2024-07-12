@@ -1120,7 +1120,53 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
 
 static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT tuner,sdrplay_api_EventParamsT *params,void *cbContext){
   struct sdrstate *sdr = (struct sdrstate *)cbContext;
-  // nothing for now
+  int64_t event_timestamp;
+  char event_timestamp_formatted[1024];
+  sdrplay_api_ErrT err;
+
+  static int64_t power_overload_detected = -1;
+
+  switch(eventId){
+  case sdrplay_api_GainChange:
+#if 0
+    // this type of event could get very chatty
+    sdrplay_api_GainCbParamT *gainParams = &params->gainParams;
+    fprintf(stdout,"gain change - gRdB=%d lnaGRdB=%dx currGain=%.2f\n",gainParams->gRdB,gainParams->lnaGRdB,gainParams->currGain);
+#endif
+    break;
+  case sdrplay_api_PowerOverloadChange:
+    event_timestamp = gps_time_ns();
+    format_gpstime(event_timestamp_formatted,sizeof(event_timestamp_formatted),event_timestamp);
+    switch(params->powerOverloadParams.powerOverloadChangeType){
+    case sdrplay_api_Overload_Detected:
+      power_overload_detected = event_timestamp;
+      fprintf(stdout,"%s - overload detected\n",event_timestamp_formatted);
+      break;
+    case sdrplay_api_Overload_Corrected:
+      if(power_overload_detected >= 0){
+        fprintf(stdout,"%s - overload corrected - duration=%ldns\n",event_timestamp_formatted,event_timestamp - power_overload_detected);
+      } else {
+        fprintf(stdout,"%s - overload corrected\n",event_timestamp_formatted);
+      }
+      power_overload_detected = -1;
+      break;
+    }
+    // send ack back for overload events
+    err = sdrplay_api_Update(sdr->device.dev,sdr->device.tuner,sdrplay_api_Update_Ctrl_OverloadMsgAck,sdrplay_api_Update_Ext1_None);
+    if(err != sdrplay_api_Success){
+      fprintf(stdout,"sdrplay_api_Update(Ctrl_OverloadMsgAck) failed: %s\n",sdrplay_api_GetErrorString(err));
+    }
+    break;
+  case sdrplay_api_DeviceRemoved:
+    fprintf(stdout,"device removed\n");
+    break;
+  case sdrplay_api_RspDuoModeChange:
+    fprintf(stdout,"PSPduo mode change\n");
+    break;
+  case sdrplay_api_DeviceFailure:
+    fprintf(stdout,"device failure\n");
+    break;
+  }
   sdr->events++;
   return;
 }
