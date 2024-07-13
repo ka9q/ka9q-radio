@@ -1131,7 +1131,7 @@ static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT t
 #if 0
     // this type of event could get very chatty
     sdrplay_api_GainCbParamT *gainParams = &params->gainParams;
-    fprintf(stdout,"gain change - gRdB=%d lnaGRdB=%dx currGain=%.2f\n",gainParams->gRdB,gainParams->lnaGRdB,gainParams->currGain);
+    fprintf(stdout,"gain change - gRdB=%d lnaGRdB=%d currGain=%.2f\n",gainParams->gRdB,gainParams->lnaGRdB,gainParams->currGain);
 #endif
     break;
   case sdrplay_api_PowerOverloadChange:
