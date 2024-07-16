@@ -9,7 +9,7 @@
 #define DEFAULT_GAIN (0.)           // Linear gain, dB
 #define DEFAULT_THRESHOLD (-15.0)     // AGC threshold, dB (noise will be at HEADROOM + THRESHOLD)
 #define DEFAULT_PLL_DAMPING (M_SQRT1_2); // PLL loop damping factor; 1/sqrt(2) is "critical" damping
-#define DEFAULT_PLL_LOCKTIME (.05);  // time, sec PLL stays above/below threshold SNR to lock/unlock
+#define DEFAULT_PLL_LOCKTIME (.5);  // time, sec PLL stays above/below threshold SNR to lock/unlock
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -113,7 +113,7 @@ void *demod_linear(void *arg){
 	}
       }
       double phase = carg(pll_phasor(&chan->pll.pll));
-      if(chan->linear.pll_lock){
+      if(chan->sig.snr > chan->fm.squelch_close){
 	// Try to avoid counting cycle slips during loss of lock
 	double phase_diff = phase - chan->linear.cphase;
 	if(phase_diff > M_PI)
