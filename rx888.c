@@ -83,7 +83,7 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
 static void rx888_set_att(struct sdrstate *sdr,float att);
 static void rx888_set_gain(struct sdrstate *sdr,float gain);
-static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate);
+static double rx888_set_samprate(struct sdrstate *sdr,double reference,unsigned int samprate);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate *sdr);
 static void rx888_close(struct sdrstate *sdr);
@@ -91,7 +91,9 @@ static void free_transfer_buffers(unsigned char **databuffers,struct libusb_tran
 static double val2gain(int g);
 static int gain2val(bool highgain, double gain);
 static void *proc_rx888(void *arg);
+#if 0
 static double actual_freq(double frequency);
+#endif
 static void rational_approximation(double value, uint32_t max_denominator, uint32_t *a, uint32_t *b, uint32_t *c);
 
 
@@ -184,12 +186,10 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stdout,"Invalid reference frequency %'lf, forcing %'lf\n",reference,Default_reference);
     reference = Default_reference;
   }
-  sdr->reference = reference;
-
-  frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
-  if(fabsl(frontend->calibrate) >= Max_calibrate){
-    fprintf(stdout,"Unreasonable frequency calibration %.3g, setting to 0\n",frontend->calibrate);
-    frontend->calibrate = 0;
+  double calibrate = config_getdouble(dictionary,section,"calibrate",0);
+  if(fabsl(calibrate) >= Max_calibrate){
+    fprintf(stdout,"Unreasonable frequency calibration %.3g, setting to 0\n",calibrate);
+    calibrate = 0;
   }
   unsigned int samprate = Default_samprate;
   {
@@ -207,9 +207,20 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     samprate = Max_samprate;
   }
 
-  double actual = rx888_set_samprate(sdr,samprate);
+  sdr->reference = reference * (1 + calibrate);
+  usleep(5000);
+  double actual = rx888_set_samprate(sdr,sdr->reference,samprate);
+
+  // start clock
+  control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
+  // power on clock 0
+  //  uint8_t const clock_control = SI5351_VALUE_MS_INT | SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
+  uint8_t const clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
+  control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_CLK_BASE+0,clock_control);
+
+  frontend->samprate = samprate;
   frontend->min_IF = 0;
-  frontend->max_IF = Nyquist * frontend->samprate; // Just an estimate - get the real number somewhere
+  frontend->max_IF = Nyquist * samprate; // Just an estimate - get the real number somewhere
   frontend->isreal = true; // Make sure the right kind of filter gets created!
   frontend->bitspersample = 16; // For gain scaling
   frontend->lock = true; // Doesn't tune in direct sampling mode
@@ -219,13 +230,14 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     frontend->description = strdup(p);
     fprintf(stdout,"%s: ",frontend->description);
   }
-  double ferror = actual - frontend->samprate;
+  double ferror = actual - samprate;
   fprintf(stdout,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
-	  sdr->reference,frontend->samprate,actual,ferror, 1e6 * ferror / frontend->samprate,
+	  sdr->reference,samprate,actual,ferror, 1e6 * ferror / samprate,
 	  sdr->highgain ? "high" : "low",
 	  gain,frontend->rf_gain,frontend->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
 	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate));
 
+  usleep(1000000); // 1s - see SDDC_FX3 firmware
   return 0;
 }
 
@@ -671,12 +683,12 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain){
 }
 
 // see: SiLabs Application Note AN619 - Manually Generating an Si5351 Register Map (https://www.silabs.com/documents/public/application-notes/AN619.pdf)
-static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
+static double rx888_set_samprate(struct sdrstate *sdr,double const reference,unsigned int const samprate){
   assert(sdr != NULL);
-  struct frontend *frontend = sdr->frontend;
-  frontend->samprate = samprate;
-  usleep(5000);
-  if(sdr->reference == Default_reference && frontend->calibrate == 0){
+
+#if 0
+  // Should we always do it ourselves?
+  if(reference == Default_reference){
     // Use firmware to set sample rate
     command_send(sdr->dev_handle,STARTADC,samprate);
     return actual_freq((double)samprate);
@@ -686,8 +698,8 @@ static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
     control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_CLK_BASE+0,SI5351_VALUE_CLK_PDN);
     return 0;
   }
-
-  /* if the requested sample rate is below 1MHz, use an R divider */
+#endif
+  // if the requested sample rate is below 1MHz, use an R divider right before the output pin
   double r_samprate = samprate;
   uint8_t rdiv = 0;
   while (r_samprate < 1e6 && rdiv <= 7) {
@@ -700,27 +712,42 @@ static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
   }
 
   /* choose an even integer for the output MS */
+  // if this is ever changed from an integer, make sure SI5351_VALUE_MS_INT isn't set later on
   uint32_t output_ms = ((uint32_t)(SI5351_MAX_VCO_FREQ / r_samprate));
   output_ms -= output_ms % 2;
   if (output_ms < 4 || output_ms > 900) {
     fprintf(stdout,"ERROR - invalid output MS: %d  (samprate=%'d)\n",output_ms,samprate);
     return 0;
   }
+  // This sets the VCO frequency
   double const vco_frequency = r_samprate * output_ms;
 
-  /* feedback MS */
-  double const reference_corrected = sdr->reference * (1.0 + frontend->calibrate);
-  double const feedback_ms = vco_frequency / reference_corrected;
+  // Now pick a fractional divisor for the VCO synthesizer feedback loop to give us this VCO frequency from the reference
+  double const feedback_ms = vco_frequency / reference;
   /* find a good rational approximation for feedback_ms */
-  uint32_t a;
-  uint32_t b;
-  uint32_t c;
+  uint32_t a,b,c;
   rational_approximation(feedback_ms,SI5351_MAX_DENOMINATOR,&a,&b,&c);
+  double const pll_ratio = a + (double)b / (double)c;
+  double const vco = reference * pll_ratio;
+  double output_samprate = vco / (output_ms * (1 << rdiv));
 
-  double const actual_ratio = a + (double)b / (double)c;
-  double const actual_samprate = reference_corrected * actual_ratio / output_ms / (1 << rdiv);
-  fprintf(stdout,"Nominal samprate %'d, Nominal reference %'lf, calibrate %'g ppm, A=%d B=%d C=%d output_ms=%d rdiv=%d Actual Samprate %'lf\n",
-	  frontend->samprate,sdr->reference,frontend->calibrate * 1e6,a,b,c,output_ms,rdiv,actual_samprate);
+  fprintf(stdout,"Nominal samprate %'d, reference %'lf, feedback divisor %d + %d/%d, VCO %'lf, integer divisor %d * %d, output = %'lf\n",
+	  samprate,
+	  reference,
+	  a,b,c,
+	  vco,
+	  output_ms,
+	  1<<rdiv,
+	  output_samprate);
+
+  // Now fine-tune the output divider to get closer
+  double output_divider = vco / (samprate * (1 << rdiv));
+  uint32_t d,e,f;
+  rational_approximation(output_divider,SI5351_MAX_DENOMINATOR,&d,&e,&f);
+  output_divider = d + (double)e/f;
+  output_samprate = vco / (output_divider * (1 << rdiv));
+
+  fprintf(stdout,"Output divider %d + %d/%d, rdiv %d, actual samprate = %'lf\n",d,e,f,(1<<rdiv),output_samprate);
 
   /* configure clock input and PLL */
   uint32_t const b_over_c = 128 * b / c;
@@ -743,9 +770,10 @@ static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
 
   /* configure clock output */
   /* since the output divider is an even integer a = output_ms, b = 0, c = 1 */
-  uint32_t const ms_p1 = 128 * output_ms - 512;
-  uint32_t const ms_p2 = 0;
-  uint32_t const ms_p3 = 1;
+  uint32_t const e_over_f = 128 * e / f;
+  uint32_t const ms_p1 = 128 * d + e_over_f - 512;
+  uint32_t const ms_p2 = 128 * e - f * e_over_f;
+  uint32_t const ms_p3 = f;
 
   uint8_t data_clkout[] = {
     (ms_p3 & 0x0000ff00) >>  8,
@@ -759,15 +787,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,unsigned int samprate){
   };
 
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
-
-  // start clock
-  control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
-  // power on clock 0
-  uint8_t const clock_control = SI5351_VALUE_MS_INT | SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
-  control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_CLK_BASE+0,clock_control);
-
-  usleep(1000000); // 1s - see SDDC_FX3 firmware
-  return actual_samprate;
+  return output_samprate;
 }
 
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
@@ -945,6 +965,8 @@ static void rational_approximation(double value, uint32_t max_denominator,
   }
   return;
 }
+#if 0
+
 // Determine actual (vs requested) clock frequency
 // Adapted from code by Franco Venturi, K4VZ
 
@@ -992,3 +1014,4 @@ static double actual_freq(double frequency){
 #endif
     return actualAdcFreq;
 }
+#endif
