@@ -3,8 +3,10 @@
 //
 // Copyright (c)  2021 Ruslan Migirov <trapi78@gmail.com>
 // Credit: https://github.com/rhgndf/rx888_stream
-// Copyright (c)  2023 Franco Venturi
-// Copyright (c)  2023 Phil Karn
+// Copyright (c)  2023 Franco Venturi K4VZ
+// Copyright (c)  2023 Phil Karn KA9Q
+
+// VHF tuner support by K4VZ July 2024
 
 #define _GNU_SOURCE 1
 #include <assert.h>
