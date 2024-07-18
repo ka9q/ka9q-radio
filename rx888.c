@@ -36,6 +36,12 @@ static double const Default_reference = 27e6;
 // Max allowable error on reference; 1e-4 = 100 ppm. Mainly to catch entry scaling errors
 static double const Max_calibrate = 1e-4;
 
+// Min and Max frequency for VHF/UHF tuner
+static double const Min_frequency = 50e6;   //  50 MHz ?
+static double const Max_frequency = 2000e6; // 2000 MHz
+static uint32_t const R828D_FREQ = 16000000;     // R820T reference frequency
+static double const R828D_IF_CARRIER = 4570000;
+
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
@@ -67,9 +73,11 @@ struct sdrstate {
 
   // RF Hardware
   double reference;
+  double frequency;
   bool randomizer;
   bool dither;
   bool highgain;
+  uint32_t gpios;
   uint64_t last_sample_count; // Used to verify sample rate
   int64_t last_count_time;
   bool message_posted; // Clock rate error posted last time around
@@ -81,9 +89,11 @@ struct sdrstate {
 static void rx_callback(struct libusb_transfer *transfer);
 static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize);
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
-static void rx888_set_att(struct sdrstate *sdr,float att);
-static void rx888_set_gain(struct sdrstate *sdr,float gain);
+static void rx888_set_att(struct sdrstate *sdr,float att,bool vhf);
+static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf);
 static double rx888_set_samprate(struct sdrstate *sdr,double reference,unsigned int samprate);
+static void rx888_set_hf_mode(struct sdrstate *sdr);
+static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate *sdr);
 static void rx888_close(struct sdrstate *sdr);
@@ -150,6 +160,8 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
       return -1;
     }
   }
+  // GPIOs
+  sdr->gpios = 0;
   // Enable/disable dithering
   sdr->dither = config_getboolean(dictionary,section,"dither",false);
   // Enable/output output randomization
@@ -160,7 +172,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   float att = fabsf(config_getfloat(dictionary,section,"att",0));
   if(att > 31.5)
     att = 31.5;
-  rx888_set_att(sdr,att);
+  rx888_set_att(sdr,att,false);
 
   // Gain Mode low/high, default high
   char const *gainmode = config_getstring(dictionary,section,"gainmode","high");
@@ -174,7 +186,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   }
   // Gain value, default +1.5 dB
   float gain = config_getfloat(dictionary,section,"gain",1.5);
-  rx888_set_gain(sdr,gain);
+  rx888_set_gain(sdr,gain,false);
 
   double reference = Default_reference;
   {
@@ -236,6 +248,29 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 	  sdr->highgain ? "high" : "low",
 	  gain,frontend->rf_gain,frontend->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
 	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate));
+
+  // VHF-UHF
+  double frequency = 0;
+  {
+    char const *p = config_getstring(dictionary,section,"frequency",NULL);
+    if(p != NULL)
+      frequency = parse_frequency(p,false);
+  }
+  if(frequency < Min_frequency || frequency > Max_frequency){
+    fprintf(stdout,"Invalid VHF/UHF frequency %'lf, forcing %'lf\n",frequency,0.0);
+    frequency = 0;
+  }
+  if(frequency == 0){
+    // HF mode
+    rx888_set_hf_mode(sdr);
+  } else {
+    // VHF/UHF mode
+    double actual_frequency = rx888_set_tuner_frequency(sdr,frequency);
+    fprintf(stdout,"Actual VHF/UHF tuner frequency %'lf\n",actual_frequency);
+    sdr->frequency = frequency;
+    rx888_set_att(sdr,att,true);
+    rx888_set_gain(sdr,gain,true);
+  }
 
   usleep(1000000); // 1s - see SDDC_FX3 firmware
   return 0;
@@ -647,39 +682,48 @@ end:;
 
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer){
   assert(sdr != NULL);
-  uint32_t gpio = 0;
   if(dither)
-    gpio |= DITH;
+    sdr->gpios |= DITH;
 
   if(randomizer)
-    gpio |= RANDO;
+    sdr->gpios |= RANDO;
 
   usleep(5000);
-  command_send(sdr->dev_handle,GPIOFX3,gpio);
+  command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
   sdr->dither = dither;
   sdr->randomizer = randomizer;
 }
 
-static void rx888_set_att(struct sdrstate *sdr,float att){
+static void rx888_set_att(struct sdrstate *sdr,float att,bool vhf){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
   assert(frontend != NULL);
   usleep(5000);
 
   frontend->rf_atten = att;
-  int const arg = (int)(att * 2);
-  argument_send(sdr->dev_handle,DAT31_ATT,arg);
+  if(!vhf){
+    int const arg = (int)(att * 2);
+    argument_send(sdr->dev_handle,DAT31_ATT,arg);
+  } else {
+    int const arg = (int)att;
+    argument_send(sdr->dev_handle,R82XX_ATTENUATOR,arg);
+  }
 }
 
-static void rx888_set_gain(struct sdrstate *sdr,float gain){
+static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
   assert(frontend != NULL);
   usleep(5000);
 
-  int const arg = gain2val(sdr->highgain,gain);
-  argument_send(sdr->dev_handle,AD8340_VGA,arg);
-  frontend->rf_gain = val2gain(arg); // Store actual nearest value
+  if(!vhf){
+    int const arg = gain2val(sdr->highgain,gain);
+    argument_send(sdr->dev_handle,AD8340_VGA,arg);
+    frontend->rf_gain = val2gain(arg); // Store actual nearest value
+  } else {
+    int const arg = (int)gain;
+    argument_send(sdr->dev_handle,R82XX_VGA,arg);
+  }
 }
 
 // see: SiLabs Application Note AN619 - Manually Generating an Si5351 Register Map (https://www.silabs.com/documents/public/application-notes/AN619.pdf)
@@ -788,6 +832,51 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
 
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
   return output_samprate;
+}
+
+static void rx888_set_hf_mode(struct sdrstate *sdr){
+  struct frontend *frontend = sdr->frontend;
+  if(frontend->frequency == 0.0){
+    return;
+  }
+  command_send(sdr->dev_handle,TUNERSTDBY,0); // Stop Tuner
+  // switch to HF Antenna
+  usleep(5000);
+  sdr->gpios &= ~VHF_EN;
+  command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
+  frontend->frequency = 0.0;
+}
+
+static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency){
+  assert(sdr != NULL);
+  // frequency == 0 -> HF mode; we shouldn't be here
+  assert(frequency > 0);
+  struct frontend *frontend = sdr->frontend;
+  if(frontend->frequency == frequency){
+    return frequency - R828D_IF_CARRIER;
+  }
+  if(frontend->frequency == 0.0){
+    // disable HF by set max ATT
+    rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
+    // switch to VHF Antenna
+    usleep(5000);
+    sdr->gpios |= VHF_EN;
+    command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
+
+    // high gain, 0db
+    uint8_t gain = 0x80 | 3;
+    argument_send(sdr->dev_handle,AD8340_VGA,gain);
+
+    // Enable Tuner reference clock
+    uint32_t ref = R828D_FREQ;
+    command_send(sdr->dev_handle,TUNERINIT,ref); // Initialize Tuner
+  }
+
+  // Tune LO
+  command_send(sdr->dev_handle,TUNERTUNE,(uint64_t)frequency);
+  frontend->frequency = frequency;
+  fprintf(stderr, "VHF/UHF tuner requested frequency: %'lf - actual frequency: %'lf", frequency, frequency - R828D_IF_CARRIER);
+  return frequency - R828D_IF_CARRIER;
 }
 
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
@@ -911,9 +1000,15 @@ static int gain2val(bool highgain, double gain){
   return g;
 }
 double rx888_tune(struct frontend *frontend,double freq){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->lock)
     return frontend->frequency;
-  return 0; // No tuning implemented (direct sampling only)
+  if(freq == 0.0){
+    rx888_set_hf_mode(sdr);
+    return 0;
+  } else {
+    return rx888_set_tuner_frequency(sdr,freq);
+  }
 }
 
 /* best rational approximation:
