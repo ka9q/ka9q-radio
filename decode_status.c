@@ -34,6 +34,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       FREE(frontend->description);
       frontend->description = decode_string(cp,optlen);
       break;
+    case STATUS_DEST_SOCKET:
+      decode_socket(&Metadata_dest_socket,cp,optlen);
+      break;
     case GPS_TIME:
       frontend->timestamp = decode_int64(cp,optlen);
       break;

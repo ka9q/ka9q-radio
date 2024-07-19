@@ -107,7 +107,7 @@ static struct session *Sessions[NSESSIONS];
 static bool Terminate;
 static bool Voting;
 static struct session *Best_session; // Session with highest SNR
-
+struct sockaddr_storage Metadata_dest_socket;
 
 int Mcast_ttl; // for decode_radio_status(); not really needed here
 

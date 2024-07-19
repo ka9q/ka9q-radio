@@ -508,7 +508,7 @@ int downconvert(struct channel *chan){
     // Look on the single-entry command queue and grab it atomically
     if(chan->status.command != NULL){
       restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
-      send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
+      send_radio_status((struct sockaddr *)&Metadata_dest_socket,&Frontend,chan); // Send status in response
       chan->status.global_timer = 0; // Just sent one
       // Also send to output stream
       send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
@@ -517,7 +517,7 @@ int downconvert(struct channel *chan){
       reset_radio_status(chan); // After both are sent
     } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
       // Delayed status request, used mainly by all-channel polls to avoid big bursts
-      send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
+      send_radio_status((struct sockaddr *)&Metadata_dest_socket,&Frontend,chan); // Send status in response
       chan->status.global_timer = 0; // to make sure
       reset_radio_status(chan); // After both are sent
     } else if(!chan->output.silent && chan->status.output_interval != 0 && chan->status.output_timer-- <= 0){

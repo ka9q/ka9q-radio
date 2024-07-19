@@ -61,6 +61,13 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
 	FREE(d);
       }
       break;
+    case STATUS_DEST_SOCKET:
+      {
+	struct sockaddr_storage sock;
+	fprintf(fp,"status dest %s",formatsock(decode_socket(&sock,cp,optlen)));
+      }
+      break;
+      break;
     case INPUT_SAMPRATE:
       fprintf(fp,"in samprate %'llu Hz",(long long unsigned)decode_int64(cp,optlen));
       break;

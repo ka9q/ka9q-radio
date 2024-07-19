@@ -81,8 +81,8 @@ volatile bool Stop_transfers = false; // Request to stop data transfers; how sho
 
 static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 static pthread_t Status_thread;
-struct sockaddr_storage Metadata_socket;      // Dest of global metadata
-static char const *Metadata_string; // DNS name of default multicast group for status/commands
+struct sockaddr_storage Metadata_dest_socket;      // Dest of global metadata
+static char const *Metadata_dest_string; // DNS name of default multicast group for status/commands
 int Output_fd = -1; // Unconnected socket used for all multicast output
 
 static void closedown(int);
@@ -385,21 +385,21 @@ static int loadconfig(char const * const file){
       *cp = '\0';
     char default_status[strlen(hostname) + strlen(Name) + 20]; // Enough room for snprintf
     snprintf(default_status,sizeof(default_status),"%s-%s.local",hostname,Name);
-    Metadata_string = strdup(config_getstring(Configtable,global,"status",default_status)); // Status/command target for all demodulators
+    Metadata_dest_string = strdup(config_getstring(Configtable,global,"status",default_status)); // Status/command target for all demodulators
   }
   {
     char ttlmsg[100];
     snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
-    int slen = sizeof(Metadata_socket);
-    uint32_t addr = make_maddr(Metadata_string);
-    avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_string,addr,ttlmsg,&Metadata_socket,&slen);
+    int slen = sizeof(Metadata_dest_socket);
+    uint32_t addr = make_maddr(Metadata_dest_string);
+    avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,addr,ttlmsg,&Metadata_dest_socket,&slen);
   }
-  // avahi_start has resolved the target DNS name into Metadata_socket and inserted the port number
-  join_group(Output_fd,(struct sockaddr *)&Metadata_socket,Iface,Mcast_ttl,IP_tos);
+  // avahi_start has resolved the target DNS name into Metadata_dest_socket and inserted the port number
+  join_group(Output_fd,(struct sockaddr *)&Metadata_dest_socket,Iface,Mcast_ttl,IP_tos);
   // Same remote socket as status
-  Ctl_fd = listen_mcast(&Metadata_socket,Iface);
+  Ctl_fd = listen_mcast(&Metadata_dest_socket,Iface);
   if(Ctl_fd < 0){
-    fprintf(stdout,"can't listen for commands from %s: %s\n",Metadata_string,strerror(errno));
+    fprintf(stdout,"can't listen for commands from %s: %s\n",Metadata_dest_string,strerror(errno));
     exit(EX_NOHOST);
   }
 

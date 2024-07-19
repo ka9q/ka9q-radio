@@ -45,6 +45,7 @@ static char const *Radio;
 static uint32_t Ssrc;
 static int Status_packets;
 static int64_t Last_status_time;
+struct sockaddr_storage Metadata_dest_socket;
 
 static char Locale[256] = "en_US.UTF-8";
 int Verbose;

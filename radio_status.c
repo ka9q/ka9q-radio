@@ -89,7 +89,7 @@ void *radio_status(void *arg){
 	  } else {
 	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	    decode_radio_commands(chan,buffer+1,length-1);
-	    send_radio_status((struct sockaddr *)&Metadata_socket,&Frontend,chan); // Send status in response
+	    send_radio_status((struct sockaddr *)&Metadata_dest_socket,&Frontend,chan); // Send status in response
 	    reset_radio_status(chan);
 	    chan->status.global_timer = 0; // Just sent one
 	    start_demod(chan);
@@ -453,6 +453,8 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   encode_int64(&bp,CMD_CNT,chan->status.packets_in); // integer
   if(strlen(frontend->description) > 0)
     encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
+
+  encode_socket(&bp,STATUS_DEST_SOCKET,&Metadata_dest_socket);
 
   // Echo timestamp from source or locally (bit of a kludge, eventually will always be local)
   if(frontend->timestamp != 0)

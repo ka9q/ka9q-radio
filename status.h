@@ -24,7 +24,7 @@ enum status_type {
   GPS_TIME,      // Nanoseconds since GPS epoch (remember to update the leap second tables!)
 
   DESCRIPTION,   // Free form text describing source
-  UNUSED0,
+  STATUS_DEST_SOCKET,
   UNUSED1,
   UNUSED2,
   UNUSED3,
