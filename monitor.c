@@ -568,19 +568,14 @@ static void *statproc(void *arg){
     float const snr = power2dB(sn0/noise_bandwidth);
     sp->snr = sp->now_active ? snr : -INFINITY;
     if(Voting){
-      if(Best_session == NULL || !Best_session->now_active){
-	// Grab the crown by default
-	Best_session = sp;
-	sp->reset = true;
-	sp->muted = false;
-      } else if(sp->snr > Best_session->snr + 1.0){
-	// Displaced the top dog
-	Best_session->muted = true;
-	sp->reset = true;
-	sp->muted = false;
-	Best_session = sp;
-      } else if(Best_session != sp)
-	sp->muted = true; // We've lost, stay silent
+      if(sp->muted){
+	if(Best_session == sp)
+	  Best_session = NULL;
+      } else {
+	if(Best_session == NULL || sp->snr > Best_session->snr + 1.0){
+	  Best_session = sp;	
+	}
+      }
     }
     int const type = sp->chan.output.rtp.type;
     if(type >= 0 && type < 128){
@@ -967,9 +962,6 @@ static void *decode_task(void *arg){
     sp->tot_active += (float)sp->frame_size / sp->samprate;
     sp->active += (float)sp->frame_size / sp->samprate;
 
-    if(sp->muted)
-      goto endloop; // No more to do with this frame
-
     kick_output(); // Ensure Rptr is current
     // Sequence number processing and write pointer updating
     if(sp->reset){
@@ -996,6 +988,10 @@ static void *decode_task(void *arg){
     sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->last_timestamp) * upsample;
     sp->wptr &= (BUFFERSIZE-1);
     sp->last_timestamp = pkt->rtp.timestamp;
+
+    // Skip actual output if session is muted, or if voting is enabled and we're not the winner
+    if(sp->muted || (Best_session != NULL && Best_session != sp))
+      goto endloop; // No more to do with this frame
 
     if(Channels == 2){
       /* Compute gains and delays for stereo imaging
@@ -1317,13 +1313,12 @@ static void *display(void *arg){
       mvprintw(y++,x,"%6s","Queue");
       for(int session = first_session; session < Nsessions_copy; session++,y++){
 	struct session const *sp = Sessions_copy[session];
-	if(!sp->now_active)
+	if(!sp->now_active || sp->muted || (Best_session != NULL && Best_session != sp))
 	  continue;
 
-	int d = modsub(sp->wptr,Rptr,BUFFERSIZE); // Unplayed samples on queue
-	int queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
-	if(sp->now_active && !sp->muted)
-	  mvprintw(y,x,"%6d",queue_ms);   // Time idle since last transmission
+	int const d = modsub(sp->wptr,Rptr,BUFFERSIZE); // Unplayed samples on queue
+	int const queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
+	mvprintw(y,x,"%6d",queue_ms);   // Time idle since last transmission
       }
       x += 7;
       y = row_save;
@@ -1428,20 +1423,22 @@ static void *display(void *arg){
 	}
       }
       // Embolden the active lines
-      attr_t attrs;
-      short pair;
+      attr_t attrs = 0;
+      short pair = 0;
       attr_get(&attrs, &pair, NULL);
       for(int session = first_session; session < Nsessions_copy; session++){
 	struct session const *sp = Sessions_copy[session];
 
 	attr_t attr = A_NORMAL;
-	attr |= session == current ? A_UNDERLINE : 0;
-	attr |= sp->now_active ? A_BOLD : 0;
+	if(sp->now_active && !sp->muted && (Best_session == NULL || Best_session == sp))
+	  attr |= A_BOLD;
 
 	// 1 adjusts for the titles
 	// only underscore to just before the socket entry since it's variable length
 	mvchgat(1 + row_save + session,col_save,x,attr,pair,NULL);
       }
+      if(current != -1)
+	move(1 + row_save + current,col_save); // Cursor on current line
       // End of display writing
     }
     int const c = getch(); // Waits for 'update interval' ms if no input
