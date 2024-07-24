@@ -1430,7 +1430,7 @@ static void *display(void *arg){
 	struct session const *sp = Sessions_copy[session];
 
 	attr_t attr = A_NORMAL;
-	if(sp->now_active && !sp->muted && (Best_session == NULL || Best_session == sp))
+	if(sp->now_active)
 	  attr |= A_BOLD;
 
 	// 1 adjusts for the titles
