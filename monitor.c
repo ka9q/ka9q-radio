@@ -989,8 +989,10 @@ static void *decode_task(void *arg){
     sp->wptr &= (BUFFERSIZE-1);
     sp->last_timestamp = pkt->rtp.timestamp;
 
+    if(Voting && !sp->muted && Best_session == NULL)
+      Best_session = sp; // Nobody else, take it
     // Skip actual output if session is muted, or if voting is enabled and we're not the winner
-    if(sp->muted || (Best_session != NULL && Best_session != sp))
+    if(sp->muted || (Voting && Best_session != sp))
       goto endloop; // No more to do with this frame
 
     if(Channels == 2){

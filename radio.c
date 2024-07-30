@@ -505,6 +505,10 @@ int downconvert(struct channel *chan){
     // Process any commands and return status
     bool restart_needed = false;
     pthread_mutex_lock(&chan->status.lock);
+
+    if(chan->status.output_interval != 0 && chan->status.output_timer == 0 && !chan->output.silent)
+      chan->status.output_timer = 1; // channel has become active, send update on this pass
+
     // Look on the single-entry command queue and grab it atomically
     if(chan->status.command != NULL){
       restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
@@ -519,13 +523,18 @@ int downconvert(struct channel *chan){
       // Delayed status request, used mainly by all-channel polls to avoid big bursts
       send_radio_status((struct sockaddr *)&Metadata_dest_socket,&Frontend,chan); // Send status in response
       chan->status.global_timer = 0; // to make sure
-      reset_radio_status(chan); // After both are sent
-    } else if(!chan->output.silent && chan->status.output_interval != 0 && chan->status.output_timer-- <= 0){
-      // Send status on output channel
-      send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
-      chan->status.output_timer = chan->status.output_interval; // Reload
-      reset_radio_status(chan); // After both are sent
+      reset_radio_status(chan);
+    } else if(chan->status.output_interval != 0 && chan->status.output_timer > 0){
+      // Timer is running for status on output stream
+      if(--chan->status.output_timer == 0){
+	// Timer has expired; send status on output channel
+	send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
+	reset_radio_status(chan);
+	if(!chan->output.silent)
+	  chan->status.output_timer = chan->status.output_interval; // Restart timer only if channel is active
+      }
     }
+
     pthread_mutex_unlock(&chan->status.lock);
     if(restart_needed){
       if(Verbose > 1)
@@ -548,6 +557,7 @@ int downconvert(struct channel *chan){
     // No front end coverage of our carrier; wait one block time for it to retune
     chan->sig.bb_power = 0;
     chan->sig.bb_energy = 0;
+    chan->sig.snr = 0;
     chan->output.energy = 0;
     struct timespec timeout; // Needed to avoid deadlock if no front end is available
     clock_gettime(CLOCK_REALTIME,&timeout);

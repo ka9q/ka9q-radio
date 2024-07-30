@@ -78,6 +78,7 @@ void *demod_fm(void *arg){
       float const snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1.0f;
       if(snr < chan->fm.squelch_close){
 	// squelch closed, reset everything and mute output
+	chan->sig.snr = snr; // Copy to FM SNR so monitor, etc, will see it
 	phase_memory = 0;
 	squelch_state = 0;
 	pl_sample_count = 0;

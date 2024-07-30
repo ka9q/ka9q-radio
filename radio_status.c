@@ -592,7 +592,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_double(&bp,DOPPLER_FREQUENCY,chan->tune.doppler); // Hz
     encode_double(&bp,DOPPLER_FREQUENCY_RATE,chan->tune.doppler_rate); // Hz
     encode_int32(&bp,OUTPUT_CHANNELS,chan->output.channels);
-    if(!isnan(chan->sig.snr) && chan->sig.snr > 0)
+    if(!isnan(chan->sig.snr))
       encode_float(&bp,DEMOD_SNR,power2dB(chan->sig.snr)); // abs ratio -> dB
 
     // Source address we're using to send data
