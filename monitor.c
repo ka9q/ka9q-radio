@@ -169,7 +169,7 @@ struct session {
   bool terminate;            // Set to cause thread to terminate voluntarily
   bool muted;
   bool reset;                // Set to force output timing reset on next packet
-  bool now_active;           // for convenience of painting output with bold colors
+  bool now_active;           // Audio arrived < 500 ms ago
 
   char id[32];
   bool notch_enable;         // Enable PL removal notch
@@ -211,7 +211,11 @@ static inline int modsub(unsigned int const a, unsigned int const b, int const m
 
   return diff;
 }
-
+static inline struct session *sptr(int index){
+  if(index >= 0 && index < Nsessions)
+    return Sessions[index];
+  return NULL;
+}
 
 static char Optstring[] = "CI:LR:Sac:f:g:p:qr:su:vnV";
 static struct  option Options[] = {
@@ -509,6 +513,27 @@ int main(int argc,char * const argv[]){
   exit(EX_OK); // calls cleanup() to clean up Portaudio and ncurses. Can't happen...
 }
 
+// Update session now-active flags, pick session with highest SNR for voting
+static void vote(){
+  struct session *best = NULL;
+  long long time = gps_time_ns();
+
+  pthread_mutex_lock(&Sess_mutex);
+  for(int i = 0; i < Nsessions; i++){
+    struct session * const sp = sptr(i);
+    if(sp == NULL || sp->muted)
+      continue;
+    sp->now_active = (time - sp->last_active) < BILLION/2; // boolean
+
+    if(!sp->now_active) // No recent audio, skip
+      continue;
+    if(best == NULL || sp->snr > best->snr + 1.0)
+      best = sp;
+  }
+  Best_session = best;
+  pthread_mutex_unlock(&Sess_mutex);
+}
+
 // Receive status multicasts on output multicast groups, update local states
 static void *statproc(void *arg){
   char const *mcast_address_text = (char *)arg;
@@ -547,7 +572,8 @@ static void *statproc(void *arg){
       fprintf(stderr,"No room!!\n");
       continue;
     }
-    sp->last_active = gps_time_ns(); // Keep active time calc from blowing up before data packet arrives
+    if(sp->last_active == 0)
+      sp->last_active = gps_time_ns(); // Keep active time calc from blowing up before data packet arrives
 
     // Decode directly into local copy, as not every parameter is updated in every status message
     // Decoding into a temp copy and then memcpy would write zeroes into unsent parameters
@@ -565,18 +591,9 @@ static void *statproc(void *arg){
     if(sig_power < 0)
       sig_power = 0; // Avoid log(-x) = nan
     float const sn0 = sig_power/sp->chan.sig.n0;
-    float const snr = power2dB(sn0/noise_bandwidth);
-    sp->snr = sp->now_active ? snr : -INFINITY;
-    if(Voting){
-      if(sp->muted){
-	if(Best_session == sp)
-	  Best_session = NULL;
-      } else {
-	if(Best_session == NULL || sp->snr > Best_session->snr + 1.0){
-	  Best_session = sp;	
-	}
-      }
-    }
+    sp->snr = power2dB(sn0/noise_bandwidth);
+    vote();
+
     int const type = sp->chan.output.rtp.type;
     if(type >= 0 && type < 128){
       // Don't overwrite existing
@@ -989,8 +1006,7 @@ static void *decode_task(void *arg){
     sp->wptr &= (BUFFERSIZE-1);
     sp->last_timestamp = pkt->rtp.timestamp;
 
-    if(Voting && !sp->muted && Best_session == NULL)
-      Best_session = sp; // Nobody else, take it
+    vote();
     // Skip actual output if session is muted, or if voting is enabled and we're not the winner
     if(sp->muted || (Voting && Best_session != sp))
       goto endloop; // No more to do with this frame
@@ -1087,13 +1103,6 @@ static void reset_session(struct session * const sp,uint32_t timestamp){
 }
 
 
-static inline struct session *sptr(int index){
-  if(index >= 0 && index < Nsessions)
-    return Sessions[index];
-  return NULL;
-}
-
-
 // Use ncurses to display streams
 static void *display(void *arg){
 
@@ -1174,6 +1183,7 @@ static void *display(void *arg){
 
       sessions_per_screen = LINES - getcury(stdscr) - 1;
 
+      vote(); // update active session flags
       // This mutex protects Sessions[] and Nsessions. Instead of holding the
       // lock for the entire display loop, we make a copy.
       pthread_mutex_lock(&Sess_mutex);
@@ -1187,14 +1197,6 @@ static void *display(void *arg){
 	current = 0; // Session got created, make it current
       pthread_mutex_unlock(&Sess_mutex);
 
-      // Flag active sessions
-      long long time = gps_time_ns();
-      for(int session = first_session; session < Nsessions_copy; session++){
-	struct session *sp = Sessions_copy[session];
-	sp->now_active = (time - sp->last_active) < BILLION/2; // boolean
-	if(!sp->now_active)
-	  sp->active = 0; // reset counter
-      }
       if(Verbose){
 	// Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
 	double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
@@ -1299,14 +1301,17 @@ static void *display(void *arg){
       y = row_save;
 
       mvprintw(y++,x,"%10s","Cur/idle");
-      for(int session = first_session; session < Nsessions_copy; session++,y++){
-	struct session *sp = Sessions_copy[session];
-	char buf[100];
-	if(sp->now_active)
-	  mvprintw(y,x,"%10s",ftime(buf,sizeof(buf),sp->active));
-	else {
-	  float idle_sec = (time - sp->last_active) / BILLION;
-	  mvprintw(y,x,"%10s",ftime(buf,sizeof(buf),idle_sec));   // Time idle since last transmission
+      {
+	long long time = gps_time_ns();
+	for(int session = first_session; session < Nsessions_copy; session++,y++){
+	  struct session *sp = Sessions_copy[session];
+	  char buf[100];
+	  if(sp->now_active)
+	    mvprintw(y,x,"%10s",ftime(buf,sizeof(buf),sp->active));
+	  else {
+	    float idle_sec = (time - sp->last_active) / BILLION;
+	    mvprintw(y,x,"%10s",ftime(buf,sizeof(buf),idle_sec));   // Time idle since last transmission
+	  }
 	}
       }
       x += 11;
