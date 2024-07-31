@@ -1017,10 +1017,10 @@ static void *decode_task(void *arg){
     sp->last_timestamp = pkt->rtp.timestamp;
 
     vote();
-    // Skip actual output if session is muted, or if voting is enabled and we're not the winner
-    // Note: thumping artifacts during vote switches *may* be caused by the tone notch only running when unmuted
-    // Should try running it all the time and see
-    if(sp->muted || (Voting && Best_session != sp))
+    // Skip output if session is muted
+    // Thumping artifacts during vote switching seem worse if we bail out here, so we keep the tone notch filters going
+    // on out-voted channels
+    if(sp->muted)
       goto endloop; // No more to do with this frame
 
     if(Channels == 2){
@@ -1065,15 +1065,17 @@ static void *decode_task(void *arg){
 	    right = applyIIRnotch(&sp->iir_right,right);
 	  }
 	}
-	// Not the cleanest way to upsample the sample rate, but it works
-	for(int j=0; j < upsample; j++){
-	  Output_buffer[left_index] += left * left_gain;
-	  Output_buffer[right_index] += right * right_gain;
-	  left_index += 2;
-	  right_index += 2;
+	if(!Voting || Best_session == sp){
+	  // Not the cleanest way to upsample the sample rate, but it works
+	  for(int j=0; j < upsample; j++){
+	    Output_buffer[left_index] += left * left_gain;
+	    Output_buffer[right_index] += right * right_gain;
+	    left_index += 2;
+	    right_index += 2;
+	  }
+	  if(modsub(right_index/2,Wptr,BUFFERSIZE) > 0)
+	    Wptr = right_index / 2; // samples to frames; For verbose mode
 	}
-	if(modsub(right_index/2,Wptr,BUFFERSIZE) > 0)
-	   Wptr = right_index / 2; // samples to frames; For verbose mode
       }
     } else { // Channels == 1, no panning
       int64_t index = sp->wptr;
@@ -1087,12 +1089,15 @@ static void *decode_task(void *arg){
 	}
 	if(sp->notch_enable && sp->notch_tone > 0)
 	  s = applyIIRnotch(&sp->iir_left,s);
-	// Not the cleanest way to upsample the sample rate, but it works
-	for(int j=0; j < upsample; j++){
-	  Output_buffer[index++] += s * sp->gain;
+
+	if(!Voting || Best_session == sp){
+	  // Not the cleanest way to upsample the sample rate, but it works
+	  for(int j=0; j < upsample; j++){
+	    Output_buffer[index++] += s * sp->gain;
+	  }
+	  if(modsub(index,Wptr,BUFFERSIZE) > 0)
+	    Wptr = index; // For verbose mode
 	}
-	if(modsub(index,Wptr,BUFFERSIZE) > 0)
-	   Wptr = index; // For verbose mode
       }
     } // Channels == 1
 
