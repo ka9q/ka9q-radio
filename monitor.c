@@ -75,6 +75,9 @@ static int64_t Mandatory_ID_interval;
 static int64_t Quiet_ID_interval;
 static int Dit_length;
 static int Channels = 2;
+static float Hysteresis = 2.0; // Voting hysteresis, dB
+//static float GoodEnoughSNR = 20.0; // FM SNR considered "good enough to not be worth changing
+
 static char const *Init;
 
 // Global variables that regularly change
@@ -514,23 +517,30 @@ int main(int argc,char * const argv[]){
 }
 
 // Update session now-active flags, pick session with highest SNR for voting
+// Needs to be enhanced: hysteresis should be a function of SNR. Little or none at low SNR, lots at high SNR
 static void vote(){
   struct session *best = NULL;
-  long long time = gps_time_ns();
+  long long const time = gps_time_ns();
 
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < Nsessions; i++){
     struct session * const sp = sptr(i);
-    if(sp == NULL || sp->muted)
+    if(sp == NULL)
       continue;
-    sp->now_active = (time - sp->last_active) < BILLION/2; // boolean
 
-    if(!sp->now_active) // No recent audio, skip
+    // Have we gotten anything in the last 500 ms?
+    sp->now_active = (time - sp->last_active) < BILLION/2; // note: boolean expression
+
+    if(sp->muted || !sp->now_active) // No recent audio, skip
       continue;
-    if(best == NULL || sp->snr > best->snr + 1.0)
+
+    if(best == NULL || sp->snr > best->snr)
       best = sp;
   }
-  Best_session = best;
+  // Don't claim it unless we're sufficiently better (or there's nobody)
+  if(Best_session == NULL || !Best_session->now_active || (best != NULL && best->snr > Best_session->snr + Hysteresis))
+    Best_session = best;
+
   pthread_mutex_unlock(&Sess_mutex);
 }
 
@@ -1008,6 +1018,8 @@ static void *decode_task(void *arg){
 
     vote();
     // Skip actual output if session is muted, or if voting is enabled and we're not the winner
+    // Note: thumping artifacts during vote switches *may* be caused by the tone notch only running when unmuted
+    // Should try running it all the time and see
     if(sp->muted || (Voting && Best_session != sp))
       goto endloop; // No more to do with this frame
 
@@ -1772,8 +1784,10 @@ static int close_session(struct session **p){
   assert(Nsessions > 0);
 
   pthread_mutex_lock(&Sess_mutex);
-  if(sp == Best_session)
+  if(sp == Best_session){
+    vote();
     Best_session = NULL;
+  }
   // Remove from table
   for(int i = 0; i < Nsessions; i++){
     if(Sessions[i] == sp){
