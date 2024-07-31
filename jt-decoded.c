@@ -114,7 +114,7 @@ void process_file(struct session *sp);
 void create_new_file(struct session *sp,time_t);
 
 void usage(){
-  fprintf(stdout,"Usage: %s [-L locale] [-v] [-k] [-d recording_dir] [-4|-8|-w] PCM_multicast_address\n",App_path);
+  fprintf(stdout,"Usage: %s [-L locale] [-v] [-k] [-d recording_dir] [-x <PATH_TO_JT9>] [-4|-8|-w] PCM_multicast_address\n",App_path);
   exit(EX_USAGE);
 }
 
@@ -126,8 +126,12 @@ int main(int argc,char *argv[]){
 
   // Defaults
   int c;
-  while((c = getopt(argc,argv,"w84d:L:vkV")) != EOF){
+  while((c = getopt(argc,argv,"w84d:L:vkVx:")) != EOF){
     switch(c){
+    case 'x':
+      Modetab[FT4].decode  = optarg;
+      Modetab[FT8].decode  = optarg;
+      break;
     case 'w':
       Mode = WSPR;
       break;
