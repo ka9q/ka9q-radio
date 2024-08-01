@@ -411,7 +411,7 @@ void vote(){
       best = sp;
   }
   // Don't claim it unless we're sufficiently better (or there's nobody)
-  if(Best_session == NULL || !Best_session->now_active || (best != NULL && best->snr > Best_session->snr + Hysteresis))
+  if(Best_session == NULL || Best_session->muted || !Best_session->now_active || (best != NULL && best->snr > Best_session->snr + Hysteresis))
     Best_session = best;
 
   pthread_mutex_unlock(&Sess_mutex);
