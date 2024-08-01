@@ -116,6 +116,9 @@ void *demod_wfm(void *arg){
   compute_tuning(composite_N,composite_M,Composite_samprate,&subc_shift,&subc_remainder,38000.);
   assert((subc_shift % 4) == 0 && subc_remainder == 0);
 
+  complex float stereo_deemph = 0;
+  float mono_deemph = 0;
+
   realtime();
 
   while(downconvert(chan) == 0){
@@ -234,17 +237,17 @@ void *demod_wfm(void *arg){
       float output_level = 0;
       for(int n = 0; n < audio_L; n++){
 	complex float subc_phasor = pilot.output.c[n]; // 19 kHz pilot
-	subc_phasor = (subc_phasor * subc_phasor) / cnrmf(subc_phasor); // square and normalize
+	subc_phasor = (subc_phasor * subc_phasor) / cnrmf(subc_phasor); // square to 38 kHz and normalize
 	float subc_info = __imag__ (conjf(subc_phasor) * lminusr.output.c[n]); // Carrier is in quadrature
 	assert(!isnan(subc_info));
 	assert(!isnan(mono.output.r[n]));
+	// demultiplex: 2L = (L+R) + (L-R); 2R = (L+R) - (L-R)
+	// L+R = mono.output.r[n]; L-R = subc_info
+	// real(s) = L, imag(s) = R
 	float complex s = mono.output.r[n] + subc_info + I * (mono.output.r[n] - subc_info);
-	if(chan->fm.rate != 0){
-	  assert(!isnan(__real__ chan->fm.state));
-	  assert(!isnan(__imag__ chan->fm.state));
-	  chan->fm.state *= chan->fm.rate;
-	  s = chan->fm.state += chan->fm.gain * (1 - chan->fm.rate) * s;
-	}
+	if(chan->fm.rate != 0)
+	  s = stereo_deemph += chan->fm.rate * (chan->fm.gain * s - stereo_deemph);
+
 	stereo_buffer[n] = s * chan->output.gain;
 	output_level += cnrmf(stereo_buffer[n]);
       }
@@ -260,10 +263,7 @@ void *demod_wfm(void *arg){
 	// Apply deemphasis
 	assert(!isnan(__real__ chan->fm.state));
 	for(int n=0; n < audio_L; n++){
-	  float s = mono.output.r[n];
-	  __real__ chan->fm.state *= chan->fm.rate;
-	  s = __real__ chan->fm.state += chan->fm.gain * (1 - chan->fm.rate) * s; 
-	  s *= chan->output.gain;
+	  float s = mono_deemph += chan->fm.rate * (chan->fm.gain * mono.output.r[n] - mono_deemph);
 	  mono.output.r[n] = s;
 	  output_level += s * s;
 	}
