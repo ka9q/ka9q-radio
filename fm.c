@@ -69,6 +69,10 @@ void *demod_fm(void *arg){
   int badsamples = 0;
   chan->output.gain = (2 * chan->output.headroom *  chan->output.samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
 
+  float dc_rate = -expm1f(-1.0f / (0.1 * chan->output.samprate)); // experimental DC removal, 100 ms time constant (~10 Hz)
+  float dc = 0; // DC removal filter state
+
+
   realtime();
 
   while(downconvert(chan) == 0){
@@ -244,10 +248,10 @@ void *demod_fm(void *arg){
     }
     if(chan->fm.rate != 0){
       // Apply de-emphasis if configured
-      float const r = 1 - chan->fm.rate;
       for(int n=0; n < N; n++){
-	deemph_state += r * (baseband[n] - deemph_state);
-	baseband[n] = deemph_state * chan->fm.gain;
+	float s = deemph_state += chan->fm.rate * (chan->fm.gain * baseband[n] - deemph_state);
+	// Experimental DC removal for carrier frequency offsets
+	baseband[n] = s - (dc += dc_rate * (s - dc)); // note assigment to dc
       }
     }
     // Compute audio output level

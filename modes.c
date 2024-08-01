@@ -231,7 +231,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     char const *cp = config_getstring(table,sname,"deemph-tc",NULL);
     if(cp){
       float const tc = strtof(cp,NULL) * 1e-6;
-      chan->fm.rate = expf(-1.0f / (tc * chan->output.samprate));
+      chan->fm.rate = -expm1f(-1.0f / (tc * chan->output.samprate));
     }
   }
   {
