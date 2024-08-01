@@ -184,7 +184,6 @@ struct channel {
     float squelch_open;      // squelch open threshold, power ratio
     float squelch_close;     // squelch close threshold
     int squelch_tail;        // Frames to hold open after loss of SNR
-    complex float state;     // de-emphasis filter state
     float gain;              // Empirically set to match overall gain with deemphasis to that without
     float rate;              // de-emphasis filter coefficient computed from expf(-1.0 / (tc * output.samprate));
                              // tc = 75e-6 sec for North American FM broadcasting
