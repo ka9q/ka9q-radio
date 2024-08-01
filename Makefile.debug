@@ -32,7 +32,7 @@ HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhi
 
 all: $(DAEMONS) $(EXECS)
 
-# NB: now overwrites existing .conf files in /etc/radio !
+# NB: no longer copies files to /etc/radio. Must be installed manually.
 install: $(DAEMONS) $(EXECS)
 	/usr/sbin/adduser --quiet --system --group radio
 	/usr/sbin/adduser --quiet --system --ingroup radio recordings
@@ -97,7 +97,7 @@ show-sig: show-sig.o libradio.a
 metadump: metadump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
-monitor: monitor.o libradio.a
+monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lasound -lncursesw -liniparser -lbsd -lm -lpthread
 
 opusd: opusd.o libradio.a

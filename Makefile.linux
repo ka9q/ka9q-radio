@@ -97,7 +97,7 @@ show-sig: show-sig.o libradio.a
 metadump: metadump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
-monitor: monitor.o libradio.a
+monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lasound -lncursesw -liniparser -lbsd -lm -lpthread
 
 opusd: opusd.o libradio.a
