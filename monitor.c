@@ -91,7 +91,7 @@ struct session *Best_session; // Session with highest SNR
 struct sockaddr_storage Metadata_dest_socket;
 int Mcast_ttl;
 
-static char Optstring[] = "CI:LR:Sac:f:g:p:qr:su:vnV";
+static char Optstring[] = "CI:LR:Sc:f:g:p:qr:su:vnV";
 static struct  option Options[] = {
    {"center", no_argument, NULL, 'C'},
    {"input", required_argument, NULL, 'I'},
@@ -101,14 +101,14 @@ static struct  option Options[] = {
    {"channels", required_argument, NULL, 'c'},
    {"config", required_argument, NULL, 'f'},
    {"gain", required_argument, NULL, 'g'},
+   {"notch", no_argument, NULL, 'n'},
    {"playout", required_argument, NULL, 'p'},
    {"quiet", no_argument, NULL, 'q'},
    {"samprate",required_argument,NULL,'r'},
+   {"voting", no_argument, NULL, 's'},
    {"update", required_argument, NULL, 'u'},
    {"verbose", no_argument, NULL, 'v'},
-   {"notch", no_argument, NULL, 'n'},
    {"version", no_argument, NULL, 'V'},
-   {"voting", no_argument, NULL, 's'},
    {NULL, 0, NULL, 0},
 };
 
@@ -401,6 +401,8 @@ void vote(){
 
     // Have we gotten anything in the last 500 ms?
     sp->now_active = (time - sp->last_active) < BILLION/2; // note: boolean expression
+    if(!sp->now_active)
+      sp->active = 0;
 
     if(sp->muted || !sp->now_active) // No recent audio, skip
       continue;

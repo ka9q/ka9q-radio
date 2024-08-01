@@ -117,33 +117,40 @@ static int scompare(void const *a, void const *b){
   struct session const * const s1 = *(struct session **)a;
   struct session const * const s2 = *(struct session **)b;
 
-  if(s1->active > 0 && s2->active > 0){
-    // Fuzz needed because active sessions are updated when packets arrive
-    if(fabsf(s1->active - s2->active) < 0.5)
-      return 0; // Equal within 1/2 sec
-    if(s1->active > s2->active)
-      return -1; // Longer active lower
-    else
+  vote(); // update now_active flags
+  if(s1->now_active){
+    if(s2->now_active){
+      // Both active. Fuzz needed because active sessions are updated when packets arrive
+      if(fabsf(s1->active - s2->active) < 0.5) {
+	return 0; // Equal within 1/2 sec
+      } else if(s1->active > s2->active){
+	return -1; // s1 Longer active
+      } else {
+	return +1; // s2 longer
+      }
+    } else
+      return -1; // s1 active, s2 inactive. Active always lower than inactive
+  } else {    // s1 inctive
+    if(s2->now_active){
       return +1;
+    } else {     // Both inactive, sort by last active times
+      if(s1->last_active > s2->last_active){
+	return -1;
+      } else {
+	return +1;
+      }
+      // last_active is in nanoseconds so chances of equality are nil
+    }
   }
-  if(s1->active <= 0 && s2->active > 0)
-    return +1; // Active always lower than inactive
-  if(s1->active >= 0 && s2->active < 0)
-    return -1;
-
-  // Both inactive
-  if(s1->last_active > s2->last_active)
-    return -1;
-  else
-    return +1;
-  // Chances of equality are nil
 }
+
 // sort callback for sort_session() for comparing sessions by total time
 static int tcompare(void const *a, void const *b){
   struct session const * const s1 = *(struct session **)a;
   struct session const * const s2 = *(struct session **)b;
 
-#if NOFUZZ
+#define FUZZ 1
+#ifdef FUZZ
   if(fabsf(s1->tot_active - s2->tot_active) < 0.1) // equal within margin
     return 0;
 #endif
