@@ -261,7 +261,6 @@ void *demod_wfm(void *arg){
       float output_level = 0;
       if(chan->fm.rate != 0){
 	// Apply deemphasis
-	assert(!isnan(__real__ chan->fm.state));
 	for(int n=0; n < audio_L; n++){
 	  float s = mono_deemph += chan->fm.rate * (chan->fm.gain * mono.output.r[n] - mono_deemph);
 	  mono.output.r[n] = s;
