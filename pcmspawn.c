@@ -53,14 +53,14 @@ int Verbose;                  // Verbosity flag (currently unused)
 
 // Global variables
 pthread_t Status_thread;
-pthread_mutex_t Input_ready_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t Input_ready_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 pthread_cond_t Input_ready_cond = PTHREAD_COND_INITIALIZER;
 
 int Status_fd = -1;           // Reading from radio status
 int Status_out_fd = -1;       // Writing to radio status
 int Input_fd = -1;            // Multicast receive socket
 struct session *Sessions;
-pthread_mutex_t Session_protect = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t Session_protect = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 char const *Command;
 char const *Input;
 char const *Status;

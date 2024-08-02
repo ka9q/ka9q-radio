@@ -39,7 +39,7 @@ int N_internal_threads = 1; // Usually most efficient
 int FFTW_planning_level = FFTW_PATIENT;
 
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
-static pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t FFTW_planning_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 static bool FFTW_init = false;
 
 // FFT job queue
