@@ -322,7 +322,7 @@ static void update_monitor_display(void){
   pthread_mutex_lock(&Sess_mutex);
   assert(Nsessions <= NSESSIONS);
   int const Nsessions_copy = Nsessions;
-  struct session *Sessions_copy[NSESSIONS];
+  struct session *Sessions_copy[Nsessions];
   memcpy(Sessions_copy,Sessions,Nsessions * sizeof(Sessions_copy[0]));
   pthread_mutex_unlock(&Sess_mutex);
 
