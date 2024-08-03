@@ -72,7 +72,7 @@ static int Status_fd = -1;
 static int Status_out_fd = -1; // Not used yet
 #endif
 static struct session *Session;
-static pthread_mutex_t Output_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+static pthread_mutex_t Output_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct sockaddr_storage Status_dest_address;
 struct sockaddr_storage Status_input_source_address;
 struct sockaddr_storage Local_status_source_address;

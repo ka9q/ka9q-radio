@@ -92,14 +92,14 @@ const float Latency = 0.02;    // chunk size for audio output callback
 
 // Global variables
 pthread_t Status_thread;
-pthread_mutex_t Input_ready_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+pthread_mutex_t Input_ready_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t Input_ready_cond = PTHREAD_COND_INITIALIZER;
 
 int Status_fd = -1;           // Reading from radio status
 int Input_fd = -1;            // Multicast receive socket
 int Output_fd = -1;           // Multicast receive socket
 struct session *Sessions;
-pthread_mutex_t Session_protect = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+pthread_mutex_t Session_protect = PTHREAD_MUTEX_INITIALIZER;
 uint64_t Output_packets;
 char const *Name;
 char const *Output;

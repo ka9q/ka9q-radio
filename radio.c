@@ -34,7 +34,7 @@
 extern float Blocktime;
 struct frontend Frontend;
 
-pthread_mutex_t Channel_list_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 int const Channelalloc_quantum = 1000;
 struct channel *Channel_list; // Contiguous array
 int Channel_list_length; // Length of array

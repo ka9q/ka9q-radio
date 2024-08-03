@@ -79,7 +79,7 @@ int Status_out_fd = -1;       // Writing to radio status
 int Input_fd = -1;            // Multicast receive socket
 int Output_fd = -1;           // Multicast send socket
 struct session *Audio;
-pthread_mutex_t Audio_protect = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+pthread_mutex_t Audio_protect = PTHREAD_MUTEX_INITIALIZER;
 uint64_t Output_packets;
 char const *Input;
 char const *Output;

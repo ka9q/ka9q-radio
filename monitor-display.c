@@ -670,6 +670,7 @@ static void process_keyboard(void){
   if(c == EOF)
     return; // No key hit
 
+  bool already_unlocked = false;
   pthread_mutex_lock(&Sess_mutex);
   switch(c){
   case 'Q': // quit program
@@ -883,6 +884,7 @@ static void process_keyboard(void){
 	sp->terminate = true;
 	// We have to wait for it to clean up before we close and remove its session
 	pthread_mutex_unlock(&Sess_mutex); // close_session will need the lock, at least
+	already_unlocked = true;
 	pthread_join(sp->task,NULL);
 	close_session(&sp); // Decrements Nsessions
       }
@@ -894,5 +896,6 @@ static void process_keyboard(void){
     beep();
     break;
   }
-  pthread_mutex_unlock(&Sess_mutex); // Is double-unlocking a problem?
+  if(!already_unlocked)
+    pthread_mutex_unlock(&Sess_mutex); // Is double-unlocking a problem?
 }

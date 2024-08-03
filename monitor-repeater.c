@@ -45,7 +45,7 @@ volatile bool PTT_state;
 int64_t Last_id_time;
 
 pthread_cond_t PTT_cond = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t PTT_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+pthread_mutex_t PTT_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 #if 0
 // Send CWID through separate CW daemon (cwd)

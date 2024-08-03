@@ -76,11 +76,11 @@ volatile int64_t LastAudioTime;
 int32_t Portaudio_delay;
 pthread_t Repeater_thread;
 int Nfds;                     // Number of streams
-pthread_mutex_t Sess_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+pthread_mutex_t Sess_mutex = PTHREAD_MUTEX_INITIALIZER;
 PaStream *Pa_Stream;          // Portaudio stream handle
 int inDevNum;                 // Portaudio's audio output device index
 int64_t Start_time;
-pthread_mutex_t Stream_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP; // Control access to stream start/stop
+pthread_mutex_t Stream_mutex = PTHREAD_MUTEX_INITIALIZER; // Control access to stream start/stop
 PaTime Start_pa_time;
 PaTime Last_callback_time;
 int64_t Last_error_time;
