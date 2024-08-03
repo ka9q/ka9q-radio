@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include "misc.h"
 #include "avahi.h"
 
 
@@ -63,8 +64,6 @@ static int deescape(char *s){
 
 
 
-static const int linesize = 1024;
-
 // Invoke 'avahi-browse' command, filter and sort output
 int avahi_browse(struct service_tab *table,int tabsize,char const *service_name){
   if(service_name == NULL || strlen(service_name) == 0 || table == NULL || tabsize == 0)
@@ -84,11 +83,14 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
   int line_count;
   for(line_count = 0; line_count < tabsize;){
     struct service_tab *tp = &table[line_count];
-    char *line = malloc(linesize);
-    tp->buffer = line; // so it can be freed later
-    if(fgets(line,linesize,fp) == NULL || feof(fp) || ferror(fp))
-      break;
+    char *line = NULL; // Fresh buffer for every line
+    size_t linesize = 0;
 
+    if(getline(&line,&linesize,fp) <= 0){
+      FREE(line);
+      break;
+    }
+    tp->buffer = line; // so it can be freed later
     tp->line_type = strsep(&line,";");
     tp->interface = strsep(&line,";");
     tp->protocol =  strsep(&line,";");
@@ -109,7 +111,7 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
       tp++;
       line_count++;
     } else {
-      free(tp->buffer);
+      FREE(tp->buffer);
       // tp pointers are now invalid, but they get reset on next iteration or it passes out of scope
     }
   }
@@ -121,8 +123,8 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
 
 // Free and wipe pointers inside service table; caller must free table array itself
 void avahi_free_service_table(struct service_tab *table,int tabsize){
-  for(int i=0; i < tabsize; i++){
+  for(int i=0; i < tabsize; i++)
     free(table[i].buffer);
-  }
+
   memset(table,0,sizeof(*table) * tabsize); // Clear it all out
 }

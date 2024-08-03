@@ -74,10 +74,10 @@ int init_bandplan(){
   if(fp == NULL)
     return -1;
 
-  char line[160];
-  memset(line,0,sizeof(line));
+  char *line = NULL;
+  size_t linelen = 0;
   int i=0;
-  for(i=0; i < MAX_BANDPLANS && fgets(line,sizeof(line),fp) != NULL;){
+  for(i=0; i < MAX_BANDPLANS && getline(&line,&linelen,fp) > 0;){
     if(line[0] == ';' || line[0] == '#')
       continue;
     chomp(line);
@@ -133,6 +133,7 @@ int init_bandplan(){
 #if 0
   fprintf(stderr,"Nbandplans %d\n",Nbandplans);
 #endif
+  FREE(line);
 
   return 0;
 }

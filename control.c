@@ -113,7 +113,6 @@ static void gen_locals(struct frontend *frontend,struct channel *channel){
 // library directory (usually /usr/local/share/ka9q-radio/)
 // then wait for a single keyboard character to clear it
 static void popup(char const *filename){
-  static int const maxcols = 256;
   char fname[PATH_MAX];
   if (dist_path(fname,sizeof(fname),filename) == -1)
     return;
@@ -122,8 +121,9 @@ static void popup(char const *filename){
     return;
   // Determine size of box
   int rows=0, cols=0;
-  char line[maxcols];
-  while(fgets(line,sizeof(line),fp) != NULL){
+  char *line = NULL;
+  size_t maxcols = 0;
+  while(getline(&line,&maxcols,fp) > 0){
     chomp(line);
     rows++;
     if(strlen(line) > cols)
@@ -135,11 +135,12 @@ static void popup(char const *filename){
   WINDOW * const pop = newwin(rows+2,cols+2,0,0);
   box(pop,0,0);
   int row = 1; // Start inside box
-  while(fgets(line,sizeof(line),fp) != NULL){
+  while(getline(&line,&maxcols,fp) > 0){
     chomp(line);
     mvwaddstr(pop,row++,1,line);
   }
   fclose(fp);
+  FREE(line);
   wnoutrefresh(pop);
   doupdate();
   wtimeout(pop,-1); // blocking read - wait indefinitely
@@ -405,12 +406,15 @@ int main(int argc,char *argv[]){
 	fprintf(stdout,"%d: %s (%s)\n",i,table[i].name,table[i].dns_name);
       fprintf(stdout,"Select index: ");
       fflush(stdout);
-      char line[1024];
-      if(fgets(line,sizeof(line),stdin) == NULL || feof(stdin) || ferror(stdin)){
+      char *line = NULL;
+      size_t linesize = 0;
+      if(getline(&line,&linesize,stdin) <= 0){
 	fprintf(stdout,"EOF on input\n");
+	FREE(line);
 	exit(EX_USAGE);
       }
       n = strtol(line,NULL,0);
+      FREE(line);
       if(n < 0 || n >= radiod_count){
 	fprintf(stdout,"Index %d out of range, try again\n",n);
 	exit(EX_USAGE);
@@ -532,12 +536,15 @@ int main(int argc,char *argv[]){
     }
     fprintf(stdout,"%d channels; choose SSRC, create new SSRC, or hit return to look for more: ",chan_count);
     fflush(stdout);
-    char line[128];
-    if(fgets(line,sizeof(line),stdin) == NULL || feof(stdin) || ferror(stdin)){
+    char *line = NULL;
+    size_t length = 0;
+    if(getline(&line,&length,stdin) <= 0){
       fprintf(stdout,"EOF on input, exiting\n");
+      FREE(line);
       exit(EX_USAGE);
     }
     int const n = strtol(line,NULL,0);
+    FREE(line);
     if(n > 0)
       Ssrc = n; // Will cause a break from this loop
   }
