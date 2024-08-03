@@ -90,6 +90,15 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 
 #endif // ifdef __APPLE__
 
+// Portable mutex initializer for recursive mutexes
+static inline int init_recursive_mutex(pthread_mutex_t *m){
+  pthread_mutexattr_t attr;
+  pthread_mutexattr_init(&attr);
+  pthread_mutexattr_settype(&attr,PTHREAD_MUTEX_RECURSIVE);
+  return pthread_mutex_init(m,&attr);
+}
+
+
 // Stolen from the Linux kernel -- enforce type matching of arguments
 #define min(x,y) ({			\
 		typeof(x) _x = (x);	\
