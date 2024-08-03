@@ -179,8 +179,8 @@ void decode_task_cleanup(void *arg){
     opus_decoder_destroy(sp->opus);
     sp->opus = NULL;
   }
-  struct packet *pkt_next;
-  for(struct packet *pkt = sp->queue; pkt; pkt = pkt_next){
+  struct packet *pkt_next = NULL;
+  for(struct packet *pkt = sp->queue; pkt != NULL; pkt = pkt_next){
     pkt_next = pkt->next;
     FREE(pkt);
   }
