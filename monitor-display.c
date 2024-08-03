@@ -152,8 +152,8 @@ void *display(void *arg){
       dist_path(path,sizeof(path),"monitor-help.txt");
       FILE *fp = fopen(path,"r");
       if(fp != NULL){
-	size_t size = 1024;
-	char *line = malloc(size);
+	size_t size = 0;
+	char *line = NULL;
 	while(getline(&line,&size,fp) != -1)
 	  addstrt(line);
 
