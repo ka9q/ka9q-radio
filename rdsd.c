@@ -72,7 +72,7 @@ static char const *Input;
 static char const *Status;
 static char const *Name = "rds";
 static struct session *Audio;
-static pthread_mutex_t Audio_protect = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t Audio_protect = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 static uint64_t Output_packets;
 
 void closedown(int);
