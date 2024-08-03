@@ -173,7 +173,7 @@ static inline int modsub(unsigned int const a, unsigned int const b, int const m
   return diff;
 }
 static inline struct session *sptr(int index){
-  if(index >= 0 && index < Nsessions)
+  if(index >= 0 && index < Nsessions && !Sessions[index]->terminate)
     return Sessions[index];
   return NULL;
 }

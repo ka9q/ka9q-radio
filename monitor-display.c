@@ -154,7 +154,7 @@ void *display(void *arg){
       if(fp != NULL){
 	size_t size = 0;
 	char *line = NULL;
-	while(getline(&line,&size,fp) != -1)
+	while(getline(&line,&size,fp) > 0)
 	  addstrt(line);
 
 	FREE(line);
@@ -322,8 +322,8 @@ static void update_monitor_display(void){
   pthread_mutex_lock(&Sess_mutex);
   assert(Nsessions <= NSESSIONS);
   int const Nsessions_copy = Nsessions;
-  struct session *Sessions_copy[Nsessions];
-  memcpy(Sessions_copy,Sessions,Nsessions * sizeof(Sessions_copy[0]));
+  struct session *Sessions_copy[Nsessions_copy];
+  memcpy(Sessions_copy,Sessions,Nsessions_copy * sizeof(Sessions_copy[0]));
   pthread_mutex_unlock(&Sess_mutex);
 
   if(Verbose){
@@ -670,7 +670,6 @@ static void process_keyboard(void){
   if(c == EOF)
     return; // No key hit
 
-  bool already_unlocked = false;
   pthread_mutex_lock(&Sess_mutex);
   switch(c){
   case 'Q': // quit program
@@ -881,21 +880,22 @@ static void process_keyboard(void){
     {
       struct session *sp = sptr(Current);
       if(sp != NULL){
-	sp->terminate = true;
-	// We have to wait for it to clean up before we close and remove its session
+	sp->terminate = true;  // Also keeps it from being found again by sptr()
 	pthread_mutex_unlock(&Sess_mutex); // close_session will need the lock, at least
-	already_unlocked = true;
+	// We have to wait for it to clean up before we close and remove its session
 	pthread_join(sp->task,NULL);
+	sp->task = NULL;
 	close_session(&sp); // Decrements Nsessions
+	vote(); // In case the best session went away
+	if(Current >= Nsessions)
+	  Current = Nsessions-1; // -1 when no sessions
+	return; // Avoid unlocking again
       }
-      if(Current >= Nsessions)
-	Current = Nsessions-1; // -1 when no sessions
     }
     break;
   default: // Invalid command
     beep();
     break;
   }
-  if(!already_unlocked)
-    pthread_mutex_unlock(&Sess_mutex); // Is double-unlocking a problem?
+  pthread_mutex_unlock(&Sess_mutex);
 }

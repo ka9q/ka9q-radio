@@ -188,6 +188,7 @@ int main(int argc,char * const argv[]){
     if(input)
       Mcast_address_text[Nfds++] = strdup(input);
     iniparser_freedict(Configtable);
+    Configtable = NULL;
   }
   // Rescan args to override config file
   bool list_audio = false;
@@ -483,7 +484,6 @@ void *statproc(void *arg){
       if(sp->chan.output.encoding != NO_ENCODING)
 	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,sp->chan.output.encoding); // Opus will get forced to stereo 48 kHz
     }
-    pthread_mutex_unlock(&Sess_mutex);
   }
   return NULL;
 }
@@ -529,47 +529,32 @@ int close_session(struct session **p){
   assert(Nsessions > 0);
 
   pthread_mutex_lock(&Sess_mutex);
-  if(sp == Best_session){
-    vote();
+  if(sp == Best_session)
     Best_session = NULL;
-  }
+
   // Remove from table
-  for(int i = 0; i < Nsessions; i++){
-    if(Sessions[i] == sp){
-      Nsessions--;
-      memmove(&Sessions[i],&Sessions[i+1],(Nsessions-i) * sizeof(Sessions[0]));
-      if(sp->opus)
-	opus_decoder_destroy(sp->opus);
-      sp->opus = NULL;
-
-      pthread_mutex_lock(&sp->qmutex);
-      while(sp->queue != NULL){
-	struct packet *next = sp->queue->next;
-	free(sp->queue);
-	sp->queue = next;
-      }
-      pthread_cond_destroy(&sp->qcond);
-      pthread_mutex_destroy(&sp->qmutex);
-
-      struct frontend * const frontend = &sp->frontend;
-      FREE(frontend->description);
-
-      // Just in case anything was allocated for these arrays
-      struct channel * const chan = &sp->chan;
-      FREE(chan->filter.energies);
-      FREE(chan->spectrum.bin_data);
-      FREE(chan->status.command);
-
-      FREE(sp);
-      *p = NULL;
-      pthread_mutex_unlock(&Sess_mutex);
-      return 0;
-    }
+  int i = 0;
+  for(i = 0; i < Nsessions; i++){
+    if(Sessions[i] == sp)
+      break;
   }
-  // get here only if not found, which shouldn't happen
-  pthread_mutex_unlock(&Sess_mutex);
-  assert(false);
-  return -1;
+  if(i == Nsessions){
+    // Not found
+    assert(false);
+    pthread_mutex_unlock(&Sess_mutex);
+    return -1;
+  }
+
+  // Copy remaining session pointers down
+  Nsessions--;
+  assert(Nsessions >= i);
+  memmove(&Sessions[i],&Sessions[i+1],(Nsessions-i) * sizeof(Sessions[0]));
+  Sessions[Nsessions] = NULL; // Last entry no longer valid
+  pthread_mutex_unlock(&Sess_mutex); // Done modifying session table
+  // Thread now cleans itself up
+  FREE(sp);
+  *p = NULL;
+  return 0;
 }
 
 // passed to atexit, invoked at exit

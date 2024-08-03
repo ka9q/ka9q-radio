@@ -184,6 +184,14 @@ void decode_task_cleanup(void *arg){
     pkt_next = pkt->next;
     FREE(pkt);
   }
+  struct frontend * const frontend = &sp->frontend;
+  FREE(frontend->description);
+
+  // Just in case anything was allocated for these arrays
+  struct channel * const chan = &sp->chan;
+  FREE(chan->filter.energies);
+  FREE(chan->spectrum.bin_data);
+  FREE(chan->status.command);
 }
 
 // Per-session thread to decode incoming RTP packets
@@ -197,7 +205,7 @@ void *decode_task(void *arg){
     snprintf(name,sizeof(name),"dec %u",sp->ssrc);
     pthread_setname(name);
   }
-  pthread_cleanup_push(decode_task_cleanup,arg);
+  pthread_cleanup_push(decode_task_cleanup,arg); // called on termination
 
   int consec_lates = 0;
   int consec_earlies = 0;
