@@ -884,7 +884,7 @@ static void process_keyboard(void){
 	pthread_mutex_unlock(&Sess_mutex); // close_session will need the lock, at least
 	// We have to wait for it to clean up before we close and remove its session
 	pthread_join(sp->task,NULL);
-	sp->task = NULL;
+	sp->task = (pthread_t)0;
 	close_session(&sp); // Decrements Nsessions
 	vote(); // In case the best session went away
 	if(Current >= Nsessions)
