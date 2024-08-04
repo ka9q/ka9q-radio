@@ -507,7 +507,6 @@ struct session *lookup_or_create_session(const struct sockaddr_storage *sender,c
 
   // Put at end of list
   Sessions[Nsessions++] = sp;
-  sp->chan.inuse = true;
   sp->init = false; // Wait for first RTP packet to set the rest up
   sp->ssrc = ssrc;
   memcpy(&sp->sender,sender,sizeof(sp->sender));

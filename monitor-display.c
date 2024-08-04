@@ -173,6 +173,7 @@ void *display(void *arg){
       update_monitor_display();
 
     process_keyboard();
+    vote(); // mainly in case a session was muted or unmuted
   }
   return NULL;
 }
@@ -181,7 +182,6 @@ static int scompare(void const *a, void const *b){
   struct session const * const s1 = *(struct session **)a;
   struct session const * const s2 = *(struct session **)b;
 
-  vote(); // update now_active flags
   if(s1->now_active){
     if(s2->now_active){
       // Both active. Fuzz needed because active sessions are updated when packets arrive
@@ -225,11 +225,15 @@ static int tcompare(void const *a, void const *b){
 
 // Sort session list in increasing order of age
 static int sort_session_active(void){
+  pthread_mutex_lock(&Sess_mutex);
   qsort(Sessions,Nsessions,sizeof(Sessions[0]),scompare);
+  pthread_mutex_unlock(&Sess_mutex);
   return 0;
 }
 static int sort_session_total(void){
+  pthread_mutex_lock(&Sess_mutex);
   qsort(Sessions,Nsessions,sizeof(Sessions[0]),tcompare);
+  pthread_mutex_unlock(&Sess_mutex);
   return 0;
 }
 
@@ -316,15 +320,16 @@ static void update_monitor_display(void){
 
   Sessions_per_screen = LINES - getcury(stdscr) - 1;
 
-  vote(); // update active session flags
+
   // This mutex protects Sessions[] and Nsessions. Instead of holding the
   // lock for the entire display loop, we make a copy.
   pthread_mutex_lock(&Sess_mutex);
-  assert(Nsessions <= NSESSIONS);
   int const Nsessions_copy = Nsessions;
   struct session *Sessions_copy[Nsessions_copy];
   memcpy(Sessions_copy,Sessions,Nsessions_copy * sizeof(Sessions_copy[0]));
   pthread_mutex_unlock(&Sess_mutex);
+
+  assert(Nsessions_copy <= NSESSIONS);
 
   if(Verbose){
     // Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
@@ -670,7 +675,8 @@ static void process_keyboard(void){
   if(c == EOF)
     return; // No key hit
 
-  pthread_mutex_lock(&Sess_mutex);
+  // These commands don't require session locking
+  bool serviced = true;
   switch(c){
   case 'Q': // quit program
     Terminate = true;
@@ -684,22 +690,6 @@ static void process_keyboard(void){
   case 'A': // Start all new sessions muted
     Start_muted = !Start_muted;
     break;
-  case 'U': // Unmute all sessions, resetting any that were muted
-    for(int i = 0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
-      if(sp != NULL && sp->muted){
-	sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
-	sp->muted = false;
-      }
-    }
-    break;
-  case 'M': // Mute all sessions
-    for(int i = 0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
-      if(sp != NULL)
-	sp->muted = true;
-    }
-    break;
   case 'q':
     Quiet_mode = !Quiet_mode;
     break;
@@ -710,56 +700,30 @@ static void process_keyboard(void){
     help = !help;
     break;
   case 's': // Sort sessions by most recently active (or longest active)
-    sort_session_active();
+    sort_session_active(); // locks Sess_mutex internally
+    break;
+  case 't': // Sort sessions by most total activity
+    sort_session_total();
     break;
   case 'S':
     Auto_sort = !Auto_sort;
     break;
-  case 't': // Sort sessions by most recently active (or longest active)
-    sort_session_total();
-    break;
-  case 'N':
-    Notch = true;
-    for(int i=0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
-      if(sp != NULL){
-	sp->notch_enable = true;
-      }
-    }
-    break;
-  case 'n':
-    Notch = true;
-    if(Current >= 0){
-      struct session *sp = sptr(Current);
-      if(sp != NULL)
-	sp->notch_enable = true;
-    }
-    break;
-  case 'R': // Reset all sessions
-    for(int i=0; i < Nsessions;i++){
-      struct session *sp = sptr(i);
-      if(sp != NULL)
-	sp->reset = true;
-    }
-    break;
-  case 'f': // Turn off tone notching
-    if(Current >= 0){
-      struct session *sp = sptr(Current);
-      if(sp != NULL)
-	sp->notch_enable = false;
-    }
-    break;
-  case 'F':
-    Notch = false;
-    for(int i=0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
-      if(sp != NULL)
-	sp->notch_enable = false;
-    }
-    break;
   case KEY_RESIZE:
   case EOF:
     break;
+  default:
+    serviced = false; // Not handled in this switch(), so fall through and handle in the next with the lock taken
+    break;
+  }
+  if(serviced)
+    return;
+
+  // Commands below this point require session locking
+  serviced = true;
+  pthread_mutex_lock(&Sess_mutex);
+
+  // Commands manipulating the current session index
+  switch(c){
   case KEY_NPAGE:
     if(First_session + Sessions_per_screen < Nsessions){
       First_session += Sessions_per_screen;
@@ -802,100 +766,140 @@ static void process_keyboard(void){
 	First_session--;
     }
     break;
-  case '=': // If the user doesn't hit the shift key (on a US keyboard) take it as a '+'
-  case '+':
-    {
-      struct session *sp = sptr(Current);
-      if(sp != NULL)
-	sp->gain *= 1.122018454; // +1 dB
-    }
-    break;
-  case '_': // Underscore is shifted minus
-  case '-':
-    {
-      struct session *sp = sptr(Current);
-      if(sp != NULL)
-	sp->gain /= 1.122018454; // -1 dB
-    }
-    break;
-  case KEY_LEFT:
-    {
-      struct session *sp = sptr(Current);
-      if(sp != NULL)
-	sp->pan = max(sp->pan - .01,-1.0);
-    }
-    break;
-  case KEY_RIGHT:
-    {
-      struct session *sp = sptr(Current);
-      if(sp != NULL)
-	sp->pan = min(sp->pan + .01,+1.0);
-    }
-    break;
-  case KEY_SLEFT: // Shifted left - decrease playout buffer 10 ms
-    if(Playout >= -100){
-      Playout -= 1;
-      struct session *sp = sptr(Current);
-      if(sp != NULL)
-	sp->reset = true;
-    }
-    break;
-  case KEY_SRIGHT: // Shifted right - increase playout buffer 10 ms
-    Playout += 1;
-    {
-      struct session *sp = sptr(Current);
-      if(sp != NULL)
-	sp->reset = true;
-      else
-	beep();
-    }
-    break;
-  case 'u': // Unmute and reset Current session
-    {
-      struct session *sp = sptr(Current);
+  default:
+    serviced = false;
+  }
+  if(serviced){
+    pthread_mutex_unlock(&Sess_mutex);
+    return;
+  }
+
+  // Commands operating on all sessions
+  serviced = true;
+  switch(c){
+  case 'U': // Unmute all sessions, resetting any that were muted
+    for(int i = 0; i < Nsessions; i++){
+      struct session *sp = sptr(i);
       if(sp != NULL && sp->muted){
 	sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	sp->muted = false;
       }
     }
     break;
-  case 'm': // Mute Current session
-    {
-      struct session *sp = sptr(Current);
+  case 'M': // Mute all sessions
+    for(int i = 0; i < Nsessions; i++){
+      struct session *sp = sptr(i);
       if(sp != NULL)
 	sp->muted = true;
     }
     break;
-  case 'r':
-    // Manually reset playout queue
-    {
-      struct session *sp = sptr(Current);
+  case 'N':
+    Notch = true;
+    for(int i=0; i < Nsessions; i++){
+      struct session *sp = sptr(i);
+      if(sp != NULL){
+	sp->notch_enable = true;
+      }
+    }
+    break;
+  case 'R': // Reset all sessions
+    for(int i=0; i < Nsessions;i++){
+      struct session *sp = sptr(i);
       if(sp != NULL)
 	sp->reset = true;
     }
     break;
+  case 'F':
+    Notch = false;
+    for(int i=0; i < Nsessions; i++){
+      struct session *sp = sptr(i);
+      if(sp != NULL)
+	sp->notch_enable = false;
+    }
+    break;
+  default:
+    serviced = false; // Not handled by this switch
+    break;
+  }
+  if(serviced){
+    pthread_mutex_unlock(&Sess_mutex);
+    return;
+  }
+
+  // Commands operating on the current session
+  // Check validity of current session pointer so individual cases don't have to
+  // Do this last
+  // Lock still held!
+  serviced = true;
+  struct session *sp = sptr(Current);
+  if(sp == NULL){
+    // Current index not valid
+    pthread_mutex_unlock(&Sess_mutex);
+    beep();
+    return;
+  }
+
+  switch(c){
+  case 'f': // Turn off tone notching
+    sp->notch_enable = false;
+    break;
+  case 'n':
+    Notch = true;
+    sp->notch_enable = true;
+    break;
+  case '=': // If the user doesn't hit the shift key (on a US keyboard) take it as a '+'
+  case '+':
+    sp->gain *= 1.122018454; // +1 dB
+    break;
+  case '_': // Underscore is shifted minus
+  case '-':
+    sp->gain /= 1.122018454; // -1 dB
+    break;
+  case KEY_LEFT:
+    sp->pan = max(sp->pan - .01,-1.0);
+    break;
+  case KEY_RIGHT:
+    sp->pan = min(sp->pan + .01,+1.0);
+    break;
+  case KEY_SLEFT: // Shifted left - decrease playout buffer 10 ms
+    if(Playout >= -100){
+      Playout -= 1;
+      sp->reset = true;
+    }
+    break;
+  case KEY_SRIGHT: // Shifted right - increase playout buffer 10 ms
+    Playout += 1;
+    sp->reset = true;
+    break;
+  case 'u': // Unmute and reset Current session
+    if(sp->muted){
+      sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
+      sp->muted = false;
+    }
+    break;
+  case 'm': // Mute Current session
+    sp->muted = true;
+    break;
+  case 'r':    // Manually reset playout queue
+    sp->reset = true;
+    break;
   case KEY_DC: // Delete
   case KEY_BACKSPACE:
   case 'd': // Delete current session
-    {
-      struct session *sp = sptr(Current);
-      if(sp != NULL){
-	sp->terminate = true;  // Also keeps it from being found again by sptr()
-	pthread_mutex_unlock(&Sess_mutex); // close_session will need the lock, at least
-	// We have to wait for it to clean up before we close and remove its session
-	pthread_join(sp->task,NULL);
-	sp->task = (pthread_t)0;
-	close_session(&sp); // Decrements Nsessions
-	vote(); // In case the best session went away
-	if(Current >= Nsessions)
-	  Current = Nsessions-1; // -1 when no sessions
-	return; // Avoid unlocking again
-      }
-    }
-    break;
-  default: // Invalid command
-    beep();
+    sp->terminate = true;  // Also keeps it from being found again by sptr()
+    pthread_mutex_unlock(&Sess_mutex); // close_session will need the lock, at least
+    // We have to wait for it to clean up before we close and remove its session
+    pthread_join(sp->task,NULL);
+    sp->task = (pthread_t)0;
+    close_session(&sp); // Decrements Nsessions
+    if(Current >= Nsessions)
+      Current = Nsessions-1; // -1 when no sessions
+    return; // Avoid unlocking again
+  default:
+    serviced = false;
     break;
   }
   pthread_mutex_unlock(&Sess_mutex);
+  if(!serviced)
+    beep(); // Not serviced by anything
 }
