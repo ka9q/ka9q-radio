@@ -390,14 +390,14 @@ static void update_monitor_display(void){
   if(Notch){
     if(x >= COLS)
       goto done;
-    width = 6;
+    width = 7;
     mvprintwt(y++,x,"%*s",width,"tone");
     for(int session = First_session; session < Nsessions_copy; session++,y++){
       struct session const *sp = Sessions_copy[session];
       if(sp != NULL && (!sp->notch_enable || sp->notch_tone == 0))
 	continue;
 
-      mvprintwt(y,x,"%*.1f%c",width,sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
+      mvprintwt(y,x,"%*.1f%c",width-1,sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
     }
     x += width;
     y = row_save;
