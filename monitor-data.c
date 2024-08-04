@@ -572,7 +572,6 @@ void reset_session(struct session * const sp,uint32_t timestamp){
 // Return true if we (re)started it
 bool kick_output(){
   bool restarted = false;
-  pthread_mutex_lock(&Stream_mutex);
   if(!Pa_IsStreamActive(Pa_Stream)){
     // Start it up
     if(!Pa_IsStreamStopped(Pa_Stream))
@@ -597,7 +596,6 @@ bool kick_output(){
     restarted = true;
   }
   Buffer_length = BUFFERSIZE; // (Continue to) run for at least the length of the ring buffer
-  pthread_mutex_unlock(&Stream_mutex);
 
   // Key up the repeater if it's configured and not already on
   if(Repeater_tail != 0){

@@ -65,10 +65,6 @@ struct session {
   struct rtp_state rtp_state_out; // RTP output state
 
   unsigned long underruns;  // Callback count of underruns (stereo samples) replaced with silence
-  float deemph_rate;
-  float deemph_gain;
-  float deemph_state_left;
-  float deemph_state_right;
   uint64_t packets;
 };
 
@@ -85,16 +81,9 @@ bool Discontinuous = false;        // Off by default
 int Opus_blocktime = 20;      // Minimum frame size 20 ms, a reasonable default
 bool Fec_enable = false;                  // Use forward error correction
 int Application = OPUS_APPLICATION_AUDIO; // Encoder optimization mode
-const float Corner_freq = 300; // Hz - corner frequency in de-emphasis integrator
-const float LF_gain = 4;       // == 12 dB; empirical to make equal subjective voice loudness with flat FM
-                               // Will make PL tone louder by this amount until we implement a filter
 const float Latency = 0.02;    // chunk size for audio output callback
 
 // Global variables
-pthread_t Status_thread;
-pthread_mutex_t Input_ready_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t Input_ready_cond = PTHREAD_COND_INITIALIZER;
-
 int Status_fd = -1;           // Reading from radio status
 int Input_fd = -1;            // Multicast receive socket
 int Output_fd = -1;           // Multicast receive socket
