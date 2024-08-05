@@ -433,7 +433,7 @@ static void update_monitor_display(void){
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
     if(sp != NULL && !isnan(sp->snr))
-      mvprintwt(y,x,"%*.1f%c",width-1,sp->snr,sp == Best_session ? '*' : ' ');
+      mvprintwt(y,x,"%*.1f%c",width-1,sp->snr,(Voting && sp == Best_session) ? '*' : ' ');
   }
   x += width;
   y = row_save;
