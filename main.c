@@ -46,7 +46,7 @@ static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
 static int const DEFAULT_MCAST_TTL = 0; // Don't blast LANs with cheap Wifi!
 static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
-static int const DEFAULT_UPDATE = 50; // 1 Hz for 20 ms blocktime (50 Hz frame rate)
+static int const DEFAULT_UPDATE = 25; // 2 Hz for 20 ms blocktime (50 Hz frame rate)
 static int const DEFAULT_LIFETIME = 20; // 20 sec for idle sessions tuned to 0 Hz
 
 char const *Iface;
