@@ -303,21 +303,10 @@ int listen_mcast(void const *s,char const *iface){
     perror("setup_mcast socket");
     return -1;
   }
-  switch(sock->sa_family){
-  case AF_INET:
-    set_ipv4_options(fd,-1,-1);
-    if(ipv4_join_group(fd,sock,iface) != 0)
-     fprintf(stderr,"join_group failed\n");
-    break;
-  case AF_INET6:
-    set_ipv6_options(fd,-1,-1);
-    if(ipv6_join_group(fd,sock,iface) != 0)
-     fprintf(stderr,"join_group failed\n");
-    break;
-  default:
+  if(join_group(fd,sock,iface,-1,-1) == -1){
+    close(fd);
     return -1;
   }
-
   if((bind(fd,sock,sizeof(struct sockaddr)) != 0)){
     perror("listen mcast bind");
     close(fd);
