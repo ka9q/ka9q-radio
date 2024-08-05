@@ -428,12 +428,12 @@ static void update_monitor_display(void){
 
   if(x >= COLS)
     goto done;
-  width = 5;
-  mvprintwt(y++,x,"%*s",width,"s/n");
+  width = 6;
+  mvprintwt(y++,x,"%*s",width-1,"s/n");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
     if(sp != NULL && !isnan(sp->snr))
-      mvprintwt(y,x,"%*.1f",width,sp->snr);
+      mvprintwt(y,x,"%*.1f%c",width-1,sp->snr,sp == Best_session ? '*' : ' ');
   }
   x += width;
   y = row_save;
