@@ -43,7 +43,7 @@ static float const DEFAULT_GAIN = 50.0;         // Unused in FM, usually adjuste
 static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
 static float const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
 static int   const DEFAULT_SQUELCH_TAIL = 1;     // close on frame *after* going below threshold, may let partial frame noise through
-static int   const DEFAULT_UPDATE = 50;         // 1 Hz for a 20 ms frame time
+static int   const DEFAULT_UPDATE = 25;         // 2 Hz for a 20 ms frame time
 #if 0
 static int   const DEFAULT_FM_SAMPRATE = 24000;
 static float const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
