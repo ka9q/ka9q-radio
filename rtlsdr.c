@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <iniparser/iniparser.h>
 #include <sysexits.h>
+#include <strings.h>
 
 #include "conf.h"
 #include "misc.h"

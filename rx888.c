@@ -18,6 +18,7 @@
 #endif
 #include <sysexits.h>
 #include <unistd.h>
+#include <strings.h>
 
 #include "misc.h"
 #include "status.h"

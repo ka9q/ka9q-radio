@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #endif
 #include <sysexits.h>
+#include <strings.h>
 
 #include "conf.h"
 #include "fcd.h"
