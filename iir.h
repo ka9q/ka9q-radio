@@ -53,4 +53,18 @@ struct iir {
 };
 float applyIIRnotch(struct iir *,float);
 void setIIRnotch(struct iir *,float);
+
+#define MAXCHORDER 8
+struct chebyshev {
+  int order;
+  float a[MAXCHORDER]; // Feedback coefficients
+  float b[MAXCHORDER]; // Feed-forward coefficients
+  float x[MAXCHORDER]; // Recent inputs
+  float y[MAXCHORDER]; // Recent outputs
+};
+
+
+int create_chebyshev(struct chebyshev *f,int order,float cutoff,float ripple,float samprate);
+float run_chebyshev(struct chebyshev *f, float in);
+
 #endif
