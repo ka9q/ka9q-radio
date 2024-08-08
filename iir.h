@@ -44,27 +44,19 @@ static void inline update_goertzel(struct goertzel *gp,float x){
 complex float output_goertzel(struct goertzel *gp);
 
 // 2-pole IIR notch filter operating on real data
-#define FILT_ORDER 2
+#define FILT_ORDER 6
 
+// Direct form II IIR data structure (single feedback array)
+// There's some confusion in the literature about notation
+// I use a[] for the poles (feedback) coefficients, b[] for the zeroes
 struct iir {
-  float a[FILT_ORDER+1]; // test
-  float b[FILT_ORDER+1];
-  float w[FILT_ORDER+1];
-};
-float applyIIRnotch(struct iir *,float);
-void setIIRnotch(struct iir *,float);
-
-#define MAXCHORDER 8
-struct chebyshev {
   int order;
-  float a[MAXCHORDER]; // Feedback coefficients
-  float b[MAXCHORDER]; // Feed-forward coefficients
-  float x[MAXCHORDER]; // Recent inputs
-  float y[MAXCHORDER]; // Recent outputs
+  double a[FILT_ORDER+1]; // feedback coefficients
+  double b[FILT_ORDER+1]; // 
+  double w[FILT_ORDER+1];
 };
+double applyIIR(struct iir *,double);
+void setIIRnotch(struct iir *,double);
 
-
-int create_chebyshev(struct chebyshev *f,int order,float cutoff,float ripple,float samprate);
-float run_chebyshev(struct chebyshev *f, float in);
 
 #endif

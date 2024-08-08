@@ -504,15 +504,15 @@ void *decode_task(void *arg){
 	  // Mono input, put on both channels
 	  left = bounce[i];
 	  if(sp->notch_enable && sp->notch_tone > 0)
-	    left = applyIIRnotch(&sp->iir_left,left);
+	    left = applyIIR(&sp->iir_left,left);
 	  right = left;
 	} else {
 	  // stereo input
 	  left = bounce[2*i];
 	  right = bounce[2*i+1];
 	  if(sp->notch_enable && sp->notch_tone > 0){
-	    left = applyIIRnotch(&sp->iir_left,left);
-	    right = applyIIRnotch(&sp->iir_right,right);
+	    left = applyIIR(&sp->iir_left,left);
+	    right = applyIIR(&sp->iir_right,right);
 	  }
 	}
 	if(!Voting || Best_session == sp){ // If voting, suppress all but best session
@@ -538,7 +538,7 @@ void *decode_task(void *arg){
 	  s = 0.5 * (bounce[2*i] + bounce[2*i+1]);
 	}
 	if(sp->notch_enable && sp->notch_tone > 0)
-	  s = applyIIRnotch(&sp->iir_left,s);
+	  s = applyIIR(&sp->iir_left,s);
 
 	if(!Voting || Best_session == sp){ // If voting, suppress all but best session
 	  // Not the cleanest way to upsample the sample rate, but it works
