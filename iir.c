@@ -75,6 +75,20 @@ void setIIRnotch(struct iir * const iir,double rel_freq){
   iir->a[1] = iir->b[1] * r; // Complex poles just inside unit circle, same angles as zeroes
   iir->a[2] = r*r;
 }
+// Simple 4-stage lowpass
+// Stevens, The Scientist and Engineer's Guide to Digital Signal Processing, p 326
+// Note a[] and b[] are swapped in that reference. Signs on a[] are also flipped
+void setIIRlp(struct iir * const iir,double f){
+  double x = exp(-14.445 * f);
+
+  iir->order = 4;
+  iir->b[0] = pow(1-x,4.);
+  iir->a[1] = -4 * x;
+  iir->a[2] = 6 * x * x;
+  iir->a[3] = -4 * x * x * x;
+  iir->a[4] = pow(x,4.);
+}
+
 
 // IIR, direct form II
 // https://schaumont.dyn.wpi.edu/ece4703b21/lecture3.html

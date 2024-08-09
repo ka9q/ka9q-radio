@@ -43,20 +43,20 @@ static void inline update_goertzel(struct goertzel *gp,float x){
 }
 complex float output_goertzel(struct goertzel *gp);
 
-// 2-pole IIR notch filter operating on real data
+// IIR filter operating on real data
 #define FILT_ORDER 6
 
 // Direct form II IIR data structure (single feedback array)
 // There's some confusion in the literature about notation
-// I use a[] for the poles (feedback) coefficients, b[] for the zeroes
+// I use a[] for the poles (feedback) coefficients, b[] for the zeroes (feed forward)
 struct iir {
   int order;
-  double a[FILT_ORDER+1]; // feedback coefficients
-  double b[FILT_ORDER+1]; // 
-  double w[FILT_ORDER+1];
+  double a[FILT_ORDER+1]; // feedback coefficients (poles)
+  double b[FILT_ORDER+1]; // feedforward coefficients (zeroes)
+  double w[FILT_ORDER+1]; // filter state
 };
 double applyIIR(struct iir *,double);
 void setIIRnotch(struct iir *,double);
-
+void setIIRlp(struct iir * const iir,double f);
 
 #endif
