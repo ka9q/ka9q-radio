@@ -25,8 +25,8 @@ enum status_type {
 
   DESCRIPTION,   // Free form text describing source
   STATUS_DEST_SOCKET,
-  UNUSED1,
-  UNUSED2,
+  SETOPTS,
+  CLEAROPTS,
   UNUSED3,
   UNUSED4,
   INPUT_SAMPRATE, // Nominal sample rate (integer)

@@ -909,6 +909,27 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       }
     }
     break;
+  case 'O': // Set/clear aux option flags, mainly for testing
+    {
+      char str[Entry_width],*ptr;
+
+      getentry("enter aux option number [0-63], ! disables: ",str,sizeof(str));
+      bool enable = true;
+      char *cp = strchr(str,'!');
+      if(cp != NULL){
+	enable = false;
+	cp++;
+      } else
+	cp = str;
+      int n = strtol(cp,&ptr,0);
+      if(ptr != cp && n >= 0 && n < 64){
+	if(enable)
+	  encode_int(bpp,SETOPTS,1LL<<n);
+	else
+	  encode_int(bpp,CLEAROPTS,1LL<<n);
+      }
+    }
+    break;
   case 'u':
     {
       char str[Entry_width],*ptr;
@@ -1384,6 +1405,8 @@ static void display_input(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Status pkts","%'llu",channel->status.packets_out);
   pprintw(w,row++,col,"Control pkts","%'llu",channel->status.packets_in);
   pprintw(w,row++,col,"Blocks since last poll","%'llu",channel->status.blocks_since_poll);
+  if(channel->options != 0)
+    pprintw(w,row++,col,"Options","0x%llx",(unsigned long long)channel->options);
   box(w,0,0);
   mvwaddstr(w,0,1,Frontend.description);
   wnoutrefresh(w);

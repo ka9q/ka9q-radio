@@ -178,7 +178,6 @@ struct channel {
   struct {                   // Used only in FM demodulator
     float pdeviation;        // Peak frequency deviation Hz (FM)
     float tone_freq;         // PL tone squelch frequency
-    struct goertzel tone_detect; // PL tone detector state
     float tone_deviation;    // Measured deviation of tone
     bool threshold;          // Threshold extension
     float squelch_open;      // squelch open threshold, power ratio
@@ -251,6 +250,7 @@ struct channel {
   } sap;
 
   pthread_t demod_thread;
+  uint64_t options;
   float tp1,tp2; // Spare test points that can be read on the status channel
 };
 

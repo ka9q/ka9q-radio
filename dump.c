@@ -354,6 +354,18 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
 	fprintf(fp,"encoding %d (%s)",e,encoding_string(e));
       }
       break;
+    case SETOPTS:
+      {
+	uint64_t opts = decode_int64(cp,optlen);
+	fprintf(fp,"setopts 0x%llx",(unsigned long long)opts);
+      }
+      break;
+    case CLEAROPTS:
+      {
+	uint64_t opts = decode_int64(cp,optlen);
+	fprintf(fp,"clearopts 0x%llx",(unsigned long long)opts);
+      }
+      break;
     default:
       fprintf(fp,"unknown type %d length %d",type,optlen);
       break;

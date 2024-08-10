@@ -265,6 +265,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case STATUS_INTERVAL:
       channel->status.output_interval = decode_int(cp,optlen);
       break;
+    case SETOPTS:
+      channel->options = decode_int64(cp,optlen);
+      break;
     default: // ignore others
       break;
     }

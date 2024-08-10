@@ -409,7 +409,19 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	}
       }
-
+      break;
+    case SETOPTS:
+      {
+	uint64_t opts = decode_int64(cp,optlen);
+	chan->options |= opts;
+      }
+      break;
+    case CLEAROPTS:
+      {
+	uint64_t opts = decode_int64(cp,optlen);
+	chan->options &= ~opts;
+      }
+      break;
     default:
       break;
     }
@@ -619,6 +631,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   if(!isnan(chan->tp2))
     encode_float(&bp,TP2,chan->tp2);
   encode_int64(&bp,BLOCKS_SINCE_POLL,chan->status.blocks_since_poll);
+  encode_int64(&bp,SETOPTS,chan->options);
 
   encode_eol(&bp);
 
