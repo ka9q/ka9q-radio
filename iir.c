@@ -1,5 +1,5 @@
 // Various simple IIR filters
-// Copyright 2022-2023, Phil Karn, KA9Q
+// Copyright 2022-2024, Phil Karn, KA9Q
 
 #include "iir.h"
 #include <string.h>

@@ -1423,7 +1423,7 @@ static void display_output(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"","%s->%s",formatsock(&channel->output.source_socket),
 	  formatsock(&channel->output.dest_socket));
 
-  pprintw(w,row++,col,"SSRC","%'u",channel->output.rtp.ssrc);
+  pprintw(w,row++,col,"SSRC","%u",channel->output.rtp.ssrc);
   pprintw(w,row++,col,"Payload Type","%u",channel->output.rtp.type);
   pprintw(w,row++,col,"Encoding","%s",encoding_string(channel->output.encoding));
   pprintw(w,row++,col,"Channels","%d",channel->output.channels);

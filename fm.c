@@ -67,14 +67,11 @@ void *demod_fm(void *arg){
   int squelch_state = 0; // Number of blocks for which squelch remains open
   int const N = chan->filter.out.olen;
   float const one_over_olen = 1.0f / N; // save some divides
-  int const pl_integrate_samples = chan->output.samprate * 0.24; // 240 milliseconds (spec is < 250 ms)
+  int const pl_integrate_samples = chan->output.samprate * 0.24; // 240 milliseconds (spec is < 250 ms). 12 blocks @ 24 kHz
   int pl_sample_count = 0;
+  float old_pl_phase = 0;
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
   chan->output.gain = (2 * chan->output.headroom *  chan->output.samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
-
-  float dc_rate = -expm1f(-1.0f / (0.1 * chan->output.samprate)); // experimental DC removal, 100 ms time constant (~10 Hz)
-  float dc = 0; // DC removal filter state
-
 
   realtime();
 
@@ -132,11 +129,10 @@ void *demod_fm(void *arg){
     float baseband[N];    // Demodulated FM baseband
     // Actual FM demodulation
     for(int n=0; n < N; n++){
-      float np = M_1_PIf * cargf(buffer[n]); // Scale to -1 to +1 (half rotations)
+      float np = M_1_PIf * cargf(buffer[n]); // Scale to -1 to +1 (half rotations/sample)
       float x = np - phase_memory;
       phase_memory = np;
-      x = x > 1 ? x - 2 : x < -1 ? x + 2 : x; // reduce to -1 to +1
-      baseband[n] = x;
+      baseband[n] = x > 1 ? x - 2 : x < -1 ? x + 2 : x; // reduce to -1 to +1
     }
     if(chan->sig.snr < 20 && chan->fm.threshold) { // take 13 dB as "full quieting"
       // Experimental threshold reduction (popcorn/click suppression)
@@ -219,26 +215,55 @@ void *demod_fm(void *arg){
       peak_positive_deviation -= chan->sig.foffset;
       peak_negative_deviation -= chan->sig.foffset;
       chan->fm.pdeviation = max(peak_positive_deviation,-peak_negative_deviation);
-    }
-    if(chan->fm.tone_freq != 0){
-      // PL/CTCSS tone squelch
-      // use samples before de-emphasis and gain scaling
-      if(squelch_state == squelch_state_max){
+
+      // remove DC before tone squelch; energy measurement responds to DC
+      if(chan->fm.rate != 0){
+	// Remove DC
+	for(int n=0; n < N; n++)
+	  baseband[n] -= 2 * chan->sig.foffset / chan->output.samprate;
+      }
+      if(chan->fm.tone_freq != 0){
+	// PL/CTCSS tone squelch
+	// use samples after DC removal but before de-emphasis and gain scaling
 	for(int n=0; n < N; n++){
-	  update_goertzel(&tone_detect,baseband[n]);
-	  float y = applyIIR(&lpf,baseband[n]);
+	  update_goertzel(&tone_detect,baseband[n]); // input is -1 to +1
+	  float y = applyIIR(&lpf,baseband[n]); // should be unity gain in passband
 	  lpf_energy += y*y;
-	}
-	pl_sample_count += N;
-	if(pl_sample_count >= pl_integrate_samples){
-	  // Peak deviation of PL tone in Hz
-	  // Not sure the calibration is correct
-	  chan->fm.tone_deviation = 2 * chan->output.samprate * cabsf(output_goertzel(&tone_detect)) / pl_sample_count;
-	  tone_mute = chan->fm.tone_deviation < 250 ? true : false;
-	  chan->tp1 = lpf_energy / pl_sample_count;
-	  reset_goertzel(&tone_detect);
-	  lpf_energy = 0;
-	  pl_sample_count = 0;
+	  if(chan->options & (1LL<0)){
+	    // Test option: let's hear the LPF output
+	    baseband[n] = y;
+	  }
+	  pl_sample_count++;
+	  if(pl_sample_count >= pl_integrate_samples){
+	    // Peak deviation of PL tone in Hz
+	    complex float const c = output_goertzel(&tone_detect); // gain of N/2 scales half cycles per sample to full cycles per interval
+	    float const g = cabsf(c) / pl_sample_count; // peak PL tone deviation in Hz per sample
+	    chan->fm.tone_deviation = chan->output.samprate * g; // peak PL tone deviation in Hz
+	    // Compute phase jump between integration periods as a fine frequency error indication
+	    float const p = cargf(c) / (2*M_PI); // +/- 0.5 rev
+	    float iptr = 0;
+	    // Update previous phase by the number of intervening PL tone cycles
+	    old_pl_phase += chan->fm.tone_freq * pl_sample_count / chan->output.samprate;
+	    float np = 2 * modff(p - old_pl_phase,&iptr); // see how much it's jumped, scale to +/-1 *half* rev
+	    old_pl_phase = p;
+	    np = np < -1 ? np + 2 : np > 1 ? np - 2 : np; // and bring to principal range, -1 to +1 half cycle per interval: 0.5 Hz / .24 sec = 2 Hz
+	    assert(np >= -1.0 && np <= 1.0);
+	    chan->tp2 = np; // monitor phase error in PL tone, 0 means exactly on frequency, + means high, - means low
+
+	    lpf_energy /= pl_sample_count; // filter output average energy per sample, range 0 to +1 half-rev^2 per sample
+	    chan->tp1 = power2dB(2*g*g / lpf_energy); // scale g from full rev peak to half-rev^2 average per sample
+	    if(chan->options & (1LL<1)){
+	      // Experimental, needs a new 300 Hz audio LPF before it is ready. Otherwise lots of low frequency voice can falsely gate it off
+	      // Scale g*g to half revs per sample^2, same as lpf_energy
+	      tone_mute = (2*g*g / lpf_energy) < 0.25; // boolean result: if tone -6 dB to LPF total, mute.
+	    } else {
+	      // Use old tone mute threshold
+	      tone_mute = chan->fm.tone_deviation < 250	|| fabsf(np) > .10; // note boolean result. ~0.2 Hz offset
+	    }
+	    reset_goertzel(&tone_detect);
+	    lpf_energy = 0;
+	    pl_sample_count = 0;
+	  }
 	}
       } else
 	tone_mute = true; // No squelch tail when tone decoding is active
@@ -250,9 +275,7 @@ void *demod_fm(void *arg){
     if(chan->fm.rate != 0){
       // Apply de-emphasis if configured
       for(int n=0; n < N; n++){
-	float s = deemph_state += chan->fm.rate * (chan->fm.gain * baseband[n] - deemph_state);
-	// Experimental DC removal for carrier frequency offsets
-	baseband[n] = s - (dc += dc_rate * (s - dc)); // note assigment to dc
+	baseband[n] = deemph_state += chan->fm.rate * (chan->fm.gain * baseband[n] - deemph_state);
       }
     }
     // Compute audio output level

@@ -21,6 +21,7 @@ P    PLL loop bandwidth, Hz
 k    Set Kaiser window beta parameter
 m/p  Preset demod mode
 o    Set/clear option flag
+O    Set/clear aux option flag
 r    Set refresh rate, s
 s    Set squelch, dB
 S    Set sample rate, Hz
