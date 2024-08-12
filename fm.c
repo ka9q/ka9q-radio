@@ -265,11 +265,10 @@ void *demod_fm(void *arg){
 	    pl_sample_count = 0;
 	  }
 	}
-      } else
-	tone_mute = true; // No squelch tail when tone decoding is active
-      if(tone_mute){
-	send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
-	continue;
+	if(tone_mute){
+	  send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
+	  continue;
+	}
       }
     }
     if(chan->fm.rate != 0){
