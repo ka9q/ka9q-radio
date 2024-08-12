@@ -47,7 +47,6 @@ static double const R828D_IF_CARRIER = 4570000;
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
-extern int Overlap; // Forward FFT overlap factor, samples
 extern volatile bool Stop_transfers; // Flag to stop receive thread upcalls
 
 // Hardware-specific stuff.

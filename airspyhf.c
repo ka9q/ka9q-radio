@@ -23,9 +23,7 @@
 
 // Global variables set by config file options
 extern int Verbose;
-extern int Overlap;
 extern const char *App_path;
-extern int Verbose;
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
 struct sdrstate {
