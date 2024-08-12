@@ -52,6 +52,7 @@ static float const DEFAULT_FM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively
 static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 #endif
 static int   const DEFAULT_BITRATE = 32000;       // Default Opus compressed bit rate
+extern int Overlap;
 
 
 int demod_type_from_name(char const *name){
@@ -245,6 +246,11 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   chan->fm.tone_freq = config_getfloat(table,sname,"tone",chan->fm.tone_freq);
   chan->fm.tone_freq = config_getfloat(table,sname,"pl",chan->fm.tone_freq);
   chan->fm.tone_freq = config_getfloat(table,sname,"ctcss",chan->fm.tone_freq);
+  chan->fm.tone_freq = fabsf(chan->fm.tone_freq);
+  if(chan->fm.tone_freq > 3000){
+    fprintf(stdout,"Tone %.1f out of range\n",chan->fm.tone_freq);
+    chan->fm.tone_freq = 0;
+  }
 
   chan->output.pacing = config_getboolean(table,sname,"pacing",chan->output.pacing);
 
@@ -259,17 +265,19 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
 
 }
 
-// force an output sample rate to a nonzero multiple of the block rate
+// force an output sample rate to a multiple of the FFT block rate times the number of
+// new blocks in each FFT interval.
+// For the default block time of 20 ms and overlap of 1/5, this is (1/20 ms)*(5-1) = 50 Hz*4 = 200 Hz
 // Should we limit the sample rate? In principle it could be greater than the input sample rate,
 // and the filter should just interpolate. But there should be practical limits
 
 // Should sample rates be integers when the block rate could in principle not be?
 // Usually Blocktime = 20.0000 ms (50.00000 Hz), which avoids the problem
 int round_samprate(int x){
-  float const blockrate = 1000. / Blocktime; // In Hz
+  float const baserate = (1000. / Blocktime) * (Overlap - 1);
 
-  if(x < blockrate)
-    return roundf(blockrate); // Output one iFFT bin minimum, i.e., blockrate
+  if(x < baserate)
+    return roundf(baserate); // Output one iFFT bin minimum, i.e., blockrate
 
-  return blockrate * roundf(x / blockrate); // Nearest multiple of blck rate
+  return baserate * roundf(x / baserate); // Nearest multiple of block rate * (Overlap - 1)
 }

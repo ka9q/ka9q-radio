@@ -58,6 +58,7 @@ struct sockaddr_storage Metadata_dest_socket;      // Dest of metadata (typicall
 int Mcast_ttl = DEFAULT_MCAST_TTL;
 int IP_tos = DEFAULT_IP_TOS;
 float Blocktime;
+int Overlap;
 int Output_fd,Status_fd;
 const char *App_path;
 int Verbose;
@@ -1221,8 +1222,8 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   if(Frontend.samprate != 0)
     pprintw(w,row++,col,"FFT out","%'lld c ",(long long)N * channel->output.samprate / Frontend.samprate);
 
-  int overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
-  pprintw(w,row++,col,"Overlap","1/%d   ",overlap);
+  Overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
+  pprintw(w,row++,col,"Overlap","1/%d   ",Overlap);
   pprintw(w,row++,col,"Bin width","%'.3f Hz",(float)Frontend.samprate / N);
 
   float const beta = channel->filter.kaiser_beta;
