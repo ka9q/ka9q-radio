@@ -819,6 +819,26 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
 	encode_float(bpp,HEADROOM,x);
     }
     break;
+  case 'G': // Manually set front end gain, dB (positive or negative)
+    {
+      char str[Entry_width],*ptr;
+      getentry("RF Gain, dB: ",str,sizeof(str));
+      float const x = strtof(str,&ptr);
+      if(ptr != str && isfinite(x)){
+	encode_float(bpp,RF_GAIN,x);
+      }
+    }
+    break;
+  case 'A': // Manually set front end attenuation, dB (positive or negative)
+    {
+      char str[Entry_width],*ptr;
+      getentry("RF Atten, dB: ",str,sizeof(str));
+      float const x = fabsf(strtof(str,&ptr));
+      if(ptr != str && isfinite(x)){
+	encode_float(bpp,RF_ATTEN,x);
+      }
+    }
+    break;
   case 'g': // Manually set linear channel gain, dB (positive or negative)
     {
       char str[Entry_width],*ptr;

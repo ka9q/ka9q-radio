@@ -11,21 +11,21 @@ Right arrow  Move cursor right one digit
 Up arrow     Increase by 1
 Down arrow   Decrease by 1
 ctl+L        Redraw screen
+A    Set front end (RF) attenuation, dB
 f    Set frequency (eg: 147m435, 10m0, 760k0, 14313000)
 g    Set gain, dB
-R    Set AGC recover rate, dB/s
-T    Set AGC hang time, s
+G    Set front end (RF) gain, dB
 H    Set output headroom, dB
-L    Set AGC threshold, dB
-P    PLL loop bandwidth, Hz
 k    Set Kaiser window beta parameter
+L    Set AGC threshold, dB
 m/p  Preset demod mode
 o    Set/clear option flag
 O    Set/clear aux option flag
+P    PLL loop bandwidth, Hz
+q    Quit program
 r    Set refresh rate, s
+R    Set AGC recover rate, dB/s
 s    Set squelch, dB
 S    Set sample rate, Hz
+T    Set AGC hang time, s
 u    Set output status update interval, frames
-q    Quit program
-
-

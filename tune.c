@@ -48,7 +48,7 @@ struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "e:f:g:H:hi:L:l:m:qr:R:s:vV";
+char Optstring[] = "A:e:f:g:G:H:hi:L:l:m:qr:R:s:vV";
 struct option Options[] = {
   {"rfatten", required_argument, NULL, 'A'},
   {"encoding", required_argument, NULL, 'e'},
@@ -384,5 +384,5 @@ int main(int argc,char *argv[]){
 
 void usage(void){
   fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-R|--samprate <sample_rate>] [-i|--iface <iface>] [-l|--locale LOCALE]  \
-[-f|--frequency <frequency>] [-L|--low <low-edge>] [-H|--high <high-edge>] [[-a|--agc] [-g|--gain <gain dB>]] [-m|--mode <mode>]\n" ,App_path);
+[-f|--frequency <frequency>] [-L|--low <low-edge>] [-H|--high <high-edge>] [[-a|--agc] [-g|--gain <gain dB>]] [-m|--mode <mode>] [--rfgain <gain dB>] [--rfatten <atten dB>]\n" ,App_path);
 }
