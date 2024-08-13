@@ -203,6 +203,8 @@ int main(int argc,char *argv[]){
   float baseband_level = INFINITY;
   float low_edge = INFINITY;
   float high_edge = INFINITY;
+  float received_rf_gain = INFINITY;
+  float received_rf_atten = INFINITY;  
   enum encoding received_encoding = NO_ENCODING;
   int samprate = 0;
 
@@ -307,6 +309,12 @@ int main(int argc,char *argv[]){
       case GAIN:
 	received_gain = decode_float(cp,optlen);
 	break;
+      case RF_GAIN:
+	received_rf_gain = decode_float(cp,optlen);
+	break;
+      case RF_ATTEN:
+	received_rf_atten = decode_float(cp,optlen);
+	break;
       case PRESET:
 	FREE(preset); // Unlikely, but just in case
 	preset = decode_string(cp,optlen);
@@ -358,6 +366,12 @@ int main(int argc,char *argv[]){
 
     if(received_gain != INFINITY)
       printf("Gain %.1f dB\n",received_gain);
+
+    if(received_rf_gain != INFINITY)
+      printf("RF Gain %.1f dB\n",received_rf_gain);      
+
+    if(received_rf_atten != INFINITY)
+      printf("RF Atten %.1f dB\n",received_rf_atten);      
 
     if(baseband_level != INFINITY)
       printf("Baseband power %.1f dB\n",baseband_level);
