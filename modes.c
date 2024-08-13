@@ -227,7 +227,6 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   chan->linear.agc = config_getboolean(table,sname,"agc",chan->linear.agc);
   chan->fm.threshold = config_getboolean(table,sname,"extend",chan->fm.threshold); // FM threshold extension
   chan->fm.threshold = config_getboolean(table,sname,"threshold-extend",chan->fm.threshold); // FM threshold extension
-
   {
     char const *cp = config_getstring(table,sname,"deemph-tc",NULL);
     if(cp){
@@ -251,18 +250,13 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     fprintf(stdout,"Tone %.1f out of range\n",chan->fm.tone_freq);
     chan->fm.tone_freq = 0;
   }
-
   chan->output.pacing = config_getboolean(table,sname,"pacing",chan->output.pacing);
-
   {
     char const *cp = config_getstring(table,sname,"encoding","s16be");
     chan->output.encoding = parse_encoding(cp);
   }
   chan->output.opus_bitrate = config_getint(table,sname,"bitrate",chan->output.opus_bitrate);
-
   return 0;
-
-
 }
 
 // force an output sample rate to a multiple of the FFT block rate times the number of
