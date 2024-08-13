@@ -100,6 +100,8 @@ struct frontend {
   int (*setup)(struct frontend *,dictionary *,char const *); // Get front end ready to go
   int (*start)(struct frontend *);          // Start front end sampling
   double (*tune)(struct frontend *,double); // Tune front end, return actual frequency
+  float (*gain)(struct frontend *,float);
+  float (*atten)(struct frontend *,float);
   struct filter_in in; // Input half of fast convolver, shared with all channels
 };
 

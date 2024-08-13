@@ -41,6 +41,8 @@ float High = INFINITY;
 int Samprate = 0;
 bool Quiet = false;
 enum encoding Encoding = NO_ENCODING;
+float RFgain = INFINITY;
+float RFatten = INFINITY;
 
 struct sockaddr_storage Control_address;
 int Status_sock = -1;
@@ -48,9 +50,11 @@ int Control_sock = -1;
 
 char Optstring[] = "e:f:g:H:hi:L:l:m:qr:R:s:vV";
 struct option Options[] = {
+  {"rfatten", required_argument, NULL, 'A'},
   {"encoding", required_argument, NULL, 'e'},
   {"frequency", required_argument, NULL, 'f'},
   {"gain", required_argument, NULL, 'g'},
+  {"rfgain", required_argument, NULL, 'G'},
   {"help", no_argument, NULL, 'h'},
   {"iface", required_argument, NULL, 'i'},
   {"locale", required_argument, NULL, 'l'},
@@ -79,6 +83,12 @@ int main(int argc,char *argv[]){
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
+      case 'A':
+	RFatten = strtod(optarg,NULL);
+	break;
+      case 'G':
+	RFgain = strtod(optarg,NULL);
+	break;
       case 'e':
 	Encoding = parse_encoding(optarg);
 	if(Encoding == NO_ENCODING){
@@ -227,6 +237,11 @@ int main(int argc,char *argv[]){
 	encode_int(&bp,AGC_ENABLE,true);
       if(Encoding != NO_ENCODING)
 	encode_int(&bp,OUTPUT_ENCODING,Encoding);
+
+      if(RFgain != INFINITY)
+	encode_float(&bp,RF_GAIN,RFgain);
+      if(RFatten != INFINITY)
+	encode_float(&bp,RF_GAIN,RFatten);
 
       encode_eol(&bp);
       int cmd_len = bp - cmd_buffer;

@@ -422,6 +422,20 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	chan->options &= ~opts;
       }
       break;
+    case RF_ATTEN:
+      {
+	float x = decode_float(cp,optlen);
+	if(!isnan(x) && Frontend.atten != NULL)
+	  (*Frontend.atten)(&Frontend,x);
+      }
+      break;
+    case RF_GAIN:
+      {
+	float x = decode_float(cp,optlen);
+	if(!isnan(x) && Frontend.gain != NULL)
+	  (*Frontend.gain)(&Frontend,x);
+      }
+      break;
     default:
       break;
     }

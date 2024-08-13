@@ -100,6 +100,8 @@ double sdrplay_tune(struct frontend *,double);
 int rx888_setup(struct frontend *,dictionary *,char const *);
 int rx888_startup(struct frontend *);
 double rx888_tune(struct frontend *,double);
+float rx888_gain(struct frontend *, float);
+float rx888_atten(struct frontend *,float);
 
 // In airspy.c
 int airspy_setup(struct frontend *,dictionary *,char const *);
@@ -605,6 +607,8 @@ static int setup_hardware(char const *sname){
     Frontend.setup = rx888_setup;
     Frontend.start = rx888_startup;
     Frontend.tune = NULL; // Only direct sampling for now
+    Frontend.gain = rx888_gain;
+    Frontend.atten = rx888_atten;
   } else if(strcasecmp(device,"airspy") == 0){
     Frontend.setup = airspy_setup;
     Frontend.start = airspy_startup;

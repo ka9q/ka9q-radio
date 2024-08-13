@@ -287,6 +287,19 @@ int rx888_startup(struct frontend * const frontend){
   return 0;
 }
 
+float rx888_gain(struct frontend * const frontend, float gain){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  rx888_set_gain(sdr,gain,sdr->frequency != 0);
+  return frontend->rf_gain;
+}
+
+float rx888_atten(struct frontend * const frontend, float atten){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  rx888_set_att(sdr,atten,sdr->frequency != 0);
+  return frontend->rf_atten;
+}
+
+// Process incoming A/D samples
 static void *proc_rx888(void *arg){
   struct sdrstate * const sdr = (struct sdrstate *)arg;
   assert(sdr != NULL);

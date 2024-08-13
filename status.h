@@ -153,7 +153,7 @@ enum status_type {
   STATUS_INTERVAL,      // Automatically send channel status over *data* channel every STATUS_RATE frames
   OUTPUT_ENCODING,    // Output data encoding (see enum encoding in multicast.h)
   SAMPLES_SINCE_OVER, // Samples since last A/D overrange
-  PLL_WRAPS,          // Count of complete linear mode PLL rotations 
+  PLL_WRAPS,          // Count of complete linear mode PLL rotations
 };
 
 int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);

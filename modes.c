@@ -74,7 +74,7 @@ char const *demod_name_from_type(enum demod_type type){
 int set_defaults(struct channel *chan){
   if(chan == NULL)
     return -1;
-  
+
   chan->tp1 = chan->tp2 = NAN;
   chan->tune.doppler = 0;
   chan->tune.doppler_rate = 0;
@@ -221,7 +221,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   chan->linear.square = config_getboolean(table,sname,"square",chan->linear.square);  // On implies PLL on
   if(chan->linear.square)
     chan->linear.pll = true; // Square implies PLL
-  
+
   chan->filter.isb = config_getboolean(table,sname,"conj",chan->filter.isb);       // (unimplemented anyway)
   chan->linear.loop_bw = config_getfloat(table,sname,"pll-bw",chan->linear.loop_bw);
   chan->linear.agc = config_getboolean(table,sname,"agc",chan->linear.agc);
