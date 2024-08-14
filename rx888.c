@@ -308,7 +308,7 @@ int rx888_startup(struct frontend * const frontend){
 float rx888_gain(struct frontend * const frontend, float gain){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(sdr->agc)
-    fprintf(stdout,"manual gain setting turning off AGC\n");
+    fprintf(stdout,"manual gain setting, turning off AGC\n");
   sdr->agc = false;
   rx888_set_gain(sdr,gain,sdr->frequency != 0);
   return frontend->rf_gain;
@@ -318,7 +318,7 @@ float rx888_gain(struct frontend * const frontend, float gain){
 float rx888_atten(struct frontend * const frontend, float atten){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(sdr->agc)
-    fprintf(stdout,"manual gain setting turning off AGC\n");
+    fprintf(stdout,"manual atten setting, turning off AGC\n");
   sdr->agc = false;
   rx888_set_att(sdr,atten,sdr->frequency != 0);
   return frontend->rf_atten;
