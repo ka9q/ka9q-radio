@@ -58,5 +58,6 @@ struct iir {
 double applyIIR(struct iir *,double);
 void setIIRnotch(struct iir *,double);
 void setIIRlp(struct iir * const iir,double f);
+void setIIRdc(struct iir * const iir);
 
 #endif

@@ -89,6 +89,18 @@ void setIIRlp(struct iir * const iir,double f){
   iir->a[4] = pow(x,4.);
 }
 
+// Simple DC block
+//https://user.eng.umd.edu/~tretter/commlab/c6713slides/ch5.pdf
+// untested
+void setIIRdc(struct iir * const iir){
+  double c = .999;
+  iir->b[0] = (1 + c)/2;
+  iir->b[1] = -1 * (1+c)/2;
+  iir->a[0] = 1;
+  iir->a[1] = -c;
+}
+
+
 
 // IIR, direct form II
 // https://schaumont.dyn.wpi.edu/ece4703b21/lecture3.html
