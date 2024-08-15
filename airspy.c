@@ -46,6 +46,7 @@ struct sdrstate {
   int agc_samples; // Samples represented in energy
   float high_threshold;
   float low_threshold;
+  float scale;         // Scale samples for #bits and front end gain
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
@@ -330,14 +331,13 @@ static int rx_callback(airspy_transfer *transfer){
     s[7] =  up[2];
     for(int j=0; j < 8; j++){
       int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
-      if(x == 32767 || x <= -32767){
+      if(x == 2047 || x <= -2047){
 	frontend->overranges++;
 	frontend->samp_since_over = 0;
       } else {
 	frontend->samp_since_over++;
       }
-      frontend->overranges += (x == 2047) || (x <= -2047);
-      wptr[j] = x;
+      wptr[j] = sdr->scale * x;
       in_energy += x * x;
     }
     wptr += 8;
@@ -467,6 +467,7 @@ static void set_gain(struct sdrstate * const sdr,int gainstep){
       frontend->lna_gain = airspy_sensitivity_lna_gains[tab];
     }
     frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
+    sdr->scale = scale_AD(frontend);
     if(Verbose)
       printf("New gainstep %d: LNA = %d, mixer = %d, vga = %d\n",gainstep,
 	     frontend->lna_gain,frontend->mixer_gain,frontend->if_gain);

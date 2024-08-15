@@ -285,8 +285,7 @@ int downconvert(struct channel *chan);
 
 // extract front end scaling factors (depends on width of A/D sample)
 float scale_voltage_out2FS(struct frontend *frontend);
-float scale_power_out2FS(struct frontend *frontend);
-float scale_ADvoltage2FS(struct frontend const *frontend);
+float scale_AD(struct frontend const *frontend);
 float scale_ADpower2FS(struct frontend const *frontend);
 
 // Helper threads

@@ -33,6 +33,7 @@ struct sdrstate {
 
   uint8_t bias_tee;
   bool agc;             // enable/disable agc
+  float scale;          // Scale samples for #bits and front end gain
 
   // portaudio parameters
   PaStream *Pa_Stream;       // Portaudio handle
@@ -244,7 +245,6 @@ void *proc_funcube(void *arg){
 	frontend->samp_since_over++;
 
       complex float samp = CMPLXF(sampbuf[2*i],sampbuf[2*i+1]);
-
       samp_sum += samp; // Accumulate average DC values
       samp -= sdr->DC;   // remove smoothed DC offset (which can be fractional)
 
@@ -263,9 +263,8 @@ void *proc_funcube(void *arg){
       // Correct phase
       __imag__ samp = secphi * cimagf(samp) - tanphi * crealf(samp);
 
-      wptr[i] = samp;
+      wptr[i] = samp * sdr->scale;
     }
-
     write_cfilter(&frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
     frontend->samples += Blocksize;
     float const block_energy = i_energy + q_energy; // Normalize for complex pairs
@@ -360,7 +359,7 @@ static void do_fcd_agc(struct sdrstate *sdr){
     }
   }
   frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
-
+  sdr->scale = scale_AD(frontend);
 }
 
 // The funcube device uses the Mirics MSi001 tuner. It has a fractional N synthesizer that can't actually do integer frequency steps.

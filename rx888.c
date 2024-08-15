@@ -87,6 +87,7 @@ struct sdrstate {
   int64_t last_count_time;
   bool message_posted; // Clock rate error posted last time around
   bool agc;
+  float scale;         // Scale samples for #bits and front end gain
 
   pthread_t cmd_thread;
   pthread_t proc_thread;
@@ -473,8 +474,8 @@ static void rx_callback(struct libusb_transfer * const transfer){
       } else {
 	frontend->samp_since_over++;
       }
-      wptr[i] = s;
-      in_energy += wptr[i] * wptr[i];
+      in_energy += s * s;
+      wptr[i] = s * sdr->scale;
     }
   } else {
     for(int i=0; i < sampcount; i++){
@@ -484,8 +485,8 @@ static void rx_callback(struct libusb_transfer * const transfer){
       } else {
 	frontend->samp_since_over++;
       }
-      wptr[i] = samples[i];
-      in_energy += wptr[i] * wptr[i];
+      wptr[i] = sdr->scale * samples[i];
+      in_energy += samples[i] * samples[i];
     }
   }
   frontend->timestamp = now;
@@ -774,6 +775,7 @@ static void rx888_set_att(struct sdrstate *sdr,float att,bool vhf){
   usleep(5000);
 
   frontend->rf_atten = att;
+  sdr->scale = scale_AD(frontend);
   if(!vhf){
     int const arg = (int)(att * 2);
     argument_send(sdr->dev_handle,DAT31_ATT,arg);
@@ -797,6 +799,7 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf){
     int const arg = (int)gain;
     argument_send(sdr->dev_handle,R82XX_VGA,arg);
   }
+  sdr->scale = scale_AD(frontend);
 }
 
 // see: SiLabs Application Note AN619 - Manually Generating an Si5351 Register Map (https://www.silabs.com/documents/public/application-notes/AN619.pdf)

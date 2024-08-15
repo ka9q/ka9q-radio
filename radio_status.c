@@ -513,12 +513,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   // Adjust for A/D width
   // Level is absolute relative to A/D saturation, so +3dB for real vs complex
   if(chan->status.blocks_since_poll > 0){
-    float level = frontend->if_power;
-    level /= (1 << (frontend->bitspersample-1)) * (1 << (frontend->bitspersample-1));
-    // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
-    // Complex signals carry twice as much power, divided between I and Q
-    if(frontend->isreal)
-      level *= 2;
+    float level = frontend->if_power * scale_ADpower2FS(frontend);
     encode_float(&bp,IF_POWER,power2dB(level));
   }
   encode_int64(&bp,AD_OVER,frontend->overranges);
