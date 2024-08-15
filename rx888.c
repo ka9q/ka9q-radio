@@ -414,7 +414,7 @@ static void *agc_rx888(void *arg){
 	frontend->if_power *= dB2power(-fabsf(AGC_step));
 	// Unlatch high water mark
 	frontend->if_power_max = 0;
-      } else if(sdr->agc && new_dBFS < AGC_lower_limit){
+      } else if(sdr->agc && new_dBFS < AGC_lower_limit && frontend->rf_gain < 34){
 	// Increase gain by AGC_step
 	float new_gain = frontend->rf_gain + fabsf(AGC_step);
 	if(Verbose)
