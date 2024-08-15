@@ -32,8 +32,9 @@ static int const Default_samprate = 64800000; // Synthesizes cleanly from 27 MHz
 static float const Nyquist = 0.47;  // Upper end of usable bandwidth, relative to 1/2 sample rate
 static float const AGC_upper_limit = -10.0;   // Reduce RF gain if A/D level exceeds this in dBFS
 static float const AGC_lower_limit = -30.0;   // Increase RF gain if level is below this in dBFS
-static float const AGC_step = 6.0;            // Size of adjustment to make every 10 sec
+static float const AGC_step = 3.0;            // Size of adjustment to make every 10 sec, dB
 static int const AGC_interval = 10;           // Seconds between runs of AGC loop
+static float const Start_gain = 10.0;         // Initial VGA gain, dB
 
 // Reference frequency for Si5351 clock generator
 static double const Min_reference = 10e6;  //  10 MHz
@@ -197,10 +198,10 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stdout,"Invalid gain mode %s, default high\n",gainmode);
     sdr->highgain = true;
   }
-  // Gain value, default +1.5 dB
+  // Gain value
   float gain = config_getfloat(dictionary,section,"gain",9999);
   if(gain == 9999){
-    gain = 1.5; // Default
+    gain = Start_gain; // Default
   } else {
     // Explicitly specifed, turn off AGC
     // should there be limits?
