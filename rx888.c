@@ -393,12 +393,13 @@ static void *agc_rx888(void *arg){
 	sdr->message_posted = (error > 0.01);
       }
     }
+    float scaled_new_power = frontend->if_power * scale_ADpower2FS(frontend);
+    float new_dBFS = power2dB(scaled_new_power);
+
     if(frontend->if_power > frontend->if_power_max){
-      float scaled_new_power = frontend->if_power * scale_ADpower2FS(frontend);
-      float new_dBFS = power2dB(scaled_new_power);
       if(Verbose){
-	float scaled_old_power = frontend->if_power_max * scale_ADpower2FS(frontend);
 	// Don't print a message unless the increase is > 0.1 dB, the precision of the printf
+	float scaled_old_power = frontend->if_power_max * scale_ADpower2FS(frontend);
 	float old_dBFS = power2dB(scaled_old_power);
 	if(new_dBFS >= old_dBFS + 0.1)
 	  fprintf(stdout,"New input power high watermark: %.1f dBFS\n",new_dBFS);
@@ -415,18 +416,18 @@ static void *agc_rx888(void *arg){
 	frontend->if_power *= dB2power(-fabsf(AGC_step));
 	// Unlatch high water mark
 	frontend->if_power_max = 0;
-      } else if(sdr->agc && new_dBFS < AGC_lower_limit && frontend->rf_gain < 34){
-	// Increase gain by AGC_step
-	float new_gain = frontend->rf_gain + fabsf(AGC_step);
-	if(Verbose)
-	  fprintf(stdout,"Front end gain increase from %.1f dB to %.1f dB\n",frontend->rf_gain,new_gain);
-
-	rx888_set_gain(sdr,new_gain,false);
-	// Increase averaged value to speed convergence
-	frontend->if_power *= dB2power(+fabsf(AGC_step));
-	// Unlatch high water mark
-	frontend->if_power_max = 0;
       }
+    } else if(sdr->agc && new_dBFS < AGC_lower_limit && frontend->rf_gain < 34){
+      // Increase gain by AGC_step
+      float new_gain = frontend->rf_gain + fabsf(AGC_step);
+      if(Verbose)
+	fprintf(stdout,"Front end gain increase from %.1f dB to %.1f dB\n",frontend->rf_gain,new_gain);
+
+      rx888_set_gain(sdr,new_gain,false);
+      // Increase averaged value to speed convergence
+      frontend->if_power *= dB2power(+fabsf(AGC_step));
+      // Unlatch high water mark
+      frontend->if_power_max = 0;
     }
   }
   return NULL;
