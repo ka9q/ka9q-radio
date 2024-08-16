@@ -140,6 +140,8 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
   frontend->context = sdr;
+  frontend->isreal = true; // Make sure the right kind of filter gets created!
+  frontend->bitspersample = 16; // For gain scaling
   sdr->agc = true; // On by default unless gain or atten is specified
   {
     char const *p = config_getstring(dictionary,section,"serial",NULL); // is serial specified?
@@ -178,6 +180,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 
   // Attenuation, default 0
   float att = fabsf(config_getfloat(dictionary,section,"att",9999));
+  att = fabsf(config_getfloat(dictionary,section,"atten",att));
+  att = fabsf(config_getfloat(dictionary,section,"featten",att));
+  att = fabsf(config_getfloat(dictionary,section,"rfatten",att));
   if(att == 9999){
     att = 0; // AGC still on, default attenuation 0 dB (not very useful anyway)
   } else {
@@ -200,6 +205,8 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   }
   // Gain value
   float gain = config_getfloat(dictionary,section,"gain",9999);
+  gain = config_getfloat(dictionary,section,"rxgain",gain);
+  gain = config_getfloat(dictionary,section,"fegain",gain);
   if(gain == 9999){
     gain = Start_gain; // Default
   } else {
@@ -241,6 +248,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   sdr->reference = reference * (1 + calibrate);
   usleep(5000);
   double actual = rx888_set_samprate(sdr,sdr->reference,samprate);
+  frontend->samprate = samprate;
+  frontend->min_IF = 0;
+  frontend->max_IF = Nyquist * samprate; // Just an estimate - get the real number somewhere
 
   // start clock
   control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
@@ -249,12 +259,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   uint8_t const clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
   control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_CLK_BASE+0,clock_control);
 
-  frontend->samprate = samprate;
-  frontend->min_IF = 0;
-  frontend->max_IF = Nyquist * samprate; // Just an estimate - get the real number somewhere
-  frontend->isreal = true; // Make sure the right kind of filter gets created!
-  frontend->bitspersample = 16; // For gain scaling
-  frontend->lock = true; // Doesn't tune in direct sampling mode
+
   {
     char const *p = config_getstring(dictionary,section,"description","rx888");
     FREE(frontend->description);
@@ -273,21 +278,24 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   double frequency = 0;
   {
     char const *p = config_getstring(dictionary,section,"frequency",NULL);
-    if(p != NULL)
+    if(p != NULL){
       frequency = parse_frequency(p,false);
+      if(frequency < Min_frequency || frequency > Max_frequency){
+	fprintf(stdout,"Invalid VHF/UHF frequency %'lf, forcing %'lf\n",frequency,0.0);
+	frequency = 0;
+      }
+    }
   }
-  if(frequency < Min_frequency || frequency > Max_frequency){
-    fprintf(stdout,"Invalid VHF/UHF frequency %'lf, forcing %'lf\n",frequency,0.0);
-    frequency = 0;
-  }
+  sdr->frequency = frequency;
   if(frequency == 0){
     // HF mode
+    frontend->lock = true; // Doesn't tune in direct sampling mode
     rx888_set_hf_mode(sdr);
   } else {
     // VHF/UHF mode
     double actual_frequency = rx888_set_tuner_frequency(sdr,frequency);
     fprintf(stdout,"Actual VHF/UHF tuner frequency %'lf\n",actual_frequency);
-    sdr->frequency = frequency;
+
     rx888_set_att(sdr,att,true);
     rx888_set_gain(sdr,gain,true);
   }
