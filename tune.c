@@ -51,10 +51,12 @@ int Control_sock = -1;
 char Optstring[] = "A:e:f:g:G:H:hi:L:l:m:qr:R:s:vV";
 struct option Options[] = {
   {"rfatten", required_argument, NULL, 'A'},
+  {"featten", required_argument, NULL, 'A'},
   {"encoding", required_argument, NULL, 'e'},
   {"frequency", required_argument, NULL, 'f'},
   {"gain", required_argument, NULL, 'g'},
   {"rfgain", required_argument, NULL, 'G'},
+  {"fegain", required_argument, NULL, 'G'},
   {"help", no_argument, NULL, 'h'},
   {"iface", required_argument, NULL, 'i'},
   {"locale", required_argument, NULL, 'l'},
