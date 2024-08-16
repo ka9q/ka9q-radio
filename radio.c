@@ -623,6 +623,7 @@ int downconvert(struct channel *chan){
 
 // scale A/D output to full scale for monitoring overloads
 float scale_ADpower2FS(struct frontend const *frontend){
+  assert(frontend->bitspersample > 0);
   float scale = 1.0f / (1 << (frontend->bitspersample - 1)); // Important to force the numerator to float, otherwise the divide produces zero!
   scale *= scale;
   // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
@@ -634,6 +635,7 @@ float scale_ADpower2FS(struct frontend const *frontend){
 // Returns multiplicative factor for converting raw samples to floats with analog gain correction
 // Real vs complex difference is (I think) handled in the filter with a 3dB boost, so there's no sqrt(2) correction here
 float scale_AD(struct frontend const *frontend){
+  assert(frontend->bitspersample > 0);
   float scale = 1.0f / (1 << (frontend->bitspersample - 1));
   float analog_gain = frontend->rf_gain - frontend->rf_atten; // net analog gain, dB
   return scale * dB2voltage(-analog_gain); // Front end gain as amplitude ratio
