@@ -371,7 +371,7 @@ int main(int argc,char *argv[]){
       printf("Frequency %'.3lf Hz\n",received_freq);
 
     if(received_agc_enable != -1)
-      printf("AGC %s\n",received_agc_enable ? "on" : "off");
+      printf("Channel AGC %s\n",received_agc_enable ? "on" : "off");
 
     if(received_gain != INFINITY)
       printf("Channel Gain %.1f dB\n",received_gain);
