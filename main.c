@@ -606,7 +606,7 @@ static int setup_hardware(char const *sname){
   if(strcasecmp(device,"rx888") == 0){
     Frontend.setup = rx888_setup;
     Frontend.start = rx888_startup;
-    Frontend.tune = NULL; // Only direct sampling for now
+    Frontend.tune = rx888_tune;
     Frontend.gain = rx888_gain;
     Frontend.atten = rx888_atten;
   } else if(strcasecmp(device,"airspy") == 0){
