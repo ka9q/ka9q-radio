@@ -254,7 +254,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
       fprintf(fp,"PL tone deviation %'g Hz",decode_float(cp,optlen));
       break;
     case AGC_ENABLE:
-      fprintf(fp,"agc %s",decode_int8(cp,optlen) ? "enable" : "disable");
+      fprintf(fp,"channel agc %s",decode_int8(cp,optlen) ? "enable" : "disable");
       break;
     case HEADROOM:
       fprintf(fp,"headroom %.1f dB",decode_float(cp,optlen));
@@ -333,7 +333,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
       fprintf(fp,"rf gain %.1f dB",decode_float(cp,optlen));
       break;
     case RF_AGC:
-      fprintf(fp,"rf agc %s",decode_int(cp,optlen) ? "on" : "off");
+      fprintf(fp,"rf agc %s",decode_int(cp,optlen) ? "enabled" : "disabled");
       break;
     case BIN_DATA:
       {
