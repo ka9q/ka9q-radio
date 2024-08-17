@@ -332,6 +332,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case RF_GAIN:
       fprintf(fp,"rf gain %.1f dB",decode_float(cp,optlen));
       break;
+    case RF_AGC:
+      fprintf(fp,"rf agc %s",decode_int(cp,optlen) ? "on" : "off");
+      break;
     case BIN_DATA:
       {
 	fprintf(fp,"fft bins:");
