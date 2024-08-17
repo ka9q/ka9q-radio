@@ -240,6 +240,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       break;
     case BIN_DATA:
       break;
+    case RF_AGC:
+      frontend->rf_agc = decode_int(cp,optlen);
+      break;
     case RF_GAIN:
       frontend->rf_gain = decode_float(cp,optlen);
       break;

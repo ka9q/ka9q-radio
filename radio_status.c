@@ -494,6 +494,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   encode_double(&bp,CALIBRATE,frontend->calibrate);
   encode_double(&bp,RF_GAIN,frontend->rf_gain);
   encode_double(&bp,RF_ATTEN,frontend->rf_atten);
+  encode_int(&bp,RF_AGC,frontend->rf_agc);
   encode_int32(&bp,LNA_GAIN,frontend->lna_gain);
   encode_int32(&bp,MIXER_GAIN,frontend->mixer_gain);
   encode_int32(&bp,IF_GAIN,frontend->if_gain);

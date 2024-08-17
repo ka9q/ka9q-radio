@@ -65,6 +65,7 @@ struct frontend {
 
   float rf_atten;         // dB (RX888 only)
   float rf_gain;          // dB gain (RX888) or lna_gain + mixer_gain + if_gain
+  bool rf_agc;               // Front end AGC of some sort
   bool direct_conversion; // Try to avoid DC spike if set
   bool isreal;            // Use real->complex FFT (otherwise complex->complex)
   int bitspersample;      // 1, 8, 12 or 16

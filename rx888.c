@@ -88,7 +88,6 @@ struct sdrstate {
   uint64_t last_sample_count; // Used to verify sample rate
   int64_t last_count_time;
   bool message_posted; // Clock rate error posted last time around
-  bool agc;
   float scale;         // Scale samples for #bits and front end gain
 
   pthread_t cmd_thread;
@@ -143,7 +142,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   frontend->context = sdr;
   frontend->isreal = true; // Make sure the right kind of filter gets created!
   frontend->bitspersample = 16; // For gain scaling
-  sdr->agc = true; // On by default unless gain or atten is specified
+  frontend->rf_agc = true; // On by default unless gain or atten is specified
   {
     char const *p = config_getstring(dictionary,section,"serial",NULL); // is serial specified?
     if(p != NULL){
@@ -190,7 +189,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     // Explicitly specified, turn off AGC
     if(att > 31.5)
       att = 31.5;
-    sdr->agc = false;
+    frontend->rf_agc = false;
   }
   rx888_set_att(sdr,att,false);
 
@@ -213,7 +212,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   } else {
     // Explicitly specifed, turn off AGC
     // should there be limits?
-    sdr->agc = false;
+    frontend->rf_agc = false;
   }
   rx888_set_gain(sdr,gain,false);
 
@@ -270,7 +269,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   double ferror = actual - samprate;
   fprintf(stdout,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  sdr->reference,samprate,actual,ferror, 1e6 * ferror / samprate,
-	  sdr->agc ? "on" : "off",
+	  frontend->rf_agc ? "on" : "off",
 	  sdr->highgain ? "high" : "low",
 	  gain,frontend->rf_gain,frontend->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
 	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate));
@@ -318,9 +317,9 @@ int rx888_startup(struct frontend * const frontend){
 // command to set analog gain. Turn off AGC if it was on
 float rx888_gain(struct frontend * const frontend, float gain){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  if(sdr->agc)
+  if(frontend->rf_agc)
     fprintf(stdout,"manual gain setting, turning off AGC\n");
-  sdr->agc = false;
+  frontend->rf_agc = false;
   rx888_set_gain(sdr,gain,sdr->frequency != 0);
   return frontend->rf_gain;
 }
@@ -328,9 +327,9 @@ float rx888_gain(struct frontend * const frontend, float gain){
 // command to set analog attenuation. Turn off AGC if it was on
 float rx888_atten(struct frontend * const frontend, float atten){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  if(sdr->agc)
+  if(frontend->rf_agc)
     fprintf(stdout,"manual atten setting, turning off AGC\n");
-  sdr->agc = false;
+  frontend->rf_agc = false;
   rx888_set_att(sdr,atten,sdr->frequency != 0);
   return frontend->rf_atten;
 }
@@ -415,7 +414,7 @@ static void *agc_rx888(void *arg){
 	  fprintf(stdout,"New input power high watermark: %.1f dBFS\n",new_dBFS);
       }
       frontend->if_power_max = frontend->if_power;
-      if(sdr->agc && new_dBFS > AGC_upper_limit){
+      if(frontend->rf_agc && new_dBFS > AGC_upper_limit){
 	// Decrease gain by AGC_step
 	float new_gain = frontend->rf_gain - fabsf(AGC_step);
 	if(Verbose)
@@ -427,7 +426,7 @@ static void *agc_rx888(void *arg){
 	// Unlatch high water mark
 	frontend->if_power_max = 0;
       }
-    } else if(sdr->agc && new_dBFS < AGC_lower_limit && frontend->rf_gain < 34){
+    } else if(frontend->rf_agc && new_dBFS < AGC_lower_limit && frontend->rf_gain < 34){
       // Increase gain by AGC_step
       float new_gain = frontend->rf_gain + fabsf(AGC_step);
       if(Verbose)
