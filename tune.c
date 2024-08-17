@@ -213,6 +213,7 @@ int main(int argc,char *argv[]){
   float received_rf_gain = INFINITY;
   float received_rf_atten = INFINITY;  
   enum encoding received_encoding = NO_ENCODING;
+  int received_rf_agc = -1;
   int samprate = 0;
 
   uint32_t sent_tag = 0;
@@ -324,6 +325,9 @@ int main(int argc,char *argv[]){
       case RF_ATTEN:
 	received_rf_atten = decode_float(cp,optlen);
 	break;
+      case RF_AGC:
+	received_rf_agc = decode_int(cp,optlen);
+	break;
       case PRESET:
 	FREE(preset); // Unlikely, but just in case
 	preset = decode_string(cp,optlen);
@@ -375,6 +379,9 @@ int main(int argc,char *argv[]){
 
     if(received_gain != INFINITY)
       printf("Channel Gain %.1f dB\n",received_gain);
+
+    if(received_rf_agc != -1)
+      printf("RF AGC %s\n",received_rf_agc ? "on" : "off");
 
     if(received_rf_gain != INFINITY)
       printf("RF Gain %.1f dB\n",received_rf_gain);      
