@@ -43,13 +43,15 @@ bool Quiet = false;
 enum encoding Encoding = NO_ENCODING;
 float RFgain = INFINITY;
 float RFatten = INFINITY;
+bool Agc_enable = -1;
 
 struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 
-char Optstring[] = "A:e:f:g:G:H:hi:L:l:m:qr:R:s:vV";
+char Optstring[] = "aA:e:f:g:G:H:hi:L:l:m:qr:R:s:vV";
 struct option Options[] = {
+  {"agc", no_argument, NULL, 'a'},
   {"rfatten", required_argument, NULL, 'A'},
   {"featten", required_argument, NULL, 'A'},
   {"encoding", required_argument, NULL, 'e'},
@@ -85,6 +87,9 @@ int main(int argc,char *argv[]){
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
+      case 'a':
+	Agc_enable = true;
+	break;
       case 'A':
 	RFatten = strtod(optarg,NULL);
 	break;
@@ -220,6 +225,9 @@ int main(int argc,char *argv[]){
       sent_tag = arc4random();
       encode_int(&bp,COMMAND_TAG,sent_tag);
       encode_int(&bp,OUTPUT_SSRC,Ssrc);
+      if(Agc_enable == true)
+	encode_int(&bp,AGC_ENABLE,true);
+
       if(Mode != NULL)
 	encode_string(&bp,PRESET,Mode,strlen(Mode));
 
@@ -237,8 +245,7 @@ int main(int argc,char *argv[]){
       if(Gain != INFINITY){
 	encode_float(&bp,GAIN,Gain);
 	encode_int(&bp,AGC_ENABLE,false); // Turn off AGC for manual gain
-      } else
-	encode_int(&bp,AGC_ENABLE,true);
+      }
       if(Encoding != NO_ENCODING)
 	encode_int(&bp,OUTPUT_ENCODING,Encoding);
 
