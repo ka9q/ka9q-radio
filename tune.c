@@ -43,7 +43,7 @@ bool Quiet = false;
 enum encoding Encoding = NO_ENCODING;
 float RFgain = INFINITY;
 float RFatten = INFINITY;
-bool Agc_enable = -1;
+int Agc_enable = -1;
 
 struct sockaddr_storage Control_address;
 int Status_sock = -1;
@@ -88,7 +88,7 @@ int main(int argc,char *argv[]){
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
       case 'a':
-	Agc_enable = true;
+	Agc_enable = 1;
 	break;
       case 'A':
 	RFatten = strtod(optarg,NULL);
@@ -225,8 +225,6 @@ int main(int argc,char *argv[]){
       sent_tag = arc4random();
       encode_int(&bp,COMMAND_TAG,sent_tag);
       encode_int(&bp,OUTPUT_SSRC,Ssrc);
-      if(Agc_enable == true)
-	encode_int(&bp,AGC_ENABLE,true);
 
       if(Mode != NULL)
 	encode_string(&bp,PRESET,Mode,strlen(Mode));
@@ -245,7 +243,9 @@ int main(int argc,char *argv[]){
       if(Gain != INFINITY){
 	encode_float(&bp,GAIN,Gain);
 	encode_int(&bp,AGC_ENABLE,false); // Turn off AGC for manual gain
-      }
+      } else if(Agc_enable == 1)
+	encode_int(&bp,AGC_ENABLE,true);
+
       if(Encoding != NO_ENCODING)
 	encode_int(&bp,OUTPUT_ENCODING,Encoding);
 
@@ -374,7 +374,7 @@ int main(int argc,char *argv[]){
       printf("AGC %s\n",received_agc_enable ? "on" : "off");
 
     if(received_gain != INFINITY)
-      printf("Gain %.1f dB\n",received_gain);
+      printf("Channel Gain %.1f dB\n",received_gain);
 
     if(received_rf_gain != INFINITY)
       printf("RF Gain %.1f dB\n",received_rf_gain);      
