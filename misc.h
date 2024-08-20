@@ -41,6 +41,8 @@
 #define GPS_UTC_OFFSET (18) // GPS ahead of utc by 18 seconds - make this a table!
 #define UNIX_EPOCH ((time_t)315964800) // GPS epoch on unix time scale
 
+#define BOLTZMANN (1.380649e-23) // Boltzmann's constant, J/K
+
 static float const SCALE16 = 1./INT16_MAX;
 static float const SCALE12 = 1/2048.;
 static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1

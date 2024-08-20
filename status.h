@@ -154,6 +154,7 @@ enum status_type {
   OUTPUT_ENCODING,    // Output data encoding (see enum encoding in multicast.h)
   SAMPLES_SINCE_OVER, // Samples since last A/D overrange
   PLL_WRAPS,          // Count of complete linear mode PLL rotations
+  RF_GAIN_CAL,        // Adjustment relating dBm to dBFS
 };
 
 int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);

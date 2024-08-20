@@ -178,6 +178,12 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   sdr->randomizer = config_getboolean(dictionary,section,"rand",false);
   rx888_set_dither_and_randomizer(sdr,sdr->dither,sdr->randomizer);
 
+  // RF Gain calibration
+  // WA2ZKD measured several rx888s with very consistent results
+  // e.g., -90 dBm gives -91.4 dBFS with 0 dB VGA gain and 0 dB attenuation
+  // If you use a preamp or converter, add its gain to gaincal
+  frontend->rf_gain_cal = config_getfloat(dictionary,section,"gaincal",-1.4);
+
   // Attenuation, default 0
   float att = fabsf(config_getfloat(dictionary,section,"att",9999));
   att = fabsf(config_getfloat(dictionary,section,"atten",att));
@@ -267,11 +273,12 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stdout,"%s: ",frontend->description);
   }
   double ferror = actual - samprate;
-  fprintf(stdout,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
+  fprintf(stdout,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  sdr->reference,samprate,actual,ferror, 1e6 * ferror / samprate,
 	  frontend->rf_agc ? "on" : "off",
 	  sdr->highgain ? "high" : "low",
-	  gain,frontend->rf_gain,frontend->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
+	  gain,frontend->rf_gain,frontend->rf_atten,frontend->rf_gain_cal,
+sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
 	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate));
 
   // VHF-UHF

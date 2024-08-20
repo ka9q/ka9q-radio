@@ -249,6 +249,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case RF_ATTEN:
       frontend->rf_atten = decode_float(cp,optlen);
       break;
+    case RF_GAIN_CAL:
+      frontend->rf_gain_cal = decode_float(cp,optlen);
+      break;
     case BLOCKS_SINCE_POLL:
       channel->status.blocks_since_poll = decode_int64(cp,optlen);
       break;

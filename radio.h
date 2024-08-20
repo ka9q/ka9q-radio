@@ -63,9 +63,10 @@ struct frontend {
   uint8_t mixer_gain;
   uint8_t if_gain;
 
-  float rf_atten;         // dB (RX888 only)
-  float rf_gain;          // dB gain (RX888) or lna_gain + mixer_gain + if_gain
-  bool rf_agc;               // Front end AGC of some sort
+  float rf_atten;         // dB (RX888 only, pretty useless)
+  float rf_gain;          // dB gain (RX888) or lna_gain + mixer_gain + if_gain for R820/828 tuners
+  bool rf_agc;            // Front end AGC of some sort is active
+  float rf_gain_cal;      // adjust to make 0 dBm give 0 dBFS: when zero, 0dBm gives "rf_gain_cal" dBFS
   bool direct_conversion; // Try to avoid DC spike if set
   bool isreal;            // Use real->complex FFT (otherwise complex->complex)
   int bitspersample;      // 1, 8, 12 or 16

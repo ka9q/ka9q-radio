@@ -1294,32 +1294,31 @@ static void display_sig(WINDOW *w,struct channel const *channel){
 	    Frontend.mixer_gain,
 	    Frontend.if_gain);
 
-  pprintw(w,row++,col,"Input","%.1f dBFS ",power2dB(Frontend.if_power));
-  pprintw(w,row++,col,"FE Gain","%.1f dB   ",Frontend.rf_atten + Frontend.rf_gain);
+  // Calculate actual input power in dBm by subtracting net RF gain
+  pprintw(w,row++,col,"Input","%.1f dBm   ",
+	  power2dB(Frontend.if_power) - (Frontend.rf_gain - Frontend.rf_atten + Frontend.rf_gain_cal));
   if(!isnan(channel->sig.bb_power))
-    pprintw(w,row++,col,"Baseband","%.1f dB   ",power2dB(channel->sig.bb_power));
-  if(!isnan(channel->sig.n0))
-     pprintw(w,row++,col,"N₀","%.1f dB/Hz",power2dB(channel->sig.n0));
-
+    pprintw(w,row++,col,"A/D","%.1f dBFS  ",power2dB(Frontend.if_power));
+  // These gain figures only affect the relative A/D input level in dBFS because an equal
+  // amount of digital attenutation is applied to the A/D output to maintain unity gain
+  pprintw(w,row++,col,"FE Gain","%.1f dB    ",Frontend.rf_gain);
+  pprintw(w,row++,col,"FE Atten","%.1f dB    ",Frontend.rf_atten);
+  pprintw(w,row++,col,"FE gain cal","%.1f dB    ",Frontend.rf_gain_cal);
+  pprintw(w,row++,col,"Baseband","%.1f dBm   ",power2dB(channel->sig.bb_power));
+  if(!isnan(channel->sig.n0)){
+     pprintw(w,row++,col,"N₀","%.1f dBm/Hz",power2dB(channel->sig.n0));
+     float temp = channel->sig.n0 / (1000 * BOLTZMANN); // 1000 converts from joules to millijoules (for power in dBm)
+     pprintw(w,row++,col,"N Temp","%g K     ",temp);
+     float nf = power2dB(1 + temp / 290); // convert to noise figure
+     pprintw(w,row++,col,"NF","%.1f dB    ",nf);
+  }
   // Derived numbers
   if(!isnan(Local.sn0))
-    pprintw(w,row++,col,"S/N₀","%.1f dBHz ",power2dB(Local.sn0));
+    pprintw(w,row++,col,"S/N₀","%.1f dBHz  ",power2dB(Local.sn0));
   if(!isnan(Local.noise_bandwidth))
-    pprintw(w,row++,col,"NBW","%.1f dBHz ",power2dB(Local.noise_bandwidth));
+    pprintw(w,row++,col,"NBW","%.1f dBHz  ",power2dB(Local.noise_bandwidth));
   if(!isnan(Local.sn0) && !isnan(Local.noise_bandwidth))
-    pprintw(w,row++,col,"S/N","%.1f dB   ",power2dB(Local.sn0/Local.noise_bandwidth));
-
-  if(!isnan(channel->output.gain))
-    pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(channel->output.gain));
-  if(!isnan(channel->output.energy))
-    pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(channel->output.energy)); // actually level; sender does averaging
-  if(!isnan(channel->output.headroom))
-    pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(channel->output.headroom));
-  if(channel->demod_type == LINEAR_DEMOD){
-    pprintw(w,row++,col,"Squel open","%.1f dB   ",power2dB(channel->fm.squelch_open)); // should move these
-    pprintw(w,row++,col,"Squel close","%.1f dB   ",power2dB(channel->fm.squelch_close));
-  }
-
+    pprintw(w,row++,col,"S/N","%.1f dB    ",power2dB(Local.sn0/Local.noise_bandwidth));
   box(w,0,0);
   mvwaddstr(w,0,1,"Signal");
   wnoutrefresh(w);
@@ -1339,8 +1338,14 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
   case FM_DEMOD:
   case WFM_DEMOD:
     pprintw(w,row++,col,"Input S/N","%.1f dB",power2dB(channel->sig.snr));
-    pprintw(w,row++,col,"Squelch open","%.1f dB",power2dB(channel->fm.squelch_open));
-    pprintw(w,row++,col,"Squelch close","%.1f dB",power2dB(channel->fm.squelch_close));
+    if(!isnan(channel->output.gain))
+      pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(channel->output.gain));
+    if(!isnan(channel->output.energy))
+      pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(channel->output.energy)); // actually level; sender does averaging
+    if(!isnan(channel->output.headroom))
+      pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(channel->output.headroom));
+    pprintw(w,row++,col,"Squel open","%.1f dB   ",power2dB(channel->fm.squelch_open)); // should move these
+    pprintw(w,row++,col,"Squel close","%.1f dB   ",power2dB(channel->fm.squelch_close));
     pprintw(w,row++,col,"Offset","%'+.3f Hz",channel->sig.foffset);
     pprintw(w,row++,col,"Deviation","%.1f Hz",channel->fm.pdeviation);
     if(!isnan(channel->fm.tone_freq) && channel->fm.tone_freq != 0)
@@ -1353,6 +1358,15 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
     }
     break;
   case LINEAR_DEMOD:
+    if(!isnan(channel->output.gain))
+      pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(channel->output.gain));
+    if(!isnan(channel->output.energy))
+      pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(channel->output.energy)); // actually level; sender does averaging
+    if(!isnan(channel->output.headroom))
+      pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(channel->output.headroom));
+    pprintw(w,row++,col,"Squel open","%.1f dB   ",power2dB(channel->fm.squelch_open)); // should move these
+    pprintw(w,row++,col,"Squel close","%.1f dB   ",power2dB(channel->fm.squelch_close));
+
     if(!isnan(channel->linear.threshold) && channel->linear.threshold > 0)
       pprintw(w,row++,col,"AGC Threshold","%.1f dB  ",voltage2dB(channel->linear.threshold));
     if(!isnan(channel->linear.recovery_rate) && channel->linear.recovery_rate > 0)
