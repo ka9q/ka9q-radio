@@ -192,7 +192,7 @@ void *demod_linear(void *arg){
       if(chan->linear.env){
 	// AM envelope detection
 	for(int n=0; n < N; n++){
-	  samples[n] = cabsf(buffer[n]) * chan->output.gain;
+	  samples[n] = M_SQRT1_2 * cabsf(buffer[n]) * chan->output.gain; // Power from both I&Q
 	  output_power += samples[n] * samples[n];
 	  chan->output.gain *= gain_change;
 	}
@@ -211,7 +211,7 @@ void *demod_linear(void *arg){
       if(chan->linear.env){
 	// I on left, envelope/AM on right (for experiments in fine SSB tuning)
 	for(int n=0; n < N; n++){      
-	  __imag__ buffer[n] = cabsf(buffer[n]) * 2; // empirical +6dB for AM to match SSB
+	  __imag__ buffer[n] = M_SQRT1_2 * cabsf(buffer[n]);
 	  buffer[n] *= chan->output.gain;
 	  output_power += cnrmf(buffer[n]);
 	  chan->output.gain *= gain_change;
