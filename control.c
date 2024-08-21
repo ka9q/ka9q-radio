@@ -1296,19 +1296,19 @@ static void display_sig(WINDOW *w,struct channel const *channel){
 
   // Calculate actual input power in dBm by subtracting net RF gain
   pprintw(w,row++,col,"Input","%.1f dBm   ",
-	  power2dB(Frontend.if_power) - (Frontend.rf_gain - Frontend.rf_atten + Frontend.rf_gain_cal));
+	  power2dB(Frontend.if_power) - (Frontend.rf_gain - Frontend.rf_atten + Frontend.rf_level_cal));
   if(!isnan(channel->sig.bb_power))
     pprintw(w,row++,col,"A/D","%.1f dBFS  ",power2dB(Frontend.if_power));
   // These gain figures only affect the relative A/D input level in dBFS because an equal
   // amount of digital attenutation is applied to the A/D output to maintain unity gain
-  pprintw(w,row++,col,"FE Gain","%.1f dB    ",Frontend.rf_gain);
-  pprintw(w,row++,col,"FE Atten","%.1f dB    ",Frontend.rf_atten);
-  pprintw(w,row++,col,"FE gain cal","%.1f dB    ",Frontend.rf_gain_cal);
+  pprintw(w,row++,col,"RF Gain","%.1f dB    ",Frontend.rf_gain);
+  pprintw(w,row++,col,"RF Atten","%.1f dB    ",Frontend.rf_atten);
+  pprintw(w,row++,col,"RF lev cal","%.1f dB    ",Frontend.rf_level_cal);
   pprintw(w,row++,col,"Baseband","%.1f dBm   ",power2dB(channel->sig.bb_power));
   if(!isnan(channel->sig.n0)){
      pprintw(w,row++,col,"N₀","%.1f dBm/Hz",power2dB(channel->sig.n0));
      float temp = channel->sig.n0 / (1000 * BOLTZMANN); // 1000 converts from joules to millijoules (for power in dBm)
-     pprintw(w,row++,col,"N Temp","%g K     ",temp);
+     pprintw(w,row++,col,"N Temp","%.5g K     ",temp);
      float nf = power2dB(1 + temp / 290); // convert to noise figure
      pprintw(w,row++,col,"NF","%.1f dB    ",nf);
   }

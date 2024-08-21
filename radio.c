@@ -638,6 +638,6 @@ float scale_AD(struct frontend const *frontend){
   assert(frontend->bitspersample > 0);
   float scale = 1.0f / (1 << (frontend->bitspersample - 1));
   // net analog gain, dBm to dBFS, that we correct for to maintain unity gain, i.e., 0 dBm -> 0 dBFS
-  float analog_gain = frontend->rf_gain - frontend->rf_atten + frontend->rf_gain_cal; 
+  float analog_gain = frontend->rf_gain - frontend->rf_atten + frontend->rf_level_cal; 
   return scale * dB2voltage(-analog_gain); // Front end gain as amplitude ratio
 }

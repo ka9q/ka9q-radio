@@ -332,8 +332,8 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case RF_GAIN:
       fprintf(fp,"rf gain %.1f dB",decode_float(cp,optlen));
       break;
-    case RF_GAIN_CAL:
-      fprintf(fp,"rf gain cal %.1f dB",decode_float(cp,optlen));
+    case RF_LEVEL_CAL:
+      fprintf(fp,"rf level cal %.1f dB",decode_float(cp,optlen));
       break;
     case RF_AGC:
       fprintf(fp,"rf agc %s",decode_int(cp,optlen) ? "enabled" : "disabled");
