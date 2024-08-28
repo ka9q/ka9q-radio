@@ -262,14 +262,14 @@ static struct windef {
   int rows;
   int cols;
 } Windefs[] = {
-  {&Tuning_win, 15, 30},
-  {&Options_win, 15, 12},
+  {&Tuning_win, 17, 30},
+  {&Options_win, 17, 12},
   //  {&Presets_win,Npresets+2,9}, // Npresets is not a static initializer
-  {&Presets_win,15,9},
-  {&Sig_win,15,25},
-  {&Demodulator_win,15,26},
-  {&Filtering_win,15,22},
-  {&Input_win,15,45},
+  {&Presets_win,17,9},
+  {&Sig_win,17,25},
+  {&Demodulator_win,17,26},
+  {&Filtering_win,17,22},
+  {&Input_win,17,45},
   {&Output_win,8,45},
 };
 #define NWINS (sizeof(Windefs) / sizeof(Windefs[0]))
@@ -1297,14 +1297,15 @@ static void display_sig(WINDOW *w,struct channel const *channel){
   // Calculate actual input power in dBm by subtracting net RF gain
   pprintw(w,row++,col,"Input","%.1f dBm ",
 	  power2dB(Frontend.if_power) - (Frontend.rf_gain - Frontend.rf_atten + Frontend.rf_level_cal));
-  if(!isnan(channel->sig.bb_power))
-    pprintw(w,row++,col,"A/D","%.1f dBFS",power2dB(Frontend.if_power));
   // These gain figures only affect the relative A/D input level in dBFS because an equal
   // amount of digital attenutation is applied to the A/D output to maintain unity gain
   pprintw(w,row++,col,"RF Gain","%.1f dB  ",Frontend.rf_gain);
-  pprintw(w,row++,col,"RF Atten","%.1f dB  ",Frontend.rf_atten);
+  pprintw(w,row++,col,"RF Atten","%.1f dB  ",-Frontend.rf_atten);
   pprintw(w,row++,col,"RF lev cal","%.1f dB  ",Frontend.rf_level_cal);
-  pprintw(w,row++,col,"Baseband","%.1f dBm ",power2dB(channel->sig.bb_power));
+  pprintw(w,row++,col,"A/D","%.1f dBFS",power2dB(Frontend.if_power));
+  pprintw(w,row++,col,"Adjust","%.1f dB  ",-(Frontend.rf_gain - Frontend.rf_atten + Frontend.rf_level_cal));
+  if(!isnan(channel->sig.bb_power))
+    pprintw(w,row++,col,"Baseband","%.1f dBm ",power2dB(channel->sig.bb_power));
   if(!isnan(channel->sig.n0)){
      pprintw(w,row++,col,"N₀","%.1f dBmJ",power2dB(channel->sig.n0));
      float temp = channel->sig.n0 / (1000 * BOLTZMANN); // 1000 converts from joules to millijoules (for power in dBm)
@@ -1319,6 +1320,10 @@ static void display_sig(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"NBW","%.1f dBHz",power2dB(Local.noise_bandwidth));
   if(!isnan(Local.sn0) && !isnan(Local.noise_bandwidth))
     pprintw(w,row++,col,"S/N","%.1f dB  ",power2dB(Local.sn0/Local.noise_bandwidth));
+  if(!isnan(channel->output.gain) && channel->demod_type == LINEAR_DEMOD) // Only relevant in linear
+    pprintw(w,row++,col,"Gain","%.1lf dB  ",voltage2dB(channel->output.gain));
+  if(!isnan(channel->output.energy))
+    pprintw(w,row++,col,"Output","%.1lf dBFS",power2dB(channel->output.energy)); // actually level; sender does averaging
   box(w,0,0);
   mvwaddstr(w,0,1,"Signal");
   wnoutrefresh(w);
@@ -1338,10 +1343,6 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
   case FM_DEMOD:
   case WFM_DEMOD:
     pprintw(w,row++,col,"Input S/N","%.1f dB",power2dB(channel->sig.snr));
-    if(!isnan(channel->output.gain))
-      pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(channel->output.gain));
-    if(!isnan(channel->output.energy))
-      pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(channel->output.energy)); // actually level; sender does averaging
     if(!isnan(channel->output.headroom))
       pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(channel->output.headroom));
     pprintw(w,row++,col,"Squel open","%.1f dB   ",power2dB(channel->fm.squelch_open)); // should move these
@@ -1358,14 +1359,10 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
     }
     break;
   case LINEAR_DEMOD:
-    if(!isnan(channel->output.gain))
-      pprintw(w,row++,col,"Gain","%.1lf dB   ",voltage2dB(channel->output.gain));
-    if(!isnan(channel->output.energy))
-      pprintw(w,row++,col,"Output","%.1lf dBFS ",power2dB(channel->output.energy)); // actually level; sender does averaging
     if(!isnan(channel->output.headroom))
-      pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(channel->output.headroom));
-    pprintw(w,row++,col,"Squel open","%.1f dB   ",power2dB(channel->fm.squelch_open)); // should move these
-    pprintw(w,row++,col,"Squel close","%.1f dB   ",power2dB(channel->fm.squelch_close));
+      pprintw(w,row++,col,"Headroom","%.1f dBFS",voltage2dB(channel->output.headroom));
+    pprintw(w,row++,col,"Squel open","%.1f dB  ",power2dB(channel->fm.squelch_open)); // should move these
+    pprintw(w,row++,col,"Squel close","%.1f dB  ",power2dB(channel->fm.squelch_close));
 
     if(!isnan(channel->linear.threshold) && channel->linear.threshold > 0)
       pprintw(w,row++,col,"AGC Threshold","%.1f dB  ",voltage2dB(channel->linear.threshold));
