@@ -481,13 +481,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
 
   encode_socket(&bp,STATUS_DEST_SOCKET,&Metadata_dest_socket);
-
-  // Echo timestamp from source or locally (bit of a kludge, eventually will always be local)
-  if(frontend->timestamp != 0)
-    encode_int64(&bp,GPS_TIME,frontend->timestamp);
-  else
-    encode_int64(&bp,GPS_TIME,gps_time_ns());
-
+  encode_int64(&bp,GPS_TIME,frontend->timestamp);
   encode_int64(&bp,INPUT_SAMPLES,frontend->samples);
   encode_int32(&bp,INPUT_SAMPRATE,frontend->samprate); // integer Hz
   encode_int32(&bp,FE_ISREAL,frontend->isreal ? true : false);
