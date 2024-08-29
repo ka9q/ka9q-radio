@@ -1303,7 +1303,7 @@ static void display_sig(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"RF Atten","%.1f dB  ",-Frontend.rf_atten);
   pprintw(w,row++,col,"RF lev cal","%.1f dB  ",Frontend.rf_level_cal);
   pprintw(w,row++,col,"A/D","%.1f dBFS",power2dB(Frontend.if_power));
-  pprintw(w,row++,col,"Adjust","%.1f dB  ",-(Frontend.rf_gain - Frontend.rf_atten + Frontend.rf_level_cal));
+  pprintw(w,row++,col,"Gain offset","%.1f dB  ",-(Frontend.rf_gain - Frontend.rf_atten + Frontend.rf_level_cal));
   if(!isnan(channel->sig.bb_power))
     pprintw(w,row++,col,"Baseband","%.1f dBm ",power2dB(channel->sig.bb_power));
   if(!isnan(channel->sig.n0)){
