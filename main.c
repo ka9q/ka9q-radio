@@ -30,6 +30,7 @@
 #include <sched.h>
 #include <sysexits.h>
 #include <fcntl.h>
+#include <strings.h>
 
 #include "misc.h"
 #include "multicast.h"
