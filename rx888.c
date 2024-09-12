@@ -33,7 +33,6 @@ static int const Default_samprate = 64800000; // Synthesizes cleanly from 27 MHz
 static float const Nyquist = 0.47;  // Upper end of usable bandwidth, relative to 1/2 sample rate
 static float const AGC_upper_limit = -15.0;   // Reduce RF gain if A/D level exceeds this in dBFS
 static float const AGC_lower_limit = -22.0;   // Increase RF gain if level is below this in dBFS
-static float const AGC_step = 3.0;            // Size of adjustment to make every 10 sec, dB
 static int const AGC_interval = 10;           // Seconds between runs of AGC loop
 static float const Start_gain = 10.0;         // Initial VGA gain, dB
 static float Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
@@ -421,27 +420,15 @@ static void *agc_rx888(void *arg){
 	  fprintf(stdout,"New input power high watermark: %.1f dBFS\n",new_dBFS);
       }
       frontend->if_power_max = frontend->if_power;
-      if(frontend->rf_agc && new_dBFS > AGC_upper_limit){
-	// Decrease gain by AGC_step
-	float new_gain = frontend->rf_gain - fabsf(AGC_step);
-	if(Verbose)
-	  fprintf(stdout,"Front end gain reduction from %.1f dB to %.1f dB\n",frontend->rf_gain,new_gain);
-
-	rx888_set_gain(sdr,new_gain,false);
-	// Drop averaged value to speed convergence
-	frontend->if_power *= dB2power(-fabsf(AGC_step));
-	// Unlatch high water mark
-	frontend->if_power_max = 0;
-      }
-    } else if(frontend->rf_agc && new_dBFS < AGC_lower_limit && frontend->rf_gain < 34){
-      // Increase gain by AGC_step
-      float new_gain = frontend->rf_gain + fabsf(AGC_step);
+    }
+    if(frontend->rf_agc && (new_dBFS > AGC_upper_limit || new_dBFS < AGC_lower_limit)){
+      float const target_level = (AGC_upper_limit + AGC_lower_limit)/2;
+      float const new_gain = frontend->rf_gain - (new_dBFS - target_level);
       if(Verbose)
-	fprintf(stdout,"Front end gain increase from %.1f dB to %.1f dB\n",frontend->rf_gain,new_gain);
-
+	fprintf(stdout,"Front end gain change from %.1f dB to %.1f dB\n",frontend->rf_gain,new_gain);
       rx888_set_gain(sdr,new_gain,false);
-      // Increase averaged value to speed convergence
-      frontend->if_power *= dB2power(+fabsf(AGC_step));
+      // Change averaged value to speed convergence
+      frontend->if_power *= dB2power(target_level - new_dBFS);
       // Unlatch high water mark
       frontend->if_power_max = 0;
     }
