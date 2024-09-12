@@ -268,7 +268,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stdout,"%s: ",frontend->description);
   }
   double ferror = actual - samprate;
-  float xfer_time = (sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);
+  float xfer_time = (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);
   // Compute exponential smoothing constant
   // value is 1 - exp(-blocktime/tc), but use expm1() function to save precision
   float const tc  = 1.0; // 1 second
