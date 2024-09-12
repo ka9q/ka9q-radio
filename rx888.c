@@ -424,7 +424,7 @@ static void *agc_rx888(void *arg){
     if(frontend->rf_agc && (new_dBFS > AGC_upper_limit || new_dBFS < AGC_lower_limit)){
       float const target_level = (AGC_upper_limit + AGC_lower_limit)/2;
       float const new_gain = frontend->rf_gain - (new_dBFS - target_level);
-      if(new_gain > 34){ // Don't try to go above max gain
+      if(new_gain < 34){ // Don't try to go above max gain
 	if(Verbose)
 	  fprintf(stdout,"Front end gain change from %.1f dB to %.1f dB\n",frontend->rf_gain,new_gain);
 	rx888_set_gain(sdr,new_gain,false);
