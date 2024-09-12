@@ -461,7 +461,7 @@ void *sap_send(void *p){
 
     len = snprintf(wp,space,"a=rtpmap:%d %s/%d/%d\r\n",
 		   chan->output.rtp.type,
-		   PT_table[chan->output.rtp.type].encoding == OPUS ? "Opus" : "L16",
+		   encoding_string(chan->output.encoding),
 		   chan->output.samprate,
 		   chan->output.channels);
     wp += len;
