@@ -51,6 +51,8 @@ static int const ADC_samprate = 192000;
 static float const DC_alpha = 1.0e-6;  // high pass filter coefficient for DC offset estimates, per sample
 static float const Power_alpha = 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
 
+static float Power_smooth = 0.05; // Calculate this properly someday
+
 // Empirical: noticeable aliasing beyond this noticed on strong 40m SSB signals
 static float const LowerEdge = -75000;
 static float const UpperEdge = +75000;

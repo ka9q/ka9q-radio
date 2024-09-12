@@ -36,6 +36,7 @@ static float const AGC_lower_limit = -22.0;   // Increase RF gain if level is be
 static float const AGC_step = 3.0;            // Size of adjustment to make every 10 sec, dB
 static int const AGC_interval = 10;           // Seconds between runs of AGC loop
 static float const Start_gain = 10.0;         // Initial VGA gain, dB
+static float Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
 
 // Reference frequency for Si5351 clock generator
 static double const Min_reference = 10e6;  //  10 MHz
@@ -83,7 +84,6 @@ struct sdrstate {
   double frequency;
   bool randomizer;
   bool dither;
-  bool highgain;
   uint32_t gpios;
   uint64_t last_sample_count; // Used to verify sample rate
   int64_t last_count_time;
@@ -108,7 +108,7 @@ static void rx888_stop_rx(struct sdrstate *sdr);
 static void rx888_close(struct sdrstate *sdr);
 static void free_transfer_buffers(unsigned char **databuffers,struct libusb_transfer **transfers,unsigned int queuedepth);
 static double val2gain(int g);
-static int gain2val(bool highgain, double gain);
+static int gain2val(double gain);
 static void *proc_rx888(void *arg);
 static void *agc_rx888(void *arg);
 #if 0
@@ -199,16 +199,11 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   }
   rx888_set_att(sdr,att,false);
 
-  // Gain Mode low/high, default high
-  char const *gainmode = config_getstring(dictionary,section,"gainmode","high");
-  if(strcmp(gainmode, "high") == 0)
-    sdr->highgain = true;
-  else if(strcmp(gainmode, "low") == 0)
-    sdr->highgain = false;
-  else {
-    fprintf(stdout,"Invalid gain mode %s, default high\n",gainmode);
-    sdr->highgain = true;
-  }
+  // Gain Mode now automatically set by gain; gain < 0 dB -> low, gain >= 0 dB -> high
+  char const *gainmode = config_getstring(dictionary,section,"gainmode",NULL);
+  if(gainmode != NULL)
+    fprintf(stdout,"gainmode parameter is obsolete, now set automatically\n");
+
   // Gain value
   float gain = config_getfloat(dictionary,section,"gain",9999);
   gain = config_getfloat(dictionary,section,"rxgain",gain);
@@ -273,13 +268,18 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stdout,"%s: ",frontend->description);
   }
   double ferror = actual - samprate;
-  fprintf(stdout,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
+  float xfer_time = (sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);
+  // Compute exponential smoothing constant
+  // value is 1 - exp(-blocktime/tc), but use expm1() function to save precision
+  float const tc  = 1.0; // 1 second
+  Power_smooth = -expm1f(-xfer_time/tc);
+
+  fprintf(stdout,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  sdr->reference,samprate,actual,ferror, 1e6 * ferror / samprate,
 	  frontend->rf_agc ? "on" : "off",
-	  sdr->highgain ? "high" : "low",
 	  gain,frontend->rf_gain,frontend->rf_atten,frontend->rf_level_cal,
 sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
-	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate));
+	  xfer_time);
 
   // VHF-UHF
   double frequency = 0;
@@ -809,7 +809,7 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf){
   usleep(5000);
 
   if(!vhf){
-    int const arg = gain2val(sdr->highgain,gain);
+    int const arg = gain2val(gain);
     argument_send(sdr->dev_handle,AD8340_VGA,arg);
     frontend->rf_gain = val2gain(arg); // Store actual nearest value
   } else {
@@ -1081,7 +1081,8 @@ static double val2gain(int g){
   return voltage2dB(av); // decibels
 }
 
-static int gain2val(bool highgain, double gain){
+static int gain2val(double gain){
+  int highgain = gain < 0 ? 0 : 1;
   gain = gain > 34 ? 34 : gain;
   int g = round(dB2voltage(gain) / (Vernier * (1 + (Pregain - 1)* highgain)));
 

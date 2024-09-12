@@ -35,6 +35,8 @@ static float const AGC_upper = -20;
 static float const AGC_lower = -40;
 #endif
 
+static float Power_smooth = 0.05; // Calculate this properly someday
+
 // Global variables set by command line options
 extern char const *App_path;
 extern int Verbose;

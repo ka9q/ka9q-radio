@@ -258,7 +258,7 @@ struct channel {
   float tp1,tp2; // Spare test points that can be read on the status channel
 };
 
-extern float Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
+
 extern struct channel *Channel_list;
 extern struct channel Template;
 extern int Channel_list_length;

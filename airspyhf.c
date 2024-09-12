@@ -25,6 +25,8 @@
 extern int Verbose;
 extern const char *App_path;
 
+static float Power_smooth = 0.05; // Calculate this properly someday
+
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
