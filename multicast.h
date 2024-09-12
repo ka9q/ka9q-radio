@@ -144,7 +144,6 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
 int setportnumber(void *sock,uint16_t port);
 int getportnumber(void const *sock);
 int address_match(void const *arg1,void const *arg2);
-
 int add_pt(int type, int samprate, int channels, enum encoding encoding);
 
 // Function to process incoming RTP packet headers

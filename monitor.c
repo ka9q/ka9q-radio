@@ -446,7 +446,7 @@ void *statproc(void *arg){
       continue;
 
     // Extract just the SSRC to see if the session exists
-    // NB! Assumes same IP address *and port* for status and data
+    // NB! Assumes same IP source address *and UDP source port* for status and data
     // This is only true for recent versions of radiod, after the switch to unconnected output sockets
     // But older versions don't send status on the output channel anyway, so no problem
     uint32_t ssrc = get_ssrc(buffer+1,length-1);
@@ -461,6 +461,11 @@ void *statproc(void *arg){
     // Decode directly into local copy, as not every parameter is updated in every status message
     // Decoding into a temp copy and then memcpy would write zeroes into unsent parameters
     decode_radio_status(&sp->frontend,&sp->chan,buffer+1,length-1);
+    // Cache payload-type/channel count/sample rate/encoding association for use by data thread
+    sp->type = sp->chan.output.rtp.type & 0x7f;
+    sp->pt_table[sp->type].encoding = sp->chan.output.encoding;
+    sp->pt_table[sp->type].samprate = sp->chan.output.samprate;
+    sp->pt_table[sp->type].channels = sp->chan.output.channels;
 
     char const *id = lookupid(sp->chan.tune.freq);
     if(id)
@@ -476,19 +481,12 @@ void *statproc(void *arg){
     float const sn0 = sig_power/sp->chan.sig.n0;
     sp->snr = power2dB(sn0/noise_bandwidth);
     vote();
-
-    int const type = sp->chan.output.rtp.type;
-    if(type >= 0 && type < 128){
-      // Don't overwrite existing
-      if(sp->chan.output.encoding != NO_ENCODING)
-	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,sp->chan.output.encoding); // Opus will get forced to stereo 48 kHz
-    }
   }
   return NULL;
 }
 
-
-
+// Look up session, or if it doesn't exist, create it.
+// Executes atomically
 struct session *lookup_or_create_session(const struct sockaddr_storage *sender,const uint32_t ssrc){
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < Nsessions; i++){

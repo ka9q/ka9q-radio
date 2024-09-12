@@ -1,3 +1,7 @@
+// Data plane sections of the multicast monitor program
+// Moved out of monitor.c when it was getting way too big
+// Copyright Aug 2024 Phil Karn, KA9Q
+
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
@@ -267,7 +271,7 @@ void *decode_task(void *arg){
     if(pkt->rtp.type >= 0 && pkt->rtp.type < 128)
       sp->type = pkt->rtp.type; // Save only if valid
 
-    int const samprate = samprate_from_pt(sp->type);
+    int const samprate = sp->pt_table[sp->type].samprate;
     if(samprate == 0)
       goto endloop; // Unknown sample rate, drop until we know
 
@@ -279,14 +283,14 @@ void *decode_task(void *arg){
       sp->notch_tone = 0; // force it to be re-detected at new sample rate
     }
     // Test for invalidity
-    sp->channels = channels_from_pt(sp->type); // channels in packet (not portaudio output buffer)
+    sp->channels = sp->pt_table[sp->type].channels; // channels in packet (not portaudio output buffer)
     if(sp->samprate <= 0 || sp->channels <= 0 || sp->channels > 2)
       goto endloop;
     int upsample = DAC_samprate / samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
     sp->bandwidth = samprate / 2000;    // in kHz allowing for Nyquist
 
     // decode Opus or PCM into bounce buffer
-    enum encoding const encoding = encoding_from_pt(sp->type);
+    enum encoding const encoding = sp->pt_table[sp->type].encoding;
     switch(encoding){
     case OPUS:
       {

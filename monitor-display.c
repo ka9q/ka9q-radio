@@ -1,3 +1,7 @@
+// Control plane section of the multicast monitor program
+// Moved out of monitor.c when it was getting way too big
+// Copyright Aug 2024 Phil Karn, KA9Q
+
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
@@ -517,7 +521,7 @@ static void update_monitor_display(void){
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
     if(sp != NULL)
-      mvprintwt(y,x,"%-*s",width,encoding_string(PT_table[sp->type].encoding));
+      mvprintwt(y,x,"%-*s",width,encoding_string(sp->pt_table[sp->type].encoding));
   }
   x += width;
   y = row_save;

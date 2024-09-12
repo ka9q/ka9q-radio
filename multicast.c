@@ -166,6 +166,7 @@ struct pt_table PT_table[128] = {
 { 0, 0, 0 }, // 127
 };
 
+
 #define AX25_PT (96)  // NON-standard payload type for my raw AX.25 frames - clean this up and remove
 #define OPUS_PT (111) // Hard-coded NON-standard payload type for OPUS (should be dynamic with sdp)
 
@@ -177,6 +178,9 @@ int const AX25_pt = AX25_PT;
 // The mappings are typically extracted from a radiod status channel and kept in a table so they can
 // be changed midstream without losing anything
 int add_pt(int type, int samprate, int channels, enum encoding encoding){
+  if(encoding == NO_ENCODING)
+    return -1;
+
   if(encoding == OPUS){
     // Force Opus to fixed values
     samprate = 48000;
@@ -591,10 +595,9 @@ enum encoding encoding_from_pt(int const type){
     return NO_ENCODING;
   return PT_table[type].encoding;
 }
-
-
 // Dynamically create a new one if not found
 // Should lock the table when it's modified
+// Use for sending only! Receivers need to build a table for each sender
 int pt_from_info(int samprate,int channels,enum encoding encoding){
   if(samprate <= 0 || channels <= 0 || channels > 2 || encoding == NO_ENCODING || encoding >= UNUSED_ENCODING)
     return -1;
@@ -610,12 +613,11 @@ int pt_from_info(int samprate,int channels,enum encoding encoding){
     if(PT_table[type].samprate == samprate && PT_table[type].channels == channels && PT_table[type].encoding == encoding)
       return type;
   }
-  for(int type=96; type < 128; type++){ // Dynamic range
+  for(int type=96; type < 128; type++){ // Allocate a new type in the dynamic range
     if(PT_table[type].samprate == 0){
       // allocate it
-      PT_table[type].samprate = samprate;
-      PT_table[type].channels = channels;
-      PT_table[type].encoding = encoding;
+      if(add_pt(type,samprate,channels,encoding) == -1)
+	return -1;
       return type;
     }
   }
