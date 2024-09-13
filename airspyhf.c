@@ -210,7 +210,9 @@ static void *airspyhf_monitor(void *p){
       break; // Device seems to have bombed. Exit and let systemd restart us
   }
   fprintf(stdout,"Device is no longer streaming, exiting\n");
-  airspyhf_close(sdr->device);
+  // This can hang when the device locks up
+  // This has been happening at KQ6RS
+  //  airspyhf_close(sdr->device); 
   exit(EX_NOINPUT); // Let systemd restart us
 }
 
