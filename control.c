@@ -262,14 +262,14 @@ static struct windef {
   int rows;
   int cols;
 } Windefs[] = {
-  {&Tuning_win, 17, 30},
-  {&Options_win, 17, 12},
+  {&Tuning_win, 18, 30},
+  {&Options_win, 18, 12},
   //  {&Presets_win,Npresets+2,9}, // Npresets is not a static initializer
-  {&Presets_win,17,9},
-  {&Sig_win,17,25},
-  {&Demodulator_win,17,26},
-  {&Filtering_win,17,22},
-  {&Input_win,17,45},
+  {&Presets_win,18,9},
+  {&Sig_win,18,25},
+  {&Demodulator_win,18,26},
+  {&Filtering_win,18,22},
+  {&Input_win,18,45},
   {&Output_win,8,45},
 };
 #define NWINS (sizeof(Windefs) / sizeof(Windefs[0]))
