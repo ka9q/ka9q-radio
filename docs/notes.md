@@ -83,7 +83,7 @@ The new RX-888 MkII is rapidly becoming my SDR of choice because it
 can direct sample at up to 130 Ms/s. With *ka9q-radio* it can
 simultaneously receive hundreds of channels over all of LF, MF, HF and
 lowband VHF (through 6m). The main drawback? It comes out of China and
-documentation is sparse. Fortuntely, K4VZ, AI6VN and I have it working
+documentation is sparse. Fortunately, K4VZ, AI6VN and I have it working
 well on HF, where it is beginning to displace stacks of KiwiSDRs for
 all-band WSPR monitoring.  [http://www.wsprdaemon.org/]
 
@@ -129,7 +129,7 @@ get them cheap or free. Although originally designed for VHF/UHF
 satellite reception, it also has good HF coverage and reasonably good
 front end preselectors.  But is severely limited by its 192 ks/s
 (complex) sample rate. That may be OK for some specialized applications
-ike the receive-only APRS i-Gate I've been running for years on a RPi3.
+like the receive-only APRS i-Gate I've been running for years on a RPi3.
 The low sample rate demands minimal CPU.
 
 The RTL-SDR is very popular because it's cheap, and while I
