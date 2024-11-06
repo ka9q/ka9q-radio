@@ -71,7 +71,7 @@ void *input_thread(void *);
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
-  int retries;
+  int retries = 0;
   int c;
 
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
