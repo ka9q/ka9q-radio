@@ -430,7 +430,7 @@ void *statproc(void *arg){
   {
     char iface[1024];
     struct sockaddr sock;
-    resolve_mcast(mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface));
+    resolve_mcast(mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     status_fd = listen_mcast(&sock,iface);
   }
   if(status_fd == -1)

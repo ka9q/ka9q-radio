@@ -443,7 +443,7 @@ int main(int argc,char *argv[]){
   } else {
     // Use resolv_mcast to resolve a manually entered domain name, using default port and parsing possible interface
     char iface[1024]; // Multicast interface
-    resolve_mcast(target,&Metadata_dest_socket,DEFAULT_STAT_PORT,iface,sizeof(iface));
+    resolve_mcast(target,&Metadata_dest_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     Status_fd = listen_mcast(&Metadata_dest_socket,iface);
     join_group(Output_fd,(struct sockaddr *)&Metadata_dest_socket,iface,Mcast_ttl,IP_tos);
   }

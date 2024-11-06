@@ -555,7 +555,7 @@ static int loadconfig(char const * const file){
 	if(SAP_enable){
 	  // Highly experimental, off by default
 	  char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
-	  resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0);
+	  resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
 	  join_group(Output_fd,(struct sockaddr *)&chan->sap.dest_socket,iface,Mcast_ttl,ip_tos);
 	  pthread_create(&chan->sap.thread,NULL,sap_send,chan);
 	}

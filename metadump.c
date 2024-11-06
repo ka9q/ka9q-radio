@@ -62,6 +62,7 @@ static struct option Options[] = {
   {"radio", required_argument, NULL, 'r'},
   {"locale", required_argument, NULL, 'l'},
   {"version", no_argument, NULL, 'V'},
+  {"retries", required_argument, NULL, 'R'},
   {NULL, 0, NULL, 0},
 };
 
@@ -70,6 +71,7 @@ void *input_thread(void *);
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
+  int retries;
   int c;
 
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
@@ -102,6 +104,9 @@ int main(int argc,char *argv[]){
     case 'l':
       strlcpy(Locale,optarg,sizeof(Locale));
       break;
+    case 'R':
+      retries = labs(strtol(optarg,NULL,0));
+      break;
      default:
       usage();
       break;
@@ -131,7 +136,10 @@ int main(int argc,char *argv[]){
 
   if(Verbose)
     fprintf(stdout,"Resolving %s\n",Radio);
-  resolve_mcast(Radio,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface));
+  if(resolve_mcast(Radio,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),retries) == -1){
+    fprintf(stdout,"Can't resolve %s\n",Radio);
+    exit(EX_UNAVAILABLE);
+  }    
   if(Verbose){
     char result[1024];
     fprintf(stdout,"Listening on %s\n",formataddr(result,sizeof(result),&sock));
@@ -196,7 +204,7 @@ int main(int argc,char *argv[]){
 
 
 void usage(void){
-  fprintf(stdout,"%s [-s|--ssrc <ssrc>|-a|--all] [-c|--count n] [-i|--interval f] [-v|--verbose] [-n|--newline] [-l|--locale] [ -r|--radio] control-channel\n",App_path);
+  fprintf(stdout,"%s [-R|--retries count] [-s|--ssrc <ssrc>|-a|--all] [-c|--count n] [-i|--interval f] [-v|--verbose] [-n|--newline] [-l|--locale] [ -r|--radio] control-channel\n",App_path);
 }
 
 // Process incoming packets

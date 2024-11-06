@@ -79,7 +79,7 @@ int main(int argc,char *argv[]){
     exit(1);
   }
   char iface[1024];
-  resolve_mcast(Radio,&Metadata_dest_socket,DEFAULT_STAT_PORT,iface,sizeof(iface));
+  resolve_mcast(Radio,&Metadata_dest_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
   Status_sock = listen_mcast(&Metadata_dest_socket,iface);
 
   if(Status_sock == -1){

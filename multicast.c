@@ -211,7 +211,7 @@ char const *Default_mcast_iface;
 // when output = 0, bind to it so we'll accept incoming packets
 // Add parameter 'offset' (normally 0) to port number; this will be 1 when sending RTCP messages
 // (Can we set up a socket for both input and output??)
-int setup_mcast(char const * const target,struct sockaddr *sock,int const output,int const ttl,int const tos,int const offset){
+int setup_mcast(char const * const target,struct sockaddr *sock,int const output,int const ttl,int const tos,int const offset,int tries){
   if(target == NULL && sock == NULL)
     return -1; // At least one must be supplied
 
@@ -221,8 +221,11 @@ int setup_mcast(char const * const target,struct sockaddr *sock,int const output
   }
   char iface[1024];
   iface[0] = '\0';
-  if(target)
-    resolve_mcast(target,sock,DEFAULT_RTP_PORT+offset,iface,sizeof(iface));
+  if(target){
+    int ret = resolve_mcast(target,sock,DEFAULT_RTP_PORT+offset,iface,sizeof(iface),tries);
+    if(ret == -1)
+      return -1;
+  }
   if(strlen(iface) == 0 && Default_mcast_iface != NULL)
     strlcpy(iface,Default_mcast_iface,sizeof(iface));
 
@@ -322,7 +325,7 @@ int listen_mcast(void const *s,char const *iface){
 // Resolve a multicast target string in the form "name[:port][,iface]"
 // If "name" is not qualified (no periods) then .local will be appended by default
 // If :port is not specified, port field in result will be zero
-int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int iface_len){
+int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int iface_len,int tries){
   if(target == NULL || strlen(target) == 0 || sock == NULL)
     return -1;
 
@@ -356,7 +359,7 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
   else
     strlcpy(full_host,host,sizeof(full_host));
 
-  for(try=0;;try++){
+  for(try=0;tries == 0 || try != tries;try++){
     results = NULL;
     struct addrinfo hints;
     memset(&hints,0,sizeof(hints));
@@ -381,6 +384,8 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
       fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s): %s. Retrying.\n",full_host,port,gai_strerror(ecode));
     sleep(10);
   }
+  if(tries != 0 && try == tries)
+    return -1;
   if(try > 0) // Don't leave them hanging: report success after failure
     fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s) succeeded\n",full_host,port);
 

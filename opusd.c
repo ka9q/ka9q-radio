@@ -216,7 +216,7 @@ int main(int argc,char * const argv[]){
   }
   char iface[1024];
   if(Input){
-    resolve_mcast(Input,&PCM_in_socket,DEFAULT_RTP_PORT,iface,sizeof(iface));
+    resolve_mcast(Input,&PCM_in_socket,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
     if(strlen(iface) == 0 && Default_mcast_iface != NULL)
       strlcpy(iface,Default_mcast_iface,sizeof(iface));
     Input_fd = listen_mcast(&PCM_in_socket,iface); // Port address already in place
@@ -231,7 +231,7 @@ int main(int argc,char * const argv[]){
       struct sockaddr_in *sin = (struct sockaddr_in *)&Metadata_in_socket;
       sin->sin_port = htons(DEFAULT_STAT_PORT);
     }
-    resolve_mcast(Input,&Metadata_in_socket,DEFAULT_STAT_PORT,iface,sizeof(iface));
+    resolve_mcast(Input,&Metadata_in_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     Status_fd = listen_mcast(&Metadata_in_socket,iface);
   }
 

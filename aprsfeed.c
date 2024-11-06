@@ -86,7 +86,7 @@ int main(int argc,char *argv[]){
   // Set up multicast input
   {
     struct sockaddr_storage sock;
-    resolve_mcast(Mcast_address_text,&sock,DEFAULT_RTP_PORT,NULL,0);
+    resolve_mcast(Mcast_address_text,&sock,DEFAULT_RTP_PORT,NULL,0,0);
     Input_fd = listen_mcast(&sock,NULL);
   }
   if(Input_fd == -1){

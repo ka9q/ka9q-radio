@@ -41,7 +41,7 @@ static char const *Mcast_address_text;
 static int Quiet;
 const char *App_path;
 int Verbose;
-bool Byteswap = true;
+int Byteswap = -1; // automaticall determine from payload type
 
 static int Input_fd = -1;
 static struct pcmstream Pcmstream;
@@ -54,7 +54,7 @@ int main(int argc,char *argv[]){
   setlocale(LC_ALL,getenv("LANG"));
 
   int c;
-  while((c = getopt(argc,argv,"qhs:bV")) != EOF){
+  while((c = getopt(argc,argv,"qhs:b:V")) != EOF){
     switch(c){
     case 'V':
       VERSION();
@@ -69,11 +69,11 @@ int main(int argc,char *argv[]){
       Ssrc = strtol(optarg,NULL,0);
       break;
     case 'b':
-      Byteswap = false;
+      Byteswap = strtol(optarg,NULL,0);
       break;
     case 'h':
     default:
-      fprintf(stderr,"Usage: %s [-h] [-v] [-q] [-s ssrc] mcast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-h] [-v] [-q] [-s ssrc] [-b 0|1] mcast_address\n",argv[0]);
       fprintf(stderr,"       hex ssrc requires 0x prefix\n");
       exit(1);
     }
@@ -85,7 +85,7 @@ int main(int argc,char *argv[]){
   Mcast_address_text = argv[optind];
 
   // Set up multicast input
-  Input_fd = setup_mcast_in(Mcast_address_text,NULL,0);
+  Input_fd = setup_mcast_in(Mcast_address_text,NULL,0,0);
   if(Input_fd == -1){
     fprintf(stderr,"Can't set up input from %s\n",
 	    Mcast_address_text);
@@ -189,7 +189,7 @@ int main(int argc,char *argv[]){
 	goto done;
       }
     }
-    if(Byteswap){
+    if(Byteswap == true){
       // Byte swap incoming buffer
       int16_t *sdp = (int16_t *)dp;
       if(!Quiet){
@@ -218,6 +218,14 @@ static int init(struct pcmstream *pc,struct rtp_header const *rtp,struct sockadd
   pc->ssrc = rtp->ssrc;
   pc->type = rtp->type;
   pc->framesize = 0; // unknown
+  if(Byteswap == -1){
+    // Hardwired test for statically assigned big-endian 16-bit PCM payload types
+    // The ideal way is to look at the data encoding in the status stream, which we'll eventually do
+    if(pc->type == 10 || pc->type == 11)
+      Byteswap = true;
+    else
+      Byteswap = false;
+  }
   
   memcpy(&pc->sender,sender,sizeof(pc->sender)); // Remember sender
   getnameinfo((struct sockaddr *)&pc->sender,sizeof(pc->sender),

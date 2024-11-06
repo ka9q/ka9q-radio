@@ -133,14 +133,14 @@ void *hton_rtp(void *, struct rtp_header const *);
 
 extern char const *Default_mcast_iface;
 
-int setup_mcast(char const *target,struct sockaddr *,int output,int ttl,int tos,int offset);
-static inline int setup_mcast_in(char const *target,struct sockaddr *sock,int offset){
-  return setup_mcast(target,sock,0,0,0,offset);
+int setup_mcast(char const *target,struct sockaddr *,int output,int ttl,int tos,int offset,int tries);
+static inline int setup_mcast_in(char const *target,struct sockaddr *sock,int offset,int tries){
+  return setup_mcast(target,sock,0,0,0,offset,tries);
 }
 int join_group(int fd,struct sockaddr const * const sock, char const * const iface,int const ttl,int const tos);
 int connect_mcast(void const *sock,char const *iface,int const ttl,int const tos);
 int listen_mcast(void const *sock,char const *iface);
-int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int iface_len);
+int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int iface_len,int tries);
 int setportnumber(void *sock,uint16_t port);
 int getportnumber(void const *sock);
 int address_match(void const *arg1,void const *arg2);
