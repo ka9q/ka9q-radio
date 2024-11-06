@@ -133,7 +133,7 @@ int main(int argc,char * const argv[]){
   
   char iface[1024];
   if(Input){
-    resolve_mcast(Input,&PCM_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
+    resolve_mcast(Input,&PCM_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
     Input_fd = listen_mcast(&PCM_dest_address,NULL); // Port address already in place
 
     if(Input_fd == -1){
@@ -278,7 +278,7 @@ void * status(void *p){
   pthread_setname("opstat");
 
   char iface[1024];
-  resolve_mcast(Status,&Status_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
+  resolve_mcast(Status,&Status_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
   Status_fd = listen_mcast(&Status_dest_address,iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't set up input on %s: %s\n",Status,strerror(errno));

@@ -216,7 +216,7 @@ int main(int argc,char *argv[]){
   {
     struct sockaddr_storage sock;
     char iface[1024];
-    resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof(iface));
+    resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
     Input_fd = listen_mcast(&sock,iface);
   }
   if(Input_fd == -1){
