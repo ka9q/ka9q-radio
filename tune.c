@@ -172,7 +172,7 @@ int main(int argc,char *argv[]){
     if(Verbose)
       fprintf(stdout,"Resolving %s\n",Radio);
     char iface[1024];
-    resolve_mcast(Radio,&Control_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
+    resolve_mcast(Radio,&Control_address,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     char const *ifc = (Iface != NULL) ? Iface : iface;
 
 
