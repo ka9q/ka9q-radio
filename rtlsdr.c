@@ -147,6 +147,8 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     fprintf(stderr,"\n");
 
   }
+  rtlsdr_set_direct_sampling(sdr->device, 0); // That's for HF
+  rtlsdr_set_offset_tuning(sdr->device,0); // Leave the DC spike for now
   rtlsdr_set_freq_correction(sdr->device,0); // don't use theirs, only good to integer ppm
   rtlsdr_set_tuner_bandwidth(sdr->device, 0); // Auto bandwidth
   rtlsdr_set_agc_mode(sdr->device,0);
@@ -154,15 +156,15 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   sdr->agc = config_getboolean(dictionary,section,"agc",false);
 
   if(sdr->agc){
-    rtlsdr_set_tuner_gain_mode(sdr->device,1);  // auto gain mode (i.e., the firmware does it)
-    rtlsdr_set_tuner_gain(sdr->device,0);
+    rtlsdr_set_tuner_gain_mode(sdr->device,0);  // auto gain mode (i.e., the firmware does it)
     sdr->gain = 0;
     frontend->rf_gain = 0; // needs conversion to dB
     sdr->holdoff_counter = HOLDOFF_TIME;
   } else {
-    rtlsdr_set_tuner_gain_mode(sdr->device,0); // manual gain mode (i.e., we do it)
-    sdr->gain = config_getint(dictionary,section,"gain",0);
-    frontend->rf_gain = sdr->gain; // Needs conversion to dB?
+    rtlsdr_set_tuner_gain_mode(sdr->device,1); // manual gain mode (i.e., we do it)
+    sdr->gain = (int)(config_getfloat(dictionary,section,"gain",0) * 10);
+    rtlsdr_set_tuner_gain(sdr->device,sdr->gain);
+    frontend->rf_gain = sdr->gain / 10.0f;
   }
   sdr->scale = scale_AD(frontend);
   sdr->bias = config_getboolean(dictionary,section,"bias",false);
@@ -172,8 +174,6 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
       fprintf(stderr,"rtlsdr_set_bias_tee(%d) failed\n",sdr->bias);
     }
   }
-  rtlsdr_set_direct_sampling(sdr->device, 0); // That's for HF
-  rtlsdr_set_offset_tuning(sdr->device,0); // Leave the DC spike for now
   frontend->samprate = config_getint(dictionary,section,"samprate",DEFAULT_SAMPRATE);
   if(frontend->samprate <= 0){
     fprintf(stderr,"Invalid sample rate, reverting to default\n");
