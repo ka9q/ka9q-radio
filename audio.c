@@ -72,7 +72,9 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   rtp.version = RTP_VERS;
   rtp.type = chan->output.rtp.type;
   rtp.ssrc = chan->output.rtp.ssrc;
-  rtp.marker = chan->output.silent; // set when transitioning from silent to not silent
+  // Send a marker to reset the receiver when the encoding changes or when we've been silent (e.g., FM squelch closed)
+  rtp.marker = (chan->output.previous_encoding != chan->output.encoding) || chan->output.silent;
+  chan->output.previous_encoding = chan->output.encoding;
   chan->output.silent = false;
   useconds_t pacing = 0;
   if(chan->output.pacing)
@@ -127,7 +129,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
 #endif
     case OPUS:
       if(chan->output.opus != NULL){
-	// See if the parameters have changed
+	// Encoder already created; see if the parameters have changed
 	// There doesn't seem to be any way to read back the channel count, so we save that explicitly
 	// If the sample rate changes we'll get restarted anyway, so this test isn't really needed. But do it anyway.
 	int s;

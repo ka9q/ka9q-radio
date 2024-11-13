@@ -224,6 +224,7 @@ struct channel {
     uint64_t samples;
     bool pacing;     // Pace output packets
     enum encoding encoding;
+    enum encoding previous_encoding;
     OpusEncoder *opus;
     int opus_channels;
     int opus_bitrate;
