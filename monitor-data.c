@@ -345,8 +345,10 @@ void *decode_task(void *arg){
 	assert(bounce == NULL); // detect possible memory leaks
 	bounce = malloc(bounce_size);
 	int const samples = opus_decode_float(sp->opus,pkt->data,pkt->len,bounce,bounce_size,0);
-	if(samples != sp->frame_size)
+	if(samples != sp->frame_size){
 	  fprintf(stderr,"samples %d frame-size %d\n",samples,sp->frame_size);
+	  goto endloop;
+	}
       }
       break;
     case S16LE:
