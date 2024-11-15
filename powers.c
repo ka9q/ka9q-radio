@@ -218,7 +218,7 @@ int main(int argc,char *argv[]){
     // npower even: emit N/2....N-1 0....N/2-1
     int const first_neg_bin = (npower + 1)/2; // round up, e.g., 64->32, 65 -> 33, 66 -> 33
     float base = r_freq - r_bin_bw * (npower/2); // integer truncation (round down), e.g., 64-> 32, 65 -> 32
-    printf(" %.0f, %.0f, %.0f, %d,",
+    printf(" %.0f, %.0f, %.0f, %d",
 	   base, base + r_bin_bw * (npower-1), r_bin_bw, npower);
 
 #if TESTING
@@ -235,10 +235,10 @@ int main(int argc,char *argv[]){
     }
 #else
     for(int i= first_neg_bin; i < npower; i++)
-      printf(" %.1f,",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      printf(", %.1f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
     // Frequencies above center
     for(int i=0; i < first_neg_bin; i++)
-      printf(" %.1f,",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      printf(", %.1f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
 #endif
     printf("\n");
     if(--count == 0)
