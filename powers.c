@@ -9,7 +9,6 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
-#include <locale.h>
 #include <assert.h>
 #include <getopt.h>
 #include <sysexits.h>
@@ -27,7 +26,6 @@ const char *App_path;
 const char *Target;
 int Verbose;
 uint32_t Ssrc;
-char Locale[256] = "en_US.UTF-8";
 char Iface[1024]; // Multicast interface to talk to front end
 int Status_fd,Ctl_fd;
 int64_t Timeout = BILLION; // Retransmission timeout
@@ -102,15 +100,6 @@ int main(int argc,char *argv[]){
       }
     }
   }
-  {
-    // The display thread assumes en_US.UTF-8, or anything with a thousands grouping character
-    // Otherwise the cursor movements will be wrong
-    char const * const cp = getenv("LANG");
-    if(cp != NULL){
-      strlcpy(Locale,cp,sizeof(Locale));
-    }
-  }
-  setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
   if(argc <= optind)
     help();
 
