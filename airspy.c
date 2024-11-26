@@ -183,7 +183,6 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     ret = airspy_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
     assert(ret == AIRSPY_SUCCESS);
   }
-  frontend->calibrate = 0;
   frontend->max_IF = -600000;
   frontend->min_IF = -0.47 * frontend->samprate;
 
