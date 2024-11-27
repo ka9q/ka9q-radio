@@ -5,6 +5,8 @@
 // Leave all other fields unchanged, as they may have local uses (e.g., file descriptors)
 // Note that we use some fields in channel differently than in radiod (e.g., dB vs ratios)
 int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,int length){
+  if(frontend == NULL || channel == NULL || buffer == NULL)
+    return -1;
   uint8_t const *cp = buffer;
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
