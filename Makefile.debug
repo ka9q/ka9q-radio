@@ -118,7 +118,7 @@ pcmspawn: pcmspawn.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pcmrecord: pcmrecord.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) -g -o $@ $^ -lopus -logg -lbsd -lm -lpthread
 
 pcmsend: pcmsend.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lm -lpthread

@@ -78,7 +78,7 @@ pcmcat: pcmcat.o libradio.a
 	$(CC) -g -o $@ $^ -lm -lpthread 
 
 pcmrecord: pcmrecord.o libradio.a
-	$(CC) -g -o $@ $^ -lm -lpthread
+	$(CC) -g -o $@ $^ -lopus -logg -lm -lpthread
 
 pcmsend: pcmsend.o libradio.a
 	$(CC) -g -o $@ $^ -lportaudio -lm -lpthread
