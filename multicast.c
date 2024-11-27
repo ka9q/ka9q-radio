@@ -446,13 +446,8 @@ void *hton_rtp(void * const data, struct rtp_header const * const rtp){
 
 
 // Process sequence number and timestamp in incoming RTP header:
-// Check that the sequence number is (close to) what we expect
-// If not, drop it but 3 wild sequence numbers in a row will assume a stream restart
-//
-// Determine timestamp jump, if any
-// Returns: <0            if packet should be dropped as a duplicate or a wild sequence number
-//           0            if packet is in sequence with no missing timestamps
-//         timestamp jump if packet is in sequence or <10 sequence numbers ahead, with missing timestamps
+// count dropped and duplicated packets, but it gets confused 
+// Determine timestamp jump from the next expected one
 int rtp_process(struct rtp_state * const state,struct rtp_header const * const rtp,int const sampcnt){
   if(rtp->ssrc != state->ssrc){
     // Normally this will happen only on the first packet in a session since
@@ -474,18 +469,14 @@ int rtp_process(struct rtp_state * const state,struct rtp_header const * const r
   // Sequence number check
   int const seq_step = (int16_t)(rtp->seq - state->seq);
   if(seq_step != 0){
-    if(seq_step < 0){
+    if(seq_step < 0)
       state->dupes++;
-      return -1;
-    }
-    state->drops += seq_step;
+    else
+      state->drops += seq_step;
   }
   state->seq = rtp->seq + 1;
 
   int const time_step = (int32_t)(rtp->timestamp - state->timestamp);
-  if(time_step < 0)
-    return time_step;    // Old samples; drop. Shouldn't happen if sequence number isn't old
-
   state->timestamp = rtp->timestamp + sampcnt;
   return time_step;
 }
