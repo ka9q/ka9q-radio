@@ -252,8 +252,9 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   }
   chan->output.pacing = config_getboolean(table,sname,"pacing",chan->output.pacing);
   {
-    char const *cp = config_getstring(table,sname,"encoding","s16be");
-    chan->output.encoding = parse_encoding(cp);
+    char const *cp = config_getstring(table,sname,"encoding",NULL);
+    if(cp)
+      chan->output.encoding = parse_encoding(cp);
   }
   chan->output.opus_bitrate = config_getint(table,sname,"bitrate",chan->output.opus_bitrate);
   return 0;
