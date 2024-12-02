@@ -252,35 +252,40 @@ static void closedown(int a){
   exit(EX_OK);  // Will call cleanup()
 }
 
-// if !flush, Send whatever's on the queue, up to the first missing segment
-// if flush, empty the entire queue, skipping entry entries. Update rtp_state.seq but not rtp_state.timestamp
-int send_opus_queue(struct session * const sp,bool const flush){
+static uint8_t OggSilence[3] = {0xf8,0xff,0xfe};
+
+
+// if default_framesize == 0, send whatever's on the queue, up to the first missing segment
+// otherwise, empty the entire queue, skipping entry entries.
+int send_opus_queue(struct session * const sp,int default_framesize){
   // Anything on the resequencing queue we can now process?
   int count = 0;
   for(int i=0; i < 16; i++,sp->rtp_state.seq++){
     struct reseq *qp = &sp->reseq[sp->rtp_state.seq & 15];
-    if(!qp->inuse){
-      if(flush)
-	continue;
-      else
-	break;
-    }
-    
+    if(!qp->inuse && default_framesize == 0)
+      break; // Stop here if we're not resynchronizing
+
     ogg_packet oggPacket;
-    oggPacket.packetno = sp->packetCount++; // Increment packet number
-    oggPacket.packet = qp->data;
-    oggPacket.bytes = qp->size;
+    int samples;
     oggPacket.e_o_s = 0;    // End of stream flag
-    int const samples = opus_packet_get_nb_samples(qp->data,qp->size,48000); // Number of 48 kHz samples
-    // Adjust the granule position if there was a timestamp jump
-    if(qp->rtp.timestamp != sp->rtp_state.timestamp){
-      int jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
-      sp->granulePosition += jump;
+    oggPacket.packetno = sp->packetCount++; // Increment packet number
+    if(qp->inuse){
+      oggPacket.packet = qp->data;
+      oggPacket.bytes = qp->size;
+      samples = opus_packet_get_nb_samples(qp->data,qp->size,48000); // Number of 48 kHz samples
+      if(qp->rtp.timestamp != sp->rtp_state.timestamp){
+	int jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
+	sp->granulePosition += jump;
+      }
+    } else {
+      oggPacket.packet = OggSilence;
+      samples = default_framesize;
+      oggPacket.bytes = sizeof(OggSilence);
     }
+    // Adjust the granule position
     sp->granulePosition += samples; // points to end of this packet
     oggPacket.granulepos = sp->granulePosition; // Granule position
-    
-    sp->rtp_state.timestamp = qp->rtp.timestamp + samples; // also ready for next
+    sp->rtp_state.timestamp += samples; // also ready for next
     sp->total_file_samples += samples;
     sp->current_segment_samples += samples;
     sp->samples_written += samples;
@@ -288,11 +293,11 @@ int send_opus_queue(struct session * const sp,bool const flush){
       sp->substantial_file = true;
     
     // Add the packet to the Ogg stream
-    if(Verbose)
-      fprintf(stdout,"writing from rtp sequence %u, timestamp %u: bytes %d samples %d granule %lld\n",
-	      qp->rtp.seq,qp->rtp.timestamp,qp->size,samples,
+    if(Verbose > 1 || (Verbose > 0 && default_framesize > 0))
+      fprintf(stdout,"writing from rtp sequence %u, timestamp %u: bytes %ld samples %d granule %lld\n",
+	      sp->rtp_state.seq,sp->rtp_state.timestamp,oggPacket.bytes,samples,
 	      oggPacket.granulepos);
-
+    
     int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);
     if (ret != 0) {
       fprintf(stderr, "Failed to write packet to Ogg stream.\n");
@@ -304,7 +309,7 @@ int send_opus_queue(struct session * const sp,bool const flush){
       fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
       fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
     }
-    FREE(qp->data);
+    FREE(qp->data); // OK if NULL
     qp->size = 0;
     qp->inuse = false;
     count++;
@@ -436,7 +441,7 @@ static void input_loop(){
 	}
 	int16_t const seqdiff = rtp.seq - sp->rtp_state.seq;
 	if(seqdiff >= 0 && seqdiff < 15){
-	  if(Verbose)
+	  if(Verbose > 1)
 	    fprintf(stdout,"queue sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
 	  int qi = rtp.seq & 15;
 	  struct reseq * const qp = &sp->reseq[qi];
@@ -445,7 +450,7 @@ static void input_loop(){
 	  qp->data = malloc(size);
 	  memcpy(qp->data,dp,size);
 	  qp->size = size;
-	  send_opus_queue(sp,false); // Transmit any pending packets
+	  send_opus_queue(sp,0); // Transmit any pending packets
 	} else if((int16_t)(rtp.seq - sp->rtp_state.seq) < 0){
 	  // old duplicate, drop
 	  if(Verbose)
@@ -456,7 +461,7 @@ static void input_loop(){
 	  // But could be a possible resync or long outage, test for this ****
 	  if(Verbose)
 	    fprintf(stdout,"flushing with drops\n");
-	  send_opus_queue(sp,true);
+	  send_opus_queue(sp,960); // set this properly ****
 	  if(Verbose)
 	    fprintf(stdout,"reset & queue sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
 
@@ -786,8 +791,8 @@ static int close_file(struct session **spp){
       // Terminate ogg Opus file
       // Write an empty packet with the end bit set
 	ogg_packet endPacket;
-	endPacket.packet = NULL; // Will this trigger a segfault?
-	endPacket.bytes = 0;
+	endPacket.packet = OggSilence;
+	endPacket.bytes = sizeof(OggSilence);
 	endPacket.e_o_s = 1;    // End of stream flag
 	endPacket.granulepos = sp->granulePosition; // Granule position
 	sp->granulePosition += 0; // Doesn't change
