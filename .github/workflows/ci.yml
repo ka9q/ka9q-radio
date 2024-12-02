@@ -20,6 +20,7 @@ jobs:
             libfftw3-dev \
             libbsd-dev \
             libhackrf-dev \
+            libogg-dev \
             libopus-dev \
             libairspy-dev \
             libairspyhf-dev \
@@ -48,6 +49,7 @@ jobs:
             ncurses \
             fftw \
             hackrf \
+            libogg \
             opus \
             airspy \
             airspyhf \
