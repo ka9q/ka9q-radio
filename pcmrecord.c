@@ -139,6 +139,7 @@ static void input_loop(void);
 static void cleanup(void);
 int session_file_init(struct session *sp,struct sockaddr const *sender);
 static int close_file(struct session **spp);
+static uint8_t *encodeTagString(uint8_t *out,const char *string);
 
 static struct option Options[] = {
   {"directory", required_argument, NULL, 'd'},
@@ -687,16 +688,30 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
       fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
     }
-    // We need to fill these in with sender ID (ka9q-radio, etc, frequency, mode, etc etc)
-    unsigned char opusTags[16];
-    memset(&opusTags,0,sizeof(opusTags));
-    memcpy(opusTags, "OpusTags", 8);  // Signature
-    // opusTags[8,9,10,11]  Vendor string length, little endian
-    // opusTags[12,13,14,15]  Comment list count, little endian
+    // fill these in with sender ID (ka9q-radio, etc, frequency, mode, etc etc)
+    uint8_t opusTags[2048];
+    memset(opusTags,0,sizeof(opusTags));
+    memcpy(opusTags,"OpusTags",8);
+    uint8_t *wp = opusTags + 8;
+    wp = encodeTagString(wp,"KA9Q-radio"); // Vendor
+    int32_t *np = (int32_t *)wp;
+    *np++ = 5; // Number of tags follows
+    wp = (uint8_t *)np;
+    char temp[64];
+    snprintf(temp,sizeof(temp),"ENCODER=KA9Q radiod");
+    wp = encodeTagString(wp,temp);
+    snprintf(temp,sizeof(temp),"TITLE=ka9q-radio, ssrc %u: %'.3lf Hz %s",sp->ssrc,sp->chan.tune.freq,sp->chan.preset);
+    wp = encodeTagString(wp,temp);
+    snprintf(temp,sizeof(temp),"SSRC=%u",sp->ssrc);
+    wp = encodeTagString(wp,temp);
+    snprintf(temp,sizeof(temp),"FREQUENCY=%lf",sp->chan.tune.freq);
+    wp = encodeTagString(wp,temp);
+    snprintf(temp,sizeof(temp),"PRESET=%s",sp->chan.preset);
+    wp = encodeTagString(wp,temp);
     
     ogg_packet tagsPacket;
     tagsPacket.packet = opusTags;
-    tagsPacket.bytes = sizeof(opusTags);
+    tagsPacket.bytes = wp - opusTags;
     tagsPacket.b_o_s = 0;             // Not the beginning of the stream
     tagsPacket.e_o_s = 0;             // Not the end of the stream
     tagsPacket.granulepos = 0;        // No granule position for metadata
@@ -857,4 +872,18 @@ static int close_file(struct session **spp){
   FREE(sp);
   
   return 0;
+}
+static uint8_t *encodeTagString(uint8_t *out,const char *string){
+  if(out == NULL)
+    return NULL;
+  if(string == NULL)
+    return out;
+
+  int len = strlen(string);
+  uint32_t *wp = (uint32_t *)out;
+  *wp = len;
+  uint8_t *sp = out + sizeof(uint32_t);
+  memcpy(sp,string,len);
+  sp += len;
+  return sp;
 }
