@@ -305,7 +305,7 @@ int send_opus_queue(struct session * const sp,int default_framesize){
     }
     // Flush the stream to ensure packets are written
     ogg_page oggPage;
-    while (ogg_stream_flush(&sp->oggState, &oggPage)) {
+    while (ogg_stream_pageout(&sp->oggState, &oggPage)) {
       fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
       fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
     }
@@ -678,10 +678,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     idPacket.bytes = sizeof(opusHeader);
     idPacket.b_o_s = 1;  // Beginning of stream
     idPacket.e_o_s = 0;
-    idPacket.granulepos = sp->granulePosition;
+    idPacket.granulepos = 0; // always zero
     idPacket.packetno = sp->packetCount++;
-    //    sp->granulePosition = -312; // supposed to be subtracted from first data packet
-    sp->granulePosition = 0; // supposed to be subtracted from first data packet
     // Add the identification header to the Ogg stream
     ogg_stream_packetin(&sp->oggState, &idPacket);
     ogg_page oggPage;
@@ -689,6 +687,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
       fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
     }
+    // We need to fill these in with sender ID (ka9q-radio, etc, frequency, mode, etc etc)
     unsigned char opusTags[16];
     memset(&opusTags,0,sizeof(opusTags));
     memcpy(opusTags, "OpusTags", 8);  // Signature
@@ -833,8 +832,8 @@ static int close_file(struct session **spp){
       
       rewind(sp->fp);
       fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
-      fflush(sp->fp);
     }
+    fflush(sp->fp);
     // RTP processing should be smarter about counting these.
     // Packets received out of order are counted as a drop and a dupe, but are harmless here
     if(Verbose && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
