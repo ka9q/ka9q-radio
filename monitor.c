@@ -437,11 +437,11 @@ void *statproc(void *arg){
     pthread_exit(NULL);
 
   // Main loop begins here - does not need to be realtime?
+  uint8_t *buffer = malloc(PKTSIZE);
   while(!Terminate){
-    uint8_t buffer[PKTSIZE];
     struct sockaddr_storage sender;
     socklen_t socksize = sizeof(sender);
-    int length = recvfrom(status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&sender,&socksize);
+    int length = recvfrom(status_fd,buffer,PKTSIZE,0,(struct sockaddr *)&sender,&socksize);
     if(buffer[0] != STATUS) // not status, ignore
       continue;
 
@@ -482,6 +482,7 @@ void *statproc(void *arg){
     sp->snr = power2dB(sn0/noise_bandwidth);
     vote();
   }
+  FREE(buffer);
   return NULL;
 }
 
