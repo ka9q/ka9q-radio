@@ -441,7 +441,7 @@ static void input_loop(){
 	    fprintf(stdout,"init seq %u timestamp %u\n",rtp.seq,rtp.timestamp);
 	}
 	int16_t const seqdiff = rtp.seq - sp->rtp_state.seq;
-	if(seqdiff >= 0 && seqdiff < 15){
+	if(seqdiff >= 0 && seqdiff < 16){
 	  if(Verbose > 1)
 	    fprintf(stdout,"queue sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
 	  int qi = rtp.seq & 15;
@@ -462,7 +462,7 @@ static void input_loop(){
 	  // But could be a possible resync or long outage, test for this ****
 	  if(Verbose)
 	    fprintf(stdout,"flushing with drops\n");
-	  send_opus_queue(sp,960); // set this properly ****
+	  send_opus_queue(sp,960); // set this properly, probably by remembering the last packet size
 	  if(Verbose)
 	    fprintf(stdout,"reset & queue sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
 
@@ -473,7 +473,7 @@ static void input_loop(){
 	  qp->data = malloc(size);
 	  memcpy(qp->data,dp,size);
 	  qp->size = size;
-	  send_opus_queue(sp,false); // Transmit any pending packets
+	  send_opus_queue(sp,0); // Transmit any pending packets
 	}
       } else { // PCM
 	int const samp_size = sp->encoding == F32LE ? 4 : 2;
@@ -704,7 +704,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     wp = encodeTagString(wp,temp);
     snprintf(temp,sizeof(temp),"SSRC=%u",sp->ssrc);
     wp = encodeTagString(wp,temp);
-    snprintf(temp,sizeof(temp),"FREQUENCY=%lf",sp->chan.tune.freq);
+    snprintf(temp,sizeof(temp),"FREQUENCY=%.3lf",sp->chan.tune.freq);
     wp = encodeTagString(wp,temp);
     snprintf(temp,sizeof(temp),"PRESET=%s",sp->chan.preset);
     wp = encodeTagString(wp,temp);
