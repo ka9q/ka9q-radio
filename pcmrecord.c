@@ -297,7 +297,7 @@ int send_opus_queue(struct session * const sp,int default_framesize){
     if(Verbose > 1 || (Verbose > 0 && default_framesize > 0))
       fprintf(stdout,"writing from rtp sequence %u, timestamp %u: bytes %ld samples %d granule %lld\n",
 	      sp->rtp_state.seq,sp->rtp_state.timestamp,oggPacket.bytes,samples,
-	      oggPacket.granulepos);
+	      (long long)oggPacket.granulepos);
     
     int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);
     if (ret != 0) {
