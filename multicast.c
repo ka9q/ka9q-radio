@@ -561,8 +561,8 @@ char const *formatsock(void const *s){
   getnameinfo(sa,slen,
 	      host,NI_MAXHOST,
 	      port,NI_MAXSERV,
-	      //		NI_NOFQDN|NI_NUMERICHOST|NI_NUMERICSERV);
-	      NI_NOFQDN|NI_NUMERICSERV);
+	      NI_NOFQDN|NI_NUMERICHOST|NI_NUMERICSERV);
+             //NI_NOFQDN|NI_NUMERICSERV);
   snprintf(ic->hostport,sizeof(ic->hostport),"%s:%s",host,port);
   assert(slen < sizeof(ic->sock));
   memcpy(&ic->sock,sa,slen);
