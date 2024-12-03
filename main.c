@@ -460,8 +460,13 @@ static int loadconfig(char const * const file){
 
       int slen = sizeof(data_dest_socket);
       uint32_t addr = make_maddr(data);
-      avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_socket,&slen);
-      avahi_start(sname,"_opus._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_socket,&slen);
+
+      // Start only one depending on chan->output.encoding
+      char const *cp = config_getstring(Configtable,sname,"encoding",NULL);
+      if(cp != NULL && strcasecmp(cp,"opus") == 0)
+	avahi_start(sname,"_opus._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_socket,&slen);
+      else
+	avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_socket,&slen);
 #if 0
       avahi_start(sname,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,data,addr,ttlmsg,&metadata_dest_socket,&slen); // sockets are same size
 #else
