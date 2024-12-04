@@ -1,3 +1,6 @@
+// Note! Doesn't really work right with consumer progs that get metadata from status beacons on data stream
+// Should modify, not just copy, metadata to indicate transcoding to Opus
+
 // Opus transcoder
 // Read PCM audio from one or more multicast groups, compress with Opus and retransmit on another with same SSRC
 // Currently subject to memory leaks as old group states aren't yet aged out

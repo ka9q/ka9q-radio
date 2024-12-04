@@ -271,26 +271,29 @@ void *decode_task(void *arg){
     if(pkt->rtp.type >= 0 && pkt->rtp.type < 128)
       sp->type = pkt->rtp.type; // Save only if valid
 
-    int const samprate = sp->pt_table[sp->type].samprate;
-    if(samprate == 0)
-      goto endloop; // Unknown sample rate, drop until we know
+    enum encoding const encoding = sp->pt_table[sp->type].encoding;
+    if(encoding == NO_ENCODING || encoding == AX25)
+      goto endloop;
+    
+    sp->channels = sp->pt_table[sp->type].channels;
+    // Force Opus decoding sample rate to 48 kHz since timestamps assume this
+    int samprate = (encoding == OPUS) ? 48000 : sp->pt_table[sp->type].samprate;
+    if(samprate <= 0 || sp->channels <= 0 || sp->channels > 2)
+      goto endloop;
 
     if(samprate != sp->samprate){
       // Reinit tone detectors whenever sample rate changes
       sp->samprate = samprate;
       for(int j=0; j < N_tones; j++)
-	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)samprate);
+	init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
       sp->notch_tone = 0; // force it to be re-detected at new sample rate
     }
-    // Test for invalidity
-    sp->channels = sp->pt_table[sp->type].channels; // channels in packet (not portaudio output buffer)
-    if(sp->samprate <= 0 || sp->channels <= 0 || sp->channels > 2)
-      goto endloop;
-    int upsample = DAC_samprate / samprate; // Upsample lower PCM samprates to output rate (should be cleaner; what about decimation?)
-    sp->bandwidth = samprate / 2000;    // in kHz allowing for Nyquist
+    int upsample = 1;
+    // PCM only - overwritten for opus
+    upsample = DAC_samprate / sp->samprate; // Upsample (PCM only) lower samprates to output rate (should be cleaner; what about decimation?)
+    sp->bandwidth = sp->pt_table[sp->type].samprate / 2000;    // in kHz allowing for Nyquist, using actual input sample rate for Opus
 
     // decode Opus or PCM into bounce buffer
-    enum encoding const encoding = sp->pt_table[sp->type].encoding;
     switch(encoding){
     case OPUS:
       {
@@ -298,22 +301,13 @@ void *decode_task(void *arg){
 	if(!sp->opus){
 	  int error;
 
-	  // Decode Opus to the selected sample rate
-	  sp->opus = opus_decoder_create(DAC_samprate,Channels,&error);
+	  // Always decode Opus to DAC rate (must be 48 kHz)
+	  sp->opus = opus_decoder_create(DAC_samprate,sp->channels,&error);
 	  if(error != OPUS_OK)
 	    fprintf(stderr,"opus_decoder_create error %d\n",error);
 
 	  assert(sp->opus);
 	}
-	// Force Opus to decode to the local hardware settings, typically stereo @ 48 kHz
-	sp->channels = Channels;
-	sp->samprate = DAC_samprate;
-	upsample = 1;
-	// Opus RTP timestamps always referenced to 48 kHz
-	int const r0 = opus_packet_get_nb_samples(pkt->data,pkt->len,48000);
-	if(r0 == OPUS_INVALID_PACKET || r0 == OPUS_BAD_ARG)
-	  goto endloop;
-
 	int const r1 = opus_packet_get_nb_samples(pkt->data,pkt->len,DAC_samprate);
 	if(r1 == OPUS_INVALID_PACKET || r1 == OPUS_BAD_ARG)
 	  goto endloop;
@@ -353,43 +347,42 @@ void *decode_task(void *arg){
       break;
     case S16LE:
     case S16BE:
-      {
-	sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
-	if(sp->frame_size <= 0)
-	  goto endloop;
+      sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
+      if(sp->frame_size <= 0)
+	goto endloop;
+      assert(bounce == NULL);
+      bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
+      if(encoding == S16BE){
 	int16_t const * const data = (int16_t *)&pkt->data[0];
-	assert(bounce == NULL);
-	bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
-	if(encoding == S16BE){
-	  for(int i=0; i < sp->channels * sp->frame_size; i++)
-	    bounce[i] = SCALE16 * (int16_t)ntohs(data[i]); // Cast is necessary
-	} else {
-	  for(int i=0; i < sp->channels * sp->frame_size; i++)
-	    bounce[i] = SCALE16 * data[i];
-	}
+	for(int i=0; i < sp->channels * sp->frame_size; i++)
+	  bounce[i] = SCALE16 * (int16_t)ntohs(data[i]); // Cast is necessary
+      } else {
+	int16_t const * const data = (int16_t *)&pkt->data[0];
+	for(int i=0; i < sp->channels * sp->frame_size; i++)
+	  bounce[i] = SCALE16 * data[i];
       }
       break;
     case F32LE:
+      sp->frame_size = pkt->len / (sizeof(float) * sp->channels); // mono/stereo samples in frame
+      if(sp->frame_size <= 0) // Check here because it might truncate to zero
+	goto endloop;
+      assert(bounce == NULL);
+      bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
       {
-	sp->frame_size = pkt->len / (sizeof(float) * sp->channels); // mono/stereo samples in frame
-	if(sp->frame_size <= 0) // Check here because it might truncate to zero
-	  goto endloop;
 	float const * const data = (float *)&pkt->data[0];
-	assert(bounce == NULL);
-	bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
 	for(int i=0; i < sp->channels * sp->frame_size; i++)
 	  bounce[i] = data[i];
       }
       break;
 #ifdef FLOAT16
     case F16LE: // 16-bit floats
+      sp->frame_size = pkt->len / (sizeof(_Float16) * sp->channels); // mono/stereo samples in frame
+      if(sp->frame_size <= 0) // Check here because it might truncate to zero
+	goto endloop;
+      assert(bounce == NULL);
+      bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
       {
-	sp->frame_size = pkt->len / (sizeof(_Float16) * sp->channels); // mono/stereo samples in frame
-	if(sp->frame_size <= 0) // Check here because it might truncate to zero
-	  goto endloop;
 	_Float16 const * const data = (_Float16 *)&pkt->data[0];
-	assert(bounce == NULL);
-	bounce = malloc(sizeof(*bounce) * sp->frame_size * sp->channels);
 	for(int i=0; i < sp->channels * sp->frame_size; i++)
 	  bounce[i] = data[i];
       }
