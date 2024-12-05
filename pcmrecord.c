@@ -97,6 +97,7 @@ struct session {
   ogg_stream_state oggState;   // For ogg Opus
   bool oggfirst;               // Set after first ogg packet
   int64_t granulePosition;
+  int last_packetsize;          // Samples in last Opus packet (used for error padding)
   int packetCount;
   struct reseq {
     struct rtp_header rtp;
@@ -274,6 +275,7 @@ int send_opus_queue(struct session * const sp,int default_framesize){
       oggPacket.packet = qp->data;
       oggPacket.bytes = qp->size;
       samples = opus_packet_get_nb_samples(qp->data,qp->size,48000); // Number of 48 kHz samples
+      sp->last_packetsize = samples;
       if(qp->rtp.timestamp != sp->rtp_state.timestamp){
 	int jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
 	sp->granulePosition += jump;
@@ -462,7 +464,7 @@ static void input_loop(){
 	  // But could be a possible resync or long outage, test for this ****
 	  if(Verbose)
 	    fprintf(stdout,"flushing with drops\n");
-	  send_opus_queue(sp,960); // set this properly, probably by remembering the last packet size
+	  send_opus_queue(sp,sp->last_packetsize); // use the last packet size for sample stuffing
 	  if(Verbose)
 	    fprintf(stdout,"reset & queue sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
 
