@@ -153,6 +153,11 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
 	assert(error == OPUS_OK && chan->output.opus);
 	chan->output.opus_channels = chan->output.channels; // In case it changes
 
+	// A communications receiver is unlikely to have more than 96 dB of output range
+	// In fact this could be made smaller as an experiment
+	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_LSB_DEPTH(16));
+	assert(error == OPUS_OK);
+
 	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_DTX(Discontinuous)); // Create an option to set this
 	assert(error == OPUS_OK);
 
