@@ -47,6 +47,16 @@ struct wav {
   int16_t BlockAlign;
   int16_t BitsPerSample;
 
+  // adding additional chunk fields to the wav file header to support 32 bit FP
+  // see https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
+  int16_t ExtensionChunkSize;
+  int16_t ValidBitsPerSample;
+  int32_t ChannelMask;
+  char Subformat[16];
+  char FactID[4];
+  uint32_t FactSize;
+  uint32_t SamplesLength;
+
    // 'auxi' chunk to pass center frequency to SDR Console
    // http://www.moetronix.com/files/spectravue.pdf had some details on this chunk
    // and https://sdrplay.com/resources/IQ/ft4.zip
@@ -730,7 +740,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     sp->header.ChunkSize = 0xffffffff; // Temporary
     memcpy(sp->header.Format,"WAVE",4);
     memcpy(sp->header.Subchunk1ID,"fmt ",4);
-    sp->header.Subchunk1Size = 16; // ?????? 
+    sp->header.Subchunk1Size = 40;
     switch(sp->encoding){
     default: // Not sure what else to do. Opus files should be written in .opus files
     case S16LE:
@@ -753,13 +763,14 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       sp->header.BlockAlign = sp->channels * 2;;
       break;
     }
-    
     sp->header.NumChannels = sp->channels;
     sp->header.SampleRate = sp->samprate;
-    
+    sp->header.ExtensionChunkSize = 22;
     memcpy(sp->header.SubChunk2ID,"data",4);
     sp->header.Subchunk2Size = 0xffffffff; // Temporary
-    
+    memcpy(sp->header.FactID,"fact",4);
+    sp->header.FactSize = 4;
+    sp->header.SamplesLength = 0xffffffff;
     // fill in the auxi chunk (start time, center frequency)
     memcpy(sp->header.AuxID, "auxi", 4);
     sp->header.AuxSize=164;
@@ -846,6 +857,7 @@ static int close_file(struct session **spp){
       sp->header.StopMinute=tm->tm_min;
       sp->header.StopSecond=tm->tm_sec;
       sp->header.StopMillis=(int16_t)(now.tv_nsec / 1000000);
+      sp->header.SamplesLength = sp->samples_written / sp->channels;
       
       rewind(sp->fp);
       fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
