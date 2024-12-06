@@ -478,6 +478,8 @@ static void input_loop(){
 	  send_opus_queue(sp,0); // Transmit any pending packets
 	}
       } else { // PCM
+        if (0 == sp->samples_remaining)
+          continue;
 	int const samp_size = sp->encoding == F32LE ? 4 : 2;
 	int const samp_count = size / samp_size;
 	
@@ -520,10 +522,20 @@ static void input_loop(){
 	} else if(sp->encoding != OPUS) {
 	  fwrite(dp,1,size,sp->fp); // Just write raw bytes
 	}
+        sp->samples_remaining -= samp_count;
       }
       sp->last_active = gps_time_ns();
     } // end of packet processing
 
+    // check to see if all sessions are complete
+    bool all_complete = true;
+    for(struct session *sp = Sessions;sp != NULL;sp = sp->next)
+      all_complete &= (0 == sp->samples_remaining);
+
+    if(all_complete){
+      cleanup();
+      exit(EX_OK);
+    }
     // Walk through list, close idle sessions
     // should we do this on every packet? seems inefficient
     // Could be in a separate thread, but that creates synchronization issues
