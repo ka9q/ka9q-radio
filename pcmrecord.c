@@ -289,6 +289,7 @@ int send_opus_queue(struct session * const sp,bool flush){
 	oggPacket.packet = OggSilence;
 	oggPacket.bytes = sizeof(OggSilence);
 	int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);	  // Add the packet to the Ogg stream
+	(void)ret;
 	assert(ret == 0);
 
 	sp->rtp_state.timestamp += samples; // also ready for next
@@ -319,6 +320,7 @@ int send_opus_queue(struct session * const sp,bool flush){
 	      (long long)oggPacket.granulepos);
     
     int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);
+    (void)ret;
     assert(ret == 0);
     }
     // Flush the stream to ensure packets are written
@@ -867,6 +869,7 @@ static int close_file(struct session **spp){
 	
 	// Add the packet to the Ogg stream
 	int ret = ogg_stream_packetin(&sp->oggState, &endPacket);
+	(void)ret;
 	assert(ret == 0);
 	// Flush the stream to ensure packets are written
 	ogg_page finalPage;
