@@ -153,6 +153,10 @@ char *format_gpstime(char *result,int len,int64_t t){
   return format_utctime(result,len,t + BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET));
 }
 
+char *format_gpstime_iso8601(char *result,int len,int64_t t){
+  return format_utctime_iso8601(result,len,t + BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET));
+}
+
 
 // Format, as UTC, a time measured in nanoseconds from the UNIX epoch
 char *format_utctime(char *result,int len,int64_t t){
@@ -179,6 +183,31 @@ char *format_utctime(char *result,int len,int64_t t){
 
   return result;
 }
+
+char *format_utctime_iso8601(char *result,int len,int64_t t){
+  lldiv_t const ut = lldiv(t,BILLION);
+
+  time_t utime = ut.quot;
+  int t_usec = ut.rem / 1000;
+  if(t_usec < 0){
+    t_usec += 1000000;
+    utime -= 1;
+  }
+  struct tm tm;
+  gmtime_r(&utime,&tm);
+  // 2018-02-26T14:40:08.123456Z
+  snprintf(result,len,"%04d-%02d-%02dT%02d:%02d:%02d.%06dZ",
+	   tm.tm_year+1900,
+	   tm.tm_mon+1,
+	   tm.tm_mday,
+	   tm.tm_hour,
+	   tm.tm_min,
+	   tm.tm_sec,
+	   t_usec);
+
+  return result;
+}
+
 // Format a seconds count into hh:mm:ss
 char *ftime(char * result,int size,int64_t t){
   // Init to blanks
