@@ -284,16 +284,19 @@ void *decode_task(void *arg){
       sp->samprate = DAC_samprate;
       sp->channels = 2;
       upsample = 1;
-      // Execute Opus decoder even when muted to keep its state updated
       if(!sp->opus){
-	int error;
-
+	// This should happen only once on a stream
 	// Always decode Opus to DAC rate of 48 kHz, stereo
+	int error;
 	sp->opus = opus_decoder_create(sp->samprate,sp->channels,&error);
 	if(error != OPUS_OK)
 	  fprintf(stderr,"opus_decoder_create error %d\n",error);
 
 	assert(sp->opus);
+	// Init PL tone detectors
+	for(int j=0; j < N_tones; j++)
+	  init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
+	sp->notch_tone = 0;
       }
       int const r1 = opus_packet_get_nb_samples(pkt->data,pkt->len,sp->samprate);
       if(r1 == OPUS_INVALID_PACKET || r1 == OPUS_BAD_ARG)
