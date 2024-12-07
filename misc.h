@@ -132,7 +132,9 @@ extern char const *Months[12];
 
 int dist_path(char *path,int path_len,const char *fname);
 char *format_gpstime(char *result,int len,int64_t t);
+char *format_gpstime_iso8601(char *result,int len,int64_t t);
 char *format_utctime(char *result,int len,int64_t t);
+char *format_utctime_iso8601(char *result,int len,int64_t t);
 char *ftime(char *result,int size,int64_t t);
 void normalize_time(struct timespec *x);
 double parse_frequency(char const *,bool);

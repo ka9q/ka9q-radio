@@ -200,7 +200,7 @@ int main(int argc,char *argv[]){
 
     // **************Process here ***************
     char gps[1024];
-    printf("%s,",format_gpstime(gps,sizeof(gps),time));
+    printf("%s,",format_gpstime_iso8601(gps,sizeof(gps),time));
 
     // Frequencies below center; note integer round-up, e.g, 65 -> 33; 64 -> 32
     // npower odd: emit N/2+1....N-1 0....N/2 (division truncating to integer)
