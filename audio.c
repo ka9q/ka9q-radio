@@ -26,7 +26,6 @@ bool TempSendFailure = false;
 
 int Application = OPUS_APPLICATION_AUDIO; // Encoder optimization mode
 bool Fec_enable = false;                  // Use forward error correction
-int Opus_bitrate = 32000;        // Opus stream audio bandwidth; default 32 kb/s
 bool Discontinuous = false;        // Off by default
 
 // Send PCM output on stream; # of channels implicit in chan->output.channels
@@ -140,8 +139,9 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
 	  chan->output.opus_channels = 0;
 	}
       }
+      int error;
       if(chan->output.opus == NULL){
-	int error = OPUS_OK;
+	error = OPUS_OK;
 
 	// Opus only supports a specific set of sample rates
 	if(chan->output.samprate != 48000 && chan->output.samprate != 24000 && chan->output.samprate != 16000 && chan->output.samprate != 12000
@@ -152,24 +152,27 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
 	chan->output.opus = opus_encoder_create(chan->output.samprate,chan->output.channels,Application,&error);
 	assert(error == OPUS_OK && chan->output.opus);
 	chan->output.opus_channels = chan->output.channels; // In case it changes
+      }
+      // These can be changed at any time
+      // A communications receiver is unlikely to have more than 96 dB of output range
+      // In fact this could be made smaller as an experiment
+      error = opus_encoder_ctl(chan->output.opus,OPUS_SET_LSB_DEPTH(16));
+      assert(error == OPUS_OK);
 
-	// A communications receiver is unlikely to have more than 96 dB of output range
-	// In fact this could be made smaller as an experiment
-	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_LSB_DEPTH(16));
-	assert(error == OPUS_OK);
+      error = opus_encoder_ctl(chan->output.opus,OPUS_SET_DTX(Discontinuous)); // Create an option to set this
+      assert(error == OPUS_OK);
 
-	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_DTX(Discontinuous)); // Create an option to set this
-	assert(error == OPUS_OK);
-
+      if(chan->output.opus_bitrate == 0)
+	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_BITRATE(OPUS_AUTO));
+      else
 	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_BITRATE(chan->output.opus_bitrate));
-	assert(error == OPUS_OK);
+      assert(error == OPUS_OK);
 
-	if(Fec_enable){ // Create an option to set this, but understand it first
-	  error = opus_encoder_ctl(chan->output.opus,OPUS_SET_INBAND_FEC(1));
-	  assert(error == OPUS_OK);
-	  error = opus_encoder_ctl(chan->output.opus,OPUS_SET_PACKET_LOSS_PERC(Fec_enable));
-	  assert(error == OPUS_OK);
-	}
+      if(Fec_enable){ // Create an option to set this, but understand it first
+	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_INBAND_FEC(1));
+	assert(error == OPUS_OK);
+	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_PACKET_LOSS_PERC(Fec_enable));
+	assert(error == OPUS_OK);
       }
       bytes = opus_encode_float(chan->output.opus,buffer,chunk,dp,sizeof(packet) - (dp-packet)); // Max # bytes in compressed output buffer
       assert(bytes >= 0);
