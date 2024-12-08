@@ -410,6 +410,9 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	}
       }
       break;
+    case OPUS_BIT_RATE:
+      chan->output.opus_bitrate = abs(decode_int(cp,optlen));
+      break;
     case SETOPTS:
       {
 	uint64_t opts = decode_int64(cp,optlen);
@@ -604,6 +607,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       }
     }
     encode_int64(&bp,OUTPUT_SAMPLES,chan->output.samples);
+    encode_int32(&bp,OPUS_BIT_RATE,chan->output.opus_bitrate);
     encode_float(&bp,HEADROOM,voltage2dB(chan->output.headroom)); // amplitude -> dB
     // Doppler info
     encode_double(&bp,DOPPLER_FREQUENCY,chan->tune.doppler); // Hz
