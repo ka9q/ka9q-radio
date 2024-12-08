@@ -51,7 +51,7 @@ static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadca
 static float const DEFAULT_FM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
 static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 #endif
-static int   const DEFAULT_BITRATE = 32000;       // Default Opus compressed bit rate
+static int   const DEFAULT_BITRATE = 0;       // Default Opus compressed bit rate. 0 means OPUS_AUTO, the encoder decides
 extern int Overlap;
 
 
