@@ -109,7 +109,7 @@ enum status_type {
   OUTPUT_LEVEL,     // All modes
   OUTPUT_SAMPLES,
 
-  UNUSED11,
+  OPUS_BIT_RATE,
   UNUSED12,
   UNUSED13,
   UNUSED14,
