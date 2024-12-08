@@ -727,7 +727,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   }
   if(Verbose)
     fprintf(stdout,"creating %s ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s offset %lld\n",
-	    sp->filename,sp->ssrc,sp->samprate,sp->channels,encoding_string(sp->encoding),sp->chan.tune.freq,sp->chan.preset,sp->starting_offset);
+	    sp->filename,sp->ssrc,sp->samprate,sp->channels,encoding_string(sp->encoding),sp->chan.tune.freq,
+	    sp->chan.preset,(long long)sp->starting_offset);
   sp->iobuffer = malloc(BUFFERSIZE);
   setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
 
