@@ -270,7 +270,7 @@ static struct windef {
   {&Demodulator_win,18,26},
   {&Filtering_win,18,22},
   {&Input_win,18,45},
-  {&Output_win,8,45},
+  {&Output_win,18,45},
 };
 #define NWINS (sizeof(Windefs) / sizeof(Windefs[0]))
 
@@ -837,6 +837,15 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       if(ptr != str && isfinite(x)){
 	encode_float(bpp,RF_ATTEN,x);
       }
+    }
+    break;
+  case 'b':
+    {
+      char str[Entry_width],*ptr;
+      getentry("Opus bitrate, bit/sec: ",str,sizeof(str));
+      int const x = labs(strtol(str,&ptr,0));
+      if(ptr != str)
+	encode_int(bpp,OPUS_BIT_RATE,x);
     }
     break;
   case 'g': // Manually set linear channel gain, dB (positive or negative)
@@ -1460,6 +1469,8 @@ static void display_output(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Encoding","%s",encoding_string(channel->output.encoding));
   pprintw(w,row++,col,"Channels","%d",channel->output.channels);
   pprintw(w,row++,col,"Packets","%'llu",(long long unsigned)channel->output.rtp.packets);
+  if(channel->output.encoding == OPUS)
+    pprintw(w,row++,col,"Opus bitrate","%d",channel->output.opus_bitrate);
   box(w,0,0);
   mvwaddstr(w,0,1,"RTP output");
   wnoutrefresh(w);
