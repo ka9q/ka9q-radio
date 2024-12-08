@@ -20,6 +20,7 @@
 #include <sysexits.h>
 #include <signal.h>
 #include <getopt.h>
+#include <inttypes.h>
 #include <ogg/ogg.h>
 
 #include "misc.h"
@@ -114,6 +115,7 @@ struct session {
   FILE *fp;                    // File being recorded
   void *iobuffer;              // Big buffer to reduce write rate
   int64_t last_active;         // gps time of last activity
+  int64_t starting_offset;     // First actual sample in file past wav header (for time alignment)
 
   bool substantial_file;       // At least one substantial segment has been seen
   int64_t current_segment_samples; // total samples in this segment without skips in timestamp
@@ -124,20 +126,20 @@ struct session {
 
 
 static float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
-static float FileLengthLimit = 0; // Length of file in seconds; 0 = unlimited
-const char *App_path;
+static double FileLengthLimit = 0; // Length of file in seconds; 0 = unlimited
+static const double Tolerance = 1.0; // tolerance for starting time in sec when FileLengthLimit is active
 int Verbose;
 static char PCM_mcast_address_text[256];
+static int64_t Timeout = 20; // 20 seconds max idle time before file close
 static char const *Recordings = ".";
 static bool Subdirs; // Place recordings in subdirectories by SSID
 static char const *Locale;
 
+const char *App_path;
 static int Input_fd,Status_fd;
 static struct session *Sessions;
-static int64_t Timeout = 20; // 20 seconds max idle time before file close
 int Mcast_ttl;
 struct sockaddr_storage Metadata_dest_socket;
-
 
 static void closedown(int a);
 static void input_loop(void);
@@ -182,7 +184,7 @@ int main(int argc,char *argv[]){
       Locale = optarg;
       break;
     case 'm':
-      SubstantialFileTime = strtof(optarg,NULL);
+      SubstantialFileTime = fabsf(strtof(optarg,NULL));
       break;
     case 's':
       Subdirs = true;
@@ -199,7 +201,7 @@ int main(int argc,char *argv[]){
       Verbose++;
       break;
     case 'L':
-      FileLengthLimit = strtof(optarg,NULL);
+      FileLengthLimit = fabsf(strtof(optarg,NULL));
       break;
     case 'V':
       VERSION();
@@ -559,6 +561,10 @@ static void input_loop(){
 	} else if(sp->encoding != OPUS) {
 	  fwrite(dp,1,size,sp->fp); // Just write raw bytes
 	}
+	if(FileLengthLimit > 0 && sp->samples_remaining > 0)
+	  sp->samples_remaining -= samp_count;
+	if(sp->samples_remaining <= 0)
+	  close_file(&sp);
       }
       sp->last_active = gps_time_ns();
     } // end of packet processing
@@ -591,15 +597,7 @@ static void cleanup(void){
 int session_file_init(struct session *sp,struct sockaddr const *sender){
   if(sp->fp != NULL)
     return 0;
-  sp->samples_remaining = sp->samprate * FileLengthLimit * sp->channels; // If file is being limited in length
-  // Create file
-  // Should we append to existing files instead? If we try this, watch out for timestamp wraparound
-  struct timespec now;
-  clock_gettime(CLOCK_REALTIME,&now);
-  struct tm const * const tm = gmtime(&now.tv_sec);
-  // yyyy-mm-dd-hh:mm:ss so it will sort properly
 
-  sp->fp = NULL;
   char const *suffix = ".wav";
   switch(sp->encoding){
   case S16BE:
@@ -617,6 +615,60 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     suffix = ".raw";
     break;
   }
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME,&now);
+  struct timespec file_time = now; // Default to actual time when length limit is not set
+
+  sp->starting_offset = 0;
+  if(FileLengthLimit > 0 && sp->encoding != OPUS){ // Not supported on opus yet
+    // Pad start of first file with zeroes
+#if 0
+    struct tm const * const tm_now = gmtime(&now.tv_sec);
+    fprintf(stdout,"time now = %4d-%02d-%02dT%02d:%02d:%02d.%dZ\n",
+	     tm_now->tm_year+1900,
+	     tm_now->tm_mon+1,
+	     tm_now->tm_mday,
+	     tm_now->tm_hour,
+	     tm_now->tm_min,
+	     tm_now->tm_sec,
+	    (int)(now.tv_nsec / 100000000)); // 100 million, i.e., convert to tenths of a sec
+#endif
+    // Do time calculations with a modified epoch to avoid overflow problems
+    int const epoch = 1704067200; // seconds between Jan 1 1970 00:00:00 UTC (unix epoch) and Jan 1 2024 00:00:00
+    intmax_t now_ns = BILLION * (now.tv_sec - epoch) + now.tv_nsec; // ns since Jan 2024
+    intmax_t limit = FileLengthLimit * BILLION;
+    imaxdiv_t r = imaxdiv(now_ns,limit);
+    intmax_t start_ns = r.quot * limit; // ns since epoch
+    intmax_t skip_ns = now_ns - start_ns;
+
+    if(skip_ns > (int64_t)(Tolerance * BILLION) && (int64_t)(limit - skip_ns) > Tolerance * BILLION){
+      // Adjust file time to previous multiple of specified limit size and pad start to first sample
+      imaxdiv_t f = imaxdiv(start_ns,BILLION);
+      file_time.tv_sec = f.quot + epoch; // restore original epoch
+      file_time.tv_nsec = f.rem;
+
+      sp->starting_offset = (sp->samprate * sp->channels * skip_ns) / BILLION;
+      sp->total_file_samples += sp->starting_offset;
+#if 0
+      fprintf(stdout,"padding %lf sec %lld samples\n",
+	      (float)skip_ns / BILLION,
+	      sp->starting_offset);
+#endif
+    }
+    sp->samples_remaining = FileLengthLimit * sp->samprate * sp->channels - sp->starting_offset;
+  }
+  struct tm const * const tm = gmtime(&file_time.tv_sec);
+  // yyyy-mm-dd-hh:mm:ss so it will sort properly
+#if 0
+  fprintf(stdout,"file time = %4d-%02d-%02dT%02d:%02d:%02d.%dZ\n",
+	     tm->tm_year+1900,
+	     tm->tm_mon+1,
+	     tm->tm_mday,
+	     tm->tm_hour,
+	     tm->tm_min,
+	     tm->tm_sec,
+	  (int)(file_time.tv_nsec / 100000000)); // 100 million, i.e., convert to tenths of a sec
+#endif
 
   if(Subdirs){
     // Create directory path
@@ -653,7 +705,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	     tm->tm_hour,
 	     tm->tm_min,
 	     tm->tm_sec,
-	     (int)(now.tv_nsec / 100000000), // 100 million, i.e., convert to tenths of a sec
+	     (int)(file_time.tv_nsec / 100000000), // 100 million, i.e., convert to tenths of a sec
 	     suffix);
   } else {
     // create file in current directory
@@ -665,7 +717,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	     tm->tm_hour,
 	     tm->tm_min,
 	     tm->tm_sec,
-	     (int)(now.tv_nsec / 100000000),
+	     (int)(file_time.tv_nsec / 100000000),
 	     suffix);
   }
   sp->fp = fopen(sp->filename,"w+");
@@ -673,17 +725,18 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
     return -1;
   }
-
   if(Verbose)
-    fprintf(stdout,"creating %s ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s\n",
-	    sp->filename,sp->ssrc,sp->samprate,sp->channels,encoding_string(sp->encoding),sp->chan.tune.freq,sp->chan.preset);
-
+    fprintf(stdout,"creating %s ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s offset %lld\n",
+	    sp->filename,sp->ssrc,sp->samprate,sp->channels,encoding_string(sp->encoding),sp->chan.tune.freq,sp->chan.preset,sp->starting_offset);
   sp->iobuffer = malloc(BUFFERSIZE);
   setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
 
   int const fd = fileno(sp->fp);
   fcntl(fd,F_SETFL,O_NONBLOCK); // Let's see if this keeps us from losing data
 
+  attrprintf(fd,"encoding","%s",encoding_string(sp->encoding));
+  attrprintf(fd,"samprate","%u",sp->samprate);
+  attrprintf(fd,"channels","%d",sp->channels);
   attrprintf(fd,"ssrc","%u",sp->ssrc);
   attrprintf(fd,"frequency","%.3lf",sp->chan.tune.freq);
   attrprintf(fd,"preset","%s",sp->chan.preset);
@@ -697,6 +750,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   if(sp->frontend.description)
     attrprintf(fd,"description","%s",sp->frontend.description);
 
+  if(sp->starting_offset != 0)
+    attrprintf(fd,"starting offset","%lld",sp->starting_offset);
   return 0;
 }
 
@@ -716,6 +771,10 @@ static int close_file(struct session **spp){
             (float)sp->samples_written / (sp->samprate * sp->channels),
             (float)sp->total_file_samples / (sp->samprate * sp->channels));
     }
+    int fd = fileno(sp->fp);
+    attrprintf(fd,"samples written","%lld",sp->samples_written);
+    attrprintf(fd,"total samples","%lld",sp->total_file_samples);
+
     if(sp->encoding == OPUS)
       end_ogg_opus_stream(sp);
     else
@@ -982,6 +1041,9 @@ static int start_wav_stream(struct session *sp){
   memset(header.AuxUknown, 0, 128);
   rewind(sp->fp); // should be at BOF but make sure
   fwrite(&header,sizeof(header),1,sp->fp);
+  int sampsize = sp->encoding == F32LE ? 4 : 2;
+  int64_t offset_bytes = sampsize * sp->starting_offset;
+  fseeko(sp->fp,offset_bytes,SEEK_CUR);
   return 0;
 }
 // Update wav header with now-known size and end auxi information
