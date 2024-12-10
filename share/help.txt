@@ -12,6 +12,7 @@ Up arrow     Increase by 1
 Down arrow   Decrease by 1
 ctl+L        Redraw screen
 A    Set front end (RF) attenuation, dB
+b    Set Opus audio codec bit rate, b/s (0 = auto)
 f    Set frequency (eg: 147m435, 10m0, 760k0, 14313000)
 g    Set gain, dB
 G    Set front end (RF) gain, dB

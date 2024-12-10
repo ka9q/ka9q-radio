@@ -842,7 +842,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   case 'b':
     {
       char str[Entry_width],*ptr;
-      getentry("Opus bitrate, bit/sec: ",str,sizeof(str));
+      getentry("Opus bitrate, bit/sec (0=auto): ",str,sizeof(str));
       int const x = labs(strtol(str,&ptr,0));
       if(ptr != str)
 	encode_int(bpp,OPUS_BIT_RATE,x);
@@ -1469,8 +1469,12 @@ static void display_output(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Encoding","%s",encoding_string(channel->output.encoding));
   pprintw(w,row++,col,"Channels","%d",channel->output.channels);
   pprintw(w,row++,col,"Packets","%'llu",(long long unsigned)channel->output.rtp.packets);
-  if(channel->output.encoding == OPUS)
-    pprintw(w,row++,col,"Opus bitrate","%d",channel->output.opus_bitrate);
+  if(channel->output.encoding == OPUS){
+    if(channel->output.opus_bitrate != 0)
+      pprintw(w,row++,col,"Opus bitrate","%d",channel->output.opus_bitrate);
+    else
+      pprintw(w,row++,col,"Opus bitrate","auto");
+  }
   box(w,0,0);
   mvwaddstr(w,0,1,"RTP output");
   wnoutrefresh(w);
