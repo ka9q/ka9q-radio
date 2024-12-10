@@ -250,7 +250,8 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   usleep(5000);
   double actual = rx888_set_samprate(sdr,sdr->reference,samprate);
   frontend->samprate = samprate;
-  frontend->min_IF = 0;
+  // Somewhat arbitrary. See https://ka7oei.blogspot.com/2024/12/frequency-response-of-rx-888-sdr-at.html
+  frontend->min_IF = 15000;
   frontend->max_IF = Nyquist * samprate; // Just an estimate - get the real number somewhere
 
   // start clock
