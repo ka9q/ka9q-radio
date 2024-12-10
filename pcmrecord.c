@@ -134,6 +134,7 @@ static int64_t Timeout = 20; // 20 seconds max idle time before file close
 static char const *Recordings = ".";
 static bool Subdirs; // Place recordings in subdirectories by SSID
 static char const *Locale;
+static uint32_t Ssrc; // SSRC, when manually specified
 
 const char *App_path;
 static int Input_fd,Status_fd;
@@ -163,10 +164,11 @@ static struct option Options[] = {
   {"verbose", no_argument, NULL, 'v'},
   {"lengthlimit", required_argument, NULL, 'L'},
   {"limit", required_argument, NULL, 'L'},
+  {"ssrc", required_argument, NULL, 'S'},
   {"version", no_argument, NULL, 'V'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = "d:l:m:st:vL:V";
+static char Optstring[] = "d:l:m:sS:t:vL:V";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -185,6 +187,14 @@ int main(int argc,char *argv[]){
       break;
     case 'm':
       SubstantialFileTime = fabsf(strtof(optarg,NULL));
+      break;
+    case 'S':
+      {
+	char *ptr;
+	uint32_t x = strtol(optarg,&ptr,0);
+	if(ptr != optarg)
+	  Ssrc = x;
+      }
       break;
     case 's':
       Subdirs = true;
@@ -384,6 +394,9 @@ static void input_loop(){
       memset(&frontend,0,sizeof(frontend));
       decode_radio_status(&frontend,&chan,buffer+1,length-1);
 
+      if(Ssrc != 0 && chan.output.rtp.ssrc != Ssrc)
+	goto statdone; // Unwanted session, but still clear any data packets
+
       // Look for existing session
       // Everything must match, or we create a different session & file
       struct session *sp;
@@ -399,7 +412,6 @@ static void input_loop(){
 	sp = calloc(1,sizeof(*sp));
 	if(sp == NULL)
 	  goto statdone; // unlikely
-
 
 	sp->prev = NULL;
 	sp->next = Sessions;
@@ -440,6 +452,9 @@ static void input_loop(){
 	continue; // Bogus RTP header
 
       size -= (dp - buffer);
+
+      if(Ssrc != 0 && rtp.ssrc != Ssrc)
+	continue;
 
       // Sessions are defined by the tuple {ssrc, payload type, sending IP address, sending UDP port}
       struct session *sp;
