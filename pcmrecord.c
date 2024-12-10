@@ -561,10 +561,11 @@ static void input_loop(){
 	} else if(sp->encoding != OPUS) {
 	  fwrite(dp,1,size,sp->fp); // Just write raw bytes
 	}
-	if(FileLengthLimit > 0 && sp->samples_remaining > 0)
+	if(FileLengthLimit > 0 && sp->samples_remaining > 0){
 	  sp->samples_remaining -= samp_count;
-	if(sp->samples_remaining <= 0)
-	  close_file(&sp);
+	  if(sp->samples_remaining <= 0)
+	    close_file(&sp);
+	}
       }
       sp->last_active = gps_time_ns();
     } // end of packet processing
@@ -620,6 +621,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   struct timespec file_time = now; // Default to actual time when length limit is not set
 
   sp->starting_offset = 0;
+  sp->samples_remaining = 0;
   if(FileLengthLimit > 0 && sp->encoding != OPUS){ // Not supported on opus yet
     // Pad start of first file with zeroes
 #if 0
