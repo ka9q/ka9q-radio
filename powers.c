@@ -214,20 +214,20 @@ int main(int argc,char *argv[]){
     // Frequencies below center
     printf("\n");
     for(int i=first_neg_bin ; i < npower; i++){
-      printf("%d %f %.1f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      printf("%d %f %.2f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
       base += r_bin_bw;
     }
     // Frequencies above center
     for(int i=0; i < first_neg_bin; i++){
-      printf("%d %f %.1f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      printf("%d %f %.2f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
       base += r_bin_bw;
     }
 #else
     for(int i= first_neg_bin; i < npower; i++)
-      printf(", %.1f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      printf(", %.2f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
     // Frequencies above center
     for(int i=0; i < first_neg_bin; i++)
-      printf(", %.1f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      printf(", %.2f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
 #endif
     printf("\n");
     if(--count == 0)
