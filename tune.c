@@ -253,7 +253,7 @@ int main(int argc,char *argv[]){
       if(RFgain != INFINITY)
 	encode_float(&bp,RF_GAIN,RFgain);
       if(RFatten != INFINITY)
-	encode_float(&bp,RF_GAIN,RFatten);
+	encode_float(&bp,RF_ATTEN,RFatten);
 
       encode_eol(&bp);
       int cmd_len = bp - cmd_buffer;
