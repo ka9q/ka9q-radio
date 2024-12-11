@@ -742,9 +742,11 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
     return -1;
   }
+  // We byte swap S16BE to S16LE, so change the tag
+  char const *file_encoding = encoding_string(sp->encoding == S16BE ? S16LE : sp->encoding);
   if(Verbose)
     fprintf(stdout,"creating %s ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s offset %lld\n",
-	    sp->filename,sp->ssrc,sp->samprate,sp->channels,encoding_string(sp->encoding),sp->chan.tune.freq,
+	    sp->filename,sp->ssrc,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
 	    sp->chan.preset,(long long)sp->starting_offset);
   sp->iobuffer = malloc(BUFFERSIZE);
   setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
@@ -752,7 +754,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   int const fd = fileno(sp->fp);
   fcntl(fd,F_SETFL,O_NONBLOCK); // Let's see if this keeps us from losing data
 
-  attrprintf(fd,"encoding","%s",encoding_string(sp->encoding));
+  attrprintf(fd,"encoding","%s",file_encoding);
   attrprintf(fd,"samprate","%u",sp->samprate);
   attrprintf(fd,"channels","%d",sp->channels);
   attrprintf(fd,"ssrc","%u",sp->ssrc);
@@ -770,6 +772,9 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 
   if(sp->starting_offset != 0)
     attrprintf(fd,"starting offset","%lld",sp->starting_offset);
+
+  if(sp->chan.demod_type == LINEAR_DEMOD && !sp->chan.linear.agc)
+    attrprintf(fd,"gain","%.3f",voltage2dB(sp->chan.output.gain));
   return 0;
 }
 
