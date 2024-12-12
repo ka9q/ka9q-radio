@@ -274,7 +274,10 @@ static void closedown(int a){
   exit(EX_OK);  // Will call cleanup()
 }
 
-static uint8_t OggSilence[3] = {0xf8,0xff,0xfe};
+// This comes from a conversation with ChatGPT that was somewhat contradictory about the silence frame
+//static uint8_t OggSilence[3] = {0xf8,0xff,0xfe}; // Silence
+//static uint8_t OggSilence[3] = {0xff}; // Comfort noise
+static uint8_t OggSilence[3] = {0xf8}; // Lost packet, packet loss concealment
 
 
 // if !flush, send whatever's on the queue, up to the first missing segment
