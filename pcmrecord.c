@@ -48,6 +48,16 @@ struct wav {
   int16_t BlockAlign;
   int16_t BitsPerSample;
 
+  // adding additional chunk fields to the wav file header to support 32 bit FP
+  // see https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
+  int16_t ExtensionChunkSize;
+  int16_t ValidBitsPerSample;
+  int32_t ChannelMask;
+  char Subformat[16];
+  char FactID[4];
+  uint32_t FactSize;
+  uint32_t SamplesLength;
+
    // 'auxi' chunk to pass center frequency to SDR Console
    // http://www.moetronix.com/files/spectravue.pdf had some details on this chunk
    // and https://sdrplay.com/resources/IQ/ft4.zip
@@ -1014,7 +1024,7 @@ static int start_wav_stream(struct session *sp){
   header.ChunkSize = 0xffffffff; // Temporary
   memcpy(header.Format,"WAVE",4);
   memcpy(header.Subchunk1ID,"fmt ",4);
-  header.Subchunk1Size = 16; // ??????
+  header.Subchunk1Size = 40; // ??????
   switch(sp->encoding){
   default:
     return -1;
@@ -1041,9 +1051,14 @@ static int start_wav_stream(struct session *sp){
 
   header.NumChannels = sp->channels;
   header.SampleRate = sp->samprate;
-
+  header.ExtensionChunkSize = 22;
   memcpy(header.SubChunk2ID,"data",4);
   header.Subchunk2Size = 0xffffffff; // Temporary
+
+  //  appears to be needed for FP
+  memcpy(header.FactID,"fact",4);
+  header.FactSize = 4;
+  header.SamplesLength = 0xffffffff;
 
   // fill in the auxi chunk (start time, center frequency)
   struct timespec now;
@@ -1085,6 +1100,9 @@ static int end_wav_stream(struct session *sp){
   }
   header.ChunkSize = statbuf.st_size - 8;
   header.Subchunk2Size = statbuf.st_size - sizeof(header);
+
+  // write number of samples (or is it frames?) into the fact chunk
+  header.SamplesLength = sp->samples_written / sp->channels;
 
   // write end time into the auxi chunk
   struct timespec now;
