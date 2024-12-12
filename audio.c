@@ -46,6 +46,8 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   }
   int max_frames_per_pkt = 0;
   switch(chan->output.encoding){
+  default:
+    return 0; // Don't send anything
   case S16BE:
   case S16LE:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(int16_t) * chan->output.channels);
@@ -61,11 +63,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   case OPUS:
     max_frames_per_pkt = INT_MAX; // No limit since they get compressed to a buffer limit
     break;
-  default:
-    return 0; // Don't send anything
-    break;
   }
-
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
   rtp.version = RTP_VERS;
@@ -78,6 +76,57 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   useconds_t pacing = 0;
   if(chan->output.pacing)
     pacing = 1000 * Blocktime * max_frames_per_pkt / frames; // for optional pacing, in microseconds
+
+  if(chan->output.encoding == OPUS){
+    if(chan->output.opus != NULL){
+      // Encoder already created; see if the parameters have changed
+      // There doesn't seem to be any way to read back the channel count, so we save that explicitly
+      // If the sample rate changes we'll get restarted anyway, so this test isn't really needed. But do it anyway.
+      int s;
+      opus_encoder_ctl(chan->output.opus,OPUS_GET_SAMPLE_RATE(&s));
+      if(s != chan->output.samprate || chan->output.opus_channels != chan->output.channels){
+	opus_encoder_destroy(chan->output.opus);
+	chan->output.opus = NULL;
+	chan->output.opus_channels = 0;
+      } else if(rtp.marker)
+	// Reset existing encoder after silence period
+	opus_encoder_ctl(chan->output.opus,OPUS_RESET_STATE);
+    }
+    int error = OPUS_OK;
+    if(chan->output.opus == NULL){
+      // Opus only supports a specific set of sample rates
+      if(chan->output.samprate != 48000 && chan->output.samprate != 24000
+	 && chan->output.samprate != 16000 && chan->output.samprate != 12000
+	 && chan->output.samprate != 8000){
+	chan->output.silent = true;
+	return 0; // Simply drop until somebody fixes it
+      }
+      chan->output.opus = opus_encoder_create(chan->output.samprate,chan->output.channels,Application,&error);
+      assert(error == OPUS_OK && chan->output.opus != NULL);
+      chan->output.opus_channels = chan->output.channels; // In case it changes
+      // A communications receiver is unlikely to have more than 96 dB of output range
+      // In fact this could be made smaller as an experiment
+      error = opus_encoder_ctl(chan->output.opus,OPUS_SET_LSB_DEPTH(16));
+      assert(error == OPUS_OK);
+    }
+    // These can be changed at any time
+    // though options have to be created to actually change them
+    error = opus_encoder_ctl(chan->output.opus,OPUS_SET_DTX(Discontinuous));
+    assert(error == OPUS_OK);
+
+    if(chan->output.opus_bitrate == 0)
+      error = opus_encoder_ctl(chan->output.opus,OPUS_SET_BITRATE(OPUS_AUTO));
+    else
+      error = opus_encoder_ctl(chan->output.opus,OPUS_SET_BITRATE(chan->output.opus_bitrate));
+    assert(error == OPUS_OK);
+
+    if(Fec_enable){ // Create an option to set this, but understand it first
+      error = opus_encoder_ctl(chan->output.opus,OPUS_SET_INBAND_FEC(1));
+      assert(error == OPUS_OK);
+      error = opus_encoder_ctl(chan->output.opus,OPUS_SET_PACKET_LOSS_PERC(Fec_enable));
+      assert(error == OPUS_OK);
+    }
+  }
 
   while(frames > 0){
     int chunk = min(max_frames_per_pkt,frames);
@@ -127,53 +176,6 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
       break;
 #endif
     case OPUS:
-      if(chan->output.opus != NULL){
-	// Encoder already created; see if the parameters have changed
-	// There doesn't seem to be any way to read back the channel count, so we save that explicitly
-	// If the sample rate changes we'll get restarted anyway, so this test isn't really needed. But do it anyway.
-	int s;
-	opus_encoder_ctl(chan->output.opus,OPUS_GET_SAMPLE_RATE(&s));
-	if(s != chan->output.samprate || chan->output.opus_channels != chan->output.channels){
-	  opus_encoder_destroy(chan->output.opus);
-	  chan->output.opus = NULL;
-	  chan->output.opus_channels = 0;
-	}
-      }
-      int error;
-      if(chan->output.opus == NULL){
-	error = OPUS_OK;
-
-	// Opus only supports a specific set of sample rates
-	if(chan->output.samprate != 48000 && chan->output.samprate != 24000 && chan->output.samprate != 16000 && chan->output.samprate != 12000
-	   && chan->output.samprate != 8000){
-	  chan->output.silent = true;
-	  break; // Simply drop until somebody fixes it
-	}
-	chan->output.opus = opus_encoder_create(chan->output.samprate,chan->output.channels,Application,&error);
-	assert(error == OPUS_OK && chan->output.opus);
-	chan->output.opus_channels = chan->output.channels; // In case it changes
-      }
-      // These can be changed at any time
-      // A communications receiver is unlikely to have more than 96 dB of output range
-      // In fact this could be made smaller as an experiment
-      error = opus_encoder_ctl(chan->output.opus,OPUS_SET_LSB_DEPTH(16));
-      assert(error == OPUS_OK);
-
-      error = opus_encoder_ctl(chan->output.opus,OPUS_SET_DTX(Discontinuous)); // Create an option to set this
-      assert(error == OPUS_OK);
-
-      if(chan->output.opus_bitrate == 0)
-	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_BITRATE(OPUS_AUTO));
-      else
-	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_BITRATE(chan->output.opus_bitrate));
-      assert(error == OPUS_OK);
-
-      if(Fec_enable){ // Create an option to set this, but understand it first
-	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_INBAND_FEC(1));
-	assert(error == OPUS_OK);
-	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_PACKET_LOSS_PERC(Fec_enable));
-	assert(error == OPUS_OK);
-      }
       bytes = opus_encode_float(chan->output.opus,buffer,chunk,dp,sizeof(packet) - (dp-packet)); // Max # bytes in compressed output buffer
       assert(bytes >= 0);
       if(Discontinuous && bytes < 3){
