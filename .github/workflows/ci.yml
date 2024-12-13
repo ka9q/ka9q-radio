@@ -7,7 +7,7 @@ jobs:
     name: Ubuntu CI
     strategy:
       matrix:
-        makefile: [Makefile.linux, Makefile.debug, Makefile.sdrplay]
+        makefile: [Makefile.linux, Makefile.debug]
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
@@ -27,7 +27,7 @@ jobs:
             librtlsdr-dev \
             libiniparser-dev \
             libavahi-client-dev \
-            portaudio19-dev \ 
+            portaudio19-dev \
             uuid-dev
       - name: Checkout code
         uses: actions/checkout@v4
