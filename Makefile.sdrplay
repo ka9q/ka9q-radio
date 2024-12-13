@@ -24,9 +24,11 @@ EXECS=control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcms
 
 LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate
 
-CFILES = aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c filter.c fm.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c pl.c powers.c radio.c radio_status.c rdsd.c rtcp.c sdrplay.c setfilt.c show-pkt.c show-sig.c sig_gen.c spectrum.c status.c stereod.c tune.c wd-record.c wfm.c
+BLACKLIST=airspy-blacklist.conf
 
-HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h filter.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h status.h
+CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c filter.c fm.c funcube.c hid-libusb.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c pl.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rx888.c sdrplay.c setfilt.c show-pkt.c show-sig.c sig_gen.c spectrum.c status.c stereod.c tune.c wd-record.c wfm.c
+
+HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h status.h
 
 all: $(DAEMONS) $(EXECS)
 
@@ -120,7 +122,7 @@ pcmspawn: pcmspawn.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pcmrecord: pcmrecord.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg -lbsd -lm -lpthread
 
 pcmsend: pcmsend.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lm -lpthread
@@ -131,8 +133,8 @@ powers: powers.o libradio.a
 pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
-radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o sdrplay.o sig_gen.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lsdrplay_api -lopus -lportaudio -lbsd -lm -lpthread
+radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sdrplay.o sig_gen.o ezusb.o libfcd.a libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lsdrplay_api -lopus -lportaudio -lusb-1.0 -lbsd -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
@@ -146,6 +148,11 @@ jt-decoded: jt-decoded.o libradio.a
 wd-record: wd-record.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
+
+# Binary libraries
+libfcd.a: fcd.o hid-libusb.o
+	ar rv $@ $?
+	ranlib $@
 
 # subroutines useful in more than one program
 libradio.a: morse.o dump.o modes.o ax25.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o osc.o config.o

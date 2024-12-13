@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <sdrplay_api.h>
 #include <errno.h>
+#include <unistd.h>
 #include <iniparser/iniparser.h>
 #if defined(linux)
 #include <bsd/string.h>
@@ -25,6 +26,8 @@ extern int Status_ttl;
 extern int Overlap;
 extern const char *App_path;
 extern int Verbose;
+
+static float Power_smooth = 0.05; // Calculate this properly someday
 
 // SDRplay device status
 enum sdrplay_status {
