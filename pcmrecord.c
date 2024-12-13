@@ -1079,12 +1079,13 @@ static int end_wav_stream(struct session *sp){
 
   rewind(sp->fp);
   struct wav header;
-  fread(&header,sizeof(header),1,sp->fp);
+  if(fread(&header,sizeof(header),1,sp->fp) != 1)
+    return -1;
 
   struct stat statbuf;
   if(fstat(fileno(sp->fp),&statbuf) != 0){
     printf("fstat(%d) [%s] failed! %s\n",fileno(sp->fp),sp->filename,strerror(errno));
-    abort();
+    return -1;
   }
   header.ChunkSize = statbuf.st_size - 8;
   header.Subchunk2Size = statbuf.st_size - sizeof(header);
@@ -1103,6 +1104,7 @@ static int end_wav_stream(struct session *sp){
   header.StopMillis=(int16_t)(now.tv_nsec / 1000000);
 
   rewind(sp->fp);
-  fwrite(&header,sizeof(header),1,sp->fp);
+  if(fwrite(&header,sizeof(header),1,sp->fp) != 1)
+    return -1;
   return 0;
 }
