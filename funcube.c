@@ -10,6 +10,7 @@
 #include <bsd/string.h>
 #endif
 #include <sysexits.h>
+#include <strings.h>
 
 #include "conf.h"
 #include "fcd.h"
@@ -33,6 +34,7 @@ struct sdrstate {
 
   uint8_t bias_tee;
   bool agc;             // enable/disable agc
+  float scale;          // Scale samples for #bits and front end gain
 
   // portaudio parameters
   PaStream *Pa_Stream;       // Portaudio handle
@@ -49,6 +51,8 @@ static float const AGC_lower = -50;
 static int const ADC_samprate = 192000;
 static float const DC_alpha = 1.0e-6;  // high pass filter coefficient for DC offset estimates, per sample
 static float const Power_alpha = 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
+
+static float Power_smooth = 0.05; // Calculate this properly someday
 
 // Empirical: noticeable aliasing beyond this noticed on strong 40m SSB signals
 static float const LowerEdge = -75000;
@@ -244,7 +248,6 @@ void *proc_funcube(void *arg){
 	frontend->samp_since_over++;
 
       complex float samp = CMPLXF(sampbuf[2*i],sampbuf[2*i+1]);
-
       samp_sum += samp; // Accumulate average DC values
       samp -= sdr->DC;   // remove smoothed DC offset (which can be fractional)
 
@@ -263,9 +266,8 @@ void *proc_funcube(void *arg){
       // Correct phase
       __imag__ samp = secphi * cimagf(samp) - tanphi * crealf(samp);
 
-      wptr[i] = samp;
+      wptr[i] = samp * sdr->scale;
     }
-
     write_cfilter(&frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
     frontend->samples += Blocksize;
     float const block_energy = i_energy + q_energy; // Normalize for complex pairs
@@ -360,7 +362,7 @@ static void do_fcd_agc(struct sdrstate *sdr){
     }
   }
   frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
-
+  sdr->scale = scale_AD(frontend);
 }
 
 // The funcube device uses the Mirics MSi001 tuner. It has a fractional N synthesizer that can't actually do integer frequency steps.

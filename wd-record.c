@@ -180,7 +180,7 @@ int main(int argc,char *argv[]){
   {
     char iface[1024];
     struct sockaddr sock;
-    resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof(iface));
+    resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
     Input_fd = listen_mcast(&sock,iface);
   }
 

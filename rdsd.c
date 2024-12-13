@@ -143,7 +143,7 @@ int main(int argc,char * const argv[]){
 
   if(Input){
     char iface[1024];
-    resolve_mcast(Input,&PCM_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface));
+    resolve_mcast(Input,&PCM_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
     Input_fd = listen_mcast(&PCM_dest_address,iface);
     if(Input_fd == -1)
       fprintf(stderr,"Can't set up input on %s: %sn",optarg,strerror(errno));
@@ -151,7 +151,7 @@ int main(int argc,char * const argv[]){
   }
   if(Status){
     char iface[1024];
-    resolve_mcast(Status,&Status_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface));
+    resolve_mcast(Status,&Status_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     Status_fd = listen_mcast(&Status_dest_address,iface);
     if(Status_fd == -1){
       fprintf(stderr,"Can't set up input on %s: %s\n",optarg,strerror(errno));
@@ -176,7 +176,7 @@ int main(int argc,char * const argv[]){
     uint32_t addr = make_maddr(output);
     avahi_start(service_name,"_rtp._udp",DEFAULT_RTP_PORT,output,addr,description,NULL,NULL);
 
-    resolve_mcast(output,&Stereo_dest_address,DEFAULT_RTP_PORT,NULL,0);
+    resolve_mcast(output,&Stereo_dest_address,DEFAULT_RTP_PORT,NULL,0,0);
     Output_fd = connect_mcast(&Stereo_dest_address,NULL,Mcast_ttl,IP_tos);
     if(Output_fd == -1)
       fprintf(stderr,"Can't set up output on %s: %s\n",output,strerror(errno));

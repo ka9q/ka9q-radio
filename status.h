@@ -25,8 +25,8 @@ enum status_type {
 
   DESCRIPTION,   // Free form text describing source
   STATUS_DEST_SOCKET,
-  UNUSED1,
-  UNUSED2,
+  SETOPTS,
+  CLEAROPTS,
   UNUSED3,
   UNUSED4,
   INPUT_SAMPRATE, // Nominal sample rate (integer)
@@ -109,7 +109,7 @@ enum status_type {
   OUTPUT_LEVEL,     // All modes
   OUTPUT_SAMPLES,
 
-  UNUSED11,
+  OPUS_BIT_RATE,
   UNUSED12,
   UNUSED13,
   UNUSED14,
@@ -143,7 +143,7 @@ enum status_type {
 
   RF_ATTEN,       // Front end attenuation (introduced with rx888)
   RF_GAIN,        // Front end gain (introduced with rx888)
-  UNUSED10,
+  RF_AGC,         // Front end AGC on/off
   FE_LOW_EDGE,    // edges of front end filter
   FE_HIGH_EDGE,
   FE_ISREAL,        // Boolean, true -> front end uses real sampling, false -> front end uses complex
@@ -153,7 +153,8 @@ enum status_type {
   STATUS_INTERVAL,      // Automatically send channel status over *data* channel every STATUS_RATE frames
   OUTPUT_ENCODING,    // Output data encoding (see enum encoding in multicast.h)
   SAMPLES_SINCE_OVER, // Samples since last A/D overrange
-  PLL_WRAPS,          // Count of complete linear mode PLL rotations 
+  PLL_WRAPS,          // Count of complete linear mode PLL rotations
+  RF_LEVEL_CAL,        // Adjustment relating dBm to dBFS
 };
 
 int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);

@@ -63,8 +63,10 @@ struct frontend {
   uint8_t mixer_gain;
   uint8_t if_gain;
 
-  float rf_atten;         // dB (RX888 only)
-  float rf_gain;          // dB gain (RX888) or lna_gain + mixer_gain + if_gain
+  float rf_atten;         // dB (RX888 only, pretty useless)
+  float rf_gain;          // dB gain (RX888) or lna_gain + mixer_gain + if_gain for R820/828 tuners
+  bool rf_agc;            // Front end AGC of some sort is active
+  float rf_level_cal;      // adjust to make 0 dBm give 0 dBFS: when zero, 0dBm gives "rf_gain_cal" dBFS
   bool direct_conversion; // Try to avoid DC spike if set
   bool isreal;            // Use real->complex FFT (otherwise complex->complex)
   int bitspersample;      // 1, 8, 12 or 16
@@ -100,6 +102,8 @@ struct frontend {
   int (*setup)(struct frontend *,dictionary *,char const *); // Get front end ready to go
   int (*start)(struct frontend *);          // Start front end sampling
   double (*tune)(struct frontend *,double); // Tune front end, return actual frequency
+  float (*gain)(struct frontend *,float);
+  float (*atten)(struct frontend *,float);
   struct filter_in in; // Input half of fast convolver, shared with all channels
 };
 
@@ -178,7 +182,6 @@ struct channel {
   struct {                   // Used only in FM demodulator
     float pdeviation;        // Peak frequency deviation Hz (FM)
     float tone_freq;         // PL tone squelch frequency
-    struct goertzel tone_detect; // PL tone detector state
     float tone_deviation;    // Measured deviation of tone
     bool threshold;          // Threshold extension
     float squelch_open;      // squelch open threshold, power ratio
@@ -221,6 +224,7 @@ struct channel {
     uint64_t samples;
     bool pacing;     // Pace output packets
     enum encoding encoding;
+    enum encoding previous_encoding;
     OpusEncoder *opus;
     int opus_channels;
     int opus_bitrate;
@@ -251,10 +255,11 @@ struct channel {
   } sap;
 
   pthread_t demod_thread;
+  uint64_t options;
   float tp1,tp2; // Spare test points that can be read on the status channel
 };
 
-extern float Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
+
 extern struct channel *Channel_list;
 extern struct channel Template;
 extern int Channel_list_length;
@@ -283,8 +288,7 @@ int downconvert(struct channel *chan);
 
 // extract front end scaling factors (depends on width of A/D sample)
 float scale_voltage_out2FS(struct frontend *frontend);
-float scale_power_out2FS(struct frontend *frontend);
-float scale_ADvoltage2FS(struct frontend const *frontend);
+float scale_AD(struct frontend const *frontend);
 float scale_ADpower2FS(struct frontend const *frontend);
 
 // Helper threads

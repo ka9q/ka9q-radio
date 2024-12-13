@@ -30,6 +30,7 @@
 #include <sched.h>
 #include <sysexits.h>
 #include <fcntl.h>
+#include <strings.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -46,7 +47,7 @@ static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
 static int const DEFAULT_MCAST_TTL = 0; // Don't blast LANs with cheap Wifi!
 static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
-static int const DEFAULT_UPDATE = 50; // 1 Hz for 20 ms blocktime (50 Hz frame rate)
+static int const DEFAULT_UPDATE = 25; // 2 Hz for 20 ms blocktime (50 Hz frame rate)
 static int const DEFAULT_LIFETIME = 20; // 20 sec for idle sessions tuned to 0 Hz
 
 char const *Iface;
@@ -100,6 +101,8 @@ double sdrplay_tune(struct frontend *,double);
 int rx888_setup(struct frontend *,dictionary *,char const *);
 int rx888_startup(struct frontend *);
 double rx888_tune(struct frontend *,double);
+float rx888_gain(struct frontend *, float);
+float rx888_atten(struct frontend *,float);
 
 // In airspy.c
 int airspy_setup(struct frontend *,dictionary *,char const *);
@@ -315,6 +318,7 @@ static int loadconfig(char const * const file){
     int slen = sizeof(Template.output.dest_socket);
     uint32_t addr = make_maddr(Data);
     avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data,addr,ttlmsg,&Template.output.dest_socket,&slen);
+    avahi_start(Name,"_opus._udp",DEFAULT_RTP_PORT,Data,addr,ttlmsg,&Template.output.dest_socket,&slen);
 #if 0
     avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Data,addr,ttlmsg,&Template.status.dest_socket,&slen); // same length
 #else
@@ -456,7 +460,13 @@ static int loadconfig(char const * const file){
 
       int slen = sizeof(data_dest_socket);
       uint32_t addr = make_maddr(data);
-      avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_socket,&slen);
+
+      // Start only one depending on chan->output.encoding
+      char const *cp = config_getstring(Configtable,sname,"encoding",NULL);
+      if(cp != NULL && strcasecmp(cp,"opus") == 0)
+	avahi_start(sname,"_opus._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_socket,&slen);
+      else
+	avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_socket,&slen);
 #if 0
       avahi_start(sname,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,data,addr,ttlmsg,&metadata_dest_socket,&slen); // sockets are same size
 #else
@@ -552,7 +562,7 @@ static int loadconfig(char const * const file){
 	if(SAP_enable){
 	  // Highly experimental, off by default
 	  char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
-	  resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0);
+	  resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
 	  join_group(Output_fd,(struct sockaddr *)&chan->sap.dest_socket,iface,Mcast_ttl,ip_tos);
 	  pthread_create(&chan->sap.thread,NULL,sap_send,chan);
 	}
@@ -605,7 +615,9 @@ static int setup_hardware(char const *sname){
   if(strcasecmp(device,"rx888") == 0){
     Frontend.setup = rx888_setup;
     Frontend.start = rx888_startup;
-    Frontend.tune = NULL; // Only direct sampling for now
+    Frontend.tune = rx888_tune;
+    Frontend.gain = rx888_gain;
+    Frontend.atten = rx888_atten;
   } else if(strcasecmp(device,"airspy") == 0){
     Frontend.setup = airspy_setup;
     Frontend.start = airspy_startup;

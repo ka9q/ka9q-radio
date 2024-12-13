@@ -97,6 +97,7 @@ struct session {
   struct rtp_state rtp_state; // Incoming RTP session state
   uint32_t ssrc;            // RTP Sending Source ID
   int type;                 // RTP type (10,11,20,111,etc)
+  struct pt_table pt_table[128];     // convert a payload type to samplerate, channels, encoding type
 
   uint32_t last_timestamp;  // Last timestamp seen
   unsigned int wptr;        // current write index into output PCM buffer, *frames*
@@ -173,7 +174,7 @@ static inline int modsub(unsigned int const a, unsigned int const b, int const m
   return diff;
 }
 static inline struct session *sptr(int index){
-  if(index >= 0 && index < Nsessions)
+  if(index >= 0 && index < Nsessions && !Sessions[index]->terminate)
     return Sessions[index];
   return NULL;
 }

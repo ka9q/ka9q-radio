@@ -1,5 +1,5 @@
 // Various simple IIR filters
-// Copyright 2022-2023, Phil Karn, KA9Q
+// Copyright 2022-2024, Phil Karn, KA9Q
 
 #include "iir.h"
 #include <string.h>
@@ -51,7 +51,8 @@ complex float output_goertzel(struct goertzel *gp){
 
 // Set notch frequency
 // Note: does not clear filter state
-void setIIRnotch(struct iir * const iir,float rel_freq){
+// https://eeweb.engineering.nyu.edu/iselesni/EL6113/matlab_examples/notch_filter_demo/html/notch_filter_demo.html
+void setIIRnotch(struct iir * const iir,double rel_freq){
   if(iir == NULL)
     return;
 
@@ -63,32 +64,58 @@ void setIIRnotch(struct iir * const iir,float rel_freq){
 
   // .997 gives a 3 dB bandwidth of +/-11.5 Hz @ 100 Hz and seems to be
   // a good compromise
-  float const r = 0.997;
-	
-  iir->a[0] = 1;
-  iir->a[1] = -2 * cos(2*M_PI*rel_freq); // Complex zeroes on unit circle
-  iir->a[2] = 1;
-  
+  double const r = 0.997;
+  iir->order = 2;
+
   iir->b[0] = 1;
-  iir->b[1] = iir->a[1] * r; // Complex poles just inside unit circle, same angles as zeroes
-  iir->b[2] = r*r;
+  iir->b[1] = -2 * cos(2*M_PI*rel_freq); // Complex zeroes on unit circle
+  iir->b[2] = 1;
+
+  iir->a[0] = 1;             // not actually used
+  iir->a[1] = iir->b[1] * r; // Complex poles just inside unit circle, same angles as zeroes
+  iir->a[2] = r*r;
+}
+// Simple 4-stage lowpass
+// Stevens, The Scientist and Engineer's Guide to Digital Signal Processing, p 326
+// Note a[] and b[] are swapped in that reference. Signs on a[] are also flipped
+void setIIRlp(struct iir * const iir,double f){
+  double x = exp(-14.445 * f);
+
+  iir->order = 4;
+  iir->b[0] = pow(1-x,4.);
+  iir->a[1] = -4 * x;
+  iir->a[2] = 6 * x * x;
+  iir->a[3] = -4 * x * x * x;
+  iir->a[4] = pow(x,4.);
 }
 
-// https://eeweb.engineering.nyu.edu/iselesni/EL6113/matlab_examples/notch_filter_demo/html/notch_filter_demo.html
-float applyIIRnotch(struct iir * const iir,float v){
-  memmove(&iir->w[1],&iir->w[0],FILT_ORDER*sizeof(iir->w[0]));
-  // Update w coefficients
+// Simple DC block
+//https://user.eng.umd.edu/~tretter/commlab/c6713slides/ch5.pdf
+// untested
+void setIIRdc(struct iir * const iir){
+  double c = .999;
+  iir->b[0] = (1 + c)/2;
+  iir->b[1] = -1 * (1+c)/2;
+  iir->a[0] = 1;
+  iir->a[1] = -c;
+}
+
+
+
+// IIR, direct form II
+// https://schaumont.dyn.wpi.edu/ece4703b21/lecture3.html
+// Use double precision to minimize instability, we can afford it
+double applyIIR(struct iir * const iir,double input){
+  memmove(&iir->w[1],&iir->w[0],iir->order*sizeof(iir->w[0]));
   // Feedback part (poles)
-  float w0 = v;
-  for(int m=1;m <= FILT_ORDER; m++)
-    w0 -= iir->b[m] * iir->w[m];
-  iir->w[0] = w0;
+  iir->w[0] = input;
+  for(int m=1;m <= iir->order; m++)
+    iir->w[0] -= iir->a[m] * iir->w[m];
 
   // Feedforward part (zeroes)
-  float y = 0;
-  for(int m = 0; m <= FILT_ORDER; m++)
-    y += iir->a[m] * iir->w[m];
+  double output = 0;
+  for(int m = 0; m <= iir->order; m++)
+    output += iir->b[m] * iir->w[m];
 
-  return y;
+  return output;
 }
-

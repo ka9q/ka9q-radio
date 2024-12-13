@@ -9,7 +9,6 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
-#include <locale.h>
 #include <assert.h>
 #include <getopt.h>
 #include <sysexits.h>
@@ -27,7 +26,6 @@ const char *App_path;
 const char *Target;
 int Verbose;
 uint32_t Ssrc;
-char Locale[256] = "en_US.UTF-8";
 char Iface[1024]; // Multicast interface to talk to front end
 int Status_fd,Ctl_fd;
 int64_t Timeout = BILLION; // Retransmission timeout
@@ -102,20 +100,11 @@ int main(int argc,char *argv[]){
       }
     }
   }
-  {
-    // The display thread assumes en_US.UTF-8, or anything with a thousands grouping character
-    // Otherwise the cursor movements will be wrong
-    char const * const cp = getenv("LANG");
-    if(cp != NULL){
-      strlcpy(Locale,cp,sizeof(Locale));
-    }
-  }
-  setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
   if(argc <= optind)
     help();
 
   Target = argv[optind];
-  resolve_mcast(Target,&Metadata_dest_socket,DEFAULT_STAT_PORT,Iface,sizeof(Iface));
+  resolve_mcast(Target,&Metadata_dest_socket,DEFAULT_STAT_PORT,Iface,sizeof(Iface),0);
   if(Verbose)
     fprintf(stderr,"Resolved %s -> %s\n",Target,formatsock(&Metadata_dest_socket));
 
@@ -211,34 +200,34 @@ int main(int argc,char *argv[]){
 
     // **************Process here ***************
     char gps[1024];
-    printf("%s,",format_gpstime(gps,sizeof(gps),time));
+    printf("%s,",format_gpstime_iso8601(gps,sizeof(gps),time));
 
     // Frequencies below center; note integer round-up, e.g, 65 -> 33; 64 -> 32
     // npower odd: emit N/2+1....N-1 0....N/2 (division truncating to integer)
     // npower even: emit N/2....N-1 0....N/2-1
     int const first_neg_bin = (npower + 1)/2; // round up, e.g., 64->32, 65 -> 33, 66 -> 33
     float base = r_freq - r_bin_bw * (npower/2); // integer truncation (round down), e.g., 64-> 32, 65 -> 32
-    printf(" %.0f, %.0f, %.0f, %d,",
+    printf(" %.0f, %.0f, %.0f, %d",
 	   base, base + r_bin_bw * (npower-1), r_bin_bw, npower);
 
 #if TESTING
     // Frequencies below center
     printf("\n");
     for(int i=first_neg_bin ; i < npower; i++){
-      printf("%d %f %.1f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      printf("%d %f %.2f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
       base += r_bin_bw;
     }
     // Frequencies above center
     for(int i=0; i < first_neg_bin; i++){
-      printf("%d %f %.1f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      printf("%d %f %.2f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
       base += r_bin_bw;
     }
 #else
     for(int i= first_neg_bin; i < npower; i++)
-      printf(" %.1f,",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      printf(", %.2f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
     // Frequencies above center
     for(int i=0; i < first_neg_bin; i++)
-      printf(" %.1f,",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      printf(", %.2f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
 #endif
     printf("\n");
     if(--count == 0)

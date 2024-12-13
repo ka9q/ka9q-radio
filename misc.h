@@ -41,6 +41,8 @@
 #define GPS_UTC_OFFSET (18) // GPS ahead of utc by 18 seconds - make this a table!
 #define UNIX_EPOCH ((time_t)315964800) // GPS epoch on unix time scale
 
+#define BOLTZMANN (1.380649e-23) // Boltzmann's constant, J/K
+
 static float const SCALE16 = 1./INT16_MAX;
 static float const SCALE12 = 1/2048.;
 static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
@@ -90,6 +92,15 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 
 #endif // ifdef __APPLE__
 
+// Portable mutex initializer for recursive mutexes
+static inline int init_recursive_mutex(pthread_mutex_t *m){
+  pthread_mutexattr_t attr;
+  pthread_mutexattr_init(&attr);
+  pthread_mutexattr_settype(&attr,PTHREAD_MUTEX_RECURSIVE);
+  return pthread_mutex_init(m,&attr);
+}
+
+
 // Stolen from the Linux kernel -- enforce type matching of arguments
 #define min(x,y) ({			\
 		typeof(x) _x = (x);	\
@@ -121,7 +132,9 @@ extern char const *Months[12];
 
 int dist_path(char *path,int path_len,const char *fname);
 char *format_gpstime(char *result,int len,int64_t t);
+char *format_gpstime_iso8601(char *result,int len,int64_t t);
 char *format_utctime(char *result,int len,int64_t t);
+char *format_utctime_iso8601(char *result,int len,int64_t t);
 char *ftime(char *result,int size,int64_t t);
 void normalize_time(struct timespec *x);
 double parse_frequency(char const *,bool);

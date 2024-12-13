@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #endif
 #include <sysexits.h>
+#include <strings.h>
 
 #include "conf.h"
 #include "fcd.h"
@@ -50,6 +51,7 @@ static int Blocksize;
 extern bool Stop_transfers;
 
 static int const Random_samples = 30000000;
+static float Power_smooth = 0.05; // Calculate this properly someday
 
 // One second of noise in requested format
 // Will be played with a random starting point every block

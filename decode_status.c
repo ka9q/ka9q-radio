@@ -1,9 +1,12 @@
+#include <string.h>
 #include "radio.h"
 
 // Decode incoming status message from the radio program, convert and fill in fields in local channel structure
 // Leave all other fields unchanged, as they may have local uses (e.g., file descriptors)
 // Note that we use some fields in channel differently than in radiod (e.g., dB vs ratios)
 int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,int length){
+  if(frontend == NULL || channel == NULL || buffer == NULL)
+    return -1;
   uint8_t const *cp = buffer;
   while(cp - buffer < length){
     enum status_type type = *cp++; // increment cp to length field
@@ -240,11 +243,17 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       break;
     case BIN_DATA:
       break;
+    case RF_AGC:
+      frontend->rf_agc = decode_int(cp,optlen);
+      break;
     case RF_GAIN:
       frontend->rf_gain = decode_float(cp,optlen);
       break;
     case RF_ATTEN:
       frontend->rf_atten = decode_float(cp,optlen);
+      break;
+    case RF_LEVEL_CAL:
+      frontend->rf_level_cal = decode_float(cp,optlen);
       break;
     case BLOCKS_SINCE_POLL:
       channel->status.blocks_since_poll = decode_int64(cp,optlen);
@@ -264,6 +273,12 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       break;
     case STATUS_INTERVAL:
       channel->status.output_interval = decode_int(cp,optlen);
+      break;
+    case SETOPTS:
+      channel->options = decode_int64(cp,optlen);
+      break;
+    case OPUS_BIT_RATE:
+      channel->output.opus_bitrate = decode_int(cp,optlen);
       break;
     default: // ignore others
       break;

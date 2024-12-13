@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <iniparser/iniparser.h>
 #include <sysexits.h>
+#include <strings.h>
 
 #include "conf.h"
 #include "misc.h"
@@ -35,11 +36,13 @@ static float const AGC_upper = -20;
 static float const AGC_lower = -40;
 #endif
 
+static float Power_smooth = 0.05; // Calculate this properly someday
+
 // Global variables set by command line options
 extern char const *App_path;
 extern int Verbose;
 
-struct sdrstate {
+struct sdr {
   struct frontend *frontend;
   struct rtlsdr_dev *device;    // Opaque pointer
 
@@ -52,6 +55,7 @@ struct sdrstate {
   bool agc;
   int holdoff_counter; // Time delay when we adjust gains
   int gain;      // Gain passed to manual gain setting
+  float scale;         // Scale samples for #bits and front end gain
 
   // Sample statistics
   //  int clips;  // Sample clips since last reset
@@ -60,8 +64,8 @@ struct sdrstate {
   pthread_t read_thread;
 };
 
-static double set_correct_freq(struct sdrstate *sdr,double freq);
-//static void do_rtlsdr_agc(struct sdrstate *);
+static double set_correct_freq(struct sdr *sdr,double freq);
+//static void do_rtlsdr_agc(struct sdr *);
 static void rx_callback(uint8_t *buf,uint32_t len, void *ctx);
 static double true_freq(uint64_t freq);
 
@@ -69,7 +73,7 @@ static double true_freq(uint64_t freq);
 int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *section){
   assert(dictionary != NULL);
 
-  struct sdrstate * const sdr = (struct sdrstate *)calloc(1,sizeof(struct sdrstate));
+  struct sdr * const sdr = (struct sdr *)calloc(1,sizeof(struct sdr));
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
   frontend->context = sdr;
@@ -143,6 +147,8 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     fprintf(stderr,"\n");
 
   }
+  rtlsdr_set_direct_sampling(sdr->device, 0); // That's for HF
+  rtlsdr_set_offset_tuning(sdr->device,0); // Leave the DC spike for now
   rtlsdr_set_freq_correction(sdr->device,0); // don't use theirs, only good to integer ppm
   rtlsdr_set_tuner_bandwidth(sdr->device, 0); // Auto bandwidth
   rtlsdr_set_agc_mode(sdr->device,0);
@@ -150,18 +156,17 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   sdr->agc = config_getboolean(dictionary,section,"agc",false);
 
   if(sdr->agc){
-    rtlsdr_set_tuner_gain_mode(sdr->device,1);  // auto gain mode (i.e., the firmware does it)
-    rtlsdr_set_tuner_gain(sdr->device,0);
+    rtlsdr_set_tuner_gain_mode(sdr->device,0);  // auto gain mode (i.e., the firmware does it)
     sdr->gain = 0;
     frontend->rf_gain = 0; // needs conversion to dB
     sdr->holdoff_counter = HOLDOFF_TIME;
   } else {
-    rtlsdr_set_tuner_gain_mode(sdr->device,0); // manual gain mode (i.e., we do it)
-    sdr->gain = config_getint(dictionary,section,"gain",0);
-    frontend->rf_gain = sdr->gain; // Needs conversion to dB?
+    rtlsdr_set_tuner_gain_mode(sdr->device,1); // manual gain mode (i.e., we do it)
+    sdr->gain = (int)(config_getfloat(dictionary,section,"gain",0) * 10);
+    rtlsdr_set_tuner_gain(sdr->device,sdr->gain);
+    frontend->rf_gain = sdr->gain / 10.0f;
   }
-
-
+  sdr->scale = scale_AD(frontend);
   sdr->bias = config_getboolean(dictionary,section,"bias",false);
   {
     int ret = rtlsdr_set_bias_tee(sdr->device,sdr->bias);
@@ -169,8 +174,6 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
       fprintf(stderr,"rtlsdr_set_bias_tee(%d) failed\n",sdr->bias);
     }
   }
-  rtlsdr_set_direct_sampling(sdr->device, 0); // That's for HF
-  rtlsdr_set_offset_tuning(sdr->device,0); // Leave the DC spike for now
   frontend->samprate = config_getint(dictionary,section,"samprate",DEFAULT_SAMPRATE);
   if(frontend->samprate <= 0){
     fprintf(stderr,"Invalid sample rate, reverting to default\n");
@@ -211,7 +214,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
 
 
 static void *rtlsdr_read_thread(void *arg){
-  struct sdrstate *sdr = arg;
+  struct sdr *sdr = arg;
   struct frontend *frontend = sdr->frontend;
 
   rtlsdr_reset_buffer(sdr->device);
@@ -223,7 +226,7 @@ static void *rtlsdr_read_thread(void *arg){
 
 
 int rtlsdr_startup(struct frontend * const frontend){
-  struct sdrstate * const sdr = frontend->context;
+  struct sdr * const sdr = frontend->context;
   pthread_create(&sdr->read_thread,NULL,rtlsdr_read_thread,sdr);
   fprintf(stdout,"rtlsdr thread running\n");
   return 0;
@@ -235,6 +238,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
   int sampcount = len/2;
   float energy = 0;
   struct frontend *frontend = ctx;
+  struct sdr *sdr = (struct sdr *)frontend->context;
   float complex * const wptr = frontend->in.input_write_pointer.c;
 
   for(int i=0; i < sampcount; i++){
@@ -253,7 +257,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
     __real__ samp = (int)buf[2*i] - 128; // Excess-128
     __imag__ samp = (int)buf[2*i+1] - 128;
     energy += cnrmf(samp);
-    wptr[i] = samp;
+    wptr[i] = sdr->scale * samp;
   }
   frontend->timestamp = gps_time_ns();
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
@@ -262,7 +266,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
   frontend->samples += sampcount;
 }
 #if 0 // use this later
-static void do_rtlsdr_agc(struct sdrstate * const sdr){
+static void do_rtlsdr_agc(struct sdr * const sdr){
   assert(sdr != NULL);
   if(!sdr->agc)
     return; // Execute only in software AGC mode
@@ -283,6 +287,7 @@ static void do_rtlsdr_agc(struct sdrstate * const sdr){
     if(r != 0)
       printf("rtlsdr_set_tuner_gain returns %d\n",r);
     frontend->rf_gain = sdr->gain; // Convert to dB?
+    sdr->scale = scale_AD(frontend);
   }
 }
 #endif
@@ -399,7 +404,7 @@ static double true_freq(uint64_t freq_hz){
 // All this really works correctly only with a gpsdo
 // Remember, rtlsdr firmware always adds Fs/4 MHz to frequency we give it.
 
-static double set_correct_freq(struct sdrstate * const sdr,double freq){
+static double set_correct_freq(struct sdr * const sdr,double freq){
   struct frontend * const frontend = sdr->frontend;
   int64_t intfreq = round(freq / (1 + frontend->calibrate));
   rtlsdr_set_center_freq(sdr->device,intfreq);
@@ -414,7 +419,7 @@ static double set_correct_freq(struct sdrstate * const sdr,double freq){
 }
 
 double rtlsdr_tune(struct frontend * const frontend,double freq){
-  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  struct sdr * const sdr = (struct sdr *)frontend->context;
   assert(sdr != NULL);
   if(frontend->lock)
     return frontend->frequency; // Don't change frequency

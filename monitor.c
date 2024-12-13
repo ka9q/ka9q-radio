@@ -80,7 +80,6 @@ pthread_mutex_t Sess_mutex = PTHREAD_MUTEX_INITIALIZER;
 PaStream *Pa_Stream;          // Portaudio stream handle
 int inDevNum;                 // Portaudio's audio output device index
 int64_t Start_time;
-pthread_mutex_t Stream_mutex = PTHREAD_MUTEX_INITIALIZER; // Control access to stream start/stop
 PaTime Start_pa_time;
 PaTime Last_callback_time;
 int64_t Last_error_time;
@@ -188,6 +187,7 @@ int main(int argc,char * const argv[]){
     if(input)
       Mcast_address_text[Nfds++] = strdup(input);
     iniparser_freedict(Configtable);
+    Configtable = NULL;
   }
   // Rescan args to override config file
   bool list_audio = false;
@@ -430,23 +430,23 @@ void *statproc(void *arg){
   {
     char iface[1024];
     struct sockaddr sock;
-    resolve_mcast(mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface));
+    resolve_mcast(mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     status_fd = listen_mcast(&sock,iface);
   }
   if(status_fd == -1)
     pthread_exit(NULL);
 
   // Main loop begins here - does not need to be realtime?
+  uint8_t *buffer = malloc(PKTSIZE);
   while(!Terminate){
-    uint8_t buffer[PKTSIZE];
     struct sockaddr_storage sender;
     socklen_t socksize = sizeof(sender);
-    int length = recvfrom(status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&sender,&socksize);
+    int length = recvfrom(status_fd,buffer,PKTSIZE,0,(struct sockaddr *)&sender,&socksize);
     if(buffer[0] != STATUS) // not status, ignore
       continue;
 
     // Extract just the SSRC to see if the session exists
-    // NB! Assumes same IP address *and port* for status and data
+    // NB! Assumes same IP source address *and UDP source port* for status and data
     // This is only true for recent versions of radiod, after the switch to unconnected output sockets
     // But older versions don't send status on the output channel anyway, so no problem
     uint32_t ssrc = get_ssrc(buffer+1,length-1);
@@ -461,6 +461,11 @@ void *statproc(void *arg){
     // Decode directly into local copy, as not every parameter is updated in every status message
     // Decoding into a temp copy and then memcpy would write zeroes into unsent parameters
     decode_radio_status(&sp->frontend,&sp->chan,buffer+1,length-1);
+    // Cache payload-type/channel count/sample rate/encoding association for use by data thread
+    sp->type = sp->chan.output.rtp.type & 0x7f;
+    sp->pt_table[sp->type].encoding = sp->chan.output.encoding;
+    sp->pt_table[sp->type].samprate = sp->chan.output.samprate;
+    sp->pt_table[sp->type].channels = sp->chan.output.channels;
 
     char const *id = lookupid(sp->chan.tune.freq);
     if(id)
@@ -476,20 +481,13 @@ void *statproc(void *arg){
     float const sn0 = sig_power/sp->chan.sig.n0;
     sp->snr = power2dB(sn0/noise_bandwidth);
     vote();
-
-    int const type = sp->chan.output.rtp.type;
-    if(type >= 0 && type < 128){
-      // Don't overwrite existing
-      if(sp->chan.output.encoding != NO_ENCODING)
-	add_pt(type,sp->chan.output.samprate,sp->chan.output.channels,sp->chan.output.encoding); // Opus will get forced to stereo 48 kHz
-    }
-    pthread_mutex_unlock(&Sess_mutex);
   }
+  FREE(buffer);
   return NULL;
 }
 
-
-
+// Look up session, or if it doesn't exist, create it.
+// Executes atomically
 struct session *lookup_or_create_session(const struct sockaddr_storage *sender,const uint32_t ssrc){
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < Nsessions; i++){
@@ -507,7 +505,6 @@ struct session *lookup_or_create_session(const struct sockaddr_storage *sender,c
 
   // Put at end of list
   Sessions[Nsessions++] = sp;
-  sp->chan.inuse = true;
   sp->init = false; // Wait for first RTP packet to set the rest up
   sp->ssrc = ssrc;
   memcpy(&sp->sender,sender,sizeof(sp->sender));
@@ -529,47 +526,32 @@ int close_session(struct session **p){
   assert(Nsessions > 0);
 
   pthread_mutex_lock(&Sess_mutex);
-  if(sp == Best_session){
-    vote();
+  if(sp == Best_session)
     Best_session = NULL;
-  }
+
   // Remove from table
-  for(int i = 0; i < Nsessions; i++){
-    if(Sessions[i] == sp){
-      Nsessions--;
-      memmove(&Sessions[i],&Sessions[i+1],(Nsessions-i) * sizeof(Sessions[0]));
-      if(sp->opus)
-	opus_decoder_destroy(sp->opus);
-      sp->opus = NULL;
-
-      pthread_mutex_lock(&sp->qmutex);
-      while(sp->queue != NULL){
-	struct packet *next = sp->queue->next;
-	free(sp->queue);
-	sp->queue = next;
-      }
-      pthread_cond_destroy(&sp->qcond);
-      pthread_mutex_destroy(&sp->qmutex);
-
-      struct frontend * const frontend = &sp->frontend;
-      FREE(frontend->description);
-
-      // Just in case anything was allocated for these arrays
-      struct channel * const chan = &sp->chan;
-      FREE(chan->filter.energies);
-      FREE(chan->spectrum.bin_data);
-      FREE(chan->status.command);
-
-      FREE(sp);
-      *p = NULL;
-      pthread_mutex_unlock(&Sess_mutex);
-      return 0;
-    }
+  int i = 0;
+  for(i = 0; i < Nsessions; i++){
+    if(Sessions[i] == sp)
+      break;
   }
-  // get here only if not found, which shouldn't happen
-  pthread_mutex_unlock(&Sess_mutex);
-  assert(false);
-  return -1;
+  if(i == Nsessions){
+    // Not found
+    assert(false);
+    pthread_mutex_unlock(&Sess_mutex);
+    return -1;
+  }
+
+  // Copy remaining session pointers down
+  Nsessions--;
+  assert(Nsessions >= i);
+  memmove(&Sessions[i],&Sessions[i+1],(Nsessions-i) * sizeof(Sessions[0]));
+  Sessions[Nsessions] = NULL; // Last entry no longer valid
+  pthread_mutex_unlock(&Sess_mutex); // Done modifying session table
+  // Thread now cleans itself up
+  FREE(sp);
+  *p = NULL;
+  return 0;
 }
 
 // passed to atexit, invoked at exit

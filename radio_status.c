@@ -409,7 +409,36 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	}
       }
-
+      break;
+    case OPUS_BIT_RATE:
+      chan->output.opus_bitrate = abs(decode_int(cp,optlen));
+      break;
+    case SETOPTS:
+      {
+	uint64_t opts = decode_int64(cp,optlen);
+	chan->options |= opts;
+      }
+      break;
+    case CLEAROPTS:
+      {
+	uint64_t opts = decode_int64(cp,optlen);
+	chan->options &= ~opts;
+      }
+      break;
+    case RF_ATTEN:
+      {
+	float x = decode_float(cp,optlen);
+	if(!isnan(x) && Frontend.atten != NULL)
+	  (*Frontend.atten)(&Frontend,x);
+      }
+      break;
+    case RF_GAIN:
+      {
+	float x = decode_float(cp,optlen);
+	if(!isnan(x) && Frontend.gain != NULL)
+	  (*Frontend.gain)(&Frontend,x);
+      }
+      break;
     default:
       break;
     }
@@ -455,19 +484,15 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
 
   encode_socket(&bp,STATUS_DEST_SOCKET,&Metadata_dest_socket);
-
-  // Echo timestamp from source or locally (bit of a kludge, eventually will always be local)
-  if(frontend->timestamp != 0)
-    encode_int64(&bp,GPS_TIME,frontend->timestamp);
-  else
-    encode_int64(&bp,GPS_TIME,gps_time_ns());
-
+  encode_int64(&bp,GPS_TIME,frontend->timestamp);
   encode_int64(&bp,INPUT_SAMPLES,frontend->samples);
   encode_int32(&bp,INPUT_SAMPRATE,frontend->samprate); // integer Hz
   encode_int32(&bp,FE_ISREAL,frontend->isreal ? true : false);
   encode_double(&bp,CALIBRATE,frontend->calibrate);
-  encode_double(&bp,RF_GAIN,frontend->rf_gain);
-  encode_double(&bp,RF_ATTEN,frontend->rf_atten);
+  encode_float(&bp,RF_GAIN,frontend->rf_gain);
+  encode_float(&bp,RF_ATTEN,frontend->rf_atten);
+  encode_float(&bp,RF_LEVEL_CAL,frontend->rf_level_cal);
+  encode_int(&bp,RF_AGC,frontend->rf_agc);
   encode_int32(&bp,LNA_GAIN,frontend->lna_gain);
   encode_int32(&bp,MIXER_GAIN,frontend->mixer_gain);
   encode_int32(&bp,IF_GAIN,frontend->if_gain);
@@ -487,12 +512,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   // Adjust for A/D width
   // Level is absolute relative to A/D saturation, so +3dB for real vs complex
   if(chan->status.blocks_since_poll > 0){
-    float level = frontend->if_power;
-    level /= (1 << (frontend->bitspersample-1)) * (1 << (frontend->bitspersample-1));
-    // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
-    // Complex signals carry twice as much power, divided between I and Q
-    if(frontend->isreal)
-      level *= 2;
+    float level = frontend->if_power * scale_ADpower2FS(frontend);
     encode_float(&bp,IF_POWER,power2dB(level));
   }
   encode_int64(&bp,AD_OVER,frontend->overranges);
@@ -587,6 +607,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       }
     }
     encode_int64(&bp,OUTPUT_SAMPLES,chan->output.samples);
+    encode_int32(&bp,OPUS_BIT_RATE,chan->output.opus_bitrate);
     encode_float(&bp,HEADROOM,voltage2dB(chan->output.headroom)); // amplitude -> dB
     // Doppler info
     encode_double(&bp,DOPPLER_FREQUENCY,chan->tune.doppler); // Hz
@@ -619,6 +640,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   if(!isnan(chan->tp2))
     encode_float(&bp,TP2,chan->tp2);
   encode_int64(&bp,BLOCKS_SINCE_POLL,chan->status.blocks_since_poll);
+  encode_int64(&bp,SETOPTS,chan->options);
 
   encode_eol(&bp);
 

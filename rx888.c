@@ -7,6 +7,7 @@
 // Copyright (c)  2023 Phil Karn KA9Q
 
 // VHF tuner support by K4VZ July 2024
+// Note: VHF tuner does not work yet -- KA9Q, 17 Aug 2024
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -18,6 +19,7 @@
 #endif
 #include <sysexits.h>
 #include <unistd.h>
+#include <strings.h>
 
 #include "misc.h"
 #include "status.h"
@@ -29,7 +31,12 @@
 static int const Min_samprate =      1000000; // 1 MHz, in ltc2208 spec
 static int const Max_samprate =    130000000; // 130 MHz, in ltc2208 spec
 static int const Default_samprate = 64800000; // Synthesizes cleanly from 27 MHz reference
-static double Nyquist = 0.47;  // Upper end of usable bandwidth, relative to 1/2 sample rate
+static float const Nyquist = 0.47;  // Upper end of usable bandwidth, relative to 1/2 sample rate
+static float const AGC_upper_limit = -15.0;   // Reduce RF gain if A/D level exceeds this in dBFS
+static float const AGC_lower_limit = -22.0;   // Increase RF gain if level is below this in dBFS
+static int const AGC_interval = 10;           // Seconds between runs of AGC loop
+static float const Start_gain = 10.0;         // Initial VGA gain, dB
+static float Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
 
 // Reference frequency for Si5351 clock generator
 static double const Min_reference = 10e6;  //  10 MHz
@@ -47,7 +54,6 @@ static double const R828D_IF_CARRIER = 4570000;
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
-extern int Overlap; // Forward FFT overlap factor, samples
 extern volatile bool Stop_transfers; // Flag to stop receive thread upcalls
 
 // Hardware-specific stuff.
@@ -78,14 +84,15 @@ struct sdrstate {
   double frequency;
   bool randomizer;
   bool dither;
-  bool highgain;
   uint32_t gpios;
   uint64_t last_sample_count; // Used to verify sample rate
   int64_t last_count_time;
   bool message_posted; // Clock rate error posted last time around
+  float scale;         // Scale samples for #bits and front end gain
 
   pthread_t cmd_thread;
   pthread_t proc_thread;
+  pthread_t agc_thread;
 };
 
 static void rx_callback(struct libusb_transfer *transfer);
@@ -101,8 +108,9 @@ static void rx888_stop_rx(struct sdrstate *sdr);
 static void rx888_close(struct sdrstate *sdr);
 static void free_transfer_buffers(unsigned char **databuffers,struct libusb_transfer **transfers,unsigned int queuedepth);
 static double val2gain(int g);
-static int gain2val(bool highgain, double gain);
+static int gain2val(double gain);
 static void *proc_rx888(void *arg);
+static void *agc_rx888(void *arg);
 #if 0
 static double actual_freq(double frequency);
 #endif
@@ -122,25 +130,25 @@ static char const *usb_speeds[N_USB_SPEEDS] = {
 
 int rx888_setup(struct frontend * const frontend,dictionary const * const dictionary,char const * const section){
   assert(dictionary != NULL);
-
-  struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
-  // Cross-link generic and hardware-specific control structures
-  sdr->frontend = frontend;
-  frontend->context = sdr;
-
+  // Hardware-dependent setup
   {
     char const *device = config_getstring(dictionary,section,"device",NULL);
     if(strcasecmp(device,"rx888") != 0)
       return -1; // Not for us
   }
-  // Hardware-dependent setup
+  struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
+  // Cross-link generic and hardware-specific control structures
+  sdr->frontend = frontend;
+  frontend->context = sdr;
+  frontend->isreal = true; // Make sure the right kind of filter gets created!
+  frontend->bitspersample = 16; // For gain scaling
+  frontend->rf_agc = true; // On by default unless gain or atten is specified
   {
     char const *p = config_getstring(dictionary,section,"serial",NULL); // is serial specified?
     if(p != NULL){
       sdr->serial = strtoll(p,NULL,16);
     }
   }
-
   // Firmware file
   char const *firmware = config_getstring(dictionary,section,"firmware","SDDC_FX3.img");
   // Queue depth, default 16; 32 sometimes overflows
@@ -170,24 +178,43 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   sdr->randomizer = config_getboolean(dictionary,section,"rand",false);
   rx888_set_dither_and_randomizer(sdr,sdr->dither,sdr->randomizer);
 
+  // RF Gain calibration
+  // WA2ZKD measured several rx888s with very consistent results
+  // e.g., -90 dBm gives -91.4 dBFS with 0 dB VGA gain and 0 dB attenuation
+  // If you use a preamp or converter, add its gain to gaincal
+  frontend->rf_level_cal = config_getfloat(dictionary,section,"gaincal",-1.4);
+
   // Attenuation, default 0
-  float att = fabsf(config_getfloat(dictionary,section,"att",0));
-  if(att > 31.5)
-    att = 31.5;
+  float att = fabsf(config_getfloat(dictionary,section,"att",9999));
+  att = fabsf(config_getfloat(dictionary,section,"atten",att));
+  att = fabsf(config_getfloat(dictionary,section,"featten",att));
+  att = fabsf(config_getfloat(dictionary,section,"rfatten",att));
+  if(att == 9999){
+    att = 0; // AGC still on, default attenuation 0 dB (not very useful anyway)
+  } else {
+    // Explicitly specified, turn off AGC
+    if(att > 31.5)
+      att = 31.5;
+    frontend->rf_agc = false;
+  }
   rx888_set_att(sdr,att,false);
 
-  // Gain Mode low/high, default high
-  char const *gainmode = config_getstring(dictionary,section,"gainmode","high");
-  if(strcmp(gainmode, "high") == 0)
-    sdr->highgain = true;
-  else if(strcmp(gainmode, "low") == 0)
-    sdr->highgain = false;
-  else {
-    fprintf(stdout,"Invalid gain mode %s, default high\n",gainmode);
-    sdr->highgain = true;
+  // Gain Mode now automatically set by gain; gain < 0 dB -> low, gain >= 0 dB -> high
+  char const *gainmode = config_getstring(dictionary,section,"gainmode",NULL);
+  if(gainmode != NULL)
+    fprintf(stdout,"gainmode parameter is obsolete, now set automatically\n");
+
+  // Gain value
+  float gain = config_getfloat(dictionary,section,"gain",9999);
+  gain = config_getfloat(dictionary,section,"rxgain",gain);
+  gain = config_getfloat(dictionary,section,"fegain",gain);
+  if(gain == 9999){
+    gain = Start_gain; // Default
+  } else {
+    // Explicitly specifed, turn off AGC
+    // should there be limits?
+    frontend->rf_agc = false;
   }
-  // Gain value, default +1.5 dB
-  float gain = config_getfloat(dictionary,section,"gain",1.5);
   rx888_set_gain(sdr,gain,false);
 
   double reference = Default_reference;
@@ -211,7 +238,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     if(p != NULL)
       samprate = parse_frequency(p,false);
   }
-
   if(samprate < Min_samprate){
     fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,Min_samprate);
     samprate = Min_samprate;
@@ -220,10 +246,13 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,Max_samprate);
     samprate = Max_samprate;
   }
-
   sdr->reference = reference * (1 + calibrate);
   usleep(5000);
   double actual = rx888_set_samprate(sdr,sdr->reference,samprate);
+  frontend->samprate = samprate;
+  // Somewhat arbitrary. See https://ka7oei.blogspot.com/2024/12/frequency-response-of-rx-888-sdr-at.html
+  frontend->min_IF = 15000;
+  frontend->max_IF = Nyquist * samprate; // Just an estimate - get the real number somewhere
 
   // start clock
   control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
@@ -232,12 +261,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   uint8_t const clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
   control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_CLK_BASE+0,clock_control);
 
-  frontend->samprate = samprate;
-  frontend->min_IF = 0;
-  frontend->max_IF = Nyquist * samprate; // Just an estimate - get the real number somewhere
-  frontend->isreal = true; // Make sure the right kind of filter gets created!
-  frontend->bitspersample = 16; // For gain scaling
-  frontend->lock = true; // Doesn't tune in direct sampling mode
+
   {
     char const *p = config_getstring(dictionary,section,"description","rx888");
     FREE(frontend->description);
@@ -245,35 +269,44 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stdout,"%s: ",frontend->description);
   }
   double ferror = actual - samprate;
-  fprintf(stdout,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), gain mode %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
+  float xfer_time = (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);
+  // Compute exponential smoothing constant
+  // value is 1 - exp(-blocktime/tc), but use expm1() function to save precision
+  float const tc  = 1.0; // 1 second
+  Power_smooth = -expm1f(-xfer_time/tc);
+
+  fprintf(stdout,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  sdr->reference,samprate,actual,ferror, 1e6 * ferror / samprate,
-	  sdr->highgain ? "high" : "low",
-	  gain,frontend->rf_gain,frontend->rf_atten,sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
-	  (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate));
+	  frontend->rf_agc ? "on" : "off",
+	  gain,frontend->rf_gain,frontend->rf_atten,frontend->rf_level_cal,
+sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
+	  xfer_time);
 
   // VHF-UHF
   double frequency = 0;
   {
     char const *p = config_getstring(dictionary,section,"frequency",NULL);
-    if(p != NULL)
+    if(p != NULL){
       frequency = parse_frequency(p,false);
+      if(frequency < Min_frequency || frequency > Max_frequency){
+	fprintf(stdout,"Invalid VHF/UHF frequency %'lf, forcing %'lf\n",frequency,0.0);
+	frequency = 0;
+      }
+    }
   }
-  if(frequency < Min_frequency || frequency > Max_frequency){
-    fprintf(stdout,"Invalid VHF/UHF frequency %'lf, forcing %'lf\n",frequency,0.0);
-    frequency = 0;
-  }
+  sdr->frequency = frequency;
   if(frequency == 0){
     // HF mode
+    frontend->lock = true; // Doesn't tune in direct sampling mode
     rx888_set_hf_mode(sdr);
   } else {
     // VHF/UHF mode
     double actual_frequency = rx888_set_tuner_frequency(sdr,frequency);
     fprintf(stdout,"Actual VHF/UHF tuner frequency %'lf\n",actual_frequency);
-    sdr->frequency = frequency;
+
     rx888_set_att(sdr,att,true);
     rx888_set_gain(sdr,gain,true);
   }
-
   usleep(1000000); // 1s - see SDDC_FX3 firmware
   return 0;
 }
@@ -284,10 +317,32 @@ int rx888_startup(struct frontend * const frontend){
 
   // Start processing A/D data
   pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
+  pthread_create(&sdr->agc_thread,NULL,agc_rx888,sdr);
   fprintf(stdout,"rx888 running\n");
   return 0;
 }
 
+// command to set analog gain. Turn off AGC if it was on
+float rx888_gain(struct frontend * const frontend, float gain){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  if(frontend->rf_agc)
+    fprintf(stdout,"manual gain setting, turning off AGC\n");
+  frontend->rf_agc = false;
+  rx888_set_gain(sdr,gain,sdr->frequency != 0);
+  return frontend->rf_gain;
+}
+
+// command to set analog attenuation. Turn off AGC if it was on
+float rx888_atten(struct frontend * const frontend, float atten){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  if(frontend->rf_agc)
+    fprintf(stdout,"manual atten setting, turning off AGC\n");
+  frontend->rf_agc = false;
+  rx888_set_att(sdr,atten,sdr->frequency != 0);
+  return frontend->rf_atten;
+}
+
+// Process incoming A/D samples
 static void *proc_rx888(void *arg){
   struct sdrstate * const sdr = (struct sdrstate *)arg;
   assert(sdr != NULL);
@@ -333,6 +388,59 @@ static void *proc_rx888(void *arg){
   exit(EX_NOINPUT);
 }
 
+// Monitor power levels, record new watermarks, adjust AGC if enabled
+// Also perform coarse check on sample rate, compared to system clock
+static void *agc_rx888(void *arg){
+  struct sdrstate * const sdr = (struct sdrstate *)arg;
+  assert(sdr != NULL);
+  pthread_setname("agc_rx888");
+  struct frontend *frontend = sdr->frontend;
+  while(1){
+    sleep(AGC_interval);
+    int64_t now = gps_time_ns();
+    if(now >= sdr->last_count_time + 60 * BILLION){
+      // Verify approximate sample rate once per minute
+      int64_t const sampcount = frontend->samples - sdr->last_sample_count;
+      double const rate = BILLION * (double)sampcount / (now - sdr->last_count_time);
+      double const error = fabs((rate - frontend->samprate) / (double)frontend->samprate);
+      if(error > 0.01 || sdr->message_posted){
+	// Post message every time the clock is off by 1% or more, or if it has just returned to nominal
+	fprintf(stdout,"RX888 measured sample rate error: %'.1lf Hz vs nominal %'d Hz\n",
+		rate,frontend->samprate);
+	sdr->message_posted = (error > 0.01);
+      }
+    }
+    float scaled_new_power = frontend->if_power * scale_ADpower2FS(frontend);
+    float new_dBFS = power2dB(scaled_new_power);
+
+    if(frontend->if_power > frontend->if_power_max){
+      if(Verbose){
+	// Don't print a message unless the increase is > 0.1 dB, the precision of the printf
+	float scaled_old_power = frontend->if_power_max * scale_ADpower2FS(frontend);
+	float old_dBFS = power2dB(scaled_old_power);
+	if(new_dBFS >= old_dBFS + 0.1)
+	  fprintf(stdout,"New input power high watermark: %.1f dBFS\n",new_dBFS);
+      }
+      frontend->if_power_max = frontend->if_power;
+    }
+    if(frontend->rf_agc && (new_dBFS > AGC_upper_limit || new_dBFS < AGC_lower_limit)){
+      float const target_level = (AGC_upper_limit + AGC_lower_limit)/2;
+      float const new_gain = frontend->rf_gain - (new_dBFS - target_level);
+      if(new_gain < 34){ // Don't try to go above max gain
+	if(Verbose)
+	  fprintf(stdout,"Front end gain change from %.1f dB to %.1f dB\n",frontend->rf_gain,new_gain);
+	rx888_set_gain(sdr,new_gain,false);
+	// Change averaged value to speed convergence
+	frontend->if_power *= dB2power(target_level - new_dBFS);
+	// Unlatch high water mark
+	frontend->if_power_max = 0;
+      }
+    }
+  }
+  return NULL;
+}
+
+
 // Callback called with incoming receiver data from A/D
 static void rx_callback(struct libusb_transfer * const transfer){
   assert(transfer != NULL);
@@ -374,8 +482,8 @@ static void rx_callback(struct libusb_transfer * const transfer){
       } else {
 	frontend->samp_since_over++;
       }
-      wptr[i] = s;
-      in_energy += wptr[i] * wptr[i];
+      in_energy += s * s;
+      wptr[i] = s * sdr->scale;
     }
   } else {
     for(int i=0; i < sampcount; i++){
@@ -385,11 +493,10 @@ static void rx_callback(struct libusb_transfer * const transfer){
       } else {
 	frontend->samp_since_over++;
       }
-      wptr[i] = samples[i];
-      in_energy += wptr[i] * wptr[i];
+      wptr[i] = sdr->scale * samples[i];
+      in_energy += samples[i] * samples[i];
     }
   }
-
   frontend->timestamp = now;
   write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
 
@@ -397,35 +504,8 @@ static void rx_callback(struct libusb_transfer * const transfer){
   {
     frontend->if_power_instant  = (float)in_energy / sampcount;
     frontend->if_power += Power_smooth * (frontend->if_power_instant - frontend->if_power);
-    if(frontend->if_power_instant > frontend->if_power_max){
-      if(Verbose){
-	float scaled_old_power = frontend->if_power_max * scale_ADpower2FS(frontend);
-	float scaled_new_power = frontend->if_power_instant * scale_ADpower2FS(frontend);
-
-	// Don't print a message unless the increase is > 0.1 dB, the precision of the printf
-	float new_dBFS = power2dB(scaled_new_power);
-	float old_dBFS = power2dB(scaled_old_power);
-	if(new_dBFS >= old_dBFS + 0.1)
-	  fprintf(stdout,"New input power high watermark: %.1f dBFS\n",new_dBFS);
-      }
-      frontend->if_power_max = frontend->if_power_instant;
-    }
   }
   frontend->samples += sampcount; // Count original samples
-  if(now >= sdr->last_count_time + 60 * BILLION){
-    // Verify approximate sample rate once per minute
-    int64_t const sampcount = frontend->samples - sdr->last_sample_count;
-    double const rate = BILLION * (double)sampcount / (now - sdr->last_count_time);
-    double const error = fabs((rate - frontend->samprate) / (double)frontend->samprate);
-    if(error > 0.01 || sdr->message_posted){
-      // Post message every time the clock is off by 1% or more, or if it has just returned to nominal
-      fprintf(stdout,"RX888 measured sample rate error: %'.1lf Hz vs nominal %'d Hz\n",
-	      rate,frontend->samprate);
-      sdr->message_posted = (error > 0.01);
-    }
-    sdr->last_count_time = now;
-    sdr->last_sample_count = frontend->samples;
-  }
   if(!Stop_transfers) {
     if(libusb_submit_transfer(transfer) == 0)
       sdr->xfers_in_progress++;
@@ -703,6 +783,7 @@ static void rx888_set_att(struct sdrstate *sdr,float att,bool vhf){
   usleep(5000);
 
   frontend->rf_atten = att;
+  sdr->scale = scale_AD(frontend);
   if(!vhf){
     int const arg = (int)(att * 2);
     argument_send(sdr->dev_handle,DAT31_ATT,arg);
@@ -719,13 +800,14 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf){
   usleep(5000);
 
   if(!vhf){
-    int const arg = gain2val(sdr->highgain,gain);
+    int const arg = gain2val(gain);
     argument_send(sdr->dev_handle,AD8340_VGA,arg);
     frontend->rf_gain = val2gain(arg); // Store actual nearest value
   } else {
     int const arg = (int)gain;
     argument_send(sdr->dev_handle,R82XX_VGA,arg);
   }
+  sdr->scale = scale_AD(frontend);
 }
 
 // see: SiLabs Application Note AN619 - Manually Generating an Si5351 Register Map (https://www.silabs.com/documents/public/application-notes/AN619.pdf)
@@ -990,7 +1072,8 @@ static double val2gain(int g){
   return voltage2dB(av); // decibels
 }
 
-static int gain2val(bool highgain, double gain){
+static int gain2val(double gain){
+  int highgain = gain < 0 ? 0 : 1;
   gain = gain > 34 ? 34 : gain;
   int g = round(dB2voltage(gain) / (Vernier * (1 + (Pregain - 1)* highgain)));
 

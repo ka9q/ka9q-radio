@@ -166,6 +166,7 @@ struct pt_table PT_table[128] = {
 { 0, 0, 0 }, // 127
 };
 
+
 #define AX25_PT (96)  // NON-standard payload type for my raw AX.25 frames - clean this up and remove
 #define OPUS_PT (111) // Hard-coded NON-standard payload type for OPUS (should be dynamic with sdp)
 
@@ -177,6 +178,9 @@ int const AX25_pt = AX25_PT;
 // The mappings are typically extracted from a radiod status channel and kept in a table so they can
 // be changed midstream without losing anything
 int add_pt(int type, int samprate, int channels, enum encoding encoding){
+  if(encoding == NO_ENCODING)
+    return -1;
+
   if(encoding == OPUS){
     // Force Opus to fixed values
     samprate = 48000;
@@ -207,7 +211,7 @@ char const *Default_mcast_iface;
 // when output = 0, bind to it so we'll accept incoming packets
 // Add parameter 'offset' (normally 0) to port number; this will be 1 when sending RTCP messages
 // (Can we set up a socket for both input and output??)
-int setup_mcast(char const * const target,struct sockaddr *sock,int const output,int const ttl,int const tos,int const offset){
+int setup_mcast(char const * const target,struct sockaddr *sock,int const output,int const ttl,int const tos,int const offset,int tries){
   if(target == NULL && sock == NULL)
     return -1; // At least one must be supplied
 
@@ -217,8 +221,11 @@ int setup_mcast(char const * const target,struct sockaddr *sock,int const output
   }
   char iface[1024];
   iface[0] = '\0';
-  if(target)
-    resolve_mcast(target,sock,DEFAULT_RTP_PORT+offset,iface,sizeof(iface));
+  if(target){
+    int ret = resolve_mcast(target,sock,DEFAULT_RTP_PORT+offset,iface,sizeof(iface),tries);
+    if(ret == -1)
+      return -1;
+  }
   if(strlen(iface) == 0 && Default_mcast_iface != NULL)
     strlcpy(iface,Default_mcast_iface,sizeof(iface));
 
@@ -303,21 +310,10 @@ int listen_mcast(void const *s,char const *iface){
     perror("setup_mcast socket");
     return -1;
   }
-  switch(sock->sa_family){
-  case AF_INET:
-    set_ipv4_options(fd,-1,-1);
-    if(ipv4_join_group(fd,sock,iface) != 0)
-     fprintf(stderr,"join_group failed\n");
-    break;
-  case AF_INET6:
-    set_ipv6_options(fd,-1,-1);
-    if(ipv6_join_group(fd,sock,iface) != 0)
-     fprintf(stderr,"join_group failed\n");
-    break;
-  default:
+  if(join_group(fd,sock,iface,-1,-1) == -1){
+    close(fd);
     return -1;
   }
-
   if((bind(fd,sock,sizeof(struct sockaddr)) != 0)){
     perror("listen mcast bind");
     close(fd);
@@ -329,7 +325,7 @@ int listen_mcast(void const *s,char const *iface){
 // Resolve a multicast target string in the form "name[:port][,iface]"
 // If "name" is not qualified (no periods) then .local will be appended by default
 // If :port is not specified, port field in result will be zero
-int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int iface_len){
+int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int iface_len,int tries){
   if(target == NULL || strlen(target) == 0 || sock == NULL)
     return -1;
 
@@ -363,7 +359,7 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
   else
     strlcpy(full_host,host,sizeof(full_host));
 
-  for(try=0;;try++){
+  for(try=0;tries == 0 || try != tries;try++){
     results = NULL;
     struct addrinfo hints;
     memset(&hints,0,sizeof(hints));
@@ -388,6 +384,8 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
       fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s): %s. Retrying.\n",full_host,port,gai_strerror(ecode));
     sleep(10);
   }
+  if(tries != 0 && try == tries)
+    return -1;
   if(try > 0) // Don't leave them hanging: report success after failure
     fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s) succeeded\n",full_host,port);
 
@@ -448,13 +446,8 @@ void *hton_rtp(void * const data, struct rtp_header const * const rtp){
 
 
 // Process sequence number and timestamp in incoming RTP header:
-// Check that the sequence number is (close to) what we expect
-// If not, drop it but 3 wild sequence numbers in a row will assume a stream restart
-//
-// Determine timestamp jump, if any
-// Returns: <0            if packet should be dropped as a duplicate or a wild sequence number
-//           0            if packet is in sequence with no missing timestamps
-//         timestamp jump if packet is in sequence or <10 sequence numbers ahead, with missing timestamps
+// count dropped and duplicated packets, but it gets confused 
+// Determine timestamp jump from the next expected one
 int rtp_process(struct rtp_state * const state,struct rtp_header const * const rtp,int const sampcnt){
   if(rtp->ssrc != state->ssrc){
     // Normally this will happen only on the first packet in a session since
@@ -476,18 +469,14 @@ int rtp_process(struct rtp_state * const state,struct rtp_header const * const r
   // Sequence number check
   int const seq_step = (int16_t)(rtp->seq - state->seq);
   if(seq_step != 0){
-    if(seq_step < 0){
+    if(seq_step < 0)
       state->dupes++;
-      return -1;
-    }
-    state->drops += seq_step;
+    else
+      state->drops += seq_step;
   }
   state->seq = rtp->seq + 1;
 
   int const time_step = (int32_t)(rtp->timestamp - state->timestamp);
-  if(time_step < 0)
-    return time_step;    // Old samples; drop. Shouldn't happen if sequence number isn't old
-
   state->timestamp = rtp->timestamp + sampcnt;
   return time_step;
 }
@@ -572,8 +561,8 @@ char const *formatsock(void const *s){
   getnameinfo(sa,slen,
 	      host,NI_MAXHOST,
 	      port,NI_MAXSERV,
-	      //		NI_NOFQDN|NI_NUMERICHOST|NI_NUMERICSERV);
-	      NI_NOFQDN|NI_NUMERICSERV);
+	      NI_NOFQDN|NI_NUMERICHOST|NI_NUMERICSERV);
+             //NI_NOFQDN|NI_NUMERICSERV);
   snprintf(ic->hostport,sizeof(ic->hostport),"%s:%s",host,port);
   assert(slen < sizeof(ic->sock));
   memcpy(&ic->sock,sa,slen);
@@ -602,10 +591,9 @@ enum encoding encoding_from_pt(int const type){
     return NO_ENCODING;
   return PT_table[type].encoding;
 }
-
-
 // Dynamically create a new one if not found
 // Should lock the table when it's modified
+// Use for sending only! Receivers need to build a table for each sender
 int pt_from_info(int samprate,int channels,enum encoding encoding){
   if(samprate <= 0 || channels <= 0 || channels > 2 || encoding == NO_ENCODING || encoding >= UNUSED_ENCODING)
     return -1;
@@ -621,12 +609,11 @@ int pt_from_info(int samprate,int channels,enum encoding encoding){
     if(PT_table[type].samprate == samprate && PT_table[type].channels == channels && PT_table[type].encoding == encoding)
       return type;
   }
-  for(int type=96; type < 128; type++){ // Dynamic range
+  for(int type=96; type < 128; type++){ // Allocate a new type in the dynamic range
     if(PT_table[type].samprate == 0){
       // allocate it
-      PT_table[type].samprate = samprate;
-      PT_table[type].channels = channels;
-      PT_table[type].encoding = encoding;
+      if(add_pt(type,samprate,channels,encoding) == -1)
+	return -1;
       return type;
     }
   }

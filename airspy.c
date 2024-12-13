@@ -13,6 +13,7 @@
 #endif
 #include <sysexits.h>
 #include <unistd.h>
+#include <strings.h>
 
 #include "conf.h"
 #include "misc.h"
@@ -46,6 +47,7 @@ struct sdrstate {
   int agc_samples; // Samples represented in energy
   float high_threshold;
   float low_threshold;
+  float scale;         // Scale samples for #bits and front end gain
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
@@ -61,6 +63,7 @@ uint8_t airspy_sensitivity_mixer_gains[GAIN_COUNT] = { 12, 12, 12, 12, 11, 10, 1
 uint8_t airspy_sensitivity_lna_gains[GAIN_COUNT] = {   14, 14, 14, 14, 14, 14, 14, 14, 14, 13, 12, 12,  9,  9,  8,  7, 6, 5, 3, 2, 1, 0 };
 
 
+static float Power_smooth = 0.05; // Calculate this properly someday
 static double set_correct_freq(struct sdrstate *sdr,double freq);
 static int rx_callback(airspy_transfer *transfer);
 static void *airspy_monitor(void *p);
@@ -180,7 +183,6 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     ret = airspy_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
     assert(ret == AIRSPY_SUCCESS);
   }
-  frontend->calibrate = 0;
   frontend->max_IF = -600000;
   frontend->min_IF = -0.47 * frontend->samprate;
 
@@ -330,14 +332,13 @@ static int rx_callback(airspy_transfer *transfer){
     s[7] =  up[2];
     for(int j=0; j < 8; j++){
       int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
-      if(x == 32767 || x <= -32767){
+      if(x == 2047 || x <= -2047){
 	frontend->overranges++;
 	frontend->samp_since_over = 0;
       } else {
 	frontend->samp_since_over++;
       }
-      frontend->overranges += (x == 2047) || (x <= -2047);
-      wptr[j] = x;
+      wptr[j] = sdr->scale * x;
       in_energy += x * x;
     }
     wptr += 8;
@@ -467,6 +468,7 @@ static void set_gain(struct sdrstate * const sdr,int gainstep){
       frontend->lna_gain = airspy_sensitivity_lna_gains[tab];
     }
     frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
+    sdr->scale = scale_AD(frontend);
     if(Verbose)
       printf("New gainstep %d: LNA = %d, mixer = %d, vga = %d\n",gainstep,
 	     frontend->lna_gain,frontend->mixer_gain,frontend->if_gain);

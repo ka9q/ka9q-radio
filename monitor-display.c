@@ -1,3 +1,7 @@
+// Control plane section of the multicast monitor program
+// Moved out of monitor.c when it was getting way too big
+// Copyright Aug 2024 Phil Karn, KA9Q
+
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
@@ -152,9 +156,9 @@ void *display(void *arg){
       dist_path(path,sizeof(path),"monitor-help.txt");
       FILE *fp = fopen(path,"r");
       if(fp != NULL){
-	size_t size = 1024;
-	char *line = malloc(size);
-	while(getline(&line,&size,fp) != -1)
+	size_t size = 0;
+	char *line = NULL;
+	while(getline(&line,&size,fp) > 0)
 	  addstrt(line);
 
 	FREE(line);
@@ -173,6 +177,7 @@ void *display(void *arg){
       update_monitor_display();
 
     process_keyboard();
+    vote(); // mainly in case a session was muted or unmuted
   }
   return NULL;
 }
@@ -181,7 +186,6 @@ static int scompare(void const *a, void const *b){
   struct session const * const s1 = *(struct session **)a;
   struct session const * const s2 = *(struct session **)b;
 
-  vote(); // update now_active flags
   if(s1->now_active){
     if(s2->now_active){
       // Both active. Fuzz needed because active sessions are updated when packets arrive
@@ -225,11 +229,15 @@ static int tcompare(void const *a, void const *b){
 
 // Sort session list in increasing order of age
 static int sort_session_active(void){
+  pthread_mutex_lock(&Sess_mutex);
   qsort(Sessions,Nsessions,sizeof(Sessions[0]),scompare);
+  pthread_mutex_unlock(&Sess_mutex);
   return 0;
 }
 static int sort_session_total(void){
+  pthread_mutex_lock(&Sess_mutex);
   qsort(Sessions,Nsessions,sizeof(Sessions[0]),tcompare);
+  pthread_mutex_unlock(&Sess_mutex);
   return 0;
 }
 
@@ -241,38 +249,41 @@ void load_id(void){
   if(statbuf.st_mtime != Last_stat.st_mtime)
     Nid = 0; // Force reload
 
-  if(Nid == 0){
-    // Load table
-    FILE * const fp = fopen(filename,"r");
-    if(fp == NULL)
-      return;
+  if(Nid != 0)
+    return;
 
-    char line[1024];
-    while(fgets(line,sizeof(line),fp)){
-      chomp(line);
+  // Load table
+  FILE * const fp = fopen(filename,"r");
+  if(fp == NULL)
+    return;
 
-      if(line[0] == '#' || strlen(line) == 0)
-	continue; // Comment
-      assert(Nid < IDSIZE);
-      char *ptr = NULL;
-      Idtable[Nid].freq = strtod(line,&ptr);
-      if(ptr == line)
-	continue; // no parseable number
+  char *line = NULL;
+  size_t linesize = 0;
+  while(getline(&line,&linesize,fp) > 0){
+    chomp(line);
 
-      while(*ptr == ' ' || *ptr == '\t')
-	ptr++;
-      int const len = strlen(ptr); // Length of ID field
-      if(len > 0){ // Not null
-	strlcpy(Idtable[Nid].id,ptr,sizeof(Idtable[Nid].id));
-      }
-      Nid++;
-      if(Nid == IDSIZE){
-	fprintf(stderr,"ID table overlow, size %d\n",Nid);
-	break;
-      }
+    if(line[0] == '#' || strlen(line) == 0)
+      continue; // Comment
+    assert(Nid < IDSIZE);
+    char *ptr = NULL;
+    Idtable[Nid].freq = strtod(line,&ptr);
+    if(ptr == line)
+      continue; // no parseable number
+
+    while(*ptr == ' ' || *ptr == '\t')
+      ptr++;
+    int const len = strlen(ptr); // Length of ID field
+    if(len > 0){ // Not null
+      strlcpy(Idtable[Nid].id,ptr,sizeof(Idtable[Nid].id));
     }
-    fclose(fp);
+    Nid++;
+    if(Nid == IDSIZE){
+      fprintf(stderr,"ID table overlow, size %d\n",Nid);
+      break;
+    }
   }
+  FREE(line);
+  fclose(fp);
 }
 
 char const *lookupid(double freq){
@@ -296,40 +307,41 @@ static void update_monitor_display(void){
   }
   if(Constant_delay)
     printwt("Constant delay ");
-  
+
   if(Start_muted)
     printwt("**Starting new sessions muted** ");
-  
+
   if(Voting)
     printwt("SNR Voting enabled\n");
-  
+
   int y,x;
   getyx(stdscr,y,x);
   if(x != 0)
     printwt("\n");
-  
+
   if(Auto_sort)
     sort_session_active();
-  
+
   Sessions_per_screen = LINES - getcury(stdscr) - 1;
-  
-  vote(); // update active session flags
+
+
   // This mutex protects Sessions[] and Nsessions. Instead of holding the
   // lock for the entire display loop, we make a copy.
   pthread_mutex_lock(&Sess_mutex);
-  assert(Nsessions <= NSESSIONS);
-  int Nsessions_copy = Nsessions;
-  struct session *Sessions_copy[NSESSIONS];
-  memcpy(Sessions_copy,Sessions,Nsessions * sizeof(Sessions_copy[0]));
+  int const Nsessions_copy = Nsessions;
+  struct session *Sessions_copy[Nsessions_copy];
+  memcpy(Sessions_copy,Sessions,Nsessions_copy * sizeof(Sessions_copy[0]));
   pthread_mutex_unlock(&Sess_mutex);
-  
+
+  assert(Nsessions_copy <= NSESSIONS);
+
   if(Verbose){
     // Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
-    double pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
-    int q = modsub(Wptr,Rptr,BUFFERSIZE);
-    double qd = (double) q / DAC_samprate;
-    double rate = Audio_frames / pa_seconds;
-    
+    double const pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
+    int const q = modsub(Wptr,Rptr,BUFFERSIZE);
+    double const qd = (double) q / DAC_samprate;
+    double const rate = Audio_frames / pa_seconds;
+
     printwt("Playout %.0f ms, latency %d ms, queue %.3lf sec, D/A rate %'.3lf Hz,",Playout,Portaudio_delay,qd,rate);
     printwt(" (%+.3lf ppm),",1e6 * (rate / DAC_samprate - 1));
     // Time since last packet drop on any channel
@@ -339,13 +351,14 @@ static void update_monitor_display(void){
   getyx(stdscr,y,x);
   int row_save = y;
   int col_save = x;
-  
+
   // dB column
   int width = 4;
   mvprintwt(y++,x,"%*s",width,"dB");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%+*.0lf",width,sp->muted ? -INFINITY : voltage2dB(sp->gain));
+    if(sp != NULL)
+      mvprintwt(y,x,"%+*.0lf",width,sp->muted ? -INFINITY : voltage2dB(sp->gain));
   }
   x += width;
   y = row_save;
@@ -358,7 +371,8 @@ static void update_monitor_display(void){
     mvprintwt(y++,x," pan");
     for(int session = First_session; session < Nsessions_copy; session++,y++){
       struct session const *sp = Sessions_copy[session];
-      mvprintwt(y,x,"%*d",width,(int)roundf(100*sp->pan));
+      if(sp != NULL)
+	mvprintwt(y,x,"%*d",width,(int)roundf(100*sp->pan));
     }
     x += width;
     y = row_save;
@@ -371,7 +385,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"ssrc");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%*d",width,sp->ssrc);
+    if(sp != NULL)
+      mvprintwt(y,x,"%*d",width,sp->ssrc);
   }
   x += width;
   y = row_save;
@@ -379,14 +394,14 @@ static void update_monitor_display(void){
   if(Notch){
     if(x >= COLS)
       goto done;
-    width = 6;
+    width = 7;
     mvprintwt(y++,x,"%*s",width,"tone");
     for(int session = First_session; session < Nsessions_copy; session++,y++){
       struct session const *sp = Sessions_copy[session];
-      if(!sp->notch_enable || sp->notch_tone == 0)
+      if(sp != NULL && (!sp->notch_enable || sp->notch_tone == 0))
 	continue;
-      
-      mvprintwt(y,x,"%*.1f%c",width,sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
+
+      mvprintwt(y,x,"%*.1f%c",width-1,sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
     }
     x += width;
     y = row_save;
@@ -397,7 +412,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"freq");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%'*.0lf",width,sp->chan.tune.freq);
+    if(sp != NULL)
+      mvprintwt(y,x,"%'*.0lf",width,sp->chan.tune.freq);
   }
   x += width;
   y = row_save;
@@ -408,31 +424,33 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"mode");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%*s",width,sp->chan.preset);
+    if(sp != NULL)
+      mvprintwt(y,x,"%*s",width,sp->chan.preset);
   }
   x += width;
   y = row_save;
 
   if(x >= COLS)
     goto done;
-  width = 5;
-  mvprintwt(y++,x,"%*s",width,"s/n");
+  width = 6;
+  mvprintwt(y++,x,"%*s",width-1,"s/n");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    if(!isnan(sp->snr))
-      mvprintwt(y,x,"%*.1f",width,sp->snr);
+    if(sp != NULL && !isnan(sp->snr))
+      mvprintwt(y,x,"%*.1f%c",width-1,sp->snr,(Voting && sp == Best_session) ? '*' : ' ');
   }
   x += width;
   y = row_save;
 
   x++; // ID is left justified, add a leading space
-
   if(x >= COLS)
     goto done;
   width = 0;
   mvprintwt(y++,x,"%s","id");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
+    if(sp == NULL)
+      continue;
     int len = strlen(sp->id);
     if(len > width)
       width = len;
@@ -447,6 +465,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"total");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
+    if(sp == NULL)
+      continue;
     char total_buf[100];
     mvprintwt(y,x,"%*s",width,ftime(total_buf,sizeof(total_buf),sp->tot_active));
   }
@@ -461,6 +481,8 @@ static void update_monitor_display(void){
     long long time = gps_time_ns();
     for(int session = First_session; session < Nsessions_copy; session++,y++){
       struct session *sp = Sessions_copy[session];
+      if(sp == NULL)
+	continue;
       char buf[100];
       if(sp->now_active)
 	mvprintwt(y,x,"%*s",width,ftime(buf,sizeof(buf),sp->active));
@@ -479,9 +501,9 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"queue");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    if(!sp->now_active || sp->muted || (Voting && Best_session != NULL && Best_session != sp))
+    if(sp == NULL || !sp->now_active || sp->muted || (Voting && Best_session != NULL && Best_session != sp))
       continue;
-    
+
     int const d = modsub(sp->wptr,Rptr,BUFFERSIZE); // Unplayed samples on queue
     int const queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
     mvprintwt(y,x,"%*d",width,queue_ms);   // Time idle since last transmission
@@ -493,12 +515,13 @@ static void update_monitor_display(void){
   x++; // Left justified, add a space
   if(x >= COLS)
     goto done;
-  
+
   width = 6;
   mvprintwt(y++,x,"%-*s",width,"type");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%-*s",width,encoding_string(PT_table[sp->type].encoding));
+    if(sp != NULL)
+      mvprintwt(y,x,"%-*s",width,encoding_string(sp->pt_table[sp->type].encoding));
   }
   x += width;
   y = row_save;
@@ -510,7 +533,7 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"ms");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    if(sp->samprate != 0)
+    if(sp != NULL && sp->samprate != 0)
       mvprintwt(y,x,"%*d",width,(1000 * sp->frame_size/sp->samprate)); // frame size, ms
   }
   x += width;
@@ -523,7 +546,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"c");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%*d",width,sp->channels);
+    if(sp != NULL)
+      mvprintwt(y,x,"%*d",width,sp->channels);
   }
   x += width;
   y = row_save;
@@ -535,7 +559,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"bw");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%*d",width,sp->bandwidth);
+    if(sp != NULL)
+      mvprintwt(y,x,"%*d",width,sp->bandwidth);
   }
   x += width;
   y = row_save;
@@ -547,7 +572,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"pt");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%*d",width,sp->type);
+    if(sp != NULL)
+      mvprintwt(y,x,"%*d",width,sp->type);
   }
   x += width;
   y = row_save;
@@ -559,7 +585,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"packets");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%*lu",width,sp->packets);
+    if(sp != NULL)
+      mvprintwt(y,x,"%*lu",width,sp->packets);
   }
   x += width;
   y = row_save;
@@ -571,7 +598,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"resets");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%*lu",width,sp->resets);
+    if(sp != NULL)
+      mvprintwt(y,x,"%*lu",width,sp->resets);
   }
   x += width;
   y = row_save;
@@ -583,7 +611,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"drops");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%'*llu",width,(unsigned long long)sp->rtp_state.drops);
+    if(sp != NULL)
+      mvprintwt(y,x,"%'*llu",width,(unsigned long long)sp->rtp_state.drops);
   }
   x += width;
   y = row_save;
@@ -595,7 +624,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"lates");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%*lu",width,sp->lates);
+    if(sp != NULL)
+      mvprintwt(y,x,"%*lu",width,sp->lates);
   }
   x += width;
   y = row_save;
@@ -607,7 +637,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"reseq");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%*lu",width,sp->reseqs);
+    if(sp != NULL)
+      mvprintwt(y,x,"%*lu",width,sp->reseqs);
   }
   x += width;
   y = row_save;
@@ -617,7 +648,8 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%s","sockets");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    mvprintwt(y,x,"%s -> %s",formatsock(&sp->sender),sp->dest);
+    if(sp != NULL)
+      mvprintwt(y,x,"%s -> %s",formatsock(&sp->sender),sp->dest);
   }
  done:;
   // Embolden the active lines
@@ -626,11 +658,13 @@ static void update_monitor_display(void){
   attr_get(&attrs, &pair, NULL);
   for(int session = First_session; session < Nsessions_copy; session++){
     struct session const *sp = Sessions_copy[session];
-    
+    if(sp == NULL)
+      continue;
+
     attr_t attr = A_NORMAL;
     if(sp->now_active)
       attr |= A_BOLD;
-    
+
     // 1 adjusts for the titles
     // only underscore to just before the socket entry since it's variable length
     mvchgat(1 + row_save + session,col_save,x,attr,pair,NULL);
@@ -644,7 +678,9 @@ static void process_keyboard(void){
   int const c = getch(); // Waits for 'update interval' ms if no input
   if(c == EOF)
     return; // No key hit
-  
+
+  // These commands don't require session locking
+  bool serviced = true;
   switch(c){
   case 'Q': // quit program
     Terminate = true;
@@ -658,22 +694,6 @@ static void process_keyboard(void){
   case 'A': // Start all new sessions muted
     Start_muted = !Start_muted;
     break;
-  case 'U': // Unmute all sessions, resetting any that were muted
-    for(int i = 0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
-      if(sp && sp->muted){
-	sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
-	sp->muted = false;
-      }
-    }
-    break;
-  case 'M': // Mute all sessions
-    for(int i = 0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
-      if(sp)
-	sp->muted = true;
-    }
-    break;
   case 'q':
     Quiet_mode = !Quiet_mode;
     break;
@@ -684,56 +704,30 @@ static void process_keyboard(void){
     help = !help;
     break;
   case 's': // Sort sessions by most recently active (or longest active)
-    sort_session_active();
+    sort_session_active(); // locks Sess_mutex internally
+    break;
+  case 't': // Sort sessions by most total activity
+    sort_session_total();
     break;
   case 'S':
     Auto_sort = !Auto_sort;
     break;
-  case 't': // Sort sessions by most recently active (or longest active)
-    sort_session_total();
-    break;
-  case 'N':
-    Notch = true;
-    for(int i=0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
-      if(sp != NULL){
-	sp->notch_enable = true;
-      }
-    }
-    break;
-  case 'n':
-    Notch = true;
-    if(Current >= 0){
-      struct session *sp = sptr(Current);
-      if(sp)
-	sp->notch_enable = true;
-    }
-    break;
-  case 'R': // Reset all sessions
-    for(int i=0; i < Nsessions;i++){
-      struct session *sp = sptr(i);
-      if(sp)
-	sp->reset = true;
-    }
-    break;
-  case 'f': // Turn off tone notching
-    if(Current >= 0){
-      struct session *sp = sptr(Current);
-      if(sp)
-	sp->notch_enable = false;
-    }
-    break;
-  case 'F':
-    Notch = false;
-    for(int i=0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
-      if(sp)
-	sp->notch_enable = false;
-    }
-    break;
   case KEY_RESIZE:
   case EOF:
     break;
+  default:
+    serviced = false; // Not handled in this switch(), so fall through and handle in the next with the lock taken
+    break;
+  }
+  if(serviced)
+    return;
+
+  // Commands below this point require session locking
+  serviced = true;
+  pthread_mutex_lock(&Sess_mutex);
+
+  // Commands manipulating the current session index
+  switch(c){
   case KEY_NPAGE:
     if(First_session + Sessions_per_screen < Nsessions){
       First_session += Sessions_per_screen;
@@ -776,95 +770,140 @@ static void process_keyboard(void){
 	First_session--;
     }
     break;
-  case '=': // If the user doesn't hit the shift key (on a US keyboard) take it as a '+'
-  case '+':
-    {
-      struct session *sp = sptr(Current);
-      if(sp)
-	sp->gain *= 1.122018454; // +1 dB
-    }
-    break;
-  case '_': // Underscore is shifted minus
-  case '-':
-    {
-      struct session *sp = sptr(Current);
-      if(sp)
-	sp->gain /= 1.122018454; // -1 dB
-    }
-    break;
-  case KEY_LEFT:
-    {
-      struct session *sp = sptr(Current);
-      if(sp)
-	sp->pan = max(sp->pan - .01,-1.0);
-    }
-    break;
-  case KEY_RIGHT:
-    {
-      struct session *sp = sptr(Current);
-      if(sp)
-	sp->pan = min(sp->pan + .01,+1.0);
-    }
-    break;
-  case KEY_SLEFT: // Shifted left - decrease playout buffer 10 ms
-    if(Playout >= -100){
-      Playout -= 1;
-      struct session *sp = sptr(Current);
-      if(sp)
-	sp->reset = true;
-    }
-    break;
-  case KEY_SRIGHT: // Shifted right - increase playout buffer 10 ms
-    Playout += 1;
-    {
-      struct session *sp = sptr(Current);
-      if(sp)
-	sp->reset = true;
-      else
-	beep();
-    }
-    break;
-  case 'u': // Unmute and reset Current session
-    {
-      struct session *sp = sptr(Current);
-      if(sp && sp->muted){
+  default:
+    serviced = false;
+  }
+  if(serviced){
+    pthread_mutex_unlock(&Sess_mutex);
+    return;
+  }
+
+  // Commands operating on all sessions
+  serviced = true;
+  switch(c){
+  case 'U': // Unmute all sessions, resetting any that were muted
+    for(int i = 0; i < Nsessions; i++){
+      struct session *sp = sptr(i);
+      if(sp != NULL && sp->muted){
 	sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	sp->muted = false;
       }
     }
     break;
-  case 'm': // Mute Current session
-    {
-      struct session *sp = sptr(Current);
-      if(sp)
+  case 'M': // Mute all sessions
+    for(int i = 0; i < Nsessions; i++){
+      struct session *sp = sptr(i);
+      if(sp != NULL)
 	sp->muted = true;
     }
     break;
-  case 'r':
-    // Manually reset playout queue
-    {
-      struct session *sp = sptr(Current);
-      if(sp)
+  case 'N':
+    Notch = true;
+    for(int i=0; i < Nsessions; i++){
+      struct session *sp = sptr(i);
+      if(sp != NULL){
+	sp->notch_enable = true;
+      }
+    }
+    break;
+  case 'R': // Reset all sessions
+    for(int i=0; i < Nsessions;i++){
+      struct session *sp = sptr(i);
+      if(sp != NULL)
 	sp->reset = true;
     }
+    break;
+  case 'F':
+    Notch = false;
+    for(int i=0; i < Nsessions; i++){
+      struct session *sp = sptr(i);
+      if(sp != NULL)
+	sp->notch_enable = false;
+    }
+    break;
+  default:
+    serviced = false; // Not handled by this switch
+    break;
+  }
+  if(serviced){
+    pthread_mutex_unlock(&Sess_mutex);
+    return;
+  }
+
+  // Commands operating on the current session
+  // Check validity of current session pointer so individual cases don't have to
+  // Do this last
+  // Lock still held!
+  serviced = true;
+  struct session *sp = sptr(Current);
+  if(sp == NULL){
+    // Current index not valid
+    pthread_mutex_unlock(&Sess_mutex);
+    beep();
+    return;
+  }
+
+  switch(c){
+  case 'f': // Turn off tone notching
+    sp->notch_enable = false;
+    break;
+  case 'n':
+    Notch = true;
+    sp->notch_enable = true;
+    break;
+  case '=': // If the user doesn't hit the shift key (on a US keyboard) take it as a '+'
+  case '+':
+    sp->gain *= 1.122018454; // +1 dB
+    break;
+  case '_': // Underscore is shifted minus
+  case '-':
+    sp->gain /= 1.122018454; // -1 dB
+    break;
+  case KEY_LEFT:
+    sp->pan = max(sp->pan - .01,-1.0);
+    break;
+  case KEY_RIGHT:
+    sp->pan = min(sp->pan + .01,+1.0);
+    break;
+  case KEY_SLEFT: // Shifted left - decrease playout buffer 10 ms
+    if(Playout >= -100){
+      Playout -= 1;
+      sp->reset = true;
+    }
+    break;
+  case KEY_SRIGHT: // Shifted right - increase playout buffer 10 ms
+    Playout += 1;
+    sp->reset = true;
+    break;
+  case 'u': // Unmute and reset Current session
+    if(sp->muted){
+      sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
+      sp->muted = false;
+    }
+    break;
+  case 'm': // Mute Current session
+    sp->muted = true;
+    break;
+  case 'r':    // Manually reset playout queue
+    sp->reset = true;
     break;
   case KEY_DC: // Delete
   case KEY_BACKSPACE:
   case 'd': // Delete current session
-    {
-      struct session *sp = sptr(Current);
-      if(sp){
-	sp->terminate = true;
-	// We have to wait for it to clean up before we close and remove its session
-	pthread_join(sp->task,NULL);
-	close_session(&sp); // Decrements Nsessions
-      }
-      if(Current >= Nsessions)
-	Current = Nsessions-1; // -1 when no sessions
-    }
-    break;
-  default: // Invalid command
-    beep();
+    sp->terminate = true;  // Also keeps it from being found again by sptr()
+    pthread_mutex_unlock(&Sess_mutex); // close_session will need the lock, at least
+    // We have to wait for it to clean up before we close and remove its session
+    pthread_join(sp->task,NULL);
+    sp->task = (pthread_t)0;
+    close_session(&sp); // Decrements Nsessions
+    if(Current >= Nsessions)
+      Current = Nsessions-1; // -1 when no sessions
+    return; // Avoid unlocking again
+  default:
+    serviced = false;
     break;
   }
+  pthread_mutex_unlock(&Sess_mutex);
+  if(!serviced)
+    beep(); // Not serviced by anything
 }
