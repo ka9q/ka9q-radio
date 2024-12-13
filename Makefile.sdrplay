@@ -2,7 +2,7 @@
 # Copyright 2017-2024, Phil Karn, KA9Q
 
 # for production
-DOPTS = -DNDEBUG=1 -O3
+DOPTS = -DNDEBUG=1 -O3 -DSDRPLAY
 
 # for debugging
 #DOPTS=-g
@@ -158,6 +158,3 @@ libfcd.a: fcd.o hid-libusb.o
 libradio.a: morse.o dump.o modes.o ax25.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o osc.o config.o
 	ar rv $@ $?
 	ranlib $@
-
-
-
