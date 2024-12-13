@@ -35,8 +35,23 @@
 // Could be (obscure) config file parameters
 float const Latency = 0.02; // chunk size for audio output callback
 float const Tone_period = 0.24; // PL tone integration period
-float Hysteresis = 2.0; // Voting hysteresis, dB
 
+// Voting hysteresis table. Small at low SNR, larger at large SNR to minimize pointless switching
+// When the current SNR is 'snr', don't switch to another channel unless it's at least 'hysteresis' dB stronger
+#define HSIZE (7)
+struct {
+  float snr;
+  float hysteresis;
+} Hysteresis_table[HSIZE] = {
+  // Must be in descending order
+  {30.0, 5.0},
+  {20.0, 3.0},
+  {12.0, 2.0},
+  {10.0, 1.0}, // Roughly full quieting
+  {8.0, 0.5},
+  {0.0, 0.0},  // Squelch probably won't be open anyway
+  {-10.0, 0.0}
+};
 
 // Names of config file sections
 char const *Radio = "radio";
@@ -388,8 +403,7 @@ int main(int argc,char * const argv[]){
 }
 
 // Update session now-active flags, pick session with highest SNR for voting
-// Needs to be enhanced: hysteresis should be a function of SNR. Little or none at low SNR, lots at high SNR
-void vote(){
+void vote(void){
   struct session *best = NULL;
   long long const time = gps_time_ns();
 
@@ -411,9 +425,17 @@ void vote(){
       best = sp;
   }
   // Don't claim it unless we're sufficiently better (or there's nobody)
-  if(Best_session == NULL || Best_session->muted || !Best_session->now_active || (best != NULL && best->snr > Best_session->snr + Hysteresis))
+  if(Best_session == NULL || Best_session->muted || !Best_session->now_active)
     Best_session = best;
-
+  else if(best != NULL){
+    for(int i=0; i < HSIZE;i++){
+      if(Best_session->snr > Hysteresis_table[i].snr){
+	if(best->snr > Best_session->snr + Hysteresis_table[i].hysteresis)
+	  Best_session = best;
+	break;
+      }
+    }
+  }
   pthread_mutex_unlock(&Sess_mutex);
 }
 
