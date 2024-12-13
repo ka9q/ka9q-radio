@@ -27,7 +27,8 @@ jobs:
             librtlsdr-dev \
             libiniparser-dev \
             libavahi-client-dev \
-            portaudio19-dev
+            portaudio19-dev \ 
+            uuid-dev
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Setup
