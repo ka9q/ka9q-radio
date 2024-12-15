@@ -276,8 +276,8 @@ static void closedown(int a){
 
 // This comes from a conversation with ChatGPT that was somewhat contradictory about the silence frame
 //static uint8_t OggSilence[3] = {0xf8,0xff,0xfe}; // Silence
-static uint8_t OggSilence[3] = {0xff}; // Comfort noise
-//static uint8_t OggSilence[3] = {0xf8}; // Lost packet, packet loss concealment. creates buzz when squelch is closed
+static uint8_t OggSilence[1] = {0xff}; // Comfort noise
+//static uint8_t OggSilence[1] = {0xf8}; // Lost packet, packet loss concealment. creates buzz when squelch is closed
 
 
 // if !flush, send whatever's on the queue, up to the first missing segment
