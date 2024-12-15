@@ -843,9 +843,12 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     {
       char str[Entry_width],*ptr;
       getentry("Opus bitrate, bit/sec (0=auto): ",str,sizeof(str));
-      int const x = labs(strtol(str,&ptr,0));
-      if(ptr != str)
+      int x = labs(strtol(str,&ptr,0));
+      if(ptr != str){
+	if(x < 510)
+	  x *= 1000;
 	encode_int(bpp,OPUS_BIT_RATE,x);
+      }
     }
     break;
   case 'g': // Manually set linear channel gain, dB (positive or negative)
