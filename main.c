@@ -446,7 +446,6 @@ static int loadconfig(char const * const file){
     // Override global defaults
     int const ip_tos = config_getint(Configtable,sname,"tos",IP_tos);
     char const *iface = config_getstring(Configtable,sname,"iface",Iface);
-    int const update = config_getint(Configtable,sname,"update",Update);
 
     // data stream is shared by all channels in this section
     // Now also used for per-channel status/control, with different port number
@@ -536,22 +535,26 @@ static int loadconfig(char const * const file){
 	  fprintf(stdout,"Can't allocate requested ssrc %u-%u\n",ssrc,ssrc + max_collisions);
 	  continue;
 	}
-	// Set reasonable compiled-in defaults just to keep things from blowing up
+	// Parameter priority, from high to low:
+	// 1. this section
+	// 2. the preset database entry, if specified
+	// 3. the [global] section
+	// 4. compiled-in defaults to keep things from blowing up
 	set_defaults(chan);
+	loadpreset(chan,Configtable,"global");
+
 	if(preset != NULL && loadpreset(chan,Preset_table,preset) != 0)
 	  fprintf(stdout,"warning: in [%s], loadpreset(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Preset_file,preset);
 
 	strlcpy(chan->preset,preset,sizeof(chan->preset));
-	loadpreset(chan,Configtable,sname); // Overwrite with other entries from this section, without overwriting those
+	loadpreset(chan,Configtable,sname);
 
 	// Set up output stream (data + status)
 	// Data multicast group has already been joined
 	memcpy(&chan->output.dest_socket,&data_dest_socket,sizeof(chan->output.dest_socket));
 	strlcpy(chan->output.dest_string,data,sizeof(chan->output.dest_string));
 	memcpy(&chan->status.dest_socket,&metadata_dest_socket,sizeof(chan->status.dest_socket));
-
 	chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
-	chan->status.output_interval = update;
 
 	// Time to start it -- ssrc is stashed by create_chan()
 	set_freq(chan,f);
