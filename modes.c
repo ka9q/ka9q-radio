@@ -257,6 +257,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
       chan->output.encoding = parse_encoding(cp);
   }
   chan->output.opus_bitrate = config_getint(table,sname,"bitrate",chan->output.opus_bitrate);
+  chan->status.output_interval = config_getint(Configtable,sname,"update",Update);
   return 0;
 }
 
