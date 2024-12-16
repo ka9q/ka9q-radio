@@ -1,4 +1,5 @@
-// Read and record PCM audio streams
+// Read and record PCM/WAV and Ogg Opus audio streams
+// Now with --stdout option to send (one) stream to standard output, eventually to replace pcmcat
 // Copyright 2021-2024 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -30,7 +31,7 @@
 
 // size of stdio buffer for disk I/O. 8K is probably the default, but we have this for possible tuning
 #define BUFFERSIZE (8192) // probably the same as default
-#define RESEQ 64 // size of resequence queue
+#define RESEQ 64 // size of resequence queue. Probably excessive; WiFi reordering is rarely more than 4-5 packets
 
 // Simplified .wav file header
 // http://soundfile.sapp.org/doc/WaveFormat/
@@ -136,6 +137,7 @@ static bool Subdirs; // Place recordings in subdirectories by SSID
 static char const *Locale;
 static uint32_t Ssrc; // SSRC, when manually specified
 static bool Catmode = false; // sending one channel to standard output
+static bool Flushmode = false; // Flush after each packet when writing to standard output
 
 const char *App_path;
 static int Input_fd,Status_fd;
@@ -158,6 +160,7 @@ static struct option Options[] = {
   {"catmode", no_argument, NULL, 'c'}, // Send single stream to stdout
   {"stdout", no_argument, NULL, 'c'},
   {"directory", required_argument, NULL, 'd'},
+  {"flush", no_argument, NULL, 'f'},   // Quickly fflush in --stdout mode to minimize delay
   {"locale", required_argument, NULL, 'l'},
   {"minfiletime", required_argument, NULL, 'm'},
   {"mintime", required_argument, NULL, 'm'},
@@ -171,7 +174,7 @@ static struct option Options[] = {
   {"version", no_argument, NULL, 'V'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = "d:l:m:sS:t:vL:V";
+static char Optstring[] = "cd:fl:m:sS:t:vL:V";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -184,6 +187,9 @@ int main(int argc,char *argv[]){
     switch(c){
     case 'c':
       Catmode = true;
+      break;
+    case 'f':
+      Flushmode = true;
       break;
     case 'd':
       Recordings = optarg;
@@ -361,6 +367,8 @@ static int send_opus_queue(struct session * const sp,bool flush){
     qp->inuse = false;
     count++;
   }
+  if(Catmode && Flushmode)
+    fflush(sp->fp);
   return count;
 }
 // if !flush, send whatever's on the queue, up to the first missing segment
@@ -413,6 +421,8 @@ static int send_wav_queue(struct session * const sp,bool flush){
       count++;
     }
   }
+  if(Catmode && Flushmode)
+    fflush(sp->fp);
   return count;
 }
 
@@ -1014,6 +1024,8 @@ static int end_ogg_opus_stream(struct session *sp){
     fwrite(finalPage.body, 1, finalPage.body_len, sp->fp);
   }
   ogg_stream_clear(&sp->oggState);
+  if(Catmode && Flushmode)
+    fflush(sp->fp);
   return -1;
 }
 
