@@ -135,6 +135,7 @@ static char const *Recordings = ".";
 static bool Subdirs; // Place recordings in subdirectories by SSID
 static char const *Locale;
 static uint32_t Ssrc; // SSRC, when manually specified
+static bool Catmode = false; // sending one channel to standard output
 
 const char *App_path;
 static int Input_fd,Status_fd;
@@ -154,6 +155,8 @@ static int start_wav_stream(struct session *sp);
 static int end_wav_stream(struct session *sp);
 
 static struct option Options[] = {
+  {"catmode", no_argument, NULL, 'c'}, // Send single stream to stdout
+  {"stdout", no_argument, NULL, 'c'},
   {"directory", required_argument, NULL, 'd'},
   {"locale", required_argument, NULL, 'l'},
   {"minfiletime", required_argument, NULL, 'm'},
@@ -179,6 +182,9 @@ int main(int argc,char *argv[]){
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != EOF){
     switch(c){
+    case 'c':
+      Catmode = true;
+      break;
     case 'd':
       Recordings = optarg;
       break;
@@ -376,13 +382,13 @@ static int send_wav_queue(struct session * const sp,bool flush){
 	// Catch up by emitting silence padding
 	if(Verbose > 2 || (Verbose > 1  && flush))
 	  fprintf(stderr,"timestamp jump %d frames\n",jump);
-#if 0
-	unsigned char *zeroes = calloc(jump,framesize); // Don't use too much stack space
-	fwrite(zeroes,framesize,jump,sp->fp);
-	FREE(zeroes);
-#else
-	fseeko(sp->fp,framesize * jump,SEEK_CUR);
-#endif
+	if(Catmode){
+	  unsigned char *zeroes = calloc(jump,framesize); // Don't use too much stack space
+	  fwrite(zeroes,framesize,jump,sp->fp);
+	  FREE(zeroes);
+	} else {
+	  fseeko(sp->fp,framesize * jump,SEEK_CUR);
+	}
 	sp->rtp_state.timestamp += jump; // also ready for next
 	sp->total_file_samples += jump;
 	sp->current_segment_samples += jump;
@@ -473,6 +479,9 @@ static void input_loop(){
 	if(sp->next)
 	  sp->next->prev = sp;
 	Sessions = sp;
+	if(Catmode && Ssrc == 0){
+	  Ssrc = chan.output.rtp.ssrc; // Latch onto the first ssrc we see, ignore others
+	}
       }
       sp->ssrc = chan.output.rtp.ssrc;
       sp->type = chan.output.rtp.type;
@@ -533,7 +542,7 @@ static void input_loop(){
 	  start_ogg_opus_stream(sp);
 	else
 	  start_wav_stream(sp);
-	fflush(sp->fp); // Get the header on disk so the file won't be empty too long
+	fflush(sp->fp); // Get the header outon disk so the file won't be empty too long
       }
 
       if(!sp->rtp_state.init){
@@ -632,6 +641,15 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   if(sp->fp != NULL)
     return 0;
 
+  char const *file_encoding = encoding_string(sp->encoding == S16BE ? S16LE : sp->encoding);
+  if(Catmode){
+    sp->fp = stdout;
+    if(Verbose)
+    fprintf(stderr,"receiving ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s offset %lld\n",
+	    sp->ssrc,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
+	    sp->chan.preset,(long long)sp->starting_offset);
+    return 0;
+  }
   char const *suffix = ".wav";
   switch(sp->encoding){
   case S16BE:
@@ -755,13 +773,11 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	     (int)(file_time.tv_nsec / 100000000),
 	     suffix);
   }
-  sp->fp = fopen(sp->filename,"w+");
   if(sp->fp == NULL){
     fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
     return -1;
   }
   // We byte swap S16BE to S16LE, so change the tag
-  char const *file_encoding = encoding_string(sp->encoding == S16BE ? S16LE : sp->encoding);
   if(Verbose)
     fprintf(stderr,"creating %s ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s offset %lld\n",
 	    sp->filename,sp->ssrc,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
@@ -1080,17 +1096,22 @@ static int start_wav_stream(struct session *sp){
   header.StartMillis=(int16_t)(now.tv_nsec / 1000000);
   header.CenterFrequency= sp->chan.tune.freq;
   memset(header.AuxUknown, 0, 128);
-  rewind(sp->fp); // should be at BOF but make sure
+  if(!Catmode)
+    rewind(sp->fp); // should be at BOF but make sure
   fwrite(&header,sizeof(header),1,sp->fp);
   int sampsize = sp->encoding == F32LE ? 4 : 2;
   int64_t offset_bytes = sampsize * sp->starting_offset;
-  fseeko(sp->fp,offset_bytes,SEEK_CUR);
+  if(!Catmode)
+    fseeko(sp->fp,offset_bytes,SEEK_CUR);
   return 0;
 }
 // Update wav header with now-known size and end auxi information
 static int end_wav_stream(struct session *sp){
   if(sp == NULL)
     return -1;
+
+  if(Catmode)
+    return 0; // Can't seek back to the beginning on a pipe
 
   rewind(sp->fp);
   struct wav header;
