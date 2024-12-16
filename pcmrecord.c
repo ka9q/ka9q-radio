@@ -138,6 +138,7 @@ static char const *Locale;
 static uint32_t Ssrc; // SSRC, when manually specified
 static bool Catmode = false; // sending one channel to standard output
 static bool Flushmode = false; // Flush after each packet when writing to standard output
+static const char *Command = NULL;
 
 const char *App_path;
 static int Input_fd,Status_fd;
@@ -160,6 +161,7 @@ static struct option Options[] = {
   {"catmode", no_argument, NULL, 'c'}, // Send single stream to stdout
   {"stdout", no_argument, NULL, 'c'},
   {"directory", required_argument, NULL, 'd'},
+  {"exec", required_argument, NULL, 'e'},
   {"flush", no_argument, NULL, 'f'},   // Quickly fflush in --stdout mode to minimize delay
   {"locale", required_argument, NULL, 'l'},
   {"minfiletime", required_argument, NULL, 'm'},
@@ -174,7 +176,7 @@ static struct option Options[] = {
   {"version", no_argument, NULL, 'V'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = "cd:fl:m:sS:t:vL:V";
+static char Optstring[] = "cd:e:fl:m:sS:t:vL:V";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -187,6 +189,9 @@ int main(int argc,char *argv[]){
     switch(c){
     case 'c':
       Catmode = true;
+      break;
+    case 'e':
+      Command = optarg;
       break;
     case 'f':
       Flushmode = true;
@@ -243,6 +248,10 @@ int main(int argc,char *argv[]){
   setlocale(LC_ALL,Locale);
   setlinebuf(stderr); // In case we're redirected to a file
 
+  if(Catmode && Command != NULL){
+    fprintf(stderr,"Both --stdout and --exec specified, --stdout turned off\n");
+    Catmode = false;
+  }
   // Set up input socket for multicast data stream from front end
   {
     struct sockaddr_storage sock;
@@ -665,6 +674,13 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	    sp->ssrc,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
 	    sp->chan.preset,(long long)sp->starting_offset);
     return 0;
+  } else if(Command != NULL){
+    sp->fp = popen(Command,"w");
+    if(sp->fp == NULL){
+      fprintf(stderr,"Cannot start %s, exiting",Command);
+      exit(1); // Will probably fail for all others too, just give up
+    }
+    return 0;
   }
   char const *suffix = ".wav";
   switch(sp->encoding){
@@ -838,6 +854,9 @@ static int close_file(struct session **spp){
   if(sp == NULL || sp->fp == NULL)
     return -1;
 
+  if(Catmode || Command != NULL)
+    return 0;
+
   if(sp->substantial_file){ // Don't bother for non-substantial files
     if(Verbose){
       fprintf(stderr,"closing %s %'.1f/%'.1f sec\n",sp->filename,
@@ -863,7 +882,10 @@ static int close_file(struct session **spp){
             (float)sp->samples_written / (sp->samprate * sp->channels),
             (float)sp->total_file_samples / (sp->samprate * sp->channels));
   }
-  fclose(sp->fp);
+  if(Command != NULL)
+    pclose(sp->fp);
+  else
+    fclose(sp->fp);
   sp->fp = NULL;
   FREE(sp->iobuffer);
   if(sp->prev)
