@@ -367,8 +367,14 @@ static int send_opus_queue(struct session * const sp,bool flush){
     qp->inuse = false;
     count++;
   }
-  if(Catmode && Flushmode)
+  if(Catmode && Flushmode){
+    ogg_page oggPage;
+    while (ogg_stream_flush(&sp->oggState, &oggPage)) {
+      fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
+      fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
+    }
     fflush(sp->fp);
+  }
   return count;
 }
 // if !flush, send whatever's on the queue, up to the first missing segment
