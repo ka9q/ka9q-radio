@@ -1,5 +1,6 @@
 // Read and record PCM/WAV and Ogg Opus audio streams
 // Now with --stdout option to send (one) stream to standard output, eventually to replace pcmcat
+// Also with --exec option to pipe stream into command, to replace pcmspawn
 // Copyright 2021-2024 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
