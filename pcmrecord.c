@@ -349,6 +349,8 @@ static int send_opus_queue(struct session * const sp,bool flush){
 	  sp->total_file_samples += samples;
 	  sp->current_segment_samples += samples;
 	  sp->samples_written += samples;
+	  if(FileLengthLimit != 0)
+	    sp->samples_remaining -= samples;
 	  if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
 	    sp->substantial_file = true;
 	}
@@ -364,6 +366,8 @@ static int send_opus_queue(struct session * const sp,bool flush){
       sp->total_file_samples += samples;
       sp->current_segment_samples += samples;
       sp->samples_written += samples;
+      if(FileLengthLimit != 0)
+	sp->samples_remaining -= samples;
       if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
 	sp->substantial_file = true;
 
@@ -427,6 +431,8 @@ static int send_wav_queue(struct session * const sp,bool flush){
 	sp->total_file_samples += jump;
 	sp->current_segment_samples += jump;
 	sp->samples_written += jump;
+	if(FileLengthLimit != 0)
+	  sp->samples_remaining -= jump;
       }
       // end of timestamp jump catch-up, send actual packets on queue
       fwrite(qp->data,framesize,frames,sp->fp);
@@ -434,6 +440,8 @@ static int send_wav_queue(struct session * const sp,bool flush){
       sp->total_file_samples += frames;
       sp->current_segment_samples += frames;
       sp->samples_written += frames;
+      if(FileLengthLimit != 0)
+	sp->samples_remaining -= frames;
       if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
 	sp->substantial_file = true;
 
@@ -645,6 +653,8 @@ static void input_loop(){
       else
 	send_wav_queue(sp,false);
 
+      if(FileLengthLimit != 0 && sp->samples_remaining <= 0)
+	close_file(&sp);
       sp->last_active = gps_time_ns();
     } // end of packet processing
 
@@ -716,7 +726,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 
   sp->starting_offset = 0;
   sp->samples_remaining = 0;
-  if(FileLengthLimit > 0 && sp->encoding != OPUS){ // Not supported on opus yet
+  if(FileLengthLimit > 0){ // Not really supported on opus yet
     // Pad start of first file with zeroes
 #if 0
     struct tm const * const tm_now = gmtime(&now.tv_sec);
@@ -743,7 +753,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       file_time.tv_sec = f.quot + epoch; // restore original epoch
       file_time.tv_nsec = f.rem;
 
-      sp->starting_offset = (sp->samprate * sp->channels * skip_ns) / BILLION;
+      sp->starting_offset = (sp->samprate * skip_ns) / BILLION;
       sp->total_file_samples += sp->starting_offset;
 #if 0
       fprintf(stderr,"padding %lf sec %lld samples\n",
@@ -751,7 +761,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	      sp->starting_offset);
 #endif
     }
-    sp->samples_remaining = FileLengthLimit * sp->samprate * sp->channels - sp->starting_offset;
+    sp->samples_remaining = FileLengthLimit * sp->samprate - sp->starting_offset;
   }
   struct tm const * const tm = gmtime(&file_time.tv_sec);
   // yyyy-mm-dd-hh:mm:ss so it will sort properly
@@ -1157,7 +1167,7 @@ static int start_wav_stream(struct session *sp){
   if(!Catmode)
     rewind(sp->fp); // should be at BOF but make sure
   fwrite(&header,sizeof(header),1,sp->fp);
-  int sampsize = sp->encoding == F32LE ? 4 : 2;
+  int sampsize = sp->channels * (sp->encoding == F32LE ? 4 : 2);
   int64_t offset_bytes = sampsize * sp->starting_offset;
   if(!Catmode)
     fseeko(sp->fp,offset_bytes,SEEK_CUR);
