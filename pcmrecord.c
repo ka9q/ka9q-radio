@@ -150,6 +150,7 @@ static uint32_t Ssrc; // SSRC, when manually specified
 static bool Catmode = false; // sending one channel to standard output
 static bool Flushmode = false; // Flush after each packet when writing to standard output
 static const char *Command = NULL;
+static bool Jtmode = false;
 
 const char *App_path;
 static int Input_fd,Status_fd;
@@ -174,6 +175,7 @@ static struct option Options[] = {
   {"directory", required_argument, NULL, 'd'},
   {"exec", required_argument, NULL, 'e'},
   {"flush", no_argument, NULL, 'f'},   // Quickly fflush in --stdout mode to minimize delay
+  {"jt", no_argument, NULL, 'j'},      // Use K1JT format file names
   {"locale", required_argument, NULL, 'l'},
   {"minfiletime", required_argument, NULL, 'm'},
   {"mintime", required_argument, NULL, 'm'},
@@ -187,7 +189,7 @@ static struct option Options[] = {
   {"version", no_argument, NULL, 'V'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = "cd:e:fl:m:sS:t:vL:V";
+static char Optstring[] = "cd:e:fjl:m:sS:t:vL:V";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -206,6 +208,9 @@ int main(int argc,char *argv[]){
       break;
     case 'f':
       Flushmode = true;
+      break;
+    case 'j':
+      Jtmode = true;
       break;
     case 'd':
       Recordings = optarg;
@@ -245,7 +250,7 @@ int main(int argc,char *argv[]){
       VERSION();
       exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-c|--catmode|--stdout] [-e|--exec command] [-f|--flush] [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-j|--jt] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
       exit(EX_USAGE);
       break;
     }
@@ -260,8 +265,18 @@ int main(int argc,char *argv[]){
   setlinebuf(stderr); // In case we're redirected to a file
 
   if(Catmode && Command != NULL){
-    fprintf(stderr,"Both --stdout and --exec specified, --stdout turned off\n");
+    fprintf(stderr,"--exec supersedes --stdout\n");
     Catmode = false;
+  }
+  if((Catmode || Command != NULL) && (Subdirs || Jtmode)){
+    fprintf(stderr,"--stdout and --exec supersede --subdirs and --jtmode\n");
+    Subdirs = false;
+    Jtmode = false;
+  }
+
+  if(Subdirs && Jtmode){
+    fprintf(stderr,"--jtmode supersedes --subdirs\n");
+    Subdirs = false;
   }
   // Set up input socket for multicast data stream from front end
   {
@@ -776,7 +791,19 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	  (int)(file_time.tv_nsec / 100000000)); // 100 million, i.e., convert to tenths of a sec
 #endif
 
-  if(Subdirs){
+  if(Jtmode){
+    //  K1JT-format file names in flat directory
+    snprintf(sp->filename,sizeof(sp->filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s%s",
+	     tm->tm_year+1900,
+	     tm->tm_mon+1,
+	     tm->tm_mday,
+	     tm->tm_hour,
+	     tm->tm_min,
+	     tm->tm_sec,
+	     sp->chan.tune.freq,
+	     sp->chan.preset,
+	     suffix);
+  } else if(Subdirs){
     // Create directory path
     char dir[PATH_MAX];
     snprintf(dir,sizeof(dir),"%u",sp->ssrc);
