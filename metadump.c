@@ -51,8 +51,9 @@ static char Locale[256] = "en_US.UTF-8";
 int Verbose;
 int IP_tos;
 int Mcast_ttl = 5;
-static char Optstring[] = "as:c:i:vnr:l:Vx::";
+static char Optstring[] = "tas:c:i:vnr:l:Vx::";
 static struct option Options[] = {
+  {"stdin", no_argument, NULL, 't'},
   {"all", no_argument, NULL, 'a'},
   {"ssrc", required_argument, NULL, 's'},
   {"count", required_argument, NULL, 'c'},
@@ -69,6 +70,17 @@ static struct option Options[] = {
 void usage(void);
 void *input_thread(void *);
 
+void decode_stdin(){
+  uint8_t buffer[PKTSIZE];
+  int length=read(STDIN_FILENO,buffer,PKTSIZE);
+  if (length>0){
+    enum pkt_type const cr = buffer[0]; // Command/response byte
+    fprintf(stdout," %s", cr == STATUS ? "STAT" : "CMD");
+    dump_metadata(stdout,buffer+1,length-1,Newline);
+    fflush(stdout);
+  }
+}
+
 int main(int argc,char *argv[]){
   App_path = argv[0];
   int retries = 0;
@@ -83,6 +95,9 @@ int main(int argc,char *argv[]){
     case 'a':
       All = true; // Dump every SSRC
       break;
+    case 't':
+      decode_stdin();
+      exit(EX_OK);
     case 's':
       Ssrc = strtol(optarg,NULL,0);
       break;
@@ -204,7 +219,7 @@ int main(int argc,char *argv[]){
 
 
 void usage(void){
-  fprintf(stdout,"%s [-R|--retries count] [-s|--ssrc <ssrc>|-a|--all] [-c|--count n] [-i|--interval f] [-v|--verbose] [-n|--newline] [-l|--locale] [ -r|--radio] control-channel\n",App_path);
+  fprintf(stdout,"%s [-R|--retries count] [-s|--ssrc <ssrc>|-a|--all] [-c|--count n] [-i|--interval f] [-v|--verbose] [-n|--newline] [-l|--locale] [-t|--stdin] [-r|--radio] control-channel\n",App_path);
 }
 
 // Process incoming packets
