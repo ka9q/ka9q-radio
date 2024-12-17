@@ -636,19 +636,19 @@ static int setup_hardware(char const *sname){
     Frontend.setup = rtlsdr_setup;
     Frontend.start = rtlsdr_startup;
     Frontend.tune = rtlsdr_tune;
-  } else if(strcasecmp(device,"sig_gen") == 0){
+  } else if(strcasecmp(device,"sig_gen") == 0) {
     Frontend.setup = sig_gen_setup;
     Frontend.start = sig_gen_startup;
     Frontend.tune = sig_gen_tune;
-#if 0
     // The sdrplay library is still proprietary and object-only, so I can't bundle it in ka9q-radio
     // Everything else either has a standard Debian package or I have information to program them directly.
     // To hell with vendors who deliberately make their products hard to use when they have plenty of competition.
+  #ifdef SDRPLAY
   } else if(strcasecmp(device,"sdrplay") == 0){
     Frontend.setup = sdrplay_setup;
     Frontend.start = sdrplay_startup;
     Frontend.tune = sdrplay_tune;
-#endif
+  #endif
   } else {
     fprintf(stdout,"device %s unrecognized\n",device);
     return -1;
