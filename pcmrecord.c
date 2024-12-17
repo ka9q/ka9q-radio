@@ -816,6 +816,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	     (int)(file_time.tv_nsec / 100000000),
 	     suffix);
   }
+  sp->fp = fopen(sp->filename,"w++");
+
   if(sp->fp == NULL){
     fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
     return -1;
