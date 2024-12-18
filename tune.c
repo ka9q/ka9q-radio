@@ -299,6 +299,17 @@ int main(int argc,char *argv[]){
       if(type == EOL)
 	break;
       unsigned int optlen = *cp++;
+      if(optlen & 0x80){
+         // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+         int length_of_length = optlen & 0x7f;
+         optlen = 0;
+         while(length_of_length > 0){
+            optlen <<= 8;
+            optlen |= *cp++;
+            length_of_length--;
+         }
+      }
+
       if(cp - response_buffer + optlen > length)
 	break; // Invalid length
       switch(type){
@@ -362,9 +373,10 @@ int main(int argc,char *argv[]){
   // Show responses unless quiet
   if(!Quiet){
     printf("SSRC %'u\n",Ssrc);
-    if(strlen(preset) > 0)
+    if ((preset) && (strlen(preset)>0)){
       printf("Preset %s\n",preset);
-    FREE(preset);
+      FREE(preset);
+    }
     if(samprate != 0)
       printf("Sample rate %'d Hz\n",samprate);
 
