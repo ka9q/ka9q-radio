@@ -1002,9 +1002,11 @@ static int start_ogg_opus_stream(struct session *sp){
   int32_t *np = (int32_t *)wp;
   *np++ = 8; // Number of tags follows
   wp = (uint8_t *)np;
-
-  wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),"ENCODER=KA9Q radiod");
-
+  {
+    char temp[256];
+    snprintf(temp,sizeof(temp),"ENCODER=KA9Q radiod - %s",opus_get_version_string());
+    wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),temp);
+  }
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
   struct tm const * const tm = gmtime(&now.tv_sec);
