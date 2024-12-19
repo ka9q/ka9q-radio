@@ -899,8 +899,10 @@ float const noise_gain(struct filter_out const * const slave){
 
 // This can occasionally be called with slave == NULL at startup, so don't abort
 // NB: 'low' and 'high' are *fractional* frequencies relative to the output sample rate, i.e., -0.5 < f < +0.5
+// If invoked on a demod that hasn't run yet, slave->master will be NULL so check for that and quit;
+// the filter should get set up when it actually starts (thanks N5TNL for bug report)
 int set_filter(struct filter_out * const slave,float low,float high,float const kaiser_beta){
-  if(slave == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta))
+  if(slave == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta) || slave->master == NULL)
     return -1;
 
   // Swap if necessary
