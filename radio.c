@@ -103,7 +103,13 @@ static const float N0_smooth = .001; // exponential smoothing rate for (noisy) b
 // in the chan's pre-filter nyquist bandwidth
 // Works better than global estimation when noise floor is not flat, e.g., on HF
 static float estimate_noise(struct channel *chan,int shift){
+  assert(chan != NULL);
+  if(chan == NULL)
+    return NAN;
   struct filter_out *slave = &chan->filter.out;
+  assert(slave != NULL);
+  if(slave == NULL)
+    return NAN;
   if(chan->filter.energies == NULL)
     chan->filter.energies = calloc(sizeof(float),slave->bins);
 
@@ -215,6 +221,7 @@ void *demod_thread(void *p){
 
 // start demod thread on already-initialized chan structure
 int start_demod(struct channel * chan){
+  assert(chan != NULL);
   if(chan == NULL)
     return -1;
 
@@ -367,6 +374,8 @@ int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, doub
 void *sap_send(void *p){
   struct channel *chan = (struct channel *)p;
   assert(chan != NULL);
+  if(chan == NULL)
+    return NULL;
 
   int64_t start_time = utc_time_sec() + NTP_EPOCH; // NTP uses UTC, not GPS
 
@@ -487,6 +496,10 @@ void *sap_send(void *p){
 
 // Baseband samples placed in chan->filter.out->output.c
 int downconvert(struct channel *chan){
+  assert(chan != NULL);
+  if(chan == NULL)
+    return -1;
+
   int shift = 0;
   double remainder = 0;
 
@@ -623,6 +636,10 @@ int downconvert(struct channel *chan){
 
 // scale A/D output to full scale for monitoring overloads
 float scale_ADpower2FS(struct frontend const *frontend){
+  assert(frontend != NULL);
+  if(frontend == NULL)
+    return NAN;
+
   assert(frontend->bitspersample > 0);
   float scale = 1.0f / (1 << (frontend->bitspersample - 1)); // Important to force the numerator to float, otherwise the divide produces zero!
   scale *= scale;
@@ -635,9 +652,13 @@ float scale_ADpower2FS(struct frontend const *frontend){
 // Returns multiplicative factor for converting raw samples to floats with analog gain correction
 // Real vs complex difference is (I think) handled in the filter with a 3dB boost, so there's no sqrt(2) correction here
 float scale_AD(struct frontend const *frontend){
+  assert(frontend != NULL);
+  if(frontend == NULL)
+    return NAN;
+
   assert(frontend->bitspersample > 0);
   float scale = 1.0f / (1 << (frontend->bitspersample - 1));
   // net analog gain, dBm to dBFS, that we correct for to maintain unity gain, i.e., 0 dBm -> 0 dBFS
-  float analog_gain = frontend->rf_gain - frontend->rf_atten + frontend->rf_level_cal; 
+  float analog_gain = frontend->rf_gain - frontend->rf_atten + frontend->rf_level_cal;
   return scale * dB2voltage(-analog_gain); // Front end gain as amplitude ratio
 }

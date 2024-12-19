@@ -359,6 +359,7 @@ int execute_filter_input(struct filter_in * const f){
   // We use the FFTW3 functions that specify the input and output arrays
   // Execute the FFT in separate worker threads
   struct fft_job * const job = calloc(1,sizeof(struct fft_job));
+  assert(job != NULL);
   job->jobnum = f->next_jobnum++;
   job->output = f->fdomain[job->jobnum % ND];
   job->type = f->in_type;
@@ -421,6 +422,8 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   // So the derefenced pointer can't be const
   struct filter_in * const master = slave->master;
   assert(master != NULL);
+  if(master == NULL)
+    return -1;
 
   assert(slave->out_type == SPECTRUM || slave->rev_plan != NULL);
   assert(slave->out_type != NONE);
@@ -449,6 +452,8 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
   pthread_mutex_unlock(&master->filter_mutex);
 
   assert(fdomain != NULL);
+  if(fdomain == NULL)
+    return -1;
 
   // Copy the requested frequency segment in preparation for multiplication by the filter response
   // Although frequency domain data is always complex, this is complicated because
@@ -614,7 +619,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 // We never actually kill a FFT thread (which is why it's turned off) but it's here if we ever do
 static void terminate_fft(struct filter_in *f){
   struct fft_job * const job = calloc(1,sizeof(struct fft_job));
-
+  assert(job != NULL);
   job->terminate = true;
   // Append job to queue, wake FFT thread
   pthread_mutex_lock(&FFT.queue_mutex);
@@ -880,6 +885,8 @@ float const noise_gain(struct filter_out const * const slave){
   if(slave == NULL)
     return NAN;
   struct filter_in const * const master = slave->master;
+  if(master == NULL)
+    return NAN;
 
   float sum = 0;
   for(int i=0;i<slave->bins;i++)
@@ -925,6 +932,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   float const gain = (slave->out_type == COMPLEX ? 1.0 : M_SQRT1_2) / (float)slave->master->bins;
 
   complex float * const response = lmalloc(sizeof(complex float) * slave->bins);
+  assert(response != NULL);
   memset(response,0,slave->bins * sizeof(response[0]));
   assert(malloc_usable_size(response) >= (slave->bins) * sizeof(*response));
   for(int n=0; n < slave->bins; n++){
@@ -957,6 +965,8 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 }
 
 int write_cfilter(struct filter_in *f, complex float const *buffer,int size){
+  if(f == NULL)
+    return -1;
   if(sizeof(*buffer) * (f->wcnt + size) >= f->input_buffer_size)
     return -1; // Write is so large it wrapped the input buffer. Should handle this more cleanly
 
@@ -977,6 +987,8 @@ int write_cfilter(struct filter_in *f, complex float const *buffer,int size){
 }
 
 int write_rfilter(struct filter_in *f, float const *buffer,int size){
+  if(f == NULL)
+    return -1;
   if(sizeof(*buffer) * (f->wcnt + size) >= f->input_buffer_size)
     return -1; // Write is so large it wrapped the input buffer. Should handle this more cleanly
 
@@ -1007,7 +1019,7 @@ void *lmalloc(size_t size){
     return ptr;
   }
   errno = r;
-  assert(0);
+  assert(false);
   return NULL;
 }
 // Suggest running fftwf-wisdom to generate some FFTW3 wisdom
