@@ -1101,15 +1101,17 @@ double rx888_tune(struct frontend *frontend,double freq){
     rx888_set_hf_mode(sdr); // Always use direct HF input; internal LPF must be bypassed
     // Select nyquist aliasing zone; 1 = baseband
     int zone = 1 + floor(2 * freq / frontend->samprate);
-    frontend->frequency = (zone / 2) * frontend->samprate;
+    frontend->frequency = (int)(zone / 2) * frontend->samprate;
+    double minf = min(fabsf(frontend->min_IF),fabsf(frontend->max_IF));
+    double maxf = max(fabsf(frontend->min_IF),fabsf(frontend->max_IF));
     if(zone & 1){
       // right side up spectrum above the aliasing frequency
-      frontend->min_IF = +fabsf(frontend->min_IF);
-      frontend->max_IF = +fabsf(frontend->max_IF);
+      frontend->min_IF = minf;
+      frontend->max_IF = maxf;
     } else {
       // Inverted spectrum below the aliasing frequency
-      frontend->min_IF = -fabsf(frontend->min_IF);
-      frontend->max_IF = -fabsf(frontend->max_IF);
+      frontend->min_IF = -maxf;
+      frontend->max_IF = -minf;
     }
     return frontend->frequency;
   }
