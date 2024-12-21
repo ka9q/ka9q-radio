@@ -299,7 +299,6 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
   sdr->frequency = frequency;
   if(frequency == 0){
     // HF mode
-    frontend->lock = true; // Doesn't tune in direct sampling mode
     rx888_set_hf_mode(sdr);
   } else {
     // VHF/UHF mode
@@ -1092,6 +1091,7 @@ double rx888_tune(struct frontend *frontend,double freq){
     return frontend->frequency;
   if(!sdr->undersample){
     if(freq == 0.0){
+      frontend->frequency = freq;
       rx888_set_hf_mode(sdr);
       return 0;
     } else {
