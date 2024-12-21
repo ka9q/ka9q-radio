@@ -89,6 +89,7 @@ struct sdrstate {
   int64_t last_count_time;
   bool message_posted; // Clock rate error posted last time around
   float scale;         // Scale samples for #bits and front end gain
+  bool undersample;    // Use Undersample aliasing on baseband input for VHF/UHF
 
   pthread_t cmd_thread;
   pthread_t proc_thread;
@@ -178,6 +179,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   sdr->randomizer = config_getboolean(dictionary,section,"rand",false);
   rx888_set_dither_and_randomizer(sdr,sdr->dither,sdr->randomizer);
 
+  sdr->undersample = config_getboolean(dictionary,section,"undersample",false);
   // RF Gain calibration
   // WA2ZKD measured several rx888s with very consistent results
   // e.g., -90 dBm gives -91.4 dBFS with 0 dB VGA gain and 0 dB attenuation
@@ -1088,11 +1090,28 @@ double rx888_tune(struct frontend *frontend,double freq){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->lock)
     return frontend->frequency;
-  if(freq == 0.0){
-    rx888_set_hf_mode(sdr);
-    return 0;
+  if(!sdr->undersample){
+    if(freq == 0.0){
+      rx888_set_hf_mode(sdr);
+      return 0;
+    } else {
+      return rx888_set_tuner_frequency(sdr,freq);
+    }
   } else {
-    return rx888_set_tuner_frequency(sdr,freq);
+    rx888_set_hf_mode(sdr); // Always use direct HF input; internal LPF must be bypassed
+    // Select nyquist aliasing zone; 1 = baseband
+    int zone = 1 + floor(2 * freq / frontend->samprate);
+    frontend->frequency = (zone / 2) * frontend->samprate;
+    if(zone & 1){
+      // right side up spectrum above the aliasing frequency
+      frontend->min_IF = +fabsf(frontend->min_IF);
+      frontend->max_IF = +fabsf(frontend->max_IF);
+    } else {
+      // Inverted spectrum below the aliasing frequency
+      frontend->min_IF = -fabsf(frontend->min_IF);
+      frontend->max_IF = -fabsf(frontend->max_IF);
+    }
+    return frontend->frequency;
   }
 }
 
