@@ -81,7 +81,6 @@ struct sdrstate {
 
   // RF Hardware
   double reference;
-  double frequency;
   bool randomizer;
   bool dither;
   uint32_t gpios;
@@ -89,7 +88,7 @@ struct sdrstate {
   int64_t last_count_time;
   bool message_posted; // Clock rate error posted last time around
   float scale;         // Scale samples for #bits and front end gain
-  bool undersample;    // Use Undersample aliasing on baseband input for VHF/UHF
+  int undersample;     // Use undersample aliasing on baseband input for VHF/UHF. n = 1 => no undersampling
 
   pthread_t cmd_thread;
   pthread_t proc_thread;
@@ -179,7 +178,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   sdr->randomizer = config_getboolean(dictionary,section,"rand",false);
   rx888_set_dither_and_randomizer(sdr,sdr->dither,sdr->randomizer);
 
-  sdr->undersample = config_getboolean(dictionary,section,"undersample",false);
   // RF Gain calibration
   // WA2ZKD measured several rx888s with very consistent results
   // e.g., -90 dBm gives -91.4 dBFS with 0 dB VGA gain and 0 dB attenuation
@@ -252,18 +250,28 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   usleep(5000);
   double actual = rx888_set_samprate(sdr,sdr->reference,samprate);
   frontend->samprate = samprate;
-  // Somewhat arbitrary. See https://ka7oei.blogspot.com/2024/12/frequency-response-of-rx-888-sdr-at.html
-  frontend->min_IF = 15000;
-  frontend->max_IF = Nyquist * samprate; // Just an estimate - get the real number somewhere
 
+  sdr->undersample = config_getint(dictionary,section,"undersample",1);
+  if(sdr->undersample < 1){
+    fprintf(stdout,"rx888 undersample must be >= 1, ignoring\n");
+    sdr->undersample = 1;
+  }
+  int mult = sdr->undersample / 2;
+  frontend->frequency = frontend->samprate * mult;
+  if(sdr->undersample & 1){
+    // Somewhat arbitrary. See https://ka7oei.blogspot.com/2024/12/frequency-response-of-rx-888-sdr-at.html
+    frontend->min_IF = 15000;
+    frontend->max_IF = Nyquist * samprate;
+  } else {
+    frontend->min_IF = -Nyquist * samprate;
+    frontend->max_IF = -15000;
+  }
   // start clock
   control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
   // power on clock 0
   //  uint8_t const clock_control = SI5351_VALUE_MS_INT | SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
   uint8_t const clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
   control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_CLK_BASE+0,clock_control);
-
-
   {
     char const *p = config_getstring(dictionary,section,"description","rx888");
     FREE(frontend->description);
@@ -284,30 +292,29 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
 	  xfer_time);
 
-  // VHF-UHF
-  double frequency = 0;
+  // VHF-UHF tuning
   {
     char const *p = config_getstring(dictionary,section,"frequency",NULL);
     if(p != NULL){
-      frequency = parse_frequency(p,false);
-      if(frequency < Min_frequency || frequency > Max_frequency){
-	fprintf(stdout,"Invalid VHF/UHF frequency %'lf, forcing %'lf\n",frequency,0.0);
-	frequency = 0;
+      if(sdr->undersample > 1){
+	fprintf(stdout,"frequency = ignored in undersample mode\n");
+      } else {
+	double frequency = parse_frequency(p,false);
+	if(frequency < Min_frequency || frequency > Max_frequency){
+	  fprintf(stdout,"Invalid VHF/UHF frequency %'lf, ignoring\n",frequency);
+	} else {
+	  // VHF/UHF mode
+	  double actual_frequency = rx888_set_tuner_frequency(sdr,frequency);
+	  fprintf(stdout,"Actual VHF/UHF tuner frequency %'lf\n",actual_frequency);
+	  frontend->frequency = actual_frequency;
+	  rx888_set_att(sdr,att,true);
+	  rx888_set_gain(sdr,gain,true);
+	}
       }
     }
   }
-  sdr->frequency = frequency;
-  if(frequency == 0){
-    // HF mode
+  if(frontend->frequency == 0)
     rx888_set_hf_mode(sdr);
-  } else {
-    // VHF/UHF mode
-    double actual_frequency = rx888_set_tuner_frequency(sdr,frequency);
-    fprintf(stdout,"Actual VHF/UHF tuner frequency %'lf\n",actual_frequency);
-
-    rx888_set_att(sdr,att,true);
-    rx888_set_gain(sdr,gain,true);
-  }
   usleep(1000000); // 1s - see SDDC_FX3 firmware
   return 0;
 }
@@ -329,7 +336,7 @@ float rx888_gain(struct frontend * const frontend, float gain){
   if(frontend->rf_agc)
     fprintf(stdout,"manual gain setting, turning off AGC\n");
   frontend->rf_agc = false;
-  rx888_set_gain(sdr,gain,sdr->frequency != 0);
+  rx888_set_gain(sdr,gain,sdr->undersample == 1 && frontend->frequency != 0);
   return frontend->rf_gain;
 }
 
@@ -339,7 +346,7 @@ float rx888_atten(struct frontend * const frontend, float atten){
   if(frontend->rf_agc)
     fprintf(stdout,"manual atten setting, turning off AGC\n");
   frontend->rf_agc = false;
-  rx888_set_att(sdr,atten,sdr->frequency != 0);
+  rx888_set_att(sdr,atten,sdr->undersample == 1 && frontend->frequency != 0);
   return frontend->rf_atten;
 }
 
@@ -920,22 +927,18 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
 }
 
 static void rx888_set_hf_mode(struct sdrstate *sdr){
-  struct frontend *frontend = sdr->frontend;
-  if(frontend->frequency == 0.0){
-    return;
-  }
   command_send(sdr->dev_handle,TUNERSTDBY,0); // Stop Tuner
   // switch to HF Antenna
   usleep(5000);
   sdr->gpios &= ~VHF_EN;
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
-  frontend->frequency = 0.0;
 }
 
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency){
   assert(sdr != NULL);
-  // frequency == 0 -> HF mode; we shouldn't be here
-  assert(frequency > 0);
+  if(frequency == 0)
+    return 0;
+
   struct frontend *frontend = sdr->frontend;
   if(frontend->frequency == frequency){
     return frequency - R828D_IF_CARRIER;
@@ -1087,33 +1090,14 @@ static int gain2val(double gain){
 }
 double rx888_tune(struct frontend *frontend,double freq){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  if(frontend->lock)
+  if(frontend->lock || sdr->undersample != 1)
     return frontend->frequency;
-  if(!sdr->undersample){
-    if(freq == 0.0){
-      frontend->frequency = freq;
-      rx888_set_hf_mode(sdr);
-      return 0;
-    } else {
-      return rx888_set_tuner_frequency(sdr,freq);
-    }
+  if(freq == 0.0){
+    frontend->frequency = 0;
+    rx888_set_hf_mode(sdr);
+    return 0;
   } else {
-    rx888_set_hf_mode(sdr); // Always use direct HF input; internal LPF must be bypassed
-    // Select nyquist aliasing zone; 1 = baseband
-    int zone = 1 + floor(2 * freq / frontend->samprate);
-    frontend->frequency = (int)(zone / 2) * frontend->samprate;
-    double minf = min(fabsf(frontend->min_IF),fabsf(frontend->max_IF));
-    double maxf = max(fabsf(frontend->min_IF),fabsf(frontend->max_IF));
-    if(zone & 1){
-      // right side up spectrum above the aliasing frequency
-      frontend->min_IF = minf;
-      frontend->max_IF = maxf;
-    } else {
-      // Inverted spectrum below the aliasing frequency
-      frontend->min_IF = -maxf;
-      frontend->max_IF = -minf;
-    }
-    return frontend->frequency;
+    return rx888_set_tuner_frequency(sdr,freq);
   }
 }
 
