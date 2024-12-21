@@ -96,6 +96,7 @@ struct session {
   struct sockaddr sender;      // Sender's IP address and source port
 
   char filename[PATH_MAX];
+  bool can_seek;               // file is regular; can seek on it
 
   uint32_t ssrc;               // RTP stream source ID
   struct rtp_state rtp_state;
@@ -151,6 +152,7 @@ static bool Catmode = false; // sending one channel to standard output
 static bool Flushmode = false; // Flush after each packet when writing to standard output
 static const char *Command = NULL;
 static bool Jtmode = false;
+static bool Raw = false;
 
 const char *App_path;
 static int Input_fd,Status_fd;
@@ -179,6 +181,7 @@ static struct option Options[] = {
   {"locale", required_argument, NULL, 'l'},
   {"minfiletime", required_argument, NULL, 'm'},
   {"mintime", required_argument, NULL, 'm'},
+  {"raw", no_argument, NULL, 'r' },
   {"subdirectories", no_argument, NULL, 's'},
   {"subdirs", no_argument, NULL, 's'},
   {"timeout", required_argument, NULL, 't'},
@@ -189,7 +192,7 @@ static struct option Options[] = {
   {"version", no_argument, NULL, 'V'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = "cd:e:fjl:m:sS:t:vL:V";
+static char Optstring[] = "cd:e:fjl:m:rsS:t:vL:V";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -221,6 +224,9 @@ int main(int argc,char *argv[]){
     case 'm':
       SubstantialFileTime = fabsf(strtof(optarg,NULL));
       break;
+    case 'r':
+      Raw = true;
+      break;
     case 'S':
       {
 	char *ptr;
@@ -250,7 +256,7 @@ int main(int argc,char *argv[]){
       VERSION();
       exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-c|--catmode|--stdout] [-e|--exec command] [-f|--flush] [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-j|--jt] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-c|--catmode|--stdout] [-r|--raw] [-e|--exec command] [-f|--flush] [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-j|--jt] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
       exit(EX_USAGE);
       break;
     }
@@ -327,6 +333,36 @@ static uint8_t OpusSilence[] = {0xf8,0xff,0xfe}; // Silence
 //static uint8_t OpusSilence[] = {0xf8}; // Lost packet, packet loss concealment. creates buzz when squelch is closed
 
 
+static int emit_opus_silence(struct session * const sp,int samples){
+  ogg_packet oggPacket;
+  oggPacket.b_o_s = 0;
+  oggPacket.e_o_s = 0;    // End of stream flag
+
+  while(samples > 0){
+    int chunk = min(samples,960); // 20 ms is 960 samples @ 48 kHz
+    oggPacket.packetno = sp->packetCount++; // Increment packet number
+    sp->granulePosition += chunk; // points to end of this packet
+    oggPacket.granulepos = sp->granulePosition; // Granule position
+    oggPacket.packet = OpusSilence;
+    oggPacket.bytes = sizeof(OpusSilence);
+    int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);	  // Add the packet to the Ogg stream
+    (void)ret;
+    assert(ret == 0);
+
+    sp->rtp_state.timestamp += chunk; // also ready for next
+    sp->total_file_samples += chunk;
+    sp->current_segment_samples += chunk;
+    sp->samples_written += chunk;
+    if(FileLengthLimit != 0)
+      sp->samples_remaining -= chunk;
+    if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
+      sp->substantial_file = true;
+    samples -= chunk;
+  }
+  return 0;
+}
+
+
 // if !flush, send whatever's on the queue, up to the first missing segment
 // if flush, empty the entire queue, skipping empty entries
 static int send_opus_queue(struct session * const sp,bool flush){
@@ -343,32 +379,14 @@ static int send_opus_queue(struct session * const sp,bool flush){
       oggPacket.e_o_s = 0;    // End of stream flag
       int samples = opus_packet_get_nb_samples(qp->data,qp->size,48000); // Number of 48 kHz samples
 
-      int jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
+      int32_t jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
       if(jump > 0){
 	// Timestamp jumped since last frame
 	// Catch up by emitting silence padding
 	if(Verbose > 2 || (Verbose > 1  && flush))
 	  fprintf(stderr,"timestamp jump %d samples\n",jump);
 
-	while((int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp) > 0){
-	  oggPacket.packetno = sp->packetCount++; // Increment packet number
-	  sp->granulePosition += samples; // points to end of this packet
-	  oggPacket.granulepos = sp->granulePosition; // Granule position
-	  oggPacket.packet = OpusSilence;
-	  oggPacket.bytes = sizeof(OpusSilence);
-	  int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);	  // Add the packet to the Ogg stream
-	  (void)ret;
-	  assert(ret == 0);
-
-	  sp->rtp_state.timestamp += samples; // also ready for next
-	  sp->total_file_samples += samples;
-	  sp->current_segment_samples += samples;
-	  sp->samples_written += samples;
-	  if(FileLengthLimit != 0)
-	    sp->samples_remaining -= samples;
-	  if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
-	    sp->substantial_file = true;
-	}
+	emit_opus_silence(sp,jump);
       }
       // end of timestamp jump catch-up, send actual packets on queue
       oggPacket.packetno = sp->packetCount++; // Increment packet number
@@ -435,12 +453,12 @@ static int send_wav_queue(struct session * const sp,bool flush){
 	// Catch up by emitting silence padding
 	if(Verbose > 2 || (Verbose > 1  && flush))
 	  fprintf(stderr,"timestamp jump %d frames\n",jump);
-	if(Catmode){
+	if(sp->can_seek)
+	  fseeko(sp->fp,framesize * jump,SEEK_CUR);
+	else {
 	  unsigned char *zeroes = calloc(jump,framesize); // Don't use too much stack space
 	  fwrite(zeroes,framesize,jump,sp->fp);
 	  FREE(zeroes);
-	} else {
-	  fseeko(sp->fp,framesize * jump,SEEK_CUR);
 	}
 	sp->rtp_state.timestamp += jump; // also ready for next
 	sp->total_file_samples += jump;
@@ -597,13 +615,27 @@ static void input_loop(){
 
       if(sp->fp == NULL){
 	session_file_init(sp,&sender);
-	if(sp->encoding == OPUS)
+	if(sp->encoding == OPUS){
+	  if(Raw)
+	    fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
 	  start_ogg_opus_stream(sp);
-	else
-	  start_wav_stream(sp);
+	  if(sp->starting_offset != 0)
+	    emit_opus_silence(sp,sp->starting_offset);
+	} else {
+	  if(!Raw)
+	    start_wav_stream(sp); // Don't emit wav header in --raw
+	  int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2);
+	  if(sp->can_seek){
+	    fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
+	  } else {
+	    // Emit zero padding
+	    unsigned char *zeroes = calloc(sp->starting_offset,framesize); // Don't use too much stack space
+	    fwrite(zeroes,framesize,sp->starting_offset,sp->fp);
+	    FREE(zeroes);
+	  }
+	}
 	fflush(sp->fp); // Get the header outon disk so the file won't be empty too long
       }
-
       if(!sp->rtp_state.init){
 	sp->rtp_state.seq = rtp.seq;
 	sp->rtp_state.timestamp = rtp.timestamp;
@@ -718,22 +750,24 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     }
     return 0;
   }
-  char const *suffix = ".wav";
-  switch(sp->encoding){
-  case S16BE:
-  case S16LE:
-  case F32LE:
-    suffix = ".wav";
-    break;
-  case F16LE:
-    suffix = ".f16"; // Non standard! But gotta do something with it for now
-    break;
-  case OPUS:
-    suffix = ".opus";
-    break;
-  default:
-    suffix = ".raw";
-    break;
+  char const *suffix = ".raw";
+  if(!Raw){
+    switch(sp->encoding){
+    case S16BE:
+    case S16LE:
+    case F32LE:
+      suffix = ".wav";
+      break;
+    case F16LE:
+      suffix = ".f16"; // Non standard! But gotta do something with it for now
+      break;
+    case OPUS:
+      suffix = ".opus";
+      break;
+    default:
+      suffix = ".raw";
+      break;
+    }
   }
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
@@ -858,6 +892,22 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   if(sp->fp == NULL){
     fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
     return -1;
+  }
+  {
+    struct stat statbuf;
+    if(fstat(fileno(sp->fp),&statbuf) != 0){
+      fprintf(stderr,"stat(%s) failed: %s\n",
+	      sp->filename,strerror(errno));
+    } else {
+      switch(statbuf.st_mode & S_IFMT){
+      case S_IFREG:
+	sp->can_seek = true;
+	break;
+      default:
+	sp->can_seek = false;
+	break;
+      }
+    }
   }
   // We byte swap S16BE to S16LE, so change the tag
   if(Verbose)
@@ -1196,10 +1246,6 @@ static int start_wav_stream(struct session *sp){
   if(!Catmode)
     rewind(sp->fp); // should be at BOF but make sure
   fwrite(&header,sizeof(header),1,sp->fp);
-  int sampsize = sp->channels * (sp->encoding == F32LE ? 4 : 2);
-  int64_t offset_bytes = sampsize * sp->starting_offset;
-  if(!Catmode)
-    fseeko(sp->fp,offset_bytes,SEEK_CUR);
   return 0;
 }
 // Update wav header with now-known size and end auxi information
