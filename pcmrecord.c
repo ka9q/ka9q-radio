@@ -167,6 +167,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender);
 static int close_file(struct session **spp);
 static uint8_t *encodeTagString(uint8_t *out,int size,const char *string);
 static int start_ogg_opus_stream(struct session *sp);
+static int emit_ogg_opus_tags(struct session *sp);
 static int end_ogg_opus_stream(struct session *sp);
 static int start_wav_stream(struct session *sp);
 static int end_wav_stream(struct session *sp);
@@ -430,7 +431,6 @@ static int send_opus_queue(struct session * const sp,bool flush){
       fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
       fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
     }
-    fflush(sp->fp);
   }
   return count;
 }
@@ -488,8 +488,6 @@ static int send_wav_queue(struct session * const sp,bool flush){
       count++;
     }
   }
-  if(Catmode && Flushmode)
-    fflush(sp->fp);
   return count;
 }
 
@@ -560,6 +558,9 @@ static void input_loop(){
 	  Ssrc = chan.output.rtp.ssrc; // Latch onto the first ssrc we see, ignore others
 	}
       }
+      // Wav can't change channels or samprate mid-stream, so if they're going to change we
+      // should probably add an option to force stereo and/or some higher sample rate.
+      // OggOpus can restart the stream with the new parameters, so it's not a problem
       sp->ssrc = chan.output.rtp.ssrc;
       sp->type = chan.output.rtp.type;
       sp->channels = chan.output.channels;
@@ -619,6 +620,7 @@ static void input_loop(){
 	  if(Raw)
 	    fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
 	  start_ogg_opus_stream(sp);
+	  emit_ogg_opus_tags(sp);
 	  if(sp->starting_offset != 0)
 	    emit_opus_silence(sp,sp->starting_offset);
 	} else {
@@ -644,13 +646,14 @@ static void input_loop(){
 	  fprintf(stderr,"init seq %u timestamp %u\n",rtp.seq,rtp.timestamp);
       }
 
-      // Ogg (containing opus) can concatenate streams with their own metadata, so restart when it changes
+      // Ogg (containing opus) can concatenate streams with new metadata, so restart when it changes
       // WAV files don't even have this metadata, so ignore changes
       if(sp->encoding == OPUS){
 	if(sp->last_frequency != sp->chan.tune.freq
 	   || strncmp(sp->last_preset,sp->chan.preset,sizeof(sp->last_preset))){
 	  end_ogg_opus_stream(sp);
 	  start_ogg_opus_stream(sp);
+	  emit_ogg_opus_tags(sp);
 	}
       }
       // Place packet into proper place in resequence ring buffer
@@ -703,6 +706,8 @@ static void input_loop(){
       if(FileLengthLimit != 0 && sp->samples_remaining <= 0)
 	close_file(&sp);
       sp->last_active = gps_time_ns();
+      if(Catmode && Flushmode)
+	fflush(sp->fp);
     } // end of packet processing
 
     // Walk through list, close idle sessions
@@ -1023,9 +1028,11 @@ static int start_ogg_opus_stream(struct session *sp){
   memset(&opusHeader,0,sizeof(opusHeader));
   memcpy(opusHeader.head, "OpusHead", 8);  // Signature
   opusHeader.version = 1;                  // Version
-  opusHeader.channels = sp->chan.output.channels;                 // Channel count (e.g., stereo)
+  // Some decoders get confused when the channel count or sample rate changes in a stream, so always say we're emitting 48kHz stereo.
+  // Opus won't use more bits when the input is actually mono and/or at a lower rate
+  opusHeader.channels = 2;
   opusHeader.preskip = 312;
-  opusHeader.samprate = sp->chan.output.samprate;
+  opusHeader.samprate = 48000;
   opusHeader.gain = 0;
   opusHeader.map_family = 0;
 
@@ -1043,6 +1050,12 @@ static int start_ogg_opus_stream(struct session *sp){
     fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
     fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
   }
+  return 0;
+}
+static int emit_ogg_opus_tags(struct session *sp){
+  if(sp == NULL)
+    return -1;
+
   // fill this in with sender ID (ka9q-radio, etc, frequency, mode, etc etc)
   uint8_t opusTags[2048]; // Variable length, not easily represented as a structure
   memset(opusTags,0,sizeof(opusTags));
@@ -1114,11 +1127,12 @@ static int start_ogg_opus_stream(struct session *sp){
   tagsPacket.bytes = wp - opusTags;
   tagsPacket.b_o_s = 0;             // Not the beginning of the stream
   tagsPacket.e_o_s = 0;             // Not the end of the stream
-  tagsPacket.granulepos = 0;        // No granule position for metadata
+  tagsPacket.granulepos = sp->granulePosition;        // No granule position for metadata
   tagsPacket.packetno = sp->packetCount++;          // Second packet in the stream
 
   ogg_stream_packetin(&sp->oggState, &tagsPacket);
   assert(sp->fp != NULL);
+  ogg_page oggPage;
   while (ogg_stream_flush(&sp->oggState, &oggPage)) {
     fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
     fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
@@ -1154,8 +1168,6 @@ static int end_ogg_opus_stream(struct session *sp){
     fwrite(finalPage.body, 1, finalPage.body_len, sp->fp);
   }
   ogg_stream_clear(&sp->oggState);
-  if(Catmode && Flushmode)
-    fflush(sp->fp);
   return -1;
 }
 
