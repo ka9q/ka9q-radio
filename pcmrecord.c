@@ -413,7 +413,9 @@ static int send_opus_queue(struct session * const sp,bool flush){
       int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);
       (void)ret;
       assert(ret == 0);
-    }
+    } else
+      sp->rtp_state.drops++;
+
     // Flush the stream to ensure packets are written
     ogg_page oggPage;
     while (ogg_stream_pageout(&sp->oggState, &oggPage)) {
@@ -425,7 +427,7 @@ static int send_opus_queue(struct session * const sp,bool flush){
     qp->inuse = false;
     count++;
   }
-  if(Catmode && Flushmode){
+  if(Flushmode){
     ogg_page oggPage;
     while (ogg_stream_flush(&sp->oggState, &oggPage)) {
       fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
@@ -496,9 +498,8 @@ static int send_wav_queue(struct session * const sp,bool flush){
 // Doing both in one thread avoids a lot of synchronization problems with the session structure, since both write it
 static void input_loop(){
   struct sockaddr sender;
+  int64_t last_scan_time = 0;
   while(true){
-    int64_t current_time = gps_time_ns();
-
     // Receive status or data
     struct pollfd pfd[2];
     pfd[0].fd = Input_fd;
@@ -509,6 +510,7 @@ static void input_loop(){
     int const n = poll(pfd,sizeof(pfd)/sizeof(pfd[0]),1000); // Wait 1 sec max so we can scan active session list
     if(n < 0)
       break; // error of some kind - should we exit or retry?
+    int64_t current_time = gps_time_ns();
     if(pfd[1].revents & (POLLIN|POLLPRI)){
       // Process status packet
       uint8_t buffer[PKTSIZE];
@@ -569,8 +571,42 @@ static void input_loop(){
       memcpy(&sp->sender,&sender,sizeof(sp->sender));
       memcpy(&sp->chan,&chan,sizeof(sp->chan));
       memcpy(&sp->frontend,&frontend,sizeof(sp->frontend));
+      sp->last_active = current_time;
+      if(sp->fp == NULL){
+	session_file_init(sp,&sender);
+	if(sp->encoding == OPUS){
+	  if(Raw)
+	    fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
+	  start_ogg_opus_stream(sp);
+	  emit_ogg_opus_tags(sp);
+	  if(sp->starting_offset != 0)
+	    emit_opus_silence(sp,sp->starting_offset);
+	} else {
+	  if(!Raw)
+	    start_wav_stream(sp); // Don't emit wav header in --raw
+	  int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2);
+	  if(sp->can_seek){
+	    fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
+	  } else {
+	    // Emit zero padding
+	    unsigned char *zeroes = calloc(sp->starting_offset,framesize); // Don't use too much stack space
+	    fwrite(zeroes,framesize,sp->starting_offset,sp->fp);
+	    FREE(zeroes);
+	  }
+	}
+	fflush(sp->fp); // Get the header out on disk so the file won't be empty too long
+      }
+      // Ogg (containing opus) can concatenate streams with new metadata, so restart when it changes
+      // WAV files don't even have this metadata, so ignore changes
+      if(sp->encoding == OPUS){
+	if(sp->last_frequency != sp->chan.tune.freq
+	   || strncmp(sp->last_preset,sp->chan.preset,sizeof(sp->last_preset))){
+	  end_ogg_opus_stream(sp);
+	  start_ogg_opus_stream(sp);
+	  emit_ogg_opus_tags(sp);
+	}
+      }
     }
-
   statdone:;
     if(pfd[0].revents & (POLLIN|POLLPRI)){
       uint8_t buffer[PKTSIZE];
@@ -614,30 +650,6 @@ static void input_loop(){
       if(sp == NULL)
 	continue;
 
-      if(sp->fp == NULL){
-	session_file_init(sp,&sender);
-	if(sp->encoding == OPUS){
-	  if(Raw)
-	    fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
-	  start_ogg_opus_stream(sp);
-	  emit_ogg_opus_tags(sp);
-	  if(sp->starting_offset != 0)
-	    emit_opus_silence(sp,sp->starting_offset);
-	} else {
-	  if(!Raw)
-	    start_wav_stream(sp); // Don't emit wav header in --raw
-	  int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2);
-	  if(sp->can_seek){
-	    fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
-	  } else {
-	    // Emit zero padding
-	    unsigned char *zeroes = calloc(sp->starting_offset,framesize); // Don't use too much stack space
-	    fwrite(zeroes,framesize,sp->starting_offset,sp->fp);
-	    FREE(zeroes);
-	  }
-	}
-	fflush(sp->fp); // Get the header outon disk so the file won't be empty too long
-      }
       if(!sp->rtp_state.init){
 	sp->rtp_state.seq = rtp.seq;
 	sp->rtp_state.timestamp = rtp.timestamp;
@@ -646,22 +658,13 @@ static void input_loop(){
 	  fprintf(stderr,"init seq %u timestamp %u\n",rtp.seq,rtp.timestamp);
       }
 
-      // Ogg (containing opus) can concatenate streams with new metadata, so restart when it changes
-      // WAV files don't even have this metadata, so ignore changes
-      if(sp->encoding == OPUS){
-	if(sp->last_frequency != sp->chan.tune.freq
-	   || strncmp(sp->last_preset,sp->chan.preset,sizeof(sp->last_preset))){
-	  end_ogg_opus_stream(sp);
-	  start_ogg_opus_stream(sp);
-	  emit_ogg_opus_tags(sp);
-	}
-      }
       // Place packet into proper place in resequence ring buffer
       int16_t const seqdiff = rtp.seq - sp->rtp_state.seq;
       if(seqdiff < 0){
 	// old, drop
 	if(Verbose > 1)
 	  fprintf(stderr,"drop old sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
+	sp->rtp_state.dupes++;
 	// But could be a resynch, should test for this ****
 	continue;
       }
@@ -706,20 +709,22 @@ static void input_loop(){
       if(FileLengthLimit != 0 && sp->samples_remaining <= 0)
 	close_file(&sp);
       sp->last_active = gps_time_ns();
-      if(Catmode && Flushmode)
+      if(Flushmode)
 	fflush(sp->fp);
     } // end of packet processing
 
-    // Walk through list, close idle sessions
-    // should we do this on every packet? seems inefficient
-    // Could be in a separate thread, but that creates synchronization issues
-    struct session *next;
-    for(struct session *sp = Sessions;sp != NULL; sp = next){
-      next = sp->next; // save in case sp is closed
-      int64_t idle = current_time - sp->last_active;
-      if(idle > Timeout * BILLION){
-	close_file(&sp); // sp will be NULL
-	// Close idle session
+    if(current_time > last_scan_time + BILLION){
+      last_scan_time = current_time;
+
+      // Walk through list, close idle sessions
+      struct session *next;
+      for(struct session *sp = Sessions;sp != NULL; sp = next){
+	next = sp->next; // save in case sp is closed
+	int64_t idle = current_time - sp->last_active;
+	if(idle > Timeout * BILLION){
+	  close_file(&sp); // sp will be NULL
+	  // Close idle session
+	}
       }
     }
   }
@@ -945,8 +950,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   {
     struct stat statbuf;
     if(fstat(fileno(sp->fp),&statbuf) != 0){
-      fprintf(stderr,"stat(%s) failed: %s\n",
-	      sp->filename,strerror(errno));
+      fprintf(stderr,"stat(%s) failed: %s\n",sp->filename,strerror(errno));
     } else {
       switch(statbuf.st_mode & S_IFMT){
       case S_IFREG:
@@ -1000,31 +1004,29 @@ static int close_file(struct session **spp){
     return -1;
   struct session *sp = *spp;
 
-  if(sp == NULL || sp->fp == NULL)
+  if(sp == NULL)
     return -1;
 
-  if(Catmode || Command != NULL)
-    return 0;
+  if(sp->encoding == OPUS)
+    end_ogg_opus_stream(sp);
+  else
+    end_wav_stream(sp);
 
-  if(sp->substantial_file){ // Don't bother for non-substantial files
-    if(Verbose){
-      fprintf(stderr,"closing %s %'.1f/%'.1f sec\n",sp->filename,
+  if(Verbose){
+    fprintf(stderr,"closing %s %'.1f/%'.1f sec\n",sp->filename, // might be blank
             (float)sp->samples_written / (sp->samprate * sp->channels),
             (float)sp->total_file_samples / (sp->samprate * sp->channels));
-    }
-    int fd = fileno(sp->fp);
-    attrprintf(fd,"samples written","%lld",sp->samples_written);
-    attrprintf(fd,"total samples","%lld",sp->total_file_samples);
+  }
+  if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
+    fprintf(stderr," dupes %llu drops %llu\n",(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
 
-    if(sp->encoding == OPUS)
-      end_ogg_opus_stream(sp);
-    else
-      end_wav_stream(sp);
-    // RTP processing should be smarter about counting these.
-    // Packets received out of order are counted as a drop and a dupe, but are harmless here
-    if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
-      fprintf(stderr,"file %s dupes %llu drops %llu\n",sp->filename,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
-  } else {
+  if(sp->substantial_file){ // Don't bother for non-substantial files
+    if(sp->can_seek){
+      int fd = fileno(sp->fp);
+      attrprintf(fd,"samples written","%lld",sp->samples_written);
+      attrprintf(fd,"total samples","%lld",sp->total_file_samples);
+    }
+  } else if(sp->can_seek && strlen(sp->filename) > 0){
     unlink(sp->filename);
     if(Verbose)
       fprintf(stderr,"deleting %s %'.1f/%'.1f sec\n",sp->filename,
@@ -1037,6 +1039,7 @@ static int close_file(struct session **spp){
     fclose(sp->fp);
   sp->fp = NULL;
   FREE(sp->iobuffer);
+
   if(sp->prev)
     sp->prev->next = sp->next;
   else
@@ -1098,6 +1101,9 @@ static int start_ogg_opus_stream(struct session *sp){
 }
 static int emit_ogg_opus_tags(struct session *sp){
   if(sp == NULL)
+    return -1;
+
+  if(ogg_stream_check(&sp->oggState))
     return -1;
 
   // fill this in with sender ID (ka9q-radio, etc, frequency, mode, etc etc)
@@ -1190,6 +1196,9 @@ static int end_ogg_opus_stream(struct session *sp){
   if(sp == NULL)
     return -1;
 
+  if(ogg_stream_check(&sp->oggState))
+    return -1;
+
   // Terminate ogg Opus file
   // Write an empty packet with the end bit set
   ogg_packet endPacket;
@@ -1212,7 +1221,7 @@ static int end_ogg_opus_stream(struct session *sp){
     fwrite(finalPage.body, 1, finalPage.body_len, sp->fp);
   }
   ogg_stream_clear(&sp->oggState);
-  return -1;
+  return 0;
 }
 
 
