@@ -45,11 +45,13 @@ static double const Default_reference = 27e6;
 // Max allowable error on reference; 1e-4 = 100 ppm. Mainly to catch entry scaling errors
 static double const Max_calibrate = 1e-4;
 
+#if 0
 // Min and Max frequency for VHF/UHF tuner
 static double const Min_frequency = 50e6;   //  50 MHz ?
 static double const Max_frequency = 2000e6; // 2000 MHz
 static uint32_t const R828D_FREQ = 16000000;     // R820T reference frequency
 static double const R828D_IF_CARRIER = 4570000;
+#endif
 
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
@@ -102,7 +104,9 @@ static void rx888_set_att(struct sdrstate *sdr,float att,bool vhf);
 static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf);
 static double rx888_set_samprate(struct sdrstate *sdr,double reference,unsigned int samprate);
 static void rx888_set_hf_mode(struct sdrstate *sdr);
+#if 0
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency);
+#endif
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate *sdr);
 static void rx888_close(struct sdrstate *sdr);
@@ -939,6 +943,7 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
 }
 
+#if 0
 // Pretty sure this is broken
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency){
   assert(sdr != NULL);
@@ -968,6 +973,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency){
   frontend->frequency = frequency;
   return frequency;
 }
+#endif
 
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
   assert(sdr != NULL);
@@ -1093,6 +1099,7 @@ static int gain2val(double gain){
 double rx888_tune(struct frontend *frontend,double freq){
   return 0; // temp
 
+#if 0
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->lock || sdr->undersample != 1)
     return frontend->frequency;
@@ -1103,6 +1110,7 @@ double rx888_tune(struct frontend *frontend,double freq){
   } else {
     return rx888_set_tuner_frequency(sdr,freq);
   }
+#endif
 }
 
 /* best rational approximation:
