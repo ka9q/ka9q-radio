@@ -13,12 +13,12 @@ Group=radio
 Type=simple
 EnvironmentFile=/etc/radio/hfdl.conf
 PermissionsStartOnly=true
-StandardOutput=append:/var/log/hfdl.log
+StandardOutput=append:${LOG}
 StandardError=inherit
 UMask = 002
 CPUSchedulingPolicy=batch
 RuntimeDirectory=hfdl
-ExecStart=/usr/local/bin/pcmrecord --raw -v --exec '/usr/local/bin/dumphfdl --output decoded:text:file:path=/var/log/hfdl.log --iq-file - --sample-rate $r --centerfreq $k  --sample-format cs16 --system-table=/var/lib/hfdl/systable.conf --system-table-save=/var/lib/hfdl/systable.conf $k' hfdl-pcm.local
+ExecStart=/usr/local/bin/pcmrecord --raw -v --exec "${DUMPHFDL} --output decoded:text:file:path=${LOG} --iq-file - --sample-rate $r --centerfreq $k  --sample-format cs16 --system-table=${SYSTABLE} --system-table-save=${SYSTABLE} $k" ${MCAST}
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
