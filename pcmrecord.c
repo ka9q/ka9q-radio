@@ -748,7 +748,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	    sp->chan.preset,(long long)sp->starting_offset);
     return 0;
   } else if(Command != NULL){
-    // Substitute frequency, channel count and sample rate as specified
+    // Substitute parameters as specified
     char expanded_command[2048];
     expanded_command[0] = '\0';
     char command_copy[2048]; // Don't overwrite program args
@@ -762,6 +762,9 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	switch(*cp++){
 	case '$':
 	  snprintf(temp,sizeof(temp),"$");
+	  break;
+	case 'd':
+	  snprintf(temp,sizeof(temp),"%s",sp->frontend.description);
 	  break;
 	case 'h':
 	  snprintf(temp,sizeof(temp),"%.1lf",sp->chan.tune.freq);
