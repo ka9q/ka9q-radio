@@ -292,6 +292,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
 	  xfer_time);
 
+#if 0
   // VHF-UHF tuning
   {
     char const *p = config_getstring(dictionary,section,"frequency",NULL);
@@ -309,10 +310,14 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
 	  frontend->frequency = actual_frequency;
 	  rx888_set_att(sdr,att,true);
 	  rx888_set_gain(sdr,gain,true);
+	  frontend->lock = true;
 	}
       }
     }
   }
+#else
+  frontend->frequency = 0;
+#endif
   if(frontend->frequency == 0)
     rx888_set_hf_mode(sdr);
   usleep(1000000); // 1s - see SDDC_FX3 firmware
@@ -934,16 +939,14 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
 }
 
+// Pretty sure this is broken
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency){
   assert(sdr != NULL);
-  if(frequency == 0)
-    return 0;
-
   struct frontend *frontend = sdr->frontend;
-  if(frontend->frequency == frequency){
-    return frequency - R828D_IF_CARRIER;
-  }
-  if(frontend->frequency == 0.0){
+  if(frequency == frontend->frequency)
+    return frequency;
+
+  if(frequency != 0.0){
     // disable HF by set max ATT
     rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
     // switch to VHF Antenna
@@ -958,13 +961,12 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency){
     // Enable Tuner reference clock
     uint32_t ref = R828D_FREQ;
     command_send(sdr->dev_handle,TUNERINIT,ref); // Initialize Tuner
+    command_send(sdr->dev_handle,TUNERTUNE,(uint64_t)frequency);
+  } else {
+    rx888_set_hf_mode(sdr);
   }
-
-  // Tune LO
-  command_send(sdr->dev_handle,TUNERTUNE,(uint64_t)frequency);
   frontend->frequency = frequency;
-  fprintf(stderr, "VHF/UHF tuner requested frequency: %'lf - actual frequency: %'lf", frequency, frequency - R828D_IF_CARRIER);
-  return frequency - R828D_IF_CARRIER;
+  return frequency;
 }
 
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
@@ -1089,6 +1091,8 @@ static int gain2val(double gain){
   return g;
 }
 double rx888_tune(struct frontend *frontend,double freq){
+  return 0; // temp
+
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->lock || sdr->undersample != 1)
     return frontend->frequency;
