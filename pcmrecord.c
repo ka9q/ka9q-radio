@@ -748,9 +748,44 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	    sp->chan.preset,(long long)sp->starting_offset);
     return 0;
   } else if(Command != NULL){
-    sp->fp = popen(Command,"w");
+    // Substitute frequency, channel count and sample rate as specified
+    char expanded_command[2048];
+    expanded_command[0] = '\0';
+    char command_copy[2048]; // Don't overwrite program args
+    strlcpy(command_copy,Command,sizeof(command_copy));
+    char *cp = command_copy;
+    char *a;
+    while((a = strsep(&cp,"$")) != NULL){
+      strlcat(expanded_command,a,sizeof(expanded_command));
+      if(cp != NULL && strlen(cp) > 0){
+	char temp[256];
+	switch(*cp++){
+	case 'h':
+	  snprintf(temp,sizeof(temp),"%.1lf",sp->chan.tune.freq);
+	  break;
+	case 'k':
+	  snprintf(temp,sizeof(temp),"%.4lf",sp->chan.tune.freq/1000.);
+	  break;
+	case 'm':
+	  snprintf(temp,sizeof(temp),"%.7lf",sp->chan.tune.freq/1000000.);
+	  break;
+	case 'c':
+	  snprintf(temp,sizeof(temp),"%d",sp->channels);
+	  break;
+	case 'r':
+	  snprintf(temp,sizeof(temp),"%d",sp->samprate);
+	  break;
+	default:
+	  break;
+	}
+	strlcat(expanded_command,temp,sizeof(expanded_command));
+      }
+    }
+    if(Verbose)
+      fprintf(stderr,"Executing %s\n",expanded_command);
+    sp->fp = popen(expanded_command,"w");
     if(sp->fp == NULL){
-      fprintf(stderr,"Cannot start %s, exiting",Command);
+      fprintf(stderr,"Cannot start %s, exiting",expanded_command);
       exit(1); // Will probably fail for all others too, just give up
     }
     return 0;
@@ -1255,7 +1290,7 @@ static int start_wav_stream(struct session *sp){
   header.StartMillis=(int16_t)(now.tv_nsec / 1000000);
   header.CenterFrequency= sp->chan.tune.freq;
   memset(header.AuxUknown, 0, 128);
-  if(!Catmode)
+  if(sp->can_seek)
     rewind(sp->fp); // should be at BOF but make sure
   fwrite(&header,sizeof(header),1,sp->fp);
   return 0;
@@ -1265,7 +1300,7 @@ static int end_wav_stream(struct session *sp){
   if(sp == NULL)
     return -1;
 
-  if(Catmode)
+  if(!sp->can_seek)
     return 0; // Can't seek back to the beginning on a pipe
 
   rewind(sp->fp);
