@@ -303,12 +303,11 @@ int main(int argc,char *argv[]){
     perror("setsockopt");
 
   // Graceful signal catch
-  signal(SIGPIPE,closedown);
+  signal(SIGPIPE,closedown); // Should catch the --exec or --stdout receiving process terminating
   signal(SIGINT,closedown);
   signal(SIGKILL,closedown);
   signal(SIGQUIT,closedown);
   signal(SIGTERM,closedown);
-  signal(SIGPIPE,SIG_IGN);
 
   atexit(cleanup);
   if(strlen(Recordings) > 0 && chdir(Recordings) != 0){
