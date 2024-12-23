@@ -760,6 +760,9 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       if(cp != NULL && strlen(cp) > 0){
 	char temp[256];
 	switch(*cp++){
+	case '$':
+	  snprintf(temp,sizeof(temp),"$");
+	  break;
 	case 'h':
 	  snprintf(temp,sizeof(temp),"%.1lf",sp->chan.tune.freq);
 	  break;
