@@ -775,6 +775,9 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	case 'r':
 	  snprintf(temp,sizeof(temp),"%d",sp->samprate);
 	  break;
+	case 's':
+	  snprintf(temp,sizeof(temp),"%u",sp->ssrc);
+	  break;
 	default:
 	  break;
 	}
