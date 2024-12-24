@@ -381,7 +381,7 @@ static int emit_opus_silence(struct session * const sp,int samples){
     if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
       sp->substantial_file = true;
     samples -= chunk;
-    samples_since_flush += samples;
+    samples_since_flush += chunk;
     if(Flushmode || samples_since_flush >= 48000){
       // Write an Ogg page on every packet to minimize latency
       // Or at least once per second to keep opusinfo from complaining, and vlc progress from sticking
@@ -763,8 +763,8 @@ static void input_loop(){
 	next = sp->next; // save in case sp is closed
 	int64_t idle = current_time - sp->last_active;
 	if(idle > Timeout * BILLION){
-	  close_file(&sp); // sp will be NULL
 	  // Close idle session
+	  close_file(&sp); // sp will be NULL
 	}
       }
     }
