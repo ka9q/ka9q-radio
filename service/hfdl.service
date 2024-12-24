@@ -8,7 +8,7 @@ Requires=network-online.target
 
 [Service]
 Nice=10
-User=recordings
+User=radio
 Group=radio
 Type=simple
 EnvironmentFile=/etc/radio/hfdl.conf
