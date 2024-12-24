@@ -171,6 +171,9 @@ static int emit_ogg_opus_tags(struct session *sp);
 static int end_ogg_opus_stream(struct session *sp);
 static int start_wav_stream(struct session *sp);
 static int end_wav_stream(struct session *sp);
+static int send_wav_queue(struct session * const sp,bool flush);
+static int send_opus_queue(struct session * const sp,bool flush);
+static int send_queue(struct session * const sp,bool flush);
 
 static struct option Options[] = {
   {"catmode", no_argument, NULL, 'c'}, // Send single stream to stdout
@@ -362,6 +365,13 @@ static int emit_opus_silence(struct session * const sp,int samples){
   return 0;
 }
 
+
+static int send_queue(struct session * const sp,bool flush){
+  if(sp->encoding == OPUS)
+    return send_opus_queue(sp,flush);
+  else
+    return send_wav_queue(sp,flush);
+}
 
 // if !flush, send whatever's on the queue, up to the first missing segment
 // if flush, empty the entire queue, skipping empty entries
@@ -649,38 +659,46 @@ static void input_loop(){
       if(sp == NULL)
 	continue;
 
+      if(sp->rtp_state.odd_seq_set){
+	if(rtp.seq == sp->rtp_state.odd_seq){
+	  // Sender probably restarted; flush queue and start over
+	  send_queue(sp,true);
+	  sp->rtp_state.init = false;
+	} else
+	  sp->rtp_state.odd_seq_set = false;
+      }
       if(!sp->rtp_state.init){
 	sp->rtp_state.seq = rtp.seq;
 	sp->rtp_state.timestamp = rtp.timestamp;
 	sp->rtp_state.init = true;
+	sp->rtp_state.odd_seq_set = false;
 	if(Verbose > 1)
 	  fprintf(stderr,"init seq %u timestamp %u\n",rtp.seq,rtp.timestamp);
       }
-
       // Place packet into proper place in resequence ring buffer
       int16_t const seqdiff = rtp.seq - sp->rtp_state.seq;
+
       if(seqdiff < 0){
 	// old, drop
 	if(Verbose > 1)
 	  fprintf(stderr,"drop old sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
 	sp->rtp_state.dupes++;
-	// But could be a resynch, should test for this ****
+	// But sender may have restarted so remember it
+	sp->rtp_state.odd_seq = rtp.seq + 1;
+	sp->rtp_state.odd_seq_set = true;
 	continue;
-      }
-      if(seqdiff >= RESEQ){
-	// too far ahead to resequence, flush what we have
-	// But could be a possible resync or long outage, test for this ****
+      } else if(seqdiff >= RESEQ){
+	// Give up waiting for the lost frame, flush what we have
+	// Could also be a restart, but treat it the same
 	if(Verbose > 1)
 	  fprintf(stderr,"flushing with drops\n");
-	if(sp->encoding == OPUS)
-	  send_opus_queue(sp,true);
-	else
-	  send_wav_queue(sp,true);
+	send_queue(sp,true);
 	if(Verbose > 1)
 	  fprintf(stderr,"reset & queue sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
       }
       if(Verbose > 2)
 	fprintf(stderr,"queue sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
+      sp->rtp_state.odd_seq_set = false;
       int qi = rtp.seq % RESEQ;
       struct reseq * const qp = &sp->reseq[qi];
       qp->inuse = true;
@@ -698,12 +716,10 @@ static void input_loop(){
 	for(int n = 0; n < samp_count; n++)
 	  wp[n] = bswap_16((uint16_t)samples[n]);
       } else {
-	memcpy(qp->data,dp,size);
+	memcpy(qp->data,dp,size); // copy as-is
       }
-      if(sp->encoding == OPUS)
-	send_opus_queue(sp,false); // Transmit any packets we can
-      else
-	send_wav_queue(sp,false);
+
+      send_queue(sp,false); // Send what we now can
 
       if(FileLengthLimit != 0 && sp->samples_remaining <= 0)
 	close_file(&sp);

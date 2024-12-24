@@ -64,6 +64,8 @@ struct rtp_state {
   uint8_t type;
   bool init;
   uint16_t seq;
+  uint16_t odd_seq;
+  bool odd_seq_set;
   uint32_t timestamp;
   uint64_t packets;
   uint64_t bytes;
