@@ -169,6 +169,7 @@ static uint8_t *encodeTagString(uint8_t *out,int size,const char *string);
 static int start_ogg_opus_stream(struct session *sp);
 static int emit_ogg_opus_tags(struct session *sp);
 static int end_ogg_opus_stream(struct session *sp);
+static int ogg_flush(struct session *sp);
 static int start_wav_stream(struct session *sp);
 static int end_wav_stream(struct session *sp);
 static int send_wav_queue(struct session * const sp,bool flush);
@@ -330,6 +331,24 @@ static void closedown(int a){
   exit(EX_OK);  // Will call cleanup()
 }
 
+// Write out any partial Ogg Opus pages
+static int ogg_flush(struct session *sp){
+  if(sp == NULL)
+    return -1;
+  if(sp->encoding != OPUS)
+    return -1;
+
+  ogg_page oggPage;
+  int count = 0;
+  while (ogg_stream_flush(&sp->oggState,&oggPage)){
+    fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
+    fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
+    count++;
+  }
+  fflush(sp->fp);
+  return count;
+}
+
 // This comes from a conversation with ChatGPT that was somewhat contradictory about the silence frame
 static uint8_t OpusSilence[] = {0xf8,0xff,0xfe}; // Silence
 //static uint8_t OpusSilence[] = {0xff}; // Comfort noise
@@ -341,6 +360,7 @@ static int emit_opus_silence(struct session * const sp,int samples){
   oggPacket.b_o_s = 0;
   oggPacket.e_o_s = 0;    // End of stream flag
 
+  int samples_since_flush = 0;
   while(samples > 0){
     int chunk = min(samples,960); // 20 ms is 960 samples @ 48 kHz
     oggPacket.packetno = sp->packetCount++; // Increment packet number
@@ -361,6 +381,13 @@ static int emit_opus_silence(struct session * const sp,int samples){
     if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
       sp->substantial_file = true;
     samples -= chunk;
+    samples_since_flush += samples;
+    if(Flushmode || samples_since_flush >= 48000){
+      // Write an Ogg page on every packet to minimize latency
+      // Or at least once per second to keep opusinfo from complaining, and vlc progress from sticking
+      samples_since_flush = 0;
+      ogg_flush(sp);
+    }
   }
   return 0;
 }
@@ -371,6 +398,8 @@ static int send_queue(struct session * const sp,bool flush){
     return send_opus_queue(sp,flush);
   else
     return send_wav_queue(sp,flush);
+  if(Flushmode)
+    fflush(sp->fp);
 }
 
 // if !flush, send whatever's on the queue, up to the first missing segment
@@ -422,26 +451,27 @@ static int send_opus_queue(struct session * const sp,bool flush){
       int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);
       (void)ret;
       assert(ret == 0);
-    } else
+      if(Flushmode) {
+	ogg_flush(sp); // Absolute minimum latency
+      } else {
+	// Just do a normal lazy pageout when it's full
+	ogg_page oggPage;
+	while (ogg_stream_pageout(&sp->oggState, &oggPage)){
+	  fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
+	  fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
+	}
+      }
+    } else {
+      // Slot was empty
+      // Instead of emitting one frame of silence here, we emit it above when the next real frame arrives
+      // so we know for sure how much to send
+      //
       sp->rtp_state.drops++;
-
-    // Flush the stream to ensure packets are written
-    ogg_page oggPage;
-    while (ogg_stream_pageout(&sp->oggState, &oggPage)) {
-      fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
-      fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
     }
     FREE(qp->data); // OK if NULL
     qp->size = 0;
     qp->inuse = false;
     count++;
-  }
-  if(Flushmode){
-    ogg_page oggPage;
-    while (ogg_stream_flush(&sp->oggState, &oggPage)) {
-      fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
-      fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
-    }
   }
   return count;
 }
@@ -603,7 +633,6 @@ static void input_loop(){
 	    FREE(zeroes);
 	  }
 	}
-	fflush(sp->fp); // Get the header out on disk so the file won't be empty too long
       }
       // Ogg (containing opus) can concatenate streams with new metadata, so restart when it changes
       // WAV files don't even have this metadata, so ignore changes
@@ -659,6 +688,7 @@ static void input_loop(){
       if(sp == NULL)
 	continue;
 
+      sp->last_active = gps_time_ns(); // Any activity at all resets the timer
       if(sp->rtp_state.odd_seq_set){
 	if(rtp.seq == sp->rtp_state.odd_seq){
 	  // Sender probably restarted; flush queue and start over
@@ -698,6 +728,8 @@ static void input_loop(){
       }
       if(Verbose > 2)
 	fprintf(stderr,"queue sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
+
+      // put into circular queue
       sp->rtp_state.odd_seq_set = false;
       int qi = rtp.seq % RESEQ;
       struct reseq * const qp = &sp->reseq[qi];
@@ -716,22 +748,16 @@ static void input_loop(){
 	for(int n = 0; n < samp_count; n++)
 	  wp[n] = bswap_16((uint16_t)samples[n]);
       } else {
-	memcpy(qp->data,dp,size); // copy as-is
+	memcpy(qp->data,dp,size); // copy everything else into circular queue as-is
       }
-
       send_queue(sp,false); // Send what we now can
-
       if(FileLengthLimit != 0 && sp->samples_remaining <= 0)
 	close_file(&sp);
-      sp->last_active = gps_time_ns();
-      if(Flushmode)
-	fflush(sp->fp);
-    } // end of packet processing
 
+    } // end of packet processing
+    // Walk through list, close idle sessions
     if(current_time > last_scan_time + BILLION){
       last_scan_time = current_time;
-
-      // Walk through list, close idle sessions
       struct session *next;
       for(struct session *sp = Sessions;sp != NULL; sp = next){
 	next = sp->next; // save in case sp is closed
