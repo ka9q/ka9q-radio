@@ -17,23 +17,19 @@ EXECS=set_xcvr
 
 CFILES = set_xcvr.c
 
-all: depend $(EXECS)
+all: $(EXECS)
 
 install: $(EXECS)
 	rsync -a $(EXECS) $(BINDIR)
 
 clean:
-	rm -f *.o *.a .depend $(EXECS)
+	rm -f *.o *.a *.d .depend $(EXECS)
 
-depend: .depend
+DEPS = $(CFILES:.c=.d)
 
-.depend: $(CFILES)
-	rm -f .depend
-	$(CC) $(CFLAGS) -MM $(CFILES) > .depend
+-include $(DEPS)
 
--include .depend
-
-.PHONY: clean all install depend
+.PHONY: clean all install
 
 # Executables
 set_xcvr: set_xcvr.o config.o
