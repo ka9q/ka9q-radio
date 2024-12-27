@@ -3,6 +3,7 @@
 *~
 *.a
 *.o
+*.d
 Makefile
 .depend
 aprs
