@@ -241,7 +241,7 @@ int main(int argc,char * const argv[]){
   {
     char description[1024];
     snprintf(description,sizeof(description),"pcm-source=%s",Input); // what if it changes?
-    int socksize = sizeof(Opus_out_socket);
+    size_t socksize = sizeof(Opus_out_socket);
     uint32_t addr = make_maddr(Output);
     avahi_start(Name,"_opus._udp",DEFAULT_RTP_PORT,Output,addr,description,&Opus_out_socket,&socksize);
     struct sockaddr_in *sin = (struct sockaddr_in *)&Metadata_out_socket;
@@ -593,6 +593,7 @@ int close_session(struct session ** p){
   return 0;
 }
 void closedown(int s){
+  (void)s; // unused
 #if 0
   // Causes deadlock when we get called from a section where Session_protect is already locked
   // Which is the usual case

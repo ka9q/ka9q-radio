@@ -305,6 +305,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
 void *run_fft(void *p){
   pthread_detach(pthread_self());
   pthread_setname("fft");
+  (void)p; // Unused
 
   realtime();
 
@@ -881,7 +882,7 @@ int window_rfilter(int const L,int const M,complex float * const response,float 
 }
 
 // Gain of filter (output / input) on uniform gaussian noise
-float const noise_gain(struct filter_out const * const slave){
+float noise_gain(struct filter_out const * const slave){
   if(slave == NULL)
     return NAN;
   struct filter_in const * const master = slave->master;

@@ -182,9 +182,8 @@ int main(int argc,char *argv[]){
     case 'I':
       dump_interfaces();
       break;
-    default:
+    default: // including 'h'
       fprintf(stdout,"Unknown command line option %c\n",c);
-    case 'h':
       fprintf(stderr,"Usage: %s [-I] [-N name] [-h] [-p fftw_plan_time_limit] [-v [-v] ...] <CONFIG_FILE>\n", argv[0]);
       exit(EX_USAGE);
     }
@@ -315,7 +314,7 @@ static int loadconfig(char const * const file){
     char ttlmsg[100];
     snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
 
-    int slen = sizeof(Template.output.dest_socket);
+    size_t slen = sizeof(Template.output.dest_socket);
     uint32_t addr = make_maddr(Data);
     avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data,addr,ttlmsg,&Template.output.dest_socket,&slen);
     avahi_start(Name,"_opus._udp",DEFAULT_RTP_PORT,Data,addr,ttlmsg,&Template.output.dest_socket,&slen);
@@ -394,7 +393,7 @@ static int loadconfig(char const * const file){
   {
     char ttlmsg[100];
     snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
-    int slen = sizeof(Metadata_dest_socket);
+    size_t slen = sizeof(Metadata_dest_socket);
     uint32_t addr = make_maddr(Metadata_dest_string);
     avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,addr,ttlmsg,&Metadata_dest_socket,&slen);
   }
@@ -457,7 +456,7 @@ static int loadconfig(char const * const file){
       char ttlmsg[100];
       snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
 
-      int slen = sizeof(data_dest_socket);
+      size_t slen = sizeof(data_dest_socket);
       uint32_t addr = make_maddr(data);
 
       // Start only one depending on chan->output.encoding

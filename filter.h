@@ -87,7 +87,7 @@ int delete_filter_input(struct filter_in * restrict);
 int delete_filter_output(struct filter_out * restrict);
 int make_kaiser(float * restrict,int M,float);
 int set_filter(struct filter_out * restrict,float,float,float);
-float const noise_gain(struct filter_out const * restrict);
+float noise_gain(struct filter_out const * restrict);
 void *run_fft(void *);
 int write_cfilter(struct filter_in *, complex float const *,int size);
 int write_rfilter(struct filter_in *, float const *,int size);

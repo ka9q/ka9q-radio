@@ -27,7 +27,6 @@ struct demodtab Demodtab[] = {
       {WFM_DEMOD,    "WFM",  }, // NBFM and noncoherent PM
       {SPECT_DEMOD,  "Spectrum", }, // Spectrum analysis
 };
-int Ndemod = sizeof(Demodtab)/sizeof(struct demodtab);
 
 static enum demod_type DEFAULT_DEMOD = LINEAR_DEMOD;
 static int   const DEFAULT_LINEAR_SAMPRATE = 12000;
@@ -56,7 +55,7 @@ extern int Overlap;
 
 
 int demod_type_from_name(char const *name){
-  for(int n = 0; n < Ndemod; n++){
+  for(enum demod_type n = 0; n < N_DEMOD; n++){
     if(strncasecmp(name,Demodtab[n].name,sizeof(Demodtab[n].name)) == 0)
       return Demodtab[n].type;
   }
@@ -65,7 +64,7 @@ int demod_type_from_name(char const *name){
 
 
 char const *demod_name_from_type(enum demod_type type){
-  if(type >= 0 && type < Ndemod)
+  if(type >= 0 && type < N_DEMOD)
     return Demodtab[type].name;
   return NULL;
 }

@@ -76,7 +76,7 @@ extern int Verbose;
 
 // description is optional; if present, forms a TXT record
 // Optionally return a sockaddr_in (through *sock) with the resolved address
-int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,int const base_address,char const *description,void *sock,int *socksize){
+int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,int const base_address,char const *description,void *sock,size_t *socksize){
 #if TRACE
   fprintf(stderr,"avahi_start(service_name = %s, service_type = %s, service_port = %d, dns_name = %s, base address = 0x%x, description = %s, sock = %p, socksize = %d\n",
 	  service_name,service_type,service_port,dns_name,base_address,description,sock,*socksize);

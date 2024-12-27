@@ -274,6 +274,7 @@ int main(int argc,char * const argv[]){
 
 // Monitor and report to radio status channel (only if specified)
 void * status(void *p){
+  (void)p;
   pthread_detach(pthread_self());
   pthread_setname("opstat");
 
@@ -444,6 +445,7 @@ int close_session(struct session *sp){
   return 0;
 }
 void closedown(int s){
+  (void)s;
 #if 0
   // Causes deadlock when we get called from a section where Session_protect is already locked
   // Which is the usual case

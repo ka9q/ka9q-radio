@@ -104,7 +104,7 @@ int printwt(char const *fmt,...){
 
 // Same for mvaddstr() and addstr()
 int mvaddstrt(int y,int x,char const *str){
-  int space = COLS - x - 1; // Leave last column open
+  size_t space = COLS - x - 1; // Leave last column open
   if(strlen(str) <= space)
     return mvaddstr(y,x,str); // fits
   char temp[space+1];
@@ -114,7 +114,7 @@ int mvaddstrt(int y,int x,char const *str){
 int addstrt(char const *str){
   int y,x;
   getyx(stdscr,y,x);
-  int space = COLS - x - 1; // Leave last column open
+  size_t space = COLS - x - 1; // Leave last column open
   if(strlen(str) <= space)
     return mvaddstr(y,x,str); // fits
   char temp[space+1];
@@ -125,8 +125,8 @@ int addstrt(char const *str){
 
 // Use ncurses to display streams
 void *display(void *arg){
-
   pthread_setname("display");
+  (void)arg; // unused
 
   if(initscr() == NULL){
     fprintf(stderr,"initscr() failed, disabling control/display thread\n");

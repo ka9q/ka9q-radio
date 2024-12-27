@@ -36,7 +36,7 @@ static inline void reset_goertzel(struct goertzel *gp){
   gp->s0 = gp->s1 = 0;
 }
 
-static void inline update_goertzel(struct goertzel *gp,float x){
+inline static void update_goertzel(struct goertzel *gp,float x){
   float s0save = gp->s0;
   gp->s0 = x + gp->coeff * gp->s0 - gp->s1;
   gp->s1 = s0save;

@@ -114,6 +114,7 @@ void send_cwid(void){
 // Drop PTT some time after last write to audio output ring buffer
 void *repeater_ctl(void *arg){
   pthread_setname("rptctl");
+  (void)arg; // unused
 
   while(!Terminate){
     // Wait for audio output; set in kick_output()

@@ -1,5 +1,3 @@
-
-
 // signal generator - looks like a pseudo-front-end to radiod
 // Copyright Phil Karn, KA9Q, Aug 2023 KA9Q
 #define _GNU_SOURCE 1
@@ -315,6 +313,7 @@ int sig_gen_startup(struct frontend *frontend){
 }
 
 double sig_gen_tune(struct frontend * const frontend,double const freq){
+  (void)freq; // not used
   assert(frontend != NULL);
 
   if(frontend->lock)

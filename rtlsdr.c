@@ -100,7 +100,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
 
     // List all devices
     fprintf(stderr,"Found %d RTL-SDR device%s:\n",device_count,device_count > 1 ? "s":"");
-    for(int i=0; i < device_count; i++){
+    for(unsigned int i=0; i < device_count; i++){
       rtlsdr_get_device_usb_strings(i,devices[i].manufacturer,devices[i].product,devices[i].serial);
       fprintf(stderr,"#%d (%s): %s %s %s\n",i,rtlsdr_get_device_name(i),
 	      devices[i].manufacturer,devices[i].product,devices[i].serial);
@@ -110,7 +110,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
       // Use first one, if any
       sdr->dev = 0;
     } else {
-      for(int i=0; i < device_count; i++){
+      for(unsigned int i=0; i < device_count; i++){
 	if(strcasecmp(p,devices[i].serial) == 0){
 	  sdr->dev = i;
 	  break;

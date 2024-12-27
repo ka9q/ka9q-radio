@@ -24,7 +24,7 @@ struct ax25_frame {
   int control;
   int type;
   char information[MAX_INFO];
-  int info_len;
+  size_t info_len;
 };
 
 

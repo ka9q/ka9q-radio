@@ -1,5 +1,7 @@
 // Multicast local audio source with PCM
 // Copyright April 2018 Phil Karn, KA9Q
+// NEEDS REWRITING to generate status stream
+
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
@@ -250,6 +252,10 @@ static int pa_callback(const void *inputBuffer, void *outputBuffer,
 		       const PaStreamCallbackTimeInfo* timeInfo,
 		       PaStreamCallbackFlags statusFlags,
 		       void *userData){
+  (void)outputBuffer; // Unused
+  (void)timeInfo;
+  (void)statusFlags;
+  (void)userData;
 
   float *in = (float *)inputBuffer;
   assert(in != NULL);

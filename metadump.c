@@ -224,6 +224,7 @@ void usage(void){
 
 // Process incoming packets
 void *input_thread(void *p){
+  (void)p; // unused
   for(int i=0; i < Count;){
     uint8_t buffer[PKTSIZE];
     struct sockaddr_storage source;

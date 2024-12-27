@@ -130,6 +130,12 @@ static struct  option Options[] = {
 #ifdef __linux__
 // Get rid of those fucking ALSA error messages that clutter the screen
 static void alsa_error_handler(const char *file, int line, const char *function, int err, const char *fmt, ...){
+  (void)file; // no args used
+  (void)line;
+  (void)function;
+  (void)err;
+  (void)fmt;
+
   return;
 }
 #endif
@@ -598,6 +604,9 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 		       PaStreamCallbackTimeInfo const * timeInfo,
 		       PaStreamCallbackFlags statusFlags,
 		       void *userData){
+  (void)inputBuffer; // Unused
+  (void)statusFlags;
+  (void)userData;
   Audio_callbacks++;
   Audio_frames += framesPerBuffer;
 

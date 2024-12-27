@@ -1,6 +1,7 @@
 // AFSK/FM packet demodulator
 // Reads RTP PCM audio stream, emits decoded frames in multicast RTP
 // Copyright 2018, Phil Karn, KA9Q
+// NEEDS TO BE REWRITTEN to use channel status stream to get sample rate and format
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -26,7 +27,7 @@
 
 struct hdlc {
   uint8_t frame[16384];
-  int frame_bits;
+  size_t frame_bits;
   int flag_seen;
   int last_bits;
 };
@@ -226,7 +227,7 @@ int main(int argc,char *argv[]){
   {
     char description[1024];
     memset(description,0,sizeof(description));
-    int p = snprintf(description,sizeof(description),"pcm-source=");
+    size_t p = snprintf(description,sizeof(description),"pcm-source=");
     for(int i=0; i < Nfds;i++){
       if(sizeof(description) <= p)
 	break; // Too long!
@@ -324,6 +325,7 @@ int main(int argc,char *argv[]){
 // audio input thread
 // Receive audio multicasts, multiplex into sessions
 static void *input(void *arg){
+  (void)arg; // unused
 
   while(true){
     struct rtp_header rtp_hdr;
@@ -343,7 +345,7 @@ static void *input(void *arg){
 
       uint8_t buffer[PKTSIZE];
       socklen_t socksize = sizeof(sender);
-      int size = recvfrom(Input_fd[fd_index],buffer,sizeof(buffer),0,&sender,&socksize);
+      ssize_t size = recvfrom(Input_fd[fd_index],buffer,sizeof(buffer),0,&sender,&socksize);
       if(size == -1){
 	if(errno != EINTR){ // Happens routinely
 	  perror("recvfrom");
@@ -416,10 +418,10 @@ static void *input(void *arg){
 	int max_skip = min(skipped_samples,1920); // Pad only a short interruption, max
 	int16_t zeroes[max_skip];
 	memset(zeroes,0,sizeof(zeroes));
-	if(write(sp->write_fd,zeroes,sizeof(zeroes)) != sizeof(zeroes))
+	if(write(sp->write_fd,zeroes,sizeof(zeroes)) != (int)sizeof(zeroes))
 	  perror("write zeroes");
       }
-      if(write(sp->write_fd,dp,sample_count * sizeof(int16_t)) != sample_count * sizeof(int16_t))
+      if(write(sp->write_fd,dp,sample_count * sizeof(int16_t)) != (ssize_t)(sample_count * sizeof(int16_t)))
 	perror("write samples");
     }
   }

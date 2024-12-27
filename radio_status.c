@@ -37,6 +37,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
 // Radio status reception and transmission thread
 void *radio_status(void *arg){
   pthread_setname("radio stat");
+  (void)arg; // unused
 
   while(true){
     // Command from user
@@ -273,7 +274,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     case DEMOD_TYPE:
       {
 	enum demod_type const i = decode_int(cp,optlen);
-	if(i >= 0 && i < Ndemod && i != chan->demod_type){
+	if(i >= 0 && i < N_DEMOD && i != chan->demod_type){
 	  if(Verbose > 1)
 	    fprintf(stdout,"Demod change %d -> %d\n",chan->demod_type,i);
 	  chan->demod_type = i;
@@ -522,7 +523,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   // Modulation mode
   encode_byte(&bp,DEMOD_TYPE,chan->demod_type);
   {
-    int len = strlen(chan->preset);
+    size_t len = strlen(chan->preset);
     if(len > 0 && len < sizeof(chan->preset))
       encode_string(&bp,PRESET,chan->preset,len);
   }
@@ -558,6 +559,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       encode_float(&bp,PL_TONE,chan->fm.tone_freq);
       encode_float(&bp,PL_DEVIATION,chan->fm.tone_deviation);
     }
+    __attribute__((fallthrough));
   case WFM_DEMOD:  // Note fall-through from FM_DEMOD
     // Relevant only when squelches are active
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
@@ -584,6 +586,8 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
 	memset(chan->spectrum.bin_data,0,chan->spectrum.bin_count * sizeof(*chan->spectrum.bin_data));
       }
     }
+    break;
+  default:
     break;
   }
   // Lots of stuff not relevant in spectrum analysis mode

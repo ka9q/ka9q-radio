@@ -286,7 +286,7 @@ char *ftime(char * result,int size,int64_t t){
 double parse_frequency(char const *s,bool heuristics){
   char * const ss = alloca(strlen(s)+1);
   {
-    int i;
+    size_t i;
     for(i=0;i<strlen(s);i++)
       ss[i] = tolower(s[i]);
 
@@ -451,6 +451,7 @@ uint32_t fnv1hash(const uint8_t *s,int length){
 
 int pthread_barrier_init(pthread_barrier_t *barrier, pthread_barrierattr_t const *attr, unsigned int count)
 {
+  (void)attr;
     if(count == 0)
     {
         errno = EINVAL;

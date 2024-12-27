@@ -97,11 +97,11 @@ static void display_input(WINDOW *input,struct channel const *channel);
 static void display_output(WINDOW *output,struct channel const *channel);
 static int process_keyboard(struct channel *,uint8_t **bpp,int c);
 static void process_mouse(struct channel *channel,uint8_t **bpp);
-static bool for_us(struct channel *channel,uint8_t const *buffer,int length,uint32_t ssrc);
+static bool for_us(uint8_t const *buffer,int length,uint32_t ssrc);
 static int init_demod(struct channel *channel);
 
 // Fill in set of locally generated variables from channel structure
-static void gen_locals(struct frontend *frontend,struct channel *channel){
+static void gen_locals(struct channel *channel){
   Local.noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
   Local.sig_power = channel->sig.bb_power - Local.noise_bandwidth * channel->sig.n0;
   if(Local.sig_power < 0)
@@ -121,7 +121,7 @@ static void popup(char const *filename){
   if(fp == NULL)
     return;
   // Determine size of box
-  int rows=0, cols=0;
+  size_t rows=0, cols=0;
   char *line = NULL;
   size_t maxcols = 0;
   while(getline(&line,&maxcols,fp) > 0){
@@ -290,13 +290,13 @@ static void setup_windows(void){
   LINES = w.ws_row;
 
   // Delete all previous windows
-  for(int i=0; i < NWINS; i++){
+  for(unsigned i=0; i < NWINS; i++){
     if(*Windefs[i].w)
       delwin(*Windefs[i].w);
     *Windefs[i].w = NULL;
   }
   // Create as many as will fit
-  for(int i=0; i < NWINS; i++){
+  for(unsigned i=0; i < NWINS; i++){
     if(COLS < col + Windefs[i].cols){
       // No more room on this line, go to next
       col = 0;
@@ -531,7 +531,7 @@ int main(int argc,char *argv[]){
 	continue;
 
       char const *ip_addr_string = formatsock(&channel->output.dest_socket);
-      gen_locals(&Frontend,channel);
+      gen_locals(channel);
       fprintf(stdout,"%13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,Local.snr,ip_addr_string);
       last_ssrc = channel->output.rtp.ssrc;
     }
@@ -615,7 +615,7 @@ int main(int argc,char *argv[]){
       socklen_t ssize = sizeof(source_socket);
       length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_socket,&ssize); // should not block
       // Ignore our own command packets and responses to other SSIDs
-      if(length < 2 || (enum pkt_type)buffer[0] != STATUS || !for_us(channel,buffer+1,length-1,Ssrc))
+      if(length < 2 || (enum pkt_type)buffer[0] != STATUS || !for_us(buffer+1,length-1,Ssrc))
 	continue; // Can include a timeout
 
       // Process only if it's a response to our SSRC
@@ -625,7 +625,7 @@ int main(int argc,char *argv[]){
       wprintw(Debug_win,"got response length %d\n",length);
 #endif
       decode_radio_status(&Frontend,channel,buffer+1,length-1);
-      gen_locals(&Frontend,channel);
+      gen_locals(channel);
 
       // Postpone next poll to specified interval
       next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
@@ -1104,7 +1104,7 @@ static int init_demod(struct channel *channel){
 }
 
 // Is response for us?
-static bool for_us(struct channel *channel,uint8_t const *buffer,int length,uint32_t ssrc){
+static bool for_us(uint8_t const *buffer,int length,uint32_t ssrc){
   uint8_t const *cp = buffer;
 
   while(cp - buffer < length){
@@ -1411,6 +1411,8 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"Bins","%d   ",channel->spectrum.bin_count);
     if(channel->spectrum.bin_data != NULL)
       pprintw(w,row++,col,"Bin 0","%.1f   ",channel->spectrum.bin_data[0]);
+    break;
+  default:
     break;
   }
 

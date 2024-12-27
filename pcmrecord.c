@@ -165,7 +165,7 @@ static void input_loop(void);
 static void cleanup(void);
 int session_file_init(struct session *sp,struct sockaddr const *sender);
 static int close_file(struct session **spp);
-static uint8_t *encodeTagString(uint8_t *out,int size,const char *string);
+static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string);
 static int start_ogg_opus_stream(struct session *sp);
 static int emit_ogg_opus_tags(struct session *sp);
 static int end_ogg_opus_stream(struct session *sp);
@@ -1269,11 +1269,11 @@ static int end_ogg_opus_stream(struct session *sp){
 // Encode a string as {length,string}, with length in 4 bytes, little endian, string without terminating null
 // Return pointer to first unused byte in output
 // Used in writing Ogg tags
-static uint8_t *encodeTagString(uint8_t *out,int size,const char *string){
+static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string){
   if(out == NULL || string == NULL || size <= sizeof(uint32_t))
     return out;
 
-  int len = strlen(string);
+  size_t len = strlen(string);
   uint32_t *wp = (uint32_t *)out;
   *wp = len;
   uint8_t *sp = out + sizeof(uint32_t);

@@ -68,7 +68,7 @@ static float PL_tones[] = {
     237.1, 241.8, 245.5, 250.3, 254.1
 };
 
-#define N_tones (sizeof(PL_tones)/sizeof(PL_tones[0]))
+#define N_tones ((int)(sizeof(PL_tones)/sizeof(PL_tones[0])))
 
 #if 0
 static float DTMF_low_tones[] = { 697, 770, 852, 941 };
@@ -385,6 +385,7 @@ static int close_session(struct session *sp){
   return 0;
 }
 static void closedown(int s){
+  (void)s; // unused
   while(Sessions != NULL)
     close_session(Sessions);
 

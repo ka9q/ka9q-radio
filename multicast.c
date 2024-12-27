@@ -520,7 +520,7 @@ static struct inverse_cache *Inverse_cache_table; // Head of cache linked list
 // so to make it easier for callers we just take a void * and avoid pointer casts that impair readability
 char const *formatsock(void const *s){
   // Determine actual length (and type) of binary socket structure (IPv4/IPv6)
-  int slen = 0;
+  size_t slen = 0;
   struct sockaddr const * const sa = (struct sockaddr *)s;
   if(sa == NULL)
     return NULL;

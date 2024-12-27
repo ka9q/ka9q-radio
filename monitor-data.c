@@ -268,7 +268,7 @@ void *decode_task(void *arg){
       // beginning of talk spurt, resync
       reset_session(sp,pkt->rtp.timestamp); // Updates sp->wptr
     }
-    if(pkt->rtp.type >= 0 && pkt->rtp.type < 128)
+    if(pkt->rtp.type < 128)
       sp->type = pkt->rtp.type; // Save only if valid
 
     enum encoding const encoding = sp->pt_table[sp->type].encoding;

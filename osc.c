@@ -49,7 +49,7 @@ void set_osc(struct osc *osc,double f,double r){
   }
 }
 
-static void inline renorm_osc(struct osc *osc){
+inline static void renorm_osc(struct osc *osc){
   if(!is_phasor_init(osc->phasor))
     osc->phasor = 1; // In case we've been stepping an uninitialized osc
      
@@ -87,7 +87,7 @@ static inline float sinpif(float x){
 
 // Initialize sine lookup table
 static void dds_init(void){
-  for(int i=0; i <= TABSIZE; i++)
+  for(unsigned long i=0; i <= TABSIZE; i++)
     Lookup[i] = sinpif(0.5f * (float)i/TABSIZE);
 
   Tab_init = true;

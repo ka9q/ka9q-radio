@@ -6,7 +6,7 @@
 #include <arpa/inet.h>
 #include "avahi.h"
 
-int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,int address,char const *description,void *sock,int *socksize){
+int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,int address,char const *description,void *sock,size_t *socksize){
   if(sock != NULL && socksize != NULL){
     // Return sockaddr structure
     if(*socksize >= sizeof(struct sockaddr_in)){

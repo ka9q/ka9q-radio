@@ -349,6 +349,7 @@ int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, doub
   int const V = N / (M-1);
   int const r = V * round((freq/hzperbin) / V);
 #else
+  (void)M;
   int const r = round(freq/hzperbin);
 #endif
   if(shift)

@@ -28,6 +28,7 @@ enum demod_type {
   FM_DEMOD,             // Frequency/phase demodulation
   WFM_DEMOD,            // wideband frequency modulation (broadcast stereo)
   SPECT_DEMOD,          // Spectrum analysis pseudo-demod
+  N_DEMOD,              // Dummy equal to number of valid entries
 };
 
 struct demodtab {
@@ -36,7 +37,6 @@ struct demodtab {
 };
 
 extern struct demodtab Demodtab[];
-extern int Ndemod;
 
 char const *demod_name_from_type(enum demod_type type);
 int demod_type_from_name(char const *name);

@@ -587,6 +587,7 @@ int close_session(struct session *sp){
   return 0;
 }
 void closedown(int s){
+  (void)s;
 #if 0
   // Causes deadlock when we get called from a section where Audio_protect is already locked
   // Which is the usual case

@@ -251,7 +251,7 @@ int main(int argc,char *argv[]){
 	  *cp++ = ':'; sspace--;
 	  assert(sspace > 0);
 	}      
-	for(int i=0; i < frame.info_len; i++){
+	for(size_t i=0; i < frame.info_len; i++){
 	  char const c = frame.information[i] & 0x7f; // Strip parity in monitor strings
 	  if(c != '\r' && c != '\n' && c != '\0'){
 	    // Strip newlines, returns and nulls (we'll add a cr-lf later)
@@ -304,6 +304,7 @@ int main(int argc,char *argv[]){
 // Just read and echo responses from server
 void *netreader(void *arg){
   pthread_setname("aprs-read");
+  (void)arg; // Not used
 
   char *line = NULL;
   size_t linecap = 0;

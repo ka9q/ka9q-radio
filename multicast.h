@@ -123,7 +123,7 @@ struct packet {
   struct packet *next;
   struct rtp_header rtp;
   uint8_t const *data; // Don't modify a packet through this pointer
-  int len;
+  size_t len;
   uint8_t content[PKTSIZE];
 };
 

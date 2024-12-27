@@ -1097,9 +1097,11 @@ static int gain2val(double gain){
   return g;
 }
 double rx888_tune(struct frontend *frontend,double freq){
+#if 1
+  (void)frontend;
+  (void)freq;
   return 0; // temp
-
-#if 0
+#else
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->lock || sdr->undersample != 1)
     return frontend->frequency;

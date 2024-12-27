@@ -1011,6 +1011,7 @@ int hid_read_timeout(hid_device *dev, unsigned char *data, size_t length, int mi
 	pthread_mutex_lock(&dev->mutex);
 	pthread_cleanup_push(&cleanup_mutex, dev);
 
+
 	/* There's an input report queued up. Return it. */
 	if (dev->input_reports) {
 		/* Return the first one */
@@ -1222,7 +1223,8 @@ int  hid_get_indexed_string(hid_device *dev, int string_index, wchar_t *string, 
 
 const wchar_t *   hid_error(hid_device *dev)
 {
-	return NULL;
+  (void)dev;
+  return NULL;
 }
 
 

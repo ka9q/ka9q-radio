@@ -277,7 +277,7 @@ int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *b
       *time = decode_int64(cp,optlen);
       break;
     case OUTPUT_SSRC: // Don't really need this, it's already been checked
-      if(decode_int32(cp,optlen) != ssrc)
+      if((int32_t)decode_int32(cp,optlen) != ssrc)
 	return -1; // Not what we want
       break;
     case DEMOD_TYPE:
