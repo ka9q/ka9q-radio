@@ -287,7 +287,7 @@ int main(int argc,char *argv[]){
 	    length_of_length--;
 	  }
 	}
-	if(cp - buffer + optlen > length)
+	if(cp + optlen > buffer + length)
 	  break;
 	
 	switch(type){

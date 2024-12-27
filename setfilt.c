@@ -147,7 +147,7 @@ int main(int argc,char *argv[]){
       if(type == EOL)
 	break;
       unsigned int optlen = *cp++;
-      if(cp - buffer + optlen > length)
+      if(cp + optlen > buffer + length)
 	break; // Invalid length
       switch(type){
       default:

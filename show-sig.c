@@ -261,7 +261,7 @@ int decode_frontend_status(uint8_t const *buffer,int length){
       break; // end of list
     
     unsigned int optlen = *cp++;
-    if(cp - buffer + optlen >= length)
+    if(cp + optlen >= buffer + length)
       break; // invalid length; we can't continue to scan
 
     switch(type){
@@ -296,7 +296,7 @@ int decode_rtp_status(uint8_t const *buffer,int length){
       break; // end of list
     
     unsigned int optlen = *cp++;
-    if(cp - buffer + optlen >= length)
+    if(cp + optlen >= buffer + length)
       break; // invalid length; we can't continue to scan
 
     switch(type){

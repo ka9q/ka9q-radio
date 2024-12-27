@@ -133,7 +133,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 
   uint8_t const *cp = buffer;
 
-  while(cp - buffer < length){
+  while(cp < buffer + length){
     enum status_type const type = *cp++; // increment cp to length field
 
     if(type == EOL)
@@ -150,7 +150,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	length_of_length--;
       }
     }
-    if(cp - buffer + optlen >= length)
+    if(cp + optlen >= buffer + length)
       break; // invalid length; we can't continue to scan
 
     switch(type){

@@ -293,7 +293,7 @@ int main(int argc,char *argv[]){
       continue; // ignore non-response; go back and receive again
 
     // Process response
-    while(cp - response_buffer < length){
+    while(cp < response_buffer + length){
       enum status_type type = *cp++;
       if(type == EOL)
 	break;
@@ -309,7 +309,7 @@ int main(int argc,char *argv[]){
          }
       }
 
-      if(cp - response_buffer + optlen > length)
+      if(cp + optlen > response_buffer + length)
 	break; // Invalid length
       switch(type){
       default:

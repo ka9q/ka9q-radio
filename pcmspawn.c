@@ -330,7 +330,7 @@ void * status(void *p){
 	    length_of_length--;
 	  }
 	}
-	if(cp - buffer + optlen > length)
+	if(cp + optlen > buffer + length)
 	  break;
 
 	// Should probably extract sample rate too, though we get it from the RTP payload type

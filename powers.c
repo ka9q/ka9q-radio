@@ -268,7 +268,7 @@ int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *b
 	length_of_length--;
       }
     }
-    if(cp - buffer + optlen >= length)
+    if(cp + optlen >= buffer + length)
       break; // Invalid length
     switch(type){
     case EOL: // Shouldn't get here

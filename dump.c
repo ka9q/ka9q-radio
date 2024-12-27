@@ -16,13 +16,13 @@
 void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline){
   uint8_t const *cp = buffer;
 
-  while(cp - buffer < length){
+  while(cp < buffer + length){
     enum status_type const type = *cp++; // increment cp to length field
 
     if(type == EOL)
       break; // End of list
 
-    unsigned int optlen = *cp++;
+    int optlen = *cp++;
     if(optlen & 0x80){
       // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
       int length_of_length = optlen & 0x7f;
@@ -33,7 +33,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
 	length_of_length--;
       }
     }
-    if(cp - buffer + optlen >= length)
+    if(cp + optlen >= buffer + length)
       break; // Invalid length
     fprintf(fp,"%s[%d] ",newline? "\n":" ",type);
     switch(type){

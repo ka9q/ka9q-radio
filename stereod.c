@@ -331,7 +331,7 @@ int fetch_socket(int status_fd){
 	  break;
 	
 	unsigned int optlen = *cp++;
-	if(cp - buffer + optlen > length)
+	if(cp + optlen > buffer + length)
 	  break;
 	
 	// Should probably extract sample rate too, instead of assuming 48 kHz

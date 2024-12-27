@@ -1124,7 +1124,7 @@ static bool for_us(uint8_t const *buffer,int length,uint32_t ssrc){
 	length_of_length--;
       }
     }
-    if(cp - buffer + optlen >= length)
+    if(cp + optlen >= buffer + length)
       break; // invalid length; we can't continue to scan
 
     switch(type){
