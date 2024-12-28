@@ -215,7 +215,7 @@ int main(int argc,char *argv[]){
       Command = optarg;
       break;
     case 'f':
-      Flushmode = true;
+      Flushmode = true; // Flush ogg opus streams after every frame
       break;
     case 'j':
       Jtmode = true;
@@ -345,7 +345,6 @@ static int ogg_flush(struct session *sp){
     fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
     count++;
   }
-  fflush(sp->fp);
   return count;
 }
 
@@ -398,8 +397,6 @@ static int send_queue(struct session * const sp,bool flush){
     return send_opus_queue(sp,flush);
   else
     return send_wav_queue(sp,flush);
-  if(Flushmode)
-    fflush(sp->fp);
 }
 
 // if !flush, send whatever's on the queue, up to the first missing segment
@@ -444,8 +441,8 @@ static int send_opus_queue(struct session * const sp,bool flush){
 	sp->substantial_file = true;
 
       if(Verbose > 2 || (Verbose > 1  && flush))
-	fprintf(stderr,"writing from rtp sequence %u, timestamp %u: bytes %ld samples %d granule %lld\n",
-		sp->rtp_state.seq,sp->rtp_state.timestamp,oggPacket.bytes,samples,
+	fprintf(stderr,"ssrc %u writing from rtp sequence %u, timestamp %u: bytes %ld samples %d granule %lld\n",
+		sp->ssrc,sp->rtp_state.seq,sp->rtp_state.timestamp,oggPacket.bytes,samples,
 		(long long)oggPacket.granulepos);
 
       int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);
@@ -703,7 +700,7 @@ static void input_loop(){
 	sp->rtp_state.init = true;
 	sp->rtp_state.odd_seq_set = false;
 	if(Verbose > 1)
-	  fprintf(stderr,"init seq %u timestamp %u\n",rtp.seq,rtp.timestamp);
+	  fprintf(stderr,"ssrc %u init seq %u timestamp %u\n",rtp.ssrc,rtp.seq,rtp.timestamp);
       }
       // Place packet into proper place in resequence ring buffer
       int16_t const seqdiff = rtp.seq - sp->rtp_state.seq;
@@ -711,7 +708,7 @@ static void input_loop(){
       if(seqdiff < 0){
 	// old, drop
 	if(Verbose > 1)
-	  fprintf(stderr,"drop old sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
+	  fprintf(stderr,"ssrc %u drop old sequence %u timestamp %u bytes %d\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
 	sp->rtp_state.dupes++;
 	// But sender may have restarted so remember it
 	sp->rtp_state.odd_seq = rtp.seq + 1;
@@ -721,13 +718,13 @@ static void input_loop(){
 	// Give up waiting for the lost frame, flush what we have
 	// Could also be a restart, but treat it the same
 	if(Verbose > 1)
-	  fprintf(stderr,"flushing with drops\n");
+	  fprintf(stderr,"ssrc %u flushing with drops\n",rtp.ssrc);
 	send_queue(sp,true);
 	if(Verbose > 1)
-	  fprintf(stderr,"reset & queue sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
+	  fprintf(stderr,"ssrc %u reset & queue sequence %u timestamp %u bytes %d\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
       }
       if(Verbose > 2)
-	fprintf(stderr,"queue sequence %u timestamp %u bytes %d\n",rtp.seq,rtp.timestamp,size);
+	fprintf(stderr,"ssrc %u queue sequence %u timestamp %u bytes %d\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
 
       // put into circular queue
       sp->rtp_state.odd_seq_set = false;
@@ -751,6 +748,11 @@ static void input_loop(){
 	memcpy(qp->data,dp,size); // copy everything else into circular queue as-is
       }
       send_queue(sp,false); // Send what we now can
+      // If output is pipe, flush right away to minimize latency
+      if(!sp->can_seek)
+	if(0 != fflush(sp->fp)){
+	  fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
+	}
       if(FileLengthLimit != 0 && sp->samples_remaining <= 0)
 	close_file(&sp);
 
@@ -837,12 +839,13 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       }
     }
     if(Verbose)
-      fprintf(stderr,"Executing %s\n",expanded_command);
+      fprintf(stderr,"ssrc %u: executing %s\n",sp->ssrc,expanded_command);
     sp->fp = popen(expanded_command,"w");
     if(sp->fp == NULL){
-      fprintf(stderr,"Cannot start %s, exiting",expanded_command);
+      fprintf(stderr,"ssrc %u: cannot start %s, exiting",sp->ssrc,expanded_command);
       exit(1); // Will probably fail for all others too, just give up
     }
+    strlcpy(sp->filename,expanded_command,sizeof(sp->filename));
     return 0;
   }
   char const *suffix = ".raw";
@@ -985,7 +988,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   sp->fp = fopen(sp->filename,"w++");
 
   if(sp->fp == NULL){
-    fprintf(stderr,"can't create/write file %s: %s\n",sp->filename,strerror(errno));
+    fprintf(stderr,"can't create/write file '%s': %s\n",sp->filename,strerror(errno));
     return -1;
   }
   {
@@ -1005,8 +1008,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   }
   // We byte swap S16BE to S16LE, so change the tag
   if(Verbose)
-    fprintf(stderr,"creating %s ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s offset %lld\n",
-	    sp->filename,sp->ssrc,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
+    fprintf(stderr,"ssrc %u creating '%s' samprate %d channels %d encoding %s freq %.3lf preset %s offset %lld\n",
+	    sp->ssrc,sp->filename,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
 	    sp->chan.preset,(long long)sp->starting_offset);
   sp->iobuffer = malloc(BUFFERSIZE);
   setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
@@ -1054,25 +1057,25 @@ static int close_file(struct session **spp){
     end_wav_stream(sp);
 
   if(Verbose){
-    fprintf(stderr,"closing %s %'.1f/%'.1f sec\n",sp->filename, // might be blank
+    fprintf(stderr,"ssrc %u closing '%s' %'.1f/%'.1f sec\n",sp->ssrc,sp->filename, // might be blank
             (float)sp->samples_written / (sp->samprate * sp->channels),
             (float)sp->total_file_samples / (sp->samprate * sp->channels));
   }
   if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
-    fprintf(stderr," dupes %llu drops %llu\n",(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
+    fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
 
-  if(sp->substantial_file){ // Don't bother for non-substantial files
-    if(sp->can_seek){
+  if(sp->can_seek){
+    if(sp->substantial_file){ // Don't bother for non-substantial files
       int fd = fileno(sp->fp);
       attrprintf(fd,"samples written","%lld",sp->samples_written);
       attrprintf(fd,"total samples","%lld",sp->total_file_samples);
+    } else if(strlen(sp->filename) > 0){
+      unlink(sp->filename);
+      if(Verbose)
+	fprintf(stderr,"ssrc %u deleting %s %'.1f/%'.1f sec\n",sp->ssrc,sp->filename,
+		(float)sp->samples_written / (sp->samprate * sp->channels),
+		(float)sp->total_file_samples / (sp->samprate * sp->channels));
     }
-  } else if(sp->can_seek && strlen(sp->filename) > 0){
-    unlink(sp->filename);
-    if(Verbose)
-      fprintf(stderr,"deleting %s %'.1f/%'.1f sec\n",sp->filename,
-            (float)sp->samples_written / (sp->samprate * sp->channels),
-            (float)sp->total_file_samples / (sp->samprate * sp->channels));
   }
   if(Command != NULL)
     pclose(sp->fp);
@@ -1133,11 +1136,7 @@ static int start_ogg_opus_stream(struct session *sp){
   idPacket.packetno = sp->packetCount++;
   // Add the identification header to the Ogg stream
   ogg_stream_packetin(&sp->oggState, &idPacket);
-  ogg_page oggPage;
-  while (ogg_stream_flush(&sp->oggState, &oggPage)) {
-    fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
-    fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
-  }
+  ogg_flush(sp);
   return 0;
 }
 static int emit_ogg_opus_tags(struct session *sp){
@@ -1223,11 +1222,7 @@ static int emit_ogg_opus_tags(struct session *sp){
 
   ogg_stream_packetin(&sp->oggState, &tagsPacket);
   assert(sp->fp != NULL);
-  ogg_page oggPage;
-  while (ogg_stream_flush(&sp->oggState, &oggPage)) {
-    fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
-    fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
-  }
+  ogg_flush(sp);
   // Remember so we'll detect changes
   sp->last_frequency = sp->chan.tune.freq;
   strlcpy(sp->last_preset,sp->chan.preset,sizeof(sp->last_preset));
@@ -1256,11 +1251,7 @@ static int end_ogg_opus_stream(struct session *sp){
   (void)ret;
   assert(ret == 0);
   // Flush the stream to ensure packets are written
-  ogg_page finalPage;
-  while (ogg_stream_flush(&sp->oggState, &finalPage)) {
-    fwrite(finalPage.header, 1, finalPage.header_len, sp->fp);
-    fwrite(finalPage.body, 1, finalPage.body_len, sp->fp);
-  }
+  ogg_flush(sp);
   ogg_stream_clear(&sp->oggState);
   return 0;
 }
