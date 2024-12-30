@@ -25,7 +25,7 @@ bool GetSockOptFailed = false;     // Have we issued this log message yet?
 bool TempSendFailure = false;
 
 int Application = OPUS_APPLICATION_AUDIO; // Encoder optimization mode
-bool Fec_enable = false;                  // Use forward error correction
+int Fec_percent = 0;               // Use forward error correction percentage, 0-100
 bool Discontinuous = false;        // Off by default
 
 // Send PCM output on stream; # of channels implicit in chan->output.channels
@@ -120,10 +120,10 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
       error = opus_encoder_ctl(chan->output.opus,OPUS_SET_BITRATE(chan->output.opus_bitrate));
     assert(error == OPUS_OK);
 
-    if(Fec_enable){ // Create an option to set this, but understand it first
+    if(Fec_percent > 0){ // Create an option to set this, but understand it first
       error = opus_encoder_ctl(chan->output.opus,OPUS_SET_INBAND_FEC(1));
       assert(error == OPUS_OK);
-      error = opus_encoder_ctl(chan->output.opus,OPUS_SET_PACKET_LOSS_PERC(Fec_enable));
+      error = opus_encoder_ctl(chan->output.opus,OPUS_SET_PACKET_LOSS_PERC(Fec_percent));
       assert(error == OPUS_OK);
     }
   }
