@@ -236,7 +236,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stdout,"Unreasonable frequency calibration %.3g, setting to 0\n",calibrate);
     calibrate = 0;
   }
-  unsigned int samprate = Default_samprate;
+  int samprate = Default_samprate;
   {
     char const *p = config_getstring(dictionary,section,"samprate",NULL);
     if(p != NULL)
