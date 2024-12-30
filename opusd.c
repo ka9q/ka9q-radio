@@ -48,8 +48,7 @@ struct session {
   int type;                 // input RTP type (10,11)
 
   struct sockaddr sender;
-  char addr[NI_MAXHOST];    // RTP Sender IP address
-  char port[NI_MAXSERV];    // RTP Sender source port
+  char const *source;
 
   pthread_t thread;
   pthread_mutex_t qmutex;
@@ -346,8 +345,7 @@ int main(int argc,char * const argv[]){
 	sp = create_session();
 	assert(sp != NULL);
 	// Initialize
-	getnameinfo((struct sockaddr *)&sender,sizeof(sender),sp->addr,sizeof(sp->addr),
-		    sp->port,sizeof(sp->port),NI_NOFQDN|NI_DGRAM);
+	sp->source = formatsock(&sender,false);
 	memcpy(&sp->sender,&sender,sizeof(struct sockaddr));
 	sp->rtp_state_out.ssrc = sp->rtp_state_in.ssrc = pkt->rtp.ssrc;
 	sp->rtp_state_in.seq = pkt->rtp.seq; // Can cause a spurious drop indication if # pcm pkts != # opus pkts

@@ -50,8 +50,8 @@ struct session {
 // Config constants
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 static float const SCALE = 1./32768;
-static int const AL = 960; // 20 ms @ 48 kHz = 1x 20 ms blocks = 24 bit times @ 1200 bps
-static int const AM = 961;
+static size_t const AL = 960; // 20 ms @ 48 kHz = 1x 20 ms blocks = 24 bit times @ 1200 bps
+static size_t const AM = 961;
 static float Bitrate = 1200;
 
 // Command line params
@@ -299,7 +299,7 @@ int main(int argc,char *argv[]){
 	    // For now, process at most one source in status messages only if not explicitly given with --pcm-in
 	    if(Verbose){
 	      printtime(stdout);
-	      fprintf(stdout,"joining pcm input channel %s\n",formatsock(&PCM_dest_address));
+	      fprintf(stdout,"joining pcm input channel %s\n",formatsock(&PCM_dest_address,false));
 	    }
 
 	    Input_fd[Nfds] = setup_mcast_in(NULL,(struct sockaddr *)&PCM_dest_address,0,0);
@@ -396,7 +396,7 @@ static void *input(void *arg){
 	pthread_create(&sp->decode_thread,NULL,decode_task,sp); // One decode thread per stream
 	if(Verbose){
 	  printtime(stdout);
-	  fprintf(stdout," New session from %s, ssrc %u\n",formatsock(&sender),sp->rtp_state_in.ssrc);
+	  fprintf(stdout," New session from %s, ssrc %u\n",formatsock(&sender,false),sp->rtp_state_in.ssrc);
 	  fflush(stdout);
 	}
       }
@@ -540,7 +540,7 @@ static void *decode_task(void *arg){
       }
       // Look for 100 zeroes at end of frame to indicate squelch closing
       int nonzero = 0;
-      for(int i=AL-100; i < AL; i++)
+      for(size_t i=AL-100; i < AL; i++)
 	nonzero |= samples[i];
       if(!nonzero)
 	pad = 5; // flush filters with 5 blocks of padding
@@ -548,7 +548,7 @@ static void *decode_task(void *arg){
 
     assert(filter_in.ilen == AL);
     assert(filter_out.olen == AL);
-    for(int n=0; n < AL; n++){
+    for(size_t n=0; n < AL; n++){
       if(put_rfilter(&filter_in,ntohs(samples[n]) * SCALE) == 0)
 	continue;
       execute_filter_output(&filter_out,0);    // Shouldn't block

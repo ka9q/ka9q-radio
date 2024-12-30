@@ -511,14 +511,14 @@ struct inverse_cache {
   struct inverse_cache *next;
   struct inverse_cache *prev;
   struct sockaddr_storage sock;
-  char hostport [NI_MAXHOST+NI_MAXSERV+5];
+  char hostport [2*NI_MAXHOST+NI_MAXSERV+5];
 };
 
 static struct inverse_cache *Inverse_cache_table; // Head of cache linked list
 
 // We actually take a sockaddr *, but can also accept a sockaddr_in *, sockaddr_in6 * and sockaddr_storage *
 // so to make it easier for callers we just take a void * and avoid pointer casts that impair readability
-char const *formatsock(void const *s){
+char const *formatsock(void const *s,bool full){
   // Determine actual length (and type) of binary socket structure (IPv4/IPv6)
   size_t slen = 0;
   struct sockaddr const * const sa = (struct sockaddr *)s;
@@ -555,15 +555,27 @@ char const *formatsock(void const *s){
   // Not in list yet, add at top
   struct inverse_cache * const ic = (struct inverse_cache *)calloc(1,sizeof(*ic));
   assert(ic != NULL); // Malloc failures are rare
-  char host[NI_MAXHOST],port[NI_MAXSERV];
-  memset(host,0,sizeof(host));
+  char host[NI_MAXHOST],port[NI_MAXSERV],hostname[NI_MAXHOST];
+  memset(host,0,sizeof(host));  
+  memset(hostname,0,sizeof(host));
   memset(port,0,sizeof(port));
   getnameinfo(sa,slen,
 	      host,NI_MAXHOST,
 	      port,NI_MAXSERV,
 	      NI_NOFQDN|NI_NUMERICHOST|NI_NUMERICSERV);
-             //NI_NOFQDN|NI_NUMERICSERV);
-  snprintf(ic->hostport,sizeof(ic->hostport),"%s:%s",host,port);
+
+  // Inverse search for name of 0.0.0.0 will time out after a long time
+  if(full && strcmp(host,"0.0.0.0") != 0){
+    getnameinfo(sa,slen,
+		hostname,NI_MAXHOST,
+		NULL,0,
+		NI_NOFQDN|NI_NUMERICSERV);
+  }
+  if(full && strlen(hostname) > 0 && strncmp(hostname,host,sizeof(host)) != 0)
+    snprintf(ic->hostport,sizeof(ic->hostport),"%s(%s):%s",host,hostname,port);
+  else
+    snprintf(ic->hostport,sizeof(ic->hostport),"%s:%s",host,port);
+
   assert(slen < sizeof(ic->sock));
   memcpy(&ic->sock,sa,slen);
   // Put at head of table

@@ -145,8 +145,8 @@ int main(int argc,char *argv[]){
 	usleep(100000); // don't burn time in a tight error loop
 	continue;
       }
-      Output_metadata_source_socket = formatsock(&Output_metadata_source_address); 
-      Output_metadata_dest_socket = formatsock(&Output_metadata_dest_address);
+      Output_metadata_source_socket = formatsock(&Output_metadata_source_address,false); 
+      Output_metadata_dest_socket = formatsock(&Output_metadata_dest_address,false);
 
       // Parse entries
       if(length >= 2 && buffer[0] == STATUS){ // Ignore our own command packets
@@ -252,13 +252,13 @@ int decode_rtp_status(uint8_t const *buffer,int length){
     case OUTPUT_DATA_SOURCE_SOCKET:
       {
 	struct sockaddr_storage tmp;
-	Output_data_source_socket = formatsock(decode_socket(&tmp,cp,optlen));
+	Output_data_source_socket = formatsock(decode_socket(&tmp,cp,optlen),true);
       }	
       break;
     case OUTPUT_DATA_DEST_SOCKET:
       {
 	struct sockaddr_storage tmp;
-	Output_data_dest_socket = formatsock(decode_socket(&tmp,cp,optlen));
+	Output_data_dest_socket = formatsock(decode_socket(&tmp,cp,optlen),true);
       }	
       break;
     case OUTPUT_SSRC:

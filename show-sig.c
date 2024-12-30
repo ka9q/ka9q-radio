@@ -156,8 +156,8 @@ int main(int argc,char *argv[]){
 	usleep(100000); // don't burn time in a tight error loop
 	continue;
       }
-      Output_metadata_source_socket = formatsock(&Output_metadata_source_address); 
-      Output_metadata_dest_socket = formatsock(&Output_metadata_dest_address);
+      Output_metadata_source_socket = formatsock(&Output_metadata_source_address,true); 
+      Output_metadata_dest_socket = formatsock(&Output_metadata_dest_address,true);
 
       // Parse entries
       if(length >= 2 && buffer[0] == 0){ // Ignore our own command packets

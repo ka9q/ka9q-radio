@@ -636,10 +636,7 @@ struct session *create_session(
     fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
     fflush(sp->fp); // get at least the header out there
 
-    char sender_text[NI_MAXHOST];
-    // Don't wait for an inverse resolve that might cause us to lose data
-    getnameinfo((struct sockaddr *)&Sender,sizeof(Sender),sender_text,sizeof(sender_text),NULL,0,NI_NOFQDN|NI_DGRAM|NI_NUMERICHOST);
-    attrprintf(fd,"source","%s",sender_text);
+    attrprintf(fd,"source","%s",formatsock(&Sender,false));
     attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
     attrprintf(fd,"unixstarttime","%.9lf",(double)filename_epoch);
 

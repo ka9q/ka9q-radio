@@ -113,7 +113,7 @@ struct rtcp_sdes {
   char message[256];
 };
 
-char const *formatsock(void const *);
+char const *formatsock(void const *,bool);
 char *formataddr(char *result,int size,void const *s);
 
 #define PKTSIZE 65536 // Largest possible IP datagram, in case we use jumbograms

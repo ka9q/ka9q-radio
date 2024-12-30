@@ -32,8 +32,7 @@ struct session {
   struct session *next; 
   
   struct sockaddr sender;
-  char addr[NI_MAXHOST];    // RTP Sender IP address
-  char port[NI_MAXSERV];    // RTP Sender source port
+  char const *source;
 
   pthread_t thread;
   pthread_mutex_t qmutex;
@@ -257,7 +256,7 @@ int main(int argc,char * const argv[]){
 	  decode_socket(&PCM_dest_address,cp,optlen);
 	  if(Input_fd == -1){
 	    if(Verbose)
-	      fprintf(stderr,"Listening for PCM on %s\n",formatsock(&PCM_dest_address));
+	      fprintf(stderr,"Listening for PCM on %s\n",formatsock(&PCM_dest_address,false));
 
 	    Input_fd = listen_mcast(&PCM_dest_address,NULL);
 	    if(Input_fd != -1)
@@ -330,8 +329,7 @@ void *input(void *arg){
       sp = create_session();
       assert(sp != NULL);
       // Initialize
-      getnameinfo((struct sockaddr *)&sender,sizeof(sender),sp->addr,sizeof(sp->addr),
-		    sp->port,sizeof(sp->port),NI_NOFQDN|NI_DGRAM);
+      sp->source = formatsock(&sender,false);
       memcpy(&sp->sender,&sender,sizeof(struct sockaddr));
       sp->rtp_state_out.ssrc = sp->rtp_state_in.ssrc = pkt->rtp.ssrc;
       sp->rtp_state_in.seq = pkt->rtp.seq;

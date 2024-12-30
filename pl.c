@@ -92,8 +92,7 @@ struct session {
   int type;                 // input RTP type (10,11)
   
   struct sockaddr sender;
-  char addr[NI_MAXHOST];    // RTP Sender IP address
-  char port[NI_MAXSERV];    // RTP Sender source port
+  char const *source;
 
   struct rtp_state rtp_state_in; // RTP input state
 
@@ -354,9 +353,7 @@ static struct session *create_session(struct sockaddr const *sender,uint32_t ssr
     return NULL; // Shouldn't happen on modern machines!
   
   // Initialize entry
-  getnameinfo((struct sockaddr *)sender,sizeof(*sender),sp->addr,sizeof(sp->addr),
-	      sp->port,sizeof(sp->port),NI_NOFQDN|NI_DGRAM);
-
+  sp->source = formatsock(sender,false);
   memcpy(&sp->sender,sender,sizeof(struct sockaddr));
   sp->rtp_state_in.ssrc = ssrc;
   sp->rtp_state_in.seq = seq;

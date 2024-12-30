@@ -530,7 +530,7 @@ int main(int argc,char *argv[]){
       if(channel == NULL || channel->output.rtp.ssrc == last_ssrc) // Skip dupes
 	continue;
 
-      char const *ip_addr_string = formatsock(&channel->output.dest_socket);
+      char const *ip_addr_string = formatsock(&channel->output.dest_socket,true);
       gen_locals(channel);
       fprintf(stdout,"%13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,Local.snr,ip_addr_string);
       last_ssrc = channel->output.rtp.ssrc;
@@ -1444,8 +1444,8 @@ static void display_input(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"Last overrange","%s",ftime(tmp,sizeof(tmp),Frontend.samp_since_over/Frontend.samprate));
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
-  pprintw(w,row++,col,"","%s->%s",formatsock(&Metadata_source_socket),
-	   formatsock(&Metadata_dest_socket));
+  pprintw(w,row++,col,"Source","%s",formatsock(&Metadata_source_socket,true));
+  pprintw(w,row++,col,"Dest","%s",formatsock(&Metadata_dest_socket,true));
   pprintw(w,row++,col,"Update interval","%'.2f sec",Refresh_rate);
   pprintw(w,row++,col,"Output status interval","%u",channel->status.output_interval);
   pprintw(w,row++,col,"Status pkts","%'llu",channel->status.packets_out);
@@ -1466,8 +1466,8 @@ static void display_output(WINDOW *w,struct channel const *channel){
   int col = 1;
   wmove(w,row,col);
   wclrtobot(w);
-  pprintw(w,row++,col,"","%s->%s",formatsock(&channel->output.source_socket),
-	  formatsock(&channel->output.dest_socket));
+  pprintw(w,row++,col,"Source","%s",formatsock(&channel->output.source_socket,true));
+  pprintw(w,row++,col,"Dest","%s",formatsock(&channel->output.dest_socket,true));
 
   pprintw(w,row++,col,"SSRC","%u",channel->output.rtp.ssrc);
   pprintw(w,row++,col,"Payload Type","%u",channel->output.rtp.type);

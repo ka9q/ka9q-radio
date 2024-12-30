@@ -243,7 +243,7 @@ void *input_thread(void *p){
     }
     int64_t now = gps_time_ns();
     char temp[1024];
-    fprintf(stdout,"%s %s", format_gpstime(temp,sizeof(temp),now), formatsock(&source));
+    fprintf(stdout,"%s %s", format_gpstime(temp,sizeof(temp),now), formatsock(&source,true));
     enum pkt_type const cr = buffer[0]; // Command/response byte
     fprintf(stdout," %s", cr == STATUS ? "STAT" : "CMD");
     if(cr == STATUS){

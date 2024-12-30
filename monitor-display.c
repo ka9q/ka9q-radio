@@ -649,7 +649,7 @@ static void update_monitor_display(void){
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
     if(sp != NULL)
-      mvprintwt(y,x,"%s -> %s",formatsock(&sp->sender),sp->dest);
+      mvprintwt(y,x,"%s -> %s",formatsock(&sp->sender,true),sp->dest);
   }
  done:;
   // Embolden the active lines

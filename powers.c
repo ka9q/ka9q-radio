@@ -106,7 +106,7 @@ int main(int argc,char *argv[]){
   Target = argv[optind];
   resolve_mcast(Target,&Metadata_dest_socket,DEFAULT_STAT_PORT,Iface,sizeof(Iface),0);
   if(Verbose)
-    fprintf(stderr,"Resolved %s -> %s\n",Target,formatsock(&Metadata_dest_socket));
+    fprintf(stderr,"Resolved %s -> %s\n",Target,formatsock(&Metadata_dest_socket,false));
 
   Status_fd = listen_mcast(&Metadata_dest_socket,Iface);
   if(Status_fd == -1){

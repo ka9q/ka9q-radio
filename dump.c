@@ -64,7 +64,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case STATUS_DEST_SOCKET:
       {
 	struct sockaddr_storage sock;
-	fprintf(fp,"status dest %s",formatsock(decode_socket(&sock,cp,optlen)));
+	fprintf(fp,"status dest %s",formatsock(decode_socket(&sock,cp,optlen),true));
       }
       break;
       break;
@@ -77,13 +77,13 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case OUTPUT_DATA_SOURCE_SOCKET:
       {
 	struct sockaddr_storage sock;
-	fprintf(fp,"data src %s",formatsock(decode_socket(&sock,cp,optlen)));
+	fprintf(fp,"data src %s",formatsock(decode_socket(&sock,cp,optlen),true));
       }
       break;
     case OUTPUT_DATA_DEST_SOCKET:
       {
 	struct sockaddr_storage sock;
-	fprintf(fp,"data dst %s",formatsock(decode_socket(&sock,cp,optlen)));
+	fprintf(fp,"data dst %s",formatsock(decode_socket(&sock,cp,optlen),true));
       }
       break;
     case OUTPUT_SSRC:

@@ -27,8 +27,7 @@ struct pcmstream {
   int type;                 // RTP type (10,11,20)
   
   struct sockaddr sender;
-  char addr[NI_MAXHOST];    // RTP Sender IP address
-  char port[NI_MAXSERV];    // RTP Sender source port
+  char const *source;
   int framesize;            // Bytes per timestamp increment
 
   long long bytes_received;
@@ -132,10 +131,9 @@ int main(int argc,char *argv[]){
       init(&Pcmstream,&rtp,&sender);
       
       if(!Quiet){
-	fprintf(stderr,"New session from %u@%s:%s, payload type %d\n",
+	fprintf(stderr,"New session from %u@%s, payload type %d\n",
 		Pcmstream.ssrc,
-		Pcmstream.addr,
-		Pcmstream.port,
+		Pcmstream.source,
 		rtp.type);
       }
     } else if(rtp.ssrc != Pcmstream.ssrc)
@@ -145,10 +143,9 @@ int main(int argc,char *argv[]){
       // Source changed, the sender restarted
       init(&Pcmstream,&rtp,&sender);
       if(!Quiet){
-	fprintf(stderr,"Session restart from %u@%s:%s\n",
+	fprintf(stderr,"Session restart from %u@%s\n",
 		Pcmstream.ssrc,
-		Pcmstream.addr,
-		Pcmstream.port);
+		Pcmstream.source);
       }
     }
     if(!rtp.marker){
@@ -228,9 +225,7 @@ static int init(struct pcmstream *pc,struct rtp_header const *rtp,struct sockadd
   }
   
   memcpy(&pc->sender,sender,sizeof(pc->sender)); // Remember sender
-  getnameinfo((struct sockaddr *)&pc->sender,sizeof(pc->sender),
-	      pc->addr,sizeof(pc->addr),
-	      pc->port,sizeof(pc->port),NI_NOFQDN|NI_DGRAM);
+  pc->source = formatsock(&pc->sender,false);
   return 0;
 }
 

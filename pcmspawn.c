@@ -33,8 +33,7 @@ struct session {
   int type;                 // input RTP type (10,11)
   
   struct sockaddr sender;
-  char addr[NI_MAXHOST];    // RTP Sender IP address
-  char port[NI_MAXSERV];    // RTP Sender source port
+  char const *source;
 
   FILE *pipe;
   int64_t last_active;
@@ -209,8 +208,7 @@ int main(int argc,char * const argv[]){
       sp = create_session();
       assert(sp != NULL);
       // Initialize
-      getnameinfo((struct sockaddr *)&sender,sizeof(sender),sp->addr,sizeof(sp->addr),
-		    sp->port,sizeof(sp->port),NI_NOFQDN|NI_DGRAM);
+      sp->source = formatsock(&sender,false);
       memcpy(&sp->sender,&sender,sizeof(struct sockaddr));
       sp->rtp_state.ssrc = pkt->rtp.ssrc;
       sp->rtp_state.seq = pkt->rtp.seq; // Can cause a spurious drop indication if # pcm pkts != # opus pkts
@@ -227,8 +225,8 @@ int main(int argc,char * const argv[]){
       int const samprate = samprate_from_pt(sp->type);
       int const channels = channels_from_pt(sp->type);
 
-      snprintf(command_line,sizeof(command_line),"%s %s:%s %d %d %d %d",
-	       Command,sp->addr,sp->port,sp->rtp_state.ssrc,sp->type,samprate,channels);
+      snprintf(command_line,sizeof(command_line),"%s %s %d %d %d %d",
+	       Command,sp->source,sp->rtp_state.ssrc,sp->type,samprate,channels);
       fprintf(stderr,"New session, %s\n",command_line);
 
       if((sp->pipe = popen(command_line,"w")) == NULL){
@@ -348,12 +346,12 @@ void * status(void *p){
 
 	    // new or changed PCM multicast group
 	    if(Verbose)
-	      fprintf(stderr,"Listening for PCM on %s\n",formatsock(&dest_temp));
+	      fprintf(stderr,"Listening for PCM on %s\n",formatsock(&dest_temp,false));
 
 	    int const fd = listen_mcast(&dest_temp,NULL); // Port address already in place
 	    if(fd == -1){
 	      if(Verbose){
-		fprintf(stderr,"Multicast listen on %s failed\n",formatsock(&dest_temp));
+		fprintf(stderr,"Multicast listen on %s failed\n",formatsock(&dest_temp,false));
 	      }
 	      break;
 	    }

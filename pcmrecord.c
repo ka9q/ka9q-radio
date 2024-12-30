@@ -1023,10 +1023,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   attrprintf(fd,"ssrc","%u",sp->ssrc);
   attrprintf(fd,"frequency","%.3lf",sp->chan.tune.freq);
   attrprintf(fd,"preset","%s",sp->chan.preset);
-  char sender_text[NI_MAXHOST];
-  // Don't wait for an inverse resolve that might cause us to lose data
-  getnameinfo((struct sockaddr *)sender,sizeof(*sender),sender_text,sizeof(sender_text),NULL,0,NI_NOFQDN|NI_DGRAM|NI_NUMERICHOST);
-  attrprintf(fd,"source","%s",sender_text);
+  attrprintf(fd,"source","%s",formatsock(sender,false));
   attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
   attrprintf(fd,"unixstarttime","%ld.%09ld",(long)now.tv_sec,(long)now.tv_nsec);
 

@@ -441,7 +441,7 @@ void *sap_send(void *p){
     space -= len;
 
     {
-      char *mcast = strdup(formatsock(&chan->output.dest_socket));
+      char *mcast = strdup(formatsock(&chan->output.dest_socket,false));
       // Remove :port field, confuses the vlc listener
       char *cp = strchr(mcast,':');
       if(cp)
