@@ -129,6 +129,7 @@ struct session {
   void *iobuffer;              // Big buffer to reduce write rate
   int64_t last_active;         // gps time of last activity
   int64_t starting_offset;     // First actual sample in file past wav header (for time alignment)
+  bool no_offset;              // Don't offset except on first file in series (with -L option)
 
   bool substantial_file;       // At least one substantial segment has been seen
   int64_t current_segment_samples; // total samples in this segment without skips in timestamp
@@ -806,14 +807,13 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     return 0;
   } else if(Command != NULL){
     // Substitute parameters as specified
-    char expanded_command[2048];
-    expanded_command[0] = '\0';
+    sp->filename[0] = '\0';
     char command_copy[2048]; // Don't overwrite program args
     strlcpy(command_copy,Command,sizeof(command_copy));
     char *cp = command_copy;
     char *a;
     while((a = strsep(&cp,"$")) != NULL){
-      strlcat(expanded_command,a,sizeof(expanded_command));
+      strlcat(sp->filename,a,sizeof(sp->filename));
       if(cp != NULL && strlen(cp) > 0){
 	char temp[256];
 	switch(*cp++){
@@ -844,17 +844,15 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	default:
 	  break;
 	}
-	strlcat(expanded_command,temp,sizeof(expanded_command));
       }
     }
     if(Verbose)
-      fprintf(stderr,"ssrc %u: executing %s\n",sp->ssrc,expanded_command);
-    sp->fp = popen(expanded_command,"w");
+      fprintf(stderr,"ssrc %u: executing %s\n",sp->ssrc,sp->filename);
+    sp->fp = popen(sp->filename,"w");
     if(sp->fp == NULL){
-      fprintf(stderr,"ssrc %u: cannot start %s, exiting",sp->ssrc,expanded_command);
+      fprintf(stderr,"ssrc %u: cannot start %s, exiting",sp->ssrc,sp->filename);
       exit(1); // Will probably fail for all others too, just give up
     }
-    strlcpy(sp->filename,expanded_command,sizeof(sp->filename));
     return 0;
   }
   char const *suffix = ".raw";
@@ -903,8 +901,9 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     intmax_t start_ns = r.quot * limit; // ns since epoch
     intmax_t skip_ns = now_ns - start_ns;
 
-    if(skip_ns > (int64_t)(Tolerance * BILLION) && (int64_t)(limit - skip_ns) > Tolerance * BILLION){
+    if(!sp->no_offset && skip_ns > (int64_t)(Tolerance * BILLION) && (int64_t)(limit - skip_ns) > Tolerance * BILLION){
       // Adjust file time to previous multiple of specified limit size and pad start to first sample
+      sp->no_offset = true; // Only on first file of session with -L
       imaxdiv_t f = imaxdiv(start_ns,BILLION);
       file_time.tv_sec = f.quot + epoch; // restore original epoch
       file_time.tv_nsec = f.rem;
