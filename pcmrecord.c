@@ -844,6 +844,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	default:
 	  break;
 	}
+	strlcat(sp->filename,temp,sizeof(sp->filename));
       }
     }
     if(Verbose)
