@@ -523,7 +523,7 @@ int main(int argc,char *argv[]){
       }
     }
     qsort(channels,chan_count,sizeof(channels[0]),chan_compare);
-    fprintf(stdout,"%13s %9s %13s %5s %s\n","SSRC","preset","freq, Hz","SNR","output channel");
+    fprintf(stdout,"%13s %9s %10s %13s %5s %s\n","SSRC","preset","samprate","freq, Hz","SNR","output channel");
     uint32_t last_ssrc = 0;
     for(int i=0; i < chan_count;i++){
       struct channel *channel = channels[i];
@@ -532,7 +532,10 @@ int main(int argc,char *argv[]){
 
       char const *ip_addr_string = formatsock(&channel->output.dest_socket,true);
       gen_locals(channel);
-      fprintf(stdout,"%13u %9s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->tune.freq,Local.snr,ip_addr_string);
+      if(channel->output.encoding == OPUS)
+	fprintf(stdout,"%13u %9s %10s %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,"opus",channel->tune.freq,Local.snr,ip_addr_string);
+      else
+	fprintf(stdout,"%13u %9s %'10d %'13.f %5.1f %s\n",channel->output.rtp.ssrc,channel->preset,channel->output.samprate,channel->tune.freq,Local.snr,ip_addr_string);
       last_ssrc = channel->output.rtp.ssrc;
     }
     fprintf(stdout,"%d channels; choose SSRC, create new SSRC, or hit return to look for more: ",chan_count);
