@@ -334,9 +334,7 @@ static void closedown(int a){
 
 // Write out any partial Ogg Opus pages
 static int ogg_flush(struct session *sp){
-  if(sp == NULL)
-    return -1;
-  if(sp->encoding != OPUS)
+  if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
     return -1;
 
   ogg_page oggPage;
@@ -356,6 +354,9 @@ static uint8_t OpusSilence[] = {0xf8,0xff,0xfe}; // Silence
 
 
 static int emit_opus_silence(struct session * const sp,int samples){
+  if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
+    return -1;
+
   ogg_packet oggPacket;
   oggPacket.b_o_s = 0;
   oggPacket.e_o_s = 0;    // End of stream flag
@@ -403,6 +404,9 @@ static int send_queue(struct session * const sp,bool flush){
 // if !flush, send whatever's on the queue, up to the first missing segment
 // if flush, empty the entire queue, skipping empty entries
 static int send_opus_queue(struct session * const sp,bool flush){
+  if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
+    return -1;
+
   // Anything on the resequencing queue we can now process?
   int count = 0;
   for(int i=0; i < RESEQ; i++,sp->rtp_state.seq++){
@@ -476,6 +480,9 @@ static int send_opus_queue(struct session * const sp,bool flush){
 // if !flush, send whatever's on the queue, up to the first missing segment
 // if flush, empty the entire queue, skipping empty entries
 static int send_wav_queue(struct session * const sp,bool flush){
+  if(sp == NULL || sp->fp == NULL)
+    return -1;
+
   // Anything on the resequencing queue we can now process?
   int count = 0;
   int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2); // bytes per sample time
@@ -1290,7 +1297,7 @@ static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string){
 // Write WAV header at start of file
 // Leave file positioned after header
 static int start_wav_stream(struct session *sp){
-  if(sp == NULL)
+  if(sp == NULL || sp->fp == NULL)
     return -1;
 
   // Write .wav header, skipping size fields
@@ -1361,7 +1368,7 @@ static int start_wav_stream(struct session *sp){
 }
 // Update wav header with now-known size and end auxi information
 static int end_wav_stream(struct session *sp){
-  if(sp == NULL)
+  if(sp == NULL || sp->fp == NULL)
     return -1;
 
   if(!sp->can_seek)
