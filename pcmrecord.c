@@ -164,7 +164,8 @@ static void closedown(int a);
 static void input_loop(void);
 static void cleanup(void);
 int session_file_init(struct session *sp,struct sockaddr const *sender);
-static int close_file(struct session **spp);
+static int close_session(struct session **spp);
+static int close_file(struct session *sp);
 static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string);
 static int start_ogg_opus_stream(struct session *sp);
 static int emit_ogg_opus_tags(struct session *sp);
@@ -608,29 +609,6 @@ static void input_loop(){
       memcpy(&sp->chan,&chan,sizeof(sp->chan));
       memcpy(&sp->frontend,&frontend,sizeof(sp->frontend));
       sp->last_active = current_time;
-      if(sp->fp == NULL){
-	session_file_init(sp,&sender);
-	if(sp->encoding == OPUS){
-	  if(Raw)
-	    fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
-	  start_ogg_opus_stream(sp);
-	  emit_ogg_opus_tags(sp);
-	  if(sp->starting_offset != 0)
-	    emit_opus_silence(sp,sp->starting_offset);
-	} else {
-	  if(!Raw)
-	    start_wav_stream(sp); // Don't emit wav header in --raw
-	  int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2);
-	  if(sp->can_seek){
-	    fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
-	  } else {
-	    // Emit zero padding
-	    unsigned char *zeroes = calloc(sp->starting_offset,framesize); // Don't use too much stack space
-	    fwrite(zeroes,framesize,sp->starting_offset,sp->fp);
-	    FREE(zeroes);
-	  }
-	}
-      }
       // Ogg (containing opus) can concatenate streams with new metadata, so restart when it changes
       // WAV files don't even have this metadata, so ignore changes
       if(sp->encoding == OPUS){
@@ -684,6 +662,30 @@ static void input_loop(){
       // We can't even process RTP timestamps without knowing how big a frame is
       if(sp == NULL)
 	continue;
+
+      if(sp->fp == NULL){
+	session_file_init(sp,&sender);
+	if(sp->encoding == OPUS){
+	  if(Raw)
+	    fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
+	  start_ogg_opus_stream(sp);
+	  emit_ogg_opus_tags(sp);
+	  if(sp->starting_offset != 0)
+	    emit_opus_silence(sp,sp->starting_offset);
+	} else {
+	  if(!Raw)
+	    start_wav_stream(sp); // Don't emit wav header in --raw
+	  int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2);
+	  if(sp->can_seek){
+	    fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
+	  } else {
+	    // Emit zero padding
+	    unsigned char *zeroes = calloc(sp->starting_offset,framesize); // Don't use too much stack space
+	    fwrite(zeroes,framesize,sp->starting_offset,sp->fp);
+	    FREE(zeroes);
+	  }
+	}
+      }
 
       sp->last_active = gps_time_ns(); // Any activity at all resets the timer
       if(sp->rtp_state.odd_seq_set){
@@ -754,7 +756,7 @@ static void input_loop(){
 	  fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
 	}
       if(FileLengthLimit != 0 && sp->samples_remaining <= 0)
-	close_file(&sp);
+	close_file(sp);
 
     } // end of packet processing
     // Walk through list, close idle sessions
@@ -766,7 +768,7 @@ static void input_loop(){
 	int64_t idle = current_time - sp->last_active;
 	if(idle > Timeout * BILLION){
 	  // Close idle session
-	  close_file(&sp); // sp will be NULL
+	  close_session(&sp); // sp will be NULL
 	}
       }
     }
@@ -779,7 +781,7 @@ static void cleanup(void){
     // Flush and close each write stream
     // Be anal-retentive about freeing and clearing stuff even though we're about to exit
     struct session *next_s = Sessions->next;
-    close_file(&Sessions); // Sessions will be NULL
+    close_session(&Sessions); // Sessions will be NULL
     Sessions = next_s;
   }
 }
@@ -1038,15 +1040,34 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   return 0;
 }
 
-// Close a session, update .wav header, remove from session table
-// If the file is not "substantial", just delete it
-static int close_file(struct session **spp){
+static int close_session(struct session **spp){
   if(spp == NULL)
     return -1;
   struct session *sp = *spp;
 
   if(sp == NULL)
     return -1;
+
+  close_file(sp);
+  if(sp->prev)
+    sp->prev->next = sp->next;
+  else
+    Sessions = sp->next;
+  if(sp->next)
+    sp->next->prev = sp->prev;
+  FREE(sp);
+  return 0;
+}
+
+
+// Close a session, update .wav header, remove from session table
+// If the file is not "substantial", just delete it
+static int close_file(struct session *sp){
+  if(sp == NULL)
+    return -1;
+
+  if(sp->fp == NULL)
+    return 0;
 
   if(sp->encoding == OPUS)
     end_ogg_opus_stream(sp);
@@ -1080,14 +1101,10 @@ static int close_file(struct session **spp){
     fclose(sp->fp);
   sp->fp = NULL;
   FREE(sp->iobuffer);
+  sp->filename[0] = '\0';
+  sp->samples_written = 0;
+  sp->total_file_samples = 0;
 
-  if(sp->prev)
-    sp->prev->next = sp->next;
-  else
-    Sessions = sp->next;
-  if(sp->next)
-    sp->next->prev = sp->prev;
-  FREE(sp);
   return 0;
 }
 
