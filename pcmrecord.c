@@ -797,13 +797,16 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   if(sp->fp != NULL)
     return 0;
 
+  sp->starting_offset = 0;
+  sp->samples_remaining = 0;
+
   char const *file_encoding = encoding_string(sp->encoding == S16BE ? S16LE : sp->encoding);
   if(Catmode){
     sp->fp = stdout;
     if(Verbose)
-    fprintf(stderr,"receiving ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s offset %lld\n",
-	    sp->ssrc,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
-	    sp->chan.preset,(long long)sp->starting_offset);
+      fprintf(stderr,"receiving ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s\n",
+	      sp->ssrc,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
+	      sp->chan.preset);
     return 0;
   } else if(Command != NULL){
     // Substitute parameters as specified
@@ -856,6 +859,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     }
     return 0;
   }
+  // Else create a file
   char const *suffix = ".raw";
   if(!Raw){
     switch(sp->encoding){
@@ -879,8 +883,6 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   clock_gettime(CLOCK_REALTIME,&now);
   struct timespec file_time = now; // Default to actual time when length limit is not set
 
-  sp->starting_offset = 0;
-  sp->samples_remaining = 0;
   if(FileLengthLimit > 0){ // Not really supported on opus yet
     // Pad start of first file with zeroes
 #if 0
