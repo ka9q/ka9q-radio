@@ -35,7 +35,6 @@ all: $(DAEMONS) $(EXECS)
 # NB: no longer copies files to /etc/radio. Must be installed manually.
 install: $(DAEMONS) $(EXECS)
 	/usr/sbin/adduser --quiet --system --group radio
-	/usr/sbin/adduser --quiet --system --ingroup radio recordings
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
 	rsync -a aux/98-sockbuf.conf /etc/sysctl.d
 	sysctl --quiet -p /etc/sysctl.d/98-sockbuf.conf

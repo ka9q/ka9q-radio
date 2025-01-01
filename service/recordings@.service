@@ -1,5 +1,4 @@
-# $Id: recordings@.service,v 1.5 2022/04/03 05:28:08 karn Exp $
-# Systemd unit to record PCM
+# Systemd unit to record receiver streams
 # Phil Karn, KA9Q May 2020
 
 [Unit]
@@ -9,7 +8,7 @@ Requires=network-online.target
 
 [Service]
 Nice=-10
-User=recordings
+User=radio
 Group=radio
 Type=simple
 PermissionsStartOnly=true
