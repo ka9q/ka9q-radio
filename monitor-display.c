@@ -546,7 +546,11 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"c");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    if(sp != NULL)
+    if(sp == NULL)
+      continue;
+    if(sp->pt_table[sp->type].encoding == OPUS)
+      mvprintwt(y,x,"%*d",width,sp->opus_channels); // actual number in incoming stream
+    else
       mvprintwt(y,x,"%*d",width,sp->channels);
   }
   x += width;
@@ -574,6 +578,19 @@ static void update_monitor_display(void){
     struct session const *sp = Sessions_copy[session];
     if(sp != NULL)
       mvprintwt(y,x,"%*d",width,sp->type);
+  }
+  x += width;
+  y = row_save;
+
+  // Data rate, kb/s
+  if(x >= COLS)
+    goto done;
+  width = 6;
+  mvprintwt(y++,x,"%*s",width,"rate");
+  for(int session = First_session; session < Nsessions_copy; session++,y++){
+    struct session const *sp = Sessions_copy[session];
+    if(sp != NULL)
+      mvprintwt(y,x,"%*.1f",width,.001 * sp->datarate);
   }
   x += width;
   y = row_save;

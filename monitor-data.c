@@ -277,12 +277,12 @@ void *decode_task(void *arg){
     
     int upsample;
 
-    // The Opus decoder is always forced to stereo output because the input stream can switch at any time
+    // The Opus decoder is always forced to the local channel count because the input stream can switch at any time
     // (e.g., I/Q vs envelope) without changing the payload type, so there could be a glitch
     // before the channel count in the status message catches up with us and we can initialize a new decoder
     if(encoding == OPUS){
       sp->samprate = DAC_samprate;
-      sp->channels = 2;
+      sp->channels = Channels;
       upsample = 1;
       if(!sp->opus){
 	// This should happen only once on a stream
@@ -325,6 +325,7 @@ void *decode_task(void *arg){
 	sp->bandwidth = 20;
 	break;
       }
+      sp->opus_channels = opus_packet_get_nb_channels(pkt->data);
       size_t const bounce_size = sizeof(*bounce) * sp->frame_size * sp->channels;
       assert(bounce == NULL); // detect possible memory leaks
       bounce = malloc(bounce_size);
@@ -333,6 +334,10 @@ void *decode_task(void *arg){
 	fprintf(stderr,"samples %d frame-size %d\n",samples,sp->frame_size);
 	goto endloop;
       }
+      // Maintain smoothed measurement of data rate
+      // Won't work right with discontinuous transmission - fix by looking at timestamps
+      float rate = 8 * pkt->len * DAC_samprate / (float)samples;
+      sp->datarate += 0.1 * (rate - sp->datarate);
     } else { // PCM
       sp->channels = sp->pt_table[sp->type].channels;
       int samprate = sp->pt_table[sp->type].samprate;
@@ -351,10 +356,12 @@ void *decode_task(void *arg){
       // (should be cleaner; what about decimation?)
       upsample = DAC_samprate / sp->samprate;
 
+
       // decode PCM into bounce buffer
       switch(encoding){
       case S16LE:
       case S16BE:
+	sp->datarate = 8 * sp->channels * sizeof(int16_t) * sp->samprate;
 	sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
 	if(sp->frame_size <= 0)
 	  goto endloop;
@@ -371,6 +378,7 @@ void *decode_task(void *arg){
 	}
 	break;
       case F32LE:
+	sp->datarate = 8 * sp->channels * sizeof(float) * sp->samprate;
 	sp->frame_size = pkt->len / (sizeof(float) * sp->channels); // mono/stereo samples in frame
 	if(sp->frame_size <= 0) // Check here because it might truncate to zero
 	  goto endloop;
@@ -384,6 +392,7 @@ void *decode_task(void *arg){
 	break;
 #ifdef FLOAT16
       case F16LE: // 16-bit floats
+	sp->datarate = 8 * sp->channels * sizeof(_Float16) * sp->samprate;
 	sp->frame_size = pkt->len / (sizeof(_Float16) * sp->channels); // mono/stereo samples in frame
 	if(sp->frame_size <= 0) // Check here because it might truncate to zero
 	  goto endloop;

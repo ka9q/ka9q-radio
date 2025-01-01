@@ -106,8 +106,10 @@ struct session {
   long long last_start;     // GPS time at last transition to active from idle
   float tot_active;         // Total PCM time, ns
   float active;             // Seconds we've been active (only when queue has stuff)
+  float datarate;           // Smoothed channel data rate
 
   OpusDecoder *opus;        // Opus codec decoder handle, if needed
+  int opus_channels;        // Actual channels in Opus stream
   int frame_size;
   int bandwidth;            // Audio bandwidth
   struct goertzel tone_detector[N_tones];
