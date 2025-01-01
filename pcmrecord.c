@@ -804,7 +804,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   if(Catmode){
     sp->fp = stdout;
     if(Verbose)
-      fprintf(stderr,"receiving ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s\n",
+      fprintf(stderr,"receiving %s ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s\n",
+	      sp->frontend.description,
 	      sp->ssrc,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
 	      sp->chan.preset);
     return 0;
@@ -851,7 +852,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       }
     }
     if(Verbose)
-      fprintf(stderr,"ssrc %u: executing %s\n",sp->ssrc,sp->filename);
+      fprintf(stderr,"%s ssrc %u: executing %s\n",sp->frontend.description,sp->ssrc,sp->filename);
     sp->fp = popen(sp->filename,"w");
     if(sp->fp == NULL){
       fprintf(stderr,"ssrc %u: cannot start %s, exiting",sp->ssrc,sp->filename);
@@ -1019,7 +1020,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   }
   // We byte swap S16BE to S16LE, so change the tag
   if(Verbose)
-    fprintf(stderr,"ssrc %u creating '%s' samprate %d channels %d encoding %s freq %.3lf preset %s offset %lld\n",
+    fprintf(stderr,"%s ssrc %u creating '%s' samprate %d channels %d encoding %s freq %.3lf preset %s offset %lld\n",
+	    sp->frontend.description,
 	    sp->ssrc,sp->filename,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
 	    sp->chan.preset,(long long)sp->starting_offset);
   sp->iobuffer = malloc(BUFFERSIZE);
@@ -1084,7 +1086,9 @@ static int close_file(struct session *sp){
     end_wav_stream(sp);
 
   if(Verbose){
-    fprintf(stderr,"ssrc %u closing '%s' %'.1f/%'.1f sec\n",sp->ssrc,sp->filename, // might be blank
+    fprintf(stderr,"%s ssrc %u closing '%s' %'.1f/%'.1f sec\n",
+	    sp->frontend.description,
+	    sp->ssrc,sp->filename, // might be blank
             (float)sp->samples_written / (sp->samprate * sp->channels),
             (float)sp->total_file_samples / (sp->samprate * sp->channels));
   }
@@ -1201,7 +1205,9 @@ static int emit_ogg_opus_tags(struct session *sp){
 	   (int)(now.tv_nsec / 1000000));
   {
     char temp[256];
-    snprintf(temp,sizeof(temp),"TITLE=ssrc %u: %'.3lf Hz %s, %s %s",sp->ssrc,sp->chan.tune.freq,sp->chan.preset,
+    snprintf(temp,sizeof(temp),"TITLE=%s ssrc %u: %'.3lf Hz %s, %s %s",
+	     sp->frontend.description,
+	     sp->ssrc,sp->chan.tune.freq,sp->chan.preset,
 	     datestring,timestring);
     wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),temp);
   }
