@@ -495,12 +495,6 @@ void *statproc(void *arg){
     sp->pt_table[sp->type].samprate = sp->chan.output.samprate;
     sp->pt_table[sp->type].channels = sp->chan.output.channels;
 
-    char const *id = lookupid(sp->chan.tune.freq);
-    if(id)
-      strlcpy(sp->id,id,sizeof(sp->id));
-    else
-      sp->id[0] = '\0';
-
     // Update SNR calculation (not sent explicitly)
     float const noise_bandwidth = fabsf(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
     float sig_power = sp->chan.sig.bb_power - noise_bandwidth * sp->chan.sig.n0;

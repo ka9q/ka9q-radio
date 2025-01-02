@@ -22,6 +22,7 @@
 #endif
 #include <sysexits.h>
 #include <poll.h>
+#include <regex.h>
 
 #include "conf.h"
 #include "config.h"
@@ -42,6 +43,7 @@ int Update_interval = 100;  // Default time in ms between display updates
 // Really should be rewritten with something much better
 struct idtable {
   double freq;
+  float tone;
   char id[128];
 };
 #define IDSIZE 1024
@@ -241,6 +243,24 @@ static int sort_session_total(void){
   return 0;
 }
 
+static int id_compare(const void *a,const void *b){
+  struct idtable const *p1 = (struct idtable *)a;
+  struct idtable const *p2 = (struct idtable *)b;
+  if(p1 == NULL || p2 == NULL)
+    return 0; // Shouldn't happen
+  // Compare frequencies first, then tones
+  if(p1->freq < p2->freq)
+    return -1;
+  if(p1->freq > p2->freq)
+    return +1;
+  if(p1->tone < p2->tone)
+    return -1;
+  if(p1->tone > p2->tone)
+    return +1;
+  return 0;
+}
+
+
 void load_id(void){
   char filename[PATH_MAX];
   dist_path(filename,sizeof(filename),ID);
@@ -257,6 +277,26 @@ void load_id(void){
   if(fp == NULL)
     return;
 
+  // Lines consist of frequency, PL tone, id. The PL tone is optional, but must be of form 88.3 or 114.8
+  // double escape special chars to get single backslashes through the C compiler
+  char const *pattern1 = "([0-9\\.]+)[[:space:]]+([0-9]{2,3}\\.[0-9])[[:space:]]+(.*)";
+  char const *pattern2 = "([0-9\\.]+)[[:space:]]+(.*)";
+  regex_t preg1;
+  int r = regcomp(&preg1,pattern1,REG_EXTENDED);
+  if(r != 0){
+    char errbuf[256];
+    regerror(r,&preg1,errbuf,sizeof(errbuf));
+    fprintf(stderr,"regex compile(%s) failed: %s\n",pattern1,errbuf);
+    return;
+  }
+  regex_t preg2;
+  r = regcomp(&preg2,pattern2,REG_EXTENDED);
+  if(r != 0){
+    char errbuf[256];
+    regerror(r,&preg2,errbuf,sizeof(errbuf));
+    fprintf(stderr,"regex compile(%s) failed: %s\n",pattern2,errbuf);
+    return;
+  }
   char *line = NULL;
   size_t linesize = 0;
   while(getline(&line,&linesize,fp) > 0){
@@ -265,33 +305,89 @@ void load_id(void){
     if(line[0] == '#' || strlen(line) == 0)
       continue; // Comment
     assert(Nid < IDSIZE);
-    char *ptr = NULL;
-    Idtable[Nid].freq = strtod(line,&ptr);
-    if(ptr == line)
-      continue; // no parseable number
-
-    while(*ptr == ' ' || *ptr == '\t')
-      ptr++;
-    int const len = strlen(ptr); // Length of ID field
-    if(len > 0){ // Not null
-      strlcpy(Idtable[Nid].id,ptr,sizeof(Idtable[Nid].id));
+    size_t const nmatch = 4;
+    regmatch_t pmatch[nmatch];
+    // Look for line with PL tone
+    r = regexec(&preg1,line,nmatch,pmatch,0);
+#if 0
+    if(r != 0){
+      char errbuf[256];
+      regerror(r,&preg1,errbuf,sizeof(errbuf));
+      fprintf(stderr,"regex1 on %s failed: %s\n",line,errbuf);
     }
+#endif
+    if(r == 0){
+      // field 1: frequency
+      char freq[128];
+      memset(freq,0,sizeof(freq));
+      memcpy(freq,&line[pmatch[1].rm_so],pmatch[1].rm_eo - pmatch[1].rm_so);
+      char *ptr = NULL;
+      Idtable[Nid].freq = strtod(freq,&ptr);
+      if(ptr == freq)
+	continue; // no parseable number
+
+      // field 2: PL tone
+      // Because it's optional, it must be of the form nn.n or nnn.n
+      if(pmatch[2].rm_so != -1){
+	memset(freq,0,sizeof(freq));
+	memcpy(freq,&line[pmatch[2].rm_so],pmatch[2].rm_eo - pmatch[2].rm_so);
+	Idtable[Nid].tone = strtod(freq,&ptr);
+	if(ptr == freq)
+	  continue; // no parseable number
+      }
+      if(pmatch[3].rm_so != -1){
+	// Free-form ID field
+	strlcpy(Idtable[Nid].id,&line[pmatch[3].rm_so],sizeof(Idtable[Nid].id));
+      }
+    } else if((r = regexec(&preg2,line,nmatch,pmatch,0)) == 0){
+      // Line without tone entry
+      char freq[128];
+      memset(freq,0,sizeof(freq));
+      memcpy(freq,&line[pmatch[1].rm_so],pmatch[1].rm_eo - pmatch[1].rm_so);
+      char *ptr = NULL;
+      Idtable[Nid].freq = strtod(freq,&ptr);
+      if(ptr == freq)
+	continue; // no parseable number
+
+      if(pmatch[2].rm_so != -1){
+	// Free-form ID field
+	strlcpy(Idtable[Nid].id,&line[pmatch[2].rm_so],sizeof(Idtable[Nid].id));
+      }
+    }
+# if 0
+ else {
+      char errbuf[256];
+      regerror(r,&preg2,errbuf,sizeof(errbuf));
+      fprintf(stderr,"regex2 on %s failed: %s\n",line,errbuf);
+      continue;
+    }
+#endif
     Nid++;
     if(Nid == IDSIZE){
       fprintf(stderr,"ID table overlow, size %d\n",Nid);
       break;
     }
   }
+  if(Nid > 0)
+    qsort(Idtable,Nid,sizeof(Idtable[0]),id_compare);
+
+  regfree(&preg1);
+  regfree(&preg2);
   FREE(line);
   fclose(fp);
 }
 
-char const *lookupid(double freq){
-  for(int i=0; i < Nid; i++){
-    if(Idtable[i].freq == freq)
-      return Idtable[i].id;
-  }
-  return NULL;
+// Use binary search to speed things up since we do this more often
+char const *lookupid(double freq,float tone){
+  struct idtable key;
+  key.freq = freq;
+  key.tone = tone;
+
+  struct idtable *entry = (struct idtable *)bsearch(&key,Idtable,Nid,sizeof(key),id_compare);
+  if(entry == NULL)
+    return NULL;
+  else
+    return entry->id;
 }
 
 static void update_monitor_display(void){

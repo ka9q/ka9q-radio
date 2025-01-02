@@ -155,7 +155,7 @@ void *decode_task(void *x);
 void *dataproc(void *arg);
 void *statproc(void *arg);
 void *repeater_ctl(void *arg);
-char const *lookupid(double freq);
+char const *lookupid(double freq,float tone);
 bool kick_output();
 void vote();
 

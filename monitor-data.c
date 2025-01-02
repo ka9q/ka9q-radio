@@ -449,9 +449,18 @@ void *decode_task(void *arg){
 	sp->notch_tone = sp->current_tone;
 	setIIRnotch(&sp->iir_right,sp->current_tone/sp->samprate);
 	setIIRnotch(&sp->iir_left,sp->current_tone/sp->samprate);
+	char const *id = lookupid(sp->chan.tune.freq,sp->current_tone); // Any or no tone
+	if(id)
+	  strlcpy(sp->id,id,sizeof(sp->id));
+	else
+	  sp->id[0] = '\0';
       }
-    } // sp->notch_enable
-
+    }
+    if(strlen(sp->id) == 0){
+      char const *id = lookupid(sp->chan.tune.freq,0.0);
+      if(id)
+	strlcpy(sp->id,id,sizeof(sp->id));
+    }
     // Count samples and frames and advance write pointer even when muted
     sp->tot_active += (float)sp->frame_size / sp->samprate;
     sp->active += (float)sp->frame_size / sp->samprate;
