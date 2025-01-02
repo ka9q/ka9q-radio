@@ -389,6 +389,10 @@ static int loadconfig(char const * const file){
     char default_status[strlen(hostname) + strlen(Name) + 20]; // Enough room for snprintf
     snprintf(default_status,sizeof(default_status),"%s-%s.local",hostname,Name);
     Metadata_dest_string = strdup(config_getstring(Configtable,global,"status",default_status)); // Status/command target for all demodulators
+    if(0 == strcmp(Metadata_dest_string,Data)){
+      fprintf(stdout,"Duplicate status/data stream names: data=%s, status=%s\n",Data,Metadata_dest_string);
+      exit(EX_USAGE);
+    }
   }
   {
     char ttlmsg[100];
