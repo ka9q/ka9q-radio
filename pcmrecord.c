@@ -348,11 +348,13 @@ static int ogg_flush(struct session *sp){
   return count;
 }
 
-// This comes from a conversation with ChatGPT that was somewhat contradictory about the silence frame
-static uint8_t OpusSilence[] = {0xf8,0xff,0xfe}; // Silence
-//static uint8_t OpusSilence[] = {0xff}; // Comfort noise
-//static uint8_t OpusSilence[] = {0xf8}; // Lost packet, packet loss concealment. creates buzz when squelch is closed
-
+// These produced by a test program I wrote. All are in CELT, 48 kHz mono
+static uint8_t OpusSilence25[] = {0xe0,0xff,0xfe}; // 2.5 ms Silence
+static uint8_t OpusSilence5[] = {0xe8,0xff,0xfe}; // 5 ms Silence
+static uint8_t OpusSilence10[] = {0xf0,0xff,0xfe}; // 10 ms Silence
+static uint8_t OpusSilence20[] = {0xf8,0xff,0xfe}; // 20 ms Silence
+static uint8_t OpusSilence40[] = {0xf9,0xff,0xfe,0xff,0xfe}; // 40 ms Silence (2x 20 ms silence frames)
+static uint8_t OpusSilence60[] = {0xfb,0x03,0xff,0xfe,0xff,0xfe,0xff,0xfe}; // 60 ms Silence (3 x 20ms silence frames)
 
 static int emit_opus_silence(struct session * const sp,int samples){
   if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
@@ -364,12 +366,36 @@ static int emit_opus_silence(struct session * const sp,int samples){
 
   int samples_since_flush = 0;
   while(samples > 0){
-    int chunk = min(samples,960); // 20 ms is 960 samples @ 48 kHz
+    int chunk = min(samples,2880); // 60 ms is 2880 samples @ 48 kHz
+    // To save a little space in long silent intervals, emit the largest frame that will fit
+    if(chunk >= 2880){
+      chunk = 2880;
+      oggPacket.packet = OpusSilence60;
+      oggPacket.bytes = sizeof(OpusSilence60);
+    } else if(chunk >= 1920){
+      chunk = 1920;
+      oggPacket.packet = OpusSilence40;
+      oggPacket.bytes = sizeof(OpusSilence40);
+    } else if(chunk >= 960){
+      chunk = 960;
+      oggPacket.packet = OpusSilence20;
+      oggPacket.bytes = sizeof(OpusSilence20);
+    } else if(chunk >= 480){
+      chunk = 480;
+      oggPacket.packet = OpusSilence10;
+      oggPacket.bytes = sizeof(OpusSilence10);
+    } else if(chunk >= 240){
+      chunk = 240;
+      oggPacket.packet = OpusSilence5;
+      oggPacket.bytes = sizeof(OpusSilence5);
+    } else {
+      chunk = 120;
+      oggPacket.packet = OpusSilence25;
+      oggPacket.bytes = sizeof(OpusSilence25);
+    }
     oggPacket.packetno = sp->packetCount++; // Increment packet number
     sp->granulePosition += chunk; // points to end of this packet
     oggPacket.granulepos = sp->granulePosition; // Granule position
-    oggPacket.packet = OpusSilence;
-    oggPacket.bytes = sizeof(OpusSilence);
     int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);	  // Add the packet to the Ogg stream
     (void)ret;
     assert(ret == 0);
@@ -1122,7 +1148,7 @@ static int close_file(struct session *sp){
 }
 
 static int start_ogg_opus_stream(struct session *sp){
-  if(sp == NULL)
+  if(sp == NULL || sp->fp == NULL)
     return -1;
   // Create Ogg container with Opus codec
   int serial = rand(); // Unique stream serial number
@@ -1167,7 +1193,7 @@ static int start_ogg_opus_stream(struct session *sp){
   return 0;
 }
 static int emit_ogg_opus_tags(struct session *sp){
-  if(sp == NULL)
+  if(sp == NULL || sp->fp == NULL)
     return -1;
 
   if(ogg_stream_check(&sp->oggState))
@@ -1250,7 +1276,6 @@ static int emit_ogg_opus_tags(struct session *sp){
   tagsPacket.packetno = sp->packetCount++;          // Second packet in the stream
 
   ogg_stream_packetin(&sp->oggState, &tagsPacket);
-  assert(sp->fp != NULL);
   ogg_flush(sp);
   // Remember so we'll detect changes
   sp->last_frequency = sp->chan.tune.freq;
@@ -1258,7 +1283,7 @@ static int emit_ogg_opus_tags(struct session *sp){
   return 0;
 }
 static int end_ogg_opus_stream(struct session *sp){
-  if(sp == NULL)
+  if(sp == NULL || sp->fp == NULL)
     return -1;
 
   if(ogg_stream_check(&sp->oggState))
@@ -1267,8 +1292,8 @@ static int end_ogg_opus_stream(struct session *sp){
   // Terminate ogg Opus file
   // Write an empty packet with the end bit set
   ogg_packet endPacket;
-  endPacket.packet = OpusSilence;
-  endPacket.bytes = sizeof(OpusSilence);
+  endPacket.packet = OpusSilence20;
+  endPacket.bytes = sizeof(OpusSilence20);
   endPacket.b_o_s = 0;
   endPacket.e_o_s = 1;    // End of stream flag
   endPacket.granulepos = sp->granulePosition; // Granule position
