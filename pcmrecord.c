@@ -1421,7 +1421,7 @@ static int end_wav_stream(struct session *sp){
   header.Subchunk2Size = statbuf.st_size - sizeof(header);
 
   // write number of samples (or is it frames?) into the fact chunk
-  header.SamplesLength = sp->samples_written / sp->channels;
+  header.SamplesLength = sp->samples_written;
 
   // write end time into the auxi chunk
   struct timespec now;
