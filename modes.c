@@ -268,7 +268,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
 
 // Should sample rates be integers when the block rate could in principle not be?
 // Usually Blocktime = 20.0000 ms (50.00000 Hz), which avoids the problem
-int round_samprate(int x){
+unsigned int round_samprate(unsigned int x){
   float const baserate = (1000. / Blocktime) * (Overlap - 1);
 
   if(x < baserate)

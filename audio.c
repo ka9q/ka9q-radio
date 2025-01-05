@@ -82,9 +82,9 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
       // Encoder already created; see if the parameters have changed
       // There doesn't seem to be any way to read back the channel count, so we save that explicitly
       // If the sample rate changes we'll get restarted anyway, so this test isn't really needed. But do it anyway.
-      int s;
-      opus_encoder_ctl(chan->output.opus,OPUS_GET_SAMPLE_RATE(&s));
-      if(s != chan->output.samprate || chan->output.opus_channels != chan->output.channels){
+      opus_int32 s;
+      int ret = opus_encoder_ctl(chan->output.opus,OPUS_GET_SAMPLE_RATE(&s));
+      if(ret != OPUS_OK || (unsigned)s != chan->output.samprate || chan->output.opus_channels != chan->output.channels){
 	opus_encoder_destroy(chan->output.opus);
 	chan->output.opus = NULL;
 	chan->output.opus_channels = 0;
@@ -139,7 +139,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     case S16BE:
       {
 	int16_t *pcm_buf = (int16_t *)dp;
-	for(int i=0; i < chunk * chan->output.channels; i++)
+	for(unsigned int i=0; i < chunk * chan->output.channels; i++)
 	  *pcm_buf++ = htons(scaleclip(*buffer++)); // Byte swap
 
 	chan->output.rtp.timestamp += chunk;
@@ -149,7 +149,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     case S16LE:
       {
 	int16_t *pcm_buf = (int16_t *)dp;
-	for(int i=0; i < chunk * chan->output.channels; i++)
+	for(unsigned int i=0; i < chunk * chan->output.channels; i++)
 	  *pcm_buf++ = scaleclip(*buffer++); // No byte swap
 
 	chan->output.rtp.timestamp += chunk;
@@ -167,7 +167,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     case F16LE:
       {
 	_Float16 *pcm_buf = (_Float16 *)dp;
-	for(int i=0; i < chunk * chan->output.channels; i++)
+	for(unsigned int i=0; i < chunk * chan->output.channels; i++)
 	  *pcm_buf++ = *buffer++;
 
 	chan->output.rtp.timestamp += chunk;

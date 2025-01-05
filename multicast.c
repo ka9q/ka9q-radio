@@ -177,7 +177,7 @@ int const AX25_pt = AX25_PT;
 // Add an encoding to the RTP payload type table
 // The mappings are typically extracted from a radiod status channel and kept in a table so they can
 // be changed midstream without losing anything
-int add_pt(int type, int samprate, int channels, enum encoding encoding){
+int add_pt(int type, unsigned int samprate, unsigned int channels, enum encoding encoding){
   if(encoding == NO_ENCODING)
     return -1;
 
@@ -606,7 +606,7 @@ enum encoding encoding_from_pt(int const type){
 // Dynamically create a new one if not found
 // Should lock the table when it's modified
 // Use for sending only! Receivers need to build a table for each sender
-int pt_from_info(int samprate,int channels,enum encoding encoding){
+int pt_from_info(unsigned int samprate,unsigned int channels,enum encoding encoding){
   if(samprate <= 0 || channels <= 0 || channels > 2 || encoding == NO_ENCODING || encoding >= UNUSED_ENCODING)
     return -1;
 

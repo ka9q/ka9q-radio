@@ -204,7 +204,7 @@ struct channel {
 
   // Output
   struct {
-    int samprate;      // Audio D/A sample rate
+    unsigned int samprate;      // Audio D/A sample rate
     float gain;        // Audio gain to normalize amplitude
     float sum_gain_sq; // Sum of squared gains, for averaging
     float headroom;    // Audio level headroom, amplitude ratio (settable)
@@ -216,7 +216,7 @@ struct channel {
     struct sockaddr_storage dest_socket;      // Dest of our data output (typically multicast)
     char dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
 
-    int channels;   // 1 = mono, 2 = stereo (settable)
+    unsigned int channels;   // 1 = mono, 2 = stereo (settable)
     float energy;   // Output energy since last poll
 
     float deemph_state_left;
@@ -226,8 +226,8 @@ struct channel {
     enum encoding encoding;
     enum encoding previous_encoding;
     OpusEncoder *opus;
-    int opus_channels;
-    int opus_bitrate;
+    unsigned int opus_channels;
+    unsigned int opus_bitrate;
   } output;
 
   struct {
@@ -307,5 +307,5 @@ int reset_radio_status(struct channel *chan);
 bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
 int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,int length);
 
-int round_samprate(int x);
+unsigned int round_samprate(unsigned int x);
 #endif

@@ -35,8 +35,8 @@ enum encoding {
 };
 
 struct pt_table {
-  int samprate;
-  int channels;
+  unsigned int samprate;
+  unsigned int channels;
   enum encoding encoding;
 };
 
@@ -146,7 +146,7 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
 int setportnumber(void *sock,uint16_t port);
 int getportnumber(void const *sock);
 int address_match(void const *arg1,void const *arg2);
-int add_pt(int type, int samprate, int channels, enum encoding encoding);
+int add_pt(int type, unsigned int samprate, unsigned int channels, enum encoding encoding);
 
 // Function to process incoming RTP packet headers
 // Returns number of samples dropped or skipped by silence suppression, if any
@@ -216,7 +216,7 @@ static inline uint8_t *put32(uint8_t *dp,uint32_t x){
 int samprate_from_pt(int type);
 int channels_from_pt(int type);
 enum encoding encoding_from_pt(int type);
-int pt_from_info(int samprate,int channels,enum encoding);
+int pt_from_info(unsigned int samprate,unsigned int channels,enum encoding);
 char const *encoding_string(enum encoding);
 enum encoding parse_encoding(char const *str);
 uint32_t make_maddr(char const *arg);

@@ -162,7 +162,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     case OUTPUT_SAMPRATE:
       // Restart the demodulator to recalculate filters, etc
       {
-	int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
+	unsigned int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
 	// If using Opus, ignore unsupported sample rates
 	if(new_sample_rate != chan->output.samprate){
 	  if(chan->output.encoding != OPUS || new_sample_rate == 48000 || new_sample_rate == 24000 || new_sample_rate == 16000 || new_sample_rate == 12000 || new_sample_rate == 8000){
@@ -245,7 +245,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	FREE(p); // decode_string now allocs memory
 	{
 	  enum demod_type const old_type = chan->demod_type;
-	  int const old_samprate = chan->output.samprate;
+	  unsigned int const old_samprate = chan->output.samprate;
 	  float const old_low = chan->filter.min_IF;
 	  float const old_high = chan->filter.max_IF;
 	  float const old_kaiser = chan->filter.kaiser_beta;
@@ -346,7 +346,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       break;
     case OUTPUT_CHANNELS: // int
       {
-	int const i = decode_int(cp,optlen);
+	unsigned int const i = decode_int(cp,optlen);
 	if(i != chan->output.channels && (i == 1 || i == 2)){
 	  chan->output.channels = i;
 	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
