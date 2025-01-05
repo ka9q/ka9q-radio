@@ -28,6 +28,21 @@
 		    fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");}
 
 
+// 16-bit floating point is not consistent across platforms
+#ifdef __arm__  // ARM platform
+  #if defined(__ARM_FP16_FORMAT_IEEE)
+    typedef __fp16 float16_t;  // ARM-specific half-precision support
+  #else
+    typedef float float16_t;  // Fallback on older ARM CPUs
+  #endif
+  #define HAS_FLOAT16 = 1
+#else  // Non-ARM platforms
+  #if defined(__FLT16_MAX__)  // Check if _Float16 is natively supported
+    typedef _Float16 float16_t;
+    #define HAS_FLOAT16 = 1
+  #endif
+#endif
+
 #ifndef M_PIf
 #define M_PIf ((float)(M_PI))
 #endif

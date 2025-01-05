@@ -443,10 +443,10 @@ void *decode_task(void *arg){
 	    bounce[i] = data[i];
 	}
 	break;
-#ifdef FLOAT16
+#ifdef HAS_FLOAT16
       case F16LE: // 16-bit floats
-	sp->datarate = 8 * sp->channels * sizeof(_Float16) * sp->samprate;
-	sp->frame_size = pkt->len / (sizeof(_Float16) * sp->channels); // mono/stereo samples in frame
+	sp->datarate = 8 * sp->channels * sizeof(float16_t) * sp->samprate;
+	sp->frame_size = pkt->len / (sizeof(float16_t) * sp->channels); // mono/stereo samples in frame
 	if(sp->frame_size <= 0) // Check here because it might truncate to zero
 	  goto endloop;
 	{
@@ -458,7 +458,7 @@ void *decode_task(void *arg){
 	}
 	assert(bounce != NULL);
 	{
-	  _Float16 const * const data = (_Float16 *)&pkt->data[0];
+	  float16_t const * const data = (float16_t *)&pkt->data[0];
 	  for(unsigned int i=0; i < sp->channels * sp->frame_size; i++)
 	    bounce[i] = data[i];
 	}

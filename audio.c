@@ -55,9 +55,9 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   case F32LE:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(float) * chan->output.channels);
     break;
-#ifdef FLOAT16
+#ifdef HAS_FLOAT16
   case F16LE:
-    max_frames_per_pkt = BYTES_PER_PKT / (sizeof(_Float16) * chan->output.channels);
+    max_frames_per_pkt = BYTES_PER_PKT / (sizeof(float16_t) * chan->output.channels);
     break;
 #endif
   case OPUS:
@@ -163,10 +163,10 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
       buffer += chunk * chan->output.channels;
       bytes = chunk * chan->output.channels * sizeof(float);
       break;
-#ifdef FLOAT16
+#ifdef HAS_FLOAT16
     case F16LE:
       {
-	_Float16 *pcm_buf = (_Float16 *)dp;
+	float16_t *pcm_buf = (float16_t *)dp;
 	for(unsigned int i=0; i < chunk * chan->output.channels; i++)
 	  *pcm_buf++ = *buffer++;
 
