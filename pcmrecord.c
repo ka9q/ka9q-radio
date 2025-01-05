@@ -1115,8 +1115,8 @@ static int close_file(struct session *sp){
     fprintf(stderr,"%s ssrc %u closing '%s' %'.1f/%'.1f sec\n",
 	    sp->frontend.description,
 	    sp->ssrc,sp->filename, // might be blank
-            (float)sp->samples_written / (sp->samprate * sp->channels),
-            (float)sp->total_file_samples / (sp->samprate * sp->channels));
+            (float)sp->samples_written / sp->samprate,
+            (float)sp->total_file_samples / sp->samprate);
   }
   if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
     fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
@@ -1130,8 +1130,8 @@ static int close_file(struct session *sp){
       unlink(sp->filename);
       if(Verbose)
 	fprintf(stderr,"ssrc %u deleting %s %'.1f/%'.1f sec\n",sp->ssrc,sp->filename,
-		(float)sp->samples_written / (sp->samprate * sp->channels),
-		(float)sp->total_file_samples / (sp->samprate * sp->channels));
+		(float)sp->samples_written / sp->samprate,
+		(float)sp->total_file_samples / sp->samprate);
     }
   }
   if(Command != NULL)
