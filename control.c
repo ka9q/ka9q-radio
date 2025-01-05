@@ -762,6 +762,8 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       char str[Entry_width];
       getentry("Output sample rate, Hz: ",str,sizeof(str));
       int samprate = parse_frequency(str,false);
+      if(samprate < 100)  // Minimum sample rate is 200 Hz for usual params (20 ms block, overlap = 20%)
+	samprate *= 1000; // Assume the user meant kHz
       channel->output.samprate = samprate;
       encode_int(bpp,OUTPUT_SAMPRATE,channel->output.samprate);
     }
