@@ -676,7 +676,7 @@
 447600000	K6VGP Johnstone Peak
 447620000	N6DD Sunset Ridge Cactus
 447640000	114.8 PAPA 31 Daniel Peak
-447640000	KA6WIN Breckenridge Mountain
+447640000	100.0 KA6WIN Breckenridge Mountain
 447680000	K6UHF Santiago Peak
 447680000	Turquoise Mountain
 447700000	N6AZY Alabama Hills
