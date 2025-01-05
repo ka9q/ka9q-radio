@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <iniparser/iniparser.h>
+#include <samplerate.h>
 #if __linux__
 #include <bsd/string.h>
 #include <alsa/asoundlib.h>
@@ -228,6 +229,10 @@ void *decode_task(void *arg){
   size_t bounce_size = 2 * sizeof(*bounce) * 960; // Stereo samples in a 20 ms 48 kHz packet
   bounce = malloc(bounce_size);
   assert(bounce != NULL);
+  float *rate_converted_buffer = NULL;
+  size_t rate_converted_buffer_size = 0;
+  SRC_STATE *src_state_mono = NULL;
+  SRC_STATE *src_state_stereo = NULL;
 
   // Initialize
   reset_session(sp,0); // Don't have a timestamp yet, but reset everything else
@@ -298,7 +303,7 @@ void *decode_task(void *arg){
     }
     // This section processes the signal in the current RTP frame, copying and/or decoding it into a bounce buffer
     // for mixing with the output ring buffer
-    int upsample;
+    float upsample_ratio;
     enum encoding const encoding = sp->pt_table[sp->type].encoding;
     if(encoding == OPUS){
       // The Opus decoder is always forced to the local channel count because the input stream can switch at any time
@@ -306,7 +311,7 @@ void *decode_task(void *arg){
       // before the channel count in the status message catches up with us and we can initialize a new decoder
       sp->samprate = DAC_samprate;
       sp->channels = Channels;
-      upsample = 1; // Opus always decodes to the local DAC rate, hopefully 48k
+      upsample_ratio = 1; // Opus always decodes to the local DAC rate, hopefully 48k
       if(!sp->opus){
 	// This should happen only once on a stream
 	// Always decode Opus to DAC rate of 48 kHz, stereo
@@ -357,8 +362,8 @@ void *decode_task(void *arg){
       {
 	size_t const needed = sizeof(*bounce) * sp->frame_size * sp->channels;
 	if(needed > bounce_size){
-	  bounce = realloc(bounce,needed);
-	  bounce_size = needed;
+	  bounce_size = needed * 2;
+	  bounce = realloc(bounce,bounce_size);
 	}
       }
       assert(bounce != NULL);
@@ -381,7 +386,6 @@ void *decode_task(void *arg){
       unsigned int samprate = sp->pt_table[sp->type].samprate;
       if(samprate != sp->samprate){
 	sp->samprate = samprate;
-	reset_session(sp,pkt->rtp.timestamp); // Is this necessary? Writing into the output is always at DAC_samprate
 	// Reinit tone detectors whenever sample rate changes
 	for(int j=0; j < N_tones; j++)
 	  init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
@@ -392,9 +396,7 @@ void *decode_task(void *arg){
       if(pkt == NULL || sp->channels > 2)
 	goto endloop;
 
-      // Upsample (PCM only) lower samprates to output rate
-      // (should be cleaner; what about decimation?)
-      upsample = DAC_samprate / sp->samprate;
+      upsample_ratio = (float)DAC_samprate / sp->samprate;
 
       // decode PCM into bounce buffer
       switch(encoding){
@@ -407,8 +409,8 @@ void *decode_task(void *arg){
 	{
 	  size_t const needed = sizeof(*bounce) * sp->frame_size * sp->channels;
 	  if(needed > bounce_size){
-	    bounce = realloc(bounce,needed);
-	    bounce_size = needed;
+	    bounce_size = needed * 2;
+	    bounce = realloc(bounce,bounce_size);
 	  }
 	}
 	assert(bounce != NULL);
@@ -430,8 +432,8 @@ void *decode_task(void *arg){
 	{
 	  size_t const needed = sizeof(*bounce) * sp->frame_size * sp->channels;
 	  if(needed > bounce_size){
-	    bounce = realloc(bounce,needed);
-	    bounce_size = needed;
+	    bounce_size = needed * 2;
+	    bounce = realloc(bounce,bounce_size);
 	  }
 	}
 	assert(bounce != NULL);
@@ -450,8 +452,8 @@ void *decode_task(void *arg){
 	{
 	  size_t const needed = sizeof(*bounce) * sp->frame_size * sp->channels;
 	  if(needed > bounce_size){
-	    bounce = realloc(bounce,needed);
-	    bounce_size = needed;
+	    bounce_size = needed * 2;
+	    bounce = realloc(bounce,bounce_size);
 	  }
 	}
 	assert(bounce != NULL);
@@ -522,7 +524,7 @@ void *decode_task(void *arg){
       // Normal packet, adjust write pointer if gap in timestamps
       // Can difference in timestamps be negative? Cast it anyway
       // Opus always counts timestamps at 48 kHz so this breaks when DAC_samprate is not 48 kHz
-      sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->next_timestamp) * upsample;
+      sp->wptr += (int32_t)(pkt->rtp.timestamp - sp->next_timestamp) * upsample_ratio;
       sp->wptr &= (BUFFERSIZE-1);
       sp->next_timestamp = pkt->rtp.timestamp + sp->frame_size;
 
@@ -547,93 +549,135 @@ void *decode_task(void *arg){
       consec_lates = 0;
       consec_earlies = 0;
     }
-    vote();
     // Skip output if session is muted
     // Thumping artifacts during vote switching seem worse if we bail out here, so we keep the tone notch filters going
     // on out-voted channels
     if(!sp->muted){
-      // Mix bounce buffer into output ring buffer
-      if(Channels == 2){
-	/* Compute gains and delays for stereo imaging
-	   Extreme gain differences can make the source sound like it's inside an ear
-	   This can be uncomfortable in good headphones with extreme panning
-	   -6dB for each channel in the center
-	   when full to one side or the other, that channel is +6 dB and the other is -inf dB
-	*/
-	float const left_gain = sp->gain * (1 - sp->pan)/2;
-	float const right_gain = sp->gain * (1 + sp->pan)/2;
-	/* Delay less favored channel 0 - 1.5 ms max (determined
-	   empirically) This is really what drives source localization
-	   in humans. The effect is so dramatic even with equal levels
-	   you have to remove one earphone to convince yourself that the
-	   levels really are the same!
-	*/
-	int const left_delay = (sp->pan > 0) ? round(sp->pan * .0015 * DAC_samprate) : 0; // Delay left channel
-	int const right_delay = (sp->pan < 0) ? round(-sp->pan * .0015 * DAC_samprate) : 0; // Delay right channel
-
-	assert(left_delay >= 0 && right_delay >= 0);
-
-	// Mix bounce buffer into output buffer read by portaudio callback
-	// Simplified by mirror buffer wrap
-	int left_index = 2 * (sp->wptr + left_delay);
-	int right_index = 2 * (sp->wptr + right_delay) + 1;
-
-	for(int i=0; i < sp->frame_size; i++){
-	  float left,right;
-	  if(sp->channels == 1){
-	    // Mono input, put on both channels
-	    left = bounce[i];
-	    if(sp->notch_enable && sp->notch_tone > 0)
-	    left = applyIIR(&sp->iir_left,left);
-	    right = left;
-	  } else {
-	    // stereo input
-	    left = bounce[2*i];
-	    right = bounce[2*i+1];
-	    if(sp->notch_enable && sp->notch_tone > 0){
-	      left = applyIIR(&sp->iir_left,left);
-	      right = applyIIR(&sp->iir_right,right);
-	    }
+      // Apply notch filter, if enabled
+      // Do this even when not selected by voting, to prevent transients when it's selected
+      if(sp->notch_enable && sp->notch_tone > 0){
+	if(sp->channels == 1){
+	  for(int i = 0; i < sp->frame_size; i++)
+	    bounce[i] = applyIIR(&sp->iir_left,bounce[i]);
+	} else {
+	  for(int i = 0; i < sp->frame_size; i++){
+	    bounce[2*i] = applyIIR(&sp->iir_left,bounce[2*i]);
+	    bounce[2*i+1] = applyIIR(&sp->iir_right,bounce[2*i+1]);
 	  }
-	  if(!Voting || Best_session == sp){ // If voting, suppress all but best session
-	    // Not the cleanest way to upsample the sample rate, but it works
-	    // Should be replaced with a proper interpolator
-	    for(int j=0; j < upsample; j++){
+	}
+      }
+      if(!Voting || Best_session == sp){ // If voting, suppress all but best session
+	float *output_rate_data = NULL;
+	size_t output_rate_data_size = 0;
+	if(upsample_ratio != 1){
+	  int error;
+	  if(sp->channels == 1 && src_state_mono == NULL){
+	    src_state_mono = src_new(SRC_SINC_FASTEST, 1, &error);
+	    assert(src_state_mono != NULL);
+	  }
+	  else if(sp->channels == 2 && src_state_stereo == NULL){
+	    src_state_stereo = src_new(SRC_SINC_FASTEST, 2, &error);
+	    assert(src_state_stereo != NULL);
+	  }
+	  // Create or enlarge rate converter output buffer
+	  if(rate_converted_buffer == NULL || rate_converted_buffer_size < bounce_size * upsample_ratio + 10){
+	    rate_converted_buffer_size = bounce_size * upsample_ratio + 10;
+	    rate_converted_buffer = malloc(rate_converted_buffer_size);
+	  }
+	  assert(rate_converted_buffer != NULL);
+	  SRC_DATA src_data;
+	  src_data.data_in = bounce;  // Pointer to input audio
+	  src_data.data_out = rate_converted_buffer;  // Pointer to resampled output buffer
+	  src_data.input_frames = sp->frame_size;
+	  src_data.output_frames = sp->frame_size * upsample_ratio + 1;
+	  src_data.src_ratio = (double)upsample_ratio;
+	  src_data.end_of_input = 0;
+	  if(sp->channels == 1)
+	    error = src_process(src_state_mono, &src_data);
+	  else
+	    error = src_process(src_state_stereo, &src_data);
+	  assert(error == 0);
+	  output_rate_data = rate_converted_buffer;
+	  output_rate_data_size = sp->frame_size * upsample_ratio;
+	} else {
+	  // Just pass a pointer to the input
+	  output_rate_data = bounce;
+	  output_rate_data_size = sp->frame_size;
+	}
+	// Mix output sample rate data into output ring buffer
+	if(Channels == 2){
+	  /* Compute gains and delays for stereo imaging
+	     Extreme gain differences can make the source sound like it's inside an ear
+	     This can be uncomfortable in good headphones with extreme panning
+	     -6dB for each channel in the center
+	     when full to one side or the other, that channel is +6 dB and the other is -inf dB
+	  */
+	  float const left_gain = sp->gain * (1 - sp->pan)/2;
+	  float const right_gain = sp->gain * (1 + sp->pan)/2;
+	  /* Delay less favored channel 0 - 1.5 ms max (determined
+	     empirically) This is really what drives source localization
+	     in humans. The effect is so dramatic even with equal levels
+	     you have to remove one earphone to convince yourself that the
+	     levels really are the same!
+	  */
+	  int const left_delay = (sp->pan > 0) ? round(sp->pan * .0015 * DAC_samprate) : 0; // Delay left channel
+	  int const right_delay = (sp->pan < 0) ? round(-sp->pan * .0015 * DAC_samprate) : 0; // Delay right channel
+
+	  assert(left_delay >= 0 && right_delay >= 0);
+
+	  // Mix into output buffer read by portaudio callback
+	  // Simplified by mirror buffer wrap
+	  int left_index = 2 * (sp->wptr + left_delay);
+	  int right_index = 2 * (sp->wptr + right_delay) + 1;
+
+	  if(sp->channels == 1){
+	    for(unsigned int i=0; i < output_rate_data_size; i++){
+	      // Mono input, put on both channels
+	      float s = output_rate_data[i];
+	      Output_buffer[left_index] += s * left_gain;
+	      Output_buffer[right_index] += s * right_gain;
+	      left_index += 2;
+	      right_index += 2;
+	      if(modsub(right_index/2,Wptr,BUFFERSIZE) > 0)
+		Wptr = right_index / 2; // samples to frames; For verbose mode
+	    }
+	  } else {
+	    for(unsigned int i=0; i < output_rate_data_size; i++){
+	      // stereo input
+	      float left = output_rate_data[2*i];
+	      float right = output_rate_data[2*i+1];
 	      Output_buffer[left_index] += left * left_gain;
 	      Output_buffer[right_index] += right * right_gain;
 	      left_index += 2;
 	      right_index += 2;
+	      if(modsub(right_index/2,Wptr,BUFFERSIZE) > 0)
+		Wptr = right_index / 2; // samples to frames; For verbose mode
 	    }
-	    if(modsub(right_index/2,Wptr,BUFFERSIZE) > 0)
-	      Wptr = right_index / 2; // samples to frames; For verbose mode
 	  }
-	}
-      } else { // Channels == 1, no panning
-	int64_t index = sp->wptr;
-	for(int i=0; i < sp->frame_size; i++){
-	  float s;
+	} else { // Channels == 1, no panning
 	  if(sp->channels == 1){
-	    s = bounce[i];
-	  } else {
-	    // Downmix to mono
-	    s = 0.5 * (bounce[2*i] + bounce[2*i+1]);
-	  }
-	  if(sp->notch_enable && sp->notch_tone > 0)
-	    s = applyIIR(&sp->iir_left,s);
-
-	  if(!Voting || Best_session == sp){ // If voting, suppress all but best session
-	    // Not the cleanest way to upsample the sample rate, but it works
-	    for(int j=0; j < upsample; j++)
+	    int64_t index = sp->wptr;
+	    for(unsigned int i=0; i < output_rate_data_size; i++){
+	      float s = output_rate_data[i];
 	      Output_buffer[index++] += s * sp->gain;
-
-	    if(modsub(index,Wptr,BUFFERSIZE) > 0)
-	      Wptr = index; // For verbose mode
+	      if(modsub(index,Wptr,BUFFERSIZE) > 0)
+		Wptr = index; // For verbose mode
+	    }
+	  } else {
+	    int64_t index = sp->wptr;
+	    for(unsigned int i=0; i < output_rate_data_size; i++){
+	      // Downmix to mono
+	      float s = 0.5 * (output_rate_data[2*i] + output_rate_data[2*i+1]);
+	      Output_buffer[index++] += s * sp->gain;
+	      if(modsub(index,Wptr,BUFFERSIZE) > 0)
+		Wptr = index; // For verbose mode
+	    }
 	  }
-	}
-      } // Channels == 1
+	} // Channels == 1
+      } // voting
     } // !sp->muted
-    // End of output mixing; update write pointer
-    sp->wptr += sp->frame_size * upsample;
+    // End of output mixing; update write pointer even if we didn't actually write
+    sp->wptr += sp->frame_size * upsample_ratio;
     sp->wptr &= (BUFFERSIZE-1);
     // Count samples and frames and advance write pointer even when muted
     if(sp->frame_size > 0){
@@ -644,6 +688,11 @@ void *decode_task(void *arg){
     FREE(pkt);
   } // !sp->terminate
   FREE(bounce);
+  FREE(rate_converted_buffer);
+  if(src_state_mono)
+    src_delete(src_state_mono);
+  if(src_state_stereo)
+    src_delete(src_state_stereo);
   pthread_cleanup_pop(1);
   return NULL;
 }

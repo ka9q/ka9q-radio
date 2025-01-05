@@ -8,7 +8,8 @@
 DOPTS=-g
 
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
-COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -D_GNU_SOURCE=1 -Wextra -MMD -MP
+# Remove -DFLOAT16 if your compiler doesn't support _Float16 (IEEE 754 16-bit floats)
+COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -D_GNU_SOURCE=1 -Wextra -MMD -MP -DFLOAT16=1
 
 CFLAGS=$(DOPTS) $(COPTS) $(INCLUDES)
 BINDIR=/usr/local/bin
@@ -35,7 +36,6 @@ all: $(DAEMONS) $(EXECS)
 # NB: no longer copies files to /etc/radio. Must be installed manually.
 install: $(DAEMONS) $(EXECS)
 	/usr/sbin/adduser --quiet --system --group radio
-	/usr/sbin/adduser --quiet --system --ingroup radio recordings
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
 	rsync -a aux/98-sockbuf.conf /etc/sysctl.d
 	sysctl --quiet -p /etc/sysctl.d/98-sockbuf.conf
@@ -95,7 +95,7 @@ metadump: metadump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lasound -lncursesw -liniparser -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lsamplerate -lopus -lportaudio -lasound -lncursesw -liniparser -lbsd -lm -lpthread
 
 opusd: opusd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lavahi-client -lavahi-common -lbsd -lm -lpthread
