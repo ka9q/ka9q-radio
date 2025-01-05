@@ -136,11 +136,13 @@ struct session {
   int64_t samples_written;
   int64_t total_file_samples;
   int64_t samples_remaining;   // Samples remaining before file is closed; 0 means indefinite
+  bool complete;
 };
 
 
 static float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
 static double FileLengthLimit = 0; // Length of file in seconds; 0 = unlimited
+static double max_length = 0; // Length of recording in seconds; 0 = unlimited
 static const double Tolerance = 1.0; // tolerance for starting time in sec when FileLengthLimit is active
 int Verbose;
 static char PCM_mcast_address_text[256];
@@ -197,9 +199,10 @@ static struct option Options[] = {
   {"limit", required_argument, NULL, 'L'},
   {"ssrc", required_argument, NULL, 'S'},
   {"version", no_argument, NULL, 'V'},
+  {"max_length", required_argument, NULL, 'x'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = "cd:e:fjl:m:rsS:t:vL:V";
+static char Optstring[] = "cd:e:fjl:m:rsS:t:vL:Vx:";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -259,11 +262,14 @@ int main(int argc,char *argv[]){
     case 'L':
       FileLengthLimit = fabsf(strtof(optarg,NULL));
       break;
+    case 'x':
+      max_length = fabsf(strtof(optarg,NULL));
+      break;
     case 'V':
       VERSION();
       exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-c|--catmode|--stdout] [-r|--raw] [-e|--exec command] [-f|--flush] [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-j|--jt] [-v] [-m sec] PCM_multicast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-c|--catmode|--stdout] [-r|--raw] [-e|--exec command] [-f|--flush] [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-j|--jt] [-v] [-m sec] [-x|--max_length max_file_time, no sync, oneshot] PCM_multicast_address\n",argv[0]);
       exit(EX_USAGE);
       break;
     }
@@ -404,7 +410,7 @@ static int emit_opus_silence(struct session * const sp,int samples){
     sp->total_file_samples += chunk;
     sp->current_segment_samples += chunk;
     sp->samples_written += chunk;
-    if(FileLengthLimit != 0)
+    if((FileLengthLimit != 0) || (max_length != 0))
       sp->samples_remaining -= chunk;
     if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
       sp->substantial_file = true;
@@ -467,7 +473,7 @@ static int send_opus_queue(struct session * const sp,bool flush){
       sp->total_file_samples += samples;
       sp->current_segment_samples += samples;
       sp->samples_written += samples;
-      if(FileLengthLimit != 0)
+      if((FileLengthLimit != 0) || (max_length != 0))
 	sp->samples_remaining -= samples;
       if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
 	sp->substantial_file = true;
@@ -537,7 +543,7 @@ static int send_wav_queue(struct session * const sp,bool flush){
 	sp->total_file_samples += jump;
 	sp->current_segment_samples += jump;
 	sp->samples_written += jump;
-	if(FileLengthLimit != 0)
+	if((FileLengthLimit != 0) || (max_length != 0))
 	  sp->samples_remaining -= jump;
       }
       // end of timestamp jump catch-up, send actual packets on queue
@@ -546,7 +552,7 @@ static int send_wav_queue(struct session * const sp,bool flush){
       sp->total_file_samples += frames;
       sp->current_segment_samples += frames;
       sp->samples_written += frames;
-      if(FileLengthLimit != 0)
+      if((FileLengthLimit != 0) || (max_length != 0))
 	sp->samples_remaining -= frames;
       if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
 	sp->substantial_file = true;
@@ -697,7 +703,7 @@ static void input_loop(){
       if(sp == NULL)
 	continue;
 
-      if(sp->fp == NULL){
+      if(sp->fp == NULL && !sp->complete){
 	session_file_init(sp,&sender);
 	if(sp->encoding == OPUS){
 	  if(Raw)
@@ -789,7 +795,7 @@ static void input_loop(){
 	if(0 != fflush(sp->fp)){
 	  fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
 	}
-      if(FileLengthLimit != 0 && sp->samples_remaining <= 0)
+      if(((FileLengthLimit != 0) || (max_length != 0)) && sp->samples_remaining <= 0)
 	close_file(sp);
 
     } // end of packet processing
@@ -948,6 +954,10 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     }
     sp->samples_remaining = FileLengthLimit * sp->samprate - sp->starting_offset;
   }
+  if (max_length > 0){
+    sp->samples_remaining = max_length * sp->samprate;
+  }
+
   struct tm const * const tm = gmtime(&file_time.tv_sec);
   // yyyy-mm-dd-hh:mm:ss so it will sort properly
 #if 0
@@ -1144,7 +1154,18 @@ static int close_file(struct session *sp){
   sp->samples_written = 0;
   sp->total_file_samples = 0;
 
-  return 0;
+  if (0 == max_length)
+    return 0;
+
+  sp->complete = true;        // don't create multiple files in max length mode
+  // check to see if all sessions are done...if so, exit
+  for(sp = Sessions;sp != NULL;sp = sp->next){
+    if(!sp->complete){
+      return 0;
+    }
+  }
+  // max length active, all sessions are done, exit
+  exit(EX_OK);  // Will call cleanup()
 }
 
 static int start_ogg_opus_stream(struct session *sp){
