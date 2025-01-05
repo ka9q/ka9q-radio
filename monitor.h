@@ -17,7 +17,7 @@ extern char const *Display;
 // Command line/config file/interactive command parameters
 extern char const *Tx_on;
 extern char const *Tx_off;
-extern int DAC_samprate;   // Actual hardware output rate
+extern unsigned int DAC_samprate;   // Actual hardware output rate
 extern int Update_interval;  // Default time in ms between display updates
 extern char const *App_path;
 extern int Verbose;                       // Verbosity flag
@@ -45,9 +45,6 @@ extern int64_t Mandatory_ID_interval;
 extern int64_t Quiet_ID_interval;
 extern int Dit_length;
 extern int Channels;
-extern float Hysteresis; // Voting hysteresis, dB
-//extern float GoodEnoughSNR; // FM SNR considered "good enough to not be worth changing
-
 extern char const *Init;
 
 // Global variables that regularly change
@@ -81,6 +78,9 @@ extern bool Terminate;
 extern bool Voting;
 extern struct session *Best_session; // Session with highest SNR
 extern struct sockaddr_storage Metadata_dest_socket;
+extern pthread_mutex_t Rptr_mutex;
+extern pthread_cond_t Rptr_cond;
+
 
 extern int Mcast_ttl;
 
@@ -99,7 +99,7 @@ struct session {
   int type;                 // RTP type (10,11,20,111,etc)
   struct pt_table pt_table[128];     // convert a payload type to samplerate, channels, encoding type
 
-  uint32_t last_timestamp;  // Last timestamp seen
+  uint32_t next_timestamp;  // Next timestamp expected
   unsigned int wptr;        // current write index into output PCM buffer, *frames*
   int playout;              // Initial playout delay, frames
   long long last_active;    // GPS time last active with data traffic
@@ -117,8 +117,8 @@ struct session {
   float current_tone;       // Detected tone frequency
   float snr;                // Extracted from status message from radiod
 
-  int samprate;
-  int channels;             // channels on stream (1 or 2). Opus is always stereo
+  unsigned int samprate;
+  unsigned int channels;    // channels on stream (1 or 2). Opus is always stereo
   float gain;               // linear gain; 1 = 0 dB
   float pan;                // Stereo position: 0 = center; -1 = full left; +1 = full right
 
@@ -129,6 +129,7 @@ struct session {
   unsigned long earlies;
   unsigned long resets;
   unsigned long reseqs;
+  unsigned long spares;     // spare counter for debugging
 
   bool terminate;            // Set to cause thread to terminate voluntarily
   bool muted;                // Do everything but send to output

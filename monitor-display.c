@@ -352,6 +352,8 @@ void load_id(void){
       if(pmatch[2].rm_so != -1){
 	// Free-form ID field
 	strlcpy(Idtable[Nid].id,&line[pmatch[2].rm_so],sizeof(Idtable[Nid].id));
+	// Make sure it's null terminated
+	Idtable[Nid].id[sizeof(Idtable[Nid].id)-1] = '\0';
       }
     }
 # if 0
@@ -438,7 +440,8 @@ static void update_monitor_display(void){
     double const qd = (double) q / DAC_samprate;
     double const rate = Audio_frames / pa_seconds;
 
-    printwt("Playout %.0f ms, latency %d ms, queue %.3lf sec, D/A rate %'.3lf Hz,",Playout,Portaudio_delay,qd,rate);
+    printwt("%s playout %.0f ms, latency %d ms, queue %.3lf sec, D/A rate %'.3lf Hz,",
+	    opus_get_version_string(),Playout,Portaudio_delay,qd,rate);
     printwt(" (%+.3lf ppm),",1e6 * (rate / DAC_samprate - 1));
     // Time since last packet drop on any channel
     printwt(" Error-free sec %'.1lf\n",(1e-9*(gps_time_ns() - Last_error_time)));
@@ -755,6 +758,21 @@ static void update_monitor_display(void){
   }
   x += width;
   y = row_save;
+
+#if 0
+  // Spare debug counters
+  if(x >= COLS)
+    goto done;
+  width = 7;
+  mvprintwt(y++,x,"%*s",width,"spares");
+  for(int session = First_session; session < Nsessions_copy; session++,y++){
+    struct session const *sp = Sessions_copy[session];
+    if(sp != NULL)
+      mvprintwt(y,x,"%*lu",width,sp->spares);
+  }
+  x += width;
+  y = row_save;
+#endif
 
   // Sockets
   x++; // Left justified

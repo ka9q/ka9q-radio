@@ -60,7 +60,7 @@ char const *Repeater = "repeater";
 char const *Display = "display";
 
 // Command line/config file/interactive command parameters
-int DAC_samprate = 48000;   // Actual hardware output rate
+unsigned int DAC_samprate = 48000;   // Actual hardware output rate
 char const *App_path;
 int Verbose = 0;                    // Verbosity flag
 char const *Config_file;
@@ -104,6 +104,8 @@ bool Terminate;
 struct session *Best_session; // Session with highest SNR
 struct sockaddr_storage Metadata_dest_socket;
 int Mcast_ttl;
+pthread_mutex_t Rptr_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t Rptr_cond = PTHREAD_COND_INITIALIZER;
 
 static char Optstring[] = "CI:LR:Sc:f:g:p:qr:su:vnV";
 static struct  option Options[] = {
@@ -494,6 +496,16 @@ void *statproc(void *arg){
     sp->pt_table[sp->type].encoding = sp->chan.output.encoding;
     sp->pt_table[sp->type].samprate = sp->chan.output.samprate;
     sp->pt_table[sp->type].channels = sp->chan.output.channels;
+    // Lookup channel ID if its not already set
+    // The data decode thread will change it if there's a tone and an entry for it
+    char const *id = lookupid(sp->chan.tune.freq,sp->notch_tone); // Any or no tone
+    if(id){
+      strlcpy(sp->id,id,sizeof(sp->id));
+    } else if((id = lookupid(sp->chan.tune.freq,0.0)) != NULL){
+      // entry with no tone?
+      strlcpy(sp->id,id,sizeof(sp->id));
+    } else
+      sp->id[0] = '\0';
 
     // Update SNR calculation (not sent explicitly)
     float const noise_bandwidth = fabsf(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
@@ -617,9 +629,13 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   memcpy(outputBuffer,&Output_buffer[Channels*Rptr],bytecount);
   // Zero what we just copied
   memset(&Output_buffer[Channels*Rptr],0,bytecount);
+  pthread_mutex_lock(&Rptr_mutex);
   Rptr += framesPerBuffer;
   Rptr &= (BUFFERSIZE-1);
   Buffer_length -= framesPerBuffer;
+  pthread_cond_broadcast(&Rptr_cond);
+  pthread_mutex_unlock(&Rptr_mutex);
+
 #if 0
   int q = modsub(Wptr,Rptr,BUFFERSIZE);
   if(q < 0)
