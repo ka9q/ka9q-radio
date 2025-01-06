@@ -628,10 +628,10 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 
   // Use mirror buffer to simplify wraparound. Count is in bytes = Channels * frames * sizeof(float)
   int const bytecount = Channels * framesPerBuffer * sizeof(*Output_buffer);
-  opus_pcm_soft_clip(&Output_buffer[Channels*Rptr],framesPerBuffer,Channels,Softclip_mem);
   memcpy(outputBuffer,&Output_buffer[Channels*Rptr],bytecount);
   // Zero what we just copied
   memset(&Output_buffer[Channels*Rptr],0,bytecount);
+  opus_pcm_soft_clip((float *)outputBuffer,framesPerBuffer,Channels,Softclip_mem);
   pthread_mutex_lock(&Rptr_mutex);
   Rptr += framesPerBuffer;
   Rptr &= (BUFFERSIZE-1);
