@@ -604,6 +604,8 @@ void cleanup(void){
   }
 }
 
+static float Softclip_mem[2];
+
 // Portaudio callback - transfer data (if any) to provided buffer
 int pa_callback(void const *inputBuffer, void *outputBuffer,
 		       unsigned long framesPerBuffer,
@@ -626,6 +628,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 
   // Use mirror buffer to simplify wraparound. Count is in bytes = Channels * frames * sizeof(float)
   int const bytecount = Channels * framesPerBuffer * sizeof(*Output_buffer);
+  opus_pcm_soft_clip(&Output_buffer[Channels*Rptr],framesPerBuffer,Channels,Softclip_mem);
   memcpy(outputBuffer,&Output_buffer[Channels*Rptr],bytecount);
   // Zero what we just copied
   memset(&Output_buffer[Channels*Rptr],0,bytecount);
