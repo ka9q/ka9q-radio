@@ -329,17 +329,17 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       }
       break;
     case PLL_ENABLE:
-      chan->linear.pll = decode_bool(cp,optlen);
+      chan->pll.enable = decode_bool(cp,optlen);
       break;
     case PLL_BW:
       {
 	float const f = decode_float(cp,optlen); // Always 0 or positive
 	if(isfinite(f))
-	  chan->linear.loop_bw = fabsf(f);
+	  chan->pll.loop_bw = fabsf(f);
       }
       break;
     case PLL_SQUARE:
-      chan->linear.square = decode_bool(cp,optlen);
+      chan->pll.square = decode_bool(cp,optlen);
       break;
     case ENVELOPE:
       chan->linear.env = decode_bool(cp,optlen);
@@ -530,14 +530,14 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   // Mode-specific params
   switch(chan->demod_type){
   case LINEAR_DEMOD:
-    encode_byte(&bp,PLL_ENABLE,chan->linear.pll); // bool
-    if(chan->linear.pll){
+    encode_byte(&bp,PLL_ENABLE,chan->pll.enable); // bool
+    if(chan->pll.enable){
       encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
-      encode_byte(&bp,PLL_LOCK,chan->linear.pll_lock); // bool
-      encode_byte(&bp,PLL_SQUARE,chan->linear.square); //bool
-      encode_float(&bp,PLL_PHASE,chan->linear.cphase); // radians
-      encode_float(&bp,PLL_BW,chan->linear.loop_bw);   // hz
-      encode_int64(&bp,PLL_WRAPS,chan->linear.rotations); // count of complete 360-deg rotations of PLL phase
+      encode_byte(&bp,PLL_LOCK,chan->pll.lock); // bool
+      encode_byte(&bp,PLL_SQUARE,chan->pll.square); //bool
+      encode_float(&bp,PLL_PHASE,chan->pll.cphase); // radians
+      encode_float(&bp,PLL_BW,chan->pll.loop_bw);   // hz
+      encode_int64(&bp,PLL_WRAPS,chan->pll.rotations); // count of complete 360-deg rotations of PLL phase
       // Relevant only when squelches are active
       encode_float(&bp,SQUELCH_OPEN,power2dB(chan->fm.squelch_open));
       encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->fm.squelch_close));

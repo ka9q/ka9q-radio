@@ -154,13 +154,6 @@ struct channel {
     float hangtime;      // AGC hang time, samples (settable)
     float recovery_rate; // AGC recovery rate, amplitude ratio/sample  (settable)
     float threshold;     // AGC threshold above noise, amplitude ratio
-
-    bool pll;         // Linear mode PLL tracking of carrier (settable)
-    bool square;      // Squarer on PLL input (settable)
-    bool pll_lock;    // PLL is locked
-    float loop_bw;    // Loop bw (coherent modes)
-    float cphase;     // Carrier phase change radians (DSB/PSK)
-    int64_t rotations; // Integer counts of cphase wraps through -PI, +PI
   } linear;
   int hangcount;      // AGC hang timer before gain recovery starts
 
@@ -168,6 +161,12 @@ struct channel {
     struct pll pll;
     bool was_on;
     int lock_count;
+    bool enable;         // Linear mode PLL tracking of carrier (settable)
+    bool square;      // Squarer on PLL input (settable)
+    bool lock;    // PLL is locked
+    float loop_bw;    // Loop bw (coherent modes)
+    float cphase;     // Carrier phase change radians (DSB/PSK)
+    int64_t rotations; // Integer counts of cphase wraps through -PI, +PI
   } pll;
 
   // Signal levels & status, common to all demods

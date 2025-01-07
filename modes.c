@@ -99,10 +99,10 @@ int set_defaults(struct channel *chan){
   if(chan->output.gain <= 0 || isnan(chan->output.gain))
      chan->output.gain = dB2voltage(DEFAULT_GAIN); // Set only if out of bounds
   chan->linear.env = false;
-  chan->linear.pll = false;
-  chan->linear.square = false;
+  chan->pll.enable = false;
+  chan->pll.square = false;
   chan->filter.isb = false;
-  chan->linear.loop_bw = DEFAULT_PLL_BW;
+  chan->pll.loop_bw = DEFAULT_PLL_BW;
   chan->linear.agc = true;
   chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
   chan->output.encoding = S16BE;
@@ -216,13 +216,13 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     }
   }
   chan->linear.env = config_getboolean(table,sname,"envelope",chan->linear.env);
-  chan->linear.pll = config_getboolean(table,sname,"pll",chan->linear.pll);
-  chan->linear.square = config_getboolean(table,sname,"square",chan->linear.square);  // On implies PLL on
-  if(chan->linear.square)
-    chan->linear.pll = true; // Square implies PLL
+  chan->pll.enable = config_getboolean(table,sname,"pll",chan->pll.enable);
+  chan->pll.square = config_getboolean(table,sname,"square",chan->pll.square);  // On implies PLL on
+  if(chan->pll.square)
+    chan->pll.enable = true; // Square implies PLL
 
   chan->filter.isb = config_getboolean(table,sname,"conj",chan->filter.isb);       // (unimplemented anyway)
-  chan->linear.loop_bw = config_getfloat(table,sname,"pll-bw",chan->linear.loop_bw);
+  chan->pll.loop_bw = config_getfloat(table,sname,"pll-bw",chan->pll.loop_bw);
   chan->linear.agc = config_getboolean(table,sname,"agc",chan->linear.agc);
   chan->fm.threshold = config_getboolean(table,sname,"extend",chan->fm.threshold); // FM threshold extension
   chan->fm.threshold = config_getboolean(table,sname,"threshold-extend",chan->fm.threshold); // FM threshold extension

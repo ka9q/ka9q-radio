@@ -1102,7 +1102,7 @@ static int init_demod(struct channel *channel){
   channel->filter.min_IF = channel->filter.max_IF = channel->filter.kaiser_beta = NAN;
   channel->output.headroom = channel->linear.hangtime = channel->linear.recovery_rate = NAN;
   channel->sig.bb_power = channel->sig.snr = channel->sig.foffset = NAN;
-  channel->fm.pdeviation = channel->linear.cphase = NAN;
+  channel->fm.pdeviation = channel->pll.cphase = NAN;
   channel->output.gain = NAN;
   channel->tp1 = channel->tp2 = NAN;
   return 0;
@@ -1388,16 +1388,16 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
     if(!isnan(channel->linear.hangtime))
       pprintw(w,row++,col,"Hang time","%.1f s   ",channel->linear.hangtime);
 
-    if(channel->linear.pll){
+    if(channel->pll.enable){
       mvwhline(w,row,0,0,1000);
       mvwaddstr(w,row++,1,"PLL");
-      mvwprintw(w,row++,col,"%-s",channel->linear.pll_lock ? "Lock" : "Unlock");
-      pprintw(w,row++,col,"BW","%.1f Hz",channel->linear.loop_bw);
+      mvwprintw(w,row++,col,"%-s",channel->pll.lock ? "Lock" : "Unlock");
+      pprintw(w,row++,col,"BW","%.1f Hz",channel->pll.loop_bw);
       pprintw(w,row++,col,"S/N","%.1f dB",power2dB(channel->sig.snr));
       pprintw(w,row++,col,"Δf","%'+.3f Hz",channel->sig.foffset);
-      double phase = channel->linear.cphase * DEGPRA + 360 * channel->linear.rotations;
+      double phase = channel->pll.cphase * DEGPRA + 360 * channel->pll.rotations;
 
-      pprintw(w,row++,col,"φ","%+.1f °",channel->linear.cphase*DEGPRA);
+      pprintw(w,row++,col,"φ","%+.1f °",channel->pll.cphase*DEGPRA);
       if(Local.pll_start_time == 0){
 	Local.pll_start_time = gps_time_ns();
 	Local.pll_start_phase = phase;
@@ -1544,17 +1544,17 @@ break;
     mvwaddstr(w,row++,col,"I/Q");
     wattroff(w,A_UNDERLINE);
 
-    if(!channel->linear.pll)
+    if(!channel->pll.enable)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"PLL Off");
     wattroff(w,A_UNDERLINE);
 
-    if(channel->linear.pll && !channel->linear.square)
+    if(channel->pll.enable && !channel->pll.square)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"PLL On");
     wattroff(w,A_UNDERLINE);
 
-    if(channel->linear.pll && channel->linear.square)
+    if(channel->pll.enable && channel->pll.square)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"PLL Square");
     wattroff(w,A_UNDERLINE);

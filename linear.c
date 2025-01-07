@@ -74,13 +74,13 @@ void *demod_linear(void *arg){
     float signal = 0; // PLL only
     float noise = 0;  // PLL only
 
-    if(chan->linear.pll){
+    if(chan->pll.enable){
       // Update PLL state, if active
-      set_pll_params(&chan->pll.pll,chan->linear.loop_bw,damping);
+      set_pll_params(&chan->pll.pll,chan->pll.loop_bw,damping);
       for(int n=0; n<N; n++){
 	complex float const s = buffer[n] *= conjf(pll_phasor(&chan->pll.pll));
 	float phase;
-	if(chan->linear.square){
+	if(chan->pll.square){
 	  phase = cargf(s*s);
 	} else {
 	  phase = cargf(s);
@@ -103,31 +103,31 @@ void *demod_linear(void *arg){
 	chan->pll.lock_count -= N;
 	if(chan->pll.lock_count <= -lock_limit){
 	  chan->pll.lock_count = -lock_limit;
-	  chan->linear.pll_lock = false;
+	  chan->pll.lock = false;
 	}
       } else if(chan->sig.snr > chan->fm.squelch_open){
 	chan->pll.lock_count += N;
 	if(chan->pll.lock_count >= lock_limit){
 	  chan->pll.lock_count = lock_limit;
-	  chan->linear.pll_lock = true;
+	  chan->pll.lock = true;
 	}
       }
       double phase = carg(pll_phasor(&chan->pll.pll));
       if(chan->sig.snr > chan->fm.squelch_close){
 	// Try to avoid counting cycle slips during loss of lock
-	double phase_diff = phase - chan->linear.cphase;
+	double phase_diff = phase - chan->pll.cphase;
 	if(phase_diff > M_PI)
-	  chan->linear.rotations--;
+	  chan->pll.rotations--;
 	else if(phase_diff < -M_PI)
-	  chan->linear.rotations++;
+	  chan->pll.rotations++;
       }
-      chan->linear.cphase = phase;
+      chan->pll.cphase = phase;
       chan->sig.foffset = pll_freq(&chan->pll.pll);
     } else {
-      chan->linear.rotations = 0;
+      chan->pll.rotations = 0;
       chan->pll.pll.integrator = 0; // reset oscillator when coming back on
       chan->pll.lock_count = -lock_limit;
-      chan->linear.pll_lock = false;
+      chan->pll.lock = false;
     }
 
     // Apply frequency shift
@@ -232,7 +232,7 @@ void *demod_linear(void *arg){
     // Mute if no signal (e.g., outside front end coverage)
     // or if no PLL lock (AM squelch)
     // or if zero frequency
-    bool mute = (output_power == 0) || (chan->linear.pll && !chan->linear.pll_lock) || (chan->tune.freq == 0);
+    bool mute = (output_power == 0) || (chan->pll.enable && !chan->pll.lock) || (chan->tune.freq == 0);
 
     // send_output() knows if the buffer is mono or stereo
     if(send_output(chan,(float *)buffer,N,mute) == -1)

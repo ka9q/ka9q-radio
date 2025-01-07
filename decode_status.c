@@ -134,19 +134,19 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->fm.pdeviation = decode_float(cp,optlen);
       break;
     case PLL_LOCK:
-      channel->linear.pll_lock = decode_bool(cp,optlen);
+      channel->pll.lock = decode_bool(cp,optlen);
       break;
     case PLL_BW:
-      channel->linear.loop_bw = decode_float(cp,optlen);
+      channel->pll.loop_bw = decode_float(cp,optlen);
       break;
     case PLL_SQUARE:
-      channel->linear.square = decode_bool(cp,optlen);
+      channel->pll.square = decode_bool(cp,optlen);
       break;
     case PLL_PHASE:
-      channel->linear.cphase = decode_float(cp,optlen);
+      channel->pll.cphase = decode_float(cp,optlen);
       break;
     case PLL_WRAPS:
-      channel->linear.rotations = (int64_t)decode_int64(cp,optlen);
+      channel->pll.rotations = (int64_t)decode_int64(cp,optlen);
       break;
     case ENVELOPE:
       channel->linear.env = decode_bool(cp,optlen);
@@ -191,7 +191,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->fm.threshold = decode_bool(cp,optlen);
       break;
     case PLL_ENABLE:
-      channel->linear.pll = decode_bool(cp,optlen);
+      channel->pll.enable = decode_bool(cp,optlen);
       break;
     case GAIN:              // dB to voltage
       channel->output.gain = dB2voltage(decode_float(cp,optlen));
