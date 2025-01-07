@@ -75,9 +75,6 @@ struct filter_out {
   int rcnt;                          // Samples read from output buffer
 };
 
-int window_filter(int L,int M,complex float * restrict response,float beta);
-int window_rfilter(int L,int M,complex float * restrict response,float beta);
-
 struct filter_in *create_filter_input(struct filter_in *,int const L,int const M, enum filtertype const in_type);
 struct filter_out *create_filter_output(struct filter_out *slave,struct filter_in * restrict master,complex float * restrict response,int olen, enum filtertype out_type);
 int execute_filter_input(struct filter_in * restrict);
@@ -85,9 +82,7 @@ int execute_filter_output(struct filter_out * restrict ,int);
 int execute_filter_output_idle(struct filter_out * const slave);
 int delete_filter_input(struct filter_in * restrict);
 int delete_filter_output(struct filter_out * restrict);
-int make_kaiser(float * restrict,int M,float);
 int set_filter(struct filter_out * restrict,float,float,float);
-float noise_gain(struct filter_out const * restrict);
 void *run_fft(void *);
 int write_cfilter(struct filter_in *, complex float const *,int size);
 int write_rfilter(struct filter_in *, float const *,int size);
