@@ -19,7 +19,12 @@
 #include "multicast.h"
 #include "radio.h"
 
-#define BYTES_PER_PKT 960        // byte count to fit in Ethernet MTU
+
+// byte count to fit in Ethernet MTU
+// For lower sample rates this won't matter at all
+// For mono 16-bit PCM at 48K, this will produce a full,not-full pair every 20 ms but the packet rate will be the same
+// At much higher rates it will minimize the total packets sent every 20 ms
+#define BYTES_PER_PKT 1400
 
 bool GetSockOptFailed = false;     // Have we issued this log message yet?
 bool TempSendFailure = false;
@@ -176,6 +181,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
       break;
 #endif
     case OPUS:
+      // Opus says max possible packet size (on high fidelity audio) is 1275 bytes at 20 ms, which fits Ethernt
       bytes = opus_encode_float(chan->output.opus,buffer,chunk,dp,sizeof(packet) - (dp-packet)); // Max # bytes in compressed output buffer
       assert(bytes >= 0);
       if(Discontinuous && bytes < 3){
