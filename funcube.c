@@ -60,7 +60,7 @@ static float const UpperEdge = +75000;
 
 // Variables set by command line options
 // A larger blocksize makes more efficient use of each frame, but the receiver generally runs on
-// frames that match the Opus codec: 2.5, 5, 10, 20, 40, 60, 180, 100, 120 ms
+// frames that match the Opus codec: 2.5, 5, 10, 20, 40, 60, 80, 100, 120 ms
 // So to minimize latency, make this a common denominator:
 // 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
 static int Blocksize;
