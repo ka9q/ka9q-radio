@@ -576,6 +576,8 @@ void *mirror_alloc(size_t size){
   return base;
 }
 void mirror_free(void **p,size_t size){
+  if(p == NULL || *p == NULL)
+    return;
   munmap(*p, size * 2);
   *p = NULL; // Nail pointer
 }

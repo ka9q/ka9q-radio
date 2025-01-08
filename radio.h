@@ -223,10 +223,14 @@ struct channel {
     uint64_t samples;
     bool pacing;     // Pace output packets
     enum encoding encoding;
-    enum encoding previous_encoding;
     OpusEncoder *opus;
     unsigned int opus_channels;
     unsigned int opus_bitrate;
+    float *queue; // Mirrored ring buffer
+    size_t queue_size; // Size of allocation, in floats
+    unsigned wp,rp; // Queue write and read indices
+    unsigned minpacket;  // minimum output packet size in blocks (0-3)
+                         // i.e, no minimum or at least 20ms, 40ms or 60ms/packet
   } output;
 
   struct {
@@ -305,6 +309,8 @@ int send_radio_status(struct sockaddr const *,struct frontend const *, struct ch
 int reset_radio_status(struct channel *chan);
 bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
 int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,int length);
+int flush_output(struct channel *chan,bool marker,bool complete);
+
 
 unsigned int round_samprate(unsigned int x);
 #endif

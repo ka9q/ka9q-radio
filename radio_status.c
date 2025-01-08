@@ -166,6 +166,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	// If using Opus, ignore unsupported sample rates
 	if(new_sample_rate != chan->output.samprate){
 	  if(chan->output.encoding != OPUS || new_sample_rate == 48000 || new_sample_rate == 24000 || new_sample_rate == 16000 || new_sample_rate == 12000 || new_sample_rate == 8000){
+	    flush_output(chan,false,true); // Flush to Ethernet before we change this
 	    chan->output.samprate = new_sample_rate;
 	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	    restart_needed = true;
@@ -244,6 +245,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	strlcpy(chan->preset,p,sizeof(chan->preset));
 	FREE(p); // decode_string now allocs memory
 	{
+	  flush_output(chan,false,true); // Flush to Ethernet before we change this
 	  enum demod_type const old_type = chan->demod_type;
 	  unsigned int const old_samprate = chan->output.samprate;
 	  float const old_low = chan->filter.min_IF;
@@ -348,6 +350,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       {
 	unsigned int const i = decode_int(cp,optlen);
 	if(i != chan->output.channels && (i == 1 || i == 2)){
+	  flush_output(chan,false,true); // Flush to Ethernet before we change this
 	  chan->output.channels = i;
 	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	}
@@ -400,6 +403,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       {
 	enum encoding encoding = decode_int(cp,optlen);
 	if(encoding != chan->output.encoding && encoding >= NO_ENCODING && encoding < UNUSED_ENCODING){
+	  flush_output(chan,false,true); // Flush to Ethernet before we change this
 	  chan->output.encoding = encoding;
 	  // Opus can handle only a certain set of sample rates, and it operates at 48K internally
 	  if(encoding == OPUS && chan->output.samprate != 48000 && chan->output.samprate != 24000
@@ -440,6 +444,13 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  (*Frontend.gain)(&Frontend,x);
       }
       break;
+    case MINPACKET:
+      {
+	int i = decode_int(cp,optlen);
+	if(i >=0 && i <=4)
+	   chan->output.minpacket = i;
+      }
+
     default:
       break;
     }
@@ -637,6 +648,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_byte(&bp,RTP_PT,chan->output.rtp.type);
     encode_int32(&bp,STATUS_INTERVAL,chan->status.output_interval);
     encode_int(&bp,OUTPUT_ENCODING,chan->output.encoding);
+    encode_int(&bp,MINPACKET,chan->output.minpacket);
   }
   // Don't send test points unless they're in use
   if(!isnan(chan->tp1))

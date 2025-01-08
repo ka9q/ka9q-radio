@@ -115,6 +115,7 @@ int set_defaults(struct channel *chan){
   chan->output.pacing = false;
   chan->status.output_interval = DEFAULT_UPDATE;
   chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
+  chan->output.minpacket = 0;  // No output buffering
   return 0;
 }
 
@@ -257,6 +258,8 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   }
   chan->output.opus_bitrate = config_getint(table,sname,"bitrate",chan->output.opus_bitrate);
   chan->status.output_interval = config_getint(table,sname,"update",chan->status.output_interval);
+  chan->output.minpacket = config_getint(table,sname,"buffer",chan->output.minpacket);
+
   return 0;
 }
 

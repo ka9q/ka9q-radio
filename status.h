@@ -110,7 +110,7 @@ enum status_type {
   OUTPUT_SAMPLES,
 
   OPUS_BIT_RATE,
-  UNUSED12,
+  MINPACKET,      // Minimum number of full blocks in an output packet, unless already full (0-3)
   UNUSED13,
   UNUSED14,
   UNUSED15,

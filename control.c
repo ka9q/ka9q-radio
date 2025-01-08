@@ -856,6 +856,17 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       }
     }
     break;
+  case 'B':
+    {
+      char str[Entry_width],*ptr;
+      getentry("Packet buffering, blocks (0-4): ",str,sizeof(str));
+      int x = labs(strtol(str,&ptr,0));
+      if(ptr != str){
+	if(x >= 0 && x <= 4)
+	  encode_int(bpp,MINPACKET,x);
+      }
+    }
+    break;
   case 'g': // Manually set linear channel gain, dB (positive or negative)
     {
       char str[Entry_width],*ptr;
@@ -1485,6 +1496,8 @@ static void display_output(WINDOW *w,struct channel const *channel){
     else
       pprintw(w,row++,col,"Opus bitrate","auto");
   }
+  pprintw(w,row++,col,"Packet buffers","%d",channel->output.minpacket);
+
   box(w,0,0);
   mvwaddstr(w,0,1,"RTP output");
   wnoutrefresh(w);
