@@ -103,7 +103,6 @@ struct session {
   unsigned int wptr;        // current write index into output PCM buffer, *frames*
   int playout;              // Initial playout delay, frames
   long long last_active;    // GPS time last active with data traffic
-  long long last_start;     // GPS time at last transition to active from idle
   float tot_active;         // Total PCM time, ns
   float active;             // Seconds we've been active (only when queue has stuff)
   float datarate;           // Smoothed channel data rate

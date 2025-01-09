@@ -135,6 +135,7 @@ void *dataproc(void *arg){
       }
     }
     sp->packets++;
+    sp->last_active = gps_time_ns();
     // Discard packets with unknown encoding
     // This will happen before the first status arrives
     enum encoding const encoding = sp->pt_table[sp->type].encoding;
@@ -170,12 +171,7 @@ void *dataproc(void *arg){
     else
       sp->queue = pkt; // Front of list
     pkt = NULL;        // force new packet to be allocated
-    long long t = gps_time_ns();
-    if(t - sp->last_active > BILLION){
-      // Transition from idle to active
-      sp->last_start = t;
-    }
-    sp->last_active = t;
+
     // wake up decoder thread
     pthread_cond_signal(&sp->qcond);
     pthread_mutex_unlock(&sp->qmutex);
