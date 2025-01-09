@@ -1102,11 +1102,16 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     }
   }
   // We byte swap S16BE to S16LE, so change the tag
-  if(Verbose)
-    fprintf(stderr,"%s ssrc %u creating '%s' samprate %d channels %d encoding %s freq %.3lf preset %s offset %lld\n",
+  if(Verbose){
+    fprintf(stderr,"%s creating '%s' samprate %d channels %d encoding %s freq %.3lf preset %s",
 	    sp->frontend.description,
-	    sp->ssrc,sp->filename,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
-	    sp->chan.preset,(long long)sp->starting_offset);
+	    sp->filename,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
+	    sp->chan.preset);
+    if(sp->starting_offset > 0)
+      fprintf(stderr," offset %lld",(long long)sp->starting_offset);
+    fputc('\n',stderr);
+  }
+
   sp->iobuffer = malloc(BUFFERSIZE);
   setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
 
