@@ -1,3 +1,37 @@
+/**
+@file pcmrecord.c
+@author Phil Karn, KA9Q
+@brief Record, stream, or launch commands with RTP streams as input
+@verbatim
+This program reads one or more RTP streams from a multicast group and either writes them into a file, streams (one of them) onto standard output, or invokes a command for each stream and pipes the RTP data into it. PCM streams are written as-is (except that big-endian PCM is converted to little-endian). Opus streams are placed in a standard Ogg container.
+
+Command-line options:
+ --stdout | --catmode | -c: write one stream to stdout. If --ssrc is not specified, selects the first one found and ignores the rest
+ --directory | -d <directory>: directory root in which to write files<
+ --exec | -e '<command args ...>': Execute the specified command for each stream and pipe to it. Several macros expanded as shown when found in the arguments:
+        $$: insert a literal '$'
+        $d: description string from the radiod front end
+        $h: receive frequency in decimal hertz
+        $k: receive frequency in decimal kilohertz
+        $m: receive frequency in decimal megahertz
+        $c: number of channels (1 or 2)
+        $r: sample rate, integer Hz
+        $s: ssrc (unsigned decimal integer)
+
+ --flush|-f: Flush after each received packet. Increases Ogg container overhead; little need for this writing files
+ --jt|-j: Use K1JT format file names
+ --locale <locale>: Set locale. Default is $LANG
+ --mintime|--minfiletime|-m: minimum file duration, in sec. Files shorter than this are deleted when closed
+ --raw|-r: Don't emit .WAV header for PCM files; ignored with Opus (Ogg is needed to delimit frames in a stream)
+ --subdirectories|--subdirs|-s': Create subdirectories when writing files: ssrc/year/month/day/filename
+ --timeout|-t <seconds>: Close file after idle period (default 20 sec)
+ --verbose|-v: Increase verbosity level
+ --lengthlimit|--limit|-L <seconds>: maximum file duration, seconds. When new file is created, round down to previous start of interval and pad with silence (for JT decoding)
+ --ssrc <ssrc>: Select one SSRC (recommended for --stdout)
+ --version|-V: display command version
+@endverbatim
+ */
+
 // Read and record PCM/WAV and Ogg Opus audio streams
 // Now with --stdout option to send (one) stream to standard output, eventually to replace pcmcat
 // Also with --exec option to pipe stream into command, to replace pcmspawn
@@ -360,6 +394,8 @@ static int emit_opus_silence(struct session * const sp,int samples){
   if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
     return -1;
 
+  if(Verbose > 1)
+    fprintf(stderr,"%d: emitting %d frames of silence\n",sp->ssrc,samples);
   ogg_packet oggPacket;
   oggPacket.b_o_s = 0;
   oggPacket.e_o_s = 0;    // End of stream flag
@@ -581,7 +617,7 @@ static void input_loop(){
     int const n = poll(pfd,sizeof(pfd)/sizeof(pfd[0]),1000); // Wait 1 sec max so we can scan active session list
     if(n < 0)
       break; // error of some kind - should we exit or retry?
-    int64_t current_time = gps_time_ns();
+
     if(pfd[1].revents & (POLLIN|POLLPRI)){
       // Process status packet
       uint8_t buffer[PKTSIZE];
@@ -616,6 +652,15 @@ static void input_loop(){
 	   && getportnumber(&sp->sender) == getportnumber(&sender))
 	  break;
       }
+      if(sp != NULL && sp->prev != NULL){
+	// Move to top of list to speed later lookups
+	sp->prev->next = sp->next;
+	if(sp->next != NULL)
+	  sp->next->prev = sp->prev;
+	sp->next = Sessions;
+	sp->prev = NULL;
+	Sessions = sp;
+      }
       if(sp == NULL){
 	// Create session and initialize
 	sp = calloc(1,sizeof(*sp));
@@ -642,7 +687,6 @@ static void input_loop(){
       memcpy(&sp->sender,&sender,sizeof(sp->sender));
       memcpy(&sp->chan,&chan,sizeof(sp->chan));
       memcpy(&sp->frontend,&frontend,sizeof(sp->frontend));
-      sp->last_active = current_time;
       // Ogg (containing opus) can concatenate streams with new metadata, so restart when it changes
       // WAV files don't even have this metadata, so ignore changes
       if(sp->encoding == OPUS){
@@ -661,10 +705,10 @@ static void input_loop(){
       int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&sender,&socksize);
       if(size <= 0){    // ??
 	perror("recvfrom");
-	continue; // Some sort of error, quit
+	goto datadone; // Some sort of error, quit
       }
       if(size < RTP_MIN_SIZE)
-	continue; // Too small for RTP, ignore
+	goto datadone; // Too small for RTP, ignore
 
       struct rtp_header rtp;
       uint8_t *dp = (uint8_t *)ntoh_rtp(&rtp,buffer);
@@ -674,12 +718,12 @@ static void input_loop(){
 	rtp.pad = 0;
       }
       if(size <= 0)
-	continue; // Bogus RTP header
+	goto datadone; // Bogus RTP header
 
       size -= (dp - buffer);
 
       if(Ssrc != 0 && rtp.ssrc != Ssrc)
-	continue;
+	goto datadone;
 
       // Sessions are defined by the tuple {ssrc, payload type, sending IP address, sending UDP port}
       struct session *sp;
@@ -695,8 +739,17 @@ static void input_loop(){
       // This is the only way to work with dynamic payload types since we need the status info
       // We can't even process RTP timestamps without knowing how big a frame is
       if(sp == NULL)
-	continue;
+	goto datadone;
 
+      if(sp->prev != NULL){
+	// Move to top of list to speed later lookups
+	sp->prev->next = sp->next;
+	if(sp->next != NULL)
+	  sp->next->prev = sp->prev;
+	sp->next = Sessions;
+	sp->prev = NULL;
+	Sessions = sp;
+      }
       if(sp->fp == NULL){
 	session_file_init(sp,&sender);
 	if(sp->encoding == OPUS){
@@ -720,8 +773,7 @@ static void input_loop(){
 	  }
 	}
       }
-
-      sp->last_active = gps_time_ns(); // Any activity at all resets the timer
+      sp->last_active = gps_time_ns();
       if(sp->rtp_state.odd_seq_set){
 	if(rtp.seq == sp->rtp_state.odd_seq){
 	  // Sender probably restarted; flush queue and start over
@@ -749,7 +801,7 @@ static void input_loop(){
 	// But sender may have restarted so remember it
 	sp->rtp_state.odd_seq = rtp.seq + 1;
 	sp->rtp_state.odd_seq_set = true;
-	continue;
+	goto datadone;
       } else if(seqdiff >= RESEQ){
 	// Give up waiting for the lost frame, flush what we have
 	// Could also be a restart, but treat it the same
@@ -790,10 +842,13 @@ static void input_loop(){
 	  fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
 	}
       if(FileLengthLimit != 0 && sp->samples_remaining <= 0)
-	close_file(sp);
+	close_file(sp); // Don't reset RTP here so we won't lose samples on the next file
 
     } // end of packet processing
-    // Walk through list, close idle sessions
+  datadone:;
+    // Walk through list, close idle files
+    // Leave sessions forever in case traffic starts again?
+    int64_t current_time = gps_time_ns();
     if(current_time > last_scan_time + BILLION){
       last_scan_time = current_time;
       struct session *next;
@@ -801,8 +856,9 @@ static void input_loop(){
 	next = sp->next; // save in case sp is closed
 	int64_t idle = current_time - sp->last_active;
 	if(idle > Timeout * BILLION){
-	  // Close idle session
-	  close_session(&sp); // sp will be NULL
+	  // Close idle file
+	  close_file(sp); // sp will be NULL
+	  sp->rtp_state.init = false; // reinit rtp on next packet so we won't emit lots of silence
 	}
       }
     }
@@ -1024,6 +1080,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	     suffix);
   }
   sp->fp = fopen(sp->filename,"w++");
+  sp->last_active = gps_time_ns();
 
   if(sp->fp == NULL){
     fprintf(stderr,"can't create/write file '%s': %s\n",sp->filename,strerror(errno));
@@ -1097,7 +1154,7 @@ static int close_session(struct session **spp){
 }
 
 
-// Close a session, update .wav header, remove from session table
+// Close a file, update .wav header
 // If the file is not "substantial", just delete it
 static int close_file(struct session *sp){
   if(sp == NULL)
@@ -1397,6 +1454,7 @@ static int start_wav_stream(struct session *sp){
   if(sp->can_seek)
     rewind(sp->fp); // should be at BOF but make sure
   fwrite(&header,sizeof(header),1,sp->fp);
+  sp->last_active = gps_time_ns();
   return 0;
 }
 // Update wav header with now-known size and end auxi information
@@ -1439,5 +1497,6 @@ static int end_wav_stream(struct session *sp){
   rewind(sp->fp);
   if(fwrite(&header,sizeof(header),1,sp->fp) != 1)
     return -1;
+  sp->last_active = gps_time_ns();
   return 0;
 }
