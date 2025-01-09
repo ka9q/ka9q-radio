@@ -1,0 +1,61 @@
+.TH "filter_in" 3 "KA9Q-Radio" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+filter_in
+.SH SYNOPSIS
+.br
+.PP
+.SS "Data Fields"
+
+.in +1c
+.ti -1c
+.RI "enum filtertype \fBin_type\fP"
+.br
+.ti -1c
+.RI "int \fBilen\fP"
+.br
+.ti -1c
+.RI "int \fBbins\fP"
+.br
+.ti -1c
+.RI "int \fBimpulse_length\fP"
+.br
+.ti -1c
+.RI "int \fBwcnt\fP"
+.br
+.ti -1c
+.RI "void * \fBinput_buffer\fP"
+.br
+.ti -1c
+.RI "size_t \fBinput_buffer_size\fP"
+.br
+.ti -1c
+.RI "struct \fBrc\fP \fBinput_write_pointer\fP"
+.br
+.ti -1c
+.RI "struct \fBrc\fP \fBinput_read_pointer\fP"
+.br
+.ti -1c
+.RI "fftwf_plan \fBfwd_plan\fP"
+.br
+.ti -1c
+.RI "pthread_mutex_t \fBfilter_mutex\fP"
+.br
+.ti -1c
+.RI "pthread_cond_t \fBfilter_cond\fP"
+.br
+.ti -1c
+.RI "complex float * \fBfdomain\fP [ND]"
+.br
+.ti -1c
+.RI "unsigned int \fBnext_jobnum\fP"
+.br
+.ti -1c
+.RI "unsigned int \fBcompleted_jobs\fP [ND]"
+.br
+.in -1c
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for KA9Q-Radio from the source code\&.

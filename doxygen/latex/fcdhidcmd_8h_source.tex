@@ -1,0 +1,306 @@
+\doxysection{/\+Users/karn/src/ka9q-\/radio/fcdhidcmd.h}
+\hypertarget{fcdhidcmd_8h_source}{}\label{fcdhidcmd_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//\ \$Id:\ fcdhidcmd.h,v\ 1.1\ 2016/10/14\ 00:23:30\ karn\ Exp\ \$}}
+\DoxyCodeLine{00002\ \textcolor{comment}{//\ Modified\ by\ KA9Q}}
+\DoxyCodeLine{00003\ \textcolor{comment}{/***************************************************************************}}
+\DoxyCodeLine{00004\ \textcolor{comment}{\ *\ \ This\ file\ is\ part\ of\ Qthid.}}
+\DoxyCodeLine{00005\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00006\ \textcolor{comment}{\ *\ \ Copyright\ (C)\ 2010\ \ Howard\ Long,\ G6LVB}}
+\DoxyCodeLine{00007\ \textcolor{comment}{\ *\ \ CopyRight\ (C)\ 2011\ \ Alexandru\ Csete,\ OZ9AEC}}
+\DoxyCodeLine{00008\ \textcolor{comment}{\ *\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ Mario\ Lorenz,\ DL5MLO}}
+\DoxyCodeLine{00009\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00010\ \textcolor{comment}{\ *\ \ Qthid\ is\ free\ software:\ you\ can\ redistribute\ it\ and/or\ modify}}
+\DoxyCodeLine{00011\ \textcolor{comment}{\ *\ \ it\ under\ the\ terms\ of\ the\ GNU\ General\ Public\ License\ as\ published\ by}}
+\DoxyCodeLine{00012\ \textcolor{comment}{\ *\ \ the\ Free\ Software\ Foundation,\ either\ version\ 3\ of\ the\ License,\ or}}
+\DoxyCodeLine{00013\ \textcolor{comment}{\ *\ \ (at\ your\ option)\ any\ later\ version.}}
+\DoxyCodeLine{00014\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00015\ \textcolor{comment}{\ *\ \ Qthid\ is\ distributed\ in\ the\ hope\ that\ it\ will\ be\ useful,}}
+\DoxyCodeLine{00016\ \textcolor{comment}{\ *\ \ but\ WITHOUT\ ANY\ WARRANTY;\ without\ even\ the\ implied\ warranty\ of}}
+\DoxyCodeLine{00017\ \textcolor{comment}{\ *\ \ MERCHANTABILITY\ or\ FITNESS\ FOR\ A\ PARTICULAR\ PURPOSE.\ \ See\ the}}
+\DoxyCodeLine{00018\ \textcolor{comment}{\ *\ \ GNU\ General\ Public\ License\ for\ more\ details.}}
+\DoxyCodeLine{00019\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00020\ \textcolor{comment}{\ *\ \ You\ should\ have\ received\ a\ copy\ of\ the\ GNU\ General\ Public\ License}}
+\DoxyCodeLine{00021\ \textcolor{comment}{\ *\ \ along\ with\ Qthid.\ \ If\ not,\ see\ <http://www.gnu.org/licenses/>.}}
+\DoxyCodeLine{00022\ \textcolor{comment}{\ *}}
+\DoxyCodeLine{00023\ \textcolor{comment}{\ ***************************************************************************/}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#ifndef\ FCD\_HID\_CMD\_H}}
+\DoxyCodeLine{00025\ \textcolor{preprocessor}{\#define\ FCD\_HID\_CMD\_H\ 1}}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{comment}{/*\ Commands\ applicable\ in\ bootloader\ mode\ */}}
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_BL\_QUERY\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 1\ \ }}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_BL\_RESET\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 8\ \ }}
+\DoxyCodeLine{00031\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_BL\_ERASE\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 24\ \ }}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_BL\_SET\_BYTE\_ADDR\ \ \ \ \ \ \ 25\ \ }}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_BL\_GET\_BYTE\_ADDR\_RANGE\ 26\ \ }}
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_BL\_WRITE\_FLASH\_BLOCK\ \ \ 27\ \ }}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_BL\_READ\_FLASH\_BLOCK\ \ \ \ 28\ \ }}
+\DoxyCodeLine{00037\ \textcolor{comment}{/*\ Commands\ applicable\ in\ application\ mode\ */}}
+\DoxyCodeLine{00038\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_FREQ\_KHZ\ \ \ \ \ 100\ }}
+\DoxyCodeLine{00039\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_FREQ\_HZ\ \ \ \ \ \ 101\ }}
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_FREQ\_HZ\ \ \ \ \ \ 102\ }}
+\DoxyCodeLine{00042\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_IF\_RSSI\ \ \ \ \ \ 104\ }}
+\DoxyCodeLine{00043\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_PLL\_LOCK\ \ \ \ \ 105\ }}
+\DoxyCodeLine{00045\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_DC\_CORR\ \ \ \ \ \ 106\ }}
+\DoxyCodeLine{00046\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_DC\_CORR\ \ \ \ \ \ 107\ }}
+\DoxyCodeLine{00047\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_IQ\_CORR\ \ \ \ \ \ 108\ }}
+\DoxyCodeLine{00048\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_IQ\_CORR\ \ \ \ \ \ 109\ }}
+\DoxyCodeLine{00050\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_LNA\_GAIN\ \ \ \ \ 110\ }}
+\DoxyCodeLine{00051\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_LNA\_ENHANCE\ \ 111}}
+\DoxyCodeLine{00052\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_BAND\ \ \ \ \ \ \ \ \ 112}}
+\DoxyCodeLine{00053\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_RF\_FILTER\ \ \ \ 113}}
+\DoxyCodeLine{00054\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_MIXER\_GAIN\ \ \ 114}}
+\DoxyCodeLine{00055\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_BIAS\_CURRENT\ 115}}
+\DoxyCodeLine{00056\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_MIXER\_FILTER\ 116}}
+\DoxyCodeLine{00057\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_IF\_GAIN1\ \ \ \ \ 117}}
+\DoxyCodeLine{00058\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_IF\_GAIN\_MODE\ 118}}
+\DoxyCodeLine{00059\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_IF\_RC\_FILTER\ 119}}
+\DoxyCodeLine{00060\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_IF\_GAIN2\ \ \ \ \ 120}}
+\DoxyCodeLine{00061\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_IF\_GAIN3\ \ \ \ \ 121}}
+\DoxyCodeLine{00062\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_IF\_FILTER\ \ \ \ 122}}
+\DoxyCodeLine{00063\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_IF\_GAIN4\ \ \ \ \ 123}}
+\DoxyCodeLine{00064\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_IF\_GAIN5\ \ \ \ \ 124}}
+\DoxyCodeLine{00065\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_IF\_GAIN6\ \ \ \ \ 125}}
+\DoxyCodeLine{00066\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SET\_BIAS\_TEE\ \ \ \ \ 126\ }}
+\DoxyCodeLine{00068\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_LNA\_GAIN\ \ \ \ \ 150\ }\textcolor{comment}{//\ Retrieve\ a\ 1\ byte\ value,\ see\ enums\ for\ reference}}
+\DoxyCodeLine{00069\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_LNA\_ENHANCE\ \ 151}}
+\DoxyCodeLine{00070\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_BAND\ \ \ \ \ \ \ \ \ 152}}
+\DoxyCodeLine{00071\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_RF\_FILTER\ \ \ \ 153}}
+\DoxyCodeLine{00072\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_MIXER\_GAIN\ \ \ 154}}
+\DoxyCodeLine{00073\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_BIAS\_CURRENT\ 155}}
+\DoxyCodeLine{00074\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_MIXER\_FILTER\ 156}}
+\DoxyCodeLine{00075\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_IF\_GAIN1\ \ \ \ \ 157}}
+\DoxyCodeLine{00076\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_IF\_GAIN\_MODE\ 158}}
+\DoxyCodeLine{00077\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_IF\_RC\_FILTER\ 159}}
+\DoxyCodeLine{00078\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_IF\_GAIN2\ \ \ \ \ 160}}
+\DoxyCodeLine{00079\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_IF\_GAIN3\ \ \ \ \ 161}}
+\DoxyCodeLine{00080\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_IF\_FILTER\ \ \ \ 162}}
+\DoxyCodeLine{00081\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_IF\_GAIN4\ \ \ \ \ 163}}
+\DoxyCodeLine{00082\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_IF\_GAIN5\ \ \ \ \ 164}}
+\DoxyCodeLine{00083\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_IF\_GAIN6\ \ \ \ \ 165}}
+\DoxyCodeLine{00084\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_GET\_BIAS\_TEE\ \ \ \ \ 166\ }}
+\DoxyCodeLine{00086\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_SEND\_I2C\_BYTE\ \ \ \ 200}}
+\DoxyCodeLine{00087\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_RECV\_I2C\_BYTE\ \ \ \ 201}}
+\DoxyCodeLine{00088\ }
+\DoxyCodeLine{00089\ \textcolor{preprocessor}{\#define\ FCD\_CMD\_APP\_RESET\ \ \ \ \ \ \ \ \ \ \ \ 255\ }\textcolor{comment}{//\ Reset\ to\ bootloader}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00092\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}\ }
+\DoxyCodeLine{00093\ \{}
+\DoxyCodeLine{00094\ \ \ \ \ TLGE\_N5\_0DB=0,}
+\DoxyCodeLine{00095\ \ \ \ \ TLGE\_N2\_5DB=1,}
+\DoxyCodeLine{00096\ \ \ \ \ TLGE\_P0\_0DB=4,}
+\DoxyCodeLine{00097\ \ \ \ \ TLGE\_P2\_5DB=5,}
+\DoxyCodeLine{00098\ \ \ \ \ TLGE\_P5\_0DB=6,}
+\DoxyCodeLine{00099\ \ \ \ \ TLGE\_P7\_5DB=7,}
+\DoxyCodeLine{00100\ \ \ \ \ TLGE\_P10\_0DB=8,}
+\DoxyCodeLine{00101\ \ \ \ \ TLGE\_P12\_5DB=9,}
+\DoxyCodeLine{00102\ \ \ \ \ TLGE\_P15\_0DB=10,}
+\DoxyCodeLine{00103\ \ \ \ \ TLGE\_P17\_5DB=11,}
+\DoxyCodeLine{00104\ \ \ \ \ TLGE\_P20\_0DB=12,}
+\DoxyCodeLine{00105\ \ \ \ \ TLGE\_P25\_0DB=13,}
+\DoxyCodeLine{00106\ \ \ \ \ TLGE\_P30\_0DB=14}
+\DoxyCodeLine{00107\ \}\ TUNER\_LNA\_GAIN\_ENUM;}
+\DoxyCodeLine{00108\ }
+\DoxyCodeLine{00109\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00110\ \{}
+\DoxyCodeLine{00111\ \ \ TLEE\_OFF=0,}
+\DoxyCodeLine{00112\ \ \ TLEE\_0=1,}
+\DoxyCodeLine{00113\ \ \ TLEE\_1=3,}
+\DoxyCodeLine{00114\ \ \ TLEE\_2=5,}
+\DoxyCodeLine{00115\ \ \ TLEE\_3=7}
+\DoxyCodeLine{00116\ \}\ TUNER\_LNA\_ENHANCE\_ENUM;}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00119\ \{}
+\DoxyCodeLine{00120\ \ \ TBE\_VHF2,}
+\DoxyCodeLine{00121\ \ \ TBE\_VHF3,}
+\DoxyCodeLine{00122\ \ \ TBE\_UHF,}
+\DoxyCodeLine{00123\ \ \ TBE\_LBAND}
+\DoxyCodeLine{00124\ \}\ TUNER\_BAND\_ENUM;}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00127\ \{}
+\DoxyCodeLine{00128\ \ \ \textcolor{comment}{//\ Band\ 0,\ VHF\ II}}
+\DoxyCodeLine{00129\ \ \ TRFE\_LPF268MHZ=0,}
+\DoxyCodeLine{00130\ \ \ TRFE\_LPF299MHZ=8,}
+\DoxyCodeLine{00131\ \ \ \textcolor{comment}{//\ Band\ 1,\ VHF\ III}}
+\DoxyCodeLine{00132\ \ \ TRFE\_LPF509MHZ=0,}
+\DoxyCodeLine{00133\ \ \ TRFE\_LPF656MHZ=8,}
+\DoxyCodeLine{00134\ \ \ \textcolor{comment}{//\ Band\ 2,\ UHF}}
+\DoxyCodeLine{00135\ \ \ TRFE\_BPF360MHZ=0,}
+\DoxyCodeLine{00136\ \ \ TRFE\_BPF380MHZ=1,}
+\DoxyCodeLine{00137\ \ \ TRFE\_BPF405MHZ=2,}
+\DoxyCodeLine{00138\ \ \ TRFE\_BPF425MHZ=3,}
+\DoxyCodeLine{00139\ \ \ TRFE\_BPF450MHZ=4,}
+\DoxyCodeLine{00140\ \ \ TRFE\_BPF475MHZ=5,}
+\DoxyCodeLine{00141\ \ \ TRFE\_BPF505MHZ=6,}
+\DoxyCodeLine{00142\ \ \ TRFE\_BPF540MHZ=7,}
+\DoxyCodeLine{00143\ \ \ TRFE\_BPF575MHZ=8,}
+\DoxyCodeLine{00144\ \ \ TRFE\_BPF615MHZ=9,}
+\DoxyCodeLine{00145\ \ \ TRFE\_BPF670MHZ=10,}
+\DoxyCodeLine{00146\ \ \ TRFE\_BPF720MHZ=11,}
+\DoxyCodeLine{00147\ \ \ TRFE\_BPF760MHZ=12,}
+\DoxyCodeLine{00148\ \ \ TRFE\_BPF840MHZ=13,}
+\DoxyCodeLine{00149\ \ \ TRFE\_BPF890MHZ=14,}
+\DoxyCodeLine{00150\ \ \ TRFE\_BPF970MHZ=15,}
+\DoxyCodeLine{00151\ \ \ \textcolor{comment}{//\ Band\ 2,\ L\ band}}
+\DoxyCodeLine{00152\ \ \ TRFE\_BPF1300MHZ=0,}
+\DoxyCodeLine{00153\ \ \ TRFE\_BPF1320MHZ=1,}
+\DoxyCodeLine{00154\ \ \ TRFE\_BPF1360MHZ=2,}
+\DoxyCodeLine{00155\ \ \ TRFE\_BPF1410MHZ=3,}
+\DoxyCodeLine{00156\ \ \ TRFE\_BPF1445MHZ=4,}
+\DoxyCodeLine{00157\ \ \ TRFE\_BPF1460MHZ=5,}
+\DoxyCodeLine{00158\ \ \ TRFE\_BPF1490MHZ=6,}
+\DoxyCodeLine{00159\ \ \ TRFE\_BPF1530MHZ=7,}
+\DoxyCodeLine{00160\ \ \ TRFE\_BPF1560MHZ=8,}
+\DoxyCodeLine{00161\ \ \ TRFE\_BPF1590MHZ=9,}
+\DoxyCodeLine{00162\ \ \ TRFE\_BPF1640MHZ=10,}
+\DoxyCodeLine{00163\ \ \ TRFE\_BPF1660MHZ=11,}
+\DoxyCodeLine{00164\ \ \ TRFE\_BPF1680MHZ=12,}
+\DoxyCodeLine{00165\ \ \ TRFE\_BPF1700MHZ=13,}
+\DoxyCodeLine{00166\ \ \ TRFE\_BPF1720MHZ=14,}
+\DoxyCodeLine{00167\ \ \ TRFE\_BPF1750MHZ=15}
+\DoxyCodeLine{00168\ \}\ TUNER\_RF\_FILTER\_ENUM;}
+\DoxyCodeLine{00169\ }
+\DoxyCodeLine{00170\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00171\ \{}
+\DoxyCodeLine{00172\ \ \ TMGE\_P4\_0DB=0,}
+\DoxyCodeLine{00173\ \ \ TMGE\_P12\_0DB=1}
+\DoxyCodeLine{00174\ \}\ TUNER\_MIXER\_GAIN\_ENUM;}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00176\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00177\ \{}
+\DoxyCodeLine{00178\ \ \ TBCE\_LBAND=0,}
+\DoxyCodeLine{00179\ \ \ TBCE\_1=1,}
+\DoxyCodeLine{00180\ \ \ TBCE\_2=2,}
+\DoxyCodeLine{00181\ \ \ TBCE\_VUBAND=3}
+\DoxyCodeLine{00182\ \}\ TUNER\_BIAS\_CURRENT\_ENUM;}
+\DoxyCodeLine{00183\ }
+\DoxyCodeLine{00184\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00185\ \{}
+\DoxyCodeLine{00186\ \ \ TMFE\_27\_0MHZ=0,}
+\DoxyCodeLine{00187\ \ \ TMFE\_4\_6MHZ=8,}
+\DoxyCodeLine{00188\ \ \ TMFE\_4\_2MHZ=9,}
+\DoxyCodeLine{00189\ \ \ TMFE\_3\_8MHZ=10,}
+\DoxyCodeLine{00190\ \ \ TMFE\_3\_4MHZ=11,}
+\DoxyCodeLine{00191\ \ \ TMFE\_3\_0MHZ=12,}
+\DoxyCodeLine{00192\ \ \ TMFE\_2\_7MHZ=13,}
+\DoxyCodeLine{00193\ \ \ TMFE\_2\_3MHZ=14,}
+\DoxyCodeLine{00194\ \ \ TMFE\_1\_9MHZ=15}
+\DoxyCodeLine{00195\ \}\ TUNER\_MIXER\_FILTER\_ENUM;}
+\DoxyCodeLine{00196\ }
+\DoxyCodeLine{00197\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00198\ \{}
+\DoxyCodeLine{00199\ \ \ TIG1E\_N3\_0DB=0,}
+\DoxyCodeLine{00200\ \ \ TIG1E\_P6\_0DB=1}
+\DoxyCodeLine{00201\ \}\ TUNER\_IF\_GAIN1\_ENUM;}
+\DoxyCodeLine{00202\ }
+\DoxyCodeLine{00203\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00204\ \{}
+\DoxyCodeLine{00205\ \ \ TIGME\_LINEARITY=0,}
+\DoxyCodeLine{00206\ \ \ TIGME\_SENSITIVITY=1}
+\DoxyCodeLine{00207\ \}\ TUNER\_IF\_GAIN\_MODE\_ENUM;}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00209\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00210\ \{}
+\DoxyCodeLine{00211\ \ \ TIRFE\_21\_4MHZ=0,}
+\DoxyCodeLine{00212\ \ \ TIRFE\_21\_0MHZ=1,}
+\DoxyCodeLine{00213\ \ \ TIRFE\_17\_6MHZ=2,}
+\DoxyCodeLine{00214\ \ \ TIRFE\_14\_7MHZ=3,}
+\DoxyCodeLine{00215\ \ \ TIRFE\_12\_4MHZ=4,}
+\DoxyCodeLine{00216\ \ \ TIRFE\_10\_6MHZ=5,}
+\DoxyCodeLine{00217\ \ \ TIRFE\_9\_0MHZ=6,}
+\DoxyCodeLine{00218\ \ \ TIRFE\_7\_7MHZ=7,}
+\DoxyCodeLine{00219\ \ \ TIRFE\_6\_4MHZ=8,}
+\DoxyCodeLine{00220\ \ \ TIRFE\_5\_3MHZ=9,}
+\DoxyCodeLine{00221\ \ \ TIRFE\_4\_4MHZ=10,}
+\DoxyCodeLine{00222\ \ \ TIRFE\_3\_4MHZ=11,}
+\DoxyCodeLine{00223\ \ \ TIRFE\_2\_6MHZ=12,}
+\DoxyCodeLine{00224\ \ \ TIRFE\_1\_8MHZ=13,}
+\DoxyCodeLine{00225\ \ \ TIRFE\_1\_2MHZ=14,}
+\DoxyCodeLine{00226\ \ \ TIRFE\_1\_0MHZ=15}
+\DoxyCodeLine{00227\ \}\ TUNER\_IF\_RC\_FILTER\_ENUM;}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00229\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00230\ \{}
+\DoxyCodeLine{00231\ \ \ TIG2E\_P0\_0DB=0,}
+\DoxyCodeLine{00232\ \ \ TIG2E\_P3\_0DB=1,}
+\DoxyCodeLine{00233\ \ \ TIG2E\_P6\_0DB=2,}
+\DoxyCodeLine{00234\ \ \ TIG2E\_P9\_0DB=3}
+\DoxyCodeLine{00235\ \}\ TUNER\_IF\_GAIN2\_ENUM;}
+\DoxyCodeLine{00236\ }
+\DoxyCodeLine{00237\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00238\ \{}
+\DoxyCodeLine{00239\ \ \ TIG3E\_P0\_0DB=0,}
+\DoxyCodeLine{00240\ \ \ TIG3E\_P3\_0DB=1,}
+\DoxyCodeLine{00241\ \ \ TIG3E\_P6\_0DB=2,}
+\DoxyCodeLine{00242\ \ \ TIG3E\_P9\_0DB=3}
+\DoxyCodeLine{00243\ \}\ TUNER\_IF\_GAIN3\_ENUM;}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00245\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00246\ \{}
+\DoxyCodeLine{00247\ \ \ TIG4E\_P0\_0DB=0,}
+\DoxyCodeLine{00248\ \ \ TIG4E\_P1\_0DB=1,}
+\DoxyCodeLine{00249\ \ \ TIG4E\_P2\_0DB=2}
+\DoxyCodeLine{00250\ \}\ TUNER\_IF\_GAIN4\_ENUM;}
+\DoxyCodeLine{00251\ }
+\DoxyCodeLine{00252\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00253\ \{}
+\DoxyCodeLine{00254\ \ \ TIFE\_5\_50MHZ=0,}
+\DoxyCodeLine{00255\ \ \ TIFE\_5\_30MHZ=1,}
+\DoxyCodeLine{00256\ \ \ TIFE\_5\_00MHZ=2,}
+\DoxyCodeLine{00257\ \ \ TIFE\_4\_80MHZ=3,}
+\DoxyCodeLine{00258\ \ \ TIFE\_4\_60MHZ=4,}
+\DoxyCodeLine{00259\ \ \ TIFE\_4\_40MHZ=5,}
+\DoxyCodeLine{00260\ \ \ TIFE\_4\_30MHZ=6,}
+\DoxyCodeLine{00261\ \ \ TIFE\_4\_10MHZ=7,}
+\DoxyCodeLine{00262\ \ \ TIFE\_3\_90MHZ=8,}
+\DoxyCodeLine{00263\ \ \ TIFE\_3\_80MHZ=9,}
+\DoxyCodeLine{00264\ \ \ TIFE\_3\_70MHZ=10,}
+\DoxyCodeLine{00265\ \ \ TIFE\_3\_60MHZ=11,}
+\DoxyCodeLine{00266\ \ \ TIFE\_3\_40MHZ=12,}
+\DoxyCodeLine{00267\ \ \ TIFE\_3\_30MHZ=13,}
+\DoxyCodeLine{00268\ \ \ TIFE\_3\_20MHZ=14,}
+\DoxyCodeLine{00269\ \ \ TIFE\_3\_10MHZ=15,}
+\DoxyCodeLine{00270\ \ \ TIFE\_3\_00MHZ=16,}
+\DoxyCodeLine{00271\ \ \ TIFE\_2\_95MHZ=17,}
+\DoxyCodeLine{00272\ \ \ TIFE\_2\_90MHZ=18,}
+\DoxyCodeLine{00273\ \ \ TIFE\_2\_80MHZ=19,}
+\DoxyCodeLine{00274\ \ \ TIFE\_2\_75MHZ=20,}
+\DoxyCodeLine{00275\ \ \ TIFE\_2\_70MHZ=21,}
+\DoxyCodeLine{00276\ \ \ TIFE\_2\_60MHZ=22,}
+\DoxyCodeLine{00277\ \ \ TIFE\_2\_55MHZ=23,}
+\DoxyCodeLine{00278\ \ \ TIFE\_2\_50MHZ=24,}
+\DoxyCodeLine{00279\ \ \ TIFE\_2\_45MHZ=25,}
+\DoxyCodeLine{00280\ \ \ TIFE\_2\_40MHZ=26,}
+\DoxyCodeLine{00281\ \ \ TIFE\_2\_30MHZ=27,}
+\DoxyCodeLine{00282\ \ \ TIFE\_2\_28MHZ=28,}
+\DoxyCodeLine{00283\ \ \ TIFE\_2\_24MHZ=29,}
+\DoxyCodeLine{00284\ \ \ TIFE\_2\_20MHZ=30,}
+\DoxyCodeLine{00285\ \ \ TIFE\_2\_15MHZ=31}
+\DoxyCodeLine{00286\ \}\ TUNER\_IF\_FILTER\_ENUM;}
+\DoxyCodeLine{00287\ }
+\DoxyCodeLine{00288\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00289\ \{}
+\DoxyCodeLine{00290\ \ \ TIG5E\_P3\_0DB=0,}
+\DoxyCodeLine{00291\ \ \ TIG5E\_P6\_0DB=1,}
+\DoxyCodeLine{00292\ \ \ TIG5E\_P9\_0DB=2,}
+\DoxyCodeLine{00293\ \ \ TIG5E\_P12\_0DB=3,}
+\DoxyCodeLine{00294\ \ \ TIG5E\_P15\_0DB=4}
+\DoxyCodeLine{00295\ \}\ TUNER\_IF\_GAIN5\_ENUM;}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}}
+\DoxyCodeLine{00298\ \{}
+\DoxyCodeLine{00299\ \ \ TIG6E\_P3\_0DB=0,}
+\DoxyCodeLine{00300\ \ \ TIG6E\_P6\_0DB=1,}
+\DoxyCodeLine{00301\ \ \ TIG6E\_P9\_0DB=2,}
+\DoxyCodeLine{00302\ \ \ TIG6E\_P12\_0DB=3,}
+\DoxyCodeLine{00303\ \ \ TIG6E\_P15\_0DB=4}
+\DoxyCodeLine{00304\ \}\ TUNER\_IF\_GAIN6\_ENUM;}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00307\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ FCDHIDCMD\_H}}
+
+\end{DoxyCode}

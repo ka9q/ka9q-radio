@@ -1,0 +1,78 @@
+.TH "hid_device_info" 3 "KA9Q-Radio" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+hid_device_info
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <hidapi\&.h>\fP
+.SS "Data Fields"
+
+.in +1c
+.ti -1c
+.RI "char * \fBpath\fP"
+.br
+.ti -1c
+.RI "unsigned short \fBvendor_id\fP"
+.br
+.ti -1c
+.RI "unsigned short \fBproduct_id\fP"
+.br
+.ti -1c
+.RI "wchar_t * \fBserial_number\fP"
+.br
+.ti -1c
+.RI "unsigned short \fBrelease_number\fP"
+.br
+.ti -1c
+.RI "wchar_t * \fBmanufacturer_string\fP"
+.br
+.ti -1c
+.RI "wchar_t * \fBproduct_string\fP"
+.br
+.ti -1c
+.RI "unsigned short \fBusage_page\fP"
+.br
+.ti -1c
+.RI "unsigned short \fBusage\fP"
+.br
+.ti -1c
+.RI "int \fBinterface_number\fP"
+.br
+.ti -1c
+.RI "struct \fBhid_device_info\fP * \fBnext\fP"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+hidapi info structure 
+.SH "Field Documentation"
+.PP 
+.SS "int hid_device_info::interface_number"
+The USB interface which this logical device represents\&. Valid on both Linux implementations in all cases, and valid on the Windows implementation only if the device contains more than one interface\&. 
+.SS "wchar_t* hid_device_info::manufacturer_string"
+Manufacturer String 
+.SS "struct \fBhid_device_info\fP* hid_device_info::next"
+Pointer to the next device 
+.SS "char* hid_device_info::path"
+Platform-specific device path 
+.SS "unsigned short hid_device_info::product_id"
+Device Product ID 
+.SS "wchar_t* hid_device_info::product_string"
+Product string 
+.SS "unsigned short hid_device_info::release_number"
+Device Release Number in binary-coded decimal, also known as Device Version Number 
+.SS "wchar_t* hid_device_info::serial_number"
+Serial Number 
+.SS "unsigned short hid_device_info::usage"
+Usage for this Device/Interface (Windows/Mac only)\&. 
+.SS "unsigned short hid_device_info::usage_page"
+Usage Page for this Device/Interface (Windows/Mac only)\&. 
+.SS "unsigned short hid_device_info::vendor_id"
+Device Vendor ID 
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for KA9Q-Radio from the source code\&.

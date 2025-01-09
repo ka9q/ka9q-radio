@@ -1,0 +1,42 @@
+\doxysection{/\+Users/karn/src/ka9q-\/radio/ax25.h}
+\hypertarget{ax25_8h_source}{}\label{ax25_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//\ Functions\ defined\ in\ ax25.c}}
+\DoxyCodeLine{00002\ \textcolor{comment}{//\ Copyright\ 2018,\ Phil\ Karn,\ KA9Q}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#ifndef\ \_AX25\_H}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#define\ \_AX25\_H\ 1}}
+\DoxyCodeLine{00006\ }
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#include\ <stdio.h>}}
+\DoxyCodeLine{00008\ }
+\DoxyCodeLine{00009\ \textcolor{comment}{//\ AX.25\ frame,\ broken\ down}}
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#define\ MAX\_DIGI\ 10}}
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#define\ CALL\_LEN\ 16\ }\textcolor{comment}{//\ Actually\ could\ be\ 9}}
+\DoxyCodeLine{00012\ \textcolor{preprocessor}{\#define\ MAX\_INFO\ 256}}
+\DoxyCodeLine{00013\ }
+\DoxyCodeLine{00014\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structdigi}{digi}}\ \{}
+\DoxyCodeLine{00015\ \ \ \textcolor{keywordtype}{char}\ name[CALL\_LEN];}
+\DoxyCodeLine{00016\ \ \ \textcolor{keywordtype}{int}\ h;\ \textcolor{comment}{//\ Has\ been\ repeated\ bit}}
+\DoxyCodeLine{00017\ \};}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structax25__frame}{ax25\_frame}}\ \{}
+\DoxyCodeLine{00020\ \ \ \textcolor{keywordtype}{char}\ dest[CALL\_LEN];\ \ \textcolor{comment}{//\ printable\ representations}}
+\DoxyCodeLine{00021\ \ \ \textcolor{keywordtype}{char}\ source[CALL\_LEN];}
+\DoxyCodeLine{00022\ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structdigi}{digi}}\ digipeaters[MAX\_DIGI];}
+\DoxyCodeLine{00023\ \ \ \textcolor{keywordtype}{int}\ ndigi;}
+\DoxyCodeLine{00024\ \ \ \textcolor{keywordtype}{int}\ control;}
+\DoxyCodeLine{00025\ \ \ \textcolor{keywordtype}{int}\ type;}
+\DoxyCodeLine{00026\ \ \ \textcolor{keywordtype}{char}\ information[MAX\_INFO];}
+\DoxyCodeLine{00027\ \ \ \textcolor{keywordtype}{size\_t}\ info\_len;}
+\DoxyCodeLine{00028\ \};}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \textcolor{keywordtype}{int}\ ax25\_parse(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structax25__frame}{ax25\_frame}}\ *out,uint8\_t\ \textcolor{keyword}{const}\ *in,\textcolor{keywordtype}{int}\ len);}
+\DoxyCodeLine{00032\ \textcolor{keywordtype}{int}\ dump\_frame(FILE\ *stream,uint8\_t\ *frame,\textcolor{keywordtype}{int}\ bytes);}
+\DoxyCodeLine{00033\ \textcolor{keywordtype}{int}\ crc\_good(uint8\_t\ *frame,\textcolor{keywordtype}{int}\ length);}
+\DoxyCodeLine{00034\ \textcolor{keywordtype}{char}\ *get\_callsign(\textcolor{keywordtype}{char}\ *\mbox{\hyperlink{unionresult}{result}},uint8\_t\ \textcolor{keyword}{const}\ *in);}
+\DoxyCodeLine{00035\ \textcolor{keywordtype}{int}\ decode\_base91(\textcolor{keywordtype}{char}\ *in);}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

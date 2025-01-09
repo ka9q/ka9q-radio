@@ -1,0 +1,309 @@
+\doxysection{/\+Users/karn/src/ka9q-\/radio/misc.h}
+\hypertarget{misc_8h_source}{}\label{misc_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//\ Miscellaneous\ constants,\ macros\ and\ function\ prototypes\ for\ ka9q-\/radio}}
+\DoxyCodeLine{00002\ \textcolor{comment}{//\ Copyright\ 2018-\/2023\ Phil\ Karn,\ KA9Q}}
+\DoxyCodeLine{00003\ \textcolor{preprocessor}{\#ifndef\ \_MISC\_H}}
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#define\ \_MISC\_H\ 1}}
+\DoxyCodeLine{00005\ }
+\DoxyCodeLine{00006\ \textcolor{comment}{//\ Note:\ files\ that\ include\ <math.h>\ before\ us\ must\ define\ \_GNU\_SOURCE\ prior\ to\ including\ math.h}}
+\DoxyCodeLine{00007\ \textcolor{comment}{//\ or\ Linux\ will\ generate\ warnings\ about\ a\ lack\ of\ declarations\ for\ sincos\ and\ sincosf.}}
+\DoxyCodeLine{00008\ \textcolor{comment}{//\ Apparently\ they\ are\ defined\ in\ math.h\ only\ when\ \_GNU\_SOURCE\ is\ defined.}}
+\DoxyCodeLine{00009\ \textcolor{comment}{//\ Our\ re-\/defining\ \_GNU\_SOURCE\ and\ re-\/including\ math.h\ doesn't\ help\ if\ it\ has\ already\ been\ included}}
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#ifndef\ \_GNU\_SOURCE}}
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#define\ \_GNU\_SOURCE\ 1}}
+\DoxyCodeLine{00012\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00013\ }
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ <pthread.h>}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ <stdint.h>}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ <limits.h>}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ <complex.h>}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ <math.h>}\ \textcolor{comment}{//\ Get\ M\_PI}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ <stdlib.h>}\ \textcolor{comment}{//\ for\ ldiv(),\ free()}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ <stdbool.h>}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#ifdef\ \_\_linux\_\_}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ <bsd/string.h>}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00024\ \textcolor{preprocessor}{\#include\ <assert.h>}}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00026\ \textcolor{comment}{//\ Must\ be\ a\ macro\ so\ \_\_FILE\_\_\ and\ \_\_TIMESTAMP\_\_\ will\ substitute\ correctly}}
+\DoxyCodeLine{00027\ \textcolor{preprocessor}{\#define\ VERSION()\ \{\ fprintf(stdout,"{}KA9Q\ Multichannel\ SDR\ \%s\ last\ modified\ \%s\(\backslash\)n"{},\_\_FILE\_\_,\_\_TIMESTAMP\_\_);\ \(\backslash\)}}
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \ \ \ \ fprintf(stdout,"{}Copyright\ 2023,\ Phil\ Karn,\ KA9Q.\ May\ be\ used\ under\ the\ terms\ of\ the\ GNU\ Public\ License\(\backslash\)n"{});\}}}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \textcolor{comment}{//\ 16-\/bit\ floating\ point\ is\ not\ consistent\ across\ platforms}}
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#ifdef\ \_\_arm\_\_\ \ }\textcolor{comment}{//\ ARM\ platform}}
+\DoxyCodeLine{00033\ \textcolor{preprocessor}{\ \ \#if\ defined(\_\_ARM\_FP16\_FORMAT\_IEEE)}}
+\DoxyCodeLine{00034\ \ \ \ \ \textcolor{keyword}{typedef}\ \_\_fp16\ float16\_t;\ \ \textcolor{comment}{//\ ARM-\/specific\ half-\/precision\ support}}
+\DoxyCodeLine{00035\ \textcolor{preprocessor}{\ \ \#else}}
+\DoxyCodeLine{00036\ \ \ \ \ \textcolor{keyword}{typedef}\ \textcolor{keywordtype}{float}\ float16\_t;\ \ \textcolor{comment}{//\ Fallback\ on\ older\ ARM\ CPUs}}
+\DoxyCodeLine{00037\ \textcolor{preprocessor}{\ \ \#endif}}
+\DoxyCodeLine{00038\ \textcolor{preprocessor}{\ \ \#define\ HAS\_FLOAT16\ =\ 1}}
+\DoxyCodeLine{00039\ \textcolor{preprocessor}{\#else\ \ }\textcolor{comment}{//\ Non-\/ARM\ platforms}}
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\ \ \#if\ defined(\_\_FLT16\_MAX\_\_)\ \ }\textcolor{comment}{//\ Check\ if\ \_Float16\ is\ natively\ supported}}
+\DoxyCodeLine{00041\ \ \ \ \ \textcolor{keyword}{typedef}\ \_Float16\ float16\_t;}
+\DoxyCodeLine{00042\ \textcolor{preprocessor}{\ \ \ \ \#define\ HAS\_FLOAT16\ =\ 1}}
+\DoxyCodeLine{00043\ \textcolor{preprocessor}{\ \ \#endif}}
+\DoxyCodeLine{00044\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00045\ }
+\DoxyCodeLine{00046\ \textcolor{preprocessor}{\#ifndef\ M\_PIf}}
+\DoxyCodeLine{00047\ \textcolor{preprocessor}{\#define\ M\_PIf\ ((float)(M\_PI))}}
+\DoxyCodeLine{00048\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00049\ \textcolor{preprocessor}{\#ifndef\ M\_1\_PIf}}
+\DoxyCodeLine{00050\ \textcolor{preprocessor}{\#define\ M\_1\_PIf\ (1\ /\ M\_PIf)}}
+\DoxyCodeLine{00051\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \textcolor{preprocessor}{\#define\ M\_1\_2PIf\ (0.5f\ *\ M\_1\_PIf)\ }\textcolor{comment}{//\ fraction\ of\ a\ rotation\ in\ one\ radian}}
+\DoxyCodeLine{00054\ \textcolor{preprocessor}{\#define\ DEGPRA\ (180./M\_PI)}}
+\DoxyCodeLine{00055\ \textcolor{preprocessor}{\#define\ RAPDEG\ (M\_PI/180.)}}
+\DoxyCodeLine{00056\ \textcolor{preprocessor}{\#define\ GPS\_UTC\_OFFSET\ (18)\ }\textcolor{comment}{//\ GPS\ ahead\ of\ utc\ by\ 18\ seconds\ -\/\ make\ this\ a\ table!}}
+\DoxyCodeLine{00057\ \textcolor{preprocessor}{\#define\ UNIX\_EPOCH\ ((time\_t)315964800)\ }\textcolor{comment}{//\ GPS\ epoch\ on\ unix\ time\ scale}}
+\DoxyCodeLine{00058\ }
+\DoxyCodeLine{00059\ \textcolor{preprocessor}{\#define\ BOLTZMANN\ (1.380649e-\/23)\ }\textcolor{comment}{//\ Boltzmann's\ constant,\ J/K}}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00061\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ SCALE16\ =\ 1./INT16\_MAX;}
+\DoxyCodeLine{00062\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ SCALE12\ =\ 1/2048.;}
+\DoxyCodeLine{00063\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ SCALE8\ =\ 1./INT8\_MAX;\ \ \textcolor{comment}{//\ Scale\ signed\ 8-\/bit\ int\ to\ float\ in\ range\ -\/1,\ +1}}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ }
+\DoxyCodeLine{00066\ \textcolor{keywordtype}{void}\ realtime(\textcolor{keywordtype}{void});}
+\DoxyCodeLine{00067\ }
+\DoxyCodeLine{00068\ \textcolor{comment}{//\ I\ *hate*\ this\ sort\ of\ pointless,\ stupid,\ gratuitous\ incompatibility\ that}}
+\DoxyCodeLine{00069\ \textcolor{comment}{//\ makes\ a\ lot\ of\ code\ impossible\ to\ read\ and\ debug}}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00071\ \textcolor{preprocessor}{\#ifdef\ \_\_APPLE\_\_}}
+\DoxyCodeLine{00072\ \textcolor{comment}{//\ OSX\ doesn't\ have\ pthread\_barrier\_*}}
+\DoxyCodeLine{00073\ \textcolor{preprocessor}{\#include\ <pthread.h>}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \textcolor{keyword}{typedef}\ \textcolor{keywordtype}{int}\ pthread\_barrierattr\_t;}
+\DoxyCodeLine{00076\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct}}
+\DoxyCodeLine{00077\ \{}
+\DoxyCodeLine{00078\ \ \ \ \ pthread\_mutex\_t\ mutex;}
+\DoxyCodeLine{00079\ \ \ \ \ pthread\_cond\_t\ cond;}
+\DoxyCodeLine{00080\ \ \ \ \ \textcolor{keywordtype}{int}\ count;}
+\DoxyCodeLine{00081\ \ \ \ \ \textcolor{keywordtype}{int}\ tripCount;}
+\DoxyCodeLine{00082\ \}\ pthread\_barrier\_t;}
+\DoxyCodeLine{00083\ \textcolor{keywordtype}{int}\ pthread\_barrier\_init(pthread\_barrier\_t\ *barrier,\ \textcolor{keyword}{const}\ pthread\_barrierattr\_t\ *attr,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ count);}
+\DoxyCodeLine{00084\ \textcolor{keywordtype}{int}\ pthread\_barrier\_destroy(pthread\_barrier\_t\ *barrier);}
+\DoxyCodeLine{00085\ \textcolor{keywordtype}{int}\ pthread\_barrier\_wait(pthread\_barrier\_t\ *barrier);}
+\DoxyCodeLine{00086\ }
+\DoxyCodeLine{00087\ \textcolor{comment}{//\ The\ Linux\ version\ of\ pthread\_setname\_np\ takes\ two\ args,\ the\ OSx\ version\ only\ one}}
+\DoxyCodeLine{00088\ \textcolor{comment}{//\ The\ GNU\ malloc\_usable\_size()\ does\ exactly\ the\ same\ thing\ as\ the\ BSD/OSX\ malloc\_size()}}
+\DoxyCodeLine{00089\ \textcolor{comment}{//\ except\ that\ the\ former\ is\ defined\ in\ <malloc.h>,\ the\ latter\ is\ in\ <malloc/malloc.h>}}
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \textcolor{preprocessor}{\#define\ pthread\_setname(x)\ pthread\_setname\_np(x)}}
+\DoxyCodeLine{00092\ \textcolor{preprocessor}{\#include\ <malloc/malloc.h>}}
+\DoxyCodeLine{00093\ \textcolor{preprocessor}{\#define\ malloc\_usable\_size(x)\ malloc\_size(x)}}
+\DoxyCodeLine{00094\ \textcolor{preprocessor}{\#define\ sincos(x,s,c)\ \_\_sincos((x),(s),(c))}}
+\DoxyCodeLine{00095\ \textcolor{preprocessor}{\#define\ sincosf(x,s,c)\ \_\_sincosf((x),(s),(c))}}
+\DoxyCodeLine{00096\ \textcolor{preprocessor}{\#define\ sincospi(x,s,c)\ \_\_sincospi((x),(s),(c))}}
+\DoxyCodeLine{00097\ \textcolor{preprocessor}{\#define\ sincospif(x,s,c)\ \_\_sincospif((x),(s),(c))}}
+\DoxyCodeLine{00098\ }
+\DoxyCodeLine{00099\ \textcolor{preprocessor}{\#else\ }\textcolor{comment}{//\ !\_\_APPLE\_\_}}
+\DoxyCodeLine{00100\ \textcolor{comment}{//\ Not\ apple\ (Linux,\ etc)}}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \textcolor{preprocessor}{\#include\ <malloc.h>}}
+\DoxyCodeLine{00103\ \textcolor{preprocessor}{\#define\ pthread\_setname(x)\ pthread\_setname\_np(pthread\_self(),(x))}}
+\DoxyCodeLine{00104\ \textcolor{comment}{//\ Does\ anyone\ implement\ these\ natively\ for\ Linux?}}
+\DoxyCodeLine{00105\ \textcolor{preprocessor}{\#define\ sincospi(x,s,c)\ sincos((x)*M\_PI,(s),(c))}}
+\DoxyCodeLine{00106\ \textcolor{preprocessor}{\#define\ sincospif(x,s,c)\ sincosf((x)*M\_PIf,(s),(c))}}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00108\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ ifdef\ \_\_APPLE\_\_}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \textcolor{comment}{//\ Portable\ mutex\ initializer\ for\ recursive\ mutexes}}
+\DoxyCodeLine{00111\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{int}\ init\_recursive\_mutex(pthread\_mutex\_t\ *m)\{}
+\DoxyCodeLine{00112\ \ \ pthread\_mutexattr\_t\ attr;}
+\DoxyCodeLine{00113\ \ \ pthread\_mutexattr\_init(\&attr);}
+\DoxyCodeLine{00114\ \ \ pthread\_mutexattr\_settype(\&attr,PTHREAD\_MUTEX\_RECURSIVE);}
+\DoxyCodeLine{00115\ \ \ \textcolor{keywordflow}{return}\ pthread\_mutex\_init(m,\&attr);}
+\DoxyCodeLine{00116\ \}}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00119\ \textcolor{comment}{//\ Stolen\ from\ the\ Linux\ kernel\ -\/-\/\ enforce\ type\ matching\ of\ arguments}}
+\DoxyCodeLine{00120\ \textcolor{preprocessor}{\#define\ min(x,y)\ (\{\ \ \ \ \ \ \ \ \ \(\backslash\)}}
+\DoxyCodeLine{00121\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ typeof(x)\ \_x\ =\ (x);\ \(\backslash\)}}
+\DoxyCodeLine{00122\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ typeof(y)\ \_y\ =\ (y);\ \(\backslash\)}}
+\DoxyCodeLine{00123\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ (void)\ (\&\_x\ ==\ \&\_y);\ \ \ \ \(\backslash\)}}
+\DoxyCodeLine{00124\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \_x\ <\ \_y\ ?\ \_x\ :\ \_y;\ \})}}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00126\ \textcolor{preprocessor}{\#define\ max(x,y)\ (\{\ \(\backslash\)}}
+\DoxyCodeLine{00127\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ typeof(x)\ \_x\ =\ (x);\ \(\backslash\)}}
+\DoxyCodeLine{00128\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ typeof(y)\ \_y\ =\ (y);\ \(\backslash\)}}
+\DoxyCodeLine{00129\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ (void)\ (\&\_x\ ==\ \&\_y);\ \ \ \ \(\backslash\)}}
+\DoxyCodeLine{00130\ \textcolor{preprocessor}{\ \ \ \ \ \ \ \ \_x\ >\ \_y\ ?\ \_x\ :\ \_y;\ \})}}
+\DoxyCodeLine{00131\ }
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \textcolor{preprocessor}{\#define\ dB2power(x)\ (powf(10.0f,(x)/10.0f))}}
+\DoxyCodeLine{00134\ \textcolor{preprocessor}{\#define\ power2dB(x)\ (10.0f\ *\ log10f(x))}}
+\DoxyCodeLine{00135\ \textcolor{preprocessor}{\#define\ dB2voltage(x)\ (powf(10.0f,\ (x)/20.0f))}}
+\DoxyCodeLine{00136\ \textcolor{preprocessor}{\#define\ voltage2dB(x)\ (20.0f\ *\ log10f(x))}}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \textcolor{comment}{//\ Cos(x)\ +\ j*sin(x)}}
+\DoxyCodeLine{00139\ \textcolor{preprocessor}{\#define\ cisf(x)\ csincosf(x)}}
+\DoxyCodeLine{00140\ \textcolor{preprocessor}{\#define\ cispif(x)\ csincospif(x)}}
+\DoxyCodeLine{00141\ \textcolor{preprocessor}{\#define\ cis(x)\ csincos(x)}}
+\DoxyCodeLine{00142\ \textcolor{preprocessor}{\#define\ cispi(x)\ csincospi(x)}}
+\DoxyCodeLine{00143\ }
+\DoxyCodeLine{00144\ \textcolor{keyword}{extern}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *App\_path;}
+\DoxyCodeLine{00145\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{int}\ Verbose;}
+\DoxyCodeLine{00146\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{char}\ \textcolor{keyword}{const}\ *Months[12];}
+\DoxyCodeLine{00147\ }
+\DoxyCodeLine{00148\ \textcolor{keywordtype}{int}\ dist\_path(\textcolor{keywordtype}{char}\ *path,\textcolor{keywordtype}{int}\ path\_len,\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *fname);}
+\DoxyCodeLine{00149\ \textcolor{keywordtype}{char}\ *format\_gpstime(\textcolor{keywordtype}{char}\ *\mbox{\hyperlink{unionresult}{result}},\textcolor{keywordtype}{int}\ len,int64\_t\ t);}
+\DoxyCodeLine{00150\ \textcolor{keywordtype}{char}\ *format\_gpstime\_iso8601(\textcolor{keywordtype}{char}\ *\mbox{\hyperlink{unionresult}{result}},\textcolor{keywordtype}{int}\ len,int64\_t\ t);}
+\DoxyCodeLine{00151\ \textcolor{keywordtype}{char}\ *format\_utctime(\textcolor{keywordtype}{char}\ *\mbox{\hyperlink{unionresult}{result}},\textcolor{keywordtype}{int}\ len,int64\_t\ t);}
+\DoxyCodeLine{00152\ \textcolor{keywordtype}{char}\ *format\_utctime\_iso8601(\textcolor{keywordtype}{char}\ *\mbox{\hyperlink{unionresult}{result}},\textcolor{keywordtype}{int}\ len,int64\_t\ t);}
+\DoxyCodeLine{00153\ \textcolor{keywordtype}{char}\ *ftime(\textcolor{keywordtype}{char}\ *\mbox{\hyperlink{unionresult}{result}},\textcolor{keywordtype}{int}\ size,int64\_t\ t);}
+\DoxyCodeLine{00154\ \textcolor{keywordtype}{void}\ normalize\_time(\textcolor{keyword}{struct}\ timespec\ *x);}
+\DoxyCodeLine{00155\ \textcolor{keywordtype}{double}\ parse\_frequency(\textcolor{keywordtype}{char}\ \textcolor{keyword}{const}\ *,\textcolor{keywordtype}{bool});}
+\DoxyCodeLine{00156\ uint32\_t\ nextfastfft(uint32\_t\ n);}
+\DoxyCodeLine{00157\ \textcolor{keywordtype}{int}\ pipefill(\textcolor{keywordtype}{int},\textcolor{keywordtype}{void}\ *,\textcolor{keywordtype}{int});}
+\DoxyCodeLine{00158\ \textcolor{keywordtype}{void}\ chomp(\textcolor{keywordtype}{char}\ *);}
+\DoxyCodeLine{00159\ uint32\_t\ ElfHash(uint8\_t\ \textcolor{keyword}{const}\ *s,\textcolor{keywordtype}{int}\ length);}
+\DoxyCodeLine{00160\ uint32\_t\ ElfHashString(\textcolor{keywordtype}{char}\ \textcolor{keyword}{const}\ *s);}
+\DoxyCodeLine{00161\ uint32\_t\ fnv1hash(\textcolor{keyword}{const}\ uint8\_t\ *s,\textcolor{keywordtype}{int}\ length);}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00163\ \textcolor{comment}{//\ Modified\ Bessel\ functions}}
+\DoxyCodeLine{00164\ \textcolor{keywordtype}{float}\ i0(\textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ z);\ \textcolor{comment}{//\ 0th\ kind}}
+\DoxyCodeLine{00165\ \textcolor{keywordtype}{float}\ i1(\textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ z);\ \textcolor{comment}{//\ 1st\ kind}}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00167\ \textcolor{keywordtype}{float}\ xi(\textcolor{keywordtype}{float}\ thetasq);}
+\DoxyCodeLine{00168\ \textcolor{keywordtype}{float}\ fm\_snr(\textcolor{keywordtype}{float}\ r);}
+\DoxyCodeLine{00169\ }
+\DoxyCodeLine{00170\ \textcolor{comment}{//\ Convert\ floating\ point\ sample\ to\ 16-\/bit\ integer,\ with\ clipping}}
+\DoxyCodeLine{00171\ \textcolor{keyword}{inline}\ \textcolor{keyword}{static}\ int16\_t\ scaleclip(\textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ x)\{}
+\DoxyCodeLine{00172\ \ \ \textcolor{keywordflow}{return}\ (x\ >=\ 1.0)\ ?\ INT16\_MAX\ :\ (x\ <=\ -\/1.0)\ ?\ -\/INT16\_MAX\ :\ (int16\_t)(INT16\_MAX\ *\ x);}
+\DoxyCodeLine{00173\ \}}
+\DoxyCodeLine{00174\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ complex\ \textcolor{keywordtype}{float}\ csincosf(\textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ x)\{}
+\DoxyCodeLine{00175\ \ \ \textcolor{keywordtype}{float}\ s,c;}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00177\ \ \ sincosf(x,\&s,\&c);}
+\DoxyCodeLine{00178\ \ \ \textcolor{keywordflow}{return}\ CMPLXF(c,s);}
+\DoxyCodeLine{00179\ \}}
+\DoxyCodeLine{00180\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ complex\ \textcolor{keywordtype}{float}\ csincospif(\textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ x)\{}
+\DoxyCodeLine{00181\ \ \ \textcolor{keywordtype}{float}\ s,c;}
+\DoxyCodeLine{00182\ \ \ sincospif(x,\&s,\&c);}
+\DoxyCodeLine{00183\ \ \ \textcolor{keywordflow}{return}\ CMPLXF(c,s);}
+\DoxyCodeLine{00184\ \}}
+\DoxyCodeLine{00185\ \textcolor{comment}{//\ return\ unit\ magnitude\ complex\ number\ with\ given\ phase\ x}}
+\DoxyCodeLine{00186\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ complex\ \textcolor{keywordtype}{double}\ csincos(\textcolor{keywordtype}{double}\ \textcolor{keyword}{const}\ x)\{}
+\DoxyCodeLine{00187\ \ \ \textcolor{keywordtype}{double}\ s,c;}
+\DoxyCodeLine{00188\ }
+\DoxyCodeLine{00189\ \ \ sincos(x,\&s,\&c);}
+\DoxyCodeLine{00190\ \ \ \textcolor{keywordflow}{return}\ CMPLX(c,s);}
+\DoxyCodeLine{00191\ \}}
+\DoxyCodeLine{00192\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ complex\ \textcolor{keywordtype}{double}\ csincospi(\textcolor{keywordtype}{double}\ \textcolor{keyword}{const}\ x)\{}
+\DoxyCodeLine{00193\ \ \ \textcolor{keywordtype}{double}\ s,c;}
+\DoxyCodeLine{00194\ \ \ sincospi(x,\&s,\&c);}
+\DoxyCodeLine{00195\ \ \ \textcolor{keywordflow}{return}\ CMPLX(c,s);}
+\DoxyCodeLine{00196\ \}}
+\DoxyCodeLine{00197\ \textcolor{comment}{//\ Complex\ norm\ (sum\ of\ squares\ of\ real\ and\ imaginary\ parts)}}
+\DoxyCodeLine{00198\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{float}\ cnrmf(complex\ \textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ x)\{}
+\DoxyCodeLine{00199\ \ \ \textcolor{keywordflow}{return}\ crealf(x)*crealf(x)\ +\ cimagf(x)\ *\ cimagf(x);}
+\DoxyCodeLine{00200\ \}}
+\DoxyCodeLine{00201\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{double}\ cnrm(complex\ \textcolor{keywordtype}{double}\ \textcolor{keyword}{const}\ x)\{}
+\DoxyCodeLine{00202\ \ \ \textcolor{keywordflow}{return}\ creal(x)*creal(x)\ +\ cimag(x)\ *\ cimag(x);}
+\DoxyCodeLine{00203\ \}}
+\DoxyCodeLine{00204\ \textcolor{comment}{//\ Fast\ approximate\ square\ root,\ for\ signal\ magnitudes}}
+\DoxyCodeLine{00205\ \textcolor{comment}{//\ https://dspguru.com/dsp/tricks/magnitude-\/estimator/}}
+\DoxyCodeLine{00206\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{float}\ approx\_magf(complex\ \textcolor{keywordtype}{float}\ x)\{}
+\DoxyCodeLine{00207\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ Alpha\ =\ 0.947543636291;}
+\DoxyCodeLine{00208\ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ Beta\ =\ \ 0.392485425092;}
+\DoxyCodeLine{00209\ }
+\DoxyCodeLine{00210\ \ \ \textcolor{keywordtype}{float}\ absr\ =\ fabsf(\_\_real\_\_\ x);}
+\DoxyCodeLine{00211\ \ \ \textcolor{keywordtype}{float}\ absi\ =\ fabsf(\_\_imag\_\_\ x);}
+\DoxyCodeLine{00212\ }
+\DoxyCodeLine{00213\ \ \ \textcolor{keywordflow}{return}\ Alpha\ *\ max(absr,absi)\ +\ Beta\ *\ min(absr,absi);}
+\DoxyCodeLine{00214\ \}}
+\DoxyCodeLine{00215\ }
+\DoxyCodeLine{00216\ \textcolor{comment}{//\ Result\ =\ a\ -\/\ b}}
+\DoxyCodeLine{00217\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{void}\ time\_sub(\textcolor{keyword}{struct}\ timespec\ *\mbox{\hyperlink{unionresult}{result}},\textcolor{keyword}{struct}\ timespec\ \textcolor{keyword}{const}\ *a,\ \textcolor{keyword}{struct}\ timespec\ \textcolor{keyword}{const}\ *b)\{}
+\DoxyCodeLine{00218\ \ \ \mbox{\hyperlink{unionresult}{result}}-\/>tv\_sec\ =\ a-\/>tv\_sec\ -\/\ b-\/>tv\_sec;}
+\DoxyCodeLine{00219\ \ \ \mbox{\hyperlink{unionresult}{result}}-\/>tv\_nsec\ =\ a-\/>tv\_nsec\ -\/\ b-\/>tv\_nsec;}
+\DoxyCodeLine{00220\ \ \ normalize\_time(\mbox{\hyperlink{unionresult}{result}});}
+\DoxyCodeLine{00221\ \}}
+\DoxyCodeLine{00222\ \textcolor{comment}{//\ Result\ =\ a\ +\ b}}
+\DoxyCodeLine{00223\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{void}\ time\_add(\textcolor{keyword}{struct}\ timespec\ *\mbox{\hyperlink{unionresult}{result}},\textcolor{keyword}{struct}\ timespec\ \textcolor{keyword}{const}\ *a,\ \textcolor{keyword}{struct}\ timespec\ \textcolor{keyword}{const}\ *b)\{}
+\DoxyCodeLine{00224\ \ \ \mbox{\hyperlink{unionresult}{result}}-\/>tv\_sec\ =\ a-\/>tv\_sec\ +\ b-\/>tv\_sec;}
+\DoxyCodeLine{00225\ \ \ \mbox{\hyperlink{unionresult}{result}}-\/>tv\_nsec\ =\ a-\/>tv\_nsec\ +\ b-\/>tv\_nsec;}
+\DoxyCodeLine{00226\ \ \ normalize\_time(\mbox{\hyperlink{unionresult}{result}});}
+\DoxyCodeLine{00227\ \}}
+\DoxyCodeLine{00228\ }
+\DoxyCodeLine{00229\ \textcolor{comment}{//\ Compare\ two\ timespec\ structures,\ assuming\ normalized}}
+\DoxyCodeLine{00230\ \textcolor{comment}{//\ a\ >\ b:\ +1}}
+\DoxyCodeLine{00231\ \textcolor{comment}{//\ a\ <\ b:\ -\/1}}
+\DoxyCodeLine{00232\ \textcolor{comment}{//\ a\ ==\ b:\ 0}}
+\DoxyCodeLine{00233\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{int}\ time\_cmp(\textcolor{keyword}{struct}\ timespec\ \textcolor{keyword}{const}\ *a,\textcolor{keyword}{struct}\ timespec\ \textcolor{keyword}{const}\ *b)\{}
+\DoxyCodeLine{00234\ \ \ \textcolor{comment}{//\ Will\ this\ long\ conditional\ help\ the\ optimizer?}}
+\DoxyCodeLine{00235\ \ \ \textcolor{keywordflow}{return}\ (a-\/>tv\_sec\ >\ b-\/>tv\_sec)\ ?\ 1}
+\DoxyCodeLine{00236\ \ \ \ \ :\ (a-\/>tv\_sec\ <\ b-\/>tv\_sec)\ ?\ -\/1}
+\DoxyCodeLine{00237\ \ \ \ \ :\ (a-\/>tv\_nsec\ >\ b-\/>tv\_nsec)\ ?\ +1}
+\DoxyCodeLine{00238\ \ \ \ \ :\ (a-\/>tv\_nsec\ <\ b-\/>tv\_nsec)\ ?\ -\/1}
+\DoxyCodeLine{00239\ \ \ \ \ :\ 0;}
+\DoxyCodeLine{00240\ \}}
+\DoxyCodeLine{00241\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{long}\ \textcolor{keywordtype}{long}\ \textcolor{keyword}{const}\ BILLION\ =\ 1000000000LL;}
+\DoxyCodeLine{00242\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{long}\ \textcolor{keyword}{const}\ MILLION\ =\ 1000000L;}
+\DoxyCodeLine{00243\ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}\ \textcolor{keyword}{const}\ THOUSAND\ =\ 1000;}
+\DoxyCodeLine{00244\ }
+\DoxyCodeLine{00245\ \textcolor{comment}{//\ Convert\ timespec\ (seconds,\ nanoseconds)\ to\ integer\ nanoseconds}}
+\DoxyCodeLine{00246\ \textcolor{comment}{//\ Integer\ nanoseconds\ overflows\ past\ 584.94242\ years.\ That's\ probably\ long\ enough}}
+\DoxyCodeLine{00247\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{long}\ \textcolor{keywordtype}{long}\ ts2ns(\textcolor{keyword}{struct}\ timespec\ \textcolor{keyword}{const}\ *ts)\{}
+\DoxyCodeLine{00248\ \ \ \textcolor{keywordflow}{return}\ ts-\/>tv\_sec\ *\ BILLION\ +\ ts-\/>tv\_nsec;}
+\DoxyCodeLine{00249\ \}}
+\DoxyCodeLine{00250\ \textcolor{comment}{//\ Convert\ integer\ nanosec\ count\ to\ timspec}}
+\DoxyCodeLine{00251\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{void}\ ns2ts(\textcolor{keyword}{struct}\ timespec\ *ts,\textcolor{keywordtype}{long}\ \textcolor{keywordtype}{long}\ ns)\{}
+\DoxyCodeLine{00252\ \ \ lldiv\_t\ r\ =\ lldiv(ns,BILLION);}
+\DoxyCodeLine{00253\ \ \ ts-\/>tv\_sec\ =\ r.quot;}
+\DoxyCodeLine{00254\ \ \ ts-\/>tv\_nsec\ =\ r.rem;}
+\DoxyCodeLine{00255\ \}}
+\DoxyCodeLine{00256\ }
+\DoxyCodeLine{00257\ \textcolor{comment}{//\ Return\ time\ of\ day\ as\ seconds\ (truncated)\ from\ UTC\ epoch}}
+\DoxyCodeLine{00258\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ time\_t\ utc\_time\_sec(\textcolor{keywordtype}{void})\{}
+\DoxyCodeLine{00259\ \ \ \textcolor{keyword}{struct\ }timespec\ now;}
+\DoxyCodeLine{00260\ \ \ clock\_gettime(CLOCK\_REALTIME,\&now);}
+\DoxyCodeLine{00261\ \ \ \textcolor{keywordflow}{return}\ (time\_t)now.tv\_sec;}
+\DoxyCodeLine{00262\ \}}
+\DoxyCodeLine{00263\ \textcolor{comment}{//\ Same\ from\ GPS\ epoch}}
+\DoxyCodeLine{00264\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ time\_t\ gps\_time\_sec(\textcolor{keywordtype}{void})\{}
+\DoxyCodeLine{00265\ \ \ \textcolor{keywordflow}{return}\ utc\_time\_sec()\ -\/\ (UNIX\_EPOCH\ -\/\ GPS\_UTC\_OFFSET);}
+\DoxyCodeLine{00266\ \}}
+\DoxyCodeLine{00267\ }
+\DoxyCodeLine{00268\ \textcolor{comment}{//\ Return\ time\ of\ day\ as\ nanosec\ from\ UTC\ epoch}}
+\DoxyCodeLine{00269\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{long}\ \textcolor{keywordtype}{long}\ utc\_time\_ns(\textcolor{keywordtype}{void})\{}
+\DoxyCodeLine{00270\ \ \ \textcolor{keyword}{struct\ }timespec\ now;}
+\DoxyCodeLine{00271\ \ \ clock\_gettime(CLOCK\_REALTIME,\&now);}
+\DoxyCodeLine{00272\ \ \ \textcolor{keywordflow}{return}\ ts2ns(\&now);}
+\DoxyCodeLine{00273\ \}}
+\DoxyCodeLine{00274\ }
+\DoxyCodeLine{00275\ \textcolor{comment}{//\ Return\ time\ of\ day\ as\ nanosec\ from\ GPS\ epoch}}
+\DoxyCodeLine{00276\ \textcolor{comment}{//\ Note:\ assumes\ fixed\ leap\ second\ offset}}
+\DoxyCodeLine{00277\ \textcolor{comment}{//\ Could\ be\ better\ derived\ direct\ from\ a\ GPS\ receiver\ without\ applying\ the\ leap\ second\ offset}}
+\DoxyCodeLine{00278\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{long}\ \textcolor{keywordtype}{long}\ gps\_time\_ns(\textcolor{keywordtype}{void})\{}
+\DoxyCodeLine{00279\ \ \ \textcolor{keywordflow}{return}\ utc\_time\_ns()\ -\/\ BILLION\ *\ (UNIX\_EPOCH\ -\/\ GPS\_UTC\_OFFSET);}
+\DoxyCodeLine{00280\ \}}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00282\ \textcolor{comment}{//\ How\ the\ free()\ library\ routine\ should\ have\ been\ all\ along:\ null\ the\ pointer\ after\ freeing!}}
+\DoxyCodeLine{00283\ \textcolor{preprocessor}{\#define\ FREE(p)\ (free(p),\ p\ =\ NULL)}}
+\DoxyCodeLine{00284\ }
+\DoxyCodeLine{00285\ \textcolor{comment}{//\ Create\ allocation\ followed\ immediately\ by\ its\ mirror,\ useful\ for\ ring\ buffers}}
+\DoxyCodeLine{00286\ \textcolor{comment}{//\ size\ is\ rounded\ up\ to\ next\ page\ boundary}}
+\DoxyCodeLine{00287\ \textcolor{keywordtype}{void}\ *mirror\_alloc(\textcolor{keywordtype}{size\_t}\ size);}
+\DoxyCodeLine{00288\ \textcolor{keywordtype}{void}\ mirror\_free(\textcolor{keywordtype}{void}\ **p,\textcolor{keywordtype}{size\_t}\ size);}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00290\ \textcolor{comment}{//\ Wrap\ pointer\ p\ to\ keep\ it\ in\ range\ (base,\ base\ +\ size),\ where\ size\ is\ in\ bytes}}
+\DoxyCodeLine{00291\ \textcolor{comment}{//\ The\ callers\ use\ C\ casts\ in\ a\ somewhat\ dodgy\ fashion,\ but\ is\ OK\ because\ size\ is\ always\ a\ multiple\ of\ the\ page\ size,}}
+\DoxyCodeLine{00292\ \textcolor{comment}{//\ and\ there's\ an\ integral\ number\ of\ the\ objects\ we're\ pointing\ to\ in\ a\ page\ (we\ hope!!)}}
+\DoxyCodeLine{00293\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{void}\ mirror\_wrap(\textcolor{keywordtype}{void}\ \textcolor{keyword}{const}\ **p,\ \textcolor{keywordtype}{void}\ \textcolor{keyword}{const}\ *\ \textcolor{keyword}{const}\ base,\textcolor{keywordtype}{size\_t}\ \textcolor{keyword}{const}\ size)\{}
+\DoxyCodeLine{00294\ \ \ assert(*p\ >=\ base);\ \textcolor{comment}{//\ Shouldn't\ be\ THIS\ low}}
+\DoxyCodeLine{00295\ \ \ assert(*p\ <\ base\ +\ 2\ *\ size);\ \textcolor{comment}{//\ Or\ this\ high}}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \ \ \textcolor{keywordflow}{if}((uint8\_t\ *)*p\ >=\ (uint8\_t\ *)base\ +\ size)}
+\DoxyCodeLine{00298\ \ \ \ \ *p\ =\ (uint8\_t\ *)*p\ -\/\ size;}
+\DoxyCodeLine{00299\ \}}
+\DoxyCodeLine{00300\ }
+\DoxyCodeLine{00301\ \textcolor{comment}{//\ round\ argument\ up\ to\ an\ even\ number\ of\ system\ pages}}
+\DoxyCodeLine{00302\ \textcolor{keywordtype}{size\_t}\ round\_to\_page(\textcolor{keywordtype}{size\_t}\ size);}
+\DoxyCodeLine{00303\ }
+\DoxyCodeLine{00304\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ \_MISC\_H}}
+
+\end{DoxyCode}

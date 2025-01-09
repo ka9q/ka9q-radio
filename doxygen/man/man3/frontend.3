@@ -1,0 +1,127 @@
+.TH "frontend" 3 "KA9Q-Radio" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+frontend \- Front end control block, one per radiod instance\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <radio\&.h>\fP
+.SS "Data Fields"
+
+.in +1c
+.ti -1c
+.RI "uint64_t \fBsamples\fP"
+.br
+.ti -1c
+.RI "uint64_t \fBoverranges\fP"
+.br
+.ti -1c
+.RI "uint64_t \fBsamp_since_over\fP"
+.br
+.ti -1c
+.RI "int \fBM\fP"
+.br
+.ti -1c
+.RI "int \fBL\fP"
+.br
+.ti -1c
+.RI "char * \fBdescription\fP"
+.br
+.ti -1c
+.RI "int \fBsamprate\fP"
+.br
+.ti -1c
+.RI "int64_t \fBtimestamp\fP"
+.br
+.ti -1c
+.RI "double \fBfrequency\fP"
+.br
+.ti -1c
+.RI "double \fBcalibrate\fP"
+.br
+.ti -1c
+.RI "uint8_t \fBlna_gain\fP"
+.br
+.ti -1c
+.RI "uint8_t \fBmixer_gain\fP"
+.br
+.ti -1c
+.RI "uint8_t \fBif_gain\fP"
+.br
+.ti -1c
+.RI "float \fBrf_atten\fP"
+.br
+.ti -1c
+.RI "float \fBrf_gain\fP"
+.br
+.ti -1c
+.RI "bool \fBrf_agc\fP"
+.br
+.ti -1c
+.RI "float \fBrf_level_cal\fP"
+.br
+.ti -1c
+.RI "bool \fBdirect_conversion\fP"
+.br
+.ti -1c
+.RI "bool \fBisreal\fP"
+.br
+.ti -1c
+.RI "int \fBbitspersample\fP"
+.br
+.ti -1c
+.RI "bool \fBlock\fP"
+.br
+.ti -1c
+.RI "float \fBmin_IF\fP"
+.br
+.ti -1c
+.RI "float \fBmax_IF\fP"
+.br
+.ti -1c
+.RI "float \fBif_power_instant\fP"
+.br
+.ti -1c
+.RI "float \fBif_power\fP"
+.br
+.ti -1c
+.RI "float \fBif_power_max\fP"
+.br
+.ti -1c
+.RI "pthread_mutex_t \fBstatus_mutex\fP"
+.br
+.ti -1c
+.RI "pthread_cond_t \fBstatus_cond\fP"
+.br
+.ti -1c
+.RI "void * \fBcontext\fP"
+.br
+.ti -1c
+.RI "int(* \fBsetup\fP )(struct \fBfrontend\fP *, dictionary *, char const *)"
+.br
+.ti -1c
+.RI "int(* \fBstart\fP )(struct \fBfrontend\fP *)"
+.br
+.ti -1c
+.RI "double(* \fBtune\fP )(struct \fBfrontend\fP *, double)"
+.br
+.ti -1c
+.RI "float(* \fBgain\fP )(struct \fBfrontend\fP *, float)"
+.br
+.ti -1c
+.RI "float(* \fBatten\fP )(struct \fBfrontend\fP *, float)"
+.br
+.ti -1c
+.RI "struct \fBfilter_in\fP \fBin\fP"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+Front end control block, one per radiod instance\&. 
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for KA9Q-Radio from the source code\&.

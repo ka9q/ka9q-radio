@@ -1,0 +1,58 @@
+.TH "filter_out" 3 "KA9Q-Radio" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+filter_out
+.SH SYNOPSIS
+.br
+.PP
+.SS "Data Fields"
+
+.in +1c
+.ti -1c
+.RI "struct \fBfilter_in\fP *restrict \fBmaster\fP"
+.br
+.ti -1c
+.RI "enum filtertype \fBout_type\fP"
+.br
+.ti -1c
+.RI "int \fBolen\fP"
+.br
+.ti -1c
+.RI "int \fBbins\fP"
+.br
+.ti -1c
+.RI "complex float *restrict \fBfdomain\fP"
+.br
+.ti -1c
+.RI "complex float *restrict \fBresponse\fP"
+.br
+.ti -1c
+.RI "pthread_mutex_t \fBresponse_mutex\fP"
+.br
+.ti -1c
+.RI "struct \fBrc\fP \fBoutput_buffer\fP"
+.br
+.ti -1c
+.RI "struct \fBrc\fP \fBoutput\fP"
+.br
+.ti -1c
+.RI "fftwf_plan \fBrev_plan\fP"
+.br
+.ti -1c
+.RI "unsigned int \fBnext_jobnum\fP"
+.br
+.ti -1c
+.RI "float \fBnoise_gain\fP"
+.br
+.ti -1c
+.RI "int \fBblock_drops\fP"
+.br
+.ti -1c
+.RI "int \fBrcnt\fP"
+.br
+.in -1c
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for KA9Q-Radio from the source code\&.

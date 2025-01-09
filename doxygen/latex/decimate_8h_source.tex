@@ -1,0 +1,22 @@
+\doxysection{/\+Users/karn/src/ka9q-\/radio/decimate.h}
+\hypertarget{decimate_8h_source}{}\label{decimate_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//\ Simple\ sample\ rate\ decimators\ \&\ half-\/band\ filters\ by\ powers\ of\ 2}}
+\DoxyCodeLine{00002\ \textcolor{comment}{//\ Not\ currently\ used\ in\ ka9q-\/radio,\ but\ here\ for\ reference\ or\ possible\ future\ use}}
+\DoxyCodeLine{00003\ \textcolor{comment}{//\ Copyright\ 2017-\/2023,\ Phil\ Karn,\ KA9Q}}
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#ifndef\ \_DECIMATE\_H}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#define\ \_DECIMATE\_H\ 1}}
+\DoxyCodeLine{00006\ }
+\DoxyCodeLine{00007\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structhb15__state}{hb15\_state}}\ \{}
+\DoxyCodeLine{00008\ \ \ \textcolor{keywordtype}{float}\ coeffs[4];}
+\DoxyCodeLine{00009\ \ \ \textcolor{keywordtype}{float}\ even\_samples[4];}
+\DoxyCodeLine{00010\ \ \ \textcolor{keywordtype}{float}\ odd\_samples[4];}
+\DoxyCodeLine{00011\ \ \ \textcolor{keywordtype}{float}\ old\_odd\_samples[4];}
+\DoxyCodeLine{00012\ \};}
+\DoxyCodeLine{00013\ \textcolor{keywordtype}{void}\ hb15\_block(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structhb15__state}{hb15\_state}}\ *state,\textcolor{keywordtype}{float}\ *output,\textcolor{keywordtype}{float}\ *input,\textcolor{keywordtype}{int}\ cnt);}
+\DoxyCodeLine{00014\ \textcolor{keywordtype}{void}\ hb3\_block(\textcolor{keywordtype}{float}\ *state,\textcolor{keywordtype}{float}\ *output,\textcolor{keywordtype}{float}\ *input,\textcolor{keywordtype}{int}\ cnt);}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

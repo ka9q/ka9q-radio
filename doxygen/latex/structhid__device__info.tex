@@ -1,0 +1,117 @@
+\doxysection{hid\+\_\+device\+\_\+info Struct Reference}
+\hypertarget{structhid__device__info}{}\label{structhid__device__info}\index{hid\_device\_info@{hid\_device\_info}}
+
+
+{\ttfamily \#include $<$hidapi.\+h$>$}
+
+
+
+Collaboration diagram for hid\+\_\+device\+\_\+info\+:\nopagebreak
+\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[width=203pt]{structhid__device__info__coll__graph}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Data Fields}
+\begin{DoxyCompactItemize}
+\item 
+char \texorpdfstring{$\ast$}{*} \mbox{\hyperlink{structhid__device__info_a6384b5bf4d9583598e5f5a889f240921}{path}}
+\item 
+unsigned short \mbox{\hyperlink{structhid__device__info_a5037a3914e0bd8a3f821d1be9376c709}{vendor\+\_\+id}}
+\item 
+unsigned short \mbox{\hyperlink{structhid__device__info_a04595915457b4374492edb1fdb62d65d}{product\+\_\+id}}
+\item 
+wchar\+\_\+t \texorpdfstring{$\ast$}{*} \mbox{\hyperlink{structhid__device__info_a80756cea367e1566f966438984b75faf}{serial\+\_\+number}}
+\item 
+unsigned short \mbox{\hyperlink{structhid__device__info_a6a832d25260f7ec17ef008e53e50e1d0}{release\+\_\+number}}
+\item 
+wchar\+\_\+t \texorpdfstring{$\ast$}{*} \mbox{\hyperlink{structhid__device__info_a484eebf746220cd2910954cc861759b7}{manufacturer\+\_\+string}}
+\item 
+wchar\+\_\+t \texorpdfstring{$\ast$}{*} \mbox{\hyperlink{structhid__device__info_aceee256b4f7cd7fdd9fa5d556f49d221}{product\+\_\+string}}
+\item 
+unsigned short \mbox{\hyperlink{structhid__device__info_ab811117f8084ce2036815bdd33b16b3b}{usage\+\_\+page}}
+\item 
+unsigned short \mbox{\hyperlink{structhid__device__info_a47f8011d58bcddd67f1403d6d3b4cab6}{usage}}
+\item 
+int \mbox{\hyperlink{structhid__device__info_a9163d8d5d7db8dc47bddfaf876e17547}{interface\+\_\+number}}
+\item 
+struct \mbox{\hyperlink{structhid__device__info}{hid\+\_\+device\+\_\+info}} \texorpdfstring{$\ast$}{*} \mbox{\hyperlink{structhid__device__info_a2bfebc240baf3bdaf03965816e11f149}{next}}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+hidapi info structure 
+
+\doxysubsection{Field Documentation}
+\Hypertarget{structhid__device__info_a9163d8d5d7db8dc47bddfaf876e17547}\index{hid\_device\_info@{hid\_device\_info}!interface\_number@{interface\_number}}
+\index{interface\_number@{interface\_number}!hid\_device\_info@{hid\_device\_info}}
+\doxysubsubsection{\texorpdfstring{interface\_number}{interface\_number}}
+{\footnotesize\ttfamily \label{structhid__device__info_a9163d8d5d7db8dc47bddfaf876e17547} 
+int hid\+\_\+device\+\_\+info\+::interface\+\_\+number}
+
+The USB interface which this logical device represents. Valid on both Linux implementations in all cases, and valid on the Windows implementation only if the device contains more than one interface. \Hypertarget{structhid__device__info_a484eebf746220cd2910954cc861759b7}\index{hid\_device\_info@{hid\_device\_info}!manufacturer\_string@{manufacturer\_string}}
+\index{manufacturer\_string@{manufacturer\_string}!hid\_device\_info@{hid\_device\_info}}
+\doxysubsubsection{\texorpdfstring{manufacturer\_string}{manufacturer\_string}}
+{\footnotesize\ttfamily \label{structhid__device__info_a484eebf746220cd2910954cc861759b7} 
+wchar\+\_\+t\texorpdfstring{$\ast$}{*} hid\+\_\+device\+\_\+info\+::manufacturer\+\_\+string}
+
+Manufacturer String \Hypertarget{structhid__device__info_a2bfebc240baf3bdaf03965816e11f149}\index{hid\_device\_info@{hid\_device\_info}!next@{next}}
+\index{next@{next}!hid\_device\_info@{hid\_device\_info}}
+\doxysubsubsection{\texorpdfstring{next}{next}}
+{\footnotesize\ttfamily \label{structhid__device__info_a2bfebc240baf3bdaf03965816e11f149} 
+struct \mbox{\hyperlink{structhid__device__info}{hid\+\_\+device\+\_\+info}}\texorpdfstring{$\ast$}{*} hid\+\_\+device\+\_\+info\+::next}
+
+Pointer to the next device \Hypertarget{structhid__device__info_a6384b5bf4d9583598e5f5a889f240921}\index{hid\_device\_info@{hid\_device\_info}!path@{path}}
+\index{path@{path}!hid\_device\_info@{hid\_device\_info}}
+\doxysubsubsection{\texorpdfstring{path}{path}}
+{\footnotesize\ttfamily \label{structhid__device__info_a6384b5bf4d9583598e5f5a889f240921} 
+char\texorpdfstring{$\ast$}{*} hid\+\_\+device\+\_\+info\+::path}
+
+Platform-\/specific device path \Hypertarget{structhid__device__info_a04595915457b4374492edb1fdb62d65d}\index{hid\_device\_info@{hid\_device\_info}!product\_id@{product\_id}}
+\index{product\_id@{product\_id}!hid\_device\_info@{hid\_device\_info}}
+\doxysubsubsection{\texorpdfstring{product\_id}{product\_id}}
+{\footnotesize\ttfamily \label{structhid__device__info_a04595915457b4374492edb1fdb62d65d} 
+unsigned short hid\+\_\+device\+\_\+info\+::product\+\_\+id}
+
+Device Product ID \Hypertarget{structhid__device__info_aceee256b4f7cd7fdd9fa5d556f49d221}\index{hid\_device\_info@{hid\_device\_info}!product\_string@{product\_string}}
+\index{product\_string@{product\_string}!hid\_device\_info@{hid\_device\_info}}
+\doxysubsubsection{\texorpdfstring{product\_string}{product\_string}}
+{\footnotesize\ttfamily \label{structhid__device__info_aceee256b4f7cd7fdd9fa5d556f49d221} 
+wchar\+\_\+t\texorpdfstring{$\ast$}{*} hid\+\_\+device\+\_\+info\+::product\+\_\+string}
+
+Product string \Hypertarget{structhid__device__info_a6a832d25260f7ec17ef008e53e50e1d0}\index{hid\_device\_info@{hid\_device\_info}!release\_number@{release\_number}}
+\index{release\_number@{release\_number}!hid\_device\_info@{hid\_device\_info}}
+\doxysubsubsection{\texorpdfstring{release\_number}{release\_number}}
+{\footnotesize\ttfamily \label{structhid__device__info_a6a832d25260f7ec17ef008e53e50e1d0} 
+unsigned short hid\+\_\+device\+\_\+info\+::release\+\_\+number}
+
+Device Release Number in binary-\/coded decimal, also known as Device Version Number \Hypertarget{structhid__device__info_a80756cea367e1566f966438984b75faf}\index{hid\_device\_info@{hid\_device\_info}!serial\_number@{serial\_number}}
+\index{serial\_number@{serial\_number}!hid\_device\_info@{hid\_device\_info}}
+\doxysubsubsection{\texorpdfstring{serial\_number}{serial\_number}}
+{\footnotesize\ttfamily \label{structhid__device__info_a80756cea367e1566f966438984b75faf} 
+wchar\+\_\+t\texorpdfstring{$\ast$}{*} hid\+\_\+device\+\_\+info\+::serial\+\_\+number}
+
+Serial Number \Hypertarget{structhid__device__info_a47f8011d58bcddd67f1403d6d3b4cab6}\index{hid\_device\_info@{hid\_device\_info}!usage@{usage}}
+\index{usage@{usage}!hid\_device\_info@{hid\_device\_info}}
+\doxysubsubsection{\texorpdfstring{usage}{usage}}
+{\footnotesize\ttfamily \label{structhid__device__info_a47f8011d58bcddd67f1403d6d3b4cab6} 
+unsigned short hid\+\_\+device\+\_\+info\+::usage}
+
+Usage for this Device/\+Interface (Windows/\+Mac only). \Hypertarget{structhid__device__info_ab811117f8084ce2036815bdd33b16b3b}\index{hid\_device\_info@{hid\_device\_info}!usage\_page@{usage\_page}}
+\index{usage\_page@{usage\_page}!hid\_device\_info@{hid\_device\_info}}
+\doxysubsubsection{\texorpdfstring{usage\_page}{usage\_page}}
+{\footnotesize\ttfamily \label{structhid__device__info_ab811117f8084ce2036815bdd33b16b3b} 
+unsigned short hid\+\_\+device\+\_\+info\+::usage\+\_\+page}
+
+Usage Page for this Device/\+Interface (Windows/\+Mac only). \Hypertarget{structhid__device__info_a5037a3914e0bd8a3f821d1be9376c709}\index{hid\_device\_info@{hid\_device\_info}!vendor\_id@{vendor\_id}}
+\index{vendor\_id@{vendor\_id}!hid\_device\_info@{hid\_device\_info}}
+\doxysubsubsection{\texorpdfstring{vendor\_id}{vendor\_id}}
+{\footnotesize\ttfamily \label{structhid__device__info_a5037a3914e0bd8a3f821d1be9376c709} 
+unsigned short hid\+\_\+device\+\_\+info\+::vendor\+\_\+id}
+
+Device Vendor ID 
+
+The documentation for this struct was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+/\+Users/karn/src/ka9q-\/radio/\mbox{\hyperlink{hidapi_8h}{hidapi.\+h}}\end{DoxyCompactItemize}

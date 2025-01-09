@@ -1,0 +1,365 @@
+.TH "session" 3 "KA9Q-Radio" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+session
+.SH SYNOPSIS
+.br
+.PP
+.SS "Data Structures"
+
+.in +1c
+.ti -1c
+.RI "struct \fBreseq\fP"
+.br
+.in -1c
+.SS "Data Fields"
+
+.in +1c
+.ti -1c
+.RI "struct \fBsession\fP * \fBprev\fP"
+.br
+.ti -1c
+.RI "struct \fBsession\fP * \fBnext\fP"
+.br
+.ti -1c
+.RI "struct sockaddr \fBsender\fP"
+.br
+.ti -1c
+.RI "char \fBfilename\fP [PATH_MAX]"
+.br
+.ti -1c
+.RI "struct \fBwav\fP \fBheader\fP"
+.br
+.ti -1c
+.RI "uint32_t \fBssrc\fP"
+.br
+.ti -1c
+.RI "uint32_t \fBnext_timestamp\fP"
+.br
+.ti -1c
+.RI "int \fBtype\fP"
+.br
+.ti -1c
+.RI "int \fBchannels\fP"
+.br
+.ti -1c
+.RI "unsigned int \fBsamprate\fP"
+.br
+.ti -1c
+.RI "FILE * \fBfp\fP"
+.br
+.ti -1c
+.RI "void * \fBiobuffer\fP"
+.br
+.ti -1c
+.RI "int64_t \fBSamplesWritten\fP"
+.br
+.ti -1c
+.RI "int64_t \fBTotalFileSamples\fP"
+.br
+.ti -1c
+.RI "bool \fBinit\fP"
+.br
+.ti -1c
+.RI "struct sockaddr_storage \fBsender\fP"
+.br
+.ti -1c
+.RI "char const  * \fBdest\fP"
+.br
+.ti -1c
+.RI "pthread_t \fBtask\fP"
+.br
+.ti -1c
+.RI "struct \fBpacket\fP * \fBqueue\fP"
+.br
+.ti -1c
+.RI "pthread_mutex_t \fBqmutex\fP"
+.br
+.ti -1c
+.RI "pthread_cond_t \fBqcond\fP"
+.br
+.ti -1c
+.RI "struct \fBrtp_state\fP \fBrtp_state\fP"
+.br
+.ti -1c
+.RI "struct \fBpt_table\fP \fBpt_table\fP [128]"
+.br
+.ti -1c
+.RI "unsigned int \fBwptr\fP"
+.br
+.ti -1c
+.RI "int \fBplayout\fP"
+.br
+.ti -1c
+.RI "long long \fBlast_active\fP"
+.br
+.ti -1c
+.RI "long long \fBlast_start\fP"
+.br
+.ti -1c
+.RI "float \fBtot_active\fP"
+.br
+.ti -1c
+.RI "float \fBactive\fP"
+.br
+.ti -1c
+.RI "float \fBdatarate\fP"
+.br
+.ti -1c
+.RI "OpusDecoder * \fBopus\fP"
+.br
+.ti -1c
+.RI "int \fBopus_channels\fP"
+.br
+.ti -1c
+.RI "int \fBframe_size\fP"
+.br
+.ti -1c
+.RI "int \fBbandwidth\fP"
+.br
+.ti -1c
+.RI "struct \fBgoertzel\fP \fBtone_detector\fP [N_tones]"
+.br
+.ti -1c
+.RI "int \fBtone_samples\fP"
+.br
+.ti -1c
+.RI "float \fBcurrent_tone\fP"
+.br
+.ti -1c
+.RI "float \fBsnr\fP"
+.br
+.ti -1c
+.RI "unsigned int \fBchannels\fP"
+.br
+.ti -1c
+.RI "float \fBgain\fP"
+.br
+.ti -1c
+.RI "float \fBpan\fP"
+.br
+.ti -1c
+.RI "unsigned long \fBpackets\fP"
+.br
+.ti -1c
+.RI "unsigned long \fBempties\fP"
+.br
+.ti -1c
+.RI "unsigned long \fBlates\fP"
+.br
+.ti -1c
+.RI "unsigned long \fBearlies\fP"
+.br
+.ti -1c
+.RI "unsigned long \fBresets\fP"
+.br
+.ti -1c
+.RI "unsigned long \fBreseqs\fP"
+.br
+.ti -1c
+.RI "unsigned long \fBspares\fP"
+.br
+.ti -1c
+.RI "bool \fBterminate\fP"
+.br
+.ti -1c
+.RI "bool \fBmuted\fP"
+.br
+.ti -1c
+.RI "bool \fBreset\fP"
+.br
+.ti -1c
+.RI "bool \fBnow_active\fP"
+.br
+.ti -1c
+.RI "char \fBid\fP [32]"
+.br
+.ti -1c
+.RI "bool \fBnotch_enable\fP"
+.br
+.ti -1c
+.RI "struct \fBiir\fP \fBiir_left\fP"
+.br
+.ti -1c
+.RI "struct \fBiir\fP \fBiir_right\fP"
+.br
+.ti -1c
+.RI "float \fBnotch_tone\fP"
+.br
+.ti -1c
+.RI "struct \fBchannel\fP \fBchan\fP"
+.br
+.ti -1c
+.RI "struct \fBfrontend\fP \fBfrontend\fP"
+.br
+.ti -1c
+.RI "char const  * \fBsource\fP"
+.br
+.ti -1c
+.RI "pthread_t \fBthread\fP"
+.br
+.ti -1c
+.RI "struct \fBrtp_state\fP \fBrtp_state_in\fP"
+.br
+.ti -1c
+.RI "int \fBsamprate\fP"
+.br
+.ti -1c
+.RI "OpusEncoder * \fBopus\fP"
+.br
+.ti -1c
+.RI "bool \fBsilence\fP"
+.br
+.ti -1c
+.RI "float \fBaudio_buffer\fP [BUFFERSIZE]"
+.br
+.ti -1c
+.RI "int \fBaudio_write_index\fP"
+.br
+.ti -1c
+.RI "struct \fBrtp_state\fP \fBrtp_state_out\fP"
+.br
+.ti -1c
+.RI "unsigned long \fBunderruns\fP"
+.br
+.ti -1c
+.RI "uint64_t \fBpackets\fP"
+.br
+.ti -1c
+.RI "int \fBwrite_fd\fP"
+.br
+.ti -1c
+.RI "int \fBread_fd\fP"
+.br
+.ti -1c
+.RI "pthread_t \fBdecode_thread\fP"
+.br
+.ti -1c
+.RI "unsigned int \fBdecoded_packets\fP"
+.br
+.ti -1c
+.RI "struct \fBhdlc\fP \fBhdlc\fP"
+.br
+.ti -1c
+.RI "bool \fBcan_seek\fP"
+.br
+.ti -1c
+.RI "double \fBlast_frequency\fP"
+.br
+.ti -1c
+.RI "char \fBlast_preset\fP [32]"
+.br
+.ti -1c
+.RI "enum encoding \fBencoding\fP"
+.br
+.ti -1c
+.RI "ogg_stream_state \fBoggState\fP"
+.br
+.ti -1c
+.RI "int64_t \fBgranulePosition\fP"
+.br
+.ti -1c
+.RI "int \fBpacketCount\fP"
+.br
+.ti -1c
+.RI "struct session::reseq \fBreseq\fP [RESEQ]"
+.br
+.ti -1c
+.RI "int64_t \fBlast_active\fP"
+.br
+.ti -1c
+.RI "int64_t \fBstarting_offset\fP"
+.br
+.ti -1c
+.RI "bool \fBno_offset\fP"
+.br
+.ti -1c
+.RI "bool \fBsubstantial_file\fP"
+.br
+.ti -1c
+.RI "int64_t \fBcurrent_segment_samples\fP"
+.br
+.ti -1c
+.RI "int64_t \fBsamples_written\fP"
+.br
+.ti -1c
+.RI "int64_t \fBtotal_file_samples\fP"
+.br
+.ti -1c
+.RI "int64_t \fBsamples_remaining\fP"
+.br
+.ti -1c
+.RI "FILE * \fBpipe\fP"
+.br
+.ti -1c
+.RI "unsigned long \fBdropped_samples\fP"
+.br
+.ti -1c
+.RI "int \fBpl_blocksize\fP"
+.br
+.ti -1c
+.RI "int \fBdtmf_blocksize\fP"
+.br
+.ti -1c
+.RI "complex float \fBpl_integrators\fP [N_tones]"
+.br
+.ti -1c
+.RI "struct \fBosc\fP \fBpl_osc\fP [N_tones]"
+.br
+.ti -1c
+.RI "float \fBstrongest_tone_energy\fP"
+.br
+.ti -1c
+.RI "int \fBstrongest_tone_index\fP"
+.br
+.ti -1c
+.RI "float \fBdtmf_tot_energy\fP"
+.br
+.ti -1c
+.RI "complex float \fBdtmf_low_integrators\fP [4]"
+.br
+.ti -1c
+.RI "complex float \fBdtmf_high_integrators\fP [4]"
+.br
+.ti -1c
+.RI "struct \fBosc\fP \fBdtmf_low_osc\fP [4]"
+.br
+.ti -1c
+.RI "struct \fBosc\fP \fBdtmf_high_osc\fP [4]"
+.br
+.ti -1c
+.RI "int \fBpl_audio_count\fP"
+.br
+.ti -1c
+.RI "int \fBdtmf_audio_count\fP"
+.br
+.ti -1c
+.RI "char \fBcurrent_dtmf_digit\fP"
+.br
+.ti -1c
+.RI "float \fBcurrent_pl_tone\fP"
+.br
+.ti -1c
+.RI "struct \fBfilter_in\fP \fBfilter_in\fP"
+.br
+.ti -1c
+.RI "int \fBin_cnt\fP"
+.br
+.ti -1c
+.RI "struct \fBfilter_out\fP \fBpl_filter_out\fP"
+.br
+.ti -1c
+.RI "float \fBdeemph_state_left\fP"
+.br
+.ti -1c
+.RI "float \fBdeemph_state_right\fP"
+.br
+.ti -1c
+.RI "uint32_t \fBfirst_sample_number\fP"
+.br
+.in -1c
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for KA9Q-Radio from the source code\&.

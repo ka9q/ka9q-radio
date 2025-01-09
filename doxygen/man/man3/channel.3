@@ -1,0 +1,374 @@
+.TH "channel" 3 "KA9Q-Radio" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+channel \- radiod channel state block  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <radio\&.h>\fP
+.SS "Data Fields"
+
+.in +1c
+.ti -1c
+.RI "bool \fBinuse\fP"
+.br
+.ti -1c
+.RI "int \fBlifetime\fP"
+.br
+.ti -1c
+.RI "struct {"
+.br
+.ti -1c
+.RI "   double \fBfreq\fP"
+.br
+.ti -1c
+.RI "   double \fBshift\fP"
+.br
+.ti -1c
+.RI "   double \fBsecond_LO\fP"
+.br
+.ti -1c
+.RI "   double \fBdoppler\fP"
+.br
+.ti -1c
+.RI "   double \fBdoppler_rate\fP"
+.br
+.ti -1c
+.RI "} \fBtune\fP"
+.br
+.ti -1c
+.RI "struct \fBosc\fP fine \fBshift\fP"
+.br
+.ti -1c
+.RI "struct {"
+.br
+.ti -1c
+.RI "   struct \fBfilter_out\fP \fBout\fP"
+.br
+.ti -1c
+.RI "   float \fBmin_IF\fP"
+.br
+.ti -1c
+.RI "   float \fBmax_IF\fP"
+.br
+.ti -1c
+.RI "   float \fBkaiser_beta\fP"
+.br
+.ti -1c
+.RI "   bool \fBisb\fP"
+.br
+.ti -1c
+.RI "   float * \fBenergies\fP"
+.br
+.ti -1c
+.RI "   int \fBbin_shift\fP"
+.br
+.ti -1c
+.RI "   double \fBremainder\fP"
+.br
+.ti -1c
+.RI "   complex double \fBphase_adjust\fP"
+.br
+.ti -1c
+.RI "} \fBfilter\fP"
+.br
+.ti -1c
+.RI "enum demod_type \fBdemod_type\fP"
+.br
+.ti -1c
+.RI "char \fBpreset\fP [32]"
+.br
+.ti -1c
+.RI "struct {"
+.br
+.ti -1c
+.RI "   bool \fBenv\fP"
+.br
+.ti -1c
+.RI "   bool \fBagc\fP"
+.br
+.ti -1c
+.RI "   float \fBhangtime\fP"
+.br
+.ti -1c
+.RI "   float \fBrecovery_rate\fP"
+.br
+.ti -1c
+.RI "   float \fBthreshold\fP"
+.br
+.ti -1c
+.RI "} \fBlinear\fP"
+.br
+.ti -1c
+.RI "int \fBhangcount\fP"
+.br
+.ti -1c
+.RI "struct {"
+.br
+.ti -1c
+.RI "   struct \fBpll\fP \fBpll\fP"
+.br
+.ti -1c
+.RI "   bool \fBwas_on\fP"
+.br
+.ti -1c
+.RI "   int \fBlock_count\fP"
+.br
+.ti -1c
+.RI "   bool \fBenable\fP"
+.br
+.ti -1c
+.RI "   bool \fBsquare\fP"
+.br
+.ti -1c
+.RI "   bool \fBlock\fP"
+.br
+.ti -1c
+.RI "   float \fBloop_bw\fP"
+.br
+.ti -1c
+.RI "   float \fBcphase\fP"
+.br
+.ti -1c
+.RI "   int64_t \fBrotations\fP"
+.br
+.ti -1c
+.RI "} \fBpll\fP"
+.br
+.ti -1c
+.RI "struct {"
+.br
+.ti -1c
+.RI "   float \fBbb_power\fP"
+.br
+.ti -1c
+.RI "   float \fBbb_energy\fP"
+.br
+.ti -1c
+.RI "   float \fBfoffset\fP"
+.br
+.ti -1c
+.RI "   float \fBsnr\fP"
+.br
+.ti -1c
+.RI "   float \fBn0\fP"
+.br
+.ti -1c
+.RI "} \fBsig\fP"
+.br
+.ti -1c
+.RI "struct {"
+.br
+.ti -1c
+.RI "   float \fBpdeviation\fP"
+.br
+.ti -1c
+.RI "   float \fBtone_freq\fP"
+.br
+.ti -1c
+.RI "   float \fBtone_deviation\fP"
+.br
+.ti -1c
+.RI "   bool \fBthreshold\fP"
+.br
+.ti -1c
+.RI "   float \fBsquelch_open\fP"
+.br
+.ti -1c
+.RI "   float \fBsquelch_close\fP"
+.br
+.ti -1c
+.RI "   int \fBsquelch_tail\fP"
+.br
+.ti -1c
+.RI "   float \fBgain\fP"
+.br
+.ti -1c
+.RI "   float \fBrate\fP"
+.br
+.ti -1c
+.RI "} \fBfm\fP"
+.br
+.ti -1c
+.RI "struct {"
+.br
+.ti -1c
+.RI "   float \fBbin_bw\fP"
+.br
+.ti -1c
+.RI "   int \fBbin_count\fP"
+.br
+.ti -1c
+.RI "   float * \fBbin_data\fP"
+.br
+.ti -1c
+.RI "} \fBspectrum\fP"
+.br
+.ti -1c
+.RI "struct {"
+.br
+.ti -1c
+.RI "   unsigned int \fBsamprate\fP"
+.br
+.ti -1c
+.RI "   float \fBgain\fP"
+.br
+.ti -1c
+.RI "   float \fBsum_gain_sq\fP"
+.br
+.ti -1c
+.RI "   float \fBheadroom\fP"
+.br
+.ti -1c
+.RI "   bool \fBsilent\fP"
+.br
+.ti -1c
+.RI "   struct \fBrtp_state\fP \fBrtp\fP"
+.br
+.ti -1c
+.RI "   struct sockaddr_storage \fBsource_socket\fP"
+.br
+.ti -1c
+.RI "   struct sockaddr_storage \fBdest_socket\fP"
+.br
+.ti -1c
+.RI "   char \fBdest_string\fP [_POSIX_HOST_NAME_MAX+20]"
+.br
+.ti -1c
+.RI "   unsigned int \fBchannels\fP"
+.br
+.ti -1c
+.RI "   float \fBenergy\fP"
+.br
+.ti -1c
+.RI "   float \fBdeemph_state_left\fP"
+.br
+.ti -1c
+.RI "   float \fBdeemph_state_right\fP"
+.br
+.ti -1c
+.RI "   uint64_t \fBsamples\fP"
+.br
+.ti -1c
+.RI "   bool \fBpacing\fP"
+.br
+.ti -1c
+.RI "   enum encoding \fBencoding\fP"
+.br
+.ti -1c
+.RI "   OpusEncoder * \fBopus\fP"
+.br
+.ti -1c
+.RI "   unsigned int \fBopus_channels\fP"
+.br
+.ti -1c
+.RI "   unsigned int \fBopus_bitrate\fP"
+.br
+.ti -1c
+.RI "   float * \fBqueue\fP"
+.br
+.ti -1c
+.RI "   size_t \fBqueue_size\fP"
+.br
+.ti -1c
+.RI "   unsigned \fBwp\fP"
+.br
+.ti -1c
+.RI "   unsigned \fBrp\fP"
+.br
+.ti -1c
+.RI "   unsigned \fBminpacket\fP"
+.br
+.ti -1c
+.RI "} \fBoutput\fP"
+.br
+.ti -1c
+.RI "struct {"
+.br
+.ti -1c
+.RI "   uint64_t \fBpackets_in\fP"
+.br
+.ti -1c
+.RI "   uint32_t \fBtag\fP"
+.br
+.ti -1c
+.RI "   pthread_mutex_t \fBlock\fP"
+.br
+.ti -1c
+.RI "   uint64_t \fBblocks_since_poll\fP"
+.br
+.ti -1c
+.RI "   int \fBglobal_timer\fP"
+.br
+.ti -1c
+.RI "   int \fBoutput_timer\fP"
+.br
+.ti -1c
+.RI "   int \fBoutput_interval\fP"
+.br
+.ti -1c
+.RI "   uint64_t \fBpackets_out\fP"
+.br
+.ti -1c
+.RI "   struct sockaddr_storage \fBdest_socket\fP"
+.br
+.ti -1c
+.RI "   uint8_t * \fBcommand\fP"
+.br
+.ti -1c
+.RI "   int \fBlength\fP"
+.br
+.ti -1c
+.RI "} \fBstatus\fP"
+.br
+.ti -1c
+.RI "struct {"
+.br
+.ti -1c
+.RI "   struct sockaddr_storage \fBdest_socket\fP"
+.br
+.ti -1c
+.RI "   pthread_t \fBthread\fP"
+.br
+.ti -1c
+.RI "} \fBrtcp\fP"
+.br
+.ti -1c
+.RI "struct {"
+.br
+.ti -1c
+.RI "   struct sockaddr_storage \fBdest_socket\fP"
+.br
+.ti -1c
+.RI "   pthread_t \fBthread\fP"
+.br
+.ti -1c
+.RI "} \fBsap\fP"
+.br
+.ti -1c
+.RI "pthread_t \fBdemod_thread\fP"
+.br
+.ti -1c
+.RI "uint64_t \fBoptions\fP"
+.br
+.ti -1c
+.RI "float \fBtp1\fP"
+.br
+.ti -1c
+.RI "float \fBtp2\fP"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+radiod channel state block 
+
+This is primarily for radiod, but it is also used by 'control' and 'monitor' to shadow radiod's state, encoded for network transmission by send_radio_status() and decoded by decode_radio_status()\&. The transfer protocol uses a series of TLV-encoded tuples that do \fInot\fP send every element of this structure, so shadow copies can be incomplete\&.
+.PP
+Be careful with memcpy(): there are a few pointers (filter\&.energies, spectrum\&.bin_data, status\&.command, etc) If you use these in shadow copies you must malloc these arrays yourself\&. 
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for KA9Q-Radio from the source code\&.

@@ -1,0 +1,97 @@
+\doxysection{/\+Users/karn/src/ka9q-\/radio/hidapi.h}
+\hypertarget{hidapi_8h_source}{}\label{hidapi_8h_source}\mbox{\hyperlink{hidapi_8h}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//\ \$Id:\ hidapi.h,v\ 1.1\ 2016/10/14\ 00:24:57\ karn\ Exp\ \$}}
+\DoxyCodeLine{00002\ \textcolor{comment}{//\ Modified\ by\ KA9Q?}}
+\DoxyCodeLine{00003\ \textcolor{comment}{/*******************************************************}}
+\DoxyCodeLine{00004\ \textcolor{comment}{\ HIDAPI\ -\/\ Multi-\/Platform\ library\ for}}
+\DoxyCodeLine{00005\ \textcolor{comment}{\ communication\ with\ HID\ devices.}}
+\DoxyCodeLine{00006\ \textcolor{comment}{}}
+\DoxyCodeLine{00007\ \textcolor{comment}{\ Alan\ Ott}}
+\DoxyCodeLine{00008\ \textcolor{comment}{\ Signal\ 11\ Software}}
+\DoxyCodeLine{00009\ \textcolor{comment}{}}
+\DoxyCodeLine{00010\ \textcolor{comment}{\ 8/22/2009}}
+\DoxyCodeLine{00011\ \textcolor{comment}{}}
+\DoxyCodeLine{00012\ \textcolor{comment}{\ Copyright\ 2009,\ All\ Rights\ Reserved.}}
+\DoxyCodeLine{00013\ \textcolor{comment}{}}
+\DoxyCodeLine{00014\ \textcolor{comment}{\ At\ the\ discretion\ of\ the\ user\ of\ this\ library,}}
+\DoxyCodeLine{00015\ \textcolor{comment}{\ this\ software\ may\ be\ licensed\ under\ the\ terms\ of\ the}}
+\DoxyCodeLine{00016\ \textcolor{comment}{\ GNU\ General\ Public\ License\ v3,\ a\ BSD-\/Style\ license,\ or\ the}}
+\DoxyCodeLine{00017\ \textcolor{comment}{\ original\ HIDAPI\ license\ as\ outlined\ in\ the\ LICENSE.txt,}}
+\DoxyCodeLine{00018\ \textcolor{comment}{\ LICENSE-\/gpl3.txt,\ LICENSE-\/bsd.txt,\ and\ LICENSE-\/orig.txt}}
+\DoxyCodeLine{00019\ \textcolor{comment}{\ files\ located\ at\ the\ root\ of\ the\ source\ distribution.}}
+\DoxyCodeLine{00020\ \textcolor{comment}{\ These\ files\ may\ also\ be\ found\ in\ the\ public\ source}}
+\DoxyCodeLine{00021\ \textcolor{comment}{\ code\ repository\ located\ at:}}
+\DoxyCodeLine{00022\ \textcolor{comment}{\ \ \ \ \ \ \ \ http://github.com/signal11/hidapi\ .}}
+\DoxyCodeLine{00023\ \textcolor{comment}{********************************************************/}}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#ifndef\ HIDAPI\_H\_\_}}
+\DoxyCodeLine{00030\ \textcolor{preprocessor}{\#define\ HIDAPI\_H\_\_}}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00032\ \textcolor{preprocessor}{\#include\ <wchar.h>}}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{preprocessor}{\#ifdef\ \_\_cplusplus}}
+\DoxyCodeLine{00035\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \{}
+\DoxyCodeLine{00036\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00037\ \ \ \ \ \ \ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structhid__device__}{hid\_device\_}};}
+\DoxyCodeLine{00038\ \ \ \ \ \ \ \ \ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structhid__device__}{hid\_device\_}}\ \mbox{\hyperlink{structhid__device__}{hid\_device}};\ }
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structhid__device__info}{hid\_device\_info}}\ \{}
+\DoxyCodeLine{00043\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ *\mbox{\hyperlink{structhid__device__info_a6384b5bf4d9583598e5f5a889f240921}{path}};}
+\DoxyCodeLine{00045\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \mbox{\hyperlink{structhid__device__info_a5037a3914e0bd8a3f821d1be9376c709}{vendor\_id}};}
+\DoxyCodeLine{00047\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \mbox{\hyperlink{structhid__device__info_a04595915457b4374492edb1fdb62d65d}{product\_id}};}
+\DoxyCodeLine{00049\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{wchar\_t}\ *\mbox{\hyperlink{structhid__device__info_a80756cea367e1566f966438984b75faf}{serial\_number}};}
+\DoxyCodeLine{00052\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \mbox{\hyperlink{structhid__device__info_a6a832d25260f7ec17ef008e53e50e1d0}{release\_number}};}
+\DoxyCodeLine{00054\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{wchar\_t}\ *\mbox{\hyperlink{structhid__device__info_a484eebf746220cd2910954cc861759b7}{manufacturer\_string}};}
+\DoxyCodeLine{00056\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{wchar\_t}\ *\mbox{\hyperlink{structhid__device__info_aceee256b4f7cd7fdd9fa5d556f49d221}{product\_string}};}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \mbox{\hyperlink{structhid__device__info_ab811117f8084ce2036815bdd33b16b3b}{usage\_page}};}
+\DoxyCodeLine{00062\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \mbox{\hyperlink{structhid__device__info_a47f8011d58bcddd67f1403d6d3b4cab6}{usage}};}
+\DoxyCodeLine{00067\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \mbox{\hyperlink{structhid__device__info_a9163d8d5d7db8dc47bddfaf876e17547}{interface\_number}};}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structhid__device__info}{hid\_device\_info}}\ *\mbox{\hyperlink{structhid__device__info_a2bfebc240baf3bdaf03965816e11f149}{next}};}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \ \ \};}
+\DoxyCodeLine{00072\ }
+\DoxyCodeLine{00073\ }
+\DoxyCodeLine{00088\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \mbox{\hyperlink{group__API_ga64ad070e06390652736c6a83e241d1ab}{hid\_init}}(\textcolor{keywordtype}{void});}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00101\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \mbox{\hyperlink{group__API_ga00e8f8cb6f3d97f4f3322de2cc29de0a}{hid\_exit}}(\textcolor{keywordtype}{void});}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structhid__device__info}{hid\_device\_info}}\ *\ \mbox{\hyperlink{group__API_ga246524645572489a5b82b6244823a507}{hid\_enumerate}}(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \mbox{\hyperlink{structhid__device__info_a5037a3914e0bd8a3f821d1be9376c709}{vendor\_id}},\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \mbox{\hyperlink{structhid__device__info_a04595915457b4374492edb1fdb62d65d}{product\_id}});}
+\DoxyCodeLine{00125\ }
+\DoxyCodeLine{00134\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{void}\ \ \ \mbox{\hyperlink{group__API_ga32d26a69bd5a374d7e856e7c5dd164dc}{hid\_free\_enumeration}}(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structhid__device__info}{hid\_device\_info}}\ *devs);}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structhid__device__}{hid\_device}}\ *\ \mbox{\hyperlink{group__API_ga8705d37e74c7ac564d410115900bb8bb}{hid\_open}}(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \mbox{\hyperlink{structhid__device__info_a5037a3914e0bd8a3f821d1be9376c709}{vendor\_id}},\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{short}\ \mbox{\hyperlink{structhid__device__info_a04595915457b4374492edb1fdb62d65d}{product\_id}},\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{wchar\_t}\ *\mbox{\hyperlink{structhid__device__info_a80756cea367e1566f966438984b75faf}{serial\_number}});}
+\DoxyCodeLine{00153\ }
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{structhid__device__}{hid\_device}}\ *\ \mbox{\hyperlink{group__API_gac072c54f5c3e9ec05624b6c8eb2516cf}{hid\_open\_path}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *\mbox{\hyperlink{structhid__device__info_a6384b5bf4d9583598e5f5a889f240921}{path}});}
+\DoxyCodeLine{00168\ }
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \mbox{\hyperlink{group__API_ga71129f1817bdaec29b56b56cd24da32e}{hid\_write}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *device,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *data,\ \textcolor{keywordtype}{size\_t}\ length);}
+\DoxyCodeLine{00196\ }
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \mbox{\hyperlink{group__API_ga4f16e67104d17054708b9e213d080a14}{hid\_read\_timeout}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *dev,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *data,\ \textcolor{keywordtype}{size\_t}\ length,\ \textcolor{keywordtype}{int}\ milliseconds);}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \mbox{\hyperlink{group__API_ga41c35a4f6fe0330eca5185f3450907a1}{hid\_read}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *device,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *data,\ \textcolor{keywordtype}{size\_t}\ length);}
+\DoxyCodeLine{00237\ }
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ \mbox{\hyperlink{group__API_ga2e60473260d02d943e4e6b9fc20f7b66}{hid\_set\_nonblocking}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *device,\ \textcolor{keywordtype}{int}\ nonblock);}
+\DoxyCodeLine{00257\ }
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \mbox{\hyperlink{group__API_gae6fdb108b9a5de8eb4093ba6c0ffd4f4}{hid\_send\_feature\_report}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *device,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *data,\ \textcolor{keywordtype}{size\_t}\ length);}
+\DoxyCodeLine{00285\ }
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \mbox{\hyperlink{group__API_ga79c8b5ac7450192dddaf92c9b53977c1}{hid\_get\_feature\_report}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *device,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{char}\ *data,\ \textcolor{keywordtype}{size\_t}\ length);}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{void}\ \ \mbox{\hyperlink{group__API_ga347f9a308e7f2002a8eb781364342e4c}{hid\_close}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *device);}
+\DoxyCodeLine{00313\ }
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \mbox{\hyperlink{group__API_ga4445a50b644fa01d4bba023a4643166c}{hid\_get\_manufacturer\_string}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *device,\ \textcolor{keywordtype}{wchar\_t}\ *\textcolor{keywordtype}{string},\ \textcolor{keywordtype}{size\_t}\ maxlen);}
+\DoxyCodeLine{00325\ }
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \mbox{\hyperlink{group__API_ga8fcbdf29b34b5694c43f4bef4e94b0b4}{hid\_get\_product\_string}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *device,\ \textcolor{keywordtype}{wchar\_t}\ *\textcolor{keywordtype}{string},\ \textcolor{keywordtype}{size\_t}\ maxlen);}
+\DoxyCodeLine{00337\ }
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \mbox{\hyperlink{group__API_ga2180e7483e1921e257e485a4d59e0662}{hid\_get\_serial\_number\_string}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *device,\ \textcolor{keywordtype}{wchar\_t}\ *\textcolor{keywordtype}{string},\ \textcolor{keywordtype}{size\_t}\ maxlen);}
+\DoxyCodeLine{00349\ }
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \ \mbox{\hyperlink{group__API_gac10112b92a859a5fcf9f41e3a7d7cc21}{hid\_get\_indexed\_string}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *device,\ \textcolor{keywordtype}{int}\ string\_index,\ \textcolor{keywordtype}{wchar\_t}\ *\textcolor{keywordtype}{string},\ \textcolor{keywordtype}{size\_t}\ maxlen);}
+\DoxyCodeLine{00362\ }
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{wchar\_t}*\ \mbox{\hyperlink{group__API_ga7aac25c9b93c619d1654fe6afde3c9f3}{hid\_error}}(\mbox{\hyperlink{structhid__device__}{hid\_device}}\ *device);}
+\DoxyCodeLine{00373\ }
+\DoxyCodeLine{00374\ \textcolor{preprocessor}{\#ifdef\ \_\_cplusplus}}
+\DoxyCodeLine{00375\ \}}
+\DoxyCodeLine{00376\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00377\ }
+\DoxyCodeLine{00378\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00379\ }
+
+\end{DoxyCode}

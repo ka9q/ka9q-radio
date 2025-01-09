@@ -1,0 +1,417 @@
+.TH "API" 3 "KA9Q-Radio" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+API \- hidapi API
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBhid_init\fP (void)"
+.br
+.RI "Initialize the HIDAPI library\&. "
+.ti -1c
+.RI "int \fBhid_exit\fP (void)"
+.br
+.RI "Finalize the HIDAPI library\&. "
+.ti -1c
+.RI "struct \fBhid_device_info\fP * \fBhid_enumerate\fP (unsigned short vendor_id, unsigned short product_id)"
+.br
+.RI "Enumerate the HID Devices\&. "
+.ti -1c
+.RI "void \fBhid_free_enumeration\fP (struct \fBhid_device_info\fP *devs)"
+.br
+.RI "Free an enumeration Linked List\&. "
+.ti -1c
+.RI "\fBhid_device\fP * \fBhid_open\fP (unsigned short vendor_id, unsigned short product_id, const wchar_t *serial_number)"
+.br
+.RI "Open a HID device using a Vendor ID (VID), Product ID (PID) and optionally a serial number\&. "
+.ti -1c
+.RI "\fBhid_device\fP * \fBhid_open_path\fP (const char *path)"
+.br
+.RI "Open a HID device by its path name\&. "
+.ti -1c
+.RI "int \fBhid_write\fP (\fBhid_device\fP *device, const unsigned char *data, size_t length)"
+.br
+.RI "Write an Output report to a HID device\&. "
+.ti -1c
+.RI "int \fBhid_read_timeout\fP (\fBhid_device\fP *dev, unsigned char *data, size_t length, int milliseconds)"
+.br
+.RI "Read an Input report from a HID device with timeout\&. "
+.ti -1c
+.RI "int \fBhid_read\fP (\fBhid_device\fP *device, unsigned char *data, size_t length)"
+.br
+.RI "Read an Input report from a HID device\&. "
+.ti -1c
+.RI "int \fBhid_set_nonblocking\fP (\fBhid_device\fP *device, int nonblock)"
+.br
+.RI "Set the device handle to be non-blocking\&. "
+.ti -1c
+.RI "int \fBhid_send_feature_report\fP (\fBhid_device\fP *device, const unsigned char *data, size_t length)"
+.br
+.RI "Send a Feature report to the device\&. "
+.ti -1c
+.RI "int \fBhid_get_feature_report\fP (\fBhid_device\fP *device, unsigned char *data, size_t length)"
+.br
+.RI "Get a feature report from a HID device\&. "
+.ti -1c
+.RI "void \fBhid_close\fP (\fBhid_device\fP *device)"
+.br
+.RI "Close a HID device\&. "
+.ti -1c
+.RI "int \fBhid_get_manufacturer_string\fP (\fBhid_device\fP *device, wchar_t *string, size_t maxlen)"
+.br
+.RI "Get The Manufacturer String from a HID device\&. "
+.ti -1c
+.RI "int \fBhid_get_product_string\fP (\fBhid_device\fP *device, wchar_t *string, size_t maxlen)"
+.br
+.RI "Get The Product String from a HID device\&. "
+.ti -1c
+.RI "int \fBhid_get_serial_number_string\fP (\fBhid_device\fP *device, wchar_t *string, size_t maxlen)"
+.br
+.RI "Get The Serial Number String from a HID device\&. "
+.ti -1c
+.RI "int \fBhid_get_indexed_string\fP (\fBhid_device\fP *device, int string_index, wchar_t *string, size_t maxlen)"
+.br
+.RI "Get a string from a HID device, based on its string index\&. "
+.ti -1c
+.RI "const wchar_t * \fBhid_error\fP (\fBhid_device\fP *device)"
+.br
+.RI "Get a string describing the last error which occurred\&. "
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "void hid_close (\fBhid_device\fP * device)"
+
+.PP
+Close a HID device\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&. 
+.RE
+.PP
+
+.SS "struct \fBhid_device_info\fP * hid_enumerate (unsigned short vendor_id, unsigned short product_id)"
+
+.PP
+Enumerate the HID Devices\&. This function returns a linked list of all the HID devices attached to the system which match vendor_id and product_id\&. If \fRvendor_id\fP is set to 0 then any vendor matches\&. If \fRproduct_id\fP is set to 0 then any product matches\&. If \fRvendor_id\fP and \fRproduct_id\fP are both set to 0, then all HID devices will be returned\&.
+.PP
+\fBParameters\fP
+.RS 4
+\fIvendor_id\fP The Vendor ID (VID) of the types of device to open\&. 
+.br
+\fIproduct_id\fP The Product ID (PID) of the types of device to open\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns a pointer to a linked list of type struct \fBhid_device\fP, containing information about the HID devices attached to the system, or NULL in the case of failure\&. Free this linked list by calling \fBhid_free_enumeration()\fP\&. 
+.RE
+.PP
+
+.SS "const wchar_t * hid_error (\fBhid_device\fP * device)"
+
+.PP
+Get a string describing the last error which occurred\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns a string containing the last error which occurred or NULL if none has occurred\&. 
+.RE
+.PP
+
+.SS "int hid_exit (void )"
+
+.PP
+Finalize the HIDAPI library\&. This function frees all of the static data associated with HIDAPI\&. It should be called at the end of execution to avoid memory leaks\&.
+.PP
+\fBReturns\fP
+.RS 4
+This function returns 0 on success and -1 on error\&. 
+.RE
+.PP
+
+.SS "void hid_free_enumeration (struct \fBhid_device_info\fP * devs)"
+
+.PP
+Free an enumeration Linked List\&. This function frees a linked list created by \fBhid_enumerate()\fP\&.
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevs\fP Pointer to a list of struct_device returned from \fBhid_enumerate()\fP\&. 
+.RE
+.PP
+
+.SS "int hid_get_feature_report (\fBhid_device\fP * device, unsigned char * data, size_t length)"
+
+.PP
+Get a feature report from a HID device\&. Make sure to set the first byte of \fRdata\fP[] to the Report ID of the report to be read\&. Make sure to allow space for this extra byte in \fRdata\fP[]\&.
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&. 
+.br
+\fIdata\fP A buffer to put the read data into, including the Report ID\&. Set the first byte of \fRdata\fP[] to the Report ID of the report to be read\&. 
+.br
+\fIlength\fP The number of bytes to read, including an extra byte for the report ID\&. The buffer can be longer than the actual report\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns the number of bytes read and -1 on error\&. 
+.RE
+.PP
+
+.SS "int hid_get_indexed_string (\fBhid_device\fP * device, int string_index, wchar_t * string, size_t maxlen)"
+
+.PP
+Get a string from a HID device, based on its string index\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&. 
+.br
+\fIstring_index\fP The index of the string to get\&. 
+.br
+\fIstring\fP A wide string buffer to put the data into\&. 
+.br
+\fImaxlen\fP The length of the buffer in multiples of wchar_t\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns 0 on success and -1 on error\&. 
+.RE
+.PP
+
+.SS "int hid_get_manufacturer_string (\fBhid_device\fP * device, wchar_t * string, size_t maxlen)"
+
+.PP
+Get The Manufacturer String from a HID device\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&. 
+.br
+\fIstring\fP A wide string buffer to put the data into\&. 
+.br
+\fImaxlen\fP The length of the buffer in multiples of wchar_t\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns 0 on success and -1 on error\&. 
+.RE
+.PP
+
+.SS "int hid_get_product_string (\fBhid_device\fP * device, wchar_t * string, size_t maxlen)"
+
+.PP
+Get The Product String from a HID device\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&. 
+.br
+\fIstring\fP A wide string buffer to put the data into\&. 
+.br
+\fImaxlen\fP The length of the buffer in multiples of wchar_t\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns 0 on success and -1 on error\&. 
+.RE
+.PP
+
+.SS "int hid_get_serial_number_string (\fBhid_device\fP * device, wchar_t * string, size_t maxlen)"
+
+.PP
+Get The Serial Number String from a HID device\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&. 
+.br
+\fIstring\fP A wide string buffer to put the data into\&. 
+.br
+\fImaxlen\fP The length of the buffer in multiples of wchar_t\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns 0 on success and -1 on error\&. 
+.RE
+.PP
+
+.SS "int hid_init (void )"
+
+.PP
+Initialize the HIDAPI library\&. This function initializes the HIDAPI library\&. Calling it is not strictly necessary, as it will be called automatically by \fBhid_enumerate()\fP and any of the hid_open_*() functions if it is needed\&. This function should be called at the beginning of execution however, if there is a chance of HIDAPI handles being opened by different threads simultaneously\&.
+.PP
+\fBReturns\fP
+.RS 4
+This function returns 0 on success and -1 on error\&. 
+.RE
+.PP
+
+.SS "\fBhid_device\fP * hid_open (unsigned short vendor_id, unsigned short product_id, const wchar_t * serial_number)"
+
+.PP
+Open a HID device using a Vendor ID (VID), Product ID (PID) and optionally a serial number\&. If \fRserial_number\fP is NULL, the first device with the specified VID and PID is opened\&.
+.PP
+\fBParameters\fP
+.RS 4
+\fIvendor_id\fP The Vendor ID (VID) of the device to open\&. 
+.br
+\fIproduct_id\fP The Product ID (PID) of the device to open\&. 
+.br
+\fIserial_number\fP The Serial Number of the device to open (Optionally NULL)\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns a pointer to a \fBhid_device\fP object on success or NULL on failure\&. 
+.RE
+.PP
+
+.SS "\fBhid_device\fP * hid_open_path (const char * path)"
+
+.PP
+Open a HID device by its path name\&. The path name be determined by calling \fBhid_enumerate()\fP, or a platform-specific path name can be used (eg: /dev/hidraw0 on Linux)\&.
+.PP
+\fBParameters\fP
+.RS 4
+\fIpath\fP The path name of the device to open
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns a pointer to a \fBhid_device\fP object on success or NULL on failure\&. 
+.RE
+.PP
+
+.SS "int hid_read (\fBhid_device\fP * device, unsigned char * data, size_t length)"
+
+.PP
+Read an Input report from a HID device\&. Input reports are returned to the host through the INTERRUPT IN endpoint\&. The first byte will contain the Report number if the device uses numbered reports\&.
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&. 
+.br
+\fIdata\fP A buffer to put the read data into\&. 
+.br
+\fIlength\fP The number of bytes to read\&. For devices with multiple reports, make sure to read an extra byte for the report number\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns the actual number of bytes read and -1 on error\&. If no packet was available to be read and the handle is in non-blocking mode, this function returns 0\&. 
+.RE
+.PP
+
+.SS "int hid_read_timeout (\fBhid_device\fP * dev, unsigned char * data, size_t length, int milliseconds)"
+
+.PP
+Read an Input report from a HID device with timeout\&. Input reports are returned to the host through the INTERRUPT IN endpoint\&. The first byte will contain the Report number if the device uses numbered reports\&.
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&. 
+.br
+\fIdata\fP A buffer to put the read data into\&. 
+.br
+\fIlength\fP The number of bytes to read\&. For devices with multiple reports, make sure to read an extra byte for the report number\&. 
+.br
+\fImilliseconds\fP timeout in milliseconds or -1 for blocking wait\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns the actual number of bytes read and -1 on error\&. If no packet was available to be read within the timeout period, this function returns 0\&. 
+.RE
+.PP
+
+.SS "int hid_send_feature_report (\fBhid_device\fP * device, const unsigned char * data, size_t length)"
+
+.PP
+Send a Feature report to the device\&. Feature reports are sent over the Control endpoint as a Set_Report transfer\&. The first byte of \fRdata\fP[] must contain the Report ID\&. For devices which only support a single report, this must be set to 0x0\&. The remaining bytes contain the report data\&. Since the Report ID is mandatory, calls to \fBhid_send_feature_report()\fP will always contain one more byte than the report contains\&. For example, if a hid report is 16 bytes long, 17 bytes must be passed to \fBhid_send_feature_report()\fP: the Report ID (or 0x0, for devices which do not use numbered reports), followed by the report data (16 bytes)\&. In this example, the length passed in would be 17\&.
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&. 
+.br
+\fIdata\fP The data to send, including the report number as the first byte\&. 
+.br
+\fIlength\fP The length in bytes of the data to send, including the report number\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns the actual number of bytes written and -1 on error\&. 
+.RE
+.PP
+
+.SS "int hid_set_nonblocking (\fBhid_device\fP * device, int nonblock)"
+
+.PP
+Set the device handle to be non-blocking\&. In non-blocking mode calls to \fBhid_read()\fP will return immediately with a value of 0 if there is no data to be read\&. In blocking mode, \fBhid_read()\fP will wait (block) until there is data to read before returning\&.
+.PP
+Nonblocking can be turned on and off at any time\&.
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&. 
+.br
+\fInonblock\fP enable or not the nonblocking reads
+.IP "\(bu" 2
+1 to enable nonblocking
+.IP "\(bu" 2
+0 to disable nonblocking\&.
+.PP
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns 0 on success and -1 on error\&. 
+.RE
+.PP
+
+.SS "int hid_write (\fBhid_device\fP * device, const unsigned char * data, size_t length)"
+
+.PP
+Write an Output report to a HID device\&. The first byte of \fRdata\fP[] must contain the Report ID\&. For devices which only support a single report, this must be set to 0x0\&. The remaining bytes contain the report data\&. Since the Report ID is mandatory, calls to \fBhid_write()\fP will always contain one more byte than the report contains\&. For example, if a hid report is 16 bytes long, 17 bytes must be passed to \fBhid_write()\fP, the Report ID (or 0x0, for devices with a single report), followed by the report data (16 bytes)\&. In this example, the length passed in would be 17\&.
+.PP
+\fBhid_write()\fP will send the data on the first OUT endpoint, if one exists\&. If it does not, it will send the data through the Control Endpoint (Endpoint 0)\&.
+.PP
+\fBParameters\fP
+.RS 4
+\fIdevice\fP A device handle returned from \fBhid_open()\fP\&. 
+.br
+\fIdata\fP The data to send, including the report number as the first byte\&. 
+.br
+\fIlength\fP The length in bytes of the data to send\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+This function returns the actual number of bytes written and -1 on error\&. 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for KA9Q-Radio from the source code\&.

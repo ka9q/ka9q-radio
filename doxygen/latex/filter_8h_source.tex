@@ -1,0 +1,141 @@
+\doxysection{/\+Users/karn/src/ka9q-\/radio/filter.h}
+\hypertarget{filter_8h_source}{}\label{filter_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//\ filter\ using\ fast\ convolution\ (overlap-\/save)\ and\ the\ FFTW3\ FFT\ package}}
+\DoxyCodeLine{00002\ \textcolor{comment}{//\ for\ the\ ka9q-\/radio\ 'radiod'\ program}}
+\DoxyCodeLine{00003\ \textcolor{comment}{//\ Generates\ transfer\ functions\ using\ Kaiser\ window}}
+\DoxyCodeLine{00004\ \textcolor{comment}{//\ Optional\ output\ decimation\ by\ integer\ factor}}
+\DoxyCodeLine{00005\ \textcolor{comment}{//\ Complex\ input\ and\ transfer\ functions,\ complex\ or\ real\ output}}
+\DoxyCodeLine{00006\ \textcolor{comment}{//\ Copyright\ 2017-\/2023,\ Phil\ Karn,\ KA9Q,\ karn@ka9q.net}}
+\DoxyCodeLine{00007\ }
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#ifndef\ \_FILTER\_H}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#define\ \_FILTER\_H\ 1}}
+\DoxyCodeLine{00010\ }
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#include\ <pthread.h>}}
+\DoxyCodeLine{00012\ \textcolor{preprocessor}{\#include\ <complex.h>}}
+\DoxyCodeLine{00013\ \textcolor{preprocessor}{\#include\ <stdbool.h>}}
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ <fftw3.h>}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}misc.h"{}}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{double}\ Fftw\_plan\_timelimit;}
+\DoxyCodeLine{00018\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{char}\ \textcolor{keyword}{const}\ *Wisdom\_file;}
+\DoxyCodeLine{00019\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{int}\ Nthreads;}
+\DoxyCodeLine{00020\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{int}\ FFTW\_planning\_level;}
+\DoxyCodeLine{00021\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{double}\ FFTW\_plan\_timelimit;}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{comment}{//\ Input\ can\ be\ REAL\ or\ COMPLEX}}
+\DoxyCodeLine{00024\ \textcolor{comment}{//\ Output\ can\ be\ REAL,\ COMPLEX,\ CROSS\_CONJ,\ i.e.,\ COMPLEX\ with\ special\ cross\ conjugation\ for\ ISB,\ or\ SPECTRUM\ (noncoherent\ power)}}
+\DoxyCodeLine{00025\ \textcolor{keyword}{enum}\ filtertype\ \{}
+\DoxyCodeLine{00026\ \ \ NONE,}
+\DoxyCodeLine{00027\ \ \ COMPLEX,}
+\DoxyCodeLine{00028\ \ \ CROSS\_CONJ,}
+\DoxyCodeLine{00029\ \ \ REAL,}
+\DoxyCodeLine{00030\ \ \ SPECTRUM,}
+\DoxyCodeLine{00031\ \};}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{comment}{//\ Input\ and\ output\ arrays\ can\ be\ either\ complex\ or\ real}}
+\DoxyCodeLine{00034\ \textcolor{comment}{//\ Used\ to\ be\ a\ union,\ but\ was\ prone\ to\ errors}}
+\DoxyCodeLine{00035\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structrc}{rc}}\ \{}
+\DoxyCodeLine{00036\ \ \ \textcolor{keywordtype}{float}\ *r;}
+\DoxyCodeLine{00037\ \ \ complex\ \textcolor{keywordtype}{float}\ *c;}
+\DoxyCodeLine{00038\ \};}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \textcolor{preprocessor}{\#define\ ND\ 4}}
+\DoxyCodeLine{00041\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structfilter__in}{filter\_in}}\ \{}
+\DoxyCodeLine{00042\ \ \ \textcolor{keyword}{enum}\ filtertype\ in\_type;\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ REAL\ or\ COMPLEX}}
+\DoxyCodeLine{00043\ \ \ \textcolor{keywordtype}{int}\ ilen;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Length\ of\ user\ portion\ of\ input\ buffer,\ aka\ 'L'}}
+\DoxyCodeLine{00044\ \ \ \textcolor{keywordtype}{int}\ bins;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Total\ number\ of\ frequency\ bins.\ Complex:\ L\ +\ M\ -\/\ 1;\ \ Real:\ (L\ +\ M\ -\/\ 1)/2\ +\ 1}}
+\DoxyCodeLine{00045\ \ \ \textcolor{keywordtype}{int}\ impulse\_length;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Length\ of\ filter\ impulse\ response,\ aka\ 'M'}}
+\DoxyCodeLine{00046\ \ \ \textcolor{keywordtype}{int}\ wcnt;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Samples\ written\ to\ unexecuted\ input\ buffer}}
+\DoxyCodeLine{00047\ \ \ \textcolor{keywordtype}{void}\ *input\_buffer;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Beginning\ of\ mirrored\ ring\ buffer}}
+\DoxyCodeLine{00048\ \ \ \textcolor{keywordtype}{size\_t}\ input\_buffer\_size;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ size\ of\ input\ buffer\ in\ **bytes**}}
+\DoxyCodeLine{00049\ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structrc}{rc}}\ input\_write\_pointer;\ \ \ \ \ \textcolor{comment}{//\ For\ incoming\ samples}}
+\DoxyCodeLine{00050\ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structrc}{rc}}\ input\_read\_pointer;\ \ \ \ \ \ \textcolor{comment}{//\ For\ FFT\ input}}
+\DoxyCodeLine{00051\ \ \ fftwf\_plan\ fwd\_plan;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ FFT\ (time\ -\/>\ frequency)}}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \ \ pthread\_mutex\_t\ filter\_mutex;\ \ \ \ \ \ \textcolor{comment}{//\ Synchronization\ for\ sequence\ number}}
+\DoxyCodeLine{00054\ \ \ pthread\_cond\_t\ filter\_cond;}
+\DoxyCodeLine{00055\ }
+\DoxyCodeLine{00056\ \ \ complex\ \textcolor{keywordtype}{float}\ *fdomain[ND];}
+\DoxyCodeLine{00057\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ next\_jobnum;}
+\DoxyCodeLine{00058\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ completed\_jobs[ND];}
+\DoxyCodeLine{00059\ \};}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00061\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structfilter__out}{filter\_out}}\ \{}
+\DoxyCodeLine{00062\ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structfilter__in}{filter\_in}}\ *\ restrict\ master;}
+\DoxyCodeLine{00063\ \ \ \textcolor{keyword}{enum}\ filtertype\ out\_type;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ REAL,\ COMPLEX\ or\ CROSS\_CONJ}}
+\DoxyCodeLine{00064\ \ \ \textcolor{keywordtype}{int}\ olen;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Length\ of\ user\ portion\ of\ output\ buffer\ (decimated\ L)}}
+\DoxyCodeLine{00065\ \ \ \textcolor{keywordtype}{int}\ bins;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Number\ of\ frequency\ bins;\ ==\ N\ for\ complex,\ ==\ N/2\ +\ 1\ for\ real\ output}}
+\DoxyCodeLine{00066\ \ \ complex\ \textcolor{keywordtype}{float}\ *\ restrict\ fdomain;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Filtered\ signal\ in\ frequency\ domain}}
+\DoxyCodeLine{00067\ \ \ complex\ \textcolor{keywordtype}{float}\ *\ restrict\ response;\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Filter\ response\ in\ frequency\ domain}}
+\DoxyCodeLine{00068\ \ \ pthread\_mutex\_t\ response\_mutex;}
+\DoxyCodeLine{00069\ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structrc}{rc}}\ output\_buffer;\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Actual\ time-\/domain\ output\ buffer,\ length\ N/decimate}}
+\DoxyCodeLine{00070\ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structrc}{rc}}\ output;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Beginning\ of\ user\ output\ area,\ length\ L/decimate}}
+\DoxyCodeLine{00071\ \ \ fftwf\_plan\ rev\_plan;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ IFFT\ (frequency\ -\/>\ time)}}
+\DoxyCodeLine{00072\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ next\_jobnum;}
+\DoxyCodeLine{00073\ \ \ \textcolor{keywordtype}{float}\ noise\_gain;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Filter\ gain\ on\ uniform\ noise\ (ratio\ <\ 1)}}
+\DoxyCodeLine{00074\ \ \ \textcolor{keywordtype}{int}\ block\_drops;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Lost\ frequency\ domain\ blocks,\ e.g.,\ from\ late\ scheduling\ of\ slave\ thread}}
+\DoxyCodeLine{00075\ \ \ \textcolor{keywordtype}{int}\ rcnt;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Samples\ read\ from\ output\ buffer}}
+\DoxyCodeLine{00076\ \};}
+\DoxyCodeLine{00077\ }
+\DoxyCodeLine{00078\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structfilter__in}{filter\_in}}\ *create\_filter\_input(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__in}{filter\_in}}\ *,\textcolor{keywordtype}{int}\ \textcolor{keyword}{const}\ L,\textcolor{keywordtype}{int}\ \textcolor{keyword}{const}\ M,\ \textcolor{keyword}{enum}\ filtertype\ \textcolor{keyword}{const}\ in\_type);}
+\DoxyCodeLine{00079\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structfilter__out}{filter\_out}}\ *create\_filter\_output(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__out}{filter\_out}}\ *slave,\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__in}{filter\_in}}\ *\ restrict\ master,complex\ \textcolor{keywordtype}{float}\ *\ restrict\ response,\textcolor{keywordtype}{int}\ olen,\ \textcolor{keyword}{enum}\ filtertype\ out\_type);}
+\DoxyCodeLine{00080\ \textcolor{keywordtype}{int}\ execute\_filter\_input(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__in}{filter\_in}}\ *\ restrict);}
+\DoxyCodeLine{00081\ \textcolor{keywordtype}{int}\ execute\_filter\_output(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__out}{filter\_out}}\ *\ restrict\ ,\textcolor{keywordtype}{int});}
+\DoxyCodeLine{00082\ \textcolor{keywordtype}{int}\ execute\_filter\_output\_idle(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__out}{filter\_out}}\ *\ \textcolor{keyword}{const}\ slave);}
+\DoxyCodeLine{00083\ \textcolor{keywordtype}{int}\ delete\_filter\_input(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__in}{filter\_in}}\ *\ restrict);}
+\DoxyCodeLine{00084\ \textcolor{keywordtype}{int}\ delete\_filter\_output(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__out}{filter\_out}}\ *\ restrict);}
+\DoxyCodeLine{00085\ \textcolor{keywordtype}{int}\ set\_filter(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__out}{filter\_out}}\ *\ restrict,\textcolor{keywordtype}{float},\textcolor{keywordtype}{float},\textcolor{keywordtype}{float});}
+\DoxyCodeLine{00086\ \textcolor{keywordtype}{void}\ *run\_fft(\textcolor{keywordtype}{void}\ *);}
+\DoxyCodeLine{00087\ \textcolor{keywordtype}{int}\ write\_cfilter(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__in}{filter\_in}}\ *,\ complex\ \textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ *,\textcolor{keywordtype}{int}\ size);}
+\DoxyCodeLine{00088\ \textcolor{keywordtype}{int}\ write\_rfilter(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__in}{filter\_in}}\ *,\ \textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ *,\textcolor{keywordtype}{int}\ size);}
+\DoxyCodeLine{00089\ }
+\DoxyCodeLine{00090\ }
+\DoxyCodeLine{00091\ \textcolor{comment}{//\ Write\ complex\ sample\ to\ input\ side\ of\ filter}}
+\DoxyCodeLine{00092\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{int}\ put\_cfilter(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__in}{filter\_in}}\ *\ restrict\ \textcolor{keyword}{const}\ f,complex\ \textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ s)\{\ \textcolor{comment}{//\ Complex}}
+\DoxyCodeLine{00093\ \ \ assert((\textcolor{keywordtype}{void}\ *)(f-\/>input\_write\_pointer.c)\ >=\ f-\/>input\_buffer);}
+\DoxyCodeLine{00094\ \ \ assert((\textcolor{keywordtype}{void}\ *)(f-\/>input\_write\_pointer.c)\ <\ f-\/>input\_buffer\ +\ f-\/>input\_buffer\_size);}
+\DoxyCodeLine{00095\ \ \ *f-\/>input\_write\_pointer.c++\ =\ s;}
+\DoxyCodeLine{00096\ \ \ mirror\_wrap((\textcolor{keywordtype}{void}\ *)\&f-\/>input\_write\_pointer.c,\ f-\/>input\_buffer,f-\/>input\_buffer\_size);}
+\DoxyCodeLine{00097\ \ \ \textcolor{keywordflow}{if}(++f-\/>wcnt\ >=\ f-\/>ilen)\{}
+\DoxyCodeLine{00098\ \ \ \ \ f-\/>wcnt\ -\/=\ f-\/>ilen;}
+\DoxyCodeLine{00099\ \ \ \ \ execute\_filter\_input(f);}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordflow}{return}\ 1;\ \textcolor{comment}{//\ may\ now\ execute\ filter\ output\ without\ blocking}}
+\DoxyCodeLine{00101\ \ \ \}}
+\DoxyCodeLine{00102\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00103\ \}}
+\DoxyCodeLine{00104\ }
+\DoxyCodeLine{00105\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{int}\ put\_rfilter(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__in}{filter\_in}}\ *\ restrict\ \textcolor{keyword}{const}\ f,\textcolor{keywordtype}{float}\ \textcolor{keyword}{const}\ s)\{}
+\DoxyCodeLine{00106\ \ \ assert((\textcolor{keywordtype}{void}\ *)(f-\/>input\_write\_pointer.r)\ >=\ f-\/>input\_buffer);}
+\DoxyCodeLine{00107\ \ \ assert((\textcolor{keywordtype}{void}\ *)(f-\/>input\_write\_pointer.r)\ <\ f-\/>input\_buffer\ +\ f-\/>input\_buffer\_size);}
+\DoxyCodeLine{00108\ \ \ *f-\/>input\_write\_pointer.r++\ =\ s;}
+\DoxyCodeLine{00109\ \ \ mirror\_wrap((\textcolor{keywordtype}{void}\ *)\&f-\/>input\_write\_pointer.r,\ f-\/>input\_buffer,f-\/>input\_buffer\_size);}
+\DoxyCodeLine{00110\ \ \ \textcolor{keywordflow}{if}(++f-\/>wcnt\ >=\ f-\/>ilen)\{}
+\DoxyCodeLine{00111\ \ \ \ \ f-\/>wcnt\ -\/=\ f-\/>ilen;}
+\DoxyCodeLine{00112\ \ \ \ \ execute\_filter\_input(f);}
+\DoxyCodeLine{00113\ \ \ \ \ \textcolor{keywordflow}{return}\ 1;\ \textcolor{comment}{//\ may\ now\ execute\ filter\ output\ without\ blocking}}
+\DoxyCodeLine{00114\ \ \ \}}
+\DoxyCodeLine{00115\ \ \ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00116\ \}}
+\DoxyCodeLine{00117\ }
+\DoxyCodeLine{00118\ \textcolor{comment}{//\ Read\ real\ samples\ from\ output\ side\ of\ filter}}
+\DoxyCodeLine{00119\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{float}\ read\_rfilter(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__out}{filter\_out}}\ *\ restrict\ \textcolor{keyword}{const}\ f,\textcolor{keywordtype}{int}\ \textcolor{keyword}{const}\ rotate)\{}
+\DoxyCodeLine{00120\ \ \ \textcolor{keywordflow}{if}(f-\/>rcnt\ ==\ 0)\{}
+\DoxyCodeLine{00121\ \ \ \ \ execute\_filter\_output(f,rotate);}
+\DoxyCodeLine{00122\ \ \ \ \ f-\/>rcnt\ =\ f-\/>olen;}
+\DoxyCodeLine{00123\ \ \ \}}
+\DoxyCodeLine{00124\ \ \ \textcolor{keywordflow}{return}\ f-\/>output.r[f-\/>olen\ -\/\ f-\/>rcnt-\/-\/];}
+\DoxyCodeLine{00125\ \}}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00127\ \textcolor{comment}{//\ Read\ complex\ samples\ from\ output\ side\ of\ filter}}
+\DoxyCodeLine{00128\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ complex\ \textcolor{keywordtype}{float}\ read\_cfilter(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfilter__out}{filter\_out}}\ *\ restrict\ \textcolor{keyword}{const}\ f,\textcolor{keywordtype}{int}\ \textcolor{keyword}{const}\ rotate)\{}
+\DoxyCodeLine{00129\ \ \ \textcolor{keywordflow}{if}(f-\/>rcnt\ ==\ 0)\{}
+\DoxyCodeLine{00130\ \ \ \ \ execute\_filter\_output(f,rotate);}
+\DoxyCodeLine{00131\ \ \ \ \ f-\/>rcnt\ =\ f-\/>olen;}
+\DoxyCodeLine{00132\ \ \ \}}
+\DoxyCodeLine{00133\ \ \ \textcolor{keywordflow}{return}\ f-\/>output.c[f-\/>olen\ -\/\ f-\/>rcnt-\/-\/];}
+\DoxyCodeLine{00134\ \}}
+\DoxyCodeLine{00135\ }
+\DoxyCodeLine{00136\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

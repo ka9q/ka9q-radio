@@ -1,0 +1,34 @@
+\doxysection{/\+Users/karn/src/ka9q-\/radio/bandplan.h}
+\hypertarget{bandplan_8h_source}{}\label{bandplan_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//\ Bandplan\ routine\ data\ structures\ and\ definitions\ for\ ka9q-\/radio}}
+\DoxyCodeLine{00002\ \textcolor{comment}{//\ Fairly\ primitive,\ needs\ to\ be\ revised\ with\ a\ more\ general\ database}}
+\DoxyCodeLine{00003\ \textcolor{comment}{//\ Copyright\ 2018-\/2023,\ Phil\ Karn,\ KA9Q}}
+\DoxyCodeLine{00004\ }
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#ifndef\ \_BANDPLAN\_H}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#define\ \_BANDPLAN\_H\ 1}}
+\DoxyCodeLine{00007\ }
+\DoxyCodeLine{00008\ \textcolor{comment}{//\ Amateur\ license\ classes\ authorized\ for\ each\ band\ segment}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#define\ NOVICE\_CLASS\ 1}}
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#define\ TECHNICIAN\_CLASS\ 2}}
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#define\ GENERAL\_CLASS\ 4}}
+\DoxyCodeLine{00012\ \textcolor{preprocessor}{\#define\ ADVANCED\_CLASS\ 8}}
+\DoxyCodeLine{00013\ \textcolor{preprocessor}{\#define\ EXTRA\_CLASS\ 16}}
+\DoxyCodeLine{00014\ }
+\DoxyCodeLine{00015\ \textcolor{comment}{//\ Emission\ types\ authorized\ for\ each\ band\ segment}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#define\ VOICE\ 1}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#define\ DATA\ 2}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#define\ IMAGE\ 4}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#define\ CW\ 8}}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structbandplan}{bandplan}}\ \{}
+\DoxyCodeLine{00022\ \ \ \textcolor{keywordtype}{double}\ lower;}
+\DoxyCodeLine{00023\ \ \ \textcolor{keywordtype}{double}\ upper;}
+\DoxyCodeLine{00024\ \ \ \textcolor{keywordtype}{char}\ description[160];}
+\DoxyCodeLine{00025\ \};}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00027\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structbandplan}{bandplan}}\ const\ *lookup\_frequency(\textcolor{keywordtype}{double});}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

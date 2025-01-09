@@ -1,0 +1,137 @@
+\doxysection{frontend Struct Reference}
+\hypertarget{structfrontend}{}\label{structfrontend}\index{frontend@{frontend}}
+
+
+Front end control block, one per radiod instance.  
+
+
+
+
+{\ttfamily \#include $<$radio.\+h$>$}
+
+
+
+Collaboration diagram for frontend\+:
+\nopagebreak
+\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[width=188pt]{structfrontend__coll__graph}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Data Fields}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{structfrontend_a363d3d600583a2549d5e33d710d840b0}\label{structfrontend_a363d3d600583a2549d5e33d710d840b0} 
+uint64\+\_\+t {\bfseries samples}
+\item 
+\Hypertarget{structfrontend_a000ddf92e79d2be9511a1a91ae84b72f}\label{structfrontend_a000ddf92e79d2be9511a1a91ae84b72f} 
+uint64\+\_\+t {\bfseries overranges}
+\item 
+\Hypertarget{structfrontend_a3a419ddeaeced4f8496e38ec570b80bd}\label{structfrontend_a3a419ddeaeced4f8496e38ec570b80bd} 
+uint64\+\_\+t {\bfseries samp\+\_\+since\+\_\+over}
+\item 
+\Hypertarget{structfrontend_af2c47f1fc76100ed35815edbbb92017c}\label{structfrontend_af2c47f1fc76100ed35815edbbb92017c} 
+int {\bfseries M}
+\item 
+\Hypertarget{structfrontend_a18f3501c4dd7230ee0abddeac74ec081}\label{structfrontend_a18f3501c4dd7230ee0abddeac74ec081} 
+int {\bfseries L}
+\item 
+\Hypertarget{structfrontend_af7941917423ae06cc3561081dbd58520}\label{structfrontend_af7941917423ae06cc3561081dbd58520} 
+char \texorpdfstring{$\ast$}{*} {\bfseries description}
+\item 
+\Hypertarget{structfrontend_ab06620766e5a83ac1a7ca96389bc7f95}\label{structfrontend_ab06620766e5a83ac1a7ca96389bc7f95} 
+int {\bfseries samprate}
+\item 
+\Hypertarget{structfrontend_a4f99536946235a67dc667753b45ef029}\label{structfrontend_a4f99536946235a67dc667753b45ef029} 
+int64\+\_\+t {\bfseries timestamp}
+\item 
+\Hypertarget{structfrontend_a235b5feeac5e2dd3b736438796b8d929}\label{structfrontend_a235b5feeac5e2dd3b736438796b8d929} 
+double {\bfseries frequency}
+\item 
+\Hypertarget{structfrontend_a5d7e23cb70c9ddb7f3a763dfcc00745d}\label{structfrontend_a5d7e23cb70c9ddb7f3a763dfcc00745d} 
+double {\bfseries calibrate}
+\item 
+\Hypertarget{structfrontend_a4b71c39e4893c6bad14ef3127381f69c}\label{structfrontend_a4b71c39e4893c6bad14ef3127381f69c} 
+uint8\+\_\+t {\bfseries lna\+\_\+gain}
+\item 
+\Hypertarget{structfrontend_a48a675f27aceb60e8a8b758d157f1b3c}\label{structfrontend_a48a675f27aceb60e8a8b758d157f1b3c} 
+uint8\+\_\+t {\bfseries mixer\+\_\+gain}
+\item 
+\Hypertarget{structfrontend_afc9f06ae33ef46990427dc5adceb67c8}\label{structfrontend_afc9f06ae33ef46990427dc5adceb67c8} 
+uint8\+\_\+t {\bfseries if\+\_\+gain}
+\item 
+\Hypertarget{structfrontend_abcfe0dce5080f7174aaa2da29db8f3de}\label{structfrontend_abcfe0dce5080f7174aaa2da29db8f3de} 
+float {\bfseries rf\+\_\+atten}
+\item 
+\Hypertarget{structfrontend_af4c3b7c906324d8f6bff22637187ef5c}\label{structfrontend_af4c3b7c906324d8f6bff22637187ef5c} 
+float {\bfseries rf\+\_\+gain}
+\item 
+\Hypertarget{structfrontend_ab3b46f3565c912031e906d1ef8a70634}\label{structfrontend_ab3b46f3565c912031e906d1ef8a70634} 
+bool {\bfseries rf\+\_\+agc}
+\item 
+\Hypertarget{structfrontend_aad9bcec49e32c4564bceb2ddfb5a0f04}\label{structfrontend_aad9bcec49e32c4564bceb2ddfb5a0f04} 
+float {\bfseries rf\+\_\+level\+\_\+cal}
+\item 
+\Hypertarget{structfrontend_ae634ab51b9091d886bfa1788e82be0b9}\label{structfrontend_ae634ab51b9091d886bfa1788e82be0b9} 
+bool {\bfseries direct\+\_\+conversion}
+\item 
+\Hypertarget{structfrontend_a2fe17c87b8bd144afd191c8e0130d637}\label{structfrontend_a2fe17c87b8bd144afd191c8e0130d637} 
+bool {\bfseries isreal}
+\item 
+\Hypertarget{structfrontend_ac64d19eb783056c17fdb6b2a34a5a9c7}\label{structfrontend_ac64d19eb783056c17fdb6b2a34a5a9c7} 
+int {\bfseries bitspersample}
+\item 
+\Hypertarget{structfrontend_a95e819702016604e38bfad0ceb3f4a91}\label{structfrontend_a95e819702016604e38bfad0ceb3f4a91} 
+bool {\bfseries lock}
+\item 
+\Hypertarget{structfrontend_a7abb2165c05e6202d4f88e5d2907104c}\label{structfrontend_a7abb2165c05e6202d4f88e5d2907104c} 
+float {\bfseries min\+\_\+\+IF}
+\item 
+\Hypertarget{structfrontend_a96646b37ca733a52cec6f57a5f878b61}\label{structfrontend_a96646b37ca733a52cec6f57a5f878b61} 
+float {\bfseries max\+\_\+\+IF}
+\item 
+\Hypertarget{structfrontend_a8a6c5623b83a091c72d85321391f7b2d}\label{structfrontend_a8a6c5623b83a091c72d85321391f7b2d} 
+float {\bfseries if\+\_\+power\+\_\+instant}
+\item 
+\Hypertarget{structfrontend_a239c8a381247bd102a37ce338ae163ba}\label{structfrontend_a239c8a381247bd102a37ce338ae163ba} 
+float {\bfseries if\+\_\+power}
+\item 
+\Hypertarget{structfrontend_abbb43d974aae884156c6691a4548956e}\label{structfrontend_abbb43d974aae884156c6691a4548956e} 
+float {\bfseries if\+\_\+power\+\_\+max}
+\item 
+\Hypertarget{structfrontend_a98e269507878ca05f7da387a38cbf621}\label{structfrontend_a98e269507878ca05f7da387a38cbf621} 
+pthread\+\_\+mutex\+\_\+t {\bfseries status\+\_\+mutex}
+\item 
+\Hypertarget{structfrontend_a9a87408e942e731711bb5ba284f875a3}\label{structfrontend_a9a87408e942e731711bb5ba284f875a3} 
+pthread\+\_\+cond\+\_\+t {\bfseries status\+\_\+cond}
+\item 
+\Hypertarget{structfrontend_a2999a8d25db808eb1723d9dd58edb392}\label{structfrontend_a2999a8d25db808eb1723d9dd58edb392} 
+void \texorpdfstring{$\ast$}{*} {\bfseries context}
+\item 
+\Hypertarget{structfrontend_af3b488e2d065b6d624a6e3002ebd2887}\label{structfrontend_af3b488e2d065b6d624a6e3002ebd2887} 
+int(\texorpdfstring{$\ast$}{*} {\bfseries setup} )(struct \mbox{\hyperlink{structfrontend}{frontend}} \texorpdfstring{$\ast$}{*}, dictionary \texorpdfstring{$\ast$}{*}, char const \texorpdfstring{$\ast$}{*})
+\item 
+\Hypertarget{structfrontend_a581a31a5b99ef197527d9f86fb957023}\label{structfrontend_a581a31a5b99ef197527d9f86fb957023} 
+int(\texorpdfstring{$\ast$}{*} {\bfseries start} )(struct \mbox{\hyperlink{structfrontend}{frontend}} \texorpdfstring{$\ast$}{*})
+\item 
+\Hypertarget{structfrontend_a317774d5a24070b417bb3fdb28b06d24}\label{structfrontend_a317774d5a24070b417bb3fdb28b06d24} 
+double(\texorpdfstring{$\ast$}{*} {\bfseries tune} )(struct \mbox{\hyperlink{structfrontend}{frontend}} \texorpdfstring{$\ast$}{*}, double)
+\item 
+\Hypertarget{structfrontend_a572d69bbe86c43e77ab506ec93fd16d0}\label{structfrontend_a572d69bbe86c43e77ab506ec93fd16d0} 
+float(\texorpdfstring{$\ast$}{*} {\bfseries gain} )(struct \mbox{\hyperlink{structfrontend}{frontend}} \texorpdfstring{$\ast$}{*}, float)
+\item 
+\Hypertarget{structfrontend_a7d53716bd4e9d37e5bfd5a25557a2177}\label{structfrontend_a7d53716bd4e9d37e5bfd5a25557a2177} 
+float(\texorpdfstring{$\ast$}{*} {\bfseries atten} )(struct \mbox{\hyperlink{structfrontend}{frontend}} \texorpdfstring{$\ast$}{*}, float)
+\item 
+\Hypertarget{structfrontend_a5f8d5b0711b2211ae591741a4e51224e}\label{structfrontend_a5f8d5b0711b2211ae591741a4e51224e} 
+struct \mbox{\hyperlink{structfilter__in}{filter\+\_\+in}} {\bfseries in}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Front end control block, one per radiod instance. 
+
+The documentation for this struct was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+/\+Users/karn/src/ka9q-\/radio/radio.\+h\end{DoxyCompactItemize}

@@ -1,0 +1,107 @@
+\chapter{Some useful notes on networking for \textquotesingle{}ka9q-\/radio\textquotesingle{}}
+\hypertarget{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES}{}\label{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES}\index{Some useful notes on networking for \textquotesingle{}ka9q-\/radio\textquotesingle{}@{Some useful notes on networking for \textquotesingle{}ka9q-\/radio\textquotesingle{}}}
+\label{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES_autotoc_md0}%
+\Hypertarget{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES_autotoc_md0}%
+ By default multicast packets are sent and received over the primary interface, which is typically the wired network or the wireless network. To see which interface is the primary one, run\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{ip\ address\ show}
+
+\end{DoxyCode}
+ and look for the first interface marked \textquotesingle{}MULTICAST\textquotesingle{}, \textquotesingle{}UP\textquotesingle{}, and \textquotesingle{}LOWER\+\_\+\+UP\textquotesingle{}
+
+For a full local setup where both \textquotesingle{}radiod\textquotesingle{} and the client applications (\textquotesingle{}monitor\textquotesingle{}, \textquotesingle{}control\textquotesingle{}, \textquotesingle{}pcmcat\textquotesingle{}, etc) are on the same host, the loopback (\textquotesingle{}lo\textquotesingle{}) interface can be used instead as documented in the second part of the document.\hypertarget{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES_autotoc_md1}{}\doxysection{\texorpdfstring{Using the primary interface for multicasting}{Using the primary interface for multicasting}}\label{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES_autotoc_md1}
+This is the default configuration with \textquotesingle{}ka9q-\/radio\textquotesingle{}; the important task in this case is to create firewall rules for the RTP streams (data) and for the control application\hypertarget{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES_autotoc_md2}{}\doxysubsection{\texorpdfstring{Firewall rule for RTP streams}{Firewall rule for RTP streams}}\label{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES_autotoc_md2}
+The RTP streams (sound/\+IQ data) use port 5004/udp; for client applications like \textquotesingle{}monitor\textquotesingle{} and \textquotesingle{}pcmcat\textquotesingle{} to work, port 5004/udp needs to be open\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{firewall-\/cmd\ -\/-\/add-\/port=5004/udp\ -\/-\/permanent}
+\DoxyCodeLine{firewall-\/cmd\ -\/-\/reload}
+
+\end{DoxyCode}
+
+
+The \textquotesingle{}monitor\textquotesingle{} client application can then be used to listen to the RTP streams; for instance\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{monitor\ nws-\/pcm.local}
+
+\end{DoxyCode}
+
+
+A tighter firewall rule allowing only multicast addresses in the 239.\+0.\+0.\+0/8 network can be defined (instead of the one above) using firewalld \textquotesingle{}rich rules\textquotesingle{}\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{firewall-\/cmd\ -\/-\/add-\/rich-\/rule='rule\ family="{}ipv4"{}\ destination\ address="{}239.0.0.0/8"{}\ port\ port="{}5004"{}\ protocol="{}udp"{}\ accept'\ -\/-\/permanent}
+\DoxyCodeLine{firewall-\/cmd\ -\/-\/reload}
+
+\end{DoxyCode}
+\hypertarget{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES_autotoc_md3}{}\doxysubsection{\texorpdfstring{Firewall rule for control connection}{Firewall rule for control connection}}\label{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES_autotoc_md3}
+The control connection instead uses port 5006/udp; for client applications like \textquotesingle{}control\textquotesingle{} to work, port 5006/udp needs to be open\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{firewall-\/cmd\ -\/-\/add-\/port=5006/udp\ -\/-\/permanent}
+\DoxyCodeLine{firewall-\/cmd\ -\/-\/reload}
+
+\end{DoxyCode}
+
+
+The \textquotesingle{}control\textquotesingle{} client application can then be used to send control commands to a specific channel in \textquotesingle{}radiod\textquotesingle{} identified by its SSRC; for instance\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{control\ -\/s\ 162550\ nws.local}
+
+\end{DoxyCode}
+
+
+A tighter firewall rule allowing only multicast addresses in the 239.\+0.\+0.\+0/8 network can be defined (instead of the one above) using firewalld \textquotesingle{}rich rules\textquotesingle{}\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{firewall-\/cmd\ -\/-\/add-\/rich-\/rule='rule\ family="{}ipv4"{}\ destination\ address="{}239.0.0.0/8"{}\ port\ port="{}5006"{}\ protocol="{}udp"{}\ accept'\ -\/-\/permanent}
+\DoxyCodeLine{firewall-\/cmd\ -\/-\/reload}
+
+\end{DoxyCode}
+\hypertarget{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES_autotoc_md4}{}\doxysection{\texorpdfstring{Using the loopback interface for multicasting}{Using the loopback interface for multicasting}}\label{md__2Users_2karn_2src_2ka9q-radio_2NETWORK-NOTES_autotoc_md4}
+This configuration can be used when \textquotesingle{}radiod\textquotesingle{} and all the client applications run on the same host -\/ it will not send multicast packets over to any external network (thus possibly avoiding problems when those networks cannot support multicasting).
+
+The first step is to add the following four lines to \textquotesingle{}multicast.\+c\textquotesingle{}, rebuild and reinstall \textquotesingle{}ka9q-\/radio\textquotesingle{}\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{diff\ -\/-\/git\ a/multicast.c\ b/multicast.c}
+\DoxyCodeLine{index\ 1c451b6..a1f3667\ 100644}
+\DoxyCodeLine{-\/-\/-\/\ a/multicast.c}
+\DoxyCodeLine{+++\ b/multicast.c}
+\DoxyCodeLine{@@\ -\/717,6\ +717,10\ @@\ static\ int\ ipv4\_join\_group(int\ const\ fd,void\ const\ *\ const\ sock,char\ const\ *\ con}
+\DoxyCodeLine{\ \ \ \ \ mreqn.imr\_ifindex\ =\ 0;}
+\DoxyCodeLine{\ \ \ else}
+\DoxyCodeLine{\ \ \ \ \ mreqn.imr\_ifindex\ =\ if\_nametoindex(iface);}
+\DoxyCodeLine{+\ \ if(setsockopt(fd,IPPROTO\_IP,IP\_MULTICAST\_IF,\&mreqn,sizeof(mreqn))\ !=\ 0)\{}
+\DoxyCodeLine{+\ \ \ \ perror("{}multicast\ v4\ set\ interface"{});}
+\DoxyCodeLine{+\ \ \ \ return\ -\/1;}
+\DoxyCodeLine{+\ \ \}}
+\DoxyCodeLine{\ \ \ if(setsockopt(fd,IPPROTO\_IP,IP\_ADD\_MEMBERSHIP,\&mreqn,sizeof(mreqn))\ !=\ 0)\{}
+\DoxyCodeLine{\ \ \ \ \ perror("{}multicast\ v4\ join"{});}
+\DoxyCodeLine{\ \ \ \ \ return\ -\/1;}
+
+\end{DoxyCode}
+ A possible reason for having to call setsockopt(\+IP\+\_\+\+MULTICAST\+\_\+\+IF) is the use of the \textquotesingle{}connect()\textquotesingle{} function, as explained here\+: \href{https://stackoverflow.com/questions/31791958/why-does-a-udp-connect-call-ignore-a-loopback-multicast-route-but-a-sendto-witho}{\texttt{ https\+://stackoverflow.\+com/questions/31791958/why-\/does-\/a-\/udp-\/connect-\/call-\/ignore-\/a-\/loopback-\/multicast-\/route-\/but-\/a-\/sendto-\/witho}}
+
+The next step is to add the line \textquotesingle{}iface = lo\textquotesingle{} in the \mbox{[}global\mbox{]} section in the radiod configuration file being run (and restart the corresponding radiod service); for instance\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{[global]}
+\DoxyCodeLine{samprate\ =\ 24000}
+\DoxyCodeLine{status\ =\ nws.local}
+\DoxyCodeLine{hardware\ =\ sdrplay}
+\DoxyCodeLine{\#verbose\ =\ 1}
+\DoxyCodeLine{iface\ =\ lo}
+
+\end{DoxyCode}
+
+
+Please note that this configuration does not require any additional firewall rules (since all the multicast traffic is over the loopback interface)
+
+I also found that I didn\textquotesingle{}t to add a routing table rule to send multicast over the loopback interface (\textquotesingle{}ip route add 239.\+0.\+0.\+0/8 dev lo\textquotesingle{}) and I didn\textquotesingle{}t have to explicitly enable multicasting on the loopback interface (\textquotesingle{}ip link set lo multicast on\textquotesingle{}); I thought I would mention these two commands in case someone else needs them.
+
+Finally in order to run \textquotesingle{}monitor\textquotesingle{}, \textquotesingle{}control\textquotesingle{}, \textquotesingle{}pcmcat\textquotesingle{}, and other client applications using the loopback interface, you have to append \textquotesingle{},lo\textquotesingle{} to the m\+DNS name; for instance\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{monitor\ nws-\/pcm.local,lo}
+
+\end{DoxyCode}
+ or\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{control\ -\/s\ 162550\ nws.local,lo}
+
+\end{DoxyCode}
+ 

@@ -1,0 +1,46 @@
+.TH "fft_job" 3 "KA9Q-Radio" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+fft_job
+.SH SYNOPSIS
+.br
+.PP
+.SS "Data Fields"
+
+.in +1c
+.ti -1c
+.RI "struct \fBfft_job\fP * \fBnext\fP"
+.br
+.ti -1c
+.RI "unsigned int \fBjobnum\fP"
+.br
+.ti -1c
+.RI "enum filtertype \fBtype\fP"
+.br
+.ti -1c
+.RI "fftwf_plan \fBplan\fP"
+.br
+.ti -1c
+.RI "void * \fBinput\fP"
+.br
+.ti -1c
+.RI "void * \fBoutput\fP"
+.br
+.ti -1c
+.RI "pthread_mutex_t * \fBcompletion_mutex\fP"
+.br
+.ti -1c
+.RI "pthread_cond_t * \fBcompletion_cond\fP"
+.br
+.ti -1c
+.RI "unsigned int * \fBcompletion_jobnum\fP"
+.br
+.ti -1c
+.RI "bool \fBterminate\fP"
+.br
+.in -1c
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for KA9Q-Radio from the source code\&.

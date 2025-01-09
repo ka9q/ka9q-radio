@@ -1,0 +1,71 @@
+\doxysection{/\+Users/karn/src/ka9q-\/radio/osc.h}
+\hypertarget{osc_8h_source}{}\label{osc_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//\ General\ purpose\ oscillator\ (complex\ quadrature\ and\ PLL)\ subroutines\ for\ ka9q-\/radio}}
+\DoxyCodeLine{00002\ \textcolor{comment}{//\ Cpoyright\ 2022-\/2023,\ Phil\ Karn,\ KA9Q}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#ifndef\ \_OSC\_H}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#define\ \_OSC\_H\ 1}}
+\DoxyCodeLine{00006\ }
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#define\ \_GNU\_SOURCE\ 1}}
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#include\ <pthread.h>}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#include\ <complex.h>}}
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#include\ <math.h>}}
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#include\ <stdint.h>}}
+\DoxyCodeLine{00012\ }
+\DoxyCodeLine{00013\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structosc}{osc}}\ \{}
+\DoxyCodeLine{00014\ \ \ \textcolor{keywordtype}{double}\ freq;}
+\DoxyCodeLine{00015\ \ \ \textcolor{keywordtype}{double}\ rate;}
+\DoxyCodeLine{00016\ \ \ complex\ \textcolor{keywordtype}{double}\ phasor;}
+\DoxyCodeLine{00017\ \ \ complex\ \textcolor{keywordtype}{double}\ phasor\_step;}
+\DoxyCodeLine{00018\ \ \ complex\ \textcolor{keywordtype}{double}\ phasor\_step\_step;}
+\DoxyCodeLine{00019\ \ \ \textcolor{keywordtype}{int}\ steps;\ \textcolor{comment}{//\ Steps\ since\ last\ normalize}}
+\DoxyCodeLine{00020\ \};}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structpll}{pll}}\ \{}
+\DoxyCodeLine{00023\ \ \ \textcolor{keywordtype}{float}\ samprate;}
+\DoxyCodeLine{00024\ \ \ uint32\_t\ vco\_phase;\ \textcolor{comment}{//\ 1\ cycle\ =\ 2\string^32}}
+\DoxyCodeLine{00025\ \ \ int32\_t\ vco\_step;\ \ \ \textcolor{comment}{//\ resolution:\ 1/2\string^32\ cycles}}
+\DoxyCodeLine{00026\ \ \ \textcolor{keywordtype}{float}\ integrator\_gain;}
+\DoxyCodeLine{00027\ \ \ \textcolor{keywordtype}{float}\ prop\_gain;}
+\DoxyCodeLine{00028\ \ \ \textcolor{keywordtype}{float}\ integrator;}
+\DoxyCodeLine{00029\ \ \ \textcolor{keywordtype}{float}\ bw;\ \textcolor{comment}{//\ loop\ bandwidth}}
+\DoxyCodeLine{00030\ \ \ \textcolor{keywordtype}{float}\ damping;\ \textcolor{comment}{//\ Damping\ factor}}
+\DoxyCodeLine{00031\ \ \ \textcolor{keywordtype}{float}\ lower\_limit;\ \textcolor{comment}{//\ Lower\ PLL\ frequency\ limit,\ cycles/sample}}
+\DoxyCodeLine{00032\ \ \ \textcolor{keywordtype}{float}\ upper\_limit;\ \textcolor{comment}{//\ Upper\ PLL\ frequency\ limit,\ cycles/sample}}
+\DoxyCodeLine{00033\ \};}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \textcolor{comment}{//\ Osc\ functions\ -\/-\/\ complex\ rotator}}
+\DoxyCodeLine{00037\ \textcolor{keywordtype}{void}\ set\_osc(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structosc}{osc}}\ *\mbox{\hyperlink{structosc}{osc}},\textcolor{keywordtype}{double}\ f,\textcolor{keywordtype}{double}\ r);}
+\DoxyCodeLine{00038\ complex\ \textcolor{keywordtype}{double}\ step\_osc(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structosc}{osc}}\ *\mbox{\hyperlink{structosc}{osc}});}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \textcolor{comment}{//\ Osc\ functions\ -\/-\/\ direct\ digital\ synthesis\ (sine\ lookup\ table)}}
+\DoxyCodeLine{00041\ \textcolor{keywordtype}{float}\ sine\_dds(uint32\_t\ accum);}
+\DoxyCodeLine{00042\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{float}\ cos\_dds(uint32\_t\ accum)\{}
+\DoxyCodeLine{00043\ \ \ \textcolor{keywordflow}{return}\ sine\_dds(accum\ +\ (uint32\_t)0x40000000);\ \textcolor{comment}{//\ cos(x)\ =\ sin(x\ +\ 90\ deg)}}
+\DoxyCodeLine{00044\ \}}
+\DoxyCodeLine{00045\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ complex\ \textcolor{keywordtype}{float}\ comp\_dds(uint32\_t\ accum)\{}
+\DoxyCodeLine{00046\ \ \ complex\ \textcolor{keywordtype}{float}\ f;}
+\DoxyCodeLine{00047\ \ \ \_\_imag\_\_\ f\ =\ sine\_dds(accum);}
+\DoxyCodeLine{00048\ \ \ \_\_real\_\_\ f\ =\ cos\_dds(accum);}
+\DoxyCodeLine{00049\ \ \ \textcolor{keywordflow}{return}\ f;}
+\DoxyCodeLine{00050\ \}}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ \textcolor{comment}{//\ PLL\ functions}}
+\DoxyCodeLine{00054\ \textcolor{keywordtype}{void}\ init\_pll(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structpll}{pll}}\ *\mbox{\hyperlink{structpll}{pll}},\textcolor{keywordtype}{float}\ samprate);}
+\DoxyCodeLine{00055\ \textcolor{keywordtype}{float}\ run\_pll(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structpll}{pll}}\ *\mbox{\hyperlink{structpll}{pll}},\textcolor{keywordtype}{float}\ phase);}
+\DoxyCodeLine{00056\ \textcolor{keywordtype}{void}\ set\_pll\_params(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structpll}{pll}}\ *\mbox{\hyperlink{structpll}{pll}},\textcolor{keywordtype}{float}\ bw,\textcolor{keywordtype}{float}\ damping);}
+\DoxyCodeLine{00057\ \textcolor{keywordtype}{void}\ set\_pll\_limits(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structpll}{pll}}\ *\mbox{\hyperlink{structpll}{pll}},\textcolor{keywordtype}{float}\ low,\textcolor{keywordtype}{float}\ high);}
+\DoxyCodeLine{00058\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ complex\ \textcolor{keywordtype}{float}\ pll\_phasor(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structpll}{pll}}\ \textcolor{keyword}{const}\ *\mbox{\hyperlink{structpll}{pll}})\{}
+\DoxyCodeLine{00059\ \ \ \textcolor{keywordflow}{return}\ comp\_dds(\mbox{\hyperlink{structpll}{pll}}-\/>vco\_phase);}
+\DoxyCodeLine{00060\ \}}
+\DoxyCodeLine{00061\ \textcolor{keyword}{static}\ \textcolor{keyword}{inline}\ \textcolor{keywordtype}{float}\ pll\_freq(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structpll}{pll}}\ \textcolor{keyword}{const}\ *\mbox{\hyperlink{structpll}{pll}})\{}
+\DoxyCodeLine{00062\ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{float})\mbox{\hyperlink{structpll}{pll}}-\/>vco\_step\ *\ \mbox{\hyperlink{structpll}{pll}}-\/>samprate\ /\ (float)(1LL\ <<\ 32);\ \textcolor{comment}{//\ Hz}}
+\DoxyCodeLine{00063\ \}}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00066\ }
+
+\end{DoxyCode}

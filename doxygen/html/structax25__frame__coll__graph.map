@@ -1,0 +1,5 @@
+<map id="ax25_frame" name="ax25_frame">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,94,95,120"/>
+<area shape="rect" id="Node000002" href="$structdigi.html" title=" " alt="" coords="29,5,71,31"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="53,47,53,94,47,94,47,47"/>
+</map>

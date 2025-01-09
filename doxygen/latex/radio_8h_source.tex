@@ -1,0 +1,312 @@
+\doxysection{/\+Users/karn/src/ka9q-\/radio/radio.h}
+\hypertarget{radio_8h_source}{}\label{radio_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//\ Internal\ structures\ and\ functions\ of\ the\ 'ka9q-\/radio'\ package}}
+\DoxyCodeLine{00002\ \textcolor{comment}{//\ Nearly\ all\ internal\ state\ is\ in\ the\ 'demod'\ structure}}
+\DoxyCodeLine{00003\ \textcolor{comment}{//\ More\ than\ one\ can\ exist\ in\ the\ same\ program,}}
+\DoxyCodeLine{00004\ \textcolor{comment}{//\ but\ so\ far\ it\ seems\ easier\ to\ just\ run\ separate\ instances\ of\ the\ 'radio'\ program.}}
+\DoxyCodeLine{00005\ \textcolor{comment}{//\ Copyright\ 2018-\/2023,\ Phil\ Karn,\ KA9Q}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#ifndef\ \_RADIO\_H}}
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#define\ \_RADIO\_H\ 1}}
+\DoxyCodeLine{00008\ }
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#include\ <pthread.h>}}
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#include\ <complex.h>}}
+\DoxyCodeLine{00011\ }
+\DoxyCodeLine{00012\ \textcolor{preprocessor}{\#include\ <sys/socket.h>}}
+\DoxyCodeLine{00013\ \textcolor{preprocessor}{\#include\ <stdint.h>}}
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ <stdbool.h>}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ <limits.h>}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ <iniparser/iniparser.h>}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ <opus/opus.h>}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}multicast.h"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}osc.h"{}}}
+\DoxyCodeLine{00021\ \textcolor{preprocessor}{\#include\ "{}status.h"{}}}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#include\ "{}filter.h"{}}}
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#include\ "{}iir.h"{}}}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{comment}{//\ The\ four\ demodulator\ types}}
+\DoxyCodeLine{00026\ \textcolor{keyword}{enum}\ demod\_type\ \{}
+\DoxyCodeLine{00027\ \ \ LINEAR\_DEMOD\ =\ 0,\ \ \ \ \ \textcolor{comment}{//\ Linear\ demodulation,\ i.e.,\ everything\ else:\ SSB,\ CW,\ DSB,\ CAM,\ IQ}}
+\DoxyCodeLine{00028\ \ \ FM\_DEMOD,\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Frequency/phase\ demodulation}}
+\DoxyCodeLine{00029\ \ \ WFM\_DEMOD,\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ wideband\ frequency\ modulation\ (broadcast\ stereo)}}
+\DoxyCodeLine{00030\ \ \ SPECT\_DEMOD,\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Spectrum\ analysis\ pseudo-\/demod}}
+\DoxyCodeLine{00031\ \ \ N\_DEMOD,\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Dummy\ equal\ to\ number\ of\ valid\ entries}}
+\DoxyCodeLine{00032\ \};}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structdemodtab}{demodtab}}\ \{}
+\DoxyCodeLine{00035\ \ \ \textcolor{keyword}{enum}\ demod\_type\ type;}
+\DoxyCodeLine{00036\ \ \ \textcolor{keywordtype}{char}\ name[16];}
+\DoxyCodeLine{00037\ \};}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \textcolor{keyword}{extern}\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structdemodtab}{demodtab}}\ Demodtab[];}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00041\ \textcolor{keywordtype}{char}\ \textcolor{keyword}{const}\ *demod\_name\_from\_type(\textcolor{keyword}{enum}\ demod\_type\ type);}
+\DoxyCodeLine{00042\ \textcolor{keywordtype}{int}\ demod\_type\_from\_name(\textcolor{keywordtype}{char}\ \textcolor{keyword}{const}\ *name);}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00047\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structfrontend}{frontend}}\ \{}
+\DoxyCodeLine{00048\ }
+\DoxyCodeLine{00049\ \ \ \textcolor{comment}{//\ Stuff\ we\ maintain\ about\ our\ upstream\ source}}
+\DoxyCodeLine{00050\ \ \ uint64\_t\ samples;\ \ \ \ \ \textcolor{comment}{//\ Count\ of\ raw\ I/Q\ samples\ received}}
+\DoxyCodeLine{00051\ \ \ uint64\_t\ overranges;\ \ \textcolor{comment}{//\ Count\ of\ full\ scale\ A/D\ samples}}
+\DoxyCodeLine{00052\ \ \ uint64\_t\ samp\_since\_over;\ \textcolor{comment}{//\ Samples\ since\ last\ overrange}}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \ \ \textcolor{keywordtype}{int}\ M;\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Impulse\ length\ of\ input\ filter}}
+\DoxyCodeLine{00055\ \ \ \textcolor{keywordtype}{int}\ L;\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Block\ length\ of\ input\ filter}}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00057\ \ \ \textcolor{comment}{//\ Stuff\ maintained\ by\ our\ upstream\ source\ and\ filled\ in\ by\ the\ status\ daemon}}
+\DoxyCodeLine{00058\ \ \ \textcolor{keywordtype}{char}\ *description;\ \ \textcolor{comment}{//\ free-\/form\ text,\ must\ be\ unique\ per\ radiod\ instance}}
+\DoxyCodeLine{00059\ \ \ \textcolor{keywordtype}{int}\ samprate;\ \ \ \ \ \ \textcolor{comment}{//\ Nominal\ (requested)\ sample\ rate\ on\ raw\ input\ data\ stream,\ needs\ to\ be\ integer\ for\ filter\ stuff}}
+\DoxyCodeLine{00060\ \ \ int64\_t\ timestamp;\ \textcolor{comment}{//\ Nanoseconds\ since\ GPS\ epoch\ 6\ Jan\ 1980\ 00:00:00\ UTC}}
+\DoxyCodeLine{00061\ \ \ \textcolor{keywordtype}{double}\ frequency;}
+\DoxyCodeLine{00062\ \ \ \textcolor{keywordtype}{double}\ calibrate;\ \ \textcolor{comment}{//\ Clock\ frequency\ error\ ratio,\ e.g,\ +1e-\/6\ means\ 1\ ppm\ high}}
+\DoxyCodeLine{00063\ \ \ \textcolor{comment}{//\ R820T/828\ tuner\ gains,\ dB.\ Informational\ only;\ total\ is\ reported\ in\ rf\_gain}}
+\DoxyCodeLine{00064\ \ \ uint8\_t\ lna\_gain;}
+\DoxyCodeLine{00065\ \ \ uint8\_t\ mixer\_gain;}
+\DoxyCodeLine{00066\ \ \ uint8\_t\ if\_gain;}
+\DoxyCodeLine{00067\ }
+\DoxyCodeLine{00068\ \ \ \textcolor{keywordtype}{float}\ rf\_atten;\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ dB\ (RX888\ only,\ pretty\ useless)}}
+\DoxyCodeLine{00069\ \ \ \textcolor{keywordtype}{float}\ rf\_gain;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ dB\ gain\ (RX888)\ or\ lna\_gain\ +\ mixer\_gain\ +\ if\_gain\ for\ R820/828\ tuners}}
+\DoxyCodeLine{00070\ \ \ \textcolor{keywordtype}{bool}\ rf\_agc;\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Front\ end\ AGC\ of\ some\ sort\ is\ active}}
+\DoxyCodeLine{00071\ \ \ \textcolor{keywordtype}{float}\ rf\_level\_cal;\ \ \ \ \ \ \textcolor{comment}{//\ adjust\ to\ make\ 0\ dBm\ give\ 0\ dBFS:\ when\ zero,\ 0dBm\ gives\ "{}rf\_gain\_cal"{}\ dBFS}}
+\DoxyCodeLine{00072\ \ \ \textcolor{keywordtype}{bool}\ direct\_conversion;\ \textcolor{comment}{//\ Try\ to\ avoid\ DC\ spike\ if\ set}}
+\DoxyCodeLine{00073\ \ \ \textcolor{keywordtype}{bool}\ isreal;\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Use\ real-\/>complex\ FFT\ (otherwise\ complex-\/>complex)}}
+\DoxyCodeLine{00074\ \ \ \textcolor{keywordtype}{int}\ bitspersample;\ \ \ \ \ \ \textcolor{comment}{//\ 1,\ 8,\ 12\ or\ 16}}
+\DoxyCodeLine{00075\ \ \ \textcolor{keywordtype}{bool}\ lock;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Tuning\ is\ locked;\ clients\ cannot\ change}}
+\DoxyCodeLine{00076\ }
+\DoxyCodeLine{00077\ \ \ \textcolor{comment}{//\ Limits\ on\ usable\ IF\ due\ to\ aliasing,\ filtering,\ etc}}
+\DoxyCodeLine{00078\ \ \ \textcolor{comment}{//\ Less\ than\ or\ equal\ to\ +/-\/\ samprate/2}}
+\DoxyCodeLine{00079\ \ \ \textcolor{comment}{//\ Straddles\ 0\ Hz\ for\ complex,\ will\ have\ same\ sign\ for\ real\ output\ from\ a\ low\ IF\ tuner}}
+\DoxyCodeLine{00080\ \ \ \textcolor{comment}{//\ Usually\ negative\ for\ the\ 820/828\ tuners,\ which\ are\ effectively\ wideband\ LSB\ radios}}
+\DoxyCodeLine{00081\ \ \ \textcolor{keywordtype}{float}\ min\_IF;}
+\DoxyCodeLine{00082\ \ \ \textcolor{keywordtype}{float}\ max\_IF;}
+\DoxyCodeLine{00083\ }
+\DoxyCodeLine{00084\ \ \ \textcolor{comment}{/*\ For\ efficiency,\ signal\ levels\ now\ scaled\ to\ full\ A/D\ range,\ e.g.,}}
+\DoxyCodeLine{00085\ \textcolor{comment}{\ \ \ \ \ 16\ bit\ real:\ \ \ \ 0\ dBFS\ =\ +87.2984\ dB\ =\ 32767/sqrt(2)\ units\ RMS}}
+\DoxyCodeLine{00086\ \textcolor{comment}{\ \ \ \ \ 16\ bit\ complex:\ 0\ dBFS\ =\ +90.3087\ dB\ =\ 32767\ units\ RMS}}
+\DoxyCodeLine{00087\ \textcolor{comment}{\ \ \ \ \ 12\ bit\ real:\ \ \ \ 0\ dBFS\ =\ +63.2121\ dB\ =\ 2047/sqrt(2)\ units\ RMS}}
+\DoxyCodeLine{00088\ \textcolor{comment}{\ \ \ \ \ 12\ bit\ complex:\ 0\ dBFS\ =\ +66.2224\ dB\ =\ 2047\ units\ RMS}}
+\DoxyCodeLine{00089\ \textcolor{comment}{\ \ \ \ \ \ 8\ bit\ complex:\ 0\ dBFS\ =\ +42.0761\ dB\ =\ 127\ units\ RMS}}
+\DoxyCodeLine{00090\ \textcolor{comment}{}}
+\DoxyCodeLine{00091\ \textcolor{comment}{\ \ \ \ \ \ so\ full\ A/D\ range\ now\ corresponds\ to\ different\ levels\ internally,\ and\ are\ scaled}}
+\DoxyCodeLine{00092\ \textcolor{comment}{\ \ \ \ \ \ in\ radio\_status.c\ when\ sending\ status\ messages}}
+\DoxyCodeLine{00093\ \textcolor{comment}{\ \ */}}
+\DoxyCodeLine{00094\ \ \ \textcolor{keywordtype}{float}\ if\_power\_instant;\ \textcolor{comment}{//\ instantaneous\ receive\ power}}
+\DoxyCodeLine{00095\ \ \ \textcolor{keywordtype}{float}\ if\_power;\ \ \ \textcolor{comment}{//\ Exponentially\ smoothed\ power\ measurement\ in\ A/D\ units\ (not\ normalized)}}
+\DoxyCodeLine{00096\ \ \ \textcolor{keywordtype}{float}\ if\_power\_max;}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00098\ \ \ \textcolor{comment}{//\ This\ structure\ is\ updated\ asynchronously\ by\ the\ front\ end\ thread,\ so\ it's\ protected}}
+\DoxyCodeLine{00099\ \ \ pthread\_mutex\_t\ status\_mutex;}
+\DoxyCodeLine{00100\ \ \ pthread\_cond\_t\ status\_cond;\ \ \ \ \ \textcolor{comment}{//\ Signalled\ whenever\ status\ changes}}
+\DoxyCodeLine{00101\ }
+\DoxyCodeLine{00102\ \ \ \textcolor{comment}{//\ Entry\ points\ for\ local\ front\ end\ driver}}
+\DoxyCodeLine{00103\ \ \ \textcolor{keywordtype}{void}\ *context;\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Stash\ hardware-\/dependent\ control\ block}}
+\DoxyCodeLine{00104\ \ \ int\ (*setup)(\textcolor{keyword}{struct\ }\mbox{\hyperlink{structfrontend}{frontend}}\ *,dictionary\ *,\textcolor{keywordtype}{char}\ \textcolor{keyword}{const}\ *);\ \textcolor{comment}{//\ Get\ front\ end\ ready\ to\ go}}
+\DoxyCodeLine{00105\ \ \ int\ (*start)(\textcolor{keyword}{struct\ }\mbox{\hyperlink{structfrontend}{frontend}}\ *);\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Start\ front\ end\ sampling}}
+\DoxyCodeLine{00106\ \ \ double\ (*tune)(\textcolor{keyword}{struct\ }\mbox{\hyperlink{structfrontend}{frontend}}\ *,double);\ \textcolor{comment}{//\ Tune\ front\ end,\ return\ actual\ frequency}}
+\DoxyCodeLine{00107\ \ \ float\ (*gain)(\textcolor{keyword}{struct\ }\mbox{\hyperlink{structfrontend}{frontend}}\ *,float);}
+\DoxyCodeLine{00108\ \ \ float\ (*atten)(\textcolor{keyword}{struct\ }\mbox{\hyperlink{structfrontend}{frontend}}\ *,float);}
+\DoxyCodeLine{00109\ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structfilter__in}{filter\_in}}\ in;\ \textcolor{comment}{//\ Input\ half\ of\ fast\ convolver,\ shared\ with\ all\ channels}}
+\DoxyCodeLine{00110\ \};}
+\DoxyCodeLine{00111\ }
+\DoxyCodeLine{00112\ \textcolor{keyword}{extern}\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structfrontend}{frontend}}\ Frontend;\ \textcolor{comment}{//\ Only\ one\ per\ radio\ instance}}
+\DoxyCodeLine{00113\ }
+\DoxyCodeLine{00125\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structchannel}{channel}}\ \{}
+\DoxyCodeLine{00126\ \ \ \textcolor{keywordtype}{bool}\ inuse;}
+\DoxyCodeLine{00127\ \ \ \textcolor{keywordtype}{int}\ lifetime;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Remaining\ lifetime,\ frames}}
+\DoxyCodeLine{00128\ \ \ \textcolor{comment}{//\ Tuning\ parameters}}
+\DoxyCodeLine{00129\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00130\ \ \ \ \ \textcolor{keywordtype}{double}\ freq;\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Desired\ carrier\ frequency\ (settable)}}
+\DoxyCodeLine{00131\ \ \ \ \ \textcolor{keywordtype}{double}\ shift;\ \ \ \ \ \ \ \ \textcolor{comment}{//\ Post-\/demod\ frequency\ shift\ (settable)}}
+\DoxyCodeLine{00132\ \ \ \ \ \textcolor{keywordtype}{double}\ second\_LO;}
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{keywordtype}{double}\ doppler;\ \ \ \ \ \ \textcolor{comment}{//\ (settable)}}
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{keywordtype}{double}\ doppler\_rate;\ \textcolor{comment}{//\ (settable)}}
+\DoxyCodeLine{00135\ \ \ \}\ tune;}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structosc}{osc}}\ fine,shift;}
+\DoxyCodeLine{00138\ }
+\DoxyCodeLine{00139\ \ \ \textcolor{comment}{//\ Zero\ IF\ pre-\/demod\ filter\ params}}
+\DoxyCodeLine{00140\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00141\ \ \ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structfilter__out}{filter\_out}}\ out;}
+\DoxyCodeLine{00142\ \ \ \ \ \textcolor{keywordtype}{float}\ min\_IF;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Edges\ of\ filter\ (settable)}}
+\DoxyCodeLine{00143\ \ \ \ \ \textcolor{keywordtype}{float}\ max\_IF;\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ (settable)}}
+\DoxyCodeLine{00144\ \ \ \ \ \textcolor{comment}{//\ Window\ shape\ factor\ for\ Kaiser\ window}}
+\DoxyCodeLine{00145\ \ \ \ \ \textcolor{keywordtype}{float}\ kaiser\_beta;\ \ \textcolor{comment}{//\ settable}}
+\DoxyCodeLine{00146\ \ \ \ \ \textcolor{keywordtype}{bool}\ isb;\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Independent\ sideband\ mode\ (settable,\ currently\ unimplemented)}}
+\DoxyCodeLine{00147\ \ \ \ \ \textcolor{keywordtype}{float}\ *energies;\ \ \ \ \textcolor{comment}{//\ Vector\ of\ smoothed\ bin\ energies}}
+\DoxyCodeLine{00148\ \ \ \ \ \textcolor{keywordtype}{int}\ bin\_shift;\ \ \ \ \ \ \textcolor{comment}{//\ FFT\ bin\ shift\ for\ frequency\ conversion}}
+\DoxyCodeLine{00149\ \ \ \ \ \textcolor{keywordtype}{double}\ remainder;\ \ \ \textcolor{comment}{//\ Frequency\ remainder\ for\ fine\ tuning}}
+\DoxyCodeLine{00150\ \ \ \ \ complex\ \textcolor{keywordtype}{double}\ phase\_adjust;\ \textcolor{comment}{//\ Block\ rotation\ of\ phase}}
+\DoxyCodeLine{00151\ \ \ \}\ filter;}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00153\ \ \ \textcolor{keyword}{enum}\ demod\_type\ demod\_type;\ \ \textcolor{comment}{//\ Index\ into\ demodulator\ table\ (Linear,\ FM,\ FM\ Stereo,\ Spectrum)}}
+\DoxyCodeLine{00154\ \ \ \textcolor{keywordtype}{char}\ preset[32];\ \ \ \ \ \ \ \textcolor{comment}{//\ name\ of\ last\ mode\ preset}}
+\DoxyCodeLine{00155\ }
+\DoxyCodeLine{00156\ \ \ \textcolor{keyword}{struct\ }\{\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Used\ only\ in\ linear\ demodulator}}
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{keywordtype}{bool}\ env;\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Envelope\ detection\ in\ linear\ mode\ (settable)}}
+\DoxyCodeLine{00158\ \ \ \ \ \textcolor{keywordtype}{bool}\ agc;\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Automatic\ gain\ control\ enabled\ (settable)}}
+\DoxyCodeLine{00159\ \ \ \ \ \textcolor{keywordtype}{float}\ hangtime;\ \ \ \ \ \ \textcolor{comment}{//\ AGC\ hang\ time,\ samples\ (settable)}}
+\DoxyCodeLine{00160\ \ \ \ \ \textcolor{keywordtype}{float}\ recovery\_rate;\ \textcolor{comment}{//\ AGC\ recovery\ rate,\ amplitude\ ratio/sample\ \ (settable)}}
+\DoxyCodeLine{00161\ \ \ \ \ \textcolor{keywordtype}{float}\ threshold;\ \ \ \ \ \textcolor{comment}{//\ AGC\ threshold\ above\ noise,\ amplitude\ ratio}}
+\DoxyCodeLine{00162\ \ \ \}\ linear;}
+\DoxyCodeLine{00163\ \ \ \textcolor{keywordtype}{int}\ hangcount;\ \ \ \ \ \ \textcolor{comment}{//\ AGC\ hang\ timer\ before\ gain\ recovery\ starts}}
+\DoxyCodeLine{00164\ }
+\DoxyCodeLine{00165\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00166\ \ \ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structpll}{pll}}\ \mbox{\hyperlink{structpll}{pll}};}
+\DoxyCodeLine{00167\ \ \ \ \ \textcolor{keywordtype}{bool}\ was\_on;}
+\DoxyCodeLine{00168\ \ \ \ \ \textcolor{keywordtype}{int}\ lock\_count;}
+\DoxyCodeLine{00169\ \ \ \ \ \textcolor{keywordtype}{bool}\ enable;\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Linear\ mode\ PLL\ tracking\ of\ carrier\ (settable)}}
+\DoxyCodeLine{00170\ \ \ \ \ \textcolor{keywordtype}{bool}\ square;\ \ \ \ \ \ \textcolor{comment}{//\ Squarer\ on\ PLL\ input\ (settable)}}
+\DoxyCodeLine{00171\ \ \ \ \ \textcolor{keywordtype}{bool}\ lock;\ \ \ \ \textcolor{comment}{//\ PLL\ is\ locked}}
+\DoxyCodeLine{00172\ \ \ \ \ \textcolor{keywordtype}{float}\ loop\_bw;\ \ \ \ \textcolor{comment}{//\ Loop\ bw\ (coherent\ modes)}}
+\DoxyCodeLine{00173\ \ \ \ \ \textcolor{keywordtype}{float}\ cphase;\ \ \ \ \ \textcolor{comment}{//\ Carrier\ phase\ change\ radians\ (DSB/PSK)}}
+\DoxyCodeLine{00174\ \ \ \ \ int64\_t\ rotations;\ \textcolor{comment}{//\ Integer\ counts\ of\ cphase\ wraps\ through\ -\/PI,\ +PI}}
+\DoxyCodeLine{00175\ \ \ \}\ \mbox{\hyperlink{structpll}{pll}};}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00177\ \ \ \textcolor{comment}{//\ Signal\ levels\ \&\ status,\ common\ to\ all\ demods}}
+\DoxyCodeLine{00178\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00179\ \ \ \ \ \textcolor{keywordtype}{float}\ bb\_power;\ \ \ \textcolor{comment}{//\ Average\ power\ of\ signal\ after\ filter\ but\ before\ digital\ gain,\ power\ ratio}}
+\DoxyCodeLine{00180\ \ \ \ \ \textcolor{keywordtype}{float}\ bb\_energy;\ \ \textcolor{comment}{//\ Integrated\ power,\ reset\ by\ poll}}
+\DoxyCodeLine{00181\ \ \ \ \ \textcolor{keywordtype}{float}\ foffset;\ \ \ \ \textcolor{comment}{//\ Frequency\ offset\ Hz\ (FM,\ coherent\ AM,\ dsb)}}
+\DoxyCodeLine{00182\ \ \ \ \ \textcolor{keywordtype}{float}\ snr;\ \ \ \ \ \ \ \ \textcolor{comment}{//\ From\ PLL\ in\ linear,\ moments\ in\ FM}}
+\DoxyCodeLine{00183\ \ \ \ \ \textcolor{keywordtype}{float}\ n0;\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ per-\/demod\ N0\ (experimental)}}
+\DoxyCodeLine{00184\ \ \ \}\ sig;}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00186\ \ \ \textcolor{keyword}{struct\ }\{\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Used\ only\ in\ FM\ demodulator}}
+\DoxyCodeLine{00187\ \ \ \ \ \textcolor{keywordtype}{float}\ pdeviation;\ \ \ \ \ \ \ \ \textcolor{comment}{//\ Peak\ frequency\ deviation\ Hz\ (FM)}}
+\DoxyCodeLine{00188\ \ \ \ \ \textcolor{keywordtype}{float}\ tone\_freq;\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PL\ tone\ squelch\ frequency}}
+\DoxyCodeLine{00189\ \ \ \ \ \textcolor{keywordtype}{float}\ tone\_deviation;\ \ \ \ \textcolor{comment}{//\ Measured\ deviation\ of\ tone}}
+\DoxyCodeLine{00190\ \ \ \ \ \textcolor{keywordtype}{bool}\ threshold;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Threshold\ extension}}
+\DoxyCodeLine{00191\ \ \ \ \ \textcolor{keywordtype}{float}\ squelch\_open;\ \ \ \ \ \ \textcolor{comment}{//\ squelch\ open\ threshold,\ power\ ratio}}
+\DoxyCodeLine{00192\ \ \ \ \ \textcolor{keywordtype}{float}\ squelch\_close;\ \ \ \ \ \textcolor{comment}{//\ squelch\ close\ threshold}}
+\DoxyCodeLine{00193\ \ \ \ \ \textcolor{keywordtype}{int}\ squelch\_tail;\ \ \ \ \ \ \ \ \textcolor{comment}{//\ Frames\ to\ hold\ open\ after\ loss\ of\ SNR}}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keywordtype}{float}\ gain;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Empirically\ set\ to\ match\ overall\ gain\ with\ deemphasis\ to\ that\ without}}
+\DoxyCodeLine{00195\ \ \ \ \ \textcolor{keywordtype}{float}\ rate;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ de-\/emphasis\ filter\ coefficient\ computed\ from\ expf(-\/1.0\ /\ (tc\ *\ output.samprate));}}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ tc\ =\ 75e-\/6\ sec\ for\ North\ American\ FM\ broadcasting}}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ tc\ =\ 1\ /\ (2\ *\ M\_PI\ *\ 300.)\ =\ 530.5e-\/6\ sec\ for\ NBFM\ (300\ Hz\ corner\ freq)}}
+\DoxyCodeLine{00198\ \ \ \}\ fm;}
+\DoxyCodeLine{00199\ }
+\DoxyCodeLine{00200\ \ \ \textcolor{comment}{//\ Used\ by\ spectrum\ analysis\ only}}
+\DoxyCodeLine{00201\ \ \ \textcolor{comment}{//\ Coherent\ bin\ bandwidth\ =\ block\ rate\ in\ Hz}}
+\DoxyCodeLine{00202\ \ \ \textcolor{comment}{//\ Coherent\ bin\ spacing\ =\ block\ rate\ *\ 1\ -\/\ ((M-\/1)/(L+M-\/1))}}
+\DoxyCodeLine{00203\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00204\ \ \ \ \ \textcolor{keywordtype}{float}\ bin\_bw;\ \ \ \ \ \textcolor{comment}{//\ Requested\ bandwidth\ (hz)\ of\ noncoherent\ integration\ bin}}
+\DoxyCodeLine{00205\ \ \ \ \ \textcolor{keywordtype}{int}\ bin\_count;\ \ \ \ \textcolor{comment}{//\ Requested\ bin\ count}}
+\DoxyCodeLine{00206\ \ \ \ \ \textcolor{keywordtype}{float}\ *bin\_data;\ \ \textcolor{comment}{//\ Array\ of\ real\ floats\ with\ bin\_count\ elements}}
+\DoxyCodeLine{00207\ \ \ \}\ spectrum;}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00209\ \ \ \textcolor{comment}{//\ Output}}
+\DoxyCodeLine{00210\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00211\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ samprate;\ \ \ \ \ \ \textcolor{comment}{//\ Audio\ D/A\ sample\ rate}}
+\DoxyCodeLine{00212\ \ \ \ \ \textcolor{keywordtype}{float}\ gain;\ \ \ \ \ \ \ \ \textcolor{comment}{//\ Audio\ gain\ to\ normalize\ amplitude}}
+\DoxyCodeLine{00213\ \ \ \ \ \textcolor{keywordtype}{float}\ sum\_gain\_sq;\ \textcolor{comment}{//\ Sum\ of\ squared\ gains,\ for\ averaging}}
+\DoxyCodeLine{00214\ \ \ \ \ \textcolor{keywordtype}{float}\ headroom;\ \ \ \ \textcolor{comment}{//\ Audio\ level\ headroom,\ amplitude\ ratio\ (settable)}}
+\DoxyCodeLine{00215\ \ \ \ \ \textcolor{comment}{//\ RTP\ network\ streaming}}
+\DoxyCodeLine{00216\ \ \ \ \ \textcolor{keywordtype}{bool}\ silent;\ \ \ \ \ \ \ \textcolor{comment}{//\ last\ packet\ was\ suppressed\ (used\ to\ generate\ RTP\ mark\ bit)}}
+\DoxyCodeLine{00217\ \ \ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structrtp__state}{rtp\_state}}\ rtp;}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00219\ \ \ \ \ \textcolor{keyword}{struct\ }sockaddr\_storage\ source\_socket;\ \ \ \ \textcolor{comment}{//\ Source\ address\ of\ our\ data\ output}}
+\DoxyCodeLine{00220\ \ \ \ \ \textcolor{keyword}{struct\ }sockaddr\_storage\ dest\_socket;\ \ \ \ \ \ \textcolor{comment}{//\ Dest\ of\ our\ data\ output\ (typically\ multicast)}}
+\DoxyCodeLine{00221\ \ \ \ \ \textcolor{keywordtype}{char}\ dest\_string[\_POSIX\_HOST\_NAME\_MAX+20];\ \textcolor{comment}{//\ Allow\ room\ for\ :portnum}}
+\DoxyCodeLine{00222\ }
+\DoxyCodeLine{00223\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ channels;\ \ \ \textcolor{comment}{//\ 1\ =\ mono,\ 2\ =\ stereo\ (settable)}}
+\DoxyCodeLine{00224\ \ \ \ \ \textcolor{keywordtype}{float}\ energy;\ \ \ \textcolor{comment}{//\ Output\ energy\ since\ last\ poll}}
+\DoxyCodeLine{00225\ }
+\DoxyCodeLine{00226\ \ \ \ \ \textcolor{keywordtype}{float}\ deemph\_state\_left;}
+\DoxyCodeLine{00227\ \ \ \ \ \textcolor{keywordtype}{float}\ deemph\_state\_right;}
+\DoxyCodeLine{00228\ \ \ \ \ uint64\_t\ samples;}
+\DoxyCodeLine{00229\ \ \ \ \ \textcolor{keywordtype}{bool}\ pacing;\ \ \ \ \ \textcolor{comment}{//\ Pace\ output\ packets}}
+\DoxyCodeLine{00230\ \ \ \ \ \textcolor{keyword}{enum}\ encoding\ encoding;}
+\DoxyCodeLine{00231\ \ \ \ \ OpusEncoder\ *opus;}
+\DoxyCodeLine{00232\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ opus\_channels;}
+\DoxyCodeLine{00233\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ opus\_bitrate;}
+\DoxyCodeLine{00234\ \ \ \ \ \textcolor{keywordtype}{float}\ *queue;\ \textcolor{comment}{//\ Mirrored\ ring\ buffer}}
+\DoxyCodeLine{00235\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ queue\_size;\ \textcolor{comment}{//\ Size\ of\ allocation,\ in\ floats}}
+\DoxyCodeLine{00236\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ wp,rp;\ \textcolor{comment}{//\ Queue\ write\ and\ read\ indices}}
+\DoxyCodeLine{00237\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ minpacket;\ \ \textcolor{comment}{//\ minimum\ output\ packet\ size\ in\ blocks\ (0-\/3)}}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ i.e,\ no\ minimum\ or\ at\ least\ 20ms,\ 40ms\ or\ 60ms/packet}}
+\DoxyCodeLine{00239\ \ \ \}\ output;}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00242\ \ \ \ \ uint64\_t\ packets\_in;}
+\DoxyCodeLine{00243\ \ \ \ \ uint32\_t\ tag;}
+\DoxyCodeLine{00244\ \ \ \ \ pthread\_mutex\_t\ lock;\ \ \ \ \ \ \ \textcolor{comment}{//\ Protect\ statistics\ during\ updates\ and\ reads}}
+\DoxyCodeLine{00245\ \ \ \ \ uint64\_t\ blocks\_since\_poll;\ \textcolor{comment}{//\ Used\ for\ averaging\ signal\ levels}}
+\DoxyCodeLine{00246\ \ \ \ \ \textcolor{keywordtype}{int}\ global\_timer;}
+\DoxyCodeLine{00247\ \ \ \ \ \textcolor{keywordtype}{int}\ output\_timer;}
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{keywordtype}{int}\ output\_interval;}
+\DoxyCodeLine{00249\ \ \ \ \ uint64\_t\ packets\_out;}
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{keyword}{struct\ }sockaddr\_storage\ dest\_socket;\ \textcolor{comment}{//\ Local\ status\ output;\ same\ IP\ as\ output.dest\_socket\ but\ different\ port}}
+\DoxyCodeLine{00251\ \ \ \ \ uint8\_t\ *command;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Incoming\ command}}
+\DoxyCodeLine{00252\ \ \ \ \ \textcolor{keywordtype}{int}\ length;}
+\DoxyCodeLine{00253\ \ \ \}\ status;}
+\DoxyCodeLine{00254\ }
+\DoxyCodeLine{00255\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00256\ \ \ \ \ \textcolor{keyword}{struct\ }sockaddr\_storage\ dest\_socket;}
+\DoxyCodeLine{00257\ \ \ \ \ pthread\_t\ thread;}
+\DoxyCodeLine{00258\ \ \ \}\ rtcp;}
+\DoxyCodeLine{00259\ }
+\DoxyCodeLine{00260\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00261\ \ \ \ \ \textcolor{keyword}{struct\ }sockaddr\_storage\ dest\_socket;}
+\DoxyCodeLine{00262\ \ \ \ \ pthread\_t\ thread;}
+\DoxyCodeLine{00263\ \ \ \}\ sap;}
+\DoxyCodeLine{00264\ }
+\DoxyCodeLine{00265\ \ \ pthread\_t\ demod\_thread;}
+\DoxyCodeLine{00266\ \ \ uint64\_t\ options;}
+\DoxyCodeLine{00267\ \ \ \textcolor{keywordtype}{float}\ tp1,tp2;\ \textcolor{comment}{//\ Spare\ test\ points\ that\ can\ be\ read\ on\ the\ status\ channel}}
+\DoxyCodeLine{00268\ \};}
+\DoxyCodeLine{00269\ }
+\DoxyCodeLine{00270\ }
+\DoxyCodeLine{00271\ \textcolor{keyword}{extern}\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structchannel}{channel}}\ *Channel\_list;}
+\DoxyCodeLine{00272\ \textcolor{keyword}{extern}\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structchannel}{channel}}\ Template;}
+\DoxyCodeLine{00273\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{int}\ Channel\_list\_length;}
+\DoxyCodeLine{00274\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{int}\ \textcolor{keyword}{const}\ Channel\_alloc\_quantum;}
+\DoxyCodeLine{00275\ \textcolor{keyword}{extern}\ pthread\_mutex\_t\ Channel\_list\_mutex;}
+\DoxyCodeLine{00276\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{int}\ Channel\_idle\_timeout;}
+\DoxyCodeLine{00277\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{int}\ Ctl\_fd;\ \ \ \ \ \textcolor{comment}{//\ File\ descriptor\ for\ receiving\ user\ commands}}
+\DoxyCodeLine{00278\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{int}\ Output\_fd;}
+\DoxyCodeLine{00279\ \textcolor{keyword}{extern}\ \textcolor{keyword}{struct\ }sockaddr\_storage\ Metadata\_dest\_socket;\ \textcolor{comment}{//\ Socket\ for\ main\ metadata}}
+\DoxyCodeLine{00280\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{int}\ Verbose;}
+\DoxyCodeLine{00281\ \textcolor{keyword}{extern}\ \textcolor{keywordtype}{float}\ Blocktime;\ \textcolor{comment}{//\ Common\ to\ all\ receiver\ slices.\ NB!\ Milliseconds,\ not\ seconds}}
+\DoxyCodeLine{00282\ }
+\DoxyCodeLine{00283\ \textcolor{comment}{//\ Channel\ initialization\ \&\ manipulation}}
+\DoxyCodeLine{00284\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structchannel}{channel}}\ *create\_chan(uint32\_t\ ssrc);}
+\DoxyCodeLine{00285\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structchannel}{channel}}\ *lookup\_chan(uint32\_t\ ssrc);}
+\DoxyCodeLine{00286\ \textcolor{keywordtype}{int}\ close\_chan(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *);}
+\DoxyCodeLine{00287\ \textcolor{keywordtype}{int}\ set\_defaults(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *chan);}
+\DoxyCodeLine{00288\ \textcolor{keywordtype}{int}\ loadpreset(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *chan,dictionary\ \textcolor{keyword}{const}\ *table,\textcolor{keywordtype}{char}\ \textcolor{keyword}{const}\ *preset);}
+\DoxyCodeLine{00289\ \textcolor{keywordtype}{int}\ start\_demod(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *\ restrict\ chan);}
+\DoxyCodeLine{00290\ \textcolor{keywordtype}{double}\ set\_freq(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *\ restrict\ ,\textcolor{keywordtype}{double});}
+\DoxyCodeLine{00291\ \textcolor{keywordtype}{double}\ set\_first\_LO(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ \textcolor{keyword}{const}\ *\ restrict,\ \textcolor{keywordtype}{double});}
+\DoxyCodeLine{00292\ }
+\DoxyCodeLine{00293\ \textcolor{comment}{//\ Routines\ common\ to\ the\ internals\ of\ all\ channel\ demods}}
+\DoxyCodeLine{00294\ \textcolor{keywordtype}{int}\ compute\_tuning(\textcolor{keywordtype}{int}\ N,\ \textcolor{keywordtype}{int}\ M,\ \textcolor{keywordtype}{int}\ samprate,\textcolor{keywordtype}{int}\ *shift,\textcolor{keywordtype}{double}\ *remainder,\ \textcolor{keywordtype}{double}\ freq);}
+\DoxyCodeLine{00295\ \textcolor{keywordtype}{int}\ downconvert(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *chan);}
+\DoxyCodeLine{00296\ }
+\DoxyCodeLine{00297\ \textcolor{comment}{//\ extract\ front\ end\ scaling\ factors\ (depends\ on\ width\ of\ A/D\ sample)}}
+\DoxyCodeLine{00298\ \textcolor{keywordtype}{float}\ scale\_voltage\_out2FS(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfrontend}{frontend}}\ *\mbox{\hyperlink{structfrontend}{frontend}});}
+\DoxyCodeLine{00299\ \textcolor{keywordtype}{float}\ scale\_AD(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfrontend}{frontend}}\ \textcolor{keyword}{const}\ *\mbox{\hyperlink{structfrontend}{frontend}});}
+\DoxyCodeLine{00300\ \textcolor{keywordtype}{float}\ scale\_ADpower2FS(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfrontend}{frontend}}\ \textcolor{keyword}{const}\ *\mbox{\hyperlink{structfrontend}{frontend}});}
+\DoxyCodeLine{00301\ }
+\DoxyCodeLine{00302\ \textcolor{comment}{//\ Helper\ threads}}
+\DoxyCodeLine{00303\ \textcolor{keywordtype}{void}\ *sap\_send(\textcolor{keywordtype}{void}\ *);}
+\DoxyCodeLine{00304\ \textcolor{keywordtype}{void}\ *radio\_status(\textcolor{keywordtype}{void}\ *);}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00306\ \textcolor{comment}{//\ Demodulator\ thread\ entry\ points}}
+\DoxyCodeLine{00307\ \textcolor{keywordtype}{void}\ *demod\_fm(\textcolor{keywordtype}{void}\ *);}
+\DoxyCodeLine{00308\ \textcolor{keywordtype}{void}\ *demod\_wfm(\textcolor{keywordtype}{void}\ *);}
+\DoxyCodeLine{00309\ \textcolor{keywordtype}{void}\ *demod\_linear(\textcolor{keywordtype}{void}\ *);}
+\DoxyCodeLine{00310\ \textcolor{keywordtype}{void}\ *demod\_spectrum(\textcolor{keywordtype}{void}\ *);}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00312\ \textcolor{keywordtype}{int}\ send\_output(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *\ restrict\ ,\textcolor{keyword}{const}\ \textcolor{keywordtype}{float}\ *\ restrict,\textcolor{keywordtype}{int},\textcolor{keywordtype}{bool});}
+\DoxyCodeLine{00313\ \textcolor{keywordtype}{int}\ send\_radio\_status(\textcolor{keyword}{struct}\ sockaddr\ \textcolor{keyword}{const}\ *,\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfrontend}{frontend}}\ \textcolor{keyword}{const}\ *,\ \textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *);}
+\DoxyCodeLine{00314\ \textcolor{keywordtype}{int}\ reset\_radio\_status(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *chan);}
+\DoxyCodeLine{00315\ \textcolor{keywordtype}{bool}\ decode\_radio\_commands(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *chan,uint8\_t\ \textcolor{keyword}{const}\ *buffer,\textcolor{keywordtype}{int}\ length);}
+\DoxyCodeLine{00316\ \textcolor{keywordtype}{int}\ decode\_radio\_status(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structfrontend}{frontend}}\ *\mbox{\hyperlink{structfrontend}{frontend}},\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *\mbox{\hyperlink{structchannel}{channel}},uint8\_t\ \textcolor{keyword}{const}\ *buffer,\textcolor{keywordtype}{int}\ length);}
+\DoxyCodeLine{00317\ \textcolor{keywordtype}{int}\ flush\_output(\textcolor{keyword}{struct}\ \mbox{\hyperlink{structchannel}{channel}}\ *chan,\textcolor{keywordtype}{bool}\ marker,\textcolor{keywordtype}{bool}\ complete);}
+\DoxyCodeLine{00318\ }
+\DoxyCodeLine{00319\ }
+\DoxyCodeLine{00320\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ round\_samprate(\textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ x);}
+\DoxyCodeLine{00321\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

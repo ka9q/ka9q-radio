@@ -1,0 +1,49 @@
+\doxysection{fft\+\_\+job Struct Reference}
+\hypertarget{structfft__job}{}\label{structfft__job}\index{fft\_job@{fft\_job}}
+
+
+Collaboration diagram for fft\+\_\+job\+:\nopagebreak
+\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[width=163pt]{structfft__job__coll__graph}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Data Fields}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{structfft__job_a389ff131d8c1f0f884af419bd5aaa9aa}\label{structfft__job_a389ff131d8c1f0f884af419bd5aaa9aa} 
+struct \mbox{\hyperlink{structfft__job}{fft\+\_\+job}} \texorpdfstring{$\ast$}{*} {\bfseries next}
+\item 
+\Hypertarget{structfft__job_ac6f88bc9ab7620c90653c1940606972a}\label{structfft__job_ac6f88bc9ab7620c90653c1940606972a} 
+unsigned int {\bfseries jobnum}
+\item 
+\Hypertarget{structfft__job_ac09cbe4dae597b406852e5e986bbebed}\label{structfft__job_ac09cbe4dae597b406852e5e986bbebed} 
+enum filtertype {\bfseries type}
+\item 
+\Hypertarget{structfft__job_a7336a89a52c68923c47193debfdd9ff6}\label{structfft__job_a7336a89a52c68923c47193debfdd9ff6} 
+fftwf\+\_\+plan {\bfseries plan}
+\item 
+\Hypertarget{structfft__job_ae81bd3a987f6913d097cc88f090bb89a}\label{structfft__job_ae81bd3a987f6913d097cc88f090bb89a} 
+void \texorpdfstring{$\ast$}{*} {\bfseries input}
+\item 
+\Hypertarget{structfft__job_ab7aeb9392cc8de7fa470d7cab34eabdc}\label{structfft__job_ab7aeb9392cc8de7fa470d7cab34eabdc} 
+void \texorpdfstring{$\ast$}{*} {\bfseries output}
+\item 
+\Hypertarget{structfft__job_aa7f6490a0f9599479f8fe575e79fc91b}\label{structfft__job_aa7f6490a0f9599479f8fe575e79fc91b} 
+pthread\+\_\+mutex\+\_\+t \texorpdfstring{$\ast$}{*} {\bfseries completion\+\_\+mutex}
+\item 
+\Hypertarget{structfft__job_a2d0312273ecf03c03b4e8afb4862756d}\label{structfft__job_a2d0312273ecf03c03b4e8afb4862756d} 
+pthread\+\_\+cond\+\_\+t \texorpdfstring{$\ast$}{*} {\bfseries completion\+\_\+cond}
+\item 
+\Hypertarget{structfft__job_a224f525e031c59847a11156f536dfbd7}\label{structfft__job_a224f525e031c59847a11156f536dfbd7} 
+unsigned int \texorpdfstring{$\ast$}{*} {\bfseries completion\+\_\+jobnum}
+\item 
+\Hypertarget{structfft__job_af951662c589b78928575105c45b4136c}\label{structfft__job_af951662c589b78928575105c45b4136c} 
+bool {\bfseries terminate}
+\end{DoxyCompactItemize}
+
+
+The documentation for this struct was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+/\+Users/karn/src/ka9q-\/radio/filter.\+c\end{DoxyCompactItemize}

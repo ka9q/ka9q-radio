@@ -1,0 +1,16 @@
+<map id="channel" name="channel">
+<area shape="rect" id="Node000001" title="radiod channel state block" alt="" coords="125,291,192,316"/>
+<area shape="rect" id="Node000002" href="$structosc.html" title=" " alt="" coords="5,202,48,228"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="56,235,98,264,138,288,135,293,95,269,53,240"/>
+<area shape="rect" id="Node000003" href="$structfilter__out.html" title=" " alt="" coords="72,202,144,228"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="125,240,154,289,149,292,120,242"/>
+<area shape="rect" id="Node000004" href="$structfilter__in.html" title=" " alt="" coords="164,111,228,137"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="175,150,121,204,118,200,171,146"/>
+<area shape="rect" id="Node000005" href="$structrc.html" title=" " alt="" coords="66,5,104,31"/>
+<area shape="poly" id="edge5_Node000003_Node000005" title=" " alt="" coords="82,47,76,90,78,139,90,172,103,200,98,203,85,174,73,139,70,90,76,46"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="110,39,185,109,181,113,107,43"/>
+<area shape="rect" id="Node000006" href="$structpll.html" title=" " alt="" coords="167,202,206,228"/>
+<area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="180,243,165,291,160,289,175,242"/>
+<area shape="rect" id="Node000007" href="$structrtp__state.html" title=" " alt="" coords="230,202,303,228"/>
+<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="241,240,175,292,172,288,238,235"/>
+</map>
