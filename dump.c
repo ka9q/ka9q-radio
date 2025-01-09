@@ -375,6 +375,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case OPUS_BIT_RATE:
       fprintf(fp,"opus bitrate %'d Hz",decode_int(cp,optlen));
       break;
+    case MINPACKET:
+      fprintf(fp,"minimum buffered pkts %d",decode_int(cp,optlen));
+      break;
     default:
       fprintf(fp,"unknown type %d length %d",type,optlen);
       break;
