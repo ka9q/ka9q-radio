@@ -1103,9 +1103,11 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   }
   // We byte swap S16BE to S16LE, so change the tag
   if(Verbose){
-    fprintf(stderr,"%s creating '%s' samprate %d channels %d encoding %s freq %.3lf preset %s",
+    fprintf(stderr,"%s creating '%s' %d s/s %s %s %.3lf Hz %s",
 	    sp->frontend.description,
-	    sp->filename,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
+	    sp->filename,sp->samprate,
+	    sp->channels == 1 ? "mono" : "stereo",
+	    file_encoding,sp->chan.tune.freq,
 	    sp->chan.preset);
     if(sp->starting_offset > 0)
       fprintf(stderr," offset %lld",(long long)sp->starting_offset);
@@ -1174,11 +1176,10 @@ static int close_file(struct session *sp){
     end_wav_stream(sp);
 
   if(Verbose){
-    fprintf(stderr,"%s ssrc %u closing '%s' %'.1f/%'.1f sec\n",
+    fprintf(stderr,"%s closing '%s' %'.1f sec\n",
 	    sp->frontend.description,
-	    sp->ssrc,sp->filename, // might be blank
-            (float)sp->samples_written / (sp->samprate * sp->channels),
-            (float)sp->total_file_samples / (sp->samprate * sp->channels));
+	    sp->filename, // might be blank
+            (float)sp->samples_written / (sp->samprate * sp->channels));
   }
   if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
     fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
@@ -1191,9 +1192,8 @@ static int close_file(struct session *sp){
     } else if(strlen(sp->filename) > 0){
       unlink(sp->filename);
       if(Verbose)
-	fprintf(stderr,"ssrc %u deleting %s %'.1f/%'.1f sec\n",sp->ssrc,sp->filename,
-		(float)sp->samples_written / (sp->samprate * sp->channels),
-		(float)sp->total_file_samples / (sp->samprate * sp->channels));
+	fprintf(stderr,"deleting %s %'.1f sec\n",sp->filename,
+		(float)sp->samples_written / (sp->samprate * sp->channels));
     }
   }
   if(Command != NULL)
