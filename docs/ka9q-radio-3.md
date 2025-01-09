@@ -1,5 +1,5 @@
 Configuring Receiver Channels in *ka9q-radio*  
-Version 1.0 April 2023, Phil Karn
+Version 2.0 Jan 8, 2025, Phil Karn
 =============================================
 
 (This is the third part of the *ka9q-radio* configuration guide.
@@ -90,9 +90,12 @@ lower the sample rate of the FM demodulator output to save network
 capacity.)
 
 *ka9q-radio* supports any output sample rate that is a multiple of the
-FFT bin spacing.  This is equal to (overlap - 1) / (overlap *
-blocktime).  For the default of block time = 20 ms and overlap = 5,
-that's 4/(5 * 20 ms) = 40 Hz. This covers all the usual standard sample rates.
+least common multiple of the FFT bin spacing and the frame rate. For a 20 ms
+frame, the frame rate is 50 Hz. For an overlap of 5 (i.e., 1/5 of each
+FFT block is old data and 4/5 is new), the FFT bin spacing is 40 Hz. Therefore
+the sample rate must be a multiple of 200 Hz.
+This covers all the usual standard sample rates except for 44.1 kHz, the
+sample rate of the compact disk.
 
 ### channels = 1|2
 
@@ -202,8 +205,8 @@ default **headroom** setting of -15 dBFS, noise will thus appear at
 ### gain = 50 
 
 Linear demodulator only (the FM and
-WFM demodulators force this to fixed values depending on the
-predetection bandwidth and the ***headroom*** setting.) This is the gain in dB applied to the output of the
+WFM demodulators automatically set their output gains.)
+This is the gain in dB applied to the output of the
 linear demodulator before transmission to the output data stream. With
 the AGC on, this value only sets the initial value before the AGC
 operates. It should be chosen to avoid either loud momentary bursts (from being set too high) or
@@ -227,12 +230,6 @@ a nominal frequency of 0 Hz.
 Linear demodulator only. Enables the
 PLL with a squaring operation in the feedback path. Useful for DSB-SC
 (Double Sideband AM with Suppressed Carrier). Implies **pll = on**.
-
-### conj = on|off
-
-*Currently unimplemented*. Linear demodulator only.
-Enables independent sideband operation: LSB on left channel, USB on right channel.
-Linear only.
 
 ### pll-bw = 100
 
@@ -269,23 +266,118 @@ below the nominal speech band. Not needed for WFM because the 75
 microsecond time constant corresponds to 2123 Hz, above most of the
 power in typical speech or music.
 
+### extend|threshold-extend = yes|no
 
-### tos = 48
+FM only. Enable or disable an experimental FM threshold extension scheme to reduce the "popcorn" noise that happens just below what
+is conventionally called "full quieting". This can buy another 2-3 dB until the pops become too frequent to suppress.
 
-Sets the IP Type of Service (TOS) field used in all outgoing packets, overriding
-any value set in [globa].
+### tone|pl|ctcss = 0
 
-### ttl = 0
+FM only. When non-zero, enable a tone squelch for the specified tone frequency (Hz). Otherwise carrier squelch is used
 
-Sets the IP Time-to_Live field for all outgoing packets, overriding
-any value set in [global].
+### pacing = on|off
 
+When on, add a delay after each transmitted Ethernet data packet to help avoid overrunning switches or hosts with
+insufficient buffering. This is useful only at high bit rates where multiple packets need to be sent during each frame time.
+
+The Ethernet data size limit is 1440, 60 bytes less than the standard Ethernet MTU (Maximum Transmission Unit) of 1500 bytes
+to allow room for the RTP/UDP/IP headers. (The 1500 byte MTU excludes the 14-byte Ethernet header.) 1440 bytes every 20 ms (the usual
+frame time) is 576 kb/s or 16-bit PCM at a 36 kHz sampling rate. Higher output rates (e.g., 48 kHz) require multiple packets be sent
+with each frame's data, and without **pacing** on they are sent back-to-back. See also the **buffer** option.
+
+### encoding = s16le|s16be|f16le|f32le|opus
+
+Select an output encoding. All options except 'opus' are uncompressed
+PCM (pulse code modulation). The default is s16be, i.e., signed 16-bit
+linea PPM with big-endian byte order. This became an Internet
+convention well before little-endian machines took over the world, so
+programs like **pcmrecord** automatically convert this to s16le
+(signed 16-bit little endian).
+
+f32le is 32-bit IEEE 754 floating point format in little endian (i.e.,
+Intel) byte order. This is ka9q-radio's internal format,
+useful when a channel is operated with fixed gain to avoid exceeding
+the (already large) 100 dB dynamic range of 16-bit linear PCM.
+
+f16le is 16-bit IEEE 754 "half float" format. Half the size of f32le,
+f16le still has a very large total dynamic range, though at some loss
+in instantaneous dynamic range.
+
+opus is the Opus codec defined in RFC 6716. Opus is an open, royalty
+free "lossy" codec for general purpose use, from voice through high
+fidelity audio. It is very widely used "under the hood" in web
+browsing, games, and voice conferencing (e.g., Zoom, Signal.)  HF SSB
+typically compresses to 15 kb/s and NBFM to 25 kb/s, an enormous
+savings over uncompressed PCM rates (192 kb/s for 16 bit PCM @ 12 kHz
+and 384 kb/s at 24 kHz.) Opus is highly recommended for signals that
+you're just listening to, like FM or SSB voice, but stick to the PCM
+formats for digital data signals that need to be decoded.
+
+Note that Opus only supports a specific set of sample rates
+(8/12/16/24/48 kHz) so ***nothing at all*** is sent unless the
+demodulator sample rate is set to one of them. Opus also
+supports only a specific set of frame durations (2.5, 5, 10, 20, 40,
+60 ms, with more in newer versions) but this isn't a problem
+at the default ka9q-radio frame rate of 20 ms.
+
+### bitrate = 0
+
+Set the target bitrate, in kb/s, for the Opus encoder. (No effect in
+the PCM modes.) Setting this to 0 allows Opus to make its own
+decisions according to the bandwidth and SNR of the audio signal. This
+is usually the best choice.
+
+### update = 25
+
+Sets the interval, in frames, between transmissions of the status update packets
+on the data channel. At a default frame time of 20 ms, this corresponds to 2 Hz, which
+is good enough for most applications. Note that status updates stop in FM
+when the squelch is closed.
+
+These updates carry the full state of the channel and are needed by
+programs such as **pcmrecord** and **monitor** to determine things
+like the sample rate and format of the data stream before it can be
+interpreted.
+
+### buffer = 0
+
+Controls data output buffering. Allowable values are 0-4.
+
+The default of 0 means no buffering, i.e., at least one Ethernet
+output packet is sent during every ka9q-radio frame. When delay is not
+critical, buffering can significantly reduce the packet output rate at
+lower sample rates or with the Opus codec.
+
+Values 1-4 specify the maximum number of frame times that data may be
+buffered pending additional data. In Opus, 0 and 1 are basically the
+same: transmit one Opus packet every frame time. This is because the
+Opus codec only handles a specific set of sample rates and packet
+durations, and these match to the usual sample rates and frame times
+of ka9q-radio (this is not a coincidence). Opus is so effective that
+it is essentially impossible to reach the Ethernet size limit with 4 x
+20 = 80 ms of audio, so this setting primarily sets the Opus frame
+duration and encoding delay.
+
+PCM modes are a little more complicated. They quickly run into the
+Ethernet packet size limit; this happens with 16-bit samples at only
+36 kHz (see the **pacing** section).  Nevertheless, Ethernet packets
+can be much less than full at lower sample rates (e.g., 480 bytes for
+16-bit PCM @ 12 kHz). Setting buffer = 3 will send 3 * 480 = 1440
+bytes every 60 ms, cutting the packet rate to 1/3.  I recommend trying
+this out especially in non-delay-sensitive applications like
+WSPR/FT8/HFDL decoding, or when recording to files.
+
+Data will never be delayed when there's enough to send a full packet,
+so the effect of buffering is minimal at higher PCM sample
+rates. Depending on the specific sample rate and format it still may
+help fully pack all Ethernet frames instead of sending sequences of
+full packets plus one partial fragment during each frame, still
+reducing the average packet rate.
 
 ### disable = yes|no
 
 A section may be disabled without deleting it by setting "disable = yes"
 somewhere in the section.
-
 
 ### freq = 
 
@@ -323,8 +415,9 @@ if the channel is tuned to a different radio frequency, making this
 usage a bit of a hack.  But particularly in VHF/UHF repeater
 monitoring, most *ka9q-radio* channels are statically configured and
 never retuned, so it is nonetheless a useful convention. Also, the
-SSRC can still be used to find the actual radio frequency (and other
-channel parameters) from the metadata (status) stream.
+actual radio frequency (and other channel parameters) are included in
+the metadata (status) stream, and newer versions of **pcmrecord** and
+**monitor** now use this.
 
 
 The Dynamic Template
