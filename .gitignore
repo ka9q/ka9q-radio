@@ -4,6 +4,7 @@
 *.a
 *.o
 *.d
+!config/*.d
 Makefile
 .depend
 aprs
