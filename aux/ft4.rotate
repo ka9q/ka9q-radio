@@ -1,6 +1,6 @@
 /var/log/ft4.log
 {
-	rotate 10
+	rotate 30
 	daily
 	missingok
 	notifempty

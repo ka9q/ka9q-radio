@@ -1,6 +1,6 @@
 /var/log/wspr.log
 {
-	rotate 10
+	rotate 30
 	daily
 	missingok
 	notifempty
