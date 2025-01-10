@@ -12,7 +12,9 @@ Prerequisites
 
 To build and install this package on Debian (including the Raspberry Pi), install the prerequisite packages:
 
-sudo apt install avahi-utils build-essential make gcc libairspy-dev libairspyhf-dev libavahi-client-dev libbsd-dev libfftw3-dev libhackrf-dev libiniparser-dev libncurses5-dev libopus-dev librtlsdr-dev libusb-1.0-0-dev libusb-dev portaudio19-dev libasound2-dev uuid-dev rsync libogg-dev libsamplerate-dev
+sudo apt install avahi-utils build-essential make gcc libairspy-dev libairspyhf-dev libavahi-client-dev libbsd-dev libfftw3-dev libhackrf-dev libiniparser-dev libncurses5-dev libopus-dev librtlsdr-dev libusb-1.0-0-dev libusb-dev portaudio19-dev libasound2-dev uuid-dev rsync libogg-dev libsamplerate-dev libliquid-dev
+
+(libliquid-dev isn't actually used yet, but it probably will be soon.)
 
 And additionally on the Raspberry Pi:
 
@@ -70,6 +72,20 @@ This is the most complex part of the setup, and I'm still writing documentation.
 A quick-start guide still needs to be written, but you should start with the
 examples in the **config** subdirectory. Although the list of available options is quite long,
 most are rarely needed so most of the examples are actually fairly short and easy to understand.
+
+For ease of maintenance, each configuration may optionally be broken up into sections in a subdirectory. If radiod is given the config file name
+"radiod@foo.conf", it will look for the directory named "radiod@foo.conf.d" and read any files found therein after the original configuration
+file. Only filenames ending in ".conf" will be used, and they will be sorted by name before being read. The usual Linux convention
+is to use names of the form "01-bar.conf" that will sort by the numeric prefix. Editor temporaries and backups, e.g., "01-bar.conf~",
+are ignored.
+
+Config file sections, e.g, [global], [hardware] and so on, may
+actually appear in any order so the sort order of the subdirectory is
+important only if a single section is split across two or more files
+in the subdirectory.
+
+Note that the subdirectory is read *in addition to* the primary config file if it also exists, so to prevent confusion it is advisable to move it to a backup
+name, e.g., radiod@foo.conf-disabled so it will not be read.
 
 The configuration options, including the rarely used esoteric ones,  are fully documented here:
 
