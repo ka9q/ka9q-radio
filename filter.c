@@ -85,6 +85,7 @@ void *lmalloc(size_t size);
 
 static void suggest(int level,int size,int dir,int clex);
 static float noise_gain(struct filter_out const * const slave);
+static bool goodchoice(unsigned long n);
 
 
 // Create fast convolution filters
@@ -129,6 +130,10 @@ struct filter_in *create_filter_input(struct filter_in *master,int const L,int c
 
   if(master == NULL)
     return NULL;
+  if(!goodchoice(N))
+    fprintf(stdout,"create_filter_input(L=%d, M=%d): N=%d is not a good blocksize for FFTW3\n",L,M,N);
+
+
   for(int i=0; i < ND; i++){
     master->fdomain[i] = lmalloc(sizeof(complex float) * bins);
     master->completed_jobs[i] = (unsigned int)-1; // So startup won't drop any blocks
@@ -307,6 +312,9 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
     break;
   }
+  if(!goodchoice(slave->bins))
+    fprintf(stdout,"create_filter_output: N=%d is not a good blocksize for FFTW3\n",slave->bins);
+
   slave->next_jobnum = master->next_jobnum;
   pthread_mutex_unlock(&FFTW_planning_mutex);
   return slave;
@@ -1148,3 +1156,67 @@ static float const kaiser(int const n,int const M, float const beta){
   return i0(beta*sqrtf(1-p*p)) * old_inv_denom;
 }
 #endif
+
+// Assist with choosing good blocksizes for FFTW3
+static const int small_primes[6] = {2, 3, 5, 7, 11, 13};
+static unsigned long factor_small_primes(unsigned long n, int exponents[6]);
+
+
+// Is this a good blocksize for FFTW3?
+// Any number of factors of 2, 3, 7 plus one of either 11 or 13
+static bool goodchoice(unsigned long n){
+  int exponents[6];
+
+  unsigned long r = factor_small_primes(n,exponents);
+  if(r != 1 || (exponents[4] + exponents[5] > 1))
+    return false;
+  else
+    return true;
+}
+
+#if 0 // Use these later for determining valid output sample rates
+static unsigned long gcd(unsigned long a,unsigned long b);
+static unsigned long lcm(unsigned long a,unsigned long b);
+
+// Greatest common divisor
+static unsigned long gcd(unsigned long a,unsigned long b){
+  while(b != 0){
+    unsigned long t = b;
+    b = a % b;
+    a = t;
+  }
+  return a;
+}
+
+static unsigned long lcm(unsigned long a,unsigned long b){
+  if(a == 0 || b == 0)
+    return 0;
+  unsigned long g = gcd(a,b);
+  return (a/g) * b;
+}
+#endif
+
+/**
+ * Factor n into the primes 2,3,5,7,11,13.
+ * exponents[] should be an array of length 6, each slot will hold
+ *   the exponent for 2,3,5,7,11,13 respectively.
+ *
+ * Return value:
+ *   - If the returned value is 1, then n was fully factored by {2,3,5,7,11,13}.
+ *   - Otherwise, the leftover (return value) is the part that couldn't
+ *     be factored into those primes.
+ */
+static unsigned long factor_small_primes(unsigned long n, int exponents[6]){
+  // Initialize exponents
+  for (int i = 0; i < 6; i++)
+    exponents[i] = 0;
+
+  // Divide out each prime in turn
+  for (int i = 0; i < 6; i++) {
+    while (n % small_primes[i] == 0) {
+      exponents[i]++;
+      n /= small_primes[i];
+    }
+  }
+  return n;  // The remainder is what's left
+}
