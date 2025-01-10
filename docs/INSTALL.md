@@ -1,8 +1,8 @@
 Installing ka9q-radio  
-Jan 5, 2025, KA9Q
+Jan 10, 2025, KA9Q
 =====================
-This package is designed for Debian Linux, including the Raspberry Pi
-OS. Since I use a Macbook Pro as my desktop, some of it (e.g., the
+This package is designed for Debian Linux, including offshoots such as Ubuntu and
+the Raspberry Pi OS. Since I use a Macbook Pro as my desktop, some of it (e.g., the
 interactive components 'control' and 'monitor') will also compile and
 run on MacOS -- but not all of it. However, I'm interested in fixing
 any unnecessary non-portabilities.
