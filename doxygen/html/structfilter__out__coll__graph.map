@@ -1,8 +1,0 @@
-<map id="filter_out" name="filter_out">
-<area shape="rect" id="Node000001" title=" " alt="" coords="12,202,83,228"/>
-<area shape="rect" id="Node000002" href="$structfilter__in.html" title=" " alt="" coords="104,111,167,137"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="114,150,61,204,57,200,111,146"/>
-<area shape="rect" id="Node000003" href="$structrc.html" title=" " alt="" coords="5,5,44,31"/>
-<area shape="poly" id="edge3_Node000001_Node000003" title=" " alt="" coords="21,47,15,90,18,139,29,172,43,200,38,203,24,174,13,139,10,90,16,46"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="50,39,124,109,120,113,46,43"/>
-</map>
