@@ -178,6 +178,11 @@ int flush_output(struct channel * chan,bool marker,bool complete){
       // In fact this could be made smaller as an experiment
       error = opus_encoder_ctl(chan->output.opus,OPUS_SET_LSB_DEPTH(16));
       assert(error == OPUS_OK);
+      // NBFM uses 24 ks/s to handle the 16 kHz IF bandwidth; the baseband bandwidth is really only 5 kHz
+      if(chan->demod_type == FM_DEMOD && chan->output.samprate <= 24000){
+	error = opus_encoder_ctl(chan->output.opus,OPUS_SET_MAX_BANDWIDTH(OPUS_BANDWIDTH_MEDIUMBAND));
+	assert(error == OPUS_OK);
+      }
     }
     // These can be changed at any time
     // though options have to be created to actually change them
