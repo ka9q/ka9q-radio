@@ -1,0 +1,26 @@
+# Systemd unit to decode aircraft HF data link
+# Phil Karn, KA9Q Dec 2024
+
+[Unit]
+Description=hfdl-decoder
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+User=radio
+Group=radio
+Type=simple
+EnvironmentFile=/etc/radio/hfdl-%i.conf
+PermissionsStartOnly=true
+StandardOutput=append:/var/log/hfdl.log
+StandardError=inherit
+UMask = 002
+CPUSchedulingPolicy=batch
+RuntimeDirectory=hfdl
+ExecStart=/usr/local/bin/pcmrecord --raw -v --exec "${DUMPHFDL} --output decoded:text:file:path=${LOG} --iq-file - --sample-rate $r --centerfreq $k  --sample-format cs16 --system-table=${SYSTABLE} --system-table-save=${SYSTABLE} $k ${FREQS}" ${MCAST}
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
