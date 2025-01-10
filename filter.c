@@ -152,6 +152,7 @@ struct filter_in *create_filter_input(struct filter_in *master,int const L,int c
   // But we have a set of worker threads operating on a job queue to allow a controlled number
   // of independent FFTs to execute at the same time
   if(!FFTW_init){
+    printf("FFTW version: %s\n", fftwf_version);
     fftwf_init_threads();
     bool sr = fftwf_import_system_wisdom();
     fprintf(stdout,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");

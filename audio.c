@@ -40,6 +40,7 @@ unsigned int Opus_samprates[] = {
   8000, 12000, 16000, 24000, 48000,
 };
 
+static bool Opus_version_logged = false;
 
 
 // Send PCM output on stream; # of channels implicit in chan->output.channels
@@ -170,6 +171,10 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	chan->output.silent = true;
 	chan->output.rp = chan->output.wp;
 	return 0;
+      }
+      if(!Opus_version_logged){
+	fprintf(stdout,"%s\n",opus_get_version_string());
+	Opus_version_logged = true;
       }
       chan->output.opus = opus_encoder_create(chan->output.samprate,chan->output.channels,Application,&error);
       assert(error == OPUS_OK && chan->output.opus != NULL);
