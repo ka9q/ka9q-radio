@@ -268,11 +268,6 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
   case COMPLEX:
   case CROSS_CONJ:
     {
-      // This needs fixing for cases where len * overlap is not an integer
-      // I think the IFFT needs to be scaled up until its length is an integer,
-      // proportionately more samples need to be dropped from the start,
-      // and some number of (zero, or near zero) samples need to be dropped from the end
-      // This will be zero-padding in reverse
       slave->olen = len;
       ldiv_t x = ldiv((long)len * N,L);
       if(x.rem != 0){
