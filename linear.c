@@ -24,9 +24,11 @@
 #include "filter.h"
 #include "radio.h"
 
-void *demod_linear(void *arg){
-  assert(arg != NULL);
+int demod_linear(void *arg){
   struct channel * const chan = arg;
+  assert(chan != NULL);
+  if(chan == NULL)
+    return -1; // in case asserts are off
 
   {
     char name[100];
@@ -45,8 +47,10 @@ void *demod_linear(void *arg){
 
   int const blocksize = chan->output.samprate * Blocktime / 1000;
   delete_filter_output(&chan->filter.out);
-  create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
+  void *status = create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
   pthread_mutex_unlock(&chan->status.lock);
+  if(status == NULL)
+    return -1;
 
   set_filter(&chan->filter.out,
 	     chan->filter.min_IF/chan->output.samprate,
@@ -242,5 +246,5 @@ void *demod_linear(void *arg){
     // average baseband (input) and output powers. But I still try to make it meaningful.
     chan->output.sum_gain_sq += start_gain * chan->output.gain; // accumulate square of approx average gain
   }
-  return NULL;
+  return 0; // Non-fatal exit, may be restarted
 }

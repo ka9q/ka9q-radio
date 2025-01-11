@@ -14,10 +14,11 @@
 #include "radio.h"
 
 // Spectrum analysis thread
-void *demod_spectrum(void *arg){
-  assert(arg != NULL);
+int demod_spectrum(void *arg){
   struct channel * const chan = arg;
-
+  assert(chan != NULL);
+  if(chan == NULL)
+    return -1;
   {
     char name[100];
     snprintf(name,sizeof(name),"spect %u",chan->output.rtp.ssrc);
@@ -92,5 +93,5 @@ void *demod_spectrum(void *arg){
   FREE(chan->status.command);
   FREE(chan->filter.energies);
   delete_filter_output(&chan->filter.out);
-  return NULL;
+  return 0;
 }

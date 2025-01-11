@@ -257,12 +257,12 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
   slave->out_type = out_type;
 
   // N / L = Total FFT points / time domain points
-  float const overlap = (float)(master->ilen + master->impulse_length - 1) / master->ilen;
+  int const N = master->ilen + master->impulse_length - 1;
+  int const L = master->ilen;
+
   slave->response = response;
   slave->noise_gain = (response == NULL) ? NAN : noise_gain(slave);
 
-  pthread_mutex_lock(&FFTW_planning_mutex);
-  fftwf_plan_with_nthreads(1); // IFFTs are always small, use only one internal thread
   switch(slave->out_type){
   default:
   case COMPLEX:
@@ -274,19 +274,27 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
       // and some number of (zero, or near zero) samples need to be dropped from the end
       // This will be zero-padding in reverse
       slave->olen = len;
-      slave->bins = ceilf(len * overlap); // Total number of time-domain FFT points including overlap
+      ldiv_t x = ldiv((long)len * N,L);
+      if(x.rem != 0){
+	fprintf(stdout,"Invalid filter output length %d for input N=%d, L=%d\n",len,N,L);
+	return NULL;
+      }
+      slave->bins = x.quot; // Total number of time-domain FFT points including overlap
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
       slave->output_buffer.c = lmalloc(sizeof(complex float) * slave->bins);
       assert(slave->output_buffer.c != NULL);
       slave->output_buffer.r = NULL; // catch erroneous references
       slave->output.c = slave->output_buffer.c + slave->bins - len;
+      pthread_mutex_lock(&FFTW_planning_mutex);
+      fftwf_plan_with_nthreads(1); // IFFTs are always small, use only one internal thread
       if((slave->rev_plan = fftwf_plan_dft_1d(slave->bins,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
 	suggest(FFTW_planning_level,slave->bins,FFTW_BACKWARD,COMPLEX);
 	slave->rev_plan = fftwf_plan_dft_1d(slave->bins,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_MEASURE);
       }
+      if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
+      pthread_mutex_unlock(&FFTW_planning_mutex);
     }
-    if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-      fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
     break;
   case SPECTRUM: // Like complex, but no IFFT or output time domain buffer
     {
@@ -301,23 +309,30 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
   case REAL:
     {
       slave->olen = len;
-      slave->bins = ceilf(len * overlap) / 2 + 1;
+      ldiv_t x = ldiv((long)len * N,L);
+      if(x.rem != 0){
+	fprintf(stdout,"Invalid filter output length %d for input N=%d, L=%d\n",len,N,L);
+	return NULL;
+      }
+      slave->bins = x.quot / 2 + 1;
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
       assert(slave->fdomain != NULL);
       slave->output_buffer.r = lmalloc(sizeof(float) * slave->bins);
       assert(slave->output_buffer.r != NULL);
       slave->output_buffer.c = NULL;
       slave->output.r = slave->output_buffer.r + slave->bins - len;
+      pthread_mutex_lock(&FFTW_planning_mutex);
       if((slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->bins,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
 	suggest(FFTW_planning_level,slave->bins,FFTW_BACKWARD,REAL);
 	slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->bins,slave->fdomain,slave->output_buffer.r,FFTW_MEASURE);
       }
+      if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
+      pthread_mutex_unlock(&FFTW_planning_mutex);
     }
-    if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-      fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
     break;
   }
-  if(!goodchoice(slave->bins)){
+  if(slave->out_type != SPECTRUM && !goodchoice(slave->bins)){
     int const n = slave->bins;
     int const ell = slave->olen;
     int const overlap = n / (n - ell);
@@ -332,9 +347,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
       }
     }
   }
-
   slave->next_jobnum = master->next_jobnum;
-  pthread_mutex_unlock(&FFTW_planning_mutex);
   return slave;
 }
 

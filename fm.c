@@ -17,9 +17,11 @@
 static int const power_squelch = 1; // Enable experimental pre-squelch to save CPU on idle channels
 
 // FM demodulator thread
-void *demod_fm(void *arg){
-  assert(arg != NULL);
+int demod_fm(void *arg){
   struct channel * const chan = arg;
+  assert(chan != NULL);
+  if(chan == NULL)
+    return -1;
 
   {
     char name[100];
@@ -38,8 +40,10 @@ void *demod_fm(void *arg){
 
   int const blocksize = chan->output.samprate * Blocktime / 1000;
   delete_filter_output(&chan->filter.out);
-  create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
+  void *status = create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
   pthread_mutex_unlock(&chan->status.lock);
+  if(status == NULL)
+    return -1; // Fatal
 
   set_filter(&chan->filter.out,
 	     chan->filter.min_IF/chan->output.samprate,
@@ -293,5 +297,5 @@ void *demod_fm(void *arg){
     if(send_output(chan,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
   }
-  return NULL;
+  return 0; // Normal exit
 }

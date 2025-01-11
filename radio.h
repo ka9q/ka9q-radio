@@ -22,7 +22,9 @@
 #include "filter.h"
 #include "iir.h"
 
-// The four demodulator types
+/**
+   @brief The four demodulator types
+ */
 enum demod_type {
   LINEAR_DEMOD = 0,     // Linear demodulation, i.e., everything else: SSB, CW, DSB, CAM, IQ
   FM_DEMOD,             // Frequency/phase demodulation
@@ -31,6 +33,9 @@ enum demod_type {
   N_DEMOD,              // Dummy equal to number of valid entries
 };
 
+/**
+   @brief list of demodulator enums and readable strings
+*/
 struct demodtab {
   enum demod_type type;
   char name[16];
@@ -305,10 +310,10 @@ void *sap_send(void *);
 void *radio_status(void *);
 
 // Demodulator thread entry points
-void *demod_fm(void *);
-void *demod_wfm(void *);
-void *demod_linear(void *);
-void *demod_spectrum(void *);
+int demod_fm(void *);
+int demod_wfm(void *);
+int demod_linear(void *);
+int demod_spectrum(void *);
 
 int send_output(struct channel * restrict ,const float * restrict,int,bool);
 int send_radio_status(struct sockaddr const *,struct frontend const *, struct channel *);

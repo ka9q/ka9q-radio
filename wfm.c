@@ -25,9 +25,11 @@ float const Audio_samprate = 48000;
 static int const power_squelch = 1; // Enable experimental pre-squelch to save CPU on idle channels
 
 // FM demodulator thread
-void *demod_wfm(void *arg){
+int demod_wfm(void *arg){
   assert(arg != NULL);
   struct channel * chan = arg;
+  if(chan == NULL)
+    return -1;
 
   {
     char name[100];
@@ -46,8 +48,10 @@ void *demod_wfm(void *arg){
 
   int const blocksize = chan->output.samprate * Blocktime / 1000;
   delete_filter_output(&chan->filter.out);
-  create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
+  void *status = create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
   pthread_mutex_unlock(&chan->status.lock);
+  if(status == NULL)
+    return -1; // fatal, don't restart
 
   // Set null here in case we quit early and try to free them
   struct filter_in composite;
@@ -289,5 +293,5 @@ void *demod_wfm(void *arg){
   delete_filter_output(&pilot);
   delete_filter_input(&composite);
 
-  return NULL;
+  return 0;
 }

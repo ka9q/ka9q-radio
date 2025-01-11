@@ -192,29 +192,29 @@ void *demod_thread(void *p){
   pthread_detach(pthread_self());
 
   // Repeatedly invoke appropriate demodulator
-  // When a demod exits, the appropriate one is started,
+  // When a demod exits, the appropriate one is restarted,
   // which can be the same one if demod_type hasn't changed
   // A demod can terminate completely by setting an invalid demod_type and exiting
-  while(true){
+  int status = 0;
+  while(status == 0){ // A demod returns non-zero to signal a fatal error, don't restart
     switch(chan->demod_type){
     case LINEAR_DEMOD:
-      demod_linear(p);
+      status = demod_linear(p);
       break;
     case FM_DEMOD:
-      demod_fm(p);
+      status = demod_fm(p);
       break;
     case WFM_DEMOD:
-      demod_wfm(p);
+      status = demod_wfm(p);
       break;
     case SPECT_DEMOD:
-      demod_spectrum(p);
+      status = demod_spectrum(p);
       break;
     default:
-      goto done;
+      status = -1; // Unknown demod, quit
       break;
     }
   }
- done:;
   close_chan(chan);
   return NULL;
 }
