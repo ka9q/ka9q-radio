@@ -86,8 +86,8 @@ void *lmalloc(size_t size);
 static void suggest(int level,int size,int dir,int clex);
 static float noise_gain(struct filter_out const * const slave);
 static bool goodchoice(unsigned long n);
-static unsigned long gcd(unsigned long a,unsigned long b);
 #if 0
+static unsigned long gcd(unsigned long a,unsigned long b);
 static unsigned long lcm(unsigned long a,unsigned long b);
 #endif
 
@@ -134,16 +134,7 @@ struct filter_in *create_filter_input(struct filter_in *master,int const L,int c
   if(master == NULL)
     return NULL;
   if(!goodchoice(N)){
-    fprintf(stdout,"create_filter_input(L=%d, M=%d): N=%d is not a good blocksize for FFTW3\n",L,M,N);
-    int step = gcd(N,L);
-    for(int n = N+step; n < master->ilen + master->impulse_length - 1; n += step){
-      if(goodchoice(n)){
-	int ell = n * L / N;
-	int m = n - ell + 1;
-	fprintf(stdout,"Next good choice would be N = %d (L=%d, M=%d)\n",n,ell,m);
-	break;
-      }
-    }
+    fprintf(stdout,"create_filter_input(L=%d, M=%d): N=%d is not an efficient blocksize for FFTW3\n",L,M,N);
   }
 
 
@@ -326,8 +317,21 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
     break;
   }
-  if(!goodchoice(slave->bins))
-    fprintf(stdout,"create_filter_output: N=%d is not a good blocksize for FFTW3\n",slave->bins);
+  if(!goodchoice(slave->bins)){
+    int const n = slave->bins;
+    int const ell = slave->olen;
+    int const overlap = n / (n - ell);
+    int const step = overlap;
+    for(int nn = n + step; nn < master->ilen + master->impulse_length - 1; nn += step){
+      if(goodchoice(nn)){
+	int nell = nn * ell / n;
+	int nm = nn - nell + 1;
+	fprintf(stdout,"create_filter_output: N=%d is not an efficient blocksize for FFTW3.",n);
+	fprintf(stdout," Next good choice is N = %d (L=%d, M=%d); set samprate = %d * blockrate\n",nn,nell,nm,ell);
+	break;
+      }
+    }
+  }
 
   slave->next_jobnum = master->next_jobnum;
   pthread_mutex_unlock(&FFTW_planning_mutex);
@@ -1189,6 +1193,7 @@ static bool goodchoice(unsigned long n){
 }
 
 
+#if 0
 // Greatest common divisor
 static unsigned long gcd(unsigned long a,unsigned long b){
   while(b != 0){
@@ -1199,7 +1204,7 @@ static unsigned long gcd(unsigned long a,unsigned long b){
   return a;
 }
 
-#if 0
+
 static unsigned long lcm(unsigned long a,unsigned long b){
   if(a == 0 || b == 0)
     return 0;
