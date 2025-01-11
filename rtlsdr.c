@@ -64,6 +64,21 @@ struct sdr {
   pthread_t read_thread;
 };
 
+char const *Rtlsdr_keys[] = {
+  "agc",
+  "bias",
+  "calibrate",
+  "device",
+  "description",
+  "frequency",
+  "gain",
+  "hardware",
+  "samprate",
+  "serial",
+  NULL
+};
+
+
 static double set_correct_freq(struct sdr *sdr,double freq);
 //static void do_rtlsdr_agc(struct sdr *);
 static void rx_callback(uint8_t *buf,uint32_t len, void *ctx);
@@ -72,6 +87,7 @@ static double true_freq(uint64_t freq);
 
 int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *section){
   assert(dictionary != NULL);
+  config_validate_section(stdout,dictionary,"hardware",Rtlsdr_keys,NULL);
 
   struct sdr * const sdr = (struct sdr *)calloc(1,sizeof(struct sdr));
   // Cross-link generic and hardware-specific control structures

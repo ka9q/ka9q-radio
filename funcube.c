@@ -66,6 +66,17 @@ static float const UpperEdge = +75000;
 static int Blocksize;
 static bool Hold_open = false;
 
+char const *Funcube_keys[] = {
+  "bias"
+  "calibrate",
+  "description",
+  "device",
+  "frequency",
+  "number",
+  NULL
+};
+
+
 static void do_fcd_agc(struct sdrstate *);
 static double fcd_actual(unsigned int);
 

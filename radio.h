@@ -279,6 +279,7 @@ extern int Output_fd;
 extern struct sockaddr_storage Metadata_dest_socket; // Socket for main metadata
 extern int Verbose;
 extern float Blocktime; // Common to all receiver slices. NB! Milliseconds, not seconds
+extern char const *Channel_keys[],*Global_keys[];
 
 // Channel initialization & manipulation
 struct channel *create_chan(uint32_t ssrc);

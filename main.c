@@ -66,6 +66,32 @@ static int Update = DEFAULT_UPDATE;
 static int RTCP_enable = false;
 static int SAP_enable = false;
 
+// List of valid config keys in [global] section, for error checking
+char const *Global_keys[] = {
+  "verbose",
+  "fft-time-limit",
+  "fft-plan-level",
+  "iface",
+  "data",
+  "update",
+  "tos",
+  "ttl",
+  "blocktime",
+  "overlap",
+  "fft-threads",
+  "rtcp",
+  "sap",
+  "mode-file",
+  "presets-file",
+  "wisdom-file",
+  "hardware",
+  "status",
+  "preset",
+  "mode",
+  NULL
+};
+
+
 struct channel Template;
 // If a channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
 // Must be computed at run time because it depends on the block time
@@ -210,7 +236,7 @@ int main(int argc,char *argv[]){
     // Extract name from config file pathname
     Name = argv[optind]; // Ah, just use whole thing
   }
-  fprintf(stdout,"Loading config file %s...\n",Config_file);
+  fprintf(stdout,"Loading config file %s\n",Config_file);
   int const n = loadconfig(Config_file);
   if(n < 0){
     fprintf(stdout,"Can't load config file %s\n",Config_file);
@@ -322,6 +348,8 @@ static int loadconfig(char const *file){
   if(Configtable == NULL)
     return -1;
 
+  config_validate_section(stdout,Configtable,"global",Global_keys,Channel_keys);
+
   // Set up template for all new channels
   set_defaults(&Template);
   Template.lifetime = DEFAULT_LIFETIME * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
@@ -404,7 +432,9 @@ static int loadconfig(char const *file){
     char const *p = config_getstring(Configtable,global,"mode-file","presets.conf");
     p = config_getstring(Configtable,global,"presets-file",p);
     dist_path(Preset_file,sizeof(Preset_file),p);
+    fprintf(stdout,"Loading presets file %s\n",Preset_file);
     Preset_table = iniparser_load(Preset_file); // Kept open for duration of program
+    config_validate(stdout,Preset_table,Channel_keys,NULL);
     if(Preset_table == NULL){
       fprintf(stdout,"Can't load preset file %s\n",Preset_file);
       exit(EX_UNAVAILABLE); // Can't really continue without fixing
@@ -490,6 +520,8 @@ static int loadconfig(char const *file){
       continue; // Already processed above
     if(config_getstring(Configtable,sname,"device",NULL) != NULL)
       continue; // It's a front end configuration, ignore
+
+    config_validate_section(stdout,Configtable,sname,Channel_keys,NULL);
 
     if(config_getboolean(Configtable,sname,"disable",false))
 	continue; // section is disabled

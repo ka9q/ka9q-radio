@@ -28,6 +28,21 @@ extern const char *App_path;
 
 static float Power_smooth = 0.05; // Calculate this properly someday
 
+char const *Airspyhf_keys[] = {
+  "device",
+  "serial",
+  "samprate",
+  "calibrate",
+  "hf-agc",
+  "agc-thresh",
+  "hf-att",
+  "hf-lna",
+  "lib-dsp",
+  "description",
+  "frequency",
+  NULL
+};
+
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
@@ -47,6 +62,7 @@ static double true_freq(uint64_t freq);
 
 int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionary,char const * const section){
   assert(Dictionary != NULL);
+  config_validate_section(stdout,Dictionary,"hardware",Airspyhf_keys,NULL);
 
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures

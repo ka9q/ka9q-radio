@@ -131,9 +131,37 @@ static char const *usb_speeds[N_USB_SPEEDS] = {
   "Super+ (10Gb/s)"
 };
 
+char const *Rx888_keys[] = {
+  "device",
+  "firmware",
+  "serial",
+  "queuedepth",
+  "reqsize",
+  "dither",
+  "rand",
+  "gaincal",
+  "att",
+  "atten",
+  "featten",
+  "rfatten",
+  "gainmode",
+  "gain",
+  "rxgain",
+  "fegain",
+  "reference",
+  "calibrate",
+  "samprate",
+  "undersample",
+  "description",
+  "frequency",
+  NULL
+};
+
 
 int rx888_setup(struct frontend * const frontend,dictionary const * const dictionary,char const * const section){
   assert(dictionary != NULL);
+  config_validate_section(stdout,dictionary,"hardware",Rx888_keys,NULL);
+
   // Hardware-dependent setup
   {
     char const *device = config_getstring(dictionary,section,"device",NULL);

@@ -53,6 +53,60 @@ static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 static int   const DEFAULT_BITRATE = 0;       // Default Opus compressed bit rate. 0 means OPUS_AUTO, the encoder decides
 extern int Overlap;
 
+// Valid keys in presets file, [global] section, and any channel section
+char const *Channel_keys[] = {
+  "disable",
+  "data",
+  "demod",
+  "mode",
+  "preset",
+
+  "samprate",
+  "mono",
+  "stereo",
+  "low",
+  "high",
+  "squelch-open",
+  "squelch-close",
+  "squelchtail",
+  "squelch-tail",
+  "headroom",
+  "shift",
+  "recovery-rate",
+  "hang-time",
+  "threshold",
+  "gain",
+  "envelope",
+  "pll",
+  "square",
+  "conj",
+  "pll-bw",
+  "agc",
+  "extend",
+  "threshold-extend",
+  "deemph-tc",
+  "deemph-gain",
+  "tone",
+  "pl",
+  "ctcss",
+  "pacing",
+  "encoding",
+  "bitrate",
+  "update",
+  "buffer",
+  "freq",
+  "freq0",
+  "freq1",
+  "freq2",
+  "freq3",
+  "freq4",
+  "freq5",
+  "freq6",
+  "freq7",
+  "freq8",
+  "freq9",
+  NULL
+};
 
 int demod_type_from_name(char const *name){
   for(enum demod_type n = 0; n < N_DEMOD; n++){
