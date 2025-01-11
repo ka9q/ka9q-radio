@@ -86,7 +86,10 @@ void *lmalloc(size_t size);
 static void suggest(int level,int size,int dir,int clex);
 static float noise_gain(struct filter_out const * const slave);
 static bool goodchoice(unsigned long n);
-
+static unsigned long gcd(unsigned long a,unsigned long b);
+#if 0
+static unsigned long lcm(unsigned long a,unsigned long b);
+#endif
 
 // Create fast convolution filters
 // The filters are now in two parts, filter_in (the master) and filter_out (the slave)
@@ -130,8 +133,18 @@ struct filter_in *create_filter_input(struct filter_in *master,int const L,int c
 
   if(master == NULL)
     return NULL;
-  if(!goodchoice(N))
+  if(!goodchoice(N)){
     fprintf(stdout,"create_filter_input(L=%d, M=%d): N=%d is not a good blocksize for FFTW3\n",L,M,N);
+    int step = gcd(N,L);
+    for(int n = N+step; n < master->ilen + master->impulse_length - 1; n += step){
+      if(goodchoice(n)){
+	int ell = n * L / N;
+	int m = n - ell + 1;
+	fprintf(stdout,"Next good choice would be N = %d (L=%d, M=%d)\n",n,ell,m);
+	break;
+      }
+    }
+  }
 
 
   for(int i=0; i < ND; i++){
@@ -1175,9 +1188,6 @@ static bool goodchoice(unsigned long n){
     return true;
 }
 
-#if 0 // Use these later for determining valid output sample rates
-static unsigned long gcd(unsigned long a,unsigned long b);
-static unsigned long lcm(unsigned long a,unsigned long b);
 
 // Greatest common divisor
 static unsigned long gcd(unsigned long a,unsigned long b){
@@ -1189,6 +1199,7 @@ static unsigned long gcd(unsigned long a,unsigned long b){
   return a;
 }
 
+#if 0
 static unsigned long lcm(unsigned long a,unsigned long b){
   if(a == 0 || b == 0)
     return 0;
