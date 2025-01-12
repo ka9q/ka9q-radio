@@ -411,14 +411,47 @@ void *run_fft(void *p){
 }
 
 
-// Execute the input side of a filter: set up a job for the FFT worker threads and enqueue it
+// Execute the input side of a filter: 
+// We use the FFTW3 functions that specify the input and output arrays
 int execute_filter_input(struct filter_in * const f){
   assert(f != NULL);
   if(f == NULL)
     return -1;
 
-  // We use the FFTW3 functions that specify the input and output arrays
-  // Execute the FFT in separate worker threads
+  if(f->perform_inline){
+    // Just execute it here
+    int jobnum = f->next_jobnum++;
+    complex float *output = f->fdomain[jobnum % ND];
+    switch(f->in_type){
+    default:
+    case CROSS_CONJ:
+    case COMPLEX:
+      {
+	complex float *input = f->input_read_pointer.c;
+	f->input_read_pointer.c += f->ilen;
+	mirror_wrap((void *)&f->input_read_pointer.c,f->input_buffer,f->input_buffer_size);
+	fftwf_execute_dft(f->fwd_plan,input,output);
+      }
+      break;
+    case REAL:
+      {
+	float *input = f->input_read_pointer.r;
+	f->input_read_pointer.r += f->ilen;
+	mirror_wrap((void *)&f->input_read_pointer.r,f->input_buffer,f->input_buffer_size);
+	fftwf_execute_dft_r2c(f->fwd_plan,input,output);
+      }
+      break;
+    }
+    // Signal we're done with this job
+    pthread_mutex_lock(&f->filter_mutex);
+    f->completed_jobs[jobnum % ND] = jobnum;
+    pthread_cond_broadcast(&f->filter_cond);
+    pthread_mutex_unlock(&f->filter_mutex);
+    return 0;
+  }
+
+
+  // set up a job for the FFT worker threads and enqueue it
   struct fft_job * const job = calloc(1,sizeof(struct fft_job));
   assert(job != NULL);
   job->jobnum = f->next_jobnum++;

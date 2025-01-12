@@ -56,6 +56,7 @@ struct filter_in {
   complex float *fdomain[ND];
   int next_jobnum;
   int completed_jobs[ND];
+  bool perform_inline;       // Perform FFT inline, don't use worker threads (better for small FFTs)
 };
 
 struct filter_out {

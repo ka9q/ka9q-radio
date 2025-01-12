@@ -67,6 +67,7 @@ int demod_linear(void *arg){
 
     // Secondary filter running at 1:1 sample rate, 50% overlap, with blocksize a small multiple (1-4) of the channel block size
     create_filter_input(&chan->filter2.in,outblock,outblock+1,COMPLEX); // 50% overlap
+    chan->filter2.in.perform_inline = true;
     create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,outblock,chan->filter2.isb ? CROSS_CONJ : COMPLEX);
     chan->filter2.low = chan->filter.min_IF;
     chan->filter2.high = chan->filter.max_IF;

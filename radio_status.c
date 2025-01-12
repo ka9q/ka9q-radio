@@ -491,6 +491,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     delete_filter_output(&chan->filter2.out);
     if(chan->filter2.blocking > 0){
       create_filter_input(&chan->filter2.in,outblock,outblock+1,COMPLEX); // 50% overlap
+      chan->filter2.in.perform_inline = true;
       create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,outblock,chan->filter2.isb ? CROSS_CONJ : COMPLEX);
       chan->filter2.low = chan->filter.min_IF;
       chan->filter2.high = chan->filter.max_IF;
