@@ -79,13 +79,15 @@ int demod_spectrum(void *arg){
       chan->filter.min_IF = -chan->filter.max_IF;
     } else {
       int binp = 0;
+      float gain = (2.0 / (float) N);   // scale each bin value by 2/N (and hope N isn't 0!)
+      gain *= gain;                     // squared because the we're scaling the output of complex norm, not the input bin values
       for(int i=0; i < bin_count; i++){ // For each noncoherent integration bin above center freq
 	double p = 0;
 	for(int j=0; j < binsperbin; j++) // Add energy of each fft bin that's part of this user integration bin
-	  p += cnrmf(chan->filter.out.fdomain[binp++]);
+          p += cnrmf(chan->filter.out.fdomain[binp++]);
 
 	// Accumulate energy until next poll
-	chan->spectrum.bin_data[i] += p;
+	chan->spectrum.bin_data[i] += (p * gain);
       }
     }
   } while(downconvert(chan) == 0);
