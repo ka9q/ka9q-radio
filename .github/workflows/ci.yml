@@ -61,7 +61,7 @@ jobs:
             portaudio \
             dbus \
             libsamplerate \
-            libliquid
+            liquid-dsp
 
           cd /tmp
           curl https://avahi.org/download/avahi-0.8.tar.gz > avahi-0.8.tar.gz
