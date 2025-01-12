@@ -170,6 +170,7 @@ struct session {
   int64_t samples_written;
   int64_t total_file_samples;
   int64_t samples_remaining;   // Samples remaining before file is closed; 0 means indefinite
+  struct timespec file_time;
 };
 
 
@@ -965,6 +966,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
   struct timespec file_time = now; // Default to actual time when length limit is not set
+  sp->file_time = file_time;
 
   if(FileLengthLimit > 0){ // Not really supported on opus yet
     // Pad start of first file with zeroes
@@ -993,7 +995,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       imaxdiv_t f = imaxdiv(start_ns,BILLION);
       file_time.tv_sec = f.quot + epoch; // restore original epoch
       file_time.tv_nsec = f.rem;
-
+      sp->file_time = file_time;
       sp->starting_offset = (sp->samprate * skip_ns) / BILLION;
       sp->total_file_samples += sp->starting_offset;
 #if 0
@@ -1489,7 +1491,7 @@ static int end_wav_stream(struct session *sp){
   // write end time into the auxi chunk
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
-  struct tm const * const tm = gmtime(&now.tv_sec);
+  struct tm const * tm = gmtime(&now.tv_sec);
   header.StopYear=tm->tm_year+1900;
   header.StopMon=tm->tm_mon+1;
   header.StopDOW=tm->tm_wday;
@@ -1498,6 +1500,16 @@ static int end_wav_stream(struct session *sp){
   header.StopMinute=tm->tm_min;
   header.StopSecond=tm->tm_sec;
   header.StopMillis=(int16_t)(now.tv_nsec / 1000000);
+
+  tm = gmtime(&sp->file_time.tv_sec);
+  header.StartYear = tm->tm_year + 1900;
+  header.StartMon = tm->tm_mon + 1;
+  header.StartDOW = tm->tm_wday;
+  header.StartDay = tm->tm_mday;
+  header.StartHour = tm->tm_hour;
+  header.StartMinute = tm->tm_min;
+  header.StartSecond = tm->tm_sec;
+  header.StartMillis = (int16_t)(sp->file_time.tv_nsec / 1000000);
 
   rewind(sp->fp);
   if(fwrite(&header,sizeof(header),1,sp->fp) != 1)
