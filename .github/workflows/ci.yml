@@ -28,7 +28,8 @@ jobs:
             libiniparser-dev \
             libavahi-client-dev \
             portaudio19-dev \
-            uuid-dev
+            uuid-dev \
+            libsamplerate0-dev
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Setup
@@ -57,7 +58,8 @@ jobs:
             librtlsdr \
             iniparser \
             portaudio \
-            dbus
+            dbus \
+            libsamplerate
 
           cd /tmp
           curl https://avahi.org/download/avahi-0.8.tar.gz > avahi-0.8.tar.gz
