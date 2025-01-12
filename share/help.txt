@@ -14,8 +14,9 @@ ctl+L        Redraw screen
 A    Set front end (RF) attenuation, dB
 b    Set Opus audio codec bit rate, b/s (0 = auto)
 B    Set output packet buffering 0-4 frames
-e    Set output encoding (pcm integer/pcm float/opus)
+e    Set output encoding (s16le, s16be, f32le, f16le, opus)
 f    Set frequency (eg: 147m435, 10m0, 760k0, 14313000)
+F    Set frames in filter2 block (0-4: 0 = disable filter2)
 g    Set gain, dB
 G    Set front end (RF) gain, dB
 H    Set output headroom, dB
