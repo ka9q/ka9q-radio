@@ -1181,7 +1181,7 @@ static int close_file(struct session *sp){
     fprintf(stderr,"%s closing '%s' %'.1f sec\n",
 	    sp->frontend.description,
 	    sp->filename, // might be blank
-            (float)sp->samples_written / (sp->samprate * sp->channels));
+            (float)sp->samples_written / sp->samprate);
   }
   if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
     fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
@@ -1195,7 +1195,7 @@ static int close_file(struct session *sp){
       unlink(sp->filename);
       if(Verbose)
 	fprintf(stderr,"deleting %s %'.1f sec\n",sp->filename,
-		(float)sp->samples_written / (sp->samprate * sp->channels));
+		(float)sp->samples_written / sp->samprate);
     }
   }
   if(Command != NULL)
