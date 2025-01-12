@@ -29,10 +29,12 @@ uint32_t Ssrc;
 char Iface[1024]; // Multicast interface to talk to front end
 int Status_fd,Ctl_fd;
 int64_t Timeout = BILLION; // Retransmission timeout
-static char const Optstring[] = "b:c:f:hi:s:t:T:vw:V";
+bool details;   // Output bin, frequency, power, newline
+static char const Optstring[] = "b:c:df:hi:s:t:T:vw:V";
 static struct  option Options[] = {
   {"bins", required_argument, NULL, 'b'},
   {"count", required_argument, NULL, 'c'},
+  {"details", no_argument, NULL, 'd'},
   {"frequency", required_argument, NULL, 'f'},
   {"help", no_argument, NULL, 'h'},
   {"interval", required_argument, NULL, 'i'},
@@ -48,7 +50,7 @@ static struct  option Options[] = {
 int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,int length);
 
 void help(){
-  fprintf(stderr,"Usage: %s [-v|--verbose [-v|--verbose]] [-f|--frequency freq] [-w|--bin-width bin_bw] [-b|--bins bins] [-t|--time-constant time_constant] [-c|--count count [-i|--interval interval]] [-T|--timeout timeout] -s|--ssrc ssrc mcast_addr\n",App_path);
+  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width bin_bw] [-b|--bins bins] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr\n",App_path);
   exit(1);
 }
 
@@ -68,6 +70,9 @@ int main(int argc,char *argv[]){
 	break;
       case 'c':
 	count = strtol(optarg,NULL,0);
+	break;
+      case 'd':
+	details = true;
 	break;
       case 'f':
 	frequency = strtof(optarg,NULL);
@@ -140,7 +145,7 @@ int main(int argc,char *argv[]){
     int const command_len = bp - buffer;
     if(Verbose > 1){
       printf("Sent:");
-      dump_metadata(stdout,buffer+1,command_len-1,false);
+      dump_metadata(stdout,buffer+1,command_len-1,details ? true : false);
     }
     if(send(Ctl_fd, buffer, command_len, 0) != command_len){
       perror("command send");
@@ -181,7 +186,7 @@ int main(int argc,char *argv[]){
 
     if(Verbose > 1){
       printf("Received:");
-      dump_metadata(stdout,buffer+1,length-1,false);
+      dump_metadata(stdout,buffer+1,length-1,details ? true : false);
     }
     float powers[PKTSIZE / sizeof(float)]; // floats in a max size IP packet
     uint64_t time;
@@ -210,25 +215,25 @@ int main(int argc,char *argv[]){
     printf(" %.0f, %.0f, %.0f, %d",
 	   base, base + r_bin_bw * (npower-1), r_bin_bw, npower);
 
-#if TESTING
-    // Frequencies below center
-    printf("\n");
-    for(int i=first_neg_bin ; i < npower; i++){
-      printf("%d %f %.2f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
-      base += r_bin_bw;
+    if (details){
+      // Frequencies below center
+      printf("\n");
+      for(int i=first_neg_bin ; i < npower; i++){
+        printf("%d %f %.2f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+        base += r_bin_bw;
+      }
+      // Frequencies above center
+      for(int i=0; i < first_neg_bin; i++){
+        printf("%d %f %.2f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+        base += r_bin_bw;
+      }
+    } else {
+      for(int i= first_neg_bin; i < npower; i++)
+        printf(", %.2f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
+      // Frequencies above center
+      for(int i=0; i < first_neg_bin; i++)
+        printf(", %.2f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
     }
-    // Frequencies above center
-    for(int i=0; i < first_neg_bin; i++){
-      printf("%d %f %.2f\n",i,base,(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
-      base += r_bin_bw;
-    }
-#else
-    for(int i= first_neg_bin; i < npower; i++)
-      printf(", %.2f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
-    // Frequencies above center
-    for(int i=0; i < first_neg_bin; i++)
-      printf(", %.2f",(powers[i] == 0) ? -100.0 : 10*log10(powers[i]));
-#endif
     printf("\n");
     if(--count == 0)
       break;
