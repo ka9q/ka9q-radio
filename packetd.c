@@ -50,8 +50,8 @@ struct session {
 // Config constants
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 static float const SCALE = 1./32768;
-static size_t const AL = 960; // 20 ms @ 48 kHz = 1x 20 ms blocks = 24 bit times @ 1200 bps
-static size_t const AM = 961;
+static int const AL = 960; // 20 ms @ 48 kHz = 1x 20 ms blocks = 24 bit times @ 1200 bps
+static int const AM = 961;
 static float Bitrate = 1200;
 
 // Command line params
@@ -533,14 +533,14 @@ static void *decode_task(void *arg){
       pad--;
       memset(samples,0,sizeof(samples));
     } else {
-      if(fread(samples,sizeof(samples[0]),AL,fp) != AL){
+      if((int)fread(samples,sizeof(samples[0]),AL,fp) != AL){
 	fprintf(stderr,"pipe read error, exiting thread\n");
 	fclose(fp);
  	break;
       }
       // Look for 100 zeroes at end of frame to indicate squelch closing
       int nonzero = 0;
-      for(size_t i=AL-100; i < AL; i++)
+      for(int i=AL-100; i < AL; i++)
 	nonzero |= samples[i];
       if(!nonzero)
 	pad = 5; // flush filters with 5 blocks of padding
@@ -548,7 +548,7 @@ static void *decode_task(void *arg){
 
     assert(filter_in.ilen == AL);
     assert(filter_out.olen == AL);
-    for(size_t n=0; n < AL; n++){
+    for(int n=0; n < AL; n++){
       if(put_rfilter(&filter_in,ntohs(samples[n]) * SCALE) == 0)
 	continue;
       execute_filter_output(&filter_out,0);    // Shouldn't block

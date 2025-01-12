@@ -148,12 +148,22 @@ struct channel {
     float max_IF;         // (settable)
     // Window shape factor for Kaiser window
     float kaiser_beta;  // settable
-    bool isb;           // Independent sideband mode (settable, currently unimplemented)
     float *energies;    // Vector of smoothed bin energies
     int bin_shift;      // FFT bin shift for frequency conversion
     double remainder;   // Frequency remainder for fine tuning
     complex double phase_adjust; // Block rotation of phase
   } filter;
+
+  // Optional secondary filter (linear demod only)
+  struct {
+    struct filter_in in;
+    struct filter_out out;
+    float low;
+    float high;
+    float kaiser_beta;
+    bool isb;
+    unsigned int blocking;       // Ratio of output to input blocksize; 0 = filter2 disabled
+  } filter2;
 
   enum demod_type demod_type;  // Index into demodulator table (Linear, FM, FM Stereo, Spectrum)
   char preset[32];       // name of last mode preset
@@ -239,8 +249,8 @@ struct channel {
     float *queue; // Mirrored ring buffer
     size_t queue_size; // Size of allocation, in floats
     unsigned wp,rp; // Queue write and read indices
-    unsigned minpacket;  // minimum output packet size in blocks (0-3)
-                         // i.e, no minimum or at least 20ms, 40ms or 60ms/packet
+    unsigned minpacket;  // minimum output packet size in blocks (0-4)
+                         // i.e, no minimum or at least 20ms, 40ms, 60ms or 80ms /packet for 20ms blocktime
   } output;
 
   struct {

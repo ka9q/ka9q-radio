@@ -185,7 +185,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->output.channels = decode_int(cp,optlen);
       break;
     case INDEPENDENT_SIDEBAND:
-      channel->filter.isb = decode_bool(cp,optlen);
+      channel->filter2.isb = decode_bool(cp,optlen);
       break;
     case THRESH_EXTEND:
       channel->fm.threshold = decode_bool(cp,optlen);
@@ -282,6 +282,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       break;
     case MINPACKET:
       channel->output.minpacket = decode_int(cp,optlen);
+      break;
+    case FILTER2:
+      channel->filter2.blocking = decode_int(cp,optlen);
       break;
     default: // ignore others
       break;

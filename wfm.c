@@ -48,9 +48,9 @@ int demod_wfm(void *arg){
 
   int const blocksize = chan->output.samprate * Blocktime / 1000;
   delete_filter_output(&chan->filter.out);
-  void *status = create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
+  int status = create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
   pthread_mutex_unlock(&chan->status.lock);
-  if(status == NULL)
+  if(status != 0)
     return -1; // fatal, don't restart
 
   // Set null here in case we quit early and try to free them

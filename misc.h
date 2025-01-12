@@ -64,6 +64,7 @@ static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in 
 
 
 void realtime(void);
+bool norealtime(void);
 
 // I *hate* this sort of pointless, stupid, gratuitous incompatibility that
 // makes a lot of code impossible to read and debug

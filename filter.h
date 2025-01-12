@@ -40,10 +40,10 @@ struct rc {
 #define ND 4
 struct filter_in {
   enum filtertype in_type;           // REAL or COMPLEX
-  int ilen;                          // Length of user portion of input buffer, aka 'L'
-  int bins;                          // Total number of frequency bins. Complex: L + M - 1;  Real: (L + M - 1)/2 + 1
-  int impulse_length;                // Length of filter impulse response, aka 'M'
-  int wcnt;                          // Samples written to unexecuted input buffer
+  int ilen;                 // Length of user portion of input buffer, aka 'L'
+  int bins;                 // Total number of frequency bins. Complex: L + M - 1;  Real: (L + M - 1)/2 + 1
+  int impulse_length;       // Length of filter impulse response, aka 'M'
+  int wcnt;                 // Samples written to unexecuted input buffer
   void *input_buffer;                // Beginning of mirrored ring buffer
   size_t input_buffer_size;          // size of input buffer in **bytes**
   struct rc input_write_pointer;     // For incoming samples
@@ -54,29 +54,29 @@ struct filter_in {
   pthread_cond_t filter_cond;
 
   complex float *fdomain[ND];
-  unsigned int next_jobnum;
-  unsigned int completed_jobs[ND];
+  int next_jobnum;
+  int completed_jobs[ND];
 };
 
 struct filter_out {
   struct filter_in * restrict master;
   enum filtertype out_type;          // REAL, COMPLEX or CROSS_CONJ
-  int olen;                          // Length of user portion of output buffer (decimated L)
-  int bins;                          // Number of frequency bins; == N for complex, == N/2 + 1 for real output
-  complex float * restrict fdomain;          // Filtered signal in frequency domain
-  complex float * restrict response;           // Filter response in frequency domain
+  int olen;                 // Length of user portion of output buffer (decimated L)
+  int bins;                 // Number of frequency bins; == N for complex, == N/2 + 1 for real output
+  complex float * restrict fdomain;  // Filtered signal in frequency domain
+  complex float * restrict response; // Filter response in frequency domain
   pthread_mutex_t response_mutex;
   struct rc output_buffer;           // Actual time-domain output buffer, length N/decimate
   struct rc output;                  // Beginning of user output area, length L/decimate
   fftwf_plan rev_plan;               // IFFT (frequency -> time)
-  unsigned int next_jobnum;
+  int next_jobnum;
   float noise_gain;                  // Filter gain on uniform noise (ratio < 1)
-  int block_drops;                   // Lost frequency domain blocks, e.g., from late scheduling of slave thread
-  int rcnt;                          // Samples read from output buffer
+  int block_drops;          // Lost frequency domain blocks, e.g., from late scheduling of slave thread
+  int rcnt;                 // Samples read from output buffer
 };
 
-struct filter_in *create_filter_input(struct filter_in *,int const L,int const M, enum filtertype const in_type);
-struct filter_out *create_filter_output(struct filter_out *slave,struct filter_in * restrict master,complex float * restrict response,int olen, enum filtertype out_type);
+int create_filter_input(struct filter_in *,int const L,int const M, enum filtertype const in_type);
+int create_filter_output(struct filter_out *slave,struct filter_in * restrict master,complex float * restrict response,int olen, enum filtertype out_type);
 int execute_filter_input(struct filter_in * restrict);
 int execute_filter_output(struct filter_out * restrict ,int);
 int execute_filter_output_idle(struct filter_out * const slave);

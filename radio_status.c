@@ -125,6 +125,7 @@ int reset_radio_status(struct channel *chan){
 bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length){
   bool restart_needed = false;
   bool new_filter_needed = false;
+  bool new_filter2_needed = false;
   uint32_t const ssrc = chan->output.rtp.ssrc;
 
   if(chan->lifetime != 0)
@@ -234,9 +235,10 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       case KAISER_BETA: // dimensionless, always 0 or positive
         {
 	  float const f = fabsf(decode_float(cp,optlen));
-	  if(isfinite(f) && chan->filter.kaiser_beta != f)
+	  if(isfinite(f) && chan->filter.kaiser_beta != f){
 	    chan->filter.kaiser_beta = f;
-	  new_filter_needed = true;
+	    new_filter_needed = true;
+	  }
 	}
       break;
     case PRESET:
@@ -285,7 +287,13 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       }
       break;
     case INDEPENDENT_SIDEBAND:
-      chan->filter.isb = decode_bool(cp,optlen); // will reimplement someday
+      {
+	bool i = decode_bool(cp,optlen); // will reimplement someday
+	if(i != chan->filter2.isb){
+	  chan->filter2.isb = i;
+	  new_filter2_needed = true;
+	}
+      }
       break;
     case THRESH_EXTEND:
       chan->fm.threshold = decode_bool(cp,optlen);
@@ -446,11 +454,21 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       break;
     case MINPACKET:
       {
-	int i = decode_int(cp,optlen);
-	if(i >=0 && i <=4)
-	   chan->output.minpacket = i;
+	unsigned int i = decode_int(cp,optlen);
+	if(i <= 4 && i != chan->output.minpacket){
+	  chan->output.minpacket = i;
+	}
       }
-
+      break;
+    case FILTER2:
+      {
+	unsigned int i = decode_int(cp,optlen);
+	if(i <= 4 && i != chan->filter2.blocking){
+	  chan->filter2.blocking = i;
+	  new_filter2_needed = true;
+	}
+      }
+      break;
     default:
       break;
     }
@@ -465,6 +483,24 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       fprintf(stdout,"restarting thread for ssrc %u\n",ssrc);
     return true;
   }
+  if(new_filter2_needed){
+    unsigned int const inblock = chan->output.samprate * Blocktime / 1000;
+    unsigned int outblock = chan->filter2.blocking * inblock;
+
+    delete_filter_input(&chan->filter2.in);
+    delete_filter_output(&chan->filter2.out);
+    if(chan->filter2.blocking > 0){
+      create_filter_input(&chan->filter2.in,outblock,outblock+1,COMPLEX); // 50% overlap
+      create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,outblock,chan->filter2.isb ? CROSS_CONJ : COMPLEX);
+      chan->filter2.low = chan->filter.min_IF;
+      chan->filter2.high = chan->filter.max_IF;
+      chan->filter2.kaiser_beta = chan->filter.kaiser_beta;
+      set_filter(&chan->filter2.out,chan->filter2.low/chan->output.samprate,
+		 chan->filter2.high/chan->output.samprate,
+		 chan->filter2.kaiser_beta);
+    }
+  }
+
   if(new_filter_needed){
     // Set up new filter with chan possibly stopped
     if(Verbose > 1)
@@ -475,6 +511,16 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     set_filter(&chan->filter.out,chan->filter.min_IF/chan->output.samprate,
 	       chan->filter.max_IF/chan->output.samprate,
 	       chan->filter.kaiser_beta);
+
+    if(chan->filter2.blocking > 0){
+      // Reset filter2 too, if it's on
+      chan->filter2.low = chan->filter.min_IF;
+      chan->filter2.high = chan->filter.max_IF;
+      chan->filter2.kaiser_beta = chan->filter.kaiser_beta;
+      set_filter(&chan->filter2.out,chan->filter2.low/chan->output.samprate,
+		 chan->filter2.high/chan->output.samprate,
+		 chan->filter2.kaiser_beta);
+    }
   }
   return false;
 }
@@ -561,9 +607,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       encode_float(&bp,AGC_THRESHOLD,voltage2dB(chan->linear.threshold)); // amplitude -> dB
       encode_float(&bp,AGC_RECOVERY_RATE,voltage2dB(chan->linear.recovery_rate)/(.001*Blocktime)); // amplitude/block -> dB/sec
     }
-#if 0
-    encode_byte(&bp,INDEPENDENT_SIDEBAND,chan->filter.isb); // bool - maybe reimplement someday
-#endif
+    encode_byte(&bp,INDEPENDENT_SIDEBAND,chan->filter2.isb);
     break;
   case FM_DEMOD:
     if(chan->fm.tone_freq != 0){
@@ -608,6 +652,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_int32(&bp,OUTPUT_SAMPRATE,chan->output.samprate); // Hz
     encode_int64(&bp,OUTPUT_DATA_PACKETS,chan->output.rtp.packets);
     encode_float(&bp,KAISER_BETA,chan->filter.kaiser_beta); // Dimensionless
+    encode_int(&bp,FILTER2,chan->filter2.blocking);
 
     // BASEBAND_POWER is now the average since last poll
     if(chan->status.blocks_since_poll > 0){

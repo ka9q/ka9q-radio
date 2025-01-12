@@ -139,6 +139,11 @@ int set_defaults(struct channel *chan){
   chan->filter.kaiser_beta = DEFAULT_KAISER_BETA;
   chan->filter.min_IF = DEFAULT_LOW;
   chan->filter.max_IF = DEFAULT_HIGH;
+  // ************ temp for testing
+  chan->filter2.low = DEFAULT_LOW;
+  chan->filter2.high = DEFAULT_HIGH;
+  chan->filter2.kaiser_beta = DEFAULT_KAISER_BETA;
+
   chan->filter.remainder = NAN;      // Important to force downconvert() to call set_osc() on first call
   chan->filter.bin_shift = -1000999; // Force initialization here too
   chan->fm.squelch_open = dB2power(DEFAULT_SQUELCH_OPEN);
@@ -155,7 +160,7 @@ int set_defaults(struct channel *chan){
   chan->linear.env = false;
   chan->pll.enable = false;
   chan->pll.square = false;
-  chan->filter.isb = false;
+  chan->filter2.isb = false;
   chan->pll.loop_bw = DEFAULT_PLL_BW;
   chan->linear.agc = true;
   chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
@@ -276,7 +281,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   if(chan->pll.square)
     chan->pll.enable = true; // Square implies PLL
 
-  chan->filter.isb = config_getboolean(table,sname,"conj",chan->filter.isb);       // (unimplemented anyway)
+  chan->filter2.isb = config_getboolean(table,sname,"conj",chan->filter2.isb);
   chan->pll.loop_bw = config_getfloat(table,sname,"pll-bw",chan->pll.loop_bw);
   chan->linear.agc = config_getboolean(table,sname,"agc",chan->linear.agc);
   chan->fm.threshold = config_getboolean(table,sname,"extend",chan->fm.threshold); // FM threshold extension

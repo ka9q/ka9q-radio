@@ -72,7 +72,7 @@ enum status_type {
   KAISER_BETA,
   FILTER_BLOCKSIZE,
   FILTER_FIR_LENGTH,
-  UNUSED17,
+  FILTER2,
 
   // Signals
   IF_POWER,

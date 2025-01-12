@@ -61,7 +61,7 @@ struct fft_job {
   void *output;
   pthread_mutex_t *completion_mutex; // protects completion_jobnum
   pthread_cond_t *completion_cond;   // Signaled when job is complete
-  unsigned int *completion_jobnum;   // Written with jobnum when complete
+  int *completion_jobnum;   // Written with jobnum when complete
   bool terminate; // set to tell fft thread to quit
 };
 
@@ -123,16 +123,16 @@ static unsigned long lcm(unsigned long a,unsigned long b);
 // The set_filter() function uses Kaiser windowing for this purpose
 
 // Set up input (master) half of filter
-struct filter_in *create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type){
+int create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type){
   assert(L > 0);
   assert(M > 0);
   int const N = L + M - 1;
   int const bins = (in_type == COMPLEX) ? N : (N/2 + 1);
   if(bins < 1)
-    return NULL; // Unreasonably small - will segfault. Can happen if sample rate is garbled
+    return -1; // Unreasonably small - will segfault. Can happen if sample rate is garbled
 
   if(master == NULL)
-    return NULL;
+    return -1;
   if(!goodchoice(N)){
     fprintf(stdout,"create_filter_input(L=%d, M=%d): N=%d is not an efficient blocksize for FFTW3\n",L,M,N);
   }
@@ -151,6 +151,8 @@ struct filter_in *create_filter_input(struct filter_in *master,int const L,int c
   master->impulse_length = M;
   pthread_mutex_init(&master->filter_mutex,NULL);
   pthread_cond_init(&master->filter_cond,NULL);
+
+  bool rt_was_on = norealtime();
 
   // FFTW itself always runs with a single thread since multithreading didn't seem to do much good
   // But we have a set of worker threads operating on a job queue to allow a controlled number
@@ -198,7 +200,9 @@ struct filter_in *create_filter_input(struct filter_in *master,int const L,int c
   default:
     pthread_mutex_unlock(&FFTW_planning_mutex);
     assert(0); // shouldn't happen
-    return NULL;
+    if(rt_was_on)
+      realtime();
+    return -1;
   case CROSS_CONJ:
   case COMPLEX:
     master->input_buffer_size = round_to_page(ND * N * sizeof(complex float));
@@ -234,21 +238,23 @@ struct filter_in *create_filter_input(struct filter_in *master,int const L,int c
     break;
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
+  if(rt_was_on)
+    realtime();
 
-  return master;
+  return 0;
 }
 // Set up output (slave) side of filter (possibly one of several sharing the same input master)
 // These output filters should be deleted before their masters
 // Segfault will occur if filter_in is deleted and execute_filter_output is executed
 // Special case: for type == SPECTRUM, 'len' is the number of FFT bins, not the number of output time domain points (since there aren't any)
-struct filter_out *create_filter_output(struct filter_out *slave,struct filter_in * master,complex float * const response,int len, enum filtertype const out_type){
+int create_filter_output(struct filter_out *slave,struct filter_in * master,complex float * const response,int len, enum filtertype const out_type){
   assert(master != NULL);
   if(master == NULL)
-    return NULL;
+    return -1;
 
   assert(slave != NULL);
   if(slave == NULL)
-    return NULL;
+    return -1;
 
   assert(len > 0);
 
@@ -272,7 +278,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
       ldiv_t x = ldiv((long)len * N,L);
       if(x.rem != 0){
 	fprintf(stdout,"Invalid filter output length %d for input N=%d, L=%d\n",len,N,L);
-	return NULL;
+	return -1;
       }
       slave->bins = x.quot; // Total number of time-domain FFT points including overlap
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
@@ -280,6 +286,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
       assert(slave->output_buffer.c != NULL);
       slave->output_buffer.r = NULL; // catch erroneous references
       slave->output.c = slave->output_buffer.c + slave->bins - len;
+      bool rt_was_on = norealtime(); // Could this cause a priority inversion?
       pthread_mutex_lock(&FFTW_planning_mutex);
       fftwf_plan_with_nthreads(1); // IFFTs are always small, use only one internal thread
       if((slave->rev_plan = fftwf_plan_dft_1d(slave->bins,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
@@ -289,6 +296,8 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
       if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
 	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
       pthread_mutex_unlock(&FFTW_planning_mutex);
+      if(rt_was_on)
+	realtime();
     }
     break;
   case SPECTRUM: // Like complex, but no IFFT or output time domain buffer
@@ -307,7 +316,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
       ldiv_t x = ldiv((long)len * N,L);
       if(x.rem != 0){
 	fprintf(stdout,"Invalid filter output length %d for input N=%d, L=%d\n",len,N,L);
-	return NULL;
+	return -1;
       }
       slave->bins = x.quot / 2 + 1;
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
@@ -316,6 +325,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
       assert(slave->output_buffer.r != NULL);
       slave->output_buffer.c = NULL;
       slave->output.r = slave->output_buffer.r + slave->bins - len;
+      bool rt_was_on = norealtime();
       pthread_mutex_lock(&FFTW_planning_mutex);
       if((slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->bins,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
 	suggest(FFTW_planning_level,slave->bins,FFTW_BACKWARD,REAL);
@@ -324,6 +334,8 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
       if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
 	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
       pthread_mutex_unlock(&FFTW_planning_mutex);
+      if(rt_was_on)
+	realtime();
     }
     break;
   }
@@ -343,7 +355,7 @@ struct filter_out *create_filter_output(struct filter_out *slave,struct filter_i
     }
   }
   slave->next_jobnum = master->next_jobnum;
-  return slave;
+  return 0;
 }
 
 // Worker thread(s) that actually execute FFTs
@@ -650,7 +662,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
     // Re-implementing ISB will probably require a filter for each sideband
     // Also probably generates time domain ripple effects due to the sharp notch at DC
     assert(malloc_usable_size(slave->fdomain) >= slave->bins * sizeof(*slave->fdomain));
-    for(int p=1,dn=slave->bins-1; p < slave->bins; p++,dn--){
+    for(int p=1,dn=slave->bins-1; p < slave->bins/2; p++,dn--){
       complex float const pos = slave->fdomain[p];
       complex float const neg = slave->fdomain[dn];
 
@@ -1075,11 +1087,13 @@ int write_cfilter(struct filter_in *f, complex float const *buffer,int size){
   f->input_write_pointer.c += size;
   mirror_wrap((void *)&f->input_write_pointer.c, f->input_buffer, f->input_buffer_size);
   f->wcnt += size;
+  bool executed = false;
   while(f->wcnt >= f->ilen){
     f->wcnt -= f->ilen;
     execute_filter_input(f);
+    executed = true;
   }
-  return size;
+  return executed;
 }
 
 int write_rfilter(struct filter_in *f, float const *buffer,int size){
@@ -1097,11 +1111,13 @@ int write_rfilter(struct filter_in *f, float const *buffer,int size){
   f->input_write_pointer.r += size;
   mirror_wrap((void *)&f->input_write_pointer.r, f->input_buffer, f->input_buffer_size);
   f->wcnt += size;
+  bool executed = false;
   while(f->wcnt >= f->ilen){
     f->wcnt -= f->ilen;
     execute_filter_input(f);
+    executed = true;
   }
-  return size;
+  return executed;
 };
 
 // Custom version of malloc that aligns to a cache line

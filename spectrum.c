@@ -70,7 +70,7 @@ int demod_spectrum(void *arg){
       old_bins = fft_bins;
 
       // Special filter without a response curve or IFFT
-      if(create_filter_output(&chan->filter.out,&Frontend.in,NULL,fft_bins,SPECTRUM) == NULL)
+      if(create_filter_output(&chan->filter.out,&Frontend.in,NULL,fft_bins,SPECTRUM) != 0)
 	assert(0);
 
       // Although we don't use filter_output, chan->filter.min_IF and max_IF still need to be set

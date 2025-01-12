@@ -75,27 +75,26 @@ int pipefill(int const fd,void *buffer,int const cnt){
 }
 
 // Set realtime priority (if possible)
-void realtime(void){
 #ifdef __linux__
-  {
-
-    struct sched_param param;
-    param.sched_priority = (sched_get_priority_max(SCHED_FIFO) + sched_get_priority_min(SCHED_FIFO)) / 2; // midway?
-    if(sched_setscheduler(0,SCHED_FIFO|SCHED_RESET_ON_FORK,&param) != 0){
-      char name[25];
-      int err;
-      if((err = pthread_getname_np(pthread_self(),name,sizeof(name))) != 0 && errno != EACCES){
-	// Don't bother with permission failures
-	fprintf(stdout,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
-      }
-    } else
-      return;
+void realtime(void){
+  struct sched_param param;
+  param.sched_priority = (sched_get_priority_max(SCHED_FIFO) + sched_get_priority_min(SCHED_FIFO)) / 2; // midway?
+  if(sched_setscheduler(0,SCHED_FIFO|SCHED_RESET_ON_FORK,&param) != 0){
+    char name[25];
+    int err;
+    if((err = pthread_getname_np(pthread_self(),name,sizeof(name))) != 0 && errno != EACCES){
+      // Don't bother with permission failures
+      fprintf(stdout,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
+    }
   }
-#endif
-  // As backup, up our nice priority
-  int prio = getpriority(PRIO_PROCESS,0);
+}
+#else
+static int Base_prio;
+void realtime(void){
+  // As backup, decrease our niceness by 10
+  Base_prio = getpriority(PRIO_PROCESS,0);
   errno = 0; // setpriority can return -1
-  prio = setpriority(PRIO_PROCESS,0,prio - 10);
+  int prio = setpriority(PRIO_PROCESS,0,Base_prio - 10);
   if(prio != 0 && errno != EACCES){ // Not EPERM!
     int err = errno;
     char name[25];
@@ -106,6 +105,50 @@ void realtime(void){
     }
   }
 }
+#endif
+
+// Drop back to normal priority, to avoid blocking a core when doing something time-consuming, like a FFT plan
+// Return 1 if we had previously been running at realtime, 0 otherwise
+#ifdef __linux__
+bool norealtime(void){
+  int old = sched_getscheduler(0);
+  if(old != SCHED_OTHER){
+    struct sched_param param;
+    param.sched_priority = 0;
+    if(sched_setscheduler(0,SCHED_OTHER,&param) != 0){
+      char name[25];
+      int err;
+      if((err = pthread_getname_np(pthread_self(),name,sizeof(name))) != 0 && errno != EACCES){
+	// Don't bother with permission failures
+	fprintf(stdout,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+#else 
+bool norealtime(void){
+  // Restore our base prio
+  // increase our niceness by 10
+  errno = 0; // setpriority can return -1
+  int prio = getpriority(PRIO_PROCESS,0);
+  if(prio != Base_prio){
+    prio = setpriority(PRIO_PROCESS,0,Base_prio);
+    if(prio != 0 && errno != EACCES){ // Not EPERM!
+      int err = errno;
+      char name[25];
+      memset(name,0,sizeof(name));
+      if(pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
+	// permission failures happen frequently, don't bother
+	fprintf(stdout,"%s: setpriority failed, %s (%d)\n",name,strerror(err),err);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+#endif
 
 // Remove return or newline, if any, from end of string
 void chomp(char *s){

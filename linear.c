@@ -45,43 +45,60 @@ int demod_linear(void *arg){
     chan->output.opus = NULL;
   }
 
-  int const blocksize = chan->output.samprate * Blocktime / 1000;
+  unsigned int const blocksize = chan->output.samprate * Blocktime / 1000;
   delete_filter_output(&chan->filter.out);
-  void *status = create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
-  pthread_mutex_unlock(&chan->status.lock);
-  if(status == NULL)
-    return -1;
+  int status = create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
 
+  if(status != 0){
+    pthread_mutex_unlock(&chan->status.lock);
+    return -1;
+  }
   set_filter(&chan->filter.out,
 	     chan->filter.min_IF/chan->output.samprate,
 	     chan->filter.max_IF/chan->output.samprate,
 	     chan->filter.kaiser_beta);
-  
+
+  // Set up secondary filter - experimental
+  delete_filter_input(&chan->filter2.in);
+  delete_filter_output(&chan->filter2.out);
+  unsigned int outblock = blocksize;
+  if(chan->filter2.blocking > 0){
+    outblock = chan->filter2.blocking * blocksize;
+
+    // Secondary filter running at 1:1 sample rate, 50% overlap, with blocksize a small multiple (1-4) of the channel block size
+    create_filter_input(&chan->filter2.in,outblock,outblock+1,COMPLEX); // 50% overlap
+    create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,outblock,chan->filter2.isb ? CROSS_CONJ : COMPLEX);
+    chan->filter2.low = chan->filter.min_IF;
+    chan->filter2.high = chan->filter.max_IF;
+    chan->filter2.kaiser_beta = chan->filter.kaiser_beta;
+    set_filter(&chan->filter2.out,chan->filter2.low/chan->output.samprate,chan->filter2.high/chan->output.samprate,chan->filter2.kaiser_beta);
+  }
   // Coherent mode parameters
   float const damping = DEFAULT_PLL_DAMPING;
   float const lock_time = DEFAULT_PLL_LOCKTIME;
 
   int const lock_limit = lock_time * chan->output.samprate;
   init_pll(&chan->pll.pll,(float)chan->output.samprate);
+  pthread_mutex_unlock(&chan->status.lock);
 
   realtime();
 
   while(downconvert(chan) == 0){
-    int const N = chan->filter.out.olen; // Number of raw samples in filter output buffer
+    unsigned int N = chan->filter.out.olen; // Number of raw samples in filter output buffer
 
     // First pass over sample block.
     // Run the PLL (if enabled)
     // Apply post-downconversion shift (if enabled, e.g. for CW)
     // Measure energy
     // Apply PLL & frequency shift, measure energy
-    complex float * const buffer = chan->filter.out.output.c; // Working buffer
+    complex float * buffer = chan->filter.out.output.c; // Working buffer
     float signal = 0; // PLL only
     float noise = 0;  // PLL only
 
     if(chan->pll.enable){
       // Update PLL state, if active
       set_pll_params(&chan->pll.pll,chan->pll.loop_bw,damping);
-      for(int n=0; n<N; n++){
+      for(unsigned int n=0; n<N; n++){
 	complex float const s = buffer[n] *= conjf(pll_phasor(&chan->pll.pll));
 	float phase;
 	if(chan->pll.square){
@@ -133,16 +150,26 @@ int demod_linear(void *arg){
       chan->pll.lock_count = -lock_limit;
       chan->pll.lock = false;
     }
+    if(chan->filter2.blocking > 0){
+      int r = write_cfilter(&chan->filter2.in,buffer,N); // Will trigger execution of input side if buffer is full, returning 1
+      if(r <= 0)
+	continue; // Nothing to read out, wait for next frame
+      execute_filter_output(&chan->filter2.out,0); // No frequency shifting
 
+      // Now switch to working on output of second filter
+      buffer = chan->filter2.out.output.c; // Working buffer
+      outblock = chan->filter2.blocking * N;
+      N = outblock;
+    }
     // Apply frequency shift
     // Must be done after PLL, which operates only on DC
     set_osc(&chan->shift,chan->tune.shift/chan->output.samprate,0);
     if(chan->shift.freq != 0){
-      for(int n=0; n < N; n++){
+      for(unsigned int n=0; n < N; n++){
 	buffer[n] *= step_osc(&chan->shift);
       }
     }
- 
+
     // Run AGC on a block basis to do some forward averaging
     // Lots of people seem to have strong opinions on how AGCs should work
     // so there's probably a lot of work to do here
@@ -195,14 +222,14 @@ int demod_linear(void *arg){
       float *samples = (float *)buffer;
       if(chan->linear.env){
 	// AM envelope detection
-	for(int n=0; n < N; n++){
+	for(unsigned int n=0; n < N; n++){
 	  samples[n] = M_SQRT1_2 * cabsf(buffer[n]) * chan->output.gain; // Power from both I&Q
 	  output_power += samples[n] * samples[n];
 	  chan->output.gain *= gain_change;
 	}
       } else {
 	// I channel only (SSB, CW, etc)
-	for(int n=0; n < N; n++){
+	for(unsigned int n=0; n < N; n++){
 	  samples[n] = crealf(buffer[n]) * chan->output.gain;
 	  output_power += samples[n] * samples[n];
 	  chan->output.gain *= gain_change;
@@ -214,7 +241,7 @@ int demod_linear(void *arg){
       // Overlay input with output
       if(chan->linear.env){
 	// I on left, envelope/AM on right (for experiments in fine SSB tuning)
-	for(int n=0; n < N; n++){      
+	for(unsigned int n=0; n < N; n++){
 	  __imag__ buffer[n] = M_SQRT1_2 * cabsf(buffer[n]);
 	  buffer[n] *= chan->output.gain;
 	  output_power += cnrmf(buffer[n]);
@@ -222,7 +249,7 @@ int demod_linear(void *arg){
 	}
       } else {
 	// Simplest case: I/Q output with I on left, Q on right
-	for(int n=0; n < N; n++){      
+	for(unsigned int n=0; n < N; n++){
 	  buffer[n] *= chan->output.gain;
 	  output_power += cnrmf(buffer[n]);
 	  chan->output.gain *= gain_change;

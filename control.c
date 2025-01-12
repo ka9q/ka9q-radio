@@ -997,6 +997,17 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
 	encode_byte(bpp,OUTPUT_ENCODING,e);
     }
     break;
+  case 'F':
+    {
+      char str[Entry_width],*ptr;
+      getentry("Filter2 blocksize (0-4): ",str,sizeof(str));
+      unsigned int x = labs(strtol(str,&ptr,0));
+      if(ptr != str){
+	if(x <= 4)
+	  encode_int(bpp,FILTER2,x);
+      }
+    }
+    break;
   default:
     beep();
     break;
@@ -1295,6 +1306,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   //  pprintw(w,row++,col,"first null","%'.1f Hz",firstnull * 1000. / Blocktime);
 #endif
 
+  pprintw(w,row++,col,"Filter2","%u   ",channel->filter2.blocking);
   pprintw(w,row++,col,"Drops","%'llu   ",channel->filter.out.block_drops);
 
   box(w,0,0);
