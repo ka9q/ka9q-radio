@@ -150,7 +150,7 @@ enum status_type {
   BLOCKS_SINCE_POLL,  // Blocks since last poll
   AD_OVER,          // A/D full scale samples, proxy for overranges
   RTP_PT,           // Real Time Protocol Payload Type
-  STATUS_INTERVAL,      // Automatically send channel status over *data* channel every STATUS_RATE frames
+  STATUS_INTERVAL,      // Automatically send channel status over *data* channel every STATUS_INTERVAL frames
   OUTPUT_ENCODING,    // Output data encoding (see enum encoding in multicast.h)
   SAMPLES_SINCE_OVER, // Samples since last A/D overrange
   PLL_WRAPS,          // Count of complete linear mode PLL rotations
