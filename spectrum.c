@@ -84,10 +84,10 @@ int demod_spectrum(void *arg){
       for(int i=0; i < bin_count; i++){ // For each noncoherent integration bin above center freq
 	double p = 0;
 	for(int j=0; j < binsperbin; j++) // Add energy of each fft bin that's part of this user integration bin
-          p += gain * cnrmf(chan->filter.out.fdomain[binp++]);
+          p += cnrmf(chan->filter.out.fdomain[binp++]);
 
 	// Accumulate energy until next poll
-	chan->spectrum.bin_data[i] += p;
+	chan->spectrum.bin_data[i] += (p * gain);
       }
     }
   } while(downconvert(chan) == 0);
