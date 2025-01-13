@@ -997,9 +997,13 @@ static void cleanup_mutex(void *param)
 }
 
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunknown-warning-option" // clang doesn't seem to know -Wclobbered
-#pragma GCC diagnostic ignored "-Wclobbered"
+#if defined(__GNUC__) && !defined(__clang__)  // GCC-only, exclude Clang
+  #if __GNUC__ >= 4
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wclobbered"
+  #endif
+#endif
+
 
 int hid_read_timeout(hid_device *dev, unsigned char *data, size_t length, int milliseconds)
 {
@@ -1087,7 +1091,11 @@ ret:
 
 	return bytes_read;
 }
-#pragma GCC diagnostic pop
+#if defined(__GNUC__) && !defined(__clang__)
+  #if __GNUC__ >= 4
+    #pragma GCC diagnostic pop
+  #endif
+#endif
 
 int hid_read(hid_device *dev, unsigned char *data, size_t length)
 {
