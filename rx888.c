@@ -132,6 +132,7 @@ static char const *usb_speeds[N_USB_SPEEDS] = {
 };
 
 static char const *Rx888_keys[] = {
+  "library",
   "device",
   "firmware",
   "serial",

@@ -67,6 +67,7 @@ static int Blocksize;
 static bool Hold_open = false;
 
 static char const *Funcube_keys[] = {
+  "library",
   "bias"
   "calibrate",
   "description",

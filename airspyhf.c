@@ -29,6 +29,7 @@ extern const char *App_path;
 static float Power_smooth = 0.05; // Calculate this properly someday
 
 static char const *Airspyhf_keys[] = {
+  "library",
   "device",
   "serial",
   "samprate",

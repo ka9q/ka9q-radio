@@ -64,6 +64,7 @@ uint8_t airspy_sensitivity_lna_gains[GAIN_COUNT] = {   14, 14, 14, 14, 14, 14, 1
 
 
 static char const *Airspy_keys[] = {
+  "library",
   "device",
   "firmware",
   "serial",

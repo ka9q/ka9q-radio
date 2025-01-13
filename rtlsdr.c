@@ -65,6 +65,7 @@ struct sdr {
 };
 
 static char const *Rtlsdr_keys[] = {
+  "library",
   "agc",
   "bias",
   "calibrate",
