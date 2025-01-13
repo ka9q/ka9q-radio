@@ -30,7 +30,9 @@ CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_brow
 
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h status.h
 
-all: $(DAEMONS) $(EXECS)
+DYNAMICS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so
+
+all: $(DAEMONS) $(EXECS) $(DYNAMICS)
 
 # NB: no longer copies files to /etc/radio. Must be installed manually.
 install: $(DAEMONS) $(EXECS)
@@ -40,6 +42,7 @@ install: $(DAEMONS) $(EXECS)
 	sysctl --quiet -p /etc/sysctl.d/98-sockbuf.conf
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) start-ka9q-horus.sh $(BINDIR)
+	rsync -a $(DYNAMICS) /usr/local/lib
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
 	(cd share;rsync -a --ignore-existing . $(LIBDIR))
 	(cd service;rsync -a . /etc/systemd/system)
@@ -54,7 +57,7 @@ install: $(DAEMONS) $(EXECS)
 	systemctl daemon-reload
 
 clean:
-	-rm -f *.o *.a *.d .depend $(EXECS) $(DAEMONS)
+	-rm -f *.o *.a *.d .depend $(EXECS) $(DAEMONS) $(DYNAMICS)
 
 DEPS = $(CFILES:.c=.d)
 
@@ -144,10 +147,43 @@ libfcd.a: fcd.o hid-libusb.o
 	ar rv $@ $?
 	ranlib $@
 
+# device shared libraries - build kludgey separate -fPIC versions of
+# drivers already built in for testing
+# To test, remove these references from main.c
+funcube.so: funcube-pic.o
+
+rx888.so: rx888-pic.o
+	$(CC) -shared -o $@ $^
+
+airspy.so: airspy-pic.o
+	$(CC) -shared -o $@ $^
+
+airspyhf.so: airspyhf-pic.o
+	$(CC) -shared -o $@ $^
+
+rtlsdr.so: rtlsdr-pic.o
+	$(CC) -shared -o $@ $^
+
+sig_gen.so: sig_gen-pic.o
+	$(CC) -shared -o $@ $^
+
+funcube-pic.o: funcube.c
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+airspy-pic.o: airspy.c
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+rtlsdr-pic.o: rtlsdr.c
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+sig_gen-pic.o: sig_gen.c
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+rx888-pic.o: rx888.c
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+airspyhf-pic.o: airspyhf.c
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
 # subroutines useful in more than one program
 libradio.a: morse.o dump.o modes.o ax25.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o osc.o config.o
 	ar rv $@ $?
 	ranlib $@
 
-
-
+%.so: %.o
+	$(CC) -shared -o $@ $<

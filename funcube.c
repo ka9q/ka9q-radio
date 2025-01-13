@@ -190,7 +190,7 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   }
   return r;
 }
-void *proc_funcube(void *arg){
+static void *proc_funcube(void *arg){
   pthread_setname("proc_funcube");
   struct sdrstate * const sdr = (struct sdrstate *)arg;
   assert(sdr != NULL);
