@@ -33,6 +33,7 @@
 #include <strings.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <dlfcn.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -65,6 +66,8 @@ int Overlap = DEFAULT_OVERLAP;
 static int Update = DEFAULT_UPDATE;
 static int RTCP_enable = false;
 static int SAP_enable = false;
+static void *Dl_handle;
+
 
 // List of valid config keys in [global] section, for error checking
 char const *Global_keys[] = {
@@ -747,8 +750,44 @@ static int setup_hardware(char const *sname){
     Frontend.tune = sdrplay_tune;
   #endif
   } else {
-    fprintf(stdout,"device %s unrecognized\n",device);
-    return -1;
+    // Try to find it dynamically
+    char const *dlname = config_getstring(Configtable,"hardware","library",NULL);
+    if(dlname == NULL){
+      fprintf(stdout,"No dynamic library= entry found in [hardware], device %s unrecognized\n",device);
+      return -1;
+    }
+    Dl_handle = dlopen(dlname,RTLD_LAZY);
+    if(Dl_handle == NULL){
+      fprintf(stdout,"Dynamic library %s for device %s not found\n",dlname,device);
+      return -1;
+    }
+    char symname[128];
+    snprintf(symname,sizeof(symname),"%s_setup",device);
+    Frontend.setup = dlsym(Dl_handle,symname);
+    char *error;
+    if((error = dlerror()) != NULL){
+      fprintf(stdout,"dynamic symbol %s not found in %s\n",symname,device);
+      dlclose(Dl_handle);
+      return -1;
+    }
+    snprintf(symname,sizeof(symname),"%s_start",device);
+    Frontend.start = dlsym(Dl_handle,symname);
+    if((error = dlerror()) != NULL){
+      fprintf(stdout,"dynamic symbol %s not found in %s\n",symname,device);
+      dlclose(Dl_handle);
+      return -1;
+    }
+    snprintf(symname,sizeof(symname),"%s_tune",device);
+    Frontend.tune = dlsym(Dl_handle,symname);
+    if((error = dlerror()) != NULL){
+      // Not fatal, but no tuning possible
+      fprintf(stdout,"warning: dynamic symbol %s not found in %s\n",symname,device);
+    }
+    // No error checking on these, they're optional
+    snprintf(symname,sizeof(symname),"%s_gain",device);
+    Frontend.gain = dlsym(Dl_handle,symname);
+    snprintf(symname,sizeof(symname),"%s_atten",device);
+    Frontend.atten = dlsym(Dl_handle,symname);
   }
 
   int r = (*Frontend.setup)(&Frontend,Configtable,sname);

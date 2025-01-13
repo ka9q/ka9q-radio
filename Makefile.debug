@@ -46,11 +46,11 @@ install: $(DAEMONS) $(EXECS)
 	(cd rules;rsync -a . /etc/udev/rules.d)
 	(cd aux;rsync -a $(BLACKLIST) /etc/modprobe.d)
 	(cd aux;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d;chown root:root /etc/logrotate.d/*;chmod go-w /etc/logrotate.d/*)
-	touch -a /var/log/ft8.log /var/log/ft4.log /var/log/wspr.log /var/log/hfdl.log
-	chown radio:radio /var/log/ft8.log /var/log/ft4.log /var/log/wspr.log /var/log/hfdl.log
-	mkdir -p /etc/fftw /etc/radio $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl
-	chgrp radio /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl
-	chmod g+ws  /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl
+	touch -a /var/log/ft8.log /var/log/ft4.log /var/log/wspr.log
+	mkdir -p /etc/fftw /etc/radio $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
+	chown radio:radio /var/log/ft8.log /var/log/ft4.log /var/log/wspr.log /var/log/hfdl /var/log/hfdl
+	chgrp radio /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
+	chmod g+ws  /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
 	systemctl daemon-reload
 
 clean:
@@ -112,7 +112,7 @@ pcmspawn: pcmspawn.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pcmrecord: pcmrecord.o libradio.a
-	$(CC) -g -o $@ $^ -lopus -logg -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg -lbsd -lm -lpthread
 
 pcmsend: pcmsend.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lm -lpthread
@@ -124,7 +124,7 @@ pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o libfcd.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lopus -lportaudio -lusb-1.0 -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lopus -lportaudio -lusb-1.0 -lbsd -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
