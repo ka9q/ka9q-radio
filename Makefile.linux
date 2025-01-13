@@ -2,6 +2,7 @@
 # Copyright 2017-2025, Phil Karn, KA9Q
 # By default, builds release version
 # To build for debugging say "make BUILD=debug"
+# To force the normally static device handlers to be dynamically loaded (for testing) say "make DYNAMIC=1"
 
 BUILD ?= release
 
@@ -9,6 +10,10 @@ ifeq ($(BUILD),debug)
      DOPTS = -g
 else
      DOPTS = -DNDEBUG=1 -O3
+endif
+
+ifeq ($(DYNAMIC),1)
+     DOPTS += -DFORCE_DYNAMIC=1
 endif
 
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
@@ -136,8 +141,13 @@ powers: powers.o libradio.a
 pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
-radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o libfcd.a libradio.a
+ifeq ($(DYNAMIC),1)
+radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libradio.a
+	$(CC) -rdynamic $(LDOPTS) -o $@ $^ -ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lopus -lportaudio -lusb-1.0 -lbsd -lm -lpthread
+else
+radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o fcd.o hid-libusb.o libradio.a
 	$(CC) -rdynamic $(LDOPTS) -o $@ $^ -ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lopus -lportaudio -lusb-1.0 -lbsd -lm -lpthread
+endif
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
@@ -154,28 +164,23 @@ wd-record: wd-record.o libradio.a
 set_xcvr: set_xcvr.o config.o
 	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lrt -lbsd -lm -lpthread
 
-# Binary libraries
-libfcd.a: fcd.o hid-libusb.o
-	ar rv $@ $?
-	ranlib $@
-
 # device shared libraries - build kludgey separate -fPIC versions of
 # drivers already built in for testing
 # To test, remove these references from main.c
-funcube.so: funcube-pic.o
+funcube.so: funcube-pic.o fcd.o hid-libusb.o
 	    $(CC) -shared -o $@ $^
 
-rx888.so: rx888-pic.o
+rx888.so: rx888-pic.o ezusb.o
 	  $(CC) -shared -o $@ $^
 
 airspy.so: airspy-pic.o
-	   $(CC) -shared -o $@ $^
+	   $(CC) -shared -o $@ $^ -lairspy
 
 airspyhf.so: airspyhf-pic.o
-	     $(CC) -shared -o $@ $^
+	     $(CC) -shared -o $@ $^ -lairspyhf
 
 rtlsdr.so: rtlsdr-pic.o
-	   $(CC) -shared -o $@ $^
+	   $(CC) -shared -o $@ $^ -lrtlsdr
 
 sig_gen.so: sig_gen-pic.o
 	    $(CC) -shared -o $@ $^
