@@ -714,6 +714,7 @@ static int setup_hardware(char const *sname){
   }
   // Do we support it?
   // This should go into a table somewhere
+#ifndef FORCE_DYNAMIC
   if(strcasecmp(device,"rx888") == 0){
     Frontend.setup = rx888_setup;
     Frontend.start = rx888_startup;
@@ -749,7 +750,9 @@ static int setup_hardware(char const *sname){
     Frontend.start = sdrplay_startup;
     Frontend.tune = sdrplay_tune;
   #endif
-  } else {
+  } else
+#endif
+  {
     // Try to find it dynamically
     char const *dlname = config_getstring(Configtable,device,"library",NULL);
     if(dlname == NULL){
