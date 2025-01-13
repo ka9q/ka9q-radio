@@ -756,6 +756,7 @@ static int setup_hardware(char const *sname){
       fprintf(stdout,"No dynamic library= entry found in [%s], device unrecognized\n",device);
       return -1;
     }
+    fprintf(stdout,"Dynamically loading SDR hardware driver %s\n",dlname);
     char *error;
     Dl_handle = dlopen(dlname,RTLD_GLOBAL|RTLD_NOW);
     if(Dl_handle == NULL){
