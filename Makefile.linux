@@ -25,6 +25,14 @@ DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 
 EXECS=control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record
 
+# Build on raspberry pi only
+HEADER_FILE = $(wildcard /usr/include/pigpio.h)
+
+ifeq ($(HEADER_FILE),)
+else
+	EXECS += set_xcvr
+endif
+
 
 LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate
 
@@ -67,11 +75,9 @@ DEPS = $(CFILES:.c=.d)
 
 -include $(DEPS)
 
-.PHONY: clean all install
+.PHONY: clean all install pi
 
 # Executables
-set_xcvr: set_xcvr.o
-	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lrt -lbsd -lm -lpthread
 
 aprs: aprs.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
@@ -145,6 +151,8 @@ jt-decoded: jt-decoded.o libradio.a
 wd-record: wd-record.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
+set_xcvr: set_xcvr.o config.o
+	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser -lrt -lbsd -lm -lpthread
 
 # Binary libraries
 libfcd.a: fcd.o hid-libusb.o
@@ -155,35 +163,39 @@ libfcd.a: fcd.o hid-libusb.o
 # drivers already built in for testing
 # To test, remove these references from main.c
 funcube.so: funcube-pic.o
-	$(CC) -shared -o $@ $^
+	    $(CC) -shared -o $@ $^
 
 rx888.so: rx888-pic.o
-	$(CC) -shared -o $@ $^
+	  $(CC) -shared -o $@ $^
 
 airspy.so: airspy-pic.o
-	$(CC) -shared -o $@ $^
+	   $(CC) -shared -o $@ $^
 
 airspyhf.so: airspyhf-pic.o
-	$(CC) -shared -o $@ $^
+	     $(CC) -shared -o $@ $^
 
 rtlsdr.so: rtlsdr-pic.o
-	$(CC) -shared -o $@ $^
+	   $(CC) -shared -o $@ $^
 
 sig_gen.so: sig_gen-pic.o
-	$(CC) -shared -o $@ $^
+	    $(CC) -shared -o $@ $^
 
 funcube-pic.o: funcube.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	       $(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
 airspy-pic.o: airspy.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	      	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
 rtlsdr-pic.o: rtlsdr.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	      $(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
 sig_gen-pic.o: sig_gen.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	       	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
 rx888-pic.o: rx888.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	     $(CC) -c -fPIC $(CFLAGS) -o $@ $^
 airspyhf-pic.o: airspyhf.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+		$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 # subroutines useful in more than one program
 libradio.a: morse.o dump.o modes.o ax25.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o osc.o config.o
