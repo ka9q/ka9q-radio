@@ -997,9 +997,13 @@ static void cleanup_mutex(void *param)
 }
 
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wclobbered"
+
 int hid_read_timeout(hid_device *dev, unsigned char *data, size_t length, int milliseconds)
 {
 	int bytes_read = -1;
+
 
 #if 0
 	int transferred;
@@ -1082,6 +1086,7 @@ ret:
 
 	return bytes_read;
 }
+#pragma GCC diagnostic pop
 
 int hid_read(hid_device *dev, unsigned char *data, size_t length)
 {

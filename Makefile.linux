@@ -1,11 +1,15 @@
 # Primary Linux makefile for ka9q-radio package
-# Copyright 2017-2024, Phil Karn, KA9Q
+# Copyright 2017-2025, Phil Karn, KA9Q
+# By default, builds release version
+# To build for debugging say "make BUILD=debug"
 
-# for production
-DOPTS = -DNDEBUG=1 -O3
+BUILD ?= release
 
-# for debugging
-#DOPTS=-g
+ifeq ($(BUILD),debug)
+     DOPTS = -g
+else
+     DOPTS = -DNDEBUG=1 -O3
+endif
 
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
 COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -D_GNU_SOURCE=1 -Wextra -MMD -MP
