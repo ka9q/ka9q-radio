@@ -28,7 +28,7 @@ extern const char *App_path;
 
 static float Power_smooth = 0.05; // Calculate this properly someday
 
-char const *Airspyhf_keys[] = {
+static char const *Airspyhf_keys[] = {
   "device",
   "serial",
   "samprate",
@@ -62,7 +62,6 @@ static double true_freq(uint64_t freq);
 
 int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionary,char const * const section){
   assert(Dictionary != NULL);
-  config_validate_section(stdout,Dictionary,"hardware",Airspyhf_keys,NULL);
 
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
@@ -73,6 +72,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     if(strcasecmp(device,"airspyhf") != 0)
       return -1; // Not for us
   }
+  config_validate_section(stdout,Dictionary,section,Airspyhf_keys,NULL);
   {
     char const *sn = config_getstring(Dictionary,section,"serial",NULL);
     if(sn != NULL){

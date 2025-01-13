@@ -131,7 +131,7 @@ static char const *usb_speeds[N_USB_SPEEDS] = {
   "Super+ (10Gb/s)"
 };
 
-char const *Rx888_keys[] = {
+static char const *Rx888_keys[] = {
   "device",
   "firmware",
   "serial",
@@ -160,14 +160,13 @@ char const *Rx888_keys[] = {
 
 int rx888_setup(struct frontend * const frontend,dictionary const * const dictionary,char const * const section){
   assert(dictionary != NULL);
-  config_validate_section(stdout,dictionary,"hardware",Rx888_keys,NULL);
-
   // Hardware-dependent setup
   {
     char const *device = config_getstring(dictionary,section,"device",NULL);
     if(strcasecmp(device,"rx888") != 0)
       return -1; // Not for us
   }
+  config_validate_section(stdout,dictionary,section,Rx888_keys,NULL);
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;

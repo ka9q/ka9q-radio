@@ -63,7 +63,7 @@ uint8_t airspy_sensitivity_mixer_gains[GAIN_COUNT] = { 12, 12, 12, 12, 11, 10, 1
 uint8_t airspy_sensitivity_lna_gains[GAIN_COUNT] = {   14, 14, 14, 14, 14, 14, 14, 14, 14, 13, 12, 12,  9,  9,  8,  7, 6, 5, 3, 2, 1, 0 };
 
 
-char const *Airspy_keys[] = {
+static char const *Airspy_keys[] = {
   "device",
   "firmware",
   "serial",
@@ -95,8 +95,6 @@ static void set_gain(struct sdrstate *sdr,int gainstep);
 
 int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,char const * const section){
   assert(Dictionary != NULL);
-
-  config_validate_section(stdout,Dictionary,"hardware",Airspy_keys,NULL);
   
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
@@ -107,6 +105,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     if(strcasecmp(device,"airspy") != 0)
       return -1; // Not for us
   }
+  config_validate_section(stdout,Dictionary,section,Airspy_keys,NULL);
   {
     int ret;
     if((ret = airspy_init()) != AIRSPY_SUCCESS){

@@ -66,7 +66,7 @@ static float const UpperEdge = +75000;
 static int Blocksize;
 static bool Hold_open = false;
 
-char const *Funcube_keys[] = {
+static char const *Funcube_keys[] = {
   "bias"
   "calibrate",
   "description",
@@ -89,6 +89,7 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
     if(strcasecmp(device,"funcube") != 0)
       return -1; // Not for us
   }
+  config_validate_section(stdout,dictionary,section,Funcube_keys,NULL);
   // Cross-link generic and hardware-specific control structures
   struct sdrstate * const sdr = calloc(1,sizeof(*sdr));
   sdr->frontend = frontend;
