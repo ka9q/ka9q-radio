@@ -3,6 +3,7 @@
 # By default, builds release version
 # To build for debugging say "make BUILD=debug"
 # To force the normally static device handlers to be dynamically loaded (for testing) say "make DYNAMIC=1"
+# Make sure you also specify DYNAMIC=1 when doing make install
 
 BUILD ?= release
 
@@ -143,7 +144,7 @@ pl: pl.o libradio.a
 
 ifeq ($(DYNAMIC),1)
 radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libradio.a
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^ -ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lopus -lportaudio -lusb-1.0 -lbsd -lm -lpthread
+	$(CC) -rdynamic $(LDOPTS) -o $@ $^ -ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lopus -lportaudio -lbsd -lm -lpthread
 else
 radiod: main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o fcd.o hid-libusb.o libradio.a
 	$(CC) -rdynamic $(LDOPTS) -o $@ $^ -ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lopus -lportaudio -lusb-1.0 -lbsd -lm -lpthread
@@ -170,8 +171,8 @@ set_xcvr: set_xcvr.o config.o
 funcube.so: funcube-pic.o fcd.o hid-libusb.o
 	    $(CC) -shared -o $@ $^
 
-rx888.so: rx888-pic.o ezusb.o
-	  $(CC) -shared -o $@ $^
+rx888.so: rx888-pic.o ezusb-pic.o hid-libusb-pic.o
+	  $(CC) -shared -o $@ $^ -lusb-1.0
 
 airspy.so: airspy-pic.o
 	   $(CC) -shared -o $@ $^ -lairspy
@@ -199,8 +200,16 @@ sig_gen-pic.o: sig_gen.c
 
 rx888-pic.o: rx888.c
 	     $(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
 airspyhf-pic.o: airspyhf.c
 		$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
+ezusb-pic.o: ezusb.c
+		$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
+hid-libusb-pic.o: hid-libusb.c
+		  $(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
 
 # subroutines useful in more than one program
 libradio.a: morse.o dump.o modes.o ax25.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o osc.o config.o
