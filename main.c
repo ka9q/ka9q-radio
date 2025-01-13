@@ -751,9 +751,9 @@ static int setup_hardware(char const *sname){
   #endif
   } else {
     // Try to find it dynamically
-    char const *dlname = config_getstring(Configtable,"hardware","library",NULL);
+    char const *dlname = config_getstring(Configtable,device,"library",NULL);
     if(dlname == NULL){
-      fprintf(stdout,"No dynamic library= entry found in [hardware], device %s unrecognized\n",device);
+      fprintf(stdout,"No dynamic library= entry found in [%s], device unrecognized\n",device);
       return -1;
     }
     Dl_handle = dlopen(dlname,RTLD_LAZY);
