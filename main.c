@@ -770,7 +770,7 @@ static int setup_hardware(char const *sname){
       dlclose(Dl_handle);
       return -1;
     }
-    snprintf(symname,sizeof(symname),"%s_start",device);
+    snprintf(symname,sizeof(symname),"%s_startup",device);
     Frontend.start = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
       fprintf(stdout,"dynamic symbol %s not found in %s\n",symname,device);
