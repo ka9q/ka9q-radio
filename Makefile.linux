@@ -151,6 +151,7 @@ libfcd.a: fcd.o hid-libusb.o
 # drivers already built in for testing
 # To test, remove these references from main.c
 funcube.so: funcube-pic.o
+	$(CC) -shared -o $@ $^
 
 rx888.so: rx888-pic.o
 	$(CC) -shared -o $@ $^
