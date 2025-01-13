@@ -756,24 +756,25 @@ static int setup_hardware(char const *sname){
       fprintf(stdout,"No dynamic library= entry found in [%s], device unrecognized\n",device);
       return -1;
     }
-    Dl_handle = dlopen(dlname,RTLD_LAZY);
+    char *error;
+    Dl_handle = dlopen(dlname,RTLD_GLOBAL|RTLD_NOW);
     if(Dl_handle == NULL){
-      fprintf(stdout,"Dynamic library %s for device %s not found\n",dlname,device);
+      error = dlerror();
+      fprintf(stdout,"Error loading %s to handle device %s: %s\n",dlname,device,error);
       return -1;
     }
     char symname[128];
     snprintf(symname,sizeof(symname),"%s_setup",device);
     Frontend.setup = dlsym(Dl_handle,symname);
-    char *error;
     if((error = dlerror()) != NULL){
-      fprintf(stdout,"dynamic symbol %s not found in %s\n",symname,device);
+      fprintf(stdout,"error: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
       dlclose(Dl_handle);
       return -1;
     }
     snprintf(symname,sizeof(symname),"%s_startup",device);
     Frontend.start = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
-      fprintf(stdout,"dynamic symbol %s not found in %s\n",symname,device);
+      fprintf(stdout,"error: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
       dlclose(Dl_handle);
       return -1;
     }
@@ -781,7 +782,7 @@ static int setup_hardware(char const *sname){
     Frontend.tune = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
       // Not fatal, but no tuning possible
-      fprintf(stdout,"warning: dynamic symbol %s not found in %s\n",symname,device);
+      fprintf(stdout,"warning: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
     }
     // No error checking on these, they're optional
     snprintf(symname,sizeof(symname),"%s_gain",device);
