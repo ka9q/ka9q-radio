@@ -523,17 +523,17 @@ static int loadconfig(char const *file){
   int nchans = 0;
   for(int sect = 0; sect < nsect; sect++){
     char const * const sname = iniparser_getsecname(Configtable,sect);
+
     if(strcasecmp(sname,global) == 0)
       continue; // Already processed above
     if(config_getstring(Configtable,sname,"device",NULL) != NULL)
       continue; // It's a front end configuration, ignore
 
-    config_validate_section(stdout,Configtable,sname,Channel_keys,NULL);
-
-    if(config_getboolean(Configtable,sname,"disable",false))
-	continue; // section is disabled
-
     fprintf(stdout,"Processing [%s]\n",sname); // log only if not disabled
+    config_validate_section(stdout,Configtable,sname,Channel_keys,NULL);
+    if(config_getboolean(Configtable,sname,"disable",false))
+      continue; // section is disabled
+
     // fall back to setting in [global] if parameter not specified in individual section
     // Set parameters even when unused for the current demodulator in case the demod is changed later
     char const * preset = config2_getstring(Configtable,Configtable,global,sname,"mode",NULL);
