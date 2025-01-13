@@ -168,7 +168,7 @@ set_xcvr: set_xcvr.o config.o
 # device shared libraries - build kludgey separate -fPIC versions of
 # drivers already built in for testing
 # To test, remove these references from main.c
-funcube.so: funcube-pic.o fcd.o hid-libusb.o
+funcube.so: funcube-pic.o fcd-pic.o hid-libusb-pic.o
 	    $(CC) -shared -o $@ $^
 
 rx888.so: rx888-pic.o ezusb-pic.o hid-libusb-pic.o
@@ -210,6 +210,8 @@ ezusb-pic.o: ezusb.c
 hid-libusb-pic.o: hid-libusb.c
 		  $(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
+fcd-pic.o: fcd.c
+		  $(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 # subroutines useful in more than one program
 libradio.a: morse.o dump.o modes.o ax25.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o osc.o config.o
