@@ -998,6 +998,7 @@ static void cleanup_mutex(void *param)
 
 
 #pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunknown-warning-option" // clang doesn't seem to know -Wclobbered
 #pragma GCC diagnostic ignored "-Wclobbered"
 
 int hid_read_timeout(hid_device *dev, unsigned char *data, size_t length, int milliseconds)
