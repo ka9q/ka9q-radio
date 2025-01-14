@@ -287,13 +287,22 @@ static int loadconfig(char const *file){
   if(file == NULL || strlen(file) == 0)
     return -1;
 
-  // Look for configuration directory with name ".d" appended
+
   char dname[PATH_MAX];
-  snprintf(dname,sizeof(dname),"%s.d",file);
+  DIR *dirp = NULL;
   struct stat statbuf;
-  DIR *dirp;
-  if(stat(dname,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR && (dirp = opendir(dname)) != NULL){
-    // Read and sort list of foo.d/*.conf files
+  if(stat(file,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR){
+    // If the argument is a directory, read its contents
+    strlcpy(dname,file,sizeof(dname));
+    dirp = opendir(dname);
+  } else {
+    // Otherwise append ".d" and see if that's a directory
+    snprintf(dname,sizeof(dname),"%s.d",file);
+    if(stat(dname,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR)
+      dirp = opendir(dname);
+  }
+  if(dirp != NULL){
+    // Read and sort list of foo.d/*.conf files, merge into temp file
     int dfd = dirfd(dirp); // this gets used for openat() and fstatat() so don't close dirp right way
     struct dirent *dp;
     char *subfiles[100]; // List of subfiles
@@ -309,27 +318,30 @@ static int loadconfig(char const *file){
     // Don't close dirp just yet, would invalidate dfd
     qsort(subfiles,sf,sizeof(subfiles[0]),(int (*)(void const *,void const *))strcmp);
 
-    // Concatenate original config and sorted subconfig files to temporary
+    // Create temporary copy of all files concatenated
     char template[PATH_MAX];
     strlcpy(template,"/tmp/radiod-configXXXXXXXX",sizeof(template));
     int tfd = mkstemp(template);
     FILE *tfp = fdopen(tfd,"rw+");
     if(tfp != NULL){
       // copy original file, if it exists, to temporary
-      FILE *fp = fopen(file,"r");
-      if(fp != NULL){
-	fprintf(tfp,"# %s\n",file); // for debugging
-	int c;
-	while((c = getc(fp)) != EOF)
-	  fputc(c,tfp);
-	fclose(fp);
-	fp = NULL;
+      if(stat(file,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFREG){
+	FILE *fp = fopen(file,"r");
+	if(fp != NULL){
+	  fprintf(tfp,"# %s\n",file); // for debugging
+	  int c;
+	  while((c = getc(fp)) != EOF)
+	    fputc(c,tfp);
+	  fclose(fp);
+	  fp = NULL;
+	}
       }
       // Concatenate the sub config files in order
       for(int i=0; i < sf; i++){
 	int fd;
+	FILE *fp;
 	if((fd = openat(dfd,subfiles[i],O_RDONLY)) != -1 && (fp = fdopen(fd,"r")) != NULL){ // There's no "fopenat()"
-	fprintf(tfp,"# %s\n",subfiles[i]); // for debugging
+	  fprintf(tfp,"# %s\n",subfiles[i]); // for debugging
 	  int c;
 	  while((c = getc(fp)) != EOF)
 	    fputc(c,tfp);
@@ -343,7 +355,7 @@ static int loadconfig(char const *file){
       unlink(template);
     } else {
       fprintf(stdout,"Can't create temp config file %s: %s\n",template,strerror(errno));
-      Configtable = iniparser_load(file); // Just read the primary
+      Configtable = iniparser_load(file); // Just try to read the primary
     }
   } else {
     Configtable = iniparser_load(file); // No subdirectory, just read the primary
@@ -360,6 +372,32 @@ static int loadconfig(char const *file){
   // Process [global] section applying to all demodulator blocks
   char const * const global = "global";
   Verbose = config_getint(Configtable,global,"verbose",Verbose);
+
+  // Set up the hardware early, in case it fails
+  const char *hardware = config_getstring(Configtable,global,"hardware",NULL);
+  if(hardware == NULL){
+    // 'hardware =' now required, no default
+    fprintf(stdout,"'hardware = [sectionname]' now required to specify front end configuration\n");
+    exit(EX_USAGE);
+  }
+  // Look for specified hardware section
+  {
+    int const nsect = iniparser_getnsec(Configtable);
+    int sect;
+    for(sect = 0; sect < nsect; sect++){
+      char const * const sname = iniparser_getsecname(Configtable,sect);
+      if(strcasecmp(sname,hardware) == 0){
+	if(setup_hardware(sname) != 0)
+	  exit(EX_NOINPUT);
+
+	break;
+      }
+    }
+    if(sect == nsect){
+      fprintf(stdout,"no hardware section [%s] found, please create it\n",hardware);
+      exit(EX_USAGE);
+    }
+  }
   FFTW_plan_timelimit = config_getdouble(Configtable,global,"fft-time-limit",FFTW_plan_timelimit);
   {
     char const *cp = config_getstring(Configtable,global,"fft-plan-level","patient");
@@ -447,30 +485,6 @@ static int loadconfig(char const *file){
     char const *p = config_getstring(Configtable,global,"wisdom-file",NULL);
     if(p != NULL)
       Wisdom_file = strdup(p);
-  }
-  const char *hardware = config_getstring(Configtable,global,"hardware",NULL);
-  if(hardware == NULL){
-    // 'hardware =' now required, no default
-    fprintf(stdout,"'hardware = [sectionname]' now required to specify front end configuration\n");
-    exit(EX_USAGE);
-  }
-  // Look for specified hardware section
-  {
-    int const nsect = iniparser_getnsec(Configtable);
-    int sect;
-    for(sect = 0; sect < nsect; sect++){
-      char const * const sname = iniparser_getsecname(Configtable,sect);
-      if(strcasecmp(sname,hardware) == 0){
-	if(setup_hardware(sname) != 0)
-	  exit(EX_NOINPUT);
-
-	break;
-      }
-    }
-    if(sect == nsect){
-      fprintf(stdout,"no hardware section [%s] found, please create it\n",hardware);
-      exit(EX_USAGE);
-    }
   }
   // Set up status/command stream, global for all receiver channels
   {
