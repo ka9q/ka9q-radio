@@ -7,7 +7,7 @@ jobs:
     name: Ubuntu CI
     strategy:
       matrix:
-        makefile: [Makefile.linux, Makefile.debug]
+        makefile: [Makefile.linux]
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies

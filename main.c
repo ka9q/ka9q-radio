@@ -288,15 +288,14 @@ static int loadconfig(char const *file){
     return -1;
 
 
-  char dname[PATH_MAX];
   DIR *dirp = NULL;
   struct stat statbuf;
   if(stat(file,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR){
     // If the argument is a directory, read its contents
-    strlcpy(dname,file,sizeof(dname));
-    dirp = opendir(dname);
+    dirp = opendir(file);
   } else {
     // Otherwise append ".d" and see if that's a directory
+    char dname[PATH_MAX];
     snprintf(dname,sizeof(dname),"%s.d",file);
     if(stat(dname,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR)
       dirp = opendir(dname);
