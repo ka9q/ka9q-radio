@@ -121,19 +121,54 @@ static int set_bandwidth(struct sdrstate *sdr,int const bandwidth,double const s
 static int set_samplerate(struct sdrstate *sdr,double const samprate);
 static double get_samplerate(struct sdrstate *sdr);
 static int set_antenna(struct sdrstate *sdr,char const *antenna);
-static uint8_t const * const get_lna_states(struct sdrstate *sdr,double const frequency,int *lna_state_count);
+static uint8_t const * get_lna_states(struct sdrstate *sdr,double const frequency,int *lna_state_count);
 static int set_rf_gain(struct sdrstate *sdr,int const lna_state,int const rf_att,int const rf_gr,double const frequency);
 static float get_rf_atten(struct sdrstate *sdr,double const frequency);
 static int set_if_gain(struct sdrstate *sdr,int const if_att,int const if_gr,int const if_agc,int const if_agc_rate,int const if_agc_setPoint_dBfs,int const if_agc_attack_ms,int const if_agc_decay_ms,int const if_agc_decay_delay_ms,int const if_agc_decay_threshold_dB);
 static int set_dc_offset_iq_imbalance_correction(struct sdrstate *sdr,int const dc_offset_corr,int const iq_imbalance_corr);
 static int set_bulk_transfer_mode(struct sdrstate *sdr,int const transfer_mode_bulk);
-static int set_notch_filters(struct sdrstate *sdr,int const rf_notch,int const dab_notch,int const am_notch);
+static int set_notch_filters(struct sdrstate *sdr,bool const rf_notch,bool const dab_notch,bool const am_notch);
 static void *sdrplay_monitor(void *p);
-static int set_biasT(struct sdrstate *sdr,int const biasT);
+static int set_biasT(struct sdrstate *sdr,bool const biasT);
 static int start_rx(struct sdrstate *sdr,sdrplay_api_StreamCallback_t rx_callback,sdrplay_api_EventCallback_t event_callback);
 static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *params,unsigned int numSamples,unsigned int reset,void *cbContext);
 static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT tuner,sdrplay_api_EventParamsT *params,void *cbContext);
 static void show_device_params(struct sdrstate *sdr);
+
+static char const *Sdrplay_keys[] = {
+  "device",
+  "library",
+  "serial",
+  "frequency",
+  "rspduo-mode",
+  "antenna",
+  "bandwidth",
+  "samprate",
+  "calibrate",
+  "lna-state",
+  "rf-att",
+  "rf-gr",
+  "if-att",
+  "if-gr",
+  "if-att",
+  "if-agc",
+  "if-agc-rate",
+  "if-agc-setpoint-dbfs",
+  "if-agc-attack-ms",
+  "if-agc-decay-ms",
+  "if-agc-decay-delay-ms",
+  "if-agc-decay-threshold-db",
+  "dc-offset-corr",
+  "iq-imbalance-corr",
+  "bulk-transfer-mode",
+  "rf-notch",
+  "dab-notch",
+  "am-notch",
+  "bias-t",
+  "description",
+  NULL
+};
+
 
 int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary,char const * const section){
   assert(Dictionary != NULL);
@@ -154,6 +189,7 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
       return -1;
     }
   }
+  config_validate_section(stdout,Dictionary,section,Sdrplay_keys,NULL);
   {
     char const * const sn = config_getstring(Dictionary,section,"serial",NULL);
     if(find_rsp(sdr,sn) == -1){
@@ -229,7 +265,7 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
 
     int const if_att = config_getint(Dictionary,section,"if-att",-1);
     int const if_gr = config_getint(Dictionary,section,"if-gr",-1);
-    int const if_agc = config_getboolean(Dictionary,section,"if-agc",0); // default off
+    bool const if_agc = config_getboolean(Dictionary,section,"if-agc",false); // default off
     int const if_agc_rate = config_getint(Dictionary,section,"if-agc-rate",-1);
     int const if_agc_setPoint_dBfs = config_getint(Dictionary,section,"if-agc-setpoint-dbfs",-60);
     int const if_agc_attack_ms = config_getint(Dictionary,section,"if-agc-attack-ms",0);
@@ -241,28 +277,28 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
       return -1;
     }
 
-    int const dc_offset_corr = config_getboolean(Dictionary,section,"dc-offset-corr",1); // default on
-    int const iq_imbalance_corr = config_getboolean(Dictionary,section,"iq-imbalance-corr",1); // default on
+    bool const dc_offset_corr = config_getboolean(Dictionary,section,"dc-offset-corr",true); // default on
+    bool const iq_imbalance_corr = config_getboolean(Dictionary,section,"iq-imbalance-corr",true); // default on
     if(set_dc_offset_iq_imbalance_correction(sdr,dc_offset_corr,iq_imbalance_corr) == -1) {
       close_sdrplay(sdr);
       return -1;
     }
 
-    int const transfer_mode_bulk = config_getboolean(Dictionary,section,"bulk-transfer-mode",0); // default isochronous
+    bool const transfer_mode_bulk = config_getboolean(Dictionary,section,"bulk-transfer-mode",false); // default isochronous
     if(set_bulk_transfer_mode(sdr,transfer_mode_bulk) == -1){
       close_sdrplay(sdr);
       return -1;
     }
 
-    int const rf_notch = config_getboolean(Dictionary,section,"rf-notch",0);
-    int const dab_notch = config_getboolean(Dictionary,section,"dab-notch",0);
-    int const am_notch = config_getboolean(Dictionary,section,"am-notch",0);
+    bool const rf_notch = config_getboolean(Dictionary,section,"rf-notch",false);
+    bool const dab_notch = config_getboolean(Dictionary,section,"dab-notch",false);
+    bool const am_notch = config_getboolean(Dictionary,section,"am-notch",false);
     if(set_notch_filters(sdr,rf_notch,dab_notch,am_notch) == -1){
       close_sdrplay(sdr);
       return -1;
     }
 
-    int const biasT = config_getboolean(Dictionary,section,"bias-t",0);
+    bool const biasT = config_getboolean(Dictionary,section,"bias-t",false);
     if(set_biasT(sdr,biasT) == -1){
       close_sdrplay(sdr);
       return -1;
@@ -423,7 +459,7 @@ static int find_rsp(struct sdrstate *sdr,char const *sn){
   if(sn == NULL){
     fprintf(stdout,"Discovered SDRplay RSP device serial%s:",ndevices > 1 ? "s" : "");
     int firstvalid = -1;
-    for(int i = 0; i < ndevices; i++){
+    for(unsigned int i = 0; i < ndevices; i++){
       if(devices[i].valid){
         fprintf(stdout," %s",devices[i].SerNo);
         if(firstvalid == -1)
@@ -435,7 +471,7 @@ static int find_rsp(struct sdrstate *sdr,char const *sn){
   }
 
   int found = 0;
-  for(int i = 0; i < ndevices; i++){
+  for(unsigned int i = 0; i < ndevices; i++){
     if(devices[i].valid){
       if(sn == NULL || strcmp(devices[i].SerNo,sn) == 0){
         sdr->device = devices[i];
@@ -735,7 +771,7 @@ static int set_antenna(struct sdrstate *sdr,char const *antenna){
   return 0;
 }
 
-static uint8_t const * const get_lna_states(struct sdrstate *sdr,double const frequency,int *lna_state_count){
+static uint8_t const *get_lna_states(struct sdrstate *sdr,double const frequency,int *lna_state_count){
   if(sdr->device.hwVer == SDRPLAY_RSP1_ID){
     if(frequency < 420e6){
       *lna_state_count = sizeof(rsp1_0_420_lna_states) / sizeof(uint8_t);
@@ -1017,43 +1053,43 @@ static int set_bulk_transfer_mode(struct sdrstate *sdr,int const transfer_mode_b
   return 0;
 }
 
-static int set_notch_filters(struct sdrstate *sdr,int const rf_notch,int const dab_notch,int const am_notch){
+static int set_notch_filters(struct sdrstate *sdr,bool const rf_notch,bool const dab_notch,bool const am_notch){
   if(sdr->device.hwVer == SDRPLAY_RSP1A_ID){
-    sdr->device_params->devParams->rsp1aParams.rfNotchEnable = rf_notch ? 1 : 0;
-    sdr->device_params->devParams->rsp1aParams.rfDabNotchEnable = dab_notch ? 1 : 0;
+    sdr->device_params->devParams->rsp1aParams.rfNotchEnable = rf_notch;
+    sdr->device_params->devParams->rsp1aParams.rfDabNotchEnable = dab_notch;
   } else if(sdr->device.hwVer == SDRPLAY_RSP1B_ID){
-    sdr->device_params->devParams->rsp1aParams.rfNotchEnable = rf_notch ? 1 : 0;
-    sdr->device_params->devParams->rsp1aParams.rfDabNotchEnable = dab_notch ? 1 : 0;
+    sdr->device_params->devParams->rsp1aParams.rfNotchEnable = rf_notch;
+    sdr->device_params->devParams->rsp1aParams.rfDabNotchEnable = dab_notch;
   } else if(sdr->device.hwVer == SDRPLAY_RSP2_ID){
-    sdr->rx_channel_params->rsp2TunerParams.rfNotchEnable = rf_notch ? 1 : 0;
+    sdr->rx_channel_params->rsp2TunerParams.rfNotchEnable = rf_notch;
   } else if(sdr->device.hwVer == SDRPLAY_RSPduo_ID){
-    sdr->rx_channel_params->rspDuoTunerParams.rfNotchEnable = rf_notch ? 1 : 0;
-    sdr->rx_channel_params->rspDuoTunerParams.rfDabNotchEnable = dab_notch ? 1 : 0;
+    sdr->rx_channel_params->rspDuoTunerParams.rfNotchEnable = rf_notch;
+    sdr->rx_channel_params->rspDuoTunerParams.rfDabNotchEnable = dab_notch;
     if(sdr->device.tuner == sdrplay_api_Tuner_A)
-      sdr->rx_channel_params->rspDuoTunerParams.tuner1AmNotchEnable = am_notch ? 1 : 0;
+      sdr->rx_channel_params->rspDuoTunerParams.tuner1AmNotchEnable = am_notch;
   } else if(sdr->device.hwVer == SDRPLAY_RSPdx_ID){
-    sdr->device_params->devParams->rspDxParams.rfNotchEnable = rf_notch ? 1 : 0;
-    sdr->device_params->devParams->rspDxParams.rfDabNotchEnable = dab_notch ? 1 : 0;
+    sdr->device_params->devParams->rspDxParams.rfNotchEnable = rf_notch;
+    sdr->device_params->devParams->rspDxParams.rfDabNotchEnable = dab_notch;
   } else if(sdr->device.hwVer == SDRPLAY_RSPdxR2_ID){
-    sdr->device_params->devParams->rspDxParams.rfNotchEnable = rf_notch ? 1 : 0;
-    sdr->device_params->devParams->rspDxParams.rfDabNotchEnable = dab_notch ? 1 : 0;
+    sdr->device_params->devParams->rspDxParams.rfNotchEnable = rf_notch;
+    sdr->device_params->devParams->rspDxParams.rfDabNotchEnable = dab_notch;
   }
   return 0;
 }
 
-static int set_biasT(struct sdrstate *sdr,int const biasT){
+static int set_biasT(struct sdrstate *sdr,bool const biasT){
   if(sdr->device.hwVer == SDRPLAY_RSP1A_ID){
-    sdr->rx_channel_params->rsp1aTunerParams.biasTEnable = biasT ? 1 : 0;
+    sdr->rx_channel_params->rsp1aTunerParams.biasTEnable = biasT;
   } else if(sdr->device.hwVer == SDRPLAY_RSP1B_ID){
-    sdr->rx_channel_params->rsp1aTunerParams.biasTEnable = biasT ? 1 : 0;
+    sdr->rx_channel_params->rsp1aTunerParams.biasTEnable = biasT;
   } else if(sdr->device.hwVer == SDRPLAY_RSP2_ID){
-    sdr->rx_channel_params->rsp2TunerParams.biasTEnable = biasT ? 1 : 0;
+    sdr->rx_channel_params->rsp2TunerParams.biasTEnable = biasT;
   } else if(sdr->device.hwVer == SDRPLAY_RSPduo_ID){
-    sdr->rx_channel_params->rspDuoTunerParams.biasTEnable = biasT ? 1 : 0;
+    sdr->rx_channel_params->rspDuoTunerParams.biasTEnable = biasT;
   } else if(sdr->device.hwVer == SDRPLAY_RSPdx_ID){
-    sdr->device_params->devParams->rspDxParams.biasTEnable = biasT ? 1 : 0;
+    sdr->device_params->devParams->rspDxParams.biasTEnable = biasT;
   } else if(sdr->device.hwVer == SDRPLAY_RSPdxR2_ID){
-    sdr->device_params->devParams->rspDxParams.biasTEnable = biasT ? 1 : 0;
+    sdr->device_params->devParams->rspDxParams.biasTEnable = biasT;
   }
   return 0;
 }
@@ -1084,6 +1120,8 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
   assert(sdr != NULL);
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
+
+  (void)reset;
 
   if(!Name_set){
     pthread_setname("sdrplay-cb");
@@ -1122,6 +1160,8 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
 }
 
 static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT tuner,sdrplay_api_EventParamsT *params,void *cbContext){
+  (void)tuner;
+
   struct sdrstate *sdr = (struct sdrstate *)cbContext;
   int64_t event_timestamp;
   char event_timestamp_formatted[1024];

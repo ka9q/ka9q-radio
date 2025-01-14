@@ -754,15 +754,19 @@ static int setup_hardware(char const *sname){
     Frontend.setup = sig_gen_setup;
     Frontend.start = sig_gen_startup;
     Frontend.tune = sig_gen_tune;
-    // The sdrplay library is still proprietary and object-only, so I can't bundle it in ka9q-radio
-    // Everything else either has a standard Debian package or I have information to program them directly.
-    // To hell with vendors who deliberately make their products hard to use when they have plenty of competition.
-  #ifdef SDRPLAY
-  } else if(strcasecmp(device,"sdrplay") == 0){
-    Frontend.setup = sdrplay_setup;
-    Frontend.start = sdrplay_startup;
-    Frontend.tune = sdrplay_tune;
-  #endif
+
+    /* SDRPlay is now a dynamically loaded module.
+       1. Install the API package (I used https://github.com/srcejon/sdrplayapi)
+          Note this will also install a strange half-megabyte daemon in /etc/systemd/system/
+	  I have no idea what it does
+       2. run "make SDRPLAY=1" to build and install the sdrplay.so module so radiod can load it
+
+       This is not done by default because the compile will fail unless the API package is installed,
+       and it's just too much hassle for people who don't have an SDRPlay anyway
+       The sdrplay library is still proprietary and object-only, so I can't bundle it in ka9q-radio
+       Everything else either has a standard Debian package or I have information to program them directly.
+       To hell with vendors who deliberately make their products hard to use when they have plenty of competition.
+    */
   } else
 #endif
   {

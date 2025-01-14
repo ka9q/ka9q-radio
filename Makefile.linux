@@ -53,7 +53,7 @@ CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_brow
 
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h status.h
 
-DYNAMICS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so
+DYNAMICS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so sdrplay.so
 
 # If FOBOS is set, add the necessary flags, files, and libraries
 ifdef FOBOS
@@ -67,8 +67,7 @@ endif
 ifdef SDRPLAY
 CFLAGS += -DSDRPLAY
 CFILES := $(CFILES) sdrplay.c
-RADIOD_OBJECTS := $(RADIOD_OBJECTS) sdrplay.o
-LDFLAGS += -lsdrplay_api
+DYNAMICS += sdrplay.so
 endif
 
 
@@ -107,13 +106,13 @@ DEPS = $(CFILES:.c=.d)
 
 # Executables
 
-aprs: aprs.o libradio.a
+aprs: aprs.o ax25.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 aprsfeed: aprsfeed.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
-control: control.o bandplan.o libradio.a
+control: control.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 cwd: cwd.o libradio.a
@@ -184,6 +183,7 @@ jt-decoded: jt-decoded.o libradio.a
 wd-record: wd-record.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
+# not made unless we're on a rpi
 set_xcvr: set_xcvr.o config.o
 	$(CC) $(LDOPTS) -o $@ $^ -lpigpio $(LDLIBS)
 
@@ -191,52 +191,59 @@ set_xcvr: set_xcvr.o config.o
 # drivers already built in for testing
 # To test, remove these references from main.c
 funcube.so: funcube-pic.o fcd-pic.o hid-libusb-pic.o
-	    $(CC) -shared -o $@ $^
+	$(CC) -shared -o $@ $^
 
 rx888.so: rx888-pic.o ezusb-pic.o hid-libusb-pic.o
-	  $(CC) -shared -o $@ $^ -lusb-1.0
+	$(CC) -shared -o $@ $^ -lusb-1.0
 
 airspy.so: airspy-pic.o
-	   $(CC) -shared -o $@ $^ -lairspy
+	$(CC) -shared -o $@ $^ -lairspy
 
 airspyhf.so: airspyhf-pic.o
-	     $(CC) -shared -o $@ $^ -lairspyhf
+	$(CC) -shared -o $@ $^ -lairspyhf
 
 rtlsdr.so: rtlsdr-pic.o
-	   $(CC) -shared -o $@ $^ -lrtlsdr
+	$(CC) -shared -o $@ $^ -lrtlsdr
 
 sig_gen.so: sig_gen-pic.o
-	    $(CC) -shared -o $@ $^
+	$(CC) -shared -o $@ $^
+
+sdrplay.so: sdrplay-pic.o
+	$(CC) -shared -o $@ $^ -lsdrplay_api
 
 funcube-pic.o: funcube.c
-	       $(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 airspy-pic.o: airspy.c
-	      	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 rtlsdr-pic.o: rtlsdr.c
-	      $(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 sig_gen-pic.o: sig_gen.c
-	       	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 rx888-pic.o: rx888.c
-	     $(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 airspyhf-pic.o: airspyhf.c
-		$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 ezusb-pic.o: ezusb.c
-		$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 hid-libusb-pic.o: hid-libusb.c
-		  $(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 fcd-pic.o: fcd.c
-		  $(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
+sdrplay-pic.o: sdrplay.c
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
 
 # subroutines useful in more than one program
-libradio.a: morse.o dump.o modes.o ax25.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o osc.o config.o
+libradio.a: ax25.o morse.o bandplan.o dump.o modes.o ax25.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o osc.o config.o
 	ar rv $@ $?
 	ranlib $@
 
