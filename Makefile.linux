@@ -53,22 +53,20 @@ CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_brow
 
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h status.h
 
-DYNAMICS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so sdrplay.so
-
-# If FOBOS is set, add the necessary flags, files, and libraries
-ifdef FOBOS
-CFLAGS += -DFOBOS
-CFILES := $(CFILES) fobos.c
-RADIOD_OBJECTS := $(RADIOD_OBJECTS) fobos.o
-LDFLAGS += -lfobos
-endif
+DYNAMICS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so
 
 # If SDRPLAY is set, add the necessary flags, files, and libraries
 ifdef SDRPLAY
-CFLAGS += -DSDRPLAY
 CFILES := $(CFILES) sdrplay.c
 DYNAMICS += sdrplay.so
 endif
+
+# if FOBOS is set, build it too
+ifdef FOBOS
+CFILES := $(CFILES) fobos.c
+DYNAMICS += fobos.so
+endif
+
 
 
 all: $(DAEMONS) $(EXECS) $(DYNAMICS)
@@ -211,6 +209,9 @@ sig_gen.so: sig_gen-pic.o
 sdrplay.so: sdrplay-pic.o
 	$(CC) -shared -o $@ $^ -lsdrplay_api
 
+fobos.so: fobos-pic.o
+	$(CC) -shared -o $@ $^ -lfobos
+
 funcube-pic.o: funcube.c
 	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
@@ -239,6 +240,9 @@ fcd-pic.o: fcd.c
 	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 sdrplay-pic.o: sdrplay.c
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+
+fobos-pic.o: fobos.c
 	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 
