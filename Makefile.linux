@@ -94,7 +94,7 @@ install: $(DAEMONS) $(EXECS)
 	systemctl daemon-reload
 
 clean:
-	-rm -f *.o *.a *.d .depend $(EXECS) $(DAEMONS) $(DYNAMICS)
+	-rm -f *.o *.a *.d *.so .depend $(EXECS) $(DAEMONS)
 
 DEPS = $(CFILES:.c=.d)
 
