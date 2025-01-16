@@ -20,6 +20,7 @@ ExecStart=/usr/local/bin/pcmrecord $ARGS
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
+SyslogIdentifier=recordings@%i
 
 [Install]
 WantedBy=multi-user.target

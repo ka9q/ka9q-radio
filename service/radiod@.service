@@ -18,6 +18,7 @@ ExecStart=/usr/local/sbin/radiod -N %i /etc/radio/radiod@%i.conf
 Restart=always
 RestartSec=5
 TimeoutStopSec=5
+SyslogIdentifier=radiod@%i
 
 [Install]
 WantedBy=multi-user.target

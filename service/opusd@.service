@@ -16,6 +16,7 @@ ExecStart=/usr/local/sbin/opusd --name %i --bitrate $BITRATE --block-time $BLOCK
 Restart=always
 RestartSec=5
 TimeoutStopSec=5
+SyslogIdentifier=opusd@%i
 
 [Install]
 WantedBy=multi-user.target

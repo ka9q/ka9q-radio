@@ -21,6 +21,7 @@ ExecStart=/usr/local/bin/pcmrecord --raw -v --exec "${DUMPHFDL} --station-id \'$
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
+SyslogIdentifier=hfdl@%i
 
 [Install]
 WantedBy=multi-user.target
