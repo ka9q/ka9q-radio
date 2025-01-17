@@ -405,7 +405,8 @@ static int close_sdrplay(struct sdrstate *sdr){
       ret = -1;
     }
     sdr->device_status &= ~DEVICE_STREAMING;
-    fprintf(stdout,"sdrplay done streaming - samples=%llu - events=%llu\n",frontend->samples,sdr->events);
+    fprintf(stdout,"sdrplay done streaming - samples=%llu - events=%llu\n",
+	    (long long unsigned)frontend->samples,(long long unsigned)sdr->events);
   }
   if(sdr->device_status & DEVICE_SELECTED){
     sdrplay_api_LockDeviceApi();
@@ -1187,7 +1188,8 @@ static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT t
       break;
     case sdrplay_api_Overload_Corrected:
       if(power_overload_detected >= 0){
-        fprintf(stdout,"%s - overload corrected - duration=%lldns\n",event_timestamp_formatted,event_timestamp - power_overload_detected);
+        fprintf(stdout,"%s - overload corrected - duration=%lldns\n",
+		event_timestamp_formatted, (long long)event_timestamp - power_overload_detected);
       } else {
         fprintf(stdout,"%s - overload corrected\n",event_timestamp_formatted);
       }
