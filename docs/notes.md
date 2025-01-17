@@ -1,15 +1,13 @@
 *ka9q-radio* Miscellaneous Installation Notes  
-23 August 2023
+16 January 2025
 ===============================
 
 Software Platform
 -----------------
 
 The preferred platform is Debian Linux 12 ("bookworm") on the x86-64
-and the 64-bit "bullseye" version of Raspberry Pi OS for the Raspberry
-Pi 4. (Raspberry Pi OS is Debian Linux 11 with customizations.
-It has not yet incorporated Debian version 12.)  Older
-versions may work, but you may have to fix some problems.
+and Raspberry Pi 4.  Older versions may work, but you may have to fix
+some problems.
 
 Because I have a Macbook running MacOS, I regularly compile
 *ka9q-radio* on it and run *monitor* and *control*, the user
@@ -36,8 +34,8 @@ An externally powered hub is often a good idea, especially on the RPi.
 
 Be careful with other CPU-intensive tasks on the same system, even
 when 'niced', unless you are running a realtime-enabled
-version of the Linux kernel. *ka9q-radio* can use the Linux real-time
-scheduling features only if the kernel supports them. (Debian provides
+version of the Linux kernel. *ka9q-radio* will use Linux real-time
+scheduling features, but only if the kernel supports them. (Debian provides
 both realtime and standard kernels for each release). The RX888 works
 fine at 64 Ms/s on the Orange Pi **until** you try to run CPU soakers;
 then *ka9q-radio* begins to badly lose data. AI6VN and I believe this
@@ -51,13 +49,15 @@ for the RX888 except at low sample rates.
 Supported Hardware and System Requirements
 ------------------------------------------
 
-At the moment, *ka9q-radio* supports the following SDR front ends:
+*ka9q-radio* currently supports the following SDR front ends:
 
 [Airspy R2/Airspy Mini](https://airspy.com/airspy-r2/)  
 [Airspy HF+](https://airspy.com/airspy-hf-discovery/)  
 [Generic RTL-SDR](https://en.wikipedia.org/wiki/Software-defined_radio#RTL-SDR) (tuner mode only)  
 [AMSAT UK Funcube Pro+ Dongle](http://www.funcubedongle.com/)  
 [RX-888 MkII](https://www.rtl-sdr.com/techminds-reviewing-the-rx888-mk2-software-defined-radio/)  (direct sampling mode only)
+[SDRPlay](https://www.sdrplay.com)__
+[Fobos](https://rigexpert.com/software-defined-radio-sdr/fobos-sdr/#)
 
 Until recently my preferred SDRs (and the ones I still have the most
 experience with) were the Airspy R2 for VHF/UHF and the Airspy HF+ for
@@ -71,27 +71,27 @@ supported.  Although it advertises a lower sample rate (12 Ms/s real)
 you can force it to the 20 Ms/s (real) rate of the Airspy R2. But it's
 in a smaller package that gets very hot, so that's probably why the
 specified sample rate is lower.  Don't push it without adequate
-heat dissipation.
+heat dissipation. Also, it seems to have more spurs than the R2.
 
 The Airspy HF+ works well, with a good built-in AGC and
 wide dynamic range. But it has a maximum sample rate of 912 ks/s
 (complex) so it can only cover one HF band at a time.  Our focus
-is definitely moving to the RX-888 MkII because of its killer ability to
+has been on the RX-888 MkII because of its killer ability to
 monitor all of HF (and more) at once.
 
-The new RX-888 MkII is rapidly becoming my SDR of choice because it
-can direct sample at up to 130 Ms/s. With *ka9q-radio* it can
-simultaneously receive hundreds of channels over all of LF, MF, HF and
-lowband VHF (through 6m). The main drawback? It comes out of China and
-documentation is sparse. Fortunately, K4VZ, AI6VN and I have it working
-well on HF, where it is beginning to displace stacks of KiwiSDRs for
-all-band WSPR monitoring.  [http://www.wsprdaemon.org/]
+The new RX-888 MkII can direct sample at up to 130 Ms/s. With
+*ka9q-radio* it can simultaneously receive hundreds of channels over
+all of LF, MF, HF and lowband VHF (through 6m). The main drawback? It
+comes out of China and documentation is sparse. Fortunately, K4VZ,
+AI6VN and I have it working well on HF, where it is beginning to
+displace stacks of KiwiSDRs for all-band WSPR monitoring.
+[http://www.wsprdaemon.org/]
 
 Some RX-888's have thermal problems especially at full sample rate
 (129.6 MHz). Until they can be resolved I've set the default to half
 rate (64.8 MHz); you can still override this.
 Because the internal lowpass filter is fixed at 64
-MHz, this may allow some lowband VHF signals to alias onto upper
+MHz, any lowband VHF signals will alias onto upper
 HF. E.g., a California Highway Patrol repeater near me on 39.8 MHz
 aliases onto WWV at 25 MHz. You'll need an external 30 MHz low pass
 filter (or two).
@@ -106,14 +106,8 @@ much more important at high HF where background noise is much
 lower. If you increase gain for good sensitivity on the high end, you
 may be easily overdriven by AM broadcast stations. An AM blocking
 filter will help, but the real answer is a "shelving filter" shaped to
-the entire spectrum seen by the RX-888. I know of one under
-development but I don't want to mention it until the designer is
-ready.
-
-Right now you can manually set the analog gain and attenuation in the
-config file, but there is as yet no software AGC as on the Airspy
-R2. I usually go for an A/D output level of -25 dBFS RMS. More experimentation
-is needed.
+the entire spectrum seen by the RX-888. Paul, WB6CXC, makes a combined
+HF shelving and anti-alias filter specifically for this application and it works well. 
 
 The RX-888 MkII includes a VHF/UHF tuner that *should* be able to
 functionally replace the Airspy R2, but I don't support it yet; right
@@ -139,30 +133,48 @@ of my front end handlers have (optional) software AGC but there's
 still no substitute for sufficient dynamic range, especially if you have strong
 intermittent signals.
 
-I have a HackRF that I used to use with *ka9q-radio* but I set it
+I have a HackRF that I once used with *ka9q-radio* but I set it
 aside when I got the Airspy R2. When I find time I will dust it off
 and re-integrate it into the current package.
 
+The Fobos wideband receiver from Rigexpert is newly supported, though
+I don't actually have one. The required low-level driver library is
+not yet a standard Debian package you can install with 'apt get', but
+you can build it from the sources fairly easily. The git repository is
+at http://github.com/rigexpert/libfobos. You build it with the sequence
+mkdir build; cd build; cmake ..; make; sudo make install. You may need to install the 'cmake' command.
+
 Finally, a word about the SDRPlay. I bought one many years ago only to
 discover that its libraries are proprietary and available only as
-compiled binaries. I consider this unacceptable, especially since its
-competitors all provide open source libraries in the standard Linux
-distributions. So my SDRPlay has been gathering dust on my shelf. I
-don't feel particularly inspired to support a product whose vendor
-goes out of their way to make it so difficult. If someone can provide
-an open-source substitute for the proprietary SDRPlay library, I'll be
-happy to reconsider supporting it.
+compiled binaries. It sat on my shelf for years because I consider
+this unacceptable, especially since its competitors all provide open
+source libraries in the standard Linux distributions.
 
-Front end drivers now merged into *radiod*
-------------------------------------------
+But the SDRPlay is finally now supported using the new (January 2025)
+dynamic driver loading feature in *ka9q-radio*.  You must first
+download and install their proprietary driver. Don't bother with the
+sdrplay.com website, it's an excercise in frustration. I found
+http://github.com/srcejon/sdrplayapi and it works.
+It does install a closed binary blob called "sdrplay_apiService" that it runs with *systemd*.
+I have no idea what it does, but it burns almost as much CPU as *radiod*.
 
-*ka9q-radio* was substantially restructured during the summer of 2023
-to merge the front end drivers into *radiod*. The drivers are no
-longer separate programs using multicast IP to communicate with
-*radiod*. This considerably improves performance and simplifies
-configuration; what used to be a separate config file (e.g.,
-*/etc/radio/airspyd.conf*) is now a section in the *radiod*
-configuration file. The separate drivers (*airspyd*, etc) are gone.
+Front end drivers can now be dynamically loaded
+-----------------------------------------------
+
+As of January 2025, *ka9q-radio* can load hardware drivers dynamically
+using the Linux/UNIX shared library facility; previously all drivers
+had to be statically linked into the *radiod* binary.  The existing
+drivers for the rx888, airspy, airspyhf+, rtlsdr, funcube and sig_gen
+are still statically linked into *radio* but this can be overridden by
+specifying DYNAMIC=1 to 'make' to force them to be built dynamically
+as well.  The shared libraries are installed in
+/var/local/lib/ka9q-radio.  By default, only those devices for which a
+Debian library package already are automatically built when
+*ka9q-radio* is installed; this excludes Fobos and SDRPlay because
+they require libraries from third party sources that must be manually
+built and installed.  If you have them installed, you can build
+*ka9q-radio* with "make FOBOS=1" or "make SDRPLAY=1" (or both) as
+appropriate.
 
 Here's an incomplete list of nits and gotchas I've run into while
 installing *ka9q-radio* on various systems.
