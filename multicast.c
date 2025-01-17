@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/ioctl.h>
 #include <ifaddrs.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -29,8 +30,8 @@
 #include "multicast.h"
 #include "misc.h"
 
-static int ipv4_join_group(int const fd,void const * const sock,char const * const iface);
-static int ipv6_join_group(int const fd,void const * const sock,char const * const iface);
+static int ipv4_join_group(int const fd,void const * const sock,char const * const iface,int ttl);
+static int ipv6_join_group(int const fd,void const * const sock,char const * const iface,int ttl);
 static void set_local_options(int);
 static void set_ipv4_options(int fd,int mcast_ttl,int tos);
 static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos);
@@ -246,12 +247,12 @@ int join_group(int fd,struct sockaddr const * const sock, char const * const ifa
   switch(sock->sa_family){
   case AF_INET:
     set_ipv4_options(fd,ttl,tos);
-    if(ipv4_join_group(fd,sock,iface) != 0)
+    if(ipv4_join_group(fd,sock,iface,ttl) != 0)
       fprintf(stderr,"connect_mcast join_group failed\n");
     break;
   case AF_INET6:
     set_ipv6_options(fd,ttl,tos);
-    if(ipv6_join_group(fd,sock,iface) != 0)
+    if(ipv6_join_group(fd,sock,iface,ttl) != 0)
       fprintf(stderr,"connect_mcast join_group failed\n");
     break;
   default:
@@ -446,7 +447,7 @@ void *hton_rtp(void * const data, struct rtp_header const * const rtp){
 
 
 // Process sequence number and timestamp in incoming RTP header:
-// count dropped and duplicated packets, but it gets confused 
+// count dropped and duplicated packets, but it gets confused
 // Determine timestamp jump from the next expected one
 int rtp_process(struct rtp_state * const state,struct rtp_header const * const rtp,int const sampcnt){
   if(rtp->ssrc != state->ssrc){
@@ -556,7 +557,7 @@ char const *formatsock(void const *s,bool full){
   struct inverse_cache * const ic = (struct inverse_cache *)calloc(1,sizeof(*ic));
   assert(ic != NULL); // Malloc failures are rare
   char host[NI_MAXHOST],port[NI_MAXSERV],hostname[NI_MAXHOST];
-  memset(host,0,sizeof(host));  
+  memset(host,0,sizeof(host));
   memset(hostname,0,sizeof(host));
   memset(port,0,sizeof(port));
   getnameinfo(sa,slen,
@@ -765,6 +766,21 @@ static void set_ipv4_options(int const fd,int const mcast_ttl,int const tos){
     if(setsockopt(fd,IPPROTO_IP,IP_TOS,&tos,sizeof(tos)) != 0)
       perror("so_tos failed");
   }
+  if(mcast_ttl == 0){
+    // TTL is zero, use loopback interface
+    struct ifreq ifr;
+    memset(&ifr,0,sizeof(ifr));
+    // Get loopback interface address. Probably 127.0.0.1
+    strncpy(ifr.ifr_name,"lo",sizeof(ifr.ifr_name));
+    if(ioctl(fd, SIOCGIFADDR, &ifr) < 0)
+      perror("set loopback interface failed");
+    else {
+      // Set our interface to it
+      struct in_addr *interface_addr = &((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
+      if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, interface_addr, sizeof(*interface_addr)) < 0)
+        perror("setsockopt IP_MULTICAST_IF failed");
+    }
+  }
 }
 // Set options on IPv6 multicast socket
 static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos){
@@ -800,7 +816,7 @@ static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos){
 }
 
 // Join a socket to a multicast group
-static int ipv4_join_group(int const fd,void const * const sock,char const * const iface){
+static int ipv4_join_group(int const fd,void const * const sock,char const * const iface,int ttl){
   if(fd < 0 || sock == NULL)
     return -1;
 
@@ -822,9 +838,17 @@ static int ipv4_join_group(int const fd,void const * const sock,char const * con
     perror("multicast v4 join");
     return -1;
   }
+  if(ttl == 0){
+    // if TTL == 0, also join on loopback
+    mreqn.imr_ifindex = if_nametoindex("lo");
+    if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
+      perror("multicast v4 join loopback");
+      return -1;
+    }
+  }
   return 0;
 }
-static int ipv6_join_group(int const fd,void const * const sock,char const * const iface){
+static int ipv6_join_group(int const fd,void const * const sock,char const * const iface,int ttl){
   if(fd < 0 || sock == NULL)
     return -1;
 
@@ -848,6 +872,14 @@ static int ipv6_join_group(int const fd,void const * const sock,char const * con
   if(setsockopt(fd,IPPROTO_IP,IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
     perror("multicast v6 join");
     return -1;
+  }
+  if(ttl == 0){
+    // if TTL == 0, also join on loopback
+    ipv6_mreq.ipv6mr_interface = if_nametoindex("lo");
+    if (setsockopt(fd, IPPROTO_IP, IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
+      perror("setsockopt IPV6_ADD_MEMBERSHIP");
+      return -1;
+    }
   }
   return 0;
 }
