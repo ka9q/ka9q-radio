@@ -95,7 +95,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   frontend->context = sdr;
 
   {
-    char const *device = config_getstring(dictionary,section,"device",NULL);
+    char const *device = config_getstring(dictionary,section,"device",section);
     if(strcasecmp(device,"rtlsdr") != 0)
       return -1; // Not for us
   }

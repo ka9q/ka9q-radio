@@ -163,7 +163,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   assert(dictionary != NULL);
   // Hardware-dependent setup
   {
-    char const *device = config_getstring(dictionary,section,"device",NULL);
+    char const *device = config_getstring(dictionary,section,"device",section);
     if(strcasecmp(device,"rx888") != 0)
       return -1; // Not for us
   }

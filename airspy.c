@@ -102,7 +102,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   sdr->frontend = frontend;
   frontend->context = sdr;
   {
-    char const *device = config_getstring(Dictionary,section,"device",NULL);
+    char const *device = config_getstring(Dictionary,section,"device",section);
     if(strcasecmp(device,"airspy") != 0)
       return -1; // Not for us
   }

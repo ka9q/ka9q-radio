@@ -83,7 +83,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
 
   // Read Config Files
   {
-    char const *device = config_getstring(dictionary, section, "device", NULL);
+    char const *device = config_getstring(dictionary, section, "device", section);
     if (strcasecmp(device, "fobos") != 0)
       return -1; // Leave if not Fobos in the config
   }

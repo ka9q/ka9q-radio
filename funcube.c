@@ -86,7 +86,7 @@ double funcube_tune(struct frontend * const frontend,double const freq);
 int funcube_setup(struct frontend * const frontend, dictionary * const dictionary, char const * const section){
   assert(dictionary != NULL);
   {
-    char const * const device = config_getstring(dictionary,section,"device",NULL);
+    char const * const device = config_getstring(dictionary,section,"device",section);
     if(strcasecmp(device,"funcube") != 0)
       return -1; // Not for us
   }
