@@ -11,6 +11,7 @@ aprs
 aprsfeed
 control
 cwd
+.DS_Store
 ft8-decoded
 hackrf
 jt-decoded
@@ -36,6 +37,7 @@ show-sig
 stereod
 tune
 wd-record
+work
 wspr-decoded
 docs/notes
 

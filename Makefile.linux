@@ -24,6 +24,7 @@ COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-m
 CFLAGS=$(DOPTS) $(COPTS) $(INCLUDES)
 BINDIR=/usr/local/bin
 LIBDIR=/usr/local/share/ka9q-radio
+SODIR=/usr/local/lib/ka9q-radio
 DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
 LDLIBS=-ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lsamplerate -lopus -logg -lportaudio -lasound -lusb-1.0 -lncurses -lbsd -lm -lpthread
@@ -79,7 +80,8 @@ install: $(DAEMONS) $(EXECS)
 	sysctl --quiet -p /etc/sysctl.d/98-sockbuf.conf
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) start-ka9q-horus.sh $(BINDIR)
-	rsync -a $(DYNAMICS) /usr/local/lib
+	rsync -a $(DYNAMICS) $(SODIR)
+	ln -sf $(SODIR)/*.so /usr/local/lib
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
 	(cd share;rsync -a --ignore-existing . $(LIBDIR))
 	(cd service;rsync -a . /etc/systemd/system)

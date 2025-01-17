@@ -25,7 +25,7 @@
 
 // Must be a macro so __FILE__ and __TIMESTAMP__ will substitute correctly
 #define VERSION() { fprintf(stdout,"KA9Q Multichannel SDR %s last modified %s\n",__FILE__,__TIMESTAMP__); \
-		    fprintf(stdout,"Copyright 2023, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");}
+		    fprintf(stdout,"Copyright 2025, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");}
 
 
 // 16-bit floating point is not consistent across platforms

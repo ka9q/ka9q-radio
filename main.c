@@ -35,6 +35,7 @@
 #include <sys/stat.h>
 #include <dlfcn.h>
 
+#include "conf.h"
 #include "misc.h"
 #include "multicast.h"
 #include "radio.h"
@@ -771,12 +772,14 @@ static int setup_hardware(char const *sname){
 #endif
   {
     // Try to find it dynamically
-    char const *dlname = config_getstring(Configtable,device,"library",NULL);
+    char defname[PATH_MAX];
+    snprintf(defname,sizeof(defname),"%s/%s.so",SODIR,device);
+    char const *dlname = config_getstring(Configtable,device,"library",defname);
     if(dlname == NULL){
-      fprintf(stdout,"No dynamic library= entry found in [%s], device unrecognized\n",device);
+      fprintf(stdout,"No dynamic library specified for device %s\n",device);
       return -1;
     }
-    fprintf(stdout,"Dynamically loading SDR hardware driver %s\n",dlname);
+    fprintf(stdout,"Dynamically loading %s hardware driver from %s\n",device,dlname);
     char *error;
     Dl_handle = dlopen(dlname,RTLD_GLOBAL|RTLD_NOW);
     if(Dl_handle == NULL){
