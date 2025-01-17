@@ -44,7 +44,9 @@ can't find and install one that is.
 
 The Raspberry Pi 4 is sufficient to handle the Airspy R2 (20 Ms/s
 real) even with several hundred channels, but it is *not* fast enough
-for the RX888 except at low sample rates.
+for the RX888 except at low sample rates. The Raspberry Pi 5 *can*
+handle the RX888 at half speed (64.8 MHz) but just barely; little is
+left over for applications such as FT8 or especially WSPR decoding.
 
 Supported Hardware and System Requirements
 ------------------------------------------
