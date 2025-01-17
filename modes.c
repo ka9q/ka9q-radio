@@ -60,7 +60,6 @@ char const *Channel_keys[] = {
   "demod",
   "mode",
   "preset",
-
   "samprate",
   "mono",
   "stereo",
