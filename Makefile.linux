@@ -104,7 +104,7 @@ DEPS = $(CFILES:.c=.d)
 
 # Executables
 
-aprs: aprs.o ax25.o libradio.a
+aprs: aprs.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 aprsfeed: aprsfeed.o libradio.a
@@ -163,11 +163,10 @@ pl: pl.o libradio.a
 
 ifeq ($(DYNAMIC),1)
 radiod: $(DYNAMIC_RADIOD_OBJECTS)
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^ $(LDLIBS)
 else
 radiod: $(RADIOD_OBJECTS)
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^ $(LDLIBS)
 endif
+	$(CC) -rdynamic $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
@@ -182,7 +181,7 @@ wd-record: wd-record.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 # not made unless we're on a rpi
-set_xcvr: set_xcvr.o config.o
+set_xcvr: set_xcvr.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lpigpio $(LDLIBS)
 
 # device shared libraries - build kludgey separate -fPIC versions of
@@ -247,7 +246,7 @@ fobos-pic.o: fobos.c
 
 
 # subroutines useful in more than one program
-libradio.a: ax25.o morse.o bandplan.o dump.o modes.o ax25.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o osc.o config.o
+libradio.a: ax25.o morse.o bandplan.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o osc.o config.o
 	ar rv $@ $?
 	ranlib $@
 
