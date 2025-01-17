@@ -1,6 +1,6 @@
 // Core of KA9Q radiod
 // downconvert, filter, demodulate, multicast output
-// Copyright 2017-2023, Phil Karn, KA9Q, karn@ka9q.net
+// Copyright 2017-2025, Phil Karn, KA9Q, karn@ka9q.net
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
@@ -721,11 +721,9 @@ static int loadconfig(char const *file){
 
 // Set up a local front end device
 static int setup_hardware(char const *sname){
-  char const *device = config_getstring(Configtable,sname,"device",NULL);
-  if(device == NULL){
-    fprintf(stdout,"No device= entry in [%s]\n",sname);
-    return -1;
-  }
+  if(sname == NULL)
+   return -1; // Possible?
+  char const *device = config_getstring(Configtable,sname,"device",sname);
   // Do we support it?
   // This should go into a table somewhere
 #ifndef FORCE_DYNAMIC
