@@ -81,21 +81,23 @@ wide dynamic range. But it has a maximum sample rate of 912 ks/s
 has been on the RX-888 MkII because of its killer ability to
 monitor all of HF (and more) at once.
 
-The new RX-888 MkII can direct sample at up to 130 Ms/s. With
+The RX-888 MkII can direct sample at up to 130 Ms/s. With
 *ka9q-radio* it can simultaneously receive hundreds of channels over
 all of LF, MF, HF and lowband VHF (through 6m). The main drawback? It
 comes out of China and documentation is sparse. The Rx-888 + *ka9q-radio*
 combination now has several years of operational experience in
-AI6VN's [http://wsprdaemon.org](WSPRdaemon network).
+AI6VN's [WSPRdaemon network] (http://wsprdaemon.org).
 
 Some RX-888's have thermal problems especially at full sample rate
-(129.6 MHz). Until they can be resolved I've set the default to half
-rate (64.8 MHz); you can still override this.
-Because the internal lowpass filter is fixed at 64
-MHz, any lowband VHF signals will alias onto upper
-HF. E.g., a California Highway Patrol repeater near me on 39.8 MHz
-aliases onto WWV at 25 MHz. You'll need an external 30 MHz low pass
-filter (or two).
+(129.6 MHz). WSPRdaemon is mainly interested in HF, so most users operate
+their RX-888s at half rate (64.8 MHz).
+However, the internal lowpass filter is fixed at 64
+MHz so any lowband VHF signals *will* alias down into the 0-30 MHz range.
+E.g., a California Highway Patrol repeater near me on 39.8 MHz
+aliases onto WWV at 25 MHz. I found that the Mini-Circuits inline lowpass filter
+does *not* have sufficient attenuation at my station. Paul, WB6CXC, makes a
+an elliptical LPF that does the trick. Paul's filter also includes an HF "shelving"
+filter; more about that next.
 
 The RX-888 has a LTC2208 16-bit A/D. That much dynamic range (about
 100 dB) is probably overkill for HF radio because the thermal noise
@@ -107,8 +109,8 @@ much more important at high HF where background noise is much
 lower. If you increase gain for good sensitivity on the high end, you
 may be easily overdriven by AM broadcast stations. An AM blocking
 filter will help, but the real answer is a "shelving filter" shaped to
-the entire spectrum seen by the RX-888. Paul, WB6CXC, makes a combined
-HF shelving and anti-alias filter specifically for this application and it works well. 
+the entire spectrum seen by the RX-888. WB6CXC's filter was specifically
+designed for this application and works well. 
 
 The RX-888 MkII includes a VHF/UHF tuner that *should* be able to
 functionally replace the Airspy R2, but I don't support it yet; right
@@ -147,17 +149,19 @@ mkdir build; cd build; cmake ..; make; sudo make install. You may need to instal
 
 Finally, a word about the SDRPlay. I bought one many years ago only to
 discover that its libraries are proprietary and available only as
-compiled binaries. It sat on my shelf for years because I consider
-this unacceptable, especially since its competitors all provide open
-source libraries in the standard Linux distributions.
+compiled binaries. It sat on my shelf for years as its many
+competitors provide open source libraries that are *far* easier
+to deal with in an open source project like *ka9q-radio*.
 
-But the SDRPlay is finally now supported using the new (January 2025)
+But at last the SDRPlay is now supported using the new (January 2025)
 dynamic driver loading feature in *ka9q-radio*.  You must first
 download and install their proprietary driver. Don't bother with the
 sdrplay.com website, it's an excercise in frustration. I found
 http://github.com/srcejon/sdrplayapi and it works.
-It does install a closed binary blob called "sdrplay_apiService" that it runs with *systemd*.
-I have no idea what it does, but it burns almost as much CPU as *radiod*.
+It installs a closed binary blob called "sdrplay_apiService" started with
+system *systemd*.
+It burns almost as much CPU as *radiod*, and I have no idea what it does or
+why it's necessary.
 
 Front end drivers can now be dynamically loaded
 -----------------------------------------------
@@ -165,17 +169,16 @@ Front end drivers can now be dynamically loaded
 As of January 2025, *ka9q-radio* can load hardware drivers dynamically
 using the Linux/UNIX shared library facility; previously all drivers
 had to be statically linked into the *radiod* binary.  The existing
-drivers for the rx888, airspy, airspyhf+, rtlsdr, funcube and sig_gen
-are still statically linked into *radio* but this can be overridden by
-specifying DYNAMIC=1 to 'make' to force them to be built dynamically
-as well.  The shared libraries are installed in
-/var/local/lib/ka9q-radio.  By default, only those devices for which a
-Debian library package already are automatically built when
-*ka9q-radio* is installed; this excludes Fobos and SDRPlay because
-they require libraries from third party sources that must be manually
-built and installed.  If you have them installed, you can build
-*ka9q-radio* with "make FOBOS=1" or "make SDRPLAY=1" (or both) as
-appropriate.
+rx888, airspy, airspyhf+, rtlsdr, funcube and sig_gen drivers are
+still statically linked into *radio*, but you can force them to be
+built as dynamic modules with "make DYNAMIC=1".  The shared libraries
+are installed in /usr/local/lib/ka9q-radio.  By default, "make" only
+creates shared library modules only for those devices for which a
+Debian library package exists; this excludes Fobos and SDRPlay because
+they require header files and libraries from third party sources that
+must be manually built and installed.  If you have them installed, you
+can build *ka9q-radio* with "make FOBOS=1" or "make SDRPLAY=1" (or
+both) as appropriate.
 
 Here's an incomplete list of nits and gotchas I've run into while
 installing *ka9q-radio* on various systems.
