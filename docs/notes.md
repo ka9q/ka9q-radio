@@ -86,7 +86,7 @@ The RX-888 MkII can direct sample at up to 130 Ms/s. With
 all of LF, MF, HF and lowband VHF (through 6m). The main drawback? It
 comes out of China and documentation is sparse. The Rx-888 + *ka9q-radio*
 combination now has several years of operational experience in
-AI6VN's [WSPRdaemon network] (http://wsprdaemon.org).
+AI6VN's [WSPRdaemon network](http://wsprdaemon.org).
 
 Some RX-888's have thermal problems especially at full sample rate
 (129.6 MHz). WSPRdaemon is mainly interested in HF, so most users operate
@@ -176,7 +176,7 @@ are installed in /usr/local/lib/ka9q-radio.  By default, "make" only
 creates shared library modules only for those devices for which a
 Debian library package exists; this excludes Fobos and SDRPlay because
 they require header files and libraries from third party sources that
-must be manually built and installed.  If you have them installed, you
+must be manually built and installed.  If you have them, you
 can build *ka9q-radio* with "make FOBOS=1" or "make SDRPLAY=1" (or
 both) as appropriate.
 
