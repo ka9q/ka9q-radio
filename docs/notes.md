@@ -94,7 +94,7 @@ their RX-888s at half rate (64.8 MHz).
 However, the internal lowpass filter is fixed at 64
 MHz so any lowband VHF signals *will* alias down into the 0-30 MHz range.
 E.g., a California Highway Patrol repeater near me on 39.8 MHz
-aliases onto WWV at 25 MHz. I found that the Mini-Circuits inline lowpass filter
+aliases onto WWV at 25 MHz. I found that the Mini-Circuits 30 MHz inline lowpass filter
 does *not* have sufficient attenuation at my station. Paul, WB6CXC, makes a
 an elliptical LPF that does the trick. Paul's filter also includes an HF "shelving"
 filter; more about that next.
@@ -156,7 +156,7 @@ to deal with in an open source project like *ka9q-radio*.
 But at last the SDRPlay is now supported using the new (January 2025)
 dynamic driver loading feature in *ka9q-radio*.  You must first
 download and install their proprietary driver. Don't bother with the
-sdrplay.com website, it's an excercise in frustration. I found
+sdrplay.com website, it's an exercise in frustration. I found
 http://github.com/srcejon/sdrplayapi and it works.
 It installs a closed binary blob called "sdrplay_apiService" started with
 system *systemd*.
@@ -172,7 +172,7 @@ had to be statically linked into the *radiod* binary.  The existing
 rx888, airspy, airspyhf+, rtlsdr, funcube and sig_gen drivers are
 still statically linked into *radio*, but you can force them to be
 built as dynamic modules with "make DYNAMIC=1".  The shared libraries
-are installed in /usr/local/lib/ka9q-radio.  By default, "make" only
+are installed in /usr/local/lib/ka9q-radio.  By default, "make"
 creates shared library modules only for those devices for which a
 Debian library package exists; this excludes Fobos and SDRPlay because
 they require header files and libraries from third party sources that
