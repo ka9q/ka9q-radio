@@ -57,8 +57,8 @@ Supported Hardware and System Requirements
 [Airspy HF+](https://airspy.com/airspy-hf-discovery/)  
 [Generic RTL-SDR](https://en.wikipedia.org/wiki/Software-defined_radio#RTL-SDR) (tuner mode only)  
 [AMSAT UK Funcube Pro+ Dongle](http://www.funcubedongle.com/)  
-[RX-888 MkII](https://www.rtl-sdr.com/techminds-reviewing-the-rx888-mk2-software-defined-radio/)  (direct sampling mode only)__
-[SDRPlay](https://www.sdrplay.com)__
+[RX-888 MkII](https://www.rtl-sdr.com/techminds-reviewing-the-rx888-mk2-software-defined-radio/)  (direct sampling only)  
+[SDRPlay](https://www.sdrplay.com)  
 [Fobos](https://rigexpert.com/software-defined-radio-sdr/fobos-sdr/#)
 
 Until recently my preferred SDRs (and the ones I still have the most
