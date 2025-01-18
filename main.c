@@ -462,6 +462,10 @@ static int loadconfig(char const *file){
 	      addr != 0 ? &Template.output.dest_socket : NULL,
 	      addr != 0 ? &slen : NULL);
 
+    // Status sent to same group, different port
+    memcpy(&Template.status.dest_socket,&Template.output.dest_socket,sizeof(Template.status.dest_socket));
+    struct sockaddr_in *sin = (struct sockaddr_in *)&Template.status.dest_socket;
+    sin->sin_port = htons(DEFAULT_STAT_PORT);
   }
   join_group(Output_fd,(struct sockaddr *)&Template.output.dest_socket,Iface,Mcast_ttl,IP_tos); // Work around snooping switch problem
 
@@ -574,6 +578,8 @@ static int loadconfig(char const *file){
     // Now also used for per-channel status/control, with different port number
     struct sockaddr_storage data_dest_socket;
     struct sockaddr_storage metadata_dest_socket;
+    memset(&data_dest_socket,0,sizeof(data_dest_socket));
+    memset(&metadata_dest_socket,0,sizeof(metadata_dest_socket));
 
     // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
     {
