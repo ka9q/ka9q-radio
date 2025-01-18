@@ -73,6 +73,7 @@ static void *Dl_handle;
 // List of valid config keys in [global] section, for error checking
 char const *Global_keys[] = {
   "verbose",
+  "dns",
   "fft-time-limit",
   "fft-plan-level",
   "iface",
@@ -441,24 +442,26 @@ static int loadconfig(char const *file){
   fcntl(Output_fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
   // Set up default output stream file descriptor and socket
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
+  char ttlmsg[100];
+  snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
+  // Look quickly (2 tries max) to see if it's already in the DNS
+  bool global_use_dns = config_getboolean(Configtable,global,"dns",false);
+
   {
-    char ttlmsg[100];
-    snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
+    uint32_t addr = 0;
+    if(!global_use_dns || resolve_mcast(Data,&Template.output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
+      addr = make_maddr(Data);
 
     size_t slen = sizeof(Template.output.dest_socket);
-    uint32_t addr = make_maddr(Data);
-    avahi_start(Name,"_rtp._udp",DEFAULT_RTP_PORT,Data,addr,ttlmsg,&Template.output.dest_socket,&slen);
-    avahi_start(Name,"_opus._udp",DEFAULT_RTP_PORT,Data,addr,ttlmsg,&Template.output.dest_socket,&slen);
-#if 0
-    avahi_start(Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Data,addr,ttlmsg,&Template.status.dest_socket,&slen); // same length
-#else
-    {
-      struct sockaddr_in *sin = (struct sockaddr_in *)&Template.status.dest_socket;
-      sin->sin_family = AF_INET;
-      sin->sin_addr.s_addr = htonl(addr);
-      sin->sin_port = htons(DEFAULT_STAT_PORT);
-    }
-#endif
+    avahi_start(Frontend.description != NULL ? Frontend.description : Name,
+	      "_rtp._udp",
+	      DEFAULT_RTP_PORT,
+	      Data,
+	      addr,
+	      ttlmsg,
+	      addr != 0 ? &Template.output.dest_socket : NULL,
+	      addr != 0 ? &slen : NULL);
+
   }
   join_group(Output_fd,(struct sockaddr *)&Template.output.dest_socket,Iface,Mcast_ttl,IP_tos); // Work around snooping switch problem
 
@@ -487,30 +490,36 @@ static int loadconfig(char const *file){
       Wisdom_file = strdup(p);
   }
   // Set up status/command stream, global for all receiver channels
+  // Form default status dns name
+  char hostname[sysconf(_SC_HOST_NAME_MAX)];
+  gethostname(hostname,sizeof(hostname));
+  // Edit off .domain, .local, etc
   {
-    // Form default status dns name
-    char hostname[sysconf(_SC_HOST_NAME_MAX)];
-    gethostname(hostname,sizeof(hostname));
-    // Edit off .domain, .local, etc
     char *cp = strchr(hostname,'.');
     if(cp != NULL)
       *cp = '\0';
-    char default_status[strlen(hostname) + strlen(Name) + 20]; // Enough room for snprintf
-    snprintf(default_status,sizeof(default_status),"%s-%s.local",hostname,Name);
-    Metadata_dest_string = strdup(config_getstring(Configtable,global,"status",default_status)); // Status/command target for all demodulators
-    if(0 == strcmp(Metadata_dest_string,Data)){
-      fprintf(stdout,"Duplicate status/data stream names: data=%s, status=%s\n",Data,Metadata_dest_string);
-      exit(EX_USAGE);
-    }
   }
+  char default_status[strlen(hostname) + strlen(Name) + 20]; // Enough room for snprintf
+  snprintf(default_status,sizeof(default_status),"%s-%s.local",hostname,Name);
+  Metadata_dest_string = strdup(config_getstring(Configtable,global,"status",default_status)); // Status/command target for all demodulators
+  if(0 == strcmp(Metadata_dest_string,Data)){
+    fprintf(stdout,"Duplicate status/data stream names: data=%s, status=%s\n",Data,Metadata_dest_string);
+    exit(EX_USAGE);
+  }
+  // Look quickly (2 tries max) to see if it's already in the DNS
   {
-    char ttlmsg[100];
-    snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
+    uint32_t addr = 0;
+    if(!global_use_dns || resolve_mcast(Metadata_dest_string,&Metadata_dest_socket,DEFAULT_STAT_PORT,NULL,0,2) != 0)
+      addr = make_maddr(Metadata_dest_string);
+
+    // If dns name already exists in the DNS, advertise the service record but not an address record
     size_t slen = sizeof(Metadata_dest_socket);
-    uint32_t addr = make_maddr(Metadata_dest_string);
-    avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,Metadata_dest_string,addr,ttlmsg,&Metadata_dest_socket,&slen);
+    avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
+		Metadata_dest_string,addr,ttlmsg,
+		addr != 0 ? &Metadata_dest_socket : NULL,
+		addr != 0 ? &slen : NULL);
   }
-  // avahi_start has resolved the target DNS name into Metadata_dest_socket and inserted the port number
+  // either resolve_mcast() or avahi_start() has resolved the target DNS name into Metadata_dest_socket and inserted the port number
   join_group(Output_fd,(struct sockaddr *)&Metadata_dest_socket,Iface,Mcast_ttl,IP_tos);
   // Same remote socket as status
   Ctl_fd = listen_mcast(&Metadata_dest_socket,Iface);
@@ -568,28 +577,26 @@ static int loadconfig(char const *file){
 
     // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
     {
-      char ttlmsg[100];
-      snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
+      // Look quickly (2 tries max) to see if it's already in the DNS. Otherwise make a multicast address.
+      uint32_t addr = 0;
+      bool use_dns = config_getboolean(Configtable,sname,"dns",global_use_dns);
+      if(!use_dns || resolve_mcast(data,&data_dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
+	// Hash name string to make IP multicast address in 239.x.x.x range
+	addr = make_maddr(data);
 
+      char const *cp = config_getstring(Configtable,sname,"encoding","s16be");
+      bool is_opus = strcasecmp(cp,"opus") == 0 ? true : false;
       size_t slen = sizeof(data_dest_socket);
-      uint32_t addr = make_maddr(data);
-
-      // Start only one depending on chan->output.encoding
-      char const *cp = config_getstring(Configtable,sname,"encoding",NULL);
-      if(cp != NULL && strcasecmp(cp,"opus") == 0)
-	avahi_start(sname,"_opus._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_socket,&slen);
-      else
-	avahi_start(sname,"_rtp._udp",DEFAULT_RTP_PORT,data,addr,ttlmsg,&data_dest_socket,&slen);
-#if 0
-      avahi_start(sname,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,data,addr,ttlmsg,&metadata_dest_socket,&slen); // sockets are same size
-#else
-      {
-	struct sockaddr_in *sin = (struct sockaddr_in *)&metadata_dest_socket;
-	sin->sin_family = AF_INET;
-	sin->sin_addr.s_addr = htonl(addr);
-	sin->sin_port = htons(DEFAULT_STAT_PORT);
-      }
-#endif
+      avahi_start(sname,
+		  is_opus ? "_opus._udp" : "_rtp._udp",
+		  DEFAULT_RTP_PORT,
+		  data,addr,ttlmsg,
+		  addr != 0 ? &data_dest_socket : NULL,
+		  addr != 0 ? &slen : NULL);
+      // metadata for this stream is same except for port number
+      memcpy(&metadata_dest_socket,&data_dest_socket,sizeof(metadata_dest_socket));
+      struct sockaddr_in *sin = (struct sockaddr_in *)&metadata_dest_socket;
+      sin->sin_port = htons(DEFAULT_STAT_PORT);
     }
     join_group(Output_fd,(struct sockaddr *)&data_dest_socket,iface,Mcast_ttl,ip_tos);
     // No need to also join group for status socket, since the IP addresses are the same

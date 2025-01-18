@@ -360,6 +360,9 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
   else
     strlcpy(full_host,host,sizeof(full_host));
 
+  int64_t start_time = gps_time_ns();
+  bool message_logged = false;
+
   for(try=0;tries == 0 || try != tries;try++){
     results = NULL;
     struct addrinfo hints;
@@ -381,13 +384,19 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
     int const ecode = getaddrinfo(full_host,port,&hints,&results);
     if(ecode == 0)
       break;
-    if(try == 0) // Don't pollute the syslog
-      fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s): %s. Retrying.\n",full_host,port,gai_strerror(ecode));
-    sleep(10);
+    if(!message_logged){
+      int64_t now = gps_time_ns();
+      if(now > start_time + 2 * BILLION){
+	fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s): %s. Retrying.\n",full_host,port,gai_strerror(ecode));
+	message_logged = true;
+      }
+    }
   }
-  if(tries != 0 && try == tries)
+  if(message_logged && try == tries){
+    fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s) failed\n",full_host,port);
     return -1;
-  if(try > 0) // Don't leave them hanging: report success after failure
+  }
+  if(message_logged) // Don't leave them hanging: report success after failure
     fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s) succeeded\n",full_host,port);
 
   // Use first entry on list -- much simpler

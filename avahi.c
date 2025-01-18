@@ -51,8 +51,8 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
     perror("exec avahi publish service");
     return -1;
   }
-  if(fork() == 0){
-    // run "avahi-publish-address dns_name address"
+  if(address != 0 && fork() == 0){
+    // run "avahi-publish-address dns_name address", only if an address is specifieda
     char *ip_address_string = NULL;    // No need to free, we're calling exec
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-result" 
