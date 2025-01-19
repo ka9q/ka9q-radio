@@ -175,6 +175,7 @@ int main(int argc,char *argv[]){
     FILE *network = fdopen(Network_fd,"w+");
     setlinebuf(network);
     
+    ASSERT_ZEROED(&Read_thread,sizeof Read_thread);
     pthread_create(&Read_thread,NULL,netreader,NULL);
     
     // Log into the network

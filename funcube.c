@@ -321,6 +321,7 @@ int funcube_startup(struct frontend *frontend){
   assert(sdr != NULL);
 
   // Start processing A/D data
+  ASSERT_ZEROED(&sdr->proc_thread,sizeof sdr->proc_thread);
   pthread_create(&sdr->proc_thread,NULL,proc_funcube,sdr);
   fprintf(stdout,"funcube running\n");
   return 0;

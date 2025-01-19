@@ -293,6 +293,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 }
 int airspy_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  ASSERT_ZEROED(&sdr->monitor_thread,sizeof sdr->monitor_thread);
   pthread_create(&sdr->monitor_thread,NULL,airspy_monitor,sdr);
   return 0;
 }

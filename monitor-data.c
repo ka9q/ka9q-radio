@@ -128,6 +128,7 @@ void *dataproc(void *arg){
       sp->reset = true;
       sp->init = true;
 
+      ASSERT_ZEROED(&sp->task,sizeof sp->task);
       if(pthread_create(&sp->task,NULL,decode_task,sp) == -1){
 	perror("pthread_create");
 	close_session(&sp);

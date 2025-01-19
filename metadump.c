@@ -176,6 +176,7 @@ int main(int argc,char *argv[]){
   if(Verbose && Interval != 0)
     fprintf(stdout,"Polling %u interval %'.1f sec count %llu\n",(unsigned)Ssrc,(float)Interval * 1e-9,(long long)Count);
 
+  ASSERT_ZEROED(&Input_thread,sizeof Input_thread);
   pthread_create(&Input_thread,NULL,input_thread,NULL);
   if(Ssrc == 0){
     fprintf(stdout,"No ssrc specified, waiting passively for responses\n");

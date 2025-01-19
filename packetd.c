@@ -393,6 +393,7 @@ static void *input(void *arg){
 	}
 	sp->read_fd = fildes[0]; sp->write_fd = fildes[1];
 
+	ASSERT_ZEROED(&sp->decode_thread,sizeof sp->decode_thread);
 	pthread_create(&sp->decode_thread,NULL,decode_task,sp); // One decode thread per stream
 	if(Verbose){
 	  printtime(stdout);

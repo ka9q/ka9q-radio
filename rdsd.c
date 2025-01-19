@@ -73,6 +73,7 @@ static char const *Name = "rds";
 static struct session *Audio;
 static pthread_mutex_t Audio_protect = PTHREAD_MUTEX_INITIALIZER;
 static uint64_t Output_packets;
+static pthread_t Input_thread;
 
 void closedown(int);
 struct session *lookup_session(const struct sockaddr *,uint32_t);
@@ -200,9 +201,8 @@ int main(int argc,char * const argv[]){
   }
 
   // Set up to receive PCM in RTP/UDP/IP
-  pthread_t input_thread;
   if(Input_fd != -1)
-    pthread_create(&input_thread,NULL,input,NULL);
+    pthread_create(&Input_thread,NULL,input,NULL);
 
   // Graceful signal catch
   signal(SIGPIPE,closedown);
@@ -260,7 +260,7 @@ int main(int argc,char * const argv[]){
 
 	    Input_fd = listen_mcast(&PCM_dest_address,NULL);
 	    if(Input_fd != -1)
-	      pthread_create(&input_thread,NULL,input,cp);
+	      pthread_create(&Input_thread,NULL,input,cp);
 	  }
 	  break;
 	default:  // Ignore all others for now
@@ -336,6 +336,7 @@ void *input(void *arg){
       sp->rtp_state_in.timestamp = pkt->rtp.timestamp;
 
       // Span per-SSRC thread
+      ASSERT_ZEROED(&sp->thread,sizeof sp->thread);
       if(pthread_create(&sp->thread,NULL,decode,sp) == -1){
 	perror("pthread_create");
 	close_session(sp);

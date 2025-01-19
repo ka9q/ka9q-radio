@@ -28,6 +28,8 @@
 		    fprintf(stdout,"Copyright 2025, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");}
 
 
+#define ASSERT_ZEROED(ptr, size) assert(memcmp(ptr, &(typeof(*(ptr))){0}, size) == 0)
+
 // 16-bit floating point is not consistent across platforms
 #ifdef __arm__  // ARM platform
   #if defined(__ARM_FP16_FORMAT_IEEE)
