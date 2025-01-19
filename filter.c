@@ -96,12 +96,12 @@ static unsigned long lcm(unsigned long a,unsigned long b);
 // Filter_in holds the original time-domain input and its frequency domain version
 // Filter_out holds the frequency response and decimation information for one of several output filters that can share the same input
 
-// filter_create_input() parameters, shared by all slaves:
+// create_filter_input() parameters, shared by all slaves:
 // L = input data blocksize
 // M = impulse response duration
 // in_type = REAL or COMPLEX
 
-// filter_create_output() parameters, distinct per slave
+// create_filter_output() parameters, distinct per slave
 // master - pointer to associated master (input) filter
 // response = complex frequency response; may be NULL here and set later with set_filter()
 // This is set in the slave and can be different (indeed, this is the reason to have multiple slaves)
@@ -124,6 +124,11 @@ static unsigned long lcm(unsigned long a,unsigned long b);
 
 // Set up input (master) half of filter
 int create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type){
+  assert(master != NULL);
+  assert(master != (void *)-1);
+  if(master == NULL)
+    return -1;
+
   assert(L > 0);
   assert(M > 0);
   int const N = L + M - 1;
@@ -131,20 +136,16 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   if(bins < 1)
     return -1; // Unreasonably small - will segfault. Can happen if sample rate is garbled
 
-  if(master == NULL)
-    return -1;
-  if(!goodchoice(N)){
+  if(!goodchoice(N))
     fprintf(stdout,"create_filter_input(L=%d, M=%d): N=%d is not an efficient blocksize for FFTW3\n",L,M,N);
-  }
 
+  memset(master,0,sizeof *master); // make sure it's clean
 
   for(int i=0; i < ND; i++){
     master->fdomain[i] = lmalloc(sizeof(complex float) * bins);
     master->completed_jobs[i] = (unsigned int)-1; // So startup won't drop any blocks
   }
 
-  assert(master != NULL);
-  assert(master != (void *)-1);
   master->bins = bins;
   master->in_type = in_type;
   master->ilen = L;
@@ -191,7 +192,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
 	pthread_create(&FFT.thread[i],NULL,run_fft,NULL);
     }
     FFTW_init = true;
-
   }
   pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(N_internal_threads);
@@ -208,7 +208,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->input_buffer_size = round_to_page(ND * N * sizeof(complex float));
     // Allocate input_buffer_size bytes immediately followed by its mirror
     master->input_buffer = mirror_alloc(master->input_buffer_size);
-    master->input_read_pointer.c = master->input_buffer;
+    master->input_read_pointer.c = master->input_buffer;              // FFT starts reading here
     master->input_write_pointer.c = master->input_read_pointer.c + L; // start writing here
     master->input_read_pointer.r = NULL;
     master->input_write_pointer.r = NULL;
@@ -234,7 +234,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of rof%d failed\n",Wisdom_file,N);
-
     break;
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
@@ -258,6 +257,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
 
   assert(len > 0);
 
+  memset(slave,0,sizeof *slave);
   // Share all but output fft bins, response, output and output type
   slave->master = master;
   slave->out_type = out_type;
@@ -268,6 +268,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
 
   slave->response = response;
   slave->noise_gain = (response == NULL) ? NAN : noise_gain(slave);
+  pthread_mutex_init(&slave->response_mutex,NULL);
 
   switch(slave->out_type){
   default:
@@ -280,7 +281,8 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
 	fprintf(stdout,"Invalid filter output length %d for input N=%d, L=%d\n",len,N,L);
 	return -1;
       }
-      slave->bins = x.quot; // Total number of time-domain FFT points including overlap
+      slave->points = x.quot; // Total number of FFT points including overlap
+      slave->bins = x.quot;
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
       slave->output_buffer.c = lmalloc(sizeof(complex float) * slave->bins);
       assert(slave->output_buffer.c != NULL);
@@ -289,9 +291,9 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
       bool rt_was_on = norealtime(); // Could this cause a priority inversion?
       pthread_mutex_lock(&FFTW_planning_mutex);
       fftwf_plan_with_nthreads(1); // IFFTs are always small, use only one internal thread
-      if((slave->rev_plan = fftwf_plan_dft_1d(slave->bins,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
+      if((slave->rev_plan = fftwf_plan_dft_1d(slave->points,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
 	suggest(FFTW_planning_level,slave->bins,FFTW_BACKWARD,COMPLEX);
-	slave->rev_plan = fftwf_plan_dft_1d(slave->bins,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_MEASURE);
+	slave->rev_plan = fftwf_plan_dft_1d(slave->points,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_MEASURE);
       }
       if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
 	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
@@ -318,18 +320,19 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
 	fprintf(stdout,"Invalid filter output length %d for input N=%d, L=%d\n",len,N,L);
 	return -1;
       }
-      slave->bins = x.quot / 2 + 1;
+      slave->points = x.quot;
+      slave->bins = slave->points / 2 + 1;
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
       assert(slave->fdomain != NULL);
-      slave->output_buffer.r = lmalloc(sizeof(float) * slave->bins);
+      slave->output_buffer.r = lmalloc(sizeof(float) * slave->points);
       assert(slave->output_buffer.r != NULL);
       slave->output_buffer.c = NULL;
-      slave->output.r = slave->output_buffer.r + slave->bins - len;
+      slave->output.r = slave->output_buffer.r + slave->points - len;
       bool rt_was_on = norealtime();
       pthread_mutex_lock(&FFTW_planning_mutex);
-      if((slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->bins,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
-	suggest(FFTW_planning_level,slave->bins,FFTW_BACKWARD,REAL);
-	slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->bins,slave->fdomain,slave->output_buffer.r,FFTW_MEASURE);
+      if((slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->points,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
+	suggest(FFTW_planning_level,slave->points,FFTW_BACKWARD,REAL);
+	slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->points,slave->fdomain,slave->output_buffer.r,FFTW_MEASURE);
       }
       if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
 	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
@@ -339,16 +342,16 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
     }
     break;
   }
-  if(slave->out_type != SPECTRUM && !goodchoice(slave->bins)){
-    int const n = slave->bins;
+  if(slave->out_type != SPECTRUM && !goodchoice(slave->points)){
     int const ell = slave->olen;
-    int const overlap = n / (n - ell);
+    int const overlap = slave->points / (slave->points - ell);
     int const step = overlap;
-    for(int nn = n + step; nn < master->ilen + master->impulse_length - 1; nn += step){
+
+    for(int nn = slave->points + step; nn < master->ilen + master->impulse_length - 1; nn += step){
       if(goodchoice(nn)){
-	int nell = nn * ell / n;
+	int nell = nn * ell / slave->points;
 	int nm = nn - nell + 1;
-	fprintf(stdout,"create_filter_output: N=%d is not an efficient blocksize for FFTW3.",n);
+	fprintf(stdout,"create_filter_output: N=%d is not an efficient blocksize for FFTW3.",slave->points);
 	fprintf(stdout," Next good choice is N = %d (L=%d, M=%d); set samprate = %d * blockrate\n",nn,nell,nm,ell);
 	break;
       }
@@ -411,7 +414,7 @@ void *run_fft(void *p){
 }
 
 
-// Execute the input side of a filter: 
+// Execute the input side of a filter:
 // We use the FFTW3 functions that specify the input and output arrays
 int execute_filter_input(struct filter_in * const f){
   assert(f != NULL);
@@ -800,7 +803,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   high = high < -0.5 ? -0.5 : high > +0.5 ? +0.5 : high;
 
   // Total number of time domain points
-  int const N = (slave->out_type == REAL) ? 2 * (slave->bins - 1) : slave->bins;
+  int const N = slave->points;
   int const L = slave->olen;
   int const M = N - L + 1; // Length of impulse response in time domain
 
