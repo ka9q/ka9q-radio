@@ -238,12 +238,16 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
   frontend->isreal = false;
   frontend->bitspersample = 16;
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
-  frontend->min_IF = -0.47 * frontend->samprate;
-  frontend->max_IF = +0.47 * frontend->samprate;
+  frontend->min_IF = -0.46 * frontend->samprate;
+  frontend->max_IF = +0.46 * frontend->samprate;
 
   // Need to know the initial frequency beforehand because of RF att/LNA state
-  double const init_frequency = config_getdouble(Dictionary,section,"frequency",0);
-
+  double init_frequency = 0;
+  {
+    char const *p = config_getstring(Dictionary,section,"frequency",NULL);
+    if(p != NULL)
+      init_frequency = parse_frequency(p,false);
+  }
   // Hardware device settings
   {
     char const *antenna = config_getstring(Dictionary,section,"antenna",NULL);
