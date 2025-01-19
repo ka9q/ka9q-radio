@@ -208,6 +208,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->input_buffer_size = round_to_page(ND * N * sizeof(complex float));
     // Allocate input_buffer_size bytes immediately followed by its mirror
     master->input_buffer = mirror_alloc(master->input_buffer_size);
+    memset(master->input_buffer,0,master->input_buffer_size);
     master->input_read_pointer.c = master->input_buffer;              // FFT starts reading here
     master->input_write_pointer.c = master->input_read_pointer.c + L; // start writing here
     master->input_read_pointer.r = NULL;
@@ -223,6 +224,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   case REAL:
     master->input_buffer_size = round_to_page(ND * N * sizeof(float));
     master->input_buffer = mirror_alloc(master->input_buffer_size);
+    memset(master->input_buffer,0,master->input_buffer_size);
     master->input_read_pointer.r = master->input_buffer;
     master->input_write_pointer.r = master->input_read_pointer.r + L; // start writing here
     master->input_read_pointer.c = NULL;
