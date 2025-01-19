@@ -35,9 +35,7 @@ extern float Blocktime;
 struct frontend Frontend;
 
 pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
-int const Channelalloc_quantum = 1000;
-struct channel *Channel_list; // Contiguous array
-int Channel_list_length; // Length of array
+struct channel Channel_list[Nchannels];
 int Active_channel_count; // Active channels
 float Power_smooth = 0.05; // Arbitrary exponential smoothing factor
 
@@ -46,7 +44,7 @@ float Power_smooth = 0.05; // Arbitrary exponential smoothing factor
 struct channel *lookup_chan(uint32_t ssrc){
   struct channel *chan = NULL;
   pthread_mutex_lock(&Channel_list_mutex);
-  for(int i=0; i < Channel_list_length; i++){
+  for(int i=0; i < Nchannels; i++){
     if(Channel_list[i].inuse && Channel_list[i].output.rtp.ssrc == ssrc){
       chan = &Channel_list[i];
       break;
@@ -62,19 +60,14 @@ struct channel *create_chan(uint32_t ssrc){
   if(ssrc == 0xffffffff)
     return NULL; // reserved
   pthread_mutex_lock(&Channel_list_mutex);
-  for(int i=0; i < Channel_list_length; i++){
+  for(int i=0; i < Nchannels; i++){
     if(Channel_list[i].inuse && Channel_list[i].output.rtp.ssrc == ssrc){
       pthread_mutex_unlock(&Channel_list_mutex);
       return NULL; // sorry, already taken
     }
   }
-  if(Channel_list == NULL){
-    Channel_list = (struct channel *)calloc(Channelalloc_quantum,sizeof(struct channel));
-    Channel_list_length = Channelalloc_quantum;
-    Active_channel_count = 0;
-  }
   struct channel *chan = NULL;
-  for(int i=0; i < Channel_list_length; i++){
+  for(int i=0; i < Nchannels; i++){
     if(!Channel_list[i].inuse){
       chan = &Channel_list[i];
       break;
@@ -229,6 +222,7 @@ int start_demod(struct channel * chan){
     fprintf(stdout,"start_demod: ssrc %'u, output %s, demod %d, freq %'.3lf, preset %s, filter (%'+.0f,%'+.0f)\n",
 	    chan->output.rtp.ssrc, chan->output.dest_string, chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
   }
+  ASSERT_ZEROED(&chan->demod_thread,sizeof chan->demod_thread);
   pthread_create(&chan->demod_thread,NULL,demod_thread,chan);
   return 0;
 }
@@ -238,14 +232,12 @@ int close_chan(struct channel *chan){
   if(chan == NULL)
     return -1;
 
-  if(chan->rtcp.thread != (pthread_t)0){
-    pthread_cancel(chan->rtcp.thread);
-    pthread_join(chan->rtcp.thread,NULL);
-  }
-  if(chan->sap.thread != (pthread_t)0){
-    pthread_cancel(chan->sap.thread);
-    pthread_join(chan->sap.thread,NULL);
-  }
+  pthread_cancel(chan->rtcp.thread);
+  pthread_join(chan->rtcp.thread,NULL);
+
+  pthread_cancel(chan->sap.thread);
+  pthread_join(chan->sap.thread,NULL);
+
   pthread_mutex_lock(&chan->status.lock);
   FREE(chan->status.command);
   FREE(chan->filter.energies);

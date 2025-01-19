@@ -283,10 +283,9 @@ struct channel {
 };
 
 
-extern struct channel *Channel_list;
+extern struct channel Channel_list[];
+#define Nchannels 1000
 extern struct channel Template;
-extern int Channel_list_length;
-extern int const Channel_alloc_quantum;
 extern pthread_mutex_t Channel_list_mutex;
 extern int Channel_idle_timeout;
 extern int Ctl_fd;     // File descriptor for receiving user commands
@@ -294,7 +293,7 @@ extern int Output_fd;
 extern struct sockaddr_storage Metadata_dest_socket; // Socket for main metadata
 extern int Verbose;
 extern float Blocktime; // Common to all receiver slices. NB! Milliseconds, not seconds
-extern char const *Channel_keys[],*Global_keys[];
+extern char const *Channel_keys[],*Global_keys[]; // Lists of valid keywords in config files
 
 // Channel initialization & manipulation
 struct channel *create_chan(uint32_t ssrc);
