@@ -54,7 +54,7 @@ void *radio_status(void *arg){
       break;
     case 0xffffffff:
       // Ask all threads to dump their status in a staggered manner
-      for(int i=0; i < Channel_list_length; i++){
+      for(int i=0; i < Nchannels; i++){
 	struct channel *chan = &Channel_list[i];
 	pthread_mutex_lock(&chan->status.lock);
 	if(chan->inuse && chan->output.rtp.ssrc != 0xffffffff && chan->output.rtp.ssrc != 0)
