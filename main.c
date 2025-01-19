@@ -53,6 +53,7 @@ static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
 static int const DEFAULT_UPDATE = 25; // 2 Hz for 20 ms blocktime (50 Hz frame rate)
 static int const DEFAULT_LIFETIME = 20; // 20 sec for idle sessions tuned to 0 Hz
+#define GLOBAL "global"
 
 char const *Iface;
 char const *Data;
@@ -67,8 +68,6 @@ int Overlap = DEFAULT_OVERLAP;
 static int Update = DEFAULT_UPDATE;
 static int RTCP_enable = false;
 static int SAP_enable = false;
-static void *Dl_handle;
-
 
 // List of valid config keys in [global] section, for error checking
 char const *Global_keys[] = {
@@ -97,18 +96,11 @@ char const *Global_keys[] = {
 };
 
 
-struct channel Template;
-// If a channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
-// Must be computed at run time because it depends on the block time
-int Channel_idle_timeout;  //  = DEFAULT_LIFETIME * 1000 / Blocktime;
-int Ctl_fd;     // File descriptor for receiving user commands
-static char const *Name;
-extern int N_worker_threads; // owned by filter.c
-
 // Command line and environ params
 const char *App_path;
 int Verbose;
 static char const *Locale = "en_US.UTF-8";
+
 static dictionary *Configtable; // Configtable file descriptor for iniparser for main radiod config file
 dictionary *Preset_table;   // Table of presets, usually in /usr/local/share/ka9q-radio/modes.conf or presets.conf
 volatile bool Stop_transfers = false; // Request to stop data transfers; how should this get set?
@@ -118,12 +110,24 @@ static pthread_t Status_thread;
 struct sockaddr_storage Metadata_dest_socket;      // Dest of global metadata
 static char const *Metadata_dest_string; // DNS name of default multicast group for status/commands
 int Output_fd = -1; // Unconnected socket used for all multicast output
+struct channel Template;
+// If a channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
+// Must be computed at run time because it depends on the block time
+int Channel_idle_timeout;  //  = DEFAULT_LIFETIME * 1000 / Blocktime;
+int Ctl_fd = -1;     // File descriptor for receiving user commands
+static char const *Name;
+extern int N_worker_threads; // owned by filter.c
+static void *Dl_handle;
+static char Ttlmsg[100];
+static bool Global_use_dns;
+static int Nchans;
 
 static void closedown(int);
 static void verbosity(int);
 static int loadconfig(char const *file);
 static int setup_hardware(char const *sname);
 static void *rtcp_send(void *);
+void *process_section(void *p);
 
 // In sdrplay.c (maybe someday)
 int sdrplay_setup(struct frontend *,dictionary *,char const *);
@@ -250,36 +254,36 @@ int main(int argc,char *argv[]){
   fprintf(stdout,"%d total demodulators started\n",n);
 
   // Measure CPU usage
+  int sleep_period = 60;
   struct timespec last_realtime = start_realtime;
   struct timespec last_cputime = {0};
-  int sleep_period = 60;
   while(true){
     sleep(sleep_period);
-    struct timespec new_realtime;
-    clock_gettime(CLOCK_MONOTONIC,&new_realtime);
-    double total_real = new_realtime.tv_sec - start_realtime.tv_sec
-      + 1e-9 * (new_realtime.tv_nsec - start_realtime.tv_nsec);
+    if(Verbose){
+      struct timespec new_realtime;
+      clock_gettime(CLOCK_MONOTONIC,&new_realtime);
+      double total_real = new_realtime.tv_sec - start_realtime.tv_sec
+	+ 1e-9 * (new_realtime.tv_nsec - start_realtime.tv_nsec);
 
-    struct timespec new_cputime;
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID,&new_cputime);
-    double total_cpu = new_cputime.tv_sec + 1e-9 * (new_cputime.tv_nsec);
+      struct timespec new_cputime;
+      clock_gettime(CLOCK_PROCESS_CPUTIME_ID,&new_cputime);
+      double total_cpu = new_cputime.tv_sec + 1e-9 * (new_cputime.tv_nsec);
 
-    double total_percent = 100. * total_cpu / total_real;
+      double total_percent = 100. * total_cpu / total_real;
 
-    double period_real = new_realtime.tv_sec - last_realtime.tv_sec
-      + 1e-9 * (new_realtime.tv_nsec - last_realtime.tv_nsec);
+      double period_real = new_realtime.tv_sec - last_realtime.tv_sec
+	+ 1e-9 * (new_realtime.tv_nsec - last_realtime.tv_nsec);
 
-    double period_cpu =  new_cputime.tv_sec - last_cputime.tv_sec
-      + 1e-9 * (new_cputime.tv_nsec - last_cputime.tv_nsec);
+      double period_cpu =  new_cputime.tv_sec - last_cputime.tv_sec
+	+ 1e-9 * (new_cputime.tv_nsec - last_cputime.tv_nsec);
 
-    double period_percent = 100. * period_cpu / period_real;
+      double period_percent = 100. * period_cpu / period_real;
 
-    last_realtime = new_realtime;
-    last_cputime = new_cputime;
-
-    if(Verbose)
+      last_realtime = new_realtime;
+      last_cputime = new_cputime;
       fprintf(stdout,"CPU usage: %.1lf%% since start, %.1lf%% in last %.1lf sec\n",
 	      total_percent, period_percent,period_real);
+    }
   }
   exit(EX_OK); // Can't happen
 }
@@ -288,7 +292,6 @@ int main(int argc,char *argv[]){
 static int loadconfig(char const *file){
   if(file == NULL || strlen(file) == 0)
     return -1;
-
 
   DIR *dirp = NULL;
   struct stat statbuf;
@@ -364,18 +367,18 @@ static int loadconfig(char const *file){
   if(Configtable == NULL)
     return -1;
 
-  config_validate_section(stdout,Configtable,"global",Global_keys,Channel_keys);
+  config_validate_section(stdout,Configtable,GLOBAL,Global_keys,Channel_keys);
 
   // Set up template for all new channels
   set_defaults(&Template);
   Template.lifetime = DEFAULT_LIFETIME * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
 
   // Process [global] section applying to all demodulator blocks
-  char const * const global = "global";
-  Verbose = config_getint(Configtable,global,"verbose",Verbose);
+
+  Verbose = config_getint(Configtable,GLOBAL,"verbose",Verbose);
 
   // Set up the hardware early, in case it fails
-  const char *hardware = config_getstring(Configtable,global,"hardware",NULL);
+  const char *hardware = config_getstring(Configtable,GLOBAL,"hardware",NULL);
   if(hardware == NULL){
     // 'hardware =' now required, no default
     fprintf(stdout,"'hardware = [sectionname]' now required to specify front end configuration\n");
@@ -399,9 +402,9 @@ static int loadconfig(char const *file){
       exit(EX_USAGE);
     }
   }
-  FFTW_plan_timelimit = config_getdouble(Configtable,global,"fft-time-limit",FFTW_plan_timelimit);
+  FFTW_plan_timelimit = config_getdouble(Configtable,GLOBAL,"fft-time-limit",FFTW_plan_timelimit);
   {
-    char const *cp = config_getstring(Configtable,global,"fft-plan-level","patient");
+    char const *cp = config_getstring(Configtable,GLOBAL,"fft-plan-level","patient");
     if(strcasecmp(cp,"estimate") == 0){
       FFTW_planning_level = FFTW_ESTIMATE;
     } else if(strcasecmp(cp,"measure") == 0){
@@ -418,7 +421,7 @@ static int loadconfig(char const *file){
   // Default multicast interface
   {
     // The area pointed to by returns from config_getstring() is freed and overwritten when the config dictionary is closed
-    char const *p = config_getstring(Configtable,global,"iface",Iface);
+    char const *p = config_getstring(Configtable,GLOBAL,"iface",Iface);
     if(p != NULL){
       Iface = strdup(p);
       Default_mcast_iface = Iface;
@@ -428,12 +431,12 @@ static int loadconfig(char const *file){
   {
     char data_default[256];
     snprintf(data_default,sizeof(data_default),"%s-pcm",Name);
-    Data = strdup(config_getstring(Configtable,global,"data",data_default));
+    Data = strdup(config_getstring(Configtable,GLOBAL,"data",data_default));
   }
   strlcpy(Template.output.dest_string,Data,sizeof(Template.output.dest_string));
-  Update = config_getint(Configtable,global,"update",Update);
-  IP_tos = config_getint(Configtable,global,"tos",IP_tos);
-  Mcast_ttl = config_getint(Configtable,global,"ttl",Mcast_ttl);
+  Update = config_getint(Configtable,GLOBAL,"update",Update);
+  IP_tos = config_getint(Configtable,GLOBAL,"tos",IP_tos);
+  Mcast_ttl = config_getint(Configtable,GLOBAL,"ttl",Mcast_ttl);
   Output_fd = socket(AF_INET,SOCK_DGRAM,0); // Eventually intended for all output with sendto()
   if(Output_fd < 0){
     fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
@@ -442,14 +445,13 @@ static int loadconfig(char const *file){
   fcntl(Output_fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
   // Set up default output stream file descriptor and socket
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
-  char ttlmsg[100];
-  snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Mcast_ttl);
-  // Look quickly (2 tries max) to see if it's already in the DNS
-  bool global_use_dns = config_getboolean(Configtable,global,"dns",false);
 
+  snprintf(Ttlmsg,sizeof(Ttlmsg),"TTL=%d",Mcast_ttl);
+  // Look quickly (2 tries max) to see if it's already in the DNS
+  Global_use_dns = config_getboolean(Configtable,GLOBAL,"dns",false);
   {
     uint32_t addr = 0;
-    if(!global_use_dns || resolve_mcast(Data,&Template.output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
+    if(!Global_use_dns || resolve_mcast(Data,&Template.output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
       addr = make_maddr(Data);
 
     size_t slen = sizeof(Template.output.dest_socket);
@@ -458,7 +460,7 @@ static int loadconfig(char const *file){
 	      DEFAULT_RTP_PORT,
 	      Data,
 	      addr,
-	      ttlmsg,
+	      Ttlmsg,
 	      addr != 0 ? &Template.output.dest_socket : NULL,
 	      addr != 0 ? &slen : NULL);
 
@@ -469,16 +471,16 @@ static int loadconfig(char const *file){
   }
   join_group(Output_fd,(struct sockaddr *)&Template.output.dest_socket,Iface,Mcast_ttl,IP_tos); // Work around snooping switch problem
 
-  Blocktime = fabs(config_getdouble(Configtable,global,"blocktime",Blocktime));
+  Blocktime = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",Blocktime));
   Channel_idle_timeout = 20 * 1000 / Blocktime;
-  Overlap = abs(config_getint(Configtable,global,"overlap",Overlap));
-  N_worker_threads = config_getint(Configtable,global,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
-  RTCP_enable = config_getboolean(Configtable,global,"rtcp",RTCP_enable);
-  SAP_enable = config_getboolean(Configtable,global,"sap",SAP_enable);
+  Overlap = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
+  N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
+  RTCP_enable = config_getboolean(Configtable,GLOBAL,"rtcp",RTCP_enable);
+  SAP_enable = config_getboolean(Configtable,GLOBAL,"sap",SAP_enable);
   {
     // Accept either keyword; "preset" is more descriptive than the old (but still accepted) "mode"
-    char const *p = config_getstring(Configtable,global,"mode-file","presets.conf");
-    p = config_getstring(Configtable,global,"presets-file",p);
+    char const *p = config_getstring(Configtable,GLOBAL,"mode-file","presets.conf");
+    p = config_getstring(Configtable,GLOBAL,"presets-file",p);
     dist_path(Preset_file,sizeof(Preset_file),p);
     fprintf(stdout,"Loading presets file %s\n",Preset_file);
     Preset_table = iniparser_load(Preset_file); // Kept open for duration of program
@@ -489,7 +491,7 @@ static int loadconfig(char const *file){
     }
   }
   {
-    char const *p = config_getstring(Configtable,global,"wisdom-file",NULL);
+    char const *p = config_getstring(Configtable,GLOBAL,"wisdom-file",NULL);
     if(p != NULL)
       Wisdom_file = strdup(p);
   }
@@ -505,7 +507,7 @@ static int loadconfig(char const *file){
   }
   char default_status[strlen(hostname) + strlen(Name) + 20]; // Enough room for snprintf
   snprintf(default_status,sizeof(default_status),"%s-%s.local",hostname,Name);
-  Metadata_dest_string = strdup(config_getstring(Configtable,global,"status",default_status)); // Status/command target for all demodulators
+  Metadata_dest_string = strdup(config_getstring(Configtable,GLOBAL,"status",default_status)); // Status/command target for all demodulators
   if(0 == strcmp(Metadata_dest_string,Data)){
     fprintf(stdout,"Duplicate status/data stream names: data=%s, status=%s\n",Data,Metadata_dest_string);
     exit(EX_USAGE);
@@ -513,13 +515,13 @@ static int loadconfig(char const *file){
   // Look quickly (2 tries max) to see if it's already in the DNS
   {
     uint32_t addr = 0;
-    if(!global_use_dns || resolve_mcast(Metadata_dest_string,&Metadata_dest_socket,DEFAULT_STAT_PORT,NULL,0,2) != 0)
+    if(!Global_use_dns || resolve_mcast(Metadata_dest_string,&Metadata_dest_socket,DEFAULT_STAT_PORT,NULL,0,2) != 0)
       addr = make_maddr(Metadata_dest_string);
 
     // If dns name already exists in the DNS, advertise the service record but not an address record
     size_t slen = sizeof(Metadata_dest_socket);
     avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
-		Metadata_dest_string,addr,ttlmsg,
+		Metadata_dest_string,addr,Ttlmsg,
 		addr != 0 ? &Metadata_dest_socket : NULL,
 		addr != 0 ? &slen : NULL);
   }
@@ -531,208 +533,225 @@ static int loadconfig(char const *file){
     fprintf(stdout,"can't listen for commands from %s: %s\n",Metadata_dest_string,strerror(errno));
     exit(EX_NOHOST);
   }
+  ASSERT_ZEROED(&Status_thread,sizeof Status_thread);
+  if(Ctl_fd >= 3)
+    pthread_create(&Status_thread,NULL,radio_status,NULL);
 
   // Preset/mode must be specified to create a dynamic channel
   // (Trying to switch from term "mode" to term "preset" as more descriptive)
-  char const * p = config_getstring(Configtable,global,"preset","am"); // Hopefully "am" is defined in presets.conf
-  char const * preset = config_getstring(Configtable,global,"mode",p); // Must be specified to create a dynamic channel
+  char const * p = config_getstring(Configtable,GLOBAL,"preset","am"); // Hopefully "am" is defined in presets.conf
+  char const * preset = config_getstring(Configtable,GLOBAL,"mode",p); // Must be specified to create a dynamic channel
   if(preset != NULL){
     if(loadpreset(&Template,Preset_table,preset) != 0)
       fprintf(stdout,"warning: loadpreset(%s,%s) in [global]\n",Preset_file,preset);
     strlcpy(Template.preset,preset,sizeof(Template.preset));
 
-    loadpreset(&Template,Configtable,global); // Overwrite with other entries from this section, without overwriting those
+    loadpreset(&Template,Configtable,GLOBAL); // Overwrite with other entries from this section, without overwriting those
   } else {
     fprintf(stdout,"No default mode for template\n");
   }
-  // Process individual demodulator sections
+  // Process individual demodulator sections in parallel for speed
   int const nsect = iniparser_getnsec(Configtable);
-  int nchans = 0;
+  pthread_t startup_threads[nsect];
+  memset(startup_threads,0,sizeof startup_threads); // Apparently necessary to prevent segfaults on pthread_join()
   for(int sect = 0; sect < nsect; sect++){
     char const * const sname = iniparser_getsecname(Configtable,sect);
 
-    if(strcasecmp(sname,global) == 0)
+    if(strcasecmp(sname,GLOBAL) == 0)
       continue; // Already processed above
     if(strcasecmp(sname,hardware) == 0)
       continue; // Already processed as a hardware section (possibly without device=)
     if(config_getstring(Configtable,sname,"device",NULL) != NULL)
       continue; // It's a front end configuration, ignore
-
-    fprintf(stdout,"Processing [%s]\n",sname); // log only if not disabled
-    config_validate_section(stdout,Configtable,sname,Channel_keys,NULL);
     if(config_getboolean(Configtable,sname,"disable",false))
       continue; // section is disabled
 
-    // fall back to setting in [global] if parameter not specified in individual section
-    // Set parameters even when unused for the current demodulator in case the demod is changed later
-    char const * preset = config2_getstring(Configtable,Configtable,global,sname,"mode",NULL);
-    preset = config2_getstring(Configtable,Configtable,global,sname,"preset",preset);
-    if(preset == NULL || strlen(preset) == 0)
-      fprintf(stdout,"warning: preset/mode not specified in [%s] or [global], all parameters must be explicitly set\n",sname);
-
-    // Override [global] settings with section settings
-    char const *data = config_getstring(Configtable,sname,"data",Data);
-    // Override global defaults
-    int const ip_tos = config_getint(Configtable,sname,"tos",IP_tos);
-    char const *iface = config_getstring(Configtable,sname,"iface",Iface);
-
-    // data stream is shared by all channels in this section
-    // Now also used for per-channel status/control, with different port number
-    struct sockaddr_storage data_dest_socket;
-    struct sockaddr_storage metadata_dest_socket;
-    memset(&data_dest_socket,0,sizeof(data_dest_socket));
-    memset(&metadata_dest_socket,0,sizeof(metadata_dest_socket));
-
-    // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
-    {
-      // Look quickly (2 tries max) to see if it's already in the DNS. Otherwise make a multicast address.
-      uint32_t addr = 0;
-      bool use_dns = config_getboolean(Configtable,sname,"dns",global_use_dns);
-      if(!use_dns || resolve_mcast(data,&data_dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
-	// Hash name string to make IP multicast address in 239.x.x.x range
-	addr = make_maddr(data);
-
-      char const *cp = config_getstring(Configtable,sname,"encoding","s16be");
-      bool is_opus = strcasecmp(cp,"opus") == 0 ? true : false;
-      size_t slen = sizeof(data_dest_socket);
-      avahi_start(sname,
-		  is_opus ? "_opus._udp" : "_rtp._udp",
-		  DEFAULT_RTP_PORT,
-		  data,addr,ttlmsg,
-		  addr != 0 ? &data_dest_socket : NULL,
-		  addr != 0 ? &slen : NULL);
-      // metadata for this stream is same except for port number
-      memcpy(&metadata_dest_socket,&data_dest_socket,sizeof(metadata_dest_socket));
-      struct sockaddr_in *sin = (struct sockaddr_in *)&metadata_dest_socket;
-      sin->sin_port = htons(DEFAULT_STAT_PORT);
-    }
-    join_group(Output_fd,(struct sockaddr *)&data_dest_socket,iface,Mcast_ttl,ip_tos);
-    // No need to also join group for status socket, since the IP addresses are the same
-
-    // Process frequency/frequencies
-    // We need to do this first to ensure the resulting SSRCs are unique
-    // To work around iniparser's limited line length, we look for multiple keywords
-    // "freq", "freq0", "freq1", etc, up to "freq9"
-    int nfreq = 0;
-
-    for(int ff = -1; ff < 10; ff++){
-      char fname[10];
-      if(ff == -1)
-	snprintf(fname,sizeof(fname),"freq");
-      else
-	snprintf(fname,sizeof(fname),"freq%d",ff);
-
-      char const * const frequencies = config_getstring(Configtable,sname,fname,NULL);
-      if(frequencies == NULL)
-	continue; // none with this prefix; look for more
-
-      // Parse the frequency list(s)
-      char *freq_list = strdup(frequencies); // Need writeable copy for strtok
-      char *saveptr = NULL;
-      for(char const *tok = strtok_r(freq_list," \t",&saveptr);
-	  tok != NULL;
-	  tok = strtok_r(NULL," \t",&saveptr)){
-
-	double const f = parse_frequency(tok,true);
-	if(f < 0){
-	  fprintf(stdout,"can't parse frequency %s\n",tok);
-	  continue;
-	}
-	uint32_t ssrc = 0;
-	// Generate default ssrc from frequency string
-	for(char const *cp = tok ; cp != NULL && *cp != '\0' ; cp++){
-	  if(isdigit(*cp)){
-	    ssrc *= 10;
-	    ssrc += *cp - '0';
-	  }
-	}
-	ssrc = config_getint(Configtable,sname,"ssrc",ssrc); // Explicitly set?
-	if(ssrc == 0)
-	  continue; // Reserved ssrc
-
-	struct channel *chan = NULL;
-	// Try to create it, incrementing in case of collision
-	int const max_collisions = 100;
-	for(int i=0; i < max_collisions; i++){
-	  chan = create_chan(ssrc+i);
-	  if(chan != NULL){
-	    ssrc += i;
-	    break;
-	  }
-	}
-	if(chan == NULL){
-	  fprintf(stdout,"Can't allocate requested ssrc %u-%u\n",ssrc,ssrc + max_collisions);
-	  continue;
-	}
-	// Parameter priority, from high to low:
-	// 1. this section
-	// 2. the preset database entry, if specified
-	// 3. the [global] section
-	// 4. compiled-in defaults to keep things from blowing up
-	set_defaults(chan);
-	loadpreset(chan,Configtable,"global");
-
-	if(preset != NULL && loadpreset(chan,Preset_table,preset) != 0)
-	  fprintf(stdout,"warning: in [%s], loadpreset(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Preset_file,preset);
-
-	strlcpy(chan->preset,preset,sizeof(chan->preset));
-	loadpreset(chan,Configtable,sname);
-
-	// Set up output stream (data + status)
-	// Data multicast group has already been joined
-	memcpy(&chan->output.dest_socket,&data_dest_socket,sizeof(chan->output.dest_socket));
-	strlcpy(chan->output.dest_string,data,sizeof(chan->output.dest_string));
-	memcpy(&chan->status.dest_socket,&metadata_dest_socket,sizeof(chan->status.dest_socket));
-	chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
-
-	// Time to start it -- ssrc is stashed by create_chan()
-	set_freq(chan,f);
-	start_demod(chan);
-	nfreq++;
-	nchans++;
-
-	if(SAP_enable){
-	  // Highly experimental, off by default
-	  char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
-	  resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
-	  join_group(Output_fd,(struct sockaddr *)&chan->sap.dest_socket,iface,Mcast_ttl,ip_tos);
-	  pthread_create(&chan->sap.thread,NULL,sap_send,chan);
-	}
-	// RTCP Real Time Control Protocol daemon is optional
-	if(RTCP_enable){
-	  // Set the dest socket to the RTCP port on the output group
-	  // What messy code just to overwrite a structure field, eh?
-	  memcpy(&chan->rtcp.dest_socket,&chan->output.dest_socket,sizeof(chan->rtcp.dest_socket));
-	  switch(chan->rtcp.dest_socket.ss_family){
-	  case AF_INET:
-	    {
-	      struct sockaddr_in *sock = (struct sockaddr_in *)&chan->rtcp.dest_socket;
-	      sock->sin_port = htons(DEFAULT_RTCP_PORT);
-	    }
-	    break;
-	  case AF_INET6:
-	    {
-	      struct sockaddr_in6 *sock = (struct sockaddr_in6 *)&chan->rtcp.dest_socket;
-	      sock->sin6_port = htons(DEFAULT_RTCP_PORT);
-	    }
-	    break;
-	  }
-	  pthread_create(&chan->rtcp.thread,NULL,rtcp_send,chan);
-	}
-      }
-      // Done processing frequency list(s) and creating chans
-      FREE(freq_list);
-    }
-    fprintf(stdout,"[%s] %d channels started\n",sname,nfreq);
+    ASSERT_ZEROED(&startup_threads[sect],sizeof startup_threads[sect]);
+    pthread_create(&startup_threads[sect],NULL,process_section,(void *)sname);
   }
-  // Start the status thread after all the receivers have been created so it doesn't contend for the chan list lock
-  if(Ctl_fd >= 3)
-    pthread_create(&Status_thread,NULL,radio_status,NULL);
-
+  // Wait for them all to start
+  for(int sect = 0; sect < nsect; sect++){
+    pthread_join(startup_threads[sect],NULL);
+    printf("startup thread %s joined\n",iniparser_getsecname(Configtable,sect));
+  }
   iniparser_freedict(Configtable);
   Configtable = NULL;
-  return nchans;
+  return Nchans;
 }
+void *process_section(void *p){
+  char const *sname = (char *)p;
+  if(sname == NULL)
+    return NULL;
+
+  config_validate_section(stdout,Configtable,sname,Channel_keys,NULL);
+
+  // fall back to setting in [global] if parameter not specified in individual section
+  // Set parameters even when unused for the current demodulator in case the demod is changed later
+  char const * preset = config2_getstring(Configtable,Configtable,GLOBAL,sname,"mode",NULL);
+  preset = config2_getstring(Configtable,Configtable,GLOBAL,sname,"preset",preset);
+  if(preset == NULL || strlen(preset) == 0)
+    fprintf(stdout,"[%s] preset/mode not specified, all parameters must be explicitly set\n",sname);
+
+  // Override [global] settings with section settings
+  char const *data = config_getstring(Configtable,sname,"data",Data);
+  // Override global defaults
+  int const ip_tos = config_getint(Configtable,sname,"tos",IP_tos);
+  char const *iface = config_getstring(Configtable,sname,"iface",Iface);
+
+  // data stream is shared by all channels in this section
+  // Now also used for per-channel status/control, with different port number
+  struct sockaddr_storage data_dest_socket;
+  struct sockaddr_storage metadata_dest_socket;
+  memset(&data_dest_socket,0,sizeof(data_dest_socket));
+  memset(&metadata_dest_socket,0,sizeof(metadata_dest_socket));
+
+  // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
+  {
+    // Look quickly (2 tries max) to see if it's already in the DNS. Otherwise make a multicast address.
+    uint32_t addr = 0;
+    bool use_dns = config_getboolean(Configtable,sname,"dns",Global_use_dns);
+
+    if(!use_dns || resolve_mcast(data,&data_dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
+      // Hash name string to make IP multicast address in 239.x.x.x range
+      addr = make_maddr(data);
+
+    char const *cp = config_getstring(Configtable,sname,"encoding","s16be");
+    bool is_opus = strcasecmp(cp,"opus") == 0 ? true : false;
+    size_t slen = sizeof(data_dest_socket);
+    avahi_start(sname,
+		is_opus ? "_opus._udp" : "_rtp._udp",
+		DEFAULT_RTP_PORT,
+		data,addr,Ttlmsg,
+		addr != 0 ? &data_dest_socket : NULL,
+		addr != 0 ? &slen : NULL);
+    // metadata for this stream is same except for port number
+    memcpy(&metadata_dest_socket,&data_dest_socket,sizeof(metadata_dest_socket));
+    struct sockaddr_in *sin = (struct sockaddr_in *)&metadata_dest_socket;
+    sin->sin_port = htons(DEFAULT_STAT_PORT);
+  }
+  join_group(Output_fd,(struct sockaddr *)&data_dest_socket,iface,Mcast_ttl,ip_tos);
+  // No need to also join group for status socket, since the IP addresses are the same
+
+  // Process frequency/frequencies
+  // We need to do this first to ensure the resulting SSRCs are unique
+  // To work around iniparser's limited line length, we look for multiple keywords
+  // "freq", "freq0", "freq1", etc, up to "freq9"
+  int nchans = 0;
+
+  for(int ff = -1; ff < 10; ff++){
+    char fname[10];
+    if(ff == -1)
+      snprintf(fname,sizeof(fname),"freq");
+    else
+      snprintf(fname,sizeof(fname),"freq%d",ff);
+
+    char const * const frequencies = config_getstring(Configtable,sname,fname,NULL);
+    if(frequencies == NULL)
+      continue; // none with this prefix; look for more
+
+    // Parse the frequency list(s)
+    char *freq_list = strdup(frequencies); // Need writeable copy for strtok
+    char *saveptr = NULL;
+    for(char const *tok = strtok_r(freq_list," \t",&saveptr);
+	tok != NULL;
+	tok = strtok_r(NULL," \t",&saveptr)){
+
+      double const f = parse_frequency(tok,true);
+      if(f < 0){
+	fprintf(stdout,"[%s] can't parse frequency %s\n",sname,tok);
+	continue;
+      }
+      uint32_t ssrc = 0;
+      // Generate default ssrc from frequency string
+      for(char const *cp = tok ; cp != NULL && *cp != '\0' ; cp++){
+	if(isdigit(*cp)){
+	  ssrc *= 10;
+	  ssrc += *cp - '0';
+	}
+      }
+      ssrc = config_getint(Configtable,sname,"ssrc",ssrc); // Explicitly set?
+      if(ssrc == 0)
+	continue; // Reserved ssrc
+
+      struct channel *chan = NULL;
+      // Try to create it, incrementing in case of collision
+      int const max_collisions = 100;
+      for(int i=0; i < max_collisions; i++){
+	chan = create_chan(ssrc+i);
+	if(chan != NULL){
+	  ssrc += i;
+	  break;
+	}
+      }
+      if(chan == NULL){
+	fprintf(stdout,"Can't allocate requested ssrc %u-%u\n",ssrc,ssrc + max_collisions);
+	continue;
+      }
+      // Parameter priority, from high to low:
+      // 1. this section
+      // 2. the preset database entry, if specified
+      // 3. the [global] section
+      // 4. compiled-in defaults to keep things from blowing up
+      set_defaults(chan);
+      loadpreset(chan,Configtable,GLOBAL);
+
+      if(preset != NULL && loadpreset(chan,Preset_table,preset) != 0)
+	fprintf(stdout,"[%s] loadpreset(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Preset_file,preset);
+
+      strlcpy(chan->preset,preset,sizeof(chan->preset));
+      loadpreset(chan,Configtable,sname);
+
+      // Set up output stream (data + status)
+      // Data multicast group has already been joined
+      memcpy(&chan->output.dest_socket,&data_dest_socket,sizeof(chan->output.dest_socket));
+      strlcpy(chan->output.dest_string,data,sizeof(chan->output.dest_string));
+      memcpy(&chan->status.dest_socket,&metadata_dest_socket,sizeof(chan->status.dest_socket));
+      chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+
+      // Time to start it -- ssrc is stashed by create_chan()
+      set_freq(chan,f);
+      start_demod(chan);
+      nchans++;
+      Nchans++;
+
+      if(SAP_enable){
+	// Highly experimental, off by default
+	char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
+	resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
+	join_group(Output_fd,(struct sockaddr *)&chan->sap.dest_socket,iface,Mcast_ttl,ip_tos);
+	ASSERT_ZEROED(&chan->sap.thread,sizeof chan->sap.thread);
+	pthread_create(&chan->sap.thread,NULL,sap_send,chan);
+      }
+      // RTCP Real Time Control Protocol daemon is optional
+      if(RTCP_enable){
+	// Set the dest socket to the RTCP port on the output group
+	// What messy code just to overwrite a structure field, eh?
+	memcpy(&chan->rtcp.dest_socket,&chan->output.dest_socket,sizeof(chan->rtcp.dest_socket));
+	switch(chan->rtcp.dest_socket.ss_family){
+	case AF_INET:
+	  {
+	    struct sockaddr_in *sock = (struct sockaddr_in *)&chan->rtcp.dest_socket;
+	    sock->sin_port = htons(DEFAULT_RTCP_PORT);
+	  }
+	  break;
+	case AF_INET6:
+	  {
+	    struct sockaddr_in6 *sock = (struct sockaddr_in6 *)&chan->rtcp.dest_socket;
+	    sock->sin6_port = htons(DEFAULT_RTCP_PORT);
+	  }
+	  break;
+	}
+	ASSERT_ZEROED(&chan->rtcp.thread,sizeof chan->rtcp.thread);
+	pthread_create(&chan->rtcp.thread,NULL,rtcp_send,chan);
+      }
+    }
+    // Done processing frequency list(s) and creating chans
+    FREE(freq_list);
+  }
+  fprintf(stdout,"[%s] %d channels started\n",sname,nchans);
+  return NULL;
+}
+
 
 // Set up a local front end device
 static int setup_hardware(char const *sname){
