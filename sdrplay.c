@@ -44,7 +44,7 @@ struct sdrstate {
   sdrplay_api_DeviceT device;
   sdrplay_api_DeviceParamsT *device_params;
   sdrplay_api_RxChannelParamsT *rx_channel_params;
-
+  float scale;
   enum sdrplay_status device_status;
 
   // Statistics and other auxiliary data
@@ -904,6 +904,8 @@ static uint8_t const *get_lna_states(struct sdrstate *sdr,double const frequency
 }
 
 static int set_rf_gain(struct sdrstate *sdr,int const lna_state,int const rf_att,int const rf_gr,double const frequency){
+  struct frontend *frontend = sdr->frontend;
+
   int lna_state_count = 0;
   uint8_t const * const lna_states = get_lna_states(sdr,frequency,&lna_state_count);
   assert(lna_states != NULL);
@@ -953,6 +955,7 @@ static int set_rf_gain(struct sdrstate *sdr,int const lna_state,int const rf_att
       return -1;
     }
   }
+  sdr->scale = scale_AD(frontend);
   return 0;
 }
 
@@ -1148,7 +1151,7 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
     __real__ samp = (int)xi[i];
     __imag__ samp = (int)xq[i];
     in_energy += cnrmf(samp);
-    wptr[i] = samp;
+    wptr[i] = samp * sdr->scale;
   }
   frontend->samples += sampcount;
   frontend->timestamp = gps_time_ns();
