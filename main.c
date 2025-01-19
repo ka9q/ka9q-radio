@@ -572,7 +572,9 @@ static int loadconfig(char const *file){
   // Wait for them all to start
   for(int sect = 0; sect < nsect; sect++){
     pthread_join(startup_threads[sect],NULL);
+#if 0
     printf("startup thread %s joined\n",iniparser_getsecname(Configtable,sect));
+#endif
   }
   iniparser_freedict(Configtable);
   Configtable = NULL;
