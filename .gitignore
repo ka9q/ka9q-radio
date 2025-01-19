@@ -4,6 +4,7 @@
 *.a
 *.o
 *.d
+*.so
 !config/*.d
 Makefile
 .depend
