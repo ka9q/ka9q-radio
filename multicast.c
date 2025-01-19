@@ -515,7 +515,12 @@ char *formataddr(char *result,int size,void const *s){
 
 // Convert binary sockaddr structure to printable host:port string
 // cache result, as getnameinfo can be very slow when it doesn't get a reverse DNS hit
-// Needs locks to be made thread safe
+
+// Needs locks to be made thread safe.
+// Unfortunately, getnameinfo() can be very slow (the whole reason we need a cache!)
+// so we let go of the lock while it executes. That might cause duplicate entries
+// if two callers look up the same unresolved name at the same time, but that doesn't
+// seem likely to cause a problem?
 
 struct inverse_cache {
   struct inverse_cache *next;
@@ -525,6 +530,8 @@ struct inverse_cache {
 };
 
 static struct inverse_cache *Inverse_cache_table; // Head of cache linked list
+
+static pthread_mutex_t Formatsock_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // We actually take a sockaddr *, but can also accept a sockaddr_in *, sockaddr_in6 * and sockaddr_storage *
 // so to make it easier for callers we just take a void * and avoid pointer casts that impair readability
@@ -544,12 +551,13 @@ char const *formatsock(void const *s,bool full){
   default: // shouldn't happen unless uninitialized
     return NULL;
   }
-
+  pthread_mutex_lock(&Formatsock_mutex);
   for(struct inverse_cache *ic = Inverse_cache_table; ic != NULL; ic = ic->next){
     if(address_match(&ic->sock,sa) && getportnumber(&ic->sock) == getportnumber(sa)){
-      if(ic->prev == NULL)
+      if(ic->prev == NULL){
+	pthread_mutex_unlock(&Formatsock_mutex);
 	return ic->hostport; // Already at top of list
-
+      }
       // move to top of list so it'll be faster to find if we look for it again soon
       ic->prev->next = ic->next;
       if(ic->next)
@@ -559,10 +567,12 @@ char const *formatsock(void const *s,bool full){
       ic->next->prev = ic;
       ic->prev = NULL;
       Inverse_cache_table = ic;
+      pthread_mutex_unlock(&Formatsock_mutex);
       return ic->hostport;
     }
   }
-  // Not in list yet, add at top
+  pthread_mutex_unlock(&Formatsock_mutex); // Let go of the lock, this will take a while
+  // Not in list yet
   struct inverse_cache * const ic = (struct inverse_cache *)calloc(1,sizeof(*ic));
   assert(ic != NULL); // Malloc failures are rare
   char host[NI_MAXHOST],port[NI_MAXSERV],hostname[NI_MAXHOST];
@@ -572,7 +582,7 @@ char const *formatsock(void const *s,bool full){
   getnameinfo(sa,slen,
 	      host,NI_MAXHOST,
 	      port,NI_MAXSERV,
-	      NI_NOFQDN|NI_NUMERICHOST|NI_NUMERICSERV);
+	      NI_NOFQDN|NI_NUMERICHOST|NI_NUMERICSERV); // this should be fast
 
   // Inverse search for name of 0.0.0.0 will time out after a long time
   if(full && strcmp(host,"0.0.0.0") != 0){
@@ -588,11 +598,14 @@ char const *formatsock(void const *s,bool full){
 
   assert(slen < sizeof(ic->sock));
   memcpy(&ic->sock,sa,slen);
+
   // Put at head of table
+  pthread_mutex_lock(&Formatsock_mutex);
   ic->next = Inverse_cache_table;
   if(ic->next)
     ic->next->prev = ic;
   Inverse_cache_table = ic;
+  pthread_mutex_unlock(&Formatsock_mutex);
   return ic->hostport;
 }
 
