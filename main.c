@@ -553,6 +553,8 @@ static int loadconfig(char const *file){
 
     if(strcasecmp(sname,global) == 0)
       continue; // Already processed above
+    if(strcasecmp(sname,hardware) == 0)
+      continue; // Already processed as a hardware section (possibly without device=)
     if(config_getstring(Configtable,sname,"device",NULL) != NULL)
       continue; // It's a front end configuration, ignore
 
