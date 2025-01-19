@@ -1,7 +1,13 @@
 // Read from SDRplay SDR using SDRplay API version 3.x
 // Accept control commands from UDP socket
 // Written by K4VZ August 2023, adapted from existing KA9Q SDR handler programs
-// Version linked into radiod
+
+// Updated Jan 2025 by KA9Q
+// Known problems:
+// Automatic tuning by ka9q-radio is unreliable. Often needs manual jiggling if not set to needed frequency in config file at startup
+// Input levels are uncalibrated
+// The opaque sdrplay "server" needed to support this thing burns as much time as ka9q-radio!
+
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
@@ -20,11 +26,7 @@
 #include "radio.h"
 #include "config.h"
 
-extern int Status_ttl;
-
 // Global variables set by config file options
-extern int Overlap;
-extern const char *App_path;
 extern int Verbose;
 
 static float Power_smooth = 0.05; // Calculate this properly someday
