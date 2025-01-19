@@ -1,6 +1,6 @@
-// Wideband FM demodulation and squelch for ka9q-radio's radiod.
-// Adapted from narrowband demod
-// Copyright 2020-2023, Phil Karn, KA9Q
+// Wideband FM demodulation
+// Copyright 2020-2025, Phil Karn, KA9Q
+// Still needs some work, e.g., cascaded filter restructuring
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
@@ -20,9 +20,6 @@
 // but the composite sample rate needs to handle the bandwidth
 float const Composite_samprate = 384000;
 float const Audio_samprate = 48000;
-
-// These could be made settable if needed
-static int const power_squelch = 1; // Enable experimental pre-squelch to save CPU on idle channels
 
 // FM demodulator thread
 int demod_wfm(void *arg){
@@ -89,10 +86,9 @@ int demod_wfm(void *arg){
   set_filter(&mono,50.0/Audio_samprate, 15000.0/Audio_samprate, chan->filter.kaiser_beta);
 
   // Narrow filter at 19 kHz for stereo pilot
+  // FCC says +/- 2 Hz, with +/- 20 Hz protected (73.322)
   struct filter_out pilot;
   create_filter_output(&pilot,&composite,NULL,audio_L, COMPLEX);
-
-  // FCC says +/- 2 Hz, with +/- 20 Hz protected (73.322)
   set_filter(&pilot,-20./Audio_samprate, 20./Audio_samprate, chan->filter.kaiser_beta);
 
   // Stereo difference (L-R) information on DSBSC carrier at 38 kHz
@@ -119,40 +115,12 @@ int demod_wfm(void *arg){
   realtime();
 
   while(downconvert(chan) == 0){
-    if(power_squelch && squelch_state == 0){
-      // quick check SNR from raw signal power to save time on variance-based squelch
-      // Variance squelch is still needed to suppress various spurs and QRM
-      float const snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1;
-      if(snr < chan->fm.squelch_close){
-	// squelch closed, reset everything and mute output
-	phase_memory = 0;
-	squelch_state = 0;
-	continue;
-      }
-    }
-
-    // Find average amplitude and variance for SNR estimation
-    // Use two passes to avoid possible numerical problems
-    float amplitudes[composite_L];
-    complex float * const buffer = chan->filter.out.output.c;
-    float avg_amp = 0;
-    for(int n=0; n < composite_L; n++){
-      //      avg_amp += amplitudes[n] = approx_magf(buffer[n]);
-      avg_amp += amplitudes[n] = cabsf(buffer[n]); // May give more accurate SNRs
-    }
-    avg_amp /= composite_L;
-
-    // Second pass over amplitudes to compute variance
-    float fm_variance = 0;
-    for(int n=0; n < composite_L; n++)
-      fm_variance += (amplitudes[n] - avg_amp) * (amplitudes[n] - avg_amp);
-
-    fm_variance /= (composite_L - 1);
-
-    const float snr = fm_snr(avg_amp*avg_amp/fm_variance);
+    // Power squelch
+    float snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1;
+    snr = fm_snr(snr);
     chan->sig.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
 
-    // Hysteresis squelch
+    // Hysteresis
     int const squelch_state_max = chan->fm.squelch_tail + 1;
     if(chan->sig.snr >= chan->fm.squelch_open
        || (squelch_state > 0 && snr >= chan->fm.squelch_close))
@@ -168,6 +136,7 @@ int demod_wfm(void *arg){
       continue;
     }
     // Actual FM demodulation
+    complex float *buffer = chan->filter.out.output.c; // Working buffer
     for(int n=0; n < composite_L; n++){
       // Although deviation can be zero, argf() is defined as returning 0, not NAN
       float np = M_1_PIf * cargf(buffer[n]); // -1 to +1
