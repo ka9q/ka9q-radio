@@ -232,11 +232,16 @@ int close_chan(struct channel *chan){
   if(chan == NULL)
     return -1;
 
-  pthread_cancel(chan->rtcp.thread);
-  pthread_join(chan->rtcp.thread,NULL);
+  pthread_t nullthread = {0};
 
-  pthread_cancel(chan->sap.thread);
-  pthread_join(chan->sap.thread,NULL);
+  if(chan->rtcp.thread != nullthread){
+    pthread_cancel(chan->rtcp.thread);
+    pthread_join(chan->rtcp.thread,NULL);
+  }
+  if(chan->sap.thread != nullthread){
+    pthread_cancel(chan->sap.thread);
+    pthread_join(chan->sap.thread,NULL);
+  }
 
   pthread_mutex_lock(&chan->status.lock);
   FREE(chan->status.command);
