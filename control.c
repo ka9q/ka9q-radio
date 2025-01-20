@@ -1249,8 +1249,8 @@ static void display_info(WINDOW *w,int row,int col,struct channel const *channel
     return;
 
   struct bandplan const *bp_low,*bp_high;
-  bp_low = lookup_frequency(channel->tune.freq + channel->filter.min_IF);
-  bp_high = lookup_frequency(channel->tune.freq + channel->filter.max_IF);
+  bp_low = lookup_frequency(channel->tune.freq + channel->filter.min_IF + 1.0);
+  bp_high = lookup_frequency(channel->tune.freq + channel->filter.max_IF - 1.0);
   // Make sure entire receiver passband is in the band
   if(bp_low != NULL && bp_high != NULL){
     if(bp_low)
