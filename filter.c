@@ -774,7 +774,7 @@ int delete_filter_output(struct filter_out *slave){
   if(slave == NULL)
     return -1;
 
-  ASSERT_UNLOCKED(&slave->master->filter_mutex);
+  ASSERT_UNLOCKED(&slave->response_mutex);
   pthread_mutex_destroy(&slave->response_mutex);
   fftwf_destroy_plan(slave->rev_plan);
   slave->rev_plan = NULL;
