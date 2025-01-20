@@ -36,6 +36,8 @@ static inline void ASSERT_UNLOCKED(pthread_mutex_t *mutex){
   int rc = pthread_mutex_trylock(mutex);
   assert(rc != EBUSY);
   pthread_mutex_unlock(mutex);
+#else
+  (void)mutex;
 #endif
 }
 // 16-bit floating point is not consistent across platforms
