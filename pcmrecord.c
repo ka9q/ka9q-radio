@@ -10,11 +10,12 @@ Command-line options:
  --directory | -d <directory>: directory root in which to write files<
  --exec | -e '<command args ...>': Execute the specified command for each stream and pipe to it. Several macros expanded as shown when found in the arguments:
         $$: insert a literal '$'
+        $c: number of channels (1 or 2)
         $d: description string from the radiod front end
+        $f: encoding ("s16le", "s16be", "f32le", "opus", "none")
         $h: receive frequency in decimal hertz
         $k: receive frequency in decimal kilohertz
         $m: receive frequency in decimal megahertz
-        $c: number of channels (1 or 2)
         $r: sample rate, integer Hz
         $s: ssrc (unsigned decimal integer)
 
@@ -934,6 +935,9 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	  break;
 	case 's':
 	  snprintf(temp,sizeof(temp),"%u",sp->ssrc);
+	  break;
+	case 'f':
+	  snprintf(temp,sizeof temp, "%s", encoding_string(sp->encoding));
 	  break;
 	default:
 	  break;
