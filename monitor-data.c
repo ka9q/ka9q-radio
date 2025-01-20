@@ -183,6 +183,7 @@ void decode_task_cleanup(void *arg){
   struct session *sp = (struct session *)arg;
   assert(sp);
 
+  ASSERT_UNLOCKED(&sp->qmutex);
   pthread_mutex_destroy(&sp->qmutex);
   pthread_cond_destroy(&sp->qcond);
 

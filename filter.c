@@ -139,7 +139,13 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   if(!goodchoice(N))
     fprintf(stdout,"create_filter_input(L=%d, M=%d): N=%d is not an efficient blocksize for FFTW3\n",L,M,N);
 
-  memset(master,0,sizeof *master); // make sure it's clean
+  // It really should already be zeroed.
+  // If not, it is probably being reused and the dynamically allocated storage in it may not have been freed
+#ifdef NDEBUG
+  memset(master,0,sizeof *master); // make sure it's clean, even if it causes a memory leak
+#else
+  ASSERT_ZEROED(master,sizeof *master);
+#endif
 
   for(int i=0; i < ND; i++){
     master->fdomain[i] = lmalloc(sizeof(complex float) * bins);
@@ -258,6 +264,14 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
     return -1;
 
   assert(len > 0);
+
+  // Should already be zeroed
+  // If not, it is probably being reused and the dynamically allocated storage in it may not have been freed
+#ifdef NDEBUG
+  memset(slave,0,sizeof *slave); // make sure it's clean
+#else
+  ASSERT_ZEROED(slave,sizeof *slave);
+#endif
 
   memset(slave,0,sizeof *slave);
   // Share all but output fft bins, response, output and output type
@@ -611,6 +625,7 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
     }
   } else if(master->in_type == REAL && slave->out_type == REAL){
     // Real -> real
+    // rotate is unlikely to be non-zero because of the frequency folding, but handle it anyway
     for(int si=0; si < slave->bins; si++){ // All positive frequencies
       int const mi = si + rotate;
       complex float result = 0;
@@ -742,6 +757,7 @@ int delete_filter_input(struct filter_in * master){
   if(master == NULL)
     return -1;
 
+  ASSERT_UNLOCKED(&master->filter_mutex);
   pthread_mutex_destroy(&master->filter_mutex);
   pthread_cond_destroy(&master->filter_cond);
   fftwf_destroy_plan(master->fwd_plan);
@@ -758,9 +774,11 @@ int delete_filter_output(struct filter_out *slave){
   if(slave == NULL)
     return -1;
 
+  ASSERT_UNLOCKED(&slave->master->filter_mutex);
   pthread_mutex_destroy(&slave->response_mutex);
   fftwf_destroy_plan(slave->rev_plan);
   slave->rev_plan = NULL;
+  // Only one will be non-null but it doesn't hurt to free both
   FREE(slave->output_buffer.c);
   FREE(slave->output_buffer.r);
   FREE(slave->response);

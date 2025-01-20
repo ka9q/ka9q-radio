@@ -136,6 +136,7 @@ int main(int argc,char * const argv[]){
       break;
     default:
       fprintf(stderr,"Usage: %s [-v] [-T mcast_ttl] -I input_mcast_address -R output_mcast_address\n",argv[0]);
+      ASSERT_UNLOCKED(&Audio_protect);
       pthread_mutex_destroy(&Audio_protect);
       exit(1);
     }
@@ -155,6 +156,7 @@ int main(int argc,char * const argv[]){
     Status_fd = listen_mcast(&Status_dest_address,iface);
     if(Status_fd == -1){
       fprintf(stderr,"Can't set up input on %s: %s\n",optarg,strerror(errno));
+      ASSERT_UNLOCKED(&Audio_protect);
       pthread_mutex_destroy(&Audio_protect);
       exit(1);
     }
@@ -191,11 +193,13 @@ int main(int argc,char * const argv[]){
   // Set up multicast
   if(Input_fd == -1 && Status_fd == -1){
     fprintf(stderr,"Must specify either --status-in or --pcm-in\n");
+    ASSERT_UNLOCKED(&Audio_protect);
     pthread_mutex_destroy(&Audio_protect);
     exit(1);
   }
   if(Output_fd == -1){
     fprintf(stderr,"Must specify --opus-out\n");
+    ASSERT_UNLOCKED(&Audio_protect);
     pthread_mutex_destroy(&Audio_protect);
     exit(1);
   }
@@ -569,6 +573,7 @@ int close_session(struct session *sp){
     sp->queue = pkt;
   }
   pthread_mutex_unlock(&sp->qmutex);
+  ASSERT_UNLOCKED(&sp->qmutex);
   pthread_mutex_destroy(&sp->qmutex);
   pthread_cond_destroy(&sp->qcond);
   
@@ -597,6 +602,7 @@ void closedown(int s){
   pthread_mutex_unlock(&Audio_protect);
 #endif
 
+  ASSERT_UNLOCKED(&Audio_protect);
   pthread_mutex_destroy(&Audio_protect);
   exit(0);
 }

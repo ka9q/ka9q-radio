@@ -454,6 +454,7 @@ void closedown(int s){
   pthread_mutex_unlock(&Session_protect);
 #endif
 
+  ASSERT_UNLOCKED(&Session_protect);
   pthread_mutex_destroy(&Session_protect);
   exit(EX_SOFTWARE);
 }
