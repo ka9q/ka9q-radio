@@ -193,10 +193,9 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     // Start FFT worker thread(s) if not already running
     pthread_mutex_init(&FFT.queue_mutex,NULL);
     pthread_cond_init(&FFT.queue_cond,NULL);
-    for(int i=0;i < N_worker_threads;i++){
-      if(FFT.thread[i] == (pthread_t)0)
-	pthread_create(&FFT.thread[i],NULL,run_fft,NULL);
-    }
+    for(int i=0;i < N_worker_threads;i++)
+      pthread_create(&FFT.thread[i],NULL,run_fft,NULL);
+
     FFTW_init = true;
   }
   pthread_mutex_lock(&FFTW_planning_mutex);

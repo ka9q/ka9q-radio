@@ -1025,7 +1025,8 @@ static void process_keyboard(void){
     pthread_mutex_unlock(&Sess_mutex); // close_session will need the lock, at least
     // We have to wait for it to clean up before we close and remove its session
     pthread_join(sp->task,NULL);
-    sp->task = (pthread_t)0;
+    pthread_t nullthread = {0};
+    sp->task = nullthread;
     close_session(&sp); // Decrements Nsessions
     if(Current >= Nsessions)
       Current = Nsessions-1; // -1 when no sessions
