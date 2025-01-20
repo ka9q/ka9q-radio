@@ -60,6 +60,7 @@ char const *Data;
 char const *Preset = DEFAULT_PRESET;
 char Preset_file[PATH_MAX];
 char const *Config_file;
+char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
 
 int IP_tos = DEFAULT_IP_TOS;
 int Mcast_ttl = DEFAULT_MCAST_TTL;
@@ -497,16 +498,16 @@ static int loadconfig(char const *file){
   }
   // Set up status/command stream, global for all receiver channels
   // Form default status dns name
-  char hostname[sysconf(_SC_HOST_NAME_MAX)];
-  gethostname(hostname,sizeof(hostname));
+
+  gethostname(Hostname,sizeof(Hostname));
   // Edit off .domain, .local, etc
   {
-    char *cp = strchr(hostname,'.');
+    char *cp = strchr(Hostname,'.');
     if(cp != NULL)
       *cp = '\0';
   }
-  char default_status[strlen(hostname) + strlen(Name) + 20]; // Enough room for snprintf
-  snprintf(default_status,sizeof(default_status),"%s-%s.local",hostname,Name);
+  char default_status[strlen(Hostname) + strlen(Name) + 20]; // Enough room for snprintf
+  snprintf(default_status,sizeof(default_status),"%s-%s.local",Hostname,Name);
   Metadata_dest_string = strdup(config_getstring(Configtable,GLOBAL,"status",default_status)); // Status/command target for all demodulators
   if(0 == strcmp(Metadata_dest_string,Data)){
     fprintf(stdout,"Duplicate status/data stream names: data=%s, status=%s\n",Data,Metadata_dest_string);
@@ -620,7 +621,11 @@ void *process_section(void *p){
     char const *cp = config_getstring(Configtable,sname,"encoding","s16be");
     bool is_opus = strcasecmp(cp,"opus") == 0 ? true : false;
     size_t slen = sizeof(data_dest_socket);
-    avahi_start(sname,
+    // there may be several hosts with the same section names
+    // prepend the host name to the service name
+    char service_name[512] = {0};
+    snprintf(service_name, sizeof service_name, "%s %s", Hostname, sname);
+    avahi_start(service_name,
 		is_opus ? "_opus._udp" : "_rtp._udp",
 		DEFAULT_RTP_PORT,
 		data,addr,Ttlmsg,
@@ -929,10 +934,8 @@ static void *rtcp_send(void *arg){
     struct rtcp_sdes sdes[4];
 
     // CNAME
-    char hostname[1024];
-    gethostname(hostname,sizeof(hostname));
     char *string = NULL;
-    int sl = asprintf(&string,"radio@%s",hostname);
+    int sl = asprintf(&string,"radio@%s",Hostname);
     if(sl > 0 && sl <= 255){
       sdes[0].type = CNAME;
       strlcpy(sdes[0].message,string,sizeof(sdes[0].message));

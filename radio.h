@@ -283,6 +283,7 @@ struct channel {
 };
 
 
+extern char Hostname[];
 extern struct channel Channel_list[];
 #define Nchannels 1000
 extern struct channel Template;
