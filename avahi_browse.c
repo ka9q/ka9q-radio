@@ -12,7 +12,7 @@ int main(){
 
   struct service_tab table[1000];
   int line_count = avahi_browse(table,1000,service_name);
-  
+
 
   for(int i=0;i<line_count;i++){
     struct service_tab *tp = &table[i];
@@ -32,10 +32,16 @@ int main(){
 }
 #endif
 
+// NULL entries sort to end so we can drop them after sorting and removing dupes
 static int table_compare(void const *a,void const *b){
   struct service_tab const *t1 = a;
   struct service_tab const *t2 = b;
-  return strcmp(t1->name,t2->name);
+  if(t2 == NULL || t2->name == NULL)
+    return -1;
+  else if(t1 == NULL || t1->name == NULL)
+    return +1;
+  else
+    return strcmp(t1->name,t2->name);
 }
 // De-escape decimal sequences of the form \032 to (space)
 // Do it in place since the string can only get shorter
@@ -103,7 +109,6 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
     tp->txt =   strsep(&line,";");
 
     if(strcmp(tp->line_type,"=") == 0 // Only full lines with resolved addresses
-       && strcmp(tp->interface,"lo") != 0  // Ignore loopback interface
        && strcmp(tp->protocol,"IPv4") == 0 // Only IPv4 for now
        && strcmp(tp->type,service_name) == 0){ // Should always match, but to be sure
       // Keep this line and the pointers into it
@@ -118,7 +123,26 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
   pclose(fp); // What to do with return code?
   // Sort by instance entity name
   qsort(table,line_count,sizeof(table[0]),table_compare);
-  return line_count;
+
+  // Remove duplicates
+  int dupes = 0;
+  for(int i = 0; i < line_count; i++){
+    if(table[i].buffer == NULL || table[i].name == NULL) // already zeroed out?
+      continue;
+    for(int j = i+1; j < line_count; j++){
+      if(table[j].buffer != NULL && table[j].name != NULL){
+	if(strcmp(table[i].name,table[j].name) != 0)
+	  break; // Different; stop looking
+	// zero it out, count it and look for more
+	FREE(table[j].buffer);
+	memset(&table[j], 0, sizeof table[j]);
+	dupes++;
+      }
+    }
+  }
+  // re-sort, pushing zeroed entries to end
+  qsort(table,line_count,sizeof(table[0]),table_compare);
+  return line_count - dupes;
 }
 
 // Free and wipe pointers inside service table; caller must free table array itself
