@@ -860,13 +860,10 @@ static int ipv4_join_group(int const fd,void const * const sock,char const * con
     perror("multicast v4 join");
     return -1;
   }
-  if(ttl == 0){
-    // if TTL == 0, also join on loopback
-    mreqn.imr_ifindex = if_nametoindex("lo");
-    if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
-      perror("multicast v4 join loopback");
-      return -1;
-    }
+  mreqn.imr_ifindex = if_nametoindex("lo");
+  if(setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
+    perror("multicast v4 join loopback");
+    return -1;
   }
   return 0;
 }
@@ -895,13 +892,10 @@ static int ipv6_join_group(int const fd,void const * const sock,char const * con
     perror("multicast v6 join");
     return -1;
   }
-  if(ttl == 0){
-    // if TTL == 0, also join on loopback
-    ipv6_mreq.ipv6mr_interface = if_nametoindex("lo");
-    if (setsockopt(fd, IPPROTO_IP, IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
-      perror("setsockopt IPV6_ADD_MEMBERSHIP");
-      return -1;
-    }
+  ipv6_mreq.ipv6mr_interface = if_nametoindex("lo");
+  if (setsockopt(fd, IPPROTO_IP, IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
+    perror("setsockopt IPV6_ADD_MEMBERSHIP");
+    return -1;
   }
   return 0;
 }
