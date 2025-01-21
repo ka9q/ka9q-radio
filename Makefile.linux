@@ -33,6 +33,8 @@ DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 
 EXECS=control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record
 
+SCRIPTS=set_lo_multicast.sh
+
 RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o fcd.o hid-libusb.o libradio.a
 
 DYNAMIC_RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libradio.a
@@ -78,8 +80,9 @@ install: $(DAEMONS) $(EXECS)
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
 	rsync -a aux/98-sockbuf.conf aux/50-multicast.conf /etc/sysctl.d
 	sysctl --quiet -p /etc/sysctl.d/98-sockbuf.conf
+	sysctl --quiet -p /etc/sysctl.d/50-multicast.conf
 	rsync -a $(DAEMONS) $(DAEMONDIR)
-	rsync -a $(EXECS) start-ka9q-horus.sh $(BINDIR)
+	rsync -a $(EXECS) $(SCRIPTS) $(BINDIR)
 	rsync -a $(DYNAMICS) $(SODIR)
 	ln -sf $(SODIR)/*.so /usr/local/lib
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
