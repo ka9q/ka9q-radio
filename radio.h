@@ -17,6 +17,7 @@
 #include <opus/opus.h>
 
 #include "multicast.h"
+#include "rtp.h"
 #include "osc.h"
 #include "status.h"
 #include "filter.h"

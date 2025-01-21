@@ -31,6 +31,7 @@
 #include "misc.h"
 #include "attr.h"
 #include "multicast.h"
+#include "rtp.h"
 
 
 // size of stdio buffer for disk I/O

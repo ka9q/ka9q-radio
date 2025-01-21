@@ -23,6 +23,7 @@
 #include <sysexits.h>
 
 #include "multicast.h"
+#include "rtp.h"
 #include "ax25.h"
 #include "misc.h"
 

@@ -23,6 +23,7 @@
 
 #include "misc.h"
 #include "multicast.h"
+#include "rtp.h"
 #include "status.h"
 #include "filter.h"
 #include "iir.h"

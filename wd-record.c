@@ -41,6 +41,7 @@ char const * wd_record_version = "This is wd-record version 0.3 which recovers f
 #include "misc.h"
 #include "attr.h"
 #include "multicast.h"
+#include "rtp.h"
 
 // size of stdio buffer for disk I/O
 // This should be large to minimize write calls, but how big?

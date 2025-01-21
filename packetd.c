@@ -21,6 +21,7 @@
 #include "filter.h"
 #include "misc.h"
 #include "multicast.h"
+#include "rtp.h"
 #include "ax25.h"
 #include "status.h"
 #include "avahi.h"

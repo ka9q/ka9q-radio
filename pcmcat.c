@@ -21,6 +21,7 @@
 
 #include "misc.h"
 #include "multicast.h"
+#include "rtp.h"
 
 struct pcmstream {
   uint32_t ssrc;            // RTP Sending Source ID

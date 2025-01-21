@@ -20,6 +20,7 @@
 
 #include "misc.h"
 #include "multicast.h"
+#include "rtp.h"
 #include "morse.h"
 
 int const Samprate = 48000; // Too hard to change

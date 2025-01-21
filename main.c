@@ -38,6 +38,7 @@
 #include "conf.h"
 #include "misc.h"
 #include "multicast.h"
+#include "rtp.h"
 #include "radio.h"
 #include "filter.h"
 #include "status.h"

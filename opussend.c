@@ -22,6 +22,7 @@
 
 #include "misc.h"
 #include "multicast.h"
+#include "rtp.h"
 
 // Global config constants
 #define BUFFERSIZE (1<<18)    // Size of audio ring buffer in mono samples. 2^18 is 2.73 sec at 48 kHz stereo

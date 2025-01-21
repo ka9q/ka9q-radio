@@ -19,6 +19,7 @@
 #include "filter.h"
 #include "misc.h"
 #include "multicast.h"
+#include "rtp.h"
 #include "osc.h"
 
 // Global config variables

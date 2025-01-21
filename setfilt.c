@@ -20,6 +20,7 @@
 
 #include "misc.h"
 #include "multicast.h"
+#include "rtp.h"
 #include "status.h"
 
 int Mcast_ttl = 5;

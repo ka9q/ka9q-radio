@@ -25,6 +25,7 @@
 
 #include "misc.h"
 #include "multicast.h"
+#include "rtp.h"
 #include "ax25.h"
 
 char *Mcast_address_text = "ax25.local:5004";

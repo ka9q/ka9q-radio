@@ -36,6 +36,7 @@
 
 #include "misc.h"
 #include "multicast.h"
+#include "rtp.h"
 #include "status.h"
 #include "iir.h"
 #include "avahi.h"

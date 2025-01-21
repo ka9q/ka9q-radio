@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "multicast.h"
+#include "rtp.h"
 
 // Build a RTCP sender report in network order
 // Return pointer to byte after end of written packet
