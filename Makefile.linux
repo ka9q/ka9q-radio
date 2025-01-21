@@ -76,7 +76,7 @@ all: $(DAEMONS) $(EXECS) $(DYNAMICS)
 install: $(DAEMONS) $(EXECS)
 	/usr/sbin/adduser --quiet --system --group radio
 	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
-	rsync -a aux/98-sockbuf.conf /etc/sysctl.d
+	rsync -a aux/98-sockbuf.conf aux/50-multicast.conf /etc/sysctl.d
 	sysctl --quiet -p /etc/sysctl.d/98-sockbuf.conf
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) start-ka9q-horus.sh $(BINDIR)

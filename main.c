@@ -110,7 +110,8 @@ static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 static pthread_t Status_thread;
 struct sockaddr_storage Metadata_dest_socket;      // Dest of global metadata
 static char const *Metadata_dest_string; // DNS name of default multicast group for status/commands
-int Output_fd = -1; // Unconnected socket used for all multicast output
+int Output_fd = -1; // Unconnected socket used for other hosts
+int Output_fd_lo = -1; // Socket for loopback
 struct channel Template;
 // If a channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
 // Must be computed at run time because it depends on the block time
@@ -438,12 +439,25 @@ static int loadconfig(char const *file){
   Update = config_getint(Configtable,GLOBAL,"update",Update);
   IP_tos = config_getint(Configtable,GLOBAL,"tos",IP_tos);
   Mcast_ttl = config_getint(Configtable,GLOBAL,"ttl",Mcast_ttl);
-  Output_fd = socket(AF_INET,SOCK_DGRAM,0); // Eventually intended for all output with sendto()
+  Output_fd = socket(AF_INET,SOCK_DGRAM,0);
   if(Output_fd < 0){
     fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
     exit(EX_NOHOST); // let systemd restart us
   }
   fcntl(Output_fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
+  if(Output_fd < 0){
+    fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
+    exit(EX_NOHOST); // let systemd restart us
+  }
+
+  Output_fd_lo = socket(AF_INET,SOCK_DGRAM,0);
+  if(Output_fd_lo < 0){
+    fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
+    exit(EX_NOHOST); // let systemd restart us
+  }
+
+  setup_loopback(Output_fd_lo);
+
   // Set up default output stream file descriptor and socket
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
 
@@ -959,6 +973,8 @@ static void *rtcp_send(void *arg){
 
 
     if(sendto(Output_fd,buffer,dp-buffer,0,(struct sockaddr *)&chan->rtcp.dest_socket,sizeof(chan->rtcp.dest_socket)) < 0)
+      chan->output.errors++;
+    if(sendto(Output_fd_lo,buffer,dp-buffer,0,(struct sockaddr *)&chan->rtcp.dest_socket,sizeof(chan->rtcp.dest_socket)) < 0)
       chan->output.errors++;
   done:;
     sleep(1);

@@ -59,7 +59,7 @@ int Mcast_ttl = DEFAULT_MCAST_TTL;
 int IP_tos = DEFAULT_IP_TOS;
 float Blocktime;
 int Overlap;
-int Output_fd,Status_fd;
+int Output_fd,Status_fd,Output_fd_lo;
 const char *App_path;
 int Verbose;
 
@@ -386,6 +386,14 @@ int main(int argc,char *argv[]){
     exit(EX_OSERR); // let systemd restart us
   }
   fcntl(Output_fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
+  Output_fd_lo = socket(AF_INET,SOCK_DGRAM,0); // Eventually intended for all output with sendto()
+  if(Output_fd_lo < 0){
+    fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
+    exit(EX_OSERR); // let systemd restart us
+  }
+  setup_loopback(Output_fd_lo);
+
+
 
   if(target == NULL){
     // Use avahi browser to find a radiod instance to control
@@ -662,9 +670,15 @@ int main(int argc,char *argv[]){
       wprintw(Debug_win,"sent command len %d\n",command_len);
       screen_update_needed = true; // show local change right away
 #endif
-      if(sendto(Output_fd, cmdbuffer, command_len, 0, (struct sockaddr *)&Metadata_dest_socket,sizeof(struct sockaddr)) != command_len){
+      if(sendto(Output_fd_lo, cmdbuffer, command_len, 0, (struct sockaddr *)&Metadata_dest_socket,sizeof(struct sockaddr)) != command_len){
 	wprintw(Debug_win,"command send error: %s\n",strerror(errno));
 	screen_update_needed = true; // show local change right away
+      }
+      if(Mcast_ttl > 0){
+	if(sendto(Output_fd, cmdbuffer, command_len, 0, (struct sockaddr *)&Metadata_dest_socket,sizeof(struct sockaddr)) != command_len){
+	  wprintw(Debug_win,"command send error: %s\n",strerror(errno));
+	  screen_update_needed = true; // show local change right away
+	}
       }
       // This will elicit an answer, defer the next poll
       next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
@@ -1670,8 +1684,11 @@ static int send_poll(int ssrc){
   encode_int(&bp,OUTPUT_SSRC,ssrc); // poll specific SSRC, or request ssrc list with ssrc = 0
   encode_eol(&bp);
   int const command_len = bp - cmdbuffer;
-  if(sendto(Output_fd, cmdbuffer, command_len, 0, (struct sockaddr *)&Metadata_dest_socket,sizeof(struct sockaddr)) != command_len)
+  if(sendto(Output_fd_lo, cmdbuffer, command_len, 0, (struct sockaddr *)&Metadata_dest_socket,sizeof(struct sockaddr)) != command_len)
     return -1;
+  if(Mcast_ttl > 0)
+    if(sendto(Output_fd, cmdbuffer, command_len, 0, (struct sockaddr *)&Metadata_dest_socket,sizeof(struct sockaddr)) != command_len)
+      return -1;
 
   return 0;
 }

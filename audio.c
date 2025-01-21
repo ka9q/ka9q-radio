@@ -304,7 +304,10 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     if(chan->output.rp >= chan->output.queue_size)
       chan->output.rp -= chan->output.queue_size;
 
-    int r = sendto(Output_fd,&packet,bytes + (dp - packet),0,(struct sockaddr *)&chan->output.dest_socket,sizeof(chan->output.dest_socket));
+    int r = sendto(Output_fd_lo,&packet,bytes + (dp - packet),0,(struct sockaddr *)&chan->output.dest_socket,sizeof(chan->output.dest_socket));
+    if(Mcast_ttl > 0)
+      r = sendto(Output_fd,&packet,bytes + (dp - packet),0,(struct sockaddr *)&chan->output.dest_socket,sizeof(chan->output.dest_socket));
+
     chan->output.rtp.bytes += bytes;
     chan->output.rtp.packets++;
     chan->output.rtp.seq++;

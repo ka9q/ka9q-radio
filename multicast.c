@@ -779,31 +779,39 @@ static void set_ipv4_options(int const fd,int const mcast_ttl,int const tos){
     if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_TTL,&mcast_ttl,sizeof(mcast_ttl)) != 0)
       perror("so_ttl failed");
   }
+#if 0 // Send explicit copies to loopback interface instead, and have everyone listen on both
   uint8_t const loop = true;
   if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_LOOP,&loop,sizeof(loop)) != 0)
     perror("so_loop failed");
+#endif
 
   if(tos >= 0){
     // Only needed on output
     if(setsockopt(fd,IPPROTO_IP,IP_TOS,&tos,sizeof(tos)) != 0)
       perror("so_tos failed");
   }
-  if(mcast_ttl == 0){
-    // TTL is zero, use loopback interface
-    struct ifreq ifr;
-    memset(&ifr,0,sizeof(ifr));
-    // Get loopback interface address. Probably 127.0.0.1
-    strncpy(ifr.ifr_name,"lo",sizeof(ifr.ifr_name));
-    if(ioctl(fd, SIOCGIFADDR, &ifr) < 0)
-      perror("set loopback interface failed");
-    else {
-      // Set our interface to it
-      struct in_addr *interface_addr = &((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
-      if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, interface_addr, sizeof(*interface_addr)) < 0)
-        perror("setsockopt IP_MULTICAST_IF failed");
+}
+// Configure separate socket for transmission (only) through loopback interface
+// Most of the options aren't relevant here, just select the loopback interface
+int setup_loopback(int fd){
+  fcntl(fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
+  struct ifreq ifr;
+  memset(&ifr,0,sizeof(ifr));
+
+  // Instead of hardwiring the loopback name (which can vary) find it in the system's list
+  struct ifaddrs *ifap = NULL;
+  getifaddrs(&ifap);
+  for(struct ifaddrs const *i = ifap; i != NULL; i = i->ifa_next){
+    if(i->ifa_addr->sa_family == AF_INET && (i->ifa_flags & IFF_LOOPBACK)){
+      struct sockaddr_in const *sin = (struct sockaddr_in *)i->ifa_addr;
+      if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &sin->sin_addr, sizeof sin->sin_addr) < 0)
+	perror("setsockopt IP_MULTICAST_IF failed");
+      break;
     }
   }
+  return 0;
 }
+
 // Set options on IPv6 multicast socket
 static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos){
   // Failures here are not fatal

@@ -292,6 +292,7 @@ extern pthread_mutex_t Channel_list_mutex;
 extern int Channel_idle_timeout;
 extern int Ctl_fd;     // File descriptor for receiving user commands
 extern int Output_fd;
+extern int Output_fd_lo;
 extern struct sockaddr_storage Metadata_dest_socket; // Socket for main metadata
 extern int Verbose;
 extern float Blocktime; // Common to all receiver slices. NB! Milliseconds, not seconds
