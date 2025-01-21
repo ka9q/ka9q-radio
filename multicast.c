@@ -839,6 +839,7 @@ static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos){
 
 // Join a socket to a multicast group
 static int ipv4_join_group(int const fd,void const * const sock,char const * const iface,int ttl){
+  (void)ttl;
   if(fd < 0 || sock == NULL)
     return -1;
 
@@ -868,6 +869,7 @@ static int ipv4_join_group(int const fd,void const * const sock,char const * con
   return 0;
 }
 static int ipv6_join_group(int const fd,void const * const sock,char const * const iface,int ttl){
+  (void)ttl;
   if(fd < 0 || sock == NULL)
     return -1;
 
