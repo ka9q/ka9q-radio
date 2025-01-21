@@ -1,0 +1,11 @@
+[Unit]
+Description=Enable multicast on loopback interface
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/set_lo_multicast.sh
+Type=oneshot
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target
