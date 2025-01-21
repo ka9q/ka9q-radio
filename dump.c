@@ -382,7 +382,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
       fprintf(fp,"filter2 blocks %d",decode_int(cp,optlen));
       break;
     case OUTPUT_ERRORS:
-      fprintf(fp,"output errors %llu",decode_int64(cp,optlen));
+      fprintf(fp,"output errors %'llu",(unsigned long long)decode_int64(cp,optlen));
       break;
     default:
       fprintf(fp,"unknown type %d length %d",type,optlen);
