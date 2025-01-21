@@ -310,6 +310,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     chan->output.rtp.seq++;
     chan->output.samples += chunk * chan->output.channels; // Count stereo frames
     if(r <= 0){
+      chan->output.errors++;
       if(errno == EAGAIN){
 	if(!TempSendFailure){
 	  fprintf(stdout,"Temporary send failure, suggest increased buffering (see sysctl net.core.wmem_max, net.core.wmem_default\n");

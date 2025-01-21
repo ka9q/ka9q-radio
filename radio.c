@@ -474,7 +474,8 @@ void *sap_send(void *p){
     wp += len;
     space -= len;
 
-    sendto(Output_fd,message,wp - message,0,(struct sockaddr *)&chan->sap.dest_socket,sizeof(chan->sap.dest_socket));
+    if(sendto(Output_fd,message,wp - message,0,(struct sockaddr *)&chan->sap.dest_socket,sizeof(chan->sap.dest_socket)) < 0)
+      chan->output.errors++;
     sleep(5);
   }
 }

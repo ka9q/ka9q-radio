@@ -109,7 +109,8 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
   uint8_t packet[PKTSIZE];
   chan->status.packets_out++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
-  sendto(Output_fd,packet,len,0,sock,sizeof(struct sockaddr));
+  if(sendto(Output_fd,packet,len,0,sock,sizeof(struct sockaddr)) < 0)
+    chan->output.errors++;
   return 0;
 }
 int reset_radio_status(struct channel *chan){
@@ -703,7 +704,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_float(&bp,TP2,chan->tp2);
   encode_int64(&bp,BLOCKS_SINCE_POLL,chan->status.blocks_since_poll);
   encode_int64(&bp,SETOPTS,chan->options);
-
+  encode_int64(&bp,OUTPUT_ERRORS,chan->output.errors);
   encode_eol(&bp);
 
   return bp - packet;

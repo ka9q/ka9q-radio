@@ -894,7 +894,7 @@ static int setup_hardware(char const *sname){
 
 // RTP control protocol sender task
 static void *rtcp_send(void *arg){
-  struct channel const *chan = (struct channel *)arg;
+  struct channel *chan = (struct channel *)arg;
   if(chan == NULL)
     pthread_exit(NULL);
 
@@ -958,7 +958,8 @@ static void *rtcp_send(void *arg){
     dp = gen_sdes(dp,sizeof(buffer) - (dp-buffer),chan->output.rtp.ssrc,sdes,4);
 
 
-    sendto(Output_fd,buffer,dp-buffer,0,(struct sockaddr *)&chan->rtcp.dest_socket,sizeof(chan->rtcp.dest_socket));
+    if(sendto(Output_fd,buffer,dp-buffer,0,(struct sockaddr *)&chan->rtcp.dest_socket,sizeof(chan->rtcp.dest_socket)) < 0)
+      chan->output.errors++;
   done:;
     sleep(1);
   }

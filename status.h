@@ -43,9 +43,9 @@ enum status_type {
   OUTPUT_SAMPRATE,
   OUTPUT_METADATA_PACKETS,
   OUTPUT_DATA_PACKETS,
+  OUTPUT_ERRORS,
 
   // Hardware
-  UNUSED22,
   CALIBRATE,
   // Hardware-specific analog gains
   LNA_GAIN,

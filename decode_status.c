@@ -286,6 +286,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case FILTER2:
       channel->filter2.blocking = decode_int(cp,optlen);
       break;
+    case OUTPUT_ERRORS:
+      channel->output.errors = decode_int64(cp,optlen);
+      break;
     default: // ignore others
       break;
     }
