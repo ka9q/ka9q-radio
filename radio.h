@@ -251,7 +251,7 @@ struct channel {
     unsigned wp,rp; // Queue write and read indices
     unsigned minpacket;  // minimum output packet size in blocks (0-4)
                          // i.e, no minimum or at least 20ms, 40ms, 60ms or 80ms /packet for 20ms blocktime
-    int64_t errors;      // Count of errors with sendto()
+    uint64_t errors;      // Count of errors with sendto()
   } output;
 
   struct {

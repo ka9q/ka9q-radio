@@ -1479,7 +1479,7 @@ static void display_input(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Status pkts","%'llu",channel->status.packets_out);
   pprintw(w,row++,col,"Control pkts","%'llu",channel->status.packets_in);
   pprintw(w,row++,col,"Blocks since last poll","%'llu",channel->status.blocks_since_poll);
-  pprintw(w,row++,col,"Send errors","%'lld",channel->output.errors);
+  pprintw(w,row++,col,"Send errors","%'llu",channel->output.errors);
   if(channel->options != 0)
     pprintw(w,row++,col,"Options","0x%llx",(unsigned long long)channel->options);
   box(w,0,0);
