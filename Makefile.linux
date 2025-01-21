@@ -97,6 +97,8 @@ install: $(DAEMONS) $(EXECS)
 	chgrp radio /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
 	chmod g+ws  /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
 	systemctl daemon-reload
+	systemctl enable set_lo_multicast
+	systemctl start set_lo_multicast
 
 clean:
 	-rm -f *.o *.a *.d *.so .depend $(EXECS) $(DAEMONS)
