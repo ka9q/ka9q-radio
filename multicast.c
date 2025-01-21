@@ -837,7 +837,9 @@ static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos){
   }
 }
 
-// Join a socket to a multicast group
+// Join a socket to a multicast group on specified iface, or default if NULL
+// Also join on loopback interfacd
+
 static int ipv4_join_group(int const fd,void const * const sock,char const * const iface,int ttl){
   (void)ttl;
   if(fd < 0 || sock == NULL)
@@ -861,13 +863,24 @@ static int ipv4_join_group(int const fd,void const * const sock,char const * con
     perror("multicast v4 join");
     return -1;
   }
-  mreqn.imr_ifindex = if_nametoindex("lo");
-  if(setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
-    perror("multicast v4 join loopback");
-    return -1;
+  // Instead of hardwiring the loopback name (which can vary) find it in the system's list
+  struct ifaddrs *ifap = NULL;
+  getifaddrs(&ifap);
+  for(struct ifaddrs const *i = ifap; i != NULL; i = i->ifa_next){
+    if(i->ifa_addr->sa_family == AF_INET && (i->ifa_flags & IFF_LOOPBACK)){
+      mreqn.imr_ifindex = if_nametoindex(i->ifa_name);
+      if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
+	perror("multicast loopback v4 join");
+      }
+      break;
+    }
   }
+  freeifaddrs(ifap);
   return 0;
 }
+
+// Join a IPv6 socket to a multicast group on specified iface, or default if NULL
+// Also join on loopback interfacd
 static int ipv6_join_group(int const fd,void const * const sock,char const * const iface,int ttl){
   (void)ttl;
   if(fd < 0 || sock == NULL)
@@ -894,11 +907,19 @@ static int ipv6_join_group(int const fd,void const * const sock,char const * con
     perror("multicast v6 join");
     return -1;
   }
-  ipv6_mreq.ipv6mr_interface = if_nametoindex("lo");
-  if (setsockopt(fd, IPPROTO_IP, IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
-    perror("setsockopt IPV6_ADD_MEMBERSHIP");
-    return -1;
+  // Instead of hardwiring the loopback name (which can vary) find it in the system's list
+  struct ifaddrs *ifap = NULL;
+  getifaddrs(&ifap);
+  for(struct ifaddrs const *i = ifap; i != NULL; i = i->ifa_next){
+    if(i->ifa_addr->sa_family == AF_INET6 && (i->ifa_flags & IFF_LOOPBACK)){
+      ipv6_mreq.ipv6mr_interface = if_nametoindex(i->ifa_name);
+      if(setsockopt(fd,IPPROTO_IP,IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof ipv6_mreq) != 0 && errno != EADDRINUSE){
+	perror("setsockopt IPV6_ADD_MEMBERSHIP");
+      }
+      break;
+    }
   }
+  freeifaddrs(ifap);
   return 0;
 }
 
