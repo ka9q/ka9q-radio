@@ -800,9 +800,10 @@ int setup_loopback(int fd){
 
   // Instead of hardwiring the loopback name (which can vary) find it in the system's list
   struct ifaddrs *ifap = NULL;
-  getifaddrs(&ifap);
+  if(getifaddrs(&ifap) == -1)
+    return -1;
   for(struct ifaddrs const *i = ifap; i != NULL; i = i->ifa_next){
-    if(i->ifa_addr->sa_family == AF_INET && (i->ifa_flags & IFF_LOOPBACK)){
+    if(i->ifa_addr != NULL && i->ifa_addr->sa_family == AF_INET && (i->ifa_flags & IFF_LOOPBACK)){
       struct sockaddr_in const *sin = (struct sockaddr_in *)i->ifa_addr;
       if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &sin->sin_addr, sizeof sin->sin_addr) < 0)
 	perror("setsockopt IP_MULTICAST_IF failed");
@@ -873,9 +874,10 @@ static int ipv4_join_group(int const fd,void const * const sock,char const * con
   }
   // Instead of hardwiring the loopback name (which can vary) find it in the system's list
   struct ifaddrs *ifap = NULL;
-  getifaddrs(&ifap);
+  if(getifaddrs(&ifap) != 0)
+    return -1;
   for(struct ifaddrs const *i = ifap; i != NULL; i = i->ifa_next){
-    if(i->ifa_addr->sa_family == AF_INET && (i->ifa_flags & IFF_LOOPBACK)){
+    if(i->ifa_addr != NULL && i->ifa_addr->sa_family == AF_INET && (i->ifa_flags & IFF_LOOPBACK)){
       mreqn.imr_ifindex = if_nametoindex(i->ifa_name);
       if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
 	perror("multicast loopback v4 join");
@@ -917,7 +919,8 @@ static int ipv6_join_group(int const fd,void const * const sock,char const * con
   }
   // Instead of hardwiring the loopback name (which can vary) find it in the system's list
   struct ifaddrs *ifap = NULL;
-  getifaddrs(&ifap);
+  if(getifaddrs(&ifap) != 0)
+    return -1;
   for(struct ifaddrs const *i = ifap; i != NULL; i = i->ifa_next){
     if(i->ifa_addr->sa_family == AF_INET6 && (i->ifa_flags & IFF_LOOPBACK)){
       ipv6_mreq.ipv6mr_interface = if_nametoindex(i->ifa_name);
@@ -977,7 +980,8 @@ static struct {
 void dump_interfaces(void){
   struct ifaddrs *ifap = NULL;
 
-  getifaddrs(&ifap);
+  if(getifaddrs(&ifap) == -1)
+    return;
   fprintf(stdout,"Interface list:\n");
 
   for(struct ifaddrs const *i = ifap; i != NULL; i = i->ifa_next){
