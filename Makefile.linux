@@ -27,7 +27,7 @@ LIBDIR=/usr/local/share/ka9q-radio
 SODIR=/usr/local/lib/ka9q-radio
 DAEMONDIR=/usr/local/sbin
 VARDIR=/var/lib/ka9q-radio
-LDLIBS=-ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lsamplerate -lopus -logg -lportaudio -lasound -lusb-1.0 -lncurses -lbsd -lm -lpthread
+LDLIBS=-ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lopus -logg -lportaudio -lasound -lusb-1.0 -lncurses -lbsd -lm -lpthread
 
 DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 
@@ -139,7 +139,7 @@ metadump: metadump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lsamplerate $(LDLIBS)
 
 opusd: opusd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
