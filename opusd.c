@@ -76,7 +76,7 @@ float const SCALE = 1./INT16_MAX;
 
 // Command line params
 int Mcast_ttl = 1;
-int IP_tos = 48;              // AF12 << 2
+int Mcast_tos = 48;              // AF12 << 2
 const char *App_path;
 int Verbose;                  // Verbosity flag (currently unused)
 int Opus_bitrate = 32000;        // Opus stream audio bandwidth; default 32 kb/s
@@ -90,7 +90,6 @@ const float Latency = 0.02;    // chunk size for audio output callback
 int Status_fd = -1;           // Reading from radio status
 int Input_fd = -1;            // Multicast receive socket
 int Output_fd = -1;           // Multicast receive socket
-int Output_fd_lo = -1;
 struct session *Sessions;
 pthread_mutex_t Session_protect = PTHREAD_MUTEX_INITIALIZER;
 uint64_t Output_packets;
@@ -134,10 +133,10 @@ struct option Options[] =
 
 char const Optstring[] = "A:B:I:N:R:T:fo:vxp:V";
 
-struct sockaddr_storage PCM_in_socket;
-struct sockaddr_storage Metadata_in_socket;
-struct sockaddr_storage Opus_out_socket;
-struct sockaddr_storage Metadata_out_socket;
+struct sockaddr PCM_in_socket;
+struct sockaddr Metadata_in_socket;
+struct sockaddr Opus_out_socket;
+struct sockaddr Metadata_out_socket;
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
@@ -163,7 +162,7 @@ int main(int argc,char * const argv[]){
       Output = optarg;
       break;
     case 'p':
-      IP_tos = strtol(optarg,NULL,0);
+      Mcast_tos = strtol(optarg,NULL,0);
       break;
     case 'T':
       Mcast_ttl = strtol(optarg,NULL,0);
@@ -254,14 +253,11 @@ int main(int argc,char * const argv[]){
   if(strlen(iface) == 0 && Default_mcast_iface != NULL)
     strlcpy(iface,Default_mcast_iface,sizeof(iface));
 
-  Output_fd = socket(AF_INET,SOCK_DGRAM,0); // Eventually intended for all output with sendto()
-  Output_fd_lo = setup_ipv4_loopback();
-  if(Output_fd < 0 || Output_fd_lo < 0){
+  Output_fd = output_mcast(&Opus_out_socket,iface,Mcast_ttl,Mcast_tos);
+  if(Output_fd < 0){
     fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
     exit(EX_OSERR); // let systemd restart us
   }
-  fcntl(Output_fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
-  join_group(Output_fd,(struct sockaddr *)&Opus_out_socket,iface,Mcast_ttl,IP_tos);
 
   // Graceful signal catch
   signal(SIGPIPE,closedown);
@@ -292,13 +288,11 @@ int main(int argc,char * const argv[]){
 
     if(fds[1].revents & POLLIN){
       // Simply copy status on output
-      struct sockaddr_storage sender;
+      struct sockaddr sender;
       socklen_t socksize = sizeof(sender);
       uint8_t buffer[PKTSIZE];
-      int size = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&sender,&socksize);
-      if(sendto(Output_fd_lo,buffer,size,0,(struct sockaddr *)&Metadata_out_socket,sizeof(struct sockaddr)) < 0)
-	perror("status sendto");
-      if(Mcast_ttl > 0 && sendto(Output_fd,buffer,size,0,(struct sockaddr *)&Metadata_out_socket,sizeof(struct sockaddr)) < 0)
+      int size = recvfrom(Status_fd,buffer,sizeof buffer,0,&sender,&socksize);
+      if(sendto(Output_fd,buffer,size,0,&Metadata_out_socket,sizeof Metadata_out_socket) < 0)
 	perror("status sendto");
 
     }
@@ -312,9 +306,9 @@ int main(int argc,char * const argv[]){
       pkt->data = NULL;
       pkt->len = 0;
 
-      struct sockaddr_storage sender;
+      struct sockaddr sender;
       socklen_t socksize = sizeof(sender);
-      int size = recvfrom(Input_fd,&pkt->content,sizeof(pkt->content),0,(struct sockaddr *)&sender,&socksize);
+      int size = recvfrom(Input_fd,&pkt->content,sizeof pkt->content,0,&sender,&socksize);
 
       if(size == -1){
 	if(errno != EINTR){ // Happens routinely, e.g., when window resized
@@ -676,7 +670,7 @@ int send_samples(struct session * const sp){
 
     if(!Discontinuous || opus_output_bytes > 2){
       // ship it
-      if(sendto(Output_fd,output_buffer,packet_bytes_written,0,(struct sockaddr *)&Opus_out_socket,sizeof(struct sockaddr)) < 0)
+      if(sendto(Output_fd,output_buffer,packet_bytes_written,0,&Opus_out_socket,sizeof Opus_out_socket) < 0)
 	return -1;
       Output_packets++; // all sessions
       sp->rtp_state_out.seq++; // Increment only if packet is sent

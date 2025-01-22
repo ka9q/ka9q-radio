@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <poll.h>
 #include <getopt.h>
+#include <fcntl.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -40,7 +41,6 @@ static bool Newline;
 static bool All;
 static int64_t Interval = 1 * BILLION; // Default 1 sec
 static int Control_sock;
-static int Control_sock_lo;
 static int Status_sock;
 static int Count = 2;
 static char const *Radio;
@@ -53,6 +53,8 @@ static char Locale[256] = "en_US.UTF-8";
 int Verbose;
 int IP_tos;
 int Mcast_ttl = 5;
+int Mcast_tos = 0;
+
 static char Optstring[] = "tas:c:i:vnr:l:Vx::";
 static struct option Options[] = {
   {"stdin", no_argument, NULL, 't'},
@@ -147,7 +149,7 @@ int main(int argc,char *argv[]){
     }
   }
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
-  struct sockaddr_storage sock;
+  struct sockaddr sock;
   char iface[1024];
   iface[0] = '\0';
 
@@ -161,7 +163,6 @@ int main(int argc,char *argv[]){
     char result[1024];
     fprintf(stdout,"Listening on %s\n",formataddr(result,sizeof(result),&sock));
   }
-
   Status_sock = listen_mcast(&sock,iface);
   if(Status_sock < 0){
     fprintf(stdout,"Can't set up multicast input\n");
@@ -169,9 +170,9 @@ int main(int argc,char *argv[]){
   }
   if(Verbose)
     fprintf(stdout,"Connecting\n");
-  Control_sock_lo = setup_ipv4_loopback();
-  Control_sock = connect_mcast(&sock,iface,Mcast_ttl,IP_tos);
-  if(Control_sock_lo < 0 || Control_sock < 0){
+
+  Control_sock = output_mcast(&sock,iface,Mcast_ttl,Mcast_tos);
+  if(Control_sock < 0){
     fprintf(stdout,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
     exit(EX_IOERR);
   }
@@ -201,11 +202,19 @@ int main(int argc,char *argv[]){
 
     if(Verbose)
       fprintf(stdout,"Send poll\n");
-    if(send(Control_sock_lo,cmd_buffer, cmd_len, 0) != cmd_len
+
+#if 0
+    if(sendto(Control_sock_lo,cmd_buffer, cmd_len, 0, &sock,sizeof(sock)) != cmd_len
        || (Mcast_ttl > 0 && send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len)){
       perror("command send");
       exit(1);
     }
+#else
+    if(sendto(Control_sock, cmd_buffer, cmd_len, 0, &sock,sizeof(sock)) != cmd_len){
+      perror("command send");
+      exit(1);
+    }
+#endif
     last_command_time = gps_time_ns();
     // usleep takes usleep_t but it's unsigned and the while loop will hang
     int32_t sleep_time = Interval / 1000; // nanosec -> microsec

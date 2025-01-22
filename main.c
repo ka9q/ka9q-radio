@@ -109,10 +109,9 @@ volatile bool Stop_transfers = false; // Request to stop data transfers; how sho
 
 static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 static pthread_t Status_thread;
-struct sockaddr_storage Metadata_dest_socket;      // Dest of global metadata
+struct sockaddr Metadata_dest_socket;      // Dest of global metadata
 static char const *Metadata_dest_string; // DNS name of default multicast group for status/commands
 int Output_fd = -1; // Unconnected socket used for other hosts
-int Output_fd_lo = -1; // Socket for loopback
 struct channel Template;
 // If a channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
 // Must be computed at run time because it depends on the block time
@@ -206,7 +205,7 @@ int main(int argc,char *argv[]){
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
 
   int c;
-  while((c = getopt(argc,argv,"N:hvp:IV")) != -1){
+  while((c = getopt(argc,argv,"N:hvp:V")) != -1){
     switch(c){
     case 'V': // Already shown above
       exit(EX_OK);
@@ -218,9 +217,6 @@ int main(int argc,char *argv[]){
       break;
     case 'N':
       Name = optarg;
-      break;
-    case 'I':
-      dump_interfaces();
       break;
     default: // including 'h'
       fprintf(stdout,"Unknown command line option %c\n",c);
@@ -440,22 +436,6 @@ static int loadconfig(char const *file){
   Update = config_getint(Configtable,GLOBAL,"update",Update);
   IP_tos = config_getint(Configtable,GLOBAL,"tos",IP_tos);
   Mcast_ttl = config_getint(Configtable,GLOBAL,"ttl",Mcast_ttl);
-  Output_fd = socket(AF_INET,SOCK_DGRAM,0);
-  if(Output_fd < 0){
-    fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
-    exit(EX_NOHOST); // let systemd restart us
-  }
-  fcntl(Output_fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
-  if(Output_fd < 0){
-    fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
-    exit(EX_NOHOST); // let systemd restart us
-  }
-
-  Output_fd_lo = setup_ipv4_loopback();
-  if(Output_fd_lo < 0){
-    fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
-    exit(EX_NOHOST); // let systemd restart us
-  }
   // Set up default output stream file descriptor and socket
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
 
@@ -482,7 +462,12 @@ static int loadconfig(char const *file){
     struct sockaddr_in *sin = (struct sockaddr_in *)&Template.status.dest_socket;
     sin->sin_port = htons(DEFAULT_STAT_PORT);
   }
-  join_group(Output_fd,(struct sockaddr *)&Template.output.dest_socket,Iface,Mcast_ttl,IP_tos); // Work around snooping switch problem
+  Output_fd = output_mcast(&Template.output.dest_socket,Iface,Mcast_ttl,IP_tos);
+  if(Output_fd < 0){
+    fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
+    exit(EX_NOHOST); // let systemd restart us
+  }
+  join_group(Output_fd,&Template.output.dest_socket,Iface); // Work around snooping switch problem
 
   Blocktime = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",Blocktime));
   Channel_idle_timeout = 20 * 1000 / Blocktime;
@@ -539,7 +524,7 @@ static int loadconfig(char const *file){
 		addr != 0 ? &slen : NULL);
   }
   // either resolve_mcast() or avahi_start() has resolved the target DNS name into Metadata_dest_socket and inserted the port number
-  join_group(Output_fd,(struct sockaddr *)&Metadata_dest_socket,Iface,Mcast_ttl,IP_tos);
+  join_group(Output_fd,&Metadata_dest_socket,Iface);
   // Same remote socket as status
   Ctl_fd = listen_mcast(&Metadata_dest_socket,Iface);
   if(Ctl_fd < 0){
@@ -610,13 +595,12 @@ void *process_section(void *p){
   // Override [global] settings with section settings
   char const *data = config_getstring(Configtable,sname,"data",Data);
   // Override global defaults
-  int const ip_tos = config_getint(Configtable,sname,"tos",IP_tos);
   char const *iface = config_getstring(Configtable,sname,"iface",Iface);
 
   // data stream is shared by all channels in this section
   // Now also used for per-channel status/control, with different port number
-  struct sockaddr_storage data_dest_socket;
-  struct sockaddr_storage metadata_dest_socket;
+  struct sockaddr data_dest_socket;
+  struct sockaddr metadata_dest_socket;
   memset(&data_dest_socket,0,sizeof(data_dest_socket));
   memset(&metadata_dest_socket,0,sizeof(metadata_dest_socket));
 
@@ -648,7 +632,7 @@ void *process_section(void *p){
     struct sockaddr_in *sin = (struct sockaddr_in *)&metadata_dest_socket;
     sin->sin_port = htons(DEFAULT_STAT_PORT);
   }
-  join_group(Output_fd,(struct sockaddr *)&data_dest_socket,iface,Mcast_ttl,ip_tos);
+  join_group(Output_fd,&data_dest_socket,iface);
   // No need to also join group for status socket, since the IP addresses are the same
 
   // Process frequency/frequencies
@@ -737,7 +721,7 @@ void *process_section(void *p){
 	// Highly experimental, off by default
 	char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
 	resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
-	join_group(Output_fd,(struct sockaddr *)&chan->sap.dest_socket,iface,Mcast_ttl,ip_tos);
+	join_group(Output_fd,&chan->sap.dest_socket,iface);
 	ASSERT_ZEROED(&chan->sap.thread,sizeof chan->sap.thread);
 	pthread_create(&chan->sap.thread,NULL,sap_send,chan);
       }
@@ -746,7 +730,7 @@ void *process_section(void *p){
 	// Set the dest socket to the RTCP port on the output group
 	// What messy code just to overwrite a structure field, eh?
 	memcpy(&chan->rtcp.dest_socket,&chan->output.dest_socket,sizeof(chan->rtcp.dest_socket));
-	switch(chan->rtcp.dest_socket.ss_family){
+	switch(chan->rtcp.dest_socket.sa_family){
 	case AF_INET:
 	  {
 	    struct sockaddr_in *sock = (struct sockaddr_in *)&chan->rtcp.dest_socket;
@@ -969,12 +953,7 @@ static void *rtcp_send(void *arg){
 
     dp = gen_sdes(dp,sizeof(buffer) - (dp-buffer),chan->output.rtp.ssrc,sdes,4);
 
-
-    if(sendto(Output_fd_lo,buffer,dp-buffer,0,(struct sockaddr *)&chan->rtcp.dest_socket,sizeof(chan->rtcp.dest_socket)) < 0)
-      chan->output.errors++;
-
-    if(Mcast_ttl > 0
-       && sendto(Output_fd,buffer,dp-buffer,0,(struct sockaddr *)&chan->rtcp.dest_socket,sizeof(chan->rtcp.dest_socket)) < 0)
+    if(sendto(Output_fd,buffer,dp-buffer,0,&chan->rtcp.dest_socket,sizeof(chan->rtcp.dest_socket)) < 0)
       chan->output.errors++;
   done:;
     sleep(1);

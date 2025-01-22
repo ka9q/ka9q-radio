@@ -78,7 +78,7 @@ struct channel *create_chan(uint32_t ssrc){
     // Abort here? Or keep going?
   } else {
     // Because the memcpy clobbers the ssrc, we must keep the lock held on Channel_list_mutex
-    memcpy(chan,&Template,sizeof(*chan));
+    memcpy(chan,&Template,sizeof *chan);
     chan->inuse = true;
     chan->output.rtp.ssrc = ssrc; // Stash it
     Active_channel_count++;
@@ -104,7 +104,7 @@ static float estimate_noise(struct channel *chan,int shift){
   if(slave == NULL)
     return NAN;
   if(chan->filter.energies == NULL)
-    chan->filter.energies = calloc(sizeof(float),slave->bins);
+    chan->filter.energies = calloc(sizeof *chan->filter.energies,slave->bins);
 
   float * const energies = chan->filter.energies;
   struct filter_in const * const master = slave->master;
@@ -474,11 +474,8 @@ void *sap_send(void *p){
     wp += len;
     space -= len;
 
-    if(sendto(Output_fd_lo,message,wp - message,0,(struct sockaddr *)&chan->sap.dest_socket,sizeof(chan->sap.dest_socket)) < 0)
+    if(sendto(Output_fd,message,wp - message,0,&chan->sap.dest_socket,sizeof(chan->sap.dest_socket)) < 0)
       chan->output.errors++;
-    if(Mcast_ttl > 0)
-      if(sendto(Output_fd,message,wp - message,0,(struct sockaddr *)&chan->sap.dest_socket,sizeof(chan->sap.dest_socket)) < 0)
-	chan->output.errors++;
     sleep(5);
   }
 }
@@ -527,23 +524,23 @@ int downconvert(struct channel *chan){
     // Look on the single-entry command queue and grab it atomically
     if(chan->status.command != NULL){
       restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
-      send_radio_status((struct sockaddr *)&Metadata_dest_socket,&Frontend,chan); // Send status in response
+      send_radio_status(&Metadata_dest_socket,&Frontend,chan); // Send status in response
       chan->status.global_timer = 0; // Just sent one
       // Also send to output stream
-      send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
+      send_radio_status(&chan->status.dest_socket,&Frontend,chan);
       chan->status.output_timer = chan->status.output_interval; // Reload
       FREE(chan->status.command);
       reset_radio_status(chan); // After both are sent
     } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
       // Delayed status request, used mainly by all-channel polls to avoid big bursts
-      send_radio_status((struct sockaddr *)&Metadata_dest_socket,&Frontend,chan); // Send status in response
+      send_radio_status(&Metadata_dest_socket,&Frontend,chan); // Send status in response
       chan->status.global_timer = 0; // to make sure
       reset_radio_status(chan);
     } else if(chan->status.output_interval != 0 && chan->status.output_timer > 0){
       // Timer is running for status on output stream
       if(--chan->status.output_timer == 0){
 	// Timer has expired; send status on output channel
-	send_radio_status((struct sockaddr *)&chan->status.dest_socket,&Frontend,chan);
+	send_radio_status(&chan->status.dest_socket,&Frontend,chan);
 	reset_radio_status(chan);
 	if(!chan->output.silent)
 	  chan->status.output_timer = chan->status.output_interval; // Restart timer only if channel is active

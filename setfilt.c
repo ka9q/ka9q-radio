@@ -30,7 +30,7 @@ int Verbose;
 char *Radio = NULL;
 char *Locale = "en_US.UTF-8";
 
-struct sockaddr_storage Metadata_dest_socket;
+struct sockaddr Metadata_dest_socket;
 
 int Status_sock = -1;
 int Control_sock = -1;
@@ -87,7 +87,7 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"Can't open Status_sock socket to radio control channel %s: %s\n",Radio,strerror(errno));
     exit(1);
   }
-  Control_sock = connect_mcast(&Metadata_dest_socket,iface,Mcast_ttl,IP_tos);
+  Control_sock = output_mcast(&Metadata_dest_socket,iface,Mcast_ttl,IP_tos);
   if(Control_sock == -1){
     fprintf(stderr,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
     exit(1);
@@ -121,7 +121,7 @@ int main(int argc,char *argv[]){
     encode_float(&bp,HIGH_EDGE,high);
     encode_eol(&bp);
     int cmd_len = bp - buffer;
-    if(send(Control_sock, buffer, cmd_len, 0) != cmd_len)
+    if(sendto(Control_sock, buffer, cmd_len, 0,&Metadata_dest_socket,sizeof Metadata_dest_socket) != cmd_len)
       perror("command send");
   }
   // Read and process status

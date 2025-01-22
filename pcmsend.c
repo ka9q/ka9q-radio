@@ -175,9 +175,9 @@ int main(int argc,char * const argv[]){
 
 
   // Set up multicast transmit socket
-  Output_fd_lo = setup_ipv4_loopback();
-  Output_fd = setup_mcast(Mcast_output_address_text,NULL,1,Mcast_ttl,IP_tos,0,0);
-  if(Output_fd_lo < 0 || Output_fd == -1){
+  struct sockaddr sock;
+  Output_fd = setup_mcast(Mcast_output_address_text,&sock,1,Mcast_ttl,IP_tos,0,0);
+  if(Output_fd == -1){
     fprintf(stderr,"Can't set up output on %s: %s\n",Mcast_output_address_text,strerror(errno));
     exit(EX_IOERR);
   }
@@ -236,9 +236,7 @@ int main(int argc,char * const argv[]){
       rptr &= (BUFFERSIZE-1);
     }
     dp += Channels * FRAMESIZE * sizeof(*samples);
-    send(Output_fd_lo,buffer,dp - buffer,0); // should probably check return code
-    if(Mcast_ttl > 0)
-      send(Output_fd,buffer,dp - buffer,0); // should probably check return code
+    sendto(Output_fd,buffer,dp - buffer,0,&sock, sizeof sock); // should probably check return code
     rtp_state_out.packets++;
     rtp_state_out.bytes += Channels * FRAMESIZE * sizeof(int16_t);
     rtp_state_out.seq++;

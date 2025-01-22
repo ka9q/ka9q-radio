@@ -198,7 +198,7 @@ const char *App_path;
 static int Input_fd,Status_fd;
 static struct session *Sessions;
 int Mcast_ttl;
-struct sockaddr_storage Metadata_dest_socket;
+struct sockaddr Metadata_dest_socket;
 
 static void closedown(int a);
 static void input_loop(void);
@@ -336,7 +336,7 @@ int main(int argc,char *argv[]){
   }
   // Set up input socket for multicast data stream from front end
   {
-    struct sockaddr_storage sock;
+    struct sockaddr sock;
     char iface[1024];
     resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
     Input_fd = listen_mcast(&sock,iface);

@@ -99,12 +99,12 @@ static struct option Options[] =
    
 static char Optstring[] = "A:I:N:S:T:vp:";
 
-static struct sockaddr_storage Status_dest_address;
-static struct sockaddr_storage Status_input_source_address;
-static struct sockaddr_storage Local_status_source_address;
-static struct sockaddr_storage PCM_dest_address;
-static struct sockaddr_storage Stereo_source_address;
-static struct sockaddr_storage Stereo_dest_address;
+static struct sockaddr Status_dest_address;
+static struct sockaddr Status_input_source_address;
+static struct sockaddr Local_status_source_address;
+static struct sockaddr PCM_dest_address;
+static struct sockaddr Stereo_source_address;
+static struct sockaddr Stereo_dest_address;
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
@@ -161,7 +161,7 @@ int main(int argc,char * const argv[]){
       pthread_mutex_destroy(&Audio_protect);
       exit(1);
     }
-    Status_out_fd = connect_mcast(&Status_dest_address,iface,Mcast_ttl,IP_tos);
+    Status_fd = output_mcast(&Status_dest_address,iface,Mcast_ttl,IP_tos);
     {
       socklen_t len;
       len = sizeof(Local_status_source_address);
@@ -180,7 +180,7 @@ int main(int argc,char * const argv[]){
     avahi_start(service_name,"_rtp._udp",DEFAULT_RTP_PORT,output,addr,description,NULL,NULL);
 
     resolve_mcast(output,&Stereo_dest_address,DEFAULT_RTP_PORT,NULL,0,0);
-    Output_fd = connect_mcast(&Stereo_dest_address,NULL,Mcast_ttl,IP_tos);
+    Output_fd = output_mcast(&Stereo_dest_address,NULL,Mcast_ttl,IP_tos);
     if(Output_fd == -1)
       fprintf(stderr,"Can't set up output on %s: %s\n",output,strerror(errno));
     socklen_t len = sizeof(Stereo_source_address);
@@ -302,7 +302,7 @@ void *input(void *arg){
     pkt->data = NULL;
     pkt->len = 0;
     
-    struct sockaddr_storage sender;
+    struct sockaddr sender;
     socklen_t socksize = sizeof(sender);
     int size = recvfrom(Input_fd,&pkt->content,sizeof(pkt->content),0,(struct sockaddr *)&sender,&socksize);
     
@@ -507,7 +507,7 @@ void *decode(void *arg){
 	*wp++ = htons(scaleclip(__imag__ subc_info));
       }
       dp = (uint8_t *)wp;
-      int const r = send(Output_fd,&packet,dp - packet,0);
+      int const r = sendto(Output_fd,&packet,dp - packet,0,&Stereo_dest_address,sizeof(Stereo_dest_address));
       Output_packets++;
       if(r <= 0){
 	perror("pcm send");

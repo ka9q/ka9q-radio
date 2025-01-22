@@ -48,7 +48,6 @@ int IP_tos = 48;              // AF12 << 2
 
 OpusEncoder *Opus;
 int Output_fd = -1;
-int Output_fd_lo = -1;
 float Audiodata[BUFFERSIZE];
 int Samples_available;
 int Wptr;   // Write pointer for callback
@@ -259,9 +258,11 @@ int main(int argc,char * const argv[]){
     fprintf(stderr,"Must specify -R mcast_output_address\n");
     exit(EX_USAGE);
   }
-  Output_fd_lo = setup_ipv4_loopback();
-  Output_fd = setup_mcast(Mcast_output_address_text,NULL,1,Mcast_ttl,IP_tos,0,0);
-  if(Output_fd_lo == -1 || Output_fd == -1){
+  struct sockaddr sock;
+  char iface[1024] = {0};
+  resolve_mcast(Mcast_output_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof iface,5);
+  Output_fd = output_mcast(&sock,iface,Mcast_ttl,IP_tos);
+  if(Output_fd == -1){
     fprintf(stderr,"Can't set up output on %s: %s\n",Mcast_output_address_text,strerror(errno));
     exit(EX_IOERR);
   }
@@ -323,9 +324,7 @@ int main(int argc,char * const argv[]){
     int size = opus_encode_float(Opus,opus_input,Opus_frame_size,dp,sizeof(buffer) - (dp - buffer));
     if(!Discontinuous || size > 2){
       dp += size;
-      send(Output_fd_lo,buffer,dp - buffer,0);
-      if(Mcast_ttl > 0)
-	send(Output_fd,buffer,dp - buffer,0);
+      sendto(Output_fd,buffer,dp - buffer,0,&sock,sizeof(sock));
       rtp_state_out.seq++; // Increment RTP sequence number only if packet is sent
       rtp_state_out.packets++;
       rtp_state_out.bytes += size;

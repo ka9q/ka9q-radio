@@ -102,7 +102,7 @@ int Nsessions;
 struct session *Sessions[NSESSIONS];
 bool Terminate;
 struct session *Best_session; // Session with highest SNR
-struct sockaddr_storage Metadata_dest_socket;
+struct sockaddr Metadata_dest_socket;
 int Mcast_ttl;
 pthread_mutex_t Rptr_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t Rptr_cond = PTHREAD_COND_INITIALIZER;
