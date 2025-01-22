@@ -40,6 +40,7 @@ static bool Newline;
 static bool All;
 static int64_t Interval = 1 * BILLION; // Default 1 sec
 static int Control_sock;
+static int Control_sock_lo;
 static int Status_sock;
 static int Count = 2;
 static char const *Radio;
@@ -168,8 +169,9 @@ int main(int argc,char *argv[]){
   }
   if(Verbose)
     fprintf(stdout,"Connecting\n");
+  Control_sock_lo = setup_ipv4_loopback();
   Control_sock = connect_mcast(&sock,iface,Mcast_ttl,IP_tos);
-  if(Control_sock == -1){
+  if(Control_sock_lo < 0 || Control_sock < 0){
     fprintf(stdout,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
     exit(EX_IOERR);
   }
@@ -199,7 +201,8 @@ int main(int argc,char *argv[]){
 
     if(Verbose)
       fprintf(stdout,"Send poll\n");
-    if(send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len){
+    if(send(Control_sock_lo,cmd_buffer, cmd_len, 0) != cmd_len
+       || (Mcast_ttl > 0 && send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len)){
       perror("command send");
       exit(1);
     }

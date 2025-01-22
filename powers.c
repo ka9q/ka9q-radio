@@ -27,7 +27,7 @@ const char *Target;
 int Verbose;
 uint32_t Ssrc;
 char Iface[1024]; // Multicast interface to talk to front end
-int Status_fd,Ctl_fd;
+int Status_fd = -1, Ctl_fd = -1, Ctl_fd_lo = -1;
 int64_t Timeout = BILLION; // Retransmission timeout
 bool details;   // Output bin, frequency, power, newline
 static char const Optstring[] = "b:c:df:hi:s:t:T:vw:V";
@@ -119,7 +119,8 @@ int main(int argc,char *argv[]){
     exit(1);
   }
   Ctl_fd = connect_mcast(&Metadata_dest_socket,Iface,Mcast_ttl,IP_tos);
-  if(Ctl_fd < 0){
+  Ctl_fd_lo = setup_ipv4_loopback();
+  if(Ctl_fd < 0 || Ctl_fd_lo < 0){
     fprintf(stderr,"connect to mcast control failed\n");
     exit(1);
   }
@@ -147,7 +148,8 @@ int main(int argc,char *argv[]){
       printf("Sent:");
       dump_metadata(stdout,buffer+1,command_len-1,details ? true : false);
     }
-    if(send(Ctl_fd, buffer, command_len, 0) != command_len){
+    if(send(Ctl_fd_lo, buffer, command_len, 0) != command_len
+       || (Mcast_ttl > 0 && send(Ctl_fd, buffer, command_len, 0) != command_len)){
       perror("command send");
       usleep(1000000); // 1 second
       goto again;

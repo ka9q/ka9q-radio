@@ -90,6 +90,7 @@ const float Latency = 0.02;    // chunk size for audio output callback
 int Status_fd = -1;           // Reading from radio status
 int Input_fd = -1;            // Multicast receive socket
 int Output_fd = -1;           // Multicast receive socket
+int Output_fd_lo = -1;
 struct session *Sessions;
 pthread_mutex_t Session_protect = PTHREAD_MUTEX_INITIALIZER;
 uint64_t Output_packets;
@@ -254,7 +255,8 @@ int main(int argc,char * const argv[]){
     strlcpy(iface,Default_mcast_iface,sizeof(iface));
 
   Output_fd = socket(AF_INET,SOCK_DGRAM,0); // Eventually intended for all output with sendto()
-  if(Output_fd < 0){
+  Output_fd_lo = setup_ipv4_loopback();
+  if(Output_fd < 0 || Output_fd_lo < 0){
     fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
     exit(EX_OSERR); // let systemd restart us
   }
@@ -294,8 +296,11 @@ int main(int argc,char * const argv[]){
       socklen_t socksize = sizeof(sender);
       uint8_t buffer[PKTSIZE];
       int size = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&sender,&socksize);
-      if(sendto(Output_fd,buffer,size,0,(struct sockaddr *)&Metadata_out_socket,sizeof(struct sockaddr)) < 0)
+      if(sendto(Output_fd_lo,buffer,size,0,(struct sockaddr *)&Metadata_out_socket,sizeof(struct sockaddr)) < 0)
 	perror("status sendto");
+      if(Mcast_ttl > 0 && sendto(Output_fd,buffer,size,0,(struct sockaddr *)&Metadata_out_socket,sizeof(struct sockaddr)) < 0)
+	perror("status sendto");
+
     }
     if(fds[0].revents & POLLIN){
       // Process incoming RTP packets, demux to per-SSRC thread

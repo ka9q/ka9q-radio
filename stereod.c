@@ -78,6 +78,7 @@ int Status_fd = -1;           // Reading from radio status
 int Status_out_fd = -1;       // Writing to radio status
 int Input_fd = -1;            // Multicast receive socket
 int Output_fd = -1;           // Multicast send socket
+int Output_fd_lo = -1;           // Multicast send socket
 struct session *Audio;
 pthread_mutex_t Audio_protect = PTHREAD_MUTEX_INITIALIZER;
 uint64_t Output_packets;
@@ -195,8 +196,9 @@ int main(int argc,char * const argv[]){
     uint32_t addr = make_maddr(Output);
     avahi_start(service_name,"_rtp._udp",DEFAULT_RTP_PORT,Output,addr,description,NULL,NULL);
     resolve_mcast(Output,&Stereo_dest_address,DEFAULT_RTP_PORT,NULL,0,0);
+    Output_fd_lo = setup_ipv4_loopback();
     Output_fd = connect_mcast(&Stereo_dest_address,NULL,Mcast_ttl,IP_tos);
-    if(Output_fd == -1){
+    if(Output_fd_lo < 0 || Output_fd < 0){
       fprintf(stderr,"Can't set up output on %s: %s\n",Output,strerror(errno));
       exit(EX_IOERR);
     }
@@ -512,8 +514,8 @@ void *decode(void *arg){
 	*wp++ = htons(scaleclip(right));
       }
       dp = (uint8_t *)wp;
-      int const r = send(Output_fd,&packet,dp - packet,0);
-      if(r <= 0){
+      if(send(Output_fd_lo,&packet,dp - packet,0) < 0
+	 || (Mcast_ttl > 0 && send(Output_fd,&packet,dp - packet,0) < 0)){
 	fprintf(stderr,"pcm send: %s, ending thread\n",strerror(errno));
 	break;
       }

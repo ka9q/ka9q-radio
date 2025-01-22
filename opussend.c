@@ -48,6 +48,7 @@ int IP_tos = 48;              // AF12 << 2
 
 OpusEncoder *Opus;
 int Output_fd = -1;
+int Output_fd_lo = -1;
 float Audiodata[BUFFERSIZE];
 int Samples_available;
 int Wptr;   // Write pointer for callback
@@ -142,7 +143,7 @@ int main(int argc,char * const argv[]){
   PaError r = Pa_Initialize();
   if(r != paNoError){
     fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
-    close(Output_fd);
+    exit(EX_IOERR);
     return r;
   }
   if(List_audio){
@@ -177,7 +178,7 @@ int main(int argc,char * const argv[]){
   }
   if(inDevNum == paNoDevice){
     fprintf(stderr,"Portaudio: no available devices\n");
-    return -1;
+    exit(EX_IOERR);
   }
 
 
@@ -200,13 +201,11 @@ int main(int argc,char * const argv[]){
 
   if(r != paNoError){
     fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));      
-    close(Output_fd);
     exit(EX_IOERR);
   }
   r = Pa_StartStream(Pa_Stream);
   if(r != paNoError){
     fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
-    close(Output_fd);
     exit(EX_IOERR);
   }
 
@@ -260,8 +259,9 @@ int main(int argc,char * const argv[]){
     fprintf(stderr,"Must specify -R mcast_output_address\n");
     exit(EX_USAGE);
   }
+  Output_fd_lo = setup_ipv4_loopback();
   Output_fd = setup_mcast(Mcast_output_address_text,NULL,1,Mcast_ttl,IP_tos,0,0);
-  if(Output_fd == -1){
+  if(Output_fd_lo == -1 || Output_fd == -1){
     fprintf(stderr,"Can't set up output on %s: %s\n",Mcast_output_address_text,strerror(errno));
     exit(EX_IOERR);
   }
@@ -323,7 +323,9 @@ int main(int argc,char * const argv[]){
     int size = opus_encode_float(Opus,opus_input,Opus_frame_size,dp,sizeof(buffer) - (dp - buffer));
     if(!Discontinuous || size > 2){
       dp += size;
-      send(Output_fd,buffer,dp - buffer,0);
+      send(Output_fd_lo,buffer,dp - buffer,0);
+      if(Mcast_ttl > 0)
+	send(Output_fd,buffer,dp - buffer,0);
       rtp_state_out.seq++; // Increment RTP sequence number only if packet is sent
       rtp_state_out.packets++;
       rtp_state_out.bytes += size;

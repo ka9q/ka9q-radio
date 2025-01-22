@@ -451,14 +451,11 @@ static int loadconfig(char const *file){
     exit(EX_NOHOST); // let systemd restart us
   }
 
-  Output_fd_lo = socket(AF_INET,SOCK_DGRAM,0);
+  Output_fd_lo = setup_ipv4_loopback();
   if(Output_fd_lo < 0){
     fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
     exit(EX_NOHOST); // let systemd restart us
   }
-
-  setup_loopback(Output_fd_lo);
-
   // Set up default output stream file descriptor and socket
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
 
@@ -973,9 +970,11 @@ static void *rtcp_send(void *arg){
     dp = gen_sdes(dp,sizeof(buffer) - (dp-buffer),chan->output.rtp.ssrc,sdes,4);
 
 
-    if(sendto(Output_fd,buffer,dp-buffer,0,(struct sockaddr *)&chan->rtcp.dest_socket,sizeof(chan->rtcp.dest_socket)) < 0)
-      chan->output.errors++;
     if(sendto(Output_fd_lo,buffer,dp-buffer,0,(struct sockaddr *)&chan->rtcp.dest_socket,sizeof(chan->rtcp.dest_socket)) < 0)
+      chan->output.errors++;
+
+    if(Mcast_ttl > 0
+       && sendto(Output_fd,buffer,dp-buffer,0,(struct sockaddr *)&chan->rtcp.dest_socket,sizeof(chan->rtcp.dest_socket)) < 0)
       chan->output.errors++;
   done:;
     sleep(1);

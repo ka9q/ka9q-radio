@@ -21,6 +21,8 @@
 #include <linux/if_packet.h>
 #include <net/ethernet.h>
 #include <bsd/string.h>
+#include <sys/prctl.h>
+#include <linux/capability.h>
 #endif
 
 #ifdef __APPLE__
@@ -36,6 +38,7 @@ static int ipv6_join_group(int const fd,void const * const sock,char const * con
 static void set_local_options(int);
 static void set_ipv4_options(int fd,int mcast_ttl,int tos);
 static void set_ipv6_options(int const fd,int const mcast_ttl,int const tos);
+int ensure_multicast_on_loopback(void);
 
 
 // This is a bit messy. Is there a better way?
@@ -493,7 +496,9 @@ static void set_ipv4_options(int const fd,int const mcast_ttl,int const tos){
     if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_TTL,&mcast_ttl,sizeof(mcast_ttl)) != 0)
       perror("so_ttl failed");
   }
-#if 0 // Send explicit copies to loopback interface instead, and have everyone listen on both
+  // Send explicit copies to loopback interface instead, and have everyone listen on both
+  // that works even if the physical interface goes down
+#if 0
   uint8_t const loop = true;
   if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_LOOP,&loop,sizeof(loop)) != 0)
     perror("so_loop failed");
@@ -505,26 +510,56 @@ static void set_ipv4_options(int const fd,int const mcast_ttl,int const tos){
       perror("so_tos failed");
   }
 }
-// Configure separate socket for transmission (only) through loopback interface
+// Create and configure separate socket for local loopback
 // Most of the options aren't relevant here, just select the loopback interface
-int setup_loopback(int fd){
-  fcntl(fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
-  struct ifreq ifr;
-  memset(&ifr,0,sizeof(ifr));
-
+// This does it with IPv4; is it even necessary to have an IPv6 counterpart?
+int setup_ipv4_loopback(void){
   // Instead of hardwiring the loopback name (which can vary) find it in the system's list
   struct ifaddrs *ifap = NULL;
   if(getifaddrs(&ifap) == -1)
     return -1;
-  for(struct ifaddrs const *i = ifap; i != NULL; i = i->ifa_next){
-    if(i->ifa_addr != NULL && i->ifa_addr->sa_family == AF_INET && (i->ifa_flags & IFF_LOOPBACK)){
-      struct sockaddr_in const *sin = (struct sockaddr_in *)i->ifa_addr;
-      if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &sin->sin_addr, sizeof sin->sin_addr) < 0)
-	perror("setsockopt IP_MULTICAST_IF failed");
+  // Look for the loopback interface
+  struct ifaddrs const *ip = NULL;
+  for(ip = ifap; ip != NULL; ip = ip->ifa_next){
+    if(ip->ifa_addr != NULL && ip->ifa_addr->sa_family == AF_INET && (ip->ifa_flags & IFF_LOOPBACK))
       break;
+  }
+  if(ip == NULL){
+    fprintf(stdout,"Can't find loopback interface");
+    return -1;
+  }
+  int fd = socket(AF_INET,SOCK_DGRAM,0);
+  if(fd < 0)
+    return fd;
+  fcntl(fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
+
+  if(!(ip->ifa_flags & IFF_MULTICAST)) {
+    // We need the multicast flag on the loopback interface
+    // Force it on if we have network admin capability
+    struct ifreq ifr = {0};
+    strncpy(ifr.ifr_name,ip->ifa_name,IFNAMSIZ-1);
+    ifr.ifr_flags = ip->ifa_flags | IFF_MULTICAST;
+    if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0) {
+      printf("Can't enable multicast option on loopback interface %s\n",ifr.ifr_name);
+      perror("ioctl (set flags)");
+      close(fd);
+      return -1;
+    } else {
+      printf("Multicast enabled on loopback interface %s\n",ifr.ifr_name);
+#if __linux__
+      if (prctl(PR_CAP_AMBIENT_LOWER, CAP_NET_ADMIN, 0, 0, 0) == -1) {
+	perror("Failed to drop CAP_NET_ADMIN");
+      }
+#endif
     }
   }
-  return 0;
+  struct sockaddr_in const *sin = (struct sockaddr_in *)ip->ifa_addr;
+  if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &sin->sin_addr, sizeof sin->sin_addr) < 0){
+    perror("setsockopt IP_MULTICAST_IF failed");
+    close(fd);
+    fd = -1;
+  }
+  return fd;
 }
 
 // Set options on IPv6 multicast socket
@@ -767,3 +802,59 @@ uint32_t make_maddr(char const *arg){
     addr |= 0x00100000; // Small chance of this for a random address
   return addr;
 }
+#if 0
+// Functionality now merged into setup_ipv4_loopback()
+int ensure_multicast_on_loopback(void) {
+  int sock = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sock < 0) {
+    perror("socket");
+    return -1;
+  }
+  struct ifreq ifr;
+  memset(&ifr,0,sizeof(ifr));
+
+  // Instead of hardwiring the loopback name (which can vary) find it in the system's list
+  struct ifaddrs *ifap = NULL;
+  if(getifaddrs(&ifap) == -1){
+    close(sock);
+    return -1;
+  }
+  for(struct ifaddrs const *i = ifap; i != NULL; i = i->ifa_next){
+    if(i->ifa_addr != NULL && (i->ifa_flags & IFF_LOOPBACK)){
+      strncpy(ifr.ifr_name,i->ifa_name,IFNAMSIZ-1);
+      break;
+    }
+  }
+  freeifaddrs(ifap);
+  ifap = NULL;
+  if(strlen(ifr.ifr_name) == 0){
+    printf("No loopback interface found!\n");
+    close(sock);
+    return -1;
+  }
+  if (ioctl(sock, SIOCGIFFLAGS, &ifr) < 0) {
+    perror("ioctl (get flags)");
+    close(sock);
+    return -1;
+  }
+
+  if (!(ifr.ifr_flags & IFF_MULTICAST)) {
+    ifr.ifr_flags |= IFF_MULTICAST;
+    if (ioctl(sock, SIOCSIFFLAGS, &ifr) < 0) {
+      printf("Can't enable multicast option on loopback interface %s\n",ifr.ifr_name);
+      perror("ioctl (set flags)");
+      close(sock);
+      return -1;
+    }
+    printf("Multicast enabled on loopback interface %s\n",ifr.ifr_name);
+  }
+  close(sock);
+#if __linux__
+  if (prctl(PR_CAPBSET_DROP, CAP_NET_ADMIN, 0, 0, 0) == -1) {
+    perror("Failed to drop CAP_NET_ADMIN");
+    return -1;
+  }
+#endif
+  return 0;
+}
+#endif

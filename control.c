@@ -386,14 +386,11 @@ int main(int argc,char *argv[]){
     exit(EX_OSERR); // let systemd restart us
   }
   fcntl(Output_fd,F_SETFL,O_NONBLOCK); // Just drop instead of blocking real time
-  Output_fd_lo = socket(AF_INET,SOCK_DGRAM,0); // Eventually intended for all output with sendto()
+  Output_fd_lo = setup_ipv4_loopback();
   if(Output_fd_lo < 0){
     fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
     exit(EX_OSERR); // let systemd restart us
   }
-  setup_loopback(Output_fd_lo);
-
-
 
   if(target == NULL){
     // Use avahi browser to find a radiod instance to control

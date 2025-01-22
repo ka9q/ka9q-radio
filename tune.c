@@ -49,6 +49,7 @@ int Agc_enable = -1;
 struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
+int Control_sock_lo = -1;
 
 char Optstring[] = "aA:e:f:g:G:H:hi:L:l:m:qr:R:s:vV";
 struct option Options[] = {
@@ -186,8 +187,10 @@ int main(int argc,char *argv[]){
     }
     if(Verbose)
       fprintf(stdout,"Connecting\n");
+    Control_sock_lo = setup_ipv4_loopback();
+
     Control_sock = connect_mcast(&Control_address,ifc,Mcast_ttl,IP_tos);
-    if(Control_sock == -1){
+    if(Control_sock_lo == -1 || Control_sock == -1){
       fprintf(stdout,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
       exit(EX_IOERR);
     }
@@ -257,7 +260,8 @@ int main(int argc,char *argv[]){
 
       encode_eol(&bp);
       int cmd_len = bp - cmd_buffer;
-      if(send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len)
+      if(send(Control_sock_lo, cmd_buffer, cmd_len, 0) != cmd_len
+	 || ( Mcast_ttl > 0 && send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len))
 	perror("command send");
 
       last_command_time = gps_time_ns();
