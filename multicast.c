@@ -515,22 +515,24 @@ static void loopback_init(void){
     // We need multicast enabled on the loopback interface
     strlcpy(Loopback_name,lop->ifa_name,sizeof Loopback_name);
     Loopback_index = if_nametoindex(lop->ifa_name);
-    struct ifreq ifr = {0};
-    strncpy(ifr.ifr_name,lop->ifa_name,IFNAMSIZ-1);
-    ifr.ifr_flags = lop->ifa_flags | IFF_MULTICAST;
-    int fd = socket(AF_INET,SOCK_DGRAM,0); // Same for IPv6?
-    if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0) {
-      printf("Can't enable multicast option on loopback interface %s\n",ifr.ifr_name);
-      perror("ioctl (set flags)");
-    } else {
-      printf("Multicast enabled on loopback interface %s\n",ifr.ifr_name);
+    if(!(lop->ifa_flags & IFF_MULTICAST)){
+      // Not already set
+      struct ifreq ifr = {0};
+      strncpy(ifr.ifr_name,lop->ifa_name,IFNAMSIZ-1);
+      ifr.ifr_flags = lop->ifa_flags | IFF_MULTICAST;
+      int fd = socket(AF_INET,SOCK_DGRAM,0); // Same for IPv6?
+      if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0) {
+	printf("Can't enable multicast option on loopback interface %s\n",ifr.ifr_name);
+	perror("ioctl (set flags)");
+      } else {
+	printf("Multicast enabled on loopback interface %s\n",ifr.ifr_name);
 #if __linux__
-      if (prctl(PR_CAP_AMBIENT_LOWER, CAP_NET_ADMIN, 0, 0, 0) == -1) {
-	perror("Failed to drop CAP_NET_ADMIN");
-      }
+	if (prctl(PR_CAP_AMBIENT_LOWER, CAP_NET_ADMIN, 0, 0, 0) == -1)
+	  perror("Failed to drop CAP_NET_ADMIN");
 #endif
+      }
+      close(fd);
     }
-    close(fd);
   }
   freeifaddrs(ifap);
 }
