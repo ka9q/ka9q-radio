@@ -33,6 +33,10 @@
 #include "rtp.h"
 #include "misc.h"
 
+static int Loopback_index = -1;
+static char Loopback_name[IFNAMSIZ];
+
+
 static int setup_ipv4_loopback(int fd);
 static int ipv4_join_group(int const fd,void const * const sock,char const * const iface);
 static int ipv6_join_group(int const fd,void const * const sock,char const * const iface);
@@ -153,7 +157,7 @@ int output_mcast(void const * const s,char const * const iface,int const ttl,int
   // But if the switches are set to pass unregistered multicasts, then IPv4 multicasts
   // that aren't subscribed to by anybody are flooded everywhere!
   // We avoid that by subscribing to our own multicasts.
-  // As a side benefit, the join will probably fail if the interface is down, so we can attach to the loopback interface
+  join_group(fd,sock,Loopback_name);
 
   if(ttl == 0 || join_group(fd,sock,iface) == -1) // join_group will hopefully fail if the output interface isn't up
     setup_ipv4_loopback(fd); // attach it to the loopback interface
@@ -492,13 +496,29 @@ int setportnumber(void *s,uint16_t port){
   return 0;
 }
 
-// We need the multicast flag on the loopback interface
-// Force it on if we have network admin capability
-static void set_loopback_multicast(struct ifaddrs const *lop,int fd){
-  if(!(lop->ifa_flags & IFF_MULTICAST)) {
+static void loopback_init(void){
+  if(Loopback_index != -1)
+    return;
+
+  // One-time setup of loopback
+  // Instead of hardwiring the loopback name (which can vary) find it in the system's list
+  struct ifaddrs *ifap = NULL;
+  if(getifaddrs(&ifap) != 0)
+    return;
+
+  struct ifaddrs const *lop = NULL;
+  for(lop = ifap; lop != NULL; lop = lop->ifa_next)
+    if(lop->ifa_name && lop->ifa_flags & IFF_LOOPBACK)
+      break;
+
+  if(lop != NULL){
+    // We need multicast enabled on the loopback interface
+    strlcpy(Loopback_name,lop->ifa_name,sizeof Loopback_name);
+    Loopback_index = if_nametoindex(lop->ifa_name);
     struct ifreq ifr = {0};
     strncpy(ifr.ifr_name,lop->ifa_name,IFNAMSIZ-1);
     ifr.ifr_flags = lop->ifa_flags | IFF_MULTICAST;
+    int fd = socket(AF_INET,SOCK_DGRAM,0); // Same for IPv6?
     if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0) {
       printf("Can't enable multicast option on loopback interface %s\n",ifr.ifr_name);
       perror("ioctl (set flags)");
@@ -510,12 +530,15 @@ static void set_loopback_multicast(struct ifaddrs const *lop,int fd){
       }
 #endif
     }
+    close(fd);
   }
+  freeifaddrs(ifap);
 }
-static int Loopback_index = -1;
+
 // Join a socket to a multicast group on specified iface, or default if NULL
-// Also join on loopback interfacd
 static int ipv4_join_group(int const fd,void const * const sock,char const * const iface){
+  loopback_init();
+
   if(fd < 0 || sock == NULL)
     return -1;
 
@@ -526,46 +549,24 @@ static int ipv4_join_group(int const fd,void const * const sock,char const * con
   if(!IN_MULTICAST(ntohl(sin->sin_addr.s_addr)))
     return -1;
 
-  if(Loopback_index == -1){
-    // One-time setup of loopback
-    // Instead of hardwiring the loopback name (which can vary) find it in the system's list
-    struct ifaddrs *ifap = NULL;
-    if(getifaddrs(&ifap) == 0){
-      struct ifaddrs *lop = NULL;
-      for(lop = ifap; lop != NULL; lop = lop->ifa_next){
-	if(lop->ifa_name && lop->ifa_flags & IFF_LOOPBACK){
-	  set_loopback_multicast(lop,fd); // Ensure the MULTICAST flag is on (privileged)
-	  Loopback_index = if_nametoindex(lop->ifa_name);
-	  break;
-	}
-      }
-      freeifaddrs(ifap);
-    }
-  }    
-  if(Loopback_index != -1){
-    struct ip_mreqn mreqn = {0};
-    mreqn.imr_multiaddr = sin->sin_addr;
-    mreqn.imr_address.s_addr = INADDR_ANY;
-    mreqn.imr_ifindex = Loopback_index;
-    if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
-      perror("multicast loopback v4 join");
-    }
-  }
   struct ip_mreqn mreqn = {0};
   mreqn.imr_multiaddr = sin->sin_addr;
   mreqn.imr_address.s_addr = INADDR_ANY;
+
   if(iface != NULL && strlen(iface) > 0)
     mreqn.imr_ifindex = if_nametoindex(iface); // defaults to 0
+  else
+    mreqn.imr_ifindex = 0;
   if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
-    fprintf(stderr,"join IPv4 group %s on %s failed: %s\n",formatsock(sock,false),iface,strerror(errno));
+    char name[IFNAMSIZ];
+    fprintf(stderr,"join IPv4 group %s on %s (%s) failed: %s\n",formatsock(sock,false),iface ? iface : "default",if_indextoname(mreqn.imr_ifindex,name),strerror(errno));
     return -1;
   }
   return 0;
 }
-
 // Join a IPv6 socket to a multicast group on specified iface, or default if NULL
-// Also join on loopback interfacd
 static int ipv6_join_group(int const fd,void const * const sock,char const * const iface){
+  loopback_init();
   if(fd < 0 || sock == NULL)
     return -1;
 
@@ -583,23 +584,23 @@ static int ipv6_join_group(int const fd,void const * const sock,char const * con
 
   struct ipv6_mreq ipv6_mreq;
   ipv6_mreq.ipv6mr_multiaddr = sin6->sin6_addr;
-  ipv6_mreq.ipv6mr_interface = Loopback_index;
-  if(setsockopt(fd,IPPROTO_IP,IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof ipv6_mreq) != 0 && errno != EADDRINUSE){
-    fprintf(stderr,"join IPv6 group %s on %s failed: %s\n",formatsock(sock,false),iface ? iface : "default",strerror(errno));
-  }
   if(iface == NULL || strlen(iface) == 0)
     ipv6_mreq.ipv6mr_interface = 0; // Default interface
   else
     ipv6_mreq.ipv6mr_interface = if_nametoindex(iface);
 
-  if(setsockopt(fd,IPPROTO_IP,IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE)
-    fprintf(stderr,"join IPv4 group %s on %s failed: %s\n",formatsock(sock,false),iface ? iface : "default",strerror(errno));
-
+  if(setsockopt(fd,IPPROTO_IP,IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
+    char name[IFNAMSIZ];
+    fprintf(stderr,"join IPv6 group %s on %s (%s) failed: %s\n",formatsock(sock,false),iface ? iface : "default",if_indextoname(ipv6_mreq.ipv6mr_interface,name),strerror(errno));
+    return -1;
+  }
   return 0;
 }
-// Configure outbound multicast socket for loopback, e.g., when TTL = 0 or operating standalone
+
+// Direct outbound multicasts to loopback, e.g., when TTL = 0 or operating standalone
 static int setup_ipv4_loopback(int fd){
-  // Instead of hardwiring the loopback name (which can vary) find it in the system's list
+  loopback_init();
+
   if(Loopback_index == -1){
     fprintf(stderr,"Can't find loopback interface");
     return -1;
