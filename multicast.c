@@ -36,14 +36,10 @@
 static int Loopback_index = -1;
 static char Loopback_name[IFNAMSIZ];
 
-
 static int setup_ipv4_loopback(int fd);
 static int ipv4_join_group(int const fd,void const * const sock,char const * const iface);
 static int ipv6_join_group(int const fd,void const * const sock,char const * const iface);
-int get_multicast_route(struct sockaddr_in *);
-#if 0
-int ensure_multicast_on_loopback(void);
-#endif
+static void loopback_init(void);
 
 // This is a bit messy. Is there a better way?
 char const *Default_mcast_iface;
@@ -157,6 +153,7 @@ int output_mcast(void const * const s,char const * const iface,int const ttl,int
   // But if the switches are set to pass unregistered multicasts, then IPv4 multicasts
   // that aren't subscribed to by anybody are flooded everywhere!
   // We avoid that by subscribing to our own multicasts.
+  loopback_init();
   join_group(fd,sock,Loopback_name);
 
   if(ttl == 0 || join_group(fd,sock,iface) == -1) // join_group will hopefully fail if the output interface isn't up
@@ -178,7 +175,8 @@ int connect_mcast(void const * const s,char const * const iface,int const ttl,in
   return fd;
 }
 
-// Create a listening socket on specified socket, using specified interface
+// Create a listening socket on specified multicast address and port
+// using specified interface (or default) and on loopback
 // Interface may be null
 int listen_mcast(void const *s,char const *iface){
   if(s == NULL)
@@ -190,7 +188,9 @@ int listen_mcast(void const *s,char const *iface){
     perror("setup_mcast socket");
     return -1;
   }
-  join_group(fd,sock,iface); // we should still be listening on multicast even if it returns -1
+  loopback_init();
+  join_group(fd,sock,Loopback_name);
+  join_group(fd,sock,iface);
   int const reuse = true; // bool doesn't work for some reason
   if(setsockopt(fd,SOL_SOCKET,SO_REUSEPORT,&reuse,sizeof(reuse)) != 0)
     perror("so_reuseport failed");
@@ -496,6 +496,8 @@ int setportnumber(void *s,uint16_t port){
   return 0;
 }
 
+// Get the name and index of the loopback interface
+// Try to set multicast flag, though this requires network admin privileges
 static void loopback_init(void){
   if(Loopback_index != -1)
     return;
@@ -512,11 +514,10 @@ static void loopback_init(void){
       break;
 
   if(lop != NULL){
-    // We need multicast enabled on the loopback interface
     strlcpy(Loopback_name,lop->ifa_name,sizeof Loopback_name);
     Loopback_index = if_nametoindex(lop->ifa_name);
     if(!(lop->ifa_flags & IFF_MULTICAST)){
-      // Not already set
+      // We need multicast enabled on the loopback interface
       struct ifreq ifr = {0};
       strncpy(ifr.ifr_name,lop->ifa_name,IFNAMSIZ-1);
       ifr.ifr_flags = lop->ifa_flags | IFF_MULTICAST;
@@ -527,6 +528,7 @@ static void loopback_init(void){
       } else {
 	printf("Multicast enabled on loopback interface %s\n",ifr.ifr_name);
 #if __linux__
+	// This capability is set when radiod is run by systemd, drop it when we no longer need it
 	if (prctl(PR_CAP_AMBIENT_LOWER, CAP_NET_ADMIN, 0, 0, 0) == -1)
 	  perror("Failed to drop CAP_NET_ADMIN");
 #endif
@@ -539,8 +541,6 @@ static void loopback_init(void){
 
 // Join a socket to a multicast group on specified iface, or default if NULL
 static int ipv4_join_group(int const fd,void const * const sock,char const * const iface){
-  loopback_init();
-
   if(fd < 0 || sock == NULL)
     return -1;
 
@@ -568,7 +568,6 @@ static int ipv4_join_group(int const fd,void const * const sock,char const * con
 }
 // Join a IPv6 socket to a multicast group on specified iface, or default if NULL
 static int ipv6_join_group(int const fd,void const * const sock,char const * const iface){
-  loopback_init();
   if(fd < 0 || sock == NULL)
     return -1;
 
