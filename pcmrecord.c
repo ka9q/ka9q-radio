@@ -241,7 +241,171 @@ static struct option Options[] = {
 };
 static char Optstring[] = "cd:e:fjl:m:rsS:t:vL:Vx:";
 
+void rounding_test(){
+  char when[256];
+  char before[256];
+  char after[256];
+
+  struct timespec start_time;
+  struct timespec now;
+  struct timespec file_time;
+  clock_gettime(CLOCK_REALTIME,&start_time);
+
+  for (int i=-125; i<125; ++i){
+    memcpy(&now, &start_time, sizeof(struct timespec));
+                                     // length limit is not set
+    FileLengthLimit = 120;
+    now.tv_sec += i;
+
+    memcpy(&file_time, &now, sizeof(struct timespec));
+//    time_t rounded_time = now.tv_sec;
+
+    struct tm const *tm_now = gmtime(&now.tv_sec);
+    sprintf(when, " %4d-%02d-%02d T %02d:%02d:%02d.%d",
+	     tm_now->tm_year+1900,
+	     tm_now->tm_mon+1,
+	     tm_now->tm_mday,
+	     tm_now->tm_hour,
+	     tm_now->tm_min,
+	     tm_now->tm_sec,
+	    (int)(now.tv_nsec / 100000000)); // 100 million, i.e., convert to tenths of a sec
+
+
+
+    // Do time calculations with a modified epoch to avoid overflow problems
+    int const epoch = 1704067200; // seconds between Jan 1 1970 00:00:00 UTC (unix epoch) and Jan 1 2024 00:00:00
+    intmax_t now_ns = BILLION * (now.tv_sec - epoch) + now.tv_nsec; // ns since Jan 2024
+    intmax_t limit = FileLengthLimit * BILLION;
+    imaxdiv_t r = imaxdiv(now_ns,limit);
+    intmax_t start_ns = r.quot * limit; // ns since epoch
+    intmax_t skip_ns = now_ns - start_ns;
+    bool adjusted = false;
+    if(skip_ns > (int64_t)(Tolerance * BILLION) && (int64_t)(limit - skip_ns) > Tolerance * BILLION){
+      // Adjust file time to previous multiple of specified limit size and pad start to first sample
+      imaxdiv_t f = imaxdiv(start_ns,BILLION);
+      file_time.tv_sec = f.quot + epoch; // restore original epoch
+      file_time.tv_nsec = f.rem;
+      adjusted = true;
+    }
+
+    tm_now = gmtime(&file_time.tv_sec);
+    sprintf(before, " %4d-%02d-%02d T %02d:%02d:%02d.%d",
+	     tm_now->tm_year+1900,
+	     tm_now->tm_mon+1,
+	     tm_now->tm_mday,
+	     tm_now->tm_hour,
+	     tm_now->tm_min,
+	     tm_now->tm_sec,
+	    (int)(now.tv_nsec / 100000000)); // 100 million, i.e., convert to tenths of a sec
+
+    time_t rounded_time = file_time.tv_sec;
+
+    #if 0
+    if (FileLengthLimit > 1){
+      rounded_time = file_time.tv_sec;
+      rounded_time += (FileLengthLimit / 2);
+      rounded_time /= FileLengthLimit;
+      rounded_time *= FileLengthLimit;
+    }
+
+    if (FileLengthLimit > 1){
+      rounded_time = rounded_time + (FileLengthLimit / 2);
+      rounded_time -= (rounded_time % (int)(FileLengthLimit));
+    }
+    #endif
+    if (FileLengthLimit > 1){
+      printf("Rounded %ld ", rounded_time);
+      imaxdiv_t f = imaxdiv(rounded_time,(intmax_t)FileLengthLimit);
+      if (f.rem > (FileLengthLimit / 2))
+        ++f.quot;
+      rounded_time = f.quot * (int)FileLengthLimit;
+      //printf(" -> %ld q: %ld r: %ld\n", rounded_time, f.quot, f.rem);
+    }
+
+
+    tm_now = gmtime(&rounded_time);
+    sprintf(after, " %4d-%02d-%02d T %02d:%02d:%02d.%d",
+	     tm_now->tm_year+1900,
+	     tm_now->tm_mon+1,
+	     tm_now->tm_mday,
+	     tm_now->tm_hour,
+	     tm_now->tm_min,
+	     tm_now->tm_sec,
+	    (int)(now.tv_nsec / 100000000)); // 100 million, i.e., convert to tenths of a sec
+
+    printf("%s %ld -> %ld: %s -> %s %s\n", when, file_time.tv_sec, rounded_time, before, after, (0 == strcmp(before, after))? "" : "DIFF");
+
+//    if (0 != strcmp(before, after)){
+    if (0){
+      printf("epoch: %d now_ns: %ld limit: %ld r.quot: %ld r.rem: %ld start: %ld skip %ld %s\n",
+             epoch,
+             now_ns,
+             limit,
+             r.quot,
+             r.rem,
+             start_ns,
+             skip_ns,
+             (adjusted ? "adjust" : ""));
+    }
+  }
+
+
+
+/*  2025-01-24 T 16:26:57.9 1737735960 -> 1737735960:  2025-01-24 T 16:26:00.9 ->  2025-01-24 T 16:26:00.9 */
+/* epoch: 1704067200 now_ns: 33668817933452946 limit: 60000000000 r.quot: 561146 r.rem: 57933452946 start: 33668760000000000 skip 57933452946 adjust */
+
+/*  2025-01-24 T 16:26:58.9 1737735960 -> 1737735960:  2025-01-24 T 16:26:00.9 ->  2025-01-24 T 16:26:00.9 */
+/* epoch: 1704067200 now_ns: 33668818933452946 limit: 60000000000 r.quot: 561146 r.rem: 58933452946 start: 33668760000000000 skip 58933452946 adjust */
+
+/*  2025-01-24 T 16:26:59.9 1737736137 -> 1737736140:  2025-01-24 T 16:28:57.9 ->  2025-01-24 T 16:29:00.9 DIFF */
+/* epoch: 1704067200 now_ns: 33668819933452946 limit: 60000000000 r.quot: 561146 r.rem: 59933452946 start: 33668760000000000 skip 59933452946 */
+
+/*  2025-01-24 T 16:27:00.9 1737736137 -> 1737736140:  2025-01-24 T 16:28:57.9 ->  2025-01-24 T 16:29:00.9 DIFF */
+/* epoch: 1704067200 now_ns: 33668820933452946 limit: 60000000000 r.quot: 561147 r.rem: 933452946 start: 33668820000000000 skip 933452946 */
+
+/*  2025-01-24 T 16:27:01.9 1737736020 -> 1737736020:  2025-01-24 T 16:27:00.9 ->  2025-01-24 T 16:27:00.9 */
+/* epoch: 1704067200 now_ns: 33668821933452946 limit: 60000000000 r.quot: 561147 r.rem: 1933452946 start: 33668820000000000 skip 1933452946 adjust */
+
+/*  2025-01-24 T 16:27:02.9 1737736020 -> 1737736020:  2025-01-24 T 16:27:00.9 ->  2025-01-24 T 16:27:00.9 */
+/* epoch: 1704067200 now_ns: 33668822933452946 limit: 60000000000 r.quot: 561147 r.rem: 2933452946 start: 33668820000000000 skip 2933452946 adjust */
+
+/*  2025-01-24 T 16:27:03.9 1737736020 -> 1737736020:  2025-01-24 T 16:27:00.9 ->  2025-01-24 T 16:27:00.9 */
+/* epoch: 1704067200 now_ns: 33668823933452946 limit: 60000000000 r.quot: 561147 r.rem: 3933452946 start: 33668820000000000 skip 3933452946 adjust */
+
+/*  2025-01-24 T 16:33:58.2 1737736320 -> 1737736320:  2025-01-24 T 16:32:00.2 ->  2025-01-24 T 16:32:00.2 */
+/* epoch: 1704067200 now_ns: 33669238237441754 limit: 120000000000 r.quot: 280576 r.rem: 118237441754 start: 33669120000000000 skip 118237441754 adjust */
+
+/*  2025-01-24 T 16:33:59.2 1737736372 -> 1737736320:  2025-01-24 T 16:32:52.2 ->  2025-01-24 T 16:32:00.2 DIFF */
+/* epoch: 1704067200 now_ns: 33669239237441754 limit: 120000000000 r.quot: 280576 r.rem: 119237441754 start: 33669120000000000 skip 119237441754 */
+
+/*  2025-01-24 T 16:34:00.2 1737736372 -> 1737736320:  2025-01-24 T 16:32:52.2 ->  2025-01-24 T 16:32:00.2 DIFF */
+/* epoch: 1704067200 now_ns: 33669240237441754 limit: 120000000000 r.quot: 280577 r.rem: 237441754 start: 33669240000000000 skip 237441754 */
+
+/*  2025-01-24 T 16:34:01.2 1737736440 -> 1737736440:  2025-01-24 T 16:34:00.2 ->  2025-01-24 T 16:34:00.2 */
+/* epoch: 1704067200 now_ns: 33669241237441754 limit: 120000000000 r.quot: 280577 r.rem: 1237441754 start: 33669240000000000 skip 1237441754 adjust */
+
+/*  2025-01-24 T 16:34:02.2 1737736440 -> 1737736440:  2025-01-24 T 16:34:00.2 ->  2025-01-24 T 16:34:00.2 */
+/* epoch: 1704067200 now_ns: 33669242237441754 limit: 120000000000 r.quot: 280577 r.rem: 2237441754 start: 33669240000000000 skip 2237441754 adjust */
+
+/*    2025-01-24 T 16:35:58.9 1737736500 -> 1737736500:  2025-01-24 T 16:35:00.9 ->  2025-01-24 T 16:35:00.9 */
+/* epoch: 1704067200 now_ns: 33669358910314989 limit: 60000000000 r.quot: 561155 r.rem: 58910314989 start: 33669300000000000 skip 58910314989 adjust */
+
+/*  2025-01-24 T 16:35:59.9 1737736620 -> 1737736620:  2025-01-24 T 16:37:00.9 ->  2025-01-24 T 16:37:00.9 */
+/* epoch: 1704067200 now_ns: 33669359910314989 limit: 60000000000 r.quot: 561155 r.rem: 59910314989 start: 33669300000000000 skip 59910314989 */
+
+/*  2025-01-24 T 16:36:00.9 1737736620 -> 1737736620:  2025-01-24 T 16:37:00.9 ->  2025-01-24 T 16:37:00.9 */
+/* epoch: 1704067200 now_ns: 33669360910314989 limit: 60000000000 r.quot: 561156 r.rem: 910314989 start: 33669360000000000 skip 910314989 */
+
+/*  2025-01-24 T 16:36:01.9 1737736560 -> 1737736560:  2025-01-24 T 16:36:00.9 ->  2025-01-24 T 16:36:00.9 */
+/* epoch: 1704067200 now_ns: 33669361910314989 limit: 60000000000 r.quot: 561156 r.rem: 1910314989 start: 33669360000000000 skip 1910314989 adjust */
+
+}
+
+
 int main(int argc,char *argv[]){
+//  rounding_test();
+//  return 0;
+
   App_path = argv[0];
 
   // Defaults
@@ -874,7 +1038,6 @@ static void input_loop(){
   }
 }
 
-
 static void cleanup(void){
   while(Sessions){
     // Flush and close each write stream
@@ -976,12 +1139,20 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   }
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
+
+#ifdef PCMRECORD_TESTING
+  #pragma message "WARNING: This will force weird file times, and it will break the output files!"
+  // debug only: force weird rounding filename glitch?
+  now.tv_sec = 1737742319;
+  now.tv_nsec = 742568973;
+#endif
+
   struct timespec file_time = now; // Default to actual time when length limit is not set
   sp->file_time = file_time;
 
   if(FileLengthLimit > 0){ // Not really supported on opus yet
     // Pad start of first file with zeroes
-#if 0
+#if 1
     struct tm const * const tm_now = gmtime(&now.tv_sec);
     fprintf(stderr,"time now = %4d-%02d-%02dT%02d:%02d:%02d.%dZ\n",
 	     tm_now->tm_year+1900,
@@ -1009,20 +1180,21 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       sp->file_time = file_time;
       sp->starting_offset = (sp->samprate * skip_ns) / BILLION;
       sp->total_file_samples += sp->starting_offset;
-#if 0
-      fprintf(stderr,"padding %lf sec %lld samples\n",
+#if 1
+      fprintf(stderr,"padding %lf sec %ld samples\n",
 	      (float)skip_ns / BILLION,
 	      sp->starting_offset);
 #endif
     }
-    sp->samples_remaining = FileLengthLimit * sp->samprate - sp->starting_offset;
+    sp->samples_remaining = FileLengthLimit * (OPUS == sp->encoding ? 48000 : sp->samprate) - sp->starting_offset;
   }
   if (max_length > 0){
-    sp->samples_remaining = max_length * sp->samprate;
+    sp->samples_remaining = max_length * (OPUS == sp->encoding ? 48000 : sp->samprate);
   }
-  struct tm const * const tm = gmtime(&file_time.tv_sec);
+  //struct tm const * const tm = gmtime(&file_time.tv_sec);
+  struct tm const *  tm = gmtime(&file_time.tv_sec);
   // yyyy-mm-dd-hh:mm:ss so it will sort properly
-#if 0
+#if 1
   fprintf(stderr,"file time = %4d-%02d-%02dT%02d:%02d:%02d.%dZ\n",
 	     tm->tm_year+1900,
 	     tm->tm_mon+1,
@@ -1035,6 +1207,22 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 
   if(Jtmode){
     //  K1JT-format file names in flat directory
+    if (FileLengthLimit > 1){
+      time_t rounded_time = file_time.tv_sec;
+      rounded_time = rounded_time + (FileLengthLimit / 2);
+      rounded_time -= (rounded_time % (int)(FileLengthLimit));
+      if (rounded_time != file_time.tv_sec){
+        fprintf(stderr, "Rounding: convert %ld (%02d:%02d:%02d.%d) to %ld; test with now.tv_sec = %ld; now.tv_nsec = %ld;\n",
+                file_time.tv_sec,
+                tm->tm_hour,
+                tm->tm_min,
+                tm->tm_sec,
+                (int)(file_time.tv_nsec / 100000000),
+                rounded_time, now.tv_sec, now.tv_nsec);
+
+      }
+      tm = gmtime(&rounded_time);
+    }
     snprintf(sp->filename,sizeof(sp->filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s%s",
 	     tm->tm_year+1900,
 	     tm->tm_mon+1,
@@ -1195,7 +1383,7 @@ static int close_file(struct session *sp){
     fprintf(stderr,"%s closing '%s' %'.1f sec\n",
 	    sp->frontend.description,
 	    sp->filename, // might be blank
-            (float)sp->samples_written / sp->samprate);
+            (float)sp->samples_written / (OPUS == sp->encoding ? 48000 : sp->samprate));
   }
   if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
     fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
