@@ -614,7 +614,7 @@ void *process_section(void *p){
       // Hash name string to make IP multicast address in 239.x.x.x range
       addr = make_maddr(data);
 
-    char const *cp = config_getstring(Configtable,sname,"encoding","s16be");
+    char const *cp = config2_getstring(Configtable,Configtable,GLOBAL,sname,"encoding","s16be");
     bool is_opus = strcasecmp(cp,"opus") == 0 ? true : false;
     size_t slen = sizeof(data_dest_socket);
     // there may be several hosts with the same section names
