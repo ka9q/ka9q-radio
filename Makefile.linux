@@ -39,15 +39,6 @@ RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_sta
 
 DYNAMIC_RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libradio.a
 
-# Build on raspberry pi only
-HEADER_FILE = $(wildcard /usr/include/pigpio.h)
-
-ifeq ($(HEADER_FILE),)
-else
-	EXECS += set_xcvr
-endif
-
-
 LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate
 
 BLACKLIST=airspy-blacklist.conf
@@ -58,19 +49,33 @@ HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhi
 
 DYNAMICS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so
 
+# Build if installed
+ifeq ($(wildcard /usr/local/include/sdrplay_api.h),)
+else
+SDRPLAY=1
+endif
 # If SDRPLAY is set, add the necessary flags, files, and libraries
 ifdef SDRPLAY
 CFILES := $(CFILES) sdrplay.c
 DYNAMICS += sdrplay.so
 endif
 
+# Build if installed
+ifeq ($(wildcard /usr/local/include/fobos.h),)
+else
+FOBOS=1
+endif
 # if FOBOS is set, build it too
 ifdef FOBOS
 CFILES := $(CFILES) fobos.c
 DYNAMICS += fobos.so
 endif
 
-
+# Build on raspberry pi only
+ifeq ($(wildcard /usr/include/pigpio.h),)
+else
+	EXECS += set_xcvr
+endif
 
 all: $(DAEMONS) $(EXECS) $(DYNAMICS)
 
@@ -107,7 +112,9 @@ DEPS = $(CFILES:.c=.d)
 
 -include $(DEPS)
 
-.PHONY: clean all install pi
+.PHONY: clean all install pi dynamics
+
+dynamics: $(DYNAMICS)
 
 # Executables
 
