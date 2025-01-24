@@ -96,7 +96,7 @@ static void set_gain(struct sdrstate *sdr,int gainstep);
 
 int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,char const * const section){
   assert(Dictionary != NULL);
-  
+
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
@@ -294,7 +294,24 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 int airspy_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   ASSERT_ZEROED(&sdr->monitor_thread,sizeof sdr->monitor_thread);
+#if 0
+  // This should work, but it doesn't
+  // So we set it in the first callback
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+  pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
+
+  struct sched_param param = { 0 };
+  param.sched_priority = (sched_get_priority_max(SCHED_FIFO) + sched_get_priority_min(SCHED_FIFO)) / 2; // midway?
+
+  pthread_attr_setschedparam(&attr, &param);
+  pthread_create(&sdr->monitor_thread,&attr,airspy_monitor,sdr);
+  pthread_attr_destroy(&attr);
+#else
   pthread_create(&sdr->monitor_thread,NULL,airspy_monitor,sdr);
+#endif
+
   return 0;
 }
 
@@ -302,10 +319,10 @@ static void *airspy_monitor(void *p){
   struct sdrstate * const sdr = (struct sdrstate *)p;
   assert(sdr != NULL);
   pthread_setname("airspy-mon");
+  realtime(); // Doesn't seem to work
 
-  realtime();
-  int ret __attribute__ ((unused));
-  ret = airspy_start_rx(sdr->device,rx_callback,sdr);
+  int ret = airspy_start_rx(sdr->device,rx_callback,sdr);
+  (void)ret;
   assert(ret == AIRSPY_SUCCESS);
   fprintf(stdout,"airspy running\n");
   // Periodically poll status to ensure device hasn't reset
@@ -330,9 +347,13 @@ static int rx_callback(airspy_transfer *transfer){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
+  // Shouldn't have to set real-time priority in the callback, but it doesn't
+  // seem to get inherited by pthread_create() despite the documentation
+  // At least this works
   if(!Name_set){
     pthread_setname("airspy-cb");
     Name_set = true;
+    realtime();
   }
   if(transfer->dropped_samples){
     fprintf(stdout,"dropped %'lld\n",(long long)transfer->dropped_samples);

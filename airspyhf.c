@@ -108,7 +108,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     if(ret != AIRSPYHF_SUCCESS){
       fprintf(stdout,"airspyhf_open(%llx) failed\n",(long long)sdr->SN);
       return -1;
-    } 
+    }
   }
   {
     airspyhf_lib_version_t version;
@@ -231,7 +231,7 @@ static void *airspyhf_monitor(void *p){
   fprintf(stdout,"Device is no longer streaming, exiting\n");
   // This can hang when the device locks up
   // This has been happening at KQ6RS
-  //  airspyhf_close(sdr->device); 
+  //  airspyhf_close(sdr->device);
   exit(EX_NOINPUT); // Let systemd restart us
 }
 
@@ -247,6 +247,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   if(!Name_set){
     pthread_setname("airspyhf-cb");
     Name_set = true;
+    realtime();    // See discussion in airspy.c
   }
   if(transfer->dropped_samples){
     fprintf(stdout,"dropped %'lld\n",(long long)transfer->dropped_samples);
