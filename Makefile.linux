@@ -91,6 +91,7 @@ install: $(DAEMONS) $(EXECS)
 	rsync -a $(DYNAMICS) $(SODIR)
 	ln -sf $(SODIR)/*.so /usr/local/lib
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
+	setcap cap_net_admin,cap_sys_nice=ep $(DAEMONDIR)/radiod
 	(cd share;rsync -a --ignore-existing . $(LIBDIR))
 	(cd service;rsync -a . /etc/systemd/system)
 	(cd rules;rsync -a . /etc/udev/rules.d)
@@ -102,8 +103,9 @@ install: $(DAEMONS) $(EXECS)
 	chgrp radio /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
 	chmod g+ws  /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
 	systemctl daemon-reload
-	systemctl enable set_lo_multicast
-	systemctl start set_lo_multicast
+# now handled by radiod with cap_net_admin capability
+#	systemctl enable set_lo_multicast
+#	systemctl start set_lo_multicast
 
 clean:
 	-rm -f *.o *.a *.d *.so .depend $(EXECS) $(DAEMONS)
