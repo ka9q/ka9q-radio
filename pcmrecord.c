@@ -1028,7 +1028,6 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   if (max_length > 0){
     sp->samples_remaining = max_length * sp->samprate;
   }
-  struct tm const * const tm = gmtime(&file_time.tv_sec);
   struct tm const *  tm = gmtime(&file_time.tv_sec);
   // yyyy-mm-dd-hh:mm:ss so it will sort properly
 #if 0
