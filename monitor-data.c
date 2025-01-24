@@ -275,8 +275,19 @@ void *decode_task(void *arg){
       if(++consec_erasures > 12){
 	// We've dried up for a while, wait for traffic instead of continuing to poll the output queue
 	pthread_mutex_lock(&sp->qmutex);
-	while(sp->queue == NULL)
-	  pthread_cond_wait(&sp->qcond,&sp->qmutex);
+	struct timeval now;
+	struct timespec timeout;
+	int retcode = 0;
+	gettimeofday(&now,NULL);
+	timeout.tv_sec = now.tv_sec;
+	timeout.tv_nsec = now.tv_usec * 1000 + 100000000; // 100 ms
+	if(timeout.tv_nsec >= BILLION){
+	  timeout.tv_nsec -= BILLION;
+	  timeout.tv_sec++;
+	}
+	// Wait max 100 ms, in case we're asked to terminate
+	while(sp->queue == NULL && retcode == 0)
+	  retcode = pthread_cond_timedwait(&sp->qcond,&sp->qmutex,&timeout);
 	pthread_mutex_unlock(&sp->qmutex);
 	continue;
       } else {
@@ -288,6 +299,7 @@ void *decode_task(void *arg){
 	if(deadline > sp->playout / 2){
 	  // We got time to wait
 	  sp->spares++;
+	  // This shouldn't deadlock as long as the output thread is running
 	  pthread_cond_wait(&Rptr_cond,&Rptr_mutex); // Wait for Rptr to change
 	  pthread_mutex_unlock(&Rptr_mutex); // Don't block the real-time audio output thread for long
 	  continue; // Go back and look at queue again
