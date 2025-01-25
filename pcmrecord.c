@@ -976,6 +976,14 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   }
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
+
+#ifdef PCMRECORD_TESTING
+  #pragma message "WARNING: This will force weird file times, and it will break the output files!"
+  // debug only: force weird rounding filename glitch?
+  now.tv_sec = 1737742319;
+  now.tv_nsec = 742568973;
+#endif
+
   struct timespec file_time = now; // Default to actual time when length limit is not set
   sp->file_time = file_time;
 
@@ -1020,7 +1028,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   if (max_length > 0){
     sp->samples_remaining = max_length * sp->samprate;
   }
-  struct tm const * const tm = gmtime(&file_time.tv_sec);
+  struct tm const *  tm = gmtime(&file_time.tv_sec);
   // yyyy-mm-dd-hh:mm:ss so it will sort properly
 #if 0
   fprintf(stderr,"file time = %4d-%02d-%02dT%02d:%02d:%02d.%dZ\n",
@@ -1035,6 +1043,14 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 
   if(Jtmode){
     //  K1JT-format file names in flat directory
+    if (FileLengthLimit > 1){
+      time_t rounded_time = file_time.tv_sec;
+      imaxdiv_t f = imaxdiv(rounded_time,(intmax_t)FileLengthLimit);
+      if (f.rem > (FileLengthLimit / 2))
+        ++f.quot;
+      rounded_time = f.quot * (int)FileLengthLimit;
+      tm = gmtime(&rounded_time);
+    }
     snprintf(sp->filename,sizeof(sp->filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s%s",
 	     tm->tm_year+1900,
 	     tm->tm_mon+1,
