@@ -119,14 +119,22 @@ int demod_fm(void *arg){
       // Squelch is fully open
       // tail timing is in blocks (usually 10 or 20 ms each)
       squelch_state = squelch_state_max;
-    } else if(--squelch_state > 0) {
-      // In tail, squelch still open
-    } else {
-      // squelch closed, reset everything and mute output
-      phase_memory = 0;
+    } else if(squelch_state > 1){
+      squelch_state--; // Squelch closing
+      continue;
+    } else if(squelch_state == 1){
+      // Now closed, emit a block of silence to flush the Opus encoder
+      float zeroes[N];
+      memset(&zeroes,0,sizeof(zeroes));
+      send_output(chan,zeroes,N,false);
+      // Reset everything
       squelch_state = 0;
+      phase_memory = 0;
       pl_sample_count = 0;
       reset_goertzel(&tone_detect);
+      continue;
+    } else {
+      // Already closed
       send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
       continue;
     }
