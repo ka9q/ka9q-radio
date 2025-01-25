@@ -1007,18 +1007,22 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       file_time.tv_sec = f.quot + epoch; // restore original epoch
       file_time.tv_nsec = f.rem;
       sp->file_time = file_time;
-      sp->starting_offset = (sp->samprate * skip_ns) / BILLION;
+      sp->starting_offset = ((OPUS == sp->encoding ? 48000 : sp->samprate) * skip_ns) / BILLION;
       sp->total_file_samples += sp->starting_offset;
 #if 0
-      fprintf(stderr,"padding %lf sec %lld samples\n",
+      fprintf(stderr,"padding %lf sec %ld samples\n",
 	      (float)skip_ns / BILLION,
 	      sp->starting_offset);
 #endif
     }
-    sp->samples_remaining = FileLengthLimit * sp->samprate - sp->starting_offset;
+    if (OPUS == sp->encoding){
+      sp->samples_remaining = (FileLengthLimit * 48000);
+    } else {
+      sp->samples_remaining = (FileLengthLimit * sp->samprate) - sp->starting_offset;
+    }
   }
   if (max_length > 0){
-    sp->samples_remaining = max_length * sp->samprate;
+    sp->samples_remaining = max_length * (OPUS == sp->encoding ? 48000 : sp->samprate);
   }
   struct tm const * const tm = gmtime(&file_time.tv_sec);
   // yyyy-mm-dd-hh:mm:ss so it will sort properly
@@ -1195,7 +1199,7 @@ static int close_file(struct session *sp){
     fprintf(stderr,"%s closing '%s' %'.1f sec\n",
 	    sp->frontend.description,
 	    sp->filename, // might be blank
-            (float)sp->samples_written / sp->samprate);
+            (float)sp->samples_written / (OPUS == sp->encoding ? 48000 : sp->samprate));
   }
   if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
     fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
