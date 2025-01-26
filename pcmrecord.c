@@ -69,6 +69,7 @@ Command-line options:
 // size of stdio buffer for disk I/O. 8K is probably the default, but we have this for possible tuning
 #define BUFFERSIZE (8192) // probably the same as default
 #define RESEQ 64 // size of resequence queue. Probably excessive; WiFi reordering is rarely more than 4-5 packets
+#define OPUS_SAMPRATE 48000 // Opus always operates at 48 kHz virtual sample rate
 
 // Simplified .wav file header
 // http://soundfile.sapp.org/doc/WaveFormat/
@@ -317,7 +318,6 @@ int main(int argc,char *argv[]){
     exit(EX_USAGE);
   }
   strlcpy(PCM_mcast_address_text,argv[optind],sizeof(PCM_mcast_address_text));
-  setlocale(LC_ALL,Locale);
   setlinebuf(stderr); // In case we're redirected to a file
 
   if(Catmode && Command != NULL){
@@ -447,15 +447,12 @@ static int emit_opus_silence(struct session * const sp,int samples){
 
     sp->rtp_state.timestamp += chunk; // also ready for next
     sp->total_file_samples += chunk;
-    sp->current_segment_samples += chunk;
     sp->samples_written += chunk;
     if((FileLengthLimit != 0) || (max_length != 0))
       sp->samples_remaining -= chunk;
-    if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
-      sp->substantial_file = true;
     samples -= chunk;
     samples_since_flush += chunk;
-    if(Flushmode || samples_since_flush >= 48000){
+    if(Flushmode || samples_since_flush >= OPUS_SAMPRATE){
       // Write an Ogg page on every packet to minimize latency
       // Or at least once per second to keep opusinfo from complaining, and vlc progress from sticking
       samples_since_flush = 0;
@@ -500,6 +497,7 @@ static int send_opus_queue(struct session * const sp,bool flush){
 	  fprintf(stderr,"timestamp jump %d samples\n",jump);
 
 	emit_opus_silence(sp,jump);
+	sp->current_segment_samples = 0; // gap resets
       }
       // end of timestamp jump catch-up, send actual packets on queue
       oggPacket.packetno = sp->packetCount++; // Increment packet number
@@ -511,11 +509,12 @@ static int send_opus_queue(struct session * const sp,bool flush){
       sp->rtp_state.timestamp += samples; // also ready for next
       sp->total_file_samples += samples;
       sp->current_segment_samples += samples;
+      if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
+	sp->substantial_file = true;
+
       sp->samples_written += samples;
       if((FileLengthLimit != 0) || (max_length != 0))
 	sp->samples_remaining -= samples;
-      if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
-	sp->substantial_file = true;
 
       if(Verbose > 2 || (Verbose > 1  && flush))
 	fprintf(stderr,"ssrc %u writing from rtp sequence %u, timestamp %u: bytes %ld samples %d granule %lld\n",
@@ -578,9 +577,9 @@ static int send_wav_queue(struct session * const sp,bool flush){
 	  fwrite(zeroes,framesize,jump,sp->fp);
 	  FREE(zeroes);
 	}
+	sp->current_segment_samples = 0; // gap resets
 	sp->rtp_state.timestamp += jump; // also ready for next
 	sp->total_file_samples += jump;
-	sp->current_segment_samples += jump;
 	sp->samples_written += jump;
 	if((FileLengthLimit != 0) || (max_length != 0))
 	  sp->samples_remaining -= jump;
@@ -590,11 +589,11 @@ static int send_wav_queue(struct session * const sp,bool flush){
       sp->rtp_state.timestamp += frames; // also ready for next
       sp->total_file_samples += frames;
       sp->current_segment_samples += frames;
+      if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
+	sp->substantial_file = true;
       sp->samples_written += frames;
       if((FileLengthLimit != 0) || (max_length != 0))
 	sp->samples_remaining -= frames;
-      if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
-	sp->substantial_file = true;
 
       if(Verbose > 2 || (Verbose > 1  && flush))
 	fprintf(stderr,"writing from rtp sequence %u, timestamp %u: bytes %d frames %d\n",
@@ -692,7 +691,7 @@ static void input_loop(){
       sp->type = chan.output.rtp.type;
       sp->channels = chan.output.channels;
       sp->encoding = chan.output.encoding;
-      sp->samprate = chan.output.samprate;
+      sp->samprate = (sp->encoding == OPUS) ? OPUS_SAMPRATE : chan.output.samprate;
       memcpy(&sp->sender,&sender,sizeof(sp->sender));
       memcpy(&sp->chan,&chan,sizeof(sp->chan));
       memcpy(&sp->frontend,&frontend,sizeof(sp->frontend));
@@ -895,9 +894,9 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   if(Catmode){
     sp->fp = stdout;
     if(Verbose)
-      fprintf(stderr,"receiving %s ssrc %u samprate %d channels %d encoding %s freq %.3lf preset %s\n",
+      fprintf(stderr,"receiving %s ssrc %u samprate %d channels %d encoding %s freq %'.3lf preset %s\n",
 	      sp->frontend.description,
-	      sp->ssrc,sp->samprate,sp->channels,file_encoding,sp->chan.tune.freq,
+	      sp->ssrc,sp->chan.output.samprate,sp->channels,file_encoding,sp->chan.tune.freq, // use rx sample rate even for opus
 	      sp->chan.preset);
     return 0;
   } else if(Command != NULL){
@@ -931,7 +930,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	  snprintf(temp,sizeof(temp),"%d",sp->channels);
 	  break;
 	case 'r':
-	  snprintf(temp,sizeof(temp),"%d",sp->samprate);
+	  snprintf(temp,sizeof(temp),"%d",sp->chan.output.samprate); // rx sample rate even for Opus
 	  break;
 	case 's':
 	  snprintf(temp,sizeof(temp),"%u",sp->ssrc);
@@ -1007,7 +1006,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       file_time.tv_sec = f.quot + epoch; // restore original epoch
       file_time.tv_nsec = f.rem;
       sp->file_time = file_time;
-      sp->starting_offset = ((OPUS == sp->encoding ? 48000 : sp->samprate) * skip_ns) / BILLION;
+      sp->starting_offset = (sp->samprate * skip_ns) / BILLION;
       sp->total_file_samples += sp->starting_offset;
 #if 0
       fprintf(stderr,"padding %lf sec %ld samples\n",
@@ -1015,30 +1014,18 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	      sp->starting_offset);
 #endif
     }
-    if (OPUS == sp->encoding){
-      sp->samples_remaining = (FileLengthLimit * 48000);
-    } else {
-      sp->samples_remaining = (FileLengthLimit * sp->samprate) - sp->starting_offset;
-    }
+    sp->samples_remaining = (FileLengthLimit * sp->samprate) - sp->starting_offset;
   }
-  if (max_length > 0){
-    sp->samples_remaining = max_length * (OPUS == sp->encoding ? 48000 : sp->samprate);
-  }
-  struct tm const * const tm = gmtime(&file_time.tv_sec);
-  // yyyy-mm-dd-hh:mm:ss so it will sort properly
-#if 0
-  fprintf(stderr,"file time = %4d-%02d-%02dT%02d:%02d:%02d.%dZ\n",
-	     tm->tm_year+1900,
-	     tm->tm_mon+1,
-	     tm->tm_mday,
-	     tm->tm_hour,
-	     tm->tm_min,
-	     tm->tm_sec,
-	  (int)(file_time.tv_nsec / 100000000)); // 100 million, i.e., convert to tenths of a sec
-#endif
+  if (max_length > 0)
+    sp->samples_remaining = max_length * sp->samprate;
 
   if(Jtmode){
     //  K1JT-format file names in flat directory
+    // Round time to nearest second
+    time_t seconds = file_time.tv_sec;
+    if(file_time.tv_nsec > BILLION/2)
+      seconds++;
+    struct tm const * const tm = gmtime(&seconds);
     snprintf(sp->filename,sizeof(sp->filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s%s",
 	     tm->tm_year+1900,
 	     tm->tm_mon+1,
@@ -1049,46 +1036,54 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	     sp->chan.tune.freq,
 	     sp->chan.preset,
 	     suffix);
-  } else if(Subdirs){
-    // Create directory path
-    char dir[PATH_MAX];
-    snprintf(dir,sizeof(dir),"%u",sp->ssrc);
-    if(mkdir(dir,0777) == -1 && errno != EEXIST){
-      fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
-      return -1;
-    }
-    snprintf(dir,sizeof(dir),"%u/%d",sp->ssrc,tm->tm_year+1900);
-    if(mkdir(dir,0777) == -1 && errno != EEXIST){
-      fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
-      return -1;
-    }
-    snprintf(dir,sizeof(dir),"%u/%d/%d",sp->ssrc,tm->tm_year+1900,tm->tm_mon+1);
-    if(mkdir(dir,0777) == -1 && errno != EEXIST){
-      fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
-      return -1;
-    }
-    snprintf(dir,sizeof(dir),"%u/%d/%d/%d",sp->ssrc,tm->tm_year+1900,tm->tm_mon+1,tm->tm_mday);
-    if(mkdir(dir,0777) == -1 && errno != EEXIST){
-      fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
-      return -1;
-    }
-    snprintf(sp->filename,sizeof(sp->filename),"%u/%d/%d/%d/%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ%s",
-	     sp->ssrc,
-	     tm->tm_year+1900,
-	     tm->tm_mon+1,
-	     tm->tm_mday,
-	     sp->ssrc,
-	     tm->tm_year+1900,
-	     tm->tm_mon+1,
-	     tm->tm_mday,
-	     tm->tm_hour,
-	     tm->tm_min,
-	     tm->tm_sec,
-	     (int)(file_time.tv_nsec / 100000000), // 100 million, i.e., convert to tenths of a sec
-	     suffix);
   } else {
-    // create file in current directory
-    snprintf(sp->filename,sizeof(sp->filename),"%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ%s",
+    // Round time to nearest 1/10 second
+    imaxdiv_t f = imaxdiv(file_time.tv_nsec,100000000); // 100 million to get deci-seconds
+    if(f.rem >= 50000000) // 50 million
+      f.quot++; // round up to next deci second
+    long long deci_seconds = f.quot + (long long)10 * file_time.tv_sec;
+    f = imaxdiv(deci_seconds,10); // seconds, tenths
+    time_t seconds = f.quot;
+    int tenths = f.rem;
+    struct tm const * const tm = gmtime(&seconds);
+    sp->filename[0] = '\0';
+
+    if(Subdirs){
+      // Create directory path
+      char dir[PATH_MAX];
+      snprintf(dir,sizeof(dir),"%u",sp->ssrc);
+      if(mkdir(dir,0777) == -1 && errno != EEXIST){
+	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
+	return -1;
+      }
+      snprintf(dir,sizeof(dir),"%u/%d",sp->ssrc,tm->tm_year+1900);
+      if(mkdir(dir,0777) == -1 && errno != EEXIST){
+	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
+	return -1;
+      }
+      snprintf(dir,sizeof(dir),"%u/%d/%d",sp->ssrc,tm->tm_year+1900,tm->tm_mon+1);
+      if(mkdir(dir,0777) == -1 && errno != EEXIST){
+	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
+	return -1;
+      }
+      snprintf(dir,sizeof(dir),"%u/%d/%d/%d",sp->ssrc,tm->tm_year+1900,tm->tm_mon+1,tm->tm_mday);
+      if(mkdir(dir,0777) == -1 && errno != EEXIST){
+	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
+	return -1;
+      }
+      // yyyy-mm-dd-hh:mm:ss.s so it will sort properly
+      snprintf(sp->filename,sizeof(sp->filename),
+	       "%u/%d/%d/%d/",
+	       sp->ssrc,
+	       tm->tm_year+1900,
+	       tm->tm_mon+1,
+	       tm->tm_mday);
+    }
+    // create file in specified directory
+    char *start = sp->filename + strlen(sp->filename);
+    int size = sizeof(sp->filename) - strlen(sp->filename);
+    snprintf(start,size,
+	     "%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ%s",
 	     sp->ssrc,
 	     tm->tm_year+1900,
 	     tm->tm_mon+1,
@@ -1096,7 +1091,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	     tm->tm_hour,
 	     tm->tm_min,
 	     tm->tm_sec,
-	     (int)(file_time.tv_nsec / 100000000),
+	     tenths,
 	     suffix);
   }
   sp->fp = fopen(sp->filename,"w++");
@@ -1123,9 +1118,9 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   }
   // We byte swap S16BE to S16LE, so change the tag
   if(Verbose){
-    fprintf(stderr,"%s creating '%s' %d s/s %s %s %.3lf Hz %s",
+    fprintf(stderr,"%s creating '%s' %d s/s %s %s %'.3lf Hz %s",
 	    sp->frontend.description,
-	    sp->filename,sp->samprate,
+	    sp->filename,sp->chan.output.samprate, // original rx samprate for opus
 	    sp->channels == 1 ? "mono" : "stereo",
 	    file_encoding,sp->chan.tune.freq,
 	    sp->chan.preset);
@@ -1199,7 +1194,7 @@ static int close_file(struct session *sp){
     fprintf(stderr,"%s closing '%s' %'.1f sec\n",
 	    sp->frontend.description,
 	    sp->filename, // might be blank
-            (float)sp->samples_written / (OPUS == sp->encoding ? 48000 : sp->samprate));
+            (float)sp->samples_written / sp->samprate);
   }
   if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
     fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
@@ -1210,7 +1205,8 @@ static int close_file(struct session *sp){
       attrprintf(fd,"samples written","%lld",sp->samples_written);
       attrprintf(fd,"total samples","%lld",sp->total_file_samples);
     } else if(strlen(sp->filename) > 0){
-      unlink(sp->filename);
+      if(unlink(sp->filename) != 0)
+	fprintf(stderr,"Can't unlink %s: %s\n",sp->filename,strerror(errno));
       if(Verbose)
 	fprintf(stderr,"deleting %s %'.1f sec\n",sp->filename,
 		(float)sp->samples_written / sp->samprate);
@@ -1225,6 +1221,7 @@ static int close_file(struct session *sp){
   sp->filename[0] = '\0';
   sp->samples_written = 0;
   sp->total_file_samples = 0;
+  sp->current_segment_samples = 0;
 
   if (0 == max_length)
     return 0;
