@@ -75,80 +75,81 @@ int pipefill(int const fd,void *buffer,int const cnt){
 }
 
 // Set realtime priority (if possible)
-#ifdef __linux__
+static int Base_prio;
+static bool Message_shown;
 void realtime(void){
-  struct sched_param param;
+#ifdef __linux__
+  struct sched_param param = {0};
   param.sched_priority = (sched_get_priority_max(SCHED_FIFO) + sched_get_priority_min(SCHED_FIFO)) / 2; // midway?
-  if(sched_setscheduler(0,SCHED_FIFO|SCHED_RESET_ON_FORK,&param) != 0){
+  if(sched_setscheduler(0,SCHED_FIFO|SCHED_RESET_ON_FORK,&param) == 0)
+    return; // Successfully set realtime
+
+  {
     char name[25];
-    int err;
-    if((err = pthread_getname_np(pthread_self(),name,sizeof(name))) != 0 && errno != EACCES){
-      // Don't bother with permission failures
+    int err = errno;
+    if(!Message_shown && pthread_getname_np(pthread_self(),name,sizeof(name)) == 0){
+      Message_shown = true;
       fprintf(stdout,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
     }
   }
-}
-#else
-static int Base_prio;
-void realtime(void){
+#endif
   // As backup, decrease our niceness by 10
   Base_prio = getpriority(PRIO_PROCESS,0);
   errno = 0; // setpriority can return -1
   int prio = setpriority(PRIO_PROCESS,0,Base_prio - 10);
-  if(prio != 0 && errno != EACCES){ // Not EPERM!
+  if(prio != 0){
     int err = errno;
     char name[25];
     memset(name,0,sizeof(name));
-    if(pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
-      // permission failures happen frequently, don't bother
+    if(!Message_shown && pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
+      Message_shown = true;
       fprintf(stdout,"%s: setpriority failed, %s (%d)\n",name,strerror(err),err);
     }
   }
 }
-#endif
 
 // Drop back to normal priority, to avoid blocking a core when doing something time-consuming, like a FFT plan
-// Return 1 if we had previously been running at realtime, 0 otherwise
+// Return true if we had previously been running at realtime, false otherwise
+
+bool norealtime(void){
 #ifdef __linux__
-bool norealtime(void){
-  int old = sched_getscheduler(0);
-  if(old != SCHED_OTHER){
-    struct sched_param param;
-    param.sched_priority = 0;
-    if(sched_setscheduler(0,SCHED_OTHER,&param) != 0){
-      char name[25];
-      int err;
-      if((err = pthread_getname_np(pthread_self(),name,sizeof(name))) != 0 && errno != EACCES){
-	// Don't bother with permission failures
-	fprintf(stdout,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
-      }
+  if(sched_getscheduler(0) == SCHED_OTHER)
+    return false; // Already normal
+
+  struct sched_param param = {0};
+  param.sched_priority = 0;
+  if(sched_setscheduler(0,SCHED_OTHER,&param) == 0)
+    return true; // Successfully returned to normal
+
+  {
+    int err = errno; // in case getname changes it
+    char name[25] = {0};
+    if(!Message_shown && pthread_getname_np(pthread_self(),name,sizeof(name)) == 0){
+      Message_shown = true;
+      fprintf(stdout,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
     }
-    return true;
   }
-  return false;
-}
-#else 
-bool norealtime(void){
-  // Restore our base prio
-  // increase our niceness by 10
+#endif
+  // Try renicing to our base prio
   errno = 0; // setpriority can return -1
   int prio = getpriority(PRIO_PROCESS,0);
-  if(prio != Base_prio){
-    prio = setpriority(PRIO_PROCESS,0,Base_prio);
-    if(prio != 0 && errno != EACCES){ // Not EPERM!
-      int err = errno;
-      char name[25];
-      memset(name,0,sizeof(name));
-      if(pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
-	// permission failures happen frequently, don't bother
-	fprintf(stdout,"%s: setpriority failed, %s (%d)\n",name,strerror(err),err);
-      }
+  if(prio == Base_prio)
+    return false; // Already normal niceness
+
+  prio = setpriority(PRIO_PROCESS,0,Base_prio);
+  if(prio == 0)
+    return true; // Successfully returned to normal niceness
+  // Can it really fail when we're lowering?
+  if(!Message_shown){
+    int err = errno;
+    char name[25] = {0};
+    if(pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
+      Message_shown = true;
+      fprintf(stdout,"%s: setpriority failed to lower, %s (%d)\n",name,strerror(err),err);
     }
-    return true;
   }
-  return false;
+  return true;  // Don't really know our state
 }
-#endif
 
 // Remove return or newline, if any, from end of string
 void chomp(char *s){
@@ -173,7 +174,7 @@ void normalize_time(struct timespec *x){
     x->tv_sec++;
   } else
     return;
-  
+
   // Unlikely to get here
   if(x->tv_nsec < 0 || x->tv_nsec >= BILLION){
     lldiv_t f = lldiv(x->tv_nsec,BILLION);
@@ -262,7 +263,7 @@ char *ftime(char * result,int size,int64_t t){
     t = -t; // absolute value
   } else
     *cp = ' ';
-  
+
   cp++;
   size--;
 
@@ -275,7 +276,7 @@ char *ftime(char * result,int size,int64_t t){
     r = snprintf(cp,size,"%3lld:",(long long)hr);
   else
     r = snprintf(cp,size,"    ");
-    
+
   if(r < 0)
     return NULL;
   cp += r;
@@ -294,14 +295,14 @@ char *ftime(char * result,int size,int64_t t){
     // Hours zero, show minute without leading 0
     r = snprintf(cp,size,"%2d:",mn);
   else
-    r = snprintf(cp,size,"   ");    
-  
+    r = snprintf(cp,size,"   ");
+
   assert(r == 3);
   if(r < 0)
     return NULL;
   cp += r;
   size -= r;
-      
+
 
   if(hr > 0 || mn > 0)
   // Hours or minutes are nonzero, show seconds with leading 0
@@ -353,10 +354,10 @@ double parse_frequency(char const *s,bool heuristics){
   double f = strtod(ss,&endptr);
   if(endptr == ss || f == 0)
     return 0; // Empty entry, or nothing decipherable
-    
+
   if(!heuristics || sp != NULL || f >= 1e5) // If multiplier explicitly given, or frequency >= 100 kHz (lower limit), return as-is
     return f * mult;
-    
+
   // no radix specified & heuristics enabled: empirically guess kHz or MHz
   if(f < 500)         // Could be kHz or MHz, arbitrarily assume MHz
     return f * 1e6;
@@ -568,7 +569,7 @@ void *mirror_alloc(size_t size){
   }
   int fd;
 
-#if __linux__  
+#if __linux__
   int flags = 0;
   // New flag? Not documented on man page but mentioned in kernel warning message, so pass it if defined
 #ifdef MFD_NOEXEC_SEAL
@@ -624,4 +625,3 @@ void mirror_free(void **p,size_t size){
   munmap(*p, size * 2);
   *p = NULL; // Nail pointer
 }
-
