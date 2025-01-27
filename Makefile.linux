@@ -102,10 +102,10 @@ install: $(DAEMONS) $(EXECS)
 	chown radio:radio /var/log/ft8.log /var/log/ft4.log /var/log/wspr.log /var/log/hfdl /var/log/hfdl
 	chgrp radio /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
 	chmod g+ws  /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
-	systemctl daemon-reload
 # now handled by radiod with cap_net_admin capability
 #	systemctl enable set_lo_multicast
 #	systemctl start set_lo_multicast
+	systemctl daemon-reload
 
 clean:
 	-rm -f *.o *.a *.d *.so .depend $(EXECS) $(DAEMONS)
