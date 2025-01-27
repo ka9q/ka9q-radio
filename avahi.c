@@ -1,10 +1,19 @@
-// Brand new version that just forks and execs the commands 'avahi-browse' or 'avahi-publish'
+//#define STATIC 1 // Define this to put static entries in /etc/avahi instead of running publish tasks
+
+// Version that just forks and execs the commands 'avahi-browse' or 'avahi-publish'
 // Using the Avahi API is a nightmare; it's a twisted mess of callbacks between "callbacks", "services", "resolvers", etc.
 // March 2024, Phil Karn KA9Q
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/file.h>
 #include "avahi.h"
+
+int avahi_publish_address(char const *dns_name,char const *ip_address_string);
+int avahi_publish_service(char const *service_name, char const *service_type, char const *dns_name,int service_port, char const *description, int pid);
 
 int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,int address,char const *description,void *sock,size_t *socksize){
   if(sock != NULL && socksize != NULL){
@@ -19,6 +28,9 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
       *socksize = 0;
   }
   int pid = getpid(); // Advertise the parent's pid, not the child's
+#if STATIC
+  avahi_publish_service(service_name, service_type, dns_name,service_port,description,pid);
+#else
   if(fork() == 0){
 #if 0
     fprintf(stdout,"avahi-publish-service child pid %d\n",getpid());
@@ -51,23 +63,123 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
     perror("exec avahi publish service");
     return -1;
   }
-  if(address != 0 && fork() == 0){
-    // run "avahi-publish-address dns_name address", only if an address is specifieda
+#endif
+
+  if(address != 0){
     char *ip_address_string = NULL;    // No need to free, we're calling exec
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-result" 
     asprintf(&ip_address_string,"%d.%d.%d.%d",(address >> 24) & 0xff, (address >> 16) & 0xff, (address >> 8) & 0xff, address & 0xff);
 #pragma GCC diagnostic pop
+#if STATIC
+    avahi_publish_address(dns_name,ip_address_string);
+#else
+    if(fork() == 0){
+      // run "avahi-publish-address dns_name address", only if an address is specified
+      
 #if 0
-    fprintf(stdout,"avahi start: ip address string = %s\n",ip_address_string);
-    fprintf(stdout,"avahi-publish-address child pid %d\n",getpid());
-    fprintf(stdout,"%s %s %s %s\n",
-	    "avahi-publish-address", "avahi-publish-address",dns_name,ip_address_string);
+      fprintf(stdout,"avahi start: ip address string = %s\n",ip_address_string);
+      fprintf(stdout,"avahi-publish-address child pid %d\n",getpid());
+      fprintf(stdout,"%s %s %s %s\n",
+	      "avahi-publish-address", "avahi-publish-address",dns_name,ip_address_string);
 #endif
-    execlp("avahi-publish-address", "avahi-publish-address",dns_name,ip_address_string, NULL);
-    perror("exec avahi publish address");
+      execlp("avahi-publish-address", "avahi-publish-address",dns_name,ip_address_string, NULL);
+      perror("exec avahi publish address");
+      return -1;
+    }
+#endif
+  }
+  return 0;
+}
+
+
+// Publish service in static avahi directory
+#define SERVICES "/etc/avahi/services"
+int avahi_publish_service(char const *service_name, char const *service_type, char const *dns_name,int service_port, char const *description, int pid){
+  char path_name[1024];
+
+  snprintf(path_name,sizeof(path_name),"%s/%s.service",SERVICES,service_name);
+  FILE *fp = fopen(path_name,"w"); // Will overwrite if exists
+  if(fp == NULL){
+    fprintf(stdout,"Can't create %s: %s\n",path_name,strerror(errno));
     return -1;
   }
+  char hostname[sysconf(_SC_HOST_NAME_MAX)];
+  gethostname(hostname,sizeof(hostname));
+
+  fcntl(fileno(fp),LOCK_EX);
+  fputs("<service-group>\n",fp);
+  fprintf(fp,"<name>%s</name>\n",service_name);
+  fputs("<service protocol=\"ipv4\">\n",fp);
+  fprintf(fp,"<host-name>%s</host-name>\n",dns_name);
+  fprintf(fp,"<type>%s</type>\n",service_type);
+  fprintf(fp,"<port>%d</port>\n",service_port);
+  fprintf(fp,"<txt-record>pid=%d</txt-record>\n",pid);
+  fprintf(fp,"<txt-record>%s</txt-record>\n",description);
+  fprintf(fp,"<txt-record>source=%s</txt-record>\n",hostname);
+  fputs("</service>\n",fp);
+  fputs("</service-group>\n",fp);
+  fcntl(fileno(fp),LOCK_UN);
+  fclose(fp);
+  return 0;
+}
+
+// Publish address, host pair in static avahi file
+#define HOSTS "/etc/avahi/hosts"
+int avahi_publish_address(char const *name,char const *address){
+  FILE *fp = fopen(HOSTS,"a+");
+  if(fp == NULL){
+    fprintf(stdout,"Can't open %s: %s\n",HOSTS,strerror(errno));
+    return -1;
+  }
+  // the lock has to be exclusive even when reading, otherwise there could be double entries
+  if(flock(fileno(fp),LOCK_EX) != 0){
+    fprintf(stderr,"Can't lock %s: %s\n",HOSTS,strerror(errno));
+    fclose(fp);
+    return -1;
+  }
+  rewind(fp); // Start reading at front
+  char *buffer = NULL;
+  size_t linecap = 0;
+  int linelen;
+  while((linelen = getline(&buffer,&linecap,fp)) > 0){
+    char *cp;
+    if((cp = strchr(buffer,'\n')) != NULL)
+      *cp = '\0';
+    if(buffer[0] == '#')
+      continue;
+    char *line = buffer;
+    char const *faddr = strsep(&line," \t");
+    if(faddr == NULL || line == NULL)
+      continue;
+    
+    // Skip multiple white space
+    while(*line == ' ' || *line == '\t')
+      line++;
+
+    char const *fname = line;
+    if(fname == NULL || *fname == '\0')
+      continue;
+    
+    // These are string comparisons so there might be a false mismatch
+    // if they're written differently. redo as compares of canonical forms
+    // Also, what are the rules about the same names with different addresses
+    // and vice versa?
+    if(strcmp(name,fname) == 0 && strcmp(address,faddr) == 0){
+      // Yes, entry is already present, don't do anything
+      flock(fileno(fp),LOCK_UN);
+      fclose(fp);
+      free(buffer);
+      return 0;
+    }
+  }
+  free(buffer);
+  // we've read the entire file without a match, so append our record
+  // The "a+" open mode means we'll append
+  if(fprintf(fp,"%s %s\n",address,name) < 0)
+    fprintf(stdout,"Can't append to %s: %s\n",HOSTS,strerror(errno));
+  flock(fileno(fp),LOCK_UN); // Upgrade to exclusive lock for writing  
+  fclose(fp);
 
   return 0;
 }

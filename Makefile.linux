@@ -100,8 +100,8 @@ install: $(DAEMONS) $(EXECS)
 	touch -a /var/log/ft8.log /var/log/ft4.log /var/log/wspr.log
 	mkdir -p /etc/fftw /etc/radio $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
 	chown radio:radio /var/log/ft8.log /var/log/ft4.log /var/log/wspr.log /var/log/hfdl /var/log/hfdl
-	chgrp radio /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
-	chmod g+ws  /etc/radio /etc/fftw $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
+	chgrp radio /etc/radio /etc/fftw /etc/avahi/hosts /etc/avahi/services $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
+	chmod g+ws  /etc/radio /etc/fftw /etc/avahi/hosts /etc/avahi/services $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
 # now handled by radiod with cap_net_admin capability
 #	systemctl enable set_lo_multicast
 #	systemctl start set_lo_multicast
