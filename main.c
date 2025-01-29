@@ -368,13 +368,63 @@ static int loadconfig(char const *file){
 
   config_validate_section(stdout,Configtable,GLOBAL,Global_keys,Channel_keys);
 
-  // Set up template for all new channels
-  set_defaults(&Template);
-  Template.lifetime = DEFAULT_LIFETIME * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
-
   // Process [global] section applying to all demodulator blocks
-
   Verbose = config_getint(Configtable,GLOBAL,"verbose",Verbose);
+  Blocktime = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",Blocktime));
+  Channel_idle_timeout = 20 * 1000 / Blocktime;
+  Overlap = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
+  N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
+  FFTW_plan_timelimit = config_getdouble(Configtable,GLOBAL,"fft-time-limit",FFTW_plan_timelimit);
+  RTCP_enable = config_getboolean(Configtable,GLOBAL,"rtcp",RTCP_enable);
+  SAP_enable = config_getboolean(Configtable,GLOBAL,"sap",SAP_enable);
+  {
+    char const *cp = config_getstring(Configtable,GLOBAL,"fft-plan-level","patient");
+    if(strcasecmp(cp,"estimate") == 0){
+      FFTW_planning_level = FFTW_ESTIMATE;
+    } else if(strcasecmp(cp,"measure") == 0){
+      FFTW_planning_level = FFTW_MEASURE;
+    } else if(strcasecmp(cp,"patient") == 0){
+      FFTW_planning_level = FFTW_PATIENT;
+    } else if(strcasecmp(cp,"exhaustive") == 0){
+      FFTW_planning_level = FFTW_EXHAUSTIVE;
+    } else if(strcasecmp(cp,"wisdom-only") == 0){
+      FFTW_planning_level = FFTW_WISDOM_ONLY;
+    }
+  }
+  Update = config_getint(Configtable,GLOBAL,"update",Update);
+  IP_tos = config_getint(Configtable,GLOBAL,"tos",IP_tos);
+  Mcast_ttl = config_getint(Configtable,GLOBAL,"ttl",Mcast_ttl);
+  Global_use_dns = config_getboolean(Configtable,GLOBAL,"dns",false);
+  {
+    char const *p = config_getstring(Configtable,GLOBAL,"wisdom-file",NULL);
+    if(p != NULL)
+      Wisdom_file = strdup(p);
+
+    // Accept either keyword; "preset" is more descriptive than the old (but still accepted) "mode"
+    p = config_getstring(Configtable,GLOBAL,"mode-file","presets.conf");
+    p = config_getstring(Configtable,GLOBAL,"presets-file",p);
+    dist_path(Preset_file,sizeof(Preset_file),p);
+    fprintf(stdout,"Loading presets file %s\n",Preset_file);
+    Preset_table = iniparser_load(Preset_file); // Kept open for duration of program
+    config_validate(stdout,Preset_table,Channel_keys,NULL);
+    if(Preset_table == NULL){
+      fprintf(stdout,"Can't load preset file %s\n",Preset_file);
+      exit(EX_UNAVAILABLE); // Can't really continue without fixing
+    }
+  }
+
+  // Form default status dns name
+
+  gethostname(Hostname,sizeof(Hostname));
+  // Edit off .domain, .local, etc
+  {
+    char *cp = strchr(Hostname,'.');
+    if(cp != NULL)
+      *cp = '\0';
+  }
+  char default_status[strlen(Hostname) + strlen(Name) + 20]; // Enough room for snprintf
+  snprintf(default_status,sizeof(default_status),"%s-%s.local",Hostname,Name);
+  Metadata_dest_string = strdup(config_getstring(Configtable,GLOBAL,"status",default_status)); // Status/command target for all demodulato
 
   // Set up the hardware early, in case it fails
   const char *hardware = config_getstring(Configtable,GLOBAL,"hardware",NULL);
@@ -401,22 +451,6 @@ static int loadconfig(char const *file){
       exit(EX_USAGE);
     }
   }
-  FFTW_plan_timelimit = config_getdouble(Configtable,GLOBAL,"fft-time-limit",FFTW_plan_timelimit);
-  {
-    char const *cp = config_getstring(Configtable,GLOBAL,"fft-plan-level","patient");
-    if(strcasecmp(cp,"estimate") == 0){
-      FFTW_planning_level = FFTW_ESTIMATE;
-    } else if(strcasecmp(cp,"measure") == 0){
-      FFTW_planning_level = FFTW_MEASURE;
-    } else if(strcasecmp(cp,"patient") == 0){
-      FFTW_planning_level = FFTW_PATIENT;
-    } else if(strcasecmp(cp,"exhaustive") == 0){
-      FFTW_planning_level = FFTW_EXHAUSTIVE;
-    } else if(strcasecmp(cp,"wisdom-only") == 0){
-      FFTW_planning_level = FFTW_WISDOM_ONLY;
-    }
-  }
-
   // Default multicast interface
   {
     // The area pointed to by returns from config_getstring() is freed and overwritten when the config dictionary is closed
@@ -432,16 +466,31 @@ static int loadconfig(char const *file){
     snprintf(data_default,sizeof(data_default),"%s-pcm",Name);
     Data = strdup(config_getstring(Configtable,GLOBAL,"data",data_default));
   }
-  strlcpy(Template.output.dest_string,Data,sizeof(Template.output.dest_string));
-  Update = config_getint(Configtable,GLOBAL,"update",Update);
-  IP_tos = config_getint(Configtable,GLOBAL,"tos",IP_tos);
-  Mcast_ttl = config_getint(Configtable,GLOBAL,"ttl",Mcast_ttl);
+  // Set up template for all new channels
+  set_defaults(&Template);
+  Template.lifetime = DEFAULT_LIFETIME * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
+
   // Set up default output stream file descriptor and socket
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
+  strlcpy(Template.output.dest_string,Data,sizeof(Template.output.dest_string));
+
+  // Preset/mode must be specified to create a dynamic channel
+  // (Trying to switch from term "mode" to term "preset" as more descriptive)
+  char const * p = config_getstring(Configtable,GLOBAL,"preset","am"); // Hopefully "am" is defined in presets.conf
+  char const * preset = config_getstring(Configtable,GLOBAL,"mode",p); // Must be specified to create a dynamic channel
+  if(preset != NULL){
+    if(loadpreset(&Template,Preset_table,preset) != 0)
+      fprintf(stdout,"warning: loadpreset(%s,%s) in [global]\n",Preset_file,preset);
+    strlcpy(Template.preset,preset,sizeof(Template.preset));
+
+    loadpreset(&Template,Configtable,GLOBAL); // Overwrite with other entries from this section, without overwriting those
+  } else {
+    fprintf(stdout,"No default mode for template\n");
+  }
 
   snprintf(Ttlmsg,sizeof(Ttlmsg),"TTL=%d",Mcast_ttl);
   // Look quickly (2 tries max) to see if it's already in the DNS
-  Global_use_dns = config_getboolean(Configtable,GLOBAL,"dns",false);
+
   {
     uint32_t addr = 0;
     if(!Global_use_dns || resolve_mcast(Data,&Template.output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
@@ -469,43 +518,7 @@ static int loadconfig(char const *file){
   }
   join_group(Output_fd,&Template.output.dest_socket,Iface); // Work around snooping switch problem
 
-  Blocktime = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",Blocktime));
-  Channel_idle_timeout = 20 * 1000 / Blocktime;
-  Overlap = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
-  N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
-  RTCP_enable = config_getboolean(Configtable,GLOBAL,"rtcp",RTCP_enable);
-  SAP_enable = config_getboolean(Configtable,GLOBAL,"sap",SAP_enable);
-  {
-    // Accept either keyword; "preset" is more descriptive than the old (but still accepted) "mode"
-    char const *p = config_getstring(Configtable,GLOBAL,"mode-file","presets.conf");
-    p = config_getstring(Configtable,GLOBAL,"presets-file",p);
-    dist_path(Preset_file,sizeof(Preset_file),p);
-    fprintf(stdout,"Loading presets file %s\n",Preset_file);
-    Preset_table = iniparser_load(Preset_file); // Kept open for duration of program
-    config_validate(stdout,Preset_table,Channel_keys,NULL);
-    if(Preset_table == NULL){
-      fprintf(stdout,"Can't load preset file %s\n",Preset_file);
-      exit(EX_UNAVAILABLE); // Can't really continue without fixing
-    }
-  }
-  {
-    char const *p = config_getstring(Configtable,GLOBAL,"wisdom-file",NULL);
-    if(p != NULL)
-      Wisdom_file = strdup(p);
-  }
   // Set up status/command stream, global for all receiver channels
-  // Form default status dns name
-
-  gethostname(Hostname,sizeof(Hostname));
-  // Edit off .domain, .local, etc
-  {
-    char *cp = strchr(Hostname,'.');
-    if(cp != NULL)
-      *cp = '\0';
-  }
-  char default_status[strlen(Hostname) + strlen(Name) + 20]; // Enough room for snprintf
-  snprintf(default_status,sizeof(default_status),"%s-%s.local",Hostname,Name);
-  Metadata_dest_string = strdup(config_getstring(Configtable,GLOBAL,"status",default_status)); // Status/command target for all demodulators
   if(0 == strcmp(Metadata_dest_string,Data)){
     fprintf(stdout,"Duplicate status/data stream names: data=%s, status=%s\n",Data,Metadata_dest_string);
     exit(EX_USAGE);
@@ -535,19 +548,6 @@ static int loadconfig(char const *file){
   if(Ctl_fd >= 3)
     pthread_create(&Status_thread,NULL,radio_status,NULL);
 
-  // Preset/mode must be specified to create a dynamic channel
-  // (Trying to switch from term "mode" to term "preset" as more descriptive)
-  char const * p = config_getstring(Configtable,GLOBAL,"preset","am"); // Hopefully "am" is defined in presets.conf
-  char const * preset = config_getstring(Configtable,GLOBAL,"mode",p); // Must be specified to create a dynamic channel
-  if(preset != NULL){
-    if(loadpreset(&Template,Preset_table,preset) != 0)
-      fprintf(stdout,"warning: loadpreset(%s,%s) in [global]\n",Preset_file,preset);
-    strlcpy(Template.preset,preset,sizeof(Template.preset));
-
-    loadpreset(&Template,Configtable,GLOBAL); // Overwrite with other entries from this section, without overwriting those
-  } else {
-    fprintf(stdout,"No default mode for template\n");
-  }
   // Process individual demodulator sections in parallel for speed
   int const nsect = iniparser_getnsec(Configtable);
   pthread_t startup_threads[nsect];
