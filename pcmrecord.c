@@ -71,6 +71,8 @@ Command-line options:
 #define RESEQ 64 // size of resequence queue. Probably excessive; WiFi reordering is rarely more than 4-5 packets
 #define OPUS_SAMPRATE 48000 // Opus always operates at 48 kHz virtual sample rate
 
+static char radio_description[256];
+
 // Simplified .wav file header
 // http://soundfile.sapp.org/doc/WaveFormat/
 struct wav {
@@ -646,7 +648,13 @@ static void input_loop(){
       struct frontend frontend;
       memset(&frontend,0,sizeof(frontend));
       decode_radio_status(&frontend,&chan,buffer+1,length-1);
-
+      // Looks like there's a malloc'd description in the frontend, so
+      // save a copy of the string in a global, then free the malloc'd
+      // description, and set the frontend to point to the global.
+      // Otherwise, this leaks!
+      strlcpy(radio_description,frontend.description,sizeof(radio_description));
+      free(frontend.description);
+      frontend.description = radio_description;
       if(Ssrc != 0 && chan.output.rtp.ssrc != Ssrc)
 	goto statdone; // Unwanted session, but still clear any data packets
 
