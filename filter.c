@@ -193,6 +193,10 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     // Start FFT worker thread(s) if not already running
     pthread_mutex_init(&FFT.queue_mutex,NULL);
     pthread_cond_init(&FFT.queue_cond,NULL);
+    if(N_worker_threads > NTHREADS_MAX){
+      fprintf(stdout,"fft-threads=%d too high, limiting to %d\n",N_worker_threads,NTHREADS_MAX);
+      N_worker_threads = NTHREADS_MAX;
+    }
     for(int i=0;i < N_worker_threads;i++)
       pthread_create(&FFT.thread[i],NULL,run_fft,NULL);
 
