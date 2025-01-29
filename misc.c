@@ -77,10 +77,17 @@ int pipefill(int const fd,void *buffer,int const cnt){
 // Set realtime priority (if possible)
 static int Base_prio;
 static bool Message_shown;
+
 void realtime(void){
 #ifdef __linux__
+  static int minprio = -1; // Save the extra system calls
+  static int maxprio = -1;
+  if(minprio == -1 || maxprio == -1){
+    minprio = sched_get_priority_min(SCHED_FIFO);
+    maxprio = sched_get_priority_max(SCHED_FIFO);
+  }
   struct sched_param param = {0};
-  param.sched_priority = (sched_get_priority_max(SCHED_FIFO) + sched_get_priority_min(SCHED_FIFO)) / 2; // midway?
+  param.sched_priority = (minprio + maxprio) / 2; // midway?
   if(sched_setscheduler(0,SCHED_FIFO|SCHED_RESET_ON_FORK,&param) == 0)
     return; // Successfully set realtime
 
