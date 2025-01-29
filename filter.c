@@ -51,7 +51,7 @@ int FFTW_planning_level = FFTW_PATIENT;
 static pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool FFTW_init = false;
 
-// FFT job queue
+// FFT job descriptor
 struct fft_job {
   struct fft_job *next;
   unsigned int jobnum;
@@ -61,10 +61,11 @@ struct fft_job {
   void *output;
   pthread_mutex_t *completion_mutex; // protects completion_jobnum
   pthread_cond_t *completion_cond;   // Signaled when job is complete
-  int *completion_jobnum;   // Written with jobnum when complete
+  unsigned int *completion_jobnum;   // Written with jobnum when complete
   bool terminate; // set to tell fft thread to quit
 };
 
+static struct fft_job *FFT_free_list; // List of spare job descriptors
 
 #define NTHREADS_MAX 20  // More than I'll ever need
 static struct {
@@ -425,7 +426,12 @@ void *run_fft(void *p){
     // Do NOT destroy job->completion_cond and completion_mutex here, they continue to exist
 
     bool const terminate = job->terminate; // Don't use job pointer after free
-    FREE(job);
+    // Put descriptor on free pool
+    pthread_mutex_lock(&FFT.queue_mutex);
+    job->next = FFT_free_list;
+    FFT_free_list = job;
+    pthread_mutex_unlock(&FFT.queue_mutex);
+
     if(terminate)
       break; // Terminate after this job
   }
@@ -472,9 +478,20 @@ int execute_filter_input(struct filter_in * const f){
     return 0;
   }
 
-
   // set up a job for the FFT worker threads and enqueue it
-  struct fft_job * const job = calloc(1,sizeof(struct fft_job));
+  // Take one off the pool, if available
+  pthread_mutex_lock(&FFT.queue_mutex);
+  struct fft_job *job = FFT_free_list;
+  if(job != NULL){
+    FFT_free_list = job->next;
+    job->next = NULL;
+  }
+  pthread_mutex_unlock(&FFT.queue_mutex);
+
+  if(job == NULL)
+    job = calloc(1,sizeof(struct fft_job)); // Otherwise create a new one
+
+  // A descriptor from the free list won't be blank, but we set everything below
   assert(job != NULL);
   job->jobnum = f->next_jobnum++;
   job->output = f->fdomain[job->jobnum % ND];
@@ -483,6 +500,7 @@ int execute_filter_input(struct filter_in * const f){
   job->completion_mutex = &f->filter_mutex;
   job->completion_jobnum = &f->completed_jobs[job->jobnum % ND];
   job->completion_cond = &f->filter_cond;
+  job->terminate = false;
 
   // Set up the job and next input buffer
   // We're assuming that the time-domain pointers we're passing to the FFT are always aligned the same
@@ -554,17 +572,23 @@ int execute_filter_output(struct filter_out * const slave,int const rotate){
 
   // Wait for new block of output data
   pthread_mutex_lock(&master->filter_mutex);
-  int blocks_to_wait = slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND];
-  if(blocks_to_wait <= -ND){
-    // Circular buffer overflow (for us)
-    slave->next_jobnum -= blocks_to_wait;
-    slave->block_drops -= blocks_to_wait;
+  int blocks_behind = master->completed_jobs[slave->next_jobnum % ND] - slave->next_jobnum;
+  if(blocks_behind >= ND){
+    // We've fallen too far behind. skip ahead to the oldest block still available
+    unsigned nextblock = master->completed_jobs[0];
+    for(int i=1; i < ND; i++){
+      if((int)(master->completed_jobs[i] - nextblock) < 0) // modular comparison
+	nextblock = master->completed_jobs[i];
+    }
+    slave->block_drops += nextblock - slave->next_jobnum;
+    slave->next_jobnum = nextblock;
   }
   while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
     pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
   // We don't modify the master's output data, we create our own
   complex float const * const fdomain = master->fdomain[slave->next_jobnum % ND];
-  slave->next_jobnum++;
+  // in case we just waited so long that the buffer wrapped, resynch
+  slave->next_jobnum = master->completed_jobs[slave->next_jobnum % ND] + 1;
   pthread_mutex_unlock(&master->filter_mutex);
 
   assert(fdomain != NULL);

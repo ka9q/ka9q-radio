@@ -54,8 +54,8 @@ struct filter_in {
   pthread_cond_t filter_cond;
 
   complex float *fdomain[ND];
-  int next_jobnum;
-  int completed_jobs[ND];
+  unsigned int next_jobnum;
+  unsigned int completed_jobs[ND];
   bool perform_inline;       // Perform FFT inline, don't use worker threads (better for small FFTs)
 };
 
@@ -71,9 +71,9 @@ struct filter_out {
   struct rc output_buffer;           // Actual time-domain output buffer, length N/decimate
   struct rc output;                  // Beginning of user output area, length L/decimate
   fftwf_plan rev_plan;               // IFFT (frequency -> time)
-  int next_jobnum;
+  unsigned next_jobnum;
   float noise_gain;                  // Filter gain on uniform noise (ratio < 1)
-  int block_drops;          // Lost frequency domain blocks, e.g., from late scheduling of slave thread
+  unsigned block_drops;          // Lost frequency domain blocks, e.g., from late scheduling of slave thread
   int rcnt;                 // Samples read from output buffer
 };
 
