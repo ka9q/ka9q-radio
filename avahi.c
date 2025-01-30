@@ -3,6 +3,8 @@
 // Version that just forks and execs the commands 'avahi-browse' or 'avahi-publish'
 // Using the Avahi API is a nightmare; it's a twisted mess of callbacks between "callbacks", "services", "resolvers", etc.
 // March 2024, Phil Karn KA9Q
+// Jan 2025 - option to publish through static additions to avahi daemon files /etc/avahi/hosts, /etc/avahi/services
+//            note - does not remove such entries yet!
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
