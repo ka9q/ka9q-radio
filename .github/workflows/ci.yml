@@ -30,7 +30,8 @@ jobs:
             portaudio19-dev \
             uuid-dev \
             libsamplerate-dev \
-            libliquid-dev
+            libliquid-dev \
+	    avahi-daemon
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Setup
