@@ -93,6 +93,7 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   config_validate_section(stdout,dictionary,section,Funcube_keys,NULL);
   // Cross-link generic and hardware-specific control structures
   struct sdrstate * const sdr = calloc(1,sizeof(*sdr));
+  assert(sdr != NULL);
   sdr->frontend = frontend;
   frontend->context = sdr;
 
@@ -110,8 +111,9 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
   {
     char const * const p = config_getstring(dictionary,section,"description","funcube dongle+");
-    FREE(frontend->description);
-    frontend->description = strdup(p);
+    if(p != NULL){
+      strlcpy(frontend->description,p,sizeof(frontend->description));
+    }
   }
   Pa_Initialize();
 

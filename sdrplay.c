@@ -177,6 +177,7 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
 
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
+  assert(sdr != NULL);
   sdr->frontend = frontend;
   frontend->context = sdr;
   {
@@ -211,6 +212,7 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
     close_sdrplay(sdr);
     return -1;
   }
+  fprintf(stdout,"This SDRplay driver has known problems with tuner control\n");
   fprintf(stdout,"SDRplay RSP serial %s, hw model %d, API version %.2f\n",
           sdr->device.SerNo,
           sdr->device.hwVer,
@@ -312,9 +314,8 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
   }
   {
     char const * const p = config_getstring(Dictionary,section,"description","SDRplay RSP");
-    FREE(frontend->description);
-    frontend->description = strdup(p);
-    fprintf(stdout,"%s: ",frontend->description);
+    if(p != NULL)
+      strlcpy(frontend->description,p,sizeof(frontend->description));
   }
 
   fprintf(stdout,"RF LNA state %d, IF att %d, IF AGC %d, IF AGC setPoint %d, DC offset corr %d, IQ imbalance corr %d\n",
@@ -1154,9 +1155,7 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
   assert(wptr != NULL);
   float in_energy = 0;
   for(int i=0; i < sampcount; i++){
-    float complex samp;
-    __real__ samp = (int)xi[i];
-    __imag__ samp = (int)xq[i];
+    float complex const samp = CMPLXF((int)xi[i],(int)xq[i]);
     in_energy += cnrmf(samp);
     wptr[i] = samp * sdr->scale;
   }

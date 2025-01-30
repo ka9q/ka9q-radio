@@ -196,9 +196,6 @@ void decode_task_cleanup(void *arg){
     pkt_next = pkt->next;
     FREE(pkt);
   }
-  struct frontend * const frontend = &sp->frontend;
-  FREE(frontend->description);
-
   // Just in case anything was allocated for these arrays
   struct channel * const chan = &sp->chan;
   FREE(chan->filter.energies);
@@ -227,6 +224,7 @@ void *decode_task(void *arg){
   size_t bounce_size = 2 * sizeof(*bounce) * 960; // Stereo samples in a 20 ms 48 kHz packet
   bounce = malloc(bounce_size);
   assert(bounce != NULL);
+  memset(bounce,0,bounce_size); // shut up static analyzer
   float *rate_converted_buffer = NULL;
   size_t rate_converted_buffer_size = 0;
   SRC_STATE *src_state_mono = NULL;
@@ -374,6 +372,8 @@ void *decode_task(void *arg){
 	if(needed > bounce_size){
 	  bounce_size = needed * 2;
 	  bounce = realloc(bounce,bounce_size);
+	  assert(bounce != NULL);
+	  memset(bounce,0,bounce_size); // shut up static analyzer
 	}
       }
       assert(bounce != NULL);
@@ -421,6 +421,8 @@ void *decode_task(void *arg){
 	  if(needed > bounce_size){
 	    bounce_size = needed * 2;
 	    bounce = realloc(bounce,bounce_size);
+	    assert(bounce != NULL);
+	    memset(bounce,0,bounce_size); // shut up static analyzer
 	  }
 	}
 	assert(bounce != NULL);
@@ -444,6 +446,8 @@ void *decode_task(void *arg){
 	  if(needed > bounce_size){
 	    bounce_size = needed * 2;
 	    bounce = realloc(bounce,bounce_size);
+	    assert(bounce != NULL);
+	    memset(bounce,0,bounce_size); // shut up static analyzer
 	  }
 	}
 	assert(bounce != NULL);
@@ -464,6 +468,8 @@ void *decode_task(void *arg){
 	  if(needed > bounce_size){
 	    bounce_size = needed * 2;
 	    bounce = realloc(bounce,bounce_size);
+	    assert(bounce != NULL);
+	    memset(bounce,0,bounce_size); // shut up static analyzer
 	  }
 	}
 	assert(bounce != NULL);

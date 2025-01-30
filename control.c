@@ -486,6 +486,7 @@ int main(int argc,char *argv[]){
     if(channels == NULL)
       channels = (struct channel **)calloc(chan_max,sizeof(struct channel *));
 
+    assert(channels != NULL);
     int64_t last_new_entry = gps_time_ns();
     while(chan_count < chan_max){
       struct sockaddr_storage source_socket;
@@ -501,6 +502,7 @@ int main(int argc,char *argv[]){
       // What to do with the source addresses?
       memcpy(&Metadata_source_socket,&source_socket,sizeof(Metadata_source_socket));
       struct channel * const channel = calloc(1,sizeof(struct channel));
+      assert(channel != NULL);
       init_demod(channel);
       decode_radio_status(&Frontend,channel,buffer+1,length-1);
 
@@ -1117,6 +1119,8 @@ static void process_mouse(struct channel *channel,uint8_t **bpp){
 
 // Initialize a new, unused channel instance where fields start non-zero
 static int init_demod(struct channel *channel){
+  if(channel == NULL)
+    return -1;
   memset(channel,0,sizeof(*channel));
   channel->tune.second_LO = NAN;
   channel->tune.freq = channel->tune.shift = NAN;

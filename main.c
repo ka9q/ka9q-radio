@@ -226,7 +226,6 @@ int main(int argc,char *argv[]){
   }
 
   // Graceful signal catch
-  signal(SIGPIPE,closedown);
   signal(SIGINT,closedown);
   signal(SIGKILL,closedown);
   signal(SIGQUIT,closedown);
@@ -451,6 +450,9 @@ static int loadconfig(char const *file){
       exit(EX_USAGE);
     }
   }
+  if(strlen(Frontend.description) == 0)
+    strlcpy(Frontend.description,Name,sizeof(Frontend.description)); // Set default description
+
   // Default multicast interface
   {
     // The area pointed to by returns from config_getstring() is freed and overwritten when the config dictionary is closed
@@ -497,7 +499,7 @@ static int loadconfig(char const *file){
       addr = make_maddr(Data);
 
     size_t slen = sizeof(Template.output.dest_socket);
-    avahi_start(Frontend.description != NULL ? Frontend.description : Name,
+    avahi_start(Frontend.description,
 	      "_rtp._udp",
 	      DEFAULT_RTP_PORT,
 	      Data,
@@ -531,7 +533,7 @@ static int loadconfig(char const *file){
 
     // If dns name already exists in the DNS, advertise the service record but not an address record
     size_t slen = sizeof(Metadata_dest_socket);
-    avahi_start(Frontend.description != NULL ? Frontend.description : Name,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
+    avahi_start(Frontend.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
 		Metadata_dest_string,addr,Ttlmsg,
 		addr != 0 ? &Metadata_dest_socket : NULL,
 		addr != 0 ? &slen : NULL);
@@ -960,14 +962,12 @@ static void *rtcp_send(void *arg){
   }
 }
 static void closedown(int a){
-  fprintf(stdout,"Received signal %d, exiting\n",a);
+  char message[] = "Received signal, shutting down\n";
+
+  write(1,message,strlen(message));
   Stop_transfers = true;
   sleep(1); // pause for threads to see it
-
-  if(a == SIGTERM)
-    exit(EX_OK); // Return success when terminated by systemd
-  else
-    exit(EX_SOFTWARE);
+  _exit(a == SIGTERM ? EX_OK : EX_SOFTWARE); // Success when terminated by systemd
 }
 
 // Increase or decrease logging level (thanks AI6VN for idea)
@@ -978,6 +978,4 @@ static void verbosity(int a){
     Verbose = (Verbose <= 0) ? 0 : Verbose - 1;
   else
     return;
-
-  fprintf(stdout,"Verbose = %d\n",Verbose);
 }

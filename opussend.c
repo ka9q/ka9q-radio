@@ -372,8 +372,7 @@ void cleanup(void){
 }
 
 void closedown(int s){
-  fprintf(stderr,"Signal %d\n",s);
-
-  exit(EX_OK);
+  (void)s;
+  _exit(EX_OK);
 }
 

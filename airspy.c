@@ -98,6 +98,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   assert(Dictionary != NULL);
 
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
+  assert(sdr != NULL);
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
   frontend->context = sdr;
@@ -262,11 +263,8 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   }
   {
     char const * const p = config_getstring(Dictionary,section,"description",NULL);
-    if(p != NULL){
-      FREE(frontend->description);
-      frontend->description = strdup(p);
-      fprintf(stdout,"%s: ",frontend->description);
-    }
+    if(p != NULL)
+      strlcpy(frontend->description,p,sizeof(frontend->description));
   }
   fprintf(stdout,"Software AGC %d; linearity %d, LNA AGC %d, Mix AGC %d, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %d\n",
 	  sdr->software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,gainstep,sdr->antenna_bias);

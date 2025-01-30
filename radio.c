@@ -82,9 +82,8 @@ struct channel *create_chan(uint32_t ssrc){
     chan->inuse = true;
     chan->output.rtp.ssrc = ssrc; // Stash it
     Active_channel_count++;
+    chan->lifetime = 20 * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
   }
-  chan->lifetime = 20 * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
-
   pthread_mutex_unlock(&Channel_list_mutex);
   return chan;
 }
@@ -439,6 +438,7 @@ void *sap_send(void *p){
 
     {
       char *mcast = strdup(formatsock(&chan->output.dest_socket,false));
+      assert(mcast != NULL);
       // Remove :port field, confuses the vlc listener
       char *cp = strchr(mcast,':');
       if(cp)

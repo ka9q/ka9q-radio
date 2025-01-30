@@ -90,6 +90,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   assert(dictionary != NULL);
 
   struct sdr * const sdr = (struct sdr *)calloc(1,sizeof(struct sdr));
+  assert(sdr != NULL);
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
   frontend->context = sdr;
@@ -101,12 +102,15 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   }
   config_validate_section(stdout,dictionary,section,Rtlsdr_keys,NULL);
   sdr->dev = -1;
-  FREE(frontend->description);
-  frontend->description = strdup(config_getstring(dictionary,section,"description","rtl-sdr"));
+  {
+    char const *p = config_getstring(dictionary,section,"description","rtl-sdr");
+    if(p != NULL)
+      strlcpy(frontend->description,p,sizeof(frontend->description));
+  }
   {
     unsigned const device_count = rtlsdr_get_device_count();
     if(device_count < 1){
-      fprintf(stderr,"No RTL-SDR devices\n");
+      fprintf(stdout,"No RTL-SDR devices\n");
       return -1;
     }
     struct {
@@ -116,10 +120,10 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     } devices[device_count];
 
     // List all devices
-    fprintf(stderr,"Found %d RTL-SDR device%s:\n",device_count,device_count > 1 ? "s":"");
+    fprintf(stdout,"Found %d RTL-SDR device%s:\n",device_count,device_count > 1 ? "s":"");
     for(unsigned int i=0; i < device_count; i++){
       rtlsdr_get_device_usb_strings(i,devices[i].manufacturer,devices[i].product,devices[i].serial);
-      fprintf(stderr,"#%d (%s): %s %s %s\n",i,rtlsdr_get_device_name(i),
+      fprintf(stdout,"#%d (%s): %s %s %s\n",i,rtlsdr_get_device_name(i),
 	      devices[i].manufacturer,devices[i].product,devices[i].serial);
     }
     char const * const p = config_getstring(dictionary,section,"serial",NULL);
@@ -135,16 +139,16 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
       }
     }
     if(sdr->dev < 0){
-      fprintf(stderr,"RTL-SDR serial %s not found\n",p);
+      fprintf(stdout,"RTL-SDR serial %s not found\n",p);
       return -1;
     }
     strlcpy(sdr->serial,devices[sdr->dev].serial,sizeof(sdr->serial));
-    fprintf(stderr,"Using RTL-SDR #%d, serial %s\n",sdr->dev,sdr->serial);
+    fprintf(stdout,"Using RTL-SDR #%d, serial %s\n",sdr->dev,sdr->serial);
   }
   {
     int const ret = rtlsdr_open(&sdr->device,sdr->dev);
     if(ret != 0){
-      fprintf(stderr,"rtlsdr_open(%d) failed: %d\n",sdr->dev,ret);
+      fprintf(stdout,"rtlsdr_open(%d) failed: %d\n",sdr->dev,ret);
       return -1;
     }
   }
@@ -156,12 +160,12 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     uint32_t rtl_freq = 0,tuner_freq = 0;
     int const ret = rtlsdr_get_xtal_freq(sdr->device,&rtl_freq,&tuner_freq);
     if(ret != 0)
-      fprintf(stderr,"rtlsdr_get_xtal_freq failed\n");
-    fprintf(stderr,"RTL freq %'u, tuner freq %'u, tuner type %'d, tuner gains",(unsigned)rtl_freq,(unsigned)tuner_freq,
+      fprintf(stdout,"rtlsdr_get_xtal_freq failed\n");
+    fprintf(stdout,"RTL freq %'u, tuner freq %'u, tuner type %'d, tuner gains",(unsigned)rtl_freq,(unsigned)tuner_freq,
 	    rtlsdr_get_tuner_type(sdr->device));
     for(int i=0; i < ngains; i++)
-      fprintf(stderr," %'d",gains[i]);
-    fprintf(stderr,"\n");
+      fprintf(stdout," %'d",gains[i]);
+    fprintf(stdout,"\n");
 
   }
   rtlsdr_set_direct_sampling(sdr->device, 0); // That's for HF
@@ -188,18 +192,18 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   {
     int ret = rtlsdr_set_bias_tee(sdr->device,sdr->bias);
     if(ret != 0){
-      fprintf(stderr,"rtlsdr_set_bias_tee(%d) failed\n",sdr->bias);
+      fprintf(stdout,"rtlsdr_set_bias_tee(%d) failed\n",sdr->bias);
     }
   }
   frontend->samprate = config_getint(dictionary,section,"samprate",DEFAULT_SAMPRATE);
   if(frontend->samprate <= 0){
-    fprintf(stderr,"Invalid sample rate, reverting to default\n");
+    fprintf(stdout,"Invalid sample rate, reverting to default\n");
     frontend->samprate = DEFAULT_SAMPRATE;
   }
   {
     int ret = rtlsdr_set_sample_rate(sdr->device,(uint32_t)frontend->samprate);
     if(ret != 0){
-      fprintf(stderr,"rtlsdr_set_sample_rate(%d) failed\n",frontend->samprate);
+      fprintf(stdout,"rtlsdr_set_sample_rate(%d) failed\n",frontend->samprate);
     }
   }
 
@@ -260,7 +264,6 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
   float complex * const wptr = frontend->in.input_write_pointer.c;
 
   for(int i=0; i < sampcount; i++){
-    float complex samp;
     if(buf[2*i] == 0 || buf[2*i] == 255){
       frontend->overranges++;
       frontend->samp_since_over = 0;
@@ -272,8 +275,8 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
       frontend->samp_since_over = 0;
     } else
       frontend->samp_since_over++;
-    __real__ samp = (int)buf[2*i] - 128; // Excess-128
-    __imag__ samp = (int)buf[2*i+1] - 128;
+    // Excess-128
+    float complex samp = CMPLXF((int)buf[2*i] - 128,(int)buf[2*i+1] - 128);
     energy += cnrmf(samp);
     wptr[i] = sdr->scale * samp;
   }

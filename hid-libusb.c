@@ -39,6 +39,7 @@
 #include <ctype.h>
 #include <locale.h>
 #include <errno.h>
+#include <assert.h>
 
 /* Unix */
 #include <unistd.h>
@@ -131,6 +132,7 @@ static int return_data(hid_device *dev, unsigned char *data, size_t length);
 static hid_device *new_hid_device(void)
 {
 	hid_device *dev = calloc(1, sizeof(hid_device));
+	assert(dev != NULL);
 	dev->blocking = 1;
 
 	pthread_mutex_init(&dev->mutex, NULL);
@@ -411,7 +413,9 @@ static char *make_path(libusb_device *dev, int interface_number)
 		interface_number);
 	str[sizeof(str)-1] = '\0';
 
-	return strdup(str);
+	char *cp = strdup(str);
+	assert(cp != NULL);
+	return cp;
 }
 
 
@@ -489,6 +493,7 @@ struct hid_device_info  *hid_enumerate(unsigned short vendor_id, unsigned short 
 
 							/* VID/PID match. Create the record. */
 							tmp = calloc(1, sizeof(struct hid_device_info));
+							assert(tmp != NULL);
 							if (cur_dev) {
 								cur_dev->next = tmp;
 							}
@@ -656,12 +661,15 @@ hid_device * hid_open(unsigned short vendor_id, unsigned short product_id, const
 static void read_callback(struct libusb_transfer *transfer)
 {
 	hid_device *dev = transfer->user_data;
+	assert(dev != NULL);
 	int res;
 
 	if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
 
 		struct input_report *rpt = malloc(sizeof(*rpt));
+		assert(rpt != NULL);
 		rpt->data = malloc(transfer->actual_length);
+		assert(rpt->data != NULL);
 		memcpy(rpt->data, transfer->buffer, transfer->actual_length);
 		rpt->len = transfer->actual_length;
 		rpt->next = NULL;
@@ -670,9 +678,9 @@ static void read_callback(struct libusb_transfer *transfer)
 
 		/* Attach the new report object to the end of the list. */
 		if (dev->input_reports == NULL) {
-			/* The list is empty. Put it at the root. */
-			dev->input_reports = rpt;
-			pthread_cond_signal(&dev->condition);
+		  /* The list is empty. Put it at the root. */
+		  dev->input_reports = rpt; // Ownership passed off to list
+		  pthread_cond_signal(&dev->condition);
 		}
 		else {
 			/* Find the end of the list and attach. */
@@ -728,6 +736,7 @@ static void *read_thread(void *param)
 
 	/* Set up the transfer object. */
 	buf = malloc(length);
+	assert(buf != NULL);
 	dev->transfer = libusb_alloc_transfer(0);
 	libusb_fill_interrupt_transfer(dev->transfer,
 		dev->device_handle,
@@ -982,7 +991,7 @@ static int return_data(hid_device *dev, unsigned char *data, size_t length)
 	   return buffer (data), and delete the liked list item. */
 	struct input_report *rpt = dev->input_reports;
 	size_t len = (length < rpt->len)? length: rpt->len;
-	if (len > 0)
+	if (len > 0 && data != NULL && rpt->data != NULL)
 		memcpy(data, rpt->data, len);
 	dev->input_reports = rpt->next;
 	free(rpt->data);
@@ -1007,6 +1016,7 @@ static void cleanup_mutex(void *param)
 
 int hid_read_timeout(hid_device *dev, unsigned char *data, size_t length, int milliseconds)
 {
+  assert(dev != NULL && data != NULL);
 	int bytes_read = -1;
 
 

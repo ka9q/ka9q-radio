@@ -301,6 +301,7 @@ int main(int argc,char * const argv[]){
       // Need a new packet buffer?
       if(!pkt)
 	pkt = malloc(sizeof(*pkt));
+      assert(pkt != NULL);
       // Zero these out to catch any uninitialized derefs
       pkt->next = NULL;
       pkt->data = NULL;
@@ -606,7 +607,7 @@ void closedown(int s){
 #endif
 
   pthread_mutex_destroy(&Session_protect);
-  exit(EX_OK);
+  _exit(EX_OK);
 }
 // Encode and send one or more Opus frames when we have enough
 int send_samples(struct session * const sp){

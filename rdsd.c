@@ -298,6 +298,7 @@ void *input(void *arg){
     if(!pkt)
       pkt = malloc(sizeof(*pkt));
     // Zero these out to catch any uninitialized derefs
+    assert(pkt != NULL);
     pkt->next = NULL;
     pkt->data = NULL;
     pkt->len = 0;

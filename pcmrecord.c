@@ -1145,7 +1145,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
   attrprintf(fd,"unixstarttime","%ld.%09ld",(long)now.tv_sec,(long)now.tv_nsec);
 
-  if(sp->frontend.description)
+  if(strlen(sp->frontend.description) > 0)
     attrprintf(fd,"description","%s",sp->frontend.description);
 
   if(sp->starting_offset != 0)
@@ -1338,7 +1338,7 @@ static int emit_ogg_opus_tags(struct session *sp){
     snprintf(temp,sizeof(temp),"DATE=%s",datestring);
     wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),temp);
   }
-  if(sp->frontend.description != NULL){
+  {
     char temp[256];
     snprintf(temp,sizeof(temp),"DESCRIPTION=%s",sp->frontend.description);
     wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),temp);

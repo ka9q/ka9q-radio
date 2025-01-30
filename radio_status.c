@@ -69,6 +69,7 @@ void *radio_status(void *arg){
 	if(chan != NULL){
 	  // Channel already exists; queue the command for it to execute
 	  uint8_t *cmd = malloc(length-1);
+	  assert(cmd != NULL);
 	  memcpy(cmd,buffer+1,length-1);
 	  pthread_mutex_lock(&chan->status.lock);
 	  bool oops = false;

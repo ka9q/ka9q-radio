@@ -34,8 +34,11 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->status.packets_in = decode_int32(cp,optlen);
       break;
     case DESCRIPTION:
-      FREE(frontend->description);
-      frontend->description = decode_string(cp,optlen);
+      {
+	char *str = decode_string(cp,optlen);
+	strlcpy(frontend->description,str,sizeof(frontend->description));
+	FREE(str);
+      }
       break;
     case STATUS_DEST_SOCKET:
       decode_socket(&Metadata_dest_socket,cp,optlen);

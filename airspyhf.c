@@ -65,6 +65,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   assert(Dictionary != NULL);
 
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
+  assert(sdr != NULL);
   // Cross-link generic and hardware-specific control structures
   sdr->frontend = frontend;
   frontend->context = sdr;
@@ -185,12 +186,9 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
 	    hf_agc,agc_thresh,hf_att,hf_lna,lib_dsp);
   }
   {
-    char const *p = config_getstring(Dictionary,section,"description",NULL);
-    if(p != NULL){
-      FREE(frontend->description);
-      frontend->description = strdup(p);
-      fprintf(stdout,"%s: ",frontend->description);
-    }
+    char const * const p = config_getstring(Dictionary,section,"description",NULL);
+    if(p != NULL)
+      strlcpy(frontend->description,p,sizeof(frontend->description));
   }
   double init_frequency = 0;
   {

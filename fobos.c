@@ -72,6 +72,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
   config_validate_section(stdout, dictionary, section, fobos_keys, NULL);
   struct sdrstate *const sdr = calloc(1, sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
+  assert(sdr != NULL);
   sdr->frontend = frontend;
   frontend->context = sdr;
   frontend->isreal = false; // Make sure the right kind of filter gets created!
@@ -87,11 +88,12 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
     if (strcasecmp(device, "fobos") != 0)
       return -1; // Leave if not Fobos in the config
   }
-
   sdr->device = -1;
-  FREE(frontend->description);
-  frontend->description =
-      strdup(config_getstring(dictionary, section, "description", "fobos"));
+  {
+    char const *cp = config_getstring(dictionary, section, "description", "fobos");
+    if(cp != NULL)
+      strlcpy(frontend->description,cp,sizeof(frontend->description));
+  }
   double requestsample =
       config_getdouble(dictionary, section, "samprate", 8000000.0);
   const char *serialnumcfg =
@@ -310,9 +312,7 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
 
   float in_energy = 0;
   for (int i = 0; i < sampcount; i++) {
-    float complex samp;
-    __real__ samp = buf[2 * i];     // Extract I component
-    __imag__ samp = buf[2 * i + 1]; // Extract Q component
+    float complex const samp = CMPLXF(buf[2*i],buf[2*i+1]);
     in_energy += cnrmf(samp);       // Calculate energy of the sample
     wptr[i] = samp;                 // Store sample in write pointer buffer
   }

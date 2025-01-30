@@ -43,10 +43,7 @@ static inline float cos_dds(uint32_t accum){
   return sine_dds(accum + (uint32_t)0x40000000); // cos(x) = sin(x + 90 deg)
 }
 static inline complex float comp_dds(uint32_t accum){
-  complex float f;
-  __imag__ f = sine_dds(accum);
-  __real__ f = cos_dds(accum);
-  return f;
+  return CMPLXF(cos_dds(accum),sine_dds(accum));
 }
 
 

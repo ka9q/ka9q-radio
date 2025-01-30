@@ -341,6 +341,9 @@ void input_loop(){
 }
 // Set up new file on session with name derived from start_time_sec
 void create_new_file(struct session *sp,time_t start_time_sec){
+  assert(sp != NULL);
+  if(sp == NULL)
+    return;
   struct tm const * const tm = gmtime(&start_time_sec);
 
   char dir[PATH_MAX];
@@ -391,9 +394,11 @@ void create_new_file(struct session *sp,time_t start_time_sec){
   // Use fdopen on a file descriptor instead of fopen(,"w+") to avoid the implicit truncation
   // This allows testing where we're killed and rapidly restarted in the same cycle
   assert(fd != -1);
+  fclose(sp->fp); // shouldn't be open
   sp->fp = fdopen(fd,"w+");
   assert(sp->fp != NULL);
   sp->iobuffer = malloc(BUFFERSIZE);
+  assert(sp->iobuffer != NULL);
   setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
   fcntl(fd,F_SETFL,O_NONBLOCK); // Let's see if this keeps us from losing data
 }

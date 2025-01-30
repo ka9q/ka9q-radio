@@ -272,11 +272,6 @@ void load_id(void){
   if(Nid != 0)
     return;
 
-  // Load table
-  FILE * const fp = fopen(filename,"r");
-  if(fp == NULL)
-    return;
-
   // Lines consist of frequency, PL tone, id. The PL tone is optional, but must be of form 88.3 or 114.8
   // double escape special chars to get single backslashes through the C compiler
   char const *pattern1 = "([0-9\\.]+)[[:space:]]+([0-9]{2,3}\\.[0-9])[[:space:]]+(.*)";
@@ -297,6 +292,11 @@ void load_id(void){
     fprintf(stderr,"regex compile(%s) failed: %s\n",pattern2,errbuf);
     return;
   }
+  // Load table
+  FILE * const fp = fopen(filename,"r");
+  if(fp == NULL)
+    return;
+
   char *line = NULL;
   size_t linesize = 0;
   while(getline(&line,&linesize,fp) > 0){
@@ -370,13 +370,13 @@ void load_id(void){
       break;
     }
   }
+  fclose(fp);
   if(Nid > 0)
     qsort(Idtable,Nid,sizeof(Idtable[0]),id_compare);
 
   regfree(&preg1);
   regfree(&preg2);
   FREE(line);
-  fclose(fp);
 }
 
 // Use binary search to speed things up since we do this more often

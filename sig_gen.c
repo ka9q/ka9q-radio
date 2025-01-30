@@ -70,6 +70,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   }
   // Cross-link generic and hardware-specific control structures
   struct sdrstate * const sdr = calloc(1,sizeof(*sdr));
+  assert(sdr != NULL);
   sdr->frontend = frontend;
   frontend->context = sdr;
 
@@ -101,7 +102,8 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   }
   {
     char const * const p = config_getstring(dictionary,section,"description","funcube dongle+");
-    frontend->description = strdup(p);
+    if(p != NULL)
+      strlcpy(frontend->description,p,sizeof(frontend->description));
   }
 
   //  double initfreq = config_getint(dictionary,section,"frequency",0);
