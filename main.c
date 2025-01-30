@@ -964,7 +964,8 @@ static void *rtcp_send(void *arg){
 static void closedown(int a){
   char message[] = "Received signal, shutting down\n";
 
-  (void)write(1,message,strlen(message));
+  int r = write(1,message,strlen(message));
+  (void)r; // shut up compiler
   Stop_transfers = true;
   sleep(1); // pause for threads to see it
   _exit(a == SIGTERM ? EX_OK : EX_SOFTWARE); // Success when terminated by systemd
