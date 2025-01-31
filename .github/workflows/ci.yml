@@ -31,7 +31,7 @@ jobs:
             uuid-dev \
             libsamplerate-dev \
             libliquid-dev \
-	    avahi-daemon
+            avahi-daemon
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Setup
