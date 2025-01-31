@@ -31,7 +31,8 @@ jobs:
             uuid-dev \
             libsamplerate-dev \
             libliquid-dev \
-            avahi-daemon
+            avahi-daemon \
+            libgnutls28-dev libgcrypt20-dev
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Setup
@@ -40,6 +41,27 @@ jobs:
         run: make
       - name: Install
         run: sudo make install
+      - name: Build and test web
+        run: |
+          git clone https://github.com/davidmoreno/onion
+          cd onion
+          mkdir build
+          cd build
+          cmake -DONION_USE_PAM=false -DONION_USE_PNG=false \
+            -DONION_USE_JPEG=false -DONION_USE_XML2=false \
+            -DONION_USE_SYSTEMD=false -DONION_USE_SQLITE3=false \
+            -DONION_USE_REDIS=false -DONION_USE_GC=false \
+            -DONION_USE_TESTS=false \
+            -DONION_EXAMPLES=false -DONION_USE_BINDINGS_CPP=false ..
+          make
+          sudo make install
+          sudo ldconfig
+          cd ../../
+          git clone https://github.com/scottnewell/ka9q-web
+          cd ka9q-web
+          sed -i 's|KA9Q_RADIO_DIR=../ka9q-radio|KA9Q_RADIO_DIR=../|' Makefile
+          sudo make install
+          cd ..
   macos-build:
     name: MacOS CI
     runs-on: macos-latest
