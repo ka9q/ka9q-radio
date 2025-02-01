@@ -200,7 +200,7 @@ wd-record: wd-record.o libradio.a
 set_xcvr: set_xcvr.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lpigpio $(LDLIBS)
 
-# device shared libraries - build kludgey separate -fPIC versions of
+# device shared libraries - build kludgey separate -fpic versions of
 # drivers already built in for testing
 # To test, remove these references from main.c
 funcube.so: funcube-pic.o fcd-pic.o hid-libusb-pic.o
@@ -228,37 +228,37 @@ fobos.so: fobos-pic.o
 	$(CC) -shared -o $@ $^ -lfobos
 
 funcube-pic.o: funcube.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 airspy-pic.o: airspy.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 rtlsdr-pic.o: rtlsdr.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 sig_gen-pic.o: sig_gen.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 rx888-pic.o: rx888.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 airspyhf-pic.o: airspyhf.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 ezusb-pic.o: ezusb.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 hid-libusb-pic.o: hid-libusb.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 fcd-pic.o: fcd.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 sdrplay-pic.o: sdrplay.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 fobos-pic.o: fobos.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 
 # subroutines useful in more than one program
