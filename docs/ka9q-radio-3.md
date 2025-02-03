@@ -425,6 +425,40 @@ the metadata (status) stream, and newer versions of **pcmrecord** and
 **monitor** now use this.
 
 
+### filter2 = 0-4 (default 0)
+
+Linear demodulator only. This is an ***experimental*** second filter
+after the primary channel filter that sharpens the frequency response
+at the expense of extra latency and a little extra CPU. The default
+setting disables the secondary filter.
+
+The duration of the primary filter impulse response, and thus its
+selectivity, is limited by the overlap in the big forward FFT; for the
+usual values of **blocktime = 20** and **overlap = 5**, this is 4
+milliseconds. With the relatively large values of **kaiser-beta**
+needed to keep sidelobes from strong adjacent signals from aliasing
+into the passband, the transition bandwidth is several FFT bins or
+about 100-150 Hz.
+
+This is good enough for most uses, but when more selectivity is needed
+(e.g., for weak signal CW operation) setting **filter2** to 1 through
+4 specifies how many receiver blocks are to be grouped and run through
+a second filter with greater selectivity. The overlap of the second
+filter is 2 (50%) so even with **filter2 = 1** the selectivity is
+improved by a factor of 10/4 = 2.5 with a very small cost in
+additional CPU and latency. Larger values sharpen the filter even
+more primarily at the expense of latency; **filter2 = 4** provides
+an impulse response of 50% * 80 ms = 40 ms, ten times as
+sharp as the primary filter alone at the cost of 60 ms of
+additional latency.
+
+The secondary filter uses the same values of 
+**low** **high** and **kaiser** as the primary
+filter.
+
+This feature is experimental and subject to substantial change.
+
+
 The Dynamic Template
 --------------------
 
