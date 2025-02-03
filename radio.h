@@ -97,7 +97,6 @@ struct frontend {
       so full A/D range now corresponds to different levels internally, and are scaled
       in radio_status.c when sending status messages
   */
-  float if_power_instant; // instantaneous receive power
   float if_power;   // Exponentially smoothed power measurement in A/D units (not normalized)
   float if_power_max;
 

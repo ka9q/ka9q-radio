@@ -264,8 +264,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   frontend->timestamp = gps_time_ns();
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   if(isfinite(in_energy)){
-    frontend->if_power_instant = in_energy / sampcount;
-    frontend->if_power += Power_smooth * (frontend->if_power_instant - frontend->if_power);
+    frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
   }
   return 0;
 }

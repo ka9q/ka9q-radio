@@ -548,10 +548,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
   write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
 
   // These blocks are kinda small, so exponentially smooth the power readings
-  {
-    frontend->if_power_instant  = (float)in_energy / sampcount;
-    frontend->if_power += Power_smooth * (frontend->if_power_instant - frontend->if_power);
-  }
+  frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
   frontend->samples += sampcount; // Count original samples
   if(!Stop_transfers) {
     if(libusb_submit_transfer(transfer) == 0)

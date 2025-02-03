@@ -324,9 +324,8 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
   // fprintf(stderr, "write_cfilter invoked with sampcount: %d\n", sampcount);
 
   if (isfinite(in_energy)) {
-    frontend->if_power_instant = in_energy / sampcount;
     frontend->if_power +=
-        Power_smooth * (frontend->if_power_instant - frontend->if_power);
+      Power_smooth * (in_energy / sampcount - frontend->if_power);
   }
 }
 
