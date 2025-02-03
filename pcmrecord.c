@@ -1171,6 +1171,12 @@ static int close_session(struct session **spp){
     Sessions = sp->next;
   if(sp->next)
     sp->next->prev = sp->prev;
+  // when the max_length (-x) option is used, valgrind has
+  // intermittently reported unfree'd allocations in the resequencing
+  // queue at program exit. Not sure what only -x is affected.
+  for(int i=0;i < RESEQ;i++){
+    FREE(sp->reseq[i].data);
+  }
   FREE(sp);
   return 0;
 }
