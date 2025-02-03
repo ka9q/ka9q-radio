@@ -138,6 +138,10 @@ deterministically hashed to generate and advertise an IPv4
 multicast address in the site local 239.0.0.0/8 block, along with a SRV DNS
 record of type _ka9q-ctl._udp with this name.
 
+This parameter cannot specify a unicast IP address, though periodic
+status transmissions are also sent on each active data channel every 500 ms,
+and that can use a unicast destination.
+
 ### iface = (no default, optional)
 
 Many computers, including most recent Raspberry Pis have
@@ -153,6 +157,25 @@ This option gives the interface name of the local Ethernet device to
 be used for all status/control and data traffic.  Don't set this
 unless you really need to.
 
+When **ttl = 0** (the default) the internal loopback interface is used automatically;
+it need not be specified here
+
+### dns = (optional, default off)
+
+Set the global default for whether to use the Domain Name System (DNS) to resolve domain names in the *data* and *status*
+fields.
+The default (off) causes **radiod** to publish the specified name in the '.local' multicast DNS zone
+along with an IPv4 multicast address in the 239.0.0.0/8 block generated from the
+name by a deterministic hash.
+
+Setting **dns = on** causes **radiod** to instead query
+the domain name system for an existing name (by default, in the .local zone)
+and use the resulting IP address. This is primarily intended
+for sending an output stream to a regular (unicast) IP address, though the DNS entry
+may point to a preset multicast address. IPv6 is not yet supported.
+
+The **dns** parameter can be overridden in individual channel definitions.
+
 ### data = (no default, optional)
 
 This sets the default domain name of the multicast group for receiver
@@ -162,24 +185,28 @@ set one. A **data =** directive in a channel group overrides this one.
 This option is required to create dynamic channels, otherwise it is optional
 provided that it is specified in each channel group.
 
-*radiod* deterministically hashes the destination string to generate
+When the *dns* option (see above) is off, *radiod* deterministically hashes the destination string to generate
 and advertise an IPv4 multicast address in the site local 239.0.0.0/8 block,
-along with a SRV DNS record of type _rtp._udp advertising this name.
+along with a SRV DNS record of type _rtp._udp or _opus._udp
+advertising this name, depending on the output encoding. _rtp._udp is used for all PCM
+formats.
+
+When the *dns* option is on, the specified name is looked up in the Domain Name System,
+and the corresponding address may be either a multicast or unicast IPv4 address.
 
 A single multicast group can carry many receiver channels, each
 distinguished by its 32-bit RTP SSRC (Real Time Protocol Stream Source
 Identifier), which must be unique for an instance of
 *radiod*. However, consider that Ethernet switches, routers and host
 handle multicast group subscriptions by their IP addresses only, so an
-application (e.g., *pcmcat*) will discard traffic from
+application (e.g., *pcmrecord*) will discard traffic from
 any unwanted SSRCs sharing an IP multicast address with desired
 traffic. At a 24 kHz sample rate, each 16-bit mono PCM stream is 384
 kb/s plus header overhead, so this can add up when many channels are
 active.  This is usually OK on 1Gb/s Ethernet, but it can be a problem
 over slower Ethernets or WiFi, especially where the base station does
 not do multicast-to-unicast conversion. To minimize network bandwidth
-when you're simply listening, use the Opus
-transcoder daemon *opusd*.
+when you're simply listening, use Opus output encoding.
 
 ### mode = (no default, optional)
 
@@ -209,10 +236,13 @@ traffic to where it is wanted (and away from WiFi) are strongly recommended. **t
 fine as long as all applications that read status or data
 from *radiod* run on the same physical system.
 
+Note that *ttl* can only be set globally, not in individual demodulator sections.
+
 ### tos = (optional, default 48)
 
 Sets the Internet Protocol Type-of-Service (TOS) field in all outbound traffic.
 There is little reason to change this on a LAN with sufficient capacity.
+This parameter also applies only globally.
 
 ### blocktime = (optional, default 20)
 
@@ -265,6 +295,7 @@ sample rates.
 
 Sets the number of FFT "worker" threads for the forward FFT shared by
 all the receiver channels. The default is usually sufficient except on slow systems.
+A single thread will suffice on fast CPUs, and may reduce overhead.
 
 ### rtcp = (optional, default off)
 

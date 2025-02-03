@@ -1,9 +1,12 @@
 ## Rigexpert Fobos SDR Support
 
-The [Fobos](https://rigexpert.com/software-defined-radio-sdr/fobos-sdr/) is a 100 kHz to 6 GHz SDR with 50 MHz bandwidth and 14-bit signal sampling resolution. The ADC can sample up to 80MS/sec. You can use **ka9q-radio** with the Fobos SDR, but support is optional because there are no precompiled drivers available for libfobos (the  driver required to use the device).
+Updated 2 Feb 2025 by KA9Q
 
-Fobos is currently only supported on Linux, but MacOS Fobos could be added if `radiod` running on MacOS is fully functional. I've successfully run it on MacOS but had multicast issues
+The [Fobos](https://rigexpert.com/software-defined-radio-sdr/fobos-sdr/) is a 100 kHz to 6 GHz SDR with 50 MHz bandwidth and 14-bit signal sampling resolution. The ADC can sample up to 80MS/sec. You can use **ka9q-radio** with the Fobos SDR, but support is
+currently optional because libfobos, required to use the device, is not yet available as a Debian Linux package. It must be
+separately downloaded and installed.
 
+Fobos is currently only supported on Linux, but MacOS Fobos could be added if `radiod` running on MacOS is fully functional. I've successfully run it on MacOS but had multicast issues.
 
 
 ### Installation
@@ -23,26 +26,28 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 sudo ldconfig
 ```
-2. Install ka9q-radio using the normal documented procedures in [INSTALL.md](INSTALL.md) with a few slight changes (appending FOBOS=1) to the make commands and modifying the udev rule that was included with libfobos to include the `plugdev` group.
+2. Build and install ka9q-radio using the normal documented procedures in [INSTALL.md](INSTALL.md). If libfobos was
+properly installed, ka9q-radio will automatically build with Fobos support. If you've already installed ka9q-radio, just re-run make and the fobos.so driver should build automatically.
+
+3. Run these commands to modify the udev rule that was included with libfobos to include the `plugdev` group.
 
 ```
-make FOBOS=1
-sudo make install FOBOS=1
 sudo sed -i 's/TAG+="uaccess"/GROUP="plugdev"/' /etc/udev/rules.d/fobos-sdr.rules
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-3. Edit the config file and run radiod
+4. Edit the config file and run radiod
 You may want first to test a basic file like this example:
 ```
 vim config/radiod@fobos-generic.conf
 ```
-You must ensure that your fobos conf files include the lines:
+Note these lines in the [fobos] section. If the "device = fobos" line is missing, the section name must be [fobos].
+The default location for the shared library is /usr/local/lib/ka9q-radio/fobos.so; this may be overridden with the "library =" line.
 ```
 [fobos]
 device = fobos
-library = /usr/local/lib/fobos.so
+library = /usr/local/lib/ka9q-radio/fobos.so
 ```
 exit and
 ```

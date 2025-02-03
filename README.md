@@ -31,7 +31,7 @@ kind of SDR that runs as a component serving other applications.
 The core components in *ka9q-radio* run as Linux 'daemons' (background
 programs) with little (or no) user interaction. Turnkey systems can be
 configured to, e.g., demodulate and record every FM channel on a band,
-or decode, log and/or relay digital messages (e.g., APRS, FT-8, WSPR, Horus 4FSK,
+or decode, log and/or relay digital messages (e.g., APRS, FT-8, WSPR, HFDL, Horus 4FSK,
 radiosondes). These programs are automatically launched by the (new)
 Linux standard system manager program *systemd*.
 
@@ -41,20 +41,23 @@ downconverters and simple demodulators for various linear and FM
 modes, including AM, SSB, CW and a raw IQ mode intended mainly for use
 by other programs.
 
-Previous versions (before mid-2023) of ka9q-radio had separate programs (e.g.,
-*airspyd*) for talking to several makes of SDR front end hardware and
-generated an I/Q multicast stream for *radiod*. Because of performance
-problems, code and configuration complexity and general lack of
-utility these separate programs have been obsoleted and the front end
-drivers built directly into *radiod*. Support is currently provided
-for generic RTL-SDR dongles, the Airspy R2, Airspy HF+, AMSAT UK
-Funcube Pro+ and RX-888 Mk II. A synthetic front end, *sig_gen*, is
+Until mid-2023, ka9q-radio had separate programs (e.g., *airspyd*) for
+talking to several makes of SDR front end hardware and generated an
+I/Q multicast stream for *radiod*. Because of performance problems,
+code and configuration complexity and general lack of utility these
+separate programs have been obsoleted and the front end drivers built
+directly into *radiod*. Support is currently provided for generic
+RTL-SDR dongles, the Airspy R2, Airspy HF+, AMSAT UK Funcube Pro+ and
+RX-888 Mk II. The Rigexpert Fobos and the SDRPlay are now optionally
+supported.
+
+A synthetic front end, *sig_gen*, is
 also provided. It simulates a front end, either complex or real,
 producing gaussian noise and single carrier at specified amplitudes.
 It can also transmit my WWV/H simulator *wwvsim*, but it's not yet
 well integrated, mainly because of the need for an external speech synthesizer.
 
-Support will be forthcoming for the SDRPlay and the HackRF (receive
+Support will be forthcoming for the HackRF (receive
 only).
 
 Two very rudimentary programs are provided for interactive use;
@@ -67,10 +70,12 @@ by much more sophisticated user interfaces. Various utilities are
 provided to record or play back signal streams, compress PCM audio
 into Opus, pipe a stream into digital demodulators, etc.
 
-*Radiod* now periodically multicasts ("beacons") status information on
+*Radiod* periodically multicasts ("beacons") status information on
 each output stream and user programs are being enhanced to make
 use of it. For example, *monitor* now displays the frequency, mode and
-signal-to-noise ratio of each channe.
+signal-to-noise ratio of each channel. The *pcmrecord* program automatically
+determines sample rate, format and byte order; with the options --stdout
+and --exec, it obsoletes the older programs *pcmcat* and *pcmspawn*, respectively.
 
 Although I've been running all this myself for several years, it is
 NOT yet ready for general use. A LOT of work still remains, especially
@@ -94,7 +99,7 @@ requirement is that the impulse response of the channel
 filters be shorter than the (configurable) overlap interval in the forward
 FFT.
 
-Updated 11 April 2024  
+Updated 2 Feb 2025  
 Phil Karn, KA9Q  
 karn@ka9q.net
 

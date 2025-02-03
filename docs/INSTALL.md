@@ -24,7 +24,7 @@ Although not needed to build ka9q-radio, I find it useful to install the followi
 
 sudo apt install sox libsox-fmt-all opus-tools flac tcpdump wireshark
 
-And if your system is in a remote location, I strongly recommend this one:
+And if your system is in a remote location, I *strongly* recommend this one:
 
 sudo apt install molly-guard
 
