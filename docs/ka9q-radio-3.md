@@ -443,9 +443,9 @@ about 100-150 Hz.
 This is good enough for most uses, but when more selectivity is needed
 (e.g., for weak signal CW operation) setting **filter2** to 1 through
 4 specifies how many receiver blocks are to be grouped and run through
-a second filter with greater selectivity. The overlap of the second
-filter is 2 (50%) so even with **filter2 = 1** the selectivity is
-improved by a factor of 10/4 = 2.5 with a very small cost in
+a second, longer filter for greater selectivity. The filter2 overlap
+is 2 (50%) so even with **filter2 = 1** the selectivity is
+improved by a factor of 10/4 = 2.5 at a small cost in
 additional CPU and latency. Larger values sharpen the filter even
 more primarily at the expense of latency; **filter2 = 4** provides
 an impulse response of 50% * 80 ms = 40 ms, ten times as
@@ -453,8 +453,12 @@ sharp as the primary filter alone at the cost of 60 ms of
 additional latency.
 
 The secondary filter uses the same values of 
-**low** **high** and **kaiser** as the primary
+**low**, **high** and **kaiser-beta** as the primary
 filter.
+
+Both **filter2** and **buffer** increase latency, but the latter doesn't
+change filtering. I.e., if you want to send fewer, larger output
+packets at low sample rates you might use **filter2** instead of **buffer**.
 
 This feature is experimental and subject to substantial change.
 
@@ -465,7 +469,11 @@ The Dynamic Template
 A dynamic "template" is also set up to allow new channels to be
 created and deleted at run time, e.g., with the *control* command.
 This is automatic if default **data** and **mode** settings are
-present in the [global] section.
+present in the [global] section.  At present the outputs of all
+dynamically created channels go to the same multicast group, but it
+will probably be made settable over the command/status channel in the
+near future.
+
 
 
 
