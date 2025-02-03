@@ -392,14 +392,13 @@ static int rx_callback(airspy_transfer *transfer){
   frontend->samples += sampcount;
   frontend->timestamp = gps_time_ns();
   write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->if_power_instant = (float)in_energy / sampcount;
-  frontend->if_power = Power_smooth * (frontend->if_power_instant - frontend->if_power);
+  frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
   if(sdr->software_agc){
     // Integrate A/D energy over A/D averaging period
     sdr->agc_energy += in_energy;
     sdr->agc_samples += sampcount;
     if(sdr->agc_samples >= frontend->samprate/10){ // Time to re-evaluate after 100 ms
-      float avg_agc_power = scale_ADpower2FS(sdr->frontend) * sdr->agc_energy / sdr->agc_samples;
+      float avg_agc_power = scale_ADpower2FS(frontend) * sdr->agc_energy / sdr->agc_samples;
       if(avg_agc_power < sdr->low_threshold){
 	if(Verbose)
 	  printf("AGC power %.1f dBFS\n",power2dB(avg_agc_power));
