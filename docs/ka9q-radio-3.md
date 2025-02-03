@@ -30,6 +30,11 @@ overridden if desired. If you find yourself doing this a lot, you might
 add a new mode to */var/lib/ka9q-radio/modes.conf*. Be careful to back
 it up; it may be overwritten by the next "make install.
 
+### dns = no | yes (default no)
+
+Use the domain name system to resolve the name in the *data* parameter. See
+the discussion in [ka9q-radio.md](ka9q-radio.md).
+
 ### data = 
 
 No default. Required unless specified in [global].
@@ -266,7 +271,7 @@ below the nominal speech band. Not needed for WFM because the 75
 microsecond time constant corresponds to 2123 Hz, above most of the
 power in typical speech or music.
 
-### extend | threshold-extend = yes|no
+### extend | threshold-extend = yes | no
 
 FM only. Enable or disable an experimental FM threshold extension scheme to reduce the "popcorn" noise that happens just below what
 is conventionally called "full quieting". This can buy another 2-3 dB until the pops become too frequent to suppress.
@@ -289,7 +294,7 @@ with each frame's data, and without **pacing** on they are sent back-to-back. Se
 
 Select an output encoding. All options except 'opus' are uncompressed
 PCM (pulse code modulation). The default is s16be, i.e., signed 16-bit
-linea PPM with big-endian byte order. This became an Internet
+linear PCM with big-endian byte order. This became an Internet
 convention well before little-endian machines took over the world, so
 programs like **pcmrecord** automatically convert this to s16le
 (signed 16-bit little endian).
