@@ -19,96 +19,80 @@ endif
 
 
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
-COPTS=-march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -D_GNU_SOURCE=1 -Wextra -MMD -MP
-
-CFLAGS=$(DOPTS) $(COPTS) $(INCLUDES)
-BINDIR=/usr/local/bin
-LIBDIR=/usr/local/share/ka9q-radio
-SODIR=/usr/local/lib/ka9q-radio
-DAEMONDIR=/usr/local/sbin
-VARDIR=/var/lib/ka9q-radio
-LDLIBS=-ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lopus -logg -lportaudio -lasound -lusb-1.0 -lncursesw -lbsd -lm -lpthread
-
-DAEMONS=aprs aprsfeed cwd opusd packetd radiod stereod rdsd
-
-EXECS=control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record
-
-SCRIPTS=set_lo_multicast.sh
-
-RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o fcd.o hid-libusb.o libradio.a
-
-DYNAMIC_RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libradio.a
-
+COPTS = -march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -D_GNU_SOURCE=1 -Wextra -MMD -MP
+CFLAGS = $(DOPTS) $(COPTS) $(INCLUDES)
+BINDIR = /usr/local/bin
+LIBDIR = /usr/local/share/ka9q-radio
+SODIR = /usr/local/lib/ka9q-radio
+DAEMONDIR = /usr/local/sbin
+VARDIR = /var/lib/ka9q-radio
+LDLIBS = -ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lopus -logg -lportaudio -lasound -lusb-1.0 -lncursesw -lbsd -lm -lpthread
+DIRS = /etc/fftw /etc/radio /etc/avahi/services $(VARDIR) /var/lib/hfdl
+DAEMONS = aprs aprsfeed cwd opusd packetd radiod stereod rdsd
+EXECS = control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record
+SCRIPTS = set_lo_multicast.sh
+LIBRADIO = ax25.o morse.o bandplan.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o
+DYNAMIC_DRIVERS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so
+STATIC_DRIVERS = rx888.o airspyhf.o airspy.o sig_gen.o funcube.o rtlsdr.o fcd.o ezusb.o hid-libusb.o
+RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libradio.a
 LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate
-
-BLACKLIST=airspy-blacklist.conf
-
+BLACKLIST = airspy-blacklist.conf
+SYSCTL = 98-sockbuf.conf 50-multicast.conf
 CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c filter.c fm.c funcube.c hid-libusb.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c pl.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c setfilt.c show-pkt.c show-sig.c sig_gen.c spectrum.c status.c stereod.c tune.c wd-record.c wfm.c
-
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h status.h
 
-DYNAMICS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so
-
-# Build if installed
+# Build SDRPLAY support if installed, or if 'make SDRPLAY=1'
 ifeq ($(wildcard /usr/local/include/sdrplay_api.h),)
 else
-SDRPLAY=1
+   SDRPLAY=1
 endif
 # If SDRPLAY is set, add the necessary flags, files, and libraries
 ifdef SDRPLAY
-CFILES := $(CFILES) sdrplay.c
-DYNAMICS += sdrplay.so
+   CFILES += sdrplay.c
+   DYNAMIC_DRIVERS += sdrplay.so
 endif
 
-# Build if installed
+# Build FOBOS support if installed, or if 'make FOBOS=1'
 ifeq ($(wildcard /usr/local/include/fobos.h),)
 else
-FOBOS=1
+   FOBOS=1
 endif
 # if FOBOS is set, build it too
 ifdef FOBOS
-CFILES := $(CFILES) fobos.c
-DYNAMICS += fobos.so
+   CFILES += fobos.c
+   DYNAMIC_DRIVERS += fobos.so
 endif
 
 # Build on raspberry pi only
 ifeq ($(wildcard /usr/include/pigpio.h),)
 else
-	EXECS += set_xcvr
+   EXECS += set_xcvr
 endif
 
-all: $(DAEMONS) $(EXECS) $(DYNAMICS)
+all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
 # NB: no longer copies files to /etc/radio. Must be installed manually.
-install: $(DAEMONS) $(EXECS)
+install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 	/usr/sbin/adduser --quiet --system --group radio
-	/usr/sbin/adduser --quiet --system --ingroup radio aprsfeed
-	rsync -a aux/98-sockbuf.conf aux/50-multicast.conf /etc/sysctl.d
-	sysctl --quiet -p /etc/sysctl.d/98-sockbuf.conf
-	sysctl --quiet -p /etc/sysctl.d/50-multicast.conf
+	mkdir -p $(DIRS)
+	chown -R radio:radio $(DIRS)
+	chmod g+ws $(DIRS)
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) $(SCRIPTS) $(BINDIR)
-	rsync -a $(DYNAMICS) $(SODIR)
+	rsync -a $(DYNAMIC_DRIVERS) $(SODIR)
 	ln -sf $(SODIR)/*.so /usr/local/lib
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
 	setcap cap_net_admin,cap_sys_nice=ep $(DAEMONDIR)/radiod
+	(cd aux;rsync -a $(SYSCTL) /etc/sysctl.d; sysctl -q -p $(SYSCTL))
+	(cd aux;rsync -a $(BLACKLIST) /etc/modprobe.d)
+	(cd aux;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d;chown root:root /etc/logrotate.d/*;chmod go-w /etc/logrotate.d/*)
 	(cd share;rsync -a --ignore-existing . $(LIBDIR))
 	(cd service;rsync -a . /etc/systemd/system)
 	(cd rules;rsync -a . /etc/udev/rules.d)
-	(cd aux;rsync -a $(BLACKLIST) /etc/modprobe.d)
-	(cd aux;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d;chown root:root /etc/logrotate.d/*;chmod go-w /etc/logrotate.d/*)
-	touch -a /etc/avahi/hosts /var/log/ft8.log /var/log/ft4.log /var/log/wspr.log
-	mkdir -p /etc/fftw /etc/radio /etc/avahi/services $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
-	chown radio:radio /var/log/ft8.log /var/log/ft4.log /var/log/wspr.log /var/log/hfdl /var/log/hfdl
-	chgrp radio /etc/radio /etc/fftw /etc/avahi/hosts /etc/avahi/services $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
-	chmod g+ws  /etc/radio /etc/fftw /etc/avahi/hosts /etc/avahi/services $(VARDIR) $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/lib/hfdl /var/log/hfdl
-# now handled by radiod with cap_net_admin capability
-#	systemctl enable set_lo_multicast
-#	systemctl start set_lo_multicast
 	systemctl daemon-reload
 
 clean:
-	-rm -f *.o *.a *.d *.so .depend $(EXECS) $(DAEMONS)
+	-rm -f *.o *.a *.d *.so $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS) $(STATIC_DRIVERS)
 
 DEPS = $(CFILES:.c=.d)
 
@@ -116,7 +100,7 @@ DEPS = $(CFILES:.c=.d)
 
 .PHONY: clean all install pi dynamics
 
-dynamics: $(DYNAMICS)
+dynamics: $(DYNAMIC_DRIVERS)
 
 # Executables
 
@@ -178,9 +162,9 @@ pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 ifeq ($(DYNAMIC),1)
-radiod: $(DYNAMIC_RADIOD_OBJECTS)
-else
 radiod: $(RADIOD_OBJECTS)
+else
+radiod: $(RADIOD_OBJECTS) $(STATIC_DRIVERS)
 endif
 	$(CC) -rdynamic $(LDOPTS) -o $@ $^ $(LDLIBS)
 
@@ -202,7 +186,7 @@ set_xcvr: set_xcvr.o libradio.a
 
 # device shared libraries - build kludgey separate -fpic versions of
 # drivers already built in for testing
-# To test, remove these references from main.c
+# To test, do 'make DYNAMIC=1'
 funcube.so: funcube-pic.o fcd-pic.o hid-libusb-pic.o
 	$(CC) -shared -o $@ $^
 
@@ -262,7 +246,7 @@ fobos-pic.o: fobos.c
 
 
 # subroutines useful in more than one program
-libradio.a: ax25.o morse.o bandplan.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o
+libradio.a: $(LIBRADIO)
 	ar rv $@ $?
 	ranlib $@
 
