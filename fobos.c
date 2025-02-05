@@ -78,6 +78,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
   frontend->isreal = false; // Make sure the right kind of filter gets created!
   frontend->bitspersample = 14; // For gain scaling
   frontend->rf_agc = false; // On by default unless gain or atten is specified
+  sdr->scale = scale_AD(frontend);
 
   sdr->buff_count = 0;
   sdr->max_buff_count = 2048;
@@ -100,7 +101,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
       config_getstring(dictionary, section, "serial", NULL);
   const char *frequencycfg =
       config_getstring(dictionary, section, "frequency", "100m0");
-  int dirsamplecfg = config_getint(dictionary, section, "direct_sampling", 0);
+  bool dirsamplecfg = config_getboolean(dictionary, section, "direct_sampling", 0);
   int lna_gaincfg = config_getint(dictionary, section, "lna_gain", 0);
   int vga_gaincfg = config_getint(dictionary, section, "vga_gain", 0);
   int clk_sourcecfg = config_getint(dictionary, section, "clk_source", 0);
@@ -228,6 +229,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
     // Set Frequency
     double init_frequency = parse_frequency(frequencycfg, false);
     double frequency_actual = 0.0;
+    // Wow, a library API that returns the *actual* tuner frequency. Bravo!
     int result = fobos_rx_set_frequency(dev, init_frequency, &frequency_actual);
     if (result != 0) {
       fprintf(stderr, "fobos_rx_set_frequency failed with error code: %d\n",
@@ -261,6 +263,8 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
               result);
       return -1;
     }
+    sdr->rf_gain = lna_gainconfig + vga_gaincfg;
+    sdr->rf_atten = 0;
 
     // Set Clock Source
     result = fobos_rx_set_clk_source(dev, clk_sourcecfg);
@@ -314,7 +318,7 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
   for (int i = 0; i < sampcount; i++) {
     float complex const samp = CMPLXF(buf[2*i],buf[2*i+1]);
     in_energy += cnrmf(samp);       // Calculate energy of the sample
-    wptr[i] = samp;                 // Store sample in write pointer buffer
+    wptr[i] = samp * sdr->scale;    // Store sample in write pointer buffer
   }
 
   frontend->samples += sampcount;
