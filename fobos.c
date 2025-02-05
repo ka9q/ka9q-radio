@@ -76,7 +76,8 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
   sdr->frontend = frontend;
   frontend->context = sdr;
   frontend->isreal = false; // Make sure the right kind of filter gets created!
-  frontend->bitspersample = 14; // For gain scaling
+  // The Fobos apparently provides scaled float samples
+  frontend->bitspersample = 1; // only used for gain scaling
   frontend->rf_agc = false; // On by default unless gain or atten is specified
   sdr->scale = scale_AD(frontend);
 
@@ -248,7 +249,8 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
       return -1;
     }
 
-    // Set LNA Gain
+    // Set LNA Gain 0..3
+    // MAX2830 datasheet, p21: 11 => max gain, 10 => -16 dB, 0X => -33 dB
     result = fobos_rx_set_lna_gain(dev, lna_gaincfg);
     if (result != FOBOS_ERR_OK) {
       fprintf(stderr, "fobos_rx_set_lna_gain failed with error code: %d\n",
@@ -256,14 +258,15 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
       return -1;
     }
 
-    // Get VGA Gain
+    // Get VGA Gain 0..31
+    // MAX2830 datasheet, p21: 2 dB steps, 0-62 dB
     result = fobos_rx_set_vga_gain(dev, vga_gaincfg);
     if (result != FOBOS_ERR_OK) {
       fprintf(stderr, "fobos_rx_set_vga_gain failed with error code: %d\n",
               result);
       return -1;
     }
-    frontend->rf_gain = lna_gaincfg + vga_gaincfg;
+    frontend->rf_gain = 2 * vga_gaincfg + (lna_gaincfg == 2 ? 16.0 : lna_gaincfg == 3 ? 33.0 : 0);
     frontend->rf_atten = 0;
 
     // Set Clock Source
@@ -273,11 +276,60 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
               result);
       return -1;
     }
+    frontend->rf_level_cal = 41; // very rough approximation, needs to be measured
 
     // SDR is open here
   }
   return 0;
 } // End of Setup
+
+/* command to set analog gain. Turn off AGC if it was on
+  MAX2830 datasheet: vga gain 0-63 dB in 2 dB steps (0x00 - 0x1F)
+  lna gain: 00 -> -33 dB; 10 -> -16 dB; 11 -> 0 dB
+  NF improves with higher lna gain setting, so use it as soon as possible
+  Absolute receiver gain not yet measured, but the Fobos block diagram has
+  1. QPL9547 LNA (19.5 dB, 0-2.4 GHz) or 9504 (21.6 dB, 2.4-6.0 GHz)
+  2. RFFC5072 mixer (-2 dB)
+  3. SKY6540S "VGA" (actually fixed at 14-15 dB depending on -11 or -20 version)
+  4. MAX 2830 (what we're apparently programming) ~ 1-99 dB
+  5. Linear LTC2143 A/D: 1V p-p or 2V p-p
+*/
+float fobos_gain(struct frontend * const frontend, float gain){
+  if(frontend->rf_agc)
+    fprintf(stdout,"manual gain setting, turning off AGC\n");
+
+  // Just the MAX2830 gain here
+  float vgain = gain;
+  int lna = 0;
+  if(vgain >= 33){
+    lna = 3;
+    vgain -= 33;
+  } else if(vgain >= 16){
+    lna = 2;
+    vgain -= 16;
+  }
+  if(vgain > 63)
+    vgain = 63;
+  vgain /= 2; // into 2 dB steps
+
+  frontend->rf_agc = false;
+  frontend->rf_gain = gain;
+
+  int result = fobos_rx_set_lna_gain(dev, lna);
+  if (result != FOBOS_ERR_OK) {
+    fprintf(stderr, "fobos_rx_set_lna_gain failed with error code: %d\n",
+	    result);
+  }
+
+  // Set VGA Gain 0..31
+  result = fobos_rx_set_vga_gain(dev, (int)vgain);
+  if (result != FOBOS_ERR_OK) {
+    fprintf(stderr, "fobos_rx_set_vga_gain failed with error code: %d\n",
+	    result);
+  }
+  frontend->rf_gain = 2 * vgain + (lna == 2 ? 16.0 : lna == 3 ? 33.0 : 0);
+  return frontend->rf_gain;
+}
 
 static void *fobos_monitor(void *p) {
   struct sdrstate *const sdr = (struct sdrstate *)p;
@@ -291,7 +343,6 @@ static void *fobos_monitor(void *p) {
     fprintf(stderr, "fobos_rx_read_async failed with error code: %d\n", result);
     exit(EXIT_FAILURE); // Exit the thread due to an error
   }
-
   return NULL; // Return NULL when the thread exits cleanly
 }
 
