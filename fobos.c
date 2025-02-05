@@ -263,8 +263,8 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
               result);
       return -1;
     }
-    sdr->rf_gain = lna_gainconfig + vga_gaincfg;
-    sdr->rf_atten = 0;
+    frontend->rf_gain = lna_gainconfg + vga_gaincfg;
+    frontendd->rf_atten = 0;
 
     // Set Clock Source
     result = fobos_rx_set_clk_source(dev, clk_sourcecfg);
