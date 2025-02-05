@@ -405,7 +405,7 @@ static int emit_opus_silence(struct session * const sp,int samples){
 
   if(Verbose > 1)
     fprintf(stderr,"%d: emitting %d frames of silence\n",sp->ssrc,samples);
-  ogg_packet oggPacket;
+  ogg_packet oggPacket = {0}; // Not really necessary
   oggPacket.b_o_s = 0;
   oggPacket.e_o_s = 0;    // End of stream flag
 
@@ -452,12 +452,11 @@ static int emit_opus_silence(struct session * const sp,int samples){
       sp->samples_remaining -= chunk;
     samples -= chunk;
     samples_since_flush += chunk;
-    if(Flushmode || samples_since_flush >= OPUS_SAMPRATE){
-      // Write an Ogg page on every packet to minimize latency
-      // Or at least once per second to keep opusinfo from complaining, and vlc progress from sticking
-      samples_since_flush = 0;
-      ogg_flush(sp);
-    }
+  }
+  if(Flushmode || samples_since_flush >= OPUS_SAMPRATE){
+    // Write at least once per second to keep opusinfo from complaining, and vlc progress from sticking
+    samples_since_flush = 0;
+    ogg_flush(sp);
   }
   return 0;
 }
@@ -484,10 +483,8 @@ static int send_opus_queue(struct session * const sp,bool flush){
       break; // Stop on first empty entry if we're not resynchronizing
 
     if(qp->inuse){
-      ogg_packet oggPacket;
-      oggPacket.b_o_s = 0;
-      oggPacket.e_o_s = 0;    // End of stream flag
-      int samples = opus_packet_get_nb_samples(qp->data,qp->size,48000); // Number of 48 kHz samples
+      ogg_packet oggPacket = {0};
+      int samples = opus_packet_get_nb_samples(qp->data,qp->size,OPUS_SAMPRATE); // Number of 48 kHz samples
 
       int32_t jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
       if(jump > 0){
@@ -524,10 +521,7 @@ static int send_opus_queue(struct session * const sp,bool flush){
       int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);
       (void)ret;
       assert(ret == 0);
-      if(Flushmode) {
-	ogg_flush(sp); // Absolute minimum latency
-      } else {
-	// Just do a normal lazy pageout when it's full
+      {
 	ogg_page oggPage;
 	while (ogg_stream_pageout(&sp->oggState, &oggPage)){
 	  fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
@@ -546,6 +540,8 @@ static int send_opus_queue(struct session * const sp,bool flush){
     qp->inuse = false;
     count++;
   }
+  if(Flushmode)
+    ogg_flush(sp); // Absolute minimum latency
   return count;
 }
 // if !flush, send whatever's on the queue, up to the first missing segment
@@ -1273,7 +1269,7 @@ static int start_ogg_opus_stream(struct session *sp){
   // Opus won't use more bits when the input is actually mono and/or at a lower rate
   opusHeader.channels = 2;
   opusHeader.preskip = 312;
-  opusHeader.samprate = 48000;
+  opusHeader.samprate = OPUS_SAMPRATE;
   opusHeader.gain = 0;
   opusHeader.map_family = 0;
 
