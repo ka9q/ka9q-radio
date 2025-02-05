@@ -263,7 +263,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
               result);
       return -1;
     }
-    frontend->rf_gain = lna_gainconfg + vga_gaincfg;
+    frontend->rf_gain = lna_gaincfg + vga_gaincfg;
     frontend->rf_atten = 0;
 
     // Set Clock Source
