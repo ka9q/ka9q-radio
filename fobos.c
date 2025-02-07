@@ -414,6 +414,9 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
   } else {
     // Use only one input in real mode
     // There **has** to be a cleaner method than dropping half the input samples
+    // Also, DC removal is unnecessary in direct sampling mode, and using
+    // just one input makes the I/Q gain balancing stuff in the library unnecessary.
+    // And it's a pretty big CPU sink
     float *const wptr = frontend->in.input_write_pointer.r;
     assert(wptr != NULL);
 
