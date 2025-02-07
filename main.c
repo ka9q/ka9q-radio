@@ -48,12 +48,12 @@
 // Configuration constants & defaults
 static char const DEFAULT_PRESET[] = "am";
 static int const DEFAULT_FFTW_THREADS = 2;
-static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
-static int const DEFAULT_MCAST_TTL = 0; // Don't blast LANs with cheap Wifi!
-static float const DEFAULT_BLOCKTIME = 20.0;
-static int const DEFAULT_OVERLAP = 5;
-static int const DEFAULT_UPDATE = 25; // 2 Hz for 20 ms blocktime (50 Hz frame rate)
-static int const DEFAULT_LIFETIME = 20; // 20 sec for idle sessions tuned to 0 Hz
+#define DEFAULT_IP_TOS 48 // AF12 left shifted 2 bits
+#define DEFAULT_MCAST_TTL 0 // Don't blast LANs with cheap Wifi!
+#define DEFAULT_BLOCKTIME 20.0
+#define DEFAULT_OVERLAP 5
+#define DEFAULT_UPDATE 25 // 2 Hz for 20 ms blocktime (50 Hz frame rate)
+#define DEFAULT_LIFETIME 20 // 20 sec for idle sessions tuned to 0 Hz
 #define GLOBAL "global"
 
 char const *Iface;
