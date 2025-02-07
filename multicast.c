@@ -555,9 +555,10 @@ static int ipv4_join_group(int const fd,void const * const sock,char const * con
   mreqn.imr_multiaddr = sin->sin_addr;
   mreqn.imr_address.s_addr = INADDR_ANY;
 
-  if(iface != NULL && strlen(iface) > 0)
+  if(iface != NULL && strlen(iface) > 0) {
     mreqn.imr_ifindex = if_nametoindex(iface); // defaults to 0
-  else
+    mreqn.imr_address.s_addr = htonl(INADDR_LOOPBACK); // be explicit when looping back
+  } else
     mreqn.imr_ifindex = 0;
   if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
     char name[IFNAMSIZ];
@@ -607,7 +608,7 @@ static int setup_ipv4_loopback(int fd){
     return -1;
   }
   struct ip_mreqn mreqn = {0};
-  mreqn.imr_address.s_addr = INADDR_LOOPBACK;
+  mreqn.imr_address.s_addr = htonl(INADDR_LOOPBACK);
   mreqn.imr_ifindex = Loopback_index;
 
   if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &mreqn, sizeof mreqn) < 0)
