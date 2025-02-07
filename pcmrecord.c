@@ -177,6 +177,9 @@ struct session {
   bool complete;
 };
 
+#define SIZE_LIMIT 1
+#define SESSION_CLOSE 2
+#define IDLE_TIMEOUT 3
 
 static float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
 static double FileLengthLimit = 0; // Length of file in seconds; 0 = unlimited
@@ -206,7 +209,7 @@ static void input_loop(void);
 static void cleanup(void);
 int session_file_init(struct session *sp,struct sockaddr const *sender);
 static int close_session(struct session **spp);
-static int close_file(struct session *sp);
+static int close_file(struct session *sp,int reason);
 static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string);
 static int start_ogg_opus_stream(struct session *sp);
 static int emit_ogg_opus_tags(struct session *sp);
@@ -846,7 +849,7 @@ static void input_loop(){
 	  fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
 	}
       if(((FileLengthLimit != 0) || (max_length != 0)) && sp->samples_remaining <= 0)
-	close_file(sp); // Don't reset RTP here so we won't lose samples on the next file
+	close_file(sp,SIZE_LIMIT); // Don't reset RTP here so we won't lose samples on the next file
 
     } // end of packet processing
   datadone:;
@@ -861,7 +864,7 @@ static void input_loop(){
 	int64_t idle = current_time - sp->last_active;
 	if(idle > Timeout * BILLION){
 	  // Close idle file
-	  close_file(sp); // sp will be NULL
+	  close_file(sp,IDLE_TIMEOUT); // sp will be NULL
 	  sp->rtp_state.init = false; // reinit rtp on next packet so we won't emit lots of silence
 	}
       }
@@ -1122,7 +1125,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	    sp->chan.preset);
     if(sp->starting_offset > 0)
       fprintf(stderr," offset %lld",(long long)sp->starting_offset);
-    fputc('\n',stderr);
+    fprintf(stderr," from %s\n",formatsock(&sp->sender,false));
   }
 
   sp->iobuffer = malloc(BUFFERSIZE);
@@ -1160,7 +1163,7 @@ static int close_session(struct session **spp){
   if(sp == NULL)
     return -1;
 
-  close_file(sp);
+  close_file(sp,SESSION_CLOSE);
   if(sp->prev)
     sp->prev->next = sp->next;
   else
@@ -1180,7 +1183,7 @@ static int close_session(struct session **spp){
 
 // Close a file, update .wav header
 // If the file is not "substantial", just delete it
-static int close_file(struct session *sp){
+static int close_file(struct session *sp,int reason){
   if(sp == NULL)
     return -1;
 
@@ -1193,10 +1196,21 @@ static int close_file(struct session *sp){
     end_wav_stream(sp);
 
   if(Verbose){
-    fprintf(stderr,"%s closing '%s' %'.1f sec\n",
+    fprintf(stderr,"%s closing '%s' %'.1f sec",
 	    sp->frontend.description,
 	    sp->filename, // might be blank
             (float)sp->samples_written / sp->samprate);
+    switch(reason){
+    case SESSION_CLOSE:
+      fprintf(stderr," (sessiom closed)\n");
+      break;
+    case IDLE_TIMEOUT:
+      fprintf(stderr," (idle timeout)\n");
+      break;
+    case SIZE_LIMIT:
+      fprintf(stderr," (size reached)\n");
+      break;
+    }
   }
   if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
     fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
