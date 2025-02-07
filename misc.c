@@ -362,6 +362,8 @@ double parse_frequency(char const *s,bool heuristics){
   } else if((sp = strchr(ss,'k')) != NULL){
     mult = 1e3;
     *sp = decimal;
+  } else if((sp = strchr(ss,decimal)) != NULL){
+    // Disable heuristic if explicitly given
   }
   char *endptr = NULL;
   double f = strtod(ss,&endptr);
