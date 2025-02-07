@@ -607,7 +607,7 @@ static int setup_ipv4_loopback(int fd){
     return -1;
   }
   struct ip_mreqn mreqn = {0};
-  mreqn.imr_address.s_addr = INADDR_ANY;
+  mreqn.imr_address.s_addr = INADDR_LOOPBACK;
   mreqn.imr_ifindex = Loopback_index;
 
   if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &mreqn, sizeof mreqn) < 0)
