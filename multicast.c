@@ -557,7 +557,8 @@ static int ipv4_join_group(int const fd,void const * const sock,char const * con
 
   if(iface != NULL && strlen(iface) > 0) {
     mreqn.imr_ifindex = if_nametoindex(iface); // defaults to 0
-    mreqn.imr_address.s_addr = htonl(INADDR_LOOPBACK); // be explicit when looping back
+    if(mreqn.imr_ifindex == Loopback_index)
+      mreqn.imr_address.s_addr = htonl(INADDR_LOOPBACK); // be explicit when looping back
   } else
     mreqn.imr_ifindex = 0;
   if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
