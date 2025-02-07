@@ -39,6 +39,7 @@ static pthread_t Input_thread;
 const char *App_path;
 static bool Newline;
 static bool All;
+#define BILLION 1000000000 
 static int64_t Interval = 1 * BILLION; // Default 1 sec
 static int Control_sock;
 static int Status_sock;
