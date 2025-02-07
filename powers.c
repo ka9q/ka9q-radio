@@ -29,6 +29,7 @@ int Verbose;
 uint32_t Ssrc;
 char Iface[1024]; // Multicast interface to talk to front end
 int Status_fd = -1, Ctl_fd = -1;
+#define BILLION 1000000000 
 int64_t Timeout = BILLION; // Retransmission timeout
 bool details;   // Output bin, frequency, power, newline
 static char const Optstring[] = "b:c:df:hi:s:t:T:vw:V";
