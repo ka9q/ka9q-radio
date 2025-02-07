@@ -23,6 +23,7 @@
 #include <sys/mman.h>
 #include <sched.h>
 #include <errno.h>
+#include <locale.h>
 
 #ifndef NULL
 #define NULL ((void *)0)
@@ -343,19 +344,26 @@ double parse_frequency(char const *s,bool heuristics){
 
     ss[i] = '\0';
   }
+  // Don't hardwire the decimal point, use the current locale
+  char decimal = '.';
+  struct lconv *lc = localeconv();
+  if(lc != NULL && lc->decimal_point != NULL && strlen(lc->decimal_point) > 0){
+    decimal = lc->decimal_point[0];
+  }
   double mult = 1;
   // k, m or g in place of decimal point indicates scaling by 1k, 1M or 1G
   char *sp = NULL;
   if((sp = strchr(ss,'g')) != NULL){
     mult = 1e9;
-    *sp = '.';
+    *sp = decimal;
   } else if((sp = strchr(ss,'m')) != NULL){
     mult = 1e6;
-    *sp = '.';
+    *sp = decimal;
   } else if((sp = strchr(ss,'k')) != NULL){
     mult = 1e3;
-    *sp = '.';
+    *sp = decimal;
   } else if((sp = strchr(ss,'.')) != NULL){ // note explicit radix point
+    *sp = decimal;
   }
   char *endptr = NULL;
   double f = strtod(ss,&endptr);
