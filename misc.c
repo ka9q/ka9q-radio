@@ -347,9 +347,9 @@ double parse_frequency(char const *s,bool heuristics){
   // Don't hardwire the decimal point, use the current locale
   char decimal = '.';
   struct lconv *lc = localeconv();
-  if(lc != NULL && lc->decimal_point != NULL && strlen(lc->decimal_point) > 0){
+  if(lc != NULL && lc->decimal_point != NULL && strlen(lc->decimal_point) > 0)
     decimal = lc->decimal_point[0];
-  }
+
   double mult = 1;
   // k, m or g in place of decimal point indicates scaling by 1k, 1M or 1G
   char *sp = NULL;
@@ -361,8 +361,6 @@ double parse_frequency(char const *s,bool heuristics){
     *sp = decimal;
   } else if((sp = strchr(ss,'k')) != NULL){
     mult = 1e3;
-    *sp = decimal;
-  } else if((sp = strchr(ss,'.')) != NULL){ // note explicit radix point
     *sp = decimal;
   }
   char *endptr = NULL;
