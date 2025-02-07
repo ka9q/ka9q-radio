@@ -45,8 +45,8 @@
 #include "radio.h"
 #include "config.h"
 
-static int const DEFAULT_IP_TOS = 48;
-static int const DEFAULT_MCAST_TTL = 1; // LAN only, no routers
+#define DEFAULT_IP_TOS 48;
+#define DEFAULT_MCAST_TTL = 1; // LAN only, no routers
 static float Refresh_rate = 0.25f;
 static char Locale[256] = "en_US.UTF-8";
 static char const *Presets_file = "presets.conf"; // make configurable!
