@@ -38,7 +38,7 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
   if(Static_avahi){
     // Just put in /etc/avahi/services
     avahi_publish_service(service_name, service_type, dns_name,service_port,description,pid);
-  } else {
+  } else { // static = no
     if(fork() == 0){
 #if 0
       fprintf(stdout,"avahi-publish-service child pid %d\n",getpid());
