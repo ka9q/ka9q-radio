@@ -91,6 +91,7 @@ char const *Global_keys[] = {
   "presets-file",
   "wisdom-file",
   "hardware",
+  "static",
   "status",
   "preset",
   "mode",
@@ -394,6 +395,7 @@ static int loadconfig(char const *file){
   IP_tos = config_getint(Configtable,GLOBAL,"tos",IP_tos);
   Mcast_ttl = config_getint(Configtable,GLOBAL,"ttl",Mcast_ttl);
   Global_use_dns = config_getboolean(Configtable,GLOBAL,"dns",false);
+  Static_avahi = config_getboolean(Configtable,GLOBAL,"static",false);
   {
     char const *p = config_getstring(Configtable,GLOBAL,"wisdom-file",NULL);
     if(p != NULL)
