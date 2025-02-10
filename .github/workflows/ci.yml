@@ -108,6 +108,6 @@ jobs:
       - name: Setup
         run: ln -s Makefile.osx Makefile
       - name: Compile
-        run: C_INCLUDE_PATH="$(brew --prefix)/include" LIBRARY_PATH="$(brew --prefix)/lib" make
+        run: C_INCLUDE_PATH="$(brew --prefix)/include:$(brew --prefix)/opt/ncurses/include" LIBRARY_PATH="$(brew --prefix)/lib:$(brew --prefix)/opt/ncurses/lib" make
       - name: Install
         run: sudo make install

@@ -1189,13 +1189,13 @@ static void display_tuning(WINDOW *w,struct channel const *channel){
   int col = 1;
   if(Frequency_lock)
     wattron(w,A_UNDERLINE); // Underscore means the frequency is locked
-  pprintw(w,row++,col,"Carrier","%'.3f",channel->tune.freq); // RF carrier frequency
+  pprintw(w,row++,col,"Carrier","%'.3lf",channel->tune.freq); // RF carrier frequency
 
   // second LO frequency is negative of IF, i.e., a signal at +48 kHz
   // needs a second LO frequency of -48 kHz to bring it to zero
   if(Frontend.lock)
     wattron(w,A_UNDERLINE);
-  pprintw(w,row++,col,"First LO","%'.3f",Frontend.frequency);
+  pprintw(w,row++,col,"First LO","%'.3lf",Frontend.frequency);
   wattroff(w,A_UNDERLINE);
 
   // Wink IF display if out of front end's range
@@ -1205,14 +1205,14 @@ static void display_tuning(WINDOW *w,struct channel const *channel){
   if(-channel->tune.second_LO + channel->filter.max_IF > Frontend.max_IF)
     wattron(w,A_BLINK);
 
-  pprintw(w,row++,col,"IF","%'.3f",-channel->tune.second_LO);
+  pprintw(w,row++,col,"IF","%'.3lf",-channel->tune.second_LO);
   wattroff(w,A_BLINK);
 
   pprintw(w,row++,col,"Filter low","%'+.0f",channel->filter.min_IF);
   pprintw(w,row++,col,"Filter high","%'+.0f",channel->filter.max_IF);
 
   if(!isnan(channel->tune.shift))
-    pprintw(w,row++,col,"Shift","%'+.3f",channel->tune.shift);
+    pprintw(w,row++,col,"Shift","%'+.3lf",channel->tune.shift);
 
   pprintw(w,row++,col,"FE filter low","%'+.0f",Frontend.min_IF);
   pprintw(w,row++,col,"FE filter high","%'+.0f",Frontend.max_IF);
@@ -1220,8 +1220,8 @@ static void display_tuning(WINDOW *w,struct channel const *channel){
   // Doppler info displayed only if active
   double const dopp = channel->tune.doppler;
   if(dopp != 0){
-    pprintw(w,row++,col,"Doppler","%'.3f",dopp);
-    pprintw(w,row++,col,"Dop Rate, Hz/s","%'.3f",channel->tune.doppler_rate);
+    pprintw(w,row++,col,"Doppler","%'.3lf",dopp);
+    pprintw(w,row++,col,"Dop Rate, Hz/s","%'.3lf",channel->tune.doppler_rate);
   }
   row++; // Blank line between frequency & band info
   display_info(w,row,col,channel); // moved to bottom of tuning window
@@ -1423,7 +1423,7 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
       pprintw(w,row++,col,"Δf","%'+.3f Hz",channel->sig.foffset);
       double phase = channel->pll.cphase * DEGPRA + 360 * channel->pll.rotations;
 
-      pprintw(w,row++,col,"φ","%+.1f °",channel->pll.cphase*DEGPRA);
+      pprintw(w,row++,col,"φ","%+.1lf °",channel->pll.cphase*DEGPRA);
       if(Local.pll_start_time == 0){
 	Local.pll_start_time = gps_time_ns();
 	Local.pll_start_phase = phase;
@@ -1431,8 +1431,8 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
       double delta_t = 1e-9 * (gps_time_ns() - Local.pll_start_time);
       double delta_ph = phase - Local.pll_start_phase;
       pprintw(w,row++,col,"ΔT","%.1lf s ",delta_t);
-      pprintw(w,row++,col,"Δφ","%+.1f °",delta_ph);
-      pprintw(w,row++,col,"μ Δf/f","%g",delta_ph / (360 * delta_t * channel->tune.freq));
+      pprintw(w,row++,col,"Δφ","%+.1lf °",delta_ph);
+      pprintw(w,row++,col,"μ Δf/f","%lg",delta_ph / (360 * delta_t * channel->tune.freq));
     } else {
       Local.pll_start_time = 0;
     }
@@ -1629,6 +1629,19 @@ static void display_presets(WINDOW *w,struct channel const *channel){
   wnoutrefresh(w);
 }
 
+// Count the actual number of characters in a UTF-8 encoded string
+static size_t utf8_strlen(const char *str) {
+  size_t length = 0;
+  while (*str != '\0') {
+    // Check if this byte is the start of a multi-byte character
+    if ((*str++ & 0xC0) != 0x80) {
+      length++;
+    }
+  }
+  return length;
+}
+
+
 // Like mvwprintw, but right justify the formatted output on the line and overlay with
 // a left-justified label
 static int pprintw(WINDOW *w,int y, int x, char const *label, char const *fmt,...){
@@ -1640,17 +1653,16 @@ static int pprintw(WINDOW *w,int y, int x, char const *label, char const *fmt,..
   va_list ap;
   va_start(ap,fmt);
   char result[maxx+1];
+  memset(result,0,sizeof(result));
   int const r = vsnprintf(result,sizeof(result)-1,fmt,ap);
   va_end(ap);
 
   if(r == -1)
     return -1;
 
-  result[sizeof(result)-1] = '\0'; // Ensure it's terminated
-
   // vsnprintf returns character count that *would* be written without limits
   // We want the actual length
-  int const len = strlen(result);
+  int const len = utf8_strlen(result);
 
   int vstart = maxx - 2 - len; // Allow an extra space for right side of box
   if(vstart < 0)

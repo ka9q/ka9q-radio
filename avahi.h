@@ -7,6 +7,8 @@
 #include <avahi-common/error.h>
 #include <avahi-common/timeval.h>
 
+extern bool Static_avahi;
+
 struct service_tab {
   void *buffer;
   char *line_type;

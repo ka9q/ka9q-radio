@@ -17,16 +17,15 @@ ifeq ($(DYNAMIC),1)
      DOPTS += -DFORCE_DYNAMIC=1
 endif
 
-
+ARCHOPTS = -march=native
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
-COPTS = -march=native -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -D_GNU_SOURCE=1 -Wextra -MMD -MP
-CFLAGS = $(DOPTS) $(COPTS) $(INCLUDES)
+COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -D_GNU_SOURCE=1 -Wextra -MMD -MP
+CFLAGS = $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
 BINDIR = /usr/local/bin
 LIBDIR = /usr/local/share/ka9q-radio
 SODIR = /usr/local/lib/ka9q-radio
 DAEMONDIR = /usr/local/sbin
 VARDIR = /var/lib/ka9q-radio
-LDLIBS = -ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -liniparser -lairspy -lairspyhf -lrtlsdr -lopus -logg -lportaudio -lasound -lusb-1.0 -lncursesw -lbsd -lm -lpthread
 DIRS = /etc/fftw /etc/radio /etc/avahi/services $(VARDIR) /var/lib/hfdl
 DAEMONS = aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 EXECS = control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record
@@ -105,90 +104,91 @@ dynamics: $(DYNAMIC_DRIVERS)
 # Executables
 
 aprs: aprs.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
 
 aprsfeed: aprsfeed.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
 
 control: control.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -liniparser -lncursesw -lbsd -lm
 
 cwd: cwd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
 
 tune: tune.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
 
 setfilt: setfilt.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
 
 show-pkt: show-pkt.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm
 
 show-sig: show-sig.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm
 
 metadump: metadump.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
 
 monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lsamplerate $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lopus -lportaudio -lasound -lsamplerate -liniparser -lbsd -lm
 
 opusd: opusd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lbsd -lm
 
 opussend: opussend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lbsd -lm
 
 packetd: packetd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm
 
 pcmcat: pcmcat.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
 
 pcmspawn: pcmspawn.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
 
 pcmrecord: pcmrecord.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg -lbsd -lm
 
 pcmsend: pcmsend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lm
 
 powers: powers.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
 
 pl: pl.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm
 
 ifeq ($(DYNAMIC),1)
 radiod: $(RADIOD_OBJECTS)
+	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -ldl -lbsd -lm
 else
 radiod: $(RADIOD_OBJECTS) $(STATIC_DRIVERS)
+	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lportaudio -lairspy -lairspyhf -lrtlsdr -lusb-1.0 -ldl -lbsd -lm
 endif
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 rdsd: rdsd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm
 
 stereod: stereod.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm
 
 jt-decoded: jt-decoded.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
 
 wd-record: wd-record.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
 
 # not made unless we're on a rpi
 set_xcvr: set_xcvr.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lpigpio $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser
 
 # device shared libraries - build kludgey separate -fpic versions of
 # drivers already built in for testing
 # To test, do 'make DYNAMIC=1'
 funcube.so: funcube-pic.o fcd-pic.o hid-libusb-pic.o
-	$(CC) -shared -o $@ $^
+	$(CC) -shared -o $@ $^ -lportaudio
 
 rx888.so: rx888-pic.o ezusb-pic.o hid-libusb-pic.o
 	$(CC) -shared -o $@ $^ -lusb-1.0
