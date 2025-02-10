@@ -1,3 +1,4 @@
+// Not maintained since radiod has a built-in FM stereo decoder
 // Transcoder (multicast in/out) that decodes a FM composite signal @ 384 kHz
 // to a stereo signal @ 48 kHz
 // Part of ka9q-radio. This is a standalone daemon, an alternative to the (very similar) built-in decoder

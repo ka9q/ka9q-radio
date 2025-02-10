@@ -1,3 +1,4 @@
+// Mostly obsolete now that radiod can generate opus directly, but probably should be updated
 // Note! Doesn't really work right with consumer progs that get metadata from status beacons on data stream
 // Should modify, not just copy, metadata to indicate transcoding to Opus
 

@@ -1,3 +1,5 @@
+// THIS PROGRAM IS OBSOLETE - Use 'pcmrecord --stdout' instead
+
 // Receive and stream PCM RTP data to stdout
 // Should emit .wav format by default to encode sample rate & parameters for subsequent encoding
 // Revised Aug 2023 to more cleanly handle sender restarts

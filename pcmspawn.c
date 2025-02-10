@@ -1,3 +1,5 @@
+// THIS PROGRAM IS OBSOLETE - use 'pcmrecord --exec' instead
+
 // Receive and demux RTP PCM streams into a command pipeline
 // Copyright 2023 Phil Karn, KA9Q
 #define _GNU_SOURCE 1
