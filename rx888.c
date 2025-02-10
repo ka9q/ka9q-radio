@@ -317,7 +317,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   float const tc  = 1.0; // 1 second
   Power_smooth = -expm1f(-xfer_time/tc);
 
-  fprintf(stdout,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, requested gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
+  fprintf(stdout,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  sdr->reference,samprate,actual,ferror, 1e6 * ferror / samprate,
 	  frontend->rf_agc ? "on" : "off",
 	  gain,frontend->rf_gain,frontend->rf_atten,frontend->rf_level_cal,
@@ -472,8 +472,10 @@ static void *agc_rx888(void *arg){
     }
     if(frontend->rf_agc && (new_dBFS > AGC_upper_limit || new_dBFS < AGC_lower_limit)){
       float const target_level = (AGC_upper_limit + AGC_lower_limit)/2;
-      float const new_gain = frontend->rf_gain - (new_dBFS - target_level);
-      if(new_gain < 34){ // Don't try to go above max gain
+      float new_gain = frontend->rf_gain - (new_dBFS - target_level);
+      if(new_gain > 34)
+	new_gain = 34;
+      if(new_gain != frontend->rf_gain){
 	if(Verbose)
 	  fprintf(stdout,"Front end gain change from %.1f dB to %.1f dB\n",frontend->rf_gain,new_gain);
 	rx888_set_gain(sdr,new_gain,false);
