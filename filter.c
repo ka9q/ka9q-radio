@@ -148,6 +148,9 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   ASSERT_ZEROED(master,sizeof *master);
 #endif
 
+  // If there are no worker threads, do it inline
+  master->perform_inline = (N_worker_threads == 0);
+
   for(int i=0; i < ND; i++){
     master->fdomain[i] = lmalloc(sizeof(complex float) * bins);
     master->completed_jobs[i] = (unsigned int)-1; // So startup won't drop any blocks
