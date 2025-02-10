@@ -248,11 +248,13 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
       frontend->rf_atten = 0;
       frontend->rf_level_cal = 20; // Gain of LTC6401; needs to be calibrated
       sdr->hf_input = config_getint(dictionary, section, "hf_input",0);
-      if(sdr->hf_input == 0)
+      if(sdr->hf_input == 0) {
 	frontend->isreal = false;
-      else
+	frontend->min_IF = -0.47 * frontend->samprate;
+      } else {
 	frontend->isreal = true;
-      frontend->min_IF = 0;
+	frontend->min_IF = 0;
+      }
       frontend->max_IF = 0.47 * frontend->samprate;
     } else {
       const char *frequencycfg =
