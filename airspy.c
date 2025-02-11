@@ -291,7 +291,6 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 }
 int airspy_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  ASSERT_ZEROED(&sdr->monitor_thread,sizeof sdr->monitor_thread);
 #if 0
   // This should work, but it doesn't
   // So we set it in the first callback

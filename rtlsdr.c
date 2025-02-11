@@ -248,7 +248,6 @@ static void *rtlsdr_read_thread(void *arg){
 
 int rtlsdr_startup(struct frontend * const frontend){
   struct sdr * const sdr = frontend->context;
-  ASSERT_ZEROED(&sdr->read_thread,sizeof sdr->read_thread);
   pthread_create(&sdr->read_thread,NULL,rtlsdr_read_thread,sdr);
   fprintf(stdout,"rtlsdr thread running\n");
   return 0;
