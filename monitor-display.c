@@ -684,7 +684,7 @@ static void update_monitor_display(void){
   // Data rate, kb/s
   if(x >= COLS)
     goto done;
-  width = 6;
+  width = 7;
   mvprintwt(y++,x,"%*s",width,"rate");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
