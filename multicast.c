@@ -523,10 +523,10 @@ static void loopback_init(void){
       ifr.ifr_flags = lop->ifa_flags | IFF_MULTICAST;
       int fd = socket(AF_INET,SOCK_DGRAM,0); // Same for IPv6?
       if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0) {
-	printf("Can't enable multicast option on loopback interface %s\n",ifr.ifr_name);
+	fprintf(stderr,"Can't enable multicast option on loopback interface %s\n",ifr.ifr_name);
 	perror("ioctl (set flags)");
       } else {
-	printf("Multicast enabled on loopback interface %s\n",ifr.ifr_name);
+	fprintf(stderr,"Multicast enabled on loopback interface %s\n",ifr.ifr_name);
 #if __linux__
 	// This capability is set when radiod is run by systemd, drop it when we no longer need it
 	if (prctl(PR_CAP_AMBIENT_LOWER, CAP_NET_ADMIN, 0, 0, 0) == -1)
