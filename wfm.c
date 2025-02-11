@@ -205,7 +205,7 @@ int demod_wfm(void *arg){
       for(int n = 0; n < audio_L; n++){
 	complex float subc_phasor = pilot.output.c[n]; // 19 kHz pilot
 	subc_phasor = (subc_phasor * subc_phasor) / cnrmf(subc_phasor); // square to 38 kHz and normalize
-	float subc_info = sqrtf(2) * __imag__ (conjf(subc_phasor) * lminusr.output.c[n]); // Carrier is in quadrature
+	float subc_info = (float)M_SQRT2 * __imag__ (conjf(subc_phasor) * lminusr.output.c[n]); // Carrier is in quadrature
 	assert(!isnan(subc_info));
 	assert(!isnan(mono.output.r[n]));
 	// demultiplex: 2L = (L+R) + (L-R); 2R = (L+R) - (L-R)
