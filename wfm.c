@@ -89,7 +89,7 @@ int demod_wfm(void *arg){
   // FCC says +/- 2 Hz, with +/- 20 Hz protected (73.322)
   struct filter_out pilot;
   create_filter_output(&pilot,&composite,NULL,audio_L, COMPLEX);
-  set_filter(&pilot,-20./Audio_samprate, 20./Audio_samprate, chan->filter.kaiser_beta);
+  set_filter(&pilot,-100./Audio_samprate, 100./Audio_samprate, chan->filter.kaiser_beta);
 
   // Stereo difference (L-R) information on DSBSC carrier at 38 kHz
   // Extends +/- 15 kHz around 38 kHz
@@ -205,7 +205,7 @@ int demod_wfm(void *arg){
       for(int n = 0; n < audio_L; n++){
 	complex float subc_phasor = pilot.output.c[n]; // 19 kHz pilot
 	subc_phasor = (subc_phasor * subc_phasor) / cnrmf(subc_phasor); // square to 38 kHz and normalize
-	float subc_info = __imag__ (conjf(subc_phasor) * lminusr.output.c[n]); // Carrier is in quadrature
+	float subc_info = sqrtf(2) * __imag__ (conjf(subc_phasor) * lminusr.output.c[n]); // Carrier is in quadrature
 	assert(!isnan(subc_info));
 	assert(!isnan(mono.output.r[n]));
 	// demultiplex: 2L = (L+R) + (L-R); 2R = (L+R) - (L-R)
