@@ -395,7 +395,7 @@ void *decode(void *arg){
   struct filter_out pilot;
   create_filter_output(&pilot,&baseband,NULL,audio_L, COMPLEX);
   // FCC says +/- 2 Hz, with +/- 20 Hz protected (73.322)
-  set_filter(&pilot,-20./Audio_samprate, 20./Audio_samprate, Kaiser_beta);
+  set_filter(&pilot,-100./Audio_samprate, 100./Audio_samprate, Kaiser_beta);
 
   // Stereo difference (L-R) information on DSBSC carrier at 38 kHz
   // Extends +/- 15 kHz around 38 kHz
@@ -499,7 +499,7 @@ void *decode(void *arg){
 	  // zero PCM input would cause a divide-by-zero and a NAN result
 	  // that would poison the de-emphasis integrators if we didn't check for it
 	  subc_phasor /= a;
-	  left_minus_right = __imag__ (conjf(subc_phasor) * stereo.output.c[n]); // Carrier is in quadrature with modulation
+	  left_minus_right = (float)M_SQRT2 * __imag__ (conjf(subc_phasor) * stereo.output.c[n]); // Carrier is in quadrature with modulation
 	}
 	  
 	float left = mono.output.r[n] + left_minus_right; // left channel = L+R + L-R
