@@ -13,6 +13,11 @@ else
      DOPTS = -DNDEBUG=1 -O3
 endif
 
+ifeq ($(SANITIZE),1)
+     DOPTS += -fsanitize=address -fsanitize=undefined
+     LDOPTS = -fsanitize=address -fsanitize=undefined
+endif
+
 ifeq ($(DYNAMIC),1)
      DOPTS += -DFORCE_DYNAMIC=1
 endif
