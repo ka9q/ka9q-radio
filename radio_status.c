@@ -515,6 +515,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	       chan->filter.max_IF/chan->output.samprate,
 	       chan->filter.kaiser_beta);
 
+    set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
+
     if(chan->filter2.blocking > 0){
       // Reset filter2 too, if it's on
       chan->filter2.low = chan->filter.min_IF;

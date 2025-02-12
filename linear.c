@@ -58,6 +58,8 @@ int demod_linear(void *arg){
 	     chan->filter.max_IF/chan->output.samprate,
 	     chan->filter.kaiser_beta);
 
+  set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
+
   // Set up secondary filter - experimental
   delete_filter_input(&chan->filter2.in);
   delete_filter_output(&chan->filter2.out);

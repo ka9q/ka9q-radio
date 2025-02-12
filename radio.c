@@ -289,6 +289,7 @@ double set_freq(struct channel * const chan,double const f){
   // Ideally the front end would just round in a preferred direction
   // but it doesn't know where our IF will be so it can't make the right choice
   // Retuning the front end will cause all the other channels to recalculate their own IFs
+  // What if the IF is wider than the receiver can supply?
   double const fudge = 1000;
   if(new_if > Frontend.max_IF - chan->filter.max_IF){
     // Retune LO1 as little as possible

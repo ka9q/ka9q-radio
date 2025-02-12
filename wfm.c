@@ -70,6 +70,8 @@ int demod_wfm(void *arg){
 	     chan->filter.max_IF/Composite_samprate,
 	     chan->filter.kaiser_beta);
 
+  set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
+
   float phase_memory = 0;  // Demodulator input phase memory
   int squelch_state = 0; // Number of blocks for which squelch remains open
 
@@ -150,7 +152,7 @@ int demod_wfm(void *arg){
       float peak_positive_deviation = 0;
       float peak_negative_deviation = 0;
       float frequency_offset = 0;
-      
+
       for(int n=0; n < composite_L; n++){
 	frequency_offset += composite.input_write_pointer.r[n];
 	if(composite.input_write_pointer.r[n] > peak_positive_deviation)
@@ -164,7 +166,7 @@ int demod_wfm(void *arg){
       // exact value would be 1 - exp(-blocktime/tc)
       float const alpha = .001f * Blocktime;
       chan->sig.foffset += alpha * (frequency_offset - chan->sig.foffset);
-      
+
       // Remove frequency offset from deviation peaks and scale to full cycles
       peak_positive_deviation *= Composite_samprate * 0.5f;
       peak_negative_deviation *= Composite_samprate * 0.5f;
