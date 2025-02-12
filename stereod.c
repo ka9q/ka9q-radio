@@ -499,7 +499,7 @@ void *decode(void *arg){
 	  // zero PCM input would cause a divide-by-zero and a NAN result
 	  // that would poison the de-emphasis integrators if we didn't check for it
 	  subc_phasor /= a;
-	  left_minus_right = __imag__ (conjf(subc_phasor) * stereo.output.c[n]); // Carrier is in quadrature with modulation
+	  left_minus_right = 2.0f * __imag__ (conjf(subc_phasor) * stereo.output.c[n]); // Carrier is in quadrature with modulation
 	}
 	  
 	float left = mono.output.r[n] + left_minus_right; // left channel = L+R + L-R
