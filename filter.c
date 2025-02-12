@@ -913,12 +913,7 @@ static float noise_gain(struct filter_out const * const slave){
   // the factor N compensates for the unity gain scaling
   // Amplitude is pre-scaled 1/N for the concatenated (FFT/IFFT) round trip, so the overall power
   // is scaled 1/N^2. Multiplying by N gives us correct power in the frequency domain (just the FFT)
-
-  // The factor of 2 undoes the 1/sqrt(2) amplitude scaling required for unity signal gain in these two modes
-  if(slave->out_type == REAL || slave->out_type == CROSS_CONJ)
-    return 2 * master->bins * sum;
-  else
-    return master->bins * sum;
+  return master->bins * sum;
 }
 
 
