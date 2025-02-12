@@ -625,7 +625,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->fm.squelch_close));
     encode_byte(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
-    encode_float(&bp,DEEMPH_TC,-1.0/(logf(chan->fm.rate) * chan->output.samprate));
+    encode_float(&bp,DEEMPH_TC,-1.0/(logf(1.0-chan->fm.rate) * chan->output.samprate));
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     break;
   case SPECT_DEMOD:
