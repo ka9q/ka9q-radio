@@ -262,6 +262,7 @@ int close_chan(struct channel *chan){
   return 0;
 }
 
+pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Set receiver frequency
 // The new IF is computed here only to determine if the front end needs retuning
@@ -280,6 +281,7 @@ double set_freq(struct channel * const chan,double const f){
   if(f == 0)
     return f;
 
+  pthread_mutex_lock(&Freq_mutex); // Protect front end tuner
   // Determine new IF
   double new_if = f - Frontend.frequency;
 
@@ -287,20 +289,18 @@ double set_freq(struct channel * const chan,double const f){
   // Tune an extra kHz to account for front end roundoff
   // Ideally the front end would just round in a preferred direction
   // but it doesn't know where our IF will be so it can't make the right choice
+  // Retuning the front end will cause all the other channels to recalculate their own IFs
   double const fudge = 1000;
   if(new_if > Frontend.max_IF - chan->filter.max_IF){
     // Retune LO1 as little as possible
     new_if = Frontend.max_IF - chan->filter.max_IF - fudge;
+    set_first_LO(chan,f - new_if);
   } else if(new_if < Frontend.min_IF - chan->filter.min_IF){
     // Also retune LO1 as little as possible
     new_if = Frontend.min_IF - chan->filter.min_IF + fudge;
-  } else
-    return f; // OK where it is
-
-  double const new_lo1 = f - new_if;
-  // the front end will send its actual new frequency in its status stream,
-  // the front end status decoder will pick it up, and the chans will recalculate their new LOs
-  set_first_LO(chan,new_lo1);
+    set_first_LO(chan,f - new_if);
+  }
+  pthread_mutex_unlock(&Freq_mutex);
   return f;
 }
 
