@@ -221,7 +221,6 @@ int start_demod(struct channel * chan){
     fprintf(stdout,"start_demod: ssrc %'u, output %s, demod %d, freq %'.3lf, preset %s, filter (%'+.0f,%'+.0f)\n",
 	    chan->output.rtp.ssrc, chan->output.dest_string, chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
   }
-  ASSERT_ZEROED(&chan->demod_thread,sizeof chan->demod_thread);
   pthread_create(&chan->demod_thread,NULL,demod_thread,chan);
   return 0;
 }

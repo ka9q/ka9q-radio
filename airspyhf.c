@@ -205,7 +205,6 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
 }
 int airspyhf_startup(struct frontend *frontend){
   struct sdrstate *sdr = (struct sdrstate *)frontend->context;
-  ASSERT_ZEROED(&sdr->monitor_thread,sizeof sdr->monitor_thread);
   pthread_create(&sdr->monitor_thread,NULL,airspyhf_monitor,sdr);
   return 0;
 }

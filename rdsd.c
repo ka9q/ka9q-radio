@@ -342,7 +342,6 @@ void *input(void *arg){
       sp->rtp_state_in.timestamp = pkt->rtp.timestamp;
 
       // Span per-SSRC thread
-      ASSERT_ZEROED(&sp->thread,sizeof sp->thread);
       if(pthread_create(&sp->thread,NULL,decode,sp) == -1){
 	perror("pthread_create");
 	close_session(sp);

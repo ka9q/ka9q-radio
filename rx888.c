@@ -361,9 +361,7 @@ int rx888_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
 
   // Start processing A/D data
-  ASSERT_ZEROED(&sdr->proc_thread, sizeof sdr->proc_thread);
   pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
-  ASSERT_ZEROED(&sdr->agc_thread, sizeof sdr->agc_thread);
   pthread_create(&sdr->agc_thread,NULL,agc_rx888,sdr);
   fprintf(stdout,"rx888 running\n");
   return 0;

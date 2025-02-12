@@ -441,7 +441,6 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
 
 int fobos_startup(struct frontend *const frontend) {
   struct sdrstate *const sdr = (struct sdrstate *)frontend->context;
-  ASSERT_ZEROED(&sdr->monitor_thread,sizeof sdr->monitor_thread);
   pthread_create(&sdr->monitor_thread, NULL, fobos_monitor, sdr);
   fprintf(stdout, "fobos read thread running\n");
   return 0;

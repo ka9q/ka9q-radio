@@ -390,9 +390,7 @@ int main(int argc,char * const argv[]){
   // All have to succeed in resolving their targets or we'll exit
   // This allows a restart when started automatically from systemd before avahi is fully running
   pthread_t datathreads[Nfds];
-  memset(datathreads,0,sizeof datathreads);
   pthread_t statthreads[Nfds];
-  memset(statthreads,0,sizeof statthreads);
   for(int i=0; i<Nfds; i++){
     pthread_create(&datathreads[i],NULL,dataproc,Mcast_address_text[i]);
     pthread_create(&statthreads[i],NULL,statproc,Mcast_address_text[i]);
@@ -404,7 +402,6 @@ int main(int argc,char * const argv[]){
   // Drove me up the wall trying to find out why this thread was spending so much CPU doing nothing!
   if(!Quiet){
     pthread_t display_thread;
-    memset(&display_thread,0,sizeof(display_thread));
     pthread_create(&display_thread,NULL,display,NULL);
   }
   while(!Terminate)

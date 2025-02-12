@@ -308,7 +308,6 @@ int sig_gen_startup(struct frontend *frontend){
   assert(sdr != NULL);
 
   // Start processing A/D data
-  ASSERT_ZEROED(&sdr->proc_thread, sizeof(sdr->proc_thread));
   pthread_create(&sdr->proc_thread,NULL,proc_sig_gen,sdr);
   fprintf(stdout,"signal generator running\n");
   return 0;
