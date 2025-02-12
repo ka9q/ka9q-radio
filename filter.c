@@ -937,7 +937,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   int const L = slave->olen;
   int const M = N - L + 1; // Length of impulse response in time domain
 
-  float const gain = (slave->out_type == COMPLEX ? 1.0 : M_SQRT1_2) / (float)slave->master->bins;
+  float const gain = 1.0f / (float)slave->master->bins;
   complex float * const response = lmalloc(sizeof(*response) * N);
   assert(response != NULL);
   float real_coeff[M];
@@ -1202,7 +1202,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   int const L = slave->olen;
   int const M = N - L + 1; // Length of impulse response in time domain
 
-  float const gain = (slave->out_type == COMPLEX ? 1.0 : M_SQRT1_2) / (float)slave->master->bins;
+  float const gain = 1.0f / (float)slave->master->bins;
 
   complex float * const response = lmalloc(sizeof(complex float) * slave->bins);
   assert(response != NULL);

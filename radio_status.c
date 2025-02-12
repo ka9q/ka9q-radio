@@ -606,9 +606,9 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_double(&bp,SHIFT_FREQUENCY,chan->tune.shift); // Hz
     encode_byte(&bp,AGC_ENABLE,chan->linear.agc); // bool
     if(chan->linear.agc){
-      encode_float(&bp,AGC_HANGTIME,chan->linear.hangtime*(.001 * Blocktime)); // samples -> sec
+      encode_float(&bp,AGC_HANGTIME,chan->linear.hangtime*(.001f * Blocktime)); // samples -> sec
       encode_float(&bp,AGC_THRESHOLD,voltage2dB(chan->linear.threshold)); // amplitude -> dB
-      encode_float(&bp,AGC_RECOVERY_RATE,voltage2dB(chan->linear.recovery_rate)/(.001*Blocktime)); // amplitude/block -> dB/sec
+      encode_float(&bp,AGC_RECOVERY_RATE,voltage2dB(chan->linear.recovery_rate)/(.001f*Blocktime)); // amplitude/block -> dB/sec
     }
     encode_byte(&bp,INDEPENDENT_SIDEBAND,chan->filter2.isb);
     break;
@@ -617,7 +617,14 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       encode_float(&bp,PL_TONE,chan->fm.tone_freq);
       encode_float(&bp,PL_DEVIATION,chan->fm.tone_deviation);
     }
-    __attribute__((fallthrough));
+    encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
+    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->fm.squelch_open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->fm.squelch_close));
+    encode_byte(&bp,THRESH_EXTEND,chan->fm.threshold);
+    encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
+    encode_float(&bp,DEEMPH_TC,-1.0f/(log1pf(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
+    encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
+    break;
   case WFM_DEMOD:  // Note fall-through from FM_DEMOD
     // Relevant only when squelches are active
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
@@ -625,7 +632,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->fm.squelch_close));
     encode_byte(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
-    encode_float(&bp,DEEMPH_TC,-1.0/(logf(chan->fm.rate) * chan->output.samprate));
+    encode_float(&bp,DEEMPH_TC,-1.0f/(log1pf(-chan->fm.rate) * 48000.0f)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     break;
   case SPECT_DEMOD:
