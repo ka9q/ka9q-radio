@@ -184,6 +184,11 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  if(Verbose > 1)
 	    fprintf(stdout,"set ssrc %u freq = %'.3lf\n",ssrc,f);
 
+          if (f != chan->tune.freq){
+            // if frequency has changed, drop energies to force the N0 averaging to restart
+            FREE(chan->filter.energies);
+          }
+
 	  set_freq(chan,f);
 	}
       }
