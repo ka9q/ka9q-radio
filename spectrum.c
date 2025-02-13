@@ -34,6 +34,9 @@ int demod_spectrum(void *arg){
     opus_encoder_destroy(chan->output.opus);
     chan->output.opus = NULL;
   }
+  chan->status.output_interval = 0; // No automatic status updates
+  chan->status.output_timer = 0; // No automatic status updates
+  chan->output.silent = true; // we don't send anything there
 
   pthread_mutex_unlock(&chan->status.lock);
 

@@ -120,6 +120,9 @@ int reset_radio_status(struct channel *chan){
   chan->output.energy = 0;
   chan->output.sum_gain_sq = 0;
   chan->status.blocks_since_poll = 0;
+  if(chan->spectrum.bin_data != NULL && chan->spectrum.bin_count != 0)
+    memset(chan->spectrum.bin_data,0,chan->spectrum.bin_count * sizeof(*chan->spectrum.bin_data));
+
   return 0;
 }
 
@@ -650,7 +653,6 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
 	  chan->spectrum.bin_data[i] *= scale;
 
 	encode_vector(&bp,BIN_DATA,chan->spectrum.bin_data,chan->spectrum.bin_count);
-	memset(chan->spectrum.bin_data,0,chan->spectrum.bin_count * sizeof(*chan->spectrum.bin_data));
       }
     }
     break;

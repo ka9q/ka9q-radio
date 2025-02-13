@@ -527,7 +527,11 @@ int downconvert(struct channel *chan){
       send_radio_status(&Metadata_dest_socket,&Frontend,chan); // Send status in response
       chan->status.global_timer = 0; // Just sent one
       // Also send to output stream
-      send_radio_status(&chan->status.dest_socket,&Frontend,chan);
+      if(chan->demod_type != SPECT_DEMOD){
+	// Only send spectrum on status channel, and only in response to poll
+	// Spectrum channel output socket isn't set anyway
+	send_radio_status(&chan->status.dest_socket,&Frontend,chan);
+      }
       chan->status.output_timer = chan->status.output_interval; // Reload
       FREE(chan->status.command);
       reset_radio_status(chan); // After both are sent
