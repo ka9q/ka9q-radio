@@ -689,7 +689,7 @@ static void update_monitor_display(void){
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
     if(sp != NULL)
-      mvprintwt(y,x,"%*.1f",width,.001 * sp->datarate);
+      mvprintwt(y,x,"%*.*f",width,.001 * sp->datarate,sp->datarate < 1e6 ? 1 : 0); // decimal only if < 1000
   }
   x += width;
   y = row_save;
