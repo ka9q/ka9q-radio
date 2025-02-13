@@ -151,7 +151,7 @@ int main(int argc,char *argv[]){
     }
     if(sendto(Ctl_fd, buffer, command_len, 0, &Metadata_dest_socket, sizeof Metadata_dest_socket) != command_len){
       perror("command send");
-      usleep(1000000); // 1 second
+      usleep(10000); // 10 millisec
       goto again;
     }
     // The deadline starts at 1 sec after a command
@@ -198,6 +198,7 @@ int main(int argc,char *argv[]){
     int npower = extract_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&r_freq,&r_bin_bw,Ssrc,buffer+1,length-1);
     if(npower <= 0){
       fprintf(stderr,"Invalid response, length %d\n",npower);
+      usleep(10000); // 10 millisec
       continue; // Invalid for some reason; retry
     }
     // Note from VK5QI:
@@ -223,6 +224,7 @@ int main(int argc,char *argv[]){
     for(int i=0; i < npower; i++){
       if(powers[i] < 0){
 	fprintf(stderr,"Invalid power %g in response\n",powers[i]);
+	usleep(10000); // 10 millisec
 	goto again; // negative powers are invalid
       }
       if(powers[i] > 0 && powers[i] < lowest)

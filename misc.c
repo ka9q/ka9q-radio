@@ -352,6 +352,8 @@ double parse_frequency(char const *s,bool heuristics){
 
   double mult = 1;
   // k, m or g in place of decimal point indicates scaling by 1k, 1M or 1G
+  // h (hertz) means unity scaling; it can be used as a locale-independent
+  // decimal point
   char *sp = NULL;
   if((sp = strchr(ss,'g')) != NULL){
     mult = 1e9;
@@ -361,6 +363,9 @@ double parse_frequency(char const *s,bool heuristics){
     *sp = decimal;
   } else if((sp = strchr(ss,'k')) != NULL){
     mult = 1e3;
+    *sp = decimal;
+  } else if((sp = strchr(ss,'h')) != NULL){
+    mult = 1;
     *sp = decimal;
   } else if((sp = strchr(ss,decimal)) != NULL){
     // Disable heuristic if explicitly given

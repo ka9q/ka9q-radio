@@ -55,7 +55,7 @@ you add your own user ID to the **radio** group so you can
 modify most of the relevant installed directories and files without
 becoming root:
 
-$ sudo addgroup your_user_name radio
+$ sudo adduser your_user_name radio
 
 Membership in a few other groups can minimize the need to run as root:
 
