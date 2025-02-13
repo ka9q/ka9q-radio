@@ -343,8 +343,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
 	fprintf(fp,"fft bins:");
 	int count = optlen/sizeof(float);
 	for(int i=0; i < count; i++){
-	  fprintf(fp," %.1g",decode_float(cp,sizeof(float)));
-	  cp += sizeof(float);
+	  fprintf(fp," %.1g",decode_float(cp + i * sizeof(float),sizeof(float)));
 	}
       }
       break;
