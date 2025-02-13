@@ -76,7 +76,7 @@ int main(int argc,char *argv[]){
 	details = true;
 	break;
       case 'f':
-	frequency = strtof(optarg,NULL);
+	frequency = parse_frequency(optarg,true);
 	break;
       case 'h':
 	help();
@@ -180,7 +180,7 @@ int main(int argc,char *argv[]){
       // Read message on the multicast group
       socklen_t ssize = sizeof(Metadata_source_socket);
       length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_socket,&ssize);
-    
+
       // Ignore invalid packets, non-status packets, packets re other SSRCs and packets not in response to our polls
       // Should we insist on the same command tag, or accept any "recent" status packet, e.g., triggered by the control program?
       // This is needed because an initial delay in joining multicast groups produces a burst of buffered responses; investigate this
@@ -194,14 +194,14 @@ int main(int argc,char *argv[]){
     uint64_t time;
     double r_freq;
     double r_bin_bw;
-    
+
     int npower = extract_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&r_freq,&r_bin_bw,Ssrc,buffer+1,length-1);
-    if(npower < 0){
+    if(npower <= 0){
       printf("Invalid response, length %d\n",npower);
-      continue; // Invalid for some reason
+      continue; // Invalid for some reason; retry
     }
     // Note from VK5QI:
-    // the output format from that utility matches that produced by rtl_power, which is: 
+    // the output format from that utility matches that produced by rtl_power, which is:
     //2022-04-02, 16:24:55, 400050181, 401524819, 450.13, 296, -52.95, -53.27, -53.26, -53.24, -53.40, <many more points here>
     // date, time, start_frequency, stop_frequency, bin_size_hz, number_bins, data0, data1, data2
 
@@ -256,11 +256,11 @@ int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *b
 #endif
   int l_ccount = 0;
   uint8_t const *cp = buffer;
-  int l_count;
+  int l_count = 0;
 
   while(cp - buffer < length){
     enum status_type const type = *cp++; // increment cp to length field
-    
+
     if(type == EOL)
       break; // End of list
 
@@ -328,6 +328,7 @@ int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *b
   }
  done:
   ;
-  assert(l_ccount == l_count);
-  return l_ccount;
+  if(l_ccount == 0 || l_count != l_ccount)
+    return 0;
+  return l_count;
 }
