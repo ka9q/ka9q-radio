@@ -605,8 +605,8 @@ int downconvert(struct channel *chan){
     // Be sure to Initialize chan->filter.bin_shift at startup to something bizarre to force this inequality on first call
     if(shift != chan->filter.bin_shift){
       const int V = 1 + (Frontend.in.ilen / (Frontend.in.impulse_length - 1)); // Overlap factor
-      chan->filter.phase_adjust = cispi(-2.0f*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
-      chan->fine.phasor *= cispi((shift - chan->filter.bin_shift) / (2.0f * (V-1))); // One time adjust for shift change
+      chan->filter.phase_adjust = cispi(-2.0*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
+      chan->fine.phasor *= cispi((shift - chan->filter.bin_shift) / (2.0 * (V-1))); // One time adjust for shift change
     }
     chan->fine.phasor *= chan->filter.phase_adjust;
   }
@@ -623,7 +623,7 @@ int downconvert(struct channel *chan){
     chan->sig.bb_power = energy;
     chan->sig.bb_energy += energy; // Added once per block
   }
-  chan->filter.bin_shift = shift; // We need this in any case (not really?)
+  chan->filter.bin_shift = shift; // Also used by spectrum to know where to read direct from master
 
   // The N0 noise estimator has a long smoothing time constant, so clamp it when the front end is saturated, e.g. by a local transmitter
   // This works well for channels tuned well away from the transmitter, but not when a channel is tuned near or to the transmit frequency
