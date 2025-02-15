@@ -362,10 +362,16 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     case OUTPUT_CHANNELS: // int
       {
 	unsigned int const i = decode_int(cp,optlen);
-	if(i != chan->output.channels && (i == 1 || i == 2)){
-	  flush_output(chan,false,true); // Flush to Ethernet before we change this
-	  chan->output.channels = i;
-	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	if(i != 1 && i != 2)
+	  break; // invalid
+
+	if(chan->demod_type == WFM_DEMOD){
+	  // Requesting 2 channels enables FM stereo; requesting 1 disables FM stereo
+	  chan->fm.stereo_enable = (i == 2); // note boolean assignment
+	} else if(i != chan->output.channels){
+	    flush_output(chan,false,true); // Flush to Ethernet before we change this
+	    chan->output.channels = i;
+	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	}
       }
       break;
