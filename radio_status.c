@@ -396,7 +396,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  if(Verbose > 1)
 	    fprintf(stdout,"bin bw %f -> %f\n",chan->spectrum.bin_bw,x);
 	  chan->spectrum.bin_bw = x;
-	  restart_needed = true;
 	}
       }
       break;
@@ -407,7 +406,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  if(Verbose > 1)
 	    fprintf(stdout,"bin count %d -> %d\n",chan->spectrum.bin_count,x);
 	  chan->spectrum.bin_count = x;
-	  restart_needed = true;
 	}
       }
       break;

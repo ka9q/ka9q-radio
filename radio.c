@@ -330,7 +330,6 @@ double set_first_LO(struct channel const * const chan,double const first_LO){
 // N = input fft length
 // M = input buffer overlap
 // samprate = input sample rate
-// adjust = complex value to multiply by each sample to correct phasing
 // remainder = fine LO frequency (double)
 // freq = frequency to mix by (double)
 // This version tunes to arbitrary FFT bin rotations and computes the necessary
@@ -561,6 +560,17 @@ int downconvert(struct channel *chan){
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);
 
+    /* Note sign conventions:
+       When the radio frequency is above the front end frequency, as in direct sampling (Frontend.frequency == 0)
+       or in low side injection, tune.second_LO is negative and so is 'shift'
+
+       For the real A/D streams from TV tuners with high-side injection, e.g., Airspy R2,
+       tune.second_LO and shift are both positive and the spectrum is inverted
+
+       For complex SDRs, tune.second_LO can be either positive or negative, so shift will be negative or positive
+
+       Note minus on 'shift' parameter to execute_filter_output()
+    */
     chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
     double const freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
@@ -610,6 +620,7 @@ int downconvert(struct channel *chan){
     }
     chan->fine.phasor *= chan->filter.phase_adjust;
   }
+  // Note minus on 'shift' parameter; see discussion inside compute_tuning() on sign conventions
   execute_filter_output(&chan->filter.out,-shift); // block until new data frame
   chan->status.blocks_since_poll++;
   if(buffer != NULL){ // No output time-domain buffer in spectral analysis mode
@@ -623,7 +634,7 @@ int downconvert(struct channel *chan){
     chan->sig.bb_power = energy;
     chan->sig.bb_energy += energy; // Added once per block
   }
-  chan->filter.bin_shift = shift; // Also used by spectrum to know where to read direct from master
+  chan->filter.bin_shift = shift; // Also used by spectrum.c:demod_spectrum() to know where to read direct from master
 
   // The N0 noise estimator has a long smoothing time constant, so clamp it when the front end is saturated, e.g. by a local transmitter
   // This works well for channels tuned well away from the transmitter, but not when a channel is tuned near or to the transmit frequency
