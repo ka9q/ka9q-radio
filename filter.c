@@ -304,6 +304,11 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
       }
       slave->points = x.quot; // Total number of FFT points including overlap
       slave->bins = x.quot;
+      if(x.quot & 1){
+	// Round up to even
+	slave->points++;
+	slave->bins++;
+      }
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
       slave->output_buffer.c = lmalloc(sizeof(complex float) * slave->bins);
       assert(slave->output_buffer.c != NULL);
@@ -337,6 +342,11 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
       }
       slave->points = x.quot;
       slave->bins = slave->points / 2 + 1;
+      if(x.quot & 1){
+	// Round up to even
+	slave->points++;
+	slave->bins++;
+      }
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
       assert(slave->fdomain != NULL);
       slave->output_buffer.r = lmalloc(sizeof(float) * slave->points);
