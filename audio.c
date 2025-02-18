@@ -206,7 +206,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
       error = opus_encoder_ctl(chan->output.opus,OPUS_SET_PACKET_LOSS_PERC(Fec_percent));
       assert(error == OPUS_OK);
     }
-  }
+  } // if(chan->output.encoding == OPUS){
 
   int available_samples;
   available_samples = (int)(chan->output.wp - chan->output.rp);
