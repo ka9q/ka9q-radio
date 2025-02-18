@@ -650,8 +650,8 @@ int downconvert(struct channel *chan){
 
 int set_channel_filter(struct channel *chan){
   // Limit to Nyquist rate
-  float lower = max(chan->filter.min_IF, (float)-chan->output.samprate/2);
-  float upper = min(chan->filter.max_IF, (float)+chan->output.samprate/2);
+  float lower = max(chan->filter.min_IF, -(float)chan->output.samprate/2);
+  float upper = min(chan->filter.max_IF, (float)chan->output.samprate/2);
 
   if(Verbose > 1)
     fprintf(stdout,"new filter for chan %'u: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
@@ -682,9 +682,9 @@ int set_channel_filter(struct channel *chan){
     // I.e., the main filter becomes a roofing filter
     // Again limit to Nyquist rate
     lower -= margin;
-    lower = max(lower, (float)-chan->output.samprate/2);
+    lower = max(lower, -(float)chan->output.samprate/2);
     upper += margin;
-    upper = min(upper, (float)+chan->output.samprate/2);
+    upper = min(upper, (float)chan->output.samprate/2);
   }
   // Set main filter
   set_filter(&chan->filter.out,
