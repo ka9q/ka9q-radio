@@ -312,6 +312,7 @@ double set_first_LO(struct channel const * restrict, double);
 // Routines common to the internals of all channel demods
 int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq);
 int downconvert(struct channel *chan);
+int set_channel_filter(struct channel *chan);
 
 // extract front end scaling factors (depends on width of A/D sample)
 float scale_voltage_out2FS(struct frontend *frontend);

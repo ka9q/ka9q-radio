@@ -130,7 +130,6 @@ int reset_radio_status(struct channel *chan){
 bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length){
   bool restart_needed = false;
   bool new_filter_needed = false;
-  bool new_filter2_needed = false;
   uint32_t const ssrc = chan->output.rtp.ssrc;
 
   if(chan->lifetime != 0)
@@ -296,7 +295,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	bool i = decode_bool(cp,optlen); // will reimplement someday
 	if(i != chan->filter2.isb){
 	  chan->filter2.isb = i;
-	  new_filter2_needed = true;
+	  new_filter_needed = true;
 	}
       }
       break;
@@ -474,7 +473,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	unsigned int i = decode_int(cp,optlen);
 	if(i <= 4 && i != chan->filter2.blocking){
 	  chan->filter2.blocking = i;
-	  new_filter2_needed = true;
+	  new_filter_needed = true;
 	}
       }
       break;
@@ -492,48 +491,10 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       fprintf(stdout,"restarting thread for ssrc %u\n",ssrc);
     return true;
   }
-  if(new_filter2_needed){
-    unsigned int const inblock = chan->output.samprate * Blocktime / 1000;
-    unsigned int outblock = chan->filter2.blocking * inblock;
+  if(new_filter_needed)
+    set_channel_filter(chan);
 
-    delete_filter_input(&chan->filter2.in);
-    delete_filter_output(&chan->filter2.out);
-    if(chan->filter2.blocking > 0){
-      create_filter_input(&chan->filter2.in,outblock,outblock+1,COMPLEX); // 50% overlap
-      chan->filter2.in.perform_inline = true;
-      create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,outblock,chan->filter2.isb ? CROSS_CONJ : COMPLEX);
-      chan->filter2.low = chan->filter.min_IF;
-      chan->filter2.high = chan->filter.max_IF;
-      chan->filter2.kaiser_beta = chan->filter.kaiser_beta;
-      set_filter(&chan->filter2.out,chan->filter2.low/chan->output.samprate,
-		 chan->filter2.high/chan->output.samprate,
-		 chan->filter2.kaiser_beta);
-    }
-  }
-
-  if(new_filter_needed){
-    // Set up new filter with chan possibly stopped
-    if(Verbose > 1)
-      fprintf(stdout,"new filter for chan %'u: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
-	      ssrc, chan->filter.min_IF, chan->filter.max_IF,
-	      chan->output.samprate, chan->filter.kaiser_beta);
-    // start_demod already sets up a new filter
-    set_filter(&chan->filter.out,chan->filter.min_IF/chan->output.samprate,
-	       chan->filter.max_IF/chan->output.samprate,
-	       chan->filter.kaiser_beta);
-
-    set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
-
-    if(chan->filter2.blocking > 0){
-      // Reset filter2 too, if it's on
-      chan->filter2.low = chan->filter.min_IF;
-      chan->filter2.high = chan->filter.max_IF;
-      chan->filter2.kaiser_beta = chan->filter.kaiser_beta;
-      set_filter(&chan->filter2.out,chan->filter2.low/chan->output.samprate,
-		 chan->filter2.high/chan->output.samprate,
-		 chan->filter2.kaiser_beta);
-    }
-  }
+  set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
   return false;
 }
 

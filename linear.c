@@ -47,35 +47,16 @@ int demod_linear(void *arg){
 
   unsigned int const blocksize = chan->output.samprate * Blocktime / 1000;
   delete_filter_output(&chan->filter.out);
+  delete_filter_output(&chan->filter2.out);
+  delete_filter_input(&chan->filter2.in);
   int status = create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
-
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
     return -1;
   }
-  set_filter(&chan->filter.out,
-	     chan->filter.min_IF/chan->output.samprate,
-	     chan->filter.max_IF/chan->output.samprate,
-	     chan->filter.kaiser_beta);
+  set_channel_filter(chan);
 
   set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
-
-  // Set up secondary filter - experimental
-  delete_filter_input(&chan->filter2.in);
-  delete_filter_output(&chan->filter2.out);
-  unsigned int outblock = blocksize;
-  if(chan->filter2.blocking > 0){
-    outblock = chan->filter2.blocking * blocksize;
-
-    // Secondary filter running at 1:1 sample rate, 50% overlap, with blocksize a small multiple (1-4) of the channel block size
-    create_filter_input(&chan->filter2.in,outblock,outblock+1,COMPLEX); // 50% overlap
-    chan->filter2.in.perform_inline = true;
-    create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,outblock,chan->filter2.isb ? CROSS_CONJ : COMPLEX);
-    chan->filter2.low = chan->filter.min_IF;
-    chan->filter2.high = chan->filter.max_IF;
-    chan->filter2.kaiser_beta = chan->filter.kaiser_beta;
-    set_filter(&chan->filter2.out,chan->filter2.low/chan->output.samprate,chan->filter2.high/chan->output.samprate,chan->filter2.kaiser_beta);
-  }
   // Coherent mode parameters
   float const damping = DEFAULT_PLL_DAMPING;
   float const lock_time = DEFAULT_PLL_LOCKTIME;
@@ -161,8 +142,7 @@ int demod_linear(void *arg){
 
       // Now switch to working on output of second filter
       buffer = chan->filter2.out.output.c; // Working buffer
-      outblock = chan->filter2.blocking * N;
-      N = outblock;
+      N = chan->filter2.blocking * N;
     }
     // Apply frequency shift
     // Must be done after PLL, which operates only on DC

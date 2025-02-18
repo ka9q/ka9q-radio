@@ -648,6 +648,53 @@ int downconvert(struct channel *chan){
   return 0;
 }
 
+int set_channel_filter(struct channel *chan){
+  // Limit to Nyquist rate
+  float lower = max(chan->filter.min_IF, (float)-chan->output.samprate/2);
+  float upper = min(chan->filter.max_IF, (float)+chan->output.samprate/2);
+
+  if(Verbose > 1)
+    fprintf(stdout,"new filter for chan %'u: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
+	    chan->output.rtp.ssrc, lower, upper,
+	    chan->output.samprate, chan->filter.kaiser_beta);
+
+  delete_filter_output(&chan->filter2.out);
+  delete_filter_input(&chan->filter2.in);
+  if(chan->filter2.blocking > 0){
+    extern int Overlap;
+    unsigned int const inblock = chan->output.samprate * Blocktime / 1000;
+    unsigned int const outblock = chan->filter2.blocking * inblock;
+    float const binsize = (1000.0f / Blocktime) * ((float)(Overlap - 1) / Overlap);
+    float const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
+
+    // Secondary filter running at 1:1 sample rate, 50% overlap, with blocksize a small multiple (1-4) of the channel block size
+    create_filter_input(&chan->filter2.in,outblock,outblock+1,COMPLEX); // 50% overlap
+    chan->filter2.in.perform_inline = true;
+    create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,outblock,chan->filter2.isb ? CROSS_CONJ : COMPLEX);
+    chan->filter2.low = lower;
+    chan->filter2.high = upper;
+    chan->filter2.kaiser_beta = chan->filter.kaiser_beta;
+    set_filter(&chan->filter2.out,
+	       lower/chan->output.samprate,
+	       upper/chan->output.samprate,
+	       chan->filter2.kaiser_beta);
+    // Widen the main filter a little to keep its broad skirts from cutting into filter2's response
+    // I.e., the main filter becomes a roofing filter
+    // Again limit to Nyquist rate
+    lower -= margin;
+    lower = max(lower, (float)-chan->output.samprate/2);
+    upper += margin;
+    upper = min(upper, (float)+chan->output.samprate/2);
+  }
+  // Set main filter
+  set_filter(&chan->filter.out,
+	     lower/chan->output.samprate,
+	     upper/chan->output.samprate,
+	     chan->filter.kaiser_beta);
+
+  return 0;
+}
+
 // scale A/D output to full scale for monitoring overloads
 float scale_ADpower2FS(struct frontend const *frontend){
   assert(frontend != NULL);
