@@ -119,81 +119,81 @@ dynamics: $(DYNAMIC_DRIVERS)
 # Executables
 
 aprs: aprs.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 aprsfeed: aprsfeed.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 control: control.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -liniparser -lncursesw -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -liniparser -lncursesw -lbsd -lm -lpthread
 
 cwd: cwd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 tune: tune.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 setfilt: setfilt.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 show-pkt: show-pkt.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm -lpthread
 
 show-sig: show-sig.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm -lpthread
 
 metadump: metadump.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lopus -lportaudio -lasound -lsamplerate -liniparser -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lopus -lportaudio -lasound -lsamplerate -liniparser -lbsd -lm -lpthread
 
 opusd: opusd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lbsd -lm -lpthread
 
 opussend: opussend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lbsd -lm -lpthread
 
 packetd: packetd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 pcmcat: pcmcat.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pcmspawn: pcmspawn.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pcmrecord: pcmrecord.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg -lbsd -lm -lpthread
 
 pcmsend: pcmsend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lm -lpthread
 
 powers: powers.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 pl: pl.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 ifeq ($(STATIC),1)
 radiod: main-static.o $(RADIOD_OBJECTS) $(STATIC_DRIVERS)
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lportaudio -lairspy -lairspyhf -lrtlsdr -lusb-1.0 -ldl -lbsd -lm
+	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lportaudio -lairspy -lairspyhf -lrtlsdr -lusb-1.0 -ldl -lbsd -lm -lpthread
 else
 radiod: main.o $(RADIOD_OBJECTS)
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -ldl -lbsd -lm
+	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -ldl -lbsd -lm -lpthread
 endif
 
 rdsd: rdsd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 stereod: stereod.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
 jt-decoded: jt-decoded.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 wd-record: wd-record.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm
+	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 # not made unless we're on a rpi
 set_xcvr: set_xcvr.o libradio.a
