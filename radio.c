@@ -102,6 +102,7 @@ static float estimate_noise(struct channel *chan,int shift){
   assert(slave != NULL);
   if(slave == NULL)
     return NAN;
+  // Should do some range checking on 'shift'
   if(chan->filter.energies == NULL)
     chan->filter.energies = calloc(sizeof *chan->filter.energies,slave->bins);
 
@@ -110,45 +111,38 @@ static float estimate_noise(struct channel *chan,int shift){
   // slave->next_jobnum already incremented by execute_filter_output
   complex float const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
 
-#undef PARSEVAL
-#ifdef PARSEVAL // Test code to sum all bins, verify Parseval's theorem
-  {
-    float total_energy = 0;
-    for(int i=0; i < master->bins; i++)
-      total_energy += cnrmf(fdomain[i]);
-    // Compute average power per sample, should match input level calculated in time domain
-    chan->tp1 = power2dB(total_energy) - voltage2dB((float)master->bins + Frontend.reference);
-  }
-#endif
 
-  int mbin = shift - slave->bins/2;
   float min_bin_energy = INFINITY;
   if(master->in_type == REAL){
-    // Only half as many bins as with complex input
-    for(int i=0; i < slave->bins; i++){
-      int n = abs(mbin); // Doesn't really handle the mirror well
-      if(n < master->bins){
-	if(energies[i] == 0)
-	  energies[i] = cnrmf(fdomain[n]); // Quick startup
-	else
-	  energies[i] += (cnrmf(fdomain[n]) - energies[i]) * N0_smooth; // blocknum was already incremented
-	if(min_bin_energy > energies[i])
-	  min_bin_energy = energies[i];
-      } else
-	break;  // off the end
-      mbin++;
+    // Only half as many bins as with complex input, all positive or all negative
+    int mbin = abs(shift) - slave->bins/2; // if shift < 0, inverted real spectrum
+    for(int i=0; i < slave->bins && mbin < master->bins; i++,mbin++){
+      if(mbin >= 0){
+	if(energies[i] == 0){
+	  // Bias first estimate high to keep it from being considered until
+	  // it's had a chance to settle down to a better average
+	  energies[i] = 10 * cnrmf(fdomain[mbin]);
+	} else {
+	  energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * N0_smooth;
+	  if(min_bin_energy > energies[i])
+	    min_bin_energy = energies[i];
+	}
+      }
     }
   } else {
+    int mbin = shift - slave->bins/2; // Start at lower channel edge (upper for inverted real)
     // Complex input that often straddles DC
     if(mbin < 0)
       mbin += master->bins; // starting in negative frequencies
+    assert(mbin >= 0 && mbin < master->bins); // probably should just return without doing anything
 
     for(int i=0; i < slave->bins; i++){
-      if(mbin >= 0 && mbin < master->bins){
-	if(energies[i] == 0)
-	  energies[i] = cnrmf(fdomain[mbin]); // Quick startup
-	else
-	  energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * N0_smooth; // blocknum was already incremented
+      if(energies[i] == 0) {
+	// Bias first estimate high to keep it from being considered until
+	// it's had a chance to settle down to a better average
+	energies[i] = 10 * cnrmf(fdomain[mbin]); // Quick startup
+      } else {
+	energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * N0_smooth;
 	if(min_bin_energy > energies[i])
 	  min_bin_energy = energies[i];
       }
@@ -171,7 +165,7 @@ static float estimate_noise(struct channel *chan,int shift){
 
   // For real mode the sample rate is double for the same power, but there are
   // only half as many bins so it cancels
-  return min_bin_energy / Frontend.samprate; // Scale to 1 Hz
+  return (float)(min_bin_energy / Frontend.samprate); // Scale to 1 Hz
 }
 
 
@@ -569,7 +563,7 @@ int downconvert(struct channel *chan){
 
        For complex SDRs, tune.second_LO can be either positive or negative, so shift will be negative or positive
 
-       Note minus on 'shift' parameter to execute_filter_output()
+       Note minus on 'shift' parameter to execute_filter_output() and estimate_noise()
     */
     chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
     double const freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
