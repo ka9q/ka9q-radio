@@ -62,7 +62,7 @@ struct filter_in {
 struct filter_out {
   struct filter_in * restrict master;
   enum filtertype out_type;          // REAL, COMPLEX or CROSS_CONJ
-  int points;               // Size of fft. Same as bins only for complex
+  int points;               // Size N of fft; Same as bins only for complex
   int olen;                 // Length of user portion of output buffer (decimated L)
   int bins;                 // Number of frequency bins; == N for complex, == N/2 + 1 for real output
   complex float * restrict fdomain;  // Filtered signal in frequency domain

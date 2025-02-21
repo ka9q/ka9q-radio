@@ -5,7 +5,7 @@
 // Complex input and transfer functions, complex or real output
 // Copyright 2017-2023, Phil Karn, KA9Q, karn@ka9q.net
 
-#define LIQUID 0 // Experimental use of parks-mcclellan in filter generation
+//#define LIQUID 1 // Experimental use of parks-mcclellan in filter generation
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
@@ -34,7 +34,8 @@
 #include "misc.h"
 #include "filter.h"
 
-//#define FILTER_DEBUG 1 # turn on lots of printfs in the window creation code
+
+//#define FILTER_DEBUG 1 // turn on lots of printfs in the window creation code
 
 // Settable from main
 char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
@@ -111,11 +112,11 @@ static unsigned long lcm(unsigned long a,unsigned long b);
 //            length = (bins/2+1) when output is real
 //            Must be SIMD-aligned (e.g., allocated with fftw_alloc) and will be freed by delete_filter()
 
-// decimate = input/output sample rate ratio, only tested for powers of 2
+// decimate = input/output sample rate ratio
 // out_type = REAL, COMPLEX, CROSS_CONJ (COMPLEX with special processing for ISB) or SPECTRUM (real vector of bin energies)
 
 // All demodulators taking baseband (zero IF) I/Q data require COMPLEX input
-// All but SSB require COMPLEX output, with ISB using the special CROSS_CONJ mode
+// All require COMPLEX output, with ISB using the special CROSS_CONJ mode
 // SSB(CW) could (and did) use the REAL mode since the imaginary component is unneeded, and the c2r IFFT is faster
 // Baseband FM audio filtering for de-emphasis and PL separation uses REAL input and output
 
@@ -260,7 +261,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
 // Set up output (slave) side of filter (possibly one of several sharing the same input master)
 // These output filters should be deleted before their masters
 // Segfault will occur if filter_in is deleted and execute_filter_output is executed
-// Special case: for type == SPECTRUM, 'len' is the number of FFT bins, not the number of output time domain points (since there aren't any)
 int create_filter_output(struct filter_out *slave,struct filter_in * master,complex float * const response,int len, enum filtertype const out_type){
   assert(master != NULL);
   if(master == NULL)
@@ -304,11 +304,6 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
       }
       slave->points = x.quot; // Total number of FFT points including overlap
       slave->bins = x.quot;
-      if(x.quot & 1){
-	// Round up to even
-	slave->points++;
-	slave->bins++;
-      }
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
       slave->output_buffer.c = lmalloc(sizeof(complex float) * slave->bins);
       assert(slave->output_buffer.c != NULL);
@@ -342,11 +337,6 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
       }
       slave->points = x.quot;
       slave->bins = slave->points / 2 + 1;
-      if(x.quot & 1){
-	// Round up to even
-	slave->points++;
-	slave->bins++;
-      }
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
       assert(slave->fdomain != NULL);
       slave->output_buffer.r = lmalloc(sizeof(float) * slave->points);
@@ -955,12 +945,16 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   bands[1] = bands[1] < 0 ? 0 : bands[1];
   bands[2] = bw/2 + 0.01; bands[3] = 0.5;
   bands[2] = bands[2] > 0.5 ? 0.5 : bands[2];
-  float des[num_bands] = { 1.0, 0.0 };
-  float weights[num_bands] = { 1.0, 1.0 };
-  liquid_firdespm_wtype wtype[num_bands] = {
-    LIQUID_FIRDESPM_FLATWEIGHT,
-    LIQUID_FIRDESPM_EXPWEIGHT,
-  };
+  float des[num_bands];
+  des[0] = 1.0;
+  des[1] = 0.0;
+  float weights[num_bands];
+  weights[0] = 1.0;
+  weights[1] = 1.0;
+  liquid_firdespm_wtype wtype[num_bands];
+  wtype[0] = LIQUID_FIRDESPM_FLATWEIGHT;
+  wtype[1] =  LIQUID_FIRDESPM_EXPWEIGHT;
+
   firdespm_run(M,num_bands,bands,des,weights,wtype,LIQUID_FIRDESPM_BANDPASS,real_coeff);
 #else // liquid kaiser filter gen
   // Create a real filter, we'll shift it later

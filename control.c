@@ -1283,8 +1283,6 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
 
   if(Frontend.samprate != 0){
     long long fftout = (long long)N * channel->output.samprate / Frontend.samprate;
-    if(fftout & 1)
-      fftout++; // filter.c now rounds up
     pprintw(w,row++,col,"FFT out","%'lld c ",fftout);
   }
 
