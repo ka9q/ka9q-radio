@@ -247,6 +247,7 @@ struct channel {
     OpusEncoder *opus;
     unsigned int opus_channels;
     unsigned int opus_bitrate;
+    int opus_bandwidth;
     float *queue; // Mirrored ring buffer
     size_t queue_size; // Size of allocation, in floats
     unsigned wp,rp; // Queue write and read indices
