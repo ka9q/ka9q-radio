@@ -298,8 +298,9 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
     {
       slave->olen = len;
       ldiv_t x = ldiv((long)len * N,L);
-      if(x.rem != 0){
-	fprintf(stdout,"Invalid filter output length %d for input N=%d, L=%d\n",len,N,L);
+      if((x.quot & 1) || x.rem != 0){
+	// Odd IFFT lengths produce corrupted output for some reason, disallow
+	fprintf(stdout,"Invalid filter output length %d (fft size %ld) for input N=%d, L=%d\n",len,x.quot,N,L);
 	return -1;
       }
       slave->points = x.quot; // Total number of FFT points including overlap

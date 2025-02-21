@@ -332,10 +332,11 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
 // Should sample rates be integers when the block rate could in principle not be?
 // Usually Blocktime = 20.0000 ms (50.00000 Hz), which avoids the problem
 unsigned int round_samprate(unsigned int x){
-  float const baserate = (1000. / Blocktime) * (Overlap - 1);
+  // For reasons yet not understood, only even multiples of 200 Hz seem to work
+  float const baserate = 2 * (1000. / Blocktime) * (Overlap - 1);
 
   if(x < baserate)
-    return roundf(baserate); // Output one iFFT bin minimum, i.e., blockrate
+    return roundf(baserate); // Output one (two) iFFT bin minimum, i.e., blockrate (*2)
 
-  return baserate * roundf(x / baserate); // Nearest multiple of block rate * (Overlap - 1)
+  return baserate * roundf(x / baserate); // Nearest multiple of (2*) block rate * (Overlap - 1)
 }
