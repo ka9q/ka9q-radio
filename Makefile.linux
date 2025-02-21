@@ -2,8 +2,8 @@
 # Copyright 2017-2025, Phil Karn, KA9Q
 # By default, builds release version
 # To build for debugging say "make BUILD=debug"
-# To force the normally static device handlers to be dynamically loaded (for testing) say "make DYNAMIC=1"
-# Make sure you also specify DYNAMIC=1 when doing make install
+# To force the normally dynamically loaded device handlers to be statically linked into radiod, "make STATIC=1"
+# Make sure you also specify STATIC=1 when doing make install
 
 BUILD ?= release
 
@@ -19,7 +19,7 @@ ifeq ($(SANITIZE),1)
 endif
 
 ifeq ($(DYNAMIC),1)
-     DOPTS += -DFORCE_DYNAMIC=1
+     echo "Dynamic is now the default. STATIC=1 builds a static version of radiod"
 endif
 
 ARCHOPTS = -march=native
@@ -40,7 +40,7 @@ SCRIPTS = set_lo_multicast.sh
 LIBRADIO = ax25.o morse.o bandplan.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o
 DYNAMIC_DRIVERS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so
 STATIC_DRIVERS = rx888.o airspyhf.o airspy.o sig_gen.o funcube.o rtlsdr.o fcd.o ezusb.o hid-libusb.o
-RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libradio.a
+RADIOD_OBJECTS = audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libradio.a
 LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate
 BLACKLIST = airspy-blacklist.conf
 SYSCTL = 98-sockbuf.conf 50-multicast.conf
@@ -75,18 +75,26 @@ else
    EXECS += set_xcvr
 endif
 
+ifeq ($(STATIC),1)
+all: $(DAEMONS) $(EXECS)
+else
 all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
+endif
 
 # NB: no longer copies files to /etc/radio. Must be installed manually.
+ifeq ($(STATIC),1)
+install: $(DAEMONS) $(EXECS)
+else
 install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
+	rsync -a $(DYNAMIC_DRIVERS) $(SODIR)
+	ln -sf $(SODIR)/*.so /usr/local/lib
+endif
 	/usr/sbin/adduser --quiet --system --group radio
 	mkdir -p $(DIRS)
 	chown -R radio:radio $(DIRS)
 	chmod g+ws $(DIRS)
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) $(SCRIPTS) $(BINDIR)
-	rsync -a $(DYNAMIC_DRIVERS) $(SODIR)
-	ln -sf $(SODIR)/*.so /usr/local/lib
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
 	setcap cap_net_admin,cap_sys_nice=ep $(DAEMONDIR)/radiod
 	(cd aux;rsync -a $(SYSCTL) /etc/sysctl.d; sysctl -q -p $(SYSCTL))
@@ -167,12 +175,12 @@ powers: powers.o libradio.a
 pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm
 
-ifeq ($(DYNAMIC),1)
-radiod: $(RADIOD_OBJECTS)
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -ldl -lbsd -lm
-else
-radiod: $(RADIOD_OBJECTS) $(STATIC_DRIVERS)
+ifeq ($(STATIC),1)
+radiod: main-static.o $(RADIOD_OBJECTS) $(STATIC_DRIVERS)
 	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lportaudio -lairspy -lairspyhf -lrtlsdr -lusb-1.0 -ldl -lbsd -lm
+else
+radiod: main.o $(RADIOD_OBJECTS)
+	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -ldl -lbsd -lm
 endif
 
 rdsd: rdsd.o libradio.a
@@ -190,6 +198,10 @@ wd-record: wd-record.o libradio.a
 # not made unless we're on a rpi
 set_xcvr: set_xcvr.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser
+
+# version with linkage to statically built hardwware drivers
+main-static.o: main.c
+	$(CC) -c -DSTATIC=1 $(CFLAGS) -o $@ $^
 
 # device shared libraries - build kludgey separate -fpic versions of
 # drivers already built in for testing
