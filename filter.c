@@ -620,7 +620,9 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
 
     int wp = (slave->bins+1)/2; // most negative output bin
     int rp = shift - slave->bins/2; // Start index in master, unwrapped = shift - # output bins
-    while(rp < -(master->bins+1)/2){ // Starting below master, zero output until we're in range
+
+    // Starting below master, zero output until we're in range. Rarely needed.
+    while(rp < -(master->bins+1)/2){
       assert(wp >=0 && wp < slave->bins);
       slave->fdomain[wp] = 0;
       rp++;
@@ -654,7 +656,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
 	wp = 0; // Slave wrapped to DC
     } while (wp != (slave->bins+1)/2 && rp != (master->bins+1)/2); // Until we reach the top of the output or input
 
-    // Zero any remaining output
+    // Zero any remaining output. Rarely needed.
     while(wp != (slave->bins+1)/2){
       assert(wp >=0 && wp < slave->bins);
       slave->fdomain[wp++] = 0;
@@ -689,7 +691,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     if(shift >= 0){
       // Right side up
       int rp = shift - slave->bins/2; // Start index in master, unwrapped = shift - # output bins
-      // Pad start if necessary
+      // Pad start if necessary. Rarely needed
       while(rp < 0){
 	assert(wp >=0 && wp < slave->bins);
 	slave->fdomain[wp] = 0;
@@ -713,7 +715,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     } else {
       // Inverted spectrum
       int rp = -(shift - slave->bins/2); // Start at high (negative) input frequency
-      // Pad start if necessary
+      // Pad start if necessary, rarely needed
       while(rp >= master->bins){
 	assert(wp >=0 && wp < slave->bins);
 	slave->fdomain[wp] = 0;
@@ -735,7 +737,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
 	rp--;
       }
     }
-    // Zero any remaining output
+    // Zero any remaining output. Rarely needed
     while(wp != (slave->bins+1)/2){
       assert(wp >=0 && wp < slave->bins);
       slave->fdomain[wp] = 0;
@@ -744,6 +746,9 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     }
   }
  done:;
+  // Zero out Nyquist bin when N even
+  if((slave->bins & 1) == 0)
+    slave->fdomain[slave->bins/2] = 0;
 
   pthread_mutex_unlock(&slave->response_mutex); // release response[]
 
