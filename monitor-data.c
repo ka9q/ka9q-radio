@@ -161,6 +161,7 @@ void *dataproc(void *arg){
 	qnext = qe->next;
 	FREE(qe);
       }
+      q_prev = NULL;
       // queue now empty, can put new packet at head
     }
     if(qe)
