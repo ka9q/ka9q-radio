@@ -55,6 +55,7 @@ int demod_linear(void *arg){
     return -1;
   }
   set_channel_filter(chan);
+  chan->filter.remainder = NAN;
 
   set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
   // Coherent mode parameters

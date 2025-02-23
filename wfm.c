@@ -72,6 +72,7 @@ int demod_wfm(void *arg){
 	     chan->filter.max_IF/Composite_samprate,
 	     chan->filter.kaiser_beta);
 
+  chan->filter.remainder = NAN;
   set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
 
   float phase_memory = 0;  // Demodulator input phase memory
