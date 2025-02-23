@@ -591,55 +591,25 @@ size_t round_to_hugepage(size_t size){
 // e.g., fftwf_execute()
 // Linux and non-Linux are sufficiently different to warrant two separate routines
 #if __linux__
-void *mirror_alloc(size_t const original_size){
-
-  bool use_hugepages = false;
-  size_t size;
-  if(original_size >= 1024 * 1024) {
-    size = round_to_hugepage(original_size); // Try huge pages for buffers >= 1MB (half a huge page)
-    use_hugepages = true;
-  } else {
-    size = round_to_page(original_size); // mmap requires even number of pages
-    use_hugepages = false;
-  }
-
-  // Reserve virtual space for buffer + mirror
-  uint8_t *base = MAP_FAILED;
-  if(use_hugepages)
-    base = mmap(NULL,size * 2, PROT_NONE, MAP_PRIVATE|MAP_HUGETLB|MAP_ANONYMOUS, -1, 0);
-  if(base == MAP_FAILED){
-    size = round_to_page(original_size);
-    use_hugepages = false;
-    base = mmap(NULL,size * 2, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0); // Retry normal
-  }
-  if(base == MAP_FAILED){
-    return NULL; // failed
-  }
-  // Create a temp file in /dev/hugepages
-  int fd = -1;
-  if(use_hugepages){
-    // Create
-    char fname[256];
-    static int counter;
-    snprintf(fname,sizeof fname,"/dev/hugepages/%d-%d",getpid(),counter++);
-    fd = open(fname,O_CREAT|O_RDWR);
-    unlink(fname);
-  }
+// Try huge pages, return NULL if unavail
+static void *mirror_alloc_huge(size_t size){
+  size = round_to_hugepage(size);
+  // Create huge page file
+  char fname[256];
+  static int counter;
+  snprintf(fname,sizeof fname,"/dev/hugepages/%d-%d",getpid(),counter++);
+  int fd = open(fname,O_CREAT|O_RDWR);
+  unlink(fname);
   if(fd == -1){
-    // Fall back to memfd_create()
-    size = round_to_page(original_size);
-    use_hugepages = false;
-    int flags = 0;
-#ifdef MFD_NOEXEC_SEAL
-    // New flag? Not documented on man page but mentioned in kernel warning message, so pass it if defined
-    flags |= MFD_NOEXEC_SEAL; // not executable and sealed to prevent changing to executable.
-#endif
-    fd = memfd_create("mirror_alloc",flags);
-  }
-  if(fd < 0){
-    perror("mirror_alloc tmpfile create");
-    munmap(base,size * 2);
+    perror("mirror_alloc_huge file create failed");
     return NULL;
+  }
+  // Reserve virtual space for buffer + mirror
+  uint8_t *base = mmap(NULL,size * 2, PROT_NONE, MAP_PRIVATE|MAP_HUGETLB|MAP_ANONYMOUS, -1, 0);
+  if(base == MAP_FAILED){
+    perror("mirror_alloc_huge first mmap");
+    close(fd);
+    return NULL; // failed
   }
   if(ftruncate(fd,size) != 0){
     perror("mirror_alloc ftruncate");
@@ -648,59 +618,100 @@ void *mirror_alloc(size_t const original_size){
     return NULL;
   }
   // Create first appearance of buffer
-  uint8_t *nbase = MAP_FAILED;
-  if(use_hugepages)
-    nbase = mmap(base, size, PROT_READ|PROT_WRITE, MAP_HUGETLB|MAP_FIXED|MAP_SHARED, fd, 0);
-  if(nbase == MAP_FAILED) {
-    use_hugepages = false;
-    size = round_to_page(original_size);
-    nbase = mmap(base, size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
-  }
+  uint8_t *nbase = mmap(base, size, PROT_READ|PROT_WRITE, MAP_HUGETLB|MAP_FIXED|MAP_SHARED, fd, 0);
   if(nbase != base){
-    perror("mirror_alloc first mmap");
+    perror("mirror_alloc_huge 2nd mmap");
     close(fd);
     munmap(base,size * 2);
     return NULL;
   }
   // Create mirror immedately after first
-  uint8_t *mirror = MAP_FAILED;
-  if(use_hugepages)
-    mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_HUGETLB|MAP_FIXED|MAP_SHARED, fd, 0);
-  if(mirror == MAP_FAILED) {
-    use_hugepages = false;
-    size = round_to_page(original_size);
-    mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
+  uint8_t *mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_HUGETLB|MAP_FIXED|MAP_SHARED, fd, 0);
+  if(mirror != base + size){
+    perror("mirror_alloc_huge 3rd mmap");
+    munmap(base,size * 2);
+    base = NULL;
   }
   close(fd); // No longer needed after all memory maps are in place
-  if(mirror != base + size){
-    perror("mirror_alloc second mmap");
-    munmap(base,size * 2);
-    return NULL;
-  }
   return base;
 }
-#else // macos, etc
-void *mirror_alloc(size_t size){
-  size = round_to_page(size); // mmap requires even number of pages
 
-  // Reserve virtual space for buffer + mirror
-  uint8_t *base = mmap(NULL,size * 2, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0); // Retry normal
-  if(base == MAP_FAILED){
-    return NULL; // failed
+
+// Allocate a mirrored buffer, with two consecutive mappings of the same memory
+// Very useful for ring buffers
+void *mirror_alloc(size_t size){
+  if(size > 1024 * 1024){
+    // Try huge pages for big buffers
+    void *buffer = mirror_alloc_huge(size);
+    if(buffer != NULL)
+      return buffer;
   }
-  char path[] = "/tmp/cb-XXXXXX";
-  int fd = mkstemp(path);
-  unlink(path);
+  size = round_to_page(size);
+
+  int flags = 0;
+#ifdef MFD_NOEXEC_SEAL
+  // New flag? Not documented on man page but mentioned in kernel warning message, so pass it if defined
+  flags |= MFD_NOEXEC_SEAL; // not executable and sealed to prevent changing to executable.
+#endif
+  int fd = memfd_create("mirror_alloc",flags);
   if(fd < 0){
-    perror("mirror_alloc mkstemp");
-    munmap(base,size * 2);
+    perror("mirror_alloc tmpfile create");
     return NULL;
   }
   if(ftruncate(fd,size) != 0){
     perror("mirror_alloc ftruncate");
     close(fd);
+    return NULL;
+  }
+  // Reserve virtual space for buffer + mirror
+  uint8_t *base = mmap(NULL,size * 2, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0); // Retry normal
+  if(base == MAP_FAILED){
+    perror("mirror_alloc first mmap");
+    close(fd);
+    return NULL; // failed
+  }
+  // Create first appearance of buffer
+  uint8_t *nbase = mmap(base, size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
+  if(nbase != base){
+    perror("mirror_alloc 2nd mmap");
+    close(fd);
     munmap(base,size * 2);
     return NULL;
+  }
+  // Create mirror immedately after first
+  uint8_t *mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
+  if(mirror != base + size){
+    perror("mirror_alloc 3rd mmap");
+    munmap(base,size * 2);
+    base = NULL;
+  }
+  close(fd); // No longer needed after all memory maps are in place
+  return base;
+}
+
+#else // macos, etc
+
+void *mirror_alloc(size_t size){
+  size = round_to_page(size); // mmap requires even number of pages
+
+  char path[] = "/tmp/cb-XXXXXX";
+  int fd = mkstemp(path);
+  unlink(path);
+  if(fd < 0){
+    perror("mirror_alloc mkstemp");
+    return NULL;
+  }
+  if(ftruncate(fd,size) != 0){
+    perror("mirror_alloc ftruncate");
+    close(fd);
+    return NULL;
+  }
+
+  // Reserve virtual space for buffer + mirror
+  uint8_t *base = mmap(NULL,size * 2, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0); // Retry normal
+  if(base == MAP_FAILED){
+    close(fd);
+    return NULL; // failed
   }
   // Create first appearance of buffer
   uint8_t *nbase = mmap(base, size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
@@ -712,13 +723,12 @@ void *mirror_alloc(size_t size){
   }
   // Create mirror immedately after first
   uint8_t *mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
-  close(fd); // No longer needed after all memory maps are in place
   if(mirror != base + size){
     perror("mirror_alloc second mmap");
-    close(fd);
     munmap(base,size * 2);
-    return NULL;
+    base = NULL;
   }
+  close(fd); // No longer needed after all memory maps are in place
   return base;
 }
 #endif
