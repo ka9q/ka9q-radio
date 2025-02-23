@@ -491,10 +491,12 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       fprintf(stdout,"restarting thread for ssrc %u\n",ssrc);
     return true;
   }
-  if(new_filter_needed)
+  if(new_filter_needed){
     set_channel_filter(chan);
-
-  set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
+    // Retune if necessary to accommodate edge of passband
+    // but only if a change was commanded, to prevent a tuning war
+    set_freq(chan,chan->tune.freq);
+  }
   return false;
 }
 
