@@ -591,19 +591,24 @@ size_t round_to_hugepage(size_t size){
 // e.g., fftwf_execute()
 // Linux and non-Linux are sufficiently different to warrant two separate routines
 #if __linux__
-void *mirror_alloc(size_t size){
+void *mirror_alloc(size_t const original_size){
+
   bool use_hugepages = false;
-  if(size >= 1024 * 1024) {
-    size = round_to_hugepage(size); // Try huge pages for buffers >= 1MB (half a huge page)
+  size_t size;
+  if(original_size >= 1024 * 1024) {
+    size = round_to_hugepage(original_size); // Try huge pages for buffers >= 1MB (half a huge page)
     use_hugepages = true;
-  } else
-    size = round_to_page(size); // mmap requires even number of pages
+  } else {
+    size = round_to_page(original_size); // mmap requires even number of pages
+    use_hugepages = false;
+  }
 
   // Reserve virtual space for buffer + mirror
   uint8_t *base = MAP_FAILED;
   if(use_hugepages)
     base = mmap(NULL,size * 2, PROT_NONE, MAP_PRIVATE|MAP_HUGETLB|MAP_ANONYMOUS, -1, 0);
   if(base == MAP_FAILED){
+    size = round_to_page(original_size);
     use_hugepages = false;
     base = mmap(NULL,size * 2, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0); // Retry normal
   }
@@ -622,6 +627,7 @@ void *mirror_alloc(size_t size){
   }
   if(fd == -1){
     // Fall back to memfd_create()
+    size = round_to_page(original_size);
     use_hugepages = false;
     int flags = 0;
 #ifdef MFD_NOEXEC_SEAL
@@ -647,6 +653,7 @@ void *mirror_alloc(size_t size){
     nbase = mmap(base, size, PROT_READ|PROT_WRITE, MAP_HUGETLB|MAP_FIXED|MAP_SHARED, fd, 0);
   if(nbase == MAP_FAILED) {
     use_hugepages = false;
+    size = round_to_page(original_size);
     nbase = mmap(base, size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
   }
   if(nbase != base){
@@ -659,8 +666,11 @@ void *mirror_alloc(size_t size){
   uint8_t *mirror = MAP_FAILED;
   if(use_hugepages)
     mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_HUGETLB|MAP_FIXED|MAP_SHARED, fd, 0);
-  if(mirror == MAP_FAILED)
+  if(mirror == MAP_FAILED) {
+    use_hugepages = false;
+    size = round_to_page(original_size);
     mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
+  }
   close(fd); // No longer needed after all memory maps are in place
   if(mirror != base + size){
     perror("mirror_alloc second mmap");
