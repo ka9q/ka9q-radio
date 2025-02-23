@@ -598,7 +598,7 @@ static void *mirror_alloc_huge(size_t size){
   char fname[256];
   static int counter;
   snprintf(fname,sizeof fname,"/dev/hugepages/%d-%d",getpid(),counter++);
-  int fd = open(fname,O_CREAT|O_RDWR);
+  int fd = open(fname,O_CREAT|O_RDWR,0600);
   unlink(fname);
   if(fd == -1){
     perror("mirror_alloc_huge file create failed");
