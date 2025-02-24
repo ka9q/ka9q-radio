@@ -52,7 +52,7 @@ This will write into the following directories:
 - **/etc/systemd/system** systemd unit files (e.g., radio@.service)
 - **/etc/sysctl.d** system configuration files (e.g., 98-sockbuf.conf)
 - **/etc/udev/rules.d** device daemon rule files (e.g., 52-airspy.rules)
-- **/etc/fftw** FFTW *wisdom* files (i.e., wisdomf)
+- **/etc/fftw** Global (not just ka9q-radio) FFTW *wisdom* files (i.e., wisdomf)
 - **/etc/radio** program config files (e.g., radio@2m.conf - but **will not** overwrite existing files)
 
 It will also create several special system users and groups so that the daemons don't have to run with root permissions.
