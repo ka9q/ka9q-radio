@@ -545,8 +545,6 @@ static void rx_callback(struct libusb_transfer * const transfer){
     }
   }
   frontend->timestamp = now;
-  write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
-
   // These blocks are kinda small, so exponentially smooth the power readings
   frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
   frontend->samples += sampcount; // Count original samples
@@ -554,6 +552,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
     if(libusb_submit_transfer(transfer) == 0)
       sdr->xfers_in_progress++;
   }
+  write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
 }
 
 static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware,unsigned int const queuedepth,unsigned int const reqsize){
