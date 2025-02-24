@@ -48,7 +48,7 @@ This will write into the following directories:
 - **/usr/local/sbin** daemon binaries (e.g., 'radiod')
 - **/usr/local/bin** application programs (e.g., 'control')
 - **/usr/local/share/ka9q-radio** support files (e.g., 'modes.conf')
-- **/var/lib/ka9q-radio** application state files (e.g., tune-\*)
+- **/var/lib/ka9q-radio** application state files (e.g., FFTW 'wisdom' files)
 - **/etc/systemd/system** systemd unit files (e.g., radio@.service)
 - **/etc/sysctl.d** system configuration files (e.g., 98-sockbuf.conf)
 - **/etc/udev/rules.d** device daemon rule files (e.g., 52-airspy.rules)
