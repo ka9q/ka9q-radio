@@ -38,7 +38,7 @@ sudo apt install molly-guard
 
 ```
 cd ka9q-radio
-ln -s Makefile.[linux|osx|sdrplay] Makefile
+ln -s Makefile.[linux|osx] Makefile
 make
 sudo make install
 ```
