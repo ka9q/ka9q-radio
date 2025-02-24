@@ -24,8 +24,8 @@ someday.  It's intended for applications that need many channels at
 once. It would also make an excellent foundation for a web SDR able to
 support many (hundreds) of simultaneous users. So far we've used it
 for specialized applications like APRS gatewaying, repeater monitoring
-and recording, multiband WSPR and FT8 skimming, propagation research,
-and radiosonde reception that all use its multichannel capabilities.
+and recording, HFDL reception, multiband WSPR and FT4/8 skimming, propagation research,
+and 400 MHz radiosonde reception that all use its multichannel capabilities.
 
 The original version of *ka9q-radio* had a separate front end handler,
 e.g., *funcubed* or *airspyd*, from the main radio daemon *radiod*.
