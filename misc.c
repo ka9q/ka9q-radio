@@ -591,6 +591,8 @@ size_t round_to_hugepage(size_t size){
 // e.g., fftwf_execute()
 // Linux and non-Linux are sufficiently different to warrant two separate routines
 #if __linux__
+
+#if 0
 // Try huge pages, return NULL if unavail
 static void *mirror_alloc_huge(size_t size){
   size = round_to_hugepage(size);
@@ -635,17 +637,19 @@ static void *mirror_alloc_huge(size_t size){
   close(fd); // No longer needed after all memory maps are in place
   return base;
 }
-
+#endif
 
 // Allocate a mirrored buffer, with two consecutive mappings of the same memory
 // Very useful for ring buffers
 void *mirror_alloc(size_t size){
+#if 0 // Seems to hurt performance, disabled for now
   if(size > 1024 * 1024){
     // Try huge pages for big buffers
     void *buffer = mirror_alloc_huge(size);
     if(buffer != NULL)
       return buffer;
   }
+#endif
   size = round_to_page(size);
 
   int flags = 0;
@@ -733,9 +737,57 @@ void *mirror_alloc(size_t size){
 }
 #endif
 
+
+
 void mirror_free(void **p,size_t size){
   if(p == NULL || *p == NULL)
     return;
   munmap(*p, size * 2);
   *p = NULL; // Nail pointer
 }
+
+#undef DROP_ENABLE
+
+#if DROP_ENABLE
+static size_t linesize(){
+#ifdef _SC_LEVEL1_DCACHE_LINESIZE
+    long sz = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
+    if (sz > 0) return (size_t) sz;
+#endif
+    return 64;  // Default fallback
+}
+#endif
+
+
+#if DROP_ENABLE && __x86_64__
+void drop_cache(void *mem,size_t bytes){
+  uint8_t *p = (uint8_t *)mem;
+  static size_t line = 0;
+  if(line == 0)
+    line = linesize();
+  for(unsigned int i = 0; i < bytes; i += line){
+    asm volatile ("clflushopt (%0)" :: "r" (p) : "memory"); // need to check that we have clflushopt
+    p += line;
+  }
+  asm volatile ("sfence" ::: "memory");
+}
+#elif DROP_ENABLE &&  __aarch64__
+void drop_cache(void *mem,size_t bytes){
+  uint8_t *p = (uint8_t *)mem;
+  static size_t line = 0;
+  if(line == 0)
+    line = linesize();
+  for(unsigned int i = 0; i < bytes; i += line){
+    asm volatile ("dc civac, %0" :: "r" (p) : "memory");
+    p += line;
+  }
+  asm volatile ("dsb ish");  // Ensure completion
+}
+
+#else
+// Dummy
+void drop_cache(void *mem,size_t bytes){
+  (void)mem;
+  (void)bytes;
+}
+#endif

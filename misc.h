@@ -314,4 +314,7 @@ static inline void mirror_wrap(void const **p, void const * const base,size_t co
 // round argument up to an even number of system pages
 size_t round_to_page(size_t size);
 
+void drop_cache(void *mem,size_t bytes);
+
+
 #endif // _MISC_H

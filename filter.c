@@ -60,6 +60,7 @@ struct fft_job {
   fftwf_plan plan;
   void *input;
   void *output;
+  size_t input_dropsize;      // byte counts to drop from cache when FFT finishes
   pthread_mutex_t *completion_mutex; // protects completion_jobnum
   pthread_cond_t *completion_cond;   // Signaled when job is complete
   unsigned int *completion_jobnum;   // Written with jobnum when complete
@@ -421,6 +422,7 @@ void *run_fft(void *p){
 	break;
       }
     }
+    drop_cache(job->input,job->input_dropsize);
     // Signal we're done with this job
     if(job->completion_mutex)
       pthread_mutex_lock(job->completion_mutex);
@@ -466,6 +468,7 @@ int execute_filter_input(struct filter_in * const f){
 	f->input_read_pointer.c += f->ilen;
 	mirror_wrap((void *)&f->input_read_pointer.c,f->input_buffer,f->input_buffer_size);
 	fftwf_execute_dft(f->fwd_plan,input,output);
+	drop_cache(input,f->ilen * sizeof(complex float));
       }
       break;
     case REAL:
@@ -474,6 +477,7 @@ int execute_filter_input(struct filter_in * const f){
 	f->input_read_pointer.r += f->ilen;
 	mirror_wrap((void *)&f->input_read_pointer.r,f->input_buffer,f->input_buffer_size);
 	fftwf_execute_dft_r2c(f->fwd_plan,input,output);
+	drop_cache(input,f->ilen * sizeof(float));
       }
       break;
     }
@@ -520,11 +524,13 @@ int execute_filter_input(struct filter_in * const f){
   case CROSS_CONJ:
   case COMPLEX:
     job->input = f->input_read_pointer.c;
+    job->input_dropsize = f->ilen * sizeof(complex float);
     f->input_read_pointer.c += f->ilen;
     mirror_wrap((void *)&f->input_read_pointer.c,f->input_buffer,f->input_buffer_size);
     break;
   case REAL:
     job->input = f->input_read_pointer.r;
+    job->input_dropsize = f->ilen * sizeof(float);
     f->input_read_pointer.r += f->ilen;
     mirror_wrap((void *)&f->input_read_pointer.r,f->input_buffer,f->input_buffer_size);
     break;
@@ -769,6 +775,11 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   }
   // And finally back to the time domain
   fftwf_execute(slave->rev_plan); // Note: c2r version destroys fdomain[], but it's not used again anyway
+  // Drop the cache in the first M-1 points of the time domain buffer that we'll discard
+  if(slave->out_type == REAL)
+    drop_cache(slave->output_buffer.r,(slave->points - slave->olen) * sizeof (float));
+  else
+    drop_cache(slave->output_buffer.c,(slave->points - slave->olen) * sizeof (complex float));
   return 0;
 }
 
