@@ -95,9 +95,9 @@ Note that the subdirectory is read *in addition to* the primary config file if i
 
 The configuration options, including the rarely used esoteric ones, are fully documented here:
 
-[ka9q-radio.md](ka9q-radio.md) - Management by *systemd*; the [global] section of the *radiod* config file
-[ka9q-radio-2.md](ka9q-radio-2.md) - The hardware dependent section of the *radiod* config file
-[ka9q-radio-3.md](ka9q-radio-3.md) - Setting up static radio channels
+- [ka9q-radio.md](ka9q-radio.md) - Management by *systemd*; the [global] section of the *radiod* config file
+- [ka9q-radio-2.md](ka9q-radio-2.md) - The hardware dependent section of the *radiod* config file
+- [ka9q-radio-3.md](ka9q-radio-3.md) - Setting up static radio channels
 
 ## Running *radiod*
 
