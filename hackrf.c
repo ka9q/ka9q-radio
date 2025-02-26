@@ -346,11 +346,13 @@ static void *hackrf_agc(void *arg){
     else
       continue;
     
+#if 0
     printf("if_power %.0f scale %g, DC (%f+j%f) sinphi %f gain_i %f gain_q %f agc change %d dB\n",
 	   powerdB,sdr->scale,crealf(sdr->DC),cimagf(sdr->DC),
 	   sdr->sinphi,
 	   sdr->gain_i,sdr->gain_q,
 	   change);
+#endif
     if(change > 0){
       // Increase gain, LNA first, then mixer, and finally IF
       if(change >= 14 && sdr->lna_gain < 14){
