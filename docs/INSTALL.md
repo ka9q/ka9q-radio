@@ -101,6 +101,34 @@ The configuration options, including the rarely used esoteric ones, are fully do
 
 ## Running *radiod*
 
+### Using the Command Line
+
+While creating a new configuration file it can be useful to run `radiod` directly without going through the service setup.
+
+```
+radiod -v YOUR_FILE.conf
+```
+
+Any errors will be printed and you can see if all the demodulators from the configuration file are started.
+
+You can verify the connectivity to `radiod` from the same host by opening another CLI and running:
+
+```
+control
+```
+
+which will show the list of demodulators and the associated multicast IPs and SSRCs.
+
+Entering the SSRC will show a ncurse-like interface with details about the specific demodulator selected.
+
+You can also run:
+
+```
+monitor MCAST_IP
+```
+
+where *MCAST_IP* is one of the above multicast IPs to monitor and listen to the demodulated audio.
+
 ### The *radiod* Daemon
 
 What follows assumes some knowledge of common Linux commands and system administration, particularly configuring, starting and stopping daemons running under the standard Linux system management daemon `systemd`.
