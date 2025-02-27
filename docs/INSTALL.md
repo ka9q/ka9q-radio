@@ -2,7 +2,7 @@
 
 This package is designed for Debian Linux, including offshoots such as Ubuntu and the Raspberry Pi OS.
 
-Since I use a Macbook Pro as my desktop, some of it (e.g., the interactive components `control` and `monitor`) will also compile and run on MacOS - but not all of it.
+Since I use a MacBook Pro as my desktop, some of it (e.g., the interactive components `control` and `monitor`) will also compile and run on MacOS - but not all of it.
 
 However, I'm interested in fixing any unnecessary non-portabilities.
 
@@ -47,13 +47,13 @@ This will write into the following directories:
 
 - **/usr/local/sbin** daemon binaries (e.g., `radiod`)
 - **/usr/local/bin** application programs (e.g., `control`)
-- **/usr/local/share/ka9q-radio** support files (e.g., `modes.conf`)
-- **/var/lib/ka9q-radio** application state files (e.g., FFTW `wisdom` files)
-- **/etc/systemd/system** systemd unit files (e.g., `radio@.service`)
-- **/etc/sysctl.d** system configuration files (e.g., `98-sockbuf.conf`)
-- **/etc/udev/rules.d** device daemon rule files (e.g., `52-airspy.rule`)
-- **/etc/fftw** Global (not just ka9q-radio) FFTW *wisdom* files (i.e., `wisdomf`)
-- **/etc/radio** program config files (e.g., `radio@2m.conf` - but **will not** overwrite existing files)
+- **/usr/local/share/ka9q-radio** support files (e.g., **presets.conf**)
+- **/var/lib/ka9q-radio** application state files (e.g., FFTW **wisdom** files)
+- **/etc/systemd/system** systemd unit files (e.g., **radio@.service**)
+- **/etc/sysctl.d** system configuration files (e.g., **98-sockbuf.conf**)
+- **/etc/udev/rules.d** device daemon rule files (e.g., **52-airspy.rule**)
+- **/etc/fftw** global (not just ka9q-radio) FFTW *wisdom* files (i.e., **wisdomf**)
+- **/etc/radio** program config files (e.g., **radio@2m.conf** - but **will not** overwrite existing files)
 
 It will also create a special system user and group (*radio*) so that the daemons don't have to run with root permissions.
 
@@ -65,9 +65,9 @@ sudo adduser your_user_name radio
 
 Membership in a few other groups can minimize the need to run as root:
 
-- *adm* Look at **/var/log/syslog**
-- *plugdev* Run `radiod` under a debugger with most devices
-- *users* Run `radiod` under a debugger with the Funcube dongle
+- *adm* read **/var/log/syslog**
+- *plugdev* run `radiod` under a debugger with most devices
+- *users* run `radiod` under a debugger with the FUNcube dongle
 
 And of course you need to be a member of the *sudo* group to execute programs as root.
 
@@ -81,7 +81,7 @@ Although the list of available options is quite long, most are rarely needed so 
 
 For ease of maintenance, each configuration may optionally be broken up into sections in a subdirectory.
 
-If `radiod` is given the config file name **radiod@foo.conf**, it will look for the directory named **radiod@foo.conf.d** and read any files found therein after the original configuration file.
+If `radiod` is given the configuration file name **radiod@foo.conf**, it will look for the directory named **radiod@foo.conf.d** and read any files found therein after the original configuration file.
 
 Only filenames ending in **.conf** will be used, and they will be sorted by name before being read.
 
@@ -89,14 +89,14 @@ The usual Linux convention is to use names of the form **01-bar.conf** that will
 
 Editor temporaries and backups, e.g., **01-bar.conf~**, are ignored.
 
-Config file sections, e.g., `[global]`, `[hardware]`, and so on, may actually appear in any order so the sort order of the subdirectory is important only if a single section is split across two or more files in the subdirectory.
+Configuration file sections, e.g., `[global]`, `[hardware]`, and so on, may actually appear in any order so the sort order of the subdirectory is important only if a single section is split across two or more files in the subdirectory.
 
-Note that the subdirectory is read *in addition to* the primary config file if it also exists, so to prevent confusion it is advisable to move it to a backup name, e.g., **radiod@foo.conf-disabled** so it will not be read.
+Note that the subdirectory is read *in addition to* the primary configuration file if it also exists, so to prevent confusion it is advisable to move it to a backup name, e.g., **radiod@foo.conf-disabled** so it will not be read.
 
 The configuration options, including the rarely used esoteric ones, are fully documented here:
 
-- [ka9q-radio.md](ka9q-radio.md) - Management by *systemd*; the [global] section of the `radiod` config file
-- [ka9q-radio-2.md](ka9q-radio-2.md) - The hardware dependent section of the `radiod` config file
+- [ka9q-radio.md](ka9q-radio.md) - Management by *systemd*; the [global] section of the `radiod` configuration file
+- [ka9q-radio-2.md](ka9q-radio-2.md) - The hardware dependent section of the `radiod` configuration file
 - [ka9q-radio-3.md](ka9q-radio-3.md) - Setting up static radio channels
 
 ## Running *radiod*
@@ -119,7 +119,7 @@ control
 
 which will show the list of demodulators and the associated multicast IPs and SSRCs.
 
-Entering the SSRC will show a ncurse-like interface with details about the specific demodulator selected.
+Entering the SSRC will show a ncurses-like interface with details about the specific demodulator selected.
 
 You can also run:
 
@@ -181,8 +181,6 @@ You can read this file directly (e.g., with `grep` or `tail`) or through the `sy
 You do not have to be root to run `systemctl status` but you usually have to be root or a member of group *adm* to read **/var/log/syslog**.
 
 Note that `systemctl status` only gives you the last 10 lines of output from `radiod`.
-
-### Client Programs
 
 ## Optimizations
 
