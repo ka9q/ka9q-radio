@@ -689,7 +689,7 @@ int set_channel_filter(struct channel *chan){
   return 0;
 }
 
-// scale A/D output to full scale for monitoring overloads
+// scale A/D output power to full scale for monitoring overloads
 float scale_ADpower2FS(struct frontend const *frontend){
   assert(frontend != NULL);
   if(frontend == NULL)

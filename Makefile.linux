@@ -47,6 +47,17 @@ SYSCTL = 98-sockbuf.conf 50-multicast.conf
 CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c filter.c fm.c funcube.c hid-libusb.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c pl.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c setfilt.c show-pkt.c show-sig.c sig_gen.c spectrum.c status.c stereod.c tune.c wd-record.c wfm.c
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h status.h
 
+# Build HackRF support if installed, or if 'make HACKRF=1'
+ifeq ($(wildcard /usr/include/libhackrf/hackrf.h),)
+else
+   HACKRF=1
+endif
+# if HACKRF is set, build it
+ifdef HACKRF
+   CFILES += hackrf.c
+   DYNAMIC_DRIVERS += hackrf.so
+endif
+
 # Build SDRPLAY support if installed, or if 'make SDRPLAY=1'
 ifeq ($(wildcard /usr/local/include/sdrplay_api.h),)
 else
@@ -230,6 +241,9 @@ sdrplay.so: sdrplay-pic.o
 fobos.so: fobos-pic.o
 	$(CC) -shared -o $@ $^ -lfobos
 
+hackrf.so: hackrf-pic.o
+	$(CC) -shared -o $@ $^ -lhackrf -lusb-1.0
+
 funcube-pic.o: funcube.c
 	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
@@ -261,6 +275,9 @@ sdrplay-pic.o: sdrplay.c
 	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 fobos-pic.o: fobos.c
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
+
+hackrf-pic.o: hackrf.c
 	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 
