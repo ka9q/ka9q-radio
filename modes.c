@@ -140,6 +140,7 @@ int set_defaults(struct channel *chan){
   chan->filter.min_IF = DEFAULT_LOW;
   chan->filter.max_IF = DEFAULT_HIGH;
   // ************ temp for testing
+  chan->filter2.blocking = 0;
   chan->filter2.low = DEFAULT_LOW;
   chan->filter2.high = DEFAULT_HIGH;
   chan->filter2.kaiser_beta = DEFAULT_KAISER_BETA;
@@ -317,9 +318,23 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
       chan->output.encoding = parse_encoding(cp);
   }
   chan->output.opus_bitrate = config_getint(table,sname,"bitrate",chan->output.opus_bitrate);
+  if(chan->output.opus_bitrate < 0 || chan->output.opus_bitrate > 510000){
+    fprintf(stdout,"opus bitrate %d out of range\n",chan->output.opus_bitrate);
+    chan->output.opus_bitrate = 0;
+  }
   chan->status.output_interval = config_getint(table,sname,"update",chan->status.output_interval);
+  if(chan->status.output_interval < 0)
+    chan->status.output_interval = 0;
   chan->output.minpacket = config_getint(table,sname,"buffer",chan->output.minpacket);
-
+  if(chan->output.minpacket < 0 || chan->output.minpacket > 4){
+    fprintf(stdout,"buffer %d out of range\n",chan->output.minpacket);
+    chan->output.minpacket = 0;
+  }
+  chan->filter2.blocking = config_getint(table,sname,"filter2",chan->filter2.blocking);
+  if(chan->filter2.blocking < 0 || chan->filter2.blocking > 4){
+    fprintf(stdout,"filter2 %d out of range\n",chan->filter2.blocking);
+    chan->filter2.blocking = 0;
+  }
   return 0;
 }
 
