@@ -128,54 +128,58 @@ int set_defaults(struct channel *chan){
   if(chan == NULL)
     return -1;
 
-  chan->tp1 = chan->tp2 = NAN;
+  chan->demod_type = DEFAULT_DEMOD;
+
+  chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
+  chan->output.encoding = S16BE;
+  chan->output.opus_bitrate = DEFAULT_BITRATE;
+  chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
+  chan->output.channels = 1;
+  if(chan->output.gain <= 0 || isnan(chan->output.gain))
+     chan->output.gain = dB2voltage(DEFAULT_GAIN); // Set only if out of bounds
+  chan->output.pacing = false;
+  chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
+  chan->output.minpacket = 0;  // No output buffering
+
   chan->tune.doppler = 0;
   chan->tune.doppler_rate = 0;
+  chan->tune.shift = 0.0;
+
+  chan->filter.kaiser_beta = DEFAULT_KAISER_BETA;
+  chan->filter.min_IF = DEFAULT_LOW;
+  chan->filter.max_IF = DEFAULT_HIGH;
+  chan->filter.remainder = NAN;      // Important to force downconvert() to call set_osc() on first call
+  chan->filter.bin_shift = -1000999; // Force initialization here too
+
+  chan->filter2.blocking = 0;        // Off by default
+  chan->filter2.low = DEFAULT_LOW;
+  chan->filter2.high = DEFAULT_HIGH;
+  chan->filter2.kaiser_beta = DEFAULT_KAISER_BETA;
+  chan->filter2.isb = false;
+
+  chan->fm.squelch_open = dB2power(DEFAULT_SQUELCH_OPEN);
+  chan->fm.squelch_close = dB2power(DEFAULT_SQUELCH_CLOSE);
+  chan->fm.squelch_tail = DEFAULT_SQUELCH_TAIL;
   // De-emphasis defaults to off, enabled only in FM modes
   chan->fm.rate = 0;
   chan->fm.gain = 1.0;
 
-  chan->demod_type = DEFAULT_DEMOD;
-  chan->filter.kaiser_beta = DEFAULT_KAISER_BETA;
-  chan->filter.min_IF = DEFAULT_LOW;
-  chan->filter.max_IF = DEFAULT_HIGH;
-  // ************ temp for testing
-  chan->filter2.blocking = 0;
-  chan->filter2.low = DEFAULT_LOW;
-  chan->filter2.high = DEFAULT_HIGH;
-  chan->filter2.kaiser_beta = DEFAULT_KAISER_BETA;
-
-  chan->filter.remainder = NAN;      // Important to force downconvert() to call set_osc() on first call
-  chan->filter.bin_shift = -1000999; // Force initialization here too
-  chan->fm.squelch_open = dB2power(DEFAULT_SQUELCH_OPEN);
-  chan->fm.squelch_close = dB2power(DEFAULT_SQUELCH_CLOSE);
-  chan->fm.squelch_tail = DEFAULT_SQUELCH_TAIL;
-  chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
-  chan->output.channels = 1;
-  chan->tune.shift = 0.0;
   chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE * .001f * Blocktime);
-  chan->linear.hangtime = DEFAULT_HANGTIME / (.001f * Blocktime);
+  chan->linear.hangtime = DEFAULT_HANGTIME;
   chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
-  if(chan->output.gain <= 0 || isnan(chan->output.gain))
-     chan->output.gain = dB2voltage(DEFAULT_GAIN); // Set only if out of bounds
   chan->linear.env = false;
+  chan->linear.agc = true;
   chan->pll.enable = false;
   chan->pll.square = false;
-  chan->filter2.isb = false;
   chan->pll.loop_bw = DEFAULT_PLL_BW;
-  chan->linear.agc = true;
-  chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
-  chan->output.encoding = S16BE;
-  chan->output.opus_bitrate = DEFAULT_BITRATE;
+
   double r = remainder(Blocktime * chan->output.samprate * .001,1.0);
   if(r != 0){
     fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
 	    Blocktime,chan->output.samprate,r);
   }
-  chan->output.pacing = false;
   chan->status.output_interval = DEFAULT_UPDATE;
-  chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
-  chan->output.minpacket = 0;  // No output buffering
+  chan->tp1 = chan->tp2 = NAN;
   return 0;
 }
 
@@ -259,7 +263,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     char const *cp = config_getstring(table,sname,"hang-time",NULL);
     if(cp){
       float x = strtof(cp,NULL);
-      chan->linear.hangtime = fabsf(x) / (.001 * Blocktime); // Always >= 0
+      chan->linear.hangtime = fabsf(x);
     }
   }
   {

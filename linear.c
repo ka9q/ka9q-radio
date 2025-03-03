@@ -163,10 +163,11 @@ int demod_linear(void *arg){
       float const bn = sqrtf(bw * chan->sig.n0); // Noise amplitude
       float const ampl = sqrtf(chan->sig.bb_power);
 
-      // per-sample gain change is required to avoid sudden gain changes at block boundaries that can
-      // cause clicks and pops when a strong signal straddles a block boundary
-      // the new gain setting is applied exponentially over the block
-      // gain_change is per sample and close to 1, so be careful with numerical precision!
+      /* Per-sample gain change is required to avoid sudden gain changes at block boundaries that can
+	 cause clicks and pops when a strong signal straddles a block boundary
+	 the new gain setting is applied exponentially over the block
+	 gain_change is per sample and close to 1, so be careful with numerical precision!
+      */
       if(ampl * chan->output.gain > chan->output.headroom){
 	// Strong signal, reduce gain
 	// Don't do it instantly, but by the end of this block
@@ -176,17 +177,17 @@ int demod_linear(void *arg){
 	if(newgain > 0)
 	  gain_change = powf(newgain/chan->output.gain, 1.0F/N);
 	assert(gain_change != 0);
-	chan->hangcount = chan->linear.hangtime;
+	chan->linear.hangcount = chan->linear.hangtime * chan->output.samprate;
       } else if(bn * chan->output.gain > chan->linear.threshold * chan->output.headroom){
 	// Reduce gain to keep noise < threshold, same as for strong signal
 	float const newgain = chan->linear.threshold * chan->output.headroom / bn;
 	if(newgain > 0)
 	  gain_change = powf(newgain/chan->output.gain, 1.0F/N);
 	assert(gain_change != 0);
-      } else if(chan->hangcount > 0){
+      } else if(chan->linear.hangcount > 0){
 	// Waiting for AGC hang time to expire before increasing gain
 	gain_change = 1; // Constant gain
-	chan->hangcount--;
+	chan->linear.hangcount -= N;
       } else {
 	// Allow gain to increase at configured rate, e.g. 20 dB/s
 	gain_change = powf(chan->linear.recovery_rate, 1.0F/N);
@@ -200,9 +201,10 @@ int demod_linear(void *arg){
     // Demodulate, apply gain changes, compute output energy
     float output_power = 0;
     if(chan->output.channels == 1){
-      // Complex input buffer is I0 Q0 I1 Q1 ...
-      // Real output will be R0 R1 R2 R3 ...
-      // Help cache use by overlaying output on input; ok as long as we index it from low to high
+      /* Complex input buffer is I0 Q0 I1 Q1 ...
+	 Real output will be R0 R1 R2 R3 ...
+	 Help cache use by overlaying output on input; ok as long as we index it from low to high
+      */
       float *samples = (float *)buffer;
       if(chan->linear.env){
 	// AM envelope detection
