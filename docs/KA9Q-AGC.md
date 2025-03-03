@@ -90,7 +90,7 @@ before the output reaches the **headroom** setting.
 
 When gain is reduced and a signal disappears or decreases in
 amplitude, a **hang-timer** is started. The default (which can be
-overridden in */usr/local/share/ka9q-radio/modes.conf* or
+overridden in */usr/local/share/ka9q-radio/presets.conf* or
 *radiod@foo.conf*) is 1.1 seconds, a typical value slightly longer than
 the usual pauses in SSB voice.  If during this timeout the signal
 amplitude again hits or exceeds the **headroom** setting, the gain is
@@ -100,7 +100,7 @@ timer expires, the gain gradually increases at the
 **headroom** minus **threshold** or the output level reaches
 **headroom**. This is essentially the same as a classic SSB AGC. The
 smaller **hang-time** usually preferred for CW is set in
-*modes.conf* for those modes. Since the carriers in AM or AME
+*presets/.conf* for those modes. Since the carriers in AM or AME
 remove the guesswork from gain setting, these modes set
 **hang-time** = 0 and **recovery-rate** = +50 dB/sec.
 

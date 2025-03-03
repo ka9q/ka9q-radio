@@ -22,12 +22,12 @@ No default. Required unless specified in [global].
 A "mode" would be more accurately called a "preset" because it
 actually refers to a group of parameters (demodulator type, sample
 rate, filters, etc) defined in sections of
-*/var/lib/ka9q-radio/modes.conf*. See the documentation for that file
+*/var/lib/ka9q-radio/presets.conf*. See the documentation for that file
 for a description of the standard definitions.
 
-The *modes.conf* file covers the most common modes, but individual parameters can be
+The *presets.conf* file covers the most common modes, but individual parameters can be
 overridden if desired. If you find yourself doing this a lot, you might
-add a new mode to */var/lib/ka9q-radio/modes.conf*. Be careful to back
+add a new mode to */var/lib/ka9q-radio/presets.conf*. Be careful to back
 it up; it may be overwritten by the next "make install.
 
 ### dns = no | yes (default no)
@@ -49,10 +49,10 @@ along with a SRV DNS record of type _rtp._udp advertising this name.
 See the discussion of this parameter in the [global] section.
 
 
-Parameters in *modes.conf*
---------------------------
+Parameters in *presets.conf*
+----------------------------
 
-The parameters that may be set in *modes.conf* and selectively overridden
+The parameters that may be set in *presets.conf* and selectively overridden
 in each receiver channel group are:
 
 ### demod = linear | fm | wfm
@@ -60,7 +60,7 @@ in each receiver channel group are:
 Selects one of
 three demodulators built into *radiod*, distinct from the
 **mode** entries that select an entry in
-*/usr/local/share/ka9q-radio/modes.conf*.  The "Linear" demodulator is
+*/usr/local/share/ka9q-radio/presets.conf*.  The "Linear" demodulator is
 for modes such as AM (envelope detected or coherent), SSB, CW, IQ and
 DSB-SC. The "FM" demodulator is for general purpose frequency
 modulation, including so-called "NBFM" that is actually phase
@@ -77,7 +77,7 @@ more convenient.)
 Set the output sample rate in Hz. A good value for communications
 FM/PM is 24000 (24 KHz); for linear modes, 12000 (12 kHz). WFM (FM
 stereo broadcast) should use 48000 (48 kHz). (These values are used on
-**modes.conf**.)
+**presets.conf**.)
 
 Remember the Nyquist theorem: the sample rate must be at least twice
 the highest frequency. For real signals, such as mono audio,
@@ -139,7 +139,7 @@ Sets the lower edge of the predetection filter passband.
 
 Sets the upper edge of the predetection filter passband.
 
-Both **low** and **high** are set by every entry in *modes.conf*, so
+Both **low** and **high** are set by every entry in *presets.conf*, so
 these defaults just provide a way to override them when necessary.
 
 ### squelch-open = 8
@@ -168,7 +168,7 @@ the specified number of block times (e.g., 20 milliseconds each) after
 the SNR drops below the **squelch-close** threshold. The default of 1
 block keeps the ends of packet transmissions from being chopped off,
 while a value of 0 is suitable to completely eliminate audible squelch
-tails in FM voice operation. Because the preset 'pm' in modes.conf
+tails in FM voice operation. Because the preset 'pm' in presets.conf
 is usually used for ordinary voice, it sets this to 0. Preset 'fm' (no de-emphasis) sets it to 1.
 
 ### headroom = -15 
