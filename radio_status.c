@@ -321,11 +321,11 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	}
       }
       break;
-    case AGC_HANGTIME: // seconds -> blocktimes
+    case AGC_HANGTIME: // seconds
       {
 	float const f = decode_float(cp,optlen);
 	if(isfinite(f))
-	  chan->linear.hangtime = fabsf(f) / (.001 * Blocktime);
+	  chan->linear.hangtime = fabsf(f);
       }
       break;
     case AGC_RECOVERY_RATE: // dB/sec -> amplitude / block times, always positive
@@ -578,7 +578,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_double(&bp,SHIFT_FREQUENCY,chan->tune.shift); // Hz
     encode_byte(&bp,AGC_ENABLE,chan->linear.agc); // bool
     if(chan->linear.agc){
-      encode_float(&bp,AGC_HANGTIME,chan->linear.hangtime*(.001f * Blocktime)); // samples -> sec
+      encode_float(&bp,AGC_HANGTIME,chan->linear.hangtime); // sec
       encode_float(&bp,AGC_THRESHOLD,voltage2dB(chan->linear.threshold)); // amplitude -> dB
       encode_float(&bp,AGC_RECOVERY_RATE,voltage2dB(chan->linear.recovery_rate)/(.001f*Blocktime)); // amplitude/block -> dB/sec
     }
