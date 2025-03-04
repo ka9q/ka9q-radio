@@ -171,11 +171,11 @@ struct channel {
   struct {               // Used only in linear demodulator
     bool env;            // Envelope detection in linear mode (settable)
     bool agc;            // Automatic gain control enabled (settable)
-    float hangtime;      // AGC hang time, samples (settable)
+    float hangtime;      // AGC hang time, seconds (settable)
     float recovery_rate; // AGC recovery rate, amplitude ratio/sample  (settable)
     float threshold;     // AGC threshold above noise, amplitude ratio
+    int hangcount;       // AGC hang timer before gain recovery starts (samples)
   } linear;
-  int hangcount;      // AGC hang timer before gain recovery starts
 
   struct {
     struct pll pll;

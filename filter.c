@@ -204,7 +204,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->input_buffer = mirror_alloc(master->input_buffer_size);
     memset(master->input_buffer,0,master->input_buffer_size);
     master->input_read_pointer.c = master->input_buffer;              // FFT starts reading here
-    master->input_write_pointer.c = master->input_read_pointer.c + L; // start writing here
+    master->input_write_pointer.c = master->input_read_pointer.c + (M-1); // start writing here
     master->input_read_pointer.r = NULL;
     master->input_write_pointer.r = NULL;
     master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_WISDOM_ONLY|FFTW_planning_level);
@@ -220,7 +220,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->input_buffer = mirror_alloc(master->input_buffer_size);
     memset(master->input_buffer,0,master->input_buffer_size);
     master->input_read_pointer.r = master->input_buffer;
-    master->input_write_pointer.r = master->input_read_pointer.r + L; // start writing here
+    master->input_write_pointer.r = master->input_read_pointer.r + (M-1); // start writing here
     master->input_read_pointer.c = NULL;
     master->input_write_pointer.c = NULL;
     master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_WISDOM_ONLY|FFTW_planning_level);
@@ -308,13 +308,10 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
     {
       slave->olen = len;
       ldiv_t x = ldiv((long)len * N,L);
-#if 0
-      if((x.quot & 1) || x.rem != 0){
-	// Odd IFFT lengths produce corrupted output for some reason, disallow
+      if(x.rem != 0){
 	fprintf(stdout,"Invalid filter output length %d (fft size %ld) for input N=%d, L=%d\n",len,x.quot,N,L);
 	return -1;
       }
-#endif
       slave->points = x.quot; // Total number of FFT points including overlap
       slave->bins = x.quot;
       slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
@@ -856,7 +853,7 @@ static float noise_gain(struct filter_out const * const slave){
   // the factor N compensates for the unity gain scaling
   // Amplitude is pre-scaled 1/N for the concatenated (FFT/IFFT) round trip, so the overall power
   // is scaled 1/N^2. Multiplying by N gives us correct power in the frequency domain (just the FFT)
-  return master->bins * sum;
+  return slave->bins * sum;
 }
 
 
@@ -1022,10 +1019,11 @@ static int window_filter(int const L,int const M,complex float * const response,
 #endif
 
   // Round trip through FFT/IFFT scales by N
-  float const gain = 1./N;
+  float gain = 1./N;
   // Shift to beginning of buffer to make causal; apply window and gain
-  for(int n = M - 1; n >= 0; n--)
+  for(int n = M - 1; n >= 0; n--){
     buffer[n] = buffer[(n-M/2+N)%N] * kaiser_window[n] * gain;
+  }
   // Pad with zeroes on right side
   memset(buffer+M,0,(N-M)*sizeof(*buffer));
 
