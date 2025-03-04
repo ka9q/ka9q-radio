@@ -239,6 +239,7 @@ int hackrf_startup(struct frontend * const frontend){
   struct sdrstate *sdr = frontend->context;
   //  pthread_create(&Process_thread,NULL,hackrf_proc,sdr);
 
+  sdr->scale = scale_AD(frontend);
   int ret = hackrf_start_rx(sdr->device,rx_callback,sdr);
   assert(ret == HACKRF_SUCCESS);
   (void)ret;

@@ -322,6 +322,7 @@ int funcube_startup(struct frontend *frontend){
   assert(sdr != NULL);
 
   // Start processing A/D data
+  sdr->scale = scale_AD(frontend);
   pthread_create(&sdr->proc_thread,NULL,proc_funcube,sdr);
   fprintf(stdout,"funcube running\n");
   return 0;

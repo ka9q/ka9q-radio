@@ -291,6 +291,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 }
 int airspy_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
 #if 0
   // This should work, but it doesn't
   // So we set it in the first callback

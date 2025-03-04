@@ -1112,6 +1112,7 @@ static int start_rx(struct sdrstate *sdr,sdrplay_api_StreamCallback_t rx_callbac
   callbacks.StreamBCbFn = NULL;
   callbacks.EventCbFn = event_callback;
   sdr->events = 0L;
+  sdr->scale = scale_AD(sdr->frontend);
   if(Verbose)
     show_device_params(sdr);
   err = sdrplay_api_Init(sdr->device.dev,&callbacks,sdr);

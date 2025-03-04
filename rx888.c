@@ -361,6 +361,7 @@ int rx888_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
 
   // Start processing A/D data
+  sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
   pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
   pthread_create(&sdr->agc_thread,NULL,agc_rx888,sdr);
   fprintf(stdout,"rx888 running\n");

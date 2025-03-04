@@ -37,6 +37,7 @@ struct sdrstate {
   float noise; // Amplitude of noise
   enum modulation modulation;
   char *source;
+  float scale;
 
   pthread_t proc_thread;
 };
@@ -173,8 +174,6 @@ static void *proc_sig_gen(void *arg){
   assert(frontend != NULL);
   
   frontend->timestamp = gps_time_ns();
-  float scale = 1 << (frontend->bitspersample-1);
-
   realtime();
 
   struct osc carrier;
@@ -245,8 +244,8 @@ static void *proc_sig_gen(void *arg){
 	}
 	if(Real_noise != NULL)
 	  wptr[i] += Real_noise[noise_index+i];
-	wptr [i] *= scale;
 	if_energy += wptr[i] * wptr[i];
+	wptr [i] *= sdr->scale;
       }
       write_rfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
     } else {
@@ -281,8 +280,8 @@ static void *proc_sig_gen(void *arg){
 	}
 	if(Complex_noise != NULL)
 	  wptr[i] += Complex_noise[noise_index+i];
-	wptr [i] *= scale;
 	if_energy += cnrmf(wptr[i]);
+	wptr [i] *= sdr->scale;
       }
       write_cfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
     }
@@ -308,6 +307,7 @@ int sig_gen_startup(struct frontend *frontend){
   assert(sdr != NULL);
 
   // Start processing A/D data
+  sdr->scale = scale_AD(frontend);
   pthread_create(&sdr->proc_thread,NULL,proc_sig_gen,sdr);
   fprintf(stdout,"signal generator running\n");
   return 0;
