@@ -111,9 +111,9 @@ enum status_type {
 
   OPUS_BIT_RATE,
   MINPACKET,      // Minimum number of full blocks in an output packet, unless already full (0-3)
-  UNUSED13,
-  UNUSED14,
-  UNUSED15,
+  FILTER2_BLOCKSIZE,
+  FILTER2_FIR_LENGTH,
+  FILTER2_KAISER_BETA,
   UNUSED16,
 
   FILTER_DROPS,
