@@ -81,10 +81,6 @@ complex double step_osc(struct osc *osc){
 static float Lookup[TABSIZE+1]; // Leave room for == pi/2
 static bool Tab_init;
 
-static inline float sinpif(float x){
-  return sinf(x * M_PI);
-}
-
 // Initialize sine lookup table
 static void dds_init(void){
   for(unsigned long i=0; i <= TABSIZE; i++)
