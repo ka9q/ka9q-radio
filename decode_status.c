@@ -155,7 +155,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->linear.env = decode_bool(cp,optlen);
       break;
     case OUTPUT_LEVEL:
-      channel->output.energy = dB2power(decode_float(cp,optlen));
+      channel->output.power = dB2power(decode_float(cp,optlen));
       break;
     case OUTPUT_SAMPLES:
       channel->output.samples = decode_int64(cp,optlen);
@@ -291,6 +291,15 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       break;
     case OUTPUT_ERRORS:
       channel->output.errors = decode_int64(cp,optlen);
+      break;
+    case FILTER2_BLOCKSIZE:
+      channel->filter2.in.ilen = decode_int(cp,optlen);
+      break;
+    case FILTER2_FIR_LENGTH:
+      channel->filter2.in.impulse_length = decode_int(cp,optlen);
+      break;
+    case FILTER2_KAISER_BETA:
+      channel->filter2.kaiser_beta = decode_float(cp,optlen);
       break;
     default: // ignore others
       break;

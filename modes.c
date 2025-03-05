@@ -164,7 +164,7 @@ int set_defaults(struct channel *chan){
   chan->fm.rate = 0;
   chan->fm.gain = 1.0;
 
-  chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE * .001f * Blocktime);
+  chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE);
   chan->linear.hangtime = DEFAULT_HANGTIME;
   chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
   chan->linear.env = false;
@@ -255,7 +255,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     if(cp){
       // dB/sec -> voltage ratio/block
       float x = strtof(cp,NULL);
-      chan->linear.recovery_rate = dB2voltage(fabsf(x) * .001f * Blocktime);
+      chan->linear.recovery_rate = dB2voltage(fabsf(x));
     }
   }
   {
@@ -335,9 +335,9 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     chan->output.minpacket = 0;
   }
   chan->filter2.blocking = config_getint(table,sname,"filter2",chan->filter2.blocking);
-  if(chan->filter2.blocking > 4){
+  if(chan->filter2.blocking > 10){
     fprintf(stdout,"filter2 %u out of range\n",chan->filter2.blocking);
-    chan->filter2.blocking = 0;
+    chan->filter2.blocking = 10;
   }
   return 0;
 }

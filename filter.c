@@ -6,6 +6,7 @@
 // Copyright 2017-2023, Phil Karn, KA9Q, karn@ka9q.net
 
 //#define LIQUID 1 // Experimental use of parks-mcclellan in filter generation
+#define MYNEW 1
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
@@ -87,7 +88,6 @@ static inline int modulo(int x,int const m){
 void *lmalloc(size_t size);
 
 static void suggest(int level,int size,int dir,int clex);
-static float noise_gain(struct filter_out const * const slave);
 static bool goodchoice(unsigned long n);
 #if 0
 static unsigned long gcd(unsigned long a,unsigned long b);
@@ -129,6 +129,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   ASSERT_ZEROED(master,sizeof *master);
 #endif
 
+  master->points = N;
   // If there are no worker threads, do it inline
   master->perform_inline = (N_worker_threads == 0);
 
@@ -298,7 +299,6 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
   int const L = master->ilen;
 
   slave->response = response;
-  slave->noise_gain = (response == NULL) ? NAN : noise_gain(slave);
   pthread_mutex_init(&slave->response_mutex,NULL);
 
   switch(slave->out_type){
@@ -384,6 +384,47 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
   }
   slave->next_jobnum = master->next_jobnum;
   return 0;
+}
+// Assist with choosing good blocksizes for FFTW3
+static const int small_primes[6] = {2, 3, 5, 7, 11, 13};
+static unsigned long factor_small_primes(unsigned long n, int exponents[6]);
+
+
+/**
+ * Factor n into the primes 2,3,5,7,11,13.
+ * exponents[] should be an array of length 6, each slot will hold
+ *   the exponent for 2,3,5,7,11,13 respectively.
+ *
+ * Return value:
+ *   - If the returned value is 1, then n was fully factored by {2,3,5,7,11,13}.
+ *   - Otherwise, the leftover (return value) is the part that couldn't
+ *     be factored into those primes.
+ */
+static unsigned long factor_small_primes(unsigned long n, int exponents[6]){
+  // Initialize exponents
+  for (int i = 0; i < 6; i++)
+    exponents[i] = 0;
+
+  // Divide out each prime in turn
+  for (int i = 0; i < 6; i++) {
+    while (n % small_primes[i] == 0) {
+      exponents[i]++;
+      n /= small_primes[i];
+    }
+  }
+  return n;  // The remainder is what's left
+}
+
+// Is this a good blocksize for FFTW3?
+// Any number of factors of 2, 3, 7 plus one of either 11 or 13
+static bool goodchoice(unsigned long n){
+  int exponents[6];
+
+  unsigned long r = factor_small_primes(n,exponents);
+  if(r != 1 || (exponents[4] + exponents[5] > 1))
+    return false;
+  else
+    return true;
 }
 
 // Worker thread(s) that actually execute FFTs
@@ -780,29 +821,6 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   return 0;
 }
 
-#if 0
-// Send terminate job to FFT thread
-// We never actually kill a FFT thread (which is why it's turned off) but it's here if we ever do
-static void terminate_fft(struct filter_in *f){
-  struct fft_job * const job = calloc(1,sizeof(struct fft_job));
-  assert(job != NULL);
-  job->terminate = true;
-  // Append job to queue, wake FFT thread
-  pthread_mutex_lock(&FFT.queue_mutex);
-  struct fft_job *jp_prev = NULL;
-  for(struct fft_job *jp = FFT.job_queue; jp != NULL; jp = jp->next)
-    jp_prev = jp;
-
-  if(jp_prev)
-    jp_prev->next = job;
-  else
-    FFT.job_queue = job; // Head of list
-
-  pthread_cond_broadcast(&FFT.queue_cond); // Alert FFT thread
-  pthread_mutex_unlock(&FFT.queue_mutex);
-}
-#endif
-
 int delete_filter_input(struct filter_in * master){
   if(master == NULL)
     return -1;
@@ -837,115 +855,6 @@ int delete_filter_output(struct filter_out *slave){
   return 0;
 }
 
-
-// Gain of filter (output / input) on uniform gaussian noise
-static float noise_gain(struct filter_out const * const slave){
-  if(slave == NULL)
-    return NAN;
-  struct filter_in const * const master = slave->master;
-  if(master == NULL)
-    return NAN;
-
-  float sum = 0;
-  for(int i=0;i<slave->bins;i++)
-    sum += cnrmf(slave->response[i]);
-
-  // the factor N compensates for the unity gain scaling
-  // Amplitude is pre-scaled 1/N for the concatenated (FFT/IFFT) round trip, so the overall power
-  // is scaled 1/N^2. Multiplying by N gives us correct power in the frequency domain (just the FFT)
-  return slave->bins * sum;
-}
-
-
-#if LIQUID
-int set_filter(struct filter_out * const slave,float low,float high,float const kaiser_beta){
-  if(slave == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta) || slave->master == NULL)
-    return -1;
-
-  // Limit filter range to Nyquist rate
-  // Limit filter range to Nyquist rate
-  low = low < -0.5 ? -0.5 : low > +0.5 ? +0.5 : low;
-  high = high < -0.5 ? -0.5 : high > +0.5 ? +0.5 : high;
-
-  // Total number of time domain points
-  int const N = slave->points;
-  int const L = slave->olen;
-  int const M = N - L + 1; // Length of impulse response in time domain
-
-  float const gain = 1.0f / (float)slave->master->bins;
-  complex float * const response = lmalloc(sizeof(*response) * N);
-  assert(response != NULL);
-  float real_coeff[M];
-  memset(real_coeff,0,sizeof(real_coeff));
-  float const bw = fabsf(high - low);
-  float const fc = (high + low)/2; // center
-
-#define REMEZ 1
-#if REMEZ
-  int const num_bands = 2;
-  float bands[2*num_bands];
-  bands[0] = 0;  bands[1] = bw/2 - 0.01; // for now
-  bands[1] = bands[1] < 0 ? 0 : bands[1];
-  bands[2] = bw/2 + 0.01; bands[3] = 0.5;
-  bands[2] = bands[2] > 0.5 ? 0.5 : bands[2];
-  float des[num_bands];
-  des[0] = 1.0;
-  des[1] = 0.0;
-  float weights[num_bands];
-  weights[0] = 1.0;
-  weights[1] = 1.0;
-  liquid_firdespm_wtype wtype[num_bands];
-  wtype[0] = LIQUID_FIRDESPM_FLATWEIGHT;
-  wtype[1] =  LIQUID_FIRDESPM_EXPWEIGHT;
-
-  firdespm_run(M,num_bands,bands,des,weights,wtype,LIQUID_FIRDESPM_BANDPASS,real_coeff);
-#else // liquid kaiser filter gen
-  // Create a real filter, we'll shift it later
-  float const atten = 108.52; // yields β = 11 by his empirical formula (my default)
-  float const mu = 0;
-
-  // The real filter's bandwidth is doubled because it includes negative frequencies
-  liquid_firdes_kaiser(M,bw/2,atten,mu,real_coeff);
-#endif // kaiser
-
-  pthread_mutex_lock(&FFTW_planning_mutex);
-  fftwf_plan_with_nthreads(1);
-  fftwf_plan plan = fftwf_plan_dft_1d(N,response,response,FFTW_FORWARD,FFTW_MEASURE); // doesn't need to be fast
-  assert(plan != NULL);
-  if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of cif%d failed\n",Wisdom_file,N);
-  pthread_mutex_unlock(&FFTW_planning_mutex);
-
-  // Multiply real coefficients by complex exponential for frequency shift, place in FFT time-domain buffer
-  memset(response,0,sizeof(*response) * N);
-
-  for(int i=0; i < M; i++)
-    response[i] = gain * real_coeff[i] * cispif(2 * fc * (i - M/2));
-
-  fftwf_execute_dft(plan,response,response);
-  fftwf_destroy_plan(plan);
-  plan = NULL;
-
-#if 0
-  printf("response:");
-  for(int i=0; i < N; i++)
-    printf(" %g+j%g",crealf(response[i]),cimag(response[i]));
-  printf("\n");
-#endif
-
-
-  // Hot swap with existing response, if any, using mutual exclusion
-  pthread_mutex_lock(&slave->response_mutex);
-  complex float * const tmp = slave->response;
-  slave->response = response;
-  slave->noise_gain = noise_gain(slave);
-  pthread_mutex_unlock(&slave->response_mutex);
-  free(tmp);
-  return 0;
-}
-
-#else // Use my windowed Kaiser generation
-
 // Compute an entire Kaiser window
 // More efficient than repeatedly calling kaiser(n,M,beta)
 static int make_kaiser(float * const window,int const M,float const beta){
@@ -970,163 +879,21 @@ static int make_kaiser(float * const window,int const M,float const beta){
   return 0;
 }
 
-// Apply Kaiser window to filter frequency response
-// "response" is SIMD-aligned array of N complex floats
-// Impulse response will be limited to first M samples in the time domain
-// Phase is adjusted so "time zero" (center of impulse response) is at M/2
-// L and M refer to the decimated output
-static int window_filter(int const L,int const M,complex float * const response,float const beta){
-  assert(response != NULL);
-  if(response == NULL)
-    return -1;
-
-  assert(L > 0 && M > 0);
-
-  int const N = L + M - 1;
-  assert(malloc_usable_size(response) >= N * sizeof(*response));
-  // fftw_plan can overwrite its buffers, so we're forced to make a temp. Ugh.
-  complex float * const buffer = lmalloc(sizeof(complex float) * N);
-  pthread_mutex_lock(&FFTW_planning_mutex);
-  fftwf_plan_with_nthreads(1);
-  fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_FORWARD,FFTW_ESTIMATE);
-  assert(fwd_filter_plan != NULL);
-  fftwf_plan_with_nthreads(1);
-  fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_ESTIMATE);
-  assert(rev_filter_plan != NULL);
-  if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of cif%d and cib%d failed\n",
-	    Wisdom_file,N,N);
-  pthread_mutex_unlock(&FFTW_planning_mutex);
-
-  // Convert to time domain
-  memcpy(buffer,response,N * sizeof(*buffer));
-  fftwf_execute(rev_filter_plan);
-  fftwf_destroy_plan(rev_filter_plan);
-  rev_filter_plan = NULL;
-#if FILTER_DEBUG
-  fprintf(stderr,"window_filter raw time domain\n");
-  for(int n=0; n < N; n++){
-    fprintf(stderr,"%d %lg %lg\n",n,crealf(buffer[n]),cimagf(buffer[n]));
-  }
-#endif
-
-  float kaiser_window[M];
-  make_kaiser(kaiser_window,M,beta);
-
-#if FILTER_DEBUG
-  for(int m = 0; m < M; m++)
-    fprintf(stderr,"kaiser[%d] = %g\n",m,kaiser_window[m]);
-#endif
-
-  // Round trip through FFT/IFFT scales by N
-  float gain = 1./N;
-  // Shift to beginning of buffer to make causal; apply window and gain
-  for(int n = M - 1; n >= 0; n--){
-    buffer[n] = buffer[(n-M/2+N)%N] * kaiser_window[n] * gain;
-  }
-  // Pad with zeroes on right side
-  memset(buffer+M,0,(N-M)*sizeof(*buffer));
-
-#if FILTER_DEBUG
-  fprintf(stderr,"window_filter filter impulse response, shifted, windowed and zero padded\n");
-  for(int n=0;n< M;n++)
-    fprintf(stderr,"%d %lg %lg\n",n,crealf(buffer[n]),cimagf(buffer[n]));
-#endif
-
-  // Now back to frequency domain
-  fftwf_execute(fwd_filter_plan);
-  fftwf_destroy_plan(fwd_filter_plan);
-  fwd_filter_plan = NULL;
-#if FILTER_DEBUG
-  fprintf(stderr,"window_filter filter response amplitude\n");
-  for(int n=0;n<N;n++)
-    fprintf(stderr,"%d %g %g (%.1f dB)\n",n,crealf(buffer[n]),cimagf(buffer[n]),power2dB(cnrmf(buffer[n])));
-
-  fprintf(stderr,"\n");
-#endif
-  memcpy(response,buffer,N*sizeof(*response));
-  free(buffer);
-  return 0;
-}
-// Real-only counterpart to window_filter()
-// response[] is only N/2+1 elements containing DC and positive frequencies only
-// Negative frequencies are inplicitly the conjugate of the positive frequencies
-// L and M refer to the decimated output
-static int window_rfilter(int const L,int const M,complex float * const response,float const beta){
-  assert(response != NULL);
-  if(response == NULL)
-    return -1;
-  assert(L > 0 && M > 0);
-
-  int const N = L + M - 1;
-
-  assert(malloc_usable_size(response) >= (N/2+1)*sizeof(*response));
-  complex float * const buffer = lmalloc(sizeof(complex float) * (N/2 + 1)); // plan destroys its input
-  assert(buffer != NULL);
-  float * const timebuf = lmalloc(sizeof(float) * N);
-  assert(timebuf != NULL);
-  pthread_mutex_lock(&FFTW_planning_mutex);
-  fftwf_plan_with_nthreads(1);
-  // Hopefully these won't take too long, we'll remember the wisdom anyway
-  fftwf_plan fwd_filter_plan = fftwf_plan_dft_r2c_1d(N,timebuf,buffer,FFTW_MEASURE);
-  assert(fwd_filter_plan != NULL);
-  fftwf_plan_with_nthreads(1);
-  fftwf_plan rev_filter_plan = fftwf_plan_dft_c2r_1d(N,buffer,timebuf,FFTW_MEASURE);
-  assert(rev_filter_plan != NULL);
-  if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of rof%d and rob%d failed\n",
-	    Wisdom_file,N,N);
-  pthread_mutex_unlock(&FFTW_planning_mutex);
-
-  // Convert to time domain
-  memcpy(buffer,response,(N/2+1)*sizeof(*buffer));
-  fftwf_execute(rev_filter_plan);
-  fftwf_destroy_plan(rev_filter_plan);
-#if FILTER_DEBUG
-  fprintf(stderr,"window_rfilter impulse response after IFFT before windowing\n");
-  for(int n=0;n< M;n++)
-    fprintf(stderr,"%d %lg\n",n,timebuf[n]);
-#endif
-
-  // Shift to beginning of buffer, apply window and scale (N*N)
-  float kaiser_window[M];
-  make_kaiser(kaiser_window,M,beta);
-  // Round trip through FFT/IFFT scales by N
-  float const gain = 1./N;
-  for(int n = M - 1; n >= 0; n--)
-    timebuf[n] = timebuf[(n-M/2+N)%N] * kaiser_window[n] * gain;
-
-  // Pad with zeroes on right side
-  memset(timebuf+M,0,(N-M)*sizeof(*timebuf));
-#if FILTER_DEBUG
-  printf("window_rfilter impulse response, shifted, windowed and zero padded\n");
-  for(int n=0;n< M;n++)
-    printf("%d %lg\n",n,timebuf[n]);
-#endif
-
-  // Now back to frequency domain
-  fftwf_execute(fwd_filter_plan);
-  fftwf_destroy_plan(fwd_filter_plan);
-  free(timebuf);
-  memcpy(response,buffer,(N/2+1)*sizeof(*response));
-  free(buffer);
-#if FILTER_DEBUG
-  printf("window_rfilter frequency response\n");
-  for(int n=0; n < N/2 + 1; n++)
-    printf("%d %g %g (%.1f dB)\n",n,crealf(response[n]),cimagf(response[n]),power2dB(cnrmf(response[n])));
-#endif
-
-  return 0;
-}
-
-// This can occasionally be called with slave == NULL at startup, so don't abort
-// NB: 'low' and 'high' are *fractional* frequencies relative to the output sample rate, i.e., -0.5 < f < +0.5
-// If invoked on a demod that hasn't run yet, slave->master will be NULL so check for that and quit;
-// the filter should get set up when it actually starts (thanks N5TNL for bug report)
+/* Set up a filter with a specified complex bandpass response
+   Uses a Kaiser-windowed sinc function - new as of March 2025
+   This can occasionally be called with slave == NULL at startup, so don't abort
+   NB: 'low' and 'high' are *fractional* frequencies relative to the output sample rate, i.e., -0.5 < f < +0.5
+   If invoked on a demod that hasn't run yet, slave->master will be NULL so check for that and quit;
+   the filter should get set up when it actually starts (thanks N5TNL for bug report) */
 int set_filter(struct filter_out * const slave,float low,float high,float const kaiser_beta){
   if(slave == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta) || slave->master == NULL)
     return -1;
 
+  if(slave->out_type == REAL){
+    // Filter edges crossing DC not allowed for real output
+    low = fabsf(low);
+    high = fabsf(high);
+  }
   // Swap if necessary
   if(low > high){
     float tmp = low;
@@ -1137,46 +904,65 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   low = low < -0.5 ? -0.5 : low > +0.5 ? +0.5 : low;
   high = high < -0.5 ? -0.5 : high > +0.5 ? +0.5 : high;
 
- // Total number of time domain points
-  int const N = (slave->out_type == REAL) ? 2 * (slave->bins - 1) : slave->bins;
+  // Total number of time domain points
+  int const N = slave->points;
   int const L = slave->olen;
   int const M = N - L + 1; // Length of impulse response in time domain
 
-  float const gain = 1.0f / (float)slave->master->bins;
+  // Real lowpass filter with cutoff = 1/2 bandwidth
+  float bw2 = fabsf(high - low)/2;
+  if(bw2 == 0)
+    bw2 = 1; // Avoid assert failures
+  float center = (high + low)/2;
+  float kaiser_window[M];
+  make_kaiser(kaiser_window,M,kaiser_beta);
 
-  complex float * const response = lmalloc(sizeof(complex float) * slave->bins);
-  assert(response != NULL);
-  memset(response,0,slave->bins * sizeof(response[0]));
-  assert(malloc_usable_size(response) >= (slave->bins) * sizeof(*response));
-  for(int n=0; n < slave->bins; n++){
-    float const f = n < N/2 ? (float)n / N : (float)(n - N) / N; // neg frequency
-    if(f == low || f == high)
-      response[n] = gain * M_SQRT1_2; // -3dB
-    else if(f > low && f < high)
-      response[n] = gain;
-    else
-      response[n] = 0;
-#if 0
-    fprintf(stderr,"f = %.3f response[%d] = %.1f\n",f,n,10*log10f(crealf(response[n])));
+  // Form complex impulse response by generating kaiser-windowed sinc pulse and shifting to desired center freq
+  complex float impulse[M];
+  float window_gain = 0;
+  for(int i = 0; i < M; i++){
+    float n = i - (float)(M-1)/2;
+    float r = kaiser_window[i] * 2 * bw2 * sinc(2 * bw2 * n);
+    window_gain += r;
+    impulse[i] = cispif(2 * center * n) * r;
+#if FILTER_DEBUG
+    printf("impulse[%d] = %g + j%g\n",i,crealf(impulse[i]),cimagf(impulse[i]));
 #endif
   }
+  printf("window gain %g (%.1f dB)\n",window_gain,voltage2dB(window_gain));
+  // correct for gains of windowed sinc function and FFT with overlap
+  float const gain = 1.0f / (window_gain *  slave->master->points); // Adjust for input FFT and overlap
+  assert(gain != 0 && isfinite(gain));
+  for(int i = 0; i < M; i++)
+    impulse[i] *= gain; // Normalize for the window gain
 
-  if(slave->out_type == REAL){
-    window_rfilter(L,M,response,kaiser_beta);
-  } else {
-    window_filter(L,M,response,kaiser_beta);
+  complex float * const response = lmalloc(N * sizeof(complex float));
+  assert(response != NULL);
+  pthread_mutex_lock(&FFTW_planning_mutex);
+  fftwf_plan_with_nthreads(1);
+  // Doesn't have to be fast, we're only doing this once
+  fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,response,response,FFTW_FORWARD,FFTW_ESTIMATE);
+  assert(fwd_filter_plan != NULL);
+  pthread_mutex_unlock(&FFTW_planning_mutex);
+
+  memcpy(response,impulse,M * sizeof *response);
+  memset(response+M,0,(N-M) * sizeof *response);
+  fftwf_execute(fwd_filter_plan);
+
+#if FILTER_DEBUG
+  {
+    for(int i=0; i < N; i++)
+      printf("response[%d] = %g + j%g\n",i,__real__ response[i],__imag__ response[i]);
   }
-
+#endif
   // Hot swap with existing response, if any, using mutual exclusion
   pthread_mutex_lock(&slave->response_mutex);
   complex float * const tmp = slave->response;
   slave->response = response;
-  slave->noise_gain = noise_gain(slave);
   pthread_mutex_unlock(&slave->response_mutex);
   free(tmp);
   return 0;
 }
-#endif
 
 int write_cfilter(struct filter_in *f, complex float const *buffer,int size){
   if(f == NULL)
@@ -1265,7 +1051,29 @@ static void suggest(int level,int size,int dir,int clex){
 	  dir == FFTW_FORWARD ? 'f' : 'b',
 	  size);
 }
-#if 0 // Available if you ever want them
+
+#if 0
+// Miscellaneous, alternate and experimental code, currently unused
+// Send terminate job to FFT thread
+// We never actually kill a FFT thread (which is why it's turned off) but it's here if we ever do
+static void terminate_fft(struct filter_in *f){
+  struct fft_job * const job = calloc(1,sizeof(struct fft_job));
+  assert(job != NULL);
+  job->terminate = true;
+  // Append job to queue, wake FFT thread
+  pthread_mutex_lock(&FFT.queue_mutex);
+  struct fft_job *jp_prev = NULL;
+  for(struct fft_job *jp = FFT.job_queue; jp != NULL; jp = jp->next)
+    jp_prev = jp;
+
+  if(jp_prev)
+    jp_prev->next = job;
+  else
+    FFT.job_queue = job; // Head of list
+
+  pthread_cond_broadcast(&FFT.queue_cond); // Alert FFT thread
+  pthread_mutex_unlock(&FFT.queue_mutex);
+}
 
 // Hamming window
 const static float hamming(int const n,int const M){
@@ -1303,27 +1111,7 @@ static float const kaiser(int const n,int const M, float const beta){
   float const p = 2.0*n/(M-1) - 1;
   return i0(beta*sqrtf(1-p*p)) * old_inv_denom;
 }
-#endif
 
-// Assist with choosing good blocksizes for FFTW3
-static const int small_primes[6] = {2, 3, 5, 7, 11, 13};
-static unsigned long factor_small_primes(unsigned long n, int exponents[6]);
-
-
-// Is this a good blocksize for FFTW3?
-// Any number of factors of 2, 3, 7 plus one of either 11 or 13
-static bool goodchoice(unsigned long n){
-  int exponents[6];
-
-  unsigned long r = factor_small_primes(n,exponents);
-  if(r != 1 || (exponents[4] + exponents[5] > 1))
-    return false;
-  else
-    return true;
-}
-
-
-#if 0
 // Greatest common divisor
 static unsigned long gcd(unsigned long a,unsigned long b){
   while(b != 0){
@@ -1341,29 +1129,317 @@ static unsigned long lcm(unsigned long a,unsigned long b){
   unsigned long g = gcd(a,b);
   return (a/g) * b;
 }
+
+#if LIQUID
+// Use Remez or windowed sinc filter design routines in Liquid DSP library
+int set_filter(struct filter_out * const slave,float low,float high,float const kaiser_beta){
+  assert(slave != NULL && slave->master != NULL && isfinite(low) && isfinite(high) && isfinite(kaiser_beta) && slave->master != NULL);
+  if(slave == NULL || slave->master == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta) || slave->master == NULL)
+    return -1;
+
+  if(slave->out_type == REAL){
+    low = fabsf(low);
+    high = fabsf(high);
+  }
+  // Swap if necessary
+  if(low > high){
+    float tmp = low;
+    low = high;
+    high = tmp;
+  }
+  // Limit filter range to Nyquist rate
+  low = low < -0.5 ? -0.5 : low > +0.5 ? +0.5 : low;
+  high = high < -0.5 ? -0.5 : high > +0.5 ? +0.5 : high;
+
+  int const N = slave->points;  // Total number of time domain points
+  int const L = slave->olen;
+  int const M = N - L + 1; // Length of impulse response in time domain
+  assert(N != 0 && L != 0 && M != 0);
+
+  // Used for both time and frequency domain, so make full length even for real transforms
+  complex float * const response = lmalloc(N * sizeof(*response));
+  assert(response != NULL);
+  float real_coeff[M];
+  memset(real_coeff,0,sizeof(real_coeff));
+  float const bw = fabsf(high - low);
+  float const fc = (high + low)/2; // center
+
+  //#define REMEZ 1
+#if REMEZ
+  // Need to understand these parameters better before I actually use it
+  int const num_bands = 2;
+  float bands[2*num_bands];
+  bands[0] = 0;  bands[1] = bw/2 - 0.01; // for now
+  bands[1] = bands[1] < 0 ? 0 : bands[1];
+  bands[2] = bw/2 + 0.01; bands[3] = 0.5;
+  bands[2] = bands[2] > 0.5 ? 0.5 : bands[2];
+  float des[num_bands];
+  des[0] = 1.0;
+  des[1] = 0.0;
+  float weights[num_bands];
+  weights[0] = 1.0;
+  weights[1] = 1.0;
+  liquid_firdespm_wtype wtype[num_bands];
+  wtype[0] = LIQUID_FIRDESPM_FLATWEIGHT;
+  wtype[1] =  LIQUID_FIRDESPM_EXPWEIGHT;
+
+  firdespm_run(M,num_bands,bands,des,weights,wtype,LIQUID_FIRDESPM_BANDPASS,real_coeff);
+#else // liquid kaiser filter gen
+  // Create a real filter, we'll shift it later
+  float const atten = 108.52; // yields β = 11 by his empirical formula (my default)
+  float const mu = 0;
+
+  // The real filter's bandwidth is doubled because it includes negative frequencies
+  liquid_firdes_kaiser(M,bw/2,atten,mu,real_coeff);
+#endif // kaiser
+
+  pthread_mutex_lock(&FFTW_planning_mutex);
+  fftwf_plan_with_nthreads(1);
+  fftwf_plan plan = fftwf_plan_dft_1d(N,response,response,FFTW_FORWARD,FFTW_MEASURE); // doesn't need to be fast
+  assert(plan != NULL);
+  if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of cif%d failed\n",Wisdom_file,N);
+  pthread_mutex_unlock(&FFTW_planning_mutex);
+
+  // Multiply real coefficients by complex exponential for frequency shift, place in FFT time-domain buffer
+  memset(response,0,N * sizeof(*response));
+
+  float gain = 1.0f / slave->master->points;
+  assert(gain != 0 && isfinite(gain));
+  for(int i=0; i < M; i++)
+    response[i] = gain * real_coeff[i] * cispif(2 * fc * (i - M/2));
+
+  fftwf_execute_dft(plan,response,response);
+  fftwf_destroy_plan(plan);
+  plan = NULL;
+
+#if FILTER_DEBUG
+  printf("response:");
+  for(int i=0; i < N; i++)
+    printf(" %g+j%g",crealf(response[i]),cimag(response[i]));
+  printf("\n");
 #endif
 
-/**
- * Factor n into the primes 2,3,5,7,11,13.
- * exponents[] should be an array of length 6, each slot will hold
- *   the exponent for 2,3,5,7,11,13 respectively.
- *
- * Return value:
- *   - If the returned value is 1, then n was fully factored by {2,3,5,7,11,13}.
- *   - Otherwise, the leftover (return value) is the part that couldn't
- *     be factored into those primes.
- */
-static unsigned long factor_small_primes(unsigned long n, int exponents[6]){
-  // Initialize exponents
-  for (int i = 0; i < 6; i++)
-    exponents[i] = 0;
-
-  // Divide out each prime in turn
-  for (int i = 0; i < 6; i++) {
-    while (n % small_primes[i] == 0) {
-      exponents[i]++;
-      n /= small_primes[i];
-    }
-  }
-  return n;  // The remainder is what's left
+  // Hot swap with existing response, if any, using mutual exclusion
+  pthread_mutex_lock(&slave->response_mutex);
+  complex float * const tmp = slave->response;
+  slave->response = response;
+  pthread_mutex_unlock(&slave->response_mutex);
+  free(tmp);
+  return 0;
 }
+
+#else
+
+// Apply Kaiser window to filter frequency response
+// "response" is SIMD-aligned array of N complex floats
+// Impulse response will be limited to first M samples in the time domain
+// Phase is adjusted so "time zero" (center of impulse response) is at M/2
+// L and M refer to the decimated output
+static int window_filter(int const L,int const M,complex float * const response,float const beta){
+  assert(response != NULL);
+  if(response == NULL)
+    return -1;
+  assert(L > 0 && M > 0);
+  int const N = L + M - 1;
+  assert(malloc_usable_size(response) >= N * sizeof(*response));
+  // fftw_plan can overwrite its buffers, so we're forced to make a temp. Ugh.
+  complex float * const buffer = lmalloc(sizeof(complex float) * N);
+  assert(buffer != NULL);
+  pthread_mutex_lock(&FFTW_planning_mutex);
+  fftwf_plan_with_nthreads(1);
+  fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_FORWARD,FFTW_MEASURE);
+  assert(fwd_filter_plan != NULL);
+  fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_MEASURE);
+  assert(rev_filter_plan != NULL);
+  if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of cif%d and cib%d failed\n",
+	    Wisdom_file,N,N);
+  pthread_mutex_unlock(&FFTW_planning_mutex);
+
+  // Convert to time domain
+  memcpy(buffer,response,N * sizeof(*buffer));
+  fftwf_execute(rev_filter_plan);
+  fftwf_destroy_plan(rev_filter_plan);
+  rev_filter_plan = NULL;
+
+  float kaiser_window[M];
+  make_kaiser(kaiser_window,M,beta);
+
+#if FILTER_DEBUG
+  for(int m = 0; m < M; m++)
+    fprintf(stderr,"kaiser[%d] = %g\n",m,kaiser_window[m]);
+#endif
+
+  // Compensate for our own FFT/IFFT cycle
+  float const gain = 1.0f/N;
+
+  // Shift to beginning of buffer to make causal; apply window and adjust for Kaiser window gain/loss
+  for(int n = M - 1; n >= 0; n--)
+    buffer[n] = buffer[(n-M/2+N)%N] * kaiser_window[n] * gain;
+
+  // Pad with zeroes on right side
+  memset(buffer+M,0,(N-M)*sizeof(*buffer));
+
+#if FILTER_DEBUG
+  fprintf(stderr,"window_filter filter impulse response, shifted, windowed and zero padded\n");
+  for(int n = 0; n < M; n++)
+    fprintf(stderr,"%d %lg %lg\n",n,crealf(buffer[n]),cimagf(buffer[n]));
+#endif
+
+  // Now back to frequency domain
+  fftwf_execute(fwd_filter_plan);
+  fftwf_destroy_plan(fwd_filter_plan);
+  fwd_filter_plan = NULL;
+#if FILTER_DEBUG
+  fprintf(stderr,"window_filter filter response amplitude\n");
+  for(int n = 0; n < N; n++)
+    fprintf(stderr,"%d %g %g (%.1f dB)\n",n,crealf(buffer[n]),cimagf(buffer[n]),power2dB(cnrmf(buffer[n])));
+
+  fprintf(stderr,"\n");
+#endif
+  memcpy(response,buffer,N*sizeof(*response));
+  free(buffer);
+  return 0;
+}
+// Real-only counterpart to window_filter()
+// response[] is only N/2+1 elements containing DC and positive frequencies only
+// Negative frequencies are inplicitly the conjugate of the positive frequencies
+// L and M refer to the decimated output
+static int window_rfilter(int const L,int const M,complex float * const response,float const beta){
+  assert(response != NULL);
+  if(response == NULL)
+    return -1;
+  assert(L > 0 && M > 0);
+  int const N = L + M - 1;
+  int const bins = N/2 + 1;
+  assert(malloc_usable_size(response) >= bins * sizeof(*response));
+  complex float * const buffer = lmalloc(bins * sizeof(complex float)); // plan destroys its input
+  assert(buffer != NULL);
+  float * const timebuf = lmalloc(sizeof(float) * N);
+  assert(timebuf != NULL);
+  pthread_mutex_lock(&FFTW_planning_mutex);
+  fftwf_plan_with_nthreads(1);
+  fftwf_plan fwd_filter_plan = fftwf_plan_dft_r2c_1d(N,timebuf,buffer,FFTW_MEASURE);
+  assert(fwd_filter_plan != NULL);
+  fftwf_plan_with_nthreads(1);
+  fftwf_plan rev_filter_plan = fftwf_plan_dft_c2r_1d(N,buffer,timebuf,FFTW_MEASURE);
+  assert(rev_filter_plan != NULL);
+  if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of rof%d and rob%d failed\n",
+	    Wisdom_file,N,N);
+  pthread_mutex_unlock(&FFTW_planning_mutex);
+
+  // Convert to time domain
+  memcpy(buffer,response,bins * sizeof(*buffer));
+  fftwf_execute(rev_filter_plan);
+  fftwf_destroy_plan(rev_filter_plan);
+  rev_filter_plan = NULL;
+
+  float kaiser_window[M];
+  make_kaiser(kaiser_window,M,beta);
+
+#if FILTER_DEBUG
+  for(int m = 0; m < M; m++)
+    fprintf(stderr,"kaiser[%d] = %g\n",m,kaiser_window[m]);
+#endif
+
+  // Compensate for our own FFT/IFFT cycle
+  float gain = 1.0f/N;
+
+  // Shift to beginning of buffer to make causal; apply window and adjust for Kaiser window gain/loss
+  for(int n = M - 1; n >= 0; n--)
+    timebuf[n] = timebuf[(n-M/2+N)%N] * kaiser_window[n] * gain;
+
+  // Pad with zeroes on right side
+  memset(timebuf+M,0,(N-M)*sizeof(*timebuf));
+#if FILTER_DEBUG
+  printf("window_rfilter impulse response, shifted, windowed and zero padded\n");
+  for(int n = 0; n < M; n++)
+    printf("%d %lg\n",n,timebuf[n]);
+#endif
+
+  // Now back to frequency domain
+  fftwf_execute(fwd_filter_plan);
+  fftwf_destroy_plan(fwd_filter_plan);
+  free(timebuf);
+  memcpy(response,buffer,bins * sizeof(*response));
+  free(buffer);
+#if FILTER_DEBUG
+  printf("window_rfilter frequency response\n");
+  for(int n = 0; n < bins; n++)
+    printf("%d %g %g (%.1f dB)\n",n,crealf(response[n]),cimagf(response[n]),power2dB(cnrmf(response[n])));
+#endif
+
+  return 0;
+}
+
+// This can occasionally be called with slave == NULL at startup, so don't abort
+// NB: 'low' and 'high' are *fractional* frequencies relative to the output sample rate, i.e., -0.5 < f < +0.5
+// If invoked on a demod that hasn't run yet, slave->master will be NULL so check for that and quit;
+// the filter should get set up when it actually starts (thanks N5TNL for bug report)
+int set_filter(struct filter_out * const slave,float low,float high,float const kaiser_beta){
+  if(slave == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta) || slave->master == NULL)
+    return -1;
+
+  if(slave->out_type == REAL){
+    // Negative frequencies are not allowed in real signals
+    low = fabsf(low);
+    high = fabsf(high);
+  }
+  // Swap if necessary
+  if(low > high){
+    float tmp = low;
+    low = high;
+    high = tmp;
+  }
+  // Limit filter range to Nyquist rate
+  low = low < -0.5 ? -0.5 : low > +0.5 ? +0.5 : low;
+  high = high < -0.5 ? -0.5 : high > +0.5 ? +0.5 : high;
+
+  // Total number of time domain points
+  int const N = slave->points;
+  int const L = slave->olen;
+  int const M = N - L + 1; // Length of impulse response in time domain
+
+  complex float * const response = lmalloc(sizeof(complex float) * slave->bins);
+  assert(response != NULL);
+  memset(response,0,slave->bins * sizeof(response[0]));
+  assert(malloc_usable_size(response) >= (slave->bins) * sizeof(*response));
+  float const gain = 1.0f / slave->master->points; // Adjust for input FFT and overlap
+  assert(gain != 0 && isfinite(gain));
+
+  for(int n = 0; n < slave->bins; n++){
+    float const f = n < N/2 ? (float)n / N : (float)(n - N) / N; // neg frequency
+    if(f == low || f == high)
+      response[n] = gain * M_SQRT1_2; // -3dB
+    else if(f > low && f < high)
+      response[n] = gain;
+    // else response[n] = 0;
+  }
+  if(slave->out_type == REAL)
+    window_rfilter(L,M,response,kaiser_beta);
+  else
+    window_filter(L,M,response,kaiser_beta);
+
+#if FILTER_DEBUG
+  {
+    // check gain in mid passband
+    int midbin = N * (high + low)/2; 
+    if(midbin < 0)
+      midbin += N; // Can only happen for complex output, will keep midbin in range for real transforms with only (N/2) + 1 bins
+    float midgain = cnrmf(response[midbin]);
+    fprintf(stdout,"passband middle freq %.3f is bin %d, gain %.3f dB\n",
+	    (high + low)/2, midbin,power2dB(midgain));
+  }
+#endif
+  // Hot swap with existing response, if any, using mutual exclusion
+  pthread_mutex_lock(&slave->response_mutex);
+  complex float * const tmp = slave->response;
+  slave->response = response;
+  pthread_mutex_unlock(&slave->response_mutex);
+  free(tmp);
+  return 0;
+}
+#endif // End of my original filter design routine
+#endif // End of experimental code

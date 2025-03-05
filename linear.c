@@ -69,14 +69,14 @@ int demod_linear(void *arg){
   realtime();
 
   while(downconvert(chan) == 0){
-    unsigned int N = chan->filter.out.olen; // Number of raw samples in filter output buffer
+    unsigned int N = chan->sampcount; // Number of raw samples in filter output buffer
+    complex float * buffer = chan->baseband; // Working buffer
 
     // First pass over sample block.
     // Run the PLL (if enabled)
     // Apply post-downconversion shift (if enabled, e.g. for CW)
     // Measure energy
     // Apply PLL & frequency shift, measure energy
-    complex float * buffer = chan->filter.out.output.c; // Working buffer
     float signal = 0; // PLL only
     float noise = 0;  // PLL only
 
@@ -135,18 +135,9 @@ int demod_linear(void *arg){
       chan->pll.lock_count = -lock_limit;
       chan->pll.lock = false;
     }
-    if(chan->filter2.blocking > 0){
-      int r = write_cfilter(&chan->filter2.in,buffer,N); // Will trigger execution of input side if buffer is full, returning 1
-      if(r <= 0)
-	continue; // Nothing to read out, wait for next frame
-      execute_filter_output(&chan->filter2.out,0); // No frequency shifting
-
-      // Now switch to working on output of second filter
-      buffer = chan->filter2.out.output.c; // Working buffer
-      N = chan->filter2.blocking * N;
-    }
     // Apply frequency shift
     // Must be done after PLL, which operates only on DC
+    assert(isfinite(chan->tune.shift));
     set_osc(&chan->shift,chan->tune.shift/chan->output.samprate,0);
     if(chan->shift.freq != 0){
       for(unsigned int n=0; n < N; n++){
@@ -176,27 +167,21 @@ int demod_linear(void *arg){
 	// Should this be in double precision to avoid imprecision when gain = - epsilon dB?
 	if(newgain > 0)
 	  gain_change = powf(newgain/chan->output.gain, 1.0F/N);
-	assert(gain_change != 0);
 	chan->linear.hangcount = chan->linear.hangtime * chan->output.samprate;
       } else if(bn * chan->output.gain > chan->linear.threshold * chan->output.headroom){
 	// Reduce gain to keep noise < threshold, same as for strong signal
 	float const newgain = chan->linear.threshold * chan->output.headroom / bn;
 	if(newgain > 0)
 	  gain_change = powf(newgain/chan->output.gain, 1.0F/N);
-	assert(gain_change != 0);
       } else if(chan->linear.hangcount > 0){
 	// Waiting for AGC hang time to expire before increasing gain
-	gain_change = 1; // Constant gain
 	chan->linear.hangcount -= N;
       } else {
-	// Allow gain to increase at configured rate, e.g. 20 dB/s
-	gain_change = powf(chan->linear.recovery_rate, 1.0F/N);
-	assert(gain_change != 0);
+	// Allow gain to increase at configured rate
+	gain_change = powf(chan->linear.recovery_rate, 1.0F/chan->output.samprate);
       }
+      assert(gain_change != 0 && isfinite(gain_change));
     }
-    // Accumulate sum of square gains, for averaging in status
-    float start_gain = chan->output.gain;
-
     // Final pass over signal block
     // Demodulate, apply gain changes, compute output energy
     float output_power = 0;
@@ -245,7 +230,7 @@ int demod_linear(void *arg){
     output_power /= N; // Per sample
     if(chan->output.channels == 1)
       output_power *= 2; // +3 dB for mono since 0 dBFS = 1 unit peak, not RMS
-    chan->output.energy += output_power;
+    chan->output.power = output_power;
     // Mute if no signal (e.g., outside front end coverage)
     // or if no PLL lock (AM squelch)
     // or if zero frequency
@@ -257,7 +242,6 @@ int demod_linear(void *arg){
 
     // When the gain is allowed to vary, the average gain won't be exactly consistent with the
     // average baseband (input) and output powers. But I still try to make it meaningful.
-    chan->output.sum_gain_sq += start_gain * chan->output.gain; // accumulate square of approx average gain
   }
   return 0; // Non-fatal exit, may be restarted
 }

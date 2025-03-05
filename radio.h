@@ -167,7 +167,9 @@ struct channel {
 
   enum demod_type demod_type;  // Index into demodulator table (Linear, FM, FM Stereo, Spectrum)
   char preset[32];       // name of last mode preset
-
+  complex float *baseband; // Output of filter or filter 2 as appropriate
+  int sampcount;           // Count of baseband samples 
+  
   struct {               // Used only in linear demodulator
     bool env;            // Envelope detection in linear mode (settable)
     bool agc;            // Automatic gain control enabled (settable)
@@ -192,7 +194,6 @@ struct channel {
   // Signal levels & status, common to all demods
   struct {
     float bb_power;   // Average power of signal after filter but before digital gain, power ratio
-    float bb_energy;  // Integrated power, reset by poll
     float foffset;    // Frequency offset Hz (FM, coherent AM, dsb)
     float snr;        // From PLL in linear, moments in FM
     float n0;         // per-demod N0 (experimental)
@@ -225,8 +226,7 @@ struct channel {
   // Output
   struct {
     unsigned int samprate;      // Audio D/A sample rate
-    float gain;        // Audio gain to normalize amplitude
-    float sum_gain_sq; // Sum of squared gains, for averaging
+
     float headroom;    // Audio level headroom, amplitude ratio (settable)
     // RTP network streaming
     bool silent;       // last packet was suppressed (used to generate RTP mark bit)
@@ -237,7 +237,7 @@ struct channel {
     char dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
 
     unsigned int channels;   // 1 = mono, 2 = stereo (settable)
-    float energy;   // Output energy since last poll
+    float power;   // Output power
 
     float deemph_state_left;
     float deemph_state_right;
@@ -254,6 +254,7 @@ struct channel {
     unsigned minpacket;  // minimum output packet size in blocks (0-4)
                          // i.e, no minimum or at least 20ms, 40ms, 60ms or 80ms /packet for 20ms blocktime
     uint64_t errors;      // Count of errors with sendto()
+    float gain;        // Audio gain to normalize amplitude
   } output;
 
   struct {

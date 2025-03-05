@@ -1,5 +1,5 @@
 // FM demodulation and squelch for ka9q-radio
-// Copyright 2018-2023, Phil Karn, KA9Q
+// Copyright 2018-2025, Phil Karn, KA9Q
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
@@ -72,8 +72,7 @@ int demod_fm(void *arg){
 
   float deemph_state = 0;
   int squelch_state = 0; // Number of blocks for which squelch remains open
-  int const N = chan->filter.out.olen;
-  float const one_over_olen = 1.0f / N; // save some divides
+
   int const pl_integrate_samples = chan->output.samprate * 0.24; // 240 milliseconds (spec is < 250 ms). 12 blocks @ 24 kHz
   int pl_sample_count = 0;
   float old_pl_phase = 0;
@@ -83,6 +82,9 @@ int demod_fm(void *arg){
   realtime();
 
   while(downconvert(chan) == 0){
+    complex float const * const buffer = chan->baseband; // For convenience
+    int const N = chan->sampcount;
+
     if(power_squelch && squelch_state == 0){
       // quick check SNR from raw signal power to save time on variance-based squelch
       // Variance squelch is still needed to suppress various spurs and QRM
@@ -98,12 +100,11 @@ int demod_fm(void *arg){
 	continue;
       }
     }
-    complex float const * const buffer = chan->filter.out.output.c; // for convenience
     float amplitudes[N];
     float avg_amp = 0;
     for(int n = 0; n < N; n++)
       avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
-    avg_amp *= one_over_olen;
+    avg_amp /= N;
     {
       // Compute variance in second pass.
       // Two passes are supposed to be more numerically stable, but is it really necessary?
@@ -217,7 +218,7 @@ int demod_fm(void *arg){
 	else if(baseband[n] < peak_negative_deviation)
 	  peak_negative_deviation = baseband[n];
       }
-      frequency_offset *= chan->output.samprate * 0.5f * one_over_olen;  // scale to Hz
+      frequency_offset *= chan->output.samprate * 0.5f * 1/N;  // scale to Hz
       // Update frequency offset and peak deviation, with smoothing to attenuate PL tones
       // alpha = blocktime in millisec is an approximation to a 1 sec time constant assuming blocktime << 1 sec
       // exact value would be 1 - exp(-blocktime/tc)
@@ -298,13 +299,12 @@ int demod_fm(void *arg){
     // Force reasonable parameters if they get messed up or aren't initialized
     chan->output.gain = (2 * chan->output.headroom *  chan->output.samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
 
-    float output_level = 0;
+    float output_energy = 0;
     for(int n=0; n < N; n++){
       baseband[n] *= chan->output.gain;
-      output_level += baseband[n] * baseband[n];
+      output_energy += baseband[n] * baseband[n];
     }
-    output_level *= one_over_olen;
-    chan->output.energy += output_level;
+    chan->output.power = output_energy / N;
     if(send_output(chan,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
   }

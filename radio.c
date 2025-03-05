@@ -154,14 +154,12 @@ static float estimate_noise(struct channel *chan,int shift){
   }
   if(!isfinite(min_bin_energy)) // Never got set!
     return 0;
-  // Normalize
-  // A round trip through IFFT(FFT(x)) scales amplitude by N, power by N^2
-  // So the FFT alone scales power by N (see Parseval's theorem for the DFT)
-  min_bin_energy /= master->bins;
+  // the front end now normalizes by the forward FFT size
 
   // Increase by overlap factor, e.g., 5/4 for overlap factor = 5 (20% overlap)
   // Determined empirically, I have to think about why this is
   min_bin_energy *= 1.0 + (float)(master->impulse_length - 1) / master->ilen;
+  min_bin_energy /= master->bins;
 
   // For real mode the sample rate is double for the same power, but there are
   // only half as many bins so it cancels
@@ -570,71 +568,79 @@ int downconvert(struct channel *chan){
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
 		      Frontend.in.impulse_length,
 		      Frontend.samprate,
-		      &shift,&remainder,freq) == 0){
+		      &shift,&remainder,freq) != 0){
+      // No front end coverage of our carrier; wait one block time for it to retune
+      chan->sig.bb_power = 0;
+      chan->sig.snr = 0;
+      chan->output.power = 0;
+      struct timespec timeout; // Needed to avoid deadlock if no front end is available
+      clock_gettime(CLOCK_REALTIME,&timeout);
+      timeout.tv_nsec += Blocktime * MILLION; // milliseconds to nanoseconds
+      if(timeout.tv_nsec > BILLION){
+	timeout.tv_sec += 1; // 1 sec in the future
+	timeout.tv_nsec -= BILLION;
+      }
+      pthread_cond_timedwait(&Frontend.status_cond,&Frontend.status_mutex,&timeout);
       pthread_mutex_unlock(&Frontend.status_mutex);
-      break;
+      continue;
     }
-    // No front end coverage of our carrier; wait one block time for it to retune
-    chan->sig.bb_power = 0;
-    chan->sig.bb_energy = 0;
-    chan->sig.snr = 0;
-    chan->output.energy = 0;
-    struct timespec timeout; // Needed to avoid deadlock if no front end is available
-    clock_gettime(CLOCK_REALTIME,&timeout);
-    timeout.tv_nsec += Blocktime * MILLION; // milliseconds to nanoseconds
-    if(timeout.tv_nsec > BILLION){
-      timeout.tv_sec += 1; // 1 sec in the future
-      timeout.tv_nsec -= BILLION;
-    }
-    pthread_cond_timedwait(&Frontend.status_cond,&Frontend.status_mutex,&timeout);
     pthread_mutex_unlock(&Frontend.status_mutex);
-  }
-  // Reasonable parameters?
-  assert(isfinite(chan->tune.doppler_rate));
-  assert(isfinite(chan->tune.shift));
 
-  // Yet we rely on the wait inside execute_filter_output for timing
-  // When not debugging, just delay a blocktime and issue an error before returning
-  complex float * const buffer = chan->filter.out.output.c; // Working output time-domain buffer (if any)
-  // set fine tuning frequency & phase. Do before execute_filter blocks (can't remember why)
-  if(buffer != NULL){ // No output time-domain buffer in spectrum mode
+    // Note minus on 'shift' parameter; see discussion inside compute_tuning() on sign conventions
+    execute_filter_output(&chan->filter.out,-shift); // block until new data frame
+    chan->status.blocks_since_poll++;
+
+    if(chan->filter.out.out_type == SPECTRUM){ // No output time-domain buffer in spectrum mode
+      chan->filter.bin_shift = shift; // Also used by spectrum.c:demod_spectrum() to know where to read direct from master
+      return 0;
+    }
+    // set fine tuning frequency & phase
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
     if(remainder != chan->filter.remainder){
+      assert(isfinite(chan->tune.doppler_rate));
       set_osc(&chan->fine,remainder/chan->output.samprate,chan->tune.doppler_rate/(chan->output.samprate * chan->output.samprate));
       chan->filter.remainder = remainder;
     }
-    // Block phase adjustment (folded into the fine tuning osc) in two parts:
-    // (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
-    // (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
-    // Be sure to Initialize chan->filter.bin_shift at startup to something bizarre to force this inequality on first call
+    /* Block phase adjustment (folded into the fine tuning osc) in two parts:
+       (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
+       (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
+       Be sure to Initialize chan->filter.bin_shift at startup to something bizarre to force this inequality on first call */
     if(shift != chan->filter.bin_shift){
       const int V = 1 + (Frontend.in.ilen / (Frontend.in.impulse_length - 1)); // Overlap factor
       chan->filter.phase_adjust = cispi(-2.0*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
       chan->fine.phasor *= cispi((shift - chan->filter.bin_shift) / (2.0 * (V-1))); // One time adjust for shift change
+      chan->filter.bin_shift = shift;
     }
     chan->fine.phasor *= chan->filter.phase_adjust;
-  }
-  // Note minus on 'shift' parameter; see discussion inside compute_tuning() on sign conventions
-  execute_filter_output(&chan->filter.out,-shift); // block until new data frame
-  chan->status.blocks_since_poll++;
-  if(buffer != NULL){ // No output time-domain buffer in spectral analysis mode
-    const int N = chan->filter.out.olen; // Number of raw samples in filter output buffer
-    float energy = 0;
-    for(int n=0; n < N; n++){
-      buffer[n] *= step_osc(&chan->fine);
-      energy += cnrmf(buffer[n]);
-    }
-    energy /= N;
-    chan->sig.bb_power = energy;
-    chan->sig.bb_energy += energy; // Added once per block
-  }
-  chan->filter.bin_shift = shift; // Also used by spectrum.c:demod_spectrum() to know where to read direct from master
 
-  // The N0 noise estimator has a long smoothing time constant, so clamp it when the front end is saturated, e.g. by a local transmitter
-  // This works well for channels tuned well away from the transmitter, but not when a channel is tuned near or to the transmit frequency
-  // because the transmitted noise is enough to severely increase the estimate even before it begins to transmit
-  // enough power to saturate the A/D. I still need a better, more general way of adjusting N0 smoothing rate,
-  // e.g. for when the channel is retuned by a lot
+    // Make fine tuning correction before secondary filtering
+    for(int n=0; n < chan->filter.out.olen; n++)
+      chan->filter.out.output.c[n] *= step_osc(&chan->fine);
+
+    if(chan->filter2.blocking == 0){
+      // No secondary filtering, done
+      chan->baseband = chan->filter.out.output.c;
+      chan->sampcount = chan->filter.out.olen;
+      break;
+    }
+    int r = write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen); // Will trigger execution of input side if buffer is full, returning 1
+    if(r > 0){
+      execute_filter_output(&chan->filter2.out,0); // No frequency shifting
+      chan->baseband = chan->filter2.out.output.c;
+      chan->sampcount = chan->filter2.out.olen;
+      break;
+    }
+  }
+  float energy = 0;
+  for(int n=0; n < chan->sampcount; n++)
+    energy += cnrmf(chan->baseband[n]);
+  chan->sig.bb_power = energy / chan->sampcount;
+
+  /* The N0 noise estimator has a long smoothing time constant, so clamp it when the front end is saturated, e.g. by a local transmitter
+     This works well for channels tuned well away from the transmitter, but not when a channel is tuned near or to the transmit frequency
+     because the transmitted noise is enough to severely increase the estimate even before it begins to transmit
+     enough power to saturate the A/D. I still need a better, more general way of adjusting N0 smoothing rate,
+     e.g. for when the channel is retuned by a lot */
   float maxpower = (1 << (Frontend.bitspersample - 1));
   maxpower *= maxpower * 0.5; // 0 dBFS
   if(Frontend.if_power < maxpower)
@@ -656,15 +662,16 @@ int set_channel_filter(struct channel *chan){
   delete_filter_input(&chan->filter2.in);
   if(chan->filter2.blocking > 0){
     extern int Overlap;
-    unsigned int const inblock = chan->output.samprate * Blocktime / 1000;
-    unsigned int const outblock = chan->filter2.blocking * inblock;
+    unsigned int const blocksize = chan->filter2.blocking * chan->output.samprate * Blocktime / 1000;
+    unsigned int const order = blocksize;
     float const binsize = (1000.0f / Blocktime) * ((float)(Overlap - 1) / Overlap);
     float const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
 
-    // Secondary filter running at 1:1 sample rate, 50% overlap, with blocksize a small multiple (1-4) of the channel block size
-    create_filter_input(&chan->filter2.in,outblock,outblock+1,COMPLEX); // 50% overlap
+    fprintf(stdout,"filter2 create: L = %d, M = %d, N = %d\n",blocksize,order+1,blocksize+order);
+    // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
+    create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX);
     chan->filter2.in.perform_inline = true;
-    create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,outblock,chan->filter2.isb ? CROSS_CONJ : COMPLEX);
+    create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,blocksize,chan->filter2.isb ? CROSS_CONJ : COMPLEX);
     chan->filter2.low = lower;
     chan->filter2.high = upper;
     chan->filter2.kaiser_beta = chan->filter.kaiser_beta;
@@ -704,7 +711,7 @@ float scale_ADpower2FS(struct frontend const *frontend){
     scale *= 2;
   return scale;
 }
-// Returns multiplicative factor for converting raw samples to floats with analog gain correction
+// Returns multiplicative factor for converting raw samples to floats with analog gain correction and FFT size scaling
 // Real vs complex difference is (I think) handled in the filter with a 3dB boost, so there's no sqrt(2) correction here
 float scale_AD(struct frontend const *frontend){
   assert(frontend != NULL);
@@ -712,8 +719,10 @@ float scale_AD(struct frontend const *frontend){
     return NAN;
 
   assert(frontend->bitspersample > 0);
-  float scale = 1.0f / (1 << (frontend->bitspersample - 1));
+  float scale = (1 << (frontend->bitspersample - 1));
+
   // net analog gain, dBm to dBFS, that we correct for to maintain unity gain, i.e., 0 dBm -> 0 dBFS
   float analog_gain = frontend->rf_gain - frontend->rf_atten + frontend->rf_level_cal;
-  return scale * dB2voltage(-analog_gain); // Front end gain as amplitude ratio
+  // Will first get called before the filter input is created
+  return dB2voltage(-analog_gain) / scale; // Front end gain as amplitude ratio
 }

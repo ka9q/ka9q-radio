@@ -40,6 +40,7 @@ struct rc {
 #define ND 4
 struct filter_in {
   enum filtertype in_type;           // REAL or COMPLEX
+  int points;               // Size of FFT N = L + M - 1. For complex, == N
   int ilen;                 // Length of user portion of input buffer, aka 'L'
   int bins;                 // Total number of frequency bins. Complex: L + M - 1;  Real: (L + M - 1)/2 + 1
   int impulse_length;       // Length of filter impulse response, aka 'M'
@@ -72,7 +73,6 @@ struct filter_out {
   struct rc output;                  // Beginning of user output area, length L/decimate
   fftwf_plan rev_plan;               // IFFT (frequency -> time)
   unsigned next_jobnum;
-  float noise_gain;                  // Filter gain on uniform noise (ratio < 1)
   unsigned block_drops;          // Lost frequency domain blocks, e.g., from late scheduling of slave thread
   int rcnt;                 // Samples read from output buffer
 };
@@ -81,7 +81,6 @@ int create_filter_input(struct filter_in *,int const L,int const M, enum filtert
 int create_filter_output(struct filter_out *slave,struct filter_in * restrict master,complex float * restrict response,int olen, enum filtertype out_type);
 int execute_filter_input(struct filter_in * restrict);
 int execute_filter_output(struct filter_out * restrict ,int);
-int execute_filter_output_idle(struct filter_out * const slave);
 int delete_filter_input(struct filter_in * restrict);
 int delete_filter_output(struct filter_out * restrict);
 int set_filter(struct filter_out * restrict,float,float,float);
