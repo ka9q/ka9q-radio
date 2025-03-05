@@ -150,7 +150,7 @@ when you're simply listening, use Opus output encoding.
 
 Sets the default mode to be used for any channel group that doesn't
 specify one. Modes are specified in the file
-*/usr/local/share/ka9q-radio/modes.conf*. They would probably be
+*/usr/local/share/ka9q-radio/presets.conf*. They would probably be
 better called "presets" because a "mode" actually describes a group of
 parameters (demodulator type, filter settings, etc) in that file.
 
@@ -246,7 +246,7 @@ Enable the Session Announcement Protocol (SAP). Eventually this will
 make receiver streams visible to session browers in applications such
 as VLC. Leave off for now.
 
-### mode-file = (optional, default */usr/local/share/ka9q-radio/modes.conf*)
+### mode-file = (optional, default */usr/local/share/ka9q-radio/presets.conf*)
 
 Specifies the mode description file mentioned in the **mode**
 parameter above. Use the default when possible.

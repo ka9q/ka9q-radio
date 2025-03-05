@@ -105,7 +105,7 @@ int Verbose;
 static char const *Locale = "en_US.UTF-8";
 
 static dictionary *Configtable; // Configtable file descriptor for iniparser for main radiod config file
-dictionary *Preset_table;   // Table of presets, usually in /usr/local/share/ka9q-radio/modes.conf or presets.conf
+dictionary *Preset_table;   // Table of presets, usually in /usr/local/share/ka9q-radio/presets.conf
 volatile bool Stop_transfers = false; // Request to stop data transfers; how should this get set?
 
 static int64_t Starttime;      // System clock at timestamp 0, for RTCP
