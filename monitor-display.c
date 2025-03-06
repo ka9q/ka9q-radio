@@ -694,6 +694,29 @@ static void update_monitor_display(void){
   x += width;
   y = row_save;
 
+  // Processing delay, assuming synchronized system clocks
+  if(x >= COLS)
+    goto done;
+  width = 8;
+  mvprintwt(y++,x,"%*s",width,"Delay");
+  for(int session = First_session; session < Nsessions_copy; session++,y++){
+    struct session const *sp = Sessions_copy[session];
+    if(sp == NULL)
+      continue;
+
+    if(sp->chan.output.rtp.timestamp == 0)
+      continue; // Not being sent
+    float delay = 0;
+    // sp->frontend.timestamp (GPS time at front end) and sp->chan.output.rtp.timestamp (next RTP timestamp to be sent) are updated periodically by status packets
+    // sp->rtp_state.timestamp contains most recent RTP packet processed
+    // This needs further thought and cleanup
+    delay = (float)(int32_t)(sp->chan.output.rtp.timestamp - sp->rtp_state.timestamp) / sp->samprate;
+    delay += 1.0e-9 * (gps_time_ns() - sp->frontend.timestamp);
+    mvprintwt(y,x,"%*.3f", width, delay);
+  }
+  x += width;
+  y = row_save;
+
   // Packets
   if(x >= COLS)
     goto done;
