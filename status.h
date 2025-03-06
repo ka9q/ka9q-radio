@@ -27,7 +27,7 @@ enum status_type {
   STATUS_DEST_SOCKET,
   SETOPTS,
   CLEAROPTS,
-  UNUSED3,
+  RTP_TIMESTAMP, // current real-time-protocol timestamp
   UNUSED4,
   INPUT_SAMPRATE, // Nominal sample rate (integer)
   UNUSED6,

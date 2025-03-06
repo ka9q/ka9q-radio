@@ -40,6 +40,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
 	FREE(str);
       }
       break;
+    case RTP_TIMESTAMP:
+      channel->output.rtp.timestamp = decode_int(cp,optlen);
+      break;
     case STATUS_DEST_SOCKET:
       decode_socket(&Metadata_dest_socket,cp,optlen);
       break;

@@ -61,6 +61,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
 	FREE(d);
       }
       break;
+    case RTP_TIMESTAMP:
+      fprintf(fp,"RTP timestamp %'u",decode_int32(cp,optlen));
+      break;
     case STATUS_DEST_SOCKET:
       {
 	struct sockaddr_storage sock;

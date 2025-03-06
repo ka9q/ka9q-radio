@@ -1531,6 +1531,7 @@ static void display_output(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Dest","%s",formatsock(&channel->output.dest_socket,true));
 
   pprintw(w,row++,col,"SSRC","%u",channel->output.rtp.ssrc);
+  pprintw(w,row++,col,"Timestamp","%u",channel->output.rtp.timestamp);
   pprintw(w,row++,col,"TTL","%d",Mcast_ttl);
   pprintw(w,row++,col,"Payload Type","%u",channel->output.rtp.type);
   pprintw(w,row++,col,"Sample rate","%'d Hz",channel->output.samprate);
@@ -1539,7 +1540,7 @@ static void display_output(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Packets","%'llu",(long long unsigned)channel->output.rtp.packets);
   if(channel->output.encoding == OPUS){
     if(channel->output.opus_bitrate != 0)
-      pprintw(w,row++,col,"Opus bitrate","%d",channel->output.opus_bitrate);
+      pprintw(w,row++,col,"Opus bitrate","%'d",channel->output.opus_bitrate);
     else
       pprintw(w,row++,col,"Opus bitrate","auto");
   }
