@@ -1299,7 +1299,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   }
 
   Overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
-  pprintw(w,row++,col,"Overlap","1/%d   ",Overlap);
+  pprintw(w,row++,col,"Overlap","%.1f %% ",100.0f/Overlap);
   pprintw(w,row++,col,"Bin width","%'.3f Hz",(float)Frontend.samprate / N);
 
   float const beta = channel->filter.kaiser_beta;
@@ -1336,7 +1336,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
       pprintw(w,row++,col,"Block rate","%.3f Hz",1000./bt);
       pprintw(w,row++,col,"FFT","%u c ",N);
       float overlap = 1 + (float)L / (M-1);
-      pprintw(w,row++,col,"Overlap","1/%.0f   ",overlap);
+      pprintw(w,row++,col,"Overlap","%.2f %% ",100./overlap);
       pprintw(w,row++,col,"Bin width","%.3f Hz",1000./(overlap*bt));
       pprintw(w,row++,col,"Kaiser β","%.1f   ",channel->filter2.kaiser_beta);
   }      

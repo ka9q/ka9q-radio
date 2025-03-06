@@ -675,7 +675,8 @@ int set_channel_filter(struct channel *chan){
     create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,blocksize,chan->filter2.isb ? CROSS_CONJ : COMPLEX);
     chan->filter2.low = lower;
     chan->filter2.high = upper;
-    chan->filter2.kaiser_beta = chan->filter.kaiser_beta;
+    if(chan->filter2.kaiser_beta < 0 || !isfinite(chan->filter2.kaiser_beta))
+      chan->filter2.kaiser_beta = chan->filter.kaiser_beta;
     set_filter(&chan->filter2.out,
 	       lower/chan->output.samprate,
 	       upper/chan->output.samprate,
