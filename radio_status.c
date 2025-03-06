@@ -242,6 +242,15 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  }
 	}
       break;
+      case FILTER2_KAISER_BETA: // dimensionless, always 0 or positive
+        {
+	  float const f = fabsf(decode_float(cp,optlen));
+	  if(isfinite(f) && chan->filter2.kaiser_beta != f){
+	    chan->filter2.kaiser_beta = f;
+	    new_filter_needed = true;
+	  }
+	}
+      break;
     case PRESET:
       {
 	char *p = decode_string(cp,optlen);

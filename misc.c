@@ -410,6 +410,19 @@ uint32_t nextfastfft(uint32_t n){
   return result;
 }
 
+// round up to next power of 2
+uint32_t round2(uint32_t v){
+  v--;
+  v |= v >> 1;
+  v |= v >> 2;
+  v |= v >> 4;
+  v |= v >> 8;
+  v |= v >> 16;  
+  v++;
+  return v;
+}
+
+
 // The amplitude of a noisy FM signal has a Rice distribution
 // Given the ratio 'r' of the mean and standard deviation measurements, find the
 // ratio 'theta' of the Ricean parameters 'nu' and 'sigma', the true

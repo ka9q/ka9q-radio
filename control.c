@@ -933,6 +933,20 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       }
     }
     break;
+  case 'K': // Kaiser window parameter for filter2
+    {
+      char str[Entry_width],*ptr;
+      getentry("Filter2 Kaiser window β: ",str,sizeof(str));
+      float const b = strtof(str,&ptr);
+      if(ptr != str && isfinite(b)){
+	if(b < 0 || b >= 100){
+	  beep(); // beyond limits
+	} else {
+	  encode_float(bpp,FILTER2_KAISER_BETA,b);
+	}
+      }
+    }
+    break;
   case 'o': // Set/clear option flags, most apply only to linear detector
     {
       char str[Entry_width];

@@ -663,11 +663,12 @@ int set_channel_filter(struct channel *chan){
   if(chan->filter2.blocking > 0){
     extern int Overlap;
     unsigned int const blocksize = chan->filter2.blocking * chan->output.samprate * Blocktime / 1000;
-    unsigned int const order = blocksize;
     float const binsize = (1000.0f / Blocktime) * ((float)(Overlap - 1) / Overlap);
     float const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
 
-    fprintf(stdout,"filter2 create: L = %d, M = %d, N = %d\n",blocksize,order+1,blocksize+order);
+    unsigned int n = round2(2 * blocksize); // Overlap >= 50%
+    unsigned int order = n - blocksize;
+    fprintf(stdout,"filter2 create: L = %d, M = %d, N = %d\n",blocksize,order+1,n);
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
     create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX);
     chan->filter2.in.perform_inline = true;
