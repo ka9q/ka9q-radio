@@ -170,6 +170,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case KAISER_BETA:
       fprintf(fp,"filter kaiser_beta %g",decode_float(cp,optlen));
       break;
+    case FILTER2_KAISER_BETA:
+      fprintf(fp,"filter2 kaiser_beta %g",decode_float(cp,optlen));
+      break;
     case FILTER_BLOCKSIZE:
       fprintf(fp,"filter L %'d",decode_int(cp,optlen));
       break;
