@@ -929,7 +929,6 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
     printf("impulse[%d] = %g + j%g\n",i,crealf(impulse[i]),cimagf(impulse[i]));
 #endif
   }
-  printf("window gain %g (%.1f dB)\n",window_gain,voltage2dB(window_gain));
   // correct for gains of windowed sinc function and FFT with overlap
   float const gain = 1.0f / (window_gain *  slave->master->points); // Adjust for input FFT and overlap
   assert(gain != 0 && isfinite(gain));
