@@ -154,16 +154,12 @@ static float estimate_noise(struct channel *chan,int shift){
   }
   if(!isfinite(min_bin_energy)) // Never got set!
     return 0;
-  // the front end now normalizes by the forward FFT size
 
-  // Increase by overlap factor, e.g., 5/4 for overlap factor = 5 (20% overlap)
-  // Determined empirically, I have to think about why this is
-  min_bin_energy *= 1.0 + (float)(master->impulse_length - 1) / master->ilen;
-  min_bin_energy /= master->bins;
-
-  // For real mode the sample rate is double for the same power, but there are
-  // only half as many bins so it cancels
-  return (float)(min_bin_energy / Frontend.samprate); // Scale to 1 Hz
+  // correct for FFT scaling and normalize to 1 Hz
+  // With an unnormalized FFT, the noise energy in each bin scales proportionately with the number of points in the FFT
+  // Not sure where the 2.0 / 0.5 factors come from, they were found empirically by matching S/(BW*N0) to FM SNR
+  // They work, but seem backwards
+  return (master->in_type == COMPLEX ? 2.0 : 0.5) * min_bin_energy / ((float)master->points * Frontend.samprate);
 }
 
 
