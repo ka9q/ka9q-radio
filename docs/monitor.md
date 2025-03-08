@@ -48,3 +48,16 @@ A session does not appear in the list until it's active (audio is decoded).
 | SHIFT + →               | playout buffer +1 ms |
 | v                       | toggle, verbose display |
 | q                       | toggle, quiet mode |
+
+## IDs
+
+If you want to show IDs for your `monitor` sessions you have to create the file */usr/local/share/ka9q-radio/id.txt*.
+
+The format of this file is:
+
+```
+freq1 [tone] ID of freq1
+freq2 [tone] ID of freq2
+```
+
+Where **freq** is the frequency in Hz, **tone** is the optional CTCSS/PL tone in Hz, and the rest of the line is the ID.
