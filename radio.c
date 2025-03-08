@@ -115,7 +115,8 @@ static float estimate_noise(struct channel *chan,int shift){
   float min_bin_energy = INFINITY;
   if(master->in_type == REAL){
     // Only half as many bins as with complex input, all positive or all negative
-    int mbin = abs(shift) - slave->bins/2; // if shift < 0, inverted real spectrum
+    // if shift < 0, the spectrum is inverted and we'll look at it in reverse order but that's OK
+    int mbin = abs(shift) - slave->bins/2;
     for(int i=0; i < slave->bins && mbin < master->bins; i++,mbin++){
       if(mbin >= 0){
 	if(energies[i] == 0){
