@@ -646,8 +646,10 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   pthread_mutex_unlock(&master->filter_mutex);
 
   assert(fdomain != NULL); // Should always be master frequency data
+
+  // In spectrum mode we'll read directly from master. Don't forget the 3dB scale when the input is real
   if(slave->fdomain == NULL || slave->response == NULL)
-    return 0; // Spectrum mode; we'll read directly from master
+    return 0;
 
   /* Multiply the requested frequency segment by the frequency response
      Although frequency domain data is always complex, this is complicated because
@@ -729,6 +731,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
        If shift >= 0, the input spectrum is positive and right-side up (e.g., rx888, fobos direct sampling)
        If shift < 0, the input spectrum is negative and inverted (e.g., Airspy R2)
        Don't cross input DC as this doesn't seem useful; just blank the output
+       For real inputs, set_filter scales +3dB to account for the half energy in the implicit negative spectrum
     */
     int wp = (slave->bins+1)/2; // most negative output bin
 
@@ -929,8 +932,12 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
     printf("impulse[%d] = %g + j%g\n",i,crealf(impulse[i]),cimagf(impulse[i]));
 #endif
   }
-  // correct for gains of windowed sinc function and FFT with overlap
-  float const gain = 1.0f / (window_gain *  slave->master->points); // Adjust for input FFT and overlap
+  // gain corrections:
+  // 1. real inputs require +3dB for half the power in the implicit negative spectrum
+  // 2. the windowed sinc has some loss
+  // 3. The un-normalized forward FFT has an implicit power gain of N
+  float const gain = (slave->master->in_type == REAL ? M_SQRT2 : 1.0f)
+    / (window_gain *  slave->master->points);
   assert(gain != 0 && isfinite(gain));
   for(int i = 0; i < M; i++)
     impulse[i] *= gain; // Normalize for the window gain
