@@ -709,8 +709,7 @@ float scale_ADpower2FS(struct frontend const *frontend){
     scale *= 2;
   return scale;
 }
-// Returns multiplicative factor for converting raw samples to floats with analog gain correction and FFT size scaling
-// Real vs complex difference is (I think) handled in the filter with a 3dB boost, so there's no sqrt(2) correction here
+// Returns multiplicative factor for converting raw samples to floats with analog gain correction
 float scale_AD(struct frontend const *frontend){
   assert(frontend != NULL);
   if(frontend == NULL)
