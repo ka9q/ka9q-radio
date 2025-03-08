@@ -701,11 +701,9 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"Delay");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
-    if(sp == NULL)
+    if(sp == NULL || sp->chan.output.rtp.timestamp == 0 || !sp->now_active)
       continue;
 
-    if(sp->chan.output.rtp.timestamp == 0)
-      continue; // Not being sent
     float delay = 0;
     // sp->frontend.timestamp (GPS time at front end) and sp->chan.output.rtp.timestamp (next RTP timestamp to be sent) are updated periodically by status packets
     // sp->rtp_state.timestamp contains most recent RTP packet processed
