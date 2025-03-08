@@ -264,7 +264,7 @@ int main(int argc,char * const argv[]){
       break;
     default:
       fprintf(stderr,"Usage: %s -L\n",App_path);
-      fprintf(stderr,"       %s [-a] [-c channels] [-f config_file] [-g gain] [-p playout] [-q] [-r samprate] [-u update] [-v]\
+      fprintf(stderr,"       %s [-c channels] [-f config_file] [-g gain] [-p playout] [-q] [-r samprate] [-u update] [-v] \
 [-I mcast_address] [-R audiodev] [-S] [mcast_address ...]\n",App_path);
       exit(EX_USAGE);
     }
