@@ -541,8 +541,8 @@ static void rx_callback(struct libusb_transfer * const transfer){
       } else {
 	frontend->samp_since_over++;
       }
+      in_energy += (int)samples[i] * samples[i];
       wptr[i] = sdr->scale * samples[i];
-      in_energy += samples[i] * samples[i];
     }
   }
   frontend->timestamp = now;

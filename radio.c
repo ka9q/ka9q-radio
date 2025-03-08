@@ -115,7 +115,8 @@ static float estimate_noise(struct channel *chan,int shift){
   float min_bin_energy = INFINITY;
   if(master->in_type == REAL){
     // Only half as many bins as with complex input, all positive or all negative
-    int mbin = abs(shift) - slave->bins/2; // if shift < 0, inverted real spectrum
+    // if shift < 0, the spectrum is inverted and we'll look at it in reverse order but that's OK
+    int mbin = abs(shift) - slave->bins/2;
     for(int i=0; i < slave->bins && mbin < master->bins; i++,mbin++){
       if(mbin >= 0){
 	if(energies[i] == 0){
@@ -159,7 +160,7 @@ static float estimate_noise(struct channel *chan,int shift){
   // With an unnormalized FFT, the noise energy in each bin scales proportionately with the number of points in the FFT
   // Not sure where the 2.0 / 0.5 factors come from, they were found empirically by matching S/(BW*N0) to FM SNR
   // They work, but seem backwards
-  return (master->in_type == COMPLEX ? 2.0 : 0.5) * min_bin_energy / ((float)master->points * Frontend.samprate);
+  return min_bin_energy / ((float)master->bins * Frontend.samprate);
 }
 
 
@@ -709,8 +710,7 @@ float scale_ADpower2FS(struct frontend const *frontend){
     scale *= 2;
   return scale;
 }
-// Returns multiplicative factor for converting raw samples to floats with analog gain correction and FFT size scaling
-// Real vs complex difference is (I think) handled in the filter with a 3dB boost, so there's no sqrt(2) correction here
+// Returns multiplicative factor for converting raw samples to floats with analog gain correction
 float scale_AD(struct frontend const *frontend){
   assert(frontend != NULL);
   if(frontend == NULL)
