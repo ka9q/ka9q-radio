@@ -84,7 +84,6 @@ static inline int modulo(int x,int const m){
 }
 
 
-static void suggest(int level,int size,int dir,int clex);
 static bool goodchoice(unsigned long n);
 #if 0
 static unsigned long gcd(unsigned long a,unsigned long b);
@@ -1016,7 +1015,7 @@ int write_rfilter(struct filter_in *f, float const *buffer,int size){
 };
 
 // Suggest running fftwf-wisdom to generate some FFTW3 wisdom
-static void suggest(int level,int size,int dir,int clex){
+void suggest(int level,int size,int dir,int clex){
   const char *opt = NULL;
 
   switch(level){

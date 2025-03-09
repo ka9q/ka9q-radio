@@ -89,6 +89,7 @@ int set_filter(struct filter_out * restrict,float,float,float);
 void *run_fft(void *);
 int write_cfilter(struct filter_in *, complex float const *,int size);
 int write_rfilter(struct filter_in *, float const *,int size);
+void suggest(int level,int size,int dir,int clex);
 
 
 // Write complex sample to input side of filter
