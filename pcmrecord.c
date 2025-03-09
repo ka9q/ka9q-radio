@@ -134,6 +134,7 @@ struct session {
 
   char filename[PATH_MAX];
   bool can_seek;               // file is regular; can seek on it
+  bool exit_after_close;       // Exit after closing output, e.g., stdout
 
   uint32_t ssrc;               // RTP stream source ID
   struct rtp_state rtp_state;
@@ -850,7 +851,7 @@ static void input_loop(){
 	}
       if(((FileLengthLimit != 0) || (max_length != 0)) && sp->samples_remaining <= 0){
 	close_file(sp,"size limit"); // Don't reset RTP here so we won't lose samples on the next file
-	if(!sp->can_seek)
+	if(sp->exit_after_close)
 	  exit(EX_OK); // if writing to a pipe, we're done
       }
     } // end of packet processing
@@ -869,7 +870,7 @@ static void input_loop(){
 	if(idle > Timeout * BILLION){
 	  // Close idle file
 	  close_file(sp,"idle timeout"); // sp will be NULL
-	  if(!sp->can_seek)
+	  if(sp->exit_after_close)
 	    exit(EX_OK); // if writing to anything but an ordinary file
 	  sp->rtp_state.init = false; // reinit rtp on next packet so we won't emit lots of silence
 	}
@@ -899,6 +900,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   if(Catmode){
     sp->fp = stdout;
     sp->can_seek = false;
+    sp->exit_after_close = true;
     strlcpy(sp->filename,"[stdout]",sizeof(sp->filename));
     if(Verbose)
       fprintf(stderr,"receiving %s ssrc %u samprate %d channels %d encoding %s freq %'.3lf preset %s\n",
@@ -909,6 +911,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   } else if(Command != NULL){
     // Substitute parameters as specified
     sp->can_seek = false;
+    sp->exit_after_close = false;
     sp->filename[0] = '\0';
     char command_copy[2048]; // Don't overwrite program args
     strlcpy(command_copy,Command,sizeof(command_copy));
@@ -962,6 +965,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     return 0;
   }
   // Else create a file
+  sp->exit_after_close = false;
   char const *suffix = ".raw";
   if(!Raw){
     switch(sp->encoding){
@@ -1175,7 +1179,7 @@ static int close_session(struct session **spp){
 
   close_file(sp,"session closed");
 
-  if(!sp->can_seek)
+  if(sp->exit_after_close)
     exit(EX_OK); // if writing to anything but an ordinary file
 
   if(sp->prev)
