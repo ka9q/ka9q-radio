@@ -1531,7 +1531,7 @@ static void display_output(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Dest","%s",formatsock(&channel->output.dest_socket,true));
 
   pprintw(w,row++,col,"SSRC","%u",channel->output.rtp.ssrc);
-  pprintw(w,row++,col,"Timestamp","%u",channel->output.rtp.timestamp);
+  pprintw(w,row++,col,"Timestamp","%'u",channel->output.rtp.timestamp);
   pprintw(w,row++,col,"TTL","%d",Mcast_ttl);
   pprintw(w,row++,col,"Payload Type","%u",channel->output.rtp.type);
   pprintw(w,row++,col,"Sample rate","%'d Hz",channel->output.samprate);
