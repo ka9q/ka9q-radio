@@ -1017,13 +1017,13 @@ static void process_keyboard(void){
   case KEY_RIGHT:
     sp->pan = min(sp->pan + .01,+1.0);
     break;
-  case KEY_SLEFT: // Shifted left - decrease playout buffer 10 ms
+  case KEY_SLEFT: // Shifted left - decrease playout buffer 1 ms
     if(Playout >= -100){
       Playout -= 1;
       sp->reset = true;
     }
     break;
-  case KEY_SRIGHT: // Shifted right - increase playout buffer 10 ms
+  case KEY_SRIGHT: // Shifted right - increase playout buffer 1 ms
     Playout += 1;
     sp->reset = true;
     break;
