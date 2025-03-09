@@ -134,7 +134,7 @@ struct session {
 
   char filename[PATH_MAX];
   bool can_seek;               // file is regular; can seek on it
-  bool exit_after_close;       // Exit after closing output, e.g., stdout
+  bool exit_after_close;       // Exit after closing stdout
 
   uint32_t ssrc;               // RTP stream source ID
   struct rtp_state rtp_state;
