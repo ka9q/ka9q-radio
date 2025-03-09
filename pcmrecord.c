@@ -848,9 +848,11 @@ static void input_loop(){
 	if(0 != fflush(sp->fp)){
 	  fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
 	}
-      if(((FileLengthLimit != 0) || (max_length != 0)) && sp->samples_remaining <= 0)
+      if(((FileLengthLimit != 0) || (max_length != 0)) && sp->samples_remaining <= 0){
 	close_file(sp,"size limit"); // Don't reset RTP here so we won't lose samples on the next file
-
+	if(!sp->can_seek)
+	  exit(EX_OK); // if writing to a pipe, we're done
+      }
     } // end of packet processing
   datadone:;
     // Walk through list, close idle files
@@ -860,11 +862,15 @@ static void input_loop(){
       last_scan_time = current_time;
       struct session *next;
       for(struct session *sp = Sessions;sp != NULL; sp = next){
+	if(sp->last_active == 0)
+	  continue; // Don't close it before it starts
 	next = sp->next; // save in case sp is closed
 	int64_t idle = current_time - sp->last_active;
 	if(idle > Timeout * BILLION){
 	  // Close idle file
 	  close_file(sp,"idle timeout"); // sp will be NULL
+	  if(!sp->can_seek)
+	    exit(EX_OK); // if writing to anything but an ordinary file
 	  sp->rtp_state.init = false; // reinit rtp on next packet so we won't emit lots of silence
 	}
       }
@@ -892,6 +898,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   char const *file_encoding = encoding_string(sp->encoding == S16BE ? S16LE : sp->encoding);
   if(Catmode){
     sp->fp = stdout;
+    sp->can_seek = false;
+    strlcpy(sp->filename,"[stdout]",sizeof(sp->filename));
     if(Verbose)
       fprintf(stderr,"receiving %s ssrc %u samprate %d channels %d encoding %s freq %'.3lf preset %s\n",
 	      sp->frontend.description,
@@ -900,6 +908,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     return 0;
   } else if(Command != NULL){
     // Substitute parameters as specified
+    sp->can_seek = false;
     sp->filename[0] = '\0';
     char command_copy[2048]; // Don't overwrite program args
     strlcpy(command_copy,Command,sizeof(command_copy));
@@ -948,7 +957,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     sp->fp = popen(sp->filename,"w");
     if(sp->fp == NULL){
       fprintf(stderr,"ssrc %u: cannot start %s, exiting",sp->ssrc,sp->filename);
-      exit(1); // Will probably fail for all others too, just give up
+      exit(EX_CANTCREAT); // Will probably fail for all others too, just give up
     }
     return 0;
   }
@@ -1101,6 +1110,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     return -1;
   }
   {
+    // The output could be a named pipe, which can't be seeked
     struct stat statbuf;
     if(fstat(fileno(sp->fp),&statbuf) != 0){
       fprintf(stderr,"stat(%s) failed: %s\n",sp->filename,strerror(errno));
@@ -1164,6 +1174,10 @@ static int close_session(struct session **spp){
     return -1;
 
   close_file(sp,"session closed");
+
+  if(!sp->can_seek)
+    exit(EX_OK); // if writing to anything but an ordinary file
+
   if(sp->prev)
     sp->prev->next = sp->next;
   else
@@ -1199,7 +1213,7 @@ static int close_file(struct session *sp,char const *reason){
     fprintf(stderr,"%s closing '%s' %'.1f sec",
 	    sp->frontend.description,
 	    sp->filename, // might be blank
-            (float)sp->samples_written / sp->samprate);
+	    (float)sp->samples_written / sp->samprate);
     if(reason != NULL)
       fprintf(stderr," (%s)\n",reason);
   }
