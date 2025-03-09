@@ -66,10 +66,10 @@ opussend: opussend.o libradio.a
 	$(CC) -g -o $@ $^ -lopus -lportaudio -lm -lpthread
 
 packetd: packetd.o libradio.a
-	$(CC) -g -o $@ $^ -lliquid -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread 
+	$(CC) -g -o $@ $^  -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread
 
 pcmcat: pcmcat.o libradio.a
-	$(CC) -g -o $@ $^ -lm -lpthread 
+	$(CC) -g -o $@ $^ -lm -lpthread
 
 pcmrecord: pcmrecord.o libradio.a
 	$(CC) -g -o $@ $^ -lopus -logg -lm -lpthread
@@ -78,16 +78,16 @@ pcmsend: pcmsend.o libradio.a
 	$(CC) -g -o $@ $^ -lportaudio -lm -lpthread
 
 pcmspawn: pcmspawn.o libradio.a
-	 $(CC) -g -o $@ $^ -lm -lpthread	  
+	 $(CC) -g -o $@ $^ -lm -lpthread
 
 pl: pl.o libradio.a
-	$(CC) -g -o $@ $^ -lliquid -lfftw3f_threads -lfftw3f -lm -lpthread    
+	$(CC) -g -o $@ $^  -lfftw3f_threads -lfftw3f -lm -lpthread
 
 powers: powers.o dump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lm -lpthread
 
 radiod: main.o radio.o audio.o fm.o wfm.o linear.o spectrum.o radio_status.o modes.o rx888.o airspy.o airspyhf.o funcube.o rtlsdr.o sig_gen.o ezusb.o libfcd.a libradio.a
-	$(CC) -g -o $@ $^ -ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncursesw -liniparser -lairspy -lairspyhf -lrtlsdr -lopus -lportaudio -lliquid -liconv -lusb-1.0 -lm -lpthread
+	$(CC) -g -o $@ $^ -ldl -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncursesw -liniparser -lairspy -lairspyhf -lrtlsdr -lopus -lportaudio  -liconv -lusb-1.0 -lm -lpthread
 
 rdsd: rdsd.o libradio.a
 	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lncursesw -lm -lpthread
@@ -102,19 +102,19 @@ show-sig: show-sig.o libradio.a
 	$(CC) -g -o $@ $^ -lfftw3f_threads -lfftw3f -lncursesw -lm -lpthread
 
 stereod: stereod.o libradio.a
-	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread    
+	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread
 
 tune: tune.o libradio.a
-	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread    
+	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread
 
 jt-decoded: jt-decoded.o libradio.a
-	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread    
+	$(CC) -g -o $@ $^ -lavahi-client -lavahi-common -lfftw3f_threads -lfftw3f -lm -lpthread
 
 set_xcvr: set_xcvr.o
 	  $(CC) -g -o $@ $^ -lpigpio -lpthread
 
 wd-record: wd-record.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lliquid -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^  -lm -lpthread
 
 
 # Binary libraries
@@ -126,7 +126,3 @@ libfcd.a: fcd.o hid-libusb.o
 libradio.a: morse.o avahi.o avahi_browse.o attr.o ax25.o config.o decimate.o filter.o status.o decode_status.o misc.o multicast.o rtcp.o osc.o iir.o rtp.o
 	ar rv $@ $?
 	ranlib $@
-
-
-
-
