@@ -861,13 +861,12 @@ static void input_loop(){
     int64_t current_time = gps_time_ns();
     if(current_time > last_scan_time + BILLION){
       last_scan_time = current_time;
-      struct session *next;
+      struct session *next = NULL;
       for(struct session *sp = Sessions;sp != NULL; sp = next){
-	if(sp->last_active == 0)
-	  continue; // Don't close it before it starts
 	next = sp->next; // save in case sp is closed
-	int64_t idle = current_time - sp->last_active;
-	if(idle > Timeout * BILLION){
+	// Don't close session waiting for first activity
+	if(sp->last_active != 0
+	   && current_time > sp->last_active + Timeout * BILLION){
 	  // Close idle file
 	  close_file(sp,"idle timeout"); // sp will be NULL
 	  if(sp->exit_after_close)
