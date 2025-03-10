@@ -159,8 +159,6 @@ static float estimate_noise(struct channel *chan,int shift){
 
   // correct for FFT scaling and normalize to 1 Hz
   // With an unnormalized FFT, the noise energy in each bin scales proportionately with the number of points in the FFT
-  // Not sure where the 2.0 / 0.5 factors come from, they were found empirically by matching S/(BW*N0) to FM SNR
-  // They work, but seem backwards
   return min_bin_energy / ((float)master->bins * Frontend.samprate);
 }
 
