@@ -117,9 +117,10 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
 int reset_radio_status(struct channel *chan){
   // Reset integrators
   chan->status.blocks_since_poll = 0;
+#if 0
   if(chan->spectrum.bin_data != NULL && chan->spectrum.bin_count != 0)
     memset(chan->spectrum.bin_data,0,chan->spectrum.bin_count * sizeof(*chan->spectrum.bin_data));
-
+#endif
   return 0;
 }
 
@@ -504,6 +505,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     // Retune if necessary to accommodate edge of passband
     // but only if a change was commanded, to prevent a tuning war
     set_freq(chan,chan->tune.freq);
+    chan->filter.remainder = NAN; // Force re-init of fine oscillator
   }
   return false;
 }
@@ -620,11 +622,12 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       // encode bin data here? maybe change this, it can be a lot
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
       if(chan->spectrum.bin_data != NULL){
+#if 0
 	// Average and clear
 	float const scale = 1.f / chan->status.blocks_since_poll;
 	for(int i=0; i < chan->spectrum.bin_count; i++)
 	  chan->spectrum.bin_data[i] *= scale;
-
+#endif
 	encode_vector(&bp,BIN_DATA,chan->spectrum.bin_data,chan->spectrum.bin_count);
       }
     }
@@ -632,10 +635,11 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   default:
     break;
   }
+
+  encode_float(&bp,LOW_EDGE,chan->filter.min_IF); // Hz
+  encode_float(&bp,HIGH_EDGE,chan->filter.max_IF); // Hz
   // Lots of stuff not relevant in spectrum analysis mode
   if(chan->demod_type != SPECT_DEMOD){
-    encode_float(&bp,LOW_EDGE,chan->filter.min_IF); // Hz
-    encode_float(&bp,HIGH_EDGE,chan->filter.max_IF); // Hz
     encode_int32(&bp,OUTPUT_SAMPRATE,chan->output.samprate); // Hz
     encode_int64(&bp,OUTPUT_DATA_PACKETS,chan->output.rtp.packets);
     encode_float(&bp,KAISER_BETA,chan->filter.kaiser_beta); // Dimensionless
