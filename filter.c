@@ -50,7 +50,7 @@ int N_internal_threads = 1; // Usually most efficient
 int FFTW_planning_level = FFTW_PATIENT;
 
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
-static pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool FFTW_init = false;
 
 // FFT job descriptor
@@ -84,10 +84,6 @@ static inline int modulo(int x,int const m){
 }
 
 
-// Custom version of malloc that aligns to a cache line
-void *lmalloc(size_t size);
-
-static void suggest(int level,int size,int dir,int clex);
 static bool goodchoice(unsigned long n);
 #if 0
 static unsigned long gcd(unsigned long a,unsigned long b);
@@ -1018,22 +1014,8 @@ int write_rfilter(struct filter_in *f, float const *buffer,int size){
   return executed;
 };
 
-// Custom version of malloc that aligns to a cache line
-// This is 64 bytes on most modern machines, including the x86 and the ARM 2711 (Pi 4)
-// This is stricter than a complex float or double, which is required by fftwf/fftw
-void *lmalloc(size_t size){
-  void *ptr;
-  int r;
-  if((r = posix_memalign(&ptr,64,size)) == 0){
-    assert(ptr != NULL);
-    return ptr;
-  }
-  errno = r;
-  assert(false);
-  return NULL;
-}
 // Suggest running fftwf-wisdom to generate some FFTW3 wisdom
-static void suggest(int level,int size,int dir,int clex){
+void suggest(int level,int size,int dir,int clex){
   const char *opt = NULL;
 
   switch(level){

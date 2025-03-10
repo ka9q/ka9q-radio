@@ -23,6 +23,6 @@ You may add or delete entries in this file as needed, but be careful as it will 
 | lsb       | linear    |   3.05k | amateur radio LSB |
 | dsb       | linear    |  10.0k  | amateur radio DSB-SC, uses PLL squaring to recover carrier |
 | amsq      | linear    |   6.0k  | envelope detected AM with carrier squelch |
-| wspr      | linear    |   3.05k | same as **usb** but with ACG disabled |
+| wspr      | linear    |   3.05k | same as **usb** but with AGC disabled |
 | spectrum  | spectrum  |   NA    | experimental |
 | nam       | linear    |   6.0k  | narrow (completely flat) AM, passes DC|
