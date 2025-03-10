@@ -102,6 +102,8 @@ static float estimate_noise(struct channel *chan,int shift){
   assert(slave != NULL);
   if(slave == NULL)
     return NAN;
+  if(slave->bins <= 0)
+    return 0;
   // Should do some range checking on 'shift'
   if(chan->filter.energies == NULL)
     chan->filter.energies = calloc(sizeof *chan->filter.energies,slave->bins);
@@ -110,7 +112,6 @@ static float estimate_noise(struct channel *chan,int shift){
   struct filter_in const * const master = slave->master;
   // slave->next_jobnum already incremented by execute_filter_output
   complex float const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
-
 
   float min_bin_energy = INFINITY;
   if(master->in_type == REAL){
@@ -593,7 +594,7 @@ int downconvert(struct channel *chan){
     }
     // set fine tuning frequency & phase
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
-    if(remainder != chan->filter.remainder){
+    if(shift != chan->filter.bin_shift || remainder != chan->filter.remainder){ // Detect startup
       assert(isfinite(chan->tune.doppler_rate));
       set_osc(&chan->fine,remainder/chan->output.samprate,chan->tune.doppler_rate/(chan->output.samprate * chan->output.samprate));
       chan->filter.remainder = remainder;
@@ -692,6 +693,7 @@ int set_channel_filter(struct channel *chan){
 	     upper/chan->output.samprate,
 	     chan->filter.kaiser_beta);
 
+  chan->filter.remainder = NAN; // Force re-init of fine oscillator
   return 0;
 }
 
