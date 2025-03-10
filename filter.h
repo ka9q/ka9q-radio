@@ -90,6 +90,8 @@ void *run_fft(void *);
 int write_cfilter(struct filter_in *, complex float const *,int size);
 int write_rfilter(struct filter_in *, float const *,int size);
 void suggest(int level,int size,int dir,int clex);
+unsigned long gcd(unsigned long a,unsigned long b);
+unsigned long lcm(unsigned long a,unsigned long b);
 
 
 // Write complex sample to input side of filter
