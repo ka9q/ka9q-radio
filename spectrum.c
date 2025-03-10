@@ -110,6 +110,7 @@ int demod_spectrum(void *arg){
 	  chan->filter.min_IF = -chan->filter.max_IF;
 
 	  create_filter_output(&chan->filter.out,&Frontend.in,NULL,0,SPECTRUM);
+	  // Compute power (not amplitude) scale factor
 	  gain = 1.0f / (float) N;   // scale each bin value for our FFT
 	  gain *= gain;              // squared because the we're scaling the output of complex norm, not the input bin values
 	  if(chan->filter.out.master->in_type == REAL)
