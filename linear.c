@@ -55,8 +55,7 @@ int demod_linear(void *arg){
     return -1;
   }
   set_channel_filter(chan);
-  chan->filter.remainder = NAN;
-
+  chan->filter.remainder = NAN;   // Force re-init of fine downconversion osc
   set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
   // Coherent mode parameters
   float const damping = DEFAULT_PLL_DAMPING;
