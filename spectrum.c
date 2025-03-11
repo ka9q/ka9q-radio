@@ -70,12 +70,12 @@ int demod_spectrum(void *arg){
   float *power_buffer = NULL;
   float *kaiser = NULL;
   float kaiser_gain = 0;
+  int actual_bin_count = 0;
 
   while(1){
     // Check user params
     int bin_count = chan->spectrum.bin_count <= 0 ? 64 : chan->spectrum.bin_count;
     float bin_bw = chan->spectrum.bin_bw <= 0 ? 1000 : chan->spectrum.bin_bw;
-    int actual_bin_count = bin_count;
 
     if(bin_bw > 50){
       // large bins, use forward FFT directly
@@ -218,9 +218,6 @@ int demod_spectrum(void *arg){
 	if(Verbose > 1)
 	  fprintf(stdout,"spectrum %d: freq %'lf bin_bw %'f bin_count %'d\n",chan->output.rtp.ssrc,chan->tune.freq,bin_bw,bin_count);
 
-#if SPECTRUM_DEBUG
-	fprintf(stdout,"spectrum creating IQ/FFT channel, requested bw = %.1f bin_count = %d\n",bin_bw,bin_count);
-#endif
 	delete_filter_output(&chan->filter.out);
 	if(plan != NULL)
 	  fftwf_destroy_plan(plan);
@@ -238,16 +235,18 @@ int demod_spectrum(void *arg){
 	if(samprate % valid_samprates != 0){
 	  // round up
 	  samprate += valid_samprates - samprate % valid_samprates;
-#if SPECTRUM_DEBUG
-	  fprintf(stdout,"rounding samprate up to %d\n",samprate);
-#endif
 	  actual_bin_count = ceilf(samprate / bin_bw);
 	} else
 	  actual_bin_count = bin_count;
+
 	// Should also round up to an efficient FFT size
 	int frame_len = ceilf(samprate * Blocktime / 1000.);
 	assert(actual_bin_count >= bin_count);
 
+#if SPECTRUM_DEBUG
+	fprintf(stdout,"spectrum creating IQ/FFT channel, requested bw = %.1f bin_count = %d, actual bin count %d samprate %f frame len %d\n",
+		bin_bw,bin_count,actual_bin_count,samprate,frame_len);
+#endif
 	chan->filter.min_IF = -samprate/2 + 200;
 	chan->filter.max_IF = samprate/2 - 200;
 
@@ -294,10 +293,7 @@ int demod_spectrum(void *arg){
 	pthread_mutex_lock(&FFTW_planning_mutex);
 	fftwf_plan_with_nthreads(1);
 	// These are small FFTs only do measure planning
-	if((plan = fftwf_plan_dft_1d(actual_bin_count, fft0_in, fft_out, FFTW_FORWARD, FFTW_WISDOM_ONLY|FFTW_MEASURE)) == NULL){
-	  suggest(FFTW_planning_level,actual_bin_count,FFTW_FORWARD,COMPLEX);
-	  plan = fftwf_plan_dft_1d(actual_bin_count,fft0_in,fft_out,FFTW_FORWARD,FFTW_MEASURE);
-	}
+	plan = fftwf_plan_dft_1d(actual_bin_count,fft0_in,fft_out,FFTW_FORWARD,FFTW_MEASURE);
 	pthread_mutex_unlock(&FFTW_planning_mutex);
 	if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
 	  fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
@@ -330,7 +326,8 @@ int demod_spectrum(void *arg){
 	  for(int j = 0; j < bin_count; j++,k++){
 	    if(j == bin_count/2)
 	      k += actual_bin_count - bin_count; // jump to negative spectrum of FFT
-	    chan->spectrum.bin_data[j] = gain * cnrmf(fft_out[k]); // Take power spectrum
+	    float p = gain * cnrmf(fft_out[k]); // Take power spectrum
+	    chan->spectrum.bin_data[j] = p;
 	    assert(isfinite(chan->spectrum.bin_data[j]));
 	  }
 	}
