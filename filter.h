@@ -92,7 +92,7 @@ int write_rfilter(struct filter_in *, float const *,int size);
 void suggest(int level,int size,int dir,int clex);
 unsigned long gcd(unsigned long a,unsigned long b);
 unsigned long lcm(unsigned long a,unsigned long b);
-
+int make_kaiser(float * const window,int const M,float const beta);
 
 // Write complex sample to input side of filter
 static inline int put_cfilter(struct filter_in * restrict const f,complex float const s){ // Complex

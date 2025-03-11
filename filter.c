@@ -856,7 +856,7 @@ int delete_filter_output(struct filter_out *slave){
 
 // Compute an entire Kaiser window
 // More efficient than repeatedly calling kaiser(n,M,beta)
-static int make_kaiser(float * const window,int const M,float const beta){
+int make_kaiser(float * const window,int const M,float const beta){
   assert(window != NULL);
   if(window == NULL)
     return -1;
