@@ -69,7 +69,7 @@ int demod_spectrum(void *arg){
     // Check user params
     int bin_count = chan->spectrum.bin_count <= 0 ? 64 : chan->spectrum.bin_count;
     float bin_bw = chan->spectrum.bin_bw <= 0 ? 1000 : chan->spectrum.bin_bw;
-    int actual_bin_count;
+    int actual_bin_count = bin_count;
 
     if(bin_bw > 50){
       // large bins, use forward FFT directly
