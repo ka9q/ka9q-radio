@@ -15,6 +15,8 @@
 #include "filter.h"
 #include "radio.h"
 
+static float const SPECTRUM_KAISER_BETA = 5.0;
+
 // Spectrum analysis thread
 int demod_spectrum(void *arg){
   struct channel * const chan = arg;
@@ -56,14 +58,18 @@ int demod_spectrum(void *arg){
   chan->spectrum.bin_data = calloc(Frontend.in.bins,sizeof *chan->spectrum.bin_data);
 
   fftwf_plan plan = NULL;
-  complex float *fft_in = NULL;
+  complex float *fft0_in = NULL;
+  complex float *fft1_in = NULL;
   complex float *fft_out = NULL;
   float gain = 0;
-  int fft_index = 0;
+  int fft0_index = 0;
+  int fft1_index = 0;
   int old_bin_count = -1;
   float old_bin_bw = -1;
   int input_bins = 0;
   float *power_buffer = NULL;
+  float *kaiser = NULL;
+  float kaiser_gain = 0;
 
   while(1){
     // Check user params
@@ -85,11 +91,13 @@ int demod_spectrum(void *arg){
 	  fftwf_destroy_plan(plan);
 	  plan = NULL;
 	}
-	FREE(fft_in);
+	FREE(fft0_in);
+	FREE(fft1_in);
 	FREE(fft_out);
 	FREE(chan->filter.energies);
 	FREE(chan->status.command);
 	FREE(power_buffer);
+	FREE(kaiser);
 
 	binsperbin = bin_bw / fe_fft_bin_spacing;
 	input_bins = ceilf(binsperbin * bin_count);
@@ -217,11 +225,13 @@ int demod_spectrum(void *arg){
 	if(plan != NULL)
 	  fftwf_destroy_plan(plan);
 	plan = NULL;
-	FREE(fft_in);
+	FREE(fft0_in);
+	FREE(fft1_in);
 	FREE(fft_out);
 	FREE(chan->filter.energies);
 	FREE(chan->status.command);
 	FREE(power_buffer);
+	FREE(kaiser);
 
 	int samprate = bin_bw * bin_count;
 	int valid_samprates = lcm(blockrate,L*blockrate/N);
@@ -249,24 +259,44 @@ int demod_spectrum(void *arg){
 	(void)r;
 	assert(r == 0);
 
-	set_filter(&chan->filter.out,chan->filter.min_IF,chan->filter.max_IF,11.0);
+	set_filter(&chan->filter.out,chan->filter.min_IF,chan->filter.max_IF,KAISER_BETA);
 	chan->filter.remainder = NAN; // Force init of downconverter
 	chan->filter.bin_shift = 1010101010; // Unlikely - but a kludge, force init of phase rotator
 
 	// Should round FFT block size up to an efficient number
-	fft_in = lmalloc(actual_bin_count * sizeof(complex float));
-	fft_out = lmalloc(actual_bin_count * sizeof(complex float));
-	fft_index = 0;
-	assert(fft_in != NULL && fft_out != NULL);
+
+	// Generate normalized Kaiser window
+	kaiser = malloc(actual_bin_count * sizeof *kaiser);
+	make_kaiser(kaiser,actual_bin_count,SPECTRUM_KAISER_BETA);
+	kaiser_gain = 0;
+	for(int i = 0; i < actual_bin_count; i++)
+	  kaiser_gain += kaiser[i];
+
+	kaiser_gain = actual_bin_count / kaiser_gain;
+	for(int i = 0; i < actual_bin_count; i++)
+	  kaiser[i] *= kaiser_gain;
+
+	// Set up two 50% overlapping time-domain windows
+	fft0_in = lmalloc(actual_bin_count * sizeof *fft0_in);
+	fft1_in = lmalloc(actual_bin_count * sizeof *fft1_in);
+	fft_out = lmalloc(actual_bin_count * sizeof *fft_out);
+	assert(fft0_in != NULL && fft1_in != NULL && fft_out != NULL);
+	memset(fft0_in,0,actual_bin_count * sizeof *fft0_in);
+	memset(fft1_in,0,actual_bin_count * sizeof *fft1_in); // Odd buffer not full when first transformed
+	memset(fft_out,0,actual_bin_count * sizeof *fft_out); // Odd buffer not full when first transformed
+	fft0_index = 0;
+	fft1_index = actual_bin_count/2;
+
 #if SPECTRUM_DEBUG
 	fprintf(stdout,"frame_len %d, actual bin count %d samprate %d, bin_bw %.1f gain %.1f dB\n",
 		frame_len,actual_bin_count,samprate,bin_bw,power2dB(gain));
 #endif
 	pthread_mutex_lock(&FFTW_planning_mutex);
 	fftwf_plan_with_nthreads(1);
-	if((plan = fftwf_plan_dft_1d(actual_bin_count, fft_in, fft_out, FFTW_FORWARD, FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
+	// These are small FFTs only do measure planning
+	if((plan = fftwf_plan_dft_1d(actual_bin_count, fft0_in, fft_out, FFTW_FORWARD, FFTW_WISDOM_ONLY|FFTW_MEASURE)) == NULL){
 	  suggest(FFTW_planning_level,actual_bin_count,FFTW_FORWARD,COMPLEX);
-	  plan = fftwf_plan_dft_1d(actual_bin_count,fft_in,fft_out,FFTW_FORWARD,FFTW_MEASURE);
+	  plan = fftwf_plan_dft_1d(actual_bin_count,fft0_in,fft_out,FFTW_FORWARD,FFTW_MEASURE);
 	}
 	pthread_mutex_unlock(&FFTW_planning_mutex);
 	if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
@@ -276,39 +306,33 @@ int demod_spectrum(void *arg){
 	break;
 
       // FFT mode for more precision
-      // Should implement overlapping windowed FFTs here
+      // Two 50% overlapping windows with Kaiser windows
       for(int i = 0; i < chan->sampcount; i++){
-	assert(fft_index >= 0 && fft_index < actual_bin_count);
-	fft_in[fft_index] = chan->baseband[i];
-	if(++fft_index >= actual_bin_count){
-	  // Time domain buffer is full, run the FFT
-	  fft_index = 0;
-	  fftwf_execute_dft(plan,fft_in,fft_out);
+	bool did_fft = false;
+
+	fft0_in[fft0_index] = chan->baseband[i] * kaiser[fft0_index];
+	fft1_in[fft1_index] = chan->baseband[i] * kaiser[fft1_index];
+
+	if(++fft0_index >= actual_bin_count){
+	  fft0_index = 0;
+	  fftwf_execute_dft(plan,fft0_in,fft_out);
+	  did_fft = true;
+	}
+	if(++fft1_index >= actual_bin_count){
+	  fft1_index = 0;
+	  fftwf_execute_dft(plan,fft1_in,fft_out);
+	  did_fft = true;
+	}
+	if(did_fft){
 	  // Copy requested number of bins to user
 	  // Should verify correctness for combinations of even and odd bin_count and actual_bin_count
-	  for(int j = 0; j < bin_count/2; j++){
-	    float p = gain * cnrmf(fft_out[j]); // Take power spectrum
-#if SPECTRUM_DEBUG
-	    if(p == 0)
-	      fprintf(stdout,"spectrum[%d] = 0\n",j);
-#endif
-	    assert(j >= 0 && j < Frontend.in.bins);
-	    chan->spectrum.bin_data[j] = p;
+	  int k = 0;
+	  for(int j = 0; j < bin_count; j++,k++){
+	    if(j == bin_count/2)
+	      k += actual_bin_count - bin_count; // jump to negative spectrum of FFT
+	    chan->spectrum.bin_data[j] = gain * cnrmf(fft_out[k]); // Take power spectrum
+	    assert(isfinite(chan->spectrum.bin_data[j]));
 	  }
-	  int offset = actual_bin_count - bin_count;
-	  for(int j = bin_count/2; j < bin_count; j++){
-	    float p = gain * cnrmf(fft_out[j+offset]); // Take power spectrum
-#if SPECTRUM_DEBUG
-	    if(p == 0)
-	      fprintf(stdout,"spectrum[%d] = 0\n",j);
-#endif
-	    assert(j >= 0 && j < Frontend.in.bins);
-	    chan->spectrum.bin_data[j] = p;
-	  }
-	  // Zero the Nyquist bin, if any
-	  // Is this correct? The display will be showing decibels, and 0 -> -inf dB
-	  if((bin_count & 1) == 0)
-	    chan->spectrum.bin_data[bin_count/2] = 0;
 	}
       }
     }
@@ -317,8 +341,10 @@ int demod_spectrum(void *arg){
   if(plan != NULL)
     fftwf_destroy_plan(plan);
   plan = NULL;
-  FREE(fft_in);
+  FREE(fft0_in);
+  FREE(fft1_in);
   FREE(fft_out);
+  FREE(kaiser);
   FREE(chan->filter.energies);
   FREE(chan->status.command);
   FREE(power_buffer);
