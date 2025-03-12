@@ -85,10 +85,6 @@ static inline int modulo(int x,int const m){
 
 
 static bool goodchoice(unsigned long n);
-#if 0
-static unsigned long gcd(unsigned long a,unsigned long b);
-static unsigned long lcm(unsigned long a,unsigned long b);
-#endif
 
 // Create fast convolution filters
 // The filters are now in two parts, filter_in (the master) and filter_out (the slave)
@@ -802,6 +798,8 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     // Also probably generates time domain ripple effects due to the sharp notch at DC
     assert(malloc_usable_size(slave->fdomain) >= slave->bins * sizeof(*slave->fdomain));
     for(int p=1,dn=slave->bins-1; p < slave->bins/2; p++,dn--){
+      assert(p >= 0 && p < slave->bins);
+      assert(dn >= 0 && dn < slave->bins);
       complex float const pos = slave->fdomain[p];
       complex float const neg = slave->fdomain[dn];
 
@@ -827,7 +825,8 @@ int delete_filter_input(struct filter_in * master){
   ASSERT_UNLOCKED(&master->filter_mutex);
   pthread_mutex_destroy(&master->filter_mutex);
   pthread_cond_destroy(&master->filter_cond);
-  fftwf_destroy_plan(master->fwd_plan);
+  if(master->fwd_plan != NULL)
+    fftwf_destroy_plan(master->fwd_plan);
   master->fwd_plan = NULL;
   mirror_free(&master->input_buffer,master->input_buffer_size); // Don't use free() !
 
@@ -843,7 +842,8 @@ int delete_filter_output(struct filter_out *slave){
 
   ASSERT_UNLOCKED(&slave->response_mutex);
   pthread_mutex_destroy(&slave->response_mutex);
-  fftwf_destroy_plan(slave->rev_plan);
+  if(slave->rev_plan != NULL)
+    fftwf_destroy_plan(slave->rev_plan);
   slave->rev_plan = NULL;
   // Only one will be non-null but it doesn't hurt to free both
   FREE(slave->output_buffer.c);
@@ -856,7 +856,7 @@ int delete_filter_output(struct filter_out *slave){
 
 // Compute an entire Kaiser window
 // More efficient than repeatedly calling kaiser(n,M,beta)
-static int make_kaiser(float * const window,int const M,float const beta){
+int make_kaiser(float * const window,int const M,float const beta){
   assert(window != NULL);
   if(window == NULL)
     return -1;
@@ -1039,6 +1039,23 @@ void suggest(int level,int size,int dir,int clex){
 	  dir == FFTW_FORWARD ? 'f' : 'b',
 	  size);
 }
+// Greatest common divisor
+unsigned long gcd(unsigned long a,unsigned long b){
+  while(b != 0){
+    unsigned long t = b;
+    b = a % b;
+    a = t;
+  }
+  return a;
+}
+
+
+unsigned long lcm(unsigned long a,unsigned long b){
+  if(a == 0 || b == 0)
+    return 0;
+  unsigned long g = gcd(a,b);
+  return (a/g) * b;
+}
 
 #if 0
 // Miscellaneous, alternate and experimental code, currently unused
@@ -1100,23 +1117,6 @@ static float const kaiser(int const n,int const M, float const beta){
   return i0(beta*sqrtf(1-p*p)) * old_inv_denom;
 }
 
-// Greatest common divisor
-static unsigned long gcd(unsigned long a,unsigned long b){
-  while(b != 0){
-    unsigned long t = b;
-    b = a % b;
-    a = t;
-  }
-  return a;
-}
-
-
-static unsigned long lcm(unsigned long a,unsigned long b){
-  if(a == 0 || b == 0)
-    return 0;
-  unsigned long g = gcd(a,b);
-  return (a/g) * b;
-}
 
 #if LIQUID
 // Use Remez or windowed sinc filter design routines in Liquid DSP library
@@ -1350,6 +1350,7 @@ static int window_rfilter(int const L,int const M,complex float * const response
   // Now back to frequency domain
   fftwf_execute(fwd_filter_plan);
   fftwf_destroy_plan(fwd_filter_plan);
+  fwd_filter_plan = NULL;
   free(timebuf);
   memcpy(response,buffer,bins * sizeof(*response));
   free(buffer);
