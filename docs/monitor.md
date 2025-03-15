@@ -51,7 +51,7 @@ A session does not appear in the list until it's active (audio is decoded).
 
 ## IDs
 
-If you want to show IDs for your `monitor` sessions you have to create the file */usr/local/share/ka9q-radio/id.txt*.
+If you want to show IDs for your `monitor` sessions you have to create (or edit) the file */usr/local/share/ka9q-radio/id.txt*.
 
 The format of this file is:
 

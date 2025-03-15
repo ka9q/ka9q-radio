@@ -1,7 +1,7 @@
 Configuring and Running *ka9q-radio - Part 2
 ============================================
 
-v1.0 (in progress), September 2023  
+v1.0 (in progress), September 2023
 Phil Karn, KA9Q
 ---------------
 
@@ -12,12 +12,12 @@ This document describes the hardware definition section in a *radiod*
 config file.  The section name must match the **hardware** entry in
 the [global] section, e.g.,
 
-[global]  
-hardware = airspy  
+[global]
+hardware = airspy
 ...
 
-[airspy]  
-device = airspy  
+[airspy]
+device = airspy
 description = "airspy on 2m antenna"
 
 
@@ -29,11 +29,11 @@ Supported Hardware
 
 Six SDR front ends are currently supported in *ka9q-radio*:
 
-[airspy](airspy.md) - Airspy R2, Airspy Mini]  
-[airspyhf](airspy.md) - Airspy HF+  
-[funcube](funcube.md) - AMSAT UK Funcube Pro+ dongle  
-[rx888](rx888.md) - RX888 Mkii (direct conversion only)  
-[rtlsdr](rtlsdr.md) - Generic RTL-SDR dongle (VHF/UHF only)  
+[airspy](airspy.md) - Airspy R2, Airspy Mini]
+[airspyhf](airspy.md) - Airspy HF+
+[funcube](funcube.md) - AMSAT UK Funcube Pro+ dongle
+[rx888](rx888.md) - RX888 Mkii (direct conversion only)
+[rtlsdr](rtlsdr.md) - Generic RTL-SDR dongle (VHF/UHF only)
 [sig_gen](sig_gen.md) - synthetic front end with signal generator (to be documented)
 
 The configuration of each device type is necessarily

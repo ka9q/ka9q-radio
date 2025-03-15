@@ -51,5 +51,5 @@ library = /usr/local/lib/ka9q-radio/fobos.so
 ```
 exit and
 ```
-radiod config/radiod@fobos-generic.conf 
+radiod config/radiod@fobos-generic.conf
 ```

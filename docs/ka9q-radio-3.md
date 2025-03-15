@@ -1,4 +1,4 @@
-Configuring Receiver Channels in *ka9q-radio*  
+Configuring Receiver Channels in *ka9q-radio*
 Version 2.1 Feb 2, 2025, Phil Karn
 =============================================
 
@@ -35,7 +35,7 @@ it up; it may be overwritten by the next "make install.
 Use the domain name system to resolve the name in the *data* parameter. See
 the discussion in [ka9q-radio.md](ka9q-radio.md).
 
-### data = 
+### data =
 
 No default. Required unless specified in [global].
 
@@ -171,7 +171,7 @@ while a value of 0 is suitable to completely eliminate audible squelch
 tails in FM voice operation. Because the preset 'pm' in presets.conf
 is usually used for ordinary voice, it sets this to 0. Preset 'fm' (no de-emphasis) sets it to 1.
 
-### headroom = -15 
+### headroom = -15
 
 Sets the target output audio
 level in dBFS. Valid in all modes but relevant mainly to the linear
@@ -188,7 +188,7 @@ tuning frequency to compensate because those operations are performed
 before the 0-Hz PLL while the **shift** value is applied last. Applicable
 to the linear demodulator only. Primarily used for CW.
 
-### recovery-rate = +20 
+### recovery-rate = +20
 
 Specifies the rate, in decibels per second, at which gain is increased
 when the input signal level has decreased and the **hang-time** has
@@ -207,7 +207,7 @@ setting, that the AGC will maintain on noise without signal. With the
 default **headroom** setting of -15 dBFS, noise will thus appear at
 -30 dBFS. Applicable only to the Linear demodulator.
 
-### gain = 50 
+### gain = 50
 
 Linear demodulator only (the FM and
 WFM demodulators automatically set their output gains.)
@@ -384,7 +384,7 @@ reducing the average packet rate.
 A section may be disabled without deleting it by setting "disable = yes"
 somewhere in the section.
 
-### freq = 
+### freq =
 
 No default. Set the channel carrier frequency.  If a
 list is specified, a receiver channel will be created for each
@@ -393,9 +393,9 @@ number formed by removing all letters from the frequency string.
 
 Frequencies are specified either as pure decimal numbers, or with a SI scale factor as follows:
 
->123.4k, 123k4 - 123.4 kilohertz  
->123.4m, 123m4 - 123m4 Megahertz  
->1.234g, 1g234 - 1.234 Gigahertz  
+>123.4k, 123k4 - 123.4 kilohertz
+>123.4m, 123m4 - 123m4 Megahertz
+>1.234g, 1g234 - 1.234 Gigahertz
 
 When no scale is given, a heuristic is used to give a "reasonable"
 answer (which may not always be right). e.g., "400" is interpreted as
@@ -406,7 +406,7 @@ Ten aliases for **freq** are provided, **freq0** through **freq9**. This is stri
 around the line length limitation in the *libiniparser* library so you can have literally
 hundreds of receiver channels in a single *radiod* instance. (The parser only allows one of each key to be present in a section, so repeating **freq** won't work.)
 
-### ssrc = 
+### ssrc =
 
 Set the RTP (Real Time Protocol) SSRC (Stream Source Identifier). This
 is a 32-bit value placed in every RTP header to identify the stream,
@@ -452,7 +452,7 @@ an impulse response of 50% * 80 ms = 40 ms, ten times as
 sharp as the primary filter alone at the cost of 60 ms of
 additional latency.
 
-The secondary filter uses the same values of 
+The secondary filter uses the same values of
 **low**, **high** and **kaiser-beta** as the primary
 filter.
 

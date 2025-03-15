@@ -1,7 +1,7 @@
 Configuring and Running *ka9q-radio* - Part 1
 ============================================
 
-v1.0 (in progress), August 2023  
+v1.0 (in progress), August 2023
 Phil Karn, KA9Q
 ---------------
 
@@ -165,7 +165,7 @@ field, limits how many hosts and routers may process the packet before
 it is dropped. Multicast routers are rare, so in practice the usual
 values are 0 and 1.
 
-**ttl** *defaults to zero*, which keeps multicast traffic 
+**ttl** *defaults to zero*, which keeps multicast traffic
 from even leaving the system that generates it. This avoids
 swamping networks with low-end WiFi base stations and "dumb"
 (unmanaged) Ethernet switches that flood multicast traffic to all
