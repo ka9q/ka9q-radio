@@ -18,6 +18,29 @@
 #include "config.h"
 #include "radio.h"
 
+// constants, some of which you might want to tweak
+#define INPUT_PRIORITY 95
+
+static float const AGC_upper = -15;
+static float const AGC_lower = -50;
+static int const ADC_samprate = 192000;
+static float const DC_alpha = 1.0e-6;  // high pass filter coefficient for DC offset estimates, per sample
+static float const Power_alpha = 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
+
+static float Power_smooth = 0.05; // Calculate this properly someday
+
+// Empirical: noticeable aliasing beyond this noticed on strong 40m SSB signals
+static float const LowerEdge = -75000;
+static float const UpperEdge = +75000;
+
+// Variables set by command line options
+// A larger blocksize makes more efficient use of each frame, but the receiver generally runs on
+// frames that match the Opus codec: 2.5, 5, 10, 20, 40, 60, 80, 100, 120 ms
+// So to minimize latency, make this a common denominator:
+// 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
+static int Blocksize;
+static bool Hold_open = false;
+
 struct sdrstate {
   struct frontend *frontend;
 
@@ -44,27 +67,6 @@ struct sdrstate {
 
   pthread_t proc_thread;
 };
-
-// constants, some of which you might want to tweak
-static float const AGC_upper = -15;
-static float const AGC_lower = -50;
-static int const ADC_samprate = 192000;
-static float const DC_alpha = 1.0e-6;  // high pass filter coefficient for DC offset estimates, per sample
-static float const Power_alpha = 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
-
-static float Power_smooth = 0.05; // Calculate this properly someday
-
-// Empirical: noticeable aliasing beyond this noticed on strong 40m SSB signals
-static float const LowerEdge = -75000;
-static float const UpperEdge = +75000;
-
-// Variables set by command line options
-// A larger blocksize makes more efficient use of each frame, but the receiver generally runs on
-// frames that match the Opus codec: 2.5, 5, 10, 20, 40, 60, 80, 100, 120 ms
-// So to minimize latency, make this a common denominator:
-// 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
-static int Blocksize;
-static bool Hold_open = false;
 
 static char const *Funcube_keys[] = {
   "library",
@@ -212,7 +214,7 @@ static void *proc_funcube(void *arg){
   int ConsecPaErrs = 0;
   int16_t * sampbuf = malloc(2 * Blocksize * sizeof(*sampbuf)); // complex samples have two integers
 
-  realtime();
+  realtime(INPUT_PRIORITY);
 
   while(true){
     // Read block of I/Q samples from A/D converter

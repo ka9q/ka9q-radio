@@ -24,6 +24,15 @@
 #include "misc.h"
 #include "config.h"
 
+// Configurable parameters
+#define INPUT_PRIORITY 95
+// decibel limits for power
+static float const Upper_limit = -15;
+static float const Lower_limit = -25;
+static int Default_samprate = 5000000;
+static float const DC_alpha = 1.0e-7;  // high pass filter coefficient for DC offset estimates, per sample
+static float const Power_alpha= 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
+
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
   hackrf_device *device;
@@ -49,13 +58,6 @@ struct sdrstate {
 };
 
 
-// Configurable parameters
-// decibel limits for power
-static float const Upper_limit = -15;
-static float const Lower_limit = -25;
-static int Default_samprate = 5000000;
-static float const DC_alpha = 1.0e-7;  // high pass filter coefficient for DC offset estimates, per sample
-static float const Power_alpha= 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
 
 static char const *HackRF_keys[] = {
   "library",
@@ -261,7 +263,7 @@ static int rx_callback(hackrf_transfer *transfer){
   if(!Name_set){
     pthread_setname("hackrf-cb");
     Name_set = true;
-    realtime();
+    realtime(INPUT_PRIORITY);
   }
   int remain = transfer->valid_length; // Count of individual samples; divide by 2 to get complex samples
   int sampcount = remain / 2;            // Complex samples

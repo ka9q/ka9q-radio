@@ -130,6 +130,7 @@ If you use these in shadow copies you must malloc these arrays yourself.
 struct channel {
   bool inuse;
   int lifetime;          // Remaining lifetime, frames
+  int prio;              // Realtime priority, if supported
   // Tuning parameters
   struct {
     double freq;         // Desired carrier frequency (settable)

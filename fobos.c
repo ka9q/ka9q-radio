@@ -28,6 +28,9 @@ the input is then purely real.
 #include <strings.h>
 #include <sysexits.h>
 
+#define INPUT_PRIORITY 95
+static float Power_smooth = 0.05; // Calculate this properly someday
+
 static char const *fobos_keys[] = {
     "library", "device", "description", "serial",   "samprate",   "frequency",
     "direct_sampling", "lna_gain",    "vga_gain", "clk_source", "hf_input", NULL};
@@ -52,7 +55,6 @@ struct sdrstate {
   pthread_t monitor_thread;
 };
 
-static float Power_smooth = 0.05; // Calculate this properly someday
 static void rx_callback(float *buf, uint32_t buf_length, void *ctx);
 static void *fobos_monitor(void *p);
 
@@ -378,7 +380,7 @@ static void *fobos_monitor(void *p) {
   pthread_setname("fobos-mon");
 
   fprintf(stdout, "Starting asynchronous read\n");
-  realtime();
+  realtime(INPUT_PRIORITY);
   int result = fobos_rx_read_async(dev, rx_callback, sdr, 16, 65536);
   if (result != 0) {
     fprintf(stderr, "fobos_rx_read_async failed with error code: %d\n", result);

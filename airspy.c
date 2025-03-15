@@ -25,6 +25,8 @@
 // Global variables set by config file options
 extern int Verbose;
 
+#define INPUT_PRIORITY 95
+
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
@@ -317,7 +319,7 @@ static void *airspy_monitor(void *p){
   struct sdrstate * const sdr = (struct sdrstate *)p;
   assert(sdr != NULL);
   pthread_setname("airspy-mon");
-  realtime(); // Doesn't seem to work
+  realtime(INPUT_PRIORITY); // Doesn't seem to work
 
   int ret = airspy_start_rx(sdr->device,rx_callback,sdr);
   (void)ret;
@@ -351,7 +353,7 @@ static int rx_callback(airspy_transfer *transfer){
   if(!Name_set){
     pthread_setname("airspy-cb");
     Name_set = true;
-    realtime();
+    realtime(INPUT_PRIORITY);
   }
   if(transfer->dropped_samples){
     fprintf(stdout,"dropped %'lld\n",(long long)transfer->dropped_samples);

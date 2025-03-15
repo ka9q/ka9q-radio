@@ -65,7 +65,7 @@ int demod_linear(void *arg){
   init_pll(&chan->pll.pll,(float)chan->output.samprate);
   pthread_mutex_unlock(&chan->status.lock);
 
-  realtime();
+  realtime(chan->prio);
 
   while(downconvert(chan) == 0){
     unsigned int N = chan->sampcount; // Number of raw samples in filter output buffer

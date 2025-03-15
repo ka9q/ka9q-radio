@@ -80,7 +80,7 @@ int pipefill(int const fd,void *buffer,int const cnt){
 static int Base_prio;
 static bool Message_shown;
 
-void realtime(void){
+int default_prio(void){
 #ifdef __linux__
   static int minprio = -1; // Save the extra system calls
   static int maxprio = -1;
@@ -88,11 +88,24 @@ void realtime(void){
     minprio = sched_get_priority_min(SCHED_FIFO);
     maxprio = sched_get_priority_max(SCHED_FIFO);
   }
+  return (minprio + maxprio) / 2; // midway?
+#else
+  return 0;
+#endif
+}
+
+
+
+void realtime(int prio){
+  if(prio == 0)
+    return;
+
+#ifdef __linux__
   struct sched_param param = {0};
-  param.sched_priority = (minprio + maxprio) / 2; // midway?
+
+  param.sched_priority = prio;
   if(sched_setscheduler(0,SCHED_FIFO|SCHED_RESET_ON_FORK,&param) == 0)
     return; // Successfully set realtime
-
   {
     char name[25];
     int err = errno;
@@ -102,11 +115,12 @@ void realtime(void){
     }
   }
 #endif
+  (void)prio;
   // As backup, decrease our niceness by 10
   Base_prio = getpriority(PRIO_PROCESS,0);
   errno = 0; // setpriority can return -1
-  int prio = setpriority(PRIO_PROCESS,0,Base_prio - 10);
-  if(prio != 0){
+  int niceness = setpriority(PRIO_PROCESS,0,Base_prio - 10);
+  if(niceness != 0){
     int err = errno;
     char name[25];
     memset(name,0,sizeof(name));
@@ -120,15 +134,18 @@ void realtime(void){
 // Drop back to normal priority, to avoid blocking a core when doing something time-consuming, like a FFT plan
 // Return true if we had previously been running at realtime, false otherwise
 
-bool norealtime(void){
+int norealtime(void){
 #ifdef __linux__
   if(sched_getscheduler(0) == SCHED_OTHER)
-    return false; // Already normal
+    return 0; // Already normal
 
   struct sched_param param = {0};
+  sched_getparam(0,&param);
+  int old_priority = param.sched_priority;
+
   param.sched_priority = 0;
   if(sched_setscheduler(0,SCHED_OTHER,&param) == 0)
-    return true; // Successfully returned to normal
+    return old_priority; // Successfully returned to normal
 
   {
     int err = errno; // in case getname changes it
@@ -143,11 +160,11 @@ bool norealtime(void){
   errno = 0; // setpriority can return -1
   int prio = getpriority(PRIO_PROCESS,0);
   if(prio == Base_prio)
-    return false; // Already normal niceness
+    return prio; // Already normal niceness
 
   prio = setpriority(PRIO_PROCESS,0,Base_prio);
   if(prio == 0)
-    return true; // Successfully returned to normal niceness
+    return prio; // Successfully returned to normal niceness
   // Can it really fail when we're lowering?
   if(!Message_shown){
     int err = errno;
@@ -157,7 +174,7 @@ bool norealtime(void){
       fprintf(stdout,"%s: setpriority failed to lower, %s (%d)\n",name,strerror(err),err);
     }
   }
-  return true;  // Don't really know our state
+  return prio;  // Don't really know our state
 }
 
 // Remove return or newline, if any, from end of string

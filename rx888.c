@@ -28,6 +28,8 @@
 #include "rx888.h"
 #include "ezusb.h"
 
+#define INPUT_PRIORITY 95
+
 static int const Min_samprate =      1000000; // 1 MHz, in ltc2208 spec
 static int const Max_samprate =    130000000; // 130 MHz, in ltc2208 spec
 static int const Default_samprate = 64800000; // Synthesizes cleanly from 27 MHz reference
@@ -394,7 +396,7 @@ static void *proc_rx888(void *arg){
   assert(sdr != NULL);
   pthread_setname("proc_rx888");
 
-  realtime();
+  realtime(INPUT_PRIORITY);
   {
     int64_t const now = gps_time_ns();
     sdr->last_callback_time = now;

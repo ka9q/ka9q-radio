@@ -29,6 +29,7 @@
 // Global variables set by config file options
 extern int Verbose;
 
+#define INPUT_PRIORITY 95
 static float Power_smooth = 0.05; // Calculate this properly someday
 
 // SDRplay device status
@@ -347,7 +348,7 @@ static void *sdrplay_monitor(void *p){
   assert(frontend != NULL);
   pthread_setname("sdrplay-mon");
 
-  realtime();
+  realtime(INPUT_PRIORITY);
   int ret __attribute__ ((unused));
   ret = start_rx(sdr,rx_callback,event_callback);
   assert(ret == 0);
@@ -1138,7 +1139,7 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
   if(!Name_set){
     pthread_setname("sdrplay-cb");
     Name_set = true;
-    realtime(); // do this once
+    realtime(INPUT_PRIORITY); // do this once
   }
 
   if(sdr->next_sample_num && params->firstSampleNum != sdr->next_sample_num){

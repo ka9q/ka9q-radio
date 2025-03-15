@@ -6,6 +6,8 @@
 // Copyright 2017-2023, Phil Karn, KA9Q, karn@ka9q.net
 
 //#define LIQUID 1 // Experimental use of parks-mcclellan in filter generation
+#define FFT_PRIO 95 // Runs at very high real time priority
+
 #define MYNEW 1
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -137,7 +139,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   pthread_mutex_init(&master->filter_mutex,NULL);
   pthread_cond_init(&master->filter_cond,NULL);
 
-  bool rt_was_on = norealtime();
+  int old_prio = norealtime();
 
   // FFTW itself always runs with a single thread since multithreading didn't seem to do much good
   // But we have a set of worker threads operating on a job queue to allow a controlled number
@@ -187,8 +189,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   default:
     pthread_mutex_unlock(&FFTW_planning_mutex);
     assert(0); // shouldn't happen
-    if(rt_was_on)
-      realtime();
+    realtime(old_prio);
     return -1;
   case CROSS_CONJ:
   case COMPLEX:
@@ -226,8 +227,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     break;
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
-  if(rt_was_on)
-    realtime();
+  realtime(old_prio);
 
   return 0;
 }
@@ -311,7 +311,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
       assert(slave->output_buffer.c != NULL);
       slave->output_buffer.r = NULL; // catch erroneous references
       slave->output.c = slave->output_buffer.c + slave->bins - len;
-      bool rt_was_on = norealtime(); // Could this cause a priority inversion?
+      int old_prio = norealtime(); // Could this cause a priority inversion?
       pthread_mutex_lock(&FFTW_planning_mutex);
       fftwf_plan_with_nthreads(1); // IFFTs are always small, use only one internal thread
       if((slave->rev_plan = fftwf_plan_dft_1d(slave->points,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
@@ -321,8 +321,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
       if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
 	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
       pthread_mutex_unlock(&FFTW_planning_mutex);
-      if(rt_was_on)
-	realtime();
+      realtime(old_prio);
     }
     break;
   case SPECTRUM: // Like complex, but no IFFT or output time domain buffer
@@ -345,7 +344,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
       assert(slave->output_buffer.r != NULL);
       slave->output_buffer.c = NULL;
       slave->output.r = slave->output_buffer.r + slave->points - len;
-      bool rt_was_on = norealtime();
+      int old_prio = norealtime();
       pthread_mutex_lock(&FFTW_planning_mutex);
       if((slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->points,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
 	suggest(FFTW_planning_level,slave->points,FFTW_BACKWARD,REAL);
@@ -354,8 +353,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
       if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
 	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
       pthread_mutex_unlock(&FFTW_planning_mutex);
-      if(rt_was_on)
-	realtime();
+      realtime(old_prio);
     }
     break;
   }
@@ -428,7 +426,7 @@ void *run_fft(void *p){
   pthread_setname("fft");
   (void)p; // Unused
 
-  realtime();
+  realtime(FFT_PRIO);
 
   while(true){
     // Get next job

@@ -129,6 +129,7 @@ int set_defaults(struct channel *chan){
     return -1;
 
   chan->demod_type = DEFAULT_DEMOD;
+  chan->prio = default_prio();
 
   chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
   chan->output.encoding = S16BE;
@@ -339,6 +340,8 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     fprintf(stdout,"filter2 %u out of range\n",chan->filter2.blocking);
     chan->filter2.blocking = 10;
   }
+  chan->prio = config_getint(table,sname,"prio",chan->prio);
+
   return 0;
 }
 
