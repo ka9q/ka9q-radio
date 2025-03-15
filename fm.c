@@ -79,7 +79,7 @@ int demod_fm(void *arg){
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
   chan->output.gain = (2 * chan->output.headroom *  chan->output.samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
 
-  realtime();
+  realtime(chan->prio);
 
   while(downconvert(chan) == 0){
     complex float const * const buffer = chan->baseband; // For convenience

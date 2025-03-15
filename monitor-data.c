@@ -34,6 +34,8 @@
 #include "status.h"
 #include "monitor.h"
 
+#define DATA_PRIORITY 50
+
 int Position; // auto-position streams
 int Invalids;
 
@@ -71,7 +73,7 @@ void *dataproc(void *arg){
 
   struct packet *pkt = NULL;
 
-  realtime();
+  realtime(DATA_PRIORITY);
   // Main loop begins here
   while(!Terminate){
     // Need a new packet buffer?

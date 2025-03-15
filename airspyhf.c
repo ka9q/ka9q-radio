@@ -26,6 +26,8 @@
 extern int Verbose;
 extern const char *App_path;
 
+#define INPUT_PRIORITY 95
+
 static float Power_smooth = 0.05; // Calculate this properly someday
 
 static char const *Airspyhf_keys[] = {
@@ -216,7 +218,7 @@ static void *airspyhf_monitor(void *p){
   assert(sdr != NULL);
   pthread_setname("airspyhf-mon");
 
-  realtime();
+  realtime(INPUT_PRIORITY);
   int ret __attribute__ ((unused));
   ret = airspyhf_start(sdr->device,rx_callback,sdr);
   assert(ret == AIRSPYHF_SUCCESS);
@@ -246,7 +248,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   if(!Name_set){
     pthread_setname("airspyhf-cb");
     Name_set = true;
-    realtime();    // See discussion in airspy.c
+    realtime(INPUT_PRIORITY);    // See discussion in airspy.c
   }
   if(transfer->dropped_samples){
     fprintf(stdout,"dropped %'lld\n",(long long)transfer->dropped_samples);

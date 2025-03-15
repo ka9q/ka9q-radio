@@ -117,7 +117,7 @@ int demod_wfm(void *arg){
   complex float stereo_deemph = 0;
   float mono_deemph = 0;
 
-  realtime();
+  realtime(chan->prio);
 
   while(downconvert(chan) == 0){
     // Power squelch

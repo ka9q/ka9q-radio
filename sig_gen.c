@@ -22,6 +22,11 @@
 #include "config.h"
 #include "radio.h"
 
+#define INPUT_PRIORITY 95
+static int const Random_samples = 30000000;
+static float Power_smooth = 0.05; // Calculate this properly someday
+
+
 enum modulation {
   CW = 0, // No modulation
   DSB, // AM without a carrier
@@ -48,9 +53,6 @@ struct sdrstate {
 // 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
 static int Blocksize;
 extern bool Stop_transfers;
-
-static int const Random_samples = 30000000;
-static float Power_smooth = 0.05; // Calculate this properly someday
 
 // One second of noise in requested format
 // Will be played with a random starting point every block
@@ -174,7 +176,7 @@ static void *proc_sig_gen(void *arg){
   assert(frontend != NULL);
   
   frontend->timestamp = gps_time_ns();
-  realtime();
+  realtime(INPUT_PRIORITY);
 
   struct osc carrier;
   memset(&carrier,0,sizeof(carrier));

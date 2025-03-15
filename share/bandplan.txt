@@ -24,11 +24,11 @@
 4.75	4.995	60m broadcast
 5.000	b.010	WWV 5 MHz
 
-5.3320  b.028	60m ham chan 1
-5.3480	b.028	60m ham chan 2
-5.3585	b.028	60m ham chan 3
-5.3730	b.028	60m ham chan 4
-5.4050	b.028	60m ham chan 5
+5.3320  b.0028	60m ham chan 1
+5.3480	b.0028	60m ham chan 2
+5.3585	b.0028	60m ham chan 3
+5.3730	b.0028	60m ham chan 4
+5.4050	b.0028	60m ham chan 5
 
 5.9	6.2	49m broadcast
 

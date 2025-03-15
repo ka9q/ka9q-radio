@@ -75,8 +75,9 @@ static float const SCALE12 = 1/2048.;
 static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
 
 
-void realtime(void);
-bool norealtime(void);
+int default_prio(void);
+void realtime(int prio);
+int norealtime(void);
 // Custom version of malloc that aligns to a cache line
 void *lmalloc(size_t size);
 
