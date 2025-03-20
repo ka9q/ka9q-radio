@@ -70,30 +70,30 @@ The `device` key is mandatory.
 
 ### serial (optional)
 
-If not specified, `radiod` uses the first Airspy R2 or Airspy HF+ device discovered. Since this is probably not what you want, you should explicitly specify the serial number if more than one is present.
+If not specified, `radiod` uses the first device discovered. Since this is probably not what you want, you should explicitly specify the serial number if more than one is present.
 
-The `serial` must exactly match the Fobos serial number, in hex (the leading 0x is optional).
+The `serial` must exactly match the SDR serial number, in hex (the leading 0x is optional).
 
 ### samprate (optional)
 
 Double, default is the highest speed advertised by the device, usually 80 MHz.
 
-### direct_sampling
-
-Boolean, default false (RF Input). If true, direct sampling on HF1 and/or HF2 inputs.
-
-### lna_gain
-
-Integer, default 0. If 0 or 1 -> 0 dB; 2 -> +16 dB; 3 -> +33 dB (disregarded in direct sample mode).
-
-### vga_gain
-
-Integer, default 0. 0 to +62 dB in 2 dB steps (disregarded in direct sample mode).
-
-### clk_source
+### clk_source (optional)
 
 Integer, default 0 (internal 1). If 1 use external CLKIN (untested).
 
-### hf_input
+### direct_sampling (optional)
+
+Boolean, default false (RF Input). If true, direct sampling on HF1 and/or HF2 inputs.
+
+### hf_input (optional)
 
 Integer, default 0. HF input selection in direct sampling mode: 0 -> I/Q; 1 -> HF1 only; 2 -> HF2 only.
+
+### lna_gain (optional)
+
+Integer, default 0. If 0 or 1 -> 0 dB; 2 -> +16 dB; 3 -> +33 dB (disregarded in direct sample mode).
+
+### vga_gain (optional)
+
+Integer, default 0. 0 to +62 dB in 2 dB steps (disregarded in direct sample mode).

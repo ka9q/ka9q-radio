@@ -42,9 +42,9 @@ The `device` key is mandatory. This specifies the front end hardware type, i.e, 
 
 ### serial (optional)
 
-If not specified, `radiod` uses the first Airspy R2 or Airspy HF+ device discovered. Since this is probably not what you want, you should explicitly specify the serial number if more than one is present.
+If not specified, `radiod` uses the first device discovered. Since this is probably not what you want, you should explicitly specify the serial number if more than one is present.
 
-The `serial` must exactly match the Airspy 64-bit serial number, in hex (the leading 0x is optional).
+The `serial` must exactly match the SDR serial number, in hex (the leading 0x is optional).
 
 For Airspy R2 you can find the serial number with the `airspy_info` utility.
 
@@ -93,63 +93,63 @@ The supported sample rates are logged in */var/log/syslog* when `radiod` starts 
 
 ## Airspy R2 only options
 
+### agc-high-threshold (optional)
+
+Float, default -10.0 dBFS. Set the average A/D output level at which the the software AGC will decrease the front end analog gain by one step.
+
+### agc-low-threshold (optional)
+
+Float, default -40.0 dBFS. Set the average A/D output level at which the software AGC will increase the front end analog gain by one step.
+
+### bias (optional)
+
+Boolean, default false. Enable the bias tee (preamplifier power).
+
+### converter (optional)
+
+Integer, default 0. Upconverter frequency (120Mhz, used for SpyVerter with Airspy R2).
+
+### gainstep (optional)
+
+Integer, default -1. 0-21 inclusive, manually select an entry in the Airspy library gain table and disable software AGC. The default is to select an entry automatically with a software AGC based on the average A/D output level and the `linearity` setting.
+
 ### linearity (optional)
 
 Boolean, default false. Like most second-generation SDRs with Mirics (or similar) analog tuners, the Airspy R2 has three stages of analog gain ahead of the A/D converters that any AGC must carefully manage.
 
 The Airspy library provides separate gain tables optimized for sensitivity and for linearity (i.e. resistance to intermod). The sensitivity table is used by default, but in areas with strong signals the linearity table may provide better resistance to intermod. I'm about 6 km line of sight from a dozen FM broadcast transmitters so I often use the linearity setting.
 
-### agc-high-threshold
-
-Float, default -10.0 dBFS. Set the average A/D output level at which the the software AGC will decrease the front end analog gain by one step.
-
-### agc-low-threshold
-
-Float, default -40.0 dBFS. Set the average A/D output level at which the software AGC will increase the front end analog gain by one step.
-
-### bias
-
-Boolean, default false. Enable the bias tee (preamplifier power).
-
-### lna-agc
+### lna-agc (optional)
 
 Boolean, default false. Enable the hardware LNA AGC and disable the software AGC. Doesn't seem to keep proper gain distribution, i.e., poor sensitivity and/or excessive intermodulation products seem to result. Use the default (software AGC) instead.
 
-### mixer-agc
+### mixer-agc (optional)
 
 Boolean, default false. Enable the hardware mixer AGC and disable the software AGC. Doesn't seem to keep proper gain distribution, i.e., poor sensitivity and/or excessive intermodulation
 products seem to result. Use the default (software AGC) instead.
 
-### lna-gain, mixer-gain, vga-gain
+### lna-gain, mixer-gain, vga-gain (optional)
 
 Integers, default -1. Manually set gains for the LNA, mixer and variable gain (baseband) analog amplifier stages. The units are supposed to be in decibels but don't seem well calibrated. Setting any of these values disables the software AGC.
 
-### gainstep
-
-Integer, default -1. 0-21 inclusive, manually select an entry in the Airspy library gain table and disable software AGC. The default is to select an entry automatically with a software AGC based on the average A/D output level and the `linearity` setting.
-
-### converter
-
-Integer, default 0. Upconverter frequency (120Mhz, used for SpyVerter with Airspy R2).
-
 ## Airspy HF+ only options
 
-### hf-agc
-
-Boolean, default false. Exact function unknown.
-
-### agc-thresh
+### agc-thresh (optional)
 
 Boolean, default false. Exact function unknown. Do not confuse with the `airspy` options `agc-high-threshold` and `agc-low-threshold`.
 
-### hf-att
+### hf-agc (optional)
 
 Boolean, default false. Exact function unknown.
 
-### hf-lna
+### hf-att (optional)
 
 Boolean, default false. Exact function unknown.
 
-### lib-dsp
+### hf-lna (optional)
+
+Boolean, default false. Exact function unknown.
+
+### lib-dsp (optional)
 
 Boolean, default true. Enables the Airspy HF+ library to correct fine frequency errors and I/Q gain and phase imbalances. This library seems a little inefficient (it doesn't use FFTW3, and it consumes more resources than the rest of `radiod` combined) but is acceptable because of the relatively low HF+ sample rate (912 kHz).
