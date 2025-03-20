@@ -427,6 +427,7 @@ void *run_fft(void *p){
   (void)p; // Unused
 
   realtime(FFT_PRIO);
+  stick_core();
 
   while(true){
     // Get next job

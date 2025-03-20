@@ -320,6 +320,7 @@ static void *airspy_monitor(void *p){
   assert(sdr != NULL);
   pthread_setname("airspy-mon");
   realtime(INPUT_PRIORITY); // Doesn't seem to work
+  stick_core();
 
   int ret = airspy_start_rx(sdr->device,rx_callback,sdr);
   (void)ret;

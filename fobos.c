@@ -381,6 +381,7 @@ static void *fobos_monitor(void *p) {
 
   fprintf(stdout, "Starting asynchronous read\n");
   realtime(INPUT_PRIORITY);
+  stick_core();
   int result = fobos_rx_read_async(dev, rx_callback, sdr, 16, 65536);
   if (result != 0) {
     fprintf(stderr, "fobos_rx_read_async failed with error code: %d\n", result);

@@ -70,6 +70,7 @@ int Overlap = DEFAULT_OVERLAP;
 static int Update = DEFAULT_UPDATE;
 static int RTCP_enable = false;
 static int SAP_enable = false;
+extern bool Affinity;
 
 // List of valid config keys in [global] section, for error checking
 char const *Global_keys[] = {
@@ -95,6 +96,8 @@ char const *Global_keys[] = {
   "status",
   "preset",
   "mode",
+  "affinity",
+  "prio",
   NULL
 };
 
@@ -398,6 +401,7 @@ static int loadconfig(char const *file){
   Mcast_ttl = config_getint(Configtable,GLOBAL,"ttl",Mcast_ttl);
   Global_use_dns = config_getboolean(Configtable,GLOBAL,"dns",false);
   Static_avahi = config_getboolean(Configtable,GLOBAL,"static",false);
+  Affinity = config_getboolean(Configtable,GLOBAL,"affinity",false);
   {
     char const *p = config_getstring(Configtable,GLOBAL,"wisdom-file",NULL);
     if(p != NULL)
