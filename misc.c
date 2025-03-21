@@ -177,6 +177,27 @@ int norealtime(void){
   return prio;  // Don't really know our state
 }
 
+// Stay on this CPU core
+bool Affinity = false;
+void stick_core(void){
+#if __linux__ // Not supported on macos, etc
+  char name[25] = {0};
+  pthread_t self = pthread_self();
+  if(pthread_getname_np(self,name,sizeof(name)-1) != 0)
+    fprintf(stdout,"getname(%ud) failed: %s\n",(unsigned int)self,strerror(errno));
+
+  int cpu = sched_getcpu();
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(cpu,&cpuset);
+  fprintf(stdout,"%s sched_setaffinity(pid=%u,core=%d)",name,(unsigned)self,cpu);
+  if (sched_setaffinity(0, sizeof(cpuset), &cpuset) == -1) {
+    fprintf(stdout," failed: %s\n",strerror(errno));
+  } else {
+    fprintf(stdout,"\n");
+  }
+#endif
+}
 // Remove return or newline, if any, from end of string
 void chomp(char *s){
 
@@ -434,7 +455,7 @@ uint32_t round2(uint32_t v){
   v |= v >> 2;
   v |= v >> 4;
   v |= v >> 8;
-  v |= v >> 16;  
+  v |= v >> 16;
   v++;
   return v;
 }

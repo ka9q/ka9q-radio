@@ -249,6 +249,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
     pthread_setname("airspyhf-cb");
     Name_set = true;
     realtime(INPUT_PRIORITY);    // See discussion in airspy.c
+    stick_core();
   }
   if(transfer->dropped_samples){
     fprintf(stdout,"dropped %'lld\n",(long long)transfer->dropped_samples);

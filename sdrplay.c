@@ -349,6 +349,7 @@ static void *sdrplay_monitor(void *p){
   pthread_setname("sdrplay-mon");
 
   realtime(INPUT_PRIORITY);
+  stick_core();
   int ret __attribute__ ((unused));
   ret = start_rx(sdr,rx_callback,event_callback);
   assert(ret == 0);

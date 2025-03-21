@@ -78,6 +78,7 @@ static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in 
 int default_prio(void);
 void realtime(int prio);
 int norealtime(void);
+void stick_core(void);
 // Custom version of malloc that aligns to a cache line
 void *lmalloc(size_t size);
 
@@ -173,6 +174,7 @@ static inline float sinc(float x){
 extern const char *App_path;
 extern int Verbose;
 extern char const *Months[12];
+extern bool Affinity;
 
 int dist_path(char *path,int path_len,const char *fname);
 char *format_gpstime(char *result,int len,int64_t t);

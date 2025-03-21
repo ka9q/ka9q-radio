@@ -22,6 +22,8 @@
 
 //#define REMOVE_DC 1
 
+#define INPUT_PRIORITY 95
+
 // Internal clock is 28.8 MHz, and 1.8 MHz * 16 = 28.8 MHz
 #define DEFAULT_SAMPRATE (1800000)
 
@@ -238,6 +240,8 @@ static void *rtlsdr_read_thread(void *arg){
   struct sdr *sdr = arg;
   struct frontend *frontend = sdr->frontend;
 
+  realtime(INPUT_PRIORITY);
+  stick_core();
   rtlsdr_reset_buffer(sdr->device);
   rtlsdr_read_async(sdr->device,rx_callback,frontend,0,16*16384); // blocks
 
