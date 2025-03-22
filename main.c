@@ -47,7 +47,7 @@
 
 // Configuration constants & defaults
 static char const DEFAULT_PRESET[] = "am";
-static int const DEFAULT_FFTW_THREADS = 2;
+static int const DEFAULT_FFTW_THREADS = 1;
 static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
 static int const DEFAULT_MCAST_TTL = 0; // Don't blast LANs with cheap Wifi!
 static float const DEFAULT_BLOCKTIME = 20.0;
