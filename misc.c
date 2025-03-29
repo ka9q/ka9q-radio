@@ -660,7 +660,7 @@ size_t round_to_hugepage(size_t size){
 }
 // Custom version of malloc that aligns to a cache line
 // This is 64 bytes on most modern machines, including the x86 and the ARM 2711 (Pi 4)
-// This is stricter than a complex float or double, which is required by fftwf/fftw
+// This is stricter than a float complex or double complex, which is required by fftwf/fftw
 void *lmalloc(size_t size){
   void *ptr;
   int r;

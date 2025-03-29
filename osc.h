@@ -13,9 +13,9 @@
 struct osc {
   double freq;
   double rate;
-  complex double phasor;
-  complex double phasor_step;
-  complex double phasor_step_step;
+  double complex phasor;
+  double complex phasor_step;
+  double complex phasor_step_step;
   int steps; // Steps since last normalize
 };
 
@@ -35,14 +35,14 @@ struct pll {
 
 // Osc functions -- complex rotator
 void set_osc(struct osc *osc,double f,double r);
-complex double step_osc(struct osc *osc);
+double complex step_osc(struct osc *osc);
 
 // Osc functions -- direct digital synthesis (sine lookup table)
 float sine_dds(uint32_t accum);
 static inline float cos_dds(uint32_t accum){
   return sine_dds(accum + (uint32_t)0x40000000); // cos(x) = sin(x + 90 deg)
 }
-static inline complex float comp_dds(uint32_t accum){
+static inline float complex comp_dds(uint32_t accum){
   return CMPLXF(cos_dds(accum),sine_dds(accum));
 }
 
@@ -52,7 +52,7 @@ void init_pll(struct pll *pll,float samprate);
 float run_pll(struct pll *pll,float phase);
 void set_pll_params(struct pll *pll,float bw,float damping);
 void set_pll_limits(struct pll *pll,float low,float high);
-static inline complex float pll_phasor(struct pll const *pll){
+static inline float complex pll_phasor(struct pll const *pll){
   return comp_dds(pll->vco_phase);
 }
 static inline float pll_freq(struct pll const *pll){

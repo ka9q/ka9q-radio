@@ -11,21 +11,21 @@
 
 // Experimental complex notch filter
 struct notchfilter {
-  complex double osc_phase; // Phase of local complex mixer
-  complex double osc_step;  // mixer phase increment (frequency)
-  complex float dcstate;    // Average signal at mixer frequency
+  double complex osc_phase; // Phase of local complex mixer
+  double complex osc_step;  // mixer phase increment (frequency)
+  float complex dcstate;    // Average signal at mixer frequency
   float bw;                 // Relative bandwidth of notch
 };
 
 
 struct notchfilter *notch_create(double,float);
 #define notch_delete(x) free(x)
-complex float notch(struct notchfilter *,complex float);
+float complex notch(struct notchfilter *,float complex);
 
 // Goertzel state
 struct goertzel {
   float coeff; // 2 * cos(2*pi*f/fs) = 2 * creal(cf)
-  complex float cf; // exp(-j*2*pi*f/fs)
+  float complex cf; // exp(-j*2*pi*f/fs)
   float s0,s1; // IIR filter state, s0 is the most recent
 };
 
@@ -41,7 +41,7 @@ inline static void update_goertzel(struct goertzel *gp,float x){
   gp->s0 = x + gp->coeff * gp->s0 - gp->s1;
   gp->s1 = s0save;
 }
-complex float output_goertzel(struct goertzel *gp);
+float complex output_goertzel(struct goertzel *gp);
 
 // IIR filter operating on real data
 #define FILT_ORDER 6

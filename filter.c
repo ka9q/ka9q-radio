@@ -128,7 +128,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   master->perform_inline = (N_worker_threads == 0);
 
   for(int i=0; i < ND; i++){
-    master->fdomain[i] = lmalloc(sizeof(complex float) * bins);
+    master->fdomain[i] = lmalloc(sizeof(float complex) * bins);
     master->completed_jobs[i] = (unsigned int)-1; // So startup won't drop any blocks
   }
 
@@ -193,7 +193,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     return -1;
   case CROSS_CONJ:
   case COMPLEX:
-    master->input_buffer_size = round_to_page(ND * N * sizeof(complex float));
+    master->input_buffer_size = round_to_page(ND * N * sizeof(float complex));
     // Allocate input_buffer_size bytes immediately followed by its mirror
     master->input_buffer = mirror_alloc(master->input_buffer_size);
     memset(master->input_buffer,0,master->input_buffer_size);
@@ -264,7 +264,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
 
     An output filter must not be used after its master is deleted, a segfault will occur
 */
-int create_filter_output(struct filter_out *slave,struct filter_in * master,complex float * const response,int len, enum filtertype const out_type){
+int create_filter_output(struct filter_out *slave,struct filter_in * master,float complex * const response,int len, enum filtertype const out_type){
   assert(master != NULL);
   if(master == NULL)
     return -1;
@@ -306,8 +306,8 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
       }
       slave->points = x.quot; // Total number of FFT points including overlap
       slave->bins = x.quot;
-      slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
-      slave->output_buffer.c = lmalloc(sizeof(complex float) * slave->bins);
+      slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
+      slave->output_buffer.c = lmalloc(sizeof(float complex) * slave->bins);
       assert(slave->output_buffer.c != NULL);
       slave->output_buffer.r = NULL; // catch erroneous references
       slave->output.c = slave->output_buffer.c + slave->bins - len;
@@ -338,7 +338,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,comp
       }
       slave->points = x.quot;
       slave->bins = slave->points / 2 + 1;
-      slave->fdomain = lmalloc(sizeof(complex float) * slave->bins);
+      slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
       assert(slave->fdomain != NULL);
       slave->output_buffer.r = lmalloc(sizeof(float) * slave->points);
       assert(slave->output_buffer.r != NULL);
@@ -487,17 +487,17 @@ int execute_filter_input(struct filter_in * const f){
   if(f->perform_inline){
     // Just execute it here
     int jobnum = f->next_jobnum++;
-    complex float *output = f->fdomain[jobnum % ND];
+    float complex *output = f->fdomain[jobnum % ND];
     switch(f->in_type){
     default:
     case CROSS_CONJ:
     case COMPLEX:
       {
-	complex float *input = f->input_read_pointer.c;
+	float complex *input = f->input_read_pointer.c;
 	f->input_read_pointer.c += f->ilen;
 	mirror_wrap((void *)&f->input_read_pointer.c,f->input_buffer,f->input_buffer_size);
 	fftwf_execute_dft(f->fwd_plan,input,output);
-	drop_cache(input,f->ilen * sizeof(complex float));
+	drop_cache(input,f->ilen * sizeof(float complex));
       }
       break;
     case REAL:
@@ -553,7 +553,7 @@ int execute_filter_input(struct filter_in * const f){
   case CROSS_CONJ:
   case COMPLEX:
     job->input = f->input_read_pointer.c;
-    job->input_dropsize = f->ilen * sizeof(complex float);
+    job->input_dropsize = f->ilen * sizeof(float complex);
     f->input_read_pointer.c += f->ilen;
     mirror_wrap((void *)&f->input_read_pointer.c,f->input_buffer,f->input_buffer_size);
     break;
@@ -631,7 +631,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
     pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
   // We don't modify the master's output data, we create our own
-  complex float const * const fdomain = master->fdomain[slave->next_jobnum % ND];
+  float complex const * const fdomain = master->fdomain[slave->next_jobnum % ND];
   // in case we just waited so long that the buffer wrapped, resynch
   slave->next_jobnum = master->completed_jobs[slave->next_jobnum % ND] + 1;
   pthread_mutex_unlock(&master->filter_mutex);
@@ -704,7 +704,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     // Complex -> real UNTESTED! not used in ka9q-radio at present
     for(int si=0; si < slave->bins; si++){
       int const mi = si + shift;
-      complex float result = 0;
+      float complex result = 0;
       if(mi >= -master->bins/2 && mi < master->bins/2)
 	result = slave->response[si] * (fdomain[modulo(mi,master->bins)] + conjf(fdomain[modulo(master->bins - mi, master->bins)]));
       slave->fdomain[si] = result;
@@ -799,8 +799,8 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     for(int p=1,dn=slave->bins-1; p < slave->bins/2; p++,dn--){
       assert(p >= 0 && p < slave->bins);
       assert(dn >= 0 && dn < slave->bins);
-      complex float const pos = slave->fdomain[p];
-      complex float const neg = slave->fdomain[dn];
+      float complex const pos = slave->fdomain[p];
+      float complex const neg = slave->fdomain[dn];
 
       slave->fdomain[p]  = pos + conjf(neg);
       slave->fdomain[dn] = neg - conjf(pos);
@@ -813,7 +813,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   if(slave->out_type == REAL)
     drop_cache(slave->output_buffer.r,(slave->points - slave->olen) * sizeof (float));
   else
-    drop_cache(slave->output_buffer.c,(slave->points - slave->olen) * sizeof (complex float));
+    drop_cache(slave->output_buffer.c,(slave->points - slave->olen) * sizeof (float complex));
   return 0;
 }
 
@@ -916,7 +916,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   make_kaiser(kaiser_window,M,kaiser_beta);
 
   // Form complex impulse response by generating kaiser-windowed sinc pulse and shifting to desired center freq
-  complex float impulse[M];
+  float complex impulse[M];
   float window_gain = 0;
   for(int i = 0; i < M; i++){
     float n = i - (float)(M-1)/2;
@@ -937,7 +937,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   for(int i = 0; i < M; i++)
     impulse[i] *= gain; // Normalize for the window gain
 
-  complex float * const response = lmalloc(N * sizeof(complex float));
+  float complex * const response = lmalloc(N * sizeof(float complex));
   assert(response != NULL);
   pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1);
@@ -958,14 +958,14 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 #endif
   // Hot swap with existing response, if any, using mutual exclusion
   pthread_mutex_lock(&slave->response_mutex);
-  complex float * const tmp = slave->response;
+  float complex * const tmp = slave->response;
   slave->response = response;
   pthread_mutex_unlock(&slave->response_mutex);
   free(tmp);
   return 0;
 }
 
-int write_cfilter(struct filter_in *f, complex float const *buffer,int size){
+int write_cfilter(struct filter_in *f, float complex const *buffer,int size){
   if(f == NULL)
     return -1;
   if(sizeof(*buffer) * (f->wcnt + size) >= f->input_buffer_size)
@@ -1144,7 +1144,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   assert(N != 0 && L != 0 && M != 0);
 
   // Used for both time and frequency domain, so make full length even for real transforms
-  complex float * const response = lmalloc(N * sizeof(*response));
+  float complex * const response = lmalloc(N * sizeof(*response));
   assert(response != NULL);
   float real_coeff[M];
   memset(real_coeff,0,sizeof(real_coeff));
@@ -1209,7 +1209,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 
   // Hot swap with existing response, if any, using mutual exclusion
   pthread_mutex_lock(&slave->response_mutex);
-  complex float * const tmp = slave->response;
+  float complex * const tmp = slave->response;
   slave->response = response;
   pthread_mutex_unlock(&slave->response_mutex);
   free(tmp);
@@ -1219,11 +1219,11 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 #else
 
 // Apply Kaiser window to filter frequency response
-// "response" is SIMD-aligned array of N complex floats
+// "response" is SIMD-aligned array of N float complexs
 // Impulse response will be limited to first M samples in the time domain
 // Phase is adjusted so "time zero" (center of impulse response) is at M/2
 // L and M refer to the decimated output
-static int window_filter(int const L,int const M,complex float * const response,float const beta){
+static int window_filter(int const L,int const M,float complex * const response,float const beta){
   assert(response != NULL);
   if(response == NULL)
     return -1;
@@ -1231,7 +1231,7 @@ static int window_filter(int const L,int const M,complex float * const response,
   int const N = L + M - 1;
   assert(malloc_usable_size(response) >= N * sizeof(*response));
   // fftw_plan can overwrite its buffers, so we're forced to make a temp. Ugh.
-  complex float * const buffer = lmalloc(sizeof(complex float) * N);
+  float complex * const buffer = lmalloc(sizeof(float complex) * N);
   assert(buffer != NULL);
   pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1);
@@ -1293,7 +1293,7 @@ static int window_filter(int const L,int const M,complex float * const response,
 // response[] is only N/2+1 elements containing DC and positive frequencies only
 // Negative frequencies are inplicitly the conjugate of the positive frequencies
 // L and M refer to the decimated output
-static int window_rfilter(int const L,int const M,complex float * const response,float const beta){
+static int window_rfilter(int const L,int const M,float complex * const response,float const beta){
   assert(response != NULL);
   if(response == NULL)
     return -1;
@@ -1301,7 +1301,7 @@ static int window_rfilter(int const L,int const M,complex float * const response
   int const N = L + M - 1;
   int const bins = N/2 + 1;
   assert(malloc_usable_size(response) >= bins * sizeof(*response));
-  complex float * const buffer = lmalloc(bins * sizeof(complex float)); // plan destroys its input
+  float complex * const buffer = lmalloc(bins * sizeof(float complex)); // plan destroys its input
   assert(buffer != NULL);
   float * const timebuf = lmalloc(sizeof(float) * N);
   assert(timebuf != NULL);
@@ -1390,7 +1390,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   int const L = slave->olen;
   int const M = N - L + 1; // Length of impulse response in time domain
 
-  complex float * const response = lmalloc(sizeof(complex float) * slave->bins);
+  float complex * const response = lmalloc(sizeof(float complex) * slave->bins);
   assert(response != NULL);
   memset(response,0,slave->bins * sizeof(response[0]));
   assert(malloc_usable_size(response) >= (slave->bins) * sizeof(*response));
@@ -1423,7 +1423,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 #endif
   // Hot swap with existing response, if any, using mutual exclusion
   pthread_mutex_lock(&slave->response_mutex);
-  complex float * const tmp = slave->response;
+  float complex * const tmp = slave->response;
   slave->response = response;
   pthread_mutex_unlock(&slave->response_mutex);
   free(tmp);

@@ -56,10 +56,10 @@ extern bool Stop_transfers;
 
 // One second of noise in requested format
 // Will be played with a random starting point every block
-complex float *Complex_noise;
+float complex *Complex_noise;
 float *Real_noise;
 
-static complex float complex_gaussian(void);
+static float complex complex_gaussian(void);
 static float real_gaussian(void);
 
 double sig_gen_tune(struct frontend * const frontend,double const freq);
@@ -252,7 +252,7 @@ static void *proc_sig_gen(void *arg){
       write_rfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
     } else {
       // Complex signal
-      complex float * wptr = frontend->in.input_write_pointer.c;
+      float complex * wptr = frontend->in.input_write_pointer.c;
       for(int i=0; i < blocksize; i++){
 	wptr[i] = sdr->amplitude * step_osc(&carrier);
 	switch(sdr->modulation){
@@ -328,8 +328,8 @@ double sig_gen_tune(struct frontend * const frontend,double const freq){
 #if 0
 // Marsaglia polar method for generating gaussian RVs
 // Slow on modern machines because of random branch and pipeline stalls
-static complex float complex_gaussian(void){
-  complex float result;
+static float complex complex_gaussian(void){
+  float complex result;
   float u,v,s;
   do {
     // range -1, +1
@@ -345,13 +345,13 @@ static complex float complex_gaussian(void){
 #else
 // Box-Mueller method that avoids rejection
 // Seems faster on i7 despite sincos call
-static complex float expif(float x){
+static float complex expif(float x){
   float s = sin(x);
   float c = cos(x);
   return c + I*s;
 }
 
-static complex float complex_gaussian(void){
+static float complex complex_gaussian(void){
   // RVs uniformly distributed over (0,1)
 #if 0
   float u = (float)arc4random() / (float)UINT32_MAX;
@@ -374,7 +374,7 @@ static float real_gaussian(void){
     got_saved = false;
     return saved;
   }
-  complex float r = complex_gaussian();
+  float complex r = complex_gaussian();
   got_saved = true;
   saved = __imag__ r;
   return __real__ r;

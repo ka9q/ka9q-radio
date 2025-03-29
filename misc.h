@@ -202,39 +202,39 @@ float fm_snr(float r);
 inline static int16_t scaleclip(float const x){
   return (x >= 1.0) ? INT16_MAX : (x <= -1.0) ? -INT16_MAX : (int16_t)(INT16_MAX * x);
 }
-static inline complex float csincosf(float const x){
+static inline float complex csincosf(float const x){
   float s,c;
 
   sincosf(x,&s,&c);
   return CMPLXF(c,s);
 }
-static inline complex float csincospif(float const x){
+static inline float complex csincospif(float const x){
   float s,c;
   sincospif(x,&s,&c);
   return CMPLXF(c,s);
 }
 // return unit magnitude complex number with given phase x
-static inline complex double csincos(double const x){
+static inline double complex csincos(double const x){
   double s,c;
 
   sincos(x,&s,&c);
   return CMPLX(c,s);
 }
-static inline complex double csincospi(double const x){
+static inline double complex csincospi(double const x){
   double s,c;
   sincospi(x,&s,&c);
   return CMPLX(c,s);
 }
 // Complex norm (sum of squares of real and imaginary parts)
-static inline float cnrmf(complex float const x){
+static inline float cnrmf(float complex const x){
   return crealf(x)*crealf(x) + cimagf(x) * cimagf(x);
 }
-static inline double cnrm(complex double const x){
+static inline double cnrm(double complex const x){
   return creal(x)*creal(x) + cimag(x) * cimag(x);
 }
 // Fast approximate square root, for signal magnitudes
 // https://dspguru.com/dsp/tricks/magnitude-estimator/
-static inline float approx_magf(complex float x){
+static inline float approx_magf(float complex x){
   static float const Alpha = 0.947543636291;
   static float const Beta =  0.392485425092;
 

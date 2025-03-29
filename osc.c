@@ -22,7 +22,7 @@ const int Renorm_rate = 16384; // Renormalize oscillators this often
 
 // Return 1 if complex phasor appears to be initialized, 0 if not
 // Uses the heuristic that the amplitude should be close to 1 after initialization.
-static bool is_phasor_init(const complex double x){
+static bool is_phasor_init(const double complex x){
   if(isnan(creal(x)) || isnan(cimag(x)) || cnrm(x) < 0.9)
     return false;
   return true;
@@ -63,10 +63,10 @@ inline static void renorm_osc(struct osc *osc){
 }
 
 // Step oscillator through one sample, return complex phase
-complex double step_osc(struct osc *osc){
+double complex step_osc(struct osc *osc){
   if(--osc->steps <= 0)   // do first, in case osc is not initialized
     renorm_osc(osc);
-  complex double const r = osc->phasor;
+  double complex const r = osc->phasor;
   if(osc->rate != 0)
     osc->phasor_step *= osc->phasor_step_step;
 

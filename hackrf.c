@@ -39,7 +39,7 @@ struct sdrstate {
   int clips;                // Sample clips since last reset
 
   // Smoothed error estimates
-  complex float DC;      // DC offset
+  float complex DC;      // DC offset
   float sinphi;          // I/Q phase error
   float imbalance;       // Ratio of I power to Q power
   // Gain and phase corrections. These will be updated every block
@@ -270,12 +270,12 @@ static int rx_callback(hackrf_transfer *transfer){
   int sampcount = remain / 2;            // Complex samples
   uint8_t *dp = transfer->buffer;
 
-  complex float samp_sum = 0;
+  float complex samp_sum = 0;
   float i_energy=0,q_energy=0;
   float dotprod = 0;                           // sum of I*Q, for phase balance
   float rate_factor = 1./(frontend->samprate * Power_alpha);
 
-  complex float * const wptr = frontend->in.input_write_pointer.c;
+  float complex * const wptr = frontend->in.input_write_pointer.c;
   for(int i=0; i < sampcount; i++){
 
     int isamp_i = (int8_t)*dp++;
@@ -289,7 +289,7 @@ static int rx_callback(hackrf_transfer *transfer){
       sdr->clips++;
       isamp_i = -127;
     }
-    complex float samp = CMPLXF(isamp_i,isamp_q);
+    float complex samp = CMPLXF(isamp_i,isamp_q);
     samp_sum += samp;
 
     // remove DC offset (which can be fractional)

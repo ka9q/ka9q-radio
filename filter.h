@@ -36,7 +36,7 @@ enum filtertype {
 // Used to be a union, but was prone to errors
 struct rc {
   float *r;
-  complex float *c;
+  float complex *c;
 };
 
 #define ND 4
@@ -56,7 +56,7 @@ struct filter_in {
   pthread_mutex_t filter_mutex;      // Synchronization for sequence number
   pthread_cond_t filter_cond;
 
-  complex float *fdomain[ND];
+  float complex *fdomain[ND];
   unsigned int next_jobnum;
   unsigned int completed_jobs[ND];
   bool perform_inline;       // Perform FFT inline, don't use worker threads (better for small FFTs)
@@ -68,8 +68,8 @@ struct filter_out {
   int points;               // Size N of fft; Same as bins only for complex
   int olen;                 // Length of user portion of output buffer (decimated L)
   int bins;                 // Number of frequency bins; == N for complex, == N/2 + 1 for real output
-  complex float * restrict fdomain;  // Filtered signal in frequency domain
-  complex float * restrict response; // Filter response in frequency domain
+  float complex * restrict fdomain;  // Filtered signal in frequency domain
+  float complex * restrict response; // Filter response in frequency domain
   pthread_mutex_t response_mutex;
   struct rc output_buffer;           // Actual time-domain output buffer, length N/decimate
   struct rc output;                  // Beginning of user output area, length L/decimate
@@ -80,14 +80,14 @@ struct filter_out {
 };
 
 int create_filter_input(struct filter_in *,int const L,int const M, enum filtertype const in_type);
-int create_filter_output(struct filter_out *slave,struct filter_in * restrict master,complex float * restrict response,int olen, enum filtertype out_type);
+int create_filter_output(struct filter_out *slave,struct filter_in * restrict master,float complex * restrict response,int olen, enum filtertype out_type);
 int execute_filter_input(struct filter_in * restrict);
 int execute_filter_output(struct filter_out * restrict ,int);
 int delete_filter_input(struct filter_in * restrict);
 int delete_filter_output(struct filter_out * restrict);
 int set_filter(struct filter_out * restrict,float,float,float);
 void *run_fft(void *);
-int write_cfilter(struct filter_in *, complex float const *,int size);
+int write_cfilter(struct filter_in *, float complex const *,int size);
 int write_rfilter(struct filter_in *, float const *,int size);
 void suggest(int level,int size,int dir,int clex);
 unsigned long gcd(unsigned long a,unsigned long b);
@@ -95,7 +95,7 @@ unsigned long lcm(unsigned long a,unsigned long b);
 int make_kaiser(float * const window,int const M,float const beta);
 
 // Write complex sample to input side of filter
-static inline int put_cfilter(struct filter_in * restrict const f,complex float const s){ // Complex
+static inline int put_cfilter(struct filter_in * restrict const f,float complex const s){ // Complex
   assert((void *)(f->input_write_pointer.c) >= f->input_buffer);
   assert((void *)(f->input_write_pointer.c) < f->input_buffer + f->input_buffer_size);
   *f->input_write_pointer.c++ = s;
@@ -131,7 +131,7 @@ static inline float read_rfilter(struct filter_out * restrict const f,int const 
 }
 
 // Read complex samples from output side of filter
-static inline complex float read_cfilter(struct filter_out * restrict const f,int const rotate){
+static inline float complex read_cfilter(struct filter_out * restrict const f,int const rotate){
   if(f->rcnt == 0){
     execute_filter_output(f,rotate);
     f->rcnt = f->olen;

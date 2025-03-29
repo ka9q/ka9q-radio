@@ -69,7 +69,7 @@ int demod_linear(void *arg){
 
   while(downconvert(chan) == 0){
     unsigned int N = chan->sampcount; // Number of raw samples in filter output buffer
-    complex float * buffer = chan->baseband; // Working buffer
+    float complex * buffer = chan->baseband; // Working buffer
 
     // First pass over sample block.
     // Run the PLL (if enabled)
@@ -83,7 +83,7 @@ int demod_linear(void *arg){
       // Update PLL state, if active
       set_pll_params(&chan->pll.pll,chan->pll.loop_bw,damping);
       for(unsigned int n=0; n<N; n++){
-	complex float const s = buffer[n] *= conjf(pll_phasor(&chan->pll.pll));
+	float complex const s = buffer[n] *= conjf(pll_phasor(&chan->pll.pll));
 	float phase;
 	if(chan->pll.square){
 	  phase = cargf(s*s);

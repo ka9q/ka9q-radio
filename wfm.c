@@ -114,7 +114,7 @@ int demod_wfm(void *arg){
   compute_tuning(composite_N,composite_M,Composite_samprate,&subc_shift,&subc_remainder,38000.);
   assert((subc_shift % 4) == 0 && subc_remainder == 0);
 
-  complex float stereo_deemph = 0;
+  float complex stereo_deemph = 0;
   float mono_deemph = 0;
 
   realtime(chan->prio);
@@ -140,7 +140,7 @@ int demod_wfm(void *arg){
       continue;
     }
     // Actual FM demodulation
-    complex float *buffer = chan->filter.out.output.c; // Working buffer
+    float complex *buffer = chan->filter.out.output.c; // Working buffer
     for(int n=0; n < composite_L; n++){
       // Although deviation can be zero, argf() is defined as returning 0, not NAN
       float np = M_1_PIf * cargf(buffer[n]); // -1 to +1
@@ -211,7 +211,7 @@ int demod_wfm(void *arg){
       float complex stereo_buffer[audio_L];
       float output_energy = 0;
       for(int n = 0; n < audio_L; n++){
-	complex float subc_phasor = pilot.output.c[n]; // 19 kHz pilot
+	float complex subc_phasor = pilot.output.c[n]; // 19 kHz pilot
 	subc_phasor = (subc_phasor * subc_phasor) / cnrmf(subc_phasor); // square to 38 kHz and normalize
 	float subc_info = 2.0f * __imag__ (conjf(subc_phasor) * lminusr.output.c[n]); // Carrier is in quadrature
 	assert(!isnan(subc_info));

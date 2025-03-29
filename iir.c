@@ -18,7 +18,7 @@ struct notchfilter *notch_create(double const f,float const bw){
   return nf;
 }
 
-complex float notch(struct notchfilter * const nf,complex float s){
+float complex notch(struct notchfilter * const nf,float complex s){
   if(nf == NULL)
     return NAN;
   s = s * conj(nf->osc_phase) - nf->dcstate; // Spin down and remove DC
@@ -42,7 +42,7 @@ void init_goertzel(struct goertzel *gp,float f){
 // Produce one sample of filter output
 // The overall gain is such that N samples of an on-frequency sinusoid with peak amplitude 1 (2 units peak-to-peak)
 // gives an output with a magnitude of N/2
-complex float output_goertzel(struct goertzel *gp){
+float complex output_goertzel(struct goertzel *gp){
   update_goertzel(gp,0); // Nth sample must be zero
   return gp->s0 - gp->cf * gp->s1;
 }

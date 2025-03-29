@@ -58,9 +58,9 @@ int demod_spectrum(void *arg){
   chan->spectrum.bin_data = calloc(Frontend.in.bins,sizeof *chan->spectrum.bin_data);
 
   fftwf_plan plan = NULL;
-  complex float *fft0_in = NULL;
-  complex float *fft1_in = NULL;
-  complex float *fft_out = NULL;
+  float complex *fft0_in = NULL;
+  float complex *fft1_in = NULL;
+  float complex *fft_out = NULL;
   float gain = 0;
   int fft0_index = 0;
   int fft1_index = 0;
@@ -126,7 +126,7 @@ int demod_spectrum(void *arg){
       // Output flter is already waiting for the next job, so subtract 1 to get the current one
       unsigned int jobnum = (chan->filter.out.next_jobnum - 1) % ND;
       struct filter_in const * const master = chan->filter.out.master;
-      complex float const * const fdomain = master->fdomain[jobnum];
+      float complex const * const fdomain = master->fdomain[jobnum];
 
       // Read the master's frequency bins directly
       // The layout depends on the master's time domain input:

@@ -101,14 +101,14 @@ struct session {
   int pl_blocksize;
   int dtmf_blocksize;
 
-  complex float pl_integrators[N_tones];
+  float complex pl_integrators[N_tones];
   struct osc pl_osc[N_tones];
   float strongest_tone_energy;
   int strongest_tone_index;
 
   float dtmf_tot_energy;
-  complex float dtmf_low_integrators[4];
-  complex float dtmf_high_integrators[4];  
+  float complex dtmf_low_integrators[4];
+  float complex dtmf_high_integrators[4];  
   struct osc dtmf_low_osc[4];
   struct osc dtmf_high_osc[4];
 
@@ -126,9 +126,9 @@ static void closedown(int);
 static struct session *lookup_session(const struct sockaddr *,uint32_t);
 static struct session *create_session(struct sockaddr const *r,uint32_t,uint16_t,uint32_t);
 static int close_session(struct session *);
-static float process_pl(struct session *sp,complex float samp);
+static float process_pl(struct session *sp,float complex samp);
 #if 0
-static char process_dtmf(struct session *sp,complex float samp);
+static char process_dtmf(struct session *sp,float complex samp);
 #endif
 
 static struct option Options[] =
@@ -391,7 +391,7 @@ static void closedown(int s){
 }
 
 // Look for PL tone after each integration interval
-static float process_pl(struct session * const sp,complex float const samp){
+static float process_pl(struct session * const sp,float complex const samp){
 
   for(int n=0; n < N_tones; n++)
     sp->pl_integrators[n] += conjf(samp) * step_osc(&sp->pl_osc[n]);
@@ -422,7 +422,7 @@ static float process_pl(struct session * const sp,complex float const samp){
 
 #if 0
 // Look for DTMF digit after each integration interval
-static char process_dtmf(struct session *sp,complex float samp){
+static char process_dtmf(struct session *sp,float complex samp){
   sp->dtmf_tot_energy += samp * samp;
   for(int n=0; n < 4; n++){
     sp->dtmf_low_integrators[n] += conjf(samp) * step_osc(&sp->dtmf_low_osc[n]);
