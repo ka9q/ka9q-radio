@@ -736,7 +736,7 @@ void reset_session(struct session * const sp,uint32_t timestamp){
 // Return true if we (re)started it
 bool kick_output(){
   bool restarted = false;
-  if(!Pa_IsStreamActive(Pa_Stream)){
+  if(!Pipe && !Pa_IsStreamActive(Pa_Stream)){
     // Start it up
     if(!Pa_IsStreamStopped(Pa_Stream))
       Pa_StopStream(Pa_Stream); // it was in limbo

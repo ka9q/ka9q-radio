@@ -21,6 +21,8 @@
 #endif
 #include <sysexits.h>
 #include <poll.h>
+#include <fcntl.h>
+#include <time.h>
 
 #include "conf.h"
 #include "config.h"
@@ -78,8 +80,11 @@ bool Voting = false;
 int Channels = 2;
 char const *Init;
 //float GoodEnoughSNR = 20.0; // FM SNR considered "good enough to not be worth changing
+char const *Pipe;
 
 // Global variables that regularly change
+int Output_fd = -1; // Output network socket, if any
+struct sockaddr_in Dest_socket;
 int64_t Last_xmit_time;
 float *Output_buffer;
 int Buffer_length; // Bytes left to play out, max BUFFERSIZE
@@ -106,8 +111,9 @@ struct sockaddr Metadata_dest_socket;
 int Mcast_ttl;
 pthread_mutex_t Rptr_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t Rptr_cond = PTHREAD_COND_INITIALIZER;
+void *output_thread(void *p);
 
-static char Optstring[] = "CI:LR:Sc:f:g:p:qr:su:vnV";
+static char Optstring[] = "CI:P:LR:Sc:f:g:p:qr:su:vnV";
 static struct  option Options[] = {
    {"center", no_argument, NULL, 'C'},
    {"input", required_argument, NULL, 'I'},
@@ -118,6 +124,7 @@ static struct  option Options[] = {
    {"config", required_argument, NULL, 'f'},
    {"gain", required_argument, NULL, 'g'},
    {"notch", no_argument, NULL, 'n'},
+   {"pipe", required_argument, NULL, 'P'},
    {"playout", required_argument, NULL, 'p'},
    {"quiet", no_argument, NULL, 'q'},
    {"samprate",required_argument,NULL,'r'},
@@ -173,6 +180,10 @@ int main(int argc,char * const argv[]){
     if(audiodev)
       Audiodev = strdup(audiodev);
     // Add validity checking
+
+#if __linux__
+    Pipe = config_getstring(Configtable,"audio","pipe",NULL);
+#endif
 
     Gain = config_getfloat(Configtable,Audio,"gain",Gain);
     Cwid = strdup(config_getstring(Configtable,Repeater,"id","NOCALL"));
@@ -255,6 +266,11 @@ int main(int argc,char * const argv[]){
     case 'R':
       Audiodev = optarg;
       break;
+#if __linux__
+    case 'P':
+      Pipe = optarg;
+      break;
+#endif
     case 'S':
       Auto_sort = true;
       break;
@@ -265,7 +281,7 @@ int main(int argc,char * const argv[]){
     default:
       fprintf(stderr,"Usage: %s -L\n",App_path);
       fprintf(stderr,"       %s [-c channels] [-f config_file] [-g gain] [-p playout] [-q] [-r samprate] [-u update] [-v] \
-[-I mcast_address] [-R audiodev] [-S] [mcast_address ...]\n",App_path);
+[-I mcast_address] [-R audiodev|-P pipename] [-S] [mcast_address ...]\n",App_path);
       exit(EX_USAGE);
     }
   }
@@ -322,66 +338,74 @@ int main(int argc,char * const argv[]){
   // Get rid of those fucking ALSA error messages that clutter the screen
   snd_lib_error_set_handler(alsa_error_handler);
 #endif
-
-  PaError r = Pa_Initialize();
-  if(r != paNoError){
-    fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
-    return r;
-  }
-  atexit(cleanup); // Make sure Pa_Terminate() gets called
-
   load_id();
-  char *nextp = NULL;
-  int d;
-  int numDevices = Pa_GetDeviceCount();
-  if(Audiodev == NULL || strlen(Audiodev) == 0){
-    // not specified; use default
-    inDevNum = Pa_GetDefaultOutputDevice();
-  } else if(d = strtol(Audiodev,&nextp,0),nextp != Audiodev && *nextp == '\0'){
-    if(d >= numDevices){
-      fprintf(stderr,"%d is out of range, use %s -L for a list\n",d,App_path);
-      exit(EX_USAGE);
-    }
-    inDevNum = d;
-  } else {
-    for(inDevNum=0; inDevNum < numDevices; inDevNum++){
-      const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(inDevNum);
-      if(strcmp(deviceInfo->name,Audiodev) == 0)
-	break;
-    }
-  }
-  if(inDevNum == paNoDevice){
-    fprintf(stderr,"Portaudio: no available devices, exiting\n");
-    exit(EX_IOERR);
-  }
-
-  // Create portaudio stream.
+  // Create output circular buffer
   // Runs continuously, playing silence until audio arrives.
   // This allows multiple streams to be played on hosts that only support one
   Output_buffer = mirror_alloc(BUFFERSIZE * Channels * sizeof(*Output_buffer)); // Must be power of 2 times page size
   memset(Output_buffer,0,BUFFERSIZE * Channels * sizeof(*Output_buffer)); // Does mmap clear its initial memory? Not sure
 
-  PaStreamParameters outputParameters;
-  memset(&outputParameters,0,sizeof(outputParameters));
-  outputParameters.channelCount = Channels;
-  outputParameters.device = inDevNum;
-  outputParameters.sampleFormat = paFloat32;
-  outputParameters.suggestedLatency = Latency; // 0 doesn't seem to be a good value on OSX, lots of underruns and stutters
+  if(Pipe != NULL){
+#if __linux__
 
-  r = Pa_OpenStream(&Pa_Stream,
-		    NULL,
-		    &outputParameters,
-		    DAC_samprate,
-		    paFramesPerBufferUnspecified, // seems to be 31 on OSX
-		    //SAMPPCALLBACK,
-		    0,
-		    pa_callback,
-		    NULL);
+    pthread_t pipethread;
+    pthread_create(&pipethread,NULL,output_thread,NULL);
+#endif
+  } else {
 
-  if(r != paNoError){
-    fprintf(stderr,"Portaudio error: %s, exiting\n",Pa_GetErrorText(r));
-    exit(EX_IOERR);
-  }
+    // Use portaudio
+    PaError r = Pa_Initialize();
+    if(r != paNoError){
+      fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
+      return r;
+    }
+    atexit(cleanup); // Make sure Pa_Terminate() gets called
+
+    char *nextp = NULL;
+    int d;
+    int numDevices = Pa_GetDeviceCount();
+    if(Audiodev == NULL || strlen(Audiodev) == 0){
+      // not specified; use default
+      inDevNum = Pa_GetDefaultOutputDevice();
+    } else if(d = strtol(Audiodev,&nextp,0),nextp != Audiodev && *nextp == '\0'){
+      if(d >= numDevices){
+	fprintf(stderr,"%d is out of range, use %s -L for a list\n",d,App_path);
+	exit(EX_USAGE);
+      }
+      inDevNum = d;
+    } else {
+      for(inDevNum=0; inDevNum < numDevices; inDevNum++){
+	const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(inDevNum);
+	if(strcmp(deviceInfo->name,Audiodev) == 0)
+	  break;
+      }
+    }
+    if(inDevNum == paNoDevice){
+      fprintf(stderr,"Portaudio: no available devices, exiting\n");
+      exit(EX_IOERR);
+    }
+    PaStreamParameters outputParameters;
+    memset(&outputParameters,0,sizeof(outputParameters));
+    outputParameters.channelCount = Channels;
+    outputParameters.device = inDevNum;
+    outputParameters.sampleFormat = paFloat32;
+    outputParameters.suggestedLatency = Latency; // 0 doesn't seem to be a good value on OSX, lots of underruns and stutters
+
+    r = Pa_OpenStream(&Pa_Stream,
+		      NULL,
+		      &outputParameters,
+		      DAC_samprate,
+		      paFramesPerBufferUnspecified, // seems to be 31 on OSX
+		      //SAMPPCALLBACK,
+		      0,
+		      pa_callback,
+		      NULL);
+
+    if(r != paNoError){
+      fprintf(stderr,"Portaudio error: %s, exiting\n",Pa_GetErrorText(r));
+      exit(EX_IOERR);
+    }
+  }  // !Network (use Portaudio)
 
   if(Repeater_tail != 0)
     pthread_create(&Repeater_thread,NULL,repeater_ctl,NULL); // Repeater mode active
@@ -647,3 +671,49 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 #endif
   return paContinue;
 }
+
+#if __linux__
+// Macos doesn't support clock_nanosleep(); find a substitute
+// Thread used instead of Portaudio callback when sending to network
+// Sends raw 16-bit PCM stereo at 48kHz; send to named pipe and opusenc, etc
+void *output_thread(void *p){
+  (void)p;
+  Output_fd = open(Pipe,O_WRONLY,0666);
+
+  struct timespec next;
+  clock_gettime(CLOCK_MONOTONIC,&next);
+
+  while(1){
+    // Grab 20 milliseconds stereo @ 48 kHz
+    int frames = .02 * 48000;
+    int samples = frames * Channels;
+    int16_t out_buffer[samples];
+
+    pthread_mutex_lock(&Rptr_mutex);
+    float *buffer = &Output_buffer[Channels*Rptr];
+    Rptr += frames;
+    Rptr &= (BUFFERSIZE-1);
+    Buffer_length -= frames;
+    for(int i=0; i < samples; i++)
+      out_buffer[i] = buffer[i] > 1 ? 32767 : buffer[i] < -1 ? -32767 : 32767 * buffer[i];
+    memset(buffer,0,samples * sizeof *buffer);
+
+    pthread_cond_broadcast(&Rptr_cond);
+    pthread_mutex_unlock(&Rptr_mutex);
+
+    int r = write(Output_fd,out_buffer,sizeof out_buffer);
+    if(r <= 0){
+      if(Output_fd != -1)
+	close(Output_fd);
+      Output_fd = open(Pipe,O_WRONLY,0666); // could retry, but don't bother
+    }
+    // Schedule next transmission in 20 ms
+    next.tv_nsec += 20000000;
+    while(next.tv_nsec >= BILLION){
+      next.tv_nsec -= BILLION;
+      next.tv_sec++;
+    }
+    clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL);
+  }
+}
+#endif

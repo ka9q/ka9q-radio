@@ -80,6 +80,7 @@ extern struct session *Best_session; // Session with highest SNR
 extern struct sockaddr Metadata_dest_socket;
 extern pthread_mutex_t Rptr_mutex;
 extern pthread_cond_t Rptr_cond;
+extern char const *Pipe;
 
 
 extern int Mcast_ttl;
