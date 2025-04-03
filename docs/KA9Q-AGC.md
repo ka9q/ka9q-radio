@@ -1,4 +1,4 @@
-Automatic Gain Control (AGC) in *ka9q-radio*  
+Automatic Gain Control (AGC) in *ka9q-radio*
 v 1.1, Phil Karn KA9Q, August 2023
 ============================================
 
