@@ -47,7 +47,8 @@ jobs:
           cd onion
           mkdir build
           cd build
-          cmake -DONION_USE_PAM=false -DONION_USE_PNG=false \
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DONION_USE_PAM=false -DONION_USE_PNG=false \
             -DONION_USE_JPEG=false -DONION_USE_XML2=false \
             -DONION_USE_SYSTEMD=false -DONION_USE_SQLITE3=false \
             -DONION_USE_REDIS=false -DONION_USE_GC=false \
