@@ -125,7 +125,6 @@ int demod_fm(void *arg){
       squelch_state = squelch_state_max;
     } else if(squelch_state > 1){
       squelch_state--; // Squelch closing
-      continue;
     } else if(squelch_state == 1){
       // Now closed, emit a block of silence to flush the Opus encoder
       float zeroes[N];
