@@ -46,10 +46,10 @@ where .02 is the block time (20 ms default) and 5/4 comes from the overlap param
 
 You may not need all these block sizes; see the notes below.
 
-$ cd /etc/fftw
-$ touch nwisdom # make sure you have write permissions - fftwf-wisdom doesn't check before doing all its work!
-$ time fftwf-wisdom -v -T 1 -o nwisdom rof3240000 rof1620000 rof500000 cof36480 cob1920 cob1200 cob960 cob800 cob600 cob480 cob320 cob300 cob200 cob160 cob150
-$ ls -l nwisdom wisdomf # check that nwisdom is larger than wisdomf
+$ cd /etc/fftw  
+$ touch nwisdom # make sure you have write permissions - fftwf-wisdom doesn't check before doing all its work!  
+$ time fftwf-wisdom -v -T 1 -o nwisdom rof3240000 rof1620000 rof500000 cof36480 cob1920 cob1200 cob960 cob800 cob600 cob480 cob320 cob300 cob200 cob160 cob150  
+$ ls -l nwisdom wisdomf # check that nwisdom is larger than wisdomf  
 $ cp -i nwisdom wisdomf
 
 This finds the best way to do the following transforms:

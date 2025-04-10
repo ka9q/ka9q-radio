@@ -1,4 +1,4 @@
-*ka9q-radio* Miscellaneous Installation Notes
+*ka9q-radio* Miscellaneous Installation Notes  
 16 January 2025
 ===============================
 
@@ -53,12 +53,12 @@ Supported Hardware and System Requirements
 
 *ka9q-radio* currently supports the following SDR front ends:
 
-[Airspy R2/Airspy Mini](https://airspy.com/airspy-r2/)
-[Airspy HF+](https://airspy.com/airspy-hf-discovery/)
-[Generic RTL-SDR](https://en.wikipedia.org/wiki/Software-defined_radio#RTL-SDR) (tuner mode only)
-[AMSAT UK Funcube Pro+ Dongle](http://www.funcubedongle.com/)
-[RX-888 MkII](https://www.rtl-sdr.com/techminds-reviewing-the-rx888-mk2-software-defined-radio/)  (direct sampling only)
-[SDRPlay](https://www.sdrplay.com)
+[Airspy R2/Airspy Mini](https://airspy.com/airspy-r2/)  
+[Airspy HF+](https://airspy.com/airspy-hf-discovery/)  
+[Generic RTL-SDR](https://en.wikipedia.org/wiki/Software-defined_radio#RTL-SDR) (tuner mode only)  
+[AMSAT UK Funcube Pro+ Dongle](http://www.funcubedongle.com/)  
+[RX-888 MkII](https://www.rtl-sdr.com/techminds-reviewing-the-rx888-mk2-software-defined-radio/)  (direct sampling only)  
+[SDRPlay](https://www.sdrplay.com)  
 [Fobos](https://rigexpert.com/software-defined-radio-sdr/fobos-sdr/#)
 
 Until recently my preferred SDRs (and the ones I still have the most
@@ -110,7 +110,7 @@ lower. If you increase gain for good sensitivity on the high end, you
 may be easily overdriven by AM broadcast stations. An AM blocking
 filter will help, but the real answer is a "shelving filter" shaped to
 the entire spectrum seen by the RX-888. WB6CXC's filter was specifically
-designed for this application and works well.
+designed for this application and works well. 
 
 The RX-888 MkII includes a VHF/UHF tuner that *should* be able to
 functionally replace the Airspy R2, but I don't support it yet; right
@@ -236,8 +236,8 @@ Multicast DNS, which *radiod* relies on, is rather badly broken on
 some older versions of Ubuntu, such as 20.04 ("focal"). The symptom
 are messages like
 
->avahi service '2m vertical (2m-vertical-data.local)' successfully established.
->resolve_mcast getaddrinfo(2m-vertical-data.local,(null)): Temporary failure in name resolution
+>avahi service '2m vertical (2m-vertical-data.local)' successfully established.  
+>resolve_mcast getaddrinfo(2m-vertical-data.local,(null)): Temporary failure in name resolution  
 >resolve_mcast getaddrinfo(2m-vertical-data.local,(null)): Temporary failure in name resolution
 
 I.e., multicast DNS lookups repeatedly fail even after the name is successfully registered with *avahi*.
@@ -248,7 +248,7 @@ been fixed in later versions). To work around this, edit
 */etc/nsswitch.conf* to change "mdns4_minimal" to "mdns4". Then create
 the file */etc/mdns.allow* with the entries
 
->>.local
+>>.local  
 >>.local.
 
 so it will only try to resolve names in the mDNS zone ".local", which
