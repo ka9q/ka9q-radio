@@ -1,5 +1,5 @@
-Automatic Gain Control (AGC) in *ka9q-radio*
-v 1.1, Phil Karn KA9Q, August 2023
+Automatic Gain Control (AGC) in *ka9q-radio*  
+v 1.1a, Phil Karn KA9Q, April 2025
 ============================================
 
 
@@ -53,17 +53,16 @@ downconversion and filtering so it responds only to in-channel signals;
 each channel has its own AGC.
 
 The AGC is controlled by signal energy measurements made on each block
-of baseband samples.  The block length, typically 20ms, is set
+of baseband samples.  The block length, typically 20ms (a 50 Hz rate), is set
 by the **blocksize** parameter in the [global] section of the *radiod*
 configuration file; it applies to every receiver channel in that
 *radiod* instance. The energy measurement is converted to an average
-power, with 0 dBFS (decibels full scale) corresponding to a full scale
+power, with 0 dBFS (decibels relative to full scale) corresponding to a full scale
 sine wave at the receiver output. (A full scale square wave would thus
 be +3 dBFS.)
 
 This avoids exaggerated responses to noise impulses
-while still responding quickly to true signal level changes (20 ms
-corresponds to a 50 Hz rate).
+while still responding quickly to true signal level changes.
 
 Except for pure tones, communication signals, including speech, are
 noise-like with Gaussian statistics and a theoretically infinite
@@ -100,7 +99,7 @@ timer expires, the gain gradually increases at the
 **headroom** minus **threshold** or the output level reaches
 **headroom**. This is essentially the same as a classic SSB AGC. The
 smaller **hang-time** usually preferred for CW is set in
-*presets/.conf* for those modes. Since the carriers in AM or AME
+*presets.conf* for those modes. Since the carriers in AM or AME
 remove the guesswork from gain setting, these modes set
 **hang-time** = 0 and **recovery-rate** = +50 dB/sec.
 

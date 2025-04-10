@@ -190,7 +190,31 @@ void stick_core(void){
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(cpu,&cpuset);
-  fprintf(stdout,"%s sched_setaffinity(pid=%u,core=%d)",name,(unsigned)self,cpu);
+  fprintf(stdout,"%s sched_setaffinity(pid=%u,cores=",name,(unsigned int)self);
+  // Any hyperthreading siblings?
+  char sysname[PATH_MAX] = {0};
+  snprintf(sysname,sizeof sysname,"/sys/devices/system/cpu/cpu%d/topology/thread_siblings_list",cpu);
+  FILE *fp = fopen(sysname,"r");
+  if(fp != NULL){
+    char corelist[128] = {0};
+    if(fgets(corelist,sizeof corelist,fp) != NULL){
+      char *string = corelist;
+      while(1){
+	char *ptr = NULL;
+	if((ptr = strsep(&string,",")) == NULL)
+	  break;
+	cpu = strtol(ptr,NULL,0);
+	CPU_SET(cpu,&cpuset);
+	fprintf(stdout," %d",cpu);
+      }
+    }
+    fclose(fp);
+    fp = NULL;
+  } else {
+    fprintf(stdout," %d",cpu);
+  }
+  fprintf(stdout,")\n");
+
   if (sched_setaffinity(0, sizeof(cpuset), &cpuset) == -1) {
     fprintf(stdout," failed: %s\n",strerror(errno));
   } else {
@@ -636,7 +660,7 @@ size_t round_to_hugepage(size_t size){
 }
 // Custom version of malloc that aligns to a cache line
 // This is 64 bytes on most modern machines, including the x86 and the ARM 2711 (Pi 4)
-// This is stricter than a complex float or double, which is required by fftwf/fftw
+// This is stricter than a float complex or double complex, which is required by fftwf/fftw
 void *lmalloc(size_t size){
   void *ptr;
   int r;

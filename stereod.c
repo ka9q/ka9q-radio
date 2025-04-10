@@ -489,7 +489,7 @@ void *decode(void *arg){
        * But virtually every FM station is stereo anyway, except for KPBS-FM which is long and strong */
       int16_t *wp = (int16_t *)dp;
       for(int n= 0; n < audio_L; n++){
-	complex float subc_phasor = pilot.output.c[n]; // 19 kHz pilot
+	float complex subc_phasor = pilot.output.c[n]; // 19 kHz pilot
 	subc_phasor *= subc_phasor;       // double to 38 kHz
 
 	float const a = approx_magf(subc_phasor);  // and normalize

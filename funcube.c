@@ -50,7 +50,7 @@ struct sdrstate {
   int number;
 
   // Smoothed error estimates
-  complex float DC;      // DC offset
+  float complex DC;      // DC offset
   float sinphi;          // I/Q phase error
   float imbalance;       // Ratio of I power to Q power
   double calibration;    // TCXO Offset (0 = on frequency)
@@ -246,10 +246,10 @@ static void *proc_funcube(void *arg){
       ConsecPaErrs = 0;
 
     float i_energy=0, q_energy=0;
-    complex float samp_sum = 0;
+    float complex samp_sum = 0;
     float dotprod = 0;
 
-    complex float * wptr = frontend->in.input_write_pointer.c;
+    float complex * wptr = frontend->in.input_write_pointer.c;
 
     for(int i=0; i<Blocksize; i++){
       if(sampbuf[2*i] == 32767 || sampbuf[2*i] <= -32767){
@@ -264,7 +264,7 @@ static void *proc_funcube(void *arg){
       } else
 	frontend->samp_since_over++;
 
-      complex float samp = CMPLXF(sampbuf[2*i],sampbuf[2*i+1]);
+      float complex samp = CMPLXF(sampbuf[2*i],sampbuf[2*i+1]);
       samp_sum += samp; // Accumulate average DC values
       samp -= sdr->DC;   // remove smoothed DC offset (which can be fractional)
 

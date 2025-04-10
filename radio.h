@@ -152,7 +152,7 @@ struct channel {
     float *energies;    // Vector of smoothed bin energies
     int bin_shift;      // FFT bin shift for frequency conversion
     double remainder;   // Frequency remainder for fine tuning
-    complex double phase_adjust; // Block rotation of phase
+    double complex phase_adjust; // Block rotation of phase
   } filter;
 
   // Optional secondary filter (linear demod only)
@@ -168,7 +168,7 @@ struct channel {
 
   enum demod_type demod_type;  // Index into demodulator table (Linear, FM, FM Stereo, Spectrum)
   char preset[32];       // name of last mode preset
-  complex float *baseband; // Output of filter or filter 2 as appropriate
+  float complex *baseband; // Output of filter or filter 2 as appropriate
   int sampcount;           // Count of baseband samples 
   
   struct {               // Used only in linear demodulator

@@ -111,7 +111,7 @@ static float estimate_noise(struct channel *chan,int shift){
   float * const energies = chan->filter.energies;
   struct filter_in const * const master = slave->master;
   // slave->next_jobnum already incremented by execute_filter_output
-  complex float const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
+  float complex const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
 
   float min_bin_energy = INFINITY;
   if(master->in_type == REAL){

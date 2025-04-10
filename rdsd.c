@@ -497,7 +497,7 @@ void *decode(void *arg){
 
       int16_t *wp = (int16_t *)dp;
       for(int n= 0; n < audio_L; n++){
-	//	complex float subc_phasor = pilot->output.c[n]; // 19 kHz pilot
+	//	float complex subc_phasor = pilot->output.c[n]; // 19 kHz pilot
 	//	subc_phasor *= subc_phasor * subc_phasor;       // triple to 57 kHz
 	//	subc_phasor /= approx_magf(subc_phasor);  // and normalize
 	//	float complex subc_info = conjf(subc_phasor) * rds->output.c[n];

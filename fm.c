@@ -82,7 +82,7 @@ int demod_fm(void *arg){
   realtime(chan->prio);
 
   while(downconvert(chan) == 0){
-    complex float const * const buffer = chan->baseband; // For convenience
+    float complex const * const buffer = chan->baseband; // For convenience
     int const N = chan->sampcount;
 
     if(power_squelch && squelch_state == 0){
@@ -252,7 +252,7 @@ int demod_fm(void *arg){
 	  pl_sample_count++;
 	  if(pl_sample_count >= pl_integrate_samples){
 	    // Peak deviation of PL tone in Hz
-	    complex float const c = output_goertzel(&tone_detect); // gain of N/2 scales half cycles per sample to full cycles per interval
+	    float complex const c = output_goertzel(&tone_detect); // gain of N/2 scales half cycles per sample to full cycles per interval
 	    float const g = cabsf(c) / pl_sample_count; // peak PL tone deviation in Hz per sample
 	    chan->fm.tone_deviation = chan->output.samprate * g; // peak PL tone deviation in Hz
 	    // Compute phase jump between integration periods as a fine frequency error indication
