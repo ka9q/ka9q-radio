@@ -4,9 +4,9 @@ Phil Karn, KA9Q
 
 ## Description
 
-## SW Installation
-
 [RTL-SDR](https://www.rtl-sdr.com/about-rtl-sdr/) is any SDR dongle based on DVB_T tuner ICs (Elonics, Rafael Micro, Fitipower, ...), usually with a RTL2832U demodulator / USB interface. The frequency range is approx. 24 MHz - 1.7 GHz and the sampling rate is approx. 2.5 Msps.
+
+## SW Installation
 
 ## Configuration
 
@@ -42,7 +42,7 @@ The `serial` must exactly match the SDR serial number.
 
 ### samprate (optional)
 
-Integer, default is 1.8 MHz (1800000).
+Integer, default 1,800,000 (1.8 MHz).
 
 ### agc (optional)
 
