@@ -77,7 +77,7 @@ int demod_spectrum(void *arg){
     int bin_count = chan->spectrum.bin_count <= 0 ? 64 : chan->spectrum.bin_count;
     float bin_bw = chan->spectrum.bin_bw <= 0 ? 1000 : chan->spectrum.bin_bw;
 
-    if(bin_bw > 50){
+    if(bin_bw >= 40){
       // large bins, use forward FFT directly
 
       if(bin_bw != old_bin_bw || bin_count != old_bin_count){
