@@ -188,7 +188,7 @@ int demod_spectrum(void *arg){
 	  outf += ratio;
 	  count++;
 	}
-	chan->spectrum.bin_data[out++] = (p * gain) / count;
+	chan->spectrum.bin_data[out++] = (p * gain);
       }
       // Positive output frequencies
       out = 0;
@@ -202,7 +202,7 @@ int demod_spectrum(void *arg){
 	  outf += ratio;
 	  count++;
 	}
-	chan->spectrum.bin_data[out++] = (p * gain) / count;
+	chan->spectrum.bin_data[out++] = (p * gain);
       }
     } else {
       // ***FFT MODE***
