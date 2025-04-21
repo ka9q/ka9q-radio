@@ -722,5 +722,5 @@ float scale_AD(struct frontend const *frontend){
   // net analog gain, dBm to dBFS, that we correct for to maintain unity gain, i.e., 0 dBm -> 0 dBFS
   float analog_gain = frontend->rf_gain - frontend->rf_atten + frontend->rf_level_cal;
   // Will first get called before the filter input is created
-  return dB2voltage(-analog_gain) / scale; // Front end gain as amplitude ratio
+  return (M_SQRT2 * dB2voltage(-analog_gain)) / scale; // Front end gain as amplitude ratio
 }
