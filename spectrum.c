@@ -182,11 +182,9 @@ int demod_spectrum(void *arg){
       int in = 0;
       while(out < bin_count){
 	float p = 0;
-	int count = 0;
 	while((int)outf == out){
 	  p += power_buffer[in++];
 	  outf += ratio;
-	  count++;
 	}
 	chan->spectrum.bin_data[out++] = (p * gain);
       }
@@ -196,11 +194,9 @@ int demod_spectrum(void *arg){
       in = input_bins/2;
       while(out < bin_count/2){
 	float p = 0;
-	int count = 0;
 	while((int)outf == out){
 	  p += power_buffer[in++];
 	  outf += ratio;
-	  count++;
 	}
 	chan->spectrum.bin_data[out++] = (p * gain);
       }
