@@ -437,7 +437,7 @@ static int loadconfig(char const *file){
     char const *suffix = ".local";
     char const *cp2 = strstr(cp,suffix);
     if(cp2 == NULL || strlen(cp2) != strlen(suffix))
-      asprintf(&Metadata_dest_string,"%s%s",cp,suffix);
+      (void)asprintf(&Metadata_dest_string,"%s%s",cp,suffix);
     else
       Metadata_dest_string = strdup(cp);
   }
@@ -487,7 +487,7 @@ static int loadconfig(char const *file){
     char const *suffix = ".local";
     char const *cp2 = strstr(cp,suffix);
     if(cp2 == NULL || strlen(cp2) != strlen(suffix))
-      asprintf(&Data,"%s%s",cp,suffix);
+      (void)asprintf(&Data,"%s%s",cp,suffix);
     else
       Data = strdup(cp);
   }
@@ -623,7 +623,7 @@ void *process_section(void *p){
     char const *suffix = ".local";
     char const *cp2 = strstr(cp,suffix);
     if(cp2 == NULL || strlen(cp2) != strlen(suffix))
-      asprintf(&data,"%s%s",cp,suffix);
+      (void)asprintf(&data,"%s%s",cp,suffix);
     else
       data = strdup(cp);
   }
