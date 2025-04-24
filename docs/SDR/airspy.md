@@ -34,6 +34,8 @@ Multiple instances of `radiod` can run on the same system, provided each has its
 
 You can have as many as you want, subject to your CPU and USB limits. (The Airspy R2 generates 240 Mb/s, but it's a USB 2.0 -- not 3.0 -- device so each will have to be on its own USB host controller.)
 
+The "description" parameter is advertised with mDNS (multicast DNS) service discovery on the LAN and this constrains its content. It should be 63 characters or less and not contain slashes ('/') or control characters (spaces are ok).
+
 ### device (mandatory)
 
 In the example above, the `hardware` entry in the `[global]` section specifies the section containing Airspy configuration information. (In this example the name of the hardware section happens to be the same as the device type, but it is not essential.)

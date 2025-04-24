@@ -1,7 +1,7 @@
 Configuring and Running *ka9q-radio - Part 2
 ============================================
 
-v1.0 (in progress), September 2023  
+v1.01 (in progress), April 2025  
 Phil Karn, KA9Q
 ---------------
 
@@ -23,6 +23,9 @@ description = "airspy on 2m antenna"
 
 In this example the name of the hardware definition section matches
 the device type, but this is not required.
+
+The "description" parameter is advertised with mDNS (multicast DNS) service discovery on the LAN and this constrains its content. It should be 63 characters or less and not contain slashes ('/') or control characters (spaces are ok).
+
 
 Supported Hardware
 ------------------
