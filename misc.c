@@ -241,7 +241,7 @@ char *ensure_suffix(char const *str, char const *suffix){
 
   char *result = NULL;
   int len = asprintf(&result,"%s%s",str,suffix);
-  if(len == 0)
+  if(len <= 0)
     return NULL;
   return result;
 }
