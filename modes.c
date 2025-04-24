@@ -105,6 +105,7 @@ char const *Channel_keys[] = {
   "freq7",
   "freq8",
   "freq9",
+  "ssrc",
   NULL
 };
 
