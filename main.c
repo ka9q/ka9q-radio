@@ -57,7 +57,7 @@ static int const DEFAULT_LIFETIME = 20; // 20 sec for idle sessions tuned to 0 H
 #define GLOBAL "global"
 
 char const *Iface;
-char const *Data;
+char *Data;
 char const *Preset = DEFAULT_PRESET;
 char Preset_file[PATH_MAX];
 char const *Config_file;
@@ -114,7 +114,7 @@ volatile bool Stop_transfers = false; // Request to stop data transfers; how sho
 static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 static pthread_t Status_thread;
 struct sockaddr Metadata_dest_socket;      // Dest of global metadata
-static char const *Metadata_dest_string; // DNS name of default multicast group for status/commands
+static char *Metadata_dest_string; // DNS name of default multicast group for status/commands
 int Output_fd = -1; // Unconnected socket used for other hosts
 struct channel Template;
 // If a channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
@@ -431,8 +431,16 @@ static int loadconfig(char const *file){
   }
   char default_status[strlen(Hostname) + strlen(Name) + 20]; // Enough room for snprintf
   snprintf(default_status,sizeof(default_status),"%s-%s.local",Hostname,Name);
-  Metadata_dest_string = strdup(config_getstring(Configtable,GLOBAL,"status",default_status)); // Status/command target for all demodulato
-
+  {
+   char const *cp = config_getstring(Configtable,GLOBAL,"status",default_status); // Status/command target for all demodulators
+    // Add .local if not present
+    char const *suffix = ".local";
+    char const *cp2 = strstr(cp,suffix);
+    if(cp2 == NULL || strlen(cp2) != strlen(suffix))
+      asprintf(&Metadata_dest_string,"%s%s",cp,suffix);
+    else
+      Metadata_dest_string = strdup(cp);
+  }
   // Set up the hardware early, in case it fails
   const char *hardware = config_getstring(Configtable,GLOBAL,"hardware",NULL);
   if(hardware == NULL){
@@ -473,8 +481,15 @@ static int loadconfig(char const *file){
   // Overrides in [global] of compiled-in defaults
   {
     char data_default[256];
-    snprintf(data_default,sizeof(data_default),"%s-pcm",Name);
-    Data = strdup(config_getstring(Configtable,GLOBAL,"data",data_default));
+    snprintf(data_default,sizeof(data_default),"%s-pcm.local",Name);
+    char const *cp = config_getstring(Configtable,GLOBAL,"data",data_default);
+    // Add .local if not present
+    char const *suffix = ".local";
+    char const *cp2 = strstr(cp,suffix);
+    if(cp2 == NULL || strlen(cp2) != strlen(suffix))
+      asprintf(&Data,"%s%s",cp,suffix);
+    else
+      Data = strdup(cp);
   }
   // Set up template for all new channels
   set_defaults(&Template);
@@ -601,7 +616,17 @@ void *process_section(void *p){
     fprintf(stdout,"[%s] preset/mode not specified, all parameters must be explicitly set\n",sname);
 
   // Override [global] settings with section settings
-  char const *data = config_getstring(Configtable,sname,"data",Data);
+  char *data = NULL;
+  {
+    char const *cp = config_getstring(Configtable,sname,"data",Data);
+    // Add .local if not present
+    char const *suffix = ".local";
+    char const *cp2 = strstr(cp,suffix);
+    if(cp2 == NULL || strlen(cp2) != strlen(suffix))
+      asprintf(&data,"%s%s",cp,suffix);
+    else
+      data = strdup(cp);
+  }
   // Override global defaults
   char const *iface = config_getstring(Configtable,sname,"iface",Iface);
 
