@@ -187,6 +187,7 @@ double parse_frequency(char const *,bool);
 uint32_t nextfastfft(uint32_t n);
 int pipefill(int,void *,int);
 void chomp(char *);
+char *ensure_suffix(char const *str, char const *suffix);
 uint32_t ElfHash(uint8_t const *s,int length);
 uint32_t ElfHashString(char const *s);
 uint32_t fnv1hash(const uint8_t *s,int length);

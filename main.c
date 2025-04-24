@@ -434,12 +434,7 @@ static int loadconfig(char const *file){
   {
    char const *cp = config_getstring(Configtable,GLOBAL,"status",default_status); // Status/command target for all demodulators
     // Add .local if not present
-    char const *suffix = ".local";
-    char const *cp2 = strstr(cp,suffix);
-    if(cp2 == NULL || strlen(cp2) != strlen(suffix))
-      (void)asprintf(&Metadata_dest_string,"%s%s",cp,suffix);
-    else
-      Metadata_dest_string = strdup(cp);
+   Metadata_dest_string = ensure_suffix(cp,".local");
   }
   // Set up the hardware early, in case it fails
   const char *hardware = config_getstring(Configtable,GLOBAL,"hardware",NULL);
@@ -484,12 +479,7 @@ static int loadconfig(char const *file){
     snprintf(data_default,sizeof(data_default),"%s-pcm.local",Name);
     char const *cp = config_getstring(Configtable,GLOBAL,"data",data_default);
     // Add .local if not present
-    char const *suffix = ".local";
-    char const *cp2 = strstr(cp,suffix);
-    if(cp2 == NULL || strlen(cp2) != strlen(suffix))
-      (void)asprintf(&Data,"%s%s",cp,suffix);
-    else
-      Data = strdup(cp);
+    Data = ensure_suffix(cp,".local");
   }
   // Set up template for all new channels
   set_defaults(&Template);
@@ -620,12 +610,7 @@ void *process_section(void *p){
   {
     char const *cp = config_getstring(Configtable,sname,"data",Data);
     // Add .local if not present
-    char const *suffix = ".local";
-    char const *cp2 = strstr(cp,suffix);
-    if(cp2 == NULL || strlen(cp2) != strlen(suffix))
-      (void)asprintf(&data,"%s%s",cp,suffix);
-    else
-      data = strdup(cp);
+    data = ensure_suffix(cp,".local");
   }
   // Override global defaults
   char const *iface = config_getstring(Configtable,sname,"iface",Iface);

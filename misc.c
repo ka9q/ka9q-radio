@@ -233,6 +233,18 @@ void chomp(char *s){
   if((cp = strchr(s,'\n')) != NULL)
     *cp = '\0';
 }
+// Return a duplicate of the string 'str', ensuring that it's terminated by 'suffix'
+char *ensure_suffix(char const *str, char const *suffix){
+  char const *cp = strstr(str,suffix);
+  if(cp != NULL && strlen(cp) == strlen(suffix))
+    return strdup(str);
+
+  char *result = NULL;
+  int len = asprintf(&result,"%s%s",str,suffix);
+  if(len == 0)
+    return NULL;
+  return result;
+}
 
 
 void normalize_time(struct timespec *x){
