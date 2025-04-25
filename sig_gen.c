@@ -24,7 +24,7 @@
 
 #define INPUT_PRIORITY 95
 static int const Random_samples = 30000000;
-static float Power_smooth = 0.05; // Calculate this properly someday
+static float Power_smooth = 0.01; // Calculate this properly someday
 
 
 enum modulation {
@@ -87,13 +87,12 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
     double const eL = frontend->samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
     Blocksize = lround(eL);
   }
+  frontend->rf_gain = 0;
+  frontend->rf_atten = 0;
+  frontend->rf_level_cal = 0;
   frontend->isreal = config_getboolean(dictionary,section,"real",true);
   frontend->isreal = ! config_getboolean(dictionary,section,"complex",! frontend->isreal);
-  frontend->bitspersample = config_getint(dictionary,section,"bitspersample",16);
-  if(frontend->bitspersample < 1 || frontend->bitspersample > 32){
-    fprintf(stdout,"unreasonable bits per sample %d, setting to 16\n",frontend->bitspersample);
-    frontend->bitspersample = 16;
-  }
+  frontend->bitspersample = 1; // Input is floating point with no scaling
   if(frontend->isreal){
     frontend->min_IF = 0;
     frontend->max_IF = frontend->samprate / 2;
@@ -104,7 +103,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
     frontend->frequency = frontend->samprate/2;
   }
   {
-    char const * const p = config_getstring(dictionary,section,"description","funcube dongle+");
+    char const * const p = config_getstring(dictionary,section,"description","signal generator");
     if(p != NULL)
       strlcpy(frontend->description,p,sizeof(frontend->description));
   }
@@ -120,8 +119,10 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
     if(p != NULL)
       sdr->carrier = parse_frequency(p,false);
   }
-  sdr->amplitude = config_getfloat(dictionary,section,"amplitude",-10.0); // Carrier amplitude, default -10 dBFS
-  sdr->amplitude = dB2voltage(sdr->amplitude); // Convert from dBFS to peak amplitude
+  {
+    float adb = config_getfloat(dictionary,section,"amplitude",-10.0); // Carrier amplitude, default -10 dBFS
+    sdr->amplitude = dB2voltage(adb); // Convert from dBFS to peak amplitude
+  }
   sdr->modulation = CW; // Default
   {
     char const *m = config_getstring(dictionary,section,"modulation","CW");
@@ -214,7 +215,7 @@ static void *proc_sig_gen(void *arg){
     int noise_index = arc4random_uniform(Random_samples - blocksize);
     int modcount = samps_per_samp;
     float modsample = 0;
-    float if_energy = 0;
+    float in_energy = 0;
     if(frontend->isreal){
       // Real signal
       float * wptr = frontend->in.input_write_pointer.r;
@@ -246,7 +247,7 @@ static void *proc_sig_gen(void *arg){
 	}
 	if(Real_noise != NULL)
 	  wptr[i] += Real_noise[noise_index+i];
-	if_energy += wptr[i] * wptr[i];
+	in_energy += wptr[i] * wptr[i];
 	wptr [i] *= sdr->scale;
       }
       write_rfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
@@ -282,16 +283,16 @@ static void *proc_sig_gen(void *arg){
 	}
 	if(Complex_noise != NULL)
 	  wptr[i] += Complex_noise[noise_index+i];
-	if_energy += cnrmf(wptr[i]);
+	in_energy += cnrmf(wptr[i]);
 	wptr [i] *= sdr->scale;
       }
       write_cfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
     }
-    // The variability in blocksize due to scheduling variability causes the energy integrated into frontend->if_energy
+    // The variability in blocksize due to scheduling variability causes the energy integrated into frontend->if_power
     // to vary, causing the reported input level to bobble around the nominal value. Long refresh intervals with 'control'
     // will smooth this out, but it's annoying
     frontend->samples += blocksize;    
-    frontend->if_power = Power_smooth * (if_energy / blocksize - frontend->if_power);
+    frontend->if_power += Power_smooth * (in_energy / blocksize - frontend->if_power);
     // Get status timestamp from UNIX TOD clock
     // Request a half block sleep since this is only the minimum
     {
