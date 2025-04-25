@@ -4,6 +4,7 @@
 // March 2024, Phil Karn KA9Q
 // Jan 2025 - option to publish through static additions to avahi daemon files /etc/avahi/hosts, /etc/avahi/services
 //            note - does not remove such entries yet!
+#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,6 +13,7 @@
 #include <errno.h>
 #include <sys/file.h>
 #include <stdbool.h>
+#include <ctype.h>
 #include "avahi.h"
 
 #define SERVICES "/etc/avahi/services"
@@ -21,6 +23,7 @@ bool Static_avahi;
 
 int avahi_publish_address(char const *dns_name,char const *ip_address_string);
 int avahi_publish_service(char const *service_name, char const *service_type, char const *dns_name,int service_port, char const *description, int pid);
+static void sanitize_filename(char *name);
 
 int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,int address,char const *description,void *sock,size_t *socksize){
   if(sock != NULL && socksize != NULL){
@@ -104,7 +107,11 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
 int avahi_publish_service(char const *service_name, char const *service_type, char const *dns_name,int service_port, char const *description, int pid){
   char path_name[1024];
 
-  snprintf(path_name,sizeof(path_name),"%s/%s.service",SERVICES,service_name);
+  char *sanitized_name = strdup(service_name);
+  sanitize_filename(sanitized_name);
+
+  snprintf(path_name,sizeof(path_name),"%s/%s.service",SERVICES,sanitized_name);
+  free(sanitized_name);
   FILE *fp = fopen(path_name,"w"); // Will overwrite if exists
   if(fp == NULL){
     fprintf(stdout,"Can't create %s: %s\n",path_name,strerror(errno));
@@ -188,4 +195,31 @@ int avahi_publish_address(char const *name,char const *address){
   fclose(fp);
 
   return 0;
+}
+// Remove problematic characters from an Avahi service file name
+static void sanitize_filename(char *name) {
+  char *src = name;
+  char *dst = name;
+
+  // Trim leading whitespace
+  while (isspace((unsigned char)*src))
+    src++;
+
+  while (*src) {
+    unsigned char c = (unsigned char)*src;
+    if (isalnum(c)) {
+      *dst++ = c;
+    } else if (c == ' ' || c == '_' || c == '-' || c == '@') {
+      *dst++ = '-';  // Normalize all to hyphen
+    } else if (c == '.') {
+      *dst++ = '.';  // Keep dot for extension
+    } else {
+      // Drop anything else (e.g., control chars, punctuation)
+    }
+    src++;
+  }
+  // Trim trailing hyphens or whitespace
+  while (dst > name && (dst[-1] == '-' || isspace((unsigned char)dst[-1])))
+    dst--;
+  *dst = '\0';
 }
