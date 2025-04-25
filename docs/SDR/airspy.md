@@ -6,7 +6,7 @@ Phil Karn, KA9Q
 
 [Airspy R2](https://airspy.com/airspy-r2/) is a SDR for the VHF and UHF (24 – 1700 MHz) bands. It has a low-IF architecture based on Rafael Micro R820T2 (or R860), a high quality oversampling 12-bit ADC and a state of the art DSP resulting in up to 16-bit resolution at narrow band channels. The sample rate is 10Msps (complex)
 
-[Airspy HF+](https://airspy.com/airspy-hf-plus/) is a SDR for the HF (9 kHz - 31 MHz) and VHF (64 - 260 MHz) bands. It has very high dynamic range ADC’s and front-ends and a polyphase harmonic rejection mixer for improved performance. The sample rate is 768 ksps (complex)
+[Airspy HF+](https://airspy.com/airspy-hf-plus/) is a SDR for the HF (9 kHz - 31 MHz) and VHF (64 - 260 MHz) bands. It has very high dynamic range ADC’s and front-ends and a polyphase harmonic rejection mixer for improved performance. The maximum sample rate is 912 ksps (complex).
 
 The [Airspy Mini](https://airspy.com/airspy-mini/) is very similar with the Airspy R2 so it can also be used by `radiod`.
 
