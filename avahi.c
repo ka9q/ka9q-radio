@@ -109,12 +109,15 @@ int avahi_publish_service(char const *service_name, char const *service_type, ch
 
   char *sanitized_name = strdup(service_name);
   sanitize_filename(sanitized_name);
+  char *sanitized_type = strdup(service_type);
+  sanitize_filename(sanitized_type);
 
   char tmp_file[1024];
-  snprintf(tmp_file,sizeof(tmp_file),"%s/%s.service.tmp%d",SERVICES,sanitized_name,pid);
+  snprintf(tmp_file,sizeof(tmp_file),"%s/%s-%s.service.tmp%d",SERVICES,sanitized_name,sanitized_type,pid);
   FILE *fp = fopen(tmp_file,"w"); // Will overwrite if exists
   if(fp == NULL){
     fprintf(stdout,"Can't create %s: %s\n",tmp_file,strerror(errno));
+    FREE(sanitized_type);
     FREE(sanitized_name);
     return -1;
   }
@@ -134,12 +137,13 @@ int avahi_publish_service(char const *service_name, char const *service_type, ch
   fputs("</service-group>\n",fp);
   fclose(fp);
   char service_file[1024];
-  snprintf(service_file,sizeof(service_file),"%s/%s.service",SERVICES,sanitized_name);
+  snprintf(service_file,sizeof(service_file),"%s/%s-%s.service",SERVICES,sanitized_name,sanitized_type);
 
   int r = rename(tmp_file,service_file);
   if(r != 0)
     fprintf(stderr,"Can't rename %s to %s: %s\n",
 	    tmp_file,service_file,strerror(errno));
+  FREE(sanitized_type);
   FREE(sanitized_name);
 
   return r;
