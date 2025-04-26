@@ -512,7 +512,13 @@ static int loadconfig(char const *file){
       addr = make_maddr(Data);
 
     size_t slen = sizeof(Template.output.dest_socket);
-    avahi_start(Frontend.description,
+    // there may be several hosts with the same section name
+    // prepend the host name to the service name
+    // Append "default" to ensure difference to control channel service
+
+    char service_name[1024] = {0};
+    snprintf(service_name,sizeof(service_name),"%s %s default",Hostname,Frontend.description);
+    avahi_start(service_name,
 	      "_rtp._udp",
 	      DEFAULT_RTP_PORT,
 	      Data,
