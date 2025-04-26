@@ -14,6 +14,7 @@
 #include <sys/file.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include "misc.h"
 #include "avahi.h"
 
 #define SERVICES "/etc/avahi/services"
@@ -105,22 +106,21 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
 
 // Publish service in static avahi directory
 int avahi_publish_service(char const *service_name, char const *service_type, char const *dns_name,int service_port, char const *description, int pid){
-  char path_name[1024];
 
   char *sanitized_name = strdup(service_name);
   sanitize_filename(sanitized_name);
 
-  snprintf(path_name,sizeof(path_name),"%s/%s.service",SERVICES,sanitized_name);
-  free(sanitized_name);
-  FILE *fp = fopen(path_name,"w"); // Will overwrite if exists
+  char tmp_file[1024];
+  snprintf(tmp_file,sizeof(tmp_file),"%s/%s.service.tmp%d",SERVICES,sanitized_name,pid);
+  FILE *fp = fopen(tmp_file,"w"); // Will overwrite if exists
   if(fp == NULL){
-    fprintf(stdout,"Can't create %s: %s\n",path_name,strerror(errno));
+    fprintf(stdout,"Can't create %s: %s\n",tmp_file,strerror(errno));
+    FREE(sanitized_name);
     return -1;
   }
   char hostname[sysconf(_SC_HOST_NAME_MAX)];
   gethostname(hostname,sizeof(hostname));
 
-  fcntl(fileno(fp),LOCK_EX);
   fputs("<service-group>\n",fp);
   fprintf(fp,"<name>%s</name>\n",service_name);
   fputs("<service protocol=\"ipv4\">\n",fp);
@@ -132,9 +132,17 @@ int avahi_publish_service(char const *service_name, char const *service_type, ch
   fprintf(fp,"<txt-record>source=%s</txt-record>\n",hostname);
   fputs("</service>\n",fp);
   fputs("</service-group>\n",fp);
-  fcntl(fileno(fp),LOCK_UN);
   fclose(fp);
-  return 0;
+  char service_file[1024];
+  snprintf(service_file,sizeof(service_file),"%s/%s.service",SERVICES,sanitized_name);
+
+  int r = rename(tmp_file,service_file);
+  if(r != 0)
+    fprintf(stderr,"Can't rename %s to %s: %s\n",
+	    tmp_file,service_file,strerror(errno));
+  FREE(sanitized_name);
+
+  return r;
 }
 
 // Publish address, host pair in static avahi file
