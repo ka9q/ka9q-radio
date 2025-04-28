@@ -382,39 +382,56 @@ int main(int argc,char *argv[]){
 
 
   if(target == NULL){
-    // Use avahi browser to find a radiod instance to control
-    fprintf(stdout,"Scanning for radiod instances...\n");
+    int entry = 0;
     int const table_size = 1000;
     struct service_tab table[table_size];
 
-    int radiod_count = avahi_browse(table,table_size,"_ka9q-ctl._udp"); // Returns list in global when cache is emptied
-    if(radiod_count == 0){
-      fprintf(stdout,"No radiod instances or Avahi not running; specify control channel manually\n");
-      exit(EX_UNAVAILABLE);
-    }
-    int n = 0;
-    if(radiod_count == 1){
-      // Only one, use it
-      fprintf(stdout,"Using %s (%s)\n",table[n].name,table[n].dns_name);
-    } else {
-      for(int i=0; i < radiod_count; i++)
-	fprintf(stdout,"%d: %s (%s)\n",i,table[i].name,table[i].dns_name);
-      fprintf(stdout,"Select index: ");
-      fflush(stdout);
-      char *line = NULL;
-      size_t linesize = 0;
-      if(getline(&line,&linesize,stdin) <= 0){
-	fprintf(stdout,"EOF on input\n");
-	FREE(line);
-	exit(EX_USAGE);
+    char *line = NULL;
+    size_t linesize = 0;
+
+    while(true){
+      // Use avahi browser to find a radiod instance to control
+      fprintf(stdout,"Scanning for radiod instances...\n");
+
+      int radiod_count = avahi_browse(table,table_size,"_ka9q-ctl._udp"); // Returns list in global when cache is emptied
+      if(radiod_count == 0){
+	fprintf(stdout,"No radiod instances or Avahi not running; hit return to retry or re-run and specify control channel with -h\n");
+	if(getline(&line,&linesize,stdin) < 0){
+	  fprintf(stdout,"EOF on input\n");
+	  exit(EX_USAGE);
+	}
+	continue;
       }
-      n = strtol(line,NULL,0);
-      FREE(line);
-      if(n < 0 || n >= radiod_count){
-	fprintf(stdout,"Index %d out of range, try again\n",n);
-	exit(EX_USAGE);
+
+      if(radiod_count == 1){
+	// Only one, use it
+	fprintf(stdout,"Using %s (%s)\n",table[entry].name,table[entry].dns_name);
+	break;
+      } else {
+	for(int i=0; i < radiod_count; i++)
+	  fprintf(stdout,"%d: %s (%s)\n",i,table[i].name,table[i].dns_name);
+	fprintf(stdout,"Select index: ");
+	fflush(stdout);
+	if(getline(&line,&linesize,stdin) <= 0){
+	  fprintf(stdout,"EOF on input\n");
+	  FREE(line);
+	  exit(EX_USAGE);
+	}
+	char *endptr = NULL;
+	entry = strtol(line,&endptr,0);
+
+	if(line == endptr)
+	  continue; // Go back and do it again
+	if(entry < 0 || entry >= radiod_count){
+	  fprintf(stdout,"Index %d out of range, try again\n",entry);
+	  continue;
+	}
+	fprintf(stdout,"Selected: %d\n",entry);
+	break;
       }
     }
+    FREE(line);
+    fprintf(stdout,"%s (%s):\n",table[entry].name,table[entry].dns_name);
     struct addrinfo *results = NULL;
     struct addrinfo hints;
     memset(&hints,0,sizeof(hints));
@@ -422,7 +439,7 @@ int main(int argc,char *argv[]){
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = IPPROTO_UDP;
     hints.ai_flags = AI_ADDRCONFIG | AI_NUMERICHOST | AI_NUMERICSERV;
-    int const ecode = getaddrinfo(table[n].address,table[n].port,&hints,&results);
+    int const ecode = getaddrinfo(table[entry].address,table[entry].port,&hints,&results);
     if(ecode != 0){
       fprintf(stdout,"getaddrinfo: %s\n",gai_strerror(ecode));
       exit(EX_IOERR);
@@ -432,9 +449,9 @@ int main(int argc,char *argv[]){
     // flags set to only return supported addresses, how could any of them fail?
     memcpy(&Metadata_dest_socket,results->ai_addr,sizeof(Metadata_dest_socket));
     freeaddrinfo(results); results = NULL;
-    Status_fd = listen_mcast(&Metadata_dest_socket,table[n].interface);
+    Status_fd = listen_mcast(&Metadata_dest_socket,table[entry].interface);
     Output_fd = output_mcast(&Metadata_dest_socket,NULL,Mcast_ttl,IP_tos);
-    join_group(Output_fd,&Metadata_dest_socket,table[n].interface);
+    join_group(Output_fd,&Metadata_dest_socket,table[entry].interface);
   } else {
     // Use resolv_mcast to resolve a manually entered domain name, using default port and parsing possible interface
     char iface[1024] = {0}; // Multicast interface string
@@ -1330,7 +1347,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
       int L = channel->filter2.in.ilen;
       int M = channel->filter2.in.impulse_length;
       int N = L+M > 0 ? L + M - 1 : 0;
-      
+
       float bt = Blocktime * channel->filter2.blocking;
       pprintw(w,row++,col,"Block Time","%.1f ms",bt);
       pprintw(w,row++,col,"Block rate","%.3f Hz",1000./bt);
@@ -1339,7 +1356,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
       pprintw(w,row++,col,"Overlap","%.2f %% ",100./overlap);
       pprintw(w,row++,col,"Bin width","%.3f Hz",1000./(overlap*bt));
       pprintw(w,row++,col,"Kaiser β","%.1f   ",channel->filter2.kaiser_beta);
-  }      
+  }
   box(w,0,0);
   mvwaddstr(w,0,1,"Filtering");
 
