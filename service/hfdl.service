@@ -26,7 +26,7 @@ StandardError=inherit
 UMask = 002
 CPUSchedulingPolicy=batch
 RuntimeDirectory=hfdl
-ExecStart=/usr/local/bin/pcmrecord --raw -v --exec "${DUMPHFDL} --output decoded:json:file:path=${LOG} --iq-file - --sample-rate $r --centerfreq $k  --sample-format cs16 --system-table=${SYSTABLE} --system-table-save=${SYSTABLE} $k" ${MCAST}
+ExecStart=/usr/local/bin/pcmrecord --raw -v --exec "${DUMPHFDL} --output decoded:json:tcp:address=feed.airframes.io,port=5556 --output decoded:json:file:path=${LOG} --iq-file - --sample-rate $r --centerfreq $k  --sample-format cs16 --system-table=${SYSTABLE} --system-table-save=${SYSTABLE} $k" ${MCAST}
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
