@@ -395,7 +395,7 @@ int main(int argc,char *argv[]){
 
       int radiod_count = avahi_browse(table,table_size,"_ka9q-ctl._udp"); // Returns list in global when cache is emptied
       if(radiod_count == 0){
-	fprintf(stdout,"No radiod instances or Avahi not running; hit return to retry or re-run and specify control channel with -h\n");
+	fprintf(stdout,"No radiod instances or Avahi not running; hit return to retry or re-run and specify control channel\n");
 	if(getline(&line,&linesize,stdin) < 0){
 	  fprintf(stdout,"EOF on input\n");
 	  exit(EX_USAGE);
