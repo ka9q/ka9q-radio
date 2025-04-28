@@ -32,7 +32,7 @@ SODIR = /usr/local/lib/ka9q-radio
 DAEMONDIR = /usr/local/sbin
 VARDIR = /var/lib/ka9q-radio
 DIRS = /etc/fftw /etc/radio /etc/avahi/services $(VARDIR) /var/lib/hfdl
-SYSFILES = /etc/avahi/hosts
+SYSFILES = /etc/avahi/hosts /var/log/hfdl.log
 #DAEMONS = aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 #EXECS = control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record
 DAEMONS = aprs aprsfeed cwd packetd radiod
@@ -105,6 +105,7 @@ endif
 	mkdir -p $(DIRS)
 	chown -R radio:radio $(DIRS)
 	chmod g+ws $(DIRS)
+	touch $(SYSFILES)
 	chgrp radio $(SYSFILES)
 	chmod g+w $(SYSFILES)
 	rsync -a $(DAEMONS) $(DAEMONDIR)
