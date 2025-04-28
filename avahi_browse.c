@@ -87,11 +87,13 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
     exit(1);
 
   int line_count;
+  char *line = NULL;
+  size_t linesize = 0;
+
   for(line_count = 0; line_count < tabsize;){
     struct service_tab *tp = &table[line_count];
-    char *line = NULL; // Fresh buffer for every line
-    size_t linesize = 0;
 
+    // Allocates or reallocates as necessary
     if(getline(&line,&linesize,fp) <= 0){
       FREE(line);
       break;
@@ -115,11 +117,12 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
       deescape(tp->name);
       tp++;
       line_count++;
-    } else {
-      FREE(tp->buffer);
-      // tp pointers are now invalid, but they get reset on next iteration or it passes out of scope
+      line = NULL; // Force a new allocation by getline() on next iteration
+      linesize = 0;
     }
+    // Otherwise reuse line (with possible expansion)
   }
+  FREE(line);
   pclose(fp); // What to do with return code?
   // Sort by instance entity name
   qsort(table,line_count,sizeof(table[0]),table_compare);
