@@ -22,7 +22,7 @@ git clone https://github.com/szpajder/dumphfdl
 
 Now install their various dependencies. (This list may not be complete. If you know of more, please let me know).
 ```
-sudo apt install cmake zlib1g-dev libxml2-dev libjansson-dev libliquid-dev libsoapysdr-dev libfftw3-dev libzmq3-dev libsqlite3-dev
+sudo apt install cmake zlib1g-dev libxml2-dev libjansson-dev libliquid-dev libsoapysdr-dev libfftw3-dev libzmq3-dev libsqlite3-dev libglib2.0-dev libconfig++-dev
 
 ```
 
