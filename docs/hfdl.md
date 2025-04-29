@@ -1,16 +1,16 @@
-Using ka9q-radio with HFDL (High Frequency Data Link)__
+Using ka9q-radio with HFDL (High Frequency Data Link)  
 Phil Karn, KA9Q 28 April 2025
 =====================================================
 
-[https://en.wikipedia.org/wiki/High_Frequency_Data_Link](HFDL) is a low speed HF packetized digital communication system used by commercial airliners for long-range communication over oceans and remote areas. It operates in the on-route (civilian) aeronautical HF allocations alongside channels use for SSB voice. Each of the 15 ground stations around the world uses a subset of about 105 channels depending on current propagation conditions.
+[HFDL](https://en.wikipedia.org/wiki/High_Frequency_Data_Link) is a low speed HF packetized digital communication system used by commercial airliners for long-range communication over oceans and remote areas. It operates in the on-route (civilian) aeronautical HF allocations alongside channels use for SSB voice. Each of the 15 ground stations around the world uses a subset of about 105 channels depending on current propagation conditions.
 
-HFDL is part of ACARS, the [https://en.wikipedia.org/wiki/ACARS](Aircraft Communications Addressing and Reporting System), better known for its VHF data links.
+HFDL is part of [ACARS](https://en.wikipedia.org/wiki/ACARS), the Aircraft Communications Addressing and Reporting System, better known for its VHF data links.
 
 What I think most interesting about HFDL for us hams aren't the actual messages but what it can tell us about HF propagation. Hearing a certain ground station or aircraft obviously tells you that the frequency is open between you and that location. The ground stations are in fixed, public locations transmitting periodic beacons ("squitter") messages as well as traffic to specific aircraft. the aircraft transmit their GPS locations, which are often over the oceans or the poles -- places few hams are like to be operate on FT8 or WSPR. Second, HFDL overhead messages include aircraft reports of which ground stations have or have not been heard, and how many messages have gotten through at a given data rate. There is much information waiting to be mined from these logs.
 
-*ka9q-radio* can feed the *dumphfdl* decoder by Tomasz Lemiech szpajder@gmail.com and the results automatically forwarded to the crowd sourced public database at [https://app.airframes.io/](Airframes). As with FT4, FT8 and WSPR, with a wideband front end covering all of HF every HFDL channel can be monitored and decoded simultaneously. The CPU time consumed is not great, so it can usually be run on the same system as decoders for those other modes.
+*ka9q-radio* can feed the *dumphfdl* decoder by Tomasz Lemiech szpajder@gmail.com and the results automatically forwarded to the crowd sourced public database at [Airframes](https://app.airframes.io/). As with FT4, FT8 and WSPR, with a wideband front end covering all of HF every HFDL channel can be monitored and decoded simultaneously. The CPU time consumed is not great, so it can usually be run on the same system as decoders for those other modes.
 
-Setting this up is a bit involved because *dumphfdl*, like *ka9q-radio*, is not yet available as Debian packages that can be easily installed with **apt-get**; it must be built from the its [https://github.com/szpajder/dumphfdl](Github) repository. *dumphfdl* in turn requires the [https://github.com/szpajder/libacars](libacars repository) by the same author. Both packages have dependencies that can be satisfied with **apt-get**.
+Setting this up is a bit involved because *dumphfdl*, like *ka9q-radio*, is not yet available as Debian packages that can be easily installed with **apt-get**; it must be built from the its [Github repository](https://github.com/szpajder/dumphfdl) repository. *dumphfdl* in turn requires [libacars](https://github.com/szpajder/libacars) by the same author. Both packages have dependencies that can be satisfied with **apt-get**.
 
 Start by cloning both respositories:
 ```
@@ -100,7 +100,7 @@ The decoders should be up and running. The individual logs will be in the subdir
 tail -f /var/log/hfdl/*.log
 ```
 
-You should go to the [https://app.airframes.io/](Airframes) site, create an account, and claim ownership of your feeds. Your station identification is taken from the "description" parameter in the hardware section of your *radiod* config file, so don't use something generic (e,g. "rx888-wsprdaemon"). Since most of us have more than one antenna, I include it in the description, e.g, "w6lvp loop @ KA9Q".
+You should go to the [Airframes](https://app.airframes.io/) site, create an account, and claim ownership of your feeds. Your station identification is taken from the "description" parameter in the hardware section of your *radiod* config file, so don't use something generic (e,g. "rx888-wsprdaemon"). Since most of us have more than one antenna, I include it in the description, e.g, "w6lvp loop @ KA9Q".
 
 I am very interested in comments on which method (per channel or per band) seems more efficient and/or works better for you. If there is a clear winner I'll probably remove the other when I next clean up the distribution.
 
