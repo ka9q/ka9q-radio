@@ -70,8 +70,8 @@ Restart *radiod*, configure and start the decoders:
 sudo systemctl try-restart 'radiod@*' # or specify the actual radiod instance
 cd ka9q-radio/config # go into the config files distributed with ka9q-radio
 cp hfdl.conf /etc/radio # edit if necessary
-systemctl enable hfdl
-systemctl start hfdl
+sudo systemctl enable hfdl
+sudo systemctl start hfdl
 ```
 
 For convenience, running **make install** in *ka9q-radio* installs a seed version of the HFDL system table in /var/lib/hfdl/systable.conf. This will be updated in place by *dumphfdl*, so the *ka9q-radio* makefile will not overwrite it if it already exists.
@@ -95,8 +95,8 @@ Restart *radiod*, configure and start the decoders, one instance for each band:
 sudo systemctl try-restart 'radiod@*' # or specify the actual radiod instance
 cd ka9q-radio/config # go into the config files distributed with ka9q-radio
 cp hfdl-*.conf /etc/radio # e.g., hfdl-8.conf, hfdl-21.conf. These are distinguished from the per-channel configuration with a band suffix.
-systemctl enable hfdl@2 hfdl@3 hfdl@4 hfdl@5 hfdl@6 hfdl@8 hfdl@10 hfdl@11 hfdl@13 hfdl@15 hfdl@17 hfdl@21 # one instance for each band
-systemctl start hfdl@2 hfdl@3 hfdl@4 hfdl@5 hfdl@6 hfdl@8 hfdl@10 hfdl@11 hfdl@13 hfdl@15 hfdl@17 hfdl@21 
+sudo systemctl enable hfdl@2 hfdl@3 hfdl@4 hfdl@5 hfdl@6 hfdl@8 hfdl@10 hfdl@11 hfdl@13 hfdl@15 hfdl@17 hfdl@21 # one instance for each band
+sudo systemctl start hfdl@2 hfdl@3 hfdl@4 hfdl@5 hfdl@6 hfdl@8 hfdl@10 hfdl@11 hfdl@13 hfdl@15 hfdl@17 hfdl@21 
 ```
 The decoders should be up and running. The individual logs will be in the subdirectory */var/log/hfdl* and you can watch them all with,
 
