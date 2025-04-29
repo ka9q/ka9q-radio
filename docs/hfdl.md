@@ -48,7 +48,7 @@ sudo make install
 The -j option to *make* speeds compilation considerably on multicore systems. If this causes trouble, remove it or specify a limit, e.g, **make -j 4**.
 
 ## Configuring *ka9q-radio* to feed *dumphfdl*
-Now the fun part. There are two ways to run *dumphfdl* with *ka9q-radio*. One runs a separate *ka9q-radio* channel and *dumphfdl* instance for every channel. The second runs one *ka9q-radio* channel and *dumphfdl* instance for every aeronautical *band*, with *dumphfdl* extracting the individual channels on each band. There are advantages to each method.
+Now the fun part. There are two ways to run *dumphfdl* with *ka9q-radio*. One runs a separate *ka9q-radio* channel and *dumphfdl* instance for every HFDL channel. The second runs one *ka9q-radio* channel and *dumphfdl* instance for every aeronautical *band*, with *dumphfdl* extracting the individual channels on each band. There are advantages to each method.
 
 The per-channel approach is considerably simpler to configure, as *systemd* need manage only one *hfdl* service. The individual channel frequencies are specifed only in the *radiod* configuration file, and all output is sent to the same IP multicast group, hfdl.local (each with its own RTP SSRC, of course). The **pcmrecord** program (part of *ka9q-radio*) with the **--exec** option automatically launches a separate instance of *dumphfdl* for each channel and passes it the appropriate parameters. All log into the same file, */var/log/hfdl.log*. The drawback to this method is that there are over a hundred HFDL channels so there will be over a hundred instances of *dumphfdl*, each with its own TCP/IP connection to feed.airframes.io.
 
@@ -56,7 +56,7 @@ The per-band approach uses only one *ka9q-radio* channel and one *dumphfdl* inst
 
 ### Per-channel method
 
-Add the channel list to your *radiod*'s config file. You can use this fragment from my own HF configuration:
+Add the channel list to your *radiod*'s config file. You can append this fragment from my own HF configuration:
 
 ka9q-radio/config/radiod@ka9q-hf.conf.d/55-hfdl-sep.conf
 
@@ -83,7 +83,7 @@ tail -f /var/log/hfdl.log
 
 ### Per-band method
 
-Insert this fragment from my HF configuration into your *radiod* config file:
+Append this fragment from my HF configuration into your *radiod* config file:
 
 ka9q-radio/config/radiod@ka9q-hf.conf.d/50-hfdl.conf
 
