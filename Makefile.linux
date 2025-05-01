@@ -81,6 +81,17 @@ ifdef FOBOS
    DYNAMIC_DRIVERS += fobos.so
 endif
 
+# Build if installed
+ifeq ($(wildcard /usr/local/include/libbladeRF.h),)
+else
+   BLADERF=1
+endif
+# if BLADERF is set, build it too
+ifdef BLADERF
+   CFILES += bladerf.c
+   DYNAMIC_DRIVERS += bladerf.so
+endif
+
 # Build on raspberry pi only
 ifeq ($(wildcard /usr/include/pigpio.h),)
 else
@@ -249,6 +260,9 @@ fobos.so: fobos-pic.o
 hackrf.so: hackrf-pic.o
 	$(CC) -shared -o $@ $^ -lhackrf -lusb-1.0
 
+bladerf.so: bladerf-pic.o
+	$(CC) -shared -o $@ $^ -lbladeRF
+
 funcube-pic.o: funcube.c
 	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
@@ -285,6 +299,8 @@ fobos-pic.o: fobos.c
 hackrf-pic.o: hackrf.c
 	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
+bladerf-pic.o: bladerf.c
+	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 # subroutines useful in more than one program
 libradio.a: $(LIBRADIO)
