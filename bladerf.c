@@ -278,6 +278,8 @@ static void *stream_callback(struct bladerf *,
 			     struct bladerf_metadata *, void *samples,
 			     size_t num_samples, void *user_data)
 {
+        (void)num_samples; // Suppress warning
+
 	struct sdrstate * const sdr = (struct sdrstate *)user_data;
 
 	assert(sdr->samples_per_buffer == num_samples);

@@ -71,7 +71,7 @@ ifdef SDRPLAY
 endif
 
 # Build FOBOS support if installed, or if 'make FOBOS=1'
-ifeq ($(wildcard /usr/local/include/fobos.h),)
+ifeq ($(wildcard /usr/local/include/fobos.h /usr/include/fobos.h),)
 else
    FOBOS=1
 endif
@@ -82,7 +82,7 @@ ifdef FOBOS
 endif
 
 # Build if installed
-ifeq ($(wildcard /usr/local/include/libbladeRF.h),)
+ifeq ($(wildcard /usr/local/include/libbladeRF.h /usr/include/libbladeRF.h),)
 else
    BLADERF=1
 endif
