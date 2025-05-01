@@ -34,10 +34,15 @@
 extern float Blocktime;
 struct frontend Frontend;
 
+// Noise estimator tuning
+static float estimate_noise(struct channel *chan,int shift);
+static float const Power_smooth = 0.10; // Temporal time smoothing factor per block
+static float const NQ = 0.10f; // look for energy in 10th quartile, hopefully contains only noise
+static float const N_cutoff = 1.5; // Average (all noise, hopefully) bins up to 1.5x the energy in the 10th quartile
+
 pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct channel Channel_list[Nchannels];
 int Active_channel_count; // Active channels
-float Power_smooth = 0.05; // Arbitrary exponential smoothing factor
 
 
 // Find chan by ssrc
@@ -88,79 +93,6 @@ struct channel *create_chan(uint32_t ssrc){
   return chan;
 }
 
-static const float N0_smooth = .001; // exponential smoothing rate for (noisy) bin noise
-
-// experimental
-// estimate n0 by finding the FFT bin with the least energy
-// in the chan's pre-filter nyquist bandwidth
-// Works better than global estimation when noise floor is not flat, e.g., on HF
-static float estimate_noise(struct channel *chan,int shift){
-  assert(chan != NULL);
-  if(chan == NULL)
-    return NAN;
-  struct filter_out *slave = &chan->filter.out;
-  assert(slave != NULL);
-  if(slave == NULL)
-    return NAN;
-  if(slave->bins <= 0)
-    return 0;
-  // Should do some range checking on 'shift'
-  if(chan->filter.energies == NULL)
-    chan->filter.energies = calloc(sizeof *chan->filter.energies,slave->bins);
-
-  float * const energies = chan->filter.energies;
-  struct filter_in const * const master = slave->master;
-  // slave->next_jobnum already incremented by execute_filter_output
-  float complex const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
-
-  float min_bin_energy = INFINITY;
-  if(master->in_type == REAL){
-    // Only half as many bins as with complex input, all positive or all negative
-    // if shift < 0, the spectrum is inverted and we'll look at it in reverse order but that's OK
-    int mbin = abs(shift) - slave->bins/2;
-    for(int i=0; i < slave->bins && mbin < master->bins; i++,mbin++){
-      if(mbin >= 0){
-	if(energies[i] == 0){
-	  // Bias first estimate high to keep it from being considered until
-	  // it's had a chance to settle down to a better average
-	  energies[i] = 10 * cnrmf(fdomain[mbin]);
-	} else {
-	  energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * N0_smooth;
-	  if(min_bin_energy > energies[i])
-	    min_bin_energy = energies[i];
-	}
-      }
-    }
-  } else {
-    int mbin = shift - slave->bins/2; // Start at lower channel edge (upper for inverted real)
-    // Complex input that often straddles DC
-    if(mbin < 0)
-      mbin += master->bins; // starting in negative frequencies
-    assert(mbin >= 0 && mbin < master->bins); // probably should just return without doing anything
-
-    for(int i=0; i < slave->bins; i++){
-      if(energies[i] == 0) {
-	// Bias first estimate high to keep it from being considered until
-	// it's had a chance to settle down to a better average
-	energies[i] = 10 * cnrmf(fdomain[mbin]); // Quick startup
-      } else {
-	energies[i] += (cnrmf(fdomain[mbin]) - energies[i]) * N0_smooth;
-	if(min_bin_energy > energies[i])
-	  min_bin_energy = energies[i];
-      }
-      if(++mbin == master->bins)
-	mbin = 0; // wrap around from neg freq to pos freq
-      if(mbin == master->bins/2)
-	break; // fallen off the right edge
-    }
-  }
-  if(!isfinite(min_bin_energy)) // Never got set!
-    return 0;
-
-  // correct for FFT scaling and normalize to 1 Hz
-  // With an unnormalized FFT, the noise energy in each bin scales proportionately with the number of points in the FFT
-  return min_bin_energy / ((float)master->bins * Frontend.samprate);
-}
 
 
 void *demod_thread(void *p){
@@ -231,7 +163,6 @@ int close_chan(struct channel *chan){
 
   pthread_mutex_lock(&chan->status.lock);
   FREE(chan->status.command);
-  FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);
   delete_filter_output(&chan->filter.out);
   if(chan->output.opus != NULL){
@@ -632,15 +563,13 @@ int downconvert(struct channel *chan){
     energy += cnrmf(chan->baseband[n]);
   chan->sig.bb_power = energy / chan->sampcount;
 
-  /* The N0 noise estimator has a long smoothing time constant, so clamp it when the front end is saturated, e.g. by a local transmitter
-     This works well for channels tuned well away from the transmitter, but not when a channel is tuned near or to the transmit frequency
-     because the transmitted noise is enough to severely increase the estimate even before it begins to transmit
-     enough power to saturate the A/D. I still need a better, more general way of adjusting N0 smoothing rate,
-     e.g. for when the channel is retuned by a lot */
-  float maxpower = (1 << (Frontend.bitspersample - 1));
-  maxpower *= maxpower * 0.5; // 0 dBFS
-  if(Frontend.if_power < maxpower)
-    chan->sig.n0 = estimate_noise(chan,-shift); // Negative, just like compute_tuning. Note: must follow execute_filter_output()
+  // Compute and exponentially smooth noise estimate
+  if(isnan(chan->sig.n0))
+     chan->sig.n0 = estimate_noise(chan,-shift);
+  else {
+    float diff = estimate_noise(chan,-shift) - chan->sig.n0; // Shift is negative, just like compute_tuning. Note: must follow execute_filter_output()
+    chan->sig.n0 += Power_smooth * diff;
+  }
   return 0;
 }
 
@@ -724,4 +653,212 @@ float scale_AD(struct frontend const *frontend){
   analog_gain += frontend->isreal ? -3.0 : 0.0;
   // Will first get called before the filter input is created
   return dB2voltage(-analog_gain) / scale; // Front end gain as amplitude ratio
+}
+
+/*
+==============================================================================
+ Real-Time Noise Floor Estimation Specification
+==============================================================================
+
+Overview:
+---------
+This method provides fast, robust, and mathematically sound estimation of
+the background noise floor (N0) from FFT bin powers in real-time SDR
+applications. It works on short timescales without long-term averaging,
+yet remains unbiased and resilient to signal contamination.
+
+Algorithm:
+----------
+1. Calculate power in FFT bins from rectangular windowed FFT.
+2. Select quantile (q) of bin powers (e.g. 10% quantile).
+3. Determine threshold (T) as multiplier of quantile (e.g. T = 1.5).
+4. Select bins where power < T * quantile.
+5. Compute the average power of selected bins.
+6. Apply correction factor C to obtain unbiased N0 estimate:
+
+    z = T * (-ln(1 - q))
+    C = 1 / [1 - (z * exp(-z)) / (1 - exp(-z))]
+    N0_estimate = mean(selected_bins) * C
+
+7. Exponentially smooth the N0 estimate in linear power domain:
+
+    N0_smoothed += alpha * (N0_estimate - N0_smoothed);
+
+Recommended Parameters:
+-----------------------
+- Quantile (q):      0.10 (10%)
+- Threshold (T):     1.5
+- Smoothing alpha:   0.1 (at 50 Hz block update rate)
+
+This provides:
+- Low bias
+- Low variance
+- Fast response (approx 0.6–1 second adaptation)
+- Robustness against signal contamination
+
+SNR Calculation:
+----------------
+True S/N (excluding noise):
+
+    SNR_linear = max(0, (S_measured - B * N0_smoothed) / (B * N0_smoothed))
+    SNR_dB = 10 * log10(SNR_linear)
+
+Notes:
+- log(0) -> -inf, which is correct
+- Negative S -> clamped to zero before log to avoid NaN
+
+Advantages over Older Min-based Methods:
+----------------------------------------
+- No bias from minimum selection
+- Exact correction factor for unbiased estimation
+- Fast response without long-term smoothing
+- Tunable tradeoffs between purity and smoothness
+
+Recommended Application:
+------------------------
+- SDR receive channels
+- AGC thresholding
+- SNR reporting and squelch
+- Fast-changing noise environments (HF, FT8, QRM)
+*/
+
+// Written by ChatGPT to analyze noise stats
+// Swap two float values
+static void swap(float *a, float *b) {
+    float tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+// Partition step for quickselect
+static int partition(float *arr, int left, int right, int pivot_index) {
+    float pivot_value = arr[pivot_index];
+    swap(&arr[pivot_index], &arr[right]); // Move pivot to end
+    int store_index = left;
+
+    for (int i = left; i < right; i++) {
+        if (arr[i] < pivot_value) {
+            swap(&arr[store_index], &arr[i]);
+            store_index++;
+        }
+    }
+
+    swap(&arr[right], &arr[store_index]); // Move pivot to final place
+    return store_index;
+}
+
+// Quickselect: find the k-th smallest element (0-based index)
+static float quickselect(float *arr, int left, int right, int k) {
+    while (left < right) {
+        int pivot_index = left + (right - left) / 2;
+        int pivot_new = partition(arr, left, right, pivot_index);
+        if (pivot_new == k)
+            return arr[k];
+        else if (k < pivot_new)
+            right = pivot_new - 1;
+        else
+            left = pivot_new + 1;
+    }
+    return arr[left];
+}
+
+// Compute the p-quantile (0 <= p <= 1) of array[0..n-1]
+float quantile(float *array, int n, float p) {
+    if (n == 0) return NAN;
+
+    float pos = p * (n - 1);
+    int i = (int)floorf(pos);
+    float frac = pos - i;
+
+    float q1 = quickselect(array, 0, n - 1, i);
+
+    if (frac == 0.0f)
+        return q1;
+    else {
+        float q2 = quickselect(array, 0, n - 1, i + 1);
+        return q1 + frac * (q2 - q1);  // Linear interpolation
+    }
+}
+
+// Complex Gaussian noise has a Rayleigh amplitude distribution. The square of the amplitudes,
+// ie the energies, has an exponential distribution. The mean of an exponential distribution
+// is the mean of the samples, and the standard deviation is equal to the mean.
+// However, the distribution is skewed, so you have to compensate for this when computing means from partial averages
+// ChatGPT helped me work out the math; its reasoning is summarized in docs/noise.md
+// I'm using its method 3 (average of bins below a threshold)
+static float estimate_noise(struct channel *chan,int shift){
+  assert(chan != NULL);
+  if(chan == NULL)
+    return NAN;
+  struct filter_out *slave = &chan->filter.out;
+  assert(slave != NULL);
+  if(slave == NULL)
+    return NAN;
+  if(slave->bins <= 0)
+    return 0;
+
+  float energies[slave->bins];
+  struct filter_in const * const master = slave->master;
+  // slave->next_jobnum already incremented by execute_filter_output
+  float complex const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
+
+  if(master->in_type == REAL){
+    // Only half as many bins as with complex input, all positive or all negative
+    // if shift < 0, the spectrum is inverted and we'll look at it in reverse order but that's OK
+    // Look between -Fs/2 and +Fs/2. If this bounces too much we *could* look wider to hopefully find more noise bins to average
+
+    // New algorithm (thanks to ChatGPT) responds instantly to changes because it averages noise across frequency rather than time
+    // but is a little more wobbly than the old minimum-of-time-smoothed-energies because it doesn't average as much
+    // Higher sample rates will give more stable results because more noise-only bins will be averaged
+    int mbin = abs(shift) - slave->bins/2; // -Fs/2
+    if(mbin < 0)
+      return 0; // Tuned too low
+
+    if(mbin + slave->bins > master->bins)
+      return 0; // Tuned too high
+    for(int i=0; i < slave->bins; i++,mbin++)
+      energies[i] = cnrmf(fdomain[mbin]);
+  } else {
+    int mbin = shift - slave->bins/2; // Start at lower channel edge (upper for inverted real)
+    // Complex input that often straddles DC
+    if(mbin < 0)
+      mbin += master->bins; // starting in negative frequencies
+    if(mbin < 0 || mbin >= master->bins)
+      return 0; // Too low or too high
+
+    for(int i=0; i < slave->bins; i++){
+      energies[i] = cnrmf(fdomain[mbin]);
+      if(++mbin == master->bins)
+	mbin = 0; // wrap around from neg freq to pos freq
+      if(mbin == master->bins/2)
+	break; // fallen off the right edge
+    }
+  }
+  static float correction = 0;
+  if(correction == 0){
+    // Compute correction only once
+    float z = N_cutoff * (-log(1-NQ));
+    correction = 1 / (1 - z*exp(-z)/(1-exp(-z)));
+  }
+
+  float en = N_cutoff * quantile(energies,slave->bins,NQ); // energy in the 10th quantile bin
+  // average the noise-only bins, excluding signal bins above 1.5 * q
+  float energy = 0;
+  int noisebins = 0;
+  for(int i=0; i < slave->bins; i++){
+    if(energies[i] <= en){
+      energy += energies[i];
+      noisebins++;
+    }
+  }
+  if(noisebins == 0)
+    return 0; // No noise bins?
+
+  energy /= noisebins;
+  // Scale for distribution
+  float noise_bin_energy = energy * correction;
+
+  // correct for FFT scaling and normalize to 1 Hz
+  // With an unnormalized FFT, the noise energy in each bin scales proportionately with the number of points in the FFT
+  return noise_bin_energy / ((float)master->bins * Frontend.samprate);
 }

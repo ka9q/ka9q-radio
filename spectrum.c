@@ -31,7 +31,6 @@ int demod_spectrum(void *arg){
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   FREE(chan->status.command);
-  FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);
   delete_filter_output(&chan->filter.out);
   if(chan->output.opus != NULL){
@@ -94,7 +93,6 @@ int demod_spectrum(void *arg){
 	FREE(fft0_in);
 	FREE(fft1_in);
 	FREE(fft_out);
-	FREE(chan->filter.energies);
 	FREE(chan->status.command);
 	FREE(power_buffer);
 	FREE(kaiser);
@@ -221,7 +219,6 @@ int demod_spectrum(void *arg){
 	FREE(fft0_in);
 	FREE(fft1_in);
 	FREE(fft_out);
-	FREE(chan->filter.energies);
 	FREE(chan->status.command);
 	FREE(power_buffer);
 	FREE(kaiser);
@@ -338,7 +335,6 @@ int demod_spectrum(void *arg){
   FREE(fft1_in);
   FREE(fft_out);
   FREE(kaiser);
-  FREE(chan->filter.energies);
   FREE(chan->status.command);
   FREE(power_buffer);
   FREE(chan->spectrum.bin_data);

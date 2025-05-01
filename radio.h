@@ -124,7 +124,7 @@ radiod's state, encoded for network transmission by send_radio_status() and deco
 The transfer protocol uses a series of TLV-encoded tuples that do *not* send every element of this
 structure, so shadow copies can be incomplete.
 
-Be careful with memcpy(): there are a few pointers (filter.energies, spectrum.bin_data, status.command, etc)
+Be careful with memcpy(): there are a few pointers (spectrum.bin_data, status.command, etc)
 If you use these in shadow copies you must malloc these arrays yourself.
 */
 struct channel {
@@ -149,7 +149,6 @@ struct channel {
     float max_IF;         // (settable)
     // Window shape factor for Kaiser window
     float kaiser_beta;  // settable
-    float *energies;    // Vector of smoothed bin energies
     int bin_shift;      // FFT bin shift for frequency conversion
     double remainder;   // Frequency remainder for fine tuning
     double complex phase_adjust; // Block rotation of phase

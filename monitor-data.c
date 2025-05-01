@@ -200,7 +200,6 @@ void decode_task_cleanup(void *arg){
   }
   // Just in case anything was allocated for these arrays
   struct channel * const chan = &sp->chan;
-  FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);
   FREE(chan->status.command);
 }

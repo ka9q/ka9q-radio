@@ -83,7 +83,7 @@ tail -f /var/log/hfdl.log
 
 ### Per-band method
 
-Append this fragment from my HF configuration into your *radiod* config file:
+Append this fragment from my HF configuration to your *radiod* config file:
 
 ka9q-radio/config/radiod@ka9q-hf.conf.d/50-hfdl.conf
 

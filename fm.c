@@ -31,7 +31,6 @@ int demod_fm(void *arg){
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   FREE(chan->status.command);
-  FREE(chan->filter.energies);
   FREE(chan->spectrum.bin_data);
   if(chan->output.opus != NULL){
     opus_encoder_destroy(chan->output.opus);
