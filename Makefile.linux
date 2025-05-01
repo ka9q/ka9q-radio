@@ -24,7 +24,7 @@ endif
 
 ARCHOPTS = -march=native
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
-COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -D_GNU_SOURCE=1 -Wextra -MMD -MP
+COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -D_GNU_SOURCE=1 -Wextra -MMD -MP
 CFLAGS = $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
 BINDIR = /usr/local/bin
 LIBDIR = /usr/local/share/ka9q-radio
