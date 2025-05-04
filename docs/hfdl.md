@@ -2,7 +2,7 @@ Using ka9q-radio with HFDL (High Frequency Data Link)
 Phil Karn, KA9Q 28 April 2025
 =====================================================
 
-[HFDL](https://en.wikipedia.org/wiki/High_Frequency_Data_Link) is a low speed HF packetized digital communication system used by commercial airliners for long-range communication over oceans and remote areas. It operates in the on-route (civilian) aeronautical HF allocations alongside SSB voice channels used for air traffic control. Each of the 15 ground stations around the world uses a subset of about 105 channels in 12 frequency bands depending on current propagation conditions.
+[HFDL](https://en.wikipedia.org/wiki/High_Frequency_Data_Link) is a low speed HF packetized digital communication system used by commercial airliners for long-range communication over oceans and remote areas. It operates in the on-route (civilian) aeronautical HF allocations alongside SSB voice channels used for air traffic control. Each of the 16 ground stations around the world uses a subset of about 105 channels in 12 frequency bands depending on current propagation conditions.
 
 HFDL is part of [ACARS](https://en.wikipedia.org/wiki/ACARS), the Aircraft Communications Addressing and Reporting System, better known for its VHF data links.
 
