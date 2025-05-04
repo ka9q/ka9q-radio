@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sysexits.h>
+#include <sys/file.h>
 
 #include "misc.h"
 #include "attr.h"
@@ -394,6 +395,7 @@ void create_new_file(struct session *sp,time_t start_time_sec){
   // Use fdopen on a file descriptor instead of fopen(,"w+") to avoid the implicit truncation
   // This allows testing where we're killed and rapidly restarted in the same cycle
   assert(fd != -1);
+  flock(fd,LOCK_EX);
   sp->fp = fdopen(fd,"w+");
   assert(sp->fp != NULL);
   sp->iobuffer = malloc(BUFFERSIZE);

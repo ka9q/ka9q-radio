@@ -60,6 +60,7 @@ Command-line options:
 #include <getopt.h>
 #include <inttypes.h>
 #include <ogg/ogg.h>
+#include <sys/file.h>
 
 #include "misc.h"
 #include "attr.h"
@@ -74,18 +75,18 @@ Command-line options:
 // Simplified .wav file header
 // http://soundfile.sapp.org/doc/WaveFormat/
 struct wav {
-  char ChunkID[4];
-  int32_t ChunkSize;
-  char Format[4];
+  char ChunkID[4]; // "RIFF"
+  int32_t ChunkSize; // Total file size minus 8
+  char Format[4]; // "WAVE"
 
-  char Subchunk1ID[4];
-  int32_t Subchunk1Size;
-  int16_t AudioFormat;
+  char Subchunk1ID[4]; // "fmt "
+  int32_t Subchunk1Size; // Chunk size minus 8
+  int16_t AudioFormat;   // 1 = integer, 3 = float
   int16_t NumChannels;
-  int32_t SampleRate;
+  int32_t SampleRate; // Hz
   int32_t ByteRate;
   int16_t BlockAlign;
-  int16_t BitsPerSample;
+  int16_t BitsPerSample; // end of subchunk1 header in typical wav header
 
   // adding additional chunk fields to the wav file header to support 32 bit FP
   // see https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
@@ -1146,6 +1147,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 
   int const fd = fileno(sp->fp);
   fcntl(fd,F_SETFL,O_NONBLOCK); // Let's see if this keeps us from losing data
+  // Keep decoders from reading the file until we're done, but don't block
+  flock(fd,LOCK_EX|LOCK_NB);
 
   attrprintf(fd,"encoding","%s",file_encoding);
   attrprintf(fd,"samprate","%u",sp->samprate);
