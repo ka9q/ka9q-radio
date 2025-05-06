@@ -1,8 +1,9 @@
-# Systemd unit to record and decode FT-8
-# Phil Karn, KA9Q Oct 2023
+# Systemd unit to record FT-4 into a spool directory
+# files are read by a separate ft4-decode daemon
+# Phil Karn, KA9Q 4 May 2025
 
 [Unit]
-Description=ft8-decoder
+Description=ft8-record
 After=network-online.target
 Requires=network-online.target
 
@@ -13,12 +14,10 @@ Group=radio
 Type=simple
 EnvironmentFile=/etc/radio/ft8-decode.conf
 PermissionsStartOnly=true
-StandardOutput=append:/var/log/ft8.log
 StandardError=inherit
 UMask = 002
-CPUSchedulingPolicy=batch
-RuntimeDirectory=ft8
-ExecStart=/usr/local/bin/jt-decoded -d /run/ft8 -8 $MCAST
+WorkingDirectory=/var/lib/ka9q-radio/ft8
+ExecStart=/usr/local/bin/pcmrecord --jt --limit 15 $MCAST
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
