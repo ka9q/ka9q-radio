@@ -304,14 +304,14 @@ static int loadconfig(char const *file){
     // primary config file radiod@foo.conf exists and is a regular file; just read it
     fprintf(stdout,"Loading config file %s\n",file);
     Configtable = iniparser_load(file); // Just try to read the primary
-    return Configtable == NULL ? -1 : 0;
+    if(Configtable == NULL)
+      return -1;
   } else if((statbuf.st_mode & S_IFMT) == S_IFDIR){
     // It's a directory, read its contents
     fprintf(stdout,"Loading config directory %s\n",file);
     dirp = opendir(file);
   } else {
     // Otherwise append ".d" and see if that's a directory
-
     snprintf(dname,sizeof(dname),"%s.d",file);
     if(stat(dname,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR)
       dirp = opendir(dname);
