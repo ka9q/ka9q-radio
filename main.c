@@ -300,105 +300,116 @@ static int loadconfig(char const *file){
   DIR *dirp = NULL;
   struct stat statbuf = {0};
   char dname[PATH_MAX] = {0};
-  if(stat(file,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFREG){
-    // primary config file radiod@foo.conf exists and is a regular file; just read it
-    fprintf(stdout,"Loading config file %s\n",file);
-    Configtable = iniparser_load(file); // Just try to read the primary
-    if(Configtable == NULL)
+  if(stat(file,&statbuf) == 0){
+    switch(statbuf.st_mode & S_IFMT){
+    case S_IFREG:
+      // primary config file radiod@foo.conf exists and is a regular file; just read it
+      fprintf(stderr,"Loading config file %s\n",file);
+      Configtable = iniparser_load(file); // Just try to read the primary
+      if(Configtable == NULL)
+	return -1;
+      break;
+    case S_IFDIR:
+      // It's a directory, read its contents
+      fprintf(stderr,"Loading config directory %s\n",file);
+      dirp = opendir(file);
+      if(dirp == NULL)
+	return -1; // give up
+      break;
+    default:
+      fprintf(stderr,"Config file %s exists but is not a regular file or directory\n",file);
       return -1;
-  } else if((statbuf.st_mode & S_IFMT) == S_IFDIR){
-    // It's a directory, read its contents
-    fprintf(stdout,"Loading config directory %s\n",file);
-    dirp = opendir(file);
-    if(dirp == NULL)
-      return -1; // give up
+    }
   } else {
     // Otherwise append ".d" and see if that's a directory
     snprintf(dname,sizeof(dname),"%s.d",file);
-    if(stat(dname,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR)
+    if(stat(dname,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR){
+      fprintf(stdout,"Loading config directory %s\n",dname);
       dirp = opendir(dname);
-    if(dirp == NULL)
+    }
+  }
+  if(Configtable == NULL){
+    if(dirp == NULL){
+      fprintf(stdout,"%s Not a valid config file/directory\n",file);
       return -1; // give up
-  }
-
-  // Read and sort list of foo.d/*.conf files, merge into temp file
-  fprintf(stdout,"Loading config directory %s\n",dname);
-  int dfd = dirfd(dirp); // this gets used for openat() and fstatat() so don't close dirp right way
-  struct dirent *dp;
-  int const n_subfiles = 100;
-  char *subfiles[n_subfiles]; // List of subfiles
-  int sf = 0;
-  while ((dp = readdir(dirp)) != NULL && sf < n_subfiles) {
-    // only consider regular files ending in .conf
-    if(strcmp(".conf",dp->d_name + strlen(dp->d_name) - 5) == 0
-       && fstatat(dfd,dp->d_name,&statbuf,0) == 0
-       && (statbuf.st_mode & S_IFMT) == S_IFREG)
-      subfiles[sf++] = strdup(dp->d_name);
-  }
-  if(sf == 0){
-    fprintf(stderr,"%s: empty config directory\n",strlen(dname) > 0 ? dname : file);
-    closedir(dirp);
-    return -1;
-  }
-  // Don't close dirp just yet, would invalidate dfd
-  // Config sections can actually be in any order, but just in case one is split across multiple files...
-  qsort(subfiles,sf,sizeof(subfiles[0]),(int (*)(void const *,void const *))strcmp);
-
-  // Concatenate sorted files into temporary copy
-  char tempfilename[PATH_MAX];
-  strlcpy(tempfilename,"/tmp/radiod-configXXXXXXXX",sizeof(tempfilename));
-  int tfd = mkstemp(tempfilename);
-  if(tfd == -1){
-    fprintf(stderr,"mkstemp(%s) failed: %s\n",tempfilename,strerror(errno));
-    closedir(dirp);
-    return -1;
-  }
-  FILE *tfp = fdopen(tfd,"rw+");
-  if(tfp == NULL){
-    fprintf(stderr,"Can't create temporary file %s: %s\n",tempfilename,strerror(errno));
-    close(tfd);
-    (void)closedir(dirp);
-    return -1;
-  }
-  // Concatenate the sub config files in order
-  for(int i=0; i < sf; i++){
-    int fd = openat(dfd,subfiles[i],O_RDONLY|O_CLOEXEC);
-    // There's no "fopenat()"
-    if(fd == -1){
-      fprintf(stderr,"Can't read config component %s: %s\n",subfiles[i],strerror(errno));
-      continue;
     }
-    FILE *fp = fdopen(fd,"r");
-    if(fp == NULL){
-      fprintf(stderr,"fdopen(%d,r) of %s failed: %s\n",fd,subfiles[i],strerror(errno));
-      close(fd);
-      continue;
+    // Read and sort list of foo.d/*.conf files, merge into temp file
+    int dfd = dirfd(dirp); // this gets used for openat() and fstatat() so don't close dirp right way
+    struct dirent *dp;
+    int const n_subfiles = 100;
+    char *subfiles[n_subfiles]; // List of subfiles
+    int sf = 0;
+    while ((dp = readdir(dirp)) != NULL && sf < n_subfiles) {
+      // only consider regular files ending in .conf
+      if(strcmp(".conf",dp->d_name + strlen(dp->d_name) - 5) == 0
+	 && fstatat(dfd,dp->d_name,&statbuf,0) == 0
+	 && (statbuf.st_mode & S_IFMT) == S_IFREG)
+	subfiles[sf++] = strdup(dp->d_name);
     }
-    fprintf(tfp,"# %s\n",subfiles[i]); // for debugging
-    char *linep = NULL;
-    size_t linecap = 0;
-    while(getline(&linep,&linecap,fp) >= 0){
-      if(fputs(linep,tfp) == EOF){
-	fprintf(stderr,"fputs(%s,%s): %s\n",linep,tempfilename,strerror(errno));
-	break;
+    if(sf == 0){
+      fprintf(stderr,"%s: empty config directory\n",strlen(dname) > 0 ? dname : file);
+      closedir(dirp);
+      return -1;
+    }
+    // Don't close dirp just yet, would invalidate dfd
+    // Config sections can actually be in any order, but just in case one is split across multiple files...
+    qsort(subfiles,sf,sizeof(subfiles[0]),(int (*)(void const *,void const *))strcmp);
+    
+    // Concatenate sorted files into temporary copy
+    char tempfilename[PATH_MAX];
+    strlcpy(tempfilename,"/tmp/radiod-configXXXXXXXX",sizeof(tempfilename));
+    int tfd = mkstemp(tempfilename);
+    if(tfd == -1){
+      fprintf(stderr,"mkstemp(%s) failed: %s\n",tempfilename,strerror(errno));
+      closedir(dirp);
+      return -1;
+    }
+    FILE *tfp = fdopen(tfd,"rw+");
+    if(tfp == NULL){
+      fprintf(stderr,"Can't create temporary file %s: %s\n",tempfilename,strerror(errno));
+      close(tfd);
+      (void)closedir(dirp);
+      return -1;
+    }
+    // Concatenate the sub config files in order
+    for(int i=0; i < sf; i++){
+      int fd = openat(dfd,subfiles[i],O_RDONLY|O_CLOEXEC);
+      // There's no "fopenat()"
+      if(fd == -1){
+	fprintf(stderr,"Can't read config component %s: %s\n",subfiles[i],strerror(errno));
+	continue;
       }
+      FILE *fp = fdopen(fd,"r");
+      if(fp == NULL){
+	fprintf(stderr,"fdopen(%d,r) of %s failed: %s\n",fd,subfiles[i],strerror(errno));
+	close(fd);
+	continue;
+      }
+      fprintf(tfp,"# %s\n",subfiles[i]); // for debugging
+      char *linep = NULL;
+      size_t linecap = 0;
+      while(getline(&linep,&linecap,fp) >= 0){
+	if(fputs(linep,tfp) == EOF){
+	  fprintf(stderr,"fputs(%s,%s): %s\n",linep,tempfilename,strerror(errno));
+	  break;
+	}
+      }
+      FREE(linep);
+      fclose(fp);     fp = NULL;
     }
-    FREE(linep);
-    fclose(fp);     fp = NULL;
+    // Done with file names and directory
+    for(int i=0; i < sf; i++)
+      FREE(subfiles[i]); // Allocated by strdup()
+    
+    (void)closedir(dirp); dirp = NULL;
+    fclose(tfp); tfp = NULL; tfd = -1; // Also does close(tfd)
+    
+    Configtable = iniparser_load(tempfilename);
+    unlink(tempfilename); // Done with temp file
   }
-  // Done with file names and directory
-  for(int i=0; i < sf; i++)
-    FREE(subfiles[i]); // Allocated by strdup()
-
-  (void)closedir(dirp); dirp = NULL;
-  fclose(tfp); tfp = NULL; tfd = -1; // Also does close(tfd)
-
-  Configtable = iniparser_load(tempfilename);
-  unlink(tempfilename); // Done with temp file
-
-  if(Configtable == NULL)
+  if(Configtable == NULL){
     return -1;
-
+  }
   config_validate_section(stdout,Configtable,GLOBAL,Global_keys,Channel_keys);
 
   // Process [global] section applying to all demodulator blocks
