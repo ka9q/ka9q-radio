@@ -1,0 +1,8 @@
+[TEST]
+disable = no
+# unicast output test
+dns = yes
+data = brian.local
+encoding = opus
+mode = usb
+freq = 5m
