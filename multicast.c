@@ -37,9 +37,10 @@ static int Loopback_index = -1;
 static char Loopback_name[IFNAMSIZ];
 
 static int setup_ipv4_loopback(int fd);
-static int ipv4_join_group(int const fd,void const * const sock,char const * const iface);
-static int ipv6_join_group(int const fd,void const * const sock,char const * const iface);
-static void loopback_init(void);
+static int setup_ipv6_loopback(int fd);
+static int ipv4_join_group(int const fd,void const * const source,void const * const group,char const * const iface);
+static int ipv6_join_group(int const fd,void const * const source,void const * const group,char const * const iface);
+static int loopback_init(void);
 
 // This is a bit messy. Is there a better way?
 char const *Default_mcast_iface;
@@ -52,47 +53,57 @@ char const *Default_mcast_iface;
 // If sock is null, the results of resolving target will not be stored there
 // If target is null and sock is non-null, the existing sock structure contents will be used
 
-// when output = 1, connect to the multicast address so we can simply send() to it without specifying a destination
-// when output = 0, bind to it so we'll accept incoming packets
+// when output == true, connect to the multicast address so we can simply send() to it without specifying a destination
+// when output == false, bind to it so we'll accept incoming packets
 // Add parameter 'offset' (normally 0) to port number; this will be 1 when sending RTCP messages
 // (Can we set up a socket for both input and output??)
-int setup_mcast(char const * const target,struct sockaddr *sock,int const output,int const ttl,int const tos,int const offset,int tries){
-  if(target == NULL && sock == NULL)
+int setup_mcast(char const * const source, struct sockaddr *source_sock, char const * const group, struct sockaddr *group_sock, bool const output, int const ttl, int const tos, int const offset, int tries){
+  if(group == NULL && group_sock == NULL)
     return -1; // At least one must be supplied
 
-  if(sock == NULL){
-    sock = alloca(sizeof(struct sockaddr_storage));
-    memset(sock,0,sizeof(struct sockaddr_storage));
+  if(group_sock == NULL){
+    group_sock = alloca(sizeof(struct sockaddr_storage));
+    memset(group_sock, 0, sizeof(struct sockaddr_storage));
   }
   char iface[1024];
   iface[0] = '\0';
-  if(target){
-    int ret = resolve_mcast(target,sock,DEFAULT_RTP_PORT+offset,iface,sizeof(iface),tries);
+  if(group){
+    int ret = resolve_mcast(group, group_sock, DEFAULT_RTP_PORT+offset, iface, sizeof(iface), tries);
     if(ret == -1)
       return -1;
   }
   if(strlen(iface) == 0 && Default_mcast_iface != NULL)
-    strlcpy(iface,Default_mcast_iface,sizeof(iface));
+    strlcpy(iface, Default_mcast_iface, sizeof(iface));
 
-  if(output == 0)
-    return listen_mcast(sock,iface);
+  if((source != NULL || source_sock != NULL) && !output){
+    // Source specific is being used
+    if(source_sock == NULL){
+      source_sock = alloca(sizeof(struct sockaddr_storage));
+      memset(source_sock, 0, sizeof(struct sockaddr_storage));
+    }
+    int ret = resolve_mcast(source, source_sock, 0, NULL, 0, 2);
+    if(ret == -1)
+      return -1;
+  }
+  if(!output)
+    return listen_mcast(source_sock, group_sock, iface);
   else
-    return connect_mcast(sock,iface,ttl,tos);
+    return connect_mcast(group_sock, iface, ttl, tos);
 }
 
 // Join an existing socket to a multicast group without connecting it
 // Since many channels may send to the same multicast group, the joins can often fail with harmless "address already in use" messages
 // Note: only the IP address is significant, the port number is ignored
-int join_group(int fd,struct sockaddr const * const sock, char const * const iface){
-  if(fd == -1 || sock == NULL)
+int join_group(int fd, struct sockaddr const * const source, struct sockaddr const * const group,  char const * const iface){
+  if(fd == -1 || group == NULL)
     return -1;
 
-  switch(sock->sa_family){
+  switch(group->sa_family){
   case AF_INET:
-    return ipv4_join_group(fd,sock,iface);
+    return ipv4_join_group(fd, source, group, iface);
     break;
   case AF_INET6:
-    return ipv6_join_group(fd,sock,iface);
+    return ipv6_join_group(fd, source, group, iface);
     break;
   default:
     return -1;
@@ -102,25 +113,25 @@ int join_group(int fd,struct sockaddr const * const sock, char const * const ifa
 
 // Set up a disconnected socket for output
 // Like connect_mcast() but without the connect()
-int output_mcast(void const * const s,char const * const iface,int const ttl,int const tos){
-  if(s == NULL)
+int output_mcast(void const * const group, char const * const iface, int const ttl, int const tos){
+  if(group == NULL)
     return -1;
 
-  struct sockaddr const *sock = s;
-  int fd = socket(sock->sa_family,SOCK_DGRAM,0);
+  struct sockaddr const *sock = group;
+  int fd = socket(sock->sa_family, SOCK_DGRAM, 0);
   if(fd == -1)
     return -1;
 
   // Better to drop a packet than to block real-time processing
-  fcntl(fd,F_SETFL,O_NONBLOCK);
+  fcntl(fd, F_SETFL, O_NONBLOCK);
   if(ttl >= 0){
     // Only needed on output
     int mcast_ttl = ttl;
     int r = 0;
     if(sock->sa_family == AF_INET)
-      r = setsockopt(fd,IPPROTO_IP,IP_MULTICAST_TTL,&mcast_ttl,sizeof(mcast_ttl));
+      r = setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, &mcast_ttl, sizeof(mcast_ttl));
     else
-      r = setsockopt(fd,IPPROTO_IPV6,IPV6_MULTICAST_HOPS,&mcast_ttl,sizeof(mcast_ttl));
+      r = setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &mcast_ttl, sizeof(mcast_ttl));
     if(r)
       perror("so_ttl failed");
   }
@@ -128,18 +139,18 @@ int output_mcast(void const * const s,char const * const iface,int const ttl,int
   uint8_t const loop = true;
   int r = 0;
   if(sock->sa_family == AF_INET)
-    r = setsockopt(fd,IPPROTO_IP,IP_MULTICAST_LOOP,&loop,sizeof(loop));
+    r = setsockopt(fd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
   else
-    r = setsockopt(fd,IPPROTO_IPV6,IPV6_MULTICAST_LOOP,&loop,sizeof(loop));
+    r = setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &loop, sizeof(loop));
   if(r)
     perror("so_loop failed");
 
   if(tos >= 0){
     int r = 0;
     if(sock->sa_family == AF_INET)
-      r = setsockopt(fd,IPPROTO_IP,IP_TOS,&tos,sizeof(tos));
+      r = setsockopt(fd, IPPROTO_IP, IP_TOS, &tos, sizeof(tos));
     else
-      r = setsockopt(fd,IPPROTO_IPV6,IPV6_TCLASS,&tos,sizeof(tos));
+      r = setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(tos));
     if(r)
       perror("so_tos failed");
   }
@@ -154,21 +165,24 @@ int output_mcast(void const * const s,char const * const iface,int const ttl,int
   // that aren't subscribed to by anybody are flooded everywhere!
   // We avoid that by subscribing to our own multicasts.
   loopback_init();
-  join_group(fd,sock,Loopback_name);
+  join_group(fd, NULL, group, Loopback_name);
 
-  if(ttl == 0 || join_group(fd,sock,iface) == -1) // join_group will hopefully fail if the output interface isn't up
-    setup_ipv4_loopback(fd); // attach it to the loopback interface
-
+  if(ttl == 0 || join_group(fd, NULL, group, iface) == -1){ // join_group will hopefully fail if the output interface isn't up
+    if(sock->sa_family == AF_INET)
+      setup_ipv4_loopback(fd); // attach it to the loopback interface
+    else
+      setup_ipv6_loopback(fd);
+  }
   return fd;
 }
 
 // Like output_mcast, but also do a connect()
-int connect_mcast(void const * const s,char const * const iface,int const ttl,int const tos){
-  int fd = output_mcast(s,iface,ttl,tos);
+int connect_mcast(void const * const s, char const * const iface, int const ttl, int const tos){
+  int fd = output_mcast(s, iface, ttl, tos);
   if(fd == -1)
     return -1;
 
-  if(connect(fd,s,sizeof(struct sockaddr)) == -1){
+  if(connect(fd, s, sizeof(struct sockaddr)) == -1){
     close(fd);
     return -1;
   }
@@ -178,32 +192,34 @@ int connect_mcast(void const * const s,char const * const iface,int const ttl,in
 // Create a listening socket on specified multicast address and port
 // using specified interface (or default) and on loopback
 // Interface may be null
-int listen_mcast(void const *s,char const *iface){
-  if(s == NULL)
+// if source != NULL,  use source-specific multicast
+// Assumes IPv4
+int listen_mcast(void const *source, void const *group, char const *iface){
+  if(group == NULL)
     return -1;
 
-  struct sockaddr const *sock = s;
-  int const fd = socket(sock->sa_family,SOCK_DGRAM,0);
+  struct sockaddr const *sock = group;
+  int const fd = socket(sock->sa_family, SOCK_DGRAM, 0);
   if(fd == -1){
     perror("setup_mcast socket");
     return -1;
   }
   loopback_init();
-  join_group(fd,sock,Loopback_name);
-  join_group(fd,sock,iface);
+  join_group(fd, source, sock, Loopback_name);
+  join_group(fd, source, sock, iface);
   int const reuse = true; // bool doesn't work for some reason
-  if(setsockopt(fd,SOL_SOCKET,SO_REUSEPORT,&reuse,sizeof(reuse)) != 0)
+  if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) != 0)
     perror("so_reuseport failed");
-  if(setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(reuse)) != 0)
+  if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) != 0)
     perror("so_reuseaddr failed");
 
 #ifdef IP_FREEBIND
   int const freebind = true;
-  if(setsockopt(fd,IPPROTO_IP,IP_FREEBIND,&freebind,sizeof(freebind)) != 0)
+  if(setsockopt(fd, IPPROTO_IP, IP_FREEBIND, &freebind, sizeof(freebind)) != 0)
     perror("freebind failed");
 #endif
 
-  if((bind(fd,sock,sizeof(struct sockaddr)) != 0)){
+  if((bind(fd, sock, sizeof(struct sockaddr)) != 0)){
     perror("listen mcast bind");
     close(fd);
     return -1;
@@ -214,15 +230,15 @@ int listen_mcast(void const *s,char const *iface){
 // Resolve a multicast target string in the form "name[:port][,iface]"
 // If "name" is not qualified (no periods) then .local will be appended by default
 // If :port is not specified, port field in result will be zero
-int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int iface_len,int tries){
-  if(target == NULL || strlen(target) == 0 || sock == NULL)
+int resolve_mcast(char const *group, void *group_sock, int default_port, char *iface, int iface_len, int tries){
+  if(group == NULL || strlen(group) == 0 || group_sock == NULL)
     return -1;
 
   char host[PATH_MAX]; // Maximum legal DNS name length?
-  strlcpy(host,target,sizeof(host));
+  strlcpy(host, group, sizeof(host));
 
-  // Look for ,iface at end of target. If present, delimit and copy to user
-  char *ifp = strrchr(host,',');
+  // Look for ,iface at end of group. If present, delimit and copy to user
+  char *ifp = strrchr(host, ',');
   if(ifp != NULL){
     // ,iface field found
     *ifp++ = '\0'; // Zap ',' with null to end preceding string
@@ -231,11 +247,11 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
     if(ifp == NULL)
       *iface = '\0';
     else
-      strlcpy(iface,ifp,iface_len);
+      strlcpy(iface, ifp, iface_len);
   }
   // Look for :port
   char *port;
-  if((port = strrchr(host,':')) != NULL){
+  if((port = strrchr(host, ':')) != NULL){
     *port++ = '\0';
   }
 
@@ -243,18 +259,17 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
   int try;
   // If no domain zone is specified, assume .local (i.e., for multicast DNS)
   char full_host[PATH_MAX+6];
-  if(strchr(host,'.') == NULL)
-    snprintf(full_host,sizeof(full_host),"%s.local",host);
+  if(strchr(host, '.') == NULL)
+    snprintf(full_host, sizeof(full_host), "%s.local", host);
   else
-    strlcpy(full_host,host,sizeof(full_host));
+    strlcpy(full_host, host, sizeof(full_host));
 
   int64_t start_time = gps_time_ns();
   bool message_logged = false;
 
   for(try=0;tries == 0 || try != tries;try++){
     results = NULL;
-    struct addrinfo hints;
-    memset(&hints,0,sizeof(hints));
+    struct addrinfo hints = {0};
 #if 1
     // Using hints.ai_family = AF_UNSPEC generates both A and AAAA queries
     // but even when the A query is answered the library times out and retransmits the AAAA
@@ -269,51 +284,51 @@ int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int
     hints.ai_protocol = IPPROTO_UDP;
     hints.ai_flags = AI_ADDRCONFIG;
 
-    int const ecode = getaddrinfo(full_host,port,&hints,&results);
+    int const ecode = getaddrinfo(full_host, port, &hints, &results);
     if(ecode == 0)
       break;
     if(!message_logged){
       int64_t now = gps_time_ns();
       if(now > start_time + 2 * BILLION){
-	fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s): %s. Retrying.\n",full_host,port,gai_strerror(ecode));
+	fprintf(stderr, "resolve_mcast getaddrinfo(host=%s, port=%s): %s. Retrying.\n", full_host, port, gai_strerror(ecode));
 	message_logged = true;
       }
     }
   }
   if(message_logged && try == tries){
-    fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s) failed\n",full_host,port);
+    fprintf(stderr, "resolve_mcast getaddrinfo(host=%s, port=%s) failed\n", full_host, port);
     return -1;
   }
   if(message_logged) // Don't leave them hanging: report success after failure
-    fprintf(stderr,"resolve_mcast getaddrinfo(host=%s, port=%s) succeeded\n",full_host,port);
+    fprintf(stderr, "resolve_mcast getaddrinfo(host=%s, port=%s) succeeded\n", full_host, port);
 
   // Use first entry on list -- much simpler
   // I previously tried each entry in turn until one succeeded, but with UDP sockets and
   // flags set to only return supported addresses, how could any of them fail?
-  memcpy(sock,results->ai_addr,results->ai_addrlen);
+  memcpy(group_sock, results->ai_addr, results->ai_addrlen);
   if(port == NULL){
     // Insert default port
-    setportnumber(sock,default_port);
+    setportnumber(group_sock, default_port);
   }
   freeaddrinfo(results); results = NULL;
   return 0;
 }
 
 // Convert binary sockaddr structure (v4 or v6 or unix) to printable numeric string
-char *formataddr(char *result,int size,void const *s){
-  struct sockaddr const *sa = (struct sockaddr *)s;
+char *formataddr(char *result, int size, void const *sock){
+  struct sockaddr const *sa = (struct sockaddr *)sock;
   result[0] = '\0';
   switch(sa->sa_family){
   case AF_INET:
     {
       struct sockaddr_in const *sin = (struct sockaddr_in *)sa;
-      inet_ntop(AF_INET,&sin->sin_addr,result,size);
+      inet_ntop(AF_INET, &sin->sin_addr, result, size);
     }
     break;
   case AF_INET6:
     {
       struct sockaddr_in6 const *sin = (struct sockaddr_in6 *)sa;
-      inet_ntop(AF_INET6,&sin->sin6_addr,result,size);
+      inet_ntop(AF_INET6, &sin->sin6_addr, result, size);
     }
     break;
   }
@@ -361,7 +376,7 @@ char const *formatsock(void const *s,bool full){
   }
   pthread_mutex_lock(&Formatsock_mutex);
   for(struct inverse_cache *ic = Inverse_cache_table; ic != NULL; ic = ic->next){
-    if(address_match(&ic->sock,sa) && getportnumber(&ic->sock) == getportnumber(sa)){
+    if(address_match(&ic->sock, sa) && getportnumber(&ic->sock) == getportnumber(sa)){
       if(ic->prev == NULL){
 	pthread_mutex_unlock(&Formatsock_mutex);
 	return ic->hostport; // Already at top of list
@@ -381,31 +396,28 @@ char const *formatsock(void const *s,bool full){
   }
   pthread_mutex_unlock(&Formatsock_mutex); // Let go of the lock, this will take a while
   // Not in list yet
-  struct inverse_cache * const ic = (struct inverse_cache *)calloc(1,sizeof(*ic));
+  struct inverse_cache * const ic = (struct inverse_cache *)calloc(1, sizeof(*ic));
   assert(ic != NULL); // Malloc failures are rare
-  char host[NI_MAXHOST],port[NI_MAXSERV],hostname[NI_MAXHOST];
-  memset(host,0,sizeof(host));
-  memset(hostname,0,sizeof(host));
-  memset(port,0,sizeof(port));
-  getnameinfo(sa,slen,
-	      host,NI_MAXHOST,
-	      port,NI_MAXSERV,
+  char host[NI_MAXHOST] = {0}, port[NI_MAXSERV] = {0}, hostname[NI_MAXHOST] = {0};
+  getnameinfo(sa, slen, 
+	      host, NI_MAXHOST, 
+	      port, NI_MAXSERV, 
 	      NI_NOFQDN|NI_NUMERICHOST|NI_NUMERICSERV); // this should be fast
 
   // Inverse search for name of 0.0.0.0 will time out after a long time
-  if(full && strcmp(host,"0.0.0.0") != 0){
-    getnameinfo(sa,slen,
-		hostname,NI_MAXHOST,
-		NULL,0,
+  if(full && strcmp(host, "0.0.0.0") != 0){
+    getnameinfo(sa, slen, 
+		hostname, NI_MAXHOST,
+		NULL, 0,
 		NI_NOFQDN|NI_NUMERICSERV);
   }
-  if(full && strlen(hostname) > 0 && strncmp(hostname,host,sizeof(host)) != 0)
-    snprintf(ic->hostport,sizeof(ic->hostport),"%s(%s):%s",host,hostname,port);
+  if(full && strlen(hostname) > 0 && strncmp(hostname, host, sizeof(host)) != 0)
+    snprintf(ic->hostport, sizeof(ic->hostport), "%s(%s):%s", host, hostname, port);
   else
-    snprintf(ic->hostport,sizeof(ic->hostport),"%s:%s",host,port);
+    snprintf(ic->hostport, sizeof(ic->hostport), "%s:%s", host, port);
 
   assert(slen < sizeof(ic->sock));
-  memcpy(&ic->sock,sa,slen);
+  memcpy(&ic->sock, sa, slen);
 
   // Put at head of table
   pthread_mutex_lock(&Formatsock_mutex);
@@ -418,7 +430,7 @@ char const *formatsock(void const *s,bool full){
 }
 
 // Compare IP addresses in sockaddr structures for equality
-int address_match(void const *arg1,void const *arg2){
+int address_match(void const *arg1, void const *arg2){
   struct sockaddr const *s1 = (struct sockaddr *)arg1;
   struct sockaddr const *s2 = (struct sockaddr *)arg2;
   if(s1->sa_family != s2->sa_family)
@@ -429,7 +441,7 @@ int address_match(void const *arg1,void const *arg2){
     {
       struct sockaddr_in const *sinp1 = (struct sockaddr_in *)arg1;
       struct sockaddr_in const *sinp2 = (struct sockaddr_in *)arg2;
-      if(memcmp(&sinp1->sin_addr,&sinp2->sin_addr,sizeof(sinp1->sin_addr)) == 0)
+      if(memcmp(&sinp1->sin_addr, &sinp2->sin_addr, sizeof(sinp1->sin_addr)) == 0)
 	return 1;
     }
     break;
@@ -437,7 +449,7 @@ int address_match(void const *arg1,void const *arg2){
     {
       struct sockaddr_in6 const *sinp1 = (struct sockaddr_in6 *)arg1;
       struct sockaddr_in6 const *sinp2 = (struct sockaddr_in6 *)arg2;
-      if(memcmp(&sinp1->sin6_addr,&sinp2->sin6_addr,sizeof(sinp1->sin6_addr)) == 0)
+      if(memcmp(&sinp1->sin6_addr, &sinp2->sin6_addr, sizeof(sinp1->sin6_addr)) == 0)
 	return 1;
     }
     break;
@@ -472,7 +484,7 @@ int getportnumber(void const *arg){
 
 // Set the port number on a sockaddr structure
 // Port number argument is in HOST order
-int setportnumber(void *s,uint16_t port){
+int setportnumber(void *s, uint16_t port){
   if(s == NULL)
     return -1;
   struct sockaddr *sock = s;
@@ -497,16 +509,16 @@ int setportnumber(void *s,uint16_t port){
 }
 
 // Get the name and index of the loopback interface
-// Try to set multicast flag, though this requires network admin privileges
-static void loopback_init(void){
+// Try to set multicast flag,  though this requires network admin privileges
+static int loopback_init(void){
   if(Loopback_index != -1)
-    return;
+    return Loopback_index;
 
   // One-time setup of loopback
   // Instead of hardwiring the loopback name (which can vary) find it in the system's list
   struct ifaddrs *ifap = NULL;
   if(getifaddrs(&ifap) != 0)
-    return;
+    return -1;
 
   struct ifaddrs const *lop = NULL;
   for(lop = ifap; lop != NULL; lop = lop->ifa_next)
@@ -514,22 +526,24 @@ static void loopback_init(void){
       break;
 
   if(lop != NULL){
-    strlcpy(Loopback_name,lop->ifa_name,sizeof Loopback_name);
-    Loopback_index = if_nametoindex(lop->ifa_name);
+    strlcpy(Loopback_name, lop->ifa_name, sizeof Loopback_name);
+    int entry = if_nametoindex(lop->ifa_name);
     if(!(lop->ifa_flags & IFF_MULTICAST)){
       // We need multicast enabled on the loopback interface
       struct ifreq ifr = {0};
-      strncpy(ifr.ifr_name,lop->ifa_name,IFNAMSIZ-1);
+      strncpy(ifr.ifr_name, lop->ifa_name, IFNAMSIZ-1);
       ifr.ifr_flags = lop->ifa_flags | IFF_MULTICAST;
-      int fd = socket(AF_INET,SOCK_DGRAM,0); // Same for IPv6?
-      if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0) {
-	fprintf(stderr,"Can't enable multicast option on loopback interface %s\n",ifr.ifr_name);
+      int fd = socket(AF_INET, SOCK_DGRAM, 0); // Same for IPv6?
+      if (ioctl(fd,  SIOCSIFFLAGS,  &ifr) < 0) {
+	fprintf(stderr, "Can't enable multicast option on loopback interface %s\n", ifr.ifr_name);
 	perror("ioctl (set flags)");
+	// Given how much we rely on multicast loopback, should this be fatal?
       } else {
-	fprintf(stderr,"Multicast enabled on loopback interface %s\n",ifr.ifr_name);
+	Loopback_index = entry;
+	fprintf(stderr, "Multicast enabled on loopback interface %s\n", ifr.ifr_name);
 #if __linux__
 	// This capability is set when radiod is run by systemd, drop it when we no longer need it
-	if (prctl(PR_CAP_AMBIENT_LOWER, CAP_NET_ADMIN, 0, 0, 0) == -1)
+	if (prctl(PR_CAP_AMBIENT_LOWER,  CAP_NET_ADMIN,  0,  0,  0) == -1)
 	  perror("Failed to drop CAP_NET_ADMIN");
 #endif
       }
@@ -537,10 +551,12 @@ static void loopback_init(void){
     }
   }
   freeifaddrs(ifap);
+  return Loopback_index;
 }
 
-// Join a socket to a multicast group on specified iface, or default if NULL
-static int ipv4_join_group(int const fd,void const * const sock,char const * const iface){
+// Join a socket to a multicast group on specified iface,  or default if NULL
+// Source is for optional source-specific joins
+static int ipv4_join_group(int const fd, void const * const source, void const * const sock, char const * const iface){
   if(fd < 0 || sock == NULL)
     return -1;
 
@@ -551,51 +567,78 @@ static int ipv4_join_group(int const fd,void const * const sock,char const * con
   if(!IN_MULTICAST(ntohl(sin->sin_addr.s_addr)))
     return -1;
 
-  struct ip_mreqn mreqn = {0};
-  mreqn.imr_multiaddr = sin->sin_addr;
-  mreqn.imr_address.s_addr = INADDR_ANY;
+  if(source == NULL){
+    struct ip_mreqn mreqn = {0};
+    mreqn.imr_multiaddr = sin->sin_addr;
+    mreqn.imr_address.s_addr = INADDR_ANY;
+    
+    if(iface != NULL && strlen(iface) > 0) {
+      mreqn.imr_ifindex = if_nametoindex(iface); // defaults to 0
+      if(mreqn.imr_ifindex == Loopback_index)
+	mreqn.imr_address.s_addr = htonl(INADDR_LOOPBACK); // be explicit when looping back
+    } else
+      mreqn.imr_ifindex = 0;
+    if(setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreqn, sizeof(mreqn)) != 0 && errno != EADDRINUSE){
+      char name[IFNAMSIZ];
+      fprintf(stderr, "join IPv4 group %s on %s (%s) failed: %s\n", formatsock(sock, false), iface ? iface : "default", if_indextoname(mreqn.imr_ifindex, name), strerror(errno));
+      return -1;
+    }
+  } else {
+    // Source-specific
+    struct ip_mreq_source mreqn = {0};
+    struct sockaddr_in const * const source_sin = (struct sockaddr_in *)source;
+    mreqn.imr_multiaddr = sin->sin_addr;
+    mreqn.imr_interface.s_addr = INADDR_ANY;
+    mreqn.imr_sourceaddr = source_sin->sin_addr;
+    
+    if(setsockopt(fd, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP, &mreqn, sizeof(mreqn)) != 0 && errno != EADDRINUSE){
+      fprintf(stderr, "source-specific join IPv4 group %s:%s (%s) failed: %s\n", formatsock(source, false), formatsock(sock, false), iface ? iface : "default", strerror(errno));
+      return -1;
+    }
 
-  if(iface != NULL && strlen(iface) > 0) {
-    mreqn.imr_ifindex = if_nametoindex(iface); // defaults to 0
-    if(mreqn.imr_ifindex == Loopback_index)
-      mreqn.imr_address.s_addr = htonl(INADDR_LOOPBACK); // be explicit when looping back
-  } else
-    mreqn.imr_ifindex = 0;
-  if(setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreqn,sizeof(mreqn)) != 0 && errno != EADDRINUSE){
-    char name[IFNAMSIZ];
-    fprintf(stderr,"join IPv4 group %s on %s (%s) failed: %s\n",formatsock(sock,false),iface ? iface : "default",if_indextoname(mreqn.imr_ifindex,name),strerror(errno));
-    return -1;
   }
   return 0;
 }
 // Join a IPv6 socket to a multicast group on specified iface, or default if NULL
-static int ipv6_join_group(int const fd,void const * const sock,char const * const iface){
-  if(fd < 0 || sock == NULL)
+static int ipv6_join_group(int const fd, void const * const source, void const * const group, char const * const iface){
+  if(fd < 0 || group == NULL)
     return -1;
 
   // Ensure it's a multicast address
   // Is this check really necessary?
   // Maybe the setsockopt would just fail cleanly if it's not
-  struct sockaddr_in6 const * const sin6 = (struct sockaddr_in6 *)sock;
+  struct sockaddr_in6 const * const sin6 = (struct sockaddr_in6 *)group;
   if(!IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))
     return -1;
 
-  // Doesn't seem to be defined on Mac OSX, but is supposed to be synonymous with IPV6_JOIN_GROUP
+  if(source == NULL){
+    // Doesn't seem to be defined on Mac OSX, but is supposed to be synonymous with IPV6_JOIN_GROUP
 #ifndef IPV6_ADD_MEMBERSHIP
 #define IPV6_ADD_MEMBERSHIP IPV6_JOIN_GROUP
 #endif
 
-  struct ipv6_mreq ipv6_mreq;
-  ipv6_mreq.ipv6mr_multiaddr = sin6->sin6_addr;
-  if(iface == NULL || strlen(iface) == 0)
-    ipv6_mreq.ipv6mr_interface = 0; // Default interface
-  else
-    ipv6_mreq.ipv6mr_interface = if_nametoindex(iface);
-
-  if(setsockopt(fd,IPPROTO_IP,IPV6_ADD_MEMBERSHIP,&ipv6_mreq,sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
-    char name[IFNAMSIZ];
-    fprintf(stderr,"join IPv6 group %s on %s (%s) failed: %s\n",formatsock(sock,false),iface ? iface : "default",if_indextoname(ipv6_mreq.ipv6mr_interface,name),strerror(errno));
-    return -1;
+    struct ipv6_mreq ipv6_mreq = {0};
+    ipv6_mreq.ipv6mr_multiaddr = sin6->sin6_addr;
+    if(iface == NULL || strlen(iface) == 0)
+      ipv6_mreq.ipv6mr_interface = 0; // Default interface
+    else
+      ipv6_mreq.ipv6mr_interface = if_nametoindex(iface);
+    
+    if(setsockopt(fd, IPPROTO_IP, IPV6_ADD_MEMBERSHIP, &ipv6_mreq, sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
+      char name[IFNAMSIZ];
+      fprintf(stderr, "join IPv6 group %s on %s (%s) failed: %s\n", formatsock(group, false), iface ? iface : "default", if_indextoname(ipv6_mreq.ipv6mr_interface, name), strerror(errno));
+      return -1;
+    }
+  } else {
+    struct group_source_req gsreq = {0};
+    gsreq.gsr_interface = if_nametoindex(iface);
+    memcpy(&gsreq.gsr_group, sin6, sizeof(struct sockaddr_in6));
+    memcpy(&gsreq.gsr_source, sin6, sizeof(struct sockaddr_in6));
+    if(setsockopt(fd, IPPROTO_IPV6, MCAST_JOIN_SOURCE_GROUP, &gsreq, sizeof gsreq) < 0){
+      char name[IFNAMSIZ];
+      fprintf(stderr, "join IPv6 group %s on %s (%s) failed: %s\n", formatsock(group, false), iface ? iface : "default", if_indextoname(gsreq.gsr_interface, name), strerror(errno));
+      return -1;
+    }
   }
   return 0;
 }
@@ -605,15 +648,31 @@ static int setup_ipv4_loopback(int fd){
   loopback_init();
 
   if(Loopback_index == -1){
-    fprintf(stderr,"Can't find loopback interface");
+    fprintf(stderr, "Can't find loopback interface\n");
     return -1;
   }
   struct ip_mreqn mreqn = {0};
   mreqn.imr_address.s_addr = htonl(INADDR_LOOPBACK);
   mreqn.imr_ifindex = Loopback_index;
 
-  if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &mreqn, sizeof mreqn) < 0)
+  if (setsockopt(fd,  IPPROTO_IP,  IP_MULTICAST_IF, &mreqn, sizeof mreqn) < 0){
     perror("setsockopt IP_MULTICAST_IF failed");
+    return -1;
+  }
+  return 0;
+}
+
+static int setup_ipv6_loopback(int fd){
+  loopback_init();
+
+  if(Loopback_index == -1){
+    fprintf(stderr, "Can't find loopback interface\n");
+    return -1;
+  }
+  if (setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_IF, &Loopback_index, sizeof Loopback_index) < 0){
+    perror("setsockopt IPV6_MULTICAST_IF failed");
+    return -1;
+  }
   return 0;
 }
 
@@ -623,7 +682,7 @@ static int setup_ipv4_loopback(int fd){
 // that is not snooped by switches
 uint32_t make_maddr(char const *arg){
   //  uint32_t addr = (239U << 24) | (ElfHashString(arg) & 0xffffff); // poor performance when last byte is always the same (.)
-  uint32_t addr = (239U << 24) | (fnv1hash((uint8_t *)arg,strlen(arg)) & 0xffffff);
+  uint32_t addr = (239U << 24) | (fnv1hash((uint8_t *)arg, strlen(arg)) & 0xffffff);
   // avoid 239.0.0.0/24 and 239.128.0.0/24 since they map to the same
   // Ethernet multicast MAC addresses as 224.0.0.0/24, the internet control block
   // This increases the risk of collision slightly (512 out of 16 M)

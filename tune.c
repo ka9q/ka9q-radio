@@ -178,7 +178,7 @@ int main(int argc,char *argv[]){
 
     if(Verbose)
       fprintf(stdout,"Listening\n");
-    Status_sock = listen_mcast(&Control_address,ifc);
+    Status_sock = listen_mcast(NULL,&Control_address,ifc);
 
     if(Status_sock == -1){
       fprintf(stdout,"Can't open Status_sock socket to radio control channel %s: %s\n",Radio,strerror(errno));

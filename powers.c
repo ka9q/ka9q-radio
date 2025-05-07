@@ -114,7 +114,7 @@ int main(int argc,char *argv[]){
   if(Verbose)
     fprintf(stderr,"Resolved %s -> %s\n",Target,formatsock(&Metadata_dest_socket,false));
 
-  Status_fd = listen_mcast(&Metadata_dest_socket,Iface);
+  Status_fd = listen_mcast(NULL,&Metadata_dest_socket,Iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't listen to mcast status %s\n",Target);
     exit(1);

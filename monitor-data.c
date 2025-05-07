@@ -66,7 +66,7 @@ void *dataproc(void *arg){
     char iface[1024];
     struct sockaddr sock;
     resolve_mcast(mcast_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
-    input_fd = listen_mcast(&sock,iface);
+    input_fd = listen_mcast(NULL,&sock,iface);
   }
   if(input_fd == -1)
     pthread_exit(NULL);

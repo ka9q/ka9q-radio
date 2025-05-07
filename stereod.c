@@ -163,7 +163,7 @@ int main(int argc,char * const argv[]){
   if(Input) {
     char iface[1024];
     resolve_mcast(Input,&PCM_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
-    Input_fd = listen_mcast(&PCM_dest_address,iface);
+    Input_fd = listen_mcast(NULL, &PCM_dest_address, iface);
     if(Input_fd == -1){
       fprintf(stderr,"Can't set up PCM input on %s: %sn",Input,strerror(errno));
       exit(EX_USAGE);
@@ -171,7 +171,7 @@ int main(int argc,char * const argv[]){
   } else if(Status){
     char iface[1024];
     resolve_mcast(Status,&Status_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
-    Status_fd = listen_mcast(&Status_dest_address,iface);
+    Status_fd = listen_mcast(NULL, &Status_dest_address, iface);
     if(Status_fd == -1){
       fprintf(stderr,"Can't set up status input on %s: %sn",Status,strerror(errno));      
       exit(EX_USAGE);
@@ -217,7 +217,7 @@ int main(int argc,char * const argv[]){
 
   signal(SIGPIPE,SIG_IGN);
   
-  realtime();
+  realtime(50);
 
   // Set up to receive PCM in RTP/UDP/IP
   // Process incoming RTP packets, demux to per-SSRC thread
@@ -342,7 +342,7 @@ int fetch_socket(int status_fd){
 	  goto done;
 	case OUTPUT_DATA_DEST_SOCKET:
 	  decode_socket(&PCM_dest_address,cp,optlen);
-	  return listen_mcast(&PCM_dest_address,NULL);
+	  return listen_mcast(NULL, &PCM_dest_address, NULL);
 	  break;
 	default:  // Ignore all others for now
 	  break;

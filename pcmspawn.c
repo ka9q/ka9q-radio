@@ -136,7 +136,7 @@ int main(int argc,char * const argv[]){
   char iface[1024];
   if(Input){
     resolve_mcast(Input,&PCM_dest_address,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
-    Input_fd = listen_mcast(&PCM_dest_address,NULL); // Port address already in place
+    Input_fd = listen_mcast(NULL,&PCM_dest_address,NULL); // Port address already in place
 
     if(Input_fd == -1){
       fprintf(stderr,"Can't resolve input PCM group %s\n",Input);
@@ -281,7 +281,7 @@ void * status(void *p){
 
   char iface[1024];
   resolve_mcast(Status,&Status_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
-  Status_fd = listen_mcast(&Status_dest_address,iface);
+  Status_fd = listen_mcast(NULL,&Status_dest_address,iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't set up input on %s: %s\n",Status,strerror(errno));
     return NULL;
@@ -351,7 +351,7 @@ void * status(void *p){
 	    if(Verbose)
 	      fprintf(stderr,"Listening for PCM on %s\n",formatsock(&dest_temp,false));
 
-	    int const fd = listen_mcast(&dest_temp,NULL); // Port address already in place
+	    int const fd = listen_mcast(NULL, &dest_temp, NULL); // Port address already in place
 	    if(fd == -1){
 	      if(Verbose){
 		fprintf(stderr,"Multicast listen on %s failed\n",formatsock(&dest_temp,false));

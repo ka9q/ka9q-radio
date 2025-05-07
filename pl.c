@@ -195,7 +195,7 @@ int main(int argc,char * const argv[]){
   int input_fd[Nfds];    // Multicast receive sockets
 
   for(int i=0;i<Nfds;i++){
-    input_fd[i] = setup_mcast_in(Mcast_address_text[i],NULL,0,0);
+    input_fd[i] = setup_mcast_in(NULL,NULL,Mcast_address_text[i],NULL,0,0);
     if(input_fd[i] == -1){
       fprintf(stdout,"Can't set up input %s\n",Mcast_address_text[i]);
       continue;

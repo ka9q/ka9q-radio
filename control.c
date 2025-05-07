@@ -449,14 +449,14 @@ int main(int argc,char *argv[]){
     // flags set to only return supported addresses, how could any of them fail?
     memcpy(&Metadata_dest_socket,results->ai_addr,sizeof(Metadata_dest_socket));
     freeaddrinfo(results); results = NULL;
-    Status_fd = listen_mcast(&Metadata_dest_socket,table[entry].interface);
+    Status_fd = listen_mcast(NULL,&Metadata_dest_socket,table[entry].interface);
     Output_fd = output_mcast(&Metadata_dest_socket,NULL,Mcast_ttl,IP_tos);
-    join_group(Output_fd,&Metadata_dest_socket,table[entry].interface);
+    join_group(Output_fd,NULL,&Metadata_dest_socket,table[entry].interface);
   } else {
     // Use resolv_mcast to resolve a manually entered domain name, using default port and parsing possible interface
     char iface[1024] = {0}; // Multicast interface string
     resolve_mcast(target,&Metadata_dest_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
-    Status_fd = listen_mcast(&Metadata_dest_socket,iface);
+    Status_fd = listen_mcast(NULL,&Metadata_dest_socket,iface);
     Output_fd = output_mcast(&Metadata_dest_socket,iface,Mcast_ttl,IP_tos);
   }
   if(Status_fd < 0){

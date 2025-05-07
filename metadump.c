@@ -163,7 +163,7 @@ int main(int argc,char *argv[]){
     char result[1024];
     fprintf(stdout,"Listening on %s\n",formataddr(result,sizeof(result),&sock));
   }
-  Status_sock = listen_mcast(&sock,iface);
+  Status_sock = listen_mcast(NULL,&sock,iface);
   if(Status_sock < 0){
     fprintf(stdout,"Can't set up multicast input\n");
     exit(EX_IOERR);

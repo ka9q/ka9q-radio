@@ -570,7 +570,7 @@ static int loadconfig(char const *file){
     fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
     exit(EX_NOHOST); // let systemd restart us
   }
-  join_group(Output_fd,&Template.output.dest_socket,Iface); // Work around snooping switch problem
+  join_group(Output_fd,NULL,&Template.output.dest_socket,Iface); // Work around snooping switch problem
 
   // Set up status/command stream, global for all receiver channels
   if(0 == strcmp(Metadata_dest_string,Data)){
@@ -591,9 +591,9 @@ static int loadconfig(char const *file){
 		addr != 0 ? &slen : NULL);
   }
   // either resolve_mcast() or avahi_start() has resolved the target DNS name into Metadata_dest_socket and inserted the port number
-  join_group(Output_fd,&Metadata_dest_socket,Iface);
+  join_group(Output_fd,NULL,&Metadata_dest_socket,Iface);
   // Same remote socket as status
-  Ctl_fd = listen_mcast(&Metadata_dest_socket,Iface);
+  Ctl_fd = listen_mcast(NULL,&Metadata_dest_socket,Iface);
   if(Ctl_fd < 0){
     fprintf(stdout,"can't listen for commands from %s: %s; no control channel is set\n",Metadata_dest_string,strerror(errno));
   } else {
@@ -689,7 +689,7 @@ void *process_section(void *p){
     struct sockaddr_in *sin = (struct sockaddr_in *)&metadata_dest_socket;
     sin->sin_port = htons(DEFAULT_STAT_PORT);
   }
-  join_group(Output_fd,&data_dest_socket,iface);
+  join_group(Output_fd,NULL,&data_dest_socket,iface);
   // No need to also join group for status socket, since the IP addresses are the same
 
   // Process frequency/frequencies
@@ -778,7 +778,7 @@ void *process_section(void *p){
 	// Highly experimental, off by default
 	char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
 	resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
-	join_group(Output_fd,&chan->sap.dest_socket,iface);
+	join_group(Output_fd,NULL,&chan->sap.dest_socket,iface);
 	pthread_create(&chan->sap.thread,NULL,sap_send,chan);
       }
       // RTCP Real Time Control Protocol daemon is optional
