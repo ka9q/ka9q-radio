@@ -3,13 +3,18 @@
 # KA9Q May 2025
 source /etc/radio/hfdl.conf
 
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 <band_center> [args-to-dumphfdl....]"
+if [ $# -lt 3 ]; then
+    echo "Usage: $0 <band_center> <description> <samprate>"
     exit 1
 fi
 
-center="$1"
-case "$center" in
+CENTER="$1"
+DESCRIPTION="$2"
+SAMPRATE="$3"
+
+
+
+case "$CENTER" in
     21964.0000)
 	FREQS=(21928. 21931. 21934. 21937. 21949. 21955. 21982. 21990. 21997.)
 	;;
@@ -64,9 +69,7 @@ case "$center" in
 	;;
 esac
 
+echo "$0: Center frequency = ${CENTER} kHz; Description = \"${DESCRIPTION}\"; Sample rate = ${SAMPRATE} Hz; Channel frequencies (kHz) = ${FREQS[@]}"
 
-exec_cmd="${DUMPHFDL} --station-id \"\$d\" --output decoded:json:tcp:address=feed.airframes.io,port=5556 --output decoded:json:file:path=${LOG} --iq-file - --sample-rate \"\$r\" --centerfreq \"\$k\"  --sample-format cs16 --system-table=${SYSTABLE} --system-table-save=${SYSTABLE} \"\$k\" ${FREQS[@]}"
 
-cmd=(/usr/local/bin/pcmrecord --raw -v --exec "$exec_cmd" "${MCAST}")
-
-"${cmd[@]}"
+${DUMPHFDL} --station-id "${DESCRIPTION}"  --output decoded:json:tcp:address=feed.airframes.io,port=5556 --output decoded:json:file:path="${LOG}" --iq-file - --sample-rate "${SAMPRATE}" --centerfreq "${CENTER}"  --sample-format cs16 --system-table="${SYSTABLE}" --system-table-save="${SYSTABLE}" ${FREQS[@]}
