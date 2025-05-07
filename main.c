@@ -310,14 +310,16 @@ static int loadconfig(char const *file){
     // It's a directory, read its contents
     fprintf(stdout,"Loading config directory %s\n",file);
     dirp = opendir(file);
+    if(dirp == NULL)
+      return -1; // give up
   } else {
     // Otherwise append ".d" and see if that's a directory
     snprintf(dname,sizeof(dname),"%s.d",file);
     if(stat(dname,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR)
       dirp = opendir(dname);
+    if(dirp == NULL)
+      return -1; // give up
   }
-  if(dirp == NULL)
-    return -1; // give up
 
   // Read and sort list of foo.d/*.conf files, merge into temp file
   fprintf(stdout,"Loading config directory %s\n",dname);
