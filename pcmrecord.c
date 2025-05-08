@@ -7,6 +7,7 @@ This program reads one or more RTP streams from a multicast group and either wri
 
 Command-line options:
  --stdout | --catmode | -c: write one stream to stdout. If --ssrc is not specified, selects the first one found and ignores the rest
+ --source <source-specific name or address>
  --directory | -d <directory>: directory root in which to write files<
  --exec | -e '<command args ...>': Execute the specified command for each stream and pipe to it. Several macros expanded as shown when found in the arguments:
         $$: insert a literal '$'
@@ -199,6 +200,8 @@ static bool Flushmode = false; // Flush after each packet when writing to standa
 static const char *Command = NULL;
 static bool Jtmode = false;
 static bool Raw = false;
+static char const *Source;
+static struct sockaddr_sock *Source_socket; // Remains NULL if Source == NULL
 
 const char *App_path;
 static int Input_fd,Status_fd;
@@ -233,6 +236,7 @@ static struct option Options[] = {
   {"locale", required_argument, NULL, 'l'},
   {"minfiletime", required_argument, NULL, 'm'},
   {"mintime", required_argument, NULL, 'm'},
+  {"source", required_argument, NULL, 'o'},
   {"raw", no_argument, NULL, 'r' },
   {"subdirectories", no_argument, NULL, 's'},
   {"subdirs", no_argument, NULL, 's'},
@@ -270,6 +274,9 @@ int main(int argc,char *argv[]){
       break;
     case 'd':
       Recordings = optarg;
+      break;
+    case 'o':
+      Source = optarg;
       break;
     case 'l':
       Locale = optarg;
@@ -339,14 +346,18 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"--jtmode supersedes --subdirs\n");
     Subdirs = false;
   }
+  if(Source != NULL){
+    Source_socket = calloc(1,sizeof(struct sockaddr_storage));
+    resolve_mcast(Source,Source_socket,0,NULL,0,0);
+  }
   // Set up input socket for multicast data stream from front end
   {
     struct sockaddr sock;
     char iface[1024];
     resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
-    Input_fd = listen_mcast(NULL,&sock,iface);
+    Input_fd = listen_mcast(Source_socket,&sock,iface);
     resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
-    Status_fd = listen_mcast(NULL,&sock,iface);
+    Status_fd = listen_mcast(Source_socket,&sock,iface);
   }
   if(Input_fd == -1){
     fprintf(stderr,"Can't set up PCM input, exiting\n");
