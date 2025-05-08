@@ -47,6 +47,7 @@ static struct  option Options[] = {
   {"verbose", no_argument, NULL, 'v'},
   {"version", no_argument, NULL, 'V'},
   {"bin-width", required_argument, NULL, 'w'},
+  {"source", required_argument, NULL, 'o'},
   {NULL, 0, NULL, 0},
 };
 
@@ -127,7 +128,7 @@ int main(int argc,char *argv[]){
     resolve_mcast(Source,Source_socket,0,NULL,0,0);
   }
 
-  Status_fd = listen_mcast(NULL,&Metadata_dest_socket,Iface);
+  Status_fd = listen_mcast(Source_socket,&Metadata_dest_socket,Iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't listen to mcast status %s\n",Target);
     exit(1);
