@@ -108,6 +108,8 @@ struct sockaddr Sender;
 struct sockaddr Input_mcast_sockaddr;
 int Input_fd;
 struct session *Sessions;
+char const *Source;
+struct sockaddr_in *Source_socket;
 
 void input_loop(void);
 void cleanup(void);
@@ -128,11 +130,14 @@ int main(int argc,char *argv[]){
 
   // Defaults
   int c;
-  while((c = getopt(argc,argv,"w84d:L:vkVx:")) != EOF){
+  while((c = getopt(argc,argv,"w84d:L:vkVx:o:")) != EOF){
     switch(c){
     case 'x':
       Modetab[FT4].decode  = optarg;
       Modetab[FT8].decode  = optarg;
+      break;
+    case 'o':
+      Source = optarg;
       break;
     case 'w':
       Mode = WSPR;
@@ -185,12 +190,17 @@ int main(int argc,char *argv[]){
     exit(EX_CANTCREAT);
   }
 
+  if(Source != NULL){
+    Source_socket = calloc(1,sizeof(struct sockaddr_storage));
+    resolve_mcast(Source,Source_socket,0,NULL,0,0);
+  }
+
   // Set up input socket for multicast data stream from front end
   {
     char iface[1024];
     struct sockaddr sock;
     resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
-    Input_fd = listen_mcast(NULL,&sock,iface);
+    Input_fd = listen_mcast(Source_socket,&sock,iface);
   }
 
   if(Input_fd == -1){
