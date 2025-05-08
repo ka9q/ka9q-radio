@@ -46,6 +46,7 @@ extern int64_t Quiet_ID_interval;
 extern int Dit_length;
 extern int Channels;
 extern char const *Init;
+extern char const *Source; // Only accept from this domain name
 
 // Global variables that regularly change
 extern int64_t Last_xmit_time;

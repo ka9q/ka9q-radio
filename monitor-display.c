@@ -148,7 +148,11 @@ void *display(void *arg){
     // Start screen update
     move(0,0);
     clrtobot();
-    addstrt("KA9Q Multicast Audio Monitor:");
+    if(Source == NULL)
+      addstrt("KA9Q Multicast Audio Monitor:");
+    else
+      printwt("KA9Q Multicast Audio Monitor, only from %s:",Source);
+      
     for(int i=0;i<Nfds;i++)
       printwt(" %s",Mcast_address_text[i]);
     addstrt("\n");
