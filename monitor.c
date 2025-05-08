@@ -288,7 +288,7 @@ int main(int argc,char * const argv[]){
     default:
       fprintf(stderr,"Usage: %s -L\n",App_path);
       fprintf(stderr,"       %s [-c channels] [-f config_file] [-g gain] [-p playout] [-q] [-r samprate] [-u update] [-v] \
-[-I mcast_address] [-R audiodev|-P pipename] [-S] [mcast_address ...]\n",App_path);
+[-I mcast_address] [-R audiodev|-P pipename] [-S] [-o|--source <source-name-or-address>] [mcast_address ...]\n",App_path);
       exit(EX_USAGE);
     }
   }
