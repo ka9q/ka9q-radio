@@ -1,6 +1,8 @@
 // Multicast socket and network utility routines for ka9q-radio
 // Copyright 2018-2023 Phil Karn, KA9Q
 
+#define _GNU_SOURCE 1
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -16,6 +18,7 @@
 #include <ifaddrs.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <netinet/in.h>
 
 #if defined(linux)
 #include <linux/if_packet.h>
@@ -41,6 +44,7 @@ static int setup_ipv6_loopback(int fd);
 static int ipv4_join_group(int const fd,void const * const source,void const * const group,char const * const iface);
 static int ipv6_join_group(int const fd,void const * const source,void const * const group,char const * const iface);
 static int loopback_init(void);
+static uint32_t get_local_address_for(uint32_t dest_addr);
 
 // This is a bit messy. Is there a better way?
 char const *Default_mcast_iface;
@@ -198,15 +202,19 @@ int listen_mcast(void const *source, void const *group, char const *iface){
   if(group == NULL)
     return -1;
 
-  struct sockaddr const *sock = group;
-  int const fd = socket(sock->sa_family, SOCK_DGRAM, 0);
+  struct sockaddr const *group_socket = group;
+  int const fd = socket(group_socket->sa_family, SOCK_DGRAM, 0);
   if(fd == -1){
     perror("setup_mcast socket");
     return -1;
   }
   loopback_init();
-  join_group(fd, source, sock, Loopback_name);
-  join_group(fd, source, sock, iface);
+
+  // If source specific multicast is in use (source != NULL), iface is
+  // ignored; we must use the interface that can reach the source
+  // If it's us, this will be the loopback interface
+  // Otherwise if the source can't be reached we will fail
+  join_group(fd, source, group_socket, iface);
   int const reuse = true; // bool doesn't work for some reason
   if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) != 0)
     perror("so_reuseport failed");
@@ -219,7 +227,7 @@ int listen_mcast(void const *source, void const *group, char const *iface){
     perror("freebind failed");
 #endif
 
-  if((bind(fd, sock, sizeof(struct sockaddr)) != 0)){
+  if((bind(fd, group_socket, sizeof(struct sockaddr)) != 0)){
     perror("listen mcast bind");
     close(fd);
     return -1;
@@ -399,14 +407,14 @@ char const *formatsock(void const *s,bool full){
   struct inverse_cache * const ic = (struct inverse_cache *)calloc(1, sizeof(*ic));
   assert(ic != NULL); // Malloc failures are rare
   char host[NI_MAXHOST] = {0}, port[NI_MAXSERV] = {0}, hostname[NI_MAXHOST] = {0};
-  getnameinfo(sa, slen, 
-	      host, NI_MAXHOST, 
-	      port, NI_MAXSERV, 
+  getnameinfo(sa, slen,
+	      host, NI_MAXHOST,
+	      port, NI_MAXSERV,
 	      NI_NOFQDN|NI_NUMERICHOST|NI_NUMERICSERV); // this should be fast
 
   // Inverse search for name of 0.0.0.0 will time out after a long time
   if(full && strcmp(host, "0.0.0.0") != 0){
-    getnameinfo(sa, slen, 
+    getnameinfo(sa, slen,
 		hostname, NI_MAXHOST,
 		NULL, 0,
 		NI_NOFQDN|NI_NUMERICSERV);
@@ -571,7 +579,7 @@ static int ipv4_join_group(int const fd, void const * const source, void const *
     struct ip_mreqn mreqn = {0};
     mreqn.imr_multiaddr = sin->sin_addr;
     mreqn.imr_address.s_addr = INADDR_ANY;
-    
+
     if(iface != NULL && strlen(iface) > 0) {
       mreqn.imr_ifindex = if_nametoindex(iface); // defaults to 0
       if(mreqn.imr_ifindex == Loopback_index)
@@ -580,22 +588,41 @@ static int ipv4_join_group(int const fd, void const * const source, void const *
       mreqn.imr_ifindex = 0;
     if(setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreqn, sizeof(mreqn)) != 0 && errno != EADDRINUSE){
       char name[IFNAMSIZ];
-      fprintf(stderr, "join IPv4 group %s on %s (%s) failed: %s\n", formatsock(sock, false), iface ? iface : "default", if_indextoname(mreqn.imr_ifindex, name), strerror(errno));
+      fprintf(stderr, "join fd %d IPv4 group %s on %s (%s) failed: %s\n",fd, formatsock(sock, false), iface ? iface : "default", if_indextoname(mreqn.imr_ifindex, name), strerror(errno));
       return -1;
     }
   } else {
-    // Source-specific
-    struct ip_mreq_source mreqn = {0};
+    // Source-specific multicast
+    // Should find the loopback interface if we're the source we're looking for
     struct sockaddr_in const * const source_sin = (struct sockaddr_in *)source;
+    struct ip_mreq_source mreqn = {0};
     mreqn.imr_multiaddr = sin->sin_addr;
-    mreqn.imr_interface.s_addr = INADDR_ANY;
     mreqn.imr_sourceaddr = source_sin->sin_addr;
-    
-    if(setsockopt(fd, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP, &mreqn, sizeof(mreqn)) != 0 && errno != EADDRINUSE){
-      fprintf(stderr, "source-specific join IPv4 group %s:%s (%s) failed: %s\n", formatsock(source, false), formatsock(sock, false), iface ? iface : "default", strerror(errno));
+    mreqn.imr_interface.s_addr = get_local_address_for(source_sin->sin_addr.s_addr);
+    if(mreqn.imr_interface.s_addr == 0 || mreqn.imr_interface.s_addr == INADDR_NONE){
+      fprintf(stderr,"Can't find local interface that reaches %s\n",formatsock(source,false));
       return -1;
     }
+#if 0
+    char localbuf[INET_ADDRSTRLEN];
+    char sourcebuf[INET_ADDRSTRLEN];
+    char groupbuf[INET_ADDRSTRLEN];
 
+    inet_ntop(AF_INET, &mreqn.imr_interface, localbuf, sizeof(localbuf));
+    inet_ntop(AF_INET, &mreqn.imr_sourceaddr, sourcebuf, sizeof(sourcebuf));
+    inet_ntop(AF_INET, &mreqn.imr_multiaddr, groupbuf, sizeof(groupbuf));
+
+    fprintf(stderr, "JOIN: fd %d  group %s source %s via local %s\n", fd, groupbuf, sourcebuf, localbuf);
+#endif
+
+    if(setsockopt(fd, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP, &mreqn, sizeof(mreqn)) != 0 && errno != EADDRINUSE){
+      fprintf(stderr, "source-specific join IPv4 %s from source %s on iface addr %s failed: %s\n",
+	      formatsock(sock, false),
+	      formatsock(source, false),
+	      formatsock(source_sin, false), // iface is ignored, we must use the interface that reaches the source
+	      strerror(errno));
+      return -1;
+    }
   }
   return 0;
 }
@@ -623,7 +650,7 @@ static int ipv6_join_group(int const fd, void const * const source, void const *
       ipv6_mreq.ipv6mr_interface = 0; // Default interface
     else
       ipv6_mreq.ipv6mr_interface = if_nametoindex(iface);
-    
+
     if(setsockopt(fd, IPPROTO_IP, IPV6_ADD_MEMBERSHIP, &ipv6_mreq, sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
       char name[IFNAMSIZ];
       fprintf(stderr, "join IPv6 group %s on %s (%s) failed: %s\n", formatsock(group, false), iface ? iface : "default", if_indextoname(ipv6_mreq.ipv6mr_interface, name), strerror(errno));
@@ -644,6 +671,7 @@ static int ipv6_join_group(int const fd, void const * const source, void const *
 }
 
 // Direct outbound multicasts to loopback, e.g., when TTL = 0 or operating standalone
+// Are both IPv4 and IPv6 versions necessary?
 static int setup_ipv4_loopback(int fd){
   loopback_init();
 
@@ -691,4 +719,32 @@ uint32_t make_maddr(char const *arg){
   if((addr & 0x007fff00) == 0)
     addr |= 0x00100000; // Small chance of this for a random address
   return addr;
+}
+// Returns local IPv4 address as uint32_t (network byte order) that would be used to reach dest
+// Written by ChatGPT, and surprisingly it works
+static uint32_t get_local_address_for(uint32_t dest_addr) {
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0)
+        return INADDR_NONE;
+
+    struct sockaddr_in dest = {0};
+    dest.sin_family = AF_INET;
+    dest.sin_addr.s_addr = dest_addr;
+    dest.sin_port = htons(12345); // arbitrary port, doesn't matter
+
+    // connect() will NOT send packets, but will bind socket to local interface
+    if (connect(sock, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
+        close(sock);
+        return INADDR_NONE;
+    }
+
+    struct sockaddr_in local = {0};
+    socklen_t len = sizeof(local);
+    if (getsockname(sock, (struct sockaddr *)&local, &len) < 0) {
+        close(sock);
+        return INADDR_NONE;
+    }
+
+    close(sock);
+    return local.sin_addr.s_addr; // Already in network byte order
 }

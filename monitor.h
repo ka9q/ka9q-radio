@@ -81,6 +81,7 @@ extern struct sockaddr Metadata_dest_socket;
 extern pthread_mutex_t Rptr_mutex;
 extern pthread_cond_t Rptr_cond;
 extern char const *Pipe;
+extern struct sockaddr_in *Source_socket;
 
 
 extern int Mcast_ttl;
