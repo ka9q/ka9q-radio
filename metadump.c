@@ -48,6 +48,8 @@ static uint32_t Ssrc;
 static int Status_packets;
 static int64_t Last_status_time;
 struct sockaddr_storage Metadata_dest_socket;
+char const *Source;
+struct sockaddr_storage *Source_socket;
 
 static char Locale[256] = "en_US.UTF-8";
 int Verbose;
@@ -55,7 +57,7 @@ int IP_tos;
 int Mcast_ttl = 5;
 int Mcast_tos = 0;
 
-static char Optstring[] = "tas:c:i:vnr:l:Vx::";
+static char Optstring[] = "tas:c:i:vnr:l:VR:o:";
 static struct option Options[] = {
   {"stdin", no_argument, NULL, 't'},
   {"all", no_argument, NULL, 'a'},
@@ -68,6 +70,7 @@ static struct option Options[] = {
   {"locale", required_argument, NULL, 'l'},
   {"version", no_argument, NULL, 'V'},
   {"retries", required_argument, NULL, 'R'},
+  {"source", required_argument, NULL, 'o'},
   {NULL, 0, NULL, 0},
 };
 
@@ -117,6 +120,9 @@ int main(int argc,char *argv[]){
     case 'n':
       Newline = true;
       break;
+    case 'o':
+      Source = optarg;
+      break;
     case 'r':
       Radio = optarg;
       break;
@@ -159,11 +165,19 @@ int main(int argc,char *argv[]){
     fprintf(stdout,"Can't resolve %s\n",Radio);
     exit(EX_UNAVAILABLE);
   }    
+  if(Source != NULL){
+    Source_socket = calloc(1,sizeof(struct sockaddr_storage));
+    resolve_mcast(Source,Source_socket,0,NULL,0,0);
+  }
+
   if(Verbose){
     char result[1024];
-    fprintf(stdout,"Listening on %s\n",formataddr(result,sizeof(result),&sock));
+    if(Source == NULL)
+      fprintf(stdout,"Listening to %s\n",formataddr(result,sizeof(result),&sock));
+    else
+      fprintf(stdout,"Listening to %s only from %s\n",formataddr(result,sizeof(result),&sock),Source);
   }
-  Status_sock = listen_mcast(NULL,&sock,iface);
+  Status_sock = listen_mcast(Source_socket,&sock,iface);
   if(Status_sock < 0){
     fprintf(stdout,"Can't set up multicast input\n");
     exit(EX_IOERR);
