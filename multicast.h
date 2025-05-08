@@ -23,7 +23,6 @@ static inline int setup_mcast_in(char const *source, struct sockaddr *source_soc
   return setup_mcast(source,source_sock,target,sock,0,0,0,offset,tries);
 }
 int join_group(int fd, struct sockaddr const * const source, struct sockaddr const * const sock,  char const * const iface);
-int connect_mcast(void const *group, char const *iface, int const ttl, int const tos);
 int output_mcast(void const * const s, char const * const iface, int const ttl, int const tos);
 int listen_mcast(void const *source, void const *sock, char const *iface);
 int resolve_mcast(char const *target, void *sock, int default_port, char *iface, int iface_len, int tries);

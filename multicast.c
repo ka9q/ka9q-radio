@@ -45,6 +45,7 @@ static int ipv4_join_group(int const fd,void const * const source,void const * c
 static int ipv6_join_group(int const fd,void const * const source,void const * const group,char const * const iface);
 static int loopback_init(void);
 static uint32_t get_local_address_for(uint32_t dest_addr);
+static int connect_mcast(void const * const s, char const * const iface, int const ttl, int const tos);
 
 // This is a bit messy. Is there a better way?
 char const *Default_mcast_iface;
@@ -181,7 +182,7 @@ int output_mcast(void const * const group, char const * const iface, int const t
 }
 
 // Like output_mcast, but also do a connect()
-int connect_mcast(void const * const s, char const * const iface, int const ttl, int const tos){
+static int connect_mcast(void const * const s, char const * const iface, int const ttl, int const tos){
   int fd = output_mcast(s, iface, ttl, tos);
   if(fd == -1)
     return -1;
