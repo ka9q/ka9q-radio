@@ -246,7 +246,7 @@ int main(int argc,char *argv[]){
     // Extract name from config file pathname
     Name = argv[optind]; // Ah, just use whole thing
   }
-  fprintf(stdout,"Loading config file %s\n",Config_file);
+
   int const n = loadconfig(Config_file);
   if(n < 0){
     fprintf(stdout,"Can't load config file %s\n",Config_file);
@@ -298,79 +298,118 @@ static int loadconfig(char const *file){
     return -1;
 
   DIR *dirp = NULL;
-  struct stat statbuf;
-  if(stat(file,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR){
-    // If the argument is a directory, read its contents
-    dirp = opendir(file);
+  struct stat statbuf = {0};
+  char dname[PATH_MAX] = {0};
+  if(stat(file,&statbuf) == 0){
+    switch(statbuf.st_mode & S_IFMT){
+    case S_IFREG:
+      // primary config file radiod@foo.conf exists and is a regular file; just read it
+      fprintf(stderr,"Loading config file %s\n",file);
+      Configtable = iniparser_load(file); // Just try to read the primary
+      if(Configtable == NULL)
+	return -1;
+      break;
+    case S_IFDIR:
+      // It's a directory, read its contents
+      fprintf(stderr,"Loading config directory %s\n",file);
+      dirp = opendir(file);
+      if(dirp == NULL)
+	return -1; // give up
+      break;
+    default:
+      fprintf(stderr,"Config file %s exists but is not a regular file or directory\n",file);
+      return -1;
+    }
   } else {
     // Otherwise append ".d" and see if that's a directory
-    char dname[PATH_MAX];
     snprintf(dname,sizeof(dname),"%s.d",file);
-    if(stat(dname,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR)
+    if(stat(dname,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR){
+      fprintf(stdout,"Loading config directory %s\n",dname);
       dirp = opendir(dname);
+    }
   }
-  if(dirp != NULL){
+  if(Configtable == NULL){
+    if(dirp == NULL){
+      fprintf(stdout,"%s Not a valid config file/directory\n",file);
+      return -1; // give up
+    }
     // Read and sort list of foo.d/*.conf files, merge into temp file
     int dfd = dirfd(dirp); // this gets used for openat() and fstatat() so don't close dirp right way
     struct dirent *dp;
-    char *subfiles[100]; // List of subfiles
-    memset(subfiles,0,sizeof(subfiles));
+    int const n_subfiles = 100;
+    char *subfiles[n_subfiles]; // List of subfiles
     int sf = 0;
-    while ((dp = readdir(dirp)) != NULL && sf < 100) {
+    while ((dp = readdir(dirp)) != NULL && sf < n_subfiles) {
       // only consider regular files ending in .conf
       if(strcmp(".conf",dp->d_name + strlen(dp->d_name) - 5) == 0
 	 && fstatat(dfd,dp->d_name,&statbuf,0) == 0
 	 && (statbuf.st_mode & S_IFMT) == S_IFREG)
 	subfiles[sf++] = strdup(dp->d_name);
     }
-    // Don't close dirp just yet, would invalidate dfd
-    qsort(subfiles,sf,sizeof(subfiles[0]),(int (*)(void const *,void const *))strcmp);
-
-    // Create temporary copy of all files concatenated
-    char template[PATH_MAX];
-    strlcpy(template,"/tmp/radiod-configXXXXXXXX",sizeof(template));
-    int tfd = mkstemp(template);
-    FILE *tfp = fdopen(tfd,"rw+");
-    if(tfp != NULL){
-      // copy original file, if it exists, to temporary
-      if(stat(file,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFREG){
-	FILE *fp = fopen(file,"r");
-	if(fp != NULL){
-	  fprintf(tfp,"# %s\n",file); // for debugging
-	  int c;
-	  while((c = getc(fp)) != EOF)
-	    fputc(c,tfp);
-	  fclose(fp);
-	  fp = NULL;
-	}
-      }
-      // Concatenate the sub config files in order
-      for(int i=0; i < sf; i++){
-	int fd;
-	FILE *fp;
-	if((fd = openat(dfd,subfiles[i],O_RDONLY)) != -1 && (fp = fdopen(fd,"r")) != NULL){ // There's no "fopenat()"
-	  fprintf(tfp,"# %s\n",subfiles[i]); // for debugging
-	  int c;
-	  while((c = getc(fp)) != EOF)
-	    fputc(c,tfp);
-	  fclose(fp);
-	  fp = NULL;
-	}
-      }
-      fclose(tfp);
-      (void)closedir(dirp); // also invalidates dfd
-      Configtable = iniparser_load(template);
-      unlink(template);
-    } else {
-      fprintf(stdout,"Can't create temp config file %s: %s\n",template,strerror(errno));
-      Configtable = iniparser_load(file); // Just try to read the primary
+    if(sf == 0){
+      fprintf(stderr,"%s: empty config directory\n",strlen(dname) > 0 ? dname : file);
+      closedir(dirp);
+      return -1;
     }
-  } else {
-    Configtable = iniparser_load(file); // No subdirectory, just read the primary
+    // Don't close dirp just yet, would invalidate dfd
+    // Config sections can actually be in any order, but just in case one is split across multiple files...
+    qsort(subfiles,sf,sizeof(subfiles[0]),(int (*)(void const *,void const *))strcmp);
+    
+    // Concatenate sorted files into temporary copy
+    char tempfilename[PATH_MAX];
+    strlcpy(tempfilename,"/tmp/radiod-configXXXXXXXX",sizeof(tempfilename));
+    int tfd = mkstemp(tempfilename);
+    if(tfd == -1){
+      fprintf(stderr,"mkstemp(%s) failed: %s\n",tempfilename,strerror(errno));
+      closedir(dirp);
+      return -1;
+    }
+    FILE *tfp = fdopen(tfd,"rw+");
+    if(tfp == NULL){
+      fprintf(stderr,"Can't create temporary file %s: %s\n",tempfilename,strerror(errno));
+      close(tfd);
+      (void)closedir(dirp);
+      return -1;
+    }
+    // Concatenate the sub config files in order
+    for(int i=0; i < sf; i++){
+      int fd = openat(dfd,subfiles[i],O_RDONLY|O_CLOEXEC);
+      // There's no "fopenat()"
+      if(fd == -1){
+	fprintf(stderr,"Can't read config component %s: %s\n",subfiles[i],strerror(errno));
+	continue;
+      }
+      FILE *fp = fdopen(fd,"r");
+      if(fp == NULL){
+	fprintf(stderr,"fdopen(%d,r) of %s failed: %s\n",fd,subfiles[i],strerror(errno));
+	close(fd);
+	continue;
+      }
+      fprintf(tfp,"# %s\n",subfiles[i]); // for debugging
+      char *linep = NULL;
+      size_t linecap = 0;
+      while(getline(&linep,&linecap,fp) >= 0){
+	if(fputs(linep,tfp) == EOF){
+	  fprintf(stderr,"fputs(%s,%s): %s\n",linep,tempfilename,strerror(errno));
+	  break;
+	}
+      }
+      FREE(linep);
+      fclose(fp);     fp = NULL;
+    }
+    // Done with file names and directory
+    for(int i=0; i < sf; i++)
+      FREE(subfiles[i]); // Allocated by strdup()
+    
+    (void)closedir(dirp); dirp = NULL;
+    fclose(tfp); tfp = NULL; tfd = -1; // Also does close(tfd)
+    
+    Configtable = iniparser_load(tempfilename);
+    unlink(tempfilename); // Done with temp file
   }
-  if(Configtable == NULL)
+  if(Configtable == NULL){
     return -1;
-
+  }
   config_validate_section(stdout,Configtable,GLOBAL,Global_keys,Channel_keys);
 
   // Process [global] section applying to all demodulator blocks
@@ -531,7 +570,7 @@ static int loadconfig(char const *file){
     fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
     exit(EX_NOHOST); // let systemd restart us
   }
-  join_group(Output_fd,&Template.output.dest_socket,Iface); // Work around snooping switch problem
+  join_group(Output_fd,NULL,&Template.output.dest_socket,Iface); // Work around snooping switch problem
 
   // Set up status/command stream, global for all receiver channels
   if(0 == strcmp(Metadata_dest_string,Data)){
@@ -552,9 +591,9 @@ static int loadconfig(char const *file){
 		addr != 0 ? &slen : NULL);
   }
   // either resolve_mcast() or avahi_start() has resolved the target DNS name into Metadata_dest_socket and inserted the port number
-  join_group(Output_fd,&Metadata_dest_socket,Iface);
+  join_group(Output_fd,NULL,&Metadata_dest_socket,Iface);
   // Same remote socket as status
-  Ctl_fd = listen_mcast(&Metadata_dest_socket,Iface);
+  Ctl_fd = listen_mcast(NULL,&Metadata_dest_socket,Iface);
   if(Ctl_fd < 0){
     fprintf(stdout,"can't listen for commands from %s: %s; no control channel is set\n",Metadata_dest_string,strerror(errno));
   } else {
@@ -650,7 +689,7 @@ void *process_section(void *p){
     struct sockaddr_in *sin = (struct sockaddr_in *)&metadata_dest_socket;
     sin->sin_port = htons(DEFAULT_STAT_PORT);
   }
-  join_group(Output_fd,&data_dest_socket,iface);
+  join_group(Output_fd,NULL,&data_dest_socket,iface);
   // No need to also join group for status socket, since the IP addresses are the same
 
   // Process frequency/frequencies
@@ -739,7 +778,7 @@ void *process_section(void *p){
 	// Highly experimental, off by default
 	char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
 	resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
-	join_group(Output_fd,&chan->sap.dest_socket,iface);
+	join_group(Output_fd,NULL,&chan->sap.dest_socket,iface);
 	pthread_create(&chan->sap.thread,NULL,sap_send,chan);
       }
       // RTCP Real Time Control Protocol daemon is optional

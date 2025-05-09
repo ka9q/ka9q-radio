@@ -31,6 +31,9 @@ char Iface[1024]; // Multicast interface to talk to front end
 int Status_fd = -1, Ctl_fd = -1;
 int64_t Timeout = BILLION; // Retransmission timeout
 bool details;   // Output bin, frequency, power, newline
+char const *Source;
+struct sockaddr_storage *Source_socket;
+
 static char const Optstring[] = "b:c:df:hi:s:t:T:vw:V";
 static struct  option Options[] = {
   {"bins", required_argument, NULL, 'b'},
@@ -44,6 +47,7 @@ static struct  option Options[] = {
   {"verbose", no_argument, NULL, 'v'},
   {"version", no_argument, NULL, 'V'},
   {"bin-width", required_argument, NULL, 'w'},
+  {"source", required_argument, NULL, 'o'},
   {NULL, 0, NULL, 0},
 };
 
@@ -51,7 +55,7 @@ static struct  option Options[] = {
 int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,int length);
 
 void help(){
-  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width bin_bw] [-b|--bins bins] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr\n",App_path);
+  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width bin_bw] [-b|--bins bins] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
   exit(1);
 }
 
@@ -99,6 +103,9 @@ int main(int argc,char *argv[]){
       case 'V':
 	VERSION();
 	exit(EX_OK);
+      case 'o':
+	Source = optarg;
+	break;
       default:
 	fprintf(stdout,"Unknown option %c\n",c);
 	help();
@@ -114,7 +121,14 @@ int main(int argc,char *argv[]){
   if(Verbose)
     fprintf(stderr,"Resolved %s -> %s\n",Target,formatsock(&Metadata_dest_socket,false));
 
-  Status_fd = listen_mcast(&Metadata_dest_socket,Iface);
+  if(Source != NULL){
+    Source_socket = calloc(1,sizeof(struct sockaddr_storage));
+    if(Verbose)
+      fprintf(stdout,"Resolving source %s\n",Source);
+    resolve_mcast(Source,Source_socket,0,NULL,0,0);
+  }
+
+  Status_fd = listen_mcast(Source_socket,&Metadata_dest_socket,Iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't listen to mcast status %s\n",Target);
     exit(1);

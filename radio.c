@@ -36,9 +36,11 @@ struct frontend Frontend;
 
 // Noise estimator tuning
 static float estimate_noise(struct channel *chan,int shift);
-static float const Power_smooth = 0.10; // Temporal time smoothing factor per block
+static float const Power_smooth = 0.10; // Noise estimation time smoothing factor, per block
 static float const NQ = 0.10f; // look for energy in 10th quartile, hopefully contains only noise
 static float const N_cutoff = 1.5; // Average (all noise, hopefully) bins up to 1.5x the energy in the 10th quartile
+static float const noise_width = 2.0; // bandwidth relative to sample rate for noise estimation
+
 
 pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct channel Channel_list[Nchannels];
@@ -797,7 +799,9 @@ static float estimate_noise(struct channel *chan,int shift){
   if(slave->bins <= 0)
     return 0;
 
-  float energies[slave->bins];
+  int const nbins = noise_width * slave->bins; // Range to examine around center frequency (+/- nbins/2)
+
+  float energies[nbins];
   struct filter_in const * const master = slave->master;
   // slave->next_jobnum already incremented by execute_filter_output
   float complex const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
@@ -810,23 +814,23 @@ static float estimate_noise(struct channel *chan,int shift){
     // New algorithm (thanks to ChatGPT) responds instantly to changes because it averages noise across frequency rather than time
     // but is a little more wobbly than the old minimum-of-time-smoothed-energies because it doesn't average as much
     // Higher sample rates will give more stable results because more noise-only bins will be averaged
-    int mbin = abs(shift) - slave->bins/2; // -Fs/2
+    int mbin = abs(shift) - nbins/2; // lower edge
     if(mbin < 0)
       return 0; // Tuned too low
 
-    if(mbin + slave->bins > master->bins)
+    if(mbin + nbins > master->bins)
       return 0; // Tuned too high
-    for(int i=0; i < slave->bins; i++,mbin++)
+    for(int i=0; i < nbins; i++,mbin++)
       energies[i] = cnrmf(fdomain[mbin]);
   } else {
-    int mbin = shift - slave->bins/2; // Start at lower channel edge (upper for inverted real)
+    int mbin = shift - nbins/2; // Start at lower channel edge (upper for inverted real)
     // Complex input that often straddles DC
     if(mbin < 0)
       mbin += master->bins; // starting in negative frequencies
     if(mbin < 0 || mbin >= master->bins)
       return 0; // Too low or too high
 
-    for(int i=0; i < slave->bins; i++){
+    for(int i=0; i < nbins; i++){
       energies[i] = cnrmf(fdomain[mbin]);
       if(++mbin == master->bins)
 	mbin = 0; // wrap around from neg freq to pos freq
@@ -837,15 +841,15 @@ static float estimate_noise(struct channel *chan,int shift){
   static float correction = 0;
   if(correction == 0){
     // Compute correction only once
-    float z = N_cutoff * (-log(1-NQ));
-    correction = 1 / (1 - z*exp(-z)/(1-exp(-z)));
+    float z = N_cutoff * (-logf(1-NQ));
+    correction = 1 / (1 - z*expf(-z)/(1-expf(-z)));
   }
 
-  float en = N_cutoff * quantile(energies,slave->bins,NQ); // energy in the 10th quantile bin
+  float en = N_cutoff * quantile(energies,nbins,NQ); // energy in the 10th quantile bin
   // average the noise-only bins, excluding signal bins above 1.5 * q
   float energy = 0;
   int noisebins = 0;
-  for(int i=0; i < slave->bins; i++){
+  for(int i=0; i < nbins; i++){
     if(energies[i] <= en){
       energy += energies[i];
       noisebins++;

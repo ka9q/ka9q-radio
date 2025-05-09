@@ -223,7 +223,7 @@ int main(int argc,char * const argv[]){
     resolve_mcast(Input,&PCM_in_socket,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
     if(strlen(iface) == 0 && Default_mcast_iface != NULL)
       strlcpy(iface,Default_mcast_iface,sizeof(iface));
-    Input_fd = listen_mcast(&PCM_in_socket,iface); // Port address already in place
+    Input_fd = listen_mcast(NULL,&PCM_in_socket,iface); // Port address already in place
 
     if(Input_fd == -1){
       fprintf(stderr,"Can't resolve input PCM group %s\n",Input);
@@ -236,7 +236,7 @@ int main(int argc,char * const argv[]){
       sin->sin_port = htons(DEFAULT_STAT_PORT);
     }
     resolve_mcast(Input,&Metadata_in_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
-    Status_fd = listen_mcast(&Metadata_in_socket,iface);
+    Status_fd = listen_mcast(NULL,&Metadata_in_socket,iface);
   }
 
   {
@@ -268,7 +268,7 @@ int main(int argc,char * const argv[]){
   signal(SIGTERM,closedown);
   signal(SIGPIPE,SIG_IGN);
 
-  realtime();
+  realtime(50);
 
   // Loop forever processing and dispatching incoming PCM and status packets
 

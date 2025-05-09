@@ -49,8 +49,10 @@ int Agc_enable = -1;
 struct sockaddr Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
+char const *Source;
+struct sockaddr_in *Source_socket;
 
-char Optstring[] = "aA:e:f:g:G:H:hi:L:l:m:qr:R:s:vV";
+char Optstring[] = "aA:e:f:g:G:H:hi:L:l:m:qr:R:s:vVo:";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"rfatten", required_argument, NULL, 'A'},
@@ -72,6 +74,7 @@ struct option Options[] = {
   {"ssrc", required_argument, NULL, 's'},
   {"verbose", no_argument, NULL, 'v'},
   {"version", no_argument, NULL, 'V'},
+  {"source", required_argument, NULL, 'o'},
   {NULL, 0, NULL, 0},
 };
 
@@ -143,6 +146,9 @@ int main(int argc,char *argv[]){
       case 'V':
 	VERSION();
 	exit(EX_OK);
+      case 'o':
+	Source = optarg;
+	break;
       default: // including 'h'
 	fprintf(stdout,"Invalid command line option -%c\n",c);
 	usage();
@@ -169,6 +175,13 @@ int main(int argc,char *argv[]){
     exit(EX_USAGE);
   }
   {
+    if(Source != NULL){
+      Source_socket = calloc(1,sizeof(struct sockaddr_storage));
+      if(Verbose)
+	fprintf(stdout,"Resolving source %s\n",Source);
+      resolve_mcast(Source,Source_socket,0,NULL,0,0);
+    }
+
     if(Verbose)
       fprintf(stdout,"Resolving %s\n",Radio);
     char iface[1024];
@@ -176,9 +189,13 @@ int main(int argc,char *argv[]){
     char const *ifc = (Iface != NULL) ? Iface : iface;
 
 
-    if(Verbose)
-      fprintf(stdout,"Listening\n");
-    Status_sock = listen_mcast(&Control_address,ifc);
+    if(Verbose){
+      if(Source)
+	fprintf(stdout,"Listening to %s only from %s\n",Radio,Source);
+      else
+	fprintf(stdout,"Listening to %s\n",Radio);
+    }
+    Status_sock = listen_mcast(Source_socket,&Control_address,ifc);
 
     if(Status_sock == -1){
       fprintf(stdout,"Can't open Status_sock socket to radio control channel %s: %s\n",Radio,strerror(errno));
@@ -212,7 +229,7 @@ int main(int argc,char *argv[]){
   float low_edge = INFINITY;
   float high_edge = INFINITY;
   float received_rf_gain = INFINITY;
-  float received_rf_atten = INFINITY;  
+  float received_rf_atten = INFINITY;
   enum encoding received_encoding = NO_ENCODING;
   int received_rf_agc = -1;
   int samprate = 0;
@@ -397,10 +414,10 @@ int main(int argc,char *argv[]){
       printf("RF AGC %s\n",received_rf_agc ? "on" : "off");
 
     if(received_rf_gain != INFINITY)
-      printf("RF Gain %.1f dB\n",received_rf_gain);      
+      printf("RF Gain %.1f dB\n",received_rf_gain);
 
     if(received_rf_atten != INFINITY)
-      printf("RF Atten %.1f dB\n",received_rf_atten);      
+      printf("RF Atten %.1f dB\n",received_rf_atten);
 
     if(baseband_level != INFINITY)
       printf("Baseband power %.1f dB\n",baseband_level);
@@ -427,5 +444,5 @@ int main(int argc,char *argv[]){
 
 void usage(void){
   fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-R|--samprate <sample_rate>] [-i|--iface <iface>] [-l|--locale LOCALE]  \
-[-f|--frequency <frequency>] [-L|--low <low-edge>] [-H|--high <high-edge>] [[-a|--agc] [-g|--gain <gain dB>]] [-m|--mode <mode>] [--rfgain <gain dB>] [--rfatten <atten dB>]\n" ,App_path);
+[-f|--frequency <frequency>] [-L|--low <low-edge>] [-H|--high <high-edge>] [[-a|--agc] [-g|--gain <gain dB>]] [-m|--mode <mode>] [--rfgain <gain dB>] [--rfatten <atten dB>] [-o|--source <source-name-or-address>\n" ,App_path);
 }

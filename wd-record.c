@@ -108,6 +108,8 @@ struct sockaddr Sender;
 struct sockaddr Input_mcast_sockaddr;
 int Input_fd;
 struct session *Sessions;
+char const *Source;
+struct sockaddr_in *Source_socket;
 
 void closedown(int a);
 void input_loop(void);
@@ -153,8 +155,11 @@ int main(int argc,char *argv[]){
     case 'S':
       Samples_per_second = strtol(optarg,NULL,0);
       break;
+    case 'o':
+      Source = optarg;
+      break;
     default:
-      fprintf(stderr,"Usage: %s [-l locale] [-v] [-k] [-d recdir] [-S samples_per_second] PCM_multicast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-l locale] [-v] [-k] [-d recdir] [-S samples_per_second] [-o|--source <source-name-or-adddress>] PCM_multicast_address\n",argv[0]);
       exit(1);
       break;
     }
@@ -177,12 +182,18 @@ int main(int argc,char *argv[]){
     exit(1);
   }
 
+  if(Source != NULL){
+    Source_socket = calloc(1,sizeof(struct sockaddr_storage));
+    if(verbosity)
+      fprintf(stdout,"Resolving source %s\n",Source);
+    resolve_mcast(Source,Source_socket,0,NULL,0,0);
+  }
   // Set up input socket for multicast data stream from front end
   {
     char iface[1024];
-    struct sockaddr sock;
-    resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
-    Input_fd = listen_mcast(&sock,iface);
+    struct sockaddr group_socket;
+    resolve_mcast(PCM_mcast_address_text,&group_socket,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
+    Input_fd = listen_mcast(Source_socket,&group_socket,iface);
   }
 
   if(Input_fd == -1){

@@ -142,7 +142,7 @@ int main(int argc,char *argv[]){
 	break;
       }
       Input[Nfds] = optarg;
-      Input_fd[Nfds] = setup_mcast_in(optarg,NULL,0,0);
+      Input_fd[Nfds] = setup_mcast_in(NULL, NULL, optarg, NULL, 0, 0);
       if(Input_fd[Nfds] == -1){
 	fprintf(stdout,"Can't set up input %s\n",optarg);
 	break;
@@ -166,13 +166,13 @@ int main(int argc,char *argv[]){
 	close(Status_fd);
 	Status_fd = -1;
       }
-      Status_fd = setup_mcast_in(optarg,(struct sockaddr *)&Status_dest_address,2,0);
+      Status_fd = setup_mcast_in(NULL,NULL,optarg,(struct sockaddr *)&Status_dest_address,2,0);
       if(Status_fd == -1){
 	fprintf(stdout,"Can't set up status input on %s: %s\n",optarg,strerror(errno));
 	exit(EX_USAGE);
       }
 #if 0 // Later use?
-      Status_out_fd = setup_mcast(NULL,(struct sockaddr *)&Status_dest_address,1,Mcast_ttl,IP_tos,2,0);
+      Status_out_fd = setup_mcast(NULL, NULL, NULL, (struct sockaddr *)&Status_dest_address, true, Mcast_ttl, IP_tos, 2, 0);
       {
 	socklen_t len;
 	len = sizeof(Local_status_source_address);
@@ -209,7 +209,7 @@ int main(int argc,char *argv[]){
       break;
     }
     Input[Nfds] = argv[i];
-    Input_fd[Nfds] = setup_mcast_in(Input[Nfds],NULL,0,0);
+    Input_fd[Nfds] = setup_mcast_in(NULL, NULL, Input[Nfds], NULL, 0, 0);
     if(Input_fd[Nfds] == -1){
       fprintf(stdout,"Can't set up input %s\n",Input[Nfds]);
       continue;
@@ -237,7 +237,7 @@ int main(int argc,char *argv[]){
     uint32_t addr = make_maddr(Output);
     avahi_start(Name,"_ax25._udp",DEFAULT_RTP_PORT,Output,addr,description,NULL,NULL);
   }
-  Output_fd = setup_mcast(Output,NULL,1,Mcast_ttl,IP_tos,0,0);
+  Output_fd = setup_mcast(NULL, NULL, Output, NULL, true, Mcast_ttl, IP_tos, 0, 0);
   if(Output_fd == -1){
     fprintf(stdout,"Must specify --ax25-out\n");
     exit(EX_USAGE);
@@ -303,7 +303,7 @@ int main(int argc,char *argv[]){
 	      fprintf(stdout,"joining pcm input channel %s\n",formatsock(&PCM_dest_address,false));
 	    }
 
-	    Input_fd[Nfds] = setup_mcast_in(NULL,(struct sockaddr *)&PCM_dest_address,0,0);
+	    Input_fd[Nfds] = setup_mcast_in(NULL, NULL, NULL, (struct sockaddr *)&PCM_dest_address, 0, 0);
 	    if(Input_fd[Nfds] != -1){
 	      Max_fd = max(Max_fd,Input_fd[Nfds]);
 	      FD_SET(Input_fd[Nfds],&Fdset_template);

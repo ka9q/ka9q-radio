@@ -23,6 +23,7 @@
 #include <poll.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/socket.h>
 
 #include "conf.h"
 #include "config.h"
@@ -81,6 +82,7 @@ int Channels = 2;
 char const *Init;
 //float GoodEnoughSNR = 20.0; // FM SNR considered "good enough to not be worth changing
 char const *Pipe;
+char const *Source; // Source specific multicast, if used
 
 // Global variables that regularly change
 int Output_fd = -1; // Output network socket, if any
@@ -112,8 +114,9 @@ int Mcast_ttl;
 pthread_mutex_t Rptr_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t Rptr_cond = PTHREAD_COND_INITIALIZER;
 void *output_thread(void *p);
+struct sockaddr_in *Source_socket;
 
-static char Optstring[] = "CI:P:LR:Sc:f:g:p:qr:su:vnV";
+static char Optstring[] = "CI:P:LR:Sc:f:g:o:p:qr:su:vnV";
 static struct  option Options[] = {
    {"center", no_argument, NULL, 'C'},
    {"input", required_argument, NULL, 'I'},
@@ -124,6 +127,7 @@ static struct  option Options[] = {
    {"config", required_argument, NULL, 'f'},
    {"gain", required_argument, NULL, 'g'},
    {"notch", no_argument, NULL, 'n'},
+   {"source", required_argument, NULL, 'o'},
    {"pipe", required_argument, NULL, 'P'},
    {"playout", required_argument, NULL, 'p'},
    {"quiet", no_argument, NULL, 'q'},
@@ -239,6 +243,9 @@ int main(int argc,char * const argv[]){
     case 'n':
       Notch = true;
       break;
+    case 'o':
+      Source = optarg; // source specific multicast; only take packets from this source
+      break;
     case 'p':
       Playout = strtof(optarg,NULL);
       break;
@@ -281,7 +288,7 @@ int main(int argc,char * const argv[]){
     default:
       fprintf(stderr,"Usage: %s -L\n",App_path);
       fprintf(stderr,"       %s [-c channels] [-f config_file] [-g gain] [-p playout] [-q] [-r samprate] [-u update] [-v] \
-[-I mcast_address] [-R audiodev|-P pipename] [-S] [mcast_address ...]\n",App_path);
+[-I mcast_address] [-R audiodev|-P pipename] [-S] [-o|--source <source-name-or-address>] [mcast_address ...]\n",App_path);
       exit(EX_USAGE);
     }
   }
@@ -410,6 +417,11 @@ int main(int argc,char * const argv[]){
   if(Repeater_tail != 0)
     pthread_create(&Repeater_thread,NULL,repeater_ctl,NULL); // Repeater mode active
 
+  if(Source != NULL){
+    Source_socket = calloc(1,sizeof(struct sockaddr_storage));
+    resolve_mcast(Source,Source_socket,0,NULL,0,0);
+  }
+
   // Spawn one thread per address
   // All have to succeed in resolving their targets or we'll exit
   // This allows a restart when started automatically from systemd before avahi is fully running
@@ -485,7 +497,7 @@ void *statproc(void *arg){
     char iface[1024];
     struct sockaddr sock;
     resolve_mcast(mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
-    status_fd = listen_mcast(&sock,iface);
+    status_fd = listen_mcast(Source_socket,&sock,iface);
   }
   if(status_fd == -1)
     pthread_exit(NULL);

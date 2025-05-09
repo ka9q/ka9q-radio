@@ -13,23 +13,23 @@ extern int Mcast_ttl;
 extern int IP_tos;
 
 
-char const *formatsock(void const *,bool);
-char *formataddr(char *result,int size,void const *s);
+char const *formatsock(void const *, bool);
+char *formataddr(char *result, int size, void const *s);
 
 extern char const *Default_mcast_iface;
 
-int setup_mcast(char const *target,struct sockaddr *,int output,int ttl,int tos,int offset,int tries);
-static inline int setup_mcast_in(char const *target,struct sockaddr *sock,int offset,int tries){
-  return setup_mcast(target,sock,0,0,0,offset,tries);
+int setup_mcast(char const *source, struct sockaddr *, char const *target, struct sockaddr *, bool output, int ttl, int tos, int offset, int tries);
+static inline int setup_mcast_in(char const *source, struct sockaddr *source_sock, char const *target, struct sockaddr *sock, int offset, int tries){
+  return setup_mcast(source,source_sock,target,sock,0,0,0,offset,tries);
 }
-int join_group(int fd,struct sockaddr const * const sock, char const * const iface);
-int connect_mcast(void const *sock,char const *iface,int const ttl,int const tos);
-int output_mcast(void const * const s,char const * const iface,int const ttl,int const tos);
-int listen_mcast(void const *sock,char const *iface);
-int resolve_mcast(char const *target,void *sock,int default_port,char *iface,int iface_len,int tries);
-int setportnumber(void *sock,uint16_t port);
+int join_group(int fd, struct sockaddr const * const source, struct sockaddr const * const sock,  char const * const iface);
+int output_mcast(void const * const s, char const * const iface, int const ttl, int const tos);
+int listen_mcast(void const *source, void const *sock, char const *iface);
+int connect_mcast(void const * const s, char const * const iface, int const ttl, int const tos);
+int resolve_mcast(char const *target, void *sock, int default_port, char *iface, int iface_len, int tries);
+int setportnumber(void *sock, uint16_t port);
 int getportnumber(void const *sock);
-int address_match(void const *arg1,void const *arg2);
+int address_match(void const *arg1, void const *arg2);
 
 void dump_interfaces(void);
 

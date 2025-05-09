@@ -1,14 +1,8 @@
 # Systemd unit to decode aircraft HF data link
-# Phil Karn, KA9Q April 2025
-# this is the per-channel version (note no '@' in hfdl.service)
-# The radiod config file sets up one receiver channel per HFDL data channel
-# All come out on the same multicast group with different SSRCs.
-# This service file causes a single instance of 'pcmrecord --exec' to execute a separate instance of dumphfdl for each data channel, and demux the SSRCs to them
-
-# Configuration is simpler because the radiod channels all have the same bandwidth and sample rate, and they only have to be specified in the radiod config file;
-# the channel frequencies are automatically passed to dumphfdl through the $k variable so only one other config file are needed (/etc/radio/hfdl.conf)
-
-# I'm interested in user comments from those who've tried both versions. Which should I keep?
+# Phil Karn, KA9Q May 2025
+# This is a new version that sets up one receiver for each band, all sending to a common multicast group (hfdl.local)
+# pcmrecord --exec then uses a helper script to launch dumphfdl with the appropriate channel frequency list
+# This service file causes a single instance of 'pcmrecord --exec' to execute a separate instance of dumphfdl for each band, and demux the SSRCs to them
 
 [Unit]
 Description=hfdl-decoder
@@ -26,7 +20,7 @@ StandardError=inherit
 UMask = 002
 CPUSchedulingPolicy=batch
 RuntimeDirectory=hfdl
-ExecStart=/usr/local/bin/pcmrecord --raw -v --exec "${DUMPHFDL} --output decoded:json:tcp:address=feed.airframes.io,port=5556 --output decoded:json:file:path=${LOG} --iq-file - --sample-rate $r --centerfreq $k  --sample-format cs16 --system-table=${SYSTABLE} --system-table-save=${SYSTABLE} $k" ${MCAST}
+ExecStart=/usr/local/bin/pcmrecord --raw -v --exec "/usr/local/sbin/start-hfdl.sh \"$k\" \"$d\" \"$r\"" ${MCAST}
 Restart=always
 RestartSec=5
 TimeoutStopSec=10

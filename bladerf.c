@@ -136,7 +136,7 @@ int bladerf_setup(struct frontend * const frontend,
 	frontend->max_IF = +frontend->samprate;
 	frontend->min_IF = -frontend->samprate;
 
-	frontend->rf_gain = config_getint(Dictionary, "bladerf", "gain",0);
+	frontend->rf_gain = config_getint(Dictionary, section, "gain",0);
 	if (Verbose)
 		fprintf(stdout, "config gain %f\n", frontend->rf_gain);
 
