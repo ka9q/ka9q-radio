@@ -178,7 +178,7 @@ int norealtime(void){
 }
 
 // Stay on this CPU core
-bool Affinity = false;
+bool Affinity = true;
 void stick_core(void){
   if(!Affinity)
     return;
