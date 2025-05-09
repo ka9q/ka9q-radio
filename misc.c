@@ -180,6 +180,9 @@ int norealtime(void){
 // Stay on this CPU core
 bool Affinity = false;
 void stick_core(void){
+  if(!Affinity)
+    return;
+
 #if __linux__ // Not supported on macos, etc
   char name[25] = {0};
   pthread_t self = pthread_self();
