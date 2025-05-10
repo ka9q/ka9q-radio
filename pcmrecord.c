@@ -227,6 +227,9 @@ static int send_opus_queue(struct session * const sp,bool flush);
 static int send_queue(struct session * const sp,bool flush);
 
 static struct option Options[] = {
+  {"ft8", no_argument, NULL, '8'}, // synonym for --jt --length 15
+  {"ft4", no_argument, NULL, '4'}, // synonym for --jt --length 7.5
+  {"wspr", no_argument, NULL, 'w'}, // synonym for --jt --length 120
   {"catmode", no_argument, NULL, 'c'}, // Send single stream to stdout
   {"stdout", no_argument, NULL, 'c'},
   {"directory", required_argument, NULL, 'd'},
@@ -249,7 +252,7 @@ static struct option Options[] = {
   {"max_length", required_argument, NULL, 'x'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = "cd:e:fjl:m:rsS:t:vL:Vx:";
+static char Optstring[] = "cd:e:fjl:m:rsS:t:vL:Vx:48w";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -260,6 +263,18 @@ int main(int argc,char *argv[]){
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != EOF){
     switch(c){
+    case '4':
+      Jtmode = true;
+      FileLengthLimit = 7.5;
+      break;
+    case '8':
+      Jtmode = true;
+      FileLengthLimit = 15.0;
+      break;
+    case 'w':
+      Jtmode = true;
+      FileLengthLimit = 120;
+      break;
     case 'c':
       Catmode = true;
       break;
