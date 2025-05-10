@@ -1,5 +1,6 @@
 # Systemd unit to record and decode WSPR
-# Phil Karn, KA9Q Oct 2023
+# Still uses old jt-decoded until wsprd gets rewritten like decode_ft8
+# Phil Karn, KA9Q May 2025
 
 [Unit]
 Description=wspr-decoder
@@ -14,7 +15,6 @@ Type=simple
 EnvironmentFile=/etc/radio/wspr-decode.conf
 PermissionsStartOnly=true
 StandardOutput=append:/var/log/wspr.log
-StandardError=inherit
 UMask=002
 CPUSchedulingPolicy=batch
 ExecStart=/usr/local/bin/jt-decoded -w -d "$DIRECTORY" $MCAST

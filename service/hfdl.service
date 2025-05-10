@@ -16,7 +16,6 @@ Type=simple
 EnvironmentFile=/etc/radio/hfdl.conf
 PermissionsStartOnly=true
 StandardOutput=append:/var/log/hfdl.log
-StandardError=inherit
 UMask = 002
 CPUSchedulingPolicy=batch
 RuntimeDirectory=hfdl
