@@ -210,11 +210,14 @@ int listen_mcast(void const *source, void const *group, char const *iface){
   }
   loopback_init();
 
-  // If source specific multicast is in use (source != NULL), iface is
+  // If source specific multicast (SSM) is in use (source != NULL), iface is
   // ignored; we must use the interface that can reach the source
   // If it's us, this will be the loopback interface
   // Otherwise if the source can't be reached we will fail
   join_group(fd, source, group_socket, iface);
+  // if we're not using SSM, see if we can also join via loopback, to avoid default routing screwups
+  if(source == NULL)
+    join_group(fd, NULL, group, Loopback_name);
   int const reuse = true; // bool doesn't work for some reason
   if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) != 0)
     perror("so_reuseport failed");
@@ -530,7 +533,7 @@ static int loopback_init(void){
 
   struct ifaddrs const *lop = NULL;
   for(lop = ifap; lop != NULL; lop = lop->ifa_next)
-    if(lop->ifa_name && lop->ifa_flags & IFF_LOOPBACK)
+    if(lop->ifa_name && (lop->ifa_flags & IFF_LOOPBACK))
       break;
 
   if(lop != NULL){
@@ -592,8 +595,9 @@ static int ipv4_join_group(int const fd, void const * const source, void const *
       return -1;
     }
   } else {
-    // Source-specific multicast
+    // Source-specific multicast, must be to interface we use to reach the source
     // Should find the loopback interface if we're the source we're looking for
+    // I think we're only allowed one join to one interface
     struct sockaddr_in const * const source_sin = (struct sockaddr_in *)source;
     struct ip_mreq_source mreqn = {0};
     mreqn.imr_multiaddr = sin->sin_addr;
