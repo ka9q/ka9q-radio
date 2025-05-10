@@ -15,6 +15,7 @@ Type=simple
 EnvironmentFile=/etc/radio/wspr-decode.conf
 PermissionsStartOnly=true
 StandardOutput=append:/var/log/wspr.log
+StandardError=journal
 UMask=002
 CPUSchedulingPolicy=batch
 ExecStart=/usr/local/bin/jt-decoded -w -d "$DIRECTORY" $MCAST

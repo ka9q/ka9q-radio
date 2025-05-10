@@ -14,6 +14,7 @@ Type=simple
 EnvironmentFile=/etc/radio/ft8-decode.conf
 PermissionsStartOnly=true
 StandardOutput=append:/var/log/ft8.log
+StandardError=journal
 UMask = 002
 WorkingDirectory=/var/lib/ka9q-radio/ft8
 ExecStart=/usr/local/bin/decode_ft8 .
