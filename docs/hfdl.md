@@ -48,32 +48,27 @@ sudo make install
 The -j option to *make* speeds compilation considerably on multicore systems. If this causes trouble, remove it or specify a limit, e.g, **make -j 4**.
 
 ## Configuring *ka9q-radio* to feed *dumphfdl*
-Now the fun part. There are two ways to run *dumphfdl* with *ka9q-radio*. One runs a separate *ka9q-radio* channel and *dumphfdl* instance for every HFDL channel. The second runs one *ka9q-radio* channel and *dumphfdl* instance for every aeronautical *band*, with *dumphfdl* extracting the individual channels on each band. There are advantages to each method.
+The 
+The *hfdl* systemd service file launches the *pcmrecord* program, which in turn runs a shell helper script that starts one instance of *dumphfdl* for each band and feeds it the signals for that band.
 
-The per-channel approach is considerably simpler to configure, as *systemd* need manage only one *hfdl* service. The individual channel frequencies are specifed only in the *radiod* configuration file, and all output is sent to the same IP multicast group, hfdl.local (each with its own RTP SSRC, of course). The **pcmrecord** program (part of *ka9q-radio*) with the **--exec** option automatically launches a separate instance of *dumphfdl* for each channel and passes it the appropriate parameters. All log into the same file, */var/log/hfdl.log*. The drawback to this method is that there are over a hundred HFDL channels so there will be over a hundred instances of *dumphfdl*, each with its own TCP/IP connection to feed.airframes.io.
-
-The per-band approach uses only one *ka9q-radio* channel and one *dumphfdl* instance per band, but the *ka9q-radio* channels are relatively wide, with different sample rates, requiring a separate IP multicast group for each band (12 total). *systemd* must manage 12 separate instances of the *hfdl* service, but there are only 12 TCP connections to feed.airframes.io. This may use somewhat less total CPU time than the first method, though the jury is still out on this question. The different sample rates also require separate runs of **fftwf-wisdom** to optimize the inverse FFT inside *radiod* for that rate, though IFFT performance doesn't seem to be a major problem.
-
-### Per-channel method
-
-Add the channel list to your *radiod*'s config file. You can append this fragment from my own HF configuration:
-
-ka9q-radio/config/radiod@ka9q-hf.conf.d/55-hfdl-sep.conf
-
-Note that I use the optional subdirectory feature for my own configuration. Eventually this will make it easier to share configuration file fragments between multiple users and configurations.
-
-Be sure to set "disable = no" at the beginning of the section.
-
-Restart *radiod*, configure and start the decoders:
+Start by adding the band/channel list to your *radiod* config file. You can append this fragment from my own HF configuration:
 
 ```
-sudo systemctl try-restart 'radiod@*' # or specify the actual radiod instance
+ka9q-radio/config/radiod@ka9q-hf.conf.d/50-hfdl.conf
+```
+
+Be sure "disable = no" is set at the top of *each* section. Restart *radiod*.
+
+Now configure and start the decoders:
+
+```
 cd ka9q-radio/config # go into the config files distributed with ka9q-radio
 cp hfdl.conf /etc/radio # edit if necessary
 sudo systemctl enable hfdl
 sudo systemctl start hfdl
 ```
 
+The service file in /etc/systemd/system/hfdl.service launches *pcmrecord*, which in turn runs a helper script that starts an instance of *dumphfdl* for each HF band. These instances read from the channels defined in your *radiod* config file that you edited earlier.
 For convenience, running **make install** in *ka9q-radio* installs a seed version of the HFDL system table in /var/lib/hfdl/systable.conf. This will be updated in place by *dumphfdl*, so the *ka9q-radio* makefile will not overwrite it if it already exists.
 
 At this point, the decoders should be running and reporting data. You can watch their progress with
@@ -81,31 +76,6 @@ At this point, the decoders should be running and reporting data. You can watch 
 tail -f /var/log/hfdl.log
 ```
 
-### Per-band method
-
-Append this fragment from my HF configuration to your *radiod* config file:
-
-ka9q-radio/config/radiod@ka9q-hf.conf.d/50-hfdl.conf
-
-Be sure "disable = no" is set at the top of *each* section.
-
-Restart *radiod*, configure and start the decoders, one instance for each band:
-
-```
-sudo systemctl try-restart 'radiod@*' # or specify the actual radiod instance
-cd ka9q-radio/config # go into the config files distributed with ka9q-radio
-cp hfdl-*.conf /etc/radio # e.g., hfdl-8.conf, hfdl-21.conf. These are distinguished from the per-channel configuration with a band suffix.
-sudo systemctl enable hfdl@2 hfdl@3 hfdl@4 hfdl@5 hfdl@6 hfdl@8 hfdl@10 hfdl@11 hfdl@13 hfdl@15 hfdl@17 hfdl@21 # one instance for each band
-sudo systemctl start hfdl@2 hfdl@3 hfdl@4 hfdl@5 hfdl@6 hfdl@8 hfdl@10 hfdl@11 hfdl@13 hfdl@15 hfdl@17 hfdl@21 
-```
-The decoders should be up and running. The individual logs will be in the subdirectory */var/log/hfdl* and you can watch them all with,
-
-```
-tail -f /var/log/hfdl/*.log
-```
-
-You should go to the [Airframes](https://app.airframes.io/) site, create an account, and claim ownership of your feeds. Your station identification is taken from the "description =" parameter in the hardware section of your *radiod* config file, so don't use something generic (e,g. "rx888-wsprdaemon"). Since most of us have more than one antenna, I include it in the description, e.g, "w6lvp loop @ KA9Q".
-
-I am very interested in comments on which method (per channel or per band) seems more efficient and/or works better for you. If there is a clear winner I'll probably remove the other when I next clean up the distribution.
+You should go to the [Airframes](https://app.airframes.io/) site, create an account, and claim ownership of your feeds. Your station identification on their list is taken from the "description" parameter in the hardware section of your *radiod* config file, so don't use something generic (e,g. "rx888-wsprdaemon"). Since most of us have more than one antenna, I use descriptions like "w6lvp loop @ KA9Q" or "g5rv @ KA9Q.
 
 
