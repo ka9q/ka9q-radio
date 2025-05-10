@@ -178,9 +178,10 @@ int demod_spectrum(void *arg){
       int out = bin_count/2;
       float outf = (int)out;
       int in = 0;
-      while(out < bin_count){
+      while(out < bin_count && in < input_bins){
 	float p = 0;
-	while((int)outf == out){
+	while((int)outf == out && in < input_bins){
+	  assert(in >= 0 && in < input_bins);
 	  p += power_buffer[in++];
 	  outf += ratio;
 	}
