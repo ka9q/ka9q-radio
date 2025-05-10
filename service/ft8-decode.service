@@ -1,5 +1,5 @@
 # Systemd unit to decode FT-8 in a spool directory
-# Phil Karn, KA9Q 4 May 2025
+# Phil Karn, KA9Q 9 May 2025
 
 [Unit]
 Description=ft8-decode
@@ -14,7 +14,6 @@ Type=simple
 EnvironmentFile=/etc/radio/ft8-decode.conf
 PermissionsStartOnly=true
 StandardOutput=append:/var/log/ft8.log
-StandardError=inherit
 UMask = 002
 WorkingDirectory=/var/lib/ka9q-radio/ft8
 ExecStart=/usr/local/bin/decode_ft8 .

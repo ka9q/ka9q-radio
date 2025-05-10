@@ -1,6 +1,6 @@
 # Systemd unit to record FT-4 into a spool directory
 # files are read by a separate ft4-decode daemon
-# Phil Karn, KA9Q 4 May 2025
+# Phil Karn, KA9Q 9 May 2025
 
 [Unit]
 Description=ft4-record
@@ -14,7 +14,6 @@ Group=radio
 Type=simple
 EnvironmentFile=/etc/radio/ft4-decode.conf
 PermissionsStartOnly=true
-StandardError=inherit
 UMask = 002
 WorkingDirectory=/var/lib/ka9q-radio/ft4
 ExecStart=/usr/local/bin/pcmrecord --jt --limit 7.5 $MCAST
