@@ -39,7 +39,8 @@ static float estimate_noise(struct channel *chan,int shift);
 static float const Power_smooth = 0.10; // Noise estimation time smoothing factor, per block
 static float const NQ = 0.10f; // look for energy in 10th quartile, hopefully contains only noise
 static float const N_cutoff = 1.5; // Average (all noise, hopefully) bins up to 1.5x the energy in the 10th quartile
-static float const noise_width = 2.0; // bandwidth relative to sample rate for noise estimation
+// Minimum to get reasonable noise level statistics; 1000 * 40 Hz = 40 kHz which seems reasonable
+static int const Min_noise_bins = 1000;
 
 
 pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -799,7 +800,9 @@ static float estimate_noise(struct channel *chan,int shift){
   if(slave->bins <= 0)
     return 0;
 
-  int const nbins = noise_width * slave->bins; // Range to examine around center frequency (+/- nbins/2)
+  int nbins = slave->bins;
+  if(nbins < Min_noise_bins)
+    nbins = Min_noise_bins;
 
   float energies[nbins];
   struct filter_in const * const master = slave->master;
