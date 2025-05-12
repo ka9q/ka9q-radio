@@ -16,6 +16,7 @@
 #include "radio.h"
 
 static float const SPECTRUM_KAISER_BETA = 5.0;
+static float const Spectrum_crossover = 20000; // Switch to summing raw FFT bins above 20 kHz
 
 // Spectrum analysis thread
 int demod_spectrum(void *arg){
@@ -76,7 +77,7 @@ int demod_spectrum(void *arg){
     int bin_count = chan->spectrum.bin_count <= 0 ? 64 : chan->spectrum.bin_count;
     float bin_bw = chan->spectrum.bin_bw <= 0 ? 1000 : chan->spectrum.bin_bw;
 
-    if(bin_bw > 50){
+    if(bin_bw > Spectrum_crossover){
       // large bins, use forward FFT directly
 
       if(bin_bw != old_bin_bw || bin_count != old_bin_count){
@@ -145,32 +146,28 @@ int demod_spectrum(void *arg){
 	// Real input right side up
 	int binp = -chan->filter.bin_shift - input_bins/2;
 	int i = 0;
-	if(binp < 0){
-	  // Requested range starts below DC; skip
-	  memset(power_buffer,0,input_bins * sizeof *power_buffer);
-	  i = -binp / binsperbin;
-	  if(i >= input_bins)
-	    i -= input_bins;
-	  binp = 0;
+	while(binp < 0 && i < input_bins){
+	  binp++;
+	  power_buffer[i++] = 0;
 	}
-	for(; i < input_bins && binp < master->bins;i++){
-	  power_buffer[i] = cnrmf(fdomain[binp++]);
+	while(i < input_bins && binp < master->bins){
+	  power_buffer[i++] = cnrmf(fdomain[binp++]);
 	}
+	while(i < input_bins)
+	  power_buffer[i++] = 0;
       } else {
 	// Real input spectrum is inverted, read in reverse order
 	int binp = chan->filter.bin_shift + input_bins/2;
 	int i = 0;
-	if(binp >= master->bins){
-	  // Requested range starts above top; skip
-	  memset(power_buffer,0,input_bins * sizeof *power_buffer);
-	  i = (master->bins - binp - 1) / binsperbin;
-	  if(i >= input_bins)
-	    i -= input_bins;
-	  binp = master->bins - 1;
+	while(binp >= master->bins){
+	  binp--;
+	  power_buffer[i++] = 0;
 	}
-	for(; i < input_bins && binp >= 0;i++)
-	  power_buffer[i] = cnrmf(fdomain[binp--]);
+	while(i < input_bins && binp >= 0)
+	  power_buffer[i++] = cnrmf(fdomain[binp--]);
 
+	while(i < input_bins)
+	  power_buffer[i++] = 0;
       }
       // Merge the bins, negative output frequencies first
       float ratio = (float)bin_count / input_bins;
