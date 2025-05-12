@@ -21,7 +21,6 @@ git clone https://github.com/szpajder/dumphfdl
 Now install their various dependencies. (This list may not be complete. If you know of more, please let me know).
 ```
 sudo apt install cmake zlib1g-dev libxml2-dev libjansson-dev libliquid-dev libsoapysdr-dev libfftw3-dev libzmq3-dev libsqlite3-dev libglib2.0-dev libconfig++-dev
-
 ```
 Build and install *libacars*:
 ```
@@ -70,6 +69,4 @@ At this point, the decoders should be running and reporting data. You can watch 
 ```
 tail -f /var/log/hfdl.log
 ```
-You should go to the [Airframes](https://app.airframes.io/) site, create an account, and claim ownership of your feeds. Your station identification on their list is taken from the "description" parameter in the hardware section of your *radiod* config file, so don't use something generic (e,g. "rx888-wsprdaemon"). Since most of us have more than one antenna, I use descriptions like "w6lvp loop @ KA9Q" or "g5rv @ KA9Q.
-
-
+You should go to the [Airframes](https://app.airframes.io/) site, create an account, and claim ownership of your feeds. Your station identification on their list is taken from the "description" parameter in the hardware section of your *radiod* config file, so don't use something generic (e,g. "rx888-wsprdaemon"). Since most of us have more than one antenna, I use descriptions like "w6lvp loop @ KA9Q" or "g5rv @ KA9Q". You will have to claim ownership from the same IP address from which your system reports data.

@@ -121,8 +121,8 @@ int output_mcast(void const * const group, char const * const iface, int const t
   if(group == NULL)
     return -1;
 
-  struct sockaddr const *sock = group;
-  int fd = socket(sock->sa_family, SOCK_DGRAM, 0);
+  struct sockaddr const *group_sock = (struct sockaddr *)group;
+  int fd = socket(group_sock->sa_family, SOCK_DGRAM, 0);
   if(fd == -1)
     return -1;
 
@@ -132,7 +132,7 @@ int output_mcast(void const * const group, char const * const iface, int const t
     // Only needed on output
     int mcast_ttl = ttl;
     int r = 0;
-    if(sock->sa_family == AF_INET)
+    if(group_sock->sa_family == AF_INET)
       r = setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, &mcast_ttl, sizeof(mcast_ttl));
     else
       r = setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &mcast_ttl, sizeof(mcast_ttl));
@@ -142,7 +142,7 @@ int output_mcast(void const * const group, char const * const iface, int const t
   // Ensure our local listeners get it too
   uint8_t const loop = true;
   int r = 0;
-  if(sock->sa_family == AF_INET)
+  if(group_sock->sa_family == AF_INET)
     r = setsockopt(fd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
   else
     r = setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &loop, sizeof(loop));
@@ -151,31 +151,65 @@ int output_mcast(void const * const group, char const * const iface, int const t
 
   if(tos >= 0){
     int r = 0;
-    if(sock->sa_family == AF_INET)
+    if(group_sock->sa_family == AF_INET)
       r = setsockopt(fd, IPPROTO_IP, IP_TOS, &tos, sizeof(tos));
     else
       r = setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(tos));
     if(r)
       perror("so_tos failed");
   }
-  // Strictly speaking, it is not necessary to join a multicast group to which we only send.
-  // But this creates a problem with "smart" switches that do IGMP snooping.
-  // They have a setting to handle what happens with unregistered
-  // multicast groups (groups to which no IGMP messages are seen.)
-  // Discarding unregistered multicast breaks IPv6 multicast, which breaks ALL of IPv6
-  // because neighbor discovery uses multicast.
-  // It can also break IPv4 mDNS, though hardwiring 224.0.0.251 to flood can fix this.
-  // But if the switches are set to pass unregistered multicasts, then IPv4 multicasts
-  // that aren't subscribed to by anybody are flooded everywhere!
-  // We avoid that by subscribing to our own multicasts.
+  /* Strictly speaking, it is not necessary to join a multicast group to which we only send.
+     But this creates a problem with "smart" switches that do IGMP snooping.
+     They have a setting to handle what happens with unregistered
+     multicast groups (groups to which no IGMP messages are seen.)
+     Discarding unregistered multicast breaks IPv6 multicast, which breaks ALL of IPv6
+     because neighbor discovery uses multicast.
+     It can also break IPv4 mDNS, though hardwiring 224.0.0.251 to flood can fix this.
+     But if the switches are set to pass unregistered multicasts, then IPv4 multicasts
+     that aren't subscribed to by anybody are flooded everywhere!
+     We avoid that by subscribing to our own multicasts.
+     We don't listen on output sockets so we don't need to specify SSM
+  */
   loopback_init();
-  join_group(fd, NULL, group, Loopback_name);
+  if(ttl <= 0){
+    // Ignore iface; listen and send on loopback
+    if(iface != NULL && strlen(iface) > 0)
+      fprintf(stderr,"ttl == 0; iface %s ignored\n",iface);
 
-  if(ttl == 0 || join_group(fd, NULL, group, iface) == -1){ // join_group will hopefully fail if the output interface isn't up
-    if(sock->sa_family == AF_INET)
-      setup_ipv4_loopback(fd); // attach it to the loopback interface
+    join_group(fd, NULL, group, Loopback_name); // no point in setting source
+    // always send to loopback
+    if(group_sock->sa_family == AF_INET)
+      setup_ipv4_loopback(fd); // direct output to the loopback interface
     else
       setup_ipv6_loopback(fd);
+  } else if(iface != NULL && strlen(iface) > 0){
+    // ttl > 0 && iface explicitly specified; join and send on the requested interface
+    if(join_group(fd, NULL, group, iface) == -1){ // handles both v4 and v6
+      fprintf(stderr,"join group on output interface %s failed: %s",iface,strerror(errno));
+    }
+    // Set up output to requested interface
+    if(group_sock->sa_family == AF_INET){
+      struct ip_mreqn mreqn = {0};
+      mreqn.imr_ifindex = if_nametoindex(iface);
+      struct sockaddr_in *sin = (struct sockaddr_in *)group_sock;
+      mreqn.imr_multiaddr = sin->sin_addr; // does this really need to be set?
+      mreqn.imr_address.s_addr = INADDR_ANY; // use whatever address is on the interface
+      if (setsockopt(fd,  IPPROTO_IP,  IP_MULTICAST_IF, &mreqn, sizeof mreqn) < 0){
+	fprintf(stderr,"set up IPv4 multicast output to iface %s failed: %s",iface,strerror(errno));
+	return -1;
+      }
+    } else { // iface set && IPv6
+      // IPv6 is actually simpler! Amazing!
+      int index = if_nametoindex(iface);
+      if (setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_IF, &index, sizeof index) < 0){
+	fprintf(stderr,"set up IPv6 multicast output to iface %s failed: %s",iface,strerror(errno));
+	return -1;
+      }
+    }
+  } else {
+    // ttl > 0 but iface not specified, just listen and send on default route
+    if(join_group(fd, NULL, group, NULL) == -1)
+      fprintf(stderr,"join group on default interface failed: %s",strerror(errno));
   }
   return fd;
 }
@@ -538,7 +572,7 @@ static int loopback_init(void){
 
   if(lop != NULL){
     strlcpy(Loopback_name, lop->ifa_name, sizeof Loopback_name);
-    int entry = if_nametoindex(lop->ifa_name);
+    Loopback_index = if_nametoindex(lop->ifa_name);
     if(!(lop->ifa_flags & IFF_MULTICAST)){
       // We need multicast enabled on the loopback interface
       struct ifreq ifr = {0};
@@ -550,7 +584,6 @@ static int loopback_init(void){
 	perror("ioctl (set flags)");
 	// Given how much we rely on multicast loopback, should this be fatal?
       } else {
-	Loopback_index = entry;
 	fprintf(stderr, "Multicast enabled on loopback interface %s\n", ifr.ifr_name);
 #if __linux__
 	// This capability is set when radiod is run by systemd, drop it when we no longer need it
