@@ -48,7 +48,7 @@ int N_worker_threads = 2;
 int N_internal_threads = 1; // Usually most efficient
 
 // Desired FFTW planning level
-// If wisdom at this level is not present for some filter, the command to generate it will be logged and FFTW_MEASURE wisdom will be generated at runtime
+// If wisdom at this level is not present for some filter, the command to generate it will be logged and FFTW_ESTIMATE wisdom will be generated at runtime
 int FFTW_planning_level = FFTW_PATIENT;
 
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
@@ -204,7 +204,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_WISDOM_ONLY|FFTW_planning_level);
     if(master->fwd_plan == NULL){
       suggest(FFTW_planning_level,N,FFTW_FORWARD,COMPLEX);
-      master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_MEASURE);
+      master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_ESTIMATE);
     }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of cof%d failed\n",Wisdom_file,N);
@@ -220,7 +220,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_WISDOM_ONLY|FFTW_planning_level);
     if(master->fwd_plan == NULL){
       suggest(FFTW_planning_level,N,FFTW_FORWARD,REAL);
-      master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_MEASURE);
+      master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_ESTIMATE);
     }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
       fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of rof%d failed\n",Wisdom_file,N);
@@ -316,7 +316,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
       fftwf_plan_with_nthreads(1); // IFFTs are always small, use only one internal thread
       if((slave->rev_plan = fftwf_plan_dft_1d(slave->points,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
 	suggest(FFTW_planning_level,slave->bins,FFTW_BACKWARD,COMPLEX);
-	slave->rev_plan = fftwf_plan_dft_1d(slave->points,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_MEASURE);
+	slave->rev_plan = fftwf_plan_dft_1d(slave->points,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_ESTIMATE);
       }
       if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
 	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
@@ -348,7 +348,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
       pthread_mutex_lock(&FFTW_planning_mutex);
       if((slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->points,slave->fdomain,slave->output_buffer.r,FFTW_WISDOM_ONLY|FFTW_planning_level)) == NULL){
 	suggest(FFTW_planning_level,slave->points,FFTW_BACKWARD,REAL);
-	slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->points,slave->fdomain,slave->output_buffer.r,FFTW_MEASURE);
+	slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->points,slave->fdomain,slave->output_buffer.r,FFTW_ESTIMATE);
       }
       if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
 	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
@@ -729,64 +729,81 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     if(shift >= 0){
       // Right side up
       int rp = shift - slave->bins/2; // Start index in master, unwrapped = shift - # output bins
-      // Pad start if necessary. Rarely needed
+      // Zero-pad start if necessary. Rarely needed
       while(rp < 0){
-	assert(wp >=0 && wp < slave->bins);
-	slave->fdomain[wp] = 0;
-	if(++wp == (slave->bins+1)/2)
-	  goto done; // Top of output
+	assert(wp >=0 && wp <= slave->bins);
 	if(wp == slave->bins)
 	  wp = 0; // wrap to DC
+	slave->fdomain[wp] = 0;
+	if(++wp == (slave->bins+1)/2){
+	  goto done; // Top of output
+	}
 	rp++;
       }
       // Actual work
       while(rp < master->bins){
 	assert(wp >=0 && wp < slave->bins);
 	assert(rp >= 0 && rp < master->bins);
-	slave->fdomain[wp] = fdomain[rp] * slave->response[wp];
-	if(++wp == (slave->bins+1)/2)
-	  goto done;
 	if(wp == slave->bins)
 	  wp = 0; // Wrap to DC
+
+	slave->fdomain[wp] = fdomain[rp] * slave->response[wp];
+	if(++wp == (slave->bins+1)/2){
+	  goto done; // Output done
+	}
 	rp++;
+      }
+      // zero-pad upper end
+      while(wp != (slave->bins+1)/2){
+	assert(wp >= 0 && wp <= slave->bins);
+	if(wp == slave->bins)
+	  wp = 0;
+	slave->fdomain[wp] = 0;
+	if(++wp == (slave->bins+1)/2){
+	  goto done; // Top of output
+	}
       }
     } else {
       // Inverted spectrum
       int rp = -(shift - slave->bins/2); // Start at high (negative) input frequency
-      // Pad start if necessary, rarely needed
+      // Pad start if necessary
       while(rp >= master->bins){
-	assert(wp >=0 && wp < slave->bins);
-	slave->fdomain[wp] = 0;
-	if(++wp == (slave->bins+1)/2)
-	  goto done; // Top of output
+	assert(wp >=0 && wp <= slave->bins);
 	if(wp == slave->bins)
 	  wp = 0; // wrap to DC
+	slave->fdomain[wp] = 0;
+	if(++wp == (slave->bins+1)/2){
+	  goto done; // Top of output
+	}
 	rp--;
       }
       // Actual work
       while(rp >= 0){
 	assert(wp >=0 && wp < slave->bins);
 	assert(rp >= 0 && rp < master->bins);
-	slave->fdomain[wp] = conjf(fdomain[rp]) * slave->response[wp];
-	if(++wp == (slave->bins+1)/2)
-	  goto done;
 	if(wp == slave->bins)
 	  wp = 0; // Wrap to DC
+	slave->fdomain[wp] = conjf(fdomain[rp]) * slave->response[wp];
+	if(++wp == (slave->bins+1)/2){
+	  goto done;
+	}
 	rp--;
       }
-    }
-    // Zero any remaining output. Rarely needed
-    while(wp != (slave->bins+1)/2){
-      assert(wp >=0 && wp < slave->bins);
-      slave->fdomain[wp] = 0;
-      if(++wp == slave->bins)
-	wp = 0; // Wrap DC
-    }
+      // Zero upper end
+      while(wp != (slave->bins+1)/2){
+	assert(wp >= 0 && wp <= slave->bins);
+	if(wp == slave->bins)
+	  wp = 0; // Wrap DC
+	slave->fdomain[wp] = 0;
+	if(++wp == (slave->bins+1)/2){
+	  goto done; // Top of output
+	}
+      }
+    } // end of inverted spectrum
   }
  done:;
-  // Zero out Nyquist bin when N even
-  if((slave->bins & 1) == 0)
-    slave->fdomain[slave->bins/2] = 0;
+  // Zero out Nyquist bin
+  slave->fdomain[(slave->bins+1)/2] = 0;
 
   pthread_mutex_unlock(&slave->response_mutex); // release response[]
 
@@ -1182,7 +1199,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 
   pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan plan = fftwf_plan_dft_1d(N,response,response,FFTW_FORWARD,FFTW_MEASURE); // doesn't need to be fast
+  fftwf_plan plan = fftwf_plan_dft_1d(N,response,response,FFTW_FORWARD,FFTW_ESTIMATE); // doesn't need to be fast
   assert(plan != NULL);
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
     fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of cif%d failed\n",Wisdom_file,N);
@@ -1235,9 +1252,9 @@ static int window_filter(int const L,int const M,float complex * const response,
   assert(buffer != NULL);
   pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_FORWARD,FFTW_MEASURE);
+  fftwf_plan fwd_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_FORWARD,FFTW_ESTIMATE);
   assert(fwd_filter_plan != NULL);
-  fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_MEASURE);
+  fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_ESTIMATE);
   assert(rev_filter_plan != NULL);
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
     fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of cif%d and cib%d failed\n",
@@ -1307,10 +1324,10 @@ static int window_rfilter(int const L,int const M,float complex * const response
   assert(timebuf != NULL);
   pthread_mutex_lock(&FFTW_planning_mutex);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan fwd_filter_plan = fftwf_plan_dft_r2c_1d(N,timebuf,buffer,FFTW_MEASURE);
+  fftwf_plan fwd_filter_plan = fftwf_plan_dft_r2c_1d(N,timebuf,buffer,FFTW_ESTIMATE);
   assert(fwd_filter_plan != NULL);
   fftwf_plan_with_nthreads(1);
-  fftwf_plan rev_filter_plan = fftwf_plan_dft_c2r_1d(N,buffer,timebuf,FFTW_MEASURE);
+  fftwf_plan rev_filter_plan = fftwf_plan_dft_c2r_1d(N,buffer,timebuf,FFTW_ESTIMATE);
   assert(rev_filter_plan != NULL);
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
     fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of rof%d and rob%d failed\n",
