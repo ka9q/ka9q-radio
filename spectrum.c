@@ -9,14 +9,13 @@
 #include <math.h>
 #include <complex.h>
 #include <fftw3.h>
-
 #include "misc.h"
 #include "iir.h"
 #include "filter.h"
 #include "radio.h"
 
 static float const SPECTRUM_KAISER_BETA = 5.0;
-static float const Spectrum_crossover = 20000; // Switch to summing raw FFT bins above 20 kHz
+static float const Spectrum_crossover = 5000; // Switch to summing raw FFT bins above 5 kHz
 
 // Spectrum analysis thread
 int demod_spectrum(void *arg){
