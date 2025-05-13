@@ -440,7 +440,7 @@ static int loadconfig(char const *file){
   Mcast_ttl = config_getint(Configtable,GLOBAL,"ttl",Mcast_ttl);
   Global_use_dns = config_getboolean(Configtable,GLOBAL,"dns",false);
   Static_avahi = config_getboolean(Configtable,GLOBAL,"static",false);
-  Affinity = config_getboolean(Configtable,GLOBAL,"affinity",true);
+  Affinity = config_getboolean(Configtable,GLOBAL,"affinity",false);
   {
     char const *p = config_getstring(Configtable,GLOBAL,"wisdom-file",NULL);
     if(p != NULL)
