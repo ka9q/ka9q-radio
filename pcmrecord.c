@@ -227,9 +227,9 @@ static int send_opus_queue(struct session * const sp,bool flush);
 static int send_queue(struct session * const sp,bool flush);
 
 static struct option Options[] = {
-  {"ft8", no_argument, NULL, '8'}, // synonym for --jt --length 15
-  {"ft4", no_argument, NULL, '4'}, // synonym for --jt --length 7.5
-  {"wspr", no_argument, NULL, 'w'}, // synonym for --jt --length 120
+  {"ft8", no_argument, NULL, '8'}, // synonym for --jt --lengthlimit 15
+  {"ft4", no_argument, NULL, '4'}, // synonym for --jt --lengthlimit 7.5
+  {"wspr", no_argument, NULL, 'w'}, // synonym for --jt --lengthlimit 120
   {"catmode", no_argument, NULL, 'c'}, // Send single stream to stdout
   {"stdout", no_argument, NULL, 'c'},
   {"directory", required_argument, NULL, 'd'},
@@ -246,6 +246,7 @@ static struct option Options[] = {
   {"timeout", required_argument, NULL, 't'},
   {"verbose", no_argument, NULL, 'v'},
   {"lengthlimit", required_argument, NULL, 'L'},
+  {"length", required_argument, NULL, 'L'},
   {"limit", required_argument, NULL, 'L'},
   {"ssrc", required_argument, NULL, 'S'},
   {"version", no_argument, NULL, 'V'},
