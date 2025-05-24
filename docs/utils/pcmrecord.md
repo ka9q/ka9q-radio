@@ -2,17 +2,28 @@
 
 `pcmrecord` records, streams, or launch commands with RTP streams as input.
 
+```
+pcmrecord [OPTIONS]... <MCAST_IP>
+```
+
+## Description
+
 This program reads one or more RTP streams from a multicast group and either writes them into a file, streams (one of them) onto standard output, or invokes a command for each stream and pipes the RTP data into it. PCM streams are written as-is (except that big-endian PCM is converted to little-endian). Opus streams are placed in a standard Ogg container.
 
-## CLI parameters
+### CLI Options
 
-**--stdout | --catmode | -c**: write one stream to stdout. If --ssrc is not specified, selects the first one found and ignores the rest.
+**-c, --stdout, --catmode**
 
-**--source \<source-specific name or address\>**
+> write one stream to stdout, default false. If --ssrc is not specified, selects the first one found and ignores the rest.
 
-**--directory | -d \<directory\>**: directory root in which to write files.
+**-d, --directory**
 
-**--exec | -e '\<command args ...\>'**: Execute the specified command for each stream and pipe to it.
+> directory root in which to write files.
+
+**-e, --exec**: 
+
+> execute the specified command for each stream and pipe to it.
+
 Several macros expanded as shown when found in the arguments:
   - $$: insert a literal '$'
   - $c: number of channels (1 or 2)
@@ -24,37 +35,72 @@ Several macros expanded as shown when found in the arguments:
   - $r: sample rate, integer Hz
   - $s: ssrc (unsigned decimal integer)
 
-**--flush | -f**: Flush after each received packet. Increases Ogg container overhead; little need for this writing files.
+**-o, --source**
 
-**--jt | -j**: Use K1JT format file names.
+> select only one source from a multicast group.
 
-**--locale | -l <locale>**: Set locale. Default is `$LANG`.
+**-f, --flush**
 
-**--mintime | --minfiletime | -m**: minimum file duration, in sec. Files shorter than this are deleted when closed.
+> flush after each received packet, default false. Increases Ogg container overhead; little need for this writing files.
 
-**--raw | -r**: Don't emit .WAV header for PCM files; ignored with Opus (Ogg is needed to delimit frames in a stream).
+**-j, --jt**
 
-**--subdirectories | --subdirs | -s**: Create subdirectories when writing files: ssrc/year/month/day/filename.
+> use K1JT format file names, default false.
 
-**--ssrc | -S \<ssrc\>**: Select one SSRC (recommended for --stdout).
+**-l, --locale**
 
-**--timeout | -t \<seconds\>**: Close file after idle period (default 20 sec).
+> set locale. Default is `$LANG`.
 
-**--verbose | -v**: Increase verbosity level.
+**-m, --mintime, --minfiletime**
 
-**--lengthlimit | --limit | -L \<seconds\>**: maximum file duration in seconds. When new file is created, round down to previous start of interval and pad with silence (for JT decoding).
+> minimum file duration, default 0.2 sec. Files shorter than this are deleted when closed.
 
-**--version | -V**: display command version.
+**-r, --raw**
 
-**--max_length | -x \<seconds\>**: maximum file duration, in seconds. Don't pad the wav file with silence. Exit when all files have reached max duration.
+> don't write .wav header for PCM files, default false. Ignored with Opus streams (Ogg is needed to delimit frames in a stream).
 
-**--ft4 | -4**: same as --jt --lengthlimit 15
+**-s, --subdirs, --subdirectories**
 
-**--ft8 | -8**: same as --jt --lengthlimit 7.5
+> create subdirectories when writing files: ssrc/year/month/day/filename.
 
-**--wspr | -w**: same as --jt --lengthlimit 120
+**-S, --ssrc**
 
-## Usage
+> select one SSRC from multicast (recommended for --stdout).
+
+**-t, --timeout**
+
+> close file after idle period, default 20 sec.
+
+**-L, --limit, --length, --lengthlimit**
+
+> maximum file duration (in seconds), default 0 (unlimited). When new file is created, round down to previous start of interval and pad with silence (for JT decoding).
+
+**-x, --max_length**
+
+> maximum recording duration (in seconds), default 0 (unlimited). Don't pad the .wav file with silence. Exit when all files have reached max duration.
+
+**-4, --ft4**
+
+> same as **--jt --lengthlimit 7.5**
+
+**-8, --ft8**
+
+> same as **--jt --lengthlimit 15**
+
+**-w, --wspr**
+
+> same as **--jt --lengthlimit 120**
+
+**-v, --verbose**
+
+> increase verbosity level, default 0.
+
+**-V, --version**
+
+> show version and exit.
+
+
+## Examples
 
 Obviously the first step is running `radiod` with the correct settings (frequency, demodulator) for whatever mode you want to receive.
 
