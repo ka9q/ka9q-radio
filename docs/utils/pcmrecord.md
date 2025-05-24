@@ -26,25 +26,25 @@ Several macros expanded as shown when found in the arguments:
 
 **--flush | -f**: Flush after each received packet. Increases Ogg container overhead; little need for this writing files.
 
-**--jt | -j**: Use K1JT format file names
+**--jt | -j**: Use K1JT format file names.
 
-**--locale | -l <locale>**: Set locale. Default is $LANG
+**--locale | -l <locale>**: Set locale. Default is `$LANG`.
 
-**--mintime | --minfiletime | -m**: minimum file duration, in sec. Files shorter than this are deleted when closed
+**--mintime | --minfiletime | -m**: minimum file duration, in sec. Files shorter than this are deleted when closed.
 
-**--raw | -r**: Don't emit .WAV header for PCM files; ignored with Opus (Ogg is needed to delimit frames in a stream)
+**--raw | -r**: Don't emit .WAV header for PCM files; ignored with Opus (Ogg is needed to delimit frames in a stream).
 
-**--subdirectories | --subdirs | -s**: Create subdirectories when writing files: ssrc/year/month/day/filename
+**--subdirectories | --subdirs | -s**: Create subdirectories when writing files: ssrc/year/month/day/filename.
 
-**--ssrc | -S \<ssrc\>**: Select one SSRC (recommended for --stdout)
+**--ssrc | -S \<ssrc\>**: Select one SSRC (recommended for --stdout).
 
-**--timeout | -t \<seconds\>**: Close file after idle period (default 20 sec)
+**--timeout | -t \<seconds\>**: Close file after idle period (default 20 sec).
 
-**--verbose | -v**: Increase verbosity level
+**--verbose | -v**: Increase verbosity level.
 
-**--lengthlimit | --limit | -L \<seconds\>**: maximum file duration in seconds. When new file is created, round down to previous start of interval and pad with silence (for JT decoding)
+**--lengthlimit | --limit | -L \<seconds\>**: maximum file duration in seconds. When new file is created, round down to previous start of interval and pad with silence (for JT decoding).
 
-**--version | -V**: display command version
+**--version | -V**: display command version.
 
 **--max_length | -x \<seconds\>**: maximum file duration, in seconds. Don't pad the wav file with silence. Exit when all files have reached max duration.
 
@@ -56,8 +56,16 @@ Several macros expanded as shown when found in the arguments:
 
 ## Usage
 
+Obviously the first step is running `radiod` with the correct settings (frequency, demodulator) for whatever mode you want to receive.
+
+Record all streams in **out** folder:
+
+```
+pcmrecord - d out <MCAST_IP>
+```
+
 Decode APRS with external program:
 
 ```
-./pcmrecord -e "direwolf -n 1 -r 24000 -b 16 -" <MCAST_IP>
+pcmrecord -e "direwolf -n 1 -r 24000 -b 16 -" <MCAST_IP>
 ```
