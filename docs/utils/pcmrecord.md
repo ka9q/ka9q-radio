@@ -81,15 +81,15 @@ Several macros expanded as shown when found in the arguments:
 
 **-4, --ft4**
 
-> same as **--jt --lengthlimit 7.5**
+> same as **--jt --lengthlimit 7.5**.
 
 **-8, --ft8**
 
-> same as **--jt --lengthlimit 15**
+> same as **--jt --lengthlimit 15**.
 
 **-w, --wspr**
 
-> same as **--jt --lengthlimit 120**
+> same as **--jt --lengthlimit 120**.
 
 **-v, --verbose**
 
@@ -99,7 +99,6 @@ Several macros expanded as shown when found in the arguments:
 
 > show version and exit.
 
-
 ## Examples
 
 Obviously the first step is running `radiod` with the correct settings (frequency, demodulator) for whatever mode you want to receive.
@@ -107,7 +106,7 @@ Obviously the first step is running `radiod` with the correct settings (frequenc
 Record all streams in **out** folder:
 
 ```
-pcmrecord - d out <MCAST_IP>
+pcmrecord -d out <MCAST_IP>
 ```
 
 Decode APRS with external program:
