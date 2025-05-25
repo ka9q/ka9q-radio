@@ -27,7 +27,7 @@ This program reads one or more RTP streams from a multicast group and either wri
 Several macros expanded as shown when found in the arguments:
   - $$: insert a literal '$'
   - $c: number of channels (1 or 2)
-  - $d: description string from the radiod front end
+  - $d: description string from the `radiod` front end
   - $f: encoding ("s16le", "s16be", "f32le", "opus", "none")
   - $h: receive frequency in decimal hertz
   - $k: receive frequency in decimal kilohertz

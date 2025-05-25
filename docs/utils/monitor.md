@@ -88,12 +88,12 @@ A session does not appear in the list until it's active (audio is decoded).
 
 ### Runtime Commands
 
-| keybind                 | description |
-|-------------------------|-------------|
-| Q                       | quit monitor entirely |
-| ↑ ↓ (arrow up/down)     | select prev/next session |
-| ⤒ ⤓ (home/end)          | select first/last session |
-| ⇞ ⇟ (page up/down)      | select prev/next session page |
+| keybind                 | description  |
+|-------------------------|--------------|
+| Q                       | quit program |
+| ↑, ↓ (arrow up/down)    | select prev/next session |
+| ⤒, ⤓ (home/end)         | select first/last session |
+| ⇞, ⇟ (page up/down)     | select prev/next session page |
 | d                       | delete session |
 | r                       | reset playout buffer |
 | R                       | reset all playout buffers |
@@ -110,12 +110,12 @@ A session does not appear in the list until it's active (audio is decoded).
 | s                       | sort sessions by most recently active |
 | S                       | autosort sessions by most recently active |
 | t                       | sort sessions by most active |
-| - +                     | volume -1/+1 dB |
-| ← → (arrow left/right)  | stereo position left/right |
-| SHIFT + ←               | playout buffer -1 ms |
-| SHIFT + →               | playout buffer +1 ms |
-| v                       | toggle, verbose display |
-| q                       | toggle, quiet mode |
+| -, +                    | volume -1/+1 dB |
+| ←, → (arrow left/right) | stereo position left/right |
+| SHIFT + ← (arrow left)  | playout buffer -1 ms |
+| SHIFT + → (arrow right) | playout buffer +1 ms |
+| v                       | toggle verbose display |
+| q                       | toggle quiet mode |
 
 ### IDs
 

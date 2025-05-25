@@ -53,4 +53,3 @@ Integer, default AGC on from BladeRF library.
 ### bias (optional)
 
 Boolean, default false. Enable the bias tee (preamplifier power).
-
