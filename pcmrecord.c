@@ -185,8 +185,8 @@ struct session {
 #define IDLE_TIMEOUT 3
 
 static float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
-static double FileLengthLimit = 0; // Length of file in seconds; 0 = unlimited
-static double max_length = 0; // Length of recording in seconds; 0 = unlimited
+static double FileLengthLimit = 0; // Length of individual file in seconds; 0 = unlimited
+static double Max_length = 0; // Length of recording in seconds; 0 = unlimited
 static const double Tolerance = 1.0; // tolerance for starting time in sec when FileLengthLimit is active
 int Verbose;
 static char PCM_mcast_address_text[256];
@@ -196,7 +196,7 @@ static bool Subdirs; // Place recordings in subdirectories by SSID
 static char const *Locale;
 static uint32_t Ssrc; // SSRC, when manually specified
 static bool Catmode = false; // sending one channel to standard output
-static bool Flushmode = false; // Flush after each packet when writing to standard output
+static bool Flushmode = false; // Flush ogg packets after each write; also fflush unless writing to file
 static const char *Command = NULL;
 static bool Jtmode = false;
 static bool Raw = false;
@@ -329,7 +329,7 @@ int main(int argc,char *argv[]){
       FileLengthLimit = fabsf(strtof(optarg,NULL));
       break;
     case 'x':
-      max_length = fabsf(strtof(optarg,NULL));
+      Max_length = fabsf(strtof(optarg,NULL));
       break;
     case 'V':
       VERSION();
@@ -368,14 +368,14 @@ int main(int argc,char *argv[]){
   }
   // Set up input socket for multicast data stream from front end
   {
-    struct sockaddr sock;
-    char iface[1024];
+    struct sockaddr_storage sock = {0};
+    char iface[1024] = {0};
     resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
     Input_fd = listen_mcast(Source_socket,&sock,iface);
     resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     Status_fd = listen_mcast(Source_socket,&sock,iface);
   }
-  if(Input_fd == -1){
+  if(Status_fd == -1 || Input_fd == -1){
     fprintf(stderr,"Can't set up PCM input, exiting\n");
     exit(EX_IOERR);
   }
@@ -409,6 +409,7 @@ static void closedown(int a){
 }
 
 // Write out any partial Ogg Opus pages
+// Note: just closes current Ogg page, doesn't actually flush stdio output stream
 static int ogg_flush(struct session *sp){
   if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
     return -1;
@@ -437,10 +438,8 @@ static int emit_opus_silence(struct session * const sp,int samples){
 
   if(Verbose > 1)
     fprintf(stderr,"%d: emitting %d frames of silence\n",sp->ssrc,samples);
-  ogg_packet oggPacket = {0}; // Not really necessary
-  oggPacket.b_o_s = 0;
-  oggPacket.e_o_s = 0;    // End of stream flag
 
+  ogg_packet oggPacket = { 0 }; // b_o_s and e_o_s are 0
   int samples_since_flush = 0;
   while(samples > 0){
     int chunk = min(samples,2880); // 60 ms is 2880 samples @ 48 kHz
@@ -473,14 +472,14 @@ static int emit_opus_silence(struct session * const sp,int samples){
     oggPacket.packetno = sp->packetCount++; // Increment packet number
     sp->granulePosition += chunk; // points to end of this packet
     oggPacket.granulepos = sp->granulePosition; // Granule position
-    int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);	  // Add the packet to the Ogg stream
+    int const ret = ogg_stream_packetin(&sp->oggState, &oggPacket);	  // Add the packet to the Ogg stream
     (void)ret;
     assert(ret == 0);
 
     sp->rtp_state.timestamp += chunk; // also ready for next
     sp->total_file_samples += chunk;
     sp->samples_written += chunk;
-    if((FileLengthLimit != 0) || (max_length != 0))
+    if((FileLengthLimit != 0) || (Max_length != 0))
       sp->samples_remaining -= chunk;
     samples -= chunk;
     samples_since_flush += chunk;
@@ -494,7 +493,7 @@ static int emit_opus_silence(struct session * const sp,int samples){
 }
 
 
-static int send_queue(struct session * const sp,bool flush){
+static int send_queue(struct session * const sp,bool const flush){
   if(sp->encoding == OPUS)
     return send_opus_queue(sp,flush);
   else
@@ -503,21 +502,19 @@ static int send_queue(struct session * const sp,bool flush){
 
 // if !flush, send whatever's on the queue, up to the first missing segment
 // if flush, empty the entire queue, skipping empty entries
-static int send_opus_queue(struct session * const sp,bool flush){
+static int send_opus_queue(struct session * const sp,bool const flush){
   if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
     return -1;
 
   // Anything on the resequencing queue we can now process?
   int count = 0;
   for(int i=0; i < RESEQ; i++,sp->rtp_state.seq++){
-    struct reseq *qp = &sp->reseq[sp->rtp_state.seq % RESEQ];
+    struct reseq * const qp = &sp->reseq[sp->rtp_state.seq % RESEQ];
     if(!qp->inuse && !flush)
       break; // Stop on first empty entry if we're not resynchronizing
 
     if(qp->inuse){
-      ogg_packet oggPacket = {0};
       int samples = opus_packet_get_nb_samples(qp->data,qp->size,OPUS_SAMPRATE); // Number of 48 kHz samples
-
       int32_t jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
       if(jump > 0){
 	// Timestamp jumped since last frame
@@ -529,12 +526,13 @@ static int send_opus_queue(struct session * const sp,bool flush){
 	sp->current_segment_samples = 0; // gap resets
       }
       // end of timestamp jump catch-up, send actual packets on queue
-      oggPacket.packetno = sp->packetCount++; // Increment packet number
-      // Adjust the granule position
-      sp->granulePosition += samples; // points to end of this packet
-      oggPacket.granulepos = sp->granulePosition; // Granule position
-      oggPacket.packet = qp->data;
-      oggPacket.bytes = qp->size;
+      sp->granulePosition += samples; // Adjust the granule position to point to end of this packet
+      ogg_packet oggPacket = { // b_o_s and e_o_s are 0
+	.packetno = sp->packetCount++, // Increment packet number
+	.granulepos = sp->granulePosition, // Granule position
+	.packet = qp->data,
+	.bytes = qp->size
+      };
       sp->rtp_state.timestamp += samples; // also ready for next
       sp->total_file_samples += samples;
       sp->current_segment_samples += samples;
@@ -542,7 +540,7 @@ static int send_opus_queue(struct session * const sp,bool flush){
 	sp->substantial_file = true;
 
       sp->samples_written += samples;
-      if((FileLengthLimit != 0) || (max_length != 0))
+      if((FileLengthLimit != 0) || (Max_length != 0))
 	sp->samples_remaining -= samples;
 
       if(Verbose > 2 || (Verbose > 1  && flush))
@@ -550,7 +548,7 @@ static int send_opus_queue(struct session * const sp,bool flush){
 		sp->ssrc,sp->rtp_state.seq,sp->rtp_state.timestamp,oggPacket.bytes,samples,
 		(long long)oggPacket.granulepos);
 
-      int ret = ogg_stream_packetin(&sp->oggState, &oggPacket);
+      int const ret = ogg_stream_packetin(&sp->oggState, &oggPacket);
       (void)ret;
       assert(ret == 0);
       {
@@ -584,15 +582,15 @@ static int send_wav_queue(struct session * const sp,bool flush){
 
   // Anything on the resequencing queue we can now process?
   int count = 0;
-  int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2); // bytes per sample time
+  int const framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2); // bytes per sample time
   for(int i=0; i < RESEQ; i++,sp->rtp_state.seq++){
-    struct reseq *qp = &sp->reseq[sp->rtp_state.seq % RESEQ];
+    struct reseq * const qp = &sp->reseq[sp->rtp_state.seq % RESEQ];
     if(!qp->inuse && !flush)
       break; // Stop on first empty entry if we're not resynchronizing
 
-    int frames = qp->size / framesize;  // One frame per sample time
+    int const frames = qp->size / framesize;  // One frame per sample time
     if(qp->inuse){
-      int jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
+      int const jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
       if(jump > 0){
 	// Timestamp jumped since last frame
 	// Catch up by emitting silence padding
@@ -609,7 +607,7 @@ static int send_wav_queue(struct session * const sp,bool flush){
 	sp->rtp_state.timestamp += jump; // also ready for next
 	sp->total_file_samples += jump;
 	sp->samples_written += jump;
-	if((FileLengthLimit != 0) || (max_length != 0))
+	if((FileLengthLimit != 0) || (Max_length != 0))
 	  sp->samples_remaining -= jump;
       }
       // end of timestamp jump catch-up, send actual packets on queue
@@ -620,7 +618,7 @@ static int send_wav_queue(struct session * const sp,bool flush){
       if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
 	sp->substantial_file = true;
       sp->samples_written += frames;
-      if((FileLengthLimit != 0) || (max_length != 0))
+      if((FileLengthLimit != 0) || (Max_length != 0))
 	sp->samples_remaining -= frames;
 
       if(Verbose > 2 || (Verbose > 1  && flush))
@@ -640,25 +638,31 @@ static int send_wav_queue(struct session * const sp,bool flush){
 // Read both data and status from RTP network socket, assemble blocks of samples
 // Doing both in one thread avoids a lot of synchronization problems with the session structure, since both write it
 static void input_loop(){
-  struct sockaddr sender;
+  struct sockaddr sender = {0};
   int64_t last_scan_time = 0;
   while(true){
     // Receive status or data
-    struct pollfd pfd[2];
-    pfd[0].fd = Input_fd;
-    pfd[1].fd = Status_fd;
-    pfd[1].events = pfd[0].events = POLLIN;
-    pfd[1].revents = pfd[0].revents = 0;
-
+    struct pollfd pfd[2] = {
+      {
+	.fd = Input_fd,
+	.events = POLLIN,
+	.revents = 0
+      },
+      {
+	.fd = Status_fd,
+	.events = POLLIN,
+	.revents = 0
+      },
+    };
     int const n = poll(pfd,sizeof(pfd)/sizeof(pfd[0]),1000); // Wait 1 sec max so we can scan active session list
     if(n < 0)
       break; // error of some kind - should we exit or retry?
 
     if(pfd[1].revents & (POLLIN|POLLPRI)){
       // Process status packet
-      uint8_t buffer[PKTSIZE];
+      uint8_t buffer[PKTSIZE] = {0};
       socklen_t socksize = sizeof(sender);
-      int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,&sender,&socksize);
+      int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,&sender,&socksize);
       if(length <= 0){    // ??
 	perror("recvfrom");
 	goto statdone; // Some sort of error
@@ -669,10 +673,8 @@ static void input_loop(){
       // NB! Assumes same IP source address *and UDP source port* for status and data
       // This is only true for recent versions of radiod, after the switch to unconnected output sockets
       // But older versions don't send status on the output channel anyway, so no problem
-      struct channel chan;
-      memset(&chan,0,sizeof(chan));
-      struct frontend frontend;
-      memset(&frontend,0,sizeof(frontend));
+      struct channel chan = {0};
+      struct frontend frontend = {0};
       decode_radio_status(&frontend,&chan,buffer+1,length-1);
 
       if(Ssrc != 0 && chan.output.rtp.ssrc != Ssrc)
@@ -720,23 +722,21 @@ static void input_loop(){
       sp->channels = chan.output.channels;
       sp->encoding = chan.output.encoding;
       sp->samprate = (sp->encoding == OPUS) ? OPUS_SAMPRATE : chan.output.samprate;
-      memcpy(&sp->sender,&sender,sizeof(sp->sender));
-      memcpy(&sp->chan,&chan,sizeof(sp->chan));
-      memcpy(&sp->frontend,&frontend,sizeof(sp->frontend));
+      sp->sender = sender;
+      sp->chan = chan;
+      sp->frontend = frontend;
       // Ogg (containing opus) can concatenate streams with new metadata, so restart when it changes
       // WAV files don't even have this metadata, so ignore changes
-      if(sp->encoding == OPUS){
-	if(sp->last_frequency != sp->chan.tune.freq
-	   || strncmp(sp->last_preset,sp->chan.preset,sizeof(sp->last_preset))){
-	  end_ogg_opus_stream(sp);
-	  start_ogg_opus_stream(sp);
-	  emit_ogg_opus_tags(sp);
-	}
+      if(sp->encoding == OPUS
+	 && (sp->last_frequency != sp->chan.tune.freq || strncmp(sp->last_preset,sp->chan.preset,sizeof(sp->last_preset)))){
+	end_ogg_opus_stream(sp);
+	start_ogg_opus_stream(sp);
+	emit_ogg_opus_tags(sp);
       }
     }
   statdone:;
     if(pfd[0].revents & (POLLIN|POLLPRI)){
-      uint8_t buffer[PKTSIZE];
+      uint8_t buffer[PKTSIZE] = {0};
       socklen_t socksize = sizeof(sender);
       int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&sender,&socksize);
       if(size <= 0){    // ??
@@ -746,8 +746,8 @@ static void input_loop(){
       if(size < RTP_MIN_SIZE)
 	goto datadone; // Too small for RTP, ignore
 
-      struct rtp_header rtp;
-      uint8_t *dp = (uint8_t *)ntoh_rtp(&rtp,buffer);
+      struct rtp_header rtp = {0};
+      uint8_t const * const dp = (uint8_t *)ntoh_rtp(&rtp,buffer);
       if(rtp.pad){
 	// Remove padding
 	size -= dp[size-1];
@@ -786,6 +786,14 @@ static void input_loop(){
 	sp->prev = NULL;
 	Sessions = sp;
       }
+      int64_t now = utc_time_ns();
+      if(Jtmode
+	 && sp->fp != NULL
+	 && floor(now / (BILLION * FileLengthLimit)) != floor(sp->last_active / (BILLION * FileLengthLimit))){
+	  // Crossed end of time period (eg, 7.5, 15 or 120 sec) in JT mode
+	  close_file(sp,"time boundary"); // Don't reset RTP here so we won't lose samples on the next file
+      }
+      sp->last_active = now;
       if(sp->fp == NULL && !sp->complete){
 	session_file_init(sp,&sender);
 	if(sp->encoding == OPUS){
@@ -798,7 +806,7 @@ static void input_loop(){
 	} else {
 	  if(!Raw)
 	    start_wav_stream(sp); // Don't emit wav header in --raw
-	  int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2);
+	  int framesize = sp->channels * (sp->encoding == F32LE ? sizeof(float) : sizeof(int16_t));
 	  if(sp->can_seek){
 	    fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
 	  } else {
@@ -809,7 +817,7 @@ static void input_loop(){
 	  }
 	}
       }
-      sp->last_active = gps_time_ns();
+      // Output stream now ready to go
       if(sp->rtp_state.odd_seq_set){
 	if(rtp.seq == sp->rtp_state.odd_seq){
 	  // Sender probably restarted; flush queue and start over
@@ -852,7 +860,7 @@ static void input_loop(){
 
       // put into circular queue
       sp->rtp_state.odd_seq_set = false;
-      int qi = rtp.seq % RESEQ;
+      int const qi = rtp.seq % RESEQ;
       struct reseq * const qp = &sp->reseq[qi];
       qp->inuse = true;
       qp->rtp = rtp;
@@ -864,8 +872,8 @@ static void input_loop(){
 	// byteswap.h is linux-specific; need to find a portable way to get the machine instructions
 
 	int16_t const * const samples = (int16_t *)dp;
-	int16_t *wp = (int16_t *)qp->data;
-	int samp_count = size / sizeof(int16_t);
+	int16_t * const wp = (int16_t *)qp->data;
+	int const samp_count = size / sizeof(int16_t);
 	for(int n = 0; n < samp_count; n++)
 	  wp[n] = bswap_16((uint16_t)samples[n]);
       } else {
@@ -873,11 +881,10 @@ static void input_loop(){
       }
       send_queue(sp,false); // Send what we now can
       // If output is pipe, flush right away to minimize latency
-      if(!sp->can_seek)
-	if(0 != fflush(sp->fp)){
-	  fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
-	}
-      if(((FileLengthLimit != 0) || (max_length != 0)) && sp->samples_remaining <= 0){
+      if(!sp->can_seek && 0 != fflush(sp->fp))
+	fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
+
+      if(((FileLengthLimit != 0) || (Max_length != 0)) && sp->samples_remaining <= 0){
 	close_file(sp,"size limit"); // Don't reset RTP here so we won't lose samples on the next file
 	if(sp->exit_after_close)
 	  exit(EX_OK); // if writing to a pipe, we're done
@@ -886,7 +893,7 @@ static void input_loop(){
   datadone:;
     // Walk through list, close idle files
     // Leave sessions forever in case traffic starts again?
-    int64_t current_time = gps_time_ns();
+    int64_t current_time = utc_time_ns();
     if(current_time > last_scan_time + BILLION){
       last_scan_time = current_time;
       struct session *next = NULL;
@@ -1012,7 +1019,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       break;
     }
   }
-  struct timespec now;
+  struct timespec now = {0};
   clock_gettime(CLOCK_REALTIME,&now);
   struct timespec file_time = now; // Default to actual time when length limit is not set
   sp->file_time = file_time;
@@ -1055,8 +1062,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     }
     sp->samples_remaining = (FileLengthLimit * sp->samprate) - sp->starting_offset;
   }
-  if (max_length > 0)
-    sp->samples_remaining = max_length * sp->samprate;
+  if (Max_length > 0)
+    sp->samples_remaining = Max_length * sp->samprate;
 
   if(Jtmode){
     //  K1JT-format file names in flat directory
@@ -1119,8 +1126,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	       tm->tm_mday);
     }
     // create file in specified directory
-    char *start = sp->filename + strlen(sp->filename);
-    int size = sizeof(sp->filename) - strlen(sp->filename);
+    char * const start = sp->filename + strlen(sp->filename);
+    int const size = sizeof(sp->filename) - strlen(sp->filename);
     snprintf(start,size,
 	     "%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ%s",
 	     sp->ssrc,
@@ -1134,7 +1141,6 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	     suffix);
   }
   sp->fp = fopen(sp->filename,"w++");
-  sp->last_active = gps_time_ns();
 
   if(sp->fp == NULL){
     fprintf(stderr,"can't create/write file '%s': %s\n",sp->filename,strerror(errno));
@@ -1142,7 +1148,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   }
   {
     // The output could be a named pipe, which can't be seeked
-    struct stat statbuf;
+    struct stat statbuf = {0};
     if(fstat(fileno(sp->fp),&statbuf) != 0){
       fprintf(stderr,"stat(%s) failed: %s\n",sp->filename,strerror(errno));
     } else {
@@ -1217,7 +1223,7 @@ static int close_session(struct session **spp){
     Sessions = sp->next;
   if(sp->next)
     sp->next->prev = sp->prev;
-  // when the max_length (-x) option is used, valgrind has
+  // when the Max_length (-x) option is used, valgrind has
   // intermittently reported unfree'd allocations in the resequencing
   // queue at program exit. Not sure what only -x is affected.
   for(int i=0;i < RESEQ;i++){
@@ -1268,7 +1274,7 @@ static int close_file(struct session *sp,char const *reason){
   }
   if(Command != NULL)
     pclose(sp->fp);
-  else
+  else if(sp->fp != NULL)
     fclose(sp->fp);
   sp->fp = NULL;
   FREE(sp->iobuffer);
@@ -1277,7 +1283,7 @@ static int close_file(struct session *sp,char const *reason){
   sp->total_file_samples = 0;
   sp->current_segment_samples = 0;
 
-  if (0 == max_length)
+  if (0 == Max_length)
     return 0;
 
   sp->complete = true;        // don't create multiple files in max length mode
@@ -1296,7 +1302,7 @@ static int start_ogg_opus_stream(struct session *sp){
   if(sp == NULL || sp->fp == NULL)
     return -1;
   // Create Ogg container with Opus codec
-  int serial = rand(); // Unique stream serial number
+  int const serial = rand(); // Unique stream serial number
   if (ogg_stream_init(&sp->oggState, serial) != 0) {
     fprintf(stderr, "Failed to initialize Ogg stream.\n");
     return -1;
@@ -1305,33 +1311,32 @@ static int start_ogg_opus_stream(struct session *sp){
   sp->packetCount = 0;
 
   struct {
-    char head[8];
+    char head[8];  // Signature
     uint8_t version;
     uint8_t channels;
     int16_t preskip;
     uint32_t samprate;
     int16_t gain;
     uint8_t map_family;
-  } opusHeader;
-
-  memset(&opusHeader,0,sizeof(opusHeader));
-  memcpy(opusHeader.head, "OpusHead", 8);  // Signature
-  opusHeader.version = 1;                  // Version
-  // Some decoders get confused when the channel count or sample rate changes in a stream, so always say we're emitting 48kHz stereo.
-  // Opus won't use more bits when the input is actually mono and/or at a lower rate
-  opusHeader.channels = 2;
-  opusHeader.preskip = 312;
-  opusHeader.samprate = OPUS_SAMPRATE;
-  opusHeader.gain = 0;
-  opusHeader.map_family = 0;
-
-  ogg_packet idPacket;
-  idPacket.packet = (unsigned char *)&opusHeader;
-  idPacket.bytes = 19; // sizeof(opusHeader) pads up, can't use!
-  idPacket.b_o_s = 1;  // Beginning of stream
-  idPacket.e_o_s = 0;
-  idPacket.granulepos = 0; // always zero
-  idPacket.packetno = sp->packetCount++;
+  } const opusHeader = {
+    .head = "OpusHead",
+    .version = 1,
+    // Some decoders get confused when the channel count or sample rate changes in a stream, so always say we're emitting 48kHz stereo.
+    // Opus won't use more bits when the input is actually mono and/or at a lower rate
+    .channels = 2,
+    .preskip = 312,
+    .samprate = OPUS_SAMPRATE,
+    .gain = 0,
+    .map_family = 0
+  };
+  ogg_packet idPacket = {
+    .packet = (unsigned char *)&opusHeader,
+    .bytes = 19,
+    .b_o_s = 1,
+    .e_o_s = 0,
+    .granulepos = 0,
+    .packetno = sp->packetCount++
+  };
   // Add the identification header to the Ogg stream
   ogg_stream_packetin(&sp->oggState, &idPacket);
   ogg_flush(sp);
@@ -1345,20 +1350,18 @@ static int emit_ogg_opus_tags(struct session *sp){
     return -1;
 
   // fill this in with sender ID (ka9q-radio, etc, frequency, mode, etc etc)
-  uint8_t opusTags[2048]; // Variable length, not easily represented as a structure
-  memset(opusTags,0,sizeof(opusTags));
-  memcpy(opusTags,"OpusTags",8);
+  uint8_t opusTags[2048] = { "OpusTags" }; // Variable length, not easily represented as a structure
   uint8_t *wp = opusTags + 8;
   wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),"KA9Q-radio"); // Vendor - don't bother computing actual remaining sp
   int32_t *np = (int32_t *)wp;
   *np++ = 8; // Number of tags follows
   wp = (uint8_t *)np;
   {
-    char temp[256];
+    char temp[256] = {0};
     snprintf(temp,sizeof(temp),"ENCODER=KA9Q radiod - %s",opus_get_version_string());
     wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),temp);
   }
-  struct timespec now;
+  struct timespec now = {0};
   clock_gettime(CLOCK_REALTIME,&now);
   struct tm const * const tm = gmtime(&now.tv_sec);
 
@@ -1412,13 +1415,14 @@ static int emit_ogg_opus_tags(struct session *sp){
     snprintf(temp,sizeof(temp),"PRESET=%s",sp->chan.preset);
     wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),temp);
   }
-  ogg_packet tagsPacket;
-  tagsPacket.packet = opusTags;
-  tagsPacket.bytes = wp - opusTags;
-  tagsPacket.b_o_s = 0;             // Not the beginning of the stream
-  tagsPacket.e_o_s = 0;             // Not the end of the stream
-  tagsPacket.granulepos = sp->granulePosition;        // No granule position for metadata
-  tagsPacket.packetno = sp->packetCount++;          // Second packet in the stream
+  ogg_packet tagsPacket = {
+    .packet = opusTags,
+    .bytes = wp - opusTags,
+    .b_o_s = 0,             // Not the beginning of the stream
+    .e_o_s = 0,             // Not the end of the stream
+    .granulepos = sp->granulePosition,        // No granule position for metadata
+    .packetno = sp->packetCount++          // Second packet in the stream
+  };
 
   ogg_stream_packetin(&sp->oggState, &tagsPacket);
   ogg_flush(sp);
@@ -1436,17 +1440,17 @@ static int end_ogg_opus_stream(struct session *sp){
 
   // Terminate ogg Opus file
   // Write an empty packet with the end bit set
-  ogg_packet endPacket;
-  endPacket.packet = OpusSilence20;
-  endPacket.bytes = sizeof(OpusSilence20);
-  endPacket.b_o_s = 0;
-  endPacket.e_o_s = 1;    // End of stream flag
-  endPacket.granulepos = sp->granulePosition; // Granule position
-  sp->granulePosition += 0; // Doesn't change
-  endPacket.packetno = sp->packetCount++; // Increment packet number (not actually used again)
+  ogg_packet endPacket = {
+    .packet = OpusSilence20,
+    .bytes = sizeof(OpusSilence20),
+    .b_o_s = 0,
+    .e_o_s = 1,    // End of stream flag
+    .granulepos = sp->granulePosition, // Granule position, doesn't change
+    .packetno = sp->packetCount++ // Increment packet number (not actually used again)
+  };
 
   // Add the packet to the Ogg stream
-  int ret = ogg_stream_packetin(&sp->oggState, &endPacket);
+  int const ret = ogg_stream_packetin(&sp->oggState, &endPacket);
   (void)ret;
   assert(ret == 0);
   // Flush the stream to ensure packets are written
@@ -1463,8 +1467,8 @@ static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string){
   if(out == NULL || string == NULL || size <= sizeof(uint32_t))
     return out;
 
-  size_t len = strlen(string);
-  uint32_t *wp = (uint32_t *)out;
+  size_t const len = strlen(string);
+  uint32_t * const wp = (uint32_t *)out;
   *wp = len;
   uint8_t *sp = out + sizeof(uint32_t);
   size -= sizeof(uint32_t);
@@ -1478,71 +1482,67 @@ static int start_wav_stream(struct session *sp){
   if(sp == NULL || sp->fp == NULL)
     return -1;
 
-  // Write .wav header, skipping size fields
-  struct wav header;
-  memset(&header,0,sizeof(header));
+  // fill in the auxi chunk (start time, center frequency)
+  struct timespec now = {0};
+  clock_gettime(CLOCK_REALTIME,&now);
+  struct tm const * const tm = gmtime(&now.tv_sec);
 
-  memcpy(header.ChunkID,"RIFF", 4);
-  header.ChunkSize = 0xffffffff; // Temporary
-  memcpy(header.Format,"WAVE",4);
-  memcpy(header.Subchunk1ID,"fmt ",4);
-  header.Subchunk1Size = 40; // ??????
+  // Construct and write .wav header, skipping size fields
+  struct wav header = {
+    .ChunkID = "RIFF",
+    .ChunkSize = 0xffffffff, // Temporary
+    .Format = "WAVE",
+    .Subchunk1ID = "fmt ",
+    .Subchunk1Size = 40,
+    .NumChannels = sp->channels,
+    .SampleRate = sp->samprate,
+    .ExtensionChunkSize = 22,
+    .SubChunk2ID = "data",
+    .Subchunk2Size = 0xffffffff, // Temporary
+    // appears to be needed for FP
+    .FactID = "fact",
+    .FactSize = 4,
+    .SamplesLength = 0xffffffff,
+    .AuxID = "auxi",
+    .AuxSize = 164,
+    .CenterFrequency = sp->chan.tune.freq,
+    //  header.AuxUknown is zeroed
+    .StartYear = tm->tm_year+1900,
+    .StartMon = tm->tm_mon+1,
+    .StartDOW = tm->tm_wday,
+    .StartDay = tm->tm_mday,
+    .StartHour = tm->tm_hour,
+    .StartMinute = tm->tm_min,
+    .StartSecond = tm->tm_sec,
+    .StartMillis = (int16_t)(now.tv_nsec / 1000000)
+  };
   switch(sp->encoding){
   default:
     return -1;
   case S16LE:
   case S16BE:
     header.AudioFormat = 1;
-    header.BitsPerSample = 16;
-    header.ByteRate = sp->samprate * sp->channels * 2;
-    header.BlockAlign = sp->channels * 2;;
+    header.BitsPerSample = 8 * sizeof(int16_t);
+    header.ByteRate = sp->samprate * sp->channels * sizeof(int16_t);
+    header.BlockAlign = sp->channels * sizeof(int16_t);
     break;
   case F32LE:
     header.AudioFormat = 3;
-    header.BitsPerSample = 32;
-    header.ByteRate = sp->samprate * sp->channels * 4;
-    header.BlockAlign = sp->channels * 4;
+    header.BitsPerSample = 8 * sizeof(float);
+    header.ByteRate = sp->samprate * sp->channels * sizeof(float);
+    header.BlockAlign = sp->channels * sizeof(float);
     break;
   case F16LE:
     header.AudioFormat = 0; // What should go here for IEEE 16-bit float?
-    header.BitsPerSample = 16;
-    header.ByteRate = sp->samprate * sp->channels * 2;
-    header.BlockAlign = sp->channels * 2;;
+    header.BitsPerSample = 8 * 2;
+    header.ByteRate = sp->samprate * sp->channels * 2; // should be sizeof(float16)
+    header.BlockAlign = sp->channels * 2;
     break;
   }
 
-  header.NumChannels = sp->channels;
-  header.SampleRate = sp->samprate;
-  header.ExtensionChunkSize = 22;
-  memcpy(header.SubChunk2ID,"data",4);
-  header.Subchunk2Size = 0xffffffff; // Temporary
-
-  //  appears to be needed for FP
-  memcpy(header.FactID,"fact",4);
-  header.FactSize = 4;
-  header.SamplesLength = 0xffffffff;
-
-  // fill in the auxi chunk (start time, center frequency)
-  struct timespec now;
-  clock_gettime(CLOCK_REALTIME,&now);
-  struct tm const * const tm = gmtime(&now.tv_sec);
-
-  memcpy(header.AuxID, "auxi", 4);
-  header.AuxSize=164;
-  header.StartYear=tm->tm_year+1900;
-  header.StartMon=tm->tm_mon+1;
-  header.StartDOW=tm->tm_wday;
-  header.StartDay=tm->tm_mday;
-  header.StartHour=tm->tm_hour;
-  header.StartMinute=tm->tm_min;
-  header.StartSecond=tm->tm_sec;
-  header.StartMillis=(int16_t)(now.tv_nsec / 1000000);
-  header.CenterFrequency= sp->chan.tune.freq;
-  memset(header.AuxUknown, 0, 128);
   if(sp->can_seek)
     rewind(sp->fp); // should be at BOF but make sure
   fwrite(&header,sizeof(header),1,sp->fp);
-  sp->last_active = gps_time_ns();
   return 0;
 }
 // Update wav header with now-known size and end auxi information
@@ -1554,11 +1554,11 @@ static int end_wav_stream(struct session *sp){
     return 0; // Can't seek back to the beginning on a pipe
 
   rewind(sp->fp);
-  struct wav header;
+  struct wav header = {0};
   if(fread(&header,sizeof(header),1,sp->fp) != 1)
     return -1;
 
-  struct stat statbuf;
+  struct stat statbuf = {0};
   if(fstat(fileno(sp->fp),&statbuf) != 0){
     fprintf(stderr,"fstat(%d) [%s] failed! %s\n",fileno(sp->fp),sp->filename,strerror(errno));
     return -1;
@@ -1570,17 +1570,17 @@ static int end_wav_stream(struct session *sp){
   header.SamplesLength = sp->samples_written;
 
   // write end time into the auxi chunk
-  struct timespec now;
+  struct timespec now = {0};
   clock_gettime(CLOCK_REALTIME,&now);
   struct tm const * tm = gmtime(&now.tv_sec);
-  header.StopYear=tm->tm_year+1900;
-  header.StopMon=tm->tm_mon+1;
-  header.StopDOW=tm->tm_wday;
-  header.StopDay=tm->tm_mday;
-  header.StopHour=tm->tm_hour;
-  header.StopMinute=tm->tm_min;
-  header.StopSecond=tm->tm_sec;
-  header.StopMillis=(int16_t)(now.tv_nsec / 1000000);
+  header.StopYear = tm->tm_year + 1900;
+  header.StopMon = tm->tm_mon + 1;
+  header.StopDOW = tm->tm_wday;
+  header.StopDay = tm->tm_mday;
+  header.StopHour = tm->tm_hour;
+  header.StopMinute = tm->tm_min;
+  header.StopSecond = tm->tm_sec;
+  header.StopMillis = (int16_t)(now.tv_nsec / 1000000);
 
   tm = gmtime(&sp->file_time.tv_sec);
   header.StartYear = tm->tm_year + 1900;
@@ -1595,6 +1595,5 @@ static int end_wav_stream(struct session *sp){
   rewind(sp->fp);
   if(fwrite(&header,sizeof(header),1,sp->fp) != 1)
     return -1;
-  sp->last_active = gps_time_ns();
   return 0;
 }
