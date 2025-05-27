@@ -1140,10 +1140,14 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	     tenths,
 	     suffix);
   }
-  sp->fp = fopen(sp->filename,"w++");
+  // create a temp file (foo.tmp)
+  // Some error and logging messages use the suffix, some don't, but hey
+  char tempfile[PATH_MAX+5]; // If too long, open will fail with ENAMETOOLONG
+  snprintf(tempfile,sizeof tempfile, "%s.tmp",sp->filename);
+  sp->fp = fopen(tempfile,"w++");
 
   if(sp->fp == NULL){
-    fprintf(stderr,"can't create/write file '%s': %s\n",sp->filename,strerror(errno));
+    fprintf(stderr,"can't create/write file '%s': %s\n",tempfile,strerror(errno));
     return -1;
   }
   {
@@ -1248,6 +1252,8 @@ static int close_file(struct session *sp,char const *reason){
   else
     end_wav_stream(sp);
 
+  char tempfile[PATH_MAX+5];
+  snprintf(tempfile,sizeof tempfile,"%s.tmp",sp->filename);
   if(Verbose){
     fprintf(stderr,"%s closing '%s' %'.1f sec",
 	    sp->frontend.description,
@@ -1265,17 +1271,20 @@ static int close_file(struct session *sp,char const *reason){
       attrprintf(fd,"samples written","%lld",sp->samples_written);
       attrprintf(fd,"total samples","%lld",sp->total_file_samples);
     } else if(strlen(sp->filename) > 0){
-      if(unlink(sp->filename) != 0)
-	fprintf(stderr,"Can't unlink %s: %s\n",sp->filename,strerror(errno));
+      if(unlink(tempfile) != 0)
+	fprintf(stderr,"Can't unlink %s: %s\n",tempfile,strerror(errno));
       if(Verbose)
-	fprintf(stderr,"deleting %s %'.1f sec\n",sp->filename,
+	fprintf(stderr,"deleting %s %'.1f sec\n",tempfile,
 		(float)sp->samples_written / sp->samprate);
     }
   }
   if(Command != NULL)
     pclose(sp->fp);
-  else if(sp->fp != NULL)
+  else if(sp->fp != NULL){
     fclose(sp->fp);
+    // Atomic rename
+    rename(tempfile,sp->filename);
+  }
   sp->fp = NULL;
   FREE(sp->iobuffer);
   sp->filename[0] = '\0';
