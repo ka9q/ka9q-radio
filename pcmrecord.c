@@ -789,7 +789,7 @@ static void input_loop(){
       if(FileLengthLimit != 0
 	 && sp->fp != NULL
 	 && floor(now / (BILLION * FileLengthLimit)) != floor(sp->last_active / (BILLION * FileLengthLimit))){
-	// Crossed end of time period (eg, 7.5, 15 or 120 sec) in JT mode
+	// Crossed end of time period (eg, 7.5, 15 or 120 sec) in --length mode
 	close_file(sp,"time boundary"); // Don't reset RTP here so we won't lose samples on the next file
       }
       sp->last_active = now;
