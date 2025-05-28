@@ -245,7 +245,7 @@ static struct option Options[] = {
   {"subdirs", no_argument, NULL, 's'},
   {"timeout", required_argument, NULL, 't'},
   {"verbose", no_argument, NULL, 'v'},
-  {"lengthlimit", required_argument, NULL, 'L'},
+  {"lengthlimit", required_argument, NULL, 'L'}, // Segment files by wall clock time
   {"length", required_argument, NULL, 'L'},
   {"limit", required_argument, NULL, 'L'},
   {"ssrc", required_argument, NULL, 'S'},
@@ -479,7 +479,7 @@ static int emit_opus_silence(struct session * const sp,int samples){
     sp->rtp_state.timestamp += chunk; // also ready for next
     sp->total_file_samples += chunk;
     sp->samples_written += chunk;
-    if((FileLengthLimit != 0) || (Max_length != 0))
+    if(Max_length != 0)
       sp->samples_remaining -= chunk;
     samples -= chunk;
     samples_since_flush += chunk;
@@ -540,7 +540,7 @@ static int send_opus_queue(struct session * const sp,bool const flush){
 	sp->substantial_file = true;
 
       sp->samples_written += samples;
-      if((FileLengthLimit != 0) || (Max_length != 0))
+      if(Max_length != 0)
 	sp->samples_remaining -= samples;
 
       if(Verbose > 2 || (Verbose > 1  && flush))
@@ -607,7 +607,7 @@ static int send_wav_queue(struct session * const sp,bool flush){
 	sp->rtp_state.timestamp += jump; // also ready for next
 	sp->total_file_samples += jump;
 	sp->samples_written += jump;
-	if((FileLengthLimit != 0) || (Max_length != 0))
+	if(Max_length != 0)
 	  sp->samples_remaining -= jump;
       }
       // end of timestamp jump catch-up, send actual packets on queue
@@ -618,7 +618,7 @@ static int send_wav_queue(struct session * const sp,bool flush){
       if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
 	sp->substantial_file = true;
       sp->samples_written += frames;
-      if((FileLengthLimit != 0) || (Max_length != 0))
+      if(Max_length != 0)
 	sp->samples_remaining -= frames;
 
       if(Verbose > 2 || (Verbose > 1  && flush))
@@ -646,20 +646,19 @@ static void input_loop(){
       {
 	.fd = Input_fd,
 	.events = POLLIN,
-	.revents = 0
       },
       {
 	.fd = Status_fd,
 	.events = POLLIN,
-	.revents = 0
       },
     };
     int const n = poll(pfd,sizeof(pfd)/sizeof(pfd[0]),1000); // Wait 1 sec max so we can scan active session list
     if(n < 0)
       break; // error of some kind - should we exit or retry?
 
+    int64_t const now = utc_time_ns();
     if(pfd[1].revents & (POLLIN|POLLPRI)){
-      // Process status packet
+      // Process status packet, if present
       uint8_t buffer[PKTSIZE] = {0};
       socklen_t socksize = sizeof(sender);
       int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,&sender,&socksize);
@@ -734,8 +733,9 @@ static void input_loop(){
 	emit_ogg_opus_tags(sp);
       }
     }
-  statdone:;
+  statdone:; // End of status packet processing (if any)
     if(pfd[0].revents & (POLLIN|POLLPRI)){
+      // Process data packet, if any
       uint8_t buffer[PKTSIZE] = {0};
       socklen_t socksize = sizeof(sender);
       int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&sender,&socksize);
@@ -786,12 +786,11 @@ static void input_loop(){
 	sp->prev = NULL;
 	Sessions = sp;
       }
-      int64_t now = utc_time_ns();
-      if(Jtmode
+      if(FileLengthLimit != 0
 	 && sp->fp != NULL
 	 && floor(now / (BILLION * FileLengthLimit)) != floor(sp->last_active / (BILLION * FileLengthLimit))){
-	  // Crossed end of time period (eg, 7.5, 15 or 120 sec) in JT mode
-	  close_file(sp,"time boundary"); // Don't reset RTP here so we won't lose samples on the next file
+	// Crossed end of time period (eg, 7.5, 15 or 120 sec) in JT mode
+	close_file(sp,"time boundary"); // Don't reset RTP here so we won't lose samples on the next file
       }
       sp->last_active = now;
       if(sp->fp == NULL && !sp->complete){
@@ -884,24 +883,24 @@ static void input_loop(){
       if(!sp->can_seek && 0 != fflush(sp->fp))
 	fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
 
-      if(((FileLengthLimit != 0) || (Max_length != 0)) && sp->samples_remaining <= 0){
+      // In FileLengthLimit mode (usually with jtmode) close only according to the wall clock; don't count samples
+      if(Max_length != 0 && sp->samples_remaining <= 0){
 	close_file(sp,"size limit"); // Don't reset RTP here so we won't lose samples on the next file
 	if(sp->exit_after_close)
 	  exit(EX_OK); // if writing to a pipe, we're done
       }
-    } // end of packet processing
-  datadone:;
-    // Walk through list, close idle files
+    }
+  datadone:; // end of data packet processing, if any
+    // Walk through list every second, close idle files
     // Leave sessions forever in case traffic starts again?
-    int64_t current_time = utc_time_ns();
-    if(current_time > last_scan_time + BILLION){
-      last_scan_time = current_time;
+    if(now > last_scan_time + BILLION){
+      last_scan_time = now;
       struct session *next = NULL;
       for(struct session *sp = Sessions;sp != NULL; sp = next){
 	next = sp->next; // save in case sp is closed
 	// Don't close session waiting for first activity
 	if(sp->last_active != 0
-	   && current_time > sp->last_active + Timeout * BILLION){
+	   && now > sp->last_active + Timeout * BILLION){
 	  // Close idle file
 	  close_file(sp,"idle timeout"); // sp will be NULL
 	  if(sp->exit_after_close)
@@ -1060,7 +1059,6 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	      sp->starting_offset);
 #endif
     }
-    sp->samples_remaining = (FileLengthLimit * sp->samprate) - sp->starting_offset;
   }
   if (Max_length > 0)
     sp->samples_remaining = Max_length * sp->samprate;
@@ -1281,9 +1279,11 @@ static int close_file(struct session *sp,char const *reason){
   if(Command != NULL)
     pclose(sp->fp);
   else if(sp->fp != NULL){
+    // Make sure it all reaches disk before the rename, which may quickly trigger a worker read before it's all flushed out
+    fflush(sp->fp);
+    fsync(fileno(sp->fp));
     fclose(sp->fp);
-    // Atomic rename
-    rename(tempfile,sp->filename);
+    rename(tempfile,sp->filename);    // Atomic rename
   }
   sp->fp = NULL;
   FREE(sp->iobuffer);
