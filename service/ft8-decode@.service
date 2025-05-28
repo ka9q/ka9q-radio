@@ -1,0 +1,26 @@
+# Systemd unit to decode FT-8 in a spool directory
+# Phil Karn, KA9Q 9 May 2025
+
+[Unit]
+Description=ft8-decode %i
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+Nice=10
+User=radio
+Group=radio
+Type=simple
+EnvironmentFile=/etc/radio/ft8-decode.conf
+PermissionsStartOnly=true
+StandardOutput=append:/var/log/ft8.log
+StandardError=journal
+UMask = 002
+WorkingDirectory=/var/lib/ka9q-radio/ft8
+ExecStart=/usr/local/bin/decode_ft8 .
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
