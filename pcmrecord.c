@@ -167,7 +167,7 @@ struct session {
 
   FILE *fp;                    // File being recorded
   void *iobuffer;              // Big buffer to reduce write rate
-  int64_t last_active;         // gps time of last activity
+  struct timespec last_active; // time of last file activity
   int64_t starting_offset;     // First actual sample in file past wav header (for time alignment)
   bool no_offset;              // Don't offset except on first file in series (with -L option)
 
@@ -212,7 +212,7 @@ struct sockaddr Metadata_dest_socket;
 static void closedown(int a);
 static void input_loop(void);
 static void cleanup(void);
-int session_file_init(struct session *sp,struct sockaddr const *sender);
+int session_file_init(struct session *sp,struct sockaddr const *sender,struct timespec const *timestamp);
 static int close_session(struct session **spp);
 static int close_file(struct session *sp,char const *reason);
 static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string);
@@ -639,7 +639,7 @@ static int send_wav_queue(struct session * const sp,bool flush){
 // Doing both in one thread avoids a lot of synchronization problems with the session structure, since both write it
 static void input_loop(){
   struct sockaddr sender = {0};
-  int64_t last_scan_time = 0;
+  struct timespec last_scan_time = {0};
   while(true){
     // Receive status or data
     struct pollfd pfd[2] = {
@@ -656,7 +656,12 @@ static void input_loop(){
     if(n < 0)
       break; // error of some kind - should we exit or retry?
 
-    int64_t const now = utc_time_ns();
+    struct timespec now = {0};
+    clock_gettime(CLOCK_REALTIME,&now);
+    int64_t now_cycle = 0;
+    if(FileLengthLimit > 0)
+      now_cycle = floor((now.tv_sec + 1.0e-9 * now.tv_nsec) / FileLengthLimit);
+
     if(pfd[1].revents & (POLLIN|POLLPRI)){
       // Process status packet, if present
       uint8_t buffer[PKTSIZE] = {0};
@@ -786,15 +791,17 @@ static void input_loop(){
 	sp->prev = NULL;
 	Sessions = sp;
       }
-      if(FileLengthLimit != 0
-	 && sp->fp != NULL
-	 && floor(now / (BILLION * FileLengthLimit)) != floor(sp->last_active / (BILLION * FileLengthLimit))){
-	// Crossed end of time period (eg, 7.5, 15 or 120 sec) in --length mode
-	close_file(sp,"time boundary"); // Don't reset RTP here so we won't lose samples on the next file
+      if(FileLengthLimit != 0 && sp->fp != NULL){
+	int64_t start_cycle = floor((sp->file_time.tv_sec + 1.0e-9 * sp->file_time.tv_nsec) / FileLengthLimit);
+
+	if(now_cycle > start_cycle){
+	  // Crossed end of time period (eg, 7.5, 15 or 120 sec) in --length mode
+	  close_file(sp,"time boundary"); // Don't reset RTP here so we won't lose samples on the next file
+	}
       }
       sp->last_active = now;
       if(sp->fp == NULL && !sp->complete){
-	session_file_init(sp,&sender);
+	session_file_init(sp,&sender,&now);
 	if(sp->encoding == OPUS){
 	  if(Raw)
 	    fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
@@ -891,23 +898,28 @@ static void input_loop(){
       }
     }
   datadone:; // end of data packet processing, if any
-    // Walk through list every second, close idle files
+
+    // Walk through session list every second, close idle files
     // Leave sessions forever in case traffic starts again?
-    if(now > last_scan_time + BILLION){
-      last_scan_time = now;
-      struct session *next = NULL;
-      for(struct session *sp = Sessions;sp != NULL; sp = next){
-	next = sp->next; // save in case sp is closed
-	// Don't close session waiting for first activity
-	if(sp->last_active != 0
-	   && now > sp->last_active + Timeout * BILLION){
-	  // Close idle file
-	  close_file(sp,"idle timeout"); // sp will be NULL
-	  if(sp->exit_after_close)
-	    exit(EX_OK); // if writing to anything but an ordinary file
-	  sp->rtp_state.init = false; // reinit rtp on next packet so we won't emit lots of silence
-	}
-      }
+    if(now.tv_sec <= last_scan_time.tv_sec) // really should also look at tv_nsec, but this will sync to full seconds
+      continue;
+
+    last_scan_time = now;
+    struct session *next = NULL;
+    for(struct session *sp = Sessions;sp != NULL; sp = next){
+      next = sp->next; // save in case sp is closed
+      // Don't close session waiting for first activity
+      if(sp->last_active.tv_sec == 0)
+	continue;
+      double const idle_time = now.tv_sec - sp->last_active.tv_sec + (now.tv_nsec - sp->last_active.tv_nsec) * 1.0e-9;
+      if(idle_time < Timeout)
+	continue;
+
+      // Close idle file
+      close_file(sp,"idle timeout"); // sp will be NULL
+      if(sp->exit_after_close)
+	exit(EX_OK); // if writing to anything but an ordinary file
+      sp->rtp_state.init = false; // reinit rtp on next packet so we won't emit lots of silence
     }
   }
 }
@@ -922,7 +934,7 @@ static void cleanup(void){
     Sessions = next_s;
   }
 }
-int session_file_init(struct session *sp,struct sockaddr const *sender){
+int session_file_init(struct session *sp,struct sockaddr const *sender,struct timespec const *timestamp){
   if(sp->fp != NULL)
     return 0;
 
@@ -1018,27 +1030,13 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       break;
     }
   }
-  struct timespec now = {0};
-  clock_gettime(CLOCK_REALTIME,&now);
-  struct timespec file_time = now; // Default to actual time when length limit is not set
-  sp->file_time = file_time;
+  // Use time provided by caller
+  // Calling the clock here can make the file name a second or two late if the system is heavily loaded
+  sp->file_time = *timestamp;
 
   if(FileLengthLimit > 0){ // Not really supported on opus yet
     // Pad start of first file with zeroes
-#if 0
-    struct tm const * const tm_now = gmtime(&now.tv_sec);
-    fprintf(stderr,"time now = %4d-%02d-%02dT%02d:%02d:%02d.%dZ\n",
-	     tm_now->tm_year+1900,
-	     tm_now->tm_mon+1,
-	     tm_now->tm_mday,
-	     tm_now->tm_hour,
-	     tm_now->tm_min,
-	     tm_now->tm_sec,
-	    (int)(now.tv_nsec / 100000000)); // 100 million, i.e., convert to tenths of a sec
-#endif
-    // Do time calculations with a modified epoch to avoid overflow problems
-    int const epoch = 1704067200; // seconds between Jan 1 1970 00:00:00 UTC (unix epoch) and Jan 1 2024 00:00:00
-    intmax_t now_ns = BILLION * (now.tv_sec - epoch) + now.tv_nsec; // ns since Jan 2024
+    intmax_t now_ns = BILLION * (timestamp->tv_sec) + timestamp->tv_nsec;
     intmax_t limit = FileLengthLimit * BILLION;
     imaxdiv_t r = imaxdiv(now_ns,limit);
     intmax_t start_ns = r.quot * limit; // ns since epoch
@@ -1048,9 +1046,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
       // Adjust file time to previous multiple of specified limit size and pad start to first sample
       sp->no_offset = true; // Only on first file of session with -L
       imaxdiv_t f = imaxdiv(start_ns,BILLION);
-      file_time.tv_sec = f.quot + epoch; // restore original epoch
-      file_time.tv_nsec = f.rem;
-      sp->file_time = file_time;
+      sp->file_time.tv_sec = f.quot;
+      sp->file_time.tv_nsec = f.rem;
       sp->starting_offset = (sp->samprate * skip_ns) / BILLION;
       sp->total_file_samples += sp->starting_offset;
 #if 0
@@ -1066,8 +1063,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   if(Jtmode){
     //  K1JT-format file names in flat directory
     // Round time to nearest second
-    time_t seconds = file_time.tv_sec;
-    if(file_time.tv_nsec > BILLION/2)
+    time_t seconds = sp->file_time.tv_sec;
+    if(sp->file_time.tv_nsec > BILLION/2)
       seconds++;
     struct tm const * const tm = gmtime(&seconds);
     snprintf(sp->filename,sizeof(sp->filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s%s",
@@ -1082,10 +1079,10 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	     suffix);
   } else {
     // Round time to nearest 1/10 second
-    imaxdiv_t f = imaxdiv(file_time.tv_nsec,100000000); // 100 million to get deci-seconds
+    imaxdiv_t f = imaxdiv(sp->file_time.tv_nsec,100000000); // 100 million to get deci-seconds
     if(f.rem >= 50000000) // 50 million
       f.quot++; // round up to next deci second
-    long long deci_seconds = f.quot + (long long)10 * file_time.tv_sec;
+    long long deci_seconds = f.quot + (long long)10 * sp->file_time.tv_sec;
     f = imaxdiv(deci_seconds,10); // seconds, tenths
     time_t seconds = f.quot;
     int tenths = f.rem;
@@ -1193,7 +1190,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   attrprintf(fd,"preset","%s",sp->chan.preset);
   attrprintf(fd,"source","%s",formatsock(sender,false));
   attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
-  attrprintf(fd,"unixstarttime","%ld.%09ld",(long)now.tv_sec,(long)now.tv_nsec);
+  attrprintf(fd,"unixstarttime","%ld.%09ld",(long)sp->file_time.tv_sec,(long)sp->file_time.tv_nsec);
 
   if(strlen(sp->frontend.description) > 0)
     attrprintf(fd,"description","%s",sp->frontend.description);
@@ -1279,9 +1276,6 @@ static int close_file(struct session *sp,char const *reason){
   if(Command != NULL)
     pclose(sp->fp);
   else if(sp->fp != NULL){
-    // Make sure it all reaches disk before the rename, which may quickly trigger a worker read before it's all flushed out
-    fflush(sp->fp);
-    fsync(fileno(sp->fp));
     fclose(sp->fp);
     rename(tempfile,sp->filename);    // Atomic rename
   }
@@ -1370,6 +1364,7 @@ static int emit_ogg_opus_tags(struct session *sp){
     snprintf(temp,sizeof(temp),"ENCODER=KA9Q radiod - %s",opus_get_version_string());
     wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),temp);
   }
+  // We can get called whenever the status changes, so use the current wall clock, not the file creation time (sp->file_time)
   struct timespec now = {0};
   clock_gettime(CLOCK_REALTIME,&now);
   struct tm const * const tm = gmtime(&now.tv_sec);
@@ -1492,9 +1487,7 @@ static int start_wav_stream(struct session *sp){
     return -1;
 
   // fill in the auxi chunk (start time, center frequency)
-  struct timespec now = {0};
-  clock_gettime(CLOCK_REALTIME,&now);
-  struct tm const * const tm = gmtime(&now.tv_sec);
+  struct tm const * const tm = gmtime(&sp->file_time.tv_sec);
 
   // Construct and write .wav header, skipping size fields
   struct wav header = {
@@ -1523,7 +1516,7 @@ static int start_wav_stream(struct session *sp){
     .StartHour = tm->tm_hour,
     .StartMinute = tm->tm_min,
     .StartSecond = tm->tm_sec,
-    .StartMillis = (int16_t)(now.tv_nsec / 1000000)
+    .StartMillis = (int16_t)(sp->file_time.tv_nsec / 1000000)
   };
   switch(sp->encoding){
   default:
