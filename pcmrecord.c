@@ -258,7 +258,7 @@ static struct option Options[] = {
   {"max_length", required_argument, NULL, 'x'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = "cd:e:fjl:m:rsS:t:vL:Vx:48w";
+static char Optstring[] = ":cd:e:fjl:m:rsS:t:vL:Vx:48w";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -303,13 +303,14 @@ int main(int argc,char *argv[]){
       Locale = optarg;
       break;
     case 'm':
-      SubstantialFileTime = fabsf(strtof(optarg,NULL));
+      if(optarg)
+	SubstantialFileTime = fabsf(strtof(optarg,NULL));
       break;
     case 'r':
       Raw = true;
       break;
     case 'S':
-      {
+      if(optarg){
 	char *ptr;
 	uint32_t x = strtol(optarg,&ptr,0);
 	if(ptr != optarg)
@@ -320,7 +321,7 @@ int main(int argc,char *argv[]){
       Subdirs = true;
       break;
     case 't':
-      {
+      if(optarg){
 	char *ptr;
 	int64_t x = strtoll(optarg,&ptr,0);
 	if(ptr != optarg)
@@ -331,10 +332,12 @@ int main(int argc,char *argv[]){
       Verbose++;
       break;
     case 'L':
-      FileLengthLimit = fabsf(strtof(optarg,NULL));
+      if(optarg)
+	FileLengthLimit = fabsf(strtof(optarg,NULL));
       break;
     case 'x':
-      Max_length = fabsf(strtof(optarg,NULL));
+      if(optarg)
+	Max_length = fabsf(strtof(optarg,NULL));
       break;
     case 'V':
       VERSION();
