@@ -211,6 +211,10 @@ struct sockaddr Metadata_dest_socket;
 
 static void closedown(int a);
 static void input_loop(void);
+static void process_status(int);
+static void process_data(int);
+static void scan_sessions(void);
+
 static void cleanup(void);
 int session_file_init(struct session *sp,struct sockaddr const *sender,struct timespec const *timestamp);
 static int close_session(struct session **spp);
@@ -218,6 +222,7 @@ static int close_file(struct session *sp,char const *reason);
 static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string);
 static int start_ogg_opus_stream(struct session *sp);
 static int emit_ogg_opus_tags(struct session *sp);
+static int emit_opus_silence(struct session * const sp,int samples);
 static int end_ogg_opus_stream(struct session *sp);
 static int ogg_flush(struct session *sp);
 static int start_wav_stream(struct session *sp);
@@ -398,6 +403,293 @@ int main(int argc,char *argv[]){
   input_loop(); // Doesn't return
 
   exit(EX_OK);
+}
+
+
+// Read both data and status from RTP network socket, assemble blocks of samples
+// Doing both in one thread avoids a lot of synchronization problems with the session structure, since both write it
+static void input_loop(){
+  while(true){
+    // Receive status or data
+    struct pollfd pfd[2] = {
+      {
+	.fd = Input_fd,
+	.events = POLLIN,
+      },
+      {
+	.fd = Status_fd,
+	.events = POLLIN,
+      },
+    };
+    int const n = poll(pfd,2,1000); // Wait 1 sec max so we can scan active session list
+    if(n < 0)
+      break; // error of some kind - should we exit or retry?
+
+    if(pfd[1].revents & (POLLIN|POLLPRI))
+      process_status(Status_fd);
+
+    if(pfd[0].revents & (POLLIN|POLLPRI))
+      process_data(Input_fd);
+
+    scan_sessions();
+  }
+}
+static void process_status(int fd){
+  // Process status packet, if present
+  uint8_t buffer[PKTSIZE] = {0};
+  struct sockaddr sender = {0};
+  socklen_t socksize = sizeof(sender);
+  int const length = recvfrom(fd,buffer,sizeof(buffer),0,&sender,&socksize);
+  if(length <= 0){    // ??
+    perror("recvfrom");
+    return; // Some sort of error
+  }
+  if(buffer[0] != STATUS)
+    return;
+  // Extract just the SSRC to see if the session exists
+  // NB! Assumes same IP source address *and UDP source port* for status and data
+  // This is only true for recent versions of radiod, after the switch to unconnected output sockets
+  // But older versions don't send status on the output channel anyway, so no problem
+  struct channel chan = {0};
+  struct frontend frontend = {0};
+  decode_radio_status(&frontend,&chan,buffer+1,length-1);
+
+  if(Ssrc != 0 && chan.output.rtp.ssrc != Ssrc)
+    return; // Unwanted session, but still clear any data packets
+
+  // Look for existing session
+  // Everything must match, or we create a different session & file
+  struct session *sp;
+  for(sp = Sessions;sp != NULL;sp=sp->next){
+    if(sp->ssrc == chan.output.rtp.ssrc
+       && sp->type == chan.output.rtp.type
+       && address_match(&sp->sender,&sender)
+       && getportnumber(&sp->sender) == getportnumber(&sender))
+      break;
+  }
+  if(sp != NULL && sp->prev != NULL){
+    // Move to top of list to speed later lookups
+    sp->prev->next = sp->next;
+    if(sp->next != NULL)
+      sp->next->prev = sp->prev;
+    sp->next = Sessions;
+    sp->prev = NULL;
+    Sessions = sp;
+  }
+  if(sp == NULL){
+    // Create session and initialize
+    sp = calloc(1,sizeof(*sp));
+    if(sp == NULL)
+      return; // Unlikely
+
+    sp->prev = NULL;
+    sp->next = Sessions;
+    if(sp->next)
+      sp->next->prev = sp;
+    Sessions = sp;
+    if(Catmode && Ssrc == 0){
+      Ssrc = chan.output.rtp.ssrc; // Latch onto the first ssrc we see, ignore others
+    }
+  }
+  // Wav can't change channels or samprate mid-stream, so if they're going to change we
+  // should probably add an option to force stereo and/or some higher sample rate.
+  // OggOpus can restart the stream with the new parameters, so it's not a problem
+  sp->ssrc = chan.output.rtp.ssrc;
+  sp->type = chan.output.rtp.type;
+  sp->channels = chan.output.channels;
+  sp->encoding = chan.output.encoding;
+  sp->samprate = (sp->encoding == OPUS) ? OPUS_SAMPRATE : chan.output.samprate;
+  sp->sender = sender;
+  sp->chan = chan;
+  sp->frontend = frontend;
+  // Ogg (containing opus) can concatenate streams with new metadata, so restart when it changes
+  // WAV files don't even have this metadata, so ignore changes
+  if(sp->encoding == OPUS
+     && (sp->last_frequency != sp->chan.tune.freq || strncmp(sp->last_preset,sp->chan.preset,sizeof(sp->last_preset)))){
+    end_ogg_opus_stream(sp);
+    start_ogg_opus_stream(sp);
+    emit_ogg_opus_tags(sp);
+  }
+}
+static void process_data(int fd){
+  // Process data packet, if any
+  uint8_t buffer[PKTSIZE] = {0};
+  struct sockaddr sender = {0};
+  socklen_t socksize = sizeof(sender);
+  int size = recvfrom(fd,buffer,sizeof(buffer),0,&sender,&socksize);
+  if(size <= 0){    // ??
+    perror("recvfrom");
+    return;
+  }
+  if(size < RTP_MIN_SIZE)
+    return; // Too small for RTP, ignore
+
+  struct rtp_header rtp = {0};
+  uint8_t const * const dp = (uint8_t *)ntoh_rtp(&rtp,buffer);
+  if(rtp.pad){
+    // Remove padding
+    size -= dp[size-1];
+    rtp.pad = 0;
+  }
+  if(size <= 0)
+    return; // Bogus RTP header
+
+  size -= (dp - buffer);
+
+  if(Ssrc != 0 && rtp.ssrc != Ssrc)
+    return;
+
+  // Sessions are defined by the tuple {ssrc, payload type, sending IP address, sending UDP port}
+  struct session *sp;
+  for(sp = Sessions;sp != NULL;sp=sp->next){
+    if(sp->ssrc == rtp.ssrc
+       && sp->type == rtp.type
+       && address_match(&sp->sender,&sender)
+       && getportnumber(&sp->sender) == getportnumber(&sender))
+      break;
+  }
+  // If a matching session is not found, drop packet and wait for first status packet to create it
+  // This is a change from previous behavior without status when the first RTP packet would create it
+  // This is the only way to work with dynamic payload types since we need the status info
+  // We can't even process RTP timestamps without knowing how big a frame is
+  if(sp == NULL)
+    return;
+
+  if(sp->prev != NULL){
+    // Move to top of list to speed later lookups
+    sp->prev->next = sp->next;
+    if(sp->next != NULL)
+      sp->next->prev = sp->prev;
+    sp->next = Sessions;
+    sp->prev = NULL;
+    Sessions = sp;
+  }
+  clock_gettime(CLOCK_REALTIME,&sp->last_active);
+  if(sp->fp == NULL && !sp->complete){
+    session_file_init(sp,&sender,&sp->last_active);
+    if(sp->encoding == OPUS){
+      if(Raw)
+	fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
+      start_ogg_opus_stream(sp);
+      emit_ogg_opus_tags(sp);
+      if(sp->starting_offset != 0)
+	emit_opus_silence(sp,sp->starting_offset);
+    } else {
+      if(!Raw)
+	start_wav_stream(sp); // Don't emit wav header in --raw
+      int framesize = sp->channels * (sp->encoding == F32LE ? sizeof(float) : sizeof(int16_t));
+      if(sp->can_seek){
+	fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
+      } else {
+	// Emit zero padding
+	unsigned char *zeroes = calloc(sp->starting_offset,framesize); // Don't use too much stack space
+	fwrite(zeroes,framesize,sp->starting_offset,sp->fp);
+	FREE(zeroes);
+      }
+    }
+  }
+  // Output stream now ready to go
+  if(sp->rtp_state.odd_seq_set){
+    if(rtp.seq == sp->rtp_state.odd_seq){
+      // Sender probably restarted; flush queue and start over
+      send_queue(sp,true);
+      sp->rtp_state.init = false;
+    } else
+      sp->rtp_state.odd_seq_set = false;
+  }
+  if(!sp->rtp_state.init){
+    sp->rtp_state.seq = rtp.seq;
+    sp->rtp_state.timestamp = rtp.timestamp;
+    sp->rtp_state.init = true;
+    sp->rtp_state.odd_seq_set = false;
+    if(Verbose > 1)
+      fprintf(stderr,"ssrc %u init seq %u timestamp %u\n",rtp.ssrc,rtp.seq,rtp.timestamp);
+  }
+  // Place packet into proper place in resequence ring buffer
+  int16_t const seqdiff = rtp.seq - sp->rtp_state.seq;
+
+  if(seqdiff < 0){
+    // old, drop
+    if(Verbose > 1)
+      fprintf(stderr,"ssrc %u drop old sequence %u timestamp %u bytes %d\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
+    sp->rtp_state.dupes++;
+    // But sender may have restarted so remember it
+    sp->rtp_state.odd_seq = rtp.seq + 1;
+    sp->rtp_state.odd_seq_set = true;
+    return;
+  } else if(seqdiff >= RESEQ){
+    // Give up waiting for the lost frame, flush what we have
+    // Could also be a restart, but treat it the same
+    if(Verbose > 1)
+      fprintf(stderr,"ssrc %u flushing with drops\n",rtp.ssrc);
+    send_queue(sp,true);
+    if(Verbose > 1)
+      fprintf(stderr,"ssrc %u reset & queue sequence %u timestamp %u bytes %d\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
+  }
+  if(Verbose > 2)
+    fprintf(stderr,"ssrc %u queue sequence %u timestamp %u bytes %d\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
+
+  // put into circular queue
+  sp->rtp_state.odd_seq_set = false;
+  int const qi = rtp.seq % RESEQ;
+  struct reseq * const qp = &sp->reseq[qi];
+  qp->inuse = true;
+  qp->rtp = rtp;
+  qp->data = malloc(size);
+  qp->size = size;
+
+  if(sp->encoding == S16BE){
+    // Flip endianness from big-endian on network to little endian wanted by .wav
+    // byteswap.h is linux-specific; need to find a portable way to get the machine instructions
+
+    int16_t const * const samples = (int16_t *)dp;
+    int16_t * const wp = (int16_t *)qp->data;
+    int const samp_count = size / sizeof(int16_t);
+    for(int n = 0; n < samp_count; n++)
+      wp[n] = bswap_16((uint16_t)samples[n]);
+  } else {
+    memcpy(qp->data,dp,size); // copy everything else into circular queue as-is
+  }
+  send_queue(sp,false); // Send what we now can
+  // If output is pipe, flush right away to minimize latency
+  if(!sp->can_seek && 0 != fflush(sp->fp))
+    fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
+
+  // In FileLengthLimit mode (usually with jtmode) close only according to the wall clock; don't count samples
+  if(Max_length != 0 && sp->samples_remaining <= 0){
+    close_file(sp,"size limit"); // Don't reset RTP here so we won't lose samples on the next file
+    if(sp->exit_after_close)
+      exit(EX_OK); // if writing to a pipe, we're done
+  }
+}
+static void scan_sessions(){
+  // Walk through session list, close idle files
+  // Also close any with FileLengthLimit set
+  // Leave sessions forever in case traffic starts again?
+  struct timespec now = {0};
+  clock_gettime(CLOCK_REALTIME,&now);
+  int64_t const now_cycle = floor((now.tv_sec + 1.0e-9 * now.tv_nsec) / FileLengthLimit);
+
+  struct session *next = NULL;
+  for(struct session *sp = Sessions;sp != NULL; sp = next){
+    next = sp->next; // save in case sp is closed
+    // Don't close session waiting for first activity
+    if(sp->last_active.tv_sec == 0 || sp->fp == NULL)
+      continue;
+    double const idle_time = now.tv_sec - sp->last_active.tv_sec + (now.tv_nsec - sp->last_active.tv_nsec) * 1.0e-9;
+    if(idle_time >= Timeout){
+      // Close idle file
+      close_file(sp,"idle timeout"); // sp will be NULL
+      if(sp->exit_after_close)
+	exit(EX_OK); // if writing to anything but an ordinary file
+      sp->rtp_state.init = false; // reinit rtp on next packet so we won't emit lots of silence
+    } else if(FileLengthLimit != 0){
+      int64_t const start_cycle = floor((sp->file_time.tv_sec + 1.0e-9 * sp->file_time.tv_nsec) / FileLengthLimit);
+      if(now_cycle > start_cycle)
+	// Crossed end of time period (eg, 7.5, 15 or 120 sec) in --length mode
+	close_file(sp,"time boundary"); // Don't reset RTP here so we won't lose samples on the next file
+    }
+  }
 }
 
 static void closedown(int a){
@@ -635,294 +927,6 @@ static int send_wav_queue(struct session * const sp,bool flush){
 }
 
 
-// Read both data and status from RTP network socket, assemble blocks of samples
-// Doing both in one thread avoids a lot of synchronization problems with the session structure, since both write it
-static void input_loop(){
-  struct sockaddr sender = {0};
-  struct timespec last_scan_time = {0};
-  while(true){
-    // Receive status or data
-    struct pollfd pfd[2] = {
-      {
-	.fd = Input_fd,
-	.events = POLLIN,
-      },
-      {
-	.fd = Status_fd,
-	.events = POLLIN,
-      },
-    };
-    int const n = poll(pfd,sizeof(pfd)/sizeof(pfd[0]),1000); // Wait 1 sec max so we can scan active session list
-    if(n < 0)
-      break; // error of some kind - should we exit or retry?
-
-    struct timespec now = {0};
-    clock_gettime(CLOCK_REALTIME,&now);
-    int64_t now_cycle = 0;
-    if(FileLengthLimit > 0)
-      now_cycle = floor((now.tv_sec + 1.0e-9 * now.tv_nsec) / FileLengthLimit);
-
-    if(pfd[1].revents & (POLLIN|POLLPRI)){
-      // Process status packet, if present
-      uint8_t buffer[PKTSIZE] = {0};
-      socklen_t socksize = sizeof(sender);
-      int const length = recvfrom(Status_fd,buffer,sizeof(buffer),0,&sender,&socksize);
-      if(length <= 0){    // ??
-	perror("recvfrom");
-	goto statdone; // Some sort of error
-      }
-      if(buffer[0] != STATUS)
-	goto statdone;
-      // Extract just the SSRC to see if the session exists
-      // NB! Assumes same IP source address *and UDP source port* for status and data
-      // This is only true for recent versions of radiod, after the switch to unconnected output sockets
-      // But older versions don't send status on the output channel anyway, so no problem
-      struct channel chan = {0};
-      struct frontend frontend = {0};
-      decode_radio_status(&frontend,&chan,buffer+1,length-1);
-
-      if(Ssrc != 0 && chan.output.rtp.ssrc != Ssrc)
-	goto statdone; // Unwanted session, but still clear any data packets
-
-      // Look for existing session
-      // Everything must match, or we create a different session & file
-      struct session *sp;
-      for(sp = Sessions;sp != NULL;sp=sp->next){
-	if(sp->ssrc == chan.output.rtp.ssrc
-	   && sp->type == chan.output.rtp.type
-	   && address_match(&sp->sender,&sender)
-	   && getportnumber(&sp->sender) == getportnumber(&sender))
-	  break;
-      }
-      if(sp != NULL && sp->prev != NULL){
-	// Move to top of list to speed later lookups
-	sp->prev->next = sp->next;
-	if(sp->next != NULL)
-	  sp->next->prev = sp->prev;
-	sp->next = Sessions;
-	sp->prev = NULL;
-	Sessions = sp;
-      }
-      if(sp == NULL){
-	// Create session and initialize
-	sp = calloc(1,sizeof(*sp));
-	if(sp == NULL)
-	  goto statdone; // unlikely
-
-	sp->prev = NULL;
-	sp->next = Sessions;
-	if(sp->next)
-	  sp->next->prev = sp;
-	Sessions = sp;
-	if(Catmode && Ssrc == 0){
-	  Ssrc = chan.output.rtp.ssrc; // Latch onto the first ssrc we see, ignore others
-	}
-      }
-      // Wav can't change channels or samprate mid-stream, so if they're going to change we
-      // should probably add an option to force stereo and/or some higher sample rate.
-      // OggOpus can restart the stream with the new parameters, so it's not a problem
-      sp->ssrc = chan.output.rtp.ssrc;
-      sp->type = chan.output.rtp.type;
-      sp->channels = chan.output.channels;
-      sp->encoding = chan.output.encoding;
-      sp->samprate = (sp->encoding == OPUS) ? OPUS_SAMPRATE : chan.output.samprate;
-      sp->sender = sender;
-      sp->chan = chan;
-      sp->frontend = frontend;
-      // Ogg (containing opus) can concatenate streams with new metadata, so restart when it changes
-      // WAV files don't even have this metadata, so ignore changes
-      if(sp->encoding == OPUS
-	 && (sp->last_frequency != sp->chan.tune.freq || strncmp(sp->last_preset,sp->chan.preset,sizeof(sp->last_preset)))){
-	end_ogg_opus_stream(sp);
-	start_ogg_opus_stream(sp);
-	emit_ogg_opus_tags(sp);
-      }
-    }
-  statdone:; // End of status packet processing (if any)
-    if(pfd[0].revents & (POLLIN|POLLPRI)){
-      // Process data packet, if any
-      uint8_t buffer[PKTSIZE] = {0};
-      socklen_t socksize = sizeof(sender);
-      int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&sender,&socksize);
-      if(size <= 0){    // ??
-	perror("recvfrom");
-	goto datadone; // Some sort of error, quit
-      }
-      if(size < RTP_MIN_SIZE)
-	goto datadone; // Too small for RTP, ignore
-
-      struct rtp_header rtp = {0};
-      uint8_t const * const dp = (uint8_t *)ntoh_rtp(&rtp,buffer);
-      if(rtp.pad){
-	// Remove padding
-	size -= dp[size-1];
-	rtp.pad = 0;
-      }
-      if(size <= 0)
-	goto datadone; // Bogus RTP header
-
-      size -= (dp - buffer);
-
-      if(Ssrc != 0 && rtp.ssrc != Ssrc)
-	goto datadone;
-
-      // Sessions are defined by the tuple {ssrc, payload type, sending IP address, sending UDP port}
-      struct session *sp;
-      for(sp = Sessions;sp != NULL;sp=sp->next){
-	if(sp->ssrc == rtp.ssrc
-	   && sp->type == rtp.type
-	   && address_match(&sp->sender,&sender)
-	   && getportnumber(&sp->sender) == getportnumber(&sender))
-	  break;
-      }
-      // If a matching session is not found, drop packet and wait for first status packet to create it
-      // This is a change from previous behavior without status when the first RTP packet would create it
-      // This is the only way to work with dynamic payload types since we need the status info
-      // We can't even process RTP timestamps without knowing how big a frame is
-      if(sp == NULL)
-	goto datadone;
-
-      if(sp->prev != NULL){
-	// Move to top of list to speed later lookups
-	sp->prev->next = sp->next;
-	if(sp->next != NULL)
-	  sp->next->prev = sp->prev;
-	sp->next = Sessions;
-	sp->prev = NULL;
-	Sessions = sp;
-      }
-      if(FileLengthLimit != 0 && sp->fp != NULL){
-	int64_t start_cycle = floor((sp->file_time.tv_sec + 1.0e-9 * sp->file_time.tv_nsec) / FileLengthLimit);
-
-	if(now_cycle > start_cycle){
-	  // Crossed end of time period (eg, 7.5, 15 or 120 sec) in --length mode
-	  close_file(sp,"time boundary"); // Don't reset RTP here so we won't lose samples on the next file
-	}
-      }
-      sp->last_active = now;
-      if(sp->fp == NULL && !sp->complete){
-	session_file_init(sp,&sender,&now);
-	if(sp->encoding == OPUS){
-	  if(Raw)
-	    fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
-	  start_ogg_opus_stream(sp);
-	  emit_ogg_opus_tags(sp);
-	  if(sp->starting_offset != 0)
-	    emit_opus_silence(sp,sp->starting_offset);
-	} else {
-	  if(!Raw)
-	    start_wav_stream(sp); // Don't emit wav header in --raw
-	  int framesize = sp->channels * (sp->encoding == F32LE ? sizeof(float) : sizeof(int16_t));
-	  if(sp->can_seek){
-	    fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
-	  } else {
-	    // Emit zero padding
-	    unsigned char *zeroes = calloc(sp->starting_offset,framesize); // Don't use too much stack space
-	    fwrite(zeroes,framesize,sp->starting_offset,sp->fp);
-	    FREE(zeroes);
-	  }
-	}
-      }
-      // Output stream now ready to go
-      if(sp->rtp_state.odd_seq_set){
-	if(rtp.seq == sp->rtp_state.odd_seq){
-	  // Sender probably restarted; flush queue and start over
-	  send_queue(sp,true);
-	  sp->rtp_state.init = false;
-	} else
-	  sp->rtp_state.odd_seq_set = false;
-      }
-      if(!sp->rtp_state.init){
-	sp->rtp_state.seq = rtp.seq;
-	sp->rtp_state.timestamp = rtp.timestamp;
-	sp->rtp_state.init = true;
-	sp->rtp_state.odd_seq_set = false;
-	if(Verbose > 1)
-	  fprintf(stderr,"ssrc %u init seq %u timestamp %u\n",rtp.ssrc,rtp.seq,rtp.timestamp);
-      }
-      // Place packet into proper place in resequence ring buffer
-      int16_t const seqdiff = rtp.seq - sp->rtp_state.seq;
-
-      if(seqdiff < 0){
-	// old, drop
-	if(Verbose > 1)
-	  fprintf(stderr,"ssrc %u drop old sequence %u timestamp %u bytes %d\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
-	sp->rtp_state.dupes++;
-	// But sender may have restarted so remember it
-	sp->rtp_state.odd_seq = rtp.seq + 1;
-	sp->rtp_state.odd_seq_set = true;
-	goto datadone;
-      } else if(seqdiff >= RESEQ){
-	// Give up waiting for the lost frame, flush what we have
-	// Could also be a restart, but treat it the same
-	if(Verbose > 1)
-	  fprintf(stderr,"ssrc %u flushing with drops\n",rtp.ssrc);
-	send_queue(sp,true);
-	if(Verbose > 1)
-	  fprintf(stderr,"ssrc %u reset & queue sequence %u timestamp %u bytes %d\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
-      }
-      if(Verbose > 2)
-	fprintf(stderr,"ssrc %u queue sequence %u timestamp %u bytes %d\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
-
-      // put into circular queue
-      sp->rtp_state.odd_seq_set = false;
-      int const qi = rtp.seq % RESEQ;
-      struct reseq * const qp = &sp->reseq[qi];
-      qp->inuse = true;
-      qp->rtp = rtp;
-      qp->data = malloc(size);
-      qp->size = size;
-
-      if(sp->encoding == S16BE){
-	// Flip endianness from big-endian on network to little endian wanted by .wav
-	// byteswap.h is linux-specific; need to find a portable way to get the machine instructions
-
-	int16_t const * const samples = (int16_t *)dp;
-	int16_t * const wp = (int16_t *)qp->data;
-	int const samp_count = size / sizeof(int16_t);
-	for(int n = 0; n < samp_count; n++)
-	  wp[n] = bswap_16((uint16_t)samples[n]);
-      } else {
-	memcpy(qp->data,dp,size); // copy everything else into circular queue as-is
-      }
-      send_queue(sp,false); // Send what we now can
-      // If output is pipe, flush right away to minimize latency
-      if(!sp->can_seek && 0 != fflush(sp->fp))
-	fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
-
-      // In FileLengthLimit mode (usually with jtmode) close only according to the wall clock; don't count samples
-      if(Max_length != 0 && sp->samples_remaining <= 0){
-	close_file(sp,"size limit"); // Don't reset RTP here so we won't lose samples on the next file
-	if(sp->exit_after_close)
-	  exit(EX_OK); // if writing to a pipe, we're done
-      }
-    }
-  datadone:; // end of data packet processing, if any
-
-    // Walk through session list every second, close idle files
-    // Leave sessions forever in case traffic starts again?
-    if(now.tv_sec <= last_scan_time.tv_sec) // really should also look at tv_nsec, but this will sync to full seconds
-      continue;
-
-    last_scan_time = now;
-    struct session *next = NULL;
-    for(struct session *sp = Sessions;sp != NULL; sp = next){
-      next = sp->next; // save in case sp is closed
-      // Don't close session waiting for first activity
-      if(sp->last_active.tv_sec == 0)
-	continue;
-      double const idle_time = now.tv_sec - sp->last_active.tv_sec + (now.tv_nsec - sp->last_active.tv_nsec) * 1.0e-9;
-      if(idle_time < Timeout)
-	continue;
-
-      // Close idle file
-      close_file(sp,"idle timeout"); // sp will be NULL
-      if(sp->exit_after_close)
-	exit(EX_OK); // if writing to anything but an ordinary file
-      sp->rtp_state.init = false; // reinit rtp on next packet so we won't emit lots of silence
-    }
-  }
-}
 
 
 static void cleanup(void){
@@ -944,7 +948,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender,struct ti
   char const *file_encoding = encoding_string(sp->encoding == S16BE ? S16LE : sp->encoding);
   if(Catmode){
     sp->fp = stdout;
-    sp->can_seek = false;
+    sp->can_seek = false; // Can't seek on a pipe
     sp->exit_after_close = true;
     strlcpy(sp->filename,"[stdout]",sizeof(sp->filename));
     if(Verbose)
@@ -955,8 +959,8 @@ int session_file_init(struct session *sp,struct sockaddr const *sender,struct ti
     return 0;
   } else if(Command != NULL){
     // Substitute parameters as specified
-    sp->can_seek = false;
-    sp->exit_after_close = false;
+    sp->can_seek = false; // Can't seek on a pipe
+    sp->exit_after_close = false; // Runs forever, closing individual pipes on timeout
     sp->filename[0] = '\0';
     char command_copy[2048]; // Don't overwrite program args
     strlcpy(command_copy,Command,sizeof(command_copy));
@@ -1139,28 +1143,17 @@ int session_file_init(struct session *sp,struct sockaddr const *sender,struct ti
   // Some error and logging messages use the suffix, some don't, but hey
   char tempfile[PATH_MAX+5]; // If too long, open will fail with ENAMETOOLONG
   snprintf(tempfile,sizeof tempfile, "%s.tmp",sp->filename);
-  sp->fp = fopen(tempfile,"w++");
-
-  if(sp->fp == NULL){
+  int const fd = open(tempfile,O_WRONLY|O_APPEND|O_CREAT|O_EXCL|O_NONBLOCK,0644);
+  if(fd == -1){
     fprintf(stderr,"can't create/write file '%s': %s\n",tempfile,strerror(errno));
     return -1;
   }
-  {
-    // The output could be a named pipe, which can't be seeked
-    struct stat statbuf = {0};
-    if(fstat(fileno(sp->fp),&statbuf) != 0){
-      fprintf(stderr,"stat(%s) failed: %s\n",sp->filename,strerror(errno));
-    } else {
-      switch(statbuf.st_mode & S_IFMT){
-      case S_IFREG:
-	sp->can_seek = true;
-	break;
-      default:
-	sp->can_seek = false;
-	break;
-      }
-    }
+  sp->fp = fdopen(fd,"a");
+  if(sp->fp == NULL){
+    fprintf(stderr,"fdopen(%d,a) failed: %s\n",fd,strerror(errno));
+    return -1;
   }
+  sp->can_seek = true; // Ordinary file
   // We byte swap S16BE to S16LE, so change the tag
   if(Verbose){
     fprintf(stderr,"%s creating '%s' %d s/s %s %s %'.3lf Hz %s",
@@ -1176,11 +1169,6 @@ int session_file_init(struct session *sp,struct sockaddr const *sender,struct ti
 
   sp->iobuffer = malloc(BUFFERSIZE);
   setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
-
-  int const fd = fileno(sp->fp);
-  fcntl(fd,F_SETFL,O_NONBLOCK); // Let's see if this keeps us from losing data
-  // Keep decoders from reading the file until we're done, but don't block
-  flock(fd,LOCK_EX|LOCK_NB);
 
   attrprintf(fd,"encoding","%s",file_encoding);
   attrprintf(fd,"samprate","%u",sp->samprate);
@@ -1247,44 +1235,47 @@ static int close_file(struct session *sp,char const *reason){
   else
     end_wav_stream(sp);
 
-  char tempfile[PATH_MAX+5];
-  snprintf(tempfile,sizeof tempfile,"%s.tmp",sp->filename);
-  if(Verbose){
-    fprintf(stderr,"%s closing '%s' %'.1f sec",
-	    sp->frontend.description,
-	    sp->filename, // might be blank
-	    (float)sp->samples_written / sp->samprate);
-    if(reason != NULL)
-      fprintf(stderr," (%s)\n",reason);
-  }
-  if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
-    fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
+  if(Catmode)
+    fclose(sp->fp); // Just close stdout
+  else if(Command != NULL)
+    pclose(sp->fp);
+  else { // regular file temporary
+    if(Verbose){
+      fprintf(stderr,"%s closing '%s' %'.1f sec",
+	      sp->frontend.description,
+	      sp->filename, // might be blank
+	      (float)sp->samples_written / sp->samprate);
+      if(reason != NULL)
+	fprintf(stderr," (%s)\n",reason);
 
-  if(sp->can_seek){
-    if(sp->substantial_file){ // Don't bother for non-substantial files
+      if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
+	fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
+    }
+    char tempfile[PATH_MAX+5];
+    snprintf(tempfile,sizeof tempfile,"%s.tmp",sp->filename); // Recover actual name of file we're working on
+    if(sp->substantial_file){
       int fd = fileno(sp->fp);
       attrprintf(fd,"samples written","%lld",sp->samples_written);
       attrprintf(fd,"total samples","%lld",sp->total_file_samples);
-    } else if(strlen(sp->filename) > 0){
+      fclose(sp->fp);
+      rename(tempfile,sp->filename);    // Atomic rename, after everything else
+    } else {
+      // File is too short to keep, delete
+      fclose(sp->fp);
       if(unlink(tempfile) != 0)
 	fprintf(stderr,"Can't unlink %s: %s\n",tempfile,strerror(errno));
       if(Verbose)
-	fprintf(stderr,"deleting %s %'.1f sec\n",tempfile,
-		(float)sp->samples_written / sp->samprate);
+	fprintf(stderr,"deleting %s %'.1f sec\n",tempfile,(float)sp->samples_written / sp->samprate);
     }
-  }
-  if(Command != NULL)
-    pclose(sp->fp);
-  else if(sp->fp != NULL){
-    fclose(sp->fp);
-    rename(tempfile,sp->filename);    // Atomic rename
-  }
+  } // else regular file
+  // Do this for all closures (stdout, command, file)
   sp->fp = NULL;
   FREE(sp->iobuffer);
   sp->filename[0] = '\0';
   sp->samples_written = 0;
   sp->total_file_samples = 0;
   sp->current_segment_samples = 0;
+  memset(&sp->file_time,0,sizeof sp->file_time);
 
   if (0 == Max_length)
     return 0;
