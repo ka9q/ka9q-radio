@@ -1143,12 +1143,12 @@ int session_file_init(struct session *sp,struct sockaddr const *sender,struct ti
   // Some error and logging messages use the suffix, some don't, but hey
   char tempfile[PATH_MAX+5]; // If too long, open will fail with ENAMETOOLONG
   snprintf(tempfile,sizeof tempfile, "%s.tmp",sp->filename);
-  int const fd = open(tempfile,O_WRONLY|O_APPEND|O_CREAT|O_EXCL|O_NONBLOCK,0644);
+  int const fd = open(tempfile,O_RDWR|O_CREAT|O_EXCL|O_NONBLOCK,0644);
   if(fd == -1){
     fprintf(stderr,"can't create/write file '%s': %s\n",tempfile,strerror(errno));
     return -1;
   }
-  sp->fp = fdopen(fd,"a");
+  sp->fp = fdopen(fd,"r+");
   if(sp->fp == NULL){
     fprintf(stderr,"fdopen(%d,a) failed: %s\n",fd,strerror(errno));
     return -1;
