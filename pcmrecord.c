@@ -164,7 +164,7 @@ struct session {
     bool inuse;
   } reseq[RESEQ];              // Reseqencing queue
 
-
+  bool bitbucket;              // Discard output, e.g, because output file couldn't be written
   FILE *fp;                    // File being recorded
   void *iobuffer;              // Big buffer to reduce write rate
   struct timespec last_active; // time of last file activity
@@ -216,7 +216,7 @@ static void process_data(int);
 static void scan_sessions(void);
 
 static void cleanup(void);
-int session_file_init(struct session *sp,struct sockaddr const *sender,struct timespec const *timestamp);
+static int session_file_init(struct session *sp,struct sockaddr const *sender,struct timespec const *timestamp);
 static int close_session(struct session **spp);
 static int close_file(struct session *sp,char const *reason);
 static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string);
@@ -565,8 +565,14 @@ static void process_data(int fd){
     Sessions = sp;
   }
   clock_gettime(CLOCK_REALTIME,&sp->last_active);
+  if(sp->bitbucket)
+    return; // Discard output, e.g., because file create failed. Need this to avoid flurry of error messages
   if(sp->fp == NULL && !sp->complete){
-    session_file_init(sp,&sender,&sp->last_active);
+    if(session_file_init(sp,&sender,&sp->last_active) != 0){
+      sp->bitbucket = true;
+      return;
+    }
+    sp->bitbucket = false;
     if(sp->encoding == OPUS){
       if(Raw)
 	fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
@@ -578,13 +584,15 @@ static void process_data(int fd){
       if(!Raw)
 	start_wav_stream(sp); // Don't emit wav header in --raw
       int framesize = sp->channels * (sp->encoding == F32LE ? sizeof(float) : sizeof(int16_t));
-      if(sp->can_seek){
-	fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
-      } else {
-	// Emit zero padding
-	unsigned char *zeroes = calloc(sp->starting_offset,framesize); // Don't use too much stack space
-	fwrite(zeroes,framesize,sp->starting_offset,sp->fp);
-	FREE(zeroes);
+      if(sp->fp != NULL){
+	if(sp->can_seek){
+	  fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
+	} else {
+	  // Emit zero padding
+	  unsigned char *zeroes = calloc(sp->starting_offset,framesize); // Don't use too much stack space
+	  fwrite(zeroes,framesize,sp->starting_offset,sp->fp);
+	  FREE(zeroes);
+	}
       }
     }
   }
@@ -652,7 +660,7 @@ static void process_data(int fd){
   }
   send_queue(sp,false); // Send what we now can
   // If output is pipe, flush right away to minimize latency
-  if(!sp->can_seek && 0 != fflush(sp->fp))
+  if(sp->fp && !sp->can_seek && 0 != fflush(sp->fp))
     fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
 
   // In FileLengthLimit mode (usually with jtmode) close only according to the wall clock; don't count samples
@@ -786,6 +794,8 @@ static int emit_opus_silence(struct session * const sp,int samples){
 
 
 static int send_queue(struct session * const sp,bool const flush){
+  if(sp == NULL)
+    return -1;
   if(sp->encoding == OPUS)
     return send_opus_queue(sp,flush);
   else
@@ -938,7 +948,7 @@ static void cleanup(void){
     Sessions = next_s;
   }
 }
-int session_file_init(struct session *sp,struct sockaddr const *sender,struct timespec const *timestamp){
+static int session_file_init(struct session *sp,struct sockaddr const *sender,struct timespec const *timestamp){
   if(sp->fp != NULL)
     return 0;
 
@@ -1145,12 +1155,15 @@ int session_file_init(struct session *sp,struct sockaddr const *sender,struct ti
   snprintf(tempfile,sizeof tempfile, "%s.tmp",sp->filename);
   int const fd = open(tempfile,O_RDWR|O_CREAT|O_EXCL|O_NONBLOCK,0644);
   if(fd == -1){
+    // This could be because two SSRCs are tuned to the same frequency and writing the same spool file
     fprintf(stderr,"can't create/write file '%s': %s\n",tempfile,strerror(errno));
+    sp->can_seek = false;
     return -1;
   }
   sp->fp = fdopen(fd,"r+");
   if(sp->fp == NULL){
     fprintf(stderr,"fdopen(%d,a) failed: %s\n",fd,strerror(errno));
+    sp->can_seek = false;
     return -1;
   }
   sp->can_seek = true; // Ordinary file

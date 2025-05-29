@@ -128,7 +128,7 @@ endif
 	(cd aux;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d;chown root:root /etc/logrotate.d/*;chmod go-w /etc/logrotate.d/*)
 	(cd aux;rsync -a --ignore-existing systable.conf /var/lib/hfdl)
 	(cd aux; rsync start-hfdl.sh $(DAEMONDIR))
-	(cd aux; rsync -a ka9q-cleanups /etc/cron.d/; chown root:root /etc/cron.d/ka9q-cleanups)
+	(cd aux; rsync -a ka9q-cleanups /etc/cron.d/; chown root:root /etc/cron.d/ka9q-cleanups;chmod 0644 /etc/cron.d/ka9q-cleanups)
 	(cd share;rsync -a --ignore-existing * $(LIBDIR))
 	chown radio:radio $(LIBDIR)
 	(cd service;rsync -a * /etc/systemd/system)
