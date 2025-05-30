@@ -180,13 +180,13 @@ int main(int argc,char * const argv[]){
     }
     DAC_samprate = config_getint(Configtable,Audio,"samprate",DAC_samprate);
     Channels = config_getint(Configtable,Audio,"channels",Channels);
-    char const *audiodev = config_getstring(Configtable,"audio","device",NULL);
+    char const *audiodev = config_getstring(Configtable,Audio,"device",NULL);
     if(audiodev)
       Audiodev = strdup(audiodev);
     // Add validity checking
 
 #if __linux__
-    Pipe = config_getstring(Configtable,"audio","pipe",NULL);
+    Pipe = config_getstring(Configtable,Audio,"pipe",NULL);
 #endif
 
     Gain = config_getfloat(Configtable,Audio,"gain",Gain);
