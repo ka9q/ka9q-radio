@@ -255,6 +255,7 @@ struct channel {
                          // i.e, no minimum or at least 20ms, 40ms, 60ms or 80ms /packet for 20ms blocktime
     uint64_t errors;      // Count of errors with sendto()
     float gain;        // Audio gain to normalize amplitude
+    int ttl; // per-channel IP TTL for multicast scope control
   } output;
 
   struct {
@@ -294,7 +295,7 @@ extern struct channel Template;
 extern pthread_mutex_t Channel_list_mutex;
 extern int Channel_idle_timeout;
 extern int Ctl_fd;     // File descriptor for receiving user commands
-extern int Output_fd;
+extern int Output_fd,Output_fd0;
 extern int Output_fd_lo;
 extern struct sockaddr Metadata_dest_socket; // Socket for main metadata
 extern int Verbose;

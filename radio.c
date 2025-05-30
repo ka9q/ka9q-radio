@@ -395,7 +395,8 @@ void *sap_send(void *p){
     wp += len;
     space -= len;
 
-    if(sendto(Output_fd,message,wp - message,0,&chan->sap.dest_socket,sizeof(chan->sap.dest_socket)) < 0)
+    int const outsock = chan->output.ttl != 0 ? Output_fd : Output_fd0;
+      if(sendto(outsock,message,wp - message,0,&chan->sap.dest_socket,sizeof(chan->sap.dest_socket)) < 0)
       chan->output.errors++;
     sleep(5);
   }

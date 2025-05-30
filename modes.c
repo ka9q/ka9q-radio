@@ -106,6 +106,7 @@ char const *Channel_keys[] = {
   "freq8",
   "freq9",
   "ssrc",
+  "ttl",
   NULL
 };
 
@@ -142,6 +143,7 @@ int set_defaults(struct channel *chan){
   chan->output.pacing = false;
   chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
   chan->output.minpacket = 0;  // No output buffering
+  chan->output.ttl = Mcast_ttl;
 
   chan->tune.doppler = 0;
   chan->tune.doppler_rate = 0;
@@ -342,6 +344,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     chan->filter2.blocking = 10;
   }
   chan->prio = config_getint(table,sname,"prio",chan->prio);
+  chan->output.ttl = config_getint(table,sname,"ttl",chan->output.ttl);
 
   return 0;
 }

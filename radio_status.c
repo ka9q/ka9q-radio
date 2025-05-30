@@ -110,7 +110,8 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
   uint8_t packet[PKTSIZE];
   chan->status.packets_out++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
-  if(sendto(Output_fd,packet,len,0,sock,sizeof(struct sockaddr)) < 0)
+  int const outsock = chan->output.ttl != 0 ? Output_fd : Output_fd0;
+  if(sendto(outsock,packet,len,0,sock,sizeof(struct sockaddr)) < 0)
     chan->output.errors++;
   return 0;
 }
@@ -672,12 +673,13 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     // Also this doesn't return anything until the socket is first transmitted on
     {
       socklen_t len = sizeof(chan->output.source_socket);
-      getsockname(Output_fd,(struct sockaddr *)&chan->output.source_socket,&len);
+      int const outsock = chan->output.ttl != 0 ? Output_fd : Output_fd0;
+      getsockname(outsock,(struct sockaddr *)&chan->output.source_socket,&len);
     }
     encode_socket(&bp,OUTPUT_DATA_SOURCE_SOCKET,&chan->output.source_socket);
     // Where we're sending PCM output
     encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&chan->output.dest_socket);
-    encode_int32(&bp,OUTPUT_TTL,Mcast_ttl);
+    encode_int32(&bp,OUTPUT_TTL,chan->output.ttl);
     encode_int64(&bp,OUTPUT_METADATA_PACKETS,chan->status.packets_out);
     encode_byte(&bp,RTP_PT,chan->output.rtp.type);
     encode_int32(&bp,STATUS_INTERVAL,chan->status.output_interval);

@@ -370,7 +370,8 @@ int flush_output(struct channel * chan,bool marker,bool complete){
       chan->output.rp -= chan->output.queue_size;
 
     if(bytes > 0){ // Suppress Opus DTX frames (bytes == 0)
-      int const r = sendto(Output_fd,&packet,bytes + (dp - packet),0,(struct sockaddr *)&chan->output.dest_socket,sizeof(chan->output.dest_socket));
+      int const outsock = chan->output.ttl != 0 ? Output_fd : Output_fd0;
+      int const r = sendto(outsock,&packet,bytes + (dp - packet),0,(struct sockaddr *)&chan->output.dest_socket,sizeof(chan->output.dest_socket));
       chan->output.rtp.bytes += bytes;
       chan->output.rtp.packets++;
       chan->output.rtp.seq++;

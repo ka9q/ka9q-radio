@@ -115,7 +115,8 @@ static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 static pthread_t Status_thread;
 struct sockaddr Metadata_dest_socket;      // Dest of global metadata
 static char *Metadata_dest_string; // DNS name of default multicast group for status/commands
-int Output_fd = -1; // Unconnected socket used for other hosts
+int Output_fd = -1; // Unconnected socket used for output when ttl > 0
+int Output_fd0 = -1; // Unconnected socket used for local loopback when ttl = 0
 struct channel Template;
 // If a channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
 // Must be computed at run time because it depends on the block time
@@ -354,7 +355,7 @@ static int loadconfig(char const *file){
     // Don't close dirp just yet, would invalidate dfd
     // Config sections can actually be in any order, but just in case one is split across multiple files...
     qsort(subfiles,sf,sizeof(subfiles[0]),(int (*)(void const *,void const *))strcmp);
-    
+
     // Concatenate sorted files into temporary copy
     char tempfilename[PATH_MAX];
     strlcpy(tempfilename,"/tmp/radiod-configXXXXXXXX",sizeof(tempfilename));
@@ -400,10 +401,10 @@ static int loadconfig(char const *file){
     // Done with file names and directory
     for(int i=0; i < sf; i++)
       FREE(subfiles[i]); // Allocated by strdup()
-    
+
     (void)closedir(dirp); dirp = NULL;
     fclose(tfp); tfp = NULL; tfd = -1; // Also does close(tfd)
-    
+
     Configtable = iniparser_load(tempfilename);
     unlink(tempfilename); // Done with temp file
   }
@@ -561,7 +562,7 @@ static int loadconfig(char const *file){
 	      addr != 0 ? &slen : NULL);
 
     // Status sent to same group, different port
-    memcpy(&Template.status.dest_socket,&Template.output.dest_socket,sizeof(Template.status.dest_socket));
+    Template.status.dest_socket = Template.output.dest_socket;
     struct sockaddr_in *sin = (struct sockaddr_in *)&Template.status.dest_socket;
     sin->sin_port = htons(DEFAULT_STAT_PORT);
   }
@@ -570,7 +571,17 @@ static int loadconfig(char const *file){
     fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
     exit(EX_NOHOST); // let systemd restart us
   }
-  join_group(Output_fd,NULL,&Template.output.dest_socket,Iface); // Work around snooping switch problem
+  // Secondary output socket with ttl = 0
+  if(Mcast_ttl == 0)
+    Output_fd0 = Output_fd;
+  else {
+    join_group(Output_fd,NULL,&Template.output.dest_socket,Iface); // Work around snooping switch problem
+    Output_fd0 = output_mcast(&Template.output.dest_socket,Iface,0,IP_tos);
+    if(Output_fd0 < 0){
+      fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
+      exit(EX_NOHOST); // let systemd restart us
+    }
+  }
 
   // Set up status/command stream, global for all receiver channels
   if(0 == strcmp(Metadata_dest_string,Data)){
@@ -591,7 +602,8 @@ static int loadconfig(char const *file){
 		addr != 0 ? &slen : NULL);
   }
   // either resolve_mcast() or avahi_start() has resolved the target DNS name into Metadata_dest_socket and inserted the port number
-  join_group(Output_fd,NULL,&Metadata_dest_socket,Iface);
+  if(Mcast_ttl != 0)
+    join_group(Output_fd,NULL,&Metadata_dest_socket,Iface);
   // Same remote socket as status
   Ctl_fd = listen_mcast(NULL,&Metadata_dest_socket,Iface);
   if(Ctl_fd < 0){
@@ -651,45 +663,65 @@ void *process_section(void *p){
     // Add .local if not present
     data = ensure_suffix(cp,".local");
   }
-  // Override global defaults
-  char const *iface = config_getstring(Configtable,sname,"iface",Iface);
 
-  // data stream is shared by all channels in this section
-  // Now also used for per-channel status/control, with different port number
-  struct sockaddr data_dest_socket;
-  struct sockaddr metadata_dest_socket;
-  memset(&data_dest_socket,0,sizeof(data_dest_socket));
-  memset(&metadata_dest_socket,0,sizeof(metadata_dest_socket));
+  // Set up a template for all channels defined in this section
+  // Parameter priority, from high to low:
+  // 1. this section
+  // 2. the preset database entry, if specified
+  // 3. the [global] section
+  // 4. compiled-in defaults to keep things from blowing up
+  struct channel chan_template = {0};
+  set_defaults(&chan_template); // compiled-in defaults (#4)
+  loadpreset(&chan_template,Configtable,GLOBAL); // [global] section (#3)
+
+  if(preset != NULL && loadpreset(&chan_template,Preset_table,preset) != 0) // preset database entry (#2)
+    fprintf(stdout,"[%s] loadpreset(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Preset_file,preset);
+
+  strlcpy(chan_template.preset,preset,sizeof chan_template.preset);
+  loadpreset(&chan_template,Configtable,sname); // this section's config (#1)
 
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
+  // Look quickly (2 tries max) to see if it's already in the DNS. Otherwise make a multicast address.
+  uint32_t addr = 0;
+  bool use_dns = config_getboolean(Configtable,sname,"dns",Global_use_dns);
+
+  if(!use_dns || resolve_mcast(data,&chan_template.output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
+    // If we're not using the DNS, or if resolution fails, hash name string to make IP multicast address in 239.x.x.x range
+    addr = make_maddr(data);
+
   {
-    // Look quickly (2 tries max) to see if it's already in the DNS. Otherwise make a multicast address.
-    uint32_t addr = 0;
-    bool use_dns = config_getboolean(Configtable,sname,"dns",Global_use_dns);
-
-    if(!use_dns || resolve_mcast(data,&data_dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
-      // Hash name string to make IP multicast address in 239.x.x.x range
-      addr = make_maddr(data);
-
-    char const *cp = config2_getstring(Configtable,Configtable,GLOBAL,sname,"encoding","s16be");
-    bool is_opus = strcasecmp(cp,"opus") == 0 ? true : false;
-    size_t slen = sizeof(data_dest_socket);
+    size_t slen = sizeof(chan_template.output.dest_socket);
     // there may be several hosts with the same section names
     // prepend the host name to the service name
     char service_name[512] = {0};
     snprintf(service_name, sizeof service_name, "%s %s", Hostname, sname);
+    char ttlmsg[128];
+    snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",chan_template.output.ttl);
+    char const *cp = config2_getstring(Configtable,Configtable,GLOBAL,sname,"encoding","s16be");
+    bool is_opus = strcasecmp(cp,"opus") == 0 ? true : false;
     avahi_start(service_name,
 		is_opus ? "_opus._udp" : "_rtp._udp",
 		DEFAULT_RTP_PORT,
-		data,addr,Ttlmsg,
-		addr != 0 ? &data_dest_socket : NULL,
+		data,addr,ttlmsg,
+		addr != 0 ? &chan_template.output.dest_socket : NULL,
 		addr != 0 ? &slen : NULL);
-    // metadata for this stream is same except for port number
-    memcpy(&metadata_dest_socket,&data_dest_socket,sizeof(metadata_dest_socket));
-    struct sockaddr_in *sin = (struct sockaddr_in *)&metadata_dest_socket;
-    sin->sin_port = htons(DEFAULT_STAT_PORT);
   }
-  join_group(Output_fd,NULL,&data_dest_socket,iface);
+
+  // Set up output stream (data + status)
+  // data stream is shared by all channels in this section
+  // Now also used for per-channel status/control, with different port number
+  chan_template.status.dest_socket = chan_template.output.dest_socket;
+  struct sockaddr_in *sin = (struct sockaddr_in *)&chan_template.status.dest_socket;
+  sin->sin_port = htons(DEFAULT_STAT_PORT);
+  strlcpy(chan_template.output.dest_string,data,sizeof chan_template.output.dest_string);
+  chan_template.output.rtp.type = pt_from_info(chan_template.output.samprate,chan_template.output.channels,chan_template.output.encoding);
+
+  char const *iface = NULL;
+  if(chan_template.output.ttl != 0){
+    // Override global defaults
+    iface = config_getstring(Configtable,sname,"iface",Iface);
+    join_group(Output_fd,NULL,&chan_template.output.dest_socket,iface);
+  }
   // No need to also join group for status socket, since the IP addresses are the same
 
   // Process frequency/frequencies
@@ -736,39 +768,21 @@ void *process_section(void *p){
       struct channel *chan = NULL;
       // Try to create it, incrementing in case of collision
       int const max_collisions = 100;
-      for(int i=0; i < max_collisions; i++){
-	chan = create_chan(ssrc+i);
-	if(chan != NULL){
-	  ssrc += i;
+      for(int i=0; i < max_collisions; i++,ssrc++){
+	chan = create_chan(ssrc);
+	if(chan != NULL)
 	  break;
-	}
       }
       if(chan == NULL){
-	fprintf(stdout,"Can't allocate requested ssrc %u-%u\n",ssrc,ssrc + max_collisions);
+	fprintf(stdout,"Can't allocate requested ssrc in range %u-%u\n",ssrc-max_collisions,ssrc);
 	continue;
       }
-      // Parameter priority, from high to low:
-      // 1. this section
-      // 2. the preset database entry, if specified
-      // 3. the [global] section
-      // 4. compiled-in defaults to keep things from blowing up
-      set_defaults(chan);
-      loadpreset(chan,Configtable,GLOBAL);
-
-      if(preset != NULL && loadpreset(chan,Preset_table,preset) != 0)
-	fprintf(stdout,"[%s] loadpreset(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Preset_file,preset);
-
-      strlcpy(chan->preset,preset,sizeof(chan->preset));
-      loadpreset(chan,Configtable,sname);
-
-      // Set up output stream (data + status)
-      // Data multicast group has already been joined
-      memcpy(&chan->output.dest_socket,&data_dest_socket,sizeof(chan->output.dest_socket));
-      strlcpy(chan->output.dest_string,data,sizeof(chan->output.dest_string));
-      memcpy(&chan->status.dest_socket,&metadata_dest_socket,sizeof(chan->status.dest_socket));
-      chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
-
-      // Time to start it -- ssrc is stashed by create_chan()
+      // Initialize from template, set frequency and start
+      // Be careful with shallow copies like this; although the pointers in the channel structure are still NULL
+      // the ssrc and inuse fields are active and must be cleaned up. Are there any others...?
+      *chan = chan_template;
+      chan->output.rtp.ssrc = ssrc; // restore after template copy
+      chan->inuse = true;
       set_freq(chan,f);
       start_demod(chan);
       nchans++;
@@ -778,7 +792,8 @@ void *process_section(void *p){
 	// Highly experimental, off by default
 	char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
 	resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
-	join_group(Output_fd,NULL,&chan->sap.dest_socket,iface);
+	if(chan_template.output.ttl != 0)
+	  join_group(Output_fd,NULL,&chan->sap.dest_socket,iface);
 	pthread_create(&chan->sap.thread,NULL,sap_send,chan);
       }
       // RTCP Real Time Control Protocol daemon is optional
