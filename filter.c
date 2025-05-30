@@ -742,7 +742,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       }
       // Actual work
       while(rp < master->bins){
-	assert(wp >=0 && wp < slave->bins);
+	assert(wp >=0 && wp <= slave->bins);
 	assert(rp >= 0 && rp < master->bins);
 	if(wp == slave->bins)
 	  wp = 0; // Wrap to DC
