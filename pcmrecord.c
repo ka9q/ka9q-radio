@@ -201,7 +201,7 @@ static const char *Command = NULL;
 static bool Jtmode = false;
 static bool Raw = false;
 static char const *Source;
-static struct sockaddr_sock *Source_socket; // Remains NULL if Source == NULL
+static struct sockaddr_storage *Source_socket; // Remains NULL if Source == NULL
 
 const char *App_path;
 static int Input_fd,Status_fd;
@@ -447,6 +447,18 @@ static void process_status(int fd){
     perror("recvfrom");
     return; // Some sort of error
   }
+#if 0
+  if(Source){
+    // Backstop for kernel source filtering, which doesn't always work (e.g., on loopback)
+    // Make this work for IPv6 too
+    struct sockaddr_in *sin = (struct sockaddr_in *)&sender;
+    struct sockaddr_in *src = (struct sockaddr_in *)Source_socket;
+    if(sin->sin_family != src->sin_family || sin->sin_addr.s_addr != src->sin_addr.s_addr){
+      fprintf(stderr,"wanted %s got %s\n",formatsock(Source_socket,false),formatsock(&sender,false));
+      return; // Source filtering isn't working right
+    }
+  }
+#endif
   if(buffer[0] != STATUS)
     return;
   // Extract just the SSRC to see if the session exists
@@ -524,6 +536,18 @@ static void process_data(int fd){
     perror("recvfrom");
     return;
   }
+#if 0
+  if(Source){
+    // Backstop for kernel source filtering, which doesn't always work (e.g., on loopback)
+    // Make this work for IPv6 too
+    struct sockaddr_in *sin = (struct sockaddr_in *)&sender;
+    struct sockaddr_in *src = (struct sockaddr_in *)Source_socket;
+    if(sin->sin_family != src->sin_family || sin->sin_addr.s_addr != src->sin_addr.s_addr){
+      fprintf(stderr,"wanted %s got %s\n",formatsock(Source_socket,false),formatsock(&sender,false));
+      return; // Source filtering isn't working right
+    }
+  }
+#endif
   if(size < RTP_MIN_SIZE)
     return; // Too small for RTP, ignore
 
