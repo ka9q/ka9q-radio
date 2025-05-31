@@ -110,8 +110,17 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
   uint8_t packet[PKTSIZE];
   chan->status.packets_out++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
-  if(sendto(Output_fd,packet,len,0,sock,sizeof(struct sockaddr)) < 0)
+  // this is a kludge. If it's going to the status channel, use ttl 1; otherwise use the channel setting
+  // This ought to be fixed
+  int out_fd;
+  if(sock == &Metadata_dest_socket || chan->output.ttl > 0)
+    out_fd = Output_fd;
+  else
+    out_fd = Output_fd0;
+
+  if(sendto(out_fd,packet,len,0,sock,sizeof(struct sockaddr)) < 0)
     chan->output.errors++;
+
   return 0;
 }
 int reset_radio_status(struct channel *chan){
