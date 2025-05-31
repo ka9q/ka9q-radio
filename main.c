@@ -688,7 +688,7 @@ void *process_section(void *p){
   strlcpy(chan_template.preset,preset,sizeof chan_template.preset);
   loadpreset(&chan_template,Configtable,sname); // this section's config (#1)
 
-  if(Template.output.ttl != 0 && chan_template.output.ttl != Template.output.ttl)
+  if(chan_template.output.ttl != 0 && Template.output.ttl != 0)
     chan_template.output.ttl = Template.output.ttl; // use global ttl when both are non-zero
 
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
