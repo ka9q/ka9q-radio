@@ -86,8 +86,7 @@ struct channel *create_chan(uint32_t ssrc){
     // Abort here? Or keep going?
   } else {
     // Because the memcpy clobbers the ssrc, we must keep the lock held on Channel_list_mutex
-    memcpy(chan,&Template,sizeof *chan);
-    chan->inuse = true;
+    *chan = Template; // Template.inuse is already set
     chan->output.rtp.ssrc = ssrc; // Stash it
     Active_channel_count++;
     chan->lifetime = 20 * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
