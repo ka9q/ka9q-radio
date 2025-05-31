@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <sysexits.h>
 
 #if defined(linux)
 #include <linux/if_packet.h>
@@ -122,6 +123,11 @@ int output_mcast(void const * const group, char const * const iface, int const t
     return -1;
 
   struct sockaddr const *group_sock = (struct sockaddr *)group;
+  if(group_sock->sa_family != AF_INET && group_sock->sa_family != AF_INET6){
+    fprintf(stderr,"output_mcast unsupported group address family %d\n",group_sock->sa_family);
+    return -1;
+  }
+
   int fd = socket(group_sock->sa_family, SOCK_DGRAM, 0);
   if(fd == -1)
     return -1;
@@ -137,9 +143,10 @@ int output_mcast(void const * const group, char const * const iface, int const t
     else
       r = setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &mcast_ttl, sizeof(mcast_ttl));
     if(r)
-      perror("so_ttl failed");
+      fprintf(stderr,"output_mcast setting ttl=%d failed: %s\n",mcast_ttl,strerror(errno));
   }
   // Ensure our local listeners get it too
+  // This should already be the default
   uint8_t const loop = true;
   int r = 0;
   if(group_sock->sa_family == AF_INET)
@@ -147,7 +154,7 @@ int output_mcast(void const * const group, char const * const iface, int const t
   else
     r = setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &loop, sizeof(loop));
   if(r)
-    perror("so_loop failed");
+      fprintf(stderr,"output_mcast setting loopback=%d failed: %s\n",loop,strerror(errno));
 
   if(tos >= 0){
     int r = 0;
@@ -156,7 +163,7 @@ int output_mcast(void const * const group, char const * const iface, int const t
     else
       r = setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(tos));
     if(r)
-      perror("so_tos failed");
+	fprintf(stderr,"output_mcast setting ip tos=%d failed: %s\n",tos,strerror(errno));
   }
   /* Strictly speaking, it is not necessary to join a multicast group to which we only send.
      But this creates a problem with "smart" switches that do IGMP snooping.
@@ -221,6 +228,8 @@ int connect_mcast(void const * const s, char const * const iface, int const ttl,
     return -1;
 
   if(connect(fd, s, sizeof(struct sockaddr)) == -1){
+    fprintf(stderr,"connect(socket=%s,iface=%s,ttl=%d,tos=%d) failed: %s\n",
+	    formatsock(s,false),iface,ttl,tos,strerror(errno));
     close(fd);
     return -1;
   }
@@ -239,7 +248,8 @@ int listen_mcast(void const *source, void const *group, char const *iface){
   struct sockaddr const *group_socket = group;
   int const fd = socket(group_socket->sa_family, SOCK_DGRAM, 0);
   if(fd == -1){
-    perror("setup_mcast socket");
+    fprintf(stderr,"listen_mcast(source=%s,group=%s,iface=%s) failed %s:\n",
+	    formatsock(source,false),formatsock(group,false),iface,strerror(errno));
     return -1;
   }
   loopback_init();
@@ -254,18 +264,18 @@ int listen_mcast(void const *source, void const *group, char const *iface){
     join_group(fd, NULL, group, Loopback_name);
   int const reuse = true; // bool doesn't work for some reason
   if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) != 0)
-    perror("so_reuseport failed");
+    fprintf(stderr,"listen_mcast socket set SO_REUSEPORT %d failed: %s\n",reuse,strerror(errno));
   if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) != 0)
-    perror("so_reuseaddr failed");
+    fprintf(stderr,"listen_mcast socket set SO_REUSEADDR %d failed: %s\n",reuse,strerror(errno));
 
 #ifdef IP_FREEBIND
   int const freebind = true;
   if(setsockopt(fd, IPPROTO_IP, IP_FREEBIND, &freebind, sizeof(freebind)) != 0)
-    perror("freebind failed");
+    fprintf(stderr,"listen_mcast socket set IP_FREEBIND %d failed: %s\n",freebind,strerror(errno));
 #endif
 
   if((bind(fd, group_socket, sizeof(struct sockaddr)) != 0)){
-    perror("listen mcast bind");
+    fprintf(stderr,"listen_mcast bind to %s failed: %s\n",formatsock(group_socket,false),strerror(errno));
     close(fd);
     return -1;
   }
@@ -404,6 +414,8 @@ static pthread_mutex_t Formatsock_mutex = PTHREAD_MUTEX_INITIALIZER;
 // We actually take a sockaddr *, but can also accept a sockaddr_in *, sockaddr_in6 * and sockaddr_storage *
 // so to make it easier for callers we just take a void * and avoid pointer casts that impair readability
 char const *formatsock(void const *s,bool full){
+  if(s == NULL)
+    return "(NULL)";
   // Determine actual length (and type) of binary socket structure (IPv4/IPv6)
   size_t slen = 0;
   struct sockaddr const * const sa = (struct sockaddr *)s;
@@ -476,6 +488,8 @@ char const *formatsock(void const *s,bool full){
 
 // Compare IP addresses in sockaddr structures for equality
 int address_match(void const *arg1, void const *arg2){
+  if(arg1 == NULL || arg2 == NULL)
+    return -1;
   struct sockaddr const *s1 = (struct sockaddr *)arg1;
   struct sockaddr const *s2 = (struct sockaddr *)arg2;
   if(s1->sa_family != s2->sa_family)
@@ -570,31 +584,43 @@ static int loopback_init(void){
     if(lop->ifa_name && (lop->ifa_flags & IFF_LOOPBACK))
       break;
 
-  if(lop != NULL){
-    strlcpy(Loopback_name, lop->ifa_name, sizeof Loopback_name);
-    Loopback_index = if_nametoindex(lop->ifa_name);
-    if(!(lop->ifa_flags & IFF_MULTICAST)){
-      // We need multicast enabled on the loopback interface
-      struct ifreq ifr = {0};
-      strncpy(ifr.ifr_name, lop->ifa_name, IFNAMSIZ-1);
-      ifr.ifr_flags = lop->ifa_flags | IFF_MULTICAST;
-      int fd = socket(AF_INET, SOCK_DGRAM, 0); // Same for IPv6?
-      if (ioctl(fd,  SIOCSIFFLAGS,  &ifr) < 0) {
-	fprintf(stderr, "Can't enable multicast option on loopback interface %s\n", ifr.ifr_name);
-	perror("ioctl (set flags)");
-	// Given how much we rely on multicast loopback, should this be fatal?
-      } else {
-	fprintf(stderr, "Multicast enabled on loopback interface %s\n", ifr.ifr_name);
-#if __linux__
-	// This capability is set when radiod is run by systemd, drop it when we no longer need it
-	if (prctl(PR_CAP_AMBIENT_LOWER,  CAP_NET_ADMIN,  0,  0,  0) == -1)
-	  perror("Failed to drop CAP_NET_ADMIN");
-#endif
-      }
-      close(fd);
-    }
+  if(lop == NULL){
+    freeifaddrs(ifap);
+    fprintf(stderr,"No loopback interface found! We really need it...\n");
+    exit(EX_OSFILE); // This is pretty serious
+
   }
+  strlcpy(Loopback_name, lop->ifa_name, sizeof Loopback_name);
+  Loopback_index = if_nametoindex(lop->ifa_name);
+  if(lop->ifa_flags & IFF_MULTICAST){
+    freeifaddrs(ifap);
+    return Loopback_index; // Already set
+  }
+  // We need multicast enabled on the loopback interface
+  struct ifreq ifr = {0};
+  strlcpy(ifr.ifr_name, Loopback_name, sizeof(ifr.ifr_name));
+  ifr.ifr_flags = lop->ifa_flags | IFF_MULTICAST;
   freeifaddrs(ifap);
+  ifap = NULL;
+  lop = NULL;
+  int fd = socket(AF_INET, SOCK_DGRAM, 0); // Same for IPv6?
+  int const r = ioctl(fd,  SIOCSIFFLAGS,  &ifr);
+  if(r < 0){
+    // Given how much we rely on multicast loopback, make this fatal
+    fprintf(stderr, "Can't enable multicast option on loopback interface %s: %s\n", ifr.ifr_name,strerror(errno));
+    fprintf(stderr, "Set manually (on Linux) with 'sudo ip link set dev %s multicast on' or 'sudo systemctl start set_lo_multicast'\n",Loopback_name);
+    close(fd);
+    exit(EX_NOPERM);
+  }
+  close(fd);
+  fprintf(stderr, "Multicast enabled on loopback interface %s\n", Loopback_name);
+#if __linux__
+  // This capability is set when radiod is run by systemd, drop it when we no longer need it
+  if (prctl(PR_CAP_AMBIENT_LOWER,  CAP_NET_ADMIN,  0,  0,  0) == 0)
+    fprintf(stderr,"Dropped CAP_NET_ADMIN capability\n");
+  else
+    fprintf(stderr,"Can't drop CAP_NET_ADMIN capability: %s\n",strerror(errno));
+#endif
   return Loopback_index;
 }
 
@@ -721,7 +747,7 @@ static int setup_ipv4_loopback(int fd){
   mreqn.imr_ifindex = Loopback_index;
 
   if (setsockopt(fd,  IPPROTO_IP,  IP_MULTICAST_IF, &mreqn, sizeof mreqn) < 0){
-    perror("setsockopt IP_MULTICAST_IF failed");
+    fprintf(stderr,"setup_ipv4_loopback(%d) IP_MULTICAST_IF failed: %s\n",fd,strerror(errno));
     return -1;
   }
   return 0;
@@ -735,7 +761,7 @@ static int setup_ipv6_loopback(int fd){
     return -1;
   }
   if (setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_IF, &Loopback_index, sizeof Loopback_index) < 0){
-    perror("setsockopt IPV6_MULTICAST_IF failed");
+    fprintf(stderr,"setup_ipv6_loopback(%d) IPV6_MULTICAST_IF failed: %s\n",fd,strerror(errno));
     return -1;
   }
   return 0;
