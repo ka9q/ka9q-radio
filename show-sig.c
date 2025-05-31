@@ -1,4 +1,4 @@
-// Display radiod signal levels -- Out of date
+// Display radiod signal levels -- OBSOLETE
 // Copyright 2021 Phil Karn, KA9Q
 // Adapted from show-pkt.c
 
@@ -108,7 +108,7 @@ int main(int argc,char *argv[]){
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
   atexit(display_cleanup);
 
-  Radio_fd = setup_mcast_in(argv[optind],(struct sockaddr *)&Output_metadata_dest_address,2,0);
+  Radio_fd = setup_mcast_in(NULL,NULL,argv[optind],(struct sockaddr *)&Output_metadata_dest_address,2,0);
   if(Radio_fd == -1){
     fprintf(stderr,"Can't listen to %s\n",argv[optind]);
     exit(1);
@@ -166,7 +166,7 @@ int main(int argc,char *argv[]){
       }
     }
     if(FE_fd == -1 && ((struct sockaddr_in *)&Input_metadata_dest_address) -> sin_family != 0){
-      FE_fd = setup_mcast_in(NULL,(struct sockaddr *)&Input_metadata_dest_address,0,0);
+      FE_fd = setup_mcast_in(NULL,NULL,NULL,(struct sockaddr *)&Input_metadata_dest_address,0,0);
     }
     if(FD_ISSET(FE_fd,&fdset)){
       // Message from the front end

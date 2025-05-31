@@ -87,7 +87,7 @@ int main(int argc,char *argv[]){
   Mcast_address_text = argv[optind];
 
   // Set up multicast input
-  Input_fd = setup_mcast_in(Mcast_address_text,NULL,0,0);
+  Input_fd = setup_mcast_in(NULL,NULL,Mcast_address_text,NULL,0,0);
   if(Input_fd == -1){
     fprintf(stderr,"Can't set up input from %s\n",
 	    Mcast_address_text);

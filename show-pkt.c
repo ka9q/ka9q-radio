@@ -98,7 +98,7 @@ int main(int argc,char *argv[]){
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
   atexit(display_cleanup);
 
-  Radio_fd = setup_mcast_in(argv[optind],(struct sockaddr *)&Output_metadata_dest_address,2,0);
+  Radio_fd = setup_mcast_in(NULL,NULL,argv[optind],(struct sockaddr *)&Output_metadata_dest_address,2,0);
   if(Radio_fd == -1){
     fprintf(stderr,"Can't listen to %s\n",argv[optind]);
     exit(1);
