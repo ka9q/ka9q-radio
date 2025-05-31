@@ -55,7 +55,7 @@ struct frontend Frontend;
 struct sockaddr Metadata_source_socket;      // Source of metadata
 struct sockaddr Metadata_dest_socket;      // Dest of metadata (typically multicast)
 
-int Mcast_ttl = DEFAULT_MCAST_TTL;
+int Mcast_ttl = DEFAULT_MCAST_TTL; // Should probably be settable from the command line
 int IP_tos = DEFAULT_IP_TOS;
 float Blocktime;
 int Overlap;
@@ -1549,7 +1549,7 @@ static void display_output(WINDOW *w,struct channel const *channel){
 
   pprintw(w,row++,col,"SSRC","%u",channel->output.rtp.ssrc);
   pprintw(w,row++,col,"Timestamp","%'u",channel->output.rtp.timestamp);
-  pprintw(w,row++,col,"TTL","%d",Mcast_ttl);
+  pprintw(w,row++,col,"TTL","%d",channel->output.ttl);
   pprintw(w,row++,col,"Payload Type","%u",channel->output.rtp.type);
   pprintw(w,row++,col,"Sample rate","%'d Hz",channel->output.samprate);
   pprintw(w,row++,col,"Encoding","%s",encoding_string(channel->output.encoding));
