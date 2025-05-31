@@ -269,8 +269,8 @@ static struct windef {
   {&Sig_win,18,25},
   {&Demodulator_win,18,26},
   {&Filtering_win,18,22},
-  {&Input_win,18,45},
-  {&Output_win,18,45},
+  {&Input_win,18,60},
+  {&Output_win,18,60},
 };
 #define NWINS (sizeof(Windefs) / sizeof(Windefs[0]))
 
