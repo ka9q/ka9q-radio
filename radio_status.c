@@ -110,8 +110,7 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
   uint8_t packet[PKTSIZE];
   chan->status.packets_out++;
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
-  int const outsock = chan->output.ttl != 0 ? Output_fd : Output_fd0;
-  if(sendto(outsock,packet,len,0,sock,sizeof(struct sockaddr)) < 0)
+  if(sendto(Output_fd,packet,len,0,sock,sizeof(struct sockaddr)) < 0)
     chan->output.errors++;
   return 0;
 }
