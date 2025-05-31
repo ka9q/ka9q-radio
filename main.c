@@ -49,7 +49,6 @@
 static char const DEFAULT_PRESET[] = "am";
 static int const DEFAULT_FFTW_THREADS = 1;
 static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
-static int const DEFAULT_MCAST_TTL = 0; // Don't blast LANs with cheap Wifi!
 static float const DEFAULT_BLOCKTIME = 20.0;
 static int const DEFAULT_OVERLAP = 5;
 static int const DEFAULT_UPDATE = 25; // 2 Hz for 20 ms blocktime (50 Hz frame rate)
@@ -64,7 +63,6 @@ char const *Config_file;
 char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
 
 int IP_tos = DEFAULT_IP_TOS;
-int Mcast_ttl = DEFAULT_MCAST_TTL;
 float Blocktime = DEFAULT_BLOCKTIME;
 int Overlap = DEFAULT_OVERLAP;
 static int Update = DEFAULT_UPDATE;
@@ -117,7 +115,7 @@ struct sockaddr Metadata_dest_socket;      // Dest of global metadata
 static char *Metadata_dest_string; // DNS name of default multicast group for status/commands
 int Output_fd = -1; // Unconnected socket used for output when ttl > 0
 int Output_fd0 = -1; // Unconnected socket used for local loopback when ttl = 0
-struct channel Template;
+struct channel Template; // Template for dynamically created channels
 // If a channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
 // Must be computed at run time because it depends on the block time
 int Channel_idle_timeout;  //  = DEFAULT_LIFETIME * 1000 / Blocktime;
@@ -125,7 +123,6 @@ int Ctl_fd = -1;     // File descriptor for receiving user commands
 static char const *Name;
 extern int N_worker_threads; // owned by filter.c
 static void *Dl_handle;
-static char Ttlmsg[100];
 static bool Global_use_dns;
 static int Nchans;
 
@@ -438,7 +435,6 @@ static int loadconfig(char const *file){
   }
   Update = config_getint(Configtable,GLOBAL,"update",Update);
   IP_tos = config_getint(Configtable,GLOBAL,"tos",IP_tos);
-  Mcast_ttl = config_getint(Configtable,GLOBAL,"ttl",Mcast_ttl);
   Global_use_dns = config_getboolean(Configtable,GLOBAL,"dns",false);
   Static_avahi = config_getboolean(Configtable,GLOBAL,"static",false);
   Affinity = config_getboolean(Configtable,GLOBAL,"affinity",false);
@@ -543,21 +539,30 @@ static int loadconfig(char const *file){
     fprintf(stdout,"No default mode for template\n");
   }
 
-  snprintf(Ttlmsg,sizeof(Ttlmsg),"TTL=%d",Mcast_ttl);
-  // Look quickly (2 tries max) to see if it's already in the DNS
+  /* The ttl in the [global] section is used for on the command/status channel and any dynamic
+     data channels. It is the default for data channels unless
+     overridden in each section. Note that when a section specifies a
+     non-zero TTL, the global setting is actually used so the section TTLs could as well be booleans.
+     It's too tedious and not very useful to manage a whole bunch of sockets with arbitrary
+     TTLs. 0 and 1 are most useful.
+  */
 
+  // Look quickly (2 tries max) to see if it's already in the DNS
   {
     uint32_t addr = 0;
     if(!Global_use_dns || resolve_mcast(Data,&Template.output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
       addr = make_maddr(Data);
 
+    char ttlmsg[128];
+    snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Template.output.ttl);
     size_t slen = sizeof(Template.output.dest_socket);
+    // Advertise dynamic service(s)
     avahi_start(Frontend.description,
 	      "_rtp._udp",
 	      DEFAULT_RTP_PORT,
 	      Data,
 	      addr,
-	      Ttlmsg,
+	      ttlmsg,
 	      addr != 0 ? &Template.output.dest_socket : NULL,
 	      addr != 0 ? &slen : NULL);
 
@@ -566,21 +571,22 @@ static int loadconfig(char const *file){
     struct sockaddr_in *sin = (struct sockaddr_in *)&Template.status.dest_socket;
     sin->sin_port = htons(DEFAULT_STAT_PORT);
   }
-  Output_fd = output_mcast(&Template.output.dest_socket,Iface,Mcast_ttl,IP_tos);
-  if(Output_fd < 0){
-    fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
-    exit(EX_NOHOST); // let systemd restart us
-  }
-  // Secondary output socket with ttl = 0
-  if(Mcast_ttl == 0)
-    Output_fd0 = Output_fd;
-  else {
-    join_group(Output_fd,NULL,&Template.output.dest_socket,Iface); // Work around snooping switch problem
-    Output_fd0 = output_mcast(&Template.output.dest_socket,Iface,0,IP_tos);
-    if(Output_fd0 < 0){
-      fprintf(stdout,"can't create output socket: %s\n",strerror(errno));
+  {
+    // Non-zero TTL streams use the global ttl if it is nonzero, 1 otherwise
+    int const ttl = Template.output.ttl > 1 ? Template.output.ttl : 1;
+
+    Output_fd = output_mcast(&Template.output.dest_socket,Iface,ttl,IP_tos);
+    if(Output_fd < 0){
+      fprintf(stdout,"can't create output socket for TTL=%d: %s\n",ttl,strerror(errno));
       exit(EX_NOHOST); // let systemd restart us
     }
+  }
+  join_group(Output_fd,NULL,&Template.output.dest_socket,Iface); // Work around snooping switch problem
+  // Secondary output socket with ttl = 0
+  Output_fd0 = output_mcast(&Template.output.dest_socket,Iface,0,IP_tos);
+  if(Output_fd0 < 0){
+    fprintf(stdout,"can't create output socket for TTL=0: %s\n",strerror(errno));
+    exit(EX_NOHOST); // let systemd restart us
   }
 
   // Set up status/command stream, global for all receiver channels
@@ -595,15 +601,17 @@ static int loadconfig(char const *file){
       addr = make_maddr(Metadata_dest_string);
 
     // If dns name already exists in the DNS, advertise the service record but not an address record
+    // Advertise control/status channel
+    char ttlmsg[128];
+    snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",Template.output.ttl);
     size_t slen = sizeof(Metadata_dest_socket);
     avahi_start(Frontend.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
-		Metadata_dest_string,addr,Ttlmsg,
+		Metadata_dest_string,addr,ttlmsg,
 		addr != 0 ? &Metadata_dest_socket : NULL,
 		addr != 0 ? &slen : NULL);
   }
   // either resolve_mcast() or avahi_start() has resolved the target DNS name into Metadata_dest_socket and inserted the port number
-  if(Mcast_ttl != 0)
-    join_group(Output_fd,NULL,&Metadata_dest_socket,Iface);
+  join_group(Output_fd,NULL,&Metadata_dest_socket,Iface);
   // Same remote socket as status
   Ctl_fd = listen_mcast(NULL,&Metadata_dest_socket,Iface);
   if(Ctl_fd < 0){
@@ -679,6 +687,9 @@ void *process_section(void *p){
 
   strlcpy(chan_template.preset,preset,sizeof chan_template.preset);
   loadpreset(&chan_template,Configtable,sname); // this section's config (#1)
+
+  if(Template.output.ttl != 0 && chan_template.output.ttl != Template.output.ttl)
+    chan_template.output.ttl = Template.output.ttl; // use global ttl when both are non-zero
 
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
   // Look quickly (2 tries max) to see if it's already in the DNS. Otherwise make a multicast address.
@@ -782,7 +793,7 @@ void *process_section(void *p){
       // the ssrc and inuse fields are active and must be cleaned up. Are there any others...?
       *chan = chan_template;
       chan->output.rtp.ssrc = ssrc; // restore after template copy
-      chan->inuse = true;
+
       set_freq(chan,f);
       start_demod(chan);
       nchans++;

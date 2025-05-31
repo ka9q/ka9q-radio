@@ -71,7 +71,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->output.rtp.ssrc = decode_int32(cp,optlen);
       break;
     case OUTPUT_TTL:
-      Mcast_ttl = decode_int8(cp,optlen);
+      channel->output.ttl = decode_int8(cp,optlen);
       break;
     case OUTPUT_SAMPRATE:
       channel->output.samprate = decode_int(cp,optlen);

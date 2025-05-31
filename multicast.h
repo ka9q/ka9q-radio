@@ -9,7 +9,6 @@
 #include <netdb.h>
 #include <assert.h>
 
-extern int Mcast_ttl;
 extern int IP_tos;
 
 

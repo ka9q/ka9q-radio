@@ -364,7 +364,7 @@ void *sap_send(void *p){
       char *cp = strchr(mcast,':');
       if(cp)
 	*cp = '\0';
-      len = snprintf(wp,space,"c=IN IP4 %s/%d\r\n",mcast,Mcast_ttl);
+      len = snprintf(wp,space,"c=IN IP4 %s/%d\r\n",mcast,chan->output.ttl);
       wp += len;
       space -= len;
       FREE(mcast);

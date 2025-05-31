@@ -28,6 +28,7 @@ struct demodtab Demodtab[] = {
       {SPECT_DEMOD,  "Spectrum", }, // Spectrum analysis
 };
 
+static int const DEFAULT_TTL = 0;                // Don't blast cheap switches and access points unless the user says so
 static enum demod_type DEFAULT_DEMOD = LINEAR_DEMOD;
 static int   const DEFAULT_LINEAR_SAMPRATE = 12000;
 static float const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
@@ -130,6 +131,7 @@ int set_defaults(struct channel *chan){
   if(chan == NULL)
     return -1;
 
+  chan->inuse = true;
   chan->demod_type = DEFAULT_DEMOD;
   chan->prio = default_prio();
 
@@ -143,7 +145,7 @@ int set_defaults(struct channel *chan){
   chan->output.pacing = false;
   chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
   chan->output.minpacket = 0;  // No output buffering
-  chan->output.ttl = Mcast_ttl;
+  chan->output.ttl = DEFAULT_TTL;
 
   chan->tune.doppler = 0;
   chan->tune.doppler_rate = 0;

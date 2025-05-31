@@ -85,8 +85,6 @@ extern char const *Pipe;
 extern struct sockaddr_in *Source_socket;
 
 
-extern int Mcast_ttl;
-
 struct session {
   bool init;               // Fully initialized by first RTP packet
   struct sockaddr_storage sender;
