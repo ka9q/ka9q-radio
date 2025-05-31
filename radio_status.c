@@ -112,6 +112,7 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
   int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
   // this is a kludge. If it's going to the status channel, use ttl 1; otherwise use the channel setting
   // This ought to be fixed
+  // one possibility is to look at the requester; if he's on same host, use TTL 0, otherwise 1
   int out_fd;
   if(sock == &Metadata_dest_socket || chan->output.ttl > 0)
     out_fd = Output_fd;

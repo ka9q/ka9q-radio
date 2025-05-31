@@ -539,12 +539,13 @@ static int loadconfig(char const *file){
     fprintf(stdout,"No default mode for template\n");
   }
 
-  /* The ttl in the [global] section is used for on the command/status channel and any dynamic
-     data channels. It is the default for data channels unless
+  /* The ttl in the [global] section is used for any dynamic
+     data channels. It is the default for static data channels unless
      overridden in each section. Note that when a section specifies a
      non-zero TTL, the global setting is actually used so the section TTLs could as well be booleans.
      It's too tedious and not very useful to manage a whole bunch of sockets with arbitrary
      TTLs. 0 and 1 are most useful.
+     At the moment, elicited status messages are always sent with TTL > 0 on the status group
   */
 
   // Look quickly (2 tries max) to see if it's already in the DNS
@@ -601,9 +602,9 @@ static int loadconfig(char const *file){
       addr = make_maddr(Metadata_dest_string);
 
     // If dns name already exists in the DNS, advertise the service record but not an address record
-    // Advertise control/status channel
+    // Advertise control/status channel with a ttl of at least 1
     char ttlmsg[128];
-    snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",Template.output.ttl);
+    snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",Template.output.ttl > 0? Template.output.ttl : 1);
     size_t slen = sizeof(Metadata_dest_socket);
     avahi_start(Frontend.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
 		Metadata_dest_string,addr,ttlmsg,
