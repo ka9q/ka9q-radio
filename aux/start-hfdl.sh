@@ -65,6 +65,7 @@ case "$CENTER" in
 
     *)
 	echo "Invalid channel center $center"
+	sleep 10
 	exit 1
 	;;
 esac
