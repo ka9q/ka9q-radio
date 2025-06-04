@@ -43,6 +43,7 @@ static float Power_smooth = 0.05; // Calculate this properly someday
 // Global variables set by command line options
 extern char const *App_path;
 extern int Verbose;
+extern char const *Description;
 
 struct sdr {
   struct frontend *frontend;
@@ -67,15 +68,15 @@ struct sdr {
 };
 
 static char const *Rtlsdr_keys[] = {
-  "library",
   "agc",
   "bias",
   "calibrate",
-  "device",
   "description",
+  "device",
   "frequency",
   "gain",
   "hardware",
+  "library",
   "samprate",
   "serial",
   NULL
@@ -105,9 +106,11 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   config_validate_section(stdout,dictionary,section,Rtlsdr_keys,NULL);
   sdr->dev = -1;
   {
-    char const *p = config_getstring(dictionary,section,"description","rtl-sdr");
-    if(p != NULL)
+    char const *p = config_getstring(dictionary,section,"description",Description ? Description : "rtl-sdr");
+    if(p != NULL){
       strlcpy(frontend->description,p,sizeof(frontend->description));
+      Description = p;
+    }
   }
   {
     unsigned const device_count = rtlsdr_get_device_count();

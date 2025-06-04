@@ -28,6 +28,7 @@
 
 // Global variables set by config file options
 extern int Verbose;
+extern char const *Description;
 
 #define INPUT_PRIORITY 95
 static float Power_smooth = 0.05; // Calculate this properly someday
@@ -139,36 +140,36 @@ static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT t
 static void show_device_params(struct sdrstate *sdr);
 
 static char const *Sdrplay_keys[] = {
-  "device",
-  "library",
-  "serial",
-  "frequency",
-  "rspduo-mode",
+  "am-notch",
   "antenna",
   "bandwidth",
-  "samprate",
+  "bias-t",
+  "bulk-transfer-mode",
   "calibrate",
+  "dab-notch",
+  "dc-offset-corr",
+  "description",
+  "device",
+  "frequency",
+  "if-agc-attack-ms",
+  "if-agc-decay-delay-ms",
+  "if-agc-decay-ms",
+  "if-agc-decay-threshold-db",
+  "if-agc-rate",
+  "if-agc-setpoint-dbfs",
+  "if-agc",
+  "if-att",
+  "if-att",
+  "if-gr",
+  "iq-imbalance-corr",
+  "library",
   "lna-state",
   "rf-att",
   "rf-gr",
-  "if-att",
-  "if-gr",
-  "if-att",
-  "if-agc",
-  "if-agc-rate",
-  "if-agc-setpoint-dbfs",
-  "if-agc-attack-ms",
-  "if-agc-decay-ms",
-  "if-agc-decay-delay-ms",
-  "if-agc-decay-threshold-db",
-  "dc-offset-corr",
-  "iq-imbalance-corr",
-  "bulk-transfer-mode",
   "rf-notch",
-  "dab-notch",
-  "am-notch",
-  "bias-t",
-  "description",
+  "rspduo-mode",
+  "samprate",
+  "serial",
   NULL
 };
 
@@ -314,9 +315,11 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
     }
   }
   {
-    char const * const p = config_getstring(Dictionary,section,"description","SDRplay RSP");
-    if(p != NULL)
+    char const * const p = config_getstring(Dictionary,section,"description",Description ? Description : "SDRplay RSP");
+    if(p != NULL){
       strlcpy(frontend->description,p,sizeof(frontend->description));
+      Description = p;
+    }
   }
 
   fprintf(stdout,"RF LNA state %d, IF att %d, IF AGC %d, IF AGC setPoint %d, DC offset corr %d, IQ imbalance corr %d\n",

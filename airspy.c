@@ -24,6 +24,7 @@
 
 // Global variables set by config file options
 extern int Verbose;
+extern char const *Description;
 
 #define INPUT_PRIORITY 95
 
@@ -66,26 +67,26 @@ uint8_t airspy_sensitivity_lna_gains[GAIN_COUNT] = {   14, 14, 14, 14, 14, 14, 1
 
 
 static char const *Airspy_keys[] = {
-  "library",
-  "device",
-  "firmware",
-  "serial",
-  "samprate",
-  "converter",
-  "calibrate",
-  "linearity",
-  "lna-agc",
-  "mixer-agc",
-  "lna-gain",
-  "mixer-gain",
-  "vga-gain",
-  "gainstep",
-  "bias",
-  "description",
   "agc-high-threshold",
   "agc-low-threshold",
+  "bias",
+  "calibrate",
+  "converter",
+  "description",
+  "device",
+  "firmware",
   "frequency",
-  NULL
+  "gainstep",
+  "library",
+  "linearity",
+  "lna-agc",
+  "lna-gain",
+  "mixer-agc",
+  "mixer-gain",
+  "samprate",
+  "serial",
+  "vga-gain",
+NULL
 };
 
 
@@ -264,9 +265,11 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     assert(ret == AIRSPY_SUCCESS);
   }
   {
-    char const * const p = config_getstring(Dictionary,section,"description",NULL);
-    if(p != NULL)
+    char const * const p = config_getstring(Dictionary,section,"description",Description ? Description : "airspy");
+    if(p != NULL){
       strlcpy(frontend->description,p,sizeof(frontend->description));
+      Description = p;
+    }
   }
   fprintf(stdout,"Software AGC %d; linearity %d, LNA AGC %d, Mix AGC %d, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %d\n",
 	  sdr->software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,gainstep,sdr->antenna_bias);

@@ -20,6 +20,7 @@
 extern int Verbose;
 
 static const float power_smooth = 0.05; // Arbitrary exponential smoothing factor
+extern char const *Description;
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
 struct sdrstate
@@ -37,6 +38,19 @@ struct sdrstate
 	unsigned int	idx_to_submit;
 	pthread_mutex_t queue_mutex;
 	pthread_cond_t  queue_cond;
+};
+
+static char const *Bladerf_keys[] = {
+  "bandwidth",
+  "bias",
+  "calibrate",
+  "description",
+  "device",
+  "frequency",
+  "gain",
+  "samprate",
+  "serial",
+  NULL
 };
 
 static double set_correct_freq(struct sdrstate *sdr, double freq);
@@ -58,6 +72,7 @@ int bladerf_setup(struct frontend * const frontend,
 
 	if (Verbose)
 		bladerf_log_set_verbosity(BLADERF_LOG_LEVEL_VERBOSE);
+	config_validate_section(stdout,Dictionary,section,Bladerf_keys,NULL);
 
 	int status;
 
@@ -167,9 +182,11 @@ int bladerf_setup(struct frontend * const frontend,
 	if (Verbose)
 		fprintf(stdout, "bias tee %d\n", antenna_bias);
 
-	p = config_getstring(Dictionary, section, "description", NULL);
-	if (p != NULL)
+	p = config_getstring(Dictionary, section, "description", Description ? Description: "bladerf");
+	if (p != NULL){
 		strlcpy(frontend->description, p, sizeof(frontend->description));
+		Description = p;
+	}
 
 	double init_frequency = 0;
 	p = config_getstring(Dictionary, section, "frequency", NULL);

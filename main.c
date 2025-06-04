@@ -55,6 +55,7 @@ static int const DEFAULT_UPDATE = 25; // 2 Hz for 20 ms blocktime (50 Hz frame r
 static int const DEFAULT_LIFETIME = 20; // 20 sec for idle sessions tuned to 0 Hz
 #define GLOBAL "global"
 
+char const *Description; // Set either in [global] or [hardware]
 char const *Iface;
 char *Data;
 char const *Preset = DEFAULT_PRESET;
@@ -72,30 +73,31 @@ extern bool Affinity;
 
 // List of valid config keys in [global] section, for error checking
 char const *Global_keys[] = {
-  "verbose",
-  "dns",
-  "fft-time-limit",
-  "fft-plan-level",
-  "iface",
-  "data",
-  "update",
-  "tos",
-  "ttl",
+  "affinity",
   "blocktime",
-  "overlap",
+  "data",
+  "description",
+  "dns",
+  "fft-plan-level",
   "fft-threads",
+  "fft-time-limit",
+  "hardware",
+  "iface",
+  "mode-file",
+  "mode",
+  "overlap",
+  "preset",
+  "presets-file",
+  "prio",
   "rtcp",
   "sap",
-  "mode-file",
-  "presets-file",
-  "wisdom-file",
-  "hardware",
   "static",
   "status",
-  "preset",
-  "mode",
-  "affinity",
-  "prio",
+  "tos",
+  "ttl",
+  "update",
+  "verbose",
+  "wisdom-file",
   NULL
 };
 
@@ -411,6 +413,7 @@ static int loadconfig(char const *file){
   config_validate_section(stdout,Configtable,GLOBAL,Global_keys,Channel_keys);
 
   // Process [global] section applying to all demodulator blocks
+  Description = config_getstring(Configtable,GLOBAL,"description",NULL);
   Verbose = config_getint(Configtable,GLOBAL,"verbose",Verbose);
   Blocktime = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",Blocktime));
   Channel_idle_timeout = 20 * 1000 / Blocktime;

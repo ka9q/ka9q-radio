@@ -32,6 +32,7 @@ static float const Lower_limit = -25;
 static int Default_samprate = 5000000;
 static float const DC_alpha = 1.0e-7;  // high pass filter coefficient for DC offset estimates, per sample
 static float const Power_alpha= 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
+extern char const *Description;
 
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
@@ -57,24 +58,21 @@ struct sdrstate {
   float scale;
 };
 
-
-
 static char const *HackRF_keys[] = {
-  "library",
+  "calibrate",
+  "description",
   "device",
-  "serial",
+  "frequency",
+  "library",
   "lna-gain",
   "mixer-gain",
-  "vga-gain",
   "reference",
-  "calibrate",
   "samprate",
-  "description",
-  "frequency",
+  "serial",
+  "vga-gain",
   NULL
 };
 static int rx_callback(hackrf_transfer *transfer);
-
 static void *hackrf_agc(void *arg);
 #if 0
 static double rffc5071_freq(uint16_t lo);
@@ -105,6 +103,13 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
     fprintf(stdout,"hackrf_init() failed: %s\n",hackrf_error_name(ret));
     hackrf_exit(); // Necessary?
     return -1;
+  }
+  {
+    char const * const p = config_getstring(dictionary,section,"description",Description ? Description : "HackRF");
+    if(p != NULL){
+      strlcpy(frontend->description,p,sizeof(frontend->description));
+      Description = p;
+    }
   }
   // Enumerate devices
   hackrf_device_list_t *dlist = hackrf_device_list();

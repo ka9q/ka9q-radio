@@ -59,6 +59,7 @@ int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
 extern volatile bool Stop_transfers; // Flag to stop receive thread upcalls
+extern char const *Description;
 
 // Hardware-specific stuff.
 // Anything generic should be moved to 'struct frontend' under sdr in radio.h
@@ -134,29 +135,29 @@ static char const *usb_speeds[N_USB_SPEEDS] = {
 };
 
 static char const *Rx888_keys[] = {
-  "library",
-  "device",
-  "firmware",
-  "serial",
-  "queuedepth",
-  "reqsize",
-  "dither",
-  "rand",
-  "gaincal",
   "att",
   "atten",
-  "featten",
-  "rfatten",
-  "gainmode",
-  "gain",
-  "rxgain",
-  "fegain",
-  "reference",
   "calibrate",
-  "samprate",
-  "undersample",
   "description",
+  "device",
+  "dither",
+  "featten",
+  "fegain",
+  "firmware",
   "frequency",
+  "gain",
+  "gaincal",
+  "gainmode",
+  "library",
+  "queuedepth",
+  "rand",
+  "reference",
+  "reqsize",
+  "rfatten",
+  "rxgain",
+  "samprate",
+  "serial",
+  "undersample",
   NULL
 };
 
@@ -308,9 +309,11 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   uint8_t const clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
   control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_CLK_BASE+0,clock_control);
   {
-    char const *p = config_getstring(dictionary,section,"description","rx888");
-    if(p != NULL)
+    char const *p = config_getstring(dictionary,section,"description",Description ? Description : "rx888");
+    if(p != NULL){
       strlcpy(frontend->description,p,sizeof(frontend->description));
+      Description = p;
+    }
   }
   double ferror = actual - samprate;
   float xfer_time = (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);

@@ -25,24 +25,25 @@
 // Global variables set by config file options
 extern int Verbose;
 extern const char *App_path;
+extern char const *Description;
 
 #define INPUT_PRIORITY 95
 
 static float Power_smooth = 0.05; // Calculate this properly someday
 
 static char const *Airspyhf_keys[] = {
-  "library",
-  "device",
-  "serial",
-  "samprate",
-  "calibrate",
-  "hf-agc",
   "agc-thresh",
+  "calibrate",
+  "description",
+  "device",
+  "frequency",
+  "hf-agc",
   "hf-att",
   "hf-lna",
   "lib-dsp",
-  "description",
-  "frequency",
+  "library",
+  "samprate",
+  "serial",
   NULL
 };
 
@@ -189,9 +190,11 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
 	    hf_agc,agc_thresh,hf_att,hf_lna,lib_dsp);
   }
   {
-    char const * const p = config_getstring(Dictionary,section,"description",NULL);
-    if(p != NULL)
+    char const * const p = config_getstring(Dictionary,section,"description",Description ? Description : "sig_gen");
+    if(p != NULL){
       strlcpy(frontend->description,p,sizeof(frontend->description));
+      Description = p;
+    }
   }
   double init_frequency = 0;
   {

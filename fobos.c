@@ -31,12 +31,24 @@ the input is then purely real.
 #define INPUT_PRIORITY 95
 static float Power_smooth = 0.05; // Calculate this properly someday
 
-static char const *fobos_keys[] = {
-    "library", "device", "description", "serial",   "samprate",   "frequency",
-    "direct_sampling", "lna_gain",    "vga_gain", "clk_source", "hf_input", NULL};
+static char const *Fobos_keys[] = {
+  "clk_source",
+  "description",
+  "device",
+  "direct_sampling",
+  "frequency",
+  "hf_input",
+  "library",
+  "lna_gain",
+  "samprate",
+  "serial",
+  "vga_gain",
+  NULL
+};
 
 // Global variables set by config file options
 extern int Verbose;
+extern char const *Description;
 
 struct fobos_dev_t *dev = NULL;
 
@@ -85,7 +97,7 @@ int find_serial_position(const char *serials, const char *serialnumcfg) {
 int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
                 char const *const section) {
   assert(dictionary != NULL);
-  config_validate_section(stdout, dictionary, section, fobos_keys, NULL);
+  config_validate_section(stdout, dictionary, section, Fobos_keys, NULL);
   struct sdrstate *const sdr = calloc(1, sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
   assert(sdr != NULL);
@@ -108,9 +120,11 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
   }
   sdr->device = -1;
   {
-    char const *cp = config_getstring(dictionary, section, "description", "fobos");
-    if(cp != NULL)
+    char const *cp = config_getstring(dictionary, section, "description", Description ? Description : "fobos");
+    if(cp != NULL){
       strlcpy(frontend->description,cp,sizeof(frontend->description));
+      Description = cp;
+    }
   }
   double requestsample =
       config_getdouble(dictionary, section, "samprate", 8000000.0);

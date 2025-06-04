@@ -41,6 +41,8 @@ static float const UpperEdge = +75000;
 static int Blocksize;
 static bool Hold_open = false;
 
+extern char const *Description;
+
 struct sdrstate {
   struct frontend *frontend;
 
@@ -69,12 +71,12 @@ struct sdrstate {
 };
 
 static char const *Funcube_keys[] = {
-  "library",
   "bias"
   "calibrate",
   "description",
   "device",
   "frequency",
+  "library",
   "number",
   NULL
 };
@@ -82,7 +84,6 @@ static char const *Funcube_keys[] = {
 
 static void do_fcd_agc(struct sdrstate *);
 static double fcd_actual(unsigned int);
-
 double funcube_tune(struct frontend * const frontend,double const freq);
 
 int funcube_setup(struct frontend * const frontend, dictionary * const dictionary, char const * const section){
@@ -112,9 +113,10 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   frontend->max_IF = UpperEdge;
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
   {
-    char const * const p = config_getstring(dictionary,section,"description","funcube dongle+");
+    char const * const p = config_getstring(dictionary,section,"description",Description ? Description : "funcube dongle+");
     if(p != NULL){
       strlcpy(frontend->description,p,sizeof(frontend->description));
+      Description = p;
     }
   }
   Pa_Initialize();

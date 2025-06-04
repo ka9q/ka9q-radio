@@ -33,6 +33,20 @@ enum modulation {
   AM,
   FM // Not yet implemented
 };
+static char const *Sig_gen_keys[] = {
+  "device",
+  "samprate",
+  "real",
+  "complex",
+  "description",
+  "carrier",
+  "amplitude",
+  "modulation",
+  "source",
+  "noise",
+  NULL
+};
+
 
 
 struct sdrstate {
@@ -53,6 +67,7 @@ struct sdrstate {
 // 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
 static int Blocksize;
 extern bool Stop_transfers;
+extern char const *Description;
 
 // One second of noise in requested format
 // Will be played with a random starting point every block
@@ -65,12 +80,16 @@ static float real_gaussian(void);
 double sig_gen_tune(struct frontend * const frontend,double const freq);
 
 int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionary, char const * const section){
+
+
   assert(dictionary != NULL);
   {
     char const * const device = config_getstring(dictionary,section,"device",section);
     if(strcasecmp(device,"sig_gen") != 0)
       return -1; // Not for us
   }
+  config_validate_section(stdout,dictionary,section,Sig_gen_keys,NULL);
+
   // Cross-link generic and hardware-specific control structures
   struct sdrstate * const sdr = calloc(1,sizeof(*sdr));
   assert(sdr != NULL);
@@ -103,9 +122,11 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
     frontend->frequency = frontend->samprate/2;
   }
   {
-    char const * const p = config_getstring(dictionary,section,"description","signal generator");
-    if(p != NULL)
+    char const * const p = config_getstring(dictionary,section,"description",Description ? Description : "signal generator");
+    if(p != NULL){
       strlcpy(frontend->description,p,sizeof(frontend->description));
+      Description = p;
+    }
   }
 
   //  double initfreq = config_getint(dictionary,section,"frequency",0);
