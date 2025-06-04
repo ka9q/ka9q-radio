@@ -1,0 +1,14 @@
+# N6NC 40m study:
+
+# 7039300 Hz, B/W: 40 Hz (Russian 'K' CW Bcn on Kamchatka)
+# 70394000 Hz B/W: 40 Hz (Russian 'M' CW Bcn at Magadan, ~500mi WNW of Kamchatka)
+#  5154300 Hz (B/W: 40 Hz Russian 'K' CW Bcn on Kamchatka)
+
+[KFS-NW-N6NC-40M]
+data = kfs-nw-n6nc-iq.local
+mode = iq
+samprate = 8k
+channels = 2
+agc = 0
+gain = 60
+freq = "5154300 7039300 7039400"

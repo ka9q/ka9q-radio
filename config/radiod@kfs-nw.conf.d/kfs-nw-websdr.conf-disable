@@ -1,0 +1,33 @@
+############# When feeding PCN to a  WebSDR, enable these three sets of channels
+[KFS-NW-WEBSDR_768]
+data = kfs-nw-websdr768-pcm.local
+#mode = websdr768
+freq = "3700k 5300k 7125k 14150k 21200k 28350k 28850k 29350k"
+samprate = 768k
+low = -383k
+high = 383k
+channels=2
+agc = 0
+gain = 20
+
+[KFS-NW-WEBSDR_384]
+data = kfs-nw-websdr384-pcm.local
+mode = websdr384
+freq = "307k 1900k"
+samprate = 384k
+low = -191k5
+high = 191k5
+channels=2
+agc = 0
+gain = 20
+
+[KFS-NW-WEBSDR_192]
+data = kfs-nw-websdr192-pcm.local
+mode = websdr192
+freq = "10090k 18118k 24940k"
+samprate = 192k
+low = -95k75
+high = 95k75
+channels=2
+agc = 0
+gain = 26
