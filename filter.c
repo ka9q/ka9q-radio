@@ -44,7 +44,7 @@
 char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
 char const *System_wisdom_file = "/etc/fftw/wisdomf"; // only valid for float version
 double FFTW_plan_timelimit = 30.0;
-int N_worker_threads = 2;
+int N_worker_threads = 1;
 int N_internal_threads = 1; // Usually most efficient
 
 // Desired FFTW planning level
