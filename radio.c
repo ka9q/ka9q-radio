@@ -817,12 +817,13 @@ static float estimate_noise(struct channel *chan,int shift){
     // New algorithm (thanks to ChatGPT) responds instantly to changes because it averages noise across frequency rather than time
     // but is a little more wobbly than the old minimum-of-time-smoothed-energies because it doesn't average as much
     // Higher sample rates will give more stable results because more noise-only bins will be averaged
+    //
     int mbin = abs(shift) - nbins/2; // lower edge
     if(mbin < 0)
-      return 0; // Tuned too low
+      mbin = 0; // Don't let the window go below DC
+    else if (mbin + nbins > master->bins)
+      mbin = master->bins - nbins; // or above nyquist
 
-    if(mbin + nbins > master->bins)
-      return 0; // Tuned too high
     for(int i=0; i < nbins; i++,mbin++)
       energies[i] = cnrmf(fdomain[mbin]);
   } else {
@@ -830,8 +831,10 @@ static float estimate_noise(struct channel *chan,int shift){
     // Complex input that often straddles DC
     if(mbin < 0)
       mbin += master->bins; // starting in negative frequencies
+    else if(mbin >= master->bins)
+      mbin -= master->bins;
     if(mbin < 0 || mbin >= master->bins)
-      return 0; // Too low or too high
+      return 0; // wraparound gives me a headache. Just give up
 
     for(int i=0; i < nbins; i++){
       energies[i] = cnrmf(fdomain[mbin]);
