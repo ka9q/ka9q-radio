@@ -31,7 +31,7 @@ extern int Verbose;
 extern char const *Description;
 
 #define INPUT_PRIORITY 95
-static float Power_smooth = 0.05; // Calculate this properly someday
+static double Power_alpha = 0.05; // Calculate this properly someday
 
 // SDRplay device status
 enum sdrplay_status {
@@ -1169,7 +1169,7 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
   frontend->timestamp = gps_time_ns();
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   if(isfinite(in_energy)){
-    frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
+    frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
   }
   return;
 }

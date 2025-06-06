@@ -19,7 +19,7 @@
 
 extern int Verbose;
 
-static const float power_smooth = 0.05; // Arbitrary exponential smoothing factor
+static const double Power_alpha = 0.05; // Arbitrary exponential smoothing factor
 extern char const *Description;
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
@@ -229,7 +229,7 @@ static void bladerf_process(struct frontend * const frontend,
 		sample += 2;
 	}
 
-	frontend->if_power += power_smooth * (energy / num_samples -
+	frontend->if_power += Power_alpha * (energy / num_samples -
 			frontend->if_power);
 	frontend->samples += num_samples;
 	frontend->timestamp = gps_time_ns();

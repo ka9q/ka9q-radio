@@ -31,7 +31,7 @@ static float const Upper_limit = -15;
 static float const Lower_limit = -25;
 static int Default_samprate = 5000000;
 static float const DC_alpha = 1.0e-7;  // high pass filter coefficient for DC offset estimates, per sample
-static float const Power_alpha= 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
+static double const Power_tc= 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
 extern char const *Description;
 
 struct sdrstate {
@@ -278,7 +278,9 @@ static int rx_callback(hackrf_transfer *transfer){
   float complex samp_sum = 0;
   float i_energy=0,q_energy=0;
   float dotprod = 0;                           // sum of I*Q, for phase balance
-  float rate_factor = 1./(frontend->samprate * Power_alpha);
+  // Use double to minimize risk of denormals
+  // Should probably be an exp() here, but it's OK as long as it's small
+  double rate_factor = 1./(frontend->samprate * Power_tc);
 
   float complex * const wptr = frontend->in.input_write_pointer.c;
   for(int i=0; i < sampcount; i++){

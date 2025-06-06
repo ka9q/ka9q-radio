@@ -24,7 +24,7 @@
 
 #define INPUT_PRIORITY 95
 static int const Random_samples = 30000000;
-static float Power_smooth = 0.01; // Calculate this properly someday
+static double Power_alpha = 0.01; // Calculate this properly someday
 
 
 enum modulation {
@@ -313,7 +313,7 @@ static void *proc_sig_gen(void *arg){
     // to vary, causing the reported input level to bobble around the nominal value. Long refresh intervals with 'control'
     // will smooth this out, but it's annoying
     frontend->samples += blocksize;    
-    frontend->if_power += Power_smooth * (in_energy / blocksize - frontend->if_power);
+    frontend->if_power += Power_alpha * (in_energy / blocksize - frontend->if_power);
     // Get status timestamp from UNIX TOD clock
     // Request a half block sleep since this is only the minimum
     {

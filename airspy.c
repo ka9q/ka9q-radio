@@ -90,7 +90,7 @@ NULL
 };
 
 
-static float Power_smooth = 0.05; // Calculate this properly someday
+static double Power_alpha = 0.05; // Calculate this properly someday
 static double set_correct_freq(struct sdrstate *sdr,double freq);
 static int rx_callback(airspy_transfer *transfer);
 static void *airspy_monitor(void *p);
@@ -398,7 +398,7 @@ static int rx_callback(airspy_transfer *transfer){
   frontend->samples += sampcount;
   frontend->timestamp = gps_time_ns();
   write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
+  frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
   if(sdr->software_agc){
     // Integrate A/D energy over A/D averaging period
     sdr->agc_energy += in_energy;

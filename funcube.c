@@ -24,10 +24,10 @@
 static float const AGC_upper = -15;
 static float const AGC_lower = -50;
 static int const ADC_samprate = 192000;
-static float const DC_alpha = 1.0e-6;  // high pass filter coefficient for DC offset estimates, per sample
-static float const Power_alpha = 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
-
-static float Power_smooth = 0.05; // Calculate this properly someday
+// Use double for DC smoothing constant to avoid denormalized math
+static double const DC_alpha = 1.0e-6;  // high pass filter coefficient for DC offset estimates, per sample
+static double Power_alpha = 0.05; // Calculate this properly someday
+static float const Power_tc = 1.0; // time constant (seconds) for computing smoothing alpha for power and I/Q imbalance estimates
 
 // Empirical: noticeable aliasing beyond this noticed on strong 40m SSB signals
 static float const LowerEdge = -75000;
@@ -212,7 +212,7 @@ static void *proc_funcube(void *arg){
   float tanphi = 0;
 
   frontend->timestamp = gps_time_ns();
-  float const rate_factor = Blocksize/(ADC_samprate * Power_alpha);
+  double const gainphase_alpha = Blocksize/(ADC_samprate * Power_tc);
   int ConsecPaErrs = 0;
   int16_t * sampbuf = malloc(2 * Blocksize * sizeof(*sampbuf)); // complex samples have two integers
 
@@ -290,7 +290,7 @@ static void *proc_funcube(void *arg){
     write_cfilter(&frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
     frontend->samples += Blocksize;
     float const block_energy = i_energy + q_energy; // Normalize for complex pairs
-    frontend->if_power += Power_smooth * (block_energy / Blocksize - frontend->if_power); // Average A/D output power per channel
+    frontend->if_power += Power_alpha * (block_energy / Blocksize - frontend->if_power); // Average A/D output power per channel
 
 #if 1
     // Get status timestamp from UNIX TOD clock -- but this might skew because of inexact sample rate
@@ -305,9 +305,9 @@ static void *proc_funcube(void *arg){
     // estimates of DC offset, signal powers and phase error
     sdr->DC += DC_alpha * (samp_sum - Blocksize*sdr->DC);
     if(block_energy > 0){ // Avoid divisions by 0, etc
-      sdr->imbalance += rate_factor * ((i_energy / q_energy) - sdr->imbalance);
+      sdr->imbalance += gainphase_alpha * ((i_energy / q_energy) - sdr->imbalance);
       float const dpn = 2 * dotprod / block_energy;
-      sdr->sinphi += rate_factor * (dpn - sdr->sinphi);
+      sdr->sinphi += gainphase_alpha * (dpn - sdr->sinphi);
       gain_q = sqrtf(0.5 * (1 + sdr->imbalance));
       gain_i = sqrtf(0.5 * (1 + 1./sdr->imbalance));
       secphi = 1/sqrtf(1 - sdr->sinphi * sdr->sinphi); // sec(phi) = 1/cos(phi)

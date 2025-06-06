@@ -29,7 +29,7 @@ the input is then purely real.
 #include <sysexits.h>
 
 #define INPUT_PRIORITY 95
-static float Power_smooth = 0.05; // Calculate this properly someday
+static double Power_alpha = 0.05; // Calculate this properly someday
 
 static char const *Fobos_keys[] = {
   "clk_source",
@@ -453,7 +453,7 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
   frontend->timestamp = gps_time_ns();
 
   if (isfinite(in_energy))
-    frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
+    frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
 }
 
 int fobos_startup(struct frontend *const frontend) {
