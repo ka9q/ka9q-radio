@@ -39,8 +39,11 @@ static float const AGC_upper_limit = -15.0;   // Reduce RF gain if A/D level exc
 static float const AGC_lower_limit = -22.0;   // Increase RF gain if level is below this in dBFS
 static int const AGC_interval = 10;           // Seconds between runs of AGC loop
 static float const Start_gain = 10.0;         // Initial VGA gain, dB
-static float Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
-static double const DC_alpha = 4e-3; // smoothing alpha to block DC; cutoff near 1 Hz
+static double Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
+
+// smoothing alpha to block DC. Don't make too large (too quick) because the corrections are applied once per
+// (256K) block to minimize loss of precision, and the lag can cause instability
+static double const DC_alpha = 4e-7;
 
 // Reference frequency for Si5351 clock generator
 static double const Min_reference = 10e6;  //  10 MHz
@@ -94,10 +97,9 @@ struct sdrstate {
   uint64_t last_sample_count; // Used to verify sample rate
   int64_t last_count_time;
   bool message_posted; // Clock rate error posted last time around
-  float scale;         // Scale samples for #bits and front end gain
+  double scale;        // Scale samples for #bits and front end gain
   int undersample;     // Use undersample aliasing on baseband input for VHF/UHF. n = 1 => no undersampling
-  double dc_offset;     // A/D offset, units, used only to adjust power reading. It just goes into the FFT DC bin
-
+  double dc_offset;    // A/D offset, units, used only to adjust power reading. It just goes into the FFT DC bin
   pthread_t cmd_thread;
   pthread_t proc_thread;
   pthread_t agc_thread;
@@ -321,11 +323,11 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     }
   }
   double ferror = actual - samprate;
-  float xfer_time = (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);
+  double xfer_time = (double)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);
   // Compute exponential smoothing constant
   // value is 1 - exp(-blocktime/tc), but use expm1() function to save precision
-  float const tc  = 1.0; // 1 second
-  Power_smooth = -expm1f(-xfer_time/tc);
+  double const tc  = 1.0; // 1 second
+  Power_smooth = -expm1(-xfer_time/tc);
 
   fprintf(stderr,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  sdr->reference,samprate,actual,ferror, 1e6 * ferror / samprate,
@@ -544,13 +546,15 @@ static void rx_callback(struct libusb_transfer * const transfer){
 	frontend->samp_since_over++;
       }
       // Remove DC offset
-      double e = (double)s - sdr->dc_offset;
+      // Use double precision to avoid denormals
+      double e  = s - sdr->dc_offset;
       delta_sum += e;
       in_energy += e * e;
       wptr[i] = e * sdr->scale;
     }
     sdr->dc_offset += DC_alpha * delta_sum;
   } else {
+    double delta_sum = 0;
     for(int i=0; i < sampcount; i++){
       if(samples[i] == 32767 || samples[i] <= -32767){
 	frontend->overranges++;
@@ -559,12 +563,13 @@ static void rx_callback(struct libusb_transfer * const transfer){
 	frontend->samp_since_over++;
       }
       // Remove DC offset
-      double s = (double)samples[i];
-      double e = s - sdr->dc_offset;
-      sdr->dc_offset += DC_alpha * e;
-      in_energy += e * e;
-      wptr[i] = (float)(e * sdr->scale);
+      // Use double precision to avoid denormals
+      double s = samples[i] - sdr->dc_offset;
+      delta_sum += s;
+      in_energy += s * s;
+      wptr[i] = s * sdr->scale;
     }
+    sdr->dc_offset += DC_alpha * delta_sum;
   }
   frontend->timestamp = now;
   // These blocks are kinda small, so exponentially smooth the power readings
@@ -582,8 +587,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     fprintf(stderr,"Firmware not loaded and not available\n");
     return -1;
   }
-  char full_firmware_file[PATH_MAX];
-  memset(full_firmware_file,0,sizeof(full_firmware_file));
+  char full_firmware_file[PATH_MAX] = {0};
   dist_path(full_firmware_file,sizeof(full_firmware_file),firmware);
 
   {
@@ -627,21 +631,18 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       continue;
     }
     if(desc.iManufacturer){
-      char manufacturer[100];
-      memset(manufacturer,0,sizeof(manufacturer));
+      char manufacturer[100] = {0};
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer));
       if(ret > 0)
 	fprintf(stderr,", manufacturer '%s'",manufacturer);
     }
     if(desc.iProduct){
-      char product[100];
-      memset(product,0,sizeof(product));
+      char product[100] = {0};
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof(product));
       if(ret > 0)
 	fprintf(stderr,", product '%s'",product);
     }
-    char serial[100];
-    memset(serial,0,sizeof(serial));
+    char serial[100] = {0};
     if(desc.iSerialNumber){
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial));
       if(ret > 0){
@@ -688,21 +689,18 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       continue;
     }
     if(desc.iManufacturer){
-      char manufacturer[100];
-      memset(manufacturer,0,sizeof(manufacturer));
+      char manufacturer[100] = {0};
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer));
       if(ret > 0)
 	fprintf(stderr,", manufacturer '%s'",manufacturer);
     }
     if(desc.iProduct){
-      char product[100];
-      memset(product,0,sizeof(product));
+      char product[100] = {0};
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof(product));
       if(ret > 0)
 	fprintf(stderr,", product '%s'",product);
     }
-    char serial[100];
-    memset(serial,0,sizeof(serial));
+    char serial[100] = {0};
     if(desc.iSerialNumber){
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial));
       if(ret > 0){
