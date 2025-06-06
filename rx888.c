@@ -20,6 +20,7 @@
 #include <sysexits.h>
 #include <unistd.h>
 #include <strings.h>
+#include <assert.h>
 
 #include "misc.h"
 #include "status.h"
@@ -39,6 +40,7 @@ static float const AGC_lower_limit = -22.0;   // Increase RF gain if level is be
 static int const AGC_interval = 10;           // Seconds between runs of AGC loop
 static float const Start_gain = 10.0;         // Initial VGA gain, dB
 static float Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
+static double const DC_alpha = 4e-3; // smoothing alpha to block DC; cutoff near 1 Hz
 
 // Reference frequency for Si5351 clock generator
 static double const Min_reference = 10e6;  //  10 MHz
@@ -94,6 +96,7 @@ struct sdrstate {
   bool message_posted; // Clock rate error posted last time around
   float scale;         // Scale samples for #bits and front end gain
   int undersample;     // Use undersample aliasing on baseband input for VHF/UHF. n = 1 => no undersampling
+  double dc_offset;     // A/D offset, units, used only to adjust power reading. It just goes into the FFT DC bin
 
   pthread_t cmd_thread;
   pthread_t proc_thread;
@@ -135,29 +138,30 @@ static char const *usb_speeds[N_USB_SPEEDS] = {
 };
 
 static char const *Rx888_keys[] = {
-  "att",
-  "atten",
-  "calibrate",
+  "att", // synonym for atten
+  "atten", // fixed attenuator gain, dB. Either -10 or +10 is interprepted as 10 dB of attenuation
+  "calibrate", // Set to zero when an external GPSDO or Rb/Cs reference is used
   "description",
   "device",
-  "dither",
-  "featten",
-  "fegain",
+  "dither",  // Dither A/D LSB, not very useful with noisy antenna signals
+  "featten", // synonym for atten
+  "fegain",  // synonym for gain
   "firmware",
-  "frequency",
-  "gain",
+  "frequency", // Used only in VHF mode (not yet implemented)
+  "gain",    // fixed VGA gain, dB
   "gaincal",
-  "gainmode",
+  "gainmode", // Obsolete
   "library",
   "queuedepth",
-  "rand",
-  "reference",
+  "rand",    // Hardware randomizer, probably doesn't help reduce spurs but it should be tested
+  "reference", // Clock reference, default 27 MHz (unlike 10 MHz, nobody cares if that gets into your receiver)
   "reqsize",
-  "rfatten",
-  "rxgain",
-  "samprate",
+  "rfatten", // synonym for atten
+  "rfgain", // synonym for gain
+  "rxgain", // synomym for gain
+  "samprate", // 129.6/64.8 MHz are good choices with 27 MHz reference. No fractional N, and good FFT factors
   "serial",
-  "undersample",
+  "undersample", // Use higher Nyquist zones. Requires removal of internal LPF and use of proper bandpass
   NULL
 };
 
@@ -170,7 +174,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     if(strcasecmp(device,"rx888") != 0)
       return -1; // Not for us
   }
-  config_validate_section(stdout,dictionary,section,Rx888_keys,NULL);
+  config_validate_section(stderr,dictionary,section,Rx888_keys,NULL);
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   assert(sdr != NULL);
   // Cross-link generic and hardware-specific control structures
@@ -190,19 +194,19 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // Queue depth, default 16; 32 sometimes overflows
   int queuedepth = config_getint(dictionary,section,"queuedepth",16);
   if(queuedepth < 1 || queuedepth > 64) {
-    fprintf(stdout,"Invalid queue depth %d, using 16\n",queuedepth);
+    fprintf(stderr,"Invalid queue depth %d, using 16\n",queuedepth);
     queuedepth = 16;
   }
   // Packets per transfer request, default 32
   int reqsize = config_getint(dictionary,section,"reqsize",32);
   if(reqsize < 1 || reqsize > 64) {
-    fprintf(stdout,"Invalid request size %d, using 32\n",reqsize);
+    fprintf(stderr,"Invalid request size %d, using 32\n",reqsize);
     reqsize = 32;
   }
   {
     int ret;
     if((ret = rx888_usb_init(sdr,firmware,queuedepth,reqsize)) != 0){
-      fprintf(stdout,"rx888_usb_init() failed\n");
+      fprintf(stderr,"rx888_usb_init() failed\n");
       return -1;
     }
   }
@@ -238,10 +242,11 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // Gain Mode now automatically set by gain; gain < 0 dB -> low, gain >= 0 dB -> high
   char const *gainmode = config_getstring(dictionary,section,"gainmode",NULL);
   if(gainmode != NULL)
-    fprintf(stdout,"gainmode parameter is obsolete, now set automatically\n");
+    fprintf(stderr,"gainmode parameter is obsolete, now set automatically\n");
 
   // Gain value
   float gain = config_getfloat(dictionary,section,"gain",9999);
+  gain = config_getfloat(dictionary,section,"rfgain",gain);
   gain = config_getfloat(dictionary,section,"rxgain",gain);
   gain = config_getfloat(dictionary,section,"fegain",gain);
   if(gain == 9999){
@@ -260,12 +265,12 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
       reference = parse_frequency(p,false);
   }
   if(reference < Min_reference || reference > Max_reference){
-    fprintf(stdout,"Invalid reference frequency %'lf, forcing %'lf\n",reference,Default_reference);
+    fprintf(stderr,"Invalid reference frequency %'lf, forcing %'lf\n",reference,Default_reference);
     reference = Default_reference;
   }
   double calibrate = config_getdouble(dictionary,section,"calibrate",0);
   if(fabsl(calibrate) >= Max_calibrate){
-    fprintf(stdout,"Unreasonable frequency calibration %.3g, setting to 0\n",calibrate);
+    fprintf(stderr,"Unreasonable frequency calibration %.3g, setting to 0\n",calibrate);
     calibrate = 0;
   }
   int samprate = Default_samprate;
@@ -275,11 +280,11 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
       samprate = parse_frequency(p,false);
   }
   if(samprate < Min_samprate){
-    fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,Min_samprate);
+    fprintf(stderr,"Invalid sample rate %'d, forcing %'d\n",samprate,Min_samprate);
     samprate = Min_samprate;
   }
   if(samprate > Max_samprate){
-    fprintf(stdout,"Invalid sample rate %'d, forcing %'d\n",samprate,Max_samprate);
+    fprintf(stderr,"Invalid sample rate %'d, forcing %'d\n",samprate,Max_samprate);
     samprate = Max_samprate;
   }
   sdr->reference = reference * (1 + calibrate);
@@ -289,7 +294,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 
   sdr->undersample = config_getint(dictionary,section,"undersample",1);
   if(sdr->undersample < 1){
-    fprintf(stdout,"rx888 undersample must be >= 1, ignoring\n");
+    fprintf(stderr,"rx888 undersample must be >= 1, ignoring\n");
     sdr->undersample = 1;
   }
   int mult = sdr->undersample / 2;
@@ -322,7 +327,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   float const tc  = 1.0; // 1 second
   Power_smooth = -expm1f(-xfer_time/tc);
 
-  fprintf(stdout,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
+  fprintf(stderr,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  sdr->reference,samprate,actual,ferror, 1e6 * ferror / samprate,
 	  frontend->rf_agc ? "on" : "off",
 	  gain,frontend->rf_gain,frontend->rf_atten,frontend->rf_level_cal,
@@ -335,15 +340,15 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
     char const *p = config_getstring(dictionary,section,"frequency",NULL);
     if(p != NULL){
       if(sdr->undersample > 1){
-	fprintf(stdout,"frequency = ignored in undersample mode\n");
+	fprintf(stderr,"frequency = ignored in undersample mode\n");
       } else {
 	double frequency = parse_frequency(p,false);
 	if(frequency < Min_frequency || frequency > Max_frequency){
-	  fprintf(stdout,"Invalid VHF/UHF frequency %'lf, ignoring\n",frequency);
+	  fprintf(stderr,"Invalid VHF/UHF frequency %'lf, ignoring\n",frequency);
 	} else {
 	  // VHF/UHF mode
 	  double actual_frequency = rx888_set_tuner_frequency(sdr,frequency);
-	  fprintf(stdout,"Actual VHF/UHF tuner frequency %'lf\n",actual_frequency);
+	  fprintf(stderr,"Actual VHF/UHF tuner frequency %'lf\n",actual_frequency);
 	  frontend->frequency = actual_frequency;
 	  rx888_set_att(sdr,att,true);
 	  rx888_set_gain(sdr,gain,true);
@@ -364,12 +369,11 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
 // Come back here after common stuff has been set up (filters, etc)
 int rx888_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-
   // Start processing A/D data
   sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
   pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
   pthread_create(&sdr->agc_thread,NULL,agc_rx888,sdr);
-  fprintf(stdout,"rx888 running\n");
+  fprintf(stderr,"rx888 running\n");
   return 0;
 }
 
@@ -377,7 +381,7 @@ int rx888_startup(struct frontend * const frontend){
 float rx888_gain(struct frontend * const frontend, float gain){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->rf_agc)
-    fprintf(stdout,"manual gain setting, turning off AGC\n");
+    fprintf(stderr,"manual gain setting, turning off AGC\n");
   frontend->rf_agc = false;
   rx888_set_gain(sdr,gain,sdr->undersample == 1 && frontend->frequency != 0);
   return frontend->rf_gain;
@@ -387,7 +391,7 @@ float rx888_gain(struct frontend * const frontend, float gain){
 float rx888_atten(struct frontend * const frontend, float atten){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->rf_agc)
-    fprintf(stdout,"manual atten setting, turning off AGC\n");
+    fprintf(stderr,"manual atten setting, turning off AGC\n");
   frontend->rf_agc = false;
   rx888_set_att(sdr,atten,sdr->undersample == 1 && frontend->frequency != 0);
   return frontend->rf_atten;
@@ -436,7 +440,7 @@ static void *proc_rx888(void *arg){
   rx888_stop_rx(sdr);
   rx888_close(sdr);
   // Can't do anything without the front end; quit entirely
-  fprintf(stdout,"rx888 has aborted, exiting radiod\n");
+  fprintf(stderr,"rx888 has aborted, exiting radiod\n");
   exit(EX_NOINPUT);
 }
 
@@ -455,9 +459,11 @@ static void *agc_rx888(void *arg){
       int64_t const sampcount = frontend->samples - sdr->last_sample_count;
       double const rate = BILLION * (double)sampcount / (now - sdr->last_count_time);
       double const error = fabs((rate - frontend->samprate) / (double)frontend->samprate);
+      sdr->last_count_time = now;
+      sdr->last_sample_count = frontend->samples;
       if(error > 0.01 || sdr->message_posted){
 	// Post message every time the clock is off by 1% or more, or if it has just returned to nominal
-	fprintf(stdout,"RX888 measured sample rate error: %'.1lf Hz vs nominal %'d Hz\n",
+	fprintf(stderr,"RX888 measured sample rate error: %'.1lf Hz vs nominal %'d Hz\n",
 		rate,frontend->samprate);
 	sdr->message_posted = (error > 0.01);
       }
@@ -471,7 +477,7 @@ static void *agc_rx888(void *arg){
 	float scaled_old_power = frontend->if_power_max * scale_ADpower2FS(frontend);
 	float old_dBFS = power2dB(scaled_old_power);
 	if(new_dBFS >= old_dBFS + 0.1)
-	  fprintf(stdout,"New input power high watermark: %.1f dBFS\n",new_dBFS);
+	  fprintf(stderr,"New input power high watermark: %.1f dBFS\n",new_dBFS);
       }
       frontend->if_power_max = frontend->if_power;
     }
@@ -480,9 +486,9 @@ static void *agc_rx888(void *arg){
       float new_gain = frontend->rf_gain - (new_dBFS - target_level);
       if(new_gain > 34)
 	new_gain = 34;
-      if(new_gain != frontend->rf_gain){
+      if(gain2val(new_gain) != gain2val(frontend->rf_gain)){ // only if it'll actually change
 	if(Verbose)
-	  fprintf(stdout,"Front end gain change from %.1f dB to %.1f dB\n",frontend->rf_gain,new_gain);
+	  fprintf(stderr,"Front end gain change from %.1f dB to %.1f dB\n",frontend->rf_gain,new_gain);
 	rx888_set_gain(sdr,new_gain,false);
 	// Change averaged value to speed convergence
 	frontend->if_power *= dB2power(target_level - new_dBFS);
@@ -508,7 +514,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
     if(Verbose > 1)
-      fprintf(stdout,"Transfer %p callback status %s received %d bytes.\n",transfer,
+      fprintf(stderr,"Transfer %p callback status %s received %d bytes.\n",transfer,
 	      libusb_error_name(transfer->status), transfer->actual_length);
     if(!Stop_transfers) {
       if(libusb_submit_transfer(transfer) == 0)
@@ -522,11 +528,12 @@ static void rx_callback(struct libusb_transfer * const transfer){
   sdr->success_count++;
 
   // Feed directly into FFT input buffer, accumulate energy
-  float in_energy = 0; // A/D energy accumulator
+  double in_energy = 0; // A/D energy accumulator
   int16_t const * const samples = (int16_t *)transfer->buffer;
   float * const wptr = frontend->in.input_write_pointer.r;
   int const sampcount = size / sizeof(int16_t);
   if(sdr->randomizer){
+    double delta_sum = 0;
     for(int i=0; i < sampcount; i++){
       int32_t s = samples[i];
       s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
@@ -536,9 +543,13 @@ static void rx_callback(struct libusb_transfer * const transfer){
       } else {
 	frontend->samp_since_over++;
       }
-      in_energy += s * s;
-      wptr[i] = s * sdr->scale;
+      // Remove DC offset
+      double e = (double)s - sdr->dc_offset;
+      delta_sum += e;
+      in_energy += e * e;
+      wptr[i] = e * sdr->scale;
     }
+    sdr->dc_offset += DC_alpha * delta_sum;
   } else {
     for(int i=0; i < sampcount; i++){
       if(samples[i] == 32767 || samples[i] <= -32767){
@@ -547,8 +558,12 @@ static void rx_callback(struct libusb_transfer * const transfer){
       } else {
 	frontend->samp_since_over++;
       }
-      in_energy += (int)samples[i] * samples[i];
-      wptr[i] = sdr->scale * samples[i];
+      // Remove DC offset
+      double s = (double)samples[i];
+      double e = s - sdr->dc_offset;
+      sdr->dc_offset += DC_alpha * e;
+      in_energy += e * e;
+      wptr[i] = (float)(e * sdr->scale);
     }
   }
   frontend->timestamp = now;
@@ -564,7 +579,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
 
 static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware,unsigned int const queuedepth,unsigned int const reqsize){
   if(firmware == NULL){
-    fprintf(stdout,"Firmware not loaded and not available\n");
+    fprintf(stderr,"Firmware not loaded and not available\n");
     return -1;
   }
   char full_firmware_file[PATH_MAX];
@@ -574,7 +589,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   {
     int ret = libusb_init(NULL);
     if(ret != 0){
-      fprintf(stdout,"Error initializing libusb: %s\n",
+      fprintf(stderr,"Error initializing libusb: %s\n",
 	      libusb_error_name(ret));
       return -1;
     }
@@ -584,7 +599,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   uint16_t const loaded_product_id = 0x00f1;
 
   if(sdr->serial != 0)
-    fprintf(stdout,"Looking for rx888 serial %016llx\n",(long long)sdr->serial);
+    fprintf(stderr,"Looking for rx888 serial %016llx\n",(long long)sdr->serial);
 
   // Search for unloaded rx888s (0x04b4:0x00f3) with the desired serial, or all such devices if no serial specified
   // and load with firmware
@@ -598,17 +613,17 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     struct libusb_device_descriptor desc = {0};
     int rc = libusb_get_device_descriptor(device,&desc);
     if(rc != 0){
-      fprintf(stdout," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
+      fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
       continue;
     }
     if(desc.idVendor != vendor_id || desc.idProduct != unloaded_product_id)
       continue;
 
-    fprintf(stdout,"found rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
+    fprintf(stderr,"found rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
     libusb_device_handle *handle = NULL;
     rc = libusb_open(device,&handle);
     if(rc != 0 || handle == NULL){
-      fprintf(stdout,", libusb_open() failed: %s\n",libusb_strerror(rc));
+      fprintf(stderr,", libusb_open() failed: %s\n",libusb_strerror(rc));
       continue;
     }
     if(desc.iManufacturer){
@@ -616,30 +631,30 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       memset(manufacturer,0,sizeof(manufacturer));
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer));
       if(ret > 0)
-	fprintf(stdout,", manufacturer '%s'",manufacturer);
+	fprintf(stderr,", manufacturer '%s'",manufacturer);
     }
     if(desc.iProduct){
       char product[100];
       memset(product,0,sizeof(product));
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof(product));
       if(ret > 0)
-	fprintf(stdout,", product '%s'",product);
+	fprintf(stderr,", product '%s'",product);
     }
     char serial[100];
     memset(serial,0,sizeof(serial));
     if(desc.iSerialNumber){
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial));
       if(ret > 0){
-	fprintf(stdout,", serial '%s'",serial);
+	fprintf(stderr,", serial '%s'",serial);
       }
     }
     // The proper serial number doesn't appear until the device is loaded with firmware, so load all we find
-    fprintf(stdout,", loading rx888 firmware file %s",full_firmware_file);
+    fprintf(stderr,", loading rx888 firmware file %s",full_firmware_file);
     if(ezusb_load_ram(handle,full_firmware_file,FX_TYPE_FX3,IMG_TYPE_IMG,1) == 0){
-      fprintf(stdout,", done\n");
+      fprintf(stderr,", done\n");
       sleep(1); // how long should this be?
     } else {
-      fprintf(stdout,", failed for device %d.%d (logical)\n",
+      fprintf(stderr,", failed for device %d.%d (logical)\n",
 	      libusb_get_bus_number(device),libusb_get_device_address(device));
     }
     libusb_close(handle);
@@ -659,17 +674,17 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     struct libusb_device_descriptor desc = {0};
     int rc = libusb_get_device_descriptor(device,&desc);
     if(rc != 0){
-      fprintf(stdout," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
+      fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
       continue;
     }
     if(desc.idVendor != vendor_id || desc.idProduct != loaded_product_id)
       continue;
 
-    fprintf(stdout,"found rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
+    fprintf(stderr,"found rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
     libusb_device_handle *handle = NULL;
     rc = libusb_open(device,&handle);
     if(rc != 0 || handle == NULL){
-      fprintf(stdout," libusb_open() failed: %s\n",libusb_strerror(rc));
+      fprintf(stderr," libusb_open() failed: %s\n",libusb_strerror(rc));
       continue;
     }
     if(desc.iManufacturer){
@@ -677,32 +692,32 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       memset(manufacturer,0,sizeof(manufacturer));
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer));
       if(ret > 0)
-	fprintf(stdout,", manufacturer '%s'",manufacturer);
+	fprintf(stderr,", manufacturer '%s'",manufacturer);
     }
     if(desc.iProduct){
       char product[100];
       memset(product,0,sizeof(product));
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof(product));
       if(ret > 0)
-	fprintf(stdout,", product '%s'",product);
+	fprintf(stderr,", product '%s'",product);
     }
     char serial[100];
     memset(serial,0,sizeof(serial));
     if(desc.iSerialNumber){
       int ret = libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial));
       if(ret > 0){
-	fprintf(stdout,", serial '%s'",serial);
+	fprintf(stderr,", serial '%s'",serial);
       }
     }
     // Is this the droid we're looking for?
     uint64_t serialnum = strtoll(serial,NULL,16);
     if(sdr->serial == 0 || sdr->serial == serialnum){
       // Either the user didn't specify a serial, or this is the one he did; use it
-      fprintf(stdout,", selected\n");
+      fprintf(stderr,", selected\n");
       sdr->dev_handle = handle;
       break;
     }
-    fprintf(stdout,"\n"); // Not selected; close and keep looking
+    fprintf(stderr,"\n"); // Not selected; close and keep looking
     libusb_close(handle);
     handle = NULL;
   }
@@ -711,17 +726,17 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
 
   // If a device has been found, device and dev_handle will be non-NULL
   if(device == NULL || sdr->dev_handle == NULL){
-    fprintf(stdout,"Error or device could not be found\n");
+    fprintf(stderr,"Error or device could not be found\n");
     goto end;
   }
   enum libusb_speed usb_speed = libusb_get_device_speed(device);
   if(usb_speed < N_USB_SPEEDS)
-    fprintf(stdout,"rx888 USB speed: %s\n",usb_speeds[usb_speed]);
+    fprintf(stderr,"rx888 USB speed: %s\n",usb_speeds[usb_speed]);
   else
-    fprintf(stdout,"Unknown rx888 USB speed index %d\n",usb_speed);
+    fprintf(stderr,"Unknown rx888 USB speed index %d\n",usb_speed);
 
   if(usb_speed < LIBUSB_SPEED_SUPER){
-    fprintf(stdout,"rx888 USB device is not at least SuperSpeed; is it plugged into a blue USB jack?\n");
+    fprintf(stderr,"rx888 USB device is not at least SuperSpeed; is it plugged into a blue USB jack?\n");
     goto end;
   }
 
@@ -731,16 +746,16 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   {
     int r = libusb_reset_device(sdr->dev_handle);
     if(r != 0){
-      fprintf(stdout,"reset failed, %d\n",r);
+      fprintf(stderr,"reset failed, %d\n",r);
     }
   }
   {
     int ret = libusb_kernel_driver_active(sdr->dev_handle,0);
     if(ret != 0){
-      fprintf(stdout,"Kernel driver active. Trying to detach kernel driver\n");
+      fprintf(stderr,"Kernel driver active. Trying to detach kernel driver\n");
       ret = libusb_detach_kernel_driver(sdr->dev_handle,0);
       if(ret != 0){
-	fprintf(stdout,"Could not detach kernel driver from an interface\n");
+	fprintf(stderr,"Could not detach kernel driver from an interface\n");
 	goto end;
       }
     }
@@ -763,7 +778,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     struct libusb_ss_endpoint_companion_descriptor *ep_comp = NULL;
     int const rc = libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
     if(rc != 0){
-      fprintf(stdout,"libusb_get_ss_endpoint_companion_descriptor returned: %s (%d)\n",libusb_error_name(rc),rc);
+      fprintf(stderr,"libusb_get_ss_endpoint_companion_descriptor returned: %s (%d)\n",libusb_error_name(rc),rc);
       goto end;
     }
     assert(ep_comp != NULL);
@@ -772,12 +787,12 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   }
   sdr->databuffers = (u_char **)calloc(queuedepth,sizeof(u_char *));
   if(sdr->databuffers == NULL){
-    fprintf(stdout,"Failed to allocate data buffers\n");
+    fprintf(stderr,"Failed to allocate data buffers\n");
     goto end;
   }
   sdr->transfers = (struct libusb_transfer **)calloc(queuedepth,sizeof(struct libusb_transfer *));
   if(sdr->transfers == NULL){
-    fprintf(stdout,"Failed to allocate transfer buffers\n");
+    fprintf(stderr,"Failed to allocate transfer buffers\n");
     goto end;
   }
   for(unsigned int i = 0; i < queuedepth; i++){
@@ -885,7 +900,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
     rdiv += 1;
   }
   if (r_samprate < 1e6) {
-    fprintf(stdout,"ERROR - requested sample rate is too low: %'d\n",samprate);
+    fprintf(stderr,"ERROR - requested sample rate is too low: %'d\n",samprate);
     return 0;
   }
 
@@ -894,7 +909,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
   uint32_t output_ms = ((uint32_t)(SI5351_MAX_VCO_FREQ / r_samprate));
   output_ms -= output_ms % 2;
   if (output_ms < 4 || output_ms > 900) {
-    fprintf(stdout,"ERROR - invalid output MS: %d  (samprate=%'d)\n",output_ms,samprate);
+    fprintf(stderr,"ERROR - invalid output MS: %d  (samprate=%'d)\n",output_ms,samprate);
     return 0;
   }
   // This sets the VCO frequency
@@ -909,7 +924,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
   double const vco = reference * pll_ratio;
   double output_samprate = vco / (output_ms * (1 << rdiv));
 
-  fprintf(stdout,"Nominal samprate %'d, reference %'lf, feedback divisor %d + %d/%d, VCO %'lf, integer divisor %d * %d, output = %'lf\n",
+  fprintf(stderr,"Nominal samprate %'d, reference %'lf, feedback divisor %d + %d/%d, VCO %'lf, integer divisor %d * %d, output = %'lf\n",
 	  samprate,
 	  reference,
 	  a,b,c,
@@ -925,7 +940,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
   output_divider = d + (double)e/f;
   output_samprate = vco / (output_divider * (1 << rdiv));
 
-  fprintf(stdout,"Output divider %d + %d/%d, rdiv %d, actual samprate = %'lf\n",d,e,f,(1<<rdiv),output_samprate);
+  fprintf(stderr,"Output divider %d + %d/%d, rdiv %d, actual samprate = %'lf\n",d,e,f,(1<<rdiv),output_samprate);
 
   /* configure clock input and PLL */
   uint32_t const b_over_c = 128 * b / c;
@@ -1039,25 +1054,25 @@ static void rx888_stop_rx(struct sdrstate *sdr){
 
   while(sdr->xfers_in_progress != 0){
     if(Verbose)
-      fprintf(stdout,"%d transfers are pending\n",sdr->xfers_in_progress);
+      fprintf(stderr,"%d transfers are pending\n",sdr->xfers_in_progress);
     struct timeval tv;
     tv.tv_sec = 1;
     tv.tv_usec = 0;
     long long stime = gps_time_ns();
     int const ret = libusb_handle_events_timeout_completed(NULL,&tv,NULL);
     if(ret != 0)
-      fprintf(stdout,"libusb error %d while stopping\n",ret);
+      fprintf(stderr,"libusb error %d while stopping\n",ret);
 
     if(gps_time_ns() > stime + BILLION/2){ // taken more than half a second, too slow
       // Apparently triggers an assertion failure inside libusb but we don't care, we're already aborting
       // Probably should release a lock or something though
-      fprintf(stdout,"libusb_handle_events_timeout_completed() timed out while stopping rx888\n");
+      fprintf(stderr,"libusb_handle_events_timeout_completed() timed out while stopping rx888\n");
       break;
     }
     usleep(100000);
   }
 
-  fprintf(stdout,"Transfers completed\n");
+  fprintf(stderr,"Transfers completed\n");
   free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
   sdr->databuffers = NULL;
   sdr->transfers = NULL;
