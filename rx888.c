@@ -325,6 +325,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   double ferror = actual - samprate;
   double xfer_time = (double)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);
   // Compute exponential smoothing constant
+  // Use double to avoid denormalized addition
   // value is 1 - exp(-blocktime/tc), but use expm1() function to save precision
   double const tc  = 1.0; // 1 second
   Power_smooth = -expm1(-xfer_time/tc);

@@ -36,7 +36,7 @@ struct frontend Frontend;
 
 // Noise estimator tuning
 static float estimate_noise(struct channel *chan,int shift);
-static float const Power_smooth = 0.10; // Noise estimation time smoothing factor, per block
+static double const Power_alpha = 0.10; // Noise estimation time smoothing factor, per block. Use double to reduce risk of slow denormals
 static float const NQ = 0.10f; // look for energy in 10th quartile, hopefully contains only noise
 static float const N_cutoff = 1.5; // Average (all noise, hopefully) bins up to 1.5x the energy in the 10th quartile
 // Minimum to get reasonable noise level statistics; 1000 * 40 Hz = 40 kHz which seems reasonable
@@ -570,8 +570,9 @@ int downconvert(struct channel *chan){
   if(isnan(chan->sig.n0))
      chan->sig.n0 = estimate_noise(chan,-shift);
   else {
-    float diff = estimate_noise(chan,-shift) - chan->sig.n0; // Shift is negative, just like compute_tuning. Note: must follow execute_filter_output()
-    chan->sig.n0 += Power_smooth * diff;
+    // Use double to minimize risk of denormalization in the smoother
+    double diff = estimate_noise(chan,-shift) - chan->sig.n0; // Shift is negative, just like compute_tuning. Note: must follow execute_filter_output()
+    chan->sig.n0 += Power_alpha * diff;
   }
   return 0;
 }
@@ -844,11 +845,12 @@ static float estimate_noise(struct channel *chan,int shift){
 	break; // fallen off the right edge
     }
   }
-  static float correction = 0;
+  // Not sure if this could be numerically unstable, but use double anyway especially since it's only executed once
+  static double correction = 0;
   if(correction == 0){
     // Compute correction only once
-    float z = N_cutoff * (-logf(1-NQ));
-    correction = 1 / (1 - z*expf(-z)/(1-expf(-z)));
+    double z = N_cutoff * (-log(1-NQ));
+    correction = 1 / (1 - z*exp(-z)/(1-exp(-z)));
   }
 
   float en = N_cutoff * quantile(energies,nbins,NQ); // energy in the 10th quantile bin
