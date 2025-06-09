@@ -406,7 +406,7 @@ static unsigned long factor_small_primes(unsigned long n, int exponents[6]){
 }
 
 // Is this a good blocksize for FFTW3?
-// Any number of factors of 2, 3, 7 plus one of either 11 or 13
+// Any number of factors of 2, 3, 5, 7 plus one of either 11 or 13
 static bool goodchoice(unsigned long n){
   int exponents[6];
 
