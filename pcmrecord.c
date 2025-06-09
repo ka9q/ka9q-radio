@@ -164,7 +164,6 @@ struct session {
     bool inuse;
   } reseq[RESEQ];              // Reseqencing queue
 
-  bool bitbucket;              // Discard output, e.g, because output file couldn't be written
   FILE *fp;                    // File being recorded
   void *iobuffer;              // Big buffer to reduce write rate
   struct timespec last_active; // time of last file activity
@@ -202,6 +201,7 @@ static bool Jtmode = false;
 static bool Raw = false;
 static char const *Source;
 static struct sockaddr_storage *Source_socket; // Remains NULL if Source == NULL
+static bool Prefix_source; // Prepend 192.168.42.4:1234_ to file name
 
 const char *App_path;
 static int Input_fd,Status_fd;
@@ -245,6 +245,7 @@ static struct option Options[] = {
   {"minfiletime", required_argument, NULL, 'm'},
   {"mintime", required_argument, NULL, 'm'},
   {"source", required_argument, NULL, 'o'},
+  {"prefix-source", no_argument, NULL, 'p' }, // Prefix file names with source socket
   {"raw", no_argument, NULL, 'r' },
   {"subdirectories", no_argument, NULL, 's'},
   {"subdirs", no_argument, NULL, 's'},
@@ -258,7 +259,7 @@ static struct option Options[] = {
   {"max_length", required_argument, NULL, 'x'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = ":cd:e:fjl:m:rsS:t:vL:Vx:48w";
+static char Optstring[] = ":cd:e:fjl:m:prsS:t:vL:Vx:48w";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -269,6 +270,9 @@ int main(int argc,char *argv[]){
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != EOF){
     switch(c){
+    case 'p':
+      Prefix_source = true;
+	break;
     case '4':
       Jtmode = true;
       FileLengthLimit = 7.5;
@@ -592,14 +596,10 @@ static void process_data(int fd){
     Sessions = sp;
   }
   clock_gettime(CLOCK_REALTIME,&sp->last_active);
-  if(sp->bitbucket)
-    return; // Discard output, e.g., because file create failed. Need this to avoid flurry of error messages
   if(sp->fp == NULL && !sp->complete){
-    if(session_file_init(sp,&sender,&sp->last_active) != 0){
-      sp->bitbucket = true;
+    if(session_file_init(sp,&sender,&sp->last_active) != 0)
       return;
-    }
-    sp->bitbucket = false;
+
     if(sp->encoding == OPUS){
       if(Raw)
 	fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
@@ -999,14 +999,14 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
     sp->can_seek = false; // Can't seek on a pipe
     sp->exit_after_close = false; // Runs forever, closing individual pipes on timeout
     sp->filename[0] = '\0';
-    char command_copy[2048]; // Don't overwrite program args
+    char command_copy[2048] = {0}; // Don't overwrite program args
     strlcpy(command_copy,Command,sizeof(command_copy));
     char *cp = command_copy;
     char *a;
     while((a = strsep(&cp,"$")) != NULL){
       strlcat(sp->filename,a,sizeof(sp->filename));
       if(cp != NULL && strlen(cp) > 0){
-	char temp[256];
+	char temp[256] = {0};
 	switch(*cp++){
 	case '$':
 	  snprintf(temp,sizeof(temp),"$");
@@ -1072,7 +1072,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
     }
   }
   // Use time provided by caller
-  // Calling the clock here can make the file name a second or two late if the system is heavily loaded
+  // Calling the clock here can make the file name fa second or two late if the system is heavily loaded
   sp->file_time = *timestamp;
 
   if(FileLengthLimit > 0){ // Not really supported on opus yet
@@ -1101,6 +1101,10 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
   if (Max_length > 0)
     sp->samples_remaining = Max_length * sp->samprate;
 
+  char filename[PATH_MAX] = {0}; // file pathname except for suffix
+  if(Prefix_source)
+    snprintf(filename, sizeof filename,"%s_",formatsock(&sp->sender,false));
+
   if(Jtmode){
     //  K1JT-format file names in flat directory
     // Round time to nearest second
@@ -1108,7 +1112,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
     if(sp->file_time.tv_nsec > BILLION/2)
       seconds++;
     struct tm const * const tm = gmtime(&seconds);
-    snprintf(sp->filename,sizeof(sp->filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s%s",
+    snprintf(filename + strlen(filename), sizeof filename - strlen(filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s",
 	     tm->tm_year+1900,
 	     tm->tm_mon+1,
 	     tm->tm_mday,
@@ -1116,9 +1120,10 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
 	     tm->tm_min,
 	     tm->tm_sec,
 	     sp->chan.tune.freq,
-	     sp->chan.preset,
-	     suffix);
+	     sp->chan.preset);
   } else {
+    // not JT; filename is yyyymmddThhmmss.sZ + digit + suffix
+    // digit is inserted only if needed to make file unique
     // Round time to nearest 1/10 second
     imaxdiv_t f = imaxdiv(sp->file_time.tv_nsec,100000000); // 100 million to get deci-seconds
     if(f.rem >= 50000000) // 50 million
@@ -1128,7 +1133,6 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
     time_t seconds = f.quot;
     int tenths = f.rem;
     struct tm const * const tm = gmtime(&seconds);
-    sp->filename[0] = '\0';
 
     if(Subdirs){
       // Create directory path
@@ -1154,7 +1158,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
 	return -1;
       }
       // yyyy-mm-dd-hh:mm:ss.s so it will sort properly
-      snprintf(sp->filename,sizeof(sp->filename),
+      snprintf(filename + strlen(filename), sizeof filename - strlen(filename),
 	       "%u/%d/%d/%d/",
 	       sp->ssrc,
 	       tm->tm_year+1900,
@@ -1162,30 +1166,44 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
 	       tm->tm_mday);
     }
     // create file in specified directory
-    char * const start = sp->filename + strlen(sp->filename);
-    int const size = sizeof(sp->filename) - strlen(sp->filename);
-    snprintf(start,size,
-	     "%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ%s",
-	     sp->ssrc,
-	     tm->tm_year+1900,
-	     tm->tm_mon+1,
-	     tm->tm_mday,
-	     tm->tm_hour,
-	     tm->tm_min,
-	     tm->tm_sec,
-	     tenths,
-	     suffix);
+    if(sizeof filename - strlen(filename) > 0)
+      snprintf(filename + strlen(filename),sizeof(filename) - strlen(filename),
+	       "%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ",
+	       sp->ssrc,
+	       tm->tm_year+1900,
+	       tm->tm_mon+1,
+	       tm->tm_mday,
+	       tm->tm_hour,
+	       tm->tm_min,
+	       tm->tm_sec,
+	       tenths);
   }
-  // create a temp file (foo.tmp)
+  // create a temp file (eg, foo.wav.tmp)
   // Some error and logging messages use the suffix, some don't, but hey
-  char tempfile[PATH_MAX+5]; // If too long, open will fail with ENAMETOOLONG
-  snprintf(tempfile,sizeof tempfile, "%s.tmp",sp->filename);
-  int const fd = open(tempfile,O_RDWR|O_CREAT|O_EXCL|O_NONBLOCK,0644);
+  int fd = -1;
+  for(int tries = 0; tries < 10; tries++){
+    if(tries == 0) // Insert digit only if necessary
+      snprintf(sp->filename,sizeof sp->filename,"%s%s",filename,suffix);
+    else
+      snprintf(sp->filename,sizeof sp->filename, "%s%d%s",filename,tries,suffix);
+    char tempfile[PATH_MAX+5]; // If too long, open will fail with ENAMETOOLONG
+    snprintf(tempfile,sizeof tempfile,"%s.tmp",sp->filename);
+    fd = open(tempfile,O_RDWR|O_CREAT|O_EXCL|O_NONBLOCK,0644);
+    if(fd != -1)
+      break;
+    fprintf(stderr,"create %s failed: %s\n",tempfile,strerror(errno));
+  }
   if(fd == -1){
+    fprintf(stderr,"Giving up creating temp file, redirecting to /dev/null\n");
     // This could be because two SSRCs are tuned to the same frequency and writing the same spool file
-    fprintf(stderr,"can't create/write file '%s': %s\n",tempfile,strerror(errno));
-    sp->can_seek = false;
-    return -1;
+    // Leave the temp file(s), the spool reader will clean it out if it's an old fragment
+    fd = open("/dev/null",O_RDWR|O_NONBLOCK);
+    if(fd == -1){
+      // Something is seriously wrong
+      fprintf(stderr,"Can't open /dev/null: %s\n",strerror(errno));
+      return -1;
+    }
+    strlcpy(sp->filename,"/dev/null",sizeof sp->filename);
   }
   sp->fp = fdopen(fd,"r+");
   if(sp->fp == NULL){
@@ -1207,27 +1225,29 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
     fprintf(stderr," from %s\n",formatsock(&sp->sender,false));
   }
 
-  sp->iobuffer = malloc(BUFFERSIZE);
-  setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
-
-  attrprintf(fd,"encoding","%s",file_encoding);
-  attrprintf(fd,"samprate","%u",sp->samprate);
-  attrprintf(fd,"channels","%d",sp->channels);
-  attrprintf(fd,"ssrc","%u",sp->ssrc);
-  attrprintf(fd,"frequency","%.3lf",sp->chan.tune.freq);
-  attrprintf(fd,"preset","%s",sp->chan.preset);
-  attrprintf(fd,"source","%s",formatsock(sender,false));
-  attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
-  attrprintf(fd,"unixstarttime","%ld.%09ld",(long)sp->file_time.tv_sec,(long)sp->file_time.tv_nsec);
-
-  if(strlen(sp->frontend.description) > 0)
-    attrprintf(fd,"description","%s",sp->frontend.description);
-
-  if(sp->starting_offset != 0)
-    attrprintf(fd,"starting offset","%lld",sp->starting_offset);
-
-  if(sp->chan.demod_type == LINEAR_DEMOD && !sp->chan.linear.agc)
-    attrprintf(fd,"gain","%.3f",voltage2dB(sp->chan.output.gain));
+  if(strcmp(sp->filename,"/dev/null") != 0){
+    sp->iobuffer = malloc(BUFFERSIZE);
+    setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
+    
+    attrprintf(fd,"encoding","%s",file_encoding);
+    attrprintf(fd,"samprate","%u",sp->samprate);
+    attrprintf(fd,"channels","%d",sp->channels);
+    attrprintf(fd,"ssrc","%u",sp->ssrc);
+    attrprintf(fd,"frequency","%.3lf",sp->chan.tune.freq);
+    attrprintf(fd,"preset","%s",sp->chan.preset);
+    attrprintf(fd,"source","%s",formatsock(sender,false));
+    attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
+    attrprintf(fd,"unixstarttime","%ld.%09ld",(long)sp->file_time.tv_sec,(long)sp->file_time.tv_nsec);
+    
+    if(strlen(sp->frontend.description) > 0)
+      attrprintf(fd,"description","%s",sp->frontend.description);
+    
+    if(sp->starting_offset != 0)
+      attrprintf(fd,"starting offset","%lld",sp->starting_offset);
+    
+    if(sp->chan.demod_type == LINEAR_DEMOD && !sp->chan.linear.agc)
+      attrprintf(fd,"gain","%.3f",voltage2dB(sp->chan.output.gain));
+  }
   return 0;
 }
 
@@ -1291,23 +1311,25 @@ static int close_file(struct session *sp,char const *reason){
       if(Verbose > 1 && (sp->rtp_state.dupes != 0 || sp->rtp_state.drops != 0))
 	fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
     }
-    char tempfile[PATH_MAX+5];
-    snprintf(tempfile,sizeof tempfile,"%s.tmp",sp->filename); // Recover actual name of file we're working on
-    if(sp->substantial_file){
-      int fd = fileno(sp->fp);
-      attrprintf(fd,"samples written","%lld",sp->samples_written);
-      attrprintf(fd,"total samples","%lld",sp->total_file_samples);
-      fclose(sp->fp);
-      rename(tempfile,sp->filename);    // Atomic rename, after everything else
-    } else {
-      // File is too short to keep, delete
-      fclose(sp->fp);
-      if(unlink(tempfile) != 0)
-	fprintf(stderr,"Can't unlink %s: %s\n",tempfile,strerror(errno));
-      if(Verbose)
-	fprintf(stderr,"deleting %s %'.1f sec\n",tempfile,(float)sp->samples_written / sp->samprate);
+    if(strcmp(sp->filename,"/dev/null") != 0){
+      char tempfile[PATH_MAX+5];
+      snprintf(tempfile,sizeof tempfile,"%s.tmp",sp->filename); // Recover actual name of file we're working on
+      if(sp->substantial_file){
+	int fd = fileno(sp->fp);
+	attrprintf(fd,"samples written","%lld",sp->samples_written);
+	attrprintf(fd,"total samples","%lld",sp->total_file_samples);
+	fclose(sp->fp);
+	rename(tempfile,sp->filename);    // Atomic rename, after everything else
+      } else {
+	// File is too short to keep, delete
+	fclose(sp->fp);
+	if(unlink(tempfile) != 0)
+	  fprintf(stderr,"Can't unlink %s: %s\n",tempfile,strerror(errno));
+	if(Verbose)
+	  fprintf(stderr,"deleting %s %'.1f sec\n",tempfile,(float)sp->samples_written / sp->samprate);
+      }
     }
-  } // else regular file
+  } // end of else regular file
   // Do this for all closures (stdout, command, file)
   sp->fp = NULL;
   FREE(sp->iobuffer);
