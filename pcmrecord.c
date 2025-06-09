@@ -1,5 +1,5 @@
 /**
-@file pcmrecord.c
+@file
 @author Phil Karn, KA9Q
 @brief Record, stream, or launch commands with RTP streams as input
 @verbatim

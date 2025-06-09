@@ -140,11 +140,15 @@ endif
 clean:
 	-rm -f *.o *.a *.d *.so $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS) $(STATIC_DRIVERS)
 
+doc:
+	rm -rf html latex man
+	doxygen
+
 DEPS = $(CFILES:.c=.d)
 
 -include $(DEPS)
 
-.PHONY: clean all install pi dynamics
+.PHONY: clean all install doc dynamics
 
 dynamics: $(DYNAMIC_DRIVERS)
 

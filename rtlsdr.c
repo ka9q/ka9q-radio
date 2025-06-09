@@ -1,6 +1,14 @@
-// Built-in driver for RTL-SDR in radiod
-// Adapted from old rtlsdrd.c
-// Copyright July 2023, Phil Karn, KA9Q
+/**
+ * @file
+ * @author Phil Karn, KA9Q
+ * @brief device driver for RTL-SDR
+ * @copyright 2023
+ * @verbatim
+ * Built-in driver for RTL-SDR in radiod
+ * Adapted from old rtlsdrd.c
+ * @endverbatim
+**/
+
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
