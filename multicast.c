@@ -811,3 +811,24 @@ static uint32_t get_local_address_for(uint32_t dest_addr) {
     close(sock);
     return local.sin_addr.s_addr; // Already in network byte order
 }
+// Set the port field in a socket structure
+int setport(void *sock,int port){
+  struct sockaddr_storage *ss = (struct sockaddr_storage *)sock;
+  switch(ss->ss_family){
+  case AF_INET:
+    {
+      struct sockaddr_in *sin = (struct sockaddr_in *)ss;
+      sin->sin_port = htons(port);
+    }
+    break;
+  case AF_INET6:
+    {
+      struct sockaddr_in6 *sin = (struct sockaddr_in6 *)ss;
+      sin->sin6_port = htons(port);
+    }
+    break;
+  default:
+    return -1; // Unknown address family
+  }
+  return 0;
+}

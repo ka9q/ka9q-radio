@@ -45,6 +45,7 @@ enum encoding Encoding = NO_ENCODING;
 float RFgain = INFINITY;
 float RFatten = INFINITY;
 int Agc_enable = -1;
+struct sockaddr Destination_socket;
 
 struct sockaddr Control_address;
 int Status_sock = -1;
@@ -52,11 +53,12 @@ int Control_sock = -1;
 char const *Source;
 struct sockaddr_in *Source_socket;
 
-char Optstring[] = "aA:e:f:g:G:H:hi:L:l:m:qr:R:s:vVo:";
+char Optstring[] = "aA:D:e:f:g:G:H:hi:L:l:m:qr:R:s:vVo:";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"rfatten", required_argument, NULL, 'A'},
   {"featten", required_argument, NULL, 'A'},
+  {"destination", required_argument, NULL, 'D'},
   {"encoding", required_argument, NULL, 'e'},
   {"frequency", required_argument, NULL, 'f'},
   {"gain", required_argument, NULL, 'g'},
@@ -96,6 +98,9 @@ int main(int argc,char *argv[]){
 	break;
       case 'A':
 	RFatten = strtod(optarg,NULL);
+	break;
+      case 'D':
+	resolve_mcast(optarg,&Destination_socket,DEFAULT_RTP_PORT,NULL,0,0);
 	break;
       case 'G':
 	RFgain = strtod(optarg,NULL);
@@ -232,6 +237,7 @@ int main(int argc,char *argv[]){
   float received_rf_atten = INFINITY;
   enum encoding received_encoding = NO_ENCODING;
   int received_rf_agc = -1;
+  struct sockaddr_storage received_destination_socket = {0};
   int samprate = 0;
 
   uint32_t sent_tag = 0;
@@ -272,6 +278,9 @@ int main(int argc,char *argv[]){
 	encode_float(&bp,RF_GAIN,RFgain);
       if(RFatten != INFINITY)
 	encode_float(&bp,RF_ATTEN,RFatten);
+
+      if(Destination_socket.sa_family != 0)
+	encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&Destination_socket);
 
       encode_eol(&bp);
       int cmd_len = bp - cmd_buffer;
@@ -379,6 +388,9 @@ int main(int argc,char *argv[]){
       case OUTPUT_ENCODING:
 	received_encoding = decode_int(cp,optlen);
 	break;
+      case OUTPUT_DATA_DEST_SOCKET:
+	decode_socket(&received_destination_socket,cp,optlen);
+	break;
       }
       cp += optlen;
     }
@@ -397,6 +409,9 @@ int main(int argc,char *argv[]){
     }
     if(samprate != 0)
       printf("Sample rate %'d Hz\n",samprate);
+
+    if(received_destination_socket.ss_family != 0)
+      printf("Destination socket: %s\n",formatsock(&received_destination_socket,false));
 
     if(received_encoding != NO_ENCODING)
       printf("Encoding %s\n",encoding_string(received_encoding));
@@ -443,6 +458,6 @@ int main(int argc,char *argv[]){
 }
 
 void usage(void){
-  fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-R|--samprate <sample_rate>] [-i|--iface <iface>] [-l|--locale LOCALE]  \
+  fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-D|--destination <destination name-or-address>] [-R|--samprate <sample_rate>] [-i|--iface <iface>] [-l|--locale LOCALE]  \
 [-f|--frequency <frequency>] [-L|--low <low-edge>] [-H|--high <high-edge>] [[-a|--agc] [-g|--gain <gain dB>]] [-m|--mode <mode>] [--rfgain <gain dB>] [--rfatten <atten dB>] [-o|--source <source-name-or-address>\n" ,App_path);
 }

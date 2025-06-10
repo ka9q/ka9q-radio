@@ -89,5 +89,6 @@ int pt_from_info(unsigned int samprate,unsigned int channels,enum encoding);
 char const *encoding_string(enum encoding);
 enum encoding parse_encoding(char const *str);
 uint32_t make_maddr(char const *arg);
+int setport(void *sock,int port);
 
 #endif

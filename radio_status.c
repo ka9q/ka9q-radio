@@ -1,5 +1,5 @@
 // Generate UDP status messages from radiod, accept incoming commands to radiod in same format
-// Copyright 2023 Phil Karn, KA9Q
+// Copyright 2023-2025 Phil Karn, KA9Q
 
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -494,6 +494,15 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  chan->filter2.blocking = i;
 	  new_filter_needed = true;
 	}
+      }
+      break;
+    case OUTPUT_DATA_DEST_SOCKET:
+      {
+	// Actually sets both data and status, overriding port numbers
+	decode_socket(&chan->output.dest_socket,cp,optlen);
+	setport(&chan->output.dest_socket,DEFAULT_RTP_PORT);
+	chan->status.dest_socket = chan->output.dest_socket;
+	setport(&chan->status.dest_socket,DEFAULT_STAT_PORT);
       }
       break;
     default:

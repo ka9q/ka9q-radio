@@ -1038,6 +1038,16 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
 	encode_int(bpp,FILTER2,x);
     }
     break;
+  case 'D':
+    {
+      char str[Entry_width];
+      struct sockaddr_storage sock;
+      getentry("Destination name/address: ",str,sizeof(str));
+      resolve_mcast(str,&sock,DEFAULT_RTP_PORT,NULL,0,0);
+      // Port is actually ignored by radiod, sets both data and status
+      encode_socket(bpp,OUTPUT_DATA_DEST_SOCKET,&sock);
+    }
+    break;
   default:
     beep();
     break;
