@@ -219,25 +219,19 @@ int main(int argc,char * const argv[]){
     exit(EX_USAGE);
   }
   char iface[1024];
-  if(Input){
-    resolve_mcast(Input,&PCM_in_socket,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
-    if(strlen(iface) == 0 && Default_mcast_iface != NULL)
-      strlcpy(iface,Default_mcast_iface,sizeof(iface));
-    Input_fd = listen_mcast(NULL,&PCM_in_socket,iface); // Port address already in place
+  resolve_mcast(Input,&PCM_in_socket,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
+  if(strlen(iface) == 0 && Default_mcast_iface != NULL)
+    strlcpy(iface,Default_mcast_iface,sizeof(iface));
+  Input_fd = listen_mcast(NULL,&PCM_in_socket,iface); // Port address already in place
 
-    if(Input_fd == -1){
-      fprintf(stderr,"Can't resolve input PCM group %s\n",Input);
-      Input = NULL; // but maybe the status will work, if specified - need to rewrite this
-    }
-    {
-      // Same IP address, but status port number
-      Metadata_in_socket = PCM_in_socket;
-      struct sockaddr_in *sin = (struct sockaddr_in *)&Metadata_in_socket;
-      sin->sin_port = htons(DEFAULT_STAT_PORT);
-    }
-    resolve_mcast(Input,&Metadata_in_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
-    Status_fd = listen_mcast(NULL,&Metadata_in_socket,iface);
+  if(Input_fd == -1){
+    fprintf(stderr,"Can't resolve input PCM group %s\n",Input);
+    exit(EX_OSERR);
   }
+  // Same IP address, but status port number
+  Metadata_in_socket = PCM_in_socket;
+  set_port(&Metadata_in_socket,DEFAULT_STAT_PORT);
+  Status_fd = listen_mcast(NULL,&Metadata_in_socket,iface);
 
   {
     char description[1024];
