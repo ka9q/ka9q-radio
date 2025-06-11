@@ -638,9 +638,10 @@ static int ipv4_join_group(int const fd, void const * const source, void const *
     return -1;
 
   if(source == NULL){
-    struct ip_mreqn mreqn = {0};
-    mreqn.imr_multiaddr = sin->sin_addr;
-    mreqn.imr_address.s_addr = INADDR_ANY;
+    struct ip_mreqn mreqn = {
+      .imr_multiaddr = sin->sin_addr,
+      .imr_address.s_addr = INADDR_ANY,
+    };
 
     if(iface != NULL && strlen(iface) > 0) {
       mreqn.imr_ifindex = if_nametoindex(iface); // defaults to 0
@@ -658,9 +659,10 @@ static int ipv4_join_group(int const fd, void const * const source, void const *
     // Should find the loopback interface if we're the source we're looking for
     // I think we're only allowed one join to one interface
     struct sockaddr_in const * const source_sin = (struct sockaddr_in *)source;
-    struct ip_mreq_source mreqn = {0};
-    mreqn.imr_multiaddr = sin->sin_addr;
-    mreqn.imr_sourceaddr = source_sin->sin_addr;
+    struct ip_mreq_source mreqn = {
+      .imr_multiaddr = sin->sin_addr,
+      .imr_sourceaddr = source_sin->sin_addr,
+    };
     mreqn.imr_interface.s_addr = get_local_address_for(source_sin->sin_addr.s_addr);
     if(mreqn.imr_interface.s_addr == 0 || mreqn.imr_interface.s_addr == INADDR_NONE){
       fprintf(stderr,"Can't find local interface that reaches %s\n",formatsock(source,false));
@@ -690,6 +692,8 @@ static int ipv4_join_group(int const fd, void const * const source, void const *
   return 0;
 }
 // Join a IPv6 socket to a multicast group on specified iface, or default if NULL
+// SSM apparently doesn't work on macos
+// UNTESTED
 static int ipv6_join_group(int const fd, void const * const source, void const * const group, char const * const iface){
   if(fd < 0 || group == NULL)
     return -1;
@@ -701,35 +705,49 @@ static int ipv6_join_group(int const fd, void const * const source, void const *
   if(!IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))
     return -1;
 
-  if(source == NULL){
-    // Doesn't seem to be defined on Mac OSX, but is supposed to be synonymous with IPV6_JOIN_GROUP
+#if __linux__
 #ifndef IPV6_ADD_MEMBERSHIP
 #define IPV6_ADD_MEMBERSHIP IPV6_JOIN_GROUP
 #endif
-
-    struct ipv6_mreq ipv6_mreq = {0};
-    ipv6_mreq.ipv6mr_multiaddr = sin6->sin6_addr;
-    if(iface == NULL || strlen(iface) == 0)
-      ipv6_mreq.ipv6mr_interface = 0; // Default interface
-    else
-      ipv6_mreq.ipv6mr_interface = if_nametoindex(iface);
-
+  if(source == NULL){
+    struct ipv6_mreq ipv6_mreq = {
+      .ipv6mr_multiaddr = sin6->sin6_addr,
+      .ipv6mr_interface = (iface != NULL && strlen(iface) > 0) ? if_nametoindex(iface) : 0,
+    };
     if(setsockopt(fd, IPPROTO_IP, IPV6_ADD_MEMBERSHIP, &ipv6_mreq, sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
       char name[IFNAMSIZ];
       fprintf(stderr, "join IPv6 group %s on %s (%s) failed: %s\n", formatsock(group, false), iface ? iface : "default", if_indextoname(ipv6_mreq.ipv6mr_interface, name), strerror(errno));
       return -1;
     }
   } else {
-    struct group_source_req gsreq = {0};
-    gsreq.gsr_interface = if_nametoindex(iface);
-    memcpy(&gsreq.gsr_group, sin6, sizeof(struct sockaddr_in6));
-    memcpy(&gsreq.gsr_source, sin6, sizeof(struct sockaddr_in6));
+    struct group_source_req gsreq = {
+      .gsr_interface = if_nametoindex(iface),
+    };
+    memcpy(&gsreq.gsr_source, source, sizeof(struct sockaddr_in6));
+    memcpy(&gsreq.gsr_group, group,  sizeof(struct sockaddr_in6));
     if(setsockopt(fd, IPPROTO_IPV6, MCAST_JOIN_SOURCE_GROUP, &gsreq, sizeof gsreq) < 0){
       char name[IFNAMSIZ];
-      fprintf(stderr, "join IPv6 group %s on %s (%s) failed: %s\n", formatsock(group, false), iface ? iface : "default", if_indextoname(gsreq.gsr_interface, name), strerror(errno));
+      fprintf(stderr, "join IPv6 group %s source %s on %s (%s) failed: %s\n",
+	      formatsock(group, false),
+	      formatsock(source,false),
+	      iface ? iface : "default",
+	      if_indextoname(gsreq.gsr_interface, name),
+	      strerror(errno));
       return -1;
     }
   }
+#else // No v6 SSM on macos
+  (void)source;
+  struct ipv6_mreq ipv6_mreq = {
+    .ipv6mr_multiaddr = sin6->sin6_addr,
+    .ipv6mr_interface = (iface != NULL && strlen(iface) > 0) ? if_nametoindex(iface) : 0,
+  };
+  if(setsockopt(fd, IPPROTO_IP, IPV6_JOIN_GROUP, &ipv6_mreq, sizeof(ipv6_mreq)) != 0 && errno != EADDRINUSE){
+    char name[IFNAMSIZ];
+    fprintf(stderr, "join IPv6 group %s on %s (%s) failed: %s\n", formatsock(group, false), iface ? iface : "default", if_indextoname(ipv6_mreq.ipv6mr_interface, name), strerror(errno));
+    return -1;
+  }
+#endif
   return 0;
 }
 
@@ -742,9 +760,10 @@ static int setup_ipv4_loopback(int fd){
     fprintf(stderr, "Can't find loopback interface\n");
     return -1;
   }
-  struct ip_mreqn mreqn = {0};
-  mreqn.imr_address.s_addr = htonl(INADDR_LOOPBACK);
-  mreqn.imr_ifindex = Loopback_index;
+  struct ip_mreqn const mreqn = {
+    .imr_address.s_addr = htonl(INADDR_LOOPBACK),
+    .imr_ifindex = Loopback_index,
+  };
 
   if (setsockopt(fd,  IPPROTO_IP,  IP_MULTICAST_IF, &mreqn, sizeof mreqn) < 0){
     fprintf(stderr,"setup_ipv4_loopback(%d) IP_MULTICAST_IF failed: %s\n",fd,strerror(errno));
@@ -790,10 +809,11 @@ static uint32_t get_local_address_for(uint32_t dest_addr) {
     if (sock < 0)
         return INADDR_NONE;
 
-    struct sockaddr_in dest = {0};
-    dest.sin_family = AF_INET;
-    dest.sin_addr.s_addr = dest_addr;
-    dest.sin_port = htons(12345); // arbitrary port, doesn't matter
+    struct sockaddr_in const dest = {
+      .sin_family = AF_INET,
+      .sin_addr.s_addr = dest_addr,
+      .sin_port = 1, // arbitrary port, doesn't matter
+    };
 
     // connect() will NOT send packets, but will bind socket to local interface
     if (connect(sock, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
