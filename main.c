@@ -572,9 +572,8 @@ static int loadconfig(char const *file){
 
     // Status sent to same group, different port
     Template.status.dest_socket = Template.output.dest_socket;
-    struct sockaddr_in *sin = (struct sockaddr_in *)&Template.status.dest_socket;
-    sin->sin_port = htons(DEFAULT_STAT_PORT);
-  }
+    setport(&Template.status.dest_socket,DEFAULT_STAT_PORT);
+   }
   {
     // Non-zero TTL streams use the global ttl if it is nonzero, 1 otherwise
     int const ttl = Template.output.ttl > 1 ? Template.output.ttl : 1;
@@ -726,8 +725,7 @@ void *process_section(void *p){
   // data stream is shared by all channels in this section
   // Now also used for per-channel status/control, with different port number
   chan_template.status.dest_socket = chan_template.output.dest_socket;
-  struct sockaddr_in *sin = (struct sockaddr_in *)&chan_template.status.dest_socket;
-  sin->sin_port = htons(DEFAULT_STAT_PORT);
+  setport(&chan_template.status.dest_socket,DEFAULT_STAT_PORT);
   strlcpy(chan_template.output.dest_string,data,sizeof chan_template.output.dest_string);
   chan_template.output.rtp.type = pt_from_info(chan_template.output.samprate,chan_template.output.channels,chan_template.output.encoding);
 
@@ -815,21 +813,8 @@ void *process_section(void *p){
       if(RTCP_enable){
 	// Set the dest socket to the RTCP port on the output group
 	// What messy code just to overwrite a structure field, eh?
-	memcpy(&chan->rtcp.dest_socket,&chan->output.dest_socket,sizeof(chan->rtcp.dest_socket));
-	switch(chan->rtcp.dest_socket.sa_family){
-	case AF_INET:
-	  {
-	    struct sockaddr_in *sock = (struct sockaddr_in *)&chan->rtcp.dest_socket;
-	    sock->sin_port = htons(DEFAULT_RTCP_PORT);
-	  }
-	  break;
-	case AF_INET6:
-	  {
-	    struct sockaddr_in6 *sock = (struct sockaddr_in6 *)&chan->rtcp.dest_socket;
-	    sock->sin6_port = htons(DEFAULT_RTCP_PORT);
-	  }
-	  break;
-	}
+	chan->rtcp.dest_socket = chan->output.dest_socket;
+	setport(&chan->rtcp.dest_socket,DEFAULT_RTCP_PORT);
 	pthread_create(&chan->rtcp.thread,NULL,rtcp_send,chan);
       }
     }
