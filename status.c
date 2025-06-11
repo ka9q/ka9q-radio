@@ -305,6 +305,9 @@ struct sockaddr *decode_socket(void *sock,uint8_t const *val,int optlen){
   struct sockaddr_in *sin = (struct sockaddr_in *)sock;
   struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sock;
 
+  // Infer family (AF_INET/AF_INET6) is inferred from length, not explicitly sent
+  // Maybe this wasn't a good idea, but are any major families going to be added
+  // with the same length?
   if(optlen == 6){
     sin->sin_family = AF_INET;
     memcpy(&sin->sin_addr.s_addr,val,4);
