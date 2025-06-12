@@ -453,7 +453,7 @@ int main(int argc,char *argv[]){
     Output_fd = output_mcast(&Metadata_dest_socket,NULL,Mcast_ttl,IP_tos);
     join_group(Output_fd,NULL,&Metadata_dest_socket,table[entry].interface);
   } else {
-    // Use resolv_mcast to resolve a manually entered domain name, using default port and parsing possible interface
+    // Use resolve_mcast to resolve a manually entered domain name, using default port and parsing possible interface
     char iface[1024] = {0}; // Multicast interface string
     resolve_mcast(target,&Metadata_dest_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     Status_fd = listen_mcast(NULL,&Metadata_dest_socket,iface);
