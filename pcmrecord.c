@@ -259,7 +259,7 @@ static struct option Options[] = {
   {"max_length", required_argument, NULL, 'x'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = ":cd:e:fjl:m:prsS:t:vL:Vx:48w";
+static char Optstring[] = ":cd:e:fjl:m:o:prsS:t:vL:Vx:48w";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
