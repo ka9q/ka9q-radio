@@ -34,7 +34,7 @@ bool details;   // Output bin, frequency, power, newline
 char const *Source;
 struct sockaddr_storage *Source_socket;
 
-static char const Optstring[] = "b:c:df:hi:s:t:T:vw:V";
+static char const Optstring[] = "b:c:df:hi:o:s:t:T:vw:V";
 static struct  option Options[] = {
   {"bins", required_argument, NULL, 'b'},
   {"count", required_argument, NULL, 'c'},
