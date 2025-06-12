@@ -32,13 +32,18 @@ install: $(EXECS)
 clean:
 	rm -f *.o *.a *.d .depend $(EXECS)
 
+doc:
+	rm -rf html latex man
+	doxygen
+
 DEPS = $(CFILES:.c=.d)
 
 -include $(DEPS)
 
-.PHONY: clean all install
+.PHONY: clean all install doc
 
 # Executables
+
 aprs: aprs.o libradio.a
 	$(CC) -g -o $@ $^ -lm
 
