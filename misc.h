@@ -25,8 +25,8 @@
 #include <assert.h>
 
 // Must be a macro so __FILE__ and __TIMESTAMP__ will substitute correctly
-#define VERSION() { fprintf(stdout,"KA9Q Multichannel SDR %s last modified %s\n",__FILE__,__TIMESTAMP__); \
-		    fprintf(stdout,"Copyright 2025, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");}
+#define VERSION() { fprintf(stderr,"KA9Q Multichannel SDR %s last modified %s\n",__FILE__,__TIMESTAMP__); \
+		    fprintf(stderr,"Copyright 2025, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");}
 
 
 #define ASSERT_ZEROED(ptr, size) assert(memcmp(ptr, &(typeof(*(ptr))){0}, size) == 0)
