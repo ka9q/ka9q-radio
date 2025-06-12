@@ -93,7 +93,7 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
     if(strcasecmp(device,"funcube") != 0)
       return -1; // Not for us
   }
-  config_validate_section(stdout,dictionary,section,Funcube_keys,NULL);
+  config_validate_section(stderr,dictionary,section,Funcube_keys,NULL);
   // Cross-link generic and hardware-specific control structures
   struct sdrstate * const sdr = calloc(1,sizeof(*sdr));
   assert(sdr != NULL);
@@ -122,7 +122,7 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   Pa_Initialize();
 
   if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
-    fprintf(stdout,"fcdOpen(%d) failed\n",sdr->number);
+    fprintf(stderr,"fcdOpen(%d) failed\n",sdr->number);
     return -1;
   }
   sdr->bias_tee = config_getboolean(dictionary,section,"bias",false);
@@ -131,13 +131,13 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   if((r = fcdGetMode(sdr->phd)) == FCD_MODE_APP){
     char caps_str[100];
     fcdGetCapsStr(sdr->phd,caps_str);
-    fprintf(stdout,"audio device name '%s', caps '%s'\n",sdr->sdr_name,caps_str);
+    fprintf(stderr,"audio device name '%s', caps '%s'\n",sdr->sdr_name,caps_str);
   } else if(r == FCD_MODE_NONE){
-    fprintf(stdout," No FCD detected!\n");
+    fprintf(stderr," No FCD detected!\n");
     r = -1;
     goto done;
   } else if (r == FCD_MODE_BL){
-    fprintf(stdout," is in bootloader mode\n");
+    fprintf(stderr," is in bootloader mode\n");
     r = -1;
     goto done;
   }
@@ -161,12 +161,12 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
     PaDeviceInfo const *deviceInfo = Pa_GetDeviceInfo(i);
     if(strstr(deviceInfo->name,sdr->sdr_name) != NULL){
       inDevNum = i;
-      fprintf(stdout,"portaudio name: %s\n",deviceInfo->name);
+      fprintf(stderr,"portaudio name: %s\n",deviceInfo->name);
       break;
     }
   }
   if(inDevNum == paNoDevice){
-    fprintf(stdout,"Can't find portaudio name\n");
+    fprintf(stderr,"Can't find portaudio name\n");
     r = -1;
     goto done;
   }
@@ -179,16 +179,16 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   r = Pa_OpenStream(&sdr->Pa_Stream,&inputParameters,NULL,ADC_samprate,
 		    paFramesPerBufferUnspecified, 0, NULL, NULL);
   if(r < 0){
-    fprintf(stdout,"Pa_OpenStream error: %s\n",Pa_GetErrorText(r));
+    fprintf(stderr,"Pa_OpenStream error: %s\n",Pa_GetErrorText(r));
     goto done;
   }
   r = Pa_StartStream(sdr->Pa_Stream);
   if(r < 0){
-    fprintf(stdout,"Pa_StartStream error: %s\n",Pa_GetErrorText(r));
+    fprintf(stderr,"Pa_StartStream error: %s\n",Pa_GetErrorText(r));
     goto done;
   }
 
-  fprintf(stdout,"Funcube %d: software AGC %d, samprate %'d, freq %'.3f Hz, bias %d, lna_gain %d, mixer gain %d, if_gain %d\n",
+  fprintf(stderr,"Funcube %d: software AGC %d, samprate %'d, freq %'.3f Hz, bias %d, lna_gain %d, mixer gain %d, if_gain %d\n",
 	  sdr->number, sdr->agc, frontend->samprate, frontend->frequency, sdr->bias_tee, frontend->lna_gain, frontend->mixer_gain, frontend->if_gain);
 
  done:; // Also the abort target: close handle before returning
@@ -239,9 +239,9 @@ static void *proc_funcube(void *arg){
 	sdr->overflows++; // Not fatal
 	ConsecPaErrs = 0;
       } else if(++ConsecPaErrs < 10){
-	fprintf(stdout,"Pa_ReadStream: %s\n",Pa_GetErrorText(r));
+	fprintf(stderr,"Pa_ReadStream: %s\n",Pa_GetErrorText(r));
       } else {
-	fprintf(stdout,"Pa_ReadStream: %s, exiting\n",Pa_GetErrorText(r));
+	fprintf(stderr,"Pa_ReadStream: %s, exiting\n",Pa_GetErrorText(r));
 	goto terminate;
       }
     } else
@@ -328,7 +328,7 @@ int funcube_startup(struct frontend *frontend){
   // Start processing A/D data
   sdr->scale = scale_AD(frontend);
   pthread_create(&sdr->proc_thread,NULL,proc_funcube,sdr);
-  fprintf(stdout,"funcube running\n");
+  fprintf(stderr,"funcube running\n");
   return 0;
 }
 
@@ -348,17 +348,17 @@ static void do_fcd_agc(struct sdrstate *sdr){
       uint8_t val = frontend->if_gain = max(0,frontend->if_gain - 10);
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_IF_GAIN1,&val,sizeof(val));
       if(Verbose)
-	fprintf(stdout,"AGC power %.1f dBFS, new lower if gain = %d\n",powerdB,val);
+	fprintf(stderr,"AGC power %.1f dBFS, new lower if gain = %d\n",powerdB,val);
     } else if(frontend->mixer_gain > 0){
       uint8_t val = frontend->mixer_gain = 0; // mixer gain is on or off?
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
       if(Verbose)
-	fprintf(stdout,"AGC power %.1f dBFS, new lower mixer gain = %d\n",powerdB,val);
+	fprintf(stderr,"AGC power %.1f dBFS, new lower mixer gain = %d\n",powerdB,val);
     } else if(frontend->lna_gain > 0){
       uint8_t val = frontend->lna_gain = 0;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
       if(Verbose)
-	fprintf(stdout,"AGC power %.1f dBFS, new lower lna gain = %d\n",powerdB,val);
+	fprintf(stderr,"AGC power %.1f dBFS, new lower lna gain = %d\n",powerdB,val);
     }
   } else if(powerdB < AGC_lower){
     if(frontend->lna_gain == 0){
@@ -366,18 +366,18 @@ static void do_fcd_agc(struct sdrstate *sdr){
       uint8_t val = 1;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
       if(Verbose)
-	fprintf(stdout,"AGC power %.1f dBFS, new higher if gain = %d\n",powerdB,val);
+	fprintf(stderr,"AGC power %.1f dBFS, new higher if gain = %d\n",powerdB,val);
     } else if(frontend->mixer_gain == 0){
       frontend->mixer_gain = 19;
       uint8_t val = 1;
       if(Verbose)
-	fprintf(stdout,"AGC power %.1f dBFS, new higher mixer gain = %d\n",powerdB,val);
+	fprintf(stderr,"AGC power %.1f dBFS, new higher mixer gain = %d\n",powerdB,val);
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
     } else if(frontend->if_gain < 20){ // Limit to 20 dB - seems enough to keep A/D going even on noise
       uint8_t val = frontend->if_gain = min(20,frontend->if_gain + 10);
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_IF_GAIN1,&val,sizeof(val));
       if(Verbose)
-	fprintf(stdout,"AGC power %.1f dBFS, new higher lna gain = %d\n",powerdB,val);
+	fprintf(stderr,"AGC power %.1f dBFS, new higher lna gain = %d\n",powerdB,val);
     }
   }
   frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
@@ -457,7 +457,7 @@ double funcube_tune(struct frontend * const frontend,double const freq){
   int const intfreq = freq;
 
   if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
-    fprintf(stdout,"fcdOpen(%d): can't re-open control port\n",sdr->number);
+    fprintf(stderr,"fcdOpen(%d): can't re-open control port\n",sdr->number);
     return frontend->frequency; // nothing changes
   }
   fcdAppSetFreq(sdr->phd,intfreq);

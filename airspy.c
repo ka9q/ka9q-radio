@@ -110,11 +110,11 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     if(strcasecmp(device,"airspy") != 0)
       return -1; // Not for us
   }
-  config_validate_section(stdout,Dictionary,section,Airspy_keys,NULL);
+  config_validate_section(stderr,Dictionary,section,Airspy_keys,NULL);
   {
     int ret;
     if((ret = airspy_init()) != AIRSPY_SUCCESS){
-      fprintf(stdout,"airspy_init() failed: %s\n",airspy_error_name(ret));
+      fprintf(stderr,"airspy_init() failed: %s\n",airspy_error_name(ret));
       return -1;
     }
   }
@@ -125,7 +125,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
       sdr->SN = 0;
       sdr->SN = strtoull(sn,&endptr,16);
       if(endptr == NULL || *endptr != '\0'){
-	fprintf(stdout,"Invalid serial number %s in section %s\n",sn,section);
+	fprintf(stderr,"Invalid serial number %s in section %s\n",sn,section);
 	return -1;
       }
     } else {
@@ -135,22 +135,22 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 
       n_serials = airspy_list_devices(serials,n_serials); // Return actual number
       if(n_serials <= 0){
-	fprintf(stdout,"No airspy devices found\n");
+	fprintf(stderr,"No airspy devices found\n");
 	return -1;
       }
-      fprintf(stdout,"Discovered airspy device serial%s:",n_serials > 1 ? "s" : "");
+      fprintf(stderr,"Discovered airspy device serial%s:",n_serials > 1 ? "s" : "");
       for(int i = 0; i < n_serials; i++){
-	fprintf(stdout," %llx",(long long)serials[i]);
+	fprintf(stderr," %llx",(long long)serials[i]);
       }
-      fprintf(stdout,"\n");
-      fprintf(stdout,"Selecting %llx; to select another, add 'serial = ' to config file\n",(long long)serials[0]);
+      fprintf(stderr,"\n");
+      fprintf(stderr,"Selecting %llx; to select another, add 'serial = ' to config file\n",(long long)serials[0]);
       sdr->SN = serials[0];
     }
   }
   {
     int const ret = airspy_open_sn(&sdr->device,sdr->SN);
     if(ret != AIRSPY_SUCCESS){
-      fprintf(stdout,"airspy_open(%llx) failed: %s\n",(long long)sdr->SN,airspy_error_name(ret));
+      fprintf(stderr,"airspy_open(%llx) failed: %s\n",(long long)sdr->SN,airspy_error_name(ret));
       return -1;
     }
   }
@@ -162,7 +162,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     char hw_version[VERSION_LOCAL_SIZE];
     airspy_version_string_read(sdr->device,hw_version,sizeof(hw_version));
 
-    fprintf(stdout,"Airspy serial %llx, hw version %s, library version %d.%d.%d\n",
+    fprintf(stderr,"Airspy serial %llx, hw version %s, library version %d.%d.%d\n",
 	    (long long unsigned)sdr->SN,
 	    hw_version,
 	    version.major_version,version.minor_version,version.revision);
@@ -181,18 +181,18 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     assert(ret == AIRSPY_SUCCESS);
     int const number_sample_rates = sdr->sample_rates[0];
     if(number_sample_rates <= 0){
-      fprintf(stdout,"error, no valid sample rates!\n");
+      fprintf(stderr,"error, no valid sample rates!\n");
       return -1;
     }
-    fprintf(stdout,"%'d sample rate%s:",number_sample_rates,number_sample_rates > 1 ? "s":"");
+    fprintf(stderr,"%'d sample rate%s:",number_sample_rates,number_sample_rates > 1 ? "s":"");
     ret = airspy_get_samplerates(sdr->device,sdr->sample_rates,number_sample_rates);
     assert(ret == AIRSPY_SUCCESS);
     for(int n = 0; n < number_sample_rates; n++){
-      fprintf(stdout," %'d",sdr->sample_rates[n]);
+      fprintf(stderr," %'d",sdr->sample_rates[n]);
       if(sdr->sample_rates[n] < 1)
 	break;
     }
-    fprintf(stdout,"\n");
+    fprintf(stderr,"\n");
   }
   {
     frontend->samprate = sdr->sample_rates[0];  // Default to first (highest) sample rate on list
@@ -206,7 +206,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   sdr->converter = config_getfloat(Dictionary,section,"converter",0);
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
 
-  fprintf(stdout,"Set sample rate %'u Hz, offset %'d Hz\n",frontend->samprate,sdr->offset);
+  fprintf(stderr,"Set sample rate %'u Hz, offset %'d Hz\n",frontend->samprate,sdr->offset);
   {
     int ret __attribute__ ((unused));
     ret = airspy_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
@@ -271,7 +271,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
       Description = p;
     }
   }
-  fprintf(stdout,"Software AGC %d; linearity %d, LNA AGC %d, Mix AGC %d, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %d\n",
+  fprintf(stderr,"Software AGC %d; linearity %d, LNA AGC %d, Mix AGC %d, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %d\n",
 	  sdr->software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,gainstep,sdr->antenna_bias);
 
   if(sdr->software_agc){
@@ -279,7 +279,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     sdr->high_threshold = dB2power(-fabs(dh));
     float const dl = config_getdouble(Dictionary,section,"agc-low-threshold",-40.0);
     sdr->low_threshold = dB2power(-fabs(dl));
-    fprintf(stdout,"AGC thresholds: high %.1f dBFS, low %.1lf dBFS\n",dh,dl);
+    fprintf(stderr,"AGC thresholds: high %.1f dBFS, low %.1lf dBFS\n",dh,dl);
   }
   double init_frequency = 0;
   {
@@ -290,7 +290,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   if(init_frequency != 0){
     set_correct_freq(sdr,init_frequency);
     frontend->lock = true;
-    fprintf(stdout,"Locked tuner frequency %'.3lf Hz\n",init_frequency);
+    fprintf(stderr,"Locked tuner frequency %'.3lf Hz\n",init_frequency);
   }
   return 0;
 }
@@ -328,14 +328,14 @@ static void *airspy_monitor(void *p){
   int ret = airspy_start_rx(sdr->device,rx_callback,sdr);
   (void)ret;
   assert(ret == AIRSPY_SUCCESS);
-  fprintf(stdout,"airspy running\n");
+  fprintf(stderr,"airspy running\n");
   // Periodically poll status to ensure device hasn't reset
   while(true){
     sleep(1);
     if(!airspy_is_streaming(sdr->device))
       break; // Device seems to have bombed. Exit and let systemd restart us
   }
-  fprintf(stdout,"Device is no longer streaming, exiting\n");
+  fprintf(stderr,"Device is no longer streaming, exiting\n");
   airspy_close(sdr->device);
   airspy_exit();
   exit(EX_NOINPUT); // Let systemd restart us
@@ -360,7 +360,7 @@ static int rx_callback(airspy_transfer *transfer){
     realtime(INPUT_PRIORITY);
   }
   if(transfer->dropped_samples){
-    fprintf(stdout,"dropped %'lld\n",(long long)transfer->dropped_samples);
+    fprintf(stderr,"dropped %'lld\n",(long long)transfer->dropped_samples);
   }
   assert(transfer->sample_type == AIRSPY_SAMPLE_RAW);
   int const sampcount = transfer->sample_count;

@@ -97,7 +97,7 @@ int find_serial_position(const char *serials, const char *serialnumcfg) {
 int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
                 char const *const section) {
   assert(dictionary != NULL);
-  config_validate_section(stdout, dictionary, section, Fobos_keys, NULL);
+  config_validate_section(stderr, dictionary, section, Fobos_keys, NULL);
   struct sdrstate *const sdr = calloc(1, sizeof(struct sdrstate));
   // Cross-link generic and hardware-specific control structures
   assert(sdr != NULL);
@@ -140,7 +140,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
   result = fobos_rx_get_api_info(lib_version, drv_version);
   if (result != 0) {
     fprintf(
-        stdout,
+        stderr,
         "Unable to find Fobos Drivers. Please check libfobos is installed.\n");
     return -1;
   }
@@ -187,14 +187,14 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
     result = fobos_rx_get_board_info(dev, hw_revision, fw_version, manufacturer,
                                      product, serial);
     if (result == FOBOS_ERR_OK) {
-      fprintf(stdout, "--------------------------------------------\n");
-      fprintf(stdout, "Library Version:    %s\n", lib_version);
-      fprintf(stdout, "Driver Version:     %s\n", drv_version);
-      fprintf(stdout, "Hardware Revision:  %s\n", hw_revision);
-      fprintf(stdout, "Firmware Version:   %s\n", fw_version);
-      fprintf(stdout, "Manufacturer:       %s\n", manufacturer);
-      fprintf(stdout, "Product:            %s\n", product);
-      fprintf(stdout, "--------------------------------------------\n");
+      fprintf(stderr, "--------------------------------------------\n");
+      fprintf(stderr, "Library Version:    %s\n", lib_version);
+      fprintf(stderr, "Driver Version:     %s\n", drv_version);
+      fprintf(stderr, "Hardware Revision:  %s\n", hw_revision);
+      fprintf(stderr, "Firmware Version:   %s\n", fw_version);
+      fprintf(stderr, "Manufacturer:       %s\n", manufacturer);
+      fprintf(stderr, "Product:            %s\n", product);
+      fprintf(stderr, "--------------------------------------------\n");
     } else {
       fprintf(stderr, "Error fetching device info from fobos device: %d\n",
               sdr->device);
@@ -225,12 +225,12 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
     // Second call to fetch the actual sample rates
     result = fobos_rx_get_samplerates(dev, sampvalues, &samplecount);
     if (result == FOBOS_ERR_OK) {
-      fprintf(stdout, "--------------------------------------------\n");
-      fprintf(stdout, "Supported Sample Rates for SDR #%d:\n", sdr->device);
+      fprintf(stderr, "--------------------------------------------\n");
+      fprintf(stderr, "Supported Sample Rates for SDR #%d:\n", sdr->device);
       for (unsigned int i = 0; i < samplecount; i++) {
-        fprintf(stdout, "  %.0f \n", sampvalues[i]);
+        fprintf(stderr, "  %.0f \n", sampvalues[i]);
       }
-      fprintf(stdout, "--------------------------------------------\n");
+      fprintf(stderr, "--------------------------------------------\n");
     } else {
       fprintf(stderr, "Error fetching sample rates (error code: %d)\n", result);
       fobos_rx_close(dev);
@@ -322,12 +322,12 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
       return -1;
     }
     if(sdr->direct_sampling){
-      fprintf(stdout,"samprate %'d Hz, direct sampling, hf_input %d (%s)\n",
+      fprintf(stderr,"samprate %'d Hz, direct sampling, hf_input %d (%s)\n",
 	      frontend->samprate,
 	      sdr->hf_input,
 	      sdr->hf_input == 0 ? "both/IQ" : sdr->hf_input == 1 ? "HF1" : "HF2");
     } else {
-      fprintf(stdout,"samprate %'d Hz, tuner %'.3lf Hz, lna_gain %d (%d dB) vga_gain %d (%d dB)\n",
+      fprintf(stderr,"samprate %'d Hz, tuner %'.3lf Hz, lna_gain %d (%d dB) vga_gain %d (%d dB)\n",
 	      frontend->samprate,
 	      frontend->frequency,
 	      sdr->lna_gain,
@@ -353,7 +353,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
 */
 float fobos_gain(struct frontend * const frontend, float gain){
   if(frontend->rf_agc)
-    fprintf(stdout,"manual gain setting, turning off AGC\n");
+    fprintf(stderr,"manual gain setting, turning off AGC\n");
 
   // Just the MAX2830 gain here
   float vgain = gain;
@@ -393,7 +393,7 @@ static void *fobos_monitor(void *p) {
   assert(sdr != NULL);
   pthread_setname("fobos-mon");
 
-  fprintf(stdout, "Starting asynchronous read\n");
+  fprintf(stderr, "Starting asynchronous read\n");
   realtime(INPUT_PRIORITY);
   stick_core();
   int result = fobos_rx_read_async(dev, rx_callback, sdr, 16, 65536);
@@ -460,7 +460,7 @@ int fobos_startup(struct frontend *const frontend) {
   struct sdrstate *const sdr = (struct sdrstate *)frontend->context;
   sdr->scale = scale_AD(frontend);
   pthread_create(&sdr->monitor_thread, NULL, fobos_monitor, sdr);
-  fprintf(stdout, "fobos read thread running\n");
+  fprintf(stderr, "fobos read thread running\n");
   return 0;
 }
 
@@ -470,7 +470,7 @@ double fobos_tune(struct frontend *const frontend, double const freq) {
     return 0.0; // No tuning in direct sample mode
 
 
-  fprintf(stdout, "Trying to tune to: %f\n", freq);
+  fprintf(stderr, "Trying to tune to: %f\n", freq);
   double frequency_actual = 0.0;
   int result = fobos_rx_set_frequency(dev, freq, &frequency_actual);
   if (result != 0) {

@@ -181,7 +181,7 @@ int set_defaults(struct channel *chan){
 
   double r = remainder(Blocktime * chan->output.samprate * .001,1.0);
   if(r != 0){
-    fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
+    fprintf(stderr,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
 	    Blocktime,chan->output.samprate,r);
   }
   chan->status.output_interval = DEFAULT_UPDATE;
@@ -318,7 +318,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   chan->fm.tone_freq = config_getfloat(table,sname,"ctcss",chan->fm.tone_freq);
   chan->fm.tone_freq = fabsf(chan->fm.tone_freq);
   if(chan->fm.tone_freq > 3000){
-    fprintf(stdout,"Tone %.1f out of range\n",chan->fm.tone_freq);
+    fprintf(stderr,"Tone %.1f out of range\n",chan->fm.tone_freq);
     chan->fm.tone_freq = 0;
   }
   chan->output.pacing = config_getboolean(table,sname,"pacing",chan->output.pacing);
@@ -329,7 +329,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   }
   chan->output.opus_bitrate = config_getint(table,sname,"bitrate",chan->output.opus_bitrate);
   if(chan->output.opus_bitrate > 510000){
-    fprintf(stdout,"opus bitrate %u out of range\n",chan->output.opus_bitrate);
+    fprintf(stderr,"opus bitrate %u out of range\n",chan->output.opus_bitrate);
     chan->output.opus_bitrate = 0;
   }
   chan->status.output_interval = config_getint(table,sname,"update",chan->status.output_interval);
@@ -337,12 +337,12 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     chan->status.output_interval = 0;
   chan->output.minpacket = config_getint(table,sname,"buffer",chan->output.minpacket);
   if(chan->output.minpacket > 4){
-    fprintf(stdout,"buffer %u out of range\n",chan->output.minpacket);
+    fprintf(stderr,"buffer %u out of range\n",chan->output.minpacket);
     chan->output.minpacket = 0;
   }
   chan->filter2.blocking = config_getint(table,sname,"filter2",chan->filter2.blocking);
   if(chan->filter2.blocking > 10){
-    fprintf(stdout,"filter2 %u out of range\n",chan->filter2.blocking);
+    fprintf(stderr,"filter2 %u out of range\n",chan->filter2.blocking);
     chan->filter2.blocking = 10;
   }
   chan->prio = config_getint(table,sname,"prio",chan->prio);

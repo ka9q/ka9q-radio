@@ -176,7 +176,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	return 0;
       }
       if(!Opus_version_logged){
-	fprintf(stdout,"%s\n",opus_get_version_string());
+	fprintf(stderr,"%s\n",opus_get_version_string());
 	Opus_version_logged = true;
       }
       chan->output.opus = opus_encoder_create(chan->output.samprate,chan->output.channels,Application,&error);
@@ -379,12 +379,12 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	chan->output.errors++;
 	if(errno == EAGAIN){
 	  if(!TempSendFailure){
-	    fprintf(stdout,"Temporary send failure, suggest increased buffering (see sysctl net.core.wmem_max, net.core.wmem_default\n");
-	    fprintf(stdout,"Additional messages suppressed\n");
+	    fprintf(stderr,"Temporary send failure, suggest increased buffering (see sysctl net.core.wmem_max, net.core.wmem_default\n");
+	    fprintf(stderr,"Additional messages suppressed\n");
 	    TempSendFailure = true;
 	  }
 	} else {
-	  fprintf(stdout,"audio send failure: %s\n",strerror(errno));
+	  fprintf(stderr,"audio send failure: %s\n",strerror(errno));
 	  abort(); // Probably more serious, like the loss of an interface or route
 	}
       }

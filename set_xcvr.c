@@ -39,7 +39,7 @@ int sendcmd(const char *fmt, ...){
   va_start(ap,fmt);
   int n = vsnprintf(cmdline,sizeof(cmdline),fmt,ap);
   va_end(ap);
-  fputs(cmdline,stdout);
+  fputs(cmdline,stderr);
   fputs(cmdline,Term_stream);
   fflush(Term_stream);
   usleep(Sleep_interval);
@@ -75,7 +75,7 @@ int main(int argc,char *argv[]){
     } else if(strstr(argv[optind],"txoff") != NULL || strstr(argv[optind],"off") != NULL){
       gpioWrite(20,1); // receive mode
     } else {
-      fprintf(stdout,"Unknown command %s\n",argv[optind]);
+      fprintf(stderr,"Unknown command %s\n",argv[optind]);
     }
     exit(EX_OK);
   }
@@ -86,7 +86,7 @@ int main(int argc,char *argv[]){
     // Load and process config file for initial setup
     Configtable = iniparser_load(Config_file);
     if(Configtable == NULL){
-     fprintf(stdout,"Can't load config file %s\n",Config_file);
+     fprintf(stderr,"Can't load config file %s\n",Config_file);
       exit(EX_USAGE);
     }
 
@@ -97,7 +97,7 @@ int main(int argc,char *argv[]){
     Port = strdup(config_getstring(Configtable,Section,"serial","/dev/ttyAMA0")); // iniparser storage is dynamic
     int fd = open(Port,O_RDWR);
     if(fd == -1){
-      fprintf(stdout,"Can't open serial port %s: %s\n",Port,strerror(errno));
+      fprintf(stderr,"Can't open serial port %s: %s\n",Port,strerror(errno));
       exit(EX_NOINPUT);
     }
 
@@ -201,19 +201,19 @@ int main(int argc,char *argv[]){
       perror("tcsetattr");
     } else {
 #if DEBUG
-      fprintf(stdout,"tcsetattr succeeded\n");
+      fprintf(stderr,"tcsetattr succeeded\n");
       tcgetattr(fd,&t);    
-      fprintf(stdout,"iflag %x oflag %x cflag %x lflag %x c_cc",
+      fprintf(stderr,"iflag %x oflag %x cflag %x lflag %x c_cc",
 	      t.c_iflag,t.c_oflag,t.c_cflag,t.c_lflag);
       for(int i=0; i < NCCS; i++)
-	fprintf(stdout," %x",t.c_cc[i]);
-      fputc('\n',stdout);
+	fprintf(stderr," %x",t.c_cc[i]);
+      fputc('\n',stderr);
 #endif
     }
 
     Term_stream = fdopen(fd,"r+");
     if(Term_stream == NULL){
-      fprintf(stdout,"Can't fdopen(%d,r+)\n",fd);
+      fprintf(stderr,"Can't fdopen(%d,r+)\n",fd);
       exit(EX_IOERR);
     }
     // Not really necessary, but the initial \r\n flushes the serial line
@@ -235,8 +235,8 @@ int main(int argc,char *argv[]){
     while(true){
       char const c = fgetc(Term_stream);
       if(cr_seen && c != '\n')	 
-	fputc('\n',stdout); // ensure new line after cr
-      fputc(c,stdout);
+	fputc('\n',stderr); // ensure new line after cr
+      fputc(c,stderr);
       cr_seen = (c == '\r'); // Assign comparison
       usleep(10000);
     }

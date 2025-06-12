@@ -78,7 +78,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     if(strcasecmp(device,"airspyhf") != 0)
       return -1; // Not for us
   }
-  config_validate_section(stdout,Dictionary,section,Airspyhf_keys,NULL);
+  config_validate_section(stderr,Dictionary,section,Airspyhf_keys,NULL);
   {
     char const *sn = config_getstring(Dictionary,section,"serial",NULL);
     if(sn != NULL){
@@ -86,7 +86,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
       sdr->SN = 0;
       sdr->SN = strtoull(sn,&endptr,16);
       if(endptr == NULL || *endptr != '\0'){
-	fprintf(stdout,"Invalid serial number %s in section %s\n",sn,section);
+	fprintf(stderr,"Invalid serial number %s in section %s\n",sn,section);
 	return -1;
       }
     } else {
@@ -96,22 +96,22 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
 
       n_serials = airspyhf_list_devices(serials,n_serials); // Return actual number
       if(n_serials == 0){
-	fprintf(stdout,"No airspyhf devices found\n");
+	fprintf(stderr,"No airspyhf devices found\n");
 	return -1;
       }
-      fprintf(stdout,"Discovered airspyhf device serials:");
+      fprintf(stderr,"Discovered airspyhf device serials:");
       for(int i = 0; i < n_serials; i++){
-	fprintf(stdout," %llx",(long long)serials[i]);
+	fprintf(stderr," %llx",(long long)serials[i]);
       }
-      fprintf(stdout,"\n");
-      fprintf(stdout,"Selecting %llx; to select another, add 'serial = ' to config file\n",(long long)serials[0]);
+      fprintf(stderr,"\n");
+      fprintf(stderr,"Selecting %llx; to select another, add 'serial = ' to config file\n",(long long)serials[0]);
       sdr->SN = serials[0];
     }
   }
   {
     int ret = airspyhf_open_sn(&sdr->device,sdr->SN);
     if(ret != AIRSPYHF_SUCCESS){
-      fprintf(stdout,"airspyhf_open(%llx) failed\n",(long long)sdr->SN);
+      fprintf(stderr,"airspyhf_open(%llx) failed\n",(long long)sdr->SN);
       return -1;
     }
   }
@@ -123,7 +123,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     char hw_version[VERSION_LOCAL_SIZE];
     airspyhf_version_string_read(sdr->device,hw_version,sizeof(hw_version));
 
-    fprintf(stdout,"Airspyhf serial %llx, hw version %s, library version %d.%d.%d\n",
+    fprintf(stderr,"Airspyhf serial %llx, hw version %s, library version %d.%d.%d\n",
 	    (long long unsigned)sdr->SN,
 	    hw_version,
 	    version.major_version,version.minor_version,version.revision);
@@ -135,19 +135,19 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     ret = airspyhf_get_samplerates(sdr->device,sdr->sample_rates,0);
     assert(ret == AIRSPYHF_SUCCESS);
     int const number_sample_rates = sdr->sample_rates[0];
-    fprintf(stdout,"%'d sample rates:",number_sample_rates);
+    fprintf(stderr,"%'d sample rates:",number_sample_rates);
     if(number_sample_rates == 0){
-      fprintf(stdout,"error, no valid sample rates!\n");
+      fprintf(stderr,"error, no valid sample rates!\n");
       return -1;
     }
     ret = airspyhf_get_samplerates(sdr->device,sdr->sample_rates,number_sample_rates);
     assert(ret == AIRSPYHF_SUCCESS);
     for(int n = 0; n < number_sample_rates; n++){
-      fprintf(stdout," %'d",sdr->sample_rates[n]);
+      fprintf(stderr," %'d",sdr->sample_rates[n]);
       if(sdr->sample_rates[n] < 1)
 	break;
     }
-    fprintf(stdout,"\n");
+    fprintf(stderr,"\n");
   }
   // Default to first (highest) sample rate on list
   frontend->samprate = config_getint(Dictionary,section,"samprate",sdr->sample_rates[0]);
@@ -161,7 +161,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   frontend->bitspersample = 1; // Causes gain scaling by unity
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
 
-  fprintf(stdout,"Set sample rate %'u Hz\n",frontend->samprate);
+  fprintf(stderr,"Set sample rate %'u Hz\n",frontend->samprate);
   {
     int ret __attribute__ ((unused));
     ret = airspyhf_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
@@ -186,7 +186,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     int const lib_dsp = config_getboolean(Dictionary,section,"lib-dsp",true); // default on
     airspyhf_set_lib_dsp(sdr->device,lib_dsp);
 
-    fprintf(stdout,"HF AGC %d, AGC thresh %d, hf att %d, hf-lna %d, lib-dsp %d\n",
+    fprintf(stderr,"HF AGC %d, AGC thresh %d, hf att %d, hf-lna %d, lib-dsp %d\n",
 	    hf_agc,agc_thresh,hf_att,hf_lna,lib_dsp);
   }
   {
@@ -205,7 +205,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   if(init_frequency != 0){
     set_correct_freq(sdr,init_frequency);
     frontend->lock = true;
-    fprintf(stdout,"Locked tuner frequency %'.3lf Hz\n",init_frequency);
+    fprintf(stderr,"Locked tuner frequency %'.3lf Hz\n",init_frequency);
   }
   return 0;
 }
@@ -225,14 +225,14 @@ static void *airspyhf_monitor(void *p){
   int ret __attribute__ ((unused));
   ret = airspyhf_start(sdr->device,rx_callback,sdr);
   assert(ret == AIRSPYHF_SUCCESS);
-  fprintf(stdout,"airspyhf running\n");
+  fprintf(stderr,"airspyhf running\n");
   // Periodically poll status to ensure device hasn't reset
   while(true){
     sleep(1);
     if(!airspyhf_is_streaming(sdr->device))
       break; // Device seems to have bombed. Exit and let systemd restart us
   }
-  fprintf(stdout,"Device is no longer streaming, exiting\n");
+  fprintf(stderr,"Device is no longer streaming, exiting\n");
   // This can hang when the device locks up
   // This has been happening at KQ6RS
   //  airspyhf_close(sdr->device);
@@ -255,7 +255,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
     stick_core();
   }
   if(transfer->dropped_samples){
-    fprintf(stdout,"dropped %'lld\n",(long long)transfer->dropped_samples);
+    fprintf(stderr,"dropped %'lld\n",(long long)transfer->dropped_samples);
   }
   int const sampcount = transfer->sample_count;
   float complex * const wptr = frontend->in.input_write_pointer.c;

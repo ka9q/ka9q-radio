@@ -111,7 +111,7 @@ void realtime(int prio){
     int err = errno;
     if(!Message_shown && pthread_getname_np(pthread_self(),name,sizeof(name)) == 0){
       Message_shown = true;
-      fprintf(stdout,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
+      fprintf(stderr,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
     }
   }
 #endif
@@ -126,7 +126,7 @@ void realtime(int prio){
     memset(name,0,sizeof(name));
     if(!Message_shown && pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
       Message_shown = true;
-      fprintf(stdout,"%s: setpriority failed, %s (%d)\n",name,strerror(err),err);
+      fprintf(stderr,"%s: setpriority failed, %s (%d)\n",name,strerror(err),err);
     }
   }
 }
@@ -152,7 +152,7 @@ int norealtime(void){
     char name[25] = {0};
     if(!Message_shown && pthread_getname_np(pthread_self(),name,sizeof(name)) == 0){
       Message_shown = true;
-      fprintf(stdout,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
+      fprintf(stderr,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
     }
   }
 #endif
@@ -171,7 +171,7 @@ int norealtime(void){
     char name[25] = {0};
     if(pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
       Message_shown = true;
-      fprintf(stdout,"%s: setpriority failed to lower, %s (%d)\n",name,strerror(err),err);
+      fprintf(stderr,"%s: setpriority failed to lower, %s (%d)\n",name,strerror(err),err);
     }
   }
   return prio;  // Don't really know our state
@@ -187,13 +187,13 @@ void stick_core(void){
   char name[25] = {0};
   pthread_t self = pthread_self();
   if(pthread_getname_np(self,name,sizeof(name)-1) != 0)
-    fprintf(stdout,"getname(%ud) failed: %s\n",(unsigned int)self,strerror(errno));
+    fprintf(stderr,"getname(%ud) failed: %s\n",(unsigned int)self,strerror(errno));
 
   int cpu = sched_getcpu();
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(cpu,&cpuset);
-  fprintf(stdout,"%s sched_setaffinity(pid=%u,cores=",name,(unsigned int)self);
+  fprintf(stderr,"%s sched_setaffinity(pid=%u,cores=",name,(unsigned int)self);
   // Any hyperthreading siblings?
   char sysname[PATH_MAX] = {0};
   snprintf(sysname,sizeof sysname,"/sys/devices/system/cpu/cpu%d/topology/thread_siblings_list",cpu);
@@ -208,20 +208,20 @@ void stick_core(void){
 	  break;
 	cpu = strtol(ptr,NULL,0);
 	CPU_SET(cpu,&cpuset);
-	fprintf(stdout," %d",cpu);
+	fprintf(stderr," %d",cpu);
       }
     }
     fclose(fp);
     fp = NULL;
   } else {
-    fprintf(stdout," %d",cpu);
+    fprintf(stderr," %d",cpu);
   }
-  fprintf(stdout,")\n");
+  fprintf(stderr,")\n");
 
   if (sched_setaffinity(0, sizeof(cpuset), &cpuset) == -1) {
-    fprintf(stdout," failed: %s\n",strerror(errno));
+    fprintf(stderr," failed: %s\n",strerror(errno));
   } else {
-    fprintf(stdout,"\n");
+    fprintf(stderr,"\n");
   }
 #endif
 }

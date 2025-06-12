@@ -113,7 +113,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     return -1; // Unreasonably small - will segfault. Can happen if sample rate is garbled
 
   if(!goodchoice(N))
-    fprintf(stdout,"create_filter_input(L=%d, M=%d): N=%d is not an efficient blocksize for FFTW3\n",L,M,N);
+    fprintf(stderr,"create_filter_input(L=%d, M=%d): N=%d is not an efficient blocksize for FFTW3\n",L,M,N);
 
   // It really should already be zeroed.
   // If not, it is probably being reused and the dynamically allocated storage in it may not have been freed
@@ -148,33 +148,33 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     printf("FFTW version: %s\n", fftwf_version);
     fftwf_init_threads();
     bool sr = fftwf_import_system_wisdom();
-    fprintf(stdout,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
+    fprintf(stderr,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
     if(!sr){
       if(access(System_wisdom_file,R_OK) == -1){ // Would really like to use AT_EACCESS flag
-	fprintf(stdout,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
+	fprintf(stderr,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
       }
     }
 
     bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
-    fprintf(stdout,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
+    fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
     if(!lr){
       if(access(Wisdom_file,R_OK) == -1){
-	fprintf(stdout,"%s not readable: %s\n",Wisdom_file,strerror(errno));
+	fprintf(stderr,"%s not readable: %s\n",Wisdom_file,strerror(errno));
       }
     }
     if(access(Wisdom_file,W_OK) == -1){
-      fprintf(stdout,"Warning: %s not writeable, exports will fail: %s\n",Wisdom_file,strerror(errno));
+      fprintf(stderr,"Warning: %s not writeable, exports will fail: %s\n",Wisdom_file,strerror(errno));
     }
 
     fftwf_set_timelimit(FFTW_plan_timelimit);
     if(!sr && !lr)
-      fprintf(stdout,"No wisdom read, planning FFTs may take up to %'.0lf sec\n",FFTW_plan_timelimit);
+      fprintf(stderr,"No wisdom read, planning FFTs may take up to %'.0lf sec\n",FFTW_plan_timelimit);
 
     // Start FFT worker thread(s) if not already running
     pthread_mutex_init(&FFT.queue_mutex,NULL);
     pthread_cond_init(&FFT.queue_cond,NULL);
     if(N_worker_threads > NTHREADS_MAX){
-      fprintf(stdout,"fft-threads=%d too high, limiting to %d\n",N_worker_threads,NTHREADS_MAX);
+      fprintf(stderr,"fft-threads=%d too high, limiting to %d\n",N_worker_threads,NTHREADS_MAX);
       N_worker_threads = NTHREADS_MAX;
     }
     for(int i=0;i < N_worker_threads;i++)
@@ -207,7 +207,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
       master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_ESTIMATE);
     }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-      fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of cof%d failed\n",Wisdom_file,N);
+      fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) of cof%d failed\n",Wisdom_file,N);
     break;
   case REAL:
     master->input_buffer_size = round_to_page(ND * N * sizeof(float));
@@ -223,7 +223,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
       master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_ESTIMATE);
     }
     if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-      fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of rof%d failed\n",Wisdom_file,N);
+      fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) of rof%d failed\n",Wisdom_file,N);
     break;
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
@@ -301,7 +301,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
       slave->olen = len;
       ldiv_t x = ldiv((long)len * N,L);
       if(x.rem != 0){
-	fprintf(stdout,"Invalid filter output length %d (fft size %ld) for input N=%d, L=%d\n",len,x.quot,N,L);
+	fprintf(stderr,"Invalid filter output length %d (fft size %ld) for input N=%d, L=%d\n",len,x.quot,N,L);
 	return -1;
       }
       slave->points = x.quot; // Total number of FFT points including overlap
@@ -319,7 +319,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
 	slave->rev_plan = fftwf_plan_dft_1d(slave->points,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD,FFTW_ESTIMATE);
       }
       if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
+	fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
       pthread_mutex_unlock(&FFTW_planning_mutex);
       realtime(old_prio);
     }
@@ -333,7 +333,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
       slave->olen = len;
       ldiv_t x = ldiv((long)len * N,L);
       if(x.rem != 0){
-	fprintf(stdout,"Invalid filter output length %d for input N=%d, L=%d\n",len,N,L);
+	fprintf(stderr,"Invalid filter output length %d for input N=%d, L=%d\n",len,N,L);
 	return -1;
       }
       slave->points = x.quot;
@@ -351,7 +351,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
 	slave->rev_plan = fftwf_plan_dft_c2r_1d(slave->points,slave->fdomain,slave->output_buffer.r,FFTW_ESTIMATE);
       }
       if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-	fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
+	fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
       pthread_mutex_unlock(&FFTW_planning_mutex);
       realtime(old_prio);
     }
@@ -366,8 +366,8 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
       if(goodchoice(nn)){
 	int nell = nn * ell / slave->points;
 	int nm = nn - nell + 1;
-	fprintf(stdout,"create_filter_output: N=%d is not an efficient blocksize for FFTW3.",slave->points);
-	fprintf(stdout," Next good choice is N = %d (L=%d, M=%d); set samprate = %d * blockrate\n",nn,nell,nm,nell);
+	fprintf(stderr,"create_filter_output: N=%d is not an efficient blocksize for FFTW3.",slave->points);
+	fprintf(stderr," Next good choice is N = %d (L=%d, M=%d); set samprate = %d * blockrate\n",nn,nell,nm,nell);
 	break;
       }
     }
@@ -1048,7 +1048,7 @@ void suggest(int level,int size,int dir,int clex){
     opt = " -x";
     break;
   }
-  fprintf(stdout,"suggest running \"fftwf-wisdom -v%s -T 1 -w %s/wisdom -o /tmp/wisdomf %co%c%d\", then \"mv /tmp/wisdomf /etc/fftw/wisdomf\" *if* larger than current file. This will take time.\n",
+  fprintf(stderr,"suggest running \"fftwf-wisdom -v%s -T 1 -w %s/wisdom -o /tmp/wisdomf %co%c%d\", then \"mv /tmp/wisdomf /etc/fftw/wisdomf\" *if* larger than current file. This will take time.\n",
 	  opt,
 	  VARDIR,
 	  clex == COMPLEX ? 'c' : 'r',
@@ -1202,7 +1202,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   fftwf_plan plan = fftwf_plan_dft_1d(N,response,response,FFTW_FORWARD,FFTW_ESTIMATE); // doesn't need to be fast
   assert(plan != NULL);
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of cif%d failed\n",Wisdom_file,N);
+    fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) of cif%d failed\n",Wisdom_file,N);
   pthread_mutex_unlock(&FFTW_planning_mutex);
 
   // Multiply real coefficients by complex exponential for frequency shift, place in FFT time-domain buffer
@@ -1257,7 +1257,7 @@ static int window_filter(int const L,int const M,float complex * const response,
   fftwf_plan rev_filter_plan = fftwf_plan_dft_1d(N,buffer,buffer,FFTW_BACKWARD,FFTW_ESTIMATE);
   assert(rev_filter_plan != NULL);
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of cif%d and cib%d failed\n",
+    fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) of cif%d and cib%d failed\n",
 	    Wisdom_file,N,N);
   pthread_mutex_unlock(&FFTW_planning_mutex);
 
@@ -1330,7 +1330,7 @@ static int window_rfilter(int const L,int const M,float complex * const response
   fftwf_plan rev_filter_plan = fftwf_plan_dft_c2r_1d(N,buffer,timebuf,FFTW_ESTIMATE);
   assert(rev_filter_plan != NULL);
   if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-    fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) of rof%d and rob%d failed\n",
+    fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) of rof%d and rob%d failed\n",
 	    Wisdom_file,N,N);
   pthread_mutex_unlock(&FFTW_planning_mutex);
 
@@ -1434,7 +1434,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
     if(midbin < 0)
       midbin += N; // Can only happen for complex output, will keep midbin in range for real transforms with only (N/2) + 1 bins
     float midgain = cnrmf(response[midbin]);
-    fprintf(stdout,"passband middle freq %.3f is bin %d, gain %.3f dB\n",
+    fprintf(stderr,"passband middle freq %.3f is bin %d, gain %.3f dB\n",
 	    (high + low)/2, midbin,power2dB(midgain));
   }
 #endif

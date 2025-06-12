@@ -82,7 +82,7 @@ struct channel *create_chan(uint32_t ssrc){
     }
   }
   if(chan == NULL){
-    fprintf(stdout,"Warning: out of chan table space (%'d)\n",Active_channel_count);
+    fprintf(stderr,"Warning: out of chan table space (%'d)\n",Active_channel_count);
     // Abort here? Or keep going?
   } else {
     // Because the memcpy clobbers the ssrc, we must keep the lock held on Channel_list_mutex
@@ -140,7 +140,7 @@ int start_demod(struct channel * chan){
     return -1;
 
   if(Verbose){
-    fprintf(stdout,"start_demod: ssrc %'u, output %s, demod %d, freq %'.3lf, preset %s, filter (%'+.0f,%'+.0f)\n",
+    fprintf(stderr,"start_demod: ssrc %'u, output %s, demod %d, freq %'.3lf, preset %s, filter (%'+.0f,%'+.0f)\n",
 	    chan->output.rtp.ssrc, chan->output.dest_string, chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
   }
   pthread_create(&chan->demod_thread,NULL,demod_thread,chan);
@@ -431,7 +431,7 @@ int downconvert(struct channel *chan){
       if(--chan->lifetime <= 0){
 	chan->demod_type = -1;  // No demodulator
 	if(Verbose > 1)
-	  fprintf(stdout,"chan %d terminate needed\n",chan->output.rtp.ssrc);
+	  fprintf(stderr,"chan %d terminate needed\n",chan->output.rtp.ssrc);
 	return -1; // terminate needed
       }
     }
@@ -475,7 +475,7 @@ int downconvert(struct channel *chan){
     pthread_mutex_unlock(&chan->status.lock);
     if(restart_needed){
       if(Verbose > 1)
-	fprintf(stdout,"chan %d restart needed\n",chan->output.rtp.ssrc);
+	fprintf(stderr,"chan %d restart needed\n",chan->output.rtp.ssrc);
       return +1; // Restart needed
     }
     // To save CPU time when the front end is completely tuned away from us, block (with timeout) until the front
@@ -583,7 +583,7 @@ int set_channel_filter(struct channel *chan){
   float upper = min(chan->filter.max_IF, (float)chan->output.samprate/2);
 
   if(Verbose > 1)
-    fprintf(stdout,"new filter for chan %'u: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
+    fprintf(stderr,"new filter for chan %'u: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
 	    chan->output.rtp.ssrc, lower, upper,
 	    chan->output.samprate, chan->filter.kaiser_beta);
 
@@ -597,7 +597,7 @@ int set_channel_filter(struct channel *chan){
 
     unsigned int n = round2(2 * blocksize); // Overlap >= 50%
     unsigned int order = n - blocksize;
-    fprintf(stdout,"filter2 create: L = %d, M = %d, N = %d\n",blocksize,order+1,n);
+    fprintf(stderr,"filter2 create: L = %d, M = %d, N = %d\n",blocksize,order+1,n);
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
     create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX);
     chan->filter2.in.perform_inline = true;

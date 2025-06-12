@@ -72,7 +72,7 @@ int bladerf_setup(struct frontend * const frontend,
 
 	if (Verbose)
 		bladerf_log_set_verbosity(BLADERF_LOG_LEVEL_VERBOSE);
-	config_validate_section(stdout,Dictionary,section,Bladerf_keys,NULL);
+	config_validate_section(stderr,Dictionary,section,Bladerf_keys,NULL);
 
 	int status;
 
@@ -118,7 +118,7 @@ int bladerf_setup(struct frontend * const frontend,
 			0);
 
 	if (Verbose)
-		fprintf(stdout, "Set sample rate %'u Hz\n",
+		fprintf(stderr, "Set sample rate %'u Hz\n",
 				frontend->samprate);
 
 	status = bladerf_set_sample_rate(sdr->dev, ch,
@@ -146,14 +146,14 @@ int bladerf_setup(struct frontend * const frontend,
 		return -1;
 	}
 	if (Verbose)
-		fprintf(stdout, "Set bandwidth %'u Hz\n", bw_actual);
+		fprintf(stderr, "Set bandwidth %'u Hz\n", bw_actual);
 	frontend->calibrate = 0;
 	frontend->max_IF = +frontend->samprate;
 	frontend->min_IF = -frontend->samprate;
 
 	frontend->rf_gain = config_getint(Dictionary, section, "gain",0);
 	if (Verbose)
-		fprintf(stdout, "config gain %f\n", frontend->rf_gain);
+		fprintf(stderr, "config gain %f\n", frontend->rf_gain);
 
 	if (frontend->rf_gain != 0) {
 		status = bladerf_set_gain_mode(sdr->dev, ch, BLADERF_GAIN_MGC);
@@ -180,7 +180,7 @@ int bladerf_setup(struct frontend * const frontend,
 	bladerf_get_bias_tee(sdr->dev, ch, &antenna_bias);
 
 	if (Verbose)
-		fprintf(stdout, "bias tee %d\n", antenna_bias);
+		fprintf(stderr, "bias tee %d\n", antenna_bias);
 
 	p = config_getstring(Dictionary, section, "description", Description ? Description: "bladerf");
 	if (p != NULL){
@@ -196,7 +196,7 @@ int bladerf_setup(struct frontend * const frontend,
 		set_correct_freq(sdr, init_frequency);
 		frontend->lock = true;
 		if (Verbose)
-			fprintf(stdout, "Locked tuner frequency %'.3lf Hz\n",
+			fprintf(stderr, "Locked tuner frequency %'.3lf Hz\n",
 				init_frequency);
 	}
 
@@ -360,7 +360,7 @@ static void *bladerf_monitor(void *p)
 	}
 
 	if (Verbose)
-		fprintf(stdout, "bladerf running\n");
+		fprintf(stderr, "bladerf running\n");
 
 	int readback = 0;
 	status = bladerf_get_gain(sdr->dev, BLADERF_MODULE_RX, &readback);
@@ -388,7 +388,7 @@ static void *bladerf_monitor(void *p)
 
 	bladerf_deinit_stream(stream);
 	bladerf_close(sdr->dev);
-	fprintf(stdout, "Device is no longer streaming, exiting\n");
+	fprintf(stderr, "Device is no longer streaming, exiting\n");
 out:
 	exit(EX_NOINPUT); // Let systemd restart us
 	return NULL;

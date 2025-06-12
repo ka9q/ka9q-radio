@@ -283,9 +283,9 @@ int init_morse(float const speed,float const pitch,float level,float const sampr
   double const cycles_per_sample = pitch / samprate;
 
   if(Verbose){
-    fprintf(stdout,"speed %.1f wpm, pitch %.1f Hz, level %.1f dB, samprate %.1f Hz\n",
+    fprintf(stderr,"speed %.1f wpm, pitch %.1f Hz, level %.1f dB, samprate %.1f Hz\n",
 	    speed,pitch,level,samprate);
-    fprintf(stdout,"dit length %d samples; cycles per sample %lf\n",Dit_length,cycles_per_sample);
+    fprintf(stderr,"dit length %d samples; cycles per sample %lf\n",Dit_length,cycles_per_sample);
   }
   level = dB2voltage(-fabsf(level)); // convert dB to amplitude
 

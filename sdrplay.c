@@ -189,12 +189,12 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
   }
   {
     if((open_sdrplay(sdr)) != 0){
-      fprintf(stdout,"open_sdrplay() failed\n");
+      fprintf(stderr,"open_sdrplay() failed\n");
       close_sdrplay(sdr);
       return -1;
     }
   }
-  config_validate_section(stdout,Dictionary,section,Sdrplay_keys,NULL);
+  config_validate_section(stderr,Dictionary,section,Sdrplay_keys,NULL);
   {
     char const * const sn = config_getstring(Dictionary,section,"serial",NULL);
     if(find_rsp(sdr,sn) == -1){
@@ -214,8 +214,8 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
     close_sdrplay(sdr);
     return -1;
   }
-  fprintf(stdout,"This SDRplay driver has known problems with tuner control\n");
-  fprintf(stdout,"SDRplay RSP serial %s, hw model %d, API version %.2f\n",
+  fprintf(stderr,"This SDRplay driver has known problems with tuner control\n");
+  fprintf(stderr,"SDRplay RSP serial %s, hw model %d, API version %.2f\n",
           sdr->device.SerNo,
           sdr->device.hwVer,
           SDRPLAY_API_VERSION);
@@ -235,7 +235,7 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
     return -1;
   }
 
-  fprintf(stdout,"Set sample rate %'f Hz\n",samprate);
+  fprintf(stderr,"Set sample rate %'f Hz\n",samprate);
   if(set_samplerate(sdr,samprate) == -1){
     close_sdrplay(sdr);
     return -1;
@@ -322,7 +322,7 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
     }
   }
 
-  fprintf(stdout,"RF LNA state %d, IF att %d, IF AGC %d, IF AGC setPoint %d, DC offset corr %d, IQ imbalance corr %d\n",
+  fprintf(stderr,"RF LNA state %d, IF att %d, IF AGC %d, IF AGC setPoint %d, DC offset corr %d, IQ imbalance corr %d\n",
           (int)(sdr->rx_channel_params->tunerParams.gain.LNAstate),
           sdr->rx_channel_params->tunerParams.gain.gRdB,
           sdr->rx_channel_params->ctrlParams.agc.enable,
@@ -333,7 +333,7 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
   if(init_frequency != 0){
     set_center_freq(sdr,init_frequency);
     frontend->lock = true;
-    fprintf(stdout,"Locked tuner frequency %'.3lf Hz\n",init_frequency);
+    fprintf(stderr,"Locked tuner frequency %'.3lf Hz\n",init_frequency);
   }
   return 0;
 }
@@ -356,7 +356,7 @@ static void *sdrplay_monitor(void *p){
   int ret __attribute__ ((unused));
   ret = start_rx(sdr,rx_callback,event_callback);
   assert(ret == 0);
-  fprintf(stdout,"SDRplay RSP running\n");
+  fprintf(stderr,"SDRplay RSP running\n");
   // Periodically poll status to ensure device hasn't reset
   uint64_t prev_samples = 0;
   while(true){
@@ -366,7 +366,7 @@ static void *sdrplay_monitor(void *p){
       break; // Device seems to have bombed. Exit and let systemd restart us
     prev_samples = curr_samples;
   }
-  fprintf(stdout,"Device is no longer streaming, exiting\n");
+  fprintf(stderr,"Device is no longer streaming, exiting\n");
   close_sdrplay(sdr);
   exit(1); // Let systemd restart us
 }
@@ -384,23 +384,23 @@ static int open_sdrplay(struct sdrstate *sdr){
   sdrplay_api_ErrT err;
   err = sdrplay_api_Open();
   if(err != sdrplay_api_Success){
-    fprintf(stdout,"sdrplay_api_Open() failed: %s\n",sdrplay_api_GetErrorString(err));
+    fprintf(stderr,"sdrplay_api_Open() failed: %s\n",sdrplay_api_GetErrorString(err));
     return -1;
   }
   sdr->device_status |= SDRPLAY_API_OPEN;
   float ver;
   err = sdrplay_api_ApiVersion(&ver);
   if(err != sdrplay_api_Success){
-    fprintf(stdout,"sdrplay_api_ApiVersion() failed: %s\n",sdrplay_api_GetErrorString(err));
+    fprintf(stderr,"sdrplay_api_ApiVersion() failed: %s\n",sdrplay_api_GetErrorString(err));
     return -1;
   }
   if(ver != SDRPLAY_API_VERSION){
-    fprintf(stdout,"SDRplay API version mismatch: found %.2f, expecting %.2f\n",ver,SDRPLAY_API_VERSION);
+    fprintf(stderr,"SDRplay API version mismatch: found %.2f, expecting %.2f\n",ver,SDRPLAY_API_VERSION);
     return -1;
   }
   err = sdrplay_api_DebugEnable(NULL,dbgLvl);
   if(err != sdrplay_api_Success){
-    fprintf(stdout,"sdrplay_api_DebugEnable() failed: %s\n",sdrplay_api_GetErrorString(err));
+    fprintf(stderr,"sdrplay_api_DebugEnable() failed: %s\n",sdrplay_api_GetErrorString(err));
     return -1;
   }
   return 0;
@@ -413,18 +413,18 @@ static int close_sdrplay(struct sdrstate *sdr){
   if(sdr->device_status & DEVICE_STREAMING){
     sdrplay_api_ErrT err = sdrplay_api_Uninit(sdr->device.dev);
     if(err != sdrplay_api_Success){
-      fprintf(stdout,"sdrplay_api_Uninit() failed: %s\n",sdrplay_api_GetErrorString(err));
+      fprintf(stderr,"sdrplay_api_Uninit() failed: %s\n",sdrplay_api_GetErrorString(err));
       ret = -1;
     }
     sdr->device_status &= ~DEVICE_STREAMING;
-    fprintf(stdout,"sdrplay done streaming - samples=%llu - events=%llu\n",
+    fprintf(stderr,"sdrplay done streaming - samples=%llu - events=%llu\n",
 	    (long long unsigned)frontend->samples,(long long unsigned)sdr->events);
   }
   if(sdr->device_status & DEVICE_SELECTED){
     sdrplay_api_LockDeviceApi();
     sdrplay_api_ErrT err = sdrplay_api_ReleaseDevice(&sdr->device);
     if(err != sdrplay_api_Success){
-      fprintf(stdout,"sdrplay_api_ReleaseDevice() failed: %s\n",sdrplay_api_GetErrorString(err));
+      fprintf(stderr,"sdrplay_api_ReleaseDevice() failed: %s\n",sdrplay_api_GetErrorString(err));
       ret = -1;
     }
     sdrplay_api_UnlockDeviceApi();
@@ -433,7 +433,7 @@ static int close_sdrplay(struct sdrstate *sdr){
   if(sdr->device_status & DEVICE_API_LOCKED){
     sdrplay_api_ErrT err = sdrplay_api_UnlockDeviceApi();
     if(err != sdrplay_api_Success){
-      fprintf(stdout,"sdrplay_api_UnlockDeviceApi() failed: %s\n",sdrplay_api_GetErrorString(err));
+      fprintf(stderr,"sdrplay_api_UnlockDeviceApi() failed: %s\n",sdrplay_api_GetErrorString(err));
       ret = -1;
     }
     sdr->device_status &= ~DEVICE_API_LOCKED;
@@ -441,7 +441,7 @@ static int close_sdrplay(struct sdrstate *sdr){
   if(sdr->device_status & SDRPLAY_API_OPEN){
     sdrplay_api_ErrT err = sdrplay_api_Close();
     if(err != sdrplay_api_Success){
-      fprintf(stdout,"sdrplay_api_Close() failed: %s\n",sdrplay_api_GetErrorString(err));
+      fprintf(stderr,"sdrplay_api_Close() failed: %s\n",sdrplay_api_GetErrorString(err));
       ret = -1;
     }
     sdr->device_status &= ~SDRPLAY_API_OPEN;
@@ -453,7 +453,7 @@ static int find_rsp(struct sdrstate *sdr,char const *sn){
   sdrplay_api_ErrT err;
   err = sdrplay_api_LockDeviceApi();
   if(err != sdrplay_api_Success){
-    fprintf(stdout,"sdrplay_api_LockDeviceApi() failed: %s\n",sdrplay_api_GetErrorString(err));
+    fprintf(stderr,"sdrplay_api_LockDeviceApi() failed: %s\n",sdrplay_api_GetErrorString(err));
     return -1;
   }
   sdr->device_status |= DEVICE_API_LOCKED;
@@ -461,26 +461,26 @@ static int find_rsp(struct sdrstate *sdr,char const *sn){
   sdrplay_api_DeviceT devices[SDRPLAY_MAX_DEVICES];
   err = sdrplay_api_GetDevices(devices,&ndevices,ndevices);
   if(err != sdrplay_api_Success){
-    fprintf(stdout,"sdrplay_api_GetDevices() failed: %s\n",sdrplay_api_GetErrorString(err));
+    fprintf(stderr,"sdrplay_api_GetDevices() failed: %s\n",sdrplay_api_GetErrorString(err));
     return -1;
   }
 
   if(ndevices == 0){
-    fprintf(stdout,"No SDRplay RSP devices found\n");
+    fprintf(stderr,"No SDRplay RSP devices found\n");
     return -1;
   }
   if(sn == NULL){
-    fprintf(stdout,"Discovered SDRplay RSP device serial%s:",ndevices > 1 ? "s" : "");
+    fprintf(stderr,"Discovered SDRplay RSP device serial%s:",ndevices > 1 ? "s" : "");
     int firstvalid = -1;
     for(unsigned int i = 0; i < ndevices; i++){
       if(devices[i].valid){
-        fprintf(stdout," %s",devices[i].SerNo);
+        fprintf(stderr," %s",devices[i].SerNo);
         if(firstvalid == -1)
           firstvalid = i;
       }
     }
-    fprintf(stdout,"\n");
-    fprintf(stdout,"Selecting %s; to select another, add 'serial = ' to config file\n",devices[firstvalid].SerNo);
+    fprintf(stderr,"\n");
+    fprintf(stderr,"Selecting %s; to select another, add 'serial = ' to config file\n",devices[firstvalid].SerNo);
   }
 
   int found = 0;
@@ -494,7 +494,7 @@ static int find_rsp(struct sdrstate *sdr,char const *sn){
     }
   }
   if(!found){
-    fprintf(stdout,"sdrplay device %s not found or unavailable\n",sn);
+    fprintf(stderr,"sdrplay device %s not found or unavailable\n",sn);
     return -1;
   }
   return 0;
@@ -535,7 +535,7 @@ static int set_rspduo_mode(struct sdrstate *sdr,char const *mode,char const *ant
   } else
     valid_mode = 0;
   if(!valid_mode){
-    fprintf(stdout,"sdrplay - RSPduo mode %s is invalid or not available\n",mode);
+    fprintf(stderr,"sdrplay - RSPduo mode %s is invalid or not available\n",mode);
     return -1;
   }
 
@@ -558,7 +558,7 @@ static int set_rspduo_mode(struct sdrstate *sdr,char const *mode,char const *ant
   } else
     valid_tuner = 0;
   if(!valid_tuner){
-    fprintf(stdout,"sdrplay - antenna %s is invalid or not available\n",antenna);
+    fprintf(stderr,"sdrplay - antenna %s is invalid or not available\n",antenna);
     return -1;
   }
 
@@ -569,24 +569,24 @@ static int select_device(struct sdrstate *sdr){
   sdrplay_api_ErrT err;
   err = sdrplay_api_SelectDevice(&sdr->device);
   if(err != sdrplay_api_Success){
-    fprintf(stdout,"sdrplay_api_SelectDevice() failed: %s\n",sdrplay_api_GetErrorString(err));
+    fprintf(stderr,"sdrplay_api_SelectDevice() failed: %s\n",sdrplay_api_GetErrorString(err));
     return -1;
   }
   sdr->device_status |= DEVICE_SELECTED;
   err = sdrplay_api_UnlockDeviceApi();
   sdr->device_status &= ~DEVICE_API_LOCKED;
   if(err != sdrplay_api_Success){
-    fprintf(stdout,"sdrplay_api_UnlockDeviceApi() failed: %s\n",sdrplay_api_GetErrorString(err));
+    fprintf(stderr,"sdrplay_api_UnlockDeviceApi() failed: %s\n",sdrplay_api_GetErrorString(err));
     return -1;
   }
   err = sdrplay_api_DebugEnable(sdr->device.dev,dbgLvl);
   if(err != sdrplay_api_Success){
-    fprintf(stdout,"sdrplay_api_DebugEnable() failed: %s\n",sdrplay_api_GetErrorString(err));
+    fprintf(stderr,"sdrplay_api_DebugEnable() failed: %s\n",sdrplay_api_GetErrorString(err));
     return -1;
   }
   err = sdrplay_api_GetDeviceParams(sdr->device.dev,&sdr->device_params);
   if(err != sdrplay_api_Success){
-    fprintf(stdout,"sdrplay_api_GetDeviceParams() failed: %s\n",sdrplay_api_GetErrorString(err));
+    fprintf(stderr,"sdrplay_api_GetDeviceParams() failed: %s\n",sdrplay_api_GetErrorString(err));
     return -1;
   }
   if(sdr->device.tuner == sdrplay_api_Tuner_A){
@@ -594,7 +594,7 @@ static int select_device(struct sdrstate *sdr){
   } else if(sdr->device.tuner == sdrplay_api_Tuner_B){
     sdr->rx_channel_params = sdr->device_params->rxChannelB;
   } else {
-    fprintf(stdout,"sdrplay - invalid tuner: %d\n",sdr->device.tuner);
+    fprintf(stderr,"sdrplay - invalid tuner: %d\n",sdr->device.tuner);
     return -1;
   }
   return 0;
@@ -608,7 +608,7 @@ static double set_center_freq(struct sdrstate *sdr,double const frequency){
     sdrplay_api_ErrT err;
     err = sdrplay_api_Update(sdr->device.dev,sdr->device.tuner,sdrplay_api_Update_Tuner_Frf,sdrplay_api_Update_Ext1_None);
     if(err != sdrplay_api_Success){
-      fprintf(stdout,"sdrplay_api_Update(Tuner_Frf) failed: %s\n",sdrplay_api_GetErrorString(err));
+      fprintf(stderr,"sdrplay_api_Update(Tuner_Frf) failed: %s\n",sdrplay_api_GetErrorString(err));
       return -1;
     }
   }
@@ -638,7 +638,7 @@ static int set_ifreq(struct sdrstate *sdr,int const ifreq){
       valid_if = 0;
   }
   if(!valid_if){
-    fprintf(stdout,"sdrplay - IF=%d is invalid\n",ifreq);
+    fprintf(stderr,"sdrplay - IF=%d is invalid\n",ifreq);
     return -1;
   }
   return 0;
@@ -666,7 +666,7 @@ static int set_bandwidth(struct sdrstate *sdr,int const bandwidth,double const s
   } else
     valid_bandwidth = 0;
   if(!valid_bandwidth){
-    fprintf(stdout,"sdrplay - Bandwidth=%d is invalid\n",bandwidth);
+    fprintf(stderr,"sdrplay - Bandwidth=%d is invalid\n",bandwidth);
     return -1;
   }
   return 0;
@@ -682,7 +682,7 @@ static int set_samplerate(struct sdrstate *sdr,double const samprate){
       break;
   }
   if(!(actual_sample_rate >= MIN_SAMPLE_RATE && actual_sample_rate <= MAX_SAMPLE_RATE)){
-    fprintf(stdout,"sdrplay - sample_rate=%f is invalid\n",samprate);
+    fprintf(stderr,"sdrplay - sample_rate=%f is invalid\n",samprate);
     return -1;
   }
   if(sdr->device.hwVer == SDRPLAY_RSPduo_ID && (sdr->device.rspDuoMode == sdrplay_api_RspDuoMode_Dual_Tuner || sdr->device.rspDuoMode == sdrplay_api_RspDuoMode_Master || sdr->device.rspDuoMode == sdrplay_api_RspDuoMode_Slave)){
@@ -690,7 +690,7 @@ static int set_samplerate(struct sdrstate *sdr,double const samprate){
       if(sdr->device_params->devParams)
         sdr->device_params->devParams->fsFreq.fsHz = sdr->device.rspDuoSampleFreq;
     } else {
-      fprintf(stdout,"sdrplay - sample_rate=%f is invalid\n",samprate);
+      fprintf(stderr,"sdrplay - sample_rate=%f is invalid\n",samprate);
       return -1;
     }
   } else {
@@ -778,7 +778,7 @@ static int set_antenna(struct sdrstate *sdr,char const *antenna){
       valid_antenna = 0;
   }
   if(!valid_antenna){
-    fprintf(stdout,"sdrplay - Antenna=%s is invalid (or not available)\n",antenna);
+    fprintf(stderr,"sdrplay - Antenna=%s is invalid (or not available)\n",antenna);
     return -1;
   }
   return 0;
@@ -925,7 +925,7 @@ static int set_rf_gain(struct sdrstate *sdr,int const lna_state,int const rf_att
   int valid_rf_gain = 1;
   if(lna_state != -1) {
     if(rf_att != -1 || rf_gr != -1){
-      fprintf(stdout,"sdrplay - only one of lna-state, rf-att, or rf-gr is allowed\n");
+      fprintf(stderr,"sdrplay - only one of lna-state, rf-att, or rf-gr is allowed\n");
       return -1;
     }
     if(lna_state >= 0 && lna_state < lna_state_count)
@@ -934,7 +934,7 @@ static int set_rf_gain(struct sdrstate *sdr,int const lna_state,int const rf_att
       valid_rf_gain = 0;
   } else {
     if(rf_att != -1 && rf_gr != -1){
-      fprintf(stdout,"sdrplay - only one of lna-state, rf-att, or rf-gr is allowed\n");
+      fprintf(stderr,"sdrplay - only one of lna-state, rf-att, or rf-gr is allowed\n");
       return -1;
     }
     int rf_gRdB = rf_att;
@@ -955,7 +955,7 @@ static int set_rf_gain(struct sdrstate *sdr,int const lna_state,int const rf_att
     sdr->rx_channel_params->tunerParams.gain.LNAstate = lna_state_min;
   }
   if(!valid_rf_gain){
-    fprintf(stdout,"sdrplay - RF gain reduction is invalid - lna_state=%d rf_att=%d rf_gr=%d\n",lna_state,rf_att,rf_gr);
+    fprintf(stderr,"sdrplay - RF gain reduction is invalid - lna_state=%d rf_att=%d rf_gr=%d\n",lna_state,rf_att,rf_gr);
     return -1;
   }
 
@@ -963,7 +963,7 @@ static int set_rf_gain(struct sdrstate *sdr,int const lna_state,int const rf_att
     sdrplay_api_ErrT err;
     err = sdrplay_api_Update(sdr->device.dev,sdr->device.tuner,sdrplay_api_Update_Tuner_Gr,sdrplay_api_Update_Ext1_None);
     if(err != sdrplay_api_Success){
-      fprintf(stdout,"sdrplay_api_Update(Tuner_Gr) failed: %s\n",sdrplay_api_GetErrorString(err));
+      fprintf(stderr,"sdrplay_api_Update(Tuner_Gr) failed: %s\n",sdrplay_api_GetErrorString(err));
       return -1;
     }
   }
@@ -978,7 +978,7 @@ static float get_rf_atten(struct sdrstate *sdr,double const frequency){
   assert(lna_state_count > 0);
   int const lna_state = sdr->rx_channel_params->tunerParams.gain.LNAstate;
   if(lna_state < 0 || lna_state >= lna_state_count){
-    fprintf(stdout,"LNA state out of range: %d - range=[%d,%d(\n",lna_state,0,lna_state_count);
+    fprintf(stderr,"LNA state out of range: %d - range=[%d,%d(\n",lna_state,0,lna_state_count);
     return NAN;
   }
   return (float)lna_states[lna_state];
@@ -994,7 +994,7 @@ static int set_if_gain(struct sdrstate *sdr,int const if_att,int const if_gr,int
         sdr->rx_channel_params->ctrlParams.agc.enable = sdrplay_api_AGC_DISABLE;
         sdr->rx_channel_params->tunerParams.gain.gRdB = if_gRdB;
       } else {
-        fprintf(stdout,"sdrplay - IF gain reduction is out of range - if_att/if_gr=%d\n",if_gRdB);
+        fprintf(stderr,"sdrplay - IF gain reduction is out of range - if_att/if_gr=%d\n",if_gRdB);
         return -1;
       }
     }
@@ -1003,7 +1003,7 @@ static int set_if_gain(struct sdrstate *sdr,int const if_att,int const if_gr,int
       sdrplay_api_ErrT err;
       err = sdrplay_api_Update(sdr->device.dev,sdr->device.tuner,sdrplay_api_Update_Ctrl_Agc | sdrplay_api_Update_Tuner_Gr,sdrplay_api_Update_Ext1_None);
       if(err != sdrplay_api_Success){
-        fprintf(stdout,"sdrplay_api_Update(Ctrl_Agc | Tuner_Gr) failed: %s\n",sdrplay_api_GetErrorString(err));
+        fprintf(stderr,"sdrplay_api_Update(Ctrl_Agc | Tuner_Gr) failed: %s\n",sdrplay_api_GetErrorString(err));
         return -1;
       }
     }
@@ -1012,7 +1012,7 @@ static int set_if_gain(struct sdrstate *sdr,int const if_att,int const if_gr,int
 
   // AGC
   if(if_gr != -1){
-    fprintf(stdout,"sdrplay - cannot select both IF gain reduction (if-gr) and AGC (if-agc)\n");
+    fprintf(stderr,"sdrplay - cannot select both IF gain reduction (if-gr) and AGC (if-agc)\n");
     return -1;
   }
 
@@ -1037,7 +1037,7 @@ static int set_if_gain(struct sdrstate *sdr,int const if_att,int const if_gr,int
     sdrplay_api_ErrT err;
     err = sdrplay_api_Update(sdr->device.dev,sdr->device.tuner,sdrplay_api_Update_Ctrl_Agc | sdrplay_api_Update_Tuner_Gr,sdrplay_api_Update_Ext1_None);
     if(err != sdrplay_api_Success){
-      fprintf(stdout,"sdrplay_api_Update(Ctrl_Agc | Tuner_Gr) failed: %s\n",sdrplay_api_GetErrorString(err));
+      fprintf(stderr,"sdrplay_api_Update(Ctrl_Agc | Tuner_Gr) failed: %s\n",sdrplay_api_GetErrorString(err));
       return -1;
     }
   }
@@ -1122,7 +1122,7 @@ static int start_rx(struct sdrstate *sdr,sdrplay_api_StreamCallback_t rx_callbac
     show_device_params(sdr);
   err = sdrplay_api_Init(sdr->device.dev,&callbacks,sdr);
   if(err != sdrplay_api_Success){
-    fprintf(stdout,"sdrplay_api_Init() failed: %s\n",sdrplay_api_GetErrorString(err));
+    fprintf(stderr,"sdrplay_api_Init() failed: %s\n",sdrplay_api_GetErrorString(err));
     return -1;
   }
   sdr->device_status |= DEVICE_STREAMING;
@@ -1153,7 +1153,7 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
     else
       dropped_samples = UINT_MAX - (params->firstSampleNum - sdr->next_sample_num) + 1;
     sdr->next_sample_num = params->firstSampleNum + numSamples;
-    fprintf(stdout,"dropped %'d\n",dropped_samples);
+    fprintf(stderr,"dropped %'d\n",dropped_samples);
   }
 
   int const sampcount = numSamples;
@@ -1189,7 +1189,7 @@ static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT t
 #if 0
     // this type of event could get very chatty
     sdrplay_api_GainCbParamT *gainParams = &params->gainParams;
-    fprintf(stdout,"gain change - gRdB=%d lnaGRdB=%d currGain=%.2f\n",gainParams->gRdB,gainParams->lnaGRdB,gainParams->currGain);
+    fprintf(stderr,"gain change - gRdB=%d lnaGRdB=%d currGain=%.2f\n",gainParams->gRdB,gainParams->lnaGRdB,gainParams->currGain);
 #endif
     break;
   case sdrplay_api_PowerOverloadChange:
@@ -1198,14 +1198,14 @@ static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT t
     switch(params->powerOverloadParams.powerOverloadChangeType){
     case sdrplay_api_Overload_Detected:
       power_overload_detected = event_timestamp;
-      fprintf(stdout,"%s - overload detected\n",event_timestamp_formatted);
+      fprintf(stderr,"%s - overload detected\n",event_timestamp_formatted);
       break;
     case sdrplay_api_Overload_Corrected:
       if(power_overload_detected >= 0){
-        fprintf(stdout,"%s - overload corrected - duration=%lldns\n",
+        fprintf(stderr,"%s - overload corrected - duration=%lldns\n",
 		event_timestamp_formatted, (long long)event_timestamp - power_overload_detected);
       } else {
-        fprintf(stdout,"%s - overload corrected\n",event_timestamp_formatted);
+        fprintf(stderr,"%s - overload corrected\n",event_timestamp_formatted);
       }
       power_overload_detected = -1;
       break;
@@ -1213,17 +1213,17 @@ static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT t
     // send ack back for overload events
     err = sdrplay_api_Update(sdr->device.dev,sdr->device.tuner,sdrplay_api_Update_Ctrl_OverloadMsgAck,sdrplay_api_Update_Ext1_None);
     if(err != sdrplay_api_Success){
-      fprintf(stdout,"sdrplay_api_Update(Ctrl_OverloadMsgAck) failed: %s\n",sdrplay_api_GetErrorString(err));
+      fprintf(stderr,"sdrplay_api_Update(Ctrl_OverloadMsgAck) failed: %s\n",sdrplay_api_GetErrorString(err));
     }
     break;
   case sdrplay_api_DeviceRemoved:
-    fprintf(stdout,"device removed\n");
+    fprintf(stderr,"device removed\n");
     break;
   case sdrplay_api_RspDuoModeChange:
-    fprintf(stdout,"PSPduo mode change\n");
+    fprintf(stderr,"PSPduo mode change\n");
     break;
   case sdrplay_api_DeviceFailure:
-    fprintf(stdout,"device failure\n");
+    fprintf(stderr,"device failure\n");
     break;
   }
   sdr->events++;
@@ -1231,59 +1231,59 @@ static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT t
 }
 
 static void show_device_params(struct sdrstate *sdr){
-  fprintf(stdout,"\n");
-  fprintf(stdout,"# Device parameters:\n");
+  fprintf(stderr,"\n");
+  fprintf(stderr,"# Device parameters:\n");
   sdrplay_api_RxChannelParamsT *rx_channels[] = {sdr->device_params->rxChannelA,sdr->device_params->rxChannelB};
   for(int i = 0; i < 2; i++){
     sdrplay_api_RxChannelParamsT* rx_channel = rx_channels[i];
     if(rx_channel == NULL)
       continue;
-    fprintf(stdout,"RX channel=%s\n",rx_channel == sdr->device_params->rxChannelA ? "A" : (rx_channel == sdr->device_params->rxChannelB ? "B" : "?"));
+    fprintf(stderr,"RX channel=%s\n",rx_channel == sdr->device_params->rxChannelA ? "A" : (rx_channel == sdr->device_params->rxChannelB ? "B" : "?"));
     sdrplay_api_TunerParamsT *tunerParams = &rx_channel->tunerParams;
-    fprintf(stdout,"    rfHz=%lf\n",tunerParams->rfFreq.rfHz);
-    fprintf(stdout,"    bwType=%d\n",tunerParams->bwType);
-    fprintf(stdout,"    ifType=%d\n",tunerParams->ifType);
+    fprintf(stderr,"    rfHz=%lf\n",tunerParams->rfFreq.rfHz);
+    fprintf(stderr,"    bwType=%d\n",tunerParams->bwType);
+    fprintf(stderr,"    ifType=%d\n",tunerParams->ifType);
     sdrplay_api_DecimationT *decimation = &rx_channel->ctrlParams.decimation;
-    fprintf(stdout,"    decimationFactor=%d\n",(int)(decimation->decimationFactor));
-    fprintf(stdout,"    decimation.enable=%d\n",(int)(decimation->enable));
-    fprintf(stdout,"    gain.gRdB=%d\n",tunerParams->gain.gRdB);
-    fprintf(stdout,"    gain.LNAstate=%d\n",(int)(tunerParams->gain.LNAstate));
+    fprintf(stderr,"    decimationFactor=%d\n",(int)(decimation->decimationFactor));
+    fprintf(stderr,"    decimation.enable=%d\n",(int)(decimation->enable));
+    fprintf(stderr,"    gain.gRdB=%d\n",tunerParams->gain.gRdB);
+    fprintf(stderr,"    gain.LNAstate=%d\n",(int)(tunerParams->gain.LNAstate));
     sdrplay_api_AgcT *agc = &rx_channel->ctrlParams.agc;
-    fprintf(stdout,"    agc.enable=%d\n",agc->enable);
-    fprintf(stdout,"    agc.setPoint_dBfs=%d\n",agc->setPoint_dBfs);
-    fprintf(stdout,"    agc.attack_ms=%hd\n",agc->attack_ms);
-    fprintf(stdout,"    agc.decay_ms=%hd\n",agc->decay_ms);
-    fprintf(stdout,"    agc.decay_delay_ms=%hd\n",agc->decay_delay_ms);
-    fprintf(stdout,"    agc.decay_threashold_dB=%hd\n",agc->decay_threshold_dB);
-    fprintf(stdout,"    agc.syncUpdate=%d\n",agc->syncUpdate);
-    fprintf(stdout,"    dcOffset.DCenable=%d\n",(int)(rx_channel->ctrlParams.dcOffset.DCenable));
-    fprintf(stdout,"    dcOffsetTuner.dcCale=%d\n",(int)(tunerParams->dcOffsetTuner.dcCal));
-    fprintf(stdout,"    dcOffsetTuner.speedUp=%d\n",(int)(tunerParams->dcOffsetTuner.speedUp));
-    fprintf(stdout,"    dcOffsetTuner.trackTime=%d\n",(int)(tunerParams->dcOffsetTuner.trackTime));
-    fprintf(stdout,"    dcOffset.IQenable=%d\n",(int)(rx_channel->ctrlParams.dcOffset.IQenable));
+    fprintf(stderr,"    agc.enable=%d\n",agc->enable);
+    fprintf(stderr,"    agc.setPoint_dBfs=%d\n",agc->setPoint_dBfs);
+    fprintf(stderr,"    agc.attack_ms=%hd\n",agc->attack_ms);
+    fprintf(stderr,"    agc.decay_ms=%hd\n",agc->decay_ms);
+    fprintf(stderr,"    agc.decay_delay_ms=%hd\n",agc->decay_delay_ms);
+    fprintf(stderr,"    agc.decay_threashold_dB=%hd\n",agc->decay_threshold_dB);
+    fprintf(stderr,"    agc.syncUpdate=%d\n",agc->syncUpdate);
+    fprintf(stderr,"    dcOffset.DCenable=%d\n",(int)(rx_channel->ctrlParams.dcOffset.DCenable));
+    fprintf(stderr,"    dcOffsetTuner.dcCale=%d\n",(int)(tunerParams->dcOffsetTuner.dcCal));
+    fprintf(stderr,"    dcOffsetTuner.speedUp=%d\n",(int)(tunerParams->dcOffsetTuner.speedUp));
+    fprintf(stderr,"    dcOffsetTuner.trackTime=%d\n",(int)(tunerParams->dcOffsetTuner.trackTime));
+    fprintf(stderr,"    dcOffset.IQenable=%d\n",(int)(rx_channel->ctrlParams.dcOffset.IQenable));
   }
-  fprintf(stdout,"\n");
+  fprintf(stderr,"\n");
   if (sdr->device_params->devParams) {
-    fprintf(stdout,"fsHz=%lf\n",sdr->device_params->devParams->fsFreq.fsHz);
-    fprintf(stdout,"ppm=%lf\n",sdr->device_params->devParams->ppm);
+    fprintf(stderr,"fsHz=%lf\n",sdr->device_params->devParams->fsFreq.fsHz);
+    fprintf(stderr,"ppm=%lf\n",sdr->device_params->devParams->ppm);
   }
-  fprintf(stdout,"\n");
+  fprintf(stderr,"\n");
   if(sdr->device.hwVer == SDRPLAY_RSP2_ID){
-    fprintf(stdout,"antennaSel=%d\n",sdr->rx_channel_params->rsp2TunerParams.antennaSel);
-    fprintf(stdout,"amPortSel=%d\n",sdr->rx_channel_params->rsp2TunerParams.amPortSel);
-    fprintf(stdout,"\n");
+    fprintf(stderr,"antennaSel=%d\n",sdr->rx_channel_params->rsp2TunerParams.antennaSel);
+    fprintf(stderr,"amPortSel=%d\n",sdr->rx_channel_params->rsp2TunerParams.amPortSel);
+    fprintf(stderr,"\n");
   } else if(sdr->device.hwVer == SDRPLAY_RSPduo_ID){
-    fprintf(stdout,"tuner=%d\n",sdr->device.tuner);
-    fprintf(stdout,"tuner1AmPortSel=%d\n",sdr->rx_channel_params->rspDuoTunerParams.tuner1AmPortSel);
-    fprintf(stdout,"\n");
+    fprintf(stderr,"tuner=%d\n",sdr->device.tuner);
+    fprintf(stderr,"tuner1AmPortSel=%d\n",sdr->rx_channel_params->rspDuoTunerParams.tuner1AmPortSel);
+    fprintf(stderr,"\n");
   } else if(sdr->device.hwVer == SDRPLAY_RSPdx_ID){
-    fprintf(stdout,"antennaSel=%d\n",sdr->device_params->devParams->rspDxParams.antennaSel);
-    fprintf(stdout,"\n");
+    fprintf(stderr,"antennaSel=%d\n",sdr->device_params->devParams->rspDxParams.antennaSel);
+    fprintf(stderr,"\n");
   } else if(sdr->device.hwVer == SDRPLAY_RSPdxR2_ID){
-    fprintf(stdout,"antennaSel=%d\n",sdr->device_params->devParams->rspDxParams.antennaSel);
-    fprintf(stdout,"\n");
+    fprintf(stderr,"antennaSel=%d\n",sdr->device_params->devParams->rspDxParams.antennaSel);
+    fprintf(stderr,"\n");
   }
-  fprintf(stdout,"transferMode=%d\n",sdr->device_params->devParams->mode);
-  fprintf(stdout,"\n");
+  fprintf(stderr,"transferMode=%d\n",sdr->device_params->devParams->mode);
+  fprintf(stderr,"\n");
   return;
 }

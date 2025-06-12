@@ -87,7 +87,7 @@ void *radio_status(void *arg){
 	  // Channel doesn't yet exist. Create, execute the rest of this command here, and then start the new demod
 	  if((chan = create_chan(ssrc)) == NULL){ // possible race here?
 	    // Creation failed, e.g., no output stream
-	    fprintf(stdout,"Dynamic create of ssrc %'u failed; is 'data =' set in [global]?\n",ssrc);
+	    fprintf(stderr,"Dynamic create of ssrc %'u failed; is 'data =' set in [global]?\n",ssrc);
 	  } else {
 	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	    decode_radio_commands(chan,buffer+1,length-1);
@@ -96,7 +96,7 @@ void *radio_status(void *arg){
 	    chan->status.global_timer = 0; // Just sent one
 	    start_demod(chan);
 	    if(Verbose)
-	      fprintf(stdout,"dynamically started ssrc %'u\n",ssrc);
+	      fprintf(stderr,"dynamically started ssrc %'u\n",ssrc);
 	  }
 	}
       }
@@ -192,7 +192,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	double const f = fabs(decode_double(cp,optlen));
 	if(isfinite(f)){
 	  if(Verbose > 1)
-	    fprintf(stdout,"set ssrc %u freq = %'.3lf\n",ssrc,f);
+	    fprintf(stderr,"set ssrc %u freq = %'.3lf\n",ssrc,f);
 
 	  set_freq(chan,f);
 	}
@@ -277,10 +277,10 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  float const old_shift = chan->tune.shift;
 
 	  if(Verbose > 1)
-	    fprintf(stdout,"command loadpreset(ssrc=%u) mode=%s\n",ssrc,chan->preset);
+	    fprintf(stderr,"command loadpreset(ssrc=%u) mode=%s\n",ssrc,chan->preset);
 	  if(loadpreset(chan,Preset_table,chan->preset) != 0){
 	    if(Verbose)
-	      fprintf(stdout,"command loadpreset(ssrc=%u) mode=%sfailed!\n",ssrc,chan->preset);
+	      fprintf(stderr,"command loadpreset(ssrc=%u) mode=%sfailed!\n",ssrc,chan->preset);
 	    break;
 	  }
 	  if(old_shift != chan->tune.shift)
@@ -290,7 +290,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 
 	  if(chan->demod_type != old_type || chan->output.samprate != old_samprate){
 	    if(Verbose > 1)
-	      fprintf(stdout,"demod %d -> %d, samprate %d -> %d\n",old_type,chan->demod_type,old_samprate,chan->output.samprate);
+	      fprintf(stderr,"demod %d -> %d, samprate %d -> %d\n",old_type,chan->demod_type,old_samprate,chan->output.samprate);
 	    restart_needed = true; // chan changed, ask for a restart
 	  }
 	}
@@ -301,7 +301,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	enum demod_type const i = decode_int(cp,optlen);
 	if(i >= 0 && i < N_DEMOD && i != chan->demod_type){
 	  if(Verbose > 1)
-	    fprintf(stdout,"Demod change %d -> %d\n",chan->demod_type,i);
+	    fprintf(stderr,"Demod change %d -> %d\n",chan->demod_type,i);
 	  chan->demod_type = i;
 	  restart_needed = true;
 	}
@@ -410,7 +410,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	float const x = decode_float(cp,optlen);
 	if(isfinite(x) && x != chan->spectrum.bin_bw){
 	  if(Verbose > 1)
-	    fprintf(stdout,"bin bw %f -> %f\n",chan->spectrum.bin_bw,x);
+	    fprintf(stderr,"bin bw %f -> %f\n",chan->spectrum.bin_bw,x);
 	  chan->spectrum.bin_bw = x;
 	}
       }
@@ -420,7 +420,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	int const x = decode_int(cp,optlen);
 	if(x > 0 && x != chan->spectrum.bin_count){
 	  if(Verbose > 1)
-	    fprintf(stdout,"bin count %d -> %d\n",chan->spectrum.bin_count,x);
+	    fprintf(stderr,"bin count %d -> %d\n",chan->spectrum.bin_count,x);
 	  chan->spectrum.bin_count = x;
 	}
       }
@@ -516,7 +516,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 
   if(restart_needed){
     if(Verbose > 1)
-      fprintf(stdout,"restarting thread for ssrc %u\n",ssrc);
+      fprintf(stderr,"restarting thread for ssrc %u\n",ssrc);
     return true;
   }
   if(new_filter_needed){

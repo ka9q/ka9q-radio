@@ -156,7 +156,7 @@ int main(int argc,char * const argv[]){
       break;
     case 'I':
       if(Nfds == MAX_MCAST){
-	fprintf(stdout,"Too many multicast addresses; max %d\n",MAX_MCAST);
+	fprintf(stderr,"Too many multicast addresses; max %d\n",MAX_MCAST);
       } else 
 	Mcast_address_text[Nfds++] = optarg;
       break;
@@ -173,18 +173,18 @@ int main(int argc,char * const argv[]){
       break;
     }
   }
-  setlinebuf(stdout); // see results quickly when grepping
+  setlinebuf(stderr); // see results quickly when grepping
 
   // Also accept groups without -I option
   for(int i=optind; i < argc; i++){
     if(Nfds == MAX_MCAST){
-      fprintf(stdout,"Too many multicast addresses; max %d\n",MAX_MCAST);
+      fprintf(stderr,"Too many multicast addresses; max %d\n",MAX_MCAST);
     } else 
       Mcast_address_text[Nfds++] = argv[i];
   }
   // Set up multicast
   if(Nfds == 0){
-    fprintf(stdout,"Must specify PCM source group(s)\n");
+    fprintf(stderr,"Must specify PCM source group(s)\n");
     exit(1);
   }
 
@@ -197,7 +197,7 @@ int main(int argc,char * const argv[]){
   for(int i=0;i<Nfds;i++){
     input_fd[i] = setup_mcast_in(NULL,NULL,Mcast_address_text[i],NULL,0,0);
     if(input_fd[i] == -1){
-      fprintf(stdout,"Can't set up input %s\n",Mcast_address_text[i]);
+      fprintf(stderr,"Can't set up input %s\n",Mcast_address_text[i]);
       continue;
     }
     if(input_fd[i] > max_fd)
@@ -258,10 +258,10 @@ int main(int argc,char * const argv[]){
       if(sp == NULL){
 	sp = create_session(&sender,rtp_hdr.ssrc,rtp_hdr.seq,rtp_hdr.timestamp);
 	if(sp == NULL){
-	  fprintf(stdout,"No room!!\n");
+	  fprintf(stderr,"No room!!\n");
 	  continue;
 	}
-	fprintf(stdout,"new ssrc %u, samprate %'d Hz\n",rtp_hdr.ssrc,samprate);
+	fprintf(stderr,"new ssrc %u, samprate %'d Hz\n",rtp_hdr.ssrc,samprate);
 	sp->type = rtp_hdr.type;
 	sp->samprate = samprate;
 

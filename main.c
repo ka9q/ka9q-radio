@@ -187,10 +187,10 @@ int main(int argc,char *argv[]){
 
   VERSION();
 #ifndef NDEBUG
-  fprintf(stdout,"Assertion checking enabled, execution will be slower\n");
+  fprintf(stderr,"Assertion checking enabled, execution will be slower\n");
 #endif
 
-  setlinebuf(stdout);
+  setlinebuf(stderr);
   Starttime = gps_time_ns();
 
   struct timespec start_realtime;
@@ -223,7 +223,7 @@ int main(int argc,char *argv[]){
       Name = optarg;
       break;
     default: // including 'h'
-      fprintf(stdout,"Unknown command line option %c\n",c);
+      fprintf(stderr,"Unknown command line option %c\n",c);
       fprintf(stderr,"Usage: %s [-I] [-N name] [-h] [-p fftw_plan_time_limit] [-v [-v] ...] <CONFIG_FILE>\n", argv[0]);
       exit(EX_USAGE);
     }
@@ -238,7 +238,7 @@ int main(int argc,char *argv[]){
   signal(SIGUSR2,verbosity);
 
   if(argc <= optind){
-    fprintf(stdout,"Configtable file missing\n");
+    fprintf(stderr,"Configtable file missing\n");
     exit(EX_NOINPUT);
   }
   Config_file = argv[optind];
@@ -249,12 +249,12 @@ int main(int argc,char *argv[]){
 
   int const n = loadconfig(Config_file);
   if(n < 0){
-    fprintf(stdout,"Can't load config file %s\n",Config_file);
+    fprintf(stderr,"Can't load config file %s\n",Config_file);
     exit(EX_NOINPUT);
   }
-  fprintf(stdout,"%d total demodulators started\n",n);
+  fprintf(stderr,"%d total demodulators started\n",n);
   if(Ctl_fd == -1 && n == 0){
-    fprintf(stdout,"Warning: no control channel and no static demodulators, radiod won't do anything\n");
+    fprintf(stderr,"Warning: no control channel and no static demodulators, radiod won't do anything\n");
   }
 
   // Measure CPU usage
@@ -285,7 +285,7 @@ int main(int argc,char *argv[]){
 
       last_realtime = new_realtime;
       last_cputime = new_cputime;
-      fprintf(stdout,"CPU usage: %.1lf%% since start, %.1lf%% in last %.1lf sec\n",
+      fprintf(stderr,"CPU usage: %.1lf%% since start, %.1lf%% in last %.1lf sec\n",
 	      total_percent, period_percent,period_real);
     }
   }
@@ -324,13 +324,13 @@ static int loadconfig(char const *file){
     // Otherwise append ".d" and see if that's a directory
     snprintf(dname,sizeof(dname),"%s.d",file);
     if(stat(dname,&statbuf) == 0 && (statbuf.st_mode & S_IFMT) == S_IFDIR){
-      fprintf(stdout,"Loading config directory %s\n",dname);
+      fprintf(stderr,"Loading config directory %s\n",dname);
       dirp = opendir(dname);
     }
   }
   if(Configtable == NULL){
     if(dirp == NULL){
-      fprintf(stdout,"%s Not a valid config file/directory\n",file);
+      fprintf(stderr,"%s Not a valid config file/directory\n",file);
       return -1; // give up
     }
     // Read and sort list of foo.d/*.conf files, merge into temp file
@@ -410,7 +410,7 @@ static int loadconfig(char const *file){
   if(Configtable == NULL){
     return -1;
   }
-  config_validate_section(stdout,Configtable,GLOBAL,Global_keys,Channel_keys);
+  config_validate_section(stderr,Configtable,GLOBAL,Global_keys,Channel_keys);
 
   // Process [global] section applying to all demodulator blocks
   Description = config_getstring(Configtable,GLOBAL,"description",NULL);
@@ -450,11 +450,11 @@ static int loadconfig(char const *file){
     p = config_getstring(Configtable,GLOBAL,"mode-file","presets.conf");
     p = config_getstring(Configtable,GLOBAL,"presets-file",p);
     dist_path(Preset_file,sizeof(Preset_file),p);
-    fprintf(stdout,"Loading presets file %s\n",Preset_file);
+    fprintf(stderr,"Loading presets file %s\n",Preset_file);
     Preset_table = iniparser_load(Preset_file); // Kept open for duration of program
-    config_validate(stdout,Preset_table,Channel_keys,NULL);
+    config_validate(stderr,Preset_table,Channel_keys,NULL);
     if(Preset_table == NULL){
-      fprintf(stdout,"Can't load preset file %s\n",Preset_file);
+      fprintf(stderr,"Can't load preset file %s\n",Preset_file);
       exit(EX_UNAVAILABLE); // Can't really continue without fixing
     }
   }
@@ -479,7 +479,7 @@ static int loadconfig(char const *file){
   const char *hardware = config_getstring(Configtable,GLOBAL,"hardware",NULL);
   if(hardware == NULL){
     // 'hardware =' now required, no default
-    fprintf(stdout,"'hardware = [sectionname]' now required to specify front end configuration\n");
+    fprintf(stderr,"'hardware = [sectionname]' now required to specify front end configuration\n");
     exit(EX_USAGE);
   }
   // Look for specified hardware section
@@ -496,7 +496,7 @@ static int loadconfig(char const *file){
       }
     }
     if(sect == nsect){
-      fprintf(stdout,"no hardware section [%s] found, please create it\n",hardware);
+      fprintf(stderr,"no hardware section [%s] found, please create it\n",hardware);
       exit(EX_USAGE);
     }
   }
@@ -534,12 +534,12 @@ static int loadconfig(char const *file){
   char const * preset = config_getstring(Configtable,GLOBAL,"mode",p); // Must be specified to create a dynamic channel
   if(preset != NULL){
     if(loadpreset(&Template,Preset_table,preset) != 0)
-      fprintf(stdout,"warning: loadpreset(%s,%s) in [global]\n",Preset_file,preset);
+      fprintf(stderr,"warning: loadpreset(%s,%s) in [global]\n",Preset_file,preset);
     strlcpy(Template.preset,preset,sizeof(Template.preset));
 
     loadpreset(&Template,Configtable,GLOBAL); // Overwrite with other entries from this section, without overwriting those
   } else {
-    fprintf(stdout,"No default mode for template\n");
+    fprintf(stderr,"No default mode for template\n");
   }
 
   /* The ttl in the [global] section is used for any dynamic
@@ -580,7 +580,7 @@ static int loadconfig(char const *file){
 
     Output_fd = output_mcast(&Template.output.dest_socket,Iface,ttl,IP_tos);
     if(Output_fd < 0){
-      fprintf(stdout,"can't create output socket for TTL=%d: %s\n",ttl,strerror(errno));
+      fprintf(stderr,"can't create output socket for TTL=%d: %s\n",ttl,strerror(errno));
       exit(EX_NOHOST); // let systemd restart us
     }
   }
@@ -588,13 +588,13 @@ static int loadconfig(char const *file){
   // Secondary output socket with ttl = 0
   Output_fd0 = output_mcast(&Template.output.dest_socket,Iface,0,IP_tos);
   if(Output_fd0 < 0){
-    fprintf(stdout,"can't create output socket for TTL=0: %s\n",strerror(errno));
+    fprintf(stderr,"can't create output socket for TTL=0: %s\n",strerror(errno));
     exit(EX_NOHOST); // let systemd restart us
   }
 
   // Set up status/command stream, global for all receiver channels
   if(0 == strcmp(Metadata_dest_string,Data)){
-    fprintf(stdout,"Duplicate status/data stream names: data=%s, status=%s\n",Data,Metadata_dest_string);
+    fprintf(stderr,"Duplicate status/data stream names: data=%s, status=%s\n",Data,Metadata_dest_string);
     exit(EX_USAGE);
   }
   // Look quickly (2 tries max) to see if it's already in the DNS
@@ -618,7 +618,7 @@ static int loadconfig(char const *file){
   // Same remote socket as status
   Ctl_fd = listen_mcast(NULL,&Metadata_dest_socket,Iface);
   if(Ctl_fd < 0){
-    fprintf(stdout,"can't listen for commands from %s: %s; no control channel is set\n",Metadata_dest_string,strerror(errno));
+    fprintf(stderr,"can't listen for commands from %s: %s; no control channel is set\n",Metadata_dest_string,strerror(errno));
   } else {
     if(Ctl_fd >= 3)
       pthread_create(&Status_thread,NULL,radio_status,NULL);
@@ -658,14 +658,14 @@ void *process_section(void *p){
   if(sname == NULL)
     return NULL;
 
-  config_validate_section(stdout,Configtable,sname,Channel_keys,NULL);
+  config_validate_section(stderr,Configtable,sname,Channel_keys,NULL);
 
   // fall back to setting in [global] if parameter not specified in individual section
   // Set parameters even when unused for the current demodulator in case the demod is changed later
   char const * preset = config2_getstring(Configtable,Configtable,GLOBAL,sname,"mode",NULL);
   preset = config2_getstring(Configtable,Configtable,GLOBAL,sname,"preset",preset);
   if(preset == NULL || strlen(preset) == 0)
-    fprintf(stdout,"[%s] preset/mode not specified, all parameters must be explicitly set\n",sname);
+    fprintf(stderr,"[%s] preset/mode not specified, all parameters must be explicitly set\n",sname);
 
   // Override [global] settings with section settings
   char *data = NULL;
@@ -686,7 +686,7 @@ void *process_section(void *p){
   loadpreset(&chan_template,Configtable,GLOBAL); // [global] section (#3)
 
   if(preset != NULL && loadpreset(&chan_template,Preset_table,preset) != 0) // preset database entry (#2)
-    fprintf(stdout,"[%s] loadpreset(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Preset_file,preset);
+    fprintf(stderr,"[%s] loadpreset(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Preset_file,preset);
 
   strlcpy(chan_template.preset,preset,sizeof chan_template.preset);
   loadpreset(&chan_template,Configtable,sname); // this section's config (#1)
@@ -763,7 +763,7 @@ void *process_section(void *p){
 
       double const f = parse_frequency(tok,true);
       if(f < 0){
-	fprintf(stdout,"[%s] can't parse frequency %s\n",sname,tok);
+	fprintf(stderr,"[%s] can't parse frequency %s\n",sname,tok);
 	continue;
       }
       uint32_t ssrc = 0;
@@ -787,7 +787,7 @@ void *process_section(void *p){
 	  break;
       }
       if(chan == NULL){
-	fprintf(stdout,"Can't allocate requested ssrc in range %u-%u\n",ssrc-max_collisions,ssrc);
+	fprintf(stderr,"Can't allocate requested ssrc in range %u-%u\n",ssrc-max_collisions,ssrc);
 	continue;
       }
       // Initialize from template, set frequency and start
@@ -821,7 +821,7 @@ void *process_section(void *p){
     // Done processing frequency list(s) and creating chans
     FREE(freq_list);
   }
-  fprintf(stdout,"[%s] %d channels started\n",sname,nchans);
+  fprintf(stderr,"[%s] %d channels started\n",sname,nchans);
   return NULL;
 }
 
@@ -881,29 +881,29 @@ static int setup_hardware(char const *sname){
     snprintf(defname,sizeof(defname),"%s/%s.so",SODIR,device);
     char const *dlname = config_getstring(Configtable,device,"library",defname);
     if(dlname == NULL){
-      fprintf(stdout,"No dynamic library specified for device %s\n",device);
+      fprintf(stderr,"No dynamic library specified for device %s\n",device);
       return -1;
     }
-    fprintf(stdout,"Dynamically loading %s hardware driver from %s\n",device,dlname);
+    fprintf(stderr,"Dynamically loading %s hardware driver from %s\n",device,dlname);
     char *error;
     Dl_handle = dlopen(dlname,RTLD_GLOBAL|RTLD_NOW);
     if(Dl_handle == NULL){
       error = dlerror();
-      fprintf(stdout,"Error loading %s to handle device %s: %s\n",dlname,device,error);
+      fprintf(stderr,"Error loading %s to handle device %s: %s\n",dlname,device,error);
       return -1;
     }
     char symname[128];
     snprintf(symname,sizeof(symname),"%s_setup",device);
     Frontend.setup = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
-      fprintf(stdout,"error: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
+      fprintf(stderr,"error: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
       dlclose(Dl_handle);
       return -1;
     }
     snprintf(symname,sizeof(symname),"%s_startup",device);
     Frontend.start = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
-      fprintf(stdout,"error: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
+      fprintf(stderr,"error: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
       dlclose(Dl_handle);
       return -1;
     }
@@ -911,7 +911,7 @@ static int setup_hardware(char const *sname){
     Frontend.tune = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
       // Not fatal, but no tuning possible
-      fprintf(stdout,"warning: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
+      fprintf(stderr,"warning: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
     }
     // No error checking on these, they're optional
     snprintf(symname,sizeof(symname),"%s_gain",device);
@@ -922,7 +922,7 @@ static int setup_hardware(char const *sname){
 
   int r = (*Frontend.setup)(&Frontend,Configtable,sname);
   if(r != 0){
-    fprintf(stdout,"device setup returned %d\n",r);
+    fprintf(stderr,"device setup returned %d\n",r);
     return r;
   }
 
@@ -936,7 +936,7 @@ static int setup_hardware(char const *sname){
   double const eL = Frontend.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
   Frontend.L = lround(eL);
   if(Frontend.L != eL)
-    fprintf(stdout,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
+    fprintf(stderr,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
 	    Blocktime,Frontend.samprate,eL-Frontend.L);
 
   Frontend.M = Frontend.L / (Overlap - 1) + 1;
@@ -948,11 +948,11 @@ static int setup_hardware(char const *sname){
   if(Frontend.start){
     int r = (*Frontend.start)(&Frontend);
     if(r != 0)
-      fprintf(stdout,"Front end start returned %d\n",r);
+      fprintf(stderr,"Front end start returned %d\n",r);
 
     return r;
   } else {
-    fprintf(stdout,"No front end start routine?\n");
+    fprintf(stderr,"No front end start routine?\n");
     return -1;
   }
 }

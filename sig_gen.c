@@ -88,7 +88,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
     if(strcasecmp(device,"sig_gen") != 0)
       return -1; // Not for us
   }
-  config_validate_section(stdout,dictionary,section,Sig_gen_keys,NULL);
+  config_validate_section(stderr,dictionary,section,Sig_gen_keys,NULL);
 
   // Cross-link generic and hardware-specific control structures
   struct sdrstate * const sdr = calloc(1,sizeof(*sdr));
@@ -165,7 +165,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   else
     sdr->noise = dB2voltage(sdr->noise);
 
-  fprintf(stdout,"Sig gen %s, samprate %'d, %s, LO freq %'.3f Hz, carrier %'.3lf Hz, amplitude %.1f dBFS, modulation %s, source %s, noise %'.1lf dBFS\n",
+  fprintf(stderr,"Sig gen %s, samprate %'d, %s, LO freq %'.3f Hz, carrier %'.3lf Hz, amplitude %.1f dBFS, modulation %s, source %s, noise %'.1lf dBFS\n",
 	  frontend->description, frontend->samprate, frontend->isreal ? "real":"complex",frontend->frequency,
 	  sdr->carrier,
 	  voltage2dB(sdr->amplitude),
@@ -186,7 +186,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
       for(int i = 0; i < Random_samples; i++)
 	Complex_noise[i] = complex_gaussian() * sdr->noise * M_SQRT1_2; // Power in both I and Q
     }
-    fprintf(stdout,"Noise generated\n");
+    fprintf(stderr,"Noise generated\n");
   }
   return 0;
 }
@@ -333,7 +333,7 @@ int sig_gen_startup(struct frontend *frontend){
   // Start processing A/D data
   sdr->scale = scale_AD(frontend);
   pthread_create(&sdr->proc_thread,NULL,proc_sig_gen,sdr);
-  fprintf(stdout,"signal generator running\n");
+  fprintf(stderr,"signal generator running\n");
   return 0;
 }
 

@@ -88,7 +88,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
     if(strcasecmp(device,"hackrf") != 0)
       return -1; // Not for us
   }
-  config_validate_section(stdout,dictionary,section,HackRF_keys,NULL);
+  config_validate_section(stderr,dictionary,section,HackRF_keys,NULL);
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
   assert(sdr != NULL);
   // Cross-link generic and hardware-specific control structures
@@ -100,7 +100,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
 
   int ret;
   if((ret = hackrf_init()) != HACKRF_SUCCESS){
-    fprintf(stdout,"hackrf_init() failed: %s\n",hackrf_error_name(ret));
+    fprintf(stderr,"hackrf_init() failed: %s\n",hackrf_error_name(ret));
     hackrf_exit(); // Necessary?
     return -1;
   }
@@ -114,9 +114,9 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
   // Enumerate devices
   hackrf_device_list_t *dlist = hackrf_device_list();
 
-  fprintf(stdout,"Found %d HackRF device(s): ",dlist->devicecount);
+  fprintf(stderr,"Found %d HackRF device(s): ",dlist->devicecount);
   for(int i=0; i < dlist->devicecount; i++){
-    fprintf(stdout,"%d %s\n",i,dlist->serial_numbers[i]);
+    fprintf(stderr,"%d %s\n",i,dlist->serial_numbers[i]);
   }
 
   int index = config_getint(dictionary, section, "index", 0);
@@ -127,13 +127,13 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
   }
 #endif
   if((ret = hackrf_device_list_open(dlist,index,&sdr->device)) != HACKRF_SUCCESS){
-    fprintf(stdout,"hackrf_open(%d) failed: %s\n",index,hackrf_error_name(ret));
+    fprintf(stderr,"hackrf_open(%d) failed: %s\n",index,hackrf_error_name(ret));
     hackrf_exit();
     return -1;
   }
   hackrf_device_list_free(dlist); dlist = NULL;
   if(sdr->device == NULL){
-    fprintf(stdout,"hackrf_open(%d) returned NULL\n",index);
+    fprintf(stderr,"hackrf_open(%d) returned NULL\n",index);
     hackrf_exit();
     return -1;
   }
@@ -146,7 +146,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
   frontend->samprate = samprate;
   ret = hackrf_set_sample_rate(sdr->device,(uint32_t)samprate);
   if(ret != HACKRF_SUCCESS){
-    fprintf(stdout,"hackrf_set_sample_rate(%lf): %s\n",samprate,hackrf_error_name(ret));
+    fprintf(stderr,"hackrf_set_sample_rate(%lf): %s\n",samprate,hackrf_error_name(ret));
     hackrf_exit();
     return -1;
   }
@@ -154,7 +154,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
   uint32_t bw = hackrf_compute_baseband_filter_bw_round_down_lt(samprate);
   ret = hackrf_set_baseband_filter_bandwidth(sdr->device,bw);
   if(ret != HACKRF_SUCCESS){
-    fprintf(stdout,"hackrf_set_baseband_filter_bandwidth(%ud): %s\n",bw,hackrf_error_name(ret));
+    fprintf(stderr,"hackrf_set_baseband_filter_bandwidth(%ud): %s\n",bw,hackrf_error_name(ret));
     hackrf_exit();
     return -1;
   }
@@ -175,7 +175,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
   frontend->lna_gain = sdr->lna_gain;
   ret = hackrf_set_antenna_enable(sdr->device,sdr->lna_gain ? true : false);
   if(ret != HACKRF_SUCCESS){
-    fprintf(stdout,"hackrf_set_antenna_enable(%d): %s\n",sdr->lna_gain,hackrf_error_name(ret));
+    fprintf(stderr,"hackrf_set_antenna_enable(%d): %s\n",sdr->lna_gain,hackrf_error_name(ret));
     hackrf_exit();
     return -1;
   }
@@ -187,10 +187,10 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
     sdr->mixer_gain = 24;
       
   frontend->mixer_gain = sdr->mixer_gain;
-  fprintf(stdout,"set mixer gain %d\n",frontend->mixer_gain);
+  fprintf(stderr,"set mixer gain %d\n",frontend->mixer_gain);
   ret = hackrf_set_lna_gain(sdr->device,sdr->mixer_gain);
   if(ret != HACKRF_SUCCESS){
-    fprintf(stdout,"hackrf_set_lna_gain(%d): %s\n",sdr->mixer_gain,hackrf_error_name(ret));
+    fprintf(stderr,"hackrf_set_lna_gain(%d): %s\n",sdr->mixer_gain,hackrf_error_name(ret));
     hackrf_exit();
     return -1;
   }
@@ -200,10 +200,10 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
   else
     sdr->if_gain = 20;
   frontend->if_gain = sdr->if_gain;
-  fprintf(stdout,"set if gain %d\n",frontend->if_gain);
+  fprintf(stderr,"set if gain %d\n",frontend->if_gain);
   ret = hackrf_set_vga_gain(sdr->device,sdr->if_gain);
   if(ret != HACKRF_SUCCESS){
-    fprintf(stdout,"hackrf_set_vga_gain(%d): %s\n",sdr->if_gain,hackrf_error_name(ret));
+    fprintf(stderr,"hackrf_set_vga_gain(%d): %s\n",sdr->if_gain,hackrf_error_name(ret));
     hackrf_exit();
     return -1;
   }
@@ -221,7 +221,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
     uint64_t intfreq = frequency;
     ret = hackrf_set_freq(sdr->device,intfreq);
     if(ret != HACKRF_SUCCESS){
-      fprintf(stdout,"hackrf_set_freq(%llu): %s\n",(long long unsigned)intfreq,hackrf_error_name(ret));
+      fprintf(stderr,"hackrf_set_freq(%llu): %s\n",(long long unsigned)intfreq,hackrf_error_name(ret));
       hackrf_exit();
       return -1;
     }
@@ -232,7 +232,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
   sdr->gain_i = 1;
   sdr->gain_q = 1;
 
-  fprintf(stdout,"device %d; A/D sample rate %'lf Hz freq %'.1f Hz lna gain %d mix gain %d if gain %d agc %s\n",
+  fprintf(stderr,"device %d; A/D sample rate %'lf Hz freq %'.1f Hz lna gain %d mix gain %d if gain %d agc %s\n",
 	  index,samprate,frequency,
 	  frontend->lna_gain,
 	  frontend->mixer_gain,
@@ -428,7 +428,7 @@ static void *hackrf_agc(void *arg){
     frontend->rf_atten = 0;
     sdr->scale = scale_AD(frontend);
 #if 0
-    fprintf(stdout,"hackrf agc gains: %d %d %d %lf\n",frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,
+    fprintf(stderr,"hackrf agc gains: %d %d %d %lf\n",frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,
 	    frontend->rf_gain);
 #endif
   }

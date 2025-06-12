@@ -103,7 +103,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     if(strcasecmp(device,"rtlsdr") != 0)
       return -1; // Not for us
   }
-  config_validate_section(stdout,dictionary,section,Rtlsdr_keys,NULL);
+  config_validate_section(stderr,dictionary,section,Rtlsdr_keys,NULL);
   sdr->dev = -1;
   {
     char const *p = config_getstring(dictionary,section,"description",Description ? Description : "rtl-sdr");
@@ -115,7 +115,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   {
     unsigned const device_count = rtlsdr_get_device_count();
     if(device_count < 1){
-      fprintf(stdout,"No RTL-SDR devices\n");
+      fprintf(stderr,"No RTL-SDR devices\n");
       return -1;
     }
     struct {
@@ -125,10 +125,10 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     } devices[device_count];
 
     // List all devices
-    fprintf(stdout,"Found %d RTL-SDR device%s:\n",device_count,device_count > 1 ? "s":"");
+    fprintf(stderr,"Found %d RTL-SDR device%s:\n",device_count,device_count > 1 ? "s":"");
     for(unsigned int i=0; i < device_count; i++){
       rtlsdr_get_device_usb_strings(i,devices[i].manufacturer,devices[i].product,devices[i].serial);
-      fprintf(stdout,"#%d (%s): %s %s %s\n",i,rtlsdr_get_device_name(i),
+      fprintf(stderr,"#%d (%s): %s %s %s\n",i,rtlsdr_get_device_name(i),
 	      devices[i].manufacturer,devices[i].product,devices[i].serial);
     }
     char const * const p = config_getstring(dictionary,section,"serial",NULL);
@@ -144,16 +144,16 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
       }
     }
     if(sdr->dev < 0){
-      fprintf(stdout,"RTL-SDR serial %s not found\n",p);
+      fprintf(stderr,"RTL-SDR serial %s not found\n",p);
       return -1;
     }
     strlcpy(sdr->serial,devices[sdr->dev].serial,sizeof(sdr->serial));
-    fprintf(stdout,"Using RTL-SDR #%d, serial %s\n",sdr->dev,sdr->serial);
+    fprintf(stderr,"Using RTL-SDR #%d, serial %s\n",sdr->dev,sdr->serial);
   }
   {
     int const ret = rtlsdr_open(&sdr->device,sdr->dev);
     if(ret != 0){
-      fprintf(stdout,"rtlsdr_open(%d) failed: %d\n",sdr->dev,ret);
+      fprintf(stderr,"rtlsdr_open(%d) failed: %d\n",sdr->dev,ret);
       return -1;
     }
   }
@@ -165,12 +165,12 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     uint32_t rtl_freq = 0,tuner_freq = 0;
     int const ret = rtlsdr_get_xtal_freq(sdr->device,&rtl_freq,&tuner_freq);
     if(ret != 0)
-      fprintf(stdout,"rtlsdr_get_xtal_freq failed\n");
-    fprintf(stdout,"RTL freq %'u, tuner freq %'u, tuner type %'d, tuner gains",(unsigned)rtl_freq,(unsigned)tuner_freq,
+      fprintf(stderr,"rtlsdr_get_xtal_freq failed\n");
+    fprintf(stderr,"RTL freq %'u, tuner freq %'u, tuner type %'d, tuner gains",(unsigned)rtl_freq,(unsigned)tuner_freq,
 	    rtlsdr_get_tuner_type(sdr->device));
     for(int i=0; i < ngains; i++)
-      fprintf(stdout," %'d",gains[i]);
-    fprintf(stdout,"\n");
+      fprintf(stderr," %'d",gains[i]);
+    fprintf(stderr,"\n");
 
   }
   rtlsdr_set_direct_sampling(sdr->device, 0); // That's for HF
@@ -197,18 +197,18 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   {
     int ret = rtlsdr_set_bias_tee(sdr->device,sdr->bias);
     if(ret != 0){
-      fprintf(stdout,"rtlsdr_set_bias_tee(%d) failed\n",sdr->bias);
+      fprintf(stderr,"rtlsdr_set_bias_tee(%d) failed\n",sdr->bias);
     }
   }
   frontend->samprate = config_getint(dictionary,section,"samprate",DEFAULT_SAMPRATE);
   if(frontend->samprate <= 0){
-    fprintf(stdout,"Invalid sample rate, reverting to default\n");
+    fprintf(stderr,"Invalid sample rate, reverting to default\n");
     frontend->samprate = DEFAULT_SAMPRATE;
   }
   {
     int ret = rtlsdr_set_sample_rate(sdr->device,(uint32_t)frontend->samprate);
     if(ret != 0){
-      fprintf(stdout,"rtlsdr_set_sample_rate(%d) failed\n",frontend->samprate);
+      fprintf(stderr,"rtlsdr_set_sample_rate(%d) failed\n",frontend->samprate);
     }
   }
 
@@ -225,7 +225,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   }
 
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
-  fprintf(stdout,"%s, samprate %'d Hz, agc %d, gain %d, bias %d, init freq %'.3lf Hz, calibrate %.3g\n",
+  fprintf(stderr,"%s, samprate %'d Hz, agc %d, gain %d, bias %d, init freq %'.3lf Hz, calibrate %.3g\n",
 	  frontend->description,frontend->samprate,sdr->agc,sdr->gain,sdr->bias,init_frequency,
 	  frontend->calibrate);
 
@@ -257,7 +257,7 @@ int rtlsdr_startup(struct frontend * const frontend){
   struct sdr * const sdr = frontend->context;
   sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
   pthread_create(&sdr->read_thread,NULL,rtlsdr_read_thread,sdr);
-  fprintf(stdout,"rtlsdr thread running\n");
+  fprintf(stderr,"rtlsdr thread running\n");
   return 0;
 }
 

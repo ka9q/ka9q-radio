@@ -100,7 +100,7 @@ int demod_spectrum(void *arg){
 	binsperbin = bin_bw / fe_fft_bin_spacing;
 	input_bins = ceilf(binsperbin * bin_count);
 	if(Verbose > 1)
-	  fprintf(stdout,"spectrum %d: freq %'lf bin_bw %'f binsperbin %'.1f bin_count %'d\n",chan->output.rtp.ssrc,chan->tune.freq,bin_bw,binsperbin,bin_count);
+	  fprintf(stderr,"spectrum %d: freq %'lf bin_bw %'f binsperbin %'.1f bin_count %'d\n",chan->output.rtp.ssrc,chan->tune.freq,bin_bw,binsperbin,bin_count);
 
 	chan->filter.max_IF = (bin_count * bin_bw)/2;
 	chan->filter.min_IF = -chan->filter.max_IF;
@@ -112,7 +112,7 @@ int demod_spectrum(void *arg){
 	if(chan->filter.out.master->in_type == REAL)
 	  gain *= 2;               // we only see one side of the spectrum for real inputs
 #if SPECTRUM_DEBUG
-	fprintf(stdout,"direct mode binsperbin %'.1f bin_bw %.1f bin_count %d gain %.1f dB\n",
+	fprintf(stderr,"direct mode binsperbin %'.1f bin_bw %.1f bin_count %d gain %.1f dB\n",
 		binsperbin,bin_bw,bin_count,power2dB(gain));
 #endif
       }
@@ -208,7 +208,7 @@ int demod_spectrum(void *arg){
 	old_bin_count = bin_count;
 
 	if(Verbose > 1)
-	  fprintf(stdout,"spectrum %d: freq %'lf bin_bw %'f bin_count %'d\n",chan->output.rtp.ssrc,chan->tune.freq,bin_bw,bin_count);
+	  fprintf(stderr,"spectrum %d: freq %'lf bin_bw %'f bin_count %'d\n",chan->output.rtp.ssrc,chan->tune.freq,bin_bw,bin_count);
 
 	delete_filter_output(&chan->filter.out);
 	if(plan != NULL)
@@ -235,7 +235,7 @@ int demod_spectrum(void *arg){
 	assert(actual_bin_count >= bin_count);
 
 #if SPECTRUM_DEBUG
-	fprintf(stdout,"spectrum creating IQ/FFT channel, requested bw = %.1f bin_count = %d, actual bin count %d samprate %f frame len %d\n",
+	fprintf(stderr,"spectrum creating IQ/FFT channel, requested bw = %.1f bin_count = %d, actual bin count %d samprate %f frame len %d\n",
 		bin_bw,bin_count,actual_bin_count,samprate,frame_len);
 #endif
 	chan->filter.min_IF = -samprate/2 + 200;
@@ -278,7 +278,7 @@ int demod_spectrum(void *arg){
 	fft1_index = actual_bin_count/2;
 
 #if SPECTRUM_DEBUG
-	fprintf(stdout,"frame_len %d, actual bin count %d samprate %d, bin_bw %.1f gain %.1f dB\n",
+	fprintf(stderr,"frame_len %d, actual bin count %d samprate %d, bin_bw %.1f gain %.1f dB\n",
 		frame_len,actual_bin_count,samprate,bin_bw,power2dB(gain));
 #endif
 	pthread_mutex_lock(&FFTW_planning_mutex);
@@ -287,7 +287,7 @@ int demod_spectrum(void *arg){
 	plan = fftwf_plan_dft_1d(actual_bin_count,fft0_in,fft_out,FFTW_FORWARD,FFTW_MEASURE);
 	pthread_mutex_unlock(&FFTW_planning_mutex);
 	if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-	  fprintf(stdout,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
+	  fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
       }
       if(downconvert(chan) != 0)
 	break;

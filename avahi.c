@@ -45,7 +45,7 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
   } else { // static = no
     if(fork() == 0){
 #if 0
-      fprintf(stdout,"avahi-publish-service child pid %d\n",getpid());
+      fprintf(stderr,"avahi-publish-service child pid %d\n",getpid());
 #endif
       // run "avahi-publish-service --no-fail --host=dns_name service_name service_type service_port description pid hostname" in subprocess
       // No need to free the asprintf-allocated strings, we're calling exec anyway
@@ -68,7 +68,7 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
 #pragma GCC diagnostic pop
 
 #if 0
-      fprintf(stdout,"%s %s %s %s %s %s %s %s %s %s\n",
+      fprintf(stderr,"%s %s %s %s %s %s %s %s %s %s\n",
 	      "avahi-publish-service", "avahi-publish-service", "--no-fail", host_string, service_name, service_type, port_string, description, pid_string, hostname);
 #endif
       execlp("avahi-publish-service", "avahi-publish-service", "--no-fail", host_string, service_name, service_type, port_string, description, pid_string, source_string, NULL);
@@ -90,9 +90,9 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
 	// run "avahi-publish-address dns_name address", only if an address is specified
 
 #if 0
-	fprintf(stdout,"avahi start: ip address string = %s\n",ip_address_string);
-	fprintf(stdout,"avahi-publish-address child pid %d\n",getpid());
-	fprintf(stdout,"%s %s %s %s\n",
+	fprintf(stderr,"avahi start: ip address string = %s\n",ip_address_string);
+	fprintf(stderr,"avahi-publish-address child pid %d\n",getpid());
+	fprintf(stderr,"%s %s %s %s\n",
 		"avahi-publish-address", "avahi-publish-address",dns_name,ip_address_string);
 #endif
 	execlp("avahi-publish-address", "avahi-publish-address",dns_name,ip_address_string, NULL);
@@ -116,7 +116,7 @@ int avahi_publish_service(char const *service_name, char const *service_type, ch
   snprintf(tmp_file,sizeof(tmp_file),"%s/%s-%s.service.tmp%d",SERVICES,sanitized_name,sanitized_type,pid);
   FILE *fp = fopen(tmp_file,"w"); // Will overwrite if exists
   if(fp == NULL){
-    fprintf(stdout,"Can't create %s: %s\n",tmp_file,strerror(errno));
+    fprintf(stderr,"Can't create %s: %s\n",tmp_file,strerror(errno));
     FREE(sanitized_type);
     FREE(sanitized_name);
     return -1;
@@ -154,7 +154,7 @@ int avahi_publish_service(char const *service_name, char const *service_type, ch
 int avahi_publish_address(char const *name,char const *address){
   FILE *fp = fopen(HOSTS,"a+");
   if(fp == NULL){
-    fprintf(stdout,"Can't open %s: %s\n",HOSTS,strerror(errno));
+    fprintf(stderr,"Can't open %s: %s\n",HOSTS,strerror(errno));
     return -1;
   }
   // the lock has to be exclusive even when reading, otherwise there could be double entries
@@ -202,7 +202,7 @@ int avahi_publish_address(char const *name,char const *address){
   // we've read the entire file without a match, so append our record
   // The "a+" open mode means we'll append
   if(fprintf(fp,"%s %s\n",address,name) < 0)
-    fprintf(stdout,"Can't append to %s: %s\n",HOSTS,strerror(errno));
+    fprintf(stderr,"Can't append to %s: %s\n",HOSTS,strerror(errno));
   flock(fileno(fp),LOCK_UN); // Upgrade to exclusive lock for writing
   fclose(fp);
 
