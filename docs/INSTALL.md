@@ -60,7 +60,7 @@ It will also create a special system user and group (*radio*) so that the daemon
 I recommend that you add your own user ID to the *radio* group so you can modify most of the relevant installed directories and files without becoming root:
 
 ```
-sudo adduser your_user_name radio
+sudo adduser `whoami` radio
 ```
 
 Membership in a few other groups can minimize the need to run as root:
