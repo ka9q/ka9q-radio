@@ -46,7 +46,7 @@ is just one possibility. I'd especially like to see a local map display
 that doesn't rely on Internet connectivity.
 
 
-# .service Files
+## .service Files
 
 Each element of the FT8 spotting chain runs as a Linux *systemd* job
 started by a service file in */etc/systemd/system*. They are
@@ -74,7 +74,7 @@ decode all the FT8 traffic on all the bands; I wrote the spool
 handling code mainly to eventually apply it to WSPR decoding, which is
 much more CPU intensive.
 
-# configuring ft8-record and ft8-decode
+## Configuring ft8-record and ft8-decode
 
 To prevent accidental overites of local configurations, the "make
 install" command in *ka9q-radio* never writes to */etc/radio*, so you
@@ -117,7 +117,7 @@ There needs to be a much better way to do this while maintaining at least
 some backward compatibility with the original ft8_lib package, probably
 through the external file attributes I already place on each recorded file.
 
-# enabling and starting ft8-record and ft8-decode
+## Enabling and starting ft8-record and ft8-decode
 
 This is very simple; just say
 ```
@@ -133,23 +133,36 @@ though this really shouldn't be necessary unless the decoders had been
 stopped while the recorders continued, long enough to build up a
 large backlog in the spool directories.
 
-# Configuring *ka9q-radio* to receive FT4 and FT8
+## Configuring *ka9q-radio* to receive FT4 and FT8
 
 You can use my own configuration files as a guide; they're available
-in *config/radiod@ka9q-hf.conf.d. I have implemented the option to
+in *config/radiod@ka9q-hf.conf.d*. I have implemented the option to
 split the radiod config file into sections in a directory to make them
 easier to manage. The file ft8.conf in that directory lists the HF FT8
 channels I am currently receiving. Note that most of the sampling
 rates and bandwidths are larger than the usual 12 kHz and 3 kHz
-respectively; this is to take in enough of each band to capture the DX
+respectively; this takes in enough of each band to capture the DX
 fox/hound segments that are usually above the standard ranges.
 The sample rates are passed to the decoder through the sample rate 
-field in the *.wav* file header; I have modified *ft8_lib* to handle them.
-For example, on 20 meters I look for FT8 signals anywhere from 14.0711 MHz to 14.102 MHz.
+field in the *.wav* file header; I have modified *decode_ft8* to handle them.
+For example, on 20 meters I look for FT8 signals anywhere from 14.0711 MHz to 14.102 MHz,
+and on 40 meters from 7.0561 to 7.087 MHz:
+```
+[ft8-40-20m]
+data = ft8.local
+samprate = 64k
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+low = 100
+high = 31k
+freq = "7056k 14m071"
+```
 
-If you like, you could actually look for FT8 in entire amateur bands;
+If you like, you could actually look for FT8 in an entire band;
 it might be interesting to see what you find.
 
-# Configuring *pskreporter*
+## Configuring *pskreporter*
 To be written...
 
