@@ -36,7 +36,7 @@ static int const Max_samprate =    130000000; // 130 MHz, in ltc2208 spec
 static int const Default_samprate = 64800000; // Synthesizes cleanly from 27 MHz reference
 static float const Nyquist = 0.47;  // Upper end of usable bandwidth, relative to 1/2 sample rate
 static float const AGC_upper_limit = -15.0;   // Reduce RF gain if A/D level exceeds this in dBFS
-static float const AGC_lower_limit = -22.0;   // Increase RF gain if level is below this in dBFS
+static float const AGC_lower_limit = -26.0;   // Increase RF gain if level is below this in dBFS
 static int const AGC_interval = 1;           // Seconds between runs of AGC loop
 static float const Start_gain = 10.0;         // Initial VGA gain, dB
 static double Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
