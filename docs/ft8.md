@@ -55,9 +55,9 @@ in Makefile.linux.  You should not have to modify them, but if you do
 **beware** that they may get overwritten by a subsequent run of "make
 install". The relevant files are
 
-radiod@.service__
-ft8-record.service (and ft4-record.service)__
-ft8-decode@.service (and ft4-decode@.service)__
+radiod@.service_
+ft8-record.service (and ft4-record.service)_
+ft8-decode@.service (and ft4-decode@.service)_
 pskreporter@.service
 
 The '@' character in a .service file name means there can be multiple
