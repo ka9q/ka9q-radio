@@ -65,8 +65,6 @@ install`. The relevant files are
 - **ft8-decode​@.service** (and **ft4-decode​@.service**)
 - **pskreporter​@.service**
 
-**user​@example.com**
-
 A '@' character in a **.service** file name means there can be (but
 don't *have* to be) multiple instances of that service. However, you
 must still specify an instance name even for a single instance.  There
