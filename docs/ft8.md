@@ -104,18 +104,18 @@ handled yet, although in the event of a file name collision
 the *.wav* suffix to make it unique.  Alternatively, the *pcmrecord*
 command used by the *ft8-record* job supports the --prefix-source
 option to prefix each recorded file name with the IP address and port
-number of the source, again making it unique.  What complicates things
-is that the *decode_ft8* command invoked by *ft8-decode* gets the
-recording time and frequency through its input file names and it can be
-confused by these nonstandard formats. As a kludgy but effective workaround, you
-could change the FT8 channel frequencies in each instance of *radiod*
-to a unique value, e.g., by adding 1 Hz; the decoder will still
-produce correct results as the base frequency is communicated through
-the file name.
+number of the source, again making it unique..
 
-There needs to be a much better way to do this while maintaining at least
-some backward compatibility with the original ft8_lib package, probably
-through the external file attributes I already place on each recorded file.
+The *decode_ft8* command invoked by *ft8-decode* now gets the start
+time and base frequency through external file attributes placed on the
+spool file by the *pcmrecord* program ("user.unixstarttime" and
+"user.frequency", respectively. *decode_ft* tries to extract them from
+the file name only when these attributes aren't present, so
+non-standard file names should be okay as long as the file system
+containing */var/lib/ka9q-radio/ft8* supports them. The main
+exceptions are *vfat* and *tmpfs* so don't use them for the spool. Use
+a regular Linux file system; all the modern ones (eg, XFS, ext4)
+support them.
 
 ## Enabling and starting ft8-record and ft8-decode
 
