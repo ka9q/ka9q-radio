@@ -60,10 +60,12 @@ You should not have to modify them, but if you do
 __beware__ that they may get overwritten by a subsequent run of `make
 install`. The relevant files are
 
-- **radiod&#64;.service**
+- **radiod​@.service**
 - **ft8-record.service** (and **ft4-record.service**)
-- **ft8-decode&#64;.service** (and **ft4-decode&#64;.service**)
-- **pskreporter&#64;.service**
+- **ft8-decode​@.service** (and **ft4-decode​@.service**)
+- **pskreporter​@.service**
+
+**user​@example.com**
 
 A '@' character in a **.service** file name means there can be (but
 don't *have* to be) multiple instances of that service. However, you
@@ -103,7 +105,7 @@ multicast group to which *radiod* sends its received streams, and
 writes 15-second files of the form **20250614T134600Z_10130000_usb.wav**
 for each band and *ft8-decode* then reads, decodes, logs and deletes them.
 *ft8-decode* appends its decoded spots to **/var/log/ft8.log**, but this
-can be changed in **ft8-decode&#64;.service**.
+can be changed in **ft8-decode​@.service**.
 
 Any number of *radiod* channels, from one or more *radiod* instances,
 may be sent to the same multicast group and they will all be handled.
@@ -177,12 +179,12 @@ Normally you should see little or nothing in the logs unless there's a problem.
 ## Configuring *ka9q-radio* to receive FT4 and FT8
 
 You can use my own configuration files as a guide; they're
-in **config/radiod&#64;ka9q-hf.conf.d/**. (I've split my *radiod* configuration
+in **config/radiod​@ka9q-hf.conf.d/**. (I've split my *radiod* configuration
 into separate directory files to make them
 easier to manage. *radiod* concatenates them into a single temp file (order doesn't matter)
 and reads them.
-You can still use a unified **radiod&#64;name.conf** file if you like.) The file
-**radiod&#64;ka9q-hf.conf.d/ft8.conf** lists every FT8
+You can still use a unified **radiod​@name.conf** file if you like.) The file
+**radiod​@ka9q-hf.conf.d/ft8.conf** lists every FT8
 frequency range I know about. Note that most of the sample
 rates and bandwidths are wider than 12 kHz and 3 kHz
 respectively. Each takes in enough of a band to capture the DX
