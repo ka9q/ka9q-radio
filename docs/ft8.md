@@ -16,7 +16,7 @@ the spool files
 - instances of *pskreporter* to send your spots to http://pskreporter.info.
 
 Because FT4 and FT8 use the same spooling, decoding and reporting
-mechanisms, all references to ft8 in the following discussion apply equally to
+mechanisms, all references to ft8 in the following discussion also apply to
 ft4; just substitute 'ft4' for 'ft8'.
 
 The *pcmrecord* program invoked by the *ft8-record* service is part of *ka9q-radio*.
@@ -24,8 +24,8 @@ The *pcmrecord* program invoked by the *ft8-record* service is part of *ka9q-rad
 The *decode_ft8* program invoked by the *ft8-decode* service comes from
 the separate git repository https://www.github.com/ka9q/ft8_lib, a
 fork of https://www.github.com/kgoba/ft8_lib by Kārlis Goba with my
-additions for processing spool directories. By default it looks for FT8;
-the -4 option tells it to look for FT4.
+additions for processing spool directories. It handles both FT8 and FT4; FT8
+is the default and the -4 option tells it to look for FT4.
 
 The *pskreporter* program comes from the repository
 https://www.github.com/pjsg/ftlib-pskreporter by Philip Gladstone
@@ -53,7 +53,7 @@ that doesn't rely on Internet connectivity.
 ## .service files
 
 Each element of the FT8 spotting chain runs as a Linux *systemd* job
-started by a service file in **/etc/systemd/system/**. They are
+started by a **.service** file in **/etc/systemd/system/**. They are
 automatically installed with `make install`
 in **Makefile.linux** but must be enabled and started manually.
 You should not have to modify them, but if you do
@@ -68,15 +68,15 @@ install`. The relevant files are
 A '@' character in a **.service** file name means there can be (but
 don't *have* to be) multiple instances of that service. However, you
 must still specify an instance name even for a single instance.  There
-is only one instance each of *ft8-record* and *ft4-record* that
+is only one instance of *ft8-record* (plus one of *ft4-record*) that
 records all of the receiver streams (bands) on a particular multicast
 channel, which can be used for output by one or more *radiod* instances.  Each
-instance of *ft8-decode* and *ft4-decode* works on the same directory
+instance of *ft8-decode* works on the same directory
 processing files from all bands, so you can control parallelism by
 how many you run. (FT8 and FT4 must use different spool directories
 so the decoder knows which mode to look for.)
-Multiple decoders use cooperative locking to ensure each file gets decoded once and
-deleted.  The FT8 decoder is usually fast enough that just
+Multiple decoders use cooperative locking to ensure each file gets decoded and logged
+once and then deleted.  The FT8 decoder is usually fast enough that just
 one instance is enough to decode every band; I wrote
 the spool handling code mainly to eventually apply it to WSPR
 decoding, which is much more CPU intensive.
@@ -94,7 +94,8 @@ manage them manually.  (I need a better way to handle this.)
 The *ft8-record* and *ft8-decode* jobs share the same configuration
 file **/etc/radio/ft8-decode.conf**, which should look like this:
 ```
-MCAST=ft8.local DIRECTORY=/var/lib/ka9q-radio/ft8
+MCAST=ft8.local
+DIRECTORY=/var/lib/ka9q-radio/ft8
 ```
 This should be fairly self-explanatory; **ft8.local** is the domain name of the
 multicast group to which *radiod* sends its received streams, and
@@ -143,7 +144,7 @@ sudo enable ft8-decode@2 ft8-decode@3 ...
 sudo start ft8-decode@2 ft8-decode@3 ...
 ```
 though this really shouldn't be necessary unless a large backlog
-has built in a spool directory because a *ft8-record* job kept running
+has built in a spool directory because *ft8-record* kept running
 when all *ft8-decode@* jobs were stopped.
 
 You can monitor the status of the record and decode jobs with the commands
@@ -152,14 +153,13 @@ systemctl status ft8-record	'ft8-decode@*'
 ```
 You don't need sudo just to query status. Note the wildcard in the decode name;
 systemd will expand it into a list of all currently running instances. The 'single quotes'
-keep the shell from expanding the expression should there be any matching files in
-your current directory.
+ensures that the shell passes the '*' to *systemctl* without expansion.
 
 You can restart these jobs with
 ```
 sudo systemctl try-restart ft8-record 'ft8-decode@*'
 ```
-The ``try-restart`` command restarts only jobs that are already running; it helps
+The ``try-restart`` command (as opposed to ``restart``) restarts only jobs that are already running; it helps
 avoid unwanted instances should you mistype the names.
 
 These programs log to the *systemd* journal and to **/var/log/syslog** (if the package
@@ -171,6 +171,8 @@ or
 ```
 grep ft8-record /var/log/syslog
 ```
+Normally you should see little or nothing in the logs unless there's a problem.
+
 
 ## Configuring *ka9q-radio* to receive FT4 and FT8
 
@@ -180,13 +182,13 @@ into separate directory files to make them
 easier to manage. *radiod* concatenates them into a single temp file (order doesn't matter)
 and reads them.
 You can still use a unified **radiod@name.conf** file if you like.) The file
-**radiod@ka9q-hf.conf.d/ft8.conf** lists all the HF FT8
-channels I know about. Note that most of the sample
+**radiod@ka9q-hf.conf.d/ft8.conf** lists every FT8
+frequency range I know about. Note that most of the sample
 rates and bandwidths are wider than 12 kHz and 3 kHz
-respectively. Each takes in enough of band to capture the DX
+respectively. Each takes in enough of a band to capture the DX
 fox/hound segments that are usually just above the standard channels.
-A file's sample rate is passed to the decoder through a standard
-field in the **.wav** file header; I have modified *decode_ft8* to handle them.
+A file's sample rate is passed to the decoder through
+the standard **.wav** file header; I have modified *decode_ft8* to handle them.
 For example, on 20 meters I look for FT8 signals anywhere from 14.0711 MHz to 14.102 MHz,
 and on 40 meters from 7.0561 MHz to 7.087 MHz:
 ```
@@ -202,8 +204,7 @@ high = 31k
 freq = "7056k 14m071"
 ```
 Normally you should configure *radiod* to produce 16-bit integer output streams
-(as here, with **encoding = s16be**)
-but *decode_ft8* also accepts **encoding = f32le**.
+as here, but *decode_ft8* also accepts **encoding = f32le**.
 **opus** and **f16le** encodings are *not* supported.
 
 If you like, you could actually look for FT8 in an entire band; it
