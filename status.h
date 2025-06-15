@@ -27,7 +27,7 @@ enum status_type {
   STATUS_DEST_SOCKET,
   SETOPTS,
   CLEAROPTS,
-  RTP_TIMESTAMP, // current real-time-protocol timestamp
+  RTP_TIMESNAP, // snapshot of current real-time-protocol timestamp, for linking RTP timestamps to clock time via GPS_TIME
   UNUSED4,
   INPUT_SAMPRATE, // Nominal sample rate (integer)
   UNUSED6,

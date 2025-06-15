@@ -256,6 +256,7 @@ struct channel {
     uint64_t errors;      // Count of errors with sendto()
     float gain;        // Audio gain to normalize amplitude
     int ttl; // per-channel IP TTL for multicast scope control
+    uint32_t time_snap;    // Snapshot of RTP timestamp sampled by sender in status packets, for linking RTP time to clock time
   } output;
 
   struct {
