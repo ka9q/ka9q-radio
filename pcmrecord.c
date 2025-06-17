@@ -21,6 +21,8 @@ Command-line options:
         $s: ssrc (unsigned decimal integer)
 
  --flush|-f: Flush after each received packet. Increases Ogg container overhead; little need for this writing files
+ -8|-4|-w: convenience flags for FT8, FT4 and WSPR modes. Sets --length,--jt and --pad
+ --pad|-P: Align first file in time to multiple of length, pad start with silence (implied by --jt)
  --jt|-j: Use K1JT format file names
  --locale <locale>: Set locale. Default is $LANG
  --mintime|--minfiletime|-m: minimum file duration, in sec. Files shorter than this are deleted when closed
@@ -28,10 +30,9 @@ Command-line options:
  --subdirectories|--subdirs|-s': Create subdirectories when writing files: ssrc/year/month/day/filename
  --timeout|-t <seconds>: Close file after idle period (default 20 sec)
  --verbose|-v: Increase verbosity level
- --lengthlimit|--limit|-L <seconds>: maximum file duration, seconds. When new file is created, round down to previous start of interval and pad with silence (for JT decoding)
+ --max_length|-x|--lengthlimit|--limit|-L <seconds>: maximum file duration, seconds. When --pad is set, pad first file to duration boundary
  --ssrc <ssrc>: Select one SSRC (recommended for --stdout)
  --version|-V: display command version
- --max_length|-x: <seconds> maximum file duration, in seconds. Don't pad the wav file with silence. Exit when all files have reached max duration.
 @endverbatim
  */
 
