@@ -603,7 +603,7 @@ static void process_data(int fd){
   }
   clock_gettime(CLOCK_REALTIME,&sp->last_active);
   if(sp->fp == NULL && !sp->complete){
-    int64_t sender_time = sp->frontend.timestamp + (int64_t)BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET);
+    int64_t sender_time = sp->chan.clocktime + (int64_t)BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET);
     sender_time += (int64_t)BILLION * (int32_t)(rtp.timestamp - sp->chan.output.time_snap) / sp->samprate;
 
     if(session_file_init(sp,&sender,sender_time) != 0)

@@ -1522,7 +1522,7 @@ static void display_input(WINDOW *w,struct channel const *channel){
   wmove(w,row,col);
   wclrtobot(w);
   char tmp[100];
-  pprintw(w,row++,col,"","%s",format_gpstime(tmp,sizeof(tmp),Frontend.timestamp));
+  pprintw(w,row++,col,"","%s",format_gpstime(tmp,sizeof(tmp),channel->clocktime));
   if(Frontend.samprate != 0){
     pprintw(w,row++,col,"Sample rate","%'d Hz",Frontend.samprate); // Nominal
     pprintw(w,row++,col,"Uptime","%s",ftime(tmp,sizeof(tmp),Frontend.samples/Frontend.samprate));

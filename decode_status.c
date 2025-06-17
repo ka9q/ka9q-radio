@@ -47,7 +47,8 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       decode_socket(&Metadata_dest_socket,cp,optlen);
       break;
     case GPS_TIME:
-      frontend->timestamp = decode_int64(cp,optlen);
+      channel->clocktime = decode_int64(cp,optlen);
+      frontend->timestamp = channel->clocktime; // Backward compatibility, deprecated
       break;
     case INPUT_SAMPRATE:
       frontend->samprate = decode_int(cp,optlen);

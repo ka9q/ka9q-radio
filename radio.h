@@ -131,6 +131,7 @@ struct channel {
   bool inuse;
   int lifetime;          // Remaining lifetime, frames
   int prio;              // Realtime priority, if supported
+  int64_t clocktime;     // Sender's clock time (ns since GPS epoch)
   // Tuning parameters
   struct {
     double freq;         // Desired carrier frequency (settable)
