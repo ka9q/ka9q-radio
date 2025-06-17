@@ -295,7 +295,6 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
     energy += cnrmf(samp);
     wptr[i] = sdr->scale * samp;
   }
-  frontend->timestamp = gps_time_ns();
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->if_power += Power_smooth * (energy / sampcount - frontend->if_power);
   frontend->samples += sampcount;

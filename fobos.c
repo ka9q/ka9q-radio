@@ -450,7 +450,6 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
 		  sampcount); // Update write pointer, invoke FFT
   }
   frontend->samples += sampcount;
-  frontend->timestamp = gps_time_ns();
 
   if (isfinite(in_energy))
     frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);

@@ -319,7 +319,6 @@ static int rx_callback(hackrf_transfer *transfer){
     wptr[i] = sdr->scale * samp;
   }
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
-  frontend->timestamp = gps_time_ns();
 
   // Update every block
   // estimates of DC offset, signal powers and phase error

@@ -573,7 +573,6 @@ static void rx_callback(struct libusb_transfer * const transfer){
     }
     sdr->dc_offset += DC_alpha * delta_sum;
   }
-  frontend->timestamp = now;
   // These blocks are kinda small, so exponentially smooth the power readings
   frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
   frontend->samples += sampcount; // Count original samples

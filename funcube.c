@@ -211,7 +211,6 @@ static void *proc_funcube(void *arg){
   float secphi = 1;
   float tanphi = 0;
 
-  frontend->timestamp = gps_time_ns();
   double const gainphase_alpha = Blocksize/(ADC_samprate * Power_tc);
   int ConsecPaErrs = 0;
   int16_t * sampbuf = malloc(2 * Blocksize * sizeof(*sampbuf)); // complex samples have two integers
@@ -291,15 +290,6 @@ static void *proc_funcube(void *arg){
     frontend->samples += Blocksize;
     float const block_energy = i_energy + q_energy; // Normalize for complex pairs
     frontend->if_power += Power_alpha * (block_energy / Blocksize - frontend->if_power); // Average A/D output power per channel
-
-#if 1
-    // Get status timestamp from UNIX TOD clock -- but this might skew because of inexact sample rate
-    frontend->timestamp = gps_time_ns();
-#else
-    // Simply increment by number of samples
-    // But what if we lose some? Then the clock will always be off
-    frontend->timestamp += 1.e9 * Blocksize / ADC_samprate;
-#endif
 
     // Update every block
     // estimates of DC offset, signal powers and phase error

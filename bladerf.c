@@ -232,7 +232,6 @@ static void bladerf_process(struct frontend * const frontend,
 	frontend->if_power += Power_alpha * (energy / num_samples -
 			frontend->if_power);
 	frontend->samples += num_samples;
-	frontend->timestamp = gps_time_ns();
 
 	// Update write pointer, invoke FFT
 	write_cfilter(&frontend->in, NULL, num_samples);
