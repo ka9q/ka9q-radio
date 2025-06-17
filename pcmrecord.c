@@ -134,7 +134,7 @@ struct session {
   struct session *next;
   struct sockaddr sender;      // Sender's IP address and source port
 
-  char filename[PATH_MAX];
+  char filename[PATH_MAX+10];  // allow room for suffixes
   bool can_seek;               // file is regular; can seek on it
   bool exit_after_close;       // Exit after closing stdout
 
@@ -175,7 +175,7 @@ struct session {
   int64_t samples_written;
   int64_t total_file_samples;
   int64_t samples_remaining;   // Samples remaining before file is closed; 0 means indefinite
-  struct timespec file_time;
+  int64_t file_time;
   bool complete;
 };
 
@@ -184,9 +184,7 @@ struct session {
 #define IDLE_TIMEOUT 3
 
 static float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
-static double FileLengthLimit = 0; // Length of individual file in seconds; 0 = unlimited
 static double Max_length = 0; // Length of recording in seconds; 0 = unlimited
-static const double Tolerance = 1.0; // tolerance for starting time in sec when FileLengthLimit is active
 int Verbose;
 static char PCM_mcast_address_text[256];
 static int64_t Timeout = 20; // 20 seconds max idle time before file close
@@ -202,6 +200,7 @@ static bool Raw = false;
 static char const *Source;
 static struct sockaddr_storage *Source_socket; // Remains NULL if Source == NULL
 static bool Prefix_source; // Prepend 192.168.42.4:1234_ to file name
+static bool Padding = false;
 
 const char *App_path;
 static int Input_fd,Status_fd;
@@ -216,7 +215,7 @@ static void process_data(int);
 static void scan_sessions(void);
 
 static void cleanup(void);
-static int session_file_init(struct session *sp,struct sockaddr const *sender,struct timespec const *timestamp);
+static int session_file_init(struct session *sp,struct sockaddr const *sender,int64_t timestamp);
 static int close_session(struct session **spp);
 static int close_file(struct session *sp,char const *reason);
 static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string);
@@ -254,12 +253,13 @@ static struct option Options[] = {
   {"lengthlimit", required_argument, NULL, 'L'}, // Segment files by wall clock time
   {"length", required_argument, NULL, 'L'},
   {"limit", required_argument, NULL, 'L'},
+  {"pad", no_argument, NULL, 'P'},
   {"ssrc", required_argument, NULL, 'S'},
   {"version", no_argument, NULL, 'V'},
   {"max_length", required_argument, NULL, 'x'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = ":cd:e:fjl:m:o:prsS:t:vL:Vx:48w";
+static char Optstring[] = ":cd:e:fjl:m:o:PprsS:t:vL:Vx:48w";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -272,18 +272,21 @@ int main(int argc,char *argv[]){
     switch(c){
     case 'p':
       Prefix_source = true;
-	break;
+      break;
     case '4':
       Jtmode = true;
-      FileLengthLimit = 7.5;
+      Max_length = 7.5;
+      Padding = true;
       break;
     case '8':
       Jtmode = true;
-      FileLengthLimit = 15.0;
+      Max_length = 15.0;
+      Padding = true;
       break;
     case 'w':
       Jtmode = true;
-      FileLengthLimit = 120;
+      Max_length = 120;
+      Padding = true;
       break;
     case 'c':
       Catmode = true;
@@ -315,7 +318,7 @@ int main(int argc,char *argv[]){
       break;
     case 'S':
       if(optarg){
-	char *ptr;
+	char *ptr = NULL;
 	uint32_t x = strtol(optarg,&ptr,0);
 	if(ptr != optarg)
 	  Ssrc = x;
@@ -326,7 +329,7 @@ int main(int argc,char *argv[]){
       break;
     case 't':
       if(optarg){
-	char *ptr;
+	char *ptr = NULL;
 	int64_t x = strtoll(optarg,&ptr,0);
 	if(ptr != optarg)
 	  Timeout = x;
@@ -336,12 +339,12 @@ int main(int argc,char *argv[]){
       Verbose++;
       break;
     case 'L':
-      if(optarg)
-	FileLengthLimit = fabsf(strtof(optarg,NULL));
-      break;
     case 'x':
       if(optarg)
 	Max_length = fabsf(strtof(optarg,NULL));
+      break;
+    case 'P':
+      Padding = true;
       break;
     case 'V':
       VERSION();
@@ -364,10 +367,12 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"--exec supersedes --stdout\n");
     Catmode = false;
   }
-  if((Catmode || Command != NULL) && (Subdirs || Jtmode)){
-    fprintf(stderr,"--stdout and --exec supersede --subdirs and --jtmode\n");
+  if((Catmode || Command != NULL) && (Subdirs || Jtmode || Max_length != 0 || Padding)){
+    fprintf(stderr,"--stdout and --exec supersede --subdirs, --jtmode, --max-length, --length and --pad\n");
     Subdirs = false;
     Jtmode = false;
+    Max_length = 0;
+    Padding = false;
   }
 
   if(Subdirs && Jtmode){
@@ -597,7 +602,10 @@ static void process_data(int fd){
   }
   clock_gettime(CLOCK_REALTIME,&sp->last_active);
   if(sp->fp == NULL && !sp->complete){
-    if(session_file_init(sp,&sender,&sp->last_active) != 0)
+    int64_t sender_time = sp->frontend.timestamp + (int64_t)BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET);
+    sender_time += (int64_t)BILLION * (int32_t)(rtp.timestamp - sp->chan.output.time_snap) / sp->samprate;
+
+    if(session_file_init(sp,&sender,sender_time) != 0)
       return;
 
     if(sp->encoding == OPUS){
@@ -690,20 +698,14 @@ static void process_data(int fd){
   if(sp->fp && !sp->can_seek && 0 != fflush(sp->fp))
     fprintf(stderr,"flush failed on '%s', %s\n",sp->filename,strerror(errno));
 
-  // In FileLengthLimit mode (usually with jtmode) close only according to the wall clock; don't count samples
-  if(Max_length != 0 && sp->samples_remaining <= 0){
+  if(sp->samples_remaining <= 0)
     close_file(sp,"size limit"); // Don't reset RTP here so we won't lose samples on the next file
-    if(sp->exit_after_close)
-      exit(EX_OK); // if writing to a pipe, we're done
-  }
 }
 static void scan_sessions(){
   // Walk through session list, close idle files
-  // Also close any with FileLengthLimit set
   // Leave sessions forever in case traffic starts again?
   struct timespec now = {0};
   clock_gettime(CLOCK_REALTIME,&now);
-  int64_t const now_cycle = floor((now.tv_sec + 1.0e-9 * now.tv_nsec) / FileLengthLimit);
 
   struct session *next = NULL;
   for(struct session *sp = Sessions;sp != NULL; sp = next){
@@ -716,13 +718,8 @@ static void scan_sessions(){
       // Close idle file
       close_file(sp,"idle timeout"); // sp will be NULL
       if(sp->exit_after_close)
-	exit(EX_OK); // if writing to anything but an ordinary file
+	exit(EX_OK); // if writing to a pipe
       sp->rtp_state.init = false; // reinit rtp on next packet so we won't emit lots of silence
-    } else if(FileLengthLimit != 0){
-      int64_t const start_cycle = floor((sp->file_time.tv_sec + 1.0e-9 * sp->file_time.tv_nsec) / FileLengthLimit);
-      if(now_cycle > start_cycle)
-	// Crossed end of time period (eg, 7.5, 15 or 120 sec) in --length mode
-	close_file(sp,"time boundary"); // Don't reset RTP here so we won't lose samples on the next file
     }
   }
 }
@@ -806,8 +803,7 @@ static int emit_opus_silence(struct session * const sp,int samples){
     sp->rtp_state.timestamp += chunk; // also ready for next
     sp->total_file_samples += chunk;
     sp->samples_written += chunk;
-    if(Max_length != 0)
-      sp->samples_remaining -= chunk;
+    sp->samples_remaining -= chunk;
     samples -= chunk;
     samples_since_flush += chunk;
   }
@@ -824,9 +820,15 @@ static int send_queue(struct session * const sp,bool const flush){
   if(sp == NULL)
     return -1;
   if(sp->encoding == OPUS)
-    return send_opus_queue(sp,flush);
+    send_opus_queue(sp,flush);
   else
-    return send_wav_queue(sp,flush);
+    send_wav_queue(sp,flush);
+
+  // If file length is not limited, keep resetting it so it won't expire
+  if(Max_length == 0)
+    sp->samples_remaining = INT64_MAX;
+
+  return 0;
 }
 
 // if !flush, send whatever's on the queue, up to the first missing segment
@@ -838,61 +840,72 @@ static int send_opus_queue(struct session * const sp,bool const flush){
   // Anything on the resequencing queue we can now process?
   int count = 0;
   for(int i=0; i < RESEQ; i++,sp->rtp_state.seq++){
+    if(sp->samples_remaining <= 0)
+      break; // Can't send any more in this file
     struct reseq * const qp = &sp->reseq[sp->rtp_state.seq % RESEQ];
-    if(!qp->inuse && !flush)
-      break; // Stop on first empty entry if we're not resynchronizing
-
-    if(qp->inuse){
-      int samples = opus_packet_get_nb_samples(qp->data,qp->size,OPUS_SAMPRATE); // Number of 48 kHz samples
-      int32_t jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
-      if(jump > 0){
-	// Timestamp jumped since last frame
-	// Catch up by emitting silence padding
-	if(Verbose > 2 || (Verbose > 1  && flush))
-	  fprintf(stderr,"timestamp jump %d samples\n",jump);
-
-	emit_opus_silence(sp,jump);
-	sp->current_segment_samples = 0; // gap resets
-      }
-      // end of timestamp jump catch-up, send actual packets on queue
-      sp->granulePosition += samples; // Adjust the granule position to point to end of this packet
-      ogg_packet oggPacket = { // b_o_s and e_o_s are 0
-	.packetno = sp->packetCount++, // Increment packet number
-	.granulepos = sp->granulePosition, // Granule position
-	.packet = qp->data,
-	.bytes = qp->size
-      };
-      sp->rtp_state.timestamp += samples; // also ready for next
-      sp->total_file_samples += samples;
-      sp->current_segment_samples += samples;
-      if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
-	sp->substantial_file = true;
-
-      sp->samples_written += samples;
-      if(Max_length != 0)
-	sp->samples_remaining -= samples;
-
-      if(Verbose > 2 || (Verbose > 1  && flush))
-	fprintf(stderr,"ssrc %u writing from rtp sequence %u, timestamp %u: bytes %ld samples %d granule %lld\n",
-		sp->ssrc,sp->rtp_state.seq,sp->rtp_state.timestamp,oggPacket.bytes,samples,
-		(long long)oggPacket.granulepos);
-
-      int const ret = ogg_stream_packetin(&sp->oggState, &oggPacket);
-      (void)ret;
-      assert(ret == 0);
-      {
-	ogg_page oggPage;
-	while (ogg_stream_pageout(&sp->oggState, &oggPage)){
-	  fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
-	  fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
-	}
-      }
-    } else {
+    if(!qp->inuse){
+      if(!flush)
+	break; // Stop on first empty entry if we're not resynchronizing
       // Slot was empty
       // Instead of emitting one frame of silence here, we emit it above when the next real frame arrives
       // so we know for sure how much to send
       //
       sp->rtp_state.drops++;
+      continue;
+    }
+    int32_t jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
+    if(jump > 0){
+      // Timestamp jumped since last frame
+      // Catch up by emitting silence padding
+      if(jump > sp->samples_remaining)
+	jump = sp->samples_remaining;
+
+      if(Verbose > 2 || (Verbose > 1  && flush))
+	fprintf(stderr,"timestamp jump %d samples\n",jump);
+
+      emit_opus_silence(sp,jump); // Might emit more if not on a frame boundar
+      sp->current_segment_samples = 0; // gap resets
+      sp->rtp_state.timestamp += jump; // also ready for next
+      sp->total_file_samples += jump;
+      sp->samples_written += jump;
+      // If samples_remaining goes to zero, we'll break out of the loop below
+      sp->samples_remaining -= jump;
+    }
+    if(sp->samples_remaining <= 0)
+      break;
+    // end of timestamp jump catch-up, send actual packets on queue
+    // We have to send the whole queue entry, so we might go past the file samples remaining
+    int samples = opus_packet_get_nb_samples(qp->data,qp->size,OPUS_SAMPRATE); // Number of 48 kHz samples
+    sp->granulePosition += samples; // Adjust the granule position to point to end of this packet
+    ogg_packet oggPacket = { // b_o_s and e_o_s are 0
+      .packetno = sp->packetCount++, // Increment packet number
+      .granulepos = sp->granulePosition, // Granule position
+      .packet = qp->data,
+      .bytes = qp->size
+    };
+    if(Verbose > 2 || (Verbose > 1  && flush))
+      fprintf(stderr,"ssrc %u writing from rtp sequence %u, timestamp %u: bytes %ld samples %d granule %lld\n",
+	      sp->ssrc,sp->rtp_state.seq,sp->rtp_state.timestamp,oggPacket.bytes,samples,
+	      (long long)oggPacket.granulepos);
+
+    sp->rtp_state.timestamp += samples; // also ready for next
+    sp->total_file_samples += samples;
+    sp->current_segment_samples += samples;
+    if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
+      sp->substantial_file = true;
+
+    sp->samples_written += samples;
+    sp->samples_remaining -= samples; // Might go negative
+
+    int const ret = ogg_stream_packetin(&sp->oggState, &oggPacket);
+    (void)ret;
+    assert(ret == 0);
+    {
+      ogg_page oggPage;
+      while (ogg_stream_pageout(&sp->oggState, &oggPage)){
+	fwrite(oggPage.header, 1, oggPage.header_len, sp->fp);
+	fwrite(oggPage.body, 1, oggPage.body_len, sp->fp);
+      }
     }
     FREE(qp->data); // OK if NULL
     qp->size = 0;
@@ -912,59 +925,75 @@ static int send_wav_queue(struct session * const sp,bool flush){
   // Anything on the resequencing queue we can now process?
   int count = 0;
   int const framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2); // bytes per sample time
-  for(int i=0; i < RESEQ; i++,sp->rtp_state.seq++){
+  for(int i=0; i < RESEQ; i++, sp->rtp_state.seq++){
+    if(sp->samples_remaining <= 0)
+      break; // Can't send any more in this file
     struct reseq * const qp = &sp->reseq[sp->rtp_state.seq % RESEQ];
-    if(!qp->inuse && !flush)
-      break; // Stop on first empty entry if we're not resynchronizing
-
-    int const frames = qp->size / framesize;  // One frame per sample time
-    if(qp->inuse){
-      int const jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
-      if(jump > 0){
-	// Timestamp jumped since last frame
-	// Catch up by emitting silence padding
-	if(Verbose > 2 || (Verbose > 1  && flush))
-	  fprintf(stderr,"timestamp jump %d frames\n",jump);
-	if(sp->can_seek)
-	  fseeko(sp->fp,framesize * jump,SEEK_CUR);
-	else {
-	  unsigned char *zeroes = calloc(jump,framesize); // Don't use too much stack space
-	  fwrite(zeroes,framesize,jump,sp->fp);
-	  FREE(zeroes);
-	}
-	sp->current_segment_samples = 0; // gap resets
-	sp->rtp_state.timestamp += jump; // also ready for next
-	sp->total_file_samples += jump;
-	sp->samples_written += jump;
-	if(Max_length != 0)
-	  sp->samples_remaining -= jump;
-      }
-      // end of timestamp jump catch-up, send actual packets on queue
-      fwrite(qp->data,framesize,frames,sp->fp);
-      sp->rtp_state.timestamp += frames; // also ready for next
-      sp->total_file_samples += frames;
-      sp->current_segment_samples += frames;
-      if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
-	sp->substantial_file = true;
-      sp->samples_written += frames;
-      if(Max_length != 0)
-	sp->samples_remaining -= frames;
-
+    if(!qp->inuse){
+      if(!flush)
+	break; // Stop on first empty entry if we're not resynchronizing
+      else
+	continue;
+    }
+    int jump = (int32_t)(qp->rtp.timestamp - sp->rtp_state.timestamp);
+    if(jump > 0){
+      // Timestamp jumped since last frame
+      // Catch up by emitting silence padding
+      if(jump > sp->samples_remaining)
+	jump = sp->samples_remaining;
+      assert(jump > 0); // already checked sp->samples_remaining above
       if(Verbose > 2 || (Verbose > 1  && flush))
-	fprintf(stderr,"writing from rtp sequence %u, timestamp %u: bytes %d frames %d\n",
-		sp->rtp_state.seq,sp->rtp_state.timestamp,framesize * frames,frames);
+	fprintf(stderr,"timestamp jump %d frames\n",jump);
+      if(sp->can_seek)
+	fseeko(sp->fp,framesize * jump,SEEK_CUR);
+      else {
+	unsigned char *zeroes = calloc(jump,framesize); // Don't use too much stack space
+	fwrite(zeroes, framesize, jump, sp->fp);
+	FREE(zeroes);
+      }
+      sp->current_segment_samples = 0; // gap resets
+      sp->rtp_state.timestamp += jump; // also ready for next
+      sp->total_file_samples += jump;
+      sp->samples_written += jump;
+      // If samples_remaining goes to zero, we'll break out of the loop below
+      sp->samples_remaining -= jump;
+    }
+    // end of timestamp jump catch-up, send actual packets on queue
+    int const avail_frames = qp->size / framesize;  // One PCM frame per sample time
+    int frames = avail_frames;
+    if(frames > sp->samples_remaining)
+      frames = sp->samples_remaining;
 
+    if(frames <= 0)
+      break;
+    if(Verbose > 2 || (Verbose > 1  && flush))
+      fprintf(stderr,"writing from rtp sequence %u, timestamp %u: bytes %d frames %d\n",
+	      sp->rtp_state.seq,sp->rtp_state.timestamp,framesize * frames,frames);
+
+    fwrite(qp->data,framesize,frames,sp->fp);
+    sp->rtp_state.timestamp += frames; // get ready for next
+    sp->total_file_samples += frames;
+    sp->current_segment_samples += frames;
+    if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
+      sp->substantial_file = true;
+    sp->samples_written += frames;
+    sp->samples_remaining -= frames;
+
+    if(frames != avail_frames){
+      // Sent only part of this entry before running out of space in the file
+      // Keep the rest, shift it up so we'll get it next time
+      memmove(qp->data, qp->data + frames * framesize, qp->size - frames * framesize);
+      qp->size -= frames * framesize;
+      break; // don't increment the expected sequence number, we'll work on this in the next file
+    } else {
       FREE(qp->data); // OK if NULL
       qp->size = 0;
       qp->inuse = false;
-      count++;
     }
+    count++;
   }
   return count;
 }
-
-
-
 
 static void cleanup(void){
   while(Sessions){
@@ -975,12 +1004,9 @@ static void cleanup(void){
     Sessions = next_s;
   }
 }
-static int session_file_init(struct session *sp,struct sockaddr const *sender,struct timespec const *timestamp){
+static int session_file_init(struct session *sp,struct sockaddr const *sender,int64_t timestamp){
   if(sp->fp != NULL)
     return 0;
-
-  sp->starting_offset = 0;
-  sp->samples_remaining = 0;
 
   char const *file_encoding = encoding_string(sp->encoding == S16BE ? S16LE : sp->encoding);
   if(Catmode){
@@ -1002,7 +1028,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
     char command_copy[2048] = {0}; // Don't overwrite program args
     strlcpy(command_copy,Command,sizeof(command_copy));
     char *cp = command_copy;
-    char *a;
+    char const *a;
     while((a = strsep(&cp,"$")) != NULL){
       strlcat(sp->filename,a,sizeof(sp->filename));
       if(cp != NULL && strlen(cp) > 0){
@@ -1072,45 +1098,41 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
     }
   }
   // Use time provided by caller
-  // Calling the clock here can make the file name fa second or two late if the system is heavily loaded
-  sp->file_time = *timestamp;
+  // Calling the clock here can make the file name a second or two late if the system is heavily loaded
+  sp->file_time = timestamp;
+  sp->starting_offset = 0;
+  sp->samples_remaining = INT64_MAX; // unlimited unless it gets lowered below
 
-  if(FileLengthLimit > 0){ // Not really supported on opus yet
-    // Pad start of first file with zeroes
-    intmax_t now_ns = BILLION * (timestamp->tv_sec) + timestamp->tv_nsec;
-    intmax_t limit = FileLengthLimit * BILLION;
-    imaxdiv_t r = imaxdiv(now_ns,limit);
-    intmax_t start_ns = r.quot * limit; // ns since epoch
-    intmax_t skip_ns = now_ns - start_ns;
+  if(Max_length > 0){
+    if(Padding && !sp->no_offset){ // Not really supported on opus yet
+      // Pad start of first file with zeroes
+      intmax_t const period = (intmax_t) BILLION * Max_length; // Period/length in ns
+      imaxdiv_t const r = imaxdiv(timestamp,period); // r.quot = # of periods since epoch
+      intmax_t const period_start_ns = r.quot * period; // time since epoch to start of current period
+      intmax_t const skip_ns = r.rem;
 
-    if(!sp->no_offset && skip_ns > (int64_t)(Tolerance * BILLION) && (int64_t)(limit - skip_ns) > Tolerance * BILLION){
-      // Adjust file time to previous multiple of specified limit size and pad start to first sample
-      sp->no_offset = true; // Only on first file of session with -L
-      imaxdiv_t f = imaxdiv(start_ns,BILLION);
-      sp->file_time.tv_sec = f.quot;
-      sp->file_time.tv_nsec = f.rem;
-      sp->starting_offset = (sp->samprate * skip_ns) / BILLION;
-      sp->total_file_samples += sp->starting_offset;
+      // Adjust file time to start of current period and pad to first sample
+      sp->file_time = period_start_ns; // file starts at beginning of period
+      sp->starting_offset = (int64_t)(sp->samprate * skip_ns) / BILLION; // Samples to skip
+      sp->total_file_samples += sp->starting_offset; // count as part of file
 #if 0
-      fprintf(stderr,"padding %lf sec %ld samples\n",
+      fprintf(stderr,"padding %lf sec %lld samples\n",
 	      (float)skip_ns / BILLION,
-	      sp->starting_offset);
+	      (long long)sp->starting_offset);
 #endif
+      sp->no_offset = true; // Only skip on first file of session
     }
+    sp->samples_remaining = Max_length * sp->samprate - sp->starting_offset;
   }
-  if (Max_length > 0)
-    sp->samples_remaining = Max_length * sp->samprate;
-
   char filename[PATH_MAX] = {0}; // file pathname except for suffix
   if(Prefix_source)
-    snprintf(filename, sizeof filename,"%s_",formatsock(&sp->sender,false));
+    snprintf(filename, sizeof filename, "%s_", formatsock(&sp->sender,false));
 
   if(Jtmode){
-    //  K1JT-format file names in flat directory
-    // Round time to nearest second
-    time_t seconds = sp->file_time.tv_sec;
-    if(sp->file_time.tv_nsec > BILLION/2)
-      seconds++;
+    // K1JT-format file names in flat directory
+    // Round time to nearest second since it will often bobble +/-
+    // Accurate time will still be written in the user.unixstarttime attribute
+    time_t const seconds = (sp->file_time + 500000000) / BILLION;
     struct tm const * const tm = gmtime(&seconds);
     snprintf(filename + strlen(filename), sizeof filename - strlen(filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s",
 	     tm->tm_year+1900,
@@ -1125,13 +1147,10 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
     // not JT; filename is yyyymmddThhmmss.sZ + digit + suffix
     // digit is inserted only if needed to make file unique
     // Round time to nearest 1/10 second
-    imaxdiv_t f = imaxdiv(sp->file_time.tv_nsec,100000000); // 100 million to get deci-seconds
-    if(f.rem >= 50000000) // 50 million
-      f.quot++; // round up to next deci second
-    long long deci_seconds = f.quot + (long long)10 * sp->file_time.tv_sec;
-    f = imaxdiv(deci_seconds,10); // seconds, tenths
-    time_t seconds = f.quot;
-    int tenths = f.rem;
+    int64_t const deci_seconds = sp->file_time / 100000000;
+    imaxdiv_t const r = imaxdiv(deci_seconds,10);
+    time_t const seconds = r.quot;
+    int const tenths = r.rem;
     struct tm const * const tm = gmtime(&seconds);
 
     if(Subdirs){
@@ -1186,7 +1205,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
       snprintf(sp->filename,sizeof sp->filename,"%s%s",filename,suffix);
     else
       snprintf(sp->filename,sizeof sp->filename, "%s%d%s",filename,tries,suffix);
-    char tempfile[PATH_MAX+5]; // If too long, open will fail with ENAMETOOLONG
+    char tempfile[PATH_MAX+50]; // If too long, open will fail with ENAMETOOLONG
     snprintf(tempfile,sizeof tempfile,"%s.tmp",sp->filename);
     fd = open(tempfile,O_RDWR|O_CREAT|O_EXCL|O_NONBLOCK,0644);
     if(fd != -1)
@@ -1226,9 +1245,9 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
   }
 
   if(strcmp(sp->filename,"/dev/null") != 0){
-    sp->iobuffer = malloc(BUFFERSIZE);
-    setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
-    
+    //    sp->iobuffer = malloc(BUFFERSIZE);
+    //    setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
+
     attrprintf(fd,"encoding","%s",file_encoding);
     attrprintf(fd,"samprate","%u",sp->samprate);
     attrprintf(fd,"channels","%d",sp->channels);
@@ -1237,14 +1256,15 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,st
     attrprintf(fd,"preset","%s",sp->chan.preset);
     attrprintf(fd,"source","%s",formatsock(sender,false));
     attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
-    attrprintf(fd,"unixstarttime","%ld.%09ld",(long)sp->file_time.tv_sec,(long)sp->file_time.tv_nsec);
-    
+    imaxdiv_t r = imaxdiv(sp->file_time,BILLION);
+    attrprintf(fd,"unixstarttime","%lld.%09lld",(long long)r.quot, (long long)r.rem);
+
     if(strlen(sp->frontend.description) > 0)
       attrprintf(fd,"description","%s",sp->frontend.description);
-    
+
     if(sp->starting_offset != 0)
       attrprintf(fd,"starting offset","%lld",sp->starting_offset);
-    
+
     if(sp->chan.demod_type == LINEAR_DEMOD && !sp->chan.linear.agc)
       attrprintf(fd,"gain","%.3f",voltage2dB(sp->chan.output.gain));
   }
@@ -1273,9 +1293,9 @@ static int close_session(struct session **spp){
   // when the Max_length (-x) option is used, valgrind has
   // intermittently reported unfree'd allocations in the resequencing
   // queue at program exit. Not sure what only -x is affected.
-  for(int i=0;i < RESEQ;i++){
+  for(int i=0;i < RESEQ;i++)
     FREE(sp->reseq[i].data);
-  }
+
   FREE(sp);
   return 0;
 }
@@ -1312,7 +1332,7 @@ static int close_file(struct session *sp,char const *reason){
 	fprintf(stderr,"ssrc %u dupes %llu drops %llu\n",sp->ssrc,(long long unsigned)sp->rtp_state.dupes,(long long unsigned)sp->rtp_state.drops);
     }
     if(strcmp(sp->filename,"/dev/null") != 0){
-      char tempfile[PATH_MAX+5];
+      char tempfile[PATH_MAX+50];
       snprintf(tempfile,sizeof tempfile,"%s.tmp",sp->filename); // Recover actual name of file we're working on
       if(sp->substantial_file){
 	int fd = fileno(sp->fp);
@@ -1331,26 +1351,14 @@ static int close_file(struct session *sp,char const *reason){
     }
   } // end of else regular file
   // Do this for all closures (stdout, command, file)
+  // Note: leaves RTP state and resequence queue intact for next file
   sp->fp = NULL;
-  FREE(sp->iobuffer);
+  //  FREE(sp->iobuffer);
   sp->filename[0] = '\0';
   sp->samples_written = 0;
   sp->total_file_samples = 0;
   sp->current_segment_samples = 0;
-  memset(&sp->file_time,0,sizeof sp->file_time);
-
-  if (0 == Max_length)
-    return 0;
-
-  sp->complete = true;        // don't create multiple files in max length mode
-  // check to see if all sessions are complete...if so, exit
-  for(sp = Sessions;sp != NULL;sp = sp->next){
-    if(!sp->complete){
-      return 0;
-    }
-  }
-  // max length active, all sessions are complete, exit
-  exit(EX_OK);  // Will call cleanup()
+  sp->file_time = 0;
   return 0;
 }
 
@@ -1540,7 +1548,8 @@ static int start_wav_stream(struct session *sp){
     return -1;
 
   // fill in the auxi chunk (start time, center frequency)
-  struct tm const * const tm = gmtime(&sp->file_time.tv_sec);
+  time_t tt = sp->file_time / BILLION;
+  struct tm const * const tm = gmtime(&tt);
 
   // Construct and write .wav header, skipping size fields
   struct wav header = {
@@ -1569,7 +1578,7 @@ static int start_wav_stream(struct session *sp){
     .StartHour = tm->tm_hour,
     .StartMinute = tm->tm_min,
     .StartSecond = tm->tm_sec,
-    .StartMillis = (int16_t)(sp->file_time.tv_nsec / 1000000)
+    .StartMillis = (int16_t)((sp->file_time / 1000000) % 10),
   };
   switch(sp->encoding){
   default:
@@ -1637,7 +1646,8 @@ static int end_wav_stream(struct session *sp){
   header.StopSecond = tm->tm_sec;
   header.StopMillis = (int16_t)(now.tv_nsec / 1000000);
 
-  tm = gmtime(&sp->file_time.tv_sec);
+  time_t tt = sp->file_time / BILLION;
+  tm = gmtime(&tt);
   header.StartYear = tm->tm_year + 1900;
   header.StartMon = tm->tm_mon + 1;
   header.StartDOW = tm->tm_wday;
@@ -1645,7 +1655,7 @@ static int end_wav_stream(struct session *sp){
   header.StartHour = tm->tm_hour;
   header.StartMinute = tm->tm_min;
   header.StartSecond = tm->tm_sec;
-  header.StartMillis = (int16_t)(sp->file_time.tv_nsec / 1000000);
+  header.StartMillis = (int16_t)(((sp->file_time / 1000000) % 10));
 
   rewind(sp->fp);
   if(fwrite(&header,sizeof(header),1,sp->fp) != 1)
