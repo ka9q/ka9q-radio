@@ -548,7 +548,8 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
   // Snapshot the output RTP timestamp
   encode_int32(&bp,RTP_TIMESNAP,chan->output.rtp.timestamp);
   encode_socket(&bp,STATUS_DEST_SOCKET,&Metadata_dest_socket);
-  encode_int64(&bp,GPS_TIME,frontend->timestamp);
+  int64_t now = gps_time_ns();
+  encode_int64(&bp,GPS_TIME,now);
   encode_int64(&bp,INPUT_SAMPLES,frontend->samples);
   encode_int32(&bp,INPUT_SAMPRATE,frontend->samprate); // integer Hz
   encode_int32(&bp,FE_ISREAL,frontend->isreal ? true : false);

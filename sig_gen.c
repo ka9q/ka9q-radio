@@ -197,7 +197,7 @@ static void *proc_sig_gen(void *arg){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
   
-  frontend->timestamp = gps_time_ns();
+  int64_t timesnap = gps_time_ns();
   realtime(INPUT_PRIORITY);
 
   struct osc carrier;
@@ -224,13 +224,13 @@ static void *proc_sig_gen(void *arg){
   while(!Stop_transfers){
     // How long since last call?
     int64_t now = gps_time_ns();
-    int64_t interval = now - frontend->timestamp;
+    int64_t interval = now - timesnap;
 
     int blocksize = (interval * frontend->samprate) / BILLION;
     // Limit how much we can do in one iteration after a long delay so we don't overwrite the buffer and its mirror
     if(blocksize > Blocksize + Blocksize / 2)
       blocksize = Blocksize + Blocksize / 2;
-    frontend->timestamp = now;
+    timesnap = now;
 
     // Pick a random starting point in the noise buffer
     int noise_index = arc4random_uniform(Random_samples - blocksize);
