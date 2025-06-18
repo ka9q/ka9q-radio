@@ -89,10 +89,10 @@ enum status_type {
   PLL_PHASE,      // Linear PLL
   PLL_BW,         // PLL loop bandwidth
   ENVELOPE,       // Envelope detection in linear mode
-  UNUSED18,
+  SNR_SQUELCH,    // Enable SNR squelch, all modes
 
   // Demodulation status
-  DEMOD_SNR,      // FM, PLL linear
+  PLL_SNR,      // FM, PLL linear
   FREQ_OFFSET,    // FM, PLL linear
   PEAK_DEVIATION, // FM only
   PL_TONE,        // PL tone squelch frequency (FM only)
@@ -102,7 +102,7 @@ enum status_type {
   HEADROOM,       // Audio level headroom, stored as amplitude ratio, exchanged as dB
   AGC_HANGTIME,   // AGC hang time, stored as samples, exchanged as sec
   AGC_RECOVERY_RATE, // stored as amplitude ratio/sample, exchanged as dB/sec
-  UNUSED19,
+  FM_SNR,         // selected FM SNR (variance or signal snr)
   AGC_THRESHOLD,   // stored as amplitude ratio, exchanged as dB
 
   GAIN,     // AM, Linear only, stored as amplitude ratio, exchanged as dB

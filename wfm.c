@@ -50,6 +50,7 @@ int demod_wfm(void *arg){
 
   chan->fm.stereo_enable = (chan->output.channels == 2); // note boolean assignment
 
+  chan->snr_squelch_enable = true; // implicitly on
   // Make these blocksizes depend on front end sample rate and blocksize
   int const composite_L = roundf(Composite_samprate * Blocktime * .001); // Intermediate sample rate
   int const composite_M = composite_L + 1; // 2:1 overlap (50%)
@@ -119,14 +120,14 @@ int demod_wfm(void *arg){
   realtime(chan->prio);
 
   while(downconvert(chan) == 0){
-    // Power squelch
+    // Power squelch - don't bother with variance squelch
     float snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1;
-    chan->sig.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
+    chan->fm.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
 
     // Hysteresis
-    int const squelch_state_max = chan->fm.squelch_tail + 1;
-    if(chan->sig.snr >= chan->fm.squelch_open
-       || (squelch_state > 0 && snr >= chan->fm.squelch_close))
+    int const squelch_state_max = chan->squelch_tail + 1;
+    if(chan->fm.snr >= chan->squelch_open
+       || (squelch_state > 0 && snr >= chan->squelch_close))
       // Squelch is fully open
       // tail timing is in blocks (usually 10 or 20 ms each)
       squelch_state = squelch_state_max;

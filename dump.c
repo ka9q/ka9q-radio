@@ -241,11 +241,17 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case PLL_WRAPS:
       fprintf(fp,"PLL phase wraps %'lld",(long long)decode_int64(cp,optlen));
       break;
+    case SNR_SQUELCH:
+      fprintf(fp,"SNR squelch %s",decode_int8(cp,optlen) ? "on" : "off");
+     break;
     case ENVELOPE:
       fprintf(fp,"Env det %s",decode_int8(cp,optlen) ? "on" : "off");
       break;
-    case DEMOD_SNR:
-      fprintf(fp,"Demod SNR %.1f dB",decode_float(cp,optlen));
+    case PLL_SNR:
+      fprintf(fp,"PLL SNR %.1f dB",decode_float(cp,optlen));
+      break;
+    case FM_SNR:
+      fprintf(fp,"FM SNR %.1f dB",decode_float(cp,optlen));
       break;
     case FREQ_OFFSET:
       fprintf(fp,"freq offset %'g Hz",decode_float(cp,optlen));

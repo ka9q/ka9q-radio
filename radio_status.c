@@ -375,6 +375,9 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     case ENVELOPE:
       chan->linear.env = decode_bool(cp,optlen);
       break;
+    case SNR_SQUELCH:
+      chan->snr_squelch_enable = decode_bool(cp,optlen);
+      break;
     case OUTPUT_CHANNELS: // int
       {
 	unsigned int const i = decode_int(cp,optlen);
@@ -395,14 +398,14 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       {
 	float const x = decode_float(cp,optlen);
 	if(isfinite(x))
-	  chan->fm.squelch_open = fabsf(dB2power(x));
+	  chan->squelch_open = fabsf(dB2power(x));
       }
       break;
     case SQUELCH_CLOSE:
       {
 	float const x = decode_float(cp,optlen);
 	if(isfinite(x))
-	   chan->fm.squelch_close = fabsf(dB2power(x));
+	   chan->squelch_close = fabsf(dB2power(x));
       }
       break;
     case NONCOHERENT_BIN_BW:
@@ -588,9 +591,12 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     if(len > 0 && len < sizeof(chan->preset))
       encode_string(&bp,PRESET,chan->preset,len);
   }
+
+
   // Mode-specific params
   switch(chan->demod_type){
   case LINEAR_DEMOD:
+    encode_byte(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
     encode_byte(&bp,PLL_ENABLE,chan->pll.enable); // bool
     if(chan->pll.enable){
       encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
@@ -599,10 +605,10 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       encode_float(&bp,PLL_PHASE,chan->pll.cphase); // radians
       encode_float(&bp,PLL_BW,chan->pll.loop_bw);   // hz
       encode_int64(&bp,PLL_WRAPS,chan->pll.rotations); // count of complete 360-deg rotations of PLL phase
-      // Relevant only when squelches are active
-      encode_float(&bp,SQUELCH_OPEN,power2dB(chan->fm.squelch_open));
-      encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->fm.squelch_close));
+      encode_float(&bp,PLL_SNR,power2dB(chan->pll.snr)); // abs ratio -> dB
     }
+    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
     encode_byte(&bp,ENVELOPE,chan->linear.env); // bool
     encode_double(&bp,SHIFT_FREQUENCY,chan->tune.shift); // Hz
     encode_byte(&bp,AGC_ENABLE,chan->linear.agc); // bool
@@ -614,27 +620,31 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_byte(&bp,INDEPENDENT_SIDEBAND,chan->filter2.isb);
     break;
   case FM_DEMOD:
+    encode_byte(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
     if(chan->fm.tone_freq != 0){
       encode_float(&bp,PL_TONE,chan->fm.tone_freq);
       encode_float(&bp,PL_DEVIATION,chan->fm.tone_deviation);
     }
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
-    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->fm.squelch_open));
-    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->fm.squelch_close));
+    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
     encode_byte(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0f/(log1pf(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
+    encode_float(&bp,FM_SNR,voltage2dB(chan->fm.snr));
     break;
-  case WFM_DEMOD:  // Note fall-through from FM_DEMOD
+  case WFM_DEMOD:
     // Relevant only when squelches are active
+    encode_byte(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
-    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->fm.squelch_open));
-    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->fm.squelch_close));
+    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
     encode_byte(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0f/(log1pf(-chan->fm.rate) * 48000.0f)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
+    encode_float(&bp,FM_SNR,voltage2dB(chan->fm.snr));
     break;
   case SPECT_DEMOD:
     {
@@ -683,8 +693,6 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_double(&bp,DOPPLER_FREQUENCY,chan->tune.doppler); // Hz
     encode_double(&bp,DOPPLER_FREQUENCY_RATE,chan->tune.doppler_rate); // Hz
     encode_int32(&bp,OUTPUT_CHANNELS,chan->output.channels);
-    if(!isnan(chan->sig.snr))
-      encode_float(&bp,DEMOD_SNR,power2dB(chan->sig.snr)); // abs ratio -> dB
 
     // Source address we're using to send data
     // Get the local socket for the output stream

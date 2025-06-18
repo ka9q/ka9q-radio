@@ -180,6 +180,11 @@ struct channel {
     int hangcount;       // AGC hang timer before gain recovery starts (samples)
   } linear;
 
+  bool snr_squelch_enable; // Use raw SNR for AM/SSB/FM squelch
+  float squelch_open;      // squelch open threshold, power ratio
+  float squelch_close;     // squelch close threshold
+  int squelch_tail;        // Frames to hold open after loss of SNR
+
   struct {
     struct pll pll;
     bool was_on;
@@ -190,13 +195,13 @@ struct channel {
     float loop_bw;    // Loop bw (coherent modes)
     float cphase;     // Carrier phase change radians (DSB/PSK)
     int64_t rotations; // Integer counts of cphase wraps through -PI, +PI
+    float snr;
   } pll;
 
   // Signal levels & status, common to all demods
   struct {
     float bb_power;   // Average power of signal after filter but before digital gain, power ratio
     float foffset;    // Frequency offset Hz (FM, coherent AM, dsb)
-    float snr;        // From PLL in linear, moments in FM
     float n0;         // per-demod N0 (experimental)
   } sig;
 
@@ -205,14 +210,12 @@ struct channel {
     float tone_freq;         // PL tone squelch frequency
     float tone_deviation;    // Measured deviation of tone
     bool threshold;          // Threshold extension
-    float squelch_open;      // squelch open threshold, power ratio
-    float squelch_close;     // squelch close threshold
-    int squelch_tail;        // Frames to hold open after loss of SNR
     float gain;              // Empirically set to match overall gain with deemphasis to that without
     float rate;              // de-emphasis filter coefficient computed from expf(-1.0 / (tc * output.samprate));
                              // tc = 75e-6 sec for North American FM broadcasting
                              // tc = 1 / (2 * M_PI * 300.) = 530.5e-6 sec for NBFM (300 Hz corner freq)
     bool stereo_enable;      // wfm only
+    float snr;               // from variance squelch, if selected, otherwise signal snr
   } fm;
 
   // Used by spectrum analysis only

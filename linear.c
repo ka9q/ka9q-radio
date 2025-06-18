@@ -66,6 +66,8 @@ int demod_linear(void *arg){
 
   realtime(chan->prio);
 
+  bool squelch_open = true; // memory for squelch hyseresis, starts open
+
   while(downconvert(chan) == 0){
     unsigned int N = chan->sampcount; // Number of raw samples in filter output buffer
     float complex * buffer = chan->baseband; // Working buffer
@@ -94,22 +96,22 @@ int demod_linear(void *arg){
 	noise += cimagf(s) * cimagf(s);  // signal in quadrature with VCO is assumed to be noise power
       }
       if(noise != 0){
-	chan->sig.snr = (signal / noise) - 1; // S/N as power ratio; meaningful only in coherent modes
-	if(chan->sig.snr < 0)
-	  chan->sig.snr = 0; // Clamp to 0 so it'll show as -Inf dB
+	chan->pll.snr = (signal / noise) - 1; // S/N as power ratio; meaningful only in coherent modes
+	if(chan->pll.snr < 0)
+	  chan->pll.snr = 0; // Clamp to 0 so it'll show as -Inf dB
       } else
-	chan->sig.snr = NAN;
+	chan->pll.snr = NAN;
 
       // Loop lock detector with hysteresis
       // If there's more I signal than Q signal, declare it locked
       // The squelch settings are really for FM, not for us
-      if(chan->sig.snr < chan->fm.squelch_close){
+      if(chan->pll.snr < chan->squelch_close){
 	chan->pll.lock_count -= N;
 	if(chan->pll.lock_count <= -lock_limit){
 	  chan->pll.lock_count = -lock_limit;
 	  chan->pll.lock = false;
 	}
-      } else if(chan->sig.snr > chan->fm.squelch_open){
+      } else if(chan->pll.snr > chan->squelch_open){
 	chan->pll.lock_count += N;
 	if(chan->pll.lock_count >= lock_limit){
 	  chan->pll.lock_count = lock_limit;
@@ -117,7 +119,7 @@ int demod_linear(void *arg){
 	}
       }
       double phase = carg(pll_phasor(&chan->pll.pll));
-      if(chan->sig.snr > chan->fm.squelch_close){
+      if(chan->pll.snr > chan->squelch_close){
 	// Try to avoid counting cycle slips during loss of lock
 	double phase_diff = phase - chan->pll.cphase;
 	if(phase_diff > M_PI)
@@ -229,10 +231,24 @@ int demod_linear(void *arg){
     if(chan->output.channels == 1)
       output_power *= 2; // +3 dB for mono since 0 dBFS = 1 unit peak, not RMS
     chan->output.power = output_power;
+
+    // If snr squelch is enabled, it takes precedence. Otherwise PLL lock, if it's on
+    float snr = +INFINITY;
+    if(chan->snr_squelch_enable)
+      snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1.0f;
+    else if(chan->pll.enable)
+      snr = chan->pll.snr;
+
+    if(snr < chan->squelch_close)
+      squelch_open = false;
+    else if(snr > chan->squelch_open)
+      squelch_open = true;
+    // otherwise leave it be
+
     // Mute if no signal (e.g., outside front end coverage)
-    // or if no PLL lock (AM squelch)
     // or if zero frequency
-    bool mute = (output_power == 0) || (chan->pll.enable && !chan->pll.lock) || (chan->tune.freq == 0);
+    // or if squelch is closed
+    bool mute = output_power == 0 || !squelch_open || chan->tune.freq == 0;
 
     // send_output() knows if the buffer is mono or stereo
     if(send_output(chan,(float *)buffer,N,mute) == -1)

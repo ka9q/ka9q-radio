@@ -103,7 +103,7 @@ static int init_demod(struct channel *channel);
 // Fill in set of locally generated variables from channel structure
 static void gen_locals(struct channel *channel){
   Local.noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
-  Local.sig_power = channel->sig.bb_power - Local.noise_bandwidth * channel->sig.n0;
+  Local.sig_power = channel->sig.bb_power - Local.noise_bandwidth * channel->sig.n0; // signal power only (no noise)
   if(Local.sig_power < 0)
     Local.sig_power = 0; // Avoid log(-x) = nan
   Local.sn0 = Local.sig_power/channel->sig.n0;
@@ -1105,6 +1105,12 @@ static void process_mouse(struct channel *channel,uint8_t **bpp){
 	case 2:
 	  encode_int(bpp,OUTPUT_CHANNELS,2);
 	  break;
+	case 3:
+	  encode_int(bpp,SNR_SQUELCH,0);
+	  break;
+	case 4:
+	  encode_int(bpp,SNR_SQUELCH,1);
+	  break;
 	}
       } else if(channel->demod_type == FM_DEMOD){
 	switch(my){
@@ -1113,6 +1119,12 @@ static void process_mouse(struct channel *channel,uint8_t **bpp){
 	  break;
 	case 2:
 	  encode_int(bpp,THRESH_EXTEND,1);
+	  break;
+	case 3:
+	  encode_int(bpp,SNR_SQUELCH,0);
+	  break;
+	case 4:
+	  encode_int(bpp,SNR_SQUELCH,1);
 	  break;
 	}
       } else if(channel->demod_type == LINEAR_DEMOD){
@@ -1150,6 +1162,12 @@ static void process_mouse(struct channel *channel,uint8_t **bpp){
 	case 9:
 	  encode_int(bpp,AGC_ENABLE,1);
 	  break;
+	case 10:
+	  encode_int(bpp,SNR_SQUELCH,0);
+	  break;
+	case 11:
+	  encode_int(bpp,SNR_SQUELCH,1);
+	  break;
 	}
       }
     }
@@ -1165,7 +1183,7 @@ static int init_demod(struct channel *channel){
   channel->tune.freq = channel->tune.shift = NAN;
   channel->filter.min_IF = channel->filter.max_IF = channel->filter.kaiser_beta = NAN;
   channel->output.headroom = channel->linear.hangtime = channel->linear.recovery_rate = NAN;
-  channel->sig.bb_power = channel->sig.snr = channel->sig.foffset = NAN;
+  channel->sig.bb_power = channel->sig.foffset = NAN;
   channel->fm.pdeviation = channel->pll.cphase = NAN;
   channel->output.gain = NAN;
   channel->tp1 = channel->tp2 = NAN;
@@ -1416,8 +1434,8 @@ static void display_sig(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"S/N₀","%.1f dBHz",power2dB(Local.sn0));
   if(!isnan(Local.noise_bandwidth))
     pprintw(w,row++,col,"NBW","%.1f dBHz",power2dB(Local.noise_bandwidth));
-  if(!isnan(Local.sn0) && !isnan(Local.noise_bandwidth))
-    pprintw(w,row++,col,"S/N","%.1f dB  ",power2dB(Local.sn0/Local.noise_bandwidth));
+  if(!isnan(Local.snr))
+    pprintw(w,row++,col,"S/N","%.1f dB  ",power2dB(Local.snr));
   if(!isnan(channel->output.gain) && channel->demod_type == LINEAR_DEMOD) // Only relevant in linear
     pprintw(w,row++,col,"Gain","%.1lf dB  ",voltage2dB(channel->output.gain));
   if(!isnan(channel->output.power))
@@ -1440,11 +1458,11 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
   switch(channel->demod_type){
   case FM_DEMOD:
   case WFM_DEMOD:
-    pprintw(w,row++,col,"Input S/N","%.1f dB",power2dB(channel->sig.snr));
+    pprintw(w,row++,col,"Input S/N","%.1f dB",power2dB(channel->fm.snr));
     if(!isnan(channel->output.headroom))
       pprintw(w,row++,col,"Headroom","%.1f dBFS ",voltage2dB(channel->output.headroom));
-    pprintw(w,row++,col,"Squel open","%.1f dB   ",power2dB(channel->fm.squelch_open)); // should move these
-    pprintw(w,row++,col,"Squel close","%.1f dB   ",power2dB(channel->fm.squelch_close));
+    pprintw(w,row++,col,"Squel open","%.1f dB   ",power2dB(channel->squelch_open));
+    pprintw(w,row++,col,"Squel close","%.1f dB   ",power2dB(channel->squelch_close));
     pprintw(w,row++,col,"Offset","%'+.3f Hz",channel->sig.foffset);
     pprintw(w,row++,col,"Deviation","%.1f Hz",channel->fm.pdeviation);
     if(!isnan(channel->fm.tone_freq) && channel->fm.tone_freq != 0)
@@ -1459,8 +1477,8 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
   case LINEAR_DEMOD:
     if(!isnan(channel->output.headroom))
       pprintw(w,row++,col,"Headroom","%.1f dBFS",voltage2dB(channel->output.headroom));
-    pprintw(w,row++,col,"Squel open","%.1f dB  ",power2dB(channel->fm.squelch_open)); // should move these
-    pprintw(w,row++,col,"Squel close","%.1f dB  ",power2dB(channel->fm.squelch_close));
+    pprintw(w,row++,col,"Squel open","%.1f dB  ",power2dB(channel->squelch_open));
+    pprintw(w,row++,col,"Squel close","%.1f dB  ",power2dB(channel->squelch_close));
 
     if(!isnan(channel->linear.threshold) && channel->linear.threshold > 0)
       pprintw(w,row++,col,"AGC Threshold","%.1f dB  ",voltage2dB(channel->linear.threshold));
@@ -1474,7 +1492,7 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
       mvwaddstr(w,row++,1,"PLL");
       mvwprintw(w,row++,col,"%-s",channel->pll.lock ? "Lock" : "Unlock");
       pprintw(w,row++,col,"BW","%.1f Hz",channel->pll.loop_bw);
-      pprintw(w,row++,col,"S/N","%.1f dB",power2dB(channel->sig.snr));
+      pprintw(w,row++,col,"S/N","%.1f dB",power2dB(channel->pll.snr));
       pprintw(w,row++,col,"Δf","%'+.3f Hz",channel->sig.foffset);
       double phase = channel->pll.cphase * DEGPRA + 360 * channel->pll.rotations;
 
@@ -1598,7 +1616,16 @@ static void display_options(WINDOW *w,struct channel const *channel){
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Th Ext on");
     wattroff(w,A_UNDERLINE);
-break;
+
+    if(!channel->snr_squelch_enable)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"SNR Sq Off");
+    wattroff(w,A_UNDERLINE);
+    if(channel->snr_squelch_enable)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"SNR Sq On");
+    wattroff(w,A_UNDERLINE);
+    break;
   case WFM_DEMOD:
     // Mono/stereo are only options
     if(channel->output.channels == 1)
@@ -1609,6 +1636,15 @@ break;
     if(channel->output.channels == 2)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"Stereo");
+    wattroff(w,A_UNDERLINE);
+
+    if(!channel->snr_squelch_enable)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"SNR Sq Off");
+    wattroff(w,A_UNDERLINE);
+    if(channel->snr_squelch_enable)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"SNR Sq On");
     wattroff(w,A_UNDERLINE);
     break;
   case LINEAR_DEMOD:
@@ -1655,6 +1691,16 @@ break;
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"AGC On");
     wattroff(w,A_UNDERLINE);
+
+    if(!channel->snr_squelch_enable)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"SNR Sq Off");
+    wattroff(w,A_UNDERLINE);
+    if(channel->snr_squelch_enable)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"SNR Sq On");
+    wattroff(w,A_UNDERLINE);
+
     break;
   default:
     break;

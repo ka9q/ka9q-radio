@@ -501,7 +501,6 @@ int downconvert(struct channel *chan){
 		      &shift,&remainder,freq) != 0){
       // No front end coverage of our carrier; wait one block time for it to retune
       chan->sig.bb_power = 0;
-      chan->sig.snr = 0;
       chan->output.power = 0;
       struct timespec timeout; // Needed to avoid deadlock if no front end is available
       clock_gettime(CLOCK_REALTIME,&timeout);

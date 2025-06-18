@@ -13,9 +13,6 @@
 #include "filter.h"
 #include "radio.h"
 
-// These could be made settable if needed
-static int const power_squelch = 1; // Enable experimental pre-squelch to save CPU on idle channels
-
 // FM demodulator thread
 int demod_fm(void *arg){
   struct channel * const chan = arg;
@@ -54,10 +51,10 @@ int demod_fm(void *arg){
 
   float phase_memory = 0;
   chan->output.channels = 1; // Only mono for now
-  if(isnan(chan->fm.squelch_open) || chan->fm.squelch_open == 0)
-    chan->fm.squelch_open = 6.3;  // open above ~ +8 dB
-  if(isnan(chan->fm.squelch_close) || chan->fm.squelch_close == 0)
-    chan->fm.squelch_close = 4; // close below ~ +6 dB
+  if(isnan(chan->squelch_open) || chan->squelch_open == 0)
+    chan->squelch_open = 6.3;  // open above ~ +8 dB
+  if(isnan(chan->squelch_close) || chan->squelch_close == 0)
+    chan->squelch_close = 4; // close below ~ +6 dB
 
 
   struct goertzel tone_detect; // PL tone detector state
@@ -71,7 +68,6 @@ int demod_fm(void *arg){
 
   float deemph_state = 0;
   int squelch_state = 0; // Number of blocks for which squelch remains open
-
   int const pl_integrate_samples = chan->output.samprate * 0.24; // 240 milliseconds (spec is < 250 ms). 12 blocks @ 24 kHz
   int pl_sample_count = 0;
   float old_pl_phase = 0;
@@ -84,41 +80,33 @@ int demod_fm(void *arg){
     float complex const * const buffer = chan->baseband; // For convenience
     int const N = chan->sampcount;
 
-    if(power_squelch && squelch_state == 0){
-      // quick check SNR from raw signal power to save time on variance-based squelch
-      // Variance squelch is still needed to suppress various spurs and QRM
-      float const snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1.0f;
-      if(snr < chan->fm.squelch_close){
-	// squelch closed, reset everything and mute output
-	chan->sig.snr = snr; // Copy to FM SNR so monitor, etc, will see it
-	phase_memory = 0;
-	squelch_state = 0;
-	pl_sample_count = 0;
-	reset_goertzel(&tone_detect);
-	send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
-	continue;
+    // Simple SNR squelch
+    float avg_amp = 0;
+    float amplitudes[N];
+    float const snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1.0f;
+    if(chan->snr_squelch_enable || snr < chan->squelch_close){ // Save the trouble if the signal just isn't there
+      chan->fm.snr = snr;
+    } else {
+      // amplitude moments squelch
+      for(int n = 0; n < N; n++)
+	avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
+      avg_amp /= N;
+      {
+	// Compute variance in second pass.
+	// Two passes are supposed to be more numerically stable, but is it really necessary?
+	float fm_variance = 0;
+	for(int n=0; n < N; n++)
+	  fm_variance += (amplitudes[n] - avg_amp) * (amplitudes[n] - avg_amp);
+
+	// Compute signal-to-noise, see if we should open the squelch
+	float const snr = fm_snr(avg_amp*avg_amp * (N-1) / fm_variance);
+	chan->fm.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
       }
     }
-    float amplitudes[N];
-    float avg_amp = 0;
-    for(int n = 0; n < N; n++)
-      avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
-    avg_amp /= N;
-    {
-      // Compute variance in second pass.
-      // Two passes are supposed to be more numerically stable, but is it really necessary?
-      float fm_variance = 0;
-      for(int n=0; n < N; n++)
-	fm_variance += (amplitudes[n] - avg_amp) * (amplitudes[n] - avg_amp);
-
-      // Compute signal-to-noise, see if we should open the squelch
-      float const snr = fm_snr(avg_amp*avg_amp * (N-1) / fm_variance);
-      chan->sig.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
-    }
-    // Hysteresis squelch
-    int const squelch_state_max = chan->fm.squelch_tail + 1;
-    if(chan->sig.snr >= chan->fm.squelch_open
-       || (squelch_state > 0 && chan->sig.snr >= chan->fm.squelch_close)){
+    // Hysteresis squelch using selected SNR (basic signal SNR or FM ampitude variance/average
+    int const squelch_state_max = chan->squelch_tail + 1;
+    if(chan->fm.snr >= chan->squelch_open
+       || (squelch_state > 0 && chan->fm.snr >= chan->squelch_close)){
       // Squelch is fully open
       // tail timing is in blocks (usually 10 or 20 ms each)
       squelch_state = squelch_state_max;
@@ -127,7 +115,7 @@ int demod_fm(void *arg){
     } else if(squelch_state == 1){
       // Now closed, emit a block of silence to flush the Opus encoder
       float zeroes[N];
-      memset(&zeroes,0,sizeof(zeroes));
+      memset(zeroes,0,sizeof zeroes);
       send_output(chan,zeroes,N,false);
       // Reset everything
       squelch_state = 0;
@@ -148,12 +136,20 @@ int demod_fm(void *arg){
       phase_memory = np;
       baseband[n] = x > 1 ? x - 2 : x < -1 ? x + 2 : x; // reduce to -1 to +1
     }
-    if(chan->sig.snr < 20 && chan->fm.threshold) { // take 13 dB as "full quieting"
+    if(chan->fm.snr < 20 && chan->fm.threshold) { // take 10*log10(20) = 13 dB as "full quieting"
       // Experimental threshold reduction (popcorn/click suppression)
+      // Compute avg amp if not computed earlier
+      // could do all this with sample energies to avoid the sqrt() in cabsf()
+      if(avg_amp == 0){
+	for(int n = 0; n < N; n++)
+	  avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
+	avg_amp /= N;
+      }
 #if 0
-      float const noise_thresh = (0.4f * avg_amp);
+      float const noise_thresh = 0.4f * avg_amp;
       float const noise_reduct_scale = 1 / noise_thresh;
 
+      // baseband[i] actually depends on buffer[i] and buffer[i-1], so we should probably look at both
       for(int n=0; n < N; n++){
 	if(amplitudes[n] < noise_thresh)
 	  baseband[n] *= amplitudes[n] * noise_reduct_scale; // Reduce amplitude of weak RF samples
@@ -196,7 +192,7 @@ int demod_fm(void *arg){
 	}
       }
 #else
-      // Simple blanker
+      // Simple blanker of big spikes
       for(int n=0; n < N; n++){
 	if(fabsf(baseband[n]) > 0.5f)
 	  baseband[n] = 0;
