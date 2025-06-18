@@ -58,7 +58,7 @@ jobs:
           sudo make install
           sudo ldconfig
           cd ../../
-          git clone https://github.com/scottnewell/ka9q-web
+          git clone https://github.com/wa2n-code/ka9q-web
           cd ka9q-web
           sed -i 's|KA9Q_RADIO_DIR=../ka9q-radio|KA9Q_RADIO_DIR=../|' Makefile
           sudo make install
