@@ -71,6 +71,10 @@ int demod_spectrum(void *arg){
   float kaiser_gain = 0;
   int actual_bin_count = 0;
 
+  int old_prio = norealtime();
+  realtime(old_prio - 10); // Drop below demod priority
+
+
   while(1){
     // Check user params
     int bin_count = chan->spectrum.bin_count <= 0 ? 64 : chan->spectrum.bin_count;
