@@ -71,9 +71,8 @@ int demod_spectrum(void *arg){
   float kaiser_gain = 0;
   int actual_bin_count = 0;
 
-#if 0
-  int old_prio = norealtime();
-  realtime(old_prio - 10); // Drop below demod priority
+#if 1
+  realtime(chan->prio - 10); // Drop below demods
 #endif
 
   while(1){
