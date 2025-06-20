@@ -300,6 +300,7 @@ int main(int argc,char *argv[]){
       break;
     case 'j':
       Jtmode = true;
+      Padding = true;
       break;
     case 'd':
       Recordings = optarg;
