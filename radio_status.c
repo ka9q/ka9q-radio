@@ -632,7 +632,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0f/(log1pf(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
-    encode_float(&bp,FM_SNR,voltage2dB(chan->fm.snr));
+    encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     break;
   case WFM_DEMOD:
     // Relevant only when squelches are active
@@ -644,7 +644,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0f/(log1pf(-chan->fm.rate) * 48000.0f)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
-    encode_float(&bp,FM_SNR,voltage2dB(chan->fm.snr));
+    encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     break;
   case SPECT_DEMOD:
     {
