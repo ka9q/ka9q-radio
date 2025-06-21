@@ -1435,7 +1435,7 @@ static void display_sig(WINDOW *w,struct channel const *channel){
   if(!isnan(Local.noise_bandwidth))
     pprintw(w,row++,col,"NBW","%.1f dBHz",power2dB(Local.noise_bandwidth));
   if(!isnan(Local.snr))
-    pprintw(w,row++,col,"S/N","%.1f dB  ",power2dB(Local.snr));
+    pprintw(w,row++,col,"S/N","%.1f dB  ",Local.snr);
   if(!isnan(channel->output.gain) && channel->demod_type == LINEAR_DEMOD) // Only relevant in linear
     pprintw(w,row++,col,"Gain","%.1lf dB  ",voltage2dB(channel->output.gain));
   if(!isnan(channel->output.power))
