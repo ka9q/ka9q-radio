@@ -176,52 +176,12 @@ int demod_spectrum(void *arg){
       float ratio = (float)bin_count / input_bins;
 
       int out = bin_count/2;
+      float outf;
       int in = 0;
-      float outf = out;
-      if (chan->options & 1){
-         fprintf(stderr,"ratio: %.6f bin_count: %d input_bins: %d out: %d in: %d\n",
-                 ratio,
-                 bin_count,
-                 input_bins,
-                 out,
-                 in);
-      }
       while(out < bin_count && in < input_bins){
-         float p = 0;
-         outf = out;
-         int x = 0;
-         if (chan->options & 1){
-            fprintf(stderr,"out: %d in: %d outf: %.6f\n",
-                    out,
-                    in,
-                    outf);
-         }
-         while((int)outf == out && in < input_bins){
-	  assert(in >= 0 && in < input_bins);
-	  p += power_buffer[in++];
-          outf = (++x * ratio) + out;
-	}
-	chan->spectrum.bin_data[out++] = (p * gain);
-      }
-      if (chan->options & 1){
-         fprintf(stderr,"end out: %d in: %d outf: %.6f\n",
-                 out,
-                 in,
-                 outf);
-      }
-      // Positive output frequencies
-      out = 0;
-      in = input_bins/2;
-      while(out < bin_count/2 && in < input_bins){
-        float p = 0;
+	float p = 0;
         outf = out;
         int x = 0;
-        if (chan->options & 1){
-           fprintf(stderr,"out: %d in: %d outf: %.6f\n",
-                   out,
-                   in,
-                   outf);
-        }
 	while((int)outf == out && in < input_bins){
 	  assert(in >= 0 && in < input_bins);
 	  p += power_buffer[in++];
@@ -229,13 +189,20 @@ int demod_spectrum(void *arg){
 	}
 	chan->spectrum.bin_data[out++] = (p * gain);
       }
-      if (chan->options & 1){
-         fprintf(stderr,"end out: %d in: %d outf: %.6f\n",
-                 out,
-                 in,
-                 outf);
+      // Positive output frequencies
+      out = 0;
+      in = input_bins/2;
+      while(out < bin_count/2 && in < input_bins){
+	float p = 0;
+        outf = out;
+        int x = 0;
+	while((int)outf == out && in < input_bins){
+	  assert(in >= 0 && in < input_bins);
+	  p += power_buffer[in++];
+          outf = (++x * ratio) + out;
+	}
+	chan->spectrum.bin_data[out++] = (p * gain);
       }
-      chan->options &= (~1);
     } else {
       // ***FFT MODE***
 
