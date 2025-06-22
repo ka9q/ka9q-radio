@@ -173,29 +173,69 @@ int demod_spectrum(void *arg){
 	  power_buffer[i++] = 0;
       }
       // Merge the bins, negative output frequencies first
-      int ratio = input_bins / bin_count;
+      float ratio = (float)bin_count / input_bins;
 
       int out = bin_count/2;
       int in = 0;
+      float outf = out;
+      if (chan->options & 1){
+         fprintf(stderr,"ratio: %.6f bin_count: %d input_bins: %d out: %d in: %d\n",
+                 ratio,
+                 bin_count,
+                 input_bins,
+                 out,
+                 in);
+      }
       while(out < bin_count && in < input_bins){
-	float p = 0;
-        for(int i = 0; i < ratio; ++i){
+         float p = 0;
+         outf = out;
+         int x = 0;
+         if (chan->options & 1){
+            fprintf(stderr,"out: %d in: %d outf: %.6f\n",
+                    out,
+                    in,
+                    outf);
+         }
+         while((int)outf == out && in < input_bins){
 	  assert(in >= 0 && in < input_bins);
 	  p += power_buffer[in++];
+          outf = (++x * ratio) + out;
 	}
 	chan->spectrum.bin_data[out++] = (p * gain);
+      }
+      if (chan->options & 1){
+         fprintf(stderr,"end out: %d in: %d outf: %.6f\n",
+                 out,
+                 in,
+                 outf);
       }
       // Positive output frequencies
       out = 0;
       in = input_bins/2;
       while(out < bin_count/2 && in < input_bins){
-	float p = 0;
-        for(int i = 0; i < ratio; ++i){
+        float p = 0;
+        outf = out;
+        int x = 0;
+        if (chan->options & 1){
+           fprintf(stderr,"out: %d in: %d outf: %.6f\n",
+                   out,
+                   in,
+                   outf);
+        }
+	while((int)outf == out && in < input_bins){
 	  assert(in >= 0 && in < input_bins);
 	  p += power_buffer[in++];
+          outf = (++x * ratio) + out;
 	}
 	chan->spectrum.bin_data[out++] = (p * gain);
       }
+      if (chan->options & 1){
+         fprintf(stderr,"end out: %d in: %d outf: %.6f\n",
+                 out,
+                 in,
+                 outf);
+      }
+      chan->options &= (~1);
     } else {
       // ***FFT MODE***
 
