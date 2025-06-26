@@ -757,10 +757,6 @@ void *mirror_alloc(size_t size){
   size = round_to_page(size);
 
   int flags = 0;
-#ifdef MFD_NOEXEC_SEAL
-  // New flag? Not documented on man page but mentioned in kernel warning message, so pass it if defined
-  flags |= MFD_NOEXEC_SEAL; // not executable and sealed to prevent changing to executable.
-#endif
   int fd = memfd_create("mirror_alloc",flags);
   if(fd < 0){
     perror("mirror_alloc tmpfile create");
