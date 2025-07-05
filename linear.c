@@ -24,6 +24,8 @@
 #include "filter.h"
 #include "radio.h"
 
+static __thread bool first_run;
+
 int demod_linear(void *arg){
   struct channel * const chan = arg;
   assert(chan != NULL);
@@ -71,6 +73,17 @@ int demod_linear(void *arg){
   while(downconvert(chan) == 0){
     unsigned int N = chan->sampcount; // Number of raw samples in filter output buffer
     float complex * buffer = chan->baseband; // Working buffer
+
+    if (!first_run){
+      if(Frontend.L != 0){
+        int block_rate = Frontend.samprate / Frontend.L;
+        uint32_t first_block = chan->filter.out.next_jobnum - 1;
+        chan->output.rtp.timestamp = first_block * (chan->output.samprate / block_rate);
+        if(Verbose > 0)
+          fprintf(stderr,"demod_linear: ssrc %u starting at FFT jobum %u, preset RTP TS to %u\n",chan->output.rtp.ssrc,first_block,chan->output.rtp.timestamp);
+        first_run = true;
+      }
+    }
 
     // First pass over sample block.
     // Run the PLL (if enabled)
