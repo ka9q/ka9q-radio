@@ -68,7 +68,7 @@ int demod_linear(void *arg){
 
   realtime(chan->prio);
 
-  bool squelch_open = true; // memory for squelch hyseresis, starts open
+  bool squelch_open = true; // memory for squelch hysteresis, starts open
 
   while(downconvert(chan) == 0){
     unsigned int N = chan->sampcount; // Number of raw samples in filter output buffer
