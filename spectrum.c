@@ -178,28 +178,28 @@ int demod_spectrum(void *arg){
       int out = bin_count/2;
       float outf;
       int in = 0;
+      outf = out;
+      int x = 0;
       while(out < bin_count && in < input_bins){
 	float p = 0;
-        outf = out;
-        int x = 0;
 	while((int)outf == out && in < input_bins){
 	  assert(in >= 0 && in < input_bins);
 	  p += power_buffer[in++];
-          outf = (++x * ratio) + out;
+          outf = (++x * ratio) + (bin_count/2);
 	}
 	chan->spectrum.bin_data[out++] = (p * gain);
       }
       // Positive output frequencies
       out = 0;
       in = input_bins/2;
+      outf = out;
+      x = 0;
       while(out < bin_count/2 && in < input_bins){
 	float p = 0;
-        outf = out;
-        int x = 0;
 	while((int)outf == out && in < input_bins){
 	  assert(in >= 0 && in < input_bins);
 	  p += power_buffer[in++];
-          outf = (++x * ratio) + out;
+          outf = (++x * ratio);
 	}
 	chan->spectrum.bin_data[out++] = (p * gain);
       }
