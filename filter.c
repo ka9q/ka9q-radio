@@ -26,7 +26,7 @@
 #include <errno.h>
 
 #if LIQUID
-// Otherwise genrates a bazillion warnings
+// Otherwise generates a bazillion warnings
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <liquid/liquid.h>
@@ -600,7 +600,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     return -1;
 
   // We do have to modify the master's data structure, notably mutex locks
-  // So the derefenced pointer can't be const
+  // So the dereferenced pointer can't be const
   struct filter_in * const master = slave->master;
   assert(master != NULL);
   if(master == NULL)
@@ -1308,7 +1308,7 @@ static int window_filter(int const L,int const M,float complex * const response,
 }
 // Real-only counterpart to window_filter()
 // response[] is only N/2+1 elements containing DC and positive frequencies only
-// Negative frequencies are inplicitly the conjugate of the positive frequencies
+// Negative frequencies are implicitly the conjugate of the positive frequencies
 // L and M refer to the decimated output
 static int window_rfilter(int const L,int const M,float complex * const response,float const beta){
   assert(response != NULL);
