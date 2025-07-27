@@ -125,7 +125,7 @@ int demod_spectrum(void *arg){
 
       // Look at downconverter's frequency bins directly
       //      chan->spectrum.bin_data = reallocf(&chan->spectrum.bin_data, bin_count * sizeof *chan->spectrum.bin_data);
-      // Output flter is already waiting for the next job, so subtract 1 to get the current one
+      // Output filter is already waiting for the next job, so subtract 1 to get the current one
       unsigned int jobnum = (chan->filter.out.next_jobnum - 1) % ND;
       struct filter_in const * const master = chan->filter.out.master;
       float complex const * const fdomain = master->fdomain[jobnum];
@@ -210,7 +210,7 @@ int demod_spectrum(void *arg){
       // and feed it to a FFT. This also has parameter restrictions, mainly on the sample rate of the IQ channel
       // It will take several blocks to fill each FFT
       if(bin_bw != old_bin_bw || bin_count != old_bin_count){
-	// Params have changed, set everything up againa
+	// Params have changed, set everything up again
 	old_bin_bw = bin_bw;
 	old_bin_count = bin_count;
 
