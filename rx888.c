@@ -106,6 +106,8 @@ struct sdrstate {
   pthread_t agc_thread;
 };
 
+static bool hack_no_usb_reset = false;
+
 static void rx_callback(struct libusb_transfer *transfer);
 static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize);
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
@@ -165,6 +167,7 @@ static char const *Rx888_keys[] = {
   "samprate", // 129.6/64.8 MHz are good choices with 27 MHz reference. No fractional N, and good FFT factors
   "serial",
   "undersample", // Use higher Nyquist zones. Requires removal of internal LPF and use of proper bandpass
+  "hack_no_usb_reset", // Don't reset USB device after sending the STOPFX3 command--the reset seems to break alternate FX3 firmware
   NULL
 };
 
@@ -206,6 +209,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stderr,"Invalid request size %d, using 32\n",reqsize);
     reqsize = 32;
   }
+  hack_no_usb_reset=config_getboolean(dictionary,section,"hack_no_usb_reset",false);
   {
     int ret;
     if((ret = rx888_usb_init(sdr,firmware,queuedepth,reqsize)) != 0){
@@ -742,6 +746,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   // Stop and reopen in case it was left running - KA9Q
   usleep(5000);
   command_send(sdr->dev_handle,STOPFX3,0);
+  if (!hack_no_usb_reset)
   {
     int r = libusb_reset_device(sdr->dev_handle);
     if(r != 0){
