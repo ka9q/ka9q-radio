@@ -646,6 +646,7 @@
 447020000	W5HMV Trona
 447040000	123.0 KK6BAD San Diego - Otay Mtn
 447040000	136.5 KK6KQG Frazier Mtn
+447040000	100.0 W6OY Sunset Ridge
 447060000	WA6DYX Glendale - Mt Lukens
 447080000	K6ZXZ Lake Arrowhead - Heaps Peak
 447100000	WB6ORK Corona - Sierra Peak
