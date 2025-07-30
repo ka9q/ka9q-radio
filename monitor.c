@@ -562,7 +562,10 @@ struct session *lookup_or_create_session(const struct sockaddr_storage *sender,c
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < Nsessions; i++){
     struct session * const sp = sptr(i);
-    if(sp && sp->ssrc == ssrc && address_match(sender,&sp->sender)){
+    if(sp && sp->ssrc == ssrc
+       && address_match(sender,&sp->sender)
+       //       && getportnumber(&sp->sender) == getportnumber(&sender)
+       ){
       pthread_mutex_unlock(&Sess_mutex);
       return sp;
     }

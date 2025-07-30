@@ -114,6 +114,15 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
   // This ought to be fixed
   // one possibility is to look at the requester; if he's on same host, use TTL 0, otherwise 1
   // Is this a good idea when sending spectrum data? It can get pretty large
+
+  // This creates a possible problem when:
+  // 1. Multiple radiod are running on the same system;
+  // 2. The same SSRC is in use by more than one radiod;
+  // 3. A consumer (monitor, pcmrecord) uses the source port as part of the session identifier (monitor currently does not, pcmrecord does)
+  // 4. TTL is 0, so metadata is forced over the ttl != 0 socket
+  //    and stream data is sent over the ttl==0 socket
+  //    Then the status/data source ports may not match and the consume may think they're separate streams
+  // So this hack should probably go
   int out_fd;
   if(sock == &Metadata_dest_socket || chan->output.ttl > 0)
     out_fd = Output_fd;
