@@ -138,10 +138,10 @@ endif
 	systemctl daemon-reload
 
 clean:
-	-rm -f *.o *.a *.d *.so $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS) $(STATIC_DRIVERS)
+	rm -f *.o *.a *.d *.so $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS) $(STATIC_DRIVERS) \;
+	rm -rf html latex man
 
 doc:
-	rm -rf html latex man
 	doxygen
 
 DEPS = $(CFILES:.c=.d)
