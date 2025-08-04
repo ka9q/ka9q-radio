@@ -1003,9 +1003,9 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
   }
   int a, b, c, P1, P2, P3;
   compute_registers(best.pll_mult, &a, &b, &c, &P1, &P2, &P3);
-  fprintf(stderr,"RX888 Si5351 PLL: [ref = %'lf] * %'lf = %'lf * (%d + %d / %d) = %'lf; P1=%d, P2=%d, P3=%d\n",
+  fprintf(stderr,"RX888 Si5351 PLL: [ref = %'lf] * [%'lf = (%d + %d / %d)] = %'lf; P1=%d, P2=%d, P3=%d\n",
 	  reference,
-	  best.pll_mult, reference, a, b, c, best.pll_freq, P1, P2, P3);
+	  best.pll_mult, a, b, c, best.pll_freq, P1, P2, P3);
 
   uint8_t data_clkin[] = {
     (P3 & 0x0000ff00) >>  8,
