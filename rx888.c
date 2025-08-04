@@ -111,7 +111,7 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
 static void rx888_set_att(struct sdrstate *sdr,float att,bool vhf);
 static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf);
-static double rx888_set_samprate(struct sdrstate *sdr,double reference,unsigned int samprate);
+static double rx888_set_samprate(struct sdrstate *sdr,double reference,double samprate);
 static void rx888_set_hf_mode(struct sdrstate *sdr);
 #if 0
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency);
@@ -127,7 +127,7 @@ static void *agc_rx888(void *arg);
 #if 0
 static double actual_freq(double frequency);
 #endif
-static void rational_approximation(double value, uint32_t max_denominator, uint32_t *a, uint32_t *b, uint32_t *c);
+
 
 
 #define N_USB_SPEEDS 6
@@ -375,6 +375,7 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
   frontend->spurs[4] = samprate/ 24;
   frontend->spurs[5] = 1.2 * sdr->reference;
   frontend->spurs[6] = 1.4 * sdr->reference;
+  frontend->spurs[7] = 0; // DC, for completeness
 
   return 0;
 }
@@ -883,6 +884,163 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf){
   sdr->scale = scale_AD(frontend);
 }
 
+#if 1
+// More optimal algorithm by ChatGPT
+typedef struct {
+  double pll_freq;
+  double ms_div;
+  double pll_mult;
+  double error_ppm;
+  bool pll_int;
+  bool ms_int;
+  int rdiv_index;
+  double samprate;
+} si5351_solution;
+
+static void compute_registers(double value, int *a, int *b, int *c, int *P1, int *P2, int *P3) {
+    *a = (int)floor(value);
+    double frac = value - *a;
+    *c = 1000000; // resolution for fractional part (can be up to 1e6)
+    *b = (int)round(frac * (*c));
+
+    *P1 = 128 * (*a) + (int)floor(128.0 * (*b) / (*c)) - 512;
+    *P2 = 128 * (*b) - (*c) * (int)floor(128.0 * (*b) / (*c));
+    *P3 = *c;
+}
+
+
+static double rx888_set_samprate(struct sdrstate *sdr,double const reference,double const samprate){
+  assert(sdr != NULL);
+
+  si5351_solution best = {0};
+  best.error_ppm = 1e9;  // large initial value
+  best.rdiv_index = -1; // invalid
+  
+  static const int r_div_values[] = {1, 2, 4, 8, 16, 32, 64, 128};
+
+  for(int rdiv_index = 0; rdiv_index < 8; rdiv_index++){
+    if(samprate * r_div_values[rdiv_index] < SI5351_MS_MIN_FREQ)
+      continue;
+
+    double rdiv = r_div_values[rdiv_index];
+
+    // First try integer-only solutions
+    for (int m = SI5351_PLL_MIN_MULT; m <= SI5351_PLL_MAX_MULT; m++) {
+      double pll_freq = reference * m;
+      if (pll_freq < SI5351_MIN_VCO_FREQ || pll_freq > SI5351_MAX_VCO_FREQ)
+	continue;
+    
+      double ms_div = pll_freq / (samprate * rdiv);
+      if (ms_div >= SI5351_MIN_MS && ms_div <= SI5351_MAX_MS) {
+	// Check if ms_div is integer
+	if (fabs(ms_div - round(ms_div)) < 1e-9) {
+	  best.pll_freq = pll_freq;
+	  best.pll_mult = m;
+	  best.ms_div = round(ms_div);
+	  best.error_ppm = 0;
+	  best.pll_int = true;
+	  best.ms_int = true;
+	  best.rdiv_index = rdiv_index;
+	  best.samprate = pll_freq / (ms_div * rdiv);
+	  goto gotit; // Perfect solution found
+	}
+      }
+    }
+    // If no perfect integer solution, find best fractional
+    for (int m = SI5351_PLL_MIN_MULT; m <= SI5351_PLL_MAX_MULT; m++) {
+      double pll_freq = reference * m;
+      if (pll_freq < SI5351_MIN_VCO_FREQ || pll_freq > SI5351_MAX_VCO_FREQ)
+	continue;
+      
+      double ms_div = pll_freq / (rdiv * samprate);
+      if (ms_div >= SI5351_MIN_MS && ms_div <= SI5351_MAX_MS) {
+	double actual_samprate = pll_freq / (ms_div * rdiv);
+	double error_ppm = fabs((actual_samprate - samprate) / samprate) * 1e6;
+	if (error_ppm < best.error_ppm) {
+	  best.rdiv_index = rdiv_index;
+	  best.samprate = actual_samprate;
+	  best.pll_freq = pll_freq;
+	  best.pll_mult = m;
+	  best.ms_div = ms_div;
+	  best.error_ppm = error_ppm;
+	  best.pll_int = true; // still integer PLL here
+	  best.ms_int = false; // but the multisynth is not
+	}
+      }
+    }
+    if(best.error_ppm < 1e-9)
+      goto gotit;
+    
+    // If no integer PLL solution, allow fractional PLL multiplier
+    double pll_step = 0.01; // step size for PLL fractional multiplier (adjust for speed vs accuracy)
+    for (double m = SI5351_PLL_MIN_MULT; m <= SI5351_PLL_MAX_MULT; m += pll_step) {
+      double pll_freq = reference * m;
+      if (pll_freq < SI5351_MIN_VCO_FREQ || pll_freq > SI5351_MAX_VCO_FREQ)
+	continue;
+      
+      // MultiSynth divider range
+      double ms_div = pll_freq / (rdiv * samprate);
+      if (ms_div >= SI5351_MIN_MS && ms_div <= SI5351_MAX_MS) {
+	double actual_samprate = pll_freq / (ms_div * rdiv);
+	double error_ppm = fabs((actual_samprate - samprate) / samprate) * 1e6;
+	if (error_ppm < best.error_ppm
+	    || (error_ppm - best.error_ppm < 1.0 && !best.ms_int && best.ms_int)){
+	  best.rdiv_index = rdiv_index;
+	  best.samprate = actual_samprate;
+	  best.pll_freq = pll_freq;
+	  best.pll_mult = m;
+	  best.ms_div = ms_div;
+	  best.error_ppm = error_ppm;
+	  best.pll_int = (fabs(m - round(m)) < 1e-9);
+	  best.ms_int = (fabs(ms_div - round(ms_div)) < 1e-9);
+	}
+      }
+    }
+  }    
+ gotit:;
+  if(best.rdiv_index == -1 || best.samprate == 0){
+    printf("RX888 Si5351 error: can't produce desired samprate %lf\n",samprate);
+    return 0;
+  }
+  int a, b, c, P1, P2, P3;
+  compute_registers(best.pll_mult, &a, &b, &c, &P1, &P2, &P3);
+  printf("RX888 Si5351 PLL: %lf = %d + %d / %d; P1=%d, P2=%d, P3=%d\n", best.pll_mult, a, b, c, P1, P2, P3);
+
+  uint8_t data_clkin[] = {
+    (P3 & 0x0000ff00) >>  8,
+    (P3 & 0x000000ff) >>  0,
+    (P1 & 0x00030000) >> 16,
+    (P1 & 0x0000ff00) >>  8,
+    (P1 & 0x000000ff) >>  0,
+    (P3 & 0x000f0000) >> 12 | (P2 & 0x000f0000) >> 16,
+    (P2 & 0x0000ff00) >>  8,
+    (P2 & 0x000000ff) >>  0
+  };
+  control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
+
+
+  compute_registers(best.ms_div, &a, &b, &c, &P1, &P2, &P3);
+  printf("RX888 Si5351 MS: %lf = %d + %d / %d; P1=%d, P2=%d, P3=%d\n", best.ms_div, a, b, c, P1, P2, P3);
+  
+  uint8_t data_clkout[] = {
+    (P3 & 0x0000ff00) >>  8,
+    (P3 & 0x000000ff) >>  0,
+    ((P1 & 0x00030000) >> 16) | (best.rdiv_index << 4),
+    (P1 & 0x0000ff00) >>  8,
+    (P1 & 0x000000ff) >>  0,
+    (P3 & 0x000f0000) >> 12 | (P2 & 0x000f0000) >> 16,
+    (P2 & 0x0000ff00) >>  8,
+    (P2 & 0x000000ff) >>  0
+  };
+
+  control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
+  return best.samprate;
+}
+
+#else 
+
+static void rational_approximation(double value, uint32_t max_denominator, uint32_t *a, uint32_t *b, uint32_t *c);
+
 // see: SiLabs Application Note AN619 - Manually Generating an Si5351 Register Map (https://www.silabs.com/documents/public/application-notes/AN619.pdf)
 static double rx888_set_samprate(struct sdrstate *sdr,double const reference,unsigned int const samprate){
   assert(sdr != NULL);
@@ -990,6 +1148,59 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
   return output_samprate;
 }
+/* best rational approximation:
+ *
+ *     value ~= a + b/c     (where c <= max_denominator)
+ *
+ * References:
+ * - https://en.wikipedia.org/wiki/Continued_fraction#Best_rational_approximations
+ */
+static void rational_approximation(double value, uint32_t max_denominator,
+                                   uint32_t *a, uint32_t *b, uint32_t *c)
+{
+  const double epsilon = 1e-5;
+
+  double af;
+  double f0 = modf(value, &af);
+  *a = (uint32_t) af;
+  *b = 0;
+  *c = 1;
+  double f = f0;
+  double delta = f0;
+  /* we need to take into account that the fractional part has a_0 = 0 */
+  uint32_t h[] = {1, 0};
+  uint32_t k[] = {0, 1};
+  for(int i = 0; i < 100; ++i){
+    if(f <= epsilon){
+      break;
+    }
+    double anf;
+    f = modf(1.0 / f,&anf);
+    uint32_t an = (uint32_t) anf;
+    for(uint32_t m = (an + 1) / 2; m <= an; ++m){
+      uint32_t hm = m * h[1] + h[0];
+      uint32_t km = m * k[1] + k[0];
+      if(km > max_denominator){
+        break;
+      }
+      double d = fabs((double) hm / (double) km - f0);
+      if(d < delta){
+        delta = d;
+        *b = hm;
+        *c = km;
+      }
+    }
+    uint32_t hn = an * h[1] + h[0];
+    uint32_t kn = an * k[1] + k[0];
+    h[0] = h[1]; h[1] = hn;
+    k[0] = k[1]; k[1] = kn;
+  }
+  return;
+}
+
+
+#endif
+
 
 static void rx888_set_hf_mode(struct sdrstate *sdr){
   command_send(sdr->dev_handle,TUNERSTDBY,0); // Stop Tuner
@@ -1171,55 +1382,6 @@ double rx888_tune(struct frontend *frontend,double freq){
 #endif
 }
 
-/* best rational approximation:
- *
- *     value ~= a + b/c     (where c <= max_denominator)
- *
- * References:
- * - https://en.wikipedia.org/wiki/Continued_fraction#Best_rational_approximations
- */
-static void rational_approximation(double value, uint32_t max_denominator,
-                                   uint32_t *a, uint32_t *b, uint32_t *c)
-{
-  const double epsilon = 1e-5;
-
-  double af;
-  double f0 = modf(value, &af);
-  *a = (uint32_t) af;
-  *b = 0;
-  *c = 1;
-  double f = f0;
-  double delta = f0;
-  /* we need to take into account that the fractional part has a_0 = 0 */
-  uint32_t h[] = {1, 0};
-  uint32_t k[] = {0, 1};
-  for(int i = 0; i < 100; ++i){
-    if(f <= epsilon){
-      break;
-    }
-    double anf;
-    f = modf(1.0 / f,&anf);
-    uint32_t an = (uint32_t) anf;
-    for(uint32_t m = (an + 1) / 2; m <= an; ++m){
-      uint32_t hm = m * h[1] + h[0];
-      uint32_t km = m * k[1] + k[0];
-      if(km > max_denominator){
-        break;
-      }
-      double d = fabs((double) hm / (double) km - f0);
-      if(d < delta){
-        delta = d;
-        *b = hm;
-        *c = km;
-      }
-    }
-    uint32_t hn = an * h[1] + h[0];
-    uint32_t kn = an * k[1] + k[0];
-    h[0] = h[1]; h[1] = hn;
-    k[0] = k[1]; k[1] = kn;
-  }
-  return;
-}
 #if 0
 
 // Determine actual (vs requested) clock frequency

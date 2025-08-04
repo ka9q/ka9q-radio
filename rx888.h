@@ -139,7 +139,14 @@ enum GPIOPin {
 
 static const uint8_t SI5351_ADDR = 0x60 << 1;
 static const double SI5351_MAX_VCO_FREQ = 900e6;
+static const double SI5351_MIN_VCO_FREQ = 600e6;
 static const uint32_t SI5351_MAX_DENOMINATOR = 1048575; // 2^20 - 1
+static const int SI5351_MIN_MS = 4;
+static const int SI5351_MAX_MS = 900;
+static const int SI5351_PLL_MIN_MULT= 15;
+static const int SI5351_PLL_MAX_MULT =  90;
+static const double SI5351_MS_MIN_FREQ = 500000;
+
 
 enum SI5351Registers {
   SI5351_REGISTER_PLL_SOURCE   = 15,
