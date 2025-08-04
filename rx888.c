@@ -292,7 +292,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   }
   sdr->reference = reference * (1 + calibrate);
   usleep(5000);
-  double actual = rx888_set_samprate(sdr,sdr->reference,samprate);
+  rx888_set_samprate(sdr,sdr->reference,samprate);
   frontend->samprate = samprate;
 
   sdr->undersample = config_getint(dictionary,section,"undersample",1);
@@ -323,7 +323,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
       Description = p;
     }
   }
-  double ferror = actual - samprate;
   double xfer_time = (double)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);
   // Compute exponential smoothing constant
   // Use double to avoid denormalized addition
@@ -331,8 +330,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 
   Power_smooth = -expm1(-xfer_time/Ptc);
 
-  fprintf(stderr,"rx888 reference %'.1lf Hz, nominal sample rate %'d Hz, actual %'.3lf Hz (synth err %.3lf Hz; %.3lf ppm), AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
-	  sdr->reference,samprate,actual,ferror, 1e6 * ferror / samprate,
+  fprintf(stderr,"RX888 AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  frontend->rf_agc ? "on" : "off",
 	  gain,frontend->rf_gain,frontend->rf_atten,frontend->rf_level_cal,
 sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
@@ -1005,7 +1003,8 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
   }
   int a, b, c, P1, P2, P3;
   compute_registers(best.pll_mult, &a, &b, &c, &P1, &P2, &P3);
-  fprintf(stderr,"RX888 Si5351 PLL: %lf = %d + %d / %d; P1=%d, P2=%d, P3=%d\n", best.pll_mult, a, b, c, P1, P2, P3);
+  fprintf(stderr,"RX888 Si5351 PLL: ref * %lf = %lf * (%d + %d / %d) = %lf; P1=%d, P2=%d, P3=%d\n",
+	  best.pll_mult, reference, a, b, c, best.pll_freq, P1, P2, P3);
 
   uint8_t data_clkin[] = {
     (P3 & 0x0000ff00) >>  8,
@@ -1021,9 +1020,12 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
 
 
   compute_registers(best.ms_div, &a, &b, &c, &P1, &P2, &P3);
-  fprintf(stderr,"RX888 Si5351 MS: (%lf * %d) = %d + %d / %d; P1=%d, P2=%d, P3=%d\n", best.ms_div,
+  fprintf(stderr,"RX888 Si5351 MS: pll / %d * [%lf = %d + %d / %d] = %lf; P1=%d, P2=%d, P3=%d\n",
 	  r_div_values[best.rdiv_index],
-	  a, b, c, P1, P2, P3);
+	  best.ms_div,
+	  a, b, c,
+	  best.samprate,
+	  P1, P2, P3);
   
   uint8_t data_clkout[] = {
     (P3 & 0x0000ff00) >>  8,
