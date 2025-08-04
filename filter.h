@@ -38,6 +38,10 @@ struct rc {
   float *r;
   float complex *c;
 };
+struct notch_state {
+  int bin;
+  float complex state;
+};
 
 #define ND 4
 struct filter_in {
@@ -56,6 +60,7 @@ struct filter_in {
   pthread_mutex_t filter_mutex;      // Synchronization for sequence number
   pthread_cond_t filter_cond;
 
+  struct notch_state *notches;
   float complex *fdomain[ND];
   unsigned int next_jobnum;
   unsigned int completed_jobs[ND];
