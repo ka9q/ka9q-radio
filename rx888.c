@@ -375,7 +375,8 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
   frontend->spurs[4] = samprate/ 24;
   frontend->spurs[5] = 1.2 * sdr->reference;
   frontend->spurs[6] = 1.4 * sdr->reference;
-  frontend->spurs[7] = 0; // DC, for completeness
+  frontend->spurs[7] = 1.6 * sdr->reference;
+  frontend->spurs[8] = 0; // DC, for completeness
 
   return 0;
 }
@@ -1020,7 +1021,9 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
 
 
   compute_registers(best.ms_div, &a, &b, &c, &P1, &P2, &P3);
-  fprintf(stderr,"RX888 Si5351 MS: %lf = %d + %d / %d; P1=%d, P2=%d, P3=%d\n", best.ms_div, a, b, c, P1, P2, P3);
+  fprintf(stderr,"RX888 Si5351 MS: (%lf * %d) = %d + %d / %d; P1=%d, P2=%d, P3=%d\n", best.ms_div,
+	  r_div_values[best.rdiv_index],
+	  a, b, c, P1, P2, P3);
   
   uint8_t data_clkout[] = {
     (P3 & 0x0000ff00) >>  8,
