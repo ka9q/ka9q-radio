@@ -996,15 +996,15 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
 	}
       }
     }
-  }    
+  }
  gotit:;
   if(best.rdiv_index == -1 || best.samprate == 0){
-    printf("RX888 Si5351 error: can't produce desired samprate %lf\n",samprate);
+    fprintf(stderr,"RX888 Si5351 error: can't produce desired samprate %lf\n",samprate);
     return 0;
   }
   int a, b, c, P1, P2, P3;
   compute_registers(best.pll_mult, &a, &b, &c, &P1, &P2, &P3);
-  printf("RX888 Si5351 PLL: %lf = %d + %d / %d; P1=%d, P2=%d, P3=%d\n", best.pll_mult, a, b, c, P1, P2, P3);
+  fprintf(stderr,"RX888 Si5351 PLL: %lf = %d + %d / %d; P1=%d, P2=%d, P3=%d\n", best.pll_mult, a, b, c, P1, P2, P3);
 
   uint8_t data_clkin[] = {
     (P3 & 0x0000ff00) >>  8,
@@ -1020,7 +1020,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
 
 
   compute_registers(best.ms_div, &a, &b, &c, &P1, &P2, &P3);
-  printf("RX888 Si5351 MS: %lf = %d + %d / %d; P1=%d, P2=%d, P3=%d\n", best.ms_div, a, b, c, P1, P2, P3);
+  fprintf(stderr,"RX888 Si5351 MS: %lf = %d + %d / %d; P1=%d, P2=%d, P3=%d\n", best.ms_div, a, b, c, P1, P2, P3);
   
   uint8_t data_clkout[] = {
     (P3 & 0x0000ff00) >>  8,
