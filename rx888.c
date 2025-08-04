@@ -884,7 +884,7 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf){
 }
 
 #if 1
-// More optimal algorithm by ChatGPT
+// More optimal algorithm by ChatGPT (with a lot of prodding)
 typedef struct {
   double pll_freq;
   double ms_div;
@@ -906,7 +906,6 @@ static void compute_registers(double value, int *a, int *b, int *c, int *P1, int
     *P2 = 128 * (*b) - (*c) * (int)floor(128.0 * (*b) / (*c));
     *P3 = *c;
 }
-
 
 static double rx888_set_samprate(struct sdrstate *sdr,double const reference,double const samprate){
   assert(sdr != NULL);
@@ -1003,7 +1002,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
   }
   int a, b, c, P1, P2, P3;
   compute_registers(best.pll_mult, &a, &b, &c, &P1, &P2, &P3);
-  fprintf(stderr,"RX888 Si5351 PLL: [ref = %'lf] * [%'lf = (%d + %d / %d)] = %'lf; P1=%d, P2=%d, P3=%d\n",
+  fprintf(stderr,"RX888 Si5351 PLL: [ref = %'lf] * [%'lf = (%d + %d / %d)] = vco = %'lf; P1=%d, P2=%d, P3=%d\n",
 	  reference,
 	  best.pll_mult, a, b, c, best.pll_freq, P1, P2, P3);
 
@@ -1019,9 +1018,8 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
   };
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
 
-
   compute_registers(best.ms_div, &a, &b, &c, &P1, &P2, &P3);
-  fprintf(stderr,"RX888 Si5351 MS: pll / (%d * [%'lf = %d + %d / %d]) = %'lf; P1=%d, P2=%d, P3=%d\n",
+  fprintf(stderr,"RX888 Si5351 MS: vco / (%d * [%'lf = %d + %d / %d]) = %'lf; P1=%d, P2=%d, P3=%d\n",
 	  r_div_values[best.rdiv_index],
 	  best.ms_div,
 	  a, b, c,
@@ -1038,7 +1036,6 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
     (P2 & 0x0000ff00) >>  8,
     (P2 & 0x000000ff) >>  0
   };
-
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
   return best.samprate;
 }
@@ -1048,15 +1045,15 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
 static void rational_approximation(double value, uint32_t max_denominator, uint32_t *a, uint32_t *b, uint32_t *c);
 
 // see: SiLabs Application Note AN619 - Manually Generating an Si5351 Register Map (https://www.silabs.com/documents/public/application-notes/AN619.pdf)
-static double rx888_set_samprate(struct sdrstate *sdr,double const reference,unsigned int const samprate){
+static double rx888_set_samprate(struct sdrstate *sdr,double const reference,double const samprate){
   assert(sdr != NULL);
 
 #if 0
   // Should we always do it ourselves?
   if(reference == Default_reference){
     // Use firmware to set sample rate
-    command_send(sdr->dev_handle,STARTADC,samprate);
-    return actual_freq((double)samprate);
+    command_send(sdr->dev_handle,STARTADC,(int32_t)samprate);
+    return actual_freq(samprate);
   }
   if(samprate == 0){
     // power off clock 0
@@ -1072,7 +1069,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
     rdiv += 1;
   }
   if (r_samprate < 1e6) {
-    fprintf(stderr,"ERROR - requested sample rate is too low: %'d\n",samprate);
+    fprintf(stderr,"ERROR - requested sample rate is too low: %'lf\n",samprate);
     return 0;
   }
 
@@ -1081,7 +1078,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
   uint32_t output_ms = ((uint32_t)(SI5351_MAX_VCO_FREQ / r_samprate));
   output_ms -= output_ms % 2;
   if (output_ms < 4 || output_ms > 900) {
-    fprintf(stderr,"ERROR - invalid output MS: %d  (samprate=%'d)\n",output_ms,samprate);
+    fprintf(stderr,"ERROR - invalid output MS: %d  (samprate=%'lf)\n",output_ms,samprate);
     return 0;
   }
   // This sets the VCO frequency
@@ -1096,7 +1093,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
   double const vco = reference * pll_ratio;
   double output_samprate = vco / (output_ms * (1 << rdiv));
 
-  fprintf(stderr,"Nominal samprate %'d, reference %'lf, feedback divisor %d + %d/%d, VCO %'lf, integer divisor %d * %d, output = %'lf\n",
+  fprintf(stderr,"Nominal samprate %'lf, reference %'lf, feedback divisor %d + %d/%d, VCO %'lf, integer divisor %d * %d, output = %'lf\n",
 	  samprate,
 	  reference,
 	  a,b,c,
@@ -1130,7 +1127,6 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
     (msn_p2 & 0x0000ff00) >>  8,
     (msn_p2 & 0x000000ff) >>  0
   };
-
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
 
   /* configure clock output */
@@ -1143,14 +1139,13 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,uns
   uint8_t data_clkout[] = {
     (ms_p3 & 0x0000ff00) >>  8,
     (ms_p3 & 0x000000ff) >>  0,
-    rdiv << 5 | (ms_p1 & 0x00030000) >> 16,
+    (rdiv << 5) | ((ms_p1 & 0x00030000) >> 16), // ??
     (ms_p1 & 0x0000ff00) >>  8,
     (ms_p1 & 0x000000ff) >>  0,
     (ms_p3 & 0x000f0000) >> 12 | (ms_p2 & 0x000f0000) >> 16,
     (ms_p2 & 0x0000ff00) >>  8,
     (ms_p2 & 0x000000ff) >>  0
   };
-
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
   return output_samprate;
 }
