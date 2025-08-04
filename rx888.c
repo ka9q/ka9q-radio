@@ -1016,6 +1016,10 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
     (P2 & 0x0000ff00) >>  8,
     (P2 & 0x000000ff) >>  0
   };
+  fprintf(stderr,"pll registers:");
+  for(int i = 0; i < 8; i++)
+    fprintf(stderr," %02x",data_clkin[i]);
+  fprintf(stderr,"\n");
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
 
   compute_registers(best.ms_div, &a, &b, &c, &P1, &P2, &P3);
@@ -1036,6 +1040,10 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
     (P2 & 0x0000ff00) >>  8,
     (P2 & 0x000000ff) >>  0
   };
+  fprintf(stderr,"pll registers:");
+  for(int i = 0; i < 8; i++)
+    fprintf(stderr," %02x",data_clkout[i]);
+  fprintf(stderr,"\n");
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
   return best.samprate;
 }
