@@ -1021,7 +1021,7 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
 
 
   compute_registers(best.ms_div, &a, &b, &c, &P1, &P2, &P3);
-  fprintf(stderr,"RX888 Si5351 MS: pll / %d * [%'lf = %d + %d / %d] = %'lf; P1=%d, P2=%d, P3=%d\n",
+  fprintf(stderr,"RX888 Si5351 MS: pll / (%d * [%'lf = %d + %d / %d]) = %'lf; P1=%d, P2=%d, P3=%d\n",
 	  r_div_values[best.rdiv_index],
 	  best.ms_div,
 	  a, b, c,
