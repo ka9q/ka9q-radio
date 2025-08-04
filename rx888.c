@@ -883,7 +883,7 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf){
   sdr->scale = scale_AD(frontend);
 }
 
-#if 1
+#if 0
 // More optimal algorithm by ChatGPT (with a lot of prodding)
 typedef struct {
   double pll_freq;
