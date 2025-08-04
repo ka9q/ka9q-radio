@@ -92,6 +92,17 @@ ifdef BLADERF
    DYNAMIC_DRIVERS += bladerf.so
 endif
 
+# Build HydraSDR support if installed, or if 'make HYDRASDR=1'
+ifeq ($(wildcard /usr/local/include/libhydrasdr/hydrasdr.h /usr/include/libhydrasdr/hydrasdr.h),)
+else
+   HYDRASDR=1
+endif
+# if HYDRASDR is set, build it too
+ifdef HYDRASDR
+   CFILES += hydrasdr.c
+   DYNAMIC_DRIVERS += hydrasdr.so
+endif
+
 # Build on raspberry pi only
 ifeq ($(wildcard /usr/include/pigpio.h),)
 else
@@ -254,6 +265,9 @@ airspy.so: airspy-pic.o
 airspyhf.so: airspyhf-pic.o
 	$(CC) -shared -o $@ $^ -lairspyhf
 
+hydrasdr.so: hydrasdr-pic.o
+	$(CC) -shared -o $@ $^ -lhydrasdr
+
 rtlsdr.so: rtlsdr-pic.o
 	$(CC) -shared -o $@ $^ -lrtlsdr
 
@@ -276,6 +290,9 @@ funcube-pic.o: funcube.c
 	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 airspy-pic.o: airspy.c
+	$(CC) -c -fpic $(CFLAGS) -o $@ $^
+
+hydrasdr-pic.o: hydrasdr.c
 	$(CC) -c -fpic $(CFLAGS) -o $@ $^
 
 rtlsdr-pic.o: rtlsdr.c
