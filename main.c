@@ -943,6 +943,19 @@ static int setup_hardware(char const *sname){
   assert(Frontend.M != 0);
   assert(Frontend.L != 0);
   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
+  // Create list of frequency spurs in filter input (experimental)
+  Frontend.in.notches = calloc(100,sizeof (struct notch_state));
+  int const N = Frontend.M + Frontend.L - 1;
+  for(int i = 0; i < 100; i++){
+    int shift;
+    double remainder;
+    int r = compute_tuning(N,Frontend.M,Frontend.samprate,&shift,&remainder,Frontend.spurs[i]);
+    if(r != 0)
+      break;
+    Frontend.in.notches[i].bin = abs(shift);
+    if(shift == 0)
+      break;
+  }
   pthread_mutex_init(&Frontend.status_mutex,NULL);
   pthread_cond_init(&Frontend.status_cond,NULL);
   if(Frontend.start){

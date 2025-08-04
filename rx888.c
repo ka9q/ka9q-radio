@@ -367,6 +367,11 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
   if(frontend->frequency == 0)
     rx888_set_hf_mode(sdr);
   usleep(1000000); // 1s - see SDDC_FX3 firmware
+  // Experimental spur notching
+  frontend->spurs[0] = sdr->reference; // reference clock
+  frontend->spurs[1] = samprate / 4;
+  frontend->spurs[2] = (3 * samprate) / 8;
+
   return 0;
 }
 

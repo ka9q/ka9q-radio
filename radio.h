@@ -112,6 +112,7 @@ struct frontend {
   float (*gain)(struct frontend *,float);
   float (*atten)(struct frontend *,float);
   struct filter_in in; // Input half of fast convolver, shared with all channels
+  double spurs[100]; // List of frequency spurs to notch (testing)
 };
 
 extern struct frontend Frontend; // Only one per radio instance
