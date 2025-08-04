@@ -372,6 +372,7 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
   frontend->spurs[1] = samprate / 4;
   frontend->spurs[2] = (3 * samprate) / 8;
   frontend->spurs[3] = samprate / 8;
+  frontend->spurs[4] = samprate/ 24;
 
 
   return 0;
