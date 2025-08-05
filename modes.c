@@ -37,6 +37,7 @@ static float const DEFAULT_HIGH = 5000.0;
 static float const DEFAULT_HEADROOM = -15.0;     // keep gaussian signals from clipping
 static float const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
 static float const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
+static bool const  DEFAULT_SNR_SQUELCH = false;  // enables squelch when true, so don't enable except in modes that use squelch
 static float const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
 static float const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
 static float const DEFAULT_GAIN = 50.0;         // Unused in FM, usually adjusted automatically in linear
@@ -167,6 +168,7 @@ int set_defaults(struct channel *chan){
   chan->squelch_open = dB2power(DEFAULT_SQUELCH_OPEN);
   chan->squelch_close = dB2power(DEFAULT_SQUELCH_CLOSE);
   chan->squelch_tail = DEFAULT_SQUELCH_TAIL;
+  chan->snr_squelch_enable = DEFAULT_SNR_SQUELCH;
   // De-emphasis defaults to off, enabled only in FM modes
   chan->fm.rate = 0;
   chan->fm.gain = 1.0;

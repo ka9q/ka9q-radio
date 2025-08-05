@@ -187,14 +187,8 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
     result = fobos_rx_get_board_info(dev, hw_revision, fw_version, manufacturer,
                                      product, serial);
     if (result == FOBOS_ERR_OK) {
-      fprintf(stderr, "--------------------------------------------\n");
-      fprintf(stderr, "Library Version:    %s\n", lib_version);
-      fprintf(stderr, "Driver Version:     %s\n", drv_version);
-      fprintf(stderr, "Hardware Revision:  %s\n", hw_revision);
-      fprintf(stderr, "Firmware Version:   %s\n", fw_version);
-      fprintf(stderr, "Manufacturer:       %s\n", manufacturer);
-      fprintf(stderr, "Product:            %s\n", product);
-      fprintf(stderr, "--------------------------------------------\n");
+      fprintf(stderr, "%s %s serial %s, hardware %s, lib %s, driver %s firmware %s\n",
+	      manufacturer,product,serial,hw_revision, lib_version,drv_version,fw_version);
     } else {
       fprintf(stderr, "Error fetching device info from fobos device: %d\n",
               sdr->device);
@@ -225,12 +219,11 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
     // Second call to fetch the actual sample rates
     result = fobos_rx_get_samplerates(dev, sampvalues, &samplecount);
     if (result == FOBOS_ERR_OK) {
-      fprintf(stderr, "--------------------------------------------\n");
-      fprintf(stderr, "Supported Sample Rates for SDR #%d:\n", sdr->device);
+      fprintf(stderr, "Supported Sample Rates for SDR #%d: ", sdr->device);
       for (unsigned int i = 0; i < samplecount; i++) {
-        fprintf(stderr, "  %.0f \n", sampvalues[i]);
+        fprintf(stderr, " %.0f", sampvalues[i]);
       }
-      fprintf(stderr, "--------------------------------------------\n");
+      fprintf(stderr, "\n");
     } else {
       fprintf(stderr, "Error fetching sample rates (error code: %d)\n", result);
       fobos_rx_close(dev);
@@ -406,9 +399,9 @@ static void *fobos_monitor(void *p) {
 
 static bool Name_set = false;
 static void rx_callback(float *buf, uint32_t len, void *ctx) {
-  struct sdrstate *sdr = (struct sdrstate *)ctx;
+  struct sdrstate * const sdr = (struct sdrstate *)ctx;
   assert(sdr != NULL);
-  struct frontend *const frontend = sdr->frontend;
+  struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
   if (!Name_set) {
@@ -440,7 +433,7 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
     assert(wptr != NULL);
 
     // read even samples for HF1, odd samples for HF2
-    int offs = sdr->hf_input == 2 ? 1 : 0;
+    int const offs = sdr->hf_input == 2 ? 1 : 0;
     for (int i=0; i < sampcount; i++){
       float const samp = buf[2 * i + offs];
       in_energy += samp * samp;       // Calculate energy of the sample
@@ -469,7 +462,8 @@ double fobos_tune(struct frontend *const frontend, double const freq) {
     return 0.0; // No tuning in direct sample mode
 
 
-  fprintf(stderr, "Trying to tune to: %f\n", freq);
+  if(Verbose)
+    fprintf(stderr, "Trying to tune to: %f\n", freq);
   double frequency_actual = 0.0;
   int result = fobos_rx_set_frequency(dev, freq, &frequency_actual);
   if (result != 0) {
