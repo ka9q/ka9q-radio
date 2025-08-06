@@ -104,6 +104,14 @@ struct sdrstate {
   pthread_t cmd_thread;
   pthread_t proc_thread;
   pthread_t agc_thread;
+  // si531 clock generator registers
+  unsigned int pll_a;
+  unsigned int pll_b;
+  unsigned int pll_c;
+  unsigned int output_a;
+  unsigned int output_b;
+  unsigned int output_c;
+  bool new_clock;
 };
 
 static void rx_callback(struct libusb_transfer *transfer);
@@ -155,6 +163,7 @@ static char const *Rx888_keys[] = {
   "gaincal",
   "gainmode", // Obsolete
   "library",
+  "new-clock",  // experimental Si5351 sample clock generator algorithm
   "queuedepth",
   "rand",    // Hardware randomizer, probably doesn't help reduce spurs but it should be tested
   "reference", // Clock reference, default 27 MHz (unlike 10 MHz, nobody cares if that gets into your receiver)
@@ -292,6 +301,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   }
   sdr->reference = reference * (1 + calibrate);
   usleep(5000);
+  sdr->new_clock = config_getboolean(dictionary,section,"new-clock",sdr->new_clock);
   rx888_set_samprate(sdr,sdr->reference,samprate);
   frontend->samprate = samprate;
 
@@ -313,8 +323,13 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // start clock
   control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
   // power on clock 0
-  //  uint8_t const clock_control = SI5351_VALUE_MS_INT | SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
-  uint8_t const clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
+
+  uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
+
+  // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer. It is in the original code, which sets it to 6.
+  if(sdr->output_b == 0)
+    clock_control |= SI5351_VALUE_MS_INT;
+
   control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_CLK_BASE+0,clock_control);
   {
     char const *p = config_getstring(dictionary,section,"description",Description ? Description : "rx888");
@@ -330,11 +345,11 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 
   Power_smooth = -expm1(-xfer_time/Ptc);
 
-  fprintf(stderr,"RX888 AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
+  fprintf(stderr,"RX888 AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec), new-clock %d\n",
 	  frontend->rf_agc ? "on" : "off",
 	  gain,frontend->rf_gain,frontend->rf_atten,frontend->rf_level_cal,
 sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
-	  xfer_time);
+	  xfer_time,sdr->new_clock);
 
 #if 0
   // VHF-UHF tuning
@@ -365,16 +380,17 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
   if(frontend->frequency == 0)
     rx888_set_hf_mode(sdr);
   usleep(1000000); // 1s - see SDDC_FX3 firmware
+
   // Experimental spur notching
   frontend->spurs[0] = sdr->reference; // reference clock
-  frontend->spurs[1] = samprate / 4;
-  frontend->spurs[2] = (3 * samprate) / 8;
-  frontend->spurs[3] = samprate / 8;
-  frontend->spurs[4] = samprate/ 24;
+  frontend->spurs[1] = samprate / 8;
+  frontend->spurs[2] = samprate / 4;  // 2/8
+  frontend->spurs[3] = (3 * samprate) / 8;
+#if 0
   frontend->spurs[5] = 1.2 * sdr->reference;
   frontend->spurs[6] = 1.4 * sdr->reference;
   frontend->spurs[7] = 1.6 * sdr->reference;
-  frontend->spurs[8] = 0; // DC, for completeness
+#endif
 
   return 0;
 }
@@ -717,6 +733,16 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
 	fprintf(stderr,", serial '%s'",serial);
       }
     }
+    enum libusb_speed usb_speed = libusb_get_device_speed(device);
+    if(usb_speed < N_USB_SPEEDS)
+      fprintf(stderr,", USB speed: %s",usb_speeds[usb_speed]);
+    else
+      fprintf(stderr,", unknown rx888 USB speed index %d",usb_speed);
+
+    if(usb_speed < LIBUSB_SPEED_SUPER){
+      fprintf(stderr,": not at least SuperSpeed; is it plugged into a blue USB jack?\n");
+      continue; // Keep looking, there just might be another
+    }
     // Is this the droid we're looking for?
     uint64_t serialnum = strtoll(serial,NULL,16);
     if(sdr->serial == 0 || sdr->serial == serialnum){
@@ -737,17 +763,6 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     fprintf(stderr,"Error or device could not be found\n");
     goto end;
   }
-  enum libusb_speed usb_speed = libusb_get_device_speed(device);
-  if(usb_speed < N_USB_SPEEDS)
-    fprintf(stderr,"rx888 USB speed: %s\n",usb_speeds[usb_speed]);
-  else
-    fprintf(stderr,"Unknown rx888 USB speed index %d\n",usb_speed);
-
-  if(usb_speed < LIBUSB_SPEED_SUPER){
-    fprintf(stderr,"rx888 USB device is not at least SuperSpeed; is it plugged into a blue USB jack?\n");
-    goto end;
-  }
-
   // Stop and reopen in case it was left running - KA9Q
   usleep(5000);
   command_send(sdr->dev_handle,STOPFX3,0);
@@ -883,15 +898,19 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf){
   sdr->scale = scale_AD(frontend);
 }
 
-#if 0
-// More optimal algorithm by ChatGPT (with a lot of prodding)
+// Alternate algorithm for sample clock settings of Si5351
+// Tries to find integer solutions for both PLL and output divisors
+// If none exist, find close result with integer PLL and fractional output
+// If *that* doesn't work, try closest value with both divisors fractional
+// Much of this comes from ChatGPT, and probably doesn't optimize the right things.
+// E.g. it doesn't know about integer boundary spurs
 typedef struct {
   double pll_freq;
-  double ms_div;
+  double output_divisor;
   double pll_mult;
   double error_ppm;
-  bool pll_int;
-  bool ms_int;
+  bool pll_is_int;
+  bool output_divisor_is_int;
   int rdiv_index;
   double samprate;
 } si5351_solution;
@@ -907,62 +926,69 @@ static void compute_registers(double value, int *a, int *b, int *c, int *P1, int
     *P3 = *c;
 }
 
-static double rx888_set_samprate(struct sdrstate *sdr,double const reference,double const samprate){
+static double new_rx888_set_samprate(struct sdrstate *sdr,double const reference,double const samprate){
   assert(sdr != NULL);
 
-  si5351_solution best = {0};
-  best.error_ppm = 1e9;  // large initial value
-  best.rdiv_index = -1; // invalid
-  
+  si5351_solution best = {
+    .error_ppm = 1e9,  // large initial value
+    .rdiv_index = -1,  // invalid to detect never being written
+  };
   static const int r_div_values[] = {1, 2, 4, 8, 16, 32, 64, 128};
 
   for(int rdiv_index = 0; rdiv_index < 8; rdiv_index++){
     if(samprate * r_div_values[rdiv_index] < SI5351_MS_MIN_FREQ)
       continue;
 
-    double rdiv = r_div_values[rdiv_index];
+    int const rdiv = r_div_values[rdiv_index];
 
-    // First try integer-only solutions
-    for (int m = SI5351_PLL_MIN_MULT; m <= SI5351_PLL_MAX_MULT; m++) {
-      double pll_freq = reference * m;
-      if (pll_freq < SI5351_MIN_VCO_FREQ || pll_freq > SI5351_MAX_VCO_FREQ)
-	continue;
-    
-      double ms_div = pll_freq / (samprate * rdiv);
-      if (ms_div >= SI5351_MIN_MS && ms_div <= SI5351_MAX_MS) {
-	// Check if ms_div is integer
-	if (fabs(ms_div - round(ms_div)) < 1e-9) {
+    // First try integer-only solutions for both PLL and MS
+    int start_pll_mult = SI5351_PLL_MIN_MULT;
+    if(reference * start_pll_mult < SI5351_MIN_VCO_FREQ)
+      start_pll_mult = ceil(SI5351_MIN_VCO_FREQ / reference);
+    for (int pll_mult = start_pll_mult; pll_mult <= SI5351_PLL_MAX_MULT; pll_mult++) { // should optimize starting m value
+      double const pll_freq = reference * pll_mult;
+      if (pll_freq > SI5351_MAX_VCO_FREQ)
+	break;
+
+      double const output_divisor = pll_freq / (samprate * rdiv);
+      if(output_divisor_ok(output_divisor)){
+	// Check if output_divisor is integer
+	if (fabs(output_divisor - round(output_divisor)) < 1e-9) {
 	  best.pll_freq = pll_freq;
-	  best.pll_mult = m;
-	  best.ms_div = round(ms_div);
+	  best.pll_mult = pll_mult;
+	  best.output_divisor = round(output_divisor);
 	  best.error_ppm = 0;
-	  best.pll_int = true;
-	  best.ms_int = true;
+	  best.pll_is_int = true;
+	  best.output_divisor_is_int = true;
 	  best.rdiv_index = rdiv_index;
-	  best.samprate = pll_freq / (ms_div * rdiv);
+	  best.samprate = pll_freq / (output_divisor * rdiv);
 	  goto gotit; // Perfect solution found
 	}
       }
     }
-    // If no perfect integer solution, find best fractional
-    for (int m = SI5351_PLL_MIN_MULT; m <= SI5351_PLL_MAX_MULT; m++) {
-      double pll_freq = reference * m;
-      if (pll_freq < SI5351_MIN_VCO_FREQ || pll_freq > SI5351_MAX_VCO_FREQ)
-	continue;
+    // If no perfect integer solution, find best solution with
+    // integer PLL and fractional MS
+    start_pll_mult = SI5351_PLL_MIN_MULT;
+    if(reference * start_pll_mult < SI5351_MIN_VCO_FREQ)
+      start_pll_mult = ceil(SI5351_MIN_VCO_FREQ / reference);
+    for (int pll_mult = start_pll_mult; pll_mult <= SI5351_PLL_MAX_MULT; pll_mult++) { // should optimize starting m value
+      double const pll_freq = reference * pll_mult;
+      if(pll_freq > SI5351_MAX_VCO_FREQ)
+	break;
       
-      double ms_div = pll_freq / (rdiv * samprate);
-      if (ms_div >= SI5351_MIN_MS && ms_div <= SI5351_MAX_MS) {
-	double actual_samprate = pll_freq / (ms_div * rdiv);
+      double const output_divisor = pll_freq / (rdiv * samprate);
+      if(output_divisor_ok(output_divisor)){
+	double actual_samprate = pll_freq / (output_divisor * rdiv);
 	double error_ppm = fabs((actual_samprate - samprate) / samprate) * 1e6;
 	if (error_ppm < best.error_ppm) {
 	  best.rdiv_index = rdiv_index;
 	  best.samprate = actual_samprate;
 	  best.pll_freq = pll_freq;
-	  best.pll_mult = m;
-	  best.ms_div = ms_div;
+	  best.pll_mult = pll_mult;
+	  best.output_divisor = output_divisor;
 	  best.error_ppm = error_ppm;
-	  best.pll_int = true; // still integer PLL here
-	  best.ms_int = false; // but the multisynth is not
+	  best.pll_is_int = true; // still integer PLL here
+	  best.output_divisor_is_int = false; // but the multisynth is not
 	}
       }
     }
@@ -970,27 +996,31 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
       goto gotit;
     
     // If no integer PLL solution, allow fractional PLL multiplier
-    double pll_step = 0.01; // step size for PLL fractional multiplier (adjust for speed vs accuracy)
-    for (double m = SI5351_PLL_MIN_MULT; m <= SI5351_PLL_MAX_MULT; m += pll_step) {
-      double pll_freq = reference * m;
-      if (pll_freq < SI5351_MIN_VCO_FREQ || pll_freq > SI5351_MAX_VCO_FREQ)
-	continue;
+    double const pll_step = 0.01; // step size for PLL fractional multiplier (adjust for speed vs accuracy)
+    start_pll_mult = SI5351_PLL_MIN_MULT;
+    if(reference * start_pll_mult < SI5351_MIN_VCO_FREQ)
+      start_pll_mult = ceil(SI5351_MIN_VCO_FREQ / reference);
+    for (double pll_mult = start_pll_mult; pll_mult <= SI5351_PLL_MAX_MULT; pll_mult += pll_step) {
+      double const pll_freq = reference * pll_mult;
+      if(pll_freq > SI5351_MAX_VCO_FREQ)
+	break;
       
       // MultiSynth divider range
-      double ms_div = pll_freq / (rdiv * samprate);
-      if (ms_div >= SI5351_MIN_MS && ms_div <= SI5351_MAX_MS) {
-	double actual_samprate = pll_freq / (ms_div * rdiv);
-	double error_ppm = fabs((actual_samprate - samprate) / samprate) * 1e6;
+      double const output_divisor = pll_freq / (rdiv * samprate);
+      if(output_divisor_ok(output_divisor)){
+	double const actual_samprate = pll_freq / (output_divisor * rdiv);
+	double const error_ppm = fabs((actual_samprate - samprate) / samprate) * 1e6;
 	if (error_ppm < best.error_ppm
-	    || (error_ppm - best.error_ppm < 1.0 && !best.ms_int && best.ms_int)){
+	    || (error_ppm - best.error_ppm < 1.0 && !best.output_divisor_is_int && best.output_divisor_is_int)){
+	  // Take it if it's better, or even if it's a little worse but an integer solution when the previous one wasn't
 	  best.rdiv_index = rdiv_index;
 	  best.samprate = actual_samprate;
 	  best.pll_freq = pll_freq;
-	  best.pll_mult = m;
-	  best.ms_div = ms_div;
+	  best.pll_mult = pll_mult;
+	  best.output_divisor = output_divisor;
 	  best.error_ppm = error_ppm;
-	  best.pll_int = (fabs(m - round(m)) < 1e-9);
-	  best.ms_int = (fabs(ms_div - round(ms_div)) < 1e-9);
+	  best.pll_is_int = (fabs(pll_mult - round(pll_mult)) < 1e-9);
+	  best.output_divisor_is_int = (fabs(output_divisor - round(output_divisor)) < 1e-9);
 	}
       }
     }
@@ -1002,9 +1032,17 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
   }
   int a, b, c, P1, P2, P3;
   compute_registers(best.pll_mult, &a, &b, &c, &P1, &P2, &P3);
-  fprintf(stderr,"RX888 Si5351 PLL: [ref = %'lf] * [%'lf = (%d + %d / %d)] = vco = %'lf; P1=%d, P2=%d, P3=%d\n",
+
+  sdr->pll_a = a;
+  sdr->pll_b = b;
+  sdr->pll_c = c;
+
+  double pll_ratio = (double)a + (double)b / (double)c;
+  double const vco = reference * pll_ratio;
+
+  fprintf(stderr,"RX888 Si5351 PLL: vco = ref * (a + b/c) = %'lf * (%'d + %'d / %'d) = %'lf * %'lf = %'lf; P1=%d, P2=%d, P3=%d\n",
 	  reference,
-	  best.pll_mult, a, b, c, best.pll_freq, P1, P2, P3);
+	  a, b, c, reference, pll_ratio, vco, P1, P2, P3);
 
   uint8_t data_clkin[] = {
     (P3 & 0x0000ff00) >>  8,
@@ -1012,49 +1050,52 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
     (P1 & 0x00030000) >> 16,
     (P1 & 0x0000ff00) >>  8,
     (P1 & 0x000000ff) >>  0,
-    (P3 & 0x000f0000) >> 12 | (P2 & 0x000f0000) >> 16,
+    ((P3 & 0x000f0000) >> 12) | ((P2 & 0x000f0000) >> 16),
     (P2 & 0x0000ff00) >>  8,
     (P2 & 0x000000ff) >>  0
   };
-  fprintf(stderr,"pll registers:");
-  for(int i = 0; i < 8; i++)
-    fprintf(stderr," %02x",data_clkin[i]);
-  fprintf(stderr,"\n");
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
 
-  compute_registers(best.ms_div, &a, &b, &c, &P1, &P2, &P3);
-  fprintf(stderr,"RX888 Si5351 MS: vco / (%d * [%'lf = %d + %d / %d]) = %'lf; P1=%d, P2=%d, P3=%d\n",
+  int d,e,f;
+  compute_registers(best.output_divisor, &d, &e, &f, &P1, &P2, &P3);
+  sdr->output_a = d;
+  sdr->output_b = e;
+  sdr->output_c = f;
+
+  double const output_ratio = (double)d + (double)e / (double)f;
+  fprintf(stderr,"RX888 Si5351 output divider: samprate = vco / ((R (a + b/c))) = %'lf / (%'d (%'d + %'d / %'d)) = %'lf / %'lf = %'lf (error = %'lg); P1=%d, P2=%d, P3=%d\n",
+	  vco,
 	  r_div_values[best.rdiv_index],
-	  best.ms_div,
-	  a, b, c,
-	  best.samprate,
+	  d, e, f,
+	  vco,
+	  output_ratio,
+	  vco / output_ratio,
+	  vco/output_ratio - samprate,
 	  P1, P2, P3);
   
   uint8_t data_clkout[] = {
     (P3 & 0x0000ff00) >>  8,
     (P3 & 0x000000ff) >>  0,
-    ((P1 & 0x00030000) >> 16) | (best.rdiv_index << 4),
+    (best.rdiv_index << 4) | ((P1 & 0x00030000) >> 16),
     (P1 & 0x0000ff00) >>  8,
     (P1 & 0x000000ff) >>  0,
-    (P3 & 0x000f0000) >> 12 | (P2 & 0x000f0000) >> 16,
+    ((P3 & 0x000f0000) >> 12) | ((P2 & 0x000f0000) >> 16),
     (P2 & 0x0000ff00) >>  8,
     (P2 & 0x000000ff) >>  0
   };
-  fprintf(stderr,"pll registers:");
-  for(int i = 0; i < 8; i++)
-    fprintf(stderr," %02x",data_clkout[i]);
-  fprintf(stderr,"\n");
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
-  return best.samprate;
+  return vco/output_ratio;
 }
 
-#else 
 
 static void rational_approximation(double value, uint32_t max_denominator, uint32_t *a, uint32_t *b, uint32_t *c);
 
 // see: SiLabs Application Note AN619 - Manually Generating an Si5351 Register Map (https://www.silabs.com/documents/public/application-notes/AN619.pdf)
 static double rx888_set_samprate(struct sdrstate *sdr,double const reference,double const samprate){
   assert(sdr != NULL);
+
+  if(sdr->new_clock)
+    return new_rx888_set_samprate(sdr,reference,samprate);
 
 #if 0
   // Should we always do it ourselves?
@@ -1100,15 +1141,9 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
   double const pll_ratio = a + (double)b / (double)c;
   double const vco = reference * pll_ratio;
   double output_samprate = vco / (output_ms * (1 << rdiv));
-
-  fprintf(stderr,"Nominal samprate %'lf, reference %'lf, feedback divisor %d + %d/%d, VCO %'lf, integer divisor %d * %d, output = %'lf\n",
-	  samprate,
-	  reference,
-	  a,b,c,
-	  vco,
-	  output_ms,
-	  1<<rdiv,
-	  output_samprate);
+  sdr->pll_a = a;
+  sdr->pll_b = b;
+  sdr->pll_c = c;
 
   // Now fine-tune the output divider to get closer
   double output_divider = vco / (samprate * (1 << rdiv));
@@ -1116,14 +1151,23 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
   rational_approximation(output_divider,SI5351_MAX_DENOMINATOR,&d,&e,&f);
   output_divider = d + (double)e/f;
   output_samprate = vco / (output_divider * (1 << rdiv));
-
-  fprintf(stderr,"Output divider %d + %d/%d, rdiv %d, actual samprate = %'lf\n",d,e,f,(1<<rdiv),output_samprate);
+  sdr->output_a = d;
+  sdr->output_b = e;
+  sdr->output_c = f;
 
   /* configure clock input and PLL */
   uint32_t const b_over_c = 128 * b / c;
   uint32_t const msn_p1 = 128 * a + b_over_c - 512;
   uint32_t const msn_p2 = 128 * b  - c * b_over_c;
   uint32_t const msn_p3 = c;
+
+  fprintf(stderr,"RX888 Si5351 PLL: vco = ref * (a + b/c) = %'lf * (%'d + %'d / %'d) = %'lf * %'lf = %'lf; P1=%d, P2=%d, P3=%d\n",
+	  reference,
+	  a, b, c,
+	  reference,
+	  pll_ratio,
+	  vco,
+	  msn_p1, msn_p2, msn_p3);
 
   uint8_t data_clkin[] = {
     (msn_p3 & 0x0000ff00) >>  8,
@@ -1143,6 +1187,15 @@ static double rx888_set_samprate(struct sdrstate *sdr,double const reference,dou
   uint32_t const ms_p1 = 128 * d + e_over_f - 512;
   uint32_t const ms_p2 = 128 * e - f * e_over_f;
   uint32_t const ms_p3 = f;
+
+  fprintf(stderr,"RX888 Si5351 output divider: samprate = vco / ((R (a + b/c))) = %'lf / (%'d (%'d + %'d / %'d)) = %'lf / %'lf = %'lf; P1=%d, P2=%d, P3=%d\n",
+	  vco,
+	  1<<rdiv,
+	  d, e, f,
+	  vco,
+	  output_divider,
+	  vco / output_divider,
+	  ms_p1, ms_p2, ms_p3);
 
   uint8_t data_clkout[] = {
     (ms_p3 & 0x0000ff00) >>  8,
@@ -1206,9 +1259,6 @@ static void rational_approximation(double value, uint32_t max_denominator,
   }
   return;
 }
-
-
-#endif
 
 
 static void rx888_set_hf_mode(struct sdrstate *sdr){
@@ -1431,12 +1481,12 @@ static double actual_freq(double frequency){
 
     double actualPllFreq = (double) xtalFreq * (mult + (double) num / (double) denom);
 #if 0
-    fprintf(stderr, "actual PLL frequency: %d * (%d + %d / %d) = %lf\n", xtalFreq, mult, num, denom,actualPllFreq);
+    fprintf(stderr, "actual PLL frequency: %d * (%d + %d / %d) = %'lf\n", xtalFreq, mult, num, denom,actualPllFreq);
 #endif
 
     double actualAdcFreq = actualPllFreq / (double) divider;
 #if 0
-    fprintf(stderr, "actual ADC frequency: %lf / %d = %lf\n", actualPllFreq, divider, actualAdcFreq);
+    fprintf(stderr, "actual ADC frequency: %lf / %d = %'lf\n", actualPllFreq, divider, actualAdcFreq);
 #endif
     return actualAdcFreq;
 }
