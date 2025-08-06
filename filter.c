@@ -55,8 +55,6 @@ int FFTW_planning_level = FFTW_PATIENT;
 pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool FFTW_init = false;
 
-static const float Notch_alpha = .01; // empirical - beware loss of precision in float
-
 // FFT job descriptor
 struct fft_job {
   struct fft_job *next;
@@ -459,7 +457,7 @@ void *run_fft(void *p){
     if(job->f->notches != NULL){
       struct notch_state * notches = job->f->notches;
       while(true){
-	notches->state += Notch_alpha * (job->output[notches->bin] - notches->state);
+	notches->state += notches->alpha * (job->output[notches->bin] - notches->state);
 	job->output[notches->bin] -= notches->state;
 	if(notches->bin == 0)
 	  break; // DC entry is last
@@ -530,7 +528,7 @@ int execute_filter_input(struct filter_in * const f){
     if(f->notches != NULL){
       struct notch_state * notches = f->notches;
       while(true){
-	notches->state += Notch_alpha * (output[notches->bin] - notches->state);
+	notches->state += notches->alpha * (output[notches->bin] - notches->state);
 	output[notches->bin] -= notches->state;
 	if(notches->bin == 0)
 	  break; // DC entry is last

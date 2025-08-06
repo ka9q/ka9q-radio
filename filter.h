@@ -40,7 +40,8 @@ struct rc {
 };
 struct notch_state {
   int bin;
-  float complex state;
+  double complex state; // averaged spur vector
+  double alpha;         // gain of averager, larger -> wider notch
 };
 
 #define ND 4

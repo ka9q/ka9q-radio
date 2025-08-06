@@ -953,6 +953,7 @@ static int setup_hardware(char const *sname){
     if(r != 0)
       break;
     Frontend.in.notches[i].bin = abs(shift);
+    Frontend.in.notches[i].alpha = .01; // Arbitrary, make adaptive
     if(shift == 0)
       break;
   }
