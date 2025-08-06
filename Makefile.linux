@@ -1,3 +1,5 @@
+# -*- makefile -*-
+
 # Primary Linux makefile for ka9q-radio package
 # Copyright 2017-2025, Phil Karn, KA9Q
 # By default, builds release version
@@ -13,18 +15,21 @@ else
      DOPTS = -DNDEBUG=1 -O3
 endif
 
-ifeq ($(SANITIZE),1)
+ifdef SANITIZE
      DOPTS += -fsanitize=address -fsanitize=undefined
      LDOPTS = -fsanitize=address -fsanitize=undefined
 endif
 
-ifeq ($(DYNAMIC),1)
+ifdef DYNAMIC
      echo "Dynamic is now the default. STATIC=1 builds a static version of radiod"
 endif
 
 ARCHOPTS = -march=native
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
 COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -D_GNU_SOURCE=1 -Wextra -MMD -MP
+ifndef STATIC
+COPTS += -fPIC
+endif
 CFLAGS = $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
 BINDIR = /usr/local/bin
 LIBDIR = /usr/local/share/ka9q-radio
@@ -40,8 +45,8 @@ EXECS = control jt-decoded metadump monitor pcmrecord pl powers tune wd-record
 SCRIPTS = set_lo_multicast.sh
 LIBRADIO = ax25.o morse.o bandplan.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o
 DYNAMIC_DRIVERS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so
-STATIC_DRIVERS = rx888.o airspyhf.o airspy.o sig_gen.o funcube.o rtlsdr.o fcd.o ezusb.o hid-libusb.o
-RADIOD_OBJECTS = audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libradio.a
+STATIC_DRIVERS = rx888.o airspyhf.o airspy.o sig_gen.o funcube.o rtlsdr.o ezusb.o
+RADIOD_OBJECTS = audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o fcd.o hid-libusb.o libradio.a
 LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate
 BLACKLIST = airspy-blacklist.conf
 SYSCTL = 98-sockbuf.conf 50-multicast.conf
@@ -98,14 +103,14 @@ else
    EXECS += set_xcvr
 endif
 
-ifeq ($(STATIC),1)
+ifdef STATIC
 all: $(DAEMONS) $(EXECS)
 else
 all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 endif
 
 # NB: no longer copies files to /etc/radio. Must be installed manually.
-ifeq ($(STATIC),1)
+ifdef STATIC
 install: $(DAEMONS) $(EXECS)
 else
 install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
@@ -144,11 +149,14 @@ doc:
 	rm -rf html latex man
 	doxygen
 
-DEPS = $(CFILES:.c=.d)
+DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
 
 -include $(DEPS)
 
 .PHONY: clean all install doc dynamics
+
+# keep all .o files
+.SECONDARY:
 
 dynamics: $(DYNAMIC_DRIVERS)
 
@@ -213,10 +221,10 @@ pl: pl.o libradio.a
 
 ifeq ($(STATIC),1)
 radiod: main-static.o $(RADIOD_OBJECTS) $(STATIC_DRIVERS)
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lportaudio -lairspy -lairspyhf -lrtlsdr -lusb-1.0 -ldl -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lportaudio -lairspy -lairspyhf -lrtlsdr -lusb-1.0 -ldl -lbsd -lm -lpthread
 else
 radiod: main.o $(RADIOD_OBJECTS)
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -ldl -lbsd -lm -lpthread
+	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl -lbsd -lm -lpthread
 endif
 
 rdsd: rdsd.o libradio.a
@@ -239,77 +247,32 @@ set_xcvr: set_xcvr.o libradio.a
 main-static.o: main.c
 	$(CC) -c -DSTATIC=1 $(CFLAGS) -o $@ $^
 
-# device shared libraries - build kludgey separate -fpic versions of
-# drivers already built in for testing
-# To test, do 'make DYNAMIC=1'
-funcube.so: funcube-pic.o fcd-pic.o hid-libusb-pic.o
+funcube.so: funcube.o fcd.o hid-libusb.o
 	$(CC) -shared -o $@ $^ -lportaudio
 
-rx888.so: rx888-pic.o ezusb-pic.o hid-libusb-pic.o
+rx888.so: rx888.o ezusb.o hid-libusb.o
 	$(CC) -shared -o $@ $^ -lusb-1.0
 
-airspy.so: airspy-pic.o
+airspy.so: airspy.o
 	$(CC) -shared -o $@ $^ -lairspy
 
-airspyhf.so: airspyhf-pic.o
+airspyhf.so: airspyhf.o
 	$(CC) -shared -o $@ $^ -lairspyhf
 
-rtlsdr.so: rtlsdr-pic.o
+rtlsdr.so: rtlsdr.o
 	$(CC) -shared -o $@ $^ -lrtlsdr
 
-sig_gen.so: sig_gen-pic.o
-	$(CC) -shared -o $@ $^
-
-sdrplay.so: sdrplay-pic.o
+sdrplay.so: sdrplay.o
 	$(CC) -shared -o $@ $^ -lsdrplay_api
 
-fobos.so: fobos-pic.o
+fobos.so: fobos.o
 	$(CC) -shared -o $@ $^ -lfobos
 
-hackrf.so: hackrf-pic.o
+hackrf.so: hackrf.o
 	$(CC) -shared -o $@ $^ -lhackrf -lusb-1.0
 
-bladerf.so: bladerf-pic.o
+bladerf.so: bladerf.o
 	$(CC) -shared -o $@ $^ -lbladeRF
-
-funcube-pic.o: funcube.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-airspy-pic.o: airspy.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-rtlsdr-pic.o: rtlsdr.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-sig_gen-pic.o: sig_gen.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-rx888-pic.o: rx888.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-airspyhf-pic.o: airspyhf.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-ezusb-pic.o: ezusb.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-hid-libusb-pic.o: hid-libusb.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-fcd-pic.o: fcd.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-sdrplay-pic.o: sdrplay.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-fobos-pic.o: fobos.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-hackrf-pic.o: hackrf.c
-	$(CC) -c -fpic $(CFLAGS) -o $@ $^
-
-bladerf-pic.o: bladerf.c
-	$(CC) -c -fPIC $(CFLAGS) -o $@ $^
 
 # subroutines useful in more than one program
 libradio.a: $(LIBRADIO)
@@ -318,3 +281,6 @@ libradio.a: $(LIBRADIO)
 
 %.so: %.o
 	$(CC) -shared -o $@ $<
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
