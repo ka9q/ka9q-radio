@@ -1749,15 +1749,19 @@ static size_t utf8_strlen(const char *str) {
 // Like mvwprintw, but right justify the formatted output on the line and overlay with
 // a left-justified label
 static int pprintw(WINDOW *w,int y, int x, char const *label, char const *fmt,...){
-  int maxy __attribute__((unused)); // needed for getmaxyx
+  int maxy;
   int maxx;
   getmaxyx(w,maxy,maxx);
+
+  if(maxy < 0 || maxy > 1000 || maxx < 0 || maxy > 1000){
+    return -1;
+  }
 
   // Format the variables
   va_list ap;
   va_start(ap,fmt);
   char result[maxx+1];
-  memset(result,0,sizeof(result));
+  memset(result,0,maxx+1);
   int const r = vsnprintf(result,sizeof(result)-1,fmt,ap);
   va_end(ap);
 
