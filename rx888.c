@@ -389,6 +389,8 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
   frontend->spurs[2] = samprate / 4;  // 2/8
   frontend->spurs[3] = (3 * samprate) / 8;
   frontend->spurs[4] = 2 * sdr->reference;
+  if(samprate - 3 * sdr->reference > 0)
+    frontend->spurs[5] = samprate - 3 * sdr->reference; // 3rd harmonic of reference aliased back down
   return 0;
 }
 
