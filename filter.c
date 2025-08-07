@@ -63,7 +63,7 @@ struct fft_job {
   fftwf_plan plan;
   void *input; // either "float complex *" or "float *"
   float complex *output;
-  struct filter_in *f;
+  struct filter_in *fin;
   size_t input_dropsize;      // byte counts to drop from cache when FFT finishes
   pthread_mutex_t *completion_mutex; // protects completion_jobnum
   pthread_cond_t *completion_cond;   // Signaled when job is complete
@@ -473,8 +473,8 @@ void *run_fft(void *p){
     drop_cache(job->input,job->input_dropsize);
     // Apply notches, if any
 
-    if(job->f->notches != NULL)
-      apply_notch_filters(job->f->notches,job->output);
+    if(job->fin->notches != NULL)
+      apply_notch_filters(job->fin->notches,job->output);
 
     // Signal we're done with this job
     if(job->completion_mutex)
@@ -545,7 +545,6 @@ int execute_filter_input(struct filter_in * const f){
     return 0;
   }
 
-
   // set up a job for the FFT worker threads and enqueue it
   // Take one off the pool, if available
   pthread_mutex_lock(&FFT.queue_mutex);
@@ -561,7 +560,7 @@ int execute_filter_input(struct filter_in * const f){
 
   // A descriptor from the free list won't be blank, but we set everything below
   assert(job != NULL);
-  job->f = f;
+  job->fin = f;
   job->jobnum = f->next_jobnum++;
   job->output = f->fdomain[job->jobnum % ND];
   job->type = f->in_type;
