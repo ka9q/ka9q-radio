@@ -302,7 +302,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   sdr->reference = reference * (1 + calibrate);
   usleep(5000);
   sdr->new_clock = config_getboolean(dictionary,section,"new-clock",sdr->new_clock);
-  rx888_set_samprate(sdr,sdr->reference,samprate);
+  samprate = rx888_set_samprate(sdr,sdr->reference,samprate); // Update to actual samprate, if different
   frontend->samprate = samprate;
 
   sdr->undersample = config_getint(dictionary,section,"undersample",1);
@@ -388,6 +388,7 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
   frontend->spurs[1] = samprate / 8;
   frontend->spurs[2] = samprate / 4;  // 2/8
   frontend->spurs[3] = (3 * samprate) / 8;
+  frontend->spurs[4] = 2 * sdr->reference;
   return 0;
 }
 
