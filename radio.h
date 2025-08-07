@@ -50,7 +50,7 @@ int demod_type_from_name(char const *name);
 /**
 @brief Front end control block, one per radiod instance
 */
-#define NSPURS 100 // Size of table of front end spurs
+#define NSPURS 20 // Size of table of front end spurs - works on coherent only
 struct frontend {
 
   // Stuff we maintain about our upstream source

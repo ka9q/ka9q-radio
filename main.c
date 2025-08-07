@@ -956,9 +956,6 @@ static int setup_hardware(char const *sname){
     if(r != 0)
       break;
     notch->state = 0;
-    // phasor rotation per block (is the sign right?)
-    // Should be the complex conjugate of the signal vector's rotation in one block time (50 Hz)
-    notch->offset = cispi(-2 * remainder * Blocktime / 1000);
     notch->bin = abs(shift);
     notch->alpha = .01; //  About 10 sec. Arbitrary, make adaptive.
     if(shift == 0) // DC is implicitly last

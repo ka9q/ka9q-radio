@@ -381,18 +381,13 @@ sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsi
     rx888_set_hf_mode(sdr);
   usleep(1000000); // 1s - see SDDC_FX3 firmware
 
-  // Experimental spur notching
+  // Experimental spur notching, works on coherent spurs only
   // What generates 1/8, 2/8, 3/8? And probably 4/8 too, though that's the Nyquist freq
   // and we don't use it
   frontend->spurs[0] = sdr->reference; // reference clock
   frontend->spurs[1] = samprate / 8;
   frontend->spurs[2] = samprate / 4;  // 2/8
   frontend->spurs[3] = (3 * samprate) / 8;
-#if 0
-  frontend->spurs[4] = 1.2 * sdr->reference;
-  frontend->spurs[5] = 1.4 * sdr->reference;
-  frontend->spurs[6] = 1.6 * sdr->reference;
-#endif
   return 0;
 }
 

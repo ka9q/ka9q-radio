@@ -40,7 +40,6 @@ struct rc {
 };
 struct notch_state {
   int bin;              // Index of bin in frequency domain (output of filter_in)
-  double complex offset; // To be used for spurs not in the exact center of a bin
   double complex state; // averaged spur vector
   double alpha;         // gain of averager, larger -> wider notch
 };

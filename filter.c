@@ -429,9 +429,6 @@ static void apply_notch_filters(struct notch_state *notches,float complex *outpu
     output[notches->bin] -= notches->state;
     if(notches->bin == 0)
       break; // DC entry is last
-#if 0 // Not used yet
-    notches->state *= notches->offset; // Rotate by offset from center of bin to follow the new signal
-#endif
     notches++;
   }
 }
