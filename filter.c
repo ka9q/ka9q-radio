@@ -61,8 +61,9 @@ struct fft_job {
   unsigned int jobnum;
   enum filtertype type;
   fftwf_plan plan;
-  void *input;
-  void *output;
+  void *input; // either "float complex *" or "float *"
+  float complex *output;
+  struct filter_in *fin;
   size_t input_dropsize;      // byte counts to drop from cache when FFT finishes
   pthread_mutex_t *completion_mutex; // protects completion_jobnum
   pthread_cond_t *completion_cond;   // Signaled when job is complete
@@ -417,6 +418,21 @@ static bool goodchoice(unsigned long n){
     return true;
 }
 
+// Apply notch filters in the frequency domain to the output of a forward FFT
+// When a list exists, DC is implicitly at the end
+static void apply_notch_filters(struct notch_state *notches,float complex *output){
+  if(notches == NULL || output == NULL)
+    return;
+
+  while(true){
+    notches->state += notches->alpha * (output[notches->bin] - notches->state);
+    output[notches->bin] -= notches->state;
+    if(notches->bin == 0)
+      break; // DC entry is last
+    notches++;
+  }
+}
+
 // Worker thread(s) that actually execute FFTs
 // Used for input FFTs since they tend to be large and CPU-consuming
 // Lets the input thread process the next input block in parallel on another core
@@ -452,6 +468,11 @@ void *run_fft(void *p){
       }
     }
     drop_cache(job->input,job->input_dropsize);
+    // Apply notches, if any
+
+    if(job->fin->notches != NULL)
+      apply_notch_filters(job->fin->notches,job->output);
+
     // Signal we're done with this job
     if(job->completion_mutex)
       pthread_mutex_lock(job->completion_mutex);
@@ -476,7 +497,6 @@ void *run_fft(void *p){
   return NULL;
 }
 
-
 // Execute the input side of a filter:
 // We use the FFTW3 functions that specify the input and output arrays
 int execute_filter_input(struct filter_in * const f){
@@ -487,7 +507,7 @@ int execute_filter_input(struct filter_in * const f){
   if(f->perform_inline){
     // Just execute it here
     int jobnum = f->next_jobnum++;
-    float complex *output = f->fdomain[jobnum % ND];
+    float complex * const output = f->fdomain[jobnum % ND];
     switch(f->in_type){
     default:
     case CROSS_CONJ:
@@ -510,6 +530,10 @@ int execute_filter_input(struct filter_in * const f){
       }
       break;
     }
+    // Apply notches, if any
+    if(f->notches != NULL)
+      apply_notch_filters(f->notches,output);
+
     // Signal we're done with this job
     pthread_mutex_lock(&f->filter_mutex);
     f->completed_jobs[jobnum % ND] = jobnum;
@@ -533,6 +557,7 @@ int execute_filter_input(struct filter_in * const f){
 
   // A descriptor from the free list won't be blank, but we set everything below
   assert(job != NULL);
+  job->fin = f;
   job->jobnum = f->next_jobnum++;
   job->output = f->fdomain[job->jobnum % ND];
   job->type = f->in_type;

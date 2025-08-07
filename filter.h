@@ -38,6 +38,11 @@ struct rc {
   float *r;
   float complex *c;
 };
+struct notch_state {
+  int bin;              // Index of bin in frequency domain (output of filter_in)
+  double complex state; // averaged spur vector
+  double alpha;         // gain of averager, larger -> wider notch
+};
 
 #define ND 4
 struct filter_in {
@@ -56,6 +61,7 @@ struct filter_in {
   pthread_mutex_t filter_mutex;      // Synchronization for sequence number
   pthread_cond_t filter_cond;
 
+  struct notch_state *notches;
   float complex *fdomain[ND];
   unsigned int next_jobnum;
   unsigned int completed_jobs[ND];
