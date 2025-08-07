@@ -418,6 +418,24 @@ static bool goodchoice(unsigned long n){
     return true;
 }
 
+// Apply notch filters in the frequency domain to the output of a forward FFT
+// When a list exists, DC is implicitly at the end
+static void apply_notch_filters(struct notch_state *notches,float complex *output){
+  if(notches == NULL || output == NULL)
+    return;
+
+  while(true){
+    notches->state += notches->alpha * (output[notches->bin] - notches->state);
+    output[notches->bin] -= notches->state;
+    if(notches->bin == 0)
+      break; // DC entry is last
+#if 0 // Not used yet
+    notches->state *= notches->offset; // Rotate by offset from center of bin to follow the new signal
+#endif
+    notches++;
+  }
+}
+
 // Worker thread(s) that actually execute FFTs
 // Used for input FFTs since they tend to be large and CPU-consuming
 // Lets the input thread process the next input block in parallel on another core
@@ -454,16 +472,10 @@ void *run_fft(void *p){
     }
     drop_cache(job->input,job->input_dropsize);
     // Apply notches, if any
-    if(job->f->notches != NULL){
-      struct notch_state * notches = job->f->notches;
-      while(true){
-	notches->state += notches->alpha * (job->output[notches->bin] - notches->state);
-	job->output[notches->bin] -= notches->state;
-	if(notches->bin == 0)
-	  break; // DC entry is last
-	notches++;
-      }
-    }
+
+    if(job->f->notches != NULL)
+      apply_notch_filters(job->f->notches,job->output);
+
     // Signal we're done with this job
     if(job->completion_mutex)
       pthread_mutex_lock(job->completion_mutex);
@@ -487,9 +499,6 @@ void *run_fft(void *p){
   }
   return NULL;
 }
-
-
-
 
 // Execute the input side of a filter:
 // We use the FFTW3 functions that specify the input and output arrays
@@ -525,16 +534,9 @@ int execute_filter_input(struct filter_in * const f){
       break;
     }
     // Apply notches, if any
-    if(f->notches != NULL){
-      struct notch_state * notches = f->notches;
-      while(true){
-	notches->state += notches->alpha * (output[notches->bin] - notches->state);
-	output[notches->bin] -= notches->state;
-	if(notches->bin == 0)
-	  break; // DC entry is last
-	notches++;
-      }
-    }
+    if(f->notches != NULL)
+      apply_notch_filters(f->notches,output);
+
     // Signal we're done with this job
     pthread_mutex_lock(&f->filter_mutex);
     f->completed_jobs[jobnum % ND] = jobnum;

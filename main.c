@@ -945,17 +945,25 @@ static int setup_hardware(char const *sname){
   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
   // Create list of frequency spurs in filter input (experimental)
   Frontend.in.notches = calloc(100,sizeof (struct notch_state));
+  struct notch_state *notch = Frontend.in.notches;
   int const N = Frontend.M + Frontend.L - 1;
-  for(int i = 0; i < 100; i++){
+
+  // Initialize spur list. MUST leave last entry zeroed as sentinel; also doubles as 0 Hz (DC) suppression
+  for(int i = 0; i < NSPURS; i++){
     int shift;
-    double remainder;
+    double remainder; // Offset from bin center, Hz, e.g, -20 to +20. Or is it -25 to +25?
     int r = compute_tuning(N,Frontend.M,Frontend.samprate,&shift,&remainder,Frontend.spurs[i]);
     if(r != 0)
       break;
-    Frontend.in.notches[i].bin = abs(shift);
-    Frontend.in.notches[i].alpha = .01; // Arbitrary, make adaptive
-    if(shift == 0)
+    notch->state = 0;
+    // phasor rotation per block (is the sign right?)
+    // Should be the complex conjugate of the signal vector's rotation in one block time (50 Hz)
+    notch->offset = cispi(-2 * remainder * Blocktime / 1000);
+    notch->bin = abs(shift);
+    notch->alpha = .01; //  About 10 sec. Arbitrary, make adaptive.
+    if(shift == 0) // DC is implicitly last
       break;
+    notch++;
   }
   pthread_mutex_init(&Frontend.status_mutex,NULL);
   pthread_cond_init(&Frontend.status_cond,NULL);

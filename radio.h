@@ -50,6 +50,7 @@ int demod_type_from_name(char const *name);
 /**
 @brief Front end control block, one per radiod instance
 */
+#define NSPURS 100 // Size of table of front end spurs
 struct frontend {
 
   // Stuff we maintain about our upstream source
@@ -112,7 +113,7 @@ struct frontend {
   float (*gain)(struct frontend *,float);
   float (*atten)(struct frontend *,float);
   struct filter_in in; // Input half of fast convolver, shared with all channels
-  double spurs[100]; // List of frequency spurs to notch (testing)
+  double spurs[NSPURS]; // List of frequency spurs to notch, in Hertz (testing)
 };
 
 extern struct frontend Frontend; // Only one per radio instance
