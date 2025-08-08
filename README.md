@@ -48,8 +48,8 @@ code and configuration complexity and general lack of utility these
 separate programs have been obsoleted and the front end drivers built
 directly into *radiod*. Support is currently provided for generic
 RTL-SDR dongles, the Airspy R2, Airspy HF+, AMSAT UK Funcube Pro+ and
-RX-888 Mk II. The Rigexpert Fobos and the SDRPlay are now optionally
-supported.
+RX-888 Mk II. The Rigexpert Fobos, SDRPlay, BladeRF, HackRF, and
+HydraSDR are now optionally supported.
 
 A synthetic front end, *sig_gen*, is
 also provided. It simulates a front end, either complex or real,
