@@ -39,6 +39,8 @@ char const *Libdir = LIBDIR;
 // This allows to run the program either from build directory or from
 // installation directory.
 int dist_path(char *path,int path_len,const char *fname){
+  if(path == NULL)
+    return -1;
   char cwd[PATH_MAX];
   struct stat st;
 

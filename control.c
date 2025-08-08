@@ -651,7 +651,7 @@ int main(int argc,char *argv[]){
       // Postpone next poll to specified interval
       next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
       if(Blocktime == 0 && Frontend.samprate != 0)
-	Blocktime = 1000.0f * Frontend.L / Frontend.samprate; // Set the firat time
+	Blocktime = 1000.0f * Frontend.L / Frontend.samprate; // Set the first time
     } while(now < start_of_recv_poll + recv_timeout);
     // Set up command buffer in case we want to change something
     uint8_t cmdbuffer[PKTSIZE];
@@ -1356,7 +1356,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   // Play with Kaiser window values
   // Formulas taken from On the Use of the I0-sinh Window for Spectrum Analysis
   // James F Kaiser & Ronald W Schafer
-  // ieee transaction on accoustics feb 1980
+  // ieee transaction on acoustics feb 1980
   // Eq (7) attenuation of first sidelobe
   float const cos_theta_r = 0.217324; // cosine of the first solution of tan(x) = x [really]
   float atten = 20 * log10(sinh(beta) / (cos_theta_r * beta));
@@ -1414,7 +1414,7 @@ static void display_sig(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Input","%.1f dBm ",
 	  power2dB(Frontend.if_power) - (Frontend.rf_gain - Frontend.rf_atten + Frontend.rf_level_cal));
   // These gain figures only affect the relative A/D input level in dBFS because an equal
-  // amount of digital attenutation is applied to the A/D output to maintain unity gain
+  // amount of digital attenuation is applied to the A/D output to maintain unity gain
   pprintw(w,row++,col,"RF Gain","%.1f dB  ",Frontend.rf_gain);
   pprintw(w,row++,col,"RF Atten","%.1f dB  ",-Frontend.rf_atten);
   pprintw(w,row++,col,"RF lev cal","%.1f dB  ",Frontend.rf_level_cal);
@@ -1749,15 +1749,19 @@ static size_t utf8_strlen(const char *str) {
 // Like mvwprintw, but right justify the formatted output on the line and overlay with
 // a left-justified label
 static int pprintw(WINDOW *w,int y, int x, char const *label, char const *fmt,...){
-  int maxy __attribute__((unused)); // needed for getmaxyx
+  int maxy;
   int maxx;
   getmaxyx(w,maxy,maxx);
+
+  if(maxy < 0 || maxy > 1000 || maxx < 0 || maxy > 1000){
+    return -1;
+  }
 
   // Format the variables
   va_list ap;
   va_start(ap,fmt);
   char result[maxx+1];
-  memset(result,0,sizeof(result));
+  memset(result,0,maxx+1);
   int const r = vsnprintf(result,sizeof(result)-1,fmt,ap);
   va_end(ap);
 

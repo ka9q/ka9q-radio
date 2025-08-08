@@ -110,6 +110,7 @@ static struct morse Morse_table[] = {
   { L'ŭ', "..__" },   // u/U with breve
   { L'ź', "__.._." }, // z/Z with accent acute
   { L'ż', "__.._" },  // z/Z with overdot
+  { L'ß', "...__.." }, // German sharp s
 
   // Greek
   { L'α', "._" }, // alpha
