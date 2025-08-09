@@ -113,7 +113,6 @@ volatile bool Stop_transfers = false; // Request to stop data transfers; how sho
 
 static int64_t Starttime;      // System clock at timestamp 0, for RTCP
 static pthread_t Status_thread;
-struct sockaddr Metadata_dest_socket;      // Dest of global metadata
 static char *Metadata_dest_string; // DNS name of default multicast group for status/commands
 int Output_fd = -1; // Unconnected socket used for output when ttl > 0
 int Output_fd0 = -1; // Unconnected socket used for local loopback when ttl = 0
@@ -600,23 +599,23 @@ static int loadconfig(char const *file){
   // Look quickly (2 tries max) to see if it's already in the DNS
   {
     uint32_t addr = 0;
-    if(!Global_use_dns || resolve_mcast(Metadata_dest_string,&Metadata_dest_socket,DEFAULT_STAT_PORT,NULL,0,2) != 0)
+    if(!Global_use_dns || resolve_mcast(Metadata_dest_string,&Frontend.metadata_dest_socket,DEFAULT_STAT_PORT,NULL,0,2) != 0)
       addr = make_maddr(Metadata_dest_string);
 
     // If dns name already exists in the DNS, advertise the service record but not an address record
     // Advertise control/status channel with a ttl of at least 1
     char ttlmsg[128];
     snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",Template.output.ttl > 0? Template.output.ttl : 1);
-    size_t slen = sizeof(Metadata_dest_socket);
+    size_t slen = sizeof(Frontend.metadata_dest_socket);
     avahi_start(Frontend.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
 		Metadata_dest_string,addr,ttlmsg,
-		addr != 0 ? &Metadata_dest_socket : NULL,
+		addr != 0 ? &Frontend.metadata_dest_socket : NULL,
 		addr != 0 ? &slen : NULL);
   }
-  // either resolve_mcast() or avahi_start() has resolved the target DNS name into Metadata_dest_socket and inserted the port number
-  join_group(Output_fd,NULL,&Metadata_dest_socket,Iface);
+  // either resolve_mcast() or avahi_start() has resolved the target DNS name into Frontend.metadata_dest_socket and inserted the port number
+  join_group(Output_fd,NULL,&Frontend.metadata_dest_socket,Iface);
   // Same remote socket as status
-  Ctl_fd = listen_mcast(NULL,&Metadata_dest_socket,Iface);
+  Ctl_fd = listen_mcast(NULL,&Frontend.metadata_dest_socket,Iface);
   if(Ctl_fd < 0){
     fprintf(stderr,"can't listen for commands from %s: %s; no control channel is set\n",Metadata_dest_string,strerror(errno));
   } else {

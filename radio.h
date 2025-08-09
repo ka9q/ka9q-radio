@@ -52,7 +52,7 @@ int demod_type_from_name(char const *name);
 */
 #define NSPURS 20 // Size of table of front end spurs - works on coherent only
 struct frontend {
-
+  struct sockaddr metadata_dest_socket; // Moved here from global to remove unnecessary dynamic linkages
   // Stuff we maintain about our upstream source
   uint64_t samples;     // Count of raw I/Q samples received
   uint64_t overranges;  // Count of full scale A/D samples
@@ -104,6 +104,8 @@ struct frontend {
   // This structure is updated asynchronously by the front end thread, so it's protected
   pthread_mutex_t status_mutex;
   pthread_cond_t status_cond;     // Signalled whenever status changes
+
+
 
   // Entry points for local front end driver
   void *context;         // Stash hardware-dependent control block

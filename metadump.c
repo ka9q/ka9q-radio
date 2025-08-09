@@ -47,7 +47,6 @@ static char const *Radio;
 static uint32_t Ssrc;
 static int Status_packets;
 static int64_t Last_status_time;
-struct sockaddr_storage Metadata_dest_socket;
 char const *Source;
 struct sockaddr_storage *Source_socket;
 
