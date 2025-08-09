@@ -37,6 +37,8 @@ int demod_linear(void *arg){
     snprintf(name,sizeof(name),"lin %u",chan->output.rtp.ssrc);
     pthread_setname(name);
   }
+  struct frontend const * const frontend = chan->frontend;
+
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   FREE(chan->status.command);
@@ -50,7 +52,7 @@ int demod_linear(void *arg){
   delete_filter_output(&chan->filter.out);
   delete_filter_output(&chan->filter2.out);
   delete_filter_input(&chan->filter2.in);
-  int status = create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
+  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
     return -1;
@@ -75,8 +77,8 @@ int demod_linear(void *arg){
     float complex * buffer = chan->baseband; // Working buffer
 
     if (!first_run){
-      if(Frontend.L != 0){
-        int block_rate = Frontend.samprate / Frontend.L;
+      if(frontend->L != 0){
+        int block_rate = frontend->samprate / frontend->L;
         uint32_t first_block = chan->filter.out.next_jobnum - 1;
         chan->output.rtp.timestamp = first_block * (chan->output.samprate / block_rate);
         if(Verbose > 0)

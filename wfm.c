@@ -62,7 +62,7 @@ int demod_wfm(void *arg){
     goto quit; // Front end sample rate is too low - should probably fix filter to allow interpolation
 
   delete_filter_output(&chan->filter.out);
-  int status = create_filter_output(&chan->filter.out,&Frontend.in,NULL,composite_L,COMPLEX);
+  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,composite_L,COMPLEX);
   pthread_mutex_unlock(&chan->status.lock);
   if(status != 0)
     return -1; // fatal, don't restart

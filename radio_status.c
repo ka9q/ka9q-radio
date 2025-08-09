@@ -91,7 +91,7 @@ void *radio_status(void *arg){
 	  } else {
 	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	    decode_radio_commands(chan,buffer+1,length-1);
-	    send_radio_status((struct sockaddr *)&Frontend.metadata_dest_socket,&Frontend,chan); // Send status in response
+	    send_radio_status(&chan->frontend->metadata_dest_socket,chan->frontend,chan); // Send status in response
 	    reset_radio_status(chan);
 	    chan->status.global_timer = 0; // Just sent one
 	    start_demod(chan);
@@ -468,15 +468,15 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     case RF_ATTEN:
       {
 	float x = decode_float(cp,optlen);
-	if(!isnan(x) && Frontend.atten != NULL)
-	  (*Frontend.atten)(&Frontend,x);
+	if(!isnan(x) && chan->frontend->atten != NULL)
+	  (*chan->frontend->atten)(chan->frontend,x);
       }
       break;
     case RF_GAIN:
       {
 	float x = decode_float(cp,optlen);
-	if(!isnan(x) && Frontend.gain != NULL)
-	  (*Frontend.gain)(&Frontend,x);
+	if(!isnan(x) && chan->frontend->gain != NULL)
+	  (*chan->frontend->gain)(chan->frontend,x);
       }
       break;
     case MINPACKET:
@@ -549,7 +549,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
 
   // Snapshot the output RTP timestamp
   encode_int32(&bp,RTP_TIMESNAP,chan->output.rtp.timestamp);
-  encode_socket(&bp,STATUS_DEST_SOCKET,&Frontend.metadata_dest_socket);
+  encode_socket(&bp,STATUS_DEST_SOCKET,&chan->frontend->metadata_dest_socket);
   int64_t now = gps_time_ns();
   encode_int64(&bp,GPS_TIME,now);
   encode_int64(&bp,INPUT_SAMPLES,frontend->samples);

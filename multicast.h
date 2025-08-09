@@ -9,9 +9,6 @@
 #include <netdb.h>
 #include <assert.h>
 
-extern int IP_tos;
-
-
 char const *formatsock(void const *, bool);
 char *formataddr(char *result, int size, void const *s);
 

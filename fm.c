@@ -36,7 +36,7 @@ int demod_fm(void *arg){
 
   int const blocksize = chan->output.samprate * Blocktime / 1000;
   delete_filter_output(&chan->filter.out);
-  int status = create_filter_output(&chan->filter.out,&Frontend.in,NULL,blocksize,COMPLEX);
+  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,COMPLEX);
   pthread_mutex_unlock(&chan->status.lock);
   if(status != 0)
     return -1; // Fatal
