@@ -73,7 +73,7 @@ void hb15_block(struct hb15_state *state,float *output,float *input,int cnt){
     // Sum up terms
     temp = _mm_add_ps(temp,_mm_and_ps(even_samples,mask3)); // even_samples[3] (central tap, unity gain)
     temp = _mm_hadd_ps(temp,temp);
-    temp = _mm_hadd_ps(temp,temp);    
+    temp = _mm_hadd_ps(temp,temp);
 
     // Left shift one word (no longer need even_samples[3])
     even_samples = shiftleft(even_samples,1);
@@ -96,7 +96,7 @@ void hb3_block(float *state,float *output,float *input,int cnt){
   while(cnt--){
     in = _mm_loadl_pi(in,input);   // 0   0       IN[1]  IN[0]
     input += 2;
-    
+
     __m128 temp;
     temp = _mm_unpacklo_ps(in,oldstate); // 0   IN[1]            S           IN[0]
     temp = _mm_add_ps(temp,in);    // 0   IN[1]             S+IN[1]      2*IN[0]
@@ -132,14 +132,14 @@ void hb15_block(struct hb15_state *state,float *output,float *input,int cnt){
 
     for(int i=0; i < 4; i++)
       result += (odd_samples[i] + old_odd_samples[i]) * coeffs[i];
-    
+
     *output++ = result;
 
     for(int i=0; i < 3; i++)
       old_odd_samples[i] = old_odd_samples[i+1];
-    
+
     old_odd_samples[3] = odd_samples[3];
-    
+
     for(int i=2; i >= 0; i--)
       odd_samples[i+1] = odd_samples[i];
   }
