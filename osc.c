@@ -84,7 +84,7 @@ static bool Tab_init;
 // Initialize sine lookup table
 static void dds_init(void){
   for(unsigned long i=0; i <= TABSIZE; i++)
-    Lookup[i] = sinpif(0.5f * (float)i/TABSIZE);
+    Lookup[i] = sinf(M_PI * 0.5f * (float)i/TABSIZE);
 
   Tab_init = true;
 }
