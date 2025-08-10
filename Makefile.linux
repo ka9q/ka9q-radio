@@ -130,8 +130,8 @@ install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 endif
 	/usr/sbin/adduser --quiet --system --group radio
 	mkdir -p $(DIRS)
-	chown -R radio:radio $(DIRS)
-	chmod g+ws $(DIRS)
+	-chown -R radio:radio $(DIRS)
+	-chmod g+ws $(DIRS)
 	touch $(SYSFILES)
 	chgrp radio $(SYSFILES)
 	chmod g+w $(SYSFILES)
