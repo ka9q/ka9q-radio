@@ -221,7 +221,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
     if (result == FOBOS_ERR_OK) {
       fprintf(stderr, "Supported Sample Rates for SDR #%d: ", sdr->device);
       for (unsigned int i = 0; i < samplecount; i++) {
-        fprintf(stderr, " %.0f", sampvalues[i]);
+        fprintf(stderr, " %'.0f", sampvalues[i]);
       }
       fprintf(stderr, "\n");
     } else {
