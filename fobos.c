@@ -36,6 +36,7 @@ static char const *Fobos_keys[] = {
   "description",
   "device",
   "direct_sampling",
+  "ext_clock", // Synonymous with clk_source, more descriptive
   "frequency",
   "hf_input",
   "library",
@@ -130,7 +131,8 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
       config_getdouble(dictionary, section, "samprate", 8000000.0);
   const char *serialnumcfg =
       config_getstring(dictionary, section, "serial", NULL);
-  int clk_sourcecfg = config_getint(dictionary, section, "clk_source", 0);
+  bool clk_sourcecfg = config_getboolean(dictionary, section, "clk_source", 0);
+  clk_sourcecfg = config_getboolean(dictionary, section, "ext_clock", clk_sourcecfg);
 
   // Get Fobos Library and Driver Version
   int result = 0;
@@ -221,7 +223,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
     if (result == FOBOS_ERR_OK) {
       fprintf(stderr, "Supported Sample Rates for SDR #%d: ", sdr->device);
       for (unsigned int i = 0; i < samplecount; i++) {
-        fprintf(stderr, " %.0f", sampvalues[i]);
+        fprintf(stderr, " %'.0f", sampvalues[i]);
       }
       fprintf(stderr, "\n");
     } else {
