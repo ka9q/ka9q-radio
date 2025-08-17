@@ -519,10 +519,6 @@ int downconvert(struct channel *chan){
     execute_filter_output(&chan->filter.out,-shift); // block until new data frame
     chan->status.blocks_since_poll++;
 
-    if(chan->filter.out.out_type == SPECTRUM){ // No output time-domain buffer in spectrum mode
-      chan->filter.bin_shift = shift; // Also used by spectrum.c:demod_spectrum() to know where to read direct from master
-      return 0;
-    }
     // set fine tuning frequency & phase
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
     if(shift != chan->filter.bin_shift || remainder != chan->filter.remainder){ // Detect startup
@@ -542,36 +538,38 @@ int downconvert(struct channel *chan){
     }
     chan->fine.phasor *= chan->filter.phase_adjust;
 
-    // Make fine tuning correction before secondary filtering
-    for(int n=0; n < chan->filter.out.olen; n++)
+    if(chan->filter.out.output.c != NULL){
+      // Make fine tuning correction before secondary filtering
+      for(int n=0; n < chan->filter.out.olen; n++)
       chan->filter.out.output.c[n] *= step_osc(&chan->fine);
 
-    if(chan->filter2.blocking == 0){
-      // No secondary filtering, done
-      chan->baseband = chan->filter.out.output.c;
-      chan->sampcount = chan->filter.out.olen;
-      break;
-    }
-    int r = write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen); // Will trigger execution of input side if buffer is full, returning 1
-    if(r > 0){
-      execute_filter_output(&chan->filter2.out,0); // No frequency shifting
-      chan->baseband = chan->filter2.out.output.c;
-      chan->sampcount = chan->filter2.out.olen;
-      break;
-    }
-  }
-  float energy = 0;
-  for(int n=0; n < chan->sampcount; n++)
-    energy += cnrmf(chan->baseband[n]);
-  chan->sig.bb_power = energy / chan->sampcount;
+      if(chan->filter2.blocking == 0){
+	// No secondary filtering, done
+	chan->baseband = chan->filter.out.output.c;
+	chan->sampcount = chan->filter.out.olen;
+      } else {
+	int r = write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen); // Will trigger execution of input side if buffer is full, returning 1
+	if(r > 0){
+	  execute_filter_output(&chan->filter2.out,0); // No frequency shifting
+	  chan->baseband = chan->filter2.out.output.c;
+	  chan->sampcount = chan->filter2.out.olen;
+	}
+      }
+      float energy = 0;
+      for(int n=0; n < chan->sampcount; n++)
+	energy += cnrmf(chan->baseband[n]);
+      chan->sig.bb_power = energy / chan->sampcount;
 
-  // Compute and exponentially smooth noise estimate
-  if(isnan(chan->sig.n0))
-     chan->sig.n0 = estimate_noise(chan,-shift);
-  else {
-    // Use double to minimize risk of denormalization in the smoother
-    double diff = estimate_noise(chan,-shift) - chan->sig.n0; // Shift is negative, just like compute_tuning. Note: must follow execute_filter_output()
-    chan->sig.n0 += Power_alpha * diff;
+      // Compute and exponentially smooth noise estimate
+      if(isnan(chan->sig.n0))
+	chan->sig.n0 = estimate_noise(chan,-shift);
+      else {
+	// Use double to minimize risk of denormalization in the smoother
+	double diff = estimate_noise(chan,-shift) - chan->sig.n0; // Shift is negative, just like compute_tuning. Note: must follow execute_filter_output()
+	chan->sig.n0 += Power_alpha * diff;
+      }
+    }
+    break;
   }
   return 0;
 }
