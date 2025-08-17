@@ -61,6 +61,7 @@ struct sdr {
   char serial[256];
 
   bool bias; // Bias tee on/off
+  int direct_sampling; // 0 - disable, 1 - I input, 2 - Q input
 
   // AGC
   bool agc;
@@ -81,6 +82,7 @@ static char const *Rtlsdr_keys[] = {
   "calibrate",
   "description",
   "device",
+  "direct_sampling",
   "frequency",
   "gain",
   "hardware",
@@ -179,9 +181,10 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     for(int i=0; i < ngains; i++)
       fprintf(stderr," %'d",gains[i]);
     fprintf(stderr,"\n");
-
   }
-  rtlsdr_set_direct_sampling(sdr->device, 0); // That's for HF
+
+  sdr->direct_sampling = config_getint(dictionary, section, "direct_sampling", 0);
+  rtlsdr_set_direct_sampling(sdr->device, sdr->direct_sampling);
   rtlsdr_set_offset_tuning(sdr->device,0); // Leave the DC spike for now
   rtlsdr_set_freq_correction(sdr->device,0); // don't use theirs, only good to integer ppm
   rtlsdr_set_tuner_bandwidth(sdr->device, 0); // Auto bandwidth
@@ -233,9 +236,9 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   }
 
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
-  fprintf(stderr,"%s, samprate %'d Hz, agc %d, gain %d, bias %d, init freq %'.3lf Hz, calibrate %.3g\n",
-	  frontend->description,frontend->samprate,sdr->agc,sdr->gain,sdr->bias,init_frequency,
-	  frontend->calibrate);
+  fprintf(stderr,"%s, samprate %'d Hz, agc %d, gain %d, bias %d, direct sampling %d, init freq %'.3lf Hz, calibrate %.3g\n",
+	  frontend->description,frontend->samprate,sdr->agc,sdr->gain,sdr->bias,sdr->direct_sampling,
+	  init_frequency, frontend->calibrate);
 
 
  // Just estimates - get the real number somewhere
