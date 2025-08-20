@@ -130,7 +130,7 @@ static int setup_hardware(char const *sname);
 static void *process_section(void *p);
 static void *sap_send(void *p);
 static void *rtcp_send(void *p);
-  
+
 // Load the radiod config file, e.g., /etc/radio/radiod@rx888-ka9q-hf.conf
 // Called from main(), concatenates sections of config file (if in a directory)
 // Processes the [global] section
@@ -1366,7 +1366,7 @@ int downconvert(struct channel *chan){
       for(int n=0; n < chan->sampcount; n++)
 	energy += cnrmf(chan->baseband[n]);
       chan->sig.bb_power = energy / chan->sampcount;
-      
+
       // Compute and exponentially smooth noise estimate
       if(isnan(chan->sig.n0))
 	chan->sig.n0 = estimate_noise(chan,-shift);
@@ -1678,4 +1678,3 @@ static float estimate_noise(struct channel *chan,int shift){
   // With an unnormalized FFT, the noise energy in each bin scales proportionately with the number of points in the FFT
   return noise_bin_energy / ((float)master->bins * Frontend.samprate);
 }
-

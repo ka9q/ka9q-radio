@@ -176,8 +176,8 @@ struct channel {
   enum demod_type demod_type;  // Index into demodulator table (Linear, FM, FM Stereo, Spectrum)
   char preset[32];       // name of last mode preset
   float complex *baseband; // Output of filter or filter 2 as appropriate
-  int sampcount;           // Count of baseband samples 
-  
+  int sampcount;           // Count of baseband samples
+
   struct {               // Used only in linear demodulator
     bool env;            // Envelope detection in linear mode (settable)
     bool agc;            // Automatic gain control enabled (settable)
