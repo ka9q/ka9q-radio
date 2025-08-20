@@ -65,6 +65,15 @@ static float const NQ = 0.10f; // look for energy in 10th quartile, hopefully co
 static float const N_cutoff = 1.5; // Average (all noise, hopefully) bins up to 1.5x the energy in the 10th quartile
 // Minimum to get reasonable noise level statistics; 1000 * 40 Hz = 40 kHz which seems reasonable
 static int const Min_noise_bins = 1000;
+static char const *Iface;
+static char *Data;
+static int IP_tos = DEFAULT_IP_TOS;
+static char Preset_file[PATH_MAX];
+static char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
+static struct channel Template; // Template for dynamically created channels
+static pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int Active_channel_count; // Active channels
 
 // List of valid config keys in [global] section, for error checking
 static char const *Global_keys[] = {
@@ -96,21 +105,12 @@ static char const *Global_keys[] = {
   NULL
 };
 
-static char const *Iface;
-static char *Data;
-static int IP_tos = DEFAULT_IP_TOS;
-static char Preset_file[PATH_MAX];
-static char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
-static struct channel Template; // Template for dynamically created channels
-static pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
-
+// Remaining global variables are linked mostly from radio_status.c
+// Try to eliminate as many as possible
 struct channel Channel_list[Nchannels];
-
 float Blocktime = DEFAULT_BLOCKTIME;
 char const *Description; // Set either in [global] or [hardware]
 int Overlap = DEFAULT_OVERLAP;
-
 dictionary *Preset_table;   // Table of presets, usually in /usr/local/share/ka9q-radio/presets.conf
 
 int Output_fd = -1; // Unconnected socket used for output when ttl > 0
@@ -120,7 +120,6 @@ int Ctl_fd = -1;     // File descriptor for receiving user commands
 // If a channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
 // Must be computed at run time because it depends on the block time
 int Channel_idle_timeout;  //  = DEFAULT_LIFETIME * 1000 / Blocktime;
-int Active_channel_count; // Active channels
 
 extern int N_worker_threads; // owned by filter.c
 extern char const *Name;
@@ -367,6 +366,7 @@ int loadconfig(char const *file){
   }
   // Set up template for all new channels
   set_defaults(&Template);
+  Template.frontend = &Frontend;
   Template.lifetime = DEFAULT_LIFETIME * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
 
   // Set up default output stream file descriptor and socket
@@ -640,7 +640,9 @@ static void *process_section(void *p){
   // 2. the preset database entry, if specified
   // 3. the [global] section
   // 4. compiled-in defaults to keep things from blowing up
-  struct channel chan_template = {0};
+  struct channel chan_template = {
+    .frontend = &Frontend
+  };
   set_defaults(&chan_template); // compiled-in defaults (#4)
   loadpreset(&chan_template,Configtable,GLOBAL); // [global] section (#3)
 
@@ -820,9 +822,9 @@ struct channel *create_chan(uint32_t ssrc){
     fprintf(stderr,"Warning: out of chan table space (%'d)\n",Active_channel_count);
     // Abort here? Or keep going?
   } else {
-    chan->frontend = &Frontend; // There's only one, but pass it as a pointer anyway
     // Because the memcpy clobbers the ssrc, we must keep the lock held on Channel_list_mutex
     *chan = Template; // Template.inuse is already set
+    chan->frontend = &Frontend; // Should be already set in template, but just be sure
     chan->output.rtp.ssrc = ssrc; // Stash it
     Active_channel_count++;
     chan->lifetime = 20 * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
