@@ -14,14 +14,17 @@
 #include <stdbool.h>
 #include <limits.h>
 #include <iniparser/iniparser.h>
+#include <dlfcn.h>
 #include <opus/opus.h>
 
+#include "config.h"
 #include "multicast.h"
 #include "rtp.h"
 #include "osc.h"
 #include "status.h"
 #include "filter.h"
 #include "iir.h"
+#include "conf.h"
 
 /**
    @brief The four demodulator types
@@ -118,8 +121,6 @@ struct frontend {
   double spurs[NSPURS]; // List of frequency spurs to notch, in Hertz (testing)
 };
 
-extern struct frontend Frontend; // Only one per radio instance
-
 /**
 @brief  radiod channel state block
 
@@ -133,6 +134,8 @@ If you use these in shadow copies you must malloc these arrays yourself.
 */
 struct channel {
   bool inuse;
+  struct frontend *frontend; // Linkage to avoid global use
+
   int lifetime;          // Remaining lifetime, frames
   int prio;              // Realtime priority, if supported
   int64_t clocktime;     // Sender's clock time (ns since GPS epoch)
@@ -173,8 +176,8 @@ struct channel {
   enum demod_type demod_type;  // Index into demodulator table (Linear, FM, FM Stereo, Spectrum)
   char preset[32];       // name of last mode preset
   float complex *baseband; // Output of filter or filter 2 as appropriate
-  int sampcount;           // Count of baseband samples 
-  
+  int sampcount;           // Count of baseband samples
+
   struct {               // Used only in linear demodulator
     bool env;            // Envelope detection in linear mode (settable)
     bool agc;            // Automatic gain control enabled (settable)
@@ -297,21 +300,19 @@ struct channel {
 };
 
 
-extern char Hostname[];
 extern struct channel Channel_list[];
 #define Nchannels 1000
-extern struct channel Template;
-extern pthread_mutex_t Channel_list_mutex;
 extern int Channel_idle_timeout;
 extern int Ctl_fd;     // File descriptor for receiving user commands
 extern int Output_fd,Output_fd0;
 extern int Output_fd_lo;
 extern struct sockaddr Metadata_dest_socket; // Socket for main metadata
 extern int Verbose;
-extern float Blocktime; // Common to all receiver slices. NB! Milliseconds, not seconds
-extern char const *Channel_keys[],*Global_keys[]; // Lists of valid keywords in config files
+extern char const *Channel_keys[]; // Lists of valid keywords in config files
+extern float Blocktime;
 
-// Channel initialization & manipulation
+// Channel configuration, initialization & manipulation
+int loadconfig(char const *file);
 struct channel *create_chan(uint32_t ssrc);
 struct channel *lookup_chan(uint32_t ssrc);
 int close_chan(struct channel *);
@@ -331,8 +332,6 @@ float scale_voltage_out2FS(struct frontend *frontend);
 float scale_AD(struct frontend const *frontend);
 float scale_ADpower2FS(struct frontend const *frontend);
 
-// Helper threads
-void *sap_send(void *);
 void *radio_status(void *);
 
 // Demodulator thread entry points
@@ -341,13 +340,13 @@ int demod_wfm(void *);
 int demod_linear(void *);
 int demod_spectrum(void *);
 
+// Control and status
 int send_output(struct channel * restrict ,const float * restrict,int,bool);
 int send_radio_status(struct sockaddr const *,struct frontend const *, struct channel *);
 int reset_radio_status(struct channel *chan);
 bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
 int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,int length);
 int flush_output(struct channel *chan,bool marker,bool complete);
-
 
 unsigned int round_samprate(unsigned int x);
 #endif

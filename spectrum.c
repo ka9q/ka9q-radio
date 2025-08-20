@@ -28,6 +28,7 @@ int demod_spectrum(void *arg){
     snprintf(name,sizeof(name),"spect %u",chan->output.rtp.ssrc);
     pthread_setname(name);
   }
+  struct frontend * const frontend = chan->frontend;
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   FREE(chan->status.command);
@@ -46,15 +47,15 @@ int demod_spectrum(void *arg){
   // Parameters set by system input side
   float const blockrate = 1000.0f / Blocktime; // Typically 50 Hz
 
-  int const L = Frontend.L;
-  int const M = Frontend.M;
+  int const L = frontend->L;
+  int const M = frontend->M;
   int const N = L + M - 1;
 
   float const fe_fft_bin_spacing = blockrate * (float)L/N; // Input FFT bin spacing. Typically 40 Hz
   float binsperbin = 0; // can handle non-integer ratios
 
   // experiment - make array largest possible to temp avoid memory corruption
-  chan->spectrum.bin_data = calloc(Frontend.in.bins,sizeof *chan->spectrum.bin_data);
+  chan->spectrum.bin_data = calloc(frontend->in.bins,sizeof *chan->spectrum.bin_data);
 
   fftwf_plan plan = NULL;
   float complex *fft0_in = NULL;
@@ -109,7 +110,7 @@ int demod_spectrum(void *arg){
 	chan->filter.max_IF = (bin_count * bin_bw)/2;
 	chan->filter.min_IF = -chan->filter.max_IF;
 	power_buffer = malloc((input_bins + 10) * sizeof *power_buffer);
-	create_filter_output(&chan->filter.out,&Frontend.in,NULL,0,SPECTRUM);
+	create_filter_output(&chan->filter.out,&frontend->in,NULL,0,SPECTRUM);
 	// Compute power (not amplitude) scale factor
 	gain = 1.0f / (float) N;   // scale each bin value for our FFT
 	gain *= gain;              // squared because the we're scaling the output of complex norm, not the input bin values
@@ -252,7 +253,7 @@ int demod_spectrum(void *arg){
 	gain = 1.0f / (float) actual_bin_count;
 	gain *= gain;                     // squared because the we're scaling the output of complex norm, not the input bin values
 
-	int r = create_filter_output(&chan->filter.out,&Frontend.in,NULL,frame_len,COMPLEX);
+	int r = create_filter_output(&chan->filter.out,&frontend->in,NULL,frame_len,COMPLEX);
 	(void)r;
 	assert(r == 0);
 
