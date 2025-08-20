@@ -38,6 +38,7 @@ int demod_linear(void *arg){
     pthread_setname(name);
   }
   struct frontend const * const frontend = chan->frontend;
+  assert(frontend != NULL);
 
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);

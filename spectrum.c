@@ -29,6 +29,7 @@ int demod_spectrum(void *arg){
     pthread_setname(name);
   }
   struct frontend * const frontend = chan->frontend;
+  assert(frontend != NULL);
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   FREE(chan->status.command);

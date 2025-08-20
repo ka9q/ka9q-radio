@@ -129,6 +129,7 @@ char const *demod_name_from_type(enum demod_type type){
 }
 
 // Set reasonable defaults before reading preset or config tables
+// Note frontend entry must be set in radio.c since Frontend global is static
 int set_defaults(struct channel *chan){
   if(chan == NULL)
     return -1;
