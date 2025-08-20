@@ -2,7 +2,7 @@
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
 // but so far it seems easier to just run separate instances of the 'radio' program.
-// Copyright 2018-2023, Phil Karn, KA9Q
+// Copyright 2018-2025, Phil Karn, KA9Q
 #ifndef _RADIO_H
 #define _RADIO_H 1
 
