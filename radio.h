@@ -185,6 +185,7 @@ struct channel {
     float recovery_rate; // AGC recovery rate, amplitude ratio/sample  (settable)
     float threshold;     // AGC threshold above noise, amplitude ratio
     int hangcount;       // AGC hang timer before gain recovery starts (samples)
+    double dc_tau;     // alpha for simple IIR carrier (DC) removal
   } linear;
 
   bool snr_squelch_enable; // Use raw SNR for AM/SSB/FM squelch

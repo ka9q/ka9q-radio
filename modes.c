@@ -53,6 +53,7 @@ static float const DEFAULT_FM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively
 static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 #endif
 static int   const DEFAULT_BITRATE = 0;       // Default Opus compressed bit rate. 0 means OPUS_AUTO, the encoder decides
+static int   const DEFAULT_DC_TC = 0;         // Time constant for AM carrier removal, default off
 extern int Overlap;
 
 // Valid keys in presets file, [global] section, and any channel section
@@ -182,6 +183,7 @@ int set_defaults(struct channel *chan){
   chan->pll.enable = false;
   chan->pll.square = false;
   chan->pll.loop_bw = DEFAULT_PLL_BW;
+  chan->linear.dc_tau = DEFAULT_DC_TC;
 
   double r = remainder(Blocktime * chan->output.samprate * .001,1.0);
   if(r != 0){
@@ -302,6 +304,10 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   chan->fm.threshold = config_getboolean(table,sname,"extend",chan->fm.threshold); // FM threshold extension
   chan->fm.threshold = config_getboolean(table,sname,"threshold-extend",chan->fm.threshold); // FM threshold extension
   chan->snr_squelch_enable = config_getboolean(table,sname,"snr-squelch",chan->snr_squelch_enable);
+  double cutoff = config_getdouble(table,sname,"dc-tc",-987);
+  if(cutoff != -987)
+    chan->linear.dc_tau = -expm1(-2.0 * M_PI * cutoff/(chan->output.samprate));
+
   {
     char const *cp = config_getstring(table,sname,"deemph-tc",NULL);
     if(cp){

@@ -67,6 +67,7 @@ int demod_linear(void *arg){
 
   int const lock_limit = lock_time * chan->output.samprate;
   init_pll(&chan->pll.pll,(float)chan->output.samprate);
+  double am_dc = 0; // Carrier removal filter, removes squelch opening thump in aviation AM
   pthread_mutex_unlock(&chan->status.lock);
 
   realtime(chan->prio);
@@ -213,6 +214,11 @@ int demod_linear(void *arg){
 	  samples[n] = M_SQRT1_2 * cabsf(buffer[n]) * chan->output.gain; // Power from both I&Q
 	  output_power += samples[n] * samples[n];
 	  chan->output.gain *= gain_change;
+	  // Estimate and remove carrier (DC)
+	  if(chan->linear.dc_tau != 0){
+	    am_dc += chan->linear.dc_tau * (samples[n] - am_dc);
+	    samples[n] -= am_dc;
+	  }
 	}
       } else {
 	// I channel only (SSB, CW, etc)
@@ -233,6 +239,11 @@ int demod_linear(void *arg){
 	  buffer[n] *= chan->output.gain;
 	  output_power += cnrmf(buffer[n]);
 	  chan->output.gain *= gain_change;
+	  // Estimate and remove DC
+	  if(chan->linear.dc_tau != 0){
+	    am_dc += chan->linear.dc_tau * (__imag__ buffer[n] - am_dc);
+	    __imag__ buffer[n] -= am_dc;
+	  }
 	}
       } else {
 	// Simplest case: I/Q output with I on left, Q on right
