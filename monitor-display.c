@@ -42,7 +42,7 @@ int Update_interval = 100;  // Default time in ms between display updates
 // Database in /usr/share/ka9q-radio/id.txt
 // Really should be rewritten with something much better
 struct idtable {
-  double freq;
+  long freq; // rounded to 1 Hz
   float tone;
   char id[128];
 };
@@ -326,7 +326,7 @@ void load_id(void){
       memset(freq,0,sizeof(freq));
       memcpy(freq,&line[pmatch[1].rm_so],pmatch[1].rm_eo - pmatch[1].rm_so);
       char *ptr = NULL;
-      Idtable[Nid].freq = strtod(freq,&ptr);
+      Idtable[Nid].freq = round(strtod(freq,&ptr));
       if(ptr == freq)
 	continue; // no parseable number
 
@@ -349,7 +349,7 @@ void load_id(void){
       memset(freq,0,sizeof(freq));
       memcpy(freq,&line[pmatch[1].rm_so],pmatch[1].rm_eo - pmatch[1].rm_so);
       char *ptr = NULL;
-      Idtable[Nid].freq = strtod(freq,&ptr);
+      Idtable[Nid].freq = round(strtod(freq,&ptr));
       if(ptr == freq)
 	continue; // no parseable number
 
@@ -386,7 +386,7 @@ void load_id(void){
 // Use binary search to speed things up since we do this more often
 char const *lookupid(double freq,float tone){
   struct idtable key;
-  key.freq = freq;
+  key.freq = round(freq);
   key.tone = tone;
 
   struct idtable *entry = (struct idtable *)bsearch(&key,Idtable,Nid,sizeof(key),id_compare);
