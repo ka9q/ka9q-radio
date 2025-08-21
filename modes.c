@@ -304,7 +304,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   chan->fm.threshold = config_getboolean(table,sname,"extend",chan->fm.threshold); // FM threshold extension
   chan->fm.threshold = config_getboolean(table,sname,"threshold-extend",chan->fm.threshold); // FM threshold extension
   chan->snr_squelch_enable = config_getboolean(table,sname,"snr-squelch",chan->snr_squelch_enable);
-  double cutoff = config_getdouble(table,sname,"dc-tc",-987);
+  double cutoff = config_getdouble(table,sname,"dc-cut",-987);
   if(cutoff != -987)
     chan->linear.dc_tau = -expm1(-2.0 * M_PI * cutoff/(chan->output.samprate));
 
