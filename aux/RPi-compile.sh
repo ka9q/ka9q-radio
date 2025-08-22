@@ -1,3 +1,4 @@
+#!/bin/bash
 # Install script for the RPi, contributed by Martin Levy, W6LHI/G8LHI
 
 # Just so it's documented somewhere; here's all the dependency
