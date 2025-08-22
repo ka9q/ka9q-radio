@@ -1,0 +1,155 @@
+[HFDL21]
+disable = no
+data = hfdl-21.local
+encoding = s16be
+samprate = 80k
+mode = iq
+low = -36k
+high = +36k
+hang-time = 0
+recovery-rate = 100
+freq = 21964k
+buffer = 3
+
+[HFDL17]
+disable = no
+data = hfdl-17.local
+encoding = s16be
+samprate = 100k
+mode = iq
+low = -46k
+high = +46k
+hang-time = 0
+recovery-rate = 100
+freq = 17944k
+buffer = 3
+
+[HFDL15]
+disable = no
+data = hfdl-15.local
+encoding = s16be
+samprate = 12k
+mode = iq
+low = 0
+high = +3k
+hang-time = 0
+recovery-rate = 100
+freq = 15025k
+buffer = 3
+
+[HFDL13]
+disable = no
+data = hfdl-13.local
+encoding = s16be
+samprate = 100k
+mode = iq
+low = -47k
+high = +47k
+hang-time = 0
+recovery-rate = 100
+freq = 13310k
+buffer = 3
+
+[HFDL11]
+disable = no
+data = hfdl-11.local
+encoding = s16be
+samprate = 220k
+mode = iq
+low = -104k
+high = +104k
+hang-time = 0
+recovery-rate = 100
+freq = 11287k
+buffer = 3
+
+[HFDL10]
+disable = no
+data = hfdl-10.local
+encoding = s16be
+samprate = 80k
+mode = iq
+low = -35k
+high = +35k
+hang-time = 0
+recovery-rate = 100
+freq = 10061k5
+buffer = 3
+
+[HFDL8]
+disable = no
+data = hfdl-8.local
+encoding = s16be
+samprate = 160k
+mode = iq
+low = -78k
+high = +78k
+hang-time = 0
+recovery-rate = 100
+freq = 8902k5
+buffer = 3
+
+[HFDL6]
+disable = no
+data = hfdl-6.local
+encoding = s16be
+samprate = 192k
+mode = iq
+low = -93k
+high = +93k
+hang-time = 0
+recovery-rate = 100
+freq = 6622k
+buffer = 3
+
+[HFDL5]
+disable = no
+data = hfdl-5.local
+encoding = s16be
+samprate = 277k2
+mode = iq
+low = -136k
+high = +136k
+hang-time = 0
+recovery-rate = 100
+freq = 5587k
+buffer = 3
+
+[HFDL4]
+disable = no
+data = hfdl-4.local
+encoding = s16be
+samprate = 40k
+mode = iq
+low = -18k
+high = +18k
+hang-time = 0
+recovery-rate = 100
+freq = 4672k
+buffer = 3
+
+[HFDL3]
+disable = no
+data = hfdl-3.local
+encoding = s16be
+samprate = 50k
+mode = iq
+low = -24k
+high = +24k
+hang-time = 0
+recovery-rate = 100
+freq = 3477k
+buffer = 3
+
+[HFDL2]
+disable = no
+data = hfdl-2.local
+encoding = s16be
+samprate = 80k
+mode = iq
+low = -39k
+high = +39k
+hang-time = 0
+recovery-rate = 100
+freq = 2980k
+buffer = 3
