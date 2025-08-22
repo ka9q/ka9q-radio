@@ -201,7 +201,7 @@ metadump: metadump.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
 
 monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lopus -lportaudio -lasound -lsamplerate -liniparser -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ `pkg-config --libs ncursesw` -lopus -lportaudio -lasound -lsamplerate -liniparser -lbsd -lm -lpthread
 
 opusd: opusd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -lbsd -lm -lpthread
