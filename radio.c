@@ -709,14 +709,14 @@ static void *process_section(void *p){
     char const *p = strtok_r(raster_params," \t",&saveptr);
     if(p == NULL)
       goto raster_done;
-    double const start = parse_frequency(p,true);
+    double start = parse_frequency(p,true);
     if(start <= 0)
       goto raster_done;
 
     p = strtok_r(NULL," \t",&saveptr);
     if(p == NULL)
       goto raster_done;
-    double const stop = parse_frequency(p,true);
+    double stop = parse_frequency(p,true);
     if(stop <= 0)
       goto raster_done;
 
@@ -727,9 +727,11 @@ static void *process_section(void *p){
     if(step <= 0)
       goto raster_done;
 
-    if(start > stop)
-      goto raster_done;
-
+    if(start > stop){
+      double tmp = start;
+      start = stop;
+      stop = tmp;
+    }
     for(double f = start; f < stop; f += step){
       // Automatic ssrcs only
       uint32_t ssrc = round(f) / 1000;
