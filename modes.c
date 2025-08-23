@@ -62,6 +62,7 @@ char const *Channel_keys[] = {
   "disable",
   "data",
   "demod",
+  "raster",
   "mode",
   "preset",
   "samprate",

@@ -698,11 +698,71 @@ static void *process_section(void *p){
   }
   // No need to also join group for status socket, since the IP addresses are the same
 
-  // Process frequency/frequencies
-  // We need to do this first to ensure the resulting SSRCs are unique
+  int nchans = 0;
+  // Process "raster = start stop step" directive
+  // create channels of common type from starting to ending frequency with fixed spacing
+
+  char const * const raster = config_getstring(Configtable,sname,"raster",NULL);
+  if(raster != NULL){
+    char *raster_params = strdup(raster);
+    char *saveptr = NULL;
+    char const *p = strtok_r(raster_params," \t",&saveptr);
+    if(p == NULL)
+      goto raster_done;
+    double const start = parse_frequency(p,true);
+    if(start <= 0)
+      goto raster_done;
+
+    p = strtok_r(NULL," \t",&saveptr);
+    if(p == NULL)
+      goto raster_done;
+    double const stop = parse_frequency(p,true);
+    if(stop <= 0)
+      goto raster_done;
+
+    p = strtok_r(NULL," \t",&saveptr);
+    if(p == NULL)
+      goto raster_done;
+    double const step = parse_frequency(p,true);
+    if(step <= 0)
+      goto raster_done;
+
+    if(start > stop)
+      goto raster_done;
+
+    for(double f = start; f < stop; f += step){
+      // Automatic ssrcs only
+      uint32_t ssrc = round(f) / 1000;
+      struct channel *chan = NULL;
+      // Try to create it, incrementing in case of collision
+      int const max_collisions = 100;
+      for(int i=0; i < max_collisions; i++,ssrc++){
+	chan = create_chan(ssrc);
+	if(chan != NULL)
+	  break;
+      }
+      if(chan == NULL){
+	fprintf(stderr,"Can't allocate requested ssrc in range %u-%u\n",ssrc-max_collisions,ssrc);
+	break;
+      }
+      // Initialize from template, set frequency and start
+      // Be careful with shallow copies like this; although the pointers in the channel structure are still NULL
+      // the ssrc and inuse fields are active and must be cleaned up. Are there any others...?
+      *chan = chan_template;
+      chan->output.rtp.ssrc = ssrc; // restore after template copy
+      set_freq(chan,f);
+      start_demod(chan);
+      Nchans++;
+      nchans++;
+      // SAP and RTCP later?
+    }
+    raster_done: ;
+    FREE(raster_params);
+  }
+  // Process freq = and freq[0-9] = directives
   // To work around iniparser's limited line length, we look for multiple keywords
   // "freq", "freq0", "freq1", etc, up to "freq9"
-  int nchans = 0;
+
 
   for(int ff = -1; ff < 10; ff++){
     char fname[10];
