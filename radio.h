@@ -302,7 +302,7 @@ struct channel {
 
 
 extern struct channel Channel_list[];
-#define Nchannels 1000
+#define Nchannels 2000
 extern int Channel_idle_timeout;
 extern int Ctl_fd;     // File descriptor for receiving user commands
 extern int Output_fd,Output_fd0;
