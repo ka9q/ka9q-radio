@@ -1,0 +1,24 @@
+# systemd unit to decode VHF ACARS
+# Aug 2025 Phil Karn, KA9Q
+
+[Unit]
+Description=ACARS
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+User = radio
+Group = radio
+Type = simple
+PermissionsStartOnly=true
+StandardOutput=append:/var/log/acars.log
+StandardError=append:/var/log/syslog
+UMask = 002
+ExecStart=/usr/local/bin/pcmrecord --raw -v --ssrc '\\$s' --exec "/usr/local/bin/acarsdec --sndfile=-,channels=1,subtype=2 --output full:file:path=/var/log/acars/\"$m\".log --output json:udp:host=feed.acars.io,port=5550" acars.local
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+SyslogIdentifier=acars
+
+[Install]
+WantedBy=multi-user.target
