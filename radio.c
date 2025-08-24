@@ -1354,10 +1354,11 @@ int downconvert(struct channel *chan){
     pthread_mutex_lock(&Frontend.status_mutex);
 
     // Sign conventions are reversed and simplified from before
-    // When RF > LO, tune.second_LO and shift are now positive
-    // When RF < LO, tune.second_LO and shift are negative
-    chan->tune.second_LO = chan->tune.freq - Frontend.frequency;
+    // When RF > LO, tune.second_LO is still negative but shift is now positive
+    // When RF < LO, tune.second_LO is still positive but shift is now negative
+    chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
     double freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
+    freq = -freq;
 #if SPECTRUM_FLIP
     if(!Frontend.isreal){
       // Complex spectrum is rotated up by Fs/2
