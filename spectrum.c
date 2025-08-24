@@ -132,6 +132,20 @@ int demod_spectrum(void *arg){
       struct filter_in const * const master = chan->filter.out.master;
       float complex const * const fdomain = master->fdomain[jobnum];
 
+#ifdef SPECTRUM_FLIP
+      int binp = -chan->filter.bin_shift - input_bins/2;
+      int i = 0;
+      while(binp < 0 && i < input_bins){
+	binp++;
+	power_buffer[i++] = 0;
+      }
+      while(i < input_bins && binp < master->bins)
+	power_buffer[i++] = cnrmf(fdomain[binp++]);
+
+      while(i < input_bins)
+	  power_buffer[i++] = 0;
+
+#else
       // Read the master's frequency bins directly
       // The layout depends on the master's time domain input:
       // 1. Complex 2. Real, upright spectrum 3. Real, inverted spectrum
@@ -174,6 +188,7 @@ int demod_spectrum(void *arg){
 	while(i < input_bins)
 	  power_buffer[i++] = 0;
       }
+#endif
       // Merge the bins, negative output frequencies first
       float ratio = (float)bin_count / input_bins;
 
@@ -303,6 +318,8 @@ int demod_spectrum(void *arg){
 
       // FFT mode for more precision
       // Two 50% overlapping windows with Kaiser windows
+      // These FFTs still produce original bin sequences even with SPECTRUM_FLIP
+      // Changing this might break external code
       for(int i = 0; i < chan->sampcount; i++){
 	bool did_fft = false;
 
