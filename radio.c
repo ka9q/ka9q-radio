@@ -1076,8 +1076,13 @@ int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, doub
   // Intentionally allow real input to go both ways, for front ends with high and low side injection
   // Even though only one works, this lets us manually check for images
   // No point in tuning to aliases, though
+#if SPECTRUM_FLIP
+  if(abs(r) > N)
+    return -1;
+#else
   if(abs(r) > N/2)
     return -1; // Chan thread will wait for the front end status to change
+#endif
   return 0;
 }
 
