@@ -421,7 +421,11 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
     for (int i = 0; i < sampcount; i++) {
       float complex const samp = CMPLXF(buf[2*i],buf[2*i+1]);
       in_energy += cnrmf(samp);       // Calculate energy of the sample
+#if SPECTRUM_FLIP
+      wptr[i] = (i & 1 ? -samp : samp) * sdr->scale;    // Store sample in write pointer buffer
+#else
       wptr[i] = samp * sdr->scale;    // Store sample in write pointer buffer
+#endif
     }
     write_cfilter(&frontend->in, NULL,
 		  sampcount); // Update write pointer, invoke FFT

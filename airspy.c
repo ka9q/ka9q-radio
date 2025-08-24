@@ -389,7 +389,11 @@ static int rx_callback(airspy_transfer *transfer){
       } else {
 	frontend->samp_since_over++;
       }
+#if SPECTRUM_FLIP
+      wptr[j] = sdr->scale * (i & 1 ? -x : x);
+#else
       wptr[j] = sdr->scale * x;
+#endif
       in_energy += x * x;
     }
     wptr += 8;

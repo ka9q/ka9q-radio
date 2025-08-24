@@ -48,7 +48,7 @@ struct sdrstate {
   float gain_i;
   float secphi;
   float tanphi;
-  
+
   double frequency;
   bool software_agc;
   int lna_gain;
@@ -171,7 +171,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
     sdr->software_agc = false;
   else
     sdr->lna_gain = 14;
-  
+
   frontend->lna_gain = sdr->lna_gain;
   ret = hackrf_set_antenna_enable(sdr->device,sdr->lna_gain ? true : false);
   if(ret != HACKRF_SUCCESS){
@@ -185,7 +185,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
     sdr->software_agc = false;
   else
     sdr->mixer_gain = 24;
-      
+
   frontend->mixer_gain = sdr->mixer_gain;
   fprintf(stderr,"set mixer gain %d\n",frontend->mixer_gain);
   ret = hackrf_set_lna_gain(sdr->device,sdr->mixer_gain);
@@ -250,7 +250,7 @@ int hackrf_startup(struct frontend * const frontend){
   int ret = hackrf_start_rx(sdr->device,rx_callback,sdr);
   assert(ret == HACKRF_SUCCESS);
   (void)ret;
-  
+
   if(sdr->software_agc)
     pthread_create(&sdr->agc_thread,NULL,hackrf_agc,sdr);
   return 0;
@@ -301,22 +301,26 @@ static int rx_callback(hackrf_transfer *transfer){
 
     // remove DC offset (which can be fractional)
     samp -= sdr->DC;
-    
+
     // Must correct gain and phase before frequency shift
     // accumulate I and Q energies before gain correction
     i_energy += crealf(samp) * crealf(samp);
     q_energy += cimagf(samp) * cimagf(samp);
-    
+
     // Balance gains, keeping constant total energy
     __real__ samp *= sdr->gain_i;
     __imag__ samp *= sdr->gain_q;
-    
+
     // Accumulate phase error
     dotprod += crealf(samp) * cimagf(samp);
 
     // Correct phase
     __imag__ samp = sdr->secphi * cimagf(samp) - sdr->tanphi * crealf(samp);
+#if SPECTRUM_FLIP
+    wptr[i] = sdr->scale * (i & 1 ? -samp : samp); // invert odd samples
+#else
     wptr[i] = sdr->scale * samp;
+#endif
   }
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
 
@@ -355,7 +359,7 @@ static void *hackrf_agc(void *arg){
       change = Lower_limit - powerdB;
     else
       continue;
-    
+
 #if 0
     printf("if_power %.0f scale %g, DC (%f+j%f) sinphi %f gain_i %f gain_q %f agc change %d dB\n",
 	   powerdB,sdr->scale,crealf(sdr->DC),cimagf(sdr->DC),
@@ -434,7 +438,7 @@ static void *hackrf_agc(void *arg){
   return NULL;
 }
 double hackrf_tune(struct frontend * const frontend,double const frequency){
-  
+
   // replace this with precise tuning?
   struct sdrstate *sdr = (struct sdrstate *)frontend->context;
   if(frontend->lock)
@@ -462,7 +466,7 @@ static double  rffc5071_freq(uint16_t lo) {
   uint8_t lodiv;
   uint16_t fvco;
   uint8_t fbkdiv;
-  
+
   /* Calculate n_lo */
   uint8_t n_lo = 0;
   uint16_t x = LO_MAX / lo;
@@ -470,18 +474,18 @@ static double  rffc5071_freq(uint16_t lo) {
     n_lo++;
     x >>= 1;
   }
-  
+
   lodiv = 1 << n_lo;
   fvco = lodiv * lo;
-  
+
   if (fvco > 3200) {
     fbkdiv = 4;
   } else {
     fbkdiv = 2;
   }
-  
+
   uint64_t tmp_n = ((uint64_t)fvco << 29ULL) / (fbkdiv*REF_FREQ) ;
-  
+
   return (REF_FREQ * (tmp_n >> 5ULL) * fbkdiv * FREQ_ONE_MHZ)
     / (lodiv * (1 << 24ULL));
 }
@@ -492,7 +496,7 @@ static uint32_t max2837_freq(uint32_t freq){
   uint32_t div_rem;
   uint32_t div_cmp;
   int i;
-  
+
   /* ASSUME 40MHz PLL. Ratio = F*(4/3)/40,000,000 = F/30,000,000 */
   //	div_int = freq / 30000000;
   div_rem = freq % 30000000;
@@ -537,12 +541,12 @@ static bool set_freq(const uint64_t freq)
   uint32_t RFFC5071_freq_mhz;
   uint32_t MAX2837_freq_hz;
   uint64_t real_RFFC5071_freq_hz;
-  
+
   const uint32_t freq_mhz = freq / 1000000;
   const uint32_t freq_hz = freq % 1000000;
-  
+
   success = true;
-  
+
   const max2837_mode_t prior_max2837_mode = max2837_mode(&max2837);
   max2837_set_mode(&max2837, MAX2837_MODE_STANDBY);
   if(freq_mhz < MAX_LP_FREQ_MHZ)

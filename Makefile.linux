@@ -24,6 +24,10 @@ ifdef DYNAMIC
      echo "Dynamic is now the default. STATIC=1 builds a static version of radiod"
 endif
 
+ifdef SPECTRUM_FLIP
+	COPTS += -DSPECTRUM_FLIP=1
+endif
+
 ARCHOPTS = -march=native
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
 COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -D_GNU_SOURCE=1 -Wextra -MMD -MP

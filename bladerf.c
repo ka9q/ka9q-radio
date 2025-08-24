@@ -225,7 +225,11 @@ static void bladerf_process(struct frontend * const frontend,
 			s |= 0xf000;
 		__imag__ samp = s;
 		energy += cnrmf(samp);
+#if SPECTRUM_FLIP
+		wptr[i] = (i & 1) ? -samp : samp;
+#else
 		wptr[i] = samp;
+#endif
 		sample += 2;
 	}
 

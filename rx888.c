@@ -285,7 +285,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     reference = Default_reference;
   }
   double calibrate = config_getdouble(dictionary,section,"calibrate",0);
-  if(fabsl(calibrate) >= Max_calibrate){
+  if(fabs(calibrate) >= Max_calibrate){
     fprintf(stderr,"Unreasonable frequency calibration %.3g, setting to 0\n",calibrate);
     calibrate = 0;
   }

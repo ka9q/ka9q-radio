@@ -3,7 +3,10 @@
 // Generates transfer functions using Kaiser window
 // Optional output decimation by integer factor
 // Complex input and transfer functions, complex or real output
-// Copyright 2017-2023, Phil Karn, KA9Q, karn@ka9q.net
+// Copyright 2017-2025, Phil Karn, KA9Q, karn@ka9q.net
+
+// Restructured 8/2025 for monotonic FFT frequency bin order (#define SPECTRUM_FLIP)
+// requires all front ends with complex or inverted real data to flip every other sample sign!
 
 //#define LIQUID 1 // Experimental use of parks-mcclellan in filter generation
 #define FFT_PRIO 95 // Runs at very high real time priority
@@ -81,11 +84,12 @@ static struct {
   pthread_t thread[NTHREADS_MAX];  // Worker threads
 } FFT;
 
+#if !SPECTRUM_FLIP
 static inline int modulo(int x,int const m){
   x = x < 0 ? x + m : x;
   return x > m ? x - m : x;
 }
-
+#endif
 
 static bool goodchoice(unsigned long n);
 
@@ -614,6 +618,7 @@ int execute_filter_input(struct filter_in * const f){
 
    2 - multiply the selected frequency bin range by the filter frequency response
    This is the hard part; handle all combinations of real/complex input/output, wraparound, etc
+   (SPECTRUM_FLIP simplifies this enormously)
 
    3 - convert back to time domain with IFFT
    'shift' is the number of FFT bins to shift *down*; a positive 'shift' means that a positive input
@@ -677,6 +682,13 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
      back to the time domain. So while real output is supported it is not well tested.
   */
   pthread_mutex_lock(&slave->response_mutex); // Don't let it change while we're using it
+#if SPECTRUM_FLIP
+  // All that's left of the extreme ugliness below!
+  for(int si=0; si < slave->bins; si++){ // All positive frequencies
+    int const mi = si + shift;
+    slave->fdomain[si] = (mi >= 0 && mi < master->bins) ? fdomain[mi] * slave->response[si] : 0;
+  }
+#else // lots of ugliness
   if(master->in_type != REAL && slave->out_type != REAL){
     // Complex -> complex (e.g., fobos (in VHF/UHF mode), funcube, airspyhf, sdrplay)
 
@@ -827,11 +839,13 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     } // end of inverted spectrum
   }
  done:;
+#endif
   // Zero out Nyquist bin
   slave->fdomain[(slave->bins+1)/2] = 0;
 
   pthread_mutex_unlock(&slave->response_mutex); // release response[]
 
+#if !SPECTRUM_FLIP // probably gonna get rid of this anyway
   if(slave->out_type == CROSS_CONJ){
     // hack for ISB; forces negative frequencies onto I, positive onto Q
     // Don't really know how to use this anymore; it's incompatible with fine tuning in the time domain
@@ -849,6 +863,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     }
     slave->fdomain[0] = 0; // Must be a null at DC
   }
+#endif
   // And finally back to the time domain
   fftwf_execute(slave->rev_plan); // Note: c2r version destroys fdomain[], but it's not used again anyway
   // Drop the cache in the first M-1 points of the time domain buffer that we'll discard

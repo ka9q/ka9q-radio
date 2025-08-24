@@ -15,6 +15,11 @@ CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_brow
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h monitor.h misc.h morse.h multicast.h osc.h radio.h rx888.h status.h rtp.h
 
 
+ifdef SPECTRUM_FLIP
+	CFLAGS += -DSPECTRUM_FLIP=1
+endif
+
+
 all: $(EXECS)
 
 install: $(EXECS)

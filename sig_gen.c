@@ -276,7 +276,7 @@ static void *proc_sig_gen(void *arg){
       // Complex signal
       float complex * wptr = frontend->in.input_write_pointer.c;
       for(int i=0; i < blocksize; i++){
-	wptr[i] = sdr->amplitude * step_osc(&carrier);
+	float samp = sdr->amplitude * step_osc(&carrier);
 	switch(sdr->modulation){
 	case CW:
 	  break;
@@ -285,10 +285,10 @@ static void *proc_sig_gen(void *arg){
 	    int16_t s = getc(src);
 	    s += getc(src) << 8;
 	    modsample = (float)s / 32767;
-	    modsample = 1 + modsample/2; // Add carrier
+	    modsample = 1 + modsample/2; // Add carrier ? (check this)
 	    modcount = samps_per_samp;
 	  }
-	  wptr[i] *= modsample;
+	  samp *= modsample;
 	  break;
 	case AM:
 	  if(modcount-- <= 0){
@@ -297,15 +297,20 @@ static void *proc_sig_gen(void *arg){
 	    modsample = (float)s / 32767;
 	    modcount = samps_per_samp;
 	  }
-	  wptr[i] *= 1 + modsample/2; // Add carrier
+	  samp  *= 1 + modsample/2; // Add carrier
 	  break;
 	case FM: // to be done
 	  break;
 	}
 	if(Complex_noise != NULL)
-	  wptr[i] += Complex_noise[noise_index+i];
-	in_energy += cnrmf(wptr[i]);
-	wptr [i] *= sdr->scale;
+	  samp += Complex_noise[noise_index+i];
+	in_energy += cnrmf(samp);
+	samp *= sdr->scale;
+#if SPECTRUM_FLIP
+	wptr[i] = i & 1 ? -samp : samp; // Flip odd samples
+#else
+	wptr[i] = samp;
+#endif
       }
       write_cfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
     }

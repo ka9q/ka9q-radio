@@ -265,7 +265,11 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   float in_energy = 0;
   for(int i=0; i < sampcount; i++){
     in_energy += cnrmf(up[i]);
+#if SPECTRUM_FLIP
+    wptr[i] = ((i & 1) ? -up[i] : up[i]) * sdr->scale;
+#else
     wptr[i] = up[i] * sdr->scale;
+#endif
   }
   frontend->samples += sampcount;
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT

@@ -284,7 +284,12 @@ static void *proc_funcube(void *arg){
       // Correct phase
       __imag__ samp = secphi * cimagf(samp) - tanphi * crealf(samp);
 
+#if SPECTRUM_FLIP
+      wptr[i] = ((i & 1) ? -samp : samp) * sdr->scale;
+#else
       wptr[i] = samp * sdr->scale;
+#endif
+
     }
     write_cfilter(&frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
     frontend->samples += Blocksize;

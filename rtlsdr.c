@@ -296,7 +296,11 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
     // Excess-128
     float complex samp = CMPLXF((int)buf[2*i] - 128,(int)buf[2*i+1] - 128);
     energy += cnrmf(samp);
+#if SPECTRUM_FLIP
+    wptr[i] = sdr->scale * (i & 1 ? -samp : samp); // invert every other sample
+#else
     wptr[i] = sdr->scale * samp;
+#endif
   }
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   frontend->if_power += Power_smooth * (energy / sampcount - frontend->if_power);
