@@ -45,16 +45,16 @@ left over for applications such as FT8 or especially WSPR decoding.
 
 *ka9q-radio* currently supports the following SDR hardware:
 
-[Airspy R2 / Airspy Mini](https://airspy.com/airspy-r2/)
-[Airspy HF+](https://airspy.com/airspy-hf-plus/)
-[Blade RF](https://www.nuand.com/bladerf-1/)
-[Fobos](https://rigexpert.com/software-defined-radio-sdr/fobos-sdr/)
-[AMSAT-UK Funcube Dongle Pro+](https://www.funcubedongle.com/?page_id=1201/)
-[HackRF One](https://greatscottgadgets.com/hackrf/one/)
-[HydraSDR RFOne](https://hydrasdr.com/products/)
-[Generic RTL-SDR](https://www.rtl-sdr.com/about-rtl-sdr/) (tuner mode only)
-[RX-888 MkII](https://www.rx-888.com/rx/) (direct sampling only)
-[SDRPlay](https://www.sdrplay.com/products/)
+- [Airspy R2 / Airspy Mini](https://airspy.com/airspy-r2/)
+- [Airspy HF+](https://airspy.com/airspy-hf-plus/)
+- [Blade RF](https://www.nuand.com/bladerf-1/)
+- [Fobos](https://rigexpert.com/software-defined-radio-sdr/fobos-sdr/)
+- [AMSAT-UK Funcube Dongle Pro+](https://www.funcubedongle.com/?page_id=1201/)
+- [HackRF One](https://greatscottgadgets.com/hackrf/one/)
+- [HydraSDR RFOne](https://hydrasdr.com/products/)
+- [Generic RTL-SDR](https://www.rtl-sdr.com/about-rtl-sdr/) (tuner mode only)
+- [RX-888 MkII](https://www.rx-888.com/rx/) (direct sampling only)
+- [SDRPlay](https://www.sdrplay.com/products/)
 
 Until recently my preferred SDRs (and the ones I still have the most
 experience with) were the Airspy R2 for VHF/UHF and the Airspy HF+ for
