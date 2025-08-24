@@ -422,7 +422,7 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
       float complex const samp = CMPLXF(buf[2*i],buf[2*i+1]);
       in_energy += cnrmf(samp);       // Calculate energy of the sample
 #if SPECTRUM_FLIP
-      wptr[i] = (i & 1 ? -samp : samp) * sdr->scale;    // Store sample in write pointer buffer
+      wptr[i] = (i & 1 ? -samp : samp) * sdr->scale;    // flip signs on odd samples to shift spectrum
 #else
       wptr[i] = samp * sdr->scale;    // Store sample in write pointer buffer
 #endif
@@ -435,6 +435,7 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
     // Also, DC removal is unnecessary in direct sampling mode, and using
     // just one input makes the I/Q gain balancing stuff in the library unnecessary.
     // And it's a pretty big CPU sink
+    // Since this is direct sampling, no spectral inversion needed
     float *const wptr = frontend->in.input_write_pointer.r;
     assert(wptr != NULL);
 
