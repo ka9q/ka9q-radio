@@ -316,6 +316,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   }
   int mult = sdr->undersample / 2;
   frontend->frequency = frontend->samprate * mult;
+  // Should this be made negative for VHF/UHF mode?
   if(sdr->undersample & 1){
     // Somewhat arbitrary. See https://ka7oei.blogspot.com/2024/12/frequency-response-of-rx-888-sdr-at.html
     frontend->min_IF = 15000;
@@ -560,6 +561,10 @@ static void rx_callback(struct libusb_transfer * const transfer){
   sdr->success_count++;
 
   // Feed directly into FFT input buffer, accumulate energy
+  // What if we're in VHF/UHF mode? Is the spectrum inverted?
+  // If so, then when SPECTRUM_FLIP is set we should invert every other sample
+  // In HF direct sampling mode, nothing special is done
+
   double in_energy = 0; // A/D energy accumulator
   int16_t const * const samples = (int16_t *)transfer->buffer;
   float * const wptr = frontend->in.input_write_pointer.r;
