@@ -1367,7 +1367,7 @@ int downconvert(struct channel *chan){
       // For inverted real, second LO freq is neg, so mirror it from nyquist
       // For right-side-up real, do nothing
       if(freq < 0)
-	freq = Frontend.samprate - freq;
+	freq = Frontend.samprate/2 - freq;
     }
     // Limit to range 0 .. nyquist
     freq = freq < 0 ? 0 : freq > Frontend.samprate ? Frontend.samprate : freq;
@@ -1392,6 +1392,9 @@ int downconvert(struct channel *chan){
       continue;
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
+    chan->tp1 = shift;
+    chan->tp2 = remainder;
+
 
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
     chan->status.blocks_since_poll++;
