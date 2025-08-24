@@ -1353,19 +1353,26 @@ int downconvert(struct channel *chan){
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);
 
-    /* Note sign conventions:
-       When the radio frequency is above the front end frequency, as in direct sampling (Frontend.frequency == 0)
-       or in low side injection, tune.second_LO is negative and so is 'shift'
+    // Sign conventions are reversed and simplified from before
+    // When RF > LO, tune.second_LO and shift are now positive
+    // When RF < LO, tune.second_LO and shift are negative
+    chan->tune.second_LO = chan->tune.freq - Frontend.frequency;
+    double freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
+#if SPECTRUM_FLIP
+    if(!Frontend.isreal){
+      // Complex spectrum is rotated up by Fs/2
+      freq += Frontend.samprate / 2;
+    } else {
+      // For inverted real, second LO freq is neg, so mirror it from nyquist
+      // For right-side-up real, do nothing
+      if(freq < 0){
+	freq = Frontend.samprate/2 - freq;
+      }
+    }
+    // Limit to range 0 .. nyquist
+    freq = freq < 0 ? 0 : freq > Frontend.samprate / 2 ? Frontend.samprate : freq;
 
-       For the real A/D streams from TV tuners with high-side injection, e.g., Airspy R2,
-       tune.second_LO and shift are both positive and the spectrum is inverted
-
-       For complex SDRs, tune.second_LO can be either positive or negative, so shift will be negative or positive
-
-       Note minus on 'shift' parameter to execute_filter_output() and estimate_noise()
-    */
-    chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
-    double const freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
+#endif
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
 		      Frontend.in.impulse_length,
 		      Frontend.samprate,
@@ -1386,8 +1393,7 @@ int downconvert(struct channel *chan){
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
 
-    // Note minus on 'shift' parameter; see discussion inside compute_tuning() on sign conventions
-    execute_filter_output(&chan->filter.out,-shift); // block until new data frame
+    execute_filter_output(&chan->filter.out,shift); // block until new data frame
     chan->status.blocks_since_poll++;
 
     // set fine tuning frequency & phase
@@ -1403,8 +1409,8 @@ int downconvert(struct channel *chan){
        Be sure to Initialize chan->filter.bin_shift at startup to something bizarre to force this inequality on first call */
     if(shift != chan->filter.bin_shift){
       const int V = 1 + (Frontend.in.ilen / (Frontend.in.impulse_length - 1)); // Overlap factor
-      chan->filter.phase_adjust = cispi(-2.0*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
-      chan->fine.phasor *= cispi((shift - chan->filter.bin_shift) / (2.0 * (V-1))); // One time adjust for shift change
+      chan->filter.phase_adjust = cispi(2.0*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
+      chan->fine.phasor *= cispi((shift - chan->filter.bin_shift) / (-2.0 * (V-1))); // One time adjust for shift change
       chan->filter.bin_shift = shift;
     }
     chan->fine.phasor *= chan->filter.phase_adjust;
@@ -1433,10 +1439,10 @@ int downconvert(struct channel *chan){
 
       // Compute and exponentially smooth noise estimate
       if(isnan(chan->sig.n0))
-	chan->sig.n0 = estimate_noise(chan,-shift);
+	chan->sig.n0 = estimate_noise(chan,shift);
       else {
 	// Use double to minimize risk of denormalization in the smoother
-	double diff = estimate_noise(chan,-shift) - chan->sig.n0; // Shift is negative, just like compute_tuning. Note: must follow execute_filter_output()
+	double diff = estimate_noise(chan,shift) - chan->sig.n0;
 	chan->sig.n0 += Power_alpha * diff;
       }
     }
@@ -1695,7 +1701,7 @@ static float estimate_noise(struct channel *chan,int shift){
 
     for(int i=0; i < nbins; i++,mbin++)
       energies[i] = cnrmf(fdomain[mbin]);
-  } else {
+  } else { // Complex input
     int mbin = shift - nbins/2; // Start at lower channel edge (upper for inverted real)
     // Complex input that often straddles DC
     if(mbin < 0)

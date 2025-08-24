@@ -684,8 +684,9 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   pthread_mutex_lock(&slave->response_mutex); // Don't let it change while we're using it
 #if SPECTRUM_FLIP
   // All that's left of the extreme ugliness below!
+  int ashift = abs(shift); // Inverted spectra aren't really inverted anymore
   for(int si=0; si < slave->bins; si++){ // All positive frequencies
-    int const mi = si + shift;
+    int const mi = si + ashift;
     slave->fdomain[si] = (mi >= 0 && mi < master->bins) ? fdomain[mi] * slave->response[si] : 0;
   }
 #else // lots of ugliness
