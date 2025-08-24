@@ -8,6 +8,8 @@ Phil Karn, KA9Q
 
 ## SW Installation
 
+RTL-SDR is supported by default on most linux distributions by the `librtlsdr-dev` package.
+
 ## Configuration
 
 See below for an basic example.
@@ -42,9 +44,38 @@ If not specified, `radiod` uses the first device discovered. Since this is proba
 
 The `serial` must exactly match the SDR serial number.
 
+You can find the serial number with the `rtl_eeprom` utility.
+
+```
+>$ rtl_eeprom
+Found 1 device(s):
+  0:  Generic RTL2832U OEM
+
+Using device 0: Generic RTL2832U OEM
+Detached kernel driver
+Found Rafael Micro R820T tuner
+
+Current configuration:
+__________________________________________
+Vendor ID:              0x0bda
+Product ID:             0x2838
+Manufacturer:           Nooelec
+Product:                NESDR SMArt v5
+Serial number:          00000001
+Serial number enabled:  yes
+IR endpoint enabled:    yes
+Remote wakeup enabled:  no
+__________________________________________
+Reattached kernel driver
+```
+
 ### samprate (optional)
 
 Integer, default 1,800,000 (1.8 MHz).
+
+### direct_sampling (optional)
+
+Integer, default 0 (direct sampling disabled). If 1 use I input, if 2 use Q input.
 
 ### agc (optional)
 

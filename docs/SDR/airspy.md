@@ -12,7 +12,7 @@ The [Airspy Mini](https://airspy.com/airspy-mini/) is very similar with the Airs
 
 ## SW Installation
 
-Airspy SW is supported by default on most linux distributions by the `airspy[hf]` and `libairspy[hf]-dev` packages.
+Airspy is supported by default on most linux distributions by the `airspy[hf]` and `libairspy[hf]-dev` packages.
 
 ## Configuration
 

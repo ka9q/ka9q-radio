@@ -2,7 +2,7 @@
 
 ## Description
 
-[BladeRF](https://www.rtl-sdr.com/about-rtl-sdr/) is a FPGA based SDR that can tune from 300MHz - 3.8GHz. It has independent RX/TX 12-bit 40MSPS quadrature sampling channels, which is capable of achieving 28Msps per channel.
+[BladeRF](https://www.nuand.com/bladerf-1/) is a FPGA based SDR that can tune from 300MHz - 3.8GHz. It has independent RX/TX 12-bit 40MSPS quadrature sampling channels, which is capable of achieving 28Msps per channel.
 
 ## SW Installation
 
