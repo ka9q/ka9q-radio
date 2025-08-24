@@ -1366,12 +1366,11 @@ int downconvert(struct channel *chan){
     } else {
       // For inverted real, second LO freq is neg, so mirror it from nyquist
       // For right-side-up real, do nothing
-      if(freq < 0){
+      if(freq < 0)
 	freq = Frontend.samprate/2 - freq;
-      }
     }
     // Limit to range 0 .. nyquist
-    freq = freq < 0 ? 0 : freq > Frontend.samprate / 2 ? Frontend.samprate : freq;
+    freq = freq < 0 ? 0 : freq > Frontend.samprate ? Frontend.samprate : freq;
 
 #endif
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
