@@ -1373,6 +1373,7 @@ int downconvert(struct channel *chan){
     freq = freq < 0 ? 0 : freq > Frontend.samprate ? Frontend.samprate : freq;
 
 #endif
+    chan->tp1 = freq;
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
 		      Frontend.in.impulse_length,
 		      Frontend.samprate,
@@ -1392,8 +1393,7 @@ int downconvert(struct channel *chan){
       continue;
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
-    chan->tp1 = shift;
-    chan->tp2 = remainder;
+    chan->tp2 = shift;
 
 
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
