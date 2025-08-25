@@ -383,7 +383,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	frontend->samp_since_over++;
       }
 #if SPECTRUM_FLIP
-      wptr[j] = sdr->scale * (i & 1 ? -x : x); // invert every other sample
+      wptr[j] = sdr->scale * (j & 1 ? -x : x); // invert every other sample
 #else
       wptr[j] = sdr->scale * x;
 #endif
