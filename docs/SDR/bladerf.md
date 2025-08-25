@@ -6,6 +6,8 @@
 
 ## SW Installation
 
+BladeRF is supported by default on most linux distributions by the `bladerf` and `libbladerf-dev` packages.
+
 ## Configuration
 
 See below for an basic example.
@@ -20,9 +22,9 @@ device = bladerf
 description = "My BladeRF"
 ```
 
-Multiple instances of `radiod` can run on the same system, provided each has its own front end (they cannot be shared).
+You can also reference the [generic config file](/config/radiod@bladerf-generic.conf).
 
-You can have as many as you want, subject to your CPU and USB limits.
+Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits.
 
 The "description" parameter is advertised with mDNS (multicast DNS) service discovery on the LAN and this constrains its content. It should be 63 characters or less and not contain slashes ('/') or control characters (spaces are ok).
 

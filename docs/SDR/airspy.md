@@ -1,7 +1,5 @@
 # Airspy R2 and HF+ SDRs
 
-Phil Karn, KA9Q
-
 ## Description
 
 [Airspy R2](https://airspy.com/airspy-r2/) is a SDR for the VHF and UHF (24 – 1700 MHz) bands. It has a low-IF architecture based on Rafael Micro R820T2 (or R860), a high quality oversampling 12-bit ADC and a state of the art DSP resulting in up to 16-bit resolution at narrow band channels. The sample rate is 10Msps (complex)
@@ -30,9 +28,7 @@ description = "My Airspy SDR"
 
 You can also reference the [generic Airspy R2 config file](/config/radiod@airspy-generic.conf) or the [generic Airspy HF+ config file](/config/radiod@airspyhf-generic.conf).
 
-Multiple instances of `radiod` can run on the same system, provided each has its own front end (they cannot be shared).
-
-You can have as many as you want, subject to your CPU and USB limits. (The Airspy R2 generates 240 Mb/s, but it's a USB 2.0 -- not 3.0 -- device so each will have to be on its own USB host controller.)
+Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits. (The Airspy R2 generates 240 Mb/s, but it's a USB 2.0 -- not 3.0 -- device so each will have to be on its own USB host controller.)
 
 The "description" parameter is advertised with mDNS (multicast DNS) service discovery on the LAN and this constrains its content. It should be 63 characters or less and not contain slashes ('/') or control characters (spaces are ok).
 

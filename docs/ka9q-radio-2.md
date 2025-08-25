@@ -35,7 +35,7 @@ Multiple SDR front ends are currently supported in `ka9q-radio`:
 | [hydra](SDR/hydra.md)     | Hydra SDR                                 | BYO driver
 | [rtlsdr](SDR/rtlsdr.md)   | Generic RTL-SDR dongle                    | OS driver
 | [rx888](SDR/rx888.md)     | RX888 MKII (direct conversion only)       |
-| [sdrplay](SDR/sdrplay.md) | SDRPlay                                   | BYO driver
+| [sdrplay](SDR/sdrplay.md) | SDRplay                                   | BYO driver
 | [sig_gen](sig_gen.md)     | synthetic front end with signal generator |
 
 ## Configuration Options

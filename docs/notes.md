@@ -54,7 +54,7 @@ left over for applications such as FT8 or especially WSPR decoding.
 - [HydraSDR RFOne](https://hydrasdr.com/products/)
 - [Generic RTL-SDR](https://www.rtl-sdr.com/about-rtl-sdr/) (tuner mode only)
 - [RX-888 MkII](https://www.rx-888.com/rx/) (direct sampling only)
-- [SDRPlay](https://www.sdrplay.com/products/)
+- [SDRplay](https://www.sdrplay.com/products/)
 
 Until recently my preferred SDRs (and the ones I still have the most
 experience with) were the Airspy R2 for VHF/UHF and the Airspy HF+ for
@@ -142,13 +142,13 @@ you can build it from the sources fairly easily. The git repository is
 at http://github.com/rigexpert/libfobos. You build it with the sequence
 mkdir build; cd build; cmake ..; make; sudo make install. You may need to install the 'cmake' command.
 
-Finally, a word about the SDRPlay. I bought one many years ago only to
+Finally, a word about the SDRplay. I bought one many years ago only to
 discover that its libraries are proprietary and available only as
 compiled binaries. It sat on my shelf for years as its many
 competitors provide open source libraries that are *far* easier
 to deal with in an open source project like *ka9q-radio*.
 
-But at last the SDRPlay is now supported using the new (January 2025)
+But at last the SDRplay is now supported using the new (January 2025)
 dynamic driver loading feature in *ka9q-radio*.  You must first
 download and install their proprietary driver. Don't bother with the
 sdrplay.com website, it's an exercise in frustration. I found
@@ -168,7 +168,7 @@ still statically linked into *radio*, but you can force them to be
 built as dynamic modules with "make DYNAMIC=1".  The shared libraries
 are installed in /usr/local/lib/ka9q-radio.  By default, "make"
 creates shared library modules only for those devices for which a
-Debian library package exists; this excludes Fobos and SDRPlay because
+Debian library package exists; this excludes Fobos and SDRplay because
 they require header files and libraries from third party sources that
 must be manually built and installed.  If you have them, you
 can build *ka9q-radio* with "make FOBOS=1" or "make SDRPLAY=1" (or

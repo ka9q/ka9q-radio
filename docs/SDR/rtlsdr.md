@@ -1,7 +1,5 @@
 # RTL-SDR
 
-Phil Karn, KA9Q
-
 ## Description
 
 [RTL-SDR](https://www.rtl-sdr.com/about-rtl-sdr/) is any SDR dongle based on DVB_T tuner ICs (Elonics, Rafael Micro, Fitipower, ...), usually with a RTL2832U demodulator / USB interface. The frequency range is approx. 24 MHz - 1.7 GHz and the sampling rate is approx. 2.5 Msps.
@@ -26,9 +24,7 @@ description = "My RTL-SDR"
 
 You can also reference the [generic config file](/config/radiod@rtlsdr-generic.conf).
 
-Multiple instances of `radiod` can run on the same system, provided each has its own front end (they cannot be shared).
-
-You can have as many as you want, subject to your CPU and USB limits.
+Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits.
 
 The "description" parameter is advertised with mDNS (multicast DNS) service discovery on the LAN and this constrains its content. It should be 63 characters or less and not contain slashes ('/') or control characters (spaces are ok).
 
