@@ -684,11 +684,35 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   pthread_mutex_lock(&slave->response_mutex); // Don't let it change while we're using it
 #if SPECTRUM_FLIP
   // All that's left of the extreme ugliness below!
-  for(int si=0; si < slave->bins; si++){ // All positive frequencies
-    int const mi = si + shift;
-    slave->fdomain[si] = (mi >= 0 && mi < master->bins) ? fdomain[mi] * slave->response[si] : 0;
+  // for complex output, shift is the center of the passband; for real output, shift is at zero in the output
+  assert(shift >= 0 && shift < master->bins);
+  if(slave->out_type == REAL){
+    int limit = slave->bins; // N/2 for real output
+    if(slave->bins + shift >= master->bins)
+      limit -= master->bins - (slave->bins + shift);
+    int mi = shift;
+    for(int si=0; si < limit; si++)
+      slave->fdomain[si] = fdomain[mi++] * slave->response[si];
+  } else {
+    // Complex output. To avoid sign flipping the time domain output, fill the IFFT with the usual unshifted order
+    int limit = slave->bins/2; // 0 to N/2, the positive output frequencies
+    if(limit >  master->bins - shift)
+      limit = master->bins - shift;
+
+    int mi = shift;
+    for(int si = 0; si < limit; si++)
+      slave->fdomain[si] = fdomain[mi++] * slave->response[si];
+
+    // Negative output spectrum starting at -N/2
+    mi = shift - slave->bins/2;
+    int start = slave->bins/2;
+    if(mi < 0){
+      start -= mi;
+      mi = 0;
+    }
+    for(int si = start; si < slave->bins; si++)
+      slave->fdomain[si] = fdomain[mi] * slave->response[si];
   }
-  slave->fdomain[0] = 0; // Nail nyquist bin
 #else // lots of ugliness
   if(master->in_type != REAL && slave->out_type != REAL){
     // Complex -> complex (e.g., fobos (in VHF/UHF mode), funcube, airspyhf, sdrplay)
