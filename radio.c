@@ -1403,7 +1403,7 @@ int downconvert(struct channel *chan){
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
     if(shift != chan->filter.bin_shift || remainder != chan->filter.remainder){ // Detect startup
       assert(isfinite(chan->tune.doppler_rate));
-      set_osc(&chan->fine,remainder/chan->output.samprate,chan->tune.doppler_rate/(chan->output.samprate * chan->output.samprate));
+      set_osc(&chan->fine,-remainder/chan->output.samprate,chan->tune.doppler_rate/(chan->output.samprate * chan->output.samprate));
       chan->filter.remainder = remainder;
     }
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:
@@ -1428,6 +1428,11 @@ int downconvert(struct channel *chan){
 	chan->baseband = chan->filter.out.output.c;
 	chan->sampcount = chan->filter.out.olen;
       } else {
+#if SPECTRUM_FLIP
+	// Flip signs on input to complex filter 2
+	for(int i = 1; i < chan->filter.out.olen; i += 2)
+	  chan->filter.out.output.c[i] = - chan->filter.out.output.c[i];
+#endif
 	int r = write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen); // Will trigger execution of input side if buffer is full, returning 1
 	if(r > 0){
 	  execute_filter_output(&chan->filter2.out,0); // No frequency shifting
