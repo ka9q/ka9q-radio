@@ -1370,21 +1370,6 @@ int downconvert(struct channel *chan){
     chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
     double freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
     freq = -freq;
-#if SPECTRUM_FLIP
-    if(!Frontend.isreal){
-      // Complex spectrum is rotated up by Fs/2
-      freq += Frontend.samprate / 2;
-    } else {
-      // For inverted real, second LO freq is neg, so mirror it from nyquist
-      // For right-side-up real, do nothing
-      if(freq < 0)
-	freq = Frontend.samprate/2 - freq;
-    }
-    // Limit to range 0 .. nyquist
-    freq = freq < 0 ? 0 : freq > Frontend.samprate ? Frontend.samprate : freq;
-
-#endif
-
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
 		      Frontend.in.impulse_length,
 		      Frontend.samprate,
