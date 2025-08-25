@@ -1372,8 +1372,7 @@ int downconvert(struct channel *chan){
     // When RF > LO, tune.second_LO is still negative but shift is now positive
     // When RF < LO, tune.second_LO is still positive but shift is now negative
     chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
-    double freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
-    freq = -freq;
+    double const freq = -(chan->tune.doppler + chan->tune.second_LO); // Total logical oscillator frequency
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
 		      Frontend.in.impulse_length,
 		      Frontend.samprate,
@@ -1399,6 +1398,18 @@ int downconvert(struct channel *chan){
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
     chan->status.blocks_since_poll++;
 
+    if(chan->filter.out.output.c == NULL)
+      return 0; // Probably in spectrum mode, nothing more to do
+
+    // Compute and exponentially smooth noise estimate
+    if(isnan(chan->sig.n0))
+      chan->sig.n0 = estimate_noise(chan,shift);
+    else {
+      // Use double to minimize risk of denormalization in the smoother
+      double diff = estimate_noise(chan,shift) - chan->sig.n0;
+      chan->sig.n0 += Power_alpha * diff;
+    }
+
     // set fine tuning frequency & phase
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
     if(shift != chan->filter.bin_shift || remainder != chan->filter.remainder){ // Detect startup
@@ -1418,45 +1429,34 @@ int downconvert(struct channel *chan){
     }
     chan->fine.phasor *= chan->filter.phase_adjust;
 
-    if(chan->filter.out.output.c != NULL){
-      // Make fine tuning correction before secondary filtering
-      for(int n=0; n < chan->filter.out.olen; n++)
-	chan->filter.out.output.c[n] *= step_osc(&chan->fine);
+    // Make fine tuning correction before secondary filtering
+    for(int n=0; n < chan->filter.out.olen; n++)
+      chan->filter.out.output.c[n] *= step_osc(&chan->fine);
 
-      if(chan->filter2.blocking == 0){
-	// No secondary filtering, done
-	chan->baseband = chan->filter.out.output.c;
-	chan->sampcount = chan->filter.out.olen;
-      } else {
+    if(chan->filter2.blocking == 0){
+      // No secondary filtering, done
+      chan->baseband = chan->filter.out.output.c;
+      chan->sampcount = chan->filter.out.olen;
+    } else {
 #if SPECTRUM_FLIP
-	// Flip signs on input to complex filter 2
-	for(int i = 1; i < chan->filter.out.olen; i += 2)
-	  chan->filter.out.output.c[i] = - chan->filter.out.output.c[i];
+      // Flip signs on input to complex filter 2
+      for(int i = 1; i < chan->filter.out.olen; i += 2)
+	chan->filter.out.output.c[i] = - chan->filter.out.output.c[i];
 #endif
-	int r = write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen); // Will trigger execution of input side if buffer is full, returning 1
-	if(r > 0){
-	  execute_filter_output(&chan->filter2.out,0); // No frequency shifting
-	  chan->baseband = chan->filter2.out.output.c;
-	  chan->sampcount = chan->filter2.out.olen;
-	}
-      }
-      float energy = 0;
-      for(int n=0; n < chan->sampcount; n++)
-	energy += cnrmf(chan->baseband[n]);
-      chan->sig.bb_power = energy / chan->sampcount;
-
-      // Compute and exponentially smooth noise estimate
-      if(isnan(chan->sig.n0))
-	chan->sig.n0 = estimate_noise(chan,shift);
-      else {
-	// Use double to minimize risk of denormalization in the smoother
-	double diff = estimate_noise(chan,shift) - chan->sig.n0;
-	chan->sig.n0 += Power_alpha * diff;
-      }
+      int r = write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen); // Will trigger execution of input side if buffer is full, returning 1
+      if(r == 0)
+	continue; // Filter 2 not finishd, wait for another block
+      execute_filter_output(&chan->filter2.out,0); // No frequency shifting
+      chan->baseband = chan->filter2.out.output.c;
+      chan->sampcount = chan->filter2.out.olen;
     }
-    break;
+    float energy = 0;
+    for(int n=0; n < chan->sampcount; n++)
+      energy += cnrmf(chan->baseband[n]);
+    chan->sig.bb_power = energy / chan->sampcount;
+    return 0;
   }
-  return 0;
+  return 0; // Should not actually be reached
 }
 
 int set_channel_filter(struct channel *chan){
@@ -1479,7 +1479,8 @@ int set_channel_filter(struct channel *chan){
 
     unsigned int n = round2(2 * blocksize); // Overlap >= 50%
     unsigned int order = n - blocksize;
-    fprintf(stderr,"filter2 create: L = %d, M = %d, N = %d\n",blocksize,order+1,n);
+    if(Verbose > 1)
+       fprintf(stderr,"filter2 create: L = %d, M = %d, N = %d\n",blocksize,order+1,n);
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
     create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX);
     chan->filter2.in.perform_inline = true;
