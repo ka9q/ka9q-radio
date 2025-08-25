@@ -587,11 +587,11 @@ static int setup_hardware(char const *sname){
   for(int i = 0; i < NSPURS; i++){
     int shift;
     double remainder; // Offset from bin center, Hz, e.g, -20 to +20. Or is it -25 to +25?
-    int r = compute_tuning(N,Frontend.M,Frontend.samprate,&shift,&remainder,Frontend.spurs[i]);
+    int r = compute_tuning(N,Frontend.M,Frontend.samprate,&shift,&remainder,Frontend.spurs[i],Frontend.isreal);
     if(r != 0)
       break;
     notch->state = 0;
-    notch->bin = abs(shift);
+    notch->bin = abs(shift); // abs() unnecessary in SPECTRUM_FLIP config
     notch->alpha = .01; //  About 10 sec. Arbitrary, make adaptive.
     if(shift == 0) // DC is implicitly last
       break;
@@ -1050,13 +1050,18 @@ double set_first_LO(struct channel const * const chan,double const first_LO){
 // M = input buffer overlap
 // samprate = input sample rate
 // remainder = fine LO frequency (double)
-// freq = frequency to mix by (double)
+// freq = frequency to mix by (double). If negative, shift will be negative
 // This version tunes to arbitrary FFT bin rotations and computes the necessary
 // block phase correction factor described in equation (12) of
 // "Analysis and Design of Efficient and Flexible Fast-Convolution Based Multirate Filter Banks"
 // by Renfors, Yli-Kaakinen & Harris, IEEE Trans on Signal Processing, Aug 2014
-// We seem to be using opposite sign conventions for 'shift'
-int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq){
+int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq,bool isreal){
+#if SPECTRUM_FLIP
+  if(!isreal || freq < 0)
+    freq += samprate/2;
+#else
+  (void)isreal;
+#endif
   double const hzperbin = (double)samprate / N;
 #if 0
   // Round to multiples of V (not needed anymore)
@@ -1066,6 +1071,7 @@ int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, doub
   (void)M;
   int const r = round(freq/hzperbin);
 #endif
+
   if(shift)
     *shift = r;
 
@@ -1077,7 +1083,7 @@ int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, doub
   // Even though only one works, this lets us manually check for images
   // No point in tuning to aliases, though
 #if SPECTRUM_FLIP
-  if(abs(r) > N)
+  if(r < 0 || r >= N)
     return -1;
 #else
   if(abs(r) > N/2)
@@ -1378,11 +1384,11 @@ int downconvert(struct channel *chan){
     freq = freq < 0 ? 0 : freq > Frontend.samprate ? Frontend.samprate : freq;
 
 #endif
-    chan->tp1 = freq;
+
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
 		      Frontend.in.impulse_length,
 		      Frontend.samprate,
-		      &shift,&remainder,freq) != 0){
+		      &shift,&remainder,freq,Frontend.isreal) != 0){
       // No front end coverage of our carrier; wait one block time for it to retune
       chan->sig.bb_power = 0;
       chan->output.power = 0;
@@ -1398,8 +1404,8 @@ int downconvert(struct channel *chan){
       continue;
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
-    chan->tp2 = shift;
-
+    chan->tp1 = shift;
+    chan->tp2 = remainder;
 
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
     chan->status.blocks_since_poll++;

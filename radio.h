@@ -324,7 +324,7 @@ double set_freq(struct channel * restrict ,double);
 double set_first_LO(struct channel const * restrict, double);
 
 // Routines common to the internals of all channel demods
-int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq);
+int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq,bool isreal);
 int downconvert(struct channel *chan);
 int set_channel_filter(struct channel *chan);
 

@@ -107,12 +107,12 @@ int demod_wfm(void *arg){
   // If not, then a mop-up oscillator has to be provided
   int pilot_shift;
   double pilot_remainder;
-  compute_tuning(composite_N,composite_M,Composite_samprate,&pilot_shift,&pilot_remainder,19000.);
+  compute_tuning(composite_N,composite_M,Composite_samprate,&pilot_shift,&pilot_remainder,19000.,true);
   assert((pilot_shift % 4) == 0 && pilot_remainder == 0);
 
   int subc_shift;
   double subc_remainder;
-  compute_tuning(composite_N,composite_M,Composite_samprate,&subc_shift,&subc_remainder,38000.);
+  compute_tuning(composite_N,composite_M,Composite_samprate,&subc_shift,&subc_remainder,38000.,true);
   assert((subc_shift % 4) == 0 && subc_remainder == 0);
 
   float complex stereo_deemph = 0;
