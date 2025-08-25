@@ -695,23 +695,36 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       slave->fdomain[si] = fdomain[mi++] * slave->response[si];
   } else {
     // Complex output. To avoid sign flipping the time domain output, fill the IFFT with the usual unshifted order
+    // Also note slave->response is in the usual unshifted order too
+    // Negative output spectrum starting at -N/2
+    int start = slave->bins/2; // Most negative frequency in output
+    int mi = shift - slave->bins/2; // Most negative frequeny in input passband
+    if(mi < 0){
+      // Off left edge of input
+      start = slave->bins - shift;
+      mi = 0;
+      memset(&slave->fdomain[slave->bins/2],0,
+	     (start - slave->bins/2) * sizeof slave->fdomain[0]); // Clear skipped output
+    }
+    assert(start >= slave->bins/2 && start <  slave->bins && mi >= 0);
+
+    for(int si = start; si < slave->bins; si++)
+      slave->fdomain[si] = fdomain[mi++] * slave->response[si];
+
+    assert(mi == shift);
+
     int limit = slave->bins/2; // 0 to N/2, the positive output frequencies
     if(limit >  master->bins - shift)
       limit = master->bins - shift;
 
-    int mi = shift;
+    mi = shift; // start in middle of passband, go to upper edge
+    assert(mi >= 0 && limit >= 0 && limit <= slave->bins/2);
     for(int si = 0; si < limit; si++)
       slave->fdomain[si] = fdomain[mi++] * slave->response[si];
 
-    // Negative output spectrum starting at -N/2
-    mi = shift - slave->bins/2;
-    int start = slave->bins/2;
-    if(mi < 0){
-      start -= mi;
-      mi = 0;
-    }
-    for(int si = start; si < slave->bins; si++)
-      slave->fdomain[si] = fdomain[mi] * slave->response[si];
+    if(limit < slave->bins/2)
+      memset(&slave->fdomain[limit],0, (slave->bins/2 - limit) * sizeof slave->fdomain[0]);
+
   }
 #else // lots of ugliness
   if(master->in_type != REAL && slave->out_type != REAL){
