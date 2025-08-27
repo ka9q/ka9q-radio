@@ -73,6 +73,8 @@ int demod_linear(void *arg){
   realtime(chan->prio);
 
   bool squelch_open = true; // memory for squelch hysteresis, starts open
+  if(chan->pll.enable || chan->snr_squelch_enable)
+    squelch_open = false; // Start closed when squelch is enabled
 
   while(downconvert(chan) == 0){
     unsigned int N = chan->sampcount; // Number of raw samples in filter output buffer
@@ -266,10 +268,14 @@ int demod_linear(void *arg){
     else if(chan->pll.enable)
       snr = chan->pll.snr;
 
-    if(snr < chan->squelch_close)
-      squelch_open = false;
-    else if(snr > chan->squelch_open)
-      squelch_open = true;
+    if(chan->snr_squelch_enable || chan->pll.enable){
+      if(squelch_open && snr < chan->squelch_close)
+	squelch_open = false;
+      else if(!squelch_open && snr > chan->squelch_open){
+	squelch_open = true;
+	am_dc = 0; // try to remove the opening thump caused by the carrier
+      }
+    }
     // otherwise leave it be
 
     // Mute if no signal (e.g., outside front end coverage)
