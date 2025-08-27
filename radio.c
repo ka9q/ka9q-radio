@@ -58,6 +58,7 @@ static int RTCP_enable = false;
 static int const DEFAULT_UPDATE = 25; // 2 Hz for 20 ms blocktime (50 Hz frame rate)
 static int Update = DEFAULT_UPDATE;
 static int const DEFAULT_FFTW_THREADS = 1;
+static int const DEFAULT_FFTW_INTERNAL_THREADS = 1;
 static int const DEFAULT_LIFETIME = 20; // 20 sec for idle sessions tuned to 0 Hz
 static int const DEFAULT_OVERLAP = 5;
 static double const Power_alpha = 0.10; // Noise estimation time smoothing factor, per block. Use double to reduce risk of slow denormals
@@ -83,6 +84,7 @@ static char const *Global_keys[] = {
   "description",
   "dns",
   "fft-plan-level",
+  "fft-internal-threads",
   "fft-threads",
   "fft-time-limit",
   "hardware",
@@ -263,6 +265,7 @@ int loadconfig(char const *file){
   Channel_idle_timeout = 20 * 1000 / Blocktime;
   Overlap = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
   N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
+  N_internal_threads = config_getint(Configtable,GLOBAL,"fft-internal-threads",DEFAULT_FFTW_INTERNAL_THREADS); // owned by filter.c
   FFTW_plan_timelimit = config_getdouble(Configtable,GLOBAL,"fft-time-limit",FFTW_plan_timelimit);
   RTCP_enable = config_getboolean(Configtable,GLOBAL,"rtcp",RTCP_enable);
   SAP_enable = config_getboolean(Configtable,GLOBAL,"sap",SAP_enable);

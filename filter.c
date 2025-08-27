@@ -207,8 +207,13 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
       suggest(FFTW_planning_level,N,FFTW_FORWARD,COMPLEX);
       master->fwd_plan = fftwf_plan_dft_1d(N, master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, FFTW_ESTIMATE);
     }
-    if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-      fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) of cof%d failed\n",Wisdom_file,N);
+    // Re-import in case it's been written in the meantime
+    {
+      int r =  fftwf_import_wisdom_from_filename(Wisdom_file);
+      fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,r ? "succeeded" : "failed");
+      if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+	fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) of cof%d failed\n",Wisdom_file,N);
+    }
     break;
   case REAL:
     master->input_buffer_size = round_to_page(ND * N * sizeof(float));
@@ -223,8 +228,13 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
       suggest(FFTW_planning_level,N,FFTW_FORWARD,REAL);
       master->fwd_plan = fftwf_plan_dft_r2c_1d(N, master->input_read_pointer.r, master->fdomain[0], FFTW_ESTIMATE);
     }
-    if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-      fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) of rof%d failed\n",Wisdom_file,N);
+    // Re-import in case it's been written in the meantime
+    {
+      int r =  fftwf_import_wisdom_from_filename(Wisdom_file);
+      fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,r ? "succeeded" : "failed");
+      if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
+	fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) of cof%d failed\n",Wisdom_file,N);
+    }
     break;
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
