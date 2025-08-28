@@ -1386,9 +1386,10 @@ int downconvert(struct channel *chan){
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
     chan->status.blocks_since_poll++;
 
-    if(chan->filter.out.output.c == NULL)
+    if(chan->filter.out.output.c == NULL){
+      chan->filter.bin_shift = shift; // Needed by spectrum.c
       return 0; // Probably in spectrum mode, nothing more to do
-
+    }
     // Compute and exponentially smooth noise estimate
     if(isnan(chan->sig.n0))
       chan->sig.n0 = estimate_noise(chan,shift);
