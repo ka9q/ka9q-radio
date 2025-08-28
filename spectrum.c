@@ -136,7 +136,7 @@ int demod_spectrum(void *arg){
       // The layout depends on the master's time domain input:
       // 1. Complex 2. Real, upright spectrum 3. Real, inverted spectrum
       if(master->in_type == COMPLEX){
-	int binp = -chan->filter.bin_shift - input_bins/2;
+	int binp = chan->filter.bin_shift - input_bins/2;
 	if(binp < 0)
 	  binp += master->bins; // Start in negative input region
 
@@ -147,9 +147,9 @@ int demod_spectrum(void *arg){
 	  if(++binp == master->bins)
 	    binp = 0;
 	}
-      } else if(chan->filter.bin_shift <= 0){
+      } else if(chan->filter.bin_shift > 0){
 	// Real input right side up
-	int binp = -chan->filter.bin_shift - input_bins/2;
+	int binp = chan->filter.bin_shift - input_bins/2;
 	int i = 0;
 	while(binp < 0 && i < input_bins){
 	  binp++;
@@ -162,7 +162,7 @@ int demod_spectrum(void *arg){
 	  power_buffer[i++] = 0;
       } else {
 	// Real input spectrum is inverted, read in reverse order
-	int binp = chan->filter.bin_shift + input_bins/2;
+	int binp = -chan->filter.bin_shift + input_bins/2;
 	int i = 0;
 	while(binp >= master->bins){
 	  binp--;
