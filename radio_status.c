@@ -32,7 +32,7 @@
 #include "status.h"
 
 extern dictionary const *Preset_table;
-static int encode_radio_status(struct frontend const *frontend,struct channel const *chan,uint8_t *packet, int len);
+static int encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, int len);
 
 // Radio status reception and transmission thread
 void *radio_status(void *arg){
@@ -534,7 +534,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 // Encode contents of frontend and chan structures as command or status packet
 // packet argument must be long enough!!
 // Convert values from internal to engineering units
-static int encode_radio_status(struct frontend const *frontend,struct channel const *chan,uint8_t *packet, int len){
+static int encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, int len){
   memset(packet,0,len);
   uint8_t *bp = packet;
 
@@ -651,6 +651,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel co
       encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
       // encode bin data here? maybe change this, it can be a lot
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
+      spectrum_poll(chan); // Update the spectral data (wide bins only)
       if(chan->spectrum.bin_data != NULL){
 #if 0
 	// Average and clear
