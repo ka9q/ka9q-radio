@@ -80,10 +80,17 @@ static int track_wisdom_length(void){
   free(wisdom); wisdom = NULL;
   return length;
 }
+void usage(){
+  printf("fft-gen: creates and updates ffw3f wisdom for ka9q-radio\n");
+  printf("usage: fft-gen [-h] [-v|--verbose [-v|--verbose]] [--timelimit|-t sec] [--threads|-T <n>] [--force|-f] [--patient|--measure|--estimate|--exhaustive|-x|-e|-m|-p] transform...\n");
+  printf("  eg   fft-gen -v --exhaustive cob200 cob300 cob400 cob600 cob1200\n");
+}
 
 
-static char Optstring[] = "epmxT:t:vf";
+
+static char Optstring[] = "hepmxT:t:vf";
 static struct option Options[] = {
+  {"help", no_argument, NULL, 'h'},
   {"timelimit", required_argument, NULL, 't'},
   {"patient", no_argument, NULL, 'p'},
   {"measure", no_argument, NULL, 'm'},
@@ -108,6 +115,10 @@ int main(int argc,char *argv[]){
   (void)name_to_level(""); // shut up compiler
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
+    case 'h':
+    default:
+      usage();
+      exit(0);
     case 'v':
       Verbose++;
       break;
@@ -131,8 +142,6 @@ int main(int argc,char *argv[]){
       break;
     case 'f':
       Force = true;
-      break;
-    default:
       break;
     }
   }
@@ -186,6 +195,10 @@ int main(int argc,char *argv[]){
       printf(", time limit %.1lf sec\n",FFTW_plan_timelimit);
     else
       printf(", no time limit\n");
+  }
+  if(optind == argc){
+    usage();
+    exit(0);
   }
   for(int i=optind; i < argc; i++){
     // Parse
