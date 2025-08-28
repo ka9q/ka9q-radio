@@ -58,6 +58,7 @@ static int RTCP_enable = false;
 static int const DEFAULT_UPDATE = 25; // 2 Hz for 20 ms blocktime (50 Hz frame rate)
 static int Update = DEFAULT_UPDATE;
 static int const DEFAULT_FFTW_THREADS = 1;
+static int const DEFAULT_FFTW_INTERNAL_THREADS = 1;
 static int const DEFAULT_LIFETIME = 20; // 20 sec for idle sessions tuned to 0 Hz
 static int const DEFAULT_OVERLAP = 5;
 static double const Power_alpha = 0.10; // Noise estimation time smoothing factor, per block. Use double to reduce risk of slow denormals
@@ -83,6 +84,7 @@ static char const *Global_keys[] = {
   "description",
   "dns",
   "fft-plan-level",
+  "fft-internal-threads",
   "fft-threads",
   "fft-time-limit",
   "hardware",
@@ -263,6 +265,7 @@ int loadconfig(char const *file){
   Channel_idle_timeout = 20 * 1000 / Blocktime;
   Overlap = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
   N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
+  N_internal_threads = config_getint(Configtable,GLOBAL,"fft-internal-threads",DEFAULT_FFTW_INTERNAL_THREADS); // owned by filter.c
   FFTW_plan_timelimit = config_getdouble(Configtable,GLOBAL,"fft-time-limit",FFTW_plan_timelimit);
   RTCP_enable = config_getboolean(Configtable,GLOBAL,"rtcp",RTCP_enable);
   SAP_enable = config_getboolean(Configtable,GLOBAL,"sap",SAP_enable);
@@ -1050,12 +1053,11 @@ double set_first_LO(struct channel const * const chan,double const first_LO){
 // M = input buffer overlap
 // samprate = input sample rate
 // remainder = fine LO frequency (double)
-// freq = frequency to mix by (double)
+// freq = frequency to mix by (double). If negative, shift will be negative
 // This version tunes to arbitrary FFT bin rotations and computes the necessary
 // block phase correction factor described in equation (12) of
 // "Analysis and Design of Efficient and Flexible Fast-Convolution Based Multirate Filter Banks"
 // by Renfors, Yli-Kaakinen & Harris, IEEE Trans on Signal Processing, Aug 2014
-// We seem to be using opposite sign conventions for 'shift'
 int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq){
   double const hzperbin = (double)samprate / N;
 #if 0
@@ -1066,6 +1068,7 @@ int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, doub
   (void)M;
   int const r = round(freq/hzperbin);
 #endif
+
   if(shift)
     *shift = r;
 
@@ -1076,7 +1079,7 @@ int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, doub
   // Intentionally allow real input to go both ways, for front ends with high and low side injection
   // Even though only one works, this lets us manually check for images
   // No point in tuning to aliases, though
-  if(abs(r) > N/2)
+  if(abs(r) >= N/2)
     return -1; // Chan thread will wait for the front end status to change
   return 0;
 }
@@ -1353,19 +1356,11 @@ int downconvert(struct channel *chan){
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);
 
-    /* Note sign conventions:
-       When the radio frequency is above the front end frequency, as in direct sampling (Frontend.frequency == 0)
-       or in low side injection, tune.second_LO is negative and so is 'shift'
-
-       For the real A/D streams from TV tuners with high-side injection, e.g., Airspy R2,
-       tune.second_LO and shift are both positive and the spectrum is inverted
-
-       For complex SDRs, tune.second_LO can be either positive or negative, so shift will be negative or positive
-
-       Note minus on 'shift' parameter to execute_filter_output() and estimate_noise()
-    */
+    // Sign conventions are reversed and simplified from before
+    // When RF > LO, tune.second_LO is still negative but shift is now positive
+    // When RF < LO, tune.second_LO is still positive but shift is now negative
     chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
-    double const freq = chan->tune.doppler + chan->tune.second_LO; // Total logical oscillator frequency
+    double const freq = -(chan->tune.doppler + chan->tune.second_LO); // Total logical oscillator frequency
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
 		      Frontend.in.impulse_length,
 		      Frontend.samprate,
@@ -1385,16 +1380,29 @@ int downconvert(struct channel *chan){
       continue;
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
+    chan->tp1 = shift;
+    chan->tp2 = remainder;
 
-    // Note minus on 'shift' parameter; see discussion inside compute_tuning() on sign conventions
-    execute_filter_output(&chan->filter.out,-shift); // block until new data frame
+    execute_filter_output(&chan->filter.out,shift); // block until new data frame
     chan->status.blocks_since_poll++;
+
+    if(chan->filter.out.output.c == NULL)
+      return 0; // Probably in spectrum mode, nothing more to do
+
+    // Compute and exponentially smooth noise estimate
+    if(isnan(chan->sig.n0))
+      chan->sig.n0 = estimate_noise(chan,shift);
+    else {
+      // Use double to minimize risk of denormalization in the smoother
+      double diff = estimate_noise(chan,shift) - chan->sig.n0;
+      chan->sig.n0 += Power_alpha * diff;
+    }
 
     // set fine tuning frequency & phase
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
     if(shift != chan->filter.bin_shift || remainder != chan->filter.remainder){ // Detect startup
       assert(isfinite(chan->tune.doppler_rate));
-      set_osc(&chan->fine,remainder/chan->output.samprate,chan->tune.doppler_rate/(chan->output.samprate * chan->output.samprate));
+      set_osc(&chan->fine,-remainder/chan->output.samprate,chan->tune.doppler_rate/(chan->output.samprate * chan->output.samprate));
       chan->filter.remainder = remainder;
     }
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:
@@ -1403,46 +1411,35 @@ int downconvert(struct channel *chan){
        Be sure to Initialize chan->filter.bin_shift at startup to something bizarre to force this inequality on first call */
     if(shift != chan->filter.bin_shift){
       const int V = 1 + (Frontend.in.ilen / (Frontend.in.impulse_length - 1)); // Overlap factor
-      chan->filter.phase_adjust = cispi(-2.0*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
-      chan->fine.phasor *= cispi((shift - chan->filter.bin_shift) / (2.0 * (V-1))); // One time adjust for shift change
+      chan->filter.phase_adjust = cispi(2.0*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
+      chan->fine.phasor *= cispi((shift - chan->filter.bin_shift) / (-2.0 * (V-1))); // One time adjust for shift change
       chan->filter.bin_shift = shift;
     }
     chan->fine.phasor *= chan->filter.phase_adjust;
 
-    if(chan->filter.out.output.c != NULL){
-      // Make fine tuning correction before secondary filtering
-      for(int n=0; n < chan->filter.out.olen; n++)
-	chan->filter.out.output.c[n] *= step_osc(&chan->fine);
+    // Make fine tuning correction before secondary filtering
+    for(int n=0; n < chan->filter.out.olen; n++)
+      chan->filter.out.output.c[n] *= step_osc(&chan->fine);
 
-      if(chan->filter2.blocking == 0){
-	// No secondary filtering, done
-	chan->baseband = chan->filter.out.output.c;
-	chan->sampcount = chan->filter.out.olen;
-      } else {
-	int r = write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen); // Will trigger execution of input side if buffer is full, returning 1
-	if(r > 0){
-	  execute_filter_output(&chan->filter2.out,0); // No frequency shifting
-	  chan->baseband = chan->filter2.out.output.c;
-	  chan->sampcount = chan->filter2.out.olen;
-	}
-      }
-      float energy = 0;
-      for(int n=0; n < chan->sampcount; n++)
-	energy += cnrmf(chan->baseband[n]);
-      chan->sig.bb_power = energy / chan->sampcount;
-
-      // Compute and exponentially smooth noise estimate
-      if(isnan(chan->sig.n0))
-	chan->sig.n0 = estimate_noise(chan,-shift);
-      else {
-	// Use double to minimize risk of denormalization in the smoother
-	double diff = estimate_noise(chan,-shift) - chan->sig.n0; // Shift is negative, just like compute_tuning. Note: must follow execute_filter_output()
-	chan->sig.n0 += Power_alpha * diff;
-      }
+    if(chan->filter2.blocking == 0){
+      // No secondary filtering, done
+      chan->baseband = chan->filter.out.output.c;
+      chan->sampcount = chan->filter.out.olen;
+    } else {
+      int r = write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen); // Will trigger execution of input side if buffer is full, returning 1
+      if(r == 0)
+	continue; // Filter 2 not finishd, wait for another block
+      execute_filter_output(&chan->filter2.out,0); // No frequency shifting
+      chan->baseband = chan->filter2.out.output.c;
+      chan->sampcount = chan->filter2.out.olen;
     }
-    break;
+    float energy = 0;
+    for(int n=0; n < chan->sampcount; n++)
+      energy += cnrmf(chan->baseband[n]);
+    chan->sig.bb_power = energy / chan->sampcount;
+    return 0;
   }
-  return 0;
+  return 0; // Should not actually be reached
 }
 
 int set_channel_filter(struct channel *chan){
@@ -1465,7 +1462,8 @@ int set_channel_filter(struct channel *chan){
 
     unsigned int n = round2(2 * blocksize); // Overlap >= 50%
     unsigned int order = n - blocksize;
-    fprintf(stderr,"filter2 create: L = %d, M = %d, N = %d\n",blocksize,order+1,n);
+    if(Verbose > 1)
+       fprintf(stderr,"filter2 create: L = %d, M = %d, N = %d\n",blocksize,order+1,n);
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
     create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX);
     chan->filter2.in.perform_inline = true;
@@ -1695,7 +1693,7 @@ static float estimate_noise(struct channel *chan,int shift){
 
     for(int i=0; i < nbins; i++,mbin++)
       energies[i] = cnrmf(fdomain[mbin]);
-  } else {
+  } else { // Complex input
     int mbin = shift - nbins/2; // Start at lower channel edge (upper for inverted real)
     // Complex input that often straddles DC
     if(mbin < 0)
