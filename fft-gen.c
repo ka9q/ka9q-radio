@@ -51,7 +51,7 @@ static int name_to_level(char const *name){
       return 0;
     if(strcasecmp(Levels[i].name,name) == 0)
       return Levels[i].level;
-  }    
+  }
 }
 static int save_plans();
 static int plan(int level, int direction, int real, int N, double limit);
@@ -102,7 +102,7 @@ static struct option Options[] = {
   {NULL, 0, NULL, 0},
 };
 
-double FFTW_plan_timelimit = 0;  
+double FFTW_plan_timelimit = 0;
 int FFTW_planning_level = FFTW_PATIENT;
 
 
@@ -135,7 +135,7 @@ int main(int argc,char *argv[]){
       FFTW_planning_level = FFTW_MEASURE;
       break;
     case 'x':
-      FFTW_planning_level = FFTW_EXHAUSTIVE;      
+      FFTW_planning_level = FFTW_EXHAUSTIVE;
       break;
     case 'e':
       FFTW_planning_level = FFTW_ESTIMATE;
@@ -162,7 +162,7 @@ int main(int argc,char *argv[]){
   bool lr = false;
   if(Force){
     if(Verbose > 1)
-      printf("Not loading wisdom\n");    
+      printf("Not loading wisdom\n");
   } else {
     sr = fftwf_import_system_wisdom();
     if(Verbose > 1)
@@ -188,12 +188,12 @@ int main(int argc,char *argv[]){
   }
   if(Verbose > 1 && !sr && !lr)
     printf("No wisdom read\n");
-  
+
   if(Verbose > 1){
     printf("nthreads = %d, level = %s",
 	   nthreads,
 	   level_to_name(FFTW_planning_level));
-  
+
     if(FFTW_plan_timelimit !=0)
       printf(", time limit %.1lf sec\n",FFTW_plan_timelimit);
     else
@@ -207,68 +207,72 @@ int main(int argc,char *argv[]){
     char buffer[1024];
     while(fgets(buffer,sizeof buffer,stdin) != NULL)
       parse_and_run(buffer);
-  }      
+  }
   exit(0);
 }
 static int parse_and_run(char *s){
-    // Parse
-    char a1,a2,a3;
-    int a4;
-    if(sscanf(s,"%c%c%c%d",&a1,&a2,&a3,&a4) != 4){
-      printf("Can't parse %s\n",s);
-      return -1;
-    }
-    
-    bool real = false;
-    int direction = FFTW_FORWARD;
-    int N = 1024;
+  char *cp = strchr(s,'\n');
+  if(cp)
+    *cp = '\0'; // chomp newline
 
-    switch(a1){
-    case 'c':
-      real = false;
-      break;
-    case 'r':
-      real = true;
-      break;
-    default:
-      printf("Unknown type %c\n",a1);
-      return -1;
-    }
-    if(a2 != 'o'){
-      printf("Only out-of-place (o) handled: %s\n",s);
-      return -1;
-    }
-    switch(a3){
-    case 'f':
-      direction = FFTW_FORWARD;
-      break;
-    case 'b':
-      direction = FFTW_BACKWARD;
-      break;
-    default:
-      printf("Unknown direction %c\n",a3);
-      return -1;
-    }
-    if(a4 <= 0){
-      printf("invalid length %d\n",a4);
-      return -1;
-    }
-    N = a4;
-    if(Verbose)
-      printf("%s\n",s);
+  // Parse
+  char a1,a2,a3;
+  int a4;
+  if(sscanf(s,"%c%c%c%d",&a1,&a2,&a3,&a4) != 4){
+    printf("Can't parse %s\n",s);
+    return -1;
+  }
 
-    plan(FFTW_planning_level, direction, real, N, FFTW_plan_timelimit);
-    if(Verbose)
-      printf("%s done\n",s);
-      
-    return 0;
+  bool real = false;
+  int direction = FFTW_FORWARD;
+  int N = 1024;
+
+  switch(a1){
+  case 'c':
+    real = false;
+    break;
+  case 'r':
+    real = true;
+    break;
+  default:
+    printf("Unknown type %c\n",a1);
+    return -1;
+  }
+  if(a2 != 'o'){
+    printf("Only out-of-place (o) handled: %s\n",s);
+    return -1;
+  }
+  switch(a3){
+  case 'f':
+    direction = FFTW_FORWARD;
+    break;
+  case 'b':
+    direction = FFTW_BACKWARD;
+    break;
+  default:
+    printf("Unknown direction %c\n",a3);
+    return -1;
+  }
+  if(a4 <= 0){
+    printf("invalid length %d\n",a4);
+    return -1;
+  }
+  N = a4;
+  if(Verbose)
+    printf("%s\n",s);
+
+  plan(FFTW_planning_level, direction, real, N, FFTW_plan_timelimit);
+  if(Verbose)
+    printf("%s done\n",s);
+
+  return 0;
 }
 
 static int plan(int level, int direction, int real, int N, double limit){
   float * inr = fftwf_malloc(N * sizeof(float));
   float complex * in = fftwf_malloc(N * sizeof (float complex));
   float complex * out = fftwf_malloc(N * sizeof (float complex));
-  
+
   fftwf_plan plan = NULL;
   if(limit != 0)
     fftwf_set_timelimit(limit);
@@ -302,7 +306,7 @@ static int save_plans(){
   char *wisdom = NULL;
   int lockfd = -1;
   int fd = -1;
-  
+
   // Import or re-import wisdom and merge
   if(asprintf(&lockfile,"%s.lock",Wisdom_file) <= 0)
     goto quit;
