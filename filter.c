@@ -101,12 +101,12 @@ fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direct
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
   if(notify){
-    fprintf(out,"%c%c%c%d\n",
+    fprintf(FFT_log,"%c%c%c%d\n",
 	    'c',
 	    in == out ? 'i' : 'o',
-	    dir == FFTW_FORWARD ? 'f' : 'b',
-	    size);
-    fflush(out);
+	    direction == FFTW_FORWARD ? 'f' : 'b',
+	    N);
+    fflush(FFT_log);
   }
   return plan;
 }
@@ -121,12 +121,12 @@ fftwf_plan plan_r2c(int N, float *in, float complex *out){
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
   if(notify){
-    fprintf(out,"%c%c%c%d\n",
+    fprintf(FFT_log,"%c%c%c%d\n",
 	    'r',
 	    (void *)in == (void *)out ? 'i' : 'o',
 	    'f',
-	    size);
-    fflush(out);
+	    N);
+    fflush(FFT_log);
   }
   return plan;
 }
@@ -141,12 +141,12 @@ fftwf_plan plan_c2r(int N, float complex *in, float *out){
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
   if(notify){
-    fprintf(out,"%c%c%c%d\n",
+    fprintf(FFT_log,"%c%c%c%d\n",
 	    'r',
 	    (void *)in == (void *)out ? 'i' : 'o',
 	    'b',
-	    size);
-    fflush(out);
+	    N);
+    fflush(FFT_log);
   }
   return plan;
 }
