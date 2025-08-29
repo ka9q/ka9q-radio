@@ -54,8 +54,6 @@ static int name_to_level(char const *name){
   }
 }
 static int save_plans();
-static int plan(int level, int direction, int real, int N, double limit);
-
 static size_t Wisdom_size;
 static uint64_t Wisdom_hash;
 
@@ -238,10 +236,8 @@ static int parse_and_run(char *s){
     printf("Unknown type %c\n",a1);
     return -1;
   }
-  if(a2 != 'o'){
-    printf("Only out-of-place (o) handled: %s\n",s);
-    return -1;
-  }
+  bool inplace = (a2 == 'i');
+
   switch(a3){
   case 'f':
     direction = FFTW_FORWARD;
@@ -261,29 +257,39 @@ static int parse_and_run(char *s){
   if(Verbose)
     printf("%s\n",s);
 
-  plan(FFTW_planning_level, direction, real, N, FFTW_plan_timelimit);
-  if(Verbose)
-    printf("%s done\n",s);
-
-  return 0;
-}
-
-static int plan(int level, int direction, int real, int N, double limit){
-  float * inr = fftwf_malloc(N * sizeof(float));
-  float complex * in = fftwf_malloc(N * sizeof (float complex));
-  float complex * out = fftwf_malloc(N * sizeof (float complex));
 
   fftwf_plan plan = NULL;
-  if(limit != 0)
-    fftwf_set_timelimit(limit);
+  if(FFTW_plan_timelimit != 0)
+    fftwf_set_timelimit(FFTW_plan_timelimit);
 
   if(real && direction == FFTW_FORWARD){
-    plan = fftwf_plan_dft_r2c_1d(N, inr, out, level | FFTW_PRESERVE_INPUT);
+    float *in = fftwf_malloc(N * sizeof(float));
+    float complex *out = (float complex *)in;
+    if(!inplace)
+      out = fftwf_malloc(N * sizeof(float complex));
+    plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_planning_level | (!inplace ? FFTW_PRESERVE_INPUT : 0));
+    if((void *)out != (void *)in)
+      fftwf_free(out);
+    fftwf_free(in);
   } else if(real && direction == FFTW_BACKWARD){
-    plan = fftwf_plan_dft_c2r_1d(N, out, inr, level | FFTW_PRESERVE_INPUT);
+    float complex *in = fftwf_malloc(N * sizeof(float complex));
+    float *out = (float *)in;
+    if(!inplace)
+      out = fftwf_malloc(N * sizeof(float));
+    plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_planning_level | (!inplace ? FFTW_PRESERVE_INPUT : 0));
+    if((void *)out != (void *)in)
+      fftwf_free(out);
+    fftwf_free(in);
   } else {
     // Complex
-    plan = fftwf_plan_dft_1d(N, in, out, direction, level | FFTW_PRESERVE_INPUT);
+    float complex *in = fftwf_malloc(N * sizeof(float complex));
+    float complex *out = in;
+    if(!inplace)
+      out = fftwf_malloc(N * sizeof(float complex));
+    plan = fftwf_plan_dft_1d(N, in, out, direction, FFTW_planning_level | (!inplace ? FFTW_PRESERVE_INPUT : 0));
+    if((void *)out != (void *)in)
+      fftwf_free(out);
+    fftwf_free(in);
   }
   if(plan != NULL){
     fftwf_destroy_plan(plan);
@@ -291,12 +297,6 @@ static int plan(int level, int direction, int real, int N, double limit){
     save_plans();
   }
   track_wisdom_length();
-  fftwf_free(inr);
-  inr = NULL;
-  fftwf_free(in);
-  in = NULL;
-  fftwf_free(out);
-  out = NULL;
   return 0;
 }
 static int save_plans(){
@@ -364,6 +364,9 @@ static int save_plans(){
     printf("rename %s to %s failed: %s\n",newtemp,Wisdom_file,strerror(errno));
   else if(Verbose > 1)
     printf("rename %s to %s succeeded\n",newtemp,Wisdom_file);
+
+  if(Force)
+    fftwf_forget_wisdom(); // start fresh for the next on the list
 
   quit:
 
