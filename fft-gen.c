@@ -205,7 +205,7 @@ int main(int argc,char *argv[]){
   } else {
     // read from stdin
     char buffer[1024];
-    while(fgets(buffer,sizeof buffer,stdin) > 0)
+    while(fgets(buffer,sizeof buffer,stdin) != NULL)
       parse_and_run(buffer);
   }      
   exit(0);
