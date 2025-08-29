@@ -61,8 +61,10 @@ static int track_wisdom_length(void){
   if(Verbose < 2)
     return 0;
 
+  size_t length= 0;
   char *wisdom = fftwf_export_wisdom_to_string();
-  size_t length = strlen(wisdom);
+  if(wisdom != NULL)
+    length = strlen(wisdom);
 
   uint64_t h = 0xcbf29ce484222325ULL;
 
