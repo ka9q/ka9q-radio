@@ -313,7 +313,8 @@ static int save_plans(){
   if(asprintf(&lockfile,"%s.lock",Wisdom_file) <= 0)
     goto quit;
 
-  lockfd = open(lockfile,O_CREAT|O_RDWR,0666);
+  lockfd = open(lockfile,O_CREAT|O_RDWR,0664);
+  fchmod(lockfd,0664); // I really do want rw-rw-r-- so the radio group can write it
   if(lockfd == -1)
     printf("Can't acquire lock on %s\n",lockfile);
   else
