@@ -46,14 +46,14 @@ int demod_spectrum(void *arg){
   pthread_mutex_unlock(&chan->status.lock);
 
   // Parameters set by system input side
-  float const blockrate = 1000.0f / Blocktime; // Typically 50 Hz
+  double const blockrate = 1000.0 / Blocktime; // Typically 50 Hz
 
   int const L = frontend->L;
   int const M = frontend->M;
   int const N = L + M - 1;
 
-  float const fe_fft_bin_spacing = blockrate * (float)L/N; // Input FFT bin spacing. Typically 40 Hz
-  float binsperbin = 0; // can handle non-integer ratios
+  double const fe_fft_bin_spacing = blockrate * (float)L/N; // Input FFT bin spacing. Typically 40 Hz
+  double binsperbin = 0; // can handle non-integer ratios
 
   // experiment - make array largest possible to temp avoid memory corruption
   chan->spectrum.bin_data = calloc(frontend->in.bins,sizeof *chan->spectrum.bin_data);
@@ -62,13 +62,14 @@ int demod_spectrum(void *arg){
   float complex *fft0_in = NULL;
   float complex *fft1_in = NULL;
   float complex *fft_out = NULL;
-  float gain = 0;
+
+  double gain = 0;
   int fft0_index = 0;
   int fft1_index = 0;
   int old_bin_count = -1;
-  float old_bin_bw = -1;
+  double old_bin_bw = -1;
   float *kaiser = NULL;
-  float kaiser_gain = 0;
+  double kaiser_gain = 0;
   int actual_bin_count = 0;
 
 #if 1
@@ -78,7 +79,7 @@ int demod_spectrum(void *arg){
   while(1){
     // Check user params
     int bin_count = chan->spectrum.bin_count <= 0 ? 64 : chan->spectrum.bin_count;
-    float bin_bw = chan->spectrum.bin_bw <= 0 ? 1000 : chan->spectrum.bin_bw;
+    double bin_bw = chan->spectrum.bin_bw <= 0 ? 1000 : chan->spectrum.bin_bw;
 
     if(bin_bw != old_bin_bw || bin_count != old_bin_count){
       // Params have changed, set everything up again
@@ -108,13 +109,9 @@ int demod_spectrum(void *arg){
 	create_filter_output(&chan->filter.out,&frontend->in,NULL,0,SPECTRUM);
 	// Compute power (not amplitude) scale factor
 #if SPECTRUM_DEBUG
-	gain = 1.0f / (float) N;   // scale each bin value for our FFT
-	gain *= gain;              // squared because the we're scaling the output of complex norm, not the input bin values
-	if(chan->filter.out.master->in_type == REAL)
-	  gain *= 2;               // we only see one side of the spectrum for real inputs
-
-	fprintf(stderr,"direct mode binsperbin %'.1f bin_bw %.1f bin_count %d gain %.1f dB\n",
-		binsperbin,bin_bw,bin_count,power2dB(gain));
+	double const gain = (master->in_type == REAL ? 2.0 : 1.0) / ((double)N*N);
+	fprintf(stderr,"direct mode binsperbin %'.1lf bin_bw %.1lf bin_count %d gain %.1lf dB\n",
+		binsperbin,bin_bw,bin_count,(double)power2dB(gain));
 #endif
       } else {
 	// Set up FFT mode
@@ -123,24 +120,25 @@ int demod_spectrum(void *arg){
 	if(samprate % valid_samprates != 0){
 	  // round up
 	  samprate += valid_samprates - samprate % valid_samprates;
-	  actual_bin_count = ceilf(samprate / bin_bw);
+	  actual_bin_count = ceil(samprate / bin_bw);
 	} else
 	  actual_bin_count = bin_count;
 
 	// Should also round up to an efficient FFT size
-	int frame_len = ceilf(samprate * Blocktime / 1000.);
+	int frame_len = ceil(samprate * Blocktime / 1000.);
 	assert(actual_bin_count >= bin_count);
 
 #if SPECTRUM_DEBUG
-	fprintf(stderr,"spectrum creating IQ/FFT channel, requested bw = %.1f bin_count = %d, actual bin count %d samprate %f frame len %d\n",
+	fprintf(stderr,"spectrum creating IQ/FFT channel, requested bw = %.1lf bin_count = %d, actual bin count %d samprate %d frame len %d\n",
 		bin_bw,bin_count,actual_bin_count,samprate,frame_len);
 #endif
-	chan->filter.min_IF = -samprate/2 + 200;
-	chan->filter.max_IF = samprate/2 - 200;
+	chan->filter.max_IF = (double)samprate/2 - 200;
+	chan->filter.min_IF = -chan->filter.max_IF;
+
 
 	// The channel filter already normalizes for the size of the forward input FFT, we just handle our own FFT gain
-	gain = 1.0f / (float) actual_bin_count;
-	gain *= gain;                     // squared because the we're scaling the output of complex norm, not the input bin values
+	// squared because the we're scaling the output of complex norm, not the input bin values
+	gain = 1.0/ ((double)actual_bin_count * actual_bin_count);
 
 	int r = create_filter_output(&chan->filter.out,&frontend->in,NULL,frame_len,COMPLEX);
 	(void)r;
@@ -180,11 +178,12 @@ int demod_spectrum(void *arg){
 #endif
 	pthread_mutex_lock(&FFTW_planning_mutex);
 	fftwf_plan_with_nthreads(1);
-	// These are small FFTs only do measure planning
-	plan = fftwf_plan_dft_1d(actual_bin_count,fft0_in,fft_out,FFTW_FORWARD,FFTW_MEASURE);
+	plan = fftwf_plan_dft_1d(actual_bin_count,fft0_in,fft_out,FFTW_FORWARD,FFTW_planning_level|FFTW_WISDOM_ONLY);
+	if(plan == NULL){
+	  suggest(actual_bin_count,FFTW_FORWARD,COMPLEX);
+	  plan = fftwf_plan_dft_1d(actual_bin_count,fft0_in,fft_out,FFTW_FORWARD,FFTW_ESTIMATE);
+	}
 	pthread_mutex_unlock(&FFTW_planning_mutex);
-	if(fftwf_export_wisdom_to_filename(Wisdom_file) == 0)
-	  fprintf(stderr,"fftwf_export_wisdom_to_filename(%s) failed\n",Wisdom_file);
       }
     }
     // Setup done (or nothing has changed)
@@ -219,11 +218,13 @@ int demod_spectrum(void *arg){
 	// Copy requested number of bins to user
 	// Should verify correctness for combinations of even and odd bin_count and actual_bin_count
 	int k = 0;
+	double alpha = 0.5;
+
 	for(int j = 0; j < bin_count; j++,k++){
 	  if(j == bin_count/2)
 	    k += actual_bin_count - bin_count; // jump to negative spectrum of FFT
-	  float p = gain * cnrmf(fft_out[k]); // Take power spectrum
-	  chan->spectrum.bin_data[j] = p;
+	  double p = gain * cnrmf(fft_out[k]); // Take power spectrum
+	  chan->spectrum.bin_data[j] += alpha * (p - chan->spectrum.bin_data[j]);
 	  assert(isfinite(chan->spectrum.bin_data[j]));
 	}
       }
@@ -255,7 +256,7 @@ int spectrum_poll(struct channel *chan){
   if(master == NULL)
     return -1;
 
-  float const bin_bw = chan->spectrum.bin_bw <= 0 ? 1000 : chan->spectrum.bin_bw;
+  double const bin_bw = chan->spectrum.bin_bw <= 0 ? 1000 : chan->spectrum.bin_bw;
 
   if(bin_bw <= Spectrum_crossover)
     return 0; // Only in wide binmode
@@ -266,15 +267,15 @@ int spectrum_poll(struct channel *chan){
   int const N = L + M - 1;
   int const bin_count = chan->spectrum.bin_count <= 0 ? 64 : chan->spectrum.bin_count;
 
-  float const blockrate = 1000.0f / Blocktime; // Typically 50 Hz
-  float const fe_fft_bin_spacing = blockrate * (float)L/N; // Input FFT bin spacing. Typically 40 Hz
-  float const binsperbin = bin_bw / fe_fft_bin_spacing;
+  double const blockrate = 1000.0f / Blocktime; // Typically 50 Hz
+  double const fe_fft_bin_spacing = blockrate * (float)L/N; // Input FFT bin spacing. Typically 40 Hz
+  double const binsperbin = bin_bw / fe_fft_bin_spacing;
   int const input_bins = ceilf(binsperbin * bin_count);
 
   // scale each bin value for our FFT
   // squared because the we're scaling the output of complex norm, not the input bin values
   // we only see one side of the spectrum for real inputs
-  float const gain = (master->in_type == REAL ? 2.0f : 1.0f) / ((float)N*N);
+  double const gain = (master->in_type == REAL ? 2.0f : 1.0f) / ((float)N*N);
 
   // Look at downconverter's frequency bins directly
   //      chan->spectrum.bin_data = reallocf(&chan->spectrum.bin_data, bin_count * sizeof *chan->spectrum.bin_data);
@@ -287,7 +288,7 @@ int spectrum_poll(struct channel *chan){
   // Read the master's frequency bins directly
   // The layout depends on the master's time domain input:
   // 1. Complex 2. Real, upright spectrum 3. Real, inverted spectrum
-  float *power_buffer = malloc((input_bins + 10) * sizeof *power_buffer);
+  double *power_buffer = malloc((input_bins + 10) * sizeof *power_buffer);
   if(master->in_type == COMPLEX){
     int binp = chan->filter.bin_shift - input_bins/2;
     if(binp < 0)
@@ -328,15 +329,15 @@ int spectrum_poll(struct channel *chan){
       power_buffer[i++] = 0;
   }
   // Merge the bins, negative output frequencies first
-  float ratio = (float)bin_count / input_bins;
+  double ratio = (double)bin_count / input_bins;
 
   int out = bin_count/2;
-  float outf;
+  double outf;
   int in = 0;
   outf = out;
   int x = 0;
   while(out < bin_count && in < input_bins){
-    float p = 0;
+    double p = 0;
     while((int)outf == out && in < input_bins){
       assert(in >= 0 && in < input_bins);
       p += power_buffer[in++];
@@ -350,7 +351,7 @@ int spectrum_poll(struct channel *chan){
   outf = out;
   x = 0;
   while(out < bin_count/2 && in < input_bins){
-    float p = 0;
+    double p = 0;
     while((int)outf == out && in < input_bins){
       assert(in >= 0 && in < input_bins);
       p += power_buffer[in++];

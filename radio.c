@@ -81,12 +81,12 @@ static char const *Global_keys[] = {
   "affinity",
   "blocktime",
   "data",
+  "dc-cut",
   "description",
   "dns",
   "fft-plan-level",
   "fft-internal-threads",
   "fft-threads",
-  "fft-time-limit",
   "hardware",
   "iface",
   "mode-file",
@@ -266,7 +266,6 @@ int loadconfig(char const *file){
   Overlap = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
   N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
   N_internal_threads = config_getint(Configtable,GLOBAL,"fft-internal-threads",DEFAULT_FFTW_INTERNAL_THREADS); // owned by filter.c
-  FFTW_plan_timelimit = config_getdouble(Configtable,GLOBAL,"fft-time-limit",FFTW_plan_timelimit);
   RTCP_enable = config_getboolean(Configtable,GLOBAL,"rtcp",RTCP_enable);
   SAP_enable = config_getboolean(Configtable,GLOBAL,"sap",SAP_enable);
   {
