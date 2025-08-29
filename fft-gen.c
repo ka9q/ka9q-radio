@@ -21,8 +21,8 @@
 #define Wisdom_dir "/var/lib/ka9q-radio"
 #define Wisdom_file "/var/lib/ka9q-radio/wisdom"
 
-int Verbose;
-bool Force;
+static int Verbose;
+static bool Force;
 
 static struct {
   char const *name;
@@ -54,10 +54,10 @@ static int name_to_level(char const *name){
   }    
 }
 static int save_plans();
-int plan(int level, int direction, int real, int N, double limit);
+static int plan(int level, int direction, int real, int N, double limit);
 
 static size_t Wisdom_size;
-uint64_t Wisdom_hash;
+static uint64_t Wisdom_hash;
 
 static int track_wisdom_length(void){
   if(Verbose < 2)
@@ -102,13 +102,16 @@ static struct option Options[] = {
   {NULL, 0, NULL, 0},
 };
 
+double FFTW_plan_timelimit = 0;  
+int FFTW_planning_level = FFTW_PATIENT;
+
+
+static int parse_and_run(char *s);
+
 // Experiment with incremental wisdom generation
 int main(int argc,char *argv[]){
   int c;
-  int N = 2000000;
   bool real = false;
-  double FFTW_plan_timelimit = 0;  
-  int FFTW_planning_level = FFTW_PATIENT;
   int nthreads = 1;
   int direction = FFTW_FORWARD;
 
@@ -196,32 +199,44 @@ int main(int argc,char *argv[]){
     else
       printf(", no time limit\n");
   }
-  if(optind == argc){
-    usage();
-    exit(0);
-  }
-  for(int i=optind; i < argc; i++){
+  if(optind < argc){
+    for(int i=optind; i < argc; i++)
+      parse_and_run(argv[i]);
+  } else {
+    // read from stdin
+    char buffer[1024];
+    while(fgets(buffer,sizeof buffer,stdin) > 0)
+      parse_and_run(buffer);
+  }      
+  exit(0);
+}
+static int parse_and_run(char *s){
     // Parse
     char a1,a2,a3;
     int a4;
-    if(sscanf(argv[i],"%c%c%c%d",&a1,&a2,&a3,&a4) != 4){
-      printf("Can't parse %s\n",argv[i]);
-      continue;
+    if(sscanf(s,"%c%c%c%d",&a1,&a2,&a3,&a4) != 4){
+      printf("Can't parse %s\n",s);
+      return -1;
     }
+    
+    bool real = false;
+    int direction = FFTW_FORWARD;
+    int N = 1024;
+
     switch(a1){
-    case 'r':
-      real = true;
-      break;
     case 'c':
       real = false;
       break;
+    case 'r':
+      real = true;
+      break;
     default:
       printf("Unknown type %c\n",a1);
-      continue;
+      return -1;
     }
     if(a2 != 'o'){
-      printf("Only out-of-place (o) handled: %s\n",argv[i]);
-      continue;
+      printf("Only out-of-place (o) handled: %s\n",s);
+      return -1;
     }
     switch(a3){
     case 'f':
@@ -232,23 +247,24 @@ int main(int argc,char *argv[]){
       break;
     default:
       printf("Unknown direction %c\n",a3);
-      continue;
+      return -1;
     }
     if(a4 <= 0){
       printf("invalid length %d\n",a4);
-      continue;
+      return -1;
     }
     N = a4;
-
     if(Verbose)
-      printf("%s\n",argv[i]);
+      printf("%s\n",s);
 
     plan(FFTW_planning_level, direction, real, N, FFTW_plan_timelimit);
-  }
-  exit(0);
+    if(Verbose)
+      printf("%s done\n",s);
+      
+    return 0;
 }
 
-int plan(int level, int direction, int real, int N, double limit){
+static int plan(int level, int direction, int real, int N, double limit){
   float * inr = fftwf_malloc(N * sizeof(float));
   float complex * in = fftwf_malloc(N * sizeof (float complex));
   float complex * out = fftwf_malloc(N * sizeof (float complex));
