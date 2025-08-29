@@ -92,9 +92,9 @@ int demod_spectrum(void *arg){
 	fftwf_destroy_plan(plan);
 	plan = NULL;
       }
-      FREE(fft0_in);
-      FREE(fft1_in);
-      FREE(fft_out);
+      fftwf_free(fft0_in);
+      fftwf_free(fft1_in);
+      fftwf_free(fft_out);
       FREE(chan->status.command);
       FREE(kaiser);
 
@@ -162,9 +162,9 @@ int demod_spectrum(void *arg){
 	  kaiser[i] *= kaiser_gain;
 
 	// Set up two 50% overlapping time-domain windows
-	fft0_in = lmalloc(actual_bin_count * sizeof *fft0_in);
-	fft1_in = lmalloc(actual_bin_count * sizeof *fft1_in);
-	fft_out = lmalloc(actual_bin_count * sizeof *fft_out);
+	fft0_in = fftwf_malloc(actual_bin_count * sizeof *fft0_in);
+	fft1_in = fftwf_malloc(actual_bin_count * sizeof *fft1_in);
+	fft_out = fftwf_malloc(actual_bin_count * sizeof *fft_out);
 	assert(fft0_in != NULL && fft1_in != NULL && fft_out != NULL);
 	memset(fft0_in,0,actual_bin_count * sizeof *fft0_in);
 	memset(fft1_in,0,actual_bin_count * sizeof *fft1_in); // Odd buffer not full when first transformed
@@ -227,9 +227,9 @@ int demod_spectrum(void *arg){
   if(plan != NULL)
     fftwf_destroy_plan(plan);
   plan = NULL;
-  FREE(fft0_in);
-  FREE(fft1_in);
-  FREE(fft_out);
+  fftwf_free(fft0_in);
+  fftwf_free(fft1_in);
+  fftwf_free(fft_out);
   FREE(kaiser);
   FREE(chan->status.command);
   FREE(chan->spectrum.bin_data);
