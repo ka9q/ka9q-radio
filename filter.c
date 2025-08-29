@@ -101,7 +101,7 @@ fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direct
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
   if(notify)
-    suggest(N,FFTW_FORWARD,COMPLEX);
+    suggest(N,direction,COMPLEX);
   return plan;
 }
 fftwf_plan plan_r2c(int N, float *in, float complex *out){
