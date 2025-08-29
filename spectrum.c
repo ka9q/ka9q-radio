@@ -176,14 +176,7 @@ int demod_spectrum(void *arg){
 	fprintf(stderr,"frame_len %d, actual bin count %d samprate %d, bin_bw %.1f gain %.1f dB\n",
 		frame_len,actual_bin_count,samprate,bin_bw,power2dB(gain));
 #endif
-	pthread_mutex_lock(&FFTW_planning_mutex);
-	fftwf_plan_with_nthreads(1);
-	plan = fftwf_plan_dft_1d(actual_bin_count,fft0_in,fft_out,FFTW_FORWARD,FFTW_planning_level|FFTW_WISDOM_ONLY);
-	if(plan == NULL){
-	  suggest(actual_bin_count,FFTW_FORWARD,COMPLEX);
-	  plan = fftwf_plan_dft_1d(actual_bin_count,fft0_in,fft_out,FFTW_FORWARD,FFTW_ESTIMATE);
-	}
-	pthread_mutex_unlock(&FFTW_planning_mutex);
+	plan = plan_complex(actual_bin_count,fft0_in,fft_out,FFTW_FORWARD);
       }
     }
     // Setup done (or nothing has changed)
