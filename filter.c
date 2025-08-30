@@ -152,8 +152,6 @@ fftwf_plan plan_c2r(int N, float complex *in, float *out){
 }
 
 
-static bool goodchoice(unsigned long n);
-
 // Create fast convolution filters
 // The filters are now in two parts, filter_in (the master) and filter_out (the slave)
 // Filter_in holds the original time-domain input and its frequency domain version
@@ -437,7 +435,7 @@ static unsigned long factor_small_primes(unsigned long n, int exponents[6]){
 
 // Is this a good blocksize for FFTW3?
 // Any number of factors of 2, 3, 5, 7 plus one of either 11 or 13
-static bool goodchoice(unsigned long n){
+bool goodchoice(unsigned long n){
   int exponents[6];
 
   unsigned long r = factor_small_primes(n,exponents);
@@ -445,6 +443,18 @@ static bool goodchoice(unsigned long n){
     return false;
   else
     return true;
+}
+
+unsigned int ceil_pow2(unsigned int x) {
+    if (x <= 1) return 1;
+    if (x > (1u << 31)) return 0;        // overflow: no power-of-2 fits
+    x--;
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
+    x |= x >> 16;
+    return x + 1;
 }
 
 // Apply notch filters in the frequency domain to the output of a forward FFT
