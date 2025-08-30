@@ -55,7 +55,6 @@ int demod_spectrum(void *arg){
   double const fe_fft_bin_spacing = blockrate * (float)L/N; // Input FFT bin spacing. Typically 40 Hz
   double binsperbin = 0; // can handle non-integer ratios
 
-  // experiment - make array largest possible to temp avoid memory corruption
   chan->spectrum.bin_data = calloc(frontend->in.bins,sizeof *chan->spectrum.bin_data);
 
   fftwf_plan plan = NULL;
@@ -237,6 +236,9 @@ int spectrum_poll(struct channel *chan){
 
   struct filter_in const * const master = chan->filter.out.master;
   if(master == NULL)
+    return -1;
+
+  if(chan->spectrum.bin_data == NULL)
     return -1;
 
   double const bin_bw = chan->spectrum.bin_bw <= 0 ? 1000 : chan->spectrum.bin_bw;
