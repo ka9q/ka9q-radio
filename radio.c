@@ -81,12 +81,12 @@ static char const *Global_keys[] = {
   "affinity",
   "blocktime",
   "data",
+  "dc-cut",
   "description",
   "dns",
   "fft-plan-level",
   "fft-internal-threads",
   "fft-threads",
-  "fft-time-limit",
   "hardware",
   "iface",
   "mode-file",
@@ -266,7 +266,6 @@ int loadconfig(char const *file){
   Overlap = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
   N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
   N_internal_threads = config_getint(Configtable,GLOBAL,"fft-internal-threads",DEFAULT_FFTW_INTERNAL_THREADS); // owned by filter.c
-  FFTW_plan_timelimit = config_getdouble(Configtable,GLOBAL,"fft-time-limit",FFTW_plan_timelimit);
   RTCP_enable = config_getboolean(Configtable,GLOBAL,"rtcp",RTCP_enable);
   SAP_enable = config_getboolean(Configtable,GLOBAL,"sap",SAP_enable);
   {
@@ -1386,9 +1385,10 @@ int downconvert(struct channel *chan){
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
     chan->status.blocks_since_poll++;
 
-    if(chan->filter.out.output.c == NULL)
+    if(chan->filter.out.output.c == NULL){
+      chan->filter.bin_shift = shift; // Needed by spectrum.c
       return 0; // Probably in spectrum mode, nothing more to do
-
+    }
     // Compute and exponentially smooth noise estimate
     if(isnan(chan->sig.n0))
       chan->sig.n0 = estimate_noise(chan,shift);

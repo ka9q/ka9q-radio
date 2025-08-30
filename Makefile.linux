@@ -41,7 +41,7 @@ SYSFILES = /etc/avahi/hosts /var/log/hfdl.log
 #DAEMONS = aprs aprsfeed cwd opusd packetd radiod stereod rdsd
 #EXECS = control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record
 DAEMONS = aprs aprsfeed cwd packetd radiod
-EXECS = control jt-decoded metadump monitor pcmrecord pl powers tune wd-record
+EXECS = control fft-gen jt-decoded metadump monitor pcmrecord pl powers tune wd-record
 SCRIPTS = aux/set_lo_multicast.sh
 LIBRADIO = ax25.o morse.o bandplan.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o
 DYNAMIC_DRIVERS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so
@@ -172,6 +172,9 @@ DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
 dynamics: $(DYNAMIC_DRIVERS)
 
 # Executables
+
+fft-gen: fft-gen.o
+	$(CC) $(LDOPTS) -o $@ $^  -lfftw3f_threads -lfftw3f  -lm -lpthread
 
 aprs: aprs.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread

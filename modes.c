@@ -61,6 +61,7 @@ char const *Channel_keys[] = {
   "dns",
   "disable",
   "data",
+  "dc-cut",
   "demod",
   "raster",
   "mode",

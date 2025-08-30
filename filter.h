@@ -95,10 +95,16 @@ int set_filter(struct filter_out * restrict,float,float,float);
 void *run_fft(void *);
 int write_cfilter(struct filter_in *, float complex const *,int size);
 int write_rfilter(struct filter_in *, float const *,int size);
-void suggest(int level,int size,int dir,int clex);
+void suggest(int size,int dir,int clex);
 unsigned long gcd(unsigned long a,unsigned long b);
 unsigned long lcm(unsigned long a,unsigned long b);
 int make_kaiser(float * const window,int const M,float const beta);
+fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction);
+fftwf_plan plan_r2c(int N, float *in, float complex *out);
+fftwf_plan plan_c2r(int N, float complex *in, float *out);
+bool goodchoice(unsigned long);
+unsigned int ceil_pow2(unsigned int x);
+
 
 // Write complex sample to input side of filter
 static inline int put_cfilter(struct filter_in * restrict const f,float complex const s){ // Complex
@@ -146,3 +152,4 @@ static inline float complex read_cfilter(struct filter_out * restrict const f,in
 }
 
 #endif
+
