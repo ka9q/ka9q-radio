@@ -64,13 +64,13 @@ int demod_spectrum(void *arg){
   float complex *fft_out = NULL;
 
   double gain = 0;
+  int fft_size = 0;
   int fft0_index = 0;
   int fft1_index = 0;
   int old_bin_count = -1;
   double old_bin_bw = -1;
   float *kaiser = NULL;
   double kaiser_gain = 0;
-  int actual_bin_count = 0;
 
 #if 1
   realtime(chan->prio - 10); // Drop below demods
@@ -95,6 +95,7 @@ int demod_spectrum(void *arg){
       fftwf_free(fft0_in);
       fftwf_free(fft1_in);
       fftwf_free(fft_out);
+      fft0_in = fft1_in = fft_out = NULL;
       FREE(chan->status.command);
       FREE(kaiser);
 
@@ -115,68 +116,56 @@ int demod_spectrum(void *arg){
 #endif
       } else {
 	// Set up FFT mode
-	int samprate = bin_bw * bin_count;
-	int valid_samprates = lcm(blockrate,L*blockrate/N);
-	if(samprate % valid_samprates != 0){
-	  // round up
-	  samprate += valid_samprates - samprate % valid_samprates;
-	  actual_bin_count = ceil(samprate / bin_bw);
-	} else
-	  actual_bin_count = bin_count;
-
-	// Should also round up to an efficient FFT size
-	int frame_len = ceil(samprate * Blocktime / 1000.);
-	assert(actual_bin_count >= bin_count);
-
-#if SPECTRUM_DEBUG
-	fprintf(stderr,"spectrum creating IQ/FFT channel, requested bw = %.1lf bin_count = %d, actual bin count %d samprate %d frame len %d\n",
-		bin_bw,bin_count,actual_bin_count,samprate,frame_len);
-#endif
-	chan->filter.max_IF = (double)samprate/2 - 200;
-	chan->filter.min_IF = -chan->filter.max_IF;
-
+	double const margin = 400; // Allow for filter skirts at edge of I/Q receiver
+	int const samprate_base = lcm(blockrate,L*blockrate/N); // Samprate must be allowed by receiver
+	fft_size = bin_count + margin / bin_bw; // Minimum for search to avoid receiver filter skirt
+	// This (int) cast should be cleaned up
+	while(fft_size < 65536 && (!goodchoice(fft_size) || (int)round(fft_size * bin_bw) % samprate_base != 0))
+	    fft_size++;
+	int samprate = fft_size * bin_bw;
+	if(Verbose > 1)
+	  fprintf(stderr,"spectrum setup: bin count %d, bin_bw %.1lf, samprate %d fft size %d\n",
+		  bin_count,bin_bw,samprate,fft_size);
 
 	// The channel filter already normalizes for the size of the forward input FFT, we just handle our own FFT gain
 	// squared because the we're scaling the output of complex norm, not the input bin values
-	gain = 1.0/ ((double)actual_bin_count * actual_bin_count);
+	gain = 1.0/ ((double)fft_size * fft_size);
 
+	int frame_len = samprate / blockrate;
 	int r = create_filter_output(&chan->filter.out,&frontend->in,NULL,frame_len,COMPLEX);
 	(void)r;
 	assert(r == 0);
 
+	chan->filter.max_IF = (double)(samprate - margin)/2;
+	chan->filter.min_IF = -chan->filter.max_IF;
 	set_filter(&chan->filter.out,chan->filter.min_IF,chan->filter.max_IF,KAISER_BETA);
 	chan->filter.remainder = NAN; // Force init of downconverter
 	chan->filter.bin_shift = 1010101010; // Unlikely - but a kludge, force init of phase rotator
 
-	// Should round FFT block size up to an efficient number
-
 	// Generate normalized Kaiser window
-	kaiser = malloc(actual_bin_count * sizeof *kaiser);
-	make_kaiser(kaiser,actual_bin_count,SPECTRUM_KAISER_BETA);
+	kaiser = malloc(fft_size * sizeof *kaiser);
+	make_kaiser(kaiser,fft_size,SPECTRUM_KAISER_BETA);
 	kaiser_gain = 0;
-	for(int i = 0; i < actual_bin_count; i++)
+	for(int i = 0; i < fft_size; i++)
 	  kaiser_gain += kaiser[i];
 
-	kaiser_gain = actual_bin_count / kaiser_gain;
-	for(int i = 0; i < actual_bin_count; i++)
+	kaiser_gain = fft_size / kaiser_gain;
+	for(int i = 0; i < fft_size; i++)
 	  kaiser[i] *= kaiser_gain;
 
 	// Set up two 50% overlapping time-domain windows
-	fft0_in = fftwf_malloc(actual_bin_count * sizeof *fft0_in);
-	fft1_in = fftwf_malloc(actual_bin_count * sizeof *fft1_in);
-	fft_out = fftwf_malloc(actual_bin_count * sizeof *fft_out);
+	fft0_in = fftwf_malloc(fft_size * sizeof *fft0_in);
+	fft1_in = fftwf_malloc(fft_size * sizeof *fft1_in);
+	fft_out = fftwf_malloc(fft_size * sizeof *fft_out);
 	assert(fft0_in != NULL && fft1_in != NULL && fft_out != NULL);
-	memset(fft0_in,0,actual_bin_count * sizeof *fft0_in);
-	memset(fft1_in,0,actual_bin_count * sizeof *fft1_in); // Odd buffer not full when first transformed
-	memset(fft_out,0,actual_bin_count * sizeof *fft_out); // Odd buffer not full when first transformed
+	memset(fft0_in,0,fft_size * sizeof *fft0_in);
+	memset(fft1_in,0,fft_size * sizeof *fft1_in); // Odd buffer not full when first transformed
+	memset(fft_out,0,fft_size * sizeof *fft_out); // Odd buffer not full when first transformed
 	fft0_index = 0;
-	fft1_index = actual_bin_count/2;
+	fft1_index = fft_size/2;
 
-#if SPECTRUM_DEBUG
-	fprintf(stderr,"frame_len %d, actual bin count %d samprate %d, bin_bw %.1f gain %.1f dB\n",
-		frame_len,actual_bin_count,samprate,bin_bw,power2dB(gain));
-#endif
-	plan = plan_complex(actual_bin_count,fft0_in,fft_out,FFTW_FORWARD);
+	plan = plan_complex(fft_size, fft0_in, fft_out, FFTW_FORWARD);
+	assert(plan != NULL);
       }
     }
     // Setup done (or nothing has changed)
@@ -197,12 +186,12 @@ int demod_spectrum(void *arg){
       fft0_in[fft0_index] = chan->baseband[i] * kaiser[fft0_index];
       fft1_in[fft1_index] = chan->baseband[i] * kaiser[fft1_index];
 
-      if(++fft0_index >= actual_bin_count){
+      if(++fft0_index >= fft_size){
 	fft0_index = 0;
 	fftwf_execute_dft(plan,fft0_in,fft_out);
 	did_fft = true;
       }
-      if(++fft1_index >= actual_bin_count){
+      if(++fft1_index >= fft_size){
 	fft1_index = 0;
 	fftwf_execute_dft(plan,fft1_in,fft_out);
 	did_fft = true;
@@ -215,9 +204,9 @@ int demod_spectrum(void *arg){
 
 	for(int j = 0; j < bin_count; j++,k++){
 	  if(j == bin_count/2)
-	    k += actual_bin_count - bin_count; // jump to negative spectrum of FFT
+	    k += fft_size - bin_count; // jump to negative spectrum of FFT
 	  double p = gain * cnrmf(fft_out[k]); // Take power spectrum
-	  chan->spectrum.bin_data[j] += alpha * (p - chan->spectrum.bin_data[j]);
+	  chan->spectrum.bin_data[j] += alpha * (p - chan->spectrum.bin_data[j]); // average it in
 	  assert(isfinite(chan->spectrum.bin_data[j]));
 	}
       }
@@ -230,6 +219,7 @@ int demod_spectrum(void *arg){
   fftwf_free(fft0_in);
   fftwf_free(fft1_in);
   fftwf_free(fft_out);
+  fft0_in = fft1_in = fft_out = NULL;
   FREE(kaiser);
   FREE(chan->status.command);
   FREE(chan->spectrum.bin_data);
