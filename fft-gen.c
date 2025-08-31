@@ -335,7 +335,7 @@ static int save_plans(){
     // Last ditch attempt to preserve the work: dump it to stdout and hope somebody sees it
     printf("Can't create temporary wisdom file %s\n",newtemp);
     printf("New wisdom:\n");
-    write(1,wisdom,newsize);
+    (void)write(1,wisdom,newsize); // Best effort, ignore return
     goto quit;
   }
   if(write(fd,wisdom,newsize) != newsize){
@@ -349,7 +349,7 @@ static int save_plans(){
   // Copy user/group/mode from old version
   struct stat st;
   if(stat(Wisdom_file,&st) == 0){
-    fchown(fd, st.st_uid, st.st_gid);
+    (void)fchown(fd, st.st_uid, st.st_gid); // Best effort
     fchmod(fd, st.st_mode);
   }
   if(fstat(fd,&st) != 0 || st.st_size <= 0){
