@@ -63,10 +63,16 @@ int demod_wfm(void *arg){
     goto quit; // Front end sample rate is too low - should probably fix filter to allow interpolation
 
   delete_filter_output(&chan->filter.out);
-  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,composite_L,COMPLEX);
+  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,composite_L,
+				    chan->filter.beam ? BEAM : COMPLEX);
+  if(status != 0){
+    pthread_mutex_unlock(&chan->status.lock);
+    return -1;
+  }
+  if(chan->filter.beam)
+    set_filter_weights(&chan->filter.out,chan->filter.a_weight,chan->filter.b_weight);
+
   pthread_mutex_unlock(&chan->status.lock);
-  if(status != 0)
-    return -1; // fatal, don't restart
 
   set_filter(&chan->filter.out,
 	     chan->filter.min_IF/Composite_samprate,

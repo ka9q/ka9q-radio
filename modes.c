@@ -63,6 +63,11 @@ char const *Channel_keys[] = {
   "data",
   "dc-cut",
   "demod",
+  "beam",
+  "A-amp",
+  "A-phase",
+  "B-amp",
+  "B-phase",
   "raster",
   "mode",
   "preset",
@@ -361,6 +366,15 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   chan->prio = config_getint(table,sname,"prio",chan->prio);
   chan->output.ttl = config_getint(table,sname,"ttl",chan->output.ttl);
 
+  chan->filter.beam = config_getboolean(table,sname,"beam",false);
+  if(chan->filter.beam){
+    double a_amp = config_getdouble(table,sname,"a-amp",1.0);
+    double a_phase = config_getdouble(table,sname,"a-phase",0.0);
+    double b_amp = config_getdouble(table,sname,"b-amp",0.0);
+    double b_phase = config_getdouble(table,sname,"b-phase",0.0);
+    chan->filter.a_weight = a_amp * csincospi(a_phase / 180.);
+    chan->filter.b_weight = b_amp * csincospi(b_phase / 180.);
+  }
   return 0;
 }
 
