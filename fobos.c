@@ -256,10 +256,13 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
     frontend->max_IF = 0.47 * frontend->samprate;
 
     if(sdr->direct_sampling){
+      // With -40 dBm @ 15 MHz on B input and nothing on A input,
+      // A/D reads -42.2 dBm
+      // So level_cal = +0.8 dB gives (average) input of -43.0 dBm
       frontend->frequency = 0;
       frontend->rf_gain = 0;
       frontend->rf_atten = 0;
-      frontend->rf_level_cal = 20; // Gain of LTC6401; needs to be calibrated
+      frontend->rf_level_cal = +0.8;
     } else {
       const char *frequencycfg =
 	config_getstring(dictionary, section, "frequency", "100m0");
