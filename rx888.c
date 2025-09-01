@@ -91,6 +91,9 @@ struct sdrstate {
   unsigned long failure_count;  // Number of failed transfers
 
   // RF Hardware
+  float high_threshold;
+  float low_threshold;
+
   double reference;
   bool randomizer;
   bool dither;
@@ -151,6 +154,8 @@ static char const *usb_speeds[N_USB_SPEEDS] = {
 };
 
 static char const *Rx888_keys[] = {
+  "agc-high-threshold",
+  "agc-low-threshold",
   "att", // synonym for atten
   "atten", // fixed attenuator gain, dB. Either -10 or +10 is interprepted as 10 dB of attenuation
   "calibrate", // Set to zero when an external GPSDO or Rb/Cs reference is used
@@ -342,6 +347,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
       Description = p;
     }
   }
+  sdr->low_threshold = config_getfloat(dictionary,section,"agc-low-threshold",AGC_lower_limit);
+  sdr->high_threshold = config_getfloat(dictionary,section,"agc-high-threshold",AGC_upper_limit);
+
   double xfer_time = (double)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);
   // Compute exponential smoothing constant
   // Use double to avoid denormalized addition
@@ -513,8 +521,8 @@ static void *agc_rx888(void *arg){
       }
       frontend->if_power_max = frontend->if_power;
     }
-    if(frontend->rf_agc && (new_dBFS > AGC_upper_limit || new_dBFS < AGC_lower_limit)){
-      float const target_level = (AGC_upper_limit + AGC_lower_limit)/2;
+    if(frontend->rf_agc && (new_dBFS > sdr->high_threshold || new_dBFS < sdr->low_threshold)){
+      float const target_level = (sdr->high_threshold + sdr->low_threshold)/2;
       float new_gain = frontend->rf_gain - (new_dBFS - target_level);
       if(new_gain > 34)
 	new_gain = 34;
