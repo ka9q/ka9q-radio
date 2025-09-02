@@ -6,7 +6,6 @@
 *.d
 *.so
 !config/*.d
-Makefile
 .depend
 aprs
 aprsfeed
