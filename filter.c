@@ -346,8 +346,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
   switch(slave->out_type){
   default:
   case BEAM:
-    slave->alpha = 0.5; // defaults select A input only, can be changed by set_filter_weights().
-    slave->beta = 0.5;
+    set_filter_weights(slave,1.0,0.0); // defaults select A input only, can be changed by set_filter_weights().
     /* fall through */
   case COMPLEX: // note fall-through
     {
