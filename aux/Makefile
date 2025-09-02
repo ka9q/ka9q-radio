@@ -3,9 +3,9 @@
 # sub-make for ka9q aux files
 # Copyright 2025, Phil Karn, KA9Q
 
-LIBDIR = /usr/local/share/ka9q-radio
 DAEMONDIR = /usr/local/sbin
 VARDIR = /var/lib/ka9q-radio
+BINDIR = /usr/local/bin
 DIRS = /etc/fftw /etc/radio /etc/avahi/services $(VARDIR) /var/lib/hfdl $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/log/acars
 SYSFILES = /etc/avahi/hosts /var/log/hfdl.log
 SCRIPTS = aux/set_lo_multicast.sh
@@ -25,17 +25,18 @@ install:
 	touch $(SYSFILES)
 	chgrp radio $(SYSFILES)
 	chmod g+w $(SYSFILES)
-	rsync -a $(SYSCTL) /etc/sysctl.d
+	rsync $(SYSCTL) /etc/sysctl.d
 	sysctl -q -p $(SYSCTL)
-	rsync -a $(BLACKLIST) /etc/modprobe.d
-	rsync -a $(LOGROTATE_FILES) /etc/logrotate.d
+	rsync $(BLACKLIST) /etc/modprobe.d
+	rsync $(LOGROTATE_FILES) /etc/logrotate.d
 	chown root:root /etc/logrotate.d/*
 	chmod go-w /etc/logrotate.d/*
-	rsync -a --ignore-existing systable.conf /var/lib/hfdl
+	rsync --ignore-existing systable.conf /var/lib/hfdl
 	rsync start-hfdl.sh $(DAEMONDIR)
-	rsync -a ka9q-cleanups /etc/cron.d/
+	rsync ka9q-cleanups /etc/cron.d/
 	chown root:root /etc/cron.d/ka9q-cleanups
 	chmod 0644 /etc/cron.d/ka9q-cleanups
+	rsync $(SCRIPTS) $(BINDIR)
 
 .PHONY: clean all install
 

@@ -10,7 +10,7 @@ all:
 clean:
 
 install:
-	rsync -a --ignore-existing * $(LIBDIR)
+	rsync --ignore-existing * $(LIBDIR)
 	chown radio:radio $(LIBDIR)
 
 .PHONY: clean all install

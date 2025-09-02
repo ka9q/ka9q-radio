@@ -7,8 +7,7 @@ all:
 clean:
 
 install:
-	rsync -a * /etc/udev/rules.d
-	chown root:root /etc/udev/rules.d
+	rsync * /etc/udev/rules.d
 
 .PHONY: clean all install
 
