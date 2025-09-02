@@ -7,7 +7,7 @@ jobs:
     name: Ubuntu CI
     strategy:
       matrix:
-        makefile: [Makefile.linux]
+        makefile: [Makefile]
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
@@ -45,7 +45,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Setup
-        run: ln -s ${{ matrix.makefile }} Makefile
       - name: Compile
         run: make
       - name: Install
@@ -116,7 +115,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Setup
-        run: ln -s Makefile.osx Makefile
       - name: Compile
         run: C_INCLUDE_PATH="$(brew --prefix)/include:$(brew --prefix)/opt/ncurses/include" LIBRARY_PATH="$(brew --prefix)/lib:$(brew --prefix)/opt/ncurses/lib" make
       - name: Install
