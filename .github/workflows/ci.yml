@@ -44,7 +44,6 @@ jobs:
             sudo make install
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup
       - name: Compile
         run: make
       - name: Install
