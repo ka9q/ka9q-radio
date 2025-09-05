@@ -44,7 +44,8 @@
 #define DEFAULT_PRESET "am"
 #define GLOBAL "global"
 
-static int Nchans;
+
+static int Total_channels;
 static bool Global_use_dns;
 static void *Dl_handle;
 static struct frontend Frontend;
@@ -131,6 +132,14 @@ static int setup_hardware(char const *sname);
 static void *process_section(void *p);
 static void *sap_send(void *p);
 static void *rtcp_send(void *p);
+// Table of frequencies to start
+struct ftab {
+  double f;
+  bool valid; // Will be false if mentioned in "except" list
+};
+
+static int fcompare(void const *ap, void const *bp); // Compare frequencies in table entries
+static int tcompare(void const *ap,void const *bp); // Lookup frequency in sorted table
 
 // Load the radiod config file, e.g., /etc/radio/radiod@rx888-ka9q-hf.conf
 // Called from main(), concatenates sections of config file (if in a directory)
@@ -489,7 +498,7 @@ int loadconfig(char const *file){
 
     pthread_create(&startup_threads[nthreads++],NULL,process_section,(void *)sname);
   }
-  // Wait for them all to start
+  // Wait for them all to finish
   for(int sect = 0; sect < nthreads; sect++){
     pthread_join(startup_threads[sect],NULL);
 #if 0
@@ -498,10 +507,10 @@ int loadconfig(char const *file){
   }
   iniparser_freedict(Configtable);
   Configtable = NULL;
-  if(Ctl_fd == -1 && Nchans == 0)
+  if(Ctl_fd == -1 && Total_channels == 0)
     fprintf(stderr,"Warning: no control channel and no static demodulators, radiod won't do anything\n");
 
-  return Nchans;
+  return Total_channels;
 }
 
 // Set up the SDR front end hardware
@@ -629,7 +638,7 @@ static void *process_section(void *p){
     fprintf(stderr,"[%s] preset/mode not specified, all parameters must be explicitly set\n",sname);
 
   // Override [global] settings with section settings
-  char *data = NULL;
+  char const *data = NULL;
   {
     char const *cp = config_getstring(Configtable,sname,"data",Data);
     // Add .local if not present
@@ -648,7 +657,7 @@ static void *process_section(void *p){
   set_defaults(&chan_template); // compiled-in defaults (#4)
   loadpreset(&chan_template,Configtable,GLOBAL); // [global] section (#3)
 
-  if(preset != NULL && loadpreset(&chan_template,Preset_table,preset) != 0) // preset database entry (#2)
+  if(loadpreset(&chan_template,Preset_table,preset) != 0) // preset database entry (#2)
     fprintf(stderr,"[%s] loadpreset(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Preset_file,preset);
 
   strlcpy(chan_template.preset,preset,sizeof chan_template.preset);
@@ -660,7 +669,7 @@ static void *process_section(void *p){
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
   // Look quickly (2 tries max) to see if it's already in the DNS. Otherwise make a multicast address.
   uint32_t addr = 0;
-  bool use_dns = config_getboolean(Configtable,sname,"dns",Global_use_dns);
+  bool const use_dns = config_getboolean(Configtable,sname,"dns",Global_use_dns);
 
   if(!use_dns || resolve_mcast(data,&chan_template.output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
     // If we're not using the DNS, or if resolution fails, hash name string to make IP multicast address in 239.x.x.x range
@@ -675,7 +684,7 @@ static void *process_section(void *p){
     char ttlmsg[128];
     snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",chan_template.output.ttl);
     char const *cp = config2_getstring(Configtable,Configtable,GLOBAL,sname,"encoding","s16be");
-    bool is_opus = strcasecmp(cp,"opus") == 0 ? true : false;
+    bool const is_opus = strcasecmp(cp,"opus") == 0 ? true : false;
     avahi_start(service_name,
 		is_opus ? "_opus._udp" : "_rtp._udp",
 		DEFAULT_RTP_PORT,
@@ -700,153 +709,177 @@ static void *process_section(void *p){
   }
   // No need to also join group for status socket, since the IP addresses are the same
 
-  int nchans = 0;
+  int section_chans = 0; // Count demodulators started in this section
+  int nchan = 0; // Count of entries in section table, including excluded ones
+  struct ftab freq_table[Nchannels] = {0}; // List of frequencies to be started
+
   // Process "raster = start stop step" directive
   // create channels of common type from starting to ending frequency with fixed spacing
+  // To work around iniparser's limited line length, we look for multiple keywords
+  // "raster", "raster0", "raster1", etc, up to "raster9"
+  for(int i = -1; i < 10; i++){
+    char fname[10];
+    if(i == -1)
+      snprintf(fname,sizeof(fname),"raster");
+    else
+      snprintf(fname,sizeof(fname),"raster%d",i);
 
-  char const * const raster = config_getstring(Configtable,sname,"raster",NULL);
-  if(raster != NULL){
-    char *raster_params = strdup(raster);
-    char *saveptr = NULL;
-    char const *p = strtok_r(raster_params," \t",&saveptr);
+    char const * const flist = config_getstring(Configtable,sname,fname,NULL);
+    if(flist == NULL)
+      continue; // none with this prefix; look for more
+
+    char *flist_copy = strdup(flist);
+    char *next = NULL;
+    char const *p = strtok_r(flist_copy," \t",&next);
     if(p == NULL)
-      goto raster_done;
+      goto raster_error;
     double start = parse_frequency(p,true);
     if(start <= 0)
-      goto raster_done;
+      goto raster_error;
 
-    p = strtok_r(NULL," \t",&saveptr);
+    p = strtok_r(NULL," \t",&next);
     if(p == NULL)
-      goto raster_done;
+      goto raster_error;
     double stop = parse_frequency(p,true);
     if(stop <= 0)
-      goto raster_done;
+      goto raster_error;
 
-    p = strtok_r(NULL," \t",&saveptr);
+    p = strtok_r(NULL," \t",&next);
     if(p == NULL)
-      goto raster_done;
+      goto raster_error;
     double const step = parse_frequency(p,true);
     if(step <= 0)
-      goto raster_done;
+      goto raster_error;
 
+    // Ensure stop >= start
     if(start > stop){
       double tmp = start;
       start = stop;
       stop = tmp;
     }
-    for(double f = start; f < stop; f += step){
-      // Automatic ssrcs only
-      uint32_t ssrc = round(f) / 1000;
-      struct channel *chan = NULL;
-      // Try to create it, incrementing in case of collision
-      int const max_collisions = 100;
-      for(int i=0; i < max_collisions; i++,ssrc++){
-	chan = create_chan(ssrc);
-	if(chan != NULL)
-	  break;
-      }
-      if(chan == NULL){
-	fprintf(stderr,"Can't allocate requested ssrc in range %u-%u\n",ssrc-max_collisions,ssrc);
-	break;
-      }
-      // Initialize from template, set frequency and start
-      // Be careful with shallow copies like this; although the pointers in the channel structure are still NULL
-      // the ssrc and inuse fields are active and must be cleaned up. Are there any others...?
-      *chan = chan_template;
-      chan->output.rtp.ssrc = ssrc; // restore after template copy
-      set_freq(chan,f);
-      start_demod(chan);
-      Nchans++;
-      nchans++;
-      // SAP and RTCP later?
+    for(double f = start; f < stop && nchan < Nchannels; f += step){
+      freq_table[nchan].valid = true;
+      freq_table[nchan++].f = f;
     }
-    raster_done: ;
-    FREE(raster_params);
+    FREE(flist_copy);
+    continue;
+  raster_error:
+    fprintf(stderr,"[%s]: can't parse raster command %s\n",sname,flist);
+    FREE(flist_copy);
   }
   // Process freq = and freq[0-9] = directives
   // To work around iniparser's limited line length, we look for multiple keywords
   // "freq", "freq0", "freq1", etc, up to "freq9"
-
-
-  for(int ff = -1; ff < 10; ff++){
+  for(int i = -1; i < 10; i++){
     char fname[10];
-    if(ff == -1)
+    if(i == -1)
       snprintf(fname,sizeof(fname),"freq");
     else
-      snprintf(fname,sizeof(fname),"freq%d",ff);
+      snprintf(fname,sizeof(fname),"freq%d",i);
 
-    char const * const frequencies = config_getstring(Configtable,sname,fname,NULL);
-    if(frequencies == NULL)
+    char const * const flist = config_getstring(Configtable,sname,fname,NULL);
+    if(flist == NULL)
       continue; // none with this prefix; look for more
 
     // Parse the frequency list(s)
-    char *freq_list = strdup(frequencies); // Need writeable copy for strtok
-    char *saveptr = NULL;
-    for(char const *tok = strtok_r(freq_list," \t",&saveptr);
+    char *flist_copy = strdup(flist); // Need writeable copy for strtok
+    char *next = NULL;
+    for(char const *tok = strtok_r(flist_copy," \t",&next);
 	tok != NULL;
-	tok = strtok_r(NULL," \t",&saveptr)){
+	tok = strtok_r(NULL," \t",&next)){
 
       double const f = parse_frequency(tok,true);
       if(f < 0){
 	fprintf(stderr,"[%s] can't parse frequency %s\n",sname,tok);
 	continue;
       }
-      uint32_t ssrc = 0;
-      // Generate default ssrc from frequency string
-      for(char const *cp = tok ; cp != NULL && *cp != '\0' ; cp++){
-	if(isdigit(*cp)){
-	  ssrc *= 10;
-	  ssrc += *cp - '0';
-	}
-      }
-      ssrc = config_getint(Configtable,sname,"ssrc",ssrc); // Explicitly set?
-      if(ssrc == 0)
-	continue; // Reserved ssrc
-
-      struct channel *chan = NULL;
-      // Try to create it, incrementing in case of collision
-      int const max_collisions = 100;
-      for(int i=0; i < max_collisions; i++,ssrc++){
-	chan = create_chan(ssrc);
-	if(chan != NULL)
-	  break;
-      }
-      if(chan == NULL){
-	fprintf(stderr,"Can't allocate requested ssrc in range %u-%u\n",ssrc-max_collisions,ssrc);
-	continue;
-      }
-      // Initialize from template, set frequency and start
-      // Be careful with shallow copies like this; although the pointers in the channel structure are still NULL
-      // the ssrc and inuse fields are active and must be cleaned up. Are there any others...?
-      *chan = chan_template;
-      chan->output.rtp.ssrc = ssrc; // restore after template copy
-
-      set_freq(chan,f);
-      start_demod(chan);
-      nchans++;
-      Nchans++;
-
-      if(SAP_enable){
-	// Highly experimental, off by default
-	char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
-	resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
-	if(chan_template.output.ttl != 0)
-	  join_group(Output_fd,NULL,&chan->sap.dest_socket,iface);
-	pthread_create(&chan->sap.thread,NULL,sap_send,chan);
-      }
-      // RTCP Real Time Control Protocol daemon is optional
-      if(RTCP_enable){
-	// Set the dest socket to the RTCP port on the output group
-	// What messy code just to overwrite a structure field, eh?
-	chan->rtcp.dest_socket = chan->output.dest_socket;
-	setport(&chan->rtcp.dest_socket,DEFAULT_RTCP_PORT);
-	pthread_create(&chan->rtcp.thread,NULL,rtcp_send,chan);
+      if(nchan < Nchannels){
+	freq_table[nchan].f = f;
+	freq_table[nchan++].valid = true;
       }
     }
-    // Done processing frequency list(s) and creating chans
-    FREE(freq_list);
+    FREE(flist_copy);
   }
-  fprintf(stderr,"[%s] %d channels started\n",sname,nchans);
+  // Process "except" directive(s) by flagging entries invalid
+  // Useful for knocking out specific elements of rasters, e.g., containing spurs
+  qsort(freq_table,nchan,sizeof freq_table[0],fcompare); // Sort for binary searching
+  for(int i = -1; i < 10; i++){
+    char ename[10];
+    if(i == -1)
+      snprintf(ename,sizeof(ename),"except");
+    else
+      snprintf(ename,sizeof(ename),"except%d",i);
+
+    char const * const elist = config_getstring(Configtable,sname,ename,NULL);
+    if(elist == NULL)
+      continue; // none with this prefix; look for more
+
+    // Parse the frequency list(s)
+    char *elist_copy = strdup(elist); // Need writeable copy for strtok
+    char *next = NULL;
+    for(char const *tok = strtok_r(elist_copy," \t",&next);
+	tok != NULL;
+	tok = strtok_r(NULL," \t",&next)){
+
+      double const f = parse_frequency(tok,true);
+      if(f < 0){
+	fprintf(stderr,"[%s] can't parse frequency %s\n",sname,tok);
+	continue;
+      }
+      struct ftab *ftp = bsearch(&f,freq_table,nchan,sizeof freq_table[0],tcompare);
+      if(ftp != NULL)
+	ftp->valid = false;
+    }
+    FREE(elist_copy);
+  }
+  // Finally spawn the demods from the list
+  // No manual ssrcs for now, maybe add back in later?
+  for(int i = 0; i < nchan; i++){
+    // Generate default ssrc from frequency
+    if(!freq_table[i].valid)
+      continue;
+
+    uint32_t ssrc = round(freq_table[i].f / 1000.0); // Kilohertz
+
+    struct channel *chan = NULL;
+    // Try to create it, incrementing in case of collision
+    int const max_collisions = 100;
+    for(int i=0; i < max_collisions; i++,ssrc++){
+      chan = create_chan(ssrc);
+      if(chan != NULL)
+	break;
+    }
+    if(chan == NULL){
+      fprintf(stderr,"Can't allocate requested ssrc in range %u-%u\n",ssrc-max_collisions,ssrc);
+      continue;
+    }
+    // Initialize from template, set frequency and start
+    // Be careful with shallow copies like this; although the pointers in the channel structure are still NULL
+    // the ssrc and inuse fields are active and must be cleaned up. Are there any others...?
+    *chan = chan_template;
+    chan->output.rtp.ssrc = ssrc; // restore after template copy
+    set_freq(chan,freq_table[i].f);
+    start_demod(chan);
+    Total_channels++;
+    section_chans++;
+    if(SAP_enable){
+      // Highly experimental, off by default
+      char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
+      resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
+      if(chan_template.output.ttl != 0)
+	join_group(Output_fd,NULL,&chan->sap.dest_socket,iface);
+      pthread_create(&chan->sap.thread,NULL,sap_send,chan);
+    }
+    // RTCP Real Time Control Protocol daemon is optional
+    if(RTCP_enable){
+      // Set the dest socket to the RTCP port on the output group
+      // What messy code just to overwrite a structure field, eh?
+      chan->rtcp.dest_socket = chan->output.dest_socket;
+      setport(&chan->rtcp.dest_socket,DEFAULT_RTCP_PORT);
+      pthread_create(&chan->rtcp.thread,NULL,rtcp_send,chan);
+    }
+  }
+  fprintf(stderr,"[%s] %d channels started\n",sname,section_chans);
   return NULL;
 }
 // Find chan by ssrc
@@ -1047,18 +1080,24 @@ double set_first_LO(struct channel const * const chan,double const first_LO){
   return first_LO;
 }
 
-// Compute FFT bin shift and time-domain fine tuning offset for specified LO frequency
-// N = input fft length
-// M = input buffer overlap
-// samprate = input sample rate
-// remainder = fine LO frequency (double)
-// freq = frequency to mix by (double). If negative, shift will be negative
-// This version tunes to arbitrary FFT bin rotations and computes the necessary
-// block phase correction factor described in equation (12) of
-// "Analysis and Design of Efficient and Flexible Fast-Convolution Based Multirate Filter Banks"
-// by Renfors, Yli-Kaakinen & Harris, IEEE Trans on Signal Processing, Aug 2014
+/* Compute FFT bin shift and time-domain fine tuning offset for specified LO frequency
+ N = input fft length
+ M = input buffer overlap
+ freq = frequency to mix by (double). If negative, shift will be negative
+ samprate = input sample rate
+ remainder = fine LO frequency (double)
+
+ This version tunes to arbitrary FFT bin rotations and computes the necessary
+ block phase correction factor described in equation (12) of
+ "Analysis and Design of Efficient and Flexible Fast-Convolution Based Multirate Filter Banks"
+ by Renfors, Yli-Kaakinen & Harris, IEEE Trans on Signal Processing, Aug 2014
+
+ Essentially just a modulo function; divide frequency by the width of each bin (eg 40 Hz), returning
+ an integer quotient and a floating remainder, e.g, +/- 20 Hz
+*/
 int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq){
   double const hzperbin = (double)samprate / N;
+
 #if 0
   // Round to multiples of V (not needed anymore)
   int const V = N / (M-1);
@@ -1739,4 +1778,14 @@ static float estimate_noise(struct channel *chan,int shift){
   // correct for FFT scaling and normalize to 1 Hz
   // With an unnormalized FFT, the noise energy in each bin scales proportionately with the number of points in the FFT
   return noise_bin_energy / ((float)master->bins * Frontend.samprate);
+}
+static int fcompare(void const *ap, void const *bp){
+  struct ftab *a = (struct ftab *)ap;
+  struct ftab *b = (struct ftab *)bp;
+  return (a->f > b->f) ? +1 : (a->f < b->f) ? -1 : 0;
+}
+static int tcompare(void const *ap,void const *bp){
+  double a = *(double *)ap;
+  struct ftab *t = (struct ftab *)bp;
+  return (a > t->f) ? +1 : (a < t->f) ? -1 : 0;
 }
