@@ -1559,7 +1559,7 @@ static void display_input(WINDOW *w,struct channel const *channel){
   if(channel->options != 0)
     pprintw(w,row++,col,"Options","0x%llx",(unsigned long long)channel->options);
   box(w,0,0);
-  mvwaddstr(w,0,1,Frontend.description);
+  mvwaddnstr(w,0,1,Frontend.description,getmaxx(w)-2);
   wnoutrefresh(w);
 }
 
@@ -1575,7 +1575,7 @@ static void display_output(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Dest","%s",formatsock(&channel->output.dest_socket,true));
 
   pprintw(w,row++,col,"SSRC","%u",channel->output.rtp.ssrc);
-  pprintw(w,row++,col,"Timestamp","%'u",channel->output.rtp.timestamp);
+  pprintw(w,row++,col,"Timestamp","%'u",channel->output.time_snap);
   pprintw(w,row++,col,"TTL","%d",channel->output.ttl);
   pprintw(w,row++,col,"Payload Type","%u",channel->output.rtp.type);
   pprintw(w,row++,col,"Sample rate","%'d Hz",channel->output.samprate);
