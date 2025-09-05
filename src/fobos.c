@@ -5,10 +5,10 @@ In direct sample mode the two A/Ds are fed directly by the two HF inputs through
 amplifiers, so there is no manual or automatic gain control.
 
 The FFT is currently complex in both tuner and direct sample mode. In tuner mode it accepts a complex sample
-stream centered on the tuner LO, and in direct sample mode it treats the two inputs as I and Q.
-So you can connect a HF antenna to just one input and it will work but half the FFT is wasted since
-the input is then purely real.
+stream centered on the tuner LO.
 
+In direct sample mode you can also treat the inputs as complex, or select or combine them
+on a per-channel basis by selecting output filter type BEAM and calling set_filter_weights() in filter.c
 */
 #define _GNU_SOURCE 1
 #include <assert.h>
@@ -31,6 +31,7 @@ the input is then purely real.
 #define INPUT_PRIORITY 95
 static double Power_alpha = 0.05; // Calculate this properly someday
 
+// hf_input has been removed, use i-weight and q-weight in individual channels
 static char const *Fobos_keys[] = {
   "clk_source",
   "description",
@@ -38,7 +39,6 @@ static char const *Fobos_keys[] = {
   "direct_sampling",
   "ext_clock", // Synonymous with clk_source, more descriptive
   "frequency",
-  "hf_input",
   "library",
   "lna_gain",
   "samprate",
@@ -57,7 +57,6 @@ struct sdrstate {
   struct frontend *frontend;
   struct fobos_dev_t *dev;
   bool direct_sampling;
-  int hf_input; // 0 = both HF1 and HF2 used as I/Q; 1 = only HF1; 2 = only HF2
   int lna_gain;
   int vga_gain;
   int buff_count;
@@ -253,20 +252,17 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
               result);
       return -1;
     }
+    frontend->min_IF = -0.47 * frontend->samprate;
+    frontend->max_IF = 0.47 * frontend->samprate;
+
     if(sdr->direct_sampling){
+      // With -40 dBm @ 15 MHz on B input and nothing on A input,
+      // A/D reads -42.2 dBm
+      // So level_cal = +0.8 dB gives (average) input of -43.0 dBm
       frontend->frequency = 0;
       frontend->rf_gain = 0;
       frontend->rf_atten = 0;
-      frontend->rf_level_cal = 20; // Gain of LTC6401; needs to be calibrated
-      sdr->hf_input = config_getint(dictionary, section, "hf_input",0);
-      if(sdr->hf_input == 0) {
-	frontend->isreal = false;
-	frontend->min_IF = -0.47 * frontend->samprate;
-      } else {
-	frontend->isreal = true;
-	frontend->min_IF = 0;
-      }
-      frontend->max_IF = 0.47 * frontend->samprate;
+      frontend->rf_level_cal = +0.8;
     } else {
       const char *frequencycfg =
 	config_getstring(dictionary, section, "frequency", "100m0");
@@ -282,8 +278,6 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
 	return -1;
       }
       frontend->frequency = frequency_actual;
-      frontend->min_IF = -0.47 * frontend->samprate;
-      frontend->max_IF = 0.47 * frontend->samprate;
 
       sdr->lna_gain = config_getint(dictionary, section, "lna_gain", 0);
       sdr->vga_gain = config_getint(dictionary, section, "vga_gain", 0);
@@ -316,20 +310,13 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
               result);
       return -1;
     }
-    if(sdr->direct_sampling){
-      fprintf(stderr,"samprate %'d Hz, direct sampling, hf_input %d (%s)\n",
-	      frontend->samprate,
-	      sdr->hf_input,
-	      sdr->hf_input == 0 ? "both/IQ" : sdr->hf_input == 1 ? "HF1" : "HF2");
-    } else {
-      fprintf(stderr,"samprate %'d Hz, tuner %'.3lf Hz, lna_gain %d (%d dB) vga_gain %d (%d dB)\n",
-	      frontend->samprate,
-	      frontend->frequency,
-	      sdr->lna_gain,
-	      sdr->lna_gain == 2 ? 33 : sdr->lna_gain == 1 ? 16 : 0,
-	      sdr->vga_gain,
-	      sdr->vga_gain * 2);
-    }
+    fprintf(stderr,"samprate %'d Hz, tuner %'.3lf Hz, lna_gain %d (%d dB) vga_gain %d (%d dB)\n",
+	    frontend->samprate,
+	    frontend->frequency,
+	    sdr->lna_gain,
+	    sdr->lna_gain == 2 ? 33 : sdr->lna_gain == 1 ? 16 : 0,
+	    sdr->vga_gain,
+	    sdr->vga_gain * 2);
     // SDR is open here
   }
   return 0;
@@ -414,36 +401,15 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
   float in_energy = 0;
   int const sampcount = len;
   assert(len % 2 == 0);    // Ensure len is a valid even number (interleaved I/Q samples)
-  if(!sdr->direct_sampling || sdr->hf_input == 0){
-    float complex *const wptr = frontend->in.input_write_pointer.c;
-    assert(wptr != NULL);
+  float complex *const wptr = frontend->in.input_write_pointer.c;
+  assert(wptr != NULL);
 
-    for (int i = 0; i < sampcount; i++) {
-      float complex const samp = CMPLXF(buf[2*i],buf[2*i+1]);
-      in_energy += cnrmf(samp);       // Calculate energy of the sample
-      wptr[i] = samp * sdr->scale;    // Store sample in write pointer buffer
-    }
-    write_cfilter(&frontend->in, NULL,
-		  sampcount); // Update write pointer, invoke FFT
-  } else {
-    // Use only one input in real mode
-    // There **has** to be a cleaner method than dropping half the input samples
-    // Also, DC removal is unnecessary in direct sampling mode, and using
-    // just one input makes the I/Q gain balancing stuff in the library unnecessary.
-    // And it's a pretty big CPU sink
-    float *const wptr = frontend->in.input_write_pointer.r;
-    assert(wptr != NULL);
-
-    // read even samples for HF1, odd samples for HF2
-    int const offs = sdr->hf_input == 2 ? 1 : 0;
-    for (int i=0; i < sampcount; i++){
-      float const samp = buf[2 * i + offs];
-      in_energy += samp * samp;       // Calculate energy of the sample
-      wptr[i] = samp * sdr->scale;    // Store sample in write pointer buffer
-    }
-    write_rfilter(&frontend->in, NULL,
-		  sampcount); // Update write pointer, invoke FFT
+  for (int i = 0; i < sampcount; i++) {
+    float complex const samp = CMPLXF(buf[2*i],buf[2*i+1]);
+    in_energy += cnrmf(samp);       // Calculate energy of the sample
+    wptr[i] = samp * sdr->scale;    // Store sample in write pointer buffer
   }
+  write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
 
   if (isfinite(in_energy))

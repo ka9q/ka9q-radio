@@ -38,10 +38,16 @@ int demod_fm(void *arg){
 
   int const blocksize = chan->output.samprate * Blocktime / 1000;
   delete_filter_output(&chan->filter.out);
-  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,COMPLEX);
+  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
+				    chan->filter.beam ? BEAM : COMPLEX);
+  if(status != 0){
+    pthread_mutex_unlock(&chan->status.lock);
+    return -1;
+  }
+  if(chan->filter.beam)
+    set_filter_weights(&chan->filter.out,chan->filter.a_weight,chan->filter.b_weight);
+
   pthread_mutex_unlock(&chan->status.lock);
-  if(status != 0)
-    return -1; // Fatal
 
   set_filter(&chan->filter.out,
 	     chan->filter.min_IF/chan->output.samprate,

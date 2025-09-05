@@ -4,8 +4,6 @@
 # Copyright 2017-2025, Phil Karn, KA9Q
 # By default, builds release version
 # To build for debugging say "make BUILD=debug"
-# To force the normally dynamically loaded device handlers to be statically linked into radiod, "make STATIC=1"
-# Make sure you also specify STATIC=1 when doing make install
 
 BUILD ?= release
 
@@ -20,36 +18,19 @@ ifdef SANITIZE
      LDOPTS = -fsanitize=address -fsanitize=undefined
 endif
 
-ifdef DYNAMIC
-     echo "Dynamic is now the default. STATIC=1 builds a static version of radiod"
-endif
-
 ARCHOPTS = -march=native
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
 COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -D_GNU_SOURCE=1 -Wextra -MMD -MP
-ifndef STATIC
 COPTS += -fPIC
-endif
 CFLAGS = $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
 BINDIR = /usr/local/bin
-LIBDIR = /usr/local/share/ka9q-radio
 SODIR = /usr/local/lib/ka9q-radio
 DAEMONDIR = /usr/local/sbin
-VARDIR = /var/lib/ka9q-radio
-DIRS = /etc/fftw /etc/radio /etc/avahi/services $(VARDIR) /var/lib/hfdl $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/log/acars
-SYSFILES = /etc/avahi/hosts /var/log/hfdl.log
-#DAEMONS = aprs aprsfeed cwd opusd packetd radiod stereod rdsd
-#EXECS = control jt-decoded metadump monitor opussend pcmcat pcmrecord pcmsend pcmspawn pl powers setfilt show-pkt show-sig tune wd-record
 DAEMONS = aprs aprsfeed cwd packetd radiod
 EXECS = control fft-gen jt-decoded metadump monitor pcmrecord pl powers tune wd-record
-SCRIPTS = aux/set_lo_multicast.sh
 LIBRADIO = ax25.o morse.o bandplan.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o
 DYNAMIC_DRIVERS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so
-STATIC_DRIVERS = rx888.o airspyhf.o airspy.o sig_gen.o funcube.o rtlsdr.o ezusb.o
 RADIOD_OBJECTS = audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o fcd.o hid-libusb.o libradio.a
-LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate
-BLACKLIST = airspy-blacklist.conf
-SYSCTL = 98-sockbuf.conf 50-multicast.conf
 CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c filter.c fm.c funcube.c hid-libusb.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c pl.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c setfilt.c show-pkt.c show-sig.c sig_gen.c spectrum.c status.c stereod.c tune.c wd-record.c wfm.c
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h status.h
 
@@ -114,51 +95,18 @@ else
    EXECS += set_xcvr
 endif
 
-ifdef STATIC
-all: $(DAEMONS) $(EXECS)
-else
 all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
-endif
 
-# NB: no longer copies files to /etc/radio. Must be installed manually.
-ifdef STATIC
-install: $(DAEMONS) $(EXECS)
-else
 install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 	rsync -a $(DYNAMIC_DRIVERS) $(SODIR)
 	ln -sf $(SODIR)/*.so /usr/local/lib
-endif
-	/usr/sbin/adduser --quiet --system --group radio
-	mkdir -p $(DIRS)
-	-chown -R radio:radio $(DIRS)
-	-chmod g+ws $(DIRS)
-	touch $(SYSFILES)
-	chgrp radio $(SYSFILES)
-	chmod g+w $(SYSFILES)
 	rsync -a $(DAEMONS) $(DAEMONDIR)
-	rsync -a $(EXECS) $(SCRIPTS) $(BINDIR)
+	rsync -a $(EXECS) $(BINDIR)
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
 	setcap cap_net_admin,cap_sys_nice=ep $(DAEMONDIR)/radiod
-	(cd aux;rsync -a $(SYSCTL) /etc/sysctl.d; sysctl -q -p $(SYSCTL))
-	(cd aux;rsync -a $(BLACKLIST) /etc/modprobe.d)
-	(cd aux;rsync -a $(LOGROTATE_FILES) /etc/logrotate.d;chown root:root /etc/logrotate.d/*;chmod go-w /etc/logrotate.d/*)
-	(cd aux;rsync -a --ignore-existing systable.conf /var/lib/hfdl)
-	(cd aux; rsync start-hfdl.sh $(DAEMONDIR))
-	(cd aux; rsync -a ka9q-cleanups /etc/cron.d/; chown root:root /etc/cron.d/ka9q-cleanups;chmod 0644 /etc/cron.d/ka9q-cleanups)
-	(cd share;rsync -a --ignore-existing * $(LIBDIR))
-	chown radio:radio $(LIBDIR)
-	(cd service;rsync -a * /etc/systemd/system)
-	chown root:root /etc/systemd/system
-	(cd rules;rsync -a * /etc/udev/rules.d)
-	chown root:root /etc/udev/rules.d
-	systemctl daemon-reload
 
 clean:
-	rm -f *.o *.a *.d *.so $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS) $(STATIC_DRIVERS) \;
-	rm -rf html latex man
-
-doc:
-	doxygen
+	rm -f *.o *.a *.d *.so $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
 DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
 
@@ -233,13 +181,8 @@ powers: powers.o libradio.a
 pl: pl.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
 
-ifeq ($(STATIC),1)
-radiod: main-static.o $(RADIOD_OBJECTS) $(STATIC_DRIVERS)
-	$(CC) $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lportaudio -lairspy -lairspyhf -lrtlsdr -lusb-1.0 -ldl -lbsd -lm -lpthread
-else
 radiod: main.o $(RADIOD_OBJECTS)
 	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl -lbsd -lm -lpthread
-endif
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
@@ -257,10 +200,7 @@ wd-record: wd-record.o libradio.a
 set_xcvr: set_xcvr.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser
 
-# version with linkage to statically built hardwware drivers
-main-static.o: main.c
-	$(CC) -c -DSTATIC=1 $(CFLAGS) -o $@ $^
-
+# Dynamically loaded modules for SDR front ends
 funcube.so: funcube.o fcd.o hid-libusb.o
 	$(CC) -shared -o $@ $^ -lportaudio
 

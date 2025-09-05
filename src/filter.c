@@ -160,7 +160,7 @@ fftwf_plan plan_c2r(int N, float complex *in, float *out){
 // create_filter_input() parameters, shared by all slaves:
 // L = input data blocksize
 // M = impulse response duration
-// in_type = REAL or COMPLEX
+// in_type = REAL, COMPLEX or BEAM
 
 // Set up input (master) half of filter
 int create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type){
@@ -197,7 +197,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   }
 
   master->bins = bins;
-  master->in_type = in_type;
+
   master->ilen = L;
   master->impulse_length = M;
   pthread_mutex_init(&master->filter_mutex,NULL);
@@ -243,12 +243,16 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     FFTW_init = true;
   }
   switch(in_type){
+  case SPECTRUM:
+    realtime(old_prio);
+    return -1; // Not valid on input type
   default:
     assert(false); // shouldn't happen
     realtime(old_prio);
     return -1;
-  case CROSS_CONJ:
+  case BEAM:
   case COMPLEX:
+    master->in_type = COMPLEX;
     master->input_buffer_size = round_to_page(ND * N * sizeof(float complex));
     // Allocate input_buffer_size bytes immediately followed by its mirror
     master->input_buffer = mirror_alloc(master->input_buffer_size);
@@ -260,6 +264,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->fwd_plan = plan_complex(N,master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD);
     break;
   case REAL:
+    master->in_type = REAL;
     master->input_buffer_size = round_to_page(ND * N * sizeof(float));
     master->input_buffer = mirror_alloc(master->input_buffer_size);
     memset(master->input_buffer,0,master->input_buffer_size);
@@ -307,7 +312,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
 
     An output filter must not be used after its master is deleted, a segfault will occur
 */
-int create_filter_output(struct filter_out *slave,struct filter_in * master,float complex * const response,int len, enum filtertype const out_type){
+int create_filter_output(struct filter_out *slave,struct filter_in * master,float complex * const response,int len, enum filtertype out_type){
   assert(master != NULL);
   if(master == NULL)
     return -1;
@@ -327,8 +332,10 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
 #endif
   // Share all but output fft bins, response, output and output type
   slave->master = master;
-  slave->out_type = out_type;
+  if(out_type == BEAM && master->in_type == REAL)
+    out_type = COMPLEX; // BEAM only valid for complex input
 
+  slave->out_type = out_type;
   // N / L = Total FFT points / time domain points
   int const N = master->ilen + master->impulse_length - 1;
   int const L = master->ilen;
@@ -338,8 +345,10 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
 
   switch(slave->out_type){
   default:
-  case COMPLEX:
-  case CROSS_CONJ:
+  case BEAM:
+    set_filter_weights(slave,1.0,0.0); // defaults select A input only, can be changed by set_filter_weights().
+    /* fall through */
+  case COMPLEX: // note fall-through
     {
       slave->olen = len;
       ldiv_t x = ldiv((long)len * N,L);
@@ -496,7 +505,6 @@ void *run_fft(void *p){
     if(job->input != NULL && job->output != NULL && job->plan != NULL){
       switch(job->type){
       case COMPLEX:
-      case CROSS_CONJ:
 	fftwf_execute_dft(job->plan,job->input,job->output);
 	break;
       case REAL:
@@ -549,7 +557,7 @@ int execute_filter_input(struct filter_in * const f){
     float complex * const output = f->fdomain[jobnum % ND];
     switch(f->in_type){
     default:
-    case CROSS_CONJ:
+    case BEAM:
     case COMPLEX:
       {
 	float complex *input = f->input_read_pointer.c;
@@ -614,7 +622,7 @@ int execute_filter_input(struct filter_in * const f){
   // the usual size of a cache line. For complex->complex transforms, L has to be divisible by 4.
   switch(f->in_type){
   default:
-  case CROSS_CONJ:
+  case BEAM:
   case COMPLEX:
     job->input = f->input_read_pointer.c;
     job->input_dropsize = f->ilen * sizeof(float complex);
@@ -716,7 +724,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
      back to the time domain. So while real output is supported it is not well tested.
   */
   pthread_mutex_lock(&slave->response_mutex); // Don't let it change while we're using it
-  if(master->in_type != REAL && slave->out_type != REAL){
+  if(master->in_type == COMPLEX && slave->out_type == COMPLEX){
     // Complex -> complex (e.g., fobos (in VHF/UHF mode), funcube, airspyhf, sdrplay)
 
     int wp = (slave->bins+1)/2; // most negative output bin
@@ -764,7 +772,68 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       if(wp == slave->bins)
 	wp = 0; // Wrap to DC
     }
-  } else if(master->in_type != REAL && slave->out_type == REAL){
+  } else if(master->in_type == COMPLEX && slave->out_type == BEAM){
+    // Generalized form of COMPLEX-COMPLEX that can beamform with antennas on I&Q inputs
+    // or just select one or the other
+    // Uses complex weights alpha and beta
+    // Useful for Fobos in independent input mode
+
+    int wp = (slave->bins+1)/2; // most negative output bin
+    int rp = shift - slave->bins/2; // Start index in master, unwrapped = shift - # output bins
+
+    // Starting below master, zero output until we're in range. Rarely needed.
+    while(rp < -(master->bins+1)/2){
+      assert(wp >=0 && wp < slave->bins);
+      slave->fdomain[wp] = 0;
+      rp++;
+      if(++wp == (slave->bins+1)/2) // exhausted output buffer
+	goto done;
+      if(wp == slave->bins)
+	wp = 0; // Wrap to DC
+    }
+    if(rp < 0)
+      rp += master->bins; // Starts in negative region of master
+
+    if(rp < 0 || rp >= master->bins){
+      // Shift is out of range
+      // Zero any remaining output
+      while(wp != (slave->bins+1)/2){
+	assert(wp >=0 && wp < slave->bins);
+	slave->fdomain[wp++] = 0;
+	if(wp == slave->bins)
+	  wp = 0; // Wrap to DC
+      }
+      goto done;
+    }
+    // The actual work is here
+    do {
+      assert(rp >= 0 && rp < master->bins);
+      assert(wp >=0 && wp < slave->bins);
+      // rp is unlikely to pass through zero or nyquist in this mode, but handle it anyway?
+      if(rp == 0)
+	slave->fdomain[wp] = __real__(fdomain[0]) * slave->alpha * slave->response[wp]
+	  + __imag__(fdomain[0]) * slave->beta * slave->response[wp];
+      else if(rp == master->bins/2)
+	slave->fdomain[wp] = __real__(fdomain[rp]) * slave->alpha * slave->response[wp]
+	  + __imag__(fdomain[rp]) * slave->beta * slave->response[wp];
+      else
+	slave->fdomain[wp] = (slave->alpha * fdomain[rp] + slave->beta * conjf(fdomain[master->bins - rp]))
+	  * slave->response[wp];
+      if(++rp == master->bins)
+	rp = 0; // Master wrapped to DC
+      if(++wp == slave->bins)
+	wp = 0; // Slave wrapped to DC
+    } while (wp != (slave->bins+1)/2 && rp != (master->bins+1)/2); // Until we reach the top of the output or input
+
+    // Zero any remaining output. Rarely needed.
+    while(wp != (slave->bins+1)/2){
+      assert(wp >=0 && wp < slave->bins);
+      slave->fdomain[wp++] = 0;
+      if(wp == slave->bins)
+	wp = 0; // Wrap to DC
+    }
+  } else if(master->in_type == COMPLEX && slave->out_type == REAL){
+
     // Complex -> real UNTESTED! not used in ka9q-radio at present
     for(int si=0; si < slave->bins; si++){
       int const mi = si + shift;
@@ -780,7 +849,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       int const mi = si + shift;
       slave->fdomain[si] = (mi >= 0 && mi < master->bins) ? fdomain[mi] * slave->response[si] : 0;
     }
-  } else if(master->in_type == REAL && slave->out_type != REAL){
+  } else if(master->in_type == REAL && slave->out_type == COMPLEX){
     /* Real->complex (e.g., rx888, fobos (direct sample mode), airspy R2)
        This can be tricky. We treat the input as complex with Hermitian symmetry (both positive and negative spectra)
        If shift >= 0, the input spectrum is positive and right-side up (e.g., rx888, fobos direct sampling)
@@ -867,27 +936,10 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   }
  done:;
   // Zero out Nyquist bin
-  slave->fdomain[(slave->bins+1)/2] = 0;
+  slave->fdomain[(slave->bins+1)/2] = 0; // ?necessary?
 
   pthread_mutex_unlock(&slave->response_mutex); // release response[]
 
-  if(slave->out_type == CROSS_CONJ){
-    // hack for ISB; forces negative frequencies onto I, positive onto Q
-    // Don't really know how to use this anymore; it's incompatible with fine tuning in the time domain
-    // Re-implementing ISB will probably require a filter for each sideband
-    // Also probably generates time domain ripple effects due to the sharp notch at DC
-    assert(malloc_usable_size(slave->fdomain) >= slave->bins * sizeof(*slave->fdomain));
-    for(int p=1,dn=slave->bins-1; p < slave->bins/2; p++,dn--){
-      assert(p >= 0 && p < slave->bins);
-      assert(dn >= 0 && dn < slave->bins);
-      float complex const pos = slave->fdomain[p];
-      float complex const neg = slave->fdomain[dn];
-
-      slave->fdomain[p]  = pos + conjf(neg);
-      slave->fdomain[dn] = neg - conjf(pos);
-    }
-    slave->fdomain[0] = 0; // Must be a null at DC
-  }
   // And finally back to the time domain
   fftwf_execute(slave->rev_plan); // Note: c2r version destroys fdomain[], but it's not used again anyway
   // Drop the cache in the first M-1 points of the time domain buffer that we'll discard
@@ -897,6 +949,15 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     drop_cache(slave->output_buffer.c,(slave->points - slave->olen) * sizeof (float complex));
   return 0;
 }
+int set_filter_weights(struct filter_out *out,double complex i_weight, double complex q_weight){
+  if(out == NULL)
+    return -1;
+  // Check filter is in BEAM output mode?
+  out->alpha = 0.5 * i_weight - I * q_weight;
+  out->beta = 0.5 * i_weight + I * q_weight;
+  return 0;
+}
+
 
 int delete_filter_input(struct filter_in * master){
   if(master == NULL)
@@ -1289,7 +1350,7 @@ static int window_filter(int const L,int const M,float complex * const response,
   // fftw_plan can overwrite its buffers, so we're forced to make a temp. Ugh.
   float complex * const buffer = lmalloc(sizeof(float complex) * N);
   assert(buffer != NULL);
-  
+
   fftwf_plan fwd_filter_plan = plan_complex(N,buffer,buffer,FFTW_FORWARD);
   assert(fwd_filter_plan != NULL);
   fftwf_plan rev_filter_plan = plan_complex(N,buffer,buffer,FFTW_BACKWARD);
@@ -1458,7 +1519,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 #if FILTER_DEBUG
   {
     // check gain in mid passband
-    int midbin = N * (high + low)/2; 
+    int midbin = N * (high + low)/2;
     if(midbin < 0)
       midbin += N; // Can only happen for complex output, will keep midbin in range for real transforms with only (N/2) + 1 bins
     float midgain = cnrmf(response[midbin]);
@@ -1476,5 +1537,3 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
 }
 #endif // End of my original filter design routine
 #endif // End of experimental code
-
-

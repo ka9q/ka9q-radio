@@ -53,11 +53,15 @@ int demod_linear(void *arg){
   delete_filter_output(&chan->filter.out);
   delete_filter_output(&chan->filter2.out);
   delete_filter_input(&chan->filter2.in);
-  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,COMPLEX);
+  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
+				    chan->filter.beam ? BEAM : COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
     return -1;
   }
+  if(chan->filter.beam)
+    set_filter_weights(&chan->filter.out,chan->filter.a_weight,chan->filter.b_weight);
+
   set_channel_filter(chan);
   chan->filter.remainder = NAN;   // Force re-init of fine downconversion osc
   set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband

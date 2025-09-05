@@ -23,13 +23,15 @@ extern pthread_mutex_t FFTW_planning_mutex;
 extern int N_internal_threads;
 
 // Input can be REAL or COMPLEX
-// Output can be REAL, COMPLEX, CROSS_CONJ, i.e., COMPLEX with special cross conjugation for ISB, or SPECTRUM (noncoherent power)
+// Output can be REAL, COMPLEX, BEAM or SPECTRUM
+// BEAM is for selecting independent I or Q from complex input or for
+// beamforming when I and Q are from independent antennas
 enum filtertype {
   NONE,
   COMPLEX,
-  CROSS_CONJ,
+  BEAM, // Input pseudo-complex: two real signals in I and Q
   REAL,
-  SPECTRUM,
+  SPECTRUM, // On output only
 };
 
 // Input and output arrays can be either complex or real
@@ -46,7 +48,7 @@ struct notch_state {
 
 #define ND 4
 struct filter_in {
-  enum filtertype in_type;           // REAL or COMPLEX
+  enum filtertype in_type;           // REAL, COMPLEX, BEAM
   int points;               // Size of FFT N = L + M - 1. For complex, == N
   int ilen;                 // Length of user portion of input buffer, aka 'L'
   int bins;                 // Total number of frequency bins. Complex: L + M - 1;  Real: (L + M - 1)/2 + 1
@@ -70,10 +72,12 @@ struct filter_in {
 
 struct filter_out {
   struct filter_in * restrict master;
-  enum filtertype out_type;          // REAL, COMPLEX or CROSS_CONJ
+  enum filtertype out_type;          // REAL, COMPLEX, BEAM, SPECTRUM
   int points;               // Size N of fft; Same as bins only for complex
   int olen;                 // Length of user portion of output buffer (decimated L)
   int bins;                 // Number of frequency bins; == N for complex, == N/2 + 1 for real output
+  double complex alpha;      // For beam synthesis mode, or for selecting I or Q on complex input
+  double complex beta;
   float complex * restrict fdomain;  // Filtered signal in frequency domain
   float complex * restrict response; // Filter response in frequency domain
   pthread_mutex_t response_mutex;
@@ -104,6 +108,7 @@ fftwf_plan plan_r2c(int N, float *in, float complex *out);
 fftwf_plan plan_c2r(int N, float complex *in, float *out);
 bool goodchoice(unsigned long);
 unsigned int ceil_pow2(unsigned int x);
+int set_filter_weights(struct filter_out *out,double complex i_weight, double complex q_weight);
 
 
 // Write complex sample to input side of filter
