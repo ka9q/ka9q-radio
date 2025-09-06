@@ -2,9 +2,11 @@
 
 ## Description
 
-[BladeRF](https://www.rtl-sdr.com/about-rtl-sdr/) is a FPGA based SDR that can tune from 300MHz - 3.8GHz. It has independent RX/TX 12-bit 40MSPS quadrature sampling channels, which is capable of achieving 28Msps per channel.
+[BladeRF](https://www.nuand.com/bladerf-1/) is a FPGA based SDR that can tune from 300MHz - 3.8GHz. It has independent RX/TX 12-bit 40MSPS quadrature sampling channels, which is capable of achieving 28Msps per channel.
 
 ## SW Installation
+
+BladeRF is supported by default on most linux distributions by the `bladerf` and `libbladerf-dev` packages.
 
 ## Configuration
 
@@ -20,9 +22,9 @@ device = bladerf
 description = "My BladeRF"
 ```
 
-Multiple instances of `radiod` can run on the same system, provided each has its own front end (they cannot be shared).
+You can also reference the [generic config file](/config/radiod@bladerf-generic.conf).
 
-You can have as many as you want, subject to your CPU and USB limits.
+Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits.
 
 The "description" parameter is advertised with mDNS (multicast DNS) service discovery on the LAN and this constrains its content. It should be 63 characters or less and not contain slashes ('/') or control characters (spaces are ok).
 
