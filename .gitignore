@@ -5,13 +5,15 @@
 *.o
 *.d
 *.so
-!config/*.d
 .depend
+`.DS_Store
+
+# binaries
 aprs
 aprsfeed
 control
 cwd
-.DS_Store
+fft-gen
 ft8-decoded
 hackrf
 jt-decoded
@@ -39,6 +41,9 @@ tune
 wd-record
 work
 wspr-decoded
+
+# project folders
+!config/*.d
 docs/notes
 html/
 latex/
