@@ -136,7 +136,9 @@ static void *rtcp_send(void *p);
 struct ftab {
   double f;
   bool valid; // Will be false if mentioned in "except" list
+  double tone; // PL/CTCSS tone, if any
 };
+static double get_tone(char const *sname,int i);
 
 static int fcompare(void const *ap, void const *bp); // Compare frequencies in table entries
 static int tcompare(void const *ap,void const *bp); // Lookup frequency in sorted table
@@ -757,8 +759,10 @@ static void *process_section(void *p){
       start = stop;
       stop = tmp;
     }
+    double tone = get_tone(sname,i);
     for(double f = start; f < stop && nchan < Nchannels; f += step){
       freq_table[nchan].valid = true;
+      freq_table[nchan].tone = tone;
       freq_table[nchan++].f = f;
     }
     FREE(flist_copy);
@@ -793,8 +797,10 @@ static void *process_section(void *p){
 	fprintf(stderr,"[%s] can't parse frequency %s\n",sname,tok);
 	continue;
       }
+      double tone = get_tone(sname,i);
       if(nchan < Nchannels){
 	freq_table[nchan].f = f;
+	freq_table[nchan].tone = tone;
 	freq_table[nchan++].valid = true;
       }
     }
@@ -858,6 +864,7 @@ static void *process_section(void *p){
     // the ssrc and inuse fields are active and must be cleaned up. Are there any others...?
     *chan = chan_template;
     chan->output.rtp.ssrc = ssrc; // restore after template copy
+    chan->fm.tone_freq = freq_table[i].tone;
     set_freq(chan,freq_table[i].f);
     start_demod(chan);
     Total_channels++;
@@ -1447,7 +1454,10 @@ int downconvert(struct channel *chan){
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:
        (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
        (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
-       Be sure to Initialize chan->filter.bin_shift at startup to something bizarre to force this inequality on first call */
+       Be sure to Initialize chan->filter.bin_shift at startup to something bizarre to force this inequality on first call
+       See "Analysis and Design of Efficient and Flexible Fast-Convolution Based Multirate Filter Banks" by Renfors, Yli-Kaakinen and harris,
+       equation (12).
+    */
     if(shift != chan->filter.bin_shift){
       const int V = 1 + (Frontend.in.ilen / (Frontend.in.impulse_length - 1)); // Overlap factor
       chan->filter.phase_adjust = cispi(2.0*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
@@ -1788,4 +1798,34 @@ static int tcompare(void const *ap,void const *bp){
   double a = *(double *)ap;
   struct ftab *t = (struct ftab *)bp;
   return (a > t->f) ? +1 : (a < t->f) ? -1 : 0;
+}
+static double get_tone(char const *sname,int i){
+  // Any matching PL tones?
+  // "tone", "pl" and "ctcss" are synonyms
+  double tone = 0;
+  char tmp[20];
+  if(i == -1)
+    snprintf(tmp,sizeof tmp, "tone");
+  else
+    snprintf(tmp,sizeof tmp, "tone%d",i);
+  tone = config_getdouble(Configtable,sname,tmp,tone);
+
+  if(i == -1)
+    snprintf(tmp,sizeof tmp, "pl");
+  else
+    snprintf(tmp,sizeof tmp, "pl%d",i);
+  tone = config_getdouble(Configtable,sname,tmp,tone);
+
+  if(i == -1)
+    snprintf(tmp,sizeof tmp, "ctcss");
+  else
+    snprintf(tmp,sizeof tmp, "ctcss%d",i);
+  tone = config_getdouble(Configtable,sname,tmp,tone);
+
+  tone = fabs(tone);
+  if(tone > 3000){
+    fprintf(stderr,"PL/CTCSS tone %.1f out of range\n",tone);
+    tone = 0;
+  }
+  return tone;
 }
