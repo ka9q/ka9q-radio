@@ -12,6 +12,7 @@ aprsfeed
 control
 cwd
 .DS_Store
+fft-gen
 ft8-decoded
 hackrf
 jt-decoded

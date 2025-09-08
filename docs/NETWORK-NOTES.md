@@ -11,7 +11,7 @@ For a full local setup where both 'radiod' and the client applications ('monitor
 
 ## Using the primary interface for multicasting
 
-This is the default configuration with 'ka9q-radio'; the important task in this case is to create firewall rules for the RTP streams (data) and for the control application
+This is the default configuration with 'ka9q-radio'; the important task in this case is to create firewall rules for the RTP streams (data) and for the control application.
 
 
 ### Firewall rule for RTP streams
@@ -89,10 +89,10 @@ iface = lo
 ```
 
 
-Please note that this configuration does not require any additional firewall rules (since all the multicast traffic is over the loopback interface)
+Please note that this configuration does not require any additional firewall rules (since all the multicast traffic is over the loopback interface).
 
 
-I also found that I didn't to add a routing table rule to send multicast over the loopback interface ('ip route add 239.0.0.0/8 dev lo') and I didn't have to explicitly enable multicasting on the loopback interface ('ip link set lo multicast on'); I thought I would mention these two commands in case someone else needs them.
+I also found that I didn't have to add a routing table rule to send multicast over the loopback interface ('ip route add 239.0.0.0/8 dev lo') and I didn't have to explicitly enable multicasting on the loopback interface ('ip link set lo multicast on'); I thought I would mention these two commands in case someone else needs them.
 
 
 Finally in order to run 'monitor', 'control', 'pcmcat', and other client applications using the loopback interface, you have to append ',lo' to the mDNS name; for instance:
