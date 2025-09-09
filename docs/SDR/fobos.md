@@ -1,7 +1,5 @@
 # RigExpert Fobos SDR
 
-Phil Karn, KA9Q
-
 ## Description
 
 The [Fobos SDR](https://rigexpert.com/software-defined-radio-sdr/fobos-sdr/) is a 100 kHz to 6 GHz SDR with 50 MHz bandwidth and 14-bit signal sampling resolution. The ADC can sample up to 80 Msps.
@@ -58,9 +56,7 @@ description = "My Fobos SDR"
 
 You can also reference the [generic config file](/config/radiod@fobos-generic.conf).
 
-Multiple instances of `radiod` can run on the same system, provided each has its own front end (they cannot be shared).
-
-You can have as many as you want, subject to your CPU and USB limits.
+Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits.
 
 The "description" parameter is advertised with mDNS (multicast DNS) service discovery on the LAN and this constrains its content. It should be 63 characters or less and not contain slashes ('/') or control characters (spaces are ok).
 
