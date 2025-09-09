@@ -32,7 +32,7 @@ Multiple SDR front ends are currently supported in `ka9q-radio`:
 | [fobos](SDR/fobos.md)     | Fobos SDR                                 | BYO driver
 | [funcube](SDR/funcube.md) | AMSAT-UK FUNcube (Pro+)                   |
 | [hackrf](SDR/hackrf.md)   | HackRF One                                | OS driver
-| [hydra](SDR/hydra.md)     | Hydra SDR                                 | BYO driver
+| [hydra](SDR/hydra.md)     | HydraSDR                                  | BYO driver
 | [rtlsdr](SDR/rtlsdr.md)   | Generic RTL-SDR dongle                    | OS driver
 | [rx888](SDR/rx888.md)     | RX888 MKII (direct conversion only)       |
 | [sdrplay](SDR/sdrplay.md) | SDRplay                                   | BYO driver
