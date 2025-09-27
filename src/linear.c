@@ -136,6 +136,7 @@ int demod_linear(void *arg){
 	if(chan->pll.lock_count <= -lock_limit){
 	  chan->pll.lock_count = -lock_limit;
 	  chan->pll.lock = false;
+	  pll_start_ns = 0;
 	}
       } else if(chan->pll.snr > chan->squelch_open){
 	chan->pll.lock_count += N;
