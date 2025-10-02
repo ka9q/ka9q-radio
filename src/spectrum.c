@@ -35,6 +35,8 @@ int demod_spectrum(void *arg){
   FREE(chan->status.command);
   FREE(chan->spectrum.bin_data);
   delete_filter_output(&chan->filter.out);
+  delete_filter_output(&chan->filter2.out); // filter2 not used in spectrum mode
+  delete_filter_input(&chan->filter2.in);
   if(chan->output.opus != NULL){
     opus_encoder_destroy(chan->output.opus);
     chan->output.opus = NULL;
@@ -140,6 +142,7 @@ int demod_spectrum(void *arg){
 
 	chan->filter.max_IF = (double)(samprate - margin)/2;
 	chan->filter.min_IF = -chan->filter.max_IF;
+	chan->filter2.blocking = 0; // Not used in this mode, make sure it's 0
 	set_filter(&chan->filter.out,chan->filter.min_IF,chan->filter.max_IF,KAISER_BETA);
 	chan->filter.remainder = NAN; // Force init of downconverter
 	chan->filter.bin_shift = 1010101010; // Unlikely - but a kludge, force init of phase rotator
