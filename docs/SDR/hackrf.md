@@ -1,12 +1,12 @@
-# FUNcube Dongle SDR
+# HackRF
 
 ## Description
 
-The [FUNcube dongle (FCD)](https://www.funcubedongle.com/?page_id=1201) is a 150 kHz to 240 MHz and 420 MHz to 1.9 GHz SDR. The ADC has a sampling rate of 192 ksps.
+[HackRF One](https://greatscottgadgets.com/hackrf/one/) is a SDR capable of transmission or reception of radio signals from 1 MHz to 6 GHz. It has a half-duplex transceiver and a sample rate of approx. 20 Msps.
 
 ## SW Installation
 
-The FUNcube dongle enumerates as a USB HID device, and usually no particular SW needs to be installed.
+HackRF One is supported by default on most linux distributions by the `libhackrf-dev` package.
 
 ## Configuration
 
@@ -14,15 +14,15 @@ See below for an basic example.
 
 ```
 [global]
-hardware = funcube
-status = funcube.local
+hardware = hackrf
+status = hackrf.local
 
 [funcube]
-device = funcube
-description = "My FUNcube SDR"
+device = hackrf
+description = "My HackRF"
 ```
 
-You can also reference the [generic config file](/config/radiod@funcube-generic.conf).
+You can also reference the [generic config file](/config/radiod@hackrf-generic.conf).
 
 Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits.
 
@@ -34,10 +34,5 @@ In the example above, the `hardware` entry in the `[global]` section specifies t
 
 The `device` key is mandatory.
 
-### number (optional)
+### serial (optional)
 
-Integer, default 0. If multiple FCDs are connected, choose which one to open.
-
-### bias (optional)
-
-Boolean, default false. Enable the bias tee (preamplifier power).

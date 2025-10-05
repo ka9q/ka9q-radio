@@ -1,12 +1,10 @@
-# FUNcube Dongle SDR
+# SDRplay
 
 ## Description
 
-The [FUNcube dongle (FCD)](https://www.funcubedongle.com/?page_id=1201) is a 150 kHz to 240 MHz and 420 MHz to 1.9 GHz SDR. The ADC has a sampling rate of 192 ksps.
+[SDRplay](https://www.sdrplay.com/products/) is a family of SDRs.
 
 ## SW Installation
-
-The FUNcube dongle enumerates as a USB HID device, and usually no particular SW needs to be installed.
 
 ## Configuration
 
@@ -14,15 +12,15 @@ See below for an basic example.
 
 ```
 [global]
-hardware = funcube
-status = funcube.local
+hardware = sdrplay
+status = sdrplay.local
 
 [funcube]
-device = funcube
-description = "My FUNcube SDR"
+device = sdrplay
+description = "My RSP1B"
 ```
 
-You can also reference the [generic config file](/config/radiod@funcube-generic.conf).
+You can also reference the [generic config file](/config/radiod@sdrplay-generic.conf).
 
 Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits.
 
@@ -34,10 +32,5 @@ In the example above, the `hardware` entry in the `[global]` section specifies t
 
 The `device` key is mandatory.
 
-### number (optional)
+### serial (optional)
 
-Integer, default 0. If multiple FCDs are connected, choose which one to open.
-
-### bias (optional)
-
-Boolean, default false. Enable the bias tee (preamplifier power).

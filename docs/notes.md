@@ -1,13 +1,8 @@
-*ka9q-radio* Miscellaneous Installation Notes  
-16 January 2025
-===============================
+# ka9q-radio Miscellaneous Notes
 
-Software Platform
------------------
+## Software Platform
 
-The preferred platform is Debian Linux 12 ("bookworm") on the x86-64
-and Raspberry Pi 4.  Older versions may work, but you may have to fix
-some problems.
+The preferred platform is Debian Linux 12 ("bookworm") or newer (for x86-64) and Raspberry Pi 4. Older versions may work, but you may have to fix some problems.
 
 Because I have a Macbook running MacOS, I regularly compile
 *ka9q-radio* on it and run *monitor* and *control*, the user
@@ -19,9 +14,7 @@ target only Debian Linux. I'm not particularly interested in porting *ka9q-radio
 to a wide range of environments, at least not yet. And I don't think I'll
 *ever* want to bother with Microsoft Windows!
 
-
-CPU Requirements
-----------------
+## CPU Requirements
 
 Most reasonably modern x86 Linux systems can run *ka9q-radio* just
 fine. Even an Intel i5 can handle the RX888 at its full sample rate of
@@ -48,18 +41,20 @@ for the RX888 except at low sample rates. The Raspberry Pi 5 *can*
 handle the RX888 at half speed (64.8 MHz) but just barely; little is
 left over for applications such as FT8 or especially WSPR decoding.
 
-Supported Hardware and System Requirements
-------------------------------------------
+## Supported Hardware and System Requirements
 
-*ka9q-radio* currently supports the following SDR front ends:
+*ka9q-radio* currently supports the following SDR hardware:
 
-[Airspy R2/Airspy Mini](https://airspy.com/airspy-r2/)  
-[Airspy HF+](https://airspy.com/airspy-hf-discovery/)  
-[Generic RTL-SDR](https://en.wikipedia.org/wiki/Software-defined_radio#RTL-SDR) (tuner mode only)  
-[AMSAT UK Funcube Pro+ Dongle](http://www.funcubedongle.com/)  
-[RX-888 MkII](https://www.rtl-sdr.com/techminds-reviewing-the-rx888-mk2-software-defined-radio/)  (direct sampling only)  
-[SDRPlay](https://www.sdrplay.com)  
-[Fobos](https://rigexpert.com/software-defined-radio-sdr/fobos-sdr/#)
+- [Airspy R2 / Airspy Mini](https://airspy.com/airspy-r2/)
+- [Airspy HF+](https://airspy.com/airspy-hf-plus/)
+- [Blade RF](https://www.nuand.com/bladerf-1/)
+- [Fobos](https://rigexpert.com/software-defined-radio-sdr/fobos-sdr/)
+- [AMSAT-UK Funcube Dongle Pro+](https://www.funcubedongle.com/?page_id=1201/)
+- [HackRF One](https://greatscottgadgets.com/hackrf/one/)
+- [HydraSDR RFOne](https://hydrasdr.com/products/)
+- [Generic RTL-SDR](https://www.rtl-sdr.com/about-rtl-sdr/) (tuner mode only)
+- [RX-888 MkII](https://www.rx-888.com/rx/) (direct sampling only)
+- [SDRplay](https://www.sdrplay.com/products/)
 
 Until recently my preferred SDRs (and the ones I still have the most
 experience with) were the Airspy R2 for VHF/UHF and the Airspy HF+ for
@@ -147,13 +142,13 @@ you can build it from the sources fairly easily. The git repository is
 at http://github.com/rigexpert/libfobos. You build it with the sequence
 mkdir build; cd build; cmake ..; make; sudo make install. You may need to install the 'cmake' command.
 
-Finally, a word about the SDRPlay. I bought one many years ago only to
+Finally, a word about the SDRplay. I bought one many years ago only to
 discover that its libraries are proprietary and available only as
 compiled binaries. It sat on my shelf for years as its many
 competitors provide open source libraries that are *far* easier
 to deal with in an open source project like *ka9q-radio*.
 
-But at last the SDRPlay is now supported using the new (January 2025)
+But at last the SDRplay is now supported using the new (January 2025)
 dynamic driver loading feature in *ka9q-radio*.  You must first
 download and install their proprietary driver. Don't bother with the
 sdrplay.com website, it's an exercise in frustration. I found
@@ -163,8 +158,7 @@ system *systemd*.
 It burns almost as much CPU as *radiod*, and I have no idea what it does or
 why it's necessary.
 
-Front end drivers can now be dynamically loaded
------------------------------------------------
+## Front end drivers can now be dynamically loaded
 
 As of January 2025, *ka9q-radio* can load hardware drivers dynamically
 using the Linux/UNIX shared library facility; previously all drivers
@@ -174,7 +168,7 @@ still statically linked into *radio*, but you can force them to be
 built as dynamic modules with "make DYNAMIC=1".  The shared libraries
 are installed in /usr/local/lib/ka9q-radio.  By default, "make"
 creates shared library modules only for those devices for which a
-Debian library package exists; this excludes Fobos and SDRPlay because
+Debian library package exists; this excludes Fobos and SDRplay because
 they require header files and libraries from third party sources that
 must be manually built and installed.  If you have them, you
 can build *ka9q-radio* with "make FOBOS=1" or "make SDRPLAY=1" (or
@@ -183,8 +177,7 @@ both) as appropriate.
 Here's an incomplete list of nits and gotchas I've run into while
 installing *ka9q-radio* on various systems.
 
-Set the Locale
---------------
+## Set the Locale
 
 The *control* program wants to display frequencies and other large
 numbers with commas between groups of 3 digits for readability, and it
@@ -201,8 +194,7 @@ shell environment variable "LANG", e.g.:
 
 >export LANG=en_US.UTF-8
 
-Multicast Interfaces And Routing
---------------------------------
+## Multicast Interfaces And Routing
 
 Linux multicast routing is still a mystery to me. On hosts with just
 one Ethernet interface it usually "just works"; multicast traffic
@@ -228,9 +220,7 @@ isn't "eth0", either remove the **iface** option entirely or make sure
 the **iface** option specifies it.  I'm still looking for solutions to
 this problem, so please let me know if you have any insights.
 
-
-Multicast DNS problems on Ubuntu
---------------------------------
+## Multicast DNS problems on Ubuntu
 
 Multicast DNS, which *radiod* relies on, is rather badly broken on
 some older versions of Ubuntu, such as 20.04 ("focal"). The symptom
@@ -253,11 +243,3 @@ the file */etc/mdns.allow* with the entries
 
 so it will only try to resolve names in the mDNS zone ".local", which
 is what mdns4_minimal normally does.
-
-
-
-
-
-
-
-
