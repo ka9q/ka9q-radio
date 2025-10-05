@@ -25,6 +25,7 @@ aprs
 aprsfeed
 control
 cwd
+.DS_Store
 docs/notes
 fft-gen
 ft8-decoded
