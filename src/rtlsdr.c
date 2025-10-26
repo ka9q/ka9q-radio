@@ -230,12 +230,12 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
       init_frequency = parse_frequency(p,false);
   }
 
+  frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
   if(init_frequency != 0){
     set_correct_freq(sdr,init_frequency);
     frontend->lock = true;
   }
 
-  frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
   fprintf(stderr,"%s, samprate %'d Hz, agc %d, gain %d, bias %d, direct sampling %d, init freq %'.3lf Hz, calibrate %.3g\n",
 	  frontend->description,frontend->samprate,sdr->agc,sdr->gain,sdr->bias,sdr->direct_sampling,
 	  init_frequency, frontend->calibrate);
