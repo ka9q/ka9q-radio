@@ -310,9 +310,10 @@ static int save_plans(){
   int fd = -1;
 
   // Import or re-import wisdom and merge
-  if(asprintf(&lockfile,"%s.lock",Wisdom_file) <= 0)
-    goto quit;
-
+  if(asprintf(&lockfile,"%s.lock",Wisdom_file) <= 0){
+    free(lockfile);
+    return 0;
+  }
   lockfd = open(lockfile,O_CREAT|O_RDWR,0664);
   fchmod(lockfd,0664); // I really do want rw-rw-r-- so the radio group can write it
   if(lockfd == -1)
@@ -379,6 +380,7 @@ static int save_plans(){
     flock(lockfd,LOCK_UN);
     close(lockfd);
     lockfd = -1;
+    unlink(lockfile);
   }
   if(fd != -1)
     close(fd);
