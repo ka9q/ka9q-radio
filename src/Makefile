@@ -7,6 +7,23 @@
 
 BUILD ?= release
 
+UNAME_S := $(shell uname -s)
+
+CPPFLAGS ?=
+LDFLAGS  ?=
+
+LDLIBS = -lm -lpthread
+
+ifeq ($(UNAME_S),Darwin)
+  CPPFLAGS += -I/opt/local/include
+  LDFLAGS  += -L/opt/local/lib
+  LDLIBS += -lintl -liconv
+  SOFLAGS = -bundle -Wl,-undefined,dynamic_lookup
+else
+  LDLIBS += -lbsd
+  SOFLAGS = -shared
+endif
+
 ifeq ($(BUILD),debug)
      DOPTS = -g
 else
@@ -20,7 +37,7 @@ endif
 
 ARCHOPTS = -march=native
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
-COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -D_GNU_SOURCE=1 -Wextra -MMD -MP
+COPTS = -std=gnu11 -pthread -Wall -Wno-gnu-folding-constant -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -D_GNU_SOURCE=1 -Wextra -MMD -MP
 COPTS += -fPIC
 CFLAGS = $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
 BINDIR = /usr/local/bin
@@ -122,79 +139,79 @@ dynamics: $(DYNAMIC_DRIVERS)
 # Executables
 
 fft-gen: fft-gen.o
-	$(CC) $(LDOPTS) -o $@ $^  -lfftw3f_threads -lfftw3f  -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^  -lfftw3f_threads -lfftw3f  $(LDLIBS)
 
 aprs: aprs.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 aprsfeed: aprsfeed.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 control: control.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -liniparser -lncursesw -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -liniparser -lncursesw $(LDLIBS)
 
 cwd: cwd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 tune: tune.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 setfilt: setfilt.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 show-pkt: show-pkt.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw $(LDLIBS)
 
 show-sig: show-sig.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lncursesw -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lncursesw $(LDLIBS)
 
 metadump: metadump.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ `pkg-config --libs ncursesw` -lopus -lportaudio -lasound -lsamplerate -liniparser -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio `pkg-config --silence-errors --libs alsa` -lsamplerate -liniparser  -lncursesw $(LDLIBS)
 
 opusd: opusd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lopus $(LDLIBS)
 
 opussend: opussend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio $(LDLIBS)
 
 packetd: packetd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 pcmcat: pcmcat.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 pcmspawn: pcmspawn.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 pcmrecord: pcmrecord.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg $(LDLIBS)
 
 pcmsend: pcmsend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lportaudio -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lportaudio $(LDLIBS)
 
 powers: powers.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 pl: pl.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 radiod: $(RADIOD_OBJECTS)
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl -lbsd -lm -lpthread
+	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl $(LDLIBS)
 
 rdsd: rdsd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 stereod: stereod.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 jt-decoded: jt-decoded.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 wd-record: wd-record.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lbsd -lm -lpthread
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 # not made unless we're on a rpi
 set_xcvr: set_xcvr.o libradio.a
@@ -202,34 +219,34 @@ set_xcvr: set_xcvr.o libradio.a
 
 # Dynamically loaded modules for SDR front ends
 funcube.so: funcube.o fcd.o hid-libusb.o
-	$(CC) -shared -o $@ $^ -lportaudio
+	$(CC) $(SOFLAGS) -o $@ $^ -lportaudio
 
 rx888.so: rx888.o ezusb.o hid-libusb.o
-	$(CC) -shared -o $@ $^ -lusb-1.0
+	$(CC) $(SOFLAGS) -o $@ $^ -lusb-1.0
 
 airspy.so: airspy.o
-	$(CC) -shared -o $@ $^ -lairspy
+	$(CC) $(SOFLAGS) -o $@ $^ -lairspy
 
 airspyhf.so: airspyhf.o
-	$(CC) -shared -o $@ $^ -lairspyhf
+	$(CC) $(SOFLAGS) -o $@ $^ -lairspyhf
 
 hydrasdr.so: hydrasdr.o
-	$(CC) -shared -o $@ $^ -lhydrasdr
+	$(CC) $(SOFLAGS) -o $@ $^ -lhydrasdr
 
 rtlsdr.so: rtlsdr.o
-	$(CC) -shared -o $@ $^ -lrtlsdr
+	$(CC) $(SOFLAGS) -o $@ $^ -lrtlsdr
 
 sdrplay.so: sdrplay.o
-	$(CC) -shared -o $@ $^ -lsdrplay_api
+	$(CC) $(SOFLAGS) -o $@ $^ -lsdrplay_api
 
 fobos.so: fobos.o
-	$(CC) -shared -o $@ $^ -lfobos
+	$(CC) $(SOFLAGS) -o $@ $^ -lfobos
 
 hackrf.so: hackrf.o
-	$(CC) -shared -o $@ $^ -lhackrf -lusb-1.0
+	$(CC) $(SOFLAGS) -o $@ $^ -lhackrf -lusb-1.0
 
 bladerf.so: bladerf.o
-	$(CC) -shared -o $@ $^ -lbladeRF
+	$(CC) $(SOFLAGS) -o $@ $^ -lbladeRF
 
 # subroutines useful in more than one program
 libradio.a: $(LIBRADIO)
@@ -237,7 +254,4 @@ libradio.a: $(LIBRADIO)
 	ranlib $@
 
 %.so: %.o
-	$(CC) -shared -o $@ $<
-
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(SOFLAGS) -o $@ $<
