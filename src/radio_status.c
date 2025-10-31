@@ -414,6 +414,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  if(Verbose > 1)
 	    fprintf(stderr,"bin bw %f -> %f\n",chan->spectrum.bin_bw,x);
 	  chan->spectrum.bin_bw = x;
+	  restart_needed = true;
 	}
       }
       break;
@@ -424,14 +425,17 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  if(Verbose > 1)
 	    fprintf(stderr,"bin count %d -> %d\n",chan->spectrum.bin_count,x);
 	  chan->spectrum.bin_count = x;
+	  restart_needed = true;
 	}
       }
       break;
     case CROSSOVER:
       {
 	float const x = decode_float(cp,optlen);
-	if(isfinite(x) && x >= 0)
+	if(isfinite(x) && x >= 0 && x != chan->spectrum.crossover){
 	  chan->spectrum.crossover = x;
+	  restart_needed = true;
+	}
       }
       break;
     case STATUS_INTERVAL:

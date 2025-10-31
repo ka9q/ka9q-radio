@@ -54,7 +54,7 @@ static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 #endif
 static int   const DEFAULT_BITRATE = 0;       // Default Opus compressed bit rate. 0 means OPUS_AUTO, the encoder decides
 static int   const DEFAULT_DC_TC = 0;         // Time constant for AM carrier removal, default off
-static float const DEFAULT_CROSSOVER = 5000;
+static float const DEFAULT_CROSSOVER = 40;
 extern int Overlap;
 
 // Valid keys in presets file, [global] section, and any channel section
