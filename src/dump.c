@@ -338,6 +338,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline
     case BIN_COUNT:
       fprintf(fp,"bins %d",decode_int(cp,optlen));
       break;
+    case CROSSOVER:
+      fprintf(fp,"crossover %.0f",decode_float(cp,optlen));
+      break;
     case RF_ATTEN:
       fprintf(fp,"rf atten %.1f dB",decode_float(cp,optlen));
       break;

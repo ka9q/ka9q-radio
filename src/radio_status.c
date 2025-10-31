@@ -430,7 +430,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     case CROSSOVER:
       {
 	float const x = decode_float(cp,optlen);
-	if(x >= 0)
+	if(isfinite(x) && x >= 0)
 	  chan->spectrum.crossover = x;
       }
       break;
