@@ -19,6 +19,10 @@ clean:
 
 install:
 	/usr/sbin/adduser --quiet --system --group radio
+	install -d -o root -g root -m 0755 /etc/sysusers.d /etc/tmpfiles.d
+	install -o root -g root -m 0644 radio.sysusers /etc/sysusers.d/radio.conf
+	install -o root -g root -m 0644 ka9q-radio.tmpfiles /etc/tmpfiles.d/ka9q-radio.conf
+	mkdir --parents --mode=0755 /etc/sysusers.d /etc/tmpfiles.d
 	mkdir -p $(DIRS)
 	-chown -R radio:radio $(DIRS)
 	-chmod g+ws $(DIRS)

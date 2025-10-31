@@ -427,6 +427,13 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	}
       }
       break;
+    case CROSSOVER:
+      {
+	float const x = decode_float(cp,optlen);
+	if(x >= 0)
+	  chan->spectrum.crossover = x;
+      }
+
     case STATUS_INTERVAL:
       {
 	int const x = decode_int(cp,optlen);
@@ -649,6 +656,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
     {
       encode_float(&bp,NONCOHERENT_BIN_BW,chan->spectrum.bin_bw); // Hz
       encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
+      encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
       // encode bin data here? maybe change this, it can be a lot
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
       spectrum_poll(chan); // Update the spectral data (wide bins only)

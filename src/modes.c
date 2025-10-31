@@ -54,6 +54,7 @@ static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 #endif
 static int   const DEFAULT_BITRATE = 0;       // Default Opus compressed bit rate. 0 means OPUS_AUTO, the encoder decides
 static int   const DEFAULT_DC_TC = 0;         // Time constant for AM carrier removal, default off
+static float const DEFAULT_CROSSOVER = 5000;
 extern int Overlap;
 
 // Valid keys in presets file, [global] section, and any channel section
@@ -228,6 +229,7 @@ int set_defaults(struct channel *chan){
 	    Blocktime,chan->output.samprate,r);
   }
   chan->status.output_interval = DEFAULT_UPDATE;
+  chan->spectrum.crossover = DEFAULT_CROSSOVER;
   chan->tp1 = chan->tp2 = NAN;
   return 0;
 }

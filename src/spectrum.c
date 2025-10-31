@@ -15,7 +15,6 @@
 #include "radio.h"
 
 static float const SPECTRUM_KAISER_BETA = 5.0;
-static float const Spectrum_crossover = 5000; // Switch to summing raw FFT bins above 5 kHz
 
 // Spectrum analysis thread
 int demod_spectrum(void *arg){
@@ -103,7 +102,7 @@ int demod_spectrum(void *arg){
 
       chan->spectrum.bin_data = calloc(bin_count,sizeof *chan->spectrum.bin_data);
       assert(chan->spectrum.bin_data != NULL);
-      if(bin_bw > Spectrum_crossover){
+      if(bin_bw > chan->spectrum.crossover){
 	// Set up wide bin mode
 	binsperbin = bin_bw / fe_fft_bin_spacing;
 	if(Verbose > 1)
@@ -177,7 +176,7 @@ int demod_spectrum(void *arg){
     if(downconvert(chan) != 0) // Wait for new frame
       break;
 
-    if(bin_bw > Spectrum_crossover)
+    if(bin_bw > chan->spectrum.crossover)
       continue; // Do the rest at poll time
 
     // FFT mode from here on
@@ -250,7 +249,7 @@ int spectrum_poll(struct channel *chan){
 
   double const bin_bw = chan->spectrum.bin_bw <= 0 ? 1000 : chan->spectrum.bin_bw;
 
-  if(bin_bw <= Spectrum_crossover)
+  if(bin_bw <= chan->spectrum.crossover)
     return 0; // Only in wide binmode
 
   // Parameters set by system input side

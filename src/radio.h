@@ -236,6 +236,7 @@ struct channel {
     float bin_bw;     // Requested bandwidth (hz) of noncoherent integration bin
     int bin_count;    // Requested bin count
     float *bin_data;  // Array of real floats with bin_count elements
+    float crossover;  // Crossover frequency between algorithms, Hz
   } spectrum;
 
   // Output
