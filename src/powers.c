@@ -34,7 +34,7 @@ bool details;   // Output bin, frequency, power, newline
 char const *Source;
 struct sockaddr_storage *Source_socket;
 
-static char const Optstring[] = "b:c:df:hi:o:s:t:T:vw:V";
+static char const Optstring[] = "b:c:C:df:hi:o:s:t:T:vw:V";
 static struct  option Options[] = {
   {"bins", required_argument, NULL, 'b'},
   {"count", required_argument, NULL, 'c'},
@@ -47,6 +47,7 @@ static struct  option Options[] = {
   {"verbose", no_argument, NULL, 'v'},
   {"version", no_argument, NULL, 'V'},
   {"bin-width", required_argument, NULL, 'w'},
+  {"crossover", required_argument, NULL, 'C'},
   {"source", required_argument, NULL, 'o'},
   {NULL, 0, NULL, 0},
 };
@@ -66,6 +67,7 @@ int main(int argc,char *argv[]){
   float frequency = -1;
   int bins = 0;
   float bin_bw = 0;
+  float crossover = -1;
   {
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
@@ -75,6 +77,9 @@ int main(int argc,char *argv[]){
 	break;
       case 'c':
 	count = strtol(optarg,NULL,0);
+	break;
+      case 'C':
+	crossover = strtod(optarg,NULL);
 	break;
       case 'd':
 	details = true;
@@ -156,7 +161,8 @@ int main(int argc,char *argv[]){
       encode_int(&bp,BIN_COUNT,bins);
     if(bin_bw > 0)
       encode_float(&bp,NONCOHERENT_BIN_BW,bin_bw);
-
+    if(crossover >= 0)
+      encode_float(&bp,CROSSOVER,crossover);
     encode_eol(&bp);
     int const command_len = bp - buffer;
     if(Verbose > 1){
