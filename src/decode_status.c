@@ -254,6 +254,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case BIN_COUNT:
       channel->spectrum.bin_count = decode_int(cp,optlen);
       break;
+    case CROSSOVER:
+      channel->spectrum.crossover = decode_float(cp,optlen);
+      break;
     case BIN_DATA:
       break;
     case RF_AGC:
