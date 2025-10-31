@@ -1,0 +1,3 @@
+d /var/lib/ka9q-radio 0750 radio radio -
+d /var/log/ka9q-radio  0750 radio radio -
+d /run/ka9q-radio      0750 radio radio -
