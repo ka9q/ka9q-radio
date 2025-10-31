@@ -433,7 +433,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	if(x >= 0)
 	  chan->spectrum.crossover = x;
       }
-
+      break;
     case STATUS_INTERVAL:
       {
 	int const x = decode_int(cp,optlen);
