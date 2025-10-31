@@ -1,0 +1,2 @@
+g radio 55050
+u radio 55050 "ka9q-radio system" /var/lib/ka9q-radio /usr/sbin/nologin
