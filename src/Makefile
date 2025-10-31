@@ -119,6 +119,7 @@ install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 	ln -sf $(SODIR)/*.so /usr/local/lib
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) $(BINDIR)
+	# not present on macos, check for this
 	setcap cap_sys_nice=ep $(BINDIR)/monitor
 	setcap cap_net_admin,cap_sys_nice=ep $(DAEMONDIR)/radiod
 

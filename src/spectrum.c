@@ -71,6 +71,7 @@ int demod_spectrum(void *arg){
   double old_bin_bw = -1;
   float *kaiser = NULL;
   double kaiser_gain = 0;
+  float old_crossover = -1;
 
 #if 1
   realtime(chan->prio - 10); // Drop below demods
@@ -81,10 +82,11 @@ int demod_spectrum(void *arg){
     int bin_count = chan->spectrum.bin_count <= 0 ? 64 : chan->spectrum.bin_count;
     double bin_bw = chan->spectrum.bin_bw <= 0 ? 1000 : chan->spectrum.bin_bw;
 
-    if(bin_bw != old_bin_bw || bin_count != old_bin_count){
+    if(bin_bw != old_bin_bw || bin_count != old_bin_count || chan->spectrum.crossover != old_crossover){
       // Params have changed, set everything up again
       old_bin_bw = bin_bw;
       old_bin_count = bin_count;
+      old_crossover = chan->spectrum.crossover;
 
       // Get rid of anything old
       delete_filter_output(&chan->filter.out);
