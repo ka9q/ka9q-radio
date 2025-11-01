@@ -114,14 +114,29 @@ endif
 
 all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
-# setcap is Linux-specific, don't fail if it's not found 
-install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
+install: install-$(UNAME_S)
+
+install-Linux: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
+	@echo "Installing for Linux..."
 	rsync -a $(DYNAMIC_DRIVERS) $(SODIR)
 	ln -sf $(SODIR)/*.so /usr/local/lib
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) $(BINDIR)
-	-setcap cap_sys_nice=ep $(BINDIR)/monitor
-	-setcap cap_net_admin,cap_sys_nice=ep $(DAEMONDIR)/radiod
+	setcap cap_sys_nice=ep $(BINDIR)/monitor
+	setcap cap_net_admin,cap_sys_nice=ep $(DAEMONDIR)/radiod
+
+install-Darwin:
+	@echo "Installing for macOS..."
+	rsync -a $(DYNAMIC_DRIVERS) $(SODIR)
+	ln -sf $(SODIR)/*.so /usr/local/lib
+	rsync -a $(DAEMONS) $(DAEMONDIR)
+	rsync -a $(EXECS) $(BINDIR)
+        sudo chown root $(BINDIR)/monitor
+        sudo chmod u+s $(DAEMONDIR)/radiod
+
+install-%:
+	@echo "Unsupported operating system: $*"
+	@exit 1
 
 clean:
 	rm -f *.o *.a *.d *.so $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
@@ -130,7 +145,7 @@ DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
 
 -include $(DEPS)
 
-.PHONY: clean all install doc dynamics
+.PHONY: clean all install install-Linux install-Darwin install-% doc dynamics
 
 # keep all .o files
 .SECONDARY:
