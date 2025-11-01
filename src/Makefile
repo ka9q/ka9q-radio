@@ -131,8 +131,8 @@ install-Darwin:
 	ln -sf $(SODIR)/*.so /usr/local/lib
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) $(BINDIR)
-        sudo chown root $(BINDIR)/monitor
-        sudo chmod u+s $(DAEMONDIR)/radiod
+	sudo chown root $(BINDIR)/monitor
+	sudo chmod u+s $(DAEMONDIR)/radiod
 
 install-%:
 	@echo "Unsupported operating system: $*"
