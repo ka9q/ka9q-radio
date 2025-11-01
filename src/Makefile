@@ -114,14 +114,14 @@ endif
 
 all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
+# setcap is Linux-specific, don't fail if it's not found 
 install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 	rsync -a $(DYNAMIC_DRIVERS) $(SODIR)
 	ln -sf $(SODIR)/*.so /usr/local/lib
 	rsync -a $(DAEMONS) $(DAEMONDIR)
 	rsync -a $(EXECS) $(BINDIR)
-	# not present on macos, check for this
-	setcap cap_sys_nice=ep $(BINDIR)/monitor
-	setcap cap_net_admin,cap_sys_nice=ep $(DAEMONDIR)/radiod
+	-setcap cap_sys_nice=ep $(BINDIR)/monitor
+	-setcap cap_net_admin,cap_sys_nice=ep $(DAEMONDIR)/radiod
 
 clean:
 	rm -f *.o *.a *.d *.so $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
