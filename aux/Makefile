@@ -59,7 +59,7 @@ install-Darwin:
 	# Setup init system (TBD)
 	# Setup ka9q-radio directories
 	mkdir -p $(DIRS)
-	-chown -R $(whoami):radio $(DIRS)
+	-chgrp -R radio $(DIRS)
 	-chmod g+ws $(DIRS)
 	touch $(SYSFILES)
 	chgrp radio $(SYSFILES)
