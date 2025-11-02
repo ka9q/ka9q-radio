@@ -22,7 +22,7 @@ install-Darwin:
 	chgrp radio $(LIBDIR)
 
 install-%:
-        @echo "Unsupported operating system: $*"
-        @exit 1
+	@echo "Unsupported operating system: $*"
+	@exit 1
 
 .PHONY: clean all install install-Linux install-Darwin install-%
