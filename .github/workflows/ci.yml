@@ -1,6 +1,6 @@
 name: CI
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 
 jobs:
   ubuntu-build:
@@ -74,26 +74,14 @@ jobs:
     name: MacOS CI
     runs-on: macos-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Install dependencies
         run: |
           brew update
-          brew install \
-            glib \
-            libusb \
-            ncurses \
-            fftw \
-            hackrf \
-            libogg \
-            opus \
-            airspy \
-            airspyhf \
-            librtlsdr \
-            iniparser \
-            portaudio \
-            dbus \
-            libsamplerate \
-            liquid-dsp
-
+          brew bundle install --file src/Brewfile
+      - name: Install Avahi
+        run: |
           cd /tmp
           curl https://avahi.org/download/avahi-0.8.tar.gz > avahi-0.8.tar.gz
           tar xvpf avahi-0.8.tar.gz
@@ -111,8 +99,6 @@ jobs:
             --disable-tests
           make -j4
           sudo make install
-      - name: Checkout code
-        uses: actions/checkout@v4
       - name: Compile
         run: C_INCLUDE_PATH="$(brew --prefix)/include:$(brew --prefix)/opt/ncurses/include" LIBRARY_PATH="$(brew --prefix)/lib:$(brew --prefix)/opt/ncurses/lib" make
       - name: Install
