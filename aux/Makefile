@@ -25,12 +25,12 @@ install-Linux:
 	# Create radio group
 	/usr/sbin/adduser --quiet --system --group radio
 	# Setup init system
-	mkdir --parents --mode=0755 /etc/sysusers.d /etc/tmpfiles.d
+	install -d -o root -g root -m 0755 /etc/sysusers.d /etc/tmpfiles.d
 	install -o root -g root -m 0644 radio.sysusers /etc/sysusers.d/radio.conf
 	install -o root -g root -m 0644 ka9q-radio.tmpfiles /etc/tmpfiles.d/ka9q-radio.conf
 	# Setup ka9q-radio directories
 	mkdir -p $(DIRS)
-	-chown -R $(whoami):radio $(DIRS)
+	-chown -R radio:radio $(DIRS)
 	-chmod g+ws $(DIRS)
 	touch $(SYSFILES)
 	chgrp radio $(SYSFILES)
