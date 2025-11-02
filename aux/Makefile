@@ -30,7 +30,7 @@ install-Linux:
 	install -o root -g root -m 0644 ka9q-radio.tmpfiles /etc/tmpfiles.d/ka9q-radio.conf
 	# Setup ka9q-radio directories
 	mkdir -p $(DIRS)
-	-chown -R radio:radio $(DIRS)
+	-chown -R $(whoami):radio $(DIRS)
 	-chmod g+ws $(DIRS)
 	touch $(SYSFILES)
 	chgrp radio $(SYSFILES)
@@ -59,7 +59,7 @@ install-Darwin:
 	# Setup init system (TBD)
 	# Setup ka9q-radio directories
 	mkdir -p $(DIRS)
-	-chown -R radio:radio $(DIRS)
+	-chown -R $(whoami):radio $(DIRS)
 	-chmod g+ws $(DIRS)
 	touch $(SYSFILES)
 	chgrp radio $(SYSFILES)
