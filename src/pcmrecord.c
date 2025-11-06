@@ -279,16 +279,19 @@ int main(int argc,char *argv[]){
       Jtmode = true;
       Max_length = 7.5;
       Padding = true;
+      Reset_time = true;
       break;
     case '8':
       Jtmode = true;
       Max_length = 15.0;
       Padding = true;
+      Reset_time = true;
       break;
     case 'w':
       Jtmode = true;
       Max_length = 120;
       Padding = true;
+      Reset_time = true;
       break;
     case 'c':
       Catmode = true;
@@ -302,6 +305,7 @@ int main(int argc,char *argv[]){
     case 'j':
       Jtmode = true;
       Padding = true;
+      Reset_time = true;
       break;
     case 'd':
       Recordings = optarg;
