@@ -202,6 +202,7 @@ static char const *Source;
 static struct sockaddr_storage *Source_socket; // Remains NULL if Source == NULL
 static bool Prefix_source; // Prepend 192.168.42.4:1234_ to file name
 static bool Padding = false;
+static bool Reset_time = false;
 
 const char *App_path;
 static int Input_fd,Status_fd;
@@ -245,6 +246,7 @@ static struct option Options[] = {
   {"mintime", required_argument, NULL, 'm'},
   {"source", required_argument, NULL, 'o'},
   {"prefix-source", no_argument, NULL, 'p' }, // Prefix file names with source socket
+  {"reset", no_argument, NULL, 'R'},  // Detect clock skew and reset
   {"raw", no_argument, NULL, 'r' },
   {"subdirectories", no_argument, NULL, 's'},
   {"subdirs", no_argument, NULL, 's'},
@@ -259,7 +261,7 @@ static struct option Options[] = {
   {"max_length", required_argument, NULL, 'x'},
   {NULL, no_argument, NULL, 0},
 };
-static char Optstring[] = ":cd:e:fjl:m:o:PprsS:t:vL:Vx:48w";
+static char Optstring[] = ":cd:e:fjl:m:o:PprRsS:t:vL:Vx:48w";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
@@ -313,6 +315,9 @@ int main(int argc,char *argv[]){
     case 'm':
       if(optarg)
 	SubstantialFileTime = fabsf(strtof(optarg,NULL));
+      break;
+    case 'R':
+      Reset_time = true;
       break;
     case 'r':
       Raw = true;
@@ -1013,7 +1018,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   if(Catmode){
     sp->fp = stdout;
     sp->can_seek = false; // Can't seek on a pipe
-    sp->exit_after_close = true;
+    sp->exit_after_close = true; // Single shot
     strlcpy(sp->filename,"[stdout]",sizeof(sp->filename));
     if(Verbose)
       fprintf(stderr,"receiving %s ssrc %u samprate %d channels %d encoding %s freq %'.3lf preset %s\n",
@@ -1121,8 +1126,11 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	      (float)skip_ns / BILLION,
 	      (long long)sp->starting_offset);
 #endif
-      sp->no_offset = true; // Only skip on first file of session
+      // experimental 5 nov 2025
+      // When -R|--reset is set, always adjust each new file to period boundary, padding as necessary
+      sp->no_offset = !Reset_time;
     }
+
     sp->samples_remaining = Max_length * sp->samprate - sp->starting_offset;
   }
   char filename[PATH_MAX] = {0}; // file pathname except for suffix
