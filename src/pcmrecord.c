@@ -1116,12 +1116,12 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   if(Max_length > 0){
     intmax_t const period = (intmax_t) BILLION * Max_length; // Period/length in ns
     imaxdiv_t const r = imaxdiv(timestamp,period); // r.quot = # of periods since epoch
-    intmax_t const period_start_ns = r.quot * period; // time since epoch to start of current period
-    intmax_t const skip_ns = r.rem;
-    intmax_t const offset = (int64_t)(sp->samprate * skip_ns) / BILLION; // Samples to skip
+    intmax_t period_start_ns = r.quot * period; // time since epoch to start of current period
+    intmax_t skip_ns = r.rem;
+
     if(Padding && !sp->no_offset){ // Not really supported on opus yet
       // Pad start of first file with zeroes
-
+      intmax_t const offset = (int64_t)(sp->samprate * skip_ns) / BILLION; // Samples to skip
       // Adjust file time to start of current period and pad to first sample
       sp->file_time = period_start_ns; // file starts at beginning of period
       sp->starting_offset = offset;
@@ -1136,6 +1136,12 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
       sp->no_offset = true; // Only on the first file
     } else if(Reset_time){
       // On subsequent files, adjust this file size to align the end to the period boundary
+      if(skip_ns > period / 2){
+	// More than halfway through, go to the next interval and 
+	period_start_ns += period;
+	skip_ns -= period;
+      }
+      intmax_t const offset = (int64_t)(sp->samprate * skip_ns) / BILLION; // Samples to skip
       sp->samples_remaining = Max_length * sp->samprate - offset;
     }
   }
