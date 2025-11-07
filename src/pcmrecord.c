@@ -1114,28 +1114,30 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   sp->samples_remaining = INT64_MAX; // unlimited unless it gets lowered below
 
   if(Max_length > 0){
+    intmax_t const period = (intmax_t) BILLION * Max_length; // Period/length in ns
+    imaxdiv_t const r = imaxdiv(timestamp,period); // r.quot = # of periods since epoch
+    intmax_t const period_start_ns = r.quot * period; // time since epoch to start of current period
+    intmax_t const skip_ns = r.rem;
+    intmax_t const offset = (int64_t)(sp->samprate * skip_ns) / BILLION; // Samples to skip
     if(Padding && !sp->no_offset){ // Not really supported on opus yet
       // Pad start of first file with zeroes
-      intmax_t const period = (intmax_t) BILLION * Max_length; // Period/length in ns
-      imaxdiv_t const r = imaxdiv(timestamp,period); // r.quot = # of periods since epoch
-      intmax_t const period_start_ns = r.quot * period; // time since epoch to start of current period
-      intmax_t const skip_ns = r.rem;
 
       // Adjust file time to start of current period and pad to first sample
       sp->file_time = period_start_ns; // file starts at beginning of period
-      sp->starting_offset = (int64_t)(sp->samprate * skip_ns) / BILLION; // Samples to skip
-      sp->total_file_samples += sp->starting_offset; // count as part of file
-#if 0
-      fprintf(stderr,"padding %lf sec %lld samples\n",
-	      (float)skip_ns / BILLION,
-	      (long long)sp->starting_offset);
-#endif
-      // experimental 5 nov 2025
-      // When -R|--reset is set, always adjust each new file to period boundary, padding as necessary
-      sp->no_offset = !Reset_time;
-    }
+      sp->starting_offset = offset;
+      sp->total_file_samples += offset; // count as part of file
+      if(Verbose > 1)
+	fprintf(stderr,"ssrc %lu padding %lf sec %lld samples\n",
+		(unsigned long)sp->ssrc,
+		(float)skip_ns / BILLION,
+		(long long)offset);
 
-    sp->samples_remaining = Max_length * sp->samprate - sp->starting_offset;
+      sp->samples_remaining = Max_length * sp->samprate - offset;
+      sp->no_offset = true; // Only on the first file
+    } else if(Reset_time){
+      // On subsequent files, adjust this file size to align the end to the period boundary
+      sp->samples_remaining = Max_length * sp->samprate - offset;
+    }
   }
   char filename[PATH_MAX] = {0}; // file pathname except for suffix
   if(Prefix_source)
