@@ -5,13 +5,13 @@
 Description=ft8-decode %i
 After=network-online.target
 Requires=network-online.target
+RequiresMountsFor=/var/lib/ka9q-radio/ft8
 
 [Service]
 Nice=10
 User=radio
 Group=radio
 Type=simple
-RequiresMountsFor=/var/lib/ka9q-radio/ft8
 EnvironmentFile=/etc/radio/ft8-decode.conf
 PermissionsStartOnly=true
 StateDirectory=ka9q-radio/ft4

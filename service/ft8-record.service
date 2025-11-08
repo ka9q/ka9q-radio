@@ -6,6 +6,7 @@
 Description=ft8-record
 After=network-online.target
 Requires=network-online.target
+RequiresMountsFor=/var/lib/ka9q-radio/ft8
 
 [Service]
 Nice=0
