@@ -155,6 +155,8 @@ enum status_type {
   SAMPLES_SINCE_OVER, // Samples since last A/D overrange
   PLL_WRAPS,          // Count of complete linear mode PLL rotations
   RF_LEVEL_CAL,        // Adjustment relating dBm to dBFS
+
+  DEMOD_SNR,      // Orphan, referenced, but not previously defined?
 };
 
 int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);
