@@ -28,13 +28,13 @@ enum status_type {
   SETOPTS,
   CLEAROPTS,
   RTP_TIMESNAP, // snapshot of current real-time-protocol timestamp, for linking RTP timestamps to clock time via GPS_TIME
-  BIN_BYTE_DATA,   // Vector of 1-byte spectrum analyzer data
+  UNUSED4,
   INPUT_SAMPRATE, // Nominal sample rate (integer)
-  SPECTRUM_BASE,  // base level of 1-byte analyzer data, dB
-  SPECTRUM_AVG,   // Number of FFTs averaged into each spectrum response
+  UNUSED6,
+  UNUSED7,
   INPUT_SAMPLES,
-  WINDOW_TYPE,   // Window type for FFT analyzer
-  NOISE_BW,      // Noise bandwidth of FFT spectrum bin, in bins
+  UNUSED8,
+  UNUSED9,
 
   OUTPUT_DATA_SOURCE_SOCKET,
   OUTPUT_DATA_DEST_SOCKET,
@@ -81,7 +81,7 @@ enum status_type {
 
   // Demodulation configuration
   DEMOD_TYPE, // 0 = linear (default), 1 = FM, 2 = WFM/Stereo, 3 = spectrum
-  OUTPUT_CHANNELS, // 1 or 2 in Linear and WFM, 1 in FM
+  OUTPUT_CHANNELS, // 1 or 2 in Linear, otherwise 1
   INDEPENDENT_SIDEBAND, // Linear only
   PLL_ENABLE,
   PLL_LOCK,       // Linear PLL
@@ -110,11 +110,11 @@ enum status_type {
   OUTPUT_SAMPLES,
 
   OPUS_BIT_RATE,
-  MAXDELAY,      // Maximum allowable aggregation delay, blocks (0-5)
+  MINPACKET,      // Minimum number of full blocks in an output packet, unless already full (0-3)
   FILTER2_BLOCKSIZE,
   FILTER2_FIR_LENGTH,
   FILTER2_KAISER_BETA,
-  SPECTRUM_FFT_N,
+  UNUSED16,
 
   FILTER_DROPS,
   LOCK,     // Tuner is locked, will ignore retune commands (boolean)
@@ -122,21 +122,21 @@ enum status_type {
   TP1, // General purpose test points (floating point)
   TP2,
 
-  UNUSED4,
+  GAINSTEP,
   AD_BITS_PER_SAMPLE, // Front end A/D width, used for gain scaling
   SQUELCH_OPEN,   // Squelch opening threshold SNR
   SQUELCH_CLOSE,  // and closing
   PRESET,         // char string containing mode presets
   DEEMPH_TC,      // De-emphasis time constant (FM only)
   DEEMPH_GAIN,    // De-emphasis gain (FM only)
-  UNUSED3,
+  CONVERTER_OFFSET, // Frequency converter shift (if present)
   PL_DEVIATION,     // Measured PL tone deviation, Hz (FM only)
   THRESH_EXTEND,    // threshold extension enable (FM only)
 
   // Spectral analysis
-  SPECTRUM_SHAPE,  // parameter for spectrum analysis window (eg, Kaiser beta)
-  UNUSED2,
-  RESOLUTION_BW, // Bandwidth (Hz) of noncoherent integration bin, some multiple of COHERENT_BIN_SPACING
+  UNUSED20,
+  COHERENT_BIN_SPACING, // (1-overlap) * block rate = (1 - ((M-1)/(L+M-1))) * block rate
+  NONCOHERENT_BIN_BW, // Bandwidth (Hz) of noncoherent integration bin, some multiple of COHERENT_BIN_SPACING
   BIN_COUNT,        // Integer number of bins accumulating energy noncoherently
   CROSSOVER,        // Frequency in Hz where spectrum algorithm changes
   BIN_DATA,         // Vector of relative bin energies, real (I^2 + Q^2)
@@ -147,7 +147,7 @@ enum status_type {
   FE_LOW_EDGE,    // edges of front end filter
   FE_HIGH_EDGE,
   FE_ISREAL,        // Boolean, true -> front end uses real sampling, false -> front end uses complex
-  UNUSED,
+  BLOCKS_SINCE_POLL,  // Blocks since last poll
   AD_OVER,          // A/D full scale samples, proxy for overranges
   RTP_PT,           // Real Time Protocol Payload Type
   STATUS_INTERVAL,      // Automatically send channel status over *data* channel every STATUS_INTERVAL frames
@@ -155,27 +155,21 @@ enum status_type {
   SAMPLES_SINCE_OVER, // Samples since last A/D overrange
   PLL_WRAPS,          // Count of complete linear mode PLL rotations
   RF_LEVEL_CAL,        // Adjustment relating dBm to dBFS
-  OPUS_DTX,         // Opus encoder discontinuous transmission enable/disable
-  OPUS_APPLICATION,   // Opus encoder application voice/audio/etc
-  OPUS_BANDWIDTH,     // Opus encoder audio bandwidth limita
-  OPUS_FEC,           // Opus encoder forward error correction loss rate, %
-  SPECTRUM_STEP,  // size of byte spectrum data level step, dB
-  SPECTRUM_OVERLAP,   // Overlap of FFT windows when averaging (0-1)
-  LIFETIME,           // seconds until channel goes away
+
+  DEMOD_SNR,      // Orphan, referenced, but not previously defined?
 };
 
-size_t encode_string(uint8_t **bp,enum status_type type,void const *buf,size_t buflen);
+int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);
 int encode_eol(uint8_t **buf);
 int encode_byte(uint8_t **buf,enum status_type type,uint8_t x);
-int encode_bool(uint8_t **buf,enum status_type type,bool x);
 int encode_int(uint8_t **buf,enum status_type type,int x);
 int encode_int16(uint8_t **buf,enum status_type type,uint16_t x);
 int encode_int32(uint8_t **buf,enum status_type type,uint32_t x);
 int encode_int64(uint8_t **buf,enum status_type type,uint64_t x);
-int encode_float(uint8_t **buf,enum status_type type,double x);
+int encode_float(uint8_t **buf,enum status_type type,float x);
 int encode_double(uint8_t **buf,enum status_type type,double x);
 int encode_socket(uint8_t **buf,enum status_type type,void const *sock);
-size_t encode_vector(uint8_t **buf,enum status_type type,float const *array,size_t size);
+int encode_vector(uint8_t **buf,enum status_type type,float const *array,int size);
 
 uint64_t decode_int64(uint8_t const *,int);
 uint32_t decode_int32(uint8_t const *,int);
@@ -184,14 +178,14 @@ uint8_t decode_int8(uint8_t const *,int);
 bool decode_bool(uint8_t const *,int);
 int decode_int(uint8_t const *,int);
 
-double decode_float(uint8_t const *,int);
+float decode_float(uint8_t const *,int);
 double decode_double(uint8_t const *,int);
 struct sockaddr *decode_socket(void *,uint8_t const *,int);
 struct sockaddr *decode_local_socket(void *,uint8_t const *,int);
 char *decode_string(uint8_t const *,int);
-uint32_t get_ssrc(uint8_t const *buffer,size_t length);
-uint32_t get_tag(uint8_t const *buffer,size_t length);
+uint32_t get_ssrc(uint8_t const *buffer,int length);
+uint32_t get_tag(uint8_t const *buffer,int length);
 
-void dump_metadata(FILE *,uint8_t const *,size_t,bool);
+void dump_metadata(FILE *,uint8_t const *,int,bool);
 
 #endif

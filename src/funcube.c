@@ -8,6 +8,8 @@
 #include <iniparser/iniparser.h>
 #if defined(linux)
 #include <bsd/string.h>
+#else
+#include <string.h>
 #endif
 #include <sysexits.h>
 #include <strings.h>

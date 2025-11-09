@@ -9,7 +9,7 @@
 #include <errno.h>
 #include <fftw3.h>
 #undef I
-#include <iniparser/iniparser.h>
+#include "compat_iniparser.h"
 #include <limits.h>
 #include <math.h>
 #include <netinet/in.h>
