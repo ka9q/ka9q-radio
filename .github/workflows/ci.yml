@@ -1,0 +1,25 @@
+name: CI
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  ubuntu-build:
+    name: Ubuntu CI
+    strategy:
+      matrix:
+        makefile: [Makefile]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run CMake build
+        run: |
+          ./rebuild.sh
+  macos-build:
+    name: MacOS CI
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run CMake build
+          ./rebuild.sh
