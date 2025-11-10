@@ -1,6 +1,23 @@
 cmake_minimum_required(VERSION 3.16)
 project(ka9q-radio VERSION 0.1 LANGUAGES C)
 
+# Global compile flags
+add_compile_options(
+  -O3
+  -march=native
+  -std=gnu11
+  -Wall
+  -Wextra
+  -Wno-gnu-folding-constant
+  -funsafe-math-optimizations
+  -fno-math-errno
+  -fcx-limited-range
+  -freciprocal-math
+  -fno-trapping-math
+  -pthread
+  -D_GNU_SOURCE=1
+)
+
 # Make our project modules discoverable
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 

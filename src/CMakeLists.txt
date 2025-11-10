@@ -25,6 +25,14 @@ target_include_directories(radio
 # === LINK: Common dependencies defined in FindDeps.cmake ===
 kr_link_common_deps(radio)
 
+# === DEP: Link libbsd if found ===
+find_library(BSD_LIBRARIES bsd)
+if(BSD_LIBRARIES)
+  target_link_libraries(radio PUBLIC ${BSD_LIBRARIES})
+else()
+  message(FATAL_ERROR "libbsd not found (required for BSD functions like strlcpy on Linux)")
+endif()
+
 # === DEP: Link iniparser if found ===
 if(INIPARSER_FOUND)
   target_link_libraries(radio PUBLIC iniparser::iniparser)
@@ -71,8 +79,18 @@ if(TARGET LibUSB::libusb-1.0)
 endif()
 
 # === HIDAPI: Enforce requirement if necessary ===
-if(HIDAPI_REQUIRED_FOR_RADIOD AND NOT HIDAPI_FOUND)
-  message(FATAL_ERROR "HIDAPI is required for building 'radiod', but not found.")
+if(HIDAPI_REQUIRED_FOR_RADIOD)
+  find_path(HIDAPI_INCLUDE_DIR hidapi/hidapi.h)
+  find_library(HIDAPI_LIBRARY NAMES hidapi-libusb hidapi-hidraw hidapi)
+  if(HIDAPI_INCLUDE_DIR AND HIDAPI_LIBRARY)
+    set(HIDAPI_FOUND TRUE)
+  else()
+    set(HIDAPI_FOUND FALSE)
+  endif()
+
+  if(NOT HIDAPI_FOUND)
+    message(FATAL_ERROR "HIDAPI is required for building 'radiod', but not found.")
+  endif()
 endif()
 
 # === TARGET: Build radiod executable ===
@@ -92,9 +110,13 @@ target_link_libraries(radiod
     iniparser::iniparser
 )
 
+target_link_libraries(radiod PRIVATE m)
+
 # HIDAPI linking (only if available)
 if(HIDAPI_FOUND)
   target_link_libraries(radiod PRIVATE ${HIDAPI_LIBRARIES})
+  target_link_libraries(radiod PRIVATE ${HIDAPI_LIBRARY})
+  target_include_directories(radiod PRIVATE ${HIDAPI_INCLUDE_DIR})
 endif()
 
 # libusb linking and feature flags
