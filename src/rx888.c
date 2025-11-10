@@ -13,7 +13,7 @@
 #include <assert.h>
 #include <pthread.h>
 #include "compat_libusb.h"
-#include <iniparser/iniparser.h>
+#include "compat_iniparser.h"
 #if defined(linux)
 #include <bsd/string.h>
 #endif
