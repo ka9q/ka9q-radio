@@ -13,24 +13,34 @@
 /*
  * Compatibility fallback for libusb_get_string_descriptor
  * 
- * This function was added in libusb 1.0.27 (2024). Older versions need a fallback.
- * We detect this by checking LIBUSB_API_VERSION.
+ * Detection strategy:
+ * 1. Check if LIBUSB_API_VERSION indicates modern libusb (1.0.27+) with the function
+ * 2. Check if __FreeBSD__ is defined (FreeBSD base libusb always has it)
+ * 3. Otherwise provide fallback
+ *
+ * Note: We can't reliably use CMake's HAVE_LIBUSB_GET_STRING_DESCRIPTOR because
+ * the detection may fail even when the function exists.
  */
 
-#if defined(LIBUSB_API_VERSION)
-  /* LIBUSB_API_VERSION format: 0x01000109 means 1.0.27 */
-  /* The function was added in version 1.0.27 (API version 0x01000109) */
-  #if LIBUSB_API_VERSION < 0x01000109
-    /* Old libusb - needs fallback */
-    #define NEED_LIBUSB_GET_STRING_DESCRIPTOR_FALLBACK 1
-  #endif
+/* Determine if we need the fallback */
+#undef NEED_LIBUSB_GET_STRING_DESCRIPTOR_FALLBACK
+
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+  /* BSD systems have libusb_get_string_descriptor in base system */
+  /* Do NOT provide fallback */
+#elif defined(LIBUSB_API_VERSION) && LIBUSB_API_VERSION >= 0x01000109
+  /* libusb >= 1.0.27 has the function */
+  /* Do NOT provide fallback */
 #else
-  /* Very old libusb without LIBUSB_API_VERSION - definitely needs fallback */
+  /* Old libusb or unknown version - provide fallback */
   #define NEED_LIBUSB_GET_STRING_DESCRIPTOR_FALLBACK 1
 #endif
 
 #ifdef NEED_LIBUSB_GET_STRING_DESCRIPTOR_FALLBACK
-/* Provide fallback implementation for older libusb versions */
+/*
+ * Fallback implementation for older libusb versions that lack
+ * libusb_get_string_descriptor (added in libusb 1.0.27, 2024)
+ */
 static inline int
 libusb_get_string_descriptor(libusb_device_handle *dev,
                              uint8_t desc_index, uint16_t langid,
