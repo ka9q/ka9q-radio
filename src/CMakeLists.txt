@@ -191,3 +191,12 @@ endif()
 message(STATUS "HIDAPI lib: ${HIDAPI_LIBRARIES}")
 message(STATUS "HIDAPI include: ${HIDAPI_INCLUDE_DIRS}")
 
+# Apply math flags if available
+if(MATH_FLAGS)
+    target_compile_options(radio PRIVATE ${MATH_FLAGS})
+    target_compile_options(packetd PRIVATE ${MATH_FLAGS})
+    if(TARGET radiod)
+        target_compile_options(radiod PRIVATE ${MATH_FLAGS})
+    endif()
+endif()
+
