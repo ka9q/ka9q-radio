@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <portaudio.h>
 #include <errno.h>
-#include <iniparser/iniparser.h>
+#include "compat_iniparser.h"
 #if defined(linux)
 #include <bsd/string.h>
 #else
