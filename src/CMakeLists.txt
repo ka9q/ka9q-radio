@@ -26,11 +26,21 @@ target_include_directories(radio
 kr_link_common_deps(radio)
 
 # === DEP: Link libbsd if found ===
-find_library(BSD_LIBRARIES bsd)
-if(BSD_LIBRARIES)
-  target_link_libraries(radio PUBLIC ${BSD_LIBRARIES})
-else()
-  message(FATAL_ERROR "libbsd not found (required for BSD functions like strlcpy on Linux)")
+# Check for strlcpy fallback
+include(CheckSymbolExists)
+
+check_symbol_exists(strlcpy "string.h" HAVE_STRLCPY)
+
+if(NOT HAVE_STRLCPY)
+  if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+    message(STATUS "strlcpy not found via check_symbol_exists, but assuming it exists in libc on FreeBSD")
+  else()
+    find_library(LIBBSD_LIBRARY bsd)
+    if(NOT LIBBSD_LIBRARY)
+      message(FATAL_ERROR "libbsd not found (required for BSD functions like strlcpy on Linux)")
+    endif()
+    target_link_libraries(radio PRIVATE ${LIBBSD_LIBRARY})
+  endif()
 endif()
 
 # === DEP: Link iniparser if found ===
