@@ -179,12 +179,12 @@ if(APPLE)
     message(FATAL_ERROR "Required dependency 'hidapi' not found on macOS. Try: brew install hidapi")
   endif()
   set(HIDAPI_REQUIRED_FOR_RADIOD ON)
+
 elseif(UNIX AND NOT APPLE)
-  if(HIDAPI_FOUND)
-    set(HIDAPI_REQUIRED_FOR_RADIOD ON)
-  else()
-    message(WARNING "Optional dependency 'hidapi' not found — 'radiod' may be built without HID support.")
+  if(NOT HIDAPI_FOUND)
+    message(FATAL_ERROR "Required dependency 'hidapi' not found on Linux. Try: sudo apt install libhidapi-dev")
   endif()
+  set(HIDAPI_REQUIRED_FOR_RADIOD ON)
 endif()
 
 # Always define imported target if found
