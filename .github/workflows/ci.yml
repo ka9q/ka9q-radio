@@ -9,7 +9,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - Configure build environment
+      - name: Configure build environment
         run: |
           sudo ./setup.sh
       - name: Run CMake build
@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - Configure build environment
+      - name: Configure build environment
         run: |
           sudo ./setup.sh
       - name: Run CMake build
