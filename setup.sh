@@ -58,7 +58,10 @@ install_packages() {
   esac
   "${pm}" update
   printf "Installing packages '%s' using %s..." "${pkg_list}" "${pm}"
-  echo "${pkg_list}" | xargs "${pm}" "${pm_opts}" install 
+  for pkg_name in ${pkg_list}
+  do
+    "${pm}" "${pm_opts}" install "${pkg_name}"
+  done
 }
 
 main() {
