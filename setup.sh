@@ -38,16 +38,23 @@ detect_package_manager() {
 
 install_packages() {
   local pmgr="$1"
+  local inst_opts=""
+
+  installer="$(command -v "${pmgr}")"
+  "${installer}" update
 
   case "$pmgr" in
     apt)
       pkg_list="avahi-utils libairspy-dev libairspyhf-dev libavahi-client-dev libbsd-dev libfftw3-dev libhackrf-dev libiniparser-dev libncurses5-dev libopus-dev librtlsdr-dev libusb-1.0-0-dev libusb-dev portaudio19-dev libasound2-dev uuid-dev libogg-dev libsamplerate-dev libliquid-dev libncursesw5-dev libhackrf-dev libbladerf-dev"
+      installer="${installer} install -y"
       ;;
     brew)
       pkg_list="fftw opus iniparser hidapi airspy airspyhf hackrf ncurses librtlsdr libogg libsamplerate libbladerf portaudio"
+      installer="${installer} install"
       ;;
     pkg)
       pkg_list="avahi avahi-libdns airspy airspyhf fftw3 hackrf iniparser ncurses opus portaudio libuuid libogg libsamplerate liquid-dsp hackrf" 
+      installer="${installer} install --yes"
       ;;
     *)
       echo "Unsupported or unknown package manager: ${pm}"
@@ -55,13 +62,10 @@ install_packages() {
       ;;
   esac
 
-  installer="$(command -v "${pmgr}")"
-  "${installer}" update
-
-  printf "Installing packages '%s' using %s..." "${pkg_list}" "${pm}"
+  printf "Installing packages '%s' using %s..." "${pkg_list}" "${installer}"
   for pkg_name in ${pkg_list}
   do
-    "${installer}" install "${pkg_name}"
+    ${installer} ${pkg_name}
   done
 }
 
