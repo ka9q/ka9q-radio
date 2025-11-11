@@ -445,31 +445,128 @@ endif()
 function(kr_link_common_deps tgt)
   find_package(Threads REQUIRED)
   target_link_libraries(${tgt} PUBLIC Threads::Threads m)
-  
+
   # Link optional libraries if found (use correct lowercase target names!)
+
+  # --- OPUS ---
+  if(TARGET opus::opus)
+    # Use PUBLIC linking to pass required libraries through the static archive
+    target_link_libraries(${tgt} PUBLIC opus::opus)
+  else()
+    # FALLBACK: If target doesn't propagate libraries correctly (e.g., static link issue)
+    # We must explicitly use the discovered library variables.
+    if(OPUS_LIBRARIES)
+        target_link_libraries(${tgt} PUBLIC ${OPUS_LIBRARIES})
+    endif()
+  endif()
+
+  # --- FFTW3F ---
   if(TARGET FFTW::fftw3f)
     target_link_libraries(${tgt} PUBLIC FFTW::fftw3f)
+  else()
+    if(FFTW3F_LIBRARIES)
+      target_link_libraries(${tgt} PUBLIC ${FFTW3F_LIBRARIES})
+    endif()
   endif()
+
+  # --- FFTW3F THREADS ---
   if(TARGET FFTW::fftw3f_threads)
     target_link_libraries(${tgt} PUBLIC FFTW::fftw3f_threads)
+  else()
+    if(FFTW3F_THREADS_LIBRARY) # Note: this variable is the manual fallback
+      target_link_libraries(${tgt} PUBLIC ${FFTW3F_THREADS_LIBRARY})
+    endif()
   endif()
+  
+  # --- INIPARSER ---
+  if(TARGET iniparser::iniparser)
+    target_link_libraries(${tgt} PUBLIC iniparser::iniparser)
+  else()
+    if(INIPARSER_LIBRARIES)
+      target_link_libraries(${tgt} PUBLIC ${INIPARSER_LIBRARIES})
+    endif()
+  endif()
+
+  # --- PORTAUDIO ---
   if(TARGET PortAudio::portaudio)
     target_link_libraries(${tgt} PUBLIC PortAudio::portaudio)
+  else()
+    if(PORTAUDIO_LIBRARIES)
+      target_link_libraries(${tgt} PUBLIC ${PORTAUDIO_LIBRARIES})
+    endif()
   endif()
+
+  # --- ALSA ---
   if(TARGET ALSA::alsa)
     target_link_libraries(${tgt} PUBLIC ALSA::alsa)
+  else()
+    if(ALSA_LIBRARIES)
+      target_link_libraries(${tgt} PUBLIC ${ALSA_LIBRARIES})
+    endif()
   endif()
+
+  # --- NCURSESW ---
   if(TARGET Ncurses::w)
     target_link_libraries(${tgt} PUBLIC Ncurses::w)
+  else()
+    if(NCURSESW_LIBRARIES)
+      target_link_libraries(${tgt} PUBLIC ${NCURSESW_LIBRARIES})
+    endif()
   endif()
+
+  # --- OGG ---
   if(TARGET Ogg::ogg)
     target_link_libraries(${tgt} PUBLIC Ogg::ogg)
+  else()
+    if(OGG_LIBRARIES)
+      target_link_libraries(${tgt} PUBLIC ${OGG_LIBRARIES})
+    endif()
   endif()
+
+  # --- SAMPLERATE ---
   if(TARGET SampleRate::samplerate)
     target_link_libraries(${tgt} PUBLIC SampleRate::samplerate)
+  else()
+    if(SAMPLERATE_LIBRARIES)
+      target_link_libraries(${tgt} PUBLIC ${SAMPLERATE_LIBRARIES})
+    endif()
   endif()
+
+  # --- AVAHI ---
   if(TARGET Avahi::client)
     target_link_libraries(${tgt} PUBLIC Avahi::client)
+  else()
+    if(AVAHI_LIBRARIES)
+      target_link_libraries(${tgt} PUBLIC ${AVAHI_LIBRARIES})
+    endif()
+  endif()
+endfunction()
+
+# ==================== HELPER FUNCTION ====================
+# Add explicit include directories for targets whose headers fail #if __has_include checks
+function(kr_add_compat_includes tgt)
+  # NOTE: These explicit includes are necessary for targets (like static libs or modules)
+  # where transitive INTERFACE_INCLUDE_DIRECTORIES are not processed early enough
+  # for the C preprocessor's #if __has_include checks to succeed.
+  
+  # Opus
+  if(OPUS_FOUND AND OPUS_INCLUDE_DIRS)
+    target_include_directories(${tgt} PUBLIC ${OPUS_INCLUDE_DIRS})
+    message(STATUS "Patch: Added Opus includes to target ${tgt}")
+  endif()
+  
+  # Iniparser
+  if(INIPARSER_FOUND AND INIPARSER_INCLUDE_DIRS)
+    target_include_directories(${tgt} PUBLIC ${INIPARSER_INCLUDE_DIRS})
+    message(STATUS "Patch: Added Iniparser includes to target ${tgt}")
+  endif()
+  
+  # FFTW3f
+  if(HAVE_FFTW3F AND (FFTW3F_INCLUDE_DIRS OR FFTW3F_INCLUDEDIR))
+    set(_FFTW_INCS ${FFTW3F_INCLUDE_DIRS} ${FFTW3F_INCLUDEDIR})
+    list(REMOVE_DUPLICATES _FFTW_INCS)
+    target_include_directories(${tgt} PUBLIC ${_FFTW_INCS})
+    message(STATUS "Patch: Added FFTW3f includes to target ${tgt}")
   endif()
 endfunction()
 

@@ -15,8 +15,4 @@ configure_file(
   @ONLY
 )
 
-# Note: Prefer target-scoped include_directories, but this ensures the
-# generated header is available to all targets during the configuration phase
-include_directories("${CMAKE_BINARY_DIR}/generated")
-
 message(STATUS "Generated config header: ${CMAKE_BINARY_DIR}/generated/ka9q_config.h")

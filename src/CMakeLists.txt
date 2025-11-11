@@ -38,16 +38,17 @@ target_include_directories(radio
     $<INSTALL_INTERFACE:include/ka9q-radio>
 )
 
-# Link compiler flags and common dependencies
+# 1. SIMPLIFIED: Only link the INTERFACE compiler flags.
 target_link_libraries(radio
   PUBLIC
     ka9q::compile_flags
-    opus::opus
-    iniparser::iniparser
 )
 
-# Link common dependencies (FFTW, threads, audio, etc.)
+# Link common dependencies (FFTW, threads, audio, opus, iniparser, etc.)
 kr_link_common_deps(radio)
+
+# Call the centralized function to add explicit include paths for C preprocessor checks.
+kr_add_compat_includes(radio)
 
 # ==================== BSD FUNCTIONS ====================
 # Check for strlcpy (BSD function, needs libbsd on Linux)
@@ -72,14 +73,16 @@ endif()
 # Helper to create small tools that link against libradio
 function(add_tool name)
   add_executable(${name} ${ARGN})
-  target_link_libraries(${name} PRIVATE radio)
+  # CHANGE: Use PUBLIC link to force propagation of radio's public dependencies
+  target_link_libraries(${name} PUBLIC radio) 
   install(TARGETS ${name} RUNTIME DESTINATION bin)
 endfunction()
 
 # Helper to create daemon programs (installed to sbin)
 function(add_daemon name)
   add_executable(${name} ${ARGN})
-  target_link_libraries(${name} PRIVATE radio)
+  # CHANGE: Use PUBLIC link to force propagation of radio's public dependencies
+  target_link_libraries(${name} PUBLIC radio) 
   install(TARGETS ${name} RUNTIME DESTINATION sbin)
 endfunction()
 
@@ -188,7 +191,7 @@ target_include_directories(radiod PRIVATE
 )
 
 # Link libraries for radiod
-# Note: opus and iniparser come transitively through radio (PUBLIC links)
+# Note: opus, iniparser, FFTW, etc. come transitively through 'radio' (PUBLIC links)
 target_link_libraries(radiod PRIVATE
   radio
   m
@@ -239,36 +242,37 @@ install(TARGETS radiod RUNTIME DESTINATION sbin)
 # Helper function for driver modules
 function(kr_add_driver name)
   add_library(${name}_drv MODULE ${ARGN})
+
+  # These lines are necessary because INTERFACE linking to a STATIC library 
+  # (radio) does not reliably propagate PUBLIC include directories for the 
+  # C preprocessor's #if __has_include checks.
   
-  # Drivers need access to headers for compilation
-  # Start with source and generated directories
-  target_include_directories(${name}_drv PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_BINARY_DIR}/generated
-  )
-  
-  # Add include directories from dependencies (needed for headers)
-  # Get them by querying the targets directly
-  if(TARGET opus::opus)
-    get_target_property(_opus_incs opus::opus INTERFACE_INCLUDE_DIRECTORIES)
-    if(_opus_incs)
-      target_include_directories(${name}_drv PRIVATE ${_opus_incs})
-    endif()
+  # Opus
+  if(OPUS_FOUND AND OPUS_INCLUDE_DIRS)
+    target_include_directories(${name}_drv PUBLIC ${OPUS_INCLUDE_DIRS})
+    message(STATUS "Patch: Added Opus includes to ${name}_drv")
   endif()
   
-  if(TARGET iniparser::iniparser)
-    get_target_property(_ini_incs iniparser::iniparser INTERFACE_INCLUDE_DIRECTORIES)
-    if(_ini_incs)
-      target_include_directories(${name}_drv PRIVATE ${_ini_incs})
-    endif()
+  # Iniparser
+  if(INIPARSER_FOUND AND INIPARSER_INCLUDE_DIRS)
+    target_include_directories(${name}_drv PUBLIC ${INIPARSER_INCLUDE_DIRS})
+    message(STATUS "Patch: Added Iniparser includes to ${name}_drv")
   endif()
+
+  # FFTW3f
+  if(HAVE_FFTW3F AND (FFTW3F_INCLUDE_DIRS OR FFTW3F_INCLUDEDIR))
+    # Check both potential variables from pkg-config and manual find_path
+    set(_FFTW_INCS ${FFTW3F_INCLUDE_DIRS} ${FFTW3F_INCLUDEDIR})
+    list(REMOVE_DUPLICATES _FFTW_INCS)
+    target_include_directories(${name}_drv PUBLIC ${_FFTW_INCS})
+    message(STATUS "Patch: Added FFTW3f includes to ${name}_drv")
+  endif()
+
+  # Explicitly add External Includes to Module for C preprocessor checks
+  kr_add_compat_includes(${name}_drv)
   
-  if(TARGET FFTW::fftw3f)
-    get_target_property(_fftw_incs FFTW::fftw3f INTERFACE_INCLUDE_DIRECTORIES)
-    if(_fftw_incs)
-      target_include_directories(${name}_drv PRIVATE ${_fftw_incs})
-    endif()
-  endif()
+  # Link INTERFACE of radio to inherit link definitions
+  target_link_libraries(${name}_drv INTERFACE radio)
   
   # Set properties for plugin naming
   set_target_properties(${name}_drv PROPERTIES
@@ -425,3 +429,4 @@ if(ENABLE_SDR_DRIVERS)
 else()
   message(STATUS "SDR driver modules disabled (ENABLE_SDR_DRIVERS=OFF)")
 endif()
+
