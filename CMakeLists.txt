@@ -27,6 +27,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_subdirectory(src)
 add_subdirectory(service)
 add_subdirectory(rules)
+add_subdirectory(aux)
+add_subdirectory(share)
 
 # Installation of data files (you may want to expand this)
 # install(DIRECTORY share/ DESTINATION share/ka9q-radio)
