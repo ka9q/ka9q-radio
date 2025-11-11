@@ -14,7 +14,7 @@
 #include <pthread.h>
 #include <rtl-sdr.h>
 #include <errno.h>
-#include <iniparser/iniparser.h>
+#include "compat_iniparser.h"
 #include <sysexits.h>
 #include <strings.h>
 

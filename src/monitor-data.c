@@ -7,13 +7,13 @@
 #include <errno.h>
 #include <pthread.h>
 #include <sys/stat.h>
-#include <opus/opus.h>
+#include "compat_opus.h"
 #include <portaudio.h>
 #include <ncurses.h>
 #include <locale.h>
 #include <signal.h>
 #include <getopt.h>
-#include <iniparser/iniparser.h>
+#include "compat_iniparser.h"
 #include <samplerate.h>
 #if __linux__
 #include <bsd/string.h>
@@ -23,6 +23,8 @@
 #endif
 #include <sysexits.h>
 #include <poll.h>
+#include <unistd.h>
+#include "compat_net.h"
 
 #include "conf.h"
 #include "config.h"

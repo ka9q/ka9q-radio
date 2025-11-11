@@ -8,7 +8,7 @@
 #include <bsd/string.h>
 #endif
 #include <math.h>
-#include <sys/socket.h>
+#include "compat_net.h"
 #include <sys/un.h>
 #include <sys/time.h>
 #include <stdlib.h>

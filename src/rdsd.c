@@ -19,6 +19,7 @@
 #include <getopt.h>
 #include <pthread.h>
 #include <sysexits.h>
+#include "compat_net.h"
 
 #include "misc.h"
 #include "multicast.h"

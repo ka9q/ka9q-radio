@@ -12,8 +12,8 @@
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
-#include <libusb-1.0/libusb.h>
-#include <iniparser/iniparser.h>
+#include "compat_libusb.h"
+#include "compat_iniparser.h"
 #if defined(linux)
 #include <bsd/string.h>
 #endif

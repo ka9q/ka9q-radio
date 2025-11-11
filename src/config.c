@@ -3,7 +3,7 @@
 // Copyright 2022-2023, Phil Karn, KA9Q
 
 #include <stdio.h>
-#include <iniparser/iniparser.h>
+#include "compat_iniparser.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>

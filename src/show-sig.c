@@ -20,6 +20,7 @@
 #include "multicast.h"
 #include "status.h"
 
+#include "compat_net.h"
 char Locale[256] = "en_US.UTF-8";
 // Fix this name conficts with status.h
 int decode_rtp_status(uint8_t const *buffer,int length);

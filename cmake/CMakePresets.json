@@ -1,0 +1,91 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 16,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default Configuration",
+      "description": "Standard build with portable optimizations",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENABLE_NATIVE_ARCH": "OFF",
+        "ENABLE_SDR_DRIVERS": "ON",
+        "ENABLE_AVAHI": "ON",
+        "ENABLE_XATTR": "ON"
+      }
+    },
+    {
+      "name": "release-native",
+      "displayName": "Release with Native Optimization",
+      "description": "Optimized for the build machine's CPU (not portable)",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build-release-native",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENABLE_NATIVE_ARCH": "ON"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug Build",
+      "description": "Debug symbols, no optimization",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENABLE_NATIVE_ARCH": "OFF"
+      }
+    },
+    {
+      "name": "minimal",
+      "displayName": "Minimal Build",
+      "description": "Core functionality only, no SDR drivers",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build-minimal",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENABLE_SDR_DRIVERS": "OFF",
+        "ENABLE_AVAHI": "OFF",
+        "ENABLE_XATTR": "OFF"
+      }
+    },
+    {
+      "name": "rpi",
+      "displayName": "Raspberry Pi Build",
+      "description": "Optimized for Raspberry Pi (portable across Pi models)",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build-rpi",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENABLE_NATIVE_ARCH": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "release-native",
+      "configurePreset": "release-native"
+    },
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "minimal",
+      "configurePreset": "minimal"
+    },
+    {
+      "name": "rpi",
+      "configurePreset": "rpi"
+    }
+  ]
+}
