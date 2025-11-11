@@ -3,14 +3,13 @@
 #include <errno.h>
 #include <pthread.h>
 #include <sys/stat.h>
-#include <opus/opus.h>
+#include "compat_opus.h"
 #include <portaudio.h>
 #include <ncurses.h>
 #include <locale.h>
 #include <signal.h>
 #include <getopt.h>
-#include <iniparser/iniparser.h>
-#include <fcntl.h>
+#include "compat_iniparser.h"
 #if __linux__
 #include <bsd/string.h>
 #include <alsa/asoundlib.h>
@@ -20,6 +19,7 @@
 #include <sysexits.h>
 #include <poll.h>
 
+#include "conf.h"
 #include "config.h"
 #include "misc.h"
 #include "multicast.h"
@@ -29,7 +29,7 @@
 #include "status.h"
 #include "monitor.h"
 
-double Repeater_tail;
+int64_t Repeater_tail;
 char const *Cwid = "de nocall/r"; // Make this configurable!
 double ID_pitch = 800.0;
 double ID_level = -29.0;
@@ -47,7 +47,7 @@ int64_t Last_id_time;
 pthread_cond_t PTT_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t PTT_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-#if 1
+#if 0
 // Send CWID through separate CW daemon (cwd)
 // Use non-blocking IO; ignore failures
 void send_cwid(void){
@@ -59,14 +59,12 @@ void send_cwid(void){
   }
   int fd = open("/run/cwd/input",O_NONBLOCK|O_WRONLY);
   if(fd != -1){
-    int r = write(fd,Cwid,strlen(Cwid));
-    (void)r; // pain in the ass
+    write(fd,Cwid,strlen(Cwid));
     close(fd);
   }
 }
 #else
 // stub version that writes directly to local portaudio output buffer
-// Needs to be updated for new architecture 23 Dec 2025
 void send_cwid(void){
   if(Quiet){
     // Debug only, temp
@@ -75,23 +73,23 @@ void send_cwid(void){
   }
   float samples[60 * Dit_length];
   kick_output(); // Start output stream if it was stopped, so we can get current Rptr
-  uint32_t wptr = Rptr + lrint(Playout * DAC_samprate);
+  uint32_t wptr = (Rptr + ((long)Playout * DAC_samprate))/1000;
   wptr &= (BUFFERSIZE-1);
 
   // Don't worry about wrap during write, the mirror will handle it
   for(char const *cp = Cwid; *cp != '\0'; cp++){
-    size_t const samplecount = encode_morse_char(samples,(wchar_t)*cp);
+    int const samplecount = encode_morse_char(samples,(wchar_t)*cp);
     if(samplecount <= 0)
       break;
     if(Channels == 2){
-      for(size_t i=0;i<samplecount;i++){
+      for(int i=0;i<samplecount;i++){
 	Output_buffer[2*wptr] += samples[i];
 	Output_buffer[(2*wptr++ + 1)] += samples[i];
       }
       if(modsub(wptr/2,Wptr,BUFFERSIZE) > 0)
 	 Wptr = wptr / 2;
     } else { // Channels == 1
-      for(size_t i=0;i<samplecount;i++)
+      for(int i=0;i<samplecount;i++)
 	Output_buffer[wptr++] += samples[i];
       if(modsub(wptr,Wptr,BUFFERSIZE) > 0)
 	 Wptr = wptr;
@@ -118,7 +116,7 @@ void *repeater_ctl(void *arg){
   pthread_setname("rptctl");
   (void)arg; // unused
 
-  while(!atomic_load_explicit(&Terminate,memory_order_acquire)){
+  while(!Terminate){
     // Wait for audio output; set in kick_output()
     pthread_mutex_lock(&PTT_mutex);
     while(!PTT_state)
@@ -143,7 +141,7 @@ void *repeater_ctl(void *arg){
 	send_cwid();
 	now = gps_time_ns(); // send_cwid() has delays
       }
-      int64_t const drop_time = (int64_t)(LastAudioTime + BILLION * Repeater_tail);
+      int64_t const drop_time = LastAudioTime + BILLION * Repeater_tail;
       if(now >= drop_time)
 	break;
 
@@ -177,3 +175,4 @@ void *repeater_ctl(void *arg){
   }
   return NULL;
 }
+

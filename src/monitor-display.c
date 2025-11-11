@@ -7,13 +7,13 @@
 #include <errno.h>
 #include <pthread.h>
 #include <sys/stat.h>
-#include <opus/opus.h>
+#include "compat_opus.h"
 #include <portaudio.h>
 #include <ncurses.h>
 #include <locale.h>
 #include <signal.h>
 #include <getopt.h>
-#include <iniparser/iniparser.h>
+#include "compat_iniparser.h"
 #if __linux__
 #include <bsd/string.h>
 #include <alsa/asoundlib.h>

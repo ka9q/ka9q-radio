@@ -23,7 +23,7 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
-#include <opus/opus.h>
+#include "compat_opus.h"
 #include <netdb.h>
 #include <locale.h>
 #include <sys/time.h>
@@ -49,7 +49,7 @@ struct session {
   struct session *next;
   int type;                 // input RTP type (10,11)
 
-  struct sockaddr_storage sender;
+  struct sockaddr sender;
   char const *source;
 
   pthread_t thread;
@@ -134,10 +134,10 @@ struct option Options[] =
 
 char const Optstring[] = "A:B:I:N:R:T:fo:vxp:V";
 
-struct sockaddr_storage PCM_in_socket;
-struct sockaddr_storage Metadata_in_socket;
-struct sockaddr_storage Opus_out_socket;
-struct sockaddr_storage Metadata_out_socket;
+struct sockaddr PCM_in_socket;
+struct sockaddr Metadata_in_socket;
+struct sockaddr Opus_out_socket;
+struct sockaddr Metadata_out_socket;
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
@@ -230,20 +230,17 @@ int main(int argc,char * const argv[]){
   }
   // Same IP address, but status port number
   Metadata_in_socket = PCM_in_socket;
+  // set_port(&Metadata_in_socket,DEFAULT_STAT_PORT);
   setport(&Metadata_in_socket,DEFAULT_STAT_PORT);
   Status_fd = listen_mcast(NULL,&Metadata_in_socket,iface);
 
   {
     char description[1024];
     snprintf(description,sizeof(description),"pcm-source=%s",Input); // what if it changes?
+    size_t socksize = sizeof(Opus_out_socket);
     uint32_t addr = make_maddr(Output);
-    avahi_start(Name,"_opus._udp",DEFAULT_RTP_PORT,Output,addr,description);
-    struct sockaddr_in *sin = (struct sockaddr_in *)&Opus_out_socket;
-    sin->sin_family = AF_INET;
-    sin->sin_addr.s_addr = htonl(addr);
-    sin->sin_port = htons(DEFAULT_RTP_PORT);
-
-    sin = (struct sockaddr_in *)&Metadata_out_socket;
+    avahi_start(Name,"_opus._udp",DEFAULT_RTP_PORT,Output,addr,description,&Opus_out_socket,&socksize);
+    struct sockaddr_in *sin = (struct sockaddr_in *)&Metadata_out_socket;
     sin->sin_family = AF_INET;
     sin->sin_addr.s_addr = htonl(addr);
     sin->sin_port = htons(DEFAULT_STAT_PORT);
@@ -266,7 +263,7 @@ int main(int argc,char * const argv[]){
   signal(SIGTERM,closedown);
   signal(SIGPIPE,SIG_IGN);
 
-  realtime(default_prio());
+  realtime(50);
 
   // Loop forever processing and dispatching incoming PCM and status packets
 
@@ -287,12 +284,11 @@ int main(int argc,char * const argv[]){
 
     if(fds[1].revents & POLLIN){
       // Simply copy status on output
-      struct sockaddr_storage sender;
+      struct sockaddr sender;
       socklen_t socksize = sizeof(sender);
       uint8_t buffer[PKTSIZE];
-      int size = recvfrom(Status_fd,buffer,sizeof buffer,0, (struct sockaddr *)&sender,&socksize);
-      socklen_t const slen = Metadata_out_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-      if(sendto(Output_fd,buffer,size,0,(struct sockaddr *)&Metadata_out_socket, slen) < 0)
+      int size = recvfrom(Status_fd,buffer,sizeof buffer,0,&sender,&socksize);
+      if(sendto(Output_fd,buffer,size,0,&Metadata_out_socket,sizeof Metadata_out_socket) < 0)
 	perror("status sendto");
 
     }
@@ -488,7 +484,7 @@ void *encode(void *arg){
 #endif
     }
 
-    if(pkt->rtp.marker || samples_skipped > 4 * OPUS_SAMPRATE * Opus_blocktime){ // Opus works on 48 kHz virtual samples
+    if(pkt->rtp.marker || samples_skipped > 4 * 48000 * Opus_blocktime){ // Opus works on 48 kHz virtual samples
       // reset encoder state after 4 seconds of skip or a RTP marker bit
       opus_encoder_ctl(sp->opus,OPUS_RESET_STATE);
       sp->silence = true;
@@ -670,8 +666,7 @@ int send_samples(struct session * const sp){
 
     if(!Discontinuous || opus_output_bytes > 2){
       // ship it
-      socklen_t const slen = Opus_out_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-      if(sendto(Output_fd,output_buffer,packet_bytes_written,0, (struct sockaddr *)&Opus_out_socket, slen) < 0)
+      if(sendto(Output_fd,output_buffer,packet_bytes_written,0,&Opus_out_socket,sizeof Opus_out_socket) < 0)
 	return -1;
       Output_packets++; // all sessions
       sp->rtp_state_out.seq++; // Increment only if packet is sent
@@ -680,7 +675,7 @@ int send_samples(struct session * const sp){
     } else
       sp->silence = true;
 
-    sp->rtp_state_out.timestamp += frame_size * OPUS_SAMPRATE / sp->samprate; // Always increase timestamp by virtual 48k sample rate
+    sp->rtp_state_out.timestamp += frame_size * 48000 / sp->samprate; // Always increase timestamp by virtual 48k sample rate
     const int remaining_bytes = sizeof(sp->audio_buffer[0]) * (sp->audio_write_index - sp->channels * frame_size);
     assert(remaining_bytes >= 0);
     memmove(sp->audio_buffer,&sp->audio_buffer[sp->channels * frame_size],remaining_bytes);
