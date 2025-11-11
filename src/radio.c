@@ -296,7 +296,11 @@ int loadconfig(char const *file){
   Update = config_getint(Configtable,GLOBAL,"update",Update);
   IP_tos = config_getint(Configtable,GLOBAL,"tos",IP_tos);
   Global_use_dns = config_getboolean(Configtable,GLOBAL,"dns",false);
+
+#ifdef AVAHI_COMPONENTS_ENABLED    
   Static_avahi = config_getboolean(Configtable,GLOBAL,"static",false);
+#endif // AVAHI_COMPONENTS_ENABLED
+
   Affinity = config_getboolean(Configtable,GLOBAL,"affinity",false);
   {
     char const *p = config_getstring(Configtable,GLOBAL,"wisdom-file",NULL);
@@ -409,6 +413,7 @@ int loadconfig(char const *file){
      At the moment, elicited status messages are always sent with TTL > 0 on the status group
   */
 
+#ifdef AVAHI_COMPONENTS_ENABLED    
   // Look quickly (2 tries max) to see if it's already in the DNS
   {
     uint32_t addr = 0;
@@ -417,6 +422,7 @@ int loadconfig(char const *file){
 
     char ttlmsg[128];
     snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Template.output.ttl);
+
     size_t slen = sizeof(Template.output.dest_socket);
     // Advertise dynamic service(s)
     avahi_start(Frontend.description,
@@ -432,6 +438,8 @@ int loadconfig(char const *file){
     Template.status.dest_socket = Template.output.dest_socket;
     setport(&Template.status.dest_socket,DEFAULT_STAT_PORT);
    }
+#endif // AVAHI_COMPONENTS_ENABLED
+
   {
     // Non-zero TTL streams use the global ttl if it is nonzero, 1 otherwise
     int const ttl = Template.output.ttl > 1 ? Template.output.ttl : 1;
@@ -455,6 +463,8 @@ int loadconfig(char const *file){
     fprintf(stderr,"Duplicate status/data stream names: data=%s, status=%s\n",Data,Metadata_dest_string);
     exit(EX_USAGE);
   }
+
+#ifdef AVAHI_COMPONENTS_ENABLED    
   // Look quickly (2 tries max) to see if it's already in the DNS
   {
     uint32_t addr = 0;
@@ -465,12 +475,15 @@ int loadconfig(char const *file){
     // Advertise control/status channel with a ttl of at least 1
     char ttlmsg[128];
     snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",Template.output.ttl > 0? Template.output.ttl : 1);
+    
     size_t slen = sizeof(Frontend.metadata_dest_socket);
     avahi_start(Frontend.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
 		Metadata_dest_string,addr,ttlmsg,
 		addr != 0 ? &Frontend.metadata_dest_socket : NULL,
-		addr != 0 ? &slen : NULL);
+		addr != 0 ? &slen : NULL);    
   }
+#endif // AVAHI_COMPONENTS_ENABLED
+
   // either resolve_mcast() or avahi_start() has resolved the target DNS name into Frontend.metadata_dest_socket and inserted the port number
   join_group(Output_fd,NULL,&Frontend.metadata_dest_socket,Iface);
   // Same remote socket as status
@@ -668,7 +681,8 @@ static void *process_section(void *p){
   if(chan_template.output.ttl != 0 && Template.output.ttl != 0)
     chan_template.output.ttl = Template.output.ttl; // use global ttl when both are non-zero
 
-  // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
+#ifdef AVAHI_COMPONENTS_ENABLED    
+  // There can be multiple senders to an output stream, so let Avahi suppress the duplicate addresses
   // Look quickly (2 tries max) to see if it's already in the DNS. Otherwise make a multicast address.
   uint32_t addr = 0;
   bool const use_dns = config_getboolean(Configtable,sname,"dns",Global_use_dns);
@@ -678,13 +692,14 @@ static void *process_section(void *p){
     addr = make_maddr(data);
 
   {
-    size_t slen = sizeof(chan_template.output.dest_socket);
     // there may be several hosts with the same section names
     // prepend the host name to the service name
     char service_name[512] = {0};
     snprintf(service_name, sizeof service_name, "%s %s", Hostname, sname);
     char ttlmsg[128];
     snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",chan_template.output.ttl);
+    
+    size_t slen = sizeof(chan_template.output.dest_socket);
     char const *cp = config2_getstring(Configtable,Configtable,GLOBAL,sname,"encoding","s16be");
     bool const is_opus = strcasecmp(cp,"opus") == 0 ? true : false;
     avahi_start(service_name,
@@ -694,6 +709,7 @@ static void *process_section(void *p){
 		addr != 0 ? &chan_template.output.dest_socket : NULL,
 		addr != 0 ? &slen : NULL);
   }
+#endif // AVAHI_COMPONENTS_ENABLED
 
   // Set up output stream (data + status)
   // data stream is shared by all channels in this section

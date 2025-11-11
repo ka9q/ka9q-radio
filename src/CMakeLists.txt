@@ -8,8 +8,9 @@ set(LIBRADIO_SOURCES
   bandplan.c
   dump.c
   modes.c
-  avahi.c
-  avahi_browse.c
+  # avahi.c and avahi_browse.c are handled conditionally below
+  # avahi.c
+  # avahi_browse.c
   decode_status.c
   status.c
   misc.c
@@ -27,6 +28,23 @@ if(ENABLE_XATTR)
   message(STATUS "Building with xattr support")
 endif()
 
+# ==================== AVAHI-DEPENDENT LOGIC ====================
+set(AVAHI_COMPONENTS_ENABLED TRUE)
+
+if(APPLE)
+    # Avahi is disabled on macOS
+    set(ENABLE_AVAHI OFF CACHE BOOL "Avahi disabled on macOS (use native mDNS)" FORCE)
+    set(AVAHI_COMPONENTS_ENABLED FALSE)
+    message(STATUS "Disabling Avahi components on macOS.")
+
+elseif(ENABLE_AVAHI)
+    # On non-Apple platforms, include the source files if Avahi is enabled
+    list(APPEND LIBRADIO_SOURCES avahi.c avahi_browse.c)
+else()
+    # Not Apple and ENABLE_AVAHI is OFF
+    set(AVAHI_COMPONENTS_ENABLED FALSE)
+endif()
+  
 # ==================== BUILD CORE LIBRARY ====================
 add_library(radio STATIC ${LIBRADIO_SOURCES})
 
@@ -88,7 +106,16 @@ endfunction()
 
 # ==================== BUILD SIMPLE TOOLS ====================
 # Tools that only need libradio
-add_tool(control   control.c)
+
+# The 'control' tool depends on avahi.h via radio.h, so exclude if Avahi is out.
+if(AVAHI_COMPONENTS_ENABLED)
+    add_tool(control control.c)
+else()
+    # If control.c is compiled without avahi.h (via #ifdefs), keep it. 
+    # Otherwise, you MUST exclude it. Assuming it relies heavily on Avahi for now:
+    message(STATUS "Skipping control due to Avahi dependency exclusion.")
+endif()
+  
 add_tool(cwd       cwd.c)
 add_tool(fft-gen   fft-gen.c)
 add_tool(jt-decoded jt-decoded.c)
@@ -105,8 +132,14 @@ add_tool(wd-record wd-record.c)
 # Daemons that only need libradio
 add_daemon(aprs      aprs.c)
 add_daemon(aprsfeed  aprsfeed.c)
-add_daemon(opusd     opusd.c)
-add_daemon(packetd   packetd.c)
+
+# opusd and packetd depend on Avahi and must use add_daemon
+if(AVAHI_COMPONENTS_ENABLED)
+    add_daemon(opusd opusd.c)
+    add_daemon(packetd packetd.c)
+else()
+    message(STATUS "Skipping opusd and packetd due to Avahi dependency exclusion.")
+endif()
 
 # ==================== BUILD MONITOR ====================
 # Monitor is a multi-file program with extra dependencies
@@ -146,19 +179,28 @@ else()
 endif()
 
 # ==================== BUILD FFTW-BASED DAEMONS ====================
-# These need FFTW with threading support
-if(TARGET FFTW::fftw3f AND TARGET FFTW::fftw3f_threads)
-  add_daemon(stereod stereod.c)
-  target_link_libraries(stereod PRIVATE FFTW::fftw3f FFTW::fftw3f_threads)
-  message(STATUS "Building stereod")
-  
-  add_daemon(rdsd rdsd.c)
-  target_link_libraries(rdsd PRIVATE FFTW::fftw3f FFTW::fftw3f_threads)
-  message(STATUS "Building rdsd")
-else()
-  message(STATUS "Skipping stereod and rdsd - require FFTW with threading")
-endif()
+# These daemons require both FFTW threading AND Avahi components
 
+# Combine all necessary conditions into a single, unambiguous check.
+if(TARGET FFTW::fftw3f AND TARGET FFTW::fftw3f_threads AND AVAHI_COMPONENTS_ENABLED)
+  
+    add_daemon(stereod stereod.c)
+    target_link_libraries(stereod PRIVATE FFTW::fftw3f FFTW::fftw3f_threads)
+    message(STATUS "Building stereod")
+  
+    add_daemon(rdsd rdsd.c)
+    target_link_libraries(rdsd PRIVATE FFTW::fftw3f FFTW::fftw3f_threads)
+    message(STATUS "Building rdsd")
+  
+else()
+    # Provide clear feedback on why the daemons were skipped.
+    if(NOT TARGET FFTW::fftw3f OR NOT TARGET FFTW::fftw3f_threads)
+        message(STATUS "Skipping stereod and rdsd - require FFTW with threading")
+    else()
+        message(STATUS "Skipping stereod and rdsd - requires Avahi components")
+    endif()
+endif()
+  
 # ==================== RADIOD SOURCES ====================
 set(RADIOD_SRCS
   main.c
@@ -184,7 +226,14 @@ endif()
 # ==================== BUILD RADIOD ====================
 add_executable(radiod ${RADIOD_SRCS})
 
-# Include directories for radiod
+if(AVAHI_COMPONENTS_ENABLED)
+    # Define a simple macro used by C code to guard Avahi includes/logic
+    target_compile_definitions(radiod PRIVATE AVAHI_COMPONENTS_ENABLED)
+    message(STATUS "radiod: Compiling with AVAHI_COMPONENTS_ENABLED defined.")
+else()
+    message(STATUS "radiod: Compiling without Avahi components.")
+endif()
+
 target_include_directories(radiod PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_BINARY_DIR}/generated

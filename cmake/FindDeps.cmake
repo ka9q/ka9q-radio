@@ -302,17 +302,29 @@ if(TARGET PkgConfig::SAMPLERATE)
 endif()
 
 # ==================== AVAHI ====================
-if(ENABLE_AVAHI)
-  pkg_check_modules(AVAHI IMPORTED_TARGET QUIET avahi-client)
-  if(TARGET PkgConfig::AVAHI)
-    kr_sanitize_pkgconfig_target(PkgConfig::AVAHI)
-    add_library(Avahi::client ALIAS PkgConfig::AVAHI)
-    message(STATUS "✓ Found Avahi")
-  else()
-    message(STATUS "  Avahi requested but not found - service discovery will be unavailable")
-  endif()
-endif()
+# We must define the targets/variables even if we skip the check,
+# so the helper functions kr_link_common_deps and kr_add_compat_includes don't fail.
 
+if(APPLE)
+    message(STATUS "Avahi check skipped on macOS (using native mDNS)")
+    set(AVAHI_FOUND FALSE CACHE INTERNAL "")
+    
+    # We exit the Avahi check block, but NOT the file execution.
+else()
+    if(ENABLE_AVAHI)
+      pkg_check_modules(AVAHI IMPORTED_TARGET QUIET avahi-client)
+      if(TARGET PkgConfig::AVAHI)
+        kr_sanitize_pkgconfig_target(PkgConfig::AVAHI)
+        add_library(Avahi::client ALIAS PkgConfig::AVAHI)
+        message(STATUS "✓ Found Avahi")
+      else()
+        kr_mark_missing("Avahi" TRUE "Install Avahi client/daemon (needed when ENABLE_AVAHI is ON)")
+      endif()
+    else()
+        message(STATUS "Avahi check skipped (ENABLE_AVAHI is OFF)")
+    endif()
+endif()
+  
 # ==================== SDR DRIVERS ====================
 if(ENABLE_SDR_DRIVERS)
   message(STATUS "Looking for SDR drivers...")
