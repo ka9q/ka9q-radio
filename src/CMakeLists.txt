@@ -68,7 +68,7 @@ if(NOT HAVE_STRLCPY)
   endif()
 endif()
 
-# ==================== TOOL HELPER FUNCTION ====================
+# ==================== TOOL HELPER FUNCTIONS ====================
 # Helper to create small tools that link against libradio
 function(add_tool name)
   add_executable(${name} ${ARGN})
@@ -76,18 +76,85 @@ function(add_tool name)
   install(TARGETS ${name} RUNTIME DESTINATION bin)
 endfunction()
 
-# ==================== BUILD TOOLS ====================
-add_tool(packetd   packetd.c)
+# Helper to create daemon programs (installed to sbin)
+function(add_daemon name)
+  add_executable(${name} ${ARGN})
+  target_link_libraries(${name} PRIVATE radio)
+  install(TARGETS ${name} RUNTIME DESTINATION sbin)
+endfunction()
+
+# ==================== BUILD SIMPLE TOOLS ====================
+# Tools that only need libradio
+add_tool(control   control.c)
+add_tool(cwd       cwd.c)
 add_tool(fft-gen   fft-gen.c)
+add_tool(jt-decoded jt-decoded.c)
+add_tool(metadump  metadump.c)
 add_tool(pl        pl.c)
 add_tool(powers    powers.c)
-add_tool(tune      tune.c)
-add_tool(control   control.c)
-add_tool(show-sig  show-sig.c)
-add_tool(show-pkt  show-pkt.c)
-add_tool(metadump  metadump.c)
 add_tool(setfilt   setfilt.c)
-add_tool(cwd       cwd.c)
+add_tool(show-pkt  show-pkt.c)
+add_tool(show-sig  show-sig.c)
+add_tool(tune      tune.c)
+add_tool(wd-record wd-record.c)
+
+# ==================== BUILD SIMPLE DAEMONS ====================
+# Daemons that only need libradio
+add_daemon(aprs      aprs.c)
+add_daemon(aprsfeed  aprsfeed.c)
+add_daemon(opusd     opusd.c)
+add_daemon(packetd   packetd.c)
+
+# ==================== BUILD MONITOR ====================
+# Monitor is a multi-file program with extra dependencies
+if(TARGET Ncurses::w AND TARGET PortAudio::portaudio AND TARGET SampleRate::samplerate)
+  add_tool(monitor 
+    monitor.c 
+    monitor-data.c 
+    monitor-display.c 
+    monitor-repeater.c
+  )
+  
+  # Monitor needs ncursesw, portaudio, samplerate beyond what radio provides
+  target_link_libraries(monitor PRIVATE 
+    Ncurses::w
+    PortAudio::portaudio
+    SampleRate::samplerate
+  )
+  
+  # Linux also needs ALSA
+  if(TARGET ALSA::alsa)
+    target_link_libraries(monitor PRIVATE ALSA::alsa)
+  endif()
+  
+  message(STATUS "Building monitor")
+else()
+  message(STATUS "Skipping monitor - requires ncursesw, portaudio, and libsamplerate")
+endif()
+
+# ==================== BUILD PCMRECORD ====================
+# Audio recording tool
+if(TARGET Ogg::ogg)
+  add_tool(pcmrecord pcmrecord.c)
+  target_link_libraries(pcmrecord PRIVATE Ogg::ogg)
+  message(STATUS "Building pcmrecord")
+else()
+  message(STATUS "Skipping pcmrecord - requires libogg")
+endif()
+
+# ==================== BUILD FFTW-BASED DAEMONS ====================
+# These need FFTW with threading support
+if(TARGET FFTW::fftw3f AND TARGET FFTW::fftw3f_threads)
+  add_daemon(stereod stereod.c)
+  target_link_libraries(stereod PRIVATE FFTW::fftw3f FFTW::fftw3f_threads)
+  message(STATUS "Building stereod")
+  
+  add_daemon(rdsd rdsd.c)
+  target_link_libraries(rdsd PRIVATE FFTW::fftw3f FFTW::fftw3f_threads)
+  message(STATUS "Building rdsd")
+else()
+  message(STATUS "Skipping stereod and rdsd - require FFTW with threading")
+endif()
 
 # ==================== RADIOD SOURCES ====================
 set(RADIOD_SRCS

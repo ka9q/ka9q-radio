@@ -23,7 +23,7 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
-#include <opus/opus.h>
+#include "compat_opus.h"
 #include <netdb.h>
 #include <locale.h>
 #include <sys/time.h>
@@ -230,7 +230,8 @@ int main(int argc,char * const argv[]){
   }
   // Same IP address, but status port number
   Metadata_in_socket = PCM_in_socket;
-  set_port(&Metadata_in_socket,DEFAULT_STAT_PORT);
+  // set_port(&Metadata_in_socket,DEFAULT_STAT_PORT);
+  setport(&Metadata_in_socket,DEFAULT_STAT_PORT);
   Status_fd = listen_mcast(NULL,&Metadata_in_socket,iface);
 
   {
