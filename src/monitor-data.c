@@ -23,6 +23,8 @@
 #endif
 #include <sysexits.h>
 #include <poll.h>
+#include <unistd.h>
+#include "compat_net.h"
 
 #include "conf.h"
 #include "config.h"

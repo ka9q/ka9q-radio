@@ -23,7 +23,9 @@
 #include <poll.h>
 #include <fcntl.h>
 #include <time.h>
-#include <sys/socket.h>
+#include <unistd.h>
+// #include <sys/socket.h>
+#include "compat_net.h"
 
 #include "conf.h"
 #include "config.h"

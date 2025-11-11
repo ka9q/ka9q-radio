@@ -15,7 +15,8 @@
 #include <locale.h>
 #include <errno.h>
 #include <ctype.h>
-#include <sys/socket.h>
+// #include <sys/socket.h>
+#include "compat_net.h"
 #include <math.h>
 #include <time.h>
 #if defined(linux)
