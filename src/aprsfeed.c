@@ -11,7 +11,8 @@
 
 #include <locale.h>
 #include <errno.h>
-#include <sys/socket.h>
+// #include <sys/socket.h>
+#include "compat_net.h"
 #include <netdb.h>
 #include <math.h>
 #include <ctype.h>

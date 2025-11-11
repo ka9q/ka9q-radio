@@ -10,6 +10,7 @@
 #include <portaudio.h>
 #include <ncurses.h>
 #include <locale.h>
+#include <signal.h>
 #include <getopt.h>
 #include "compat_iniparser.h"
 #if __linux__
@@ -22,10 +23,12 @@
 #include <poll.h>
 #include <fcntl.h>
 #include <time.h>
-#include <sys/socket.h>
-#include <stdatomic.h>
-#include <signal.h>
+#include <unistd.h>
+// #include <sys/socket.h>
+#include "compat_net.h"
 
+#include "conf.h"
+#include "config.h"
 #include "misc.h"
 #include "multicast.h"
 #include "radio.h"
@@ -35,15 +38,15 @@
 #include "monitor.h"
 
 // Could be (obscure) config file parameters
-static double const Latency = 0.02; // chunk size for audio output callback
-double const Tone_period = 0.24; // PL tone integration period
+float const Latency = 0.02; // chunk size for audio output callback
+float const Tone_period = 0.24; // PL tone integration period
 
 // Voting hysteresis table. Small at low SNR, larger at large SNR to minimize pointless switching
 // When the current SNR is 'snr', don't switch to another channel unless it's at least 'hysteresis' dB stronger
 #define HSIZE (7)
 struct {
-  double snr;
-  double hysteresis;
+  float snr;
+  float hysteresis;
 } Hysteresis_table[HSIZE] = {
   // Must be in descending order
   {30.0, 5.0},
@@ -62,38 +65,39 @@ char const *Repeater = "repeater";
 char const *Display = "display";
 
 // Command line/config file/interactive command parameters
-int DAC_samprate = FULL_SAMPRATE;   // Actual hardware output rate
+unsigned int DAC_samprate = 48000;   // Actual hardware output rate
 char const *App_path;
 int Verbose = 0;                    // Verbosity flag
 char const *Config_file;
 bool Quiet = false;                 // Disable curses
 bool Quiet_mode = false;            // Toggle screen activity after starting
-double Playout = 0.1; // default 100 ms
+float Playout = 100;
 bool Constant_delay = false;
 bool Start_muted = false;
 bool Auto_position = true;  // first will be in the center
-double Gain = 0; // unity gain by default
+float Gain = 0; // unity gain by default
 bool Notch = false;
 char *Mcast_address_text[MAX_MCAST]; // Multicast address(es) we're listening to
 char const *Audiodev = "";    // Name of audio device; empty means portaudio's default
 bool Voting = false;
 int Channels = 2;
 char const *Init;
-//double GoodEnoughSNR = 20.0; // FM SNR considered "good enough to not be worth changing
+//float GoodEnoughSNR = 20.0; // FM SNR considered "good enough to not be worth changing
 char const *Pipe;
 char const *Source; // Source specific multicast, if used
 
 // Global variables that regularly change
 int Output_fd = -1; // Output network socket, if any
+struct sockaddr_in Dest_socket;
 int64_t Last_xmit_time;
-_Atomic uint64_t Output_time;  // Relative output time in frames
-_Atomic uint64_t Callbacks;
-_Atomic uint64_t Audio_frames;
-_Atomic int64_t LastAudioTime;
-_Atomic unsigned Callback_quantum;
-_Atomic uint64_t Output_total;
-_Atomic double Output_level; // Output level, mean square
-double Portaudio_delay;
+float *Output_buffer;
+int Buffer_length; // Bytes left to play out, max BUFFERSIZE
+volatile unsigned int Rptr;   // callback thread read pointer, *frames*
+volatile unsigned int Wptr;   // For monitoring length of output queue
+uint64_t Audio_callbacks;
+unsigned long Audio_frames;
+volatile int64_t LastAudioTime;
+int32_t Portaudio_delay;
 pthread_t Repeater_thread;
 int Nfds;                     // Number of streams
 pthread_mutex_t Sess_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -101,26 +105,25 @@ PaStream *Pa_Stream;          // Portaudio stream handle
 int inDevNum;                 // Portaudio's audio output device index
 int64_t Start_time;
 PaTime Start_pa_time;
-_Atomic PaTime Last_callback_time;
+PaTime Last_callback_time;
 int64_t Last_error_time;
-struct session Sessions[NSESSIONS];
-_Atomic bool Terminate;
-struct session * _Atomic Best_session; // Session with highest SNR
+int Nsessions;
+struct session *Sessions[NSESSIONS];
+bool Terminate;
+struct session *Best_session; // Session with highest SNR
+int Mcast_ttl;
+pthread_mutex_t Rptr_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t Rptr_cond = PTHREAD_COND_INITIALIZER;
 void *output_thread(void *p);
 struct sockaddr_in *Source_socket;
-int Callback_blocksize = 960; // 960 samples = 20 ms @ 48k
-uint64_t Wait_timeout;
-uint64_t Wait_successful;
-uint64_t Waits;
 
-static char Optstring[] = "CI:P:LR:Sb:c:f:g:o:p:qr:su:vnV";
+static char Optstring[] = "CI:P:LR:Sc:f:g:o:p:qr:su:vnV";
 static struct  option Options[] = {
    {"center", no_argument, NULL, 'C'},
    {"input", required_argument, NULL, 'I'},
    {"list-audio", no_argument, NULL, 'L'},
    {"device", required_argument, NULL, 'R'},
    {"autosort", no_argument, NULL, 'S'},
-   {"blocksize", required_argument, NULL, 'b'},
    {"channels", required_argument, NULL, 'c'},
    {"config", required_argument, NULL, 'f'},
    {"gain", required_argument, NULL, 'g'},
@@ -170,7 +173,6 @@ int main(int argc,char * const argv[]){
       break;
     }
   }
-
   if(Config_file){
     dictionary *Configtable = iniparser_load(Config_file);
     if(Configtable == NULL){
@@ -188,7 +190,7 @@ int main(int argc,char * const argv[]){
     Pipe = config_getstring(Configtable,Audio,"pipe",NULL);
 #endif
 
-    Gain = config_getdouble(Configtable,Audio,"gain",Gain);
+    Gain = config_getfloat(Configtable,Audio,"gain",Gain);
     Cwid = strdup(config_getstring(Configtable,Repeater,"id","NOCALL"));
     // 600 sec is 10 minutes, max ID interval per FCC 97.119(a)
     int const period = config_getint(Configtable,Repeater,"period",600);
@@ -197,18 +199,17 @@ int main(int argc,char * const argv[]){
       pperiod = period;
     Mandatory_ID_interval = period * BILLION;
     Quiet_ID_interval = pperiod * BILLION;
-    ID_pitch = config_getdouble(Configtable,Repeater,"pitch",ID_pitch);
-    ID_level = config_getdouble(Configtable,Repeater,"level",ID_level);
+    ID_pitch = config_getfloat(Configtable,Repeater,"pitch",ID_pitch);
+    ID_level = config_getfloat(Configtable,Repeater,"level",ID_level);
     Notch = config_getboolean(Configtable,Audio,"notch",Notch);
     Quiet = config_getboolean(Configtable,Display,"quiet",Quiet);
     if(config_getboolean(Configtable,Audio,"center",false))
       Auto_position = false;
 
-    Callback_blocksize = config_getint(Configtable,Audio,"blocksize",Callback_blocksize);
     Auto_sort = config_getboolean(Configtable,Display,"autosort",Auto_sort);
     Update_interval = config_getint(Configtable,Display,"update",Update_interval);
-    Playout = config_getdouble(Configtable,Audio,"playout",Playout) / 1000.; // convert ms to sec
-    Repeater_tail = config_getdouble(Configtable,Repeater,"tail",Repeater_tail);
+    Playout = config_getfloat(Configtable,Audio,"playout",Playout);
+    Repeater_tail = config_getfloat(Configtable,Repeater,"tail",Repeater_tail);
     Verbose = config_getboolean(Configtable,Display,"verbose",Verbose);
     char const *txon = config_getstring(Configtable,Radio,"txon",NULL);
     char const *txoff = config_getstring(Configtable,Radio,"txoff",NULL);
@@ -232,16 +233,13 @@ int main(int argc,char * const argv[]){
   optind = 0; // reset getopt()
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
-    case 'b':
-      Callback_blocksize = atoi(optarg);
-      break;
     case 'c':
-      Channels = atoi(optarg);
+      Channels = strtol(optarg,NULL,0);
       break;
     case 'f':
       break; // Ignore this time
     case 'g':
-      Gain = strtod(optarg,NULL);
+      Gain = strtof(optarg,NULL);
       break;
     case 'n':
       Notch = true;
@@ -250,16 +248,16 @@ int main(int argc,char * const argv[]){
       Source = optarg; // source specific multicast; only take packets from this source
       break;
     case 'p':
-      Playout = strtod(optarg,NULL) / 1000.;
+      Playout = strtof(optarg,NULL);
       break;
     case 'q': // No ncurses
       Quiet = true;
       break;
     case 'r':
-      DAC_samprate = atoi(optarg);
+      DAC_samprate = strtol(optarg,NULL,0);
       break;
     case 'u':
-      Update_interval = atoi(optarg);
+      Update_interval = strtol(optarg,NULL,0);
       break;
     case 'v':
       Verbose = true;
@@ -332,7 +330,6 @@ int main(int argc,char * const argv[]){
     fprintf(stderr,"At least one input group required, exiting\n");
     exit(EX_USAGE);
   }
-  atomic_init(&Terminate,false);
 
   if(Init != NULL)
     (void) - system(Init);
@@ -350,12 +347,15 @@ int main(int argc,char * const argv[]){
   snd_lib_error_set_handler(alsa_error_handler);
 #endif
   load_id();
-  // Callback continuously scans sessions, merging their audio
-  // if active into the output stream
+  // Create output circular buffer
+  // Runs continuously, playing silence until audio arrives.
   // This allows multiple streams to be played on hosts that only support one
+  Output_buffer = mirror_alloc(BUFFERSIZE * Channels * sizeof(*Output_buffer)); // Must be power of 2 times page size
+  memset(Output_buffer,0,BUFFERSIZE * Channels * sizeof(*Output_buffer)); // Does mmap clear its initial memory? Not sure
 
   if(Pipe != NULL){
 #if __linux__
+
     pthread_t pipethread;
     pthread_create(&pipethread,NULL,output_thread,NULL);
 #endif
@@ -370,17 +370,17 @@ int main(int argc,char * const argv[]){
     atexit(cleanup); // Make sure Pa_Terminate() gets called
 
     char *nextp = NULL;
-    long d;
+    int d;
     int numDevices = Pa_GetDeviceCount();
     if(Audiodev == NULL || strlen(Audiodev) == 0){
       // not specified; use default
       inDevNum = Pa_GetDefaultOutputDevice();
     } else if(d = strtol(Audiodev,&nextp,0),nextp != Audiodev && *nextp == '\0'){
       if(d >= numDevices){
-	fprintf(stderr,"%ld is out of range, use %s -L for a list\n",d,App_path);
+	fprintf(stderr,"%d is out of range, use %s -L for a list\n",d,App_path);
 	exit(EX_USAGE);
       }
-      inDevNum = (int)d;
+      inDevNum = d;
     } else {
       for(inDevNum=0; inDevNum < numDevices; inDevNum++){
 	const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(inDevNum);
@@ -392,18 +392,19 @@ int main(int argc,char * const argv[]){
       fprintf(stderr,"Portaudio: no available devices, exiting\n");
       exit(EX_IOERR);
     }
-    PaStreamParameters outputParameters = {
-      .channelCount = Channels,
-      .device = inDevNum,
-      .sampleFormat = paFloat32,
-      .suggestedLatency = Latency // 0 doesn't seem to be a good value on OSX, lots of underruns and stutters
-    };
+    PaStreamParameters outputParameters;
+    memset(&outputParameters,0,sizeof(outputParameters));
+    outputParameters.channelCount = Channels;
+    outputParameters.device = inDevNum;
+    outputParameters.sampleFormat = paFloat32;
+    outputParameters.suggestedLatency = Latency; // 0 doesn't seem to be a good value on OSX, lots of underruns and stutters
 
     r = Pa_OpenStream(&Pa_Stream,
 		      NULL,
 		      &outputParameters,
 		      DAC_samprate,
-		      Callback_blocksize,
+		      paFramesPerBufferUnspecified, // seems to be 31 on OSX
+		      //SAMPPCALLBACK,
 		      0,
 		      pa_callback,
 		      NULL);
@@ -413,8 +414,6 @@ int main(int argc,char * const argv[]){
       exit(EX_IOERR);
     }
   }  // !Network (use Portaudio)
-
-
 
   if(Repeater_tail != 0)
     pthread_create(&Repeater_thread,NULL,repeater_ctl,NULL); // Repeater mode active
@@ -442,32 +441,44 @@ int main(int argc,char * const argv[]){
     pthread_t display_thread;
     pthread_create(&display_thread,NULL,display,NULL);
   }
-  while(!atomic_load_explicit(&Terminate,memory_order_acquire))
+  while(!Terminate)
     sleep(1);
 
   exit(EX_OK); // calls cleanup() to clean up Portaudio and ncurses. Can't happen...
 }
 
-// Sets global Best_session if we have the highest SNR
-void vote(struct session *sp){
-  assert(sp != NULL);
-  if(!inuse(sp) || muted(sp))
-    return;
+// Update session now-active flags, pick session with highest SNR for voting
+void vote(void){
+  struct session *best = NULL;
+  long long const time = gps_time_ns();
 
   pthread_mutex_lock(&Sess_mutex);
-  struct session *best = atomic_load_explicit(&Best_session,memory_order_acquire);
-  if(best == NULL || !inuse(best) || muted(best)){
-    atomic_store_explicit(&Best_session,sp,memory_order_release); // they abdicated; grab the throne
-    pthread_mutex_unlock(&Sess_mutex);
-    return;
-  }
-  // Don't take it from a running session unless we're sufficiently better
-  for(int i=0; i < HSIZE;i++){
-    if(sp->snr <= Hysteresis_table[i].snr)
+  for(int i = 0; i < Nsessions; i++){
+    struct session * const sp = sptr(i);
+    if(sp == NULL)
       continue;
-    if(sp->snr > best->snr + Hysteresis_table[i].hysteresis){
-      atomic_store_explicit(&Best_session,sp,memory_order_release); // we won
-      break;
+
+    // Have we gotten anything in the last 500 ms?
+    sp->now_active = (time - sp->last_active) < BILLION/2; // note: boolean expression
+    if(!sp->now_active)
+      sp->active = 0;
+
+    if(sp->muted || !sp->now_active) // No recent audio, skip
+      continue;
+
+    if(best == NULL || sp->snr > best->snr)
+      best = sp;
+  }
+  // Don't claim it unless we're sufficiently better (or there's nobody)
+  if(Best_session == NULL || Best_session->muted || !Best_session->now_active)
+    Best_session = best;
+  else if(best != NULL){
+    for(int i=0; i < HSIZE;i++){
+      if(Best_session->snr > Hysteresis_table[i].snr){
+	if(best->snr > Best_session->snr + Hysteresis_table[i].hysteresis)
+	  Best_session = best;
+	break;
+      }
     }
   }
   pthread_mutex_unlock(&Sess_mutex);
@@ -494,11 +505,10 @@ void *statproc(void *arg){
 
   // Main loop begins here - does not need to be realtime?
   uint8_t *buffer = malloc(PKTSIZE);
-  assert(buffer != NULL);
-  while(!atomic_load_explicit(&Terminate,memory_order_acquire)){
+  while(!Terminate){
     struct sockaddr_storage sender;
     socklen_t socksize = sizeof(sender);
-    ssize_t length = recvfrom(status_fd,buffer,PKTSIZE,0,(struct sockaddr *)&sender,&socksize);
+    int length = recvfrom(status_fd,buffer,PKTSIZE,0,(struct sockaddr *)&sender,&socksize);
     if(buffer[0] != STATUS) // not status, ignore
       continue;
 
@@ -517,12 +527,7 @@ void *statproc(void *arg){
 
     // Decode directly into local copy, as not every parameter is updated in every status message
     // Decoding into a temp copy and then memcpy would write zeroes into unsent parameters
-    // Lock and signal the queue so the data handler can atomically wait for the squelch to open
     decode_radio_status(&sp->frontend,&sp->chan,buffer+1,length-1);
-    // chan.output.power is in dBFS so no signal is -Infinity
-    if(isnan(sp->chan.output.power) || !isfinite(sp->chan.output.power))
-      sp->squelch_open = false; // only turned off here; turned on in the data path
-
     // Cache payload-type/channel count/sample rate/encoding association for use by data thread
     sp->type = sp->chan.output.rtp.type & 0x7f;
     sp->pt_table[sp->type].encoding = sp->chan.output.encoding;
@@ -540,13 +545,13 @@ void *statproc(void *arg){
       sp->id[0] = '\0';
 
     // Update SNR calculation (not sent explicitly)
-    double const noise_bandwidth = fabs(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
-    double sig_power = sp->chan.sig.bb_power - noise_bandwidth * sp->chan.sig.n0;
+    float const noise_bandwidth = fabsf(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
+    float sig_power = sp->chan.sig.bb_power - noise_bandwidth * sp->chan.sig.n0;
     if(sig_power < 0)
       sig_power = 0; // Avoid log(-x) = nan
-    double const sn0 = sig_power/sp->chan.sig.n0;
+    float const sn0 = sig_power/sp->chan.sig.n0;
     sp->snr = power2dB(sn0/noise_bandwidth);
-    vote(sp);
+    vote();
   }
   FREE(buffer);
   return NULL;
@@ -554,19 +559,11 @@ void *statproc(void *arg){
 
 // Look up session, or if it doesn't exist, create it.
 // Executes atomically
-int Session_creates = 0;
-
-struct session *lookup_or_create_session(struct sockaddr_storage const *sender,const uint32_t ssrc){
-  int first_idle = -1;
+struct session *lookup_or_create_session(const struct sockaddr_storage *sender,const uint32_t ssrc){
   pthread_mutex_lock(&Sess_mutex);
-  for(int i = 0; i < NSESSIONS; i++){
-    struct session * const sp = Sessions + i;
-    if(!inuse(sp)){
-      if(first_idle == -1)
-	first_idle = i; // in case we need to create it
-      continue;
-    }
-    if(sp->ssrc == ssrc
+  for(int i = 0; i < Nsessions; i++){
+    struct session * const sp = sptr(i);
+    if(sp && sp->ssrc == ssrc
        && address_match(sender,&sp->sender)
        //       && getportnumber(&sp->sender) == getportnumber(&sender)
        ){
@@ -574,43 +571,60 @@ struct session *lookup_or_create_session(struct sockaddr_storage const *sender,c
       return sp;
     }
   }
-  // Assign an empty spot
-  if(first_idle == -1)
+  struct session * const sp = calloc(1,sizeof(*sp));
+  if(sp == NULL){ // Shouldn't happen on modern machines!
+    pthread_mutex_unlock(&Sess_mutex);
     return NULL;
+  }
 
-  struct session * const sp = Sessions + first_idle;
-  memset(sp,0,sizeof(struct session));
-
-  Session_creates++;
-  atomic_init(&sp->terminate,false);
+  // Put at end of list
+  Sessions[Nsessions++] = sp;
+  sp->init = false; // Wait for first RTP packet to set the rest up
   sp->ssrc = ssrc;
-
-  memcpy(sp->pt_table,PT_table,sizeof sp->pt_table);
-
   memcpy(&sp->sender,sender,sizeof(sp->sender));
+
   pthread_cond_init(&sp->qcond,NULL);
   pthread_mutex_init(&sp->qmutex,NULL);
-  atomic_store_explicit(&sp->inuse,true,memory_order_release);
   pthread_mutex_unlock(&Sess_mutex);
-  return sp; // caller will set sp->inuse
-}
 
-int close_session(struct session *sp){
+  return sp;
+}
+int close_session(struct session **p){
+  assert(p != NULL);
+  if(p == NULL)
+    return -1;
+  struct session * sp = *p;
   assert(sp != NULL);
   if(sp == NULL)
     return -1;
+  assert(Nsessions > 0);
 
-  assert(sp >= Sessions && sp < Sessions + NSESSIONS);
+  pthread_mutex_lock(&Sess_mutex);
   if(sp == Best_session)
     Best_session = NULL;
 
-  // Tell it to commit hari-kari
-  atomic_store_explicit(&sp->terminate,true,memory_order_release);
-  pthread_mutex_lock(&sp->qmutex);
-  pthread_cond_broadcast(&sp->qcond);   // Try to get its attention
-  pthread_mutex_unlock(&sp->qmutex); // Done modifying session table
+  // Remove from table
+  int i = 0;
+  for(i = 0; i < Nsessions; i++){
+    if(Sessions[i] == sp)
+      break;
+  }
+  if(i == Nsessions){
+    // Not found
+    assert(false);
+    pthread_mutex_unlock(&Sess_mutex);
+    return -1;
+  }
 
+  // Copy remaining session pointers down
+  Nsessions--;
+  assert(Nsessions >= i);
+  memmove(&Sessions[i],&Sessions[i+1],(Nsessions-i) * sizeof(Sessions[0]));
+  Sessions[Nsessions] = NULL; // Last entry no longer valid
+  pthread_mutex_unlock(&Sess_mutex); // Done modifying session table
   // Thread now cleans itself up
+  FREE(sp);
+  *p = NULL;
   return 0;
 }
 
@@ -633,97 +647,44 @@ void cleanup(void){
 static float Softclip_mem[2];
 
 // Portaudio callback - transfer data (if any) to provided buffer
-// This has to be lock-free; no mutexes allowed, so _Atomic variables are used to communicate with the producer threads
-// The session blocks are static, not malloced, in case the callback accesses them for one call before it sees the sp->inuse flag drop.
-// Even if the callback reads a dead buffer, it won't generate any output for it because its write pointer will have stopped advancing
 int pa_callback(void const *inputBuffer, void *outputBuffer,
-		       unsigned long const framesPerBuffer,
+		       unsigned long framesPerBuffer,
 		       PaStreamCallbackTimeInfo const * timeInfo,
 		       PaStreamCallbackFlags statusFlags,
 		       void *userData){
   (void)inputBuffer; // Unused
   (void)statusFlags;
   (void)userData;
-
+  Audio_callbacks++;
+  Audio_frames += framesPerBuffer;
 
   if(!outputBuffer)
     return paAbort; // can this happen??
 
-  assert(framesPerBuffer != 0);
-  // Informational stuff
-  atomic_store_explicit(&Last_callback_time,timeInfo->currentTime,memory_order_release);
-  atomic_store_explicit(&Callback_quantum,framesPerBuffer,memory_order_release);
-  Portaudio_delay = timeInfo->outputBufferDacTime - timeInfo->currentTime;
+  Last_callback_time = timeInfo->currentTime;
+  assert(framesPerBuffer < BUFFERSIZE); // Make sure ring buffer is big enough
+  // Delay within Portaudio in milliseconds
+  Portaudio_delay = 1000. * (timeInfo->outputBufferDacTime - timeInfo->currentTime);
 
-  // Output frame clock at beginning of our buffer
-  uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed); // we control it
-  // base sample index into all session output buffers
-  int const base = (Channels * rptr) & (BUFFERSIZE-1);
-  // We'll be summing into it, so clear it first
-  float * const buffer = (float *)outputBuffer;
-  memset(buffer, 0, framesPerBuffer * Channels * sizeof (float));
+  // Use mirror buffer to simplify wraparound. Count is in bytes = Channels * frames * sizeof(float)
+  int const bytecount = Channels * framesPerBuffer * sizeof(*Output_buffer);
+  memcpy(outputBuffer,&Output_buffer[Channels*Rptr],bytecount);
+  // Zero what we just copied
+  memset(&Output_buffer[Channels*Rptr],0,bytecount);
+  opus_pcm_soft_clip((float *)outputBuffer,framesPerBuffer,Channels,Softclip_mem);
+  pthread_mutex_lock(&Rptr_mutex);
+  Rptr += framesPerBuffer;
+  Rptr &= (BUFFERSIZE-1);
+  Buffer_length -= framesPerBuffer;
+  pthread_cond_broadcast(&Rptr_cond);
+  pthread_mutex_unlock(&Rptr_mutex);
 
-  int64_t total = 0;
-#if TEST_TONE
-  double freq = 2. / 64.;
-  double phase = freq * ((rptr) % 64); // 64 frames/cycle = 750 Hz
-  double complex os = cispi(phase);
-
-  double complex step = cispi(freq);
-
-  for(unsigned int i=0; i < framesPerBuffer; i++){
-    buffer[2*i] += 0.1 * creal(os); // -20dBFS
-    buffer[2*i+1] += 0.1 * cimag(os);
-    os *= step;
-  }
+#if 0
+  int q = modsub(Wptr,Rptr,BUFFERSIZE);
+  if(q < 0)
+    return paComplete;
+  return (Buffer_length <= 0) ?  paComplete : paContinue;
 #endif
-
-  // If voting, look only at the leader.
-  // Otherwise scan the whole list, summing all active sessions
-  // finally a real use for do {} while();
-  struct session *sp = Voting ?
-    atomic_load_explicit(&Best_session,memory_order_acquire) : Sessions;
-
-  do {
-    if(sp == NULL)
-      break; // Voting, and no one has claimed the prize yet
-
-    if(!inuse(sp) || muted(sp) || sp->buffer == NULL)
-      continue; // Don't consider
-
-    unsigned long frames = framesPerBuffer;
-    uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
-    // careful with unsigned arithmetic
-    int start = 0;
-    if(wptr <= rptr){
-      int late = rptr - wptr; // guaranteed zero or positive
-      if(late * Channels >= BUFFERSIZE){
-	continue;      // all of it is late
-      } else
-	start = late * Channels; // trim the front to keep it from backward wrapping and being played 1 buffer later
-    } else if(Channels * (wptr - rptr + frames) > BUFFERSIZE){
-      if(Channels * (wptr - rptr) > BUFFERSIZE)
-	continue; // all is too early
-      frames = BUFFERSIZE / Channels - (wptr - rptr); // Trim the end from forward wrapping, prevent early play
-    }
-    for(unsigned int j = start; j < Channels*frames; j++)
-      buffer[j] += sp->buffer[BINDEX(base,j)];
-
-    total += frames;
-  } while(!Voting && ++sp < Sessions + NSESSIONS);
-
-  // Sum up all the energy we've written in this callback
-  double energy = 0;
-  for(unsigned int j=0; j < Channels * framesPerBuffer;j++)
-    energy += buffer[j] * buffer[j];
-
-  energy /= Channels * framesPerBuffer;
-  atomic_store_explicit(&Output_level,energy,memory_order_relaxed);
-  opus_pcm_soft_clip(buffer,(int)framesPerBuffer,Channels,Softclip_mem);
-  atomic_fetch_add_explicit(&Audio_frames,framesPerBuffer,memory_order_release);
-  atomic_fetch_add_explicit(&Output_time,framesPerBuffer,memory_order_release);
-  atomic_fetch_add_explicit(&Output_total,total,memory_order_release);
-  atomic_fetch_add_explicit(&Callbacks,1,memory_order_release);
   return paContinue;
 }
 
@@ -731,72 +692,37 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 // Macos doesn't support clock_nanosleep(); find a substitute
 // Thread used instead of Portaudio callback when sending to network
 // Sends raw 16-bit PCM stereo at 48kHz; send to named pipe and opusenc, etc
-// Rewritten for new output architecture 23 Dec 2025, not yet tested
 void *output_thread(void *p){
   (void)p;
   Output_fd = open(Pipe,O_WRONLY,0666);
-  signal(SIGPIPE,SIG_IGN); // Allow the pipe reader to go away
 
   struct timespec next;
   clock_gettime(CLOCK_MONOTONIC,&next);
 
-  // Grab 20 milliseconds stereo @ 48 kHz
-  int const frames = lrint(.02 * DAC_samprate);
-  int const samples = frames * Channels;
-
-  atomic_store_explicit(&Callback_quantum,(uint64_t)frames,memory_order_release);
-
-  int16_t *pcm_buffer = malloc(samples * sizeof *pcm_buffer);
-  assert(pcm_buffer != NULL);
-  float *out_buffer = malloc(samples * sizeof *out_buffer);
-  assert(out_buffer != NULL);
   while(1){
+    // Grab 20 milliseconds stereo @ 48 kHz
+    int frames = .02 * 48000;
+    int samples = frames * Channels;
+    int16_t out_buffer[samples];
 
-    uint64_t total = 0;
-    memset(out_buffer, 0, samples * sizeof *out_buffer);
-    uint64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-    for(int i=0; i < NSESSIONS; i++){
-      struct session *sp = Sessions + i;
-      if(!inuse(sp) || muted(sp) || sp->buffer == NULL)
-	continue;
+    pthread_mutex_lock(&Rptr_mutex);
+    float *buffer = &Output_buffer[Channels*Rptr];
+    Rptr += frames;
+    Rptr &= (BUFFERSIZE-1);
+    Buffer_length -= frames;
+    for(int i=0; i < samples; i++)
+      out_buffer[i] = buffer[i] > 1 ? 32767 : buffer[i] < -1 ? -32767 : 32767 * buffer[i];
+    memset(buffer,0,samples * sizeof *buffer);
 
-      uint64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
-      int64_t count = samples;
-      if(wptr <= rptr)
-	count = 0; // he's empty
-      else {
-	int queue = wptr - rptr; // known to be positive
-	if(count > queue)
-	  count = queue;
-      }
-      int const base = (Channels * rptr) & (BUFFERSIZE-1);
+    pthread_cond_broadcast(&Rptr_cond);
+    pthread_mutex_unlock(&Rptr_mutex);
 
-      for(int j = 0; j < count; j++)
-	out_buffer[j] += sp->buffer[BINDEX(base,j)];
-
-      total += count;
-    }
-    atomic_store_explicit(&Output_time,rptr + frames,memory_order_release);
-    double energy = 0;
-    for(int j=0; j < samples; j++)
-      energy += out_buffer[j] * out_buffer[j];
-
-    energy /= samples;
-    atomic_store_explicit(&Output_level,energy,memory_order_relaxed);
-
-    opus_pcm_soft_clip(out_buffer,frames,Channels,Softclip_mem);
-    for(int j = 0; j < samples; j++){
-      double s = 32768 * out_buffer[j];
-      pcm_buffer[j] = s > 32767 ? 32767 : s < -32767 ? -32767 : s; // clip - redundant?
-    }
-    int r = write(Output_fd,pcm_buffer,samples * sizeof *pcm_buffer);
+    int r = write(Output_fd,out_buffer,sizeof out_buffer);
     if(r <= 0){
       if(Output_fd != -1)
 	close(Output_fd);
       Output_fd = open(Pipe,O_WRONLY,0666); // could retry, but don't bother
     }
-    atomic_fetch_add_explicit(&Output_total,total,memory_order_release);
-    atomic_fetch_add_explicit(&Callbacks,1,memory_order_release);
     // Schedule next transmission in 20 ms
     next.tv_nsec += 20000000;
     while(next.tv_nsec >= BILLION){

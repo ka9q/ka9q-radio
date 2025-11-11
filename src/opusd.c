@@ -24,6 +24,7 @@
 #include <bsd/string.h>
 #endif
 #include "compat_opus.h"
+#include "compat_net.h"
 #include <netdb.h>
 #include <locale.h>
 #include <sys/time.h>
