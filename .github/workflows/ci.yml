@@ -11,10 +11,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure build environment
         run: |
-          sudo ./setup.sh
+          sudo ./scripts/setup.sh
       - name: Run CMake build
         run: |
-          ./build.sh
+          ./scripts/build.sh
   macos-build:
     name: MacOS CI
     runs-on: macos-latest
@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure build environment
         run: |
-          ./setup.sh
+          ./scripts/setup.sh
       - name: Run CMake build
         run: |
-          ./build.sh
+          ./scripts/build.sh
