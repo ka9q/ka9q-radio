@@ -1,4 +1,8 @@
 #ifndef _AVAHI_H
+
+#pragma once
+
+#ifdef AVAHI_COMPONENTS_ENABLED
 #include <avahi-client/client.h>
 #include <avahi-client/publish.h>
 #include <avahi-common/alternative.h>
@@ -6,6 +10,7 @@
 #include <avahi-common/malloc.h>
 #include <avahi-common/error.h>
 #include <avahi-common/timeval.h>
+#endif // AVAHI_COMPONENTS_ENABLED
 
 extern bool Static_avahi;
 
