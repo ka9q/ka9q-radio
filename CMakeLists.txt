@@ -15,6 +15,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 # Load configuration modules
 include(Options)                          # Feature flags, standards, FreeBSD helpers
 include(CompilerFlags)                    # Compiler options via interface target
+include(GNUInstallDirs)
 include(DetectSockets)                    # Platform header checks
 include(DetectAlloca)                     # alloca availability
 include(FindDeps)                         # Dependencies via pkg-config

@@ -13,10 +13,3 @@ if(HAVE_ALLOCA_H)
 else()
   message(STATUS "alloca.h not found (will use stdlib.h on BSD/macOS)")
 endif()
-
-# Regenerate the configuration header with alloca detection
-configure_file(
-  "${CMAKE_SOURCE_DIR}/cmake/ka9q_config.h.in"
-  "${CMAKE_BINARY_DIR}/generated/ka9q_config.h"
-  @ONLY
-)
