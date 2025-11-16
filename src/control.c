@@ -774,6 +774,15 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   case '\f':  // Screen repaint (formfeed, aka control-L)
     clearok(curscr,TRUE);
     break;
+  case 'C':
+    {
+      char str[Entry_width];
+      getentry("Spectrum crossover, Hz: ",str,sizeof(str));
+      float crossover = fabs(parse_frequency(str,false));
+      channel->spectrum.crossover = crossover;
+      encode_float(bpp,CROSSOVER,crossover);
+    }
+    break;
   case 'S':
     {
       char str[Entry_width];
