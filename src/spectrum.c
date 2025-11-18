@@ -14,7 +14,9 @@
 #include "filter.h"
 #include "radio.h"
 
-static float const SPECTRUM_KAISER_BETA = 5.0;
+// Controls tradeoff between main lobe width and sidelobe level in small-bin (overlapped FFT) spectrum display
+// 7 gives -70 dB sidelobes. Could be dynamically changed from peak-to-N0 ratios
+static float const SPECTRUM_KAISER_BETA = 7.0;
 
 // Spectrum analysis thread
 int demod_spectrum(void *arg){
