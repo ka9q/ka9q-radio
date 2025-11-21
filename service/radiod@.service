@@ -9,6 +9,7 @@ Requires=network-online.target
 User=radio
 Group=radio
 Type=simple
+Environment="LD_LIBRARY_PATH=/usr/local/lib"
 SupplementaryGroups=plugdev radio users
 AmbientCapabilities=CAP_SYS_NICE CAP_NET_ADMIN
 StateDirectory=ka9q-radio
