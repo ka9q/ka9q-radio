@@ -262,6 +262,9 @@ int spectrum_poll(struct channel *chan){
   if(bin_bw <= chan->spectrum.crossover)
     return 0; // Only in wide binmode
 
+  if(chan->spectrum.plan == NULL || chan->spectrum.fft_n == 0 || chan->spectrum.window == NULL || chan->spectrum.bin_count == 0)
+    return 0; // Not yet set up
+
   // Parameters set by system input side
   int const bin_count = chan->spectrum.bin_count <= 0 ? 64 : chan->spectrum.bin_count;
 
@@ -298,6 +301,7 @@ int spectrum_poll(struct channel *chan){
     fftwf_execute_dft(chan->spectrum.plan,buffer,fft_out);
     fftwf_free(buffer);
   }
+  assert(fft_out != NULL);	
   // scale each bin value for our FFT
   // squared because the we're scaling the output of complex norm, not the input bin values
   // we only see one side of the spectrum for real inputs
