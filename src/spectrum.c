@@ -308,11 +308,13 @@ int spectrum_poll(struct channel *chan){
   double const gain = (master->in_type == REAL ? 2.0f : 1.0f) / ((float)chan->spectrum.fft_n * (float)chan->spectrum.fft_n);
   double const alpha = 1; // for smoothing
 
+  int const shift = chan->filter.bin_shift * (int64_t)chan->spectrum.fft_n / master->bins;
+
   if(frontend->in.in_type == COMPLEX){
     // Copy requested bins to user
-    int binp = chan->filter.bin_shift - bin_count/2;
+    int binp = shift - bin_count/2;
     if(binp < 0)
-      binp += master->bins; // Start in negative input region
+      binp += chan->spectrum.fft_n; // Start in negative input region
 
     // Form array of bin energies from lowest frequency to high
     // Lowest frequency in power_buffer[0] to simplify interpolation
@@ -321,18 +323,18 @@ int spectrum_poll(struct channel *chan){
       double const p = gain * cnrmf(fft_out[binp]); // Take power
       chan->spectrum.bin_data[i] += alpha * (p - chan->spectrum.bin_data[i]); // average it in
       assert(isfinite(chan->spectrum.bin_data[i]));
-      if(++binp == master->bins)
+      if(++binp == chan->spectrum.fft_n)
 	binp = 0;
     }
   } else if(chan->filter.bin_shift > 0){
     // Real input right side up
-    int binp = chan->filter.bin_shift - bin_count/2;
+    int binp = shift - bin_count/2;
     int i = 0;
     while(binp < 0 && i < bin_count){
       binp++;
       chan->spectrum.bin_data[i++] = 0;
     }
-    while(i < bin_count && binp < master->bins){
+    while(i < bin_count && binp < chan->spectrum.fft_n/2 + 1){
       double const p = gain * cnrmf(fft_out[binp]); // Take power
       chan->spectrum.bin_data[i] += alpha * (p - chan->spectrum.bin_data[i]); // average it in
       i++;
@@ -343,9 +345,9 @@ int spectrum_poll(struct channel *chan){
   } else {
     // Real input inverted
     // Real input spectrum is inverted, read in reverse order
-    int binp = -chan->filter.bin_shift + bin_count/2;
+    int binp = -shift + bin_count/2;
     int i = 0;
-    while(binp >= master->bins){
+    while(binp >= chan->spectrum.fft_n/2 + 1){
       binp--;
       chan->spectrum.bin_data[i++] = 0;
     }
