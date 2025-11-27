@@ -176,7 +176,7 @@ int demod_spectrum(void *arg){
     fft1_index = chan->spectrum.fft_n/2;
 
     chan->spectrum.plan = plan_complex(chan->spectrum.fft_n, fft0_in, fft_out, FFTW_FORWARD);
-    assert(plan != NULL);
+    assert(chan->spectrum.plan != NULL);
   }
   // Main loop
   while(1){
