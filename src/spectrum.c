@@ -101,16 +101,21 @@ int demod_spectrum(void *arg){
     switch(frontend->in.in_type){
     case REAL:
       {
-      float *fftr_in = fftwf_malloc(chan->spectrum.fft_n * sizeof *fftr_in);
-      fft_out = fftwf_malloc((chan->spectrum.fft_n/2 + 1) * sizeof *fft_out); // N/2 + 1 output points for real->complex
-      chan->spectrum.plan = plan_r2c(chan->spectrum.fft_n, fftr_in, fft_out);
-      fftwf_free(fftr_in);
+      float *in = fftwf_malloc(chan->spectrum.fft_n * sizeof *in);
+      float complex *out = fftwf_malloc((chan->spectrum.fft_n/2 + 1) * sizeof *out); // N/2 + 1 output points for real->complex
+      chan->spectrum.plan = plan_r2c(chan->spectrum.fft_n, in, out);
+      fftwf_free(in);
+      fftwf_free(out);
       }
       break;
     case COMPLEX:
-      fft0_in = fftwf_malloc(chan->spectrum.fft_n * sizeof *fft0_in);
-      fft_out = fftwf_malloc(chan->spectrum.fft_n * sizeof *fft_out);
-      chan->spectrum.plan = plan_complex(chan->spectrum.fft_n, fft0_in, fft_out, FFTW_FORWARD);
+      {
+      float complex *in = fftwf_malloc(chan->spectrum.fft_n * sizeof *in);
+      float complex *out = fftwf_malloc(chan->spectrum.fft_n * sizeof *out);
+      chan->spectrum.plan = plan_complex(chan->spectrum.fft_n, in, out, FFTW_FORWARD);
+      fftwf_free(in);
+      fftwf_free(out);
+      }
       break;
     default:
       goto quit;
@@ -267,7 +272,7 @@ int spectrum_poll(struct channel *chan){
     fft_out = fftwf_malloc(chan->spectrum.fft_n * sizeof *fft_out);
     float complex const *input = frontend->in.input_write_pointer.c;
     float complex *buffer = fftwf_malloc(chan->spectrum.fft_n * sizeof *buffer);
-
+    assert(buffer != NULL);
     // Find starting point to read in input A/D stream - 2 buffers back from current write point
     input -= 2 * chan->spectrum.fft_n;
     if(input < (float complex *)frontend->in.input_buffer)
@@ -281,6 +286,7 @@ int spectrum_poll(struct channel *chan){
     fft_out = fftwf_malloc((chan->spectrum.fft_n/2 + 1) * sizeof *fft_out);
     float const *input = frontend->in.input_write_pointer.r;
     float complex *buffer = fftwf_malloc(chan->spectrum.fft_n * sizeof *buffer);
+    assert(buffer != NULL);
     // Find starting point to read in input A/D stream - 2 buffers back from current write point
     input -= 2 * chan->spectrum.fft_n;
     if(input < (float *)frontend->in.input_buffer)
