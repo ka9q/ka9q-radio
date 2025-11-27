@@ -28,11 +28,8 @@ char const *Config_file;
 const char *App_path;
 int Verbose;
 static char const *Locale = "en_US.UTF-8";
-volatile bool Stop_transfers = false; // Request to stop data transfers; how should this get se?t// List of valid config keys in [global] section, for error checking
-
-char const *Name;
-
-
+volatile bool Stop_transfers = false; // Request to stop data transfers; how should this get set?
+char const *Name; // List of valid config keys in [global] section, for error checking
 
 static void closedown(int);
 static void verbosity(int);

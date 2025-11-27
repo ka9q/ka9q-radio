@@ -972,6 +972,20 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       }
     }
     break;
+  case 'w':
+    {
+      char str[Entry_width],*ptr;
+      getentry("Spectrum Kaiser window β: ",str,sizeof(str));
+      float const b = strtof(str,&ptr);
+      if(ptr != str && isfinite(b)){
+	if(b < 0 || b >= 100){
+	  beep(); // beyond limits
+	} else {
+	  encode_float(bpp,SPECTRUM_KAISER_BETA,b);
+	}
+      }
+    }
+    break;
   case 'o': // Set/clear option flags, most apply only to linear detector
     {
       char str[Entry_width];
@@ -1522,6 +1536,7 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"Bin width","%.0f Hz",channel->spectrum.bin_bw);
     pprintw(w,row++,col,"Bins","%d   ",channel->spectrum.bin_count);
     pprintw(w,row++,col,"Crossover","%.0f Hz",channel->spectrum.crossover);
+    pprintw(w,row++,col,"Spect β","%.1f",channel->spectrum.kaiser);
     if(channel->spectrum.bin_data != NULL)
       pprintw(w,row++,col,"Bin 0","%.1f   ",channel->spectrum.bin_data[0]);
     break;

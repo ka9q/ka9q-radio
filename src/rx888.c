@@ -64,7 +64,7 @@ static double const R828D_IF_CARRIER = 4570000;
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
-extern volatile bool Stop_transfers; // Flag to stop receive thread upcalls
+extern volatile bool Stop_transfers; // Flag to stop receive thread upcalls; defined in main.c
 extern char const *Description;
 
 // Hardware-specific stuff.

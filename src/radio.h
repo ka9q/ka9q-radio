@@ -237,6 +237,10 @@ struct channel {
     int bin_count;    // Requested bin count
     float *bin_data;  // Array of real floats with bin_count elements
     float crossover;  // Crossover frequency between algorithms, Hz
+    float kaiser;     // Analysis window beta
+    int fft_n;        // size of analysis FFT
+    float *window;    // Analysis window
+    void *plan;       // FFTW plan - don't drag in <fftw.h>
   } spectrum;
 
   // Output

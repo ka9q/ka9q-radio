@@ -19,8 +19,6 @@
 #include "status.h"
 #include "radio.h"
 
-extern int Mcast_ttl;
-
 union result {
   uint64_t ll;
   uint32_t l;

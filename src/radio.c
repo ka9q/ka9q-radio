@@ -125,7 +125,7 @@ int Ctl_fd = -1;     // File descriptor for receiving user commands
 int Channel_idle_timeout;  //  = DEFAULT_LIFETIME * 1000 / Blocktime;
 
 extern int N_worker_threads; // owned by filter.c
-extern char const *Name;
+extern char const *Name;     // owned by main.c
 
 static float estimate_noise(struct channel *chan,int shift);// Noise estimator tuning
 static int setup_hardware(char const *sname);
@@ -1504,7 +1504,6 @@ int set_channel_filter(struct channel *chan){
   delete_filter_output(&chan->filter2.out);
   delete_filter_input(&chan->filter2.in);
   if(chan->filter2.blocking > 0){
-    extern int Overlap;
     unsigned int const blocksize = chan->filter2.blocking * chan->output.samprate * Blocktime / 1000;
     float const binsize = (1000.0f / Blocktime) * ((float)(Overlap - 1) / Overlap);
     float const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
