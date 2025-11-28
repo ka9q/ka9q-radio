@@ -121,6 +121,7 @@ int demod_spectrum(void *arg){
     while(chan->spectrum.fft_n < 65536 && (!goodchoice(chan->spectrum.fft_n) || (int)round(chan->spectrum.fft_n * bin_bw) % samprate_base != 0))
       chan->spectrum.fft_n++;
     int samprate = chan->spectrum.fft_n * bin_bw;
+    chan->output.samprate = samprate;
     if(Verbose > 1)
       fprintf(stderr,"spectrum setup: bin count %d, bin_bw %.1lf, samprate %d fft size %d\n",
 	      bin_count,bin_bw,samprate,chan->spectrum.fft_n);

@@ -696,18 +696,18 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
 
   encode_float(&bp,LOW_EDGE,chan->filter.min_IF); // Hz
   encode_float(&bp,HIGH_EDGE,chan->filter.max_IF); // Hz
-  // Lots of stuff not relevant in spectrum analysis mode
-  if(chan->demod_type != SPECT_DEMOD){
-    encode_int32(&bp,OUTPUT_SAMPRATE,chan->output.samprate); // Hz
-    encode_int64(&bp,OUTPUT_DATA_PACKETS,chan->output.rtp.packets);
+  encode_int32(&bp,OUTPUT_SAMPRATE,chan->output.samprate); // Hz
+  encode_float(&bp,BASEBAND_POWER,power2dB(chan->sig.bb_power));
 
+  // Stuff not relevant in spectrum analysis mode
+  if(chan->demod_type != SPECT_DEMOD){
+    encode_int64(&bp,OUTPUT_DATA_PACKETS,chan->output.rtp.packets);
     encode_int(&bp,FILTER2,chan->filter2.blocking);
     if(chan->filter2.blocking != 0){
       encode_int(&bp,FILTER2_BLOCKSIZE,chan->filter2.in.ilen);
       encode_int(&bp,FILTER2_FIR_LENGTH,chan->filter2.in.impulse_length);
       encode_float(&bp,FILTER2_KAISER_BETA,chan->filter2.kaiser_beta);
     }
-    encode_float(&bp,BASEBAND_POWER,power2dB(chan->sig.bb_power));
     // Output levels are already normalized since they scaled by a fixed 32767 for conversion to int16_t
     encode_float(&bp,OUTPUT_LEVEL,power2dB(chan->output.power)); // power ratio -> dB
     if(chan->demod_type == LINEAR_DEMOD){ // Gain not really meaningful in FM modes

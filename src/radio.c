@@ -1437,7 +1437,7 @@ int downconvert(struct channel *chan){
     chan->status.blocks_since_poll++;
 
     if(chan->filter.out.output.c == NULL){
-      chan->filter.bin_shift = shift; // Needed by spectrum.c
+      chan->filter.bin_shift = shift; // Needed by spectrum.c in wideband mode
       return 0; // Probably in spectrum mode, nothing more to do
     }
     // Compute and exponentially smooth noise estimate
