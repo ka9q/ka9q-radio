@@ -447,8 +447,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     case SPECTRUM_KAISER_BETA:
       {
 	float const x = decode_float(cp,optlen);
-	if(isfinite(x) && x != chan->spectrum.kaiser){
-	  chan->spectrum.kaiser = x;
+	if(isfinite(x) && x != chan->spectrum.kaiser_beta){
+	  chan->spectrum.kaiser_beta = x;
 	  restart_needed = true;
 	}
       }
@@ -615,7 +615,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
     if(len > 0 && len < sizeof(chan->preset))
       encode_string(&bp,PRESET,chan->preset,len);
   }
-
+  encode_float(&bp,KAISER_BETA,chan->filter.kaiser_beta); // Dimensionless
 
   // Mode-specific params
   switch(chan->demod_type){
@@ -675,7 +675,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
       encode_float(&bp,NONCOHERENT_BIN_BW,chan->spectrum.bin_bw); // Hz
       encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
       encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
-      encode_float(&bp,SPECTRUM_KAISER_BETA,chan->spectrum.kaiser);
+      encode_float(&bp,SPECTRUM_KAISER_BETA,chan->spectrum.kaiser_beta);
       // encode bin data here? maybe change this, it can be a lot
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
       spectrum_poll(chan); // Update the spectral data (wide bins only)
@@ -700,7 +700,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
   if(chan->demod_type != SPECT_DEMOD){
     encode_int32(&bp,OUTPUT_SAMPRATE,chan->output.samprate); // Hz
     encode_int64(&bp,OUTPUT_DATA_PACKETS,chan->output.rtp.packets);
-    encode_float(&bp,KAISER_BETA,chan->filter.kaiser_beta); // Dimensionless
+
     encode_int(&bp,FILTER2,chan->filter2.blocking);
     if(chan->filter2.blocking != 0){
       encode_int(&bp,FILTER2_BLOCKSIZE,chan->filter2.in.ilen);

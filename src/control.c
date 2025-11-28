@@ -1370,7 +1370,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Bin width","%'.3f Hz",(float)Frontend.samprate / N);
 
   float const beta = channel->filter.kaiser_beta;
-  if(!isnan(beta))
+  if(isfinite(beta))
     pprintw(w,row++,col,"Kaiser β","%'.1f   ",beta);
 
 
@@ -1536,7 +1536,7 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"Bin width","%.0f Hz",channel->spectrum.bin_bw);
     pprintw(w,row++,col,"Bins","%d   ",channel->spectrum.bin_count);
     pprintw(w,row++,col,"Crossover","%.0f Hz",channel->spectrum.crossover);
-    pprintw(w,row++,col,"Spect β","%.1f",channel->spectrum.kaiser);
+    pprintw(w,row++,col,"Spect β","%.1f",channel->spectrum.kaiser_beta);
     if(channel->spectrum.bin_data != NULL)
       pprintw(w,row++,col,"Bin 0","%.1f   ",channel->spectrum.bin_data[0]);
     break;
