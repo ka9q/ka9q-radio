@@ -87,6 +87,7 @@ int demod_spectrum(void *arg){
 
     // Generate normalized Kaiser window
     chan->spectrum.window = malloc(chan->spectrum.fft_n * sizeof *chan->spectrum.window);
+    assert(chan->spectrum.window != NULL);
     make_kaiser(chan->spectrum.window,chan->spectrum.fft_n,chan->spectrum.kaiser);
     double window_gain = 0;
     for(int i = 0; i < chan->spectrum.fft_n; i++)
@@ -98,17 +99,22 @@ int demod_spectrum(void *arg){
 
     if(frontend->isreal){
       float *in = fftwf_alloc_real(chan->spectrum.fft_n);
+      assert(in != NULL);
       float complex *out = fftwf_alloc_complex(chan->spectrum.fft_n/2+1); // N/2 + 1 output points for real->complex
+      assert(out != NULL);
       chan->spectrum.plan = plan_r2c(chan->spectrum.fft_n, in, out);
       fftwf_free(in);
       fftwf_free(out);
     } else {
       float complex *in = fftwf_alloc_complex(chan->spectrum.fft_n);
+      assert(in != NULL);
       float complex *out = fftwf_alloc_complex(chan->spectrum.fft_n);
+      assert(out != NULL);
       chan->spectrum.plan = plan_complex(chan->spectrum.fft_n, in, out, FFTW_FORWARD);
       fftwf_free(in);
       fftwf_free(out);
     }
+    assert(chan->spectrum.plan != NULL);
     // Dummy just so downconvert() will process commands and signal need to restart
     int r = create_filter_output(&chan->filter.out,&frontend->in,NULL,0,SPECTRUM);
     assert(r == 0);
@@ -168,9 +174,7 @@ int demod_spectrum(void *arg){
     assert(chan->spectrum.plan != NULL);
   }
   // Main loop
-  while(1){
-    if(downconvert(chan) != 0) // Wait for new frame
-      break; // restart required, e.g, due to parameter change
+  while(downconvert(chan) == 0){ // Wait for new frame
 
     if(bin_bw > chan->spectrum.crossover)
       continue; // Do the rest at poll time
@@ -214,6 +218,7 @@ int demod_spectrum(void *arg){
       }
     }
   } // end of main loop, break on restart
+  chan->spectrum.fft_n = 0;
   delete_filter_output(&chan->filter.out);
   if(chan->spectrum.plan)
     fftwf_destroy_plan(chan->spectrum.plan);
@@ -268,7 +273,7 @@ int spectrum_poll(struct channel *chan){
 
     // Find starting point to read in input A/D stream - 2 buffers back from current write point
     float const *input = frontend->in.input_write_pointer.r;
-    input -= 2 * chan->spectrum.fft_n * sizeof *input;
+    input -= 2 * chan->spectrum.fft_n;
     if(input < (float *)frontend->in.input_buffer)
       input += frontend->in.input_buffer_size / sizeof *input; // backward wrap
     // Copy and window raw A/D
@@ -284,7 +289,7 @@ int spectrum_poll(struct channel *chan){
     assert(buffer != NULL);
     assert(fft_out != NULL);
     // Find starting point to read in input A/D stream - 2 buffers back from current write point
-    input -= 2 * chan->spectrum.fft_n * sizeof *input;
+    input -= 2 * chan->spectrum.fft_n;
     if(input < (float complex *)frontend->in.input_buffer)
       input += frontend->in.input_buffer_size / sizeof *input; // backward wrap
     // Copy and window raw A/D

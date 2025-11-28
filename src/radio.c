@@ -1364,17 +1364,22 @@ int downconvert(struct channel *chan){
     // Look on the single-entry command queue and grab it atomically
     if(chan->status.command != NULL){
       restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
-      send_radio_status(&Frontend.metadata_dest_socket,&Frontend,chan); // Send status in response
-      chan->status.global_timer = 0; // Just sent one
-      // Also send to output stream
-      if(chan->demod_type != SPECT_DEMOD){
-	// Only send spectrum on status channel, and only in response to poll
-	// Spectrum channel output socket isn't set anyway
-	send_radio_status(&chan->status.dest_socket,&Frontend,chan);
+      if(!restart_needed){
+	// Don't send status immediately after a major change requiring a restart
+	// This would cause corruption in spectrum.c since the new params haven't all been calculated yet
+	// Let the new demod incarnation send its first status
+	send_radio_status(&Frontend.metadata_dest_socket,&Frontend,chan); // Send status in response
+	chan->status.global_timer = 0; // Just sent one
+	// Also send to output stream
+	if(chan->demod_type != SPECT_DEMOD){
+	  // Only send spectrum on status channel, and only in response to poll
+	  // Spectrum channel output socket isn't set anyway
+	  send_radio_status(&chan->status.dest_socket,&Frontend,chan);
+	}
+	chan->status.output_timer = chan->status.output_interval; // Reload
+	FREE(chan->status.command);
+	reset_radio_status(chan); // After both are sent
       }
-      chan->status.output_timer = chan->status.output_interval; // Reload
-      FREE(chan->status.command);
-      reset_radio_status(chan); // After both are sent
     } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
       // Delayed status request, used mainly by all-channel polls to avoid big bursts
       send_radio_status(&Frontend.metadata_dest_socket,&Frontend,chan); // Send status in response
