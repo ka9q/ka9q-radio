@@ -97,14 +97,14 @@ int demod_spectrum(void *arg){
       chan->spectrum.window[i] *= window_gain;
 
     if(frontend->isreal){
-      float *in = fftwf_malloc(chan->spectrum.fft_n * sizeof *in);
-      float complex *out = fftwf_malloc((chan->spectrum.fft_n/2 + 1) * sizeof *out); // N/2 + 1 output points for real->complex
+      float *in = fftwf_alloc_real(chan->spectrum.fft_n);
+      float complex *out = fftwf_alloc_complex(chan->spectrum.fft_n/2+1); // N/2 + 1 output points for real->complex
       chan->spectrum.plan = plan_r2c(chan->spectrum.fft_n, in, out);
       fftwf_free(in);
       fftwf_free(out);
     } else {
-      float complex *in = fftwf_malloc(chan->spectrum.fft_n * sizeof *in);
-      float complex *out = fftwf_malloc(chan->spectrum.fft_n * sizeof *out);
+      float complex *in = fftwf_alloc_complex(chan->spectrum.fft_n);
+      float complex *out = fftwf_alloc_complex(chan->spectrum.fft_n);
       chan->spectrum.plan = plan_complex(chan->spectrum.fft_n, in, out, FFTW_FORWARD);
       fftwf_free(in);
       fftwf_free(out);
@@ -138,13 +138,13 @@ int demod_spectrum(void *arg){
     chan->filter.max_IF = (double)(samprate - margin)/2;
     chan->filter.min_IF = -chan->filter.max_IF;
     chan->filter2.blocking = 0; // Not used in this mode, make sure it's 0
-    set_filter(&chan->filter.out,chan->filter.min_IF,chan->filter.max_IF,KAISER_BETA);
+    set_filter(&chan->filter.out,chan->filter.min_IF,chan->filter.max_IF,chan->filter.kaiser_beta);
     chan->filter.remainder = NAN; // Force init of downconverter
     chan->filter.bin_shift = 1010101010; // Unlikely - but a kludge, force init of phase rotator
 
     // Generate normalized Kaiser window
     chan->spectrum.window = malloc(chan->spectrum.fft_n * sizeof *chan->spectrum.window);
-    make_kaiser(chan->spectrum.window,chan->spectrum.fft_n,SPECTRUM_KAISER_BETA);
+    make_kaiser(chan->spectrum.window,chan->spectrum.fft_n,chan->spectrum.kaiser);
     double window_gain = 0;
     for(int i = 0; i < chan->spectrum.fft_n; i++)
       window_gain += chan->spectrum.window[i];
@@ -154,9 +154,9 @@ int demod_spectrum(void *arg){
       chan->spectrum.window[i] *= window_gain;
 
     // Set up two 50% overlapping time-domain windows
-    fft0_in = fftwf_malloc(chan->spectrum.fft_n * sizeof *fft0_in);
-    fft1_in = fftwf_malloc(chan->spectrum.fft_n * sizeof *fft1_in);
-    fft_out = fftwf_malloc(chan->spectrum.fft_n * sizeof *fft_out);
+    fft0_in = fftwf_alloc_complex(chan->spectrum.fft_n);
+    fft1_in = fftwf_alloc_complex(chan->spectrum.fft_n);
+    fft_out = fftwf_alloc_complex(chan->spectrum.fft_n);
     assert(fft0_in != NULL && fft1_in != NULL && fft_out != NULL);
     memset(fft0_in,0,chan->spectrum.fft_n * sizeof *fft0_in);
     memset(fft1_in,0,chan->spectrum.fft_n * sizeof *fft1_in); // Odd buffer not full when first transformed
@@ -260,10 +260,27 @@ int spectrum_poll(struct channel *chan){
   // Asynchronously read newest data from input buffer
   // Look back two FFT blocks from the most recent write pointer to allow room for overlapping windows
   float complex *fft_out = NULL;
-  if(!frontend->isreal){
-    fft_out = fftwf_malloc(chan->spectrum.fft_n * sizeof *fft_out);
+  if(frontend->isreal){
+    fft_out = fftwf_alloc_complex(chan->spectrum.fft_n/2 + 1);
+    assert(fft_out != NULL);
+    float *buffer = fftwf_alloc_real(chan->spectrum.fft_n);
+    assert(buffer != NULL);
+
+    // Find starting point to read in input A/D stream - 2 buffers back from current write point
+    float const *input = frontend->in.input_write_pointer.r;
+    input -= 2 * chan->spectrum.fft_n * sizeof *input;
+    if(input < (float *)frontend->in.input_buffer)
+      input += frontend->in.input_buffer_size / sizeof *input; // backward wrap
+    // Copy and window raw A/D
+    // Invert spectrum for inverted inputs?
+    for(int i=0; i < chan->spectrum.fft_n; i++)
+      buffer[i] = chan->spectrum.window[i] * input[i];
+    fftwf_execute_dft_r2c(chan->spectrum.plan,buffer,fft_out);
+    fftwf_free(buffer);
+  } else {
+    fft_out = fftwf_alloc_complex(chan->spectrum.fft_n);
     float complex const *input = frontend->in.input_write_pointer.c;
-    float complex *buffer = fftwf_malloc(chan->spectrum.fft_n * sizeof *buffer);
+    float complex *buffer = fftwf_alloc_complex(chan->spectrum.fft_n);
     assert(buffer != NULL);
     assert(fft_out != NULL);
     // Find starting point to read in input A/D stream - 2 buffers back from current write point
@@ -274,22 +291,6 @@ int spectrum_poll(struct channel *chan){
     for(int i=0; i < chan->spectrum.fft_n; i++)
       buffer[i] = chan->spectrum.window[i] * input[i];
     fftwf_execute_dft(chan->spectrum.plan,buffer,fft_out);
-    fftwf_free(buffer);
-  } else {
-    fft_out = fftwf_malloc((chan->spectrum.fft_n/2 + 1) * sizeof *fft_out);
-    float const *input = frontend->in.input_write_pointer.r;
-    float *buffer = fftwf_malloc(chan->spectrum.fft_n * sizeof *buffer);
-    assert(buffer != NULL);
-    assert(fft_out != NULL);
-    // Find starting point to read in input A/D stream - 2 buffers back from current write point
-    input -= 2 * chan->spectrum.fft_n * sizeof *input;
-    if(input < (float *)frontend->in.input_buffer)
-      input += frontend->in.input_buffer_size / sizeof *input; // backward wrap
-    // Copy and window raw A/D
-    // Invert spectrum for inverted inputs?
-    for(int i=0; i < chan->spectrum.fft_n; i++)
-      buffer[i] = chan->spectrum.window[i] * input[i];
-    fftwf_execute_dft_r2c(chan->spectrum.plan,buffer,fft_out);
     fftwf_free(buffer);
   }
   assert(fft_out != NULL);	
@@ -346,14 +347,22 @@ int spectrum_poll(struct channel *chan){
       binp++;
     }
   } else {
-    // Real input inverted - broken, fix
     // Real input spectrum is inverted, read in reverse order
-    int binp = -shift + bin_count/2;
+    // Start with DC, then positive, then negative
+    int binp = -shift;
     int i = 0;
-    while(binp >= chan->spectrum.fft_n/2 + 1){
+    while(binp >= chan->spectrum.fft_n/2 + 1 && i < bin_count/2){
       binp--;
       chan->spectrum.bin_data[i++] = 0;
     }
+    while(i < bin_count/2 && binp >= 0){
+      double const p = gain * cnrmf(fft_out[binp]); // Take power
+      chan->spectrum.bin_data[i] += alpha * (p - chan->spectrum.bin_data[i]); // average it in
+      i++;
+      binp--;
+    }
+    // negative frequencies
+    binp = -shift + bin_count/2;
     while(i < bin_count && binp >= 0){
       double const p = gain * cnrmf(fft_out[binp]); // Take power
       chan->spectrum.bin_data[i] += alpha * (p - chan->spectrum.bin_data[i]); // average it in
