@@ -298,10 +298,10 @@ int spectrum_poll(struct channel *chan){
   // squared because the we're scaling the output of complex norm, not the input bin values
   // we only see one side of the spectrum for real inputs
   double const gain = (master->in_type == REAL ? 2.0f : 1.0f) / ((float)chan->spectrum.fft_n * (float)chan->spectrum.fft_n);
-  double const alpha = 1; // for smoothing
+  double const alpha = .2; // for smoothing
 
   // scale fft bin shift down to size of analysis FFT, which is smaller than the input FFT
-  int const shift = chan->filter.bin_shift * (int64_t)chan->spectrum.fft_n / master->bins;
+  int const shift = chan->filter.bin_shift * (int64_t)chan->spectrum.fft_n / master->points;
 
   if(frontend->in.in_type == COMPLEX){
     // Copy requested bins to user
