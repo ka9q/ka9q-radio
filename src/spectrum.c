@@ -217,11 +217,11 @@ int spectrum_poll(struct channel *chan){
   // squared because the we're scaling the output of complex norm, not the input bin values
   // we only see one side of the spectrum for real inputs
   double const gain = (frontend->isreal ? 2.0f : 1.0f) / ((float)chan->spectrum.fft_n * (float)chan->spectrum.fft_n);
-  double const alpha = 0.5;
+  double const alpha = 0.5; // -3dB/cycle, or -30 dB/sec @ 10 Hz pollrate
 
   if(bin_bw <= chan->spectrum.crossover){
     // Narrowband mode
-    // Copy most recent data in receive ring buffer
+    // Copy most recent data from receive ring buffer
     float complex *buffer = fftwf_alloc_complex(chan->spectrum.fft_n);
     assert(buffer != NULL);
     int rp = chan->spectrum.ring_ptr - chan->spectrum.fft_n;
@@ -243,7 +243,6 @@ int spectrum_poll(struct channel *chan){
       assert(isfinite(chan->spectrum.bin_data[i]));
       if(i == bin_count/2)
 	fr = chan->spectrum.fft_n - bin_count/2; // skip excess FFT bins
-
     }
     fftwf_free(fft_out);
     return 0;
