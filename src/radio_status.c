@@ -699,6 +699,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
   encode_float(&bp,HIGH_EDGE,chan->filter.max_IF); // Hz
   encode_int32(&bp,OUTPUT_SAMPRATE,chan->output.samprate); // Hz
   encode_float(&bp,BASEBAND_POWER,power2dB(chan->sig.bb_power));
+  encode_int32(&bp,OUTPUT_CHANNELS,chan->output.channels);
 
   // Stuff not relevant in spectrum analysis mode
   if(chan->demod_type != SPECT_DEMOD){
@@ -720,7 +721,6 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
     // Doppler info
     encode_double(&bp,DOPPLER_FREQUENCY,chan->tune.doppler); // Hz
     encode_double(&bp,DOPPLER_FREQUENCY_RATE,chan->tune.doppler_rate); // Hz
-    encode_int32(&bp,OUTPUT_CHANNELS,chan->output.channels);
 
     // Source address we're using to send data
     // Get the local socket for the output stream

@@ -1537,7 +1537,7 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"Bins","%d   ",channel->spectrum.bin_count);
     pprintw(w,row++,col,"Crossover","%.0f Hz",channel->spectrum.crossover);
     pprintw(w,row++,col,"FFT N","%d   ",channel->spectrum.fft_n);
-    pprintw(w,row++,col,"Spect β","%.1f   ",channel->spectrum.kaiser_beta);
+    pprintw(w,row++,col,"Kaiser β","%.1f   ",channel->spectrum.kaiser_beta);
     if(channel->spectrum.bin_data != NULL)
       pprintw(w,row++,col,"Bin 0","%.1f   ",channel->spectrum.bin_data[0]);
     break;
