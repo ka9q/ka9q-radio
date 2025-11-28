@@ -77,6 +77,7 @@ int demod_spectrum(void *arg){
     // Direct Wideband mode. Setup FFT to work on raw A/D input
     // What can we do about unfriendly sizes? Anything?
     chan->spectrum.fft_n = frontend->samprate / bin_bw;
+    chan->output.samprate = frontend->samprate * (int64_t)chan->spectrum.fft_n / N; // Virtual number for control display
 
     // Generate normalized Kaiser window
     chan->spectrum.window = malloc(chan->spectrum.fft_n * sizeof *chan->spectrum.window);
@@ -122,6 +123,7 @@ int demod_spectrum(void *arg){
       chan->spectrum.fft_n++;
     int samprate = chan->spectrum.fft_n * bin_bw;
     chan->output.samprate = samprate;
+    chan->output.channels = 2; // IQ mode
     if(Verbose > 1)
       fprintf(stderr,"spectrum setup: bin count %d, bin_bw %.1lf, samprate %d fft size %d\n",
 	      bin_count,bin_bw,samprate,chan->spectrum.fft_n);
