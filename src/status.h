@@ -114,7 +114,7 @@ enum status_type {
   FILTER2_BLOCKSIZE,
   FILTER2_FIR_LENGTH,
   FILTER2_KAISER_BETA,
-  UNUSED16,
+  SPECTRUM_FFT_N,
 
   FILTER_DROPS,
   LOCK,     // Tuner is locked, will ignore retune commands (boolean)

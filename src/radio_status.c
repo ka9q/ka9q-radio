@@ -676,6 +676,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
       encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
       encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
       encode_float(&bp,SPECTRUM_KAISER_BETA,chan->spectrum.kaiser_beta);
+      encode_int(&bp,SPECTRUM_FFT_N,chan->spectrum.fft_n);
       // encode bin data here? maybe change this, it can be a lot
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
       spectrum_poll(chan); // Update the spectral data (wide bins only)
