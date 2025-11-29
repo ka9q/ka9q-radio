@@ -76,6 +76,28 @@ Command-line options:
 
 // Simplified .wav file header
 // http://soundfile.sapp.org/doc/WaveFormat/
+
+// Broadcast Wave Format "bext" chunk
+// https://tech.ebu.ch/docs/tech/tech3285.pdf
+struct bext_chunk {
+  char ChunkID[4]; // "bext"
+  int32_t ChunkSize; // Size of the payload
+  char Description[256];
+  char Originator[32];
+  char OriginatorReference[32];
+  char OriginationDate[10]; // "YYYY-MM-DD"
+  char OriginationTime[8]; // "HH:MM:SS"
+  int64_t TimeReference; // First sample count since midnight
+  int16_t Version;
+  uint8_t UMID[64];
+  int16_t LoudnessValue;
+  int16_t LoudnessRange;
+  int16_t MaxTruePeakLevel;
+  int16_t MaxMomentaryLoudness;
+  int16_t MaxShortTermLoudness;
+  char Reserved[182];
+} __attribute__((packed));
+
 struct wav {
   char ChunkID[4]; // "RIFF"
   int32_t ChunkSize; // Total file size minus 8
@@ -125,6 +147,8 @@ struct wav {
    int32_t CenterFrequency;
    char AuxUknown[128];
 
+   struct bext_chunk bext;
+
   char SubChunk2ID[4];
   int32_t Subchunk2Size;
 };
@@ -141,6 +165,15 @@ struct session {
 
   uint32_t ssrc;               // RTP stream source ID
   struct rtp_state rtp_state;
+  struct rtcp_sr first_sr;
+  bool has_sr;
+  bool has_rtp_timestamp;
+  uint32_t first_rtp_timestamp;
+
+  // RTCP Source Description
+  char cname[256];
+  char name[256];
+  char tool[256];
 
   // information obtained from status stream
   struct channel chan;
@@ -205,7 +238,7 @@ static bool Padding = false;
 static bool Reset_time = false;
 
 const char *App_path;
-static int Input_fd,Status_fd;
+static int Input_fd,Status_fd,Rtcp_fd;
 static struct session *Sessions;
 int Mcast_ttl;
 
@@ -213,6 +246,7 @@ static void closedown(int a);
 static void input_loop(void);
 static void process_status(int);
 static void process_data(int);
+static void process_rtcp(int);
 static void scan_sessions(void);
 
 static void cleanup(void);
@@ -401,8 +435,10 @@ int main(int argc,char *argv[]){
     Input_fd = listen_mcast(Source_socket,&sock,iface);
     resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     Status_fd = listen_mcast(Source_socket,&sock,iface);
+    resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_RTCP_PORT,iface,sizeof(iface),0);
+    Rtcp_fd = listen_mcast(Source_socket,&sock,iface);
   }
-  if(Status_fd == -1 || Input_fd == -1){
+  if(Status_fd == -1 || Input_fd == -1 || Rtcp_fd == -1){
     fprintf(stderr,"Can't set up PCM input, exiting\n");
     exit(EX_IOERR);
   }
@@ -433,7 +469,7 @@ int main(int argc,char *argv[]){
 static void input_loop(){
   while(true){
     // Receive status or data
-    struct pollfd pfd[2] = {
+    struct pollfd pfd[3] = {
       {
 	.fd = Input_fd,
 	.events = POLLIN,
@@ -442,8 +478,12 @@ static void input_loop(){
 	.fd = Status_fd,
 	.events = POLLIN,
       },
+      {
+	.fd = Rtcp_fd,
+	.events = POLLIN,
+      },
     };
-    int const n = poll(pfd,2,1000); // Wait 1 sec max so we can scan active session list
+    int const n = poll(pfd,3,1000); // Wait 1 sec max so we can scan active session list
     if(n < 0)
       break; // error of some kind - should we exit or retry?
 
@@ -452,6 +492,9 @@ static void input_loop(){
 
     if(pfd[0].revents & (POLLIN|POLLPRI))
       process_data(Input_fd);
+
+    if(pfd[2].revents & (POLLIN|POLLPRI))
+      process_rtcp(Rtcp_fd);
 
     scan_sessions();
   }
@@ -682,6 +725,11 @@ static void process_data(int fd){
   if(Verbose > 2)
     fprintf(stderr,"ssrc %u queue sequence %u timestamp %u bytes %d\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
 
+  if(!sp->has_rtp_timestamp){
+    sp->first_rtp_timestamp = rtp.timestamp;
+    sp->has_rtp_timestamp = true;
+  }
+
   // put into circular queue
   sp->rtp_state.odd_seq_set = false;
   int const qi = rtp.seq % RESEQ;
@@ -710,6 +758,110 @@ static void process_data(int fd){
 
   if(sp->samples_remaining <= 0)
     close_file(sp,"size limit"); // Don't reset RTP here so we won't lose samples on the next file
+}
+
+
+
+static void process_rtcp(int fd){
+  uint8_t buffer[PKTSIZE] = {0};
+  struct sockaddr sender = {0};
+  socklen_t socksize = sizeof(sender);
+  int const length = recvfrom(fd,buffer,sizeof(buffer),0,&sender,&socksize);
+  if(length <= 0){
+    perror("recvfrom");
+    return;
+  }
+  uint8_t *dp = buffer;
+  int remaining = length;
+
+  while(remaining > 0){
+    if(remaining < 4) break; // Header too short
+    uint8_t first = dp[0];
+    int version = first >> 6;
+    int padding = (first >> 5) & 1;
+    int count = first & 0x1f;
+    int pt = dp[1];
+    int length_words = (dp[2] << 8) | dp[3];
+    int packet_len = (length_words + 1) * 4;
+
+    if(version != 2) break;
+    if(packet_len > remaining) break; // Malformed
+
+    uint8_t *packet_end = dp + packet_len;
+    if(padding) packet_end -= dp[packet_len-1]; // Ignore padding bytes
+
+    if(pt == 200){ // SR
+       if(packet_len < 28) goto next; // Too short for SR header + sender info
+       uint8_t *sp_ptr = dp + 4; // Skip header
+       uint32_t ssrc = get32(sp_ptr); sp_ptr += 4;
+       uint32_t ntp_msw = get32(sp_ptr); sp_ptr += 4;
+       uint32_t ntp_lsw = get32(sp_ptr); sp_ptr += 4;
+       uint32_t rtp_ts = get32(sp_ptr); sp_ptr += 4;
+       uint32_t pkt_count = get32(sp_ptr); sp_ptr += 4;
+       uint32_t byte_count = get32(sp_ptr); sp_ptr += 4;
+
+       struct session *sp;
+       for(sp = Sessions;sp != NULL;sp=sp->next){
+         if(sp->ssrc == ssrc && !sp->has_sr){
+           sp->first_sr.ssrc = ssrc;
+           sp->first_sr.ntp_timestamp = ((uint64_t)ntp_msw << 32) | ntp_lsw;
+           sp->first_sr.rtp_timestamp = rtp_ts;
+           sp->first_sr.packet_count = pkt_count;
+           sp->first_sr.byte_count = byte_count;
+           sp->has_sr = true;
+           if(Verbose > 1)
+             fprintf(stderr,"Got SR for %x: NTP %x.%08x RTP %u\n",ssrc,ntp_msw,ntp_lsw,rtp_ts);
+           break;
+         }
+       }
+    } else if(pt == 202){ // SDES
+       uint8_t *cp = dp + 4; // Skip header
+       for(int i=0; i < count; i++){
+         if(cp + 4 > packet_end) break;
+         uint32_t ssrc = get32(cp); cp += 4;
+         struct session *sp = NULL;
+         for(struct session *s = Sessions; s != NULL; s=s->next){
+           if(s->ssrc == ssrc){
+             sp = s;
+             break;
+           }
+         }
+
+         while(cp < packet_end){
+           uint8_t type = *cp++;
+           if(type == 0) {
+             // End of chunk, align to 32-bit boundary
+             while(((cp - dp) % 4) != 0 && cp < packet_end) cp++;
+             break; 
+           }
+           if(cp >= packet_end) break;
+           uint8_t len = *cp++;
+           if(cp + len > packet_end) break;
+           
+           if(sp){
+             if(type == 1){ // CNAME
+               int l = min((int)len, (int)(sizeof(sp->cname)-1));
+               memcpy(sp->cname, cp, l);
+               sp->cname[l] = 0;
+             } else if(type == 2){ // NAME
+               int l = min((int)len, (int)(sizeof(sp->name)-1));
+               memcpy(sp->name, cp, l);
+               sp->name[l] = 0;
+             } else if(type == 6){ // TOOL
+               int l = min((int)len, (int)(sizeof(sp->tool)-1));
+               memcpy(sp->tool, cp, l);
+               sp->tool[l] = 0;
+             }
+           }
+           cp += len;
+         }
+       }
+    }
+
+    next:
+    dp += packet_len;
+    remaining -= packet_len;
+  }
 }
 static void scan_sessions(){
   // Walk through session list, close idle files
@@ -1600,6 +1752,11 @@ static int start_wav_stream(struct session *sp){
     .StartMinute = tm->tm_min,
     .StartSecond = tm->tm_sec,
     .StartMillis = (int16_t)((sp->file_time / 1000000) % 10),
+    .bext = {
+      .ChunkID = "JUNK",
+      .ChunkSize = sizeof(struct bext_chunk) - 8,
+      .Version = 1,
+    },
   };
   switch(sp->encoding){
   default:
@@ -1629,6 +1786,18 @@ static int start_wav_stream(struct session *sp){
     rewind(sp->fp); // should be at BOF but make sure
   fwrite(&header,sizeof(header),1,sp->fp);
   return 0;
+}
+uint64_t compute_high_64_bits(uint64_t x, uint32_t y) {
+    uint64_t y_64 = (uint64_t)y;
+
+    uint64_t x_l = x & 0xFFFFFFFFULL;
+    uint64_t x_h = x >> 32;
+
+    uint64_t term1 = x_h * y_64;
+
+    uint64_t term2 = (x_l * y_64) >> 32;
+
+    return term1 + term2;
 }
 // Update wav header with now-known size and end auxi information
 static int end_wav_stream(struct session *sp){
@@ -1677,6 +1846,41 @@ static int end_wav_stream(struct session *sp){
   header.StartMinute = tm->tm_min;
   header.StartSecond = tm->tm_sec;
   header.StartMillis = (int16_t)(((sp->file_time / 1000000) % 10));
+
+  if(sp->has_sr && sp->has_rtp_timestamp){
+    snprintf(header.bext.Description, sizeof(header.bext.Description),
+             "RTCP SR: NTP=%lx RTP=%u PC=%u BC=%u CNAME=%.40s NAME=%.40s TOOL=%.40s",
+             (unsigned long)sp->first_sr.ntp_timestamp,
+             sp->first_sr.rtp_timestamp,
+             sp->first_sr.packet_count,
+             sp->first_sr.byte_count,
+             sp->cname,
+             sp->name,
+             sp->tool);
+
+    // By default, this header is set to "JUNK". Set it to "bext" if we have SR data
+    memcpy(header.bext.ChunkID,"bext",4);
+
+    // Get the ntp time since midnight
+    uint32_t ntp_msw = sp->first_sr.ntp_timestamp >> 32;
+    uint32_t ntp_lsw = sp->first_sr.ntp_timestamp & 0xffffffff;
+    uint64_t ntp_time_since_midnight = ((uint64_t)(ntp_msw % 86400) << 32) | ntp_lsw;
+
+    int64_t samples_before_first_sr = sp->first_sr.rtp_timestamp - sp->first_rtp_timestamp;
+
+    // The bext TimeReference is the number of samples since midnight of the first
+    // sample in the file.
+    header.bext.TimeReference = compute_high_64_bits(ntp_time_since_midnight, sp->samprate) 
+             + samples_before_first_sr;
+
+    char date_buf[32];
+    snprintf(date_buf, sizeof(date_buf), "%04d-%02d-%02d", tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday);
+    memcpy(header.bext.OriginationDate, date_buf, 10);
+
+    char time_buf[32];
+    snprintf(time_buf, sizeof(time_buf), "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
+    memcpy(header.bext.OriginationTime, time_buf, 8);
+  }
 
   rewind(sp->fp);
   if(fwrite(&header,sizeof(header),1,sp->fp) != 1)
