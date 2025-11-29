@@ -25,6 +25,9 @@
 #include "radio.h"
 
 static __thread bool first_run;
+static __thread int64_t pll_start_ns;	// time when PLL last locked
+static __thread float pll_start_phase;	// phase when PLL last locked
+static __thread int64_t pll_last_debug; // time of last pll debug output message
 
 int demod_linear(void *arg){
   struct channel * const chan = arg;
@@ -133,12 +136,25 @@ int demod_linear(void *arg){
 	if(chan->pll.lock_count <= -lock_limit){
 	  chan->pll.lock_count = -lock_limit;
 	  chan->pll.lock = false;
+	  pll_start_ns = 0;
 	}
       } else if(chan->pll.snr > chan->squelch_open){
 	chan->pll.lock_count += N;
 	if(chan->pll.lock_count >= lock_limit){
 	  chan->pll.lock_count = lock_limit;
 	  chan->pll.lock = true;
+	  if (0 == pll_start_ns){
+	    pll_start_ns = gps_time_ns();
+	    pll_start_phase = chan->pll.cphase * DEGPRA + 360 * chan->pll.rotations;
+	  }
+
+	  // log phase and time in lock every second or so
+	  if ((gps_time_ns() - pll_last_debug) >= 1e9){
+	    double delta_t = 1e-9 * (gps_time_ns() - pll_start_ns);
+	    double delta_phase = (chan->pll.cphase * DEGPRA + 360 * chan->pll.rotations) - pll_start_phase;
+	    pll_last_debug = gps_time_ns();
+	    fprintf(stderr,"PLL on SSRC: %u delta phase: %.3f delta t: %.3f\n",chan->output.rtp.ssrc,delta_phase,delta_t);
+	  }
 	}
       }
       double phase = carg(pll_phasor(&chan->pll.pll));
