@@ -1882,6 +1882,9 @@ static int end_wav_stream(struct session *sp){
     memcpy(header.bext.OriginationTime, time_buf, 8);
   }
 
+  sp->has_sr = false;
+  sp->has_rtp_timestamp = false;
+
   rewind(sp->fp);
   if(fwrite(&header,sizeof(header),1,sp->fp) != 1)
     return -1;
