@@ -1848,12 +1848,17 @@ static int end_wav_stream(struct session *sp){
   header.StartMillis = (int16_t)(((sp->file_time / 1000000) % 10));
 
   if(sp->has_sr && sp->has_rtp_timestamp){
+    uint32_t ntp_msw = sp->first_sr.ntp_timestamp >> 32;
+    uint32_t ntp_lsw = sp->first_sr.ntp_timestamp & 0xffffffff;
+
     snprintf(header.bext.Description, sizeof(header.bext.Description),
-             "RTCP SR: NTP=%lx RTP=%u PC=%u BC=%u CNAME=%.40s NAME=%.40s TOOL=%.40s",
-             (unsigned long)sp->first_sr.ntp_timestamp,
+             "RTCP SR: NTP=%x.%x RTP=%u PC=%u BC=%u RTPT=%u CNAME=%.40s NAME=%.40s TOOL=%.40s",
+             ntp_msw,
+             ntp_lsw,
              sp->first_sr.rtp_timestamp,
              sp->first_sr.packet_count,
              sp->first_sr.byte_count,
+             sp->first_rtp_timestamp,
              sp->cname,
              sp->name,
              sp->tool);
@@ -1862,8 +1867,6 @@ static int end_wav_stream(struct session *sp){
     memcpy(header.bext.ChunkID,"bext",4);
 
     // Get the ntp time since midnight
-    uint32_t ntp_msw = sp->first_sr.ntp_timestamp >> 32;
-    uint32_t ntp_lsw = sp->first_sr.ntp_timestamp & 0xffffffff;
     uint64_t ntp_time_since_midnight = ((uint64_t)(ntp_msw % 86400) << 32) | ntp_lsw;
 
     int64_t samples_before_first_sr = sp->first_sr.rtp_timestamp - sp->first_rtp_timestamp;
