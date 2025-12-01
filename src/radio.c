@@ -1162,7 +1162,7 @@ static void *rtcp_send(void *arg){
       sr.ntp_timestamp += ((int64_t)now.tv_nsec << 32) / BILLION; // NTP timestamps are units of 2^-32 sec
     }
     // The zero is to remind me that I start timestamps at zero, but they could start anywhere
-    sr.rtp_timestamp = (0 + gps_time_ns() - Starttime) / BILLION;
+    sr.rtp_timestamp = (0 + gps_time_ns() - Starttime) / BILLION * chan->output.samprate;
     sr.packet_count = chan->output.rtp.seq;
     sr.byte_count = chan->output.rtp.bytes;
 
