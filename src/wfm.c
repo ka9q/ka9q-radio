@@ -18,8 +18,8 @@
 // Forced sample rates; config file values are ignored for now
 // The audio output sample rate can probably eventually be made configurable,
 // but the composite sample rate needs to handle the bandwidth
-float const Composite_samprate = 384000;
-float const Audio_samprate = 48000;
+static float const Composite_samprate = 384000;
+static float const Audio_samprate = 48000;
 
 // FM demodulator thread
 int demod_wfm(void *arg){
@@ -36,13 +36,6 @@ int demod_wfm(void *arg){
   assert(chan->frontend != NULL);
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
-  FREE(chan->status.command);
-  FREE(chan->spectrum.bin_data);
-  if(chan->output.opus != NULL){
-    opus_encoder_destroy(chan->output.opus);
-    chan->output.opus = NULL;
-  }
-
   // This is not the downconverter samprate, but the audio output samprate so as not to confuse consumers
   chan->output.samprate = Audio_samprate;
 
@@ -126,7 +119,25 @@ int demod_wfm(void *arg){
 
   realtime(chan->prio);
 
-  while(downconvert(chan) == 0){
+  do {
+    // Process any commands
+    bool restart_needed = false;
+    bool response_needed = false;
+    pthread_mutex_lock(&chan->status.lock);
+
+    // Look on the single-entry command queue and grab it atomically
+    if(chan->status.command != NULL){
+      restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
+      FREE(chan->status.command);
+      response_needed = true;
+    }
+    pthread_mutex_unlock(&chan->status.lock);
+    if(restart_needed)
+      break;
+
+    if(downconvert(chan) != 0)
+      break; // Dynamic channel termination
+
     // Power squelch - don't bother with variance squelch
     float snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1;
     chan->fm.snr = max(0.0f,snr); // Smoothed values can be a little inconsistent
@@ -263,12 +274,23 @@ int demod_wfm(void *arg){
       if(send_output(chan,mono.output.r,audio_L,false) < 0)
 	break; // No output stream! Terminate
     }
-  }
+    response(chan,response_needed);
+  } while(true);
  quit:;
+  // clean up
+  response(chan,true); // One last status message, though it may not be fully consistent
+  flush_output(chan,false,true); // if still set, marker won't get sent since it wasn't sent last time
+  mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float)); // Nails pointer
+  FREE(chan->status.command);
+  if(chan->output.opus != NULL){
+    opus_encoder_destroy(chan->output.opus);
+    chan->output.opus = NULL;
+  }
+  delete_filter_input(&composite);
   delete_filter_output(&mono);
   delete_filter_output(&lminusr);
   delete_filter_output(&pilot);
-  delete_filter_input(&composite);
-
+  delete_filter_output(&chan->filter.out); // we don't use filter2
+  chan->baseband = NULL;
   return 0;
 }

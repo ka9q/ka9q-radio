@@ -75,11 +75,11 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
     }
   }
   size_t needed_size = frames * chan->output.channels * (1 + chan->output.minpacket);
-  if(needed_size > 0 && needed_size > chan->output.queue_size){
+  if(chan->output.queue == NULL || (needed_size > 0 && needed_size > chan->output.queue_size)){
     // Enlarge the output queue
-    flush_output(chan,marker,true); // if still set, marker won't get sent since it wasn't sent last time
-    mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float));
-    size_t size = round_to_page(sizeof(float) * needed_size); // mmap requires even number of pages
+    flush_output(chan,marker,true); // if still set, marker won't get sent since it wasn't sent last time; no-op if empty/null
+    mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float)); // no-op if null
+    size_t const size = round_to_page(sizeof(float) * needed_size); // mmap requires even number of pages
     chan->output.queue = mirror_alloc(size);
     chan->output.queue_size = size/ sizeof(float);
     chan->output.rp = chan->output.wp = 0;

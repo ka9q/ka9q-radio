@@ -95,14 +95,15 @@ int execute_filter_input(struct filter_in * restrict);
 int execute_filter_output(struct filter_out * restrict ,int);
 int delete_filter_input(struct filter_in * restrict);
 int delete_filter_output(struct filter_out * restrict);
-int set_filter(struct filter_out * restrict,float,float,float);
+int set_filter(struct filter_out * restrict,double,double,double);
 void *run_fft(void *);
 int write_cfilter(struct filter_in *, float complex const *,int size);
 int write_rfilter(struct filter_in *, float const *,int size);
 void suggest(int size,int dir,int clex);
 unsigned long gcd(unsigned long a,unsigned long b);
 unsigned long lcm(unsigned long a,unsigned long b);
-int make_kaiser(float * const window,int const M,float const beta);
+int make_kaiser(double * const window,int const M,double const beta);
+int make_kaiserf(float * const window,int const M,double const beta);
 fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction);
 fftwf_plan plan_r2c(int N, float *in, float complex *out);
 fftwf_plan plan_c2r(int N, float complex *in, float *out);
@@ -157,4 +158,3 @@ static inline float complex read_cfilter(struct filter_out * restrict const f,in
 }
 
 #endif
-

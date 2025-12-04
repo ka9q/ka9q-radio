@@ -124,12 +124,8 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
   return 0;
 }
 int reset_radio_status(struct channel *chan){
-  // Reset integrators
+  // Reset counter
   chan->status.blocks_since_poll = 0;
-#if 0
-  if(chan->spectrum.bin_data != NULL && chan->spectrum.bin_count != 0)
-    memset(chan->spectrum.bin_data,0,chan->spectrum.bin_count * sizeof(*chan->spectrum.bin_data));
-#endif
   return 0;
 }
 
@@ -143,8 +139,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     chan->lifetime = Channel_idle_timeout; // restart self-destruct timer
   chan->status.packets_in++;
 
+  // First pass to execute any PRESET command first
   uint8_t const *cp = buffer;
-
   while(cp < buffer + length){
     enum status_type const type = *cp++; // increment cp to length field
 
@@ -165,9 +161,69 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     if(cp + optlen >= buffer + length)
       break; // invalid length; we can't continue to scan
 
+    assert(type != EOL); // Should be caught above
     switch(type){
-    case EOL: // Shouldn't get here
-      goto done;
+    case PRESET: // This should be processed before any other options, regardless of order in packet
+      {
+	struct channel old = *chan; // Copy old to detect changes
+	char *p = decode_string(cp,optlen);
+	strlcpy(chan->preset,p,sizeof(chan->preset));
+	FREE(p); // decode_string now allocs memory
+	//	  flush_output(chan,false,true); // Flush to Ethernet before we change this
+	if(Verbose > 1)
+	  fprintf(stderr,"command loadpreset(ssrc=%u) mode=%s\n",ssrc,chan->preset);
+	if(loadpreset(chan,Preset_table,chan->preset) != 0){
+	  if(Verbose)
+	    fprintf(stderr,"command loadpreset(ssrc=%u) mode=%sfailed!\n",ssrc,chan->preset);
+	  break;
+	}
+	if(chan->filter.min_IF > chan->filter.max_IF){
+	  // Swap to ensure min <= max
+	  float const tmp = chan->filter.min_IF;
+	  chan->filter.min_IF = chan->filter.max_IF;
+	  chan->filter.max_IF = tmp;
+	}
+	if(old.tune.shift != chan->tune.shift)
+	  set_freq(chan,chan->tune.freq + chan->tune.shift - old.tune.shift);
+	if(chan->filter.min_IF != old.filter.min_IF || chan->filter.max_IF != old.filter.max_IF || chan->filter.kaiser_beta != old.filter.kaiser_beta)
+	  new_filter_needed = true;
+
+	if(chan->demod_type != old.demod_type || chan->output.samprate != old.output.samprate){
+	  if(Verbose > 1)
+	    fprintf(stderr,"demod %d -> %d, samprate %d -> %d\n",old.demod_type,chan->demod_type,old.output.samprate,chan->output.samprate);
+	  restart_needed = true; // chan changed, ask for a restart
+	}
+      }
+      break;
+    default:
+      break; // Skip other commands until second pass
+    }
+    cp += optlen;
+  }
+  // Second pass
+  cp = buffer;
+  while(cp < buffer + length){
+    enum status_type const type = *cp++; // increment cp to length field
+
+    if(type == EOL)
+      break; // end of list, no length
+
+    unsigned int optlen = *cp++;
+    if(optlen & 0x80){
+      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+      int length_of_length = optlen & 0x7f;
+      optlen = 0;
+      while(length_of_length > 0){
+	optlen <<= 8;
+	optlen |= *cp++;
+	length_of_length--;
+      }
+    }
+    if(cp + optlen >= buffer + length)
+      break; // invalid length; we can't continue to scan
+
+    assert(type != EOL);
+    switch(type){
     case COMMAND_TAG:
       chan->status.tag = decode_int32(cp,optlen);
       break;
@@ -260,46 +316,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	    new_filter_needed = true;
 	  }
 	}
-      break;
-    case PRESET:
-      {
-	char *p = decode_string(cp,optlen);
-	strlcpy(chan->preset,p,sizeof(chan->preset));
-	FREE(p); // decode_string now allocs memory
-	{
-	  flush_output(chan,false,true); // Flush to Ethernet before we change this
-	  enum demod_type const old_type = chan->demod_type;
-	  unsigned int const old_samprate = chan->output.samprate;
-	  float const old_low = chan->filter.min_IF;
-	  float const old_high = chan->filter.max_IF;
-	  float const old_kaiser = chan->filter.kaiser_beta;
-	  float const old_shift = chan->tune.shift;
-
-	  if(Verbose > 1)
-	    fprintf(stderr,"command loadpreset(ssrc=%u) mode=%s\n",ssrc,chan->preset);
-	  if(loadpreset(chan,Preset_table,chan->preset) != 0){
-	    if(Verbose)
-	      fprintf(stderr,"command loadpreset(ssrc=%u) mode=%sfailed!\n",ssrc,chan->preset);
-	    break;
-	  }
-	  if(chan->filter.min_IF > chan->filter.max_IF){
-	    // Swap to ensure min <= max
-	    float const tmp = chan->filter.min_IF;
-	    chan->filter.min_IF = chan->filter.max_IF;
-	    chan->filter.max_IF = tmp;
-	  }
-	  if(old_shift != chan->tune.shift)
-	    set_freq(chan,chan->tune.freq + chan->tune.shift - old_shift);
-	  if(chan->filter.min_IF != old_low || chan->filter.max_IF != old_high || chan->filter.kaiser_beta != old_kaiser)
-	    new_filter_needed = true;
-
-	  if(chan->demod_type != old_type || chan->output.samprate != old_samprate){
-	    if(Verbose > 1)
-	      fprintf(stderr,"demod %d -> %d, samprate %d -> %d\n",old_type,chan->demod_type,old_samprate,chan->output.samprate);
-	    restart_needed = true; // chan changed, ask for a restart
-	  }
-	}
-      }
       break;
     case DEMOD_TYPE:
       {
@@ -537,14 +553,13 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     }
     cp += optlen;
   }
- done:;
   if(chan->demod_type == SPECT_DEMOD)
     memset(chan->preset,0,sizeof(chan->preset)); // No presets in this mode
 
   if(restart_needed){
     if(Verbose > 1)
       fprintf(stderr,"restarting thread for ssrc %u\n",ssrc);
-    return true;
+    return true; // A new filter will also be needed but the demod will set that up
   }
   if(new_filter_needed){
     set_channel_filter(chan);
@@ -681,12 +696,6 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
       spectrum_poll(chan); // Update the spectral data (wide bins only)
       if(chan->spectrum.bin_data != NULL){
-#if 0
-	// Average and clear
-	float const scale = 1.f / chan->status.blocks_since_poll;
-	for(int i=0; i < chan->spectrum.bin_count; i++)
-	  chan->spectrum.bin_data[i] *= scale;
-#endif
 	encode_vector(&bp,BIN_DATA,chan->spectrum.bin_data,chan->spectrum.bin_count);
       }
     }

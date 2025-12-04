@@ -159,10 +159,15 @@ static inline int init_recursive_mutex(pthread_mutex_t *m){
 #define cispi(x) csincospi(x)
 
 // Normalized sinc function sin(πx) / πx
-static inline float sinc(float x){
+static inline float sincf(float x){
   if(x == 0)
     return 1;
   return sinf(M_PI * x) / (M_PI * x);
+}
+static inline double sinc(float x){
+  if(x == 0)
+    return 1;
+  return sin(M_PI * x) / (M_PI * x);
 }
 
 

@@ -42,17 +42,7 @@ int demod_linear(void *arg){
 
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
-  FREE(chan->status.command);
-  FREE(chan->spectrum.bin_data);
-  if(chan->output.opus != NULL){
-    opus_encoder_destroy(chan->output.opus);
-    chan->output.opus = NULL;
-  }
-
   unsigned int const blocksize = chan->output.samprate * Blocktime / 1000;
-  delete_filter_output(&chan->filter.out);
-  delete_filter_output(&chan->filter2.out);
-  delete_filter_input(&chan->filter2.in);
   int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
 				    chan->filter.beam ? BEAM : COMPLEX);
   if(status != 0){
@@ -80,8 +70,26 @@ int demod_linear(void *arg){
   if(chan->pll.enable || chan->snr_squelch_enable)
     squelch_open = false; // Start closed when squelch is enabled
 
-  while(downconvert(chan) == 0){
-    unsigned int N = chan->sampcount; // Number of raw samples in filter output buffer
+  do {
+    // Process any commands
+    bool restart_needed = false;
+    bool response_needed = false;
+    pthread_mutex_lock(&chan->status.lock);
+
+    // Look on the single-entry command queue and grab it atomically
+    if(chan->status.command != NULL){
+      restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
+      FREE(chan->status.command);
+      response_needed = true;
+    }
+    pthread_mutex_unlock(&chan->status.lock);
+    if(restart_needed)
+      break;
+
+    if(downconvert(chan) != 0)
+      break; // Dynamic channel termination
+
+    unsigned int const N = chan->sampcount; // Number of raw samples in filter output buffer
     float complex * buffer = chan->baseband; // Working buffer
 
     if (!first_run){
@@ -181,6 +189,8 @@ int demod_linear(void *arg){
 	 cause clicks and pops when a strong signal straddles a block boundary
 	 the new gain setting is applied exponentially over the block
 	 gain_change is per sample and close to 1, so be careful with numerical precision!
+	 When the gain is allowed to vary, the average gain won't be exactly consistent with the
+	 average baseband (input) and output powers. But I still try to make it meaningful.
       */
       if(ampl * chan->output.gain > chan->output.headroom){
 	// Strong signal, reduce gain
@@ -286,14 +296,27 @@ int demod_linear(void *arg){
     // Mute if no signal (e.g., outside front end coverage)
     // or if zero frequency
     // or if squelch is closed
-    bool mute = output_power == 0 || !squelch_open || chan->tune.freq == 0;
+    bool const mute = output_power == 0 || !squelch_open || chan->tune.freq == 0;
 
     // send_output() knows if the buffer is mono or stereo
     if(send_output(chan,(float *)buffer,N,mute) == -1)
       break; // No output stream!
 
-    // When the gain is allowed to vary, the average gain won't be exactly consistent with the
-    // average baseband (input) and output powers. But I still try to make it meaningful.
+    response(chan,response_needed);
+  } while(true);
+
+  // clean up
+  response(chan,true); // One last status message, though it may not be fully consistent
+  flush_output(chan,false,true); // if still set, marker won't get sent since it wasn't sent last time
+  mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float)); // Nails pointer
+  FREE(chan->status.command);
+  if(chan->output.opus != NULL){
+    opus_encoder_destroy(chan->output.opus);
+    chan->output.opus = NULL;
   }
-  return 0; // Non-fatal exit, may be restarted
+  delete_filter_output(&chan->filter.out);
+  delete_filter_output(&chan->filter2.out);
+  delete_filter_input(&chan->filter2.in);
+  chan->baseband = NULL;
+  return 0;
 }

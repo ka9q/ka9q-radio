@@ -242,7 +242,7 @@ struct channel {
     float *window;    // Analysis window
     void *plan;       // FFTW plan - don't drag in <fftw.h>
     float complex *ring; // Ring buffer of demodulated data in narrowband mode
-    int ring_ptr;     // pointer into ring buffer
+    int ring_idx;     // index into ring buffer
   } spectrum;
 
   // Output
@@ -338,6 +338,7 @@ int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, doub
 int downconvert(struct channel *chan);
 int set_channel_filter(struct channel *chan);
 int spectrum_poll(struct channel *chan);
+void response(struct channel *chan,bool response_needed);
 
 // extract front end scaling factors (depends on width of A/D sample)
 float scale_voltage_out2FS(struct frontend *frontend);
