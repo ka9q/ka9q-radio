@@ -337,7 +337,6 @@ double set_first_LO(struct channel const * restrict, double);
 int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq);
 int downconvert(struct channel *chan);
 int set_channel_filter(struct channel *chan);
-int spectrum_poll(struct channel *chan);
 void response(struct channel *chan,bool response_needed);
 
 // extract front end scaling factors (depends on width of A/D sample)

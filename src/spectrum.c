@@ -14,6 +14,8 @@
 #include "filter.h"
 #include "radio.h"
 
+static int spectrum_poll(struct channel *chan);
+
 #define RING_SIZE (2 * chan->spectrum.fft_n)
 
 
@@ -177,7 +179,7 @@ int demod_spectrum(void *arg){
 
 // Called at poll time
 // Runs FFTs, updates chan->spectrum.bin_data[]
-int spectrum_poll(struct channel *chan){
+static int spectrum_poll(struct channel *chan){
 
   if(chan == NULL)
     return -1;
