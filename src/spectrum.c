@@ -125,11 +125,13 @@ int demod_spectrum(void *arg){
   chan->spectrum.window = malloc(chan->spectrum.fft_n * sizeof *chan->spectrum.window);
   assert(chan->spectrum.window != NULL);
   make_kaiserf(chan->spectrum.window,chan->spectrum.fft_n,chan->spectrum.kaiser_beta);
+  bool restart_needed = true;
+  bool response_needed = false;
+
   // Main loop
   do {
-    // Process any commands
-    bool restart_needed = false;
-    bool response_needed = false;
+    response(chan,response_needed);
+    response_needed = false;
 
     // Look on the single-entry command queue and grab it atomically
     pthread_mutex_lock(&chan->status.lock);
@@ -140,11 +142,8 @@ int demod_spectrum(void *arg){
     }
     pthread_mutex_unlock(&chan->status.lock);
 
-    if(restart_needed)
+    if(restart_needed || downconvert(chan) != 0)
       break; // No response sent this time
-
-    if(downconvert(chan) != 0)
-      break; // Dynamic channel termination
 
     if(chan->spectrum.bin_bw <= chan->spectrum.crossover){
       // Narrowband mode
@@ -158,9 +157,7 @@ int demod_spectrum(void *arg){
       }
     }
     spectrum_poll(chan);
-    response(chan,response_needed);
   } while(true);
-  response(chan,true); // One last status message, though it may not be fully consistent
 
   chan->spectrum.fft_n = 0;
   delete_filter_output(&chan->filter.out);

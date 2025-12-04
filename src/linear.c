@@ -62,18 +62,17 @@ int demod_linear(void *arg){
   int const lock_limit = lock_time * chan->output.samprate;
   init_pll(&chan->pll.pll,(float)chan->output.samprate);
   double am_dc = 0; // Carrier removal filter, removes squelch opening thump in aviation AM
-  pthread_mutex_unlock(&chan->status.lock);
 
-  realtime(chan->prio);
-
+  bool response_needed = true;
+  bool restart_needed = false;
   bool squelch_open = true; // memory for squelch hysteresis, starts open
   if(chan->pll.enable || chan->snr_squelch_enable)
     squelch_open = false; // Start closed when squelch is enabled
-
+  pthread_mutex_unlock(&chan->status.lock);
+  realtime(chan->prio);
   do {
-    // Process any commands
-    bool restart_needed = false;
-    bool response_needed = false;
+    response(chan,response_needed);
+    response_needed = false;
     pthread_mutex_lock(&chan->status.lock);
 
     // Look on the single-entry command queue and grab it atomically
@@ -302,11 +301,9 @@ int demod_linear(void *arg){
     if(send_output(chan,(float *)buffer,N,mute) == -1)
       break; // No output stream!
 
-    response(chan,response_needed);
   } while(true);
 
   // clean up
-  response(chan,true); // One last status message, though it may not be fully consistent
   flush_output(chan,false,true); // if still set, marker won't get sent since it wasn't sent last time
   mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float)); // Nails pointer
   FREE(chan->status.command);

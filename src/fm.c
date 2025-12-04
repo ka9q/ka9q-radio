@@ -40,8 +40,6 @@ int demod_fm(void *arg){
   if(chan->filter.beam)
     set_filter_weights(&chan->filter.out,chan->filter.a_weight,chan->filter.b_weight);
 
-  pthread_mutex_unlock(&chan->status.lock);
-
   set_filter(&chan->filter.out,
 	     chan->filter.min_IF/chan->output.samprate,
 	     chan->filter.max_IF/chan->output.samprate,
@@ -74,15 +72,16 @@ int demod_fm(void *arg){
   float old_pl_phase = 0;
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
   chan->output.gain = (2 * chan->output.headroom *  chan->output.samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
-
+  bool response_needed = true;
+  bool restart_needed = false;
+  pthread_mutex_unlock(&chan->status.lock);
   realtime(chan->prio);
 
   do {
-    // Process any commands
-    bool restart_needed = false;
-    bool response_needed = false;
-    pthread_mutex_lock(&chan->status.lock);
+    response(chan,response_needed);
+    response_needed = false;
 
+    pthread_mutex_lock(&chan->status.lock);
     // Look on the single-entry command queue and grab it atomically
     if(chan->status.command != NULL){
       restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
@@ -90,11 +89,8 @@ int demod_fm(void *arg){
       response_needed = true;
     }
     pthread_mutex_unlock(&chan->status.lock);
-    if(restart_needed)
-      break;
-
-    if(downconvert(chan) != 0)
-      break; // Dynamic channel termination
+    if(restart_needed || downconvert(chan) != 0)
+      break; // restart or terminate
 
     float complex const * const buffer = chan->baseband; // For convenience
     int const N = chan->sampcount;
@@ -320,12 +316,10 @@ int demod_fm(void *arg){
     chan->output.power = output_energy / N;
     if(send_output(chan,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
-    response(chan,response_needed);
 
   } while(true);
 
   // clean up
-  response(chan,true); // One last status message, though it may not be fully consistent
   flush_output(chan,false,true); // if still set, marker won't get sent since it wasn't sent last time
   mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float)); // Nails pointer
   FREE(chan->status.command);
