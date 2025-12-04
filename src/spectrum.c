@@ -74,23 +74,21 @@ int demod_spectrum(void *arg){
     // This (int) cast should be cleaned up
     while(chan->spectrum.fft_n < 65536 && (!goodchoice(chan->spectrum.fft_n) || (int)round(chan->spectrum.fft_n * chan->spectrum.bin_bw) % samprate_base != 0))
       chan->spectrum.fft_n++;
-    int samprate = chan->spectrum.fft_n * chan->spectrum.bin_bw;
-    chan->output.samprate = samprate;
+    chan->output.samprate = chan->spectrum.fft_n * chan->spectrum.bin_bw;
     chan->output.channels = 2; // IQ mode
     if(Verbose > 1)
       fprintf(stderr,"narrow bin spectrum: bin count %d, bin_bw %.1lf, samprate %d fft size %d\n",
-	      chan->spectrum.bin_count,chan->spectrum.bin_bw,samprate,chan->spectrum.fft_n);
+	      chan->spectrum.bin_count,chan->spectrum.bin_bw,chan->output.samprate,chan->spectrum.fft_n);
 
     // The channel filter already normalizes for the size of the forward input FFT, we just handle our own FFT gain
     // squared because the we're scaling the output of complex norm, not the input bin values
     //    double const gain = 1.0/ ((double)chan->spectrum.fft_n * chan->spectrum.fft_n);
 
-    int frame_len = samprate / blockrate;
-    int r = create_filter_output(&chan->filter.out,&frontend->in,NULL,frame_len,COMPLEX);
+    int r = create_filter_output(&chan->filter.out,&frontend->in,NULL,chan->output.samprate/blockrate,COMPLEX);
     (void)r;
     assert(r == 0);
 
-    chan->filter.max_IF = (double)(samprate - margin)/2;
+    chan->filter.max_IF = (double)(chan->output.samprate - margin)/2;
     chan->filter.min_IF = -chan->filter.max_IF;
     chan->filter2.blocking = 0; // Not used in this mode, make sure it's 0
     set_filter(&chan->filter.out,chan->filter.min_IF,chan->filter.max_IF,chan->filter.kaiser_beta);
