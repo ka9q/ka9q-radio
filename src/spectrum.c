@@ -125,8 +125,8 @@ int demod_spectrum(void *arg){
   chan->spectrum.window = malloc(chan->spectrum.fft_n * sizeof *chan->spectrum.window);
   assert(chan->spectrum.window != NULL);
   make_kaiserf(chan->spectrum.window,chan->spectrum.fft_n,chan->spectrum.kaiser_beta);
-  bool restart_needed = true;
-  bool response_needed = false;
+  bool restart_needed = false;
+  bool response_needed = true;
 
   // Main loop
   do {
