@@ -14,6 +14,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <errno.h>
+#include <stdatomic.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -42,7 +43,7 @@ unsigned int Opus_samprates[] = {
   8000, 12000, 16000, 24000, 48000,
 };
 
-static bool Opus_version_logged = false;
+static atomic_flag Opus_version_logged = ATOMIC_FLAG_INIT;
 
 
 // Send PCM output on stream; # of channels implicit in chan->output.channels
@@ -175,9 +176,9 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	chan->output.rp = chan->output.wp;
 	return 0;
       }
-      if(!Opus_version_logged){
-	fprintf(stderr,"%s\n",opus_get_version_string());
-	Opus_version_logged = true;
+      if(!atomic_flag_test_and_set_explicit(&Opus_version_logged,memory_order_relaxed)){
+	// Log this message only once
+	fprintf(stderr,"Using %s\n",opus_get_version_string());
       }
       chan->output.opus = opus_encoder_create(chan->output.samprate,chan->output.channels,Application,&error);
       assert(error == OPUS_OK && chan->output.opus != NULL);
