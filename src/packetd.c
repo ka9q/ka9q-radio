@@ -26,6 +26,8 @@
 #include "status.h"
 #include "avahi.h"
 
+#include "compat_net.h"
+
 struct hdlc {
   uint8_t frame[16384];
   size_t frame_bits;

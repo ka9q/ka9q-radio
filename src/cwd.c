@@ -23,6 +23,8 @@
 #include "rtp.h"
 #include "morse.h"
 
+#include "compat_net.h"
+
 int const Samprate = 48000; // Too hard to change
 float CW_speed = 18.0;
 float CW_pitch = 500.0;

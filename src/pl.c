@@ -22,6 +22,8 @@
 #include "rtp.h"
 #include "osc.h"
 
+#include "compat_net.h"
+
 // Global config variables
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 
