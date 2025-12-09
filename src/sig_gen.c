@@ -237,6 +237,8 @@ static void *proc_sig_gen(void *arg){
     int modcount = samps_per_samp;
     float modsample = 0;
     float in_energy = 0;
+    // Note lack of bandpass filtering on modulation - this creates alias images across the spectrum
+    // at multiples of mod_samprate when the synthetic noise is very low
     if(frontend->isreal){
       // Real signal
       float * wptr = frontend->in.input_write_pointer.r;

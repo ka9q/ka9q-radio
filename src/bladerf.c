@@ -289,12 +289,15 @@ int bladerf_startup(struct frontend * const frontend)
 	return 0;
 }
 
-static void *stream_callback(struct bladerf *,
-			     struct bladerf_stream *,
-			     struct bladerf_metadata *, void *samples,
+static void *stream_callback(struct bladerf *unused1,
+			     struct bladerf_stream *unused2,
+			     struct bladerf_metadata *unused3, void *samples,
 			     size_t num_samples, void *user_data)
 {
         (void)num_samples; // Suppress warning
+	(void)unused1;
+	(void)unused2;
+	(void)unused3;
 
 	struct sdrstate * const sdr = (struct sdrstate *)user_data;
 

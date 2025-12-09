@@ -114,7 +114,7 @@ enum status_type {
   FILTER2_BLOCKSIZE,
   FILTER2_FIR_LENGTH,
   FILTER2_KAISER_BETA,
-  UNUSED16,
+  SPECTRUM_FFT_N,
 
   FILTER_DROPS,
   LOCK,     // Tuner is locked, will ignore retune commands (boolean)
@@ -134,7 +134,7 @@ enum status_type {
   THRESH_EXTEND,    // threshold extension enable (FM only)
 
   // Spectral analysis
-  UNUSED20,
+  SPECTRUM_KAISER_BETA,  // Kaiser beta for spectrum analysis window
   COHERENT_BIN_SPACING, // (1-overlap) * block rate = (1 - ((M-1)/(L+M-1))) * block rate
   NONCOHERENT_BIN_BW, // Bandwidth (Hz) of noncoherent integration bin, some multiple of COHERENT_BIN_SPACING
   BIN_COUNT,        // Integer number of bins accumulating energy noncoherently

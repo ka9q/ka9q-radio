@@ -54,7 +54,8 @@ static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 #endif
 static int   const DEFAULT_BITRATE = 0;       // Default Opus compressed bit rate. 0 means OPUS_AUTO, the encoder decides
 static int   const DEFAULT_DC_TC = 0;         // Time constant for AM carrier removal, default off
-static float const DEFAULT_CROSSOVER = 40;
+static float const DEFAULT_CROSSOVER = 200;   // About where the two spectral analysis algorithms use equal CPU
+static float const DEFAULT_SPECTRUM_KAISER_BETA = 7.0; // Default for spectral analysis window
 extern int Overlap;
 
 // Valid keys in presets file, [global] section, and any channel section
@@ -230,6 +231,10 @@ int set_defaults(struct channel *chan){
   }
   chan->status.output_interval = DEFAULT_UPDATE;
   chan->spectrum.crossover = DEFAULT_CROSSOVER;
+  chan->spectrum.kaiser_beta = DEFAULT_SPECTRUM_KAISER_BETA;
+  chan->spectrum.window = NULL;
+  chan->spectrum.plan = NULL;
+  chan->spectrum.bin_data = NULL;
   chan->tp1 = chan->tp2 = NAN;
   return 0;
 }

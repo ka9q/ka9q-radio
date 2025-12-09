@@ -774,6 +774,15 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   case '\f':  // Screen repaint (formfeed, aka control-L)
     clearok(curscr,TRUE);
     break;
+  case 'C':
+    {
+      char str[Entry_width];
+      getentry("Spectrum crossover, Hz: ",str,sizeof(str));
+      float crossover = fabs(parse_frequency(str,false));
+      channel->spectrum.crossover = crossover;
+      encode_float(bpp,CROSSOVER,crossover);
+    }
+    break;
   case 'S':
     {
       char str[Entry_width];
@@ -959,6 +968,20 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
 	  beep(); // beyond limits
 	} else {
 	  encode_float(bpp,FILTER2_KAISER_BETA,b);
+	}
+      }
+    }
+    break;
+  case 'w':
+    {
+      char str[Entry_width],*ptr;
+      getentry("Spectrum Kaiser window β: ",str,sizeof(str));
+      float const b = strtof(str,&ptr);
+      if(ptr != str && isfinite(b)){
+	if(b < 0 || b >= 100){
+	  beep(); // beyond limits
+	} else {
+	  encode_float(bpp,SPECTRUM_KAISER_BETA,b);
 	}
       }
     }
@@ -1337,7 +1360,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
 
   pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.isreal ? 'r' : 'c');
 
-  if(Frontend.samprate != 0){
+  if(Frontend.samprate != 0 && channel->output.samprate != 0){
     long long fftout = (long long)N * channel->output.samprate / Frontend.samprate;
     pprintw(w,row++,col,"FFT out","%'lld c ",fftout);
   }
@@ -1347,7 +1370,7 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Bin width","%'.3f Hz",(float)Frontend.samprate / N);
 
   float const beta = channel->filter.kaiser_beta;
-  if(!isnan(beta))
+  if(isfinite(beta))
     pprintw(w,row++,col,"Kaiser β","%'.1f   ",beta);
 
 
@@ -1513,6 +1536,8 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"Bin width","%.0f Hz",channel->spectrum.bin_bw);
     pprintw(w,row++,col,"Bins","%d   ",channel->spectrum.bin_count);
     pprintw(w,row++,col,"Crossover","%.0f Hz",channel->spectrum.crossover);
+    pprintw(w,row++,col,"FFT N","%d   ",channel->spectrum.fft_n);
+    pprintw(w,row++,col,"Kaiser β","%.1f   ",channel->spectrum.kaiser_beta);
     if(channel->spectrum.bin_data != NULL)
       pprintw(w,row++,col,"Bin 0","%.1f   ",channel->spectrum.bin_data[0]);
     break;

@@ -29,15 +29,8 @@ int demod_fm(void *arg){
 
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
-  FREE(chan->status.command);
-  FREE(chan->spectrum.bin_data);
-  if(chan->output.opus != NULL){
-    opus_encoder_destroy(chan->output.opus);
-    chan->output.opus = NULL;
-  }
-
   int const blocksize = chan->output.samprate * Blocktime / 1000;
-  delete_filter_output(&chan->filter.out);
+
   int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
 				    chan->filter.beam ? BEAM : COMPLEX);
   if(status != 0){
@@ -46,8 +39,6 @@ int demod_fm(void *arg){
   }
   if(chan->filter.beam)
     set_filter_weights(&chan->filter.out,chan->filter.a_weight,chan->filter.b_weight);
-
-  pthread_mutex_unlock(&chan->status.lock);
 
   set_filter(&chan->filter.out,
 	     chan->filter.min_IF/chan->output.samprate,
@@ -81,10 +72,26 @@ int demod_fm(void *arg){
   float old_pl_phase = 0;
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
   chan->output.gain = (2 * chan->output.headroom *  chan->output.samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
-
+  bool response_needed = true;
+  bool restart_needed = false;
+  pthread_mutex_unlock(&chan->status.lock);
   realtime(chan->prio);
 
-  while(downconvert(chan) == 0){
+  do {
+    response(chan,response_needed);
+    response_needed = false;
+
+    pthread_mutex_lock(&chan->status.lock);
+    // Look on the single-entry command queue and grab it atomically
+    if(chan->status.command != NULL){
+      restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
+      FREE(chan->status.command);
+      response_needed = true;
+    }
+    pthread_mutex_unlock(&chan->status.lock);
+    if(restart_needed || downconvert(chan) != 0)
+      break; // restart or terminate
+
     float complex const * const buffer = chan->baseband; // For convenience
     int const N = chan->sampcount;
 
@@ -309,6 +316,18 @@ int demod_fm(void *arg){
     chan->output.power = output_energy / N;
     if(send_output(chan,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
+
+  } while(true);
+
+  // clean up
+  flush_output(chan,false,true); // if still set, marker won't get sent since it wasn't sent last time
+  mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float)); // Nails pointer
+  FREE(chan->status.command);
+  if(chan->output.opus != NULL){
+    opus_encoder_destroy(chan->output.opus);
+    chan->output.opus = NULL;
   }
+  delete_filter_output(&chan->filter.out);
+  chan->baseband = NULL;
   return 0; // Normal exit
 }

@@ -944,9 +944,9 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   fftwf_execute(slave->rev_plan); // Note: c2r version destroys fdomain[], but it's not used again anyway
   // Drop the cache in the first M-1 points of the time domain buffer that we'll discard
   if(slave->out_type == REAL)
-    drop_cache(slave->output_buffer.r,(slave->points - slave->olen) * sizeof (float));
+    drop_cache(slave->output_buffer.r,(slave->points - slave->olen) * sizeof (*slave->output_buffer.r));
   else
-    drop_cache(slave->output_buffer.c,(slave->points - slave->olen) * sizeof (float complex));
+    drop_cache(slave->output_buffer.c,(slave->points - slave->olen) * sizeof (*slave->output_buffer.c));
   return 0;
 }
 int set_filter_weights(struct filter_out *out,double complex i_weight, double complex q_weight){
@@ -995,26 +995,63 @@ int delete_filter_output(struct filter_out *slave){
   return 0;
 }
 
-// Compute an entire Kaiser window
+// Compute an entire normalized Kaiser window
 // More efficient than repeatedly calling kaiser(n,M,beta)
-int make_kaiser(float * const window,int const M,float const beta){
+int make_kaiser(double * const window,int const M,double const beta){
   assert(window != NULL);
   if(window == NULL)
     return -1;
 
   // Precompute unchanging partial values
-  float const inv_denom = 1. / i0(beta); // Inverse of denominator
-  float const pc = 2.0 / (M-1);
+  double const inv_denom = 1. / i0(beta); // Inverse of denominator
+  double const pc = 2.0 / (M-1);
 
   // The window is symmetrical, so compute only half of it and mirror
   // this won't compute the middle value in an odd-length sequence
+  double window_gain = 0;
   for(int n = 0; n < M/2; n++){
-    float const p = pc * n  - 1;
-    window[M-1-n] = window[n] = i0(beta * sqrtf(1-p*p)) * inv_denom;
+    double const p = pc * n  - 1;
+    window[M-1-n] = window[n] = i0(beta * sqrt(1-p*p)) * inv_denom;
+    window_gain += 2 * window[n];
   }
   // If sequence length is odd, middle value is unity
-  if(M & 1)
+  if(M & 1){
     window[(M-1)/2] = 1; // The -1 is actually unnecessary
+    window_gain += window[(M-1)/2];
+  }
+  window_gain = M / window_gain;
+  for(int i = 0; i < M; i++)
+    window[i] *= window_gain;
+
+  return 0;
+}
+// Compute an entire normalized Kaiser window - float version
+// More efficient than repeatedly calling kaiser(n,M,beta)
+int make_kaiserf(float * const window,int const M,double const beta){
+  assert(window != NULL);
+  if(window == NULL)
+    return -1;
+
+  // Precompute unchanging partial values
+  double const inv_denom = 1. / i0(beta); // Inverse of denominator
+  double const pc = 2.0 / (M-1);
+
+  // The window is symmetrical, so compute only half of it and mirror
+  // this won't compute the middle value in an odd-length sequence
+  double window_gain = 0;
+  for(int n = 0; n < M/2; n++){
+    double const p = pc * n  - 1;
+    window[M-1-n] = window[n] = i0(beta * sqrt(1-p*p)) * inv_denom;
+    window_gain += 2 * window[n];
+  }
+  // If sequence length is odd, middle value is unity
+  if(M & 1){
+    window[(M-1)/2] = 1; // The -1 is actually unnecessary
+    window_gain += window[(M-1)/2];
+  }
+  window_gain = M / window_gain;
+  for(int i = 0; i < M; i++)
+    window[i] *= window_gain;
 
   return 0;
 }
@@ -1025,18 +1062,18 @@ int make_kaiser(float * const window,int const M,float const beta){
    NB: 'low' and 'high' are *fractional* frequencies relative to the output sample rate, i.e., -0.5 < f < +0.5
    If invoked on a demod that hasn't run yet, slave->master will be NULL so check for that and quit;
    the filter should get set up when it actually starts (thanks N5TNL for bug report) */
-int set_filter(struct filter_out * const slave,float low,float high,float const kaiser_beta){
+int set_filter(struct filter_out * const slave,double low,double high,double const kaiser_beta){
   if(slave == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta) || slave->master == NULL)
     return -1;
 
   if(slave->out_type == REAL){
     // Filter edges crossing DC not allowed for real output
-    low = fabsf(low);
-    high = fabsf(high);
+    low = fabs(low);
+    high = fabs(high);
   }
   // Swap if necessary
   if(low > high){
-    float tmp = low;
+    double tmp = low;
     low = high;
     high = tmp;
   }
@@ -1050,21 +1087,21 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   int const M = N - L + 1; // Length of impulse response in time domain
 
   // Real lowpass filter with cutoff = 1/2 bandwidth
-  float bw2 = fabsf(high - low)/2;
+  double bw2 = fabs(high - low)/2;
   if(bw2 == 0)
     bw2 = 1; // Avoid assert failures
-  float center = (high + low)/2;
+  double center = (high + low)/2;
   float kaiser_window[M];
-  make_kaiser(kaiser_window,M,kaiser_beta);
+  make_kaiserf(kaiser_window,M,kaiser_beta);
 
   // Form complex impulse response by generating kaiser-windowed sinc pulse and shifting to desired center freq
   float complex impulse[M];
-  float window_gain = 0;
+  double window_gain = 0;
   for(int i = 0; i < M; i++){
-    float n = i - (float)(M-1)/2;
-    float r = kaiser_window[i] * 2 * bw2 * sinc(2 * bw2 * n);
+    double n = i - (double)(M-1)/2;
+    double r = kaiser_window[i] * 2 * bw2 * sinc(2 * bw2 * n);
     window_gain += r;
-    impulse[i] = cispif(2 * center * n) * r;
+    impulse[i] = cispi(2 * center * n) * r;
 #if FILTER_DEBUG
     printf("impulse[%d] = %g + j%g\n",i,crealf(impulse[i]),cimagf(impulse[i]));
 #endif
@@ -1073,7 +1110,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   // 1. real inputs require +3dB for half the power in the implicit negative spectrum
   // 2. the windowed sinc has some loss
   // 3. The un-normalized forward FFT has an implicit power gain of N
-  float const gain = (slave->master->in_type == REAL ? M_SQRT2 : 1.0f)
+  double const gain = (slave->master->in_type == REAL ? M_SQRT2 : 1.0)
     / (window_gain *  slave->master->points);
   assert(gain != 0 && isfinite(gain));
   for(int i = 0; i < M; i++)
@@ -1203,31 +1240,31 @@ static void terminate_fft(struct filter_in *f){
 }
 
 // Hamming window
-const static float hamming(int const n,int const M){
-  const float alpha = 25./46.;
-  const float beta = (1-alpha);
+const static double hamming(int const n,int const M){
+  const double alpha = 25./46.;
+  const double beta = (1-alpha);
 
-  return alpha - beta * cosf(2*M_PI*n/(M-1));
+  return alpha - beta * cos(2*M_PI*n/(M-1));
 }
 
 // Hann / "Hanning" window
-const static float hann(int const n,int const M){
-    return 0.5 - 0.5 * cosf(2*M_PI*n/(M-1));
+const static double hann(int const n,int const M){
+    return 0.5 - 0.5 * cos(2*M_PI*n/(M-1));
 }
 
 // Exact Blackman window
-const static float blackman(int const n,int const M){
-  float const a0 = 7938./18608;
-  float const a1 = 9240./18608;
-  float const a2 = 1430./18608;
-  return a0 - a1*cosf(2*M_PI*n/(M-1)) + a2*cosf(4*M_PI*n/(M-1));
+const static double blackman(int const n,int const M){
+  double const a0 = 7938./18608;
+  double const a1 = 9240./18608;
+  double const a2 = 1430./18608;
+  return a0 - a1*cos(2*M_PI*n/(M-1)) + a2*cos(4*M_PI*n/(M-1));
 }
 
 // Jim Kaiser was in my Bellcore department in the 1980s. Really friendly guy.
 // Superseded by make_kaiser() routine that more efficiently computes entire window at once
-static float const kaiser(int const n,int const M, float const beta){
-  static float old_beta = NAN;
-  static float old_inv_denom;
+static double const kaiser(int const n,int const M, double const beta){
+  static double old_beta = NAN;
+  static double old_inv_denom;
 
   // Cache old value of beta, since it rarely changes
   // Not thread safe
@@ -1235,305 +1272,8 @@ static float const kaiser(int const n,int const M, float const beta){
     old_beta = beta;
     old_inv_denom = 1. / i0(beta);
   }
-  float const p = 2.0*n/(M-1) - 1;
-  return i0(beta*sqrtf(1-p*p)) * old_inv_denom;
+  double const p = 2.0*n/(M-1) - 1;
+  return i0(beta*sqrt(1-p*p)) * old_inv_denom;
 }
 
-
-#if LIQUID
-// Use Remez or windowed sinc filter design routines in Liquid DSP library
-int set_filter(struct filter_out * const slave,float low,float high,float const kaiser_beta){
-  assert(slave != NULL && slave->master != NULL && isfinite(low) && isfinite(high) && isfinite(kaiser_beta) && slave->master != NULL);
-  if(slave == NULL || slave->master == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta) || slave->master == NULL)
-    return -1;
-
-  if(slave->out_type == REAL){
-    low = fabsf(low);
-    high = fabsf(high);
-  }
-  // Swap if necessary
-  if(low > high){
-    float tmp = low;
-    low = high;
-    high = tmp;
-  }
-  // Limit filter range to Nyquist rate
-  low = low < -0.5 ? -0.5 : low > +0.5 ? +0.5 : low;
-  high = high < -0.5 ? -0.5 : high > +0.5 ? +0.5 : high;
-
-  int const N = slave->points;  // Total number of time domain points
-  int const L = slave->olen;
-  int const M = N - L + 1; // Length of impulse response in time domain
-  assert(N != 0 && L != 0 && M != 0);
-
-  // Used for both time and frequency domain, so make full length even for real transforms
-  float complex * const response = lmalloc(N * sizeof(*response));
-  assert(response != NULL);
-  float real_coeff[M];
-  memset(real_coeff,0,sizeof(real_coeff));
-  float const bw = fabsf(high - low);
-  float const fc = (high + low)/2; // center
-
-  //#define REMEZ 1
-#if REMEZ
-  // Need to understand these parameters better before I actually use it
-  int const num_bands = 2;
-  float bands[2*num_bands];
-  bands[0] = 0;  bands[1] = bw/2 - 0.01; // for now
-  bands[1] = bands[1] < 0 ? 0 : bands[1];
-  bands[2] = bw/2 + 0.01; bands[3] = 0.5;
-  bands[2] = bands[2] > 0.5 ? 0.5 : bands[2];
-  float des[num_bands];
-  des[0] = 1.0;
-  des[1] = 0.0;
-  float weights[num_bands];
-  weights[0] = 1.0;
-  weights[1] = 1.0;
-  liquid_firdespm_wtype wtype[num_bands];
-  wtype[0] = LIQUID_FIRDESPM_FLATWEIGHT;
-  wtype[1] =  LIQUID_FIRDESPM_EXPWEIGHT;
-
-  firdespm_run(M,num_bands,bands,des,weights,wtype,LIQUID_FIRDESPM_BANDPASS,real_coeff);
-#else // liquid kaiser filter gen
-  // Create a real filter, we'll shift it later
-  float const atten = 108.52; // yields β = 11 by his empirical formula (my default)
-  float const mu = 0;
-
-  // The real filter's bandwidth is doubled because it includes negative frequencies
-  liquid_firdes_kaiser(M,bw/2,atten,mu,real_coeff);
-#endif // kaiser
-
-  fftwf_plan plan = plan_complex(N,response,response,FFTW_FORWARD);
-
-  // Multiply real coefficients by complex exponential for frequency shift, place in FFT time-domain buffer
-  memset(response,0,N * sizeof(*response));
-
-  float gain = 1.0f / slave->master->points;
-  assert(gain != 0 && isfinite(gain));
-  for(int i=0; i < M; i++)
-    response[i] = gain * real_coeff[i] * cispif(2 * fc * (i - M/2));
-
-  fftwf_execute_dft(plan,response,response);
-  fftwf_destroy_plan(plan);
-  plan = NULL;
-
-#if FILTER_DEBUG
-  printf("response:");
-  for(int i=0; i < N; i++)
-    printf(" %g+j%g",crealf(response[i]),cimag(response[i]));
-  printf("\n");
-#endif
-
-  // Hot swap with existing response, if any, using mutual exclusion
-  pthread_mutex_lock(&slave->response_mutex);
-  float complex * const tmp = slave->response;
-  slave->response = response;
-  pthread_mutex_unlock(&slave->response_mutex);
-  free(tmp);
-  return 0;
-}
-
-#else
-
-// Apply Kaiser window to filter frequency response
-// "response" is SIMD-aligned array of N float complexs
-// Impulse response will be limited to first M samples in the time domain
-// Phase is adjusted so "time zero" (center of impulse response) is at M/2
-// L and M refer to the decimated output
-static int window_filter(int const L,int const M,float complex * const response,float const beta){
-  assert(response != NULL);
-  if(response == NULL)
-    return -1;
-  assert(L > 0 && M > 0);
-  int const N = L + M - 1;
-  assert(malloc_usable_size(response) >= N * sizeof(*response));
-  // fftw_plan can overwrite its buffers, so we're forced to make a temp. Ugh.
-  float complex * const buffer = lmalloc(sizeof(float complex) * N);
-  assert(buffer != NULL);
-
-  fftwf_plan fwd_filter_plan = plan_complex(N,buffer,buffer,FFTW_FORWARD);
-  assert(fwd_filter_plan != NULL);
-  fftwf_plan rev_filter_plan = plan_complex(N,buffer,buffer,FFTW_BACKWARD);
-  assert(rev_filter_plan != NULL);
-
-  // Convert to time domain
-  memcpy(buffer,response,N * sizeof(*buffer));
-  fftwf_execute(rev_filter_plan);
-  fftwf_destroy_plan(rev_filter_plan);
-  rev_filter_plan = NULL;
-
-  float kaiser_window[M];
-  make_kaiser(kaiser_window,M,beta);
-
-#if FILTER_DEBUG
-  for(int m = 0; m < M; m++)
-    fprintf(stderr,"kaiser[%d] = %g\n",m,kaiser_window[m]);
-#endif
-
-  // Compensate for our own FFT/IFFT cycle
-  float const gain = 1.0f/N;
-
-  // Shift to beginning of buffer to make causal; apply window and adjust for Kaiser window gain/loss
-  for(int n = M - 1; n >= 0; n--)
-    buffer[n] = buffer[(n-M/2+N)%N] * kaiser_window[n] * gain;
-
-  // Pad with zeroes on right side
-  memset(buffer+M,0,(N-M)*sizeof(*buffer));
-
-#if FILTER_DEBUG
-  fprintf(stderr,"window_filter filter impulse response, shifted, windowed and zero padded\n");
-  for(int n = 0; n < M; n++)
-    fprintf(stderr,"%d %lg %lg\n",n,crealf(buffer[n]),cimagf(buffer[n]));
-#endif
-
-  // Now back to frequency domain
-  fftwf_execute(fwd_filter_plan);
-  fftwf_destroy_plan(fwd_filter_plan);
-  fwd_filter_plan = NULL;
-#if FILTER_DEBUG
-  fprintf(stderr,"window_filter filter response amplitude\n");
-  for(int n = 0; n < N; n++)
-    fprintf(stderr,"%d %g %g (%.1f dB)\n",n,crealf(buffer[n]),cimagf(buffer[n]),power2dB(cnrmf(buffer[n])));
-
-  fprintf(stderr,"\n");
-#endif
-  memcpy(response,buffer,N*sizeof(*response));
-  free(buffer);
-  return 0;
-}
-// Real-only counterpart to window_filter()
-// response[] is only N/2+1 elements containing DC and positive frequencies only
-// Negative frequencies are implicitly the conjugate of the positive frequencies
-// L and M refer to the decimated output
-static int window_rfilter(int const L,int const M,float complex * const response,float const beta){
-  assert(response != NULL);
-  if(response == NULL)
-    return -1;
-  assert(L > 0 && M > 0);
-  int const N = L + M - 1;
-  int const bins = N/2 + 1;
-  assert(malloc_usable_size(response) >= bins * sizeof(*response));
-  float complex * const buffer = lmalloc(bins * sizeof(float complex)); // plan destroys its input
-  assert(buffer != NULL);
-  float * const timebuf = lmalloc(sizeof(float) * N);
-  assert(timebuf != NULL);
-  fftwf_plan fwd_filter_plan = plan_r2c(N,timebuf,buffer);
-  assert(fwd_filter_plan != NULL);
-
-  fftwf_plan rev_filter_plan = plan_c2r(N,buffer,timebuf);
-  assert(rev_filter_plan != NULL);
-
-  // Convert to time domain
-  memcpy(buffer,response,bins * sizeof(*buffer));
-  fftwf_execute(rev_filter_plan);
-  fftwf_destroy_plan(rev_filter_plan);
-  rev_filter_plan = NULL;
-
-  float kaiser_window[M];
-  make_kaiser(kaiser_window,M,beta);
-
-#if FILTER_DEBUG
-  for(int m = 0; m < M; m++)
-    fprintf(stderr,"kaiser[%d] = %g\n",m,kaiser_window[m]);
-#endif
-
-  // Compensate for our own FFT/IFFT cycle
-  float gain = 1.0f/N;
-
-  // Shift to beginning of buffer to make causal; apply window and adjust for Kaiser window gain/loss
-  for(int n = M - 1; n >= 0; n--)
-    timebuf[n] = timebuf[(n-M/2+N)%N] * kaiser_window[n] * gain;
-
-  // Pad with zeroes on right side
-  memset(timebuf+M,0,(N-M)*sizeof(*timebuf));
-#if FILTER_DEBUG
-  printf("window_rfilter impulse response, shifted, windowed and zero padded\n");
-  for(int n = 0; n < M; n++)
-    printf("%d %lg\n",n,timebuf[n]);
-#endif
-
-  // Now back to frequency domain
-  fftwf_execute(fwd_filter_plan);
-  fftwf_destroy_plan(fwd_filter_plan);
-  fwd_filter_plan = NULL;
-  free(timebuf);
-  memcpy(response,buffer,bins * sizeof(*response));
-  free(buffer);
-#if FILTER_DEBUG
-  printf("window_rfilter frequency response\n");
-  for(int n = 0; n < bins; n++)
-    printf("%d %g %g (%.1f dB)\n",n,crealf(response[n]),cimagf(response[n]),power2dB(cnrmf(response[n])));
-#endif
-
-  return 0;
-}
-
-// This can occasionally be called with slave == NULL at startup, so don't abort
-// NB: 'low' and 'high' are *fractional* frequencies relative to the output sample rate, i.e., -0.5 < f < +0.5
-// If invoked on a demod that hasn't run yet, slave->master will be NULL so check for that and quit;
-// the filter should get set up when it actually starts (thanks N5TNL for bug report)
-int set_filter(struct filter_out * const slave,float low,float high,float const kaiser_beta){
-  if(slave == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta) || slave->master == NULL)
-    return -1;
-
-  if(slave->out_type == REAL){
-    // Negative frequencies are not allowed in real signals
-    low = fabsf(low);
-    high = fabsf(high);
-  }
-  // Swap if necessary
-  if(low > high){
-    float tmp = low;
-    low = high;
-    high = tmp;
-  }
-  // Limit filter range to Nyquist rate
-  low = low < -0.5 ? -0.5 : low > +0.5 ? +0.5 : low;
-  high = high < -0.5 ? -0.5 : high > +0.5 ? +0.5 : high;
-
-  // Total number of time domain points
-  int const N = slave->points;
-  int const L = slave->olen;
-  int const M = N - L + 1; // Length of impulse response in time domain
-
-  float complex * const response = lmalloc(sizeof(float complex) * slave->bins);
-  assert(response != NULL);
-  memset(response,0,slave->bins * sizeof(response[0]));
-  assert(malloc_usable_size(response) >= (slave->bins) * sizeof(*response));
-  float const gain = 1.0f / slave->master->points; // Adjust for input FFT and overlap
-  assert(gain != 0 && isfinite(gain));
-
-  for(int n = 0; n < slave->bins; n++){
-    float const f = n < N/2 ? (float)n / N : (float)(n - N) / N; // neg frequency
-    if(f == low || f == high)
-      response[n] = gain * M_SQRT1_2; // -3dB
-    else if(f > low && f < high)
-      response[n] = gain;
-    // else response[n] = 0;
-  }
-  if(slave->out_type == REAL)
-    window_rfilter(L,M,response,kaiser_beta);
-  else
-    window_filter(L,M,response,kaiser_beta);
-
-#if FILTER_DEBUG
-  {
-    // check gain in mid passband
-    int midbin = N * (high + low)/2;
-    if(midbin < 0)
-      midbin += N; // Can only happen for complex output, will keep midbin in range for real transforms with only (N/2) + 1 bins
-    float midgain = cnrmf(response[midbin]);
-    fprintf(stderr,"passband middle freq %.3f is bin %d, gain %.3f dB\n",
-	    (high + low)/2, midbin,power2dB(midgain));
-  }
-#endif
-  // Hot swap with existing response, if any, using mutual exclusion
-  pthread_mutex_lock(&slave->response_mutex);
-  float complex * const tmp = slave->response;
-  slave->response = response;
-  pthread_mutex_unlock(&slave->response_mutex);
-  free(tmp);
-  return 0;
-}
-#endif // End of my original filter design routine
 #endif // End of experimental code

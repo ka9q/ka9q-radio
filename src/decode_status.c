@@ -257,6 +257,12 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case CROSSOVER:
       channel->spectrum.crossover = decode_float(cp,optlen);
       break;
+    case SPECTRUM_KAISER_BETA:
+      channel->spectrum.kaiser_beta = decode_float(cp,optlen);
+      break;
+    case SPECTRUM_FFT_N:
+      channel->spectrum.fft_n = decode_int(cp,optlen);
+      break;
     case BIN_DATA:
       break;
     case RF_AGC:
