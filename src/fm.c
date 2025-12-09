@@ -31,7 +31,7 @@ int demod_fm(void *arg){
   pthread_mutex_lock(&chan->status.lock);
   int const blocksize = chan->output.samprate * Blocktime / 1000;
 
-  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
+  int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
 				    chan->filter.beam ? BEAM : COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
@@ -252,7 +252,7 @@ int demod_fm(void *arg){
 	// use samples after DC removal but before de-emphasis and gain scaling
 	for(int n=0; n < N; n++){
 	  update_goertzel(&tone_detect,baseband[n]); // input is -1 to +1
-	  float y = applyIIR(&lpf,baseband[n]); // should be unity gain in passband
+	  float const y = applyIIR(&lpf,baseband[n]); // should be unity gain in passband
 	  lpf_energy += y*y;
 	  if(chan->options & (1LL<0)){
 	    // Test option: let's hear the LPF output

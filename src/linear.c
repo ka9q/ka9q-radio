@@ -24,8 +24,6 @@
 #include "filter.h"
 #include "radio.h"
 
-static __thread bool first_run;
-
 int demod_linear(void *arg){
   struct channel * const chan = arg;
   assert(chan != NULL);
@@ -43,7 +41,7 @@ int demod_linear(void *arg){
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   unsigned int const blocksize = chan->output.samprate * Blocktime / 1000;
-  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
+  int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
 				    chan->filter.beam ? BEAM : COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
@@ -63,6 +61,7 @@ int demod_linear(void *arg){
   init_pll(&chan->pll.pll,(float)chan->output.samprate);
   double am_dc = 0; // Carrier removal filter, removes squelch opening thump in aviation AM
 
+  bool first_run = false;
   bool response_needed = true;
   bool restart_needed = false;
   bool squelch_open = true; // memory for squelch hysteresis, starts open
@@ -91,15 +90,13 @@ int demod_linear(void *arg){
     unsigned int const N = chan->sampcount; // Number of raw samples in filter output buffer
     float complex * buffer = chan->baseband; // Working buffer
 
-    if (!first_run){
-      if(frontend->L != 0){
-        int block_rate = frontend->samprate / frontend->L;
-        uint32_t first_block = chan->filter.out.next_jobnum - 1;
-        chan->output.rtp.timestamp = first_block * (chan->output.samprate / block_rate);
-        if(Verbose > 0)
-          fprintf(stderr,"demod_linear: ssrc %u starting at FFT jobum %u, preset RTP TS to %u\n",chan->output.rtp.ssrc,first_block,chan->output.rtp.timestamp);
-        first_run = true;
-      }
+    if (!first_run && frontend->L != 0){
+      int const block_rate = frontend->samprate / frontend->L;
+      uint32_t const first_block = chan->filter.out.next_jobnum - 1;
+      chan->output.rtp.timestamp = first_block * (chan->output.samprate / block_rate);
+      if(Verbose > 0)
+	fprintf(stderr,"demod_linear: ssrc %u starting at FFT jobum %u, preset RTP TS to %u\n",chan->output.rtp.ssrc,first_block,chan->output.rtp.timestamp);
+      first_run = true;
     }
 
     // First pass over sample block.
@@ -115,12 +112,7 @@ int demod_linear(void *arg){
       set_pll_params(&chan->pll.pll,chan->pll.loop_bw,damping);
       for(unsigned int n=0; n<N; n++){
 	float complex const s = buffer[n] *= conjf(pll_phasor(&chan->pll.pll));
-	float phase;
-	if(chan->pll.square){
-	  phase = cargf(s*s);
-	} else {
-	  phase = cargf(s);
-	}
+	float const phase = chan->pll.square ? cargf(s*s) : cargf(s);
 	run_pll(&chan->pll.pll,phase);
 	signal += crealf(s) * crealf(s); // signal in phase with VCO is signal + noise power
 	noise += cimagf(s) * cimagf(s);  // signal in quadrature with VCO is assumed to be noise power
@@ -148,10 +140,10 @@ int demod_linear(void *arg){
 	  chan->pll.lock = true;
 	}
       }
-      double phase = carg(pll_phasor(&chan->pll.pll));
+      double const phase = carg(pll_phasor(&chan->pll.pll));
       if(chan->pll.snr > chan->squelch_close){
 	// Try to avoid counting cycle slips during loss of lock
-	double phase_diff = phase - chan->pll.cphase;
+	double const phase_diff = phase - chan->pll.cphase;
 	if(phase_diff > M_PI)
 	  chan->pll.rotations--;
 	else if(phase_diff < -M_PI)
@@ -170,9 +162,8 @@ int demod_linear(void *arg){
     assert(isfinite(chan->tune.shift));
     set_osc(&chan->shift,chan->tune.shift/chan->output.samprate,0);
     if(chan->shift.freq != 0){
-      for(unsigned int n=0; n < N; n++){
+      for(unsigned int n=0; n < N; n++)
 	buffer[n] *= step_osc(&chan->shift);
-      }
     }
 
     // Run AGC on a block basis to do some forward averaging
