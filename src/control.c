@@ -47,7 +47,7 @@
 
 static int const DEFAULT_IP_TOS = 48;
 static int const DEFAULT_MCAST_TTL = 1; // LAN only, no routers
-static double Refresh_rate = 0.25f;
+static double Refresh_rate = 0.25;
 static char Locale[256] = "en_US.UTF-8";
 static char const *Presets_file = "presets.conf"; // make configurable!
 static dictionary *Pdict;
@@ -1365,12 +1365,12 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   }
 
   Overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
-  pprintw(w,row++,col,"Overlap","%.1f %% ",100.0f/Overlap);
-  pprintw(w,row++,col,"Bin width","%'.3f Hz",(double)Frontend.samprate / N);
+  pprintw(w,row++,col,"Overlap","%.1lf %% ",100./Overlap);
+  pprintw(w,row++,col,"Bin width","%'.3lf Hz",Frontend.samprate / N);
 
   double const beta = channel->filter.kaiser_beta;
   if(isfinite(beta))
-    pprintw(w,row++,col,"Kaiser β","%'.1f   ",beta);
+    pprintw(w,row++,col,"Kaiser β","%'.1lf   ",beta);
 
 
 #if 0 // Doesn't really give accurate results
@@ -1381,11 +1381,11 @@ static void display_filtering(WINDOW *w,struct channel const *channel){
   // Eq (7) attenuation of first sidelobe
   double const cos_theta_r = 0.217324; // cosine of the first solution of tan(x) = x [really]
   double atten = 20 * log10(sinh(beta) / (cos_theta_r * beta));
-  pprintw(w,row++,col,"Sidelobes","%'.1f dB",-atten);
+  pprintw(w,row++,col,"Sidelobes","%'.1lf dB",-atten);
 
-  double firstnull = (1/(2*M_PI)) * sqrtf(M_PI * M_PI + beta*beta); // Eqn (3) to first null
-  double const transition = (2.0 / M_PI) * sqrtf(M_PI*M_PI + beta * beta);
-  pprintw(w,row++,col,"first null","%'.1f Hz",0.5 * transition * Frontend.samprate / (Frontend.M-1)); // Not N, apparently
+  double firstnull = (1/(2*M_PI)) * sqrt(M_PI * M_PI + beta*beta); // Eqn (3) to first null
+  double const transition = (2.0 / M_PI) * sqrt(M_PI*M_PI + beta * beta);
+  pprintw(w,row++,col,"first null","%'.1lf Hz",0.5 * transition * Frontend.samprate / (Frontend.M-1)); // Not N, apparently
   //  pprintw(w,row++,col,"first null","%'.1lf Hz",firstnull * 1. / Blocktime);
 #endif
 
