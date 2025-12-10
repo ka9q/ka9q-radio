@@ -24,9 +24,9 @@
 #include "morse.h"
 
 int const Samprate = 48000; // Too hard to change
-float CW_speed = 18.0;
-float CW_pitch = 500.0;
-float CW_level = -29.0; // dB
+double CW_speed = 18.0;
+double CW_pitch = 500.0;
+double CW_level = -29.0; // dB
 int const Default_ssrc = 100;
 
 const char *App_path;
@@ -35,7 +35,7 @@ int Verbose = 0;
 char const *Input = "/run/cw/input";
 char const *Target = NULL;
 
-#define PCM_BUFSIZE 480        // 16-bit sample count per packet; must fit in Ethernet MTU
+#define PCM_BUFSIZE ((size_t)480)        // 16-bit sample count per packet; must fit in Ethernet MTU
 #define SCALE16 (1./INT16_MAX)
 int Dit_length;
 
@@ -49,16 +49,16 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
   int const type = pt_from_info(Samprate,1,S16BE);
   if(type < 0)
     return 0; // Can't allocate!
-  rtp.type = type;
+  rtp.type = (uint8_t)type;
   rtp.version = RTP_VERS;
   rtp.ssrc = rtp_state->ssrc;
   rtp.marker = true; // Start with marker bit on to reset playout buffer
 
-  int sample_count = encode_morse_char(fsamples,c);
+  size_t sample_count = encode_morse_char(fsamples,c);
   // byte swap for network
   
   int16_t samples[sample_count];
-  for(int i=0; i < sample_count;i++)
+  for(size_t i=0; i < sample_count;i++)
     samples[i] = htons((int16_t)(SCALE16 * fsamples[i]));
   int16_t *outp = samples;
   
@@ -71,7 +71,7 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
   msghdr.msg_iovlen = 2;
 
   while(sample_count > 0){
-    int const chunk = min(PCM_BUFSIZE,sample_count);
+    size_t const chunk = min(PCM_BUFSIZE,sample_count);
     rtp.timestamp = rtp_state->timestamp;
     rtp_state->timestamp += chunk;
     rtp.seq = rtp_state->seq++;
@@ -79,7 +79,7 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
     rtp_state->bytes += sizeof(samples[0]) * chunk;
     
     uint8_t encoded_rtp_header[128]; // longer than any possible RTP header?
-    int const encoded_rtp_header_size = (uint8_t *)hton_rtp(encoded_rtp_header,&rtp) - encoded_rtp_header;
+    size_t const encoded_rtp_header_size = (uint8_t *)hton_rtp(encoded_rtp_header,&rtp) - encoded_rtp_header;
 
     iovec[0].iov_base = &encoded_rtp_header;
     iovec[0].iov_len = encoded_rtp_header_size;
@@ -92,7 +92,7 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
 	      iovec[0].iov_base,(unsigned long)iovec[0].iov_len,
 	      iovec[1].iov_base,(unsigned long)iovec[1].iov_len);
 
-    int const r = sendmsg(sock,&msghdr,0);
+    ssize_t const r = sendmsg(sock,&msghdr,0);
     if(r <= 0){
       perror("pcm send");
       return -1;
@@ -129,7 +129,7 @@ int main(int argc,char *argv[]){
       Input = optarg;
       break;
     case 's':
-      rtp_state.ssrc = strtol(optarg,NULL,0);
+      rtp_state.ssrc = atoi(optarg);
       break;
     case 'R':
       Target = optarg;

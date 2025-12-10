@@ -50,11 +50,11 @@ struct session {
 // Global config variables
 // Each block of stereo output @ 48kHz must fit in an ethernet packet
 // 5 ms * 48000 = 240 stereo frames; 240 * 2 * 2 = 960 bytes
-static float Blocktime = 5; // milliseconds
+static double Blocktime = 0.005; // milliseconds
 static int In_samprate = 384000;         // Composite input rate
 static int Out_samprate = 48000;         // stereo output rate
-static float Kaiser_beta = 3.5 * M_PI;
-static float const SCALE = 1./INT16_MAX;
+static double Kaiser_beta = 3.5 * M_PI;
+static double const SCALE = 1./INT16_MAX;
 
 // Command line params
 const char *App_path;
@@ -127,10 +127,10 @@ int main(int argc,char * const argv[]){
       Status = optarg;
       break;
     case 'p':
-      IP_tos = strtol(optarg,NULL,0);
+      IP_tos = atoi(optarg);
       break;
     case 'T':
-      Mcast_ttl = strtol(optarg,NULL,0);
+      Mcast_ttl = atoi(optarg);
       break;
     case 'v':
       Verbose++;
@@ -225,7 +225,7 @@ int main(int argc,char * const argv[]){
   while(true){
     socklen_t socklen = sizeof(Status_input_source_address);
     uint8_t buffer[16384];
-    int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
+    ssize_t length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
 
     // We MUST ignore our own status packets, or we'll loop!
     if(address_match(&Status_input_source_address, &Local_status_source_address)
@@ -305,7 +305,7 @@ void *input(void *arg){
     
     struct sockaddr sender;
     socklen_t socksize = sizeof(sender);
-    int size = recvfrom(Input_fd,&pkt->content,sizeof(pkt->content),0,(struct sockaddr *)&sender,&socksize);
+    ssize_t size = recvfrom(Input_fd,&pkt->content,sizeof(pkt->content),0,(struct sockaddr *)&sender,&socksize);
     
     if(size == -1){
       if(errno != EINTR){ // Happens routinely, e.g., when window resized
@@ -389,7 +389,7 @@ void *decode(void *arg){
   // Set up audio filters: mono, pilot & stereo difference
   // These blocksizes depend on front end sample rate and blocksize
   // At Blocktime = 5ms and 384 kHz, L = 1920, M = 1921, N = 3840
-  int const L = roundf(In_samprate * Blocktime * .001); // Number of input samples in Blocktime
+  int const L = (int)round(In_samprate * Blocktime); // Number of input samples in Blocktime
   int const M = L + 1;
   int const N = L + M - 1;
 
@@ -416,10 +416,10 @@ void *decode(void *arg){
   // If not, then a mop-up oscillator has to be provided
   double const hzperbin = In_samprate / N;              // 100 hertz per FFT bin @ 384 kHz and 5 ms
   int const quantum = N / (M - 1);       // rotate by multiples of (2) bins due to overlap-save (100 * 2 = 200 Hz)
-  int const pilot_rotate = quantum * round(19000./(hzperbin * quantum));
-  int const subc_rotate = quantum * round(57000./(hzperbin * quantum));
+  int const pilot_rotate = (int)(quantum * round(19000./(hzperbin * quantum)));
+  int const subc_rotate = (int)(quantum * round(57000./(hzperbin * quantum)));
 
-  int const payload_type = pt_from_info(Out_samprate,2,S16BE);
+  uint8_t const payload_type = pt_from_info(Out_samprate,2,S16BE);
   if(payload_type < 0){
     fprintf(stderr,"Can't allocate RTP payload type for samprate = %'d, channels = %d\n",Out_samprate,2);
     exit(EX_SOFTWARE);
@@ -453,7 +453,7 @@ void *decode(void *arg){
     }
     sp->packets++; // Count all packets, regardless of type
       
-    int frame_size = 0;
+    size_t frame_size = 0;
     int channels = channels_from_pt(pkt->rtp.type);
     switch(channels){
     case 1:
@@ -469,8 +469,8 @@ void *decode(void *arg){
     
     int16_t const * const samples = (int16_t *)pkt->data;
     
-    for(int i=0; i<frame_size; i++){
-      float const s = SCALE * (int16_t)ntohs(samples[i]);
+    for(size_t i=0; i<frame_size; i++){
+      float const s = (float)(SCALE * (int16_t)ntohs(samples[i]));
       if(put_rfilter(&baseband,s) == 0)
 	continue;
       // Filter input buffer full
@@ -497,17 +497,16 @@ void *decode(void *arg){
 
       int16_t *wp = (int16_t *)dp;
       for(int n= 0; n < audio_L; n++){
-	//	float complex subc_phasor = pilot->output.c[n]; // 19 kHz pilot
+	//	double complex subc_phasor = pilot->output.c[n]; // 19 kHz pilot
 	//	subc_phasor *= subc_phasor * subc_phasor;       // triple to 57 kHz
 	//	subc_phasor /= approx_magf(subc_phasor);  // and normalize
-	//	float complex subc_info = conjf(subc_phasor) * rds->output.c[n];
-	float complex subc_info = rds.output.c[n];
+	//	double complex subc_info = conjf(subc_phasor) * rds->output.c[n];
 	// Need to add de-emphasis!
-	*wp++ = htons(scaleclip(__real__ subc_info));
-	*wp++ = htons(scaleclip(__imag__ subc_info));
+	*wp++ = htons(scaleclip(crealf(rds.output.c[n])));
+	*wp++ = htons(scaleclip(cimagf(rds.output.c[n])));
       }
       dp = (uint8_t *)wp;
-      int const r = sendto(Output_fd,&packet,dp - packet,0,&Stereo_dest_address,sizeof(Stereo_dest_address));
+      ssize_t const r = sendto(Output_fd,&packet,dp - packet,0,&Stereo_dest_address,sizeof(Stereo_dest_address));
       Output_packets++;
       if(r <= 0){
 	perror("pcm send");

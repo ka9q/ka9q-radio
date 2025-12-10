@@ -23,6 +23,7 @@
 #include <bsd/string.h>
 #endif
 #include <assert.h>
+#include <sys/types.h>
 
 // Must be a macro so __FILE__ and __TIMESTAMP__ will substitute correctly
 #define VERSION() { fprintf(stderr,"KA9Q Multichannel SDR %s last modified %s\n",__FILE__,__TIMESTAMP__); \
@@ -56,10 +57,10 @@ static inline void ASSERT_UNLOCKED(pthread_mutex_t *mutex){
 #endif
 
 #ifndef M_PIf
-#define M_PIf ((float)(M_PI))
+#define M_PIf (3.14159274101257324219f)
 #endif
 #ifndef M_1_PIf
-#define M_1_PIf (1 / M_PIf)
+#define M_1_PIf (1.f / M_PIf)
 #endif
 
 #define M_1_2PIf (0.5f * M_1_PIf) // fraction of a rotation in one radian
@@ -70,9 +71,9 @@ static inline void ASSERT_UNLOCKED(pthread_mutex_t *mutex){
 
 #define BOLTZMANN (1.380649e-23) // Boltzmann's constant, J/K
 
-static float const SCALE16 = 1./INT16_MAX;
-static float const SCALE12 = 1/2048.;
-static float const SCALE8 = 1./INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
+static float const SCALE16 = 1.f/INT16_MAX;
+static float const SCALE12 = 1.f/2048.;
+static float const SCALE8 = 1.f/INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
 
 
 int default_prio(void);
@@ -147,10 +148,10 @@ static inline int init_recursive_mutex(pthread_mutex_t *m){
 		_x > _y ? _x : _y; })
 
 
-#define dB2power(x) (powf(10.0f,(x)/10.0f))
-#define power2dB(x) (10.0f * log10f(x))
-#define dB2voltage(x) (powf(10.0f, (x)/20.0f))
-#define voltage2dB(x) (20.0f * log10f(x))
+#define dB2power(x) (pow(10.0,(x)/10.0))
+#define power2dB(x) (10.0 * log10(x))
+#define dB2voltage(x) (pow(10.0, (x)/20.0))
+#define voltage2dB(x) (20.0 * log10(x))
 
 // Cos(x) + j*sin(x)
 #define cisf(x) csincosf(x)
@@ -162,9 +163,9 @@ static inline int init_recursive_mutex(pthread_mutex_t *m){
 static inline float sincf(float x){
   if(x == 0)
     return 1;
-  return sinf(M_PI * x) / (M_PI * x);
+  return sinf(M_PIf * x) / (M_PIf * x);
 }
-static inline double sinc(float x){
+static inline double sinc(double x){
   if(x == 0)
     return 1;
   return sin(M_PI * x) / (M_PI * x);
@@ -185,19 +186,19 @@ char *ftime(char *result,int size,int64_t t);
 void normalize_time(struct timespec *x);
 double parse_frequency(char const *,bool);
 uint32_t nextfastfft(uint32_t n);
-int pipefill(int,void *,int);
+ssize_t pipefill(int,void *,size_t);
 void chomp(char *);
 char *ensure_suffix(char const *str, char const *suffix);
-uint32_t ElfHash(uint8_t const *s,int length);
+uint32_t ElfHash(uint8_t const *s,size_t length);
 uint32_t ElfHashString(char const *s);
-uint32_t fnv1hash(const uint8_t *s,int length);
+uint32_t fnv1hash(const uint8_t *s,size_t length);
 
 // Modified Bessel functions
-float i0(float const z); // 0th kind
-float i1(float const z); // 1st kind
+double i0(double const z); // 0th kind
+double i1(double const z); // 1st kind
 
-float xi(float thetasq);
-float fm_snr(float r);
+double xi(double thetasq);
+double fm_snr(double r);
 
 // Convert floating point sample to 16-bit integer, with clipping
 inline static int16_t scaleclip(float const x){
@@ -235,12 +236,12 @@ static inline double cnrm(double complex const x){
 }
 // Fast approximate square root, for signal magnitudes
 // https://dspguru.com/dsp/tricks/magnitude-estimator/
-static inline float approx_magf(float complex x){
-  static float const Alpha = 0.947543636291;
-  static float const Beta =  0.392485425092;
+static inline double approx_magf(double complex x){
+  static double const Alpha = 0.947543636291;
+  static double const Beta =  0.392485425092;
 
-  float absr = fabsf(__real__ x);
-  float absi = fabsf(__imag__ x);
+  double absr = fabs(__real__ x);
+  double absi = fabs(__imag__ x);
 
   return Alpha * max(absr,absi) + Beta * min(absr,absi);
 }

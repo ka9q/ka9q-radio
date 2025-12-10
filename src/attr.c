@@ -17,7 +17,7 @@
 
 // Look for external attribute "name" on an open file and perform scanf on its value
 int attrscanf(int fd,char const *name,char const *format, ...){
-  int attrlen;
+  ssize_t attrlen;
   char *value = NULL;
 
 #ifdef __linux__   // Grrrrr.....

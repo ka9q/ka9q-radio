@@ -24,6 +24,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdatomic.h>
 
 #if LIQUID
 // Otherwise generates a bazillion warnings
@@ -56,7 +57,7 @@ static FILE *FFT_log;
 
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
 pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
-static bool FFTW_init = false;
+static atomic_flag FFTW_init = ATOMIC_FLAG_INIT;
 
 // FFT job descriptor
 struct fft_job {
@@ -208,7 +209,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   // FFTW itself always runs with a single thread since multithreading didn't seem to do much good
   // But we have a set of worker threads operating on a job queue to allow a controlled number
   // of independent FFTs to execute at the same time
-  if(!FFTW_init){
+  if(!atomic_flag_test_and_set_explicit(&FFTW_init,memory_order_relaxed)){
     fprintf(stderr,"FFTW version: %s\n", fftwf_version);
     FFT_log = fopen(FFT_LOG_FILE,"a");
     if(FFT_log == NULL)
@@ -230,7 +231,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
 	fprintf(stderr,"%s not readable: %s\n",Wisdom_file,strerror(errno));
       }
     }
-    // Start FFT worker thread(s) if not already running
+    // Start FFT worker thread(s)
     pthread_mutex_init(&FFT.queue_mutex,NULL);
     pthread_cond_init(&FFT.queue_cond,NULL);
     if(N_worker_threads > NTHREADS_MAX){
@@ -239,8 +240,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     }
     for(int i=0;i < N_worker_threads;i++)
       pthread_create(&FFT.thread[i],NULL,run_fft,NULL);
-
-    FFTW_init = true;
   }
   switch(in_type){
   case SPECTRUM:
@@ -351,13 +350,14 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
   case COMPLEX: // note fall-through
     {
       slave->olen = len;
-      ldiv_t x = ldiv((long)len * N,L);
-      if(x.rem != 0){
-	fprintf(stderr,"Invalid filter output length %d (fft size %ld) for input N=%d, L=%d\n",len,x.quot,N,L);
+      int m = (int)((long)len * N % L); // promote to avoid overflow in the multiply
+      int q = (int)((long)len * N / L);
+      if(m != 0){
+	fprintf(stderr,"Invalid filter output length %d (fft size %d) for input N=%d, L=%d\n",len,q,N,L);
 	return -1;
       }
-      slave->points = x.quot; // Total number of FFT points including overlap
-      slave->bins = x.quot;
+      slave->points = q; // Total number of FFT points including overlap
+      slave->bins = q;
       slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
       slave->output_buffer.c = lmalloc(sizeof(float complex) * slave->bins);
       assert(slave->output_buffer.c != NULL);
@@ -375,12 +375,13 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
   case REAL:
     {
       slave->olen = len;
-      ldiv_t x = ldiv((long)len * N,L);
-      if(x.rem != 0){
-	fprintf(stderr,"Invalid filter output length %d for input N=%d, L=%d\n",len,N,L);
+      int m = (int)((long)len * N % L);
+      int q = (int)((long)len * N / L);
+      if(m != 0){
+	fprintf(stderr,"Invalid filter output length %d (fft size %d) for input N=%d, L=%d\n",len,q,N,L);
 	return -1;
       }
-      slave->points = x.quot;
+      slave->points = q;
       slave->bins = slave->points / 2 + 1;
       slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
       assert(slave->fdomain != NULL);
@@ -810,15 +811,12 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       assert(rp >= 0 && rp < master->bins);
       assert(wp >=0 && wp < slave->bins);
       // rp is unlikely to pass through zero or nyquist in this mode, but handle it anyway?
-      if(rp == 0)
-	slave->fdomain[wp] = __real__(fdomain[0]) * slave->alpha * slave->response[wp]
-	  + __imag__(fdomain[0]) * slave->beta * slave->response[wp];
-      else if(rp == master->bins/2)
-	slave->fdomain[wp] = __real__(fdomain[rp]) * slave->alpha * slave->response[wp]
-	  + __imag__(fdomain[rp]) * slave->beta * slave->response[wp];
+      if(rp == 0 || rp == master->bins/2)
+	slave->fdomain[wp] = (float complex)(__real__(fdomain[rp]) * slave->alpha * slave->response[wp]
+					     + __imag__(fdomain[rp]) * slave->beta * slave->response[wp]);
       else
-	slave->fdomain[wp] = (slave->alpha * fdomain[rp] + slave->beta * conjf(fdomain[master->bins - rp]))
-	  * slave->response[wp];
+	slave->fdomain[wp] = (float complex)((slave->alpha * fdomain[rp] + slave->beta * conjf(fdomain[master->bins - rp]))
+					     * slave->response[wp]);
       if(++rp == master->bins)
 	rp = 0; // Master wrapped to DC
       if(++wp == slave->bins)
@@ -1041,17 +1039,18 @@ int make_kaiserf(float * const window,int const M,double const beta){
   double window_gain = 0;
   for(int n = 0; n < M/2; n++){
     double const p = pc * n  - 1;
-    window[M-1-n] = window[n] = i0(beta * sqrt(1-p*p)) * inv_denom;
-    window_gain += 2 * window[n];
+    double const w = i0(beta * sqrt(1-p*p)) * inv_denom;
+    window[M-1-n] = window[n] = (float)w;
+    window_gain += 2 * w;
   }
   // If sequence length is odd, middle value is unity
   if(M & 1){
     window[(M-1)/2] = 1; // The -1 is actually unnecessary
-    window_gain += window[(M-1)/2];
+    window_gain += 1;
   }
   window_gain = M / window_gain;
   for(int i = 0; i < M; i++)
-    window[i] *= window_gain;
+    window[i] *= (float)window_gain;
 
   return 0;
 }
@@ -1101,7 +1100,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
     double n = i - (double)(M-1)/2;
     double r = kaiser_window[i] * 2 * bw2 * sinc(2 * bw2 * n);
     window_gain += r;
-    impulse[i] = cispi(2 * center * n) * r;
+    impulse[i] = (float)(cispi(2 * center * n) * r);
 #if FILTER_DEBUG
     printf("impulse[%d] = %g + j%g\n",i,crealf(impulse[i]),cimagf(impulse[i]));
 #endif

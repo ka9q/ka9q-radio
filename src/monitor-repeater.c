@@ -29,7 +29,7 @@
 #include "status.h"
 #include "monitor.h"
 
-int64_t Repeater_tail;
+double Repeater_tail;
 char const *Cwid = "de nocall/r"; // Make this configurable!
 double ID_pitch = 800.0;
 double ID_level = -29.0;
@@ -73,23 +73,23 @@ void send_cwid(void){
   }
   float samples[60 * Dit_length];
   kick_output(); // Start output stream if it was stopped, so we can get current Rptr
-  uint32_t wptr = (Rptr + ((long)Playout * DAC_samprate))/1000;
+  uint32_t wptr = Rptr + (int)round(Playout * DAC_samprate);
   wptr &= (BUFFERSIZE-1);
 
   // Don't worry about wrap during write, the mirror will handle it
   for(char const *cp = Cwid; *cp != '\0'; cp++){
-    int const samplecount = encode_morse_char(samples,(wchar_t)*cp);
+    size_t const samplecount = encode_morse_char(samples,(wchar_t)*cp);
     if(samplecount <= 0)
       break;
     if(Channels == 2){
-      for(int i=0;i<samplecount;i++){
+      for(size_t i=0;i<samplecount;i++){
 	Output_buffer[2*wptr] += samples[i];
 	Output_buffer[(2*wptr++ + 1)] += samples[i];
       }
       if(modsub(wptr/2,Wptr,BUFFERSIZE) > 0)
 	 Wptr = wptr / 2;
     } else { // Channels == 1
-      for(int i=0;i<samplecount;i++)
+      for(size_t i=0;i<samplecount;i++)
 	Output_buffer[wptr++] += samples[i];
       if(modsub(wptr,Wptr,BUFFERSIZE) > 0)
 	 Wptr = wptr;
@@ -141,7 +141,7 @@ void *repeater_ctl(void *arg){
 	send_cwid();
 	now = gps_time_ns(); // send_cwid() has delays
       }
-      int64_t const drop_time = LastAudioTime + BILLION * Repeater_tail;
+      int64_t const drop_time = (int64_t)(LastAudioTime + BILLION * Repeater_tail);
       if(now >= drop_time)
 	break;
 

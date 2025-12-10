@@ -35,7 +35,7 @@ char *get_callsign(char *result,uint8_t const *in){
 // show currently transmitting station in UPPER CASE
 // show type and control field
 // dump entire frame in hex/ascii
-int dump_frame(FILE *stream,uint8_t *frame,int bytes){
+int dump_frame(FILE *stream,uint8_t *frame,size_t bytes){
 
   // By default, no digipeaters; will update if there are any
   uint8_t *control = frame + 14;
@@ -115,14 +115,14 @@ int dump_frame(FILE *stream,uint8_t *frame,int bytes){
   fprintf(stream,"; control = %02x",*control++ & 0xff);
   fprintf(stream,"; type = %02x\n",*control & 0xff);
 
-  for(int i = 0; i < bytes; i++){
+  for(size_t i = 0; i < bytes; i++){
     fprintf(stream,"%02x ",frame[i] & 0xff);
     if((i % 16) == 15 || i == bytes-1){
-      for(int k = (i % 16); k < 15; k++)
+      for(size_t k = (i % 16); k < 15; k++)
 	fprintf(stream,"   "); // blanks as needed in last line
 
       fprintf(stream," |  ");
-      for(int k=(i & ~0xf );k <= i; k++){
+      for(size_t k=(i & ~0xf );k <= i; k++){
 	if(frame[k] >= 0x20 && frame[k] < 0x7e)
 	  fputc(frame[k],stream);
 	else
@@ -137,7 +137,7 @@ int dump_frame(FILE *stream,uint8_t *frame,int bytes){
 
 // Check 16-bit AX.25 standard CRC-CCITT on frame
 // return 1 if good, 0 otherwise
-int crc_good(uint8_t *frame,int length){
+int crc_good(uint8_t *frame,size_t length){
   unsigned int const crc_poly = 0x8408;
 	
   uint16_t crc = 0xffff;
@@ -165,12 +165,12 @@ int decode_base91(char *in){
 }
 
 // Break an incoming AX.25 frame into its parts
-int ax25_parse(struct ax25_frame *out,uint8_t const *in,int len){
+int ax25_parse(struct ax25_frame *out,uint8_t const *in,size_t len){
   if(len < 16) // Frame length NOT including CRC
     return -1; // Too short
 
   // Find end of address field
-  int ctl_offs;
+  size_t ctl_offs;
   for(ctl_offs=0; ctl_offs<len; ctl_offs++){
     if(in[ctl_offs] & 1)
       break;
@@ -189,7 +189,7 @@ int ax25_parse(struct ax25_frame *out,uint8_t const *in,int len){
   get_callsign(out->dest,in+0);
 
   // Process digipeaters, if any
-  for(int i=0; i<out->ndigi; i++){
+  for(size_t i=0; i<out->ndigi; i++){
     if(i >= MAX_DIGI)
       return -1; // too many!
     get_callsign(out->digipeaters[i].name,in+7*(2+i));

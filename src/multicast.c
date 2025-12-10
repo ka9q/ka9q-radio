@@ -64,7 +64,7 @@ char const *Default_mcast_iface;
 // when output == false, bind to it so we'll accept incoming packets
 // Add parameter 'offset' (normally 0) to port number; this will be 1 when sending RTCP messages
 // (Can we set up a socket for both input and output??)
-int setup_mcast(char const * const source, struct sockaddr *source_sock, char const * const group, struct sockaddr *group_sock, bool const output, int const ttl, int const tos, int const offset, int tries){
+int setup_mcast(char const * const source, struct sockaddr *source_sock, char const * const group, struct sockaddr *group_sock, bool const output, int const ttl, int const tos, uint16_t const offset, int tries){
   if(group == NULL && group_sock == NULL)
     return -1; // At least one must be supplied
 
@@ -271,7 +271,7 @@ int listen_mcast(void const *source, void const *group, char const *iface){
 // Resolve a multicast target string in the form "name[:port][,iface]"
 // If "name" is not qualified (no periods) then .local will be appended by default
 // If :port is not specified, port field in result will be zero
-int resolve_mcast(char const *group, void *group_sock, int default_port, char *iface, int iface_len, int tries){
+int resolve_mcast(char const *group, void *group_sock, uint16_t default_port, char *iface, int iface_len, int tries){
   if(group == NULL || strlen(group) == 0 || group_sock == NULL)
     return -1;
 
@@ -402,7 +402,7 @@ char const *formatsock(void const *s,bool full){
   if(s == NULL)
     return "(NULL)";
   // Determine actual length (and type) of binary socket structure (IPv4/IPv6)
-  size_t slen = 0;
+  socklen_t slen = 0;
   struct sockaddr const * const sa = (struct sockaddr *)s;
   if(sa == NULL)
     return NULL;

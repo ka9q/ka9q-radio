@@ -225,7 +225,7 @@ void input_loop(){
   while(true){
     uint8_t buffer[PKTSIZE];
     socklen_t socksize = sizeof(Sender);
-    int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
+    ssize_t size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
     // stash time now in case we are slowed by the code below
     int64_t const now = utc_time_ns();
 
@@ -304,11 +304,11 @@ void input_loop(){
       memcpy(sp->header.Subchunk1ID,"fmt ",4);
       sp->header.Subchunk1Size = 16;
       sp->header.AudioFormat = 1;
-      sp->header.NumChannels = sp->channels;
+      sp->header.NumChannels = (int16_t)sp->channels;
       sp->header.SampleRate = sp->samprate;
       
       sp->header.ByteRate = sp->samprate * sp->channels * 16/8;
-      sp->header.BlockAlign = sp->channels * 16/8;
+      sp->header.BlockAlign = (int16_t)(sp->channels * 16/8);
       sp->header.BitsPerSample = 16;
       memcpy(sp->header.SubChunk2ID,"data",4);
       sp->header.Subchunk2Size = 0xffffffff; // Temporary
@@ -320,7 +320,7 @@ void input_loop(){
     // Write data into current file
     // A "sample" is a single audio sample, usually 16 bits.
     // A "frame" is the same as a sample for mono. It's two audio samples for stereo
-    int const samp_count = size / sizeof(*samples); // number of individual audio samples (not frames)
+    size_t const samp_count = size / sizeof(*samples); // number of individual audio samples (not frames)
 
     // Seek to the proper place based on RTP timestamp. Normally offset = 0 when packets are in order
     off_t const offset = (int32_t)(rtp.timestamp - sp->next_timestamp) * sizeof(uint16_t) * sp->channels;
@@ -330,11 +330,11 @@ void input_loop(){
     sp->SamplesWritten += samp_count;
 
     // Packet samples are in big-endian order; write to .wav file in little-endian order
-    for(int n = 0; n < samp_count; n++){
+    for(size_t n = 0; n < samp_count; n++){
       fputc(samples[n] >> 8,sp->fp);
       fputc(samples[n],sp->fp);
     }
-    sp->next_timestamp = rtp.timestamp + samp_count / sp->channels;
+    sp->next_timestamp = (uint32_t)(rtp.timestamp + samp_count / sp->channels);
     if(modtime >= Modetab[Mode].transmission_time * BILLION){
       // We've reached the end of the current transmission.
       // Close current file, hand it to the decoder
@@ -444,8 +444,8 @@ void process_file(struct session *sp){
   fflush(sp->fp);
   struct stat statbuf;
   fstat(fileno(sp->fp),&statbuf);
-  sp->header.ChunkSize = statbuf.st_size - 8;
-  sp->header.Subchunk2Size = statbuf.st_size - sizeof(sp->header);
+  sp->header.ChunkSize = (int32_t)(statbuf.st_size - 8);
+  sp->header.Subchunk2Size = (int32_t)(statbuf.st_size - sizeof(sp->header));
   rewind(sp->fp);
   fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
   fflush(sp->fp);

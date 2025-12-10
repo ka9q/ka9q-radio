@@ -78,7 +78,7 @@ void *input_thread(void *);
 
 void decode_stdin(){
   uint8_t buffer[PKTSIZE];
-  int length=read(STDIN_FILENO,buffer,PKTSIZE);
+  ssize_t length = read(STDIN_FILENO,buffer,PKTSIZE);
   if (length>0){
     enum pkt_type const cr = buffer[0]; // Command/response byte
     fprintf(stdout," %s", cr == STATUS ? "STAT" : "CMD");
@@ -105,13 +105,13 @@ int main(int argc,char *argv[]){
       decode_stdin();
       exit(EX_OK);
     case 's':
-      Ssrc = strtol(optarg,NULL,0);
+      Ssrc = atoi(optarg);
       break;
     case 'c':
-      Count = strtol(optarg,NULL,0);
+      Count = atoi(optarg);
       break;
     case 'i':
-      Interval = fabs(strtod(optarg,NULL)) * BILLION; // ensure it's not negative
+      Interval = (int64_t)fabs(strtod(optarg,NULL)) * BILLION; // ensure it's not negative
       break;
     case 'v':
       Verbose++;
@@ -129,7 +129,7 @@ int main(int argc,char *argv[]){
       strlcpy(Locale,optarg,sizeof(Locale));
       break;
     case 'R':
-      retries = labs(strtol(optarg,NULL,0));
+      retries = abs(atoi(optarg));
       break;
      default:
       usage();
@@ -210,34 +210,34 @@ int main(int argc,char *argv[]){
     encode_int(&bp,COMMAND_TAG,sent_tag);
     encode_int(&bp,OUTPUT_SSRC,Ssrc);
     encode_eol(&bp);
-    int cmd_len = bp - cmd_buffer;
+    size_t cmd_len = bp - cmd_buffer;
 
     if(Verbose)
       fprintf(stdout,"Send poll\n");
 
 #if 0
-    if(sendto(Control_sock_lo,cmd_buffer, cmd_len, 0, &sock,sizeof(sock)) != cmd_len
+    if(sendto(Control_sock_lo,cmd_buffer, cmd_len, 0, &sock,sizeof(sock)) != (ssize_t)cmd_len
        || (Mcast_ttl > 0 && send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len)){
       perror("command send");
       exit(1);
     }
 #else
-    if(sendto(Control_sock, cmd_buffer, cmd_len, 0, &sock,sizeof(sock)) != cmd_len){
+    if(sendto(Control_sock, cmd_buffer, cmd_len, 0, &sock,sizeof(sock)) != (ssize_t)cmd_len){
       perror("command send");
       exit(1);
     }
 #endif
     last_command_time = gps_time_ns();
     // usleep takes usleep_t but it's unsigned and the while loop will hang
-    int32_t sleep_time = Interval / 1000; // nanosec -> microsec
+    int32_t sleep_time = (int32_t)(Interval / 1000); // nanosec -> microsec
 
     while(sleep_time > 0){
       usleep(sleep_time); // Sleeps at least this long
       // sleep Interval beyond latest event
       if(Last_status_time > last_command_time)
-	sleep_time = (Last_status_time + Interval - gps_time_ns()) / 1000;
+	sleep_time = (int32_t)((Last_status_time + Interval - gps_time_ns()) / 1000); // ns to us
       else
-	sleep_time = (last_command_time + Interval - gps_time_ns()) / 1000;
+	sleep_time = (int32_t)((last_command_time + Interval - gps_time_ns()) / 1000); // ns to us
     }
   }
   exit(EX_OK); // can't reach
@@ -255,7 +255,7 @@ void *input_thread(void *p){
     uint8_t buffer[PKTSIZE];
     struct sockaddr_storage source;
     socklen_t len = sizeof(source);
-    int length = recvfrom(Status_sock,buffer,sizeof(buffer),0,(struct sockaddr *)&source,&len);
+    ssize_t length = recvfrom(Status_sock,buffer,sizeof(buffer),0,(struct sockaddr *)&source,&len);
     if(length <= 0){
       fprintf(stderr,"Recvfrom error %s\n",strerror(errno));
       sleep(1);

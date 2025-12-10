@@ -166,7 +166,7 @@ int avahi_publish_address(char const *name,char const *address){
   rewind(fp); // Start reading at front
   char *buffer = NULL;
   size_t linecap = 0;
-  int linelen;
+  ssize_t linelen;
   while((linelen = getline(&buffer,&linecap,fp)) > 0){
     char *cp;
     if((cp = strchr(buffer,'\n')) != NULL)

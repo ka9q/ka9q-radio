@@ -34,7 +34,7 @@ union result {
 int encode_int64(uint8_t **buf,enum status_type type,uint64_t x){
   uint8_t *cp = *buf;
 
-  *cp++ = type;
+  *cp++ = (uint8_t)type;
 
   if(x == 0){
     // Compress zero value to zero length
@@ -48,7 +48,7 @@ int encode_int64(uint8_t **buf,enum status_type type,uint64_t x){
     x <<= 8;
     len--;
   }
-  *cp++ = len;
+  *cp++ = (uint8_t)len;
 
   for(int i=0; i<len; i++){
     *cp++ = x >> 56;
@@ -71,7 +71,7 @@ int encode_eol(uint8_t **buf){
 
 int encode_byte(uint8_t **buf,enum status_type type,uint8_t x){
   uint8_t *cp = *buf;
-  *cp++ = type;
+  *cp++ = (uint8_t)type;
   if(x == 0){
     // Compress zero value to zero length
     *cp++ = 0;
@@ -98,12 +98,13 @@ int encode_int(uint8_t **buf,enum status_type type,int x){
 
 
 // Floating types are also byte-swapped to big-endian order
-int encode_float(uint8_t **buf,enum status_type type,float x){
+// Intentionally accepts a double so callers don't need to cast them
+int encode_float(uint8_t **buf,enum status_type type,double x){
   if(isnan(x))
     return 0; // Never encode a NAN
 
   union result r;
-  r.f = x;
+  r.f = (float)x;
   return encode_int32(buf,type,r.l);
 }
 
@@ -117,30 +118,30 @@ int encode_double(uint8_t **buf,enum status_type type,double x){
 }
 
 // Encode byte string without byte swapping
-int encode_string(uint8_t **bp,enum status_type const type,void const *buf,unsigned int const buflen){
+size_t encode_string(uint8_t **bp,enum status_type const type,void const *buf,size_t const buflen){
   uint8_t const *orig_bpp = *bp;
   uint8_t *cp = *bp;
-  *cp++ = type;
+  *cp++ = (uint8_t)type;
 
   if(buflen < 128){
     // send length directly
-    *cp++ = buflen;
+    *cp++ = (uint8_t)buflen;
   } else if(buflen < 65536){
     // Length is 2 bytes, big endian
     *cp++ = 0x80 | 2;
-    *cp++ = buflen >> 8;
-    *cp++ = buflen;
+    *cp++ = (uint8_t)(buflen >> 8);
+    *cp++ = (uint8_t)buflen;
   } else if(buflen < 16777216){
     *cp++ = 0x80 | 3;
-    *cp++ = buflen >> 16;
-    *cp++ = buflen >> 8;
-    *cp++ = buflen;
+    *cp++ = (uint8_t)(buflen >> 16);
+    *cp++ = (uint8_t)(buflen >> 8);
+    *cp++ = (uint8_t)buflen;
   } else { // Handle more than 4 GB??
     *cp++ = 0x80 | 4;
-    *cp++ = buflen >> 24;
-    *cp++ = buflen >> 16;
-    *cp++ = buflen >> 8;
-    *cp++ = buflen;
+    *cp++ = (uint8_t)(buflen >> 24);
+    *cp++ = (uint8_t)(buflen >> 16);
+    *cp++ = (uint8_t)(buflen >> 8);
+    *cp++ = (uint8_t)buflen;
   }
   memcpy(cp,buf,buflen);
   cp += buflen;
@@ -152,43 +153,43 @@ int encode_string(uint8_t **bp,enum status_type const type,void const *buf,unsig
 // size = number of floats
 // Sent in big endian order just like other floats
 // Because it can be very long, handle large sizes
-int encode_vector(uint8_t **bp,enum status_type type,float const *array,int size){
+size_t encode_vector(uint8_t **bp,enum status_type type,float const *array,size_t size){
   uint8_t const *orig_bp = *bp;
   uint8_t *cp = *bp;
-  *cp++ = type;
+  *cp++ = (uint8_t)type;
 
-  int const bytes = sizeof(*array) * size; // Number of bytes in data
+  size_t const bytes = sizeof(*array) * size; // Number of bytes in data
   if(bytes < 128){
-    *cp++ = bytes;    // Send length directly
+    *cp++ = (uint8_t)bytes;    // Send length directly
   } else if(bytes < 65536){
     *cp++ = 0x80 | 2; // length takes 2 bytes
-    *cp++ = bytes >> 8;
-    *cp++ = bytes;
+    *cp++ = (uint8_t)(bytes >> 8);
+    *cp++ = (uint8_t)bytes;
   } else if(bytes < 16777216){
     *cp++ = 0x80 | 3;
-    *cp++ = bytes >> 16;
-    *cp++ = bytes >> 8;
-    *cp++ = bytes;
+    *cp++ = (uint8_t)(bytes >> 16);
+    *cp++ = (uint8_t)(bytes >> 8);
+    *cp++ = (uint8_t)bytes;
   } else {
     *cp++ = 0x80 | 4;
-    *cp++ = bytes >> 24;
-    *cp++ = bytes >> 16;
-    *cp++ = bytes >> 8;
-    *cp++ = bytes;
+    *cp++ = (uint8_t)(bytes >> 24);
+    *cp++ = (uint8_t)(bytes >> 16);
+    *cp++ = (uint8_t)(bytes >> 8);
+    *cp++ = (uint8_t)bytes;
   }
   // Encode the individual array elements
   // Right now they're DC....maxpositive maxnegative...minnegative
-  for(int i=0;i < size;i++){
+  for(size_t i=0;i < size;i++){
     // Swap but don't bother compressing leading zeroes for now
     union {
       uint32_t i;
       float f;
     } foo;
     foo.f = array[i];
-    *cp++ = foo.i >> 24;
-    *cp++ = foo.i >> 16;
-    *cp++ = foo.i >> 8;
-    *cp++ = foo.i;
+    *cp++ = (uint8_t)(foo.i >> 24);
+    *cp++ = (uint8_t)(foo.i >> 16);
+    *cp++ = (uint8_t)(foo.i >> 8);
+    *cp++ = (uint8_t)foo.i;
   }
   *bp = cp;
   return cp - orig_bp;
@@ -275,8 +276,8 @@ int encode_socket(uint8_t **buf,enum status_type type,void const *sock){
   switch(sin->sin_family){
   case AF_INET:
     optlen = 6;
-    *bp++ = type;
-    *bp++ = optlen;
+    *bp++ = (uint8_t)type;
+    *bp++ = (uint8_t)optlen;
     memcpy(bp,&sin->sin_addr.s_addr,4); // Already in network order
     bp += 4;
     memcpy(bp,&sin->sin_port,2);
@@ -284,8 +285,8 @@ int encode_socket(uint8_t **buf,enum status_type type,void const *sock){
     break;
   case AF_INET6:
     optlen = 10;
-    *bp++ = type;
-    *bp++ = optlen;
+    *bp++ = (uint8_t)type;
+    *bp++ = (uint8_t)optlen;
     memcpy(bp,&sin6->sin6_addr,8);
     bp += 8;
     memcpy(bp,&sin6->sin6_port,2);

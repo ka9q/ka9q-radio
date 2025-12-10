@@ -1,10 +1,10 @@
 #ifndef _RTP_H
 #define _RTP_H 1
 
-#define DEFAULT_MCAST_PORT (5004)
-#define DEFAULT_RTP_PORT (5004)
-#define DEFAULT_RTCP_PORT (5005)
-#define DEFAULT_STAT_PORT (5006)
+#define DEFAULT_MCAST_PORT ((uint16_t)5004)
+#define DEFAULT_RTP_PORT ((uint16_t)5004)
+#define DEFAULT_RTCP_PORT ((uint16_t)5005)
+#define DEFAULT_STAT_PORT ((uint16_t)5006)
 
 #define NTP_EPOCH 2208988800UL // Seconds between Jan 1 1900 and Jan 1 1970
 
@@ -97,7 +97,7 @@ enum sdes_type {
 struct rtcp_sdes {
   enum sdes_type type;
   uint32_t ssrc;
-  int mlen;
+  size_t mlen;
   char message[256];
 };
 #define PKTSIZE 65536 // Largest possible IP datagram, in case we use jumbograms
@@ -118,15 +118,15 @@ void *hton_rtp(void *, struct rtp_header const *);
 int add_pt(int type, unsigned int samprate, unsigned int channels, enum encoding encoding);
 // Function to process incoming RTP packet headers
 // Returns number of samples dropped or skipped by silence suppression, if any
-int rtp_process(struct rtp_state *state,struct rtp_header const *rtp,int samples);
+int rtp_process(struct rtp_state *state,struct rtp_header const *rtp,size_t samples);
 
 // Generate RTCP source description segment
-uint8_t *gen_sdes(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_sdes const *sdes,int sc);
+uint8_t *gen_sdes(uint8_t *output,size_t bufsize,uint32_t ssrc,struct rtcp_sdes const *sdes,int sc);
 // Generate RTCP bye segment
-uint8_t *gen_bye(uint8_t *output,int bufsize,uint32_t const *ssrcs,int sc);
+uint8_t *gen_bye(uint8_t *output,size_t bufsize,uint32_t const *ssrcs,int sc);
 // Generate RTCP sender report segment
-uint8_t *gen_sr(uint8_t *output,int bufsize,struct rtcp_sr const *sr,struct rtcp_rr const *rr,int rc);
+uint8_t *gen_sr(uint8_t *output,size_t bufsize,struct rtcp_sr const *sr,struct rtcp_rr const *rr,int rc);
 // Generate RTCP receiver report segment
-uint8_t *gen_rr(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_rr const *rr,int rc);
+uint8_t *gen_rr(uint8_t *output,size_t bufsize,uint32_t ssrc,struct rtcp_rr const *rr,int rc);
 
 #endif

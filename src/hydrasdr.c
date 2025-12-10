@@ -40,17 +40,17 @@ struct sdrstate {
 
   // Tuning
   double converter;   // Upconverter base frequency (usually 120 MHz)
-  int offset; // 1/4 of sample rate in real mode; 0 in complex mode
+  double offset; // 1/4 of sample rate in real mode; 0 in complex mode
 
   // AGC
   bool software_agc;
   bool linearity; // Use linearity gain tables; default is sensitivity
   int gainstep; // HydraSDR gain table steps (0-21), higher numbers == higher gain
-  float agc_energy; // Integrated energy
+  double agc_energy; // Integrated energy
   int agc_samples; // Samples represented in energy
-  float high_threshold;
-  float low_threshold;
-  float scale;         // Scale samples for #bits and front end gain
+  double high_threshold;
+  double low_threshold;
+  double scale;         // Scale samples for #bits and front end gain
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
@@ -196,10 +196,10 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
   frontend->isreal = true;
   frontend->bitspersample = 12;
   sdr->offset = frontend->samprate/4;
-  sdr->converter = config_getfloat(Dictionary,section,"converter",0);
+  sdr->converter = config_getdouble(Dictionary,section,"converter",0);
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
 
-  fprintf(stderr,"Set sample rate %'u Hz, offset %'d Hz\n",frontend->samprate,sdr->offset);
+  fprintf(stderr,"Set sample rate %'lf Hz, offset %'lf Hz\n",frontend->samprate,sdr->offset);
   {
     int ret __attribute__ ((unused));
     ret = hydrasdr_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
@@ -213,32 +213,32 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
   // Hardware device settings
   sdr->linearity = config_getboolean(Dictionary,section,"linearity",false);
   sdr->software_agc = true; // On by default unless one of the hardware AGCs is turned on
-  int const lna_agc = config_getboolean(Dictionary,section,"lna-agc",false); // default off
-  hydrasdr_set_lna_agc(sdr->device,lna_agc);
+  bool const lna_agc = config_getboolean(Dictionary,section,"lna-agc",false); // default off
+  hydrasdr_set_lna_agc(sdr->device,(uint8_t)lna_agc);
   if(lna_agc)
     sdr->software_agc = false;
 
-  int const mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",false); // default off
-  hydrasdr_set_mixer_agc(sdr->device,mixer_agc);
+  bool const mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",false); // default off
+  hydrasdr_set_mixer_agc(sdr->device,(uint8_t)mixer_agc);
   if(mixer_agc)
     sdr->software_agc = false;
 
   int const lna_gain = config_getint(Dictionary,section,"lna-gain",-1);
   if(lna_gain != -1){
     frontend->lna_gain = lna_gain;
-    hydrasdr_set_lna_gain(sdr->device,lna_gain);
+    hydrasdr_set_lna_gain(sdr->device,(uint8_t)lna_gain);
     sdr->software_agc = false;
   }
   int const mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
   if(mixer_gain != -1){
     frontend->mixer_gain = mixer_gain;
-    hydrasdr_set_mixer_gain(sdr->device,mixer_gain);
+    hydrasdr_set_mixer_gain(sdr->device,(uint8_t)mixer_gain);
     sdr->software_agc = false;
   }
   int const vga_gain = config_getint(Dictionary,section,"vga-gain",-1);
   if(vga_gain != -1){
     frontend->if_gain = vga_gain;
-    hydrasdr_set_vga_gain(sdr->device,vga_gain);
+    hydrasdr_set_vga_gain(sdr->device,(uint8_t)vga_gain);
     sdr->software_agc = false;
   }
   int gainstep = config_getint(Dictionary,section,"gainstep",-1);
@@ -251,7 +251,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     set_gain(sdr,gainstep); // Start AGC with max gain step
   }
   frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
-  frontend->rf_level_cal = config_getfloat(Dictionary,section,"gaincal",4.8);
+  frontend->rf_level_cal = config_getdouble(Dictionary,section,"gaincal",4.8);
   sdr->antenna_bias = config_getboolean(Dictionary,section,"bias",false);
   {
     int ret __attribute__ ((unused));
@@ -269,9 +269,9 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
 	  sdr->software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,gainstep,sdr->antenna_bias);
 
   if(sdr->software_agc){
-    float const dh = config_getdouble(Dictionary,section,"agc-high-threshold",-10.0);
+    double const dh = config_getdouble(Dictionary,section,"agc-high-threshold",-10.0);
     sdr->high_threshold = dB2power(-fabs(dh));
-    float const dl = config_getdouble(Dictionary,section,"agc-low-threshold",-40.0);
+    double const dl = config_getdouble(Dictionary,section,"agc-low-threshold",-40.0);
     sdr->low_threshold = dB2power(-fabs(dl));
     fprintf(stderr,"AGC thresholds: high %.1f dBFS, low %.1lf dBFS\n",dh,dl);
   }
@@ -361,7 +361,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
   uint32_t const *up = (uint32_t *)transfer->samples;
   assert(wptr != NULL);
   assert(up != NULL);
-  float in_energy = 0;
+  double in_energy = 0;
   // Libhydrasdr could do this for us, but this minimizes mem copies
   // This could probably be vectorized someday
   for(int i=0; i < sampcount; i+= 8){ // assumes multiple of 8
@@ -382,8 +382,8 @@ static int rx_callback(hydrasdr_transfer *transfer){
       } else {
 	frontend->samp_since_over++;
       }
-      wptr[j] = sdr->scale * x;
-      in_energy += x * x;
+      wptr[j] = (float)(sdr->scale * x);
+      in_energy += (double)x * x;
     }
     wptr += 8;
     up += 3;
@@ -396,7 +396,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
     sdr->agc_energy += in_energy;
     sdr->agc_samples += sampcount;
     if(sdr->agc_samples >= frontend->samprate/10){ // Time to re-evaluate after 100 ms
-      float avg_agc_power = scale_ADpower2FS(frontend) * sdr->agc_energy / sdr->agc_samples;
+      double avg_agc_power = scale_ADpower2FS(frontend) * sdr->agc_energy / sdr->agc_samples;
       if(avg_agc_power < sdr->low_threshold){
 	if(Verbose)
 	  printf("AGC power %.1f dBFS\n",power2dB(avg_agc_power));
@@ -438,7 +438,7 @@ static double true_freq(uint64_t freq_hz){
   // 5:  27.65625   55.312      5.960
   int8_t div_num;
   for (div_num = 0; div_num <= MAX_DIV; div_num++){
-    uint32_t const vco = freq_hz << (div_num + 1);
+    uint64_t const vco = freq_hz << (div_num + 1);
     if (VCO_MIN <= vco && vco <= VCO_MAX)
       break;
   }
@@ -448,7 +448,7 @@ static double true_freq(uint64_t freq_hz){
   // r = PLL programming bits: Nint in upper 16 bits, Nfract in lower 16 bits
   // Freq steps are pll_ref / 2^(16 + div_num) Hz
   // Note the '+ (pll_ref >> 1)' term simply rounds the division to the nearest integer
-  uint32_t const r = ((freq_hz << (div_num + 16)) + (pll_ref >> 1)) / pll_ref;
+  uint64_t const r = ((freq_hz << (div_num + 16)) + (pll_ref >> 1)) / pll_ref;
 
   // This is a puzzle; is it related to spur suppression?
   double const offset = 0.25;
@@ -468,9 +468,9 @@ static double true_freq(uint64_t freq_hz){
 static double set_correct_freq(struct sdrstate * const sdr,double const freq){
   struct frontend * const frontend = sdr->frontend;
   // sdr->converter refers to an upconverter, so it's added to the frequency we request
-  int64_t const intfreq = round((freq + sdr->converter)/ (1 + frontend->calibrate));
+  int64_t const intfreq = (int64_t)round((freq + sdr->converter)/ (1 + frontend->calibrate));
   int ret __attribute__((unused)) = HYDRASDR_SUCCESS; // Won't be used when asserts are disabled
-  ret = hydrasdr_set_freq(sdr->device,intfreq - sdr->offset);
+  ret = hydrasdr_set_freq(sdr->device,(uint64_t)(intfreq - sdr->offset));
   assert(ret == HYDRASDR_SUCCESS);
   double const tf = true_freq(intfreq);
   frontend->frequency = tf * (1 + frontend->calibrate) - sdr->converter;
@@ -496,14 +496,14 @@ static void set_gain(struct sdrstate * const sdr,int gainstep){
     int const tab = GAIN_COUNT - 1 - sdr->gainstep;
     if(sdr->linearity){
       int ret __attribute__((unused)) = HYDRASDR_SUCCESS; // Won't be used when asserts are disabled
-      ret = hydrasdr_set_linearity_gain(sdr->device,sdr->gainstep);
+      ret = hydrasdr_set_linearity_gain(sdr->device,(uint8_t)sdr->gainstep);
       assert(ret == HYDRASDR_SUCCESS);
       frontend->if_gain = hydrasdr_linearity_vga_gains[tab];
       frontend->mixer_gain = hydrasdr_linearity_mixer_gains[tab];
       frontend->lna_gain = hydrasdr_linearity_lna_gains[tab];
     } else {
       int ret __attribute__((unused)) = HYDRASDR_SUCCESS; // Won't be used when asserts are disabled
-      ret = hydrasdr_set_sensitivity_gain(sdr->device,sdr->gainstep);
+      ret = hydrasdr_set_sensitivity_gain(sdr->device,(uint8_t)sdr->gainstep);
       assert(ret == HYDRASDR_SUCCESS);
       frontend->if_gain = hydrasdr_sensitivity_vga_gains[tab];
       frontend->mixer_gain = hydrasdr_sensitivity_mixer_gains[tab];

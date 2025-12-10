@@ -118,7 +118,7 @@ int bladerf_setup(struct frontend * const frontend,
 			0);
 
 	if (Verbose)
-		fprintf(stderr, "Set sample rate %'u Hz\n",
+		fprintf(stderr, "Set sample rate %'lf Hz\n",
 				frontend->samprate);
 
 	status = bladerf_set_sample_rate(sdr->dev, ch,
@@ -207,11 +207,11 @@ static void bladerf_process(struct frontend * const frontend,
 		void *samples, size_t num_samples)
 {
 	float complex * const wptr = frontend->in.input_write_pointer.c;
-	float energy = 0;
+	double energy = 0;
 
 	const int16_t *sample = (const int16_t *)samples;
 	for (size_t i=0; i < num_samples; i++) {
-		float complex samp;
+		double complex samp;
 		int16_t s;
 
 		s = sample[0] & 0xfff;
@@ -224,8 +224,8 @@ static void bladerf_process(struct frontend * const frontend,
 		if (s & 0x800)
 			s |= 0xf000;
 		__imag__ samp = s;
-		energy += cnrmf(samp);
-		wptr[i] = samp;
+		energy += cnrm(samp);
+		wptr[i] = (float complex)samp;
 		sample += 2;
 	}
 

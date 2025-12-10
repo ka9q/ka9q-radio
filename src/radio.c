@@ -50,7 +50,7 @@ static bool Global_use_dns;
 static void *Dl_handle;
 static struct frontend Frontend;
 static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
-static float const DEFAULT_BLOCKTIME = 20.0;
+static double const DEFAULT_BLOCKTIME = .02; // 20 ms
 static char *Metadata_dest_string; // DNS name of default multicast group for status/commands
 static pthread_t Status_thread;
 static dictionary *Configtable; // Configtable file descriptor for iniparser for main radiod config file
@@ -63,8 +63,8 @@ static int const DEFAULT_FFTW_INTERNAL_THREADS = 1;
 static int const DEFAULT_LIFETIME = 20; // 20 sec for idle sessions tuned to 0 Hz
 static int const DEFAULT_OVERLAP = 5;
 static double const Power_alpha = 0.10; // Noise estimation time smoothing factor, per block. Use double to reduce risk of slow denormals
-static float const NQ = 0.10f; // look for energy in 10th quartile, hopefully contains only noise
-static float const N_cutoff = 1.5; // Average (all noise, hopefully) bins up to 1.5x the energy in the 10th quartile
+static double const NQ = 0.10; // look for energy in 10th quartile, hopefully contains only noise
+static double const N_cutoff = 1.5; // Average (all noise, hopefully) bins up to 1.5x the energy in the 10th quartile
 // Minimum to get reasonable noise level statistics; 1000 * 40 Hz = 40 kHz which seems reasonable
 static int const Min_noise_bins = 1000;
 static char const *Iface;
@@ -111,7 +111,8 @@ static char const *Global_keys[] = {
 // Remaining global variables are linked mostly from radio_status.c
 // Try to eliminate as many as possible
 struct channel Channel_list[Nchannels];
-float Blocktime = DEFAULT_BLOCKTIME;
+double Blocktime = 0;      // Actual blocktime to give integral blocksize at input sample rate. Starts uninitialized
+double User_blocktime = DEFAULT_BLOCKTIME; // User's requested blocktime
 char const *Description; // Set either in [global] or [hardware]
 int Overlap = DEFAULT_OVERLAP;
 dictionary *Preset_table;   // Table of presets, usually in /usr/local/share/ka9q-radio/presets.conf
@@ -122,12 +123,12 @@ int Ctl_fd = -1;     // File descriptor for receiving user commands
 
 // If a channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
 // Must be computed at run time because it depends on the block time
-int Channel_idle_timeout;  //  = DEFAULT_LIFETIME * 1000 / Blocktime;
+int Channel_idle_timeout;  //  = DEFAULT_LIFETIME / Blocktime;
 
 extern int N_worker_threads; // owned by filter.c
 extern char const *Name;     // owned by main.c
 
-static float estimate_noise(struct channel *chan,int shift);// Noise estimator tuning
+static double estimate_noise(struct channel *chan,int shift);// Noise estimator tuning
 static int setup_hardware(char const *sname);
 static void *process_section(void *p);
 static void *sap_send(void *p);
@@ -272,8 +273,8 @@ int loadconfig(char const *file){
   // Process [global] section applying to all demodulator blocks
   Description = config_getstring(Configtable,GLOBAL,"description",NULL);
   Verbose = config_getint(Configtable,GLOBAL,"verbose",Verbose);
-  Blocktime = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",Blocktime));
-  Channel_idle_timeout = 20 * 1000 / Blocktime;
+  User_blocktime = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",User_blocktime)); // Input value is in ms, internally in sec
+  Channel_idle_timeout = (int)round(20 / User_blocktime);
   Overlap = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
   N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
   N_internal_threads = config_getint(Configtable,GLOBAL,"fft-internal-threads",DEFAULT_FFTW_INTERNAL_THREADS); // owned by filter.c
@@ -380,7 +381,8 @@ int loadconfig(char const *file){
   // Set up template for all new channels
   set_defaults(&Template);
   Template.frontend = &Frontend;
-  Template.lifetime = DEFAULT_LIFETIME * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
+  assert(Blocktime != 0);
+  Template.lifetime = (int)round(DEFAULT_LIFETIME / Blocktime); // If freq == 0, goes away 20 sec after last command
 
   // Set up default output stream file descriptor and socket
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
@@ -581,11 +583,11 @@ static int setup_hardware(char const *sname){
   // N = FFT size = L + M - 1
   // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
   assert(Frontend.samprate != 0);
-  double const eL = Frontend.samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
-  Frontend.L = lround(eL);
-  if(Frontend.L != eL)
-    fprintf(stderr,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
-	    Blocktime,Frontend.samprate,eL-Frontend.L);
+  Frontend.L = (int)round(Frontend.samprate * User_blocktime); // Blocktime is in seconds
+  Blocktime = Frontend.L / Frontend.samprate; // True value, must be set early, many things depend on it
+  if(fabs(Blocktime - User_blocktime) > 1e-6)
+    fprintf(stderr,"Warning: requested block time %lf changed to %lf for integral block size %d at sample rate %lf Hz\n",
+	    User_blocktime,Blocktime,Frontend.L,Frontend.samprate);
 
   Frontend.M = Frontend.L / (Overlap - 1) + 1;
   assert(Frontend.M != 0);
@@ -845,7 +847,7 @@ static void *process_section(void *p){
     if(!freq_table[i].valid)
       continue;
 
-    uint32_t ssrc = round(freq_table[i].f / 1000.0); // Kilohertz
+    uint32_t ssrc = (uint32_t)round(freq_table[i].f / 1000.0); // Kilohertz
 
     struct channel *chan = NULL;
     // Try to create it, incrementing in case of collision
@@ -931,7 +933,8 @@ struct channel *create_chan(uint32_t ssrc){
     chan->frontend = &Frontend; // Should be already set in template, but just be sure
     chan->output.rtp.ssrc = ssrc; // Stash it
     Active_channel_count++;
-    chan->lifetime = 20 * 1000 / Blocktime; // If freq == 0, goes away 20 sec after last command
+    assert(Blocktime != 0);
+    chan->lifetime = (int)round(20. / Blocktime); // If freq == 0, goes away 20 sec after last command
   }
   pthread_mutex_unlock(&Channel_list_mutex);
   return chan;
@@ -1100,18 +1103,18 @@ double set_first_LO(struct channel const * const chan,double const first_LO){
  by Renfors, Yli-Kaakinen & Harris, IEEE Trans on Signal Processing, Aug 2014
 
  Essentially just a modulo function; divide frequency by the width of each bin (eg 40 Hz), returning
- an integer quotient and a floating remainder, e.g, +/- 20 Hz
+ an integer quotient and a double remainder, e.g, +/- 20 Hz
 */
-int compute_tuning(int N, int M, int samprate,int *shift,double *remainder, double freq){
-  double const hzperbin = (double)samprate / N;
+int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, double freq){
+  double const hzperbin = samprate / N;
 
 #if 0
   // Round to multiples of V (not needed anymore)
   int const V = N / (M-1);
-  int const r = V * round((freq/hzperbin) / V);
+  int const r = (int)(V * round((freq/hzperbin) / V));
 #else
   (void)M;
-  int const r = round(freq/hzperbin);
+  int const r = (int)round(freq/hzperbin);
 #endif
 
   if(shift)
@@ -1162,9 +1165,9 @@ static void *rtcp_send(void *arg){
       sr.ntp_timestamp += ((int64_t)now.tv_nsec << 32) / BILLION; // NTP timestamps are units of 2^-32 sec
     }
     // The zero is to remind me that I start timestamps at zero, but they could start anywhere
-    sr.rtp_timestamp = (0 + gps_time_ns() - Starttime) / BILLION;
+    sr.rtp_timestamp = (unsigned)((0 + gps_time_ns() - Starttime) / BILLION);
     sr.packet_count = chan->output.rtp.seq;
-    sr.byte_count = chan->output.rtp.bytes;
+    sr.byte_count = (unsigned)chan->output.rtp.bytes;
 
     uint8_t *dp = gen_sr(buffer,sizeof(buffer),&sr,NULL,0);
 
@@ -1216,7 +1219,7 @@ static void *sap_send(void *p){
   int64_t start_time = utc_time_sec() + NTP_EPOCH; // NTP uses UTC, not GPS
 
   // These should change when a change is made elsewhere
-  uint16_t const id = random(); // Should be a hash, but it changes every time anyway
+  uint16_t const id = (uint16_t)random(); // Should be a hash, but it changes every time anyway
   int const sess_version = 1;
 
   for(;;){
@@ -1339,6 +1342,8 @@ int downconvert(struct channel *chan){
   if(chan == NULL)
     return -1;
 
+  assert(Blocktime != 0);
+
   int shift = 0;
   double remainder = 0;
 
@@ -1349,7 +1354,7 @@ int downconvert(struct channel *chan){
     if(chan->tune.freq == 0 && chan->lifetime > 0 && --chan->lifetime <= 0){
       chan->demod_type = -1;  // No demodulator
       if(Verbose > 1)
-	fprintf(stderr,"chan %d terminate needed\n",chan->output.rtp.ssrc);
+	fprintf(stderr,"chan %u terminate needed\n",chan->output.rtp.ssrc);
       return -1; // terminate needed
     }
     // Process any commands and return status
@@ -1396,7 +1401,7 @@ int downconvert(struct channel *chan){
     pthread_mutex_unlock(&chan->status.lock);
     if(restart_needed){
       if(Verbose > 1)
-	fprintf(stderr,"chan %d restart needed\n",chan->output.rtp.ssrc);
+	fprintf(stderr,"chan %u restart needed\n",chan->output.rtp.ssrc);
       return +1; // Restart needed
     }
     // To save CPU time when the front end is completely tuned away from us, block (with timeout) until the front
@@ -1417,7 +1422,7 @@ int downconvert(struct channel *chan){
       chan->output.power = 0;
       struct timespec timeout; // Needed to avoid deadlock if no front end is available
       clock_gettime(CLOCK_REALTIME,&timeout);
-      timeout.tv_nsec += Blocktime * MILLION; // milliseconds to nanoseconds
+      timeout.tv_nsec += (long)(Blocktime * BILLION); // seconds to nanoseconds
       if(timeout.tv_nsec > BILLION){
 	timeout.tv_sec += 1; // 1 sec in the future
 	timeout.tv_nsec -= BILLION;
@@ -1484,7 +1489,7 @@ int downconvert(struct channel *chan){
       chan->baseband = chan->filter2.out.output.c;
       chan->sampcount = chan->filter2.out.olen;
     }
-    float energy = 0;
+    double energy = 0;
     for(int n=0; n < chan->sampcount; n++)
       energy += cnrmf(chan->baseband[n]);
     chan->sig.bb_power = energy / chan->sampcount;
@@ -1528,8 +1533,8 @@ void response(struct channel *chan,bool response_needed){
 
 int set_channel_filter(struct channel *chan){
   // Limit to Nyquist rate
-  float lower = max(chan->filter.min_IF, -(float)chan->output.samprate/2);
-  float upper = min(chan->filter.max_IF, (float)chan->output.samprate/2);
+  double lower = max(chan->filter.min_IF, -(double)chan->output.samprate/2);
+  double upper = min(chan->filter.max_IF, (double)chan->output.samprate/2);
 
   if(Verbose > 1)
     fprintf(stderr,"new filter for chan %'u: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
@@ -1539,9 +1544,10 @@ int set_channel_filter(struct channel *chan){
   delete_filter_output(&chan->filter2.out);
   delete_filter_input(&chan->filter2.in);
   if(chan->filter2.blocking > 0){
-    unsigned int const blocksize = chan->filter2.blocking * chan->output.samprate * Blocktime / 1000;
-    float const binsize = (1000.0f / Blocktime) * ((float)(Overlap - 1) / Overlap);
-    float const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
+    assert(Blocktime != 0);
+    unsigned int const blocksize = (int)round(chan->filter2.blocking * chan->output.samprate * Blocktime);
+    double const binsize = (1.0 / Blocktime) * ((double)(Overlap - 1) / Overlap);
+    double const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
 
     unsigned int n = round2(2 * blocksize); // Overlap >= 50%
     unsigned int order = n - blocksize;
@@ -1563,9 +1569,9 @@ int set_channel_filter(struct channel *chan){
     // I.e., the main filter becomes a roofing filter
     // Again limit to Nyquist rate
     lower -= margin;
-    lower = max(lower, -(float)chan->output.samprate/2);
+    lower = max(lower, -(double)chan->output.samprate/2);
     upper += margin;
-    upper = min(upper, (float)chan->output.samprate/2);
+    upper = min(upper, (double)chan->output.samprate/2);
   }
   // Set main filter
   set_filter(&chan->filter.out,
@@ -1578,13 +1584,13 @@ int set_channel_filter(struct channel *chan){
 }
 
 // scale A/D output power to full scale for monitoring overloads
-float scale_ADpower2FS(struct frontend const *frontend){
+double scale_ADpower2FS(struct frontend const *frontend){
   assert(frontend != NULL);
   if(frontend == NULL)
     return NAN;
 
   assert(frontend->bitspersample > 0);
-  float scale = 1.0f / (1 << (frontend->bitspersample - 1)); // Important to force the numerator to float, otherwise the divide produces zero!
+  double scale = 1.0 / (1 << (frontend->bitspersample - 1)); // Important to force the numerator to double, otherwise the divide produces zero!
   scale *= scale;
   // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
   // Complex signals carry twice as much power, divided between I and Q
@@ -1592,17 +1598,17 @@ float scale_ADpower2FS(struct frontend const *frontend){
     scale *= 2;
   return scale;
 }
-// Returns multiplicative factor for converting raw samples to floats with analog gain correction
-float scale_AD(struct frontend const *frontend){
+// Returns multiplicative factor for converting raw samples to doubles with analog gain correction
+double scale_AD(struct frontend const *frontend){
   assert(frontend != NULL);
   if(frontend == NULL)
     return NAN;
 
   assert(frontend->bitspersample > 0);
-  float scale = (1 << (frontend->bitspersample - 1));
+  double scale = (1 << (frontend->bitspersample - 1));
 
   // net analog gain, dBm to dBFS, that we correct for to maintain unity gain, i.e., 0 dBm -> 0 dBFS
-  float analog_gain = frontend->rf_gain - frontend->rf_atten + frontend->rf_level_cal;
+  double analog_gain = frontend->rf_gain - frontend->rf_atten + frontend->rf_level_cal;
   analog_gain += frontend->isreal ? -3.0 : 0.0;
   // Will first get called before the filter input is created
   return dB2voltage(-analog_gain) / scale; // Front end gain as amplitude ratio
@@ -1676,16 +1682,16 @@ Recommended Application:
 */
 
 // Written by ChatGPT to analyze noise stats
-// Swap two float values
-static void swap(float *a, float *b) {
-    float tmp = *a;
+// Swap two doubles
+static void swap(double *a, double *b) {
+    double tmp = *a;
     *a = *b;
     *b = tmp;
 }
 
 // Partition step for quickselect
-static int partition(float *arr, int left, int right, int pivot_index) {
-    float pivot_value = arr[pivot_index];
+static int partition(double *arr, int left, int right, int pivot_index) {
+    double pivot_value = arr[pivot_index];
     swap(&arr[pivot_index], &arr[right]); // Move pivot to end
     int store_index = left;
 
@@ -1701,7 +1707,7 @@ static int partition(float *arr, int left, int right, int pivot_index) {
 }
 
 // Quickselect: find the k-th smallest element (0-based index)
-static float quickselect(float *arr, int left, int right, int k) {
+static double quickselect(double *arr, int left, int right, int k) {
     while (left < right) {
         int pivot_index = left + (right - left) / 2;
         int pivot_new = partition(arr, left, right, pivot_index);
@@ -1716,19 +1722,19 @@ static float quickselect(float *arr, int left, int right, int k) {
 }
 
 // Compute the p-quantile (0 <= p <= 1) of array[0..n-1]
-static float quantile(float *array, int n, float p) {
+static double quantile(double *array, int n, double p) {
     if (n == 0) return NAN;
 
-    float pos = p * (n - 1);
-    int i = (int)floorf(pos);
-    float frac = pos - i;
+    double pos = p * (n - 1);
+    int i = (int)floor(pos);
+    double frac = pos - i;
 
-    float q1 = quickselect(array, 0, n - 1, i);
+    double q1 = quickselect(array, 0, n - 1, i);
 
-    if (frac == 0.0f)
+    if (frac == 0.0)
         return q1;
     else {
-        float q2 = quickselect(array, 0, n - 1, i + 1);
+        double q2 = quickselect(array, 0, n - 1, i + 1);
         return q1 + frac * (q2 - q1);  // Linear interpolation
     }
 }
@@ -1739,7 +1745,7 @@ static float quantile(float *array, int n, float p) {
 // However, the distribution is skewed, so you have to compensate for this when computing means from partial averages
 // ChatGPT helped me work out the math; its reasoning is summarized in docs/noise.md
 // I'm using its method 3 (average of bins below a threshold)
-static float estimate_noise(struct channel *chan,int shift){
+static double estimate_noise(struct channel *chan,int shift){
   assert(chan != NULL);
   if(chan == NULL)
     return NAN;
@@ -1754,7 +1760,7 @@ static float estimate_noise(struct channel *chan,int shift){
   if(nbins < Min_noise_bins)
     nbins = Min_noise_bins;
 
-  float energies[nbins];
+  double energies[nbins];
   struct filter_in const * const master = slave->master;
   // slave->next_jobnum already incremented by execute_filter_output
   float complex const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
@@ -1802,9 +1808,9 @@ static float estimate_noise(struct channel *chan,int shift){
     correction = 1 / (1 - z*exp(-z)/(1-exp(-z)));
   }
 
-  float en = N_cutoff * quantile(energies,nbins,NQ); // energy in the 10th quantile bin
+  double en = N_cutoff * quantile(energies,nbins,NQ); // energy in the 10th quantile bin
   // average the noise-only bins, excluding signal bins above 1.5 * q
-  float energy = 0;
+  double energy = 0;
   int noisebins = 0;
   for(int i=0; i < nbins; i++){
     if(energies[i] <= en){
@@ -1817,11 +1823,11 @@ static float estimate_noise(struct channel *chan,int shift){
 
   energy /= noisebins;
   // Scale for distribution
-  float noise_bin_energy = energy * correction;
+  double noise_bin_energy = energy * correction;
 
   // correct for FFT scaling and normalize to 1 Hz
   // With an unnormalized FFT, the noise energy in each bin scales proportionately with the number of points in the FFT
-  return noise_bin_energy / ((float)master->bins * Frontend.samprate);
+  return noise_bin_energy / ((double)master->bins * Frontend.samprate);
 }
 static int fcompare(void const *ap, void const *bp){
   struct ftab *a = (struct ftab *)ap;

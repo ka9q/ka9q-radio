@@ -7,6 +7,6 @@
 #include <wchar.h>
 #include <wctype.h>
 
-int encode_morse_char(float *samples,wint_t c);
-int init_morse(float const speed,float const pitch,float const level,float const samprate);
+unsigned long encode_morse_char(float *samples,wint_t c);
+int init_morse(double const speed,double const pitch,double const level,double const samprate);
 #endif

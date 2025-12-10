@@ -4,12 +4,12 @@
 // Decode incoming status message from the radio program, convert and fill in fields in local channel structure
 // Leave all other fields unchanged, as they may have local uses (e.g., file descriptors)
 // Note that we use some fields in channel differently than in radiod (e.g., dB vs ratios)
-int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,int length){
+int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,size_t length){
   if(frontend == NULL || channel == NULL || buffer == NULL)
     return -1;
   uint8_t const *cp = buffer;
-  while(cp - buffer < length){
-    enum status_type type = *cp++; // increment cp to length field
+  while(cp  < &buffer[length]){
+    enum status_type type = *cp++; // increment to length field
 
     if(type == EOL)
       break; // end of list
@@ -25,7 +25,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
 	length_of_length--;
       }
     }
-    if(cp + optlen >= buffer + length)
+    if(cp >= &buffer[length])
       break; // invalid length; we can't continue to scan
     switch(type){
     case EOL:
@@ -288,7 +288,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       }
       break;
     case RTP_PT:
-      channel->output.rtp.type = decode_int(cp,optlen);
+      channel->output.rtp.type = decode_int8(cp,optlen);
       break;
     case OUTPUT_ENCODING:
       channel->output.encoding = decode_int(cp,optlen);
@@ -328,10 +328,10 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
   return 0;
 }
 // Extract SSRC; 0 means not present (reserved value)
-uint32_t get_ssrc(uint8_t const *buffer,int length){
+uint32_t get_ssrc(uint8_t const *buffer,size_t length){
   uint8_t const *cp = buffer;
 
-  while(cp - buffer < length){
+  while(cp < &buffer[length]){
     enum status_type const type = *cp++; // increment cp to length field
 
     if(type == EOL)
@@ -366,7 +366,7 @@ uint32_t get_ssrc(uint8_t const *buffer,int length){
   return 0;
 }
 // Extract command tag
-uint32_t get_tag(uint8_t const *buffer,int length){
+uint32_t get_tag(uint8_t const *buffer,unsigned long length){
   uint8_t const *cp = buffer;
 
   while(cp < buffer + length){

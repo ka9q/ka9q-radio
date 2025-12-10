@@ -212,7 +212,7 @@ int main(int argc,char *argv[]){
     exit(EX_NOINPUT);
   }
   uint8_t packet[PKTSIZE];
-  int size;
+  ssize_t size;
 
   while((size = recv(Input_fd,packet,sizeof(packet),0)) > 0){
     struct rtp_header rtp_header;
@@ -359,7 +359,7 @@ int main(int argc,char *argv[]){
 char *parse_timestamp(char *data,int *days,int *hours, int *minutes, int *seconds){
   // process timestamp
   char *ncp = NULL;
-  int t = strtol(data,&ncp,10);
+  int t = (int)strtol(data,&ncp,10);
   switch(*ncp){
   case 'h':
     // Hours, minutes, seconds

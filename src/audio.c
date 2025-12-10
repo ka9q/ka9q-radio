@@ -114,7 +114,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
   // When flushing, anything will do
   int min_frames_per_pkt = 1;
   if(!complete && !marker && chan->output.minpacket > 0)
-    min_frames_per_pkt = chan->output.minpacket * Blocktime * chan->output.samprate / 1000;
+    min_frames_per_pkt = (int)round(chan->output.minpacket * Blocktime * chan->output.samprate);
 
   // The PCM modes are limited by the Ethenet MTU
   // Opus is essentially unlimited as it should never fill an ethernet (?)
@@ -329,7 +329,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
       {
 	float16_t *pcm_buf = (float16_t *)dp;
 	for(unsigned int i=0; i < chunk * chan->output.channels; i++)
-	  *pcm_buf++ = buf[i];
+	  *pcm_buf++ = (float16_t)buf[i];
 
 	chan->output.rtp.timestamp += chunk;
 	bytes = chunk * chan->output.channels * sizeof(*pcm_buf);
@@ -339,8 +339,8 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     case OPUS:
       {
 	// Enforce supported Opus packet sizes
-	int const nsizes = sizeof (Opus_blocksizes) / sizeof(Opus_blocksizes[0]);
-	int si;
+	size_t const nsizes = sizeof (Opus_blocksizes) / sizeof(Opus_blocksizes[0]);
+	size_t si;
 	for(si = 0; si < nsizes; si++){
 	  if(chunk < Opus_blocksizes[si] * chan->output.samprate / 10000)
 	    break;
@@ -351,7 +351,8 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 
 	// Opus says max possible packet size (on high fidelity audio) is 1275 bytes at 20 ms, which fits Ethernt
 	// But this could conceivably fragment
-	bytes = opus_encode_float(chan->output.opus,buf,chunk,dp,sizeof(packet) - (dp-packet)); // Max # bytes in compressed output buffer
+	opus_int32 const room = (opus_int32)(sizeof(packet) - (dp-packet)); // Max # bytes in compressed output buffer
+	bytes = opus_encode_float(chan->output.opus,buf,chunk,dp,room); // Max # bytes in compressed output buffer
 	assert(bytes >= 0);
 	opus_int32 d;
 	opus_encoder_ctl(chan->output.opus,OPUS_GET_IN_DTX(&d));
@@ -372,7 +373,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 
     if(bytes > 0){ // Suppress Opus DTX frames (bytes == 0)
       int const outsock = chan->output.ttl != 0 ? Output_fd : Output_fd0;
-      int const r = sendto(outsock,&packet,bytes + (dp - packet),0,(struct sockaddr *)&chan->output.dest_socket,sizeof(chan->output.dest_socket));
+      ssize_t const r = sendto(outsock,&packet,bytes + (dp - packet),0,(struct sockaddr *)&chan->output.dest_socket,sizeof(chan->output.dest_socket));
       chan->output.rtp.bytes += bytes;
       chan->output.rtp.packets++;
       chan->output.rtp.seq++;

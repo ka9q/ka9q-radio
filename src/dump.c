@@ -13,7 +13,7 @@
 #include "multicast.h"
 #include "radio.h"
 
-void dump_metadata(FILE *fp,uint8_t const * const buffer,int length,bool newline){
+void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newline){
   uint8_t const *cp = buffer;
 
   while(cp < buffer + length){

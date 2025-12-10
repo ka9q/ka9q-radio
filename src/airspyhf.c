@@ -54,7 +54,7 @@ struct sdrstate {
 
   uint32_t sample_rates[20];
   uint64_t SN; // Serial number
-  float scale;
+  double scale;
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
@@ -161,7 +161,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   frontend->bitspersample = 1; // Causes gain scaling by unity
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
 
-  fprintf(stderr,"Set sample rate %'u Hz\n",frontend->samprate);
+  fprintf(stderr,"Set sample rate %'lf Hz\n",frontend->samprate);
   {
     int ret __attribute__ ((unused));
     ret = airspyhf_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
@@ -171,20 +171,20 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   frontend->max_IF = +0.43 * frontend->samprate;
 
   {
-    int const hf_agc = config_getboolean(Dictionary,section,"hf-agc",false); // default off
-    airspyhf_set_hf_agc(sdr->device,hf_agc);
+    bool const hf_agc = config_getboolean(Dictionary,section,"hf-agc",false); // default off
+    airspyhf_set_hf_agc(sdr->device,(uint8_t)hf_agc);
 
-    int const agc_thresh = config_getboolean(Dictionary,section,"agc-thresh",false); // default off
-    airspyhf_set_hf_agc_threshold(sdr->device,agc_thresh);
+    bool const agc_thresh = config_getboolean(Dictionary,section,"agc-thresh",false); // default off
+    airspyhf_set_hf_agc_threshold(sdr->device,(uint8_t)agc_thresh);
 
-    int const hf_att = config_getboolean(Dictionary,section,"hf-att",false); // default off
-    airspyhf_set_hf_att(sdr->device,hf_att);
+    bool const hf_att = config_getboolean(Dictionary,section,"hf-att",false); // default off
+    airspyhf_set_hf_att(sdr->device,(uint8_t)hf_att);
 
-    int const hf_lna = config_getboolean(Dictionary,section,"hf-lna",false); // default off
-    airspyhf_set_hf_lna(sdr->device,hf_lna);
+    bool const hf_lna = config_getboolean(Dictionary,section,"hf-lna",false); // default off
+    airspyhf_set_hf_lna(sdr->device,(uint8_t)hf_lna);
 
-    int const lib_dsp = config_getboolean(Dictionary,section,"lib-dsp",true); // default on
-    airspyhf_set_lib_dsp(sdr->device,lib_dsp);
+    bool const lib_dsp = config_getboolean(Dictionary,section,"lib-dsp",true); // default on
+    airspyhf_set_lib_dsp(sdr->device,(uint8_t)lib_dsp);
 
     fprintf(stderr,"HF AGC %d, AGC thresh %d, hf att %d, hf-lna %d, lib-dsp %d\n",
 	    hf_agc,agc_thresh,hf_att,hf_lna,lib_dsp);
@@ -262,10 +262,10 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   float complex const * const up = (float complex *)transfer->samples;
   assert(wptr != NULL);
   assert(up != NULL);
-  float in_energy = 0;
+  double in_energy = 0;
   for(int i=0; i < sampcount; i++){
     in_energy += cnrmf(up[i]);
-    wptr[i] = up[i] * sdr->scale;
+    wptr[i] = (float)(up[i] * sdr->scale);
   }
   frontend->samples += sampcount;
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
@@ -286,9 +286,9 @@ static double true_freq(uint64_t freq_hz){
 // All this really works correctly only with a gpsdo, forcing the calibration offset to 0
 static double set_correct_freq(struct sdrstate *sdr,double freq){
   struct frontend *frontend = sdr->frontend;
-  int64_t intfreq = round((freq)/ (1 + frontend->calibrate));
+  int64_t intfreq = (int64_t)round((freq)/ (1 + frontend->calibrate));
   int ret __attribute__((unused)) = AIRSPYHF_SUCCESS; // Won't be used when asserts are disabled
-  ret = airspyhf_set_freq(sdr->device,intfreq);
+  ret = airspyhf_set_freq(sdr->device,(uint32_t)intfreq);
   assert(ret == AIRSPYHF_SUCCESS);
   double const tf = true_freq(intfreq);
   frontend->frequency = tf * (1 + frontend->calibrate);

@@ -63,11 +63,11 @@ int dist_path(char *path,int path_len,const char *fname){
 
 // Fill buffer from pipe
 // Needed because reads from a pipe can be partial
-int pipefill(int const fd,void *buffer,int const cnt){
-  int i;
+ssize_t pipefill(int const fd,void *buffer,size_t const cnt){
+  size_t i;
   uint8_t *bp = buffer;
   for(i=0;i<cnt;){
-    int n = read(fd,bp+i,cnt-i);
+    ssize_t n = read(fd,bp+i,cnt-i);
     if(n < 0)
       return n;
     if(n == 0)
@@ -292,10 +292,9 @@ char *format_gpstime_iso8601(char *result,int len,int64_t t){
 
 // Format, as UTC, a time measured in nanoseconds from the UNIX epoch
 char *format_utctime(char *result,int len,int64_t t){
-  lldiv_t const ut = lldiv(t,BILLION);
+  time_t utime = t / BILLION;
+  int t_usec = (int)((t % BILLION) / 1000); // ns to us
 
-  time_t utime = ut.quot;
-  int t_usec = ut.rem / 1000;
   if(t_usec < 0){
     t_usec += 1000000;
     utime -= 1;
@@ -317,10 +316,9 @@ char *format_utctime(char *result,int len,int64_t t){
 }
 
 char *format_utctime_iso8601(char *result,int len,int64_t t){
-  lldiv_t const ut = lldiv(t,BILLION);
+  time_t utime = t / BILLION;
+  int t_usec = (int)((t % BILLION) / 1000);
 
-  time_t utime = ut.quot;
-  int t_usec = ut.rem / 1000;
   if(t_usec < 0){
     t_usec += 1000000;
     utime -= 1;
@@ -370,7 +368,7 @@ char *ftime(char * result,int size,int64_t t){
   cp += r;
   size -= r;
 
-  int const mn = t / 60; // minutes is limited to 0-59
+  int64_t const mn = t / 60; // minutes is limited to 0-59
   t -= mn * 60;
   assert(mn < 60);
   assert(t < 60);
@@ -378,10 +376,10 @@ char *ftime(char * result,int size,int64_t t){
   r = 3;
   if(hr > 0)
     // hours field is present, show minutes with leading zero
-    r = snprintf(cp,size,"%02d:",mn);
+    r = snprintf(cp,size,"%02lld:",(long long)mn);
   else if(mn > 0)
     // Hours zero, show minute without leading 0
-    r = snprintf(cp,size,"%2d:",mn);
+    r = snprintf(cp,size,"%2lld:",(long long)mn);
   else
     r = snprintf(cp,size,"   ");
 
@@ -420,7 +418,7 @@ double parse_frequency(char const *s,bool heuristics){
   {
     size_t i;
     for(i=0;i<strlen(s);i++)
-      ss[i] = tolower(s[i]);
+      ss[i] = (char)tolower(s[i]);
 
     ss[i] = '\0';
   }
@@ -486,7 +484,7 @@ uint32_t nextfastfft(uint32_t n){
       }
     }
   }
-  return result;
+  return (uint32_t)result;
 }
 
 // round up to next power of 2
@@ -512,10 +510,10 @@ uint32_t round2(uint32_t v){
 // See Wikipedia article on "Rice Distribution"
 
 // Modified Bessel function of the 0th kind
-float i0(float const z){
-  float const t = 0.25 * z * z;
-  float sum = 1 + t;
-  float term = t;
+double i0(double const z){
+  double const t = 0.25 * z * z;
+  double sum = 1 + t;
+  double term = t;
   for(int k=2; k<40; k++){
     term *= t/(k * k);
     sum += term;
@@ -526,10 +524,10 @@ float i0(float const z){
 }
 
 // Modified Bessel function of first kind
-float i1(float const z){
-  float const t = 0.25 * z * z;
-  float term = 0.5 * t;
-  float sum = 1 + term;
+double i1(double const z){
+  double const t = 0.25 * z * z;
+  double term = 0.5 * t;
+  double sum = 1 + term;
 
   for(int k=2; k<40; k++){
     term *= t / (k * (k+1));
@@ -539,16 +537,16 @@ float i1(float const z){
   }
   return 0.5 * z * sum;
 }
-float xi(float thetasq){
+double xi(double thetasq){
 
-  float t = (2 + thetasq) * i0(0.25 * thetasq) + thetasq * i1(0.25 * thetasq);
+  double t = (2 + thetasq) * i0(0.25 * thetasq) + thetasq * i1(0.25 * thetasq);
   t *= t;
-  return 2 + thetasq - (0.125 * M_PI) * expf(-0.5 * thetasq) * t;
+  return 2 + thetasq - (0.125 * M_PI) * exp(-0.5 * thetasq) * t;
 }
 
 
 // Given apparent signal-to-noise power ratio, return corrected value
-float fm_snr(float r){
+double fm_snr(double r){
 
   if(r <= M_PI / (4 - M_PI)) // shouldn't be this low even on pure noise
     return 0;
@@ -556,11 +554,11 @@ float fm_snr(float r){
   if(r > 100) // 20 dB
     return r; // Formula blows up for large SNR, and correction is tiny anyway
 
-  float thetasq = r;
+  double thetasq = r;
   for(int i=0;i < 10; i++){
-    float othetasq = thetasq;
+    double othetasq = thetasq;
     thetasq = xi(thetasq) * (1+r) - 2;
-    if(fabsf(thetasq - othetasq) <= 0.01)
+    if(fabs(thetasq - othetasq) <= 0.01)
       break; // converged
   }
   return thetasq;
@@ -569,7 +567,7 @@ float fm_snr(float r){
 // Simple non-crypto hash function
 // Adapted from https://en.wikipedia.org/wiki/PJW_hash_function
 // This needs replacing -- last 4 bits are usually 0xc because the last character of the DNS name is usually a '.'
-uint32_t ElfHash(const uint8_t *s,int length){
+uint32_t ElfHash(const uint8_t *s,size_t length){
     uint32_t h = 0;
     while(length-- > 0){
         h = (h << 4) + *s++;
@@ -586,7 +584,7 @@ uint32_t ElfHashString(const char *s){
 }
 
 // FNV-1 hash (https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function)
-uint32_t fnv1hash(const uint8_t *s,int length){
+uint32_t fnv1hash(const uint8_t *s,unsigned long length){
   uint32_t hash = 0x811c9dc5;
   while(length-- > 0){
     hash *= 0x01000193;

@@ -78,13 +78,13 @@ double complex step_osc(struct osc *osc){
 // Sine lookup table
 
 // sin(x) from 0 to pi/2 (0-90 deg) **inclusive**
-static float Lookup[TABSIZE+1]; // Leave room for == pi/2
+static double Lookup[TABSIZE+1]; // Leave room for == pi/2
 static bool Tab_init;
 
 // Initialize sine lookup table
 static void dds_init(void){
   for(unsigned long i=0; i <= TABSIZE; i++)
-    Lookup[i] = sinf(M_PI * 0.5f * (float)i/TABSIZE);
+    Lookup[i] = sin(M_PI * 0.5 * (double)i/TABSIZE);
 
   Tab_init = true;
 }
@@ -92,7 +92,7 @@ static void dds_init(void){
 
 // Direct digital synthesizer, 32-bit phase accumulator
 // 0 .... 0xffffffff => 0 to 2*pi (360 deg)
-float sine_dds(uint32_t accum){
+double sine_dds(uint32_t accum){
   if(!Tab_init)
     dds_init();
 
@@ -114,10 +114,10 @@ float sine_dds(uint32_t accum){
   }
 
   assert(tab <= TABSIZE && tab + next <= TABSIZE);
-  float f = Lookup[tab];
-  float const f1 = Lookup[tab+next];
+  double f = Lookup[tab];
+  double const f1 = Lookup[tab+next];
 
-  float const fscale = 1.0f / (1 << FRACTBITS);
+  double const fscale = 1.0 / (1 << FRACTBITS);
 
   f += (f1 - f) * (float)fract * fscale;
   return sign ? -f : f;
@@ -125,7 +125,7 @@ float sine_dds(uint32_t accum){
 
 
 // Initialize digital phase lock loop with bandwidth, damping factor, initial VCO frequency and sample rate
-void init_pll(struct pll *pll,float samprate){
+void init_pll(struct pll *pll,double samprate){
   assert(pll != NULL);
   assert(samprate != 0);
 
@@ -135,11 +135,11 @@ void init_pll(struct pll *pll,float samprate){
   set_pll_params(pll,1.0f,M_SQRT1_2); // 1 Hz, 1/sqrt(2) defaults
 }
 
-void set_pll_limits(struct pll *pll,float low,float high){
+void set_pll_limits(struct pll *pll,double low,double high){
   assert(pll != NULL);
   assert(pll->samprate != 0);
   if(low > high){
-    float t = low;
+    double t = low;
     low = high;
     high = t;
   }
@@ -149,9 +149,9 @@ void set_pll_limits(struct pll *pll,float low,float high){
 
 
 // Set PLL loop bandwidth & damping factor
-void set_pll_params(struct pll *pll,float bw,float damping){
+void set_pll_params(struct pll *pll,double bw,double damping){
   assert(pll != NULL);
-  bw = fabsf(bw);
+  bw = fabs(bw);
   if(bw == 0)
     return; // Can't really handle this
   if(bw == pll->bw && damping == pll->damping) // nothing changed
@@ -160,19 +160,19 @@ void set_pll_params(struct pll *pll,float bw,float damping){
   pll->bw = bw;
   bw /= pll->samprate;   // cycles per sample
   pll->damping = damping;
-  float const freq = pll->integrator * pll->integrator_gain; // Keep current frequency
+  double const freq = pll->integrator * pll->integrator_gain; // Keep current frequency
   
-  float const vcogain = 2 * M_PI;          // 2 pi radians/sample per "volt"
-  float const pdgain = 1;                  // phase detector gain "volts" per radian (unity from atan2)
-  float const natfreq = bw * 2 * M_PI;     // loop natural frequency in rad/sample
-  float const tau1 = vcogain * pdgain / (natfreq * natfreq);
-  float const tau2 = 2 * damping / natfreq;
+  double const vcogain = 2 * M_PI;          // 2 pi radians/sample per "volt"
+  double const pdgain = 1;                  // phase detector gain "volts" per radian (unity from atan2)
+  double const natfreq = bw * 2 * M_PI;     // loop natural frequency in rad/sample
+  double const tau1 = vcogain * pdgain / (natfreq * natfreq);
+  double const tau2 = 2 * damping / natfreq;
 
   pll->prop_gain = tau2 / tau1;
   pll->integrator_gain = 1 / tau1;
   pll->integrator = freq * tau1; // To give specified frequency
 #if 0
-  fprintf(stderr,"init_pll(%p,%f,%f,%f,%f)\n",pll,bw,damping,freq,samprate);
+  fprintf(stderr,"init_pll(%p,%lf,%lf,%lf,%lf)\n",pll,bw,damping,freq,samprate);
   fprintf(stderr,"natfreq %lg tau1 %lg tau2 %lg propgain %lg intgain %lg\n",
 	  natfreq,tau1,tau2,pll->prop_gain,pll->integrator_gain);
 #endif
@@ -182,10 +182,10 @@ void set_pll_params(struct pll *pll,float bw,float damping){
 
 // Step the PLL through one sample, return VCO control voltage
 // Return PLL freq in cycles/sample
-float run_pll(struct pll *pll,float phase){
+double run_pll(struct pll *pll,double phase){
   assert(pll != NULL);
 
-  float feedback = pll->integrator_gain * pll->integrator + pll->prop_gain * phase;
+  double feedback = pll->integrator_gain * pll->integrator + pll->prop_gain * phase;
   pll->integrator += phase;
   
   if(pll->integrator_gain * pll->integrator > pll->upper_limit){
@@ -197,7 +197,7 @@ float run_pll(struct pll *pll,float phase){
   pll->vco_phase += pll->vco_step;
 #if 0
   if((random() & 0xffff) == 0){
-    fprintf(stderr,"phase %f integrator %g feedback %g pll_freq %g\n",
+    fprintf(stderr,"phase %lf integrator %lg feedback %lg pll_freq %lg\n",
 	    phase,pll->integrator,feedback,feedback * pll->samprate);
   }
 #endif

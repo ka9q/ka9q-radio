@@ -114,7 +114,7 @@ struct sockaddr_in *Source_socket;
 void closedown(int a);
 void input_loop(void);
 void cleanup(void);
-struct session *create_session( struct rtp_header *,  const int wav_start_epoch, const int tuning_freq_hz );
+struct session *create_session( struct rtp_header *,  const time_t wav_start_epoch, const int tuning_freq_hz );
 void close_session(struct session **p);
 void flush_session(struct session **p);
 uint32_t Ssrc=0; // Requested SSRC
@@ -150,10 +150,10 @@ int main(int argc,char *argv[]){
       Keep_wav = 1;
       break;
     case 's':
-      Ssrc = strtol(optarg,NULL,0);
+      Ssrc = atoi(optarg);
       break;
     case 'S':
-      Samples_per_second = strtol(optarg,NULL,0);
+      Samples_per_second = atoi(optarg);
       break;
     case 'o':
       Source = optarg;
@@ -280,8 +280,8 @@ void test_calculateAbsoluteDifference() {
 // Read from RTP network socket, assemble blocks of samples
 void input_loop(){
     int64_t loop_count = INT64_MAX - 1;
-    int last_flush_second = -1;                // Flush all streams once per second
-    int last_data_second = -1;        // Used in search for the first data packet to be put in the first wav fileafter tansition from second 50 to second 0
+    time_t last_flush_second = -1;                // Flush all streams once per second
+    time_t last_data_second = -1;        // Used in search for the first data packet to be put in the first wav fileafter tansition from second 50 to second 0
 
    test_calculateAbsoluteDifference();
    // exit (0);
@@ -303,10 +303,10 @@ void input_loop(){
             }
         }
 
-        int const current_epoch = utc_time_sec();
-        int const current_second   = current_epoch % 60; // UTC second within 0-60 period
+        time_t const current_epoch = utc_time_sec();
+        time_t const current_second   = current_epoch % 60; // UTC second within 0-60 period
         if ( verbosity > 1 && last_flush_second == -1 ) {
-            fprintf(stderr, "input_loop(): Starting at second% 2d\n", current_second);
+            fprintf(stderr, "input_loop(): Starting at second%ld\n", current_second);
         }
 
         // Flush the samples to the wav files once each second
@@ -337,19 +337,19 @@ void input_loop(){
             }
             uint8_t buffer[PKTSIZE];
             socklen_t socksize = sizeof(Sender);
-            int size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
+            ssize_t size = recvfrom(Input_fd,buffer,sizeof(buffer),0,&Sender,&socksize);
             if(size <= 0){ 
                 perror("recvfrom");
                 usleep(50000);
                 if(verbosity > 0) {
-                    fprintf(stderr, "wd-record->input_loop(): ERROR: recvfrom() => %d\n", size);
+                    fprintf(stderr, "wd-record->input_loop(): ERROR: recvfrom() => %lu\n", size);
                 }
                 continue;
             }
 
             if(size < RTP_MIN_SIZE) {
                 if(verbosity > 0) {
-                    fprintf(stderr, "wd-record->input_loop(): ERROR: recvfrom() => %d which is < RTP_MIN_SIZE %d\n", size, RTP_MIN_SIZE);
+                    fprintf(stderr, "wd-record->input_loop(): ERROR: recvfrom() => %lu which is < RTP_MIN_SIZE %d\n", size, RTP_MIN_SIZE);
                 }
                 continue; 
             }
@@ -359,13 +359,13 @@ void input_loop(){
  
             if(rtp.ssrc != Ssrc) {
                 if(verbosity > 3) {
-                    fprintf(stderr, "input_loop(): discard data from rtp.ssrc %8d != Ssrc %8d\n", rtp.ssrc, Ssrc);
+                    fprintf(stderr, "input_loop(): discard data from rtp.ssrc %8u != Ssrc %8u\n", rtp.ssrc, Ssrc);
                 }
                 ++loop_count;   // So we process loop_count buffers of the SSRC packet stream
                 continue;       // We are only processing one SSRC
             }
             if(verbosity > 2) {
-                fprintf(stderr, "input_loop(): got a %d byte buffer of SSRC %d data\n", size, Ssrc);
+                fprintf(stderr, "input_loop(): got a %lu byte buffer of SSRC %u data\n", size, Ssrc);
             }
 
             if(rtp.pad){
@@ -376,12 +376,12 @@ void input_loop(){
 
             if(size <= 0) {
                 if(verbosity > 0) {
-                    fprintf(stderr, "wd-record->input_loop(): ERROR: rtp buffer size is invalid value %d which is <= 0\n", size);
+                    fprintf(stderr, "wd-record->input_loop(): ERROR: rtp buffer size is invalid value %lu which is <= 0\n", size);
                 }
                 continue; // Bogus RTP header
             }
             if( verbosity > 2 ) {
-                fprintf(stderr, "input_loop(): rtp buffer size = %d\n",  size );
+                fprintf(stderr, "input_loop(): rtp buffer size = %ld\n",  size );
             } 
 
             // Find the first session which wants the SSRC or if none in found create a new session 
@@ -391,7 +391,7 @@ void input_loop(){
                     && rtp.type == sp->type
                     && address_match( &sp->sender, &Sender )) {
                     if ( verbosity > 2 ) {
-                        fprintf(stderr, "input_loop(): found an exisiting session for SSRD %d\n", sp->ssrc);
+                        fprintf(stderr, "input_loop(): found an exisiting session for SSRC %u\n", sp->ssrc);
                     }
                     break;
                 }
@@ -434,7 +434,7 @@ void input_loop(){
                 // Open new session for new 1 minute wav fle
                 if ( ( Searching_for_first_minute == 0 ) &&  ( current_second != 0 ) ) {
                     if ( verbosity > 0 ) {
-                        fprintf(stderr, "wd-record->input_loop(): ERROR: opening new file at second %d, not expected second 0. The RX-888 sample rate is wrong or this server's NTP time is wrong.  Flushing RTP packets until the next second zero\n", current_second);
+                        fprintf(stderr, "wd-record->input_loop(): ERROR: opening new file at second %ld, not expected second 0. The RX-888 sample rate is wrong or this server's NTP time is wrong.  Flushing RTP packets until the next second zero\n", current_second);
                     }
                     Searching_for_first_minute = 1;
                     continue;
@@ -460,7 +460,7 @@ void input_loop(){
                 if ( last_data_second != 59 ) {
                     // The current second is 0-58, so toss the data
                     if ( verbosity > 2 ) {
-                        fprintf(stderr, "input_loop(): tossing data during second %2d while searching for first data received in second 0\n", current_second);
+                        fprintf(stderr, "input_loop(): tossing data during second %ld while searching for first data received in second 0\n", current_second);
                     }
                     last_data_second = current_second;
                 } else {
@@ -468,13 +468,13 @@ void input_loop(){
                     if ( current_second == 59 ) {
                         // This is the second or more packet received during second 59
                         if ( verbosity > 2 ) {
-                            fprintf(stderr, "input_loop(): tossing the second or more data packet during second %2d while searching for first data received in second 0\n", current_second);
+                            fprintf(stderr, "input_loop(): tossing the second or more data packet during second %ld while searching for first data received in second 0\n", current_second);
                         }
                     } else {
                         if ( current_second != 0 ) {
                             // We appear to have missed receiving data during second 0, which would surprise me.
                             if ( verbosity > 2 ) {
-                                fprintf(stderr, "input_loop(): ERROR: unexpected transition from second %2d to second %d while missing data during second 0. Start searching for next second 0\n", last_data_second, current_second);
+                                fprintf(stderr, "input_loop(): ERROR: unexpected transition from second %ld to second %ld while missing data during second 0. Start searching for next second 0\n", last_data_second, current_second);
                             }
                             Searching_for_first_minute = 1;
                             continue;
@@ -503,8 +503,8 @@ void input_loop(){
                 // A "frame" is the same as a sample for mono. It's two audio samples for stereo
                 int16_t const * const samples = (int16_t *)dp;
                 size -= (dp - buffer);
-                int const samp_count = size / sizeof(*samples); // number of individual audio samples (not frames)
-                int const frame_count = samp_count / sp->channels; // 1 every sample period (e.g., 4 for stereo 16-bit)
+                size_t const samp_count = size / sizeof(*samples); // number of individual audio samples (not frames)
+                size_t const frame_count = samp_count / sp->channels; // 1 every sample period (e.g., 4 for stereo 16-bit)
                 off_t const offset = rtp_process(&sp->rtp_state,&rtp,frame_count); // rtp timestamps refer to frames
 
                 // The seek offset relative to the current position in the file is the signed (modular) difference between
@@ -518,7 +518,7 @@ void input_loop(){
                 sp->SamplesWritten += samp_count;
 
                 // Packet samples are in big-endian order; write to .wav file in little-endian order
-                for(int n = 0; n < samp_count; n++){
+                for(size_t n = 0; n < samp_count; n++){
                     fputc(samples[n] >> 8,sp->fp);
                     fputc(samples[n],sp->fp);
                 }
@@ -543,26 +543,26 @@ void cleanup(void){
 
 struct session *create_session( 
         struct rtp_header *rtp, 
-        const int wav_start_epoch,    // The WD wav file name is derived from the epoch of the first samples of the wav fle 
+        const time_t wav_start_epoch,    // The WD wav file name is derived from the epoch of the first samples of the wav fle 
         const int tuning_freq_hz )
 {
-    int filename_epoch = wav_start_epoch;
-    int  wav_start_second = wav_start_epoch % 60;
+    time_t filename_epoch = wav_start_epoch;
+    time_t  wav_start_second = wav_start_epoch % 60;
     if ( Searching_for_first_minute == 1 ) {
         // If this is the first wav file, then samples will start being written at the begining of the next minute
         // So the filname should reflect that future time
         filename_epoch = wav_start_epoch + 60 - wav_start_second;
         if ( verbosity > 2 ) {
-            fprintf( stderr,"create_session(): changing the filename of the first wav file to be derived from epoch=%d rather than from wav_start_epoch=%d\n", filename_epoch, wav_start_epoch);
+            fprintf( stderr,"create_session(): changing the filename of the first wav file to be derived from epoch=%ld rather than from wav_start_epoch=%ld\n", filename_epoch, wav_start_epoch);
         }
     } else {
         if ( wav_start_second != 0 ) {
             if( verbosity > 1 ) {
-            fprintf( stderr,"create_session(): ERRROR: (INTERNAL) wav_start_epoch=%d is for second %d, not for an expected second 0\n", wav_start_epoch, wav_start_second );
+            fprintf( stderr,"create_session(): ERRROR: (INTERNAL) wav_start_epoch=%ld is for second %ld, not for an expected second 0\n", wav_start_epoch, wav_start_second );
             }
         }
         if( verbosity > 1 ) {
-            fprintf( stderr,"create_session(): wav_start_epoch=%d, tuning_freq_hz,%d\n", wav_start_epoch, tuning_freq_hz );
+            fprintf( stderr,"create_session(): wav_start_epoch=%ld, tuning_freq_hz,%d\n", wav_start_epoch, tuning_freq_hz );
         }
     }
     struct session *sp = calloc(1,sizeof(*sp));
@@ -637,11 +637,11 @@ struct session *create_session(
     memcpy(sp->header.Subchunk1ID,"fmt ",4);
     sp->header.Subchunk1Size = 16;
     sp->header.AudioFormat = 1;
-    sp->header.NumChannels = sp->channels;
+    sp->header.NumChannels = (int16_t)sp->channels;
     sp->header.SampleRate = sp->samprate;
 
     sp->header.ByteRate = sp->samprate * sp->channels * 16/8;
-    sp->header.BlockAlign = sp->channels * 16/8;
+    sp->header.BlockAlign = (int16_t)(sp->channels * 16/8);
     sp->header.BitsPerSample = 16;
     memcpy(sp->header.SubChunk2ID,"data",4);
     sp->header.Subchunk2Size = 0xffffffff; // Temporary
@@ -663,9 +663,9 @@ void flush_session(struct session **p){
     return;
 
   if ( (verbosity > 2) && (sp->SamplesWritten != 0) )
-    fprintf(stderr, "flush_session(): Flushing %s %'.1f/%'.1f sec\n",sp->filename,
-	   (float)sp->SamplesWritten / sp->samprate,
-	   (float)sp->TotalFileSamples / sp->samprate);
+    fprintf(stderr, "flush_session(): Flushing %s %'.1lf/%'.1lf sec\n",sp->filename,
+	   (double)sp->SamplesWritten / sp->samprate,
+	   (double)sp->TotalFileSamples / sp->samprate);
   
   if(sp->fp != NULL){
     // Get final file size, write .wav header with sizes
@@ -682,17 +682,17 @@ void close_session(struct session **p){
     return;
 
   if(verbosity > 2)
-    fprintf(stderr,"close_session(): closing %s %'.1f/%'.1f sec\n",sp->filename,
-	   (float)sp->SamplesWritten / sp->samprate,
-	   (float)sp->TotalFileSamples / sp->samprate);
+    fprintf(stderr,"close_session(): closing %s %'.1lf/%'.1lf sec\n",sp->filename,
+	   (double)sp->SamplesWritten / sp->samprate,
+	   (double)sp->TotalFileSamples / sp->samprate);
   
   if(sp->fp != NULL){
     // Get final file size, write .wav header with sizes
     fflush(sp->fp);
     struct stat statbuf;
     fstat(fileno(sp->fp),&statbuf);
-    sp->header.ChunkSize = statbuf.st_size - 8;
-    sp->header.Subchunk2Size = statbuf.st_size - sizeof(sp->header);
+    sp->header.ChunkSize = (int32_t)(statbuf.st_size - 8);
+    sp->header.Subchunk2Size = (int32_t)(statbuf.st_size - sizeof(sp->header));
     rewind(sp->fp);
     fwrite(&sp->header,sizeof(sp->header),1,sp->fp);
     fflush(sp->fp);

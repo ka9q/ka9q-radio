@@ -42,8 +42,8 @@ int Update_interval = 100;  // Default time in ms between display updates
 // Database in /usr/share/ka9q-radio/id.txt
 // Really should be rewritten with something much better
 struct idtable {
-  long freq; // rounded to 1 Hz
-  float tone;
+  double freq; // rounded to 1 Hz
+  double tone;
   char id[128];
 };
 #define IDSIZE 1024
@@ -195,7 +195,7 @@ static int scompare(void const *a, void const *b){
   if(s1->now_active){
     if(s2->now_active){
       // Both active. Fuzz needed because active sessions are updated when packets arrive
-      if(fabsf(s1->active - s2->active) < 0.5) {
+      if(fabs(s1->active - s2->active) < 0.5) {
 	return 0; // Equal within 1/2 sec
       } else if(s1->active > s2->active){
 	return -1; // s1 Longer active
@@ -225,7 +225,7 @@ static int tcompare(void const *a, void const *b){
 
 #define FUZZ 1
 #ifdef FUZZ
-  if(fabsf(s1->tot_active - s2->tot_active) < 0.1) // equal within margin
+  if(fabs(s1->tot_active - s2->tot_active) < 0.1) // equal within margin
     return 0;
 #endif
   if(s1->tot_active > s2->tot_active)
@@ -326,7 +326,7 @@ void load_id(void){
       memset(freq,0,sizeof(freq));
       memcpy(freq,&line[pmatch[1].rm_so],pmatch[1].rm_eo - pmatch[1].rm_so);
       char *ptr = NULL;
-      Idtable[Nid].freq = round(strtod(freq,&ptr));
+      Idtable[Nid].freq = (long)round(strtod(freq,&ptr));
       if(ptr == freq)
 	continue; // no parseable number
 
@@ -384,7 +384,7 @@ void load_id(void){
 }
 
 // Use binary search to speed things up since we do this more often
-char const *lookupid(double freq,float tone){
+char const *lookupid(double freq,double tone){
   struct idtable key;
   key.freq = round(freq);
   key.tone = tone;
@@ -444,9 +444,9 @@ static void update_monitor_display(void){
     double const qd = (double) q / DAC_samprate;
     double const rate = Audio_frames / pa_seconds;
 
-    printwt("%s playout %.0f ms, latency %d ms, queue %.3lf sec, D/A rate %'.3lf Hz,",
-	    opus_get_version_string(),Playout,Portaudio_delay,qd,rate);
-    printwt(" (%+.3lf ppm),",1e6 * (rate / DAC_samprate - 1));
+    printwt("%s playout %.0lf ms, latency %5.1lf ms, queue %5.1lf ms, D/A rate %'.3lf Hz,",
+	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,qd*1000.,rate);
+    printwt(" (%+8.3lf ppm),",1e6 * (rate / DAC_samprate - 1));
     // Time since last packet drop on any channel
     printwt(" Error-free sec %'.1lf\n",(1e-9*(gps_time_ns() - Last_error_time)));
   }
@@ -475,7 +475,7 @@ static void update_monitor_display(void){
     for(int session = First_session; session < Nsessions_copy; session++,y++){
       struct session const *sp = Sessions_copy[session];
       if(sp != NULL)
-	mvprintwt(y,x,"%*d",width,(int)roundf(100*sp->pan));
+	mvprintwt(y,x,"%*d",width,(int)round(100*sp->pan));
     }
     x += width;
     y = row_save;
@@ -554,7 +554,7 @@ static void update_monitor_display(void){
     struct session const *sp = Sessions_copy[session];
     if(sp == NULL)
       continue;
-    int len = strlen(sp->id);
+    int len = (int)strlen(sp->id);
     if(len > width)
       width = len;
     mvprintwt(y,x,"%s",sp->id);
@@ -571,7 +571,7 @@ static void update_monitor_display(void){
     if(sp == NULL)
       continue;
     char total_buf[100];
-    mvprintwt(y,x,"%*s",width,ftime(total_buf,sizeof(total_buf),sp->tot_active));
+    mvprintwt(y,x,"%*s",width,ftime(total_buf,sizeof(total_buf),(int64_t)round(sp->tot_active)));
   }
   x += width;
   y = row_save;
@@ -588,10 +588,10 @@ static void update_monitor_display(void){
 	continue;
       char buf[100];
       if(sp->now_active)
-	mvprintwt(y,x,"%*s",width,ftime(buf,sizeof(buf),sp->active));
+	mvprintwt(y,x,"%*s",width,ftime(buf,sizeof(buf),(int64_t)round(sp->active)));
       else {
-	float idle_sec = (time - sp->last_active) / BILLION;
-	mvprintwt(y,x,"%*s",width,ftime(buf,sizeof(buf),idle_sec));   // Time idle since last transmission
+	double idle_sec = (time - sp->last_active) / BILLION;
+	mvprintwt(y,x,"%*s",width,ftime(buf,sizeof(buf),(int64_t)round(idle_sec)));   // Time idle since last transmission
       }
     }
   }
@@ -708,13 +708,13 @@ static void update_monitor_display(void){
     if(sp == NULL || sp->chan.output.rtp.timestamp == 0 || !sp->now_active)
       continue;
 
-    float delay = 0;
+    double delay = 0;
     // sp->frontend.timestamp (GPS time at front end) and sp->chan.output.rtp.timestamp (next RTP timestamp to be sent) are updated periodically by status packets
     // sp->rtp_state.timestamp contains most recent RTP packet processed
     // This needs further thought and cleanup
-    delay = (float)(int32_t)(sp->chan.output.rtp.timestamp - sp->rtp_state.timestamp) / sp->samprate;
+    delay = (double)(int32_t)(sp->chan.output.rtp.timestamp - sp->rtp_state.timestamp) / sp->samprate;
     delay += 1.0e-9 * (gps_time_ns() - sp->frontend.timestamp);
-    mvprintwt(y,x,"%*.3f", width, delay);
+    mvprintwt(y,x,"%*.3lf", width, delay);
   }
   x += width;
   y = row_save;
@@ -1022,13 +1022,13 @@ static void process_keyboard(void){
     sp->pan = min(sp->pan + .01,+1.0);
     break;
   case KEY_SLEFT: // Shifted left - decrease playout buffer 1 ms
-    if(Playout >= -100){
-      Playout -= 1;
+    if(Playout >= -0.1){
+      Playout -= .001;
       sp->reset = true;
     }
     break;
   case KEY_SRIGHT: // Shifted right - increase playout buffer 1 ms
-    Playout += 1;
+    Playout += .001;
     sp->reset = true;
     break;
   case 'u': // Unmute and reset Current session

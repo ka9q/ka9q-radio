@@ -1,11 +1,11 @@
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 #define BUFFERSIZE (1<<19)    // about 10.92 sec at 48 kHz - must be power of 2 times page size (4k)!
-extern float const Latency; // chunk size for audio output callback
-extern float const Tone_period; // PL tone integration period
+extern double const Latency; // chunk size for audio output callback
+extern double const Tone_period; // PL tone integration period
 #define NSESSIONS 1500
 
 #define N_tones 55
-extern float PL_tones[N_tones];
+extern double PL_tones[N_tones];
 
 
 // Names of config file sections
@@ -24,16 +24,16 @@ extern int Verbose;                       // Verbosity flag
 extern char const *Config_file;
 extern bool Quiet;                 // Disable curses
 extern bool Quiet_mode;            // Toggle screen activity after starting
-extern float Playout;
+extern double Playout;
 extern bool Constant_delay;
 extern bool Start_muted;
 extern bool Auto_position;  // first will be in the center
-extern int64_t Repeater_tail;
+extern double Repeater_tail;
 extern char const *Cwid; // Make this configurable!
 extern double ID_pitch;
 extern double ID_level;
 extern double ID_speed;
-extern float Gain; // unity gain by default
+extern double Gain; // unity gain by default
 extern bool Notch;
 extern char *Mcast_address_text[]; // Multicast address(es) we're listening to
 extern char const *Audiodev;    // Name of audio device; empty means portaudio's default
@@ -59,7 +59,7 @@ extern volatile bool PTT_state;      // For repeater transmitter
 extern uint64_t Audio_callbacks;
 extern unsigned long Audio_frames;
 extern volatile int64_t LastAudioTime;
-extern int32_t Portaudio_delay;
+extern double Portaudio_delay;
 extern pthread_t Repeater_thread;
 extern pthread_cond_t PTT_cond;
 extern pthread_mutex_t PTT_mutex;
@@ -104,23 +104,23 @@ struct session {
   unsigned int wptr;        // current write index into output PCM buffer, *frames*
   int playout;              // Initial playout delay, frames
   long long last_active;    // GPS time last active with data traffic
-  float tot_active;         // Total PCM time, ns
-  float active;             // Seconds we've been active (only when queue has stuff)
-  float datarate;           // Smoothed channel data rate
+  double tot_active;         // Total PCM time, s
+  double active;             // Seconds we've been active (only when queue has stuff)
+  double datarate;           // Smoothed channel data rate
 
   OpusDecoder *opus;        // Opus codec decoder handle, if needed
   int opus_channels;        // Actual channels in Opus stream
-  int frame_size;
+  size_t frame_size;
   int bandwidth;            // Audio bandwidth
   struct goertzel tone_detector[N_tones];
   int tone_samples;
-  float current_tone;       // Detected tone frequency
-  float snr;                // Extracted from status message from radiod
+  double current_tone;       // Detected tone frequency
+  double snr;                // Extracted from status message from radiod
 
   unsigned int samprate;
   unsigned int channels;    // channels on stream (1 or 2). Opus is always stereo
-  float gain;               // linear gain; 1 = 0 dB
-  float pan;                // Stereo position: 0 = center; -1 = full left; +1 = full right
+  double gain;               // linear gain; 1 = 0 dB
+  double pan;                // Stereo position: 0 = center; -1 = full left; +1 = full right
 
   // Counters
   unsigned long packets;    // RTP packets for this session
@@ -140,7 +140,7 @@ struct session {
   bool notch_enable;         // Enable PL removal notch
   struct iir iir_left;       // State for PL removal filter
   struct iir iir_right;
-  float notch_tone;
+  double notch_tone;
   struct channel chan;       // Partial copy of radiod's channel structure, filled in by status protocol
   struct frontend frontend;  // Partial copy of radiod's front end structure, ditto
 };
@@ -156,7 +156,7 @@ void *decode_task(void *x);
 void *dataproc(void *arg);
 void *statproc(void *arg);
 void *repeater_ctl(void *arg);
-char const *lookupid(double freq,float tone);
+char const *lookupid(double freq,double tone);
 bool kick_output();
 void vote();
 

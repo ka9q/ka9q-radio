@@ -6,6 +6,7 @@
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
+#include <complex.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,8 +48,8 @@ struct session {
   struct rtp_state rtp_state_in; // RTP input state
   struct rtp_state rtp_state_out; // RTP output state
 
-  float deemph_state_left;
-  float deemph_state_right;
+  double deemph_state_left;
+  double deemph_state_right;
   uint64_t packets;
 };
 
@@ -57,15 +58,15 @@ struct session {
 int const Bufsize = 1540;     // Maximum samples/words per RTP packet - must be smaller than Ethernet MTU
 // Each block of stereo output @ 48kHz must fit in an ethernet packet
 // 5 ms * 48000 = 240 stereo frames; 240 * 2 * 2 = 960 bytes
-float Blocktime = 5; // milliseconds
+double Blocktime = .005; // milliseconds
 int const Composite_samprate = 384000;         // Composite input rate
 int const Audio_samprate = 48000;         // stereo output rate
-float Kaiser_beta = 3.5 * M_PI;
-float const SCALE = 1./INT16_MAX;
+double Kaiser_beta = 3.5 * M_PI;
+double const SCALE = 1./INT16_MAX;
 
-float Deemph_tc = 75.0e-6; // De-emphasis time constant. 75us for North America & Korea, 50us elsewhere
-float Deemph_rate;
-float Deemph_gain;
+double Deemph_tc = 75.0e-6; // De-emphasis time constant. 75us for North America & Korea, 50us elsewhere
+double Deemph_rate;
+double Deemph_gain;
 
 
 // Command line params
@@ -143,10 +144,10 @@ int main(int argc,char * const argv[]){
       Status = optarg;
       break;
     case 'p':
-      IP_tos = strtol(optarg,NULL,0);
+      IP_tos = atoi(optarg);
       break;
     case 'T':
-      Mcast_ttl = strtol(optarg,NULL,0);
+      Mcast_ttl = atoi(optarg);
       break;
     case 'v':
       Verbose++;
@@ -213,7 +214,7 @@ int main(int argc,char * const argv[]){
 
   // Initialize de-emphasis with 75 microseconds
   Deemph_gain = 4; // Check this later empirically
-  Deemph_rate = expf(-1.0 / (Deemph_tc * Audio_samprate));
+  Deemph_rate = exp(-1.0 / (Deemph_tc * Audio_samprate));
 
   signal(SIGPIPE,SIG_IGN);
   
@@ -237,7 +238,7 @@ int main(int argc,char * const argv[]){
     
     struct sockaddr sender;
     socklen_t socksize = sizeof(sender);
-    int size = recvfrom(Input_fd,&pkt->content,sizeof(pkt->content),0,(struct sockaddr *)&sender,&socksize);
+    ssize_t size = recvfrom(Input_fd,&pkt->content,sizeof(pkt->content),0,(struct sockaddr *)&sender,&socksize);
     
     if(size == -1){
       if(errno != EINTR){ // Happens routinely, e.g., when window resized
@@ -307,7 +308,7 @@ int fetch_socket(int status_fd){
   while(true){
     socklen_t socklen = sizeof(Status_input_source_address);
     uint8_t buffer[16384];
-    int length = recvfrom(status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
+    ssize_t length = recvfrom(status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
     
     // We MUST ignore our own status packets, or we'll loop!
     // We don't actually use Local_status_source_address yet
@@ -326,7 +327,7 @@ int fetch_socket(int status_fd){
 	continue; // Ignore commands
       uint8_t *cp = buffer+1;
       
-      while(cp - buffer < length){
+      while(cp < &buffer[length]){
 	enum status_type type = *cp++;
 	
 	if(type == EOL)
@@ -372,7 +373,7 @@ void *decode(void *arg){
   // Set up audio filters: mono, pilot & stereo difference
   // These blocksizes depend on front end sample rate and blocksize
   // At Blocktime = 5ms and 384 kHz, L = 1920, M = 1921, N = 3840
-  int const L = roundf(Composite_samprate * Blocktime * .001); // Number of input samples in Blocktime
+  int const L = (int)round(Composite_samprate * Blocktime); // Number of input samples in Blocktime
   int const M = L + 1;
   int const N = L + M - 1;
 
@@ -406,8 +407,8 @@ void *decode(void *arg){
   // If not, then a mop-up oscillator has to be provided
   double const hzperbin = Composite_samprate / N;              // 100 hertz per FFT bin @ 384 kHz and 5 ms
   int const quantum = N / (M - 1);       // rotate by multiples of (2) bins due to overlap-save (100 * 2 = 200 Hz)
-  int const pilot_rotate = quantum * round(19000./(hzperbin * quantum));
-  int const subc_rotate = quantum * round(38000./(hzperbin * quantum));
+  int const pilot_rotate = (int)(quantum * round(19000./(hzperbin * quantum)));
+  int const subc_rotate = (int)(quantum * round(38000./(hzperbin * quantum)));
 
   while(true){
     struct packet *pkt = NULL;
@@ -437,7 +438,7 @@ void *decode(void *arg){
     }
     sp->packets++; // Count all packets, regardless of type
       
-    int frame_size = 0;
+    size_t frame_size = 0;
     int channels = channels_from_pt(pkt->rtp.type);
     switch(channels){
     case 1:
@@ -453,15 +454,15 @@ void *decode(void *arg){
     
     int16_t const * const samples = (int16_t *)pkt->data;
     
-    int rtp_type = pt_from_info(Audio_samprate,2,S16BE); // 48 kHz stereo PCM
+    uint8_t rtp_type = pt_from_info(Audio_samprate,2,S16BE); // 48 kHz stereo PCM
     if(rtp_type < 0){
       fprintf(stderr,"Can't allocate RTP payload type for samprate = %'d, channels = %d\n",Audio_samprate,2);
       exit(EX_SOFTWARE);
     }
 
-    for(int i=0; i<frame_size; i++){
-      float const s = SCALE * (int16_t)ntohs(samples[i]);
-      if(put_rfilter(&baseband,s) == 0)
+    for(size_t i=0; i<frame_size; i++){
+      double const s = SCALE * (int16_t)ntohs(samples[i]);
+      if(put_rfilter(&baseband,(float)s) == 0)
 	continue;
       // Filter input buffer full
       // Decimate to audio sample rate, do stereo processing
@@ -489,29 +490,29 @@ void *decode(void *arg){
        * But virtually every FM station is stereo anyway, except for KPBS-FM which is long and strong */
       int16_t *wp = (int16_t *)dp;
       for(int n= 0; n < audio_L; n++){
-	float complex subc_phasor = pilot.output.c[n]; // 19 kHz pilot
+	double complex subc_phasor = pilot.output.c[n]; // 19 kHz pilot
 	subc_phasor *= subc_phasor;       // double to 38 kHz
 
-	float const a = approx_magf(subc_phasor);  // and normalize
-	float left_minus_right = 0;
+	double const a = cabs(subc_phasor);  // and normalize
+	double left_minus_right = 0;
 	if(a > 0){
 	  // zero PCM input would cause a divide-by-zero and a NAN result
 	  // that would poison the de-emphasis integrators if we didn't check for it
 	  subc_phasor /= a;
-	  left_minus_right = 2.0f * __imag__ (conjf(subc_phasor) * stereo.output.c[n]); // Carrier is in quadrature with modulation
+	  left_minus_right = 2.0 * __imag__ (conj(subc_phasor) * stereo.output.c[n]); // Carrier is in quadrature with modulation
 	}
 	  
-	float left = mono.output.r[n] + left_minus_right; // left channel = L+R + L-R
+	double left = mono.output.r[n] + left_minus_right; // left channel = L+R + L-R
 	assert(!isnan(sp->deemph_state_left));
 	left = sp->deemph_state_left = sp->deemph_state_left * Deemph_rate
 	  + Deemph_gain * (1 - Deemph_rate) * left;
-	*wp++ = htons(scaleclip(left));
+	*wp++ = htons(scaleclip((float)left));
 
-	float right =  mono.output.r[n] - left_minus_right; // right channel = L+R - (L-R)
+	double right =  mono.output.r[n] - left_minus_right; // right channel = L+R - (L-R)
 	assert(!isnan(sp->deemph_state_right));
 	right = sp->deemph_state_right = sp->deemph_state_right * Deemph_rate
 	  + Deemph_gain * (1 - Deemph_rate) * right;
-	*wp++ = htons(scaleclip(right));
+	*wp++ = htons(scaleclip((float)right));
       }
       dp = (uint8_t *)wp;
       if(sendto(Output_fd,&packet,dp - packet,0,&Stereo_dest_address,sizeof Stereo_dest_address) < 0){

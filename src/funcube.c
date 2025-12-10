@@ -21,17 +21,17 @@
 // constants, some of which you might want to tweak
 #define INPUT_PRIORITY 95
 
-static float const AGC_upper = -15;
-static float const AGC_lower = -50;
+static double const AGC_upper = -15;
+static double const AGC_lower = -50;
 static int const ADC_samprate = 192000;
 // Use double for DC smoothing constant to avoid denormalized math
 static double const DC_alpha = 1.0e-6;  // high pass filter coefficient for DC offset estimates, per sample
 static double Power_alpha = 0.05; // Calculate this properly someday
-static float const Power_tc = 1.0; // time constant (seconds) for computing smoothing alpha for power and I/Q imbalance estimates
+static double const Power_tc = 1.0; // time constant (seconds) for computing smoothing alpha for power and I/Q imbalance estimates
 
 // Empirical: noticeable aliasing beyond this noticed on strong 40m SSB signals
-static float const LowerEdge = -75000;
-static float const UpperEdge = +75000;
+static double const LowerEdge = -75000;
+static double const UpperEdge = +75000;
 
 // Variables set by command line options
 // A larger blocksize makes more efficient use of each frame, but the receiver generally runs on
@@ -52,14 +52,14 @@ struct sdrstate {
   int number;
 
   // Smoothed error estimates
-  float complex DC;      // DC offset
-  float sinphi;          // I/Q phase error
-  float imbalance;       // Ratio of I power to Q power
+  double complex DC;      // DC offset
+  double sinphi;          // I/Q phase error
+  double imbalance;       // Ratio of I power to Q power
   double calibration;    // TCXO Offset (0 = on frequency)
 
   uint8_t bias_tee;
   bool agc;             // enable/disable agc
-  float scale;          // Scale samples for #bits and front end gain
+  double scale;          // Scale samples for #bits and front end gain
 
   // portaudio parameters
   PaStream *Pa_Stream;       // Portaudio handle
@@ -102,11 +102,6 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
 
   sdr->number = config_getint(dictionary,section,"number",0);
   frontend->samprate = ADC_samprate;
-  {
-    double const eL = frontend->samprate * Blocktime / 1000.0; // Blocktime is in milliseconds
-    Blocksize = lround(eL);
-  }
-
   frontend->isreal = false; // Complex sample stream
   frontend->bitspersample = 16;
   frontend->min_IF = LowerEdge;
@@ -188,7 +183,7 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
     goto done;
   }
 
-  fprintf(stderr,"Funcube %d: software AGC %d, samprate %'d, freq %'.3f Hz, bias %d, lna_gain %d, mixer gain %d, if_gain %d\n",
+  fprintf(stderr,"Funcube %d: software AGC %d, samprate %'lf, freq %'.3f Hz, bias %d, lna_gain %d, mixer gain %d, if_gain %d\n",
 	  sdr->number, sdr->agc, frontend->samprate, frontend->frequency, sdr->bias_tee, frontend->lna_gain, frontend->mixer_gain, frontend->if_gain);
 
  done:; // Also the abort target: close handle before returning
@@ -206,10 +201,10 @@ static void *proc_funcube(void *arg){
   assert(frontend != NULL);
 
   // Gain and phase corrections. These will be updated every block
-  float gain_q = 1;
-  float gain_i = 1;
-  float secphi = 1;
-  float tanphi = 0;
+  double gain_q = 1;
+  double gain_i = 1;
+  double secphi = 1;
+  double tanphi = 0;
 
   double const gainphase_alpha = Blocksize/(ADC_samprate * Power_tc);
   int ConsecPaErrs = 0;
@@ -246,9 +241,9 @@ static void *proc_funcube(void *arg){
     } else
       ConsecPaErrs = 0;
 
-    float i_energy=0, q_energy=0;
-    float complex samp_sum = 0;
-    float dotprod = 0;
+    double i_energy=0, q_energy=0;
+    double complex samp_sum = 0;
+    double dotprod = 0;
 
     float complex * wptr = frontend->in.input_write_pointer.c;
 
@@ -265,30 +260,30 @@ static void *proc_funcube(void *arg){
       } else
 	frontend->samp_since_over++;
 
-      float complex samp = CMPLXF(sampbuf[2*i],sampbuf[2*i+1]);
+      double complex samp = CMPLX(sampbuf[2*i],sampbuf[2*i+1]);
       samp_sum += samp; // Accumulate average DC values
       samp -= sdr->DC;   // remove smoothed DC offset (which can be fractional)
 
       // Must correct gain and phase before frequency shift
       // accumulate I and Q energies before gain correction
-      i_energy += crealf(samp) * crealf(samp);
-      q_energy += cimagf(samp) * cimagf(samp);
+      i_energy += creal(samp) * creal(samp);
+      q_energy += cimag(samp) * cimag(samp);
 
       // Balance gains, keeping constant total energy
       __real__ samp *= gain_i;
       __imag__ samp *= gain_q;
 
       // Accumulate phase error
-      dotprod += crealf(samp) * cimagf(samp);
+      dotprod += creal(samp) * cimag(samp);
 
       // Correct phase
-      __imag__ samp = secphi * cimagf(samp) - tanphi * crealf(samp);
+      __imag__ samp = secphi * cimag(samp) - tanphi * creal(samp);
 
-      wptr[i] = samp * sdr->scale;
+      wptr[i] = (float)(samp * sdr->scale);
     }
     write_cfilter(&frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
     frontend->samples += Blocksize;
-    float const block_energy = i_energy + q_energy; // Normalize for complex pairs
+    double const block_energy = i_energy + q_energy; // Normalize for complex pairs
     frontend->if_power += Power_alpha * (block_energy / Blocksize - frontend->if_power); // Average A/D output power per channel
 
     // Update every block
@@ -296,11 +291,11 @@ static void *proc_funcube(void *arg){
     sdr->DC += DC_alpha * (samp_sum - Blocksize*sdr->DC);
     if(block_energy > 0){ // Avoid divisions by 0, etc
       sdr->imbalance += gainphase_alpha * ((i_energy / q_energy) - sdr->imbalance);
-      float const dpn = 2 * dotprod / block_energy;
+      double const dpn = 2 * dotprod / block_energy;
       sdr->sinphi += gainphase_alpha * (dpn - sdr->sinphi);
-      gain_q = sqrtf(0.5 * (1 + sdr->imbalance));
-      gain_i = sqrtf(0.5 * (1 + 1./sdr->imbalance));
-      secphi = 1/sqrtf(1 - sdr->sinphi * sdr->sinphi); // sec(phi) = 1/cos(phi)
+      gain_q = sqrt(0.5 * (1 + sdr->imbalance));
+      gain_i = sqrt(0.5 * (1 + 1./sdr->imbalance));
+      secphi = 1/sqrt(1 - sdr->sinphi * sdr->sinphi); // sec(phi) = 1/cos(phi)
       tanphi = sdr->sinphi * secphi;      // tan(phi) = sin(phi) * sec(phi) = sin(phi)/cos(phi)
     }
     if(sdr->agc)
@@ -330,25 +325,26 @@ static void do_fcd_agc(struct sdrstate *sdr){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
-  float const powerdB = power2dB(frontend->if_power * scale_ADpower2FS(frontend));
+  double const powerdB = power2dB(frontend->if_power * scale_ADpower2FS(frontend));
 
   if(powerdB > AGC_upper){
     if(frontend->if_gain > 0){
       // Decrease gain in 10 dB steps, down to 0
-      uint8_t val = frontend->if_gain = max(0,frontend->if_gain - 10);
+      frontend->if_gain = max(0,frontend->if_gain - 10);
+      uint8_t val = (uint8_t)frontend->if_gain;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_IF_GAIN1,&val,sizeof(val));
       if(Verbose)
-	fprintf(stderr,"AGC power %.1f dBFS, new lower if gain = %d\n",powerdB,val);
+	fprintf(stderr,"AGC power %.1lf dBFS, new lower if gain = %u\n",powerdB,val);
     } else if(frontend->mixer_gain > 0){
       uint8_t val = frontend->mixer_gain = 0; // mixer gain is on or off?
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
       if(Verbose)
-	fprintf(stderr,"AGC power %.1f dBFS, new lower mixer gain = %d\n",powerdB,val);
+	fprintf(stderr,"AGC power %.1lf dBFS, new lower mixer gain = %u\n",powerdB,val);
     } else if(frontend->lna_gain > 0){
       uint8_t val = frontend->lna_gain = 0;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_LNA_GAIN,&val,sizeof(val));
       if(Verbose)
-	fprintf(stderr,"AGC power %.1f dBFS, new lower lna gain = %d\n",powerdB,val);
+	fprintf(stderr,"AGC power %.1lf dBFS, new lower lna gain = %u\n",powerdB,val);
     }
   } else if(powerdB < AGC_lower){
     if(frontend->lna_gain == 0){
@@ -364,7 +360,8 @@ static void do_fcd_agc(struct sdrstate *sdr){
 	fprintf(stderr,"AGC power %.1f dBFS, new higher mixer gain = %d\n",powerdB,val);
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_MIXER_GAIN,&val,sizeof(val));
     } else if(frontend->if_gain < 20){ // Limit to 20 dB - seems enough to keep A/D going even on noise
-      uint8_t val = frontend->if_gain = min(20,frontend->if_gain + 10);
+      frontend->if_gain = min(20,frontend->if_gain + 10);
+      uint8_t val = (uint8_t)frontend->if_gain;
       fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_IF_GAIN1,&val,sizeof(val));
       if(Verbose)
 	fprintf(stderr,"AGC power %.1f dBFS, new higher lna gain = %d\n",powerdB,val);
@@ -380,16 +377,13 @@ static void do_fcd_agc(struct sdrstate *sdr){
 
 // This needs to be generalized since other tuners will be completely different!
 static double fcd_actual(unsigned int u32Freq){
-  typedef uint32_t UINT32;
-  typedef uint64_t UINT64;
-
-  UINT32 const u32Thresh = 3250U;
-  UINT32 const u32FRef = 26000000U;
+  uint32_t const u32Thresh = 3250U;
+  uint32_t const u32FRef = 26000000U;
 
   struct {
-    UINT32 u32Freq;
-    UINT32 u32FreqOff;
-    UINT32 u32LODiv;
+    uint32_t u32Freq;
+    uint32_t u32FreqOff;
+    uint32_t u32LODiv;
   } *pts,ats[]= {
 	{4000000U,130000000U,16U},
 	{8000000U,130000000U,16U},
@@ -413,19 +407,19 @@ static double fcd_actual(unsigned int u32Freq){
     pts--;
 
   // Frequency of synthesizer before divider - can possibly exceed 32 bits, so it's stored in 64
-  UINT64 const u64FSynth = ((UINT64)u32Freq + pts->u32FreqOff) * pts->u32LODiv;
+  uint64_t const u64FSynth = ((uint64_t)u32Freq + pts->u32FreqOff) * pts->u32LODiv;
 
   // Integer part of divisor ("INT")
-  UINT32 const u32Int = u64FSynth / (u32FRef*4);
+  uint32_t const u32Int = (uint32_t)(u64FSynth / (u32FRef*4));
 
   // Subtract integer part to get fractional and AFC parts of divisor ("FRAC" and "AFC")
-  UINT32 const u32Frac4096 =  (u64FSynth<<12) * u32Thresh/(u32FRef*4) - (u32Int<<12) * u32Thresh;
+  uint32_t const u32Frac4096 = (uint32_t)( (u64FSynth<<12) * u32Thresh/(u32FRef*4) - (u32Int<<12) * u32Thresh);
 
   // FRAC is higher 12 bits
-  UINT32 const u32Frac = u32Frac4096>>12;
+  uint32_t const u32Frac = u32Frac4096>>12;
 
   // AFC is lower 12 bits
-  UINT32 const u32AFC = u32Frac4096 - (u32Frac<<12);
+  uint32_t const u32AFC = u32Frac4096 - (u32Frac<<12);
 
   // Actual tuner frequency, in floating point, given specified parameters
   double const f64FAct = (4.0 * u32FRef / (double)pts->u32LODiv) * (u32Int + ((u32Frac * 4096.0 + u32AFC) / (u32Thresh * 4096.))) - pts->u32FreqOff;
@@ -444,7 +438,7 @@ double funcube_tune(struct frontend * const frontend,double const freq){
     return freq; // Don't change if locked
 
 
-  int const intfreq = freq;
+  int const intfreq = (int)freq;
 
   if(sdr->phd == NULL && (sdr->phd = fcdOpen(sdr->sdr_name,sizeof(sdr->sdr_name),sdr->number)) == NULL){
     fprintf(stderr,"fcdOpen(%d): can't re-open control port\n",sdr->number);

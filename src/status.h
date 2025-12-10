@@ -157,17 +157,17 @@ enum status_type {
   RF_LEVEL_CAL,        // Adjustment relating dBm to dBFS
 };
 
-int encode_string(uint8_t **bp,enum status_type type,void const *buf,unsigned int buflen);
+size_t encode_string(uint8_t **bp,enum status_type type,void const *buf,size_t buflen);
 int encode_eol(uint8_t **buf);
 int encode_byte(uint8_t **buf,enum status_type type,uint8_t x);
 int encode_int(uint8_t **buf,enum status_type type,int x);
 int encode_int16(uint8_t **buf,enum status_type type,uint16_t x);
 int encode_int32(uint8_t **buf,enum status_type type,uint32_t x);
 int encode_int64(uint8_t **buf,enum status_type type,uint64_t x);
-int encode_float(uint8_t **buf,enum status_type type,float x);
+int encode_float(uint8_t **buf,enum status_type type,double x);
 int encode_double(uint8_t **buf,enum status_type type,double x);
 int encode_socket(uint8_t **buf,enum status_type type,void const *sock);
-int encode_vector(uint8_t **buf,enum status_type type,float const *array,int size);
+size_t encode_vector(uint8_t **buf,enum status_type type,float const *array,size_t size);
 
 uint64_t decode_int64(uint8_t const *,int);
 uint32_t decode_int32(uint8_t const *,int);
@@ -181,9 +181,9 @@ double decode_double(uint8_t const *,int);
 struct sockaddr *decode_socket(void *,uint8_t const *,int);
 struct sockaddr *decode_local_socket(void *,uint8_t const *,int);
 char *decode_string(uint8_t const *,int);
-uint32_t get_ssrc(uint8_t const *buffer,int length);
-uint32_t get_tag(uint8_t const *buffer,int length);
+uint32_t get_ssrc(uint8_t const *buffer,unsigned long length);
+uint32_t get_tag(uint8_t const *buffer,unsigned long length);
 
-void dump_metadata(FILE *,uint8_t const *,int,bool);
+void dump_metadata(FILE *,uint8_t const *,size_t,bool);
 
 #endif

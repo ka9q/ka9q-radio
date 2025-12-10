@@ -36,15 +36,15 @@
 #include "monitor.h"
 
 // Could be (obscure) config file parameters
-float const Latency = 0.02; // chunk size for audio output callback
-float const Tone_period = 0.24; // PL tone integration period
+double const Latency = 0.02; // chunk size for audio output callback
+double const Tone_period = 0.24; // PL tone integration period
 
 // Voting hysteresis table. Small at low SNR, larger at large SNR to minimize pointless switching
 // When the current SNR is 'snr', don't switch to another channel unless it's at least 'hysteresis' dB stronger
 #define HSIZE (7)
 struct {
-  float snr;
-  float hysteresis;
+  double snr;
+  double hysteresis;
 } Hysteresis_table[HSIZE] = {
   // Must be in descending order
   {30.0, 5.0},
@@ -69,18 +69,18 @@ int Verbose = 0;                    // Verbosity flag
 char const *Config_file;
 bool Quiet = false;                 // Disable curses
 bool Quiet_mode = false;            // Toggle screen activity after starting
-float Playout = 100;
+double Playout = 0.1; // default 100 ms
 bool Constant_delay = false;
 bool Start_muted = false;
 bool Auto_position = true;  // first will be in the center
-float Gain = 0; // unity gain by default
+double Gain = 0; // unity gain by default
 bool Notch = false;
 char *Mcast_address_text[MAX_MCAST]; // Multicast address(es) we're listening to
 char const *Audiodev = "";    // Name of audio device; empty means portaudio's default
 bool Voting = false;
 int Channels = 2;
 char const *Init;
-//float GoodEnoughSNR = 20.0; // FM SNR considered "good enough to not be worth changing
+//double GoodEnoughSNR = 20.0; // FM SNR considered "good enough to not be worth changing
 char const *Pipe;
 char const *Source; // Source specific multicast, if used
 
@@ -95,7 +95,7 @@ volatile unsigned int Wptr;   // For monitoring length of output queue
 uint64_t Audio_callbacks;
 unsigned long Audio_frames;
 volatile int64_t LastAudioTime;
-int32_t Portaudio_delay;
+double Portaudio_delay;
 pthread_t Repeater_thread;
 int Nfds;                     // Number of streams
 pthread_mutex_t Sess_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -188,7 +188,7 @@ int main(int argc,char * const argv[]){
     Pipe = config_getstring(Configtable,Audio,"pipe",NULL);
 #endif
 
-    Gain = config_getfloat(Configtable,Audio,"gain",Gain);
+    Gain = config_getdouble(Configtable,Audio,"gain",Gain);
     Cwid = strdup(config_getstring(Configtable,Repeater,"id","NOCALL"));
     // 600 sec is 10 minutes, max ID interval per FCC 97.119(a)
     int const period = config_getint(Configtable,Repeater,"period",600);
@@ -197,8 +197,8 @@ int main(int argc,char * const argv[]){
       pperiod = period;
     Mandatory_ID_interval = period * BILLION;
     Quiet_ID_interval = pperiod * BILLION;
-    ID_pitch = config_getfloat(Configtable,Repeater,"pitch",ID_pitch);
-    ID_level = config_getfloat(Configtable,Repeater,"level",ID_level);
+    ID_pitch = config_getdouble(Configtable,Repeater,"pitch",ID_pitch);
+    ID_level = config_getdouble(Configtable,Repeater,"level",ID_level);
     Notch = config_getboolean(Configtable,Audio,"notch",Notch);
     Quiet = config_getboolean(Configtable,Display,"quiet",Quiet);
     if(config_getboolean(Configtable,Audio,"center",false))
@@ -206,8 +206,8 @@ int main(int argc,char * const argv[]){
 
     Auto_sort = config_getboolean(Configtable,Display,"autosort",Auto_sort);
     Update_interval = config_getint(Configtable,Display,"update",Update_interval);
-    Playout = config_getfloat(Configtable,Audio,"playout",Playout);
-    Repeater_tail = config_getfloat(Configtable,Repeater,"tail",Repeater_tail);
+    Playout = config_getdouble(Configtable,Audio,"playout",Playout) / 1000.; // convert ms to sec
+    Repeater_tail = config_getdouble(Configtable,Repeater,"tail",Repeater_tail);
     Verbose = config_getboolean(Configtable,Display,"verbose",Verbose);
     char const *txon = config_getstring(Configtable,Radio,"txon",NULL);
     char const *txoff = config_getstring(Configtable,Radio,"txoff",NULL);
@@ -232,12 +232,12 @@ int main(int argc,char * const argv[]){
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
     case 'c':
-      Channels = strtol(optarg,NULL,0);
+      Channels = atoi(optarg);
       break;
     case 'f':
       break; // Ignore this time
     case 'g':
-      Gain = strtof(optarg,NULL);
+      Gain = strtod(optarg,NULL);
       break;
     case 'n':
       Notch = true;
@@ -246,16 +246,16 @@ int main(int argc,char * const argv[]){
       Source = optarg; // source specific multicast; only take packets from this source
       break;
     case 'p':
-      Playout = strtof(optarg,NULL);
+      Playout = strtod(optarg,NULL) / 1000.;
       break;
     case 'q': // No ncurses
       Quiet = true;
       break;
     case 'r':
-      DAC_samprate = strtol(optarg,NULL,0);
+      DAC_samprate = atoi(optarg);
       break;
     case 'u':
-      Update_interval = strtol(optarg,NULL,0);
+      Update_interval = atoi(optarg);
       break;
     case 'v':
       Verbose = true;
@@ -368,17 +368,17 @@ int main(int argc,char * const argv[]){
     atexit(cleanup); // Make sure Pa_Terminate() gets called
 
     char *nextp = NULL;
-    int d;
+    long d;
     int numDevices = Pa_GetDeviceCount();
     if(Audiodev == NULL || strlen(Audiodev) == 0){
       // not specified; use default
       inDevNum = Pa_GetDefaultOutputDevice();
     } else if(d = strtol(Audiodev,&nextp,0),nextp != Audiodev && *nextp == '\0'){
       if(d >= numDevices){
-	fprintf(stderr,"%d is out of range, use %s -L for a list\n",d,App_path);
+	fprintf(stderr,"%ld is out of range, use %s -L for a list\n",d,App_path);
 	exit(EX_USAGE);
       }
-      inDevNum = d;
+      inDevNum = (int)d;
     } else {
       for(inDevNum=0; inDevNum < numDevices; inDevNum++){
 	const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(inDevNum);
@@ -506,7 +506,7 @@ void *statproc(void *arg){
   while(!Terminate){
     struct sockaddr_storage sender;
     socklen_t socksize = sizeof(sender);
-    int length = recvfrom(status_fd,buffer,PKTSIZE,0,(struct sockaddr *)&sender,&socksize);
+    ssize_t length = recvfrom(status_fd,buffer,PKTSIZE,0,(struct sockaddr *)&sender,&socksize);
     if(buffer[0] != STATUS) // not status, ignore
       continue;
 
@@ -543,11 +543,11 @@ void *statproc(void *arg){
       sp->id[0] = '\0';
 
     // Update SNR calculation (not sent explicitly)
-    float const noise_bandwidth = fabsf(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
-    float sig_power = sp->chan.sig.bb_power - noise_bandwidth * sp->chan.sig.n0;
+    double const noise_bandwidth = fabs(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
+    double sig_power = sp->chan.sig.bb_power - noise_bandwidth * sp->chan.sig.n0;
     if(sig_power < 0)
       sig_power = 0; // Avoid log(-x) = nan
-    float const sn0 = sig_power/sp->chan.sig.n0;
+    double const sn0 = sig_power/sp->chan.sig.n0;
     sp->snr = power2dB(sn0/noise_bandwidth);
     vote();
   }
@@ -661,15 +661,15 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 
   Last_callback_time = timeInfo->currentTime;
   assert(framesPerBuffer < BUFFERSIZE); // Make sure ring buffer is big enough
-  // Delay within Portaudio in milliseconds
-  Portaudio_delay = 1000. * (timeInfo->outputBufferDacTime - timeInfo->currentTime);
+  // Delay within Portaudio in sec
+  Portaudio_delay = timeInfo->outputBufferDacTime - timeInfo->currentTime;
 
   // Use mirror buffer to simplify wraparound. Count is in bytes = Channels * frames * sizeof(float)
-  int const bytecount = Channels * framesPerBuffer * sizeof(*Output_buffer);
+  size_t const bytecount = Channels * framesPerBuffer * sizeof(*Output_buffer);
   memcpy(outputBuffer,&Output_buffer[Channels*Rptr],bytecount);
   // Zero what we just copied
   memset(&Output_buffer[Channels*Rptr],0,bytecount);
-  opus_pcm_soft_clip((float *)outputBuffer,framesPerBuffer,Channels,Softclip_mem);
+  opus_pcm_soft_clip((float *)outputBuffer,(int)framesPerBuffer,Channels,Softclip_mem);
   pthread_mutex_lock(&Rptr_mutex);
   Rptr += framesPerBuffer;
   Rptr &= (BUFFERSIZE-1);

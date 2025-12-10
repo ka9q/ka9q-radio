@@ -63,7 +63,7 @@ struct sdrstate {
   int max_buff_count;
   int device;
   unsigned int next_sample_num;
-  float scale; // Scale samples for #bits and front end gain
+  double scale; // Scale samples for #bits and front end gain
   pthread_t monitor_thread;
 };
 
@@ -310,7 +310,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
               result);
       return -1;
     }
-    fprintf(stderr,"samprate %'d Hz, tuner %'.3lf Hz, lna_gain %d (%d dB) vga_gain %d (%d dB)\n",
+    fprintf(stderr,"samprate %'lf Hz, tuner %'.3lf Hz, lna_gain %d (%d dB) vga_gain %d (%d dB)\n",
 	    frontend->samprate,
 	    frontend->frequency,
 	    sdr->lna_gain,
@@ -333,12 +333,12 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
   4. MAX 2830 (what we're apparently programming) ~ 1-99 dB
   5. Linear LTC2143 A/D: 1V p-p or 2V p-p
 */
-float fobos_gain(struct frontend * const frontend, float gain){
+double fobos_gain(struct frontend * const frontend, double gain){
   if(frontend->rf_agc)
     fprintf(stderr,"manual gain setting, turning off AGC\n");
 
   // Just the MAX2830 gain here
-  float vgain = gain;
+  double vgain = gain;
   int lna = 0;
   if(vgain >= 33){
     lna = 3;
@@ -398,16 +398,16 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
     Name_set = true;
   }
 
-  float in_energy = 0;
+  double in_energy = 0;
   int const sampcount = len;
   assert(len % 2 == 0);    // Ensure len is a valid even number (interleaved I/Q samples)
   float complex *const wptr = frontend->in.input_write_pointer.c;
   assert(wptr != NULL);
 
   for (int i = 0; i < sampcount; i++) {
-    float complex const samp = CMPLXF(buf[2*i],buf[2*i+1]);
-    in_energy += cnrmf(samp);       // Calculate energy of the sample
-    wptr[i] = samp * sdr->scale;    // Store sample in write pointer buffer
+    double complex const samp = CMPLX(buf[2*i],buf[2*i+1]);
+    in_energy += cnrm(samp);       // Calculate energy of the sample
+    wptr[i] = (float complex)(samp * sdr->scale);    // Store sample in write pointer buffer
   }
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;

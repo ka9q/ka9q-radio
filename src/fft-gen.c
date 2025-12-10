@@ -57,7 +57,7 @@ static int save_plans();
 static size_t Wisdom_size;
 static uint64_t Wisdom_hash;
 
-static int track_wisdom_length(void){
+static size_t track_wisdom_length(void){
   if(Verbose < 2)
     return 0;
 
@@ -141,7 +141,7 @@ int main(int argc,char *argv[]){
       FFTW_planning_level = FFTW_ESTIMATE;
       break;
     case 'T':
-      nthreads = strtol(optarg,NULL,0);
+      nthreads = atoi(optarg);
       break;
     case 'f':
       Force = true;
@@ -336,7 +336,7 @@ static int save_plans(){
     // Last ditch attempt to preserve the work: dump it to stdout and hope somebody sees it
     printf("Can't create temporary wisdom file %s\n",newtemp);
     printf("New wisdom:\n");
-    int r = write(1,wisdom,newsize); // Best effort, ignore return
+    ssize_t r = write(1,wisdom,newsize); // Best effort, ignore return
     (void)r;
     goto quit;
   }

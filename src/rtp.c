@@ -213,7 +213,7 @@ void *hton_rtp(void * const data, struct rtp_header const * const rtp){
 // Process sequence number and timestamp in incoming RTP header:
 // count dropped and duplicated packets, but it gets confused
 // Determine timestamp jump from the next expected one
-int rtp_process(struct rtp_state * const state,struct rtp_header const * const rtp,int const sampcnt){
+int rtp_process(struct rtp_state * const state,struct rtp_header const * const rtp,size_t const sampcnt){
   if(rtp->ssrc != state->ssrc){
     // Normally this will happen only on the first packet in a session since
     // the caller demuxes the SSRC to multiple instances.
@@ -241,8 +241,8 @@ int rtp_process(struct rtp_state * const state,struct rtp_header const * const r
   }
   state->seq = rtp->seq + 1;
 
-  int const time_step = (int32_t)(rtp->timestamp - state->timestamp);
-  state->timestamp = rtp->timestamp + sampcnt;
+  int const time_step = (int)(rtp->timestamp - state->timestamp);
+  state->timestamp = (uint32_t)(rtp->timestamp + sampcnt);
   return time_step;
 }
 int samprate_from_pt(int const type){
@@ -265,7 +265,7 @@ enum encoding encoding_from_pt(int const type){
 // Dynamically create a new one if not found
 // Should lock the table when it's modified
 // Use for sending only! Receivers need to build a table for each sender
-int pt_from_info(unsigned int samprate,unsigned int channels,enum encoding encoding){
+uint8_t pt_from_info(unsigned int samprate,unsigned int channels,enum encoding encoding){
   if(samprate <= 0 || channels <= 0 || channels > 2 || encoding == NO_ENCODING || encoding >= UNUSED_ENCODING)
     return -1;
 
@@ -276,11 +276,11 @@ int pt_from_info(unsigned int samprate,unsigned int channels,enum encoding encod
   }
 
   // Search table for existing entry, otherwise create new entry
-  for(int type=0; type < 128; type++){
+  for(uint8_t type=0; type < 128; type++){
     if(PT_table[type].samprate == samprate && PT_table[type].channels == channels && PT_table[type].encoding == encoding)
       return type;
   }
-  for(int type=96; type < 128; type++){ // Allocate a new type in the dynamic range
+  for(uint8_t type=96; type < 128; type++){ // Allocate a new type in the dynamic range
     if(PT_table[type].samprate == 0){
       // allocate it
       if(add_pt(type,samprate,channels,encoding) == -1)

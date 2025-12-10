@@ -28,7 +28,7 @@
 
 struct hdlc {
   uint8_t frame[16384];
-  size_t frame_bits;
+  unsigned frame_bits;
   int flag_seen;
   int last_bits;
 };
@@ -50,10 +50,10 @@ struct session {
 
 // Config constants
 #define MAX_MCAST 20          // Maximum number of multicast addresses
-static float const SCALE = 1./32768;
+static double const SCALE = 1./32768;
 static int const AL = 960; // 20 ms @ 48 kHz = 1x 20 ms blocks = 24 bit times @ 1200 bps
 static int const AM = 961;
-static float Bitrate = 1200;
+static double Bitrate = 1200;
 
 // Command line params
 const char *App_path;
@@ -181,10 +181,10 @@ int main(int argc,char *argv[]){
 #endif
       break;
     case 'p':
-      IP_tos = strtol(optarg,NULL,0);
+      IP_tos = atoi(optarg);
       break;
     case 'T':
-      Mcast_ttl = strtol(optarg,NULL,0);
+      Mcast_ttl = atoi(optarg);
       break;
     case 'v':
       Verbose++;
@@ -253,7 +253,7 @@ int main(int argc,char *argv[]){
   while(true){
     socklen_t socklen = sizeof(Status_input_source_address);
     uint8_t buffer[PKTSIZE];
-    int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
+    ssize_t length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
 
     // We MUST ignore our own status packets, or we'll loop!
     if(address_match(&Status_input_source_address, &Local_status_source_address)
@@ -271,7 +271,7 @@ int main(int argc,char *argv[]){
 	continue; // Ignore commands
       uint8_t const *cp = buffer+1;
 
-      while(cp - buffer < length){
+      while(cp < &buffer[length]){
 	enum status_type const type = *cp++;
 	
 	if(type == EOL)
@@ -401,14 +401,14 @@ static void *input(void *arg){
 	  fflush(stdout);
 	}
       }
-      int const sample_count = size / sizeof(int16_t); // 16-bit sample count
+      size_t const sample_count = size / sizeof(int16_t); // 16-bit sample count
       int skipped_samples = rtp_process(&sp->rtp_state_in,&rtp_hdr,sample_count);
       if(rtp_hdr.marker)
 	skipped_samples = 0; // Ignore samples skipped before mark
 
       if(Verbose && skipped_samples != 0){
 	printtime(stdout);
-	fprintf(stdout," skipped samples %d\n",skipped_samples); fflush(stdout);
+	fprintf(stdout," skipped samples %lu\n",(unsigned long)skipped_samples); fflush(stdout);
       }
       if(skipped_samples < 0)
 	continue;	// Drop probable duplicate(s)
@@ -416,7 +416,7 @@ static void *input(void *arg){
       if(skipped_samples > 0){
 	// Don't worry too much about skipped samples right now
 	// There's no FEC, and enough are probably dropped that sync wouldn't be maintained anyway
-	int max_skip = min(skipped_samples,1920); // Pad only a short interruption, max
+	size_t max_skip = min(skipped_samples,1920); // Pad only a short interruption, max
 	int16_t zeroes[max_skip];
 	memset(zeroes,0,sizeof(zeroes));
 	if(write(sp->write_fd,zeroes,sizeof(zeroes)) != (int)sizeof(zeroes))
@@ -480,12 +480,12 @@ static int close_session(struct session *sp){
 }
 #endif
 
-const float mark_tone = 1200;
-const float space_tone = 2200;
+const double mark_tone = 1200;
+const double space_tone = 2200;
 
 // AFSK demod
 static void *decode_task(void *arg){
-  float const twist = mark_tone/space_tone; // Scale back upper tone from FM demod
+  double const twist = mark_tone/space_tone; // Scale back upper tone from FM demod
 
   pthread_setname("afsk");
   struct session *sp = (struct session *)arg;
@@ -495,8 +495,8 @@ static void *decode_task(void *arg){
   create_filter_input(&filter_in,AL,AM,REAL);
   struct filter_out filter_out;
   create_filter_output(&filter_out,&filter_in,NULL,AL,COMPLEX);
-  const float filter_low = min(mark_tone,space_tone) - Bitrate/4;
-  const float filter_high = max(mark_tone,space_tone) + Bitrate/4;
+  const double filter_low = min(mark_tone,space_tone) - Bitrate/4;
+  const double filter_high = max(mark_tone,space_tone) + Bitrate/4;
   set_filter(&filter_out,filter_low/sp->samprate,filter_high/sp->samprate,3.0); // Creates analytic, band-limited signal
 
   // Tone replica generators (-1200 and -2200 Hz)
@@ -508,16 +508,16 @@ static void *decode_task(void *arg){
   memset(&space,0,sizeof(space));
   set_osc(&space,-space_tone/sp->samprate, 0.0);  
     
-  int samppbit = sp->samprate / Bitrate;
+  int samppbit = (int)(sp->samprate / Bitrate);
 
   // Tone integrators
   int symphase = 0;
-  float complex mark_accum = 0; // On-time
-  float complex space_accum = 0;
-  float complex mark_offset_accum = 0; // Straddles previous zero crossing
-  float complex space_offset_accum = 0;
-  float last_val = 0;  // Last on-time symbol
-  float mid_val = 0;   // Last zero crossing symbol
+  double complex mark_accum = 0; // On-time
+  double complex space_accum = 0;
+  double complex mark_offset_accum = 0; // Straddles previous zero crossing
+  double complex space_offset_accum = 0;
+  double last_val = 0;  // Last on-time symbol
+  double mid_val = 0;   // Last zero crossing symbol
 
   FILE *fp = fdopen(sp->read_fd,"r");
   if(fp == NULL){
@@ -550,14 +550,13 @@ static void *decode_task(void *arg){
     assert(filter_in.ilen == AL);
     assert(filter_out.olen == AL);
     for(int n=0; n < AL; n++){
-      if(put_rfilter(&filter_in,ntohs(samples[n]) * SCALE) == 0)
+      if(put_rfilter(&filter_in,(float)(ntohs(samples[n]) * SCALE)) == 0)
 	continue;
       execute_filter_output(&filter_out,0);    // Shouldn't block
       for(int n=0; n<filter_out.olen; n++){
 	// Spin down by mark and space frequencies, accumulate each in boxcar (comb) filters
 	// Mark and space each have in-phase and offset integrators for timing recovery
-	float complex s;
-	s = filter_out.output.c[n] * step_osc(&mark);
+	double complex s = filter_out.output.c[n] * step_osc(&mark);
 	mark_accum += s;
 	mark_offset_accum += s;
 	
@@ -567,14 +566,14 @@ static void *decode_task(void *arg){
 	
 	if(++symphase == samppbit/2){
 	  // Finish offset integrator and reset
-	  mid_val = cnrmf(mark_offset_accum) - twist * cnrmf(space_offset_accum);
+	  mid_val = cnrm(mark_offset_accum) - twist * cnrm(space_offset_accum);
 	  mark_offset_accum = space_offset_accum = 0;
 	}
 	if(symphase < samppbit)
 	  continue;
 	
 	// Finished whole bit
-	float const cur_val = cnrmf(mark_accum) - twist * cnrmf(space_accum);
+	double const cur_val = cnrm(mark_accum) - twist * cnrm(space_accum);
 	mark_accum = space_accum = 0;
 	
 	if(cur_val * last_val >= 0){ // cur_val and last_val have same sign; no transition
@@ -603,7 +602,7 @@ static void *decode_task(void *arg){
 	    struct rtp_header rtp_hdr;
 	    memset(&rtp_hdr,0,sizeof(rtp_hdr));
 	    rtp_hdr.version = 2;
-	    rtp_hdr.type = AX25_pt;
+	    rtp_hdr.type = (uint8_t)AX25_pt;
 	    rtp_hdr.seq = sp->rtp_state_out.seq++;
 	    // RTP timestamp??
 	    rtp_hdr.timestamp = sp->rtp_state_out.timestamp;

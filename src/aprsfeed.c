@@ -117,9 +117,9 @@ int main(int argc,char *argv[]){
     if((cp = strchr(callsign,'-')) != NULL)
       *cp = '\0';
     
-    int const len = strlen(callsign);
+    size_t const len = strlen(callsign);
 
-    for(int i=0; i<len; i += 2){
+    for(size_t i=0; i<len; i += 2){
       hash ^= toupper(callsign[i]) << 8;
       hash ^= toupper(callsign[i+1]);
     }
@@ -186,7 +186,7 @@ int main(int argc,char *argv[]){
       continue;
     }
     uint8_t packet[PKTSIZE];
-    int size;
+    ssize_t size;
     while((size = recv(Input_fd,packet,sizeof(packet),0)) > 0){
       struct rtp_header rtp_header;
       uint8_t const *dp = packet;
@@ -236,7 +236,7 @@ int main(int argc,char *argv[]){
 	  cp += w; sspace -= w;
 	  assert(sspace > 0);
 	}
-	for(int i=0;i<frame.ndigi;i++){
+	for(size_t i=0;i<frame.ndigi;i++){
 	  // if "TCPIP" appears, this frame came off the Internet and should not be sent back to it
 	  if(strcmp(frame.digipeaters[i].name,"TCPIP") == 0)
 	    is_tcpip = 1;

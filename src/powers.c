@@ -53,7 +53,7 @@ static struct  option Options[] = {
 };
 
 
-int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,int length);
+int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,size_t length);
 
 void help(){
   fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width bin_bw] [-b|--bins bins] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
@@ -63,20 +63,20 @@ void help(){
 int main(int argc,char *argv[]){
   App_path = argv[0];
   int count = 1;     // Number of updates. -1 means infinite
-  float interval = 5; // Period between updates, sec
-  float frequency = -1;
+  double interval = 5; // Period between updates, sec
+  double frequency = -1;
   int bins = 0;
-  float bin_bw = 0;
-  float crossover = -1;
+  double bin_bw = 0;
+  double crossover = -1;
   {
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
       case 'b':
-	bins = strtol(optarg,NULL,0);
+	bins = atoi(optarg);
 	break;
       case 'c':
-	count = strtol(optarg,NULL,0);
+	count = atoi(optarg);
 	break;
       case 'C':
 	crossover = strtod(optarg,NULL);
@@ -91,19 +91,19 @@ int main(int argc,char *argv[]){
 	help();
 	break;
       case 'i':
-	interval = strtof(optarg,NULL);
+	interval = strtod(optarg,NULL);
 	break;
       case 's':
-	Ssrc = strtol(optarg,NULL,0); // Send to specific SSRC
+	Ssrc = atoi(optarg); // Send to specific SSRC
 	break;
       case 'T':
-	Timeout = (int64_t)(BILLION * strtof(optarg,NULL)); // Retransmission timeout
+	Timeout = (int64_t)(BILLION * strtod(optarg,NULL)); // Retransmission timeout
 	break;
       case 'v':
 	Verbose++;
 	break;
       case 'w':
-	bin_bw = strtof(optarg,NULL);
+	bin_bw = strtod(optarg,NULL);
 	break;
       case 'V':
 	VERSION();
@@ -152,7 +152,7 @@ int main(int argc,char *argv[]){
     *bp++ = 1; // Command
 
     encode_int(&bp,OUTPUT_SSRC,Ssrc);
-    uint32_t tag = random();
+    uint32_t tag = (uint32_t)random();
     encode_int(&bp,COMMAND_TAG,tag);
     encode_int(&bp,DEMOD_TYPE,SPECT_DEMOD);
     if(frequency >= 0)
@@ -164,7 +164,7 @@ int main(int argc,char *argv[]){
     if(crossover >= 0)
       encode_float(&bp,CROSSOVER,crossover);
     encode_eol(&bp);
-    int const command_len = bp - buffer;
+    ssize_t const command_len = bp - buffer;
     if(Verbose > 1){
       fprintf(stderr,"Sent:");
       dump_metadata(stderr,buffer+1,command_len-1,details ? true : false);
@@ -176,7 +176,7 @@ int main(int argc,char *argv[]){
     }
     // The deadline starts at 1 sec after a command
     int64_t deadline = gps_time_ns() + Timeout;
-    int length = 0;
+    ssize_t length = 0;
     do {
       // Wait for a reply to our query
       // ignore all packets on group without changing deadline
@@ -215,9 +215,9 @@ int main(int argc,char *argv[]){
     double r_freq;
     double r_bin_bw;
 
-    int npower = extract_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&r_freq,&r_bin_bw,Ssrc,buffer+1,length-1);
+    size_t npower = extract_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&r_freq,&r_bin_bw,Ssrc,buffer+1,length-1);
     if(npower <= 0){
-      fprintf(stderr,"Invalid response, length %d\n",npower);
+      fprintf(stderr,"Invalid response, length %lu\n",npower);
       usleep(10000); // 10 millisec
       continue; // Invalid for some reason; retry
     }
@@ -233,15 +233,15 @@ int main(int argc,char *argv[]){
     // Frequencies below center; note integer round-up, e.g, 65 -> 33; 64 -> 32
     // npower odd: emit N/2+1....N-1 0....N/2 (division truncating to integer)
     // npower even: emit N/2....N-1 0....N/2-1
-    int const first_neg_bin = (npower + 1)/2; // round up, e.g., 64->32, 65 -> 33, 66 -> 33
-    float base = r_freq - r_bin_bw * (npower/2); // integer truncation (round down), e.g., 64-> 32, 65 -> 32
-    printf(" %.0f, %.0f, %.0f, %d",
+    size_t const first_neg_bin = (npower + 1)/2; // round up, e.g., 64->32, 65 -> 33, 66 -> 33
+    double base = r_freq - r_bin_bw * (npower/2); // integer truncation (round down), e.g., 64-> 32, 65 -> 32
+    printf(" %.0lf, %.0lf, %.0lf, %lu",
 	   base, base + r_bin_bw * (npower-1), r_bin_bw, npower);
 
     // Find lowest non-zero entry, use the same for zero power to avoid -infinity dB
     // Zero power in any bin is unlikely unless they're all zero, but handle it anyway
-    float lowest = INFINITY;
-    for(int i=0; i < npower; i++){
+    double lowest = INFINITY;
+    for(size_t i=0; i < npower; i++){
       if(powers[i] < 0){
 	fprintf(stderr,"Invalid power %g in response\n",powers[i]);
 	usleep(10000); // 10 millisec
@@ -250,26 +250,26 @@ int main(int argc,char *argv[]){
       if(powers[i] > 0 && powers[i] < lowest)
 	lowest = powers[i];
     }
-    float const min_db = lowest != INFINITY ? power2dB(lowest) : 0;
+    double const min_db = lowest != INFINITY ? power2dB(lowest) : 0;
 
     if (details){
       // Frequencies below center
       printf("\n");
-      for(int i=first_neg_bin ; i < npower; i++){
-        printf("%d %f %.2f\n",i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
+      for(size_t i=first_neg_bin ; i < npower; i++){
+        printf("%lu %lf %.2lf\n",i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
         base += r_bin_bw;
       }
       // Frequencies above center
-      for(int i=0; i < first_neg_bin; i++){
-        printf("%d %f %.2f\n",i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
+      for(size_t i=0; i < first_neg_bin; i++){
+        printf("%lu %lf %.2lf\n",i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
         base += r_bin_bw;
       }
     } else {
-      for(int i= first_neg_bin; i < npower; i++)
-        printf(", %.2f",(powers[i] == 0) ? min_db : power2dB(powers[i]));
+      for(size_t i= first_neg_bin; i < npower; i++)
+        printf(", %.2lf",(powers[i] == 0) ? min_db : power2dB(powers[i]));
       // Frequencies above center
-      for(int i=0; i < first_neg_bin; i++)
-        printf(", %.2f",(powers[i] == 0) ? min_db : power2dB(powers[i]));
+      for(size_t i=0; i < first_neg_bin; i++)
+        printf(", %.2lf",(powers[i] == 0) ? min_db : power2dB(powers[i]));
     }
     printf("\n");
     if(--count == 0)
@@ -285,7 +285,7 @@ int main(int argc,char *argv[]){
 
 // Decode only those status fields relevant to spectrum measurement
 // Return number of bins
-int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,int length){
+int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,size_t length){
 #if 0  // use later
   double l_lo1 = 0,l_lo2 = 0;
 #endif
@@ -293,7 +293,7 @@ int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *b
   uint8_t const *cp = buffer;
   int l_count = 0;
 
-  while(cp - buffer < length){
+  while(cp < &buffer[length]){
     enum status_type const type = *cp++; // increment cp to length field
 
     if(type == EOL)

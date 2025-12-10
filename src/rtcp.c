@@ -8,22 +8,22 @@
 
 // Build a RTCP sender report in network order
 // Return pointer to byte after end of written packet
-uint8_t *gen_sr(uint8_t *output,int bufsize,struct rtcp_sr const *sr,struct rtcp_rr const *rr,int rc){
+uint8_t *gen_sr(uint8_t *output,size_t bufsize,struct rtcp_sr const *sr,struct rtcp_rr const *rr,int rc){
 
   int words = 1 + 6 + 6*rc;
 
-  if(4*words > bufsize)
+  if(4*words > (int)bufsize)
     return NULL; // Not enough room in buffer
 
   // SR packet header
-  *output++ = (2 << 6) | rc;
+  *output++ = (uint8_t)((2 << 6) | rc);
   *output++ = 200;
   output = put16(output,words-1);
 
   // Sender info
   output = put32(output,sr->ssrc);
-  output = put32(output,sr->ntp_timestamp >> 32);
-  output = put32(output,sr->ntp_timestamp);
+  output = put32(output,(int32_t)(sr->ntp_timestamp >> 32));
+  output = put32(output,(int32_t)sr->ntp_timestamp);
   output = put32(output,sr->rtp_timestamp);
   output = put32(output,sr->packet_count);
   output = put32(output,sr->byte_count);
@@ -31,7 +31,7 @@ uint8_t *gen_sr(uint8_t *output,int bufsize,struct rtcp_sr const *sr,struct rtcp
   // Receiver info (if any)
   for(int i=0; i < rc; i++){
     output = put32(output,rr->ssrc);
-    *output++ = rr->lost_fract;
+    *output++ = (uint8_t)rr->lost_fract;
     output = put24(output,rr->lost_packets);
     output = put32(output,rr->highest_seq);
     output = put32(output,rr->jitter);
@@ -43,15 +43,15 @@ uint8_t *gen_sr(uint8_t *output,int bufsize,struct rtcp_sr const *sr,struct rtcp
 }
 // Build a RTCP receiver report in network order
 // Return pointer to byte after end of written packet
-uint8_t *gen_rr(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_rr const *rr,int rc){
+uint8_t *gen_rr(uint8_t *output,size_t bufsize,uint32_t ssrc,struct rtcp_rr const *rr,int rc){
 
   int words = 2 + 6*rc;
 
-  if(4*words > bufsize)
+  if(4*words > (int)bufsize)
     return NULL; // Not enough room in buffer
 
   // RR packet header
-  *output++ = (2 << 6) | rc;
+  *output++ = (uint8_t)((2 << 6) | rc);
   *output++ = 201; // Receiver report
   output = put16(output,words-1);
   output = put32(output,ssrc);
@@ -59,7 +59,7 @@ uint8_t *gen_rr(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_rr const *
   // Receiver info (if any)
   for(int i=0; i < rc; i++){
     output = put32(output,rr->ssrc);
-    *output++ = rr->lost_fract;
+    *output++ = (uint8_t)rr->lost_fract;
     output = put24(output,rr->lost_packets);
     output = put32(output,rr->highest_seq);
     output = put32(output,rr->jitter);
@@ -73,7 +73,7 @@ uint8_t *gen_rr(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_rr const *
 
 // Build a RTCP source description packet in network order
 // Return pointer to byte after end of written packet
-uint8_t *gen_sdes(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_sdes const *sdes,int sc){
+uint8_t *gen_sdes(uint8_t *output,size_t bufsize,uint32_t ssrc,struct rtcp_sdes const *sdes,int sc){
   
   if(sc < 0 || sc > 31) // Range check on source count
     return NULL;
@@ -81,14 +81,14 @@ uint8_t *gen_sdes(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_sdes con
   // Calculate size
   int bytes = 4 + 4 + 1; // header + ssrc + terminating null
   for(int i=0; i < sc; i++){
-    if(sdes[i].mlen < 0 || sdes[i].mlen > 255)
+    if(sdes[i].mlen > 255)
       return NULL;
     bytes += 2 + sdes[i].mlen; // type + length + item
   }
   // Round up to 4 byte boundary
   int words = (bytes + 3)/4;
 
-  if(4*words > bufsize)
+  if(4*words > (int)bufsize)
     return NULL;
 
   memset(output,0,bufsize); // easist way to guarantee nulls at end
@@ -101,23 +101,23 @@ uint8_t *gen_sdes(uint8_t *output,int bufsize,uint32_t ssrc,struct rtcp_sdes con
 
   // Put each item
   for(int i=0; i<sc; i++){
-    *dp++ = sdes[i].type;
-    *dp++ = sdes[i].mlen;
+    *dp++ = (uint8_t)sdes[i].type;
+    *dp++ = (uint8_t)sdes[i].mlen;
     memcpy(dp,sdes[i].message,sdes[i].mlen); // Buffer overrun avoided by size calc?
     dp += sdes[i].mlen;
   }
   return output + words*4;
 }
 
-uint8_t *gen_bye(uint8_t *output,int bufsize,uint32_t const *ssrcs,int sc){
+uint8_t *gen_bye(uint8_t *output,size_t bufsize,uint32_t const *ssrcs,int sc){
   if(sc < 0 || sc > 31) // Range check on source count
     return NULL;
 
   int words = 1 + sc;
-  if(4*words > bufsize)
+  if(4*words > (int)bufsize)
     return NULL;
 
-  *output++ = (2 << 6) | sc;
+  *output++ = (uint8_t)((2 << 6) | sc);
   *output++ = 203; // BYE
   output = put16(output,words-1);
 

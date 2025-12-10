@@ -32,7 +32,7 @@
 #include "status.h"
 
 extern dictionary const *Preset_table;
-static int encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, int len);
+static unsigned long encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, unsigned long len);
 
 // Radio status reception and transmission thread
 void *radio_status(void *arg){
@@ -42,7 +42,7 @@ void *radio_status(void *arg){
   while(true){
     // Command from user
     uint8_t buffer[PKTSIZE];
-    int const length = recv(Ctl_fd,buffer,sizeof(buffer),0);
+    ssize_t const length = recv(Ctl_fd,buffer,sizeof(buffer),0);
     if(length <= 0 || (enum pkt_type)buffer[0] != CMD)
       continue; // short packet, or a response; ignore
 
@@ -109,7 +109,7 @@ void *radio_status(void *arg){
 int send_radio_status(struct sockaddr const *sock,struct frontend const *frontend,struct channel *chan){
   uint8_t packet[PKTSIZE];
   chan->status.packets_out++;
-  int const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
+  unsigned long const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
   // I had been forcing metadata to the ttl != 0 socket even when ttl = 0, but this creates a potential problem when
   // 1. Multiple radiod are running on the same system;
   // 2. The same SSRC is in use by more than one radiod;
@@ -130,7 +130,7 @@ int reset_radio_status(struct channel *chan){
 }
 
 // Return TRUE if a restart is needed, false otherwise
-bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length){
+bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned long length){
   bool restart_needed = false;
   bool new_filter_needed = false;
   uint32_t const ssrc = chan->output.rtp.ssrc;
@@ -179,7 +179,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	}
 	if(chan->filter.min_IF > chan->filter.max_IF){
 	  // Swap to ensure min <= max
-	  float const tmp = chan->filter.min_IF;
+	  double const tmp = chan->filter.min_IF;
 	  chan->filter.min_IF = chan->filter.max_IF;
 	  chan->filter.max_IF = tmp;
 	}
@@ -417,21 +417,21 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       break;
     case SQUELCH_OPEN:
       {
-	float const x = decode_float(cp,optlen);
+	double const x = decode_float(cp,optlen);
 	if(isfinite(x))
 	  chan->squelch_open = dB2power(x);
       }
       break;
     case SQUELCH_CLOSE:
       {
-	float const x = decode_float(cp,optlen);
+        double const x = decode_float(cp,optlen);
 	if(isfinite(x))
 	  chan->squelch_close = dB2power(x);
       }
       break;
     case NONCOHERENT_BIN_BW:
       {
-	float const x = fabs(decode_float(cp,optlen));
+	double const x = fabsf(decode_float(cp,optlen));
 	if(isfinite(x) && x != chan->spectrum.bin_bw){
 	  if(Verbose > 1)
 	    fprintf(stderr,"bin bw %f -> %f\n",chan->spectrum.bin_bw,x);
@@ -453,7 +453,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       break;
     case CROSSOVER:
       {
-	float const x = fabsf(decode_float(cp,optlen));
+	double const x = fabsf(decode_float(cp,optlen));
 	if(isfinite(x) && x != chan->spectrum.crossover){
 	  chan->spectrum.crossover = x;
 	  restart_needed = true;
@@ -462,7 +462,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       break;
     case SPECTRUM_KAISER_BETA:
       {
-	float const x = decode_float(cp,optlen);
+	double const x = decode_float(cp,optlen);
 	if(isfinite(x) && x != chan->spectrum.kaiser_beta){
 	  chan->spectrum.kaiser_beta = x;
 	  restart_needed = true;
@@ -508,14 +508,14 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       break;
     case RF_ATTEN:
       {
-	float x = decode_float(cp,optlen);
+	double x = decode_float(cp,optlen);
 	if(isfinite(x) && chan->frontend->atten != NULL)
 	  (*chan->frontend->atten)(chan->frontend,x);
       }
       break;
     case RF_GAIN:
       {
-	float x = decode_float(cp,optlen);
+	double x = decode_float(cp,optlen);
 	if(isfinite(x) && chan->frontend->gain != NULL)
 	  (*chan->frontend->gain)(chan->frontend,x);
       }
@@ -574,7 +574,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 // Encode contents of frontend and chan structures as command or status packet
 // packet argument must be long enough!!
 // Convert values from internal to engineering units
-static int encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, int len){
+static unsigned long encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, unsigned long len){
   memset(packet,0,len);
   uint8_t *bp = packet;
 
@@ -593,7 +593,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
   int64_t now = gps_time_ns();
   encode_int64(&bp,GPS_TIME,now);
   encode_int64(&bp,INPUT_SAMPLES,frontend->samples);
-  encode_int32(&bp,INPUT_SAMPRATE,frontend->samprate); // integer Hz
+  encode_int32(&bp,INPUT_SAMPRATE,(uint32_t)round(frontend->samprate)); // Already defined on the wire as integer Hz, shouldn't change now
   encode_int32(&bp,FE_ISREAL,frontend->isreal ? true : false);
   encode_double(&bp,CALIBRATE,frontend->calibrate);
   encode_float(&bp,RF_GAIN,frontend->rf_gain);
@@ -624,7 +624,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
   encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
 
   // Modulation mode
-  encode_byte(&bp,DEMOD_TYPE,chan->demod_type);
+  encode_byte(&bp,DEMOD_TYPE,(uint8_t)chan->demod_type); // must not exceed 255 entries (unlikely)
   {
     size_t len = strlen(chan->preset);
     if(len > 0 && len < sizeof(chan->preset))
@@ -669,7 +669,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
     encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
     encode_byte(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
-    encode_float(&bp,DEEMPH_TC,-1.0f/(log1pf(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
+    encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     break;
@@ -681,7 +681,7 @@ static int encode_radio_status(struct frontend const *frontend,struct channel *c
     encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
     encode_byte(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
-    encode_float(&bp,DEEMPH_TC,-1.0f/(log1pf(-chan->fm.rate) * 48000.0f)); // ad-hoc
+    encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * 48000.0f)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     break;

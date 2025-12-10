@@ -25,16 +25,16 @@
 // Global config variables
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 
-static const float Kaiser_beta = 11;
+static const double Kaiser_beta = 11;
 
 static const int PL_blockrate = 5;    // PL Integration time 200 msec
 //static const int PL_blockrate = 50;    // PL Integration time 20 msec
 //static const int DTMF_blockrate = 20; // PL Integration time 50 ms
 // Shift PL filter output down by PL_Shift to straddle DC and allow lower sample rate
-static float const PL_Shift = 150;    // -83 to +104.1 Hz
-static const float PL_samprate = 500; // Nyquist rate 250 Hz
-static const float Filter_time = .200; // 200 ms
-//static const float Filter_time = .0200; // 20 ms
+static double const PL_Shift = 150;    // -83 to +104.1 Hz
+static const double PL_samprate = 500; // Nyquist rate 250 Hz
+static const double Filter_time = .200; // 200 ms
+//static const double Filter_time = .0200; // 20 ms
 
 // Command line params
 const char *App_path;
@@ -60,7 +60,7 @@ static char *Mcast_address_text[MAX_MCAST];
 // 150.0, 213.8, 221.3, 237.1, 245.5, 
 
 // All the tones from various groups, including special NATO 150 Hz tone
-static float PL_tones[] = {
+static double PL_tones[] = {
      67.0,  69.3,  71.9,  74.4,  77.0,  79.7,  82.5,  85.4,  88.5,  91.5,
      94.8,  97.4, 100.0, 103.5, 107.2, 110.9, 114.8, 118.8, 123.0, 127.3,
     131.8, 136.5, 141.3, 146.2, 150.0, 151.4, 156.7, 159.8, 162.2, 165.5,
@@ -72,8 +72,8 @@ static float PL_tones[] = {
 #define N_tones ((int)(sizeof(PL_tones)/sizeof(PL_tones[0])))
 
 #if 0
-static float DTMF_low_tones[] = { 697, 770, 852, 941 };
-static float DTMF_high_tones[] = { 1209, 1336, 1477, 1633 };
+static double DTMF_low_tones[] = { 697, 770, 852, 941 };
+static double DTMF_high_tones[] = { 1209, 1336, 1477, 1633 };
 
 static char DTMF_matrix[4][4] = {   // indexed by [low][high]
   { '1', '2', '3', 'A' },			  
@@ -101,14 +101,14 @@ struct session {
   int pl_blocksize;
   int dtmf_blocksize;
 
-  float complex pl_integrators[N_tones];
+  double complex pl_integrators[N_tones];
   struct osc pl_osc[N_tones];
-  float strongest_tone_energy;
+  double strongest_tone_energy;
   int strongest_tone_index;
 
-  float dtmf_tot_energy;
-  float complex dtmf_low_integrators[4];
-  float complex dtmf_high_integrators[4];  
+  double dtmf_tot_energy;
+  double complex dtmf_low_integrators[4];
+  double complex dtmf_high_integrators[4];  
   struct osc dtmf_low_osc[4];
   struct osc dtmf_high_osc[4];
 
@@ -116,7 +116,7 @@ struct session {
   int dtmf_audio_count;        // Number of samples integrated so far
 
   char current_dtmf_digit;
-  float current_pl_tone;
+  double current_pl_tone;
   struct filter_in filter_in;
   int in_cnt;
   struct filter_out pl_filter_out;
@@ -126,9 +126,9 @@ static void closedown(int);
 static struct session *lookup_session(const struct sockaddr *,uint32_t);
 static struct session *create_session(struct sockaddr const *r,uint32_t,uint16_t,uint32_t);
 static int close_session(struct session *);
-static float process_pl(struct session *sp,float complex samp);
+static double process_pl(struct session *sp,double complex samp);
 #if 0
-static char process_dtmf(struct session *sp,float complex samp);
+static char process_dtmf(struct session *sp,double complex samp);
 #endif
 
 static struct option Options[] =
@@ -161,7 +161,7 @@ int main(int argc,char * const argv[]){
 	Mcast_address_text[Nfds++] = optarg;
       break;
     case 'T':
-      Mcast_ttl = strtol(optarg,NULL,0);
+      Mcast_ttl = atoi(optarg);
       break;
     case 'v':
       Verbose++;
@@ -227,7 +227,7 @@ int main(int argc,char * const argv[]){
       struct sockaddr sender;
       uint8_t buffer[PKTSIZE];
       socklen_t socksize = sizeof(sender);
-      int size = recvfrom(input_fd[fd_index],buffer,sizeof(buffer),0,&sender,&socksize);
+      ssize_t size = recvfrom(input_fd[fd_index],buffer,sizeof(buffer),0,&sender,&socksize);
       if(size == -1){
 	if(errno != EINTR){ // Happens routinely
 	  perror("recvfrom");
@@ -267,11 +267,11 @@ int main(int argc,char * const argv[]){
 
 	// Set up input side of audio baseband filter
 	// 4800 samples @ 24 kHz = 200 ms
-	int const Filter_block = roundf(Filter_time * sp->samprate);
+	int const Filter_block = (int)round(Filter_time * sp->samprate);
 	create_filter_input(&sp->filter_in,Filter_block,Filter_block+1,REAL);
 
 	// Set up PL tone detector
-	sp->pl_blocksize = PL_samprate / PL_blockrate;
+	sp->pl_blocksize = (int)round(PL_samprate / PL_blockrate);
 	// Set up PL tone steps and phasors
 	for(int n=0; n < N_tones; n++){
 	  sp->pl_integrators[n] = 0;
@@ -279,14 +279,14 @@ int main(int argc,char * const argv[]){
 	}
 
 	//  200 ms @ 1500 Hz = 300 samples x 2 = 600 point FFT, 2.5 Hz bins, rotate by 10 hz increments
-	int pl_Filter_block = roundf(PL_samprate * Filter_time);
+	int pl_Filter_block = (int)round(PL_samprate * Filter_time);
 	create_filter_output(&sp->pl_filter_out,&sp->filter_in,NULL,pl_Filter_block,COMPLEX);
 	// Pass 50-300 Hz
 	// Kaiser beta = 11; kaiser alpha = 11/pi = 3.5; first null @ sqrt(1+alpha^2) = 3.64 bins * 5 Hz = 18.2 Hz
 	set_filter(&sp->pl_filter_out,(50. - PL_Shift)/PL_samprate,(300. - PL_Shift)/PL_samprate,Kaiser_beta);
       }
-      int sampcount = size / sizeof(int16_t);
-      int const samples_skipped = rtp_process(&sp->rtp_state_in,&rtp_hdr,sampcount);
+      long sampcount = size / sizeof(int16_t);
+      long const samples_skipped = rtp_process(&sp->rtp_state_in,&rtp_hdr,sampcount);
       if(samples_skipped < 0) continue;
 
       
@@ -297,14 +297,14 @@ int main(int argc,char * const argv[]){
 	if(put_rfilter(&sp->filter_in,samp) == 0)
 	  continue;
 
-	int const Rotate = 2 * (PL_Shift * Filter_time);
+	int const Rotate = (int)round(2 * (PL_Shift * Filter_time));
 	execute_filter_output(&sp->pl_filter_out,Rotate);
 	// Process for PL tone
 	for(int n=0; n < sp->pl_filter_out.olen; n++){
-	  float const pl_tone = process_pl(sp,sp->pl_filter_out.output.c[n]);
+	  double const pl_tone = process_pl(sp,sp->pl_filter_out.output.c[n]);
 	  if(pl_tone > 0){
 #if 0
-	    printf("ssrc %u: PL %.1f Hz\n",sp->rtp_state_in.ssrc,pl_tone);
+	    printf("ssrc %u: PL %.1lf Hz\n",sp->rtp_state_in.ssrc,pl_tone);
 #endif
 	    sp->current_pl_tone = pl_tone;
 	  }
@@ -391,10 +391,10 @@ static void closedown(int s){
 }
 
 // Look for PL tone after each integration interval
-static float process_pl(struct session * const sp,float complex const samp){
+static double process_pl(struct session * const sp,double complex const samp){
 
   for(int n=0; n < N_tones; n++)
-    sp->pl_integrators[n] += conjf(samp) * step_osc(&sp->pl_osc[n]);
+    sp->pl_integrators[n] += conj(samp) * step_osc(&sp->pl_osc[n]);
 
   if(++sp->pl_audio_count < sp->pl_blocksize)
     return -1; // Not done integrating
@@ -406,7 +406,7 @@ static float process_pl(struct session * const sp,float complex const samp){
   sp->strongest_tone_energy = 0.005 * sp->pl_blocksize; // mininum tone energy in block
   sp->strongest_tone_index = -1;
   for(int n=0; n < N_tones; n++){
-    float const energy = cnrmf(sp->pl_integrators[n]);
+    double const energy = cnrm(sp->pl_integrators[n]);
     if(energy > sp->strongest_tone_energy){
       sp->strongest_tone_energy = energy;
       sp->strongest_tone_index = n;
@@ -415,14 +415,14 @@ static float process_pl(struct session * const sp,float complex const samp){
   }
   if(sp->strongest_tone_index == -1)
     return 0; // No tone found
-  float const pl_tone = PL_tones[sp->strongest_tone_index];
-  printf("ssrc %u: tone %.1f Hz %.1f dB\n",sp->rtp_state_in.ssrc,pl_tone,power2dB(sp->strongest_tone_energy/sp->pl_blocksize));
+  double const pl_tone = PL_tones[sp->strongest_tone_index];
+  printf("ssrc %u: tone %.1lf Hz %.1lf dB\n",sp->rtp_state_in.ssrc,pl_tone,power2dB(sp->strongest_tone_energy/sp->pl_blocksize));
   return pl_tone;
 }
 
 #if 0
 // Look for DTMF digit after each integration interval
-static char process_dtmf(struct session *sp,float complex samp){
+static char process_dtmf(struct session *sp,double complex samp){
   sp->dtmf_tot_energy += samp * samp;
   for(int n=0; n < 4; n++){
     sp->dtmf_low_integrators[n] += conjf(samp) * step_osc(&sp->dtmf_low_osc[n]);
@@ -432,15 +432,15 @@ static char process_dtmf(struct session *sp,float complex samp){
     return -1;
 
   sp->dtmf_audio_count = 0;
-  const float min_tone_level = 0.1 * sp->dtmf_blocksize; // Each tone must be above -10 dBFS
+  const double min_tone_level = 0.1 * sp->dtmf_blocksize; // Each tone must be above -10 dBFS
   
   int low_tone_index = -1;
-  float low_tone_snr = 0;
-  float low_tone_energy = 0; // Set this to a minimum threshold
+  double low_tone_snr = 0;
+  double low_tone_energy = 0; // Set this to a minimum threshold
   {
-    float total_energy = 0;
+    double total_energy = 0;
     for(int n=0; n < 4; n++){
-      float const energy = cnrmf(sp->dtmf_low_integrators[n]);
+      double const energy = cnrmf(sp->dtmf_low_integrators[n]);
       sp->dtmf_low_integrators[n] = 0;
       total_energy += energy;
       if(energy >= low_tone_energy){
@@ -453,12 +453,12 @@ static char process_dtmf(struct session *sp,float complex samp){
       low_tone_index = -1; // Not good enough
   }
   int high_tone_index = -1;
-  float high_tone_snr = 0;
-  float high_tone_energy = 0; // Set this to a minimum threshold
+  double high_tone_snr = 0;
+  double high_tone_energy = 0; // Set this to a minimum threshold
   {
-    float total_energy = 0;
+    double total_energy = 0;
     for(int n=0; n < 4; n++){
-      float const energy = cnrmf(sp->dtmf_high_integrators[n]);
+      double const energy = cnrmf(sp->dtmf_high_integrators[n]);
       sp->dtmf_high_integrators[n] = 0;
       total_energy += energy;
       if(energy >= high_tone_energy){

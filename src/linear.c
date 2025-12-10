@@ -37,10 +37,11 @@ int demod_linear(void *arg){
   }
   struct frontend const * const frontend = chan->frontend;
   assert(frontend != NULL);
+  assert(Blocktime != 0);
 
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
-  unsigned int const blocksize = chan->output.samprate * Blocktime / 1000;
+  unsigned int const blocksize = (int)round(chan->output.samprate * Blocktime);
   int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
 				    chan->filter.beam ? BEAM : COMPLEX);
   if(status != 0){
@@ -54,11 +55,11 @@ int demod_linear(void *arg){
   chan->filter.remainder = NAN;   // Force re-init of fine downconversion osc
   set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
   // Coherent mode parameters
-  float const damping = DEFAULT_PLL_DAMPING;
-  float const lock_time = DEFAULT_PLL_LOCKTIME;
+  double const damping = DEFAULT_PLL_DAMPING;
+  double const lock_time = DEFAULT_PLL_LOCKTIME;
 
-  int const lock_limit = lock_time * chan->output.samprate;
-  init_pll(&chan->pll.pll,(float)chan->output.samprate);
+  int const lock_limit = (int)round(lock_time * chan->output.samprate);
+  init_pll(&chan->pll.pll,(double)chan->output.samprate);
   double am_dc = 0; // Carrier removal filter, removes squelch opening thump in aviation AM
 
   bool first_run = false;
@@ -91,9 +92,9 @@ int demod_linear(void *arg){
     float complex * buffer = chan->baseband; // Working buffer
 
     if (!first_run && frontend->L != 0){
-      int const block_rate = frontend->samprate / frontend->L;
+      double const block_rate = frontend->samprate / frontend->L;
       uint32_t const first_block = chan->filter.out.next_jobnum - 1;
-      chan->output.rtp.timestamp = first_block * (chan->output.samprate / block_rate);
+      chan->output.rtp.timestamp = (int32_t)(first_block * (chan->output.samprate / block_rate));
       if(Verbose > 0)
 	fprintf(stderr,"demod_linear: ssrc %u starting at FFT jobum %u, preset RTP TS to %u\n",chan->output.rtp.ssrc,first_block,chan->output.rtp.timestamp);
       first_run = true;
@@ -104,18 +105,18 @@ int demod_linear(void *arg){
     // Apply post-downconversion shift (if enabled, e.g. for CW)
     // Measure energy
     // Apply PLL & frequency shift, measure energy
-    float signal = 0; // PLL only
-    float noise = 0;  // PLL only
+    double signal = 0; // PLL only
+    double noise = 0;  // PLL only
 
     if(chan->pll.enable){
       // Update PLL state, if active
       set_pll_params(&chan->pll.pll,chan->pll.loop_bw,damping);
       for(unsigned int n=0; n<N; n++){
-	float complex const s = buffer[n] *= conjf(pll_phasor(&chan->pll.pll));
-	float const phase = chan->pll.square ? cargf(s*s) : cargf(s);
+	double complex const s = buffer[n] *= conj(pll_phasor(&chan->pll.pll));
+	double const phase = chan->pll.square ? carg(s*s) : carg(s);
 	run_pll(&chan->pll.pll,phase);
-	signal += crealf(s) * crealf(s); // signal in phase with VCO is signal + noise power
-	noise += cimagf(s) * cimagf(s);  // signal in quadrature with VCO is assumed to be noise power
+	signal += creal(s) * creal(s); // signal in phase with VCO is signal + noise power
+	noise += cimag(s) * cimag(s);  // signal in quadrature with VCO is assumed to be noise power
       }
       if(noise != 0){
 	chan->pll.snr = (signal / noise) - 1; // S/N as power ratio; meaningful only in coherent modes
@@ -169,11 +170,11 @@ int demod_linear(void *arg){
     // Run AGC on a block basis to do some forward averaging
     // Lots of people seem to have strong opinions on how AGCs should work
     // so there's probably a lot of work to do here
-    float gain_change = 1; // default to constant gain
+    double gain_change = 1; // default to constant gain
     if(chan->linear.agc){
-      float const bw = fabsf(chan->filter.min_IF - chan->filter.max_IF);
-      float const bn = sqrtf(bw * chan->sig.n0); // Noise amplitude
-      float const ampl = sqrtf(chan->sig.bb_power);
+      double const bw = fabs(chan->filter.min_IF - chan->filter.max_IF);
+      double const bn = sqrt(bw * chan->sig.n0); // Noise amplitude
+      double const ampl = sqrt(chan->sig.bb_power);
 
       /* Per-sample gain change is required to avoid sudden gain changes at block boundaries that can
 	 cause clicks and pops when a strong signal straddles a block boundary
@@ -185,29 +186,29 @@ int demod_linear(void *arg){
       if(ampl * chan->output.gain > chan->output.headroom){
 	// Strong signal, reduce gain
 	// Don't do it instantly, but by the end of this block
-	float const newgain = chan->output.headroom / ampl;
+	double const newgain = chan->output.headroom / ampl;
 	// N-th root of newgain / gain
 	// Should this be in double precision to avoid imprecision when gain = - epsilon dB?
 	if(newgain > 0)
-	  gain_change = powf(newgain/chan->output.gain, 1.0F/N);
-	chan->linear.hangcount = chan->linear.hangtime * chan->output.samprate;
+	  gain_change = pow(newgain/chan->output.gain, 1.0/N);
+	chan->linear.hangcount = (int)round(chan->linear.hangtime * chan->output.samprate);
       } else if(bn * chan->output.gain > chan->linear.threshold * chan->output.headroom){
 	// Reduce gain to keep noise < threshold, same as for strong signal
-	float const newgain = chan->linear.threshold * chan->output.headroom / bn;
+	double const newgain = chan->linear.threshold * chan->output.headroom / bn;
 	if(newgain > 0)
-	  gain_change = powf(newgain/chan->output.gain, 1.0F/N);
+	  gain_change = pow(newgain/chan->output.gain, 1.0F/N);
       } else if(chan->linear.hangcount > 0){
 	// Waiting for AGC hang time to expire before increasing gain
 	chan->linear.hangcount -= N;
       } else {
 	// Allow gain to increase at configured rate
-	gain_change = powf(chan->linear.recovery_rate, 1.0F/chan->output.samprate);
+	gain_change = pow(chan->linear.recovery_rate, 1.0F/chan->output.samprate);
       }
       assert(gain_change != 0 && isfinite(gain_change));
     }
     // Final pass over signal block
     // Demodulate, apply gain changes, compute output energy
-    float output_power = 0;
+    double output_power = 0;
     if(chan->output.channels == 1){
       /* Complex input buffer is I0 Q0 I1 Q1 ...
 	 Real output will be R0 R1 R2 R3 ...
@@ -217,20 +218,22 @@ int demod_linear(void *arg){
       if(chan->linear.env){
 	// AM envelope detection
 	for(unsigned int n=0; n < N; n++){
-	  samples[n] = M_SQRT1_2 * cabsf(buffer[n]) * chan->output.gain; // Power from both I&Q
-	  output_power += samples[n] * samples[n];
+	  const double s = M_SQRT1_2 * cabsf(buffer[n]) * (float)chan->output.gain; // Power from both I&Q
+	  output_power += s*s;
 	  chan->output.gain *= gain_change;
 	  // Estimate and remove carrier (DC)
 	  if(chan->linear.dc_tau != 0){
-	    am_dc += chan->linear.dc_tau * (samples[n] - am_dc);
-	    samples[n] -= am_dc;
-	  }
+	    am_dc += chan->linear.dc_tau * (s - am_dc);
+	    samples[n] = (float)(s - am_dc);
+	  } else
+	    samples[n] = (float)s;	    
 	}
       } else {
 	// I channel only (SSB, CW, etc)
 	for(unsigned int n=0; n < N; n++){
-	  samples[n] = crealf(buffer[n]) * chan->output.gain;
-	  output_power += samples[n] * samples[n];
+	  double const s = crealf(buffer[n]) * chan->output.gain;
+	  samples[n] = (float)s;
+	  output_power += s*s;
 	  chan->output.gain *= gain_change;
 	}
       }
@@ -241,21 +244,23 @@ int demod_linear(void *arg){
       if(chan->linear.env){
 	// I on left, envelope/AM on right (for experiments in fine SSB tuning)
 	for(unsigned int n=0; n < N; n++){
-	  __imag__ buffer[n] = M_SQRT1_2 * cabsf(buffer[n]);
-	  buffer[n] *= chan->output.gain;
-	  output_power += cnrmf(buffer[n]);
+	  double complex const s = chan->output.gain * M_SQRT1_2 * (crealf(buffer[n]) + I * cabsf(buffer[n]));
+	  output_power += cnrm(s);
 	  chan->output.gain *= gain_change;
 	  // Estimate and remove DC
 	  if(chan->linear.dc_tau != 0){
-	    am_dc += chan->linear.dc_tau * (__imag__ buffer[n] - am_dc);
-	    __imag__ buffer[n] -= am_dc;
-	  }
+	    am_dc += chan->linear.dc_tau * (__imag__ s - am_dc);
+	    __real__ buffer[n] = (float)creal(s);
+	    __imag__ buffer[n] = (float)(s - am_dc);
+	  } else
+	    buffer[n] = (float complex)s;	    
 	}
       } else {
 	// Simplest case: I/Q output with I on left, Q on right
 	for(unsigned int n=0; n < N; n++){
-	  buffer[n] *= chan->output.gain;
-	  output_power += cnrmf(buffer[n]);
+	  double complex const s = buffer[n] * chan->output.gain;
+	  output_power += cnrm(s);
+	  buffer[n] = (float complex)s;
 	  chan->output.gain *= gain_change;
 	}
       }
@@ -266,9 +271,9 @@ int demod_linear(void *arg){
     chan->output.power = output_power;
 
     // If snr squelch is enabled, it takes precedence. Otherwise PLL lock, if it's on
-    float snr = +INFINITY;
+    double snr = +INFINITY;
     if(chan->snr_squelch_enable)
-      snr = (chan->sig.bb_power / (chan->sig.n0 * fabsf(chan->filter.max_IF - chan->filter.min_IF))) - 1.0f;
+      snr = (chan->sig.bb_power / (chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF))) - 1.0;
     else if(chan->pll.enable)
       snr = chan->pll.snr;
 

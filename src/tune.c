@@ -35,15 +35,15 @@ char const *Locale = "en_US.UTF-8";
 char const *Iface;
 char const *Mode;
 uint32_t Ssrc;
-float Gain = INFINITY;
+double Gain = INFINITY;
 double Frequency = INFINITY;
-float Low = INFINITY;
-float High = INFINITY;
-int Samprate = 0;
+double Low = INFINITY;
+double High = INFINITY;
+double Samprate = 0;
 bool Quiet = false;
 enum encoding Encoding = NO_ENCODING;
-float RFgain = INFINITY;
-float RFatten = INFINITY;
+double RFgain = INFINITY;
+double RFatten = INFINITY;
 int Agc_enable = -1;
 struct sockaddr Destination_socket;
 
@@ -125,7 +125,7 @@ int main(int argc,char *argv[]){
 	Mode = optarg;
 	break;
       case 's':
-	Ssrc = strtol(optarg,NULL,0);
+	Ssrc = atoi(optarg);
 	break;
       case 'v':
 	Verbose++;
@@ -219,7 +219,7 @@ int main(int argc,char *argv[]){
   long long last_command_time = 0;
 
   if(Low > High){
-    float temp = Low;
+    double temp = Low;
     Low = High;
     High = temp;
   }
@@ -227,14 +227,14 @@ int main(int argc,char *argv[]){
   double received_freq = INFINITY;
   uint32_t received_ssrc = 0;
   int received_agc_enable = -1;
-  float received_gain = INFINITY;
+  double received_gain = INFINITY;
   char *preset = NULL;
-  float noise_density = INFINITY;
-  float baseband_level = INFINITY;
-  float low_edge = INFINITY;
-  float high_edge = INFINITY;
-  float received_rf_gain = INFINITY;
-  float received_rf_atten = INFINITY;
+  double noise_density = INFINITY;
+  double baseband_level = INFINITY;
+  double low_edge = INFINITY;
+  double high_edge = INFINITY;
+  double received_rf_gain = INFINITY;
+  double received_rf_atten = INFINITY;
   enum encoding received_encoding = NO_ENCODING;
   int received_rf_agc = -1;
   struct sockaddr_storage received_destination_socket = {0};
@@ -255,7 +255,7 @@ int main(int argc,char *argv[]){
 	encode_string(&bp,PRESET,Mode,strlen(Mode));
 
       if(Samprate != 0)
-	encode_int(&bp,OUTPUT_SAMPRATE,Samprate);
+	encode_int(&bp,OUTPUT_SAMPRATE,(int)round(Samprate));
 
       if(Low != INFINITY)
 	encode_float(&bp,LOW_EDGE,Low);
@@ -283,7 +283,7 @@ int main(int argc,char *argv[]){
 	encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&Destination_socket);
 
       encode_eol(&bp);
-      int cmd_len = bp - cmd_buffer;
+      ssize_t cmd_len = bp - cmd_buffer;
       if(sendto(Control_sock, cmd_buffer, cmd_len, 0,&Control_address,sizeof Control_address) != cmd_len)
 	perror("command send");
 
@@ -308,14 +308,14 @@ int main(int argc,char *argv[]){
     // Incoming packet should be ready
     uint8_t response_buffer[PKTSIZE];
     uint8_t const * cp = response_buffer; // make response read-only
-    int length = recvfrom(Status_sock,response_buffer,sizeof(response_buffer),0,NULL,NULL);
+    ssize_t const length = recvfrom(Status_sock,response_buffer,sizeof(response_buffer),0,NULL,NULL);
 
     if(length <= 0){
       fprintf(stdout,"recvfrom status socket error: %s\n",strerror(errno));
       exit(1);
     }
     if(Verbose)
-      fprintf(stdout,"Message received, %d bytes, type %d\n",length,*cp);
+      fprintf(stdout,"Message received, %ld bytes, type %d\n",length,*cp);
 
     if(*cp++ != 0)
       continue; // ignore non-response; go back and receive again
@@ -438,7 +438,7 @@ int main(int argc,char *argv[]){
       printf("Baseband power %.1f dB\n",baseband_level);
 
     if(low_edge != INFINITY && high_edge != INFINITY)
-      printf("Passband %'.1f Hz to %'.1f Hz (%.1f dB-Hz)\n",low_edge,high_edge,10*log10(fabsf(high_edge - low_edge)));
+      printf("Passband %'.1lf Hz to %'.1lf Hz (%.1lf dB-Hz)\n",low_edge,high_edge,10*log10(fabs(high_edge - low_edge)));
 
     if(noise_density != INFINITY)
       printf("N0 %.1f dB/Hz\n",noise_density);
@@ -448,10 +448,10 @@ int main(int argc,char *argv[]){
        high_edge != INFINITY &&
        noise_density != INFINITY){
 
-      float noise_power = dB2power(noise_density) * fabsf(high_edge - low_edge);
-      float signal_plus_noise_power = dB2power(baseband_level);
+      double noise_power = dB2power(noise_density) * fabs(high_edge - low_edge);
+      double signal_plus_noise_power = dB2power(baseband_level);
 
-      printf("SNR %.1f dB\n",power2dB(signal_plus_noise_power / noise_power - 1));
+      printf("SNR %.1lf dB\n",power2dB(signal_plus_noise_power / noise_power - 1));
     }
   }
   exit(EX_OK); // We're done

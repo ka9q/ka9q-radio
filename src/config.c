@@ -33,7 +33,7 @@ double config_getdouble(dictionary const *d,char const *section,char const *key,
   snprintf(buf,sizeof(buf),"%s:%s",section,key);
   return iniparser_getdouble(d,buf,def);
 }
-int config_getboolean(dictionary const *d,char const *section,char const *key,int def){
+bool config_getboolean(dictionary const *d,char const *section,char const *key,int def){
   if(section == NULL || key == NULL)
     return def;
   char buf[1024];
@@ -62,11 +62,11 @@ char const *config2_getstring(dictionary const *d1,dictionary const *d2,char con
 int config2_getint(dictionary const *d1,dictionary const *d2,char const *sec1,char const *sec2,char const *key,int def){
   char const *cp = config_getstring(d2,sec2,key,NULL);
   if(cp)
-    return strtol(cp,NULL,0);
+    return atoi(cp);
 
   cp = config_getstring(d1,sec1,key,NULL);
   if(cp)
-    return strtol(cp,NULL,0);
+    return atoi(cp);
 
   return def;
 }
@@ -92,7 +92,7 @@ double config2_getdouble(dictionary const *d1,dictionary const *d2,char const *s
 
   return def;
 }
-int config2_getboolean(dictionary const *d1,dictionary const *d2,char const *sec1,char const *sec2,char const *key,int def){
+bool config2_getboolean(dictionary const *d1,dictionary const *d2,char const *sec1,char const *sec2,char const *key,int def){
   int x = config_getboolean(d2,sec2,key,-1);
   if(x != -1)
     return x;
@@ -103,32 +103,32 @@ int config2_getboolean(dictionary const *d1,dictionary const *d2,char const *sec
   return def;
 }
 
-static inline int min(int a,int b){
+static inline size_t min(size_t a,size_t b){
   return a < b ? a : b;
 }
 
 
 // Functions to compute Levenshtein distance - from ChatGPT
 #if 1
-static int levenshtein_distance(const char *s1, const char *s2) {
+static size_t levenshtein_distance(const char *s1, const char *s2) {
   size_t len1 = strlen(s1);
   size_t len2 = strlen(s2);
-  int row1[len2 + 1];
-  int row2[len2 + 1];
+  size_t row1[len2 + 1];
+  size_t row2[len2 + 1];
 
   // Initialize first row
   for (size_t j = 0; j <= len2; j++)
     row1[j] = j;
 
-  for (size_t i = 1; i <= len1; i++) {
-    row2[0] = i;
-    for (size_t j = 1; j <= len2; j++) {
-      int cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
-      row2[j] = min(row1[j] + 1,        // Deletion
-                    min(row2[j - 1] + 1,   // Insertion
-                        row1[j - 1] + cost));  // Substitution
+  for (size_t i = 0; i < len1; i++) {
+    row2[0] = i + 1;
+    for (size_t j = 0; j < len2; j++) {
+      size_t cost = (s1[i] == s2[j]) ? 0 : 1;
+      row2[j+1] = min(row1[j+1] + 1,        // Deletion
+                    min(row2[j] + 1,   // Insertion
+                        row1[j] + cost));  // Substitution
     }
-    memcpy(row1, row2, (len2 + 1) * sizeof(int));  // Copy new row
+    memcpy(row1, row2, (len2 + 1) * sizeof(*row1));  // Copy new row
   }
   return row1[len2];
 }
@@ -136,7 +136,7 @@ static int levenshtein_distance(const char *s1, const char *s2) {
 static int levenshtein_distance(const char *s1, const char *s2) {
   size_t len1 = strlen(s1);
   size_t len2 = strlen(s2);
-  int matrix[len1 + 1][len2 + 1];
+  size_t matrix[len1 + 1][len2 + 1];
 
   // Initialize the matrix
   for (size_t i = 0; i <= len1; i++)
@@ -147,7 +147,7 @@ static int levenshtein_distance(const char *s1, const char *s2) {
   // Fill the matrix
   for (size_t i = 1; i <= len1; i++) {
     for (size_t j = 1; j <= len2; j++) {
-      int cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
+      size_t cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
       matrix[i][j] = min(matrix[i - 1][j] + 1,        // Deletion
 			  min(matrix[i][j - 1] + 1,   // Insertion
 			       matrix[i - 1][j - 1] + cost));  // Substitution
@@ -161,7 +161,7 @@ static int levenshtein_distance(const char *s1, const char *s2) {
 static const char *suggest_correction(const char *input_key, const char *valid_keys[]) {
   if(input_key == NULL || valid_keys == NULL || strlen(input_key) == 0)
     return NULL;
-  int best_distance = 3;  // Set a threshold distance for possible typos
+  size_t best_distance = 3;  // Set a threshold distance for possible typos
   const char *best_match = NULL;
 
   for (size_t i = 0; valid_keys[i] != NULL; i++) {
@@ -169,7 +169,7 @@ static const char *suggest_correction(const char *input_key, const char *valid_k
       continue; // Don't match any empty entries (which shouldn't exist)
     if(strcmp(input_key,valid_keys[i]) == 0)
       return input_key; // Found as is
-    int distance = levenshtein_distance(input_key, valid_keys[i]);
+    size_t distance = levenshtein_distance(input_key, valid_keys[i]);
     if (distance < best_distance) {
       best_distance = distance;
       best_match = valid_keys[i];

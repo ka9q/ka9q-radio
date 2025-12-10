@@ -20,7 +20,7 @@ struct ax25_frame {
   char dest[CALL_LEN];  // printable representations
   char source[CALL_LEN];
   struct digi digipeaters[MAX_DIGI];
-  int ndigi;
+  size_t ndigi;
   int control;
   int type;
   char information[MAX_INFO];
@@ -28,9 +28,9 @@ struct ax25_frame {
 };
 
 
-int ax25_parse(struct ax25_frame *out,uint8_t const *in,int len);
-int dump_frame(FILE *stream,uint8_t *frame,int bytes);
-int crc_good(uint8_t *frame,int length);
+int ax25_parse(struct ax25_frame *out,uint8_t const *in,size_t len);
+int dump_frame(FILE *stream,uint8_t *frame,size_t bytes);
+int crc_good(uint8_t *frame,size_t length);
 char *get_callsign(char *result,uint8_t const *in);
 int decode_base91(char *in);
 

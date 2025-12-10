@@ -31,31 +31,31 @@ struct demodtab Demodtab[] = {
 static int const DEFAULT_TTL = 0;                // Don't blast cheap switches and access points unless the user says so
 static enum demod_type DEFAULT_DEMOD = LINEAR_DEMOD;
 static int   const DEFAULT_LINEAR_SAMPRATE = 12000;
-static float const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
-static float const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
-static float const DEFAULT_HIGH = 5000.0;
-static float const DEFAULT_HEADROOM = -15.0;     // keep gaussian signals from clipping
-static float const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
-static float const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
+static double const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
+static double const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
+static double const DEFAULT_HIGH = 5000.0;
+static double const DEFAULT_HEADROOM = -15.0;     // keep gaussian signals from clipping
+static double const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
+static double const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
 static bool const  DEFAULT_SNR_SQUELCH = false;  // enables squelch when true, so don't enable except in modes that use squelch
-static float const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
-static float const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
-static float const DEFAULT_GAIN = 50.0;         // Unused in FM, usually adjusted automatically in linear
-static float const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
-static float const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
+static double const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
+static double const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
+static double const DEFAULT_GAIN = 50.0;         // Unused in FM, usually adjusted automatically in linear
+static double const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
+static double const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
 static int   const DEFAULT_SQUELCH_TAIL = 1;     // close on frame *after* going below threshold, may let partial frame noise through
 static int   const DEFAULT_UPDATE = 25;         // 2 Hz for a 20 ms frame time
 #if 0
 static int   const DEFAULT_FM_SAMPRATE = 24000;
-static float const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
-static float const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
-static float const DEFAULT_FM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
-static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
+static double const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
+static double const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
+static double const DEFAULT_FM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
+static double const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 #endif
 static int   const DEFAULT_BITRATE = 0;       // Default Opus compressed bit rate. 0 means OPUS_AUTO, the encoder decides
 static int   const DEFAULT_DC_TC = 0;         // Time constant for AM carrier removal, default off
-static float const DEFAULT_CROSSOVER = 200;   // About where the two spectral analysis algorithms use equal CPU
-static float const DEFAULT_SPECTRUM_KAISER_BETA = 7.0; // Default for spectral analysis window
+static double const DEFAULT_CROSSOVER = 200;   // About where the two spectral analysis algorithms use equal CPU
+static double const DEFAULT_SPECTRUM_KAISER_BETA = 7.0; // Default for spectral analysis window
 extern int Overlap;
 
 // Valid keys in presets file, [global] section, and any channel section
@@ -224,10 +224,11 @@ int set_defaults(struct channel *chan){
   chan->pll.loop_bw = DEFAULT_PLL_BW;
   chan->linear.dc_tau = DEFAULT_DC_TC;
 
-  double r = remainder(Blocktime * chan->output.samprate * .001,1.0);
+  double r = remainder(Blocktime * chan->output.samprate,1.0);
   if(r != 0){
     fprintf(stderr,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
 	    Blocktime,chan->output.samprate,r);
+    assert(false);
   }
   chan->status.output_interval = DEFAULT_UPDATE;
   chan->spectrum.crossover = DEFAULT_CROSSOVER;
@@ -254,7 +255,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   {
     char const *p = config_getstring(table,sname,"samprate",NULL);
     if(p != NULL){
-      int s = parse_frequency(p,false);
+      int s = (int)round(parse_frequency(p,false));
       chan->output.samprate = round_samprate(s);
     }
   }
@@ -266,7 +267,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     chan->output.channels = 1;
   if(config_getboolean(table,sname,"stereo",false))
     chan->output.channels = 2;
-  chan->filter.kaiser_beta = config_getfloat(table,sname,"kaiser-beta",chan->filter.kaiser_beta);
+  chan->filter.kaiser_beta = config_getdouble(table,sname,"kaiser-beta",chan->filter.kaiser_beta);
 
   // Pre-detection filter limits
   {
@@ -280,26 +281,26 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   }
   if(chan->filter.min_IF > chan->filter.max_IF){
     // Ensure max >= min
-    float t = chan->filter.min_IF;
+    double t = chan->filter.min_IF;
     chan->filter.min_IF = chan->filter.max_IF;
     chan->filter.max_IF = t;
   }
   {
     char const *cp = config_getstring(table,sname,"squelch-open",NULL);
     if(cp)
-      chan->squelch_open = dB2power(strtof(cp,NULL));
+      chan->squelch_open = dB2power(strtod(cp,NULL));
   }
   {
     char const *cp = config_getstring(table,sname,"squelch-close",NULL);
     if(cp)
-      chan->squelch_close = dB2power(strtof(cp,NULL));
+      chan->squelch_close = dB2power(strtod(cp,NULL));
   }
   chan->squelch_tail = config_getint(table,sname,"squelchtail",chan->squelch_tail); // historical
   chan->squelch_tail = config_getint(table,sname,"squelch-tail",chan->squelch_tail);
   {
     char const *cp = config_getstring(table,sname,"headroom",NULL);
     if(cp)
-      chan->output.headroom = dB2voltage(-fabsf(strtof(cp,NULL))); // always treat as <= 0 dB
+      chan->output.headroom = dB2voltage(-fabs(strtod(cp,NULL))); // always treat as <= 0 dB
   }
   {
     char const *p = config_getstring(table,sname,"shift",NULL);
@@ -310,29 +311,29 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     char const *cp = config_getstring(table,sname,"recovery-rate",NULL);
     if(cp){
       // dB/sec -> voltage ratio/block
-      float x = strtof(cp,NULL);
-      chan->linear.recovery_rate = dB2voltage(fabsf(x));
+      double x = strtod(cp,NULL);
+      chan->linear.recovery_rate = dB2voltage(fabs(x));
     }
   }
   {
     // time in seconds -> time in blocks
     char const *cp = config_getstring(table,sname,"hang-time",NULL);
     if(cp){
-      float x = strtof(cp,NULL);
-      chan->linear.hangtime = fabsf(x);
+      double x = strtod(cp,NULL);
+      chan->linear.hangtime = fabs(x);
     }
   }
   {
     char const *cp = config_getstring(table,sname,"threshold",NULL);
     if(cp){
-      float x = strtof(cp,NULL);
-      chan->linear.threshold = dB2voltage(-fabsf(x)); // Always <= unity
+      double x = strtod(cp,NULL);
+      chan->linear.threshold = dB2voltage(-fabs(x)); // Always <= unity
     }
   }
   {
     char const *cp = config_getstring(table,sname,"gain",NULL);
     if(cp){
-      float x = strtof(cp,NULL);
+      double x = strtod(cp,NULL);
       chan->output.gain = dB2voltage(x); // Can be more or less than unity
     }
   }
@@ -343,7 +344,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     chan->pll.enable = true; // Square implies PLL
 
   chan->filter2.isb = config_getboolean(table,sname,"conj",chan->filter2.isb);
-  chan->pll.loop_bw = config_getfloat(table,sname,"pll-bw",chan->pll.loop_bw);
+  chan->pll.loop_bw = config_getdouble(table,sname,"pll-bw",chan->pll.loop_bw);
   chan->linear.agc = config_getboolean(table,sname,"agc",chan->linear.agc);
   chan->fm.threshold = config_getboolean(table,sname,"extend",chan->fm.threshold); // FM threshold extension
   chan->fm.threshold = config_getboolean(table,sname,"threshold-extend",chan->fm.threshold); // FM threshold extension
@@ -355,23 +356,23 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   {
     char const *cp = config_getstring(table,sname,"deemph-tc",NULL);
     if(cp){
-      float const tc = strtof(cp,NULL) * 1e-6;
+      double const tc = strtod(cp,NULL) * 1e-6;
       unsigned int samprate = (chan->demod_type == WFM_DEMOD) ? 48000 : chan->output.samprate;
-      chan->fm.rate = -expm1f(-1.0f / (tc * samprate));
+      chan->fm.rate = -expm1(-1.0 / (tc * samprate));
     }
   }
   {
     char const *cp = config_getstring(table,sname,"deemph-gain",NULL);
     if(cp){
-      float const g = strtof(cp,NULL);
+      double const g = strtod(cp,NULL);
       chan->fm.gain = dB2voltage(g);
     }
   }
   // "tone", "pl" and "ctcss" are synonyms
-  chan->fm.tone_freq = config_getfloat(table,sname,"tone",chan->fm.tone_freq);
-  chan->fm.tone_freq = config_getfloat(table,sname,"pl",chan->fm.tone_freq);
-  chan->fm.tone_freq = config_getfloat(table,sname,"ctcss",chan->fm.tone_freq);
-  chan->fm.tone_freq = fabsf(chan->fm.tone_freq);
+  chan->fm.tone_freq = config_getdouble(table,sname,"tone",chan->fm.tone_freq);
+  chan->fm.tone_freq = config_getdouble(table,sname,"pl",chan->fm.tone_freq);
+  chan->fm.tone_freq = config_getdouble(table,sname,"ctcss",chan->fm.tone_freq);
+  chan->fm.tone_freq = fabs(chan->fm.tone_freq);
   if(chan->fm.tone_freq > 3000){
     fprintf(stderr,"Tone %.1f out of range\n",chan->fm.tone_freq);
     chan->fm.tone_freq = 0;
@@ -425,10 +426,10 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
 // Usually Blocktime = 20.0000 ms (50.00000 Hz), which avoids the problem
 unsigned int round_samprate(unsigned int x){
   // For reasons yet not understood, only even multiples of 200 Hz seem to work
-  float const baserate = (1000. / Blocktime) * (Overlap - 1);
+  double const baserate = (1. / Blocktime) * (Overlap - 1);
 
   if(x < baserate)
-    return roundf(baserate); // Output one (two) iFFT bin minimum, i.e., blockrate (*2)
+    return (int)round(baserate); // Output one (two) iFFT bin minimum, i.e., blockrate (*2)
 
-  return baserate * roundf(x / baserate); // Nearest multiple of (2*) block rate * (Overlap - 1)
+  return (int)(baserate * round(x / baserate)); // Nearest multiple of (2*) block rate * (Overlap - 1)
 }
