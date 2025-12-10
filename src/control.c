@@ -54,6 +54,7 @@ static dictionary *Pdict;
 struct frontend Frontend;
 struct sockaddr Metadata_source_socket;      // Source of metadata
 
+#define TABLE_SIZE (1000)
 int Mcast_ttl = DEFAULT_MCAST_TTL; // Should probably be settable from the command line
 int IP_tos = DEFAULT_IP_TOS;
 double Blocktime; // Now in seconds, not milliseconds
@@ -382,9 +383,7 @@ int main(int argc,char *argv[]){
 
   if(target == NULL){
     long entry = 0;
-    int const table_size = 1000;
-    struct service_tab table[table_size];
-
+    struct service_tab table[TABLE_SIZE];
     char *line = NULL;
     size_t linesize = 0;
 
@@ -392,7 +391,7 @@ int main(int argc,char *argv[]){
       // Use avahi browser to find a radiod instance to control
       fprintf(stdout,"Scanning for radiod instances...\n");
 
-      int radiod_count = avahi_browse(table,table_size,"_ka9q-ctl._udp"); // Returns list in global when cache is emptied
+      int radiod_count = avahi_browse(table,TABLE_SIZE,"_ka9q-ctl._udp"); // Returns list in global when cache is emptied
       if(radiod_count == 0){
 	fprintf(stdout,"No radiod instances or Avahi not running; hit return to retry or re-run and specify control channel\n");
 	if(getline(&line,&linesize,stdin) < 0){
@@ -717,7 +716,7 @@ int main(int argc,char *argv[]){
   exit(EX_OK);
 }
 
-int const Entry_width = 15;
+#define Entry_width (15)
 
 static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   // Look for keyboard and mouse events

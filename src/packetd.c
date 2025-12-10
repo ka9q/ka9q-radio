@@ -51,8 +51,8 @@ struct session {
 // Config constants
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 static double const SCALE = 1./32768;
-static int const AL = 960; // 20 ms @ 48 kHz = 1x 20 ms blocks = 24 bit times @ 1200 bps
-static int const AM = 961;
+#define AL 960 // 20 ms @ 48 kHz = 1x 20 ms blocks = 24 bit times @ 1200 bps
+#define AM 961
 static double Bitrate = 1200;
 
 // Command line params
