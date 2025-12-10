@@ -48,7 +48,7 @@ struct sdrstate {
   sdrplay_api_DeviceT device;
   sdrplay_api_DeviceParamsT *device_params;
   sdrplay_api_RxChannelParamsT *rx_channel_params;
-  float scale;
+  double scale;
   enum sdrplay_status device_status;
 
   // Statistics and other auxiliary data
@@ -127,7 +127,7 @@ static double get_samplerate(struct sdrstate *sdr);
 static int set_antenna(struct sdrstate *sdr,char const *antenna);
 static uint8_t const * get_lna_states(struct sdrstate *sdr,double const frequency,int *lna_state_count);
 static int set_rf_gain(struct sdrstate *sdr,int const lna_state,int const rf_att,int const rf_gr,double const frequency);
-static float get_rf_atten(struct sdrstate *sdr,double const frequency);
+static double get_rf_atten(struct sdrstate *sdr,double const frequency);
 static int set_if_gain(struct sdrstate *sdr,int const if_att,int const if_gr,int const if_agc,int const if_agc_rate,int const if_agc_setPoint_dBfs,int const if_agc_attack_ms,int const if_agc_decay_ms,int const if_agc_decay_delay_ms,int const if_agc_decay_threshold_dB);
 static int set_dc_offset_iq_imbalance_correction(struct sdrstate *sdr,int const dc_offset_corr,int const iq_imbalance_corr);
 static int set_bulk_transfer_mode(struct sdrstate *sdr,int const transfer_mode_bulk);
@@ -675,7 +675,7 @@ static int set_bandwidth(struct sdrstate *sdr,int const bandwidth,double const s
 static int set_samplerate(struct sdrstate *sdr,double const samprate){
   // get actual sample rate and decimation
   double actual_sample_rate;
-  int decimation;
+  uint8_t decimation;
   for(decimation = 1; decimation <= MAX_DECIMATION; decimation *= 2){
     actual_sample_rate = samprate * decimation;
     if(actual_sample_rate >= MIN_SAMPLE_RATE)
@@ -929,7 +929,7 @@ static int set_rf_gain(struct sdrstate *sdr,int const lna_state,int const rf_att
       return -1;
     }
     if(lna_state >= 0 && lna_state < lna_state_count)
-      sdr->rx_channel_params->tunerParams.gain.LNAstate = lna_state;
+      sdr->rx_channel_params->tunerParams.gain.LNAstate = (uint8_t)lna_state;
     else
       valid_rf_gain = 0;
   } else {
@@ -952,7 +952,7 @@ static int set_rf_gain(struct sdrstate *sdr,int const lna_state,int const rf_att
         delta_min = delta;
       }
     }
-    sdr->rx_channel_params->tunerParams.gain.LNAstate = lna_state_min;
+    sdr->rx_channel_params->tunerParams.gain.LNAstate = (uint8_t)lna_state_min;
   }
   if(!valid_rf_gain){
     fprintf(stderr,"sdrplay - RF gain reduction is invalid - lna_state=%d rf_att=%d rf_gr=%d\n",lna_state,rf_att,rf_gr);
@@ -971,7 +971,7 @@ static int set_rf_gain(struct sdrstate *sdr,int const lna_state,int const rf_att
   return 0;
 }
 
-static float get_rf_atten(struct sdrstate *sdr,double const frequency){
+static double get_rf_atten(struct sdrstate *sdr,double const frequency){
   int lna_state_count = 0;
   uint8_t const * const lna_states = get_lna_states(sdr,frequency,&lna_state_count);
   assert(lna_states != NULL);
@@ -981,7 +981,7 @@ static float get_rf_atten(struct sdrstate *sdr,double const frequency){
     fprintf(stderr,"LNA state out of range: %d - range=[%d,%d(\n",lna_state,0,lna_state_count);
     return NAN;
   }
-  return (float)lna_states[lna_state];
+  return (double)lna_states[lna_state];
 }
 
 static int set_if_gain(struct sdrstate *sdr,int const if_att,int const if_gr,int const if_agc,int const if_agc_rate,int const if_agc_setPoint_dBfs,int const if_agc_attack_ms,int const if_agc_decay_ms,int const if_agc_decay_delay_ms,int const if_agc_decay_threshold_dB){
@@ -1027,10 +1027,10 @@ static int set_if_gain(struct sdrstate *sdr,int const if_att,int const if_gr,int
   } else if(if_agc_rate == 0){  // use AGC scheme
     sdr->rx_channel_params->ctrlParams.agc.enable = sdrplay_api_AGC_CTRL_EN;
     sdr->rx_channel_params->ctrlParams.agc.setPoint_dBfs = if_agc_setPoint_dBfs;
-    sdr->rx_channel_params->ctrlParams.agc.attack_ms = if_agc_attack_ms;
-    sdr->rx_channel_params->ctrlParams.agc.decay_ms = if_agc_decay_ms;
-    sdr->rx_channel_params->ctrlParams.agc.decay_delay_ms = if_agc_decay_delay_ms;
-    sdr->rx_channel_params->ctrlParams.agc.decay_threshold_dB = if_agc_decay_threshold_dB;
+    sdr->rx_channel_params->ctrlParams.agc.attack_ms = (uint8_t)if_agc_attack_ms;
+    sdr->rx_channel_params->ctrlParams.agc.decay_ms = (uint8_t)if_agc_decay_ms;
+    sdr->rx_channel_params->ctrlParams.agc.decay_delay_ms = (uint8_t)if_agc_decay_delay_ms;
+    sdr->rx_channel_params->ctrlParams.agc.decay_threshold_dB = (uint8_t)if_agc_decay_threshold_dB;
   }
 
   if(sdr->device_status & DEVICE_STREAMING){
@@ -1159,11 +1159,11 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
   int const sampcount = numSamples;
   float complex * const wptr = frontend->in.input_write_pointer.c;
   assert(wptr != NULL);
-  float in_energy = 0;
+  double in_energy = 0;
   for(int i=0; i < sampcount; i++){
-    float complex const samp = CMPLXF((int)xi[i],(int)xq[i]);
-    in_energy += cnrmf(samp);
-    wptr[i] = samp * sdr->scale;
+    double complex const samp = CMPLX((int)xi[i],(int)xq[i]);
+    in_energy += cnrm(samp);
+    wptr[i] = (float)(samp * sdr->scale);
   }
   frontend->samples += sampcount;
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
