@@ -1566,7 +1566,7 @@ static void display_input(WINDOW *w,struct channel const *channel){
   char tmp[100];
   pprintw(w,row++,col,"","%s",format_gpstime(tmp,sizeof(tmp),channel->clocktime));
   if(Frontend.samprate != 0){
-    pprintw(w,row++,col,"Sample rate","%'d Hz",Frontend.samprate); // Nominal
+    pprintw(w,row++,col,"Sample rate","%'.0lf Hz",Frontend.samprate); // Nominal
     pprintw(w,row++,col,"Uptime","%s",ftime(tmp,sizeof(tmp),(int64_t)(Frontend.samples/Frontend.samprate)));
     pprintw(w,row++,col,"Overranges","%'llu",Frontend.overranges);
     pprintw(w,row++,col,"Last overrange","%s",ftime(tmp,sizeof(tmp),(int64_t)(Frontend.samp_since_over/Frontend.samprate)));
