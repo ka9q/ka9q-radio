@@ -218,7 +218,7 @@ int demod_linear(void *arg){
       if(chan->linear.env){
 	// AM envelope detection
 	for(unsigned int n=0; n < N; n++){
-	  const double s = chan->output.gain * M_SQRT1_2 * cabsf(buffer[n]); // Power from both I&Q
+	  double s = chan->output.gain * M_SQRT1_2 * cabsf(buffer[n]); // Power from both I&Q
 	  chan->output.gain *= gain_change;
 	  output_power += s*s;
 
