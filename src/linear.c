@@ -245,7 +245,7 @@ int demod_linear(void *arg){
       if(chan->linear.env){
 	// I on left, envelope/AM on right (for experiments in fine SSB tuning)
 	for(unsigned int n=0; n < N; n++){
-	  double complex const s = chan->output.gain * M_SQRT1_2 * (crealf(buffer[n]) + I * cabsf(buffer[n]));
+	  double complex s = chan->output.gain * M_SQRT1_2 * (crealf(buffer[n]) + I * cabsf(buffer[n]));
 	  chan->output.gain *= gain_change;
 	  output_power += cnrm(s);
 
