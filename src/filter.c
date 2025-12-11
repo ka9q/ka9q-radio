@@ -349,13 +349,12 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
     /* fall through */
   case COMPLEX: // note fall-through
     {
-      slave->olen = len;
-      int m = (int)((long)len * N % L); // promote to avoid overflow in the multiply
       int q = (int)((long)len * N / L);
-      if(m != 0){
+      if(((long)len * N % L) != 0){
 	fprintf(stderr,"Invalid filter output length %d (fft size %d) for input N=%d, L=%d\n",len,q,N,L);
 	return -1;
       }
+      slave->olen = len;
       slave->points = q; // Total number of FFT points including overlap
       slave->bins = q;
       slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
@@ -374,13 +373,12 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
     break;
   case REAL:
     {
-      slave->olen = len;
-      int m = (int)((long)len * N % L);
       int q = (int)((long)len * N / L);
-      if(m != 0){
+      if(((long)len * N % L) != 0){
 	fprintf(stderr,"Invalid filter output length %d (fft size %d) for input N=%d, L=%d\n",len,q,N,L);
 	return -1;
       }
+      slave->olen = len;
       slave->points = q;
       slave->bins = slave->points / 2 + 1;
       slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
@@ -1080,16 +1078,19 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   low = low < -0.5 ? -0.5 : low > +0.5 ? +0.5 : low;
   high = high < -0.5 ? -0.5 : high > +0.5 ? +0.5 : high;
 
+
   // Total number of time domain points
   int const N = slave->points;
   int const L = slave->olen;
   int const M = N - L + 1; // Length of impulse response in time domain
 
   // Real lowpass filter with cutoff = 1/2 bandwidth
-  double bw2 = fabs(high - low)/2;
-  if(bw2 == 0)
-    bw2 = 1; // Avoid assert failures
-  double center = (high + low)/2;
+  double const bw2 = (high == low) ? .0001 : fabs(high - low)/2;
+  double const center = (high + low)/2;
+#if FILTER_DEBUG
+  printf("filter %p low %lf high %lf, center %lf bw/2 %lf kaiser %lf\n",slave,low,high,center,bw2,kaiser_beta);
+#endif
+
   float kaiser_window[M];
   make_kaiserf(kaiser_window,M,kaiser_beta);
 
@@ -1100,7 +1101,8 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
     double n = i - (double)(M-1)/2;
     double r = kaiser_window[i] * 2 * bw2 * sinc(2 * bw2 * n);
     window_gain += r;
-    impulse[i] = (float)(cispi(2 * center * n) * r);
+    impulse[i] = (float complex)(cispi(2 * center * n) * r);
+
 #if FILTER_DEBUG
     printf("impulse[%d] = %g + j%g\n",i,crealf(impulse[i]),cimagf(impulse[i]));
 #endif

@@ -201,7 +201,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
     rtlsdr_set_tuner_gain_mode(sdr->device,1); // manual gain mode (i.e., we do it)
     sdr->gain = (int)(config_getdouble(dictionary,section,"gain",0) * 10);
     rtlsdr_set_tuner_gain(sdr->device,sdr->gain);
-    frontend->rf_gain = sdr->gain / 10.0f;
+    frontend->rf_gain = sdr->gain / 10.0;
   }
   sdr->scale = scale_AD(frontend);
   sdr->bias = config_getboolean(dictionary,section,"bias",false);

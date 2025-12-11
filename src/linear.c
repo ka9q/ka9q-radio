@@ -218,23 +218,24 @@ int demod_linear(void *arg){
       if(chan->linear.env){
 	// AM envelope detection
 	for(unsigned int n=0; n < N; n++){
-	  const double s = M_SQRT1_2 * cabsf(buffer[n]) * (float)chan->output.gain; // Power from both I&Q
-	  output_power += s*s;
+	  const double s = chan->output.gain * M_SQRT1_2 * cabsf(buffer[n]); // Power from both I&Q
 	  chan->output.gain *= gain_change;
+	  output_power += s*s;
+
 	  // Estimate and remove carrier (DC)
 	  if(chan->linear.dc_tau != 0){
 	    am_dc += chan->linear.dc_tau * (s - am_dc);
-	    samples[n] = (float)(s - am_dc);
-	  } else
-	    samples[n] = (float)s;	    
+	    s -= am_dc;
+	  }
+	  samples[n] = (float)s;
 	}
       } else {
 	// I channel only (SSB, CW, etc)
 	for(unsigned int n=0; n < N; n++){
-	  double const s = crealf(buffer[n]) * chan->output.gain;
-	  samples[n] = (float)s;
-	  output_power += s*s;
+	  double const s = chan->output.gain * crealf(buffer[n]);
 	  chan->output.gain *= gain_change;
+	  output_power += s*s;
+	  samples[n] = (float)s;
 	}
       }
     } else {
@@ -245,23 +246,23 @@ int demod_linear(void *arg){
 	// I on left, envelope/AM on right (for experiments in fine SSB tuning)
 	for(unsigned int n=0; n < N; n++){
 	  double complex const s = chan->output.gain * M_SQRT1_2 * (crealf(buffer[n]) + I * cabsf(buffer[n]));
-	  output_power += cnrm(s);
 	  chan->output.gain *= gain_change;
+	  output_power += cnrm(s);
+
 	  // Estimate and remove DC
 	  if(chan->linear.dc_tau != 0){
 	    am_dc += chan->linear.dc_tau * (__imag__ s - am_dc);
-	    __real__ buffer[n] = (float)creal(s);
-	    __imag__ buffer[n] = (float)(s - am_dc);
-	  } else
-	    buffer[n] = (float complex)s;	    
+	    __imag__ s -= am_dc;
+	  }
+	  buffer[n] = (float complex)s;
 	}
       } else {
 	// Simplest case: I/Q output with I on left, Q on right
 	for(unsigned int n=0; n < N; n++){
-	  double complex const s = buffer[n] * chan->output.gain;
+	  double complex const s = chan->output.gain * buffer[n];
+	  chan->output.gain *= gain_change;
 	  output_power += cnrm(s);
 	  buffer[n] = (float complex)s;
-	  chan->output.gain *= gain_change;
 	}
       }
     }

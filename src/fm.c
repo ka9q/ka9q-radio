@@ -49,7 +49,7 @@ int demod_fm(void *arg){
   chan->filter.remainder = NAN;   // Force init of fine downconversion oscillator
   set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
 
-  float phase_memory = 0;
+  double phase_memory = 0;
   chan->output.channels = 1; // Only mono for now
   if(isnan(chan->squelch_open) || chan->squelch_open == 0)
     chan->squelch_open = 6.3;  // open above ~ +8 dB
@@ -99,7 +99,7 @@ int demod_fm(void *arg){
     // Simple SNR squelch
     double avg_amp = 0;
     double amplitudes[N];
-    double const snr = (chan->sig.bb_power / (chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF))) - 1.0f;
+    double const snr = (chan->sig.bb_power / (chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF))) - 1.0q;
     if(chan->snr_squelch_enable || snr < chan->squelch_close){ // Save the trouble if the signal just isn't there
       chan->fm.snr = snr;
     } else {
@@ -147,10 +147,10 @@ int demod_fm(void *arg){
     float baseband[N];    // Demodulated FM baseband
     // Actual FM demodulation
     for(int n=0; n < N; n++){
-      float np = M_1_PIf * cargf(buffer[n]); // Scale to -1 to +1 (half rotations/sample)
-      float x = np - phase_memory;
+      double np = M_1_PI * cargf(buffer[n]); // Scale to -1 to +1 (half rotations/sample)
+      double x = np - phase_memory;
       phase_memory = np;
-      baseband[n] = x > 1 ? x - 2 : x < -1 ? x + 2 : x; // reduce to -1 to +1
+      baseband[n] = (float)(x > 1 ? x - 2 : x < -1 ? x + 2 : x); // reduce to -1 to +1
     }
     if(chan->fm.snr < 20 && chan->fm.threshold) { // take 10*log10(20) = 13 dB as "full quieting"
       // Experimental threshold reduction (popcorn/click suppression)
@@ -162,8 +162,8 @@ int demod_fm(void *arg){
 	avg_amp /= N;
       }
 #if 0
-      double const noise_thresh = 0.4f * avg_amp;
-      double const noise_reduct_scale = 1 / noise_thresh;
+      double const noise_thresh = 0.4 * avg_amp;
+      double const noise_reduct_scale = 1. / noise_thresh;
 
       // baseband[i] actually depends on buffer[i] and buffer[i-1], so we should probably look at both
       for(int n=0; n < N; n++){
@@ -228,7 +228,7 @@ int demod_fm(void *arg){
 	else if(baseband[n] < peak_negative_deviation)
 	  peak_negative_deviation = baseband[n];
       }
-      frequency_offset *= chan->output.samprate * 0.5 * 1/N;  // scale to Hz
+      frequency_offset *= chan->output.samprate * 0.5 / N;  // scale to Hz
       // Update frequency offset and peak deviation, with smoothing to attenuate PL tones
       // alpha = blocktime in millisec is an approximation to a 1 sec time constant assuming blocktime << 1 sec
       // exact value would be 1 - exp(-blocktime/tc)
@@ -313,8 +313,9 @@ int demod_fm(void *arg){
 
     double output_energy = 0;
     for(int n=0; n < N; n++){
-      baseband[n] *= (float)chan->output.gain;
-      output_energy += (double)baseband[n] * baseband[n];
+      double const s = chan->output.gain * baseband[n];
+      output_energy += s * s;
+      baseband[n] = (float)s;
     }
     chan->output.power = output_energy / N;
     if(send_output(chan,baseband,N,false) < 0)
