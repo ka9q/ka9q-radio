@@ -1161,7 +1161,7 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
   assert(wptr != NULL);
   double in_energy = 0;
   for(int i=0; i < sampcount; i++){
-    double complex const samp = CMPLX((int)xi[i],(int)xq[i]);
+    double complex const samp = CMPLX((double)xi[i],(double)xq[i]);
     in_energy += cnrm(samp);
     wptr[i] = (float complex)(samp * sdr->scale);
   }

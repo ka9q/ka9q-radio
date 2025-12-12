@@ -151,7 +151,8 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     hydrasdr_lib_version_t version;
     hydrasdr_lib_version(&version);
 
-    const int VERSION_LOCAL_SIZE = 128; // Library doesn't define, but says should be >= 128
+    // Library doesn't define, but says should be >= 128
+#define VERSION_LOCAL_SIZE (128)
     char hw_version[VERSION_LOCAL_SIZE];
     hydrasdr_version_string_read(sdr->device,hw_version,sizeof(hw_version));
 

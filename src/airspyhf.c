@@ -119,7 +119,8 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     airspyhf_lib_version_t version;
     airspyhf_lib_version(&version);
 
-    const int VERSION_LOCAL_SIZE = 128; // Library doesn't define, but says should be >= 128
+    // Library doesn't define, but says should be >= 128
+#define VERSION_LOCAL_SIZE (128)
     char hw_version[VERSION_LOCAL_SIZE];
     airspyhf_version_string_read(sdr->device,hw_version,sizeof(hw_version));
 
@@ -264,8 +265,9 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   assert(up != NULL);
   double in_energy = 0;
   for(int i=0; i < sampcount; i++){
-    in_energy += cnrmf(up[i]);
-    wptr[i] = (float complex)(up[i] * sdr->scale);
+    double complex const s = (double complex)up[i];
+    in_energy += cnrmf(s);
+    wptr[i] = (float complex)(s * sdr->scale);
   }
   frontend->samples += sampcount;
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT

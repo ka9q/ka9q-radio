@@ -309,10 +309,10 @@ void load_id(void){
     if(line[0] == '#' || strlen(line) == 0)
       continue; // Comment
     assert(Nid < IDSIZE);
-    size_t const nmatch = 4;
-    regmatch_t pmatch[nmatch];
+#define NMATCH (4)
+    regmatch_t pmatch[NMATCH];
     // Look for line with PL tone
-    r = regexec(&preg1,line,nmatch,pmatch,0);
+    r = regexec(&preg1,line,NMATCH,pmatch,0);
 #if 0
     if(r != 0){
       char errbuf[256];
@@ -343,7 +343,7 @@ void load_id(void){
 	// Free-form ID field
 	strlcpy(Idtable[Nid].id,&line[pmatch[3].rm_so],sizeof(Idtable[Nid].id));
       }
-    } else if((r = regexec(&preg2,line,nmatch,pmatch,0)) == 0){
+    } else if((r = regexec(&preg2,line,NMATCH,pmatch,0)) == 0){
       // Line without tone entry
       char freq[128];
       memset(freq,0,sizeof(freq));

@@ -194,10 +194,10 @@ int loadconfig(char const *file){
     // Read and sort list of foo.d/*.conf files, merge into temp file
     int dfd = dirfd(dirp); // this gets used for openat() and fstatat() so don't close dirp right way
     struct dirent *dp;
-    int const n_subfiles = 100;
-    char *subfiles[n_subfiles]; // List of subfiles
+#define N_SUBFILES (100)
+    char *subfiles[N_SUBFILES]; // List of subfiles
     int sf = 0;
-    while ((dp = readdir(dirp)) != NULL && sf < n_subfiles) {
+    while ((dp = readdir(dirp)) != NULL && sf < N_SUBFILES) {
       // only consider regular files ending in .conf
       if(strcmp(".conf",dp->d_name + strlen(dp->d_name) - 5) == 0
 	 && fstatat(dfd,dp->d_name,&statbuf,0) == 0
