@@ -1163,7 +1163,7 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
   for(int i=0; i < sampcount; i++){
     double complex const samp = CMPLX((int)xi[i],(int)xq[i]);
     in_energy += cnrm(samp);
-    wptr[i] = (float)(samp * sdr->scale);
+    wptr[i] = (float complex)(samp * sdr->scale);
   }
   frontend->samples += sampcount;
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT

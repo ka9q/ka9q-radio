@@ -279,7 +279,7 @@ static void *proc_funcube(void *arg){
       // Correct phase
       __imag__ samp = secphi * cimag(samp) - tanphi * creal(samp);
 
-      wptr[i] = (float)(samp * sdr->scale);
+      wptr[i] = (float complex)(samp * sdr->scale);
     }
     write_cfilter(&frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
     frontend->samples += Blocksize;

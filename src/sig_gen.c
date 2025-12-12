@@ -231,7 +231,7 @@ static void *proc_sig_gen(void *arg){
     // Pick a random starting point in the noise buffer
     int noise_index = arc4random_uniform(Random_samples - blocksize);
     int modcount = samps_per_samp;
-    float modsample = 0;
+    double modsample = 0;
     double in_energy = 0;
     // Note lack of bandpass filtering on modulation - this creates alias images across the spectrum
     // at multiples of mod_samprate when the synthetic noise is very low
@@ -247,7 +247,7 @@ static void *proc_sig_gen(void *arg){
 	  if(modcount-- <= 0){
 	    int s = getc(src);
 	    s += getc(src) << 8;
-	    modsample = (float)s * SCALE16;
+	    modsample = (double)s * SCALE16;
 	    modcount = samps_per_samp;
 	  }
 	  wptr[i] *= modsample;
@@ -256,10 +256,10 @@ static void *proc_sig_gen(void *arg){
 	  if(modcount-- <= 0){
 	    int s = getc(src);
 	    s += getc(src) << 8;
-	    modsample = (float)s * SCALE16;
+	    modsample = (double)s * SCALE16;
 	    modcount = samps_per_samp;
 	  }
-	  wptr[i] *= 1 + (modsample/2); // Add carrier
+	  wptr[i] *= 1 + (modsample/2.); // Add carrier
 	  break;
 	case FM: // to be done
 	  break;
@@ -275,7 +275,7 @@ static void *proc_sig_gen(void *arg){
       // Complex signal
       float complex * wptr = frontend->in.input_write_pointer.c;
       for(int i=0; i < blocksize; i++){
-	wptr[i] = (float)(sdr->amplitude * step_osc(&carrier));
+	wptr[i] = (float complex)(sdr->amplitude * step_osc(&carrier));
 	switch(sdr->modulation){
 	case CW:
 	  break;
@@ -283,8 +283,8 @@ static void *proc_sig_gen(void *arg){
 	  if(modcount-- <= 0){
 	    int s = getc(src);
 	    s += getc(src) << 8;
-	    modsample = (float)s / 32767;
-	    modsample = 1 + modsample/2; // Add carrier
+	    modsample = (double)s / 32767;
+	    modsample = 1 + modsample/2.; // Add carrier
 	    modcount = samps_per_samp;
 	  }
 	  wptr[i] *= modsample;
@@ -293,10 +293,10 @@ static void *proc_sig_gen(void *arg){
 	  if(modcount-- <= 0){
 	    int s = getc(src);
 	    s += getc(src) << 8;
-	    modsample = (float)s / 32767;
+	    modsample = (double)s / 32767;
 	    modcount = samps_per_samp;
 	  }
-	  wptr[i] *= 1 + modsample/2; // Add carrier
+	  wptr[i] *= 1 + modsample/2.; // Add carrier
 	  break;
 	case FM: // to be done
 	  break;
