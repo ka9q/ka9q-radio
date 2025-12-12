@@ -294,7 +294,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
     } else
       frontend->samp_since_over++;
     // Excess-128
-    double complex samp = CMPLX((int)buf[2*i] - 128,(int)buf[2*i+1] - 128);
+    double complex samp = CMPLX((int)buf[2*i] - 128.,(int)buf[2*i+1] - 128.);
     energy += cnrm(samp);
     wptr[i] = (float complex)(sdr->scale * samp);
   }
