@@ -242,11 +242,12 @@ int decode_int(uint8_t const *cp,int len){
 }
 
 
+// Will convert a double and cast to float if 8 bytes long
 float decode_float(uint8_t const *cp,int len){
   if(len == 0)
     return 0;
 
-  if(len == 8)
+  if(len == sizeof(double))
     return (float)decode_double(cp,len);
 
   union result r;
@@ -254,11 +255,12 @@ float decode_float(uint8_t const *cp,int len){
   return r.f;
 }
 
+// Will automatically decode a float if the arg is only 4 bytes
 double decode_double(uint8_t const *cp,int len){
   if(len == 0)
     return 0;
 
-  if(len == 4)
+  if(len == sizeof(float))
     return (double)decode_float(cp,len);
 
   union result r;
