@@ -400,6 +400,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case OUTPUT_ERRORS:
       fprintf(fp,"output errors %'llu",(unsigned long long)decode_int64(cp,optlen));
       break;
+    case NOISE_BW:
+      fprintf(fp,"bin noise bw %.1lf",decode_double(cp,optlen));
+      break;
     default:
       fprintf(fp,"unknown type %d length %d",type,optlen);
       break;

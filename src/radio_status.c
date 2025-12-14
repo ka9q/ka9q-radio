@@ -692,6 +692,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
       encode_float(&bp,SPECTRUM_KAISER_BETA,chan->spectrum.kaiser_beta);
       encode_int(&bp,SPECTRUM_FFT_N,chan->spectrum.fft_n);
+      encode_float(&bp,NOISE_BW,chan->spectrum.noise_bw);
       // encode bin data here? maybe change this, it can be a lot
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
       if(chan->spectrum.bin_data != NULL){

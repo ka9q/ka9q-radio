@@ -34,7 +34,7 @@ enum status_type {
   UNUSED7,
   INPUT_SAMPLES,
   UNUSED8,
-  UNUSED9,
+  NOISE_BW,      // Noise bandwidth of FFT spectrum bin, in bins
 
   OUTPUT_DATA_SOURCE_SOCKET,
   OUTPUT_DATA_DEST_SOCKET,

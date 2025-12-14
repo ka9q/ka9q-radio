@@ -128,6 +128,16 @@ int demod_spectrum(void *arg){
   chan->spectrum.window = malloc(chan->spectrum.fft_n * sizeof *chan->spectrum.window);
   assert(chan->spectrum.window != NULL);
   make_kaiserf(chan->spectrum.window,chan->spectrum.fft_n,chan->spectrum.kaiser_beta);
+
+  // Compute noise bandwidth of each bin in bins
+  chan->spectrum.noise_bw = 0;
+  for(int i=0; i < chan->spectrum.fft_n; i++)
+    chan->spectrum.noise_bw += (double)chan->spectrum.window[i] * chan->spectrum.window[i];
+
+  // Scale to the actual bin bandwidth
+  // This also has to be divided by the square of the sum of the window values, but that's already normalized to 1
+  chan->spectrum.noise_bw *= chan->spectrum.bin_bw / chan->spectrum.fft_n;
+
   bool restart_needed = false;
   bool response_needed = true;
 
