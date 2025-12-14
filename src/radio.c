@@ -125,7 +125,6 @@ int Ctl_fd = -1;     // File descriptor for receiving user commands
 // Must be computed at run time because it depends on the block time
 int Channel_idle_timeout;  //  = DEFAULT_LIFETIME / Blocktime;
 
-extern int N_worker_threads; // owned by filter.c
 extern char const *Name;     // owned by main.c
 
 static double estimate_noise(struct channel *chan,int shift);// Noise estimator tuning
@@ -1864,7 +1863,7 @@ static double get_tone(char const *sname,int i){
 
   tone = fabs(tone);
   if(tone > 3000){
-    fprintf(stderr,"PL/CTCSS tone %.1f out of range\n",tone);
+    fprintf(stderr,"PL/CTCSS tone %.1lf out of range\n",tone);
     tone = 0;
   }
   return tone;
