@@ -946,13 +946,13 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   case 'k': // Kaiser window parameter
     {
       char str[Entry_width],*ptr;
-      getentry("Kaiser window β: ",str,sizeof(str));
+      getentry("Spect Analyzer Kaiser window β: ",str,sizeof(str));
       double const b = strtod(str,&ptr);
       if(ptr != str && isfinite(b)){
 	if(b < 0 || b >= 100){
 	  beep(); // beyond limits
 	} else {
-	  encode_float(bpp,KAISER_BETA,b);
+	  encode_float(bpp,SPECTRUM_KAISER_BETA,b);
 	}
       }
     }
