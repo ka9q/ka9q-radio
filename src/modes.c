@@ -150,6 +150,7 @@ char const *Channel_keys[] = {
   "except9",
   "ttl",
   "snr-squelch",
+  "filter2",
   NULL
 };
 
