@@ -21,6 +21,7 @@ extern int FFTW_planning_level;
 extern double FFTW_plan_timelimit;
 extern pthread_mutex_t FFTW_planning_mutex;
 extern int N_internal_threads;
+extern int N_worker_threads; // owned by filter.c
 
 // Input can be REAL or COMPLEX
 // Output can be REAL, COMPLEX, BEAM or SPECTRUM
