@@ -385,7 +385,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   }
   chan->output.opus_bitrate = config_getint(table,sname,"bitrate",chan->output.opus_bitrate);
   if(chan->output.opus_bitrate > 510000){
-    fprintf(stderr,"opus bitrate %u out of range\n",chan->output.opus_bitrate);
+    fprintf(stderr,"opus bitrate %u out of range, using 0 (auto)\n",chan->output.opus_bitrate);
     chan->output.opus_bitrate = 0;
   }
   chan->status.output_interval = config_getint(table,sname,"update",chan->status.output_interval);
@@ -393,12 +393,12 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     chan->status.output_interval = 0;
   chan->output.minpacket = config_getint(table,sname,"buffer",chan->output.minpacket);
   if(chan->output.minpacket > 4){
-    fprintf(stderr,"buffer %u out of range\n",chan->output.minpacket);
+    fprintf(stderr,"buffer %u out of range, using 0\n",chan->output.minpacket);
     chan->output.minpacket = 0;
   }
   chan->filter2.blocking = config_getint(table,sname,"filter2",chan->filter2.blocking);
   if(chan->filter2.blocking > 10){
-    fprintf(stderr,"filter2 %u out of range\n",chan->filter2.blocking);
+    fprintf(stderr,"filter2 blocking %u out of range, using 10\n",chan->filter2.blocking);
     chan->filter2.blocking = 10;
   }
   chan->prio = config_getint(table,sname,"prio",chan->prio);
