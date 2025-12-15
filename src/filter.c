@@ -1047,6 +1047,9 @@ int make_kaiserf(float * const window,int const M,double const beta){
 }
 
 int normalize_windowf(float * const window, int const M){
+  assert(window != NULL && M != 0);
+  if(window == NULL || M == 0)
+    return -1;
   double window_gain = 0;
   for(int n = 0; n < M; n++)
     window_gain += window[n];
@@ -1249,6 +1252,12 @@ static void terminate_fft(struct filter_in *f){
 
 // Hamming window
 double hamming_window(int const n,int const N){
+  assert(N > 1 && n >=0 && n < N);
+  if(N <= 1)
+    return 1.0;
+  if(n < 0 || n >= N)
+    return 0.0;
+
   const double alpha = 25./46.;
   const double beta = (1-alpha);
 
@@ -1257,11 +1266,22 @@ double hamming_window(int const n,int const N){
 
 // Hann / "Hanning" window
 double hann_window(int n,int N){
-    return 0.5 - 0.5 * cos(2*M_PI*n/(N-1));
+  assert(N > 1 && n >=0 && n < N);
+  if(N <= 1)
+    return 1.0;
+  if(n < 0 || n >= N)
+    return 0.0;
+
+  return 0.5 - 0.5 * cos(2*M_PI*n/(N-1));
 }
 
 // common blackman window
 double blackman_window(int const n, int const N){
+  assert(N > 1 && n >=0 && n < N);
+  if(N <= 1)
+    return 1.0;
+  if(n < 0 || n >= N)
+    return 0.0;
   double const a0 = 0.42;
   double const a1 = 0.5;
   double const a2 = 0.08;
@@ -1269,6 +1289,11 @@ double blackman_window(int const n, int const N){
 }
 // Exact Blackman window
 double exact_blackman_window(int n,int N){
+  assert(N > 1 && n >=0 && n < N);
+  if(N <= 1)
+    return 1.0;
+  if(n < 0 || n >= N)
+    return 0.0;
   double const a0 = 7938./18608;
   double const a1 = 9240./18608;
   double const a2 = 1430./18608;
@@ -1278,12 +1303,20 @@ double exact_blackman_window(int n,int N){
 // Used by gaussian_window
 // https://en.wikipedia.org/wiki/Window_function (section Approximate confined Gaussian window)
 static inline double G(double const x,int const N, double const s){
+  assert(isfinite(s));
   int const L = N+1;
+  assert(L != 0 && s != 0);
   double const tmp = (x - N/2) / (2 * L *s);
   return exp(-tmp*tmp);
 }
 
 double gaussian_window(int n, int N, double s){
+  assert(N > 1 && n >=0 && n < N && isfinite(s));
+  if(N <= 1)
+    return 1.0;
+  if(n < 0 || n >= N)
+    return 0.0;
+
   if(!isfinite(s) || s < 1e-6){
     // Special case to avoid divide by zero -> exp(-infinity)
     if(N & 1) // odd?
