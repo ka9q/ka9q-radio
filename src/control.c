@@ -952,7 +952,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
 	if(b < 0 || b >= 100){
 	  beep(); // beyond limits
 	} else {
-	  encode_float(bpp,SPECTRUM_KAISER_BETA,b);
+	  encode_float(bpp,SPECTRUM_SHAPE,b);
 	}
       }
     }
@@ -988,13 +988,13 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   case 'w':
     {
       char str[Entry_width],*ptr;
-      getentry("Spectrum Kaiser window β: ",str,sizeof(str));
+      getentry("Spectrum shape factor: ",str,sizeof(str));
       double const b = strtod(str,&ptr);
       if(ptr != str && isfinite(b)){
 	if(b < 0 || b >= 100){
 	  beep(); // beyond limits
 	} else {
-	  encode_float(bpp,SPECTRUM_KAISER_BETA,b);
+	  encode_float(bpp,SPECTRUM_SHAPE,b);
 	}
       }
     }
@@ -1556,7 +1556,7 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
       char win_type[100];
       switch(channel->spectrum.window_type){
 	case KAISER_WINDOW:
-	  snprintf(win_type,sizeof win_type,"Kaiser β = %.1lf",channel->spectrum.kaiser_beta);
+	  snprintf(win_type,sizeof win_type,"Kaiser β = %.1lf",channel->spectrum.shape);
 	  break;
 	case RECT_WINDOW:
 	  snprintf(win_type,sizeof win_type,"rect");
@@ -1568,7 +1568,7 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
 	  snprintf(win_type,sizeof win_type,"exact Blackman");
 	  break;
 	case GAUSSIAN_WINDOW:
-	  snprintf(win_type,sizeof win_type,"Gaussian σ = %.1lf",channel->spectrum.kaiser_beta);
+	  snprintf(win_type,sizeof win_type,"Gaussian σ = %.1lf",channel->spectrum.shape);
 	  break;
 	case HANN_WINDOW:
 	  snprintf(win_type,sizeof win_type,"Hann");
@@ -1582,7 +1582,6 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
       }
       pprintw(w,row++,col,"Window","%s",win_type);
     }
-    //    pprintw(w,row++,col,"Kaiser β","%.1lf   ",channel->spectrum.kaiser_beta);
     if(channel->spectrum.bin_data != NULL)
       pprintw(w,row++,col,"Bin 0","%.1lf   ",channel->spectrum.bin_data[0]);
     break;

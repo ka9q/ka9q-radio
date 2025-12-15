@@ -33,3 +33,4 @@ s    Set squelch, dB
 S    Set sample rate, Hz
 T    Set AGC hang time, s
 u    Set output status update interval, frames
+W    Set FFT analyzer window type

@@ -235,7 +235,7 @@ int set_defaults(struct channel *chan){
   chan->status.output_interval = DEFAULT_UPDATE;
   chan->spectrum.window_type = DEFAULT_WINDOW_TYPE;
   chan->spectrum.crossover = DEFAULT_CROSSOVER;
-  chan->spectrum.kaiser_beta = DEFAULT_SPECTRUM_KAISER_BETA;
+  chan->spectrum.shape = DEFAULT_SPECTRUM_KAISER_BETA;
   chan->spectrum.window = NULL;
   chan->spectrum.plan = NULL;
   chan->spectrum.bin_data = NULL;

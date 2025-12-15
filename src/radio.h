@@ -251,7 +251,7 @@ struct channel {
     int bin_count;    // Requested bin count
     float *bin_data;  // Array of real floats with bin_count elements
     double crossover;  // Crossover frequency between algorithms, Hz
-    double kaiser_beta;// Analysis window beta
+    double shape;     // Analysis window parameter if any (kaiser β, gaussian σ)
     int fft_n;        // size of analysis FFT
     enum window_type window_type;
     float *window;    // Analysis window

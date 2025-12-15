@@ -176,33 +176,62 @@ int demod_linear(void *arg){
       double const bn = sqrt(bw * chan->sig.n0); // Noise amplitude
       double const ampl = sqrt(chan->sig.bb_power);
 
-      /* Per-sample gain change is required to avoid sudden gain changes at block boundaries that can
+      /* Old comment: Per-sample gain change is required to avoid sudden gain changes at block boundaries that can
 	 cause clicks and pops when a strong signal straddles a block boundary
 	 the new gain setting is applied exponentially over the block
 	 gain_change is per sample and close to 1, so be careful with numerical precision!
 	 When the gain is allowed to vary, the average gain won't be exactly consistent with the
 	 average baseband (input) and output powers. But I still try to make it meaningful.
+
+	 Experiment prompted by monitoring ARRL 10m contest 13-14 Dec 2025 and hearing K6AM 1km away
+	 Find peak level among 2ms subblocks, to handle start of an extremely loud signal
+	 At 12 kHz, 2 ms is 24 samples which should be large enough to give a good average
       */
-      if(ampl * chan->output.gain > chan->output.headroom){
+      double peak_level = 0;
+      {
+	// Divide into 2 ms slices. Hopefully divides evenly (it does for the usual sampling rates and block times)
+	// Should handle fractions if that ever happens
+	int samples_per_slice = (int)round(N * .002 / Blocktime);
+	unsigned int n = 0;
+	while(n < N){
+	  double energy = 0;
+	  for(int i = 0; i < samples_per_slice; i++)
+	    energy += cnrmf(buffer[n++]);
+	  if(energy > peak_level)
+	    peak_level = energy;
+	}
+	peak_level = sqrt(peak_level/samples_per_slice); // RMS power -> amplitude
+      }
+      if(peak_level * chan->output.gain > M_SQRT2 * chan->output.headroom){
+	// Peak is more than 3 dB above the headroom, immediately reduce gain but only for 80 ms
+	double const newgain = M_SQRT2 * chan->output.headroom / peak_level;
+	gain_change = 1;
+	chan->output.gain = newgain;
+	chan->linear.hangcount = (int)round(0.08 * chan->output.samprate);
+      } else if(ampl * chan->output.gain > chan->output.headroom){
 	// Strong signal, reduce gain
 	// Don't do it instantly, but by the end of this block
 	double const newgain = chan->output.headroom / ampl;
 	// N-th root of newgain / gain
 	// Should this be in double precision to avoid imprecision when gain = - epsilon dB?
 	if(newgain > 0)
-	  gain_change = pow(newgain/chan->output.gain, 1.0/N);
+	  gain_change = pow(newgain/chan->output.gain, 1.0/N); // can newgain ever <= 0?
 	chan->linear.hangcount = (int)round(chan->linear.hangtime * chan->output.samprate);
       } else if(bn * chan->output.gain > chan->linear.threshold * chan->output.headroom){
 	// Reduce gain to keep noise < threshold, same as for strong signal
+	// but don't touch hang timer
 	double const newgain = chan->linear.threshold * chan->output.headroom / bn;
 	if(newgain > 0)
-	  gain_change = pow(newgain/chan->output.gain, 1.0F/N);
+	  gain_change = pow(newgain/chan->output.gain, 1.0/N);
       } else if(chan->linear.hangcount > 0){
 	// Waiting for AGC hang time to expire before increasing gain
 	chan->linear.hangcount -= N;
       } else {
 	// Allow gain to increase at configured rate
-	gain_change = pow(chan->linear.recovery_rate, 1.0F/chan->output.samprate);
+	// This needs to be sped up when there's a lot of gain to be recovered
+	// Maybe something like:
+	// if amplitude < headroom - threshold - 20 dB, increase gain 20 dB immediately?
+	gain_change = pow(chan->linear.recovery_rate, 1.0/chan->output.samprate);
       }
       assert(gain_change != 0 && isfinite(gain_change));
     }

@@ -473,11 +473,11 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	}
       }
       break;
-    case SPECTRUM_KAISER_BETA:
+    case SPECTRUM_SHAPE: // Kaiser or gaussian
       {
-	double const x = decode_double(cp,optlen);
-	if(isfinite(x) && x != chan->spectrum.kaiser_beta){
-	  chan->spectrum.kaiser_beta = x;
+	double const x = fabs(decode_double(cp,optlen)); // always positive
+	if(isfinite(x) && x != chan->spectrum.shape){
+	  chan->spectrum.shape = x;
 	  restart_needed = true;
 	}
       }
@@ -704,7 +704,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       encode_float(&bp,NONCOHERENT_BIN_BW,chan->spectrum.bin_bw); // Hz
       encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
       encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
-      encode_float(&bp,SPECTRUM_KAISER_BETA,chan->spectrum.kaiser_beta);
+      encode_float(&bp,SPECTRUM_SHAPE,chan->spectrum.shape);
       encode_int(&bp,SPECTRUM_FFT_N,chan->spectrum.fft_n);
       encode_float(&bp,NOISE_BW,chan->spectrum.noise_bw);
       // encode bin data here? maybe change this, it can be a lot

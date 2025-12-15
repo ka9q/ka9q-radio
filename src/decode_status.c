@@ -260,8 +260,8 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case WINDOW_TYPE:
       channel->spectrum.window_type = decode_int(cp,optlen);
       break;
-    case SPECTRUM_KAISER_BETA:
-      channel->spectrum.kaiser_beta = decode_double(cp,optlen);
+    case SPECTRUM_SHAPE:
+      channel->spectrum.shape = decode_double(cp,optlen);
       break;
     case SPECTRUM_FFT_N:
       channel->spectrum.fft_n = decode_int(cp,optlen);

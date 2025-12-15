@@ -202,6 +202,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
 	}
       }
       break;
+    case SPECTRUM_SHAPE:
+      fprintf(fp,"spectrum shape factor %lg",decode_double(cp,optlen));
+      break;
     case KAISER_BETA:
       fprintf(fp,"filter kaiser_beta %lg",decode_double(cp,optlen));
       break;
