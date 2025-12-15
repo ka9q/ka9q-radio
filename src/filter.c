@@ -1021,7 +1021,7 @@ int make_kaiser(double * const window,int const M,double const beta){
 
   return 0;
 }
-// Compute an entire normalized Kaiser window - float version
+// Compute an entire Kaiser window - float version
 // More efficient than repeatedly calling kaiser(n,M,beta)
 int make_kaiserf(float * const window,int const M,double const beta){
   assert(window != NULL);
@@ -1034,24 +1034,29 @@ int make_kaiserf(float * const window,int const M,double const beta){
 
   // The window is symmetrical, so compute only half of it and mirror
   // this won't compute the middle value in an odd-length sequence
-  double window_gain = 0;
   for(int n = 0; n < M/2; n++){
     double const p = pc * n  - 1;
     double const w = i0(beta * sqrt(1-p*p)) * inv_denom;
     window[M-1-n] = window[n] = (float)w;
-    window_gain += 2 * w;
   }
   // If sequence length is odd, middle value is unity
   if(M & 1){
     window[(M-1)/2] = 1; // The -1 is actually unnecessary
-    window_gain += 1;
   }
+  return 0;
+}
+
+int normalize_windowf(float * const window, int const M){
+  double window_gain = 0;
+  for(int n = 0; n < M; n++)
+    window_gain += window[n];
   window_gain = M / window_gain;
   for(int i = 0; i < M; i++)
     window[i] *= (float)window_gain;
 
   return 0;
 }
+
 
 /* Set up a filter with a specified complex bandpass response
    Uses a Kaiser-windowed sinc function - new as of March 2025
@@ -1093,6 +1098,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
 
   float kaiser_window[M];
   make_kaiserf(kaiser_window,M,kaiser_beta);
+  normalize_windowf(kaiser_window,M); // probably unnecessary, is normalized below
 
   // Form complex impulse response by generating kaiser-windowed sinc pulse and shifting to desired center freq
   float complex impulse[M];
@@ -1239,28 +1245,51 @@ static void terminate_fft(struct filter_in *f){
   pthread_cond_broadcast(&FFT.queue_cond); // Alert FFT thread
   pthread_mutex_unlock(&FFT.queue_mutex);
 }
+#endif
 
 // Hamming window
-const static double hamming(int const n,int const M){
+double hamming_window(int const n,int const N){
   const double alpha = 25./46.;
   const double beta = (1-alpha);
 
-  return alpha - beta * cos(2*M_PI*n/(M-1));
+  return alpha - beta * cos(2*M_PI*n/(N-1));
 }
 
 // Hann / "Hanning" window
-const static double hann(int const n,int const M){
-    return 0.5 - 0.5 * cos(2*M_PI*n/(M-1));
+double hann_window(int n,int N){
+    return 0.5 - 0.5 * cos(2*M_PI*n/(N-1));
 }
 
+// common blackman window
+double blackman_window(int const n, int const N){
+  double const a0 = 0.42;
+  double const a1 = 0.5;
+  double const a2 = 0.08;
+  return a0 - a1*cos(2*M_PI*n/(N-1)) + a2*cos(4*M_PI*n/(N-1));
+}
 // Exact Blackman window
-const static double blackman(int const n,int const M){
+double exact_blackman_window(int n,int N){
   double const a0 = 7938./18608;
   double const a1 = 9240./18608;
   double const a2 = 1430./18608;
-  return a0 - a1*cos(2*M_PI*n/(M-1)) + a2*cos(4*M_PI*n/(M-1));
+  return a0 - a1*cos(2*M_PI*n/(N-1)) + a2*cos(4*M_PI*n/(N-1));
 }
 
+// Used by gaussian_window
+// https://en.wikipedia.org/wiki/Window_function (section Approximate confined Gaussian window)
+static inline double G(double const x,int const N, double const s){
+  int const L = N+1;
+  double const tmp = (x - N/2) / (2 * L *s);
+  return exp(-tmp*tmp);
+}
+
+double gaussian_window(int n, int N, double s){
+  int const L = N+1;
+  return G(n,N,s) - ( G(-0.5,N,s) * (G(n+L,N,s) + G(n-L,N,s) ) / ( G(-0.5 + L,N,s) + G(-0.5 - L,N,s) ) );
+}
+
+
+#if 0
 // Jim Kaiser was in my Bellcore department in the 1980s. Really friendly guy.
 // Superseded by make_kaiser() routine that more efficiently computes entire window at once
 static double const kaiser(int const n,int const M, double const beta){
@@ -1276,5 +1305,5 @@ static double const kaiser(int const n,int const M, double const beta){
   double const p = 2.0*n/(M-1) - 1;
   return i0(beta*sqrt(1-p*p)) * old_inv_denom;
 }
+#endif
 
-#endif // End of experimental code

@@ -127,7 +127,38 @@ int demod_spectrum(void *arg){
   // Generate normalized Kaiser window
   chan->spectrum.window = malloc(chan->spectrum.fft_n * sizeof *chan->spectrum.window);
   assert(chan->spectrum.window != NULL);
-  make_kaiserf(chan->spectrum.window,chan->spectrum.fft_n,chan->spectrum.kaiser_beta);
+  switch(chan->spectrum.window_type){
+  default:
+  case KAISER_WINDOW:
+    make_kaiserf(chan->spectrum.window,chan->spectrum.fft_n,chan->spectrum.kaiser_beta);
+    break;
+  case RECT_WINDOW: // essentially kaiser with beta = 0
+    for(int i=0; i < chan->spectrum.fft_n; i++)
+      chan->spectrum.window[i] = 1;
+    break;
+  case BLACKMAN_WINDOW:
+    for(int i=0; i < chan->spectrum.fft_n; i++)
+      chan->spectrum.window[i] = blackman_window(i,chan->spectrum.fft_n);
+    break;
+  case EXACT_BLACKMAN_WINDOW:
+    for(int i=0; i < chan->spectrum.fft_n; i++)
+      chan->spectrum.window[i] = exact_blackman_window(i,chan->spectrum.fft_n);
+    break;
+  case GAUSSIAN_WINDOW:
+    // Reuse kaiser β as σ parameter
+    for(int i=0; i < chan->spectrum.fft_n; i++)
+      chan->spectrum.window[i] = gaussian_window(i,chan->spectrum.fft_n,chan->spectrum.kaiser_beta);
+    break;
+  case HANN_WINDOW:
+    for(int i=0; i < chan->spectrum.fft_n; i++)
+      chan->spectrum.window[i] = hann_window(i,chan->spectrum.fft_n);
+    break;
+  case HAMMING_WINDOW:
+    for(int i=0; i < chan->spectrum.fft_n; i++)
+      chan->spectrum.window[i] = hamming_window(i,chan->spectrum.fft_n);
+  }
+  normalize_windowf(chan->spectrum.window,chan->spectrum.fft_n);
+
 
   // Compute noise bandwidth of each bin in bins
   chan->spectrum.noise_bw = 0;

@@ -25,7 +25,7 @@ struct demodtab Demodtab[] = {
       {LINEAR_DEMOD, "Linear"}, // Coherent demodulation of AM, DSB, BPSK; calibration on WWV/WWVH/CHU carrier
       {FM_DEMOD,     "FM",   }, // NBFM and noncoherent PM
       {WFM_DEMOD,    "WFM",  }, // NBFM and noncoherent PM
-      {SPECT_DEMOD,  "Spectrum", }, // Spectrum analysis
+      {SPECT_DEMOD, "Spectrum", }, // Spectrum analysis
 };
 
 static int const DEFAULT_TTL = 0;                // Don't blast cheap switches and access points unless the user says so
@@ -56,6 +56,7 @@ static int   const DEFAULT_BITRATE = 0;       // Default Opus compressed bit rat
 static int   const DEFAULT_DC_TC = 0;         // Time constant for AM carrier removal, default off
 static double const DEFAULT_CROSSOVER = 200;   // About where the two spectral analysis algorithms use equal CPU
 static double const DEFAULT_SPECTRUM_KAISER_BETA = 7.0; // Default for spectral analysis window
+static enum window_type const DEFAULT_WINDOW_TYPE = KAISER_WINDOW;
 extern int Overlap;
 
 // Valid keys in presets file, [global] section, and any channel section
@@ -232,6 +233,7 @@ int set_defaults(struct channel *chan){
     assert(false);
   }
   chan->status.output_interval = DEFAULT_UPDATE;
+  chan->spectrum.window_type = DEFAULT_WINDOW_TYPE;
   chan->spectrum.crossover = DEFAULT_CROSSOVER;
   chan->spectrum.kaiser_beta = DEFAULT_SPECTRUM_KAISER_BETA;
   chan->spectrum.window = NULL;

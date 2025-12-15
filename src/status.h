@@ -33,7 +33,7 @@ enum status_type {
   UNUSED6,
   UNUSED7,
   INPUT_SAMPLES,
-  UNUSED8,
+  WINDOW_TYPE,   // Window type for FFT analyzer
   NOISE_BW,      // Noise bandwidth of FFT spectrum bin, in bins
 
   OUTPUT_DATA_SOURCE_SOCKET,

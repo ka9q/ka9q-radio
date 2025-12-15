@@ -103,8 +103,6 @@ int write_rfilter(struct filter_in *, float const *,int size);
 void suggest(int size,int dir,int clex);
 unsigned long gcd(unsigned long a,unsigned long b);
 unsigned long lcm(unsigned long a,unsigned long b);
-int make_kaiser(double * const window,int const M,double const beta);
-int make_kaiserf(float * const window,int const M,double const beta);
 fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction);
 fftwf_plan plan_r2c(int N, float *in, float complex *out);
 fftwf_plan plan_c2r(int N, float complex *in, float *out);
@@ -112,6 +110,15 @@ bool goodchoice(unsigned long);
 unsigned int ceil_pow2(unsigned int x);
 int set_filter_weights(struct filter_out *out,double complex i_weight, double complex q_weight);
 
+// Window functions
+int make_kaiser(double * const window,int const M,double const beta);
+int make_kaiserf(float * const window,int const M,double const beta);
+int normalize_windowf(float * const window, int const M);
+double gaussian_window(int n, int M, double s);
+double exact_blackman_window(int n, int N);
+double blackman_window(int n, int N);
+double hann_window(int n,int N);
+double hamming_window(int n,int N);
 
 // Write complex sample to input side of filter
 static inline int put_cfilter(struct filter_in * restrict const f,float complex const s){ // Complex

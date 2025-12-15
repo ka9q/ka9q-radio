@@ -170,6 +170,38 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case FE_ISREAL:
       fprintf(fp,"fe produces %s samples",decode_int8(cp,optlen) ? "real" : "complex");
       break;
+    case WINDOW_TYPE:
+      {
+	enum window_type i = decode_int(cp,optlen);
+	fprintf(fp,"fft window type %i ",i);
+	switch(i){
+	case KAISER_WINDOW:
+	  fprintf(fp,"Kaiser");
+	  break;
+	case RECT_WINDOW:
+	  fprintf(fp,"rect");
+	  break;
+	case BLACKMAN_WINDOW:
+	  fprintf(fp,"Blackman");
+	  break;
+	case EXACT_BLACKMAN_WINDOW:
+	  fprintf(fp,"exact Blackman");
+	  break;
+	case GAUSSIAN_WINDOW:
+	  fprintf(fp,"Gaussian");
+	  break;
+	case HANN_WINDOW:
+	  fprintf(fp,"Hann");
+	  break;
+	case HAMMING_WINDOW:
+	  fprintf(fp,"Hamming");
+	  break;
+	default:
+	  fprintf(fp,"unknown");
+	  break;
+	}
+      }
+      break;
     case KAISER_BETA:
       fprintf(fp,"filter kaiser_beta %lg",decode_double(cp,optlen));
       break;

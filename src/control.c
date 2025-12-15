@@ -971,6 +971,20 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
       }
     }
     break;
+  case 'W':
+    {
+      char str[Entry_width],*ptr;
+      getentry("FFT Window type [0=Kaiser,1=rect,2=blackman,3=exact blackman,4=gaussian,5=hann,6=hamming: ",str,sizeof(str));
+      unsigned const b = strtol(str,&ptr,0);
+      if(ptr != str){
+	if(b >= N_WINDOW){
+	  beep(); // beyond limits
+	} else {
+	  encode_int(bpp,WINDOW_TYPE,b);
+	}
+      }
+    }
+    break;
   case 'w':
     {
       char str[Entry_width],*ptr;
@@ -1195,7 +1209,7 @@ static void process_mouse(struct channel *channel,uint8_t **bpp){
   } // end of mouse processing
 }
 
-// Initialize a new, unused channel instance where fields start non-zero
+// Initialize a new, unused channel instance where fields might be non-zero
 static int init_demod(struct channel *channel){
   if(channel == NULL)
     return -1;
@@ -1203,6 +1217,7 @@ static int init_demod(struct channel *channel){
   channel->tune.second_LO = NAN;
   channel->tune.freq = channel->tune.shift = NAN;
   channel->filter.min_IF = channel->filter.max_IF = channel->filter.kaiser_beta = NAN;
+  channel->spectrum.window_type = KAISER_WINDOW;
   channel->output.headroom = channel->linear.hangtime = channel->linear.recovery_rate = NAN;
   channel->sig.bb_power = channel->sig.foffset = NAN;
   channel->fm.pdeviation = channel->pll.cphase = NAN;
@@ -1537,7 +1552,37 @@ static void display_demodulator(WINDOW *w,struct channel const *channel){
     pprintw(w,row++,col,"Bins","%d   ",channel->spectrum.bin_count);
     pprintw(w,row++,col,"Crossover","%.0lf Hz",channel->spectrum.crossover);
     pprintw(w,row++,col,"FFT N","%d   ",channel->spectrum.fft_n);
-    pprintw(w,row++,col,"Kaiser β","%.1lf   ",channel->spectrum.kaiser_beta);
+    {
+      char win_type[100];
+      switch(channel->spectrum.window_type){
+	case KAISER_WINDOW:
+	  snprintf(win_type,sizeof win_type,"Kaiser β = %.1lf",channel->spectrum.kaiser_beta);
+	  break;
+	case RECT_WINDOW:
+	  snprintf(win_type,sizeof win_type,"rect");
+	  break;
+	case BLACKMAN_WINDOW:
+	  snprintf(win_type,sizeof win_type,"Blackman");
+	  break;
+	case EXACT_BLACKMAN_WINDOW:
+	  snprintf(win_type,sizeof win_type,"exact Blackman");
+	  break;
+	case GAUSSIAN_WINDOW:
+	  snprintf(win_type,sizeof win_type,"Gaussian σ = %.1lf",channel->spectrum.kaiser_beta);
+	  break;
+	case HANN_WINDOW:
+	  snprintf(win_type,sizeof win_type,"Hann");
+	  break;
+	case HAMMING_WINDOW:
+	  snprintf(win_type,sizeof win_type,"Hamming");
+	  break;
+	default:
+	  snprintf(win_type,sizeof win_type,"unknown");
+	  break;
+      }
+      pprintw(w,row++,col,"Window","%s",win_type);
+    }
+    //    pprintw(w,row++,col,"Kaiser β","%.1lf   ",channel->spectrum.kaiser_beta);
     if(channel->spectrum.bin_data != NULL)
       pprintw(w,row++,col,"Bin 0","%.1lf   ",channel->spectrum.bin_data[0]);
     break;

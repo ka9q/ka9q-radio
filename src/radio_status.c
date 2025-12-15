@@ -436,7 +436,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  if(Verbose > 1)
 	    fprintf(stderr,"bin bw %f -> %f\n",chan->spectrum.bin_bw,x);
 	  chan->spectrum.bin_bw = x;
-	  restart_needed = true;
+	  if(chan->demod_type == SPECT_DEMOD)
+	    restart_needed = true;
 	}
       }
       break;
@@ -447,7 +448,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  if(Verbose > 1)
 	    fprintf(stderr,"bin count %d -> %d\n",chan->spectrum.bin_count,x);
 	  chan->spectrum.bin_count = x;
-	  restart_needed = true;
+	  if(chan->demod_type == SPECT_DEMOD)
+	    restart_needed = true;
 	}
       }
       break;
@@ -456,7 +458,18 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	double const x = fabs(decode_double(cp,optlen));
 	if(isfinite(x) && x != chan->spectrum.crossover){
 	  chan->spectrum.crossover = x;
-	  restart_needed = true;
+	  if(chan->demod_type == SPECT_DEMOD)
+	    restart_needed = true;
+	}
+      }
+      break;
+    case WINDOW_TYPE:
+      {
+	enum window_type const i = decode_int(cp,optlen);
+	if(i < N_WINDOW){
+	  chan->spectrum.window_type = i;
+	  if(chan->demod_type == SPECT_DEMOD)
+	    restart_needed = true;
 	}
       }
       break;
@@ -687,6 +700,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     break;
   case SPECT_DEMOD:
     {
+      encode_int(&bp,WINDOW_TYPE,chan->spectrum.window_type);
       encode_float(&bp,NONCOHERENT_BIN_BW,chan->spectrum.bin_bw); // Hz
       encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
       encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
