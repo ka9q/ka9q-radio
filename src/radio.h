@@ -37,6 +37,19 @@ enum demod_type {
   N_DEMOD,              // Dummy equal to number of valid entries
 };
 
+enum window_type {
+  KAISER_WINDOW,
+  RECT_WINDOW, // essentially kaiser with beta = 0
+  BLACKMAN_WINDOW,
+  EXACT_BLACKMAN_WINDOW,
+  GAUSSIAN_WINDOW,
+  HANN_WINDOW,
+  HAMMING_WINDOW,
+  N_WINDOW,
+};
+
+
+
 /**
    @brief list of demodulator enums and readable strings
 */
@@ -240,6 +253,7 @@ struct channel {
     double crossover;  // Crossover frequency between algorithms, Hz
     double kaiser_beta;// Analysis window beta
     int fft_n;        // size of analysis FFT
+    enum window_type window_type;
     float *window;    // Analysis window
     void *plan;       // FFTW plan - don't drag in <fftw.h>
     float complex *ring; // Ring buffer of demodulated data in narrowband mode
