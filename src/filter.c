@@ -1284,6 +1284,13 @@ static inline double G(double const x,int const N, double const s){
 }
 
 double gaussian_window(int n, int N, double s){
+  if(!isfinite(s) || s < 1e-6){
+    // Special case to avoid divide by zero -> exp(-infinity)
+    if(N & 1) // odd?
+      return (n == N/2 - 1) ? 1 : 0;
+    else
+      return n == (N/2 - 1) ? 0.5 : (n == N/2) ? 0.5 : 0;
+  }
   int const L = N+1;
   return G(n,N,s) - ( G(-0.5,N,s) * (G(n+L,N,s) + G(n-L,N,s) ) / ( G(-0.5 + L,N,s) + G(-0.5 - L,N,s) ) );
 }
