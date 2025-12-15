@@ -583,19 +583,22 @@ static int setup_hardware(char const *sname){
   // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
   assert(Frontend.samprate != 0);
   Frontend.L = (int)round(Frontend.samprate * User_blocktime); // Blocktime is in seconds
+  Frontend.M = Frontend.L / (Overlap - 1) + 1;
+  assert(Frontend.M != 0);
+  assert(Frontend.L != 0);
+  int const N = Frontend.M + Frontend.L - 1;
   Blocktime = Frontend.L / Frontend.samprate; // True value, must be set early, many things depend on it
   if(fabs(Blocktime - User_blocktime) > 1e-6)
     fprintf(stderr,"Warning: requested block time %lf changed to %lf for integral block size %d at sample rate %lf Hz\n",
 	    User_blocktime,Blocktime,Frontend.L,Frontend.samprate);
 
-  Frontend.M = Frontend.L / (Overlap - 1) + 1;
-  assert(Frontend.M != 0);
-  assert(Frontend.L != 0);
+  fprintf(stderr,"Block time %.3lf ms, overlap %d, forward FFT size %u %s\n",
+	  1000.*Blocktime, Overlap, N,Frontend.isreal ? "real" : "complex");
   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
   // Create list of frequency spurs in filter input (experimental)
   Frontend.in.notches = calloc(100,sizeof (struct notch_state));
   struct notch_state *notch = Frontend.in.notches;
-  int const N = Frontend.M + Frontend.L - 1;
+
 
   // Initialize spur list. MUST leave last entry zeroed as sentinel; also doubles as 0 Hz (DC) suppression
   for(int i = 0; i < NSPURS; i++){
