@@ -240,15 +240,12 @@ static int spectrum_poll(struct channel *chan){
      || chan->spectrum.bin_bw <= 0 || chan->spectrum.window == NULL)
     return 0; // Not yet set up
 
-  // scale each bin value for our FFT
-  // squared because the we're scaling the output of complex norm, not the input bin values
-  // we only see one side of the spectrum for real inputs
-  double const gain = 1./N_ITER * (frontend->isreal ? 2.0 : 1.0) / ((double)chan->spectrum.fft_n * chan->spectrum.fft_n);
 
   memset(chan->spectrum.bin_data,0, chan->spectrum.bin_count * sizeof *chan->spectrum.bin_data); // zero output data
 
   if(chan->spectrum.bin_bw <= chan->spectrum.crossover){
     // Narrowband mode
+
     if(chan->spectrum.ring == NULL)
       return 0; // Needed
     // Most recent data from receive ring buffer
@@ -259,6 +256,11 @@ static int spectrum_poll(struct channel *chan){
     assert(fft_in != NULL);
     float complex *fft_out = fftwf_alloc_complex(chan->spectrum.fft_n);
     assert(fft_out != NULL);
+
+    // scale each bin value for our FFT
+    // squared because the we're scaling the output of complex norm, not the input bin values
+    // we only see one side of the spectrum for real inputs
+    double const gain = 1./N_ITER * (frontend->isreal ? 2.0 : 1.0) / ((double)chan->spectrum.fft_n * chan->spectrum.fft_n);
 
     for(int iter=0; iter < N_ITER; iter++){
       // Copy and window raw baseband
@@ -295,6 +297,18 @@ static int spectrum_poll(struct channel *chan){
   // Look back two FFT blocks from the most recent write pointer to allow room for overlapping windows
   // scale fft bin shift down to size of analysis FFT, which is smaller than the input FFT
   int shift = (int)(chan->filter.bin_shift * (int64_t)chan->spectrum.fft_n / master->points);
+
+  // Experiment: vary the number of averaged blocks of A/D samples with the resolution bandwidth to keep the
+  // total FFT points processed roughly constant and the CPU load also roughly constant
+  // This helps with noise variance at wider spans, not as much with medium spans
+  int const point_budget = 512 * 1024; // tunable, experimental
+  int n_iter = (int)ceil((double)point_budget / chan->spectrum.fft_n);
+
+  // scale each bin value for our FFT
+  // squared because the we're scaling the output of complex norm, not the input bin values
+  // we only see one side of the spectrum for real inputs
+  double const gain = 1./n_iter * (frontend->isreal ? 2.0 : 1.0) / ((double)chan->spectrum.fft_n * chan->spectrum.fft_n);
+
   if(frontend->isreal){
     // Point into raw SDR A/D input ring buffer
     // We're reading from a mirrored buffer so it will automatically wrap back to the beginning
@@ -308,7 +322,8 @@ static int spectrum_poll(struct channel *chan){
     float complex *fft_out = fftwf_alloc_complex(chan->spectrum.fft_n/2 + 1); // r2c has only the positive frequencies
     assert(fft_out != NULL);
 
-    for(int iter=0; iter < N_ITER; iter++){
+
+    for(int iter=0; iter < n_iter; iter++){
       // Copy and window raw A/D
       if(shift >= 0){
 	// Upright spectrum
@@ -358,7 +373,7 @@ static int spectrum_poll(struct channel *chan){
     float complex *fft_out = fftwf_alloc_complex(chan->spectrum.fft_n);
     assert(fft_out != NULL);
 
-    for(int iter=0; iter < N_ITER; iter++){
+    for(int iter=0; iter < n_iter; iter++){
       // Copy and window raw A/D
       for(int i=0; i < chan->spectrum.fft_n; i++)
 	fft_in[i] = chan->spectrum.window[i] * input[i];

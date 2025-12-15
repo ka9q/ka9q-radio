@@ -946,7 +946,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
   case 'k': // Kaiser window parameter
     {
       char str[Entry_width],*ptr;
-      getentry("Spect Analyzer Kaiser window β: ",str,sizeof(str));
+      getentry("Spectrum analyzer shape param β/σ: ",str,sizeof(str));
       double const b = strtod(str,&ptr);
       if(ptr != str && isfinite(b)){
 	if(b < 0 || b >= 100){
