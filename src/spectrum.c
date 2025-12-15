@@ -16,7 +16,9 @@
 
 #define N_ITER (2)
 #define RING_SIZE (N_ITER * chan->spectrum.fft_n)
-#define OVERLAP (0.0)
+#define WIDEBAND_OVERLAP (0.0)
+// Use at RBW <= 10 Hz to reduce bouncing on pulsed signals like WWV's tones
+#define NARROWBAND_OVERLAP (0.5)
 
 static int spectrum_poll(struct channel *chan);
 
@@ -276,7 +278,10 @@ static int spectrum_poll(struct channel *chan){
 	chan->spectrum.bin_data[i] = (float)p;
       }
       // Back to start of current buffer, then to previous buffer. TWO buffers in all, unless there's overlap
-      rp -= (int)round(chan->spectrum.fft_n * (2. - OVERLAP));
+      if(chan->spectrum.bin_bw <= 10)
+	rp -= (int)round(chan->spectrum.fft_n * (2. - NARROWBAND_OVERLAP));
+      else
+	rp -= (int)round(chan->spectrum.fft_n * (2. - WIDEBAND_OVERLAP));
       while(rp < 0)
 	rp += RING_SIZE;
     }
@@ -336,7 +341,7 @@ static int spectrum_poll(struct channel *chan){
 	assert(isfinite(p));
 	chan->spectrum.bin_data[i] = (float)p; // Accumulate power
       }
-      input -= (int)round(chan->spectrum.fft_n * (1. - OVERLAP)); // move back fraction of a buffer
+      input -= (int)round(chan->spectrum.fft_n * (1. - WIDEBAND_OVERLAP)); // move back fraction of a buffer
       if(input < (float *)frontend->in.input_buffer)
 	input += frontend->in.input_buffer_size / sizeof *input; // wrap backward
     }
@@ -377,7 +382,7 @@ static int spectrum_poll(struct channel *chan){
 	chan->spectrum.bin_data[i] = (float)p;
       }
       // Back to previous buffer
-      input -= (int)round(chan->spectrum.fft_n * (1. - OVERLAP));
+      input -= (int)round(chan->spectrum.fft_n * (1. - WIDEBAND_OVERLAP));
       if(input < (float complex *)frontend->in.input_buffer)
 	input += frontend->in.input_buffer_size / sizeof *input; // backward wrap
     }
