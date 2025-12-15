@@ -592,7 +592,7 @@ static int setup_hardware(char const *sname){
     fprintf(stderr,"Warning: requested block time %lf changed to %lf for integral block size %d at sample rate %lf Hz\n",
 	    User_blocktime,Blocktime,Frontend.L,Frontend.samprate);
 
-  fprintf(stderr,"Block time %.3lf ms, overlap %d, forward FFT size %u %s\n",
+  fprintf(stderr,"Block time %.3lf ms, overlap %d, forward FFT size %'u %s\n",
 	  1000.*Blocktime, Overlap, N,Frontend.isreal ? "real" : "complex");
   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
   // Create list of frequency spurs in filter input (experimental)
