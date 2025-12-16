@@ -6,6 +6,5 @@
 	missingok
 	notifempty
 	compress
-	compress
 	copytruncate
 }
