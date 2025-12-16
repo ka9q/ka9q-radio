@@ -395,8 +395,8 @@ int main(int argc,char *argv[]){
   }
   // Set up input socket for multicast data stream from front end
   {
-    struct sockaddr_storage sock = {0};
-    char iface[1024] = {0};
+    struct sockaddr_storage sock;
+    char iface[1024];
     resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
     Input_fd = listen_mcast(Source_socket,&sock,iface);
     resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
@@ -458,8 +458,8 @@ static void input_loop(){
 }
 static void process_status(int fd){
   // Process status packet, if present
-  uint8_t buffer[PKTSIZE] = {0};
-  struct sockaddr sender = {0};
+  uint8_t buffer[PKTSIZE];
+  struct sockaddr sender;
   socklen_t socksize = sizeof(sender);
   ssize_t const length = recvfrom(fd,buffer,sizeof(buffer),0,&sender,&socksize);
   if(length <= 0){    // ??
@@ -484,8 +484,8 @@ static void process_status(int fd){
   // NB! Assumes same IP source address *and UDP source port* for status and data
   // This is only true for recent versions of radiod, after the switch to unconnected output sockets
   // But older versions don't send status on the output channel anyway, so no problem
-  struct channel chan = {0};
-  struct frontend frontend = {0};
+  struct channel chan;
+  struct frontend frontend;
   decode_radio_status(&frontend,&chan,buffer+1,length-1);
 
   if(Ssrc != 0 && chan.output.rtp.ssrc != Ssrc)
@@ -547,8 +547,8 @@ static void process_status(int fd){
 }
 static void process_data(int fd){
   // Process data packet, if any
-  uint8_t buffer[PKTSIZE] = {0};
-  struct sockaddr sender = {0};
+  uint8_t buffer[PKTSIZE];
+  struct sockaddr sender;
   socklen_t socksize = sizeof(sender);
   ssize_t size = recvfrom(fd,buffer,sizeof(buffer),0,&sender,&socksize);
   if(size <= 0){    // ??
@@ -570,7 +570,7 @@ static void process_data(int fd){
   if(size < RTP_MIN_SIZE)
     return; // Too small for RTP, ignore
 
-  struct rtp_header rtp = {0};
+  struct rtp_header rtp;
   uint8_t const * const dp = (uint8_t *)ntoh_rtp(&rtp,buffer);
   if(rtp.pad){
     // Remove padding
@@ -714,7 +714,7 @@ static void process_data(int fd){
 static void scan_sessions(){
   // Walk through session list, close idle files
   // Leave sessions forever in case traffic starts again?
-  struct timespec now = {0};
+  struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
 
   struct session *next = NULL;
@@ -1035,14 +1035,14 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     sp->can_seek = false; // Can't seek on a pipe
     sp->exit_after_close = false; // Runs forever, closing individual pipes on timeout
     sp->filename[0] = '\0';
-    char command_copy[2048] = {0}; // Don't overwrite program args
+    char command_copy[2048]; // Don't overwrite program args
     strlcpy(command_copy,Command,sizeof(command_copy));
     char *cp = command_copy;
     char const *a;
     while((a = strsep(&cp,"$")) != NULL){
       strlcat(sp->filename,a,sizeof(sp->filename));
       if(cp != NULL && strlen(cp) > 0){
-	char temp[256] = {0};
+	char temp[256];
 	switch(*cp++){
 	case '$':
 	  snprintf(temp,sizeof(temp),"$");
@@ -1144,7 +1144,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
       sp->samples_remaining = (intmax_t)round(Max_length * sp->samprate) - offset;
     }
   }
-  char filename[PATH_MAX] = {0}; // file pathname except for suffix
+  char filename[PATH_MAX]; // file pathname except for suffix
   if(Prefix_source)
     snprintf(filename, sizeof filename, "%s_", formatsock(&sp->sender,false));
 
@@ -1440,12 +1440,12 @@ static int emit_ogg_opus_tags(struct session *sp){
   *np++ = 8; // Number of tags follows
   wp = (uint8_t *)np;
   {
-    char temp[256] = {0};
+    char temp[256];
     snprintf(temp,sizeof(temp),"ENCODER=KA9Q radiod - %s",opus_get_version_string());
     wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),temp);
   }
   // We can get called whenever the status changes, so use the current wall clock, not the file creation time (sp->file_time)
-  struct timespec now = {0};
+  struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
   struct tm const * const tm = gmtime(&now.tv_sec);
 
@@ -1637,11 +1637,11 @@ static int end_wav_stream(struct session *sp){
     return 0; // Can't seek back to the beginning on a pipe
 
   rewind(sp->fp);
-  struct wav header = {0};
+  struct wav header;
   if(fread(&header,sizeof(header),1,sp->fp) != 1)
     return -1;
 
-  struct stat statbuf = {0};
+  struct stat statbuf;
   if(fstat(fileno(sp->fp),&statbuf) != 0){
     fprintf(stderr,"fstat(%d) [%s] failed! %s\n",fileno(sp->fp),sp->filename,strerror(errno));
     return -1;
@@ -1653,7 +1653,7 @@ static int end_wav_stream(struct session *sp){
   header.SamplesLength = (uint32_t)sp->samples_written;
 
   // write end time into the auxi chunk
-  struct timespec now = {0};
+  struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
   struct tm const * tm = gmtime(&now.tv_sec);
   header.StopYear = (int16_t)tm->tm_year + 1900;
