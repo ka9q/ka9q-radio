@@ -233,6 +233,7 @@ int set_defaults(struct channel *chan){
     assert(false);
   }
   chan->status.output_interval = DEFAULT_UPDATE;
+  chan->spectrum.fft_avg = 0; // will get set by client or by default in spectrum.c
   chan->spectrum.window_type = DEFAULT_WINDOW_TYPE;
   chan->spectrum.crossover = DEFAULT_CROSSOVER;
   chan->spectrum.shape = DEFAULT_SPECTRUM_KAISER_BETA;

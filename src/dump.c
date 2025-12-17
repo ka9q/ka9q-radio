@@ -352,7 +352,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"deemph gain %.1lf dB",decode_double(cp,optlen));
       break;
     case DEEMPH_TC:
-      fprintf(fp,"demph tc %.1lf us",1e6f * decode_double(cp,optlen));
+      fprintf(fp,"demph tc %.1lf us",1e6 * decode_double(cp,optlen));
       break;
     case CONVERTER_OFFSET:
       fprintf(fp,"converter %.1lf Hz",decode_double(cp,optlen));
@@ -367,8 +367,11 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case COHERENT_BIN_SPACING:
       fprintf(fp,"coherent bin spacing %.1lf Hz",decode_double(cp,optlen));
       break;
-    case NONCOHERENT_BIN_BW:
-      fprintf(fp,"noncoherent bin bandwidth %.1lf Hz",decode_double(cp,optlen));
+    case RESOLUTION_BW:
+      fprintf(fp,"resolution bw %.1lf Hz",decode_double(cp,optlen));
+      break;
+    case SPECTRUM_AVG:
+      fprintf(fp,"fft avg %u",decode_int(cp,optlen));
       break;
     case BIN_COUNT:
       fprintf(fp,"bins %d",decode_int(cp,optlen));

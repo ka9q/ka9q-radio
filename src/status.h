@@ -31,7 +31,7 @@ enum status_type {
   UNUSED4,
   INPUT_SAMPRATE, // Nominal sample rate (integer)
   UNUSED6,
-  UNUSED7,
+  SPECTRUM_AVG,   // Number of FFTs averaged into each spectrum response
   INPUT_SAMPLES,
   WINDOW_TYPE,   // Window type for FFT analyzer
   NOISE_BW,      // Noise bandwidth of FFT spectrum bin, in bins
@@ -136,7 +136,7 @@ enum status_type {
   // Spectral analysis
   SPECTRUM_SHAPE,  // parameter for spectrum analysis window (eg, Kaiser beta)
   COHERENT_BIN_SPACING, // (1-overlap) * block rate = (1 - ((M-1)/(L+M-1))) * block rate
-  NONCOHERENT_BIN_BW, // Bandwidth (Hz) of noncoherent integration bin, some multiple of COHERENT_BIN_SPACING
+  RESOLUTION_BW, // Bandwidth (Hz) of noncoherent integration bin, some multiple of COHERENT_BIN_SPACING
   BIN_COUNT,        // Integer number of bins accumulating energy noncoherently
   CROSSOVER,        // Frequency in Hz where spectrum algorithm changes
   BIN_DATA,         // Vector of relative bin energies, real (I^2 + Q^2)

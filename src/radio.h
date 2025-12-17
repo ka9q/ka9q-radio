@@ -253,10 +253,12 @@ struct channel {
     double crossover;  // Crossover frequency between algorithms, Hz
     double shape;     // Analysis window parameter if any (kaiser β, gaussian σ)
     int fft_n;        // size of analysis FFT
+    int fft_avg;      // Number of consecutive FFTs to average into each spectrum response
     enum window_type window_type;
     float *window;    // Analysis window
     void *plan;       // FFTW plan - don't drag in <fftw.h>
     float complex *ring; // Ring buffer of demodulated data in narrowband mode
+    int ring_size;
     int ring_idx;     // index into ring buffer
   } spectrum;
 

@@ -160,7 +160,7 @@ int main(int argc,char *argv[]){
     if(bins > 0)
       encode_int(&bp,BIN_COUNT,bins);
     if(bin_bw > 0)
-      encode_float(&bp,NONCOHERENT_BIN_BW,bin_bw);
+      encode_float(&bp,RESOLUTION_BW,bin_bw);
     if(crossover >= 0)
       encode_float(&bp,CROSSOVER,crossover);
     encode_eol(&bp);
@@ -350,8 +350,8 @@ int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *b
 	cp += sizeof(float);
       }
       break;
-    case NONCOHERENT_BIN_BW:
-      *bin_bw = decode_float(cp,optlen);
+    case RESOLUTION_BW:
+      *bin_bw = decode_double(cp,optlen);
       break;
     case BIN_COUNT: // Do we check that this equals the length of the BIN_DATA tlv?
       l_ccount = decode_int(cp,optlen);

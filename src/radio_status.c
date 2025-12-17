@@ -429,7 +429,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  chan->squelch_close = dB2power(x);
       }
       break;
-    case NONCOHERENT_BIN_BW:
+    case RESOLUTION_BW:
       {
 	double const x = fabs(decode_double(cp,optlen));
 	if(isfinite(x) && x != chan->spectrum.bin_bw){
@@ -480,6 +480,15 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  chan->spectrum.shape = x;
 	  restart_needed = true;
 	}
+      }
+      break;
+    case SPECTRUM_AVG:
+      {
+	unsigned x = abs(decode_int(cp,optlen));
+	if(x == 0)
+	  x = 1; // Minimum 1
+	chan->spectrum.fft_avg = x;
+	restart_needed = true;
       }
       break;
     case STATUS_INTERVAL:
@@ -701,12 +710,13 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   case SPECT_DEMOD:
     {
       encode_int(&bp,WINDOW_TYPE,chan->spectrum.window_type);
-      encode_float(&bp,NONCOHERENT_BIN_BW,chan->spectrum.bin_bw); // Hz
+      encode_float(&bp,RESOLUTION_BW,chan->spectrum.bin_bw); // Hz
       encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
       encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
       encode_float(&bp,SPECTRUM_SHAPE,chan->spectrum.shape);
       encode_int(&bp,SPECTRUM_FFT_N,chan->spectrum.fft_n);
       encode_float(&bp,NOISE_BW,chan->spectrum.noise_bw);
+      encode_int(&bp,SPECTRUM_AVG,chan->spectrum.fft_avg);
       // encode bin data here? maybe change this, it can be a lot
       // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
       if(chan->spectrum.bin_data != NULL){

@@ -893,7 +893,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
 	}
       }
     } else {
-      // Inverted spectrum
+      // shift < 0: Inverted spectrum
       int rp = -(shift - slave->bins/2); // Start at high (negative) input frequency
       // Pad start if necessary
       while(rp >= master->bins){

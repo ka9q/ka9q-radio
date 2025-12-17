@@ -248,8 +248,11 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case PL_DEVIATION:
       channel->fm.tone_deviation = decode_double(cp,optlen);
       break;
-    case NONCOHERENT_BIN_BW:
+    case RESOLUTION_BW:
       channel->spectrum.bin_bw = decode_double(cp,optlen);
+      break;
+    case SPECTRUM_AVG:
+      channel->spectrum.fft_avg = decode_int(cp,optlen);
       break;
     case BIN_COUNT:
       channel->spectrum.bin_count = decode_int(cp,optlen);
