@@ -355,7 +355,7 @@ static int spectrum_poll(struct channel *chan){
       assert(binp >= 0);
       for(int i=0;i < chan->spectrum.bin_count && binp < chan->spectrum.fft_n/2+1 ; i++,binp++){
 	if(i == chan->spectrum.bin_count/2)
-	  binp -= chan->spectrum.bin_count/2; // crossed into negative output rang, Wrap input back to lowest frequency requested
+	  binp -= chan->spectrum.bin_count; // crossed into negative output rang, Wrap input back to lowest frequency requested
 
 	double const p = chan->spectrum.bin_data[i] + gain * cnrmf(fft_out[binp]); // Accumulate power
 	assert(isfinite(p));
