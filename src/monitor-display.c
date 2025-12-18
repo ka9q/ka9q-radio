@@ -400,11 +400,11 @@ static void update_monitor_display(void){
   // First header line
   if(Repeater_tail != 0){
     if(Last_id_time != 0)
-      printwt("Last ID: %lld sec",(long long)((gps_time_ns() - Last_id_time) / BILLION));
+      printwt("Last ID: %.1lf sec",((double)(gps_time_ns() - Last_id_time) * 1e-9));
     if(PTT_state)
       addstrt(" PTT On");
     else if(Last_xmit_time != 0)
-      printwt(" PTT Off; Last xmit: %lld sec",(long long)((gps_time_ns() - Last_xmit_time) / BILLION));
+      printwt(" PTT Off; Last xmit: %.1lf sec",(double)(gps_time_ns() - Last_xmit_time) * 1e-9);
     printwt("\n");
   }
   if(Constant_delay)
@@ -590,7 +590,7 @@ static void update_monitor_display(void){
       if(sp->now_active)
 	mvprintwt(y,x,"%*s",width,ftime(buf,sizeof(buf),(int64_t)round(sp->active)));
       else {
-	double idle_sec = (time - sp->last_active) / BILLION;
+	double idle_sec = (time - sp->last_active) * 1e-9;
 	mvprintwt(y,x,"%*s",width,ftime(buf,sizeof(buf),(int64_t)round(idle_sec)));   // Time idle since last transmission
       }
     }
