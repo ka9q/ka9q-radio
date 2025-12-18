@@ -272,7 +272,7 @@ static struct windef {
   {&Input_win,20,60},
   {&Output_win,20,60},
 };
-#define NWINS (sizeof(Windefs) / sizeof(Windefs[0]))
+#define NWINS ((int)(sizeof(Windefs) / sizeof(Windefs[0])))
 
 static void setup_windows(void){
   // First row
@@ -290,13 +290,13 @@ static void setup_windows(void){
   LINES = w.ws_row;
 
   // Delete all previous windows
-  for(unsigned i=0; i < NWINS; i++){
+  for(int i=0; i < NWINS; i++){
     if(*Windefs[i].w)
       delwin(*Windefs[i].w);
     *Windefs[i].w = NULL;
   }
   // Create as many as will fit
-  for(unsigned i=0; i < NWINS; i++){
+  for(int i=0; i < NWINS; i++){
     if(COLS < col + Windefs[i].cols){
       // No more room on this line, go to next
       col = 0;
@@ -975,7 +975,7 @@ static int process_keyboard(struct channel *channel,uint8_t **bpp,int c){
     {
       char str[Entry_width],*ptr;
       getentry("FFT Window type [0=Kaiser,1=rect,2=blackman,3=exact blackman,4=gaussian,5=hann,6=hamming: ",str,sizeof(str));
-      unsigned const b = strtol(str,&ptr,0);
+      int const b = strtol(str,&ptr,0);
       if(ptr != str){
 	if(b >= N_WINDOW){
 	  beep(); // beyond limits
@@ -1236,7 +1236,7 @@ static bool for_us(uint8_t const *buffer,size_t length,uint32_t ssrc){
     if(type == EOL)
       break; // end of list, no length
 
-    unsigned int optlen = *cp++;
+    int optlen = *cp++;
     if(optlen & 0x80){
       // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
       int length_of_length = optlen & 0x7f;
@@ -1627,7 +1627,7 @@ static void display_input(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Blocks since last poll","%'llu",channel->status.blocks_since_poll);
   pprintw(w,row++,col,"Send errors","%'llu",channel->output.errors);
   if(channel->options != 0)
-    pprintw(w,row++,col,"Options","0x%llx",(unsigned long long)channel->options);
+    pprintw(w,row++,col,"Options","0x%llx",(long long)channel->options);
   box(w,0,0);
   mvwaddnstr(w,0,1,Frontend.description,getmaxx(w)-2);
   wnoutrefresh(w);
@@ -1651,7 +1651,7 @@ static void display_output(WINDOW *w,struct channel const *channel){
   pprintw(w,row++,col,"Sample rate","%'d Hz",channel->output.samprate);
   pprintw(w,row++,col,"Encoding","%s",encoding_string(channel->output.encoding));
   pprintw(w,row++,col,"Channels","%d",channel->output.channels);
-  pprintw(w,row++,col,"Packets","%'llu",(long long unsigned)channel->output.rtp.packets);
+  pprintw(w,row++,col,"Packets","%'lld",(long long)channel->output.rtp.packets);
   if(channel->output.encoding == OPUS){
     if(channel->output.opus_bitrate != 0)
       pprintw(w,row++,col,"Opus bitrate","%'d",channel->output.opus_bitrate);
