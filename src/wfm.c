@@ -158,7 +158,7 @@ int demod_wfm(void *arg){
       continue;
     }
     // Actual FM demodulation
-    float complex *buffer = chan->filter.out.output.c; // Working buffer
+    float complex * restrict buffer = chan->filter.out.output.c; // Working buffer
     for(int n=0; n < composite_L; n++){
       // Although deviation can be zero, argf() is defined as returning 0, not NAN
       float const np = M_1_PIf * cargf(buffer[n]); // -1 to +1
@@ -228,6 +228,9 @@ int demod_wfm(void *arg){
 
       float complex stereo_buffer[audio_L];
       double output_energy = 0;
+      double const fm_gain = chan->fm.gain;
+      double const fm_rate = chan->fm.rate;
+      double const gain = chan->output.gain;
       for(int n = 0; n < audio_L; n++){
 	double complex subc_phasor = pilot.output.c[n]; // 19 kHz pilot
 	subc_phasor = (subc_phasor * subc_phasor) / cnrm(subc_phasor); // square to 38 kHz and normalize
@@ -238,10 +241,10 @@ int demod_wfm(void *arg){
 	// L+R = mono.output.r[n]; L-R = subc_info
 	// real(s) = L, imag(s) = R
 	double complex s = mono.output.r[n] + subc_info + I * (mono.output.r[n] - subc_info);
-	if(chan->fm.rate != 0)
-	  s = stereo_deemph += chan->fm.rate * (chan->fm.gain * s - stereo_deemph);
+	if(fm_rate != 0)
+	  s = stereo_deemph += fm_rate * (fm_gain * s - stereo_deemph);
 
-	stereo_buffer[n] = (float)(s * chan->output.gain);
+	stereo_buffer[n] = (float)(s * gain);
 	output_energy += cnrmf(stereo_buffer[n]);
       }
       // Halve power to get level per channel
@@ -255,17 +258,20 @@ int demod_wfm(void *arg){
 	chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
       }
       double output_energy = 0;
+      double const gain = chan->output.gain;
       if(chan->fm.rate != 0){
 	// Apply deemphasis
+	double const fm_rate = chan->fm.rate;
+	double const fm_gain = chan->fm.gain;
 	for(int n=0; n < audio_L; n++){
-	  mono_deemph += chan->fm.rate * (chan->fm.gain * mono.output.r[n] - mono_deemph);
-	  double const s = mono_deemph * chan->output.gain;
+	  mono_deemph += fm_rate * (fm_gain * mono.output.r[n] - mono_deemph);
+	  double const s = mono_deemph * gain;
 	  mono.output.r[n] = (float)s;
 	  output_energy += s * s;
 	}
       } else {
 	for(int n=0; n < audio_L; n++){
-	  double const s = mono.output.r[n] * chan->output.gain;
+	  double const s = mono.output.r[n] * gain;
 	  output_energy += s * s;
 	  mono.output.r[n] = (float)s;
 	}
