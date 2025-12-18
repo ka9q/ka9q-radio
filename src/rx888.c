@@ -544,8 +544,8 @@ static void *agc_rx888(void *arg){
 // Callback called with incoming receiver data from A/D
 static void rx_callback(struct libusb_transfer * const transfer){
   assert(transfer != NULL);
-  struct sdrstate * const sdr = (struct sdrstate *)transfer->user_data;
-  struct frontend * const frontend = sdr->frontend;
+  struct sdrstate * const restrict sdr = (struct sdrstate *)transfer->user_data;
+  struct frontend * const restrict frontend = sdr->frontend;
   int64_t const now = gps_time_ns();
 
   sdr->xfers_in_progress--;
@@ -569,11 +569,11 @@ static void rx_callback(struct libusb_transfer * const transfer){
 
   // Feed directly into FFT input buffer, accumulate energy
   double in_energy = 0; // A/D energy accumulator
-  int16_t const * const samples = (int16_t *)transfer->buffer;
-  float * const wptr = frontend->in.input_write_pointer.r;
+  int16_t const * const restrict samples = (int16_t *)transfer->buffer;
+  float * const restrict wptr = frontend->in.input_write_pointer.r;
   int const sampcount = size / sizeof(int16_t);
+  double delta_sum = 0;
   if(sdr->randomizer){
-    double delta_sum = 0;
     for(int i=0; i < sampcount; i++){
       int32_t s = samples[i];
       s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
@@ -585,14 +585,12 @@ static void rx_callback(struct libusb_transfer * const transfer){
       }
       // Remove DC offset
       // Use double precision to avoid denormals
-      double e  = s - sdr->dc_offset;
+      double const e  = s - sdr->dc_offset;
       delta_sum += e;
       in_energy += e * e;
       wptr[i] = (float)(e * sdr->scale);
     }
-    sdr->dc_offset += DC_alpha * delta_sum;
   } else {
-    double delta_sum = 0;
     for(int i=0; i < sampcount; i++){
       if(samples[i] == 32767 || samples[i] <= -32767){
 	frontend->overranges++;
@@ -602,13 +600,13 @@ static void rx_callback(struct libusb_transfer * const transfer){
       }
       // Remove DC offset
       // Use double precision to avoid denormals
-      double s = samples[i] - sdr->dc_offset;
+      double const s = samples[i] - sdr->dc_offset;
       delta_sum += s;
       in_energy += s * s;
       wptr[i] = (float)(s * sdr->scale);
     }
-    sdr->dc_offset += DC_alpha * delta_sum;
   }
+  sdr->dc_offset += DC_alpha * delta_sum;
   // These blocks are kinda small, so exponentially smooth the power readings
   frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
   frontend->samples += sampcount; // Count original samples
