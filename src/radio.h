@@ -309,7 +309,7 @@ struct channel {
     uint64_t packets_out;
     struct sockaddr dest_socket; // Local status output; same IP as output.dest_socket but different port
     uint8_t *command;          // Incoming command
-    unsigned long length;
+    size_t length;
   } status;
 
   struct {
