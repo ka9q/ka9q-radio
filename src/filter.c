@@ -91,6 +91,7 @@ static inline int modulo(int x,int const m){
 }
 
 
+// in MAY be the same as out, meaning a in-place transform.
 fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction){
   bool notify = false;
   pthread_mutex_lock(&FFTW_planning_mutex);
@@ -413,7 +414,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
 }
 // Assist with choosing good blocksizes for FFTW3
 static const int small_primes[6] = {2, 3, 5, 7, 11, 13};
-static unsigned long factor_small_primes(unsigned long n, int exponents[6]);
+static long factor_small_primes(long n, int exponents[6]);
 
 
 /**
@@ -426,7 +427,7 @@ static unsigned long factor_small_primes(unsigned long n, int exponents[6]);
  *   - Otherwise, the leftover (return value) is the part that couldn't
  *     be factored into those primes.
  */
-static unsigned long factor_small_primes(unsigned long n, int exponents[6]){
+static long factor_small_primes(long n, int exponents[6]){
   // Initialize exponents
   for (int i = 0; i < 6; i++)
     exponents[i] = 0;
@@ -443,26 +444,25 @@ static unsigned long factor_small_primes(unsigned long n, int exponents[6]){
 
 // Is this a good blocksize for FFTW3?
 // Any number of factors of 2, 3, 5, 7 plus one of either 11 or 13
-bool goodchoice(unsigned long n){
+bool goodchoice(long n){
   int exponents[6];
 
-  unsigned long r = factor_small_primes(n,exponents);
+  long r = factor_small_primes(n,exponents);
   if(r != 1 || (exponents[4] + exponents[5] > 1))
     return false;
   else
     return true;
 }
 
-unsigned int ceil_pow2(unsigned int x) {
-    if (x <= 1) return 1;
-    if (x > (1u << 31)) return 0;        // overflow: no power-of-2 fits
-    x--;
-    x |= x >> 1;
-    x |= x >> 2;
-    x |= x >> 4;
-    x |= x >> 8;
-    x |= x >> 16;
-    return x + 1;
+int ceil_pow2(uint32_t x) {
+  if (x <= 1) return 1;
+  x--;
+  x |= x >> 1;
+  x |= x >> 2;
+  x |= x >> 4;
+  x |= x >> 8;
+  x |= x >> 16;
+  return x + 1;
 }
 
 // Apply notch filters in the frequency domain to the output of a forward FFT
@@ -604,7 +604,7 @@ int execute_filter_input(struct filter_in * const f){
   // A descriptor from the free list won't be blank, but we set everything below
   assert(job != NULL);
   job->fin = f;
-  job->jobnum = f->next_jobnum++;
+  job->jobnum = f->next_jobnum++; // Can wrap, hence jobnum is unsigned
   job->output = f->fdomain[job->jobnum % ND];
   job->type = f->in_type;
   job->plan = f->fwd_plan;
@@ -672,7 +672,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
 
   // We do have to modify the master's data structure, notably mutex locks
   // So the dereferenced pointer can't be const
-  struct filter_in * const master = slave->master;
+  struct filter_in * restrict const master = slave->master;
   assert(master != NULL);
   if(master == NULL)
     return -1;
@@ -688,7 +688,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
 
   // Wait for new block of output data
   pthread_mutex_lock(&master->filter_mutex);
-  int blocks_behind = master->completed_jobs[slave->next_jobnum % ND] - slave->next_jobnum;
+  int blocks_behind = (int)(master->completed_jobs[slave->next_jobnum % ND] - slave->next_jobnum);
   if(blocks_behind >= ND){
     // We've fallen too far behind. skip ahead to the oldest block still available
     unsigned nextblock = master->completed_jobs[0];
@@ -702,16 +702,22 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
     pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
   // We don't modify the master's output data, we create our own
-  float complex const * const fdomain = master->fdomain[slave->next_jobnum % ND];
+  float complex const * restrict const m_fdomain = master->fdomain[slave->next_jobnum % ND];
   // in case we just waited so long that the buffer wrapped, resynch
   slave->next_jobnum = master->completed_jobs[slave->next_jobnum % ND] + 1;
   pthread_mutex_unlock(&master->filter_mutex);
 
-  assert(fdomain != NULL); // Should always be master frequency data
+  assert(m_fdomain != NULL); // Should always be master frequency data
 
   // In spectrum mode we'll read directly from master. Don't forget the 3dB scale when the input is real
+
   if(slave->fdomain == NULL || slave->response == NULL)
     return 0;
+
+  float complex * restrict const s_fdomain = slave->fdomain;
+  float complex const * restrict const s_response = slave->response;
+  int const s_bins = slave->bins;
+  int const m_bins = master->bins;
 
   /* Multiply the requested frequency segment by the frequency response
      Although frequency domain data is always complex, this is complicated because
@@ -726,49 +732,49 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   if(master->in_type == COMPLEX && slave->out_type == COMPLEX){
     // Complex -> complex (e.g., fobos (in VHF/UHF mode), funcube, airspyhf, sdrplay)
 
-    int wp = (slave->bins+1)/2; // most negative output bin
-    int rp = shift - slave->bins/2; // Start index in master, unwrapped = shift - # output bins
+    int wp = (s_bins+1)/2; // most negative output bin
+    int rp = shift - s_bins/2; // Start index in master, unwrapped = shift - # output bins
 
     // Starting below master, zero output until we're in range. Rarely needed.
-    while(rp < -(master->bins+1)/2){
-      assert(wp >=0 && wp < slave->bins);
-      slave->fdomain[wp] = 0;
+    while(rp < -(m_bins+1)/2){
+      assert(wp >=0 && wp < s_bins);
+      s_fdomain[wp] = 0;
       rp++;
-      if(++wp == (slave->bins+1)/2) // exhausted output buffer
+      if(++wp == (s_bins+1)/2) // exhausted output buffer
 	goto done;
-      if(wp == slave->bins)
+      if(wp == s_bins)
 	wp = 0; // Wrap to DC
     }
     if(rp < 0)
-      rp += master->bins; // Starts in negative region of master
+      rp += m_bins; // Starts in negative region of master
 
-    if(rp < 0 || rp >= master->bins){
+    if(rp < 0 || rp >= m_bins){
       // Shift is out of range
       // Zero any remaining output
-      while(wp != (slave->bins+1)/2){
-	assert(wp >=0 && wp < slave->bins);
-	slave->fdomain[wp++] = 0;
-	if(wp == slave->bins)
+      while(wp != (s_bins+1)/2){
+	assert(wp >=0 && wp < s_bins);
+	s_fdomain[wp++] = 0;
+	if(wp == s_bins)
 	  wp = 0; // Wrap to DC
       }
       goto done;
     }
     // The actual work is here
     do {
-      assert(rp >= 0 && rp < master->bins);
-      assert(wp >=0 && wp < slave->bins);
-      slave->fdomain[wp] = fdomain[rp] * slave->response[wp];
-      if(++rp == master->bins)
+      assert(rp >= 0 && rp < m_bins);
+      assert(wp >=0 && wp < s_bins);
+      s_fdomain[wp] = m_fdomain[rp] * s_response[wp];
+      if(++rp == m_bins)
 	rp = 0; // Master wrapped to DC
-      if(++wp == slave->bins)
+      if(++wp == s_bins)
 	wp = 0; // Slave wrapped to DC
-    } while (wp != (slave->bins+1)/2 && rp != (master->bins+1)/2); // Until we reach the top of the output or input
+    } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
 
     // Zero any remaining output. Rarely needed.
-    while(wp != (slave->bins+1)/2){
-      assert(wp >=0 && wp < slave->bins);
-      slave->fdomain[wp++] = 0;
-      if(wp == slave->bins)
+    while(wp != (s_bins+1)/2){
+      assert(wp >=0 && wp < s_bins);
+      s_fdomain[wp++] = 0;
+      if(wp == s_bins)
 	wp = 0; // Wrap to DC
     }
   } else if(master->in_type == COMPLEX && slave->out_type == BEAM){
@@ -777,73 +783,73 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     // Uses complex weights alpha and beta
     // Useful for Fobos in independent input mode
 
-    int wp = (slave->bins+1)/2; // most negative output bin
-    int rp = shift - slave->bins/2; // Start index in master, unwrapped = shift - # output bins
+    int wp = (s_bins+1)/2; // most negative output bin
+    int rp = shift - s_bins/2; // Start index in master, unwrapped = shift - # output bins
 
     // Starting below master, zero output until we're in range. Rarely needed.
-    while(rp < -(master->bins+1)/2){
-      assert(wp >=0 && wp < slave->bins);
-      slave->fdomain[wp] = 0;
+    while(rp < -(m_bins+1)/2){
+      assert(wp >=0 && wp < s_bins);
+      s_fdomain[wp] = 0;
       rp++;
-      if(++wp == (slave->bins+1)/2) // exhausted output buffer
+      if(++wp == (s_bins+1)/2) // exhausted output buffer
 	goto done;
-      if(wp == slave->bins)
+      if(wp == s_bins)
 	wp = 0; // Wrap to DC
     }
     if(rp < 0)
-      rp += master->bins; // Starts in negative region of master
+      rp += m_bins; // Starts in negative region of master
 
-    if(rp < 0 || rp >= master->bins){
+    if(rp < 0 || rp >= m_bins){
       // Shift is out of range
       // Zero any remaining output
-      while(wp != (slave->bins+1)/2){
-	assert(wp >=0 && wp < slave->bins);
-	slave->fdomain[wp++] = 0;
-	if(wp == slave->bins)
+      while(wp != (s_bins+1)/2){
+	assert(wp >=0 && wp < s_bins);
+	s_fdomain[wp++] = 0;
+	if(wp == s_bins)
 	  wp = 0; // Wrap to DC
       }
       goto done;
     }
     // The actual work is here
     do {
-      assert(rp >= 0 && rp < master->bins);
-      assert(wp >=0 && wp < slave->bins);
+      assert(rp >= 0 && rp < m_bins);
+      assert(wp >=0 && wp < s_bins);
       // rp is unlikely to pass through zero or nyquist in this mode, but handle it anyway?
-      if(rp == 0 || rp == master->bins/2)
-	slave->fdomain[wp] = (float complex)(__real__(fdomain[rp]) * slave->alpha * slave->response[wp]
-					     + __imag__(fdomain[rp]) * slave->beta * slave->response[wp]);
+      if(rp == 0 || rp == m_bins/2)
+	s_fdomain[wp] = (float complex)(__real__(m_fdomain[rp]) * slave->alpha * s_response[wp]
+					     + __imag__(m_fdomain[rp]) * slave->beta * s_response[wp]);
       else
-	slave->fdomain[wp] = (float complex)((slave->alpha * fdomain[rp] + slave->beta * conjf(fdomain[master->bins - rp]))
-					     * slave->response[wp]);
-      if(++rp == master->bins)
+	s_fdomain[wp] = (float complex)((slave->alpha * m_fdomain[rp] + slave->beta * conjf(m_fdomain[m_bins - rp]))
+					     * s_response[wp]);
+      if(++rp == m_bins)
 	rp = 0; // Master wrapped to DC
-      if(++wp == slave->bins)
+      if(++wp == s_bins)
 	wp = 0; // Slave wrapped to DC
-    } while (wp != (slave->bins+1)/2 && rp != (master->bins+1)/2); // Until we reach the top of the output or input
+    } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
 
     // Zero any remaining output. Rarely needed.
-    while(wp != (slave->bins+1)/2){
-      assert(wp >=0 && wp < slave->bins);
-      slave->fdomain[wp++] = 0;
-      if(wp == slave->bins)
+    while(wp != (s_bins+1)/2){
+      assert(wp >=0 && wp < s_bins);
+      s_fdomain[wp++] = 0;
+      if(wp == s_bins)
 	wp = 0; // Wrap to DC
     }
   } else if(master->in_type == COMPLEX && slave->out_type == REAL){
 
     // Complex -> real UNTESTED! not used in ka9q-radio at present
-    for(int si=0; si < slave->bins; si++){
+    for(int si=0; si < s_bins; si++){
       int const mi = si + shift;
       float complex result = 0;
-      if(mi >= -master->bins/2 && mi < master->bins/2)
-	result = slave->response[si] * (fdomain[modulo(mi,master->bins)] + conjf(fdomain[modulo(master->bins - mi, master->bins)]));
-      slave->fdomain[si] = result;
+      if(mi >= -m_bins/2 && mi < m_bins/2)
+	result = s_response[si] * (m_fdomain[modulo(mi,m_bins)] + conjf(m_fdomain[modulo(m_bins - mi, m_bins)]));
+      s_fdomain[si] = result;
     }
   } else if(master->in_type == REAL && slave->out_type == REAL){
     // Real -> real (e.g. in wfm stereo decoding)
     // shift is unlikely to be non-zero because of the frequency folding, but handle it anyway
-    for(int si=0; si < slave->bins; si++){ // All positive frequencies
+    for(int si=0; si < s_bins; si++){ // All positive frequencies
       int const mi = si + shift;
-      slave->fdomain[si] = (mi >= 0 && mi < master->bins) ? fdomain[mi] * slave->response[si] : 0;
+      s_fdomain[si] = (mi >= 0 && mi < m_bins) ? m_fdomain[mi] * s_response[si] : 0;
     }
   } else if(master->in_type == REAL && slave->out_type == COMPLEX){
     /* Real->complex (e.g., rx888, fobos (direct sample mode), airspy R2)
@@ -853,78 +859,78 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
        Don't cross input DC as this doesn't seem useful; just blank the output
        For real inputs, set_filter scales +3dB to account for the half energy in the implicit negative spectrum
     */
-    int wp = (slave->bins+1)/2; // most negative output bin
+    int wp = (s_bins+1)/2; // most negative output bin
 
     if(shift >= 0){
       // Right side up
-      int rp = shift - slave->bins/2; // Start index in master, unwrapped = shift - # output bins
+      int rp = shift - s_bins/2; // Start index in master, unwrapped = shift - # output bins
       // Zero-pad start if necessary. Rarely needed
       while(rp < 0){
-	assert(wp >=0 && wp <= slave->bins);
-	if(wp == slave->bins)
+	assert(wp >=0 && wp <= s_bins);
+	if(wp == s_bins)
 	  wp = 0; // wrap to DC
-	slave->fdomain[wp] = 0;
-	if(++wp == (slave->bins+1)/2){
+	s_fdomain[wp] = 0;
+	if(++wp == (s_bins+1)/2){
 	  goto done; // Top of output
 	}
 	rp++;
       }
       // Actual work
-      while(rp < master->bins){
-	assert(wp >=0 && wp <= slave->bins);
-	assert(rp >= 0 && rp < master->bins);
-	if(wp == slave->bins)
+      while(rp < m_bins){
+	assert(wp >=0 && wp <= s_bins);
+	assert(rp >= 0 && rp < m_bins);
+	if(wp == s_bins)
 	  wp = 0; // Wrap to DC
 
-	slave->fdomain[wp] = fdomain[rp] * slave->response[wp];
-	if(++wp == (slave->bins+1)/2){
+	s_fdomain[wp] = m_fdomain[rp] * s_response[wp];
+	if(++wp == (s_bins+1)/2){
 	  goto done; // Output done
 	}
 	rp++;
       }
       // zero-pad upper end
-      while(wp != (slave->bins+1)/2){
-	assert(wp >= 0 && wp <= slave->bins);
-	if(wp == slave->bins)
+      while(wp != (s_bins+1)/2){
+	assert(wp >= 0 && wp <= s_bins);
+	if(wp == s_bins)
 	  wp = 0;
-	slave->fdomain[wp] = 0;
-	if(++wp == (slave->bins+1)/2){
+	s_fdomain[wp] = 0;
+	if(++wp == (s_bins+1)/2){
 	  goto done; // Top of output
 	}
       }
     } else {
       // shift < 0: Inverted spectrum
-      int rp = -(shift - slave->bins/2); // Start at high (negative) input frequency
+      int rp = -(shift - s_bins/2); // Start at high (negative) input frequency
       // Pad start if necessary
-      while(rp >= master->bins){
-	assert(wp >=0 && wp <= slave->bins);
-	if(wp == slave->bins)
+      while(rp >= m_bins){
+	assert(wp >=0 && wp <= s_bins);
+	if(wp == s_bins)
 	  wp = 0; // wrap to DC
-	slave->fdomain[wp] = 0;
-	if(++wp == (slave->bins+1)/2){
+	s_fdomain[wp] = 0;
+	if(++wp == (s_bins+1)/2){
 	  goto done; // Top of output
 	}
 	rp--;
       }
       // Actual work
       while(rp >= 0){
-	assert(wp >=0 && wp < slave->bins);
-	assert(rp >= 0 && rp < master->bins);
-	if(wp == slave->bins)
+	assert(wp >=0 && wp < s_bins);
+	assert(rp >= 0 && rp < m_bins);
+	if(wp == s_bins)
 	  wp = 0; // Wrap to DC
-	slave->fdomain[wp] = conjf(fdomain[rp]) * slave->response[wp];
-	if(++wp == (slave->bins+1)/2){
+	s_fdomain[wp] = conjf(m_fdomain[rp]) * s_response[wp];
+	if(++wp == (s_bins+1)/2){
 	  goto done;
 	}
 	rp--;
       }
       // Zero upper end
-      while(wp != (slave->bins+1)/2){
-	assert(wp >= 0 && wp <= slave->bins);
-	if(wp == slave->bins)
+      while(wp != (s_bins+1)/2){
+	assert(wp >= 0 && wp <= s_bins);
+	if(wp == s_bins)
 	  wp = 0; // Wrap DC
-	slave->fdomain[wp] = 0;
-	if(++wp == (slave->bins+1)/2){
+	s_fdomain[wp] = 0;
+	if(++wp == (s_bins+1)/2){
 	  goto done; // Top of output
 	}
       }
@@ -932,12 +938,12 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   }
  done:;
   // Zero out Nyquist bin
-  slave->fdomain[(slave->bins+1)/2] = 0; // ?necessary?
+  s_fdomain[(s_bins+1)/2] = 0; // ?necessary?
 
   pthread_mutex_unlock(&slave->response_mutex); // release response[]
 
   // And finally back to the time domain
-  fftwf_execute(slave->rev_plan); // Note: c2r version destroys fdomain[], but it's not used again anyway
+  fftwf_execute(slave->rev_plan); // Note: c2r version destroys m_fdomain[], but it's not used again anyway
   // Drop the cache in the first M-1 points of the time domain buffer that we'll discard
   if(slave->out_type == REAL)
     drop_cache(slave->output_buffer.r,(slave->points - slave->olen) * sizeof (*slave->output_buffer.r));
@@ -1209,9 +1215,9 @@ void suggest(int size,int dir,int clex){
   fflush(out);
 }
 // Greatest common divisor
-unsigned long gcd(unsigned long a,unsigned long b){
+long gcd(long a,long b){
   while(b != 0){
-    unsigned long t = b;
+    long t = b;
     b = a % b;
     a = t;
   }
@@ -1219,10 +1225,10 @@ unsigned long gcd(unsigned long a,unsigned long b){
 }
 
 
-unsigned long lcm(unsigned long a,unsigned long b){
-  if(a == 0 || b == 0)
+long lcm(long a, long b){
+  if(a <= 0 || b <= 0)
     return 0;
-  unsigned long g = gcd(a,b);
+  long g = gcd(a,b);
   return (a/g) * b;
 }
 
@@ -1346,4 +1352,3 @@ static double const kaiser(int const n,int const M, double const beta){
   return i0(beta*sqrt(1-p*p)) * old_inv_denom;
 }
 #endif
-

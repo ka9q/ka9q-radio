@@ -72,15 +72,15 @@ struct filter_in {
 };
 
 struct filter_out {
-  struct filter_in * restrict master;
+  struct filter_in * master;
   enum filtertype out_type;          // REAL, COMPLEX, BEAM, SPECTRUM
   int points;               // Size N of fft; Same as bins only for complex
   int olen;                 // Length of user portion of output buffer (decimated L)
   int bins;                 // Number of frequency bins; == N for complex, == N/2 + 1 for real output
   double complex alpha;      // For beam synthesis mode, or for selecting I or Q on complex input
   double complex beta;
-  float complex * restrict fdomain;  // Filtered signal in frequency domain
-  float complex * restrict response; // Filter response in frequency domain
+  float complex *fdomain;  // Filtered signal in frequency domain
+  float complex *response; // Filter response in frequency domain
   pthread_mutex_t response_mutex;
   struct rc output_buffer;           // Actual time-domain output buffer, length N/decimate
   struct rc output;                  // Beginning of user output area, length L/decimate
@@ -91,23 +91,23 @@ struct filter_out {
 };
 
 int create_filter_input(struct filter_in *,int const L,int const M, enum filtertype const in_type);
-int create_filter_output(struct filter_out *slave,struct filter_in * restrict master,float complex * restrict response,int olen, enum filtertype out_type);
-int execute_filter_input(struct filter_in * restrict);
-int execute_filter_output(struct filter_out * restrict ,int);
-int delete_filter_input(struct filter_in * restrict);
-int delete_filter_output(struct filter_out * restrict);
-int set_filter(struct filter_out * restrict,double,double,double);
+int create_filter_output(struct filter_out * restrict slave,struct filter_in * restrict master,float complex * restrict response,int olen, enum filtertype out_type);
+int execute_filter_input(struct filter_in *);
+int execute_filter_output(struct filter_out * ,int);
+int delete_filter_input(struct filter_in *);
+int delete_filter_output(struct filter_out *);
+int set_filter(struct filter_out *,double,double,double);
 void *run_fft(void *);
-int write_cfilter(struct filter_in *, float complex const *,int size);
-int write_rfilter(struct filter_in *, float const *,int size);
+int write_cfilter(struct filter_in * restrict, float complex const * restrict, int size);
+int write_rfilter(struct filter_in * restrict, float const * restrict , int size);
 void suggest(int size,int dir,int clex);
-unsigned long gcd(unsigned long a,unsigned long b);
-unsigned long lcm(unsigned long a,unsigned long b);
+long gcd(long a,long b);
+long lcm(long a,long b);
 fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction);
 fftwf_plan plan_r2c(int N, float *in, float complex *out);
 fftwf_plan plan_c2r(int N, float complex *in, float *out);
-bool goodchoice(unsigned long);
-unsigned int ceil_pow2(unsigned int x);
+bool goodchoice(long);
+int ceil_pow2(uint32_t x);
 int set_filter_weights(struct filter_out *out,double complex i_weight, double complex q_weight);
 
 // Window functions
@@ -148,7 +148,7 @@ static inline int put_rfilter(struct filter_in * restrict const f,float const s)
 }
 
 // Read real samples from output side of filter
-static inline float read_rfilter(struct filter_out * restrict const f,int const rotate){
+static inline float read_rfilter(struct filter_out *const f,int const rotate){
   if(f->rcnt == 0){
     execute_filter_output(f,rotate);
     f->rcnt = f->olen;
@@ -157,7 +157,7 @@ static inline float read_rfilter(struct filter_out * restrict const f,int const 
 }
 
 // Read complex samples from output side of filter
-static inline float complex read_cfilter(struct filter_out * restrict const f,int const rotate){
+static inline float complex read_cfilter(struct filter_out * const f,int const rotate){
   if(f->rcnt == 0){
     execute_filter_output(f,rotate);
     f->rcnt = f->olen;
