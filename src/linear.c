@@ -41,7 +41,7 @@ int demod_linear(void *arg){
 
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
-  unsigned int const blocksize = (int)round(chan->output.samprate * Blocktime);
+  int const blocksize = (int)round(chan->output.samprate * Blocktime);
   int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
 				    chan->filter.beam ? BEAM : COMPLEX);
   if(status != 0){
@@ -88,8 +88,8 @@ int demod_linear(void *arg){
     if(downconvert(chan) != 0)
       break; // Dynamic channel termination
 
-    unsigned int const N = chan->sampcount; // Number of raw samples in filter output buffer
-    float complex * buffer = chan->baseband; // Working buffer
+    int const N = chan->sampcount; // Number of raw samples in filter output buffer
+    float complex * restrict const buffer = chan->baseband; // Working buffer
 
     if (!first_run && frontend->L != 0){
       double const block_rate = frontend->samprate / frontend->L;
@@ -111,9 +111,11 @@ int demod_linear(void *arg){
     if(chan->pll.enable){
       // Update PLL state, if active
       set_pll_params(&chan->pll.pll,chan->pll.loop_bw,damping);
-      for(unsigned int n=0; n<N; n++){
-	double complex const s = buffer[n] *= conj(pll_phasor(&chan->pll.pll));
-	double const phase = chan->pll.square ? carg(s*s) : carg(s);
+      bool const square = chan->pll.square;
+      for(int n=0; n<N; n++){
+	double complex const s = buffer[n] * conj(pll_phasor(&chan->pll.pll));
+	buffer[n] = s;
+	double const phase = square ? carg(s*s) : carg(s);
 	run_pll(&chan->pll.pll,phase);
 	signal += creal(s) * creal(s); // signal in phase with VCO is signal + noise power
 	noise += cimag(s) * cimag(s);  // signal in quadrature with VCO is assumed to be noise power
@@ -163,7 +165,7 @@ int demod_linear(void *arg){
     assert(isfinite(chan->tune.shift));
     set_osc(&chan->shift,chan->tune.shift/chan->output.samprate,0);
     if(chan->shift.freq != 0){
-      for(unsigned int n=0; n < N; n++)
+      for(int n=0; n < N; n++)
 	buffer[n] *= step_osc(&chan->shift);
     }
 
@@ -192,7 +194,7 @@ int demod_linear(void *arg){
 	// Divide into 2 ms slices. Hopefully divides evenly (it does for the usual sampling rates and block times)
 	// Should handle fractions if that ever happens
 	int samples_per_slice = (int)round(N * .002 / Blocktime);
-	unsigned int n = 0;
+	int n = 0;
 	while(n < N){
 	  double energy = 0;
 	  for(int i = 0; i < samples_per_slice; i++)
@@ -246,9 +248,10 @@ int demod_linear(void *arg){
       float *samples = (float *)buffer;
       if(chan->linear.env){
 	// AM envelope detection
-	for(unsigned int n=0; n < N; n++){
-	  double s = chan->output.gain * M_SQRT1_2 * cabsf(buffer[n]); // Power from both I&Q
-	  chan->output.gain *= gain_change;
+	double gain = chan->output.gain;
+	for(int n=0; n < N; n++){
+	  double s = gain * M_SQRT1_2 * cabsf(buffer[n]); // Power from both I&Q
+	  gain *= gain_change;
 	  output_power += s*s;
 
 	  // Estimate and remove carrier (DC)
@@ -258,14 +261,17 @@ int demod_linear(void *arg){
 	  }
 	  samples[n] = (float)s;
 	}
+	chan->output.gain = gain;
       } else {
 	// I channel only (SSB, CW, etc)
-	for(unsigned int n=0; n < N; n++){
-	  double const s = chan->output.gain * crealf(buffer[n]);
-	  chan->output.gain *= gain_change;
+	double gain = chan->output.gain;
+	for(int n=0; n < N; n++){
+	  double const s = gain * crealf(buffer[n]);
+	  gain *= gain_change;
 	  output_power += s*s;
 	  samples[n] = (float)s;
 	}
+	chan->output.gain = gain;
       }
     } else {
       // Complex input buffer is I0 Q0 I1 Q1 ...
@@ -273,9 +279,10 @@ int demod_linear(void *arg){
       // Overlay input with output
       if(chan->linear.env){
 	// I on left, envelope/AM on right (for experiments in fine SSB tuning)
-	for(unsigned int n=0; n < N; n++){
-	  double complex s = chan->output.gain * M_SQRT1_2 * (crealf(buffer[n]) + I * cabsf(buffer[n]));
-	  chan->output.gain *= gain_change;
+	double gain = chan->output.gain;
+	for(int n=0; n < N; n++){
+	  double complex s = gain * M_SQRT1_2 * (crealf(buffer[n]) + I * cabsf(buffer[n]));
+	  gain *= gain_change;
 	  output_power += cnrm(s);
 
 	  // Estimate and remove DC
@@ -285,14 +292,17 @@ int demod_linear(void *arg){
 	  }
 	  buffer[n] = (float complex)s;
 	}
+	chan->output.gain = gain;
       } else {
 	// Simplest case: I/Q output with I on left, Q on right
-	for(unsigned int n=0; n < N; n++){
-	  double complex const s = chan->output.gain * buffer[n];
-	  chan->output.gain *= gain_change;
+	double gain = chan->output.gain;
+	for(int n=0; n < N; n++){
+	  double complex const s = gain * buffer[n];
+	  gain *= gain_change;
 	  output_power += cnrm(s);
 	  buffer[n] = (float complex)s;
 	}
+	chan->output.gain = gain;
       }
     }
     output_power /= N; // Per sample
