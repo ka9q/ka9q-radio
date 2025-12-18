@@ -1114,13 +1114,13 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   sp->samples_remaining = INT64_MAX; // unlimited unless it gets lowered below
 
   if(Max_length > 0){
-    int64_t const period = (intmax_t) round(BILLION * Max_length); // Period/length in ns
+    int64_t const period = (intmax_t) round(1e9 * Max_length); // Period/length in ns
     int64_t period_start_ns = (timestamp / period) * period;  // time since epoch to start of current period
     int64_t skip_ns = timestamp % period;
 
     if(Padding && !sp->no_offset){ // Not really supported on opus yet
       // Pad start of first file with zeroes
-      int64_t const offset = (int64_t)(sp->samprate * skip_ns) / BILLION; // Samples to skip
+      int64_t const offset = (int64_t)round((double)sp->samprate * skip_ns * 1e-9); // Samples to skip
       // Adjust file time to start of current period and pad to first sample
       sp->file_time = period_start_ns; // file starts at beginning of period
       sp->starting_offset = offset;
@@ -1128,7 +1128,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
       if(Verbose > 1)
 	fprintf(stderr,"ssrc %lu padding %lf sec %lld samples\n",
 		(unsigned long)sp->ssrc,
-		(double)skip_ns / BILLION,
+		(double)skip_ns * 1e-9,
 		(long long)offset);
 
       sp->samples_remaining = (int64_t)round(Max_length * sp->samprate) - offset;
@@ -1140,7 +1140,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	period_start_ns += period;
 	skip_ns -= period;
       }
-      intmax_t const offset = (int64_t)(sp->samprate * skip_ns) / BILLION; // Samples to skip
+      intmax_t const offset = (int64_t)round((double)sp->samprate * skip_ns * 1e-9); // Samples to skip
       sp->samples_remaining = (intmax_t)round(Max_length * sp->samprate) - offset;
     }
   }
@@ -1153,24 +1153,26 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     // Round time to nearest second since it will often bobble +/-
     // Accurate time will still be written in the user.unixstarttime attribute
     time_t const seconds = (sp->file_time + 500000000) / BILLION;
-    struct tm const * const tm = gmtime(&seconds);
+    struct tm tm;
+    gmtime_r(&seconds,&tm);
     snprintf(filename + strlen(filename), sizeof filename - strlen(filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s",
-	     tm->tm_year+1900,
-	     tm->tm_mon+1,
-	     tm->tm_mday,
-	     tm->tm_hour,
-	     tm->tm_min,
-	     tm->tm_sec,
+	     tm.tm_year+1900,
+	     tm.tm_mon+1,
+	     tm.tm_mday,
+	     tm.tm_hour,
+	     tm.tm_min,
+	     tm.tm_sec,
 	     sp->chan.tune.freq,
 	     sp->chan.preset);
   } else {
     // not JT; filename is yyyymmddThhmmss.sZ + digit + suffix
     // digit is inserted only if needed to make file unique
     // Round time to nearest 1/10 second
-    int64_t const deci_seconds = sp->file_time / 100000000;
+    int64_t const deci_seconds = sp->file_time / 100000000; // 10 million
     time_t const seconds = deci_seconds/10;
     int const tenths = deci_seconds % 10;
-    struct tm const * const tm = gmtime(&seconds);
+    struct tm tm;
+    gmtime_r(&seconds,&tm);
 
     if(Subdirs){
       // Create directory path
@@ -1180,17 +1182,17 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
 	return -1;
       }
-      snprintf(dir,sizeof(dir),"%u/%d",sp->ssrc,tm->tm_year+1900);
+      snprintf(dir,sizeof(dir),"%u/%d",sp->ssrc,tm.tm_year+1900);
       if(mkdir(dir,0777) == -1 && errno != EEXIST){
 	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
 	return -1;
       }
-      snprintf(dir,sizeof(dir),"%u/%d/%d",sp->ssrc,tm->tm_year+1900,tm->tm_mon+1);
+      snprintf(dir,sizeof(dir),"%u/%d/%d",sp->ssrc,tm.tm_year+1900,tm.tm_mon+1);
       if(mkdir(dir,0777) == -1 && errno != EEXIST){
 	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
 	return -1;
       }
-      snprintf(dir,sizeof(dir),"%u/%d/%d/%d",sp->ssrc,tm->tm_year+1900,tm->tm_mon+1,tm->tm_mday);
+      snprintf(dir,sizeof(dir),"%u/%d/%d/%d",sp->ssrc,tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday);
       if(mkdir(dir,0777) == -1 && errno != EEXIST){
 	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
 	return -1;
@@ -1199,21 +1201,21 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
       snprintf(filename + strlen(filename), sizeof filename - strlen(filename),
 	       "%u/%d/%d/%d/",
 	       sp->ssrc,
-	       tm->tm_year+1900,
-	       tm->tm_mon+1,
-	       tm->tm_mday);
+	       tm.tm_year+1900,
+	       tm.tm_mon+1,
+	       tm.tm_mday);
     }
     // create file in specified directory
     if(sizeof filename - strlen(filename) > 0)
       snprintf(filename + strlen(filename),sizeof(filename) - strlen(filename),
 	       "%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ",
 	       sp->ssrc,
-	       tm->tm_year+1900,
-	       tm->tm_mon+1,
-	       tm->tm_mday,
-	       tm->tm_hour,
-	       tm->tm_min,
-	       tm->tm_sec,
+	       tm.tm_year+1900,
+	       tm.tm_mon+1,
+	       tm.tm_mday,
+	       tm.tm_hour,
+	       tm.tm_min,
+	       tm.tm_sec,
 	       tenths);
   }
   // create a temp file (eg, foo.wav.tmp)
@@ -1447,19 +1449,20 @@ static int emit_ogg_opus_tags(struct session *sp){
   // We can get called whenever the status changes, so use the current wall clock, not the file creation time (sp->file_time)
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
-  struct tm const * const tm = gmtime(&now.tv_sec);
+  struct tm tm;
+  gmtime_r(&now.tv_sec,&tm);
 
   char datestring[128];
   char timestring[128];
   snprintf(datestring,sizeof(datestring),"%4d-%02d-%02d",
-	   tm->tm_year+1900,
-	   tm->tm_mon+1,
-	   tm->tm_mday);
+	   tm.tm_year+1900,
+	   tm.tm_mon+1,
+	   tm.tm_mday);
 
   snprintf(timestring,sizeof(timestring),"%02d:%02d:%02d.%03d UTC",
-	   tm->tm_hour,
-	   tm->tm_min,
-	   tm->tm_sec,
+	   tm.tm_hour,
+	   tm.tm_min,
+	   tm.tm_sec,
 	   (int)(now.tv_nsec / 1000000));
   {
     char temp[256];
@@ -1568,7 +1571,8 @@ static int start_wav_stream(struct session *sp){
 
   // fill in the auxi chunk (start time, center frequency)
   time_t tt = sp->file_time / BILLION;
-  struct tm const * const tm = gmtime(&tt);
+  struct tm tm;
+  gmtime_r(&tt,&tm);
 
   // Construct and write .wav header, skipping size fields
   struct wav header = {
@@ -1590,13 +1594,13 @@ static int start_wav_stream(struct session *sp){
     .AuxSize = 164,
     .CenterFrequency = (int32_t)sp->chan.tune.freq,
     //  header.AuxUknown is zeroed
-    .StartYear = (int16_t)tm->tm_year+1900,
-    .StartMon = (int16_t)tm->tm_mon+1,
-    .StartDOW = (int16_t)tm->tm_wday,
-    .StartDay = (int16_t)tm->tm_mday,
-    .StartHour = (int16_t)tm->tm_hour,
-    .StartMinute = (int16_t)tm->tm_min,
-    .StartSecond = (int16_t)tm->tm_sec,
+    .StartYear = (int16_t)tm.tm_year+1900,
+    .StartMon = (int16_t)tm.tm_mon+1,
+    .StartDOW = (int16_t)tm.tm_wday,
+    .StartDay = (int16_t)tm.tm_mday,
+    .StartHour = (int16_t)tm.tm_hour,
+    .StartMinute = (int16_t)tm.tm_min,
+    .StartSecond = (int16_t)tm.tm_sec,
     .StartMillis = (int16_t)((sp->file_time / 1000000) % 10),
   };
   switch(sp->encoding){
@@ -1655,25 +1659,26 @@ static int end_wav_stream(struct session *sp){
   // write end time into the auxi chunk
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
-  struct tm const * tm = gmtime(&now.tv_sec);
-  header.StopYear = (int16_t)tm->tm_year + 1900;
-  header.StopMon = (int16_t)tm->tm_mon + 1;
-  header.StopDOW = (int16_t)tm->tm_wday;
-  header.StopDay = (int16_t)tm->tm_mday;
-  header.StopHour = (int16_t)tm->tm_hour;
-  header.StopMinute = (int16_t)tm->tm_min;
-  header.StopSecond = (int16_t)tm->tm_sec;
+  struct tm tm;
+  gmtime_r(&now.tv_sec,&tm);
+  header.StopYear = (int16_t)tm.tm_year + 1900;
+  header.StopMon = (int16_t)tm.tm_mon + 1;
+  header.StopDOW = (int16_t)tm.tm_wday;
+  header.StopDay = (int16_t)tm.tm_mday;
+  header.StopHour = (int16_t)tm.tm_hour;
+  header.StopMinute = (int16_t)tm.tm_min;
+  header.StopSecond = (int16_t)tm.tm_sec;
   header.StopMillis = (int16_t)(now.tv_nsec / 1000000);
 
   time_t tt = sp->file_time / BILLION;
-  tm = gmtime(&tt);
-  header.StartYear = (int16_t)tm->tm_year + 1900;
-  header.StartMon = (int16_t)tm->tm_mon + 1;
-  header.StartDOW = (int16_t)tm->tm_wday;
-  header.StartDay = (int16_t)tm->tm_mday;
-  header.StartHour = (int16_t)tm->tm_hour;
-  header.StartMinute = (int16_t)tm->tm_min;
-  header.StartSecond = (int16_t)tm->tm_sec;
+  gmtime_r(&tt,&tm);
+  header.StartYear = (int16_t)tm.tm_year + 1900;
+  header.StartMon = (int16_t)tm.tm_mon + 1;
+  header.StartDOW = (int16_t)tm.tm_wday;
+  header.StartDay = (int16_t)tm.tm_mday;
+  header.StartHour = (int16_t)tm.tm_hour;
+  header.StartMinute = (int16_t)tm.tm_min;
+  header.StartSecond = (int16_t)tm.tm_sec;
   header.StartMillis = (int16_t)(((sp->file_time / 1000000) % 10));
 
   rewind(sp->fp);

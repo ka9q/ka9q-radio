@@ -355,7 +355,8 @@ void create_new_file(struct session *sp,time_t start_time_sec){
   assert(sp != NULL);
   if(sp == NULL)
     return;
-  struct tm const * const tm = gmtime(&start_time_sec);
+  struct tm tm;
+  gmtime_r(&start_time_sec,&tm);
 
   char dir[PATH_MAX];
   snprintf(dir,sizeof(dir),"%u",sp->ssrc);
@@ -370,22 +371,22 @@ void create_new_file(struct session *sp,time_t start_time_sec){
     snprintf(filename,sizeof(filename),"%s/%u/%02d%02d%02d_%02d%02d%02d.wav",
 	     Recordings,
 	     sp->ssrc,
-	     (tm->tm_year+1900) % 100,
-	     tm->tm_mon+1,
-	     tm->tm_mday,
-	     tm->tm_hour,
-	     tm->tm_min,
-	     tm->tm_sec);
+	     (tm.tm_year+1900) % 100,
+	     tm.tm_mon+1,
+	     tm.tm_mday,
+	     tm.tm_hour,
+	     tm.tm_min,
+	     tm.tm_sec);
     break;
   case WSPR:
     snprintf(filename,sizeof(filename),"%s/%u/%02d%02d%02d_%02d%02d.wav",
 	     Recordings,
 	     sp->ssrc,
-	     (tm->tm_year+1900) % 100,
-	     tm->tm_mon+1,
-	     tm->tm_mday,
-	     tm->tm_hour,
-	     tm->tm_min);
+	     (tm.tm_year+1900) % 100,
+	     tm.tm_mon+1,
+	     tm.tm_mday,
+	     tm.tm_hour,
+	     tm.tm_min);
     break;
   }    
   int fd = -1;

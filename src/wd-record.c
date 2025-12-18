@@ -583,14 +583,15 @@ struct session *create_session(
     }
 
     time_t start_time_sec = filename_epoch;
-    struct tm const * const tm = gmtime(&start_time_sec);
+    struct tm tm;
+    gmtime_r(&start_time_sec,&tm);
     snprintf( sp->filename, sizeof(sp->filename), "%04d%02d%02dT%02d%02d%02dZ_%d_usb.wav",
-            tm->tm_year+1900,
-            tm->tm_mon+1,
-            tm->tm_mday,
-            tm->tm_hour,
-            tm->tm_min,
-            tm->tm_sec,
+            tm.tm_year+1900,
+            tm.tm_mon+1,
+            tm.tm_mday,
+            tm.tm_hour,
+            tm.tm_min,
+            tm.tm_sec,
             tuning_freq_hz)
             ;
 

@@ -242,11 +242,11 @@ int main(int argc,char *argv[]){
       continue; // Nope
 
     time_t t;
-    struct tm *tmp;
+    struct tm tm;
     time(&t);
-    tmp = gmtime(&t);
-    fprintf(stdout,"%d %s %04d %02d:%02d:%02d UTC",tmp->tm_mday,Months[tmp->tm_mon],tmp->tm_year+1900,
-	   tmp->tm_hour,tmp->tm_min,tmp->tm_sec);
+    gmtime_r(&t,&tm);
+    fprintf(stdout,"%d %s %04d %02d:%02d:%02d UTC",tm.tm_mday,Months[tm.tm_mon],tm.tm_year+1900,
+	   tm.tm_hour,tm.tm_min,tm.tm_sec);
     
     fprintf(stdout," ssrc %u seq %d",rtp_header.ssrc,rtp_header.seq);
     fprintf(stdout," %s:",frame.source);
