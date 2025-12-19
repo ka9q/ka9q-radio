@@ -19,6 +19,8 @@ Restart=always
 RestartSec=5
 TimeoutStopSec=10
 SyslogIdentifier=acars
+LogRateLimitBurst=200
+LogRateLimitIntervalSec=20
 
 [Install]
 WantedBy=multi-user.target

@@ -23,6 +23,8 @@ ExecStart=/usr/local/bin/pcmrecord --raw -v --exec "/usr/local/sbin/start-hfdl.s
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
+LogRateLimitBurst=200
+LogRateLimitIntervalSec=20
 
 [Install]
 WantedBy=multi-user.target

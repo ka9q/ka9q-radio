@@ -23,6 +23,8 @@ PIDFile=/run/cwd/pid
 Restart=always
 RestartSec=5
 TimeoutStopSec=5
+LogRateLimitBurst=200
+LogRateLimitIntervalSec=20
 
 [Install]
 WantedBy=multi-user.target

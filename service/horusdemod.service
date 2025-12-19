@@ -18,6 +18,8 @@ ExecStart=/usr/local/bin/pcmspawn --pcm-in $STREAM /usr/local/sbin/start-ka9q-ho
 Restart=always
 RestartSec=5
 TimeoutStopSec=5
+LogRateLimitBurst=200
+LogRateLimitIntervalSec=20
 
 [Install]
 WantedBy=multi-user.target
