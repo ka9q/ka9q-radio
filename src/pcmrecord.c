@@ -1074,7 +1074,11 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	default:
 	  break;
 	}
-	strlcat(sp->filename,temp,sizeof(sp->filename));
+	size_t r = strlcat(sp->filename,temp,sizeof(sp->filename));
+	if(r >= sizeof sp->filename){
+	  fprintf(stderr,"filename overflow\n");
+	  return -1;
+	}
       }
     }
     if(Verbose)
@@ -1144,10 +1148,16 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
       sp->samples_remaining = (intmax_t)round(Max_length * sp->samprate) - offset;
     }
   }
-  char filename[PATH_MAX]; // file pathname except for suffix
-  if(Prefix_source)
-    snprintf(filename, sizeof filename, "%s_", formatsock(&sp->sender,false));
-
+  char filename[PATH_MAX] = {0}; // file pathname except for suffix. Must clear so strlen(filename) will always work
+  size_t r = 0;
+  if(Prefix_source){
+    r = snprintf(filename, sizeof filename, "%s_", formatsock(&sp->sender,false));
+    if(r >= sizeof filename){
+      // Extremely unlikely, but I'm paranoid
+      fprintf(stderr,"filename overflow 2\n");
+      return -1;
+    }
+  }
   if(Jtmode){
     // K1JT-format file names in flat directory
     // Round time to nearest second since it will often bobble +/-
@@ -1155,7 +1165,8 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     time_t const seconds = (sp->file_time + 500000000) / BILLION;
     struct tm tm;
     gmtime_r(&seconds,&tm);
-    snprintf(filename + strlen(filename), sizeof filename - strlen(filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s",
+    size_t space = sizeof filename - strlen(filename);
+    size_t r = snprintf(filename + strlen(filename), space,"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s",
 	     tm.tm_year+1900,
 	     tm.tm_mon+1,
 	     tm.tm_mday,
@@ -1164,6 +1175,8 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	     tm.tm_sec,
 	     sp->chan.tune.freq,
 	     sp->chan.preset);
+    if(r >= space)
+      return -1; // Too long, unterminated
   } else {
     // not JT; filename is yyyymmddThhmmss.sZ + digit + suffix
     // digit is inserted only if needed to make file unique
@@ -1176,60 +1189,95 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 
     if(Subdirs){
       // Create directory path
-      char dir[PATH_MAX];
-      snprintf(dir,sizeof(dir),"%u",sp->ssrc);
+      char dir[PATH_MAX] = {0}; // not really necessary to clear, but I'm paranoid
+      errno = 0; // successful mkdir won't clear it, don't want a spurious strerror message if the snprintf failed
+      size_t r = snprintf(dir,sizeof dir,"%u",sp->ssrc);
+      if(r >= sizeof dir){
+	fprintf(stderr,"snprintf overflow 1\n");
+	return -1;
+      }
       if(mkdir(dir,0777) == -1 && errno != EEXIST){
 	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
 	return -1;
       }
-      snprintf(dir,sizeof(dir),"%u/%d",sp->ssrc,tm.tm_year+1900);
+      r = snprintf(dir,sizeof dir,"%u/%d",sp->ssrc,tm.tm_year+1900);
+      if(r >= sizeof dir){
+	fprintf(stderr,"snprintf overflow 2\n");
+	return -1;
+      }
       if(mkdir(dir,0777) == -1 && errno != EEXIST){
 	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
 	return -1;
       }
-      snprintf(dir,sizeof(dir),"%u/%d/%d",sp->ssrc,tm.tm_year+1900,tm.tm_mon+1);
+      r = snprintf(dir,sizeof dir,"%u/%d/%d",sp->ssrc,tm.tm_year+1900,tm.tm_mon+1);
+      if(r >= sizeof dir){
+	fprintf(stderr,"snprintf overflow 3\n");
+	return -1;
+      }
       if(mkdir(dir,0777) == -1 && errno != EEXIST){
 	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
 	return -1;
       }
-      snprintf(dir,sizeof(dir),"%u/%d/%d/%d",sp->ssrc,tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday);
+      r = snprintf(dir,sizeof dir,"%u/%d/%d/%d",sp->ssrc,tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday);
+      if(r >= sizeof dir){
+	fprintf(stderr,"snprintf overflow 4\n");
+	return -1;
+      }
       if(mkdir(dir,0777) == -1 && errno != EEXIST){
 	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
 	return -1;
       }
       // yyyy-mm-dd-hh:mm:ss.s so it will sort properly
-      snprintf(filename + strlen(filename), sizeof filename - strlen(filename),
+      size_t space = sizeof filename - strlen(filename);
+      r = snprintf(filename + strlen(filename), space,
 	       "%u/%d/%d/%d/",
 	       sp->ssrc,
 	       tm.tm_year+1900,
 	       tm.tm_mon+1,
 	       tm.tm_mday);
+      if(r >= space){
+	fprintf(stderr,"snprintf overflow 5\n");
+	return -1;
+      }
     }
     // create file in specified directory
-    if(sizeof filename - strlen(filename) > 0)
-      snprintf(filename + strlen(filename),sizeof(filename) - strlen(filename),
-	       "%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ",
-	       sp->ssrc,
-	       tm.tm_year+1900,
-	       tm.tm_mon+1,
-	       tm.tm_mday,
-	       tm.tm_hour,
-	       tm.tm_min,
-	       tm.tm_sec,
-	       tenths);
+    size_t space = sizeof filename - strlen(filename);
+    size_t r = snprintf(filename + strlen(filename),space,
+	     "%uk%4d-%02d-%02dT%02d:%02d:%02d.%dZ",
+	     sp->ssrc,
+	     tm.tm_year+1900,
+	     tm.tm_mon+1,
+	     tm.tm_mday,
+	     tm.tm_hour,
+	     tm.tm_min,
+	     tm.tm_sec,
+	     tenths);
+    if(r >= space){
+      fprintf(stderr,"snprintf overflow 6\n");
+      return -1;
+    }
   }
   // create a temp file (eg, foo.wav.tmp)
   // Some error and logging messages use the suffix, some don't, but hey
   int fd = -1;
   for(int tries = 0; tries < 10; tries++){
+    size_t r;
     if(tries == 0) // Insert digit only if necessary
-      snprintf(sp->filename,sizeof sp->filename,"%s%s",filename,suffix);
+      r = snprintf(sp->filename,sizeof sp->filename,"%s%s",filename,suffix);
     else
-      snprintf(sp->filename,sizeof sp->filename, "%s%d%s",filename,tries,suffix);
-    char tempfile[PATH_MAX+50]; // If too long, open will fail with ENAMETOOLONG
-    snprintf(tempfile,sizeof tempfile,"%s.tmp",sp->filename);
+      r = snprintf(sp->filename,sizeof sp->filename, "%s%d%s",filename,tries,suffix);
+    if(r >= sizeof sp->filename){
+      fprintf(stderr,"snprintf overflow 7\n");
+      return -1;
+    }
+    char tempfile[PATH_MAX+50] = {0};
+    r = snprintf(tempfile,sizeof tempfile,"%s.tmp",sp->filename);
+    if(r >= sizeof tempfile){
+      fprintf(stderr,"snprintf overflow 8\n");
+      return -1;
+    }
     fd = open(tempfile,O_RDWR|O_CREAT|O_EXCL|O_NONBLOCK,0644);
-    if(fd != -1)
+    if(fd != -1) // If too long, open will fail with ENAMETOOLONG
       break;
     fprintf(stderr,"create %s failed: %s\n",tempfile,strerror(errno));
   }
