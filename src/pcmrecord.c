@@ -484,9 +484,11 @@ static void process_status(int fd){
   // NB! Assumes same IP source address *and UDP source port* for status and data
   // This is only true for recent versions of radiod, after the switch to unconnected output sockets
   // But older versions don't send status on the output channel anyway, so no problem
-  struct channel chan;
-  struct frontend frontend;
+  struct channel chan = {0};
+  struct frontend frontend = {0};
   decode_radio_status(&frontend,&chan,buffer+1,length-1);
+  chan.preset[sizeof chan.preset - 1] = '\0';
+  frontend.description[sizeof frontend.description - 1] = '\0';
 
   if(Ssrc != 0 && chan.output.rtp.ssrc != Ssrc)
     return; // Unwanted session, but still clear any data packets
@@ -1140,7 +1142,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     } else if(Reset_time){
       // On subsequent files, adjust this file size to align the end to the period boundary
       if(skip_ns > period / 2){
-	// More than halfway through, go to the next interval and 
+	// More than halfway through, go to the next interval and
 	period_start_ns += period;
 	skip_ns -= period;
       }
@@ -1149,9 +1151,9 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     }
   }
   char filename[PATH_MAX] = {0}; // file pathname except for suffix. Must clear so strlen(filename) will always work
-  size_t r = 0;
+
   if(Prefix_source){
-    r = snprintf(filename, sizeof filename, "%s_", formatsock(&sp->sender,false));
+    size_t const r = snprintf(filename, sizeof filename, "%s_", formatsock(&sp->sender,false));
     if(r >= sizeof filename){
       // Extremely unlikely, but I'm paranoid
       fprintf(stderr,"filename overflow 2\n");
@@ -1177,7 +1179,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	     sp->chan.preset);
     if(r >= space)
       return -1; // Too long, unterminated
-  } else {
+  } else { // not Jtmode
     // not JT; filename is yyyymmddThhmmss.sZ + digit + suffix
     // digit is inserted only if needed to make file unique
     // Round time to nearest 1/10 second
