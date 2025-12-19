@@ -156,6 +156,7 @@ struct session {
 
   // Ogg container state
   ogg_stream_state oggState;   // For ogg Opus
+  uint8_t opus_toc;            // Last opus TOC (first) byte, for packet loss concealment
   int64_t granulePosition;
   int packetCount;
   struct reseq {
@@ -222,7 +223,7 @@ static int close_file(struct session *sp,char const *reason);
 static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string);
 static int start_ogg_opus_stream(struct session *sp);
 static int emit_ogg_opus_tags(struct session *sp);
-static int emit_opus_silence(struct session * const sp,size_t samples);
+static int emit_opus_silence(struct session * const sp,int samples);
 static int end_ogg_opus_stream(struct session *sp);
 static int ogg_flush(struct session *sp);
 static int start_wav_stream(struct session *sp);
@@ -768,43 +769,96 @@ static uint8_t OpusSilence20[] = {0xf8,0xff,0xfe}; // 20 ms Silence
 static uint8_t OpusSilence40[] = {0xf9,0xff,0xfe,0xff,0xfe}; // 40 ms Silence (2x 20 ms silence frames)
 static uint8_t OpusSilence60[] = {0xfb,0x03,0xff,0xfe,0xff,0xfe,0xff,0xfe}; // 60 ms Silence (3 x 20ms silence frames)
 
-static int emit_opus_silence(struct session * const sp,size_t samples){
+static int emit_opus_silence(struct session * const sp,int samples){
   if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
     return -1;
 
   if(Verbose > 1)
-    fprintf(stderr,"%u: emitting %ld frames of silence\n",sp->ssrc,samples);
+    fprintf(stderr,"%u: emitting %d frames of silence\n",sp->ssrc,samples);
 
   ogg_packet oggPacket = { 0 }; // b_o_s and e_o_s are 0
   int samples_since_flush = 0;
+  int plc_samples_generated = 0;
+  uint8_t buffer[128] = {0}; // much longer than needed
+  int length = 0;
   while(samples > 0){
-    size_t chunk = min(samples,(size_t)2880); // 60 ms is 2880 samples @ 48 kHz
+    int chunk = min(samples,2880); // 60 ms is 2880 samples @ 48 kHz
+    chunk = chunk > 2880 ? 2880 : chunk; // limit to 60 ms of either silence or PLC
     // To save a little space in long silent intervals, emit the largest frame that will fit
-    if(chunk >= 2880){
-      chunk = 2880;
-      oggPacket.packet = OpusSilence60;
-      oggPacket.bytes = sizeof(OpusSilence60);
+    if(plc_samples_generated < 2880){
+      // Emit PLC until 60 ms, then switch to silence if there's more
+      int code = sp->opus_toc >> 3; // high 5 bit code for codec mode and frame duration
+      // Rewrite the code with our chosen duration and to indicate a length field follows (which will be 0)
+      if(code < 12){
+	// Silk-only numbers 0-11
+	int ms = chunk / 48;  // samples -> ms
+	code = (code & ~0x3) | (ms/20);  // replace duration in last 2 bits: 10, 20, 40 or 60 ms
+      } else if(code < 14){
+	// hybrid SWB, 12-13
+	chunk = chunk > 960 ? 960 : chunk; // limit to 20 ms
+	int ms = chunk / 48;
+	code = (code & ~0x1) | (ms/20);   // 10 or 20 ms (0 or 1)
+      } else if(code < 16){
+	// hybrid FB 14-15
+	chunk = chunk > 960 ? 960 : chunk; // limit to 20 ms
+	int ms = chunk / 48;
+	code = (code & ~0x1) | (ms / 20); // 10 or 20 ms (0 or 1)
+      } else {
+	// CELT-only codes 16-31
+	chunk = chunk > 960 ? 960 : chunk; // limit to 20 ms
+	int ms10 = 10 * chunk / 48; // tenths of ms
+	code = (code & ~0x3) | (ms10 > 100 ? 3 : ms10 / 50); // 2.5, 5, 10 or 20
+      }
+      buffer[0] = (code << 3)| 0x00;
+      length = 1;
+      plc_samples_generated += chunk;
+      // Check suggested by ChatGPT when I encode multi-frame PLC
+      int n = opus_packet_get_nb_samples(buffer,length,48000);
+      int spf = opus_packet_get_samples_per_frame(buffer, 48000);
+      int nf  = opus_packet_get_nb_frames(buffer, length);
+      (void)spf; (void)nf;
+      assert(n == spf * nf);
+
+      if(n == OPUS_BAD_ARG){
+	fprintf(stderr,"Bad generated Opus PLC TOC! ssrc %u saved toc 0x%x (%d), generated toc 0x%x (%d), intended duration %d samples (%.1lf ms)\n",
+		sp->ssrc,sp->opus_toc,sp->opus_toc,buffer[0],buffer[0],chunk,(double)chunk/48.);
+      } else if (n == OPUS_INVALID_PACKET){
+	fprintf(stderr,"Invalid generated Opus packet! ssrc %u saved toc 0x%x (%d), generated toc 0x%x (%d), intended duration %d samples (%.1lf ms)\n",
+		sp->ssrc,sp->opus_toc,sp->opus_toc,buffer[0],buffer[0],chunk,(double)chunk/48.);
+      } else if(n != chunk){
+	fprintf(stderr,"Opus PLC Length error! ssrc %u saved toc 0x%x (%d), generated toc 0x%x (%d), intended duration %d samples (%.1lf ms) actual %d samples (%.1lf ms)\n",
+		sp->ssrc,sp->opus_toc,sp->opus_toc,buffer[0],buffer[0],chunk,(double)chunk/48.,n,(double)n/48.);
+      }		
+      if(Verbose > 2)
+	fprintf(stderr,"ssrc %u emit plc %.1lf ms\n",sp->ssrc,chunk / 48.);
+    } else if(chunk >= 2880){
+      length = sizeof OpusSilence60;
+      memcpy(buffer,OpusSilence60,length);
     } else if(chunk >= 1920){
       chunk = 1920;
-      oggPacket.packet = OpusSilence40;
-      oggPacket.bytes = sizeof(OpusSilence40);
+      length = sizeof OpusSilence40;
+      memcpy(buffer,OpusSilence40,length);
     } else if(chunk >= 960){
       chunk = 960;
-      oggPacket.packet = OpusSilence20;
-      oggPacket.bytes = sizeof(OpusSilence20);
+      length = sizeof OpusSilence20;
+      memcpy(buffer,OpusSilence20,length);
     } else if(chunk >= 480){
       chunk = 480;
-      oggPacket.packet = OpusSilence10;
-      oggPacket.bytes = sizeof(OpusSilence10);
+      length = sizeof OpusSilence10;
+      memcpy(buffer,OpusSilence10,length);
     } else if(chunk >= 240){
       chunk = 240;
-      oggPacket.packet = OpusSilence5;
-      oggPacket.bytes = sizeof(OpusSilence5);
+      length = sizeof OpusSilence5;
+      memcpy(buffer,OpusSilence5,length);
     } else {
       chunk = 120;
-      oggPacket.packet = OpusSilence25;
-      oggPacket.bytes = sizeof(OpusSilence25);
+      length = sizeof OpusSilence25;
+      memcpy(buffer,OpusSilence25,length);
     }
+    // Can we copy the stereo bit into the silence messages?
+    //    buffer[0] |= (sp->opus_toc & 0x04);
+    oggPacket.packet = buffer;
+    oggPacket.bytes = length;
     oggPacket.packetno = sp->packetCount++; // Increment packet number
     sp->granulePosition += chunk; // points to end of this packet
     oggPacket.granulepos = sp->granulePosition; // Granule position
@@ -818,11 +872,11 @@ static int emit_opus_silence(struct session * const sp,size_t samples){
     sp->samples_remaining -= chunk;
     samples -= chunk;
     samples_since_flush += chunk;
-  }
-  if(Flushmode || samples_since_flush >= OPUS_SAMPRATE){
-    // Write at least once per second to keep opusinfo from complaining, and vlc progress from sticking
-    samples_since_flush = 0;
-    ogg_flush(sp);
+    if(Flushmode || samples_since_flush >= OPUS_SAMPRATE){
+      // Write at least once per second to keep opusinfo from complaining, and vlc progress from sticking
+      samples_since_flush = 0;
+      ogg_flush(sp);
+    }
   }
   return 0;
 }
@@ -889,6 +943,7 @@ static int send_opus_queue(struct session * const sp,bool const flush){
     // We have to send the whole queue entry, so we might go past the file samples remaining
     opus_int32 samples = opus_packet_get_nb_samples(qp->data,(opus_int32)qp->size,OPUS_SAMPRATE); // Number of 48 kHz samples
     sp->granulePosition += samples; // Adjust the granule position to point to end of this packet
+    sp->opus_toc = qp->data[0]; // save toc byte in case we need it for PLC
     ogg_packet oggPacket = { // b_o_s and e_o_s are 0
       .packetno = sp->packetCount++, // Increment packet number
       .granulepos = sp->granulePosition, // Granule position
