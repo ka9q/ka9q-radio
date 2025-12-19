@@ -484,8 +484,8 @@ static void process_status(int fd){
   // NB! Assumes same IP source address *and UDP source port* for status and data
   // This is only true for recent versions of radiod, after the switch to unconnected output sockets
   // But older versions don't send status on the output channel anyway, so no problem
-  struct channel chan = {0};
-  struct frontend frontend = {0};
+  struct channel chan = {0}; // Must be cleared, decode_radio_status() may not write every field
+  struct frontend frontend = {0}; // ditto
   decode_radio_status(&frontend,&chan,buffer+1,length-1);
   chan.preset[sizeof chan.preset - 1] = '\0';
   frontend.description[sizeof frontend.description - 1] = '\0';
