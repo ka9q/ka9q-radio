@@ -97,14 +97,25 @@ int demod_fm(void *arg){
     float complex const * restrict const buffer = chan->baseband; // For convenience
     int const N = chan->sampcount;
 
-    // Simple SNR squelch
+
+    /* there are two SNR estimators:
+       1. fast and general using the existing signal power and noise density estimates
+       2. a FM-specific estimator that computes the variance of amplitude to its mean
+          since FM is constant envelope, any variance is noise
+
+       The simple estimator is used first. If it's below threshold and the squelch is closed, don't bother with the variance estimator.
+       Above threshold, or if the squelch is still open, run the variance estimator and use it
+    */
+
+    // Simple SNR estimate: Power/(N0 * Bandwidth) - 1
     double avg_amp = 0;
     double amplitudes[N];
-    double const snr = (chan->sig.bb_power / (chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF))) - 1.0q;
-    if(chan->snr_squelch_enable || snr < chan->squelch_close){ // Save the trouble if the signal just isn't there
+
+    double const snr = (chan->sig.bb_power / (chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF))) - 1.0;
+    if(chan->snr_squelch_enable || (squelch_state <= 0 && snr < chan->squelch_close)){ // Save the trouble if the signal just isn't there
       chan->fm.snr = snr;
     } else {
-      // amplitude moments squelch
+      // variance estimation. first get average amplitude (lots of square roots)
       for(int n = 0; n < N; n++)
 	avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
       avg_amp /= N;
@@ -115,37 +126,55 @@ int demod_fm(void *arg){
 	for(int n=0; n < N; n++)
 	  fm_variance += (amplitudes[n] - avg_amp) * (amplitudes[n] - avg_amp);
 
-	// Compute signal-to-noise, see if we should open the squelch
-	double const snr = fm_snr(avg_amp*avg_amp * (N-1) / fm_variance);
-	chan->fm.snr = max(0.0,snr); // Smoothed values can be a little inconsistent
+	// The result is biased up at low SNR:
+	// complex gaussian RVs have Rayleigh/Ricean amplitudes and exponentially distributed powers
+	// Run through a correction function
+	// The bias is small at high SNR, but we most need accuracy near threshold
+	double const snr = fm_snr(avg_amp*avg_amp * (N-1) / fm_variance); // power ratio
+	chan->fm.snr = max(0.0,snr); // Just make sure it isn't negative. Log() doesn't like that.
       }
     }
-    // Hysteresis squelch using selected SNR (basic signal SNR or FM ampitude variance/average
-    int const squelch_state_max = chan->squelch_tail + 1;
-    if(chan->fm.snr >= chan->squelch_open
-       || (squelch_state > 0 && chan->fm.snr >= chan->squelch_close)){
+    /* Hysteresis squelch using selected SNR (basic signal SNR or FM ampitude variance/average
+       'squelch_state' is a block countdown timer that sequences squelch closing
+       A. 'squelch_state' is restarted at squelch_state_max (>= 4 frames) whenever the SNR is above the open threshold
+       B. Else if the squelch is open but the SNR falls below the close threshold, decrement the squelch_state
+       C. Else leave squelch_state alone. (ie, SNR is in the hysteresis region)
+       if squelch_state == 1, 2 or 3 send a silent (zeroes) frame and wait for next frame.
+       I.e, send 3 frames of silence after the squelch closes
+       When squelch_state reaches 0, stop decrementing and stop sending, but maintain rtp timestamps.
+       squelch_state == 0 : fully closed, no RTP stream
+                     == 1, 2, 3 : send a silent RTP frame
+                            >=4 : squelch is fully open
+
+       The user parameter chan->squelch_tail thus controls how many blocks the squelch will remain open
+       after the SNR falls below the close threshold. This is always followed by 3 blocks of silence, then the stream stops.
+       If at any time the SNR >= open threshold, the sequence is aborted, the timer is restarted and normal operation continues
+    */
+    int const squelch_state_max = chan->squelch_tail + 4;
+    if(chan->fm.snr >= chan->squelch_open){
       // Squelch is fully open
       // tail timing is in blocks (usually 10 or 20 ms each)
-      squelch_state = squelch_state_max;
-    } else if(squelch_state > 1){
-      squelch_state--; // Squelch closing
-    } else if(squelch_state == 1){
-      // Now closed, emit a block of silence to flush the Opus encoder
-      float zeroes[N];
-      memset(zeroes,0,sizeof zeroes);
-      send_output(chan,zeroes,N,false);
+      squelch_state = squelch_state_max; // hold timer at start
+    } else if(squelch_state > 0 && chan->fm.snr < chan->squelch_close)
+      squelch_state--; // Begin to close it. If squelch_tail == 0, this will result in zeroes being emitted right away (no tail)
+
+    float baseband[N];    // Demodulated FM baseband
+
+    if(squelch_state > 0 && squelch_state < 4){
+      // closed, but emit a block of silence to flush the Opus encoder
+      memset(baseband,0,sizeof baseband);
+      send_output(chan,baseband,N,false);
       // Reset everything
-      squelch_state = 0;
       phase_memory = 0;
       pl_sample_count = 0;
       reset_goertzel(&tone_detect);
       continue;
-    } else {
-      // Already closed
+    } else if(squelch_state == 0){
+      // Fully closed, send nothing,
       send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
       continue;
     }
-    float baseband[N];    // Demodulated FM baseband
+
     // Actual FM demodulation
     for(int n=0; n < N; n++){
       double np = M_1_PI * cargf(buffer[n]); // Scale to -1 to +1 (half rotations/sample)
