@@ -194,12 +194,12 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     int opus_bits = 16;
 #if 0
     if(chan->demod_type == LINEAR_DEMOD) {
-      float noise_bandwidth = fabsf(chan->filter.max_IF - chan->filter.min_IF);
-      float sig_power = chan->sig.bb_power - noise_bandwidth * chan->sig.n0;
+      double noise_bandwidth = fabs(chan->filter.max_IF - chan->filter.min_IF);
+      double sig_power = chan->sig.bb_power - noise_bandwidth * chan->sig.n0;
       if(sig_power < 0)
 	sig_power = 0; // Avoid log(-x) = nan
-      float sn0 = sig_power/chan->sig.n0;
-      float snr = power2dB(sn0/noise_bandwidth);
+      double sn0 = sig_power/chan->sig.n0;
+      double snr = power2dB(sn0/noise_bandwidth);
       opus_bits = snr / 6;
       if(opus_bits < 8)
 	opus_bits = 8;
@@ -214,26 +214,24 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     error = opus_encoder_ctl(chan->output.opus,OPUS_SET_LSB_DEPTH(opus_bits));
     assert(error == OPUS_OK);
 
+    // Set the encoder bandwidth according to the filter bandwidth
+    // Questionable how much this helps, but it doesn't seem to hurt
     int opus_bandwidth = OPUS_BANDWIDTH_FULLBAND;
-#if 0
-    /* Set the encoder bandwidth according to the filter bandwidth
-       Opus accepts these bandwidth settings, but actual bit rates
-       seem to depend only on the input sample rate. So this is also turned off.
-    */
     switch(chan->demod_type){
     case FM_DEMOD:
       // NBFM uses 24 ks/s to handle the 16 kHz IF bandwidth; the baseband bandwidth is really only 5 kHz
+      // NBFM should probably use a sample rate converter to save output bits
       if(chan->output.samprate <= 24000)
 	opus_bandwidth = OPUS_BANDWIDTH_MEDIUMBAND;
       break;
     case LINEAR_DEMOD:
       {
 	// Set opus bandwidth according to IF filter
-	float filter_bandwidth;
+	double filter_bandwidth;
 	if(chan->filter2.blocking > 0)
-	  filter_bandwidth = max(fabsf(chan->filter2.low),fabsf(chan->filter2.high));
+	  filter_bandwidth = max(fabs(chan->filter2.low),fabs(chan->filter2.high));
 	else
-	  filter_bandwidth = max(fabsf(chan->filter.min_IF),fabsf(chan->filter.max_IF));
+	  filter_bandwidth = max(fabs(chan->filter.min_IF),fabs(chan->filter.max_IF));
 	if(filter_bandwidth <= 4000)
 	  opus_bandwidth = OPUS_BANDWIDTH_NARROWBAND;
 	else if(filter_bandwidth <= 6000)
@@ -249,7 +247,6 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     default: // Just use fullband for WFM
       break;
     }
-#endif
     if(chan->output.opus_bandwidth != opus_bandwidth){
       chan->output.opus_bandwidth = opus_bandwidth;
       error = opus_encoder_ctl(chan->output.opus,OPUS_SET_MAX_BANDWIDTH(chan->output.opus_bandwidth));
@@ -274,8 +271,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     }
   } // if(chan->output.encoding == OPUS){
 
-  int available_samples;
-  available_samples = (int)(chan->output.wp - chan->output.rp);
+  int available_samples = (int)(chan->output.wp - chan->output.rp);
   if(available_samples < 0)
     available_samples += chan->output.queue_size;
 
