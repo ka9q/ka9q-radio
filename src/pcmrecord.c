@@ -223,7 +223,7 @@ static int close_file(struct session *sp,char const *reason);
 static uint8_t *encodeTagString(uint8_t *out,size_t size,const char *string);
 static int start_ogg_opus_stream(struct session *sp);
 static int emit_ogg_opus_tags(struct session *sp);
-static int emit_opus_silence(struct session * const sp,int samples);
+static int emit_opus_silence(struct session * const sp,int samples,bool plc_ok);
 static int end_ogg_opus_stream(struct session *sp);
 static int ogg_flush(struct session *sp);
 static int start_wav_stream(struct session *sp);
@@ -627,11 +627,11 @@ static void process_data(int fd){
       start_ogg_opus_stream(sp);
       emit_ogg_opus_tags(sp);
       if(sp->starting_offset != 0)
-	emit_opus_silence(sp,sp->starting_offset);
+	emit_opus_silence(sp,sp->starting_offset,false);
     } else {
       if(!Raw)
 	start_wav_stream(sp); // Don't emit wav header in --raw
-      int framesize = sp->channels * (sp->encoding == F32LE ? sizeof(float) : sizeof(int16_t));
+      int const framesize = sp->channels * (sp->encoding == F32LE ? sizeof(float) : sizeof(int16_t));
       if(sp->fp != NULL){
 	if(sp->can_seek){
 	  fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
@@ -761,7 +761,7 @@ static int ogg_flush(struct session *sp){
   return count;
 }
 
-// These produced by a test program I wrote. All are in CELT, 48 kHz mono
+// These produced by a test program I wrote. All are in CELT, mono
 static uint8_t OpusSilence25[] = {0xe0,0xff,0xfe}; // 2.5 ms Silence
 static uint8_t OpusSilence5[] = {0xe8,0xff,0xfe}; // 5 ms Silence
 static uint8_t OpusSilence10[] = {0xf0,0xff,0xfe}; // 10 ms Silence
@@ -769,7 +769,7 @@ static uint8_t OpusSilence20[] = {0xf8,0xff,0xfe}; // 20 ms Silence
 static uint8_t OpusSilence40[] = {0xf9,0xff,0xfe,0xff,0xfe}; // 40 ms Silence (2x 20 ms silence frames)
 static uint8_t OpusSilence60[] = {0xfb,0x03,0xff,0xfe,0xff,0xfe,0xff,0xfe}; // 60 ms Silence (3 x 20ms silence frames)
 
-static int emit_opus_silence(struct session * const sp,int samples){
+static int emit_opus_silence(struct session * const sp,int samples,bool plc_ok){
   if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
     return -1;
 
@@ -783,42 +783,43 @@ static int emit_opus_silence(struct session * const sp,int samples){
   int length = 0;
   while(samples > 0){
     int chunk = min(samples,2880); // 60 ms is 2880 samples @ 48 kHz
-    chunk = chunk > 2880 ? 2880 : chunk; // limit to 60 ms of either silence or PLC
+    chunk = min(chunk,2880); // limit to 60 ms of either silence or PLC per packet
     // To save a little space in long silent intervals, emit the largest frame that will fit
-    if(plc_samples_generated < 2880){
+    // Are we allowed to emit PLC, and have we not already sent 60 ms of it?
+    if(plc_ok && plc_samples_generated < 2880){
       // Emit PLC until 60 ms, then switch to silence if there's more
       int code = sp->opus_toc >> 3; // high 5 bit code for codec mode and frame duration
-      // Rewrite the code with our chosen duration and to indicate a length field follows (which will be 0)
+      // Rewrite the code with our chosen duration
       if(code < 12){
 	// Silk-only numbers 0-11
 	int ms = chunk / 48;  // samples -> ms
 	code = (code & ~0x3) | (ms/20);  // replace duration in last 2 bits: 10, 20, 40 or 60 ms
       } else if(code < 14){
 	// hybrid SWB, 12-13
-	chunk = chunk > 960 ? 960 : chunk; // limit to 20 ms
+	chunk = min(chunk,960); // limit to 20 ms
 	int ms = chunk / 48;
 	code = (code & ~0x1) | (ms/20);   // 10 or 20 ms (0 or 1)
       } else if(code < 16){
 	// hybrid FB 14-15
-	chunk = chunk > 960 ? 960 : chunk; // limit to 20 ms
+	chunk = min(chunk,960); // limit to 20 ms
 	int ms = chunk / 48;
 	code = (code & ~0x1) | (ms / 20); // 10 or 20 ms (0 or 1)
       } else {
 	// CELT-only codes 16-31
-	chunk = chunk > 960 ? 960 : chunk; // limit to 20 ms
+	chunk = min(chunk,960); // limit to 20 ms
 	int ms10 = 10 * chunk / 48; // tenths of ms
 	code = (code & ~0x3) | (ms10 > 100 ? 3 : ms10 / 50); // 2.5, 5, 10 or 20
       }
       buffer[0] = (code << 3)| 0x00;
       length = 1;
       plc_samples_generated += chunk;
-      // Check suggested by ChatGPT when I encode multi-frame PLC
       int n = opus_packet_get_nb_samples(buffer,length,48000);
+#ifndef NDEBUG
       int spf = opus_packet_get_samples_per_frame(buffer, 48000);
       int nf  = opus_packet_get_nb_frames(buffer, length);
-      (void)spf; (void)nf;
+      // Check suggested by ChatGPT when I encode multi-frame PLC
       assert(n == spf * nf);
-
+#endif
       if(n == OPUS_BAD_ARG){
 	fprintf(stderr,"Bad generated Opus PLC TOC! ssrc %u saved toc 0x%x (%d), generated toc 0x%x (%d), intended duration %d samples (%.1lf ms)\n",
 		sp->ssrc,sp->opus_toc,sp->opus_toc,buffer[0],buffer[0],chunk,(double)chunk/48.);
@@ -913,7 +914,7 @@ static int send_opus_queue(struct session * const sp,bool const flush){
       if(!flush)
 	break; // Stop on first empty entry if we're not resynchronizing
       // Slot was empty
-      // Instead of emitting one frame of silence here, we emit it above when the next real frame arrives
+      // Instead of emitting one frame of silence here, we emit it when the next real frame arrives
       // so we know for sure how much to send
       //
       sp->rtp_state.drops++;
@@ -929,7 +930,11 @@ static int send_opus_queue(struct session * const sp,bool const flush){
       if(Verbose > 2 || (Verbose > 1  && flush))
 	fprintf(stderr,"timestamp jump %d samples\n",jump);
 
-      emit_opus_silence(sp,jump); // Might emit more if not on a frame boundar
+      // Send packet loss concealment only if there's a jump in the sequence number
+      // to indicate an actual packet loss. Don't send a PLC if the sender had merely
+      // paused due to DTX or a squelch closure, that causes annoying artifacts
+      bool const plc_ok = (qp->rtp.seq != sp->rtp_state.seq);
+      emit_opus_silence(sp,jump,plc_ok); // Might emit more if not on a frame boundary
       sp->current_segment_samples = 0; // gap resets
       sp->rtp_state.timestamp += jump; // also ready for next
       sp->total_file_samples += jump;
