@@ -473,7 +473,7 @@ void process_file(struct session *sp){
 	  perror("chdir");
       }
       char freq[100];
-      snprintf(freq,sizeof(freq),"%lf",(double)sp->ssrc * 1e-6);
+      snprintf(freq,sizeof(freq),"%lf",(double)sp->ssrc * 1e-3);
       
       switch(Mode){
       case WSPR:
