@@ -7,6 +7,7 @@
 #include <math.h>
 #include <netdb.h>
 #include <stdint.h>
+#include <opus/opus.h>
 
 #include "misc.h"
 #include "status.h"
@@ -428,6 +429,62 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       break;
     case OPUS_BIT_RATE:
       fprintf(fp,"opus bitrate %'d Hz",decode_int(cp,optlen));
+      break;
+    case OPUS_DTX:
+      fprintf(fp,"opus dtx %s",decode_bool(cp,optlen) ? "on" : "off");
+      break;
+    case OPUS_APPLICATION:
+      {
+	char const *str = "unknown";
+	int const x = decode_int(cp,optlen); 
+	for(int i=0; Opus_application[i].str == NULL; i++){
+	  if(Opus_application[i].value == x){
+	    str = Opus_application[i].str;
+	    break;
+	  }
+	}
+	fprintf(fp,"opus application (%d) %s",x,str);
+	break;
+      }
+    case OPUS_FEC:
+      {
+	int const x = decode_int(cp,optlen);
+	fprintf(fp,"opus fec %d%%",x);
+      }
+      break;
+    case OPUS_BANDWIDTH:
+      {
+	int const x = decode_int(cp,optlen);
+	int bw = 0;
+	const char *str = NULL;
+	switch(x){
+	case OPUS_BANDWIDTH_NARROWBAND:
+	  bw = 4000;
+	  str = "narrowband";
+	  break;
+	case OPUS_BANDWIDTH_MEDIUMBAND:
+	  bw = 6000;
+	  str = "mediumband";
+	  break;
+	case OPUS_BANDWIDTH_WIDEBAND:
+	  bw = 8000;
+	  str = "wideband";
+	  break;
+	case OPUS_BANDWIDTH_SUPERWIDEBAND:
+	  bw = 12000;
+	  str = "superwideband";
+	  break;
+	case OPUS_BANDWIDTH_FULLBAND:
+	  bw = 20000;
+	  str = "fullband";
+	  break;
+	default:
+	  bw = 0;
+	  str = "invalid";
+	  break;
+	}
+	fprintf(fp,"opus bw %s (%d)",str,bw);
+      }
       break;
     case MINPACKET:
       fprintf(fp,"minimum buffered pkts %d",decode_int(cp,optlen));

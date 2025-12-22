@@ -24,6 +24,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <sys/socket.h>
+#include <stdatomic.h>
 
 #include "conf.h"
 #include "config.h"
@@ -63,7 +64,7 @@ char const *Repeater = "repeater";
 char const *Display = "display";
 
 // Command line/config file/interactive command parameters
-unsigned int DAC_samprate = 48000;   // Actual hardware output rate
+int DAC_samprate = 48000;   // Actual hardware output rate
 char const *App_path;
 int Verbose = 0;                    // Verbosity flag
 char const *Config_file;
@@ -89,11 +90,11 @@ int Output_fd = -1; // Output network socket, if any
 struct sockaddr_in Dest_socket;
 int64_t Last_xmit_time;
 float *Output_buffer;
-int Buffer_length; // Bytes left to play out, max BUFFERSIZE
-volatile unsigned int Rptr;   // callback thread read pointer, *frames*
-volatile unsigned int Wptr;   // For monitoring length of output queue
+_Atomic int Buffer_length; // Bytes left to play out, max BUFFERSIZE
+_Atomic int Rptr;   // callback thread read pointer, *frames*
+int Wptr; // for monitoring write pointers
 uint64_t Audio_callbacks;
-unsigned long Audio_frames;
+uint64_t Audio_frames;
 volatile int64_t LastAudioTime;
 double Portaudio_delay;
 pthread_t Repeater_thread;
@@ -110,8 +111,6 @@ struct session *Sessions[NSESSIONS];
 bool Terminate;
 struct session *Best_session; // Session with highest SNR
 int Mcast_ttl;
-pthread_mutex_t Rptr_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t Rptr_cond = PTHREAD_COND_INITIALIZER;
 void *output_thread(void *p);
 struct sockaddr_in *Source_socket;
 
@@ -390,12 +389,12 @@ int main(int argc,char * const argv[]){
       fprintf(stderr,"Portaudio: no available devices, exiting\n");
       exit(EX_IOERR);
     }
-    PaStreamParameters outputParameters;
-    memset(&outputParameters,0,sizeof(outputParameters));
-    outputParameters.channelCount = Channels;
-    outputParameters.device = inDevNum;
-    outputParameters.sampleFormat = paFloat32;
-    outputParameters.suggestedLatency = Latency; // 0 doesn't seem to be a good value on OSX, lots of underruns and stutters
+    PaStreamParameters outputParameters = {
+      .channelCount = Channels,
+      .device = inDevNum,
+      .sampleFormat = paFloat32,
+      .suggestedLatency = Latency // 0 doesn't seem to be a good value on OSX, lots of underruns and stutters
+    };
 
     r = Pa_OpenStream(&Pa_Stream,
 		      NULL,
@@ -666,23 +665,15 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 
   // Use mirror buffer to simplify wraparound. Count is in bytes = Channels * frames * sizeof(float)
   size_t const bytecount = Channels * framesPerBuffer * sizeof(*Output_buffer);
-  memcpy(outputBuffer,&Output_buffer[Channels*Rptr],bytecount);
+  int rptr = atomic_load_explicit(&Rptr,memory_order_relaxed);
+  memcpy(outputBuffer,&Output_buffer[Channels*rptr],bytecount);
   // Zero what we just copied
-  memset(&Output_buffer[Channels*Rptr],0,bytecount);
+  memset(&Output_buffer[Channels*rptr],0,bytecount);
   opus_pcm_soft_clip((float *)outputBuffer,(int)framesPerBuffer,Channels,Softclip_mem);
-  pthread_mutex_lock(&Rptr_mutex);
-  Rptr += framesPerBuffer;
-  Rptr &= (BUFFERSIZE-1);
-  Buffer_length -= framesPerBuffer;
-  pthread_cond_broadcast(&Rptr_cond);
-  pthread_mutex_unlock(&Rptr_mutex);
-
-#if 0
-  int q = modsub(Wptr,Rptr,BUFFERSIZE);
-  if(q < 0)
-    return paComplete;
-  return (Buffer_length <= 0) ?  paComplete : paContinue;
-#endif
+  rptr += framesPerBuffer;
+  rptr &= (BUFFERSIZE-1);
+  atomic_store_explicit(&Rptr,rptr,memory_order_release); // Nobody else writes it
+  atomic_fetch_sub(&Buffer_length,framesPerBuffer);       // same
   return paContinue;
 }
 
@@ -703,17 +694,15 @@ void *output_thread(void *p){
     int samples = frames * Channels;
     int16_t out_buffer[samples];
 
-    pthread_mutex_lock(&Rptr_mutex);
-    float *buffer = &Output_buffer[Channels*Rptr];
-    Rptr += frames;
-    Rptr &= (BUFFERSIZE-1);
-    Buffer_length -= frames;
+    int rptr = atomic_load_explicit(&Rptr,memory_order_relaxed);
+    float *buffer = &Output_buffer[Channels*rptr];
+    rptr += frames;
+    rptr &= (BUFFERSIZE-1);
+    atomic_fetch_sub(&Buffer_length,frames);
     for(int i=0; i < samples; i++)
       out_buffer[i] = buffer[i] > 1 ? 32767 : buffer[i] < -1 ? -32767 : 32767 * buffer[i];
     memset(buffer,0,samples * sizeof *buffer);
-
-    pthread_cond_broadcast(&Rptr_cond);
-    pthread_mutex_unlock(&Rptr_mutex);
+    atomic_store_explicit(&Rptr,rptr,memory_order_release);
 
     int r = write(Output_fd,out_buffer,sizeof out_buffer);
     if(r <= 0){

@@ -421,6 +421,25 @@ static void update_monitor_display(void){
   if(x != 0)
     printwt("\n");
 
+  if(Verbose){
+    // Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
+    double const pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
+
+    int rptr = atomic_load_explicit(&Rptr,memory_order_acquire);
+    int const q = modsub(Wptr,rptr,BUFFERSIZE);
+    double const qd = (double) q / DAC_samprate;
+    double const rate = Audio_frames / pa_seconds;
+
+    printwt("%s playout %.0lf ms, latency %5.1lf ms, queue %5.1lf ms, D/A rate %'.3lf Hz,",
+	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,qd*1000.,rate);
+    printwt(" (%+8.3lf ppm),",1e6 * (rate / DAC_samprate - 1));
+    // Time since last packet drop on any channel
+    printwt(" Error-free sec %'.1lf\n",(1e-9*(gps_time_ns() - Last_error_time)));
+  }
+  if(Nsessions == 0)
+    return; // Nothing to do; shut up sanitizer about empty arrays
+
+
   if(Auto_sort)
     sort_session_active();
 
@@ -437,19 +456,6 @@ static void update_monitor_display(void){
 
   assert(Nsessions_copy <= NSESSIONS);
 
-  if(Verbose){
-    // Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
-    double const pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
-    int const q = modsub(Wptr,Rptr,BUFFERSIZE);
-    double const qd = (double) q / DAC_samprate;
-    double const rate = Audio_frames / pa_seconds;
-
-    printwt("%s playout %.0lf ms, latency %5.1lf ms, queue %5.1lf ms, D/A rate %'.3lf Hz,",
-	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,qd*1000.,rate);
-    printwt(" (%+8.3lf ppm),",1e6 * (rate / DAC_samprate - 1));
-    // Time since last packet drop on any channel
-    printwt(" Error-free sec %'.1lf\n",(1e-9*(gps_time_ns() - Last_error_time)));
-  }
   // Show channel statuses
   getyx(stdscr,y,x);
   int row_save = y;
@@ -607,7 +613,8 @@ static void update_monitor_display(void){
     if(sp == NULL || !sp->now_active || sp->muted || (Voting && Best_session != NULL && Best_session != sp))
       continue;
 
-    int const d = modsub(sp->wptr,Rptr,BUFFERSIZE); // Unplayed samples on queue
+    int rptr = atomic_load_explicit(&Rptr,memory_order_acquire);
+    int const d = modsub(sp->wptr,rptr,BUFFERSIZE); // Unplayed samples on queue
     int const queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
     mvprintwt(y,x,"%*d",width,queue_ms);   // Time idle since last transmission
   }
@@ -784,20 +791,19 @@ static void update_monitor_display(void){
   x += width;
   y = row_save;
 
-#if 0
-  // Spare debug counters
+  // Opus loss conceals
   if(x >= COLS)
     goto done;
   width = 7;
-  mvprintwt(y++,x,"%*s",width,"spares");
+  mvprintwt(y++,x,"%*s",width,"PLCs");
   for(int session = First_session; session < Nsessions_copy; session++,y++){
     struct session const *sp = Sessions_copy[session];
     if(sp != NULL)
-      mvprintwt(y,x,"%*lu",width,sp->spares);
+      mvprintwt(y,x,"%*lu",width,sp->plcs);
   }
   x += width;
   y = row_save;
-#endif
+
 
   // Sockets
   x++; // Left justified

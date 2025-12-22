@@ -1,3 +1,6 @@
+#include <stdatomic.h>
+
+
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 #define BUFFERSIZE (1<<19)    // about 10.92 sec at 48 kHz - must be power of 2 times page size (4k)!
 extern double const Latency; // chunk size for audio output callback
@@ -7,6 +10,7 @@ extern double const Tone_period; // PL tone integration period
 #define N_tones 55
 extern double PL_tones[N_tones];
 
+#define OPUS_SAMPRATE (48000)
 
 // Names of config file sections
 extern char const *Radio;
@@ -17,7 +21,7 @@ extern char const *Display;
 // Command line/config file/interactive command parameters
 extern char const *Tx_on;
 extern char const *Tx_off;
-extern unsigned int DAC_samprate;   // Actual hardware output rate
+extern int DAC_samprate;   // Actual hardware output rate
 extern int Update_interval;  // Default time in ms between display updates
 extern char const *App_path;
 extern int Verbose;                       // Verbosity flag
@@ -52,12 +56,12 @@ extern char const *Source; // Only accept from this domain name
 extern int64_t Last_xmit_time;
 extern int64_t Last_id_time;
 extern float *Output_buffer;
-extern int Buffer_length; // Bytes left to play out, max BUFFERSIZE
-extern volatile unsigned int Rptr;   // callback thread read pointer, *frames*
-extern volatile unsigned int Wptr;   // For monitoring length of output queue
+extern _Atomic int Buffer_length; // Bytes left to play out, max BUFFERSIZE
+extern _Atomic int Rptr;
+extern int Wptr;
 extern volatile bool PTT_state;      // For repeater transmitter
 extern uint64_t Audio_callbacks;
-extern unsigned long Audio_frames;
+extern uint64_t Audio_frames;
 extern volatile int64_t LastAudioTime;
 extern double Portaudio_delay;
 extern pthread_t Repeater_thread;
@@ -79,8 +83,6 @@ extern bool Terminate;
 extern bool Voting;
 extern struct session *Best_session; // Session with highest SNR
 extern struct sockaddr Metadata_dest_socket;
-extern pthread_mutex_t Rptr_mutex;
-extern pthread_cond_t Rptr_cond;
 extern char const *Pipe;
 extern struct sockaddr_in *Source_socket;
 
@@ -101,7 +103,7 @@ struct session {
   struct pt_table pt_table[128];     // convert a payload type to samplerate, channels, encoding type
 
   uint32_t next_timestamp;  // Next timestamp expected
-  unsigned int wptr;        // current write index into output PCM buffer, *frames*
+  int wptr;                 // current write index into output PCM buffer, *frames*
   int playout;              // Initial playout delay, frames
   long long last_active;    // GPS time last active with data traffic
   double tot_active;         // Total PCM time, s
@@ -110,26 +112,25 @@ struct session {
 
   OpusDecoder *opus;        // Opus codec decoder handle, if needed
   int opus_channels;        // Actual channels in Opus stream
-  size_t frame_size;
+  int frame_size;
   int bandwidth;            // Audio bandwidth
   struct goertzel tone_detector[N_tones];
   int tone_samples;
   double current_tone;       // Detected tone frequency
   double snr;                // Extracted from status message from radiod
 
-  unsigned int samprate;
-  unsigned int channels;    // channels on stream (1 or 2). Opus is always stereo
+  int samprate;
+  int channels;              // channels on stream (1 or 2). Opus is always stereo
   double gain;               // linear gain; 1 = 0 dB
   double pan;                // Stereo position: 0 = center; -1 = full left; +1 = full right
 
   // Counters
-  unsigned long packets;    // RTP packets for this session
-  unsigned long empties;    // RTP but no data
-  unsigned long lates;
-  unsigned long earlies;
-  unsigned long resets;
-  unsigned long reseqs;
-  unsigned long spares;     // spare counter for debugging
+  uint64_t packets;    // RTP packets for this session
+  uint64_t empties;    // RTP but no data
+  uint64_t lates;
+  uint64_t resets;
+  uint64_t reseqs;
+  uint64_t plcs;       // Opus packet loss conceals
 
   bool terminate;            // Set to cause thread to terminate voluntarily
   bool muted;                // Do everything but send to output
@@ -148,7 +149,7 @@ struct session {
 void load_id(void);
 void cleanup(void);
 void *display(void *);
-void reset_session(struct session *sp,uint32_t timestamp);
+
 struct session *lookup_or_create_session(struct sockaddr_storage const *,uint32_t);
 int close_session(struct session **);
 int pa_callback(void const *,void *,unsigned long,PaStreamCallbackTimeInfo const *,PaStreamCallbackFlags,void *);
@@ -160,20 +161,17 @@ char const *lookupid(double freq,double tone);
 bool kick_output();
 void vote();
 
-static inline int modsub(unsigned int const a, unsigned int const b, int const modulus){
-  int diff = (int)a - (int)b;
-  if(diff > modulus)
-    return diff % modulus; // Unexpectedly large, just do it the slow way
+static inline int modsub(int a, int b, int const modulus){
+  if(a >= modulus)
+    a %= modulus;
+  if(b >= modulus)
+    b %= modulus;
 
+  int diff = a - b;
   if(diff > modulus/2)
-   return  diff - modulus;
-
-  if(diff < -modulus)
-    return diff % modulus; // Unexpectedly small
-
+    return diff - modulus;
   if(diff < -modulus/2)
-    diff += modulus;
-
+    return diff + modulus;
   return diff;
 }
 static inline struct session *sptr(int index){

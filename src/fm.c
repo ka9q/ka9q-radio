@@ -360,9 +360,9 @@ int demod_fm(void *arg){
   flush_output(chan,false,true); // if still set, marker won't get sent since it wasn't sent last time
   mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float)); // Nails pointer
   FREE(chan->status.command);
-  if(chan->output.opus != NULL){
-    opus_encoder_destroy(chan->output.opus);
-    chan->output.opus = NULL;
+  if(chan->opus.encoder != NULL){
+    opus_encoder_destroy(chan->opus.encoder);
+    chan->opus.encoder = NULL;
   }
   delete_filter_output(&chan->filter.out);
   chan->baseband = NULL;

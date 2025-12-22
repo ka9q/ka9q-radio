@@ -155,6 +155,10 @@ enum status_type {
   SAMPLES_SINCE_OVER, // Samples since last A/D overrange
   PLL_WRAPS,          // Count of complete linear mode PLL rotations
   RF_LEVEL_CAL,        // Adjustment relating dBm to dBFS
+  OPUS_DTX,         // Opus encoder discontinuous transmission enable/disable
+  OPUS_APPLICATION,   // Opus encoder application voice/audio/etc
+  OPUS_BANDWIDTH,     // Opus encoder audio bandwidth limita
+  OPUS_FEC,           // Opus encoder forward error correction loss rate, %
 };
 
 size_t encode_string(uint8_t **bp,enum status_type type,void const *buf,size_t buflen);

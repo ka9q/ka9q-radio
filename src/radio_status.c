@@ -514,7 +514,22 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       }
       break;
     case OPUS_BIT_RATE:
-      chan->output.opus_bitrate = abs(decode_int(cp,optlen));
+      chan->opus.bitrate = abs(decode_int(cp,optlen));
+      break;
+    case OPUS_DTX:
+      chan->opus.dtx = decode_bool(cp,optlen);
+      break;
+    case OPUS_APPLICATION:
+      {
+	int x = decode_int(cp,optlen);
+	if(x == OPUS_APPLICATION_AUDIO || x == OPUS_APPLICATION_VOIP || x == OPUS_APPLICATION_RESTRICTED_LOWDELAY
+#if defined(OPUS_APPLICATION_RESTRICTED_SILK) && defined(OPUS_APPLICATION_RESTRICTED_CELT)
+	   // Unclear if these are actually supported in Opus 1.6
+	   || x == OPUS_APPLICATION_RESTRICTED_SILK || x == OPUS_APPLICATION_RESTRICTED_CELT
+#endif
+        )
+	  chan->opus.application = x;
+      }
       break;
     case SETOPTS:
       {
@@ -749,7 +764,11 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       encode_float(&bp,GAIN,voltage2dB(chan->output.gain));
     }
     encode_int64(&bp,OUTPUT_SAMPLES,chan->output.samples);
-    encode_int32(&bp,OPUS_BIT_RATE,chan->output.opus_bitrate);
+    encode_int(&bp,OPUS_BIT_RATE,chan->opus.bitrate);
+    encode_int(&bp,OPUS_BANDWIDTH,chan->opus.bandwidth);
+    encode_int(&bp,OPUS_APPLICATION,chan->opus.application);
+    encode_int(&bp,OPUS_FEC,chan->opus.fec);
+    encode_int(&bp,OPUS_DTX,chan->opus.dtx);
     encode_float(&bp,HEADROOM,voltage2dB(chan->output.headroom)); // amplitude -> dB
     // Doppler info
     encode_double(&bp,DOPPLER_FREQUENCY,chan->tune.doppler); // Hz

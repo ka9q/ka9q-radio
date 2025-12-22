@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <locale.h>
 #include <fcntl.h>
+#include <opus/opus.h>
 
 #ifndef NULL
 #define NULL ((void *)0)
@@ -34,6 +35,20 @@
 #include "misc.h"
 
 char const *Libdir = LIBDIR;
+
+struct string_table Opus_application[] = {
+  {"voip", OPUS_APPLICATION_VOIP},
+  {"audio", OPUS_APPLICATION_AUDIO},
+  {"lowdelay",OPUS_APPLICATION_RESTRICTED_LOWDELAY},
+#ifdef OPUS_APPLICATION_RESTRICTED_CELT
+  {"celt", OPUS_APPLICATION_RESTRICTED_CELT},
+#endif
+#ifdef OPUS_APPLICATION_SILK
+  {"silk", OPUS_APPLICATION_SILK},
+#endif
+  { NULL, -1 },
+};
+
 
 // Return path to file which is part of the application distribution.
 // This allows to run the program either from build directory or from
@@ -299,7 +314,7 @@ char *format_utctime(char *result,int len,int64_t t){
     t_usec += 1000000;
     utime -= 1;
   }
-  struct tm tm;
+  struct tm tm = {0};
   gmtime_r(&utime,&tm);
   // Mon Feb 26 2018 14:40:08.123456 UTC
   snprintf(result,len,"%s %02d %s %4d %02d:%02d:%02d.%06d UTC",
@@ -323,7 +338,7 @@ char *format_utctime_iso8601(char *result,int len,int64_t t){
     t_usec += 1000000;
     utime -= 1;
   }
-  struct tm tm;
+  struct tm tm = {0};
   gmtime_r(&utime,&tm);
   // 2018-02-26T14:40:08.123456Z
   snprintf(result,len,"%04d-%02d-%02dT%02d:%02d:%02d.%06dZ",

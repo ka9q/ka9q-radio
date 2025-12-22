@@ -306,7 +306,19 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->options = decode_int64(cp,optlen);
       break;
     case OPUS_BIT_RATE:
-      channel->output.opus_bitrate = decode_int(cp,optlen);
+      channel->opus.bitrate = decode_int(cp,optlen);
+      break;
+    case OPUS_DTX:
+      channel->opus.dtx = decode_bool(cp,optlen);
+      break;
+    case OPUS_APPLICATION:
+      channel->opus.application = decode_int(cp,optlen); 
+      break;
+    case OPUS_FEC:
+      channel->opus.fec = decode_int(cp,optlen);
+      break;
+    case OPUS_BANDWIDTH:
+      channel->opus.bandwidth = decode_int(cp,optlen);
       break;
     case MINPACKET:
       channel->output.minpacket = decode_int(cp,optlen);

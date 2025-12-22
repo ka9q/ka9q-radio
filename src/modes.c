@@ -114,6 +114,9 @@ char const *Channel_keys[] = {
   "pacing",
   "encoding",
   "bitrate",
+  "opus-dtx",
+  "opus-application",
+  "opus-fec",
   "update",
   "buffer",
   "freq",
@@ -182,7 +185,11 @@ int set_defaults(struct channel *chan){
 
   chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
   chan->output.encoding = S16BE;
-  chan->output.opus_bitrate = DEFAULT_BITRATE;
+  chan->opus.application = OPUS_APPLICATION_AUDIO;
+  chan->opus.bandwidth = OPUS_BANDWIDTH_FULLBAND;
+  chan->opus.bitrate = DEFAULT_BITRATE;
+  chan->opus.dtx = false;
+  chan->opus.fec = 0;
   chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
   chan->output.channels = 1;
   if(chan->output.gain <= 0 || isnan(chan->output.gain))
@@ -373,13 +380,14 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     }
   }
   // "tone", "pl" and "ctcss" are synonyms
-  chan->fm.tone_freq = config_getdouble(table,sname,"tone",chan->fm.tone_freq);
-  chan->fm.tone_freq = config_getdouble(table,sname,"pl",chan->fm.tone_freq);
-  chan->fm.tone_freq = config_getdouble(table,sname,"ctcss",chan->fm.tone_freq);
-  chan->fm.tone_freq = fabs(chan->fm.tone_freq);
-  if(chan->fm.tone_freq > 3000){
-    fprintf(stderr,"Tone %.1f out of range\n",chan->fm.tone_freq);
-    chan->fm.tone_freq = 0;
+  {
+    double tone = config_getdouble(table,sname,"tone",chan->fm.tone_freq);
+    tone = config_getdouble(table,sname,"pl",tone);
+    tone = fabs(config_getdouble(table,sname,"ctcss",tone));
+    if(tone > 3000)
+      fprintf(stderr,"Tone %.1lf out of range\n",tone);
+    else
+      chan->fm.tone_freq = tone;
   }
   chan->output.pacing = config_getboolean(table,sname,"pacing",chan->output.pacing);
   {
@@ -387,23 +395,50 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     if(cp)
       chan->output.encoding = parse_encoding(cp);
   }
-  chan->output.opus_bitrate = config_getint(table,sname,"bitrate",chan->output.opus_bitrate);
-  if(chan->output.opus_bitrate > 510000){
-    fprintf(stderr,"opus bitrate %u out of range, using 0 (auto)\n",chan->output.opus_bitrate);
-    chan->output.opus_bitrate = 0;
+  {
+    int const bitrate = abs(config_getint(table,sname,"bitrate",chan->opus.bitrate));
+    if(bitrate > 510000)
+      fprintf(stderr,"opus bitrate %d out of range\n",bitrate);
+    else 
+      chan->opus.bitrate = bitrate;
   }
-  chan->status.output_interval = config_getint(table,sname,"update",chan->status.output_interval);
-  if(chan->status.output_interval < 0)
-    chan->status.output_interval = 0;
-  chan->output.minpacket = config_getint(table,sname,"buffer",chan->output.minpacket);
-  if(chan->output.minpacket > 4){
-    fprintf(stderr,"buffer %u out of range, using 0\n",chan->output.minpacket);
-    chan->output.minpacket = 0;
+  chan->opus.dtx = config_getboolean(table,sname,"opus-dtx",chan->opus.dtx);
+  {
+    int const fec = abs(config_getint(table,sname,"opus-fec",chan->opus.fec));
+    if(fec > 100)
+      fprintf(stderr,"opus FEC %dxx out of range\n",fec);
+    else
+      chan->opus.fec = fec;
   }
-  chan->filter2.blocking = config_getint(table,sname,"filter2",chan->filter2.blocking);
-  if(chan->filter2.blocking > 10){
-    fprintf(stderr,"filter2 blocking %u out of range, using 10\n",chan->filter2.blocking);
-    chan->filter2.blocking = 10;
+  {
+    char const *cp = config_getstring(table,sname,"opus-application",NULL);
+    if(cp && strlen(cp) > 0){
+      for(int i=0; ; i++){
+	if(Opus_application[i].str == NULL){
+	  fprintf(stderr,"opus application '%s' unknown\n",cp);
+	  break;
+	}
+	if(strncmp(cp,Opus_application[i].str,strlen(cp)) == 0){
+	  chan->opus.application = Opus_application[i].value;
+	  break;
+	}
+      }
+    }
+  }
+  chan->status.output_interval = abs(config_getint(table,sname,"update",chan->status.output_interval));
+  {
+    int minpacket = abs(config_getint(table,sname,"buffer",chan->output.minpacket));
+    if(minpacket > 4)
+      fprintf(stderr,"buffer %u out of range, using 0\n",minpacket);
+    else
+      chan->output.minpacket = minpacket;
+  }
+  {
+    int blocking = config_getint(table,sname,"filter2",chan->filter2.blocking);
+    if(blocking > 10)
+      fprintf(stderr,"filter2 blocking %u out of range\n",blocking);
+    else
+      chan->filter2.blocking = blocking;
   }
   chan->prio = config_getint(table,sname,"prio",chan->prio);
   chan->output.ttl = config_getint(table,sname,"ttl",chan->output.ttl);

@@ -283,10 +283,6 @@ struct channel {
     uint64_t samples;
     bool pacing;     // Pace output packets
     enum encoding encoding;
-    OpusEncoder *opus;
-    unsigned int opus_channels;
-    unsigned int opus_bitrate;
-    int opus_bandwidth;
     float *queue; // Mirrored ring buffer
     size_t queue_size; // Size of allocation, in floats
     unsigned wp,rp; // Queue write and read indices
@@ -297,6 +293,16 @@ struct channel {
     int ttl; // per-channel IP TTL for multicast scope control
     uint32_t time_snap;    // Snapshot of RTP timestamp sampled by sender in status packets, for linking RTP time to clock time
   } output;
+
+  struct {
+    OpusEncoder *encoder;
+    unsigned int channels;
+    unsigned int bitrate;
+    int bandwidth;
+    int application;  // Opus application setting (OPUS_APPLICATION_AUDIO, etc)
+    int fec;
+    bool dtx;
+  } opus;
 
   struct {
     uint64_t packets_in;
@@ -339,6 +345,7 @@ extern int Verbose;
 extern char const *Channel_keys[]; // Lists of valid keywords in config files
 extern double User_blocktime;
 extern double Blocktime;
+extern struct string_table opus_application[];
 
 // Channel configuration, initialization & manipulation
 int loadconfig(char const *file);
@@ -371,7 +378,7 @@ int demod_linear(void *);
 int demod_spectrum(void *);
 
 // Control and status
-int send_output(struct channel * restrict ,const float * restrict,int,bool);
+int send_output(struct channel * restrict ,const float * rsestrict,int,bool);
 int send_radio_status(struct sockaddr const *,struct frontend const *, struct channel *);
 int reset_radio_status(struct channel *chan);
 bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned long length);

@@ -49,7 +49,7 @@ static int Total_channels;
 static bool Global_use_dns;
 static void *Dl_handle;
 static struct frontend Frontend;
-static int const DEFAULT_IP_TOS = 48; // AF12 left shifted 2 bits
+static int const DEFAULT_IP_TOS = 46 << 2; // Expedited Forwarding
 static double const DEFAULT_BLOCKTIME = .02; // 20 ms
 static char *Metadata_dest_string; // DNS name of default multicast group for status/commands
 static pthread_t Status_thread;
@@ -1014,9 +1014,9 @@ int close_chan(struct channel *chan){
   FREE(chan->status.command);
   FREE(chan->spectrum.bin_data);
   delete_filter_output(&chan->filter.out);
-  if(chan->output.opus != NULL){
-    opus_encoder_destroy(chan->output.opus);
-    chan->output.opus = NULL;
+  if(chan->opus.encoder != NULL){
+    opus_encoder_destroy(chan->opus.encoder);
+    chan->opus.encoder = NULL;
   }
   pthread_mutex_unlock(&chan->status.lock);
   pthread_mutex_lock(&Channel_list_mutex);
