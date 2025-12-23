@@ -74,7 +74,7 @@ void *dataproc(void *arg){
   int input_fd;
   {
     char iface[1024];
-    struct sockaddr group = {0};;
+    struct sockaddr group = {0};
 
     resolve_mcast(mcast_address_text,&group,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
     input_fd = listen_mcast(Source_socket,&group,iface);
@@ -302,6 +302,8 @@ void *decode_task(void *arg){
     // Rest of packet processing
     // All if/else clauses above should reach here except old sequence duplicates
     // Do PL detection and notching even when muted or outvoted
+    if(sp->samprate == 0 || sp->channels == 0)
+      continue; // Not yet fully initialized
     if(sp->notch_enable){
       run_pl(sp);
       apply_notch(sp);
@@ -767,7 +769,6 @@ static void copy_to_stream(struct session *sp){
 	right_index += Channels;
       }
     }
-    wptr += right_index;
   } else { // Channels == 1, no panning
     if(sp->channels == 1){
       for(int i=0; i < sp->output_rate_data_size; i++){
@@ -781,10 +782,9 @@ static void copy_to_stream(struct session *sp){
 	sp->buffer[BINDEX(wptr,i)] = (float)s;
       }
     }
-    wptr += sp->output_rate_data_size;
     // Write back atomically
   } // if(sp->channels == 1)
-  // Advance the official write pointer
-  sp->wptr += (int)round(Channels * sp->output_rate_data_size);
+  // Advance the official write pointer in units of mono samples
+  wptr += (int)round(Channels * sp->output_rate_data_size);
   atomic_store_explicit(&sp->wptr,wptr,memory_order_release);
 }

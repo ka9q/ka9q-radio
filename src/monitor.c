@@ -90,10 +90,11 @@ int Output_fd = -1; // Output network socket, if any
 struct sockaddr_in Dest_socket;
 int64_t Last_xmit_time;
 _Atomic int64_t Output_time;  // Relative output time in samples
-uint64_t Audio_callbacks;
+_Atomic uint64_t Callbacks;
 _Atomic uint64_t Audio_frames;
 _Atomic int64_t LastAudioTime;
 _Atomic int Callback_quantum;
+_Atomic int64_t Output_total;
 double Portaudio_delay;
 pthread_t Repeater_thread;
 int Nfds;                     // Number of streams
@@ -446,8 +447,10 @@ void vote(void){
   long long const time = gps_time_ns();
 
   pthread_mutex_lock(&Sess_mutex);
-  for(int i = 0; i < Nsessions; i++){
+  for(int i = 0; i < NSESSIONS; i++){
     struct session * const sp = &Sessions[i];
+    if(!sp->init)
+      continue;
 
     // Have we gotten anything in the last 500 ms?
     sp->now_active = (time - sp->last_active) < BILLION/2; // note: boolean expression
@@ -628,7 +631,6 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   (void)inputBuffer; // Unused
   (void)statusFlags;
   (void)userData;
-  Audio_callbacks++;
 
   atomic_fetch_add(&Audio_frames,framesPerBuffer);
 
@@ -636,15 +638,17 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     return paAbort; // can this happen??
 
   Last_callback_time = timeInfo->currentTime;
-  assert(framesPerBuffer < BUFFERSIZE); // Make sure ring buffer is big enough
   atomic_store_explicit(&Callback_quantum,framesPerBuffer,memory_order_release); // For writer's information
   // Delay within Portaudio in sec
   Portaudio_delay = timeInfo->outputBufferDacTime - timeInfo->currentTime;
 
   // Output sample clock at beginning of our buffer
   int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-  memset(outputBuffer, 0, framesPerBuffer * Channels * sizeof (float));
   float * const buffer = (float *)outputBuffer;
+  memset(buffer, 0, framesPerBuffer * Channels * sizeof (float));
+
+#if 0
+  int64_t total = 0;
 
   for(int i=0; i < NSESSIONS; i++){
     struct session *sp = Sessions + i;
@@ -662,10 +666,27 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     for(int j = 0; j < count; j++){
       buffer[j] += sp->buffer[BINDEX(rptr,j)];
     }
+    total += count;
   }
-  opus_pcm_soft_clip((float *)outputBuffer,(int)framesPerBuffer,Channels,Softclip_mem);
-  rptr += framesPerBuffer;
-  atomic_store_explicit(&Output_time,rptr,memory_order_release);
+#else
+  // test tone
+  double complex os = 1;
+  double x,y;
+  double freq = 2 * 0.010;
+  sincos(2*M_PI*freq,&y,&x);
+  //  float complex step = cispif(freq);
+  double complex step = x + I*y;
+  for(int i=0; i < framesPerBuffer; i++){
+    buffer[2*i] += 0.1 * creal(os);
+    buffer[2*i+1] += 0.1 * cimag(os);
+    os *= step;
+  }
+#endif
+
+  //  opus_pcm_soft_clip(buffer,(int)framesPerBuffer,Channels,Softclip_mem);
+  atomic_fetch_add(&Output_time,framesPerBuffer * Channels);
+  atomic_fetch_add(&Output_total,total);
+  atomic_fetch_add(&Callbacks,1);
   return paContinue;
 }
 

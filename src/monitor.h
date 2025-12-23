@@ -137,15 +137,14 @@ extern double PL_tones[N_tones];
 
 extern int64_t Last_xmit_time;
 extern int64_t Last_id_time;
-extern _Atomic int Callback_quantum;
 extern _Atomic int Buffer_length; // Bytes left to play out, max BUFFERSIZE
-extern _Atomic int Rptr;
 extern _Atomic int Callback_quantum; // How much the callback reads at a time
 extern _Atomic int64_t Output_time;
 extern volatile bool PTT_state;      // For repeater transmitter
-extern uint64_t Audio_callbacks;
 extern _Atomic uint64_t Audio_frames;
 extern _Atomic int64_t LastAudioTime;
+extern _Atomic int64_t Output_total;
+extern _Atomic uint64_t Callbacks;
 extern double Portaudio_delay;
 extern pthread_t Repeater_thread;
 extern pthread_cond_t PTT_cond;
