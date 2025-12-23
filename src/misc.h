@@ -131,6 +131,7 @@ struct string_table {
 };
 extern struct string_table Opus_application[];
 
+int opus_bandwidth(char const **str,int code);
 
 // Portable mutex initializer for recursive mutexes
 static inline int init_recursive_mutex(pthread_mutex_t *m){

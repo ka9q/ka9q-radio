@@ -455,34 +455,8 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case OPUS_BANDWIDTH:
       {
 	int const x = decode_int(cp,optlen);
-	int bw = 0;
 	const char *str = NULL;
-	switch(x){
-	case OPUS_BANDWIDTH_NARROWBAND:
-	  bw = 4000;
-	  str = "narrowband";
-	  break;
-	case OPUS_BANDWIDTH_MEDIUMBAND:
-	  bw = 6000;
-	  str = "mediumband";
-	  break;
-	case OPUS_BANDWIDTH_WIDEBAND:
-	  bw = 8000;
-	  str = "wideband";
-	  break;
-	case OPUS_BANDWIDTH_SUPERWIDEBAND:
-	  bw = 12000;
-	  str = "superwideband";
-	  break;
-	case OPUS_BANDWIDTH_FULLBAND:
-	  bw = 20000;
-	  str = "fullband";
-	  break;
-	default:
-	  bw = 0;
-	  str = "invalid";
-	  break;
-	}
+	int bw = opus_bandwidth(&str,x);
 	fprintf(fp,"opus bw %s (%d)",str,bw);
       }
       break;

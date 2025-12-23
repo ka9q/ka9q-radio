@@ -48,8 +48,40 @@ struct string_table Opus_application[] = {
 #endif
   { NULL, -1 },
 };
-
-
+// Interpret an Opus bandwidth constant
+int opus_bandwidth(char const **str,int code){
+  int bw = 0;
+  char const *s = NULL;
+  switch(code){
+  case OPUS_BANDWIDTH_NARROWBAND:
+    bw = 4000;
+    s = "narrowband";
+    break;
+  case OPUS_BANDWIDTH_MEDIUMBAND:
+    bw = 6000;
+    s = "mediumband";
+    break;
+  case OPUS_BANDWIDTH_WIDEBAND:
+    bw = 8000;
+    s = "wideband";
+    break;
+  case OPUS_BANDWIDTH_SUPERWIDEBAND:
+    bw = 12000;
+    s = "superwideband";
+    break;
+  case OPUS_BANDWIDTH_FULLBAND:
+    bw = 20000;
+    s = "fullband";
+    break;
+  default:
+    bw = 0;
+    s = "invalid";
+    break;
+  }
+  if(str != NULL)
+    *str = s;
+  return bw;
+}
 // Return path to file which is part of the application distribution.
 // This allows to run the program either from build directory or from
 // installation directory.
