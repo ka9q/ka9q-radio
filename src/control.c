@@ -1668,31 +1668,9 @@ static void display_output(WINDOW *w,struct channel const *chan){
     }
     pprintw(w,row++,col,"Opus application","%s",appl);
     pprintw(w,row++,col,"Opus fec","%d%%",chan->opus.fec);
-    int bw = 0;
-    switch(chan->opus.bandwidth){
-    case OPUS_BANDWIDTH_NARROWBAND:
-      bw = 4;
-      break;
-    case OPUS_BANDWIDTH_MEDIUMBAND:
-      bw = 6;
-      break;
-    case OPUS_BANDWIDTH_WIDEBAND:
-      bw = 8;
-      break;
-    case OPUS_BANDWIDTH_SUPERWIDEBAND:
-      bw = 12;
-      break;
-    case OPUS_BANDWIDTH_FULLBAND:
-      bw = 20;
-      break;
-    default:
-      bw = 0;
-      break;
-    }
+    int bw = opus_bandwidth(NULL,chan->opus.bandwidth);
     pprintw(w,row++,col,"Opus bw","%d kHz",bw);
   }
-
-
   box(w,0,0);
   mvwaddstr(w,0,1,"RTP output");
   wnoutrefresh(w);
