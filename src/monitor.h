@@ -1,16 +1,94 @@
 #include <stdatomic.h>
+#include <samplerate.h>
 
 
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 #define BUFFERSIZE (1<<19)    // about 10.92 sec at 48 kHz - must be power of 2 times page size (4k)!
-extern double const Latency; // chunk size for audio output callback
-extern double const Tone_period; // PL tone integration period
 #define NSESSIONS 1500
 
 #define N_tones 55
-extern double PL_tones[N_tones];
 
 #define OPUS_SAMPRATE (48000)
+// Add two numbers modulo the buffer size
+// Used frequently for writin into output buffers with non-wrapping counters
+#define BINDEX(a,b) (((a) + (b)) & (BUFFERSIZE - 1))
+
+
+#define BBSIZE (2*5760)   // 120 ms @ 48 kHz stereo (biggest Opus packet)
+struct session {
+  bool init;               // Fully initialized by first RTP packet
+  struct sockaddr_storage sender;
+  char const *dest;
+
+  float bounce[BBSIZE];
+  uint8_t buffer[BUFFERSIZE];
+  float rate_converted_buffer[BBSIZE];
+  int rate_converted_buffer_size;
+  SRC_STATE *src_state_mono;
+  SRC_STATE *src_state_stereo;
+  float *output_rate_data;
+  int output_rate_data_size;
+
+  _Atomic int64_t wptr;    // Next write sample, in output sample clock units
+
+  int64_t consec_erasures;
+  int consec_lates;
+  int consec_out_of_order;
+
+
+  pthread_t task;           // Thread reading from queue and running decoder
+  struct packet *queue;     // Incoming RTP packets
+  pthread_mutex_t qmutex;   // Mutex protecting packet queue
+  pthread_cond_t qcond;     // Condition variable for arrival of new packet
+
+  struct rtp_state rtp_state; // Incoming RTP session state
+  uint32_t ssrc;            // RTP Sending Source ID
+  int type;                 // RTP type (10,11,20,111,etc)
+  struct pt_table pt_table[128];     // convert a payload type to samplerate, channels, encoding type
+
+  uint32_t next_timestamp;  // Next timestamp expected
+  int playout;              // Initial playout delay, frames
+  int64_t last_active;    // GPS time last active with data traffic
+  double tot_active;         // Total PCM time, s
+  double active;             // Seconds we've been active (only when queue has stuff)
+  double datarate;           // Smoothed channel data rate
+
+  OpusDecoder *opus;        // Opus codec decoder handle, if needed
+  int opus_channels;        // Actual channels in Opus stream
+  int frame_size;
+  int bandwidth;            // Audio bandwidth
+  struct goertzel tone_detector[N_tones];
+  int tone_samples;
+  double current_tone;       // Detected tone frequency
+  double snr;                // Extracted from status message from radiod
+
+  int samprate;
+  int channels;              // channels on stream (1 or 2). Opus is always stereo
+  double gain;               // linear gain; 1 = 0 dB
+  double pan;                // Stereo position: 0 = center; -1 = full left; +1 = full right
+
+  // Counters
+  uint64_t packets;    // RTP packets for this session
+  uint64_t empties;    // RTP but no data
+  uint64_t lates;
+  uint64_t resets;
+  uint64_t reseqs;
+  uint64_t plcs;       // Opus packet loss conceals
+
+  bool terminate;            // Set to cause thread to terminate voluntarily
+  bool muted;                // Do everything but send to output
+  bool reset;                // Set to force output timing reset on next packet
+  bool now_active;           // Audio arrived < 500 ms ago; updated by vote()
+
+  char id[32];
+  bool notch_enable;         // Enable PL removal notch
+  struct iir iir_left;       // State for PL removal filter
+  struct iir iir_right;
+  double notch_tone;
+  struct channel chan;       // Partial copy of radiod's channel structure, filled in by status protocol
+  struct frontend frontend;  // Partial copy of radiod's front end structure, ditto
+};
+
 
 // Names of config file sections
 extern char const *Radio;
@@ -53,16 +131,21 @@ extern char const *Init;
 extern char const *Source; // Only accept from this domain name
 
 // Global variables that regularly change
+extern double const Latency; // chunk size for audio output callback
+extern double const Tone_period; // PL tone integration period
+extern double PL_tones[N_tones];
+
 extern int64_t Last_xmit_time;
 extern int64_t Last_id_time;
-extern float *Output_buffer;
+extern _Atomic int Callback_quantum;
 extern _Atomic int Buffer_length; // Bytes left to play out, max BUFFERSIZE
 extern _Atomic int Rptr;
-extern int Wptr;
+extern _Atomic int Callback_quantum; // How much the callback reads at a time
+extern _Atomic int64_t Output_time;
 extern volatile bool PTT_state;      // For repeater transmitter
 extern uint64_t Audio_callbacks;
-extern uint64_t Audio_frames;
-extern volatile int64_t LastAudioTime;
+extern _Atomic uint64_t Audio_frames;
+extern _Atomic int64_t LastAudioTime;
 extern double Portaudio_delay;
 extern pthread_t Repeater_thread;
 extern pthread_cond_t PTT_cond;
@@ -78,7 +161,7 @@ extern PaTime Last_callback_time;
 extern int Invalids;
 extern int64_t Last_error_time;
 extern int Nsessions;
-extern struct session *Sessions[NSESSIONS];
+
 extern bool Terminate;
 extern bool Voting;
 extern struct session *Best_session; // Session with highest SNR
@@ -86,72 +169,14 @@ extern struct sockaddr Metadata_dest_socket;
 extern char const *Pipe;
 extern struct sockaddr_in *Source_socket;
 
-
-struct session {
-  bool init;               // Fully initialized by first RTP packet
-  struct sockaddr_storage sender;
-  char const *dest;
-
-  pthread_t task;           // Thread reading from queue and running decoder
-  struct packet *queue;     // Incoming RTP packets
-  pthread_mutex_t qmutex;   // Mutex protecting packet queue
-  pthread_cond_t qcond;     // Condition variable for arrival of new packet
-
-  struct rtp_state rtp_state; // Incoming RTP session state
-  uint32_t ssrc;            // RTP Sending Source ID
-  int type;                 // RTP type (10,11,20,111,etc)
-  struct pt_table pt_table[128];     // convert a payload type to samplerate, channels, encoding type
-
-  uint32_t next_timestamp;  // Next timestamp expected
-  int wptr;                 // current write index into output PCM buffer, *frames*
-  int playout;              // Initial playout delay, frames
-  long long last_active;    // GPS time last active with data traffic
-  double tot_active;         // Total PCM time, s
-  double active;             // Seconds we've been active (only when queue has stuff)
-  double datarate;           // Smoothed channel data rate
-
-  OpusDecoder *opus;        // Opus codec decoder handle, if needed
-  int opus_channels;        // Actual channels in Opus stream
-  int frame_size;
-  int bandwidth;            // Audio bandwidth
-  struct goertzel tone_detector[N_tones];
-  int tone_samples;
-  double current_tone;       // Detected tone frequency
-  double snr;                // Extracted from status message from radiod
-
-  int samprate;
-  int channels;              // channels on stream (1 or 2). Opus is always stereo
-  double gain;               // linear gain; 1 = 0 dB
-  double pan;                // Stereo position: 0 = center; -1 = full left; +1 = full right
-
-  // Counters
-  uint64_t packets;    // RTP packets for this session
-  uint64_t empties;    // RTP but no data
-  uint64_t lates;
-  uint64_t resets;
-  uint64_t reseqs;
-  uint64_t plcs;       // Opus packet loss conceals
-
-  bool terminate;            // Set to cause thread to terminate voluntarily
-  bool muted;                // Do everything but send to output
-  bool reset;                // Set to force output timing reset on next packet
-  bool now_active;           // Audio arrived < 500 ms ago; updated by vote()
-
-  char id[32];
-  bool notch_enable;         // Enable PL removal notch
-  struct iir iir_left;       // State for PL removal filter
-  struct iir iir_right;
-  double notch_tone;
-  struct channel chan;       // Partial copy of radiod's channel structure, filled in by status protocol
-  struct frontend frontend;  // Partial copy of radiod's front end structure, ditto
-};
+extern struct session Sessions[NSESSIONS];
 
 void load_id(void);
 void cleanup(void);
 void *display(void *);
 
 struct session *lookup_or_create_session(struct sockaddr_storage const *,uint32_t);
-int close_session(struct session **);
+int close_session(struct session *);
 int pa_callback(void const *,void *,unsigned long,PaStreamCallbackTimeInfo const *,PaStreamCallbackFlags,void *);
 void *decode_task(void *x);
 void *dataproc(void *arg);
@@ -173,9 +198,4 @@ static inline int modsub(int a, int b, int const modulus){
   if(diff < -modulus/2)
     return diff + modulus;
   return diff;
-}
-static inline struct session *sptr(int index){
-  if(index >= 0 && index < Nsessions && !Sessions[index]->terminate)
-    return Sessions[index];
-  return NULL;
 }

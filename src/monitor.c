@@ -89,13 +89,11 @@ char const *Source; // Source specific multicast, if used
 int Output_fd = -1; // Output network socket, if any
 struct sockaddr_in Dest_socket;
 int64_t Last_xmit_time;
-float *Output_buffer;
-_Atomic int Buffer_length; // Bytes left to play out, max BUFFERSIZE
-_Atomic int Rptr;   // callback thread read pointer, *frames*
-int Wptr; // for monitoring write pointers
+_Atomic int64_t Output_time;  // Relative output time in samples
 uint64_t Audio_callbacks;
-uint64_t Audio_frames;
-volatile int64_t LastAudioTime;
+_Atomic uint64_t Audio_frames;
+_Atomic int64_t LastAudioTime;
+_Atomic int Callback_quantum;
 double Portaudio_delay;
 pthread_t Repeater_thread;
 int Nfds;                     // Number of streams
@@ -107,7 +105,7 @@ PaTime Start_pa_time;
 PaTime Last_callback_time;
 int64_t Last_error_time;
 int Nsessions;
-struct session *Sessions[NSESSIONS];
+struct session Sessions[NSESSIONS];
 bool Terminate;
 struct session *Best_session; // Session with highest SNR
 int Mcast_ttl;
@@ -347,8 +345,6 @@ int main(int argc,char * const argv[]){
   // Create output circular buffer
   // Runs continuously, playing silence until audio arrives.
   // This allows multiple streams to be played on hosts that only support one
-  Output_buffer = mirror_alloc(BUFFERSIZE * Channels * sizeof(*Output_buffer)); // Must be power of 2 times page size
-  memset(Output_buffer,0,BUFFERSIZE * Channels * sizeof(*Output_buffer)); // Does mmap clear its initial memory? Not sure
 
   if(Pipe != NULL){
 #if __linux__
@@ -451,9 +447,7 @@ void vote(void){
 
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < Nsessions; i++){
-    struct session * const sp = sptr(i);
-    if(sp == NULL)
-      continue;
+    struct session * const sp = &Sessions[i];
 
     // Have we gotten anything in the last 500 ms?
     sp->now_active = (time - sp->last_active) < BILLION/2; // note: boolean expression
@@ -558,8 +552,10 @@ void *statproc(void *arg){
 // Executes atomically
 struct session *lookup_or_create_session(const struct sockaddr_storage *sender,const uint32_t ssrc){
   pthread_mutex_lock(&Sess_mutex);
-  for(int i = 0; i < Nsessions; i++){
-    struct session * const sp = sptr(i);
+  for(int i = 0; i < NSESSIONS; i++){
+    struct session * const sp = Sessions + i;
+    if(!sp->init)
+      continue;
     if(sp && sp->ssrc == ssrc
        && address_match(sender,&sp->sender)
        //       && getportnumber(&sp->sender) == getportnumber(&sender)
@@ -568,14 +564,13 @@ struct session *lookup_or_create_session(const struct sockaddr_storage *sender,c
       return sp;
     }
   }
-  struct session * const sp = calloc(1,sizeof(*sp));
-  if(sp == NULL){ // Shouldn't happen on modern machines!
-    pthread_mutex_unlock(&Sess_mutex);
-    return NULL;
+  // Look for an empty spot
+  struct session *sp = NULL;
+  for(int i = 0; i < NSESSIONS; i++){
+    sp = Sessions + i;
+    if(!sp->init)
+      break;
   }
-
-  // Put at end of list
-  Sessions[Nsessions++] = sp;
   sp->init = false; // Wait for first RTP packet to set the rest up
   sp->ssrc = ssrc;
   memcpy(&sp->sender,sender,sizeof(sp->sender));
@@ -586,42 +581,23 @@ struct session *lookup_or_create_session(const struct sockaddr_storage *sender,c
 
   return sp;
 }
-int close_session(struct session **p){
-  assert(p != NULL);
-  if(p == NULL)
-    return -1;
-  struct session * sp = *p;
+
+int close_session(struct session *sp){
   assert(sp != NULL);
   if(sp == NULL)
     return -1;
-  assert(Nsessions > 0);
+
+  assert(sp >= Sessions && sp < Sessions + NSESSIONS);
 
   pthread_mutex_lock(&Sess_mutex);
   if(sp == Best_session)
     Best_session = NULL;
 
   // Remove from table
-  int i = 0;
-  for(i = 0; i < Nsessions; i++){
-    if(Sessions[i] == sp)
-      break;
-  }
-  if(i == Nsessions){
-    // Not found
-    assert(false);
-    pthread_mutex_unlock(&Sess_mutex);
-    return -1;
-  }
-
-  // Copy remaining session pointers down
-  Nsessions--;
-  assert(Nsessions >= i);
-  memmove(&Sessions[i],&Sessions[i+1],(Nsessions-i) * sizeof(Sessions[0]));
-  Sessions[Nsessions] = NULL; // Last entry no longer valid
+  sp->init = false;
+  sp->terminate = true;
   pthread_mutex_unlock(&Sess_mutex); // Done modifying session table
   // Thread now cleans itself up
-  FREE(sp);
-  *p = NULL;
   return 0;
 }
 
@@ -653,27 +629,43 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   (void)statusFlags;
   (void)userData;
   Audio_callbacks++;
-  Audio_frames += framesPerBuffer;
+
+  atomic_fetch_add(&Audio_frames,framesPerBuffer);
 
   if(!outputBuffer)
     return paAbort; // can this happen??
 
   Last_callback_time = timeInfo->currentTime;
   assert(framesPerBuffer < BUFFERSIZE); // Make sure ring buffer is big enough
+  atomic_store_explicit(&Callback_quantum,framesPerBuffer,memory_order_release); // For writer's information
   // Delay within Portaudio in sec
   Portaudio_delay = timeInfo->outputBufferDacTime - timeInfo->currentTime;
 
-  // Use mirror buffer to simplify wraparound. Count is in bytes = Channels * frames * sizeof(float)
-  size_t const bytecount = Channels * framesPerBuffer * sizeof(*Output_buffer);
-  int rptr = atomic_load_explicit(&Rptr,memory_order_relaxed);
-  memcpy(outputBuffer,&Output_buffer[Channels*rptr],bytecount);
-  // Zero what we just copied
-  memset(&Output_buffer[Channels*rptr],0,bytecount);
+  // Output sample clock at beginning of our buffer
+  int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+  memset(outputBuffer, 0, framesPerBuffer * Channels * sizeof (float));
+  float * const buffer = (float *)outputBuffer;
+
+  for(int i=0; i < NSESSIONS; i++){
+    struct session *sp = Sessions + i;
+    if(!sp->init)
+      continue;
+
+    int64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
+    int64_t count = framesPerBuffer * Channels;
+    if(wptr <= rptr)
+      continue;      // he's empty
+
+    if(count > wptr - rptr)
+      count = wptr - rptr; // limit to what he's got
+
+    for(int j = 0; j < count; j++){
+      buffer[j] += sp->buffer[BINDEX(rptr,j)];
+    }
+  }
   opus_pcm_soft_clip((float *)outputBuffer,(int)framesPerBuffer,Channels,Softclip_mem);
   rptr += framesPerBuffer;
-  rptr &= (BUFFERSIZE-1);
-  atomic_store_explicit(&Rptr,rptr,memory_order_release); // Nobody else writes it
-  atomic_fetch_sub(&Buffer_length,framesPerBuffer);       // same
+  atomic_store_explicit(&Output_time,rptr,memory_order_release);
   return paContinue;
 }
 
@@ -681,6 +673,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 // Macos doesn't support clock_nanosleep(); find a substitute
 // Thread used instead of Portaudio callback when sending to network
 // Sends raw 16-bit PCM stereo at 48kHz; send to named pipe and opusenc, etc
+// Rewritten for new output architecture 23 Dec 2025, not yet tested
 void *output_thread(void *p){
   (void)p;
   Output_fd = open(Pipe,O_WRONLY,0666);
@@ -693,16 +686,30 @@ void *output_thread(void *p){
     int frames = .02 * 48000;
     int samples = frames * Channels;
     int16_t out_buffer[samples];
+    memset(out_buffer,0,sizeof out_buffer);
 
-    int rptr = atomic_load_explicit(&Rptr,memory_order_relaxed);
-    float *buffer = &Output_buffer[Channels*rptr];
-    rptr += frames;
-    rptr &= (BUFFERSIZE-1);
-    atomic_fetch_sub(&Buffer_length,frames);
-    for(int i=0; i < samples; i++)
-      out_buffer[i] = buffer[i] > 1 ? 32767 : buffer[i] < -1 ? -32767 : 32767 * buffer[i];
-    memset(buffer,0,samples * sizeof *buffer);
-    atomic_store_explicit(&Rptr,rptr,memory_order_release);
+    int rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+    for(int i=0; i < NSESSIONS; i++){
+      struct session *sp = Sessions + i;
+      if(!sp->init)
+	continue;
+
+      int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
+      int64_t count = framesPerBuffer * Channels;
+      if(wptr <= rptr)
+	count = 0; // he's empty
+      if(count > wptr - rptr)
+	count = wptr - rptr; // limit to what he's got
+
+      for(int j = 0; j < count; j++){
+	double s = 32768 * sp->buffer[BINDEX(rptr,j)];
+	s = s > 32767 ? 32767 : s < -32767 ? -32767 : s; // clip
+	s += out_buffer[j];
+	s = s > 32767 ? 32767 : s < -32767 ? -32767 : s; // clip again
+	out_buffer[j] = s;
+      }
+    }
+    atomic_store_explicit(&Output_time,rptr + count,memory_order_release);
 
     int r = write(Output_fd,out_buffer,sizeof out_buffer);
     if(r <= 0){

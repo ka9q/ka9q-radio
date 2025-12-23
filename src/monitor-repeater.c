@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <iniparser/iniparser.h>
+#include <fcntl.h>
 #if __linux__
 #include <bsd/string.h>
 #include <alsa/asoundlib.h>
@@ -47,7 +48,7 @@ int64_t Last_id_time;
 pthread_cond_t PTT_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t PTT_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-#if 0
+#if 1
 // Send CWID through separate CW daemon (cwd)
 // Use non-blocking IO; ignore failures
 void send_cwid(void){
@@ -65,6 +66,7 @@ void send_cwid(void){
 }
 #else
 // stub version that writes directly to local portaudio output buffer
+// Needs to be updated for new architecture 23 Dec 2025
 void send_cwid(void){
   if(Quiet){
     // Debug only, temp

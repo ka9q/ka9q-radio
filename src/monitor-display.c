@@ -425,10 +425,12 @@ static void update_monitor_display(void){
     // Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
     double const pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
 
-    int rptr = atomic_load_explicit(&Rptr,memory_order_acquire);
-    int const q = modsub(Wptr,rptr,BUFFERSIZE);
-    double const qd = (double) q / DAC_samprate;
-    double const rate = Audio_frames / pa_seconds;
+    //    int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+    //    int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
+    //    double const qd = (double) (rptr - wptr) / DAC_samprate;
+    double const qd = 0; // fix this
+    uint64_t audio_frames = atomic_load_explicit(&Audio_frames,memory_order_relaxed);
+    double const rate = audio_frames / pa_seconds;
 
     printwt("%s playout %.0lf ms, latency %5.1lf ms, queue %5.1lf ms, D/A rate %'.3lf Hz,",
 	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,qd*1000.,rate);
@@ -613,8 +615,10 @@ static void update_monitor_display(void){
     if(sp == NULL || !sp->now_active || sp->muted || (Voting && Best_session != NULL && Best_session != sp))
       continue;
 
-    int rptr = atomic_load_explicit(&Rptr,memory_order_acquire);
-    int const d = modsub(sp->wptr,rptr,BUFFERSIZE); // Unplayed samples on queue
+    int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+    int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
+    
+    int d = wptr - rptr;
     int const queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
     mvprintwt(y,x,"%*d",width,queue_ms);   // Time idle since last transmission
   }
@@ -945,7 +949,7 @@ static void process_keyboard(void){
   switch(c){
   case 'U': // Unmute all sessions, resetting any that were muted
     for(int i = 0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
+      struct session *sp = Sessions + i;
       if(sp != NULL && sp->muted){
 	sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	sp->muted = false;
@@ -954,7 +958,7 @@ static void process_keyboard(void){
     break;
   case 'M': // Mute all sessions
     for(int i = 0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
+      struct session *sp = Sessions + i;
       if(sp != NULL)
 	sp->muted = true;
     }
@@ -962,7 +966,7 @@ static void process_keyboard(void){
   case 'N':
     Notch = true;
     for(int i=0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
+      struct session *sp = Sessions + i;
       if(sp != NULL){
 	sp->notch_enable = true;
       }
@@ -970,7 +974,7 @@ static void process_keyboard(void){
     break;
   case 'R': // Reset all sessions
     for(int i=0; i < Nsessions;i++){
-      struct session *sp = sptr(i);
+      struct session *sp = Sessions + i;
       if(sp != NULL)
 	sp->reset = true;
     }
@@ -978,7 +982,7 @@ static void process_keyboard(void){
   case 'F':
     Notch = false;
     for(int i=0; i < Nsessions; i++){
-      struct session *sp = sptr(i);
+      struct session *sp = Sessions + i;
       if(sp != NULL)
 	sp->notch_enable = false;
     }
@@ -997,8 +1001,8 @@ static void process_keyboard(void){
   // Do this last
   // Lock still held!
   serviced = true;
-  struct session *sp = sptr(Current);
-  if(sp == NULL){
+  struct session *sp = Sessions + Current;
+  if(!sp->init){
     // Current index not valid
     pthread_mutex_unlock(&Sess_mutex);
     beep();
@@ -1058,7 +1062,7 @@ static void process_keyboard(void){
     pthread_join(sp->task,NULL);
     pthread_t nullthread = {0};
     sp->task = nullthread;
-    close_session(&sp); // Decrements Nsessions
+    close_session(sp); // Decrements Nsessions
     if(Current >= Nsessions)
       Current = Nsessions-1; // -1 when no sessions
     return; // Avoid unlocking again
