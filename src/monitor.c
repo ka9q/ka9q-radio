@@ -695,7 +695,7 @@ void *output_thread(void *p){
 	continue;
 
       int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
-      int64_t count = framesPerBuffer * Channels;
+      int64_t count = frames * Channels;
       if(wptr <= rptr)
 	count = 0; // he's empty
       if(count > wptr - rptr)
@@ -709,7 +709,7 @@ void *output_thread(void *p){
 	out_buffer[j] = s;
       }
     }
-    atomic_store_explicit(&Output_time,rptr + count,memory_order_release);
+    atomic_store_explicit(&Output_time,rptr + samples,memory_order_release);
 
     int r = write(Output_fd,out_buffer,sizeof out_buffer);
     if(r <= 0){
