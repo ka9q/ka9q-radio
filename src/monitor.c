@@ -445,27 +445,18 @@ int main(int argc,char * const argv[]){
 // Update session now-active flags, pick session with highest SNR for voting
 void vote(void){
   struct session *best = NULL;
-  long long const time = gps_time_ns();
 
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < NSESSIONS; i++){
     struct session * const sp = &Sessions[i];
-    if(!sp->init)
-      continue;
-
-    // Have we gotten anything in the last 500 ms?
-    sp->now_active = (time - sp->last_active) < BILLION/2; // note: boolean expression
-    if(!sp->now_active)
-      sp->active = 0;
-
-    if(sp->muted || !sp->now_active) // No recent audio, skip
+    if(!sp->init || sp->muted || !sp->running) // No recent audio, skip
       continue;
 
     if(best == NULL || sp->snr > best->snr)
       best = sp;
   }
   // Don't claim it unless we're sufficiently better (or there's nobody)
-  if(Best_session == NULL || Best_session->muted || !Best_session->now_active)
+  if(Best_session == NULL || Best_session->muted || !Best_session->running)
     Best_session = best;
   else if(best != NULL){
     for(int i=0; i < HSIZE;i++){
@@ -654,7 +645,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 
   for(int i=0; i < NSESSIONS; i++){
     struct session *sp = Sessions + i;
-    if(!sp->init)
+    if(!sp->init || !sp->running)
       continue;
 
     int64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);

@@ -3,8 +3,8 @@
 
 
 #define MAX_MCAST 20          // Maximum number of multicast addresses
-#define BUFFERSIZE (1<<17)    // about 4 sec at 48 kHz - must be power of 2 times page size (4k)!
-#define NSESSIONS 1500
+#define BUFFERSIZE (1<<17)    // about 2.73 sec at 48 kHz - must be power of 2 times page size (4k)!
+#define NSESSIONS 1000
 
 #define N_tones 55
 
@@ -32,8 +32,6 @@ struct session {
   int64_t consec_erasures;
   int consec_lates;
   int consec_out_of_order;
-
-  bool running;             // stream hasn't paused
 
   pthread_t task;           // Thread reading from queue and running decoder
   struct packet *queue;     // Incoming RTP packets
@@ -78,7 +76,7 @@ struct session {
   bool terminate;            // Set to cause thread to terminate voluntarily
   bool muted;                // Do everything but send to output
   bool reset;                // Set to force output timing reset on next packet
-  bool now_active;           // Audio arrived < 500 ms ago; updated by vote()
+  bool running;              // Audio arrived recently
 
   char id[32];
   bool notch_enable;         // Enable PL removal notch

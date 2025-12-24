@@ -250,8 +250,10 @@ void *decode_task(void *arg){
   bool init = false;
   // Main loop; run until asked to quit
   while(!sp->terminate && !Terminate){
-    if(sp->samprate == 0)
+    if(sp->samprate == 0){
       sp->running = false;
+      sp->active = 0;
+    }
     int64_t timeout = (int64_t)BILLION/10; // timeout 100 ms when stopped
     int old_seq = -1;
     do {
@@ -277,7 +279,10 @@ void *decode_task(void *arg){
 	  pthread_mutex_unlock(&sp->qmutex);
 	  old_seq = -1;
 	  pkt->next = NULL;
-	  sp->running = true;
+	  if(!sp->running){
+	    sp->running = true;
+	    reset_playout(sp);
+	  }
 	  sp->rtp_state.seq = pkt->rtp.seq + 1; // Expect the one after this next
 	  sp->consec_erasures = 0;
 	  if(sp->consec_out_of_order > 0){
@@ -324,6 +329,7 @@ void *decode_task(void *arg){
 	  } else {
 	    // The stream has stopped
 	    sp->running = false;
+	    sp->active = 0;
 	    timeout = (int64_t)BILLION/10; // timeout 100 ms when stopped
 	  }
 	}
@@ -613,8 +619,8 @@ static int conceal(struct session *sp){
   if(seq_diff != 0 && time_diff > 0 && plc_size > time_diff)
     plc_size = time_diff; // But limit to the gap, if we know what it is
 
-  if(++sp->consec_erasures <= 3 && sp->opus && legal_opus_size(plc_size)){
-    // Trigger loss concealment, up to 3 consecutive packets
+  if(++sp->consec_erasures <= 6 && sp->opus && legal_opus_size(plc_size)){
+    // Trigger loss concealment, up to 6 consecutive packets (max Opus packet is 120 ms)
     sp->plcs++;
     opus_int32 const frame_count = opus_decode_float(sp->opus,NULL,0,
 					       sp->bounce,plc_size,0);
@@ -624,6 +630,7 @@ static int conceal(struct session *sp){
     return plc_size;
   }
   sp->running = false;
+  sp->active = 0;
   return 0;
 }
 #endif
@@ -777,7 +784,7 @@ static void copy_to_stream(struct session *sp){
   if(room < tsize){
     // oops not enough room; keep what fits
     if(room <= 0){
-      // Nothing fits
+      // too late - nothing fits
       sp->lates++;
       if(++sp->consec_lates < 6)
 	return;

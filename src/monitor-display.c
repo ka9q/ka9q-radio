@@ -189,8 +189,8 @@ static int scompare(void const *a, void const *b){
   struct session const * const s1 = *(struct session **)a;
   struct session const * const s2 = *(struct session **)b;
 
-  if(s1->now_active){
-    if(s2->now_active){
+  if(s1->running){
+    if(s2->running){
       // Both active. Fuzz needed because active sessions are updated when packets arrive
       if(fabs(s1->active - s2->active) < 0.5) {
 	return 0; // Equal within 1/2 sec
@@ -202,7 +202,7 @@ static int scompare(void const *a, void const *b){
     } else
       return -1; // s1 active, s2 inactive. Active always lower than inactive
   } else {    // s1 inctive
-    if(s2->now_active){
+    if(s2->running){
       return +1;
     } else {     // Both inactive, sort by last active times
       if(s1->last_active > s2->last_active){
@@ -426,17 +426,17 @@ static void update_monitor_display(void){
     double const rate = audio_frames / pa_seconds;
     int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
     
-    printwt("%s playout %.0lf ms, latency %5.1lf ms, D/A rate %'.3lf Hz,",
+    printwt("%s playout %.0lf ms latency %5.1lf ms D/A %'.1lf Hz,",
 	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,rate);
-    printwt(" (%+8.3lf ppm),",1e6 * (rate / DAC_samprate - 1));
+    printwt(" (%+4.0lf ppm),",1e6 * (rate / DAC_samprate - 1));
     // Time since last packet drop on any channel
-    printwt(" Error-free sec %'.1lf",(1e-9*(gps_time_ns() - Last_error_time)));
+    printwt(" EFS %'.1lf",(1e-9*(gps_time_ns() - Last_error_time)));
     //    int64_t total = atomic_load(&Output_total);
-    int64_t calls = atomic_load(&Callbacks);
+    //    int64_t calls = atomic_load(&Callbacks);
     int quant = atomic_load(&Callback_quantum);
     double level = atomic_load(&Output_level);
     level = power2dB(level);
-    printwt(" Callbacks %llu Out_time %lld (%.1lf) level %.1lf dB quanta %u",calls,rptr,(double)rptr/DAC_samprate,level,quant);
+    printwt(" Clock %.1lfs %.1lf dBFS CB N %u",(double)rptr/DAC_samprate,level,quant);
     printwt("\n");
   }
   Sessions_per_screen = LINES - getcury(stdscr) - 1;
@@ -580,7 +580,7 @@ static void update_monitor_display(void){
       struct session *sp = Sessions_copy[session];
       if(!sp->init)
 	continue;
-      int64_t t = (int64_t)round( sp->now_active ? sp->active : (time - sp->last_active) * 1e-9);
+      int64_t t = (int64_t)round( sp->running ? sp->active : (time - sp->last_active) * 1e-9);
       char buf[100];
       mvprintwt(y++,x,"%*s",width,ftime(buf,sizeof(buf),t));
     }
@@ -718,7 +718,7 @@ static void update_monitor_display(void){
   mvprintwt(y++,x,"%*s",width,"Delay");
   for(int session = First_session; session < NSESSIONS && y < LINES; session++){
     struct session const *sp = Sessions_copy[session];
-    if(!sp->init || sp->chan.output.rtp.timestamp == 0 || !sp->now_active)
+    if(!sp->init || sp->chan.output.rtp.timestamp == 0 || !sp->running)
       continue;
 
     double delay = 0;
