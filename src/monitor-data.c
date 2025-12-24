@@ -554,10 +554,11 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
 // Called when there isn't an in-sequence packet to be processed
 // Return 0 when the output stream is already in good shape
 // Return -1 if stream is not initialized and running
-// Return length of generated PLC frame
-
-// or 0 if we've waited
+// Return >0 when length of generated PLC frame
 static int conceal(struct session *sp){
+  assert(sp != NULL);
+  if(sp == NULL)
+    return -1;
   if(!sp->running)
     return -1;
   if(sp->muted)
@@ -574,7 +575,7 @@ static int conceal(struct session *sp){
   int64_t margin = wptr - (rptr + sp->playout);
   if(margin > 0){
     // Playout queue is happy, we don't need to do anything right now
-    // Probably shouldn't wait until the last microsecond, decrease this a little
+    // If this isn't enough, increase the playout
     return 0;
   }
 

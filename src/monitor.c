@@ -690,7 +690,6 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   return paContinue;
 }
 
-#if 0
 #if __linux__
 // Macos doesn't support clock_nanosleep(); find a substitute
 // Thread used instead of Portaudio callback when sending to network
@@ -748,5 +747,4 @@ void *output_thread(void *p){
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL);
   }
 }
-#endif
 #endif
