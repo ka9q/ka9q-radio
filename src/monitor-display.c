@@ -951,6 +951,7 @@ static void process_keyboard(void){
       if(sp != NULL && sp->muted){
 	sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	sp->muted = false;
+	reset_playout(sp);
       }
     }
     break;
@@ -1044,6 +1045,7 @@ static void process_keyboard(void){
     if(sp->muted){
       sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
       sp->muted = false;
+      reset_playout(sp);
     }
     break;
   case 'm': // Mute Current session

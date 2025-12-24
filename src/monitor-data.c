@@ -51,12 +51,11 @@ double PL_tones[] = {
 };
 static double make_position(int x);
 static bool legal_opus_size(int n);
-static void reset_playout(struct session *sp);
 static int impatient_wait(struct session *sp, int64_t const ns);
 static void init_pl(struct session *sp);
 static int run_pl(struct session *sp);
 static void apply_notch(struct session *sp);
-//static int conceal(struct session *sp);
+static int conceal(struct session *sp);
 static int decode_rtp_data(struct session *sp,struct packet const *pkt);
 static void copy_to_stream(struct session *sp);
 static int upsample(struct session *sp);
@@ -297,6 +296,7 @@ void *decode_task(void *arg){
 	}
 	// Out of sequence, leave it on queue
 	// Remember it so we won't just pick it up after 6 loops
+	// the demux could be made smarter if we told it the sequence we expect next
 	if(old_seq != pkt->rtp.seq)
 	  old_seq = pkt->rtp.seq;
 	else
@@ -307,39 +307,17 @@ void *decode_task(void *arg){
       // nothing usable on queue
       pthread_mutex_unlock(&sp->qmutex);      
       if(sp->running) {
-	// How does our output queue look?
-	// wptr and rptr are in frames at DAC_samprate, typically 48 kHz
-	int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-	int64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
-	// Read and write pointers and sample rate  must be initialized to be useful
-	//if(rptr == 0 || wptr == 0)
-	int64_t margin = wptr - (rptr + sp->playout);
-	if(margin <= sp->samprate/50){ // <= 20 ms
-	  // Time has run out, so we gotta do something; generate some PLC or silence
-	  int plc_size = (int)round(sp->samprate * .02); // fake a frame of this length
-	  if(++sp->consec_erasures <= 3 && sp->opus && legal_opus_size(plc_size)){
-	    // Trigger loss concealment, up to 3 consecutive packets
-	    sp->plcs++;
-	    opus_int32 const frame_count = opus_decode_float(sp->opus,NULL,0,
-							     sp->bounce,plc_size,0);
-	    (void)frame_count;
-	    assert(frame_count == plc_size);
-	    sp->frame_size = plc_size;
-	    break; // "Received" loss concealment
-	  } else {
-	    // The stream has stopped
-	    sp->running = false;
-	    sp->active = 0;
+	int r = conceal(sp); // r == 0 means all is well, we're ahead of the game
+	if(r > 0)
+	  break; // we "received" a PLC
+	if(r < 0)  // stream stopped
 	    timeout = (int64_t)BILLION/10; // timeout 100 ms when stopped
-	  }
-	}
       } else { // !sp->running
 	timeout = BILLION/10; // 100 ms when not running
       }
 	// Sleep unil a packet arrives or time out
       impatient_wait(sp,timeout);
     } while(1);
-
 
     // Rest of packet processing
     // Do PL detection and notching even when muted or outvoted
@@ -365,7 +343,7 @@ void *decode_task(void *arg){
 
 // Reset playout buffer
 // also reset Opus decoder, if present
-static void reset_playout(struct session * const sp){
+void reset_playout(struct session * const sp){
   sp->resets++;
   if(sp->opus)
     opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
@@ -573,7 +551,6 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
   return 0;
 }
 
-#if 0
 // Called when there isn't an in-sequence packet to be processed
 // Return 0 when the output stream is already in good shape
 // Return -1 if stream is not initialized and running
@@ -583,7 +560,10 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
 static int conceal(struct session *sp){
   if(!sp->running)
     return -1;
-  
+  if(sp->muted)
+    return 0;  // Normal for our output to be stopped, since we're not writing to it
+  // How does our output queue look?
+  // wptr and rptr are in frames at DAC_samprate, typically 48 kHz  
   int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
   int64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
   // Read and write pointers and sample rate  must be initialized to be useful
@@ -631,9 +611,9 @@ static int conceal(struct session *sp){
   }
   sp->running = false;
   sp->active = 0;
-  return 0;
+  return -1;
 }
-#endif
+
 static int run_pl(struct session *sp){
   assert(sp != NULL);
   if(sp == NULL)

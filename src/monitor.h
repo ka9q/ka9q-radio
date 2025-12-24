@@ -183,6 +183,7 @@ void *repeater_ctl(void *arg);
 char const *lookupid(double freq,double tone);
 bool kick_output();
 void vote();
+void reset_playout(struct session *sp);
 
 static inline int modsub(int a, int b, int const modulus){
   if(a >= modulus)
