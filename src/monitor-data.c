@@ -132,7 +132,7 @@ void *dataproc(void *arg){
 	sp->pan = make_position(Position++);
       else
 	sp->pan = 0;     // center by default
-      sp->gain = pow(10.,0.05 * Gain);    // Start with global default
+      sp->gain = dB2voltage(Gain);    // Start with global default
       sp->notch_enable = Notch;
       sp->muted = Start_muted;
       sp->dest = mcast_address_text;
@@ -331,7 +331,7 @@ static void reset_playout(struct session * const sp){
 }
 // Start output stream if it was off; reset idle timeout on output audio stream activity
 // Return true if we (re)started it
-bool kick_output(){
+bool kick_output(void){
   bool restarted = false;
   if(!Pipe && !Pa_IsStreamActive(Pa_Stream)){
     // Start it up
@@ -346,6 +346,12 @@ bool kick_output(){
       fprintf(stderr,"Portaudio error: %s, aborting\n",Pa_GetErrorText(r));
       abort();
     }
+    for(int i=0; i < NSESSIONS; i++){
+      if(!Sessions[i].init)
+	continue;
+      reset_playout(&Sessions[i]);
+    }
+
     restarted = true;
   }
   // Key up the repeater if it's configured and not already on
@@ -380,14 +386,6 @@ static bool legal_opus_size(int n){
     return true;
   return false;
 }
-
-#if 0
-// How far ahead of the output we are, in frames
-static int buffer_margin(struct session const *sp){
-  int rptr = atomic_load_explicit(&Rptr,memory_order_acquire);
-  return modsub(sp->wptr,rptr,BUFFERSIZE);
-}
-#endif
 
 // Sleep ns nanoseconds or until a packet arrives
 static void impatient_wait(struct session *sp, int64_t const ns){
@@ -466,6 +464,7 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
     opus_int32 const r2 = opus_packet_get_bandwidth(pkt->data);
     sp->bandwidth = opus_bandwidth(NULL,r2);
     sp->opus_channels = opus_packet_get_nb_channels(pkt->data); // Only for display purposes. We always decode to output preference
+    // by 'samples' they apparently mean stereo samples
     opus_int32 const decoded_samples = opus_decode_float(sp->opus,pkt->data,(opus_int32)pkt->len,
 							 sp->bounce,
 							 (int)sp->frame_size,0);
@@ -477,15 +476,19 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
     return 0;
   }
   switch(sp->pt_table[sp->type].encoding){
-  case S16LE:
   case S16BE:
     sp->datarate = 8 * sp->channels * sizeof(int16_t) * sp->samprate; // fixed rate
     sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
-    if(sp->pt_table[sp->type].encoding == S16BE){
+    {
       int16_t const * const data = (int16_t *)&pkt->data[0];
       for(int i=0; i < sp->channels * sp->frame_size; i++)
 	sp->bounce[i] = SCALE16 * (int16_t)ntohs(data[i]); // Cast is necessary
-    } else {
+    }
+    break;
+  case S16LE: // same as S16BE but no byte swap - assumes little-endian machine
+    sp->datarate = 8 * sp->channels * sizeof(int16_t) * sp->samprate; // fixed rate
+    sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
+    {
       int16_t const * const data = (int16_t *)&pkt->data[0];
       for(int i=0; i < sp->channels * sp->frame_size; i++)
 	sp->bounce[i] = SCALE16 * data[i];
@@ -513,6 +516,7 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
 #endif
   default:
     sp->rtp_state.drops++;
+    sp->frame_size = 0;
     return -2; // No change to next_timestamp or wptr because we don't know the sample size
   } // end of PCM switch
   return 0;
@@ -527,13 +531,16 @@ static int conceal_or_wait(struct session *sp){
     impatient_wait(sp,BILLION/10); // fixed 100 ms
     return 0;
   }
-  if(wptr > rptr + sp->playout){
+  // wptr and rptr are in frames
+  int64_t margin = wptr - (rptr + sp->playout);
+  if(margin > 0){
     // Playout queue is happy, we don't need to do anything right now
     // Probably shouldn't wait until the last microsecond, decrease this a little
-    int64_t duration = BILLION * (wptr - (rptr + sp->playout)) / sp->samprate;
+    int64_t duration = BILLION * margin / sp->samprate;
     if(duration > BILLION)
       duration = BILLION; // guard against random values
     impatient_wait(sp,duration);
+    sp->frame_size = 0; // don't emit anything
     return 0; // look again
   }
 
@@ -561,10 +568,10 @@ static int conceal_or_wait(struct session *sp){
   if(sp->opus && legal_opus_size(sp->frame_size) && ++sp->consec_erasures <= 3){
     // Trigger loss concealment, up to 3 consecutive packets
     sp->plcs++;
-    opus_int32 const count = opus_decode_float(sp->opus,NULL,0,
+    opus_int32 const frame_count = opus_decode_float(sp->opus,NULL,0,
 					       sp->bounce,sp->frame_size,0);
-    (void)count;
-    assert(count == sp->frame_size);
+    (void)frame_count;
+    assert(frame-count == sp->frame_size);
   } else {
     memset(sp->bounce,0,sizeof(sp->bounce));
   }
@@ -701,8 +708,8 @@ static void copy_to_stream(struct session *sp){
   // Figure out where to write into output buffer
   // We didn't actully know how many samples we have to write until after decoding
   //
-  int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-  int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
+  int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed); // frames
+  int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire); // frames
 
   int room = wptr - rptr;
   if(room < sp->output_rate_data_size){
@@ -725,6 +732,7 @@ static void copy_to_stream(struct session *sp){
     }
   }
   // Mix output sample rate data into output ring buffer
+  int64_t base = wptr * Channels; // Base of output buffer for this packet
   if(Channels == 2){
     /* Compute gains and delays for stereo imaging
        Extreme gain differences can make the source sound like it's inside an ear
@@ -749,12 +757,13 @@ static void copy_to_stream(struct session *sp){
     int64_t left_index = Channels * left_delay;
     int64_t right_index = Channels * right_delay + 1;
 
+
     if(sp->channels == 1){
       for(int i=0; i < sp->output_rate_data_size; i++){
 	// Mono input, put on both channels
 	double s = sp->output_rate_data[i];
-	sp->buffer[BINDEX(wptr,left_index)] = (float)(s * left_gain);
-	sp->buffer[BINDEX(wptr,right_index)] = (float)(s * right_gain);
+	sp->buffer[BINDEX(base,left_index)] = (float)(s * left_gain);
+	sp->buffer[BINDEX(base,right_index)] = (float)(s * right_gain);
 	left_index += Channels;
 	right_index += Channels;
       }
@@ -763,8 +772,8 @@ static void copy_to_stream(struct session *sp){
 	// stereo input
 	double left = sp->output_rate_data[2*i];
 	double right = sp->output_rate_data[2*i+1];
-	sp->buffer[BINDEX(wptr,left_index)] = left * left_gain;
-	sp->buffer[BINDEX(wptr,right_index)] = right * right_gain;
+	sp->buffer[BINDEX(base,left_index)] = left * left_gain;
+	sp->buffer[BINDEX(base,right_index)] = right * right_gain;
 	left_index += Channels;
 	right_index += Channels;
       }
@@ -773,18 +782,18 @@ static void copy_to_stream(struct session *sp){
     if(sp->channels == 1){
       for(int i=0; i < sp->output_rate_data_size; i++){
 	double s = sp->gain * sp->output_rate_data[i];
-	sp->buffer[BINDEX(wptr,i)] = (float)s;
+	sp->buffer[BINDEX(base,i)] = (float)s;
       }
     } else {  // sp->channels == 2
       for(int i=0; i < sp->output_rate_data_size; i++){
 	// Downmix to mono
 	double s = 0.5 * sp->gain * (sp->output_rate_data[2*i] + sp->output_rate_data[2*i+1]);
-	sp->buffer[BINDEX(wptr,i)] = (float)s;
+	sp->buffer[BINDEX(base,i)] = (float)s;
       }
     }
     // Write back atomically
   } // if(sp->channels == 1)
-  // Advance the official write pointer in units of mono samples
-  wptr += (int)round(Channels * sp->output_rate_data_size);
+  // Advance the official write pointer in units of frames
+  wptr += sp->output_rate_data_size;
   atomic_store_explicit(&sp->wptr,wptr,memory_order_release);
 }

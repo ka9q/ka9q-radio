@@ -422,21 +422,21 @@ static void update_monitor_display(void){
     // Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
     double const pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
     
-    //    int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-    //    int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
-    //    double const qd = (double) (rptr - wptr) / DAC_samprate;
-    double const qd = 0; // fix this
     uint64_t audio_frames = atomic_load_explicit(&Audio_frames,memory_order_relaxed);
     double const rate = audio_frames / pa_seconds;
+    int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
     
-    printwt("%s playout %.0lf ms, latency %5.1lf ms, queue %5.1lf ms, D/A rate %'.3lf Hz,",
-	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,qd*1000.,rate);
+    printwt("%s playout %.0lf ms, latency %5.1lf ms, D/A rate %'.3lf Hz,",
+	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,rate);
     printwt(" (%+8.3lf ppm),",1e6 * (rate / DAC_samprate - 1));
     // Time since last packet drop on any channel
     printwt(" Error-free sec %'.1lf",(1e-9*(gps_time_ns() - Last_error_time)));
-    int64_t total = atomic_load(&Output_total);
+    //    int64_t total = atomic_load(&Output_total);
     int64_t calls = atomic_load(&Callbacks);
-    printwt(" Callbacks %llu samples %lu",calls,total);
+    int quant = atomic_load(&Callback_quantum);
+    double level = atomic_load(&Output_level);
+    level = power2dB(level);
+    printwt(" Callbacks %llu Out_time %lld (%.1lf) level %.1lf dB quanta %u",calls,rptr,(double)rptr/DAC_samprate,level,quant);
     printwt("\n");
   }
   Sessions_per_screen = LINES - getcury(stdscr) - 1;
@@ -495,7 +495,7 @@ static void update_monitor_display(void){
     mvprintwt(y++,x,"%*s",width,"tone");
     for(int session = First_session; session < NSESSIONS && y < LINES; session++){
       struct session const *sp = Sessions_copy[session];
-      if(!sp->init || (!sp->notch_enable || sp->notch_tone == 0))
+      if(!sp->init || !sp->notch_enable || sp->notch_tone == 0)
 	continue;
 
       mvprintwt(y++,x,"%*.1f%c",width-1,sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
@@ -602,9 +602,8 @@ static void update_monitor_display(void){
     if(!sp->init)
       continue;
 
-
     int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
-    int64_t d = (wptr - rptr) / Channels;
+    int64_t d = (wptr - rptr);
     int64_t const queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
     mvprintwt(y++,x,"%*lld",width,queue_ms);   // Time idle since last transmission
   }
@@ -894,20 +893,16 @@ static void process_keyboard(void){
     }
     break;
   case KEY_HOME: // first session
-    if(Nsessions > 0){
-      Current = 0;
-      First_session = 0;
-    }
+    Current = 0;
+    First_session = 0;
     break;
   case KEY_END: // last session
-    if(Nsessions > 0){
-      Current = NSESSIONS-1;
-      First_session = max(0,Nsessions - Sessions_per_screen);
-    }
+    Current = NSESSIONS-1;
+    First_session = max(0,NSESSIONS - Sessions_per_screen);
     break;
   case '\t':
   case KEY_DOWN:
-    if(Current >= 0 && Current < Nsessions-1){
+    if(Current >= 0 && Current < NSESSIONS){
       Current++;
       if(Current >= First_session + Sessions_per_screen - 1)
 	First_session++;

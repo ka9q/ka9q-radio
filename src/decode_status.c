@@ -42,6 +42,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       break;
     case RTP_TIMESNAP:
       channel->output.time_snap = decode_int(cp,optlen);
+      channel->output.rtp.timestamp = channel->output.time_snap; // is this duplicated?
       break;
     case STATUS_DEST_SOCKET:
       decode_socket(&frontend->metadata_dest_socket,cp,optlen);

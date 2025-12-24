@@ -61,6 +61,7 @@ struct session {
   int tone_samples;
   double current_tone;       // Detected tone frequency
   double snr;                // Extracted from status message from radiod
+  double level;              // Smoothed audio power
 
   int samprate;
   int channels;              // channels on stream (1 or 2). Opus is always stereo
@@ -139,12 +140,13 @@ extern int64_t Last_xmit_time;
 extern int64_t Last_id_time;
 extern _Atomic int Buffer_length; // Bytes left to play out, max BUFFERSIZE
 extern _Atomic int Callback_quantum; // How much the callback reads at a time
-extern _Atomic int64_t Output_time;
+extern _Atomic int64_t Output_time;  // Output sample clock, frames (48 kHz)
 extern volatile bool PTT_state;      // For repeater transmitter
 extern _Atomic uint64_t Audio_frames;
 extern _Atomic int64_t LastAudioTime;
 extern _Atomic int64_t Output_total;
 extern _Atomic uint64_t Callbacks;
+extern _Atomic double Output_level; // Output level, mean square
 extern double Portaudio_delay;
 extern pthread_t Repeater_thread;
 extern pthread_cond_t PTT_cond;

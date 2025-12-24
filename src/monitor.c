@@ -89,12 +89,13 @@ char const *Source; // Source specific multicast, if used
 int Output_fd = -1; // Output network socket, if any
 struct sockaddr_in Dest_socket;
 int64_t Last_xmit_time;
-_Atomic int64_t Output_time;  // Relative output time in samples
+_Atomic int64_t Output_time;  // Relative output time in frames
 _Atomic uint64_t Callbacks;
 _Atomic uint64_t Audio_frames;
 _Atomic int64_t LastAudioTime;
 _Atomic int Callback_quantum;
 _Atomic int64_t Output_total;
+_Atomic double Output_level; // Output level, mean square
 double Portaudio_delay;
 pthread_t Repeater_thread;
 int Nfds;                     // Number of streams
@@ -642,13 +643,14 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   // Delay within Portaudio in sec
   Portaudio_delay = timeInfo->outputBufferDacTime - timeInfo->currentTime;
 
-  // Output sample clock at beginning of our buffer
-  int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+  // Output frame clock at beginning of our buffer
+  int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+  int64_t const base = Channels * rptr; // base sample index in session output buffers
   float * const buffer = (float *)outputBuffer;
   memset(buffer, 0, framesPerBuffer * Channels * sizeof (float));
 
-#if 0
   int64_t total = 0;
+#if 1
 
   for(int i=0; i < NSESSIONS; i++){
     struct session *sp = Sessions + i;
@@ -656,40 +658,48 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
       continue;
 
     int64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
-    int64_t count = framesPerBuffer * Channels;
+    int64_t frames = framesPerBuffer;
     if(wptr <= rptr)
       continue;      // he's empty
 
-    if(count > wptr - rptr)
-      count = wptr - rptr; // limit to what he's got
+    if(frames > wptr - rptr)
+      frames = wptr - rptr; // limit to what he's got
 
-    for(int j = 0; j < count; j++){
-      buffer[j] += sp->buffer[BINDEX(rptr,j)];
+    for(int j = 0; j < Channels*frames; j++){
+      buffer[j] += sp->buffer[BINDEX(base,j)];
     }
-    total += count;
+    total += frames;
   }
+  double energy = 0;
+  for(unsigned int j=0; j < Channels * framesPerBuffer;j++){
+    energy += buffer[j] * buffer[j];
+  }
+  energy /= Channels * framesPerBuffer;
+  atomic_store_explicit(&Output_level,energy,memory_order_release);
+
 #else
   // test tone
-  double complex os = 1;
-  double x,y;
-  double freq = 2 * 0.010;
-  sincos(2*M_PI*freq,&y,&x);
-  //  float complex step = cispif(freq);
-  double complex step = x + I*y;
-  for(int i=0; i < framesPerBuffer; i++){
+  double freq = 2. / 64.;
+  double phase = freq * ((rptr) % 64); // 64 frames/cycle = 750 Hz
+  double complex os = cispi(phase);
+
+  double complex step = cispi(freq);
+
+  for(unsigned int i=0; i < framesPerBuffer; i++){
     buffer[2*i] += 0.1 * creal(os);
     buffer[2*i+1] += 0.1 * cimag(os);
     os *= step;
   }
 #endif
 
-  //  opus_pcm_soft_clip(buffer,(int)framesPerBuffer,Channels,Softclip_mem);
-  atomic_fetch_add(&Output_time,framesPerBuffer * Channels);
+  opus_pcm_soft_clip(buffer,(int)framesPerBuffer,Channels,Softclip_mem);
+  atomic_fetch_add(&Output_time,framesPerBuffer);
   atomic_fetch_add(&Output_total,total);
   atomic_fetch_add(&Callbacks,1);
   return paContinue;
 }
 
+#if 0
 #if __linux__
 // Macos doesn't support clock_nanosleep(); find a substitute
 // Thread used instead of Portaudio callback when sending to network
@@ -704,7 +714,7 @@ void *output_thread(void *p){
 
   while(1){
     // Grab 20 milliseconds stereo @ 48 kHz
-    int frames = .02 * 48000;
+    int frames = .02 * sp->samprate;
     int samples = frames * Channels;
     int16_t out_buffer[samples];
     memset(out_buffer,0,sizeof out_buffer);
@@ -730,7 +740,7 @@ void *output_thread(void *p){
 	out_buffer[j] = s;
       }
     }
-    atomic_store_explicit(&Output_time,rptr + samples,memory_order_release);
+    atomic_store_explicit(&Output_time,rptr + frames,memory_order_release);
 
     int r = write(Output_fd,out_buffer,sizeof out_buffer);
     if(r <= 0){
@@ -747,4 +757,5 @@ void *output_thread(void *p){
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL);
   }
 }
+#endif
 #endif
