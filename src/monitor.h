@@ -14,20 +14,18 @@
 #define BINDEX(a,b) (((a) + (b)) & (BUFFERSIZE - 1))
 
 
-#define BBSIZE (2*5760)   // 120 ms @ 48 kHz stereo (biggest Opus packet)
+// Bounce buffer size = 120 ms @ 48 kHz stereo (biggest Opus packet)
+// Enlarge this if sample rates > 48 kHz are ever used
+#define BBSIZE (2*5760)
 struct session {
   bool init;               // Fully initialized by first RTP packet
   struct sockaddr_storage sender;
   char const *dest;
 
-  float bounce[BBSIZE];
-  float buffer[BUFFERSIZE]; // output stream read by portaudio callback
-  float rate_converted_buffer[BBSIZE];
-  int rate_converted_buffer_size;
+  float *bounce;           // Scratch sample buffer for current packet.
+  float *buffer;           // Output stream, read by Portaudio callback
   SRC_STATE *src_state_mono;
   SRC_STATE *src_state_stereo;
-  float *output_rate_data;
-  int output_rate_data_size;
 
   _Atomic int64_t wptr;    // Next write sample, in output sample clock units
 
@@ -35,6 +33,7 @@ struct session {
   int consec_lates;
   int consec_out_of_order;
 
+  bool running;             // stream hasn't paused
 
   pthread_t task;           // Thread reading from queue and running decoder
   struct packet *queue;     // Incoming RTP packets

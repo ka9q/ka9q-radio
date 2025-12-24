@@ -580,13 +580,9 @@ static void update_monitor_display(void){
       struct session *sp = Sessions_copy[session];
       if(!sp->init)
 	continue;
+      int64_t t = (int64_t)round( sp->now_active ? sp->active : (time - sp->last_active) * 1e-9);
       char buf[100];
-      if(sp->now_active)
-	mvprintwt(y++,x,"%*s",width,ftime(buf,sizeof(buf),(int64_t)round(sp->active)));
-      else {
-	double idle_sec = (time - sp->last_active) * 1e-9;
-	mvprintwt(y++,x,"%*s",width,ftime(buf,sizeof(buf),(int64_t)round(idle_sec)));   // Time idle since last transmission
-      }
+      mvprintwt(y++,x,"%*s",width,ftime(buf,sizeof(buf),t));
     }
   }
   x += width;
@@ -621,8 +617,12 @@ static void update_monitor_display(void){
 
     int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
     int64_t d = (wptr - rptr);
-    int64_t const queue_ms = d > 0 ? 1000 * d / DAC_samprate : 0; // milliseconds
-    mvprintwt(y++,x,"%*lld",width,queue_ms);   // Time idle since last transmission
+    if(d > 0){
+      int64_t const queue_ms = 1000 * d / DAC_samprate; // milliseconds
+      mvprintwt(y++,x,"%*lld",width,queue_ms);   // Time idle since last transmission
+    } else {
+      y++; // leave blank
+    }
   }
   x += width;
   y = row_save;
@@ -801,7 +801,7 @@ static void update_monitor_display(void){
   if(x >= COLS)
     goto done;
   width = 7;
-  mvprintwt(y++,x,"%*s",width,"PLCs");
+  mvprintwt(y++,x,"%*s",width,"PLC");
   for(int session = First_session; session < NSESSIONS && y < LINES; session++){
     struct session const *sp = Sessions_copy[session];
     if(sp->init)
@@ -830,7 +830,8 @@ static void update_monitor_display(void){
       continue;
 
     attr_t attr = A_NORMAL;
-    if(sp->now_active)
+    long long const time = gps_time_ns();
+    if((time - sp->last_active) < BILLION/2) // active within the past 500 ms
       attr |= A_BOLD;
 
     // 1 adjusts for the titles

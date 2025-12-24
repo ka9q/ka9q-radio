@@ -578,11 +578,9 @@ struct session *lookup_or_create_session(const struct sockaddr_storage *sender,c
   sp->init = false; // Wait for first RTP packet to set the rest up
   sp->ssrc = ssrc;
   memcpy(&sp->sender,sender,sizeof(sp->sender));
-
   pthread_cond_init(&sp->qcond,NULL);
   pthread_mutex_init(&sp->qmutex,NULL);
   pthread_mutex_unlock(&Sess_mutex);
-
   return sp;
 }
 
@@ -600,6 +598,8 @@ int close_session(struct session *sp){
   // Remove from table
   sp->init = false;
   sp->terminate = true;
+
+
   pthread_mutex_unlock(&Sess_mutex); // Done modifying session table
   // Thread now cleans itself up
   return 0;
