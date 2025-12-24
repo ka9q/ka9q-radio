@@ -154,7 +154,7 @@ void *display(void *arg){
       addstrt("KA9Q Multicast Audio Monitor:");
     else
       printwt("KA9Q Multicast Audio Monitor, only from %s:",Source);
-      
+
     for(int i=0;i<Nfds;i++)
       printwt(" %s",Mcast_address_text[i]);
     addstrt("\n");
@@ -421,11 +421,11 @@ static void update_monitor_display(void){
   if(Verbose){
     // Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
     double const pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
-    
+
     uint64_t audio_frames = atomic_load_explicit(&Audio_frames,memory_order_relaxed);
     double const rate = audio_frames / pa_seconds;
     int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-    
+
     printwt("%s playout %.0lf ms latency %5.1lf ms D/A %'.1lf Hz,",
 	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,rate);
     printwt(" (%+4.0lf ppm),",1e6 * (rate / DAC_samprate - 1));
@@ -433,8 +433,8 @@ static void update_monitor_display(void){
     printwt(" EFS %'.1lf",(1e-9*(gps_time_ns() - Last_error_time)));
     //    int64_t total = atomic_load(&Output_total);
     //    int64_t calls = atomic_load(&Callbacks);
-    int quant = atomic_load(&Callback_quantum);
-    double level = atomic_load(&Output_level);
+    int quant = atomic_load_explicit(&Callback_quantum,memory_order_relaxed);
+    double level = atomic_load_explicit(&Output_level,memory_order_relaxed);
     level = power2dB(level);
     printwt(" Clock %.1lfs %.1lf dBFS CB N %u",(double)rptr/DAC_samprate,level,quant);
     printwt("\n");
@@ -598,9 +598,10 @@ static void update_monitor_display(void){
       continue;
 
     double dB = power2dB(sp->level);
-    if(dB < -99)
-      dB = -99;
-    mvprintwt(y++,x,"%*.1lf",width,dB);   // Time idle since last transmission
+    if(dB >= -99)
+      mvprintwt(y++,x,"%*.1lf",width,dB);   // Time idle since last transmission
+    else
+      y++;
   }
   x += width;
   y = row_save;
@@ -1053,6 +1054,7 @@ static void process_keyboard(void){
     break;
   case 'r':    // Manually reset playout queue
     sp->reset = true;
+    reset_playout(sp);
     break;
   case KEY_DC: // Delete
   case KEY_BACKSPACE:

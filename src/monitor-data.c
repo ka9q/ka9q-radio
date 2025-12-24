@@ -254,10 +254,11 @@ void *decode_task(void *arg){
       sp->active = 0;
     }
     int64_t timeout = (int64_t)BILLION/10; // timeout 100 ms when stopped
-    int old_seq = -1;
     do {
       // Try to receive and process a RTP packet. Break when we have.
       assert(pkt == NULL); // should be cleared, otherwise it's a memory leak
+      if(sp->reset)
+	reset_playout(sp);
       // The queue is sorted by sequence number. Anything on it?
       pthread_mutex_lock(&sp->qmutex);
       pkt = sp->queue;
@@ -270,16 +271,13 @@ void *decode_task(void *arg){
 	  init = true;
 	}
 	// Peek at the queue and find the time jump to the next waiting packet, if any
-	// Count out-of-sequence packets only when they're different, otherwise
-	// we'll just keep seeing the same one
-	if(pkt->rtp.seq == sp->rtp_state.seq
-	   || (old_seq != pkt->rtp.seq && ++sp->consec_out_of_order >= 6)){
+	if(pkt->rtp.seq == sp->rtp_state.seq || ++sp->consec_out_of_order >= 6){
 	  sp->queue = sp->queue->next;
 	  pthread_mutex_unlock(&sp->qmutex);
-	  old_seq = -1;
 	  pkt->next = NULL;
 	  if(!sp->running){
 	    sp->running = true;
+	    timeout = (int64_t)BILLION/100; // 10 ms while running
 	    reset_playout(sp);
 	  }
 	  sp->rtp_state.seq = pkt->rtp.seq + 1; // Expect the one after this next
@@ -295,29 +293,19 @@ void *decode_task(void *arg){
 	  break; // we've got a weiner
 	}
 	// Out of sequence, leave it on queue
-	// Remember it so we won't just pick it up after 6 loops
-	// the demux could be made smarter if we told it the sequence we expect next
-	if(old_seq != pkt->rtp.seq)
-	  old_seq = pkt->rtp.seq;
-	else
-	  sp->consec_out_of_order = 0;
-
+	// We'll see it on each new poll, though
 	pkt = NULL;
       } // fall through
       // nothing usable on queue
-      pthread_mutex_unlock(&sp->qmutex);      
-      if(sp->running) {
-	int r = conceal(sp); // r == 0 means all is well, we're ahead of the game
-	if(r > 0)
-	  break; // we "received" a PLC
-	if(r < 0)  // stream stopped
-	    timeout = (int64_t)BILLION/10; // timeout 100 ms when stopped
-      } else { // !sp->running
-	timeout = BILLION/10; // 100 ms when not running
-      }
-	// Sleep unil a packet arrives or time out
+      pthread_mutex_unlock(&sp->qmutex);
+      if(sp->running && conceal(sp) > 0)
+	break; // packet loss concealment generated
+      if(!sp->running) // conceal() may also have stopped the stream
+	timeout = (int64_t)BILLION/10; // timeout 100 ms when stopped
+
+      // Sleep unil a packet arrives or time out
       impatient_wait(sp,timeout);
-    } while(1);
+    } while(true);
 
     // Rest of packet processing
     // Do PL detection and notching even when muted or outvoted
@@ -350,7 +338,7 @@ void reset_playout(struct session * const sp){
   sp->reset = false;
   sp->playout = (int)round(Playout * DAC_samprate);
 
-  int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+  int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_acquire);
   atomic_store_explicit(&sp->wptr,rptr + sp->playout,memory_order_release);
 }
 // Start output stream if it was off; reset idle timeout on output audio stream activity
@@ -564,7 +552,7 @@ static int conceal(struct session *sp){
   if(sp->muted)
     return 0;  // Normal for our output to be stopped, since we're not writing to it
   // How does our output queue look?
-  // wptr and rptr are in frames at DAC_samprate, typically 48 kHz  
+  // wptr and rptr are in frames at DAC_samprate, typically 48 kHz
   int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
   int64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
   // Read and write pointers and sample rate  must be initialized to be useful
@@ -758,22 +746,21 @@ static void copy_to_stream(struct session *sp){
   float *trimmed = sp->bounce;
   int tsize = sp->frame_size;
 
-  int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed); // frames
-  int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire); // frames
+  int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed); // frames
+  int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed); // frames
 
-  int room = wptr - rptr;
+  int64_t room = wptr - rptr;
   if(room < tsize){
-    // oops not enough room; keep what fits
-    if(room <= 0){
-      // too late - nothing fits
-      sp->lates++;
-      if(++sp->consec_lates < 6)
-	return;
-
-      // A playout reset should make room
+    sp->lates++;
+    if(++sp->consec_lates >= 6){
       sp->consec_lates = 0;
       reset_playout(sp);
-    } else {
+      // Refresh and recompute
+      wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
+      rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+      room = wptr - rptr;
+    }
+    if(room > 0){
       // Keep what fits
       trimmed += tsize - room;
       wptr += tsize - room;
@@ -791,7 +778,7 @@ static void copy_to_stream(struct session *sp){
       double energy = 0;
       for(int i=0; i < count; i++)
 	energy += trimmed[i] * trimmed[i];
-      
+
       energy /= count;
       if(isfinite(energy))
 	sp->level += .01 * (energy - sp->level); // smooth
