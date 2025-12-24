@@ -595,6 +595,23 @@ static void update_monitor_display(void){
   if(x >= COLS)
     goto done;
   width = 6;
+  mvprintwt(y++,x,"%*s",width,"level");
+  for(int session = First_session; session < NSESSIONS && y < LINES; session++){
+    struct session const *sp = Sessions_copy[session];
+    if(!sp->init)
+      continue;
+
+    double dB = power2dB(sp->level);
+    if(dB < -99)
+      dB = -99;
+    mvprintwt(y++,x,"%*.1lf",width,dB);   // Time idle since last transmission
+  }
+  x += width;
+  y = row_save;
+  if(x >= COLS)
+    goto done;
+
+  width = 6;
   int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
   mvprintwt(y++,x,"%*s",width,"queue");
   for(int session = First_session; session < NSESSIONS && y < LINES; session++){

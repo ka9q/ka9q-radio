@@ -3,7 +3,7 @@
 
 
 #define MAX_MCAST 20          // Maximum number of multicast addresses
-#define BUFFERSIZE (1<<19)    // about 10.92 sec at 48 kHz - must be power of 2 times page size (4k)!
+#define BUFFERSIZE (1<<17)    // about 4 sec at 48 kHz - must be power of 2 times page size (4k)!
 #define NSESSIONS 1500
 
 #define N_tones 55
@@ -21,7 +21,7 @@ struct session {
   char const *dest;
 
   float bounce[BBSIZE];
-  uint8_t buffer[BUFFERSIZE];
+  float buffer[BUFFERSIZE]; // output stream read by portaudio callback
   float rate_converted_buffer[BBSIZE];
   int rate_converted_buffer_size;
   SRC_STATE *src_state_mono;

@@ -240,7 +240,6 @@ void *decode_task(void *arg){
   struct packet *pkt = NULL; // make sure it starts this way
   reset_playout(sp);
   bool init = false;
-  init_pl(sp);
   // Main loop; run until asked to quit
   while(!sp->terminate && !Terminate){
     if(sp->reset) // Requested by somebody
@@ -302,7 +301,7 @@ void *decode_task(void *arg){
     // Rest of packet processing
     // All if/else clauses above should reach here except old sequence duplicates
     // Do PL detection and notching even when muted or outvoted
-    if(sp->samprate == 0 || sp->channels == 0)
+    if(sp->samprate == 0 || sp->channels == 0||sp->frame_size == 0)
       continue; // Not yet fully initialized
     if(sp->notch_enable){
       run_pl(sp);
@@ -410,6 +409,7 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
   if(sp == NULL || pkt == NULL)
     return 0;
   sp->type = pkt->rtp.type;
+  int prev_samprate = sp->samprate;
   if(sp->pt_table[sp->type].encoding == OPUS){
     // The table values reflect the encoder input; they're for the status display
     // The encoder output is always forced to the local DAC
@@ -420,6 +420,8 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
     sp->samprate = sp->pt_table[sp->type].samprate;
     sp->channels = sp->pt_table[sp->type].channels;
   }
+  if(sp->samprate != prev_samprate)
+    init_pl(sp);
   if(sp->samprate == 0){
     // Don't know the sample rate yet, we can't proceed
     sp->rtp_state.drops++; // may cause big burst at start of stream
@@ -572,10 +574,11 @@ static int conceal_or_wait(struct session *sp){
 					       sp->bounce,sp->frame_size,0);
     (void)frame_count;
     assert(frame-count == sp->frame_size);
+    return sp->frame_size;
   } else {
     memset(sp->bounce,0,sizeof(sp->bounce));
+    return 0; // stopped
   }
-  return sp->frame_size;
 }
 
 static int run_pl(struct session *sp){
@@ -653,7 +656,7 @@ static void apply_notch(struct session *sp){
     } else {
       for(int i = 0; i < sp->frame_size; i++){
 	sp->bounce[2*i] = (float)applyIIR(&sp->iir_left,sp->bounce[2*i]);
-	sp->bounce[2*i+1] = (float)applyIIR(&sp->iir_left,sp->bounce[2*i+1]);
+	sp->bounce[2*i+1] = (float)applyIIR(&sp->iir_right,sp->bounce[2*i+1]);
       }
     }
   } // End of tone notching
@@ -663,6 +666,9 @@ static int upsample(struct session *sp){
   assert(sp != NULL && sp->samprate != 0 && sp->channels != 0);
   if(sp == NULL || sp->samprate == 0 || sp->channels == 0)
     return -1;
+
+  if(sp->frame_size == 0)
+    return 0;
 
   if(sp->samprate == DAC_samprate){
     // No conversion necessary
@@ -683,7 +689,7 @@ static int upsample(struct session *sp){
     sp->src_state_stereo = src_new(SRC_SINC_FASTEST, 2, &error);
     assert(sp->src_state_stereo != NULL);
   }
-  SRC_DATA src_data;
+  SRC_DATA src_data = {0};
   src_data.data_in = sp->bounce;  // Pointer to input audio
   src_data.data_out = sp->rate_converted_buffer;  // Pointer to resampled output buffer
   src_data.input_frames = sp->frame_size;
@@ -708,6 +714,9 @@ static void copy_to_stream(struct session *sp){
   // Figure out where to write into output buffer
   // We didn't actully know how many samples we have to write until after decoding
   //
+  if(sp->output_rate_data_size == 0)
+    return;
+
   int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed); // frames
   int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire); // frames
 
@@ -729,6 +738,23 @@ static void copy_to_stream(struct session *sp){
       sp->output_rate_data += sp->output_rate_data_size - room;
       wptr += sp->output_rate_data_size - room;
       sp->output_rate_data_size = room;
+    }
+  }
+  {
+    // Measure output audio level
+
+    int count = sp->output_rate_data_size;
+    if(sp->channels == 2)
+      count *= 2;
+
+    if(count > 0){
+      double energy = 0;
+      for(int i=0; i < count; i++)
+	energy += sp->output_rate_data[i] * sp->output_rate_data[i];
+      
+      energy /= count;
+      if(isfinite(energy))
+	sp->level += .01 * (energy - sp->level); // smooth
     }
   }
   // Mix output sample rate data into output ring buffer
@@ -756,7 +782,6 @@ static void copy_to_stream(struct session *sp){
     // Write into per-session buffer to be read by portaudio callback
     int64_t left_index = Channels * left_delay;
     int64_t right_index = Channels * right_delay + 1;
-
 
     if(sp->channels == 1){
       for(int i=0; i < sp->output_rate_data_size; i++){
@@ -791,9 +816,9 @@ static void copy_to_stream(struct session *sp){
 	sp->buffer[BINDEX(base,i)] = (float)s;
       }
     }
-    // Write back atomically
   } // if(sp->channels == 1)
   // Advance the official write pointer in units of frames
   wptr += sp->output_rate_data_size;
+  // Write back atomically
   atomic_store_explicit(&sp->wptr,wptr,memory_order_release);
 }
