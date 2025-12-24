@@ -704,7 +704,7 @@ void *output_thread(void *p){
 
   while(1){
     // Grab 20 milliseconds stereo @ 48 kHz
-    int frames = .02 * sp->samprate;
+    int frames = .02 * DAC_samprate;
     int samples = frames * Channels;
     int16_t out_buffer[samples];
     memset(out_buffer,0,sizeof out_buffer);
