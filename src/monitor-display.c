@@ -198,7 +198,7 @@ static int scompare(void const *a, void const *b){
     if(s2->running){
       // Both active. Fuzz needed because active sessions are updated when packets arrive
       if(fabs(s1->active - s2->active) < 0.5) {
-	return 0; // Equal within 1/2 sec
+	return s1->ssrc > s2->ssrc ? +1 : -1; // resolve ties by ssrc to stop rapid flipping
       } else if(s1->active > s2->active){
 	return -1; // s1 Longer active
       } else {
@@ -230,8 +230,8 @@ static int tcompare(void const *a, void const *b){
 
 #define FUZZ 1
 #ifdef FUZZ
-  if(fabs(s1->tot_active - s2->tot_active) < 0.1) // equal within margin
-    return 0;
+  if(fabs(s1->tot_active - s2->tot_active) < 0.5) // equal within margin
+    return s1->ssrc > s2->ssrc ? +1 : -1; // resolve ties by ssrc to stop rapid flipping
 #endif
   if(s1->tot_active > s2->tot_active)
     return -1;
@@ -476,7 +476,7 @@ static void update_monitor_display(void){
 
   defragment_session();
   if(Auto_sort)
-    sort_session_active();
+    sort_session_total();
 
   assert(First_session >= 0 && First_session < NSESSIONS);
   if(First_session >= NSESSIONS)
@@ -925,7 +925,7 @@ static void process_keyboard(void){
   case 't': // Sort sessions by most total activity
     sort_session_total();
     break;
-  case 'S':
+  case 'T':
     Auto_sort = !Auto_sort;
     break;
   case KEY_RESIZE:
