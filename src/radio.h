@@ -80,7 +80,6 @@ struct frontend {
   // Stuff maintained by our upstream source and filled in by the status daemon
   char description[128];  // free-form text, must be unique per radiod instance
   double samprate;      // Nominal (requested) sample rate on raw input data stream
-  int64_t timestamp; // Nanoseconds since GPS epoch 6 Jan 1980 00:00:00 UTC
   double frequency;
   double calibrate;  // Clock frequency error ratio, e.g, +1e-6 means 1 ppm high
   // R820T/828 tuner gains, dB. Informational only; total is reported in rf_gain

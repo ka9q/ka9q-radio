@@ -535,13 +535,13 @@ static void process_status(int fd){
   sp->type = chan.output.rtp.type;
   sp->channels = chan.output.channels;
   sp->encoding = chan.output.encoding;
-  sp->samprate = (sp->encoding == OPUS) ? OPUS_SAMPRATE : chan.output.samprate;
+  sp->samprate = (sp->encoding == OPUS || sp->encoding == OPUS_VOIP) ? OPUS_SAMPRATE : chan.output.samprate;
   sp->sender = sender;
   sp->chan = chan;
   sp->frontend = frontend;
   // Ogg (containing opus) can concatenate streams with new metadata, so restart when it changes
   // WAV files don't even have this metadata, so ignore changes
-  if(sp->encoding == OPUS
+  if((sp->encoding == OPUS || sp->encoding == OPUS_VOIP)
      && (sp->last_frequency != sp->chan.tune.freq || strncmp(sp->last_preset,sp->chan.preset,sizeof(sp->last_preset)))){
     end_ogg_opus_stream(sp);
     start_ogg_opus_stream(sp);
@@ -621,7 +621,7 @@ static void process_data(int fd){
     if(session_file_init(sp,&sender,sender_time) != 0)
       return;
 
-    if(sp->encoding == OPUS){
+    if(sp->encoding == OPUS || sp->encoding == OPUS_VOIP){
       if(Raw)
 	fprintf(stderr,"--raw ignored on Ogg Opus streams\n");
       start_ogg_opus_stream(sp);
@@ -748,7 +748,7 @@ static void closedown(int a){
 // Write out any partial Ogg Opus pages
 // Note: just closes current Ogg page, doesn't actually flush stdio output stream
 static int ogg_flush(struct session *sp){
-  if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
+  if(sp == NULL || sp->fp == NULL || (sp->encoding != OPUS && sp->encoding != OPUS_VOIP))
     return -1;
 
   ogg_page oggPage;
@@ -770,7 +770,7 @@ static uint8_t OpusSilence40[] = {0xf9,0xff,0xfe,0xff,0xfe}; // 40 ms Silence (2
 static uint8_t OpusSilence60[] = {0xfb,0x03,0xff,0xfe,0xff,0xfe,0xff,0xfe}; // 60 ms Silence (3 x 20ms silence frames)
 
 static int emit_opus_silence(struct session * const sp,int samples,bool plc_ok){
-  if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
+  if(sp == NULL || sp->fp == NULL || (sp->encoding != OPUS && sp->encoding != OPUS_VOIP))
     return -1;
 
   if(Verbose > 1)
@@ -886,7 +886,7 @@ static int emit_opus_silence(struct session * const sp,int samples,bool plc_ok){
 static int send_queue(struct session * const sp,bool const flush){
   if(sp == NULL)
     return -1;
-  if(sp->encoding == OPUS)
+  if(sp->encoding == OPUS || sp->encoding == OPUS_VOIP)
     send_opus_queue(sp,flush);
   else
     send_wav_queue(sp,flush);
@@ -901,7 +901,7 @@ static int send_queue(struct session * const sp,bool const flush){
 // if !flush, send whatever's on the queue, up to the first missing segment
 // if flush, empty the entire queue, skipping empty entries
 static int send_opus_queue(struct session * const sp,bool const flush){
-  if(sp == NULL || sp->fp == NULL || sp->encoding != OPUS)
+  if(sp == NULL || sp->fp == NULL || (sp->encoding != OPUS && sp->encoding != OPUS_VOIP))
     return -1;
 
   // Anything on the resequencing queue we can now process?
@@ -1165,6 +1165,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     case F16LE:
       suffix = ".f16"; // Non standard! But gotta do something with it for now
       break;
+    case OPUS_VOIP:
     case OPUS:
       suffix = ".opus";
       break;
@@ -1441,7 +1442,7 @@ static int close_file(struct session *sp,char const *reason){
   if(sp->fp == NULL)
     return 0;
 
-  if(sp->encoding == OPUS)
+  if(sp->encoding == OPUS || sp->encoding == OPUS_VOIP)
     end_ogg_opus_stream(sp);
   else
     end_wav_stream(sp);

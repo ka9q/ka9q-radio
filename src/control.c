@@ -1058,10 +1058,18 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
   case 'e':
     {
       char str[Entry_width];
-      getentry("Output encoding [s16le s16be f32le f16le opus]: ",str,sizeof(str));
+      getentry("Output encoding [s16le s16be f32le f16le opus opus-voip]: ",str,sizeof(str));
       enum encoding e = parse_encoding(str);
+      // "OPUS_VOIP" really means OPUS wih the OPUS_APPLICATION_VOIP option
+      if(e == OPUS_VOIP){
+	e = OPUS;
+	encode_int(bpp,OPUS_APPLICATION,OPUS_APPLICATION_VOIP);
+      } else if(e == OPUS){
+	// Default is OPUS_APPLICATION_AUDIO
+	encode_int(bpp,OPUS_APPLICATION,OPUS_APPLICATION_AUDIO);
+      }
       if(e != NO_ENCODING)
-	encode_byte(bpp,OUTPUT_ENCODING,(uint8_t)e);
+	encode_int(bpp,OUTPUT_ENCODING,(uint8_t)e);
     }
     break;
   case 'F':

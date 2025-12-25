@@ -568,8 +568,10 @@ struct session *lookup_or_create_session(struct sockaddr_storage const *sender,c
     if(!sp->inuse)
       break;
   }
-  if(sp == Sessions + NSESSIONS)
+  if(sp == Sessions + NSESSIONS){
+    pthread_mutex_unlock(&Sess_mutex);
     return NULL;
+  }
   sp->ssrc = ssrc;
   memcpy(&sp->sender,sender,sizeof(sp->sender));
   pthread_cond_init(&sp->qcond,NULL);
@@ -584,15 +586,16 @@ int close_session(struct session *sp){
     return -1;
 
   assert(sp >= Sessions && sp < Sessions + NSESSIONS);
-
-  pthread_mutex_lock(&Sess_mutex);
   if(sp == Best_session)
     Best_session = NULL;
 
+  pthread_mutex_lock(&Sess_mutex);
   // Remove from table
   sp->terminate = true;
-
+  pthread_cond_signal(&sp->qcond);   // Try to get its attention
   pthread_mutex_unlock(&Sess_mutex); // Done modifying session table
+
+
   // Thread now cleans itself up
   return 0;
 }

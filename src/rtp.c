@@ -301,6 +301,8 @@ char const *encoding_string(enum encoding e){
     return "s16be";
   case OPUS:
     return "opus";
+  case OPUS_VOIP:
+    return "opus-voip";
   case F32LE:
     return "f32le";
   case AX25:
@@ -318,6 +320,8 @@ enum encoding parse_encoding(char const *str){
     return F32LE;
   else if(strcasecmp(str,"f16") == 0 || strcasecmp(str,"f16le") == 0)
     return F16LE;
+  else if(strcasecmp(str,"opus-voip") == 0)
+    return OPUS_VOIP;
   else if(strcasecmp(str,"opus") == 0)
     return OPUS;
   else if(strcasecmp(str,"ax25") == 0 || strcasecmp(str,"ax.25") == 0)

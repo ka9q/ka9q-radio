@@ -478,21 +478,28 @@ static void update_monitor_display(void){
   if(Auto_sort)
     sort_session_total();
 
-  assert(First_session >= 0 && First_session < NSESSIONS);
   if(First_session >= NSESSIONS)
     First_session = NSESSIONS-1;
   while(First_session > 0 && !Sess_ptr[First_session]->inuse)
     First_session--;
-  assert(Current >= 0 && Current < NSESSIONS);
-  if(Current >= NSESSIONS)
-    Current = NSESSIONS-1;
-  while(Current > 0 && !Sess_ptr[Current]->inuse)
-    Current--;
 
   // Show channel statuses
   getyx(stdscr,y,x);
   int row_save = y;
   int col_save = x;
+  int first_line = row_save+1; // after header line
+
+  // Bound current pointer to active list area
+  while(Current >= 0 && !Sess_ptr[Current]->inuse)
+    Current--; // Current session is no valid, back up
+
+  if(Current <= First_session)
+    Current = First_session;
+  else if(Current >= LINES - first_line)
+    Current = LINES - first_line;
+
+
+
 
   // dB column
   int width = 4;
@@ -677,11 +684,11 @@ static void update_monitor_display(void){
     goto done;
 
   width = 6;
-  mvprintwt(y,x,"%-*s",width,"type");
+  mvprintwt(y++,x,"%-*s",width,"type");
   for(int session = First_session; session < NSESSIONS && y < LINES; session++,y++){
     struct session const *sp = Sess_ptr[session];
     if(!sp->inuse) break;
-      mvprintwt(y,x,"%-*s",width,encoding_string(sp->pt_table[sp->type].encoding));
+    mvprintwt(y,x,"%-*s",width,encoding_string(sp->pt_table[sp->type].encoding));
   }
   x += width;
   y = row_save;
@@ -710,7 +717,8 @@ static void update_monitor_display(void){
     struct session const *sp = Sess_ptr[session];
     if(!sp->inuse)
       break;
-    if(sp->pt_table[sp->type].encoding == OPUS)
+    enum encoding encoding = sp->pt_table[sp->type].encoding;
+    if(encoding == OPUS || encoding == OPUS_VOIP)
       mvprintwt(y,x,"%*d",width,sp->opus_channels); // actual number in incoming stream
     else
       mvprintwt(y,x,"%*d",width,sp->channels);
@@ -772,10 +780,9 @@ static void update_monitor_display(void){
       // sp->rtp_state.timestamp contains most recent RTP packet processed
       // This needs further thought and cleanup
       delay = (double)(int32_t)(sp->chan.output.rtp.timestamp - sp->rtp_state.timestamp) / sp->samprate;
-      delay += 1.0e-9 * (gps_time_ns() - sp->frontend.timestamp);
+      delay += 1.0e-9 * (gps_time_ns() - sp->chan.clocktime);
       mvprintwt(y,x,"%*.3lf", width, delay);
     }
-
   }
   x += width;
   y = row_save;
@@ -858,7 +865,6 @@ static void update_monitor_display(void){
   x += width;
   y = row_save;
 
-
   // Sockets
   x++; // Left justified
   mvprintwt(y++,x,"%s","sockets");
@@ -886,7 +892,7 @@ static void update_monitor_display(void){
     // only underscore to just before the socket entry since it's variable length
     mvchgat(1 + row_save + session,col_save,x,attr,pair,NULL);
   }
-  move(1 + row_save + Current,col_save); // Cursor on current line
+  move(first_line + Current - First_session,col_save); // Cursor on current line
   // End of display writing
 }
 static void process_keyboard(void){
@@ -938,59 +944,42 @@ static void process_keyboard(void){
   if(serviced)
     return;
 
-  // Commands below this point require session locking
   serviced = true;
-  pthread_mutex_lock(&Sess_mutex);
+
 
   // Commands manipulating the current session index
   switch(c){
   case KEY_NPAGE:
-    if(First_session + Sessions_per_screen < NSESSIONS){
+    if(First_session + Sessions_per_screen < NSESSIONS)
       First_session += Sessions_per_screen;
-      Current += Sessions_per_screen;
-      if(Current > NSESSIONS-1)
-	Current = NSESSIONS - 1;
-    }
     break;
   case KEY_PPAGE:
-    if(First_session - Sessions_per_screen >= 0){
+    if(First_session - Sessions_per_screen >= 0)
       First_session -= Sessions_per_screen;
-      Current -= Sessions_per_screen;
-    }
     break;
   case KEY_HOME: // first session
-    Current = 0;
     First_session = 0;
     break;
   case KEY_END: // last session
-    Current = NSESSIONS-1;
     First_session = max(0,NSESSIONS - Sessions_per_screen);
     break;
   case '\t':
-  case KEY_DOWN:
-    if(Current < NSESSIONS){
-      Current++;
-      if(Current >= First_session + Sessions_per_screen - 1)
-	First_session++;
-    }
+  case KEY_DOWN: // We'll clip this on the next iteration
+    Current++;
     break;
   case KEY_BTAB:
   case KEY_UP:
-    if(Current > 0){
-      Current--;
-      if(Current < First_session)
-	First_session--;
-    }
+    Current--;
     break;
   default:
     serviced = false;
   }
-  if(serviced){
-    pthread_mutex_unlock(&Sess_mutex);
+  if(serviced)
     return;
-  }
+
 
   // Commands operating on all sessions
+  // These *probably* don't require locking?
   serviced = true;
   switch(c){
   case 'U': // Unmute all sessions, resetting any that were muted
@@ -999,7 +988,6 @@ static void process_keyboard(void){
       if(sp != NULL && sp->muted){
 	sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	sp->muted = false;
-	reset_playout(sp);
       }
     }
     break;
@@ -1038,21 +1026,18 @@ static void process_keyboard(void){
     serviced = false; // Not handled by this switch
     break;
   }
-  if(serviced){
-    pthread_mutex_unlock(&Sess_mutex);
+  if(serviced)
     return;
-  }
+
 
   // Commands operating on the current session
   // Check validity of current session pointer so individual cases don't have to
   // Do this last
-  // Lock still held!
   serviced = true;
 
   struct session *sp = Sessions + Current;
   if(!sp->inuse){
     // Current index not valid
-    pthread_mutex_unlock(&Sess_mutex);
     beep();
     return;
   }
@@ -1093,7 +1078,6 @@ static void process_keyboard(void){
     if(sp->muted){
       sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
       sp->muted = false;
-      reset_playout(sp);
     }
     break;
   case 'm': // Mute Current session
@@ -1101,24 +1085,19 @@ static void process_keyboard(void){
     break;
   case 'r':    // Manually reset playout queue
     sp->reset = true;
-    reset_playout(sp);
     break;
   case KEY_DC: // Delete
   case KEY_BACKSPACE:
   case 'd': // Delete current session
-    sp->terminate = true;  // Also keeps it from being found again by sptr()
-    pthread_mutex_unlock(&Sess_mutex); // close_session will need the lock, at least
-    // We have to wait for it to clean up before we close and remove its session
+    close_session(sp);
     pthread_join(sp->task,NULL);
     pthread_t nullthread = {0};
     sp->task = nullthread;
-    close_session(sp);
-    return; // Avoid unlocking again
+    break;
   default:
     serviced = false;
     break;
   }
-  pthread_mutex_unlock(&Sess_mutex);
   if(!serviced)
     beep(); // Not serviced by anything
 }

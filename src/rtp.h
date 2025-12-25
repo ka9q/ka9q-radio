@@ -20,6 +20,7 @@ enum encoding {
   F32LE,
   AX25,
   F16LE,
+  OPUS_VOIP,       // Opus with APPLICATION_VOIP
   UNUSED_ENCODING, // Sentinel, not used
 };
 struct pt_table {
