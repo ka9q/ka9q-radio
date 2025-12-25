@@ -69,6 +69,8 @@ struct filter_in {
   unsigned int next_jobnum;
   unsigned int completed_jobs[ND];
   bool perform_inline;       // Perform FFT inline, don't use worker threads (better for small FFTs)
+  uint64_t sample_index;     // input sample index at start of buffer
+  uint64_t samples_by_job[ND];
 };
 
 struct filter_out {
@@ -88,6 +90,7 @@ struct filter_out {
   unsigned next_jobnum;
   unsigned block_drops;          // Lost frequency domain blocks, e.g., from late scheduling of slave thread
   int rcnt;                 // Samples read from output buffer
+  uint64_t sample_index;     // input sample index at start of buffer
 };
 
 int create_filter_input(struct filter_in *,int const L,int const M, enum filtertype const in_type);

@@ -582,9 +582,11 @@ int execute_filter_input(struct filter_in * const f){
 
     // Signal we're done with this job
     pthread_mutex_lock(&f->filter_mutex);
+    f->samples_by_job[jobnum % ND] = f->sample_index;
     f->completed_jobs[jobnum % ND] = jobnum;
     pthread_cond_broadcast(&f->filter_cond);
     pthread_mutex_unlock(&f->filter_mutex);
+    f->sample_index += f->ilen;
     return 0;
   }
 
@@ -611,6 +613,7 @@ int execute_filter_input(struct filter_in * const f){
   job->completion_mutex = &f->filter_mutex;
   job->completion_jobnum = &f->completed_jobs[job->jobnum % ND];
   job->completion_cond = &f->filter_cond;
+  f->sample_index += f->ilen;
   job->terminate = false;
 
   // Set up the job and next input buffer
@@ -704,12 +707,15 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   // We don't modify the master's output data, we create our own
   float complex const * restrict const m_fdomain = master->fdomain[slave->next_jobnum % ND];
   // in case we just waited so long that the buffer wrapped, resynch
+  slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
   slave->next_jobnum = master->completed_jobs[slave->next_jobnum % ND] + 1;
   pthread_mutex_unlock(&master->filter_mutex);
 
   assert(m_fdomain != NULL); // Should always be master frequency data
 
   // In spectrum mode we'll read directly from master. Don't forget the 3dB scale when the input is real
+
+  slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
 
   if(slave->fdomain == NULL || slave->response == NULL)
     return 0;
