@@ -1062,8 +1062,8 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       enum encoding e = parse_encoding(str);
       // "OPUS_VOIP" really means OPUS wih the OPUS_APPLICATION_VOIP option
       if(e == OPUS_VOIP){
-	e = OPUS;
 	encode_int(bpp,OPUS_APPLICATION,OPUS_APPLICATION_VOIP);
+	e = OPUS;
       } else if(e == OPUS){
 	// Default is OPUS_APPLICATION_AUDIO
 	encode_int(bpp,OPUS_APPLICATION,OPUS_APPLICATION_AUDIO);
@@ -1667,14 +1667,9 @@ static void display_output(WINDOW *w,struct channel const *chan){
     else
       pprintw(w,row++,col,"Opus bitrate","auto");
     pprintw(w,row++,col,"Opus dtx","%s",chan->opus.dtx ? "on" : "off");
-    char const *appl = "unknown";
-    for(int i=0; Opus_application[i].str != NULL; i++){
-      if(chan->opus.application == Opus_application[i].value){
-	appl = Opus_application[i].str;
-	break;
-      }
-    }
-    pprintw(w,row++,col,"Opus application","%s",appl);
+    char const *appl = opus_application_string(chan->opus.application);
+    if(appl != NULL)
+      pprintw(w,row++,col,"Opus application","%s",appl);
     pprintw(w,row++,col,"Opus fec","%d%%",chan->opus.fec);
     int bw = opus_bandwidth(NULL,chan->opus.bandwidth);
     pprintw(w,row++,col,"Opus bw","%d kHz",bw);

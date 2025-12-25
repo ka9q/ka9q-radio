@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <netinet/in.h>
+#include <opus/opus.h>
 #include "rtp.h"
 
 struct pt_table PT_table[128] = {
@@ -328,4 +329,59 @@ enum encoding parse_encoding(char const *str){
     return AX25;
   else
     return NO_ENCODING;
+}
+struct string_table Opus_application[] = {
+  {"voip", OPUS_APPLICATION_VOIP},
+  {"audio", OPUS_APPLICATION_AUDIO},
+  {"lowdelay",OPUS_APPLICATION_RESTRICTED_LOWDELAY},
+#ifdef OPUS_APPLICATION_RESTRICTED_CELT
+  {"celt", OPUS_APPLICATION_RESTRICTED_CELT},
+#endif
+#ifdef OPUS_APPLICATION_SILK
+  {"silk", OPUS_APPLICATION_SILK},
+#endif
+  { NULL, -1 },
+};
+
+char const *opus_application_string(int x){
+  for(int i=0; Opus_application[i].value != -1; i++){
+    if(Opus_application[i].value == x)
+      return Opus_application[i].str;
+  }
+  return NULL;
+}
+
+// Interpret an Opus bandwidth constant
+int opus_bandwidth(char const **str,int code){
+  int bw = 0;
+  char const *s = NULL;
+  switch(code){
+  case OPUS_BANDWIDTH_NARROWBAND:
+    bw = 4000;
+    s = "narrowband";
+    break;
+  case OPUS_BANDWIDTH_MEDIUMBAND:
+    bw = 6000;
+    s = "mediumband";
+    break;
+  case OPUS_BANDWIDTH_WIDEBAND:
+    bw = 8000;
+    s = "wideband";
+    break;
+  case OPUS_BANDWIDTH_SUPERWIDEBAND:
+    bw = 12000;
+    s = "superwideband";
+    break;
+  case OPUS_BANDWIDTH_FULLBAND:
+    bw = 20000;
+    s = "fullband";
+    break;
+  default:
+    bw = 0;
+    s = "invalid";
+    break;
+  }
+  if(str != NULL)
+    *str = s;
+  return bw;
 }

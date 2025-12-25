@@ -125,14 +125,6 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 
 #endif // ifdef __APPLE__
 
-struct string_table {
-  char *str;
-  int value;
-};
-extern struct string_table Opus_application[];
-
-int opus_bandwidth(char const **str,int code);
-
 // Portable mutex initializer for recursive mutexes
 static inline int init_recursive_mutex(pthread_mutex_t *m){
   pthread_mutexattr_t attr;

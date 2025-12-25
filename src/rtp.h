@@ -129,5 +129,15 @@ uint8_t *gen_bye(uint8_t *output,size_t bufsize,uint32_t const *ssrcs,int sc);
 uint8_t *gen_sr(uint8_t *output,size_t bufsize,struct rtcp_sr const *sr,struct rtcp_rr const *rr,int rc);
 // Generate RTCP receiver report segment
 uint8_t *gen_rr(uint8_t *output,size_t bufsize,uint32_t ssrc,struct rtcp_rr const *rr,int rc);
+struct string_table {
+  char *str;
+  int value;
+};
+extern struct string_table Opus_application[];
+
+int opus_bandwidth(char const **str,int code);
+char const *opus_application_string(int);
+
+
 
 #endif

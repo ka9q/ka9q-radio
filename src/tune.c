@@ -20,6 +20,8 @@
 #include <errno.h>
 #include <sysexits.h>
 #include <poll.h>
+#include <opus/opus.h>
+
 
 #include "misc.h"
 #include "multicast.h"
@@ -109,7 +111,7 @@ int main(int argc,char *argv[]){
 	Encoding = parse_encoding(optarg);
 	if(Encoding == NO_ENCODING){
 	  fprintf(stdout,"Unknown encoding %s\n",optarg);
-	  fprintf(stdout,"Encodings: S16BE S16LE F32 F16 OPUS\n");
+	  fprintf(stdout,"Encodings: s16le s16be f32le f16le opus opus-voip\n");
 	}
 	break;
       case 'f':
@@ -239,6 +241,7 @@ int main(int argc,char *argv[]){
   int received_rf_agc = -1;
   struct sockaddr_storage received_destination_socket = {0};
   int samprate = 0;
+  int opus_application;
 
   uint32_t sent_tag = 0;
   while(true){
@@ -271,6 +274,13 @@ int main(int argc,char *argv[]){
       } else if(Agc_enable == 1)
 	encode_int(&bp,AGC_ENABLE,true);
 
+      if(Encoding == OPUS_VOIP){
+	// Special case: ordinary opus + OPUS_APPLICATION_VOIP option
+	encode_int(&bp,OPUS_APPLICATION,OPUS_APPLICATION_VOIP);
+	Encoding = OPUS;
+      } else if(Encoding == OPUS){
+	encode_int(&bp,OPUS_APPLICATION,OPUS_APPLICATION_AUDIO);
+      }
       if(Encoding != NO_ENCODING)
 	encode_int(&bp,OUTPUT_ENCODING,Encoding);
 
@@ -391,6 +401,9 @@ int main(int argc,char *argv[]){
       case OUTPUT_DATA_DEST_SOCKET:
 	decode_socket(&received_destination_socket,cp,optlen);
 	break;
+      case OPUS_APPLICATION:
+	opus_application = decode_int(cp,optlen);
+	break;
       }
       cp += optlen;
     }
@@ -413,7 +426,9 @@ int main(int argc,char *argv[]){
     if(received_destination_socket.ss_family != 0)
       printf("Destination socket: %s\n",formatsock(&received_destination_socket,false));
 
-    if(received_encoding != NO_ENCODING)
+    if(received_encoding == OPUS || received_encoding == OPUS_VOIP)
+      printf("Opus mode %s\n",opus_application_string(opus_application));
+    else if(received_encoding < UNUSED_ENCODING)
       printf("Encoding %s\n",encoding_string(received_encoding));
 
     if(received_freq != INFINITY)

@@ -384,5 +384,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,unsigned long length);
 int flush_output(struct channel *chan,bool marker,bool complete);
 
+
 unsigned int round_samprate(unsigned int x);
 #endif
