@@ -241,7 +241,7 @@ int main(int argc,char *argv[]){
   int received_rf_agc = -1;
   struct sockaddr_storage received_destination_socket = {0};
   int samprate = 0;
-  int opus_application;
+  int opus_application = 0;
 
   uint32_t sent_tag = 0;
   while(true){
