@@ -89,12 +89,12 @@ char const *Source; // Source specific multicast, if used
 int Output_fd = -1; // Output network socket, if any
 struct sockaddr_in Dest_socket;
 int64_t Last_xmit_time;
-_Atomic int64_t Output_time;  // Relative output time in frames
+_Atomic uint64_t Output_time;  // Relative output time in frames
 _Atomic uint64_t Callbacks;
 _Atomic uint64_t Audio_frames;
 _Atomic int64_t LastAudioTime;
-_Atomic int Callback_quantum;
-_Atomic int64_t Output_total;
+_Atomic unsigned Callback_quantum;
+_Atomic uint64_t Output_total;
 _Atomic double Output_level; // Output level, mean square
 double Portaudio_delay;
 pthread_t Repeater_thread;
@@ -108,7 +108,7 @@ PaTime Last_callback_time;
 int64_t Last_error_time;
 int Nsessions;
 struct session Sessions[NSESSIONS];
-bool Terminate;
+_Atomic bool Terminate;
 struct session *Best_session; // Session with highest SNR
 int Mcast_ttl;
 void *output_thread(void *p);
@@ -327,6 +327,7 @@ int main(int argc,char * const argv[]){
     fprintf(stderr,"At least one input group required, exiting\n");
     exit(EX_USAGE);
   }
+  atomic_init(&Terminate,false);
 
   if(Init != NULL)
     (void) - system(Init);
@@ -412,6 +413,8 @@ int main(int argc,char * const argv[]){
     }
   }  // !Network (use Portaudio)
 
+
+
   if(Repeater_tail != 0)
     pthread_create(&Repeater_thread,NULL,repeater_ctl,NULL); // Repeater mode active
 
@@ -438,7 +441,7 @@ int main(int argc,char * const argv[]){
     pthread_t display_thread;
     pthread_create(&display_thread,NULL,display,NULL);
   }
-  while(!Terminate)
+  while(!atomic_load_explicit(&Terminate,memory_order_acquire))
     sleep(1);
 
   exit(EX_OK); // calls cleanup() to clean up Portaudio and ncurses. Can't happen...
@@ -451,7 +454,9 @@ void vote(void){
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < NSESSIONS; i++){
     struct session * const sp = &Sessions[i];
-    if(!sp->inuse || sp->muted || !sp->running) // No recent audio, skip
+    if(!atomic_load_explicit(&sp->inuse,memory_order_acquire))
+      continue;
+    if(sp->muted || !sp->running) // No recent audio, skip
       continue;
 
     if(best == NULL || sp->snr > best->snr)
@@ -493,7 +498,7 @@ void *statproc(void *arg){
 
   // Main loop begins here - does not need to be realtime?
   uint8_t *buffer = malloc(PKTSIZE);
-  while(!Terminate){
+  while(!atomic_load_explicit(&Terminate,memory_order_acquire)){
     struct sockaddr_storage sender;
     socklen_t socksize = sizeof(sender);
     ssize_t length = recvfrom(status_fd,buffer,PKTSIZE,0,(struct sockaddr *)&sender,&socksize);
@@ -547,6 +552,8 @@ void *statproc(void *arg){
 
 // Look up session, or if it doesn't exist, create it.
 // Executes atomically
+int Session_creates = 0;
+
 struct session *lookup_or_create_session(struct sockaddr_storage const *sender,const uint32_t ssrc){
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < NSESSIONS; i++){
@@ -572,11 +579,16 @@ struct session *lookup_or_create_session(struct sockaddr_storage const *sender,c
     pthread_mutex_unlock(&Sess_mutex);
     return NULL;
   }
+  memset(sp,0,sizeof(struct session));
+
+  Session_creates++;
+  atomic_init(&sp->terminate,false);
   sp->ssrc = ssrc;
   memcpy(&sp->sender,sender,sizeof(sp->sender));
   pthread_cond_init(&sp->qcond,NULL);
   pthread_mutex_init(&sp->qmutex,NULL);
   pthread_mutex_unlock(&Sess_mutex);
+  atomic_store_explicit(&sp->inuse,true,memory_order_release);
   return sp; // caller will set sp->inuse
 }
 
@@ -589,12 +601,11 @@ int close_session(struct session *sp){
   if(sp == Best_session)
     Best_session = NULL;
 
-  pthread_mutex_lock(&Sess_mutex);
-  // Remove from table
-  sp->terminate = true;
-  pthread_cond_signal(&sp->qcond);   // Try to get its attention
-  pthread_mutex_unlock(&Sess_mutex); // Done modifying session table
-
+  // Tell it to commit hari-kari
+  atomic_store_explicit(&sp->terminate,true,memory_order_release);
+  pthread_mutex_lock(&sp->qmutex);
+  pthread_cond_broadcast(&sp->qcond);   // Try to get its attention
+  pthread_mutex_unlock(&sp->qmutex); // Done modifying session table
 
   // Thread now cleans itself up
   return 0;
@@ -619,6 +630,9 @@ void cleanup(void){
 static float Softclip_mem[2];
 
 // Portaudio callback - transfer data (if any) to provided buffer
+// This has to be lock-free; no mutexes allowed, so _Atomic variables are used to communicate with the producer threads
+// The session blocks are static, not malloced, in case the callback accesses them for one call before it sees the sp->inuse flag drop.
+// Even if the callback reads a dead buffer, it won't generate any output for it because its write pointer will have stopped advancing
 int pa_callback(void const *inputBuffer, void *outputBuffer,
 		       unsigned long framesPerBuffer,
 		       PaStreamCallbackTimeInfo const * timeInfo,
@@ -628,7 +642,6 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   (void)statusFlags;
   (void)userData;
 
-  atomic_fetch_add(&Audio_frames,framesPerBuffer);
 
   if(!outputBuffer)
     return paAbort; // can this happen??
@@ -639,41 +652,13 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   Portaudio_delay = timeInfo->outputBufferDacTime - timeInfo->currentTime;
 
   // Output frame clock at beginning of our buffer
-  int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-  int64_t const base = Channels * rptr; // base sample index in session output buffers
+  uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+  int const base = (Channels * rptr) & (BUFFERSIZE-1); // base sample index into all session output buffers
   float * const buffer = (float *)outputBuffer;
   memset(buffer, 0, framesPerBuffer * Channels * sizeof (float));
 
   int64_t total = 0;
-#if 1
-
-  for(int i=0; i < NSESSIONS; i++){
-    struct session *sp = Sessions + i;
-    if(!sp->inuse || !sp->running)
-      continue;
-
-    int64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
-    int64_t frames = framesPerBuffer;
-    if(wptr <= rptr)
-      continue;      // he's empty
-
-    if(frames > wptr - rptr)
-      frames = wptr - rptr; // limit to what he's got
-
-    for(int j = 0; j < Channels*frames; j++){
-      buffer[j] += sp->buffer[BINDEX(base,j)];
-    }
-    total += frames;
-  }
-  double energy = 0;
-  for(unsigned int j=0; j < Channels * framesPerBuffer;j++){
-    energy += buffer[j] * buffer[j];
-  }
-  energy /= Channels * framesPerBuffer;
-  atomic_store_explicit(&Output_level,energy,memory_order_release);
-
-#else
-  // test tone
+#if TEST_TONE
   double freq = 2. / 64.;
   double phase = freq * ((rptr) % 64); // 64 frames/cycle = 750 Hz
   double complex os = cispi(phase);
@@ -685,12 +670,41 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     buffer[2*i+1] += 0.1 * cimag(os);
     os *= step;
   }
+#else
+  for(int i=0; i < NSESSIONS; i++){
+    struct session *sp = Sessions + i;
+    if(!atomic_load_explicit(&sp->inuse,memory_order_acquire)) // don't proceed unless the session is fully initialized
+      continue;
+    if(!sp->running)
+      continue;
+
+    uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
+    unsigned long frames = framesPerBuffer;
+    // careful with unsigned arithmetic
+    if(wptr <= rptr)
+      continue;      // he's empty
+
+    if(frames + rptr > wptr)
+      frames = wptr - rptr; // limit to what he's got - okay because we know wptr > rptr
+
+    for(unsigned int j = 0; j < Channels*frames; j++){
+      buffer[j] += sp->buffer[BINDEX(base,j)];
+    }
+    total += frames;
+  }
+  double energy = 0;
+  for(unsigned int j=0; j < Channels * framesPerBuffer;j++){
+    energy += buffer[j] * buffer[j];
+  }
+  energy /= Channels * framesPerBuffer;
+  atomic_store_explicit(&Output_level,energy,memory_order_relaxed);
 #endif
 
   opus_pcm_soft_clip(buffer,(int)framesPerBuffer,Channels,Softclip_mem);
-  atomic_fetch_add(&Output_time,framesPerBuffer);
-  atomic_fetch_add(&Output_total,total);
-  atomic_fetch_add(&Callbacks,1);
+  atomic_fetch_add_explicit(&Audio_frames,framesPerBuffer,memory_order_relaxed);
+  atomic_fetch_add_explicit(&Output_time,framesPerBuffer,memory_order_relaxed);
+  atomic_fetch_add_explicit(&Output_total,total,memory_order_relaxed);
+  atomic_fetch_add_explicit(&Callbacks,1,memory_order_relaxed);
   return paContinue;
 }
 

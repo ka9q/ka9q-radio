@@ -18,7 +18,8 @@
 // Enlarge this if sample rates > 48 kHz are ever used
 #define BBSIZE (2*5760)
 struct session {
-  bool inuse;
+  _Atomic bool inuse;
+  bool initialized;
   struct sockaddr_storage sender;
   char const *dest;
 
@@ -73,7 +74,7 @@ struct session {
   uint64_t reseqs;
   uint64_t plcs;       // Opus packet loss conceals
 
-  bool terminate;            // Set to cause thread to terminate voluntarily
+  _Atomic bool terminate;            // Set to cause thread to terminate voluntarily
   bool muted;                // Do everything but send to output
   bool reset;                // Set to force output timing reset on next packet
   bool running;              // Audio arrived recently
@@ -135,13 +136,12 @@ extern double PL_tones[N_tones];
 
 extern int64_t Last_xmit_time;
 extern int64_t Last_id_time;
-extern _Atomic int Buffer_length; // Bytes left to play out, max BUFFERSIZE
-extern _Atomic int Callback_quantum; // How much the callback reads at a time
-extern _Atomic int64_t Output_time;  // Output sample clock, frames (48 kHz)
+extern _Atomic unsigned Callback_quantum; // How much the callback reads at a time
+extern _Atomic uint64_t Output_time;  // Output sample clock, frames (48 kHz)
 extern volatile bool PTT_state;      // For repeater transmitter
 extern _Atomic uint64_t Audio_frames;
 extern _Atomic int64_t LastAudioTime;
-extern _Atomic int64_t Output_total;
+extern _Atomic uint64_t Output_total;
 extern _Atomic uint64_t Callbacks;
 extern _Atomic double Output_level; // Output level, mean square
 extern double Portaudio_delay;
@@ -160,7 +160,7 @@ extern int Invalids;
 extern int64_t Last_error_time;
 extern int Nsessions;
 
-extern bool Terminate;
+extern _Atomic bool Terminate;
 extern bool Voting;
 extern struct session *Best_session; // Session with highest SNR
 extern struct sockaddr Metadata_dest_socket;

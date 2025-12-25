@@ -84,7 +84,7 @@ void *dataproc(void *arg){
 
   realtime(DATA_PRIORITY);
   // Main loop begins here
-  while(!Terminate){
+  while(!atomic_load_explicit(&Terminate,memory_order_acquire)){
     // Need a new packet buffer?
     if(!pkt)
       pkt = malloc(sizeof(*pkt));
@@ -124,7 +124,7 @@ void *dataproc(void *arg){
       fprintf(stderr,"No room!!\n");
       continue;
     }
-    if(!sp->inuse){
+    if(!sp->initialized){
       // status reception doesn't write below this point
       if(Auto_position)
 	sp->pan = make_position(Position++);
@@ -137,13 +137,13 @@ void *dataproc(void *arg){
       sp->rtp_state.timestamp = sp->next_timestamp = pkt->rtp.timestamp;
       sp->rtp_state.seq = pkt->rtp.seq;
       sp->reset = true;
-      sp->inuse = true;
 
-      if(pthread_create(&sp->task,NULL,decode_task,sp) == -1){
+      if(pthread_create(&sp->task,NULL,decode_task,sp) != 0){
 	perror("pthread_create");
 	close_session(sp);
 	continue;
       }
+      sp->initialized = true;
     }
     sp->packets++;
     sp->last_active = gps_time_ns();
@@ -194,6 +194,7 @@ void decode_task_cleanup(void *arg){
   struct session *sp = (struct session *)arg;
   assert(sp);
 
+  sp->inuse = false;
   ASSERT_UNLOCKED(&sp->qmutex);
   pthread_mutex_destroy(&sp->qmutex);
   pthread_cond_destroy(&sp->qcond);
@@ -223,7 +224,7 @@ void decode_task_cleanup(void *arg){
   FREE(chan->spectrum.ring);
   FREE(sp->buffer);
   FREE(sp->bounce);
-  sp->inuse = false;
+
   memset((void *)sp,0,sizeof(*sp)); // blow it all away
 }
 
@@ -248,12 +249,12 @@ void *decode_task(void *arg){
   reset_playout(sp);
   bool init = false;
   // Main loop; run until asked to quit
-  while(!sp->terminate && !Terminate){
+  while(!atomic_load_explicit(&sp->terminate,memory_order_acquire) && !atomic_load_explicit(&Terminate,memory_order_acquire)){
     if(sp->samprate == 0){
       sp->running = false;
       sp->active = 0;
     }
-    while(!sp->terminate && !Terminate){
+    while(!atomic_load_explicit(&sp->terminate,memory_order_acquire) && !atomic_load_explicit(&Terminate,memory_order_acquire)){
       // Try to receive and process a RTP packet. Break when we have.
       assert(pkt == NULL); // should be cleared, otherwise it's a memory leak
       // The queue is sorted by sequence number. Anything on it?
@@ -301,9 +302,9 @@ void *decode_task(void *arg){
 	reset_playout(sp); // Use the most up-to-date wptr based on Output_time
 
       // Calculate queue wait timeout
-      int64_t timeout = (int64_t)BILLION/10; // default timeout 100 ms when stopped
-      int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-      int64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
+      uint64_t timeout = (int64_t)BILLION/10; // default timeout 100 ms when stopped
+      uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+      uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
       // Read and write pointers and sample rate  must be initialized to be useful
       if(rptr == 0 || wptr == 0){
 	// Probably hasn't ever run - can this happen? maybe the callback isn't running yet
@@ -312,9 +313,11 @@ void *decode_task(void *arg){
       }
       if(sp->running && !sp->muted){
 	// wptr and rptr are in frames at DAC_samprate, typically 48 kHz
-	int const quantum = atomic_load_explicit(&Callback_quantum,memory_order_relaxed);
-	int64_t margin = wptr - (rptr + sp->playout + quantum);
-	if(margin > 0){
+	unsigned const quantum = atomic_load_explicit(&Callback_quantum,memory_order_relaxed);
+
+	if(wptr > rptr + sp->playout + quantum){ // care with unsigned!
+	  // We're conservatively ahead of the reader, by how much?
+	  uint64_t margin = wptr - (rptr + sp->playout + quantum); // must be positive
 	  timeout = BILLION * margin / DAC_samprate;	  // Playout queue is happy, we don't need to do anything right now
 	  if(timeout > BILLION/10)
 	    timeout = BILLION/10; // Limit the timeout to 100 ms just in case rptr got hung up, eg, by suspend
@@ -347,7 +350,7 @@ void *decode_task(void *arg){
       pthread_mutex_unlock(&sp->qmutex); // finally release it
     }
 
-    if(sp->terminate ||Terminate)
+    if(atomic_load_explicit(&sp->terminate,memory_order_acquire) || atomic_load_explicit(&Terminate,memory_order_acquire))
       break;
 
     // We get here with a frame of decoded audio, possibly PLC from Opus
@@ -381,7 +384,7 @@ void reset_playout(struct session * const sp){
   sp->reset = false;
   sp->playout = (int)round(Playout * DAC_samprate);
 
-  int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_acquire);
+  uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_acquire);
   atomic_store_explicit(&sp->wptr,rptr + sp->playout,memory_order_release);
 }
 // Start output stream if it was off; reset idle timeout on output audio stream activity
@@ -745,46 +748,41 @@ static void copy_to_stream(struct session *sp){
   float *trimmed = sp->bounce;
   int tsize = sp->frame_size;
 
-  int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed); // frames
-  int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed); // frames
+  uint64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed); // frames
+  uint64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed); // frames
 
-  int64_t room = wptr - rptr;
-  if(room < tsize){
-    sp->lates++;
-    if(++sp->consec_lates >= 6){
-      sp->consec_lates = 0;
-      reset_playout(sp);
-      // Refresh and recompute
-      wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
-      rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-      room = wptr - rptr;
-    }
-    if(room > 0){
-      // Keep what fits
-      trimmed += tsize - room;
-      wptr += tsize - room;
-      tsize = room;
+  if(wptr < rptr){
+    // we're late; can we salvage anything?
+    int64_t overage = rptr - wptr; // Okay because we know it's positive
+    if(overage < tsize){
+      // the tail can still be sent
+      trimmed += overage;
+      wptr += overage;
+      tsize -= overage;
+    } else {
+      // All of it is too late
+      sp->lates++;
+      if(++sp->consec_lates < 6)
+	return; // might be an outlier Don't update wptr
+      reset_playout(sp);  // drastic measures are needed, reset wptr
     }
   }
   {
     // Measure output audio level
-
     int count = tsize;
     if(sp->channels == 2)
       count *= 2;
 
-    if(count > 0){
-      double energy = 0;
-      for(int i=0; i < count; i++)
-	energy += trimmed[i] * trimmed[i];
+    double energy = 0;
+    for(int i=0; i < count; i++)
+      energy += trimmed[i] * trimmed[i];
 
-      energy /= count;
-      if(isfinite(energy))
-	sp->level += .01 * (energy - sp->level); // smooth
-    }
+    energy /= count;
+    if(isfinite(energy))
+      sp->level += .01 * (energy - sp->level); // smooth
   }
   // Mix output sample rate data into output ring buffer
-  int64_t base = wptr * Channels; // Base of output buffer for this packet
+  int base = (wptr * Channels) & (BUFFERSIZE-1); // Base of output buffer for this packet
   if(Channels == 2){
     /* Compute gains and delays for stereo imaging
        Extreme gain differences can make the source sound like it's inside an ear

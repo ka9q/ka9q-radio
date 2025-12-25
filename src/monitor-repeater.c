@@ -118,7 +118,7 @@ void *repeater_ctl(void *arg){
   pthread_setname("rptctl");
   (void)arg; // unused
 
-  while(!Terminate){
+  while(!atomic_load_explicit(&Terminate,memory_order_acquire)){
     // Wait for audio output; set in kick_output()
     pthread_mutex_lock(&PTT_mutex);
     while(!PTT_state)

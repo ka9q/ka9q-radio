@@ -144,7 +144,7 @@ void *display(void *arg){
   for(int i=0; i < NSESSIONS; i++)
     Sess_ptr[i] = Sessions + i;
 
-  while(!Terminate){
+  while(!atomic_load_explicit(&Terminate,memory_order_acquire)){
     // Start screen update
     move(0,0);
     clrtobot();
@@ -470,6 +470,8 @@ static void update_monitor_display(void){
     double level = atomic_load_explicit(&Output_level,memory_order_relaxed);
     level = power2dB(level);
     printwt(" Clock %.1lfs %.1lf dBFS CB N %u",(double)rptr/DAC_samprate,level,quant);
+    extern int Session_creates;
+    printwt("sessions %d",Session_creates);
     printwt("\n");
   }
   Sessions_per_screen = LINES - getcury(stdscr) - 1;
@@ -497,9 +499,6 @@ static void update_monitor_display(void){
     Current = First_session;
   else if(Current >= LINES - first_line)
     Current = LINES - first_line;
-
-
-
 
   // dB column
   int width = 4;
@@ -905,7 +904,7 @@ static void process_keyboard(void){
   bool serviced = true;
   switch(c){
   case 'Q': // quit program
-    Terminate = true;
+    atomic_store_explicit(&Terminate,true,memory_order_release);
     break;
   case 'v':
     Verbose = !Verbose;
@@ -1090,9 +1089,6 @@ static void process_keyboard(void){
   case KEY_BACKSPACE:
   case 'd': // Delete current session
     close_session(sp);
-    pthread_join(sp->task,NULL);
-    pthread_t nullthread = {0};
-    sp->task = nullthread;
     break;
   default:
     serviced = false;
