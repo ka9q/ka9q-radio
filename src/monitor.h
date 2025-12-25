@@ -18,7 +18,7 @@
 // Enlarge this if sample rates > 48 kHz are ever used
 #define BBSIZE (2*5760)
 struct session {
-  bool init;               // Fully initialized by first RTP packet
+  bool inuse;
   struct sockaddr_storage sender;
   char const *dest;
 

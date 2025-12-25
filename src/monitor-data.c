@@ -125,7 +125,7 @@ void *dataproc(void *arg){
       fprintf(stderr,"No room!!\n");
       continue;
     }
-    if(!sp->init){
+    if(!sp->inuse){
       // status reception doesn't write below this point
       if(Auto_position)
 	sp->pan = make_position(Position++);
@@ -138,7 +138,7 @@ void *dataproc(void *arg){
       sp->rtp_state.timestamp = sp->next_timestamp = pkt->rtp.timestamp;
       sp->rtp_state.seq = pkt->rtp.seq;
       sp->reset = true;
-      sp->init = true;
+      sp->inuse = true;
 
       if(pthread_create(&sp->task,NULL,decode_task,sp) == -1){
 	perror("pthread_create");
@@ -224,6 +224,7 @@ void decode_task_cleanup(void *arg){
   FREE(chan->spectrum.ring);
   FREE(sp->buffer);
   FREE(sp->bounce);
+  sp->inuse = false;
   memset((void *)sp,0,sizeof(*sp)); // blow it all away
 }
 
@@ -298,11 +299,31 @@ void *decode_task(void *arg){
       } // fall through
       // nothing usable on queue
       pthread_mutex_unlock(&sp->qmutex);
-      if(sp->running && conceal(sp) > 0)
-	break; // packet loss concealment generated
-      if(!sp->running) // conceal() may also have stopped the stream
-	timeout = (int64_t)BILLION/10; // timeout 100 ms when stopped
-
+      if(sp->running){
+	// How does our output queue look?
+	// wptr and rptr are in frames at DAC_samprate, typically 48 kHz
+	int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+	int64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
+	// Read and write pointers and sample rate  must be initialized to be useful
+	if(rptr == 0 || wptr == 0){
+	  // Shouldn't have been running in the first place
+	  sp->running = false;
+	  timeout = (int64_t)BILLION/10; // timeout 100 ms when stopped
+	}
+	// wptr and rptr are in frames at DAC_samprate, typically 48 kHz
+	int const quantum = atomic_load_explicit(&Callback_quantum,memory_order_relaxed);
+	int64_t margin = wptr - (rptr + sp->playout + quantum);
+	if(sp->muted)
+	  timeout = (int64_t)BILLION/10; // we don't care if we're losing data
+	else if(margin > 0)
+	  timeout = BILLION * margin / sp->samprate;	  // Playout queue is happy, we don't need to do anything right now
+	else {
+	  if(conceal(sp) > 0)
+	    break; // conceal generated, handle it
+	  // Too many PLCs generated, stream stopped
+	  timeout = (int64_t)BILLION/10; // timeout 100 ms when stopped
+	}
+      }
       // Sleep unil a packet arrives or time out
       impatient_wait(sp,timeout);
     } while(true);
@@ -359,7 +380,7 @@ bool kick_output(void){
       abort();
     }
     for(int i=0; i < NSESSIONS; i++){
-      if(!Sessions[i].init)
+      if(!Sessions[i].inuse)
 	continue;
       reset_playout(&Sessions[i]);
     }
@@ -547,25 +568,6 @@ static int conceal(struct session *sp){
   assert(sp != NULL);
   if(sp == NULL)
     return -1;
-  if(!sp->running)
-    return -1;
-  if(sp->muted)
-    return 0;  // Normal for our output to be stopped, since we're not writing to it
-  // How does our output queue look?
-  // wptr and rptr are in frames at DAC_samprate, typically 48 kHz
-  int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-  int64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
-  // Read and write pointers and sample rate  must be initialized to be useful
-  if(rptr == 0 || wptr == 0)
-    return -1;
-
-  // wptr and rptr are in frames at DAC_samprate, typically 48 kHz
-  int64_t margin = wptr - (rptr + sp->playout);
-  if(margin > 0){
-    // Playout queue is happy, we don't need to do anything right now
-    // If this isn't enough, increase the playout
-    return 0;
-  }
 
   // Time has run out, so we gotta do something; generate some PLC or silence
   int seq_diff = 0;

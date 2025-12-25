@@ -398,7 +398,9 @@ int main(int argc,char * const argv[]){
 		      NULL,
 		      &outputParameters,
 		      DAC_samprate,
-		      paFramesPerBufferUnspecified, // seems to be 31 on OSX
+
+		      //		      paFramesPerBufferUnspecified, // seems to be 31 on OSX
+		      480,
 		      //SAMPPCALLBACK,
 		      0,
 		      pa_callback,
@@ -449,7 +451,7 @@ void vote(void){
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < NSESSIONS; i++){
     struct session * const sp = &Sessions[i];
-    if(!sp->init || sp->muted || !sp->running) // No recent audio, skip
+    if(!sp->inuse || sp->muted || !sp->running) // No recent audio, skip
       continue;
 
     if(best == NULL || sp->snr > best->snr)
@@ -545,13 +547,13 @@ void *statproc(void *arg){
 
 // Look up session, or if it doesn't exist, create it.
 // Executes atomically
-struct session *lookup_or_create_session(const struct sockaddr_storage *sender,const uint32_t ssrc){
+struct session *lookup_or_create_session(struct sockaddr_storage const *sender,const uint32_t ssrc){
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < NSESSIONS; i++){
     struct session * const sp = Sessions + i;
-    if(!sp->init)
+    if(!sp->inuse)
       continue;
-    if(sp && sp->ssrc == ssrc
+    if(sp->ssrc == ssrc
        && address_match(sender,&sp->sender)
        //       && getportnumber(&sp->sender) == getportnumber(&sender)
        ){
@@ -563,16 +565,17 @@ struct session *lookup_or_create_session(const struct sockaddr_storage *sender,c
   struct session *sp = NULL;
   for(int i = 0; i < NSESSIONS; i++){
     sp = Sessions + i;
-    if(!sp->init)
+    if(!sp->inuse)
       break;
   }
-  sp->init = false; // Wait for first RTP packet to set the rest up
+  if(sp == Sessions + NSESSIONS)
+    return NULL;
   sp->ssrc = ssrc;
   memcpy(&sp->sender,sender,sizeof(sp->sender));
   pthread_cond_init(&sp->qcond,NULL);
   pthread_mutex_init(&sp->qmutex,NULL);
   pthread_mutex_unlock(&Sess_mutex);
-  return sp;
+  return sp; // caller will set sp->inuse
 }
 
 int close_session(struct session *sp){
@@ -587,9 +590,7 @@ int close_session(struct session *sp){
     Best_session = NULL;
 
   // Remove from table
-  sp->init = false;
   sp->terminate = true;
-
 
   pthread_mutex_unlock(&Sess_mutex); // Done modifying session table
   // Thread now cleans itself up
@@ -645,7 +646,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 
   for(int i=0; i < NSESSIONS; i++){
     struct session *sp = Sessions + i;
-    if(!sp->init || !sp->running)
+    if(!sp->inuse || !sp->running)
       continue;
 
     int64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
@@ -712,7 +713,7 @@ void *output_thread(void *p){
     int rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
     for(int i=0; i < NSESSIONS; i++){
       struct session *sp = Sessions + i;
-      if(!sp->init)
+      if(!sp->inuse)
 	continue;
 
       int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
