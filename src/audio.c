@@ -330,12 +330,20 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	  goto quit;	// too small for the smallest frame
 	chunk = Opus_blocksizes[si-1] * chan->output.samprate / 10000;
 
+	opus_int32 d;
+	d = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_APPLICATION(chan->opus.application));
+	if(d != OPUS_OK)
+	  fprintf(stderr,"opus set application %d (%s) failed, %d\n",chan->opus.application,
+		  opus_application_string(chan->opus.application),d);
+
+	assert(d == OPUS_OK);
+
 	// Opus says max possible packet size (on high fidelity audio) is 1275 bytes at 20 ms, which fits Ethernt
 	// But this could conceivably fragment
 	opus_int32 const room = (opus_int32)(sizeof(packet) - (dp-packet)); // Max # bytes in compressed output buffer
 	bytes = opus_encode_float(chan->opus.encoder,buf,chunk,dp,room); // Max # bytes in compressed output buffer
 	assert(bytes >= 0);
-	opus_int32 d;
+
 	opus_encoder_ctl(chan->opus.encoder,OPUS_GET_IN_DTX(&d));
 	if(d == 1)
 	  bytes = 0; // Suppress frame, but still increment timestamp
