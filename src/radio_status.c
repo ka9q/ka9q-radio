@@ -629,7 +629,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   encode_socket(&bp,STATUS_DEST_SOCKET,&chan->frontend->metadata_dest_socket);
   int64_t now = gps_time_ns();
   encode_int64(&bp,GPS_TIME,now);
-  encode_int64(&bp,INPUT_SAMPLES,frontend->samples);
+  encode_int64(&bp,INPUT_SAMPLES,chan->filter.out.sample_index);
   encode_int32(&bp,INPUT_SAMPRATE,(uint32_t)round(frontend->samprate)); // Already defined on the wire as integer Hz, shouldn't change now
   encode_int32(&bp,FE_ISREAL,frontend->isreal ? true : false);
   encode_double(&bp,CALIBRATE,frontend->calibrate);
