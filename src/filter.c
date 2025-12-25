@@ -613,6 +613,7 @@ int execute_filter_input(struct filter_in * const f){
   job->completion_mutex = &f->filter_mutex;
   job->completion_jobnum = &f->completed_jobs[job->jobnum % ND];
   job->completion_cond = &f->filter_cond;
+  f->samples_by_job[job->jobnum % ND] = f->sample_index;
   f->sample_index += f->ilen;
   job->terminate = false;
 
@@ -713,8 +714,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
 
   assert(m_fdomain != NULL); // Should always be master frequency data
 
-  // In spectrum mode we'll read directly from master. Don't forget the 3dB scale when the input is real
-
+  // In spectrum mode we'll read directly from the input queue. Don't forget the 3dB scale when the input is real
   slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
 
   if(slave->fdomain == NULL || slave->response == NULL)
