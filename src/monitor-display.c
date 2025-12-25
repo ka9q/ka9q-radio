@@ -197,7 +197,7 @@ static int scompare(void const *a, void const *b){
   if(s1->running){
     if(s2->running){
       // Both active. Fuzz needed because active sessions are updated when packets arrive
-      if(fabs(s1->active - s2->active) < 0.5) {
+      if(fabs(s1->active - s2->active) < 1.0) {
 	return s1->ssrc > s2->ssrc ? +1 : -1; // resolve ties by ssrc to stop rapid flipping
       } else if(s1->active > s2->active){
 	return -1; // s1 Longer active
@@ -228,11 +228,8 @@ static int tcompare(void const *a, void const *b){
   if(s2 == NULL || !s2->inuse) // second is empty or idle, put it at end
     return -1;
 
-#define FUZZ 1
-#ifdef FUZZ
-  if(fabs(s1->tot_active - s2->tot_active) < 0.5) // equal within margin
+  if(fabs(s1->tot_active - s2->tot_active) < 1.0) // equal within margin
     return s1->ssrc > s2->ssrc ? +1 : -1; // resolve ties by ssrc to stop rapid flipping
-#endif
   if(s1->tot_active > s2->tot_active)
     return -1;
   return +1;
@@ -960,15 +957,28 @@ static void process_keyboard(void){
     First_session = 0;
     break;
   case KEY_END: // last session
+    {
+      while(Current < NSESSIONS-1 && Sess_ptr[Current]->inuse)
+	Current++;
+      if(Current > First_session + Sessions_per_screen)
+	First_session = Current - Sessions_per_screen;
+    }
     First_session = max(0,NSESSIONS - Sessions_per_screen);
     break;
   case '\t':
-  case KEY_DOWN: // We'll clip this on the next iteration
+  case KEY_DOWN:
+    if(Current >= NSESSIONS-1 || !Sess_ptr[Current+1]->inuse)
+      break;
     Current++;
+    if(Current >= First_session + Sessions_per_screen)
+      First_session++;
     break;
   case KEY_BTAB:
   case KEY_UP:
-    Current--;
+    if(Current > 0)
+      Current--;
+    if(Current < First_session)
+      First_session--;
     break;
   default:
     serviced = false;
@@ -983,8 +993,8 @@ static void process_keyboard(void){
   switch(c){
   case 'U': // Unmute all sessions, resetting any that were muted
     for(int i = 0; i < NSESSIONS; i++){
-      struct session *sp = Sessions + i;
-      if(sp != NULL && sp->muted){
+      struct session *sp = Sess_ptr[i];
+      if(sp->inuse && sp->muted){
 	sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
 	sp->muted = false;
       }
@@ -992,32 +1002,32 @@ static void process_keyboard(void){
     break;
   case 'M': // Mute all sessions
     for(int i = 0; i < NSESSIONS; i++){
-      struct session *sp = Sessions + i;
-      if(sp != NULL)
+      struct session *sp = Sess_ptr[i];
+      if(sp->inuse)
 	sp->muted = true;
     }
     break;
   case 'N':
     Notch = true;
     for(int i=0; i < NSESSIONS; i++){
-      struct session *sp = Sessions + i;
-      if(sp != NULL){
+      struct session *sp = Sess_ptr[i];
+      if(sp->inuse){
 	sp->notch_enable = true;
       }
     }
     break;
   case 'R': // Reset all sessions
     for(int i=0; i < NSESSIONS;i++){
-      struct session *sp = Sessions + i;
-      if(sp != NULL)
+      struct session *sp = Sess_ptr[i];
+      if(sp->inuse)
 	sp->reset = true;
     }
     break;
   case 'F':
     Notch = false;
     for(int i=0; i < NSESSIONS; i++){
-      struct session *sp = Sessions + i;
-      if(sp != NULL)
+      struct session *sp = Sess_ptr[i];
+      if(sp->inuse)
 	sp->notch_enable = false;
     }
     break;
@@ -1034,7 +1044,7 @@ static void process_keyboard(void){
   // Do this last
   serviced = true;
 
-  struct session *sp = Sessions + Current;
+  struct session *sp = Sess_ptr[Current];
   if(!sp->inuse){
     // Current index not valid
     beep();

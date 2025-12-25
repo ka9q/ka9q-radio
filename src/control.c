@@ -1672,7 +1672,7 @@ static void display_output(WINDOW *w,struct channel const *chan){
       pprintw(w,row++,col,"Opus application","%s",appl);
     pprintw(w,row++,col,"Opus fec","%d%%",chan->opus.fec);
     int bw = opus_bandwidth(NULL,chan->opus.bandwidth);
-    pprintw(w,row++,col,"Opus bw","%d kHz",bw);
+    pprintw(w,row++,col,"Opus bw","%d kHz",bw/1000);
   }
   box(w,0,0);
   mvwaddstr(w,0,1,"RTP output");
