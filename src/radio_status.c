@@ -522,13 +522,19 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case OPUS_APPLICATION:
       {
 	int x = decode_int(cp,optlen);
-	if(x == OPUS_APPLICATION_AUDIO || x == OPUS_APPLICATION_VOIP || x == OPUS_APPLICATION_RESTRICTED_LOWDELAY
-#if defined(OPUS_APPLICATION_RESTRICTED_SILK) && defined(OPUS_APPLICATION_RESTRICTED_CELT)
-	   // Unclear if these are actually supported in Opus 1.6
-	   || x == OPUS_APPLICATION_RESTRICTED_SILK || x == OPUS_APPLICATION_RESTRICTED_CELT
-#endif
-        )
-	  chan->opus.application = x;
+	if(x == chan->opus.application)
+	  break; // no change
+	if(x == OPUS_APPLICATION_RESTRICTED_LOWDELAY){
+	    opus_encoder_ctl(chan->opus.encoder,OPUS_RESET_STATE); // needs reset for this one
+	    chan->opus.application = x; // it's valid
+	    break;
+	}
+	for(int i=0; Opus_application[i].value != -1; i++){
+	  if(Opus_application[i].value == x){
+	    chan->opus.application = x; // it's valid
+	    break;
+	  }
+	}
       }
       break;
     case SETOPTS:
