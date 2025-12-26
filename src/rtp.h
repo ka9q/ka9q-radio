@@ -12,6 +12,12 @@
 #define RTP_VERS 2U
 #define RTP_MARKER 0x80  // Marker flag in mpt field
 
+#define OPUS_SAMPRATE (48000)
+
+// Allowable Opus block durations, millisec * 10
+extern int Opus_blocksizes[];
+extern int Opus_samprates[];
+
 enum encoding {
   NO_ENCODING = 0,
   S16LE,
@@ -137,7 +143,6 @@ extern struct string_table Opus_application[];
 
 int opus_bandwidth(char const **str,int code);
 char const *opus_application_string(int);
-
-
+int opus_bandwidth_to_code(int bw);
 
 #endif

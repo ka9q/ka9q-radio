@@ -240,28 +240,33 @@ bool decode_bool(uint8_t const *cp,int len){
 int decode_int(uint8_t const *cp,int len){
   return decode_int64(cp,len) & UINT_MAX; // mask to the size of an int
 }
-
-
-// Will convert a double and cast to float if 8 bytes long
-float decode_float(uint8_t const *cp,int len){
+// Will recognize a double as long as no more than 3 of the leading bytes are zeroes and are compressed away
+// Note this returns double.
+// The only compressed doubles that could masquerade as floats are:
+// +0, which encodes into 0 bytes (same as a zero integer) as an important special case.
+// or the smallest positive denormals (biased 10-bit exponent == 0 *and* the top 21 bits of the mantissa
+// (Recall denormals are where the hidden bit to the left of the mantissa is a 0 instead of the usual implied 1)
+// If misinterpreted as a compressed float the rightmost 32 bits of the double's mantissa could re-emerge as a totally
+// a bogus 32-bit float that might be very large
+// Denormals aren't very common but still it's best to be careful
+double decode_float(uint8_t const *cp,int len){
   if(len == 0)
     return 0;
 
-  if(len == sizeof(double))
-    return (float)decode_double(cp,len);
+  if(len > (int)sizeof(float))
+    return decode_double(cp,len); // seems safe, just in case it's really a double
 
   union result r;
   r.ll = decode_int64(cp,len);
   return r.f;
 }
 
-// Will automatically decode a float if the arg is only 4 bytes
+// No float can masquerade as a double except as a very small positive denormal
+// even if the float was very large to start with
+// So always interpret as a possibly compressed double
 double decode_double(uint8_t const *cp,int len){
   if(len == 0)
     return 0;
-
-  if(len == sizeof(float))
-    return (double)decode_float(cp,len);
 
   union result r;
   r.ll = decode_int64(cp,len);

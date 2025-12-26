@@ -72,7 +72,6 @@ Command-line options:
 // size of stdio buffer for disk I/O. 8K is probably the default, but we have this for possible tuning
 #define BUFFERSIZE (8192) // probably the same as default
 #define RESEQ 64 // size of resequence queue. Probably excessive; WiFi reordering is rarely more than 4-5 packets
-#define OPUS_SAMPRATE 48000 // Opus always operates at 48 kHz virtual sample rate
 
 // Simplified .wav file header
 // http://soundfile.sapp.org/doc/WaveFormat/

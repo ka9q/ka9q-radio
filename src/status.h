@@ -81,7 +81,7 @@ enum status_type {
 
   // Demodulation configuration
   DEMOD_TYPE, // 0 = linear (default), 1 = FM, 2 = WFM/Stereo, 3 = spectrum
-  OUTPUT_CHANNELS, // 1 or 2 in Linear, otherwise 1
+  OUTPUT_CHANNELS, // 1 or 2 in Linear and WFM, 1 in FM
   INDEPENDENT_SIDEBAND, // Linear only
   PLL_ENABLE,
   PLL_LOCK,       // Linear PLL
@@ -180,7 +180,7 @@ uint8_t decode_int8(uint8_t const *,int);
 bool decode_bool(uint8_t const *,int);
 int decode_int(uint8_t const *,int);
 
-float decode_float(uint8_t const *,int);
+double decode_float(uint8_t const *,int);
 double decode_double(uint8_t const *,int);
 struct sockaddr *decode_socket(void *,uint8_t const *,int);
 struct sockaddr *decode_local_socket(void *,uint8_t const *,int);

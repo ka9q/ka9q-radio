@@ -90,22 +90,25 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       frontend->M = decode_int(cp,optlen);
       break;
     case LOW_EDGE:
-      channel->filter.min_IF = decode_double(cp,optlen);
+      channel->filter.min_IF = decode_float(cp,optlen);
       break;
     case HIGH_EDGE:
-      channel->filter.max_IF = decode_double(cp,optlen);
+      channel->filter.max_IF = decode_float(cp,optlen);
       break;
     case FE_LOW_EDGE:
-      frontend->min_IF = decode_double(cp,optlen);
+      frontend->min_IF = decode_float(cp,optlen);
       break;
     case FE_HIGH_EDGE:
-      frontend->max_IF = decode_double(cp,optlen);
+      frontend->max_IF = decode_float(cp,optlen);
       break;
     case FE_ISREAL:
       frontend->isreal = decode_bool(cp,optlen);
       break;
     case AD_BITS_PER_SAMPLE:
       frontend->bitspersample = decode_int(cp,optlen);
+      break;
+    case CALIBRATE:
+      frontend->calibrate = decode_double(cp,optlen);
       break;
     case IF_GAIN:
       frontend->if_gain = decode_int8(cp,optlen);
@@ -117,43 +120,43 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       frontend->mixer_gain = decode_int8(cp,optlen);
       break;
     case KAISER_BETA:
-      channel->filter.kaiser_beta = decode_double(cp,optlen);
+      channel->filter.kaiser_beta = decode_float(cp,optlen);
       break;
     case FILTER_DROPS:
       channel->filter.out.block_drops = decode_int(cp,optlen);
       break;
     case IF_POWER:
-      frontend->if_power = dB2power(decode_double(cp,optlen));
+      frontend->if_power = dB2power(decode_float(cp,optlen));
       break;
     case BASEBAND_POWER:
-      channel->sig.bb_power = dB2power(decode_double(cp,optlen)); // dB -> power
+      channel->sig.bb_power = dB2power(decode_float(cp,optlen)); // dB -> power
       break;
     case NOISE_DENSITY:
-      channel->sig.n0 = dB2power(decode_double(cp,optlen));
+      channel->sig.n0 = dB2power(decode_float(cp,optlen));
       break;
     case PLL_SNR:
-      channel->pll.snr = dB2power(decode_double(cp,optlen));
+      channel->pll.snr = dB2power(decode_float(cp,optlen));
       break;
     case FM_SNR:
-      channel->fm.snr = dB2power(decode_double(cp,optlen));
+      channel->fm.snr = dB2power(decode_float(cp,optlen));
       break;
     case FREQ_OFFSET:
-      channel->sig.foffset = decode_double(cp,optlen);
+      channel->sig.foffset = decode_float(cp,optlen);
       break;
     case PEAK_DEVIATION:
-      channel->fm.pdeviation = decode_double(cp,optlen);
+      channel->fm.pdeviation = decode_float(cp,optlen);
       break;
     case PLL_LOCK:
       channel->pll.lock = decode_bool(cp,optlen);
       break;
     case PLL_BW:
-      channel->pll.loop_bw = decode_double(cp,optlen);
+      channel->pll.loop_bw = decode_float(cp,optlen);
       break;
     case PLL_SQUARE:
       channel->pll.square = decode_bool(cp,optlen);
       break;
     case PLL_PHASE:
-      channel->pll.cphase = decode_double(cp,optlen);
+      channel->pll.cphase = decode_float(cp,optlen);
       break;
     case PLL_WRAPS:
       channel->pll.rotations = (int64_t)decode_int64(cp,optlen);
@@ -165,7 +168,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->snr_squelch_enable = decode_bool(cp,optlen);
       break;
     case OUTPUT_LEVEL:
-      channel->output.power = dB2power(decode_double(cp,optlen));
+      channel->output.power = dB2power(decode_float(cp,optlen));
       break;
     case OUTPUT_SAMPLES:
       channel->output.samples = decode_int64(cp,optlen);
@@ -207,49 +210,49 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->pll.enable = decode_bool(cp,optlen);
       break;
     case GAIN:              // dB to voltage
-      channel->output.gain = dB2voltage(decode_double(cp,optlen));
+      channel->output.gain = dB2voltage(decode_float(cp,optlen));
       break;
     case AGC_ENABLE:
       channel->linear.agc = decode_bool(cp,optlen);
       break;
     case HEADROOM:          // db to voltage
-      channel->output.headroom = dB2voltage(decode_double(cp,optlen));
+      channel->output.headroom = dB2voltage(decode_float(cp,optlen));
       break;
     case AGC_HANGTIME:      // s to samples
-      channel->linear.hangtime = decode_double(cp,optlen);
+      channel->linear.hangtime = decode_float(cp,optlen);
       break;
     case AGC_RECOVERY_RATE: // dB/s to dB/sample to voltage/sample
-      channel->linear.recovery_rate = dB2voltage(decode_double(cp,optlen));
+      channel->linear.recovery_rate = dB2voltage(decode_float(cp,optlen));
       break;
     case AGC_THRESHOLD:   // dB to voltage
-      channel->linear.threshold = dB2voltage(decode_double(cp,optlen));
+      channel->linear.threshold = dB2voltage(decode_float(cp,optlen));
       break;
     case TP1: // Test point
-      channel->tp1 = decode_double(cp,optlen);
+      channel->tp1 = decode_float(cp,optlen);
       break;
     case TP2:
-      channel->tp2 = decode_double(cp,optlen);
+      channel->tp2 = decode_float(cp,optlen);
       break;
     case SQUELCH_OPEN:
-      channel->squelch_open = dB2power(decode_double(cp,optlen));
+      channel->squelch_open = dB2power(decode_float(cp,optlen));
       break;
     case SQUELCH_CLOSE:
-      channel->squelch_close = dB2power(decode_double(cp,optlen));
+      channel->squelch_close = dB2power(decode_float(cp,optlen));
       break;
     case DEEMPH_GAIN:
-      channel->fm.gain = decode_double(cp,optlen);
+      channel->fm.gain = decode_float(cp,optlen);
       break;
     case DEEMPH_TC:
-      channel->fm.rate = 1e6*decode_double(cp,optlen);
+      channel->fm.rate = 1e6*decode_float(cp,optlen);
       break;
     case PL_TONE:
-      channel->fm.tone_freq = decode_double(cp,optlen);
+      channel->fm.tone_freq = decode_float(cp,optlen);
       break;
     case PL_DEVIATION:
-      channel->fm.tone_deviation = decode_double(cp,optlen);
+      channel->fm.tone_deviation = decode_float(cp,optlen);
       break;
     case RESOLUTION_BW:
-      channel->spectrum.bin_bw = decode_double(cp,optlen);
+      channel->spectrum.bin_bw = decode_float(cp,optlen);
       break;
     case SPECTRUM_AVG:
       channel->spectrum.fft_avg = decode_int(cp,optlen);
@@ -258,13 +261,13 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->spectrum.bin_count = decode_int(cp,optlen);
       break;
     case CROSSOVER:
-      channel->spectrum.crossover = decode_double(cp,optlen);
+      channel->spectrum.crossover = decode_float(cp,optlen);
       break;
     case WINDOW_TYPE:
       channel->spectrum.window_type = decode_int(cp,optlen);
       break;
     case SPECTRUM_SHAPE:
-      channel->spectrum.shape = decode_double(cp,optlen);
+      channel->spectrum.shape = decode_float(cp,optlen);
       break;
     case SPECTRUM_FFT_N:
       channel->spectrum.fft_n = decode_int(cp,optlen);
@@ -275,13 +278,13 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       frontend->rf_agc = decode_int(cp,optlen);
       break;
     case RF_GAIN:
-      frontend->rf_gain = decode_double(cp,optlen);
+      frontend->rf_gain = decode_float(cp,optlen);
       break;
     case RF_ATTEN:
-      frontend->rf_atten = decode_double(cp,optlen);
+      frontend->rf_atten = decode_float(cp,optlen);
       break;
     case RF_LEVEL_CAL:
-      frontend->rf_level_cal = decode_double(cp,optlen);
+      frontend->rf_level_cal = decode_float(cp,optlen);
       break;
     case BLOCKS_SINCE_POLL:
       channel->status.blocks_since_poll = decode_int64(cp,optlen);
@@ -336,12 +339,12 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->filter2.in.impulse_length = decode_int(cp,optlen);
       break;
     case FILTER2_KAISER_BETA:
-      channel->filter2.kaiser_beta = decode_double(cp,optlen);
+      channel->filter2.kaiser_beta = decode_float(cp,optlen);
       break;
     case NOISE_BW:
-      channel->spectrum.noise_bw = decode_double(cp,optlen);
+      channel->spectrum.noise_bw = decode_float(cp,optlen);
       break;
-    default: // ignore others
+    default: // ignore otherst
       break;
     }
     cp += optlen;

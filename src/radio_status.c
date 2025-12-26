@@ -230,7 +230,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case OUTPUT_SAMPRATE:
       // Restart the demodulator to recalculate filters, etc
       {
-	unsigned int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
+	int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
 	// If using Opus, ignore unsupported sample rates
 	if(new_sample_rate != chan->output.samprate){
 	  if(chan->output.encoding != OPUS || new_sample_rate == 48000 || new_sample_rate == 24000 || new_sample_rate == 16000 || new_sample_rate == 12000 || new_sample_rate == 8000){
@@ -283,7 +283,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case LOW_EDGE: // Hz
       {
-	double const f = decode_double(cp,optlen);
+	double const f = decode_float(cp,optlen);
 	if(isfinite(f) && f != chan->filter.min_IF && f <= chan->filter.max_IF){
 	  chan->filter.min_IF = max(f,-(double)chan->output.samprate/2);
 	  new_filter_needed = true;
@@ -292,7 +292,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case HIGH_EDGE: // Hz
       {
-	double const f = decode_double(cp,optlen);
+	double const f = decode_float(cp,optlen);
 	if(isfinite(f) && f != chan->filter.max_IF && f >= chan->filter.min_IF){
 	  chan->filter.max_IF = min(f,(double)chan->output.samprate/2);
 	  new_filter_needed = true;
@@ -301,7 +301,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
       case KAISER_BETA: // dimensionless, always 0 or positive
         {
-	  double const f = fabs(decode_double(cp,optlen));
+	  double const f = fabs(decode_float(cp,optlen));
 	  if(isfinite(f) && chan->filter.kaiser_beta != f){
 	    chan->filter.kaiser_beta = f;
 	    new_filter_needed = true;
@@ -310,7 +310,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
       case FILTER2_KAISER_BETA: // dimensionless, always 0 or positive
         {
-	  double const f = fabs(decode_double(cp,optlen));
+	  double const f = fabs(decode_float(cp,optlen));
 	  if(isfinite(f) && chan->filter2.kaiser_beta != f){
 	    chan->filter2.kaiser_beta = f;
 	    new_filter_needed = true;
@@ -342,7 +342,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case HEADROOM: // dB -> voltage, always negative dB
       {
-	double const f = decode_double(cp,optlen);
+	double const f = decode_float(cp,optlen);
 	if(isfinite(f))
 	  chan->output.headroom = dB2voltage(-fabs(f));
       }
@@ -352,7 +352,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case GAIN:
       {
-	double const f = decode_double(cp,optlen); // can be -, 0, +
+	double const f = decode_float(cp,optlen); // can be -, 0, +
 	if(isfinite(f)){
 	  chan->output.gain = dB2voltage(f); // -Inf = 0 gain is OK
 	  chan->linear.agc = false; // Doesn't make sense to change gain and then have the AGC change it again
@@ -361,21 +361,21 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case AGC_HANGTIME: // seconds
       {
-	double const f = decode_double(cp,optlen);
+	double const f = decode_float(cp,optlen);
 	if(isfinite(f))
 	  chan->linear.hangtime = fabs(f);
       }
       break;
     case AGC_RECOVERY_RATE: // dB/sec -> amplitude / block times, always positive
       {
-	double const f = decode_double(cp,optlen);
+	double const f = decode_float(cp,optlen);
 	if(isfinite(f))
 	  chan->linear.recovery_rate = dB2voltage(fabs(f));
       }
       break;
     case AGC_THRESHOLD: // dB -> amplitude
       {
-	double const f = decode_double(cp,optlen);
+	double const f = decode_float(cp,optlen);
 	if(isfinite(f))
 	  chan->linear.threshold = dB2voltage(-fabs(f));
       }
@@ -385,7 +385,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case PLL_BW:
       {
-	double const f = decode_double(cp,optlen); // Always 0 or positive
+	double const f = decode_float(cp,optlen); // Always 0 or positive
 	if(isfinite(f))
 	  chan->pll.loop_bw = fabs(f);
       }
@@ -401,7 +401,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case OUTPUT_CHANNELS: // int
       {
-	unsigned int const i = decode_int(cp,optlen);
+	int const i = decode_int(cp,optlen);
 	if(i != 1 && i != 2)
 	  break; // invalid
 
@@ -417,21 +417,21 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case SQUELCH_OPEN:
       {
-	double const x = decode_double(cp,optlen);
+	double const x = decode_float(cp,optlen);
 	if(isfinite(x))
 	  chan->squelch_open = dB2power(x);
       }
       break;
     case SQUELCH_CLOSE:
       {
-        double const x = decode_double(cp,optlen);
+        double const x = decode_float(cp,optlen);
 	if(isfinite(x))
 	  chan->squelch_close = dB2power(x);
       }
       break;
     case RESOLUTION_BW:
       {
-	double const x = fabs(decode_double(cp,optlen));
+	double const x = fabs(decode_float(cp,optlen));
 	if(isfinite(x) && x != chan->spectrum.bin_bw){
 	  if(Verbose > 1)
 	    fprintf(stderr,"bin bw %f -> %f\n",chan->spectrum.bin_bw,x);
@@ -455,7 +455,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case CROSSOVER:
       {
-	double const x = fabs(decode_double(cp,optlen));
+	double const x = fabs(decode_float(cp,optlen));
 	if(isfinite(x) && x != chan->spectrum.crossover){
 	  chan->spectrum.crossover = x;
 	  if(chan->demod_type == SPECT_DEMOD)
@@ -475,7 +475,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case SPECTRUM_SHAPE: // Kaiser or gaussian
       {
-	double const x = fabs(decode_double(cp,optlen)); // always positive
+	double const x = fabs(decode_float(cp,optlen)); // always positive
 	if(isfinite(x) && x != chan->spectrum.shape){
 	  chan->spectrum.shape = x;
 	  restart_needed = true;
@@ -484,18 +484,16 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case SPECTRUM_AVG:
       {
-	unsigned x = abs(decode_int(cp,optlen));
+	int x = abs(decode_int(cp,optlen));
 	if(x == 0)
 	  x = 1; // Minimum 1
-	chan->spectrum.fft_avg = x;
+	if(x != chan->spectrum.fft_avg)
+	  chan->spectrum.fft_avg = x;
 	restart_needed = true;
       }
       break;
     case STATUS_INTERVAL:
-      {
-	int const x = abs(decode_int(cp,optlen));
-	chan->status.output_interval = x;
-      }
+      chan->status.output_interval = abs(decode_int(cp,optlen));
       break;
     case OUTPUT_ENCODING:
       {
@@ -524,17 +522,26 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	int x = decode_int(cp,optlen);
 	if(x == chan->opus.application)
 	  break; // no change
-	if(x == OPUS_APPLICATION_RESTRICTED_LOWDELAY){
-	    opus_encoder_ctl(chan->opus.encoder,OPUS_RESET_STATE); // needs reset for this one
-	    chan->opus.application = x; // it's valid
-	    break;
-	}
-	for(int i=0; Opus_application[i].value != -1; i++){
+	int i;
+	for(i=0; Opus_application[i].value != -1; i++){
 	  if(Opus_application[i].value == x){
-	    chan->opus.application = x; // it's valid
 	    break;
 	  }
 	}
+	if(Opus_application[i].value == x){
+	  // Apparently this requires an encoder restart; the opus_encoder_ctl() seems to fail
+	  opus_encoder_destroy(chan->opus.encoder);
+	  chan->opus.encoder = NULL;
+	  chan->opus.application = x;
+	}
+#if 0
+	if(x == OPUS_APPLICATION_RESTRICTED_LOWDELAY){
+	  if(chan->opus.encoder)
+	    opus_encoder_ctl(chan->opus.encoder,OPUS_RESET_STATE); // needs reset for this one
+	  chan->opus.application = x; // it's valid
+	  break;
+	}
+#endif
       }
       break;
     case SETOPTS:
@@ -551,32 +558,30 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case RF_ATTEN:
       {
-	double x = decode_double(cp,optlen);
+	double x = decode_float(cp,optlen);
 	if(isfinite(x) && chan->frontend->atten != NULL)
 	  (*chan->frontend->atten)(chan->frontend,x);
       }
       break;
     case RF_GAIN:
       {
-	double x = decode_double(cp,optlen);
+	double x = decode_float(cp,optlen);
 	if(isfinite(x) && chan->frontend->gain != NULL)
 	  (*chan->frontend->gain)(chan->frontend,x);
       }
       break;
     case MINPACKET:
       {
-	unsigned int i = decode_int(cp,optlen);
-	if(i <= 4 && i != chan->output.minpacket){
+	int i = decode_int(cp,optlen);
+	if(i >= 0 && i <= 4 && i != chan->output.minpacket){
 	  chan->output.minpacket = i;
 	}
       }
       break;
     case FILTER2:
       {
-	unsigned int i = decode_int(cp,optlen);
-	if(i > 10)
-	  i = 10;
-	if(i != chan->filter2.blocking){
+	int i = decode_int(cp,optlen);
+	if(i >= 0 && i < 10 && i != chan->filter2.blocking){
 	  chan->filter2.blocking = i;
 	  new_filter_needed = true;
 	}

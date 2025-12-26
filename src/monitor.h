@@ -8,7 +8,6 @@
 
 #define N_tones 55
 
-#define OPUS_SAMPRATE (48000)
 // Add two numbers modulo the buffer size
 // Used frequently for writin into output buffers with non-wrapping counters
 #define BINDEX(a,b) (((a) + (b)) & (BUFFERSIZE - 1))

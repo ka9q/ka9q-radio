@@ -32,14 +32,6 @@ bool TempSendFailure = false;
 
 int Fec_percent = 0;               // Use forward error correction percentage, 0-100
 
-// Allowable Opus block durations, millisec * 10
-int Opus_blocksizes[] = {
-  25, 50, 100, 200, 400, 600, 800, 1000, 1200,
-};
-unsigned int Opus_samprates[] = {
-  8000, 12000, 16000, 24000, 48000,
-};
-
 static atomic_flag Opus_version_logged = ATOMIC_FLAG_INIT;
 
 
@@ -145,29 +137,28 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 
   if(chan->output.encoding == OPUS){
     if(chan->opus.encoder != NULL){
-      // Encoder already created; see if the parameters have changed
       // There doesn't seem to be any way to read back the channel count, so we save that explicitly
       // If the sample rate changes we'll get restarted anyway, so this test isn't really needed. But do it anyway.
       opus_int32 s;
-      int ret = opus_encoder_ctl(chan->opus.encoder,OPUS_GET_SAMPLE_RATE(&s));
-      if(ret != OPUS_OK || (unsigned)s != chan->output.samprate || chan->opus.channels != chan->output.channels){
+      opus_int32 ret = opus_encoder_ctl(chan->opus.encoder,OPUS_GET_SAMPLE_RATE(&s));
+      if(ret != OPUS_OK || s != chan->output.samprate || chan->opus.channels != chan->output.channels){
 	opus_encoder_destroy(chan->opus.encoder);
 	chan->opus.encoder = NULL;
 	chan->opus.channels = 0;
-      } else if(marker)
+      } else if(marker) {
 	// Reset existing encoder after silence period
 	opus_encoder_ctl(chan->opus.encoder,OPUS_RESET_STATE);
+      }
     }
     int error = OPUS_OK;
     if(chan->opus.encoder == NULL){
       // Opus only supports a specific set of sample rates
       int si;
-      int const nrates = sizeof (Opus_samprates) / sizeof (Opus_samprates[0]);
-      for(si = 0; si < nrates; si++){
+      for(si = 0; Opus_samprates[si] != -1; si++){
 	if(chan->output.samprate == Opus_samprates[si])
 	  break;
       }
-      if(si == nrates){
+      if(Opus_samprates[si] == -1){
 	// Simply drop until somebody fixes it
 	chan->output.silent = true;
 	chan->output.rp = chan->output.wp;
@@ -209,13 +200,13 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 
     // Set the encoder bandwidth automatically according to the filter bandwidth
     // Questionable how much this helps, but it doesn't seem to hurt
-    int opus_bandwidth = OPUS_BANDWIDTH_FULLBAND;
+    int opus_bw_code = OPUS_BANDWIDTH_FULLBAND;
     switch(chan->demod_type){
     case FM_DEMOD:
       // NBFM uses 24 ks/s to handle the 16 kHz IF bandwidth; the baseband bandwidth is really only 5 kHz
       // NBFM should probably use a sample rate converter to save output bits
       if(chan->output.samprate <= 24000)
-	opus_bandwidth = OPUS_BANDWIDTH_MEDIUMBAND;
+	opus_bw_code = OPUS_BANDWIDTH_MEDIUMBAND;
       break;
     case LINEAR_DEMOD:
       {
@@ -225,23 +216,14 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	  filter_bandwidth = max(fabs(chan->filter2.low),fabs(chan->filter2.high));
 	else
 	  filter_bandwidth = max(fabs(chan->filter.min_IF),fabs(chan->filter.max_IF));
-	if(filter_bandwidth <= 4000)
-	  opus_bandwidth = OPUS_BANDWIDTH_NARROWBAND;
-	else if(filter_bandwidth <= 6000)
-	  opus_bandwidth = OPUS_BANDWIDTH_MEDIUMBAND;
-	else if(filter_bandwidth <= 8000)
-	  opus_bandwidth = OPUS_BANDWIDTH_WIDEBAND;
-	else if(filter_bandwidth <= 12000)
-	  opus_bandwidth = OPUS_BANDWIDTH_SUPERWIDEBAND;
-	else
-	  opus_bandwidth = OPUS_BANDWIDTH_FULLBAND;
+	opus_bw_code = opus_bandwidth_to_code(filter_bandwidth);
       }
       break;
     default: // Just use fullband for WFM
       break;
     }
-    error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_MAX_BANDWIDTH(opus_bandwidth));
-    chan->opus.bandwidth = opus_bandwidth;
+    error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_MAX_BANDWIDTH(opus_bw_code));
+    chan->opus.bandwidth = opus_bw_code;
     assert(error == OPUS_OK);
 
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_DTX(chan->opus.dtx));
@@ -269,7 +251,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
   int available_frames = available_samples / chan->output.channels;
   int frames_sent = 0;
   while(available_frames >= min_frames_per_pkt){
-    unsigned int chunk = min(max_frames_per_pkt,available_frames);
+    int chunk = min(max_frames_per_pkt,available_frames);
     rtp.timestamp = chan->output.rtp.timestamp;
     rtp.seq = chan->output.rtp.seq;
     rtp.marker = marker;
@@ -282,7 +264,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     case S16BE:
       {
 	int16_t *pcm_buf = (int16_t *)dp;
-	for(unsigned int i=0; i < chunk * chan->output.channels; i++)
+	for(int i=0; i < chunk * chan->output.channels; i++)
 	  *pcm_buf++ = htons(scaleclip(buf[i])); // Byte swap
 
 	chan->output.rtp.timestamp += chunk;
@@ -292,7 +274,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     case S16LE:
       {
 	int16_t *pcm_buf = (int16_t *)dp;
-	for(unsigned int i=0; i < chunk * chan->output.channels; i++)
+	for(int i=0; i < chunk * chan->output.channels; i++)
 	  *pcm_buf++ = scaleclip(buf[i]); // No byte swap
 
 	chan->output.rtp.timestamp += chunk;
@@ -309,7 +291,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     case F16LE:
       {
 	float16_t *pcm_buf = (float16_t *)dp;
-	for(unsigned int i=0; i < chunk * chan->output.channels; i++)
+	for(int i=0; i < chunk * chan->output.channels; i++)
 	  *pcm_buf++ = (float16_t)buf[i];
 
 	chan->output.rtp.timestamp += chunk;
@@ -320,35 +302,27 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     case OPUS:
       {
 	// Enforce supported Opus packet sizes
-	size_t const nsizes = sizeof (Opus_blocksizes) / sizeof(Opus_blocksizes[0]);
 	size_t si;
-	for(si = 0; si < nsizes; si++){
+	for(si = 0; Opus_blocksizes[si] != -1; si++){
 	  if(chunk < Opus_blocksizes[si] * chan->output.samprate / 10000)
 	    break;
 	}
 	if(si == 0)
 	  goto quit;	// too small for the smallest frame
+
 	chunk = Opus_blocksizes[si-1] * chan->output.samprate / 10000;
-
-	opus_int32 d;
-	d = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_APPLICATION(chan->opus.application));
-	if(d != OPUS_OK)
-	  fprintf(stderr,"opus set application %d (%s) failed, %d\n",chan->opus.application,
-		  opus_application_string(chan->opus.application),d);
-
-	assert(d == OPUS_OK);
-
 	// Opus says max possible packet size (on high fidelity audio) is 1275 bytes at 20 ms, which fits Ethernet
 	// But this could conceivably fragment
 	opus_int32 const room = (opus_int32)(sizeof(packet) - (dp-packet)); // Max # bytes in compressed output buffer
 	bytes = opus_encode_float(chan->opus.encoder,buf,chunk,dp,room); // Max # bytes in compressed output buffer
 	assert(bytes >= 0);
 
+	opus_int32 d;
 	opus_encoder_ctl(chan->opus.encoder,OPUS_GET_IN_DTX(&d));
 	if(d == 1)
 	  bytes = 0; // Suppress frame, but still increment timestamp
 
-	chan->output.rtp.timestamp += chunk * 48000 / chan->output.samprate; // Always increases at 48 kHz
+	chan->output.rtp.timestamp += chunk * OPUS_SAMPRATE / chan->output.samprate; // Always increases at 48 kHz
       }
       break;
     default:

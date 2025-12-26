@@ -185,7 +185,7 @@ struct channel {
     double high;
     double kaiser_beta;
     bool isb;
-    unsigned int blocking;       // Ratio of output to input blocksize; 0 = filter2 disabled
+    int blocking;       // Ratio of output to input blocksize; 0 = filter2 disabled
   } filter2;
 
   enum demod_type demod_type;  // Index into demodulator table (Linear, FM, FM Stereo, Spectrum)
@@ -263,7 +263,7 @@ struct channel {
 
   // Output
   struct {
-    unsigned int samprate;      // Audio D/A sample rate
+    int samprate;      // Audio D/A sample rate
 
     double headroom;    // Audio level headroom, amplitude ratio (settable)
     // RTP network streaming
@@ -274,7 +274,7 @@ struct channel {
     struct sockaddr dest_socket;      // Dest of our data output (typically multicast)
     char dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
 
-    unsigned int channels;   // 1 = mono, 2 = stereo (settable)
+    int channels;   // 1 = mono, 2 = stereo (settable)
     double power;   // Output power
 
     double deemph_state_left;
@@ -285,7 +285,7 @@ struct channel {
     float *queue; // Mirrored ring buffer
     size_t queue_size; // Size of allocation, in floats
     unsigned wp,rp; // Queue write and read indices
-    unsigned minpacket;  // minimum output packet size in blocks (0-4)
+    int minpacket;  // minimum output packet size in blocks (0-4)
                          // i.e, no minimum or at least 20ms, 40ms, 60ms or 80ms /packet for 20ms blocktime
     uint64_t errors;      // Count of errors with sendto()
     double gain;        // Audio gain to normalize amplitude
@@ -295,8 +295,8 @@ struct channel {
 
   struct {
     OpusEncoder *encoder;
-    unsigned int channels;
-    unsigned int bitrate;
+    int channels;
+    int bitrate;
     int bandwidth;
     int application;  // Opus application setting (OPUS_APPLICATION_AUDIO, etc)
     int fec;

@@ -1661,7 +1661,7 @@ static void display_output(WINDOW *w,struct channel const *chan){
   pprintw(w,row++,col,"Channels","%d",chan->output.channels);
   pprintw(w,row++,col,"Packets","%'lld",(long long)chan->output.rtp.packets);
   pprintw(w,row++,col,"Packet buffers","%d",chan->output.minpacket);
-  if(chan->output.encoding == OPUS){
+  if(chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP){
     if(chan->opus.bitrate != 0)
       pprintw(w,row++,col,"Opus bitrate","%'d",chan->opus.bitrate);
     else

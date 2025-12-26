@@ -385,3 +385,24 @@ int opus_bandwidth(char const **str,int code){
     *str = s;
   return bw;
 }
+// Allowable Opus block durations, millisec * 10
+int Opus_blocksizes[] = {
+  25, 50, 100, 200, 400, 600, 800, 1000, 1200, -1,
+};
+int Opus_samprates[] = {
+  8000, 12000, 16000, 24000, 48000, -1,
+};
+
+// Return slowest bandwidth code that can support the specified bandwidth
+int opus_bandwidth_to_code(int bw){
+  if(bw <= 4000)
+    return OPUS_BANDWIDTH_NARROWBAND;
+  else if(bw <= 6000)
+    return OPUS_BANDWIDTH_MEDIUMBAND;
+  else if(bw <= 8000)
+    return OPUS_BANDWIDTH_WIDEBAND;
+  else if(bw <= 12000)
+    return OPUS_BANDWIDTH_SUPERWIDEBAND;
+  else
+    return OPUS_BANDWIDTH_FULLBAND;
+}
