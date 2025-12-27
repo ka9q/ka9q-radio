@@ -1881,8 +1881,8 @@ static int send_poll(int ssrc){
   *bp++ = 1; // Command
 
   uint32_t tag = (uint32_t)random();
-  encode_int(&bp,COMMAND_TAG,tag);
   encode_int(&bp,OUTPUT_SSRC,ssrc); // poll specific SSRC, or request ssrc list with ssrc = 0
+  encode_int(&bp,COMMAND_TAG,tag);
   encode_eol(&bp);
   size_t const command_len = bp - cmdbuffer;
   if(sendto(Output_fd, cmdbuffer, command_len, 0, &Frontend.metadata_dest_socket,sizeof Frontend.metadata_dest_socket) != (ssize_t)command_len)
