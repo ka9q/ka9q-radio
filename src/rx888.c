@@ -243,7 +243,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // WA2ZKD measured several rx888s with very consistent results
   // e.g., -90 dBm gives -91.4 dBFS with 0 dB VGA gain and 0 dB attenuation
   // If you use a preamp or converter, add its gain to gaincal
-  frontend->rf_level_cal = config_getdouble(dictionary,section,"gaincal",-1.4);
+  // Note: sign convention has flipped dec 2025 to have units of dBm/FS vs FS/dbm
+  // ie. an input of +1.4 dBm gives 0 dBFS with atten == rfgain == 0
+  frontend->rf_level_cal = config_getdouble(dictionary,section,"gaincal",+1.4);
 
   // Attenuation, default 0
   double att = fabs(config_getdouble(dictionary,section,"att",9999));

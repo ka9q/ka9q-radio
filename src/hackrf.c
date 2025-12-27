@@ -211,7 +211,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
 
   frontend->rf_gain = sdr->lna_gain + sdr->mixer_gain + sdr->if_gain;
   frontend->rf_atten = 0;
-  frontend->rf_level_cal = 0; // To be measured
+  frontend->rf_level_cal = NAN; // To be measured
   sdr->scale = scale_AD(frontend);
 
   double frequency = config_getdouble(dictionary, section, "frequency", 0);

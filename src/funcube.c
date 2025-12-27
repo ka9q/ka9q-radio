@@ -107,6 +107,7 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
   frontend->min_IF = LowerEdge;
   frontend->max_IF = UpperEdge;
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
+  frontend->rf_level_cal = NAN; // varies wildly with frequency; uncalibrated
   {
     char const * const p = config_getstring(dictionary,section,"description",Description ? Description : "funcube dongle+");
     if(p != NULL){

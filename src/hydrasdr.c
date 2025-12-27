@@ -252,7 +252,8 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     set_gain(sdr,gainstep); // Start AGC with max gain step
   }
   frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
-  frontend->rf_level_cal = config_getdouble(Dictionary,section,"gaincal",4.8);
+  // sign convention flipped to make units dBm/FS, ie, input power in dBm for full scale
+  frontend->rf_level_cal = config_getdouble(Dictionary,section,"gaincal",-4.8);
   sdr->antenna_bias = config_getboolean(Dictionary,section,"bias",false);
   {
     int ret __attribute__ ((unused));

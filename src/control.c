@@ -594,7 +594,7 @@ int main(int argc,char *argv[]){
   setup_windows();
 
   Frontend.frequency = Frontend.min_IF = Frontend.max_IF = NAN;
-
+  Frontend.rf_level_cal = NAN; // Not calibrated unless it says it is
   /* Main loop:
      Send poll if we haven't received one in our refresh interval
      See if anything has arrived (use short timeout)
@@ -1455,15 +1455,24 @@ static void display_sig(WINDOW *w,struct channel const *chan){
 	    Frontend.if_gain);
 
   // Calculate actual input power in dBm by subtracting net RF gain
-  pprintw(w,row++,col,"Input","%.1lf dBm ",
-	  power2dB(Frontend.if_power) - (Frontend.rf_gain - Frontend.rf_atten + Frontend.rf_level_cal));
+  double pwr = power2dB(Frontend.if_power) - (Frontend.rf_gain - Frontend.rf_atten);
+  double gain_offset = Frontend.rf_atten - Frontend.rf_gain;
+  // dec 2025: sign convention has flipped to be dBm/FS (prevously dBFS/dbm)
+  // not sent unless it is calibrated
+  if(isfinite(Frontend.rf_level_cal)){
+    pwr += Frontend.rf_level_cal;
+    gain_offset += Frontend.rf_level_cal;
+    pprintw(w,row++,col,"Input","%.1lf dBm ",pwr);
+    pprintw(w,row++,col,"RF lev cal","%.1lf dBm ",Frontend.rf_level_cal);
+  }
+
   // These gain figures only affect the relative A/D input level in dBFS because an equal
   // amount of digital attenuation is applied to the A/D output to maintain unity gain
   pprintw(w,row++,col,"RF Gain","%.1lf dB  ",Frontend.rf_gain);
   pprintw(w,row++,col,"RF Atten","%.1lf dB  ",-Frontend.rf_atten);
-  pprintw(w,row++,col,"RF lev cal","%.1lf dB  ",Frontend.rf_level_cal);
   pprintw(w,row++,col,"A/D","%.1lf dBFS",power2dB(Frontend.if_power));
-  pprintw(w,row++,col,"Gain offset","%.1lf dB  ",-(Frontend.rf_gain - Frontend.rf_atten + Frontend.rf_level_cal));
+
+  pprintw(w,row++,col,"Gain offset","%.1lf dB  ",gain_offset);
   if(!isnan(chan->sig.bb_power))
     pprintw(w,row++,col,"Baseband","%.1lf dBm ",power2dB(chan->sig.bb_power));
   if(!isnan(chan->sig.n0)){

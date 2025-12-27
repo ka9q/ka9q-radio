@@ -161,6 +161,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
   frontend->isreal = false;
   frontend->bitspersample = 1; // Causes gain scaling by unity
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
+  frontend->rf_level_cal = NAN; // varies wildly with frequency; uncalibrated
 
   fprintf(stderr,"Set sample rate %'lf Hz\n",frontend->samprate);
   {

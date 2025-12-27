@@ -246,6 +246,7 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
   frontend->min_IF = -0.46 * frontend->samprate;
   frontend->max_IF = +0.46 * frontend->samprate;
+  frontend->rf_level_cal = NAN; // varies wildly with frequency; uncalibrated
 
   // Need to know the initial frequency beforehand because of RF att/LNA state
   double init_frequency = 0;

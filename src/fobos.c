@@ -258,11 +258,13 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
     if(sdr->direct_sampling){
       // With -40 dBm @ 15 MHz on B input and nothing on A input,
       // A/D reads -42.2 dBm
-      // So level_cal = +0.8 dB gives (average) input of -43.0 dBm
+      // So level_cal = -0.8 dB gives (average) input of -43.0 dBm
+      // Note I flipped the sign convention on rf_level_cal to have units of dBm/FS
+      // ie, how many dBm on the input gives 0 dBFS
       frontend->frequency = 0;
       frontend->rf_gain = 0;
       frontend->rf_atten = 0;
-      frontend->rf_level_cal = +0.8;
+      frontend->rf_level_cal = -0.8;
     } else {
       const char *frequencycfg =
 	config_getstring(dictionary, section, "frequency", "100m0");
@@ -301,7 +303,7 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
       }
       frontend->rf_gain = 2 * sdr->vga_gain + (sdr->lna_gain == 2 ? 16.0 : sdr->lna_gain == 3 ? 33.0 : 0);
       frontend->rf_atten = 0;
-      frontend->rf_level_cal = 41; // very rough approximation, needs to be measured
+      frontend->rf_level_cal = -41; // very rough approximation, needs to be measured
     }
     // Set Clock Source
     result = fobos_rx_set_clk_source(dev, clk_sourcecfg);

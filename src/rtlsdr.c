@@ -231,6 +231,7 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
   }
 
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
+  frontend->rf_level_cal = NAN; // uncalibrated, probably varies wildly with frequency
   if(init_frequency != 0){
     set_correct_freq(sdr,init_frequency);
     frontend->lock = true;

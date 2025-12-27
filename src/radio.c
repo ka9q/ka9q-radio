@@ -1610,8 +1610,12 @@ double scale_AD(struct frontend const *frontend){
   double scale = (1 << (frontend->bitspersample - 1));
 
   // net analog gain, dBm to dBFS, that we correct for to maintain unity gain, i.e., 0 dBm -> 0 dBFS
-  double analog_gain = frontend->rf_gain - frontend->rf_atten + frontend->rf_level_cal;
-  analog_gain += frontend->isreal ? -3.0 : 0.0;
+
+  double analog_gain = frontend->rf_gain - frontend->rf_atten;
+  if(isfinite(frontend->rf_level_cal))
+    analog_gain -= frontend->rf_level_cal; // new sign convention
+  if(frontend->isreal)
+    analog_gain -= 3.0;
   // Will first get called before the filter input is created
   return dB2voltage(-analog_gain) / scale; // Front end gain as amplitude ratio
 }

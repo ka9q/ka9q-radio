@@ -206,6 +206,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   sdr->offset = frontend->samprate/4;
   sdr->converter = config_getdouble(Dictionary,section,"converter",0);
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
+  frontend->rf_level_cal = NAN; // varies wildly with frequency; uncalibrated
 
   fprintf(stderr,"Set sample rate %'lf Hz, offset %'lf Hz\n",frontend->samprate,sdr->offset);
   {
