@@ -43,7 +43,7 @@ f.sock_addr6 = ProtoField.ipv6("ka9qctl.sock.addr6", "Socket IPv6 Address")
 f.sock_port = ProtoField.uint16("ka9qctl.sock.port", "Socket Port", base.DEC)
 f.sock_text = ProtoField.string("ka9qctl.sock.text", "Socket")
 
-f.list_u32  = ProtoField.uint32("ka9qctl.list.u32", "List Element (u32)", base.DEC)
+f.list_uint  = ProtoField.uint32("ka9qctl.list.uint", "List Element (uint)", base.DEC)
 f.list_f32  = ProtoField.float("ka9qctl.list.f32", "List Element (f32)")
 
 -- ---- TLV name table (from your header) ----
@@ -186,7 +186,7 @@ local TLV_KIND = {
   [10] = "uint_hz",
   [12] = "uint",
   [13] = "uint",
-  [14] = "uint",
+  [14] = "window",
   [15] = "f32_hz",
   [16] = "socket",
   [17] = "socket",
@@ -321,9 +321,19 @@ local OPUS_APPLICATION = {
   [2048] = "VOIP",
   [2049] = "AUDIO",
   [2051] = "RESTRICTED_LOWDELAY",
+  [2052] = "RESTRICTED_SILK",
+  [2053] = "RESTRICTED_CELT",
 }
 
-
+local WINDOWS = {
+  [0] = "Kaiser",
+  "Rectangular",
+  "Blackman",
+  "exact Blackman",
+  "Gaussian",
+  "Hann",
+  "Hamming",
+}
 
 local function fmt_opus_bw(u)
   return OPUS_BW[u] or ("unknown (" .. tostring(u) .. ")")
@@ -557,7 +567,7 @@ end
 
 local function decode_by_kind(kind, v, st, t)
   if kind == "demod" then
-    local x, err = decode_uint(v)    
+    local x, err = decode_uint(v)
     if not x then
       st:add_expert_info(PI_MALFORMED, PI_ERROR, err)
       st:add(f.tlv_raw, v)
@@ -569,6 +579,21 @@ local function decode_by_kind(kind, v, st, t)
       return "invalid"
     else
       return d
+    end
+
+  elseif kind == "window" then
+    local x, err = decode_uint(v)
+    if not x then
+      st:add_expert_info(PI_MALFORMED, PI_ERROR, err)
+      st:add(f.tlv_raw, v)
+      return nil
+    end
+    st:add(f.uint, v, x)
+    local e = WINDOWS[x:tonumber()]
+    if not e then
+      return "invalid"
+    else
+      return e
     end
 
   elseif kind == "encoding" then
@@ -613,7 +638,7 @@ local function decode_by_kind(kind, v, st, t)
     else
       return bw
     end
-    
+
   elseif kind == "uint_hz" then
     local x, err = decode_uint(v)
     if not x then
@@ -642,7 +667,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%.0f",x)) .. " Hz"
+    return group_float(string.format("%.1f",x)) .. " Hz"
 
   elseif kind == "f64_hz" then
     local x, err = decode_f64(v)
@@ -653,7 +678,7 @@ local function decode_by_kind(kind, v, st, t)
     end
     st:add(f.double, v, x)
     return group_float(string.format("%.3f",x)) .. " Hz"
-    
+
   elseif kind == "f64_hz_per_s" then
     local x, err = decode_f64(v)
     if not x then
@@ -735,7 +760,7 @@ local function decode_by_kind(kind, v, st, t)
     return group_float(string.format("%.1f", x)) .. " s"
 
   elseif kind == "bool" then
-    local x, err = decode_uint(v)    
+    local x, err = decode_uint(v)
     if not x then
       st:add_expert_info(PI_MALFORMED, PI_ERROR, err)
       st:add(f.tlv_raw, v)
@@ -770,7 +795,7 @@ local function decode_by_kind(kind, v, st, t)
     st:add(f.uint, v, x)
     local h = x:tohex():gsub("^0+", "")
     return group_hex((h ~= "" and h or "0"))
-    
+
   elseif kind == "gps_ns" then
     local x, err = decode_uint(v)
     if not x then
@@ -816,14 +841,17 @@ local function decode_by_kind(kind, v, st, t)
     return txt
 
   elseif kind == "f32_list" then
+    idx = 0
     for i = 0, v:len()-4, 4 do
       local r = v(i,4)
-      local x = unpack_f32(r)
+      local x = decode_f32(r)
       if x then
-	lt:add(f.list_f32, r, x)
+	local ei = st:add(f.list_f32, r, x)
+	ei:append_text(string.format(" [%d]",idx))
       else
-	lt:add(f.tlv_raw, r)
+	st:add(f.tlv_raw, r)
       end
+      idx = idx+1
     end
   else
     st:add(f.tlv_raw, v)

@@ -187,7 +187,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
       sig_power = max(sig_power,0.0); // Avoid log(-x) = nan
       double const sn0 = sig_power/chan->sig.n0;
       double const snr = power2dB(sn0/noise_bandwidth);
-      opus_bits = (int)round(snr / 6);
+      opus_bits = (int)round(snr / 6); // 6 dB SNR per bit
       opus_bits = max(opus_bits,8);  // don't go to ridiculous values on no signal
       opus_bits = min(opus_bits,16); // Opus can actually take 24
       error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_LSB_DEPTH(opus_bits));
