@@ -624,8 +624,6 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   if(strlen(frontend->description) > 0)
     encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
 
-  // Snapshot the output RTP timestamp
-  encode_int32(&bp,RTP_TIMESNAP,chan->output.rtp.timestamp);
   encode_socket(&bp,STATUS_DEST_SOCKET,&chan->frontend->metadata_dest_socket);
   int64_t now = gps_time_ns();
   encode_int64(&bp,GPS_TIME,now);
@@ -658,7 +656,8 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   // Level is absolute relative to A/D saturation, so +3dB for real vs complex
   encode_float(&bp,IF_POWER,power2dB(frontend->if_power * scale_ADpower2FS(frontend)));
   encode_int64(&bp,AD_OVER,frontend->overranges);
-  encode_int64(&bp,SAMPLES_SINCE_OVER,frontend->samp_since_over);
+  if(frontend->overranges != 0)
+    encode_int64(&bp,SAMPLES_SINCE_OVER,frontend->samp_since_over);
   encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
 
   // Modulation mode
@@ -752,6 +751,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
 
   // Stuff not relevant in spectrum analysis mode
   if(chan->demod_type != SPECT_DEMOD){
+    encode_int32(&bp,RTP_TIMESNAP,chan->output.rtp.timestamp);
     encode_int64(&bp,OUTPUT_DATA_PACKETS,chan->output.rtp.packets);
     encode_int(&bp,FILTER2,chan->filter2.blocking);
     if(chan->filter2.blocking != 0){
