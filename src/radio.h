@@ -299,6 +299,7 @@ struct channel {
     int bitrate;
     int bandwidth;
     int application;  // Opus application setting (OPUS_APPLICATION_AUDIO, etc)
+    int signal;       // speech/music: OPUS_AUTO, OPUS_SIGNAL_VOICE, OPUS_SIGNAL_MUSIC
     int fec;
     bool dtx;
   } opus;

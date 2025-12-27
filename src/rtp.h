@@ -13,10 +13,12 @@
 #define RTP_MARKER 0x80  // Marker flag in mpt field
 
 #define OPUS_SAMPRATE (48000)
+#define PKTSIZE 65536 // Largest possible IP datagram, in case we use jumbograms
 
-// Allowable Opus block durations, millisec * 10
-extern int Opus_blocksizes[];
-extern int Opus_samprates[];
+struct string_table {
+  char *str;
+  int value;
+};
 
 enum encoding {
   NO_ENCODING = 0,
@@ -29,15 +31,12 @@ enum encoding {
   OPUS_VOIP,       // Opus with APPLICATION_VOIP
   UNUSED_ENCODING, // Sentinel, not used
 };
+
 struct pt_table {
   unsigned int samprate;
   unsigned int channels;
   enum encoding encoding;
 };
-
-extern struct pt_table PT_table[];
-extern int const Opus_pt; // Allow dynamic setting in the future
-extern int const AX25_pt;
 
 // Internal representation of RTP header -- NOT what's on wire!
 struct rtp_header {
@@ -107,7 +106,7 @@ struct rtcp_sdes {
   size_t mlen;
   char message[256];
 };
-#define PKTSIZE 65536 // Largest possible IP datagram, in case we use jumbograms
+
 // Incoming RTP packets
 // This should probably be extracted into a more general RTP library
 struct packet {
@@ -135,13 +134,17 @@ uint8_t *gen_bye(uint8_t *output,size_t bufsize,uint32_t const *ssrcs,int sc);
 uint8_t *gen_sr(uint8_t *output,size_t bufsize,struct rtcp_sr const *sr,struct rtcp_rr const *rr,int rc);
 // Generate RTCP receiver report segment
 uint8_t *gen_rr(uint8_t *output,size_t bufsize,uint32_t ssrc,struct rtcp_rr const *rr,int rc);
-struct string_table {
-  char *str;
-  int value;
-};
 
+extern struct pt_table PT_table[];
+extern int const Opus_pt; // Allow dynamic setting in the future
+extern int const AX25_pt;
+
+// Allowable Opus block durations, millisec * 10
+extern int Opus_blocksizes[];
+extern int Opus_samprates[];
 // Codec helpers
 extern struct string_table Opus_application[];
+extern struct string_table Opus_signal[];
 
 int opus_bandwidth(char const **str,int code);
 char const *opus_application_string(int);
@@ -153,6 +156,5 @@ enum encoding encoding_from_pt(int type);
 uint8_t pt_from_info(unsigned int samprate,unsigned int channels,enum encoding);
 char const *encoding_string(enum encoding);
 enum encoding parse_encoding(char const *str);
-
 
 #endif

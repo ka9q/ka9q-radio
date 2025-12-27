@@ -28,35 +28,54 @@ struct demodtab Demodtab[] = {
       {SPECT_DEMOD, "Spectrum", }, // Spectrum analysis
 };
 
-static int const DEFAULT_TTL = 0;                // Don't blast cheap switches and access points unless the user says so
-static enum demod_type DEFAULT_DEMOD = LINEAR_DEMOD;
-static int   const DEFAULT_LINEAR_SAMPRATE = 12000;
+static int    const DEFAULT_TTL = 0;                // Don't blast cheap switches and access points unless the user says so
+static enum demod_type const DEFAULT_DEMOD = LINEAR_DEMOD;
+static int    const DEFAULT_LINEAR_SAMPRATE = 12000;
+
+// Channel filter
 static double const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
 static double const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
 static double const DEFAULT_HIGH = 5000.0;
-static double const DEFAULT_HEADROOM = -15.0;     // keep gaussian signals from clipping
+
+// Squelch
 static double const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
 static double const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
-static bool const  DEFAULT_SNR_SQUELCH = false;  // enables squelch when true, so don't enable except in modes that use squelch
+static bool   const  DEFAULT_SNR_SQUELCH = false;  // enables squelch when true, so don't enable except in modes that use squelch
+
+// per-channel AGC
+static double const DEFAULT_HEADROOM = -15.0;     // keep gaussian signals from clipping
 static double const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
 static double const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
 static double const DEFAULT_GAIN = 50.0;         // Unused in FM, usually adjusted automatically in linear
 static double const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
+
+// PLL
 static double const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
-static int   const DEFAULT_SQUELCH_TAIL = 1;     // close on frame *after* going below threshold, may let partial frame noise through
-static int   const DEFAULT_UPDATE = 25;         // 2 Hz for a 20 ms frame time
-#if 0
-static int   const DEFAULT_FM_SAMPRATE = 24000;
+static int    const DEFAULT_SQUELCH_TAIL = 1;     // close on frame *after* going below threshold, may let partial frame noise through
+static int    const DEFAULT_UPDATE = 25;         // 2 Hz for a 20 ms frame time
+static int    const DEFAULT_NBFM_SAMPRATE = 24000;
 static double const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
+static double const DEFAULT_NBFM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
+
+// We assume NBFM if FM will be used
+#if 0
 static double const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
-static double const DEFAULT_FM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
 static double const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 #endif
-static int   const DEFAULT_BITRATE = 0;       // Default Opus compressed bit rate. 0 means OPUS_AUTO, the encoder decides
-static int   const DEFAULT_DC_TC = 0;         // Time constant for AM carrier removal, default off
+
+static int    const DEFAULT_DC_TC = 0;         // Time constant for AM carrier removal, default off
 static double const DEFAULT_CROSSOVER = 200;   // About where the two spectral analysis algorithms use equal CPU
 static double const DEFAULT_SPECTRUM_KAISER_BETA = 7.0; // Default for spectral analysis window
 static enum window_type const DEFAULT_WINDOW_TYPE = KAISER_WINDOW;
+
+// Opus encoder defaults
+static int  const DEFAULT_OPUS_APPLICATION = OPUS_APPLICATION_AUDIO;
+static int  const DEFAULT_OPUS_BITRATE = OPUS_AUTO;
+static int  const DEFAULT_OPUS_BANDWIDTH = OPUS_BANDWIDTH_FULLBAND;
+static int  const DEFAULT_OPUS_SIGNAL = OPUS_AUTO;
+static bool const DEFAULT_OPUS_DTX = false;
+static int  const DEFAULT_OPUS_FEC = 0; // disabled
+
 extern int Overlap;
 
 // Valid keys in presets file, [global] section, and any channel section
@@ -114,9 +133,11 @@ char const *Channel_keys[] = {
   "pacing",
   "encoding",
   "bitrate",
+  "opus-bitrate",
   "opus-dtx",
   "opus-application",
   "opus-fec",
+  "opus-signal",
   "update",
   "buffer",
   "freq",
@@ -180,35 +201,47 @@ int set_defaults(struct channel *chan){
     return -1;
 
   chan->inuse = true;
+  chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
   chan->demod_type = DEFAULT_DEMOD;
+  chan->linear.env = false;
   chan->prio = default_prio();
+  chan->output.ttl = DEFAULT_TTL;
+  chan->status.output_interval = DEFAULT_UPDATE;
+  chan->output.minpacket = 0;  // No output buffering
 
   chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
   chan->output.encoding = S16BE;
-  chan->opus.application = OPUS_APPLICATION_AUDIO;
-  chan->opus.bandwidth = OPUS_BANDWIDTH_FULLBAND;
-  chan->opus.bitrate = DEFAULT_BITRATE;
-  chan->opus.dtx = false;
-  chan->opus.fec = 0;
+
+  chan->linear.agc = true;
+  chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE);
+  chan->linear.hangtime = DEFAULT_HANGTIME;
+  chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
   chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
   chan->output.channels = 1;
-  if(chan->output.gain <= 0 || isnan(chan->output.gain))
+  if(chan->output.gain <= 0 || !isfinite(chan->output.gain))
      chan->output.gain = dB2voltage(DEFAULT_GAIN); // Set only if out of bounds
+  chan->linear.dc_tau = DEFAULT_DC_TC; // primarily for removing AM carriers
   chan->output.pacing = false;
-  chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
-  chan->output.minpacket = 0;  // No output buffering
-  chan->output.ttl = DEFAULT_TTL;
+
+  chan->opus.signal = DEFAULT_OPUS_SIGNAL;
+  chan->opus.application = DEFAULT_OPUS_APPLICATION;
+  chan->opus.bandwidth = DEFAULT_OPUS_BANDWIDTH;
+  chan->opus.bitrate = DEFAULT_OPUS_BITRATE;
+  chan->opus.dtx = DEFAULT_OPUS_DTX;
+  chan->opus.fec = DEFAULT_OPUS_FEC;
 
   chan->tune.doppler = 0;
   chan->tune.doppler_rate = 0;
   chan->tune.shift = 0.0;
 
+  // Primary channel filter
   chan->filter.kaiser_beta = DEFAULT_KAISER_BETA;
   chan->filter.min_IF = DEFAULT_LOW;
   chan->filter.max_IF = DEFAULT_HIGH;
   chan->filter.remainder = NAN;      // Important to force downconvert() to call set_osc() on first call
   chan->filter.bin_shift = -1000999; // Force initialization here too
 
+  // Post-detection audio filter
   chan->filter2.blocking = 0;        // Off by default
   chan->filter2.low = DEFAULT_LOW;
   chan->filter2.high = DEFAULT_HIGH;
@@ -219,19 +252,15 @@ int set_defaults(struct channel *chan){
   chan->squelch_close = dB2power(DEFAULT_SQUELCH_CLOSE);
   chan->squelch_tail = DEFAULT_SQUELCH_TAIL;
   chan->snr_squelch_enable = DEFAULT_SNR_SQUELCH;
-  // De-emphasis defaults to off, enabled only in FM modes
-  chan->fm.rate = 0;
-  chan->fm.gain = 1.0;
 
-  chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE);
-  chan->linear.hangtime = DEFAULT_HANGTIME;
-  chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
-  chan->linear.env = false;
-  chan->linear.agc = true;
+  // elements shared with WFM demod, which uses different values
+  chan->fm.rate = -expm1(-1.0 / (DEFAULT_NBFM_TC * DEFAULT_NBFM_SAMPRATE));
+  chan->fm.gain = DEFAULT_NBFM_DEEMPH_GAIN;
+
   chan->pll.enable = false;
   chan->pll.square = false;
   chan->pll.loop_bw = DEFAULT_PLL_BW;
-  chan->linear.dc_tau = DEFAULT_DC_TC;
+
 
   double r = remainder(Blocktime * chan->output.samprate,1.0);
   if(r != 0){
@@ -239,7 +268,7 @@ int set_defaults(struct channel *chan){
 	    Blocktime,chan->output.samprate,r);
     assert(false);
   }
-  chan->status.output_interval = DEFAULT_UPDATE;
+
   chan->spectrum.fft_avg = 0; // will get set by client or by default in spectrum.c
   chan->spectrum.window_type = DEFAULT_WINDOW_TYPE;
   chan->spectrum.crossover = DEFAULT_CROSSOVER;
@@ -396,10 +425,11 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
       chan->output.encoding = parse_encoding(cp);
   }
   {
-    int const bitrate = abs(config_getint(table,sname,"bitrate",chan->opus.bitrate));
+    int bitrate = abs(config_getint(table,sname,"bitrate",chan->opus.bitrate));
+    bitrate = abs(config_getint(table,sname,"opus-bitrate",bitrate));
     if(bitrate > 510000)
       fprintf(stderr,"opus bitrate %d out of range\n",bitrate);
-    else 
+    else
       chan->opus.bitrate = bitrate;
   }
   chan->opus.dtx = config_getboolean(table,sname,"opus-dtx",chan->opus.dtx);
@@ -420,6 +450,21 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
 	}
 	if(strncmp(cp,Opus_application[i].str,strlen(cp)) == 0){
 	  chan->opus.application = Opus_application[i].value;
+	  break;
+	}
+      }
+    }
+  }
+  {
+    char const *cp = config_getstring(table,sname,"opus-signal",NULL);
+    if(cp && strlen(cp) > 0){
+      for(int i=0; ; i++){
+	if(Opus_signal[i].str == NULL){
+	  fprintf(stderr,"opus signal type '%s' unknown\n",cp);
+	  break;
+	}
+	if(strncmp(cp,Opus_signal[i].str,strlen(cp)) == 0){
+	  chan->opus.signal = Opus_signal[i].value;
 	  break;
 	}
       }

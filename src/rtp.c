@@ -409,3 +409,9 @@ int opus_bandwidth_to_code(int bw){
   else
     return OPUS_BANDWIDTH_FULLBAND;
 }
+struct string_table Opus_signal[] = {
+  {"auto", OPUS_AUTO},
+  {"music", OPUS_SIGNAL_MUSIC},
+  {"voice", OPUS_SIGNAL_VOICE},
+  {NULL,  -1},
+};

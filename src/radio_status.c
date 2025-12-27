@@ -232,25 +232,25 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       {
 	int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
 	// If using Opus, ignore unsupported sample rates
-	if(new_sample_rate != chan->output.samprate){
-	  if(chan->output.encoding != OPUS || new_sample_rate == 48000 || new_sample_rate == 24000 || new_sample_rate == 16000 || new_sample_rate == 12000 || new_sample_rate == 8000){
-	    flush_output(chan,false,true); // Flush to Ethernet before we change this
-	    chan->output.samprate = new_sample_rate;
-	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
-	    restart_needed = true;
-	  }
+	if(new_sample_rate == chan->output.samprate)
+	  break;
+	if(chan->output.encoding != OPUS || new_sample_rate == 48000 || new_sample_rate == 24000 || new_sample_rate == 16000 || new_sample_rate == 12000 || new_sample_rate == 8000){
+	  flush_output(chan,false,true); // Flush to Ethernet before we change this
+	  chan->output.samprate = new_sample_rate;
+	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	  restart_needed = true;
 	}
       }
       break;
     case RADIO_FREQUENCY: // Hz
       {
 	double const f = fabs(decode_double(cp,optlen));
-	if(isfinite(f)){
-	  if(Verbose > 1)
-	    fprintf(stderr,"set ssrc %u freq = %'.3lf\n",ssrc,f);
+	if(!isfinite(f))
+	  break;
+	if(Verbose > 1)
+	  fprintf(stderr,"set ssrc %u freq = %'.3lf\n",ssrc,f);
 
-	  set_freq(chan,f);
-	}
+	set_freq(chan,f);
       }
       break;
     case FIRST_LO_FREQUENCY:
@@ -284,48 +284,48 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case LOW_EDGE: // Hz
       {
 	double const f = decode_float(cp,optlen);
-	if(isfinite(f) && f != chan->filter.min_IF && f <= chan->filter.max_IF){
-	  chan->filter.min_IF = max(f,-(double)chan->output.samprate/2);
-	  new_filter_needed = true;
-	}
+	if(!isfinite(f) || f == chan->filter.min_IF || f > chan->filter.max_IF)
+	  break;
+	chan->filter.min_IF = max(f,-(double)chan->output.samprate/2);
+	new_filter_needed = true;
       }
       break;
     case HIGH_EDGE: // Hz
       {
 	double const f = decode_float(cp,optlen);
-	if(isfinite(f) && f != chan->filter.max_IF && f >= chan->filter.min_IF){
-	  chan->filter.max_IF = min(f,(double)chan->output.samprate/2);
-	  new_filter_needed = true;
-	}
+	if(!isfinite(f) || f == chan->filter.max_IF || f < chan->filter.min_IF)
+	  break;
+	chan->filter.max_IF = min(f,(double)chan->output.samprate/2);
+	new_filter_needed = true;
       }
       break;
       case KAISER_BETA: // dimensionless, always 0 or positive
         {
 	  double const f = fabs(decode_float(cp,optlen));
-	  if(isfinite(f) && chan->filter.kaiser_beta != f){
-	    chan->filter.kaiser_beta = f;
-	    new_filter_needed = true;
-	  }
+	  if(!isfinite(f) || chan->filter.kaiser_beta == f)
+	    break;
+	  chan->filter.kaiser_beta = f;
+	  new_filter_needed = true;
 	}
       break;
       case FILTER2_KAISER_BETA: // dimensionless, always 0 or positive
         {
 	  double const f = fabs(decode_float(cp,optlen));
-	  if(isfinite(f) && chan->filter2.kaiser_beta != f){
-	    chan->filter2.kaiser_beta = f;
-	    new_filter_needed = true;
-	  }
+	  if(!isfinite(f) || chan->filter2.kaiser_beta == f)
+	    break;
+	  chan->filter2.kaiser_beta = f;
+	  new_filter_needed = true;
 	}
       break;
     case DEMOD_TYPE:
       {
 	enum demod_type const i = decode_int(cp,optlen);
-	if(i >= 0 && i < N_DEMOD && i != chan->demod_type){
-	  if(Verbose > 1)
-	    fprintf(stderr,"Demod change %d -> %d\n",chan->demod_type,i);
-	  chan->demod_type = i;
-	  restart_needed = true;
-	}
+	if(i < 0 || i >= N_DEMOD || i == chan->demod_type)
+	  break;
+	if(Verbose > 1)
+	  fprintf(stderr,"Demod change %d -> %d\n",chan->demod_type,i);
+	chan->demod_type = i;
+	restart_needed = true;
       }
       break;
     case INDEPENDENT_SIDEBAND:
@@ -432,13 +432,13 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case RESOLUTION_BW:
       {
 	double const x = fabs(decode_float(cp,optlen));
-	if(isfinite(x) && x != chan->spectrum.bin_bw){
-	  if(Verbose > 1)
-	    fprintf(stderr,"bin bw %f -> %f\n",chan->spectrum.bin_bw,x);
-	  chan->spectrum.bin_bw = x;
-	  if(chan->demod_type == SPECT_DEMOD)
-	    restart_needed = true;
-	}
+	if(!isfinite(x) || x == chan->spectrum.bin_bw)
+	  break;
+	if(Verbose > 1)
+	  fprintf(stderr,"bin bw %f -> %f\n",chan->spectrum.bin_bw,x);
+	chan->spectrum.bin_bw = x;
+	if(chan->demod_type == SPECT_DEMOD)
+	  restart_needed = true;
       }
       break;
     case BIN_COUNT:
@@ -525,23 +525,13 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	int i;
 	for(i=0; Opus_application[i].value != -1; i++){
 	  if(Opus_application[i].value == x){
+	    // Apparently this requires an encoder restart; the opus_encoder_ctl() seems to fail
+	    chan->opus.application = x;
+	    opus_encoder_destroy(chan->opus.encoder);
+	    chan->opus.encoder = NULL;
 	    break;
 	  }
 	}
-	if(Opus_application[i].value == x){
-	  // Apparently this requires an encoder restart; the opus_encoder_ctl() seems to fail
-	  opus_encoder_destroy(chan->opus.encoder);
-	  chan->opus.encoder = NULL;
-	  chan->opus.application = x;
-	}
-#if 0
-	if(x == OPUS_APPLICATION_RESTRICTED_LOWDELAY){
-	  if(chan->opus.encoder)
-	    opus_encoder_ctl(chan->opus.encoder,OPUS_RESET_STATE); // needs reset for this one
-	  chan->opus.application = x; // it's valid
-	  break;
-	}
-#endif
       }
       break;
     case SETOPTS:
@@ -598,7 +588,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     default:
       break;
-    }
+      }
     cp += optlen;
   }
   if(chan->demod_type == SPECT_DEMOD)
@@ -618,7 +608,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
   }
   return false;
 }
-
 // Encode contents of frontend and chan structures as command or status packet
 // packet argument must be long enough!!
 // Convert values from internal to engineering units
@@ -646,7 +635,8 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   encode_double(&bp,CALIBRATE,frontend->calibrate);
   encode_float(&bp,RF_GAIN,frontend->rf_gain);
   encode_float(&bp,RF_ATTEN,frontend->rf_atten);
-  encode_float(&bp,RF_LEVEL_CAL,frontend->rf_level_cal);
+  if(isfinite(frontend->rf_level_cal))
+    encode_float(&bp,RF_LEVEL_CAL,frontend->rf_level_cal); // not sent unless set
   encode_int(&bp,RF_AGC,frontend->rf_agc);
   encode_int32(&bp,LNA_GAIN,frontend->lna_gain);
   encode_int32(&bp,MIXER_GAIN,frontend->mixer_gain);
