@@ -548,7 +548,7 @@ local function format_gps_ns(u64)
   local rem_ns = ns - gps_sec * 1e9
   local unix_utc = gps_sec + GPS_UNIX_EPOCH_OFFSET - GPS_UTC_OFFSET_SECONDS
   local ns_string = group_dec(string.format("%09d",rem_ns))
-  return fmt_utc_seconds(ns/1e9) .. "; " .. group_dec(tostring(gps_sec)) .. "." .. ns_string .. " GPS seconds"
+  return fmt_utc_seconds(ns/1e9 - GPS_UTC_OFFSET_SECONDS) .. "; " .. group_dec(tostring(gps_sec)) .. "." .. ns_string .. " GPS seconds"
 end
 
 local function add_f32_list(tree, tvb_range, little)
@@ -567,7 +567,7 @@ end
 
 local function decode_by_kind(kind, v, st, t)
   if kind == "demod" then
-    local x, err = decode_uint(v)
+    local x, err = decode_uint(v)    
     if not x then
       st:add_expert_info(PI_MALFORMED, PI_ERROR, err)
       st:add(f.tlv_raw, v)
@@ -595,7 +595,7 @@ local function decode_by_kind(kind, v, st, t)
     else
       return e
     end
-
+    
   elseif kind == "encoding" then
     local x, err = decode_uint(v)
     if not x then
@@ -638,7 +638,7 @@ local function decode_by_kind(kind, v, st, t)
     else
       return bw
     end
-
+    
   elseif kind == "uint_hz" then
     local x, err = decode_uint(v)
     if not x then
@@ -678,7 +678,7 @@ local function decode_by_kind(kind, v, st, t)
     end
     st:add(f.double, v, x)
     return group_float(string.format("%.3f",x)) .. " Hz"
-
+    
   elseif kind == "f64_hz_per_s" then
     local x, err = decode_f64(v)
     if not x then
@@ -760,7 +760,7 @@ local function decode_by_kind(kind, v, st, t)
     return group_float(string.format("%.1f", x)) .. " s"
 
   elseif kind == "bool" then
-    local x, err = decode_uint(v)
+    local x, err = decode_uint(v)    
     if not x then
       st:add_expert_info(PI_MALFORMED, PI_ERROR, err)
       st:add(f.tlv_raw, v)
@@ -795,7 +795,7 @@ local function decode_by_kind(kind, v, st, t)
     st:add(f.uint, v, x)
     local h = x:tohex():gsub("^0+", "")
     return group_hex((h ~= "" and h or "0"))
-
+    
   elseif kind == "gps_ns" then
     local x, err = decode_uint(v)
     if not x then
