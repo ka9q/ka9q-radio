@@ -234,8 +234,18 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_INBAND_FEC(chan->opus.fec > 0 ? 1 : 0));
     assert(error == OPUS_OK);
+
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_PACKET_LOSS_PERC(chan->opus.fec));
     assert(error == OPUS_OK);
+
+    opus_int32 signal;
+    error = opus_encoder_ctl(chan->opus.encoder,OPUS_GET_SIGNAL(&signal));
+    assert(error == OPUS_OK);
+    if(signal != chan->opus.signal){
+      error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_SIGNAL(chan->opus.signal));
+      assert(error == OPUS_OK);
+    }
+
   } // if(chan->output.encoding == OPUS){
 
   int available_samples = (int)(chan->output.wp - chan->output.rp);
