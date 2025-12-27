@@ -567,7 +567,7 @@ end
 
 local function decode_by_kind(kind, v, st, t)
   if kind == "demod" then
-    local x, err = decode_uint(v)    
+    local x, err = decode_uint(v)
     if not x then
       st:add_expert_info(PI_MALFORMED, PI_ERROR, err)
       st:add(f.tlv_raw, v)
@@ -595,7 +595,7 @@ local function decode_by_kind(kind, v, st, t)
     else
       return e
     end
-    
+
   elseif kind == "encoding" then
     local x, err = decode_uint(v)
     if not x then
@@ -618,6 +618,7 @@ local function decode_by_kind(kind, v, st, t)
       st:add(f.tlv_raw, v)
       return nil
     end
+    st:add(f.uint, v, x)
     local bw = OPUS_BW[x:tonumber()]
     if not bw then
       return "invalid"
@@ -632,13 +633,14 @@ local function decode_by_kind(kind, v, st, t)
       st:add(f.tlv_raw, v)
       return nil
     end
+    st:add(f.uint, v, x)
     local bw = OPUS_APPLICATION[x:tonumber()]
     if not bw then
       return "invalid"
     else
       return bw
     end
-    
+
   elseif kind == "uint_hz" then
     local x, err = decode_uint(v)
     if not x then
@@ -678,7 +680,7 @@ local function decode_by_kind(kind, v, st, t)
     end
     st:add(f.double, v, x)
     return group_float(string.format("%.3f",x)) .. " Hz"
-    
+
   elseif kind == "f64_hz_per_s" then
     local x, err = decode_f64(v)
     if not x then
@@ -760,7 +762,7 @@ local function decode_by_kind(kind, v, st, t)
     return group_float(string.format("%.1f", x)) .. " s"
 
   elseif kind == "bool" then
-    local x, err = decode_uint(v)    
+    local x, err = decode_uint(v)
     if not x then
       st:add_expert_info(PI_MALFORMED, PI_ERROR, err)
       st:add(f.tlv_raw, v)
@@ -795,7 +797,7 @@ local function decode_by_kind(kind, v, st, t)
     st:add(f.uint, v, x)
     local h = x:tohex():gsub("^0+", "")
     return group_hex((h ~= "" and h or "0"))
-    
+
   elseif kind == "gps_ns" then
     local x, err = decode_uint(v)
     if not x then
