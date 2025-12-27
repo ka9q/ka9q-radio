@@ -70,7 +70,7 @@ static enum window_type const DEFAULT_WINDOW_TYPE = KAISER_WINDOW;
 
 // Opus encoder defaults
 static int  const DEFAULT_OPUS_APPLICATION = OPUS_APPLICATION_AUDIO;
-static int  const DEFAULT_OPUS_BITRATE = OPUS_AUTO;
+static int  const DEFAULT_OPUS_BITRATE = 0; // automatic
 static int  const DEFAULT_OPUS_BANDWIDTH = OPUS_BANDWIDTH_FULLBAND;
 static int  const DEFAULT_OPUS_SIGNAL = OPUS_AUTO;
 static bool const DEFAULT_OPUS_DTX = false;
