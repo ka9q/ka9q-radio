@@ -330,6 +330,9 @@ enum encoding parse_encoding(char const *str){
   else
     return NO_ENCODING;
 }
+
+// _CELT and _SILK seem to have been added with verson 1.6
+// Don't break the compilation if we have an older version
 struct string_table Opus_application[] = {
   {"voip", OPUS_APPLICATION_VOIP},
   {"audio", OPUS_APPLICATION_AUDIO},
