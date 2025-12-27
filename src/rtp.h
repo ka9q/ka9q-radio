@@ -139,10 +139,20 @@ struct string_table {
   char *str;
   int value;
 };
+
+// Codec helpers
 extern struct string_table Opus_application[];
 
 int opus_bandwidth(char const **str,int code);
 char const *opus_application_string(int);
 int opus_bandwidth_to_code(int bw);
+
+int samprate_from_pt(int type);
+int channels_from_pt(int type);
+enum encoding encoding_from_pt(int type);
+uint8_t pt_from_info(unsigned int samprate,unsigned int channels,enum encoding);
+char const *encoding_string(enum encoding);
+enum encoding parse_encoding(char const *str);
+
 
 #endif

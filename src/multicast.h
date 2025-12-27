@@ -79,12 +79,6 @@ static inline uint8_t *put32(uint8_t *dp,uint32_t x){
   *dp++ = (uint8_t)x;
   return dp;
 }
-int samprate_from_pt(int type);
-int channels_from_pt(int type);
-enum encoding encoding_from_pt(int type);
-uint8_t pt_from_info(unsigned int samprate,unsigned int channels,enum encoding);
-char const *encoding_string(enum encoding);
-enum encoding parse_encoding(char const *str);
 uint32_t make_maddr(char const *arg);
 int setport(void *sock,int port);
 
