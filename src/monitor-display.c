@@ -456,9 +456,9 @@ static void update_monitor_display(void){
     double const rate = audio_frames / pa_seconds;
     int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
 
-    printwt("%s playout %.0lf ms latency %5.1lf ms D/A %'.1lf Hz,",
+    printwt("%s playout %.0lf ms latency %5.1lf ms D/A %'.1lf Hz",
 	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,rate);
-    printwt(" (%+4.0lf ppm),",1e6 * (rate / DAC_samprate - 1));
+    printwt(" (%+4.0lf ppm)",1e6 * (rate / DAC_samprate - 1));
     // Time since last packet drop on any channel
     printwt(" EFS %'.1lf",(1e-9*(gps_time_ns() - Last_error_time)));
     //    int64_t total = atomic_load(&Output_total);
@@ -468,8 +468,7 @@ static void update_monitor_display(void){
     level = power2dB(level);
     printwt(" Clock %.1lfs %.1lf dBFS CB N %u",(double)rptr/DAC_samprate,level,quant);
     extern int Session_creates;
-    printwt("sessions %d",Session_creates);
-    printwt("\n");
+    printwt(" sessions %d\n",Session_creates);
   }
   Sessions_per_screen = LINES - getcury(stdscr) - 1;
 
@@ -873,6 +872,7 @@ static void update_monitor_display(void){
   // Embolden the active lines
   attr_t attrs = 0;
   short pair = 0;
+  int64_t const time = gps_time_ns();
   attr_get(&attrs, &pair, NULL);
   for(int session = First_session; session < NSESSIONS && y < LINES; session++,y++){
     struct session const *sp = Sess_ptr[session];
@@ -880,7 +880,6 @@ static void update_monitor_display(void){
       break;
 
     attr_t attr = A_NORMAL;
-    long long const time = gps_time_ns();
     if((time - sp->last_active) < BILLION/2) // active within the past 500 ms
       attr |= A_BOLD;
 
