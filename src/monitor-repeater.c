@@ -60,7 +60,8 @@ void send_cwid(void){
   }
   int fd = open("/run/cwd/input",O_NONBLOCK|O_WRONLY);
   if(fd != -1){
-    write(fd,Cwid,strlen(Cwid));
+    int r = write(fd,Cwid,strlen(Cwid));
+    (void)r; // pain in the ass
     close(fd);
   }
 }
