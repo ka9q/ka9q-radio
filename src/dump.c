@@ -44,15 +44,15 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"cmd tag %08x",(uint32_t)decode_int32(cp,optlen));
       break;
     case CMD_CNT:
-      fprintf(fp,"commands %'llu",(long long unsigned)decode_int32(cp,optlen));
+      fprintf(fp,"commands %'llu",(long long unsigned int)decode_int32(cp,optlen));
       break;
     case BLOCKS_SINCE_POLL:
-      fprintf(fp,"last poll %'llu blocks",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"last poll %'llu blocks",(long long unsigned int)decode_int64(cp,optlen));
       break;
     case GPS_TIME:
       {
 	char tbuf[100];
-	fprintf(fp,"%s",format_gpstime(tbuf,sizeof(tbuf),(uint64_t)decode_int64(cp,optlen)));
+	fprintf(fp,"%s",format_gpstime(tbuf,sizeof(tbuf),(int64_t)decode_int64(cp,optlen))); // not likely negative anyway
       }
       break;
     case DESCRIPTION:
@@ -73,10 +73,10 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       break;
       break;
     case INPUT_SAMPRATE:
-      fprintf(fp,"in samprate %'llu Hz",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"in samprate %'llu Hz",(long long unsigned int)decode_int64(cp,optlen));
       break;
     case INPUT_SAMPLES:
-      fprintf(fp,"in samples %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"in samples %'llu",(long long unsigned int)decode_int64(cp,optlen));
       break;
     case OUTPUT_DATA_SOURCE_SOCKET:
       {
@@ -94,22 +94,22 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"SSRC %'u",(unsigned int)decode_int32(cp,optlen));
       break;
     case OUTPUT_TTL:
-      fprintf(fp,"TTL %'u",(unsigned)decode_int8(cp,optlen));
+      fprintf(fp,"TTL %'u",(unsigned int)decode_int8(cp,optlen));
       break;
     case OUTPUT_SAMPRATE:
       fprintf(fp,"samprate %'u Hz",(unsigned int)decode_int(cp,optlen));
       break;
     case OUTPUT_METADATA_PACKETS:
-      fprintf(fp,"metadata pkts %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"metadata pkts %'llu",(long long unsigned int)decode_int64(cp,optlen));
       break;
     case OUTPUT_DATA_PACKETS:
-      fprintf(fp,"data pkts %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"data pkts %'llu",(long long unsigned int)decode_int64(cp,optlen));
       break;
     case AD_OVER:
-      fprintf(fp,"A/D overrange: %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"A/D overrange: %'llu",(long long unsigned int)decode_int64(cp,optlen));
       break;
     case SAMPLES_SINCE_OVER:
-      fprintf(fp,"Samples since A/D overrange: %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"Samples since A/D overrange: %'llu",(long long unsigned int)decode_int64(cp,optlen));
       break;
     case CALIBRATE:
       fprintf(fp,"calibration %'lg",decode_double(cp,optlen));
@@ -136,7 +136,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"phase imbal %.1lf deg",DEGPRA*asin(decode_float(cp,optlen)));
       break;
     case DIRECT_CONVERSION:
-      fprintf(fp,"direct conv %s",decode_int8(cp,optlen) ? "yes" : "no");
+      fprintf(fp,"direct conv %s",decode_bool(cp,optlen) ? "yes" : "no");
       break;
     case RADIO_FREQUENCY:
       fprintf(fp,"RF %'.3lf Hz",decode_double(cp,optlen));
@@ -169,7 +169,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"fe filt high %'lg Hz",decode_float(cp,optlen));
       break;
     case FE_ISREAL:
-      fprintf(fp,"fe produces %s samples",decode_int8(cp,optlen) ? "real" : "complex");
+      fprintf(fp,"fe produces %s samples",decode_bool(cp,optlen) ? "real" : "complex");
       break;
     case WINDOW_TYPE:
       {
@@ -209,14 +209,11 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case KAISER_BETA:
       fprintf(fp,"filter kaiser_beta %lg",decode_float(cp,optlen));
       break;
-    case FILTER2_KAISER_BETA:
-      fprintf(fp,"filter2 kaiser_beta %lg",decode_float(cp,optlen));
-      break;
     case FILTER_BLOCKSIZE:
-      fprintf(fp,"filter L %'d",decode_int(cp,optlen));
+      fprintf(fp,"filter L %'u",decode_int(cp,optlen));
       break;
     case FILTER_FIR_LENGTH:
-      fprintf(fp,"filter M %'d",decode_int(cp,optlen));
+      fprintf(fp,"filter M %'u",decode_int(cp,optlen));
       break;
     case IF_POWER:
       fprintf(fp,"IF pwr %'.1lf dB",decode_float(cp,optlen));
@@ -251,22 +248,22 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       }
       break;
     case OUTPUT_CHANNELS:
-      fprintf(fp,"out channels %'d",decode_int(cp,optlen));
+      fprintf(fp,"out channels %'u",decode_int(cp,optlen));
       break;
     case INDEPENDENT_SIDEBAND:
-      fprintf(fp,"ISB %s",decode_int8(cp,optlen) ? "on" : "off");
+      fprintf(fp,"ISB %s",decode_bool(cp,optlen) ? "on" : "off");
       break;
     case THRESH_EXTEND:
-      fprintf(fp,"Thr Extend %s",decode_int8(cp,optlen) ? "on" : "off");
+      fprintf(fp,"Thr Extend %s",decode_bool(cp,optlen) ? "on" : "off");
       break;
     case PLL_ENABLE:
-      fprintf(fp,"PLL %s",decode_int8(cp,optlen) ? "enable":"disable");
+      fprintf(fp,"PLL %s",decode_bool(cp,optlen) ? "enable":"disable");
       break;
     case PLL_LOCK:
-      fprintf(fp,"PLL %s",decode_int8(cp,optlen) ? "lock" : "unlock");
+      fprintf(fp,"PLL %s",decode_bool(cp,optlen) ? "lock" : "unlock");
       break;
     case PLL_SQUARE:
-      fprintf(fp,"PLL square %s",decode_int8(cp,optlen) ? "on" : "off");
+      fprintf(fp,"PLL square %s",decode_bool(cp,optlen) ? "on" : "off");
       break;
     case PLL_PHASE:
       fprintf(fp,"PLL phase %lg deg",DEGPRA*decode_float(cp,optlen));
@@ -275,13 +272,13 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"PLL loop BW %'.1lf Hz",decode_float(cp,optlen));
       break;
     case PLL_WRAPS:
-      fprintf(fp,"PLL phase wraps %'lld",(long long)decode_int64(cp,optlen));
+      fprintf(fp,"PLL phase wraps %'lld",(long long)decode_int64(cp,optlen)); // signed?
       break;
     case SNR_SQUELCH:
-      fprintf(fp,"SNR squelch %s",decode_int8(cp,optlen) ? "on" : "off");
+      fprintf(fp,"SNR squelch %s",decode_bool(cp,optlen) ? "on" : "off");
      break;
     case ENVELOPE:
-      fprintf(fp,"Env det %s",decode_int8(cp,optlen) ? "on" : "off");
+      fprintf(fp,"Env det %s",decode_bool(cp,optlen) ? "on" : "off");
       break;
     case PLL_SNR:
       fprintf(fp,"PLL SNR %.1lf dB",decode_float(cp,optlen));
@@ -302,7 +299,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"PL tone deviation %'lg Hz",decode_float(cp,optlen));
       break;
     case AGC_ENABLE:
-      fprintf(fp,"channel agc %s",decode_int8(cp,optlen) ? "enable" : "disable");
+      fprintf(fp,"channel agc %s",decode_bool(cp,optlen) ? "enable" : "disable");
       break;
     case HEADROOM:
       fprintf(fp,"headroom %.1lf dB",decode_float(cp,optlen));
@@ -320,16 +317,16 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"gain %.1lf dB",decode_float(cp,optlen));
       break;
     case OUTPUT_LEVEL:
-      fprintf(fp,"output level %.1lf dB",decode_float(cp,optlen));
+      fprintf(fp,"output level %+.1lf dBFS",decode_float(cp,optlen));
       break;
     case OUTPUT_SAMPLES:
-      fprintf(fp,"output samp %'llu",(long long unsigned)decode_int64(cp,optlen));
+      fprintf(fp,"output samp %'llu",(long long unsigned int)decode_int64(cp,optlen));
       break;
     case FILTER_DROPS:
       fprintf(fp,"block drops %'u",(unsigned int)decode_int(cp,optlen));
       break;
     case LOCK:
-      fprintf(fp,"freq %s",decode_int8(cp,optlen) ? "locked" : "unlocked");
+      fprintf(fp,"freq %s",decode_bool(cp,optlen) ? "locked" : "unlocked");
       break;
     case TP1:
       fprintf(fp,"TP1 %'.1lf",decode_float(cp,optlen));
@@ -338,10 +335,10 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"TP2 %'.1lf",decode_float(cp,optlen));
       break;
     case GAINSTEP:
-      fprintf(fp,"gain step %'d",decode_int(cp,optlen));
+      fprintf(fp,"gain step %'u",decode_int(cp,optlen));
       break;
     case AD_BITS_PER_SAMPLE:
-      fprintf(fp,"A/D bits/sample %d",decode_int(cp,optlen));
+      fprintf(fp,"A/D bits/sample %u",decode_int(cp,optlen));
       break;
     case SQUELCH_OPEN:
       fprintf(fp,"squelch open %.1lf dB",decode_float(cp,optlen));
@@ -353,7 +350,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"deemph gain %.1lf dB",decode_float(cp,optlen));
       break;
     case DEEMPH_TC:
-      fprintf(fp,"demph tc %.1lf us",1e6 * decode_float(cp,optlen));
+      fprintf(fp,"demph tc %.1lf us",1.0e6 * decode_float(cp,optlen));
       break;
     case CONVERTER_OFFSET:
       fprintf(fp,"converter %.1lf Hz",decode_double(cp,optlen));
@@ -374,8 +371,11 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case SPECTRUM_AVG:
       fprintf(fp,"fft avg %u",decode_int(cp,optlen));
       break;
+    case SPECTRUM_FFT_N:
+      fprintf(fp,"fft N %u",decode_int(cp,optlen));
+      break;
     case BIN_COUNT:
-      fprintf(fp,"bins %d",decode_int(cp,optlen));
+      fprintf(fp,"bins %u",decode_int(cp,optlen));
       break;
     case CROSSOVER:
       fprintf(fp,"crossover %.0lf",decode_float(cp,optlen));
@@ -384,13 +384,13 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"rf atten %.1lf dB",decode_float(cp,optlen));
       break;
     case RF_GAIN:
-      fprintf(fp,"rf gain %.1lf dB",decode_float(cp,optlen));
+      fprintf(fp,"rf gain %+.1lf dB",decode_float(cp,optlen));
       break;
     case RF_LEVEL_CAL:
-      fprintf(fp,"rf level cal %.1lf dB",decode_float(cp,optlen));
+      fprintf(fp,"rf level cal %+.1lf dBm",decode_float(cp,optlen));
       break;
     case RF_AGC:
-      fprintf(fp,"rf agc %s",decode_int(cp,optlen) ? "enabled" : "disabled");
+      fprintf(fp,"rf agc %s",decode_bool(cp,optlen) ? "enabled" : "disabled");
       break;
     case BIN_DATA:
       {
@@ -407,12 +407,12 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"RTP PT %u",decode_int(cp,optlen));
       break;
     case STATUS_INTERVAL:
-      fprintf(fp,"status interval %d",decode_int(cp,optlen));
+      fprintf(fp,"status interval %u",decode_int(cp,optlen));
       break;
     case OUTPUT_ENCODING:
       {
-	int e = decode_int(cp,optlen);
-	fprintf(fp,"encoding %d (%s)",e,encoding_string(e));
+	enum encoding e = (enum encoding)decode_int(cp,optlen);
+	fprintf(fp,"encoding %u (%s)",e,encoding_string(e));
       }
       break;
     case SETOPTS:
@@ -428,7 +428,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       }
       break;
     case OPUS_BIT_RATE:
-      fprintf(fp,"opus bitrate %'d Hz",decode_int(cp,optlen));
+      fprintf(fp,"opus bitrate %'u Hz",decode_int(cp,optlen));
       break;
     case OPUS_DTX:
       fprintf(fp,"opus dtx %s",decode_bool(cp,optlen) ? "on" : "off");
@@ -436,7 +436,7 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case OPUS_APPLICATION:
       {
 	char const *str = "unknown";
-	int const x = decode_int(cp,optlen); 
+	int const x = (int)decode_int(cp,optlen);
 	for(int i=0; Opus_application[i].str != NULL; i++){
 	  if(Opus_application[i].value == x){
 	    str = Opus_application[i].str;
@@ -448,23 +448,32 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       }
     case OPUS_FEC:
       {
-	int const x = decode_int(cp,optlen);
-	fprintf(fp,"opus fec %d%%",x);
+	unsigned int const x = decode_int(cp,optlen);
+	fprintf(fp,"opus fec %u%%",x);
       }
       break;
     case OPUS_BANDWIDTH:
       {
-	int const x = decode_int(cp,optlen);
+	int const x = (int)decode_int(cp,optlen);
 	const char *str = NULL;
 	int bw = opus_bandwidth(&str,x);
 	fprintf(fp,"opus bw %s (%d)",str,bw);
       }
       break;
     case MINPACKET:
-      fprintf(fp,"minimum buffered pkts %d",decode_int(cp,optlen));
+      fprintf(fp,"minimum buffered pkts %u",decode_int(cp,optlen));
       break;
     case FILTER2:
-      fprintf(fp,"filter2 blocks %d",decode_int(cp,optlen));
+      fprintf(fp,"filter2 blocks %u",decode_int(cp,optlen));
+      break;
+    case FILTER2_BLOCKSIZE:
+      fprintf(fp,"filter2 blocksize %u",decode_int(cp,optlen));
+      break;
+    case FILTER2_FIR_LENGTH:
+      fprintf(fp,"filter2 FIR length %u",decode_int(cp,optlen));
+      break;
+    case FILTER2_KAISER_BETA:
+      fprintf(fp,"filter2 kaiser β %.1lf",decode_float(cp,optlen));
       break;
     case OUTPUT_ERRORS:
       fprintf(fp,"output errors %'llu",(unsigned long long)decode_int64(cp,optlen));
