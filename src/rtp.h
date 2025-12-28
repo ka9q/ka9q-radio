@@ -149,6 +149,8 @@ extern struct string_table Opus_signal[];
 int opus_bandwidth(char const **str,int code);
 char const *opus_application_string(int);
 int opus_bandwidth_to_code(int bw);
+bool legal_opus_size(int n);
+bool legal_opus_samprate(int n);
 
 int samprate_from_pt(int type);
 int channels_from_pt(int type);

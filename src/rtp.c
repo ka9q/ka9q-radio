@@ -415,3 +415,18 @@ struct string_table Opus_signal[] = {
   {"voice", OPUS_SIGNAL_VOICE},
   {NULL,  -1},
 };
+
+bool legal_opus_size(int n){
+  // 2.5, 5, 10, 20, 40, 60, 80, 100, 120
+  if(n == 120 || n == 240 || n == 480 || n == 960 || n == 1920 || n == 2880 || n == 3840 || n == 4800 || n == 5760)
+    return true;
+  return false;
+}
+
+bool legal_opus_samprate(int n){
+  for(int i=0;Opus_samprates[i] != -1; i++){
+    if(n == Opus_samprates[i])
+      return true;
+  }
+  return false;
+}

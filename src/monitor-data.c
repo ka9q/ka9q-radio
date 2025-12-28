@@ -50,7 +50,6 @@ double PL_tones[] = {
     237.1, 241.8, 245.5, 250.3, 254.1
 };
 static double make_position(int x);
-static bool legal_opus_size(int n);
 static void init_pl(struct session *sp);
 static int run_pl(struct session *sp);
 static void apply_notch(struct session *sp);
@@ -434,12 +433,6 @@ static double make_position(int x){
   }
   // Scale
   return 0.5 * (((double)y / 128) - 1);
-}
-static bool legal_opus_size(int n){
-  // 2.5, 5, 10, 20, 40, 60, 80, 100, 120
-  if(n == 120 || n == 240 || n == 480 || n == 960 || n == 1920 || n == 2880 || n == 3840 || n == 4800 || n == 5760)
-    return true;
-  return false;
 }
 // Extract the data from an incoming RTP, place in bounce buffer
 // Decode opus or just convert PCM

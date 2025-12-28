@@ -153,12 +153,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     int error = OPUS_OK;
     if(chan->opus.encoder == NULL){
       // Opus only supports a specific set of sample rates
-      int si;
-      for(si = 0; Opus_samprates[si] != -1; si++){
-	if(chan->output.samprate == Opus_samprates[si])
-	  break;
-      }
-      if(Opus_samprates[si] == -1){
+      if(!legal_opus_samprate(chan->output.samprate)){
 	// Simply drop until somebody fixes it
 	chan->output.silent = true;
 	chan->output.rp = chan->output.wp;
