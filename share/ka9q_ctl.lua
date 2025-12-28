@@ -410,6 +410,112 @@ local function parse_ber_length(tvb, offset, pktlen)
   return len, 1 + n, nil
 end
 
+local function ieee754_f32_be(raw)
+  local b1,b2,b3,b4 = raw:byte(1,4)
+
+  local u =
+      b1 * 16777216 +  -- 2^24
+      b2 * 65536     + -- 2^16
+      b3 * 256       +
+      b4
+
+  local sign = (u >= 2147483648) and -1 or 1
+  if sign < 0 then
+    u = u - 2147483648
+  end
+
+  local exp = math.floor(u / 8388608)  -- 2^23
+  local frac = u % 8388608
+
+  if exp == 255 then
+    if frac == 0 then
+      return sign * math.huge
+    else
+      return 0/0
+    end
+  end
+
+  if exp == 0 then
+    if frac == 0 then
+      return sign * 0.0
+    end
+    return sign * (frac / 8388608) * 2^(-126)
+  end
+
+  return sign * (1 + frac / 8388608) * 2^(exp - 127)
+end
+
+local function ieee754_f64_be(raw)
+  local b = { raw:byte(1,8) }
+
+  local hi =
+      b[1] * 16777216 +
+      b[2] * 65536 +
+      b[3] * 256 +
+      b[4]
+
+  local lo =
+      b[5] * 16777216 +
+      b[6] * 65536 +
+      b[7] * 256 +
+      b[8]
+
+  local sign = (hi >= 2147483648) and -1 or 1
+  if sign < 0 then
+    hi = hi - 2147483648
+  end
+
+  local exp = math.floor(hi / 1048576)  -- 2^20
+  local frac_hi = hi % 1048576
+
+  local frac = frac_hi * 4294967296 + lo  -- 2^32
+
+  if exp == 2047 then
+    if frac == 0 then
+      return sign * math.huge
+    else
+      return 0/0
+    end
+  end
+
+  if exp == 0 then
+    if frac == 0 then
+      return sign * 0.0
+    end
+    return sign * (frac / 4503599627370496) * 2^(-1022)
+  end
+
+  return sign * (1 + frac / 4503599627370496) * 2^(exp - 1023)
+end
+
+local function decode_f32(v)
+  local L = v:len()
+  if L == 0 then
+    return 0.0, nil
+  end
+  if L > 4 then
+    return nil, "float32 len>4"
+  end
+  local raw = v:bytes():raw()
+  raw = string.rep("\0", 4 - L) .. raw
+  return ieee754_f32_be(raw), nil
+end
+
+local function decode_f64(v)
+  local L = v:len()
+  if L == 0 then
+    return 0.0, nil
+  end
+  if L > 8 then
+    return nil, "float64 len>8"
+  end
+  local raw = v:bytes():raw()
+  raw = string.rep("\0", 8 - L) .. raw
+  return ieee754_f64_be(raw), nil
+end
+
+
+
 local function decode_uint(v)
   local n = v:len()
   if n == 0 then return UInt64(0), nil end
@@ -419,33 +525,6 @@ local function decode_uint(v)
   return v:uint64(), nil  -- big-endian, 1..8 bytes
 end
 
-local function decode_f32(v)
-  local L = v:len()
-  if L == 0 then
-    return 0.0, nil
-  end
-  if L > 4 then
-    return nil,"float32 len>4"
-  end
-  local raw = v:bytes():raw()        -- exact 4 bytes
-  raw = string.rep("\0", 4 - L) .. raw
-  local x = string.unpack(">f", raw)
-  return x, nil
-end
-
-local function decode_f64(v)
-  local L = v:len()
-  if L == 0 then
-    return 0.0, nil
-  end
-  if L > 8 then
-    return nil,"float64 len>8"
-  end
-  local raw = v:bytes():raw()        -- exact 4 bytes
-  raw = string.rep("\0", 8 - L) .. raw
-  local x = string.unpack(">d", raw)
-  return x, nil
-end
 
 
 local function decode_socket_text(v)
