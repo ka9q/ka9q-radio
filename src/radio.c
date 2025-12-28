@@ -705,7 +705,15 @@ static void *process_section(void *p){
   chan_template.status.dest_socket = chan_template.output.dest_socket;
   setport(&chan_template.status.dest_socket,DEFAULT_STAT_PORT);
   strlcpy(chan_template.output.dest_string,data,sizeof chan_template.output.dest_string);
-  chan_template.output.rtp.type = pt_from_info(chan_template.output.samprate,chan_template.output.channels,chan_template.output.encoding);
+  {
+    int pt = pt_from_info(chan_template.output.samprate,chan_template.output.channels,chan_template.output.encoding);
+    if(pt == -1){
+      fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+	      chan_template.output.samprate,chan_template.output.channels,chan_template.output.encoding); // make sure it's initialized
+	  return -1;
+    }
+    chan_template.output.rtp.type = pt;
+  }
 
   char const *iface = NULL;
   if(chan_template.output.ttl != 0){
@@ -1374,7 +1382,7 @@ int downconvert(struct channel *chan){
       // When a spectrum restart is needed, blow away old bin data so it won't get sent with this status response
       if(chan->demod_type == SPECT_DEMOD && restart_needed)
 	FREE(chan->spectrum.bin_data);
-      else 
+      else
 	response_needed = true;
     }
     pthread_mutex_unlock(&chan->status.lock);

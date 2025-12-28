@@ -222,7 +222,13 @@ int demod_wfm(void *arg){
       // Stereo multiplex processing
       if(chan->output.channels != 2){
 	chan->output.channels = 2;
-	chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	if(pt == -1){
+	  fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+		  chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	  return -1;
+	}
+	chan->output.rtp.type = pt;
       }
       execute_filter_output(&lminusr,subc_shift); // L-R composite spun down to 0 Hz, 48 kHz rate
 
@@ -255,7 +261,13 @@ int demod_wfm(void *arg){
       // Mono processing
       if(chan->output.channels != 1){
 	chan->output.channels = 1;
-	chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	if(pt == -1){
+	  fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+		  chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	  return -1;
+	}
+	chan->output.rtp.type = pt;
       }
       double output_energy = 0;
       double const gain = chan->output.gain;

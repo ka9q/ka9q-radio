@@ -235,9 +235,15 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(new_sample_rate == chan->output.samprate)
 	  break;
 	if(chan->output.encoding != OPUS || new_sample_rate == 48000 || new_sample_rate == 24000 || new_sample_rate == 16000 || new_sample_rate == 12000 || new_sample_rate == 8000){
+	  int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	  if(pt == -1){
+	    fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+		    chan->output.samprate,chan->output.channels,chan->output.encoding);
+	    break; // refuse to change
+	  }
+	  chan->output.rtp.type = pt;
 	  flush_output(chan,false,true); // Flush to Ethernet before we change this
 	  chan->output.samprate = new_sample_rate;
-	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	  restart_needed = true;
 	}
       }
@@ -409,9 +415,15 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  // Requesting 2 channels enables FM stereo; requesting 1 disables FM stereo
 	  chan->fm.stereo_enable = (i == 2); // note boolean assignment
 	} else if(i != chan->output.channels){
-	    flush_output(chan,false,true); // Flush to Ethernet before we change this
-	    chan->output.channels = i;
-	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	  int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	  if(pt == -1){
+	    fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+		    chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	    break; // ignore the request
+	  }
+	  chan->output.rtp.type = pt;
+	  flush_output(chan,false,true); // Flush to Ethernet before we change this
+	  chan->output.channels = i;
 	}
       }
       break;
@@ -499,6 +511,13 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       {
 	enum encoding encoding = decode_int(cp,optlen);
 	if(encoding != chan->output.encoding && encoding >= NO_ENCODING && encoding < UNUSED_ENCODING){
+	  int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	  if(pt == -1){
+	    fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+		    chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	    break; // Simply refuse to change
+	  }
+	  chan->output.rtp.type = pt;
 	  flush_output(chan,false,true); // Flush to Ethernet before we change this
 	  chan->output.encoding = encoding;
 	  // Opus can handle only a certain set of sample rates, and it operates at 48K internally
@@ -507,7 +526,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	    chan->output.samprate = 48000;
 	    restart_needed = true;
 	  }
-	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	}
       }
       break;

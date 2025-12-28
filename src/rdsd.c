@@ -419,7 +419,7 @@ void *decode(void *arg){
   int const pilot_rotate = (int)(quantum * round(19000./(hzperbin * quantum)));
   int const subc_rotate = (int)(quantum * round(57000./(hzperbin * quantum)));
 
-  uint8_t const payload_type = pt_from_info(Out_samprate,2,S16BE);
+  int const payload_type = pt_from_info(Out_samprate,2,S16BE);
   if(payload_type < 0){
     fprintf(stderr,"Can't allocate RTP payload type for samprate = %'d, channels = %d\n",Out_samprate,2);
     exit(EX_SOFTWARE);

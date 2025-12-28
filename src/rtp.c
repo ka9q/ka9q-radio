@@ -109,7 +109,7 @@ struct pt_table PT_table[128] = {
 { 0, 0, 0 }, // 97
 { 0, 0, 0 }, // 98
 { 0, 0, 0 }, // 99
-{ 0, 0, 0 }, // 100
+{ 8000, 0, 0 }, // 100  defacto owned by RTP Event
 { 0, 0, 0 }, // 101
 { 0, 0, 0 }, // 102
 { 0, 0, 0 }, // 103
@@ -150,7 +150,7 @@ int const AX25_pt = AX25_PT;
 // Add an encoding to the RTP payload type table
 // The mappings are typically extracted from a radiod status channel and kept in a table so they can
 // be changed midstream without losing anything
-int add_pt(int type, unsigned int samprate, unsigned int channels, enum encoding encoding){
+int add_pt(int type, int samprate, int channels, enum encoding encoding){
   if(encoding == NO_ENCODING)
     return -1;
 
@@ -266,22 +266,24 @@ enum encoding encoding_from_pt(int const type){
 // Dynamically create a new one if not found
 // Should lock the table when it's modified
 // Use for sending only! Receivers need to build a table for each sender
-uint8_t pt_from_info(unsigned int samprate,unsigned int channels,enum encoding encoding){
+int pt_from_info(int samprate,int channels,enum encoding encoding){
   if(samprate <= 0 || channels <= 0 || channels > 2 || encoding == NO_ENCODING || encoding >= UNUSED_ENCODING)
     return -1;
 
   if(encoding == OPUS){
-    // Force Opus to fixed values
+    // Force Opus to fixed values; merges all variations to single PT
     channels = 2;
     samprate = 48000;
   }
 
   // Search table for existing entry, otherwise create new entry
-  for(uint8_t type=0; type < 128; type++){
+  for(int type=0; type < 128; type++){
     if(PT_table[type].samprate == samprate && PT_table[type].channels == channels && PT_table[type].encoding == encoding)
       return type;
   }
-  for(uint8_t type=96; type < 128; type++){ // Allocate a new type in the dynamic range
+  for(int type=96; type < 128; type++){ // Allocate a new type in the dynamic range
+    if(type == 100)
+      continue; // avoid this one, de-facto RTP Event
     if(PT_table[type].samprate == 0){
       // allocate it
       if(add_pt(type,samprate,channels,encoding) == -1)
