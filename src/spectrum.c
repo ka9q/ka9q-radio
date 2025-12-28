@@ -132,7 +132,7 @@ int demod_spectrum(void *arg){
   }
   assert(chan->spectrum.plan != NULL);
 
-  // Generate normalized Kaiser window
+  // Generate normalized sampling window
   chan->spectrum.window = malloc(chan->spectrum.fft_n * sizeof *chan->spectrum.window);
   assert(chan->spectrum.window != NULL);
   switch(chan->spectrum.window_type){
