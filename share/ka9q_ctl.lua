@@ -16,7 +16,7 @@
 -- Floats/doubles are sender "machine order" (endianness is a preference).
 -- Socket values: length 6 (IPv4), 10 (compact-IPv6: 8 bytes), or 18 (full IPv6: 16 bytes),
 --                followed by 2-byte port in network order.
-
+-- December 2025 KA9Q + ChatGPT
 local ka9q = Proto("ka9qctl", "ka9q-radio Control/Status")
 
 -- Preferences
@@ -173,7 +173,7 @@ end
 
 
 -- ---- TLV kind table (inferred from your dump.c) ----
--- Kinds: "uint", "float64" (len 4/8 chosen at runtime), "string", "socket", "f32_list", "gps_ns"
+-- Kinds: "uint", "f64" (len 4/8 chosen at runtime), "string", "socket", "f32_list", "gps_ns"
 local TLV_KIND = {
   [1] = "uint_hex",
   [2] = "uint",
@@ -200,10 +200,10 @@ local TLV_KIND = {
   [25] = "uint_db",
   [26] = "uint_db",
   [27] = "uint_db",
-  [28] = "float32",
-  [29] = "float32",
-  [30] = "float32",
-  [31] = "float32",
+  [28] = "f32",
+  [29] = "f32",
+  [30] = "f32",
+  [31] = "f32",
   [32] = "bool",
   [33] = "f64_hz",
   [34] = "f64_hz",
@@ -213,7 +213,7 @@ local TLV_KIND = {
   [38] = "f64_hz_per_s",
   [39] = "f32_hz",
   [40] = "f32_hz",
-  [41] = "float32",
+  [41] = "f32",
   [42] = "uint",
   [43] = "uint",
   [44] = "uint",
@@ -226,7 +226,7 @@ local TLV_KIND = {
   [51] = "bool",
   [52] = "bool",
   [53] = "bool",
-  [54] = "float32",
+  [54] = "f32",
   [55] = "f32_hz",
   [56] = "bool",
   [57] = "bool",
@@ -251,19 +251,19 @@ local TLV_KIND = {
   [76] = "uint",
   [77] = "uint",
   [78] = "bool",
-  [79] = "float32",
-  [80] = "float32",
+  [79] = "f32",
+  [80] = "f32",
   [81] = "uint",
   [82] = "uint",
   [83] = "f32_db",
   [84] = "f32_db",
   [85] = "string",
-  [86] = "f32_s",
+  [86] = "f32_us",
   [87] = "f32_db",
   [88] = "f32_hz",
   [89] = "f32_hz",
   [90] = "bool",
-  [91] = "float32",
+  [91] = "f32",
   [92] = "f32_hz",
   [93] = "f32_hz",
   [94] = "uint",
@@ -517,6 +517,7 @@ end
 
 local function fmt_utc_seconds(x)
   -- x: seconds since Unix epoch, may be integer or float
+  -- double precision is good enough for μs but not ns
   local sec = math.floor(x)
   local frac = x - sec
 
@@ -525,11 +526,7 @@ local function fmt_utc_seconds(x)
     return "invalid time"
   end
 
-  if frac > 0 then
-    return string.format("%s.%03d UTC", t, math.floor(frac * 1000 + 0.5))
-  end
-
-  return t
+  return string.format("%s.%06d UTC", t, math.floor(frac * 1000000 + 0.5))
 end
 
 
@@ -543,12 +540,10 @@ local function format_gps_ns(u64)
   if not ns then
     return tostring(u64)
   end
-  -- If it won't fit exactly in a Lua double, don't pretend.
-  local gps_sec = math.floor(ns / 1e9)
-  local rem_ns = ns - gps_sec * 1e9
-  local unix_utc = gps_sec + GPS_UNIX_EPOCH_OFFSET - GPS_UTC_OFFSET_SECONDS
-  local ns_string = group_dec(string.format("%09d",rem_ns))
-  return fmt_utc_seconds(ns/1e9 - GPS_UTC_OFFSET_SECONDS) .. "; " .. group_dec(tostring(gps_sec)) .. "." .. ns_string .. " GPS seconds"
+  local sec = u64 / UInt64(1000000000) + GPS_UNIX_EPOCH_OFFSET - GPS_UTC_OFFSET_SECONDS
+  local ns = u64 % UInt64(1000000000)
+  local t = os.date("!%Y-%m-%d %H:%M:%S", sec:tonumber())
+  return t .. "." .. ns .. " UTC"
 end
 
 local function add_f32_list(tree, tvb_range, little)
@@ -709,7 +704,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%.1f", x)) .. " dB"
+    return group_float(string.format("%+.1f", x)) .. " dB"
 
   elseif kind == "f32_db_per_s" then
     local x, err = decode_f32(v)
@@ -719,7 +714,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%.1f", x)) .. " dB/s"
+    return group_float(string.format("%+.1f", x)) .. " dB/s"
 
   elseif kind == "f32_dbm" then
     local x, err = decode_f32(v)
@@ -729,7 +724,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%.1f", x)) .. " dBm"
+    return group_float(string.format("%+.1f", x)) .. " dBm"
 
   elseif kind == "f32_dbmj" then
     local x, err = decode_f32(v)
@@ -739,7 +734,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%.1f",x)) .. " dBmJ (dBm/Hz)"
+    return group_float(string.format("%+.1f",x)) .. " dBmJ (dBm/Hz)"
 
   elseif kind == "f32_dbfs" then
     local x, err = decode_f32(v)
@@ -749,7 +744,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%.1f",x)) .. " dBFS"
+    return group_float(string.format("%+.1f",x)) .. " dBFS"
 
   elseif kind == "f32_s" then
     local x, err = decode_f32(v)
@@ -760,6 +755,16 @@ local function decode_by_kind(kind, v, st, t)
     end
     st:add(f.float, v, x)
     return group_float(string.format("%.1f", x)) .. " s"
+
+  elseif kind == "f32_us" then
+    local x, err = decode_f32(v)
+    if not x then
+      st:add_expert_info(PI_MALFORMED, PI_ERROR, err)
+      st:add(f.tlv_raw, v)
+      return nil
+    end
+    st:add(f.float, v, x)
+    return group_float(string.format("%.1f", 1e6*x)) .. " μs"
 
   elseif kind == "bool" then
     local x, err = decode_uint(v)
@@ -808,7 +813,7 @@ local function decode_by_kind(kind, v, st, t)
     st:add(f.uint, v,x):append_text(" (GPS ns)")
     return format_gps_ns(x)
 
-  elseif kind == "float32" then
+  elseif kind == "f32" then
     -- dimensionless
     local x, err = decode_f32(v)
     if not x then
@@ -819,7 +824,7 @@ local function decode_by_kind(kind, v, st, t)
     st:add(f.float,v,x)
     return group_float(tostring(x))
 
-  elseif kind == "float64" then
+  elseif kind == "f64" then
     -- dimensionless
     local x, err = decode_f64(v)
     if not x then
