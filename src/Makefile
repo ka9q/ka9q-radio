@@ -118,6 +118,7 @@ install: install-$(UNAME_S)
 
 install-Linux: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 	@echo "Installing for Linux..."
+	chmod 0755 $(DYNAMIC_DRIVERS)
 	rsync -a $(DYNAMIC_DRIVERS) $(SODIR)
 	ln -sf $(SODIR)/*.so /usr/local/lib
 	rsync -a $(DAEMONS) $(DAEMONDIR)
