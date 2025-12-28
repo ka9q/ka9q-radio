@@ -1462,21 +1462,21 @@ static void display_sig(WINDOW *w,struct channel const *chan){
   if(isfinite(Frontend.rf_level_cal)){
     pwr += Frontend.rf_level_cal;
     gain_offset += Frontend.rf_level_cal;
-    pprintw(w,row++,col,"Input","%.1lf dBm ",pwr);
-    pprintw(w,row++,col,"RF lev cal","%.1lf dBm ",Frontend.rf_level_cal);
+    pprintw(w,row++,col,"Input","%+.1lf dBm ",pwr);
+    pprintw(w,row++,col,"RF lev cal","%+.1lf dBm ",Frontend.rf_level_cal);
   }
 
   // These gain figures only affect the relative A/D input level in dBFS because an equal
   // amount of digital attenuation is applied to the A/D output to maintain unity gain
-  pprintw(w,row++,col,"RF Gain","%.1lf dB  ",Frontend.rf_gain);
-  pprintw(w,row++,col,"RF Atten","%.1lf dB  ",-Frontend.rf_atten);
-  pprintw(w,row++,col,"A/D","%.1lf dBFS",power2dB(Frontend.if_power));
+  pprintw(w,row++,col,"RF Gain","%+.1lf dB  ",Frontend.rf_gain);
+  pprintw(w,row++,col,"RF Atten","%+.1lf dB  ",-Frontend.rf_atten);
+  pprintw(w,row++,col,"A/D","%+.1lf dBFS",power2dB(Frontend.if_power));
 
-  pprintw(w,row++,col,"Gain offset","%.1lf dB  ",gain_offset);
+  pprintw(w,row++,col,"Gain offset","%+.1lf dB  ",gain_offset);
   if(!isnan(chan->sig.bb_power))
-    pprintw(w,row++,col,"Baseband","%.1lf dBm ",power2dB(chan->sig.bb_power));
+    pprintw(w,row++,col,"Baseband","%+.1lf dBm ",power2dB(chan->sig.bb_power));
   if(!isnan(chan->sig.n0)){
-     pprintw(w,row++,col,"N₀","%.1lf dBmJ",power2dB(chan->sig.n0));
+     pprintw(w,row++,col,"N₀","%+.1lf dBmJ",power2dB(chan->sig.n0));
      double temp = chan->sig.n0 / (1000 * BOLTZMANN); // 1000 converts from joules to millijoules (for power in dBm)
      pprintw(w,row++,col,"N Temp","%.5lg K   ",temp);
      double nf = power2dB(1 + temp / 290); // convert to noise figure
@@ -1484,15 +1484,15 @@ static void display_sig(WINDOW *w,struct channel const *chan){
   }
   // Derived numbers
   if(!isnan(Local.sn0))
-    pprintw(w,row++,col,"S/N₀","%.1lf dBHz",power2dB(Local.sn0));
+    pprintw(w,row++,col,"S/N₀","%+.1lf dBHz",power2dB(Local.sn0));
   if(!isnan(Local.noise_bandwidth))
     pprintw(w,row++,col,"NBW","%.1lf dBHz",power2dB(Local.noise_bandwidth));
   if(!isnan(Local.snr))
-    pprintw(w,row++,col,"S/N","%.1lf dB  ",Local.snr);
+    pprintw(w,row++,col,"S/N","%+.1lf dB  ",Local.snr);
   if(!isnan(chan->output.gain) && chan->demod_type == LINEAR_DEMOD) // Only relevant in linear
-    pprintw(w,row++,col,"Gain","%.1lf dB  ",voltage2dB(chan->output.gain));
+    pprintw(w,row++,col,"Gain","%+.1lf dB  ",voltage2dB(chan->output.gain));
   if(!isnan(chan->output.power))
-    pprintw(w,row++,col,"Output","%.1lf dBFS",power2dB(chan->output.power));
+    pprintw(w,row++,col,"Output","%+.1lf dBFS",power2dB(chan->output.power));
   box(w,0,0);
   mvwaddstr(w,0,1,"Signal");
   wnoutrefresh(w);
@@ -1511,32 +1511,32 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
   switch(chan->demod_type){
   case FM_DEMOD:
   case WFM_DEMOD:
-    pprintw(w,row++,col,"Input S/N","%.1lf dB",power2dB(chan->fm.snr));
+    pprintw(w,row++,col,"Input S/N","%+.1lf dB",power2dB(chan->fm.snr));
     if(!isnan(chan->output.headroom))
-      pprintw(w,row++,col,"Headroom","%.1lf dBFS ",voltage2dB(chan->output.headroom));
-    pprintw(w,row++,col,"Squel open","%.1lf dB   ",power2dB(chan->squelch_open));
-    pprintw(w,row++,col,"Squel close","%.1lf dB   ",power2dB(chan->squelch_close));
+      pprintw(w,row++,col,"Headroom","%+.1lf dBFS ",voltage2dB(chan->output.headroom));
+    pprintw(w,row++,col,"Squel open","%+.1lf dB   ",power2dB(chan->squelch_open));
+    pprintw(w,row++,col,"Squel close","%+.1lf dB   ",power2dB(chan->squelch_close));
     pprintw(w,row++,col,"Offset","%'+.3lf Hz",chan->sig.foffset);
-    pprintw(w,row++,col,"Deviation","%.1lf Hz",chan->fm.pdeviation);
+    pprintw(w,row++,col,"Deviation","%+.1lf Hz",chan->fm.pdeviation);
     if(!isnan(chan->fm.tone_freq) && chan->fm.tone_freq != 0)
       pprintw(w,row++,col,"Tone squelch","%.1lf Hz",chan->fm.tone_freq);
     if(!isnan(chan->fm.tone_deviation) && !isnan(chan->fm.tone_freq) && chan->fm.tone_freq != 0)
       pprintw(w,row++,col,"Tone dev","%.1lf Hz",chan->fm.tone_deviation);
     if(chan->fm.rate != 0){
       pprintw(w,row++,col,"Deemph τ","%.1lf μs",chan->fm.rate);
-      pprintw(w,row++,col,"Deemph gain","%.1lf dB",chan->fm.gain);
+      pprintw(w,row++,col,"Deemph gain","%+.1lf dB",chan->fm.gain);
     }
     break;
   case LINEAR_DEMOD:
     if(!isnan(chan->output.headroom))
-      pprintw(w,row++,col,"Headroom","%.1lf dBFS",voltage2dB(chan->output.headroom));
-    pprintw(w,row++,col,"Squel open","%.1lf dB  ",power2dB(chan->squelch_open));
-    pprintw(w,row++,col,"Squel close","%.1lf dB  ",power2dB(chan->squelch_close));
+      pprintw(w,row++,col,"Headroom","%+.1lf dBFS",voltage2dB(chan->output.headroom));
+    pprintw(w,row++,col,"Squel open","%+.1lf dB  ",power2dB(chan->squelch_open));
+    pprintw(w,row++,col,"Squel close","%+.1lf dB  ",power2dB(chan->squelch_close));
 
     if(!isnan(chan->linear.threshold) && chan->linear.threshold > 0)
-      pprintw(w,row++,col,"AGC Threshold","%.1lf dB  ",voltage2dB(chan->linear.threshold));
+      pprintw(w,row++,col,"AGC Threshold","%+.1lf dB  ",voltage2dB(chan->linear.threshold));
     if(!isnan(chan->linear.recovery_rate) && chan->linear.recovery_rate > 0)
-      pprintw(w,row++,col,"Recovery rate","%.1lf dB/s",voltage2dB(chan->linear.recovery_rate));
+      pprintw(w,row++,col,"Recovery rate","%+.1lf dB/s",voltage2dB(chan->linear.recovery_rate));
     if(!isnan(chan->linear.hangtime))
       pprintw(w,row++,col,"Hang time","%.1lf s   ",chan->linear.hangtime);
 
@@ -1545,7 +1545,7 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
       mvwaddstr(w,row++,1,"PLL");
       mvwprintw(w,row++,col,"%-s",chan->pll.lock ? "Lock" : "Unlock");
       pprintw(w,row++,col,"BW","%.1lf Hz",chan->pll.loop_bw);
-      pprintw(w,row++,col,"S/N","%.1lf dB",power2dB(chan->pll.snr));
+      pprintw(w,row++,col,"S/N","%+.1lf dB",power2dB(chan->pll.snr));
       pprintw(w,row++,col,"Δf","%'+.3lf Hz",chan->sig.foffset);
       double phase = chan->pll.cphase * DEGPRA + 360 * chan->pll.rotations;
 
@@ -1558,7 +1558,7 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
       double delta_ph = phase - Local.pll_start_phase;
       pprintw(w,row++,col,"ΔT","%.1lf s ",delta_t);
       pprintw(w,row++,col,"Δφ","%+.1lf °",delta_ph);
-      pprintw(w,row++,col,"μ Δf/f","%lg",delta_ph / (360 * delta_t * chan->tune.freq));
+      pprintw(w,row++,col,"μ Δf/f","%+lg",delta_ph / (360 * delta_t * chan->tune.freq));
     } else {
       Local.pll_start_time = 0;
     }
@@ -1664,25 +1664,25 @@ static void display_output(WINDOW *w,struct channel const *chan){
 
   pprintw(w,row++,col,"SSRC","%u",chan->output.rtp.ssrc);
   pprintw(w,row++,col,"Timestamp","%'u",chan->output.time_snap);
-  pprintw(w,row++,col,"TTL","%d",chan->output.ttl);
+  pprintw(w,row++,col,"TTL","%u",chan->output.ttl);
   pprintw(w,row++,col,"Payload Type","%u",chan->output.rtp.type);
-  pprintw(w,row++,col,"Sample rate","%'d Hz",chan->output.samprate);
+  pprintw(w,row++,col,"Sample rate","%'u Hz",chan->output.samprate);
   pprintw(w,row++,col,"Encoding","%s",encoding_string(chan->output.encoding));
-  pprintw(w,row++,col,"Channels","%d",chan->output.channels);
-  pprintw(w,row++,col,"Packets","%'lld",(long long)chan->output.rtp.packets);
-  pprintw(w,row++,col,"Packet buffers","%d",chan->output.minpacket);
+  pprintw(w,row++,col,"Channels","%u",chan->output.channels);
+  pprintw(w,row++,col,"Packets","%'llu",(unsigned long long)chan->output.rtp.packets);
+  pprintw(w,row++,col,"Packet buffers","%u",chan->output.minpacket);
   if(chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP){
     if(chan->opus.bitrate != 0)
-      pprintw(w,row++,col,"Opus bitrate","%'d",chan->opus.bitrate);
+      pprintw(w,row++,col,"Opus bitrate","%'u",chan->opus.bitrate);
     else
       pprintw(w,row++,col,"Opus bitrate","auto");
     pprintw(w,row++,col,"Opus dtx","%s",chan->opus.dtx ? "on" : "off");
     char const *appl = opus_application_string(chan->opus.application);
     if(appl != NULL)
       pprintw(w,row++,col,"Opus application","%s",appl);
-    pprintw(w,row++,col,"Opus fec","%d%%",chan->opus.fec);
+    pprintw(w,row++,col,"Opus fec","%u%%",chan->opus.fec);
     int bw = opus_bandwidth(NULL,chan->opus.bandwidth);
-    pprintw(w,row++,col,"Opus bw","%d kHz",bw/1000);
+    pprintw(w,row++,col,"Opus bw","%u kHz",bw/1000);
   }
   box(w,0,0);
   mvwaddstr(w,0,1,"RTP output");
@@ -1885,6 +1885,7 @@ static int send_poll(int ssrc){
   encode_int(&bp,OUTPUT_SSRC,ssrc); // poll specific SSRC, or request ssrc list with ssrc = 0
   encode_int(&bp,COMMAND_TAG,tag);
   encode_eol(&bp);
+  assert(bp >= cmdbuffer);
   size_t const command_len = bp - cmdbuffer;
   if(sendto(Output_fd, cmdbuffer, command_len, 0, &Frontend.metadata_dest_socket,sizeof Frontend.metadata_dest_socket) != (ssize_t)command_len)
     return -1;
