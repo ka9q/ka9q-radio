@@ -234,18 +234,18 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	// If using Opus, ignore unsupported sample rates
 	if(new_sample_rate == chan->output.samprate)
 	  break;
-	if(chan->output.encoding != OPUS || new_sample_rate == 48000 || new_sample_rate == 24000 || new_sample_rate == 16000 || new_sample_rate == 12000 || new_sample_rate == 8000){
-	  int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
-	  if(pt == -1){
-	    fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
-		    chan->output.samprate,chan->output.channels,chan->output.encoding);
-	    break; // refuse to change
-	  }
-	  chan->output.rtp.type = pt;
-	  flush_output(chan,false,true); // Flush to Ethernet before we change this
-	  chan->output.samprate = new_sample_rate;
-	  restart_needed = true;
+	if(chan->output.encoding == OPUS && !legal_opus_samprate(new_sample_rate))
+	  break; // ignore illegal Opus sample rates (eventually will use sample rate converter)
+	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	if(pt == -1){
+	  fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+		  chan->output.samprate,chan->output.channels,chan->output.encoding);
+	  break; // refuse to change
 	}
+	chan->output.rtp.type = pt;
+	flush_output(chan,false,true); // Flush to Ethernet before we change this
+	chan->output.samprate = new_sample_rate;
+	restart_needed = true;
       }
       break;
     case RADIO_FREQUENCY: // Hz
@@ -262,29 +262,33 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case FIRST_LO_FREQUENCY:
       {
 	double const f = decode_double(cp,optlen);
-	if(isfinite(f) && f != 0)
-	  set_first_LO(chan,fabs(f)); // Will ignore it if there's no change
+	if(!isfinite(f) || f == 0)
+	  break;
+	set_first_LO(chan,fabs(f)); // Will ignore it if there's no change
       }
       break;
     case SHIFT_FREQUENCY: // Hz
       {
 	double const f = decode_double(cp,optlen);
-	if(isfinite(f))
-	  chan->tune.shift = f;
+	if(!isfinite(f))
+	  break;
+	chan->tune.shift = f;
       }
       break;
     case DOPPLER_FREQUENCY: // Hz
       {
 	double const f = decode_double(cp,optlen);
-	if(isfinite(f))
-	  chan->tune.doppler = f;
+	if(!isfinite(f))
+	  break;
+	chan->tune.doppler = f;
       }
       break;
     case DOPPLER_FREQUENCY_RATE: // Hz
       {
 	double const f = decode_double(cp,optlen);
-	if(isfinite(f))
-	  chan->tune.doppler_rate = f;
+	if(!isfinite(f))
+	  break;
+	chan->tune.doppler_rate = f;
       }
       break;
     case LOW_EDGE: // Hz
@@ -337,10 +341,10 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case INDEPENDENT_SIDEBAND:
       {
 	bool i = decode_bool(cp,optlen); // will reimplement someday
-	if(i != chan->filter2.isb){
-	  chan->filter2.isb = i;
-	  new_filter_needed = true;
-	}
+	if(i == chan->filter2.isb)
+	  break;
+	chan->filter2.isb = i;
+	new_filter_needed = true;
       }
       break;
     case THRESH_EXTEND:
@@ -349,8 +353,9 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case HEADROOM: // dB -> voltage, always negative dB
       {
 	double const f = decode_float(cp,optlen);
-	if(isfinite(f))
-	  chan->output.headroom = dB2voltage(-fabs(f));
+	if(!isfinite(f))
+	  break;
+	chan->output.headroom = dB2voltage(-fabs(f));
       }
       break;
     case AGC_ENABLE:
@@ -359,31 +364,34 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case GAIN:
       {
 	double const f = decode_float(cp,optlen); // can be -, 0, +
-	if(isfinite(f)){
-	  chan->output.gain = dB2voltage(f); // -Inf = 0 gain is OK
-	  chan->linear.agc = false; // Doesn't make sense to change gain and then have the AGC change it again
-	}
+	if(!isfinite(f))
+	  break;
+	chan->output.gain = dB2voltage(f); // -Inf = 0 gain is OK
+	chan->linear.agc = false; // Doesn't make sense to change gain and then have the AGC change it again
       }
       break;
     case AGC_HANGTIME: // seconds
       {
 	double const f = decode_float(cp,optlen);
-	if(isfinite(f))
-	  chan->linear.hangtime = fabs(f);
+	if(!isfinite(f))
+	  break;
+	chan->linear.hangtime = fabs(f);
       }
       break;
     case AGC_RECOVERY_RATE: // dB/sec -> amplitude / block times, always positive
       {
 	double const f = decode_float(cp,optlen);
-	if(isfinite(f))
-	  chan->linear.recovery_rate = dB2voltage(fabs(f));
+	if(!isfinite(f))
+	  break;
+	chan->linear.recovery_rate = dB2voltage(fabs(f));
       }
       break;
     case AGC_THRESHOLD: // dB -> amplitude
       {
 	double const f = decode_float(cp,optlen);
-	if(isfinite(f))
-	  chan->linear.threshold = dB2voltage(-fabs(f));
+	if(!isfinite(f))
+	  break;
+	chan->linear.threshold = dB2voltage(-fabs(f));
       }
       break;
     case PLL_ENABLE:
@@ -392,8 +400,9 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case PLL_BW:
       {
 	double const f = decode_float(cp,optlen); // Always 0 or positive
-	if(isfinite(f))
-	  chan->pll.loop_bw = fabs(f);
+	if(!isfinite(f))
+	  break;
+	chan->pll.loop_bw = fabs(f);
       }
       break;
     case PLL_SQUARE:
@@ -414,31 +423,33 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(chan->demod_type == WFM_DEMOD){
 	  // Requesting 2 channels enables FM stereo; requesting 1 disables FM stereo
 	  chan->fm.stereo_enable = (i == 2); // note boolean assignment
-	} else if(i != chan->output.channels){
-	  int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
-	  if(pt == -1){
-	    fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
-		    chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
-	    break; // ignore the request
-	  }
-	  chan->output.rtp.type = pt;
-	  flush_output(chan,false,true); // Flush to Ethernet before we change this
-	  chan->output.channels = i;
+	} else if(i == chan->output.channels)
+	  break;
+	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	if(pt == -1){
+	  fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+		  chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	  break; // ignore the request
 	}
+	chan->output.rtp.type = pt;
+	flush_output(chan,false,true); // Flush to Ethernet before we change this
+	chan->output.channels = i;
       }
       break;
     case SQUELCH_OPEN:
       {
 	double const x = decode_float(cp,optlen);
-	if(isfinite(x))
-	  chan->squelch_open = dB2power(x);
+	if(!isfinite(x))
+	  break;
+	chan->squelch_open = dB2power(x);
       }
       break;
     case SQUELCH_CLOSE:
       {
         double const x = decode_float(cp,optlen);
-	if(isfinite(x))
-	  chan->squelch_close = dB2power(x);
+	if(!isfinite(x))
+	  break;
+	chan->squelch_close = dB2power(x);
       }
       break;
     case RESOLUTION_BW:
@@ -456,33 +467,33 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case BIN_COUNT:
       {
 	int const x = abs(decode_int(cp,optlen));
-	if(x > 0 && x != chan->spectrum.bin_count){
-	  if(Verbose > 1)
-	    fprintf(stderr,"bin count %d -> %d\n",chan->spectrum.bin_count,x);
-	  chan->spectrum.bin_count = x;
-	  if(chan->demod_type == SPECT_DEMOD)
-	    restart_needed = true;
-	}
+	if(x <= 0 || x == chan->spectrum.bin_count)
+	  break;
+	if(Verbose > 1)
+	  fprintf(stderr,"bin count %d -> %d\n",chan->spectrum.bin_count,x);
+	chan->spectrum.bin_count = x;
+	if(chan->demod_type == SPECT_DEMOD)
+	  restart_needed = true;
       }
       break;
     case CROSSOVER:
       {
 	double const x = fabs(decode_float(cp,optlen));
-	if(isfinite(x) && x != chan->spectrum.crossover){
-	  chan->spectrum.crossover = x;
-	  if(chan->demod_type == SPECT_DEMOD)
-	    restart_needed = true;
-	}
+	if(!isfinite(x) || x == chan->spectrum.crossover)
+	  break;
+	chan->spectrum.crossover = x;
+	if(chan->demod_type == SPECT_DEMOD)
+	  restart_needed = true;
       }
       break;
     case WINDOW_TYPE:
       {
 	enum window_type const i = decode_int(cp,optlen);
-	if(i < N_WINDOW){
-	  chan->spectrum.window_type = i;
-	  if(chan->demod_type == SPECT_DEMOD)
-	    restart_needed = true;
-	}
+	if(i < 0 || i >=  N_WINDOW)
+	  break;
+	chan->spectrum.window_type = i;
+	if(chan->demod_type == SPECT_DEMOD)
+	  restart_needed = true;
       }
       break;
     case SPECTRUM_SHAPE: // Kaiser or gaussian
@@ -499,8 +510,9 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	int x = abs(decode_int(cp,optlen));
 	if(x == 0)
 	  x = 1; // Minimum 1
-	if(x != chan->spectrum.fft_avg)
-	  chan->spectrum.fft_avg = x;
+	if(x == chan->spectrum.fft_avg)
+	  break;
+	chan->spectrum.fft_avg = x;
 	restart_needed = true;
       }
       break;
@@ -510,22 +522,27 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case OUTPUT_ENCODING:
       {
 	enum encoding encoding = decode_int(cp,optlen);
-	if(encoding != chan->output.encoding && encoding >= NO_ENCODING && encoding < UNUSED_ENCODING){
-	  int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
-	  if(pt == -1){
-	    fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
-		    chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
-	    break; // Simply refuse to change
-	  }
-	  chan->output.rtp.type = pt;
-	  flush_output(chan,false,true); // Flush to Ethernet before we change this
-	  chan->output.encoding = encoding;
-	  // Opus can handle only a certain set of sample rates, and it operates at 48K internally
-	  if(encoding == OPUS && chan->output.samprate != 48000 && chan->output.samprate != 24000
-	     && chan->output.samprate != 16000 && chan->output.samprate != 12000 && chan->output.samprate != 8000){
-	    chan->output.samprate = 48000;
-	    restart_needed = true;
-	  }
+	if(encoding == chan->output.encoding || encoding < 0 || encoding >= NO_ENCODING)
+	  break;
+
+	// Opus can handle only a certain set of sample rates, and it operates at 48K internally
+	int samprate = chan->output.samprate;
+	if(encoding == OPUS && !legal_opus_samprate(samprate))
+	    samprate = OPUS_SAMPRATE; // force sample rate to 48K for Opus
+
+	int pt = pt_from_info(samprate,chan->output.channels,chan->output.encoding);
+	if(pt == -1){
+	  fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+		  samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	  break; // Simply refuse to change
+	}
+	chan->output.rtp.type = pt;
+	flush_output(chan,false,true); // Flush to Ethernet before we change this
+	chan->output.encoding = encoding;
+	if(samprate != chan->output.samprate){
+	  // Sample rate changed for Opus
+	  chan->output.samprate = samprate;
+	  restart_needed = true;
 	}
       }
       break;
@@ -540,8 +557,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	int x = decode_int(cp,optlen);
 	if(x == chan->opus.application)
 	  break; // no change
-	int i;
-	for(i=0; Opus_application[i].value != -1; i++){
+
+	for(int i=0; Opus_application[i].value != -1; i++){
 	  if(Opus_application[i].value == x){
 	    // Apparently this requires an encoder restart; the opus_encoder_ctl() seems to fail
 	    chan->opus.application = x;
@@ -567,32 +584,34 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case RF_ATTEN:
       {
 	double x = decode_float(cp,optlen);
-	if(isfinite(x) && chan->frontend->atten != NULL)
-	  (*chan->frontend->atten)(chan->frontend,x);
+	if(!isfinite(x) || chan->frontend->atten == NULL)
+	  break;
+	(*chan->frontend->atten)(chan->frontend,x);
       }
       break;
     case RF_GAIN:
       {
 	double x = decode_float(cp,optlen);
-	if(isfinite(x) && chan->frontend->gain != NULL)
-	  (*chan->frontend->gain)(chan->frontend,x);
+	if(!isfinite(x) || chan->frontend->gain == NULL)
+	  break;
+	(*chan->frontend->gain)(chan->frontend,x);
       }
       break;
     case MINPACKET:
       {
-	int i = decode_int(cp,optlen);
-	if(i >= 0 && i <= 4 && i != chan->output.minpacket){
-	  chan->output.minpacket = i;
-	}
+	int i = abs(decode_int(cp,optlen));
+	if(i > 4 || i == chan->output.minpacket)
+	  break;
+	chan->output.minpacket = i;
       }
       break;
     case FILTER2:
       {
-	int i = decode_int(cp,optlen);
-	if(i >= 0 && i < 10 && i != chan->filter2.blocking){
-	  chan->filter2.blocking = i;
-	  new_filter_needed = true;
-	}
+	int i = abs(decode_int(cp,optlen));
+	if(i < 10 || i == chan->filter2.blocking)
+	  break;
+	chan->filter2.blocking = i;
+	new_filter_needed = true;
       }
       break;
     case OUTPUT_DATA_DEST_SOCKET:
