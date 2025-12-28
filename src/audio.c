@@ -243,9 +243,10 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 
   } // if(chan->output.encoding == OPUS){
 
-  int available_samples = (int)(chan->output.wp - chan->output.rp);
-  if(available_samples < 0)
-    available_samples += chan->output.queue_size;
+  int const available_samples =
+    (chan->output.wp >= chan->output.rp) ?
+    (chan->output.wp - chan->output.rp)
+    : chan->output.queue_size - (chan->output.rp - chan->output.wp); // careful with unsigned differences
 
   struct rtp_header rtp;
   memset(&rtp,0,sizeof(rtp));
@@ -318,11 +319,12 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	chunk = Opus_blocksizes[si-1] * chan->output.samprate / 10000;
 	// Opus says max possible packet size (on high fidelity audio) is 1275 bytes at 20 ms, which fits Ethernet
 	// But this could conceivably fragment
-	opus_int32 const room = (opus_int32)(sizeof(packet) - (dp-packet)); // Max # bytes in compressed output buffer
+	assert(dp <= packet + sizeof packet);
+	opus_int32 const room = (opus_int32)(packet + sizeof packet - dp); // Max # bytes in compressed output buffer
 	bytes = opus_encode_float(chan->opus.encoder,buf,chunk,dp,room); // Max # bytes in compressed output buffer
 	assert(bytes >= 0);
 
-	opus_int32 d;
+	opus_int32 d = 0;
 	opus_encoder_ctl(chan->opus.encoder,OPUS_GET_IN_DTX(&d));
 	if(d == 1)
 	  bytes = 0; // Suppress frame, but still increment timestamp
