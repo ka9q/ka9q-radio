@@ -1361,6 +1361,7 @@ int downconvert(struct channel *chan){
     }
     // Process any commands and return status
     bool restart_needed = false;
+    bool response_needed = false;
     pthread_mutex_lock(&chan->status.lock);
 
     if(chan->status.output_interval != 0 && chan->status.output_timer == 0 && !chan->output.silent)
@@ -1374,14 +1375,17 @@ int downconvert(struct channel *chan){
       if(chan->demod_type == SPECT_DEMOD && restart_needed)
 	FREE(chan->spectrum.bin_data);
       else 
-	response(chan,true);
+	response_needed = true;
     }
     pthread_mutex_unlock(&chan->status.lock);
+
     if(restart_needed){
       if(Verbose > 1)
 	fprintf(stderr,"chan %u restart needed\n",chan->output.rtp.ssrc);
       return +1; // Restart needed
     }
+    response(chan,response_needed);
+
     // To save CPU time when the front end is completely tuned away from us, block (with timeout) until the front
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);
@@ -1476,6 +1480,7 @@ int downconvert(struct channel *chan){
   return 0; // Should not actually be reached
 }
 void response(struct channel *chan,bool response_needed){
+  assert(chan != NULL);
   if(chan == NULL)
     return;
 

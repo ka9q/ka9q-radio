@@ -319,7 +319,7 @@ void *decode_task(void *arg){
 	  // We're conservatively ahead of the reader, by how much?
 	  uint64_t margin = wptr - (rptr + sp->playout + quantum); // must be positive
 	  timeout = BILLION * margin / DAC_samprate;	  // Playout queue is happy, we don't need to do anything right now
-	  if(timeout > BILLION/10)
+	  if(timeout > (uint64_t)BILLION/10)
 	    timeout = BILLION/10; // Limit the timeout to 100 ms just in case rptr got hung up, eg, by suspend
 	} else {
 	  // Ran out of time, try to conceal the packet loss
