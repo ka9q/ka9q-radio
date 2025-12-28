@@ -920,10 +920,10 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       }
       // Actual work
       while(rp >= 0){
-	assert(wp >=0 && wp < s_bins);
 	assert(rp >= 0 && rp < m_bins);
 	if(wp == s_bins)
 	  wp = 0; // Wrap to DC
+	assert(wp >=0 && wp < s_bins);
 	s_fdomain[wp] = conjf(m_fdomain[rp]) * s_response[wp];
 	if(++wp == (s_bins+1)/2){
 	  goto done;
