@@ -1631,7 +1631,8 @@ static void display_input(WINDOW *w,struct channel const *chan){
     pprintw(w,row++,col,"Sample rate","%'.0lf Hz",Frontend.samprate); // Nominal
     pprintw(w,row++,col,"Uptime","%s",ftime(tmp,sizeof(tmp),(int64_t)(Frontend.samples/Frontend.samprate)));
     pprintw(w,row++,col,"Overranges","%'llu",Frontend.overranges);
-    pprintw(w,row++,col,"Last overrange","%s",ftime(tmp,sizeof(tmp),(int64_t)(Frontend.samp_since_over/Frontend.samprate)));
+    if(Frontend.overranges != 0)
+      pprintw(w,row++,col,"Last overrange","%s",ftime(tmp,sizeof(tmp),(int64_t)(Frontend.samp_since_over/Frontend.samprate)));
   }
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
