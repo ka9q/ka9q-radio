@@ -1373,33 +1373,9 @@ int downconvert(struct channel *chan){
       // When a spectrum restart is needed, blow away old bin data so it won't get sent with this status response
       if(chan->demod_type == SPECT_DEMOD && restart_needed)
 	FREE(chan->spectrum.bin_data);
-
-      send_radio_status(&Frontend.metadata_dest_socket,&Frontend,chan); // Send status in response
-      chan->status.global_timer = 0; // Just sent one
-      // Also send to output stream
-      if(chan->demod_type != SPECT_DEMOD){
-	// Only send spectrum on status channel, and only in response to poll
-	// Spectrum channel output socket isn't set anyway
-	send_radio_status(&chan->status.dest_socket,&Frontend,chan);
-      }
-      chan->status.output_timer = chan->status.output_interval; // Reload
-      reset_radio_status(chan); // After both are sent
-    } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
-      // Delayed status request, used mainly by all-channel polls to avoid big bursts
-      send_radio_status(&Frontend.metadata_dest_socket,&Frontend,chan); // Send status in response
-      chan->status.global_timer = 0; // to make sure
-      reset_radio_status(chan);
-    } else if(chan->status.output_interval != 0 && chan->status.output_timer > 0){
-      // Timer is running for status on output stream
-      if(--chan->status.output_timer == 0){
-	// Timer has expired; send status on output channel
-	send_radio_status(&chan->status.dest_socket,&Frontend,chan);
-	reset_radio_status(chan);
-	if(!chan->output.silent)
-	  chan->status.output_timer = chan->status.output_interval; // Restart timer only if channel is active
-      }
+      else 
+	response(chan,true);
     }
-
     pthread_mutex_unlock(&chan->status.lock);
     if(restart_needed){
       if(Verbose > 1)
@@ -1513,8 +1489,10 @@ void response(struct channel *chan,bool response_needed){
     chan->status.global_timer = 0; // Just sent one
     // Also send to output stream
     // Only send spectrum on status channel, and only in response to poll
-    send_radio_status(&chan->status.dest_socket,frontend,chan);
-    chan->status.output_timer = chan->status.output_interval; // Reload
+    if(chan->demod_type != SPECT_DEMOD){
+      send_radio_status(&chan->status.dest_socket,frontend,chan);
+      chan->status.output_timer = chan->status.output_interval; // Reload
+    }
     reset_radio_status(chan); // After both are sent
   } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
     // Delayed status request, used mainly by all-channel polls to avoid big bursts
