@@ -254,6 +254,7 @@ void *decode_task(void *arg){
       sp->running = false;
       sp->active = 0;
     }
+    assert(pkt == NULL); // watch for leaks
     while(!atomic_load_explicit(&sp->terminate,memory_order_acquire) && !atomic_load_explicit(&Terminate,memory_order_acquire)){
       // Try to receive and process a RTP packet. Break when we have.
       assert(pkt == NULL); // should be cleared, otherwise it's a memory leak
@@ -348,11 +349,7 @@ void *decode_task(void *arg){
 	pthread_cond_timedwait(&sp->qcond,&sp->qmutex,&deadline);
       }
       pthread_mutex_unlock(&sp->qmutex); // finally release it
-    }
-
-    if(atomic_load_explicit(&sp->terminate,memory_order_acquire) || atomic_load_explicit(&Terminate,memory_order_acquire))
-      break;
-
+    } // end of inner loop
     // We get here with a frame of decoded audio, possibly PLC from Opus
     // Do PL detection and notching even when muted or outvoted
     if(sp->samprate == 0 || sp->channels == 0||sp->frame_size == 0)
@@ -686,7 +683,7 @@ static void apply_notch(struct session *sp){
   } // End of tone notching
 }
 // Upsample to DAC rate if necessary
-static int upsample(struct session *sp){
+static int upsample(struct session * const sp){
   assert(sp != NULL && sp->samprate != 0 && sp->channels != 0);
   if(sp == NULL || sp->samprate == 0 || sp->channels == 0)
     return -1;
