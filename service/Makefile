@@ -11,7 +11,7 @@ clean:
 install: install-$(UNAME_S)
 
 install-Linux:
-	rsync *.service /etc/systemd/system
+	rsync --ignore-existing *.service /etc/systemd/system
 	systemctl daemon-reload
 
 install-Darwin:

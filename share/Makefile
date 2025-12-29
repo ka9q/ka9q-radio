@@ -14,11 +14,11 @@ clean:
 install: install-$(UNAME_S)
 
 install-Linux:
-	rsync --ignore-existing * $(LIBDIR)
+	rsync *.lua *.txt *.img *.conf --ignore-existing  $(LIBDIR)
 	chown radio:radio $(LIBDIR)
 
 install-Darwin:
-	rsync --ignore-existing * $(LIBDIR)
+	rsync *.lua *.txt *.img *.conf --ignore-existing $(LIBDIR)
 	chgrp radio $(LIBDIR)
 
 install-%:

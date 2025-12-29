@@ -12,7 +12,7 @@ clean:
 install: install-$(UNAME_S)
 
 install-Linux:
-	rsync * /etc/udev/rules.d
+	rsync *.rules /etc/udev/rules.d
 
 install-Darwin:
 	# TODO
