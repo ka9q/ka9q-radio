@@ -28,11 +28,12 @@ int demod_wfm(void *arg){
   if(chan == NULL)
     return -1;
 
-  {
-    char name[100];
-    snprintf(name,sizeof(name),"wfm %u",chan->output.rtp.ssrc);
-    pthread_setname(name);
-  }
+  char name[100];
+  snprintf(name,sizeof(name),"wfm %u",chan->output.rtp.ssrc);
+  pthread_setname(name);
+  if(Verbose > 1)
+    fprintf(stderr,"%s freq %.3lf starting\n",name,chan->tune.freq);
+
   assert(Blocktime != 0);
   assert(chan->frontend != NULL);
   pthread_mutex_init(&chan->status.lock,NULL);
@@ -296,6 +297,9 @@ int demod_wfm(void *arg){
   } while(true);
  quit:;
   // clean up
+  if(Verbose > 1)
+    fprintf(stderr,"%s exiting\n",name);
+
   flush_output(chan,false,true); // if still set, marker won't get sent since it wasn't sent last time
   mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float)); // Nails pointer
   FREE(chan->status.command);
