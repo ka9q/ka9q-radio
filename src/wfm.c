@@ -28,11 +28,10 @@ int demod_wfm(void *arg){
   if(chan == NULL)
     return -1;
 
-  char name[100];
-  snprintf(name,sizeof(name),"wfm %u",chan->output.rtp.ssrc);
-  pthread_setname(name);
+  snprintf(chan->name,sizeof(chan->name),"wfm %u",chan->output.rtp.ssrc);
+  pthread_setname(chan->name);
   if(Verbose > 1)
-    fprintf(stderr,"%s freq %.3lf starting\n",name,chan->tune.freq);
+    fprintf(stderr,"%s freq %.3lf starting\n",chan->name,chan->tune.freq);
 
   assert(Blocktime != 0);
   assert(chan->frontend != NULL);
@@ -225,8 +224,8 @@ int demod_wfm(void *arg){
 	chan->output.channels = 2;
 	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	if(pt == -1){
-	  fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
-		  chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	  fprintf(stderr,"%s Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	  return -1;
 	}
 	chan->output.rtp.type = pt;
@@ -264,8 +263,8 @@ int demod_wfm(void *arg){
 	chan->output.channels = 1;
 	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	if(pt == -1){
-	  fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
-		  chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	  fprintf(stderr,"%s can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	  return -1;
 	}
 	chan->output.rtp.type = pt;
@@ -298,7 +297,7 @@ int demod_wfm(void *arg){
  quit:;
   // clean up
   if(Verbose > 1)
-    fprintf(stderr,"%s exiting\n",name);
+    fprintf(stderr,"%s exiting\n",chan->name);
 
   flush_output(chan,false,true); // if still set, marker won't get sent since it wasn't sent last time
   mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float)); // Nails pointer

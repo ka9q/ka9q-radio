@@ -1095,7 +1095,7 @@ double set_first_LO(struct channel const * const chan,double const first_LO){
 
   // Direct tuning through local module if available
   if(Verbose > 1)
-    fprintf(stderr,"ssrc %u retuning front end to %.3lf\n",chan->output.rtp.ssrc,first_LO);
+    fprintf(stderr,"%s retuning front end to %.3lf\n",chan->name,first_LO);
   if(Frontend.tune != NULL)
     return (*Frontend.tune)(&Frontend,first_LO);
 
@@ -1366,7 +1366,7 @@ int downconvert(struct channel *chan){
     if(chan->tune.freq == 0 && chan->lifetime > 0 && --chan->lifetime <= 0){
       chan->demod_type = -1;  // No demodulator
       if(Verbose > 1)
-	fprintf(stderr,"chan %u terminate needed\n",chan->output.rtp.ssrc);
+	fprintf(stderr,"%s terminate needed\n",chan->name);
       return -1; // terminate needed
     }
     // Process any commands and return status
@@ -1391,7 +1391,7 @@ int downconvert(struct channel *chan){
 
     if(restart_needed){
       if(Verbose > 1)
-	fprintf(stderr,"chan %u restart needed\n",chan->output.rtp.ssrc);
+	fprintf(stderr,"%s restart needed\n",chan->name);
       return +1; // Restart needed
     }
     response(chan,response_needed);
@@ -1532,8 +1532,8 @@ int set_channel_filter(struct channel *chan){
   double upper = min(chan->filter.max_IF, (double)chan->output.samprate/2);
 
   if(Verbose > 1)
-    fprintf(stderr,"new filter for chan %'u: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
-	    chan->output.rtp.ssrc, lower, upper,
+    fprintf(stderr,"chan %s new filter: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
+	    chan->name, lower, upper,
 	    chan->output.samprate, chan->filter.kaiser_beta);
 
   delete_filter_output(&chan->filter2.out);
@@ -1547,7 +1547,7 @@ int set_channel_filter(struct channel *chan){
     int n = round2(2 * blocksize); // Overlap >= 50%
     int order = n - blocksize;
     if(Verbose > 1)
-       fprintf(stderr,"filter2 create: L = %d, M = %d, N = %d\n",blocksize,order+1,n);
+      fprintf(stderr,"%s filter2 create: L = %d, M = %d, N = %d\n",chan->name,blocksize,order+1,n);
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
     create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX);
     chan->filter2.in.perform_inline = true;

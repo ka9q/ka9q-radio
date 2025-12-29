@@ -30,11 +30,10 @@ int demod_linear(void *arg){
   if(chan == NULL)
     return -1; // in case asserts are off
 
-  char name[100];
-  snprintf(name,sizeof(name),"lin %u",chan->output.rtp.ssrc);
-  pthread_setname(name);
+  snprintf(chan->name,sizeof(chan->name),"lin %u",chan->output.rtp.ssrc);
+  pthread_setname(chan->name);
   if(Verbose > 1)
-    fprintf(stderr,"%s freq %.3lf starting\n",name,chan->tune.freq);
+    fprintf(stderr,"%s freq %.3lf starting\n",chan->name,chan->tune.freq);
 
   struct frontend const * const frontend = chan->frontend;
   assert(frontend != NULL);
@@ -97,7 +96,7 @@ int demod_linear(void *arg){
       uint32_t const first_block = chan->filter.out.next_jobnum - 1;
       chan->output.rtp.timestamp = (int32_t)(first_block * (chan->output.samprate / block_rate));
       if(Verbose > 0)
-	fprintf(stderr,"demod_linear: ssrc %u starting at FFT jobum %u, preset RTP TS to %u\n",chan->output.rtp.ssrc,first_block,chan->output.rtp.timestamp);
+	fprintf(stderr,"%s starting at FFT jobum %u, preset RTP TS to %u\n",chan->name,first_block,chan->output.rtp.timestamp);
       first_run = true;
     }
 
@@ -342,7 +341,7 @@ int demod_linear(void *arg){
 
   // clean up
   if(Verbose > 1)
-    fprintf(stderr,"%s exiting\n",name);
+    fprintf(stderr,"%s exiting\n",chan->name);
 
   flush_output(chan,false,true); // if still set, marker won't get sent since it wasn't sent last time
   mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float)); // Nails pointer

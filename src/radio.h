@@ -146,6 +146,7 @@ If you use these in shadow copies you must malloc these arrays yourself.
 */
 struct channel {
   bool inuse;
+  char name[100];
   struct frontend *frontend; // Linkage to avoid global use
 
   int lifetime;          // Remaining lifetime, frames

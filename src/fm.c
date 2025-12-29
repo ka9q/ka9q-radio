@@ -20,11 +20,10 @@ int demod_fm(void *arg){
   if(chan == NULL)
     return -1;
 
-  char name[100];
-  snprintf(name,sizeof(name),"fm %u",chan->output.rtp.ssrc);
-  pthread_setname(name);
+  snprintf(chan->name,sizeof(chan->name),"fm %u",chan->output.rtp.ssrc);
+  pthread_setname(chan->name);
   if(Verbose > 1)
-    fprintf(stderr,"%s freq %.3lf starting\n",name,chan->tune.freq);
+    fprintf(stderr,"%s freq %.3lf starting\n",chan->name,chan->tune.freq);
 
   assert(Blocktime != 0);
   assert(chan->frontend != NULL);
@@ -357,7 +356,7 @@ int demod_fm(void *arg){
 
   } while(true);
   if(Verbose > 1)
-    fprintf(stderr,"%s exiting\n",name);
+    fprintf(stderr,"%s exiting\n",chan->name);
 
   // clean up
   flush_output(chan,false,true); // if still set, marker won't get sent since it wasn't sent last time

@@ -28,9 +28,8 @@ int demod_spectrum(void *arg){
   if(chan == NULL)
     return -1;
 
-  char name[100];
-  snprintf(name,sizeof(name),"spect %u",chan->output.rtp.ssrc);
-  pthread_setname(name);
+  snprintf(chan->name,sizeof(chan->name),"spect %u",chan->output.rtp.ssrc);
+  pthread_setname(chan->name);
 
   struct frontend * const frontend = chan->frontend;
   assert(frontend != NULL);
@@ -60,7 +59,7 @@ int demod_spectrum(void *arg){
     // What can we do about unfriendly sizes? Anything?
     if(Verbose > 1)
       fprintf(stderr,"%s wide bin spectrum %u: freq %'lf bin_bw %'f chan->spectrum.bin_count %'d\n",
-	      name,chan->output.rtp.ssrc,chan->tune.freq,chan->spectrum.bin_bw,chan->spectrum.bin_count);
+	      chan->name,chan->output.rtp.ssrc,chan->tune.freq,chan->spectrum.bin_bw,chan->spectrum.bin_count);
 
     chan->spectrum.fft_n = (int)round(frontend->samprate / chan->spectrum.bin_bw);
     chan->output.samprate = 0; // Not meaningful
@@ -87,7 +86,7 @@ int demod_spectrum(void *arg){
     chan->output.channels = 2; // IQ mode
     if(Verbose > 1)
       fprintf(stderr,"%s narrow bin spectrum: bin count %d, bin_bw %.1lf, samprate %d fft size %d\n",
-	      name,chan->spectrum.bin_count,chan->spectrum.bin_bw,chan->output.samprate,chan->spectrum.fft_n);
+	      chan->name,chan->spectrum.bin_count,chan->spectrum.bin_bw,chan->output.samprate,chan->spectrum.fft_n);
 
     int blocklen = (int)round(chan->output.samprate/blockrate);
 
@@ -214,7 +213,7 @@ int demod_spectrum(void *arg){
   } while(true);
 
   if(Verbose > 1)
-    fprintf(stderr,"%s exiting\n",name);
+    fprintf(stderr,"%s exiting\n",chan->name);
 
   chan->spectrum.fft_n = 0;
   delete_filter_output(&chan->filter.out);
