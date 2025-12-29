@@ -253,10 +253,11 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	double const f = fabs(decode_double(cp,optlen));
 	if(!isfinite(f))
 	  break;
-	if(Verbose > 1)
-	  fprintf(stderr,"set ssrc %u freq = %'.3lf\n",ssrc,f);
 
-	set_freq(chan,f);
+	if(Verbose > 1 && f != chan->tune.freq)
+	  fprintf(stderr,"ssrc %u change freq freq = %'.3lf\n",ssrc,f);
+
+	set_freq(chan,f); // still call even if freq hasn't changed, to possibly reassert front end tuner control
       }
       break;
     case FIRST_LO_FREQUENCY:

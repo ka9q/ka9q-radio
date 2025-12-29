@@ -1094,6 +1094,8 @@ double set_first_LO(struct channel const * const chan,double const first_LO){
     return first_LO;
 
   // Direct tuning through local module if available
+  if(Verbose > 1)
+    fprintf(stderr,"ssrc %u retuning front end to %.3lf\n",chan->output.rtp.ssrc,first_LO);
   if(Frontend.tune != NULL)
     return (*Frontend.tune)(&Frontend,first_LO);
 
