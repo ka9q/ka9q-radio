@@ -252,7 +252,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->fm.tone_deviation = decode_float(cp,optlen);
       break;
     case RESOLUTION_BW:
-      channel->spectrum.bin_bw = decode_float(cp,optlen);
+      channel->spectrum.rbw = decode_float(cp,optlen);
       break;
     case SPECTRUM_AVG:
       channel->spectrum.fft_avg = decode_int(cp,optlen);

@@ -53,10 +53,10 @@ static struct  option Options[] = {
 };
 
 
-int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,size_t length);
+int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *rbw,int32_t const ssrc,uint8_t const * const buffer,size_t length);
 
 void help(){
-  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width bin_bw] [-b|--bins bins] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
+  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width rbw] [-b|--bins bins] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
   exit(1);
 }
 
@@ -66,7 +66,7 @@ int main(int argc,char *argv[]){
   double interval = 5; // Period between updates, sec
   double frequency = -1;
   int bins = 0;
-  double bin_bw = 0;
+  double rbw = 0;
   double crossover = -1;
   {
     int c;
@@ -103,7 +103,7 @@ int main(int argc,char *argv[]){
 	Verbose++;
 	break;
       case 'w':
-	bin_bw = strtod(optarg,NULL);
+	rbw = strtod(optarg,NULL);
 	break;
       case 'V':
 	VERSION();
@@ -159,8 +159,8 @@ int main(int argc,char *argv[]){
       encode_float(&bp,RADIO_FREQUENCY,frequency); // 0 frequency means terminate
     if(bins > 0)
       encode_int(&bp,BIN_COUNT,bins);
-    if(bin_bw > 0)
-      encode_float(&bp,RESOLUTION_BW,bin_bw);
+    if(rbw > 0)
+      encode_float(&bp,RESOLUTION_BW,rbw);
     if(crossover >= 0)
       encode_float(&bp,CROSSOVER,crossover);
     encode_eol(&bp);
@@ -213,9 +213,9 @@ int main(int argc,char *argv[]){
     float powers[PKTSIZE / sizeof(float)]; // floats in a max size IP packet
     uint64_t time;
     double r_freq;
-    double r_bin_bw;
+    double r_rbw;
 
-    size_t npower = extract_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&r_freq,&r_bin_bw,Ssrc,buffer+1,length-1);
+    size_t npower = extract_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&r_freq,&r_rbw,Ssrc,buffer+1,length-1);
     if(npower <= 0){
       fprintf(stderr,"Invalid response, length %lu\n",npower);
       usleep(10000); // 10 millisec
@@ -234,9 +234,9 @@ int main(int argc,char *argv[]){
     // npower odd: emit N/2+1....N-1 0....N/2 (division truncating to integer)
     // npower even: emit N/2....N-1 0....N/2-1
     size_t const first_neg_bin = (npower + 1)/2; // round up, e.g., 64->32, 65 -> 33, 66 -> 33
-    double base = r_freq - r_bin_bw * (npower/2); // integer truncation (round down), e.g., 64-> 32, 65 -> 32
+    double base = r_freq - r_rbw * (npower/2); // integer truncation (round down), e.g., 64-> 32, 65 -> 32
     printf(" %.0lf, %.0lf, %.0lf, %lu",
-	   base, base + r_bin_bw * (npower-1), r_bin_bw, npower);
+	   base, base + r_rbw * (npower-1), r_rbw, npower);
 
     // Find lowest non-zero entry, use the same for zero power to avoid -infinity dB
     // Zero power in any bin is unlikely unless they're all zero, but handle it anyway
@@ -257,12 +257,12 @@ int main(int argc,char *argv[]){
       printf("\n");
       for(size_t i=first_neg_bin ; i < npower; i++){
         printf("%lu %lf %.2lf\n",i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
-        base += r_bin_bw;
+        base += r_rbw;
       }
       // Frequencies above center
       for(size_t i=0; i < first_neg_bin; i++){
         printf("%lu %lf %.2lf\n",i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
-        base += r_bin_bw;
+        base += r_rbw;
       }
     } else {
       for(size_t i= first_neg_bin; i < npower; i++)
@@ -285,7 +285,7 @@ int main(int argc,char *argv[]){
 
 // Decode only those status fields relevant to spectrum measurement
 // Return number of bins
-int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *bin_bw,int32_t const ssrc,uint8_t const * const buffer,size_t length){
+int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *rbw,int32_t const ssrc,uint8_t const * const buffer,size_t length){
 #if 0  // use later
   double l_lo1 = 0,l_lo2 = 0;
 #endif
@@ -351,7 +351,7 @@ int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *b
       }
       break;
     case RESOLUTION_BW:
-      *bin_bw = decode_double(cp,optlen);
+      *rbw = decode_double(cp,optlen);
       break;
     case BIN_COUNT: // Do we check that this equals the length of the BIN_DATA tlv?
       l_ccount = decode_int(cp,optlen);

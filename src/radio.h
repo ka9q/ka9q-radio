@@ -246,7 +246,7 @@ struct channel {
   // Coherent bin bandwidth = block rate in Hz
   // Coherent bin spacing = block rate * 1 - ((M-1)/(L+M-1))
   struct {
-    double bin_bw;     // Requested bandwidth (hz) of noncoherent integration bin
+    double rbw;    // Requested bandwidth (hz) of noncoherent integration bin
     double noise_bw;  // Estimated noise bandwidth of bin with current window
     int bin_count;    // Requested bin count
     float *bin_data;  // Array of real floats with bin_count elements

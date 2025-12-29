@@ -465,11 +465,11 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case RESOLUTION_BW:
       {
 	double const x = fabs(decode_float(cp,optlen));
-	if(!isfinite(x) || x == chan->spectrum.bin_bw)
+	if(!isfinite(x) || x == chan->spectrum.rbw)
 	  break;
 	if(Verbose > 1)
-	  fprintf(stderr,"%s bin bw %'.1lf -> %'.1f Hz\n",chan->name,chan->spectrum.bin_bw,x);
-	chan->spectrum.bin_bw = x;
+	  fprintf(stderr,"%s bin bw %'.1lf -> %'.1f Hz\n",chan->name,chan->spectrum.rbw,x);
+	chan->spectrum.rbw = x;
 	if(chan->demod_type == SPECT_DEMOD)
 	  restart_needed = true;
       }
@@ -773,7 +773,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   case SPECT_DEMOD:
     {
       encode_int(&bp,WINDOW_TYPE,chan->spectrum.window_type);
-      encode_float(&bp,RESOLUTION_BW,chan->spectrum.bin_bw); // Hz
+      encode_float(&bp,RESOLUTION_BW,chan->spectrum.rbw); // Hz
       encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
       encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
       encode_float(&bp,SPECTRUM_SHAPE,chan->spectrum.shape);
