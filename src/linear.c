@@ -33,7 +33,7 @@ int demod_linear(void *arg){
   snprintf(chan->name,sizeof(chan->name),"lin %u",chan->output.rtp.ssrc);
   pthread_setname(chan->name);
   if(Verbose > 1)
-    fprintf(stderr,"%s freq %.3lf starting\n",chan->name,chan->tune.freq);
+    fprintf(stderr,"%s freq %'.3lf Hz starting\n",chan->name,chan->tune.freq);
 
   struct frontend const * const frontend = chan->frontend;
   assert(frontend != NULL);

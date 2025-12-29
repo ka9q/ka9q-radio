@@ -31,7 +31,7 @@ int demod_wfm(void *arg){
   snprintf(chan->name,sizeof(chan->name),"wfm %u",chan->output.rtp.ssrc);
   pthread_setname(chan->name);
   if(Verbose > 1)
-    fprintf(stderr,"%s freq %.3lf starting\n",chan->name,chan->tune.freq);
+    fprintf(stderr,"%s freq %'.3lf Hz starting\n",chan->name,chan->tune.freq);
 
   assert(Blocktime != 0);
   assert(chan->frontend != NULL);
