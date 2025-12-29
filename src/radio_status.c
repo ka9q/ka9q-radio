@@ -195,7 +195,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  restart_needed = true; // chan changed, ask for a restart
 	} if(chan->output.samprate != old.output.samprate){
 	  if(Verbose > 1)
-	    fprintf(stderr,"%s samp rate change %u -> %u\n",chan->name,old.output.samprate,chan->output.samprate);
+	    fprintf(stderr,"%s samp rate change %'u -> %'u\n",chan->name,old.output.samprate,chan->output.samprate);
 	  restart_needed = true; // chan changed, ask for a restart
 	}
       }
@@ -243,12 +243,15 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  break; // ignore illegal Opus sample rates (eventually will use sample rate converter)
 	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	if(pt == -1){
-	  fprintf(stderr,"%s can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+	  fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
 		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding);
 	  break; // refuse to change
 	}
 	chan->output.rtp.type = pt;
 	flush_output(chan,false,true); // Flush to Ethernet before we change this
+	if(Verbose)
+	  fprintf(stderr,"%s change samprate %'u -> %'u\n",chan->name,chan->output.samprate,new_sample_rate);
+
 	chan->output.samprate = new_sample_rate;
 	restart_needed = true;
       }
@@ -260,7 +263,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  break;
 
 	if(Verbose > 1 && f != chan->tune.freq)
-	  fprintf(stderr,"%s change freq = %'.3lf\n",chan->name,f);
+	  fprintf(stderr,"%s change freq = %'.3lf Hz\n",chan->name,f);
 
 	set_freq(chan,f); // still call even if freq hasn't changed, to possibly reassert front end tuner control
       }
@@ -434,7 +437,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  break;
 	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	if(pt == -1){
-	  fprintf(stderr,"%s can't allocate payload type for samprate %u, channels %u, encoding %d\n",
+	  fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
 		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	  break; // ignore the request
 	}
@@ -539,7 +542,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 
 	int pt = pt_from_info(samprate,chan->output.channels,chan->output.encoding);
 	if(pt == -1){
-	  fprintf(stderr,"%s can't allocate payload type for samprate %u, channels %u, encoding %u\n",
+	  fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
 		  chan->name,samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	  break; // Simply refuse to change
 	}
