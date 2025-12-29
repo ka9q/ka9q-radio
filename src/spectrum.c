@@ -58,8 +58,8 @@ int demod_spectrum(void *arg){
     // Direct Wideband mode. Setup FFT to work on raw A/D input
     // What can we do about unfriendly sizes? Anything?
     if(Verbose > 1)
-      fprintf(stderr,"%s wide bin spectrum %u: freq %'lf bin_bw %'f chan->spectrum.bin_count %'d\n",
-	      chan->name,chan->output.rtp.ssrc,chan->tune.freq,chan->spectrum.bin_bw,chan->spectrum.bin_count);
+      fprintf(stderr,"%s wide spectrum: center %'.3lf bin count %d, rbw %.1lf, samprate %u fft size %d\n",
+	      chan->name,chan->tune.freq,chan->spectrum.bin_count,chan->spectrum.bin_bw,chan->output.samprate,chan->spectrum.fft_n);
 
     chan->spectrum.fft_n = (int)round(frontend->samprate / chan->spectrum.bin_bw);
     chan->output.samprate = 0; // Not meaningful
@@ -85,8 +85,8 @@ int demod_spectrum(void *arg){
     chan->output.samprate = (int)round(chan->spectrum.fft_n * chan->spectrum.bin_bw);
     chan->output.channels = 2; // IQ mode
     if(Verbose > 1)
-      fprintf(stderr,"%s narrow bin spectrum: bin count %d, bin_bw %.1lf, samprate %d fft size %d\n",
-	      chan->name,chan->spectrum.bin_count,chan->spectrum.bin_bw,chan->output.samprate,chan->spectrum.fft_n);
+      fprintf(stderr,"%s narrow spectrum: center %'.3lf bin count %u, rbw %.1lf, samprate %u fft size %u\n",
+	      chan->name,chan->tune.freq,chan->spectrum.bin_count,chan->spectrum.bin_bw,chan->output.samprate,chan->spectrum.fft_n);
 
     int blocklen = (int)round(chan->output.samprate/blockrate);
 
