@@ -57,10 +57,6 @@ int demod_spectrum(void *arg){
   if(chan->spectrum.bin_bw > chan->spectrum.crossover){
     // Direct Wideband mode. Setup FFT to work on raw A/D input
     // What can we do about unfriendly sizes? Anything?
-    if(Verbose > 1)
-      fprintf(stderr,"%s wide spectrum: center %'.3lf bin count %d, rbw %.1lf, samprate %u fft size %d\n",
-	      chan->name,chan->tune.freq,chan->spectrum.bin_count,chan->spectrum.bin_bw,chan->output.samprate,chan->spectrum.fft_n);
-
     chan->spectrum.fft_n = (int)round(frontend->samprate / chan->spectrum.bin_bw);
     chan->output.samprate = 0; // Not meaningful
     chan->output.channels = 0;
@@ -70,6 +66,10 @@ int demod_spectrum(void *arg){
       // This helps with noise variance at wider spans, not as much with medium spans
       chan->spectrum.fft_avg = (int)ceil((double)point_budget / chan->spectrum.fft_n);
     }
+    if(Verbose > 1)
+      fprintf(stderr,"%s wide spectrum: center %'.3lf bin count %d, rbw %.1lf, samprate %u fft size %d\n",
+	      chan->name,chan->tune.freq,chan->spectrum.bin_count,chan->spectrum.bin_bw,chan->output.samprate,chan->spectrum.fft_n);
+
     // Dummy just so downconvert() will block on each frame
     int r = create_filter_output(&chan->filter.out,&frontend->in,NULL,0,SPECTRUM);
     assert(r == 0);
