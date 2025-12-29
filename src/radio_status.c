@@ -187,10 +187,15 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(chan->filter.min_IF != old.filter.min_IF || chan->filter.max_IF != old.filter.max_IF || chan->filter.kaiser_beta != old.filter.kaiser_beta)
 	  new_filter_needed = true;
 
-	if(chan->demod_type != old.demod_type || chan->output.samprate != old.output.samprate){
+	if(chan->demod_type != old.demod_type){
 	  if(Verbose > 1)
-	    fprintf(stderr,"%s demod %d -> %d, samprate %d -> %d\n",
-		    chan->name,old.demod_type,chan->demod_type,old.output.samprate,chan->output.samprate);
+	  fprintf(stderr,"%s demod change %s (%u) -> %s (%u)\n",chan->name,
+		  demod_name_from_type(old.demod_type),old.demod_type,demod_name_from_type(chan->demod_type),chan->demod_type);
+
+	  restart_needed = true; // chan changed, ask for a restart
+	} if(chan->output.samprate != old.output.samprate){
+	  if(Verbose > 1)
+	    fprintf(stderr,"%s samp rate change %u -> %u\n",chan->name,old.output.samprate,chan->output.samprate);
 	  restart_needed = true; // chan changed, ask for a restart
 	}
       }
@@ -334,7 +339,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(i < 0 || i >= N_DEMOD || i == chan->demod_type)
 	  break;
 	if(Verbose > 1)
-	  fprintf(stderr,"%s demod change %d -> %d\n",chan->name,chan->demod_type,i);
+	  fprintf(stderr,"%s demod change %s (%u) -> %s (%u)\n",chan->name,
+		  demod_name_from_type(chan->demod_type),chan->demod_type,demod_name_from_type(i),i);
 	chan->demod_type = i;
 	restart_needed = true;
       }
@@ -428,7 +434,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  break;
 	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 	if(pt == -1){
-	  fprintf(stderr,"%s can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+	  fprintf(stderr,"%s can't allocate payload type for samprate %u, channels %u, encoding %d\n",
 		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	  break; // ignore the request
 	}
@@ -459,7 +465,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(!isfinite(x) || x == chan->spectrum.bin_bw)
 	  break;
 	if(Verbose > 1)
-	  fprintf(stderr,"%s bin bw %f -> %f\n",chan->name,chan->spectrum.bin_bw,x);
+	  fprintf(stderr,"%s bin bw %'.1lf -> %'.1f Hz\n",chan->name,chan->spectrum.bin_bw,x);
 	chan->spectrum.bin_bw = x;
 	if(chan->demod_type == SPECT_DEMOD)
 	  restart_needed = true;
@@ -471,7 +477,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(x <= 0 || x == chan->spectrum.bin_count)
 	  break;
 	if(Verbose > 1)
-	  fprintf(stderr,"%s bin count %d -> %d\n",chan->name,chan->spectrum.bin_count,x);
+	  fprintf(stderr,"%s bin count %u -> %u\n",chan->name,chan->spectrum.bin_count,x);
 	chan->spectrum.bin_count = x;
 	if(chan->demod_type == SPECT_DEMOD)
 	  restart_needed = true;
@@ -533,7 +539,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 
 	int pt = pt_from_info(samprate,chan->output.channels,chan->output.encoding);
 	if(pt == -1){
-	  fprintf(stderr,"%s can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+	  fprintf(stderr,"%s can't allocate payload type for samprate %u, channels %u, encoding %u\n",
 		  chan->name,samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	  break; // Simply refuse to change
 	}

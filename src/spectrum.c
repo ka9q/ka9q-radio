@@ -67,7 +67,7 @@ int demod_spectrum(void *arg){
       chan->spectrum.fft_avg = (int)ceil((double)point_budget / chan->spectrum.fft_n);
     }
     if(Verbose > 1)
-      fprintf(stderr,"%s wide spectrum: center %'.3lf bin count %d, rbw %.1lf, samprate %u fft size %d\n",
+      fprintf(stderr,"%s wide spectrum: center %'.3lf Hz bin count %u, rbw %.1lf Hz, samprate %u Hz fft size %u\n",
 	      chan->name,chan->tune.freq,chan->spectrum.bin_count,chan->spectrum.bin_bw,chan->output.samprate,chan->spectrum.fft_n);
 
     // Dummy just so downconvert() will block on each frame
@@ -85,7 +85,7 @@ int demod_spectrum(void *arg){
     chan->output.samprate = (int)round(chan->spectrum.fft_n * chan->spectrum.bin_bw);
     chan->output.channels = 2; // IQ mode
     if(Verbose > 1)
-      fprintf(stderr,"%s narrow spectrum: center %'.3lf bin count %u, rbw %.1lf, samprate %u fft size %u\n",
+      fprintf(stderr,"%s narrow spectrum: center %'.3lf Hz bin count %u, rbw %.1lf Hz, samprate %u Hz fft size %u\n",
 	      chan->name,chan->tune.freq,chan->spectrum.bin_count,chan->spectrum.bin_bw,chan->output.samprate,chan->spectrum.fft_n);
 
     int blocklen = (int)round(chan->output.samprate/blockrate);
