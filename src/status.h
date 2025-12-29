@@ -164,6 +164,7 @@ enum status_type {
 size_t encode_string(uint8_t **bp,enum status_type type,void const *buf,size_t buflen);
 int encode_eol(uint8_t **buf);
 int encode_byte(uint8_t **buf,enum status_type type,uint8_t x);
+int encode_bool(uint8_t **buf,enum status_type type,bool x);
 int encode_int(uint8_t **buf,enum status_type type,int x);
 int encode_int16(uint8_t **buf,enum status_type type,uint16_t x);
 int encode_int32(uint8_t **buf,enum status_type type,uint32_t x);

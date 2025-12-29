@@ -69,6 +69,10 @@ int encode_eol(uint8_t **buf){
   return 1;
 }
 
+int encode_bool(uint8_t **buf,enum status_type type,bool x){
+  return encode_byte(buf,type,(uint8_t)x);
+}
+
 int encode_byte(uint8_t **buf,enum status_type type,uint8_t x){
   uint8_t *cp = *buf;
   *cp++ = (uint8_t)type;

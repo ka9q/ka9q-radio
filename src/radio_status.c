@@ -255,7 +255,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  break;
 
 	if(Verbose > 1 && f != chan->tune.freq)
-	  fprintf(stderr,"%s change freq freq = %'.3lf\n",chan->name,f);
+	  fprintf(stderr,"%s change freq = %'.3lf\n",chan->name,f);
 
 	set_freq(chan,f); // still call even if freq hasn't changed, to possibly reassert front end tuner control
       }
@@ -667,13 +667,13 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   encode_int64(&bp,GPS_TIME,now);
   encode_int64(&bp,INPUT_SAMPLES,chan->filter.out.sample_index);
   encode_int32(&bp,INPUT_SAMPRATE,(uint32_t)round(frontend->samprate)); // Already defined on the wire as integer Hz, shouldn't change now
-  encode_int32(&bp,FE_ISREAL,frontend->isreal ? true : false);
+  encode_bool(&bp,FE_ISREAL,frontend->isreal);
   encode_double(&bp,CALIBRATE,frontend->calibrate);
   encode_float(&bp,RF_GAIN,frontend->rf_gain);
   encode_float(&bp,RF_ATTEN,frontend->rf_atten);
   if(isfinite(frontend->rf_level_cal))
     encode_float(&bp,RF_LEVEL_CAL,frontend->rf_level_cal); // not sent unless set
-  encode_int(&bp,RF_AGC,frontend->rf_agc);
+  encode_bool(&bp,RF_AGC,frontend->rf_agc);
   encode_int32(&bp,LNA_GAIN,frontend->lna_gain);
   encode_int32(&bp,MIXER_GAIN,frontend->mixer_gain);
   encode_int32(&bp,IF_GAIN,frontend->if_gain);
@@ -696,6 +696,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   encode_int64(&bp,AD_OVER,frontend->overranges);
   if(frontend->overranges != 0)
     encode_int64(&bp,SAMPLES_SINCE_OVER,frontend->samp_since_over);
+  if(isfinite(chan->sig.n0) && chan->sig.n0 > 0)
   encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
 
   // Modulation mode
@@ -710,31 +711,31 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   // Mode-specific params
   switch(chan->demod_type){
   case LINEAR_DEMOD:
-    encode_byte(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
-    encode_byte(&bp,PLL_ENABLE,chan->pll.enable); // bool
+    encode_bool(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
+    encode_bool(&bp,PLL_ENABLE,chan->pll.enable); // bool
     if(chan->pll.enable){
       encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
-      encode_byte(&bp,PLL_LOCK,chan->pll.lock); // bool
-      encode_byte(&bp,PLL_SQUARE,chan->pll.square); //bool
+      encode_bool(&bp,PLL_LOCK,chan->pll.lock);
+      encode_bool(&bp,PLL_SQUARE,chan->pll.square);
       encode_float(&bp,PLL_PHASE,chan->pll.cphase); // radians
       encode_float(&bp,PLL_BW,chan->pll.loop_bw);   // hz
-      encode_int64(&bp,PLL_WRAPS,chan->pll.rotations); // count of complete 360-deg rotations of PLL phase
+      encode_int64(&bp,PLL_WRAPS,chan->pll.rotations); // count of complete 360-deg rotations of PLL phase - SIGNED
       encode_float(&bp,PLL_SNR,power2dB(chan->pll.snr)); // abs ratio -> dB
     }
     encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
     encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
-    encode_byte(&bp,ENVELOPE,chan->linear.env); // bool
+    encode_bool(&bp,ENVELOPE,chan->linear.env);
     encode_double(&bp,SHIFT_FREQUENCY,chan->tune.shift); // Hz
-    encode_byte(&bp,AGC_ENABLE,chan->linear.agc); // bool
+    encode_bool(&bp,AGC_ENABLE,chan->linear.agc);
     if(chan->linear.agc){
       encode_float(&bp,AGC_HANGTIME,chan->linear.hangtime); // sec
       encode_float(&bp,AGC_THRESHOLD,voltage2dB(chan->linear.threshold)); // amplitude -> dB
       encode_float(&bp,AGC_RECOVERY_RATE,voltage2dB(chan->linear.recovery_rate)); // amplitude/ -> dB/sec
     }
-    encode_byte(&bp,INDEPENDENT_SIDEBAND,chan->filter2.isb);
+    encode_bool(&bp,INDEPENDENT_SIDEBAND,chan->filter2.isb);
     break;
   case FM_DEMOD:
-    encode_byte(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
+    encode_bool(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
     if(chan->fm.tone_freq != 0){
       encode_float(&bp,PL_TONE,chan->fm.tone_freq);
       encode_float(&bp,PL_DEVIATION,chan->fm.tone_deviation);
@@ -742,7 +743,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
     encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
     encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
-    encode_byte(&bp,THRESH_EXTEND,chan->fm.threshold);
+    encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
@@ -750,11 +751,11 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     break;
   case WFM_DEMOD:
     // Relevant only when squelches are active
-    encode_byte(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
+    encode_bool(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
     encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
     encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
-    encode_byte(&bp,THRESH_EXTEND,chan->fm.threshold);
+    encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * 48000.0f)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
@@ -807,7 +808,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_int(&bp,OPUS_BANDWIDTH,chan->opus.bandwidth);
     encode_int(&bp,OPUS_APPLICATION,chan->opus.application);
     encode_int(&bp,OPUS_FEC,chan->opus.fec);
-    encode_int(&bp,OPUS_DTX,chan->opus.dtx);
+    encode_bool(&bp,OPUS_DTX,chan->opus.dtx);
     encode_float(&bp,HEADROOM,voltage2dB(chan->output.headroom)); // amplitude -> dB
     // Doppler info
     encode_double(&bp,DOPPLER_FREQUENCY,chan->tune.doppler); // Hz

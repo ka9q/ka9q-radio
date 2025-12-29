@@ -899,7 +899,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       double const x = strtod(str,&ptr);
       if(ptr != str && isfinite(x)){
 	encode_float(bpp,GAIN,x);
-	encode_byte(bpp,AGC_ENABLE,0); // Also done implicitly in radiod
+	encode_bool(bpp,AGC_ENABLE,false); // Also done implicitly in radiod
       }
     }
     break;
@@ -1013,15 +1013,15 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       } else if(strcasestr(str,"stereo") != NULL){
 	encode_int(bpp,OUTPUT_CHANNELS,enable ? 2 : 1);
       } else if(strcasestr(str,"isb") != NULL){
-	encode_byte(bpp,INDEPENDENT_SIDEBAND,enable);
+	encode_bool(bpp,INDEPENDENT_SIDEBAND,enable);
       } else if(strcasestr(str,"pll") != NULL){
-	encode_byte(bpp,PLL_ENABLE,enable);
+	encode_bool(bpp,PLL_ENABLE,enable);
       } else if(strcasestr(str,"square") != NULL){
-	encode_byte(bpp,PLL_SQUARE,enable);
+	encode_bool(bpp,PLL_SQUARE,enable);
 	if(enable)
-	  encode_byte(bpp,PLL_ENABLE,enable);
+	  encode_bool(bpp,PLL_ENABLE,enable);
       } else if(strcasestr(str,"agc") != NULL){
-	encode_byte(bpp,AGC_ENABLE,enable);
+	encode_bool(bpp,AGC_ENABLE,enable);
       }
     }
     break;
@@ -1149,67 +1149,67 @@ static void process_mouse(struct channel *chan,uint8_t **bpp){
 	  encode_int(bpp,OUTPUT_CHANNELS,2);
 	  break;
 	case 3:
-	  encode_int(bpp,SNR_SQUELCH,0);
+	  encode_bool(bpp,SNR_SQUELCH,false);
 	  break;
 	case 4:
-	  encode_int(bpp,SNR_SQUELCH,1);
+	  encode_bool(bpp,SNR_SQUELCH,true);
 	  break;
 	}
       } else if(chan->demod_type == FM_DEMOD){
 	switch(my){
 	case 1:
-	  encode_int(bpp,THRESH_EXTEND,0);
+	  encode_bool(bpp,THRESH_EXTEND,false);
 	  break;
 	case 2:
-	  encode_int(bpp,THRESH_EXTEND,1);
+	  encode_bool(bpp,THRESH_EXTEND,true);
 	  break;
 	case 3:
-	  encode_int(bpp,SNR_SQUELCH,0);
+	  encode_bool(bpp,SNR_SQUELCH,false);
 	  break;
 	case 4:
-	  encode_int(bpp,SNR_SQUELCH,1);
+	  encode_bool(bpp,SNR_SQUELCH,true);
 	  break;
 	}
       } else if(chan->demod_type == LINEAR_DEMOD){
 	switch(my){
 	case 1:
-	  encode_int(bpp,ENVELOPE,1);
+	  encode_bool(bpp,ENVELOPE,true);
 	  encode_int(bpp,OUTPUT_CHANNELS,1);
 	  break;
 	case 2:
-	  encode_int(bpp,ENVELOPE,1);
+	  encode_bool(bpp,ENVELOPE,true);
 	  encode_int(bpp,OUTPUT_CHANNELS,2);
 	  break;
  	case 3:
-	  encode_int(bpp,ENVELOPE,0);
+	  encode_bool(bpp,ENVELOPE,false);
 	  encode_int(bpp,OUTPUT_CHANNELS,1);
 	  break;
 	case 4:
-	  encode_int(bpp,ENVELOPE,0);
+	  encode_bool(bpp,ENVELOPE,false);
 	  encode_int(bpp,OUTPUT_CHANNELS,2);
 	  break;
 	case 5:
-	  encode_int(bpp,PLL_ENABLE,0);
+	  encode_int(bpp,PLL_ENABLE,false);
 	  break;
 	case 6:
-	  encode_int(bpp,PLL_ENABLE,1);
-	  encode_int(bpp,PLL_SQUARE,0);
+	  encode_int(bpp,PLL_ENABLE,true);
+	  encode_int(bpp,PLL_SQUARE,false);
 	  break;
 	case 7:
-	  encode_int(bpp,PLL_ENABLE,1);
-	  encode_int(bpp,PLL_SQUARE,1);
+	  encode_int(bpp,PLL_ENABLE,true);
+	  encode_int(bpp,PLL_SQUARE,true);
 	  break;
 	case 8:
-	  encode_int(bpp,AGC_ENABLE,0);
+	  encode_int(bpp,AGC_ENABLE,false);
 	  break;
 	case 9:
-	  encode_int(bpp,AGC_ENABLE,1);
+	  encode_int(bpp,AGC_ENABLE,true);
 	  break;
 	case 10:
-	  encode_int(bpp,SNR_SQUELCH,0);
+	  encode_int(bpp,SNR_SQUELCH,false);
 	  break;
 	case 11:
-	  encode_int(bpp,SNR_SQUELCH,1);
+	  encode_int(bpp,SNR_SQUELCH,true);
 	  break;
 	}
       }

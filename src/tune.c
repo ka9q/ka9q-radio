@@ -270,9 +270,9 @@ int main(int argc,char *argv[]){
 	encode_double(&bp,RADIO_FREQUENCY,Frequency); // Hz
       if(Gain != INFINITY){
 	encode_float(&bp,GAIN,Gain);
-	encode_int(&bp,AGC_ENABLE,false); // Turn off AGC for manual gain
+	encode_bool(&bp,AGC_ENABLE,false); // Turn off AGC for manual gain
       } else if(Agc_enable == 1)
-	encode_int(&bp,AGC_ENABLE,true);
+	encode_bool(&bp,AGC_ENABLE,true);
 
       if(Encoding == OPUS_VOIP){
 	// Special case: ordinary opus + OPUS_APPLICATION_VOIP option
