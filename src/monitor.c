@@ -399,10 +399,7 @@ int main(int argc,char * const argv[]){
 		      NULL,
 		      &outputParameters,
 		      DAC_samprate,
-
-		      //		      paFramesPerBufferUnspecified, // seems to be 31 on OSX
-		      480,
-		      //SAMPPCALLBACK,
+		      480, // 10 ms @ 48 kHz
 		      0,
 		      pa_callback,
 		      NULL);
@@ -456,14 +453,15 @@ void vote(void){
     struct session * const sp = &Sessions[i];
     if(!atomic_load_explicit(&sp->inuse,memory_order_acquire))
       continue;
-    if(sp->muted || !sp->running) // No recent audio, skip
+    if(atomic_load_explicit(&sp->muted,memory_order_relaxed)
+       || !atomic_load_explicit(&sp->running,memory_order_relaxed)) // No recent audio, skip
       continue;
 
     if(best == NULL || sp->snr > best->snr)
       best = sp;
   }
   // Don't claim it unless we're sufficiently better (or there's nobody)
-  if(Best_session == NULL || Best_session->muted || !Best_session->running)
+  if(Best_session == NULL || Best_session->muted || !Best_session->running) // use atomics?
     Best_session = best;
   else if(best != NULL){
     for(int i=0; i < HSIZE;i++){
@@ -555,11 +553,15 @@ void *statproc(void *arg){
 int Session_creates = 0;
 
 struct session *lookup_or_create_session(struct sockaddr_storage const *sender,const uint32_t ssrc){
+  int first_idle = -1;
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < NSESSIONS; i++){
     struct session * const sp = Sessions + i;
-    if(!sp->inuse)
+    if(!sp->inuse){
+      if(first_idle == -1)
+	first_idle = i; // in case we need to create it
       continue;
+    }
     if(sp->ssrc == ssrc
        && address_match(sender,&sp->sender)
        //       && getportnumber(&sp->sender) == getportnumber(&sender)
@@ -568,17 +570,11 @@ struct session *lookup_or_create_session(struct sockaddr_storage const *sender,c
       return sp;
     }
   }
-  // Look for an empty spot
-  struct session *sp = NULL;
-  for(int i = 0; i < NSESSIONS; i++){
-    sp = Sessions + i;
-    if(!sp->inuse)
-      break;
-  }
-  if(sp == Sessions + NSESSIONS){
-    pthread_mutex_unlock(&Sess_mutex);
+  // Assign an empty spot
+  if(first_idle == -1)
     return NULL;
-  }
+
+  struct session * const sp = Sessions + first_idle;
   memset(sp,0,sizeof(struct session));
 
   Session_creates++;
@@ -587,8 +583,8 @@ struct session *lookup_or_create_session(struct sockaddr_storage const *sender,c
   memcpy(&sp->sender,sender,sizeof(sp->sender));
   pthread_cond_init(&sp->qcond,NULL);
   pthread_mutex_init(&sp->qmutex,NULL);
-  pthread_mutex_unlock(&Sess_mutex);
   atomic_store_explicit(&sp->inuse,true,memory_order_release);
+  pthread_mutex_unlock(&Sess_mutex);
   return sp; // caller will set sp->inuse
 }
 
@@ -652,7 +648,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   Portaudio_delay = timeInfo->outputBufferDacTime - timeInfo->currentTime;
 
   // Output frame clock at beginning of our buffer
-  uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+  uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed); // we control it
   int const base = (Channels * rptr) & (BUFFERSIZE-1); // base sample index into all session output buffers
   float * const buffer = (float *)outputBuffer;
   memset(buffer, 0, framesPerBuffer * Channels * sizeof (float));
@@ -675,7 +671,8 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     struct session *sp = Sessions + i;
     if(!atomic_load_explicit(&sp->inuse,memory_order_acquire)) // don't proceed unless the session is fully initialized
       continue;
-    if(!sp->running)
+    if(!atomic_load_explicit(&sp->running,memory_order_acquire)
+       || atomic_load_explicit(&sp->muted,memory_order_acquire))
       continue;
 
     uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
@@ -687,9 +684,9 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     if(frames + rptr > wptr)
       frames = wptr - rptr; // limit to what he's got - okay because we know wptr > rptr
 
-    for(unsigned int j = 0; j < Channels*frames; j++){
+    for(unsigned int j = 0; j < Channels*frames; j++)
       buffer[j] += sp->buffer[BINDEX(base,j)];
-    }
+
     total += frames;
   }
   double energy = 0;
@@ -701,10 +698,10 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 #endif
 
   opus_pcm_soft_clip(buffer,(int)framesPerBuffer,Channels,Softclip_mem);
-  atomic_fetch_add_explicit(&Audio_frames,framesPerBuffer,memory_order_relaxed);
-  atomic_fetch_add_explicit(&Output_time,framesPerBuffer,memory_order_relaxed);
-  atomic_fetch_add_explicit(&Output_total,total,memory_order_relaxed);
-  atomic_fetch_add_explicit(&Callbacks,1,memory_order_relaxed);
+  atomic_fetch_add_explicit(&Audio_frames,framesPerBuffer,memory_order_release);
+  atomic_fetch_add_explicit(&Output_time,framesPerBuffer,memory_order_release);
+  atomic_fetch_add_explicit(&Output_total,total,memory_order_release);
+  atomic_fetch_add_explicit(&Callbacks,1,memory_order_release);
   return paContinue;
 }
 
@@ -730,7 +727,7 @@ void *output_thread(void *p){
     int rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
     for(int i=0; i < NSESSIONS; i++){
       struct session *sp = Sessions + i;
-      if(!sp->inuse)
+      if(!atomic_load_explicit(&sp->inuse,memory_order_acquire))
 	continue;
 
       int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);

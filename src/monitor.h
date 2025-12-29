@@ -18,7 +18,12 @@
 #define BBSIZE (2*5760)
 struct session {
   _Atomic bool inuse;
+  _Atomic bool terminate;            // Set to cause thread to terminate voluntarily
+  _Atomic bool muted;                // Do everything but send to output
+  _Atomic bool running;              // Audio arrived recently
+
   bool initialized;
+  bool reset;                // Set to force output timing reset on next packet
   struct sockaddr_storage sender;
   char const *dest;
 
@@ -73,10 +78,7 @@ struct session {
   uint64_t reseqs;
   uint64_t plcs;       // Opus packet loss conceals
 
-  _Atomic bool terminate;            // Set to cause thread to terminate voluntarily
-  bool muted;                // Do everything but send to output
-  bool reset;                // Set to force output timing reset on next packet
-  bool running;              // Audio arrived recently
+
 
   char id[32];
   bool notch_enable;         // Enable PL removal notch

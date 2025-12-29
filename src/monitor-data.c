@@ -131,7 +131,7 @@ void *dataproc(void *arg){
 	sp->pan = 0;     // center by default
       sp->gain = dB2voltage(Gain);    // Start with global default
       sp->notch_enable = Notch;
-      sp->muted = Start_muted;
+      atomic_store_explicit(&sp->muted,Start_muted,memory_order_release);
       sp->dest = mcast_address_text;
       sp->rtp_state.timestamp = sp->next_timestamp = pkt->rtp.timestamp;
       sp->rtp_state.seq = pkt->rtp.seq;
@@ -193,7 +193,7 @@ void decode_task_cleanup(void *arg){
   struct session *sp = (struct session *)arg;
   assert(sp);
 
-  sp->inuse = false;
+  atomic_store_explicit(&sp->inuse,false,memory_order_release);
   ASSERT_UNLOCKED(&sp->qmutex);
   pthread_mutex_destroy(&sp->qmutex);
   pthread_cond_destroy(&sp->qcond);
@@ -250,8 +250,8 @@ void *decode_task(void *arg){
   // Main loop; run until asked to quit
   while(!atomic_load_explicit(&sp->terminate,memory_order_acquire) && !atomic_load_explicit(&Terminate,memory_order_acquire)){
     if(sp->samprate == 0){
-      sp->running = false;
       sp->active = 0;
+      atomic_store_explicit(&sp->running,false,memory_order_release);
     }
     assert(pkt == NULL); // watch for leaks
     while(!atomic_load_explicit(&sp->terminate,memory_order_acquire) && !atomic_load_explicit(&Terminate,memory_order_acquire)){
@@ -283,8 +283,8 @@ void *decode_task(void *arg){
 	    sp->consec_out_of_order = 0;
 	  }
 	  if(!sp->running){
-	    sp->running = true;
 	    reset_playout(sp);
+	    atomic_store_explicit(&sp->running,true,memory_order_release);
 	  }
 	  decode_rtp_data(sp,pkt);
 	  FREE(pkt);
@@ -303,17 +303,17 @@ void *decode_task(void *arg){
 
       // Calculate queue wait timeout
       uint64_t timeout = (int64_t)BILLION/10; // default timeout 100 ms when stopped
-      uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-      uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
+      uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_acquire); // the callback writes it
+      uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed); // only we write it
       // Read and write pointers and sample rate  must be initialized to be useful
       if(rptr == 0 || wptr == 0){
 	// Probably hasn't ever run - can this happen? maybe the callback isn't running yet
-	sp->running = false;
 	sp->active = 0;
+	atomic_store_explicit(&sp->running,false,memory_order_release);
       }
-      if(sp->running && !sp->muted){
+      if(atomic_load_explicit(&sp->running,memory_order_relaxed) && !atomic_load_explicit(&sp->muted,memory_order_relaxed)){
 	// wptr and rptr are in frames at DAC_samprate, typically 48 kHz
-	unsigned const quantum = atomic_load_explicit(&Callback_quantum,memory_order_relaxed);
+	unsigned const quantum = atomic_load_explicit(&Callback_quantum,memory_order_relaxed); // pretty much static
 
 	if(wptr > rptr + sp->playout + quantum){ // care with unsigned!
 	  // We're conservatively ahead of the reader, by how much?
@@ -329,8 +329,8 @@ void *decode_task(void *arg){
 	    break; // conceal generated, handle the synthetic audio
 	  } else {
 	    // Too many PLCs generated, stream stopped
-	    sp->running = false;
 	    sp->active = 0;
+	    atomic_store_explicit(&sp->running,false,memory_order_release);
 	  }
 	}
       }
@@ -401,7 +401,7 @@ bool kick_output(void){
       abort();
     }
     for(int i=0; i < NSESSIONS; i++){
-      if(!Sessions[i].inuse)
+      if(!atomic_load_explicit(&Sessions[i].inuse,memory_order_acquire))
 	continue;
       reset_playout(&Sessions[i]);
     }
@@ -738,7 +738,7 @@ static void copy_to_stream(struct session *sp){
   float *trimmed = sp->bounce;
   int tsize = sp->frame_size;
 
-  uint64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed); // frames
+  uint64_t rptr = atomic_load_explicit(&Output_time,memory_order_acquire); // frames
   uint64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed); // frames
 
   if(wptr < rptr){
