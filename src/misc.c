@@ -357,11 +357,9 @@ char *ftime(char * result,int size,int64_t t){
   t -= 3600 * hr;
 
   // Show hours and the hour:minute colon only if hr > 0
-  int r;
+  int r = 0;
   if(hr > 0)
-    r = snprintf(cp,size,"%3lld:",(long long)hr);
-  else
-    r = snprintf(cp,size,"    ");
+    r = snprintf(cp,size,"%lld:",(long long)hr);
 
   if(r < 0)
     return NULL;
@@ -373,32 +371,27 @@ char *ftime(char * result,int size,int64_t t){
   assert(mn < 60);
   assert(t < 60);
 
-  r = 3;
+  r = 0;
   if(hr > 0)
     // hours field is present, show minutes with leading zero
     r = snprintf(cp,size,"%02lld:",(long long)mn);
   else if(mn > 0)
     // Hours zero, show minute without leading 0
-    r = snprintf(cp,size,"%2lld:",(long long)mn);
-  else
-    r = snprintf(cp,size,"   ");
+    r = snprintf(cp,size,"%lld:",(long long)mn);
 
-  assert(r == 3);
   if(r < 0)
     return NULL;
   cp += r;
   size -= r;
 
 
+  r = 0;
   if(hr > 0 || mn > 0)
   // Hours or minutes are nonzero, show seconds with leading 0
     r = snprintf(cp,size,"%02lld",(long long)t);
   else if(t > 0)
-    r = snprintf(cp,size,"%2lld",(long long)t);
-  else
-    r = snprintf(cp,size,"  "); // All zero, emit all blanks
+    r = snprintf(cp,size,"%lld",(long long)t);
 
-  assert(r == 2);
   if(r < 0)
     return NULL;
 
