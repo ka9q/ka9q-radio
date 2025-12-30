@@ -943,7 +943,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       }
     }
     break;
-  case 'k': // Kaiser window parameter
+  case 'k': // FFT analysis window parameter (Kaiser or Gaussian)
     {
       char str[Entry_width],*ptr;
       getentry("Spectrum analyzer shape param β/σ: ",str,sizeof(str));
@@ -1566,6 +1566,7 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
   case SPECT_DEMOD:
     pprintw(w,row++,col,"Bin width","%.0lf Hz",chan->spectrum.rbw);
     pprintw(w,row++,col,"Noise BW","%.1lf Hz",chan->spectrum.noise_bw);
+    pprintw(w,row++,col,"Rel NBW","%.1lf dB",power2dB(chan->spectrum.noise_bw/chan->spectrum.rbw));
     pprintw(w,row++,col,"Bins","%d   ",chan->spectrum.bin_count);
     pprintw(w,row++,col,"Crossover","%.0lf Hz",chan->spectrum.crossover);
     pprintw(w,row++,col,"FFT N","%d   ",chan->spectrum.fft_n);
