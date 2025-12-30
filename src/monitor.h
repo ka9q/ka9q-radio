@@ -163,7 +163,7 @@ extern int Nsessions;
 
 extern _Atomic bool Terminate;
 extern bool Voting;
-struct session const * _Atomic Best_session; // Session with highest SNR
+extern struct session const * _Atomic Best_session; // Session with highest SNR
 extern struct sockaddr Metadata_dest_socket;
 extern char const *Pipe;
 extern struct sockaddr_in *Source_socket;
