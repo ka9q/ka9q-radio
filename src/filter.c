@@ -1312,6 +1312,7 @@ double exact_blackman_window(int n,int N){
   return a0 - a1*cos(2*M_PI*n/(N-1)) + a2*cos(4*M_PI*n/(N-1));
 }
 
+#if 0
 // Used by gaussian_window
 // https://en.wikipedia.org/wiki/Window_function (section Approximate confined Gaussian window)
 static inline double G(double const x,int const N, double const s){
@@ -1339,6 +1340,56 @@ double gaussian_window(int n, int N, double s){
   int const L = N+1;
   return G(n,N,s) - ( G(-0.5,N,s) * (G(n+L,N,s) + G(n-L,N,s) ) / ( G(-0.5 + L,N,s) + G(-0.5 - L,N,s) ) );
 }
+
+# else
+// chat gpt version
+/*
+ * Gaussian window using the common "alpha" parameterization:
+ *
+ *   c = (N-1)/2
+ *   t = (n - c)/c   (so endpoints are at t = ±1)
+ *   w[n] = exp( -0.5 * (alpha * t)^2 )
+ *
+ * Properties (with normalize_peak=1):
+ *   max(w) = 1
+ *   w[0] = w[N-1] = exp(-0.5 * alpha^2)
+ *
+ * Returns 0 on success, -1 on invalid args.
+ */
+int gaussian_window_alpha(float *w, size_t N, double alpha, bool normalize_peak){
+    if (!w || N == 0) return -1;
+    if (!(alpha > 0.0)) return -1;
+
+    const double c = 0.5 * (double)(N - 1);
+
+    // N=1: define as 1.0
+    if (N == 1) {
+        w[0] = 1.0;
+        return 0;
+    }
+
+    double maxv = 0.0;
+
+    for (size_t n = 0; n < N; n++) {
+        // Normalized coordinate in [-1, +1]
+        const double t = ((double)n - c) / c;
+        const double x = alpha * t;
+        const double v = exp(-0.5 * x * x);
+        w[n] = v;
+        if (v > maxv) maxv = v;
+    }
+
+    if (normalize_peak && maxv > 0.0) {
+        const double inv = 1.0 / maxv;
+        for (size_t n = 0; n < N; n++)
+            w[n] *= inv;
+    }
+
+    return 0;
+}
+#endif
+
+
 
 
 #if 0

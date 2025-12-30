@@ -155,8 +155,12 @@ int demod_spectrum(void *arg){
   case GAUSSIAN_WINDOW:
     // Reuse kaiser β as σ parameter
     // note σ = 0 is a pathological value for gaussian, it's an impulse with infinite sidelobes
+#if 0
     for(int i=0; i < chan->spectrum.fft_n; i++)
       chan->spectrum.window[i] = gaussian_window(i,chan->spectrum.fft_n,chan->spectrum.shape);
+#else
+    gaussian_window_alpha(chan->spectrum.window, chan->spectrum.fft_n,chan->spectrum.shape, false); // we normalize them all below
+#endif
     break;
   case HANN_WINDOW:
     for(int i=0; i < chan->spectrum.fft_n; i++)

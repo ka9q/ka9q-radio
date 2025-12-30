@@ -509,10 +509,10 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case SPECTRUM_SHAPE: // Kaiser or gaussian
       {
 	double const x = fabs(decode_float(cp,optlen)); // always positive
-	if(isfinite(x) && x != chan->spectrum.shape){
-	  chan->spectrum.shape = x;
-	  restart_needed = true;
-	}
+	if(!isfinite(x) || x == chan->spectrum.shape)
+	  break;
+	chan->spectrum.shape = x;
+	restart_needed = true;
       }
       break;
     case SPECTRUM_AVG:
