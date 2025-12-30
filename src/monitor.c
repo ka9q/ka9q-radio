@@ -104,23 +104,25 @@ PaStream *Pa_Stream;          // Portaudio stream handle
 int inDevNum;                 // Portaudio's audio output device index
 int64_t Start_time;
 PaTime Start_pa_time;
-PaTime Last_callback_time;
+_Atomic PaTime Last_callback_time;
 int64_t Last_error_time;
 int Nsessions;
 struct session Sessions[NSESSIONS];
 _Atomic bool Terminate;
-struct session *Best_session; // Session with highest SNR
+struct session const * _Atomic Best_session; // Session with highest SNR
 int Mcast_ttl;
 void *output_thread(void *p);
 struct sockaddr_in *Source_socket;
+int Callback_blocksize = 960; // 960 samples = 20 ms @ 48k
 
-static char Optstring[] = "CI:P:LR:Sc:f:g:o:p:qr:su:vnV";
+static char Optstring[] = "CI:P:LR:Sb:c:f:g:o:p:qr:su:vnV";
 static struct  option Options[] = {
    {"center", no_argument, NULL, 'C'},
    {"input", required_argument, NULL, 'I'},
    {"list-audio", no_argument, NULL, 'L'},
    {"device", required_argument, NULL, 'R'},
    {"autosort", no_argument, NULL, 'S'},
+   {"blocksize", required_argument, NULL, 'b'},
    {"channels", required_argument, NULL, 'c'},
    {"config", required_argument, NULL, 'f'},
    {"gain", required_argument, NULL, 'g'},
@@ -170,6 +172,7 @@ int main(int argc,char * const argv[]){
       break;
     }
   }
+
   if(Config_file){
     dictionary *Configtable = iniparser_load(Config_file);
     if(Configtable == NULL){
@@ -203,6 +206,7 @@ int main(int argc,char * const argv[]){
     if(config_getboolean(Configtable,Audio,"center",false))
       Auto_position = false;
 
+    Callback_blocksize = config_getint(Configtable,Audio,"blocksize",Callback_blocksize);
     Auto_sort = config_getboolean(Configtable,Display,"autosort",Auto_sort);
     Update_interval = config_getint(Configtable,Display,"update",Update_interval);
     Playout = config_getdouble(Configtable,Audio,"playout",Playout) / 1000.; // convert ms to sec
@@ -230,6 +234,9 @@ int main(int argc,char * const argv[]){
   optind = 0; // reset getopt()
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
+    case 'b':
+      Callback_blocksize = atoi(optarg);
+      break;
     case 'c':
       Channels = atoi(optarg);
       break;
@@ -345,13 +352,12 @@ int main(int argc,char * const argv[]){
   snd_lib_error_set_handler(alsa_error_handler);
 #endif
   load_id();
-  // Create output circular buffer
-  // Runs continuously, playing silence until audio arrives.
+  // Callback continuously scans sessions, merging their audio
+  // if active into the output stream
   // This allows multiple streams to be played on hosts that only support one
 
   if(Pipe != NULL){
 #if __linux__
-
     pthread_t pipethread;
     pthread_create(&pipethread,NULL,output_thread,NULL);
 #endif
@@ -399,7 +405,7 @@ int main(int argc,char * const argv[]){
 		      NULL,
 		      &outputParameters,
 		      DAC_samprate,
-		      480, // 10 ms @ 48 kHz
+		      Callback_blocksize,
 		      0,
 		      pa_callback,
 		      NULL);
@@ -444,29 +450,27 @@ int main(int argc,char * const argv[]){
   exit(EX_OK); // calls cleanup() to clean up Portaudio and ncurses. Can't happen...
 }
 
-// Update session now-active flags, pick session with highest SNR for voting
-void vote(void){
-  struct session *best = NULL;
-
+// Sets global Best_session if we have the highest SNR
+void vote(struct session const *sp){
+  assert(sp != NULL);
+  if(!inuse(sp) || muted(sp) || !running(sp))
+    return;
+  
   pthread_mutex_lock(&Sess_mutex);
-  for(int i = 0; i < NSESSIONS; i++){
-    struct session * const sp = &Sessions[i];
-    if(!inuse(sp) || muted(sp) || !running(sp)) // No recent audio, skip
-      continue;
-
-    if(best == NULL || sp->snr > best->snr)
-      best = sp;
+  struct session const *best = atomic_load_explicit(&Best_session,memory_order_acquire);
+  if(best == NULL || !inuse(best) || muted(best)
+     || !running(best)){
+    atomic_store_explicit(&Best_session,sp,memory_order_release); // they abdicated; grab the throne
+    pthread_mutex_unlock(&Sess_mutex);
+    return;
   }
-  // Don't claim it unless we're sufficiently better (or there's nobody)
-  if(Best_session == NULL || muted(Best_session) || !running(Best_session)) // use atomics?
-    Best_session = best;
-  else if(best != NULL){
-    for(int i=0; i < HSIZE;i++){
-      if(Best_session->snr > Hysteresis_table[i].snr){
-	if(best->snr > Best_session->snr + Hysteresis_table[i].hysteresis)
-	  Best_session = best;
-	break;
-      }
+  // Don't take it from a running session unless we're sufficiently better
+  for(int i=0; i < HSIZE;i++){
+    if(sp->snr <= Hysteresis_table[i].snr)
+      continue;
+    if(sp->snr > best->snr + Hysteresis_table[i].hysteresis){
+      atomic_store_explicit(&Best_session,sp,memory_order_release); // we won
+      break;
     }
   }
   pthread_mutex_unlock(&Sess_mutex);
@@ -539,7 +543,7 @@ void *statproc(void *arg){
       sig_power = 0; // Avoid log(-x) = nan
     double const sn0 = sig_power/sp->chan.sig.n0;
     sp->snr = power2dB(sn0/noise_bandwidth);
-    vote();
+    vote(sp);
   }
   FREE(buffer);
   return NULL;
@@ -627,7 +631,7 @@ static float Softclip_mem[2];
 // The session blocks are static, not malloced, in case the callback accesses them for one call before it sees the sp->inuse flag drop.
 // Even if the callback reads a dead buffer, it won't generate any output for it because its write pointer will have stopped advancing
 int pa_callback(void const *inputBuffer, void *outputBuffer,
-		       unsigned long framesPerBuffer,
+		       unsigned long const framesPerBuffer,
 		       PaStreamCallbackTimeInfo const * timeInfo,
 		       PaStreamCallbackFlags statusFlags,
 		       void *userData){
@@ -639,14 +643,17 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   if(!outputBuffer)
     return paAbort; // can this happen??
 
-  Last_callback_time = timeInfo->currentTime;
-  atomic_store_explicit(&Callback_quantum,framesPerBuffer,memory_order_release); // For writer's information
-  // Delay within Portaudio in sec
+  assert(framesPerBuffer != 0);
+  // Informational stuff
+  atomic_store_explicit(&Last_callback_time,timeInfo->currentTime,memory_order_release);
+  atomic_store_explicit(&Callback_quantum,framesPerBuffer,memory_order_release);
   Portaudio_delay = timeInfo->outputBufferDacTime - timeInfo->currentTime;
 
   // Output frame clock at beginning of our buffer
   uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed); // we control it
-  int const base = (Channels * rptr) & (BUFFERSIZE-1); // base sample index into all session output buffers
+  // base sample index into all session output buffers
+  int const base = (Channels * rptr) & (BUFFERSIZE-1);
+  // We'll be summing into it, so clear it first
   float * const buffer = (float *)outputBuffer;
   memset(buffer, 0, framesPerBuffer * Channels * sizeof (float));
 
@@ -664,29 +671,39 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     os *= step;
   }
 #else
-  for(int i=0; i < NSESSIONS; i++){
-    struct session *sp = Sessions + i;
+
+  // If voting, look only at the leader.
+  // Otherwise scan the whole list, summing all active sessions
+  // finally a real use for do {} while();
+  struct session const *sp = Voting ? 
+    atomic_load_explicit(&Best_session,memory_order_acquire) : Sessions;
+
+  do {
+    if(sp == NULL)
+      break; // Voting, and no one has claimed the prize yet
+
     if(!inuse(sp) || !running(sp) || muted(sp))
-      continue;
+      continue; // Don't consider
 
     uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
-    unsigned long frames = framesPerBuffer;
     // careful with unsigned arithmetic
     if(wptr <= rptr)
-      continue;      // he's empty
-
-    if(frames + rptr > wptr)
-      frames = wptr - rptr; // limit to what he's got - okay because we know wptr > rptr
-
+      continue;      // he's empty or behind
+    
+    // limit to what he's got - okay because we know wptr > rptr
+    unsigned long frames =  (wptr - rptr > framesPerBuffer) ? framesPerBuffer :  wptr - rptr;
+    
     for(unsigned int j = 0; j < Channels*frames; j++)
       buffer[j] += sp->buffer[BINDEX(base,j)];
 
     total += frames;
-  }
+  } while(!Voting && ++sp < Sessions + NSESSIONS);
+
+  // Sum up all the energy we've written in this callback
   double energy = 0;
-  for(unsigned int j=0; j < Channels * framesPerBuffer;j++){
+  for(unsigned int j=0; j < Channels * framesPerBuffer;j++)
     energy += buffer[j] * buffer[j];
-  }
+
   energy /= Channels * framesPerBuffer;
   atomic_store_explicit(&Output_level,energy,memory_order_relaxed);
 #endif

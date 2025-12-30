@@ -156,14 +156,14 @@ extern int inDevNum;                 // Portaudio's audio output device index
 extern int64_t Start_time;
 extern pthread_mutex_t Stream_mutex; // Control access to stream start/stop
 extern PaTime Start_pa_time;
-extern PaTime Last_callback_time;
+extern _Atomic PaTime Last_callback_time;
 extern int Invalids;
 extern int64_t Last_error_time;
 extern int Nsessions;
 
 extern _Atomic bool Terminate;
 extern bool Voting;
-extern struct session *Best_session; // Session with highest SNR
+struct session const * _Atomic Best_session; // Session with highest SNR
 extern struct sockaddr Metadata_dest_socket;
 extern char const *Pipe;
 extern struct sockaddr_in *Source_socket;
@@ -183,7 +183,7 @@ void *statproc(void *arg);
 void *repeater_ctl(void *arg);
 char const *lookupid(double freq,double tone);
 bool kick_output();
-void vote();
+void vote(struct session const *sp);
 void reset_playout(struct session *sp,bool hard);
 static inline bool inuse(struct session const *sp){
   assert(sp != NULL);
