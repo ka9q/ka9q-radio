@@ -451,17 +451,14 @@ void vote(void){
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < NSESSIONS; i++){
     struct session * const sp = &Sessions[i];
-    if(!atomic_load_explicit(&sp->inuse,memory_order_acquire))
-      continue;
-    if(atomic_load_explicit(&sp->muted,memory_order_relaxed)
-       || !atomic_load_explicit(&sp->running,memory_order_relaxed)) // No recent audio, skip
+    if(!inuse(sp) || muted(sp) || !running(sp)) // No recent audio, skip
       continue;
 
     if(best == NULL || sp->snr > best->snr)
       best = sp;
   }
   // Don't claim it unless we're sufficiently better (or there's nobody)
-  if(Best_session == NULL || Best_session->muted || !Best_session->running) // use atomics?
+  if(Best_session == NULL || muted(Best_session) || !running(Best_session)) // use atomics?
     Best_session = best;
   else if(best != NULL){
     for(int i=0; i < HSIZE;i++){
@@ -557,7 +554,7 @@ struct session *lookup_or_create_session(struct sockaddr_storage const *sender,c
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < NSESSIONS; i++){
     struct session * const sp = Sessions + i;
-    if(!sp->inuse){
+    if(!inuse(sp)){
       if(first_idle == -1)
 	first_idle = i; // in case we need to create it
       continue;
@@ -669,10 +666,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 #else
   for(int i=0; i < NSESSIONS; i++){
     struct session *sp = Sessions + i;
-    if(!atomic_load_explicit(&sp->inuse,memory_order_acquire)) // don't proceed unless the session is fully initialized
-      continue;
-    if(!atomic_load_explicit(&sp->running,memory_order_acquire)
-       || atomic_load_explicit(&sp->muted,memory_order_acquire))
+    if(!inuse(sp) || !running(sp) || muted(sp))
       continue;
 
     uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
@@ -727,7 +721,7 @@ void *output_thread(void *p){
     int rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
     for(int i=0; i < NSESSIONS; i++){
       struct session *sp = Sessions + i;
-      if(!atomic_load_explicit(&sp->inuse,memory_order_acquire))
+      if(!inuse(sp))
 	continue;
 
       int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);

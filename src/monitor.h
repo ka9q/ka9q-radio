@@ -184,7 +184,20 @@ void *repeater_ctl(void *arg);
 char const *lookupid(double freq,double tone);
 bool kick_output();
 void vote();
-void reset_playout(struct session *sp);
+void reset_playout(struct session *sp,bool hard);
+static inline bool inuse(struct session const *sp){
+  assert(sp != NULL);
+  return atomic_load_explicit(&sp->inuse,memory_order_acquire);
+}
+static inline bool running(struct session const *sp){
+  assert(sp != NULL);
+  return atomic_load_explicit(&sp->running,memory_order_acquire);
+}
+static inline bool muted(struct session const *sp){
+  assert(sp != NULL);
+  return atomic_load_explicit(&sp->muted,memory_order_acquire);
+}
+
 
 static inline int modsub(int a, int b, int const modulus){
   if(a >= modulus)
