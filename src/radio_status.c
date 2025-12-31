@@ -610,7 +610,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case MINPACKET:
       {
 	int i = abs(decode_int(cp,optlen));
-	if(i > 4 || i == chan->output.minpacket)
+	if(i > 6 || i == chan->output.minpacket)
 	  break;
 	chan->output.minpacket = i;
       }
