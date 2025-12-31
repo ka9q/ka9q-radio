@@ -154,6 +154,7 @@ int demod_wfm(void *arg){
     } else {
       squelch_state = 0; // Squelch closed
       phase_memory = 0;
+      chan->output.power = 0;
       send_output(chan,NULL,audio_L,true); // Keep track of timestamps and mute state
       continue;
     }
@@ -289,7 +290,6 @@ int demod_wfm(void *arg){
 	}
       }
       chan->output.power = output_energy / audio_L;
-
       if(send_output(chan,mono.output.r,audio_L,false) < 0)
 	break; // No output stream! Terminate
     }
