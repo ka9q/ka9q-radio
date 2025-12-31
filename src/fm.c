@@ -169,7 +169,9 @@ int demod_fm(void *arg){
       phase_memory = 0;
       pl_sample_count = 0;
       chan->output.power = 0;  // don't keep resending previous value
+      [[fallthrough]];
     case 2: // fall-thru
+      [[fallthrough]];
     case 1: // fall-thru
       memset(baseband,0,sizeof baseband);
       send_output(chan,baseband,N,false);
