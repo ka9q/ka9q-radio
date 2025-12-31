@@ -458,14 +458,14 @@ static void update_monitor_display(void){
     col = 0;
     move(++row,col);
   }
-
+  int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
   if(Verbose){
     // Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
     double const pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
 
     uint64_t audio_frames = atomic_load_explicit(&Audio_frames,memory_order_relaxed);
     double const rate = audio_frames / pa_seconds;
-    int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+
 
     printwt("%s playout %.0lf ms latency %5.1lf ms D/A %'.1lf Hz",
 	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,rate);
@@ -616,8 +616,7 @@ static void update_monitor_display(void){
   if(col >= COLS)
     goto done;
   // Dynamic column width
-  width = 0;
-  mvprintwt(row++,col,"%s","id");
+  width = mvprintwt(row++,col,"%s","id");
   for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
     struct session const *sp = Sess_ptr[session];
     if(!inuse(sp))
@@ -708,23 +707,7 @@ static void update_monitor_display(void){
   if(col >= COLS)
     goto done;
 
-  width = 2;
-  int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
-  for(int session = First_session; session < NSESSIONS; session++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp))
-      continue;
-
-    int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
-    int64_t d = (wptr - rptr);
-    if(d > 0){
-      int64_t const queue_ms = 1000 * d / DAC_samprate; // milliseconds
-      if(queue_ms > 100)
-	width = 3;
-    }
-  }
-  width++;
-
+  width = 4;
   mvprintwt(row++,col,"%*s",width,"Q");
   for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
     struct session const *sp = Sess_ptr[session];
@@ -732,7 +715,7 @@ static void update_monitor_display(void){
       continue;
 
     int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
-    int64_t d = (wptr - rptr);
+    int64_t d = wptr - rptr;
     if(d > 0){
       int64_t const queue_ms = 1000 * d / DAC_samprate; // milliseconds
       mvprintwt(row,col,"%*lld",width,queue_ms);   // Time idle since last transmission
