@@ -77,7 +77,7 @@ int mvprintwt(int row,int col,char const *fmt,...){
   va_list ap;
   va_start(ap,fmt);
   char string[COLS+1]; // Maximum line length plus null
-  int r = vsnprintf(string,sizeof string,fmt,ap); // write only 'space' characters, space <= COLS
+  int r = vsnprintf(string,space,fmt,ap); // write only 'space' characters, space <= COLS
   va_end(ap);
   if(r < 0)
     return ERR;
@@ -100,7 +100,7 @@ int printwt(char const *fmt,...){
   va_list ap;
   va_start(ap,fmt);
   char string[COLS+1]; // Maximum line length plus null
-  int r = vsnprintf(string,sizeof string,fmt,ap); // write only 'space' characters, space <= COLS
+  int r = vsnprintf(string,space,fmt,ap); // write only 'space' characters, space <= COLS
   va_end(ap);
   if(r < 0)
     return ERR;
