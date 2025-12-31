@@ -76,7 +76,10 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
   }
 
   // Copy into queue
-  memcpy(&chan->output.queue[chan->output.wp],buffer,sizeof(float) * frames * chan->output.channels);
+  if(buffer)
+    memcpy(&chan->output.queue[chan->output.wp],buffer,sizeof(float) * frames * chan->output.channels);
+  else
+    memset(&chan->output.queue[chan->output.wp],0,sizeof(float) * frames * chan->output.channels);
   chan->output.wp += frames * chan->output.channels; // Number of floats written
   // handle wrap
   if(chan->output.wp >= chan->output.queue_size)

@@ -158,8 +158,6 @@ int demod_fm(void *arg){
     } else if(squelch_state > 0 && chan->fm.snr < chan->squelch_close)
       squelch_state--; // Begin to close it. If squelch_tail == 0, this will result in zeroes being emitted right away (no tail)
 
-    float baseband[N];    // Demodulated FM baseband
-
     // mini state machine for multi-frame squelch closing sequence
     // squelch_state decrements 3..2..1..0
     switch(squelch_state){
@@ -173,8 +171,7 @@ int demod_fm(void *arg){
     case 2: // fall-thru
       [[fallthrough]];
     case 1: // fall-thru
-      memset(baseband,0,sizeof baseband);
-      send_output(chan,baseband,N,false);
+      send_output(chan,NULL,N,false); // buffer of zeroes no longer needed
       continue;
     case 0: // squelch completely closed
       chan->output.power = 0;  // don't keep resending previous value
@@ -183,7 +180,7 @@ int demod_fm(void *arg){
     default: // 4 and above - squelch is open
       break;
     }
-
+    float baseband[N];    // Demodulated FM baseband
     for(int n=0; n < N; n++){
       double np = M_1_PI * cargf(buffer[n]); // Scale to -1 to +1 (half rotations/sample)
       double x = np - phase_memory;

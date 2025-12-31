@@ -65,9 +65,9 @@ int demod_linear(void *arg){
   bool first_run = false;
   bool response_needed = true;
   bool restart_needed = false;
+  int squelch_state = (!chan->pll.enable && !chan->snr_squelch_enable) ? chan->squelch_tail + 4 : 0;
   bool squelch_open = true; // memory for squelch hysteresis, starts open
-  if(chan->pll.enable || chan->snr_squelch_enable)
-    squelch_open = false; // Start closed when squelch is enabled
+
   pthread_mutex_unlock(&chan->status.lock);
   realtime(chan->prio);
   do {
@@ -273,7 +273,7 @@ int demod_linear(void *arg){
 	}
 	chan->output.gain = gain;
       }
-    } else {
+    } else { // stereo
       // Complex input buffer is I0 Q0 I1 Q1 ...
       // Real output will be L0 R0 L1 R1  ...
       // Overlay input with output
@@ -316,6 +316,41 @@ int demod_linear(void *arg){
       snr = (chan->sig.bb_power / (chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF))) - 1.0;
     else if(chan->pll.enable)
       snr = chan->pll.snr;
+
+
+    // Multi-step squelch similar to FM but simpler
+    int const squelch_state_max = chan->squelch_tail + 4;
+
+    if((chan->snr_squelch_enable || chan->pll.enable) && snr >= chan->squelch_open)
+      squelch_state = squelch_state_max; // hold timer at start
+
+    else if(squelch_state > 0 && snr < chan->squelch_close)
+      squelch_state--; // Begin to close it. If squelch_tail == 0, this will result in zeroes being emitted right away (no tail)
+
+
+
+
+
+    // mini state machine for multi-frame squelch closing sequence
+    // squelch_state decrements 3..2..1..0
+    switch(squelch_state){
+    case 3:
+      response_needed = true; // force update to indicate squelch is closing
+      chan->output.power = 0;  // don't keep resending previous value
+      [[fallthrough]];
+    case 2: // fall-thru
+      [[fallthrough]];
+    case 1: // fall-thru
+      send_output(chan,NULL,N,false); // buffer of zeroes no longer needed
+      continue;
+    case 0: // squelch completely closed
+      chan->output.power = 0;  // don't keep resending previous value
+      send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
+      continue;
+    default: // 4 and above - squelch is open
+      break;
+    }
+
 
     if(chan->snr_squelch_enable || chan->pll.enable){
       if(snr < chan->squelch_close)
