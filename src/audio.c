@@ -46,7 +46,7 @@ int send_output(struct channel * restrict const chan,float const * restrict buff
 
     // Still increment timestamp
     if(chan->output.encoding == OPUS)
-      chan->output.rtp.timestamp += frames * 48000 / chan->output.samprate; // Opus always at 48 kHz
+      chan->output.rtp.timestamp += frames * OPUS_SAMPRATE / chan->output.samprate; // Opus always at 48 kHz
     else
       chan->output.rtp.timestamp += frames;
 
@@ -255,6 +255,13 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     if(error != OPUS_OK)
       fprintf(stderr,"set signal %d error %d: %s\n",chan->opus.signal,error,opus_strerror(error));
     assert(error == OPUS_OK);
+
+    error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_VBR_CONSTRAINT(0));
+    if(error != OPUS_OK)
+      fprintf(stderr,"set vbr constraint error %d: %s\n",error,opus_strerror(error));
+
+    assert(error == OPUS_OK);
+
     }
 
   } // if(chan->output.encoding == OPUS){
@@ -340,15 +347,14 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	if(bytes < 0)
 	  fprintf(stderr,"opus encode %d bytes fail %d: %s\n",chunk,bytes,opus_strerror(bytes));
 	assert(bytes >= 0);
+#if 0 // for tracing
 	opus_int32 d = 0;
 	int error = opus_encoder_ctl(chan->opus.encoder,OPUS_GET_IN_DTX(&d));
 
 	if(error != OPUS_OK)
 	  fprintf(stderr,"get dtx %d fail %d: %s\n",d,error,opus_strerror(error));
 	assert(error == OPUS_OK);
-	if(d == 1)
-	  bytes = 0; // Suppress frame, but still increment timestamp
-
+#endif
 	chan->output.rtp.timestamp += chunk * OPUS_SAMPRATE / chan->output.samprate; // Always increases at 48 kHz
       }
       break;
