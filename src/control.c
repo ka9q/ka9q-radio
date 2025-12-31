@@ -894,12 +894,11 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
   case 'B':
     {
       char str[Entry_width],*ptr;
-      getentry("Packet buffering, blocks (0-4): ",str,sizeof(str));
+      getentry("Packet buffering, blocks (0-6): ",str,sizeof(str));
       long x = labs(strtol(str,&ptr,0));
-      if(ptr != str){
-	if(x >= 0 && x <= 4)
-	  encode_int(bpp,MINPACKET,(int)x);
-      }
+      if(ptr == str || x > 6)
+	break;
+      encode_int(bpp,MINPACKET,(int)x);
     }
     break;
   case 'g': // Manually set linear channel gain, dB (positive or negative)
