@@ -881,6 +881,16 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       }
     }
     break;
+  case 'x':
+    {
+      char str[Entry_width],*ptr;
+      getentry("Opus dtx 0=off 1=on: ",str,sizeof(str));
+      int x = strtol(str,&ptr,0);
+      if(ptr == str)
+	break;
+      encode_bool(bpp,OPUS_DTX,(bool)x);
+    }
+    break;
   case 'B':
     {
       char str[Entry_width],*ptr;

@@ -187,10 +187,12 @@ int flush_output(struct channel * chan,bool marker,bool complete){
       opus_bits = min(opus_bits,16); // Opus can actually take 24
       error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_LSB_DEPTH(opus_bits));
       if(error != OPUS_OK)
-	fprintf(stderr,"set bit depth error %d\n",error);
+	fprintf(stderr,"set bit depth error %d: %s\n",error,opus_strerror(error));
       assert(error == OPUS_OK);
     }
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_LSB_DEPTH(opus_bits));
+    if(error != OPUS_OK)
+      fprintf(stderr,"set bit depth error %d: %s\n",error,opus_strerror(error));
     assert(error == OPUS_OK);
 
     // Set the encoder bandwidth automatically according to the filter bandwidth
@@ -219,26 +221,40 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     }
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_MAX_BANDWIDTH(opus_bw_code));
     chan->opus.bandwidth = opus_bw_code;
+    if(error != OPUS_OK)
+      fprintf(stderr,"set max bandwidth %d error %d: %s\n",opus_bw_code,error,opus_strerror(error));
     assert(error == OPUS_OK);
 
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_DTX(chan->opus.dtx));
+    if(error != OPUS_OK)
+      fprintf(stderr,"set dtx %d error %d: %s\n",chan->opus.dtx,error,opus_strerror(error));
     assert(error == OPUS_OK);
 
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_BITRATE(chan->opus.bitrate == 0 ? OPUS_AUTO : chan->opus.bitrate));
+    if(error != OPUS_OK)
+      fprintf(stderr,"set bitrate %d error %d: %s\n",chan->opus.bitrate,error,opus_strerror(error));
     assert(error == OPUS_OK);
 
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_INBAND_FEC(chan->opus.fec > 0 ? 1 : 0));
+    if(error != OPUS_OK)
+      fprintf(stderr,"set inband fec %d error %d: %s\n",chan->opus.fec,error,opus_strerror(error));
     assert(error == OPUS_OK);
 
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_PACKET_LOSS_PERC(chan->opus.fec));
+    if(error != OPUS_OK)
+      fprintf(stderr,"set packet loss %d%% error %d: %s\n",chan->opus.fec,error,opus_strerror(error));
     assert(error == OPUS_OK);
 
-    opus_int32 signal;
+    opus_int32 signal = 0;
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_GET_SIGNAL(&signal));
+    if(error != OPUS_OK)
+      fprintf(stderr,"get signal error %d: %s\n",error,opus_strerror(error));
     assert(error == OPUS_OK);
     if(signal != chan->opus.signal){
       error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_SIGNAL(chan->opus.signal));
-      assert(error == OPUS_OK);
+    if(error != OPUS_OK)
+      fprintf(stderr,"set signal %d error %d: %s\n",chan->opus.signal,error,opus_strerror(error));
+    assert(error == OPUS_OK);
     }
 
   } // if(chan->output.encoding == OPUS){
@@ -248,8 +264,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     (chan->output.wp - chan->output.rp)
     : chan->output.queue_size - (chan->output.rp - chan->output.wp); // careful with unsigned differences
 
-  struct rtp_header rtp;
-  memset(&rtp,0,sizeof(rtp));
+  struct rtp_header rtp = {0};
   rtp.version = RTP_VERS;
   rtp.type = chan->output.rtp.type;
   rtp.ssrc = chan->output.rtp.ssrc;
@@ -322,10 +337,15 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	assert(dp <= packet + sizeof packet);
 	opus_int32 const room = (opus_int32)(packet + sizeof packet - dp); // Max # bytes in compressed output buffer
 	bytes = opus_encode_float(chan->opus.encoder,buf,chunk,dp,room); // Max # bytes in compressed output buffer
+	if(bytes < 0)
+	  fprintf(stderr,"opus encode %d bytes fail %d: %s\n",chunk,bytes,opus_strerror(bytes));
 	assert(bytes >= 0);
-
 	opus_int32 d = 0;
-	opus_encoder_ctl(chan->opus.encoder,OPUS_GET_IN_DTX(&d));
+	int error = opus_encoder_ctl(chan->opus.encoder,OPUS_GET_IN_DTX(&d));
+
+	if(error != OPUS_OK)
+	  fprintf(stderr,"get dtx %d fail %d: %s\n",d,error,opus_strerror(error));
+	assert(error == OPUS_OK);
 	if(d == 1)
 	  bytes = 0; // Suppress frame, but still increment timestamp
 

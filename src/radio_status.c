@@ -318,7 +318,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	new_filter_needed = true;
       }
       break;
-      case KAISER_BETA: // dimensionless, always 0 or positive
+    case KAISER_BETA: // dimensionless, always 0 or positive
         {
 	  double const f = fabs(decode_float(cp,optlen));
 	  if(!isfinite(f) || chan->filter.kaiser_beta == f)
@@ -327,7 +327,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  new_filter_needed = true;
 	}
       break;
-      case FILTER2_KAISER_BETA: // dimensionless, always 0 or positive
+    case FILTER2_KAISER_BETA: // dimensionless, always 0 or positive
         {
 	  double const f = fabs(decode_float(cp,optlen));
 	  if(!isfinite(f) || chan->filter2.kaiser_beta == f)
