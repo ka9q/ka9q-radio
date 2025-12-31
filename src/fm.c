@@ -160,22 +160,28 @@ int demod_fm(void *arg){
 
     float baseband[N];    // Demodulated FM baseband
 
-    if(squelch_state > 0 && squelch_state < 4){
-      // closed, but emit a block of silence to flush the Opus encoder
-      memset(baseband,0,sizeof baseband);
-      send_output(chan,baseband,N,false);
-      // Reset everything
+    // mini state machine for multi-frame squelch closing sequence
+    // squelch_state decrements 3..2..1..0
+    switch(squelch_state){
+    case 3:
+      response_needed = true; // force update to indicate squelch is closing
+      reset_goertzel(&tone_detect);
       phase_memory = 0;
       pl_sample_count = 0;
-      reset_goertzel(&tone_detect);
+      chan->output.power = 0;  // don't keep resending previous value
+    case 2: // fall-thru
+    case 1: // fall-thru
+      memset(baseband,0,sizeof baseband);
+      send_output(chan,baseband,N,false);
       continue;
-    } else if(squelch_state == 0){
-      // Fully closed, send nothing,
+    case 0: // squelch completely closed
+      chan->output.power = 0;  // don't keep resending previous value
       send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
       continue;
+    default: // 4 and above - squelch is open
+      break;
     }
 
-    // Actual FM demodulation
     for(int n=0; n < N; n++){
       double np = M_1_PI * cargf(buffer[n]); // Scale to -1 to +1 (half rotations/sample)
       double x = np - phase_memory;
@@ -323,6 +329,7 @@ int demod_fm(void *arg){
 	  }
 	}
 	if(tone_mute){
+	  chan->output.power = 0;
 	  send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
 	  continue;
 	}
