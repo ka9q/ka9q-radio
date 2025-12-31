@@ -123,6 +123,7 @@ void *dataproc(void *arg){
       fprintf(stderr,"No room!!\n");
       continue;
     }
+    // this (except for the threaad create) should probably move to the decode task
     if(!sp->initialized){
       // status reception doesn't write below this point
       if(Auto_position)
@@ -183,8 +184,8 @@ void *dataproc(void *arg){
       sp->queue = pkt; // Front of list
     pkt = NULL;        // force new packet to be allocated
 
-    // wake up decoder thread
-    pthread_cond_signal(&sp->qcond);
+    // wake up decoder thread, a packet has appeared
+    pthread_cond_broadcast(&sp->qcond);
     pthread_mutex_unlock(&sp->qmutex);
   }
   return NULL;
@@ -256,16 +257,21 @@ void *decode_task(void *arg){
       atomic_store_explicit(&sp->running,false,memory_order_release);
     }
     assert(pkt == NULL); // watch for leaks
+
     while(!atomic_load_explicit(&sp->terminate,memory_order_acquire) && !atomic_load_explicit(&Terminate,memory_order_acquire)){
       // Try to receive and process a RTP packet. Break when we have.
       assert(pkt == NULL); // should be cleared, otherwise it's a memory leak
       // The queue is sorted by sequence number. Anything on it?
       pthread_mutex_lock(&sp->qmutex);
+
+      // true -> false transitions (squelch closing) inhibit PLC, they don't do much else
+      bool const squelch_open = sp->squelch_open; // also protected by qmutex, changes are signaled by qcond
       pkt = sp->queue;
       uint32_t rtp_timestamp = 0;
       if(pkt != NULL){
 	// We have the lock while we figure out if we want it
-	// Can reordering cause a problem here? it seemed to, so I took out a test for pkt->rtp.timestamp > sp->rtp_state.timestamp
+	// Can reordering cause a problem here? it seemed to,
+	// so I took out a test for pkt->rtp.timestamp > sp->rtp_state.timestamp
 	sp->rtp_state.timestamp = pkt->rtp.timestamp; // Always remember the latest. Used for delay calcs
 	if(!init){
 	  // Very first packet, force acceptance
@@ -289,71 +295,77 @@ void *decode_task(void *arg){
 	  decode_rtp_data(sp,pkt);
 	  FREE(pkt);
 	  run_pending = true; // delay this until after we write to our output stream
-	  break; // we've got a weiner
+	  break; // ...out of the inner loop to continue processing the audio, then look for more (no sleep)
 	}
-	// Out of sequence, grab its RTP timestamp, leave it on queue
+	// Grab the RTP timestamp from the out of sequence packet on the queue (which stays there)
 	// We'll see it on each new poll, though
 	rtp_timestamp = pkt->rtp.timestamp;
 	pkt = NULL;
-      } // fall through
-      // nothing usable on queue - lock still held
-      // How does our output queue look?
-      // wptr and rptr are in frames at DAC_samprate, typically 48 kHz
+      } // fall through end of 'if(pkt != NULL)' ...qmutex lock still held
+      // pkt == NULL; nothing usable on queue
+
       if(sp->reset)
 	reset_playout(sp,true); // Use the most up-to-date wptr based on Output_time
 
-      // Calculate queue wait timeout
+      // How does our playout buffer look?
+      // wptr and rptr are in frames at DAC_samprate, typically 48 kHz
       uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_acquire); // the callback writes it
       uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed); // only we write it
       int64_t margin = 0;
       // Read and write pointers and sample rate  must be initialized to be useful
       if(rptr == 0 || wptr == 0){
-	// Probably hasn't ever run - can this happen? maybe the callback isn't running yet
+	// Probably hasn't ever run - can this happen? maybe the callback isn't running yet. Stop streaming
 	sp->active = 0;
 	atomic_store_explicit(&sp->running,false,memory_order_release);
       } else if(running(sp)){
 	// wptr and rptr are in frames at DAC_samprate, typically 48 kHz
 	if(wptr > rptr){ // care with unsigned!
 	  // Playout queue is happy, we don't need to do anything right now
-	  margin = wptr - rptr; // samples
-	} else if(conceal(sp,rtp_timestamp) > 0){  // Ran out of time, try to conceal the loss; rtp_timestamp from last seen RTP (or 0)
+	  margin = wptr - rptr;
+	} else if(squelch_open && conceal(sp,rtp_timestamp) > 0){ // don't try to conceal when squelch is closed
+	  // Ran out of time, try to conceal the loss; rtp_timestamp from last seen RTP (or 0)
+	  // successfully sent a PLC, handle the synthetic audio
 	  pthread_mutex_unlock(&sp->qmutex); // finally release it
-	  break; // conceal generated, handle the synthetic audio
+	  break; // process the synthetic PLC samples
 	} else {
-	  // Too many PLCs generated, stream stopped
+	  // too many PLCs generated and/or the squelch closed, mark the stream stopped
 	  sp->active = 0;
 	  atomic_store_explicit(&sp->running,false,memory_order_release);
 	}
       }
       // Sleep unil a packet arrives or our deadline
-      // we're still holding the lock
-      {
-	// convert margin to nanosec
-	int64_t timeout = BILLION/10; // default sleep 100 ms
-	if(running(sp)){
-	  timeout = BILLION * margin / DAC_samprate; // How much time is left until the queue drains
-	  // minus time elapsed since the last callback updated us (0 to 20 ms)
-	  timeout -= BILLION * (Pa_GetStreamTime(Pa_Stream) - atomic_load_explicit(&Last_callback_time,memory_order_acquire));
+      // note we're still holding the lock
+      // compute max wait time for a new packet or a squelch state change
+      int64_t timeout = BILLION/2; // default sleep 500 ms when stream is not running (same as radiod status update)
+      if(running(sp)){
+	timeout = BILLION * margin / DAC_samprate; // time until the queue drains
+	// minus time elapsed since the last callback updated us (0 to 20 ms)
+	timeout -= BILLION * (Pa_GetStreamTime(Pa_Stream)
+			      - atomic_load_explicit(&Last_callback_time,memory_order_acquire));
+	int const longest_Opus_frame = 120000000; // 120 ms
+	if(timeout > longest_Opus_frame)
+	  timeout = longest_Opus_frame;
+      }
+      if(timeout > BILLION/1000){
+	// Don't sleep less than a millisecond
+	struct timespec deadline = {0};
+	if(clock_gettime(CLOCK_REALTIME,&deadline) != 0){
+	  fprintf(stderr,"clock_gettime(CLOCK_REALTIME): %s\n",strerror(errno));
+	  assert(false);
+	  usleep(timeout/1000); // try the old standby
+	  break;
 	}
-	if(timeout > BILLION/10)
-	  timeout = BILLION/10;
-	if(timeout > BILLION/1000){
-	  // Don't sleep less than a millisecond
-	  struct timespec deadline = {0};
-	  if(clock_gettime(CLOCK_REALTIME,&deadline) != 0){
-	    fprintf(stderr,"clock_gettime(CLOCK_REALTIME): %s\n",strerror(errno));
-	    assert(false);
-	    usleep(timeout/1000); // try the old standby
-	    break;
-	  }
-	  deadline.tv_nsec += timeout % BILLION;
-	  if(deadline.tv_nsec >= BILLION){
-	    deadline.tv_nsec -= BILLION;
-	    deadline.tv_sec++;
-	  }
-	  deadline.tv_sec += timeout / BILLION; // should be 0, since timeout < 100 ms
-	  pthread_cond_timedwait(&sp->qcond,&sp->qmutex,&deadline);
-	} // Otherwise loop around for another poll immediately
+	deadline.tv_nsec += timeout % BILLION;
+	if(deadline.tv_nsec >= BILLION){
+	  deadline.tv_nsec -= BILLION;
+	  deadline.tv_sec++;
+	}
+	deadline.tv_sec += timeout / BILLION; // should be 0, since timeout < 100 ms
+
+	// The qcond condition is signaled when a new RTP frame appears
+	// or if the status thread has detected a change in the channel squelch state
+	// implying a stream start/stop. Otherwise we'll time out
+	pthread_cond_timedwait(&sp->qcond,&sp->qmutex,&deadline);
       }
       pthread_mutex_unlock(&sp->qmutex); // finally release it
     } // end of inner loop
@@ -379,7 +391,6 @@ void *decode_task(void *arg){
     // When transitioning to run, hold off the callback until we've written something
     if(run_pending)
       atomic_store_explicit(&sp->running,true,memory_order_release);
-    
   }
   pthread_cleanup_pop(1);
   return NULL;
