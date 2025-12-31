@@ -455,7 +455,7 @@ void vote(struct session const *sp){
   assert(sp != NULL);
   if(!inuse(sp) || muted(sp) || !running(sp))
     return;
-  
+
   pthread_mutex_lock(&Sess_mutex);
   struct session const *best = atomic_load_explicit(&Best_session,memory_order_acquire);
   if(best == NULL || !inuse(best) || muted(best)
@@ -519,7 +519,18 @@ void *statproc(void *arg){
 
     // Decode directly into local copy, as not every parameter is updated in every status message
     // Decoding into a temp copy and then memcpy would write zeroes into unsent parameters
+    // Lock and signal the queue so the data handler can atomically wait for the squelch to open
+    pthread_mutex_lock(&sp->qmutex); // avoid races in reading sp->squelch_open
     decode_radio_status(&sp->frontend,&sp->chan,buffer+1,length-1);
+    // chan.output.power is in dBFS so no signal is -Infinity
+    bool squelch_open = isfinite(sp->chan.output.power) ? true : false;
+    if(sp->squelch_open != squelch_open){
+      // Squelch changed state. Signal the data thread
+      sp->squelch_open = squelch_open;
+      if(!squelch_open)
+	pthread_cond_broadcast(&sp->qcond); // should openings be signaled?
+    }
+    pthread_mutex_unlock(&sp->qmutex);
     // Cache payload-type/channel count/sample rate/encoding association for use by data thread
     sp->type = sp->chan.output.rtp.type & 0x7f;
     sp->pt_table[sp->type].encoding = sp->chan.output.encoding;
@@ -666,16 +677,16 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   double complex step = cispi(freq);
 
   for(unsigned int i=0; i < framesPerBuffer; i++){
-    buffer[2*i] += 0.1 * creal(os);
+    buffer[2*i] += 0.1 * creal(os); // -20dBFS
     buffer[2*i+1] += 0.1 * cimag(os);
     os *= step;
   }
-#else
+#endif
 
   // If voting, look only at the leader.
   // Otherwise scan the whole list, summing all active sessions
   // finally a real use for do {} while();
-  struct session const *sp = Voting ? 
+  struct session const *sp = Voting ?
     atomic_load_explicit(&Best_session,memory_order_acquire) : Sessions;
 
   do {
@@ -689,10 +700,10 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     // careful with unsigned arithmetic
     if(wptr <= rptr)
       continue;      // he's empty or behind
-    
+
     // limit to what he's got - okay because we know wptr > rptr
     unsigned long frames =  (wptr - rptr > framesPerBuffer) ? framesPerBuffer :  wptr - rptr;
-    
+
     for(unsigned int j = 0; j < Channels*frames; j++)
       buffer[j] += sp->buffer[BINDEX(base,j)];
 
@@ -706,8 +717,6 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 
   energy /= Channels * framesPerBuffer;
   atomic_store_explicit(&Output_level,energy,memory_order_relaxed);
-#endif
-
   opus_pcm_soft_clip(buffer,(int)framesPerBuffer,Channels,Softclip_mem);
   atomic_fetch_add_explicit(&Audio_frames,framesPerBuffer,memory_order_release);
   atomic_fetch_add_explicit(&Output_time,framesPerBuffer,memory_order_release);

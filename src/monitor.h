@@ -17,10 +17,13 @@
 // Enlarge this if sample rates > 48 kHz are ever used
 #define BBSIZE (2*5760)
 struct session {
+  // atomics examined by the callback without locking
   _Atomic bool inuse;
   _Atomic bool terminate;            // Set to cause thread to terminate voluntarily
   _Atomic bool muted;                // Do everything but send to output
   _Atomic bool running;              // Audio arrived recently
+
+  bool squelch_open;        // implied state of radiod's squelch state inferred from output power
 
   bool initialized;
   bool reset;                // Set to force output timing reset on next packet
@@ -41,7 +44,7 @@ struct session {
   pthread_t task;           // Thread reading from queue and running decoder
   struct packet *queue;     // Incoming RTP packets
   pthread_mutex_t qmutex;   // Mutex protecting packet queue
-  pthread_cond_t qcond;     // Condition variable for arrival of new packet
+  pthread_cond_t qcond;     // Condition variable for arrival of new packet *OR* change of squelch state
 
   struct rtp_state rtp_state; // Incoming RTP session state
   uint32_t ssrc;            // RTP Sending Source ID
