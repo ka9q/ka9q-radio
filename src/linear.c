@@ -92,8 +92,10 @@ int demod_linear(void *arg){
     float complex * restrict const buffer = chan->baseband; // Working buffer
 
     if (!first_run && frontend->L != 0){
-      double const block_rate = frontend->samprate / frontend->L;
-      uint32_t const first_block = chan->filter.out.next_jobnum - 1;
+      // Tie the RTP timestamps to radiod uptime
+      // ie, reference RTP timestamp 0 to the first radiod block
+      double const block_rate = frontend->samprate / frontend->L; // eg Fs 126 MHz * 20 ms = 2,520,000 samples
+      uint32_t const first_block = chan->filter.out.next_jobnum - 1; // radiod starts with jobnum 0
       chan->output.rtp.timestamp = (int32_t)(first_block * (chan->output.samprate / block_rate));
       if(Verbose > 0)
 	fprintf(stderr,"%s starting at FFT jobum %u, preset RTP TS to %u\n",chan->name,first_block,chan->output.rtp.timestamp);
