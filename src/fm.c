@@ -153,7 +153,7 @@ int demod_fm(void *arg){
     int const squelch_state_max = chan->squelch_tail + 4;
     if(chan->fm.snr >= chan->squelch_open){
       // Squelch is fully open
-      // tail timing is in blocks (usually 10 or 20 ms each)
+      // tail timing is in blocks (usually 20 ms each)
       squelch_state = squelch_state_max; // hold timer at start
     } else if(squelch_state > 0 && chan->fm.snr < chan->squelch_close)
       squelch_state--; // Begin to close it. If squelch_tail == 0, this will result in zeroes being emitted right away (no tail)
