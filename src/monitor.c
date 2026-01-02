@@ -453,13 +453,12 @@ int main(int argc,char * const argv[]){
 // Sets global Best_session if we have the highest SNR
 void vote(struct session const *sp){
   assert(sp != NULL);
-  if(!inuse(sp) || muted(sp) || !running(sp))
+  if(!inuse(sp) || muted(sp))
     return;
 
   pthread_mutex_lock(&Sess_mutex);
   struct session const *best = atomic_load_explicit(&Best_session,memory_order_acquire);
-  if(best == NULL || !inuse(best) || muted(best)
-     || !running(best)){
+  if(best == NULL || !inuse(best) || muted(best)){
     atomic_store_explicit(&Best_session,sp,memory_order_release); // they abdicated; grab the throne
     pthread_mutex_unlock(&Sess_mutex);
     return;
@@ -520,17 +519,11 @@ void *statproc(void *arg){
     // Decode directly into local copy, as not every parameter is updated in every status message
     // Decoding into a temp copy and then memcpy would write zeroes into unsent parameters
     // Lock and signal the queue so the data handler can atomically wait for the squelch to open
-    pthread_mutex_lock(&sp->qmutex); // avoid races in reading sp->squelch_open
     decode_radio_status(&sp->frontend,&sp->chan,buffer+1,length-1);
     // chan.output.power is in dBFS so no signal is -Infinity
-    bool squelch_open = isfinite(sp->chan.output.power) ? true : false;
-    if(sp->squelch_open != squelch_open){
-      // Squelch changed state. Signal the data thread
-      sp->squelch_open = squelch_open;
-      if(!squelch_open)
-	pthread_cond_broadcast(&sp->qcond); // should openings be signaled?
-    }
-    pthread_mutex_unlock(&sp->qmutex);
+    if(!isfinite(sp->chan.output.power))
+      sp->squelch_open = false; // only turned off here; turned on in the data path
+
     // Cache payload-type/channel count/sample rate/encoding association for use by data thread
     sp->type = sp->chan.output.rtp.type & 0x7f;
     sp->pt_table[sp->type].encoding = sp->chan.output.encoding;
@@ -693,7 +686,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     if(sp == NULL)
       break; // Voting, and no one has claimed the prize yet
 
-    if(!inuse(sp) || !running(sp) || muted(sp))
+    if(!inuse(sp) || muted(sp))
       continue; // Don't consider
 
     uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);

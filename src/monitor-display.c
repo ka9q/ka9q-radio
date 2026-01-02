@@ -53,6 +53,8 @@ static struct stat Last_stat;
 
 static void update_monitor_display(void);
 static void process_keyboard(void);
+static int render(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const ncols);
+static int render_left(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const ncols);
 
 static int First_session = 0;
 static int Sessions_per_screen = 0;
@@ -195,30 +197,30 @@ static int scompare(void const *a, void const *b){
 
   if(s1 == s2) // same session compares equal (shouldn't happen)
     return 0;
-  if(s1 == NULL || !inuse(s1)) // first is empty or idle, put it at end
-    return +1;
-  if(s2 == NULL || !inuse(s2)) // second is empty or idle, put it at end
-    return -1;
-
-  if(running(s1)){
-    if(running(s2)){
-      // Both active. Fuzz needed because active sessions are updated when packets arrive
-      if(fabs(s1->active - s2->active) < 1.0) {
-	return s1->ssrc > s2->ssrc ? +1 : -1; // resolve ties by ssrc to stop rapid flipping
-      } else if(s1->active > s2->active){
-	return -1; // s1 Longer active
-      } else {
-	return +1; // s2 longer
-      }
-    } else
-      return -1; // s1 active, s2 inactive. Active always lower than inactive
-  } else {    // s1 inctive
-    if(running(s2)){
+  if(s1 == NULL || !inuse(s1)){ // first is empty or idle, put it at end
+    if(s2 == NULL || !inuse(s1))
+      return 0;
+    else
       return +1;
-    } else {     // Both inactive, sort by last active times
-      return s1->last_active > s2->last_active ? -1 : +1;
-      // last_active is in nanoseconds so chances of equality are nil
+  } else if(s2 == NULL || !inuse(s2)){
+    return -1; // s1 is not empty
+  }
+  // Both in use. Fuzz needed because active sessions are updated when packets arrive
+  if(s1->active != 0 && s2->active != 0){
+    if(fabs(s1->active - s2->active) < 1.0) {
+      return s1->ssrc > s2->ssrc ? +1 : -1; // resolve ties by ssrc to stop rapid flipping
+    } else if(s1->active > s2->active){
+      return -1; // s1 Longer active, move to top
+    } else {
+      return +1; // s2 longer active, move it to the top
     }
+  } else {
+    if(s2->active != 0)
+      return +1;   // s1 inctive
+    else if(s1->active != 0)
+      return -1; // s2 inactive
+    else     // Both inactive, sort by last active times
+      return s1->last_active > s2->last_active ? -1 : +1;    // last_active is in nanoseconds so chances of equality are nil
   }
 }
 
@@ -241,7 +243,7 @@ static int tcompare(void const *a, void const *b){
   return +1;
 }
 
-// Defragment list
+// Defragment session list
 static int defragment_session(void){
   pthread_mutex_lock(&Sess_mutex);
   for(int i=0; i < NSESSIONS-1; i++){
@@ -259,7 +261,6 @@ static int defragment_session(void){
     struct session *save = Sess_ptr[i];
     Sess_ptr[i] = Sess_ptr[j];
     Sess_ptr[j] = save;
-    i = j; // resume after this one
   }
   pthread_mutex_unlock(&Sess_mutex);
   return 0;
@@ -458,14 +459,13 @@ static void update_monitor_display(void){
     col = 0;
     move(++row,col);
   }
-  int64_t const rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+  int64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
   if(Verbose){
     // Measure skew between sampling clock and UNIX real time (hopefully NTP synched)
     double const pa_seconds = Pa_GetStreamTime(Pa_Stream) - Start_pa_time;
 
     uint64_t audio_frames = atomic_load_explicit(&Audio_frames,memory_order_relaxed);
     double const rate = audio_frames / pa_seconds;
-
 
     printwt("%s playout %.0lf ms latency %5.1lf ms D/A %'.1lf Hz",
 	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,rate);
@@ -665,7 +665,7 @@ static void update_monitor_display(void){
     struct session const *sp = Sess_ptr[session];
     if(!inuse(sp))
       continue;
-    double t = running(sp) ? sp->active : (double)(gpstime - sp->last_active) * 1e-9;
+    double t = sp->active != 0 ? sp->active : (double)(gpstime - sp->last_active) * 1e-9;
     char buf[100] = {0};
     ftime(buf,sizeof buf,t);
     if(strlen(buf) > totl)
@@ -680,7 +680,7 @@ static void update_monitor_display(void){
       struct session *sp = Sess_ptr[session];
       if(!inuse(sp))
 	continue;
-      double t = running(sp) ? sp->active : (double)(gpstime - sp->last_active) * 1e-9;
+      double t = sp->active != 0 ? sp->active : (double)(gpstime - sp->last_active) * 1e-9;
       char buf[100];
       mvprintwt(row,col,"%*s",width,ftime(buf,sizeof buf,t));
     }
@@ -714,12 +714,9 @@ static void update_monitor_display(void){
     if(!inuse(sp))
       continue;
 
-    int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
-    int64_t d = wptr - rptr;
-    if(d > 0){
-      int64_t const queue_ms = 1000 * d / DAC_samprate; // milliseconds
-      mvprintwt(row,col,"%*lld",width,queue_ms);   // Time idle since last transmission
-    }
+    int64_t q = 1000. * qlen(sp) / DAC_samprate;
+    if(q >= 0)
+      mvprintwt(row,col,"%*lld",width,q);   // Time idle since last transmission
   }
   col += width;
   row = header_line;
@@ -756,7 +753,7 @@ static void update_monitor_display(void){
     struct session const *sp = Sess_ptr[session];
     if(!inuse(sp)) break;
     if(sp->samprate != 0)
-      mvprintwt(row,col,"%*d",width,(1000 * sp->frame_size/sp->samprate)); // frame size, ms
+      mvprintwt(row,col,"%*d",width,(1000 * sp->last_framesize/sp->samprate)); // frame size, ms
 
   }
   col += width;
@@ -819,193 +816,215 @@ static void update_monitor_display(void){
   }
   col += width;
   row = header_line;
-
-  // Processing delay, assuming synchronized system clocks
   if(col >= COLS)
     goto done;
-  width = 8;
-  mvprintwt(row++,col,"%*s",width,"Delay");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp))
-      break; // The list is sorted with empties at the end, so there aren't any more
-    if(sp->chan.output.rtp.timestamp == 0 || !running(sp))
-      continue; // no status packets when squelch closes, receive thread is not updating chan.clocktime
 
-    // sp->frontend.timestamp (GPS time at front end) and sp->chan.output.rtp.timestamp (next RTP timestamp to be sent) are updated periodically by status packets
-    // sp->rtp_state.timestamp contains most recent RTP packet processed
-    // This needs further thought and cleanup
-    double delay = (double)(int32_t)(sp->chan.output.rtp.timestamp - sp->rtp_state.timestamp) / sp->samprate;
-    delay += 1.0e-9 * (gps_time_ns() - sp->chan.clocktime);
-    mvprintwt(row,col,"%*.3lf", width, delay);
+  {  // Processing delay, assuming synchronized system clocks
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 20;
+    int rows = 0;
+    snprintf(scratch[rows++],COLS,"%*s",width,"Delay");
+    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp))
+	break;
+
+      if(sp->chan.output.rtp.timestamp == 0)
+	continue;
+      // sp->frontend.timestamp (GPS time at front end) and sp->chan.output.rtp.timestamp (next RTP timestamp to be sent) are updated periodically by status packets
+      // sp->last_timestamp contains most recent RTP packet processed
+      // This needs further thought and cleanup
+      if(gps_time_ns() >  sp->last_active + BILLION/2)
+	continue;
+
+      double delay = (double)(int32_t)(sp->chan.output.rtp.timestamp - sp->last_timestamp) / sp->samprate;
+      delay += 1.0e-9 * (gps_time_ns() - sp->chan.clocktime);
+      snprintf(scratch[rows],COLS,"%'*.3lf", width,delay);
+    }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
+    col += width;
   }
-  col += width;
-  row = header_line;
+  if(col >= COLS)
+    goto done;
 
+  {
+    // DAC clock time (ms) at which the RTP timestamp was 0
+    // At 48 khz, the 32-bit RTP timestamp wraps in 89478.485 sec or 1.0356306 days
+    // should be invariant +/- 1 frame (20 ms) for a given stream unless monitor or radiod is restarted
+    // Checks for failures to update timestamp at sender, etc
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 20;
+    int rows = 0;
+    snprintf(scratch[rows++],COLS,"%*s",width,"T0");
+    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp))
+	break;
+
+      if(sp->samprate == 0)
+	continue;
+
+      int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
+      int64_t t0 = 1000*wptr/DAC_samprate - 1000*(int64_t)sp->next_timestamp / sp->samprate;
+      snprintf(scratch[rows],COLS,"%'*lld", width, t0); // ms
+    }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
+    col += width;
+  }
 
   if(col >= COLS)
     goto done;
-  // Packets - dynamic width
-  uint64_t maxpktsize = 0;
-  for(int session = First_session; session < NSESSIONS; session++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    if(sp->packets > maxpktsize)
-      maxpktsize = sp->packets;
-  }
-  col++;
-  width = 1 + floor(log10((double)maxpktsize));
-  if(width < 3)
-    width = 3;
-  row = header_line;
-  mvprintwt(row++,col,"%*s",width,"pkt");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    mvprintwt(row,col,"%*lu",width,sp->packets);
-  }
-  col += width;
-  row = header_line;
 
-  // Resets - variable
-  if(col >= COLS)
-    goto done;
-  uint64_t max_rsts = 0;
-  for(int session = First_session; session < NSESSIONS; session++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    if(sp->resets > max_rsts)
-      max_rsts = sp->resets;
-  }
-  if(max_rsts > 0){
-    width = 1 + floor(log10((double)max_rsts));
-    if(width < 3)
-      width = 3;
+  {
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 20;
+    int rows = 0;
 
-    width++;
-    mvprintwt(row++,col,"%*s",width,"rst");
-    for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
+    snprintf(scratch[rows++],COLS,"%*s",width,"pkt");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      mvprintwt(row,col,"%*lu",width,sp->resets);
+      snprintf(scratch[rows],COLS,"%*llu",width,sp->packets);
     }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
     col += width;
-    row = header_line;
-  }
-  // drops
-  if(col >= COLS)
-    goto done;
-  uint64_t max_drops = 0;
-  for(int session = First_session; session < NSESSIONS; session++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    if(sp->rtp_state.drops > max_drops)
-      max_drops = sp->rtp_state.drops;
-  }
-  if(max_drops > 0){
-    width = 1 + floor(log10((double)max_drops));
-    if(width < 3)
-      width = 3;
-    width++;
-
-    mvprintwt(row++,col,"%*s",width,"drp");
-    for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-      struct session const *sp = Sess_ptr[session];
-      if(!inuse(sp)) break;
-      mvprintwt(row,col,"%'*llu",width,(unsigned long long)sp->rtp_state.drops);
-    }
-    col += width;
-    row = header_line;
-  }
-  // Lates
-  if(col >= COLS)
-    goto done;
-  uint64_t max_lates = 0;
-  for(int session = First_session; session < NSESSIONS; session++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    if(sp->lates > max_lates)
-      max_lates = sp->lates;
-  }
-  if(max_lates > 0){
-    width = 1 + floor(log10((double)max_lates));
-    if(width < 3)
-      width = 3;
-    width++;
-
-    mvprintwt(row++,col,"%*s",width,"lat");
-    for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-      struct session const *sp = Sess_ptr[session];
-      if(!inuse(sp)) break;
-      mvprintwt(row,col,"%*lu",width,sp->lates);
-    }
-    col += width;
-    row = header_line;
   }
   if(col >= COLS)
     goto done;
 
-  uint64_t max_reseq = 0;
-  for(int session = First_session; session < NSESSIONS; session++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    if(sp->reseqs > max_reseq)
-      max_reseq = sp->reseqs;
-  }
-  if(max_reseq > 0){
-    width = 1 + floor(log10((double)max_reseq));
-    if(width < 3)
-      width = 3;
-    width++;
+  {
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 10;
+    int rows = 0;
 
-    mvprintwt(row++,col,"%*s",width,"rsq");
-    for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
+    snprintf(scratch[rows++],COLS,"%*s",width,"rst");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      mvprintwt(row,col,"%*lu",width,sp->reseqs);
+      snprintf(scratch[rows],COLS,"%*llu",width,sp->resets);
     }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
     col += width;
-    row = header_line;
   }
-  // Opus loss conceals
   if(col >= COLS)
     goto done;
-  uint64_t max_plc = 0;
-  for(int session = First_session; session < NSESSIONS; session++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    if(sp->plcs > max_plc)
-      max_plc = sp->plcs;
-  }
-  if(max_plc > 0){
-    width = 1 + floor(log10((double)max_plc));
-    if(width < 3)
-      width = 3;
-    width++;
+  {  // drops
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 10;
+    int rows = 0;
 
-    mvprintwt(row++,col,"%*s",width,"plc");
-    for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
+    snprintf(scratch[rows++],COLS,"%*s",width,"drp");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      mvprintwt(row,col,"%*lu",width,sp->plcs);
+      snprintf(scratch[rows],COLS,"%*llu",width,sp->drops);
     }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
     col += width;
-    row = header_line;
   }
+  if(col >= COLS)
+    goto done;
+  {  // lates
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 10;
+    int rows = 0;
 
-  // Sockets
-  col++; // Left justified
-  mvprintwt(row++,col,"%s","sockets");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    mvprintwt(row,col,"%s -> %s",formatsock(&sp->sender,true),sp->dest);
+    snprintf(scratch[rows++],COLS,"%*s",width,"late");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      snprintf(scratch[rows],COLS,"%*llu",width,sp->lates);
+    }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
+    col += width;
   }
+  if(col >= COLS)
+    goto done;
+
+  {  // reseq
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 10;
+    int rows = 0;
+
+    snprintf(scratch[rows++],COLS,"%*s",width,"resq");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      snprintf(scratch[rows],COLS,"%*llu",width,sp->reseqs);
+    }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
+    col += width;
+  }
+  if(col >= COLS)
+    goto done;
+
+  {  // opus plc
+    char scratch [LINES][COLS];
+    memset(scratch,0,sizeof scratch);
+    int session = First_session;
+    int width = 10;
+    int rows = 0;
+
+    snprintf(scratch[rows++],COLS,"%*s",width,"plc");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      snprintf(scratch[rows],COLS,"%*llu",width,sp->plcs);
+    }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
+    col += width;
+  }
+  if(col >= COLS)
+    goto done;
+
+  {  // sockets
+    char scratch [LINES][COLS];
+    memset(scratch,0,sizeof scratch);
+    int session = First_session;
+    int width = COLS;
+    int rows = 0;
+
+    snprintf(scratch[rows++],COLS,"%s","sockets");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      snprintf(scratch[rows],COLS,"%s -> %s",formatsock(&sp->sender,true),sp->dest);
+    }
+    col++;
+    width = render_left(header_line,col,scratch,rows,width);
+    col += width;
+  }
+  if(col >= COLS)
+    goto done;
+
+
  done:;
   // Embolden the active lines
+  row = header_line + 1;
   attr_t attrs = 0;
   short pair = 0;
-  int64_t const time = gps_time_ns();
   attr_get(&attrs, &pair, NULL);
   for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
     struct session const *sp = Sess_ptr[session];
@@ -1013,12 +1032,16 @@ static void update_monitor_display(void){
       break;
 
     attr_t attr = A_NORMAL;
-    if((time - sp->last_active) < BILLION/2) // active within the past 500 ms
+    if(gps_time_ns() - sp->last_active < BILLION/2){
+      // active within the past 500 ms
       attr |= A_BOLD;
+    }
 
     // 1 adjusts for the titles
     // only underscore to just before the socket entry since it's variable length
-    mvchgat(1 + header_line + session - First_session,col_save,col,attr,pair,NULL);
+   int r =  mvchgat(row,col_save,col,attr,pair,NULL);
+   (void)r;
+   assert(r == OK);
   }
   move(first_line + Current - First_session,col_save); // Cursor on current line
   // End of display writing
@@ -1127,7 +1150,7 @@ static void process_keyboard(void){
     for(int i = 0; i < NSESSIONS; i++){
       struct session *sp = Sess_ptr[i];
       if(inuse(sp) && muted(sp)){
-	sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
+	sp->restart = true; // restart playout
 	sp->muted = false;
       }
     }
@@ -1152,7 +1175,7 @@ static void process_keyboard(void){
     for(int i=0; i < NSESSIONS;i++){
       struct session *sp = Sess_ptr[i];
       if(inuse(sp))
-	sp->reset = true;
+	sp->restart = true;
     }
     break;
   case 'F':
@@ -1208,24 +1231,19 @@ static void process_keyboard(void){
   case KEY_SLEFT: // Shifted left - decrease playout buffer 1 ms
     if(Playout >= -0.1){
       Playout -= .001;
-      sp->reset = true;
     }
     break;
   case KEY_SRIGHT: // Shifted right - increase playout buffer 1 ms
     Playout += .001;
-    sp->reset = true;
     break;
   case 'u': // Unmute and reset Current session
-    if(muted(sp)){
-      sp->reset = true; // Resynchronize playout buffer (output callback may have paused)
-      sp->muted = false;
-    }
+    atomic_store_explicit(&sp->muted,false,memory_order_release);
     break;
   case 'm': // Mute Current session
     atomic_store_explicit(&sp->muted,true,memory_order_release);
     break;
   case 'r':    // Manually reset playout queue
-    reset_playout(sp,true);
+    sp->restart = true;
     break;
   case KEY_DC: // Delete
   case KEY_BACKSPACE:
@@ -1238,4 +1256,38 @@ static void process_keyboard(void){
   }
   if(!serviced)
     beep(); // Not serviced by anything
+}
+static int render(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const ncols){
+  int firstcol = -1;
+  for(int i = 0; i < ncols; i++){
+    for(int j = 0; j < nrows; j++){
+      if(scratch[j][i] != ' ' && scratch[j][i] != '\0'){
+	firstcol = i;
+	break;
+      }
+    }
+    if(firstcol != -1)
+      break;
+  }
+  int nc = 0;
+  if(firstcol != -1){
+    nc = ncols - firstcol;
+
+    for(int i = 0; i < nrows; i++){
+      int ncol = strlen(scratch[i] + firstcol);
+      if(ncol > nc)
+	ncol = nc;
+      mvaddnstr(row+i,col,scratch[i] + firstcol,ncol);
+    }
+  }
+  return nc;
+}
+static int render_left(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const ncols){
+  unsigned int maxline = 0;
+  for(int j = 0; j < nrows; j++){
+    mvaddnstr(row+j,col,scratch[j],ncols);
+    if(strlen(scratch[j]) > maxline)
+      maxline = strlen(scratch[j]);
+  }
+  return maxline;
 }

@@ -21,12 +21,12 @@ struct session {
   _Atomic bool inuse;
   _Atomic bool terminate;            // Set to cause thread to terminate voluntarily
   _Atomic bool muted;                // Do everything but send to output
-  _Atomic bool running;              // Audio arrived recently
+  bool plc_enable;
 
   bool squelch_open;        // implied state of radiod's squelch state inferred from output power
 
   bool initialized;
-  bool reset;                // Set to force output timing reset on next packet
+  bool restart;             // Manually set to force session restart
   struct sockaddr_storage sender;
   char const *dest;
 
@@ -35,7 +35,10 @@ struct session {
   SRC_STATE *src_state_mono;
   SRC_STATE *src_state_stereo;
 
-  _Atomic int64_t wptr;    // Next write sample, in output sample clock units
+  _Atomic uint64_t wptr;    // Next write sample, in output sample clock units
+  uint64_t wptr_highwater;
+  int underflows;          // up/down counter to decide when to adjust playout
+
 
   int64_t consec_erasures;
   int consec_lates;
@@ -46,11 +49,12 @@ struct session {
   pthread_mutex_t qmutex;   // Mutex protecting packet queue
   pthread_cond_t qcond;     // Condition variable for arrival of new packet *OR* change of squelch state
 
-  struct rtp_state rtp_state; // Incoming RTP session state
   uint32_t ssrc;            // RTP Sending Source ID
   int type;                 // RTP type (10,11,20,111,etc)
   struct pt_table pt_table[128];     // convert a payload type to samplerate, channels, encoding type
 
+  uint32_t last_timestamp;  // last timestamp observed, for timing
+  uint16_t next_seq;        // next expected sequence number
   uint32_t next_timestamp;  // Next timestamp expected
   int playout;              // Initial playout delay, frames
   int64_t last_active;    // GPS time last active with data traffic
@@ -59,6 +63,7 @@ struct session {
   double datarate;           // Smoothed channel data rate
 
   OpusDecoder *opus;        // Opus codec decoder handle, if needed
+  int last_framesize;       // for loss concealment
   int opus_channels;        // Actual channels in Opus stream
   int frame_size;
   int bandwidth;            // Audio bandwidth
@@ -80,7 +85,7 @@ struct session {
   uint64_t resets;
   uint64_t reseqs;
   uint64_t plcs;       // Opus packet loss conceals
-
+  uint64_t drops;
 
 
   char id[32];
@@ -180,25 +185,25 @@ void *display(void *);
 struct session *lookup_or_create_session(struct sockaddr_storage const *,uint32_t);
 int close_session(struct session *);
 int pa_callback(void const *,void *,unsigned long,PaStreamCallbackTimeInfo const *,PaStreamCallbackFlags,void *);
-void *decode_task(void *x);
 void *dataproc(void *arg);
 void *statproc(void *arg);
 void *repeater_ctl(void *arg);
 char const *lookupid(double freq,double tone);
 bool kick_output();
 void vote(struct session const *sp);
-void reset_playout(struct session *sp,bool hard);
+int64_t qlen(struct session const *sp);
+
 static inline bool inuse(struct session const *sp){
   assert(sp != NULL);
   return atomic_load_explicit(&sp->inuse,memory_order_acquire);
 }
-static inline bool running(struct session const *sp){
-  assert(sp != NULL);
-  return atomic_load_explicit(&sp->running,memory_order_acquire);
-}
 static inline bool muted(struct session const *sp){
   assert(sp != NULL);
   return atomic_load_explicit(&sp->muted,memory_order_acquire);
+}
+static inline bool terminated(struct session const *sp){
+  assert(sp != NULL);
+  return atomic_load_explicit(&sp->terminate,memory_order_relaxed) || atomic_load_explicit(&Terminate,memory_order_relaxed);
 }
 
 
