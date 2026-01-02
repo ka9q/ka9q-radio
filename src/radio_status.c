@@ -540,10 +540,10 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(encoding == OPUS && !legal_opus_samprate(samprate))
 	    samprate = OPUS_SAMPRATE; // force sample rate to 48K for Opus
 
-	int pt = pt_from_info(samprate,chan->output.channels,chan->output.encoding);
+	int pt = pt_from_info(samprate,chan->output.channels,encoding);
 	if(pt == -1){
 	  fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
-		  chan->name,samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+		  chan->name,samprate,chan->output.channels,encoding); // make sure it's initialized
 	  break; // Simply refuse to change
 	}
 	chan->output.rtp.type = pt;
