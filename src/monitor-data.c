@@ -232,7 +232,7 @@ static void *decode_task(void *arg){
     sp->buffer = malloc(BUFFERSIZE * sizeof *sp->buffer);
 
   if(sp->bounce == NULL)
-    sp->bounce = malloc(BBSIZE * sizeof *sp->bounce);
+    sp->bounce = malloc(2 * BBSIZE * sizeof *sp->bounce);
 
   struct packet *pkt = NULL; // make sure it starts this way
 
@@ -256,7 +256,8 @@ static void *decode_task(void *arg){
     if(!sp->squelch_open || sp->samprate == 0 || sp->channels == 0){
       sp->plc_enable = false;
     } else {
-      sp->plc_enable = (sp->opus != NULL);
+      enum encoding encoding = sp->pt_table[sp->type].encoding;
+      sp->plc_enable = (encoding == OPUS || encoding == OPUS_VOIP);
     }
     if(sp->plc_enable){
       // If we can send PLCs, sleep until the last millisecond to do them
@@ -325,12 +326,20 @@ static void *decode_task(void *arg){
 	int32_t jump = (int32_t)(pkt->rtp.timestamp - sp->next_timestamp);
 
 	// convert to frames at DAC rate
-	int write_adjust = (int64_t)jump * DAC_samprate / sp->samprate;
-	if(write_adjust != 0){
-	  atomic_fetch_add_explicit(&sp->wptr,write_adjust,memory_order_release);	    // Adjust write pointer
-	  uint64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
-	  if(wptr > sp->wptr_highwater)
-	    sp->wptr_highwater = wptr;
+	if(jump != 0){
+	  if(sp->samprate == 0 || sp->channels == 0){
+	    // Can't proceed, probably first use of a new payload type
+	    FREE(pkt);
+	    reset_playout(sp); // but don't fall behind for when it clears up
+	    continue;
+	  }
+	  int write_adjust = (int64_t)jump * DAC_samprate / sp->samprate;
+	  if(write_adjust != 0){
+	    atomic_fetch_add_explicit(&sp->wptr,write_adjust,memory_order_release);	    // Adjust write pointer
+	    uint64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
+	    if(wptr > sp->wptr_highwater)
+	      sp->wptr_highwater = wptr;
+	  }
 	}
 	sp->next_timestamp = pkt->rtp.timestamp + sp->frame_size;
 	FREE(pkt);
@@ -361,7 +370,7 @@ static void *decode_task(void *arg){
       goto done;
     // We have a frame of decoded audio or PLC from Opus
     // Do PL detection and notching even when muted
-    if(sp->frame_size > 0){
+    if(sp->frame_size > 0 && sp->samprate != 0){
       if(sp->notch_enable){
 	run_pl(sp);
 	apply_notch(sp);
@@ -461,8 +470,17 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
     sp->channels = Channels;
   } else {
     // Use actual table values for PCM
-    sp->samprate = sp->pt_table[sp->type].samprate;
-    sp->channels = sp->pt_table[sp->type].channels;
+    int samprate = sp->pt_table[sp->type].samprate;
+    int channels = sp->pt_table[sp->type].channels;
+    if(samprate == 0 || channels == 0){
+      // Don't know the sample rate yet, we can't proceed
+      // Probably because the pt_table wasn't populated yet by the status message using it for the first time
+      sp->frame_size = 0;
+      sp->drops++;
+      return 0;
+    }
+    sp->samprate = samprate;
+    sp->channels = channels;
   }
   if(sp->samprate != prev_samprate)
     init_pl(sp);
@@ -471,11 +489,6 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
     sp->frame_size = 0;
     sp->empties++;
     sp->drops++;
-    return 0;
-  }
-  if(sp->samprate == 0){
-    // Don't know the sample rate yet, we can't proceed
-    sp->drops++; // may cause big burst at start of stream
     return 0;
   }
 
@@ -585,7 +598,9 @@ static int conceal(struct session *sp,int gap){
     return 0;
 
   assert(legal_opus_size(gap));
-  if(!sp->opus || !legal_opus_size(gap))
+  enum encoding encoding = sp->pt_table[sp->type].encoding;
+
+  if((encoding != OPUS && encoding != OPUS_VOIP) || !legal_opus_size(gap))
     return 0;
 
   // Trigger loss concealment, up to 6 consecutive packets (max Opus packet is 120 ms)
@@ -688,9 +703,9 @@ static int upsample(struct session * const sp){
   if(sp->samprate == DAC_samprate)
     return sp->frame_size;   // No conversion necessary
 
-  double upsample_ratio = DAC_samprate / sp->samprate;
-  assert(sp->frame_size * upsample_ratio * sp->channels <= BBSIZE);
-  if(sp->frame_size * upsample_ratio * sp->channels > BBSIZE)
+  double upsample_ratio = (double)DAC_samprate / sp->samprate;
+  assert(sp->frame_size * upsample_ratio <= BBSIZE);
+  if(sp->frame_size * upsample_ratio  > BBSIZE)
     return -1;
 
   int error = 0;
@@ -701,14 +716,17 @@ static int upsample(struct session * const sp){
     sp->src_state_stereo = src_new(SRC_SINC_FASTEST, sp->channels, &error);
     assert(sp->src_state_stereo != NULL);
   }
-  SRC_DATA src_data = {0};
-  src_data.data_in = sp->bounce;  // Pointer to input audio
-  src_data.input_frames = sp->frame_size;
-  src_data.output_frames = BBSIZE;
-  src_data.data_out = malloc(BBSIZE * sizeof(float));
+  SRC_DATA src_data = {
+    .data_in = sp->bounce,  // Pointer to input audio
+    .input_frames = sp->frame_size,
+    .output_frames = BBSIZE,
+    .data_out = malloc(2 * BBSIZE * sizeof(float)) // assume stereo for safety
+  };
 
   src_data.src_ratio = upsample_ratio;
   src_data.end_of_input = 0;
+  src_set_ratio (sp->channels == 1 ? sp->src_state_mono : sp->src_state_stereo, upsample_ratio);
+
   error = src_process(sp->channels == 1 ? sp->src_state_mono : sp->src_state_stereo, &src_data);
   if(error != 0)
     fprintf(stderr,"src_process: %s\n",src_strerror(error));
@@ -716,7 +734,7 @@ static int upsample(struct session * const sp){
   FREE(sp->bounce);
   // Replace input pointer with output
   sp->bounce = src_data.data_out;
-  sp->frame_size = (int)round(sp->frame_size * upsample_ratio);
+  sp->frame_size = (int)round(upsample_ratio * sp->frame_size);
   return sp->frame_size;
 }
 

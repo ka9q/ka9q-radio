@@ -13,9 +13,10 @@
 #define BINDEX(a,b) (((a) + (b)) & (BUFFERSIZE - 1))
 
 
-// Bounce buffer size = 120 ms @ 48 kHz stereo (biggest Opus packet)
-// Enlarge this if sample rates > 48 kHz are ever used
-#define BBSIZE (2*5760)
+// 8192 frames is 170.66 ms @ 48 kHz
+// Be careful with opus at high sample rates
+// Should be OK for any PCM format because they're kept to less than one ethernet MTU and they don't expand with decoding
+#define BBSIZE (8192)
 struct session {
   // atomics examined by the callback without locking
   _Atomic bool inuse;
