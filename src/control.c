@@ -1078,7 +1078,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
 	encode_int(bpp,OPUS_APPLICATION,OPUS_APPLICATION_AUDIO);
       }
       if(e != NO_ENCODING)
-	encode_int(bpp,OUTPUT_ENCODING,(uint8_t)e);
+	encode_int(bpp,OUTPUT_ENCODING,e);
     }
     break;
   case 'F':

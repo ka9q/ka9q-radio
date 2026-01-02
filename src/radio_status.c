@@ -532,7 +532,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case OUTPUT_ENCODING:
       {
 	enum encoding encoding = decode_int(cp,optlen);
-	if(encoding == chan->output.encoding || encoding < 0 || encoding >= NO_ENCODING)
+	if(encoding == chan->output.encoding || encoding < 0 || encoding >= UNUSED_ENCODING)
 	  break;
 
 	// Opus can handle only a certain set of sample rates, and it operates at 48K internally
