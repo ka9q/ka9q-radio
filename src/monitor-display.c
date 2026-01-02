@@ -895,7 +895,7 @@ static void update_monitor_display(void){
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      snprintf(scratch[rows],COLS,"%*llu",width,sp->packets);
+      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->packets);
     }
     col++;
     width = render(header_line,col,scratch,rows,width);
@@ -919,7 +919,7 @@ static void update_monitor_display(void){
       if(sp->resets > 0)
 	enable = true;
 
-      snprintf(scratch[rows],COLS,"%*llu",width,sp->resets);
+      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->resets);
     }
     if(enable){
       col++;
@@ -943,7 +943,7 @@ static void update_monitor_display(void){
       if(!inuse(sp)) break;
       if(sp->drops > 0)
 	enable = true;
-      snprintf(scratch[rows],COLS,"%*llu",width,sp->drops);
+      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->drops);
     }
     if(enable){
       col++;
@@ -967,7 +967,7 @@ static void update_monitor_display(void){
       if(!inuse(sp)) break;
       if(sp->lates > 0)
 	enable = true;
-      snprintf(scratch[rows],COLS,"%*llu",width,sp->lates);
+      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->lates);
     }
     if(enable){
       col++;
@@ -990,7 +990,7 @@ static void update_monitor_display(void){
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      snprintf(scratch[rows],COLS,"%*llu",width,sp->reseqs);
+      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->reseqs);
       if(sp->reseqs > 0)
 	enable = true;
     }
@@ -1015,7 +1015,7 @@ static void update_monitor_display(void){
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      snprintf(scratch[rows],COLS,"%*llu",width,sp->plcs);
+      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->plcs);
       if(sp->plcs > 0)
 	enable = true;
     }
