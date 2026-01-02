@@ -540,29 +540,28 @@ static void update_monitor_display(void){
   if(col >= COLS)
     goto done;
 
-  // experiment with dynamic column widths
-  // problem is, it left justifies everything
-  col++; // one blank column on left
-  uint32_t max_ssrc = 0;
-  for(int session = First_session; session < NSESSIONS; session++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    if(sp->ssrc > max_ssrc)
-      max_ssrc = sp->ssrc;
+  {  // total active time
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 20;
+    int rows = 0;
+    snprintf(scratch[rows++],COLS,"%*s",width,"ssrc");
+    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp))
+	break;
+
+      snprintf(scratch[rows],COLS,"%*u",width,sp->ssrc);
+    }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
+    col += width;
   }
-  width = 1 + floor(log10((double)max_ssrc));
-  mvprintwt(row++,col,"%*s",width,"ssrc");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    mvprintwt(row,col,"%*d",width,sp->ssrc);
-  }
-  row = header_line;
-  col += width;
+  if(col >= COLS)
+    goto done;
 
   if(Notch){
-    if(col >= COLS)
-      goto done;
     width = 7;
     mvprintwt(row++,col,"%*s",width,"tone");
     for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
@@ -615,78 +614,78 @@ static void update_monitor_display(void){
   col++; // ID is left justified, add a leading space
   if(col >= COLS)
     goto done;
+
   // Dynamic column width
-  width = mvprintwt(row++,col,"%s","id");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp))
-      continue;
-    int len = (int)strlen(sp->id);
-    if(len > width)
-      width = len;
-    mvprintwt(row,col,"%s",sp->id);
-  }
-  col += width;
-  row = header_line;
+  {  // id
+    char scratch [LINES][COLS];
+    memset(scratch,0,sizeof scratch);
+    int session = First_session;
+    int width = COLS;
+    int rows = 0;
+    bool enable = false;
 
-  if(col >= COLS)
-    goto done;
+    snprintf(scratch[rows++],COLS,"%s","id");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
 
-  unsigned int totl = 0;
-  for(int session = First_session; session < NSESSIONS; session++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp))
-      continue;
-    char total_buf[100] = {0};
-    ftime(total_buf,sizeof(total_buf),(int64_t)round(sp->tot_active));
-    if(strlen(total_buf) > totl)
-      totl = strlen(total_buf);
-  }
-  col++;
-  width = totl;
-  mvprintwt(row++,col,"%*s",width,"tot");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp))
-      continue;
-    char total_buf[100] = {0};
-    mvprintwt(row,col,"%*s",width,ftime(total_buf,sizeof(total_buf),(int64_t)round(sp->tot_active)));
-  }
-  col += width;
-  row = header_line;
-
-  if(col >= COLS)
-    goto done;
-
-  int64_t gpstime = gps_time_ns();
-  totl = 0;
-
-  for(int session = First_session; session < NSESSIONS; session++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp))
-      continue;
-    double t = sp->active != 0 ? sp->active : (double)(gpstime - sp->last_active) * 1e-9;
-    char buf[100] = {0};
-    ftime(buf,sizeof buf,t);
-    if(strlen(buf) > totl)
-      totl = strlen(buf);
-  }
-  col++;
-  width = totl;
-  width = width < 3 ? 3 : width;
-  mvprintwt(row++,col,"%*s",width,"cur");
-  {
-    for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-      struct session *sp = Sess_ptr[session];
-      if(!inuse(sp))
-	continue;
-      double t = sp->active != 0 ? sp->active : (double)(gpstime - sp->last_active) * 1e-9;
-      char buf[100];
-      mvprintwt(row,col,"%*s",width,ftime(buf,sizeof buf,t));
+      if(strlen(sp->id) > 0){
+	snprintf(scratch[rows],COLS,"%s",sp->id);
+	enable = true;
+      }
+    }
+    if(enable){
+      col++;
+      width = render_left(header_line,col,scratch,rows,width);
+      col += width;
     }
   }
-  col += width;
-  row = header_line;
+  if(col >= COLS)
+    goto done;
+
+  {  // total active time
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 20;
+    int rows = 0;
+    snprintf(scratch[rows++],COLS,"%*s",width,"Tot");
+    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp))
+	break;
+
+      char total_buf[100] = {0};
+      ftime(total_buf,sizeof(total_buf),(int64_t)round(sp->tot_active));
+      snprintf(scratch[rows],COLS,"%*s",width,total_buf);
+    }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
+    col += width;
+  }
+  if(col >= COLS)
+    goto done;
+
+  {
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 20;
+    int rows = 0;
+    snprintf(scratch[rows++],COLS,"%*s",width,"Cur");
+    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp))
+	break;
+
+      double t = sp->active != 0 ? sp->active : (double)(gps_time_ns() - sp->last_active) * 1e-9;
+      char buf[100];
+      snprintf(scratch[rows],COLS,"%*s",width,ftime(buf,sizeof buf,t));
+    }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
+    col += width;
+  }
 
   if(col >= COLS)
     goto done;
@@ -819,6 +818,7 @@ static void update_monitor_display(void){
   if(col >= COLS)
     goto done;
 
+#if 0
   {  // Processing delay, assuming synchronized system clocks
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
@@ -843,15 +843,18 @@ static void update_monitor_display(void){
       delay += 1.0e-9 * (gps_time_ns() - sp->chan.clocktime);
       snprintf(scratch[rows],COLS,"%'*.3lf", width,delay);
     }
+    // Suppress entirely unless there's at least one entry
     col++;
     width = render(header_line,col,scratch,rows,width);
     col += width;
   }
   if(col >= COLS)
     goto done;
+#endif
 
+#if 0
   {
-    // DAC clock time (ms) at which the RTP timestamp was 0
+    // T0: DAC clock time (ms) at which the RTP timestamp was 0
     // At 48 khz, the 32-bit RTP timestamp wraps in 89478.485 sec or 1.0356306 days
     // should be invariant +/- 1 frame (20 ms) for a given stream unless monitor or radiod is restarted
     // Checks for failures to update timestamp at sender, etc
@@ -880,7 +883,7 @@ static void update_monitor_display(void){
 
   if(col >= COLS)
     goto done;
-
+#endif
   {
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
@@ -907,16 +910,22 @@ static void update_monitor_display(void){
     int session = First_session;
     int width = 10;
     int rows = 0;
+    bool enable = false;
 
     snprintf(scratch[rows++],COLS,"%*s",width,"rst");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
+      if(sp->resets > 0)
+	enable = true;
+
       snprintf(scratch[rows],COLS,"%*llu",width,sp->resets);
     }
-    col++;
-    width = render(header_line,col,scratch,rows,width);
-    col += width;
+    if(enable){
+      col++;
+      width = render(header_line,col,scratch,rows,width);
+      col += width;
+    }
   }
   if(col >= COLS)
     goto done;
@@ -926,16 +935,21 @@ static void update_monitor_display(void){
     int session = First_session;
     int width = 10;
     int rows = 0;
+    bool enable = false;
 
     snprintf(scratch[rows++],COLS,"%*s",width,"drp");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
+      if(sp->drops > 0)
+	enable = true;
       snprintf(scratch[rows],COLS,"%*llu",width,sp->drops);
     }
-    col++;
-    width = render(header_line,col,scratch,rows,width);
-    col += width;
+    if(enable){
+      col++;
+      width = render(header_line,col,scratch,rows,width);
+      col += width;
+    }
   }
   if(col >= COLS)
     goto done;
@@ -945,16 +959,21 @@ static void update_monitor_display(void){
     int session = First_session;
     int width = 10;
     int rows = 0;
+    bool enable = false;
 
     snprintf(scratch[rows++],COLS,"%*s",width,"late");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
+      if(sp->lates > 0)
+	enable = true;
       snprintf(scratch[rows],COLS,"%*llu",width,sp->lates);
     }
-    col++;
-    width = render(header_line,col,scratch,rows,width);
-    col += width;
+    if(enable){
+      col++;
+      width = render(header_line,col,scratch,rows,width);
+      col += width;
+    }
   }
   if(col >= COLS)
     goto done;
@@ -965,16 +984,21 @@ static void update_monitor_display(void){
     int session = First_session;
     int width = 10;
     int rows = 0;
+    bool enable = false;
 
     snprintf(scratch[rows++],COLS,"%*s",width,"resq");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       snprintf(scratch[rows],COLS,"%*llu",width,sp->reseqs);
+      if(sp->reseqs > 0)
+	enable = true;
     }
-    col++;
-    width = render(header_line,col,scratch,rows,width);
-    col += width;
+    if(enable){
+      col++;
+      width = render(header_line,col,scratch,rows,width);
+      col += width;
+    }
   }
   if(col >= COLS)
     goto done;
@@ -985,16 +1009,21 @@ static void update_monitor_display(void){
     int session = First_session;
     int width = 10;
     int rows = 0;
+    bool enable = false;
 
     snprintf(scratch[rows++],COLS,"%*s",width,"plc");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       snprintf(scratch[rows],COLS,"%*llu",width,sp->plcs);
+      if(sp->plcs > 0)
+	enable = true;
     }
-    col++;
-    width = render(header_line,col,scratch,rows,width);
-    col += width;
+    if(enable){
+      col++;
+      width = render(header_line,col,scratch,rows,width);
+      col += width;
+    }
   }
   if(col >= COLS)
     goto done;
