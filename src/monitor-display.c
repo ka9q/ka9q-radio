@@ -540,7 +540,7 @@ static void update_monitor_display(void){
   if(col >= COLS)
     goto done;
 
-  {  // total active time
+  {  // ssrc
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
@@ -577,30 +577,49 @@ static void update_monitor_display(void){
   }
   if(col >= COLS)
     goto done;
-  width = 12;
-  mvprintwt(row++,col,"%*s",width,"freq");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-      mvprintwt(row,col,"%'*.0lf",width,sp->chan.tune.freq);
-  }
-  col += width;
-  row = header_line;
 
+  {  // freq
+    char scratch [LINES][COLS];
+    memset(scratch,0,sizeof scratch);
+    int session = First_session;
+    int width = 30;
+    int rows = 0;
+
+    snprintf(scratch[rows++],COLS,"%*s",width,"freq");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+
+      snprintf(scratch[rows],COLS,"%'*.0lf",width,sp->chan.tune.freq);
+    }
+    col++;
+    width = render(header_line,col,scratch,rows,width);
+    col += width;
+  }
   if(col >= COLS)
     goto done;
-  width = 5;
-  mvprintwt(row++,col,"%*s",width,"mode");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-      mvprintwt(row,col,"%*s",width,sp->chan.preset);
-  }
-  col += width;
-  row = header_line;
 
+  {  // mode
+    char scratch [LINES][COLS];
+    memset(scratch,0,sizeof scratch);
+    int session = First_session;
+    int width = COLS;
+    int rows = 0;
+
+    snprintf(scratch[rows++],COLS,"%s","mode");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+
+      snprintf(scratch[rows],COLS,"%s",sp->chan.preset);
+    }
+    col++;
+    width = render_left(header_line,col,scratch,rows,width);
+    col += width;
+  }
   if(col >= COLS)
     goto done;
+
   width = 6;
   mvprintwt(row++,col,"%*s",width-1,"s/n");
   for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
