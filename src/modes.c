@@ -509,6 +509,9 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
 // Should sample rates be integers when the block rate could in principle not be?
 // Usually Blocktime = 20.0000 ms (50.00000 Hz), which avoids the problem
 unsigned int round_samprate(unsigned int x){
+  if(x < 400)
+    return 400; // quick patch 2 Jan 2026 - 200 Hz puts the linear demod in a tight loop, reason unknown
+
   // For reasons yet not understood, only even multiples of 200 Hz seem to work
   double const baserate = (1. / Blocktime) * (Overlap - 1);
 
