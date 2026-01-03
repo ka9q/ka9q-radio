@@ -698,7 +698,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
       if(late * Channels >= BUFFERSIZE)
 	continue;      // all of it is late
       else
-	start = late; // trim the front to keep it from backward wrapping and being played 1 buffer later
+	start = late * Channels; // trim the front to keep it from backward wrapping and being played 1 buffer later
     } else if(Channels * (wptr - rptr + frames) > BUFFERSIZE){
       if(Channels * (wptr - rptr) > BUFFERSIZE)
 	continue; // all is too early
