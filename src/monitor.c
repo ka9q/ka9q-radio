@@ -699,11 +699,11 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 	continue;      // all of it is late
       else
 	start = late; // trim the front to keep it from backward wrapping and being played 1 buffer later
-    } else if(Channels * (wptr - rptr + frames) > BUFFERSIZE)
+    } else if(Channels * (wptr - rptr + frames) > BUFFERSIZE){
+      if(Channels * (wptr - rptr) > BUFFERSIZE)
+	continue; // all is too early
       frames = BUFFERSIZE / Channels - (wptr - rptr); // Trim the end from forward wrapping, prevent early play
-    if(frames <= 0)
-      continue; // all is too early
-
+    }
     for(unsigned int j = start; j < Channels*frames; j++)
       buffer[j] += sp->buffer[BINDEX(base,j)];
 
