@@ -301,7 +301,7 @@ static void *decode_task(void *arg){
 	}
 	if((int16_t)(pkt->rtp.seq - sp->next_seq) > 10){
 	  // Allow a forward sequence jump of up to 10 dropped packets
-	  // Drop old sequence numbers because we've probably skipped over them anyway
+	  // Accept old sequence numbers to get them out of the way, they're probably too old anyway
 	  // But if it persists, consider a possible stream restart
 	  if(++sp->consec_out_of_order < 6){
 	    // Toss but count
@@ -501,6 +501,7 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
   case OPUS_VOIP:
     // The Opus decoder output is always forced to the local channel count and sample rate
     // The values in the table reflect the *encoder input*
+
     if(!sp->opus){
       // This should happen only once on a stream
       // Always decode Opus to local DAC rate of 48 kHz and channel count
@@ -523,15 +524,20 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
     opus_int32 const r2 = opus_packet_get_bandwidth(pkt->data);
     sp->bandwidth = opus_bandwidth(NULL,r2);
     sp->opus_channels = opus_packet_get_nb_channels(pkt->data); // Only for display purposes. We always decode to output preference
+
     // by 'samples' they apparently mean stereo samples
-    opus_int32 const decoded_samples = opus_decode_float(sp->opus,pkt->data,(opus_int32)pkt->len,
-							 sp->bounce,
-							 (int)sp->frame_size,0);
-    assert(decoded_samples == (opus_int32)sp->frame_size); // Or something is broken inside Opus
-    // Maintain smoothed measurement of data rate
-    // Won't work right with discontinuous transmission - fix by looking at timestamps
-    double const rate = 8 * pkt->len * DAC_samprate / (double)decoded_samples; // 8 bits/byte * length / (samples/samprate)
-    sp->datarate += 0.1 * (rate - sp->datarate);
+    // Should probably blank any data with timestamp < expected timestamp since the decoder state won't be right
+    if(pkt->rtp.timestamp == sp->next_timestamp){
+      opus_int32 const decoded_samples = opus_decode_float(sp->opus,pkt->data,(opus_int32)pkt->len,
+							   sp->bounce,
+							   (int)sp->frame_size,0);
+      assert(decoded_samples == (opus_int32)sp->frame_size); // Or something is broken inside Opus
+      // Maintain smoothed measurement of data rate
+      // Won't work right with discontinuous transmission - fix by looking at timestamps
+      double const rate = 8 * pkt->len * DAC_samprate / (double)decoded_samples; // 8 bits/byte * length / (samples/samprate)
+      sp->datarate += 0.1 * (rate - sp->datarate);
+    } else
+      memset(sp->bounce,0,sp->frame_size * sp->channels * sizeof *sp->bounce); // blank out of sequence
     break;
   case S16BE:
     {
@@ -720,11 +726,11 @@ static int upsample(struct session * const sp){
     .data_in = sp->bounce,  // Pointer to input audio
     .input_frames = sp->frame_size,
     .output_frames = BBSIZE,
-    .data_out = malloc(2 * BBSIZE * sizeof(float)) // assume stereo for safety
+    .data_out = malloc(2 * BBSIZE * sizeof(float)), // assume stereo for safety
+    .src_ratio = upsample_ratio,
+    .end_of_input = 0
   };
 
-  src_data.src_ratio = upsample_ratio;
-  src_data.end_of_input = 0;
   src_set_ratio (sp->channels == 1 ? sp->src_state_mono : sp->src_state_stereo, upsample_ratio);
 
   error = src_process(sp->channels == 1 ? sp->src_state_mono : sp->src_state_stereo, &src_data);
@@ -734,7 +740,11 @@ static int upsample(struct session * const sp){
   FREE(sp->bounce);
   // Replace input pointer with output
   sp->bounce = src_data.data_out;
-  sp->frame_size = (int)round(upsample_ratio * sp->frame_size);
+  sp->frame_size = src_data.output_frames_gen;
+  if(src_data.input_frames != src_data.input_frames_used){
+    fprintf(stderr,"ssrc %d src ratio %lf: in given %ld, taken %ld, out asked %ld, out given %ld\n",
+	    sp->ssrc,src_data.src_ratio,src_data.input_frames, src_data.input_frames_used,src_data.output_frames,src_data.output_frames_gen);
+  }
   return sp->frame_size;
 }
 
@@ -761,18 +771,31 @@ static void copy_to_stream(struct session *sp){
     if(isfinite(energy))
       sp->level += .01 * (energy - sp->level); // smooth
   }
-  uint64_t rptr = atomic_load_explicit(&Output_time,memory_order_acquire); // DAC frames
-  uint64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed); // frames
-  float const *trimmed = sp->bounce;
-  int tsize = sp->frame_size;
+  int64_t queue_in_frames = qlen(sp);
+  double q = (double)queue_in_frames / DAC_samprate; // seconds
 
-  if(wptr <= rptr){
+  // I had been smoothing this, but it's remarkably stable when taken at this time
+  // bobbles only a few ms
+  sp->qlen = q;
+
+  // Use these for playout buffer adjustments
+  if(queue_in_frames < 0){
     sp->lates++;
-    if(++sp->consec_lates < 6)
-      goto advance;
-    wptr = reset_playout(sp);  // drastic measures are needed, reset playout delay, write whole thing
-  } else
+    sp->consec_lates++;
+    sp->consec_earlies = 0;
+  } else if((queue_in_frames + sp->frame_size) * Channels > BUFFERSIZE){
+    sp->earlies++;
+    sp->consec_earlies++;
     sp->consec_lates = 0;
+  } else {
+    sp->consec_earlies = 0;
+    sp->consec_lates = 0;
+  }
+	
+
+ // these can cause more of a problem because they'll wrap back in time
+
+  uint64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed); // frames
 
   if(muted(sp))
     goto advance; // skip the copy
@@ -805,19 +828,19 @@ static void copy_to_stream(struct session *sp){
     int64_t right_index = Channels * right_delay + 1;
 
     if(sp->channels == 1){
-      for(int i=0; i < tsize; i++){
+      for(int i=0; i < sp->frame_size; i++){
 	// Mono input, put on both channels
-	double s = trimmed[i];
+	double s = sp->bounce[i];
 	sp->buffer[BINDEX(base,left_index)] = (float)(s * left_gain);
 	sp->buffer[BINDEX(base,right_index)] = (float)(s * right_gain);
 	left_index += Channels;
 	right_index += Channels;
       }
     } else {
-      for(int i=0; i < tsize; i++){
+      for(int i=0; i < sp->frame_size; i++){
 	// stereo input
-	double left = trimmed[2*i];
-	double right = trimmed[2*i+1];
+	double left = sp->bounce[2*i];
+	double right = sp->bounce[2*i+1];
 	sp->buffer[BINDEX(base,left_index)] = left * left_gain;
 	sp->buffer[BINDEX(base,right_index)] = right * right_gain;
 	left_index += Channels;
@@ -826,14 +849,14 @@ static void copy_to_stream(struct session *sp){
     }
   } else { // Channels == 1, no panning
     if(sp->channels == 1){
-      for(int i=0; i < tsize; i++){
-	double s = sp->gain * trimmed[i];
+      for(int i=0; i < sp->frame_size; i++){
+	double s = sp->gain * sp->bounce[i];
 	sp->buffer[BINDEX(base,i)] = (float)s;
       }
     } else {  // sp->channels == 2
-      for(int i=0; i < tsize; i++){
+      for(int i=0; i < sp->frame_size; i++){
 	// Downmix to mono
-	double s = 0.5 * sp->gain * (trimmed[2*i] + trimmed[2*i+1]);
+	double s = 0.5 * sp->gain * (sp->bounce[2*i] + sp->bounce[2*i+1]);
 	sp->buffer[BINDEX(base,i)] = (float)s;
       }
     }
@@ -841,7 +864,7 @@ static void copy_to_stream(struct session *sp){
  advance:;
   // Always advance the official write pointer in units of output frames
   // even when muted
-  wptr += tsize;
+  wptr += sp->frame_size;
   // Write back atomically
   atomic_store_explicit(&sp->wptr,wptr,memory_order_release);
   if(wptr > sp->wptr_highwater)

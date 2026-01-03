@@ -39,10 +39,12 @@ struct session {
   _Atomic uint64_t wptr;    // Next write sample, in output sample clock units
   uint64_t wptr_highwater;
   int underflows;          // up/down counter to decide when to adjust playout
+  double qlen;             // averaged queue length, seconds
 
 
   int64_t consec_erasures;
   int consec_lates;
+  int consec_earlies;
   int consec_out_of_order;
 
   pthread_t task;           // Thread reading from queue and running decoder
@@ -82,6 +84,7 @@ struct session {
   // Counters
   uint64_t packets;    // RTP packets for this session
   uint64_t empties;    // RTP but no data
+  uint64_t earlies;
   uint64_t lates;
   uint64_t resets;
   uint64_t reseqs;

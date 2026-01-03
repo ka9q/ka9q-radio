@@ -689,15 +689,22 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     if(!inuse(sp) || muted(sp))
       continue; // Don't consider
 
+    unsigned long frames = framesPerBuffer;
     uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
     // careful with unsigned arithmetic
-    if(wptr <= rptr)
-      continue;      // he's empty or behind
+    int start = 0;
+    if(wptr <= rptr){
+      int late = rptr - wptr; // guaranteed zero or positive
+      if(late * Channels >= BUFFERSIZE)
+	continue;      // all of it is late
+      else
+	start = late; // trim the front to keep it from backward wrapping and being played 1 buffer later
+    } else if(Channels * (wptr - rptr + frames) > BUFFERSIZE)
+      frames = BUFFERSIZE / Channels - (wptr - rptr); // Trim the end from forward wrapping, prevent early play
+    if(frames <= 0)
+      continue; // all is too early
 
-    // limit to what he's got - okay because we know wptr > rptr
-    unsigned long frames =  (wptr - rptr > framesPerBuffer) ? framesPerBuffer :  wptr - rptr;
-
-    for(unsigned int j = 0; j < Channels*frames; j++)
+    for(unsigned int j = start; j < Channels*frames; j++)
       buffer[j] += sp->buffer[BINDEX(base,j)];
 
     total += frames;

@@ -725,16 +725,14 @@ static void update_monitor_display(void){
   if(col >= COLS)
     goto done;
 
-  width = 4;
+  width = 8;
   mvprintwt(row++,col,"%*s",width,"Q");
   for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
     struct session const *sp = Sess_ptr[session];
     if(!inuse(sp))
       continue;
 
-    int64_t q = 1000. * qlen(sp) / DAC_samprate;
-    if(q >= 0)
-      mvprintwt(row,col,"%*lld",width,q);   // Time idle since last transmission
+    mvprintwt(row,col,"%*d",width,(int)round(1000. * sp->qlen));   // Time idle since last transmission
   }
   col += width;
   row = header_line;
@@ -972,6 +970,7 @@ static void update_monitor_display(void){
   }
   if(col >= COLS)
     goto done;
+
   {  // lates
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
@@ -994,6 +993,31 @@ static void update_monitor_display(void){
       col += width;
     }
   }
+  if(col >= COLS)
+    goto done;
+  {  // earlies
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 10;
+    int rows = 0;
+    bool enable = false;
+
+    snprintf(scratch[rows++],COLS,"%*s",width,"early");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      if(sp->lates > 0)
+	enable = true;
+      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->earlies);
+    }
+    if(enable){
+      col++;
+      width = render(header_line,col,scratch,rows,width);
+      col += width;
+    }
+  }
+
   if(col >= COLS)
     goto done;
 

@@ -143,7 +143,7 @@ struct pt_table PT_table[128] = {
 #define AX25_PT (96)  // NON-standard payload type for my raw AX.25 frames - clean this up and remove
 #define OPUS_PT (111) // Hard-coded NON-standard payload type for OPUS (should be dynamic with sdp)
 
-
+t
 int const Opus_pt = OPUS_PT;
 int const AX25_pt = AX25_PT;
 
@@ -281,7 +281,9 @@ int pt_from_info(int samprate,int channels,enum encoding encoding){
     if(PT_table[type].samprate == samprate && PT_table[type].channels == channels && PT_table[type].encoding == encoding)
       return type;
   }
-  for(int type=96; type < 128; type++){ // Allocate a new type in the dynamic range
+  // The dynamic pool starts at 96 but sometimes I need more than are available during testing with lots of encoder/
+  // sample rate/channel combinations. 77-95 is unassigned, so I'm squatting. I do avoid 100 since it's de-facto RTP Event
+  for(int type=77; type < 128; type++){ // Allocate a new type in the dynamic range
     if(type == 100)
       continue; // avoid this one, de-facto RTP Event
     if(PT_table[type].samprate == 0){
