@@ -296,7 +296,8 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     char const *p = config_getstring(table,sname,"samprate",NULL);
     if(p != NULL){
       int s = (int)round(parse_frequency(p,false));
-      chan->output.samprate = round_samprate(s);
+      if(s != 0)
+	chan->output.samprate = round_samprate(s);
     }
   }
   // This test can't fail since round_samprate() forces it to a minimium of the blockrate; not sure what is ideal here

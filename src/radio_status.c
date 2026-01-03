@@ -236,6 +236,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       // Restart the demodulator to recalculate filters, etc
       {
 	int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
+	if(new_sample_rate == 0)
+	  break;
 	// If using Opus, ignore unsupported sample rates
 	if(new_sample_rate == chan->output.samprate)
 	  break;
