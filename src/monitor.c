@@ -686,7 +686,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     if(sp == NULL)
       break; // Voting, and no one has claimed the prize yet
 
-    if(!inuse(sp) || muted(sp))
+    if(!inuse(sp) || muted(sp) || sp->buffer == NULL)
       continue; // Don't consider
 
     unsigned long frames = framesPerBuffer;
