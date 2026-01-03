@@ -463,6 +463,7 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
 
   sp->type = pkt->rtp.type;
   int prev_samprate = sp->samprate;
+  int prev_channels = sp->channels;
   if(sp->pt_table[sp->type].encoding == OPUS){
     // The table values reflect the encoder input; they're for the status display
     // The encoder output is always forced to the local DAC
@@ -482,8 +483,10 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
     sp->samprate = samprate;
     sp->channels = channels;
   }
-  if(sp->samprate != prev_samprate)
+  if(sp->samprate != prev_samprate || sp->channels != prev_channels){
+    reset_playout(sp);
     init_pl(sp);
+  }
 
   if(pkt->len <= 0){
     sp->frame_size = 0;
@@ -790,6 +793,10 @@ static void copy_to_stream(struct session *sp){
   } else {
     sp->consec_earlies = 0;
     sp->consec_lates = 0;
+  }
+  if(sp->consec_lates > 6 || sp->consec_earlies > 6){
+    reset_playout(sp);
+    sp->consec_lates = sp->consec_earlies = 0;
   }
 	
 
