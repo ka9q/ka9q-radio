@@ -35,6 +35,9 @@ struct session {
   float *buffer;           // Output stream, read by Portaudio callback
   SRC_STATE *src_state_mono;
   SRC_STATE *src_state_stereo;
+  double clock_freq;
+  double clock_offset;
+  
 
   _Atomic uint64_t wptr;    // Next write sample, in output sample clock units
   uint64_t wptr_highwater;

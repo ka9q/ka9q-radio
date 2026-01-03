@@ -1415,7 +1415,7 @@ int downconvert(struct channel *chan){
       struct timespec timeout; // Needed to avoid deadlock if no front end is available
       clock_gettime(CLOCK_REALTIME,&timeout);
       timeout.tv_nsec += (long)(Blocktime * BILLION); // seconds to nanoseconds
-      if(timeout.tv_nsec > BILLION){
+      if(timeout.tv_nsec >= BILLION){
 	timeout.tv_sec += 1; // 1 sec in the future
 	timeout.tv_nsec -= BILLION;
       }

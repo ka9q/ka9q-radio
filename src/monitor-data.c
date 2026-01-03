@@ -786,7 +786,8 @@ static void copy_to_stream(struct session *sp){
     sp->lates++;
     sp->consec_lates++;
     sp->consec_earlies = 0;
-  } else if((queue_in_frames + sp->frame_size) * Channels > BUFFERSIZE){
+    //  } else if((queue_in_frames + sp->frame_size) * Channels > BUFFERSIZE){ // entire buffer
+  } else if((double)queue_in_frames > 2 * sp->playout * DAC_samprate){
     sp->earlies++;
     sp->consec_earlies++;
     sp->consec_lates = 0;
@@ -798,10 +799,6 @@ static void copy_to_stream(struct session *sp){
     reset_playout(sp);
     sp->consec_lates = sp->consec_earlies = 0;
   }
-	
-
- // these can cause more of a problem because they'll wrap back in time
-
   uint64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed); // frames
 
   if(muted(sp))
@@ -905,6 +902,8 @@ static int calculate_tight_deadline(struct timespec *deadline,struct session *sp
 int64_t qlen(struct session const *sp){
   uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_acquire); // the callback writes it
   uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed); // only we write it
+  if(rptr == 0 || wptr == 0)
+    return 0; // probably not initialized yet
   int64_t qlen = (int64_t)(wptr - rptr)
     - (int64_t)ceil(DAC_samprate * (Pa_GetStreamTime(Pa_Stream) - atomic_load_explicit(&Last_callback_time,memory_order_acquire)));
 
