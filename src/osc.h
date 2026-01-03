@@ -38,13 +38,7 @@ void set_osc(struct osc *osc,double f,double r);
 double complex step_osc(struct osc *osc);
 
 // Osc functions -- direct digital synthesis (sine lookup table)
-double sine_dds(uint32_t accum);
-static inline double cos_dds(uint32_t accum){
-  return sine_dds(accum + (uint32_t)0x40000000); // cos(x) = sin(x + 90 deg)
-}
-static inline double complex comp_dds(uint32_t accum){
-  return CMPLX(cos_dds(accum),sine_dds(accum));
-}
+void nco(uint32_t,double *,double *);
 
 
 // PLL functions
@@ -53,7 +47,9 @@ double run_pll(struct pll *pll,double phase);
 void set_pll_params(struct pll *pll,double bw,double damping);
 void set_pll_limits(struct pll *pll,double low,double high);
 static inline double complex pll_phasor(struct pll const *pll){
-  return comp_dds(pll->vco_phase);
+  double s,c;
+  nco(pll->vco_phase,&s,&c);
+  return CMPLX(c,s);
 }
 static inline double pll_freq(struct pll const *pll){
   return (double)pll->vco_step * pll->samprate / (double)(1LL << 32); // Hz

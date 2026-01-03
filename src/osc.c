@@ -12,11 +12,6 @@
 #include "misc.h"
 #include "osc.h"
 
-// Constants for the sine lookup table
-#define TABBITS (10) // Log of table size; 2^10 = 1024
-#define TABSIZE (1UL<<TABBITS)
-#define FRACTBITS (32 - TABBITS - 2)
-
 // Constants for the complex rotator
 const int Renorm_rate = 16384; // Renormalize oscillators this often
 
@@ -74,53 +69,58 @@ double complex step_osc(struct osc *osc){
   return r;
 }
 
-
 // Sine lookup table
 
-// sin(x) from 0 to pi/2 (0-90 deg) **inclusive**
-static double Lookup[TABSIZE+1]; // Leave room for == pi/2
+// Constants for the sine lookup table
+#define TAB_BITS (10) // Log of table size; 2^10 = 1024
+#define TAB_SIZE (1<<TAB_BITS)
+#define FRACT_BITS (32 - TAB_BITS - 2)
+
+// sin(x) from 0 to pi/2 (0-90 deg) **inclusive** in TAB_BITS steps
+static double Lookup[TAB_SIZE+1]; // Leave room for == pi/2
 static bool Tab_init;
 
 // Initialize sine lookup table
-static void dds_init(void){
-  for(unsigned long i=0; i <= TABSIZE; i++)
-    Lookup[i] = sin(M_PI * 0.5 * (double)i/TABSIZE);
+static void nco_init(void){
+  for(int i=0; i <= TAB_SIZE; i++)
+    Lookup[i] = sin(M_PI * 0.5 * (double)i/TAB_SIZE);
 
   Tab_init = true;
 }
 
-
 // Direct digital synthesizer, 32-bit phase accumulator
 // 0 .... 0xffffffff => 0 to 2*pi (360 deg)
-double sine_dds(uint32_t accum){
+void nco(uint32_t accum,double *s,double *c){
   if(!Tab_init)
-    dds_init();
+    nco_init();
 
-  // Sign half   tab index  fraction
+  /* Sign half   tab index  fraction
   // S    H      TTTTTTTTTT ffffffffffffffffffff
+  // or
+  // QQ          TTTTTTTTTT ffffffffffffffffffff
+  //  = quadrant: 00: I  0-90 deg
+                  01: II 90-180
+                  10: III 180-270
+		  11  IV  270-360
+  */
+  uint32_t const fract = accum & ((1U << FRACT_BITS)-1);
+  uint32_t tab = (accum >> FRACT_BITS) & ((1U << TAB_BITS) - 1);
+  uint32_t quad = accum >> (FRACT_BITS + TAB_BITS);  // 0-3: 0-90, 90-180, 180-270, 270-360
 
-  uint32_t const fract = accum & ((1 << FRACTBITS)-1);
-  accum >>= FRACTBITS;
-  uint32_t tab = accum & ((1 << TABBITS) - 1);
-  accum >>= TABBITS;
-  bool const half = accum & 1;
-  accum >>= 1;
-  bool const sign = accum & 1;
+  // Index the lookup table in the proper direction
+  tab = (quad & 1) ? TAB_SIZE - tab : tab; // up, down, up, down
+  // Approx sine with proper sign
+  double sine = Lookup[tab] * (quad & 2 ? -1 : +1); // +,  +,    -,  -
 
-  int next = +1;
-  if(half){
-    tab = TABSIZE - tab;
-    next = -1;
-  }
+  // Approx cos with propr sign (derivative of sine)
+  double cosine = Lookup[TAB_SIZE - tab] * ((quad + 1) & 2 ? -1 : +1); // +down, -up, -down, +up
+  // Use approx cos as slope to interpolate fraction
+  double diff = 2 * M_PI * ldexp((double)fract, -32);
+  if(s)
+    *s = sine + cosine * diff - 0.5 * (sine * diff * diff);
 
-  assert(tab <= TABSIZE && tab + next <= TABSIZE);
-  double f = Lookup[tab];
-  double const f1 = Lookup[tab+next];
-
-  double const fscale = 1.0 / (1 << FRACTBITS);
-
-  f += (f1 - f) * (float)fract * fscale;
-  return sign ? -f : f;
+  if(c)
+    *c = cosine - sine * diff - 0.5 * (cosine * diff * diff);
 }
 
 
