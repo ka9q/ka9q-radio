@@ -145,6 +145,7 @@ int demod_linear(void *arg){
       }
       chan->pll.cphase = pll_phase(&chan->pll.pll);
       chan->sig.foffset = pll_freq(&chan->pll.pll);
+      chan->pll.rotations = pll_rotations(&chan->pll.pll);
 
       if(noise != 0){
 	chan->pll.snr = (signal / noise) - 1; // S/N as power ratio; meaningful only in coherent modes
@@ -169,10 +170,8 @@ int demod_linear(void *arg){
 	  chan->pll.lock = true;
 	}
       }
-
     } else {
       chan->pll.rotations = 0;
-      chan->pll.pll.integrator = 0; // reset oscillator when coming back on
       chan->pll.lock_count = -lock_limit;
       chan->pll.lock = false;
     }

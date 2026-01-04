@@ -21,22 +21,16 @@ struct osc {
 
 struct pll {
   double samprate;
-  double phase_prev;
   uint32_t vco_phase; // 1 cycle = 2^32
   int32_t vco_step;   // resolution: 1/2^32 cycles
-  double integrator_gain;
-  double prop_gain;
-  double integrator;
-  double bw; // loop bandwidth
+  double bw; // loop noise bandwidth (not natural frequency)
   double damping; // Damping factor
-  double lower_limit; // Lower PLL frequency limit, cycles/sample
-  double upper_limit; // Upper PLL frequency limit, cycles/sample
-  double feedback;
-  double gain;
+  double lower_limit; // Lower PLL frequency limit, Hz
+  double upper_limit; // Upper PLL frequency limit, Hz
   double u; // frequency cycles/sample
   double phi; // cycles
-  double K1,K2;
-  int32_t wraps;
+  double K1,K2; // gains
+  int32_t wraps; // complete phase wraps of NCO
 };
 
 
@@ -67,5 +61,9 @@ static inline double pll_freq(struct pll const *pll){
 static inline double pll_phase(struct pll const *pll){
   return ldexp(2 * M_PI * pll->vco_phase,-32);
 }
+static inline int32_t pll_rotations(struct pll const *pll){
+  return pll->wraps;
+}
+
 #endif
 
