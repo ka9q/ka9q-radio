@@ -178,9 +178,9 @@ int main(int argc,char *argv[]){
   
   {
     double sinlat,coslat;
-    sincos(RAPDEG*latitude,&sinlat,&coslat);
+    sincospi(latitude/180., &sinlat, &coslat);
     double sinlong,coslong;
-    sincos(RAPDEG*longitude,&sinlong,&coslong);
+    sincospi(longitude/180.,&sinlong,&coslong);
     
     double tmp = WGS84_A/sqrt(1-(square(WGS84_E)*square(sinlat)));
     station_x = (tmp + altitude) * coslat * coslong;
@@ -318,9 +318,9 @@ int main(int argc,char *argv[]){
       double target_x,target_y,target_z;
       {
 	double sinlat,coslat;
-	sincos(RAPDEG*latitude,&sinlat,&coslat);
+	sincospi(latitude/180., &sinlat, &coslat);
 	double sinlong,coslong;
-	sincos(RAPDEG*longitude,&sinlong,&coslong);
+	sincospi(longitude/180., &sinlong, &coslong);
 	
 	double tmp = WGS84_A/sqrt(1-(square(WGS84_E)*square(sinlat))); // Earth radius under target
 	target_x = (tmp + altitude) * coslat * coslong;
