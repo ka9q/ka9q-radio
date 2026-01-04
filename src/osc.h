@@ -25,8 +25,8 @@ struct pll {
   int32_t vco_step;   // resolution: 1/2^32 cycles
   double bw; // loop noise bandwidth (not natural frequency)
   double damping; // Damping factor
-  double lower_limit; // Lower PLL frequency limit, Hz
-  double upper_limit; // Upper PLL frequency limit, Hz
+  double lower_limit; // Lower PLL frequency limit, cycles/sample
+  double upper_limit; // Upper PLL frequency limit, cycles/sample
   double u; // frequency cycles/sample
   double phi; // cycles
   double K1,K2; // gains

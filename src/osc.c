@@ -135,7 +135,7 @@ void init_pll(struct pll *pll,double samprate){
 
   memset(pll,0,sizeof(*pll));
   pll->samprate = samprate;
-  set_pll_limits(pll, -0.5 * samprate, +0.5 * samprate);
+  set_pll_limits(pll, -0.5, +0.5);
   set_pll_params(pll, 1.0, M_SQRT1_2); // 1 Hz, 1/sqrt(2) defaults
 }
 
@@ -180,6 +180,10 @@ double run_pll(struct pll *pll,double phase){
 
   pll->u += pll->K2 * phase;
   double dphi = pll->u + pll->K1 * phase;
+  if(dphi > pll->upper_limit)
+    dphi = pll->upper_limit;
+  else if(dphi < pll->lower_limit)
+    dphi = pll->lower_limit;
 
   pll->phi += dphi;
   if(pll->phi > 1){

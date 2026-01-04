@@ -125,7 +125,9 @@ int demod_linear(void *arg){
 	    double mag = cabs(s);
 	    phase = (mag > 0) ? cimag(s) / mag : 0;
 	  } else {
-	    phase = cimag(s) / creal(s);
+	    double r = creal(s);
+	    double i = cimag(s);
+	    phase = 2.0 * r * i / (r*r - i*i);
 	  }
 	} else {
 	  // unlocked

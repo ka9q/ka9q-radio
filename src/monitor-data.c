@@ -147,7 +147,7 @@ void *dataproc(void *arg){
     struct packet *qe = NULL;
 
     int qlen = 0;
-    const int maxq = 500; // 10 seconds
+    const int maxq = 100; // 2 seconds
     pthread_mutex_lock(&sp->qmutex);
     for(qe = sp->queue;
 	qe != NULL && qlen < maxq && pkt->rtp.seq >= qe->rtp.seq;
@@ -155,7 +155,7 @@ void *dataproc(void *arg){
       ;
 
     if(qlen >= maxq){
-      // Queue has grown huge, blow it away. Seems to happen when a macos laptop is asleep
+      // Queue has gotten out of control, blow it away. Seems to happen when a macos laptop is asleep
       struct packet *qnext;
       for(qe = sp->queue; qe != NULL; qe = qnext){
 	qnext = qe->next;
@@ -371,6 +371,10 @@ static void *decode_task(void *arg){
     // We have a frame of decoded audio or PLC from Opus
     // Do PL detection and notching even when muted
     if(sp->frame_size > 0 && sp->samprate != 0){
+      // Limit to 1 second on queue
+      if(sp->qlen > 1 * DAC_samprate || sp->qlen < 0)
+	reset_playout(sp);
+
       if(sp->notch_enable){
 	run_pl(sp);
 	apply_notch(sp);
