@@ -189,5 +189,8 @@ double run_pll(struct pll *pll,double phase){
     pll->phi += 1;
     pll->wraps--;
   }
+  pll->vco_step = (int32_t)ldexp(dphi,+32);
+  pll->vco_phase += pll->vco_step;
+
   return dphi * pll->samprate;
 }

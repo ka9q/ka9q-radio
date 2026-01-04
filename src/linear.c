@@ -125,26 +125,23 @@ int demod_linear(void *arg){
 	    double mag = cabs(s);
 	    phase = (mag > 0) ? cimag(s) / mag : 0;
 	  } else {
-	    phase = 2 * cimag(s) / creal(s);
+	    phase = cimag(s) / creal(s);
 	  }
 	} else {
 	  // unlocked
 	  if(!chan->pll.square){
 	    phase = carg(s);
 	  } else {
-	    phase = carg(s*s);
+	    phase = 0.5 * carg(s*s); // compensate for doubled gain
 	  }
 	}
 	phase /= (2*M_PI);
-	double f_error = run_pll(&chan->pll.pll,phase); // frequency error in Hz
-	chan->pll.pll.vco_step = (int32_t)ldexp(f_error / chan->pll.pll.samprate,+32);
-	chan->pll.pll.vco_phase += chan->pll.pll.vco_step;
+	chan->sig.foffset = run_pll(&chan->pll.pll,phase); // frequency error in Hz
 
 	signal += creal(s) * creal(s); // signal in phase with VCO is signal + noise power
 	noise += cimag(s) * cimag(s);  // signal in quadrature with VCO is assumed to be noise power
       }
       chan->pll.cphase = pll_phase(&chan->pll.pll);
-      chan->sig.foffset = pll_freq(&chan->pll.pll);
       chan->pll.rotations = pll_rotations(&chan->pll.pll);
 
       if(noise != 0){
