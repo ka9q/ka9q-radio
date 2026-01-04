@@ -121,6 +121,7 @@ int demod_linear(void *arg){
 	double phase;
 	if(chan->pll.lock){
 	  // Smal angle approximations are faster when locked
+	  // Need to add numerical stability guards for division close to zero
 	  if(!chan->pll.square){
 	    double mag = cabs(s);
 	    phase = (mag > 0) ? cimag(s) / mag : 0;
