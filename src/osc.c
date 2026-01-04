@@ -9,6 +9,7 @@
 #include <math.h>
 #include <complex.h>
 #include <memory.h>
+#include <stdatomic.h>
 #include "misc.h"
 #include "osc.h"
 
@@ -78,20 +79,18 @@ double complex step_osc(struct osc *osc){
 
 // sin(x) from 0 to pi/2 (0-90 deg) **inclusive** in TAB_BITS steps
 static double Lookup[TAB_SIZE+1]; // Leave room for == pi/2
-static bool Tab_init;
+static atomic_flag NCO_init = ATOMIC_FLAG_INIT;
 
 // Initialize sine lookup table
 static void nco_init(void){
   for(int i=0; i <= TAB_SIZE; i++)
     Lookup[i] = sin(M_PI * 0.5 * (double)i/TAB_SIZE);
-
-  Tab_init = true;
 }
 
 // Direct digital synthesizer, 32-bit phase accumulator
 // 0 .... 0xffffffff => 0 to 2*pi (360 deg)
 void nco(uint32_t accum,double *s,double *c){
-  if(!Tab_init)
+  if(!atomic_flag_test_and_set_explicit(&NCO_init,memory_order_relaxed))
     nco_init();
 
   /* Sign half   tab index  fraction
@@ -110,17 +109,22 @@ void nco(uint32_t accum,double *s,double *c){
   // Index the lookup table in the proper direction
   tab = (quad & 1) ? TAB_SIZE - tab : tab; // up, down, up, down
   // Approx sine with proper sign
-  double sine = Lookup[tab] * (quad & 2 ? -1 : +1); // +,  +,    -,  -
+  double sine = (quad & 2) ? -Lookup[tab] : +Lookup[tab]; // +,  +,    -,  -
 
-  // Approx cos with propr sign (derivative of sine)
-  double cosine = Lookup[TAB_SIZE - tab] * ((quad + 1) & 2 ? -1 : +1); // +down, -up, -down, +up
+  // Approx cos with proper sign (derivative of sine)
+  tab = TAB_SIZE - tab;
+  quad++;
+  double cosine = (quad & 2) ? -Lookup[tab] : +Lookup[tab]; // +down, -up, -down, +up
   // Use approx cos as slope to interpolate fraction
   double diff = 2 * M_PI * ldexp((double)fract, -32);
+  double cdiff = cosine * diff;
+  double sdiff = sine * diff;
+  // Interpolate with 2nd order Taylor expansion
   if(s)
-    *s = sine + cosine * diff - 0.5 * (sine * diff * diff);
+    *s = sine + cdiff - 0.5 * sdiff * diff;
 
   if(c)
-    *c = cosine - sine * diff - 0.5 * (cosine * diff * diff);
+    *c = cosine - sdiff - 0.5 * cdiff * diff;
 }
 
 
@@ -132,7 +136,7 @@ void init_pll(struct pll *pll,double samprate){
   memset(pll,0,sizeof(*pll));
   pll->samprate = samprate;
   set_pll_limits(pll,-0.5,+0.5);
-  set_pll_params(pll,1.0f,M_SQRT1_2); // 1 Hz, 1/sqrt(2) defaults
+  set_pll_params(pll,1.0,M_SQRT1_2); // 1 Hz, 1/sqrt(2) defaults
 }
 
 void set_pll_limits(struct pll *pll,double low,double high){
