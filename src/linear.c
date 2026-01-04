@@ -135,10 +135,17 @@ int demod_linear(void *arg){
 	    phase = carg(s*s);
 	  }
 	}
-	run_pll(&chan->pll.pll,phase);
+	phase /= (2*M_PI);
+	double f_error = run_pll(&chan->pll.pll,phase); // frequency error in Hz
+	chan->pll.pll.vco_step = (int32_t)ldexp(f_error / chan->pll.pll.samprate,+32);
+	chan->pll.pll.vco_phase += chan->pll.pll.vco_step;
+
 	signal += creal(s) * creal(s); // signal in phase with VCO is signal + noise power
 	noise += cimag(s) * cimag(s);  // signal in quadrature with VCO is assumed to be noise power
       }
+      chan->pll.cphase = pll_phase(&chan->pll.pll);
+      chan->sig.foffset = pll_freq(&chan->pll.pll);
+
       if(noise != 0){
 	chan->pll.snr = (signal / noise) - 1; // S/N as power ratio; meaningful only in coherent modes
 	if(chan->pll.snr < 0)
@@ -162,17 +169,7 @@ int demod_linear(void *arg){
 	  chan->pll.lock = true;
 	}
       }
-      double const phase = carg(pll_phasor(&chan->pll.pll));
-      if(chan->pll.snr > chan->squelch_close){
-	// Try to avoid counting cycle slips during loss of lock
-	double const phase_diff = phase - chan->pll.cphase;
-	if(phase_diff > M_PI)
-	  chan->pll.rotations--;
-	else if(phase_diff < -M_PI)
-	  chan->pll.rotations++;
-      }
-      chan->pll.cphase = phase;
-      chan->sig.foffset = pll_freq(&chan->pll.pll);
+
     } else {
       chan->pll.rotations = 0;
       chan->pll.pll.integrator = 0; // reset oscillator when coming back on

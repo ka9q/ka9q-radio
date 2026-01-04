@@ -48,7 +48,7 @@ void set_osc(struct osc *osc,double f,double r){
 inline static void renorm_osc(struct osc *osc){
   if(!is_phasor_init(osc->phasor))
     osc->phasor = 1; // In case we've been stepping an uninitialized osc
-     
+
   osc->steps = Renorm_rate;
   osc->phasor /= cabs(osc->phasor);
 
@@ -128,15 +128,15 @@ void nco(uint32_t accum,double *s,double *c){
 }
 
 
-// Initialize digital phase lock loop with bandwidth, damping factor, initial VCO frequency and sample rate
+// Initialize digital phase lock loop with sample rate and some reasonable defaults
 void init_pll(struct pll *pll,double samprate){
   assert(pll != NULL);
   assert(samprate != 0);
 
   memset(pll,0,sizeof(*pll));
   pll->samprate = samprate;
-  set_pll_limits(pll,-0.5,+0.5);
-  set_pll_params(pll,1.0,M_SQRT1_2); // 1 Hz, 1/sqrt(2) defaults
+  set_pll_limits(pll, -0.5 * samprate, +0.5 * samprate);
+  set_pll_params(pll, 1.0, M_SQRT1_2); // 1 Hz, 1/sqrt(2) defaults
 }
 
 void set_pll_limits(struct pll *pll,double low,double high){
@@ -147,65 +147,47 @@ void set_pll_limits(struct pll *pll,double low,double high){
     low = high;
     high = t;
   }
-  pll->lower_limit = low / pll->samprate; // fraction of sample rate
-  pll->upper_limit = high / pll->samprate;
+  pll->lower_limit = low; // Hz
+  pll->upper_limit = high;
 }
 
 
 // Set PLL loop bandwidth & damping factor
 void set_pll_params(struct pll *pll,double bw,double damping){
   assert(pll != NULL);
-  bw = fabs(bw);
-  if(bw == 0)
-    return; // Can't really handle this
-  if(bw == pll->bw && damping == pll->damping) // nothing changed
+  if(bw == 0 || (bw == pll->bw && damping == pll->damping)) // nothing changed
     return;
 
-  pll->bw = bw;
-  bw /= pll->samprate;   // cycles per sample
-  pll->damping = damping;
-  double const freq = pll->integrator * pll->integrator_gain; // Keep current frequency
-  
-  double const vcogain = 2 * M_PI;          // 2 pi radians/sample per "volt"
-  double const pdgain = 1;                  // phase detector gain "volts" per radian (unity from atan2)
-  double const natfreq = bw * 2 * M_PI;     // loop natural frequency in rad/sample
-  double const tau1 = vcogain * pdgain / (natfreq * natfreq);
-  double const tau2 = 2 * damping / natfreq;
+  double denom = damping + 1.0/(4.0 * damping);
+  double wn = 4.0 * M_PI * fabs(bw)/denom;
 
-  pll->prop_gain = tau2 / tau1;
-  pll->integrator_gain = 1 / tau1;
-  pll->integrator = freq * tau1; // To give specified frequency
-#if 0
-  fprintf(stderr,"init_pll(%p,%lf,%lf,%lf,%lf)\n",pll,bw,damping,freq,samprate);
-  fprintf(stderr,"natfreq %lg tau1 %lg tau2 %lg propgain %lg intgain %lg\n",
-	  natfreq,tau1,tau2,pll->prop_gain,pll->integrator_gain);
-#endif
+  pll->bw = bw; // Hz
+  pll->damping = damping; // dimensionless
+
+  double theta = wn / pll->samprate;
+  double D = 1.0 + 2.0 * damping * theta + theta * theta;
+  pll->K1 = 4.0 * damping * theta/ D;
+  pll->K2 = 4.0 * theta * theta / D;
 }
 
 
 
 // Step the PLL through one sample, return VCO control voltage
-// Return PLL freq in cycles/sample
+// phase error input in cycles
+// Return PLL freq in Hz
 double run_pll(struct pll *pll,double phase){
   assert(pll != NULL);
 
-  double feedback = pll->integrator_gain * pll->integrator + pll->prop_gain * phase;
-  pll->integrator += phase;
-  
-  if(pll->integrator_gain * pll->integrator > pll->upper_limit){
-    pll->integrator = pll->upper_limit / pll->integrator_gain;
-  } else if(pll->integrator_gain * pll->integrator < pll->lower_limit){
-    pll->integrator = pll->lower_limit / pll->integrator_gain;
-  }
-  pll->vco_step = (int32_t)ldexp(feedback,32);
-  pll->vco_phase += pll->vco_step;
-#if 0
-  if((random() & 0xffff) == 0){
-    fprintf(stderr,"phase %lf integrator %lg feedback %lg pll_freq %lg\n",
-	    phase,pll->integrator,feedback,feedback * pll->samprate);
-  }
-#endif
-   
-  return feedback;
-}
+  pll->u += pll->K2 * phase;
+  double dphi = pll->u + pll->K1 * phase;
 
+  pll->phi += dphi;
+  if(pll->phi > 1){
+    pll->phi -= 1;
+    pll->wraps++;
+  } else if(pll->phi < -1){
+    pll->phi += 1;
+    pll->wraps--;
+  }
+  return dphi * pll->samprate;
+}

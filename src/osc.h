@@ -21,6 +21,7 @@ struct osc {
 
 struct pll {
   double samprate;
+  double phase_prev;
   uint32_t vco_phase; // 1 cycle = 2^32
   int32_t vco_step;   // resolution: 1/2^32 cycles
   double integrator_gain;
@@ -30,6 +31,12 @@ struct pll {
   double damping; // Damping factor
   double lower_limit; // Lower PLL frequency limit, cycles/sample
   double upper_limit; // Upper PLL frequency limit, cycles/sample
+  double feedback;
+  double gain;
+  double u; // frequency cycles/sample
+  double phi; // cycles
+  double K1,K2;
+  int32_t wraps;
 };
 
 
@@ -51,9 +58,14 @@ static inline double complex pll_phasor(struct pll const *pll){
   nco(pll->vco_phase,&s,&c);
   return CMPLX(c,s);
 }
+// PLL frequency in Hz
 static inline double pll_freq(struct pll const *pll){
-  return (double)pll->vco_step * pll->samprate / (double)(1LL << 32); // Hz
+  return ldexp(((double)pll->vco_step * pll->samprate),-32);
 }
 
+// PLL frequency in radians
+static inline double pll_phase(struct pll const *pll){
+  return ldexp(2 * M_PI * pll->vco_phase,-32);
+}
 #endif
 
