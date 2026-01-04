@@ -197,7 +197,7 @@ double run_pll(struct pll *pll,double phase){
   } else if(pll->integrator_gain * pll->integrator < pll->lower_limit){
     pll->integrator = pll->lower_limit / pll->integrator_gain;
   }
-  pll->vco_step = (int32_t)(feedback * (float)(1LL<<32));
+  pll->vco_step = (int32_t)ldexp(feedback,32);
   pll->vco_phase += pll->vco_step;
 #if 0
   if((random() & 0xffff) == 0){
