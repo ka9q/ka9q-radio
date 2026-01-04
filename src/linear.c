@@ -112,12 +112,29 @@ int demod_linear(void *arg){
 
     if(chan->pll.enable){
       // Update PLL state, if active
-      set_pll_params(&chan->pll.pll,chan->pll.loop_bw,damping);
-      bool const square = chan->pll.square;
+      set_pll_params(&chan->pll.pll,chan->pll.lock ? 0.1 * chan->pll.loop_bw : chan->pll.loop_bw,
+		     damping);
       for(int n=0; n<N; n++){
-	double complex const s = buffer[n] * conj(pll_phasor(&chan->pll.pll));
+	double complex const s = buffer[n] * conj(pll_phasor(&chan->pll.pll)); // mix vco with input
 	buffer[n] = s;
-	double const phase = square ? carg(s*s) : carg(s);
+	// Determine phase of product
+	double phase;
+	if(chan->pll.lock){
+	  // Smal angle approximations are faster when locked
+	  if(!chan->pll.square){
+	    double mag = cabs(s);
+	    phase = (mag > 0) ? cimag(s) / mag : 0;
+	  } else {
+	    phase = 2 * cimag(s) / creal(s);
+	  }
+	} else {
+	  // unlocked
+	  if(!chan->pll.square){
+	    phase = carg(s);
+	  } else {
+	    phase = carg(s*s);
+	  }
+	}
 	run_pll(&chan->pll.pll,phase);
 	signal += creal(s) * creal(s); // signal in phase with VCO is signal + noise power
 	noise += cimag(s) * cimag(s);  // signal in quadrature with VCO is assumed to be noise power
