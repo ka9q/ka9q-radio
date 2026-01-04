@@ -111,17 +111,12 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 #define malloc_usable_size(x) malloc_size(x)
 #define sincos(x,s,c) __sincos((x),(s),(c))
 #define sincosf(x,s,c) __sincosf((x),(s),(c))
-#define sincospi(x,s,c) __sincospi((x),(s),(c))
-#define sincospif(x,s,c) __sincospif((x),(s),(c))
 
 #else // !__APPLE__
 // Not apple (Linux, etc)
 
 #include <malloc.h>
 #define pthread_setname(x) pthread_setname_np(pthread_self(),(x))
-// Does anyone implement these natively for Linux?
-#define sincospi(x,s,c) sincos((x)*M_PI,(s),(c))
-#define sincospif(x,s,c) sincosf((x)*M_PIf,(s),(c))
 
 #endif // ifdef __APPLE__
 
@@ -153,11 +148,22 @@ static inline int init_recursive_mutex(pthread_mutex_t *m){
 #define dB2voltage(x) (pow(10.0, (x)/20.0))
 #define voltage2dB(x) (20.0 * log10(x))
 
-// Cos(x) + j*sin(x)
+// Does anyone implement these natively for Linux?
+// (I just did - KA9Q Jan 2026 -- see sincospi.c and sincospif.c)
+// It's a big win in DSP to keep phases as rotations (or half rotations),
+// rather than radians, to make phase wrap reduction really easy and accurate
+void sincospi(double x, double *s, double *c);
+void sincospif(float x, float *s, float *c);
+
+// How many names can people dream up for the same operation?
+// (I know, I'm an EE so I should say 'j', not 'i')
+// exp(i*x) = Cos(x) + i*sin(x)
+// "cosine plus i sine" -- heard a lot in grad school
 #define cisf(x) csincosf(x)
 #define cispif(x) csincospif(x)
 #define cis(x) csincos(x)
 #define cispi(x) csincospi(x)
+
 
 // Normalized sinc function sin(πx) / πx
 static inline float sincf(float x){
