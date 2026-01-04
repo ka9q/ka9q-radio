@@ -340,8 +340,8 @@ int demod_linear(void *arg){
     // Multi-step squelch similar to FM but simpler
     int const squelch_state_max = chan->squelch_tail + 4;
 
-    if(!(chan->snr_squelch_enable || chan->pll.enable))
-      || && snr >= chan->squelch_open)
+    if(!(chan->snr_squelch_enable || chan->pll.enable)
+       || snr >= chan->squelch_open)
       squelch_state = squelch_state_max; // hold timer at start
 
     else if(squelch_state > 0 && snr < chan->squelch_close)
