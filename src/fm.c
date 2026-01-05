@@ -186,24 +186,25 @@ int demod_fm(void *arg){
     }
     float baseband[N];    // Demodulated FM baseband
     if(chan->pll.enable){
+      double pdev = chan->fm.devmax / samprate;
       if(!chan->pll.was_on){
 	chan->pll.was_on = true;
-	init_pll(&chan->pll.pll,chan->output.samprate);
-	set_pll_params(&chan->pll.pll,500.0,M_SQRT1_2);
-	double dev = chan->fm.devmax / samprate;
-	set_pll_limits(&chan->pll.pll, -dev, +dev); // clip to +/-deviation
+	init_pll(&chan->pll.pll);
+	double bw = 500.0 / samprate; // empirical, play with this
+	set_pll_params(&chan->pll.pll, bw, M_SQRT1_2);
+	set_pll_limits(&chan->pll.pll, -pdev, +pdev); // clip to +/-deviation
       }
       for(int n=0; n < N; n++){
 	double phase = M_1_PI2 * carg(buffer[n] * conj(pll_phasor(&chan->pll.pll))); // mix vco with input, -0.5 to +0.5 cycle/sample
 	// Clamp to peak deviation
-	if(fabs(phase) > chan->fm.devmax/samprate)
-	  phase = copysign(chan->fm.devmax/samprate, phase);
+	if(fabs(phase) > pdev)
+	  phase = copysign(pdev, phase);
 
 	// Weight by IF amplitude
 	double a = cnrmf(buffer[n]) / chan->sig.bb_power;
 	if(a < 1)
 	  phase *= a;
-	baseband[n] = 2 * run_pll(&chan->pll.pll,phase)/chan->output.samprate; // scale output to -1 to +1
+	baseband[n] = 2 * run_pll(&chan->pll.pll,phase); // scale output to -1 to +1
       }
     } else {
       chan->pll.was_on = false;

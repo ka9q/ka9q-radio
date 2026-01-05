@@ -59,7 +59,7 @@ int demod_linear(void *arg){
   double const lock_time = DEFAULT_PLL_LOCKTIME;
 
   int const lock_limit = (int)round(lock_time * chan->output.samprate);
-  init_pll(&chan->pll.pll,(double)chan->output.samprate);
+  init_pll(&chan->pll.pll);
   double am_dc = 0; // Carrier removal filter, removes squelch opening thump in aviation AM
 
   bool first_run = false;
@@ -112,8 +112,11 @@ int demod_linear(void *arg){
 
     if(chan->pll.enable){
       // Update PLL state, if active
-      set_pll_params(&chan->pll.pll,chan->pll.lock ? 0.1 * chan->pll.loop_bw : chan->pll.loop_bw,
-		     damping);
+      double bw = chan->pll.loop_bw / chan->output.samprate;
+      if(chan->pll.lock)
+	bw /= 10; // tighten by 10x when locked
+
+      set_pll_params(&chan->pll.pll, bw, damping);
       for(int n=0; n<N; n++){
 	double complex const s = buffer[n] * conj(pll_phasor(&chan->pll.pll)); // mix vco with input
 	buffer[n] = s;
@@ -139,7 +142,7 @@ int demod_linear(void *arg){
 	  }
 	}
 	phase /= (2*M_PI);
-	chan->sig.foffset = run_pll(&chan->pll.pll,phase); // frequency error in Hz
+	chan->sig.foffset = chan->output.samprate * run_pll(&chan->pll.pll,phase); // frequency error in Hz
 
 	signal += creal(s) * creal(s); // signal in phase with VCO is signal + noise power
 	noise += cimag(s) * cimag(s);  // signal in quadrature with VCO is assumed to be noise power

@@ -129,16 +129,15 @@ void nco(uint32_t accum,double *s,double *c){
 
 
 // Initialize digital phase lock loop with sample rate and some reasonable defaults
-void init_pll(struct pll *pll,double samprate){
+void init_pll(struct pll *pll){
   assert(pll != NULL);
-  assert(samprate != 0);
 
   memset(pll,0,sizeof(*pll));
-  pll->samprate = samprate;
-  set_pll_limits(pll, -0.5, +0.5);
-  set_pll_params(pll, 1.0, M_SQRT1_2); // 1 Hz, 1/sqrt(2) defaults
+  set_pll_limits(pll, -0.5, +0.5); // reasonable upper bound
+  set_pll_params(pll, 0.01, M_SQRT1_2); // 0.01 cycles/sample, 1/sqrt(2) defaults
 }
 
+// Set NCO frequency limits, cycles per sample
 void set_pll_limits(struct pll *pll,double low,double high){
   assert(pll != NULL);
   assert(pll->samprate != 0);
@@ -161,10 +160,10 @@ void set_pll_params(struct pll *pll,double bw,double damping){
   double denom = damping + 1.0/(4.0 * damping);
   double wn = 4.0 * M_PI * fabs(bw)/denom;
 
-  pll->bw = bw; // Hz
+  pll->bw = bw; // cycles/sample (< 0.5)
   pll->damping = damping; // dimensionless
 
-  double theta = wn / pll->samprate;
+  double theta = wn;
   double D = 1.0 + 2.0 * damping * theta + theta * theta;
   pll->K1 = 4.0 * damping * theta/ D;
   pll->K2 = 4.0 * theta * theta / D;
@@ -205,5 +204,5 @@ double run_pll(struct pll *pll,double phase){
   pll->vco_step = (int32_t)ldexp(dphi,+32);
   pll->vco_phase += pll->vco_step;
 
-  return pll->u * pll->samprate;
+  return pll->u; // cycles per sample
 }

@@ -20,10 +20,9 @@ struct osc {
 };
 
 struct pll {
-  double samprate;
   uint32_t vco_phase; // 1 cycle = 2^32
   int32_t vco_step;   // resolution: 1/2^32 cycles
-  double bw; // loop noise bandwidth (not natural frequency)
+  double bw; // loop noise bandwidth (not natural frequency), cycles/sample
   double damping; // Damping factor
   double lower_limit; // Lower PLL frequency limit, cycles/sample
   double upper_limit; // Upper PLL frequency limit, cycles/sample
@@ -43,10 +42,10 @@ void nco(uint32_t,double *,double *);
 
 
 // PLL functions
-void init_pll(struct pll *pll,double samprate);
+void init_pll(struct pll *pll);
 double run_pll(struct pll *pll,double phase);
-void set_pll_params(struct pll *pll,double bw,double damping);
-void set_pll_limits(struct pll *pll,double low,double high);
+void set_pll_params(struct pll *pll,double bw,double damping); // bw in cycles/sample
+void set_pll_limits(struct pll *pll,double low,double high); // low, high in cycles/sample
 static inline double complex pll_phasor(struct pll const *pll){
   double s,c;
   nco(pll->vco_phase,&s,&c);
@@ -54,10 +53,10 @@ static inline double complex pll_phasor(struct pll const *pll){
 }
 // PLL frequency in Hz
 static inline double pll_freq(struct pll const *pll){
-  return ldexp(((double)pll->vco_step * pll->samprate),-32);
+  return ldexp(((double)pll->vco_step),-32);
 }
 
-// PLL frequency in radians
+// PLL phase in radians
 static inline double pll_phase(struct pll const *pll){
   return ldexp(2 * M_PI * pll->vco_phase,-32);
 }

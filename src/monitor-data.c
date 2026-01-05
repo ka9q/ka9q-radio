@@ -371,8 +371,8 @@ static void *decode_task(void *arg){
     // We have a frame of decoded audio or PLC from Opus
     // Do PL detection and notching even when muted
     if(sp->frame_size > 0 && sp->samprate != 0){
-      // Limit to 1 second on queue
-      if(sp->qlen > 1 * DAC_samprate || sp->qlen < 0)
+      // Limit to 750 ms on queue
+      if(sp->qlen > 0.75 || sp->qlen < 0)
 	reset_playout(sp);
 
       if(sp->notch_enable){
