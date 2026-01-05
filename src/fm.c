@@ -13,6 +13,8 @@
 #include "filter.h"
 #include "radio.h"
 
+#define M_1_PI2 (0.5/M_PI) // 1/(2pi)
+
 // FM demodulator thread
 int demod_fm(void *arg){
   struct channel * const chan = arg;
@@ -50,12 +52,15 @@ int demod_fm(void *arg){
   chan->filter.remainder = NAN;   // Force init of fine downconversion oscillator
   set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
 
-  double phase_memory = 0;
+  double complex phase_memory = 0;
   chan->output.channels = 1; // Only mono for now
   if(isnan(chan->squelch_open) || chan->squelch_open == 0)
     chan->squelch_open = 6.3;  // open above ~ +8 dB
   if(isnan(chan->squelch_close) || chan->squelch_close == 0)
     chan->squelch_close = 4; // close below ~ +6 dB
+
+  chan->fm.devmax = 5000.; // nominal peak deviation Hz
+  chan->fm.modbw = 3000.;   // maximum modulating frequency Hz
 
 
   struct goertzel tone_detect; // PL tone detector state
@@ -66,7 +71,6 @@ int demod_fm(void *arg){
     // Set up PL tone squelch
     init_goertzel(&tone_detect,chan->fm.tone_freq/samprate);
   }
-
   double deemph_state = 0;
   int squelch_state = 0; // Number of blocks for which squelch remains open
   int const pl_integrate_samples = (int)(samprate * 0.24); // 240 milliseconds (spec is < 250 ms). 12 blocks @ 24 kHz
@@ -168,9 +172,9 @@ int demod_fm(void *arg){
       pl_sample_count = 0;
       chan->output.power = 0;  // don't keep resending previous value
       [[fallthrough]];
-    case 2: // fall-thru
+    case 2:
       [[fallthrough]];
-    case 1: // fall-thru
+    case 1:
       send_output(chan,NULL,N,false); // buffer of zeroes no longer needed
       continue;
     case 0: // squelch completely closed
@@ -181,74 +185,105 @@ int demod_fm(void *arg){
       break;
     }
     float baseband[N];    // Demodulated FM baseband
-    for(int n=0; n < N; n++){
-      double np = M_1_PI * cargf(buffer[n]); // Scale to -1 to +1 (half rotations/sample)
-      double x = np - phase_memory;
-      phase_memory = np;
-      baseband[n] = (float)(x > 1 ? x - 2 : x < -1 ? x + 2 : x); // reduce to -1 to +1
-    }
-    if(chan->fm.snr < 20 && chan->fm.threshold) { // take 10*log10(20) = 13 dB as "full quieting"
-      // Experimental threshold reduction (popcorn/click suppression)
-      // Compute avg amp if not computed earlier
-      // could do all this with sample energies to avoid the sqrt() in cabsf()
-      if(avg_amp == 0){
-	for(int n = 0; n < N; n++)
-	  avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
-	avg_amp /= N;
+    if(chan->pll.enable){
+      if(!chan->pll.was_on){
+	chan->pll.was_on = true;
+	init_pll(&chan->pll.pll,chan->output.samprate);
+	set_pll_params(&chan->pll.pll,500.0,M_SQRT1_2);
+	double dev = chan->fm.devmax / samprate;
+	set_pll_limits(&chan->pll.pll, -dev, +dev); // clip to +/-deviation
       }
-#if 0
-      double const noise_thresh = 0.4 * avg_amp;
-      double const noise_reduct_scale = 1. / noise_thresh;
-
-      // baseband[i] actually depends on buffer[i] and buffer[i-1], so we should probably look at both
       for(int n=0; n < N; n++){
-	if(amplitudes[n] < noise_thresh)
-	  baseband[n] *= amplitudes[n] * noise_reduct_scale; // Reduce amplitude of weak RF samples
+	double phase = M_1_PI2 * carg(buffer[n] * conj(pll_phasor(&chan->pll.pll))); // mix vco with input, -0.5 to +0.5 cycle/sample
+	// Clamp to peak deviation
+	if(fabs(phase) > chan->fm.devmax/samprate)
+	  phase = copysign(chan->fm.devmax/samprate, phase);
+
+	// Weight by IF amplitude
+	double a = cnrmf(buffer[n]) / chan->sig.bb_power;
+	if(a < 1)
+	  phase *= a;
+	baseband[n] = 2 * run_pll(&chan->pll.pll,phase)/chan->output.samprate; // scale output to -1 to +1
+      }
+    } else {
+      chan->pll.was_on = false;
+      for(int n=0; n < N; n++){
+	double phase = M_1_PI * carg(buffer[n] * conj(phase_memory)); // Scale to -1 to +1 peak
+	// Clamp to peak deviation
+	if(fabs(phase) > chan->fm.devmax/samprate)
+	  phase = copysign(chan->fm.devmax/samprate, phase);
+
+	// Weight by IF amplitude
+	double a = cnrmf(buffer[n]) / chan->sig.bb_power;
+	if(a < 1)
+	  phase *= a;
+
+	baseband[n] = phase;
+	phase_memory = buffer[n];
+      }
+      if(chan->fm.snr < 20 && chan->fm.threshold) { // take 10*log10(20) = 13 dB as "full quieting"
+	// Experimental threshold reduction (popcorn/click suppression)
+	// Compute avg amp if not computed earlier
+	// could do all this with sample energies to avoid the sqrt() in cabsf()
+	if(avg_amp == 0){
+	  for(int n = 0; n < N; n++)
+	    avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
+	  avg_amp /= N;
+	}
+#if 0
+	double const noise_thresh = 0.4 * avg_amp;
+	double const noise_reduct_scale = 1. / noise_thresh;
+
+	// baseband[i] actually depends on buffer[i] and buffer[i-1], so we should probably look at both
+	for(int n=0; n < N; n++){
+	  if(amplitudes[n] < noise_thresh)
+	    baseband[n] *= amplitudes[n] * noise_reduct_scale; // Reduce amplitude of weak RF samples
       }
 #elif 1
-      // New experimental algorithm 2/2023
-      // Find segments of low amplitude, look for clicks within them, and replace with interpolated values
-      // doesn't yet handle bad samples at beginning and end of buffer, but this gets most of them
-      double const nthresh = 0.4 * avg_amp;
+	// New experimental algorithm 2/2023
+	// Find segments of low amplitude, look for clicks within them, and replace with interpolated values
+	// doesn't yet handle bad samples at beginning and end of buffer, but this gets most of them
+	double const nthresh = 0.4 * avg_amp;
 
-      // start scan at 1 so we can use the 0th sample as the start if necessary
-      for(int i=1; i < N; i++){
-	// find i = first weak sample
-	if(amplitudes[i] < nthresh){ // each baseband sample i depends on IF samples i-1 and i
-	  float const start = baseband[i-1]; // Last good value before bad segment
-	  // Find next good sample
-	  int j;
-	  double finish = 0; // default if we can't find a good sample
-	  int steps = N - i + 1;
-	  for(j=i+2 ; j < N; j++){	 // If amplitude[i] is weak, then both baseband[i] and baseband[i+1] will be bad
-	    // find j = good sample after bad segment
-	    if(amplitudes[j-1] >= nthresh && amplitudes[j] >= nthresh){ // each baseband sample j depends on IF samples j-1 and j
-	      finish = baseband[j];
-	      steps = j - i + 1;
-	      break;
+	// start scan at 1 so we can use the 0th sample as the start if necessary
+	for(int i=1; i < N; i++){
+	  // find i = first weak sample
+	  if(amplitudes[i] < nthresh){ // each baseband sample i depends on IF samples i-1 and i
+	    float const start = baseband[i-1]; // Last good value before bad segment
+	    // Find next good sample
+	    int j;
+	    double finish = 0; // default if we can't find a good sample
+	    int steps = N - i + 1;
+	    for(j=i+2 ; j < N; j++){	 // If amplitude[i] is weak, then both baseband[i] and baseband[i+1] will be bad
+	      // find j = good sample after bad segment
+	      if(amplitudes[j-1] >= nthresh && amplitudes[j] >= nthresh){ // each baseband sample j depends on IF samples j-1 and j
+		finish = baseband[j];
+		steps = j - i + 1;
+		break;
+	      }
 	    }
-	  }
-	  // Is a click present in the weak segment?
-	  double phase_change = 0;
-	  for(int k=0; k < steps-1; k++)
-	    phase_change += fabsf(baseband[i+k]);
-
-	  if(fabs(phase_change) >= 1.0){
-	    // Linear interpolation
-	    double const increment = (finish - start) / steps;
+	    // Is a click present in the weak segment?
+	    double phase_change = 0;
 	    for(int k=0; k < steps-1; k++)
-	      baseband[i+k] = (float)(baseband[i+k-1] + increment); // also why i starts at 1
+	      phase_change += fabsf(baseband[i+k]);
+
+	    if(fabs(phase_change) >= 1.0){
+	      // Linear interpolation
+	      double const increment = (finish - start) / steps;
+	      for(int k=0; k < steps-1; k++)
+		baseband[i+k] = (float)(baseband[i+k-1] + increment); // also why i starts at 1
+	    }
+	    i = j; // advance so increment will test the next sample after the last we know is good
 	  }
-	  i = j; // advance so increment will test the next sample after the last we know is good
 	}
-      }
 #else
-      // Simple blanker of big spikes
-      for(int n=0; n < N; n++){
-	if(fabsf(baseband[n]) > 0.5f)
-	  baseband[n] = 0;
-      }
+	// Simple blanker of big spikes
+	for(int n=0; n < N; n++){
+	  if(fabsf(baseband[n]) > 0.5f)
+	    baseband[n] = 0;
+	}
 #endif
+      }
     }
     if(squelch_state == squelch_state_max){
       // Squelch fully open; look at deviation peaks
@@ -266,7 +301,7 @@ int demod_fm(void *arg){
       frequency_offset *= samprate * 0.5 / N;  // scale to Hz
       // Update frequency offset and peak deviation, with smoothing to attenuate PL tones
       // alpha = blocktime in millisec is an approximation to a 1 sec time constant assuming blocktime << 1 sec
-      // exact value would be 1 - exp(-blocktime/tc)
+      // exact value would be 1 - exp(-blocktime/tc) = -expm1(-blockime/tc)
       double const alpha = 1 * Blocktime;
       chan->sig.foffset += alpha * (frequency_offset - chan->sig.foffset);
 

@@ -147,7 +147,7 @@ void set_pll_limits(struct pll *pll,double low,double high){
     low = high;
     high = t;
   }
-  pll->lower_limit = low; // Hz
+  pll->lower_limit = low;
   pll->upper_limit = high;
 }
 
@@ -178,13 +178,22 @@ void set_pll_params(struct pll *pll,double bw,double damping){
 double run_pll(struct pll *pll,double phase){
   assert(pll != NULL);
 
-  pll->u += pll->K2 * phase;
-  double dphi = pll->u + pll->K1 * phase;
-  if(dphi > pll->upper_limit)
-    dphi = pll->upper_limit;
-  else if(dphi < pll->lower_limit)
-    dphi = pll->lower_limit;
+  double u_new = pll->u + pll->K2 * phase; // integrated frequency
+  double dphi = u_new + pll->K1 * phase; // new vco freq input
 
+  // Limit maximum VCO frequency
+  if(dphi > pll->upper_limit){
+    dphi = pll->upper_limit;
+    if(phase > 0)
+      u_new = pll->u; // freeze
+  } else if(dphi < pll->lower_limit){
+    dphi = pll->lower_limit;
+    if(phase < 0)
+      u_new = pll->u;
+  }
+  pll->u = u_new;
+
+  // count vco phase wraps
   pll->phi += dphi;
   if(pll->phi > 1){
     pll->phi -= 1;
@@ -196,5 +205,5 @@ double run_pll(struct pll *pll,double phase){
   pll->vco_step = (int32_t)ldexp(dphi,+32);
   pll->vco_phase += pll->vco_step;
 
-  return dphi * pll->samprate;
+  return pll->u * pll->samprate;
 }
