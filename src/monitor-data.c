@@ -635,15 +635,18 @@ static int run_pl(struct session *sp){
   // Run PL tone decoders on the bounce buffer. We don't really care about timestamp jumps
   // Disable if display isn't active and autonotching is off
   // Fed audio that might be discontinuous or out of sequence, but it's a pain to fix
-  for(int i=0; i < sp->frame_size; i++){
-    double s;
-    if(sp->channels == 2)
-      s = 0.5 * sp->bounce[2*i] + sp->bounce[2*i+1];
-    else
-      s = sp->bounce[i];
-
-    for(int j = 0; j < N_tones; j++)
-      update_goertzel(&sp->tone_detector[j],s);
+  if(sp->channels == 1){
+    for(int i=0; i < sp->frame_size; i++){
+      double s = sp->bounce[i];
+      for(int j = 0; j < N_tones; j++)
+	update_goertzel(&sp->tone_detector[j],s);
+    }
+  } else {
+    for(int i=0,k=0; i < sp->frame_size; i++,k+= 2){
+      double s = 0.5 * (sp->bounce[k] + sp->bounce[k+1]);
+      for(int j = 0; j < N_tones; j++)
+	update_goertzel(&sp->tone_detector[j],s);
+    }
   }
   sp->tone_samples += sp->frame_size;
   if(sp->tone_samples >= Tone_period * sp->samprate){
@@ -698,9 +701,9 @@ static void apply_notch(struct session *sp){
     for(int i = 0; i < sp->frame_size; i++)
       sp->bounce[i] = (float)applyIIR(&sp->iir_left,sp->bounce[i]);
   } else {
-    for(int i = 0; i < sp->frame_size; i++){
-      sp->bounce[2*i] = (float)applyIIR(&sp->iir_left,sp->bounce[2*i]);
-      sp->bounce[2*i+1] = (float)applyIIR(&sp->iir_right,sp->bounce[2*i+1]);
+    for(int i = 0,k=0; i < sp->frame_size; i++,k += 2){
+      sp->bounce[k] = (float)applyIIR(&sp->iir_left,sp->bounce[k]);
+      sp->bounce[k+1] = (float)applyIIR(&sp->iir_right,sp->bounce[k+1]);
     }
   }
 }
