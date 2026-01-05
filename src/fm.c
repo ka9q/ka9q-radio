@@ -119,6 +119,7 @@ int demod_fm(void *arg){
     if(chan->snr_squelch_enable || (squelch_state <= 0 && snr < chan->squelch_close)){ // Save the trouble if the signal just isn't there
       chan->fm.snr = snr;
     } else {
+#if 1
       // variance estimation. first get average amplitude (lots of square roots)
       for(int n = 0; n < N; n++)
 	avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
@@ -137,6 +138,27 @@ int demod_fm(void *arg){
 	double const snr = fm_snr(avg_amp*avg_amp * (N-1) / fm_variance); // power ratio
 	chan->fm.snr = max(0.0,snr); // Just make sure it isn't negative. Log() doesn't like that.
       }
+#else
+      double power = 0;
+      for(int n = 0; n < N; n++)
+	power += cnrmf(buffer[n]);
+      power /= N;
+      double fm_variance = 0;
+      for(int n=0; n < N; n++){
+	double va = cnrmf(buffer[n]) - power;
+	fm_variance += va * va;
+      }
+      fm_variance /= (N-1);
+
+      double ssq = power*power - fm_variance;
+      if(ssq < 0)
+	return chan->fm.snr = 0;
+      double s = sqrt(ssq);
+      if(power > s)
+	chan->fm.snr = s/(power - s);
+      else
+	chan->fm.snr = +INFINITY;
+#endif
     }
     /* Hysteresis squelch using selected SNR (basic signal SNR or FM ampitude variance/average
        'squelch_state' is a block countdown timer that sequences squelch closing
