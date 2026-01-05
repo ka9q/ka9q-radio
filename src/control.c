@@ -1178,6 +1178,12 @@ static void process_mouse(struct channel *chan,uint8_t **bpp){
 	case 4:
 	  encode_bool(bpp,SNR_SQUELCH,true);
 	  break;
+	case 5:
+	  encode_bool(bpp,PLL_ENABLE,false);
+	  break;
+	case 6:
+	  encode_bool(bpp,PLL_ENABLE,true);
+	  break;
 	}
       } else if(chan->demod_type == LINEAR_DEMOD){
 	switch(my){
@@ -1727,6 +1733,14 @@ static void display_options(WINDOW *w,struct channel const *chan){
     if(chan->snr_squelch_enable)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"SNR Sq On");
+    wattroff(w,A_UNDERLINE);
+    if(!chan->pll.enable)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"Atan demod");
+    wattroff(w,A_UNDERLINE);
+    if(chan->pll.enable)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"PLL demod");
     wattroff(w,A_UNDERLINE);
     break;
   case WFM_DEMOD:
