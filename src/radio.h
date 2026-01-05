@@ -230,7 +230,9 @@ struct channel {
   } sig;
 
   struct {                   // Used only in FM demodulator
-    double pdeviation;        // Peak frequency deviation Hz (FM)
+    double devmax;            // configured peak deviation, Hz (eg 5 kHz for NBFM)
+    double modbw;             // configured modulation bandwidth, e,g, 3 kHz for NBFM
+    double pdeviation;        // measured frequency deviation Hz (FM)
     double tone_freq;         // PL tone squelch frequency
     double tone_deviation;    // Measured deviation of tone
     bool threshold;          // Threshold extension
