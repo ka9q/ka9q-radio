@@ -759,6 +759,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
+    encode_bool(&bp,PLL_ENABLE,chan->pll.enable); // bool
     break;
   case WFM_DEMOD:
     // Relevant only when squelches are active
