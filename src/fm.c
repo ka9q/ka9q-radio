@@ -62,7 +62,6 @@ int demod_fm(void *arg){
   chan->fm.devmax = 5000.; // nominal peak deviation Hz
   chan->fm.modbw = 3000.;   // maximum modulating frequency Hz
 
-
   struct goertzel tone_detect; // PL tone detector state
   double lpf_energy = 0;
   struct iir lpf = {0};
@@ -101,7 +100,6 @@ int demod_fm(void *arg){
     float complex const * restrict const buffer = chan->baseband; // For convenience
     int const N = chan->sampcount;
 
-
     /* there are two SNR estimators:
        1. fast and general using the existing signal power and noise density estimates
        2. a FM-specific estimator that computes the variance of amplitude to its mean
@@ -109,56 +107,36 @@ int demod_fm(void *arg){
 
        The simple estimator is used first. If it's below threshold and the squelch is closed, don't bother with the variance estimator.
        Above threshold, or if the squelch is still open, run the variance estimator and use it
+       unfortunately the fancy variance-based estimation is biased high by correlated noise samples by IF filter
     */
 
-    // Simple SNR estimate: Power/(N0 * Bandwidth) - 1
     double avg_amp = 0;
     double amplitudes[N];
+    double noise = chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF); // noise power estimate
+    double beta = 0.5; // threshold extension factor
 
-    double const snr = (chan->sig.bb_power / (chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF))) - 1.0;
+    // Simple SNR estimate: Power/(N0 * Bandwidth) - 1
+    double const snr = (chan->sig.bb_power / noise) - 1.0;
     if(chan->snr_squelch_enable || (squelch_state <= 0 && snr < chan->squelch_close)){ // Save the trouble if the signal just isn't there
       chan->fm.snr = snr;
     } else {
-#if 1
       // variance estimation. first get average amplitude (lots of square roots)
       for(int n = 0; n < N; n++)
 	avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
       avg_amp /= N;
-      {
-	// Compute variance in second pass.
-	// Two passes are supposed to be more numerically stable, but is it really necessary?
-	double fm_variance = 0;
-	for(int n=0; n < N; n++)
-	  fm_variance += (amplitudes[n] - avg_amp) * (amplitudes[n] - avg_amp);
 
-	// The result is biased up at low SNR:
-	// complex gaussian RVs have Rayleigh/Ricean amplitudes and exponentially distributed powers
-	// Run through a correction function
-	// The bias is small at high SNR, but we most need accuracy near threshold
-	double const snr = fm_snr(avg_amp*avg_amp * (N-1) / fm_variance); // power ratio
-	chan->fm.snr = max(0.0,snr); // Just make sure it isn't negative. Log() doesn't like that.
-      }
-#else
-      double power = 0;
-      for(int n = 0; n < N; n++)
-	power += cnrmf(buffer[n]);
-      power /= N;
+      // Compute variance in second pass.
+      // Two passes are supposed to be more numerically stable, but is it really necessary?
       double fm_variance = 0;
-      for(int n=0; n < N; n++){
-	double va = cnrmf(buffer[n]) - power;
-	fm_variance += va * va;
-      }
-      fm_variance /= (N-1);
+      for(int n=0; n < N; n++)
+	fm_variance += (amplitudes[n] - avg_amp) * (amplitudes[n] - avg_amp);
 
-      double ssq = power*power - fm_variance;
-      if(ssq < 0)
-	return chan->fm.snr = 0;
-      double s = sqrt(ssq);
-      if(power > s)
-	chan->fm.snr = s/(power - s);
-      else
-	chan->fm.snr = +INFINITY;
-#endif
+      // The result is biased up at low SNR:
+      // complex gaussian RVs have Rayleigh/Ricean amplitudes and exponentially distributed powers
+      // Run through a correction function
+      // The bias is small at high SNR, but we most need accuracy near threshold
+      double const snr = fm_snr(avg_amp*avg_amp * (N-1) / fm_variance); // power ratio
+      chan->fm.snr = max(0.0,snr); // Just make sure it isn't negative. Log() doesn't like that.
     }
     /* Hysteresis squelch using selected SNR (basic signal SNR or FM ampitude variance/average
        'squelch_state' is a block countdown timer that sequences squelch closing
@@ -216,96 +194,51 @@ int demod_fm(void *arg){
 	set_pll_params(&chan->pll.pll, bw, M_SQRT1_2);
 	set_pll_limits(&chan->pll.pll, -pdev, +pdev); // clip to +/-deviation
       }
+
+      double p0 = cnrm(phase_memory);
+      p0 /= (p0 + beta * noise);
       for(int n=0; n < N; n++){
-	double phase = M_1_PI2 * carg(buffer[n] * conj(pll_phasor(&chan->pll.pll))); // mix vco with input, -0.5 to +0.5 cycle/sample
-	// Clamp to peak deviation
-	if(fabs(phase) > pdev)
-	  phase = copysign(pdev, phase);
+	double complex s = buffer[n] * conj(pll_phasor(&chan->pll.pll)); // mix vco with input, -0.5 to +0.5 cycle/sample
+	double phase = M_1_PI * carg(s); // Scale to -1 to +1 peak
 
-	// Weight by IF amplitude
-	double a = cnrmf(buffer[n]) / chan->sig.bb_power;
-	if(a < 1)
-	  phase *= a;
-	baseband[n] = 2 * run_pll(&chan->pll.pll,phase); // scale output to -1 to +1
-      }
-    } else {
-      chan->pll.was_on = false;
-      for(int n=0; n < N; n++){
-	double phase = M_1_PI * carg(buffer[n] * conj(phase_memory)); // Scale to -1 to +1 peak
-	// Clamp to peak deviation
-	if(fabs(phase) > chan->fm.devmax/samprate)
-	  phase = copysign(chan->fm.devmax/samprate, phase);
+	if(chan->fm.threshold){
+	  // Clamp to peak deviation
+	  if(fabs(phase) > chan->fm.devmax/samprate)
+	    phase = copysign(chan->fm.devmax/samprate, phase);
 
-	// Weight by IF amplitude
-	double a = cnrmf(buffer[n]) / chan->sig.bb_power;
-	if(a < 1)
-	  phase *= a;
-
-	baseband[n] = phase;
+	  // Weight by IF amplitude
+	  double p1 = cnrm(buffer[0]);
+	  p1 /= (p1 + beta * noise);
+	  phase *= p0 * p1;
+	  chan->tp1 = p0 * p1;
+	  p0 = p1;
+	}
+	baseband[n] = 2 * run_pll(&chan->pll.pll,phase);
 	phase_memory = buffer[n];
       }
-      if(chan->fm.snr < 20 && chan->fm.threshold) { // take 10*log10(20) = 13 dB as "full quieting"
-	// Experimental threshold reduction (popcorn/click suppression)
-	// Compute avg amp if not computed earlier
-	// could do all this with sample energies to avoid the sqrt() in cabsf()
-	if(avg_amp == 0){
-	  for(int n = 0; n < N; n++)
-	    avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
-	  avg_amp /= N;
-	}
-#if 0
-	double const noise_thresh = 0.4 * avg_amp;
-	double const noise_reduct_scale = 1. / noise_thresh;
+    } else {
+      // Straight carg/atan demodulation
+      chan->pll.was_on = false;
+      double p0 = cnrm(phase_memory);
+      p0 /= (p0 + beta * noise);
+      for(int n=0; n < N; n++){
+	double complex s = buffer[n] * conj(phase_memory);
+	phase_memory = buffer[n];
+	double phase = M_1_PI * carg(s); // Scale to -1 to +1 peak
+	if(chan->fm.threshold){
+	  // Clamp to peak deviation
+	  if(fabs(phase) > chan->fm.devmax/samprate)
+	    phase = copysign(chan->fm.devmax/samprate, phase);
 
-	// baseband[i] actually depends on buffer[i] and buffer[i-1], so we should probably look at both
-	for(int n=0; n < N; n++){
-	  if(amplitudes[n] < noise_thresh)
-	    baseband[n] *= amplitudes[n] * noise_reduct_scale; // Reduce amplitude of weak RF samples
-      }
-#elif 1
-	// New experimental algorithm 2/2023
-	// Find segments of low amplitude, look for clicks within them, and replace with interpolated values
-	// doesn't yet handle bad samples at beginning and end of buffer, but this gets most of them
-	double const nthresh = 0.4 * avg_amp;
-
-	// start scan at 1 so we can use the 0th sample as the start if necessary
-	for(int i=1; i < N; i++){
-	  // find i = first weak sample
-	  if(amplitudes[i] < nthresh){ // each baseband sample i depends on IF samples i-1 and i
-	    float const start = baseband[i-1]; // Last good value before bad segment
-	    // Find next good sample
-	    int j;
-	    double finish = 0; // default if we can't find a good sample
-	    int steps = N - i + 1;
-	    for(j=i+2 ; j < N; j++){	 // If amplitude[i] is weak, then both baseband[i] and baseband[i+1] will be bad
-	      // find j = good sample after bad segment
-	      if(amplitudes[j-1] >= nthresh && amplitudes[j] >= nthresh){ // each baseband sample j depends on IF samples j-1 and j
-		finish = baseband[j];
-		steps = j - i + 1;
-		break;
-	      }
-	    }
-	    // Is a click present in the weak segment?
-	    double phase_change = 0;
-	    for(int k=0; k < steps-1; k++)
-	      phase_change += fabsf(baseband[i+k]);
-
-	    if(fabs(phase_change) >= 1.0){
-	      // Linear interpolation
-	      double const increment = (finish - start) / steps;
-	      for(int k=0; k < steps-1; k++)
-		baseband[i+k] = (float)(baseband[i+k-1] + increment); // also why i starts at 1
-	    }
-	    i = j; // advance so increment will test the next sample after the last we know is good
-	  }
+	  // Weight by IF amplitude
+	  double p1 = cnrm(buffer[0]);
+	  p1 /= (p1 + beta * noise);
+	  phase *= p0 * p1;
+	  chan->tp1 = p0 * p1;
+	  p0 = p1;
 	}
-#else
-	// Simple blanker of big spikes
-	for(int n=0; n < N; n++){
-	  if(fabsf(baseband[n]) > 0.5f)
-	    baseband[n] = 0;
-	}
-#endif
+	baseband[n] = phase;
+	phase_memory = buffer[n];
       }
     }
     if(squelch_state == squelch_state_max){
@@ -368,10 +301,8 @@ int demod_fm(void *arg){
 	    old_pl_phase = p;
 	    np = np < -1 ? np + 2 : np > 1 ? np - 2 : np; // and bring to principal range, -1 to +1 half cycle per interval: 0.5 Hz / .24 sec = 2 Hz
 	    assert(np >= -1.0 && np <= 1.0);
-	    chan->tp2 = np; // monitor phase error in PL tone, 0 means exactly on frequency, + means high, - means low
 
 	    lpf_energy /= pl_sample_count; // filter output average energy per sample, range 0 to +1 half-rev^2 per sample
-	    chan->tp1 = power2dB(2*g*g / lpf_energy); // scale g from full rev peak to half-rev^2 average per sample
 	    if(chan->options & (1LL<1)){
 	      // Experimental, needs a new 300 Hz audio LPF before it is ready. Otherwise lots of low frequency voice can falsely gate it off
 	      // Scale g*g to half revs per sample^2, same as lpf_energy
