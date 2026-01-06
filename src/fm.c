@@ -207,7 +207,7 @@ int demod_fm(void *arg){
 	    phase = copysign(chan->fm.devmax/samprate, phase);
 
 	  // Weight by IF amplitude
-	  double p1 = cnrm(buffer[0]);
+	  double p1 = cnrm(buffer[n]);
 	  p1 /= (p1 + beta * noise);
 	  phase *= p0 * p1;
 	  chan->tp1 = p0 * p1;
@@ -231,7 +231,7 @@ int demod_fm(void *arg){
 	    phase = copysign(chan->fm.devmax/samprate, phase);
 
 	  // Weight by IF amplitude
-	  double p1 = cnrm(buffer[0]);
+	  double p1 = cnrm(buffer[n]);
 	  p1 /= (p1 + beta * noise);
 	  phase *= p0 * p1;
 	  chan->tp1 = p0 * p1;
