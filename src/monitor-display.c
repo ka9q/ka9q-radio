@@ -624,7 +624,7 @@ static void update_monitor_display(void){
   mvprintwt(row++,col,"%*s",width-1,"s/n");
   for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
     struct session const *sp = Sess_ptr[session];
-    if(inuse(sp) && !isnan(sp->snr))
+    if(inuse(sp) && isfinite(sp->snr))
       mvprintwt(row,col,"%*.1f%c",width-1,sp->snr,(Voting && sp == Best_session) ? '*' : ' ');
   }
   col += width;
