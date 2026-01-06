@@ -213,9 +213,9 @@ struct channel {
     struct pll pll;
     bool was_on;
     int lock_count;
-    bool enable;         // Linear mode PLL tracking of carrier (settable)
-    bool square;      // Squarer on PLL input (settable)
-    bool lock;    // PLL is locked
+    bool enable;       // Linear mode PLL tracking of carrier / FM PLL demodulation
+    bool square;       // Squarer on PLL input (settable)
+    bool lock;         // PLL is locked
     double loop_bw;    // Loop bw (coherent modes)
     double cphase;     // Carrier phase change radians (DSB/PSK)
     int64_t rotations; // Integer counts of cphase wraps through -PI, +PI
@@ -230,18 +230,18 @@ struct channel {
   } sig;
 
   struct {                   // Used only in FM demodulator
-    double devmax;            // configured peak deviation, Hz (eg 5 kHz for NBFM)
-    double modbw;             // configured modulation bandwidth, e,g, 3 kHz for NBFM
-    double pdeviation;        // measured frequency deviation Hz (FM)
-    double tone_freq;         // PL tone squelch frequency
-    double tone_deviation;    // Measured deviation of tone
+    double devmax;           // configured peak deviation, Hz (eg 5 kHz for NBFM)
+    double modbw;            // configured modulation bandwidth, e,g, 3 kHz for NBFM
+    double pdeviation;       // measured frequency deviation Hz (FM)
+    double tone_freq;        // PL tone squelch frequency
+    double tone_deviation;   // Measured deviation of tone
     bool threshold;          // Threshold extension
-    double gain;              // Empirically set to match overall gain with deemphasis to that without
-    double rate;              // de-emphasis filter coefficient computed from expf(-1.0 / (tc * output.samprate));
+    double gain;             // Empirically set to match overall gain with deemphasis to that without
+    double rate;             // de-emphasis filter coefficient computed from expf(-1.0 / (tc * output.samprate));
                              // tc = 75e-6 sec for North American FM broadcasting
                              // tc = 1 / (2 * M_PI * 300.) = 530.5e-6 sec for NBFM (300 Hz corner freq)
     bool stereo_enable;      // wfm only
-    double snr;               // from variance squelch, if selected, otherwise signal snr
+    double snr;              // from variance squelch, if selected, otherwise signal snr
   } fm;
 
   // Used by spectrum analysis only
