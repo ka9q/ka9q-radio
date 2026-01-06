@@ -372,7 +372,8 @@ static void *decode_task(void *arg){
     // Do PL detection and notching even when muted
     if(sp->frame_size > 0 && sp->samprate != 0){
       // Limit to 750 ms on queue
-      if(sp->qlen > 0.75 || sp->qlen < 0)
+      double q = qlen(sp);
+      if(q > 1.5 * DAC_samprate || qlen < 0)
 	reset_playout(sp);
 
       if(sp->notch_enable){
@@ -781,20 +782,16 @@ static void copy_to_stream(struct session *sp){
     if(isfinite(energy))
       sp->level += .01 * (energy - sp->level); // smooth
   }
-  int64_t queue_in_frames = qlen(sp);
-  double q = (double)queue_in_frames / DAC_samprate; // seconds
 
-  // I had been smoothing this, but it's remarkably stable when taken at this time
-  // bobbles only a few ms
-  sp->qlen = q;
+  double q = qlen(sp);
 
   // Use these for playout buffer adjustments
-  if(queue_in_frames < 0){
+  if(q < 0){
     sp->lates++;
     sp->consec_lates++;
     sp->consec_earlies = 0;
     //  } else if((queue_in_frames + sp->frame_size) * Channels > BUFFERSIZE){ // entire buffer
-  } else if((double)queue_in_frames > 2 * sp->playout * DAC_samprate){
+  } else if(q > 2 * sp->playout){
     sp->earlies++;
     sp->consec_earlies++;
     sp->consec_lates = 0;

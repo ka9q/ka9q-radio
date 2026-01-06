@@ -42,8 +42,6 @@ struct session {
   _Atomic uint64_t wptr;    // Next write sample, in output sample clock units
   uint64_t wptr_highwater;
   int underflows;          // up/down counter to decide when to adjust playout
-  double qlen;             // averaged queue length, seconds
-
 
   int64_t consec_erasures;
   int consec_lates;
