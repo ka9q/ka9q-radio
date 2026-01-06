@@ -1424,8 +1424,6 @@ int downconvert(struct channel *chan){
       continue;
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
-    chan->tp1 = shift;
-    chan->tp2 = remainder;
 
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
     chan->status.blocks_since_poll++;
