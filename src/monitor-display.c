@@ -729,10 +729,10 @@ static void update_monitor_display(void){
   mvprintwt(row++,col,"%*s",width,"Q");
   for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
     struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp))
+    if(!inuse(sp) || qlen(sp) <= 0)
       continue;
 
-    mvprintwt(row,col,"%*d",width,(int)round(1000. * sp->qlen));   // Time idle since last transmission
+    mvprintwt(row,col,"%*d",width,(int)round(1000. * qlen(sp)/DAC_samprate));   // Time idle since last transmission
   }
   col += width;
   row = header_line;

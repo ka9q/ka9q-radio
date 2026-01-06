@@ -373,7 +373,7 @@ static void *decode_task(void *arg){
     if(sp->frame_size > 0 && sp->samprate != 0){
       // Limit to 750 ms on queue
       double q = qlen(sp);
-      if(q > 1.5 * DAC_samprate || qlen < 0)
+      if(q > 1.5 * DAC_samprate || q < 0)
 	reset_playout(sp);
 
       if(sp->notch_enable){
