@@ -18,7 +18,7 @@ const int Renorm_rate = 16384; // Renormalize oscillators this often
 
 // Return 1 if complex phasor appears to be initialized, 0 if not
 // Uses the heuristic that the amplitude should be close to 1 after initialization.
-static bool is_phasor_init(const double complex x){
+static inline bool is_phasor_init(const double complex x){
   if(isnan(creal(x)) || isnan(cimag(x)) || cnrm(x) < 0.9)
     return false;
   return true;
@@ -45,7 +45,7 @@ void set_osc(struct osc *osc,double f,double r){
   }
 }
 
-inline static void renorm_osc(struct osc *osc){
+static inline void renorm_osc(struct osc *osc){
   if(!is_phasor_init(osc->phasor))
     osc->phasor = 1; // In case we've been stepping an uninitialized osc
 
@@ -93,14 +93,11 @@ void nco(uint32_t accum,double *s,double *c){
   if(!atomic_flag_test_and_set_explicit(&NCO_init,memory_order_relaxed))
     nco_init();
 
-  /* Sign half   tab index  fraction
-  // S    H      TTTTTTTTTT ffffffffffffffffffff
-  // or
-  // QQ          TTTTTTTTTT ffffffffffffffffffff
-  //  = quadrant: 00: I  0-90 deg
-                  01: II 90-180
-                  10: III 180-270
-		  11  IV  270-360
+  /* QQ          TTTTTTTTTT ffffffffffffffffffff
+     00: I     0-90 deg
+     01: II   90-180
+     10: III 180-270
+     11: IV  270-360
   */
   uint32_t const fract = accum & ((1U << FRACT_BITS)-1);
   uint32_t tab = (accum >> FRACT_BITS) & ((1U << TAB_BITS) - 1);
@@ -108,6 +105,7 @@ void nco(uint32_t accum,double *s,double *c){
 
   // Index the lookup table in the proper direction
   tab = (quad & 1) ? TAB_SIZE - tab : tab; // up, down, up, down
+
   // Approx sine with proper sign
   double sine = (quad & 2) ? -Lookup[tab] : +Lookup[tab]; // +,  +,    -,  -
 
@@ -115,15 +113,16 @@ void nco(uint32_t accum,double *s,double *c){
   tab = TAB_SIZE - tab;
   quad++;
   double cosine = (quad & 2) ? -Lookup[tab] : +Lookup[tab]; // +down, -up, -down, +up
+
   // Use approx cos as slope to interpolate fraction
   double diff = 2 * M_PI * ldexp((double)fract, -32);
   double cdiff = cosine * diff;
   double sdiff = sine * diff;
   // Interpolate with 2nd order Taylor expansion
-  if(s)
+  if(s != NULL)
     *s = sine + cdiff - 0.5 * sdiff * diff;
 
-  if(c)
+  if(c != NULL)
     *c = cosine - sdiff - 0.5 * cdiff * diff;
 }
 
@@ -133,7 +132,7 @@ void init_pll(struct pll *pll){
   assert(pll != NULL);
 
   memset(pll,0,sizeof(*pll));
-  set_pll_limits(pll, -0.5, +0.5); // reasonable upper bound
+  set_pll_limits(pll, -0.5, +0.5); // absolute upper bound
   set_pll_params(pll, 0.01, M_SQRT1_2); // 0.01 cycles/sample, 1/sqrt(2) defaults
 }
 
