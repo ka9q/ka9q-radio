@@ -352,9 +352,7 @@ int demod_linear(void *arg){
     case 3:
       response_needed = true; // force update to indicate squelch is closing
       chan->output.power = 0;  // don't keep resending previous value
-      [[fallthrough]];
     case 2: // fall-thru
-      [[fallthrough]];
     case 1: // fall-thru
       send_output(chan,NULL,N,false); // buffer of zeroes no longer needed
       continue;
