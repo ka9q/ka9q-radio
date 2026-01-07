@@ -272,6 +272,12 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case SPECTRUM_FFT_N:
       channel->spectrum.fft_n = decode_int(cp,optlen);
       break;
+    case SPECTRUM_BASE:
+      channel->spectrum.base = decode_float(cp,optlen);
+      break;
+    case SPECTRUM_STEP:
+      channel->spectrum.step = decode_float(cp,optlen);
+      break;
     case BIN_DATA:
       break;
     case RF_AGC:
