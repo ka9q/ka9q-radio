@@ -57,9 +57,9 @@ local STATUS_TYPE_NAME = {
   [6] = "SETOPTS",
   [7] = "CLEAROPTS",
   [8] = "RTP_TIMESNAP",
-  [9] = "UNUSED4",
+  [9] = "BIN_BYTE_DATA",
   [10] = "INPUT_SAMPRATE",
-  [11] = "UNUSED6",
+  [11] = "SPECTRUM_BASE",
   [12] = "SPECTRUM_AVG",
   [13] = "INPUT_SAMPLES",
   [14] = "WINDOW_TYPE",
@@ -163,6 +163,7 @@ local STATUS_TYPE_NAME = {
   [112] = "OPUS_APPLICATION",
   [113] = "OPUS_BANDWIDTH",
   [114] = "OPUS_FEC",
+  [115] = "SPECTRUM_STEP",
 }
 
 -- Reverse lookup: name -> type ID
@@ -183,7 +184,9 @@ local TLV_KIND = {
   [6] = "uint",
   [7] = "uint",
   [8] = "uint",
+  [9] = "", -- write this
   [10] = "uint_hz",
+  [11] = "f32_db",
   [12] = "uint",
   [13] = "uint",
   [14] = "window",
@@ -287,6 +290,7 @@ local TLV_KIND = {
   [112] = "opus_app",
   [113] = "opus_bw",
   [114] = "uint",
+  [115] = "f32 dB"
 }
 
 -- ---- Helpers ----
@@ -295,7 +299,8 @@ local DEMOD = {
   [0] = "Linear",
   "FM",
   "WFM",
-  "Spectrum"
+  "Spectrum",
+  "Spectrum v2"
 }
 
 local ENCODING = {
@@ -303,9 +308,9 @@ local ENCODING = {
   "S16LE",
   "S16BE",
   "OPUS",
-  "F32LE",
+  "F32BE",
   "AX25",
-  "F16LE",
+  "F16BE",
   "OPUS_VOIP",
 }
 
@@ -969,7 +974,7 @@ function ka9q.dissector(tvb, pinfo, tree)
 
   local info_parts = {}
   if ka9q.prefs.add_info_column then
-    table.insert(info_parts, (msg_class == 1) and "CMD" or "STAT")
+    table.insert(info_parts, (msg_class == 1) and "CMD " or "STAT")
   end
 
   while offset < pktlen do
@@ -1047,3 +1052,4 @@ end
 
 -- Register to UDP port 5006
 DissectorTable.get("udp.port"):add(5006, ka9q)
+
