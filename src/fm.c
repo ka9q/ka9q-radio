@@ -171,9 +171,7 @@ int demod_fm(void *arg){
       phase_memory = 0;
       pl_sample_count = 0;
       chan->output.power = 0;  // don't keep resending previous value
-      [[fallthrough]];
     case 2:
-      [[fallthrough]];
     case 1:
       send_output(chan,NULL,N,false); // buffer of zeroes no longer needed
       continue;
@@ -195,8 +193,6 @@ int demod_fm(void *arg){
 	set_pll_limits(&chan->pll.pll, -pdev, +pdev); // clip to +/-deviation
       }
 
-      double p0 = cnrm(phase_memory);
-      p0 /= (p0 + beta * noise);
       for(int n=0; n < N; n++){
 	double complex s = buffer[n] * conj(pll_phasor(&chan->pll.pll)); // mix vco with input, -0.5 to +0.5 cycle/sample
 	double phase = M_1_PI * carg(s); // Scale to -1 to +1 peak
@@ -207,24 +203,22 @@ int demod_fm(void *arg){
 	    phase = copysign(chan->fm.devmax/samprate, phase);
 
 	  // Weight by IF amplitude
-	  double p1 = cnrm(buffer[n]);
-	  p1 /= (p1 + beta * noise);
-	  phase *= p0 * p1;
-	  chan->tp1 = p0 * p1;
-	  p0 = p1;
+	  double p = cnrm(buffer[n]);
+	  p /= (p + beta * noise);
+	  phase *= p;
 	}
 	baseband[n] = 2 * run_pll(&chan->pll.pll,phase);
 	phase_memory = buffer[n];
       }
     } else {
       // Straight carg/atan demodulation
-      chan->pll.was_on = false;
       double p0 = cnrm(phase_memory);
       p0 /= (p0 + beta * noise);
+      chan->pll.was_on = false;
       for(int n=0; n < N; n++){
 	double complex s = buffer[n] * conj(phase_memory);
-	phase_memory = buffer[n];
 	double phase = M_1_PI * carg(s); // Scale to -1 to +1 peak
+
 	if(chan->fm.threshold){
 	  // Clamp to peak deviation
 	  if(fabs(phase) > chan->fm.devmax/samprate)
