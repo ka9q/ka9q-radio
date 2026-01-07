@@ -528,6 +528,20 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	restart_needed = true;
       }
       break;
+    case SPECTRUM_BASE:
+      {
+	double x = decode_float(cp,optlen);
+	if(isfinite(x))
+	  chan->spectrum.base = x;
+      }
+      break;
+    case SPECTRUM_STEP:
+      {
+	double x = decode_float(cp,optlen);
+	if(isfinite(x))
+	  chan->spectrum.step = x;
+      }
+      break;
     case STATUS_INTERVAL:
       chan->status.output_interval = abs(decode_int(cp,optlen));
       break;
