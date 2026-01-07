@@ -171,7 +171,8 @@ int demod_fm(void *arg){
       phase_memory = 0;
       pl_sample_count = 0;
       chan->output.power = 0;  // don't keep resending previous value; falls through
-    case 2: // fallthrough
+      /* fallthrough */
+    case 2:
     case 1:
       send_output(chan,NULL,N,false); // buffer of zeroes no longer needed
       continue;
