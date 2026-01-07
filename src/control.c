@@ -1579,6 +1579,7 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
     }
     break;
   case SPECT_DEMOD:
+  case SPECT2_DEMOD:
     pprintw(w,row++,col,"Bin width","%.0lf Hz",chan->spectrum.rbw);
     pprintw(w,row++,col,"Noise BW","%.1lf Hz",chan->spectrum.noise_bw);
     pprintw(w,row++,col,"Rel NBW","%.1lf dB",power2dB(chan->spectrum.noise_bw/chan->spectrum.rbw));

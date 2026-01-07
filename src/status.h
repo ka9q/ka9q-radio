@@ -28,9 +28,9 @@ enum status_type {
   SETOPTS,
   CLEAROPTS,
   RTP_TIMESNAP, // snapshot of current real-time-protocol timestamp, for linking RTP timestamps to clock time via GPS_TIME
-  UNUSED4,
+  BIN_BYTE_DATA,   // Vector of 1-byte spectrum analyzer data
   INPUT_SAMPRATE, // Nominal sample rate (integer)
-  UNUSED6,
+  SPECTRUM_BASE,  // base level of 1-byte analyzer data, dB
   SPECTRUM_AVG,   // Number of FFTs averaged into each spectrum response
   INPUT_SAMPLES,
   WINDOW_TYPE,   // Window type for FFT analyzer
@@ -159,6 +159,7 @@ enum status_type {
   OPUS_APPLICATION,   // Opus encoder application voice/audio/etc
   OPUS_BANDWIDTH,     // Opus encoder audio bandwidth limita
   OPUS_FEC,           // Opus encoder forward error correction loss rate, %
+  SPECTRUM_STEP,  // size of byte spectrum data level step, dB
 };
 
 size_t encode_string(uint8_t **bp,enum status_type type,void const *buf,size_t buflen);

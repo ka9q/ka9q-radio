@@ -472,7 +472,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(Verbose > 1)
 	  fprintf(stderr,"%s bin bw %'.1lf -> %'.1f Hz\n",chan->name,chan->spectrum.rbw,x);
 	chan->spectrum.rbw = x;
-	if(chan->demod_type == SPECT_DEMOD)
+	if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
 	  restart_needed = true;
       }
       break;
@@ -484,7 +484,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(Verbose > 1)
 	  fprintf(stderr,"%s bin count %u -> %u\n",chan->name,chan->spectrum.bin_count,x);
 	chan->spectrum.bin_count = x;
-	if(chan->demod_type == SPECT_DEMOD)
+	if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
 	  restart_needed = true;
       }
       break;
@@ -494,7 +494,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(!isfinite(x) || x == chan->spectrum.crossover)
 	  break;
 	chan->spectrum.crossover = x;
-	if(chan->demod_type == SPECT_DEMOD)
+	if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
 	  restart_needed = true;
       }
       break;
@@ -504,7 +504,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(i < 0 || i >=  N_WINDOW)
 	  break;
 	chan->spectrum.window_type = i;
-	if(chan->demod_type == SPECT_DEMOD)
+	if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
 	  restart_needed = true;
       }
       break;
@@ -640,7 +640,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       }
     cp += optlen;
   }
-  if(chan->demod_type == SPECT_DEMOD)
+  if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
     memset(chan->preset,0,sizeof(chan->preset)); // No presets in this mode
 
   if(restart_needed){
@@ -774,19 +774,42 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     break;
   case SPECT_DEMOD:
-    {
-      encode_int(&bp,WINDOW_TYPE,chan->spectrum.window_type);
-      encode_float(&bp,RESOLUTION_BW,chan->spectrum.rbw); // Hz
-      encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
-      encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
-      encode_float(&bp,SPECTRUM_SHAPE,chan->spectrum.shape);
-      encode_int(&bp,SPECTRUM_FFT_N,chan->spectrum.fft_n);
-      encode_float(&bp,NOISE_BW,chan->spectrum.noise_bw);
-      encode_int(&bp,SPECTRUM_AVG,chan->spectrum.fft_avg);
-      // encode bin data here? maybe change this, it can be a lot
-      // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
-      if(chan->spectrum.bin_data != NULL){
-	encode_vector(&bp,BIN_DATA,chan->spectrum.bin_data,chan->spectrum.bin_count);
+    encode_int(&bp,WINDOW_TYPE,chan->spectrum.window_type);
+    encode_float(&bp,RESOLUTION_BW,chan->spectrum.rbw); // Hz
+    encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
+    encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
+    encode_float(&bp,SPECTRUM_SHAPE,chan->spectrum.shape);
+    encode_int(&bp,SPECTRUM_FFT_N,chan->spectrum.fft_n);
+    encode_float(&bp,NOISE_BW,chan->spectrum.noise_bw);
+    encode_int(&bp,SPECTRUM_AVG,chan->spectrum.fft_avg);
+    // encode bin data here? maybe change this, it can be a lot
+    // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
+    if(chan->spectrum.bin_data != NULL){
+      encode_vector(&bp,BIN_DATA,chan->spectrum.bin_data,chan->spectrum.bin_count);
+    }
+    break;
+  case SPECT2_DEMOD:
+    encode_int(&bp,WINDOW_TYPE,chan->spectrum.window_type);
+    encode_float(&bp,RESOLUTION_BW,chan->spectrum.rbw); // Hz
+    encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
+    encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
+    encode_float(&bp,SPECTRUM_SHAPE,chan->spectrum.shape);
+    encode_int(&bp,SPECTRUM_FFT_N,chan->spectrum.fft_n);
+    encode_float(&bp,NOISE_BW,chan->spectrum.noise_bw);
+    encode_int(&bp,SPECTRUM_AVG,chan->spectrum.fft_avg);
+    encode_float(&bp,SPECTRUM_BASE,chan->spectrum.base);
+    encode_float(&bp,SPECTRUM_STEP,chan->spectrum.step);
+
+    // encode bin data here? maybe change this, it can be a lot
+    // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
+    if(chan->spectrum.bin_data != NULL){
+      uint8_t *bins = malloc(chan->spectrum.bin_count);
+      if(bins == NULL){
+	fprintf(stderr,"malloc of spectrum data failed\n");
+      } else {
+	encode_byte_data(chan,bins,chan->spectrum.base,chan->spectrum.step);
+	encode_string(&bp,BIN_BYTE_DATA,bins,chan->spectrum.bin_count);
+	free(bins);
       }
     }
     break;
@@ -801,7 +824,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   encode_int32(&bp,OUTPUT_CHANNELS,chan->output.channels);
 
   // Stuff not relevant in spectrum analysis mode
-  if(chan->demod_type != SPECT_DEMOD){
+  if(chan->demod_type != SPECT_DEMOD && chan->demod_type != SPECT2_DEMOD){
     encode_int32(&bp,RTP_TIMESNAP,chan->output.rtp.timestamp);
     encode_int64(&bp,OUTPUT_DATA_PACKETS,chan->output.rtp.packets);
     encode_int(&bp,FILTER2,chan->filter2.blocking);
@@ -840,12 +863,12 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     // Where we're sending PCM output
     encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&chan->output.dest_socket);
     encode_int32(&bp,OUTPUT_TTL,chan->output.ttl);
-    encode_int64(&bp,OUTPUT_METADATA_PACKETS,chan->status.packets_out);
     encode_byte(&bp,RTP_PT,chan->output.rtp.type);
     encode_int32(&bp,STATUS_INTERVAL,chan->status.output_interval);
     encode_int(&bp,OUTPUT_ENCODING,chan->output.encoding);
     encode_int(&bp,MINPACKET,chan->output.minpacket);
   }
+  encode_int64(&bp,OUTPUT_METADATA_PACKETS,chan->status.packets_out);
   // Don't send test points unless they're in use
   if(!isnan(chan->tp1))
     encode_float(&bp,TP1,chan->tp1);

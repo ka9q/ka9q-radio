@@ -241,6 +241,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
 	case SPECT_DEMOD:
 	  fprintf(fp,"(spectrum)");
 	  break;
+	case SPECT2_DEMOD:
+	  fprintf(fp,"(spectrum v2)");
+	  break;
 	default:
 	  fprintf(fp,"(unknown)");
 	  break;

@@ -21,6 +21,7 @@ int const point_budget = 512 * 1024; // tunable, experimental
 
 static int spectrum_poll(struct channel *chan);
 
+
 // Spectrum analysis thread
 int demod_spectrum(void *arg){
   struct channel * const chan = arg;
@@ -448,4 +449,29 @@ static int spectrum_poll(struct channel *chan){
   }
 
   return 0;
+}
+
+// Fill a buffer with compact frequency bin data, 1 byte each
+// Each unsigned byte in the output gives the bin power above 'base' decibels, in steps of 'step' dB
+// Unlike the regular float32 format, these bins run uniformly from lowest frequency to highest frequency
+void encode_byte_data(struct channel *chan,uint8_t *buffer,double base,double step){
+  assert(chan != NULL && buffer != NULL);
+  assert(isfinite(base) && isfinite(step) && step != 0);
+
+  int const bin_count = chan->spectrum.bin_count;
+  double scale = 1./step;
+
+  int wbin = bin_count/2; // nyquist freq is most negative
+  int i;
+  for(i=0; i < bin_count; i++){
+    double x = scale * (power2dB(chan->spectrum.bin_data[wbin++]) - base);
+    if(x < 0)
+      x = 0;
+    else if(x > 255)
+      x = 255;
+
+    buffer[i] = (uint8_t)round(x);
+    if(wbin == bin_count)
+      wbin = 0;  // Continuing through dc and positive frequencies
+  }
 }

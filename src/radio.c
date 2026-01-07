@@ -977,6 +977,7 @@ static void *demod_thread(void *p){
       status = demod_wfm(p);
       break;
     case SPECT_DEMOD:
+    case SPECT2_DEMOD: // Same task, output is formatted differently
       status = demod_spectrum(p);
       break;
     default:
@@ -1382,7 +1383,7 @@ int downconvert(struct channel *chan){
       restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
       FREE(chan->status.command);
       // When a spectrum restart is needed, blow away old bin data so it won't get sent with this status response
-      if(chan->demod_type == SPECT_DEMOD && restart_needed)
+      if((chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD) && restart_needed)
 	FREE(chan->spectrum.bin_data);
       else
 	response_needed = true;
@@ -1502,7 +1503,7 @@ void response(struct channel *chan,bool response_needed){
     chan->status.global_timer = 0; // Just sent one
     // Also send to output stream
     // Only send spectrum on status channel, and only in response to poll
-    if(chan->demod_type != SPECT_DEMOD){
+    if(chan->demod_type != SPECT_DEMOD && chan->demod_type != SPECT2_DEMOD){
       send_radio_status(&chan->status.dest_socket,frontend,chan);
       chan->status.output_timer = chan->status.output_interval; // Reload
     }

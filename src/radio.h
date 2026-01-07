@@ -34,6 +34,7 @@ enum demod_type {
   FM_DEMOD,             // Frequency/phase demodulation
   WFM_DEMOD,            // wideband frequency modulation (broadcast stereo)
   SPECT_DEMOD,          // Spectrum analysis pseudo-demod
+  SPECT2_DEMOD,         // spectrum v2: 8-bit log bins, low-to-high order
   N_DEMOD,              // Dummy equal to number of valid entries
 };
 
@@ -262,6 +263,8 @@ struct channel {
     float complex *ring; // Ring buffer of demodulated data in narrowband mode
     int ring_size;
     int ring_idx;     // index into ring buffer
+    double base;      // lowest bin energy, dB (v2 byte format)
+    double step;      // dB/step (v2 byte format)
   } spectrum;
 
   // Output
@@ -360,6 +363,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *preset);
 int start_demod(struct channel * restrict chan);
 double set_freq(struct channel * restrict ,double);
 double set_first_LO(struct channel const * restrict, double);
+void encode_byte_data(struct channel *chan,uint8_t *buffer,double base,double step);
 
 // Routines common to the internals of all channel demods
 int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, double freq);
