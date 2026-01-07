@@ -277,6 +277,9 @@ int set_defaults(struct channel *chan){
   chan->spectrum.window = NULL;
   chan->spectrum.plan = NULL;
   chan->spectrum.bin_data = NULL;
+  chan->spectrum.base = -150; // dB == value 0
+  chan->spectrum.step = 0.5;  // dB/step
+
   chan->tp1 = chan->tp2 = NAN;
   return 0;
 }
