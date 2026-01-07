@@ -134,12 +134,12 @@ int demod_spectrum(void *arg){
   assert(chan->spectrum.plan != NULL);
 
   // Generate normalized sampling window
-  chan->spectrum.window = malloc(chan->spectrum.fft_n * sizeof *chan->spectrum.window);
+  chan->spectrum.window = malloc((1 + chan->spectrum.fft_n) * sizeof *chan->spectrum.window);
   assert(chan->spectrum.window != NULL);
   switch(chan->spectrum.window_type){
   default:
   case KAISER_WINDOW: // If beta == 0, same as rectangular
-    make_kaiserf(chan->spectrum.window,chan->spectrum.fft_n,chan->spectrum.shape);
+    make_kaiserf(chan->spectrum.window,chan->spectrum.fft_n+1,chan->spectrum.shape);
     break;
   case RECT_WINDOW:
     for(int i=0; i < chan->spectrum.fft_n; i++)
@@ -147,15 +147,15 @@ int demod_spectrum(void *arg){
     break;
   case BLACKMAN_WINDOW:
     for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = blackman_window(i,chan->spectrum.fft_n);
+      chan->spectrum.window[i] = blackman_window(i,chan->spectrum.fft_n+1);
     break;
   case EXACT_BLACKMAN_WINDOW:
     for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = exact_blackman_window(i,chan->spectrum.fft_n);
+      chan->spectrum.window[i] = exact_blackman_window(i,chan->spectrum.fft_n+1);
     break;
   case BLACKMAN_HARRIS_WINDOW:
     for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = blackman_harris_window(i,chan->spectrum.fft_n);
+      chan->spectrum.window[i] = blackman_harris_window(i,chan->spectrum.fft_n+1);
     break;
   case GAUSSIAN_WINDOW:
     // Reuse kaiser β as σ parameter
@@ -164,16 +164,16 @@ int demod_spectrum(void *arg){
     for(int i=0; i < chan->spectrum.fft_n; i++)
       chan->spectrum.window[i] = gaussian_window(i,chan->spectrum.fft_n,chan->spectrum.shape);
 #else
-    gaussian_window_alpha(chan->spectrum.window, chan->spectrum.fft_n,chan->spectrum.shape, false); // we normalize them all below
+    gaussian_window_alpha(chan->spectrum.window, chan->spectrum.fft_n+1,chan->spectrum.shape, false); // we normalize them all below
 #endif
     break;
   case HANN_WINDOW:
     for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = hann_window(i,chan->spectrum.fft_n);
+      chan->spectrum.window[i] = hann_window(i,chan->spectrum.fft_n+1);
     break;
   case HAMMING_WINDOW:
     for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = hamming_window(i,chan->spectrum.fft_n);
+      chan->spectrum.window[i] = hamming_window(i,chan->spectrum.fft_n+1);
   }
   normalize_windowf(chan->spectrum.window,chan->spectrum.fft_n);
 
