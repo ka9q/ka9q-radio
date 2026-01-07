@@ -308,12 +308,12 @@ char const *encoding_string(enum encoding e){
     return "opus";
   case OPUS_VOIP:
     return "opus-voip";
-  case F32LE:
-    return "f32le";
+  case F32BE:
+    return "f32be";
   case AX25:
     return "ax.25";
-  case F16LE:
-    return "f16le";
+  case F16BE:
+    return "f16be";
   }
 }
 enum encoding parse_encoding(char const *str){
@@ -321,10 +321,10 @@ enum encoding parse_encoding(char const *str){
     return S16BE;
   else if(strcasecmp(str,"s16le") == 0)
     return S16LE;
-  else if(strcasecmp(str,"f32") == 0 || strcasecmp(str,"float") == 0 || strcasecmp(str,"f32le") == 0)
-    return F32LE;
-  else if(strcasecmp(str,"f16") == 0 || strcasecmp(str,"f16le") == 0)
-    return F16LE;
+  else if(strcasecmp(str,"f32") == 0 || strcasecmp(str,"float") == 0 || strcasecmp(str,"f32be") == 0)
+    return F32BE;
+  else if(strcasecmp(str,"f16") == 0 || strcasecmp(str,"f16be") == 0)
+    return F16BE;
   else if(strcasecmp(str,"opus-voip") == 0)
     return OPUS_VOIP;
   else if(strcasecmp(str,"opus") == 0)

@@ -25,9 +25,9 @@ enum encoding {
   S16LE,
   S16BE,
   OPUS,
-  F32LE,
+  F32BE,
   AX25,
-  F16LE,
+  F16BE,
   OPUS_VOIP,       // Opus with APPLICATION_VOIP
   UNUSED_ENCODING, // Sentinel, not used
 };

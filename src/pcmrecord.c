@@ -630,7 +630,7 @@ static void process_data(int fd){
     } else {
       if(!Raw)
 	start_wav_stream(sp); // Don't emit wav header in --raw
-      int const framesize = sp->channels * (sp->encoding == F32LE ? sizeof(float) : sizeof(int16_t));
+      int const framesize = sp->channels * (sp->encoding == F32BE ? sizeof(float) : sizeof(int16_t));
       if(sp->fp != NULL){
 	if(sp->can_seek){
 	  fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
@@ -995,7 +995,7 @@ static int send_wav_queue(struct session * const sp,bool flush){
 
   // Anything on the resequencing queue we can now process?
   int count = 0;
-  int const framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2); // bytes per sample time
+  int const framesize = sp->channels * (sp->encoding == F32BE ? 4 : 2); // bytes per sample time
   for(int i=0; i < RESEQ; i++, sp->rtp_state.seq++){
     if(sp->samples_remaining <= 0)
       break; // Can't send any more in this file
@@ -1158,10 +1158,10 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     switch(sp->encoding){
     case S16BE:
     case S16LE:
-    case F32LE:
+    case F32BE:
       suffix = ".wav";
       break;
-    case F16LE:
+    case F16BE:
       suffix = ".f16"; // Non standard! But gotta do something with it for now
       break;
     case OPUS_VOIP:
@@ -1723,13 +1723,13 @@ static int start_wav_stream(struct session *sp){
     header.ByteRate = sp->samprate * sp->channels * sizeof(int16_t);
     header.BlockAlign = (int16_t)(sp->channels * sizeof(int16_t));
     break;
-  case F32LE:
+  case F32BE:
     header.AudioFormat = 3;
     header.BitsPerSample = 8 * sizeof(float);
     header.ByteRate = sp->samprate * sp->channels * sizeof(float);
     header.BlockAlign = (int16_t)(sp->channels * sizeof(float));
     break;
-  case F16LE:
+  case F16BE:
     header.AudioFormat = 0; // What should go here for IEEE 16-bit float?
     header.BitsPerSample = 8 * 2;
     header.ByteRate = sp->samprate * sp->channels * 2; // should be sizeof(float16)

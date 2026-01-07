@@ -231,8 +231,6 @@ static void *decode_task(void *arg){
   if(sp->buffer == NULL)
     sp->buffer = malloc(BUFFERSIZE * sizeof *sp->buffer);
 
-  if(sp->bounce == NULL)
-    sp->bounce = malloc(2 * BBSIZE * sizeof *sp->bounce);
 
   struct packet *pkt = NULL; // make sure it starts this way
 
@@ -277,11 +275,18 @@ static void *decode_task(void *arg){
 	pkt = sp->queue;
 	if(pkt != NULL && (sp->restart || (int16_t)(pkt->rtp.seq - sp->next_seq)<=0))
 	  break;	  // No reason to wait
+
 	// The qcond condition is signaled when a new RTP frame appears
+	Waits++;
 	rc = pthread_cond_timedwait(&sp->qcond,&sp->qmutex,&deadline);
 	rc &= 0xff;
 	assert(rc == 0 || rc == ETIMEDOUT); // shouldn't fail for any other reason
       } while(rc != ETIMEDOUT);
+      if(rc == ETIMEDOUT)
+	Wait_timeout++;
+      else
+	Wait_successful++;
+
       if(pkt != NULL)
 	sp->queue = pkt->next; // before we release the lock
       pthread_mutex_unlock(&sp->qmutex); // no longer examining queue
@@ -371,9 +376,9 @@ static void *decode_task(void *arg){
     // We have a frame of decoded audio or PLC from Opus
     // Do PL detection and notching even when muted
     if(sp->frame_size > 0 && sp->samprate != 0){
-      // Limit to 750 ms on queue
+      // Limit to 1.5s on queue
       double q = qlen(sp);
-      if(q > 1.5 * DAC_samprate || q < 0)
+      if(q < 0 || q > 1.5 * DAC_samprate)
 	reset_playout(sp);
 
       if(sp->notch_enable){
@@ -499,6 +504,9 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
     sp->drops++;
     return 0;
   }
+  if(sp->bounce == NULL)
+    sp->bounce = malloc(2 * BBSIZE * sizeof *sp->bounce);
+  assert(sp->bounce != NULL);
 
   // This section processes the signal in the current RTP frame, copying and/or decoding it into a sp->bounce buffer
   // for mixing with the output ring buffer
@@ -569,7 +577,7 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
       sp->bandwidth = sp->samprate / 2; // Nyquist
     }
     break;
-  case F32LE:
+  case F32BE:
     {
       float const * const data = (float *)&pkt->data[0];
       sampsize = sizeof *data;
@@ -581,7 +589,7 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
     }
     break;
 #ifdef HAS_FLOAT16
-  case F16LE: // 16-bit floats
+  case F16BE: // 16-bit floats
     {
       float16_t const * const data = (float16_t *)&pkt->data[0];
       sampsize = sizeof *data;

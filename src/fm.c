@@ -151,37 +151,34 @@ int demod_fm(void *arg){
                             >=4 : squelch is fully open
 
        The user parameter chan->squelch_tail thus controls how many blocks the squelch will remain open
-       after the SNR falls below the close threshold. This is always followed by 3 blocks of silence, then the stream stops.
+       after the SNR falls below the close threshold. This is always followed by several blocks of silence, then the stream stops.
        If at any time the SNR >= open threshold, the sequence is aborted, the timer is restarted and normal operation continues
     */
-    int const squelch_state_max = chan->squelch_tail + 4;
+    int const squelch_state_max = chan->squelch_tail + 5;
     if(chan->fm.snr >= chan->squelch_open){
-      // Squelch is fully open
-      // tail timing is in blocks (usually 20 ms each)
-      squelch_state = squelch_state_max; // hold timer at start
-    } else if(squelch_state > 0 && chan->fm.snr < chan->squelch_close)
-      squelch_state--; // Begin to close it. If squelch_tail == 0, this will result in zeroes being emitted right away (no tail)
-
-    // mini state machine for multi-frame squelch closing sequence
+      squelch_state = squelch_state_max; // hold open
+    } else if(squelch_state > 0 && (chan->fm.snr < chan->squelch_close || squelch_state < squelch_state_max)){
+      squelch_state--; // initiate or continue closing
+    }
+    // mini sequencer for multi-frame squelch closing sequence
     // squelch_state decrements 3..2..1..0
     switch(squelch_state){
-    case 3:
+    default: // squelch is fully open
+      break;
+    case 4: // squelch starting to close
       response_needed = true; // force update to indicate squelch is closing
       reset_goertzel(&tone_detect);
-      phase_memory = 0;
-      pl_sample_count = 0;
-      chan->output.power = 0;  // don't keep resending previous value; falls through
       /* fallthrough */
+    case 3:
     case 2:
     case 1:
-      send_output(chan,NULL,N,false); // buffer of zeroes no longer needed
-      continue;
-    case 0: // squelch completely closed
+      phase_memory = 0;
+      pl_sample_count = 0;
       chan->output.power = 0;  // don't keep resending previous value
-      send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
+      /* fallthrough */
+    case 0: // squelch completely closed
+      send_output(chan,NULL,N,squelch_state == 0);
       continue;
-    default: // 4 and above - squelch is open
-      break;
     }
     float baseband[N];    // Demodulated FM baseband
     if(chan->pll.enable){

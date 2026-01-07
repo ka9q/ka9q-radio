@@ -37,7 +37,7 @@ struct session {
   SRC_STATE *src_state_stereo;
   double clock_freq;
   double clock_offset;
-  
+
 
   _Atomic uint64_t wptr;    // Next write sample, in output sample clock units
   uint64_t wptr_highwater;
@@ -173,6 +173,10 @@ extern _Atomic PaTime Last_callback_time;
 extern int Invalids;
 extern int64_t Last_error_time;
 extern int Nsessions;
+extern uint64_t Wait_timeout;
+extern uint64_t Wait_successful;
+extern uint64_t Waits;
+
 
 extern _Atomic bool Terminate;
 extern bool Voting;

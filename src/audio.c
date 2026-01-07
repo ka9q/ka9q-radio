@@ -119,11 +119,11 @@ int flush_output(struct channel * chan,bool marker,bool complete){
   case S16LE:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(int16_t) * chan->output.channels);
     break;
-  case F32LE:
+  case F32BE:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(float) * chan->output.channels);
     break;
 #ifdef HAS_FLOAT16
-  case F16LE:
+  case F16BE:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(float16_t) * chan->output.channels);
     break;
 #endif
@@ -312,14 +312,14 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	bytes = chunk * chan->output.channels * sizeof(*pcm_buf);
       }
       break;
-    case F32LE:
+    case F32BE:
       // Could use sendmsg() to avoid copy here since there's no conversion, but this doesn't use much
       memcpy(dp,buf,chunk * chan->output.channels * sizeof(float));
       chan->output.rtp.timestamp += chunk;
       bytes = chunk * chan->output.channels * sizeof(float);
       break;
 #ifdef HAS_FLOAT16
-    case F16LE:
+    case F16BE:
       {
 	float16_t *pcm_buf = (float16_t *)dp;
 	for(int i=0; i < chunk * chan->output.channels; i++)

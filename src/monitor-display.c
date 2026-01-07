@@ -53,8 +53,8 @@ static struct stat Last_stat;
 
 static void update_monitor_display(void);
 static void process_keyboard(void);
-static int render(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const ncols);
-static int render_left(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const ncols);
+static int render_right(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const ncols);
+static int render_left(int const row, int const col, char const scratch[LINES][COLS],int const nrows);
 
 static int First_session = 0;
 static int Sessions_per_screen = 0;
@@ -480,12 +480,17 @@ static void update_monitor_display(void){
     printwt(" Clock %.1lfs %.1lf dBFS CB N %u",(double)rptr/DAC_samprate,level,quant);
     extern int Session_creates;
     printwt(" sessions %d",Session_creates);
+    printwt("\n");
+    printwt("Waits %llu Wait timeouts %llu successful %llu\n",Waits,Wait_timeout,Wait_successful);
   }
   getyx(stdscr,row,col);
   if(col != 0){
     col = 0;
     move(++row,col);
   }
+  // Show channel statuses
+  int const header_line = row;
+
   Sessions_per_screen = LINES - getcury(stdscr) - 1;
 
   defragment_session();
@@ -497,44 +502,56 @@ static void update_monitor_display(void){
   while(First_session > 0 && !inuse(Sess_ptr[First_session]))
     First_session--;
 
-  // Show channel statuses
-  int header_line = row;
-  int col_save = col;
-  int first_line = header_line+1; // after header line
-
   // Bound current pointer to active list area
   while(Current > 0 && !inuse(Sess_ptr[Current]))
     Current--; // Current session is no valid, back up
+
+  int first_line = header_line+1; // after header line
 
   if(Current <= First_session)
     Current = First_session;
   else if(Current > LINES - first_line)
     Current = LINES - first_line;
 
-  // dB column
-  int width = 4;
-  mvprintwt(row++,col,"%*s",width,"dB");
-  for(int session = First_session; session < NSESSIONS &&  row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    mvprintwt(row,col,"%+*.0lf",width,muted(sp) ? -INFINITY : voltage2dB(sp->gain));
-  }
-  col += width;
-  row = header_line;
-  if(Auto_position){
-    if(col >= COLS)
-      goto done;
 
-    // Pan column
-    width = 4;
-    mvprintwt(row++,col," pan");
-    for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
+  {  // dB gain
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 2;
+    int rows = 0;
+    snprintf(scratch[rows++],COLS,"dB");
+    for(; rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
-      if(!inuse(sp)) break;
-      mvprintwt(row,col,"%*d",width,(int)round(100*sp->pan));
+      if(!inuse(sp))
+	break;
+
+      snprintf(scratch[rows],COLS,"%+*.0lf",width,muted(sp) ? -INFINITY : voltage2dB(sp->gain));
     }
+    width = render_right(header_line,col,scratch,rows,width);
     col += width;
-    row = header_line;
+  }
+  if(col >= COLS)
+    goto done;
+
+  if(Auto_position){
+    // Pan column
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 3;
+    int rows = 0;
+    snprintf(scratch[rows++],COLS,"pan");
+    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp))
+	break;
+
+      snprintf(scratch[rows],COLS,"%d",(int)round(100*sp->pan));
+    }
+    col++;
+    width = render_right(header_line,col,scratch,rows,width);
+    col += width;
   }
   // SSRC
   if(col >= COLS)
@@ -544,36 +561,39 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 20;
+    int width = 6;
     int rows = 0;
-    snprintf(scratch[rows++],COLS,"%*s",width,"ssrc");
+    snprintf(scratch[rows++],COLS,"ssrc");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
-      snprintf(scratch[rows],COLS,"%*u",width,sp->ssrc);
+      snprintf(scratch[rows],COLS,"%u",sp->ssrc);
     }
     col++;
-    width = render(header_line,col,scratch,rows,width);
+    width = render_right(header_line,col,scratch,rows,width);
     col += width;
   }
   if(col >= COLS)
     goto done;
 
   if(Notch){
-    width = 7;
-    mvprintwt(row++,col,"%*s",width,"tone");
-    for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-      struct session const *sp = Sess_ptr[session];
-      if(!inuse(sp))
-	break;
-      if(sp->notch_enable && sp->notch_tone != 0)
-	mvprintwt(row,col,"%*.1f%c",width-1,sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
+   char scratch [LINES][COLS];
+    memset(scratch,0,sizeof scratch);
+    int session = First_session;
+    int width = 7;
+    int rows = 0;
 
+    snprintf(scratch[rows++],COLS,"tone");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      if(sp->notch_enable && sp->notch_tone != 0)
+	snprintf(scratch[row],COLS,"%.1f%c",sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
     }
+    width = render_right(header_line,col,scratch,rows,width);
     col += width;
-    row = header_line;
   }
   if(col >= COLS)
     goto done;
@@ -582,10 +602,10 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = 30;
+    int width = 6;
     int rows = 0;
 
-    snprintf(scratch[rows++],COLS,"%*s",width,"freq");
+    snprintf(scratch[rows++],COLS,"freq");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
@@ -593,7 +613,7 @@ static void update_monitor_display(void){
       snprintf(scratch[rows],COLS,"%'*.0lf",width,sp->chan.tune.freq);
     }
     col++;
-    width = render(header_line,col,scratch,rows,width);
+    width = render_right(header_line,col,scratch,rows,width);
     col += width;
   }
   if(col >= COLS)
@@ -603,10 +623,10 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = COLS;
+    int width = 0;
     int rows = 0;
 
-    snprintf(scratch[rows++],COLS,"%s","mode");
+    snprintf(scratch[rows++],COLS,"mode");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
@@ -614,36 +634,43 @@ static void update_monitor_display(void){
       snprintf(scratch[rows],COLS,"%s",sp->chan.preset);
     }
     col++;
-    width = render_left(header_line,col,scratch,rows,width);
+    width = render_left(header_line,col,scratch,rows);
     col += width;
   }
   if(col >= COLS)
     goto done;
 
-  width = 6;
-  mvprintwt(row++,col,"%*s",width-1,"s/n");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(inuse(sp) && isfinite(sp->snr))
-      mvprintwt(row,col,"%*.1f%c",width-1,sp->snr,(Voting && sp == Best_session) ? '*' : ' ');
-  }
-  col += width;
-  row = header_line;
+ {  // snr
+    char scratch [LINES][COLS];
+    memset(scratch,0,sizeof scratch);
+    int session = First_session;
+    int width = 6;
+    int rows = 0;
 
-  col++; // ID is left justified, add a leading space
+    snprintf(scratch[rows++],COLS,"snr");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      if(!isfinite(sp->snr))
+	continue;
+
+      snprintf(scratch[rows],COLS,"%.1f",sp->snr);
+    }
+    width = render_right(header_line,col,scratch,rows,width);
+    col += width;
+  }
   if(col >= COLS)
     goto done;
 
-  // Dynamic column width
   {  // id
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = COLS;
+    int width = 0;
     int rows = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"%s","id");
+    snprintf(scratch[rows++],COLS,"id");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
@@ -655,7 +682,7 @@ static void update_monitor_display(void){
     }
     if(enable){
       col++;
-      width = render_left(header_line,col,scratch,rows,width);
+      width = render_left(header_line,col,scratch,rows);
       col += width;
     }
   }
@@ -666,9 +693,9 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 20;
+    int width = 4;
     int rows = 0;
-    snprintf(scratch[rows++],COLS,"%*s",width,"Tot");
+    snprintf(scratch[rows++],COLS,"Tot");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
@@ -676,10 +703,9 @@ static void update_monitor_display(void){
 
       char total_buf[100] = {0};
       ftime(total_buf,sizeof(total_buf),(int64_t)round(sp->tot_active));
-      snprintf(scratch[rows],COLS,"%*s",width,total_buf);
+      snprintf(scratch[rows],COLS,"%s",total_buf);
     }
-    col++;
-    width = render(header_line,col,scratch,rows,width);
+    width = render_right(header_line,col,scratch,rows,width);
     col += width;
   }
   if(col >= COLS)
@@ -689,9 +715,9 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 20;
+    int width = 4;
     int rows = 0;
-    snprintf(scratch[rows++],COLS,"%*s",width,"Cur");
+    snprintf(scratch[rows++],COLS,"Cur");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
@@ -699,139 +725,184 @@ static void update_monitor_display(void){
 
       double t = sp->active != 0 ? sp->active : (double)(gps_time_ns() - sp->last_active) * 1e-9;
       char buf[100];
-      snprintf(scratch[rows],COLS,"%*s",width,ftime(buf,sizeof buf,t));
+      snprintf(scratch[rows],COLS,"%s",ftime(buf,sizeof buf,t));
     }
-    col++;
-    width = render(header_line,col,scratch,rows,width);
+    width = render_right(header_line,col,scratch,rows,width);
     col += width;
   }
 
   if(col >= COLS)
     goto done;
-  width = 6;
-  mvprintwt(row++,col,"%*s",width,"level");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp))
-      continue;
+  {
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 6;
+    int rows = 0;
 
-    double dB = power2dB(sp->level);
-    if(dB >= -99)
-      mvprintwt(row,col,"%*.1lf",width,dB);   // Time idle since last transmission
-
+    snprintf(scratch[rows++],COLS,"level");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      if(sp->level <= 1e-10) // -100 dB
+	continue;
+      double dB = power2dB(sp->level);
+      snprintf(scratch[rows],COLS,"%.1lf",dB);
+    }
+    width = render_right(header_line,col,scratch,rows,width);
+    col += width;
   }
-  col += width;
-  row = header_line;
   if(col >= COLS)
     goto done;
 
-  width = 8;
-  mvprintwt(row++,col,"%*s",width,"Q");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp) || qlen(sp) <= 0)
-      continue;
+  {
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 6;
+    int rows = 0;
 
-    mvprintwt(row,col,"%*d",width,(int)round(1000. * qlen(sp)/DAC_samprate));   // Time idle since last transmission
+    snprintf(scratch[rows++],COLS,"Queue");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      if(qlen(sp) <= 0)
+	continue;
+      snprintf(scratch[rows],COLS,"%d",(int)round(1000. * qlen(sp)/DAC_samprate));
+    }
+    width = render_right(header_line,col,scratch,rows,width);
+    col += width;
   }
-  col += width;
-  row = header_line;
+  if(col >= COLS)
+    goto done;
 
   // Opus/pcm
-  col++; // Left justified, add a space
+  {
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 5;
+    int rows = 0;
+
+    snprintf(scratch[rows++],COLS,"type");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      snprintf(scratch[rows],COLS,"%s",encoding_string(sp->pt_table[sp->type].encoding));
+    }
+    width = render_right(header_line,col,scratch,rows,width);
+    col += width;
+  }
   if(col >= COLS)
     goto done;
-
-  width = 0;
-  for(int session = First_session; session < NSESSIONS; session++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    int i = strlen(encoding_string(sp->pt_table[sp->type].encoding));
-    if(i > width)
-      width = i;
-  }
-
-  mvprintwt(row++,col,"%s","type");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    mvprintwt(row,col,"%s",encoding_string(sp->pt_table[sp->type].encoding));
-  }
-  col += width;
-  row = header_line;
 
   // frame size, ms
+  {
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 2;
+    int rows = 0;
+
+    snprintf(scratch[rows++],COLS,"ms");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      if(sp->samprate == 0)
+	continue;
+      snprintf(scratch[rows],COLS,"%d",1000 * sp->last_framesize/sp->samprate); // frame size, ms
+    }
+    col++;
+    width = render_right(header_line,col,scratch,rows,width);
+    col += width;
+  }
   if(col >= COLS)
     goto done;
-  width = 3;
-  mvprintwt(row++,col,"%*s",width,"ms");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    if(sp->samprate != 0)
-      mvprintwt(row,col,"%*d",width,(1000 * sp->last_framesize/sp->samprate)); // frame size, ms
-
-  }
-  col += width;
-  row = header_line;
 
   // channels
+  {
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 3;
+    int rows = 0;
+
+    snprintf(scratch[rows++],COLS,"%s","ch");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      if(sp->pt_table[sp->type].encoding == OPUS
+	 || sp->pt_table[sp->type].encoding == OPUS_VOIP)
+	snprintf(scratch[rows],COLS,"%d",sp->opus_channels);
+      else
+	snprintf(scratch[rows],COLS,"%d",sp->channels);
+    }
+    width = render_right(header_line,col,scratch,rows,width);
+    col += width;
+  }
   if(col >= COLS)
     goto done;
-  width = 2;
-  mvprintwt(row++,col,"%*s",width,"c");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp))
-      break;
-    enum encoding encoding = sp->pt_table[sp->type].encoding;
-    if(encoding == OPUS || encoding == OPUS_VOIP)
-      mvprintwt(row,col,"%*d",width,sp->opus_channels); // actual number in incoming stream
-    else
-      mvprintwt(row,col,"%*d",width,sp->channels);
 
+  { // bw
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 3;
+    int rows = 0;
+
+    snprintf(scratch[rows++],COLS,"bw");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      if(sp->samprate == 0)
+	continue;
+      snprintf(scratch[rows],COLS,"%d",sp->bandwidth/1000); // to kHz
+    }
+    width = render_right(header_line,col,scratch,rows,width);
+    col += width;
   }
-  col += width;
-  row = header_line;
-
   // BW
   if(col >= COLS)
     goto done;
-  width = 3;
-  mvprintwt(row++,col,"%*s",width,"bw");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    mvprintwt(row,col,"%*d",width,sp->bandwidth/1000); // convert to kHz
-  }
-  col += width;
-  row = header_line;
 
-  // RTP payload type
+ {  // RTP payload type
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 4;
+    int rows = 0;
+
+    snprintf(scratch[rows++],COLS,"pt");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      if(sp->samprate == 0)
+	continue;
+      snprintf(scratch[rows],COLS,"%d",sp->type);
+    }
+    width = render_right(header_line,col,scratch,rows,width);
+    col += width;
+  }
   if(col >= COLS)
     goto done;
-  width = 4;
-  mvprintwt(row++,col,"%*s",width,"pt");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    mvprintwt(row,col,"%*d",width,sp->type);
-  }
-  col += width;
-  row = header_line;
 
   // Data rate, kb/s
-  if(col >= COLS)
-    goto done;
-  width = 6;
-  mvprintwt(row++,col,"%*s",width,"rate");
-  for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
-    if(!inuse(sp)) break;
-    mvprintwt(row,col,"%*.*f", width, sp->datarate < 1e6 ? 1 : 0, .001 * sp->datarate); // decimal only if < 1000
+ {  // RTP payload type
+    char scratch [LINES][COLS];
+    memset(scratch, 0 , sizeof scratch);
+    int session = First_session;
+    int width = 5;
+    int rows = 0;
+
+    snprintf(scratch[rows++],COLS,"rate");
+    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+      struct session const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+      snprintf(scratch[rows],COLS,"%.*f", sp->datarate < 1e6 ? 1 : 0, .001 * sp->datarate); // decimal only if < 1000
+    }
+    width = render_right(header_line,col,scratch,rows,width);
+    col += width;
   }
-  col += width;
-  row = header_line;
   if(col >= COLS)
     goto done;
 
@@ -840,9 +911,9 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 20;
+    int width = 6;
     int rows = 0;
-    snprintf(scratch[rows++],COLS,"%*s",width,"Delay");
+    snprintf(scratch[rows++],COLS,"Delay");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
@@ -858,11 +929,10 @@ static void update_monitor_display(void){
 
       double delay = (double)(int32_t)(sp->chan.output.rtp.timestamp - sp->last_timestamp) / sp->samprate;
       delay += 1.0e-9 * (gps_time_ns() - sp->chan.clocktime);
-      snprintf(scratch[rows],COLS,"%'*.3lf", width,delay);
+      snprintf(scratch[rows],COLS,"%'.3lf", delay);
     }
     // Suppress entirely unless there's at least one entry
-    col++;
-    width = render(header_line,col,scratch,rows,width);
+    width = render_right(header_line,col,scratch,rows,width);
     col += width;
   }
   if(col >= COLS)
@@ -878,9 +948,9 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 20;
+    int width = 3;
     int rows = 0;
-    snprintf(scratch[rows++],COLS,"%*s",width,"T0");
+    snprintf(scratch[rows++],COLS,"T0");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
@@ -893,8 +963,7 @@ static void update_monitor_display(void){
       int64_t t0 = 1000*wptr/DAC_samprate - 1000*(int64_t)sp->next_timestamp / sp->samprate;
       snprintf(scratch[rows],COLS,"%'*lld", width, t0); // ms
     }
-    col++;
-    width = render(header_line,col,scratch,rows,width);
+    width = render_right(header_line,col,scratch,rows,width);
     col += width;
   }
 
@@ -905,17 +974,17 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 20;
+    int width = 4;
     int rows = 0;
 
-    snprintf(scratch[rows++],COLS,"%*s",width,"pkt");
+    snprintf(scratch[rows++],COLS,"pkt");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->packets);
+      snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->packets);
     }
     col++;
-    width = render(header_line,col,scratch,rows,width);
+    width = render_right(header_line,col,scratch,rows,width);
     col += width;
   }
   if(col >= COLS)
@@ -925,22 +994,21 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 10;
+    int width = 4;
     int rows = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"%*s",width,"rst");
+    snprintf(scratch[rows++],COLS,"rst");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      if(sp->resets > 0)
+      if(sp->resets > 0){
 	enable = true;
-
-      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->resets);
+	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->resets);
+      }
     }
     if(enable){
-      col++;
-      width = render(header_line,col,scratch,rows,width);
+      width = render_right(header_line,col,scratch,rows,width);
       col += width;
     }
   }
@@ -950,21 +1018,21 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 10;
+    int width = 4;
     int rows = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"%*s",width,"drp");
+    snprintf(scratch[rows++],COLS,"drp");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      if(sp->drops > 0)
+      if(sp->drops > 0){
 	enable = true;
-      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->drops);
+	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->drops);
+      }
     }
     if(enable){
-      col++;
-      width = render(header_line,col,scratch,rows,width);
+      width = render_right(header_line,col,scratch,rows,width);
       col += width;
     }
   }
@@ -975,21 +1043,21 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 10;
+    int width = 5;
     int rows = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"%*s",width,"late");
+    snprintf(scratch[rows++],COLS,"late");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      if(sp->lates > 0)
+      if(sp->lates > 0){
 	enable = true;
-      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->lates);
+	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->lates);
+      }
     }
     if(enable){
-      col++;
-      width = render(header_line,col,scratch,rows,width);
+      width = render_right(header_line,col,scratch,rows,width);
       col += width;
     }
   }
@@ -999,21 +1067,21 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 10;
+    int width = 6;
     int rows = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"%*s",width,"early");
+    snprintf(scratch[rows++],COLS,"early");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      if(sp->lates > 0)
+      if(sp->earlies > 0){
 	enable = true;
-      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->earlies);
+	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->earlies);
+      }
     }
     if(enable){
-      col++;
-      width = render(header_line,col,scratch,rows,width);
+      width = render_right(header_line,col,scratch,rows,width);
       col += width;
     }
   }
@@ -1025,21 +1093,21 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 10;
+    int width = 5;
     int rows = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"%*s",width,"resq");
+    snprintf(scratch[rows++],COLS,"resq");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->reseqs);
-      if(sp->reseqs > 0)
+      if(sp->reseqs > 0){
 	enable = true;
+	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->reseqs);
+      }
     }
     if(enable){
-      col++;
-      width = render(header_line,col,scratch,rows,width);
+      width = render_right(header_line,col,scratch,rows,width);
       col += width;
     }
   }
@@ -1050,21 +1118,21 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = 10;
+    int width = 4;
     int rows = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"%*s",width,"plc");
+    snprintf(scratch[rows++],COLS,"plc");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      snprintf(scratch[rows],COLS,"%*llu",width,(unsigned long long)sp->plcs);
-      if(sp->plcs > 0)
+      if(sp->plcs > 0){
 	enable = true;
+	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->plcs);
+      }
     }
     if(enable){
-      col++;
-      width = render(header_line,col,scratch,rows,width);
+      width = render_right(header_line,col,scratch,rows,width);
       col += width;
     }
   }
@@ -1075,17 +1143,17 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = COLS;
+    int width = 0;
     int rows = 0;
 
-    snprintf(scratch[rows++],COLS,"%s","sockets");
+    snprintf(scratch[rows++],COLS,"sockets");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       snprintf(scratch[rows],COLS,"%s -> %s",formatsock(&sp->sender,true),sp->dest);
     }
     col++;
-    width = render_left(header_line,col,scratch,rows,width);
+    width = render_left(header_line,col,scratch,rows);
     col += width;
   }
   if(col >= COLS)
@@ -1108,14 +1176,17 @@ static void update_monitor_display(void){
       // active within the past 500 ms
       attr |= A_BOLD;
     }
+    if(Voting && sp == Best_session)
+      attr |= A_UNDERLINE;
+
 
     // 1 adjusts for the titles
     // only underscore to just before the socket entry since it's variable length
-   int r =  mvchgat(row,col_save,col,attr,pair,NULL);
+   int r =  mvchgat(row,0,col,attr,pair,NULL);
    (void)r;
    assert(r == OK);
   }
-  move(first_line + Current - First_session,col_save); // Cursor on current line
+  move(first_line + Current - First_session,0); // Cursor on current line
   // End of display writing
 }
 static void process_keyboard(void){
@@ -1329,37 +1400,51 @@ static void process_keyboard(void){
   if(!serviced)
     beep(); // Not serviced by anything
 }
-static int render(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const ncols){
-  int firstcol = -1;
-  for(int i = 0; i < ncols; i++){
-    for(int j = 0; j < nrows; j++){
-      if(scratch[j][i] != ' ' && scratch[j][i] != '\0'){
-	firstcol = i;
-	break;
-      }
-    }
-    if(firstcol != -1)
-      break;
-  }
-  int nc = 0;
-  if(firstcol != -1){
-    nc = ncols - firstcol;
 
-    for(int i = 0; i < nrows; i++){
-      int ncol = strlen(scratch[i] + firstcol);
-      if(ncol > nc)
-	ncol = nc;
-      mvaddnstr(row+i,col,scratch[i] + firstcol,ncol);
+// These routines keep columns of numbers nicely aligned without having to pre-reserve space for the widest possible entry
+// Each entry is right justified and the entire column is sized according to its widest row, subject to a minimum width
+static int render_right(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const minwidth){
+  int first_used_column = COLS;
+  int longest_line = minwidth;
+  // Find leftmost occupied column and widest line
+  for(int j = 0; j < nrows; j++){
+    for(int i = 0; i < COLS; i++){
+      if(scratch[j][i] == ' ' || scratch[j][i] == '\0')
+	continue;
+      if(first_used_column > i)
+	first_used_column = i;
+
+      int len = strlen(scratch[j]);
+      if(len > COLS)
+	len = COLS;
+      if(longest_line < len)
+	longest_line = len;
+      break;
     }
   }
-  return nc;
-}
-static int render_left(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const ncols){
-  unsigned int maxline = 0;
+  if(longest_line == 0 || first_used_column == COLS)
+    return 0; // nothing to render
+
   for(int j = 0; j < nrows; j++){
-    mvaddnstr(row+j,col,scratch[j],ncols);
-    if(strlen(scratch[j]) > maxline)
-      maxline = strlen(scratch[j]);
+    int len = strlen(scratch[j]);
+    if(len > COLS)
+      len = COLS;
+    int left_pad = 0;
+    if(len < longest_line)
+      left_pad = longest_line - len;
+
+    mvaddnstr(row+j, col+left_pad, scratch[j], len);
+  }
+  return longest_line;
+}
+// Simpler than right justification, just have to keep track of the widest row
+static int render_left(int const row, int const col, char const scratch[LINES][COLS],int const nrows){
+  int maxline = 0;
+  for(int j = 0; j < nrows; j++){
+    int len = strlen(scratch[j]);
+    if(maxline < len)
+      maxline = len;
+    mvaddnstr(row+j,col,scratch[j],len);
   }
   return maxline;
 }
