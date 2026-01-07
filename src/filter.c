@@ -1323,7 +1323,7 @@ double blackman_harris_window(int n, int N){
   double const a2 = 0.14128;
   double const a3 = 0.01168;
 
-  return a0 + a1*cos(M_PI*n/(N-1)) + a2*cos(2*M_PI*n/(N-1)) + a3 * cos(3*M_PI*n/(N-1));
+  return a0 - a1 * cos(2*M_PI*n/(N-1)) + a2 * cos(4*M_PI*n/(N-1)) - a3 * cos(6*M_PI*n/(N-1));
 }
 
 #if 0
