@@ -153,6 +153,10 @@ int demod_spectrum(void *arg){
     for(int i=0; i < chan->spectrum.fft_n; i++)
       chan->spectrum.window[i] = exact_blackman_window(i,chan->spectrum.fft_n);
     break;
+  case BLACKMAN_HARRIS_WINDOW:
+    for(int i=0; i < chan->spectrum.fft_n; i++)
+      chan->spectrum.window[i] = blackman_harris_window(i,chan->spectrum.fft_n);
+    break;
   case GAUSSIAN_WINDOW:
     // Reuse kaiser β as σ parameter
     // note σ = 0 is a pathological value for gaussian, it's an impulse with infinite sidelobes

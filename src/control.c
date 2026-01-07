@@ -983,7 +983,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
   case 'W':
     {
       char str[Entry_width],*ptr;
-      getentry("FFT Window type [0=Kaiser,1=rect,2=blackman,3=exact blackman,4=gaussian,5=hann,6=hamming: ",str,sizeof(str));
+      getentry("FFT Window type [0=Kaiser,1=rect,2=blackman,3=exact blackman,4=gaussian,5=hann,6=hamming,7=blackman-harris]: ",str,sizeof(str));
       int const b = strtol(str,&ptr,0);
       if(ptr != str){
 	if(b >= N_WINDOW){

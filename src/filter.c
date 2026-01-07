@@ -1311,6 +1311,20 @@ double exact_blackman_window(int n,int N){
   double const a2 = 1430./18608;
   return a0 - a1*cos(2*M_PI*n/(N-1)) + a2*cos(4*M_PI*n/(N-1));
 }
+// Blackman-Harris
+double blackman_harris_window(int n, int N){
+  assert(N > 1 && n >=0 && n < N);
+  if(N <= 1)
+    return 1.0;
+  if(n < 0 || n >= N)
+    return 0.0;
+  double const a0 = 0.35875;
+  double const a1 = 0.48829;
+  double const a2 = 0.14128;
+  double const a3 = 0.01168;
+
+  return a0 + a1*cos(M_PI*n/(N-1)) + a2*cos(2*M_PI*n/(N-1)) + a3 * cos(3*M_PI*n/(N-1));
+}
 
 #if 0
 // Used by gaussian_window
