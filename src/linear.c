@@ -352,8 +352,9 @@ int demod_linear(void *arg){
     case 3:
       response_needed = true; // force update to indicate squelch is closing
       chan->output.power = 0;  // don't keep resending previous value
-    case 2: // fall-thru
-    case 1: // fall-thru
+      // fallthrough
+    case 2: /* fallthrough */
+    case 1: /* fallthrough */
       send_output(chan,NULL,N,false); // buffer of zeroes no longer needed
       continue;
     case 0: // squelch completely closed
@@ -363,8 +364,6 @@ int demod_linear(void *arg){
     default: // 4 and above - squelch is open
       break;
     }
-
-
     if(chan->snr_squelch_enable || chan->pll.enable){
       if(snr < chan->squelch_close)
 	squelch_open = false;

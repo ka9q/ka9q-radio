@@ -170,8 +170,8 @@ int demod_fm(void *arg){
       reset_goertzel(&tone_detect);
       phase_memory = 0;
       pl_sample_count = 0;
-      chan->output.power = 0;  // don't keep resending previous value
-    case 2:
+      chan->output.power = 0;  // don't keep resending previous value; falls through
+    case 2: // fallthrough
     case 1:
       send_output(chan,NULL,N,false); // buffer of zeroes no longer needed
       continue;
@@ -192,7 +192,6 @@ int demod_fm(void *arg){
 	set_pll_params(&chan->pll.pll, bw, M_SQRT1_2);
 	set_pll_limits(&chan->pll.pll, -pdev, +pdev); // clip to +/-deviation
       }
-
       for(int n=0; n < N; n++){
 	double complex s = buffer[n] * conj(pll_phasor(&chan->pll.pll)); // mix vco with input, -0.5 to +0.5 cycle/sample
 	double phase = M_1_PI * carg(s); // Scale to -1 to +1 peak
