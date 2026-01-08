@@ -139,7 +139,6 @@ void init_pll(struct pll *pll){
 // Set NCO frequency limits, cycles per sample
 void set_pll_limits(struct pll *pll,double low,double high){
   assert(pll != NULL);
-  assert(pll->samprate != 0);
   if(low > high){
     double t = low;
     low = high;
