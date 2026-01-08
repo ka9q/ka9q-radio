@@ -744,8 +744,11 @@ void *output_thread(void *p){
     // Grab 20 milliseconds stereo @ 48 kHz
     int frames = .02 * DAC_samprate;
     int samples = frames * Channels;
-    int16_t out_buffer[samples];
-    memset(out_buffer,0,sizeof out_buffer);
+    int16_t *pcm_buffer = malloc(pcm_buffer,0,samples * sizeof *pcm_buffer);
+
+    float *out_buffer = malloc(samples * sizeof *out_buffer);
+    assert(out_buffer != NULL);
+    memset(out_buffer, 0, samples * sizeof *out_buffer);
 
     int rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
     for(int i=0; i < NSESSIONS; i++){
@@ -761,16 +764,17 @@ void *output_thread(void *p){
 	count = wptr - rptr; // limit to what he's got
 
       for(int j = 0; j < count; j++){
-	double s = 32768 * sp->buffer[BINDEX(rptr,j)];
-	s = s > 32767 ? 32767 : s < -32767 ? -32767 : s; // clip
-	s += out_buffer[j];
-	s = s > 32767 ? 32767 : s < -32767 ? -32767 : s; // clip again
-	out_buffer[j] = s;
+	out_buffer[i] += sp->buffer[BINDEX(rptr,j)];
       }
     }
     atomic_store_explicit(&Output_time,rptr + frames,memory_order_release);
 
-    int r = write(Output_fd,out_buffer,sizeof out_buffer);
+    for(int j = 0; j < count; j++){
+      double s = 32768 * out_buffer[j];
+      pcm_buffer[j] = s > 32767 ? 32767 : s < -32767 ? -32767 : s; // clip
+      pcm_buffer[j] = s;
+    }
+    int r = write(Output_fd,pcm_buffer,samples * sizeof *pcm_buffer);
     if(r <= 0){
       if(Output_fd != -1)
 	close(Output_fd);
