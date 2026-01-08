@@ -295,11 +295,11 @@ int encode_socket(uint8_t **buf,enum status_type type,void const *sock){
     bp += 2;
     break;
   case AF_INET6:
-    optlen = 10;
+    optlen = 18;
     *bp++ = (uint8_t)type;
     *bp++ = (uint8_t)optlen;
-    memcpy(bp,&sin6->sin6_addr,8);
-    bp += 8;
+    memcpy(bp,&sin6->sin6_addr,16);
+    bp += 16;
     memcpy(bp,&sin6->sin6_port,2);
     bp += 2;
     break;
@@ -323,10 +323,10 @@ struct sockaddr *decode_socket(void *sock,uint8_t const *val,int optlen){
     memcpy(&sin->sin_addr.s_addr,val,4);
     memcpy(&sin->sin_port,val+4,2);
     return sock;
-  } else if(optlen == 10){
+  } else if(optlen == 18){
     sin6->sin6_family = AF_INET6;
-    memcpy(&sin6->sin6_addr,val,8);
-    memcpy(&sin6->sin6_port,val+8,2);
+    memcpy(&sin6->sin6_addr,val,16);
+    memcpy(&sin6->sin6_port,val+16,2);
     return sock;
   }
   return NULL;
