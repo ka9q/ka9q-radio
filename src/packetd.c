@@ -235,7 +235,7 @@ int main(int argc,char *argv[]){
       p += snprintf(&description[p],sizeof(description)-p,"%s%s",i > 0 ? "," : "" ,Input[i]);
     }
     uint32_t addr = make_maddr(Output);
-    avahi_start(Name,"_ax25._udp",DEFAULT_RTP_PORT,Output,addr,description,NULL,NULL);
+    avahi_start(Name,"_ax25._udp",DEFAULT_RTP_PORT,Output,addr,description);
   }
   Output_fd = setup_mcast(NULL, NULL, Output, NULL, true, Mcast_ttl, IP_tos, 0, 0);
   if(Output_fd == -1){
