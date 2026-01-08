@@ -26,18 +26,7 @@ int avahi_publish_address(char const *dns_name,char const *ip_address_string);
 int avahi_publish_service(char const *service_name, char const *service_type, char const *dns_name,int service_port, char const *description, int pid);
 static void sanitize_filename(char *name);
 
-int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,int address,char const *description,void *sock,size_t *socksize){
-  if(sock != NULL && socksize != NULL){
-    // Return sockaddr structure
-    if(*socksize >= sizeof(struct sockaddr_in)){
-      struct sockaddr_in *sin = sock;
-      sin->sin_family = AF_INET;
-      sin->sin_addr.s_addr = htonl(address);
-      sin->sin_port = htons(service_port);
-      *socksize = sizeof(struct sockaddr_in);
-    } else
-      *socksize = 0;
-  }
+int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,int address,char const *description){
   int pid = getpid(); // Advertise the parent's pid, not the child's
   if(Static_avahi){
     // Just put in /etc/avahi/services
