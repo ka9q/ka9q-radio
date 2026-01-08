@@ -744,7 +744,7 @@ void *output_thread(void *p){
     // Grab 20 milliseconds stereo @ 48 kHz
     int frames = .02 * DAC_samprate;
     int samples = frames * Channels;
-    int16_t *pcm_buffer = malloc(pcm_buffer,0,samples * sizeof *pcm_buffer);
+    int16_t *pcm_buffer = malloc(samples * sizeof *pcm_buffer);
 
     float *out_buffer = malloc(samples * sizeof *out_buffer);
     assert(out_buffer != NULL);
@@ -769,7 +769,7 @@ void *output_thread(void *p){
     }
     atomic_store_explicit(&Output_time,rptr + frames,memory_order_release);
 
-    for(int j = 0; j < count; j++){
+    for(int j = 0; j < samples; j++){
       double s = 32768 * out_buffer[j];
       pcm_buffer[j] = s > 32767 ? 32767 : s < -32767 ? -32767 : s; // clip
       pcm_buffer[j] = s;
