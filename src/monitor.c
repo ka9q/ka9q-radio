@@ -741,14 +741,17 @@ void *output_thread(void *p){
   clock_gettime(CLOCK_MONOTONIC,&next);
 
   // Grab 20 milliseconds stereo @ 48 kHz
-  int const frames = .02 * DAC_samprate;
+  int const frames = (int)round(.02 * DAC_samprate);
   int const samples = frames * Channels;
+
+  atomic_store_explicit(&Callback_quantum,(uint64_t)frames,memory_order_release);
 
   int16_t *pcm_buffer = malloc(samples * sizeof *pcm_buffer);
   float *out_buffer = malloc(samples * sizeof *out_buffer);
   assert(out_buffer != NULL);
   while(1){
 
+    uint64_t total = 0;
     memset(out_buffer, 0, samples * sizeof *out_buffer);
     int rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
     for(int i=0; i < NSESSIONS; i++){
@@ -768,6 +771,7 @@ void *output_thread(void *p){
       for(int j = 0; j < count; j++){
 	out_buffer[j] += sp->buffer[BINDEX(base,j)];
       }
+      total += count;
     }
     atomic_store_explicit(&Output_time,rptr + frames,memory_order_release);
     double energy = 0;
@@ -788,6 +792,8 @@ void *output_thread(void *p){
 	close(Output_fd);
       Output_fd = open(Pipe,O_WRONLY,0666); // could retry, but don't bother
     }
+    atomic_fetch_add_explicit(&Output_total,total,memory_order_release);
+    atomic_fetch_add_explicit(&Callbacks,1,memory_order_release);
     // Schedule next transmission in 20 ms
     next.tv_nsec += 20000000;
     while(next.tv_nsec >= BILLION){
