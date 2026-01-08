@@ -177,7 +177,7 @@ int main(int argc,char * const argv[]){
     char description[1024];
     snprintf(description,sizeof(description),"pcm-source=%s",Input);
     uint32_t addr = make_maddr(output);
-    avahi_start(service_name,"_rtp._udp",DEFAULT_RTP_PORT,output,addr,description,NULL,NULL);
+    avahi_start(service_name,"_rtp._udp",DEFAULT_RTP_PORT,output,addr,description);
 
     resolve_mcast(output,&Stereo_dest_address,DEFAULT_RTP_PORT,NULL,0,0);
     Output_fd = output_mcast(&Stereo_dest_address,NULL,Mcast_ttl,IP_tos);
