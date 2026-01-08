@@ -116,6 +116,7 @@ double User_blocktime = DEFAULT_BLOCKTIME; // User's requested blocktime
 char const *Description; // Set either in [global] or [hardware]
 int Overlap = DEFAULT_OVERLAP;
 dictionary *Preset_table;   // Table of presets, usually in /usr/local/share/ka9q-radio/presets.conf
+bool Advertise; // control whether avahi advertises services
 
 int Output_fd = -1; // Unconnected socket used for output when ttl > 0
 int Output_fd0 = -1; // Unconnected socket used for local loopback when ttl = 0
@@ -410,29 +411,35 @@ int loadconfig(char const *file){
      At the moment, elicited status messages are always sent with TTL > 0 on the status group
   */
 
-  // Look quickly (2 tries max) to see if it's already in the DNS
   {
+    // Look quickly (2 tries max) to see if it's already in the DNS
+
     uint32_t addr = 0;
     if(!Global_use_dns || resolve_mcast(Data,&Template.output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
       addr = make_maddr(Data);
 
-    char ttlmsg[128];
-    snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Template.output.ttl);
-    size_t slen = sizeof(Template.output.dest_socket);
-    // Advertise dynamic service(s)
-    avahi_start(Frontend.description,
-	      "_rtp._udp",
-	      DEFAULT_RTP_PORT,
-	      Data,
-	      addr,
-	      ttlmsg,
-	      addr != 0 ? &Template.output.dest_socket : NULL,
-	      addr != 0 ? &slen : NULL);
+    Advertise = config_getboolean(Configtable,GLOBAL,"advertise",true);
 
-    // Status sent to same group, different port
-    Template.status.dest_socket = Template.output.dest_socket;
-    setport(&Template.status.dest_socket,DEFAULT_STAT_PORT);
-   }
+
+    if(Advertise){
+      char ttlmsg[128];
+      snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Template.output.ttl);
+      size_t slen = sizeof(Template.output.dest_socket);
+      // Advertise dynamic service(s)
+      avahi_start(Frontend.description,
+		  "_rtp._udp",
+		  DEFAULT_RTP_PORT,
+		  Data,
+		  addr,
+		  ttlmsg,
+		  addr != 0 ? &Template.output.dest_socket : NULL,
+		  addr != 0 ? &slen : NULL);
+
+      // Status sent to same group, different port
+      Template.status.dest_socket = Template.output.dest_socket;
+      setport(&Template.status.dest_socket,DEFAULT_STAT_PORT);
+    }
+  }
   {
     // Non-zero TTL streams use the global ttl if it is nonzero, 1 otherwise
     int const ttl = Template.output.ttl > 1 ? Template.output.ttl : 1;
@@ -457,20 +464,23 @@ int loadconfig(char const *file){
     exit(EX_USAGE);
   }
   // Look quickly (2 tries max) to see if it's already in the DNS
+
   {
     uint32_t addr = 0;
     if(!Global_use_dns || resolve_mcast(Metadata_dest_string,&Frontend.metadata_dest_socket,DEFAULT_STAT_PORT,NULL,0,2) != 0)
       addr = make_maddr(Metadata_dest_string);
 
-    // If dns name already exists in the DNS, advertise the service record but not an address record
-    // Advertise control/status channel with a ttl of at least 1
-    char ttlmsg[128];
-    snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",Template.output.ttl > 0? Template.output.ttl : 1);
-    size_t slen = sizeof(Frontend.metadata_dest_socket);
-    avahi_start(Frontend.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
-		Metadata_dest_string,addr,ttlmsg,
-		addr != 0 ? &Frontend.metadata_dest_socket : NULL,
-		addr != 0 ? &slen : NULL);
+    if(Advertise) {
+      // If dns name already exists in the DNS, advertise the service record but not an address record
+      // Advertise control/status channel with a ttl of at least 1
+      char ttlmsg[128];
+      snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",Template.output.ttl > 0? Template.output.ttl : 1);
+      size_t slen = sizeof(Frontend.metadata_dest_socket);
+      avahi_start(Frontend.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
+		  Metadata_dest_string,addr,ttlmsg,
+		  addr != 0 ? &Frontend.metadata_dest_socket : NULL,
+		  addr != 0 ? &slen : NULL);
+    }
   }
   // either resolve_mcast() or avahi_start() has resolved the target DNS name into Frontend.metadata_dest_socket and inserted the port number
   join_group(Output_fd,NULL,&Frontend.metadata_dest_socket,Iface);
@@ -676,13 +686,13 @@ static void *process_section(void *p){
   // Look quickly (2 tries max) to see if it's already in the DNS. Otherwise make a multicast address.
   uint32_t addr = 0;
   bool const use_dns = config_getboolean(Configtable,sname,"dns",Global_use_dns);
-  bool const enable_adv = config_getboolean(Configtable,sname,"advertise",true);
+  bool const enable_section_adv = config_getboolean(Configtable,sname,"advertise",Advertise);
 
   if(!use_dns || resolve_mcast(data,&chan_template.output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
     // If we're not using the DNS, or if resolution fails, hash name string to make IP multicast address in 239.x.x.x range
     addr = make_maddr(data);
 
-  if(enable_adv) {
+  if(enable_section_adv) {
     size_t slen = sizeof(chan_template.output.dest_socket);
     // there may be several hosts with the same section names
     // prepend the host name to the service name

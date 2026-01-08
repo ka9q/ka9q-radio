@@ -81,6 +81,7 @@ extern int Overlap;
 
 // Valid keys in presets file, [global] section, and any channel section
 char const *Channel_keys[] = {
+  "advertise",
   "dns",
   "disable",
   "data",
