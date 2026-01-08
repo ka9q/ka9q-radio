@@ -418,26 +418,30 @@ int loadconfig(char const *file){
     if(!Global_use_dns || resolve_mcast(Data,&Template.output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
       addr = make_maddr(Data);
 
-    Advertise = config_getboolean(Configtable,GLOBAL,"advertise",true);
+    struct sockaddr_in *sin = (struct sockaddr_in *)&Template.output.dest_socket;
+    sin->sin_family = AF_INET;
+    sin->sin_addr.s_addr = htonl(addr);
+    sin->sin_port = htons(DEFAULT_RTP_PORT);
 
+    // Status sent to same group, different port
+    sin = (struct sockaddr_in *)&Template.status.dest_socket;
+    sin->sin_family = AF_INET;
+    sin->sin_addr.s_addr = htonl(addr);
+    sin->sin_port = htons(DEFAULT_STAT_PORT);
+
+    Advertise = config_getboolean(Configtable,GLOBAL,"advertise",true);
 
     if(Advertise){
       char ttlmsg[128];
       snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Template.output.ttl);
-      size_t slen = sizeof(Template.output.dest_socket);
       // Advertise dynamic service(s)
       avahi_start(Frontend.description,
 		  "_rtp._udp",
 		  DEFAULT_RTP_PORT,
 		  Data,
 		  addr,
-		  ttlmsg,
-		  addr != 0 ? &Template.output.dest_socket : NULL,
-		  addr != 0 ? &slen : NULL);
+		  ttlmsg);
 
-      // Status sent to same group, different port
-      Template.status.dest_socket = Template.output.dest_socket;
-      setport(&Template.status.dest_socket,DEFAULT_STAT_PORT);
     }
   }
   {
@@ -470,16 +474,18 @@ int loadconfig(char const *file){
     if(!Global_use_dns || resolve_mcast(Metadata_dest_string,&Frontend.metadata_dest_socket,DEFAULT_STAT_PORT,NULL,0,2) != 0)
       addr = make_maddr(Metadata_dest_string);
 
+    struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
+    sin->sin_family = AF_INET;
+    sin->sin_addr.s_addr = htonl(addr);
+    sin->sin_port = htons(DEFAULT_STAT_PORT);
+
     if(Advertise) {
       // If dns name already exists in the DNS, advertise the service record but not an address record
       // Advertise control/status channel with a ttl of at least 1
       char ttlmsg[128];
       snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",Template.output.ttl > 0? Template.output.ttl : 1);
-      size_t slen = sizeof(Frontend.metadata_dest_socket);
       avahi_start(Frontend.description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
-		  Metadata_dest_string,addr,ttlmsg,
-		  addr != 0 ? &Frontend.metadata_dest_socket : NULL,
-		  addr != 0 ? &slen : NULL);
+		  Metadata_dest_string,addr,ttlmsg);
     }
   }
   // either resolve_mcast() or avahi_start() has resolved the target DNS name into Frontend.metadata_dest_socket and inserted the port number
@@ -692,8 +698,19 @@ static void *process_section(void *p){
     // If we're not using the DNS, or if resolution fails, hash name string to make IP multicast address in 239.x.x.x range
     addr = make_maddr(data);
 
+  {
+    struct sockaddr_in *sock = (struct sockaddr_in *)&chan_template.output.dest_socket;
+    sock->sin_family = AF_INET;
+    sock->sin_addr.s_addr = htonl(addr);
+    sock->sin_port = htons(DEFAULT_RTP_PORT);
+
+    // Status sent to same group, different port
+    sock = (struct sockaddr_in *)&chan_template.status.dest_socket;
+    sock->sin_family = AF_INET;
+    sock->sin_addr.s_addr = htonl(addr);
+    sock->sin_port = htons(DEFAULT_STAT_PORT);
+  }
   if(enable_section_adv) {
-    size_t slen = sizeof(chan_template.output.dest_socket);
     // there may be several hosts with the same section names
     // prepend the host name to the service name
     char service_name[512] = {0};
@@ -705,9 +722,7 @@ static void *process_section(void *p){
     avahi_start(service_name,
 		is_opus ? "_opus._udp" : "_rtp._udp",
 		DEFAULT_RTP_PORT,
-		data,addr,ttlmsg,
-		addr != 0 ? &chan_template.output.dest_socket : NULL,
-		addr != 0 ? &slen : NULL);
+		data,addr,ttlmsg);
   }
 
   // Set up output stream (data + status)
