@@ -771,7 +771,7 @@ void *output_thread(void *p){
     }
     atomic_store_explicit(&Output_time,rptr + frames,memory_order_release);
     double energy = 0;
-    for(unsigned int j=0; j < samples; j++)
+    for(int j=0; j < samples; j++)
       energy += out_buffer[j] * out_buffer[j];
 
     energy /= samples;
