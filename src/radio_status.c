@@ -634,7 +634,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case FILTER2:
       {
 	int i = abs(decode_int(cp,optlen));
-	if(i < 10 || i == chan->filter2.blocking)
+	if(i >10 || i < 0 || i == chan->filter2.blocking)
 	  break;
 	chan->filter2.blocking = i;
 	new_filter_needed = true;
