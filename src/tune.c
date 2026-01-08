@@ -48,6 +48,7 @@ double RFgain = INFINITY;
 double RFatten = INFINITY;
 int Agc_enable = -1;
 struct sockaddr Destination_socket;
+int Buffer = -1;
 
 struct sockaddr Control_address;
 int Status_sock = -1;
@@ -55,11 +56,12 @@ int Control_sock = -1;
 char const *Source;
 struct sockaddr_in *Source_socket;
 
-char Optstring[] = "aA:D:e:f:g:G:H:hi:L:l:m:qr:R:s:vVo:";
+char Optstring[] = "aA:b:D:e:f:g:G:H:hi:L:l:m:qr:R:s:vVo:";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"rfatten", required_argument, NULL, 'A'},
   {"featten", required_argument, NULL, 'A'},
+  {"buffer", required_argument, NULL, 'b'},
   {"destination", required_argument, NULL, 'D'},
   {"encoding", required_argument, NULL, 'e'},
   {"frequency", required_argument, NULL, 'f'},
@@ -100,6 +102,9 @@ int main(int argc,char *argv[]){
 	break;
       case 'A':
 	RFatten = strtod(optarg,NULL);
+	break;
+      case 'b':
+	Buffer = atoi(optarg);
 	break;
       case 'D':
 	resolve_mcast(optarg,&Destination_socket,DEFAULT_RTP_PORT,NULL,0,0);
@@ -237,6 +242,7 @@ int main(int argc,char *argv[]){
   double high_edge = INFINITY;
   double received_rf_gain = INFINITY;
   double received_rf_atten = INFINITY;
+  int received_buffer = -1;
   enum encoding received_encoding = NO_ENCODING;
   int received_rf_agc = -1;
   struct sockaddr_storage received_destination_socket = {0};
@@ -260,6 +266,9 @@ int main(int argc,char *argv[]){
       if(Samprate != 0)
 	encode_int(&bp,OUTPUT_SAMPRATE,(int)round(Samprate));
 
+      if(Buffer != -1)
+	encode_int(&bp,MINPACKET,Buffer);
+      
       if(Low != INFINITY)
 	encode_float(&bp,LOW_EDGE,Low);
 
@@ -404,6 +413,9 @@ int main(int argc,char *argv[]){
       case OPUS_APPLICATION:
 	opus_application = decode_int(cp,optlen);
 	break;
+      case MINPACKET:
+	received_buffer = decode_int(cp,optlen);
+	break;
       }
       cp += optlen;
     }
@@ -468,6 +480,8 @@ int main(int argc,char *argv[]){
 
       printf("SNR %.1lf dB\n",power2dB(signal_plus_noise_power / noise_power - 1));
     }
+    if(received_buffer != -1)
+      printf("Buffers: %d\n",received_buffer);
   }
   exit(EX_OK); // We're done
 }
