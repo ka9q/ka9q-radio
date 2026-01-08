@@ -230,16 +230,20 @@ int main(int argc,char * const argv[]){
   }
   // Same IP address, but status port number
   Metadata_in_socket = PCM_in_socket;
-  set_port(&Metadata_in_socket,DEFAULT_STAT_PORT);
+  setport(&Metadata_in_socket,DEFAULT_STAT_PORT);
   Status_fd = listen_mcast(NULL,&Metadata_in_socket,iface);
 
   {
     char description[1024];
     snprintf(description,sizeof(description),"pcm-source=%s",Input); // what if it changes?
-    size_t socksize = sizeof(Opus_out_socket);
     uint32_t addr = make_maddr(Output);
-    avahi_start(Name,"_opus._udp",DEFAULT_RTP_PORT,Output,addr,description,&Opus_out_socket,&socksize);
-    struct sockaddr_in *sin = (struct sockaddr_in *)&Metadata_out_socket;
+    avahi_start(Name,"_opus._udp",DEFAULT_RTP_PORT,Output,addr,description);
+    struct sockaddr_in *sin = (struct sockaddr_in *)&Opus_out_socket;
+    sin->sin_family = AF_INET;
+    sin->sin_addr.s_addr = htonl(addr);
+    sin->sin_port = htons(DEFAULT_RTP_PORT);
+
+    sin = (struct sockaddr_in *)&Metadata_out_socket;
     sin->sin_family = AF_INET;
     sin->sin_addr.s_addr = htonl(addr);
     sin->sin_port = htons(DEFAULT_STAT_PORT);
