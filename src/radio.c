@@ -676,12 +676,13 @@ static void *process_section(void *p){
   // Look quickly (2 tries max) to see if it's already in the DNS. Otherwise make a multicast address.
   uint32_t addr = 0;
   bool const use_dns = config_getboolean(Configtable,sname,"dns",Global_use_dns);
+  bool const enable_adv = config_getboolean(Configtable,sname,"advertise",true);
 
   if(!use_dns || resolve_mcast(data,&chan_template.output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0)
     // If we're not using the DNS, or if resolution fails, hash name string to make IP multicast address in 239.x.x.x range
     addr = make_maddr(data);
 
-  {
+  if(enable_adv) {
     size_t slen = sizeof(chan_template.output.dest_socket);
     // there may be several hosts with the same section names
     // prepend the host name to the service name

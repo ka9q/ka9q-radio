@@ -736,6 +736,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 void *output_thread(void *p){
   (void)p;
   Output_fd = open(Pipe,O_WRONLY,0666);
+  signal(SIGPIPE,SIG_IGN); // Allow the pipe reader to go away
 
   struct timespec next;
   clock_gettime(CLOCK_MONOTONIC,&next);
