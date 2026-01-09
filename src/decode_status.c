@@ -174,7 +174,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->output.samples = decode_int64(cp,optlen);
       break;
     case COMMAND_TAG:
-      channel->status.tag = decode_int32(cp,optlen);
+      channel->status.tag = decode_int64(cp,optlen);
       break;
     case RADIO_FREQUENCY:
       channel->tune.freq = decode_double(cp,optlen);
@@ -423,7 +423,7 @@ uint32_t get_tag(uint8_t const *buffer,unsigned long length){
     case EOL: // Shouldn't get here
       goto done;
     case COMMAND_TAG:
-      return decode_int32(cp,optlen);
+      return decode_int64(cp,optlen);
       break;
     default:
       break; // Ignore on this pass
