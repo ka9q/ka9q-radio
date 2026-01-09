@@ -230,7 +230,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     assert(type != EOL);
     switch(type){
     case COMMAND_TAG:
-      chan->status.tag = decode_int32(cp,optlen);
+      chan->status.tag = decode_int64(cp,optlen);
       break;
     case OUTPUT_SAMPRATE:
       // Restart the demodulator to recalculate filters, etc
@@ -682,7 +682,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
 
   // parameters valid in all modes
   encode_int32(&bp,OUTPUT_SSRC,chan->output.rtp.ssrc); // Now used as channel ID, so present in all modes
-  encode_int32(&bp,COMMAND_TAG,chan->status.tag); // at top to make it easier to spot in dumps
+  encode_int64(&bp,COMMAND_TAG,chan->status.tag); // at top to make it easier to spot in dumps
   encode_int64(&bp,CMD_CNT,chan->status.packets_in); // integer
   if(strlen(frontend->description) > 0)
     encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
