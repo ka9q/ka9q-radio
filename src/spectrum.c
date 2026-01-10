@@ -146,16 +146,9 @@ int demod_spectrum(void *arg){
 // Called at poll time
 // Runs FFTs, updates chan->spectrum.bin_data[]
 static void spectrum_poll(struct channel *chan){
-
-  if(chan == NULL)
-    return;
-  if(chan->spectrum.plan == NULL || chan->spectrum.fft_n <= 0 || chan->spectrum.window == NULL || chan->spectrum.bin_count <= 0
+  if(chan == NULL || chan->spectrum.plan == NULL || chan->spectrum.fft_n <= 0 || chan->spectrum.window == NULL || chan->spectrum.bin_count <= 0
      || chan->spectrum.rbw <= 0 || chan->spectrum.window == NULL)
     return; // Not yet set up
-
-  struct frontend const * restrict const frontend = chan->frontend;
-  if(frontend == NULL)
-    return;
 
   if(chan->spectrum.bin_data == NULL)
     return;
@@ -185,7 +178,6 @@ static void narrowband_poll(struct channel *chan){
   memset(bin_data,0, bin_count * sizeof *bin_data); // zero output data
 
   float const * restrict const window = chan->spectrum.window;
-
 
   // Most recent data from receive ring buffer
   float complex const * restrict const ring = chan->spectrum.ring;
@@ -486,6 +478,7 @@ static void setup_wideband(struct channel *chan){
 	    chan->name,chan->tune.freq,chan->spectrum.bin_count,chan->spectrum.rbw,chan->output.samprate,chan->spectrum.fft_n);
 
   FREE(chan->spectrum.ring);
+  chan->spectrum.ring_size = 0;
   // Dummy just so downconvert() will block on each frame
   delete_filter_output(&chan->filter.out);
   int r = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,0,SPECTRUM);

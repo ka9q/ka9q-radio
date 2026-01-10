@@ -859,6 +859,15 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       }
     }
     break;
+  case 'a':
+    {
+      char str[Entry_width];
+      getentry("FFT averaging, frames: ",str,sizeof(str));
+      int const x = abs(atoi(str));
+      if(x > 0)
+	encode_int(bpp,SPECTRUM_AVG,x);
+    }
+    break;
   case 'A': // Manually set front end attenuation, dB (positive or negative)
     {
       char str[Entry_width],*ptr;
@@ -1623,6 +1632,8 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
       }
       pprintw(w,row++,col,"Window","%s",win_type);
     }
+    pprintw(w,row++,col,"Avg","%u   ",chan->spectrum.fft_avg);
+
     if(chan->spectrum.bin_data != NULL)
       pprintw(w,row++,col,"Bin 0","%.1lf   ",chan->spectrum.bin_data[0]);
     break;
