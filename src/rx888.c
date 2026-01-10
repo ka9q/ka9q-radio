@@ -965,10 +965,10 @@ static double new_rx888_set_samprate(struct sdrstate *sdr,double const reference
       double const output_divisor = pll_freq / (samprate * rdiv);
       if(output_divisor_ok(output_divisor)){
 	// Check if output_divisor is integer
-	if (fabs(output_divisor - llrint(output_divisor)) < 1e-9) {
+	if (fabs(output_divisor - round(output_divisor)) < 1e-9) {
 	  best.pll_freq = pll_freq;
 	  best.pll_mult = pll_mult;
-	  best.output_divisor = llrint(output_divisor);
+	  best.output_divisor = round(output_divisor);
 	  best.error_ppm = 0;
 	  best.pll_is_int = true;
 	  best.output_divisor_is_int = true;
