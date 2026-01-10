@@ -839,8 +839,36 @@ void mirror_free(void **p,size_t size){
   *p = NULL; // Nail pointer
 }
 
-#undef DROP_ENABLE
+#if (defined(__i386__) || defined(__x86_64__)) && (defined(__SSE__) || defined(__AVX__))
+#include <immintrin.h>   // _mm_getcsr, _mm_setcsr
 
+void enable_ftz_daz(void) {
+  unsigned int csr = _mm_getcsr();
+  csr |= (1u << 15);   // FTZ
+  csr |= (1u << 6);    // DAZ
+  _mm_setcsr(csr);
+}
+
+void disable_ftz_daz(void) {
+  unsigned int csr = _mm_getcsr();
+  csr &= ~(1u << 15);
+  csr &= ~(1u << 6);
+  _mm_setcsr(csr);
+}
+#endif
+
+
+#if defined(__aarch64__)
+void enable_ftz(void) {
+  unsigned long fpcr;
+  __asm__ volatile("mrs %0, fpcr" : "=r"(fpcr));
+  fpcr |= (1ul << 24);          // FZ bit
+  __asm__ volatile("msr fpcr, %0" :: "r"(fpcr));
+}
+#endif
+
+
+#undef DROP_ENABLE
 #if DROP_ENABLE
 static size_t linesize(){
 #ifdef _SC_LEVEL1_DCACHE_LINESIZE
