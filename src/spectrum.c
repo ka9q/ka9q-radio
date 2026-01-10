@@ -60,6 +60,7 @@ int demod_spectrum(void *arg){
   int bin_count = -1;
   int crossover = -1;
   double shape = -1;
+  int fft_avg = -1;
 
   // Main loop
   do {
@@ -86,7 +87,7 @@ int demod_spectrum(void *arg){
     if((chan->spectrum.rbw > chan->spectrum.crossover) != (rbw > crossover)) // note nested booleans
       rbw = -1; // force regeneration only if crossover moved over rbw
 
-    if(chan->spectrum.rbw != rbw || chan->spectrum.bin_count != bin_count){
+    if(chan->spectrum.fft_avg != fft_avg || chan->spectrum.rbw != rbw || chan->spectrum.bin_count != bin_count){
       // fairly major reinitialization required
       if(chan->spectrum.rbw > chan->spectrum.crossover)
 	setup_wideband(chan);
@@ -108,6 +109,7 @@ int demod_spectrum(void *arg){
     crossover = chan->spectrum.crossover;
     window_type = chan->spectrum.window_type;
     shape = chan->spectrum.shape;
+    fft_avg = chan->spectrum.fft_avg;
 
     if(restart_needed || downconvert(chan) != 0)
       break;
@@ -215,8 +217,8 @@ static void narrowband_poll(struct channel *chan){
 	fr = fft_n - i; // skip over excess FFT bins at edges
       assert(fr >= 0 && fr < fft_n);
       double const p = bin_data[i] + gain * cnrmf(fft_out[fr++]);
-      assert(isfinite(p));
-      bin_data[i] = (float)p;
+      if(isfinite(p))
+	bin_data[i] = (float)p;
     }
     // rp now points to *next* buffer, so move it back between 1 and 2 buffers depending on overlap
     if(chan->spectrum.rbw <= 10)
