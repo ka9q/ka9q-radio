@@ -140,7 +140,6 @@ int demod_spectrum(void *arg){
   FREE(chan->spectrum.bin_data);
   FREE(chan->spectrum.ring);
   chan->spectrum.ring_size = 0;
-  chan->spectrum.fft_avg = 0; // cause it to be regenerated next time (temp hack)
   return 0;
 }
 
@@ -201,8 +200,8 @@ static void narrowband_poll(struct channel *chan){
   float complex * restrict fft_out = fftwf_alloc_complex(fft_n);
   assert(fft_out != NULL);
 
-  int const fft_avg = chan->spectrum.fft_avg <= 0 ? 1 : chan->spectrum.fft_avg; // force it valid
-
+  int fft_avg = chan->spectrum.fft_avg;
+  fft_avg = fft_avg <= 0 ? 1 : fft_avg; // force it valid
   // scale each bin value for our FFT
   // squared because the we're scaling the output of complex norm, not the input bin values
   // we only see one side of the spectrum for real inputs
@@ -475,11 +474,12 @@ static void setup_wideband(struct channel *chan){
   chan->spectrum.fft_n = lrint(chan->frontend->samprate / chan->spectrum.rbw);
   chan->output.samprate = 0; // Not meaningful
   chan->output.channels = 0;
-  if(chan->spectrum.fft_avg <= 0){
+  int fft_avg = chan->spectrum.fft_avg;
+  if(fft_avg <= 0){
     // Experiment: vary the number of averaged blocks of A/D samples with the resolution bandwidth to keep the
     // total FFT points processed roughly constant and the CPU load also roughly constant
     // This helps with noise variance at wider spans, not as much with medium spans
-    chan->spectrum.fft_avg = (int)ceil((double)point_budget / chan->spectrum.fft_n);
+    fft_avg = (int)ceil((double)point_budget / chan->spectrum.fft_n);
   }
   if(Verbose > 1)
     fprintf(stderr,"%s wide spectrum: center %'.3lf Hz bin count %u, rbw %.1lf Hz, samprate %u Hz fft size %u\n",
@@ -537,11 +537,12 @@ static void setup_narrowband(struct channel *chan){
   chan->filter.remainder = NAN; // Force init of downconverter
   chan->filter.bin_shift = 1010101010; // Unlikely - but a kludge, force init of phase rotator
 
-  if(chan->spectrum.fft_avg <= 0)
-    chan->spectrum.fft_avg = 2; // generalize this
+  int fft_avg = chan->spectrum.fft_avg;
+  if(fft_avg <= 0)
+    fft_avg = 2; // generalize this
 
   // Set up ring buffer for demod output - CHAN->SPECTRUM.FFT_AVG times the analysis FFT length
-  chan->spectrum.ring_size = chan->spectrum.fft_avg * chan->spectrum.fft_n;
+  chan->spectrum.ring_size = fft_avg * chan->spectrum.fft_n;
   assert(chan->spectrum.ring_size > 0);
   FREE(chan->spectrum.ring);
   chan->spectrum.ring = calloc(chan->spectrum.ring_size,sizeof *chan->spectrum.ring);
