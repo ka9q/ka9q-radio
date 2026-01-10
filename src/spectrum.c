@@ -285,8 +285,6 @@ static void wideband_poll(struct channel *chan){
     float complex * restrict fft_out = fftwf_alloc_complex(fft_n/2 + 1); // r2c has only the positive frequencies
     assert(fft_out != NULL);
 
-    fprintf(stderr,"wideband poll, real front end, fft_n = %d, shift %d\n",fft_n,shift);
-
     for(int iter=0; iter < fft_avg; iter++){
       // Copy and window raw A/D
       if(shift >= 0){
