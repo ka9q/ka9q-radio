@@ -11,6 +11,7 @@ Right arrow  Move cursor right one digit
 Up arrow     Increase by 1
 Down arrow   Decrease by 1
 ctl+L        Redraw screen
+a    Set FFT analyzer averaging in frames (>= 1)
 A    Set front end (RF) attenuation, dB
 b    Set Opus audio codec bit rate, b/s (0 = auto)
 B    Set output packet buffering 0-4 frames
