@@ -360,7 +360,7 @@ void load_id(void){
       memset(freq,0,sizeof(freq));
       memcpy(freq,&line[pmatch[1].rm_so],pmatch[1].rm_eo - pmatch[1].rm_so);
       char *ptr = NULL;
-      Idtable[Nid].freq = (long)round(strtod(freq,&ptr));
+      Idtable[Nid].freq = round(strtod(freq,&ptr));
       if(ptr == freq)
 	continue; // no parseable number
 
@@ -383,7 +383,7 @@ void load_id(void){
       memset(freq,0,sizeof(freq));
       memcpy(freq,&line[pmatch[1].rm_so],pmatch[1].rm_eo - pmatch[1].rm_so);
       char *ptr = NULL;
-      Idtable[Nid].freq = round(strtod(freq,&ptr));
+      Idtable[Nid].freq = lrint(strtod(freq,&ptr));
       if(ptr == freq)
 	continue; // no parseable number
 
@@ -547,7 +547,7 @@ static void update_monitor_display(void){
       if(!inuse(sp))
 	break;
 
-      snprintf(scratch[rows],COLS,"%d",(int)round(100*sp->pan));
+      snprintf(scratch[rows],COLS,"%ld",lrint(100*sp->pan));
     }
     col++;
     width = render_right(header_line,col,scratch,rows,width);
@@ -702,7 +702,7 @@ static void update_monitor_display(void){
 	break;
 
       char total_buf[100] = {0};
-      ftime(total_buf,sizeof(total_buf),(int64_t)round(sp->tot_active));
+      ftime(total_buf,sizeof(total_buf),lrint(sp->tot_active));
       snprintf(scratch[rows],COLS,"%s",total_buf);
     }
     width = render_right(header_line,col,scratch,rows,width);
@@ -759,7 +759,7 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 6;
+    int width = 5;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"Queue");
@@ -768,8 +768,9 @@ static void update_monitor_display(void){
       if(!inuse(sp)) break;
       if(qlen(sp) <= 0)
 	continue;
-      snprintf(scratch[rows],COLS,"%d",(int)round(1000. * qlen(sp)/DAC_samprate));
+      snprintf(scratch[rows],COLS,"%ld",lrint(1000. * qlen(sp)/DAC_samprate));
     }
+    col++; // left space
     width = render_right(header_line,col,scratch,rows,width);
     col += width;
   }
@@ -781,7 +782,7 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 5;
+    int width = 6;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"type");
@@ -861,7 +862,6 @@ static void update_monitor_display(void){
     width = render_right(header_line,col,scratch,rows,width);
     col += width;
   }
-  // BW
   if(col >= COLS)
     goto done;
 
@@ -891,15 +891,16 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 5;
+    int width = 4;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"rate");
     for(;rows < LINES && session < NSESSIONS; rows++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      snprintf(scratch[rows],COLS,"%.*f", sp->datarate < 1e6 ? 1 : 0, .001 * sp->datarate); // decimal only if < 1000
+      snprintf(scratch[rows],COLS,"%.*f", sp->datarate < 1e5 ? 1 : 0, .001 * sp->datarate); // decimal only if < 1000
     }
+    col++;
     width = render_right(header_line,col,scratch,rows,width);
     col += width;
   }

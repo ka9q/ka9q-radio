@@ -58,7 +58,7 @@ int demod_spectrum(void *arg){
   if(chan->spectrum.rbw > chan->spectrum.crossover){
     // Direct Wideband mode. Setup FFT to work on raw A/D input
     // What can we do about unfriendly sizes? Anything?
-    chan->spectrum.fft_n = (int)round(frontend->samprate / chan->spectrum.rbw);
+    chan->spectrum.fft_n = lrint(frontend->samprate / chan->spectrum.rbw);
     chan->output.samprate = 0; // Not meaningful
     chan->output.channels = 0;
     if(chan->spectrum.fft_avg <= 0){
@@ -79,17 +79,17 @@ int demod_spectrum(void *arg){
     // Set up downconvert mode
     double const margin = 400; // Allow 400 Hz for filter skirts at edge of I/Q receiver
     unsigned long const samprate_base = lcm((unsigned long)blockrate,(unsigned long)(L*blockrate/N)); // Samprate must be allowed by receiver
-    chan->spectrum.fft_n = (int)round(chan->spectrum.bin_count + margin / chan->spectrum.rbw); // Minimum for search to avoid receiver filter skirt
+    chan->spectrum.fft_n = lrint(chan->spectrum.bin_count + margin / chan->spectrum.rbw); // Minimum for search to avoid receiver filter skirt
     // This (int) cast should be cleaned up
-    while(chan->spectrum.fft_n < 65536 && (!goodchoice(chan->spectrum.fft_n) || (int)round(chan->spectrum.fft_n * chan->spectrum.rbw) % samprate_base != 0))
+    while(chan->spectrum.fft_n < 65536 && (!goodchoice(chan->spectrum.fft_n) || lrint(chan->spectrum.fft_n * chan->spectrum.rbw) % samprate_base != 0))
       chan->spectrum.fft_n++;
-    chan->output.samprate = (int)round(chan->spectrum.fft_n * chan->spectrum.rbw);
+    chan->output.samprate = lrint(chan->spectrum.fft_n * chan->spectrum.rbw);
     chan->output.channels = 2; // IQ mode
     if(Verbose > 1)
       fprintf(stderr,"%s narrow spectrum: center %'.3lf Hz bin count %u, rbw %.1lf Hz, samprate %u Hz fft size %u\n",
 	      chan->name,chan->tune.freq,chan->spectrum.bin_count,chan->spectrum.rbw,chan->output.samprate,chan->spectrum.fft_n);
 
-    int blocklen = (int)round(chan->output.samprate/blockrate);
+    int blocklen = lrint(chan->output.samprate/blockrate);
 
     int r = create_filter_output(&chan->filter.out,&frontend->in,NULL,blocklen,COMPLEX);
     (void)r;
@@ -312,9 +312,9 @@ static int spectrum_poll(struct channel *chan){
       }
       // rp now points to *next* buffer, so move it back between 1 and 2 buffers depending on overlap
       if(chan->spectrum.rbw <= 10)
-	rp -= (int)round(fft_n * (2. - VERY_NARROWBAND_OVERLAP));
+	rp -= lrint(fft_n * (2. - VERY_NARROWBAND_OVERLAP));
       else
-	rp -= (int)round(fft_n * (2. - OVERLAP));
+	rp -= lrint(fft_n * (2. - OVERLAP));
 
       if(rp < 0)
 	rp += ring_size;
@@ -381,7 +381,7 @@ static int spectrum_poll(struct channel *chan){
 	assert(isfinite(p));
 	bin_data[i] = (float)p; // Accumulate power
       }
-      input -= (int)round(fft_n * (1. - OVERLAP)); // move back fraction of a buffer
+      input -= lrint(fft_n * (1. - OVERLAP)); // move back fraction of a buffer
       if(input < (float *)frontend->in.input_buffer)
 	input += frontend->in.input_buffer_size / sizeof *input; // wrap backward
     }
@@ -440,7 +440,7 @@ static int spectrum_poll(struct channel *chan){
     done:;
 
       // Back to previous buffer
-      input -= (int)round(fft_n * (1. - OVERLAP));
+      input -= lrint(fft_n * (1. - OVERLAP));
       if(input < (float complex *)frontend->in.input_buffer)
 	input += frontend->in.input_buffer_size / sizeof *input; // backward wrap
     }
@@ -470,7 +470,7 @@ void encode_byte_data(struct channel *chan,uint8_t *buffer,double base,double st
     else if(x > 255)
       x = 255;
 
-    buffer[i] = (uint8_t)round(x);
+    buffer[i] = (uint8_t)llrint(x);
     if(wbin == bin_count)
       wbin = 0;  // Continuing through dc and positive frequencies
   }

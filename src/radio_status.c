@@ -548,7 +548,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case OUTPUT_ENCODING:
       {
 	enum encoding encoding = decode_int(cp,optlen);
-	if(encoding == chan->output.encoding || encoding < 0 || encoding >= UNUSED_ENCODING)
+	if(encoding == chan->output.encoding || encoding < 0 || encoding >= UNUSED_ENCODING || encoding == AX25)
 	  break;
 
 	// Opus can handle only a certain set of sample rates, and it operates at 48K internally
@@ -563,7 +563,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  break; // Simply refuse to change
 	}
 	chan->output.rtp.type = pt;
-	flush_output(chan,false,true); // Flush to Ethernet before we change this
+	//	flush_output(chan,false,true); // Flush to Ethernet before we change this
 	chan->output.encoding = encoding;
 	if(samprate != chan->output.samprate){
 	  // Sample rate changed for Opus
@@ -691,7 +691,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   int64_t now = gps_time_ns();
   encode_int64(&bp,GPS_TIME,now);
   encode_int64(&bp,INPUT_SAMPLES,chan->filter.out.sample_index);
-  encode_int32(&bp,INPUT_SAMPRATE,(uint32_t)round(frontend->samprate)); // Already defined on the wire as integer Hz, shouldn't change now
+  encode_int32(&bp,INPUT_SAMPRATE,(uint32_t)llrint(frontend->samprate)); // Already defined on the wire as integer Hz, shouldn't change now
   encode_bool(&bp,FE_ISREAL,frontend->isreal);
   encode_double(&bp,CALIBRATE,frontend->calibrate);
   encode_float(&bp,RF_GAIN,frontend->rf_gain);

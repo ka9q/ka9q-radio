@@ -300,7 +300,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   {
     char const *p = config_getstring(table,sname,"samprate",NULL);
     if(p != NULL){
-      int s = (int)round(parse_frequency(p,false));
+      int s = lrint(parse_frequency(p,false));
       if(s != 0)
 	chan->output.samprate = round_samprate(s);
     }
@@ -522,7 +522,7 @@ unsigned int round_samprate(unsigned int x){
   double const baserate = (1. / Blocktime) * (Overlap - 1);
 
   if(x < baserate)
-    return (int)round(baserate); // Output one (two) iFFT bin minimum, i.e., blockrate (*2)
+    return lrint(baserate); // Output one (two) iFFT bin minimum, i.e., blockrate (*2)
 
-  return (int)(baserate * round(x / baserate)); // Nearest multiple of (2*) block rate * (Overlap - 1)
+  return lrint(baserate * round((double)x / baserate)); // Nearest multiple of (2*) block rate * (Overlap - 1)
 }

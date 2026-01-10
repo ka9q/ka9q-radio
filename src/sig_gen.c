@@ -192,7 +192,7 @@ static void *proc_sig_gen(void *arg){
   assert(sdr != NULL);
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
-  
+
   int64_t timesnap = gps_time_ns();
   realtime(INPUT_PRIORITY);
 
@@ -215,14 +215,14 @@ static void *proc_sig_gen(void *arg){
     sdr->modulation = CW; // Turn it off
 
   const int mod_samprate = 48000; // Fixed for now
-  const int samps_per_samp = (int)round(frontend->samprate / mod_samprate);
+  const int samps_per_samp = lrint(frontend->samprate / mod_samprate);
 
   while(!Stop_transfers){
     // How long since last call?
     int64_t now = gps_time_ns();
     int64_t interval = now - timesnap;
 
-    int blocksize = (int)round((interval * frontend->samprate) / BILLION);
+    int blocksize = lrint((interval * frontend->samprate) / BILLION);
     // Limit how much we can do in one iteration after a long delay so we don't overwrite the buffer and its mirror
     if(blocksize > frontend->L + frontend->L / 2)
       blocksize = frontend->L + frontend->L / 2;
@@ -270,7 +270,7 @@ static void *proc_sig_gen(void *arg){
 	in_energy += s * s;
 	wptr [i] = (float)(s * sdr->scale);
       }
-      write_rfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
+      write_rfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT
     } else {
       // Complex signal
       float complex * wptr = frontend->in.input_write_pointer.c;
@@ -283,7 +283,7 @@ static void *proc_sig_gen(void *arg){
 	  if(modcount-- <= 0){
 	    int s = getc(src);
 	    s += getc(src) << 8;
-	    modsample = (double)s / 32767;
+	    modsample = ldexp((double)s,-15);
 	    modsample = 1 + modsample/2.; // Add carrier
 	    modcount = samps_per_samp;
 	  }
@@ -293,7 +293,7 @@ static void *proc_sig_gen(void *arg){
 	  if(modcount-- <= 0){
 	    int s = getc(src);
 	    s += getc(src) << 8;
-	    modsample = (double)s / 32767;
+	    modsample = ldexp((double)s,-15);
 	    modcount = samps_per_samp;
 	  }
 	  wptr[i] *= 1 + modsample/2.; // Add carrier
@@ -306,19 +306,19 @@ static void *proc_sig_gen(void *arg){
 	in_energy += cnrmf(wptr[i]);
 	wptr [i] *= sdr->scale;
       }
-      write_cfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT      
+      write_cfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT
     }
     // The variability in blocksize due to scheduling variability causes the energy integrated into frontend->if_power
     // to vary, causing the reported input level to bobble around the nominal value. Long refresh intervals with 'control'
     // will smooth this out, but it's annoying
-    frontend->samples += blocksize;    
+    frontend->samples += blocksize;
     frontend->if_power += Power_alpha * (in_energy / blocksize - frontend->if_power);
     // Get status timestamp from UNIX TOD clock
     // Request a half block sleep since this is only the minimum
     {
       struct timespec ts;
       ts.tv_sec = 0;
-      ts.tv_nsec = (int)round(Blocktime * BILLION / 2); // s -> ns
+      ts.tv_nsec = lrint(Blocktime * BILLION / 2); // s -> ns
       nanosleep(&ts,NULL);
     }
   }
@@ -376,12 +376,12 @@ static double complex complex_gaussian(void){
   // RVs uniformly distributed over (0,1)
 #if 0
   double u = (double)arc4random() / (double)UINT32_MAX;
-  double v = (double)arc4random() / (double)UINT32_MAX;  
+  double v = (double)arc4random() / (double)UINT32_MAX;
 #else
   // Not crypto quality (who cares?) but vastly faster.
   double u = (double)random() / (double)INT32_MAX;
-  double v = (double)random() / (double)INT32_MAX;  
-#endif  
+  double v = (double)random() / (double)INT32_MAX;
+#endif
   double s = sqrt(-2 * log(u));
   return s * expi(2 * M_PI * v);
 }
@@ -413,26 +413,26 @@ static float real_gaussian(void){
 
 #if 0
  ulong u = get_random_uniform(); // fast generator that returns 64 randomized bits
-  
+
   uint major = (uint)(u >> 32);	// split into 2 x 32 bits
   uint minor = (uint)u;		// the sus bits of lcgs end up in minor
 #else
   uint32_t major = mrand48();
   uint32_t minor = mrand48();
-#endif  
-  
+#endif
+
   float x = PopCount(major);     // x = random binomially distributed integer 0 to 32
   x += minor * delta; 		// linearly fill the gaps between integers
   x -= 16.5;			// re-center around 0 (the mean should be 16+0.5)
   x *= 0.3535534;			// scale to ~1 standard deviation
   return x;
-  
+
   // x now has a mean of 0.0
   // a standard deviation of approximately 1.0
   // and is strictly within +/- 5.833631
   //
-  // a good long sampling will reveal that the distribution is approximated 
-  // via 33 equally spaced intervals and each interval is itself divided 
+  // a good long sampling will reveal that the distribution is approximated
+  // via 33 equally spaced intervals and each interval is itself divided
   // into 2^32 equally spaced points
   //
   // there are exactly 33 * 2^32 possible outputs (about 37 bits of entropy)
@@ -545,13 +545,13 @@ void build_gauss_table(int16_t table[GAUSS_TABLE_SIZE], double sigma)
         double y = sigma * z;
 
         /* Round to nearest integer and saturate to int16_t range */
-        long v = lround(y);
+        long v = round(y);
         if (v < INT16_MIN_VAL)
             v = INT16_MIN_VAL;
         else if (v > INT16_MAX_VAL)
             v = INT16_MAX_VAL;
 
-        table[i] = (int16_t)v;
+        table[i] = (int16_t)lrint(v);
     }
 }
 

@@ -264,11 +264,11 @@ int main(int argc,char *argv[]){
 	encode_string(&bp,PRESET,Mode,strlen(Mode));
 
       if(Samprate != 0)
-	encode_int(&bp,OUTPUT_SAMPRATE,(int)round(Samprate));
+	encode_int(&bp,OUTPUT_SAMPRATE,lrint(Samprate));
 
       if(Buffer != -1)
 	encode_int(&bp,MINPACKET,Buffer);
-      
+
       if(Low != INFINITY)
 	encode_float(&bp,LOW_EDGE,Low);
 

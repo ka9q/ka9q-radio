@@ -19,7 +19,7 @@
 #include "misc.h"
 #include "bandplan.h"
 
-char Bandplan_file[] = BANDPLAN; 
+char Bandplan_file[] = BANDPLAN;
 #define MAX_BANDPLANS 1000
 struct bandplan Bandplans[MAX_BANDPLANS];
 int Nbandplans;
@@ -50,7 +50,7 @@ struct bandplan const *lookup_frequency(double f){
     return Cache_bandplan;
 
   double key;
-  key = round(f) *  1.0e-6;
+  key = lrint(f *  1.0e-6);
 
   if(!Bandplan_init){
     init_bandplan();

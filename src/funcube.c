@@ -249,13 +249,13 @@ static void *proc_funcube(void *arg){
     float complex * wptr = frontend->in.input_write_pointer.c;
 
     for(int i=0; i<Blocksize; i++){
-      if(sampbuf[2*i] == 32767 || sampbuf[2*i] <= -32767){
+      if(abs(sampbuf[2*i]) >= 32767){
 	frontend->overranges++;
 	frontend->samp_since_over = 0;
       } else
 	frontend->samp_since_over++;
 
-      if(sampbuf[2*i+1] == 32767 || sampbuf[2*i+1] <= -32767){
+      if(abs(sampbuf[2*i+1]) >= 32767){
 	frontend->overranges++;
 	frontend->samp_since_over = 0;
       } else

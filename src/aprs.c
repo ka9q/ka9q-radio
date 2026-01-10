@@ -70,7 +70,7 @@ int main(int argc,char *argv[]){
   altitude = 144; // estimate
 
 #endif
-    
+
   int c;
   while((c = getopt(argc,argv,"L:M:A:I:vs:R:V")) != EOF){
     switch(c){
@@ -118,20 +118,20 @@ int main(int argc,char *argv[]){
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = IPPROTO_UDP;
     hints.ai_flags = AI_ADDRCONFIG | AI_NUMERICSERV;
-    
+
     // If no domain zone is specified, assume .local (i.e., for multicast DNS)
     char full_host[PATH_MAX+6];
     if(strchr(Dest,'.') == NULL)
       snprintf(full_host,sizeof(full_host),"%s.local",Dest);
     else
       strlcpy(full_host,Dest,sizeof(full_host));
-    
+
     char *port;
     if((port = strrchr(Dest,':')) != NULL)
       *port++ = '\0';
     else
       port = "4533"; // Default for rotctld
-    
+
 
     int const ecode = getaddrinfo(full_host,port,&hints,&results);
     if(ecode != 0){
@@ -150,7 +150,7 @@ int main(int argc,char *argv[]){
     if((rot_fd = socket(sock->sa_family,SOCK_STREAM,0)) == -1){
       perror("rotor socket");
       exit(1);
-    }      
+    }
     if(connect(rot_fd,(struct sockaddr *)&rotctl,sizeof(rotctl)) == -1){
       perror("rotor socket connect");
       exit(1);
@@ -173,20 +173,20 @@ int main(int argc,char *argv[]){
   double station_x,station_y,station_z;
   // Unit vectors defining station's orientation
   double up_x,up_y,up_z;
-  double south_x,south_y,south_z;  
+  double south_x,south_y,south_z;
   double east_x,east_y,east_z;
-  
+
   {
     double sinlat,coslat;
     sincospi(latitude/180., &sinlat, &coslat);
     double sinlong,coslong;
     sincospi(longitude/180.,&sinlong,&coslong);
-    
+
     double tmp = WGS84_A/sqrt(1-(square(WGS84_E)*square(sinlat)));
     station_x = (tmp + altitude) * coslat * coslong;
     station_y = (tmp + altitude) * coslat * sinlong;
     station_z = (tmp*(1-square(WGS84_E)) + altitude) * sinlat;
-    
+
     // Zenith vector is (coslong*coslat, sinlong*coslat, sinlat)
     up_x = coslong * coslat;
     up_y = sinlong * coslat;
@@ -199,7 +199,7 @@ int main(int argc,char *argv[]){
     south_x = coslong*sinlat;
     south_y = sinlong*sinlat;
     south_z = -(sinlong*sinlong*sinlat + coslong*coslong*coslat);
-  }    
+  }
 
   // Set up multicast input
   struct sockaddr_storage sock;
@@ -247,7 +247,7 @@ int main(int argc,char *argv[]){
     gmtime_r(&t,&tm);
     fprintf(stdout,"%d %s %04d %02d:%02d:%02d UTC",tm.tm_mday,Months[tm.tm_mon],tm.tm_year+1900,
 	   tm.tm_hour,tm.tm_min,tm.tm_sec);
-    
+
     fprintf(stdout," ssrc %u seq %d",rtp_header.ssrc,rtp_header.seq);
     fprintf(stdout," %s:",frame.source);
     if(frame.control != 0x03 || frame.type != 0xf0){
@@ -259,16 +259,16 @@ int main(int argc,char *argv[]){
 
     char *data = frame.information; // First byte of text field
     // Extract lat/long
-    
+
     // Parse APRS position packets
     // The APRS spec is an UNBELIEVABLE FUCKING MESS THAT SHOULD BE SHOT, SHREDDED, BURNED AND SENT TO HELL!
     // There, now I feel a little better. But not much.
     double latitude=NAN,longitude=NAN,altitude=NAN;
     int hours=-1, minutes=-1,days=-1,seconds=-1;
-    
+
     // Sample WB8ELK LU1ESY-3>APRS,TCPIP*,qAS,WB8ELK:/180205h3648.75S/04627.50WO000/000/A=039566 2 4.50 25 12060 GF63SE 1N7MSE 226
     // Sample PITS "!/%s%sO   /A=%06ld|%s|%s/%s,%d'C,http://www.pi-in-the-sky.com",
-    
+
     switch(*data){
     case '/':
     case '@':
@@ -321,7 +321,7 @@ int main(int argc,char *argv[]){
 	sincospi(latitude/180., &sinlat, &coslat);
 	double sinlong,coslong;
 	sincospi(longitude/180., &sinlong, &coslong);
-	
+
 	double tmp = WGS84_A/sqrt(1-(square(WGS84_E)*square(sinlat))); // Earth radius under target
 	target_x = (tmp + altitude) * coslat * coslong;
 	target_y = (tmp + altitude) * coslat * sinlong;
@@ -330,21 +330,21 @@ int main(int argc,char *argv[]){
       double look_x,look_y,look_z;
       look_x = target_x - station_x;
       look_y = target_y - station_y;
-      look_z = target_z - station_z;      
+      look_z = target_z - station_z;
       double range = sqrt(square(look_x)+square(look_y)+square(look_z));
-      
+
       double south = (south_x * look_x + south_y * look_y + south_z * look_z) / range;
       double east = (east_x * look_x + east_y * look_y + east_z * look_z) / range;
       double up = (up_x * look_x + up_y * look_y + up_z * look_z) / range;
-      
+
       double elevation = asin(up);
       double azimuth = M_PI - atan2(east,south);
-      
+
       if(altitude_known){
 	fprintf(stdout," az %.1lf elev %.1lf range %'.1lf m",
 	       azimuth*DEGPRA, elevation*DEGPRA,range);
 	fprintf(rot_fp,"\\set_pos %.1lf %.1lf\n",azimuth*DEGPRA,elevation*DEGPRA);
-	fflush(rot_fp);		
+	fflush(rot_fp);
       } else {
 	fprintf(stdout," az %.1lf range %'.1lf m",
 	       azimuth*DEGPRA, range);
@@ -355,7 +355,7 @@ int main(int argc,char *argv[]){
   done:;
     fputc('\n',stdout);
   }
-}  
+}
 char *parse_timestamp(char *data,int *days,int *hours, int *minutes, int *seconds){
   // process timestamp
   char *ncp = NULL;
@@ -400,7 +400,7 @@ char *parse_position(char *data,double *latitude,double *longitude,double *altit
     return NULL;
   if(*data == '=')
     data++;
-     
+
   if(*data == '/' || *data == '!'){
     // Compressed
     data++; // skip /
@@ -453,19 +453,15 @@ char *parse_mice_position(struct ax25_frame *frame,char *data,double *latitude, 
       deg -= 190;
     if(frame->dest[4] & 0x40)
       deg += 100;
-    
+
     int minutes = *data++ - 28;
     if(minutes > 60)
       minutes -= 60;
     int hun_mins = *data++ - 28;
-    
+
     *longitude = deg + minutes / 60. + hun_mins / 6000.;
   }
   if(frame->dest[3] & 0x40)
     *longitude *= -1;
   return data;
 }
-
-
-
-

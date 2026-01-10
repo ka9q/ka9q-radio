@@ -274,7 +274,7 @@ int loadconfig(char const *file){
   Description = config_getstring(Configtable,GLOBAL,"description",NULL);
   Verbose = config_getint(Configtable,GLOBAL,"verbose",Verbose);
   User_blocktime = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",User_blocktime)); // Input value is in ms, internally in sec
-  Channel_idle_timeout = (int)round(20 / User_blocktime);
+  Channel_idle_timeout = lrint(20 / User_blocktime);
   Overlap = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
   N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
   N_internal_threads = config_getint(Configtable,GLOBAL,"fft-internal-threads",DEFAULT_FFTW_INTERNAL_THREADS); // owned by filter.c
@@ -382,7 +382,7 @@ int loadconfig(char const *file){
   set_defaults(&Template);
   Template.frontend = &Frontend;
   assert(Blocktime != 0);
-  Template.lifetime = (int)round(DEFAULT_LIFETIME / Blocktime); // If freq == 0, goes away 20 sec after last command
+  Template.lifetime = lrint(DEFAULT_LIFETIME / Blocktime); // If freq == 0, goes away 20 sec after last command
 
   // Set up default output stream file descriptor and socket
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
@@ -598,7 +598,7 @@ static int setup_hardware(char const *sname){
   // N = FFT size = L + M - 1
   // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
   assert(Frontend.samprate != 0);
-  Frontend.L = (int)round(Frontend.samprate * User_blocktime); // Blocktime is in seconds
+  Frontend.L = lrint(Frontend.samprate * User_blocktime); // Blocktime is in seconds
   Frontend.M = Frontend.L / (Overlap - 1) + 1;
   assert(Frontend.M != 0);
   assert(Frontend.L != 0);
@@ -883,7 +883,7 @@ static void *process_section(void *p){
     if(!freq_table[i].valid)
       continue;
 
-    uint32_t ssrc = (uint32_t)round(freq_table[i].f / 1000.0); // Kilohertz
+    uint32_t ssrc = lrint(freq_table[i].f / 1000.0); // Kilohertz
 
     struct channel *chan = NULL;
     // Try to create it, incrementing in case of collision
@@ -970,7 +970,7 @@ struct channel *create_chan(uint32_t ssrc){
     chan->output.rtp.ssrc = ssrc; // Stash it
     Active_channel_count++;
     assert(Blocktime != 0);
-    chan->lifetime = (int)round(20. / Blocktime); // If freq == 0, goes away 20 sec after last command
+    chan->lifetime = lrint(20. / Blocktime); // If freq == 0, goes away 20 sec after last command
   }
   pthread_mutex_unlock(&Channel_list_mutex);
   return chan;
@@ -1150,10 +1150,10 @@ int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, d
 #if 0
   // Round to multiples of V (not needed anymore)
   int const V = N / (M-1);
-  int const r = (int)(V * round((freq/hzperbin) / V));
+  int const r = V * lrint((freq/hzperbin) / V);
 #else
   (void)M;
-  int const r = (int)round(freq/hzperbin);
+  int const r = lrint(freq/hzperbin);
 #endif
 
   if(shift)
@@ -1565,7 +1565,7 @@ int set_channel_filter(struct channel *chan){
   delete_filter_input(&chan->filter2.in);
   if(chan->filter2.blocking > 0){
     assert(Blocktime != 0);
-    int const blocksize = (int)round(chan->filter2.blocking * chan->output.samprate * Blocktime);
+    int const blocksize = lrint(chan->filter2.blocking * chan->output.samprate * Blocktime);
     double const binsize = (1.0 / Blocktime) * ((double)(Overlap - 1) / Overlap);
     double const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
 
@@ -1619,14 +1619,13 @@ double scale_ADpower2FS(struct frontend const *frontend){
   return scale;
 }
 // Returns multiplicative factor for converting raw samples to doubles with analog gain correction
+// Front ends providing floating point in the nominal +/- 1 range have effectively 1 bit/sample, for a unity scale factor
 double scale_AD(struct frontend const *frontend){
   assert(frontend != NULL);
   if(frontend == NULL)
     return NAN;
 
   assert(frontend->bitspersample > 0);
-  double scale = (1 << (frontend->bitspersample - 1));
-
   // net analog gain, dBm to dBFS, that we correct for to maintain unity gain, i.e., 0 dBm -> 0 dBFS
 
   double analog_gain = frontend->rf_gain - frontend->rf_atten;
@@ -1635,7 +1634,8 @@ double scale_AD(struct frontend const *frontend){
   if(frontend->isreal)
     analog_gain -= 3.0;
   // Will first get called before the filter input is created
-  return dB2voltage(-analog_gain) / scale; // Front end gain as amplitude ratio
+  //  = (10 ^ (-analog_gain/10)) * 2^(1-bitspersample)
+  return ldexp(dB2voltage(-analog_gain), 1-frontend->bitspersample); // Front end gain as amplitude ratio
 }
 
 /*

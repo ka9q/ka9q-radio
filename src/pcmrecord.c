@@ -461,7 +461,7 @@ static void process_status(int fd){
   uint8_t buffer[PKTSIZE];
   struct sockaddr sender;
   socklen_t socksize = sizeof(sender);
-  ssize_t const length = recvfrom(fd,buffer,sizeof(buffer),0,&sender,&socksize);
+  ssize_t const length = recvfrom(fd, buffer, sizeof buffer, 0, &sender,&socksize);
   if(length <= 0){    // ??
     perror("recvfrom");
     return; // Some sort of error
@@ -630,15 +630,31 @@ static void process_data(int fd){
     } else {
       if(!Raw)
 	start_wav_stream(sp); // Don't emit wav header in --raw
-      int const framesize = sp->channels * (sp->encoding == F32BE ? sizeof(float) : sizeof(int16_t));
+      int const framesize = sp->channels *
+	(sp->encoding == F32LE ? sizeof(float)
+	 : sp->encoding == F32BE ? sizeof(float)
+	 : sp->encoding == S16LE ? sizeof(int16_t)
+	 : sp->encoding == S16BE ? sizeof(int16_t)
+#ifdef HAS_FLOAT16
+	 : sp->encoding == F16LE ? sizeof(float16_t)
+	 : sp->encoding == F16BE ? sizeof(float16_t)
+#endif
+	 : 0);
+      if(framesize == 0)
+	return; // invalid, can't process
+
       if(sp->fp != NULL){
 	if(sp->can_seek){
 	  fseeko(sp->fp,framesize * sp->starting_offset,SEEK_CUR);
 	} else {
 	  // Emit zero padding
-	  unsigned char *zeroes = calloc(sp->starting_offset,framesize); // Don't use too much stack space
-	  fwrite(zeroes,framesize,sp->starting_offset,sp->fp);
-	  FREE(zeroes);
+	  uint8_t zeroes[4096] = {0};
+	  int bytesleft = sp->starting_offset * framesize;
+	  while(bytesleft > 0){
+	    int bytes = min(bytesleft,4096);
+	    fwrite(zeroes,1,bytes,sp->fp);
+	    bytesleft -= bytes;
+	  }
 	}
       }
     }
@@ -828,7 +844,7 @@ static int emit_opus_silence(struct session * const sp,int samples,bool plc_ok){
       } else if(n != chunk){
 	fprintf(stderr,"Opus PLC Length error! ssrc %u saved toc 0x%x (%d), generated toc 0x%x (%d), intended duration %d samples (%.1lf ms) actual %d samples (%.1lf ms)\n",
 		sp->ssrc,sp->opus_toc,sp->opus_toc,buffer[0],buffer[0],chunk,(double)chunk/48.,n,(double)n/48.);
-      }		
+      }
       if(Verbose > 2)
 	fprintf(stderr,"ssrc %u emit plc %.1lf ms\n",sp->ssrc,chunk / 48.);
     } else if(chunk >= 2880){
@@ -995,7 +1011,15 @@ static int send_wav_queue(struct session * const sp,bool flush){
 
   // Anything on the resequencing queue we can now process?
   int count = 0;
-  int const framesize = sp->channels * (sp->encoding == F32BE ? 4 : 2); // bytes per sample time
+  int const framesize = sp->channels *
+    ( sp->encoding == F32LE ? sizeof(float)
+      : sp->encoding == F32BE ? sizeof(float)
+      : sp->encoding == S16BE ? sizeof(int16_t)
+      : sp->encoding == S16LE ? sizeof(int16_t)
+      : 0);
+  if(framesize == 0)
+    return -1;
+  // bytes per sample time
   for(int i=0; i < RESEQ; i++, sp->rtp_state.seq++){
     if(sp->samples_remaining <= 0)
       break; // Can't send any more in this file
@@ -1018,9 +1042,13 @@ static int send_wav_queue(struct session * const sp,bool flush){
       if(sp->can_seek)
 	fseeko(sp->fp,framesize * jump,SEEK_CUR);
       else {
-	unsigned char *zeroes = calloc(jump,framesize); // Don't use too much stack space
-	fwrite(zeroes, framesize, jump, sp->fp);
-	FREE(zeroes);
+	int bytesleft = jump * framesize;
+	uint8_t zeroes[4096] = {0};
+	while(bytesleft > 0){
+	  int bytes = min(bytesleft,4096);
+	  fwrite(zeroes,1,bytes,sp->fp);
+	  bytesleft -= bytes;
+	}
       }
       sp->current_segment_samples = 0; // gap resets
       sp->rtp_state.timestamp += jump; // also ready for next
@@ -1158,10 +1186,12 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     switch(sp->encoding){
     case S16BE:
     case S16LE:
+    case F32LE:
     case F32BE:
       suffix = ".wav";
       break;
     case F16BE:
+    case F16LE:
       suffix = ".f16"; // Non standard! But gotta do something with it for now
       break;
     case OPUS_VOIP:
@@ -1180,13 +1210,13 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   sp->samples_remaining = INT64_MAX; // unlimited unless it gets lowered below
 
   if(Max_length > 0){
-    int64_t const period = (intmax_t) round(1e9 * Max_length); // Period/length in ns
+    int64_t const period = llrint(1e9 * Max_length); // Period/length in ns
     int64_t period_start_ns = (timestamp / period) * period;  // time since epoch to start of current period
     int64_t skip_ns = timestamp % period;
 
     if(Padding && !sp->no_offset){ // Not really supported on opus yet
       // Pad start of first file with zeroes
-      int64_t const offset = (int64_t)round((double)sp->samprate * skip_ns * 1e-9); // Samples to skip
+      int64_t const offset = llrint((double)sp->samprate * skip_ns * 1e-9); // Samples to skip
       // Adjust file time to start of current period and pad to first sample
       sp->file_time = period_start_ns; // file starts at beginning of period
       sp->starting_offset = offset;
@@ -1197,7 +1227,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 		(double)skip_ns * 1e-9,
 		(long long)offset);
 
-      sp->samples_remaining = (int64_t)round(Max_length * sp->samprate) - offset;
+      sp->samples_remaining = llrint(Max_length * sp->samprate) - offset;
       sp->no_offset = true; // Only on the first file
     } else if(Reset_time){
       // On subsequent files, adjust this file size to align the end to the period boundary
@@ -1206,8 +1236,8 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	period_start_ns += period;
 	skip_ns -= period;
       }
-      intmax_t const offset = (int64_t)round((double)sp->samprate * skip_ns * 1e-9); // Samples to skip
-      sp->samples_remaining = (intmax_t)round(Max_length * sp->samprate) - offset;
+      intmax_t const offset = llrint((double)sp->samprate * skip_ns * 1e-9); // Samples to skip
+      sp->samples_remaining = llrint(Max_length * sp->samprate) - offset;
     }
   }
   char filename[PATH_MAX] = {0}; // file pathname except for suffix. Must clear so strlen(filename) will always work
@@ -1723,12 +1753,14 @@ static int start_wav_stream(struct session *sp){
     header.ByteRate = sp->samprate * sp->channels * sizeof(int16_t);
     header.BlockAlign = (int16_t)(sp->channels * sizeof(int16_t));
     break;
+  case F32LE:
   case F32BE:
     header.AudioFormat = 3;
     header.BitsPerSample = 8 * sizeof(float);
     header.ByteRate = sp->samprate * sp->channels * sizeof(float);
     header.BlockAlign = (int16_t)(sp->channels * sizeof(float));
     break;
+  case F16LE:
   case F16BE:
     header.AudioFormat = 0; // What should go here for IEEE 16-bit float?
     header.BitsPerSample = 8 * 2;

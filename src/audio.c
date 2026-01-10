@@ -20,7 +20,7 @@
 #include "misc.h"
 #include "multicast.h"
 #include "radio.h"
-
+#include "import.h"
 
 // byte count to fit in Ethernet MTU
 // For lower sample rates this won't matter at all
@@ -106,7 +106,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
   // When flushing, anything will do
   int min_frames_per_pkt = 1;
   if(!complete && !marker && chan->output.minpacket > 0)
-    min_frames_per_pkt = (int)round(chan->output.minpacket * Blocktime * chan->output.samprate);
+    min_frames_per_pkt = lrint(chan->output.minpacket * Blocktime * chan->output.samprate);
 
   // The PCM modes are limited by the Ethenet MTU
   // Opus is essentially unlimited as it should never fill an ethernet (?)
@@ -119,10 +119,12 @@ int flush_output(struct channel * chan,bool marker,bool complete){
   case S16LE:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(int16_t) * chan->output.channels);
     break;
+  case F32LE:
   case F32BE:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(float) * chan->output.channels);
     break;
 #ifdef HAS_FLOAT16
+  case F16LE:
   case F16BE:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(float16_t) * chan->output.channels);
     break;
@@ -185,7 +187,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
       sig_power = max(sig_power,0.0); // Avoid log(-x) = nan
       double const sn0 = sig_power/chan->sig.n0;
       double const snr = power2dB(sn0/noise_bandwidth);
-      opus_bits = (int)round(snr / 6); // 6 dB SNR per bit
+      opus_bits = lrint(snr / 6); // 6 dB SNR per bit
       opus_bits = max(opus_bits,8);  // don't go to ridiculous values on no signal
       opus_bits = min(opus_bits,16); // Opus can actually take 24
       error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_LSB_DEPTH(opus_bits));
@@ -274,10 +276,10 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     (chan->output.wp - chan->output.rp)
     : chan->output.queue_size - (chan->output.rp - chan->output.wp); // careful with unsigned differences
 
-  struct rtp_header rtp = {0};
-  rtp.version = RTP_VERS;
-  rtp.type = chan->output.rtp.type;
-  rtp.ssrc = chan->output.rtp.ssrc;
+  struct rtp_header rtp = {
+    .version = RTP_VERS,
+    .ssrc = chan->output.rtp.ssrc
+  };
 
   int available_frames = available_samples / chan->output.channels;
   int frames_sent = 0;
@@ -285,6 +287,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     int chunk = min(max_frames_per_pkt,available_frames);
     rtp.timestamp = chan->output.rtp.timestamp;
     rtp.seq = chan->output.rtp.seq;
+    rtp.type = chan->output.rtp.type;
     rtp.marker = marker;
     marker = false; // only send once
     uint8_t packet[PKTSIZE];
@@ -293,41 +296,35 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     float const *buf = &chan->output.queue[chan->output.rp]; // Point to first sample to be output
     switch(chan->output.encoding){
     case S16BE:
-      {
-	int16_t *pcm_buf = (int16_t *)dp;
-	for(int i=0; i < chunk * chan->output.channels; i++)
-	  *pcm_buf++ = htons(scaleclip(buf[i])); // Byte swap
-
-	chan->output.rtp.timestamp += chunk;
-	bytes = chunk * chan->output.channels * sizeof(*pcm_buf);
-      }
+      export_s16_be(dp,buf,chunk*chan->output.channels);
+      chan->output.rtp.timestamp += chunk;
+      bytes = chunk * chan->output.channels * sizeof(int16_t);
       break;
     case S16LE:
-      {
-	int16_t *pcm_buf = (int16_t *)dp;
-	for(int i=0; i < chunk * chan->output.channels; i++)
-	  *pcm_buf++ = scaleclip(buf[i]); // No byte swap
-
-	chan->output.rtp.timestamp += chunk;
-	bytes = chunk * chan->output.channels * sizeof(*pcm_buf);
-      }
+      export_s16_le(dp, buf, chunk * chan->output.channels);
+      chan->output.rtp.timestamp += chunk;
+      bytes = chunk * chan->output.channels * sizeof(int16_t);
       break;
     case F32BE:
-      // Could use sendmsg() to avoid copy here since there's no conversion, but this doesn't use much
-      memcpy(dp,buf,chunk * chan->output.channels * sizeof(float));
+      export_f32_be(dp,buf,chunk * chan->output.channels);
+      chan->output.rtp.timestamp += chunk;
+      bytes = chunk * chan->output.channels * sizeof(float);
+      break;
+    case F32LE:
+      export_f32_le(dp,buf,chunk * chan->output.channels);
       chan->output.rtp.timestamp += chunk;
       bytes = chunk * chan->output.channels * sizeof(float);
       break;
 #ifdef HAS_FLOAT16
+    case F16LE:
+      export_f16_le(dp, buf, chunk * chan->output.channels);
+      chan->output.rtp.timestamp += chunk;
+      bytes = chunk * chan->output.channels * sizeof(float16_t);
+      break;
     case F16BE:
-      {
-	float16_t *pcm_buf = (float16_t *)dp;
-	for(int i=0; i < chunk * chan->output.channels; i++)
-	  *pcm_buf++ = (float16_t)buf[i];
-
-	chan->output.rtp.timestamp += chunk;
-	bytes = chunk * chan->output.channels * sizeof(*pcm_buf);
-      }
+      export_f16_be(dp, buf, chunk * chan->output.channels);
+      chan->output.rtp.timestamp += chunk;
+      bytes = chunk * chan->output.channels * sizeof(float16_t);
       break;
 #endif
     case OPUS:
@@ -335,7 +332,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	// Enforce supported Opus packet sizes
 	size_t si;
 	for(si = 0; Opus_blocksizes[si] != -1; si++){
-	  if(chunk < Opus_blocksizes[si] * chan->output.samprate / 10000)
+	  if(10000 * chunk < Opus_blocksizes[si] * chan->output.samprate)
 	    break;
 	}
 	if(si == 0)
@@ -346,7 +343,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
 	// But this could conceivably fragment
 	assert(dp <= packet + sizeof packet);
 	opus_int32 const room = (opus_int32)(packet + sizeof packet - dp); // Max # bytes in compressed output buffer
-	bytes = opus_encode_float(chan->opus.encoder,buf,chunk,dp,room); // Max # bytes in compressed output buffer
+	bytes = opus_encode_float(chan->opus.encoder, buf, chunk, dp, room); // Max # bytes in compressed output buffer
 	if(bytes < 0)
 	  fprintf(stderr,"opus encode %d bytes fail %d: %s\n",chunk,bytes,opus_strerror(bytes));
 	assert(bytes >= 0);

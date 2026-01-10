@@ -742,7 +742,7 @@ void *output_thread(void *p){
   clock_gettime(CLOCK_MONOTONIC,&next);
 
   // Grab 20 milliseconds stereo @ 48 kHz
-  int const frames = (int)round(.02 * DAC_samprate);
+  int const frames = lrint(.02 * DAC_samprate);
   int const samples = frames * Channels;
 
   atomic_store_explicit(&Callback_quantum,(uint64_t)frames,memory_order_release);

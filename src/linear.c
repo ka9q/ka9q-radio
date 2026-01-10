@@ -41,7 +41,7 @@ int demod_linear(void *arg){
 
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
-  int const blocksize = (int)round(chan->output.samprate * Blocktime);
+  int const blocksize = lrint(chan->output.samprate * Blocktime);
   int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
 				    chan->filter.beam ? BEAM : COMPLEX);
   if(status != 0){
@@ -58,7 +58,7 @@ int demod_linear(void *arg){
   double const damping = DEFAULT_PLL_DAMPING;
   double const lock_time = DEFAULT_PLL_LOCKTIME;
 
-  int const lock_limit = (int)round(lock_time * chan->output.samprate);
+  int const lock_limit = lrint(lock_time * chan->output.samprate);
   init_pll(&chan->pll.pll);
   double am_dc = 0; // Carrier removal filter, removes squelch opening thump in aviation AM
 
@@ -211,7 +211,7 @@ int demod_linear(void *arg){
       {
 	// Divide into 2 ms slices. Hopefully divides evenly (it does for the usual sampling rates and block times)
 	// Should handle fractions if that ever happens
-	int samples_per_slice = (int)round(N * .002 / Blocktime);
+	int samples_per_slice = lrint(N * .002 / Blocktime);
 	int n = 0;
 	while(n < N){
 	  double energy = 0;
@@ -227,7 +227,7 @@ int demod_linear(void *arg){
 	double const newgain = M_SQRT2 * chan->output.headroom / peak_level;
 	gain_change = 1;
 	chan->output.gain = newgain;
-	chan->linear.hangcount = (int)round(0.08 * chan->output.samprate);
+	chan->linear.hangcount = lrint(0.08 * chan->output.samprate);
       } else if(ampl * chan->output.gain > chan->output.headroom){
 	// Strong signal, reduce gain
 	// Don't do it instantly, but by the end of this block
@@ -236,7 +236,7 @@ int demod_linear(void *arg){
 	// Should this be in double precision to avoid imprecision when gain = - epsilon dB?
 	if(newgain > 0)
 	  gain_change = pow(newgain/chan->output.gain, 1.0/N); // can newgain ever <= 0?
-	chan->linear.hangcount = (int)round(chan->linear.hangtime * chan->output.samprate);
+	chan->linear.hangcount = lrint(chan->linear.hangtime * chan->output.samprate);
       } else if(bn * chan->output.gain > chan->linear.threshold * chan->output.headroom){
 	// Reduce gain to keep noise < threshold, same as for strong signal
 	// but don't touch hang timer

@@ -36,7 +36,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case DESCRIPTION:
       {
 	char *str = decode_string(cp,optlen);
-	strlcpy(frontend->description,str,sizeof(frontend->description));
+	strlcpy(frontend->description,str,sizeof(frontend->description)); // should enforce null termination
 	FREE(str);
       }
       break;
@@ -298,7 +298,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case PRESET:
       {
 	char *p = decode_string(cp,optlen);
-	strlcpy(channel->preset,p,sizeof(channel->preset));
+	strlcpy(channel->preset,p,sizeof(channel->preset)); // should enforce null termination
 	FREE(p);
       }
       break;
@@ -321,7 +321,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->opus.dtx = decode_bool(cp,optlen);
       break;
     case OPUS_APPLICATION:
-      channel->opus.application = decode_int(cp,optlen); 
+      channel->opus.application = decode_int(cp,optlen);
       break;
     case OPUS_FEC:
       channel->opus.fec = decode_int(cp,optlen);

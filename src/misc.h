@@ -344,5 +344,4 @@ uint32_t round2(uint32_t v);
 
 void drop_cache(void *mem,size_t bytes);
 
-
 #endif // _MISC_H

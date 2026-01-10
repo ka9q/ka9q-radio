@@ -47,12 +47,12 @@ int demod_wfm(void *arg){
 
   chan->snr_squelch_enable = true; // implicitly on
   // Make these blocksizes depend on front end sample rate and blocksize
-  int const composite_L = (int)round(Composite_samprate * Blocktime); // Intermediate sample rate
+  int const composite_L = lrint(Composite_samprate * Blocktime); // Intermediate sample rate
   int const composite_M = composite_L + 1; // 2:1 overlap (50%)
   int const composite_N = composite_L + composite_M - 1;
 
   // output forced to 48 kHz for now
-  const int audio_L = (int)round(Audio_samprate * Blocktime);
+  const int audio_L = lrint(Audio_samprate * Blocktime);
   if(composite_L < audio_L)
     goto quit; // Front end sample rate is too low - should probably fix filter to allow interpolation
 

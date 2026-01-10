@@ -84,10 +84,10 @@ static struct morse Morse_table[] = {
   { L'ä', "._._" },   // a + umlaut
   { L'ą', "._._"},    //a + ogonek
   { L'æ', "._._" },   // ae
-  { L'å', ".__._" }, 
+  { L'å', ".__._" },
   { L'ć', "_._.." },  // c/C + accent acute
   { L'ĉ', "_._.." },  // c/C + circumflex
-  { L'ç', "_.-.." },  
+  { L'ç', "_.-.." },
   // ch as a digraph has no unicode encoding
   { L'đ', ".._.." },  // d/D with stroke
   { L'ð', "..__." },  // eth (very similar to D with stroke)
@@ -98,7 +98,7 @@ static struct morse Morse_table[] = {
   { L'ĵ', ".___." },  // j/J with circumflex */
   { L'ł', "._.._" },  // l/L with stroke */
   { L'ń', "__.__" },  // n/N with accent acute */
-  { L'ñ', "__.__" },  // n/N with tilde (Spanish ene) 
+  { L'ñ', "__.__" },  // n/N with tilde (Spanish ene)
   { L'ó', "___." },   // o/O with accent acute
   { L'ö', "___." },   // o/O with umlaut
   { L'ø', "___." },   // o/O with stroke
@@ -182,8 +182,8 @@ static struct morse Morse_table[] = {
   { L'ї',".___."},
 
   // Hebrew (did I get this right?)
-  { L'א',"._"},   // alef 
-  { L'ב',"_..."}, // bet  
+  { L'א',"._"},   // alef
+  { L'ב',"_..."}, // bet
   { L'ג',"__."},  // gimel
   { L'ד',"_.."},  // dalet
   { L'ה',"___"},  // he
@@ -210,14 +210,14 @@ static struct morse Morse_table[] = {
   { L'ש',"..."},  // shin
   { L'ת',"_"},    // tav
 };
-    
+
 #define TABSIZE (sizeof(Morse_table)/sizeof(Morse_table[0]))
 
 // Comparison function for sort and bsearch on Morse table
 static int mcompar(const void *a,const void *b){
   const struct morse * const am = (struct morse *)a;
   const struct morse * const bm = (struct morse *)b;
-  
+
   if(am->c < bm->c)
     return -1;
   else if(am->c > bm->c)
@@ -280,7 +280,7 @@ unsigned long encode_morse_char(float * const samples,wint_t c){
 int init_morse(double const speed,double const pitch,double level,double const samprate){
   qsort(Morse_table,TABSIZE,sizeof(Morse_table[0]),mcompar);
 
-  Dit_length = (int)round(samprate * 1.2 / speed); // Samples per dit
+  Dit_length = lrint(samprate * 1.2 / speed); // Samples per dit
   double const cycles_per_sample = pitch / samprate;
 
   if(Verbose){
@@ -323,17 +323,17 @@ int init_morse(double const speed,double const pitch,double level,double const s
     Dit[k] = (float)(dit_envelope * level * t);
     Dah[k] = (float)(dah_envelope * level * t);
     dit_envelope += g * (0 - dit_envelope);
-    dah_envelope += g * (1 - dah_envelope);    
+    dah_envelope += g * (1 - dah_envelope);
   }
   // Third element of dah continues
   for(; k < 3*Dit_length; k++){
     Dah[k] = (float)(dah_envelope * level * creal(step_osc(&tone)));
-    dah_envelope += g * (1 - dah_envelope);    
+    dah_envelope += g * (1 - dah_envelope);
   }
   // Fourth element of dah decays
   for(; k < 4*Dit_length; k++){
     Dah[k] = (float)(dah_envelope * level * creal(step_osc(&tone)));
-    dah_envelope += g * (0 - dah_envelope);    
+    dah_envelope += g * (0 - dah_envelope);
   }
   // end initialization
   return Dit_length;

@@ -444,7 +444,7 @@ static double true_freq(uint64_t freq_hz){
 
 static double set_correct_freq(struct sdr * const sdr,double freq){
   struct frontend * const frontend = sdr->frontend;
-  int32_t intfreq = (int32_t)round(freq / (1 + frontend->calibrate));
+  int32_t intfreq = llrint(freq / (1 + frontend->calibrate));
   rtlsdr_set_center_freq(sdr->device,intfreq);
 #ifdef USE_NEW_LIBRTLSDR
   double tf = rtlsdr_get_freq(sdr->device);

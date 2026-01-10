@@ -289,7 +289,7 @@ static double true_freq(uint64_t freq_hz){
 // All this really works correctly only with a gpsdo, forcing the calibration offset to 0
 static double set_correct_freq(struct sdrstate *sdr,double freq){
   struct frontend *frontend = sdr->frontend;
-  int64_t intfreq = (int64_t)round((freq)/ (1 + frontend->calibrate));
+  int64_t intfreq = lrint(freq/ (1 + frontend->calibrate));
   int ret __attribute__((unused)) = AIRSPYHF_SUCCESS; // Won't be used when asserts are disabled
   ret = airspyhf_set_freq(sdr->device,(uint32_t)intfreq);
   assert(ret == AIRSPYHF_SUCCESS);

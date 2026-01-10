@@ -65,7 +65,7 @@ void closedown(int);
 // Convert unsigned number modulo buffersize to a signed 2's complement
 static inline int signmod(unsigned int const a){
   int y = a & (BUFFERSIZE-1);
-  
+
   if(y >= BUFFERSIZE/2)
     y -= BUFFERSIZE;
   assert(y >= -BUFFERSIZE/2 && y < BUFFERSIZE/2);
@@ -132,7 +132,7 @@ int main(int argc,char * const argv[]){
     fprintf(stderr,"80/100/120 supported only on opus 1.2 and later\n");
     exit(EX_USAGE);
   }
-  int Opus_frame_size = round(Opus_blocktime * Samprate / 1000.);
+  int Opus_frame_size = lrint(Opus_blocktime * Samprate / 1000.);
 
 
   atexit(cleanup);
@@ -187,7 +187,7 @@ int main(int argc,char * const argv[]){
   inputParameters.device = inDevNum;
   inputParameters.sampleFormat = paFloat32;
   inputParameters.suggestedLatency = .001 * Opus_blocktime;
-  
+
   PaStream *Pa_Stream;          // Portaudio stream handle
   r = Pa_OpenStream(&Pa_Stream,
 		    &inputParameters,
@@ -199,7 +199,7 @@ int main(int argc,char * const argv[]){
 		    NULL);
 
   if(r != paNoError){
-    fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));      
+    fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
     exit(EX_IOERR);
   }
   r = Pa_StartStream(Pa_Stream);
@@ -215,7 +215,7 @@ int main(int argc,char * const argv[]){
   if(Opus_bitrate > 510000)
     Opus_bitrate =  510000;
 
-  int est_packet_size = round(Opus_bitrate * Opus_blocktime * .001/8);
+  int est_packet_size = lrint(Opus_bitrate * Opus_blocktime * .001/8);
   if(est_packet_size > 1500){
     fprintf(stderr,"Warning: estimated packet size %d bytes; IP framgmentation is likely\n",est_packet_size);
   }
@@ -350,7 +350,7 @@ static int pa_callback(const void *inputBuffer, void *outputBuffer,
 
   float *in = (float *)inputBuffer;
   assert(in != NULL);
-    
+
   int count = Channels*framesPerBuffer;
 
   while(count--){
@@ -365,7 +365,7 @@ void cleanup(void){
   if(Opus != NULL)
     opus_encoder_destroy(Opus);
   Opus = NULL;
-  
+
   if(Output_fd != -1)
     close(Output_fd);
   Output_fd = -1;
@@ -375,4 +375,3 @@ void closedown(int s){
   (void)s;
   _exit(EX_OK);
 }
-

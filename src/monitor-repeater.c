@@ -76,7 +76,7 @@ void send_cwid(void){
   }
   float samples[60 * Dit_length];
   kick_output(); // Start output stream if it was stopped, so we can get current Rptr
-  uint32_t wptr = Rptr + (int)round(Playout * DAC_samprate);
+  uint32_t wptr = Rptr + lrint(Playout * DAC_samprate);
   wptr &= (BUFFERSIZE-1);
 
   // Don't worry about wrap during write, the mirror will handle it
@@ -178,4 +178,3 @@ void *repeater_ctl(void *arg){
   }
   return NULL;
 }
-

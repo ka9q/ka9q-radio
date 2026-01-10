@@ -34,6 +34,7 @@
 #include "morse.h"
 #include "status.h"
 #include "monitor.h"
+#include "import.h"
 
 #define DATA_PRIORITY 50
 
@@ -241,7 +242,7 @@ static void *decode_task(void *arg){
 
   sp->gain = dB2voltage(Gain);    // Start with global default
   sp->notch_enable = Notch;
-  sp->playout = (int)round(Playout * (double)DAC_samprate); // per-session playout is in frames
+  sp->playout = lrint(Playout * (double)DAC_samprate); // per-session playout is in frames
   atomic_store_explicit(&sp->muted,Start_muted,memory_order_release);
   sp->restart = true; // Force rest of init when first packet arrives
   struct timespec deadline = {0};
@@ -511,7 +512,6 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
   // This section processes the signal in the current RTP frame, copying and/or decoding it into a sp->bounce buffer
   // for mixing with the output ring buffer
   enum encoding encoding = sp->pt_table[sp->type].encoding;
-  int sampsize = 0;
   switch(encoding){
   case OPUS:
   case OPUS_VOIP:
@@ -556,55 +556,46 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
       memset(sp->bounce,0,sp->frame_size * sp->channels * sizeof *sp->bounce); // blank out of sequence
     break;
   case S16BE:
-    {
-      int16_t const * const data = (int16_t *)&pkt->data[0];
-      sampsize = sizeof *data;
-      sp->frame_size = pkt->len / (sampsize * sp->channels); // mono/stereo samples in frame
-      for(int i=0; i < sp->channels * sp->frame_size; i++)
-	sp->bounce[i] = SCALE16 * (int16_t)ntohs(data[i]); // Cast is necessary
-      sp->datarate = 8 * sp->channels * sampsize * sp->samprate; // fixed rate
-      sp->bandwidth = sp->samprate / 2; // Nyquist
-    }
+    sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
+    import_s16_be(sp->bounce,pkt->data, sp->channels * sp->frame_size);
+    sp->datarate = 8 * sp->channels * sizeof(int16_t) * sp->samprate; // fixed rate
+    sp->bandwidth = sp->samprate / 2; // Nyquist
     break;
-  case S16LE: // same as S16BE but no byte swap - assumes little-endian machine
-    {
-      int16_t const * const data = (int16_t *)&pkt->data[0];
-      sampsize = sizeof *data;
-      sp->frame_size = pkt->len / (sampsize * sp->channels); // mono/stereo samples in frame
-      for(int i=0; i < sp->channels * sp->frame_size; i++)
-	sp->bounce[i] = SCALE16 * data[i];
-      sp->datarate = 8 * sp->channels * sampsize * sp->samprate; // fixed rate
-      sp->bandwidth = sp->samprate / 2; // Nyquist
-    }
+  case S16LE:
+    sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
+    import_s16_le(sp->bounce,pkt->data, sp->channels * sp->frame_size);
+    sp->datarate = 8 * sp->channels * sizeof (int16_t) * sp->samprate; // fixed rate
+    sp->bandwidth = sp->samprate / 2; // Nyquist
+    break;
+  case F32LE:
+    sp->frame_size = pkt->len / (sizeof(float) * sp->channels); // mono/stereo samples in frame
+    import_f32_le(sp->bounce, pkt->data, sp->channels * sp->frame_size);
+    sp->datarate = 8 * sp->channels * sizeof(float) * sp->samprate; // fixed rate
+    sp->bandwidth = sp->samprate / 2; // Nyquist
     break;
   case F32BE:
-    {
-      float const * const data = (float *)&pkt->data[0];
-      sampsize = sizeof *data;
-      sp->frame_size = pkt->len / (sampsize * sp->channels); // mono/stereo samples in frame
-      for(int i=0; i < sp->channels * sp->frame_size; i++)
-	sp->bounce[i] = data[i];
-      sp->datarate = 8 * sp->channels * sampsize * sp->samprate; // fixed rate
-      sp->bandwidth = sp->samprate / 2; // Nyquist
-    }
+    sp->frame_size = pkt->len / (sizeof(float) * sp->channels); // mono/stereo samples in frame
+    import_f32_be(sp->bounce, pkt->data, sp->channels * sp->frame_size);
+    sp->datarate = 8 * sp->channels * sizeof(float) * sp->samprate; // fixed rate
+    sp->bandwidth = sp->samprate / 2; // Nyquist
     break;
 #ifdef HAS_FLOAT16
-  case F16BE: // 16-bit floats
-    {
-      float16_t const * const data = (float16_t *)&pkt->data[0];
-      sampsize = sizeof *data;
-      sp->frame_size = pkt->len / (sampsize * sp->channels); // mono/stereo samples in frame
-      for(int i=0; i < sp->channels * sp->frame_size; i++)
-	sp->bounce[i] = data[i];
-      sp->datarate = 8 * sp->channels * sampsize * sp->samprate; // fixed rate
-      sp->bandwidth = sp->samprate / 2; // Nyquist
-    }
+  case F16LE: // 16-bit floats
+    sp->frame_size = pkt->len / (sizeof(float16_t) * sp->channels); // mono/stereo samples in frame
+    import_f16_le(sp->bounce, pkt->data, sizeof(float16_t) * sp->frame_size);
+    sp->datarate = 8 * sp->channels * sizeof(float16_t) * sp->samprate; // fixed rate
+    sp->bandwidth = sp->samprate / 2; // Nyquist
+    break;
+  case F16BE:
+    sp->frame_size = pkt->len / (sizeof(float16_t) * sp->channels); // mono/stereo samples in frame
+    import_f16_be(sp->bounce, pkt->data, sizeof(float16_t) * sp->frame_size);
+    sp->datarate = 8 * sp->channels * sizeof(float16_t) * sp->samprate; // fixed rate
+    sp->bandwidth = sp->samprate / 2; // Nyquist
     break;
 #endif
   default:
     sp->drops++;
     sp->frame_size = 0;
-    sampsize = 0;
     return -2; // No change to next_timestamp or wptr because we don't know the sample size
   } // end of encoding switch
   sp->last_framesize = sp->frame_size;
@@ -834,8 +825,8 @@ static void copy_to_stream(struct session *sp){
        you have to remove one earphone to convince yourself that the
        levels really are the same!
     */
-    int const left_delay = (sp->pan > 0) ? (int)round(sp->pan * .0015 * DAC_samprate) : 0; // Delay left channel
-    int const right_delay = (sp->pan < 0) ? (int)round(-sp->pan * .0015 * DAC_samprate) : 0; // Delay right channel
+    int const left_delay = (sp->pan > 0) ? lrint(sp->pan * .0015 * DAC_samprate) : 0; // Delay left channel
+    int const right_delay = (sp->pan < 0) ? lrint(-sp->pan * .0015 * DAC_samprate) : 0; // Delay right channel
 
     assert(left_delay >= 0 && right_delay >= 0);
 

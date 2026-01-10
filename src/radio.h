@@ -177,7 +177,7 @@ struct channel {
     double complex phase_adjust; // Block rotation of phase
     bool beam;          // Use beamforming on independent I&Q inputs
     double complex a_weight; // A & B weights when beamforming
-    double complex b_weight; 
+    double complex b_weight;
   } filter;
 
   // Optional secondary filter (linear demod only)

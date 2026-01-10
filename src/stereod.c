@@ -35,8 +35,8 @@
 
 struct session {
   struct session *prev;       // Linked list pointers
-  struct session *next; 
-  
+  struct session *next;
+
   struct sockaddr sender;
   char const *source;
 
@@ -44,7 +44,7 @@ struct session {
   pthread_mutex_t qmutex;
   pthread_cond_t qcond;
   struct packet *queue;
- 
+
   struct rtp_state rtp_state_in; // RTP input state
   struct rtp_state rtp_state_out; // RTP output state
 
@@ -107,10 +107,10 @@ struct option Options[] =
    {"verbose", no_argument, NULL, 'v'},
    {"tos", required_argument, NULL, 'p'},
    {"iptos", required_argument, NULL, 'p'},
-   {"ip-tos", required_argument, NULL, 'p'},    
+   {"ip-tos", required_argument, NULL, 'p'},
    {NULL, 0, NULL, 0},
   };
-   
+
 char Optstring[] = "A:I:N:R:S:T:vp:";
 
 struct sockaddr Status_dest_address;
@@ -174,7 +174,7 @@ int main(int argc,char * const argv[]){
     resolve_mcast(Status,&Status_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     Status_fd = listen_mcast(NULL, &Status_dest_address, iface);
     if(Status_fd == -1){
-      fprintf(stderr,"Can't set up status input on %s: %sn",Status,strerror(errno));      
+      fprintf(stderr,"Can't set up status input on %s: %sn",Status,strerror(errno));
       exit(EX_USAGE);
     }
     // Read from status stream until we learn the data stream
@@ -196,7 +196,7 @@ int main(int argc,char * const argv[]){
     char description[1024];
     snprintf(description,sizeof(description),"pcm-source=%s",formatsock(&PCM_dest_address,false));
     uint32_t addr = make_maddr(Output);
-    avahi_start(service_name,"_rtp._udp",DEFAULT_RTP_PORT,Output,addr,description,NULL,NULL);
+    avahi_start(service_name,"_rtp._udp",DEFAULT_RTP_PORT,Output,addr,description);
     resolve_mcast(Output,&Stereo_dest_address,DEFAULT_RTP_PORT,NULL,0,0);
     Output_fd = output_mcast(&Stereo_dest_address,NULL,Mcast_ttl,IP_tos);
     if(Output_fd < 0){
@@ -217,7 +217,7 @@ int main(int argc,char * const argv[]){
   Deemph_rate = exp(-1.0 / (Deemph_tc * Audio_samprate));
 
   signal(SIGPIPE,SIG_IGN);
-  
+
   realtime(50);
 
   // Set up to receive PCM in RTP/UDP/IP
@@ -235,11 +235,11 @@ int main(int argc,char * const argv[]){
     pkt->next = NULL;
     pkt->data = NULL;
     pkt->len = 0;
-    
+
     struct sockaddr sender;
     socklen_t socksize = sizeof(sender);
     ssize_t size = recvfrom(Input_fd,&pkt->content,sizeof(pkt->content),0,(struct sockaddr *)&sender,&socksize);
-    
+
     if(size == -1){
       if(errno != EINTR){ // Happens routinely, e.g., when window resized
 	perror("recvfrom");
@@ -249,7 +249,7 @@ int main(int argc,char * const argv[]){
     }
     if(size <= RTP_MIN_SIZE)
       continue; // Must be big enough for RTP header and at least some data
-    
+
     // Extract and convert RTP header to host format
     uint8_t const *dp = ntoh_rtp(&pkt->rtp,pkt->content);
     pkt->data = dp;
@@ -260,7 +260,7 @@ int main(int argc,char * const argv[]){
     }
     if(pkt->len <= 0)
       continue; // Used to be an assert, but would be triggered by bogus packets
-    
+
     // Find appropriate session; create new one if necessary
     struct session *sp = lookup_session((const struct sockaddr *)&sender,pkt->rtp.ssrc);
     if(!sp){
@@ -281,7 +281,7 @@ int main(int argc,char * const argv[]){
 	continue;
       }
     }
-    
+
     // Insert onto queue sorted by sequence number, wake up thread
     struct packet *q_prev = NULL;
     struct packet *qe = NULL;
@@ -289,7 +289,7 @@ int main(int argc,char * const argv[]){
       pthread_mutex_lock(&sp->qmutex);
       for(qe = sp->queue; qe && pkt->rtp.seq >= qe->rtp.seq; q_prev = qe,qe = qe->next)
 	;
-      
+
       pkt->next = qe;
       if(q_prev)
 	q_prev->next = pkt;
@@ -300,7 +300,7 @@ int main(int argc,char * const argv[]){
       pthread_cond_signal(&sp->qcond);
       pthread_mutex_unlock(&sp->qmutex);
     }
-  }      
+  }
   // Not reached
 }
 // Read status stream looking for the socket address of the PCM output stream
@@ -309,13 +309,13 @@ int fetch_socket(int status_fd){
     socklen_t socklen = sizeof(Status_input_source_address);
     uint8_t buffer[16384];
     ssize_t length = recvfrom(status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Status_input_source_address,&socklen);
-    
+
     // We MUST ignore our own status packets, or we'll loop!
     // We don't actually use Local_status_source_address yet
     if(address_match(&Status_input_source_address,&Local_status_source_address)
        && getportnumber(&Status_input_source_address) == getportnumber(&Local_status_source_address))
       continue;
-    
+
     if(length <= 0){
       usleep(10000);
       continue;
@@ -326,17 +326,17 @@ int fetch_socket(int status_fd){
       if(cr != STATUS)
 	continue; // Ignore commands
       uint8_t *cp = buffer+1;
-      
+
       while(cp < &buffer[length]){
 	enum status_type type = *cp++;
-	
+
 	if(type == EOL)
 	  break;
-	
+
 	unsigned int optlen = *cp++;
 	if(cp + optlen > buffer + length)
 	  break;
-	
+
 	// Should probably extract sample rate too, instead of assuming 48 kHz
 	switch(type){
 	case EOL:
@@ -352,7 +352,7 @@ int fetch_socket(int status_fd){
       }
     done:;
     }
-  }    
+  }
 }
 
 // Per-SSRC thread - does actual decoding
@@ -373,7 +373,7 @@ void *decode(void *arg){
   // Set up audio filters: mono, pilot & stereo difference
   // These blocksizes depend on front end sample rate and blocksize
   // At Blocktime = 5ms and 384 kHz, L = 1920, M = 1921, N = 3840
-  int const L = (int)round(Composite_samprate * Blocktime); // Number of input samples in Blocktime
+  int const L = lrint(Composite_samprate * Blocktime); // Number of input samples in Blocktime
   int const M = L + 1;
   int const N = L + M - 1;
 
@@ -407,8 +407,8 @@ void *decode(void *arg){
   // If not, then a mop-up oscillator has to be provided
   double const hzperbin = Composite_samprate / N;              // 100 hertz per FFT bin @ 384 kHz and 5 ms
   int const quantum = N / (M - 1);       // rotate by multiples of (2) bins due to overlap-save (100 * 2 = 200 Hz)
-  int const pilot_rotate = (int)(quantum * round(19000./(hzperbin * quantum)));
-  int const subc_rotate = (int)(quantum * round(38000./(hzperbin * quantum)));
+  int const pilot_rotate = quantum * lrint(19000./(hzperbin * quantum));
+  int const subc_rotate = quantum * lrint(38000./(hzperbin * quantum));
 
   while(true){
     struct packet *pkt = NULL;
@@ -426,7 +426,7 @@ void *decode(void *arg){
 	  if(ret == ETIMEDOUT){
 	    // Idle timeout after 10 sec; close session and terminate thread
 	    pthread_mutex_unlock(&sp->qmutex);
-	    close_session(&sp); 
+	    close_session(&sp);
 	    return NULL; // exit thread
 	  }
 	}
@@ -437,7 +437,7 @@ void *decode(void *arg){
       } // End of mutex protected segment
     }
     sp->packets++; // Count all packets, regardless of type
-      
+
     size_t frame_size = 0;
     int channels = channels_from_pt(pkt->rtp.type);
     switch(channels){
@@ -451,9 +451,9 @@ void *decode(void *arg){
     int samples_skipped = rtp_process(&sp->rtp_state_in,&pkt->rtp,frame_size);
     if(samples_skipped < 0)
       goto endloop; // Old dupe
-    
+
     int16_t const * const samples = (int16_t *)pkt->data;
-    
+
     int rtp_type = pt_from_info(Audio_samprate,2,S16BE); // 48 kHz stereo PCM
     if(rtp_type < 0){
       fprintf(stderr,"Can't allocate RTP payload type for samprate = %'d, channels = %d\n",Audio_samprate,2);
@@ -501,7 +501,7 @@ void *decode(void *arg){
 	  subc_phasor /= a;
 	  left_minus_right = 2.0 * __imag__ (conj(subc_phasor) * stereo.output.c[n]); // Carrier is in quadrature with modulation
 	}
-	  
+
 	double left = mono.output.r[n] + left_minus_right; // left channel = L+R + L-R
 	assert(!isnan(sp->deemph_state_left));
 	left = sp->deemph_state_left = sp->deemph_state_left * Deemph_rate
@@ -553,7 +553,7 @@ struct session *create_session(void){
 
   struct session * const sp = calloc(1,sizeof(*sp));
   assert(sp != NULL); // Shouldn't happen on modern machines!
-  
+
   // Initialize entry
   pthread_mutex_init(&sp->qmutex,NULL);
   pthread_cond_init(&sp->qcond,NULL);
@@ -575,7 +575,7 @@ int close_session(struct session ** p){
   struct session *sp = *p;
   if(sp == NULL)
     return -1;
-  
+
   // packet queue should be empty, but just in case
   pthread_mutex_lock(&sp->qmutex);
   while(sp->queue){

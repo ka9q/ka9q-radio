@@ -579,7 +579,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
     for(int i=0; i < sampcount; i++){
       int32_t s = samples[i];
       s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
-      if(s == 32767 || s <= -32767){
+      if(abs(s) >= 32767){
 	frontend->overranges++;
 	frontend->samp_since_over = 0;
       } else {
@@ -594,7 +594,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
     }
   } else {
     for(int i=0; i < sampcount; i++){
-      if(samples[i] == 32767 || samples[i] <= -32767){
+      if(abs(samples[i]) >= 32767){
 	frontend->overranges++;
 	frontend->samp_since_over = 0;
       } else {
@@ -931,7 +931,7 @@ static void compute_registers(double value, int *a, int *b, int *c, int *P1, int
     *a = (int)floor(value);
     double frac = value - *a;
     *c = 1000000; // resolution for fractional part (can be up to 1e6)
-    *b = (int)round(frac * (*c));
+    *b = lrint(frac * (*c));
 
     *P1 = 128 * (*a) + (int)floor(128.0 * (*b) / (*c)) - 512;
     *P2 = 128 * (*b) - (*c) * (int)floor(128.0 * (*b) / (*c));
@@ -965,10 +965,10 @@ static double new_rx888_set_samprate(struct sdrstate *sdr,double const reference
       double const output_divisor = pll_freq / (samprate * rdiv);
       if(output_divisor_ok(output_divisor)){
 	// Check if output_divisor is integer
-	if (fabs(output_divisor - round(output_divisor)) < 1e-9) {
+	if (fabs(output_divisor - llrint(output_divisor)) < 1e-9) {
 	  best.pll_freq = pll_freq;
 	  best.pll_mult = pll_mult;
-	  best.output_divisor = round(output_divisor);
+	  best.output_divisor = llrint(output_divisor);
 	  best.error_ppm = 0;
 	  best.pll_is_int = true;
 	  best.output_divisor_is_int = true;
@@ -987,7 +987,7 @@ static double new_rx888_set_samprate(struct sdrstate *sdr,double const reference
       double const pll_freq = reference * pll_mult;
       if(pll_freq > SI5351_MAX_VCO_FREQ)
 	break;
-      
+
       double const output_divisor = pll_freq / (rdiv * samprate);
       if(output_divisor_ok(output_divisor)){
 	double actual_samprate = pll_freq / (output_divisor * rdiv);
@@ -1006,7 +1006,7 @@ static double new_rx888_set_samprate(struct sdrstate *sdr,double const reference
     }
     if(best.error_ppm < 1e-9)
       goto gotit;
-    
+
     // If no integer PLL solution, allow fractional PLL multiplier
     double const pll_step = 0.01; // step size for PLL fractional multiplier (adjust for speed vs accuracy)
     start_pll_mult = SI5351_PLL_MIN_MULT;
@@ -1016,7 +1016,7 @@ static double new_rx888_set_samprate(struct sdrstate *sdr,double const reference
       double const pll_freq = reference * pll_mult;
       if(pll_freq > SI5351_MAX_VCO_FREQ)
 	break;
-      
+
       // MultiSynth divider range
       double const output_divisor = pll_freq / (rdiv * samprate);
       if(output_divisor_ok(output_divisor)){
@@ -1031,8 +1031,8 @@ static double new_rx888_set_samprate(struct sdrstate *sdr,double const reference
 	  best.pll_mult = pll_mult;
 	  best.output_divisor = output_divisor;
 	  best.error_ppm = error_ppm;
-	  best.pll_is_int = (fabs(pll_mult - round(pll_mult)) < 1e-9);
-	  best.output_divisor_is_int = (fabs(output_divisor - round(output_divisor)) < 1e-9);
+	  best.pll_is_int = (fabs(pll_mult - round(pll_mult)) < 1e-9); // note boolean
+	  best.output_divisor_is_int = (fabs(output_divisor - round(output_divisor)) < 1e-9); // note boolean
 	}
       }
     }
@@ -1084,7 +1084,7 @@ static double new_rx888_set_samprate(struct sdrstate *sdr,double const reference
 	  vco / output_ratio,
 	  vco/output_ratio - samprate,
 	  P1, P2, P3);
-  
+
   uint8_t data_clkout[] = {
     (P3 & 0x0000ff00) >>  8,
     (P3 & 0x000000ff) >>  0,
@@ -1425,7 +1425,7 @@ static double val2gain(int g){
 static int gain2val(double gain){
   int highgain = gain < 0 ? 0 : 1;
   gain = gain > 34 ? 34 : gain;
-  int g = (int)round(dB2voltage(gain) / (Vernier * (1 + (Pregain - 1)* highgain)));
+  int g = lrint(dB2voltage(gain) / (Vernier * (1 + (Pregain - 1)* highgain)));
 
   if(g > 127)
     g = 127;

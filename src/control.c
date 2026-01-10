@@ -789,7 +789,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       double samprate = parse_frequency(str,false);
       if(samprate < 100)  // Minimum sample rate is 200 Hz for usual params (20 ms block, overlap = 20%)
 	samprate *= 1000; // Assume the user meant kHz
-      chan->output.samprate = (int)round(samprate);
+      chan->output.samprate = lrint(samprate);
       encode_int(bpp,OUTPUT_SAMPRATE,chan->output.samprate);
     }
     break;
@@ -1067,7 +1067,17 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
   case 'e':
     {
       char str[Entry_width];
-      getentry("Output encoding [s16le s16be f32le f16le opus opus-voip]: ",str,sizeof(str));
+      char prompt[100] = {0};
+      strlcat(prompt,"Output encoding [", sizeof prompt);
+      for(int i = 0; i < UNUSED_ENCODING; i++){
+	if(i == AX25)
+	  continue;
+	if(i != 0)
+	  strlcat(prompt, " ", sizeof prompt);
+	strlcat(prompt, encoding_string(i), sizeof prompt);
+      }
+      strlcat(prompt, "]: ", sizeof prompt);
+      getentry(prompt, str, sizeof str);
       enum encoding e = parse_encoding(str);
       // "OPUS_VOIP" really means OPUS wih the OPUS_APPLICATION_VOIP option
       if(e == OPUS_VOIP){
@@ -1387,21 +1397,16 @@ static void display_filtering(WINDOW *w,struct channel const *chan){
   int col = 1;
   wmove(w,row,col);
   wclrtobot(w);
-
-
-
   pprintw(w,row++,col,"Block Time","%'.1f ms",1000*Blocktime);
   pprintw(w,row++,col,"Block rate","%'.3f Hz",1./Blocktime); // Just the block rate
 
   int64_t const N = Frontend.L + Frontend.M - 1;
-
   pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.isreal ? 'r' : 'c');
 
   if(Frontend.samprate != 0 && chan->output.samprate != 0){
-    int fftout = (int)round(N * chan->output.samprate / Frontend.samprate);
+    int fftout = lrint(N * chan->output.samprate / Frontend.samprate);
     pprintw(w,row++,col,"FFT out","%'d c ",fftout);
   }
-
   Overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
   pprintw(w,row++,col,"Overlap","%.1lf %% ",100./Overlap);
   pprintw(w,row++,col,"Bin width","%'.3lf Hz",Frontend.samprate / N);
@@ -1409,7 +1414,6 @@ static void display_filtering(WINDOW *w,struct channel const *chan){
   double const beta = chan->filter.kaiser_beta;
   if(isfinite(beta))
     pprintw(w,row++,col,"Kaiser β","%'.1lf   ",beta);
-
 
 #if 0 // Doesn't really give accurate results
   // Play with Kaiser window values

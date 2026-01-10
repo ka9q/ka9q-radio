@@ -477,7 +477,7 @@ static double true_freq(uint64_t freq_hz){
 static double set_correct_freq(struct sdrstate * const sdr,double const freq){
   struct frontend * const frontend = sdr->frontend;
   // sdr->converter refers to an upconverter, so it's added to the frequency we request
-  int64_t const intfreq = (int64_t)round((freq + sdr->converter)/ (1 + frontend->calibrate));
+  int64_t const intfreq = lrint((freq + sdr->converter)/ (1 + frontend->calibrate));
   int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
   ret = airspy_set_freq(sdr->device,(uint32_t)(intfreq - sdr->offset));
   assert(ret == AIRSPY_SUCCESS);
