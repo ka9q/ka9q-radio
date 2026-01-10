@@ -472,8 +472,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(Verbose > 1)
 	  fprintf(stderr,"%s bin bw %'.1lf -> %'.1f Hz\n",chan->name,chan->spectrum.rbw,x);
 	chan->spectrum.rbw = x;
-	if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
-	  restart_needed = true;
       }
       break;
     case BIN_COUNT:
@@ -484,8 +482,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(Verbose > 1)
 	  fprintf(stderr,"%s bin count %u -> %u\n",chan->name,chan->spectrum.bin_count,x);
 	chan->spectrum.bin_count = x;
-	if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
-	  restart_needed = true;
       }
       break;
     case CROSSOVER:
@@ -494,8 +490,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(!isfinite(x) || x == chan->spectrum.crossover)
 	  break;
 	chan->spectrum.crossover = x;
-	if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
-	  restart_needed = true;
       }
       break;
     case WINDOW_TYPE:
@@ -504,8 +498,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(i < 0 || i >=  N_WINDOW)
 	  break;
 	chan->spectrum.window_type = i;
-	if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
-	  restart_needed = true;
       }
       break;
     case SPECTRUM_SHAPE: // Kaiser or gaussian
@@ -514,7 +506,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(!isfinite(x) || x == chan->spectrum.shape)
 	  break;
 	chan->spectrum.shape = x;
-	restart_needed = true;
       }
       break;
     case SPECTRUM_AVG:
@@ -525,7 +516,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(x == chan->spectrum.fft_avg)
 	  break;
 	chan->spectrum.fft_avg = x;
-	restart_needed = true;
       }
       break;
     case SPECTRUM_BASE:
