@@ -1614,6 +1614,9 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
 	case HAMMING_WINDOW:
 	  snprintf(win_type,sizeof win_type,"Hamming");
 	  break;
+      case BLACKMAN_HARRIS_WINDOW:
+	  snprintf(win_type,sizeof win_type,"Blackman-Harris");
+	break;
 	default:
 	  snprintf(win_type,sizeof win_type,"unknown");
 	  break;
