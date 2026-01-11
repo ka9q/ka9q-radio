@@ -228,7 +228,7 @@ jt-decoded: jt-decoded.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 wd-record: wd-record.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg $(LDLIBS)
 
 # not made unless we're on a rpi
 set_xcvr: set_xcvr.o libradio.a
