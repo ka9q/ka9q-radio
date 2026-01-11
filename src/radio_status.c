@@ -553,7 +553,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  break; // Simply refuse to change
 	}
 	chan->output.rtp.type = pt;
-	//	flush_output(chan,false,true); // Flush to Ethernet before we change this
 	chan->output.encoding = encoding;
 	if(samprate != chan->output.samprate){
 	  // Sample rate changed for Opus
@@ -712,7 +711,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   if(frontend->overranges != 0)
     encode_int64(&bp,SAMPLES_SINCE_OVER,frontend->samp_since_over);
   if(isfinite(chan->sig.n0) && chan->sig.n0 > 0)
-  encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
+    encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
 
   // Modulation mode
   encode_byte(&bp,DEMOD_TYPE,(uint8_t)chan->demod_type); // must not exceed 255 entries (unlikely)
