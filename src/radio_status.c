@@ -511,7 +511,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case SPECTRUM_AVG:
       {
 	int x = abs(decode_int(cp,optlen));
-	if(x == 0)
+	if(x <= 0)
 	  x = 1; // Minimum 1
 	if(x == chan->spectrum.fft_avg)
 	  break;
