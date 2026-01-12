@@ -27,8 +27,14 @@
 
 // Must be a macro so __FILE__ and __TIMESTAMP__ will substitute correctly
 #define VERSION() { fprintf(stderr,"KA9Q Multichannel SDR %s last modified %s\n",__FILE__,__TIMESTAMP__); \
-		    fprintf(stderr,"Copyright 2025, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");}
-
+  fprintf(stderr,"Copyright 2026, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n"); \
+  fprintf(stderr,"   Repo: %s\n",GIT_REMOTE_URL); \
+  fprintf(stderr," Commit: %s\n",GIT_HASH); \
+  fprintf(stderr,"   Date: %s\n",GIT_TIME); \
+  fprintf(stderr," Branch:%s\n",GIT_BRANCH); \
+  fprintf(stderr,"Version: %s\n",GIT_VERSION); \
+  fprintf(stderr,"Summary: %s\n",GIT_SUMMARY); \
+}
 
 #define ASSERT_ZEROED(ptr, size) assert(memcmp(ptr, &(typeof(*(ptr))){0}, size) == 0)
 
