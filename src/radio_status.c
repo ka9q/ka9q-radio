@@ -802,9 +802,6 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_int(&bp,SPECTRUM_AVG,chan->spectrum.fft_avg);
     encode_float(&bp,SPECTRUM_BASE,chan->spectrum.base);
     encode_float(&bp,SPECTRUM_STEP,chan->spectrum.step);
-
-    // encode bin data here? maybe change this, it can be a lot
-    // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
     if(chan->spectrum.bin_data != NULL){
       uint8_t *bins = malloc(chan->spectrum.bin_count);
       if(bins == NULL){

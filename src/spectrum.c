@@ -17,7 +17,7 @@
 #define OVERLAP (0.0)
 // Use at RBW <= 10 Hz to reduce bouncing on pulsed signals like WWV's tones
 //#define VERY_NARROWBAND_OVERLAP (0.5)
-#define VERY_NARROWBAND_OVERLAP (0.)
+#define VERY_NARROWBAND_OVERLAP (0.5)
 int const point_budget = 512 * 1024; // tunable, experimental
 
 static void generate_window(struct channel *chan);
@@ -64,6 +64,7 @@ int demod_spectrum(void *arg){
   int bin_count = -1;
   int crossover = -1;
   double shape = -1;
+  int timeout = 0;
 
   // Main loop
   do {
@@ -131,6 +132,9 @@ int demod_spectrum(void *arg){
 	if(chan->spectrum.ring_idx == chan->spectrum.ring_size)
 	  chan->spectrum.ring_idx = 0; // wrap around
       }
+      timeout -= chan->sampcount;
+      if(timeout < 0)
+	timeout = 0;
     }
     if(response_needed){      // Generate new bin data for the next response
       // Make sure output frequency bin data buffers exist
@@ -140,9 +144,13 @@ int demod_spectrum(void *arg){
 	if(chan->spectrum.bin_data == NULL)
 	  FREE(old); // emulate reallocf()
       }
-      if(chan->spectrum.rbw <= chan->spectrum.crossover)
-	narrowband_poll(chan);
-      else
+      if(chan->spectrum.rbw <= chan->spectrum.crossover){
+	// Don't run FFT more often than one FFT's worth of samples
+	if(timeout <= 0){
+	  narrowband_poll(chan);
+	  timeout = chan->spectrum.fft_n;
+	}
+      } else
 	wideband_poll(chan);
     }
     // Remember new values in case they change next time
