@@ -14,6 +14,20 @@ LDFLAGS  ?=
 
 LDLIBS = -lm -lpthread
 
+GIT_HASH := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
+GIT_TIME := $(shell git show -s --format=%ci 2>/dev/null || echo "unknown")
+GIT_BRANCH := $(shell git log --pretty=format:'%d' -n 1 2>/dev/null || echo "unknown")
+GIT_SUMMARY := $(shell git log -1 --format="%s" 2>/dev/null || echo "unknown")
+GIT_VERSION := $(shell git describe --always --dirty --tags 2>/dev/null || echo "unknown")
+GIT_REMOTE_URL := $(shell git remote get-url origin 2>/dev/null || echo "unknown")
+
+VERSION_FLAGS = -DGIT_HASH='"$(GIT_HASH)"' \
+                -DGIT_TIME='"$(GIT_TIME)"' \
+                -DGIT_BRANCH='"$(GIT_BRANCH)"' \
+                -DGIT_SUMMARY='"$(GIT_SUMMARY)"' \
+                -DGIT_VERSION='"$(GIT_VERSION)"' \
+                -DGIT_REMOTE_URL='"$(GIT_REMOTE_URL)"'
+
 ifeq ($(UNAME_S),Darwin)
   CPPFLAGS += -I/opt/local/include
   LDFLAGS  += -L/opt/local/lib
@@ -39,7 +53,7 @@ ARCHOPTS = -march=native
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
 COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -D_GNU_SOURCE=1 -Wextra -Wno-sign-conversion -Wno-int-conversion -MMD -MP
 COPTS += -fPIC
-CFLAGS = $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
+CFLAGS = $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES) $(VERSION_FLAGS)
 BINDIR = /usr/local/bin
 SODIR = /usr/local/lib/ka9q-radio
 DAEMONDIR = /usr/local/sbin
