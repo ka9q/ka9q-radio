@@ -124,6 +124,7 @@ double blackman_window(int n, int N);
 double blackman_harris_window(int n, int N);
 double hann_window(int n,int N);
 double hamming_window(int n,int N);
+double hft95(int n, int N);
 
 // Write complex sample to input side of filter
 static inline int put_cfilter(struct filter_in * restrict const f,float complex const s){ // Complex

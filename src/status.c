@@ -9,11 +9,9 @@
 #endif
 #include <math.h>
 #include <sys/socket.h>
-#include <sys/un.h>
 #include <sys/time.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <netdb.h>
 
 #include "misc.h"
 #include "status.h"
@@ -43,7 +41,7 @@ int encode_int64(uint8_t **buf,enum status_type type,uint64_t x){
     return 2;
   }
 
-  int len = sizeof(x);
+  int len = sizeof x;
   while(len > 0 && ((x >> 56) == 0)){
     x <<= 8;
     len--;
@@ -82,10 +80,10 @@ int encode_byte(uint8_t **buf,enum status_type type,uint8_t x){
     *buf = cp;
     return 2;
   }
-  *cp++ = sizeof(x);
+  *cp++ = sizeof x;
   *cp++ = x;
   *buf = cp;
-  return 2+sizeof(x);
+  return 2 + sizeof x;
 }
 
 int encode_int16(uint8_t **buf,enum status_type type,uint16_t x){
@@ -162,7 +160,7 @@ size_t encode_vector(uint8_t **bp,enum status_type type,float const *array,size_
   uint8_t *cp = *bp;
   *cp++ = (uint8_t)type;
 
-  size_t const bytes = sizeof(*array) * size; // Number of bytes in data
+  size_t const bytes = size * sizeof *array; // Number of bytes in data
   if(bytes < 128){
     *cp++ = (uint8_t)bytes;    // Send length directly
   } else if(bytes < 65536){

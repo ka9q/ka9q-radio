@@ -1326,6 +1326,19 @@ double blackman_harris_window(int n, int N){
   return a0 - a1 * cos(2*M_PI*n/(N-1)) + a2 * cos(4*M_PI*n/(N-1)) - a3 * cos(6*M_PI*n/(N-1));
 }
 
+// Harris 5-term flat top (HFT95)
+double hft95(int n, int N){
+  double const a0 = 1.0;
+  double const a1 = 1.912510941;
+  double const a2 = 1.079173272;
+  double const a3 = 0.1832630879;
+  double const a4 = 0.0066586847;
+  return a0 - a1 * cos(2 * M_PI * n/(N-1))
+    + a2 * cos(4 * M_PI * n/(N-1))
+    - a3 * cos(6 * M_PI * n/(N-1))
+    + a4 * cos(8 * M_PI * n/(N-1));
+}
+
 #if 0
 // Used by gaussian_window
 // https://en.wikipedia.org/wiki/Window_function (section Approximate confined Gaussian window)

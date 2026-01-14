@@ -992,7 +992,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
   case 'W':
     {
       char str[Entry_width],*ptr;
-      getentry("FFT Window type [0=Kaiser,1=rect,2=blackman,3=exact blackman,4=gaussian,5=hann,6=hamming,7=blackman-harris]: ",str,sizeof(str));
+      getentry("FFT Window type [0=Kaiser,1=rect,2=blackman,3=exact blackman,4=gaussian,5=hann,6=hamming,7=blackman-harris 8=HFT95]: ",str,sizeof(str));
       int const b = strtol(str,&ptr,0);
       if(ptr != str){
 	if(b >= N_WINDOW){
@@ -1602,33 +1602,36 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
     {
       char win_type[100];
       switch(chan->spectrum.window_type){
-	case KAISER_WINDOW:
-	  snprintf(win_type,sizeof win_type,"Kaiser β = %.1lf",chan->spectrum.shape);
-	  break;
-	case RECT_WINDOW:
-	  snprintf(win_type,sizeof win_type,"rect");
-	  break;
-	case BLACKMAN_WINDOW:
-	  snprintf(win_type,sizeof win_type,"Blackman");
-	  break;
-	case EXACT_BLACKMAN_WINDOW:
-	  snprintf(win_type,sizeof win_type,"exact Blackman");
-	  break;
-	case GAUSSIAN_WINDOW:
-	  snprintf(win_type,sizeof win_type,"Gaussian σ = %.1lf",chan->spectrum.shape);
-	  break;
-	case HANN_WINDOW:
-	  snprintf(win_type,sizeof win_type,"Hann");
-	  break;
-	case HAMMING_WINDOW:
-	  snprintf(win_type,sizeof win_type,"Hamming");
-	  break;
-      case BLACKMAN_HARRIS_WINDOW:
-	  snprintf(win_type,sizeof win_type,"Blackman-Harris");
+      case KAISER_WINDOW:
+	snprintf(win_type,sizeof win_type,"Kaiser β = %.1lf",chan->spectrum.shape);
 	break;
-	default:
-	  snprintf(win_type,sizeof win_type,"unknown");
-	  break;
+      case RECT_WINDOW:
+	snprintf(win_type,sizeof win_type,"rect");
+	break;
+      case BLACKMAN_WINDOW:
+	snprintf(win_type,sizeof win_type,"Blackman");
+	break;
+      case EXACT_BLACKMAN_WINDOW:
+	snprintf(win_type,sizeof win_type,"exact Blackman");
+	break;
+      case GAUSSIAN_WINDOW:
+	snprintf(win_type,sizeof win_type,"Gaussian σ = %.1lf",chan->spectrum.shape);
+	break;
+      case HANN_WINDOW:
+	snprintf(win_type,sizeof win_type,"Hann");
+	break;
+      case HAMMING_WINDOW:
+	snprintf(win_type,sizeof win_type,"Hamming");
+	break;
+      case BLACKMAN_HARRIS_WINDOW:
+	snprintf(win_type,sizeof win_type,"Blackman-Harris");
+	break;
+      case HFT95_WINDOW:
+	snprintf(win_type,sizeof win_type, "HFT95");
+	break;
+      default:
+	snprintf(win_type,sizeof win_type,"unknown");
+	break;
       }
       pprintw(w,row++,col,"Window","%s",win_type);
     }

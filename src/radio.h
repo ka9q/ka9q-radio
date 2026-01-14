@@ -47,6 +47,7 @@ enum window_type {
   HANN_WINDOW,
   HAMMING_WINDOW,
   BLACKMAN_HARRIS_WINDOW,
+  HFT95_WINDOW,
   N_WINDOW,
 };
 
