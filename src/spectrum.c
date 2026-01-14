@@ -13,6 +13,7 @@
 #include "iir.h"
 #include "filter.h"
 #include "radio.h"
+#include "window.h"
 
 #define OVERLAP (0.0)
 // Use at RBW <= 10 Hz to reduce bouncing on pulsed signals like WWV's tones

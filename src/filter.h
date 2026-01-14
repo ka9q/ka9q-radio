@@ -113,19 +113,6 @@ bool goodchoice(long);
 int ceil_pow2(uint32_t x);
 int set_filter_weights(struct filter_out *out,double complex i_weight, double complex q_weight);
 
-// Window functions
-int make_kaiser(double * const window,int const M,double const beta);
-int make_kaiserf(float * const window,int const M,double const beta);
-int normalize_windowf(float * const window, int const M);
-double gaussian_window(int n, int M, double s);
-int gaussian_window_alpha(float *w, size_t N, double alpha, bool normalize_peak);
-double exact_blackman_window(int n, int N);
-double blackman_window(int n, int N);
-double blackman_harris_window(int n, int N);
-double hann_window(int n,int N);
-double hamming_window(int n,int N);
-double hft95_window(int n, int N);
-
 // Write complex sample to input side of filter
 static inline int put_cfilter(struct filter_in * restrict const f,float complex const s){ // Complex
   assert((void *)(f->input_write_pointer.c) >= f->input_buffer);
