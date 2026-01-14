@@ -1328,6 +1328,7 @@ double blackman_harris_window(int n, int N){
 
 // Harris 5-term flat top (HFT95)
 double hft95_window(int n, int N){
+  assert(N > 1 && n >=0 && n < N);
   double const a0 = 1.0;
   double const a1 = 1.912510941;
   double const a2 = 1.079173272;
