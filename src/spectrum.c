@@ -19,15 +19,14 @@
 // Use at RBW <= 10 Hz to reduce bouncing on pulsed signals like WWV's tones
 //#define VERY_NARROWBAND_OVERLAP (0.5)
 #define VERY_NARROWBAND_OVERLAP (0.5)
-int const point_budget = 512 * 1024; // tunable, experimental
 
-static void generate_window(struct channel *chan);
-static void setup_real_fft(struct channel *chan);
-static void setup_complex_fft(struct channel *chan);
-static void setup_wideband(struct channel *chan);
-static void setup_narrowband(struct channel *chan);
-static void narrowband_poll(struct channel *chan);
-static void wideband_poll(struct channel *chan);
+static void generate_window(struct channel *);
+static void setup_real_fft(struct channel *);
+static void setup_complex_fft(struct channel *);
+static void setup_wideband(struct channel *);
+static void setup_narrowband(struct channel *);
+static void narrowband_poll(struct channel *);
+static void wideband_poll(struct channel *);
 
 // Spectrum analysis thread
 int demod_spectrum(void *arg){
@@ -48,14 +47,9 @@ int demod_spectrum(void *arg){
 
   // Parameters set by system input side
   assert(Blocktime != 0);
-
-#if 1
   realtime(chan->prio - 10); // Drop below demods
-#endif
-
   if(chan->spectrum.fft_avg <= 0)
     chan->spectrum.fft_avg = 1;     // force legal
-
 
   bool restart_needed = false;
   bool response_needed = true;
@@ -245,7 +239,7 @@ static void narrowband_poll(struct channel *chan){
       assert(fr >= 0 && fr < fft_n);
       double const p = bin_data[i] + gain * cnrm((double complex)fft_out[fr++]);
       if(isfinite(p))
-	bin_data[i] = (float)p;
+	bin_data[i] = (float)p; // Don't pollute with infinities or NANs
     }
     // rp now points to *next* buffer, so move it back between 1 and 2 buffers depending on overlap
     if(chan->spectrum.rbw <= 10)
@@ -455,7 +449,7 @@ static void generate_window(struct channel *chan){
   assert(chan->spectrum.window != NULL);
   switch(chan->spectrum.window_type){
   default:
-  case KAISER_WINDOW: // If beta == 0, same as rectangular
+  case KAISER_WINDOW: // If β == 0, same as rectangular
     make_kaiserf(chan->spectrum.window,chan->spectrum.fft_n+1,chan->spectrum.shape);
     break;
   case RECT_WINDOW:
@@ -538,7 +532,7 @@ static void setup_narrowband(struct channel *chan){
   int const N = L + M - 1;
 
   double const margin = 400; // Allow 400 Hz for filter skirts at edge of I/Q receiver - calculate this
-  unsigned long const samprate_base = lcm((unsigned long)blockrate,(unsigned long)(L*blockrate/N)); // Samprate must be allowed by receiver
+  unsigned long const samprate_base = lcm(lrint(blockrate),lrint(L*blockrate/N)); // Samprate must be allowed by receiver
   chan->spectrum.fft_n = lrint(chan->spectrum.bin_count + margin / chan->spectrum.rbw); // Minimum for search to avoid receiver filter skirt
   // This (int) cast should be cleaned up
   while(chan->spectrum.fft_n < 65536 && (!goodchoice(chan->spectrum.fft_n) || lrint(chan->spectrum.fft_n * chan->spectrum.rbw) % samprate_base != 0))
