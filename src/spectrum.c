@@ -485,6 +485,12 @@ static void generate_window(struct channel *chan){
   case HAMMING_WINDOW:
     for(int i=0; i < chan->spectrum.fft_n; i++)
       chan->spectrum.window[i] = hamming_window(i,chan->spectrum.fft_n+1);
+    break;
+  case HFT95_WINDOW:
+    for(int i=0; i < chan->spectrum.fft_n; i++)
+      chan->spectrum.window[i] = hft95_window(i,chan->spectrum.fft_n+1);
+    break;
+    break;
   }
   normalize_windowf(chan->spectrum.window,chan->spectrum.fft_n);
 

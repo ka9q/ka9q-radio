@@ -1396,33 +1396,6 @@ int downconvert(struct channel *chan){
 	fprintf(stderr,"%s terminate needed\n",chan->name);
       return -1; // terminate needed
     }
-    // Process any commands and return status
-    bool restart_needed = false;
-    bool response_needed = false;
-    pthread_mutex_lock(&chan->status.lock);
-
-    if(chan->status.output_interval != 0 && chan->status.output_timer == 0 && !chan->output.silent)
-      chan->status.output_timer = 1; // channel has become active, send update on this pass
-
-    // Look on the single-entry command queue and grab it atomically
-    if(chan->status.command != NULL){
-      restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
-      FREE(chan->status.command);
-      // When a spectrum restart is needed, blow away old bin data so it won't get sent with this status response
-      if((chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD) && restart_needed)
-	FREE(chan->spectrum.bin_data);
-      else
-	response_needed = true;
-    }
-    pthread_mutex_unlock(&chan->status.lock);
-
-    if(restart_needed){
-      if(Verbose > 1)
-	fprintf(stderr,"%s restart needed\n",chan->name);
-      return +1; // Restart needed
-    }
-    response(chan,response_needed);
-
     // To save CPU time when the front end is completely tuned away from us, block (with timeout) until the front
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);
