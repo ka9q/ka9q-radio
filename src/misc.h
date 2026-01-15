@@ -82,6 +82,8 @@ static float const SCALE12 = 1.f/2048.;
 static float const SCALE8 = 1.f/INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
 
 
+#define FULL_SAMPRATE (48000)
+
 int default_prio(void);
 void realtime(int prio);
 int norealtime(void);

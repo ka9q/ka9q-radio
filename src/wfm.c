@@ -18,8 +18,9 @@
 // Forced sample rates; config file values are ignored for now
 // The audio output sample rate can probably eventually be made configurable,
 // but the composite sample rate needs to handle the bandwidth
-static int const Composite_samprate = 384000;
-static int const Audio_samprate = 48000;
+
+static int const Audio_samprate = FULL_SAMPRATE;
+static int const Composite_samprate = 8 * FULL_SAMPRATE;
 
 // FM demodulator thread
 int demod_wfm(void *arg){

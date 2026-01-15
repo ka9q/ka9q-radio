@@ -50,10 +50,11 @@ struct session {
 // Global config variables
 // Each block of stereo output @ 48kHz must fit in an ethernet packet
 // 5 ms * 48000 = 240 stereo frames; 240 * 2 * 2 = 960 bytes
-static double Blocktime = 0.005; // milliseconds
-static int In_samprate = 384000;         // Composite input rate
-static int Out_samprate = 48000;         // stereo output rate
-static double Kaiser_beta = 3.5 * M_PI;
+static double const Blocktime = 0.005; // milliseconds
+static int const Out_samprate = FULL_SAMPRATE;         // stereo output rate
+static int const In_samprate = 8*Out_samprate;         // Composite input rate
+
+static double const Kaiser_beta = 3.5 * M_PI;
 static double const SCALE = 1./INT16_MAX;
 
 // Command line params

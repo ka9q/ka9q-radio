@@ -155,7 +155,7 @@ int add_pt(int type, int samprate, int channels, enum encoding encoding){
 
   if(encoding == OPUS){
     // Force Opus to fixed values
-    samprate = 48000;
+    samprate = OPUS_SAMPRATE;
     channels = 2;
   }
   if(type >= 0 && type < 128){
@@ -272,7 +272,7 @@ int pt_from_info(int samprate,int channels,enum encoding encoding){
   if(encoding == OPUS){
     // Force Opus to fixed values; merges all variations to single PT
     channels = 2;
-    samprate = 48000;
+    samprate = OPUS_SAMPRATE;
   }
 
   // Search table for existing entry, otherwise create new entry

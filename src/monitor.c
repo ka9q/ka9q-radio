@@ -64,7 +64,7 @@ char const *Repeater = "repeater";
 char const *Display = "display";
 
 // Command line/config file/interactive command parameters
-int DAC_samprate = 48000;   // Actual hardware output rate
+int DAC_samprate = FULL_SAMPRATE;   // Actual hardware output rate
 char const *App_path;
 int Verbose = 0;                    // Verbosity flag
 char const *Config_file;

@@ -487,7 +487,7 @@ void *encode(void *arg){
 #endif
     }
 
-    if(pkt->rtp.marker || samples_skipped > 4 * 48000 * Opus_blocktime){ // Opus works on 48 kHz virtual samples
+    if(pkt->rtp.marker || samples_skipped > 4 * OPUS_SAMPRATE * Opus_blocktime){ // Opus works on 48 kHz virtual samples
       // reset encoder state after 4 seconds of skip or a RTP marker bit
       opus_encoder_ctl(sp->opus,OPUS_RESET_STATE);
       sp->silence = true;
@@ -678,7 +678,7 @@ int send_samples(struct session * const sp){
     } else
       sp->silence = true;
 
-    sp->rtp_state_out.timestamp += frame_size * 48000 / sp->samprate; // Always increase timestamp by virtual 48k sample rate
+    sp->rtp_state_out.timestamp += frame_size * OPUS_SAMPRATE / sp->samprate; // Always increase timestamp by virtual 48k sample rate
     const int remaining_bytes = sizeof(sp->audio_buffer[0]) * (sp->audio_write_index - sp->channels * frame_size);
     assert(remaining_bytes >= 0);
     memmove(sp->audio_buffer,&sp->audio_buffer[sp->channels * frame_size],remaining_bytes);

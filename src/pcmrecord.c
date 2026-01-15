@@ -828,9 +828,9 @@ static int emit_opus_silence(struct session * const sp,int samples,bool plc_ok){
       buffer[0] = (code << 3)| 0x00;
       length = 1;
       plc_samples_generated += chunk;
-      int n = opus_packet_get_nb_samples(buffer,length,48000);
+      int n = opus_packet_get_nb_samples(buffer,length,OPUS_SAMPRATE);
 #ifndef NDEBUG
-      int spf = opus_packet_get_samples_per_frame(buffer, 48000);
+      int spf = opus_packet_get_samples_per_frame(buffer, OPUS_SAMPRATE);
       int nf  = opus_packet_get_nb_frames(buffer, length);
       // Check suggested by ChatGPT when I encode multi-frame PLC
       assert(n == spf * nf);

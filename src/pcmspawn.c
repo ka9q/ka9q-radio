@@ -251,7 +251,7 @@ int main(int argc,char * const argv[]){
       goto endloop; // Old dupe
 
     if(samples_skipped){
-      if(samples_skipped < 4 * 48000){ // 4 sec @ 48kHz is arbitrary
+      if(samples_skipped < 4 * FULL_SAMPRATE){ // 4 sec @ 48kHz is arbitrary
 	sp->dropped_samples += samples_skipped;
 	int const padding = 2 * channels * samples_skipped;
 	

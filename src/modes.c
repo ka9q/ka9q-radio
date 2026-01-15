@@ -404,7 +404,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     char const *cp = config_getstring(table,sname,"deemph-tc",NULL);
     if(cp){
       double const tc = strtod(cp,NULL) * 1e-6;
-      unsigned int samprate = (chan->demod_type == WFM_DEMOD) ? 48000 : chan->output.samprate;
+      unsigned int samprate = (chan->demod_type == WFM_DEMOD) ? FULL_SAMPRATE : chan->output.samprate;
       chan->fm.rate = -expm1(-1.0 / (tc * samprate));
     }
   }

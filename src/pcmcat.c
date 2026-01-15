@@ -176,7 +176,7 @@ int main(int argc,char *argv[]){
 		  (int16_t)(Pcmstream.last_header.seq+1),rtp.seq,
 		  time_step);
 
-	if(Pcmstream.framesize != 0 && time_step >= 0 && time_step < 48000){  // arbitrary, make this a parameter
+	if(Pcmstream.framesize != 0 && time_step >= 0 && time_step < FULL_SAMPRATE){  // arbitrary, make this a parameter
 	  char zeroes[Pcmstream.framesize * time_step];
 	  memset(zeroes,0,sizeof(zeroes));
 	  fwrite(zeroes,1,sizeof(zeroes),stdout);

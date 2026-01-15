@@ -214,8 +214,8 @@ static void *proc_sig_gen(void *arg){
   if(src == NULL)
     sdr->modulation = CW; // Turn it off
 
-  const int mod_samprate = 48000; // Fixed for now
-  const int samps_per_samp = lrint(frontend->samprate / mod_samprate);
+  int const mod_samprate = FULL_SAMPRATE; // Fixed for now
+  int const samps_per_samp = lrint(frontend->samprate / mod_samprate);
 
   while(!Stop_transfers){
     // How long since last call?

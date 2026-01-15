@@ -27,7 +27,7 @@
 // Global config constants
 #define BUFFERSIZE (1<<18)    // Size of audio ring buffer in mono samples. 2^18 is 2.73 sec at 48 kHz stereo
                               // Defined as macro so the Audiodata[] declaration below won't bother some compilers
-int const Samprate = 48000;   // Too hard to handle other sample rates right now
+int const Samprate = FULL_SAMPRATE;   // Too hard to handle other sample rates right now
 int const Channels = 2;
 #define FRAMESIZE 240         // 5 ms @ 48 kHz makes 960 bytes/packet
 // End of config stuff

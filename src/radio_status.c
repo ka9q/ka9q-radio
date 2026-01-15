@@ -772,7 +772,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch.close));
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
-    encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * 48000.0f)); // ad-hoc
+    encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * FULL_SAMPRATE)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     break;

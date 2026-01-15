@@ -60,7 +60,7 @@ int const Bufsize = 1540;     // Maximum samples/words per RTP packet - must be 
 // 5 ms * 48000 = 240 stereo frames; 240 * 2 * 2 = 960 bytes
 double Blocktime = .005; // milliseconds
 int const Composite_samprate = 384000;         // Composite input rate
-int const Audio_samprate = 48000;         // stereo output rate
+int const Audio_samprate = FULL_SAMPRATE;         // stereo output rate
 double Kaiser_beta = 3.5 * M_PI;
 double const SCALE = 1./INT16_MAX;
 
