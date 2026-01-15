@@ -83,7 +83,7 @@ int demod_spectrum(void *arg){
 
     if(chan->spectrum.rbw != rbw || chan->spectrum.bin_count != bin_count)
       chan->spectrum.fft_n = -1; // force setup;
-      
+
     // fairly major reinitialization required
     if(chan->spectrum.fft_n <= 0){
       if(chan->spectrum.plan == NULL)
@@ -196,7 +196,7 @@ static void narrowband_poll(struct channel *chan){
 
   if(chan->spectrum.window == NULL)
     generate_window(chan);
-  
+
   float const * restrict const window = chan->spectrum.window;
 
   // Most recent data from receive ring buffer
@@ -205,7 +205,7 @@ static void narrowband_poll(struct channel *chan){
 
   int const fft_n = chan->spectrum.fft_n;
   assert(fft_n > 0); // should be set by narrowband_setup()
-  
+
   int rp = chan->spectrum.ring_idx - fft_n;
   if(rp < 0)
     rp += ring_size;
@@ -481,9 +481,9 @@ static void generate_window(struct channel *chan){
     for(int i=0; i < chan->spectrum.fft_n; i++)
       chan->spectrum.window[i] = hamming_window(i,chan->spectrum.fft_n+1);
     break;
-  case HFT95_WINDOW:
+  case HP5FT_WINDOW:
     for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = hft95_window(i,chan->spectrum.fft_n+1);
+      chan->spectrum.window[i] = hp5ft_window(i,chan->spectrum.fft_n+1);
     break;
     break;
   }

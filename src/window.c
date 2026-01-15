@@ -71,8 +71,8 @@ double blackman_harris_window(int n, int N){
   return a0 - a1 * cos(2*M_PI*n/(N-1)) + a2 * cos(4*M_PI*n/(N-1)) - a3 * cos(6*M_PI*n/(N-1));
 }
 
-// Harris 5-term flat top (HFT95)
-double hft95_window(int n, int N){
+// 5-term HP/Agilent flat-top window" by Heinzel et al
+double hp5ft_window(int n, int N){
   assert(N > 1 && n >=0 && n < N);
   double const a0 = 1.0;
   double const a1 = 1.912510941;

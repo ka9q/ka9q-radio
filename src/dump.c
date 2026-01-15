@@ -13,6 +13,7 @@
 #include "status.h"
 #include "multicast.h"
 #include "radio.h"
+#include "window.h"
 
 void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newline){
   uint8_t const *cp = buffer;

@@ -20,6 +20,7 @@
 #include "misc.h"
 #include "radio.h"
 #include "config.h"
+#include "window.h"
 
 struct demodtab Demodtab[] = {
       {LINEAR_DEMOD,   "Linear"}, // Coherent demodulation of AM, DSB, BPSK; calibration on WWV/WWVH/CHU carrier
@@ -250,10 +251,10 @@ int set_defaults(struct channel *chan){
   chan->filter2.kaiser_beta = DEFAULT_KAISER_BETA;
   chan->filter2.isb = false;
 
-  chan->squelch_open = dB2power(DEFAULT_SQUELCH_OPEN);
-  chan->squelch_close = dB2power(DEFAULT_SQUELCH_CLOSE);
-  chan->squelch_tail = DEFAULT_SQUELCH_TAIL;
-  chan->snr_squelch_enable = DEFAULT_SNR_SQUELCH;
+  chan->squelch.open = dB2power(DEFAULT_SQUELCH_OPEN);
+  chan->squelch.close = dB2power(DEFAULT_SQUELCH_CLOSE);
+  chan->squelch.tail = DEFAULT_SQUELCH_TAIL;
+  chan->squelch.snr_enable = DEFAULT_SNR_SQUELCH;
 
   // elements shared with WFM demod, which uses different values
   chan->fm.rate = -expm1(-1.0 / (DEFAULT_NBFM_TC * DEFAULT_NBFM_SAMPRATE));
@@ -334,15 +335,15 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   {
     char const *cp = config_getstring(table,sname,"squelch-open",NULL);
     if(cp)
-      chan->squelch_open = dB2power(strtod(cp,NULL));
+      chan->squelch.open = dB2power(strtod(cp,NULL));
   }
   {
     char const *cp = config_getstring(table,sname,"squelch-close",NULL);
     if(cp)
-      chan->squelch_close = dB2power(strtod(cp,NULL));
+      chan->squelch.close = dB2power(strtod(cp,NULL));
   }
-  chan->squelch_tail = config_getint(table,sname,"squelchtail",chan->squelch_tail); // historical
-  chan->squelch_tail = config_getint(table,sname,"squelch-tail",chan->squelch_tail);
+  chan->squelch.tail = config_getint(table,sname,"squelchtail",chan->squelch.tail); // historical
+  chan->squelch.tail = config_getint(table,sname,"squelch-tail",chan->squelch.tail);
   {
     char const *cp = config_getstring(table,sname,"headroom",NULL);
     if(cp)
@@ -394,7 +395,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   chan->linear.agc = config_getboolean(table,sname,"agc",chan->linear.agc);
   chan->fm.threshold = config_getboolean(table,sname,"extend",chan->fm.threshold); // FM threshold extension
   chan->fm.threshold = config_getboolean(table,sname,"threshold-extend",chan->fm.threshold); // FM threshold extension
-  chan->snr_squelch_enable = config_getboolean(table,sname,"snr-squelch",chan->snr_squelch_enable);
+  chan->squelch.snr_enable = config_getboolean(table,sname,"snr-squelch",chan->squelch.snr_enable);
   double cutoff = config_getdouble(table,sname,"dc-cut",-987);
   if(cutoff != -987)
     chan->linear.dc_tau = -expm1(-2.0 * M_PI * cutoff/(chan->output.samprate));

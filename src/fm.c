@@ -54,10 +54,10 @@ int demod_fm(void *arg){
 
   double complex phase_memory = 0;
   chan->output.channels = 1; // Only mono for now
-  if(isnan(chan->squelch_open) || chan->squelch_open == 0)
-    chan->squelch_open = 6.3;  // open above ~ +8 dB
-  if(isnan(chan->squelch_close) || chan->squelch_close == 0)
-    chan->squelch_close = 4; // close below ~ +6 dB
+  if(isnan(chan->squelch.open) || chan->squelch.open == 0)
+    chan->squelch.open = 6.3;  // open above ~ +8 dB
+  if(isnan(chan->squelch.close) || chan->squelch.close == 0)
+    chan->squelch.close = 4; // close below ~ +6 dB
 
   chan->fm.devmax = 5000.; // nominal peak deviation Hz
   chan->fm.modbw = 3000.;   // maximum modulating frequency Hz
@@ -117,7 +117,7 @@ int demod_fm(void *arg){
 
     // Simple SNR estimate: Power/(N0 * Bandwidth) - 1
     double const snr = (chan->sig.bb_power / noise) - 1.0;
-    if(chan->snr_squelch_enable || (squelch_state <= 0 && snr < chan->squelch_close)){ // Save the trouble if the signal just isn't there
+    if(chan->squelch.snr_enable || (squelch_state <= 0 && snr < chan->squelch.close)){ // Save the trouble if the signal just isn't there
       chan->fm.snr = snr;
     } else {
       // variance estimation. first get average amplitude (lots of square roots)
@@ -150,14 +150,14 @@ int demod_fm(void *arg){
                      == 1, 2, 3 : send a silent RTP frame
                             >=4 : squelch is fully open
 
-       The user parameter chan->squelch_tail thus controls how many blocks the squelch will remain open
+       The user parameter chan->squelch.tail thus controls how many blocks the squelch will remain open
        after the SNR falls below the close threshold. This is always followed by several blocks of silence, then the stream stops.
        If at any time the SNR >= open threshold, the sequence is aborted, the timer is restarted and normal operation continues
     */
-    int const squelch_state_max = chan->squelch_tail + 5;
-    if(chan->fm.snr >= chan->squelch_open){
+    int const squelch_state_max = chan->squelch.tail + 5;
+    if(chan->fm.snr >= chan->squelch.open){
       squelch_state = squelch_state_max; // hold open
-    } else if(squelch_state > 0 && (chan->fm.snr < chan->squelch_close || squelch_state < squelch_state_max)){
+    } else if(squelch_state > 0 && (chan->fm.snr < chan->squelch.close || squelch_state < squelch_state_max)){
       squelch_state--; // initiate or continue closing
     }
     // mini sequencer for multi-frame squelch closing sequence

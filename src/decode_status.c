@@ -165,7 +165,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->linear.env = decode_bool(cp,optlen);
       break;
     case SNR_SQUELCH:
-      channel->snr_squelch_enable = decode_bool(cp,optlen);
+      channel->squelch.snr_enable = decode_bool(cp,optlen);
       break;
     case OUTPUT_LEVEL:
       channel->output.power = dB2power(decode_float(cp,optlen));
@@ -234,10 +234,10 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->tp2 = decode_float(cp,optlen);
       break;
     case SQUELCH_OPEN:
-      channel->squelch_open = dB2power(decode_float(cp,optlen));
+      channel->squelch.open = dB2power(decode_float(cp,optlen));
       break;
     case SQUELCH_CLOSE:
-      channel->squelch_close = dB2power(decode_float(cp,optlen));
+      channel->squelch.close = dB2power(decode_float(cp,optlen));
       break;
     case DEEMPH_GAIN:
       channel->fm.gain = decode_float(cp,optlen);

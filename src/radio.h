@@ -25,6 +25,7 @@
 #include "filter.h"
 #include "iir.h"
 #include "conf.h"
+#include "window.h"
 
 /**
    @brief The four demodulator types
@@ -36,19 +37,6 @@ enum demod_type {
   SPECT_DEMOD,          // Spectrum analysis pseudo-demod
   SPECT2_DEMOD,         // spectrum v2: 8-bit log bins, low-to-high order
   N_DEMOD,              // Dummy equal to number of valid entries
-};
-
-enum window_type {
-  KAISER_WINDOW,
-  RECT_WINDOW, // essentially kaiser with beta = 0
-  BLACKMAN_WINDOW,
-  EXACT_BLACKMAN_WINDOW,
-  GAUSSIAN_WINDOW,
-  HANN_WINDOW,
-  HAMMING_WINDOW,
-  BLACKMAN_HARRIS_WINDOW,
-  HFT95_WINDOW,
-  N_WINDOW,
 };
 
 
@@ -207,10 +195,12 @@ struct channel {
     double dc_tau;     // alpha for simple IIR carrier (DC) removal
   } linear;
 
-  bool snr_squelch_enable; // Use raw SNR for AM/SSB/FM squelch
-  double squelch_open;      // squelch open threshold, power ratio
-  double squelch_close;     // squelch close threshold
-  int squelch_tail;        // Frames to hold open after loss of SNR
+  struct {
+    bool snr_enable; // Use raw SNR for AM/SSB/FM squelch
+    double open;      // squelch open threshold, power ratio
+    double close;     // squelch close threshold
+    int tail;        // Frames to hold open after loss of SNR
+  } squelch;
 
   struct {
     struct pll pll;

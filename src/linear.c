@@ -65,7 +65,7 @@ int demod_linear(void *arg){
   bool first_run = false;
   bool response_needed = true;
   bool restart_needed = false;
-  int squelch_state = (!chan->pll.enable && !chan->snr_squelch_enable) ? chan->squelch_tail + 4 : 0;
+  int squelch_state = (!chan->pll.enable && !chan->squelch.snr_enable) ? chan->squelch.tail + 4 : 0;
   bool squelch_open = true; // memory for squelch hysteresis, starts open
 
   pthread_mutex_unlock(&chan->status.lock);
@@ -160,13 +160,13 @@ int demod_linear(void *arg){
       // Loop lock detector with hysteresis
       // If there's more I signal than Q signal, declare it locked
       // The squelch settings are really for FM, not for us
-      if(chan->pll.snr < chan->squelch_close){
+      if(chan->pll.snr < chan->squelch.close){
 	chan->pll.lock_count -= N;
 	if(chan->pll.lock_count <= -lock_limit){
 	  chan->pll.lock_count = -lock_limit;
 	  chan->pll.lock = false;
 	}
-      } else if(chan->pll.snr > chan->squelch_open){
+      } else if(chan->pll.snr > chan->squelch.open){
 	chan->pll.lock_count += N;
 	if(chan->pll.lock_count >= lock_limit){
 	  chan->pll.lock_count = lock_limit;
@@ -330,20 +330,20 @@ int demod_linear(void *arg){
 
     // If snr squelch is enabled, it takes precedence. Otherwise PLL lock, if it's on
     double snr = +INFINITY;
-    if(chan->snr_squelch_enable)
+    if(chan->squelch.snr_enable)
       snr = (chan->sig.bb_power / (chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF))) - 1.0;
     else if(chan->pll.enable)
       snr = chan->pll.snr;
 
 
     // Multi-step squelch similar to FM but simpler
-    int const squelch_state_max = chan->squelch_tail + 4;
+    int const squelch_state_max = chan->squelch.tail + 4;
 
-    if(!(chan->snr_squelch_enable || chan->pll.enable)
-       || snr >= chan->squelch_open)
+    if(!(chan->squelch.snr_enable || chan->pll.enable)
+       || snr >= chan->squelch.open)
       squelch_state = squelch_state_max; // hold timer at start
 
-    else if(squelch_state > 0 && snr < chan->squelch_close)
+    else if(squelch_state > 0 && snr < chan->squelch.close)
       squelch_state--; // Begin to close it. If squelch_tail == 0, this will result in zeroes being emitted right away (no tail)
 
     // mini state machine for multi-frame squelch closing sequence
@@ -364,10 +364,10 @@ int demod_linear(void *arg){
     default: // 4 and above - squelch is open
       break;
     }
-    if(chan->snr_squelch_enable || chan->pll.enable){
-      if(snr < chan->squelch_close)
+    if(chan->squelch.snr_enable || chan->pll.enable){
+      if(snr < chan->squelch.close)
 	squelch_open = false;
-      else if(!squelch_open && snr > chan->squelch_open){
+      else if(!squelch_open && snr > chan->squelch.open){
 	squelch_open = true;
 	am_dc = 0; // try to remove the opening thump caused by the carrier
       }

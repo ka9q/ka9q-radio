@@ -1542,8 +1542,8 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
     pprintw(w,row++,col,"Input S/N","%+.1lf dB",power2dB(chan->fm.snr));
     if(!isnan(chan->output.headroom))
       pprintw(w,row++,col,"Headroom","%+.1lf dBFS ",voltage2dB(chan->output.headroom));
-    pprintw(w,row++,col,"Squel open","%+.1lf dB   ",power2dB(chan->squelch_open));
-    pprintw(w,row++,col,"Squel close","%+.1lf dB   ",power2dB(chan->squelch_close));
+    pprintw(w,row++,col,"Squel open","%+.1lf dB   ",power2dB(chan->squelch.open));
+    pprintw(w,row++,col,"Squel close","%+.1lf dB   ",power2dB(chan->squelch.close));
     pprintw(w,row++,col,"Offset","%'+.3lf Hz",chan->sig.foffset);
     pprintw(w,row++,col,"Deviation","%+.1lf Hz",chan->fm.pdeviation);
     if(!isnan(chan->fm.tone_freq) && chan->fm.tone_freq != 0)
@@ -1558,8 +1558,8 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
   case LINEAR_DEMOD:
     if(!isnan(chan->output.headroom))
       pprintw(w,row++,col,"Headroom","%+.1lf dBFS",voltage2dB(chan->output.headroom));
-    pprintw(w,row++,col,"Squel open","%+.1lf dB  ",power2dB(chan->squelch_open));
-    pprintw(w,row++,col,"Squel close","%+.1lf dB  ",power2dB(chan->squelch_close));
+    pprintw(w,row++,col,"Squel open","%+.1lf dB  ",power2dB(chan->squelch.open));
+    pprintw(w,row++,col,"Squel close","%+.1lf dB  ",power2dB(chan->squelch.close));
 
     if(!isnan(chan->linear.threshold) && chan->linear.threshold > 0)
       pprintw(w,row++,col,"AGC Threshold","%+.1lf dB  ",voltage2dB(chan->linear.threshold));
@@ -1626,8 +1626,8 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
       case BLACKMAN_HARRIS_WINDOW:
 	snprintf(win_type,sizeof win_type,"Blackman-Harris");
 	break;
-      case HFT95_WINDOW:
-	snprintf(win_type,sizeof win_type, "HFT95");
+      case HP5FT_WINDOW:
+	snprintf(win_type,sizeof win_type, "HP 5 flat top");
 	break;
       default:
 	snprintf(win_type,sizeof win_type,"unknown");
@@ -1748,11 +1748,11 @@ static void display_options(WINDOW *w,struct channel const *chan){
     mvwaddstr(w,row++,col,"Th Ext on");
     wattroff(w,A_UNDERLINE);
 
-    if(!chan->snr_squelch_enable)
+    if(!chan->squelch.snr_enable)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"SNR Sq Off");
     wattroff(w,A_UNDERLINE);
-    if(chan->snr_squelch_enable)
+    if(chan->squelch.snr_enable)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"SNR Sq On");
     wattroff(w,A_UNDERLINE);
@@ -1777,11 +1777,11 @@ static void display_options(WINDOW *w,struct channel const *chan){
     mvwaddstr(w,row++,col,"Stereo");
     wattroff(w,A_UNDERLINE);
 
-    if(!chan->snr_squelch_enable)
+    if(!chan->squelch.snr_enable)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"SNR Sq Off");
     wattroff(w,A_UNDERLINE);
-    if(chan->snr_squelch_enable)
+    if(chan->squelch.snr_enable)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"SNR Sq On");
     wattroff(w,A_UNDERLINE);
@@ -1831,11 +1831,11 @@ static void display_options(WINDOW *w,struct channel const *chan){
     mvwaddstr(w,row++,col,"AGC On");
     wattroff(w,A_UNDERLINE);
 
-    if(!chan->snr_squelch_enable)
+    if(!chan->squelch.snr_enable)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"SNR Sq Off");
     wattroff(w,A_UNDERLINE);
-    if(chan->snr_squelch_enable)
+    if(chan->squelch.snr_enable)
       wattron(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,"SNR Sq On");
     wattroff(w,A_UNDERLINE);

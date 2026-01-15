@@ -424,7 +424,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       chan->linear.env = decode_bool(cp,optlen);
       break;
     case SNR_SQUELCH:
-      chan->snr_squelch_enable = decode_bool(cp,optlen);
+      chan->squelch.snr_enable = decode_bool(cp,optlen);
       break;
     case OUTPUT_CHANNELS: // int
       {
@@ -453,7 +453,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	double const x = decode_float(cp,optlen);
 	if(!isfinite(x))
 	  break;
-	chan->squelch_open = dB2power(x);
+	chan->squelch.open = dB2power(x);
       }
       break;
     case SQUELCH_CLOSE:
@@ -461,7 +461,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
         double const x = decode_float(cp,optlen);
 	if(!isfinite(x))
 	  break;
-	chan->squelch_close = dB2power(x);
+	chan->squelch.close = dB2power(x);
       }
       break;
     case RESOLUTION_BW:
@@ -725,7 +725,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   // Mode-specific params
   switch(chan->demod_type){
   case LINEAR_DEMOD:
-    encode_bool(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
+    encode_bool(&bp,SNR_SQUELCH,chan->squelch.snr_enable);
     encode_bool(&bp,PLL_ENABLE,chan->pll.enable); // bool
     if(chan->pll.enable){
       encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
@@ -736,8 +736,8 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       encode_int64(&bp,PLL_WRAPS,chan->pll.rotations); // count of complete 360-deg rotations of PLL phase - SIGNED
       encode_float(&bp,PLL_SNR,power2dB(chan->pll.snr)); // abs ratio -> dB
     }
-    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
-    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
+    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch.open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch.close));
     encode_bool(&bp,ENVELOPE,chan->linear.env);
     encode_double(&bp,SHIFT_FREQUENCY,chan->tune.shift); // Hz
     encode_bool(&bp,AGC_ENABLE,chan->linear.agc);
@@ -749,14 +749,14 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_bool(&bp,INDEPENDENT_SIDEBAND,chan->filter2.isb);
     break;
   case FM_DEMOD:
-    encode_bool(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
+    encode_bool(&bp,SNR_SQUELCH,chan->squelch.snr_enable);
     if(chan->fm.tone_freq != 0){
       encode_float(&bp,PL_TONE,chan->fm.tone_freq);
       encode_float(&bp,PL_DEVIATION,chan->fm.tone_deviation);
     }
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
-    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
-    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
+    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch.open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch.close));
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
@@ -766,10 +766,10 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     break;
   case WFM_DEMOD:
     // Relevant only when squelches are active
-    encode_bool(&bp,SNR_SQUELCH,chan->snr_squelch_enable);
+    encode_bool(&bp,SNR_SQUELCH,chan->squelch.snr_enable);
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
-    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch_open));
-    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch_close));
+    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch.open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch.close));
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * 48000.0f)); // ad-hoc
