@@ -352,4 +352,20 @@ uint32_t round2(uint32_t v);
 
 void drop_cache(void *mem,size_t bytes);
 
+// Gaussian (normal) RV generation
+typedef struct {
+    uint64_t s[4];
+} xoshiro256ss_state;
+
+void xoshiro256ss_seed(xoshiro256ss_state *st, uint64_t seed);
+uint64_t xoshiro256ss_next(xoshiro256ss_state *st);
+void xoshiro256ss_jump(xoshiro256ss_state *st);
+void rand_init(void);
+double real_gauss(void);
+static inline double complex complex_gauss(void){
+  double r = real_gauss();
+  double i = real_gauss();
+  return CMPLX(r,i);
+}
+
 #endif // _MISC_H
