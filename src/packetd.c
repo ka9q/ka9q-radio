@@ -50,7 +50,6 @@ struct session {
 
 // Config constants
 #define MAX_MCAST 20          // Maximum number of multicast addresses
-static double const SCALE = 1./32768;
 #define AL 960 // 20 ms @ 48 kHz = 1x 20 ms blocks = 24 bit times @ 1200 bps
 #define AM 961
 static double Bitrate = 1200;
@@ -550,7 +549,9 @@ static void *decode_task(void *arg){
     assert(filter_in.ilen == AL);
     assert(filter_out.olen == AL);
     for(int n=0; n < AL; n++){
-      if(put_rfilter(&filter_in,(float)(ntohs(samples[n]) * SCALE)) == 0)
+      double s = (double)(int16_t)ntohs(samples[n]);
+      s = ldexp(s,-15); // scale by 32768
+      if(put_rfilter(&filter_in,s) == 0)
 	continue;
       execute_filter_output(&filter_out,0);    // Shouldn't block
       for(int n=0; n<filter_out.olen; n++){
