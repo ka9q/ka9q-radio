@@ -27,7 +27,7 @@
 #include "conf.h"
 #include "window.h"
 
-#define FULL_SAMPRATE (48000)
+
 
 /**
    @brief The four demodulator types
