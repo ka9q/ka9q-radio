@@ -44,15 +44,16 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
   // Should be longer than any character
   float fsamples[60 * Dit_length];
 
-  struct rtp_header rtp;
-  memset(&rtp,0,sizeof(rtp));
   int const type = pt_from_info(Samprate,1,S16BE);
   if(type < 0)
     return 0; // Can't allocate!
-  rtp.type = (uint8_t)type;
-  rtp.version = RTP_VERS;
-  rtp.ssrc = rtp_state->ssrc;
-  rtp.marker = true; // Start with marker bit on to reset playout buffer
+
+  struct rtp_header rtp = {
+    .type = (uint8_t)type,
+    .version = RTP_VERS,
+    .ssrc = rtp_state->ssrc,
+    .marker = true // Start with marker bit on to reset playout buffer
+  };
 
   size_t sample_count = encode_morse_char(fsamples,c);
   // byte swap for network
