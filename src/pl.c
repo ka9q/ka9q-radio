@@ -293,7 +293,7 @@ int main(int argc,char * const argv[]){
       int16_t const *sampp = (int16_t *)dp;
       while(sampcount-- > 0){
 	// For each sample, run the local oscillators and integrators
-	float const samp = SCALE16 * (int16_t)ntohs(*sampp++);
+	double const samp = ldexp((double)(int16_t)ntohs(*sampp++),-15);
 	if(put_rfilter(&sp->filter_in,samp) == 0)
 	  continue;
 
