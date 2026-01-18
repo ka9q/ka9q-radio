@@ -55,7 +55,6 @@ static int const Out_samprate = FULL_SAMPRATE;         // stereo output rate
 static int const In_samprate = 8*Out_samprate;         // Composite input rate
 
 static double const Kaiser_beta = 3.5 * M_PI;
-static double const SCALE = 1./INT16_MAX;
 
 // Command line params
 const char *App_path;
@@ -471,7 +470,7 @@ void *decode(void *arg){
     int16_t const * const samples = (int16_t *)pkt->data;
 
     for(size_t i=0; i<frame_size; i++){
-      float const s = (float)(SCALE * (int16_t)ntohs(samples[i]));
+      double const s = ldexp((double)(int16_t)ntohs(samples[i]),-15);
       if(put_rfilter(&baseband,s) == 0)
 	continue;
       // Filter input buffer full
