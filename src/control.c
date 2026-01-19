@@ -595,6 +595,8 @@ int main(int argc,char *argv[]){
 
   Frontend.frequency = Frontend.min_IF = Frontend.max_IF = NAN;
   Frontend.rf_level_cal = NAN; // Not calibrated unless it says it is
+  Frontend.rf_gain = NAN;
+  Frontend.rf_atten = NAN;
   /* Main loop:
      Send poll if we haven't received one in our refresh interval
      See if anything has arrived (use short timeout)
@@ -1483,25 +1485,33 @@ static void display_sig(WINDOW *w,struct channel const *chan){
 	    Frontend.if_gain);
 
   // Calculate actual input power in dBm by subtracting net RF gain
-  double pwr = power2dB(Frontend.if_power) - (Frontend.rf_gain - Frontend.rf_atten);
-  double gain_offset = Frontend.rf_atten - Frontend.rf_gain;
+  double pwr = power2dB(Frontend.if_power);
+  double gain_offset = 0;
+  // These gain figures only affect the relative A/D input level in dBFS because an equal
+  // amount of digital attenuation is applied to the A/D output to maintain unity gain
+  if (isfinite(Frontend.rf_gain) && Frontend.rf_gain != 0){
+    pprintw(w,row++,col,"RF Gain","%+.1lf dB  ",Frontend.rf_gain);
+    pwr -= Frontend.rf_gain;
+    gain_offset -= Frontend.rf_gain;
+  }
+  if(isfinite(Frontend.rf_atten) && Frontend.rf_atten != 0){
+    pprintw(w,row++,col,"RF Atten","%+.1lf dB  ",-Frontend.rf_atten);
+    pwr += Frontend.rf_atten;
+    gain_offset += Frontend.rf_atten;
+  }
   // dec 2025: sign convention has flipped to be dBm/FS (prevously dBFS/dbm)
   // not sent unless it is calibrated
-  if(isfinite(Frontend.rf_level_cal)){
+  if(isfinite(Frontend.rf_level_cal) && Frontend.rf_level_cal != 0){
     pwr += Frontend.rf_level_cal;
     gain_offset += Frontend.rf_level_cal;
     pprintw(w,row++,col,"Input","%+.1lf dBm ",pwr);
     pprintw(w,row++,col,"RF lev cal","%+.1lf dBm ",Frontend.rf_level_cal);
   }
-
-  // These gain figures only affect the relative A/D input level in dBFS because an equal
-  // amount of digital attenuation is applied to the A/D output to maintain unity gain
-  pprintw(w,row++,col,"RF Gain","%+.1lf dB  ",Frontend.rf_gain);
-  pprintw(w,row++,col,"RF Atten","%+.1lf dB  ",-Frontend.rf_atten);
   pprintw(w,row++,col,"A/D","%+.1lf dBFS",power2dB(Frontend.if_power));
 
-  pprintw(w,row++,col,"Gain offset","%+.1lf dB  ",gain_offset);
-  if(!isnan(chan->sig.bb_power))
+  if(gain_offset != 0)
+    pprintw(w,row++,col,"Gain offset","%+.1lf dB  ",gain_offset);
+  if(isfinite(chan->sig.bb_power))
     pprintw(w,row++,col,"Baseband","%+.1lf dBm ",power2dB(chan->sig.bb_power));
   if(!isnan(chan->sig.n0)){
      pprintw(w,row++,col,"N₀","%+.1lf dBmJ",power2dB(chan->sig.n0));
@@ -1517,9 +1527,9 @@ static void display_sig(WINDOW *w,struct channel const *chan){
     pprintw(w,row++,col,"NBW","%.1lf dBHz",power2dB(Local.noise_bandwidth));
   if(!isnan(Local.snr))
     pprintw(w,row++,col,"S/N","%+.1lf dB  ",Local.snr);
-  if(!isnan(chan->output.gain) && chan->demod_type == LINEAR_DEMOD) // Only relevant in linear
+  if(isfinite(chan->output.gain) && chan->demod_type == LINEAR_DEMOD) // Only relevant in linear
     pprintw(w,row++,col,"Gain","%+.1lf dB  ",voltage2dB(chan->output.gain));
-  if(!isnan(chan->output.power))
+  if(isfinite(chan->output.power))
     pprintw(w,row++,col,"Output","%+.1lf dBFS",power2dB(chan->output.power));
   box(w,0,0);
   mvwaddstr(w,0,1,"Signal");

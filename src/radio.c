@@ -1602,7 +1602,11 @@ double scale_AD(struct frontend const *frontend){
   assert(frontend->bitspersample > 0);
   // net analog gain, dBm to dBFS, that we correct for to maintain unity gain, i.e., 0 dBm -> 0 dBFS
 
-  double analog_gain = frontend->rf_gain - frontend->rf_atten;
+  double analog_gain = 0;
+  if(isfinite(frontend->rf_gain))
+    analog_gain += frontend->rf_gain;
+  if (isfinite(frontend->rf_atten))
+    analog_gain -= frontend->rf_atten;
   if(isfinite(frontend->rf_level_cal))
     analog_gain -= frontend->rf_level_cal; // new sign convention
   if(frontend->isreal)

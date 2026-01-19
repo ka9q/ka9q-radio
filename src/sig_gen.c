@@ -93,9 +93,9 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
     if(p != NULL)
       frontend->samprate = (int)parse_frequency(p,false);
   }
-  frontend->rf_gain = 0;
-  frontend->rf_atten = 0;
-  frontend->rf_level_cal = 0;
+  frontend->rf_gain = NAN;
+  frontend->rf_atten = NAN;
+  frontend->rf_level_cal = NAN;
   frontend->isreal = config_getboolean(dictionary,section,"real",true);
   frontend->isreal = ! config_getboolean(dictionary,section,"complex",! frontend->isreal);
   frontend->bitspersample = 1; // Input is floating point with no scaling
