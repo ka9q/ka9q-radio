@@ -21,12 +21,14 @@ GIT_SUMMARY := $(shell git log -1 --format="%s" 2>/dev/null || echo "unknown")
 GIT_VERSION := $(shell git describe --always --dirty --tags 2>/dev/null || echo "unknown")
 GIT_REMOTE_URL := $(shell git remote get-url origin 2>/dev/null || echo "unknown")
 
-VERSION_FLAGS = -DGIT_HASH='"$(GIT_HASH)"' \
-                -DGIT_TIME='"$(GIT_TIME)"' \
-                -DGIT_BRANCH='"$(GIT_BRANCH)"' \
-                -DGIT_SUMMARY='"$(GIT_SUMMARY)"' \
-                -DGIT_VERSION='"$(GIT_VERSION)"' \
-                -DGIT_REMOTE_URL='"$(GIT_REMOTE_URL)"'
+#VERSION_FLAGS = -DGIT_HASH='"$(GIT_HASH)"' \
+#                -DGIT_TIME='"$(GIT_TIME)"' \
+#                -DGIT_BRANCH='"$(GIT_BRANCH)"' \
+#                -DGIT_SUMMARY='"$(GIT_SUMMARY)"' \
+#                -DGIT_VERSION='"$(GIT_VERSION)"' \
+#                -DGIT_REMOTE_URL='"$(GIT_REMOTE_URL)"'
+
+VERSION_FLAGS   = -DGIT_HASH='"$(GIT_HASH)"' -DGIT_REMOTE_URL='"$(GIT_REMOTE_URL)"'
 
 ifeq ($(UNAME_S),Darwin)
   CPPFLAGS += -I/opt/local/include
