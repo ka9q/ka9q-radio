@@ -273,9 +273,21 @@ int loadconfig(char const *file){
   // Process [global] section applying to all demodulator blocks
   Description = config_getstring(Configtable,GLOBAL,"description",NULL);
   Verbose = config_getint(Configtable,GLOBAL,"verbose",Verbose);
-  User_blocktime = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",User_blocktime)); // Input value is in ms, internally in sec
-  Channel_idle_timeout = lrint(20 / User_blocktime);
-  Overlap = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
+  {
+    double bt = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",User_blocktime)); // Input value is in ms, internally in sec
+    if (!isfinite(bt) || bt == 0.0)
+      fprintf(stderr, "Block time %lf invalid, default %lf used\n", bt, User_blocktime);
+    else
+      User_blocktime = bt;
+  }
+  Channel_idle_timeout = lrint(20.0 / User_blocktime); // 20 sec
+  {
+    int ol = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
+    if (ol == 0)
+      fprintf(stderr, "Overlap %d invalid, default %d used\n", ol, Overlap);
+    else
+      Overlap = ol;
+  }
   N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by filter.c
   N_internal_threads = config_getint(Configtable,GLOBAL,"fft-internal-threads",DEFAULT_FFTW_INTERNAL_THREADS); // owned by filter.c
   RTCP_enable = config_getboolean(Configtable,GLOBAL,"rtcp",RTCP_enable);
