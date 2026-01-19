@@ -140,11 +140,15 @@ int demod_spectrum(void *arg){
 	  FREE(old); // emulate reallocf()
       }
       if(chan->spectrum.rbw <= chan->spectrum.crossover){
+#if 0
 	// Don't run FFT more often than one FFT's worth of samples
-	if(timeout <= 0){
+        if(timeout <= 0){
 	  narrowband_poll(chan);
 	  timeout = chan->spectrum.fft_n;
 	}
+#else
+	narrowband_poll(chan);
+#endif
       } else
 	wideband_poll(chan);
     }
@@ -219,8 +223,8 @@ static void narrowband_poll(struct channel *chan){
   fft_avg = fft_avg <= 0 ? 1 : fft_avg; // force it valid
   // scale each bin value for our FFT
   // squared because the we're scaling the output of complex norm, not the input bin values
-  // we only see one side of the spectrum for real inputs
-  double const gain = (frontend->isreal ? 2.0 : 1.0) / ((double)fft_n * fft_n * fft_avg);
+  // Unlike wideband, no adjustment for a real front end because the downconverter corrects the gain
+  double const gain = 1.0 / ((double)fft_n * fft_n * fft_avg);
 
   for(int iter=0; iter < fft_avg; iter++){
     // Copy and window raw baseband
@@ -300,7 +304,7 @@ static void wideband_poll(struct channel *chan){
   // squared because the we're scaling the output of complex norm, not the input bin values
   // we only see one side of the spectrum for real inputs
   int const fft_avg = chan->spectrum.fft_avg <= 0 ? 1 : chan->spectrum.fft_avg; // force it valid
-  double const gain = 1./fft_avg * (frontend->isreal ? 2.0 : 1.0) / ((double)fft_n * fft_n);
+
 
   if(frontend->isreal){
     // Point into raw SDR A/D input ring buffer
@@ -314,6 +318,7 @@ static void wideband_poll(struct channel *chan){
     assert(fft_in != NULL);
     float complex * restrict fft_out = fftwf_alloc_complex(fft_n/2 + 1); // r2c has only the positive frequencies
     assert(fft_out != NULL);
+    double const gain = 2./(double)((int64_t)fft_avg * fft_n * fft_n); // +3dB to include the virtual conjugate spectrum
 
     for(int iter=0; iter < fft_avg; iter++){
       // Copy and window raw A/D
@@ -360,11 +365,11 @@ static void wideband_poll(struct channel *chan){
     // UNTESTED
     float complex const * restrict input = frontend->in.input_write_pointer.c - fft_n; // 1 buffer back
     input += (input < (float complex *)frontend->in.input_buffer) ? frontend->in.input_buffer_size / sizeof *input : 0; // backward wrap
-
     float complex * restrict fft_in = fftwf_alloc_complex(fft_n);
     assert(fft_in != NULL);
     float complex * restrict fft_out = fftwf_alloc_complex(fft_n);
     assert(fft_out != NULL);
+    double const gain = 1./(double)((int64_t)fft_avg * fft_n * fft_n); // check this
 
     for(int iter=0; iter < fft_avg; iter++){
       // Copy and window raw A/D

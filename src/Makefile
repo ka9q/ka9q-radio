@@ -279,6 +279,9 @@ hackrf.so: hackrf.o
 bladerf.so: bladerf.o
 	$(CC) $(SOFLAGS) -o $@ $^ -lbladeRF
 
+sig_gen.so: sig_gen.o libradio.a
+	$(CC) $(SOFLAGS) -o $@ $^ -lsamplerate
+
 # subroutines useful in more than one program
 libradio.a: $(LIBRADIO)
 	ar rv $@ $?

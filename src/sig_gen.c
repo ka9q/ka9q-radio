@@ -15,6 +15,7 @@
 #endif
 #include <sysexits.h>
 #include <strings.h>
+#include <samplerate.h>
 
 #include "conf.h"
 #include "fcd.h"
@@ -23,7 +24,6 @@
 #include "radio.h"
 
 #define INPUT_PRIORITY 95
-static int const Random_samples = 30000000;
 static double Power_alpha = 0.01; // Calculate this properly someday
 
 
@@ -44,10 +44,9 @@ static char const *Sig_gen_keys[] = {
   "modulation",
   "source",
   "noise",
+  "n0",
   NULL
 };
-
-
 
 struct sdrstate {
   struct frontend *frontend;
@@ -68,19 +67,12 @@ struct sdrstate {
 extern bool Stop_transfers;
 extern char const *Description;
 
-// One second of noise in requested format
-// Will be played with a random starting point every block
-float complex *Complex_noise;
-float *Real_noise;
-
-static double complex complex_gaussian(void);
-static double real_gaussian(void);
+double complex complex_gaussian(double);
+double real_gaussian(double);
 
 double sig_gen_tune(struct frontend * const frontend,double const freq);
 
 int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionary, char const * const section){
-
-
   assert(dictionary != NULL);
   {
     char const * const device = config_getstring(dictionary,section,"device",section);
@@ -90,7 +82,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   config_validate_section(stderr,dictionary,section,Sig_gen_keys,NULL);
 
   // Cross-link generic and hardware-specific control structures
-  struct sdrstate * const sdr = calloc(1,sizeof(*sdr));
+  struct sdrstate * const sdr = calloc(1,sizeof *sdr);
   assert(sdr != NULL);
   sdr->frontend = frontend;
   frontend->context = sdr;
@@ -109,12 +101,12 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   frontend->bitspersample = 1; // Input is floating point with no scaling
   if(frontend->isreal){
     frontend->min_IF = 0;
-    frontend->max_IF = frontend->samprate / 2;
+    frontend->max_IF = 0.5 * frontend->samprate;
     frontend->frequency = 0;
   } else {
-    frontend->min_IF = -frontend->samprate/2;
-    frontend->max_IF = +frontend->samprate/2;
-    frontend->frequency = frontend->samprate/2;
+    frontend->min_IF = -0.5 * frontend->samprate;
+    frontend->max_IF = +0.5 * frontend->samprate;
+    frontend->frequency = 0.5 * frontend->samprate;
   }
   {
     char const * const p = config_getstring(dictionary,section,"description",Description ? Description : "signal generator");
@@ -136,7 +128,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
       sdr->carrier = parse_frequency(p,false);
   }
   {
-    float adb = config_getfloat(dictionary,section,"amplitude",-10.0); // Carrier amplitude, default -10 dBFS
+    double adb = config_getdouble(dictionary,section,"amplitude",-10.0); // Carrier amplitude, default -10 dBFS
     sdr->amplitude = dB2voltage(adb); // Convert from dBFS to peak amplitude
   }
   sdr->modulation = CW; // Default
@@ -154,38 +146,39 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
     if(p != NULL)
       sdr->source = strdup(p);
   }
-  sdr->noise = config_getfloat(dictionary,section,"noise",101.0); // Noise amplitude dBFS, default off
-  if(sdr->noise == 101.0)
-    sdr->noise = 0;
-  else
-    sdr->noise = dB2voltage(sdr->noise);
-
-  fprintf(stderr,"Sig gen %s, samprate %'lf, %s, LO freq %'.3f Hz, carrier %'.3lf Hz, amplitude %.1f dBFS, modulation %s, source %s, noise %'.1lf dBFS\n",
-	  frontend->description, frontend->samprate, frontend->isreal ? "real":"complex",frontend->frequency,
-	  sdr->carrier,
-	  voltage2dB(sdr->amplitude),
-	  sdr->modulation == CW ? "none" : sdr->modulation == AM ? "AM" : sdr->modulation == FM ? "FM" : "?",
-	  sdr->source,
-	  voltage2dB(sdr->noise)
-	  );
-
-
-  // Generate noise to be played repeatedly
-  // Redo this!
-  if(sdr->noise != 0){
-    if(frontend->isreal){
-      Real_noise = malloc(sizeof(*Real_noise) * Random_samples);
-      for(int i = 0; i < Random_samples; i++)
-	Real_noise[i] = (float)(M_SQRT1_2 * real_gaussian() * sdr->noise);
-    } else {
-      Complex_noise = malloc(sizeof(*Complex_noise) * Random_samples);
-      for(int i = 0; i < Random_samples; i++)
-	Complex_noise[i] = (float complex)(complex_gaussian() * sdr->noise * M_SQRT1_2); // Power in both I and Q
+  {
+    double noise = config_getdouble(dictionary,section,"noise",101.0); // Noise amplitude dBFS, default off
+    double n0 = config_getdouble(dictionary,section,"n0",101.0); // Noise amplitude dBFS, default off
+    if(noise != 101.0)
+      sdr->noise = dB2voltage(noise);
+    else if (n0 != 101.0){
+      sdr->noise = dB2voltage(n0) * 0.5 * sqrt(frontend->samprate);
     }
-    fprintf(stderr,"Noise generated\n");
+    fprintf(stderr,"Sig gen %s, samprate %'lf, %s, LO freq %'.3f Hz, carrier %'.3lf Hz, amplitude %.1f dBFS, modulation %s, source %s, N0 %'.1lf dBJ\n",
+	    frontend->description, frontend->samprate, frontend->isreal ? "real":"complex",frontend->frequency,
+	    sdr->carrier,
+	    voltage2dB(sdr->amplitude),
+	    sdr->modulation == CW ? "none" : sdr->modulation == AM ? "AM" : sdr->modulation == FM ? "FM" : "?",
+	    sdr->source,
+	    voltage2dB(2.0 * sdr->noise / sqrt(frontend->samprate))
+	  );
   }
   return 0;
 }
+
+FILE *Source = NULL;
+#define MODBUFSIZE (96000)
+static float src_input_data[MODBUFSIZE];
+static int16_t inbuf[MODBUFSIZE];
+static long src_callback(void *cb_data,float **data){
+  (void)cb_data;
+  int len = fread(inbuf, sizeof inbuf[0], MODBUFSIZE, Source);
+  src_short_to_float_array (inbuf,src_input_data,len);
+  *data = src_input_data;
+  return len;
+}
+
+
 static void *proc_sig_gen(void *arg){
   pthread_setname("proc_siggen");
   struct sdrstate * const sdr = (struct sdrstate *)arg;
@@ -196,129 +189,114 @@ static void *proc_sig_gen(void *arg){
   int64_t timesnap = gps_time_ns();
   realtime(INPUT_PRIORITY);
 
-  struct osc carrier;
-  memset(&carrier,0,sizeof(carrier));
+  struct osc carrier = {0};
   if(frontend->isreal)
     set_osc(&carrier,sdr->carrier / frontend->samprate,0.0); // No sweep just yet
   else
     set_osc(&carrier,(sdr->carrier - frontend->frequency)/frontend->samprate,0.0); // Offset down
 
+  rand_init();
 
-  FILE *src = NULL;
-
-  if(sdr->source != NULL){
-    src = popen(sdr->source,"r");
-    if(src == NULL)
+  if(sdr->modulation != CW && sdr->source != NULL){
+    Source = popen(sdr->source,"r");
+    if(Source == NULL)
       perror("popen");
   }
-  if(src == NULL)
+  if(Source == NULL)
     sdr->modulation = CW; // Turn it off
 
   int const mod_samprate = FULL_SAMPRATE; // Fixed for now
-  int const samps_per_samp = lrint(frontend->samprate / mod_samprate);
+  double const upsample_ratio = (double)frontend->samprate / mod_samprate;
 
+  // Input buffer with modulation to sample rate converter
+  long const output_size = lrint(Blocktime * frontend->samprate);
+  // Output buffer with modulation at virtual A/D rate
+  float * const dac_modulation = malloc(output_size * sizeof *dac_modulation);
+
+  // Set up sample rate converter for modulation
+  int error = 0;
+  //  SRC_STATE * const src_state = src_callback_new(src_callback,SRC_SINC_FASTEST, 1, &error,NULL);
+  SRC_STATE * const src_state = src_callback_new(src_callback,SRC_LINEAR, 1, &error,NULL);
+  if(error != 0)
+    fprintf(stderr,"src_callback_new: %s\n",src_strerror(error));
+  assert(error == 0);
+  assert(src_state != NULL);
   while(!Stop_transfers){
     // How long since last call?
     int64_t now = gps_time_ns();
     int64_t interval = now - timesnap;
 
-    int blocksize = lrint((interval * frontend->samprate) / BILLION);
+    long blocksize = lrint((interval * frontend->samprate) / BILLION);
     // Limit how much we can do in one iteration after a long delay so we don't overwrite the buffer and its mirror
-    if(blocksize > frontend->L + frontend->L / 2)
-      blocksize = frontend->L + frontend->L / 2;
+    // or the sample rate converter buffer
+    if(blocksize > output_size)
+      blocksize = output_size;
     timesnap = now;
 
-    // Pick a random starting point in the noise buffer
-    int noise_index = arc4random_uniform(Random_samples - blocksize);
-    int modcount = samps_per_samp;
-    double modsample = 0;
     double in_energy = 0;
     // Note lack of bandpass filtering on modulation - this creates alias images across the spectrum
     // at multiples of mod_samprate when the synthetic noise is very low
+    // This needs to be redone using sample rate conversion
+    double const dc = sdr->modulation == AM ? 1.0 : 0.0; // carrier component amplitude
+
     if(frontend->isreal){
       // Real signal
       float * wptr = frontend->in.input_write_pointer.r;
-      for(int i=0; i < blocksize; i++){
-	wptr[i] = (float)(sdr->amplitude * creal(step_osc(&carrier)));
-	switch(sdr->modulation){
-	case CW:
-	  break;
-	case DSB:
-	  if(modcount-- <= 0){
-	    int s = getc(src);
-	    s += getc(src) << 8;
-	    modsample = (double)s * SCALE16;
-	    modcount = samps_per_samp;
-	  }
-	  wptr[i] *= modsample;
-	  break;
-	case AM:
-	  if(modcount-- <= 0){
-	    int s = getc(src);
-	    s += getc(src) << 8;
-	    modsample = (double)s * SCALE16;
-	    modcount = samps_per_samp;
-	  }
-	  wptr[i] *= 1 + (modsample/2.); // Add carrier
-	  break;
-	case FM: // to be done
-	  break;
+      if(sdr->modulation == CW || sdr->modulation == FM){ // FM to be implemented
+	for(long i=0; i < blocksize; i++){
+	  double samp = sdr->amplitude * creal(step_osc(&carrier)) + sdr->noise * real_gauss();
+	  in_energy += samp * samp;
+	  wptr[i] = samp * sdr->scale;
 	}
-	double s = wptr[i];
-	if(Real_noise != NULL)
-	  s += Real_noise[noise_index+i];
-	in_energy += s * s;
-	wptr [i] = (float)(s * sdr->scale);
+      } else {
+	long r = src_callback_read(src_state, upsample_ratio, blocksize, dac_modulation);
+	assert(r == blocksize);
+	blocksize = r;
+	for(long int i=0; i < blocksize; i++){
+	  double samp = (dc + dac_modulation[i]) * sdr->amplitude * creal(step_osc(&carrier)) + sdr->noise * real_gauss();
+	  in_energy += samp * samp;
+	  wptr[i] = samp * sdr->scale;
+	}
       }
-      write_rfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT
+      int r = write_rfilter(&frontend->in, NULL, blocksize); // Update write pointer, invoke FFT
+      assert(r != -1);
+      (void)r;
     } else {
-      // Complex signal
+      // Front end is complex
       float complex * wptr = frontend->in.input_write_pointer.c;
-      for(int i=0; i < blocksize; i++){
-	wptr[i] = (float complex)(sdr->amplitude * step_osc(&carrier));
-	switch(sdr->modulation){
-	case CW:
-	  break;
-	case DSB:
-	  if(modcount-- <= 0){
-	    int s = getc(src);
-	    s += getc(src) << 8;
-	    modsample = ldexp((double)s,-15);
-	    modsample = 1 + modsample/2.; // Add carrier
-	    modcount = samps_per_samp;
-	  }
-	  wptr[i] *= modsample;
-	  break;
-	case AM:
-	  if(modcount-- <= 0){
-	    int s = getc(src);
-	    s += getc(src) << 8;
-	    modsample = ldexp((double)s,-15);
-	    modcount = samps_per_samp;
-	  }
-	  wptr[i] *= 1 + modsample/2.; // Add carrier
-	  break;
-	case FM: // to be done
-	  break;
+      if(sdr->modulation == CW || sdr->modulation == FM){ // FM to be implemented
+	for(long i=0; i < blocksize; i++){
+	  double complex samp = sdr->amplitude * step_osc(&carrier) + sdr->noise * complex_gauss();
+	  in_energy += samp * samp;
+	  wptr[i] = samp * sdr->scale;
 	}
-	if(Complex_noise != NULL)
-	  wptr[i] += Complex_noise[noise_index+i];
-	in_energy += cnrmf(wptr[i]);
-	wptr [i] *= sdr->scale;
+      } else {
+	long r = src_callback_read(src_state, upsample_ratio, blocksize, dac_modulation);
+	assert(r == blocksize);
+	blocksize = r;
+	for(long i=0; i < blocksize; i++){
+	  double complex samp = (dc + dac_modulation[i]) * sdr->amplitude * step_osc(&carrier) + sdr->noise * real_gauss();
+	  in_energy += samp * samp;
+	  wptr[i] = samp * sdr->scale;
+	}
       }
-      write_cfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT
+      int r = write_cfilter(&frontend->in, NULL, blocksize); // Update write pointer, invoke FFT
+      assert(r != -1);
+      (void)r;
     }
+    frontend->samples += blocksize;
     // The variability in blocksize due to scheduling variability causes the energy integrated into frontend->if_power
     // to vary, causing the reported input level to bobble around the nominal value. Long refresh intervals with 'control'
     // will smooth this out, but it's annoying
-    frontend->samples += blocksize;
+
     frontend->if_power += Power_alpha * (in_energy / blocksize - frontend->if_power);
     // Get status timestamp from UNIX TOD clock
     // Request a half block sleep since this is only the minimum
     {
-      struct timespec ts;
-      ts.tv_sec = 0;
-      ts.tv_nsec = lrint(Blocktime * BILLION / 2); // s -> ns
+      struct timespec ts = {
+	.tv_sec = 0,
+	.tv_nsec = lrint(Blocktime * BILLION/2) // s -> ns
+      };
       nanosleep(&ts,NULL);
     }
   }
@@ -346,346 +324,3 @@ double sig_gen_tune(struct frontend * const frontend,double const freq){
   return frontend->frequency; // Not implemented anyway
 }
 
-#if 0
-// Marsaglia polar method for generating gaussian RVs
-// Slow on modern machines because of random branch and pipeline stalls
-static float complex complex_gaussian(void){
-  float complex result;
-  float u,v,s;
-  do {
-    // range -1, +1
-    u = 2 * (float)arc4random() / (float)UINT32_MAX - 1.0;
-    v = 2 * (float)arc4random() / (float)UINT32_MAX - 1.0;
-    s = u*u + v*v;
-  } while(s >= 1);
-  float a = sqrtf(-2 * logf(s) / s);
-  __real__ result = a * u;
-  __imag__ result = a * v;
-  return result;
-}
-#else
-// Box-Mueller method that avoids rejection
-// Seems faster on i7 despite sincos call
-static double complex expi(double x){
-  double s = sin(x);
-  double c = cos(x);
-  return c + I*s;
-}
-
-static double complex complex_gaussian(void){
-  // RVs uniformly distributed over (0,1)
-#if 0
-  double u = (double)arc4random() / (double)UINT32_MAX;
-  double v = (double)arc4random() / (double)UINT32_MAX;
-#else
-  // Not crypto quality (who cares?) but vastly faster.
-  double u = (double)random() / (double)INT32_MAX;
-  double v = (double)random() / (double)INT32_MAX;
-#endif
-  double s = sqrt(-2 * log(u));
-  return s * expi(2 * M_PI * v);
-}
-#endif
-
-// Not thread safe
-static double real_gaussian(void){
-  static double saved;
-  static bool got_saved;
-  if(got_saved){
-    got_saved = false;
-    return saved;
-  }
-  double complex r = complex_gaussian();
-  got_saved = true;
-  saved = __imag__ r;
-  return __real__ r;
-}
-
-#if 0
-// From https://www.reddit.com/r/algorithms/comments/yyz59u/fast_approximate_gaussian_generator/
-// Double changed to float
-// Incomplete and untested
-static float real_gaussian(void){
-  // input: ulong get_random_uniform() - gets 64 stochastic bits from a prng
-  // output: double x - normal deviate (mean 0.0 stdev 1.0) (**more at bottom)
-
-  const float delta = (1.0 / 4294967296.0); // (1 / 2^32)
-
-#if 0
- ulong u = get_random_uniform(); // fast generator that returns 64 randomized bits
-
-  uint major = (uint)(u >> 32);	// split into 2 x 32 bits
-  uint minor = (uint)u;		// the sus bits of lcgs end up in minor
-#else
-  uint32_t major = mrand48();
-  uint32_t minor = mrand48();
-#endif
-
-  float x = PopCount(major);     // x = random binomially distributed integer 0 to 32
-  x += minor * delta; 		// linearly fill the gaps between integers
-  x -= 16.5;			// re-center around 0 (the mean should be 16+0.5)
-  x *= 0.3535534;			// scale to ~1 standard deviation
-  return x;
-
-  // x now has a mean of 0.0
-  // a standard deviation of approximately 1.0
-  // and is strictly within +/- 5.833631
-  //
-  // a good long sampling will reveal that the distribution is approximated
-  // via 33 equally spaced intervals and each interval is itself divided
-  // into 2^32 equally spaced points
-  //
-  // there are exactly 33 * 2^32 possible outputs (about 37 bits of entropy)
-  // the special values -inf, +inf, and NaN are not among the outputs
-}
-
-
-// Even faster version from same discussion thread
-static inline double
-dist_normal_fast(uint64_t u){
-	double x = __builtin_popcountll(u*0x2c1b3c6dU) +
-	           __builtin_popcountll(u*0x297a2d39U) - 64;
-	x += (int64_t)u * (1 / 9223372036854775808.);
-	x *= 0.1765469659009499; /* sqrt(1/(32 + 4/12)) */
-	return x;
-}
-#endif
-#if 0
-// Beginnings of a new generator from ChatGPT
-#include <stdio.h>
-#include <stdint.h>
-#include <math.h>
-
-
-/*
- * Build a 16-bit Gaussian noise table.
- *
- * table[u] gives a signed 16-bit Gaussian-distributed sample corresponding
- * to uniform 16-bit input u in [0, 65535].
- *
- * sigma is the desired standard deviation IN ADC COUNTS (LSBs), i.e.
- * if sigma = 1000.0, then RMS noise is 1000 counts.
- *
- * The tails of the continuous Gaussian beyond +/-32768 are folded into
- * the int16_t saturation values -32768 and +32767 automatically.
- */
-
-#define GAUSS_TABLE_SIZE 65536
-#define INT16_MIN_VAL (-32768)
-#define INT16_MAX_VAL (32767)
-
-/* Standard normal PDF: phi(x) */
-static double normal_pdf(double x)
-{
-    const double inv_sqrt_2pi = 0.39894228040143267793994605993438; /* 1/sqrt(2*pi) */
-    return inv_sqrt_2pi * exp(-0.5 * x * x);
-}
-
-/* Standard normal CDF: Phi(x) using erfc */
-static double normal_cdf(double x)
-{
-    /* Phi(x) = 0.5 * erfc(-x / sqrt(2)) */
-    return 0.5 * erfc(-x / M_SQRT2);
-}
-
-/*
- * Inverse standard normal CDF Phi^{-1}(p), 0 < p < 1
- * Using Newton–Raphson with a simple tail-based initial guess.
- * This runs only 65k times at startup, so we favor clarity over speed.
- */
-static double normal_inv_cdf(double p)
-{
-    /* Clamp p away from 0 and 1 to avoid log(0) and infinities */
-    if (p <= 1e-12) p = 1e-12;
-    if (p >= 1.0 - 1e-12) p = 1.0 - 1e-12;
-
-    /* Initial guess: rough tail approximation */
-    double x;
-    if (p < 0.5) {
-        double t = sqrt(-2.0 * log(p));   /* large negative tail */
-        x = -t;
-    } else {
-        double t = sqrt(-2.0 * log1p(-p)); /* large positive tail */
-        x = t;
-    }
-
-    /* Newton–Raphson refinement */
-    for (int iter = 0; iter < 10; iter++) {
-        double phi  = normal_pdf(x);
-        double Phi  = normal_cdf(x);
-        double diff = Phi - p;
-
-        /* If PDF is tiny, avoid blowing up the step */
-        if (phi < 1e-12)
-            break;
-
-        double step = diff / phi;
-        x -= step;
-
-        if (fabs(step) < 1e-12)
-            break;
-    }
-
-    return x;
-}
-
-/*
- * Build the Gaussian lookup table.
- */
-void build_gauss_table(int16_t table[GAUSS_TABLE_SIZE], double sigma)
-{
-    for (uint32_t i = 0; i < GAUSS_TABLE_SIZE; i++) {
-        /* Center p in the middle of each 1/65536 interval */
-        double p = ( (double)i + 0.5 ) / (double)GAUSS_TABLE_SIZE;  /* (0,1) */
-
-        /* Standard normal quantile */
-        double z = normal_inv_cdf(p);
-
-        /* Scale to desired sigma (in ADC counts) */
-        double y = sigma * z;
-
-        /* Round to nearest integer and saturate to int16_t range */
-        long v = round(y);
-        if (v < INT16_MIN_VAL)
-            v = INT16_MIN_VAL;
-        else if (v > INT16_MAX_VAL)
-            v = INT16_MAX_VAL;
-
-        table[i] = (int16_t)lrint(v);
-    }
-}
-
-/* Example driver to write the table out as a C array */
-int main(void)
-{
-    static int16_t gauss_table[GAUSS_TABLE_SIZE];
-
-    /* Example: sigma = 1000 ADC counts RMS */
-    double sigma = 1000.0;
-    build_gauss_table(gauss_table, sigma);
-
-    /* For demonstration: print a few entries */
-    for (int i = 0; i < 16; i++) {
-        printf("gauss_table[%5d] = %6d\n", i, gauss_table[i]);
-    }
-
-    /* In your real code, you’d probably write this table to a file,
-       or keep it in memory for your noise generator. */
-
-    return 0;
-}
-#include <stdint.h>
-
-/* xoshiro256** PRNG
- *
- * Public domain reference implementation adapted from:
- *   http://prng.di.unimi.it/
- *
- * State must be nonzero. Use the seed function below.
- */
-
-typedef struct {
-    uint64_t s[4];
-} xoshiro256ss_state;
-
-/* Rotate left */
-static inline uint64_t rotl64(uint64_t x, int k)
-{
-    return (x << k) | (x >> (64 - k));
-}
-
-/* SplitMix64 for seeding xoshiro256** */
-static uint64_t splitmix64(uint64_t *x)
-{
-    uint64_t z = (*x += 0x9E3779B97F4A7C15ULL);
-    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
-    z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
-    return z ^ (z >> 31);
-}
-
-/* Initialize xoshiro256** state from a 64-bit seed */
-static inline void xoshiro256ss_seed(xoshiro256ss_state *st, uint64_t seed)
-{
-    /* Expand a single 64-bit seed into 4 nonzero 64-bit words */
-    uint64_t x = seed;
-    st->s[0] = splitmix64(&x);
-    st->s[1] = splitmix64(&x);
-    st->s[2] = splitmix64(&x);
-    st->s[3] = splitmix64(&x);
-
-    /* Extremely unlikely, but ensure not all zeros */
-    if ((st->s[0] | st->s[1] | st->s[2] | st->s[3]) == 0) {
-        st->s[0] = 1; /* arbitrary nonzero */
-    }
-}
-
-/* Generate next 64-bit output */
-static inline uint64_t xoshiro256ss_next(xoshiro256ss_state *st)
-{
-    const uint64_t result = rotl64(st->s[1] * 5, 7) * 9;
-
-    const uint64_t t = st->s[1] << 17;
-
-    st->s[2] ^= st->s[0];
-    st->s[3] ^= st->s[1];
-    st->s[1] ^= st->s[2];
-    st->s[0] ^= st->s[3];
-
-    st->s[2] ^= t;
-    st->s[3] = rotl64(st->s[3], 45);
-
-    return result;
-}
-
-/* Optional: jump function for 2^128 steps ahead (independent streams) */
-static inline void xoshiro256ss_jump(xoshiro256ss_state *st)
-{
-    static const uint64_t JUMP[] = {
-        0x180ec6d33cfd0abaULL,
-        0xd5a61266f0c9392cULL,
-        0xa9582618e03fc9aaULL,
-        0x39abdc4529b1661cULL
-    };
-
-    uint64_t s0 = 0;
-    uint64_t s1 = 0;
-    uint64_t s2 = 0;
-    uint64_t s3 = 0;
-
-    for (int i = 0; i < 4; i++) {
-        for (int b = 0; b < 64; b++) {
-            if (JUMP[i] & (1ULL << b)) {
-                s0 ^= st->s[0];
-                s1 ^= st->s[1];
-                s2 ^= st->s[2];
-                s3 ^= st->s[3];
-            }
-            (void)xoshiro256ss_next(st);
-        }
-    }
-
-    st->s[0] = s0;
-    st->s[1] = s1;
-    st->s[2] = s2;
-    st->s[3] = s3;
-}
-
-static int16_t gaussian_sample(){
-
-uint64_t r = xoshiro256starstar(&state);
-
-uint16_t u0 = (r >>  0) & 0xFFFF;
-uint16_t u1 = (r >> 16) & 0xFFFF;
-uint16_t u2 = (r >> 32) & 0xFFFF;
-uint16_t u3 = (r >> 48) & 0xFFFF;
-
-int16_t n0 = gauss_table[u0];
-int16_t n1 = gauss_table[u1];
-int16_t n2 = gauss_table[u2];
-int16_t n3 = gauss_table[u3];
-
-/* Then add to your synthetic WWV samples, or convert to float, etc. */
-}
-
-
-#endif

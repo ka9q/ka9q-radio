@@ -98,11 +98,11 @@ void rand_init(void){
   Rand_init = true;
 }
 
-double dist_normal_fast(void){
+double real_gauss(void){
   uint64_t u = xoshiro256ss_next(&Rand_state);
 
-  double x = __builtin_popcountll(u*0x2c1b3c6dU) +
-    __builtin_popcountll(u*0x297a2d39U) - 64;
+  double x = __builtin_popcountll(u*0x2c1b3c6dULL) +
+    __builtin_popcountll(u*0x297a2d39ULL) - 64;
   x += (int64_t)u * (1 / 9223372036854775808.);
   x *= 0.1765469659009499; /* sqrt(1/(32 + 4/12)) */
   return x;
