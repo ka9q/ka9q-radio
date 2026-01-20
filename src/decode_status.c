@@ -350,7 +350,10 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case NOISE_BW:
       channel->spectrum.noise_bw = decode_float(cp,optlen);
       break;
-    default: // ignore otherst
+    case SPECTRUM_OVERLAP:
+      channel->spectrum.overlap = decode_float(cp,optlen);
+      break;
+    default: // ignore others
       break;
     }
     cp += optlen;

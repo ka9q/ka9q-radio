@@ -539,7 +539,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
           break;
 	chan->spectrum.overlap = x;
       }
-	break;
+      break;
     case STATUS_INTERVAL:
       chan->status.output_interval = abs(decode_int(cp,optlen));
       break;
