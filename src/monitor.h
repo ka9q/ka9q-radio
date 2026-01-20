@@ -144,7 +144,6 @@ extern char const *Init;
 extern char const *Source; // Only accept from this domain name
 
 // Global variables that regularly change
-extern double const Latency; // chunk size for audio output callback
 extern double const Tone_period; // PL tone integration period
 extern double PL_tones[N_tones];
 

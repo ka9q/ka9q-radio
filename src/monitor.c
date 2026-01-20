@@ -37,7 +37,7 @@
 #include "monitor.h"
 
 // Could be (obscure) config file parameters
-double const Latency = 0.02; // chunk size for audio output callback
+static double const Latency = 0.02; // chunk size for audio output callback
 double const Tone_period = 0.24; // PL tone integration period
 
 // Voting hysteresis table. Small at low SNR, larger at large SNR to minimize pointless switching
@@ -87,7 +87,6 @@ char const *Source; // Source specific multicast, if used
 
 // Global variables that regularly change
 int Output_fd = -1; // Output network socket, if any
-struct sockaddr_in Dest_socket;
 int64_t Last_xmit_time;
 _Atomic uint64_t Output_time;  // Relative output time in frames
 _Atomic uint64_t Callbacks;
@@ -106,11 +105,9 @@ int64_t Start_time;
 PaTime Start_pa_time;
 _Atomic PaTime Last_callback_time;
 int64_t Last_error_time;
-int Nsessions;
 struct session Sessions[NSESSIONS];
 _Atomic bool Terminate;
 struct session const * _Atomic Best_session; // Session with highest SNR
-int Mcast_ttl;
 void *output_thread(void *p);
 struct sockaddr_in *Source_socket;
 int Callback_blocksize = 960; // 960 samples = 20 ms @ 48k

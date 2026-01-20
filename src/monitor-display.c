@@ -68,6 +68,7 @@ struct session *Sess_ptr[NSESSIONS];
 // wrap to the first column of the next row, and I can't stop that except by not using the last column.
 // Return number of chars written
 
+#if 0 // currently unused
 int mvprintwt(int row,int col,char const *fmt,...){
   if(col < 0)
     return ERR;
@@ -86,7 +87,7 @@ int mvprintwt(int row,int col,char const *fmt,...){
   mvaddstr(row,col,string);
   return r;
 }
-
+#endif
 // Same for printw() - truncate at EOL
 // returns number of chars written
 int printwt(char const *fmt,...){
@@ -111,6 +112,7 @@ int printwt(char const *fmt,...){
 }
 
 // Same for mvaddstr() and addstr()
+#if 0
 int mvaddstrt(int row,int col,char const *str){
   size_t space = COLS - col - 1; // Leave last column open
   if(strlen(str) <= space)
@@ -119,6 +121,7 @@ int mvaddstrt(int row,int col,char const *str){
   strlcpy(temp,str,sizeof temp); // truncate
   return mvaddstr(row,col,temp);
 }
+#endif
 int addstrt(char const *str){
   int row,col;
   getyx(stdscr,row,col);
