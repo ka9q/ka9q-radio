@@ -232,7 +232,7 @@ struct channel {
     double tone_deviation;   // Measured deviation of tone
     bool threshold;          // Threshold extension
     double gain;             // Empirically set to match overall gain with deemphasis to that without
-    double rate;             // de-emphasis filter coefficient computed from expf(-1.0 / (tc * output.samprate));
+    double rate;             // de-emphasis filter coefficient computed from exp(-1.0 / (tc * output.samprate));
                              // tc = 75e-6 sec for North American FM broadcasting
                              // tc = 1 / (2 * M_PI * 300.) = 530.5e-6 sec for NBFM (300 Hz corner freq)
     bool stereo_enable;      // wfm only
