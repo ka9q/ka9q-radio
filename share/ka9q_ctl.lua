@@ -164,6 +164,7 @@ local STATUS_TYPE_NAME = {
   [113] = "OPUS_BANDWIDTH",
   [114] = "OPUS_FEC",
   [115] = "SPECTRUM_STEP",
+  [116] = "SPECTRUM_OVERLAP",
 }
 
 -- Reverse lookup: name -> type ID
@@ -290,7 +291,8 @@ local TLV_KIND = {
   [112] = "opus_app",
   [113] = "opus_bw",
   [114] = "uint",
-  [115] = "f32 dB"
+  [115] = "f32 dB",
+  [116] = "f32"
 }
 
 -- ---- Helpers ----
@@ -305,13 +307,15 @@ local DEMOD = {
 
 local ENCODING = {
   [0] = "None",
-  "S16LE",
-  "S16BE",
+  "S16LE (signed 16 bit little endian)",
+  "S16BE (signed 16 bit big endian)",
   "OPUS",
-  "F32BE",
+  "F32LE (IEEE float32 little endian)",
   "AX25",
-  "F16BE",
-  "OPUS_VOIP",
+  "F16LE (IEEE float16 little endian)",
+  "OPUS_VOIP (OPUS_APPLICATION_VOIP",
+  "F32BE (IEEE float32 big endian)",
+  "F16BE (IEEE float16 big endian)"
 }
 
 
@@ -334,10 +338,11 @@ local WINDOWS = {
   [0] = "Kaiser",
   "Rectangular",
   "Blackman",
-  "exact Blackman",
+  "Exact Blackman",
   "Gaussian",
   "Hann",
   "Hamming",
+  "HP 5-pt flat top",
 }
 
 local function fmt_opus_bw(u)
@@ -1052,4 +1057,3 @@ end
 
 -- Register to UDP port 5006
 DissectorTable.get("udp.port"):add(5006, ka9q)
-
