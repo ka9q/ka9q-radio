@@ -207,7 +207,6 @@ static bool Reset_time = false;
 const char *App_path;
 static int Input_fd,Status_fd;
 static struct session *Sessions;
-int Mcast_ttl;
 
 static void closedown(int a);
 static void input_loop(void);
