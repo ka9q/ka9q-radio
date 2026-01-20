@@ -1019,6 +1019,16 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       }
     }
     break;
+    case 'v':
+      {
+	char str[Entry_width],*ptr;
+	getentry("Spectrum FFT overlap (0-1): ",str,sizeof(str));
+	double const b = strtod(str,&ptr);
+	if(ptr == str || !isfinite(b) || b < 0 || b >= 1)
+	  break;
+	encode_float(bpp,SPECTRUM_OVERLAP,b);
+      }
+      break;
   case 'o': // Set/clear option flags, most apply only to linear detector
     {
       char str[Entry_width];
@@ -1646,6 +1656,7 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
       pprintw(w,row++,col,"Window","%s",win_type);
     }
     pprintw(w,row++,col,"Avg","%u   ",chan->spectrum.fft_avg);
+    pprintw(w, row++, col, "Overlap", "%.3ld   ",chan->spectrum.overlap);
 
     if(chan->spectrum.bin_data != NULL)
       pprintw(w,row++,col,"Bin 0","%.1lf   ",chan->spectrum.bin_data[0]);

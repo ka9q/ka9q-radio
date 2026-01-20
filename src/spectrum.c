@@ -15,11 +15,6 @@
 #include "radio.h"
 #include "window.h"
 
-#define OVERLAP (0.0)
-// Use at RBW <= 10 Hz to reduce bouncing on pulsed signals like WWV's tones
-//#define VERY_NARROWBAND_OVERLAP (0.5)
-#define VERY_NARROWBAND_OVERLAP (0.5)
-
 static void generate_window(struct channel *);
 static void setup_real_fft(struct channel *);
 static void setup_complex_fft(struct channel *);
@@ -246,10 +241,7 @@ static void narrowband_poll(struct channel *chan){
 	bin_data[i] = (float)p; // Don't pollute with infinities or NANs
     }
     // rp now points to *next* buffer, so move it back between 1 and 2 buffers depending on overlap
-    if(chan->spectrum.rbw <= 10)
-      rp -= lrint(fft_n * (2. - VERY_NARROWBAND_OVERLAP));
-    else
-      rp -= lrint(fft_n * (2. - OVERLAP));
+    rp -= lrint(fft_n * (2. - chan->spectrum.overlap));
 
     if(rp < 0)
       rp += ring_size;
@@ -353,7 +345,7 @@ static void wideband_poll(struct channel *chan){
 	if(isfinite(p))
 	  bin_data[i] = (float)p; // Accumulate power
       }
-      input -= lrint(fft_n * (1. - OVERLAP)); // move back fraction of a buffer
+      input -= lrint(fft_n * (1. - chan->spectrum.overlap)); // move back fraction of a buffer
       if(input < (float *)frontend->in.input_buffer)
 	input += frontend->in.input_buffer_size / sizeof *input; // wrap backward
     }
@@ -413,7 +405,7 @@ static void wideband_poll(struct channel *chan){
     done:;
 
       // Back to previous buffer
-      input -= lrint(fft_n * (1. - OVERLAP));
+      input -= lrint(fft_n * (1. - chan->spectrum.overlap));
       if(input < (float complex *)frontend->in.input_buffer)
 	input += frontend->in.input_buffer_size / sizeof *input; // backward wrap
     }
@@ -489,7 +481,6 @@ static void generate_window(struct channel *chan){
   case HP5FT_WINDOW:
     for(int i=0; i < chan->spectrum.fft_n; i++)
       chan->spectrum.window[i] = hp5ft_window(i,chan->spectrum.fft_n+1);
-    break;
     break;
   }
   normalize_windowf(chan->spectrum.window,chan->spectrum.fft_n);

@@ -160,6 +160,7 @@ enum status_type {
   OPUS_BANDWIDTH,     // Opus encoder audio bandwidth limita
   OPUS_FEC,           // Opus encoder forward error correction loss rate, %
   SPECTRUM_STEP,  // size of byte spectrum data level step, dB
+  SPECTRUM_OVERLAP,   // Overlap of FFT windows when averaging (0-1)
 };
 
 size_t encode_string(uint8_t **bp,enum status_type type,void const *buf,size_t buflen);

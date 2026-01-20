@@ -259,6 +259,7 @@ struct channel {
     int ring_idx;     // index into ring buffer
     double base;      // lowest bin energy, dB (v2 byte format)
     double step;      // dB/step (v2 byte format)
+    double overlap;   // Overlap between successive FFTs when averaging
   } spectrum;
 
   // Output

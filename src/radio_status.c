@@ -532,6 +532,14 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  chan->spectrum.step = x;
       }
       break;
+    case SPECTRUM_OVERLAP:
+      {
+	double x = decode_float(cp, optlen);
+        if (x < 0 || x > 1)
+          break;
+	chan->spectrum.overlap = x;
+      }
+	break;
     case STATUS_INTERVAL:
       chan->status.output_interval = abs(decode_int(cp,optlen));
       break;
@@ -787,6 +795,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_int(&bp,SPECTRUM_FFT_N,chan->spectrum.fft_n);
     encode_float(&bp,NOISE_BW,chan->spectrum.noise_bw);
     encode_int(&bp,SPECTRUM_AVG,chan->spectrum.fft_avg);
+    encode_float(&bp, SPECTRUM_OVERLAP, chan->spectrum.overlap);
     // encode bin data here? maybe change this, it can be a lot
     // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
     if(chan->spectrum.bin_data != NULL){
@@ -804,6 +813,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_int(&bp,SPECTRUM_AVG,chan->spectrum.fft_avg);
     encode_float(&bp,SPECTRUM_BASE,chan->spectrum.base);
     encode_float(&bp,SPECTRUM_STEP,chan->spectrum.step);
+    encode_float(&bp, SPECTRUM_OVERLAP, chan->spectrum.overlap);
     if(chan->spectrum.bin_data != NULL){
       uint8_t *bins = malloc(chan->spectrum.bin_count);
       if(bins == NULL){

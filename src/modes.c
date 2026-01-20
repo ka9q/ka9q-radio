@@ -42,7 +42,7 @@ static double const DEFAULT_HIGH = 5000.0;
 // Squelch
 static double const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
 static double const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
-static bool   const  DEFAULT_SNR_SQUELCH = false;  // enables squelch when true, so don't enable except in modes that use squelch
+static bool   const DEFAULT_SNR_SQUELCH = false;  // enables squelch when true, so don't enable except in modes that use squelch
 
 // per-channel AGC
 static double const DEFAULT_HEADROOM = -15.0;     // keep gaussian signals from clipping
@@ -69,6 +69,8 @@ static int    const DEFAULT_DC_TC = 0;         // Time constant for AM carrier r
 static double const DEFAULT_CROSSOVER = 200;   // About where the two spectral analysis algorithms use equal CPU
 static double const DEFAULT_SPECTRUM_KAISER_BETA = 7.0; // Default for spectral analysis window
 static enum window_type const DEFAULT_WINDOW_TYPE = KAISER_WINDOW;
+static int    const DEFAULT_FFT_AVG = 10;      // number of FFTs averaged per spectrum display
+static double const DEFAULT_FFT_OVERLAP = 0.5;
 
 // Opus encoder defaults
 static int  const DEFAULT_OPUS_APPLICATION = OPUS_APPLICATION_AUDIO;
@@ -271,8 +273,8 @@ int set_defaults(struct channel *chan){
 	    Blocktime,chan->output.samprate,r);
     assert(false);
   }
-
-  chan->spectrum.fft_avg = 0; // will get set by client or by default in spectrum.c
+  chan->spectrum.overlap = DEFAULT_FFT_OVERLAP;
+  chan->spectrum.fft_avg = DEFAULT_FFT_AVG;
   chan->spectrum.window_type = DEFAULT_WINDOW_TYPE;
   chan->spectrum.crossover = DEFAULT_CROSSOVER;
   chan->spectrum.shape = DEFAULT_SPECTRUM_KAISER_BETA;

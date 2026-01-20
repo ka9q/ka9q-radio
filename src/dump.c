@@ -384,6 +384,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case CROSSOVER:
       fprintf(fp,"crossover %.0lf",decode_float(cp,optlen));
       break;
+    case SPECTRUM_OVERLAP:
+      fprintf(fp,"fft overlap %.3lf",decode_float(cp,optlen));
+      break;
     case RF_ATTEN:
       fprintf(fp,"rf atten %.1lf dB",decode_float(cp,optlen));
       break;
