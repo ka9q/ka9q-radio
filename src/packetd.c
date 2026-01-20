@@ -479,8 +479,8 @@ static int close_session(struct session *sp){
 }
 #endif
 
-const double mark_tone = 1200;
-const double space_tone = 2200;
+static const double mark_tone = 1200;
+static const double space_tone = 2200;
 
 // AFSK demod
 static void *decode_task(void *arg){

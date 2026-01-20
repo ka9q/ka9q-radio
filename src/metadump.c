@@ -52,7 +52,6 @@ struct sockaddr_storage *Source_socket;
 
 static char Locale[256] = "en_US.UTF-8";
 int Verbose;
-int IP_tos;
 int Mcast_ttl = 5;
 int Mcast_tos = 0;
 

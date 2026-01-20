@@ -23,11 +23,11 @@
 #include "rtp.h"
 #include "morse.h"
 
-int const Samprate = FULL_SAMPRATE; // Too hard to change
+static int const Samprate = FULL_SAMPRATE; // Too hard to change
 double CW_speed = 18.0;
 double CW_pitch = 500.0;
 double CW_level = -29.0; // dB
-int const Default_ssrc = 100;
+static int const Default_ssrc = 100;
 
 const char *App_path;
 int Verbose = 0;

@@ -105,7 +105,6 @@ enum {
 } Mode;
 
 struct sockaddr Sender;
-struct sockaddr Input_mcast_sockaddr;
 int Input_fd;
 struct session *Sessions;
 char const *Source;

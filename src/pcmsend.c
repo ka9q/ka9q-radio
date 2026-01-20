@@ -27,8 +27,8 @@
 // Global config constants
 #define BUFFERSIZE (1<<18)    // Size of audio ring buffer in mono samples. 2^18 is 2.73 sec at 48 kHz stereo
                               // Defined as macro so the Audiodata[] declaration below won't bother some compilers
-int const Samprate = FULL_SAMPRATE;   // Too hard to handle other sample rates right now
-int const Channels = 2;
+static int const Samprate = FULL_SAMPRATE;   // Too hard to handle other sample rates right now
+static int const Channels = 2;
 #define FRAMESIZE 240         // 5 ms @ 48 kHz makes 960 bytes/packet
 // End of config stuff
 
@@ -43,9 +43,7 @@ int IP_tos = 48; // AF12 << 2
 
 // Global vars
 int Output_fd = -1;
-int Output_fd_lo = -1;
 float Audiodata[BUFFERSIZE];
-int Samples_available;
 int Wptr;   // Write pointer for callback
 
 static int pa_callback(const void *inputBuffer, void *outputBuffer,

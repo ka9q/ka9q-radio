@@ -32,8 +32,8 @@ char *Mcast_address_text = "ax25.local:5004";
 char *Source = NULL;
 char *Dest = "127.0.0.1:4533";
 
-double const WGS84_E = 0.081819190842622;  // Eccentricity
-double const WGS84_A = 6378137;         // Equatorial radius, meters
+static double const WGS84_E = 0.081819190842622;  // Eccentricity
+static double const WGS84_A = 6378137;         // Equatorial radius, meters
 
 const char *App_path;
 int Verbose;

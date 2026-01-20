@@ -28,7 +28,7 @@ const char *Target;
 int Verbose;
 uint32_t Ssrc;
 char Iface[1024]; // Multicast interface to talk to front end
-int Status_fd = -1, Ctl_fd = -1;
+int Status_fd = -1;
 int64_t Timeout = BILLION; // Retransmission timeout
 bool details;   // Output bin, frequency, power, newline
 char const *Source;

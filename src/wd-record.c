@@ -235,8 +235,6 @@ static double wd_tolerance_seconds = 2.0;
 const char *App_path;
 static int Input_fd,Status_fd;
 static struct session *Sessions;
-int Mcast_ttl;
-struct sockaddr Metadata_dest_socket;
 struct sockaddr mcast_dest_sock;
 static char const *Source;
 static struct sockaddr_storage *Source_socket; // Remains NULL if Source == NULL
