@@ -170,7 +170,11 @@ int demod_linear(void *arg){
 	chan->pll.lock_count += N;
 	if(chan->pll.lock_count >= lock_limit){
 	  chan->pll.lock_count = lock_limit;
-	  chan->pll.lock = true;
+	  if(!chan->pll.lock){
+	    // reset rotation count when entering lock
+	    chan->pll.lock = true;
+	    chan->pll.rotations = 0;
+	  }
 	}
       }
     } else {
