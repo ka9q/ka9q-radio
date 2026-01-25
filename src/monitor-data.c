@@ -139,7 +139,7 @@ void *dataproc(void *arg){
     sp->last_active = gps_time_ns();
     // Discard packets with unknown encoding
     // This will happen before the first status arrives
-    enum encoding const encoding = sp->pt_table[sp->type].encoding;
+    enum encoding const encoding = sp->pt_table[pkt->rtp.type].encoding;
     if(encoding == NO_ENCODING || encoding == AX25)
       continue;
 

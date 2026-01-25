@@ -10,7 +10,6 @@
 #include <portaudio.h>
 #include <ncurses.h>
 #include <locale.h>
-#include <signal.h>
 #include <getopt.h>
 #include <iniparser/iniparser.h>
 #if __linux__
@@ -27,7 +26,6 @@
 #include <stdatomic.h>
 
 #include "conf.h"
-#include "config.h"
 #include "misc.h"
 #include "multicast.h"
 #include "radio.h"
@@ -585,6 +583,9 @@ struct session *lookup_or_create_session(struct sockaddr_storage const *sender,c
   Session_creates++;
   atomic_init(&sp->terminate,false);
   sp->ssrc = ssrc;
+
+  memcpy(sp->pt_table,PT_table,sizeof sp->pt_table);
+
   memcpy(&sp->sender,sender,sizeof(sp->sender));
   pthread_cond_init(&sp->qcond,NULL);
   pthread_mutex_init(&sp->qmutex,NULL);
