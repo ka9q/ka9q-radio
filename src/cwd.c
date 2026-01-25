@@ -48,17 +48,11 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
     return 0; // Can't allocate!
 
   size_t sample_count = encode_morse_char(fsamples,c);
-  // byte swap for network
-
-  for (int i = 0; i < sample_count; i++)
-    printf("%g ", fsamples[i]);
-  printf("\n");
-
   int16_t samples[sample_count];
   for(size_t i=0; i < sample_count;i++){
     float s = ldexpf(fsamples[i],15);
     int16_t is = s > 32767 ? 32767 : s < -32768 ? -32768 : (int16_t)s;
-    samples[i] = htons(is);
+    samples[i] = htons(is);  // byte swap for network
   }
   int16_t *outp = samples;
 
