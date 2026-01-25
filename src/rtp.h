@@ -1,6 +1,9 @@
 #ifndef _RTP_H
 #define _RTP_H 1
 
+#include <stdint.h>
+#include <stddef.h>
+
 #define DEFAULT_MCAST_PORT ((uint16_t)5004)
 #define DEFAULT_RTP_PORT ((uint16_t)5004)
 #define DEFAULT_RTCP_PORT ((uint16_t)5005)
