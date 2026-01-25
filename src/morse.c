@@ -214,7 +214,7 @@ static struct morse Morse_table[] = {
 #define TABSIZE (sizeof(Morse_table)/sizeof(Morse_table[0]))
 
 // Comparison function for sort and bsearch on Morse table
-static int mcompar(const void *a,const void *b){
+static int mcompar(const void *a, const void *b){
   const struct morse * const am = (struct morse *)a;
   const struct morse * const bm = (struct morse *)b;
 
@@ -236,7 +236,7 @@ static float *Dah;  // three elements key-down, one element key-up
 // Encode a single Morse character as audio samples
 // Return number of samples generated
 // Buffer must be long enough! 60 dit times is recommended
-unsigned long encode_morse_char(float * const samples,wint_t c){
+unsigned long encode_morse_char(float * const samples, wint_t c){
   if(samples == NULL || Dit_length == 0)
     return 0; // Bad arg, or not initialized
 
@@ -277,7 +277,7 @@ unsigned long encode_morse_char(float * const samples,wint_t c){
 }
 
 // Initialize morse encoder, return number of samples in a dit
-int init_morse(double const speed,double const pitch,double level,double const samprate){
+int init_morse(double const speed, double const pitch, double level, double const samprate){
   qsort(Morse_table,TABSIZE,sizeof(Morse_table[0]),mcompar);
 
   Dit_length = lrint(samprate * 1.2 / speed); // Samples per dit
@@ -291,8 +291,7 @@ int init_morse(double const speed,double const pitch,double level,double const s
   level = dB2voltage(-fabs(level)); // convert dB to amplitude
 
   // Precompute element audio
-  struct osc tone;
-  memset(&tone,0,sizeof(tone));
+  struct osc tone = {0};
   set_osc(&tone,cycles_per_sample,0.0);
 
   // Exponential envelope shaping to avoid key clicks
