@@ -24,6 +24,7 @@
 #include <time.h>
 #include <sys/socket.h>
 #include <stdatomic.h>
+#include <signal.h>
 
 #include "conf.h"
 #include "misc.h"
