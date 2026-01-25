@@ -2,7 +2,6 @@
 // Runs as daemon, reads from a named pipe, sends audio to a specified multicast group + RTP SSRC
 // Useful for IDs and other messages in repeater mode
 // Copyright Phil Karn, KA9Q, July 31, 2022 - 2023
-
 #include <stdio.h>
 #include <wchar.h>
 #include <wctype.h>
@@ -42,7 +41,6 @@ int Dit_length;
 // Redo for loopback?
 int send_cw(int sock, struct rtp_state *rtp_state, wchar_t *msg){
   // Should be longer than any character
-  float fsamples[60 * Dit_length];
 
   int const type = pt_from_info(Samprate,1, S16BE);
   if(type < 0)
@@ -59,21 +57,22 @@ int send_cw(int sock, struct rtp_state *rtp_state, wchar_t *msg){
     .msg_iovlen = 2
   };
   int16_t *samples = malloc(60 * Dit_length * sizeof *samples);
+  float *fsamples = malloc(60 * Dit_length * sizeof *fsamples);
   struct timespec now;
   clock_gettime(CLOCK_MONOTONIC,&now);
 
-  uint64_t total_samples = 0;
+
+  int rem = 0; // remainder from division by sample rate
 
   wchar_t c;
   while((c = *msg++) != 0){
     size_t const sample_count = encode_morse_char(fsamples, c);
     for(size_t i=0; i < sample_count;i++){
-      float s = ldexpf(fsamples[i],15);
-      int16_t is = s > 32767 ? 32767 : s < -32768 ? -32768 : (int16_t)s;
+      float const s = ldexpf(fsamples[i],15);
+      int16_t const is = s > 32767 ? 32767 : s < -32768 ? -32768 : (int16_t)s;
       samples[i] = htons(is);  // byte swap for network
     }
     int16_t *outp = samples;
-
     size_t samples_remaining = sample_count;
     while(samples_remaining > 0){
       size_t const chunk = min(PCM_BUFSIZE, samples_remaining);
@@ -101,27 +100,33 @@ int send_cw(int sock, struct rtp_state *rtp_state, wchar_t *msg){
       if(r <= 0)
 	fprintf(stdout,"sendmsg: (%d) %s\n",errno,strerror(errno));
 
-      total_samples += chunk;
       samples_remaining -= chunk;
       outp += chunk;
 
       // Wait until this finishes sending
-      // Note 48 kHz has a factor of 3, so it's not necessarily a whole number of ns
-      uint64_t samptime_ns = 1000000000UL * total_samples / Samprate;
+      // Note 48 kHz has a factor of 3, so it's not necessarily a whole number of ns, hence the remainder
+      uint64_t const num = rem + BILLION * chunk;
+      uint64_t const chunk_ns = num / Samprate;
+      rem = num % Samprate;
 
-      int secs = samptime_ns / 1000000000UL;
-      int nsecs = samptime_ns % 1000000000UL;
-      struct timespec deadline;
-      deadline.tv_sec = now.tv_sec + secs;
-      deadline.tv_nsec = now.tv_nsec + nsecs;
-      if (deadline.tv_nsec >= 1000000000) {
-        deadline.tv_nsec -= 1000000000;
-	deadline.tv_sec++;
+      now.tv_sec += chunk_ns / BILLION;
+      now.tv_nsec += chunk_ns % BILLION;
+      while(now.tv_nsec >= BILLION) {
+        now.tv_nsec -= BILLION;
+	now.tv_sec++;
       }
-      clock_nanosleep(CLOCK_MONOTONIC,TIMER_ABSTIME,&deadline,NULL);
+#ifdef __APPLE__
+      {
+	struct timespec nspec = {.tv_sec = chunk_ns/BILLION,.tv_nsec = chunk_ns % BILLION};
+	nanosleep(&nspec,NULL);
+      }
+#else
+      clock_nanosleep(CLOCK_MONOTONIC,TIMER_ABSTIME,&now,NULL);
+#endif
     }
   }
   FREE(samples);
+  FREE(fsamples);
   return 0;
 }
 
@@ -167,6 +172,7 @@ int main(int argc,char *argv[]){
   }
 
   setlocale(LC_ALL,""); // Accept all characters, not just the English subset of Latin
+
   Dit_length = init_morse(CW_speed,CW_pitch,CW_level,Samprate);
   struct sockaddr sock;
   int const fd = setup_mcast(NULL, NULL,Target, &sock,true,1,0,0,0);

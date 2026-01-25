@@ -242,7 +242,7 @@ unsigned long encode_morse_char(float * const samples, wint_t c){
 
   c = towlower(c);
 
-  struct morse const * const mp = bsearch(&c,Morse_table,TABSIZE,sizeof(Morse_table[0]),mcompar);
+  struct morse const * const mp = bsearch(&c,Morse_table,TABSIZE,sizeof *Morse_table,mcompar);
   if(mp == NULL)
     return 0;
 
