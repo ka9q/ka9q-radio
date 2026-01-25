@@ -36,7 +36,6 @@ char const *Input = "/run/cw/input";
 char const *Target = NULL;
 
 #define PCM_BUFSIZE ((size_t)480)        // 16-bit sample count per packet; must fit in Ethernet MTU
-#define SCALE16 (1./INT16_MAX)
 int Dit_length;
 
 // Redo for loopback?
@@ -48,46 +47,49 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
   if(type < 0)
     return 0; // Can't allocate!
 
+  size_t sample_count = encode_morse_char(fsamples,c);
+  // byte swap for network
+
+  for (int i = 0; i < sample_count; i++)
+    printf("%g ", fsamples[i]);
+  printf("\n");
+
+  int16_t samples[sample_count];
+  for(size_t i=0; i < sample_count;i++){
+    float s = ldexpf(fsamples[i],15);
+    int16_t is = s > 32767 ? 32767 : s < -32768 ? -32768 : (int16_t)s;
+    samples[i] = htons(is);
+  }
+  int16_t *outp = samples;
+
   struct rtp_header rtp = {
     .type = (uint8_t)type,
     .version = RTP_VERS,
     .ssrc = rtp_state->ssrc,
-    .marker = true // Start with marker bit on to reset playout buffer
+    .marker = true, // Start with marker bit on to reset playout buffer
   };
 
-  size_t sample_count = encode_morse_char(fsamples,c);
-  // byte swap for network
-  
-  int16_t samples[sample_count];
-  for(size_t i=0; i < sample_count;i++)
-    samples[i] = htons((int16_t)(SCALE16 * fsamples[i]));
-  int16_t *outp = samples;
-  
-  // Use gather-output to avoid copying data
-  // 0th element for RTP header, 1st element for sample data
-  struct iovec iovec[2];
-  struct msghdr msghdr;
-  memset(&msghdr,0,sizeof(msghdr));
-  msghdr.msg_iov = iovec;
-  msghdr.msg_iovlen = 2;
-
   while(sample_count > 0){
-    size_t const chunk = min(PCM_BUFSIZE,sample_count);
+    size_t const chunk = min(PCM_BUFSIZE, sample_count);
+
     rtp.timestamp = rtp_state->timestamp;
     rtp_state->timestamp += chunk;
     rtp.seq = rtp_state->seq++;
     rtp_state->packets++;
-    rtp_state->bytes += sizeof(samples[0]) * chunk;
-    
+    rtp_state->bytes += chunk * sizeof *samples;
+
     uint8_t encoded_rtp_header[128]; // longer than any possible RTP header?
     size_t const encoded_rtp_header_size = (uint8_t *)hton_rtp(encoded_rtp_header,&rtp) - encoded_rtp_header;
 
-    iovec[0].iov_base = &encoded_rtp_header;
-    iovec[0].iov_len = encoded_rtp_header_size;
-
-    iovec[1].iov_base = outp;
-    iovec[1].iov_len = sizeof(samples[0]) * chunk;
-
+    // 0th element for RTP header, 1st element for sample data
+    struct iovec iovec[2] = {
+      [0] = {.iov_base = &encoded_rtp_header,
+             .iov_len = encoded_rtp_header_size},
+      [1] = {.iov_base = outp, .iov_len = chunk * sizeof *samples} };
+    struct msghdr msghdr = {
+      .msg_iov = iovec,
+      .msg_iovlen = 2
+    };
     if(Verbose > 1)
       fprintf(stdout,"iovec[0] = (%p,%lu) iovec[1] = (%p,%lu)\n",
 	      iovec[0].iov_base,(unsigned long)iovec[0].iov_len,
@@ -100,12 +102,12 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
     }
     sample_count -= chunk;
     outp += chunk;
-    rtp.marker = 0; // Subsequent frames are not marked
+    rtp.marker = false; // Subsequent frames are not marked
     {
       // Sleep pacing - how long will this take to send?
       int64_t const nanosec = BILLION * chunk / Samprate;
       struct timespec delay;
-      
+
       ns2ts(&delay,nanosec);
       nanosleep(&delay,NULL);
     }
@@ -115,10 +117,10 @@ int send_cw(int sock, struct rtp_state *rtp_state, wint_t c){
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
-  
-  struct rtp_state rtp_state;
-  memset(&rtp_state,0,sizeof(rtp_state));
-  rtp_state.ssrc = Default_ssrc;
+
+  struct rtp_state rtp_state = {
+    .ssrc = Default_ssrc
+  };
 
   int c;
   while((c = getopt(argc,argv,"R:s:I:vS:P:L:")) != -1){
@@ -157,7 +159,7 @@ int main(int argc,char *argv[]){
   setlocale(LC_ALL,""); // Accept all characters, not just the English subset of Latin
   Dit_length = init_morse(CW_speed,CW_pitch,CW_level,Samprate);
   struct sockaddr sock;
-  int const fd = setup_mcast(NULL,NULL,Target,&sock,true,1,0,0,0);
+  int const fd = setup_mcast(NULL, NULL,Target, &sock,true,1,0,0,0);
   if(fd == -1){
     fprintf(stdout,"Can't resolve %s\n",Target);
     exit(EX_IOERR);
