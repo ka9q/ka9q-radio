@@ -69,14 +69,6 @@ static inline void ASSERT_UNLOCKED(pthread_mutex_t *mutex){
   #endif
 #endif
 
-#ifndef M_PIf
-#define M_PIf (3.14159274101257324219f)
-#endif
-#ifndef M_1_PIf
-#define M_1_PIf (1.f / M_PIf)
-#endif
-
-#define M_1_2PIf (0.5f * M_1_PIf) // fraction of a rotation in one radian
 #define DEGPRA (180./M_PI)
 #define RAPDEG (M_PI/180.)
 #define GPS_UTC_OFFSET (18) // GPS ahead of utc by 18 seconds - make this a table!
@@ -180,12 +172,6 @@ void sincospif(float x, float *s, float *c);
 #define cispi(x) csincospi(x)
 
 
-// Normalized sinc function sin(πx) / πx
-static inline float sincf(float x){
-  if(x == 0)
-    return 1;
-  return sinf(M_PIf * x) / (M_PIf * x);
-}
 static inline double sinc(double x){
   if(x == 0)
     return 1;
