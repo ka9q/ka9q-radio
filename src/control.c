@@ -77,6 +77,9 @@ static struct {
   double snr;
   int64_t pll_start_time;
   double pll_start_phase;
+  bool pll_lock;
+  double delta_t;
+  double delta_phase;
 } Local;
 
 static int send_poll(int ssrc);
@@ -1595,20 +1598,22 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
       pprintw(w,row++,col,"BW","%.1lf Hz",chan->pll.loop_bw);
       pprintw(w,row++,col,"S/N","%+.1lf dB",power2dB(chan->pll.snr));
       pprintw(w,row++,col,"Δf","%'+.3lf Hz",chan->sig.foffset);
-      double phase = chan->pll.cphase * DEGPRA + 360 * chan->pll.rotations;
-
       pprintw(w,row++,col,"φ","%+.1lf °",chan->pll.cphase*DEGPRA);
-      if(Local.pll_start_time == 0){
-	Local.pll_start_time = gps_time_ns();
-	Local.pll_start_phase = phase;
+      if (chan->pll.lock) {
+	double phase = chan->pll.cphase * DEGPRA + 360 * chan->pll.rotations;
+        if (!Local.pll_lock) {
+          // Just entered lock state
+	  Local.pll_start_time = gps_time_ns();
+	  Local.pll_start_phase = phase;
+	}
+	Local.delta_t = 1e-9 * (gps_time_ns() - Local.pll_start_time);
+	Local.delta_phase = phase - Local.pll_start_phase;
       }
-      double delta_t = 1e-9 * (gps_time_ns() - Local.pll_start_time);
-      double delta_ph = phase - Local.pll_start_phase;
-      pprintw(w,row++,col,"ΔT","%.1lf s ",delta_t);
-      pprintw(w,row++,col,"Δφ","%+.1lf °",delta_ph);
-      pprintw(w,row++,col,"μ Δf/f","%+lg",delta_ph / (360 * delta_t * chan->tune.freq));
-    } else {
-      Local.pll_start_time = 0;
+      pprintw(w,row++,col,"ΔT","%.1lf s ",Local.delta_t);
+      pprintw(w,row++,col,"Δφ","%+.1lf °",Local.delta_phase);
+      pprintw(w, row++, col, "μ Δf/f", "%+lg",
+	      Local.delta_phase / (360 * Local.delta_t * chan->tune.freq));
+      Local.pll_lock = chan->pll.lock;
     }
     break;
   case SPECT_DEMOD:
