@@ -77,7 +77,7 @@ int demod_wfm(void *arg){
   chan->filter.remainder = NAN; // Force re-init of fine oscillator
   set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
 
-  float phase_memory = 0;  // Demodulator input phase memory
+  double phase_memory = 0;  // Demodulator input phase memory
   int squelch_state = 0; // Number of blocks for which squelch remains open
 
   // Composite signal 50 Hz - 15 kHz contains mono (L+R) signal
@@ -163,9 +163,9 @@ int demod_wfm(void *arg){
     float complex * restrict buffer = chan->filter.out.output.c; // Working buffer
     for(int n=0; n < composite_L; n++){
       // Although deviation can be zero, argf() is defined as returning 0, not NAN
-      float const np = M_1_PIf * cargf(buffer[n]); // -1 to +1
+      double const np = M_1_PI * cargf(buffer[n]); // -1 to +1
       assert(isfinite(np));
-      float const x = np - phase_memory;
+      double const x = np - phase_memory;
       phase_memory = np;
       composite.input_write_pointer.r[n] = x > 1 ? x - 2 : x < -1 ? x + 2 : x; // reduce difference to -1 to +1
     } // for(int n=0; n < composite_L; n++)
