@@ -114,7 +114,7 @@ int demod_linear(void *arg){
       // Update PLL state, if active
       double bw = chan->pll.loop_bw / chan->output.samprate;
       if(chan->pll.lock)
-	bw /= 10; // tighten by 10x when locked
+	bw *= 0.1; // tighten by 10x when locked
 
       set_pll_params(&chan->pll.pll, bw, damping);
       for(int n=0; n<N; n++){
@@ -123,7 +123,7 @@ int demod_linear(void *arg){
 	// Determine phase of product
 	double phase;
 	if(chan->pll.lock){
-	  // Smal angle approximations are faster when locked
+	  // Small angle approximations are faster when locked
 	  // Need to add numerical stability guards for division close to zero
 	  if(!chan->pll.square){
 	    double mag = cabs(s);
