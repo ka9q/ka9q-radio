@@ -34,6 +34,7 @@ enum encoding {
   OPUS_VOIP,       // Opus with APPLICATION_VOIP
   F32BE,
   F16BE,
+  MULAW,
   UNUSED_ENCODING, // Sentinel, not used
 };
 
@@ -163,5 +164,7 @@ enum encoding encoding_from_pt(int type);
 int pt_from_info(int samprate,int channels,enum encoding);
 char const *encoding_string(enum encoding);
 enum encoding parse_encoding(char const *str);
+uint8_t float_to_mulaw(float fsample);
+float mulaw_to_float(uint8_t ulaw);
 
 #endif

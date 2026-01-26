@@ -23,7 +23,7 @@
 #include "rtp.h"
 #include "morse.h"
 
-static int const Samprate = 12000;
+static int const Samprate = 8000;
 double CW_speed = 18.0;
 double CW_pitch = 500.0;
 double CW_level = -29.0; // dB
@@ -35,7 +35,8 @@ int Verbose = 0;
 char const *Input = "/run/cw/input";
 char const *Target = NULL;
 
-#define PCM_BUFSIZE ((size_t)700)        // 16-bit sample count per packet; must fit in Ethernet MTU
+#define PKT_SIZE ((size_t)1500)
+#define PCM_BUFSIZE ((PKT_SIZE-100)/2)        // 16-bit sample count per packet; must fit in Ethernet MTU
 int Dit_length;
 
 // Redo for loopback?
@@ -50,58 +51,40 @@ int send_cw(int sock, struct rtp_state *rtp_state, wchar_t *msg){
     .type = (uint8_t)type,
     .version = RTP_VERS,
     .ssrc = rtp_state->ssrc,
+    .marker = true // set on the first packet
   };
-  struct iovec iovec[2] = {0};
-  struct msghdr msghdr = {
-    .msg_iov = iovec,
-    .msg_iovlen = 2
-  };
-  int16_t *samples = malloc(60 * Dit_length * sizeof *samples);
   float *fsamples = malloc(60 * Dit_length * sizeof *fsamples);
   struct timespec now;
   clock_gettime(CLOCK_MONOTONIC,&now);
-
-
   int rem = 0; // remainder from division by sample rate
-
   wchar_t c;
   while((c = *msg++) != 0){
-    size_t const sample_count = encode_morse_char(fsamples, c);
-    for(size_t i=0; i < sample_count;i++){
-      float const s = ldexpf(fsamples[i],15);
-      int16_t const is = s > 32767 ? 32767 : s < -32768 ? -32768 : (int16_t)s;
-      samples[i] = htons(is);  // byte swap for network
-    }
-    int16_t *outp = samples;
-    size_t samples_remaining = sample_count;
-    while(samples_remaining > 0){
-      size_t const chunk = min(PCM_BUFSIZE, samples_remaining);
+    size_t sample_count = encode_morse_char(fsamples, c);
+    float const *outp = fsamples;
+    while(sample_count > 0){
+      size_t const chunk = min(PCM_BUFSIZE, sample_count);
+      sample_count -= chunk;
 
       rtp.timestamp = rtp_state->timestamp;
       rtp_state->timestamp += chunk;
       rtp.seq = rtp_state->seq++;
       rtp_state->packets++;
-      rtp_state->bytes += chunk * sizeof *samples;
+      rtp_state->bytes += chunk * sizeof(int16_t);
 
-      uint8_t encoded_rtp_header[128]; // longer than any possible RTP header?
-      size_t const encoded_rtp_header_size = (uint8_t *)hton_rtp(encoded_rtp_header,&rtp) - encoded_rtp_header;
-
-      // 0th element for RTP header, 1st element for sample data
-      iovec[0].iov_base = encoded_rtp_header;
-      iovec[0].iov_len = encoded_rtp_header_size;
-      iovec[1].iov_base = outp;
-      iovec[1].iov_len = chunk * sizeof *samples;
-      if(Verbose > 1)
-	fprintf(stdout,"iovec[0] = (%p,%lu) iovec[1] = (%p,%lu)\n",
-		iovec[0].iov_base,(unsigned long)iovec[0].iov_len,
-		iovec[1].iov_base,(unsigned long)iovec[1].iov_len);
-
-      ssize_t const r = sendmsg(sock,&msghdr,0);
+      uint8_t packet[PKT_SIZE];
+      uint8_t *dp = hton_rtp(packet,&rtp);
+      for(size_t i=0; i < chunk; i++){
+	float const s = ldexpf(*outp++, 15);
+	int16_t const is = s > 32767 ? 32767 : s < -32768 ? -32768 : (int16_t)s;
+        *dp++ = is >> 8; // big-endian order
+	*dp++ = is;
+      }
+      size_t const len = dp - packet;
+      ssize_t const r = send(sock, packet, len, 0);
       if(r <= 0)
 	fprintf(stdout,"sendmsg: (%d) %s\n",errno,strerror(errno));
 
-      samples_remaining -= chunk;
-      outp += chunk;
+      rtp.marker = false;
 
       // Wait until this finishes sending
       // Note 48 kHz has a factor of 3, so it's not necessarily a whole number of ns, hence the remainder
@@ -125,7 +108,6 @@ int send_cw(int sock, struct rtp_state *rtp_state, wchar_t *msg){
 #endif
     }
   }
-  FREE(samples);
   FREE(fsamples);
   return 0;
 }

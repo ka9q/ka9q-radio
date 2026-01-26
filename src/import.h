@@ -7,12 +7,21 @@
 #include <limits.h>
 #include <float.h>
 #include <limits.h>
+#include "rtp.h"
 
 _Static_assert(sizeof(float) == 4, "float must be 32-bit");
 _Static_assert(FLT_RADIX == 2, "float must be base-2");
 _Static_assert(FLT_MANT_DIG == 24, "float must have 24-bit significand");
 _Static_assert(FLT_MAX_EXP == 128, "float must have IEEE-754 exponent range");
 
+static inline void import_mulaw(float *out, uint8_t const *in, size_t count) {
+  for(size_t i=0; i < count; i++)
+    out[i] = mulaw_to_float(in[i]);
+}
+static inline void export_mulaw(uint8_t *out, float const *in, size_t count) {
+  for (size_t i = 0; i < count; i++)
+    out[i] = float_to_mulaw(in[i]);
+}
 static inline void import_f64_swap(double *out,uint8_t const *in, size_t count){
   for(size_t i=0; i < count; i++){
     uint64_t temp_int;

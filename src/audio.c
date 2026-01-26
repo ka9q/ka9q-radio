@@ -132,6 +132,9 @@ int flush_output(struct channel * chan,bool marker,bool complete){
   case OPUS:
     max_frames_per_pkt = INT_MAX; // No real limit
     break;
+  case MULAW:
+    max_frames_per_pkt = BYTES_PER_PKT / (sizeof(uint8_t) * chan->output.channels);
+    break;
   }
   if(min_frames_per_pkt > max_frames_per_pkt)
     min_frames_per_pkt = max_frames_per_pkt;
@@ -295,6 +298,11 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     int bytes = 0;
     float const *buf = &chan->output.queue[chan->output.rp]; // Point to first sample to be output
     switch(chan->output.encoding){
+    case MULAW:
+      export_mulaw(dp,buf,chunk*chan->output.channels);
+      chan->output.rtp.timestamp += chunk;
+      bytes = chunk * chan->output.channels * sizeof(uint8_t);
+      break;
     case S16BE:
       export_s16_be(dp,buf,chunk*chan->output.channels);
       chan->output.rtp.timestamp += chunk;

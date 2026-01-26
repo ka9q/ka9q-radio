@@ -1,15 +1,17 @@
 // Real Time Protocol support routines and tables
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
 #include <netinet/in.h>
 #include <opus/opus.h>
+#include <math.h>
 #include "rtp.h"
 
 struct pt_table PT_table[128] = {
-{ 0, 0, 0 }, // 0
+{ 8000, 1, MULAW }, // 0
 { 0, 0, 0 }, // 1
 { 0, 0, 0 }, // 2
 { 0, 0, 0 }, // 3
@@ -316,6 +318,8 @@ char const *encoding_string(enum encoding e){
     return "f16le";
   case F16BE:
     return "f16be";
+  case MULAW:
+    return "μlaw";
   }
 }
 enum encoding parse_encoding(char const *str){
@@ -337,6 +341,8 @@ enum encoding parse_encoding(char const *str){
     return OPUS;
   else if(strcasecmp(str,"ax25") == 0 || strcasecmp(str,"ax.25") == 0)
     return AX25;
+  else if (strcasecmp(str, "ulaw") == 0 || strcasecmp(str, "mulaw") == 0 || strcasecmp(str,"μlaw") == 0)
+    return MULAW;
   else
     return NO_ENCODING;
 }
@@ -439,4 +445,48 @@ bool legal_opus_samprate(int n){
       return true;
   }
   return false;
+}
+
+// μ-law from ChatGPT
+
+#define G711_BIAS 0x84   // 132
+#define G711_CLIP 32635
+_Static_assert(sizeof(unsigned int) == 4, "need 32-bit unsigned int for __builtin_clz");
+uint8_t float_to_mulaw(float fsample){
+  if (fsample > 1)
+    fsample = 1;
+  else if (fsample < -1)
+    fsample = -1;
+  int32_t sample = lrintf(ldexpf(fsample,15));
+  int sign = (sample < 0);
+  int32_t pcm  = sign ? -sample : sample;
+  if (pcm > G711_CLIP)
+    pcm = G711_CLIP;
+
+  pcm += G711_BIAS;
+
+  // Find segment (exponent)
+  int exponent = (31 - __builtin_clz((uint32_t)pcm)) - 7;
+  if (exponent < 0)
+    exponent = 0;
+  else if (exponent > 7)
+    exponent = 7;
+
+  // Mantissa is next 4 bits after exponent bit
+  int mantissa = (pcm >> (exponent + 3)) & 0x0F;
+
+  return (uint8_t)~((uint8_t)((exponent << 4) | mantissa) | (sign << 7));
+}
+
+float mulaw_to_float(uint8_t ulaw){
+  ulaw = (uint8_t)~ulaw;
+
+  int sign     = ulaw & 0x80;
+  int exponent = (ulaw >> 4) & 0x07;
+  int mantissa = ulaw & 0x0F;
+
+  int32_t pcm = ((mantissa << 3) + G711_BIAS) << exponent;
+  pcm -= G711_BIAS;
+
+  return ldexpf((float)(sign ? -pcm : pcm),-15);
 }

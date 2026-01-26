@@ -555,6 +555,12 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
     } else
       memset(sp->bounce,0,sp->frame_size * sp->channels * sizeof *sp->bounce); // blank out of sequence
     break;
+  case MULAW:
+    sp->frame_size = pkt->len / (sizeof(uint8_t) * sp->channels); // mono/stereo samples in frame
+    import_mulaw(sp->bounce,pkt->data, sp->channels * sp->frame_size);
+    sp->datarate = 8 * sp->channels * sizeof(uint8_t) * sp->samprate; // fixed rate
+    sp->bandwidth = sp->samprate / 2; // Nyquist
+    break;
   case S16BE:
     sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
     import_s16_be(sp->bounce,pkt->data, sp->channels * sp->frame_size);
