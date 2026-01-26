@@ -35,6 +35,7 @@ enum encoding {
   F32BE,
   F16BE,
   MULAW,
+  ALAW,
   UNUSED_ENCODING, // Sentinel, not used
 };
 
@@ -166,5 +167,7 @@ char const *encoding_string(enum encoding);
 enum encoding parse_encoding(char const *str);
 uint8_t float_to_mulaw(float fsample);
 float mulaw_to_float(uint8_t ulaw);
+uint8_t float_to_alaw(float fsample);
+float alaw_to_float(uint8_t alaw);
 
 #endif

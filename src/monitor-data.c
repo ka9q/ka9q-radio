@@ -561,6 +561,12 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
     sp->datarate = 8 * sp->channels * sizeof(uint8_t) * sp->samprate; // fixed rate
     sp->bandwidth = sp->samprate / 2; // Nyquist
     break;
+  case ALAW:
+    sp->frame_size = pkt->len / (sizeof(uint8_t) * sp->channels); // mono/stereo samples in frame
+    import_alaw(sp->bounce,pkt->data, sp->channels * sp->frame_size);
+    sp->datarate = 8 * sp->channels * sizeof(uint8_t) * sp->samprate; // fixed rate
+    sp->bandwidth = sp->samprate / 2; // Nyquist
+    break;
   case S16BE:
     sp->frame_size = pkt->len / (sizeof(int16_t) * sp->channels); // mono/stereo samples in frame
     import_s16_be(sp->bounce,pkt->data, sp->channels * sp->frame_size);

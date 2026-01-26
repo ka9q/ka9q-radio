@@ -19,7 +19,7 @@ struct pt_table PT_table[128] = {
 { 0, 0, 0 }, // 5
 { 0, 0, 0 }, // 6
 { 0, 0, 0 }, // 7
-{ 0, 0, 0 }, // 8
+{ 8000, 1, ALAW }, // 8
 { 0, 0, 0 }, // 9
 { 44100, 2, S16BE }, // 10
 { 44100, 1, S16BE }, // 11
@@ -320,6 +320,8 @@ char const *encoding_string(enum encoding e){
     return "f16be";
   case MULAW:
     return "μlaw";
+  case ALAW:
+    return "alaw";
   }
 }
 enum encoding parse_encoding(char const *str){
@@ -343,6 +345,8 @@ enum encoding parse_encoding(char const *str){
     return AX25;
   else if (strcasecmp(str, "ulaw") == 0 || strcasecmp(str, "mulaw") == 0 || strcasecmp(str,"μlaw") == 0)
     return MULAW;
+  else if (strcasecmp(str, "alaw") == 0)
+    return ALAW;
   else
     return NO_ENCODING;
 }
@@ -489,4 +493,62 @@ float mulaw_to_float(uint8_t ulaw){
   pcm -= G711_BIAS;
 
   return ldexpf((float)(sign ? -pcm : pcm),-15);
+}
+
+#define G711_ALAW_CLIP 32635
+
+uint8_t float_to_alaw(float fsample){
+  // Clamp input
+  if(fsample > 1.0f)
+    fsample =  1.0f;
+  else if(fsample < -1.0f)
+    fsample = -1.0f;
+
+  int32_t sample = (int32_t)lrintf(ldexpf(fsample, 15));
+  if(sample > 32767)
+    sample =  32767;
+  else if(sample < -32768)
+    sample = -32768;
+
+  int sign = (sample < 0);
+  int32_t pcm = sign ? -sample : sample;
+
+  if(pcm > G711_ALAW_CLIP)
+    pcm = G711_ALAW_CLIP;
+
+  int exponent = 0;
+  if(pcm >= 256)
+    exponent = (31 - __builtin_clz((uint32_t)pcm)) - 7;
+
+  if(exponent < 0)
+    exponent = 0;
+  else if(exponent > 7)
+    exponent = 7;
+
+  int mantissa;
+  if(exponent == 0)
+    mantissa = (pcm >> 4) & 0x0F;
+  else
+    mantissa = (pcm >> (exponent + 3)) & 0x0F;
+
+  uint8_t a = (uint8_t)((exponent << 4) | mantissa);
+  a ^= (sign ? 0xD5 : 0x55);   // A-law XOR mask
+
+  return a;
+}
+
+float alaw_to_float(uint8_t alaw){
+  alaw ^= 0x55;
+
+  int sign     = alaw & 0x80;
+  int exponent = (alaw >> 4) & 0x07;
+  int mantissa = alaw & 0x0F;
+
+  int32_t pcm;
+  if (exponent == 0)
+    pcm = (mantissa << 4) + 8;
+  else
+    pcm = ((mantissa << 4) + 0x108) << (exponent - 1);
+
+  return ldexpf((float)(sign ? -pcm : pcm), -15);
 }

@@ -135,6 +135,9 @@ int flush_output(struct channel * chan,bool marker,bool complete){
   case MULAW:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(uint8_t) * chan->output.channels);
     break;
+  case ALAW:
+    max_frames_per_pkt = BYTES_PER_PKT / (sizeof(uint8_t) * chan->output.channels);
+    break;
   }
   if(min_frames_per_pkt > max_frames_per_pkt)
     min_frames_per_pkt = max_frames_per_pkt;
@@ -300,6 +303,11 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     switch(chan->output.encoding){
     case MULAW:
       export_mulaw(dp,buf,chunk*chan->output.channels);
+      chan->output.rtp.timestamp += chunk;
+      bytes = chunk * chan->output.channels * sizeof(uint8_t);
+      break;
+    case ALAW:
+      export_alaw(dp,buf,chunk*chan->output.channels);
       chan->output.rtp.timestamp += chunk;
       bytes = chunk * chan->output.channels * sizeof(uint8_t);
       break;

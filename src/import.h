@@ -18,9 +18,20 @@ static inline void import_mulaw(float *out, uint8_t const *in, size_t count) {
   for(size_t i=0; i < count; i++)
     out[i] = mulaw_to_float(in[i]);
 }
+
 static inline void export_mulaw(uint8_t *out, float const *in, size_t count) {
   for (size_t i = 0; i < count; i++)
     out[i] = float_to_mulaw(in[i]);
+}
+
+static inline void import_alaw(float *out, uint8_t const *in, size_t count) {
+  for(size_t i=0; i < count; i++)
+    out[i] = alaw_to_float(in[i]);
+}
+
+static inline void export_alaw(uint8_t *out, float const *in, size_t count) {
+  for (size_t i = 0; i < count; i++)
+    out[i] = float_to_alaw(in[i]);
 }
 static inline void import_f64_swap(double *out,uint8_t const *in, size_t count){
   for(size_t i=0; i < count; i++){
