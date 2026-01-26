@@ -789,7 +789,9 @@ static void copy_to_stream(struct session *sp){
     for(int i=0; i < sp->frame_size * sp->channels; i++)
       energy += sp->bounce[i] * sp->bounce[i];
 
-    energy /= sp->frame_size * sp->channels;
+    energy /= sp->frame_size;
+    if (sp->channels == 1)
+      energy *= 2; // +3dB for mono because of 0 dBFS definition for mono being peak, not rms
     if(isfinite(energy))
       sp->level += .01 * (energy - sp->level); // smooth
   }
