@@ -319,7 +319,7 @@ char const *encoding_string(enum encoding e){
   case F16BE:
     return "f16be";
   case MULAW:
-    return "μlaw";
+    return "ulaw";
   case ALAW:
     return "alaw";
   }
@@ -343,7 +343,7 @@ enum encoding parse_encoding(char const *str){
     return OPUS;
   else if(strcasecmp(str,"ax25") == 0 || strcasecmp(str,"ax.25") == 0)
     return AX25;
-  else if (strcasecmp(str, "ulaw") == 0 || strcasecmp(str, "mulaw") == 0 || strcasecmp(str,"μlaw") == 0)
+  else if (strcasecmp(str, "ulaw") == 0 || strcasecmp(str, "mulaw") == 0 || strcasecmp(str,"μlaw") == 0 || strcasecmp(str,"pcmu") == 0)
     return MULAW;
   else if (strcasecmp(str, "alaw") == 0)
     return ALAW;
