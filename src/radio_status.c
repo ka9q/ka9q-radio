@@ -189,7 +189,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 
 	if(chan->demod_type != old.demod_type){
 	  if(Verbose > 1)
-	  fprintf(stderr,"%s demod change %s (%u) -> %s (%u)\n",chan->name,
+	    fprintf(stderr,"%s demod change %s (%u) -> %s (%u)\n",chan->name,
 		  demod_name_from_type(old.demod_type),old.demod_type,demod_name_from_type(chan->demod_type),chan->demod_type);
 
 	  restart_needed = true; // chan changed, ask for a restart
@@ -243,7 +243,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  break;
 	if(chan->output.encoding == OPUS && !legal_opus_samprate(new_sample_rate))
 	  break; // ignore illegal Opus sample rates (eventually will use sample rate converter)
-	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	int pt = pt_from_info(new_sample_rate,chan->output.channels, chan->output.encoding);
 	if(pt == -1){
 	  fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
 		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding);
@@ -437,7 +437,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  chan->fm.stereo_enable = (i == 2); // note boolean assignment
 	} else if(i == chan->output.channels)
 	  break;
-	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+	int pt = pt_from_info(chan->output.samprate,i, chan->output.encoding);
 	if(pt == -1){
 	  fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
 		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
@@ -851,11 +851,13 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       encode_float(&bp,GAIN,voltage2dB(chan->output.gain));
     }
     encode_int64(&bp,OUTPUT_SAMPLES,chan->output.samples);
-    encode_int(&bp,OPUS_BIT_RATE,chan->opus.bitrate);
-    encode_int(&bp,OPUS_BANDWIDTH,chan->opus.bandwidth);
-    encode_int(&bp,OPUS_APPLICATION,chan->opus.application);
-    encode_int(&bp,OPUS_FEC,chan->opus.fec);
-    encode_bool(&bp,OPUS_DTX,chan->opus.dtx);
+    if(chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP){
+      encode_int(&bp,OPUS_BIT_RATE,chan->opus.bitrate);
+      encode_int(&bp,OPUS_BANDWIDTH,chan->opus.bandwidth);
+      encode_int(&bp,OPUS_APPLICATION,chan->opus.application);
+      encode_int(&bp,OPUS_FEC,chan->opus.fec);
+      encode_bool(&bp,OPUS_DTX,chan->opus.dtx);
+    }
     encode_float(&bp,HEADROOM,voltage2dB(chan->output.headroom)); // amplitude -> dB
     // Doppler info
     encode_double(&bp,DOPPLER_FREQUENCY,chan->tune.doppler); // Hz

@@ -133,8 +133,6 @@ int flush_output(struct channel * chan,bool marker,bool complete){
     max_frames_per_pkt = INT_MAX; // No real limit
     break;
   case MULAW:
-    max_frames_per_pkt = BYTES_PER_PKT / (sizeof(uint8_t) * chan->output.channels);
-    break;
   case ALAW:
     max_frames_per_pkt = BYTES_PER_PKT / (sizeof(uint8_t) * chan->output.channels);
     break;
@@ -196,16 +194,11 @@ int flush_output(struct channel * chan,bool marker,bool complete){
       opus_bits = lrint(snr / 6); // 6 dB SNR per bit
       opus_bits = max(opus_bits,8);  // don't go to ridiculous values on no signal
       opus_bits = min(opus_bits,16); // Opus can actually take 24
-      error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_LSB_DEPTH(opus_bits));
-      if(error != OPUS_OK)
-	fprintf(stderr,"set bit depth error %d: %s\n",error,opus_strerror(error));
-      assert(error == OPUS_OK);
     }
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_LSB_DEPTH(opus_bits));
     if(error != OPUS_OK)
       fprintf(stderr,"set bit depth error %d: %s\n",error,opus_strerror(error));
     assert(error == OPUS_OK);
-
     // Set the encoder bandwidth automatically according to the filter bandwidth
     // Questionable how much this helps, but it doesn't seem to hurt
     int opus_bw_code = OPUS_BANDWIDTH_FULLBAND;

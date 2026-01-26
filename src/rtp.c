@@ -499,17 +499,12 @@ float mulaw_to_float(uint8_t ulaw){
 
 uint8_t float_to_alaw(float fsample){
   // Clamp input
-  if(fsample > 1.0f)
-    fsample =  1.0f;
-  else if(fsample < -1.0f)
-    fsample = -1.0f;
+  if(fsample > 1.0)
+    fsample =  1.0;
+  else if(fsample < -1.0)
+    fsample = -1.0;
 
   int32_t sample = (int32_t)lrintf(ldexpf(fsample, 15));
-  if(sample > 32767)
-    sample =  32767;
-  else if(sample < -32768)
-    sample = -32768;
-
   int sign = (sample < 0);
   int32_t pcm = sign ? -sample : sample;
 
@@ -518,7 +513,7 @@ uint8_t float_to_alaw(float fsample){
 
   int exponent = 0;
   if(pcm >= 256)
-    exponent = (31 - __builtin_clz((uint32_t)pcm)) - 7;
+    exponent = (31 - __builtin_clz((uint32_t)pcm)) - 7; // __builtin_clz(0) is undefined
 
   if(exponent < 0)
     exponent = 0;
@@ -552,3 +547,7 @@ float alaw_to_float(uint8_t alaw){
 
   return ldexpf((float)(sign ? -pcm : pcm), -15);
 }
+
+// 1 kHz test sine waves at 0 dBm0
+uint8_t alaw_sine[] = {0x34, 0x21, 0x21, 034, 0xb4, 0xa1, 0xa1, 0xb4};
+uint8_t mulaw_sine[] = {0x1e, 0x0b, 0x0b, 0x1e, 0x9e, 0x8b, 0x8b, 0x9e};
