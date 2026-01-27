@@ -176,8 +176,8 @@ int main(int argc,char *argv[]){
   // Hold open (and idle) so we won't get EOF
   int out_fd = open(Input,O_WRONLY);
 
-  wchar_t line[80];
-  while(fgetws(line,sizeof line, fp) != NULL){
+  wchar_t line[200];
+  while(fgetws(line,200, fp) != NULL){
     send_cw(fd,&rtp_state,line);
   }
 
