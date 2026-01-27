@@ -340,7 +340,7 @@ int flush_output(struct channel * chan,bool marker,bool complete){
       {
 	// Enforce supported Opus packet sizes
 	size_t si;
-	for(si = 0; Opus_blocksizes[si] != -1; si++){
+	for(si = 0; Opus_blocksizes[si] > 0; si++){
 	  if(10000 * chunk < Opus_blocksizes[si] * chan->output.samprate)
 	    break;
 	}

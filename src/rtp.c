@@ -319,9 +319,9 @@ char const *encoding_string(enum encoding e){
   case F16BE:
     return "f16be";
   case MULAW:
-    return "ulaw";
+    return "pcmu";
   case ALAW:
-    return "alaw";
+    return "pcma";
   }
 }
 enum encoding parse_encoding(char const *str){
@@ -345,7 +345,7 @@ enum encoding parse_encoding(char const *str){
     return AX25;
   else if (strcasecmp(str, "ulaw") == 0 || strcasecmp(str, "mulaw") == 0 || strcasecmp(str,"μlaw") == 0 || strcasecmp(str,"pcmu") == 0)
     return MULAW;
-  else if (strcasecmp(str, "alaw") == 0)
+  else if (strcasecmp(str, "alaw") == 0 || strcasecmp(str, "pcma") == 0)
     return ALAW;
   else
     return NO_ENCODING;
@@ -444,7 +444,7 @@ bool legal_opus_size(int n){
 }
 
 bool legal_opus_samprate(int n){
-  for(int i=0;Opus_samprates[i] != -1; i++){
+  for(int i=0;Opus_samprates[i] > 0; i++){
     if(n == Opus_samprates[i])
       return true;
   }
