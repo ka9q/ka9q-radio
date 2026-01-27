@@ -629,16 +629,27 @@ static void process_data(int fd){
     } else {
       if(!Raw)
 	start_wav_stream(sp); // Don't emit wav header in --raw
-      int const framesize = sp->channels *
-	(sp->encoding == F32LE ? sizeof(float)
-	 : sp->encoding == F32BE ? sizeof(float)
-	 : sp->encoding == S16LE ? sizeof(int16_t)
-	 : sp->encoding == S16BE ? sizeof(int16_t)
-#ifdef HAS_FLOAT16
-	 : sp->encoding == F16LE ? sizeof(float16_t)
-	 : sp->encoding == F16BE ? sizeof(float16_t)
-#endif
-	 : 0);
+      int sampsize;
+      switch (sp->encoding) {
+      case F32LE:
+      case F32BE:
+        sampsize = sizeof(float);
+	break;
+      case S16LE:
+      case S16BE:
+      case F16LE:
+      case F16BE:
+        sampsize = sizeof(int16_t);
+	break;
+      case MULAW:
+      case ALAW:
+        sampsize = sizeof(uint8_t);
+	break;
+      default:
+	sampsize = 0;
+	break;
+      }
+      int const framesize = sp->channels * sampsize;
       if(framesize == 0)
 	return; // invalid, can't process
 
@@ -1010,12 +1021,27 @@ static int send_wav_queue(struct session * const sp,bool flush){
 
   // Anything on the resequencing queue we can now process?
   int count = 0;
-  int const framesize = sp->channels *
-    ( sp->encoding == F32LE ? sizeof(float)
-      : sp->encoding == F32BE ? sizeof(float)
-      : sp->encoding == S16BE ? sizeof(int16_t)
-      : sp->encoding == S16LE ? sizeof(int16_t)
-      : 0);
+  int sampsize;
+  switch (sp->encoding) {
+  case F32LE:
+  case F32BE:
+    sampsize = sizeof(float);
+    break;
+  case S16LE:
+  case S16BE:
+  case F16LE:
+  case F16BE:
+    sampsize = sizeof(int16_t);
+    break;
+  case MULAW:
+  case ALAW:
+    sampsize = sizeof(uint8_t);
+    break;
+  default:
+    sampsize = 0;
+    break;
+  }
+  int const framesize = sp->channels * sampsize;
   if(framesize == 0)
     return -1;
   // bytes per sample time
@@ -1183,6 +1209,8 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   char const *suffix = ".raw";
   if(!Raw){
     switch(sp->encoding){
+    case MULAW:
+    case ALAW:
     case S16BE:
     case S16LE:
     case F32LE:
@@ -1745,6 +1773,18 @@ static int start_wav_stream(struct session *sp){
   switch(sp->encoding){
   default:
     return -1;
+  case MULAW:
+    header.AudioFormat = 7;
+    header.BitsPerSample = 8 * sizeof(uint8_t);
+    header.ByteRate = sp->samprate * sp->channels * sizeof(uint8_t);
+    header.BlockAlign = (int16_t)(sp->channels * sizeof(uint8_t));
+    break;
+  case ALAW:
+    header.AudioFormat = 6;
+    header.BitsPerSample = 8 * sizeof(uint8_t);
+    header.ByteRate = sp->samprate * sp->channels * sizeof(uint8_t);
+    header.BlockAlign = (int16_t)(sp->channels * sizeof(uint8_t));
+    break;
   case S16LE:
   case S16BE:
     header.AudioFormat = 1;
