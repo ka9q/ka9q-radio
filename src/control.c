@@ -1611,8 +1611,10 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
       }
       pprintw(w,row++,col,"ΔT","%.1lf s ",Local.delta_t);
       pprintw(w,row++,col,"Δφ","%+.1lf °",Local.delta_phase);
-      pprintw(w, row++, col, "μ Δf/f", "%+lg",
-	      Local.delta_phase / (360 * Local.delta_t * chan->tune.freq));
+      double dff = Local.delta_phase / (360 * Local.delta_t * chan->tune.freq);
+      if(isfinite(dff))
+	pprintw(w, row++, col, "μ Δf/f", "%+lg",dff);
+
       Local.pll_lock = chan->pll.lock;
     }
     break;
