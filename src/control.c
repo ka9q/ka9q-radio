@@ -1708,7 +1708,6 @@ static void display_input(WINDOW *w,struct channel const *chan){
   pprintw(w,row++,col,"Output status interval","%u",chan->status.output_interval);
   pprintw(w,row++,col,"Status pkts","%'llu",chan->status.packets_out);
   pprintw(w,row++,col,"Control pkts","%'llu",chan->status.packets_in);
-  pprintw(w,row++,col,"Blocks since last poll","%'llu",chan->status.blocks_since_poll);
   pprintw(w,row++,col,"Send errors","%'llu",chan->output.errors);
   if(chan->options != 0)
     pprintw(w,row++,col,"Options","0x%llx",(long long)chan->options);

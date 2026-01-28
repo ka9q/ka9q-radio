@@ -147,7 +147,7 @@ enum status_type {
   FE_LOW_EDGE,    // edges of front end filter
   FE_HIGH_EDGE,
   FE_ISREAL,        // Boolean, true -> front end uses real sampling, false -> front end uses complex
-  BLOCKS_SINCE_POLL,  // Blocks since last poll
+  UNUSED,
   AD_OVER,          // A/D full scale samples, proxy for overranges
   RTP_PT,           // Real Time Protocol Payload Type
   STATUS_INTERVAL,      // Automatically send channel status over *data* channel every STATUS_INTERVAL frames

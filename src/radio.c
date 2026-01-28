@@ -283,7 +283,7 @@ int loadconfig(char const *file){
   Channel_idle_timeout = lrint(20.0 / User_blocktime); // 20 sec
   {
     int ol = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
-    if (ol == 0)
+    if (ol < 2)
       fprintf(stderr, "Overlap %d invalid, default %d used\n", ol, Overlap);
     else
       Overlap = ol;
@@ -1438,7 +1438,6 @@ int downconvert(struct channel *chan){
     pthread_mutex_unlock(&Frontend.status_mutex);
 
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
-    chan->status.blocks_since_poll++;
 
     if(chan->filter.out.output.c == NULL){
       chan->filter.bin_shift = shift; // Needed by spectrum.c in wideband mode
@@ -1519,16 +1518,13 @@ void response(struct channel *chan,bool response_needed){
       send_radio_status(&chan->status.dest_socket,frontend,chan);
       chan->status.output_timer = chan->status.output_interval; // Reload
     }
-    reset_radio_status(chan); // After both are sent
   } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
     // Delayed status request, used mainly by all-channel polls to avoid big bursts
     send_radio_status(&frontend->metadata_dest_socket,frontend,chan); // Send status in response
     chan->status.global_timer = 0; // to make sure
-    reset_radio_status(chan);
   } else if(chan->status.output_interval != 0 && chan->status.output_timer > 0 && --chan->status.output_timer == 0){
     // Output stream status timer has expired; send status on output channel
     send_radio_status(&chan->status.dest_socket,frontend,chan);
-    reset_radio_status(chan);
     if(!chan->output.silent)
       chan->status.output_timer = chan->status.output_interval; // Restart timer only if channel is active
   }

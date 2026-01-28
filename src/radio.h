@@ -309,7 +309,6 @@ struct channel {
     uint64_t packets_in;
     uint64_t tag;               // arbitrary value computed by client and sent in status responses
     pthread_mutex_t lock;       // Protect statistics during updates and reads
-    uint64_t blocks_since_poll; // Used for averaging signal levels
     int global_timer;
     int output_timer;
     int output_interval;

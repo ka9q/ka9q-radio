@@ -92,7 +92,6 @@ void *radio_status(void *arg){
 	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	    decode_radio_commands(chan,buffer+1,length-1);
 	    send_radio_status(&chan->frontend->metadata_dest_socket,chan->frontend,chan); // Send status in response
-	    reset_radio_status(chan);
 	    chan->status.global_timer = 0; // Just sent one
 	    start_demod(chan);
 	    if(Verbose)
@@ -121,11 +120,6 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
   if(sendto(out_fd,packet,len,0,sock,sizeof(struct sockaddr)) < 0)
     chan->output.errors++;
 
-  return 0;
-}
-int reset_radio_status(struct channel *chan){
-  // Reset counter
-  chan->status.blocks_since_poll = 0;
   return 0;
 }
 
@@ -888,7 +882,6 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_float(&bp,TP1,chan->tp1);
   if(!isnan(chan->tp2))
     encode_float(&bp,TP2,chan->tp2);
-  encode_int64(&bp,BLOCKS_SINCE_POLL,chan->status.blocks_since_poll);
   encode_int64(&bp,SETOPTS,chan->options);
   encode_int64(&bp,OUTPUT_ERRORS,chan->output.errors);
   encode_eol(&bp);
