@@ -1341,27 +1341,30 @@ static void display_tuning(WINDOW *w,struct channel const *chan){
     wattron(w,A_UNDERLINE); // Underscore means the frequency is locked
   pprintw(w,row++,col,"Carrier","%'.3lf",chan->tune.freq); // RF carrier frequency
 
-  // second LO frequency is negative of IF, i.e., a signal at +48 kHz
-  // needs a second LO frequency of -48 kHz to bring it to zero
-  if(Frontend.lock)
-    wattron(w,A_UNDERLINE);
-  pprintw(w,row++,col,"First LO","%'.3lf",Frontend.frequency);
-  wattroff(w,A_UNDERLINE);
-
-  // Wink IF display if out of front end's range
-  wattroff(w,A_UNDERLINE);
-  if(-chan->tune.second_LO + chan->filter.min_IF < Frontend.min_IF)
-    wattron(w,A_BLINK);
-  if(-chan->tune.second_LO + chan->filter.max_IF > Frontend.max_IF)
-    wattron(w,A_BLINK);
-
-  pprintw(w,row++,col,"IF","%'.3lf",-chan->tune.second_LO);
-  wattroff(w,A_BLINK);
-
+  if(isfinite(Frontend.frequency)){
+    // second LO frequency is negative of IF, i.e., a signal at +48 kHz
+    // needs a second LO frequency of -48 kHz to bring it to zero
+    if(Frontend.lock)
+      wattron(w,A_UNDERLINE);
+    pprintw(w,row++,col,"First LO","%'.3lf",Frontend.frequency);
+    wattroff(w,A_UNDERLINE);
+    if(isfinite(chan->tune.second_LO)){
+      // Wink IF display if out of front end's range
+      wattroff(w,A_UNDERLINE);
+      if(-chan->tune.second_LO + chan->filter.min_IF < Frontend.min_IF)
+	wattron(w,A_BLINK);
+      if(-chan->tune.second_LO + chan->filter.max_IF > Frontend.max_IF)
+	wattron(w,A_BLINK);
+      pprintw(w,row++,col,"IF","%'.3lf",-chan->tune.second_LO);
+      wattroff(w,A_BLINK);
+    } else
+      row++;
+  } else
+    row += 2;
   pprintw(w,row++,col,"Filter low","%'+.0f",chan->filter.min_IF);
   pprintw(w,row++,col,"Filter high","%'+.0f",chan->filter.max_IF);
 
-  if(!isnan(chan->tune.shift))
+  if(isfinite(chan->tune.shift))
     pprintw(w,row++,col,"Shift","%'+.3lf",chan->tune.shift);
 
   pprintw(w,row++,col,"FE filter low","%'+.0f",Frontend.min_IF);
