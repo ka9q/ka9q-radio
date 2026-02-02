@@ -725,11 +725,17 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       encode_string(&bp,PRESET,chan->preset,len);
   }
   encode_float(&bp,KAISER_BETA,chan->filter.kaiser_beta); // Dimensionless
+  encode_float(&bp,LOW_EDGE,chan->filter.min_IF); // Hz
+  encode_float(&bp,HIGH_EDGE,chan->filter.max_IF); // Hz
+  encode_int32(&bp,OUTPUT_SAMPRATE,chan->output.samprate); // Hz
+  encode_float(&bp,BASEBAND_POWER,power2dB(chan->sig.bb_power));
+  encode_int32(&bp,OUTPUT_CHANNELS,chan->output.channels);
+  encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch.open));
+  encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch.close));
 
   // Mode-specific params
   switch(chan->demod_type){
   case LINEAR_DEMOD:
-    encode_bool(&bp,SNR_SQUELCH,chan->squelch.snr_enable);
     encode_bool(&bp,PLL_ENABLE,chan->pll.enable); // bool
     if(chan->pll.enable){
       encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
@@ -740,8 +746,6 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       encode_int64(&bp,PLL_WRAPS,chan->pll.rotations); // count of complete 360-deg rotations of PLL phase - SIGNED
       encode_float(&bp,PLL_SNR,power2dB(chan->pll.snr)); // abs ratio -> dB
     }
-    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch.open));
-    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch.close));
     encode_bool(&bp,ENVELOPE,chan->linear.env);
     encode_double(&bp,SHIFT_FREQUENCY,chan->tune.shift); // Hz
     encode_bool(&bp,AGC_ENABLE,chan->linear.agc);
@@ -751,16 +755,14 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       encode_float(&bp,AGC_RECOVERY_RATE,voltage2dB(chan->linear.recovery_rate)); // amplitude/ -> dB/sec
     }
     encode_bool(&bp,INDEPENDENT_SIDEBAND,chan->filter2.isb);
+    encode_float(&bp,GAIN,voltage2dB(chan->output.gain));
     break;
   case FM_DEMOD:
-    encode_bool(&bp,SNR_SQUELCH,chan->squelch.snr_enable);
     if(chan->fm.tone_freq != 0){
       encode_float(&bp,PL_TONE,chan->fm.tone_freq);
       encode_float(&bp,PL_DEVIATION,chan->fm.tone_deviation);
     }
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
-    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch.open));
-    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch.close));
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
@@ -770,10 +772,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     break;
   case WFM_DEMOD:
     // Relevant only when squelches are active
-    encode_bool(&bp,SNR_SQUELCH,chan->squelch.snr_enable);
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
-    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch.open));
-    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch.close));
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * FULL_SAMPRATE)); // ad-hoc
@@ -781,34 +780,24 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     break;
   case SPECT_DEMOD:
+  case SPECT2_DEMOD:
     encode_int(&bp,WINDOW_TYPE,chan->spectrum.window_type);
     encode_float(&bp,RESOLUTION_BW,chan->spectrum.rbw); // Hz
     encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
     encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
-    encode_float(&bp,SPECTRUM_SHAPE,chan->spectrum.shape);
+    if(chan->spectrum.window_type == GAUSSIAN_WINDOW || chan->spectrum.window_type == KAISER_WINDOW)
+      encode_float(&bp,SPECTRUM_SHAPE,chan->spectrum.shape);
     encode_int(&bp,SPECTRUM_FFT_N,chan->spectrum.fft_n);
     encode_float(&bp,NOISE_BW,chan->spectrum.noise_bw);
     encode_int(&bp,SPECTRUM_AVG,chan->spectrum.fft_avg);
     encode_float(&bp, SPECTRUM_OVERLAP, chan->spectrum.overlap);
     // encode bin data here? maybe change this, it can be a lot
     // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
-    if(chan->spectrum.bin_data != NULL){
+    if(chan->spectrum.bin_data == NULL)
+      break;
+    if(chan->demod_type == SPECT_DEMOD)
       encode_vector(&bp,BIN_DATA,chan->spectrum.bin_data,chan->spectrum.bin_count);
-    }
-    break;
-  case SPECT2_DEMOD:
-    encode_int(&bp,WINDOW_TYPE,chan->spectrum.window_type);
-    encode_float(&bp,RESOLUTION_BW,chan->spectrum.rbw); // Hz
-    encode_int(&bp,BIN_COUNT,chan->spectrum.bin_count);
-    encode_float(&bp,CROSSOVER,chan->spectrum.crossover);
-    encode_float(&bp,SPECTRUM_SHAPE,chan->spectrum.shape);
-    encode_int(&bp,SPECTRUM_FFT_N,chan->spectrum.fft_n);
-    encode_float(&bp,NOISE_BW,chan->spectrum.noise_bw);
-    encode_int(&bp,SPECTRUM_AVG,chan->spectrum.fft_avg);
-    encode_float(&bp,SPECTRUM_BASE,chan->spectrum.base);
-    encode_float(&bp,SPECTRUM_STEP,chan->spectrum.step);
-    encode_float(&bp, SPECTRUM_OVERLAP, chan->spectrum.overlap);
-    if(chan->spectrum.bin_data != NULL){
+    else {
       uint8_t *bins = malloc(chan->spectrum.bin_count);
       if(bins == NULL){
 	fprintf(stderr,"malloc of spectrum data failed\n");
@@ -822,15 +811,9 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   default:
     break;
   }
-
-  encode_float(&bp,LOW_EDGE,chan->filter.min_IF); // Hz
-  encode_float(&bp,HIGH_EDGE,chan->filter.max_IF); // Hz
-  encode_int32(&bp,OUTPUT_SAMPRATE,chan->output.samprate); // Hz
-  encode_float(&bp,BASEBAND_POWER,power2dB(chan->sig.bb_power));
-  encode_int32(&bp,OUTPUT_CHANNELS,chan->output.channels);
-
   // Stuff not relevant in spectrum analysis mode
   if(chan->demod_type != SPECT_DEMOD && chan->demod_type != SPECT2_DEMOD){
+    encode_bool(&bp,SNR_SQUELCH,chan->squelch.snr_enable);
     encode_int32(&bp,RTP_TIMESNAP,chan->output.rtp.timestamp);
     encode_int64(&bp,OUTPUT_DATA_PACKETS,chan->output.rtp.packets);
     encode_int(&bp,FILTER2,chan->filter2.blocking);
@@ -841,9 +824,6 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     }
     // Output levels are already normalized since they scaled by a fixed 32767 for conversion to int16_t
     encode_float(&bp,OUTPUT_LEVEL,power2dB(chan->output.power)); // power ratio -> dB
-    if(chan->demod_type == LINEAR_DEMOD){ // Gain not really meaningful in FM modes
-      encode_float(&bp,GAIN,voltage2dB(chan->output.gain));
-    }
     encode_int64(&bp,OUTPUT_SAMPLES,chan->output.samples);
     if(chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP){
       encode_int(&bp,OPUS_BIT_RATE,chan->opus.bitrate);
