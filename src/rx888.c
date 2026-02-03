@@ -1039,7 +1039,7 @@ static double new_rx888_set_samprate(struct sdrstate *sdr,double const reference
   }
  gotit:;
   if(best.rdiv_index == -1 || best.samprate == 0){
-    fprintf(stderr,"RX888 Si5351 error: can't produce desired samprate %lf\n",samprate);
+    fprintf(stderr,"RX888 Si5351 error: can't produce desired samprate %'lf\n",samprate);
     return 0;
   }
   int a, b, c, P1, P2, P3;
