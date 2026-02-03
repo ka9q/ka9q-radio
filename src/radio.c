@@ -1457,7 +1457,7 @@ int downconvert(struct channel *chan){
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
     if(shift != chan->filter.bin_shift || remainder != chan->filter.remainder){ // Detect startup
       assert(isfinite(chan->tune.doppler_rate));
-      set_osc(&chan->fine,-remainder/chan->output.samprate,chan->tune.doppler_rate/(chan->output.samprate * chan->output.samprate));
+      set_osc(&chan->fine,-remainder/chan->output.samprate,chan->tune.doppler_rate/((double)chan->output.samprate * chan->output.samprate));
       chan->filter.remainder = remainder;
     }
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:
