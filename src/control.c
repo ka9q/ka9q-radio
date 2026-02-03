@@ -1922,7 +1922,7 @@ static int pprintw(WINDOW *w,int y, int x, char const *label, char const *fmt,..
   int maxx;
   getmaxyx(w,maxy,maxx);
 
-  if(maxy < 0 || maxy > 1000 || maxx < 0 || maxy > 1000){
+  if(maxy < 0 || maxy > 1000 || maxx < 0 || maxx > 1000){
     return -1;
   }
 
