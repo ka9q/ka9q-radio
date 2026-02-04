@@ -1509,7 +1509,7 @@ double rx888_set_samprate(struct sdrstate *sdr,int64_t const reference,int64_t c
   };
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
 
-  double const output_ratio = (double)best.D + (double)best.E / (double)best.F;
+  double const output_ratio = best.R * (best.D + best.E / (double)best.F);
   si5351_pvals_t ms = {0};
   si5351_get_ms_pvals(&best,&ms);
   fprintf(stderr,"RX888 Si5351 output divider: samprate = vco / (%'d*(%'d + %'d/%'d)) = %'lf/%'lf = %'lld/%'lld = %'lf (error = %'lg); P1=%d, P2=%d, P3=%d\n",
