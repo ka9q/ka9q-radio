@@ -141,16 +141,6 @@ static const uint8_t SI5351_ADDR = 0x60 << 1;
 static const double SI5351_MAX_VCO_FREQ = 900e6;
 static const double SI5351_MIN_VCO_FREQ = 600e6;
 static const uint32_t SI5351_MAX_DENOMINATOR = 1048575; // 2^20 - 1
-
-// The rules for valid multisynth dividers are complicated
-// the divisor will later be quantized to a + b/c,
-// with a == 4, 6, or 8-2047 inclusive
-// with b and c >= 0 && < 2^20
-static inline bool output_divisor_ok(double ms) {
-  if(ms == 4 || ms == 6 || (ms >= 8 && ms <= 2048))
-    return true;
-  return false;
-}
 static const int SI5351_PLL_MIN_MULT = 15;
 static const int SI5351_PLL_MAX_MULT = 90;
 static const double SI5351_MS_MIN_FREQ = 500000;
