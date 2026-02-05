@@ -291,7 +291,7 @@ local TLV_KIND = {
   [112] = "opus_app",
   [113] = "opus_bw",
   [114] = "uint",
-  [115] = "f32 dB",
+  [115] = "f32_db",
   [116] = "f32"
 }
 
@@ -315,7 +315,9 @@ local ENCODING = {
   "F16LE (IEEE float16 little endian)",
   "OPUS_VOIP (OPUS_APPLICATION_VOIP",
   "F32BE (IEEE float32 big endian)",
-  "F16BE (IEEE float16 big endian)"
+  "F16BE (IEEE float16 big endian)",
+  "μlaw PCM",
+  "Alaw PCM"
 }
 
 
