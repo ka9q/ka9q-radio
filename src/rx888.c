@@ -47,18 +47,18 @@ static double const DEFAULT_GAINCAL = +1.4;
 static double const DC_ALPHA = 4e-7;
 
 // Reference frequency for Si5351 clock generator
-static int64_t const MIN_REFERENCE = 10e6;  //  10 MHz
-static int64_t const MAX_REFERENCE = 100e6; // 100 MHz
-static int64_t const DEFAULT_REFERENCE = 27e6;
+static long long const MIN_REFERENCE = 10e6;  //  10 MHz
+static long long const MAX_REFERENCE = 100e6; // 100 MHz
+static long long const DEFAULT_REFERENCE = 27e6;
 // Max allowable error on reference; 1e-4 = 100 ppm. Mainly to catch entry scaling errors
 static double const MAX_CALIBRATE = 1e-4;
 
 #if 0
 // Min and Max frequency for VHF/UHF tuner
-static int64_t const MIN_FREQUENCY = 50e6;   //  50 MHz ?
-static int64_t const MAX_FREQUENCY = 2000e6; // 2000 MHz
-static uint32_t const R828D_FREQ = 16000000;     // R820T reference frequency
-static int64_t const R828D_IF_CARRIER = 4570000;
+static long long const MIN_FREQUENCY = 50e6;   //  50 MHz ?
+static long long const MAX_FREQUENCY = 2000e6; // 2000 MHz
+static int const R828D_FREQ = 16000000;     // R820T reference frequency
+static int const R828D_IF_CARRIER = 4570000;
 #endif
 
 static double Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
@@ -95,7 +95,7 @@ struct sdrstate {
   double high_threshold;
   double low_threshold;
 
-  int64_t reference;
+  long long reference;
   bool randomizer;
   bool dither;
   uint32_t gpios;
@@ -118,7 +118,7 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
 static void rx888_set_att(struct sdrstate *sdr,double att,bool vhf);
 static void rx888_set_gain(struct sdrstate *sdr,double gain,bool vhf);
-static double rx888_set_samprate(struct sdrstate *sdr,int64_t reference,int64_t samprate);
+static double rx888_set_samprate(struct sdrstate *sdr,long long reference,long long samprate);
 static void rx888_set_hf_mode(struct sdrstate *sdr);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate *sdr);
@@ -272,14 +272,14 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   }
   rx888_set_gain(sdr,gain,false);
 
-  int64_t reference = DEFAULT_REFERENCE;
+  long long reference = DEFAULT_REFERENCE;
   {
     char const *p = config_getstring(dictionary,section,"reference",NULL);
     if(p != NULL)
       reference = llrint(parse_frequency(p,false));
   }
   if(reference < MIN_REFERENCE || reference > MAX_REFERENCE){
-    fprintf(stderr,"Invalid reference frequency %'lld, forcing %'lld\n",(long long)reference,(long long)DEFAULT_REFERENCE);
+    fprintf(stderr,"Invalid reference frequency %'lld, forcing %'lld\n", reference, DEFAULT_REFERENCE);
     reference = DEFAULT_REFERENCE;
   }
   double calibrate = config_getdouble(dictionary,section,"calibrate",0);
@@ -1094,78 +1094,77 @@ double rx888_tune(struct frontend *frontend,double freq){
 
 // ----------------- utilities -----------------
 
-static uint64_t gcd_u64(uint64_t a, uint64_t b){
-    while(b){
-        uint64_t t = a % b;
-        a = b;
-        b = t;
-    }
-    return a;
+static unsigned long long gcd_u64(unsigned long long a, unsigned long long b){
+  while(b){
+    unsigned long long t = a % b;
+    a = b;
+    b = t;
+  }
+  return a;
 }
 
 #if 0
-static uint64_t clamp_u64(uint64_t x, uint64_t lo, uint64_t hi){
-    return (x < lo) ? lo : (x > hi) ? hi : x;
+static unsigned long long clamp_u64(unsigned long long x, unsigned long long lo, unsigned long long hi){
+  return (x < lo) ? lo : (x > hi) ? hi : x;
 }
 #endif
 
 // Best rational approximation to p/q with denominator <= max_den.
 // Uses continued fractions + semiconvergent step.
-static void best_rational_approx(uint64_t p, uint64_t q, uint64_t max_den,
-                                 uint64_t *out_num, uint64_t *out_den)
+static void best_rational_approx(unsigned long long p, unsigned long long q, unsigned long long max_den,
+                                 unsigned long long *out_num, unsigned long long *out_den)
 {
-    // Convergents: h[-2]=0,h[-1]=1 ; k[-2]=1,k[-1]=0
-    uint64_t h_m2 = 0, h_m1 = 1;
-    uint64_t k_m2 = 1, k_m1 = 0;
+  // Convergents: h[-2]=0,h[-1]=1 ; k[-2]=1,k[-1]=0
+  unsigned long long h_m2 = 0, h_m1 = 1;
+  unsigned long long k_m2 = 1, k_m1 = 0;
+  unsigned long long pp = p, qq = q;
 
-    uint64_t pp = p, qq = q;
+  // track last within limit
+  unsigned long long last_h = 0, last_k = 1;
 
-    // track last within limit
-    uint64_t last_h = 0, last_k = 1;
+  while(qq != 0){
+    unsigned long long a0 = pp / qq;
+    unsigned long long r  = pp % qq;
 
-    while(qq != 0){
-        uint64_t a0 = pp / qq;
-        uint64_t r  = pp % qq;
+    U128 h = (U128)a0 * h_m1 + h_m2;
+    U128 k = (U128)a0 * k_m1 + k_m2;
 
-        U128 h = (U128)a0 * h_m1 + h_m2;
-        U128 k = (U128)a0 * k_m1 + k_m2;
-
-        if(k > max_den){
-            // semiconvergent: k_m2 + t*k_m1 <= max_den
-            if(k_m1 == 0){
-                *out_num = last_h;
-                *out_den = last_k;
-                return;
-            }
-            uint64_t t = (max_den - k_m2) / k_m1;
-            U128 hs = (U128)t * h_m1 + h_m2;
-            U128 ks = (U128)t * k_m1 + k_m2;
-            *out_num = (uint64_t)hs;
-            *out_den = (uint64_t)ks;
-            return;
-        }
-
-        last_h = (uint64_t)h;
-        last_k = (uint64_t)k;
-
-        h_m2 = h_m1; h_m1 = (uint64_t)h;
-        k_m2 = k_m1; k_m1 = (uint64_t)k;
-
-        pp = qq;
-        qq = r;
+    if(k > max_den){
+      // semiconvergent: k_m2 + t*k_m1 <= max_den
+      if(k_m1 == 0){
+	*out_num = last_h;
+	*out_den = last_k;
+	return;
+      }
+      unsigned long long t = (max_den - k_m2) / k_m1;
+      U128 hs = (U128)t * h_m1 + h_m2;
+      U128 ks = (U128)t * k_m1 + k_m2;
+      *out_num = (unsigned long long)hs;
+      *out_den = (unsigned long long)ks;
+      return;
     }
+    last_h = (unsigned long long)h;
+    last_k = (unsigned long long)k;
 
-    // exact convergent fits
-    *out_num = last_h;
-    *out_den = last_k;
+    h_m2 = h_m1;
+    h_m1 = (unsigned long long)h;
+
+    k_m2 = k_m1;
+    k_m1 = (unsigned long long)k;
+    pp = qq;
+    qq = r;
+  }
+  // exact convergent fits
+  *out_num = last_h;
+  *out_den = last_k;
 }
 
 // Absolute difference of two rationals a/b and c/d, returned as numerator over common denom in u128.
 // |a/b - c/d| = |ad - bc| / bd
-static U128 abs_diff_num_u128(uint64_t a, uint64_t b, uint64_t c, uint64_t d){
-    U128 left  = (U128)a * d;
-    U128 right = (U128)c * b;
-    return (left > right) ? (left - right) : (right - left);
+static U128 abs_diff_num_u128(unsigned long long a, unsigned long long b, unsigned long long c, unsigned long long d){
+  U128 left  = (U128)a * d;
+  U128 right = (U128)c * b;
+  return (left > right) ? (left - right) : (right - left);
 }
 
 // ----------------- Si5351 packing -----------------
@@ -1175,127 +1174,142 @@ static U128 abs_diff_num_u128(uint64_t a, uint64_t b, uint64_t c, uint64_t d){
 // P3 = c
 // (Same structure for PLL and MultiSynth fractional dividers.)  (See AN619) :contentReference[oaicite:5]{index=5}
 typedef struct {
-    uint32_t P1, P2, P3;
+  unsigned P1, P2, P3;
 } si5351_pvals_t;
 
-static si5351_pvals_t pack_abc(uint64_t a, uint64_t b, uint64_t c){
-    si5351_pvals_t v;
-    if(b == 0){
-        // integer mode
-        v.P1 = (uint32_t)(128u*a - 512u);
-        v.P2 = 0;
-        v.P3 = 1;
-        return v;
-    }
-    // t = floor(128*b/c)
-    uint64_t t = (U128)128u * b / c;
-    v.P1 = (uint32_t)(128u*a + t - 512u);
-    v.P2 = (uint32_t)((U128)128u*b - (U128)c*t);
-    v.P3 = (uint32_t)c;
+static si5351_pvals_t pack_abc(unsigned long long a, unsigned long long b, unsigned long long c){
+  si5351_pvals_t v;
+  if(b == 0){
+    // integer mode
+    v.P1 = (unsigned)(128u*a - 512u);
+    v.P2 = 0;
+    v.P3 = 1;
     return v;
+  }
+  // t = floor(128*b/c)
+  unsigned long long t = (U128)128u * b / c;
+  v.P1 = (unsigned)(128u*a + t - 512u);
+  v.P2 = (unsigned)((U128)128u*b - (U128)c*t);
+  v.P3 = (unsigned)c;
+  return v;
 }
 
 // ----------------- configuration + scoring -----------------
 
-static uint64_t SI5351_DEN_MAX = 1048575u;
+static unsigned long long SI5351_DEN_MAX = 1048575u;
 
 typedef struct {
-    // PLL: A + B/C
-    uint32_t A, B, C;
+  // PLL: A + B/C
+  unsigned A, B, C;
 
-    // MultiSynth: D + E/F
-    uint32_t D, E, F;
+  // MultiSynth: D + E/F
+  unsigned D, E, F;
 
-    // Output R divider (power of two: 1,2,4,...,128)
-    uint32_t R;
+  // Output R divider (power of two: 1,2,4,...,128)
+  unsigned R;
 
-    // Achieved frequency as rational: f_ref * (A+B/C)/(D+E/F) / R
-    // represented as num/den in Hz
-    uint64_t fout_num;
-    uint64_t fout_den;
+  // Achieved frequency as rational: f_ref * (A+B/C)/(D+E/F) / R
+  // represented as num/den in Hz
+  unsigned long long fout_num;
+  unsigned long long fout_den;
 
-    // Scoring
-    U128 err_num;        // |fout - target| expressed as numerator over common denom
-    uint8_t prefer_rank; // lower is better
+  // Scoring
+  U128 err_num;        // |fout - target| expressed as numerator over common denom
+  uint8_t prefer_rank; // lower is better
 } si5351_solution_t;
 
-static bool multisynth_is_legal(uint32_t D, uint32_t E, uint32_t F){
-    if(F == 0) return false;
-    if(E >= F) return false;
+static bool multisynth_is_legal(unsigned D, unsigned E, unsigned F){
+  if(F == 0)
+    return false;
+  if(E >= F)
+    return false;
 
-    // Special integer-only cases: 4,6,8 are allowed.
-    if(E == 0 && (D == 4 || D == 6 || D == 8)) return true;
-
-    // Fractional MS valid range: >= 8 + 1/den ... 2048 (AN619/AN1234) :contentReference[oaicite:6]{index=6}
-    // That means:
-    // - D must be >= 8
-    // - if D == 8 then E must be > 0
-    if(D < 8) return false;
-    if(D == 8 && E == 0) return false; // but ok in integer-only case above
-    if(D > 2048) return false;
+  // Special integer-only cases: 4,6,8 are allowed.
+  if(E == 0 && (D == 4 || D == 6 || D == 8))
     return true;
+
+  // Fractional MS valid range: >= 8 + 1/den ... 2048 (AN619/AN1234) :contentReference[oaicite:6]{index=6}
+  // That means:
+  // - D must be >= 8
+  // - if D == 8 then E must be > 0
+  if(D < 8)
+    return false;
+  if(D == 8 && E == 0)
+    return false; // but ok in integer-only case above
+  if(D > 2048)
+    return false;
+  return true;
 }
 
-static bool pll_is_legal(uint32_t A, uint32_t B, uint32_t C){
-    if(C == 0) return false;
-    if(B >= C) return false;
-    // Typical legal A range for PLL multiplier is ~15..90 (app notes) :contentReference[oaicite:7]{index=7}
-    if(A < 15 || A > 90) return false;
-    if(C > SI5351_DEN_MAX) return false;
-    return true;
+static bool pll_is_legal(unsigned A, unsigned B, unsigned C){
+  if(C == 0)
+    return false;
+  if(B >= C)
+    return false;
+  // Typical legal A range for PLL multiplier is ~15..90 (app notes) :contentReference[oaicite:7]{index=7}
+  if(A < 15 || A > 90)
+    return false;
+  if(C > SI5351_DEN_MAX)
+    return false;
+  return true;
 }
 
-static bool pll_freq_in_range(uint64_t fref_hz, uint32_t A, uint32_t B, uint32_t C){
-    // fpll = fref * (A + B/C)
-    // compare as rational: fpll = fref*(A*C + B)/C
-    U128 num = (U128)fref_hz * ((U128)A*C + B);
-    U128 den = C;
+static bool pll_freq_in_range(unsigned long long fref_hz, unsigned A, unsigned B, unsigned C){
+  // fpll = fref * (A + B/C)
+  // compare as rational: fpll = fref*(A*C + B)/C
+  U128 num = (U128)fref_hz * ((U128)A*C + B);
+  U128 den = C;
 
-    // 600..900 MHz typical VCO range :contentReference[oaicite:8]{index=8}
-    const U128 lo = (U128)600000000;
-    const U128 hi = (U128)900000000;
+  // 600..900 MHz typical VCO range :contentReference[oaicite:8]{index=8}
+  const U128 lo = (U128)600000000;
+  const U128 hi = (U128)900000000;
 
-    // num/den within [lo,hi]  <=> lo*den <= num <= hi*den
-    return (lo*den <= num) && (num <= hi*den);
+  // num/den within [lo,hi]  <=> lo*den <= num <= hi*den
+  return (lo*den <= num) && (num <= hi*den);
 }
 
 // Compute achieved fout as reduced rational (num/den) in Hz.
-static void compute_fout_rational(uint64_t fref_hz,
-                                  uint32_t A,uint32_t B,uint32_t C,
-                                  uint32_t D,uint32_t E,uint32_t F,
-                                  uint32_t R,
-                                  uint64_t *out_num, uint64_t *out_den)
+static void compute_fout_rational(unsigned long long fref_hz,
+                                  unsigned A,unsigned B,unsigned C,
+                                  unsigned D,unsigned E,unsigned F,
+                                  unsigned R,
+                                  unsigned long long *out_num, unsigned long long *out_den)
 {
-    // fout = fref * ( (A*C+B)/C ) / ( (D*F+E)/F ) / R
-    //      = fref * (A*C+B) * F / ( C*(D*F+E)*R )
-    U128 num = (U128)fref_hz * ((U128)A*C + B) * F;
-    U128 den = (U128)C * ((U128)D*F + E) * R;
+  // fout = fref * ( (A*C+B)/C ) / ( (D*F+E)/F ) / R
+  //      = fref * (A*C+B) * F / ( C*(D*F+E)*R )
+  U128 num = (U128)fref_hz * ((U128)A*C + B) * F;
+  U128 den = (U128)C * ((U128)D*F + E) * R;
 
-    // Reduce to u64 by gcd if possible (fits in u128 first)
-    // Compute gcd on 64-bit only if both fit, else do a small reduction pass.
-    // Here we do a conservative reduction using 64-bit gcd when possible.
-    // (For typical Hz ranges, these will fit in 64-bit after reduction.)
-    uint64_t n64 = (uint64_t)num;
-    uint64_t d64 = (uint64_t)den;
-    uint64_t g = gcd_u64(n64, d64);
-    n64 /= g; d64 /= g;
-    *out_num = n64;
-    *out_den = d64;
+  // Reduce to u64 by gcd if possible (fits in u128 first)
+  // Compute gcd on 64-bit only if both fit, else do a small reduction pass.
+  // Here we do a conservative reduction using 64-bit gcd when possible.
+  // (For typical Hz ranges, these will fit in 64-bit after reduction.)
+  unsigned long long n64 = (unsigned long long)num;
+  unsigned long long d64 = (unsigned long long)den;
+  unsigned long long g = gcd_u64(n64, d64);
+  n64 /= g; d64 /= g;
+  *out_num = n64;
+  *out_den = d64;
 }
 
 // Spur-aware preference rank: 0 best.
-static uint8_t preference_rank(uint32_t D,uint32_t E,uint32_t F, uint32_t C){
-    // Prefer integer MS (E==0, D in {4,6,8}) most.
-    if(E == 0 && (D == 4 || D == 6 || D == 8)) return 0;
+static uint8_t preference_rank(unsigned D,unsigned E,unsigned F, unsigned C){
+  // Prefer integer MS (E==0, D in {4,6,8}) most.
+  if(E == 0 && (D == 4 || D == 6 || D == 8))
+    return 0;
 
-    // Next: fractional MS but small denominators
-    // Penalize larger denominators loosely.
-    uint8_t r = 1;
-    if(F > 1000) r++;
-    if(F > 10000) r++;
-    if(C > 1000) r++;
-    if(C > 10000) r++;
-    return r;
+  // Next: fractional MS but small denominators
+  // Penalize larger denominators loosely.
+  uint8_t r = 1;
+  if(F > 1000)
+    r++;
+  if(F > 10000)
+    r++;
+  if(C > 1000)
+    r++;
+  if(C > 10000)
+    r++;
+  return r;
 }
 
 // ----------------- main solver -----------------
@@ -1308,195 +1322,192 @@ static uint8_t preference_rank(uint32_t D,uint32_t E,uint32_t F, uint32_t C){
 //     picking E/F by approximating a target MS value derived from a target PLL freq.
 //  4) For each candidate MS, compute required PLL ratio X = r*Y and approximate its fractional part by B/C (C<=1,048,575).
 //  5) Score by absolute frequency error + preference rank.
-bool si5351_solve(uint64_t fref_hz, uint64_t fout_hz, si5351_solution_t *best)
+bool si5351_solve(unsigned long long fref_hz, unsigned long long fout_hz, si5351_solution_t *best)
 {
-    if(!best || fref_hz == 0 || fout_hz == 0) return false;
+  if(!best || fref_hz == 0 || fout_hz == 0)
+    return false;
 
-    // Exact ratio r = P/Q
-    uint64_t P = fout_hz;
-    uint64_t Q = fref_hz;
-    uint64_t g = gcd_u64(P, Q);
-    P /= g; Q /= g;
+  // Exact ratio r = P/Q
+  unsigned long long P = fout_hz;
+  unsigned long long Q = fref_hz;
+  unsigned long long g = gcd_u64(P, Q);
+  P /= g;
+  Q /= g;
 
-    // Initialize best as "infinite error"
-    best->err_num = (U128)(~(U128)0);
-    best->prefer_rank = 255;
+  // Initialize best as "infinite error"
+  best->err_num = (U128)(~(U128)0);
+  best->prefer_rank = 255;
 
-    // Candidate PLL targets (Hz) to bias MS approximation.
-    const uint64_t pll_targets[] = { 900000000ULL, 864000000ULL, 800000000ULL, 750000000ULL, 600000000ULL };
-    const unsigned n_pll_targets = sizeof(pll_targets)/sizeof(pll_targets[0]);
+  // Candidate PLL targets (Hz) to bias MS approximation.
+  const unsigned long long pll_targets[] = { 900000000ULL, 864000000ULL, 800000000ULL, 750000000ULL, 600000000ULL };
+  const unsigned n_pll_targets = sizeof(pll_targets)/sizeof(pll_targets[0]);
 
-    // R divider values: 1,2,4,...,128
-    for(uint32_t R = 1; R <= 128; R <<= 1){
+  // R divider values: 1,2,4,...,128
+  for(unsigned R = 1; R <= 128; R <<= 1){
 
-        // ---- 3a) integer MS first: D in {4,6,8}, E=0,F=1
-        const uint32_t D_ints[] = {4,6,8};
-        for(unsigned i=0;i<3;i++){
-            uint32_t D = D_ints[i], E = 0, F = 1;
-            if(!multisynth_is_legal(D,E,F)) continue;
+    // ---- 3a) integer MS first: D in {4,6,8}, E=0,F=1
+    const unsigned D_ints[] = {4,6,8};
+    for(unsigned i=0;i<3;i++){
+      unsigned D = D_ints[i], E = 0, F = 1;
+      if(!multisynth_is_legal(D,E,F))
+	continue;
 
-            // Required PLL freq = fout * D * R
-            // Ensure within VCO band via PLL ratio later.
+      // Required PLL freq = fout * D * R
+      // Ensure within VCO band via PLL ratio later.
 #if 0
-            U128 fpll = (U128)fout_hz * D * R;
+      U128 fpll = (U128)fout_hz * D * R;
 #endif
-            // Compute PLL ratio X = fpll / fref = (fout/fref) * (D*R)
-            // X = (P/Q) * (D*R) = (P*(D*R))/Q
-            U128 Xn = (U128)P * (D*R);
-            U128 Xd = (U128)Q;
+      // Compute PLL ratio X = fpll / fref = (fout/fref) * (D*R)
+      // X = (P/Q) * (D*R) = (P*(D*R))/Q
+      U128 Xn = (U128)P * (D*R);
+      U128 Xd = (U128)Q;
 
-            uint64_t A = (uint64_t)(Xn / Xd);
-            U128 rem = Xn % Xd;
+      unsigned long long A = (unsigned long long)(Xn / Xd);
+      U128 rem = Xn % Xd;
 
-            // fractional part rem/Xd approximated by B/C
-            uint64_t B=0,C=1;
-            if(rem != 0){
-                // Reduce rem/Xd first for smaller numbers
-                uint64_t rem64 = (uint64_t)rem;
-                uint64_t xd64  = (uint64_t)Xd;
-                uint64_t gg = gcd_u64(rem64, xd64);
-                rem64 /= gg; xd64 /= gg;
-                best_rational_approx(rem64, xd64, SI5351_DEN_MAX, &B, &C);
-            }
+      // fractional part rem/Xd approximated by B/C
+      unsigned long long B=0,C=1;
+      if(rem != 0){
+	// Reduce rem/Xd first for smaller numbers
+	unsigned long long rem64 = (unsigned long long)rem;
+	unsigned long long xd64  = (unsigned long long)Xd;
+	unsigned long long gg = gcd_u64(rem64, xd64);
+	rem64 /= gg;
+	xd64 /= gg;
+	best_rational_approx(rem64, xd64, SI5351_DEN_MAX, &B, &C);
+      }
+      if(!pll_is_legal((unsigned)A,(unsigned)B,(unsigned)C)
+	 || !pll_freq_in_range(fref_hz,(unsigned)A,(unsigned)B,(unsigned)C))
+	continue;
 
-            if(!pll_is_legal((uint32_t)A,(uint32_t)B,(uint32_t)C)
-	       || !pll_freq_in_range(fref_hz,(uint32_t)A,(uint32_t)B,(uint32_t)C))
-	      continue;
+      // achieved fout as rational:
+      unsigned long long fn, fd;
+      compute_fout_rational(fref_hz,(unsigned)A,(unsigned)B,(unsigned)C,D,E,F,R,&fn,&fd);
 
-            // achieved fout as rational:
-            uint64_t fn, fd;
-            compute_fout_rational(fref_hz,(uint32_t)A,(uint32_t)B,(uint32_t)C,D,E,F,R,&fn,&fd);
-
-            // error = |fn/fd - fout_hz|
-            // compute |fn - fout*fd| / fd
-            U128 err = abs_diff_num_u128(fn, fd, fout_hz, 1);
-
-            uint8_t pref = preference_rank(D,E,F,(uint32_t)C);
-
-            // Select best: smallest err, then pref
-            if(err < best->err_num || (err == best->err_num && pref < best->prefer_rank)){
-                best->A=(uint32_t)A; best->B=(uint32_t)B; best->C=(uint32_t)C;
-                best->D=D; best->E=E; best->F=F;
-                best->R=R;
-                best->fout_num=fn; best->fout_den=fd;
-                best->err_num=err;
-                best->prefer_rank=pref;
-            }
-        }
-
-        // ---- 3b) fractional MS: D=8..2048, E/F chosen by approximating target MS ratio
-        for(uint32_t D=8; D<=2048; D++){
-            for(unsigned t=0;t<n_pll_targets;t++){
-                uint64_t fpll_target = pll_targets[t];
-
-                // target multisynth value Ytarget = fpll_target / (fout * R)
-                // Ytarget in [D, D+1)
-                // Compute fractional part exactly: frac = Ytarget - D
-                // frac = (fpll_target) / (fout*R) - D = (fpll_target - D*fout*R) / (fout*R)
-                U128 denom = (U128)fout_hz * R;
-                U128 numer = (U128)fpll_target;
-
-                // Skip if D band doesn't straddle target
-                U128 Dden = (U128)D * denom;
-                U128 D1den = (U128)(D+1) * denom;
-                if(numer < Dden || numer >= D1den) continue;
-
-                U128 frac_num = numer - Dden;   // in [0, denom)
-                uint64_t E=0,F=1;
-
-                // Approx frac_num/denom by E/F with F<=DEN_MAX, and require E>0 if D==8
-                if(frac_num != 0){
-                    uint64_t fn = (uint64_t)frac_num;
-                    uint64_t fd = (uint64_t)denom;
-                    uint64_t gg = gcd_u64(fn, fd);
-                    fn/=gg; fd/=gg;
-                    best_rational_approx(fn, fd, SI5351_DEN_MAX, &E, &F);
-                } else {
-                    // exactly integer D; but fractional mode requires D==8 must be >8, and for 8 integer is legal only via integer-mode case (handled above)
-                    E = 0; F = 1;
-                }
-
-                if(!multisynth_is_legal(D,(uint32_t)E,(uint32_t)F)) continue;
-
-                // Now Y = (D*F+E)/F exactly.
-                // Compute required PLL ratio X = r * Y = (P/Q)*((D*F+E)/F)
-                U128 Yn = (U128)D*F + E;
-                U128 Yd = (U128)F;
-
-                U128 Xn = (U128)P * Yn;
-                U128 Xd = (U128)Q * Yd;
-
-                uint64_t A = (uint64_t)(Xn / Xd);
-                U128 rem = Xn % Xd;
-
-                uint64_t B=0,C=1;
-                if(rem != 0){
-                    uint64_t rem64 = (uint64_t)rem;
-                    uint64_t xd64  = (uint64_t)Xd;
-                    uint64_t gg2 = gcd_u64(rem64, xd64);
-                    rem64/=gg2; xd64/=gg2;
-                    best_rational_approx(rem64, xd64, SI5351_DEN_MAX, &B, &C);
-                }
-
-                if(!pll_is_legal((uint32_t)A,(uint32_t)B,(uint32_t)C)
-		   || !pll_freq_in_range(fref_hz,(uint32_t)A,(uint32_t)B,(uint32_t)C))
-		  continue;
-
-                uint64_t fn, fd;
-                compute_fout_rational(fref_hz,(uint32_t)A,(uint32_t)B,(uint32_t)C,
-                                      D,(uint32_t)E,(uint32_t)F,R,&fn,&fd);
-
-                U128 err = abs_diff_num_u128(fn, fd, fout_hz, 1);
-                uint8_t pref = preference_rank(D,(uint32_t)E,(uint32_t)F,(uint32_t)C);
-
-                if(err < best->err_num || (err == best->err_num && pref < best->prefer_rank)){
-                    best->A=(uint32_t)A; best->B=(uint32_t)B; best->C=(uint32_t)C;
-                    best->D=D; best->E=(uint32_t)E; best->F=(uint32_t)F;
-                    best->R=R;
-                    best->fout_num=fn; best->fout_den=fd;
-                    best->err_num=err;
-                    best->prefer_rank=pref;
-                }
-            }
-        }
+      // error = |fn/fd - fout_hz|
+      // compute |fn - fout*fd| / fd
+      U128 err = abs_diff_num_u128(fn, fd, fout_hz, 1);
+      uint8_t pref = preference_rank(D,E,F,(unsigned)C);
+      // Select best: smallest err, then pref
+      if(err < best->err_num || (err == best->err_num && pref < best->prefer_rank)){
+	best->A=(unsigned)A; best->B=(unsigned)B; best->C=(unsigned)C;
+	best->D=D; best->E=E; best->F=F;
+	best->R=R;
+	best->fout_num=fn; best->fout_den=fd;
+	best->err_num=err;
+	best->prefer_rank=pref;
+      }
     }
+    // ---- 3b) fractional MS: D=8..2048, E/F chosen by approximating target MS ratio
+    for(unsigned D=8; D<=2048; D++){
+      for(unsigned t=0;t<n_pll_targets;t++){
+	unsigned long long fpll_target = pll_targets[t];
 
-    return best->err_num != (U128)(~(U128)0);
+	// target multisynth value Ytarget = fpll_target / (fout * R)
+	// Ytarget in [D, D+1)
+	// Compute fractional part exactly: frac = Ytarget - D
+	// frac = (fpll_target) / (fout*R) - D = (fpll_target - D*fout*R) / (fout*R)
+	U128 denom = (U128)fout_hz * R;
+	U128 numer = (U128)fpll_target;
+
+	// Skip if D band doesn't straddle target
+	U128 Dden = (U128)D * denom;
+	U128 D1den = (U128)(D+1) * denom;
+	if(numer < Dden || numer >= D1den) continue;
+
+	U128 frac_num = numer - Dden;   // in [0, denom)
+	unsigned long long E=0,F=1;
+
+	// Approx frac_num/denom by E/F with F<=DEN_MAX, and require E>0 if D==8
+	if(frac_num != 0){
+	  unsigned long long fn = (unsigned long long)frac_num;
+	  unsigned long long fd = (unsigned long long)denom;
+	  unsigned long long gg = gcd_u64(fn, fd);
+	  fn/=gg; fd/=gg;
+	  best_rational_approx(fn, fd, SI5351_DEN_MAX, &E, &F);
+	} else {
+	  // exactly integer D; but fractional mode requires D==8 must be >8, and for 8 integer is legal only via integer-mode case (handled above)
+	  E = 0; F = 1;
+	}
+	if(!multisynth_is_legal(D,(unsigned)E,(unsigned)F))
+	  continue;
+
+	// Now Y = (D*F+E)/F exactly.
+	// Compute required PLL ratio X = r * Y = (P/Q)*((D*F+E)/F)
+	U128 Yn = (U128)D*F + E;
+	U128 Yd = (U128)F;
+	U128 Xn = (U128)P * Yn;
+	U128 Xd = (U128)Q * Yd;
+	unsigned long long A = (unsigned long long)(Xn / Xd);
+	U128 rem = Xn % Xd;
+	unsigned long long B=0,C=1;
+	if(rem != 0){
+	  unsigned long long rem64 = (unsigned long long)rem;
+	  unsigned long long xd64  = (unsigned long long)Xd;
+	  unsigned long long gg2 = gcd_u64(rem64, xd64);
+	  rem64/=gg2; xd64/=gg2;
+	  best_rational_approx(rem64, xd64, SI5351_DEN_MAX, &B, &C);
+	}
+	if(!pll_is_legal((unsigned)A,(unsigned)B,(unsigned)C)
+	   || !pll_freq_in_range(fref_hz,(unsigned)A,(unsigned)B,(unsigned)C))
+	  continue;
+
+	unsigned long long fn, fd;
+	compute_fout_rational(fref_hz,(unsigned)A,(unsigned)B,(unsigned)C,
+			      D,(unsigned)E,(unsigned)F,R,&fn,&fd);
+
+	U128 err = abs_diff_num_u128(fn, fd, fout_hz, 1);
+	uint8_t pref = preference_rank(D,(unsigned)E,(unsigned)F,(unsigned)C);
+	if(err < best->err_num || (err == best->err_num && pref < best->prefer_rank)){
+	  best->A=(unsigned)A; best->B=(unsigned)B; best->C=(unsigned)C;
+	  best->D=D; best->E=(unsigned)E; best->F=(unsigned)F;
+	  best->R=R;
+	  best->fout_num=fn; best->fout_den=fd;
+	  best->err_num=err;
+	  best->prefer_rank=pref;
+	}
+      }
+    }
+  }
+  return best->err_num != (U128)(~(U128)0);
 }
 
 // Helpers to get packed register parameters:
 void si5351_get_pll_pvals(const si5351_solution_t *s, si5351_pvals_t *pll){
-    *pll = pack_abc(s->A, s->B, s->C);
+  *pll = pack_abc(s->A, s->B, s->C);
 }
 void si5351_get_ms_pvals(const si5351_solution_t *s, si5351_pvals_t *ms){
-    *ms = pack_abc(s->D, s->E, s->F);
+  *ms = pack_abc(s->D, s->E, s->F);
 }
-double rx888_set_samprate(struct sdrstate *sdr,int64_t const reference,int64_t const samprate){
+double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long long const samprate){
   assert(sdr != NULL);
   assert(reference != 0);
   assert(samprate != 0);
 
   si5351_solution_t best = {0};
-
   bool result = si5351_solve(reference,samprate,&best);
   if(!result){
-    fprintf(stderr,"si5351_solve(%'lld, %'lld) failed\n", (long long)reference, (long long)samprate);
+    fprintf(stderr,"si5351_solve(%'lld, %'lld) failed\n", reference, samprate);
     return 0;
   }
   if(best.E == 0)
     sdr->ms_int = true;
 
-  double const pll_ratio = (double)best.A + (double)best.B / (double)best.C;
-  double const vco = reference * pll_ratio;
   si5351_pvals_t pll = {0};
   si5351_get_pll_pvals(&best,&pll);
-
-  fprintf(stderr,"RX888 Si5351 PLL: vco = %'lld * (%'d + %'d/%'d) = %'lf; P1=%d, P2=%d, P3=%d\n",
-	  (long long)reference,
-	  best.A, best.B, best.C,
-	  vco,
-	  pll.P1, pll.P2, pll.P3);
-
+  {
+    long long whole_hz,num,denom;
+    whole_hz = reference * best.B / best.C;
+    num = reference * best.B % best.C;
+    denom = best.C;
+    whole_hz += reference * best.A;
+    fprintf(stderr,"RX888 Si5351 PLL: vco = %'lld * (%'d + %'d/%'d) = %'lld",
+	  reference,
+	    best.A, best.B, best.C, whole_hz);
+    if(num != 0)
+      fprintf(stderr," + %'lld/%'lld", num, denom);
+  }
+  fprintf(stderr," Hz; P1=%d, P2=%d, P3=%d\n",pll.P1, pll.P2, pll.P3);
   uint8_t data_clkin[] = {
     (pll.P3 & 0x0000ff00) >>  8,
     (pll.P3 & 0x000000ff) >>  0,
@@ -1509,19 +1520,19 @@ double rx888_set_samprate(struct sdrstate *sdr,int64_t const reference,int64_t c
   };
   control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
 
-  double const output_ratio = best.R * (best.D + best.E / (double)best.F);
   si5351_pvals_t ms = {0};
   si5351_get_ms_pvals(&best,&ms);
-  fprintf(stderr,"RX888 Si5351 output divider: samprate = vco / (%'d*(%'d + %'d/%'d)) = %'lf/%'lf = %'lld/%'lld = %'lf (error = %'lg); P1=%d, P2=%d, P3=%d\n",
-	  best.R,
-	  best.D, best.E, best.F,
-	  vco,
-	  output_ratio,
-	  (long long)best.fout_num, (long long)best.fout_den,
-	  vco / output_ratio,
-	  vco/output_ratio - samprate,
-	  ms.P1, ms.P2, ms.P3);
-
+  fprintf(stderr,"RX888 Si5351 output divider: samprate = vco / (%'d*(%'d + %'d/%'d)) = %'lld",
+	  best.R, best.D, best.E, best.F, best.fout_num);
+  if(best.fout_den != 1){
+    long long whole_hz = best.fout_num / best.fout_den;
+    long long num = best.fout_num % best.fout_den;
+    fprintf(stderr,"/%'lld = %'lld + %'lld/%'lld", best.fout_den, whole_hz, num, best.fout_den);
+  }
+  fprintf(stderr," Hz");
+  if(best.err_num != 0)
+    fprintf(stderr," (error = %'lld/%'lld)",(long long)best.err_num, best.fout_den);
+  fprintf(stderr,"; P1=%d, P2=%d, P3=%d\n", ms.P1, ms.P2, ms.P3);
   uint8_t data_clkout[] = {
     (ms.P3 & 0x0000ff00) >>  8,
     (ms.P3 & 0x000000ff) >>  0,
