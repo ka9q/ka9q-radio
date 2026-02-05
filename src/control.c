@@ -1665,8 +1665,10 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
       }
       pprintw(w,row++,col,"Window","%s",win_type);
     }
-    pprintw(w,row++,col,"Avg","%u   ",chan->spectrum.fft_avg);
+    pprintw(w, row++, col, "Avg","%u   ",chan->spectrum.fft_avg);
     pprintw(w, row++, col, "Overlap", "%.3lf   ",chan->spectrum.overlap);
+    pprintw(w, row++, col, "Min", "%.1lf dB", chan->spectrum.base);
+    pprintw(w, row++, col, "Max", "%.1lf dB", chan->spectrum.base + 255 * chan->spectrum.step);
 
     if(chan->spectrum.bin_data != NULL)
       pprintw(w,row++,col,"Bin 0","%.1lf   ",chan->spectrum.bin_data[0]);

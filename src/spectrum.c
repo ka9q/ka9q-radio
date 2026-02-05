@@ -216,6 +216,7 @@ static void narrowband_poll(struct channel *chan){
 
   int fft_avg = chan->spectrum.fft_avg;
   fft_avg = fft_avg <= 0 ? 1 : fft_avg; // force it valid
+
   // scale each bin value for our FFT
   // squared because the we're scaling the output of complex norm, not the input bin values
   // Unlike wideband, no adjustment for a real front end because the downconverter corrects the gain
@@ -236,9 +237,10 @@ static void narrowband_poll(struct channel *chan){
       if(i == bin_count/2)
 	fr = fft_n - i; // skip over excess FFT bins at edges
       assert(fr >= 0 && fr < fft_n);
-      double const p = bin_data[i] + gain * cnrm((double complex)fft_out[fr++]);
+      double const p = cnrm((double complex)fft_out[fr++]); // use double for improved accuracy when summing?
+      assert(isfinite(p));
       if(isfinite(p))
-	bin_data[i] = (float)p; // Don't pollute with infinities or NANs
+	bin_data[i] += gain * p; // Don't pollute with infinities or NANs
     }
     // rp now points to *next* buffer, so move it back between 1 and 2 buffers depending on overlap
     rp -= lrint(fft_n * (2. - chan->spectrum.overlap));
@@ -248,6 +250,18 @@ static void narrowband_poll(struct channel *chan){
   }
   fftwf_free(fft_in);
   fftwf_free(fft_out);
+  double min_power = INFINITY;
+  double max_power = 0;
+
+  // scaling for byte bin format
+  for(int i=0; i < bin_count; i++){
+    if(bin_data[i] < min_power)
+      min_power = bin_data[i];
+    if(bin_data[i] > max_power)
+      max_power = bin_data[i];
+  }
+  chan->spectrum.base = power2dB(min_power);
+  chan->spectrum.step = (1./256.) * (power2dB(max_power) - chan->spectrum.base); // dB range
 }
 
 static void wideband_poll(struct channel *chan){
@@ -297,7 +311,6 @@ static void wideband_poll(struct channel *chan){
   // we only see one side of the spectrum for real inputs
   int const fft_avg = chan->spectrum.fft_avg <= 0 ? 1 : chan->spectrum.fft_avg; // force it valid
 
-
   if(frontend->isreal){
     // Point into raw SDR A/D input ring buffer
     // We're reading from a mirrored buffer so it will automatically wrap back to the beginning
@@ -341,9 +354,10 @@ static void wideband_poll(struct channel *chan){
 	if(i == bin_count/2)
 	  binp -= bin_count; // crossed into negative output rang, Wrap input back to lowest frequency requested
 
-	double const p = bin_data[i] + gain * cnrmf(fft_out[binp]); // Accumulate power
+	double const p = cnrm(fft_out[binp]);
+	assert(isfinite(p));
 	if(isfinite(p))
-	  bin_data[i] = (float)p; // Accumulate power
+	  bin_data[i] += gain * p;
       }
       input -= lrint(fft_n * (1. - chan->spectrum.overlap)); // move back fraction of a buffer
       if(input < (float *)frontend->in.input_buffer)
@@ -392,10 +406,11 @@ static void wideband_poll(struct channel *chan){
       }
       do {
 	assert(binp >= 0 && binp < fft_n && i >= 0 && i < bin_count);
-	double const p = bin_data[i] + gain * cnrmf(fft_out[binp]);
-	assert(isfinite(p)); // Don't let a NAN or infinity poison the sum
+	double const p = cnrm(fft_out[binp]);
+	assert(isfinite(p));
 	if(isfinite(p))
-	  bin_data[i] = (float)p;
+	  bin_data[i] += gain * p;
+
 	// Increment and wrap indices
 	if(++i == bin_count)
 	  i = 0; // wrap to DC
@@ -412,21 +427,39 @@ static void wideband_poll(struct channel *chan){
     fftwf_free(fft_in);
     fftwf_free(fft_out);
   }
+  double min_power = INFINITY;
+  double max_power = 0;
+
+  // scaling for byte bin format
+  for(int i=0; i < bin_count; i++){
+    if(bin_data[i] < min_power)
+      min_power = bin_data[i];
+    if(bin_data[i] > max_power)
+      max_power = bin_data[i];
+  }
+  if(min_power > 0)
+    chan->spectrum.base = power2dB(min_power);
+  else
+    chan->spectrum.base = -150; // arbitrary clamp
+
+  if(max_power > 0)
+    chan->spectrum.step = ldexp(power2dB(max_power) - chan->spectrum.base,-8); // dB range
+  else
+    chan->spectrum.step = 0.5; // just keep it from blowing up
 }
 
 // Fill a buffer with compact frequency bin data, 1 byte each
 // Each unsigned byte in the output gives the bin power above 'base' decibels, in steps of 'step' dB
 // Unlike the regular float32 format, these bins run uniformly from lowest frequency to highest frequency
-void encode_byte_data(struct channel const *chan, uint8_t *buffer, double base, double step){
+void encode_byte_data(struct channel const *chan, uint8_t *buffer){
   assert(chan != NULL && buffer != NULL);
-  assert(isfinite(base) && isfinite(step) && step != 0);
 
   int const bin_count = chan->spectrum.bin_count;
-  double scale = 1./step;
+  double scale = 1./chan->spectrum.step;
 
   int wbin = bin_count/2; // nyquist freq is most negative
   for(int i=0; i < bin_count; i++){
-    double x = scale * (power2dB(chan->spectrum.bin_data[wbin++]) - base);
+    double x = scale * (power2dB(chan->spectrum.bin_data[wbin++]) - chan->spectrum.base);
     if(x < 0)
       x = 0;
     else if(x > 255)

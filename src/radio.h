@@ -357,7 +357,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *preset);
 int start_demod(struct channel * restrict chan);
 double set_freq(struct channel * restrict ,double);
 double set_first_LO(struct channel const * restrict, double);
-void encode_byte_data(struct channel const *chan,uint8_t *buffer,double base,double step);
+void encode_byte_data(struct channel const *chan,uint8_t *buffer);
 
 // Routines common to the internals of all channel demods
 int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, double freq);

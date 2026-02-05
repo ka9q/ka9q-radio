@@ -804,7 +804,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       } else {
 	encode_float(&bp,SPECTRUM_BASE, chan->spectrum.base);
 	encode_float(&bp,SPECTRUM_STEP, chan->spectrum.step);
-	encode_byte_data(chan,bins,chan->spectrum.base,chan->spectrum.step);
+	encode_byte_data(chan,bins);
 	encode_string(&bp,BIN_BYTE_DATA,bins,chan->spectrum.bin_count);
 	free(bins);
       }
