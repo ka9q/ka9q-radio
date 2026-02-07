@@ -801,7 +801,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       uint8_t *bins = malloc(chan->spectrum.bin_count);
       if(bins == NULL){
 	fprintf(stderr,"malloc of spectrum data failed\n");
-      } else {
+      } else if(isfinite(chan->spectrum.base) && isfinite(chan->spectrum.step)){
 	encode_float(&bp,SPECTRUM_BASE, chan->spectrum.base);
 	encode_float(&bp,SPECTRUM_STEP, chan->spectrum.step);
 	encode_byte_data(chan,bins);
