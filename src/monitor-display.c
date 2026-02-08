@@ -1446,6 +1446,8 @@ static int render_left(int const row, int const col, char const scratch[LINES][C
   int maxline = 0;
   for(int j = 0; j < nrows; j++){
     int len = strlen(scratch[j]);
+    if(col + len >= COLS)
+      len = COLS - col;
     if(maxline < len)
       maxline = len;
     mvaddnstr(row+j,col,scratch[j],len);
