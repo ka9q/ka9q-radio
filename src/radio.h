@@ -221,7 +221,7 @@ struct channel {
   struct {
     double bb_power;   // Average power of signal after filter but before digital gain, power ratio
     double foffset;    // Frequency offset Hz (FM, coherent AM, dsb)
-    double n0;         // per-demod N0 (experimental)
+    double n0;         // per-demod N0
   } sig;
 
   struct {                   // Used only in FM demodulator
