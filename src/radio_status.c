@@ -692,9 +692,12 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   if(isfinite(frontend->rf_level_cal))
     encode_float(&bp,RF_LEVEL_CAL,frontend->rf_level_cal); // not sent unless set
   encode_bool(&bp,RF_AGC,frontend->rf_agc);
-  encode_int32(&bp,LNA_GAIN,frontend->lna_gain);
-  encode_int32(&bp,MIXER_GAIN,frontend->mixer_gain);
-  encode_int32(&bp,IF_GAIN,frontend->if_gain);
+  if(frontend->lna_gain != 0 || frontend->mixer_gain != 0 || frontend->if_gain != 0){
+    // This should be specifically enabled only for front ends that have them
+    encode_int32(&bp,LNA_GAIN,frontend->lna_gain);
+    encode_int32(&bp,MIXER_GAIN,frontend->mixer_gain);
+    encode_int32(&bp,IF_GAIN,frontend->if_gain);
+  }
   encode_float(&bp,FE_LOW_EDGE,frontend->min_IF);
   encode_float(&bp,FE_HIGH_EDGE,frontend->max_IF);
   encode_int32(&bp,AD_BITS_PER_SAMPLE,frontend->bitspersample);
@@ -730,8 +733,6 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   encode_int32(&bp,OUTPUT_SAMPRATE,chan->output.samprate); // Hz
   encode_float(&bp,BASEBAND_POWER,power2dB(chan->sig.bb_power));
   encode_int32(&bp,OUTPUT_CHANNELS,chan->output.channels);
-  encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch.open));
-  encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch.close));
 
   // Mode-specific params
   switch(chan->demod_type){
@@ -816,6 +817,8 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   // Stuff not relevant in spectrum analysis mode
   if(chan->demod_type != SPECT_DEMOD && chan->demod_type != SPECT2_DEMOD){
     encode_bool(&bp,SNR_SQUELCH,chan->squelch.snr_enable);
+    encode_float(&bp,SQUELCH_OPEN,power2dB(chan->squelch.open));
+    encode_float(&bp,SQUELCH_CLOSE,power2dB(chan->squelch.close));
     encode_int32(&bp,RTP_TIMESNAP,chan->output.rtp.timestamp);
     encode_int64(&bp,OUTPUT_DATA_PACKETS,chan->output.rtp.packets);
     encode_int(&bp,FILTER2,chan->filter2.blocking);
