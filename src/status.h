@@ -129,13 +129,13 @@ enum status_type {
   PRESET,         // char string containing mode presets
   DEEMPH_TC,      // De-emphasis time constant (FM only)
   DEEMPH_GAIN,    // De-emphasis gain (FM only)
-  CONVERTER_OFFSET, // Frequency converter shift (if present)
+  UNUSED3,
   PL_DEVIATION,     // Measured PL tone deviation, Hz (FM only)
   THRESH_EXTEND,    // threshold extension enable (FM only)
 
   // Spectral analysis
   SPECTRUM_SHAPE,  // parameter for spectrum analysis window (eg, Kaiser beta)
-  COHERENT_BIN_SPACING, // (1-overlap) * block rate = (1 - ((M-1)/(L+M-1))) * block rate
+  UNUSED2,
   RESOLUTION_BW, // Bandwidth (Hz) of noncoherent integration bin, some multiple of COHERENT_BIN_SPACING
   BIN_COUNT,        // Integer number of bins accumulating energy noncoherently
   CROSSOVER,        // Frequency in Hz where spectrum algorithm changes

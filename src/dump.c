@@ -353,18 +353,12 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case DEEMPH_TC:
       fprintf(fp,"demph tc %.1lf us",1.0e6 * decode_float(cp,optlen));
       break;
-    case CONVERTER_OFFSET:
-      fprintf(fp,"converter %.1lf Hz",decode_double(cp,optlen));
-      break;
     case PRESET:
       {
 	char *p = decode_string(cp,optlen);
 	fprintf(fp,"preset %s",p);
 	FREE(p);
       }
-      break;
-    case COHERENT_BIN_SPACING:
-      fprintf(fp,"coherent bin spacing %.1lf Hz",decode_float(cp,optlen));
       break;
     case RESOLUTION_BW:
       fprintf(fp,"resolution bw %.1lf Hz",decode_float(cp,optlen));
