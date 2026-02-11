@@ -335,9 +335,6 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case TP2:
       fprintf(fp,"TP2 %'.1lf",decode_float(cp,optlen));
       break;
-    case GAINSTEP:
-      fprintf(fp,"gain step %'u",decode_int(cp,optlen));
-      break;
     case AD_BITS_PER_SAMPLE:
       fprintf(fp,"A/D bits/sample %u",decode_int(cp,optlen));
       break;

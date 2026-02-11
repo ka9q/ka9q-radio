@@ -122,7 +122,7 @@ enum status_type {
   TP1, // General purpose test points (floating point)
   TP2,
 
-  GAINSTEP,
+  UNUSED4,
   AD_BITS_PER_SAMPLE, // Front end A/D width, used for gain scaling
   SQUELCH_OPEN,   // Squelch opening threshold SNR
   SQUELCH_CLOSE,  // and closing
