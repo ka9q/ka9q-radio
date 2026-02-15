@@ -1729,30 +1729,31 @@ static void display_output(WINDOW *w,struct channel const *chan){
   int col = 1;
   wmove(w,row,col);
   wclrtobot(w);
-  pprintw(w,row++,col,"Source","%s",formatsock(&chan->output.source_socket,true));
-  pprintw(w,row++,col,"Dest","%s",formatsock(&chan->output.dest_socket,true));
-
   pprintw(w,row++,col,"SSRC","%u",chan->output.rtp.ssrc);
-  pprintw(w,row++,col,"Timestamp","%'u",chan->output.time_snap);
-  pprintw(w,row++,col,"TTL","%u",chan->output.ttl);
-  pprintw(w,row++,col,"Payload Type","%u",chan->output.rtp.type);
   pprintw(w,row++,col,"Sample rate","%'u Hz",chan->output.samprate);
-  pprintw(w,row++,col,"Encoding","%s",encoding_string(chan->output.encoding));
-  pprintw(w,row++,col,"Channels","%u",chan->output.channels);
-  pprintw(w,row++,col,"Packets","%'llu",(unsigned long long)chan->output.rtp.packets);
-  pprintw(w,row++,col,"Packet buffers","%u",chan->output.minpacket);
-  if(chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP){
-    if(chan->opus.bitrate != 0)
-      pprintw(w,row++,col,"Opus bitrate","%'u",chan->opus.bitrate);
-    else
-      pprintw(w,row++,col,"Opus bitrate","auto");
-    pprintw(w,row++,col,"Opus dtx","%s",chan->opus.dtx ? "on" : "off");
-    char const *appl = opus_application_string(chan->opus.application);
-    if(appl != NULL)
-      pprintw(w,row++,col,"Opus application","%s",appl);
-    pprintw(w,row++,col,"Opus fec","%u%%",chan->opus.fec);
-    int bw = opus_bandwidth(NULL,chan->opus.bandwidth);
-    pprintw(w,row++,col,"Opus bw","%u kHz",bw/1000);
+  if(chan->demod_type != SPECT_DEMOD && chan->demod_type != SPECT2_DEMOD){
+    pprintw(w,row++,col,"Source","%s",formatsock(&chan->output.source_socket,true));
+    pprintw(w,row++,col,"Dest","%s",formatsock(&chan->output.dest_socket,true));
+    pprintw(w,row++,col,"Timestamp","%'u",chan->output.time_snap);
+    pprintw(w,row++,col,"TTL","%u",chan->output.ttl);
+    pprintw(w,row++,col,"Payload Type","%u",chan->output.rtp.type);
+    pprintw(w,row++,col,"Encoding","%s",encoding_string(chan->output.encoding));
+    pprintw(w,row++,col,"Channels","%u",chan->output.channels);
+    pprintw(w,row++,col,"Packets","%'llu",(unsigned long long)chan->output.rtp.packets);
+    pprintw(w,row++,col,"Packet buffers","%u",chan->output.minpacket);
+    if(chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP){
+      if(chan->opus.bitrate != 0)
+	pprintw(w,row++,col,"Opus bitrate","%'u",chan->opus.bitrate);
+      else
+	pprintw(w,row++,col,"Opus bitrate","auto");
+      pprintw(w,row++,col,"Opus dtx","%s",chan->opus.dtx ? "on" : "off");
+      char const *appl = opus_application_string(chan->opus.application);
+      if(appl != NULL)
+	pprintw(w,row++,col,"Opus application","%s",appl);
+      pprintw(w,row++,col,"Opus fec","%u%%",chan->opus.fec);
+      int bw = opus_bandwidth(NULL,chan->opus.bandwidth);
+      pprintw(w,row++,col,"Opus bw","%u kHz",bw/1000);
+    }
   }
   box(w,0,0);
   mvwaddstr(w,0,1,"RTP output");
