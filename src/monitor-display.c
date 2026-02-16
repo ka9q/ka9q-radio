@@ -23,6 +23,7 @@
 #include <sysexits.h>
 #include <poll.h>
 #include <regex.h>
+#include <ctype.h>
 
 #include "conf.h"
 #include "config.h"
