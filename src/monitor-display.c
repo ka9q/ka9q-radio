@@ -53,8 +53,8 @@ static struct stat Last_stat;
 
 static void update_monitor_display(void);
 static void process_keyboard(void);
-static int render_right(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const ncols);
-static int render_left(int const row, int const col, char const scratch[LINES][COLS],int const nrows);
+static int render_right(int const row, int const col, char scratch[LINES][COLS],int const nrows,int const ncols);
+static int render_left(int const row, int const col, char scratch[LINES][COLS],int const nrows);
 
 static int First_session = 0;
 static int Sessions_per_screen = 0;
@@ -516,12 +516,10 @@ static void update_monitor_display(void){
   else if(Current > LINES - first_line)
     Current = LINES - first_line;
 
-
   {  // dB gain
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 2;
     int rows = 0;
     snprintf(scratch[rows++],COLS,"dB");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
@@ -529,10 +527,9 @@ static void update_monitor_display(void){
       if(!inuse(sp))
 	break;
 
-      snprintf(scratch[rows],COLS,"%+*.0lf",width,muted(sp) ? -INFINITY : voltage2dB(sp->gain));
+      snprintf(scratch[rows],COLS,"%+.0lf",muted(sp) ? -INFINITY : voltage2dB(sp->gain));
     }
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
@@ -542,7 +539,6 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 3;
     int rows = 0;
     snprintf(scratch[rows++],COLS,"pan");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
@@ -550,11 +546,9 @@ static void update_monitor_display(void){
       if(!inuse(sp))
 	break;
 
-      snprintf(scratch[rows],COLS,"%ld",lrint(100*sp->pan));
+      snprintf(scratch[rows],COLS,"%+ld",lrint(100*sp->pan));
     }
-    col++;
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   // SSRC
   if(col >= COLS)
@@ -564,7 +558,6 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 6;
     int rows = 0;
     snprintf(scratch[rows++],COLS,"ssrc");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
@@ -574,9 +567,7 @@ static void update_monitor_display(void){
 
       snprintf(scratch[rows],COLS,"%u",sp->ssrc);
     }
-    col++;
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
@@ -585,7 +576,6 @@ static void update_monitor_display(void){
    char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = 7;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"tone");
@@ -595,8 +585,7 @@ static void update_monitor_display(void){
       if(sp->notch_enable && sp->notch_tone != 0)
 	snprintf(scratch[row],COLS,"%.1f%c",sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
     }
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
@@ -605,7 +594,6 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = 6;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"freq");
@@ -613,11 +601,9 @@ static void update_monitor_display(void){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
 
-      snprintf(scratch[rows],COLS,"%'*.0lf",width,sp->chan.tune.freq);
+      snprintf(scratch[rows],COLS,"%'.0lf",sp->chan.tune.freq);
     }
-    col++;
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
@@ -626,7 +612,6 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = 0;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"mode");
@@ -636,18 +621,15 @@ static void update_monitor_display(void){
 
       snprintf(scratch[rows],COLS,"%s",sp->chan.preset);
     }
-    col++;
-    width = render_left(header_line,col,scratch,rows);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
 
- {  // snr
+  {  // snr
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = 6;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"snr");
@@ -659,17 +641,16 @@ static void update_monitor_display(void){
 
       snprintf(scratch[rows],COLS,"%.1f",sp->snr);
     }
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,5); // Don't keep changing when SNR fluctuates
   }
   if(col >= COLS)
     goto done;
 
-  {  // id
+  {
+    // id
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = 0;
     int rows = 0;
     bool enable = false;
 
@@ -684,9 +665,7 @@ static void update_monitor_display(void){
       }
     }
     if(enable){
-      col++;
-      width = render_left(header_line,col,scratch,rows);
-      col += width;
+      col++; col += render_left(header_line,col,scratch,rows);
     }
   }
   if(col >= COLS)
@@ -696,7 +675,6 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 4;
     int rows = 0;
     snprintf(scratch[rows++],COLS,"Tot");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
@@ -708,8 +686,7 @@ static void update_monitor_display(void){
       ftime(total_buf,sizeof(total_buf),lrint(sp->tot_active));
       snprintf(scratch[rows],COLS,"%s",total_buf);
     }
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
@@ -718,7 +695,6 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 4;
     int rows = 0;
     snprintf(scratch[rows++],COLS,"Cur");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
@@ -730,17 +706,15 @@ static void update_monitor_display(void){
       char buf[100];
       snprintf(scratch[rows],COLS,"%s",ftime(buf,sizeof buf,t));
     }
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
-
   if(col >= COLS)
     goto done;
+
   {
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 6;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"level");
@@ -752,8 +726,7 @@ static void update_monitor_display(void){
       double dB = power2dB(sp->level);
       snprintf(scratch[rows],COLS,"%.1lf",dB);
     }
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
@@ -762,7 +735,6 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 5;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"Queue");
@@ -770,22 +742,19 @@ static void update_monitor_display(void){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(qlen(sp) <= 0)
-	continue;
+	continue; // blank inactive sessions
       snprintf(scratch[rows],COLS,"%ld",lrint(1000. * qlen(sp)/DAC_samprate));
     }
-    col++; // left space
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
 
-  // Opus/pcm
   {
+    // Opus/pcm
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 6;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"type");
@@ -794,8 +763,7 @@ static void update_monitor_display(void){
       if(!inuse(sp)) break;
       snprintf(scratch[rows],COLS,"%s",encoding_string(sp->pt_table[sp->type].encoding));
     }
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
@@ -805,7 +773,6 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 2;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"ms");
@@ -816,19 +783,17 @@ static void update_monitor_display(void){
 	continue;
       snprintf(scratch[rows],COLS,"%d",1000 * sp->last_framesize/sp->samprate); // frame size, ms
     }
-    col++;
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
 
-  // channels
   {
+    // channels
+    // Opus is special - the decoder always produces stereo, so the channel count is just informational
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 3;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"%s","ch");
@@ -841,17 +806,16 @@ static void update_monitor_display(void){
       else
 	snprintf(scratch[rows],COLS,"%d",sp->channels);
     }
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
 
-  { // bw
+  {
+    // Audio bandwidth
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 3;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"bw");
@@ -862,8 +826,7 @@ static void update_monitor_display(void){
 	continue;
       snprintf(scratch[rows],COLS,"%d",sp->bandwidth/1000); // to kHz
     }
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
@@ -872,7 +835,6 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 4;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"pt");
@@ -883,18 +845,16 @@ static void update_monitor_display(void){
 	continue;
       snprintf(scratch[rows],COLS,"%d",sp->type);
     }
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
 
-  // Data rate, kb/s
- {  // RTP payload type
+  {
+    // Data rate, kb/s
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 4;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"rate");
@@ -903,19 +863,17 @@ static void update_monitor_display(void){
       if(!inuse(sp)) break;
       snprintf(scratch[rows],COLS,"%.*f", sp->datarate < 1e5 ? 1 : 0, .001 * sp->datarate); // decimal only if < 1000
     }
-    col++;
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
 
 #if 0
-  {  // Processing delay, assuming synchronized system clocks
+  {
+    // Processing delay, assuming synchronized system clocks
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 6;
     int rows = 0;
     snprintf(scratch[rows++],COLS,"Delay");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
@@ -935,9 +893,7 @@ static void update_monitor_display(void){
       delay += 1.0e-9 * (gps_time_ns() - sp->chan.clocktime);
       snprintf(scratch[rows],COLS,"%'.3lf", delay);
     }
-    // Suppress entirely unless there's at least one entry
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
@@ -952,7 +908,6 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 3;
     int rows = 0;
     snprintf(scratch[rows++],COLS,"T0");
     for(; rows < LINES && session < NSESSIONS; rows++,session++){
@@ -967,18 +922,17 @@ static void update_monitor_display(void){
       int64_t t0 = 1000*wptr/DAC_samprate - 1000*(int64_t)sp->next_timestamp / sp->samprate;
       snprintf(scratch[rows],COLS,"%'*lld", width, t0); // ms
     }
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
 
   if(col >= COLS)
     goto done;
 #endif
   {
+    // Packet count
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 4;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"pkt");
@@ -987,18 +941,16 @@ static void update_monitor_display(void){
       if(!inuse(sp)) break;
       snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->packets);
     }
-    col++;
-    width = render_right(header_line,col,scratch,rows,width);
-    col += width;
+    col++; col += render_right(header_line,col,scratch,rows,0);
   }
   if(col >= COLS)
     goto done;
 
   {
+    // RTP resets
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 4;
     int rows = 0;
     bool enable = false;
 
@@ -1012,17 +964,17 @@ static void update_monitor_display(void){
       }
     }
     if(enable){
-      width = render_right(header_line,col,scratch,rows,width);
-      col += width;
+      col++; col += render_right(header_line,col,scratch,rows,0);
     }
   }
   if(col >= COLS)
     goto done;
-  {  // drops
+
+  {
+    // RTP packet drops
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 4;
     int rows = 0;
     bool enable = false;
 
@@ -1036,18 +988,17 @@ static void update_monitor_display(void){
       }
     }
     if(enable){
-      width = render_right(header_line,col,scratch,rows,width);
-      col += width;
+      col++; col += render_right(header_line,col,scratch,rows,0);
     }
   }
   if(col >= COLS)
     goto done;
 
-  {  // lates
+  {
+    // Late RTP packets
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 5;
     int rows = 0;
     bool enable = false;
 
@@ -1061,17 +1012,17 @@ static void update_monitor_display(void){
       }
     }
     if(enable){
-      width = render_right(header_line,col,scratch,rows,width);
-      col += width;
+      col++; col += render_right(header_line,col,scratch,rows,0);
     }
   }
   if(col >= COLS)
     goto done;
-  {  // earlies
+
+  {
+    // early RTP packets
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 6;
     int rows = 0;
     bool enable = false;
 
@@ -1085,19 +1036,17 @@ static void update_monitor_display(void){
       }
     }
     if(enable){
-      width = render_right(header_line,col,scratch,rows,width);
-      col += width;
+      col++; col += render_right(header_line,col,scratch,rows,0);
     }
   }
-
   if(col >= COLS)
     goto done;
 
-  {  // reseq
+  {
+    // resequenced RTP packets
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int width = 5;
     int rows = 0;
     bool enable = false;
 
@@ -1111,18 +1060,17 @@ static void update_monitor_display(void){
       }
     }
     if(enable){
-      width = render_right(header_line,col,scratch,rows,width);
-      col += width;
+      col++; col += render_right(header_line,col,scratch,rows,0);
     }
   }
   if(col >= COLS)
     goto done;
 
-  {  // opus plc
+  {
+    // opus packet loss concealment events
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = 4;
     int rows = 0;
     bool enable = false;
 
@@ -1136,18 +1084,17 @@ static void update_monitor_display(void){
       }
     }
     if(enable){
-      width = render_right(header_line,col,scratch,rows,width);
-      col += width;
+      col++; col += render_right(header_line,col,scratch,rows,0);
     }
   }
   if(col >= COLS)
     goto done;
 
-  {  // sockets
+  {
+    // sockets
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int width = 0;
     int rows = 0;
 
     snprintf(scratch[rows++],COLS,"sockets");
@@ -1156,9 +1103,7 @@ static void update_monitor_display(void){
       if(!inuse(sp)) break;
       snprintf(scratch[rows],COLS,"%s -> %s",formatsock(&sp->sender,true),sp->dest);
     }
-    col++;
-    width = render_left(header_line,col,scratch,rows);
-    col += width;
+    col++; col += render_left(header_line,col,scratch,rows);
   }
   if(col >= COLS)
     goto done;
@@ -1405,52 +1350,67 @@ static void process_keyboard(void){
     beep(); // Not serviced by anything
 }
 
+// Render a block with all lines right justified
 // These routines keep columns of numbers nicely aligned without having to pre-reserve space for the widest possible entry
-// Each entry is right justified and the entire column is sized according to its widest row, subject to a minimum width
-static int render_right(int const row, int const col, char const scratch[LINES][COLS],int const nrows,int const minwidth){
-  int first_used_column = COLS;
-  int longest_line = minwidth;
-  // Find leftmost occupied column and widest line
-  for(int j = 0; j < nrows; j++){
-    for(int i = 0; i < COLS; i++){
-      if(scratch[j][i] == ' ' || scratch[j][i] == '\0')
-	continue;
-      if(first_used_column > i)
-	first_used_column = i;
+// and without the user having to specify field widths
+static int render_right(int const row, int const col, char scratch[LINES][COLS],int const nrows,int width){
+  if(COLS == 0)
+    return 0; // pathological case
+  // Ensure each line is terminated on the right
+  for(int r = 0; r < nrows; r++)
+    scratch[r][COLS-1] = 0;
 
-      int len = strlen(scratch[j]);
-      if(len > COLS)
-	len = COLS;
-      if(longest_line < len)
-	longest_line = len;
-      break;
+  // Find leftmost occupied column
+  // Usually 0 but don't assume that
+  int first_column = COLS;
+  for(int c = 0; c < COLS; c++){
+    for(int r = 0; r < nrows; r++){
+      if(isgraph((unsigned char)scratch[r][c])){
+	first_column = c;
+	goto foundit;
+      }
     }
   }
-  if(longest_line == 0 || first_used_column == COLS)
-    return 0; // nothing to render
-
-  for(int j = 0; j < nrows; j++){
-    int len = strlen(scratch[j]);
-    if(len > COLS)
-      len = COLS;
-    int left_pad = 0;
-    if(len < longest_line)
-      left_pad = longest_line - len;
-
-    mvaddnstr(row+j, col+left_pad, scratch[j], len);
+  return 0; // nothing to render
+ foundit:;
+  // Find longest line; determines block width
+  for(int r = 0; r < nrows; r++){
+    int len = strlen(&scratch[r][first_column]);
+    if(len > width)
+      width = len;
   }
-  return longest_line;
+  if(width > COLS)
+    width = COLS; // keep it sane
+  for(int r = 0; r < nrows; r++){
+    int len = strlen(&scratch[r][first_column]);
+    int pad = (width > len) ? width - len : 0; // if shorter than width, pad on left to right justify
+    int x = col + pad;
+    int room = COLS - x;
+    if(len > room)
+      len = room;  // Too wide, clip on right
+
+    if(len > 0) // could be < 0 if col + pad > COLS
+      mvaddnstr(row+r, x, &scratch[r][first_column], len);
+  }
+  return width;
 }
+// Render a block with left justification
 // Simpler than right justification, just have to keep track of the widest row
-static int render_left(int const row, int const col, char const scratch[LINES][COLS],int const nrows){
+static int render_left(int const row, int const col, char scratch[LINES][COLS],int const nrows){
   int maxline = 0;
-  for(int j = 0; j < nrows; j++){
-    int len = strlen(scratch[j]);
-    if(col + len >= COLS)
-      len = COLS - col;
+  int room = COLS - col;
+  if(room <= 0)
+    return 0;
+
+  for(int r = 0; r < nrows; r++){
+    scratch[r][COLS-1] = 0; // ensure each line is null terminated
+    int len = strlen(scratch[r]);
+    if(len > room)
+      len = room;
     if(maxline < len)
       maxline = len;
-    mvaddnstr(row+j,col,scratch[j],len);
+    if(len > 0)
+      mvaddnstr(row+r,col,scratch[r],len);
   }
   return maxline;
 }
