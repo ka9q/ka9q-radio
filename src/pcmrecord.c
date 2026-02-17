@@ -1139,7 +1139,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     sp->exit_after_close = true; // Single shot
     strlcpy(sp->filename,"[stdout]",sizeof(sp->filename));
     if(Verbose)
-      fprintf(stderr,"receiving %s ssrc %u samprate %d channels %d encoding %s freq %'.3lf preset %s\n",
+      fprintf(stderr,"receiving %s ssrc %u samprate %'d Hz channels %d encoding %s freq %'.3lf Hz preset %s\n",
 	      sp->frontend.description,
 	      sp->ssrc,sp->chan.output.samprate,sp->channels,file_encoding,sp->chan.tune.freq, // use rx sample rate even for opus
 	      sp->chan.preset);
