@@ -131,9 +131,15 @@ int demod_wfm(void *arg){
       response_needed = true;
     }
     pthread_mutex_unlock(&chan->status.lock);
-    if(restart_needed || downconvert(chan) != 0)
-      break; // Dynamic channel termination
+    if(restart_needed)
+      break; // restart or terminate
+    int r = downconvert(chan);
+    if(r == -1)
+      break; // restart needed
+    else if(r == 1)
+      continue; // channel inactive; poll for commands
 
+    // r == 0 is normal return
     // Power squelch - don't bother with variance squelch
     double const snr = (chan->sig.bb_power / (chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF))) - 1;
     chan->fm.snr = max(0.0,snr); // Smoothed values can be a little inconsistent

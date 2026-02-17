@@ -1440,7 +1440,7 @@ int downconvert(struct channel *chan){
       }
       pthread_cond_timedwait(&Frontend.status_cond,&Frontend.status_mutex,&timeout);
       pthread_mutex_unlock(&Frontend.status_mutex);
-      continue;
+      return 1; // channel idle
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
 

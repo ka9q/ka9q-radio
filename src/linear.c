@@ -78,11 +78,14 @@ int demod_linear(void *arg){
     }
     pthread_mutex_unlock(&chan->status.lock);
     if(restart_needed)
-      break;
+      break; // restart or terminate
+    int r = downconvert(chan);
+    if(r == -1)
+      break; // restart needed
+    else if(r == 1)
+      continue; // channel inactive; poll for commands
 
-    if(downconvert(chan) != 0)
-      break; // Dynamic channel termination
-
+    // r == 0 is normal return
     int const N = chan->sampcount; // Number of raw samples in filter output buffer
     float complex * restrict const buffer = chan->baseband; // Working buffer
 

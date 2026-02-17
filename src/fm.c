@@ -89,9 +89,15 @@ int demod_fm(void *arg){
       response_needed = true;
     }
     pthread_mutex_unlock(&chan->status.lock);
-    if(restart_needed || downconvert(chan) != 0)
+    if(restart_needed)
       break; // restart or terminate
+    int r = downconvert(chan);
+    if(r == -1)
+      break; // restart needed
+    else if(r == 1)
+      continue; // channel inactive; poll for commands
 
+    // r == 0 is normal return
     float complex const * restrict const buffer = chan->baseband; // For convenience
     int const N = chan->sampcount;
 

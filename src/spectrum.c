@@ -15,6 +15,10 @@
 #include "radio.h"
 #include "window.h"
 
+//#define RICE 1
+//#define SPECTRUM_CLIP 1
+//#define FIXED_STEP  1
+
 static void generate_window(struct channel *);
 static void setup_real_fft(struct channel *);
 static void setup_complex_fft(struct channel *);
@@ -22,6 +26,9 @@ static void setup_wideband(struct channel *);
 static void setup_narrowband(struct channel *);
 static void narrowband_poll(struct channel *);
 static void wideband_poll(struct channel *);
+#if RICE
+static void rice(struct channel *);
+#endif
 
 // Spectrum analysis thread
 int demod_spectrum(void *arg){
@@ -29,9 +36,6 @@ int demod_spectrum(void *arg){
   assert(chan != NULL);
   if(chan == NULL)
     return -1;
-
-  snprintf(chan->name,sizeof(chan->name),"spect %u",chan->output.rtp.ssrc);
-  pthread_setname(chan->name);
 
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
@@ -95,9 +99,15 @@ int demod_spectrum(void *arg){
       FREE(chan->spectrum.window); // force regeneration
     }
     // End of parameter checking and (re)initialization
-    if(restart_needed || downconvert(chan) != 0)
-      break;
+    if(restart_needed)
+      break; // restart or terminate
+    int r = downconvert(chan);
+    if(r == -1)
+      break; // restart needed
+    else if(r == 1)
+      continue; // channel inactive; poll for commands
 
+    // r == 0 is normal return
     // Process receiver data only in narrowband mode
     if(chan->spectrum.rbw <= chan->spectrum.crossover && chan->baseband != NULL){
       if(chan->spectrum.ring == NULL || chan->spectrum.ring_size < chan->spectrum.fft_avg * chan->spectrum.fft_n){
@@ -146,6 +156,9 @@ int demod_spectrum(void *arg){
 #endif
       } else
 	wideband_poll(chan);
+#ifdef RICE
+      rice(chan); // experiment with rice encoding
+#endif
     }
     // Remember new values in case they change next time
     rbw = chan->spectrum.rbw;
@@ -260,12 +273,17 @@ static void narrowband_poll(struct channel *chan){
     if(bin_data[i] > max_power)
       max_power = bin_data[i];
   }
-#if 0
+#if SPECTRUM_CLIP
   chan->spectrum.base = power2dB(chan->sig.n0 * chan->spectrum.noise_bw);
 #else
   chan->spectrum.base = power2dB(min_power);
 #endif
+#if FIXED_STEP
+  chan->spectrum.step = 0.5; // 0.5 dB fixed
+#else
   chan->spectrum.step = (1./256.) * (power2dB(max_power) - chan->spectrum.base); // dB range
+#endif
+
 }
 
 static void wideband_poll(struct channel *chan){
@@ -441,19 +459,26 @@ static void wideband_poll(struct channel *chan){
     if(bin_data[i] > max_power)
       max_power = bin_data[i];
   }
-#if 0
+#if SPECTRUM_CLIP
   chan->spectrum.base = power2dB(chan->sig.n0 * chan->spectrum.noise_bw);
+
 #else
   if(min_power > 0)
     chan->spectrum.base = power2dB(min_power);
   else
     chan->spectrum.base = -150; // arbitrary clamp
-#endif
 
+#endif
+#if FIXED_STEP
+  chan->spectrum.step = 0.5; // 0.25 dB fixed
+#else
   if(max_power > 0)
     chan->spectrum.step = ldexp(power2dB(max_power) - chan->spectrum.base,-8); // dB range
   else
     chan->spectrum.step = 0.5; // just keep it from blowing up
+#endif
+
+
 }
 
 // Fill a buffer with compact frequency bin data, 1 byte each
@@ -623,3 +648,82 @@ static void setup_complex_fft(struct channel *chan){
   fftwf_free(out);
   assert(chan->spectrum.plan != NULL);
 }
+
+
+#if RICE
+// Experiment with rice coding of delta values in bin data
+static void rice(struct channel *chan){
+  assert(chan != NULL);
+
+  // make vector of quantized measurements
+  int const bin_count = chan->spectrum.bin_count;
+  double scale = 1./chan->spectrum.step;
+  int data[bin_count];
+  int wbin = bin_count/2; // nyquist freq is most negative
+  for(int i=0; i < bin_count; i++){
+    double x = scale * (power2dB(chan->spectrum.bin_data[wbin++]) - chan->spectrum.base);
+    if(x < 0)
+      x = 0;
+    data[i] = llrint(x);
+    if(wbin == bin_count)
+      wbin = 0;  // Continuing through dc and positive frequencies
+  }
+
+  int best_k = -1;
+  int best_bits = 8 * bin_count;
+  bool delta = false;
+
+  // Test non-delta encoding
+  for(int k=1;k < 6; k++){
+    int bits = 0;
+    int M = 1 << k;
+
+    for(int i=0;i < bin_count; i++){
+      int value = data[i]; // values are non-negative, no sign bit needed
+
+      // Rice encode
+      int q = value / M;
+      int r = value % M;
+      (void)r;
+
+      // emit q 0-bits and a 1 bit
+      bits += q + 1;
+      // Emit r using k bits
+      bits += k;
+    }
+    if(bits < best_bits){
+      best_bits = bits;
+      best_k = k;
+    }
+  }
+  // Now test delta encoding
+  for(int k=1;k < 6; k++){
+    int bits = 0;
+    int M = 1 << k;
+    int prev = 0;
+
+    for(int i=0;i < bin_count; i++){
+      int delta = data[i] - prev;
+      prev = data[i];
+      int value = (abs(delta) << 1) | (delta < 0); // zig-zag encoding
+
+      // Rice encode
+      int q = value / M;
+      int r = value % M;
+      (void)r;
+
+      // emit q 0-bits and a 1 bit
+      bits += q + 1;
+      // Emit r using k bits
+      bits += k;
+    }
+    if(bits < best_bits){
+      best_bits = bits;
+      best_k = k;
+      delta = true;
+    }
+  }
+  fprintf(stderr,"rice encoding, delta %d,  k=%d: %d bits (%d bytes), %.1lf%%\n",delta,best_k,best_bits,best_bits/8,
+	  100. * best_bits / (8 * bin_count));
+}
+#endif
