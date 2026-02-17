@@ -216,7 +216,7 @@ static void adjust_item(struct channel *chan,uint8_t **bpp,int direction){
     if(Control.lock) // Tuner is locked, don't change it
       break;
     // Send via radiod
-    encode_float(bpp,FIRST_LO_FREQUENCY,Frontend.frequency+tunestep);
+    encode_double(bpp,FIRST_LO_FREQUENCY,Frontend.frequency+tunestep);
     break;
   case 2: // IF (not implemented)
     break;
