@@ -320,10 +320,10 @@ static void do_rtlsdr_agc(struct sdr * const sdr){
       return;
     // librtlsdr inverts its gain tables for some reason
     if(Verbose)
-      printf("new tuner gain %.0lf dB\n",(double)sdr->gain/10.);
+      fprintf(stderr,"new tuner gain %.0lf dB\n",(double)sdr->gain/10.);
     int r = rtlsdr_set_tuner_gain(sdr->device,sdr->gain);
     if(r != 0)
-      printf("rtlsdr_set_tuner_gain returns %d\n",r);
+      fprintf(stderr,"rtlsdr_set_tuner_gain returns %d\n",r);
     frontend->rf_gain = sdr->gain; // Convert to dB?
     sdr->scale = scale_AD(frontend);
   }

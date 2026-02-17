@@ -30,11 +30,6 @@ int demod_linear(void *arg){
   if(chan == NULL)
     return -1; // in case asserts are off
 
-  snprintf(chan->name,sizeof(chan->name),"lin %u",chan->output.rtp.ssrc);
-  pthread_setname(chan->name);
-  if(Verbose > 1)
-    fprintf(stderr,"%s freq %'.3lf Hz starting\n",chan->name,chan->tune.freq);
-
   struct frontend const * const frontend = chan->frontend;
   assert(frontend != NULL);
   assert(Blocktime != 0);

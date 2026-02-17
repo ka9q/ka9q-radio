@@ -533,7 +533,7 @@ int loadconfig(char const *file){
   for(int sect = 0; sect < nthreads; sect++){
     pthread_join(startup_threads[sect],NULL);
 #if 0
-    printf("startup thread %s joined\n",iniparser_getsecname(Configtable,sect));
+    fprintf(stderr,"startup thread %s joined\n",iniparser_getsecname(Configtable,sect));
 #endif
   }
   iniparser_freedict(Configtable);
@@ -914,6 +914,7 @@ static void *process_section(void *p){
     // the ssrc and inuse fields are active and must be cleaned up. Are there any others...?
     *chan = chan_template;
     chan->output.rtp.ssrc = ssrc; // restore after template copy
+    snprintf(chan->name, sizeof chan->name, "%s %u", demod_name_from_type(chan->demod_type), chan->output.rtp.ssrc);
     chan->fm.tone_freq = freq_table[i].tone;
     set_freq(chan,freq_table[i].f);
     start_demod(chan);
@@ -1004,6 +1005,11 @@ static void *demod_thread(void *p){
   // A demod can terminate completely by setting an invalid demod_type and exiting
   int status = 0;
   while(status == 0){ // A demod returns non-zero to signal a fatal error, don't restart
+    snprintf(chan->name, sizeof chan->name, "%s %u", demod_name_from_type(chan->demod_type), chan->output.rtp.ssrc);
+    pthread_setname(chan->name);
+    if(Verbose > 1)
+      fprintf(stderr,"%s freq %'.3lf Hz starting\n",chan->name,chan->tune.freq);
+
     switch(chan->demod_type){
     case LINEAR_DEMOD:
       status = demod_linear(p);
@@ -1034,8 +1040,9 @@ int start_demod(struct channel * chan){
     return -1;
 
   if(Verbose){
-    fprintf(stderr,"start_demod: ssrc %'u, output %s, demod %d, freq %'.3lf Hz, preset %s, filter (%'+.0f,%'+.0f)\n",
-	    chan->output.rtp.ssrc, chan->output.dest_string, chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
+    fprintf(stderr,"start_demod: ssrc %u, output %s, demod %s (%d), freq %'.3lf Hz, preset %s, filter (%'+.0f,%'+.0f)\n",
+	    chan->output.rtp.ssrc, chan->output.dest_string, demod_name_from_type(chan->demod_type),
+	    chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
   }
   pthread_create(&chan->demod_thread,NULL,demod_thread,chan);
   return 0;

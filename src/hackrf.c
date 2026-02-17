@@ -357,7 +357,7 @@ static void *hackrf_agc(void *arg){
       continue;
     
 #if 0
-    printf("if_power %.0lf scale %lg, DC (%lf+j%lf) sinphi %lf gain_i %lf gain_q %lf agc change %d dB\n",
+    fprintf(stderr,"if_power %.0lf scale %lg, DC (%lf+j%lf) sinphi %lf gain_i %lf gain_q %lf agc change %d dB\n",
 	   powerdB,sdr->scale,creal(sdr->DC),cimag(sdr->DC),
 	   sdr->sinphi,
 	   sdr->gain_i,sdr->gain_q,

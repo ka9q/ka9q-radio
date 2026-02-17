@@ -279,7 +279,7 @@ int bladerf_startup(struct frontend * const frontend)
 	sdr->samples_per_buffer = k*1024;
 
 	if (Verbose) {
-		printf("ilen %d samples_per_buffer: %ld\n",
+		fprintf(stderr,"ilen %d samples_per_buffer: %ld\n",
 			frontend->in.ilen,
 			sdr->samples_per_buffer);
 	}
@@ -308,7 +308,7 @@ static void *stream_callback(struct bladerf *unused1,
 		for (i=0;i<sdr->num_buffers;i++)
 			if (sdr->buffers[i] == samples)
 				break;
-		printf("index mismatch %d %ld\n", sdr->idx_to_fill, i);
+		fprintf(stderr,"index mismatch %d %ld\n", sdr->idx_to_fill, i);
 	}
 
 	pthread_mutex_lock(&sdr->queue_mutex);
@@ -321,7 +321,7 @@ static void *stream_callback(struct bladerf *unused1,
 		sdr->idx_to_submit = 1;
 
 	if (sdr->idx_to_submit == sdr->idx_to_process)
-		printf("buffer overrun %d %d %d\n",
+		fprintf(stderr,"buffer overrun %d %d %d\n",
 			sdr->idx_to_process, sdr->idx_to_process,
 			sdr->idx_to_submit);
 
@@ -374,7 +374,7 @@ static void *bladerf_monitor(void *p)
 		sdr->frontend->rf_gain = readback;
 
 	if (Verbose)
-		printf("set gain = %d\n", readback);
+		fprintf(stderr,"set gain = %d\n", readback);
 
 	/* Start stream and stay there until we kill the stream */
 	status = bladerf_stream(stream, BLADERF_MODULE_RX);
@@ -411,7 +411,7 @@ static double set_correct_freq(struct sdrstate * const sdr, double const freq)
 	}
 
 	if (Verbose)
-		printf("tuned to %d\n", f);
+		fprintf(stderr,"tuned to %d\n", f);
 
 	return sdr->frontend->frequency;
 }

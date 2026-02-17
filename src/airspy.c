@@ -408,11 +408,11 @@ static int rx_callback(airspy_transfer *transfer){
       double avg_agc_power = scale_ADpower2FS(frontend) * sdr->agc_energy / sdr->agc_samples;
       if(avg_agc_power < sdr->low_threshold){
 	if(Verbose)
-	  printf("AGC power %.1f dBFS\n",power2dB(avg_agc_power));
+	  fprintf(stderr,"AGC power %.1f dBFS\n",power2dB(avg_agc_power));
 	set_gain(sdr,sdr->gainstep + 1);
       } else if(avg_agc_power > sdr->high_threshold){
 	if(Verbose)
-	  printf("AGC power %.1f dBFS\n",power2dB(avg_agc_power));
+	  fprintf(stderr,"AGC power %.1f dBFS\n",power2dB(avg_agc_power));
 	set_gain(sdr,sdr->gainstep - 1);
       }
       // Reset integrator
@@ -521,7 +521,7 @@ static void set_gain(struct sdrstate * const sdr,int gainstep){
     frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
     sdr->scale = scale_AD(frontend);
     if(Verbose)
-      printf("New gainstep %d: LNA = %d, mixer = %d, vga = %d\n",gainstep,
+      fprintf(stderr,"New gainstep %d: LNA = %d, mixer = %d, vga = %d\n",gainstep,
 	     frontend->lna_gain,frontend->mixer_gain,frontend->if_gain);
   }
 }

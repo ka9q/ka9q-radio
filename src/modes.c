@@ -206,6 +206,7 @@ int set_defaults(struct channel *chan){
     return -1;
 
   chan->inuse = true;
+  snprintf(chan->name, sizeof chan->name, "new chan");
   chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
   chan->demod_type = DEFAULT_DEMOD;
   chan->linear.env = false;
@@ -299,6 +300,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     int const x = demod_type_from_name(demod_name);
     if(chan->demod_type >= 0)
       chan->demod_type = x;
+    snprintf(chan->name, sizeof chan->name, "%s %u", demod_name, chan->output.rtp.ssrc);
   }
   {
     char const *p = config_getstring(table,sname,"samprate",NULL);

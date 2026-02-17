@@ -204,7 +204,7 @@ static int get_usage(uint8_t *report_descriptor, size_t size,
 		int key = report_descriptor[i];
 		int key_cmd = key & 0xfc;
 
-		//printf("key: %02hhx\n", key);
+		//fprintf(stderr,"key: %02hhx\n", key);
 
 		if ((key & 0xf0) == 0xf0) {
 			/* This is a Long Item. The next byte contains the
@@ -244,12 +244,12 @@ static int get_usage(uint8_t *report_descriptor, size_t size,
 		if (key_cmd == 0x4) {
 			*usage_page  = get_bytes(report_descriptor, size, data_len, i);
 			usage_page_found = 1;
-			//printf("Usage Page: %x\n", (uint32_t)*usage_page);
+			//fprintf(stderr,"Usage Page: %x\n", (uint32_t)*usage_page);
 		}
 		if (key_cmd == 0x8) {
 			*usage = get_bytes(report_descriptor, size, data_len, i);
 			usage_found = 1;
-			//printf("Usage: %x\n", (uint32_t)*usage);
+			//fprintf(stderr,"Usage: %x\n", (uint32_t)*usage);
 		}
 
 		if (usage_page_found && usage_found)

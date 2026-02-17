@@ -1040,7 +1040,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   double const bw2 = (high == low) ? .0001 : fabs(high - low)/2;
   double const center = (high + low)/2;
 #if FILTER_DEBUG
-  printf("filter %p low %lf high %lf, center %lf bw/2 %lf kaiser %lf\n",slave,low,high,center,bw2,kaiser_beta);
+  fprintf(stderr,"filter %p low %lf high %lf, center %lf bw/2 %lf kaiser %lf\n",slave,low,high,center,bw2,kaiser_beta);
 #endif
 
   float kaiser_window[M];
@@ -1057,7 +1057,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
     impulse[i] = (float complex)(cispi(2 * center * n) * r);
 
 #if FILTER_DEBUG
-    printf("impulse[%d] = %g + j%g\n",i,crealf(impulse[i]),cimagf(impulse[i]));
+    fprintf(stderr,"impulse[%d] = %g + j%g\n",i,crealf(impulse[i]),cimagf(impulse[i]));
 #endif
   }
   // gain corrections:
@@ -1081,7 +1081,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
 #if FILTER_DEBUG
   {
     for(int i=0; i < N; i++)
-      printf("response[%d] = %g + j%g\n",i,__real__ response[i],__imag__ response[i]);
+      fprintf(stderr,"response[%d] = %g + j%g\n",i,__real__ response[i],__imag__ response[i]);
   }
 #endif
   // Hot swap with existing response, if any, using mutual exclusion
