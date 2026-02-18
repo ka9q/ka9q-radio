@@ -253,7 +253,7 @@ int demod_wfm(void *arg){
 	if(fm_rate != 0)
 	  s = stereo_deemph += fm_rate * (fm_gain * s - stereo_deemph);
 
-	stereo_buffer[n] = (float)(s * gain);
+	stereo_buffer[n] = (float complex)(s * gain);
 	output_energy += cnrmf(stereo_buffer[n]);
       }
       // Halve power to get level per channel
