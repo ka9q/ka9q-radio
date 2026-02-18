@@ -912,7 +912,7 @@ void drop_cache(void *mem,size_t bytes){
   (void)bytes;
 }
 #endif
-#ifndef __arm__
+#if defined(__i386__) || defined(__x86_64__)
 #include <xmmintrin.h>
 
 enum { MXCSR_EX_FLAGS = 0x3Fu, MXCSR_DE = 1u<<1, MXCSR_UE = 1u<<4 };
