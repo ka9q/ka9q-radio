@@ -20,6 +20,7 @@
 #include <getopt.h>
 #include <sysexits.h>
 #include <strings.h>
+#include <fenv.h>
 
 #include "radio.h"
 
@@ -33,6 +34,15 @@ char const *Name; // List of valid config keys in [global] section, for error ch
 
 static void closedown(int);
 static void verbosity(int);
+
+#ifndef NDEBUG
+static void fpe_handler(int sig){
+  (void)sig;
+  fprintf(stderr,"SIGFPE: floating point exception\n");
+  abort();
+}
+#endif
+
 
 // The main program sets up the demodulator parameter defaults,
 // overwrites them with command-line arguments and/or state file settings,
@@ -48,6 +58,10 @@ int main(int argc,char *argv[]){
   VERSION();
 #ifndef NDEBUG
   fprintf(stderr,"Assertion checking enabled, execution will be slower\n");
+  fprintf(stderr,"Floating point exception traps enabled\n");
+  feclearexcept(FE_ALL_EXCEPT);
+  feenableexcept(FE_INVALID|FE_DIVBYZERO);
+  signal(SIGFPE,fpe_handler);
 #endif
 
   setlinebuf(stderr);

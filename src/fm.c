@@ -117,7 +117,7 @@ int demod_fm(void *arg){
     double beta = 0.5; // threshold extension factor
 
     // Simple SNR estimate: Power/(N0 * Bandwidth) - 1
-    double const snr = (chan->sig.bb_power / noise) - 1.0;
+    double const snr = noise == 0 ? INFINITY : (chan->sig.bb_power / noise) - 1.0;
     if(chan->squelch.snr_enable || (squelch_state <= 0 && snr < chan->squelch.close)){ // Save the trouble if the signal just isn't there
       chan->fm.snr = snr;
     } else {
@@ -202,8 +202,11 @@ int demod_fm(void *arg){
 
 	  // Weight by IF amplitude
 	  double p = cnrm(buffer[n]);
-	  p /= (p + beta * noise);
-	  phase *= p;
+	  if(p > 0){
+	    p /= (p + beta * noise);
+	    phase *= p;
+	  } else
+	    phase = 0;
 	}
 	baseband[n] = 2 * run_pll(&chan->pll.pll,phase);
 	phase_memory = buffer[n];
@@ -211,7 +214,8 @@ int demod_fm(void *arg){
     } else {
       // Straight carg/atan demodulation
       double p0 = cnrm(phase_memory);
-      p0 /= (p0 + beta * noise);
+      if(p0 > 0)
+	p0 /= (p0 + beta * noise);
       chan->pll.was_on = false;
       for(int n=0; n < N; n++){
 	double complex s = buffer[n] * conj(phase_memory);
@@ -224,7 +228,8 @@ int demod_fm(void *arg){
 
 	  // Weight by IF amplitude
 	  double p1 = cnrm(buffer[n]);
-	  p1 /= (p1 + beta * noise);
+	  if(p1 > 0)
+	    p1 /= (p1 + beta * noise);
 	  phase *= p0 * p1;
 	  chan->tp1 = p0 * p1;
 	  p0 = p1;

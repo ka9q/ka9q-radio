@@ -189,11 +189,14 @@ int flush_output(struct channel * chan,bool marker,bool complete){
       double const noise_bandwidth = fabs(chan->filter.max_IF - chan->filter.min_IF);
       double sig_power = chan->sig.bb_power - noise_bandwidth * chan->sig.n0;
       sig_power = max(sig_power,0.0); // Avoid log(-x) = nan
-      double const sn0 = sig_power/chan->sig.n0;
+      double const sn0 = chan->sig.n0 == 0 ? INFINITY : sig_power/chan->sig.n0;
       double const snr = power2dB(sn0/noise_bandwidth);
-      opus_bits = lrint(snr / 6); // 6 dB SNR per bit
-      opus_bits = max(opus_bits,8);  // don't go to ridiculous values on no signal
-      opus_bits = min(opus_bits,16); // Opus can actually take 24
+      if(snr < 48)
+	opus_bits = 8; // Use a floor of 8 bit precision, which is usually the case for comm quality channels
+      else if(snr > 100)
+	opus_bits = 16;
+      else
+	opus_bits = lrint(snr / 6); // 6 dB SNR per bit; don't operate on -infinite SNRs
     }
     error = opus_encoder_ctl(chan->opus.encoder,OPUS_SET_LSB_DEPTH(opus_bits));
     if(error != OPUS_OK)

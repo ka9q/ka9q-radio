@@ -150,10 +150,24 @@ static inline int init_recursive_mutex(pthread_mutex_t *m){
 		_x > _y ? _x : _y; })
 
 
-#define dB2power(x) (pow(10.0,(x)/10.0))
-#define power2dB(x) (10.0 * log10(x))
-#define dB2voltage(x) (pow(10.0, (x)/20.0))
-#define voltage2dB(x) (20.0 * log10(x))
+// power2dB and voltage2dB pass NAN to log10(), for debug trapping
+// They do avoid the divide-by-zero exception for the common case of 0 -> -infinity dB
+static inline double dB2power(double x){
+  return pow(10.0,x/10.0);
+}
+static inline double power2dB(double x){
+  if(x <= 0.0)
+    return -INFINITY;
+  return 10.0 * log10(x);
+}
+static inline double dB2voltage(double x){
+  return pow(10.0,x/20.0);
+}
+static inline double voltage2dB(double x){
+  if(x <= 0.0)
+    return -INFINITY;
+  return 20.0 * log10(x);
+}
 
 // Does anyone implement these natively for Linux?
 // (I just did - KA9Q Jan 2026 -- see sincospi.c and sincospif.c)

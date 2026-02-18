@@ -912,3 +912,15 @@ void drop_cache(void *mem,size_t bytes){
   (void)bytes;
 }
 #endif
+#ifndef __arm__
+#include <xmmintrin.h>
+
+enum { MXCSR_EX_FLAGS = 0x3Fu, MXCSR_DE = 1u<<1, MXCSR_UE = 1u<<4 };
+
+uint32_t mxcsr_get_and_clear_flags(void){
+    uint32_t x = _mm_getcsr();
+    uint32_t flags = x & MXCSR_EX_FLAGS;
+    _mm_setcsr(x & ~MXCSR_EX_FLAGS);
+    return flags;
+}
+#endif

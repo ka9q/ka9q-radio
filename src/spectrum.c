@@ -273,17 +273,18 @@ static void narrowband_poll(struct channel *chan){
     if(bin_data[i] > max_power)
       max_power = bin_data[i];
   }
+  if(max_power > 0 && min_power > 0){
 #if SPECTRUM_CLIP
-  chan->spectrum.base = power2dB(chan->sig.n0 * chan->spectrum.noise_bw);
+    chan->spectrum.base = power2dB(chan->sig.n0 * chan->spectrum.noise_bw);
 #else
-  chan->spectrum.base = power2dB(min_power);
+    chan->spectrum.base = power2dB(min_power);
 #endif
 #if FIXED_STEP
-  chan->spectrum.step = 0.5; // 0.5 dB fixed
+    chan->spectrum.step = 0.5; // 0.5 dB fixed
 #else
-  chan->spectrum.step = (1./256.) * (power2dB(max_power) - chan->spectrum.base); // dB range
+    chan->spectrum.step = (1./256.) * (power2dB(max_power) - chan->spectrum.base); // dB range
 #endif
-
+  }
 }
 
 static void wideband_poll(struct channel *chan){
@@ -459,25 +460,19 @@ static void wideband_poll(struct channel *chan){
     if(bin_data[i] > max_power)
       max_power = bin_data[i];
   }
+  if(max_power > 0 && min_power > 0){
 #if SPECTRUM_CLIP
-  chan->spectrum.base = power2dB(chan->sig.n0 * chan->spectrum.noise_bw);
+    chan->spectrum.base = power2dB(chan->sig.n0 * chan->spectrum.noise_bw);
 
 #else
-  if(min_power > 0)
     chan->spectrum.base = power2dB(min_power);
-  else
-    chan->spectrum.base = -150; // arbitrary clamp
-
 #endif
 #if FIXED_STEP
-  chan->spectrum.step = 0.5; // 0.25 dB fixed
+    chan->spectrum.step = 0.5; // 0.25 dB fixed
 #else
-  if(max_power > 0)
     chan->spectrum.step = ldexp(power2dB(max_power) - chan->spectrum.base,-8); // dB range
-  else
-    chan->spectrum.step = 0.5; // just keep it from blowing up
 #endif
-
+  }
 
 }
 
