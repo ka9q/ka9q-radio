@@ -917,7 +917,7 @@ static void update_monitor_display(void){
 
       int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
       int64_t t0 = 1000*wptr/DAC_samprate - 1000*(int64_t)sp->next_timestamp / sp->samprate;
-      snprintf(scratch[rows],COLS,"%'lld", t0); // ms
+      snprintf(scratch[rows],COLS,"%'lld",(long long)t0); // ms
     }
     col++; col += render_right(header_line,col,scratch,rows,0);
     if(col >= COLS)
