@@ -869,7 +869,7 @@ static void update_monitor_display(void){
   if(col >= COLS)
     goto done;
 
-#if 0
+#if DELAY
   {
     // Processing delay, assuming synchronized system clocks
     char scratch [LINES][COLS];
@@ -900,7 +900,7 @@ static void update_monitor_display(void){
     goto done;
 #endif
 
-#if 0
+#if T0
   {
     // T0: DAC clock time (ms) at which the RTP timestamp was 0
     // At 48 khz, the 32-bit RTP timestamp wraps in 89478.485 sec or 1.0356306 days
@@ -921,7 +921,7 @@ static void update_monitor_display(void){
 
       int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
       int64_t t0 = 1000*wptr/DAC_samprate - 1000*(int64_t)sp->next_timestamp / sp->samprate;
-      snprintf(scratch[rows],COLS,"%'*lld", width, t0); // ms
+      snprintf(scratch[rows],COLS,"%'lld", t0); // ms
     }
     col++; col += render_right(header_line,col,scratch,rows,0);
   }
