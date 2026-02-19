@@ -25,6 +25,8 @@
 #include <errno.h>
 #include <locale.h>
 #include <fcntl.h>
+#include <stdatomic.h>
+#include <sys/timex.h>
 
 #ifndef NULL
 #define NULL ((void *)0)
@@ -250,7 +252,38 @@ char *ensure_suffix(char const *str, char const *suffix){
     return NULL;
   return result;
 }
+static atomic_flag Leap_second_warning_logged = ATOMIC_FLAG_INIT;
 
+int64_t gps_time_ns(void){
+  struct timespec ts = {0};
+#ifdef CLOCK_TAI
+  // Try CLOCK_TAI and also query TAI-UTC offset
+  struct timex tx = {0};
+  if (clock_gettime(CLOCK_TAI, &ts) == 0 && adjtimex(&tx) != -1 && tx.tai >= 10) {
+    /* If CLOCK_TAI is supported, make sure it actually knows what the TAI-UTC offset is (it was never 0)
+       Strictly speaking this isn't TAI, which is defined from the epoch of 1 Jan 1958. 
+       CLOCK_TAI counts seconds from the fictitious UNIX/POSIX epoch of 1 Jan 1970 00:00:00 UTC. (Fictitious because leap seconds
+       didn't start until 1972, and POSIX doesn't count them anyway.)
+       Since the system time is kept in pseudo-UTC, CLOCK_TAI returns system time plus the current TAI-UTC offset (+37 sec as of early 2026)
+       TAI is always 19 sec ahead of GPS
+       The GPS epoch (Sun 6 Jan 1980 00:00:00 UTC) was 3657 days after the UNIX epoch of Thu 1 Jan 1970 00:00:00 UTC), ignoring the 9
+       leap seconds between those two dates (because POSIX does)
+    */
+    ts.tv_sec -= UNIX_EPOCH;
+    ts.tv_sec -= TAI_GPS_OFFSET;
+    return ts.tv_sec * BILLION + ts.tv_nsec;
+  }
+#endif
+  // Need to add fallback code that consults an (updated) leap second table
+  if(!atomic_flag_test_and_set_explicit(&Leap_second_warning_logged,memory_order_relaxed)){
+    // Log this message only once
+    fprintf(stderr,"Warning: system doesn't know leap second count; using %d sec, which will break with the next leap second\n",GPS_UTC_OFFSET);
+  }
+  clock_gettime(CLOCK_REALTIME, &ts);
+  ts.tv_sec -= UNIX_EPOCH;
+  ts.tv_sec += GPS_UTC_OFFSET;
+  return ts.tv_sec * BILLION + ts.tv_nsec;
+}
 
 void normalize_time(struct timespec *x){
   // Most common cases first

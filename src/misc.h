@@ -71,7 +71,9 @@ static inline void ASSERT_UNLOCKED(pthread_mutex_t *mutex){
 
 #define DEGPRA (180./M_PI)
 #define RAPDEG (M_PI/180.)
+#define TAI_GPS_OFFSET (19) // TAI is always and forever 19 seconds ahead of GPS
 #define GPS_UTC_OFFSET (18) // GPS ahead of utc by 18 seconds - make this a table!
+#define TAI_UTC_OFFSET (TAI_GPS_OFFSET+GPS_UTC_OFFSET)
 #define UNIX_EPOCH ((time_t)315964800) // GPS epoch on unix time scale
 
 #define BOLTZMANN (1.380649e-23) // Boltzmann's constant, J/K
@@ -329,9 +331,7 @@ static inline int64_t utc_time_ns(void){
 // Return time of day as nanosec from GPS epoch
 // Note: assumes fixed leap second offset
 // Could be better derived direct from a GPS receiver without applying the leap second offset
-static inline int64_t gps_time_ns(void){
-  return utc_time_ns() - BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET);
-}
+int64_t gps_time_ns(void);
 
 // How the free() library routine should have been all along: null the pointer after freeing!
 #define FREE(p) (free(p), p = NULL)
