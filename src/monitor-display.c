@@ -869,8 +869,7 @@ static void update_monitor_display(void){
   if(col >= COLS)
     goto done;
 
-#if DELAY
-  {
+  if(Verbose){
     // Processing delay, assuming synchronized system clocks
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
@@ -895,13 +894,10 @@ static void update_monitor_display(void){
       snprintf(scratch[rows],COLS,"%'.3lf", delay);
     }
     col++; col += render_right(header_line,col,scratch,rows,0);
+    if(col >= COLS)
+      goto done;
   }
-  if(col >= COLS)
-    goto done;
-#endif
-
-#if T0
-  {
+  if(Verbose){
     // T0: DAC clock time (ms) at which the RTP timestamp was 0
     // At 48 khz, the 32-bit RTP timestamp wraps in 89478.485 sec or 1.0356306 days
     // should be invariant +/- 1 frame (20 ms) for a given stream unless monitor or radiod is restarted
@@ -924,11 +920,9 @@ static void update_monitor_display(void){
       snprintf(scratch[rows],COLS,"%'lld", t0); // ms
     }
     col++; col += render_right(header_line,col,scratch,rows,0);
+    if(col >= COLS)
+      goto done;
   }
-
-  if(col >= COLS)
-    goto done;
-#endif
   {
     // Packet count
     char scratch [LINES][COLS];
