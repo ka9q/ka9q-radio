@@ -1528,13 +1528,18 @@ static void display_sig(WINDOW *w,struct channel const *chan){
   if(gain_offset != 0)
     pprintw(w,row++,col,"Gain offset","%+.1lf dB  ",gain_offset);
   if(isfinite(chan->sig.bb_power))
-    pprintw(w,row++,col,"Baseband","%+.1lf dBm ",power2dB(chan->sig.bb_power));
+    pprintw(w,row++,col,"Baseband","%+.1lf %4s",power2dB(chan->sig.bb_power),!isnan(Frontend.rf_level_cal) ? "dBm " : "dB  ");
   if(!isnan(chan->sig.n0)){
-     pprintw(w,row++,col,"N₀","%+.1lf dBmJ",power2dB(chan->sig.n0));
-     double temp = chan->sig.n0 / (1000 * BOLTZMANN); // 1000 converts from joules to millijoules (for power in dBm)
-     pprintw(w,row++,col,"N Temp","%.5lg K   ",temp);
-     double nf = power2dB(1 + temp / 290); // convert to noise figure
-     pprintw(w,row++,col,"NF","%.1lf dB  ",nf);
+    if(!isnan(Frontend.rf_level_cal)){
+      pprintw(w,row++,col,"N₀","%+.1lf dBmJ",power2dB(chan->sig.n0));
+      double temp = chan->sig.n0 / (1000 * BOLTZMANN); // 1000 converts from joules to millijoules (for power in dBm)
+      pprintw(w,row++,col,"N Temp","%.5lg K   ",temp);
+      double nf = power2dB(1 + temp / 290); // convert to noise figure
+      pprintw(w,row++,col,"NF","%.1lf dB  ",nf);
+    } else {
+      // Uncalibrated front end
+      pprintw(w,row++,col,"N₀","%+.1lf dBs ",power2dB(chan->sig.n0));
+    }
   }
   // Derived numbers
   if(!isnan(Local.sn0))
