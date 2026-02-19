@@ -753,24 +753,26 @@ void *output_thread(void *p){
 
     uint64_t total = 0;
     memset(out_buffer, 0, samples * sizeof *out_buffer);
-    int rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
+    uint64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
     for(int i=0; i < NSESSIONS; i++){
       struct session *sp = Sessions + i;
-      if(!inuse(sp))
+      if(!inuse(sp) || muted(sp) || sp->buffer == NULL)
 	continue;
 
-      int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
+      uint64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_acquire);
       int64_t count = samples;
       if(wptr <= rptr)
 	count = 0; // he's empty
-      if(count > wptr - rptr)
-	count = wptr - rptr; // limit to what he's got
-
+      else {
+	int queue = wptr - rptr; // known to be positive
+	if(count > queue)
+	  count = queue;
+      }
       int const base = (Channels * rptr) & (BUFFERSIZE-1);
 
-      for(int j = 0; j < count; j++){
+      for(int j = 0; j < count; j++)
 	out_buffer[j] += sp->buffer[BINDEX(base,j)];
-      }
+
       total += count;
     }
     atomic_store_explicit(&Output_time,rptr + frames,memory_order_release);
@@ -784,7 +786,7 @@ void *output_thread(void *p){
     opus_pcm_soft_clip(out_buffer,frames,Channels,Softclip_mem);
     for(int j = 0; j < samples; j++){
       double s = 32768 * out_buffer[j];
-      pcm_buffer[j] = s > 32767 ? 32767 : s < -32767 ? -32767 : s; // clip
+      pcm_buffer[j] = s > 32767 ? 32767 : s < -32767 ? -32767 : s; // clip - redundant?
     }
     int r = write(Output_fd,pcm_buffer,samples * sizeof *pcm_buffer);
     if(r <= 0){
