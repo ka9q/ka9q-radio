@@ -173,7 +173,7 @@ int send_output(struct channel * restrict const chan, float const * buffer, int 
       chan->output.queue_length -= chunk;
       assert(chan->output.queue_length >= 0);
       if(chan->output.queue_length > 0)
-	memmove(chan->output.queue, chan->output.queue + chunk, chan->output.queue_length * sizeof *chan->output.queue);
+	memmove(chan->output.queue, chan->output.queue + chunk, chan->output.queue_length * chan->output.channels * sizeof(float));
     } else {
       // consumed from new data
       buffer += chunk;
