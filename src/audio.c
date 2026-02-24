@@ -65,7 +65,7 @@ int send_output(struct channel * restrict const chan, float const * buffer, int 
 
   while(available_frames >= max_frames_per_pkt
 	|| (available_frames > 0 && chan->output.queue_age >= chan->output.maxdelay)){
-    // We have enough data to send at least one ethernet packet
+    // We have enough data to send at least one full size packet OR we've run out of time and there's something to send
     struct rtp_header rtp = {
       .version = RTP_VERS,
       .ssrc = chan->output.rtp.ssrc,
@@ -78,26 +78,27 @@ int send_output(struct channel * restrict const chan, float const * buffer, int 
 
     uint8_t packet[PKTSIZE];
     uint8_t * const dp = (uint8_t *)hton_rtp(packet,&rtp); // First byte after RTP header to be written
-    int chunk = 0;
-    float const *buf = NULL;
+    int chunk = frames;
+    float const *buf = buffer;
 
     if(chan->output.queue_length > 0){
-      // something is on the queue, fill it out and send it first
-      int copylen = max_frames_per_pkt - chan->output.queue_length; // available room
-      assert(copylen > 0);
-      if(copylen > frames)
-	copylen = frames; // limit to what we have
-      memcpy(chan->output.queue + chan->output.queue_length, buffer, copylen * sizeof *chan->output.queue);
-      chan->output.queue_length += copylen;
-      frames -= copylen;
-      buffer += copylen;
+      if(chan->output.queue_length < max_frames_per_pkt){
+	// Copy as much as we can to fill up this first packet in the burst
+	int copylen = max_frames_per_pkt - chan->output.queue_length;
+	if(copylen > frames)
+	  copylen = frames; // limit to what we have
+	chan->output.queue = realloc(chan->output.queue, (chan->output.queue_length + copylen) * chan->output.channels * sizeof(float));
+	memcpy(chan->output.queue + chan->output.queue_length, buffer, copylen * chan->output.channels * sizeof(float));
+	chan->output.queue_length += copylen;
+	frames -= copylen;
+	buffer += copylen;
+      }
       buf = chan->output.queue;
-      chunk = chan->output.queue_length; // we will send it all
-    } else {
-      buf = buffer; // will be updated on each iteration for multi-packet sends
-      chunk = min(max_frames_per_pkt,frames);
+      chunk = chan->output.queue_length; // we will try to send it all, shouldn't exceed max_frames_per_pkt
     }
-    assert(chunk <= max_frames_per_pkt);
+    if(chunk > max_frames_per_pkt)
+      chunk = max_frames_per_pkt;
+
     uint8_t *ndp = NULL; // pointer to first unwritten byte after export call
     int const samples = chunk * chan->output.channels;
     switch(chan->output.encoding){
@@ -208,13 +209,8 @@ int send_output(struct channel * restrict const chan, float const * buffer, int 
  quit:
   // Any left that we must buffer?
   if(available_frames > 0){
-    if(chan->output.queue == NULL){
-      chan->output.queue = malloc(5 * BYTES_PER_PKT * sizeof(float)); // Hold onto a maximum of 5 blocks (100 ms)
-      chan->output.queue_length = 0; // in 32-bit floats
-      chan->output.queue_age = 0;
-    }
-    assert(frames + chan->output.queue_length < max_frames_per_pkt); // should not be full, or we would have sent it
-    memcpy(chan->output.queue + chan->output.queue_length, buffer, frames * sizeof *chan->output.queue);
+    chan->output.queue = realloc(chan->output.queue, (chan->output.queue_length + frames) * chan->output.channels * sizeof(float));
+    memcpy(chan->output.queue + chan->output.queue_length, buffer, frames * chan->output.channels * sizeof(float));
     chan->output.queue_length += frames;
     chan->output.queue_age++;
   }
@@ -369,7 +365,7 @@ static int max_frames(struct channel *chan){
     break;
 #endif
   case OPUS:
-    max_frames_per_pkt = INT_MAX; // No real limit
+    max_frames_per_pkt = (chan->output.samprate * 0.12); // 120 ms is biggest Opus frame
     break;
   case MULAW:
   case ALAW:
