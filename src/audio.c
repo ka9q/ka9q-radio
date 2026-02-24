@@ -82,16 +82,18 @@ int send_output(struct channel * restrict const chan, float const * buffer, int 
     float const *buf = buffer;
 
     if(chan->output.queue_length > 0){
+      // There's something in the buffer, send it first
       if(chan->output.queue_length < max_frames_per_pkt){
-	// Copy as much as we can to fill up this first packet in the burst
+	// Try to fill it out with new data if available
 	int copylen = max_frames_per_pkt - chan->output.queue_length;
 	if(copylen > frames)
 	  copylen = frames; // limit to what we have
 	chan->output.queue = realloc(chan->output.queue, (chan->output.queue_length + copylen) * chan->output.channels * sizeof(float));
-	memcpy(chan->output.queue + chan->output.queue_length, buffer, copylen * chan->output.channels * sizeof(float));
+	memcpy(chan->output.queue + chan->output.channels * chan->output.queue_length,
+	       buffer, copylen * chan->output.channels * sizeof(float));
 	chan->output.queue_length += copylen;
 	frames -= copylen;
-	buffer += copylen;
+	buffer += copylen * chan->output.channels;
       }
       buf = chan->output.queue;
       chunk = chan->output.queue_length; // we will try to send it all, shouldn't exceed max_frames_per_pkt
@@ -173,10 +175,12 @@ int send_output(struct channel * restrict const chan, float const * buffer, int 
       chan->output.queue_length -= chunk;
       assert(chan->output.queue_length >= 0);
       if(chan->output.queue_length > 0)
-	memmove(chan->output.queue, chan->output.queue + chunk, chan->output.queue_length * chan->output.channels * sizeof(float));
+	memmove(chan->output.queue,
+		chan->output.queue + chunk * chan->output.channels,
+		chan->output.queue_length * chan->output.channels * sizeof(float));
     } else {
       // consumed from new data
-      buffer += chunk;
+      buffer += chunk * chan->output.channels;
       frames -= chunk;
     }
     chan->output.samples += chunk; // Count stereo frames
@@ -208,12 +212,16 @@ int send_output(struct channel * restrict const chan, float const * buffer, int 
   }
  quit:
   // Any left that we must buffer?
-  if(available_frames > 0){
+  if(frames > 0){
     chan->output.queue = realloc(chan->output.queue, (chan->output.queue_length + frames) * chan->output.channels * sizeof(float));
-    memcpy(chan->output.queue + chan->output.queue_length, buffer, frames * chan->output.channels * sizeof(float));
+    memcpy(chan->output.queue + chan->output.channels * chan->output.queue_length,
+	   buffer,
+	   frames * chan->output.channels * sizeof(float));
     chan->output.queue_length += frames;
-    chan->output.queue_age++;
   }
+  if(chan->output.queue_length > 0)
+    chan->output.queue_age++; // Timer runs whenever there's anything pending
+
   return frames_sent;
 }
 
@@ -365,7 +373,7 @@ static int max_frames(struct channel *chan){
     break;
 #endif
   case OPUS:
-    max_frames_per_pkt = (chan->output.samprate * 0.12); // 120 ms is biggest Opus frame
+    max_frames_per_pkt = floor(chan->output.samprate * 0.12); // 120 ms is biggest Opus frame
     break;
   case MULAW:
   case ALAW:
