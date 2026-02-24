@@ -19,9 +19,10 @@ static inline void import_mulaw(float *out, uint8_t const *in, size_t count) {
     out[i] = mulaw_to_float(in[i]);
 }
 
-static inline void export_mulaw(uint8_t *out, float const *in, size_t count) {
+static inline uint8_t *export_mulaw(uint8_t *out, float const *in, size_t count) {
   for (size_t i = 0; i < count; i++)
     out[i] = float_to_mulaw(in[i]);
+  return out + count;
 }
 
 static inline void import_alaw(float *out, uint8_t const *in, size_t count) {
@@ -29,9 +30,10 @@ static inline void import_alaw(float *out, uint8_t const *in, size_t count) {
     out[i] = alaw_to_float(in[i]);
 }
 
-static inline void export_alaw(uint8_t *out, float const *in, size_t count) {
+static inline uint8_t *export_alaw(uint8_t *out, float const *in, size_t count) {
   for (size_t i = 0; i < count; i++)
     out[i] = float_to_alaw(in[i]);
+  return out + count;
 }
 static inline void import_f64_swap(double *out,uint8_t const *in, size_t count){
   for(size_t i=0; i < count; i++){
@@ -42,13 +44,14 @@ static inline void import_f64_swap(double *out,uint8_t const *in, size_t count){
   }
 }
 
-static inline void export_f64_swap(uint8_t *out, double const *in, size_t count){
+static inline uint8_t *export_f64_swap(uint8_t *out, double const *in, size_t count){
   for(size_t i=0; i < count; i++){
     uint64_t temp_int;
     memcpy(&temp_int, in + i, sizeof temp_int);
     temp_int = __builtin_bswap64(temp_int);
     memcpy(out + i * sizeof temp_int, &temp_int, sizeof temp_int);
   }
+  return out + count * sizeof *in;
 }
 
 static inline void import_f32_swap(float *out,uint8_t const *in, size_t count){
@@ -60,13 +63,14 @@ static inline void import_f32_swap(float *out,uint8_t const *in, size_t count){
   }
 }
 
-static inline void export_f32_swap(uint8_t *out, float const *in, size_t count){
+static inline uint8_t *export_f32_swap(uint8_t *out, float const *in, size_t count){
   for(size_t i=0; i < count; i++){
     uint32_t temp_int;
     memcpy(&temp_int, in + i, sizeof temp_int);
     temp_int = __builtin_bswap32(temp_int);
     memcpy(out + i * sizeof temp_int, &temp_int, sizeof temp_int);
   }
+  return out + count * sizeof *in;
 }
 
 static inline void import_s16_swap(float *out, uint8_t const *in, size_t count){
@@ -77,7 +81,7 @@ static inline void import_s16_swap(float *out, uint8_t const *in, size_t count){
     out[i] = ldexpf((float)temp_int, -15); // scale down
   }
 }
-static inline void export_s16_swap(uint8_t *out,float const *in, size_t count){
+static inline uint8_t *export_s16_swap(uint8_t *out,float const *in, size_t count){
   for(size_t i=0; i < count; i++){
     float temp_float = ldexpf(in[i],15); // Scale to integer range and clip to +/- 32767
     temp_float = temp_float > 32767.0 ? 32767.0
@@ -87,6 +91,7 @@ static inline void export_s16_swap(uint8_t *out,float const *in, size_t count){
     temp_int = (int16_t)__builtin_bswap16((uint16_t)temp_int);
     memcpy(out + i*sizeof temp_int, &temp_int, sizeof temp_int);
   }
+  return out + count * sizeof(int16_t);
 }
 static inline void import_s16_noswap(float *out, uint8_t const *in, size_t count){
   for(size_t i=0; i < count; i++){
@@ -95,7 +100,7 @@ static inline void import_s16_noswap(float *out, uint8_t const *in, size_t count
     out[i] = ldexpf((float)temp_int, -15); // scale integer to +/- float
   }
 }
-static inline void export_s16_noswap(uint8_t *out,float const *in, size_t count){
+static inline uint8_t *export_s16_noswap(uint8_t *out,float const *in, size_t count){
   for(size_t i=0; i < count; i++){
     float temp_float = ldexpf(in[i],15); // Scale to integer range and clip to+/- 32767
     temp_float = temp_float > 32767.0f ? 32767.0f
@@ -105,6 +110,7 @@ static inline void export_s16_noswap(uint8_t *out,float const *in, size_t count)
     int16_t temp_int = lrintf(temp_float);
     memcpy(out + i*sizeof temp_int, &temp_int, sizeof temp_int);
   }
+  return out + count * sizeof(int16_t);
 }
 
 #ifdef HAS_FLOAT16
@@ -127,13 +133,14 @@ static inline void import_f16_swap(float *out, uint8_t const *in, size_t count){
     out[i] = (float)temp_float;
   }
 }
-static inline void export_f16_noswap(uint8_t *out,float const *in, size_t count){
+static inline uint8_t *export_f16_noswap(uint8_t *out,float const *in, size_t count){
   for(size_t i=0; i < count; i++){
     float16_t temp_float = in[i];
     memcpy(out + i * sizeof temp_float, &temp_float, sizeof temp_float);
   }
+  return out + count * sizeof(float16_t);
 }
-static inline void export_f16_swap(uint8_t *out,float const *in, size_t count){
+static inline uint8_t *export_f16_swap(uint8_t *out,float const *in, size_t count){
   for(size_t i=0; i < count; i++){
     float16_t temp_float = in[i];
     uint16_t temp_int;
@@ -141,6 +148,7 @@ static inline void export_f16_swap(uint8_t *out,float const *in, size_t count){
     temp_int = __builtin_bswap16(temp_int);
     memcpy(out + i*sizeof temp_int, &temp_int, sizeof temp_int);
   }
+  return out + count * sizeof(float16_t);
 }
 #endif
 
@@ -151,24 +159,25 @@ static inline void import_f64_le(double *out,uint8_t const *in, size_t count){
 static inline void import_f64_be(double *out,uint8_t const *in, size_t count){
   import_f64_swap(out,in,count);
 }
-static inline void export_f64_le(uint8_t *out, double const *in, size_t count){
+static inline uint8_t *export_f64_le(uint8_t *out, double const *in, size_t count){
   memcpy(out, in, count * sizeof *in);
+  return out + count * sizeof *in;
 }
-static inline void export_f64_be(uint8_t *out, double const *in, size_t count){
-  export_f64_swap(out, in, count);
+static inline uint8_t *export_f64_be(uint8_t *out, double const *in, size_t count){
+  return export_f64_swap(out, in, count);
 }
-
 static inline void import_f32_le(float *out,uint8_t const *in, size_t count){
   memcpy(out, in, count * sizeof *out);
 }
 static inline void import_f32_be(float *out,uint8_t const *in, size_t count){
   import_f32_swap(out,in,count);
 }
-static inline void export_f32_le(uint8_t *out, float const *in, size_t count){
+static inline uint8_t *export_f32_le(uint8_t *out, float const *in, size_t count){
   memcpy(out, in, count * sizeof *in);
+  return out + count * sizeof *in;
 }
-static inline void export_f32_be(uint8_t *out, float const *in, size_t count){
-  export_f32_swap(out, in, count);
+static inline uint8_t *export_f32_be(uint8_t *out, float const *in, size_t count){
+  return export_f32_swap(out, in, count);
 }
 
 static inline void import_s16_le(float *out,uint8_t const *in, size_t count){
@@ -177,11 +186,11 @@ static inline void import_s16_le(float *out,uint8_t const *in, size_t count){
 static inline void import_s16_be(float *out,uint8_t const *in, size_t count){
   import_s16_swap(out, in, count);
 }
-static inline void export_s16_le(uint8_t *out,float const *in, size_t count){
-  export_s16_noswap(out, in, count);
+static inline uint8_t *export_s16_le(uint8_t *out,float const *in, size_t count){
+  return export_s16_noswap(out, in, count);
 }
-static inline void export_s16_be(uint8_t *out,float const *in, size_t count){
-  export_s16_swap(out, in, count);
+static inline uint8_t *export_s16_be(uint8_t *out,float const *in, size_t count){
+  return export_s16_swap(out, in, count);
 }
 
 #ifdef HAS_FLOAT16
@@ -192,11 +201,11 @@ static inline void import_f16_le(float *out,uint8_t const *in, size_t count){
 static inline void import_f16_be(float *out, uint8_t const *in, size_t count){
   import_f16_swap(out, in, count);
 }
-static inline void export_f16_le(uint8_t *out,float const *in, size_t count){
-  export_f16_noswap(out, in, count);
+static inline uint8_t *export_f16_le(uint8_t *out,float const *in, size_t count){
+  return export_f16_noswap(out, in, count);
 }
-static inline void export_f16_be(uint8_t *out,float const *in, size_t count){
-  export_f16_swap(out, in, count);
+static inline uint8_t *export_f16_be(uint8_t *out,float const *in, size_t count){
+  return export_f16_swap(out, in, count);
 }
 #endif
 
@@ -208,11 +217,12 @@ static inline void import_f64_le(double *out,uint8_t const *in, size_t count){
 static inline void import_f64_be(double *out,uint8_t const *in, size_t count){
   memcpy(out, in, count * sizeof *out);
 }
-static inline void export_f64_le(uint8_t *out, double const *in, size_t count){
-  export_f64_swap(out, in, count);
+static inline uint8_t *export_f64_le(uint8_t *out, double const *in, size_t count){
+  return export_f64_swap(out, in, count);
 }
-static inline void export_f64_be(uint8_t *out, double const *in, size_t count){
+static inline uint8_t *export_f64_be(uint8_t *out, double const *in, size_t count){
   memcpy(out, in, count * sizeof *in);
+  return out + count * sizeof *in;
 }
 
 static inline void import_f32_le(float *out,uint8_t const *in, size_t count){
@@ -222,10 +232,11 @@ static inline void import_f32_be(float *out,uint8_t const *in, size_t count){
   memcpy(out, in, count * sizeof *out);
 }
 static inline void export_f32_le(uint8_t *out, float const *in, size_t count){
-  export_f32_swap(out, in, count);
+  return export_f32_swap(out, in, count);
 }
 static inline void export_f32_be(uint8_t *out, float const *in, size_t count){
-  memcpy(out, in, count * sizeof(float));
+  memcpy(out, in, count * sizeof(*in));
+  return out + count * sizeof *in;
 }
 
 static inline void import_s16_le(float *out,uint8_t const *in, size_t count){
@@ -234,11 +245,11 @@ static inline void import_s16_le(float *out,uint8_t const *in, size_t count){
 static inline void import_s16_be(float *out,uint8_t const *in, size_t count){
   import_s16_noswap(out, in, count);
 }
-static inline void export_s16_le(uint8_t *out,float const *in, size_t count){
-  export_s16_swap(out, in, count);
+static inline uint8_t *export_s16_le(uint8_t *out,float const *in, size_t count){
+  return export_s16_swap(out, in, count);
 }
-static inline void export_s16_be(uint8_t *out,float const *in, size_t count){
-  export_s16_noswap(out, in, count);
+static inline uint8_t *export_s16_be(uint8_t *out,float const *in, size_t count){
+  return export_s16_noswap(out, in, count);
 }
 
 #ifdef HAS_FLOAT16
@@ -250,11 +261,11 @@ static inline void import_f16_be(float *out, uint8_t const *in, size_t count){
   import_f16_noswap(out, in, count);
 
 }
-static inline void export_f16_le(uint8_t *out,float const *in, size_t count){
-  export_f16_swap(out,in,count);
+static inline uint8_t *export_f16_le(uint8_t *out,float const *in, size_t count){
+  return export_f16_swap(out,in,count);
 }
-static inline void export_f16_be(uint8_t *out,float const *in, size_t count){
-  export_f16_noswap(out, in, count);
+static inline uint8_t *export_f16_be(uint8_t *out,float const *in, size_t count){
+  return export_f16_noswap(out, in, count);
 }
 #endif
 #endif

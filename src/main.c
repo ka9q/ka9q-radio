@@ -58,10 +58,12 @@ int main(int argc,char *argv[]){
   VERSION();
 #ifndef NDEBUG
   fprintf(stderr,"Assertion checking enabled, execution will be slower\n");
+#if 0
   fprintf(stderr,"Floating point exception traps enabled\n");
   feclearexcept(FE_ALL_EXCEPT);
   feenableexcept(FE_INVALID|FE_DIVBYZERO);
   signal(SIGFPE,fpe_handler);
+#endif
 #endif
 
   setlinebuf(stderr);

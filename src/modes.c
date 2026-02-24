@@ -213,7 +213,7 @@ int set_defaults(struct channel *chan){
   chan->prio = default_prio();
   chan->output.ttl = DEFAULT_TTL;
   chan->status.output_interval = DEFAULT_UPDATE;
-  chan->output.minpacket = 0;  // No output buffering
+  chan->output.maxdelay = 0;  // No output buffering
 
   chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
   chan->output.encoding = S16BE;
@@ -483,11 +483,11 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   }
   chan->status.output_interval = abs(config_getint(table,sname,"update",chan->status.output_interval));
   {
-    int minpacket = abs(config_getint(table,sname,"buffer",chan->output.minpacket));
-    if(minpacket > 4)
-      fprintf(stderr,"buffer %u out of range, using 0\n",minpacket);
+    int maxdelay = abs(config_getint(table,sname,"buffer",chan->output.maxdelay));
+    if(maxdelay > 4)
+      fprintf(stderr,"buffer %u out of range, using 0\n",maxdelay);
     else
-      chan->output.minpacket = minpacket;
+      chan->output.maxdelay = maxdelay;
   }
   {
     int blocking = config_getint(table,sname,"filter2",chan->filter2.blocking);

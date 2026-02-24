@@ -267,7 +267,7 @@ int main(int argc,char *argv[]){
 	encode_int(&bp,OUTPUT_SAMPRATE,lrint(Samprate));
 
       if(Buffer != -1)
-	encode_int(&bp,MINPACKET,Buffer);
+	encode_int(&bp,MAXDELAY,Buffer);
 
       if(Low != INFINITY)
 	encode_float(&bp,LOW_EDGE,Low);
@@ -413,7 +413,7 @@ int main(int argc,char *argv[]){
       case OPUS_APPLICATION:
 	opus_application = decode_int(cp,optlen);
 	break;
-      case MINPACKET:
+      case MAXDELAY:
 	received_buffer = decode_int(cp,optlen);
 	break;
       }

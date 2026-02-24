@@ -110,7 +110,7 @@ enum status_type {
   OUTPUT_SAMPLES,
 
   OPUS_BIT_RATE,
-  MINPACKET,      // Minimum number of full blocks in an output packet, unless already full (0-3)
+  MAXDELAY,      // Maximum allowable aggregation delay, blocks (0-5)
   FILTER2_BLOCKSIZE,
   FILTER2_FIR_LENGTH,
   FILTER2_KAISER_BETA,

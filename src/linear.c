@@ -399,8 +399,7 @@ int demod_linear(void *arg){
   if(Verbose > 1)
     fprintf(stderr,"%s exiting\n",chan->name);
 
-  flush_output(chan,false,true); // if still set, marker won't get sent since it wasn't sent last time
-  mirror_free((void *)&chan->output.queue,chan->output.queue_size * sizeof(float)); // Nails pointer
+  FREE(chan->output.queue);
   FREE(chan->status.command);
   if(chan->opus.encoder != NULL){
     opus_encoder_destroy(chan->opus.encoder);

@@ -162,7 +162,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	char *p = decode_string(cp,optlen);
 	strlcpy(chan->preset,p,sizeof(chan->preset));
 	FREE(p); // decode_string now allocs memory
-	//	  flush_output(chan,false,true); // Flush to Ethernet before we change this
 	if(Verbose > 1)
 	  fprintf(stderr,"%s loadpreset(%s)\n",chan->name,chan->preset);
 	if(loadpreset(chan,Preset_table,chan->preset) != 0){
@@ -244,7 +243,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  break; // refuse to change
 	}
 	chan->output.rtp.type = pt;
-	flush_output(chan,false,true); // Flush to Ethernet before we change this
 	if(Verbose)
 	  fprintf(stderr,"%s change samprate %'u -> %'u\n",chan->name,chan->output.samprate,new_sample_rate);
 
@@ -438,7 +436,6 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	  break; // ignore the request
 	}
 	chan->output.rtp.type = pt;
-	flush_output(chan,false,true); // Flush to Ethernet before we change this
 	chan->output.channels = i;
       }
       break;
@@ -614,12 +611,12 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	(*chan->frontend->gain)(chan->frontend,x);
       }
       break;
-    case MINPACKET:
+    case MAXDELAY:
       {
 	int i = abs(decode_int(cp,optlen));
-	if(i > 6 || i == chan->output.minpacket)
+	if(i > 5 || i == chan->output.maxdelay)
 	  break;
-	chan->output.minpacket = i;
+	chan->output.maxdelay = i;
       }
       break;
     case FILTER2:
@@ -859,7 +856,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
     encode_byte(&bp,RTP_PT,chan->output.rtp.type);
     encode_int32(&bp,STATUS_INTERVAL,chan->status.output_interval);
     encode_int(&bp,OUTPUT_ENCODING,chan->output.encoding);
-    encode_int(&bp,MINPACKET,chan->output.minpacket);
+    encode_int(&bp,MAXDELAY,chan->output.maxdelay);
   }
   encode_int64(&bp,OUTPUT_METADATA_PACKETS,chan->status.packets_out);
   // Don't send test points unless they're in use

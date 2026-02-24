@@ -455,8 +455,8 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
 	fprintf(fp,"opus bw %s (%d)",str,bw);
       }
       break;
-    case MINPACKET:
-      fprintf(fp,"minimum buffered pkts %u",decode_int(cp,optlen));
+    case MAXDELAY:
+      fprintf(fp,"maximum buffered pkts %u",decode_int(cp,optlen));
       break;
     case FILTER2:
       fprintf(fp,"filter2 blocks %u",decode_int(cp,optlen));

@@ -328,8 +328,8 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case OPUS_BANDWIDTH:
       channel->opus.bandwidth = decode_int(cp,optlen);
       break;
-    case MINPACKET:
-      channel->output.minpacket = decode_int(cp,optlen);
+    case MAXDELAY:
+      channel->output.maxdelay = decode_int(cp,optlen);
       break;
     case FILTER2:
       channel->filter2.blocking = decode_int(cp,optlen);

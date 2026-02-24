@@ -283,11 +283,10 @@ struct channel {
     uint64_t samples;
     bool pacing;     // Pace output packets
     enum encoding encoding;
-    float *queue; // Mirrored ring buffer
-    size_t queue_size; // Size of allocation, in floats
-    unsigned wp,rp; // Queue write and read indices
-    int minpacket;  // minimum output packet size in blocks (0-4)
-                         // i.e, no minimum or at least 20ms, 40ms, 60ms or 80ms /packet for 20ms blocktime
+    float *queue;    // delayed output data for aggregation when minpacket > 0
+    int queue_length; // Size of allocation, in floats
+    int queue_age; // in frames
+    int maxdelay;  // maximum allowable extra latency for output aggregation in blocks, max 5
     uint64_t errors;      // Count of errors with sendto()
     double gain;        // Audio gain to normalize amplitude
     int ttl; // per-channel IP TTL for multicast scope control
@@ -315,7 +314,7 @@ struct channel {
     uint64_t packets_out;
     struct sockaddr dest_socket; // Local status output; same IP as output.dest_socket but different port
     uint8_t *command;          // Incoming command
-    size_t length;
+    int length;
   } status;
 
   struct {
@@ -379,7 +378,7 @@ int demod_linear(void *);
 int demod_spectrum(void *);
 
 // Control and status
-int send_output(struct channel * restrict ,const float * rsestrict,int,bool);
+int send_output(struct channel * restrict ,const float * ,int,bool);
 int send_radio_status(struct sockaddr const *,struct frontend const *, struct channel *);
 int reset_radio_status(struct channel *chan);
 bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned long length);

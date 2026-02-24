@@ -598,8 +598,8 @@ int main(int argc,char *argv[]){
 
   Frontend.frequency = Frontend.min_IF = Frontend.max_IF = NAN;
   Frontend.rf_level_cal = NAN; // Not calibrated unless it says it is
-  Frontend.rf_gain = NAN;
-  Frontend.rf_atten = NAN;
+  Frontend.rf_gain = 0;
+  Frontend.rf_atten = 0;
   /* Main loop:
      Send poll if we haven't received one in our refresh interval
      See if anything has arrived (use short timeout)
@@ -908,11 +908,11 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
   case 'B':
     {
       char str[Entry_width],*ptr;
-      getentry("Packet buffering, blocks (0-6): ",str,sizeof(str));
+      getentry("Packet buffering, blocks (0-5): ",str,sizeof(str));
       long x = labs(strtol(str,&ptr,0));
       if(ptr == str || x > 6)
 	break;
-      encode_int(bpp,MINPACKET,(int)x);
+      encode_int(bpp,MAXDELAY,(int)x);
     }
     break;
   case 'g': // Manually set linear channel gain, dB (positive or negative)
@@ -1495,38 +1495,39 @@ static void display_sig(WINDOW *w,struct channel const *chan){
   wmove(w,row,col);
   wclrtobot(w);
 
+  double gain_offset = 0;
+  double input_power = power2dB(Frontend.if_power); // Start with A/D level
+  // Work back to input power level
+  input_power += Frontend.lna_gain;
+  input_power += Frontend.mixer_gain;
+  input_power += Frontend.if_gain;
+
+  input_power += fabs(Frontend.rf_atten);
+  gain_offset += fabs(Frontend.rf_atten);
+  input_power -= Frontend.rf_gain;
+  gain_offset -= Frontend.rf_gain;
+  if(isfinite(Frontend.rf_level_cal)){
+    input_power += Frontend.rf_level_cal;
+    gain_offset += Frontend.rf_level_cal;
+    pprintw(w, row++, col, "Input", "%+.1lf dBm ", input_power);
+    pprintw(w, row++, col, "RF lev cal", "%+.1lf dBm ", Frontend.rf_level_cal);
+  } else {
+    pprintw(w, row++, col, "Input", "%+.1lf dB  ", input_power);
+  }
   if(Frontend.lna_gain != 0 || Frontend.mixer_gain != 0 || Frontend.if_gain != 0)
     pprintw(w,row++,col,"A Gain","%02d+%02d+%02d dB   ",Frontend.lna_gain,
 	    Frontend.mixer_gain,
 	    Frontend.if_gain);
 
-  // Calculate actual input power in dBm by subtracting net RF gain
-  double pwr = power2dB(Frontend.if_power);
-  double gain_offset = 0;
-  // These gain figures only affect the relative A/D input level in dBFS because an equal
-  // amount of digital attenuation is applied to the A/D output to maintain unity gain
-  if (isfinite(Frontend.rf_gain) && Frontend.rf_gain != 0){
-    pprintw(w,row++,col,"RF Gain","%+.1lf dB  ",Frontend.rf_gain);
-    pwr -= Frontend.rf_gain;
-    gain_offset -= Frontend.rf_gain;
-  }
-  if(isfinite(Frontend.rf_atten) && Frontend.rf_atten != 0){
-    pprintw(w,row++,col,"RF Atten","%+.1lf dB  ",-Frontend.rf_atten);
-    pwr += Frontend.rf_atten;
-    gain_offset += Frontend.rf_atten;
-  }
-  // dec 2025: sign convention has flipped to be dBm/FS (prevously dBFS/dbm)
-  // not sent unless it is calibrated
-  if(isfinite(Frontend.rf_level_cal) && Frontend.rf_level_cal != 0){
-    pwr += Frontend.rf_level_cal;
-    gain_offset += Frontend.rf_level_cal;
-    pprintw(w,row++,col,"Input","%+.1lf dBm ",pwr);
-    pprintw(w,row++,col,"RF lev cal","%+.1lf dBm ",Frontend.rf_level_cal);
-  }
-  pprintw(w,row++,col,"A/D","%+.1lf dBFS",power2dB(Frontend.if_power));
+  if(Frontend.rf_atten != 0)
+    pprintw(w, row++, col, "RF atten", "%+.1lf dB  ", -fabs(Frontend.rf_atten));
+  if(Frontend.rf_gain != 0)
+    pprintw(w, row++, col, "RF gain", "%+.1lf dB  ", Frontend.rf_gain);
 
-  if(gain_offset != 0)
-    pprintw(w,row++,col,"Gain offset","%+.1lf dB  ",gain_offset);
+  pprintw(w, row++, col, "A/D", "%.1lf dBFS", power2dB(Frontend.if_power));
+  if(gain_offset != 0){
+    pprintw(w,row++,col,"Gain offset","%+.1lf %s ",gain_offset, isfinite(Frontend.rf_level_cal) ? "dBm" : "dB ");
+  }
   if(isfinite(chan->sig.bb_power))
     pprintw(w,row++,col,"Baseband","%+.1lf %4s",power2dB(chan->sig.bb_power),!isnan(Frontend.rf_level_cal) ? "dBm " : "dB  ");
   if(!isnan(chan->sig.n0)){
@@ -1745,7 +1746,7 @@ static void display_output(WINDOW *w,struct channel const *chan){
     pprintw(w,row++,col,"Encoding","%s",encoding_string(chan->output.encoding));
     pprintw(w,row++,col,"Channels","%u",chan->output.channels);
     pprintw(w,row++,col,"Packets","%'llu",(unsigned long long)chan->output.rtp.packets);
-    pprintw(w,row++,col,"Packet buffers","%u",chan->output.minpacket);
+    pprintw(w,row++,col,"Packet buffers","%u",chan->output.maxdelay);
     if(chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP){
       if(chan->opus.bitrate != 0)
 	pprintw(w,row++,col,"Opus bitrate","%'u",chan->opus.bitrate);
