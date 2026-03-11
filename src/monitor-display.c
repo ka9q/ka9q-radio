@@ -521,16 +521,16 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
-    snprintf(scratch[rows++],COLS,"dB");
-    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+    int i = 0;
+    snprintf(scratch[i++],COLS,"dB");
+    for(; i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
-      snprintf(scratch[rows],COLS,"%+.0lf",muted(sp) ? -INFINITY : voltage2dB(sp->gain));
+      snprintf(scratch[i],COLS,"%+.0lf",muted(sp) ? -INFINITY : voltage2dB(sp->gain));
     }
-    col += render_right(header_line,col,scratch,rows,0);
+    col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -540,16 +540,16 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
-    snprintf(scratch[rows++],COLS,"pan");
-    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+    int i = 0;
+    snprintf(scratch[i++],COLS,"pan");
+    for(; i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
-      snprintf(scratch[rows],COLS,"%+ld",lrint(100*sp->pan));
+      snprintf(scratch[i],COLS,"%+ld",lrint(100*sp->pan));
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   // SSRC
   if(col >= COLS)
@@ -559,16 +559,16 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
-    snprintf(scratch[rows++],COLS,"ssrc");
-    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+    int i = 0;
+    snprintf(scratch[i++],COLS,"ssrc");
+    for(; i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
-      snprintf(scratch[rows],COLS,"%u",sp->ssrc);
+      snprintf(scratch[i],COLS,"%u",sp->ssrc);
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -577,16 +577,16 @@ static void update_monitor_display(void){
    char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"tone");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"tone");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->notch_enable && sp->notch_tone != 0)
-	snprintf(scratch[row],COLS,"%.1f%c",sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
+	snprintf(scratch[i],COLS,"%.1f%c",sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -595,16 +595,16 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"freq");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"freq");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
 
-      snprintf(scratch[rows],COLS,"%'.0lf",sp->chan.tune.freq);
+      snprintf(scratch[i],COLS,"%'.0lf",sp->chan.tune.freq);
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -613,16 +613,16 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"mode");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"mode");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
 
-      snprintf(scratch[rows],COLS,"%s",sp->chan.preset);
+      snprintf(scratch[i],COLS,"%s",sp->chan.preset);
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -631,18 +631,18 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"snr");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"snr");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(!isfinite(sp->snr))
 	continue;
 
-      snprintf(scratch[rows],COLS,"%.1f",sp->snr);
+      snprintf(scratch[i],COLS,"%.1f",sp->snr);
     }
-    col++; col += render_right(header_line,col,scratch,rows,5); // Don't keep changing when SNR fluctuates
+    col++; col += render_right(header_line,col,scratch,i,5); // Don't keep changing when SNR fluctuates
   }
   if(col >= COLS)
     goto done;
@@ -652,21 +652,21 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"id");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"id");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
 
       if(strlen(sp->id) > 0){
-	snprintf(scratch[rows],COLS,"%s",sp->id);
+	snprintf(scratch[i],COLS,"%s",sp->id);
 	enable = true;
       }
     }
     if(enable){
-      col++; col += render_left(header_line,col,scratch,rows);
+      col++; col += render_left(header_line,col,scratch,i);
     }
   }
   if(col >= COLS)
@@ -676,18 +676,18 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
-    snprintf(scratch[rows++],COLS,"Tot");
-    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+    int i = 0;
+    snprintf(scratch[i++],COLS,"tot");
+    for(; i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
       char total_buf[100] = {0};
       ftime(total_buf,sizeof(total_buf),lrint(sp->tot_active));
-      snprintf(scratch[rows],COLS,"%s",total_buf);
+      snprintf(scratch[i],COLS,"%s",total_buf);
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -696,18 +696,18 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
-    snprintf(scratch[rows++],COLS,"Cur");
-    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+    int i = 0;
+    snprintf(scratch[i++],COLS,"cur");
+    for(; i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
       double t = sp->active != 0 ? sp->active : (double)(gps_time_ns() - sp->last_active) * 1e-9;
       char buf[100];
-      snprintf(scratch[rows],COLS,"%s",ftime(buf,sizeof buf,t));
+      snprintf(scratch[i],COLS,"%s",ftime(buf,sizeof buf,t));
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -716,18 +716,18 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"level");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"level");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->level <= 1e-10) // -100 dB
 	continue;
       double dB = power2dB(sp->level);
-      snprintf(scratch[rows],COLS,"%.1lf",dB);
+      snprintf(scratch[i],COLS,"%.1lf",dB);
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -736,17 +736,17 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"Queue");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"queue");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(qlen(sp) <= 0)
 	continue; // blank inactive sessions
-      snprintf(scratch[rows],COLS,"%ld",lrint(1000. * qlen(sp)/DAC_samprate));
+      snprintf(scratch[i],COLS,"%ld",lrint(1000. * qlen(sp)/DAC_samprate));
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -756,15 +756,15 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"type");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"type");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      snprintf(scratch[rows],COLS,"%s",encoding_string(sp->pt_table[sp->type].encoding));
+      snprintf(scratch[i],COLS,"%s",encoding_string(sp->pt_table[sp->type].encoding));
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -774,17 +774,17 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"ms");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"ms");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->samprate == 0)
 	continue;
-      snprintf(scratch[rows],COLS,"%d",1000 * sp->last_framesize/sp->samprate); // frame size, ms
+      snprintf(scratch[i],COLS,"%d",1000 * sp->last_framesize/sp->samprate); // frame size, ms
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -795,19 +795,19 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"%s","ch");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"%s","ch");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->pt_table[sp->type].encoding == OPUS
 	 || sp->pt_table[sp->type].encoding == OPUS_VOIP)
-	snprintf(scratch[rows],COLS,"%d",sp->opus_channels);
+	snprintf(scratch[i],COLS,"%d",sp->opus_channels);
       else
-	snprintf(scratch[rows],COLS,"%d",sp->channels);
+	snprintf(scratch[i],COLS,"%d",sp->channels);
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -817,17 +817,17 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"bw");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"bw");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->samprate == 0)
 	continue;
-      snprintf(scratch[rows],COLS,"%d",sp->bandwidth/1000); // to kHz
+      snprintf(scratch[i],COLS,"%d",sp->bandwidth/1000); // to kHz
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -836,17 +836,17 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"pt");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"pt");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->samprate == 0)
 	continue;
-      snprintf(scratch[rows],COLS,"%d",sp->type);
+      snprintf(scratch[i],COLS,"%d",sp->type);
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -856,15 +856,15 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"rate");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"rate");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      snprintf(scratch[rows],COLS,"%.*f", sp->datarate < 1e5 ? 1 : 0, .001 * sp->datarate); // decimal only if < 1000
+      snprintf(scratch[i],COLS,"%.*f", sp->datarate < 1e5 ? 1 : 0, .001 * sp->datarate); // decimal only if < 1000
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -874,9 +874,9 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
-    snprintf(scratch[rows++],COLS,"Delay");
-    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+    int i = 0;
+    snprintf(scratch[i++],COLS,"Delay");
+    for(; i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
@@ -891,9 +891,9 @@ static void update_monitor_display(void){
 
       double delay = (double)(int32_t)(sp->chan.output.rtp.timestamp - sp->last_timestamp) / sp->samprate;
       delay += 1.0e-9 * (gps_time_ns() - sp->chan.clocktime);
-      snprintf(scratch[rows],COLS,"%'.3lf", delay);
+      snprintf(scratch[i],COLS,"%'.3lf", delay);
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
     if(col >= COLS)
       goto done;
   }
@@ -905,9 +905,9 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
-    snprintf(scratch[rows++],COLS,"T0");
-    for(; rows < LINES && session < NSESSIONS; rows++,session++){
+    int i = 0;
+    snprintf(scratch[i++],COLS,"T0");
+    for(; i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
@@ -917,9 +917,9 @@ static void update_monitor_display(void){
 
       int64_t wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed);
       int64_t t0 = 1000*wptr/DAC_samprate - 1000*(int64_t)sp->next_timestamp / sp->samprate;
-      snprintf(scratch[rows],COLS,"%'lld",(long long)t0); // ms
+      snprintf(scratch[i],COLS,"%'lld",(long long)t0); // ms
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
     if(col >= COLS)
       goto done;
   }
@@ -928,15 +928,15 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"pkt");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"pkt");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->packets);
+      snprintf(scratch[i],COLS,"%llu",(unsigned long long)sp->packets);
     }
-    col++; col += render_right(header_line,col,scratch,rows,0);
+    col++; col += render_right(header_line,col,scratch,i,0);
   }
   if(col >= COLS)
     goto done;
@@ -946,20 +946,20 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"rst");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"rst");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->resets > 0){
 	enable = true;
-	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->resets);
+	snprintf(scratch[i],COLS,"%llu",(unsigned long long)sp->resets);
       }
     }
     if(enable){
-      col++; col += render_right(header_line,col,scratch,rows,0);
+      col++; col += render_right(header_line,col,scratch,i,0);
     }
   }
   if(col >= COLS)
@@ -970,20 +970,20 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"drp");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"drp");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->drops > 0){
 	enable = true;
-	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->drops);
+	snprintf(scratch[i],COLS,"%llu",(unsigned long long)sp->drops);
       }
     }
     if(enable){
-      col++; col += render_right(header_line,col,scratch,rows,0);
+      col++; col += render_right(header_line,col,scratch,i,0);
     }
   }
   if(col >= COLS)
@@ -994,20 +994,20 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"late");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"late");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->lates > 0){
 	enable = true;
-	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->lates);
+	snprintf(scratch[i],COLS,"%llu",(unsigned long long)sp->lates);
       }
     }
     if(enable){
-      col++; col += render_right(header_line,col,scratch,rows,0);
+      col++; col += render_right(header_line,col,scratch,i,0);
     }
   }
   if(col >= COLS)
@@ -1018,20 +1018,20 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"early");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"early");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->earlies > 0){
 	enable = true;
-	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->earlies);
+	snprintf(scratch[i],COLS,"%llu",(unsigned long long)sp->earlies);
       }
     }
     if(enable){
-      col++; col += render_right(header_line,col,scratch,rows,0);
+      col++; col += render_right(header_line,col,scratch,i,0);
     }
   }
   if(col >= COLS)
@@ -1042,20 +1042,20 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch, 0 , sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"resq");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"resq");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->reseqs > 0){
 	enable = true;
-	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->reseqs);
+	snprintf(scratch[i],COLS,"%llu",(unsigned long long)sp->reseqs);
       }
     }
     if(enable){
-      col++; col += render_right(header_line,col,scratch,rows,0);
+      col++; col += render_right(header_line,col,scratch,i,0);
     }
   }
   if(col >= COLS)
@@ -1066,20 +1066,20 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
     bool enable = false;
 
-    snprintf(scratch[rows++],COLS,"plc");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"plc");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->plcs > 0){
 	enable = true;
-	snprintf(scratch[rows],COLS,"%llu",(unsigned long long)sp->plcs);
+	snprintf(scratch[i],COLS,"%llu",(unsigned long long)sp->plcs);
       }
     }
     if(enable){
-      col++; col += render_right(header_line,col,scratch,rows,0);
+      col++; col += render_right(header_line,col,scratch,i,0);
     }
   }
   if(col >= COLS)
@@ -1090,15 +1090,15 @@ static void update_monitor_display(void){
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
     int session = First_session;
-    int rows = 0;
+    int i = 0;
 
-    snprintf(scratch[rows++],COLS,"sockets");
-    for(;rows < LINES && session < NSESSIONS; rows++,session++){
+    snprintf(scratch[i++],COLS,"sockets");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      snprintf(scratch[rows],COLS,"%s -> %s",formatsock(&sp->sender,true),sp->dest);
+      snprintf(scratch[i],COLS,"%s -> %s",formatsock(&sp->sender,true),sp->dest);
     }
-    col++; col += render_left(header_line,col,scratch,rows);
+    col++; col += render_left(header_line,col,scratch,i);
   }
   if(col >= COLS)
     goto done;
