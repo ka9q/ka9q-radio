@@ -640,13 +640,15 @@ static int hdlc_process(struct hdlc *hp,int bit){
   
   if((hp->last_bits & 0xff) == 0x7e){
     // 01111110 - Flag
-    int const bytes = (hp->frame_bits - 7) >> 3; // Don't count leading 7 bits of flag
-    if(hp->flag_seen && bytes > 2){
-      hp->frame_bits = 0;
-      if(crc_good(hp->frame,bytes)){
-	return bytes; // Caller must set frame_bits to 0 when done
-      } else
-	return -1;
+    if(hp->flag_seen && hp->frame_bits > 7){
+      int const bytes = (hp->frame_bits - 7) >> 3; // Don't count leading 7 bits of flag
+      if(bytes > 2){
+	hp->frame_bits = 0;
+	if(crc_good(hp->frame,bytes)){
+	  return bytes; // Caller must set frame_bits to 0 when done
+	} else
+	  return -1;
+      }
     }
     hp->frame_bits = 0;
     hp->flag_seen = 1;
