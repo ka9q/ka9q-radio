@@ -67,10 +67,16 @@ int demod_spectrum(void *arg){
 
     // Look on the single-entry command queue, grab it atomically and execute it
     pthread_mutex_lock(&chan->status.lock);
-    if(chan->status.command != NULL){
-      restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
-      FREE(chan->status.command);
-      response_needed = true;
+    // Look on the command queue and grab just one atomically
+    for(int i=0;i < CQLEN; i++){
+      if(chan->commands[i].buffer != NULL){
+	restart_needed = decode_radio_commands(chan,chan->commands[i].buffer,
+					       chan->commands[i].length);
+	FREE(chan->commands[i].buffer);
+	chan->commands[i].length = 0;
+	response_needed = true;
+	break;
+      }
     }
     pthread_mutex_unlock(&chan->status.lock);
 
@@ -178,7 +184,10 @@ int demod_spectrum(void *arg){
     fftwf_destroy_plan(chan->spectrum.plan);
   chan->spectrum.plan = NULL;
   FREE(chan->spectrum.window);
-  FREE(chan->status.command);
+  for(int i=0; i < CQLEN; i++){
+    FREE(chan->commands[i].buffer);
+    chan->commands[i].length = 0;
+  }
   FREE(chan->spectrum.bin_data);
   FREE(chan->spectrum.ring);
   chan->spectrum.ring_size = 0;

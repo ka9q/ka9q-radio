@@ -1065,7 +1065,10 @@ int close_chan(struct channel *chan){
   }
 
   pthread_mutex_lock(&chan->status.lock);
-  FREE(chan->status.command);
+  for(int i=0; i < CQLEN; i++){
+    FREE(chan->commands[i].buffer);
+    chan->commands[i].length = 0;
+  }
   FREE(chan->spectrum.bin_data);
   delete_filter_output(&chan->filter.out);
   if(chan->opus.encoder != NULL){

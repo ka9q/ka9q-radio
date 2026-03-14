@@ -72,13 +72,14 @@ void *radio_status(void *arg){
 	  assert(cmd != NULL);
 	  memcpy(cmd,buffer+1,length-1);
 	  pthread_mutex_lock(&chan->status.lock);
-	  bool oops = false;
-	  if(chan->status.command){
-	    // An entry already exists. Drop ours, until we make this a queue
-	    oops = true;
-	  } else {
-	    chan->status.command = cmd;
-	    chan->status.length = length-1;
+	  bool oops = true;
+	  for(int i=0; i < CQLEN; i++){
+	    if(chan->commands[i].buffer == NULL){
+	      chan->commands[i].buffer = cmd;
+	      chan->commands[i].length = length - 1;
+	      oops = false;
+	      break;
+	    }
 	  }
 	  pthread_mutex_unlock(&chan->status.lock);
 	  if(oops)

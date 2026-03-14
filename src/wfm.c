@@ -124,11 +124,16 @@ int demod_wfm(void *arg){
     response_needed = false;
 
     pthread_mutex_lock(&chan->status.lock);
-    // Look on the single-entry command queue and grab it atomically
-    if(chan->status.command != NULL){
-      restart_needed = decode_radio_commands(chan,chan->status.command,chan->status.length);
-      FREE(chan->status.command);
-      response_needed = true;
+    // Look on the command queue and grab just one atomically
+    for(int i=0;i < CQLEN; i++){
+      if(chan->commands[i].buffer != NULL){
+	restart_needed = decode_radio_commands(chan,chan->commands[i].buffer,
+					       chan->commands[i].length);
+	FREE(chan->commands[i].buffer);
+	chan->commands[i].length = 0;
+	response_needed = true;
+	break;
+      }
     }
     pthread_mutex_unlock(&chan->status.lock);
     if(restart_needed)
@@ -302,7 +307,10 @@ int demod_wfm(void *arg){
     fprintf(stderr,"%s exiting\n",chan->name);
 
   FREE(chan->output.queue);
-  FREE(chan->status.command);
+  for(int i=0; i < CQLEN; i++){
+    FREE(chan->commands[i].buffer);
+    chan->commands[i].length = 0;
+  }
   if(chan->opus.encoder != NULL){
     opus_encoder_destroy(chan->opus.encoder);
     chan->opus.encoder = NULL;

@@ -208,7 +208,10 @@ static void decode_task_cleanup(void *arg){
   // Just in case anything was allocated for these arrays
   struct channel * const chan = &sp->chan;
   FREE(chan->spectrum.bin_data);
-  FREE(chan->status.command);
+  for(int i=0; i < CQLEN; i++){
+    FREE(chan->commands[i].buffer);
+    chan->commands[i].length = 0;
+  }
   FREE(chan->spectrum.window);
   FREE(chan->spectrum.plan);
   FREE(chan->spectrum.ring);

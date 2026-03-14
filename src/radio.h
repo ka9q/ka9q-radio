@@ -313,9 +313,13 @@ struct channel {
     int output_interval;
     uint64_t packets_out;
     struct sockaddr dest_socket; // Local status output; same IP as output.dest_socket but different port
-    uint8_t *command;          // Incoming command
-    int length;
   } status;
+
+#define CQLEN 2
+  struct {
+    uint8_t *buffer;
+    int length;
+  } commands[CQLEN];
 
   struct {
     struct sockaddr dest_socket;
