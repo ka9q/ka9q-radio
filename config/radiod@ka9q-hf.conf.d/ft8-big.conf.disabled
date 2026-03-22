@@ -1,0 +1,200 @@
+# experimental new version, March 2026
+# Covers entirety of bands except 6m
+# let's see if the CPU is acceptable
+[ft8]
+# 2200m: 135k7-137k8
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 5k040
+low = 210
+high = 2310
+freq = 135k49
+
+[ft8-630]
+# 630m: 472k-479k
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 20k16
+low = 1540
+high = 8540
+freq = 470k46
+
+
+[ft8-160]
+# 160m: 1m800 - 2m000
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 403k2
+low = 800
+high = 200k8
+freq = 1799k2
+
+[ft8-80]
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 1008k0
+low = 2k00
+high = 502k
+freq = 3498k
+
+[ft8-60]
+# 60m: 5330k5 - 5406k5
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 161k28
+low = 2k32
+high = 78k32
+freq = 5328k18
+
+[ft8-40]
+# 40m: 7000k - 7300k
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 705k6
+low = 26k4
+high = 326k4
+freq = 6973k6
+
+[ft8-30]
+# 30m: 10m1 - 10m15
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 161k28
+low = 15k32
+high = 65k32
+freq = 10m08468
+
+[ft8-20]
+# 20m: 14m0 - 14m35
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 705k6
+low = 1k4
+high = 351k4
+freq = 13m9986
+
+[ft8-17]
+# 17m: 18m068 - 18m168
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 201k6
+low = 400
+high = 100k4
+freq = 18m0676
+
+[ft8-15]
+# 15m: 21m0 - 21m45
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 921k6
+low = 5k4
+high = 455k4
+freq = 20m9946
+
+[ft8-12]
+# 12m: 24m89 - 24m99
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 201k6
+low = 400
+high = 100k4
+freq = 24m8896
+
+[ft8-10]
+# 10m: 28m0 - 29m7
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 3m456
+low = 14k
+high = 1714k
+freq = 27m986
+
+[ft8-8m]
+# 8m experimental: 40m51 - 40m70
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 403k2
+low = 800
+high = 200k8
+freq = 40m5092
+
+
+[ft8-6m]
+# 6m: 50m0 - 54m0
+# just a piece for now: 50m3 - 50m4 (covers 50m313 and 50m323)
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 201k6
+low = 400
+high = 100k4
+freq = 54m3
+
+[ft8-4m]
+# 4m: 70m0 - 70m5 in the UK
+disable = yes
+advertise = no
+data = ft8.local
+encoding = s16be
+mode = usb
+hang-time = 0
+recovery-rate = 60
+samprate = 1008k0
+low = 2k00
+high = 502k
+freq = 69m998
+
