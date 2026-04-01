@@ -75,15 +75,65 @@ Command-line options:
 #include <inttypes.h>
 #include <ogg/ogg.h>
 #include <stdarg.h>
+#include <syslog.h>
+#include <sys/mman.h>
+#include <complex.h>
 
 #include "misc.h"
 #include "attr.h"
 #include "multicast.h"
 #include "radio.h"
+#include "status.h"
+
+#include <math.h>
+
+typedef struct {
+    double x1, x2;
+    double y1, y2;
+} BiquadState;
+
+/* Initialize notch filter at 500 Hz, fs = 16 kHz, pole radius r */
+void notch500_init(double r, double *b0, double *b1, double *b2,
+                   double *a1, double *a2, BiquadState *st, double sample_rate)
+{
+  double fs  = sample_rate;
+  double f0  = 500.0;
+  double w0  = 2.0 * M_PI * f0 / fs;    // pi/16
+  double c   = cos(w0);                 // ~0.980785
+
+  *b0 = 1.0;
+  *b1 = -2.0 * c;
+  *b2 = 1.0;
+
+  *a1 = -2.0 * r * c;
+  *a2 = r * r;
+
+  st->x1 = st->x2 = st->y1 = st->y2 = 0.0;
+}
+
+/* Process one real sample through the biquad */
+static inline double notch500_process(double x,
+                                      double b0, double b1, double b2,
+                                      double a1, double a2,
+                                      BiquadState *st)
+{
+    double y = b0 * x + b1 * st->x1 + b2 * st->x2
+                     - a1 * st->y1   - a2 * st->y2;
+
+    st->x2 = st->x1;
+    st->x1 = x;
+    st->y2 = st->y1;
+    st->y1 = y;
+    return y;
+}
+
+BiquadState stI, stQ;
+double b0, b1, b2, a1, a2;
 
 // size of stdio buffer for disk I/O. 8K is probably the default, but we have this for possible tuning
 #define BUFFERSIZE (8192) // probably the same as default
 #define RESEQ 64 // size of resequence queue. Probably excessive; WiFi reordering is rarely more than 4-5 packets
+#define OPUS_SAMPRATE 48000 // Opus always operates at 48 kHz virtual sample rate
 
 enum sync_state_t
 {
@@ -208,8 +258,46 @@ struct session {
   uint32_t max_rx_queue;
   uint32_t max_drops;
   uint32_t last_block_drops;
+  bool session_errors_init;     // true once the session has run wd_check() at least once to set the next expected ts,seq
+
+  float last_angle;
+  uint32_t last_edge;
+  uint32_t start_ts;
+  int64_t start_timesnap;
+  uint32_t start_sequence;
 };
 
+static struct {
+  float noise_bandwidth;
+  float sig_power;
+  float sn0;
+  float snr;
+  int64_t pll_start_time;
+  double pll_start_phase;
+} Local;
+
+struct sync_diag_t {
+  char multicast[32];
+  uint32_t magic;
+  uint32_t version;
+  uint32_t pid;
+  uint32_t reserved;
+
+  uint64_t start_ns;
+  uint64_t updated_ns;
+  uint64_t datagrams;
+  uint64_t dropped_blocks;
+  uint64_t seq_errors;
+  uint64_t ts_errors;
+  uint64_t pps_ok;
+  uint64_t pps_noise;
+  uint64_t pps_consecutive;
+  double sync_frequency;
+  float sync_snr;
+};
+
+struct sync_diag_t *sync_diags;
+static int sync_diags_fd = -1;
 
 static float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
 static double FileLengthLimit = 0; // Length of file in seconds; 0 = unlimited
@@ -231,10 +319,23 @@ static bool wd_mode = false;
 static int force_sample_rate_error = 0;
 static char const *wd_error_log = 0;
 static double wd_tolerance_seconds = 2.0;
+static uint32_t sync_ssrc = 0;
+static float sync_frequency = 0;
+static bool sync_record = false;
+static uint32_t sync_start_ts;
+static int32_t sync_pretrigger;
+static char* radio_mcast_group = NULL;
+static bool no_output = false;
+static bool filter_500 = false;
+static bool leaky_folding = false;
+static double leaky_folding_filter = 0.99;
+static bool notch_filter_initialized = false;
 
 const char *App_path;
-static int Input_fd,Status_fd;
+static int Input_fd,Status_fd,Control_fd;
 static struct session *Sessions;
+int Mcast_ttl;
+struct sockaddr Metadata_dest_socket;
 struct sockaddr mcast_dest_sock;
 static char const *Source;
 static struct sockaddr_storage *Source_socket; // Remains NULL if Source == NULL
@@ -275,6 +376,14 @@ static struct option Options[] = {
   {"lengthlimit", required_argument, NULL, 'L'},
   {"limit", required_argument, NULL, 'L'},
   {"ssrc", required_argument, NULL, 'S'},
+  {"sync-ssrc", required_argument, NULL, 1001},
+  {"sync-frequency", required_argument, NULL, 1002},
+  {"sync-record", no_argument, NULL, 1003},
+  {"sync-pretrigger", required_argument, NULL, 1004},
+  {"no-output", no_argument, NULL, 1005},
+  {"filter-500", no_argument, NULL, 1006},
+  {"leaky-folding", no_argument, NULL, 1007},
+  {"leaky-folding-filter", required_argument, NULL, 1008},
   {"version", no_argument, NULL, 'V'},
   {"max_length", required_argument, NULL, 'x'},
   {"wd_mode", no_argument, NULL, 'W'},
@@ -287,7 +396,7 @@ static char Optstring[] = "cd:e:fjl:m:o:rsS:t:vL:Vx:WE:q:Y:";
 
 int main(int argc,char *argv[]){
   App_path = argv[0];
-
+  openlog(App_path, LOG_PID | LOG_CONS, LOG_USER);
   // Defaults
   Locale = getenv("LANG");
 
@@ -323,10 +432,10 @@ int main(int argc,char *argv[]){
       break;
     case 'S':
       {
-	char *ptr;
-	uint32_t x = strtol(optarg,&ptr,0);
-	if(ptr != optarg)
-	  Ssrc = x;
+        char *ptr;
+        uint32_t x = strtol(optarg,&ptr,0);
+        if(ptr != optarg)
+          Ssrc = x;
       }
       break;
     case 's':
@@ -334,10 +443,10 @@ int main(int argc,char *argv[]){
       break;
     case 't':
       {
-	char *ptr;
-	int64_t x = strtoll(optarg,&ptr,0);
-	if(ptr != optarg)
-	  Timeout = x;
+        char *ptr;
+        int64_t x = strtoll(optarg,&ptr,0);
+        if(ptr != optarg)
+          Timeout = x;
       }
       break;
     case 'v':
@@ -351,7 +460,7 @@ int main(int argc,char *argv[]){
       break;
     case 'V':
       VERSION();
-      fputs("wsprdaemon mode (-W): v0.11\n",stdout);
+      fputs("wsprdaemon mode (-W): v0.15\n",stdout);
       exit(EX_OK);
     case 'W':
       wd_mode = true;
@@ -362,10 +471,10 @@ int main(int argc,char *argv[]){
       break;
     case 'E':
       {
-	char *ptr;
-	int32_t x = strtol(optarg,&ptr,0);
-	if(ptr != optarg)
-	  force_sample_rate_error = x;
+        char *ptr;
+        int32_t x = strtol(optarg,&ptr,0);
+        if(ptr != optarg)
+          force_sample_rate_error = x;
       }
       fprintf(stderr,"Warning: sample count error forced to %+d samples\n",force_sample_rate_error);
       break;
@@ -374,6 +483,59 @@ int main(int argc,char *argv[]){
       break;
     case 'Y':
       wd_tolerance_seconds = fabsf(strtof(optarg,NULL));
+      break;
+    case 1001:
+      {
+        char *ptr;
+        int32_t x = strtol(optarg,&ptr,0);
+        if(ptr != optarg)
+          sync_ssrc = x;
+      }
+      fprintf(stderr,"bpsk sync signal on SSRC %u\n",sync_ssrc);
+      break;
+    case 1002:
+      {
+        char *ptr;
+        float x = strtod(optarg,&ptr);
+        if(ptr != optarg)
+          sync_frequency = x;
+      }
+      fprintf(stderr,"bpsk sync signal at %.0f Hz\n",sync_frequency);
+      break;
+    case 1003:
+      sync_record = true;
+      fprintf(stderr,"recording bpsk sync channel\n");
+      break;
+    case 1004:
+      {
+        char *ptr;
+        int32_t x = strtol(optarg,&ptr,0);
+        if(ptr != optarg)
+          sync_pretrigger = x;
+      }
+      fprintf(stderr,"bpsk pretrigger at %d samples\n",sync_pretrigger);
+      break;
+    case 1005:
+      no_output = true;
+      break;
+    case 1006:
+      filter_500 = true;
+      fprintf(stderr,"500 Hz notch filter engaged\n");
+      break;
+    case 1007:
+      leaky_folding = true;
+      fprintf(stderr,"Leaky folding engaged\n");
+      break;
+    case 1008:
+      {
+        char *ptr;
+        double x = strtod(optarg,&ptr);
+        if(ptr != optarg)
+          leaky_folding_filter = x;
+      }
+      if ((leaky_folding_filter >= 1.0) || (leaky_folding_filter <= 0.0))
+        leaky_folding_filter = 0.99;
+      fprintf(stderr,"Leaky folding filter set to %.4f\n",leaky_folding_filter);
       break;
     default:
       fprintf(stderr,"Usage: %s [-c|--catmode|--stdout] [-r|--raw] [-e|--exec command] [-f|--flush] [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-j|--jt] [-v] [-m sec] [-x|--max_length max_file_time, no sync, oneshot] [--wd_mode|-W] PCM_multicast_address\n",argv[0]);
@@ -414,7 +576,11 @@ int main(int argc,char *argv[]){
     resolve_mcast(PCM_mcast_address_text,&mcast_dest_sock,DEFAULT_RTP_PORT,iface,sizeof(iface),0);
     Input_fd = listen_mcast(Source_socket,&mcast_dest_sock,iface);
     resolve_mcast(PCM_mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
+    /* fprintf(stderr,"mcast group: %s\n",PCM_mcast_address_text); */
+    /* fprintf(stderr,"mcast port: %d\n",DEFAULT_STAT_PORT); */
+    /* fprintf(stderr,"mcast iface: %s\n",iface); */
     Status_fd = listen_mcast(Source_socket,&sock,iface);
+    Control_fd = -1;
   }
   if(Input_fd == -1){
     fprintf(stderr,"Can't set up PCM input, exiting\n");
@@ -491,43 +657,47 @@ static void clear_queue_counters(struct session * const sp){
   sp->max_drops = 0;
 }
 
-static int wd_write(struct session * const sp,void *samples,int buffer_size,struct timespec now){
-  if(NULL == sp->fp)
-    return -1;
+static void wd_check(struct session * const sp,int buffer_size,struct rtp_header *rtp){
+  /* if (!sp->session_errors_init){ */
+  /*   wd_log(0,"wd_check(): SSRC %u first check of session?\n", */
+  /*          sp->ssrc); */
+  /* } */
+  __atomic_fetch_add(&sync_diags->datagrams,1,__ATOMIC_RELAXED);
 
   // track sequence numbers and report if we see one out of order (except the first datagram of file)
-  if ((0 != sp->total_file_samples) && (sp->rtp_state.seq != sp->next_expected_rtp_seq)){
+  if ((sp->session_errors_init) && (rtp->seq != sp->next_expected_rtp_seq)){
+    __atomic_fetch_add(&sync_diags->seq_errors,1,__ATOMIC_RELAXED);
     wd_log(0,"Weird rtp.seq: expected %u, received %u (delta %d) on SSRC %d (tx %u, rx %u, drops %u)\n",
            sp->next_expected_rtp_seq,
-           sp->rtp_state.seq,
-           (int16_t)(sp->rtp_state.seq - sp->next_expected_rtp_seq),
+           rtp->seq,
+           (int16_t)(rtp->seq - sp->next_expected_rtp_seq),
            sp->ssrc,
            sp->max_tx_queue,
            sp->max_rx_queue,
            sp->max_drops);
   }
-  sp->next_expected_rtp_seq = sp->rtp_state.seq + 1;    // next expected RTP sequence number
+  sp->next_expected_rtp_seq = rtp->seq + 1;    // next expected RTP sequence number
 
   int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2); // bytes per sample time
   int frames = buffer_size / framesize;  // One frame per sample time
 
   // is the rtp.timestamp value what we expect from the last datagram (don't log on first datagram of file)
-  if ((0 != sp->total_file_samples) && (sp->rtp_state.timestamp != sp->next_expected_rtp_ts)){
-    wd_log(0,"Weird rtp.timestamp: expected %u, received %u (delta %d) on SSRC %d (tx %u, rx %u, drops %u) frame: %d size: %d\n",
+  if ((sp->session_errors_init) && (rtp->timestamp != sp->next_expected_rtp_ts)){
+    __atomic_fetch_add(&sync_diags->ts_errors,1,__ATOMIC_RELAXED);
+    wd_log(0,"Weird rtp.timestamp: expected %u, received %u (delta %d) on SSRC %d (tx %u, rx %u, drops %u)\n",
            sp->next_expected_rtp_ts,
-           sp->rtp_state.timestamp,
-           sp->rtp_state.timestamp - sp->next_expected_rtp_ts,
+           rtp->timestamp,
+           rtp->timestamp - sp->next_expected_rtp_ts,
            sp->ssrc,
            sp->max_tx_queue,
            sp->max_rx_queue,
-           sp->max_drops,
-           frames,
-           framesize);
+           sp->max_drops);
   }
-  sp->next_expected_rtp_ts = sp->rtp_state.timestamp + frames;    // next expected RTP timestamp
+  sp->next_expected_rtp_ts = rtp->timestamp + frames;    // next expected RTP timestamp
 
   // if the output filter dropped a block, emit a warning
-  if (sp->last_block_drops != sp->chan.filter.out.block_drops){
+  if ((sp->session_errors_init) && (sp->last_block_drops != sp->chan.filter.out.block_drops)){
+    __atomic_fetch_add(&sync_diags->dropped_blocks,(sp->chan.filter.out.block_drops - sp->last_block_drops),__ATOMIC_RELAXED);
     wd_log(0,"Weird block_drops: expected %u, received %u on SSRC %d (tx %u, rx %u, drops %u)\n",
            sp->last_block_drops,
            sp->chan.filter.out.block_drops,
@@ -535,10 +705,33 @@ static int wd_write(struct session * const sp,void *samples,int buffer_size,stru
            sp->max_tx_queue,
            sp->max_rx_queue,
            sp->max_drops);
-    sp->last_block_drops = sp->chan.filter.out.block_drops;
   }
+  sp->last_block_drops = sp->chan.filter.out.block_drops;
+  sp->session_errors_init = true;
+  __atomic_store_n(&sync_diags->updated_ns,gps_time_ns(),__ATOMIC_RELAXED);
+}
 
-  // check time of first sample: if it's more than +/- x seconds from expected, force resync on nex tfile
+int64_t calculated_starting_timesnap(struct session * const sp, uint32_t rtp_timestamp){
+        /* int64_t sender_time = sp->chan.clocktime + (int64_t)BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET); */
+        int64_t sender_time = sp->chan.clocktime + (int64_t)BILLION * (UNIX_EPOCH);
+        sender_time += (int64_t)BILLION * (int32_t)(rtp_timestamp - sp->chan.output.time_snap) / sp->samprate;
+        return sender_time;
+}
+
+static int wd_write(struct session * const sp,void *samples,int buffer_size,struct timespec now){
+  if(NULL == sp->fp)
+    return -1;
+
+  int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2); // bytes per sample time
+  int frames = buffer_size / framesize;  // One frame per sample time
+
+  /* static int xc = 80; */
+  /* if (xc) { */
+  /*    wd_log(0,"%u bytes %u frames %u samples, %u bytes/sample\n",buffer_size,frames,frames*sp->channels,(sp->encoding == F32LE ? 4 : 2)); */
+  /*    xc--; */
+  /* } */
+
+  // check time of first sample: if it's more than +/- x seconds from expected, force resync on next file
   if (0 == sp->total_file_samples){
     struct timespec expected_start = now;
     expected_start.tv_nsec = 0;
@@ -547,7 +740,7 @@ static int wd_write(struct session * const sp,void *samples,int buffer_size,stru
     expected_start.tv_sec *= (time_t)(FileLengthLimit);
 
     if (fabs(time_diff(expected_start,now)) >= wd_tolerance_seconds){
-      wd_log(0,"First sample %.3f s off...resync at next interval on SSRC %d (tx %u, rx %u, drops %u)\n",
+      wd_log(1,"First sample %.3f s off...resync at next interval on SSRC %d (tx %u, rx %u, drops %u)\n",
              time_diff(expected_start,now),
              sp->ssrc,
              sp->max_tx_queue,
@@ -558,13 +751,79 @@ static int wd_write(struct session * const sp,void *samples,int buffer_size,stru
     clear_queue_counters(sp);
   }
 
-  fwrite(samples,framesize,frames,sp->fp);
-  sp->total_file_samples += frames;
-  sp->current_segment_samples += frames;
+  int partial_frames = frames;
+  if (partial_frames > sp->samples_remaining){
+     wd_log(1,"SSRC %u Too many frames in this packet! %ld remain, %u this packet\n",
+	    sp->ssrc,
+	    sp->samples_remaining,
+	    partial_frames);
+     partial_frames = sp->samples_remaining;
+  }
+
+  fwrite(samples,framesize,partial_frames,sp->fp);
+  sp->total_file_samples += partial_frames;
+  sp->current_segment_samples += partial_frames;
   if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
     sp->substantial_file = true;
-  sp->samples_written += frames;
-  sp->samples_remaining -= frames;
+  sp->samples_written += partial_frames;
+  sp->samples_remaining -= partial_frames;
+
+  // if we wrote a partial, finish up in the new file
+  if (partial_frames < frames){
+    wd_log(1,"SSRC %u frames: %d partial %d samples %p %ld new samples %p %ld\n",
+           sp->ssrc,
+           frames,
+           partial_frames,
+           samples,
+           (long int)samples,
+           (void*)((float*)samples + (partial_frames * sp->channels)),
+           (long int)(void*)((float*)samples + (partial_frames * sp->channels)));
+    close_file(sp);
+
+    // start new file
+    sp->start_ts = sp->rtp_state.timestamp + partial_frames;
+    sp->start_sequence = sp->rtp_state.seq;
+    sp->start_timesnap = calculated_starting_timesnap(sp,sp->start_ts);
+    session_file_init(sp,&sp->sender);
+    sp->sync_state = sync_state_active;
+    wd_log(1,"SSRC %u set start ts to %u (RTP TS %u, partial %u) wd_write()\n",
+           sp->ssrc,
+           sp->start_ts,
+           sp->rtp_state.timestamp,
+           partial_frames);
+
+    // spit out the estimated start time of the stream, based on sample rate and RTP timestamp, ignoring rollovers
+    wd_log(1, "SSRC %u start partial file with seq %u timestamp %u, estimated stream start is %u s ago\n",
+           sp->ssrc,
+           sp->rtp_state.seq,
+           sp->rtp_state.timestamp,
+           sp->rtp_state.timestamp / sp->samprate);
+
+    start_wav_stream(sp);
+    sp->file_time = now;
+    wd_log(1,"SSRC %u starting in the middle of a packet. partial_frames = %d, frames = %d, samples = %p (%ld)\n",
+           sp->ssrc,
+           partial_frames,frames,samples,(long int)samples);
+    samples = (void*)((float*) samples + (partial_frames * sp->channels));
+    partial_frames = frames - partial_frames;
+    wd_log(1,"SSRC %u Starting in the middle of a packet. partial_frames = %d, frames = %d, samples = %p (%ld)\n",
+           sp->ssrc,
+           partial_frames,
+           frames,samples,
+           (long int)samples);
+
+    fwrite(samples,framesize,partial_frames,sp->fp);
+    sp->total_file_samples += partial_frames;
+    sp->current_segment_samples += partial_frames;
+    if(sp->current_segment_samples >= SubstantialFileTime * sp->samprate)
+      sp->substantial_file = true;
+    sp->samples_written += partial_frames;
+    sp->samples_remaining -= partial_frames;
+  }
+
+  /* if (sp->samples_remaining <= sp->samprate * 2){ */
+  /*   return -1; */
+  /* } */
 
   if(sp->samples_remaining <= 0)
   {
@@ -648,6 +907,19 @@ static void wd_state_machine(struct session * const sp,struct sockaddr const *se
       sp->max_drops = d;
   }
 
+  int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2); // bytes per sample time
+  uint32_t packet_start_ts = sp->rtp_state.timestamp;
+  uint32_t packet_stop_ts = packet_start_ts + (buffer_size / framesize);
+
+  if ((0 != sync_ssrc) && (sync_start_ts >= packet_start_ts) && (sync_start_ts < packet_stop_ts)){
+    // PPS sync mode
+    wd_log(1,"SSRC %u sync start at RTP ts %u: this packet is %u - %u\n",
+           sp->ssrc,
+           sync_start_ts,
+           packet_start_ts,
+           packet_stop_ts);
+  }
+
   switch(sp->sync_state){
   default:
   case sync_state_startup:
@@ -659,27 +931,61 @@ static void wd_state_machine(struct session * const sp,struct sockaddr const *se
     break;
 
   case sync_state_armed:
-    // drop samples until we're in second 0
-    if (0 == seconds){
-      // first packet in :00, so start recording the file
+    // drop samples until we're in second 0 or see the PPS edge
+
+    bool start = false;
+    if (0 == sync_ssrc){
+      // wd mode, no PPS sync channel, start with first datagram in second 0
+      if (0 == seconds){
+        start = true;
+        sync_start_ts = packet_start_ts;
+      }
+    } else {
+      /* fprintf(stderr,"ssrc %u armed start ts: %u packet %u - %u!\n",sp->ssrc,sync_start_ts,packet_start_ts,packet_stop_ts); */
+      // PPS sync mode, only start when the PPS is in this datagram
+      if ((sync_start_ts >= packet_start_ts) && (sync_start_ts < packet_stop_ts)){
+        start=true;
+      }
+    }
+
+    if (true == start){
+      // either first datagram in :00 or PPS detected in this datagram--start recording
       sp->sync_state = sync_state_active;
 
       if(sp->fp == NULL && !sp->complete){
         // create new file in second :00
         sp->wd_file_time.tv_sec = 0;
+        sp->start_sequence = sp->rtp_state.seq;
+        sp->start_timesnap = calculated_starting_timesnap(sp,sync_start_ts);
+        sp->start_ts = sync_start_ts;
         session_file_init(sp,sender);
         sp->sync_state = sync_state_active;
 
         // spit out the estimated start time of the stream, based on sample rate and RTP timestamp, ignoring rollovers
-        wd_log(1, "Start file on SSRC %d with seq %u timestamp %u, estimated stream start is %u s ago\n",
+        wd_log(1, "SSRC %u start file with seq %u timestamp %u, estimated stream start is %u s ago\n",
                sp->ssrc,
                sp->rtp_state.seq,
-               sp->rtp_state.timestamp,
-               sp->rtp_state.timestamp / sp->samprate);
+               sync_start_ts,
+               sync_start_ts / sp->samprate);
 
         start_wav_stream(sp);
         sp->file_time = now;
-        if (0 != wd_write(sp,samples,buffer_size,now)){
+
+        uint32_t frame_offset = sync_start_ts - packet_start_ts;
+        /* printf("buffer at %p (%lu), length %u -- ",samples,(unsigned long int)samples,buffer_size); */
+        float * new_samples = (float*) samples;
+        new_samples += (frame_offset * sp->channels);
+        buffer_size -= (frame_offset * framesize);
+        /* printf("buffer at %p (%lu), length %u\n",new_samples,(unsigned long int)new_samples,buffer_size); */
+        sp->start_ts = sp->rtp_state.timestamp + frame_offset;
+        wd_log(1,"SSRC %u set start ts to %u (RTP TS %u, partial %u) wd_state_machine()\n",
+               sp->ssrc,
+               sp->start_ts,
+               sp->rtp_state.timestamp,
+               frame_offset);
+
+
+        if (0 != wd_write(sp,new_samples,buffer_size,now)){
           // something went wrong...should we delete the file?
           sp->sync_state = sync_state_startup;
           close_file(sp);
@@ -710,6 +1016,9 @@ static void wd_state_machine(struct session * const sp,struct sockaddr const *se
 
   case sync_state_done:
     // last time through the file was complete, so start a new one
+    sp->start_sequence = sp->rtp_state.seq;
+    sp->start_timesnap = calculated_starting_timesnap(sp,sp->rtp_state.timestamp);
+    sp->start_ts = sp->rtp_state.timestamp;
     session_file_init(sp,sender);
     sp->sync_state = sync_state_active;
 
@@ -753,6 +1062,9 @@ static void wd_state_machine(struct session * const sp,struct sockaddr const *se
       // first packet in :00, resync and start clean after the short file
       close_file(sp);
       sp->wd_file_time.tv_sec = 0;
+      sp->start_sequence = sp->rtp_state.seq;
+      sp->start_timesnap = calculated_starting_timesnap(sp,sp->rtp_state.timestamp);
+      sp->start_ts = sp->rtp_state.timestamp;
       session_file_init(sp,sender);
       sp->sync_state = sync_state_active;
 
@@ -775,10 +1087,271 @@ static void wd_state_machine(struct session * const sp,struct sockaddr const *se
   }
 }
 
+void log_printf(const char* format, ...){
+  va_list args;
+  va_start(args, format);
+  char* buff;
+  if (vasprintf(&buff, format, args)>=0)
+  {
+    syslog(LOG_INFO, "%s", buff);
+    free(buff);
+  }
+  va_end(args);
+}
+
+static uint32_t pps_consecutive = 0;
+static uint32_t pps_ok = 0;
+static uint32_t pps_noise = 0;
+
+static void fix_mode(struct session * const sp){
+  if (Control_fd >= 0){
+    // Probably need a rate limit so we don't hammer radiod
+    // anything else that needs to be config'd? IQ, float, AGC off, gain 0 dB?
+    uint8_t cmdbuffer[PKTSIZE];
+    uint8_t *bp = cmdbuffer;
+    *bp++ = CMD; // Command
+
+    encode_int(&bp,OUTPUT_SSRC,sp->ssrc); // Specific SSRC
+    int sent_tag = arc4random();
+    encode_int(&bp,COMMAND_TAG,sent_tag); // Append a command tag
+    encode_string(&bp,PRESET,"iq",strlen("iq"));
+    encode_int(&bp,OUTPUT_ENCODING,F32LE);
+    encode_float(&bp,GAIN,0);
+    encode_int(&bp,AGC_ENABLE,false); // Turn off AGC for manual gain
+    float low = (-(double)sp->samprate/2) + 50;
+    /* float low = -sp->samprate + 50; */
+    encode_float(&bp,LOW_EDGE, low);
+    float high = (sp->samprate/2) - 50;
+    fprintf(stderr,"SSRC %u, samprate %u: set filter:%.0f to %.0f Hz\n", sp->ssrc, sp->samprate, low, high);
+    encode_float(&bp,HIGH_EDGE,high);
+    encode_eol(&bp);
+    int command_len = bp - cmdbuffer;
+
+    if(send(Control_fd, cmdbuffer, command_len, 0) != command_len){
+      fprintf(stderr,"Control command send error: %s\n",strerror(errno));
+    } else {
+      fprintf(stderr,"Control command sent ok.\n");
+    }
+  }
+}
+
+static void bpsk_state_machine(struct session * const sp,struct sockaddr const */*sender*/,void *samples,int buffer_size,int64_t sender_time){
+  if (NULL == sp){
+    return;
+  }
+
+  if (filter_500){
+    if (!notch_filter_initialized){
+      notch500_init(0.99, &b0, &b1, &b2, &a1, &a2, &stI, sp->samprate);
+      notch500_init(0.99, &b0, &b1, &b2, &a1, &a2, &stQ, sp->samprate);
+      notch_filter_initialized = true;
+    }
+  }
+
+  static float complex acc[32000];
+  static uint32_t acc_i = 0;
+
+  {
+    static bool wrong_mode_warning = false;
+    if ((strcmp("iq",sp->chan.preset)) || (2 != sp->channels) || (F32LE != sp->encoding)){
+      if (!wrong_mode_warning){
+        fprintf(stderr,"SSRC %u mode %s channels %d encoding %s unsupported! Must be 2 channel IQ float\n",
+                sp->ssrc,
+                sp->chan.preset,
+                sp->channels,
+                encoding_string(sp->encoding));
+      }
+      wrong_mode_warning = true;
+      fix_mode(sp);
+      return;
+    } else {
+      if (wrong_mode_warning){
+        fprintf(stderr,"SSRC %u mode/encoding/channels now fixed\n",sp->ssrc);
+      }
+      wrong_mode_warning = false;
+    }
+  }
+
+  // don't even bother if SNR is <8 dB or so
+  /* if (Local.snr < 8) */
+  /*   return; */
+
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME,&now);
+
+  // read through the samples and calculate the arg of each (assuming IQ for now)
+  int framesize = sp->channels * (sp->encoding == F32LE ? 4 : 2); // bytes per sample time
+  uint32_t frames = buffer_size / framesize;  // One frame per sample time
+  float complex* s=(float complex*)samples;
+  /* wd_log(0,"%d frames of %d bytes each, size: %d, IQ samples: %lu\n", */
+  /*        frames,framesize,buffer_size,buffer_size/sizeof(complex float)); */
+  for(uint32_t i = 0;i < frames;++i){
+    uint32_t ts = sp->rtp_state.timestamp + i;
+    float complex sample = s[i];
+
+    // Per sample:
+    /* double I_in, Q_in;   // your input IQ */
+    if (filter_500){
+      double I_out = notch500_process(creal(sample), b0, b1, b2, a1, a2, &stI);
+      double Q_out = notch500_process(cimag(sample), b0, b1, b2, a1, a2, &stQ);
+      sample = I_out + Q_out * I;
+    }
+
+    if (leaky_folding){
+      acc[acc_i] = (acc[acc_i] * leaky_folding_filter) + sample;
+      sample = acc[acc_i] * (1.0 - leaky_folding_filter);
+      acc_i = (acc_i + 1) % (sp->samprate * 2);
+      if (0 == acc_i){
+
+        /* int64_t st = calculated_starting_timesnap(sp, ts); */
+        char buff[128];
+        lldiv_t const ut = lldiv(sender_time,BILLION);
+        int ms = llabs(ut.rem / 1000000);
+        time_t t=time(0);
+        wd_log(1,"SSRC: %u SNR: %.1f dB PPS ok: %u noise: %u consecutive: %u sync TS: %u now TS: %u ms: %u %s",
+                sp->ssrc,
+                Local.snr,
+                pps_ok,
+                pps_noise,
+                pps_consecutive,
+                sync_start_ts,
+                ts,
+                ms,
+                ctime(&t));
+
+        static int downcount=0;
+        if ((Verbose >0) &&(!(downcount++ % 30))){
+          sprintf(buff,"%d.raw",downcount-1);
+          FILE *f=fopen(buff, "wb");
+          if (f){
+            fwrite(acc,sizeof(acc),1,f);
+            fclose(f);
+          }
+        }
+      }
+    }
+
+
+    /* lldiv_t const ut = lldiv(sender_time,BILLION); */
+    /* // if we're within +/- 100 ms of the second, run the comparison */
+    /* int ms = abs(ut.rem / 1000000); */
+    /* if (ms >= 100) */
+    /*   continue; */
+
+    float angle = 180.0 * cargf(sample) / M_PI;
+    float angle_diff=angle - sp->last_angle;
+    if ((fabs(angle_diff) > 90.0) && (fabs(angle_diff) < 270.0)){
+      bool noisy = false;
+
+      // if the pulse isn't +/- 5 samples from the expected position, modulo sample rate, call it noise
+      int32_t delta = (ts % sp->samprate) - (sp->last_edge % sp->samprate);
+      if (abs(delta) > 10)
+        noisy=true;
+
+      // or if the pulse is <99% of a second?
+      if ((ts - sp->last_edge) < ((sp->samprate * 99) / 100))
+        noisy = true;
+
+      /* if ((ts - sp->last_edge) > ((sp->samprate * 101) / 100)) */
+      /*   noisy = true; */
+
+      if (noisy){
+        ++pps_noise;
+        pps_consecutive = 0;
+      } else{
+        ++pps_ok;
+        ++pps_consecutive;
+      }
+
+      /* printf("%s%ld %8u %.0f Hz %10u %6u %6d %8u %+6.1f %+6.1f %3.1f dB %6u %s %ld %6u %6u\n",wd_time(),now.tv_sec,sp->ssrc,sp->chan.tune.freq,ts,ts % sp->samprate,delta,ts / sp->samprate,angle,angle-sp->last_angle,Local.snr,ts - sp->last_edge,noisy?"noise?!":"",sender_time,pps_ok,pps_noise); */
+      /* printf("Time                                         SSRC     Freq        RTP TS       Offset       Seconds Phase  Diff   SNR     Delta\n"); */
+
+      // check if this PPS edge is +/- 0.4 seconds from top of minute -1 second, to arm the wsprdaemon sync start thing
+      struct timespec expected_start = now;
+      expected_start.tv_nsec = 0;
+      /* expected_start.tv_sec += (time_t)(FileLengthLimit / 2); */
+      /* expected_start.tv_sec /= (time_t)(FileLengthLimit); */
+      /* expected_start.tv_sec *= (time_t)(FileLengthLimit); */
+      /* expected_start.tv_sec -= 1; */
+      expected_start.tv_sec += (time_t)(FileLengthLimit);
+      expected_start.tv_sec /= (time_t)(FileLengthLimit);
+      expected_start.tv_sec *= (time_t)(FileLengthLimit);
+
+      if (pps_consecutive >= 1){
+        wd_log(1,"SSRC %u edge at ts %u, modulo samp_rate: %u, time delta: %.6f, now: %ld, next: %ld, cons: %u sync: %u\n",
+               sp->ssrc,
+               ts,
+               ts % sp->samprate,
+               time_diff(now,expected_start),
+                 now.tv_sec,
+               expected_start.tv_sec,
+               pps_consecutive,
+               sync_start_ts);
+      }
+
+      /* if (fabs(time_diff(expected_start,now)) < 0.4){ */
+      if (1) {
+        if (pps_consecutive >= 10){
+          // anti-race: There's no assurance that this sync SSRC will run before the others
+          // This means the starting ts could be advanced one minute before any of the other sessions
+          // have a chance to start recording. Not seeing an easy/clean fix.
+          // Maybe we don't update if it's exactly one minute past the last
+          // We can't really start in second 0 anyway, because we can't be sure this SSRC runs first.
+          if (0 == ((expected_start.tv_sec - now.tv_sec) % (time_t)FileLengthLimit)){
+            wd_log(1,"skip this starting TS update to avoid a race with the other sessions\n");
+          }
+          else{
+            sync_start_ts = ts + (sp->samprate * (expected_start.tv_sec - now.tv_sec));
+            sync_start_ts += sync_pretrigger;
+          }
+          wd_log(1,"SSRC %u sync start at next PPS (RTP ts %u)? Time delta: %.3f s, modulo samp_rate: %u, now: %ld, next: %ld\n",
+                 sp->ssrc,
+                 sync_start_ts,
+                 time_diff(now,expected_start),
+                 ts % sp->samprate,
+                 now.tv_sec,
+                 expected_start.tv_sec);
+        }
+      }
+      fflush(0);
+      sp->last_edge=ts;
+    }
+    sp->last_angle=angle;
+  }
+
+  // log interesting data once/minute
+  if (59 == (now.tv_sec % 60)){
+    static long int last_s = 0;
+    if (now.tv_sec != last_s){
+      log_printf("SSRC %u PPS ok: %u PPS noise: %u consecutive ok: %u sync at TS %u last edge: %u",
+                 sp->ssrc,
+                 pps_ok,
+                 pps_noise,
+                 pps_consecutive,
+                 sync_start_ts,
+                 sp->last_edge);
+      last_s = now.tv_sec;
+    }
+  }
+
+  __atomic_store_n(&sync_diags->pps_ok,pps_ok,__ATOMIC_RELAXED);
+  __atomic_store_n(&sync_diags->pps_noise,pps_noise,__ATOMIC_RELAXED);
+  __atomic_store_n(&sync_diags->pps_consecutive,pps_consecutive,__ATOMIC_RELAXED);
+  __atomic_fetch_add(&sync_diags->datagrams,1,__ATOMIC_RELAXED);
+  __atomic_store(&sync_diags->sync_frequency,&sp->chan.tune.freq,__ATOMIC_RELAXED);
+  __atomic_store(&sync_diags->sync_snr,&Local.snr,__ATOMIC_RELAXED);
+  __atomic_store_n(&sync_diags->updated_ns,gps_time_ns(),__ATOMIC_RELAXED);
+}
+
 static void closedown(int a){
   if(Verbose)
     fprintf(stderr,"%s: caught signal %d: %s\n",App_path,a,strsignal(a));
 
+  if (wd_mode){
+    char buff[NAME_MAX+1];
+    snprintf(buff,NAME_MAX,"/pcmrecord.bpsk-%u",getpid());
+    shm_unlink(buff);
+  }
   cleanup();
   exit(EX_OK);  // Will call cleanup()
 }
@@ -1011,6 +1584,108 @@ static int send_wav_queue(struct session * const sp,bool flush){
   return count;
 }
 
+void extract_source(uint8_t const * const buffer,int length){
+  uint8_t const *cp = buffer;
+
+  while(cp - buffer < length){
+    enum status_type const type = *cp++; // increment cp to length field
+
+    if(type == EOL)
+      break; // End of list
+
+    unsigned int optlen = *cp++;
+    if(optlen & 0x80){
+      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+      int length_of_length = optlen & 0x7f;
+      optlen = 0;
+      while(length_of_length > 0){
+        optlen <<= 8;
+        optlen |= *cp++;
+        length_of_length--;
+      }
+    }
+    if(cp - buffer + optlen >= length)
+      break; // Invalid length
+
+    switch(type){
+    case EOL: // Shouldn't get here
+      goto done;
+
+    case STATUS_DEST_SOCKET:
+    {
+      if (NULL == radio_mcast_group){
+        struct sockaddr_storage sock;
+        radio_mcast_group = strdup(formatsock(decode_socket(&sock,cp,optlen),false));
+        /* fprintf(stderr,"radio mcast_group: %s\n",radio_mcast_group); */
+
+        char iface[1024];
+        struct sockaddr Metadata_dest_socket;
+
+        resolve_mcast(radio_mcast_group,&Metadata_dest_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
+        Control_fd = connect_mcast(&Metadata_dest_socket,iface,1,48);
+        /* if(Control_fd < 0){ */
+        /*   fprintf(stderr,"Control connection failed!\n"); */
+        /* } else { */
+        /*   fprintf(stderr,"Control connection ok\n"); */
+        /* } */
+      }
+      break;
+    }
+
+    default:
+      break;
+    }
+    cp += optlen;
+  }
+  done:
+}
+
+static void gen_locals(struct channel *channel){
+  Local.noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
+  Local.sig_power = channel->sig.bb_power - Local.noise_bandwidth * channel->sig.n0;
+  if(Local.sig_power < 0)
+    Local.sig_power = 0; // Avoid log(-x) = nan
+  Local.sn0 = Local.sig_power/channel->sig.n0;
+  Local.snr = power2dB(Local.sn0/Local.noise_bandwidth);
+}
+
+static void check_stream_skew(int64_t clocktime_ns){
+  if (!wd_mode)
+    return;
+
+  struct session *sp;
+  static int64_t last_skew_ns = 0;
+
+  // run about 1 Hz
+  if ((clocktime_ns - last_skew_ns) >= BILLION){
+    last_skew_ns = clocktime_ns;
+    int64_t min_stream_start_ns = INT64_MAX;
+    for(sp = Sessions;sp != NULL;sp = sp->next){
+      if(sp->chan.output.samprate>0){
+	int64_t idle = clocktime_ns - sp->last_active;
+        int64_t stream_start_ns = sp->chan.clocktime - (((int64_t)sp->chan.output.time_snap * BILLION) / sp->chan.output.samprate);
+        if ((stream_start_ns < min_stream_start_ns) && (idle < BILLION))
+          min_stream_start_ns = stream_start_ns;
+      }
+    }
+    for(sp = Sessions;sp != NULL;sp=sp->next){
+      // output starting RTP TS and GPS time
+      char buff[256];
+      if(sp->chan.output.samprate>0){
+	int64_t idle = clocktime_ns - sp->last_active;
+        int64_t stream_start_ns = sp->chan.clocktime - (((int64_t)sp->chan.output.time_snap * BILLION) / sp->chan.output.samprate);
+        int64_t skew_ms = (stream_start_ns - min_stream_start_ns) / (1000 * 1000);
+        if (idle < BILLION){
+          wd_log((skew_ms >= 20) ? 0 : 1, "SSRC %8u: snap: %u skew: %4ld ms stream start: %s\n",
+                 sp->chan.output.rtp.ssrc,
+                 sp->chan.output.time_snap,
+                 skew_ms,
+                 format_gpstime(buff,256,stream_start_ns));
+        }
+      }
+    }
+  }
+}
 
 // Read both data and status from RTP network socket, assemble blocks of samples
 // Doing both in one thread avoids a lot of synchronization problems with the session structure, since both write it
@@ -1050,8 +1725,20 @@ static void input_loop(){
       memset(&frontend,0,sizeof(frontend));
       decode_radio_status(&frontend,&chan,buffer+1,length-1);
 
+      if (NULL == radio_mcast_group){
+        extract_source(buffer+1,length-1);
+      }
+
+      if ((sync_ssrc) && (chan.output.rtp.ssrc == sync_ssrc)){
+        // status packet for the BPSK sync channel, so calc SNR stats
+        gen_locals(&chan);
+      }
+
+
       if(Ssrc != 0 && chan.output.rtp.ssrc != Ssrc)
 	goto statdone; // Unwanted session, but still clear any data packets
+
+      check_stream_skew(chan.clocktime);
 
       // Look for existing session
       // Everything must match, or we create a different session & file
@@ -1086,6 +1773,27 @@ static void input_loop(){
 	if(Catmode && Ssrc == 0){
 	  Ssrc = chan.output.rtp.ssrc; // Latch onto the first ssrc we see, ignore others
 	}
+
+        // init diag structure if not already
+        if (-1 == sync_diags_fd){
+          char buff[NAME_MAX+1];
+          snprintf(buff,NAME_MAX,"/pcmrecord.bpsk-%u",getpid());
+          sync_diags_fd = shm_open(buff,O_RDWR | O_CREAT | O_TRUNC,0600);
+          ftruncate(sync_diags_fd,sizeof(*sync_diags));
+          sync_diags = mmap(NULL,sizeof(*sync_diags),PROT_READ | PROT_WRITE,MAP_SHARED,sync_diags_fd,0);
+          if (((void*)-1) == sync_diags){
+            fprintf(stderr,"Couldn't mmap diagnostic area!\n");
+          } else {
+            memset(sync_diags,0,sizeof(*sync_diags));
+            sync_diags->magic = 0xefbe000a;
+            sync_diags->version = 1;
+            sync_diags->pid = getpid();
+            strlcpy(sync_diags->multicast, PCM_mcast_address_text, sizeof(sync_diags->multicast));
+            sync_diags->start_ns = gps_time_ns();
+            sync_diags->updated_ns = gps_time_ns();
+          }
+          close(sync_diags_fd);
+        }
       }
       // Wav can't change channels or samprate mid-stream, so if they're going to change we
       // should probably add an option to force stereo and/or some higher sample rate.
@@ -1162,7 +1870,10 @@ static void input_loop(){
 	Sessions = sp;
       }
 
+      wd_check(sp,size,&rtp);
+
       if(sp->fp == NULL && !sp->complete && !wd_mode){
+        sp->start_ts = rtp.timestamp;
 	session_file_init(sp,&sender);
 	if(sp->encoding == OPUS){
 	  if(Raw)
@@ -1187,23 +1898,33 @@ static void input_loop(){
       }
       sp->last_active = gps_time_ns();
 
+      if ((sync_frequency) && (sp->chan.tune.freq == sync_frequency)){
+        sync_frequency = 0.0;
+        sync_ssrc = rtp.ssrc;
+      }
+
+      if ((sync_ssrc) && (rtp.ssrc == sync_ssrc)){
+	sp->rtp_state.seq = rtp.seq;
+	sp->rtp_state.timestamp = rtp.timestamp;
+
+        int64_t sender_time = sp->chan.clocktime + (int64_t)BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET);
+        sender_time += (int64_t)BILLION * (int32_t)(rtp.timestamp - sp->chan.output.time_snap) / sp->samprate;
+
+        bpsk_state_machine(sp,&sender,dp,size,sender_time);
+        if (!sync_record)
+          goto datadone;
+      }
+
+      if (no_output)
+        goto datadone;
+
       if (wd_mode){
-        if(S16LE == sp->encoding){
-          wd_log(0,"SSRC %u: Little endian 16 bit ints are not supported!\n",sp->ssrc);
-          exit(EX_DATAERR);
-        }
-        if(F16LE == sp->encoding){
-          wd_log(0,"SSRC %u: Little endian 16 bit floats are not supported!\n",sp->ssrc);
-          exit(EX_DATAERR);
-        }
-        if(F16BE == sp->encoding){
-          wd_log(0,"SSRC %u: Big endian 16 bit floats are not supported!\n",sp->ssrc);
-          exit(EX_DATAERR);
-        }
-        if(F32BE == sp->encoding){
-          wd_log(0,"SSRC %u: Big endian 32 bit floats are not supported!\n",sp->ssrc);
-          exit(EX_DATAERR);
-        }
+        /* static int dc=0; */
+        /* if (! (++dc % 100)){ */
+        /*   printf("wd_mode(): SSRC %u\n",sp->ssrc); */
+        /* } */
+	sp->rtp_state.seq = rtp.seq;
+	sp->rtp_state.timestamp = rtp.timestamp;
         if(sp->encoding == S16BE){
           // Flip endianness from big-endian on network to little endian wanted by .wav
           // byteswap.h is linux-specific; need to find a portable way to get the machine instructions
@@ -1213,8 +1934,6 @@ static void input_loop(){
           for(int n = 0; n < samp_count; n++)
             wp[n] = bswap_16((uint16_t)samples[n]);
         }
-	sp->rtp_state.seq = rtp.seq;
-	sp->rtp_state.timestamp = rtp.timestamp;
         wd_state_machine(sp,&sender,dp,size);
         goto datadone;
       }
@@ -1398,7 +2117,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     case F32LE:
       suffix = ".wav";
       break;
-    case F16BE:
+    case F16LE:
       suffix = ".f16"; // Non standard! But gotta do something with it for now
       break;
     case OPUS:
@@ -1416,11 +2135,9 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     if (sp->wd_file_time.tv_sec){
       // not the first file in the series, so +60 (well, FileLengthLimit) seconds from last file time
       sp->wd_file_time.tv_sec += FileLengthLimit;
-      //wd_log(1,"New file named +%.0f s from last: %ld.%03ld\n",FileLengthLimit,sp->wd_file_time.tv_sec,sp->wd_file_time.tv_nsec/1000000);
     } else {
       // first file in series, use current time to name it
       sp->wd_file_time = file_time;
-      //wd_log(1,"New file named from current time due to startup or resync: %ld.%03ld\n",sp->wd_file_time.tv_sec,sp->wd_file_time.tv_nsec/1000000);
     }
   } else {
     // not wd mode, use current time
@@ -1581,12 +2298,13 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   }
   // We byte swap S16BE to S16LE, so change the tag
   if(Verbose){
-    fprintf(stderr,"%s creating '%s' %d s/s %s %s %'.3lf Hz %s",
+    fprintf(stderr,"%s creating %s %d s/s %s %s %'.3lf Hz %s TS %u",
 	    sp->frontend.description,
 	    sp->filename,sp->chan.output.samprate, // original rx samprate for opus
 	    sp->channels == 1 ? "mono" : "stereo",
 	    file_encoding,sp->chan.tune.freq,
-	    sp->chan.preset);
+	    sp->chan.preset,
+	    sp->start_ts);
     if(sp->starting_offset > 0)
       fprintf(stderr," offset %lld",(long long)sp->starting_offset);
     fputc('\n',stderr);
@@ -1607,6 +2325,11 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   attrprintf(fd,"source","%s",formatsock(sender,false));
   attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
   attrprintf(fd,"unixstarttime","%ld.%09ld",(long)now.tv_sec,(long)now.tv_nsec);
+
+  attrprintf(fd,"Start RTP timestamp","%u",sp->start_ts);
+  attrprintf(fd,"Start RTP seq","%u",sp->start_sequence);
+  attrprintf(fd,"Start timesnap","%.6f s",1.0e-9 * sp->start_timesnap);
+  attrprintf(fd,"Pretrigger","%d",sync_pretrigger);
 
   if(strlen(sp->frontend.description) > 0)
     attrprintf(fd,"description","%s",sp->frontend.description);
@@ -1676,9 +2399,15 @@ static int close_file(struct session *sp){
       clock_gettime(CLOCK_REALTIME,&now);
       attrprintf(fd,"end time","%ld.%09ld",(long)now.tv_sec,(long)now.tv_nsec);
       attrprintf(fd,"elapsed","%.6f",time_diff(now,sp->file_time));
+      attrprintf(fd,"Start RTP timestamp","%u",sp->start_ts);
+
       if (wd_mode){
         attrprintf(fd,"drift","%.6f",time_diff(sp->file_time,sp->wd_file_time));
-        wd_log(1,"Close file at %ld.%09ld, %.6f s elapsed, %.6f drift\n",
+        if (sync_ssrc)
+          attrprintf(fd,"PPS RTP timestamp","%u",sync_start_ts);
+
+        wd_log(1,"SSRC %u close file at %ld.%09ld, %.6f s elapsed, %.6f drift\n",
+               sp->ssrc,
                (long)now.tv_sec,
                (long)now.tv_nsec,
                time_diff(now,sp->file_time),
@@ -1907,7 +2636,6 @@ static int start_wav_stream(struct session *sp){
   // Write .wav header, skipping size fields
   struct wav header;
   memset(&header,0,sizeof(header));
-
   memcpy(header.ChunkID,"RIFF", 4);
   header.ChunkSize = 0xffffffff; // Temporary
   memcpy(header.Format,"WAVE",4);
@@ -1929,7 +2657,7 @@ static int start_wav_stream(struct session *sp){
     header.ByteRate = sp->samprate * sp->channels * 4;
     header.BlockAlign = sp->channels * 4;
     break;
-  case F16BE:
+  case F16LE:
     header.AudioFormat = 0; // What should go here for IEEE 16-bit float?
     header.BitsPerSample = 16;
     header.ByteRate = sp->samprate * sp->channels * 2;
