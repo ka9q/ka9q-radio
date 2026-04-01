@@ -133,7 +133,6 @@ double b0, b1, b2, a1, a2;
 // size of stdio buffer for disk I/O. 8K is probably the default, but we have this for possible tuning
 #define BUFFERSIZE (8192) // probably the same as default
 #define RESEQ 64 // size of resequence queue. Probably excessive; WiFi reordering is rarely more than 4-5 packets
-#define OPUS_SAMPRATE 48000 // Opus always operates at 48 kHz virtual sample rate
 
 enum sync_state_t
 {
@@ -753,9 +752,9 @@ static int wd_write(struct session * const sp,void *samples,int buffer_size,stru
 
   int partial_frames = frames;
   if (partial_frames > sp->samples_remaining){
-     wd_log(1,"SSRC %u Too many frames in this packet! %ld remain, %u this packet\n",
+     wd_log(1,"SSRC %u Too many frames in this packet! %lld remain, %u this packet\n",
 	    sp->ssrc,
-	    sp->samples_remaining,
+	    (long long)sp->samples_remaining,
 	    partial_frames);
      partial_frames = sp->samples_remaining;
   }
@@ -930,7 +929,7 @@ static void wd_state_machine(struct session * const sp,struct sockaddr const *se
     }
     break;
 
-  case sync_state_armed:
+  case sync_state_armed:;
     // drop samples until we're in second 0 or see the PPS edge
 
     bool start = false;
@@ -1135,7 +1134,8 @@ static void fix_mode(struct session * const sp){
   }
 }
 
-static void bpsk_state_machine(struct session * const sp,struct sockaddr const */*sender*/,void *samples,int buffer_size,int64_t sender_time){
+static void bpsk_state_machine(struct session * const sp,struct sockaddr const *sender,void *samples,int buffer_size,int64_t sender_time){
+  (void)sender;
   if (NULL == sp){
     return;
   }
@@ -1637,11 +1637,11 @@ void extract_source(uint8_t const * const buffer,int length){
     }
     cp += optlen;
   }
-  done:
+ done:;
 }
 
 static void gen_locals(struct channel *channel){
-  Local.noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
+  Local.noise_bandwidth = fabs(channel->filter.max_IF - channel->filter.min_IF);
   Local.sig_power = channel->sig.bb_power - Local.noise_bandwidth * channel->sig.n0;
   if(Local.sig_power < 0)
     Local.sig_power = 0; // Avoid log(-x) = nan
@@ -1676,10 +1676,10 @@ static void check_stream_skew(int64_t clocktime_ns){
         int64_t stream_start_ns = sp->chan.clocktime - (((int64_t)sp->chan.output.time_snap * BILLION) / sp->chan.output.samprate);
         int64_t skew_ms = (stream_start_ns - min_stream_start_ns) / (1000 * 1000);
         if (idle < BILLION){
-          wd_log((skew_ms >= 20) ? 0 : 1, "SSRC %8u: snap: %u skew: %4ld ms stream start: %s\n",
+          wd_log((skew_ms >= 20) ? 0 : 1, "SSRC %8u: snap: %u skew: %4lld ms stream start: %s\n",
                  sp->chan.output.rtp.ssrc,
                  sp->chan.output.time_snap,
-                 skew_ms,
+                 (long long)skew_ms,
                  format_gpstime(buff,256,stream_start_ns));
         }
       }
