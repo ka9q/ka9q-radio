@@ -28,7 +28,7 @@
 
 struct hdlc {
   uint8_t frame[16384];
-  unsigned frame_bits;
+  int frame_bits;
   int flag_seen;
   int last_bits;
 };
@@ -665,7 +665,7 @@ static int hdlc_process(struct hdlc *hp,int bit){
     return 0;
   }
   // Add bit to frame
-  if(hp->frame_bits > sizeof(hp->frame) << 3){
+  if(hp->frame_bits > (int)sizeof(hp->frame) << 3){
     // Too long; abort
     hp->frame_bits = 0;
     hp->flag_seen = 0;
