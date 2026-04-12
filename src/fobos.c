@@ -28,7 +28,6 @@ on a per-channel basis by selecting output filter type BEAM and calling set_filt
 #include <strings.h>
 #include <sysexits.h>
 
-#define INPUT_PRIORITY 95
 static double Power_alpha = 0.05; // Calculate this properly someday
 
 // hf_input has been removed, use i-weight and q-weight in individual channels
@@ -378,7 +377,7 @@ static void *fobos_monitor(void *p) {
   pthread_setname("fobos-mon");
 
   fprintf(stderr, "Starting asynchronous read\n");
-  realtime(INPUT_PRIORITY);
+  realtime(2 + default_prio());
   stick_core();
   int result = fobos_rx_read_async(dev, rx_callback, sdr, 16, 65536);
   if (result != 0) {

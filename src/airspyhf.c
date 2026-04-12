@@ -27,7 +27,6 @@ extern int Verbose;
 extern const char *App_path;
 extern char const *Description;
 
-#define INPUT_PRIORITY 95
 
 static double Power_alpha = 0.05; // Calculate this properly someday
 
@@ -223,7 +222,7 @@ static void *airspyhf_monitor(void *p){
   assert(sdr != NULL);
   pthread_setname("airspyhf-mon");
 
-  realtime(INPUT_PRIORITY);
+  realtime(2 + default_prio());
   int ret __attribute__ ((unused));
   ret = airspyhf_start(sdr->device,rx_callback,sdr);
   assert(ret == AIRSPYHF_SUCCESS);
@@ -253,7 +252,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   if(!Name_set){
     pthread_setname("airspyhf-cb");
     Name_set = true;
-    realtime(INPUT_PRIORITY);    // See discussion in airspy.c
+    realtime(2 + default_prio());    // See discussion in airspy.c
     stick_core();
   }
   if(transfer->dropped_samples){

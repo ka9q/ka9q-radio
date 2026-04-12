@@ -19,8 +19,6 @@
 #include "radio.h"
 
 // constants, some of which you might want to tweak
-#define INPUT_PRIORITY 95
-
 static double const AGC_upper = -15;
 static double const AGC_lower = -50;
 static int const ADC_samprate = 192000;
@@ -211,7 +209,7 @@ static void *proc_funcube(void *arg){
   int ConsecPaErrs = 0;
   int16_t * sampbuf = malloc(2 * Blocksize * sizeof(*sampbuf)); // complex samples have two integers
 
-  realtime(INPUT_PRIORITY);
+  realtime(2 + default_prio());
 
   while(true){
     // Read block of I/Q samples from A/D converter

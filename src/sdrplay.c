@@ -30,7 +30,6 @@
 extern int Verbose;
 extern char const *Description;
 
-#define INPUT_PRIORITY 95
 static double Power_alpha = 0.05; // Calculate this properly someday
 
 // SDRplay device status
@@ -352,7 +351,7 @@ static void *sdrplay_monitor(void *p){
   assert(frontend != NULL);
   pthread_setname("sdrplay-mon");
 
-  realtime(INPUT_PRIORITY);
+  realtime(2 + default_prio());
   stick_core();
   int ret __attribute__ ((unused));
   ret = start_rx(sdr,rx_callback,event_callback);
@@ -1144,7 +1143,7 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
   if(!Name_set){
     pthread_setname("sdrplay-cb");
     Name_set = true;
-    realtime(INPUT_PRIORITY); // do this once
+    realtime(2 + default_prio()); // do this once
   }
 
   if(sdr->next_sample_num && params->firstSampleNum != sdr->next_sample_num){

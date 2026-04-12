@@ -6,7 +6,6 @@
 // Copyright 2017-2023, Phil Karn, KA9Q, karn@ka9q.net
 
 //#define LIQUID 1 // Experimental use of parks-mcclellan in filter generation
-#define FFT_PRIO 95 // Runs at very high real time priority
 
 #define MYNEW 1
 #define _GNU_SOURCE 1
@@ -489,7 +488,7 @@ void *run_fft(void *p){
   pthread_setname("fft");
   (void)p; // Unused
 
-  realtime(FFT_PRIO);
+  realtime(1 + default_prio()); // one notch above channels, but below input thread
   stick_core();
 
   while(true){

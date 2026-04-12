@@ -25,7 +25,6 @@
 #include "config.h"
 
 // Configurable parameters
-#define INPUT_PRIORITY 95
 // decibel limits for power
 static double const Upper_limit = -15;
 static double const Lower_limit = -25;
@@ -268,7 +267,7 @@ static int rx_callback(hackrf_transfer *transfer){
   if(!Name_set){
     pthread_setname("hackrf-cb");
     Name_set = true;
-    realtime(INPUT_PRIORITY);
+    realtime(2 + default_prio());
     stick_core();
   }
   int remain = transfer->valid_length; // Count of individual samples; divide by 2 to get complex samples
