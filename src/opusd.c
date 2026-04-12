@@ -266,7 +266,7 @@ int main(int argc,char * const argv[]){
   signal(SIGTERM,closedown);
   signal(SIGPIPE,SIG_IGN);
 
-  realtime(50);
+  realtime(default_prio());
 
   // Loop forever processing and dispatching incoming PCM and status packets
 

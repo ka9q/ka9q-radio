@@ -26,8 +26,6 @@
 extern int Verbose;
 extern char const *Description;
 
-#define INPUT_PRIORITY 95
-
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
@@ -320,7 +318,7 @@ static void *hydrasdr_monitor(void *p){
   struct sdrstate * const sdr = (struct sdrstate *)p;
   assert(sdr != NULL);
   pthread_setname("hydrasdr-mon");
-  realtime(INPUT_PRIORITY); // Doesn't seem to work
+  realtime(2 + default_prio()); // Doesn't seem to work
   stick_core();
 
   int ret = hydrasdr_start_rx(sdr->device,rx_callback,sdr);
@@ -354,7 +352,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
   if(!Name_set){
     pthread_setname("hydrasdr-cb");
     Name_set = true;
-    realtime(INPUT_PRIORITY);
+    realtime(2 + default_prio());
   }
   if(transfer->dropped_samples){
     fprintf(stderr,"dropped %'lld\n",(long long)transfer->dropped_samples);

@@ -195,7 +195,7 @@ int main(int argc,char * const argv[]){
 
   int rptr = 0;
 
-  int prio = 50; // Temp hack for default
+  int prio = default_prio();
   realtime(prio);
 
   int const payload_type = pt_from_info(Samprate,Channels,S16BE); // fixed encoding for now

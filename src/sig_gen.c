@@ -23,7 +23,6 @@
 #include "config.h"
 #include "radio.h"
 
-#define INPUT_PRIORITY 95
 static double Power_alpha = 0.01; // Calculate this properly someday
 
 
@@ -187,7 +186,7 @@ static void *proc_sig_gen(void *arg){
   assert(frontend != NULL);
 
   int64_t timesnap = gps_time_ns();
-  realtime(INPUT_PRIORITY);
+  realtime(2 + default_prio());
 
   struct osc carrier = {0};
   if(frontend->isreal)

@@ -26,7 +26,6 @@
 extern int Verbose;
 extern char const *Description;
 
-#define INPUT_PRIORITY 95
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
 struct sdrstate {
@@ -299,24 +298,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 int airspy_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
-#if 0
-  // This should work, but it doesn't
-  // So we set it in the first callback
-  pthread_attr_t attr;
-  pthread_attr_init(&attr);
-  pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
-  pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
-
-  struct sched_param param = { 0 };
-  param.sched_priority = (sched_get_priority_max(SCHED_FIFO) + sched_get_priority_min(SCHED_FIFO)) / 2; // midway?
-
-  pthread_attr_setschedparam(&attr, &param);
-  pthread_create(&sdr->monitor_thread,&attr,airspy_monitor,sdr);
-  pthread_attr_destroy(&attr);
-#else
-  pthread_create(&sdr->monitor_thread,NULL,airspy_monitor,sdr);
-#endif
-
+  pthread_create(&sdr->monitor_thread,NULL,airspy_monitor,sdr); // prio gets set in first callback
   return 0;
 }
 
@@ -324,7 +306,7 @@ static void *airspy_monitor(void *p){
   struct sdrstate * const sdr = (struct sdrstate *)p;
   assert(sdr != NULL);
   pthread_setname("airspy-mon");
-  realtime(INPUT_PRIORITY); // Doesn't seem to work
+  realtime(2 + default_prio()); // Doesn't seem to work
   stick_core();
 
   int ret = airspy_start_rx(sdr->device,rx_callback,sdr);
@@ -359,7 +341,7 @@ static int rx_callback(airspy_transfer *transfer){
   if(!Name_set){
     pthread_setname("airspy-cb");
     Name_set = true;
-    realtime(INPUT_PRIORITY);
+    realtime(2 + default_prio());
   }
   if(transfer->dropped_samples){
     fprintf(stderr,"dropped %'lld\n",(long long)transfer->dropped_samples);

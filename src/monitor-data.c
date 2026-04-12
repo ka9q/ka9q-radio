@@ -36,8 +36,6 @@
 #include "monitor.h"
 #include "import.h"
 
-#define DATA_PRIORITY 50
-
 int Position; // auto-position streams
 
 // All the tones from various groups, including special NATO 150 Hz tone
@@ -84,7 +82,7 @@ void *dataproc(void *arg){
 
   struct packet *pkt = NULL;
 
-  realtime(DATA_PRIORITY);
+  realtime(default_prio());
   // Main loop begins here
   while(!atomic_load_explicit(&Terminate,memory_order_acquire)){
     // Need a new packet buffer?

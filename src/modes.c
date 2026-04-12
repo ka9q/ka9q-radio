@@ -496,7 +496,11 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     else
       chan->filter2.blocking = blocking;
   }
-  chan->prio = config_getint(table,sname,"prio",chan->prio);
+  chan->prio = abs(config_getint(table,sname,"prio",chan->prio));
+  if(chan->prio >  default_prio()){
+    fprintf(stderr,"prio %d too high; max %d\n",chan->prio,default_prio());
+    chan->prio = default_prio();
+  }
   chan->output.ttl = config_getint(table,sname,"ttl",chan->output.ttl);
 
   chan->filter.beam = config_getboolean(table,sname,"beam",false);

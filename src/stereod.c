@@ -219,7 +219,7 @@ int main(int argc,char * const argv[]){
 
   signal(SIGPIPE,SIG_IGN);
 
-  realtime(50);
+  realtime(default_prio());
 
   // Set up to receive PCM in RTP/UDP/IP
   // Process incoming RTP packets, demux to per-SSRC thread

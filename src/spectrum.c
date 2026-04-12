@@ -46,7 +46,8 @@ int demod_spectrum(void *arg){
 
   // Parameters set by system input side
   assert(Blocktime != 0);
-  realtime(chan->prio - 10); // Drop below demods
+  int const prio = chan->prio >= 10 ? chan->prio - 10 : 0; // don't let it go negative
+  realtime(prio); // Drop below demods
   if(chan->spectrum.fft_avg <= 0)
     chan->spectrum.fft_avg = 1;     // force legal
 
