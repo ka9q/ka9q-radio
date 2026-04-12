@@ -7,12 +7,12 @@ Description=APRS network feeder
 Requires=network-online.target
 
 [Service]
-User=aprsfeed
+User=radio
 SupplementaryGroups=radio
 Type=simple
 PermissionsStartOnly=true
-ExecStartPre=/bin/touch /var/log/aprsfeed.log
-ExecStartPre=/bin/chown aprsfeed /var/log/aprsfeed.log
+ExecStartPre=/usr/bin/touch /var/log/aprsfeed.log
+ExecStartPre=/usr/bin/chown radio /var/log/aprsfeed.log
 # set CALL and SERVER in /etc/radio/aprs.conf
 EnvironmentFile=/etc/radio/aprs.conf
 ExecStart=/usr/local/sbin/aprsfeed -I $AX25 -u $CALL -h $SERVER -f /var/log/aprsfeed.log
