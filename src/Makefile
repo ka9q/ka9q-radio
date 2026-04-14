@@ -36,7 +36,7 @@ ifeq ($(UNAME_S),Darwin)
   LDLIBS += -lintl -liconv
   SOFLAGS = -bundle -Wl,-undefined,dynamic_lookup
 else
-  LDLIBS += -lbsd
+  LDLIBS += -lbsd -lrt
   SOFLAGS = -shared
 endif
 
