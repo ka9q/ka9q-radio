@@ -149,14 +149,14 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     hydrasdr_lib_version_t version;
     hydrasdr_lib_version(&version);
 
-    // Library doesn't define, but says should be >= 128
-#define VERSION_LOCAL_SIZE (128)
-    char hw_version[VERSION_LOCAL_SIZE];
-    hydrasdr_version_string_read(sdr->device,hw_version,sizeof(hw_version));
+    hydrasdr_device_info_t info;
+    hydrasdr_get_device_info(sdr->device, &info);
 
-    fprintf(stderr,"HydraSDR serial %llx, hw version %s, library version %d.%d.%d\n",
+
+    fprintf(stderr,"HydraSDR serial %llx, hw version %s, firmware %s, library version %d.%d.%d\n",
 	    (long long unsigned)sdr->SN,
-	    hw_version,
+	    info.board_name,
+	    info.firmware_version,
 	    version.major_version,version.minor_version,version.revision);
   }
   // Initialize hardware first
@@ -213,31 +213,31 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
   sdr->linearity = config_getboolean(Dictionary,section,"linearity",false);
   sdr->software_agc = true; // On by default unless one of the hardware AGCs is turned on
   bool const lna_agc = config_getboolean(Dictionary,section,"lna-agc",false); // default off
-  hydrasdr_set_lna_agc(sdr->device,(uint8_t)lna_agc);
+  hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_LNA_AGC, (uint8_t)lna_agc);
   if(lna_agc)
     sdr->software_agc = false;
 
   bool const mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",false); // default off
-  hydrasdr_set_mixer_agc(sdr->device,(uint8_t)mixer_agc);
+  hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_MIXER_AGC, (uint8_t)mixer_agc);
   if(mixer_agc)
     sdr->software_agc = false;
 
   int const lna_gain = config_getint(Dictionary,section,"lna-gain",-1);
   if(lna_gain != -1){
     frontend->lna_gain = lna_gain;
-    hydrasdr_set_lna_gain(sdr->device,(uint8_t)lna_gain);
+    hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_LNA, (uint8_t)lna_gain);
     sdr->software_agc = false;
   }
   int const mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
   if(mixer_gain != -1){
     frontend->mixer_gain = mixer_gain;
-    hydrasdr_set_mixer_gain(sdr->device,(uint8_t)mixer_gain);
+    hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_MIXER, (uint8_t)mixer_gain);
     sdr->software_agc = false;
   }
   int const vga_gain = config_getint(Dictionary,section,"vga-gain",-1);
   if(vga_gain != -1){
     frontend->if_gain = vga_gain;
-    hydrasdr_set_vga_gain(sdr->device,(uint8_t)vga_gain);
+    hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_VGA, (uint8_t)vga_gain);
     sdr->software_agc = false;
   }
   int gainstep = config_getint(Dictionary,section,"gainstep",-1);
@@ -498,14 +498,14 @@ static void set_gain(struct sdrstate * const sdr,int gainstep){
     int const tab = GAIN_COUNT - 1 - sdr->gainstep;
     if(sdr->linearity){
       int ret __attribute__((unused)) = HYDRASDR_SUCCESS; // Won't be used when asserts are disabled
-      ret = hydrasdr_set_linearity_gain(sdr->device,(uint8_t)sdr->gainstep);
+      ret = hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_LINEARITY, (uint8_t)sdr->gainstep);
       assert(ret == HYDRASDR_SUCCESS);
       frontend->if_gain = hydrasdr_linearity_vga_gains[tab];
       frontend->mixer_gain = hydrasdr_linearity_mixer_gains[tab];
       frontend->lna_gain = hydrasdr_linearity_lna_gains[tab];
     } else {
       int ret __attribute__((unused)) = HYDRASDR_SUCCESS; // Won't be used when asserts are disabled
-      ret = hydrasdr_set_sensitivity_gain(sdr->device,(uint8_t)sdr->gainstep);
+      ret = hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_SENSITIVITY, (uint8_t)sdr->gainstep);
       assert(ret == HYDRASDR_SUCCESS);
       frontend->if_gain = hydrasdr_sensitivity_vga_gains[tab];
       frontend->mixer_gain = hydrasdr_sensitivity_mixer_gains[tab];
