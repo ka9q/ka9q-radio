@@ -132,16 +132,14 @@ filesystems like *XFS* and *ext4* do support them.
 
 This is very simple; just say
 ```
-sudo enable ft8-record ft4-record ft8-decode@1 ft4-decode@1
-sudo start ft8-record ft4-record ft8-decode@1 ft4-decode@1
+sudo systemctl enable --now ft8-record ft4-record ft8-decode@1 ft4-decode@1
 ```
 Again, note that there's just one *ft4-record* and one *ft8-record* job so they
 do not take a **@n** suffix. The *ft4-decode@* and *ft8-decode@* jobs *do*
 require suffixes even if you only want one of each. 
 If you want more, just add them like this:
 ```
-sudo enable ft8-decode@2 ft8-decode@3 ...
-sudo start ft8-decode@2 ft8-decode@3 ...
+sudo systemctl enable --now ft8-decode@2 ft8-decode@3 ...
 ```
 though this really shouldn't be necessary unless a large backlog
 has built in a spool directory because *ft8-record* kept running
