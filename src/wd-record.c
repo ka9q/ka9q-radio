@@ -329,6 +329,7 @@ static bool filter_500 = false;
 static bool leaky_folding = false;
 static double leaky_folding_filter = 0.99;
 static bool notch_filter_initialized = false;
+static bool freq_path = false;  // if true and in WD mode, prefix wav file path with frequency
 
 const char *App_path;
 static int Input_fd,Status_fd,Control_fd;
@@ -389,6 +390,7 @@ static struct option Options[] = {
   {"error", required_argument, NULL, 'E'},
   {"wd_errors", required_argument, NULL, 'q'},
   {"wd_tolerance", required_argument, NULL, 'Y'},
+  {"freq-path", no_argument, NULL, 1009},
   {NULL, no_argument, NULL, 0},
 };
 static char Optstring[] = "cd:e:fjl:m:o:rsS:t:vL:Vx:WE:q:Y:";
@@ -459,7 +461,7 @@ int main(int argc,char *argv[]){
       break;
     case 'V':
       VERSION();
-      fputs("wsprdaemon mode (-W): v0.15\n",stdout);
+      fputs("wsprdaemon mode (-W): v0.16\n",stdout);
       exit(EX_OK);
     case 'W':
       wd_mode = true;
@@ -535,6 +537,9 @@ int main(int argc,char *argv[]){
       if ((leaky_folding_filter >= 1.0) || (leaky_folding_filter <= 0.0))
         leaky_folding_filter = 0.99;
       fprintf(stderr,"Leaky folding filter set to %.4f\n",leaky_folding_filter);
+      break;
+    case 1009:
+      freq_path = true;
       break;
     default:
       fprintf(stderr,"Usage: %s [-c|--catmode|--stdout] [-r|--raw] [-e|--exec command] [-f|--flush] [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-j|--jt] [-v] [-m sec] [-x|--max_length max_file_time, no sync, oneshot] [--wd_mode|-W] PCM_multicast_address\n",argv[0]);
@@ -1349,7 +1354,7 @@ static void closedown(int a){
 
   if (wd_mode){
     char buff[NAME_MAX+1];
-    snprintf(buff,NAME_MAX,"/pcmrecord.bpsk-%u",getpid());
+    snprintf(buff,NAME_MAX,"/wd-record-%u",getpid());
     shm_unlink(buff);
   }
   cleanup();
@@ -1777,9 +1782,13 @@ static void input_loop(){
         // init diag structure if not already
         if (-1 == sync_diags_fd){
           char buff[NAME_MAX+1];
-          snprintf(buff,NAME_MAX,"/pcmrecord.bpsk-%u",getpid());
+          snprintf(buff,NAME_MAX,"/wd-record-%u",getpid());
           sync_diags_fd = shm_open(buff,O_RDWR | O_CREAT | O_TRUNC,0600);
-          ftruncate(sync_diags_fd,sizeof(*sync_diags));
+          if (posix_fallocate(sync_diags_fd,0,sizeof(*sync_diags))) {
+            fprintf(stderr,"Failed to allocate shared mem\n");
+            close(sync_diags_fd);
+            exit(EX_CANTCREAT);
+          }
           sync_diags = mmap(NULL,sizeof(*sync_diags),PROT_READ | PROT_WRITE,MAP_SHARED,sync_diags_fd,0);
           if (((void*)-1) == sync_diags){
             fprintf(stderr,"Couldn't mmap diagnostic area!\n");
@@ -2206,16 +2215,39 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
     if(file_time.tv_nsec > BILLION/2)
       seconds++;
     struct tm const * const tm = gmtime(&seconds);
-    snprintf(sp->filename,sizeof(sp->filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s%s",
-	     tm->tm_year+1900,
-	     tm->tm_mon+1,
-	     tm->tm_mday,
-	     tm->tm_hour,
-	     tm->tm_min,
-	     tm->tm_sec,
-	     sp->chan.tune.freq,
-	     sp->chan.preset,
-	     suffix);
+    // if freq_path is true, prefix the wav filename with a directory named for
+    // the channel frequency
+    if(freq_path){
+      char dir[PATH_MAX];
+      snprintf(dir,sizeof(dir),"%.0f",sp->chan.tune.freq);
+      if(mkdir(dir,0777) == -1 && errno != EEXIST){
+	fprintf(stderr,"can't create directory %s: %s\n",dir,strerror(errno));
+	return -1;
+      }
+      snprintf(sp->filename,sizeof(sp->filename),
+        "%.0f/%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s%s",
+        sp->chan.tune.freq,
+        tm->tm_year+1900,
+        tm->tm_mon+1,
+        tm->tm_mday,
+        tm->tm_hour,
+        tm->tm_min,
+        tm->tm_sec,
+        sp->chan.tune.freq,
+        sp->chan.preset,
+        suffix);
+    } else {
+      snprintf(sp->filename,sizeof(sp->filename),"%4d%02d%02dT%02d%02d%02dZ_%.0lf_%s%s",
+        tm->tm_year+1900,
+        tm->tm_mon+1,
+        tm->tm_mday,
+        tm->tm_hour,
+        tm->tm_min,
+        tm->tm_sec,
+        sp->chan.tune.freq,
+        sp->chan.preset,
+        suffix);
+    }
   } else {
     // Round time to nearest 1/10 second
     imaxdiv_t f = imaxdiv(file_time.tv_nsec,100000000); // 100 million to get deci-seconds
