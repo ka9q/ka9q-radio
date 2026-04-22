@@ -92,18 +92,32 @@ int demod_spectrum(void *arg){
 
     // fairly major reinitialization required
     if(chan->spectrum.fft_n <= 0){
-      if(chan->spectrum.plan == NULL)
-	fftwf_destroy_plan(chan->spectrum.plan); // will be regenerated on first poll
-      chan->spectrum.plan = NULL;
+      // NOTE: setup_complex_fft / setup_real_fft (called via setup_narrowband / setup_wideband)
+      // already destroy any existing chan->spectrum.plan before allocating a new one.
+      // The previous code here did "if(plan == NULL) fftwf_destroy_plan(plan); plan = NULL;"
+      // which (a) was an inverted NULL check (no-op) and (b) NULL-orphaned the live plan
+      // pointer so the inner setup_*_fft would not destroy it -> leaked plan + buffers.
       FREE(chan->spectrum.window); // force regeneration on first poll
       if(chan->spectrum.rbw > chan->spectrum.crossover)
 	setup_wideband(chan);
       else
 	setup_narrowband(chan);
+      // Cache current parameter values so we do not refire reinit every block.
+      // Without this, the local shadow vars (rbw, bin_count, ...) stay at their
+      // sentinel -1 forever, the comparisons above always set fft_n=-1, and we
+      // re-enter this block on every iteration -> per-block FFT plan + filter
+      // alloc churn (~32 MB/s leak on RX888 / 21 spectrum bands).
+      rbw = chan->spectrum.rbw;
+      bin_count = chan->spectrum.bin_count;
+      crossover = chan->spectrum.crossover;
+      shape = chan->spectrum.shape;
+      window_type = chan->spectrum.window_type;
     } else if(chan->spectrum.window_type != window_type
 	      || (chan->spectrum.shape != shape && (chan->spectrum.window_type == KAISER_WINDOW
 						    || chan->spectrum.window_type == GAUSSIAN_WINDOW))){
       FREE(chan->spectrum.window); // force regeneration
+      shape = chan->spectrum.shape;
+      window_type = chan->spectrum.window_type;
     }
     // End of parameter checking and (re)initialization
     if(restart_needed)
