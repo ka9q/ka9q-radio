@@ -92,18 +92,23 @@ int demod_spectrum(void *arg){
 
     // fairly major reinitialization required
     if(chan->spectrum.fft_n <= 0){
-      if(chan->spectrum.plan == NULL)
-	fftwf_destroy_plan(chan->spectrum.plan); // will be regenerated on first poll
-      chan->spectrum.plan = NULL;
       FREE(chan->spectrum.window); // force regeneration on first poll
       if(chan->spectrum.rbw > chan->spectrum.crossover)
 	setup_wideband(chan);
       else
 	setup_narrowband(chan);
+      // Remember the new values
+      rbw = chan->spectrum.rbw;
+      bin_count = chan->spectrum.bin_count;
+      crossover = chan->spectrum.crossover;
+      shape = chan->spectrum.shape;
+      window_type = chan->spectrum.window_type;
     } else if(chan->spectrum.window_type != window_type
 	      || (chan->spectrum.shape != shape && (chan->spectrum.window_type == KAISER_WINDOW
 						    || chan->spectrum.window_type == GAUSSIAN_WINDOW))){
       FREE(chan->spectrum.window); // force regeneration
+      shape = chan->spectrum.shape;
+      window_type = chan->spectrum.window_type;
     }
     // End of parameter checking and (re)initialization
     if(restart_needed)
