@@ -620,8 +620,13 @@ static int setup_hardware(char const *sname){
     fprintf(stderr,"Warning: requested block time %lf changed to %lf for integral block size %d at sample rate %lf Hz\n",
 	    User_blocktime,Blocktime,Frontend.L,Frontend.samprate);
 
-  fprintf(stderr,"Block time %.3lf ms, overlap %d, forward FFT size %'u %s\n",
-	  1000.*Blocktime, Overlap, N,Frontend.isreal ? "real" : "complex");
+  fprintf(stderr,"Block time %.3lf ms, block samples L=%'d, overlap %d (%.1lf%%) M-1=%'d samples, forward FFT size N=%'u %s\n",
+	  1000.*Blocktime,
+	  Frontend.L,
+	  Overlap, 100. / Overlap,
+	  Frontend.M-1,
+	  N,
+	  Frontend.isreal ? "real" : "complex");
   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
   // Create list of frequency spurs in filter input (experimental)
   Frontend.in.notches = calloc(100,sizeof (struct notch_state));
@@ -937,7 +942,7 @@ static void *process_section(void *p){
       pthread_create(&chan->rtcp.thread,NULL,rtcp_send,chan);
     }
   }
-  fprintf(stderr,"[%s] %d channels started\n",sname,section_chans);
+  fprintf(stderr,"[%s] %d channel%s started\n",sname,section_chans,section_chans != 1 ? "s" : "");
   return NULL;
 }
 // Find chan by ssrc
