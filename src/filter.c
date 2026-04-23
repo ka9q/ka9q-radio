@@ -427,11 +427,9 @@ static long factor_small_primes(long n, int exponents[6]);
  *     be factored into those primes.
  */
 static long factor_small_primes(long n, int exponents[6]){
-  // Initialize exponents
-  memset(exponents,0,sizeof exponents[6]);
-
   // Divide out each prime in turn
   for (int i = 0; i < 6; i++) {
+    exponents[i] = 0;
     while (n % small_primes[i] == 0) {
       exponents[i]++;
       n /= small_primes[i];
