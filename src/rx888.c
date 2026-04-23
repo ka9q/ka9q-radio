@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <strings.h>
 #include <assert.h>
+#include <stdatomic.h>
 
 #include "misc.h"
 #include "status.h"
@@ -29,6 +30,10 @@
 #include "radio.h"
 #include "rx888.h"
 #include "ezusb.h"
+
+#include <stdatomic.h>
+
+static _Atomic int usb_device_gone = 0;
 
 static int64_t const MIN_SAMPRATE =      1000000; // 1 MHz, in ltc2208 spec
 static int64_t const MAX_SAMPRATE =    130000000; // 130 MHz, in ltc2208 spec
@@ -347,10 +352,18 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 
   Power_smooth = -expm1(-xfer_time/PTC);
 
-  fprintf(stderr,"RX888 AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dB, dither %d, randomizer %d, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
+  fprintf(stderr,"RX888 AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dBm, dither %s, randomizer %s, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  frontend->rf_agc ? "on" : "off",
-	  gain,frontend->rf_gain,frontend->rf_atten,frontend->rf_level_cal,
-sdr->dither,sdr->randomizer,sdr->queuedepth,sdr->reqsize,sdr->pktsize,sdr->reqsize * sdr->pktsize,
+	  gain,
+	  frontend->rf_gain,
+	  frontend->rf_atten,
+	  frontend->rf_level_cal,
+	  sdr->dither ? "on" : "off",
+	  sdr->randomizer ? "on" : "off",
+	  sdr->queuedepth,
+	  sdr->reqsize,
+	  sdr->pktsize,
+	  sdr->reqsize * sdr->pktsize,
 	  xfer_time);
 
 #if 0
@@ -445,10 +458,14 @@ static void *proc_rx888(void *arg){
     assert(ret == 0);
   }
   do {
-    // If the USB cable is pulled, libusb_handle_events() simply hangs
-    // so use libusb_handle_events_timeout_completed() instead
-    // Unfortunately it doesn't give any indication that it has timed out
-    // so we check more directly how long it's been since we last got data
+    if(usb_device_gone){
+      // Device actually disappeared, exit immediately in case
+      // it gets quickly plugged back in before 5 seconds
+      fprintf(stderr,"RX888 device disappeared, exiting\n");
+      exit(EX_NOINPUT);
+   }
+    // But also check for a silent hang with libusb_handle_events_timeout_completed()
+    // Check more directly how long it's been since we last got data
     // sdr->last_callback_time is set in rx_callback()
     int const maxtime = 5;
     if(gps_time_ns() > sdr->last_callback_time + maxtime * BILLION){
@@ -540,6 +557,11 @@ static void rx_callback(struct libusb_transfer * const transfer){
 
   sdr->xfers_in_progress--;
   sdr->last_callback_time = now;
+
+  if(transfer->status == LIBUSB_TRANSFER_NO_DEVICE){
+    usb_device_gone = 1;
+    return;
+  }
 
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
