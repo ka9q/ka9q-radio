@@ -3,19 +3,15 @@
 # RADIOD_INSTANCE=ka9q-hf
 
 # automatically start radiod when the device is programmed (product 00f1). 
-ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f1", \
-  TAG+="systemd", IMPORT{file}="/etc/radio/rx888.conf", \
-  ENV{SYSTEMD_WANTS}+="radiod@%E{RADIOD_INSTANCE}.service"
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f1", TAG+="systemd", IMPORT{file}="/etc/radio/rx888.conf",  ENV{SYSTEMD_WANTS}+="radiod@%E{RADIOD_INSTANCE}.service"
 
 # unprogrammed device
-ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f3", \
-  TAG+="systemd", {SYSTEMD_WANTS}+="rx888_boot.service"
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f3", TAG+="systemd", {SYSTEMD_WANTS}+="rx888_boot.service"
 
 # if you have more than one rx888, you will have to create a separate rule here for each one to invoke the proper instance:
 # Note the serial number is the one returned by the unprogrammed device, which will be different from the one you see
 # when the firmware is loaded (why?)
-#ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f3", ATTRS{serial}=="0000000004BE", \
-  TAG+="systemd", ENV{SYSTEMD_WANTS}+="radiod@kfs-hf.service"
+#ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f3", ATTRS{serial}=="0000000004BE", TAG+="systemd", ENV{SYSTEMD_WANTS}+="radiod@kfs-hf.service"
 
 # When radiod loads the firmware,
 # the device will detach itself from the bus and reappear as product 00f1.
