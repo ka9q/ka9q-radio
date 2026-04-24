@@ -1,13 +1,18 @@
 # RX-888 MkII SDR front end - automatically start radiod.
 # The instance name is taken from /etc/radio/rx888.conf, which should contain a line like
 # RADIOD_INSTANCE=ka9q-hf
+# which would launch radiod@ka9q-hf using config file /etc/radio/radiod@ka9q-hf.conf or /etc/radio/radiod@ka9q-hf.conf.d/*
 
 # automatically start radiod when the device is programmed (product 00f1). 
-ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f1", \
-GROUP="radio", MODE="0660", TAG+="systemd", \
-IMPORT{file}="/etc/radio/rx888.conf",  \
-ENV{RADIOD_INSTANCE}!="", \
-ENV{SYSTEMD_WANTS}+="radiod@%E{RADIOD_INSTANCE}.service"
+# Import config and set permissions
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{PRODUCT}=="4b4/f1/0", \
+  GROUP="radio", MODE="0660", TAG+="systemd", \
+  IMPORT{file}="/etc/radio/rx888.conf"
+
+# Now test the imported variable in a later rule
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{PRODUCT}=="4b4/f1/0", \
+  ENV{RADIOD_INSTANCE}=="?*", \
+  ENV{SYSTEMD_WANTS}+="radiod@%E{RADIOD_INSTANCE}.service"
 
 # unprogrammed device
 ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f3", \
