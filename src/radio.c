@@ -695,7 +695,6 @@ static void *process_section(void *p){
   };
   set_defaults(&chan_template); // compiled-in defaults (#4)
   loadpreset(&chan_template,Configtable,GLOBAL); // [global] section (#3)
-
   if(loadpreset(&chan_template,Preset_table,preset) != 0) // preset database entry (#2)
     fprintf(stderr,"[%s] loadpreset(%s,%s) failed; compiled-in defaults and local settings used\n",sname,Preset_file,preset);
 
@@ -751,7 +750,7 @@ static void *process_section(void *p){
   {
     int pt = pt_from_info(chan_template.output.samprate,chan_template.output.channels,chan_template.output.encoding);
     if(pt == -1){
-      fprintf(stderr,"Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+      fprintf(stderr,"channel template: can't allocate payload type for samprate %'d, channels %d, encoding %d\n",
 	      chan_template.output.samprate,chan_template.output.channels,chan_template.output.encoding); // make sure it's initialized
 	  return -1;
     }

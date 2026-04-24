@@ -232,7 +232,7 @@ int demod_wfm(void *arg){
 	chan->output.channels = 2;
 	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	if(pt == -1){
-	  fprintf(stderr,"%s Can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+	  fprintf(stderr,"%s can't allocate payload type for samprate %'d, channels %d, encoding %d\n",
 		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	  return -1;
 	}
@@ -271,7 +271,7 @@ int demod_wfm(void *arg){
 	chan->output.channels = 1;
 	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	if(pt == -1){
-	  fprintf(stderr,"%s can't allocate payload type for samprate %d, channels %d, encoding %d\n",
+	  fprintf(stderr,"%s can't allocate payload type for samprate %'d, channels %d, encoding %d\n",
 		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	  return -1;
 	}

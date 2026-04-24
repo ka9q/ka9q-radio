@@ -425,21 +425,26 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     tone = config_getdouble(table,sname,"pl",tone);
     tone = fabs(config_getdouble(table,sname,"ctcss",tone));
     if(tone > 3000)
-      fprintf(stderr,"Tone %.1lf out of range\n",tone);
+      fprintf(stderr,"%s: Tone %.1lf out of range\n",chan->name,tone);
     else
       chan->fm.tone_freq = tone;
   }
   chan->output.pacing = config_getboolean(table,sname,"pacing",chan->output.pacing);
   {
     char const *cp = config_getstring(table,sname,"encoding",NULL);
-    if(cp)
-      chan->output.encoding = parse_encoding(cp);
+    if(cp){
+      int e = parse_encoding(cp);
+      if(e != NO_ENCODING)
+	chan->output.encoding = e;
+      else
+	fprintf(stderr,"%s: invalid encoding %s\n",chan->name,cp);
+    }
   }
   {
     int bitrate = abs(config_getint(table,sname,"bitrate",chan->opus.bitrate));
     bitrate = abs(config_getint(table,sname,"opus-bitrate",bitrate));
     if(bitrate > 510000)
-      fprintf(stderr,"opus bitrate %d out of range\n",bitrate);
+      fprintf(stderr,"%s: opus bitrate %d out of range\n",chan->name,bitrate);
     else
       chan->opus.bitrate = bitrate;
   }
@@ -447,7 +452,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   {
     int const fec = abs(config_getint(table,sname,"opus-fec",chan->opus.fec));
     if(fec > 100)
-      fprintf(stderr,"opus FEC %dxx out of range\n",fec);
+      fprintf(stderr,"%s: opus FEC %dxx out of range\n",chan->name,fec);
     else
       chan->opus.fec = fec;
   }
@@ -456,7 +461,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     if(cp && strlen(cp) > 0){
       for(int i=0; ; i++){
 	if(Opus_application[i].str == NULL){
-	  fprintf(stderr,"opus application '%s' unknown\n",cp);
+	  fprintf(stderr,"%s: opus application '%s' unknown\n",chan->name,cp);
 	  break;
 	}
 	if(strncmp(cp,Opus_application[i].str,strlen(cp)) == 0){
@@ -471,7 +476,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     if(cp && strlen(cp) > 0){
       for(int i=0; ; i++){
 	if(Opus_signal[i].str == NULL){
-	  fprintf(stderr,"opus signal type '%s' unknown\n",cp);
+	  fprintf(stderr,"%s: opus signal type '%s' unknown\n",chan->name,cp);
 	  break;
 	}
 	if(strncmp(cp,Opus_signal[i].str,strlen(cp)) == 0){
@@ -485,20 +490,20 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   {
     int maxdelay = abs(config_getint(table,sname,"buffer",chan->output.maxdelay));
     if(maxdelay > 4)
-      fprintf(stderr,"buffer %u out of range, using 0\n",maxdelay);
+      fprintf(stderr,"%s: buffer %u out of range, using 0\n",chan->name,maxdelay);
     else
       chan->output.maxdelay = maxdelay;
   }
   {
     int blocking = config_getint(table,sname,"filter2",chan->filter2.blocking);
     if(blocking > 10)
-      fprintf(stderr,"filter2 blocking %u out of range\n",blocking);
+      fprintf(stderr,"%s: filter2 blocking %u out of range\n",chan->name,blocking);
     else
       chan->filter2.blocking = blocking;
   }
   chan->prio = abs(config_getint(table,sname,"prio",chan->prio));
   if(chan->prio >  default_prio()){
-    fprintf(stderr,"prio %d too high; max %d\n",chan->prio,default_prio());
+    fprintf(stderr,"%s: prio %d too high; max %d\n",chan->name,chan->prio,default_prio());
     chan->prio = default_prio();
   }
   chan->output.ttl = config_getint(table,sname,"ttl",chan->output.ttl);
