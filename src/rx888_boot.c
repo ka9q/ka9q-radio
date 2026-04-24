@@ -41,6 +41,7 @@ int main(int argc,char *argv[]){
       firmware = optarg;
       break;
     default:
+      fprintf(stderr,"usage: %s [-f bootimage]\n",App_path);
       exit(EX_USAGE);
       break;
     }

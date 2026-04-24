@@ -1,0 +1,22 @@
+# systemd unit to decode VHF ACARS
+# Aug 2025 Phil Karn, KA9Q
+
+[Unit]
+Description=Rx888 firmware loader
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+User = radio
+Group = radio
+Type = oneshot
+PermissionsStartOnly=true
+UMask = 002
+ExecStart=/usr/local/bin/rx888_boot
+Restart=no
+TimeoutStopSec=10
+SyslogIdentifier=rx888_boot
+
+[Install]
+WantedBy=multi-user.target
+
