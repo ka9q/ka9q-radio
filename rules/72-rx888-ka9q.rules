@@ -1,0 +1,3 @@
+# if you have more than one rx888, you will have to create a separate rule here for each one to invoke the proper instance, like this:
+#ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f1", ATTRS{serial}=="000908270A582911", TAG+="systemd", ENV{SYSTEMD_WANTS}+="radiod@ka9q-hf.service"
+

@@ -1,0 +1,2 @@
+# Launch radiod for specific Fobos serial numbers at KA9Q
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="132e", ENV{ID_SERIAL_SHORT}=="A1D610000207", TAG+="systemd", ENV{SYSTEMD_WANTS}+="radiod@ka9q-airband"

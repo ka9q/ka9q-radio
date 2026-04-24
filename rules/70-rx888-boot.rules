@@ -1,0 +1,6 @@
+# unprogrammed RX888, load firmware
+# It will then drop off the USB and reappear as idProduct=00f1, triggering radiod
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f3", \
+GROUP="radio", MODE="0660", TAG+="systemd", \
+ENV{SYSTEMD_WANTS}+="rx888_boot.service"
+

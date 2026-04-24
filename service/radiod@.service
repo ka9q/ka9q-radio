@@ -3,7 +3,9 @@
 
 [Unit]
 Description=%i radio receiver
-Requires=network-online.target
+Wants=network-online.target
+After=network-online.target
+CollectMode=inactive-or-failed
 
 [Service]
 User=radio
@@ -19,12 +21,13 @@ LogsDirectoryMode=0775
 ReadWritePaths=/etc/fftw
 UMask=002
 ExecStart=/usr/local/sbin/radiod -N %i /etc/radio/radiod@%i.conf
-Restart=always
+Restart=on-failure
 RestartSec=5
 TimeoutStopSec=5
 SyslogIdentifier=radiod@%i
 LogRateLimitBurst=500
 LogRateLimitIntervalSec=20
+RestartPreventExitStatus=66
 
 [Install]
 WantedBy=multi-user.target
