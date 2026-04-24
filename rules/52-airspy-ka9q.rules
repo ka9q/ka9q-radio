@@ -1,0 +1,20 @@
+# Airspy R2 rules customized for KA9Q
+# Each serial number starts a specific instance of radiod
+# Phil Karn KA9Q 23 April 2026
+ATTR{idVendor}=="1d50", ATTR{idProduct}=="60a1", \
+ENV{ID_SERIAL_SHORT}=="AIRSPY_SN:62CC68FF21146A17", \
+TAG+="systemd", \
+ENV{SYSTEMD_WANTS}+="radiod@ka9q-2m.service"
+
+ATTR{idVendor}=="1d50", ATTR{idProduct}=="60a1", \
+ENV{ID_SERIAL_SHORT}=="AIRSPY_SN:62CC68FF355B1E5B", \
+TAG+="systemd", \
+ENV{SYSTEMD_WANTS}+="radiod@ka9q-125cm.service"
+
+ATTR{idVendor}=="1d50", ATTR{idProduct}=="60a1", \
+ENV{ID_SERIAL_SHORT}=="AIRSPY_SN:91D064DC27839FCF", \
+TAG+="systemd", \
+ENV{SYSTEMD_WANTS}+="radiod@ka9q-70cm.service"
+
+
+

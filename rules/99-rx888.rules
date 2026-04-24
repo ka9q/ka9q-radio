@@ -1,7 +1,7 @@
 # RX-888 MkII SDR front end - automatically start radiod.
 # The instance name is taken from /etc/radio/rx888.conf, which should contain a line like
 # RADIOD_INSTANCE=ka9q-hf
-# which would launch radiod@ka9q-hf using config file /etc/radio/radiod@ka9q-hf.conf or /etc/radio/radiod@ka9q-hf.conf.d/*
+# which would launch radiod@ka9q-hf using config file /etc/radio/radiod@ka9q-hf.conf or config directory /etc/radio/radiod@ka9q-hf.conf.d/*
 
 # automatically start radiod when the device is programmed (product 00f1). 
 # Import config and set permissions
