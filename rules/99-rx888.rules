@@ -5,7 +5,8 @@
 # automatically start radiod when the device is programmed (product 00f1). 
 ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f1", \
 GROUP="radio", MODE="0660", TAG+="systemd", \
-ENV{RADIOD_INSTANCE}!="", IMPORT{file}="/etc/radio/rx888.conf",  \
+IMPORT{file}="/etc/radio/rx888.conf",  \
+ENV{RADIOD_INSTANCE}!="", \
 ENV{SYSTEMD_WANTS}+="radiod@%E{RADIOD_INSTANCE}.service"
 
 # unprogrammed device
