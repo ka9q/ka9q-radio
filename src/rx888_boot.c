@@ -31,7 +31,7 @@ char const *Libdir = "/var/lib/ka9q-radio/";
 int Ezusb_verbose = 0; // used by ezusb.c
 
 int main(int argc,char *argv[]){
-  char const *firmware = "/var/lib/ka9q-radio/SDDC_FX3.img"; // default
+  char const *firmware = "/usr/local/share/ka9q-radio/SDDC_FX3.img"; // default
   App_path = argv[0];
 
   int c;

@@ -6,7 +6,7 @@
 ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f1", TAG+="systemd", IMPORT{file}="/etc/radio/rx888.conf",  ENV{SYSTEMD_WANTS}+="radiod@%E{RADIOD_INSTANCE}.service"
 
 # unprogrammed device
-ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f3", TAG+="systemd", ENV{SYSTEMD_WANTS}+="rx888_boot.service"
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f3", TAG+="systemd", ENV{SYSTEMD_WANTS}+="rx888_boot.service", GROUP="radio"
 
 # if you have more than one rx888, you will have to create a separate rule here for each one to invoke the proper instance:
 # Note the serial number is the one returned by the unprogrammed device, which will be different from the one you see
