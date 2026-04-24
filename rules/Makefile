@@ -13,6 +13,7 @@ install: install-$(UNAME_S)
 
 install-Linux:
 	rsync *.rules /etc/udev/rules.d
+	udevadm control --reload
 
 install-Darwin:
 	# TODO
