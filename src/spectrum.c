@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 #include <complex.h>
 #include <fftw3.h>
 #include "misc.h"
@@ -122,41 +123,93 @@ int demod_spectrum(void *arg){
     // End of parameter checking and (re)initialization
     if(restart_needed)
       break; // restart or terminate
-    int r = downconvert(chan);
-    if(r == -1)
-      break; // restart needed
-    else if(r == 1)
-      continue; // channel inactive; poll for commands
 
-    // r == 0 is normal return
-    // Process receiver data only in narrowband mode
-    if(chan->spectrum.rbw <= chan->spectrum.crossover && chan->baseband != NULL){
-      if(chan->spectrum.ring == NULL || chan->spectrum.ring_size < chan->spectrum.fft_avg * chan->spectrum.fft_n){
+    // Poll-driven (lazy) mode for narrowband spectrum:
+    //
+    // The default narrowband path runs an inverse FFT every block (~50 Hz)
+    // for every active spectrum channel, regardless of whether anyone is
+    // actually polling. With multiweb-style usage (~21 always-on channels,
+    // ~5 Hz poll rate) this dominates radiod's CPU (+~280% on a Pi 5).
+    //
+    // When the client opts in by requesting fft_avg=1 (multiweb does this
+    // in its sliding-mode averaging), the per-poll FFT only consumes one
+    // window of baseband -- so it is safe to skip the per-block IFFT
+    // between polls and only refill the ring on demand. ka9q-web and other
+    // clients that leave fft_avg at radiod's default (10) keep the
+    // legacy continuous-IFFT path.
+    bool const lazy_eligible = (chan->spectrum.rbw > 0
+				&& chan->spectrum.rbw <= chan->spectrum.crossover
+				&& chan->spectrum.fft_avg <= 1
+				&& chan->spectrum.fft_n > 0
+				&& chan->frontend != NULL);
 
-	// Need a new or bigger baseband ring buffer
-	if(chan->spectrum.ring == NULL)
-	  chan->spectrum.ring_idx = 0; // ? no need to reset on growth vs start?
-
-	chan->spectrum.ring_size = chan->spectrum.fft_avg * chan->spectrum.fft_n;
-	assert(chan->spectrum.ring_size > 0);
-	void *old = chan->spectrum.ring;
-	int old_ring_size = chan->spectrum.ring_size;
-	chan->spectrum.ring = realloc(chan->spectrum.ring, chan->spectrum.ring_size * sizeof *chan->spectrum.ring);
-	if(chan->spectrum.ring == NULL)
-	  FREE(old); // emulate reallocf() in case the realloc fails, though we'll crash anyway
-	// Clear the new space to avoid display glitches
-	memset(chan->spectrum.ring + old_ring_size, 0, (chan->spectrum.ring_size - old_ring_size) * sizeof *chan->spectrum.ring);
-      }
-      assert(chan->spectrum.ring != NULL);
-      for(int i=0; i < chan->sampcount; i++){
-	chan->spectrum.ring[chan->spectrum.ring_idx++] = chan->baseband[i];
-	if(chan->spectrum.ring_idx == chan->spectrum.ring_size)
-	  chan->spectrum.ring_idx = 0; // wrap around
-      }
-      timeout -= chan->sampcount;
-      if(timeout < 0)
-	timeout = 0;
+    if(lazy_eligible && !response_needed){
+      // No poll pending -- skip the per-block downconvert IFFT and idle
+      // for one block. The next time a poll arrives we will refill the
+      // ring buffer with a fresh window before running narrowband_poll().
+      // Note: Blocktime is in *seconds* (e.g. 0.02 for 20 ms), not ms.
+      double const sleep_s = Blocktime;
+      struct timespec ts = {
+	.tv_sec  = (time_t)sleep_s,
+	.tv_nsec = (long)lrint((sleep_s - (time_t)sleep_s) * 1e9),
+      };
+      nanosleep(&ts, NULL);
+      continue;
     }
+
+    // How many downconvert blocks to run this iteration before the
+    // (optional) narrowband poll. Normally 1 (preserves legacy behaviour
+    // for fft_avg > 1 clients). In lazy mode, on the iteration where a
+    // poll arrived, we need enough fresh baseband to cover at least one
+    // analysis FFT window, so we run several downconverts back-to-back.
+    int blocks_to_run = 1;
+    if(lazy_eligible && response_needed && chan->sampcount > 0){
+      blocks_to_run = (chan->spectrum.fft_n + chan->sampcount - 1) / chan->sampcount;
+      if(blocks_to_run < 1) blocks_to_run = 1;
+      if(blocks_to_run > 4) blocks_to_run = 4; // cap added latency at ~80 ms
+    }
+
+    bool restart_after_blocks = false;
+    bool inactive = false;
+    for(int b = 0; b < blocks_to_run; b++){
+      int r = downconvert(chan);
+      if(r == -1){ restart_after_blocks = true; break; }
+      else if(r == 1){ inactive = true; break; }
+
+      // r == 0 is normal return
+      // Process receiver data only in narrowband mode
+      if(chan->spectrum.rbw <= chan->spectrum.crossover && chan->baseband != NULL){
+	if(chan->spectrum.ring == NULL || chan->spectrum.ring_size < chan->spectrum.fft_avg * chan->spectrum.fft_n){
+
+	  // Need a new or bigger baseband ring buffer
+	  if(chan->spectrum.ring == NULL)
+	    chan->spectrum.ring_idx = 0; // ? no need to reset on growth vs start?
+
+	  chan->spectrum.ring_size = chan->spectrum.fft_avg * chan->spectrum.fft_n;
+	  assert(chan->spectrum.ring_size > 0);
+	  void *old = chan->spectrum.ring;
+	  int old_ring_size = chan->spectrum.ring_size;
+	  chan->spectrum.ring = realloc(chan->spectrum.ring, chan->spectrum.ring_size * sizeof *chan->spectrum.ring);
+	  if(chan->spectrum.ring == NULL)
+	    FREE(old); // emulate reallocf() in case the realloc fails, though we'll crash anyway
+	  // Clear the new space to avoid display glitches
+	  memset(chan->spectrum.ring + old_ring_size, 0, (chan->spectrum.ring_size - old_ring_size) * sizeof *chan->spectrum.ring);
+	}
+	assert(chan->spectrum.ring != NULL);
+	for(int i=0; i < chan->sampcount; i++){
+	  chan->spectrum.ring[chan->spectrum.ring_idx++] = chan->baseband[i];
+	  if(chan->spectrum.ring_idx == chan->spectrum.ring_size)
+	    chan->spectrum.ring_idx = 0; // wrap around
+	}
+	timeout -= chan->sampcount;
+	if(timeout < 0)
+	  timeout = 0;
+      }
+    }
+    if(restart_after_blocks)
+      break; // restart needed
+    if(inactive)
+      continue; // channel inactive; poll for commands
     if(response_needed){      // Generate new bin data for the next response
       // Make sure output frequency bin data buffers exist
       if(chan->spectrum.bin_data == NULL || chan->spectrum.bin_count != bin_count){
