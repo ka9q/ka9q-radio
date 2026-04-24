@@ -60,7 +60,7 @@ BINDIR = /usr/local/bin
 SODIR = /usr/local/lib/ka9q-radio
 DAEMONDIR = /usr/local/sbin
 DAEMONS = aprs aprsfeed cwd packetd radiod
-EXECS = control fft-gen jt-decoded metadump monitor pcmrecord pl powers tune wd-record
+EXECS = control fft-gen jt-decoded metadump monitor pcmrecord pl powers tune wd-record rx888_boot
 LIBRADIO = ax25.o morse.o bandplan.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o sincospi.o sincospif.o window.o gauss.o
 DYNAMIC_DRIVERS = rx888.so airspyhf.so airspy.so sig_gen.so funcube.so rtlsdr.so
 RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o fcd.o hid-libusb.o libradio.a
@@ -236,6 +236,10 @@ radiod: $(RADIOD_OBJECTS)
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
+
+
+rx888_boot: rx888_boot.o ezusb.o
+	$(CC) $(LDOPTS) -o $@ $^ -lusb-1.0 $(LDLIBS)
 
 stereod: stereod.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
