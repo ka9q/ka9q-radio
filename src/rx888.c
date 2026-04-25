@@ -33,7 +33,11 @@
 
 #include <stdatomic.h>
 
-static _Atomic int usb_device_gone = 0;
+
+
+static uint16_t const Vendor_id = 0x04b4;
+static uint16_t const Unloaded_product_id = 0x00f3;
+static uint16_t const Loaded_product_id = 0x00f1;
 
 static int64_t const MIN_SAMPRATE =      1000000; // 1 MHz, in ltc2208 spec
 static int64_t const MAX_SAMPRATE =    130000000; // 130 MHz, in ltc2208 spec
@@ -63,13 +67,16 @@ static long long const MAX_FREQUENCY = 2000e6; // 2000 MHz
 static int const R828D_FREQ = 16000000;     // R820T reference frequency
 static int const R828D_IF_CARRIER = 4570000;
 #endif
-
+static _Atomic int usb_device_gone = 0;
 static double Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
 extern volatile bool Stop_transfers; // Flag to stop receive thread upcalls; defined in main.c
 extern char const *Description;
+extern int USB_busnum;
+extern int USB_devnum;
+extern char const *Serial;
 
 // Hardware-specific stuff.
 // Anything generic should be moved to 'struct frontend' under sdr in radio.h
@@ -197,11 +204,11 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   frontend->isreal = true; // Make sure the right kind of filter gets created!
   frontend->bitspersample = 16; // For gain scaling
   frontend->rf_agc = true; // On by default unless gain or atten is specified
+  sdr->serial = 0;
   {
     char const *p = config_getstring(dictionary,section,"serial",NULL); // is serial specified?
-    if(p != NULL){
+    if(p != NULL)
       sdr->serial = strtoll(p,NULL,16);
-    }
   }
   // Firmware file
   char const *firmware = config_getstring(dictionary,section,"firmware","SDDC_FX3.img");
@@ -645,15 +652,9 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       return -1;
     }
   }
-  uint16_t const vendor_id = 0x04b4;
-  uint16_t const unloaded_product_id = 0x00f3;
-  uint16_t const loaded_product_id = 0x00f1;
-
-  if(sdr->serial != 0)
-    fprintf(stderr,"Looking for rx888 serial %016llx\n",(long long)sdr->serial);
-
   // Search for unloaded rx888s (0x04b4:0x00f3) with the desired serial, or all such devices if no serial specified
   // and load with firmware
+  // With the rx888 bootloader launched by udev, this section should never find anything
   libusb_device **device_list;
   ssize_t dev_count = libusb_get_device_list(NULL,&device_list);
   for(ssize_t i=0; i < dev_count; i++){
@@ -667,10 +668,10 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
       continue;
     }
-    if(desc.idVendor != vendor_id || desc.idProduct != unloaded_product_id)
+    if(desc.idVendor != Vendor_id || desc.idProduct != Unloaded_product_id)
       continue;
 
-    fprintf(stderr,"found rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
+    fprintf(stderr,"found unloaded rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
     libusb_device_handle *handle = NULL;
     rc = libusb_open(device,&handle);
     if(rc != 0 || handle == NULL){
@@ -711,7 +712,16 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   libusb_free_device_list(device_list,1);
   device_list = NULL;
 
-  // Scan list again, looking for a loaded device
+  // Scan list again, looking for a loaded RX888 with the right numbers
+  if(Serial != NULL){ // specified on command line, overrides config file
+    // Specified on command line, convert and compare
+    sdr->serial = strtoll(Serial,NULL,16); // always hex
+  }
+  if(sdr->serial != 0)
+    fprintf(stderr,"Looking for rx888 serial %016llx\n",(long long)sdr->serial);
+  else if(USB_busnum != -1 && USB_devnum != -1)
+    fprintf(stderr,"Looking for rx888 at %d:%d\n",USB_busnum,USB_devnum);
+
   libusb_device *device = NULL;
   dev_count = libusb_get_device_list(NULL,&device_list);
   for(int i=0; i < dev_count; i++){
@@ -725,7 +735,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
       continue;
     }
-    if(desc.idVendor != vendor_id || desc.idProduct != loaded_product_id)
+    if(desc.idVendor != Vendor_id || desc.idProduct != Loaded_product_id)
       continue;
 
     fprintf(stderr,"found rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
@@ -765,16 +775,30 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       continue; // Keep looking, there just might be another
     }
     // Is this the droid we're looking for?
-    uint64_t serialnum = strtoll(serial,NULL,16);
-    if(sdr->serial == 0 || sdr->serial == serialnum){
-      // Either the user didn't specify a serial, or this is the one he did; use it
-      fprintf(stderr,", selected\n");
+    uint64_t current_serialnum = strtoll(serial,NULL,16); // device serial
+    uint8_t current_busnum = libusb_get_bus_number(device);
+    uint8_t current_devnum = libusb_get_device_address(device);
+
+    if(sdr->serial == 0 && USB_busnum == -1 && USB_devnum == -1){
+      // No particular unit specified, so take it
+      fprintf(stderr,", selected by default\n");
+      sdr->dev_handle = handle;
+      sdr->serial = current_serialnum;
+      break;
+    } else if(sdr->serial == current_serialnum){
+      fprintf(stderr,", selected by line serial number\n");
       sdr->dev_handle = handle;
       break;
+    } else if(current_busnum == USB_busnum && current_devnum == USB_devnum){
+      fprintf(stderr,", selected by USB device ID\n");
+      sdr->serial = current_serialnum;
+      sdr->dev_handle = handle;
+      break;
+    } else {
+      fprintf(stderr,"\n"); // Not selected; close and keep looking
+      libusb_close(handle);
+      handle = NULL;
     }
-    fprintf(stderr,"\n"); // Not selected; close and keep looking
-    libusb_close(handle);
-    handle = NULL;
   }
   libusb_free_device_list(device_list,1);
   device_list = NULL;

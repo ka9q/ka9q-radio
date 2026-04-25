@@ -25,6 +25,7 @@
 // Global variables set by config file options
 extern int Verbose;
 extern char const *Description;
+extern char const *Serial;
 
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
@@ -118,17 +119,31 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     }
   }
   {
-    char const * const sn = config_getstring(Dictionary,section,"serial",NULL);
-    if(sn != NULL){
-      char *endptr = NULL;
-      sdr->SN = 0;
-      sdr->SN = strtoull(sn,&endptr,16);
-      if(endptr == NULL || *endptr != '\0'){
-	fprintf(stderr,"Invalid serial number %s in section %s\n",sn,section);
-	return -1;
+    // Determine the serial number we'll look for
+    sdr->SN = 0;
+    if(Serial != NULL){
+      // Specified on command line
+      long long serial_number_arg = 0;
+      if(sscanf(Serial,"AIRSPY_SN:%llx",&serial_number_arg) != 1){
+	fprintf(stderr,"Invalid serial number argument %s\n",Serial);
+      } else {
+	sdr->SN = serial_number_arg;
       }
-    } else {
-      // Serial number not specified, enumerate and pick one
+    }
+    if(sdr->SN == 0){
+      // examine only if not already given on command line
+      char const * const sn = config_getstring(Dictionary,section,"serial",NULL);
+      if(sn != NULL){
+	char *endptr = NULL;
+	sdr->SN = strtoull(sn,&endptr,16);
+	if(endptr == NULL || *endptr != '\0'){
+	  fprintf(stderr,"Invalid serial number %s in section %s\n",sn,section);
+	  return -1;
+	}
+      }
+    }
+    if(sdr->SN == 0){
+      // Specific serial number not specified, enumerate and pick the first one
       int n_serials = 100; // ridiculously large
       uint64_t serials[n_serials];
 
@@ -142,7 +157,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 	fprintf(stderr," %llx",(long long)serials[i]);
       }
       fprintf(stderr,"\n");
-      fprintf(stderr,"Selecting %llx; to select another, add 'serial = ' to config file\n",(long long)serials[0]);
+      fprintf(stderr,"Selecting %llx by default; to select another, add -snn to command line or 'serial = ' to config file\n",(long long)serials[0]);
       sdr->SN = serials[0];
     }
   }

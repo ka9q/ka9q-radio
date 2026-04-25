@@ -31,6 +31,11 @@ int Verbose;
 static char const *Locale = "en_US.UTF-8";
 volatile bool Stop_transfers = false; // Request to stop data transfers; how should this get set?
 char const *Name; // List of valid config keys in [global] section, for error checking
+// Passed by udev when it finds a USB device
+int USB_busnum = -1;
+int USB_devnum = -1;
+char const *Serial;
+
 
 static void closedown(int);
 static void verbosity(int);
@@ -82,9 +87,25 @@ int main(int argc,char *argv[]){
   }
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
 
+  // -b, -d, -s might be passed null arguments by systemd, so use optional argument version
+  // If used there's **no space** between -b/-d/-s and its argument, that's what getopt wants
+  // Don't put these at the end of the option list without a '--' so the config file won't
+  // be mistaken as an argument to one of them
   int c;
-  while((c = getopt(argc,argv,"N:vV")) != -1){
+  while((c = getopt(argc,argv,"N:vVb::d::s::")) != -1){
     switch(c){
+    case 's':
+      if(optarg != NULL)
+	Serial = optarg;
+      break;
+    case 'b':
+      if(optarg != NULL)
+	USB_busnum = strtol(optarg,NULL,0);
+      break;
+    case 'd':
+      if(optarg != NULL)
+	USB_devnum = strtol(optarg,NULL,0);
+      break;
     case 'V': // Already shown above
       exit(EX_OK);
     case 'v':
@@ -95,7 +116,7 @@ int main(int argc,char *argv[]){
       break;
     default: // including 'h'
       fprintf(stderr,"Unknown command line option %c\n",c);
-      fprintf(stderr,"Usage: %s [-I] [-N name] [-h] [-p fftw_plan_time_limit] [-v [-v] ...] <CONFIG_FILE>\n", argv[0]);
+      fprintf(stderr,"Usage: %s [-sserial | [-bbusnum -ddevnum]] [-N name] [-h] [-v] [--] <CONFIG_FILE>\n", argv[0]);
       exit(EX_USAGE);
     }
   }
