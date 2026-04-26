@@ -159,8 +159,10 @@ int demod_spectrum(void *arg){
       if(chan->spectrum.bin_data == NULL || chan->spectrum.bin_count != bin_count){
 	void *old = chan->spectrum.ring;
 	chan->spectrum.bin_data = realloc(chan->spectrum.bin_data, chan->spectrum.bin_count * sizeof *chan->spectrum.bin_data);
-	if(chan->spectrum.bin_data == NULL)
+	if(chan->spectrum.bin_data == NULL){
 	  FREE(old); // emulate reallocf()
+	  goto quit;
+	}
       }
       if(chan->spectrum.rbw <= chan->spectrum.crossover){
 #if 0
