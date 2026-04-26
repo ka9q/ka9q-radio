@@ -495,6 +495,7 @@ void *statproc(void *arg){
 
   // Main loop begins here - does not need to be realtime?
   uint8_t *buffer = malloc(PKTSIZE);
+  assert(buffer != NULL);
   while(!atomic_load_explicit(&Terminate,memory_order_acquire)){
     struct sockaddr_storage sender;
     socklen_t socksize = sizeof(sender);
@@ -747,6 +748,7 @@ void *output_thread(void *p){
   atomic_store_explicit(&Callback_quantum,(uint64_t)frames,memory_order_release);
 
   int16_t *pcm_buffer = malloc(samples * sizeof *pcm_buffer);
+  assert(pcm_buffer != NULL);
   float *out_buffer = malloc(samples * sizeof *out_buffer);
   assert(out_buffer != NULL);
   while(1){

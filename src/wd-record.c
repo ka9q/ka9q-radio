@@ -566,6 +566,7 @@ int main(int argc,char *argv[]){
   }
   if(Source != NULL){
     Source_socket = calloc(1,sizeof(struct sockaddr_storage));
+    assert(Source_socket != NULL);
     resolve_mcast(Source,Source_socket,0,NULL,0,0);
   }
   // Set up input socket for multicast data stream from front end
@@ -1221,7 +1222,7 @@ static void bpsk_state_machine(struct session * const sp,struct sockaddr const *
 
         static int downcount=0;
         if ((Verbose >0) &&(!(downcount++ % 30))){
-          sprintf(buff,"%d.raw",downcount-1);
+          snprintf(buff,sizeof buff,"%d.raw",downcount-1);
           FILE *f=fopen(buff, "wb");
           if (f){
             fwrite(acc,sizeof(acc),1,f);
@@ -1550,6 +1551,7 @@ static int send_wav_queue(struct session * const sp,bool flush){
 	  fseeko(sp->fp,framesize * jump,SEEK_CUR);
 	else {
 	  unsigned char *zeroes = calloc(jump,framesize); // Don't use too much stack space
+	  assert(zeroes != NULL);
 	  fwrite(zeroes,framesize,jump,sp->fp);
 	  FREE(zeroes);
 	}
@@ -1891,6 +1893,7 @@ static void input_loop(){
 	  } else {
 	    // Emit zero padding
 	    unsigned char *zeroes = calloc(sp->starting_offset,framesize); // Don't use too much stack space
+	    assert(zeroes != NULL);
 	    fwrite(zeroes,framesize,sp->starting_offset,sp->fp);
 	    FREE(zeroes);
 	  }
@@ -1985,6 +1988,7 @@ static void input_loop(){
       qp->inuse = true;
       qp->rtp = rtp;
       qp->data = malloc(size);
+      assert(qp->data != NULL);
       qp->size = size;
 
       if(sp->encoding == S16BE){
@@ -2311,6 +2315,7 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
   }
 
   sp->iobuffer = malloc(BUFFERSIZE);
+  assert(sp->iobuffer != NULL);
   setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
 
   int const fd = fileno(sp->fp);

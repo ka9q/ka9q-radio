@@ -189,6 +189,7 @@ int main(int argc,char *argv[]){
   {
     if(Source != NULL){
       Source_socket = calloc(1,sizeof(struct sockaddr_storage));
+      assert(Source_socket != NULL);
       if(Verbose)
 	fprintf(stdout,"Resolving source %s\n",Source);
       resolve_mcast(Source,Source_socket,0,NULL,0,0);
