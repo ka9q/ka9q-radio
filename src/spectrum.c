@@ -136,7 +136,7 @@ int demod_spectrum(void *arg){
 	assert(newsize > 0);
 	chan->spectrum.ring = realloc(chan->spectrum.ring,newsize);
 	if(chan->spectrum.ring == NULL){
-	  fprintf(stderr,"spectrum: realloc(%lu) failed\n",newsize);
+	  fprintf(stderr,"spectrum: realloc(%d) failed\n",newsize);
 	  FREE(old); // emulate reallocf() in case the realloc fails
 	  goto quit;
 	}
