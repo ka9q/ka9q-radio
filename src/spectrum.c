@@ -128,14 +128,20 @@ int demod_spectrum(void *arg){
 	if(chan->spectrum.ring == NULL)
 	  chan->spectrum.ring_idx = 0; // ? no need to reset on growth vs start?
 
+	int old_ring_size = chan->spectrum.ring_size;
 	chan->spectrum.ring_size = chan->spectrum.fft_avg * chan->spectrum.fft_n;
 	assert(chan->spectrum.ring_size > 0);
 	void *old = chan->spectrum.ring;
-	int old_ring_size = chan->spectrum.ring_size;
-	chan->spectrum.ring = realloc(chan->spectrum.ring, chan->spectrum.ring_size * sizeof *chan->spectrum.ring);
-	if(chan->spectrum.ring == NULL)
-	  FREE(old); // emulate reallocf() in case the realloc fails, though we'll crash anyway
+	int newsize =  chan->spectrum.ring_size * sizeof *chan->spectrum.ring;
+	assert(newsize > 0);
+	chan->spectrum.ring = realloc(chan->spectrum.ring,newsize);
+	if(chan->spectrum.ring == NULL){
+	  fprintf(stderr,"spectrum: realloc(%lu) failed\n",newsize);
+	  FREE(old); // emulate reallocf() in case the realloc fails
+	  goto quit;
+	}
 	// Clear the new space to avoid display glitches
+	assert(ring_size >= old_ring_size);
 	memset(chan->spectrum.ring + old_ring_size, 0, (chan->spectrum.ring_size - old_ring_size) * sizeof *chan->spectrum.ring);
       }
       assert(chan->spectrum.ring != NULL);
@@ -179,7 +185,7 @@ int demod_spectrum(void *arg){
     window_type = chan->spectrum.window_type;
     shape = chan->spectrum.shape;
   } while(true);
-
+ quit:;
   if(Verbose > 1)
     fprintf(stderr,"%s exiting\n",chan->name);
 

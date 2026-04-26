@@ -462,7 +462,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(!isfinite(x) || x == chan->spectrum.rbw)
 	  break;
 	if(Verbose > 1)
-	  fprintf(stderr,"%s bin bw %'.1lf -> %'.1f Hz\n",chan->name,chan->spectrum.rbw,x);
+	  fprintf(stderr,"%s bin bw %'.1lf -> %'.1lf Hz\n",chan->name,chan->spectrum.rbw,x);
 	chan->spectrum.rbw = x;
       }
       break;
@@ -472,7 +472,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	if(x <= 0 || x == chan->spectrum.bin_count)
 	  break;
 	if(Verbose > 1)
-	  fprintf(stderr,"%s bin count %u -> %u\n",chan->name,chan->spectrum.bin_count,x);
+	  fprintf(stderr,"%s bin count %d -> %d\n",chan->name,chan->spectrum.bin_count,x);
 	chan->spectrum.bin_count = x;
       }
       break;

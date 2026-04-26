@@ -562,14 +562,14 @@ static int setup_hardware(char const *sname){
       return -1;
     }
     fprintf(stderr,"Dynamically loading %s hardware driver from %s\n",device,dlname);
-    char *error;
     Dl_handle = dlopen(dlname,RTLD_GLOBAL|RTLD_NOW);
     if(Dl_handle == NULL){
-      error = dlerror();
+      char *error = dlerror();
       fprintf(stderr,"Error loading %s to handle device %s: %s\n",dlname,device,error);
       return -1;
     }
     char symname[128];
+    char *error = NULL;
     snprintf(symname,sizeof(symname),"%s_setup",device);
     Frontend.setup = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
@@ -593,8 +593,14 @@ static int setup_hardware(char const *sname){
     // No error checking on these, they're optional
     snprintf(symname,sizeof(symname),"%s_gain",device);
     Frontend.gain = dlsym(Dl_handle,symname);
+    if((error = dlerror()) != NULL){
+      fprintf(stderr,"no %s_gain symbol: %s\n",device,error);
+    }
     snprintf(symname,sizeof(symname),"%s_atten",device);
     Frontend.atten = dlsym(Dl_handle,symname);
+    if((error = dlerror()) != NULL){
+      fprintf(stderr,"no %s_atten symbol: %s\n",device,error);
+    }
   }
 
   int r = (*Frontend.setup)(&Frontend,Configtable,sname);
@@ -629,23 +635,26 @@ static int setup_hardware(char const *sname){
 	  Frontend.isreal ? "real" : "complex");
   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
   // Create list of frequency spurs in filter input (experimental)
-  Frontend.in.notches = calloc(100,sizeof (struct notch_state));
+  Frontend.in.notches = calloc(NSPURS+1,sizeof (struct notch_state));
   struct notch_state *notch = Frontend.in.notches;
-
-
-  // Initialize spur list. MUST leave last entry zeroed as sentinel; also doubles as 0 Hz (DC) suppression
-  for(int i = 0; i < NSPURS; i++){
-    int shift;
-    double remainder; // Offset from bin center, Hz, e.g, -20 to +20. Or is it -25 to +25?
-    int r = compute_tuning(N,Frontend.M,Frontend.samprate,&shift,&remainder,Frontend.spurs[i]);
-    if(r != 0)
-      break;
-    notch->state = 0;
-    notch->bin = abs(shift);
-    notch->alpha = .01; //  About 10 sec. Arbitrary, make adaptive.
-    if(shift == 0) // DC is implicitly last
-      break;
-    notch++;
+  if(notch == NULL){
+    fprintf(stderr,"calloc failed in notch filter setup\n");
+    // Will probably crash later, but try to keep going
+  } else {
+    // Initialize spur list. MUST leave last entry zeroed as sentinel; also doubles as 0 Hz (DC) suppression
+    for(int i = 0; i < NSPURS; i++){
+      int shift;
+      double remainder; // Offset from bin center, Hz, e.g, -20 to +20. Or is it -25 to +25?
+      int r = compute_tuning(N,Frontend.M,Frontend.samprate,&shift,&remainder,Frontend.spurs[i]);
+      if(r != 0)
+	break;
+      notch->state = 0;
+      notch->bin = abs(shift);
+      notch->alpha = .01; //  About 10 sec. Arbitrary, make adaptive.
+      if(shift == 0) // DC is implicitly last
+	break;
+      notch++;
+    }
   }
   pthread_mutex_init(&Frontend.status_mutex,NULL);
   pthread_cond_init(&Frontend.status_cond,NULL);
@@ -970,6 +979,7 @@ struct channel *create_chan(uint32_t ssrc){
       return NULL; // sorry, already taken
     }
   }
+  // Find first unused channel entry
   struct channel *chan = NULL;
   for(int i=0; i < Nchannels; i++){
     if(!Channel_list[i].inuse){
