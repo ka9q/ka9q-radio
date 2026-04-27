@@ -352,6 +352,9 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
     case SPECTRUM_OVERLAP:
       channel->spectrum.overlap = decode_float(cp,optlen);
       break;
+    case LIFETIME:
+      channel->lifetime = decode_int(cp,optlen);
+      break;
     default: // ignore others
       break;
     }
