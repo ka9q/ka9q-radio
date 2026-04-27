@@ -165,7 +165,7 @@ local STATUS_TYPE_NAME = {
   [114] = "OPUS_FEC",
   [115] = "SPECTRUM_STEP",
   [116] = "SPECTRUM_OVERLAP",
-  [117] = "LIFETIME",
+  [117] = "LIFETIME"
 }
 
 -- Reverse lookup: name -> type ID
@@ -293,8 +293,8 @@ local TLV_KIND = {
   [113] = "opus_bw",
   [114] = "uint",
   [115] = "f32_db",
-  [116] = "f32"
-  [117] = "uint",
+  [116] = "f32",
+  [117] = "uint"
 }
 
 -- ---- Helpers ----

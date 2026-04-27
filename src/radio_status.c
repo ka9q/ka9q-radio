@@ -640,7 +640,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
       break;
     case LIFETIME:
       {
-	int x = abs(decode_int(cp,optlen));
+sudo 	int x = decode_int(cp,optlen);
 	chan->lifetime = x;
       }
       break;
