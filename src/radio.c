@@ -60,7 +60,7 @@ static int const DEFAULT_UPDATE = 25; // 2 Hz for 20 ms blocktime (50 Hz frame r
 static int Update = DEFAULT_UPDATE;
 static int const DEFAULT_FFTW_THREADS = 1;
 static int const DEFAULT_FFTW_INTERNAL_THREADS = 1;
-static int const DEFAULT_LIFETIME = 20; // 20 sec for idle sessions tuned to 0 Hz
+static int const DEFAULT_LIFETIME = 20; // 20 sec minimum each time a channel is polled
 static int const DEFAULT_OVERLAP = 5;
 static double const Power_alpha = 0.10; // Noise estimation time smoothing factor, per block. Use double to reduce risk of slow denormals
 static double const NQ = 0.10; // look for energy in 10th quartile, hopefully contains only noise
@@ -280,7 +280,7 @@ int loadconfig(char const *file){
     else
       User_blocktime = bt;
   }
-  Channel_idle_timeout = lrint(20.0 / User_blocktime); // 20 sec
+  Channel_idle_timeout = lrint(DEFAULT_LIFETIME / User_blocktime); // 20 sec
   {
     int ol = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
     if (ol < 2)
@@ -394,7 +394,7 @@ int loadconfig(char const *file){
   set_defaults(&Template);
   Template.frontend = &Frontend;
   assert(Blocktime != 0);
-  Template.lifetime = lrint(DEFAULT_LIFETIME / Blocktime); // If freq == 0, goes away 20 sec after last command
+  Template.lifetime = 0; // unlimited by default
 
   // Set up default output stream file descriptor and socket
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses
@@ -997,7 +997,7 @@ struct channel *create_chan(uint32_t ssrc){
     chan->output.rtp.ssrc = ssrc; // Stash it
     Active_channel_count++;
     assert(Blocktime != 0);
-    chan->lifetime = lrint(20. / Blocktime); // If freq == 0, goes away 20 sec after last command
+    chan->lifetime = 0; // unlimited by default
   }
   pthread_mutex_unlock(&Channel_list_mutex);
   return chan;
@@ -1426,7 +1426,8 @@ int downconvert(struct channel *chan){
     // Should we die?
     // Will be slower if 0 Hz is outside front end coverage because of slow timed wait below
     // But at least it will eventually go away
-    if(chan->tune.freq == 0 && chan->lifetime > 0 && --chan->lifetime <= 0){
+    if(chan->lifetime > 0 && --chan->lifetime <= 0){
+      // channel timed out
       chan->demod_type = -1;  // No demodulator
       if(Verbose > 1)
 	fprintf(stderr,"%s terminate needed\n",chan->name);
