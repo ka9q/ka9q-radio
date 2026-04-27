@@ -809,6 +809,15 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       }
     }
     break;
+  case 't': // Lifetime, frames
+    {
+      char str[Entry_width],*ptr;
+      getentry("Lifetime, frames: ",str,sizeof(str));
+      long const x = labs(strtol(str,&ptr,0));
+      if(ptr != str)
+	encode_int(bpp,LIFETIME,x);
+    }
+    break;
   case 'T': // Hang time, s (always taken as positive)
     {
       char str[Entry_width],*ptr;
@@ -1720,6 +1729,7 @@ static void display_input(WINDOW *w,struct channel const *chan){
   pprintw(w,row++,col,"Status pkts","%'llu",chan->status.packets_out);
   pprintw(w,row++,col,"Control pkts","%'llu",chan->status.packets_in);
   pprintw(w,row++,col,"Send errors","%'llu",chan->output.errors);
+  pprintw(w,row++,col,"Lifetime","%'u",chan->lifetime);
   if(chan->options != 0)
     pprintw(w,row++,col,"Options","0x%llx",(long long)chan->options);
   box(w,0,0);
