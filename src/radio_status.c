@@ -638,6 +638,12 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
 	setport(&chan->status.dest_socket,DEFAULT_STAT_PORT);
       }
       break;
+    case LIFETIME:
+      {
+	int x = abs(decode_int(cp,optlen));
+	chan->lifetime = x;
+      }
+      break;
     default:
       break;
       }
@@ -676,6 +682,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   if(strlen(frontend->description) > 0)
     encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
 
+  encode_int32(&bp,LIFETIME,chan->lifetime);
   encode_socket(&bp,STATUS_DEST_SOCKET,&chan->frontend->metadata_dest_socket);
   int64_t now = gps_time_ns();
   encode_int64(&bp,GPS_TIME,now);
