@@ -49,6 +49,7 @@ double RFatten = INFINITY;
 int Agc_enable = -1;
 struct sockaddr Destination_socket;
 int Buffer = -1;
+int Lifetime = 0;
 
 struct sockaddr Control_address;
 int Status_sock = -1;
@@ -78,6 +79,7 @@ struct option Options[] = {
   {"radio", required_argument, NULL, 'r'},
   {"samprate", required_argument, NULL, 'R'},
   {"ssrc", required_argument, NULL, 's'},
+  {"lifetime", required_argument, NULL, 't'},
   {"verbose", no_argument, NULL, 'v'},
   {"version", no_argument, NULL, 'V'},
   {"source", required_argument, NULL, 'o'},
@@ -97,6 +99,9 @@ int main(int argc,char *argv[]){
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
+      case 't':
+	Lifetime = atoi(optarg);
+	break;
       case 'a':
 	Agc_enable = 1;
 	break;
@@ -232,6 +237,7 @@ int main(int argc,char *argv[]){
     High = temp;
   }
   uint32_t received_tag = 0;
+  int received_lifetime = -1;
   double received_freq = INFINITY;
   uint32_t received_ssrc = 0;
   int received_agc_enable = -1;
@@ -260,6 +266,7 @@ int main(int argc,char *argv[]){
       sent_tag = arc4random();
       encode_int(&bp,COMMAND_TAG,sent_tag);
       encode_int(&bp,OUTPUT_SSRC,Ssrc);
+      encode_int(&bp,LIFETIME,Lifetime);
 
       if(Mode != NULL)
 	encode_string(&bp,PRESET,Mode,strlen(Mode));
@@ -362,6 +369,9 @@ int main(int argc,char *argv[]){
       switch(type){
       default:
 	break;
+      case LIFETIME:
+	received_lifetime = decode_int32(cp,optlen);
+	break;
       case COMMAND_TAG:
 	received_tag = decode_int32(cp,optlen);
 	break;
@@ -429,6 +439,8 @@ int main(int argc,char *argv[]){
   // Show responses unless quiet
   if(!Quiet){
     printf("SSRC %'u\n",Ssrc);
+    if(received_lifetime != -1)
+      printf("Lifetime %d\n",received_lifetime);
     if ((preset) && (strlen(preset)>0)){
       printf("Preset %s\n",preset);
       FREE(preset);
