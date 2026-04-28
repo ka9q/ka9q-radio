@@ -33,6 +33,7 @@ R    Set AGC recover rate, dB/s
 s    Set squelch, dB
 S    Set sample rate, Hz
 T    Set AGC hang time, s
+t    Set lifetime, frames (0 = immortal)
 u    Set output status update interval, frames
 v    Set FFT analyzer overlap (0-1)
 W    Set FFT analyzer window type
