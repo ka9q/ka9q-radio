@@ -179,7 +179,7 @@ extern uint64_t Waits;
 
 extern _Atomic bool Terminate;
 extern bool Voting;
-extern struct session const * _Atomic Best_session; // Session with highest SNR
+extern struct session * _Atomic Best_session; // Session with highest SNR
 extern struct sockaddr Metadata_dest_socket;
 extern char const *Pipe;
 extern struct sockaddr_in *Source_socket;
@@ -198,7 +198,7 @@ void *statproc(void *arg);
 void *repeater_ctl(void *arg);
 char const *lookupid(double freq,double tone);
 bool kick_output();
-void vote(struct session const *sp);
+void vote(struct session *sp);
 int64_t qlen(struct session const *sp);
 
 static inline bool inuse(struct session const *sp){

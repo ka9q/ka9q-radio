@@ -106,7 +106,7 @@ _Atomic PaTime Last_callback_time;
 int64_t Last_error_time;
 struct session Sessions[NSESSIONS];
 _Atomic bool Terminate;
-struct session const * _Atomic Best_session; // Session with highest SNR
+struct session * _Atomic Best_session; // Session with highest SNR
 void *output_thread(void *p);
 struct sockaddr_in *Source_socket;
 int Callback_blocksize = 960; // 960 samples = 20 ms @ 48k
@@ -450,13 +450,13 @@ int main(int argc,char * const argv[]){
 }
 
 // Sets global Best_session if we have the highest SNR
-void vote(struct session const *sp){
+void vote(struct session *sp){
   assert(sp != NULL);
   if(!inuse(sp) || muted(sp))
     return;
 
   pthread_mutex_lock(&Sess_mutex);
-  struct session const *best = atomic_load_explicit(&Best_session,memory_order_acquire);
+  struct session *best = atomic_load_explicit(&Best_session,memory_order_acquire);
   if(best == NULL || !inuse(best) || muted(best)){
     atomic_store_explicit(&Best_session,sp,memory_order_release); // they abdicated; grab the throne
     pthread_mutex_unlock(&Sess_mutex);
@@ -682,7 +682,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   // If voting, look only at the leader.
   // Otherwise scan the whole list, summing all active sessions
   // finally a real use for do {} while();
-  struct session const *sp = Voting ?
+  struct session *sp = Voting ?
     atomic_load_explicit(&Best_session,memory_order_acquire) : Sessions;
 
   do {
@@ -698,9 +698,10 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     int start = 0;
     if(wptr <= rptr){
       int late = rptr - wptr; // guaranteed zero or positive
-      if(late * Channels >= BUFFERSIZE)
+      if(late * Channels >= BUFFERSIZE){
+	sp->drops++;
 	continue;      // all of it is late
-      else
+      } else
 	start = late * Channels; // trim the front to keep it from backward wrapping and being played 1 buffer later
     } else if(Channels * (wptr - rptr + frames) > BUFFERSIZE){
       if(Channels * (wptr - rptr) > BUFFERSIZE)

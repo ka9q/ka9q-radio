@@ -337,6 +337,7 @@ static void *decode_task(void *arg){
 	  if(sp->samprate == 0 || sp->channels == 0){
 	    // Can't proceed, probably first use of a new payload type
 	    FREE(pkt);
+	    sp->drops++;
 	    reset_playout(sp); // but don't fall behind for when it clears up
 	    continue;
 	  }
@@ -379,8 +380,8 @@ static void *decode_task(void *arg){
     // Do PL detection and notching even when muted
     if(sp->frame_size > 0 && sp->samprate != 0){
       // Limit to 1.5s on queue
-      double q = qlen(sp);
-      if(q < 0 || q > 1.5 * DAC_samprate)
+      int64_t q = qlen(sp);
+      if(q < 0 || q > 3 * DAC_samprate / 2)
 	reset_playout(sp);
 
       if(sp->notch_enable){
@@ -801,22 +802,23 @@ static void copy_to_stream(struct session *sp){
       sp->level = energy;
 #endif
   }
+  {
+    int64_t q = qlen(sp);
 
-  double q = qlen(sp);
-
-  // Use these for playout buffer adjustments
-  if(q < 0){
-    sp->lates++;
-    sp->consec_lates++;
-    sp->consec_earlies = 0;
-    //  } else if((queue_in_frames + sp->frame_size) * Channels > BUFFERSIZE){ // entire buffer
-  } else if(q > 2 * sp->playout){
-    sp->earlies++;
-    sp->consec_earlies++;
-    sp->consec_lates = 0;
-  } else {
-    sp->consec_earlies = 0;
-    sp->consec_lates = 0;
+    // Use these for playout buffer adjustments
+    if(q < 0){
+      sp->lates++;
+      sp->consec_lates++;
+      sp->consec_earlies = 0;
+      //  } else if((queue_in_frames + sp->frame_size) * Channels > BUFFERSIZE){ // entire buffer
+    } else if(q > BUFFERSIZE/2){ // about 1.36 sec at 48kHz, 128K buffer
+      sp->earlies++;
+      sp->consec_earlies++;
+      sp->consec_lates = 0;
+    } else {
+      sp->consec_earlies = 0;
+      sp->consec_lates = 0;
+    }
   }
   if(sp->consec_lates > 6 || sp->consec_earlies > 6){
     reset_playout(sp);
