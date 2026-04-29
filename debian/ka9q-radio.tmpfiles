@@ -1,0 +1,6 @@
+d /etc/radio 0775 radio radio -
+d /var/lib/hfdl 0775 radio radio -
+d /var/lib/ka9q-radio 0775 radio radio -
+d /var/lib/ka9q-radio/ft8 0775 radio radio -
+d /var/lib/ka9q-radio/ft4 0775 radio radio -
+d /var/lib/ka9q-radio/wspr 0775 radio radio -

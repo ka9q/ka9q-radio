@@ -43,27 +43,24 @@ install-system: install
 		$(DESTDIR)$(statedir)/ft8 $(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr $(DESTDIR)$(hfdllibdir) 
 
 install:
-	# Setup ka9q-radio directories
-	install -d -m 0775 $(DESTDIR)$(radioconfdir) $(DESTDIR)$(hfdllibdir) $(DESTDIR)$(statedir) \
-		$(DESTDIR)$(statedir)/ft8 $(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr $(DESTDIR)$(hfdllibdir) 
-
+# Setup ka9q-radio directories
+	install -d -m 0775 $(DESTDIR)$(hfdllibdir) $(DESTDIR)$(hfdllibdir) 
 	install -d -m 0755 $(DESTDIR)$(sysusersdir) $(DESTDIR)$(sysctldir) $(DESTDIR)$(modprobedir) \
 		$(DESTDIR)$(logrotatedir) $(DESTDIR)$(sbindir) $(DESTDIR)$(crondir) $(DESTDIR)$(bindir)
 
-
-	# Setup init system
+# Setup init system
 	install -m 0644 radio.sysusers $(DESTDIR)$(sysusersdir)/radio.conf
-	# Setup kernel configuration
+# Setup kernel configuration
 	install $(SYSCTL) $(DESTDIR)$(sysctldir)
 	install $(BLACKLIST) $(DESTDIR)$(modprobedir)
-	# Setup log rotation
+# Setup log rotation
 	install -m 0644 $(LOGROTATE_FILES) $(DESTDIR)$(logrotatedir)
-	# Configure HFDL
+# Configure HFDL
 	install systable.conf $(DESTDIR)$(hfdllibdir)
 	install start-hfdl.sh $(DESTDIR)$(sbindir)
-	# Configure cron jobs
+# Configure cron jobs
 	install -m 0644 ka9q-cleanups $(DESTDIR)$(crondir)
-	# Configure scripts
+# Configure scripts
 	install $(SCRIPTS) $(DESTDIR)$(bindir)
 
 
