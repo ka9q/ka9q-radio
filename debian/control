@@ -20,7 +20,7 @@ Architecture: any
 Depends:
  ${shlibs:Depends},
  ${misc:Depends},
- libcat2-bin, systemd, udev
+ libcap2-bin, systemd, udev
 Description: KA9Q multichannel SDR server
  Multichannel software-defined radio "spectrum server"
  with multicast control and data
