@@ -68,7 +68,7 @@ COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -f
 COPTS += -fPIC
 CFLAGS = $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES) $(VERSION_FLAGS)
 DAEMONS = aprs aprsfeed cwd packetd radiod
-EXECS = control fft-gen jt-decoded metadump monitor pcmrecord pl powers tune wd-record rx888_boot
+EXECS = control fft-gen jt-decoded metadump monitor pcmrecord pl powers tune wd-record
 LIBRADIO = ax25.o morse.o bandplan.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o sincospi.o sincospif.o window.o gauss.o
 DYNAMIC_DRIVERS = sig_gen.so
 RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o fcd.o hid-libusb.o libradio.a
@@ -120,13 +120,14 @@ endif
 # cheap RTLSDR dongles
 ifeq ($(ENABLE_RTLSDR),1)
    CFILES += rtlsdr.c
-   DYNAMIC_DRIVERS += rtlsdr.o	
+   DYNAMIC_DRIVERS += rtlsdr.so
 endif
 
 # RX 888 MkII
 ifeq ($(ENABLE_RX888),1)
    CFILES += rx888.c
    DYNAMIC_DRIVERS += rx888.so
+   EXECS += rx888_boot
 endif
 
 ifeq ($(ENABLE_SDRPLAY),1)
