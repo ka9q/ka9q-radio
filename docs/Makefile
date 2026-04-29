@@ -1,5 +1,9 @@
 # Copyright 2026, Phil Karn, KA9Q
 
+prefix	?= /usr/local
+mandir  ?= $(prefix)/man
+
+
 .PHONY: clean all install
 
 all:
