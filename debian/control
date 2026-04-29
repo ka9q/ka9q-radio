@@ -28,51 +28,64 @@ Package: ka9q-radio-airspy
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Airspy device plugin for ka9q-radio
-
+ ka9q-radio plugin for the Airspy R2, Airspy Mini SDR front ends
+	     
 Package: ka9q-radio-airspyhf
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Airspy HF+ device plugin for ka9q-radio
+ ka9q-radio plugin for the Airspy HF+ SDR front end
 
 Package: ka9q-radio-bladerf
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Blade RF device plugin for ka9q-radio
+ ka9q-radio plugin for the Blade RF SDR front end
 
 #Package: ka9q-radio-fobos
 #Architecture: any
 #Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 #Description: Rigexpert Fobos device plugin for ka9q-radio
+ ka9q-radio plugin for the Rigexpert Fobos SDR front end
 
 Package: ka9q-radio-funcube
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Amsat UK Funcube Dongle Pro+ device plugin for ka9q-radio
+ ka9q-radio plugin for the old AMSAT UK Funcube Dongle Pro+ SDR front end
 
 Package: ka9q-radio-hackrf
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Hack RF device plugin for ka9q-radio
+ ka9q-radio plugin for the Hack RF SDR frontend
 
 #Package: ka9q-radio-hydrasdr
 #Architecture: any
 #Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 #Description: Hydra SDR One device plugin for ka9q-radio
-
+# ka9q-radio plugin for the Hydra SDR One (can also use the airspy plugin)
+ 
 Package: ka9q-radio-rtlsdr
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Generic RTL-SDR device plugin for ka9q-radio
+ ka9q-radio plugin for generic RTL-SDR SDR front ends
 
 Package: ka9q-radio-rx888
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: RX-888 MkII device plugin for ka9q-radio
+ ka9q-radio plugin for the RX-888 MkII direct sampling HF-6m SDR front end (no VHF/UHF support)
 
 #Package: ka9q-radio-sdrplay
 #Architecture: any
 #Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 #Description: SDRPlay device plugin for ka9q-radio
+# ka9q-radio plugin for some of the SDR Play SDR front ends. I discourage this device because
+# they keep their libraries proprietary, making support difficult or impossible. And there are
+# good alternatives.
+
 
 
 
