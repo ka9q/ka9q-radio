@@ -11,7 +11,7 @@ Build-Depends:
  libhackrf-dev,
  librtlsdr-dev
 Standards-Version: 4.7.2
-Homepage: <insert the upstream URL, if relevant>
+Homepage: http://www.ka9q.net
 Vcs-Browser: https://github.com/ka9q/ka9q-radio
 Vcs-Git: https://github.com/ka9q/ka9q-radio.git
 
