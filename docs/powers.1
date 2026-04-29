@@ -4,7 +4,7 @@
 .\" First parameter, NAME, should be all caps
 .\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
 .\" other parameters are allowed: see man(7), man(1)
-.TH RADIOD 8 "April 28 2026"
+.TH POWERS 1 "April 28 2026"
 .\" Please adjust this date whenever revising the manpage.
 .\"
 .\" Some roff macros, for reference:
@@ -18,21 +18,19 @@
 .\" .sp <n>    insert n+1 empty lines
 .\" for manpage-specific macros, see man(7)
 .SH NAME
-ka9q-radio \- radio spectrum server
+powers \- show signal levels on a radiod channel
 .SH SYNOPSIS
-.B ka9q-radio
+.B powers
 .RI [ options ] " files" ...
 .SH DESCRIPTION
 This manual page documents briefly the
-.B ka9q-radio
-and
-.B bar
-commands.
+.B powers
+command.
 .PP
 .\" TeX users may be more comfortable with the \fB<whatever>\fP and
 .\" \fI<whatever>\fP escape sequences to invode bold face and italics,
 .\" respectively.
-\fBka9q-radio\fP is a program that works magic. (to be completed)
+\fBpowers\fP receives a multicast stream containing the status of a radiod channel.
 .SH OPTIONS
 These programs follow the usual GNU command line syntax, with long
 options starting with two dashes ('\-').
@@ -45,7 +43,7 @@ Show summary of options.
 .B \-v, \-\-version
 Show version of program.
 .SH SEE ALSO
-.BR control (1),
+.BR radiod (8),
 .BR monitor (1).
 .br
 The programs are documented fully by
