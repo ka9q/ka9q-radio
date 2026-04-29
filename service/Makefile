@@ -12,11 +12,11 @@ all:
 clean:
 	@true
 
-# package install is handled by dpkg
+# install as ordinary files for now, don't have dpkg autostart them
 install:
-	@true
-
-install-system:
 	install -d 0755 $(DESTDIR)$(systemunitdir)
 	install *.service $(DESTDIR)$(systemunitdir)
+
+install-system:
+	@true
 
