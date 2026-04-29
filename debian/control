@@ -22,7 +22,8 @@ Depends:
  ${misc:Depends},
  libcat2-bin, systemd, udev
 Description: ka9q-radio SDR package
- Multichannel software-defined radio "spectrum server" with multicast control and data
+ Multichannel software-defined radio "spectrum server"
+ with multicast control and data
  
 Package: ka9q-radio-airspy
 Architecture: any
@@ -76,7 +77,8 @@ Package: ka9q-radio-rx888
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: RX-888 MkII device plugin for ka9q-radio
- ka9q-radio plugin for the RX-888 MkII direct sampling HF-6m SDR front end (no VHF/UHF support)
+ ka9q-radio plugin for the RX-888 MkII direct sampling HF-6m
+ SDR front end (no VHF/UHF support)
 
 #Package: ka9q-radio-sdrplay
 #Architecture: any

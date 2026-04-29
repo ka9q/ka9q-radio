@@ -52,16 +52,16 @@ install:
 # Setup init system
 	install -m 0644 radio.sysusers $(DESTDIR)$(sysusersdir)/radio.conf
 # Setup kernel configuration
-	install $(SYSCTL) $(DESTDIR)$(sysctldir)
-	install $(BLACKLIST) $(DESTDIR)$(modprobedir)
+	install -m 0644 $(SYSCTL) $(DESTDIR)$(sysctldir)
+	install -m 0644 $(BLACKLIST) $(DESTDIR)$(modprobedir)
 # Setup log rotation
 	install -m 0644 $(LOGROTATE_FILES) $(DESTDIR)$(logrotatedir)
 # Configure HFDL
-	install systable.conf $(DESTDIR)$(hfdllibdir)
-	install start-hfdl.sh $(DESTDIR)$(sbindir)
+	install -m 0644 systable.conf $(DESTDIR)$(hfdllibdir)
+	install -m 0755 start-hfdl.sh $(DESTDIR)$(sbindir)
 # Configure cron jobs
 	install -m 0644 ka9q-cleanups $(DESTDIR)$(crondir)
 # Configure scripts
-	install $(SCRIPTS) $(DESTDIR)$(bindir)
+	install -m 0755 $(SCRIPTS) $(DESTDIR)$(bindir)
 
 
