@@ -6,20 +6,20 @@
 
 # HydraSDR RFOne main device (idVendor=38af VERNOUX BENJAMIN, idProduct=0001 HydraSDR RFOne Normal operation mode)
 # Primary rule for distributions with plugdev group (Debian/Ubuntu family)
-SUBSYSTEM=="usb", ATTR{idVendor}=="38af", ATTR{idProduct}=="0001", SYMLINK+="hydrasdr_rfone-%k", MODE="0660", GROUP="plugdev", TAG+="uaccess", TAG+="udev-acl"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="38af", ATTR{idProduct}=="0001", SYMLINK+="hydrasdr_rfone-%k", MODE="0660", GROUP="plugdev", TAG+="uaccess", TAG+="udev-acl"
 # Fallback rule for distributions without plugdev group (Red Hat/SUSE/Arch family)
-SUBSYSTEM=="usb", ATTR{idVendor}=="38af", ATTR{idProduct}=="0001", SYMLINK+="hydrasdr_rfone-%k", MODE="0664", GROUP="users", TAG+="uaccess"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="38af", ATTR{idProduct}=="0001", SYMLINK+="hydrasdr_rfone-%k", MODE="0664", GROUP="users", TAG+="uaccess"
 
 # HydraSDR RFOne device in normal operation mode (uses historic OpenMoko VID 1d50, official VID 38af now available)
 # Primary rule for distributions with plugdev group (Debian/Ubuntu family)
-SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="60a1", SYMLINK+="hydrasdr_rfone-%k", MODE="0660", GROUP="plugdev", TAG+="uaccess", TAG+="udev-acl"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="60a1", SYMLINK+="hydrasdr_rfone-%k", MODE="0660", GROUP="plugdev", TAG+="uaccess", TAG+="udev-acl"
 # Fallback rule for distributions without plugdev group (Red Hat/SUSE/Arch family)
-SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="60a1", SYMLINK+="hydrasdr_rfone-%k", MODE="0664", GROUP="users", TAG+="uaccess"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="60a1", SYMLINK+="hydrasdr_rfone-%k", MODE="0664", GROUP="users", TAG+="uaccess"
 
 
 # NXP DFU mode device (Firmware update mode)
 # Primary rule for distributions with plugdev group (Debian/Ubuntu family)
-SUBSYSTEM=="usb", ATTR{idVendor}=="1fc9", ATTR{idProduct}=="000c", SYMLINK+="nxp-dfu-%k", MODE="0660", GROUP="plugdev", TAG+="uaccess", TAG+="udev-acl"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1fc9", ATTR{idProduct}=="000c", SYMLINK+="nxp-dfu-%k", MODE="0660", GROUP="plugdev", TAG+="uaccess", TAG+="udev-acl"
 # Fallback rule for distributions without plugdev group (Red Hat/SUSE/Arch family)
-SUBSYSTEM=="usb", ATTR{idVendor}=="1fc9", ATTR{idProduct}=="000c", SYMLINK+="nxp-dfu-%k", MODE="0664", GROUP="users", TAG+="uaccess"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1fc9", ATTR{idProduct}=="000c", SYMLINK+="nxp-dfu-%k", MODE="0664", GROUP="users", TAG+="uaccess"
 
