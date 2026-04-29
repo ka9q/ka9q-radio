@@ -141,7 +141,7 @@ int demod_spectrum(void *arg){
 	  goto quit;
 	}
 	// Clear the new space to avoid display glitches
-	assert(ring_size >= old_ring_size);
+	assert(newsize >= old_ring_size);
 	memset(chan->spectrum.ring + old_ring_size, 0, (chan->spectrum.ring_size - old_ring_size) * sizeof *chan->spectrum.ring);
       }
       assert(chan->spectrum.ring != NULL);
