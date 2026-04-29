@@ -1,0 +1,2 @@
+# debian/ka9q-radio-airspy.install
+usr/lib/ka9q-radio/airspy.so

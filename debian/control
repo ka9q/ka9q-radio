@@ -19,3 +19,57 @@ Depends:
 Description: ka9q-radio SDR package
  Multichannel software-defined radio "spectrum server" with multicast control and data
  
+Package: ka9q-radio-airspy
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Airspy device plugin for ka9q-radio
+
+Package: ka9q-radio-airspyhf
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Airspy HF+ device plugin for ka9q-radio
+
+Package: ka9q-radio-bladerf
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Blade RF device plugin for ka9q-radio
+
+Package: ka9q-radio-fobos
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Rigexpert Fobos device plugin for ka9q-radio
+
+Package: ka9q-radio-funcube
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Amsat UK Funcube Dongle Pro+ device plugin for ka9q-radio
+
+Package: ka9q-radio-hackrf
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Hack RF device plugin for ka9q-radio
+
+Package: ka9q-radio-hydrasdr
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Hydra SDR One device plugin for ka9q-radio
+
+Package: ka9q-radio-rtlsdr
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Generic RTL-SDR device plugin for ka9q-radio
+
+Package: ka9q-radio-rx888
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: RX-888 MkII device plugin for ka9q-radio
+
+Package: ka9q-radio-sdrplay
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: SDRPlay device plugin for ka9q-radio
+
+
+
+
+

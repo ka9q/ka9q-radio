@@ -1,0 +1,5 @@
+# debian/ka9q-radio.install
+usr/bin/*
+usr/sbin/*
+usr/share/ka9q-radio/*
+etc/radio/*
