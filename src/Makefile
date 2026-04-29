@@ -121,6 +121,7 @@ endif
 ifeq ($(ENABLE_RTLSDR),1)
    CFILES += rtlsdr.c
    DYNAMIC_DRIVERS += rtlsdr.o	
+endif
 
 # RX 888 MkII
 ifeq ($(ENABLE_RX888),1)
