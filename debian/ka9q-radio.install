@@ -10,6 +10,6 @@ etc/sysctl.d/*
 etc/modprobe.d/*
 usr/lib/hfdl/*
 etc/cron.d/*
-etc/udev/rules.d/*
+lib/udev/rules.d/*
 lib/systemd/system/*
 usr/lib/*
