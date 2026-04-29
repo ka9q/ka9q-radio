@@ -11,5 +11,5 @@ etc/modprobe.d/*
 usr/lib/hfdl/*
 etc/cron.d/*
 etc/udev/rules.d/*
-etc/systemd/system/*
+lib/systemd/system/*
 usr/lib/*
