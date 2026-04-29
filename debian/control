@@ -61,11 +61,11 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Hack RF device plugin for ka9q-radio
  ka9q-radio plugin for the Hack RF SDR frontend
 
-#Package: ka9q-radio-hydrasdr
-#Architecture: any
-#Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-#Description: Hydra SDR One device plugin for ka9q-radio
-# ka9q-radio plugin for the Hydra SDR One (can also use the airspy plugin)
+Package: ka9q-radio-hydrasdr
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Hydra SDR One device plugin for ka9q-radio
+ ka9q-radio plugin for the Hydra SDR One (can also use the airspy plugin)
  
 Package: ka9q-radio-rtlsdr
 Architecture: any
