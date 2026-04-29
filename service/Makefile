@@ -15,7 +15,7 @@ clean:
 # install as ordinary files for now, don't have dpkg autostart them
 install:
 	install -d 0755 $(DESTDIR)$(systemdunitdir)
-	install *.service $(DESTDIR)$(systemdunitdir)
+	install -m 0644 *.service $(DESTDIR)$(systemdunitdir)
 
 install-system:
 	@true

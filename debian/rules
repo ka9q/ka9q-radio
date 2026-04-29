@@ -41,7 +41,7 @@ override_dh_auto_build:
 	$(MAKE) $(PLUGIN_FLAGS)
 
 override_dh_auto_install:
-	$(MAKE) $(PLUGIN_FLAGS) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr systemdunitdir=/lib/systemd/system
+	$(MAKE) $(PLUGIN_FLAGS) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr systemdunitdir=/lib/systemd/system udevdir=/lib/udev/rules.d
 
 override_dh_installsystemd:
 	dh_installsystemd --no-enable --no-start
