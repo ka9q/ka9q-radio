@@ -17,7 +17,7 @@ override_dh_auto_build:
 	$(MAKE) ENABLE_AIRSPY=0 ENABLE_HACKRF=0 ENABLE_RTLSDR=1 ENABLE_AIRSPY=0 ENABLE_AIRSPYHF=0 ENABLE_HYDRASDR=0 ENABLE_RX888=0
 
 override_dh_auto_install:
-	$(MAKE) install DESTDIR=$(CURDIR)/debian/ka9q-radio prefix=/usr
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr
 
 %:
 	dh $@
