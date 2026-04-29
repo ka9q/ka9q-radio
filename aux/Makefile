@@ -25,7 +25,7 @@ crondir         ?= $(sysconfdir)/cron.d
 
 UNAME_S := $(shell uname -s)
 
-SCRIPTS = set_lo_multicast.sh
+SCRIPTS = set_lo_multicast
 LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate recordings.rotate
 BLACKLIST = airspy-blacklist.conf
 SYSCTL = 98-sockbuf.conf 50-multicast.conf
@@ -58,7 +58,7 @@ install:
 	install -m 0644 $(LOGROTATE_FILES) $(DESTDIR)$(logrotatedir)
 # Configure HFDL
 	install -m 0644 systable.conf $(DESTDIR)$(hfdllibdir)
-	install -m 0755 start-hfdl.sh $(DESTDIR)$(sbindir)
+	install -m 0755 start-hfdl $(DESTDIR)$(sbindir)
 # Configure cron jobs
 	install -m 0644 ka9q-cleanups $(DESTDIR)$(crondir)
 # Configure scripts
