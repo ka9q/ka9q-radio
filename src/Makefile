@@ -143,7 +143,6 @@ install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 	install -d -m 0755 $(DESTDIR)$(sbindir) $(DESTDIR)$(bindir) $(DESTDIR)$(pkglibdir) \
 		$(DESTDIR)$(sbindir) $(DESTDIR)$(bindir)
 	install -m 0755 $(DYNAMIC_DRIVERS) $(DESTDIR)$(pkglibdir)
-	ln -sf $(DESTDIR)$(pkglibdir)/*.so $(DESTDIR)$(pkglibdir)/..
 	install -m 0755 $(DAEMONS) $(DESTDIR)$(sbindir)
 	install -m 0755 $(EXECS) $(DESTDIR)$(bindir)
 

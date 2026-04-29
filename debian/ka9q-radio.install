@@ -2,4 +2,14 @@
 usr/bin/*
 usr/sbin/*
 usr/share/ka9q-radio/*
+usr/lib/ka9q-radio/*
 etc/radio/*
+etc/sysusers.d/*
+etc/logrotate.d/*
+etc/sysctl.d/*
+etc/modprobe.d/*
+usr/lib/hfdl/*
+etc/cron.d/*
+etc/udev/rules.d/*
+etc/systemd/system/*
+usr/lib/*
