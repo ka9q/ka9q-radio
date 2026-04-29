@@ -5,6 +5,11 @@ Maintainer: Phil Karn <karn@ka9q.net>
 Rules-Requires-Root: no
 Build-Depends:
  debhelper-compat (= 13),
+ libairspy-dev,
+ libairspyhf-dev,
+ libbladerf-dev,
+ libhackrf-dev,
+ librtlsdr-dev
 Standards-Version: 4.7.2
 Homepage: <insert the upstream URL, if relevant>
 Vcs-Browser: https://github.com/ka9q/ka9q-radio
@@ -34,10 +39,10 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Blade RF device plugin for ka9q-radio
 
-Package: ka9q-radio-fobos
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Description: Rigexpert Fobos device plugin for ka9q-radio
+#Package: ka9q-radio-fobos
+#Architecture: any
+#Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+#Description: Rigexpert Fobos device plugin for ka9q-radio
 
 Package: ka9q-radio-funcube
 Architecture: any
@@ -49,10 +54,10 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Hack RF device plugin for ka9q-radio
 
-Package: ka9q-radio-hydrasdr
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Description: Hydra SDR One device plugin for ka9q-radio
+#Package: ka9q-radio-hydrasdr
+#Architecture: any
+#Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+#Description: Hydra SDR One device plugin for ka9q-radio
 
 Package: ka9q-radio-rtlsdr
 Architecture: any
@@ -64,10 +69,10 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: RX-888 MkII device plugin for ka9q-radio
 
-Package: ka9q-radio-sdrplay
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Description: SDRPlay device plugin for ka9q-radio
+#Package: ka9q-radio-sdrplay
+#Architecture: any
+#Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+#Description: SDRPlay device plugin for ka9q-radio
 
 
 
