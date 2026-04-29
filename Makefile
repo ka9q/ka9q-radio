@@ -29,7 +29,7 @@ ENABLE_RTLSDR   ?= 1
 ENABLE_RX888    ?= 1
 ENABLE_SDRPLAY  ?= 0
 
-SUBDIRS=src aux share service rules docs
+SUBDIRS=src aux share service rules docs config
 .PHONY: clean all install $(SUBDIRS) install-system commands
 
 all: $(SUBDIRS)
