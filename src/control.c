@@ -86,7 +86,7 @@ static int send_poll(int ssrc);
 static int pprintw(WINDOW *w,int y, int x, char const *prefix, char const *fmt, ...);
 
 static WINDOW *Tuning_win,*Sig_win,*Filtering_win,*Demodulator_win,
-  *Options_win,*Presets_win,*Debug_win,*Input_win,
+  *Options_win,*Presets_win,*Debug_win,*Debug_win_outer,*Input_win,
   *Output_win;
 
 static void display_tuning(WINDOW *tuning,struct channel const *chan);
@@ -321,12 +321,21 @@ static void setup_windows(void){
     row += maxrows;
     col = 0;
   }
-  if(row < LINES && col < COLS)
-    Debug_win = newwin(LINES - row,COLS-col,row,col); // Only if room is left
-  // A message from our sponsor...
-  scrollok(Debug_win,TRUE); // This one scrolls so it can be written to with wprintw(...\n)
-  wprintw(Debug_win,"KA9Q-radio %s last modified %s\n",__FILE__,__TIMESTAMP__);
-  wprintw(Debug_win,"Copyright 2024, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n");
+  if(row < LINES && col < COLS){
+    // Use remaining space for debug window
+    Debug_win_outer = newwin(LINES - row,COLS-col,row,col); // Only if room is left
+    if(Debug_win_outer != NULL){
+      box(Debug_win_outer,0,0);
+      wrefresh(Debug_win_outer);
+      Debug_win = derwin(Debug_win_outer, LINES - row - 2, COLS-col - 2, 1, 1);
+      // A message from our sponsor...
+      scrollok(Debug_win,TRUE); // This one scrolls so it can be written to with wprintw(...\n)
+      wprintw(Debug_win,"KA9Q-radio copyright 2026, Phil Karn, KA9Q.\n");
+      wprintw(Debug_win,"May be used under the terms of the GNU Public License\n");
+      wprintw(Debug_win,"   Repo: %s\n",GIT_REMOTE_URL);
+      wprintw(Debug_win," Commit: %s\n",GIT_HASH);
+    }
+  }
 }
 
 // Comparison for sorting by SSRC
@@ -584,6 +593,10 @@ int main(int argc,char *argv[]){
 
   // Set up display subwindows
   Tty = fopen("/dev/tty","r+");
+  if(Tty == NULL){
+    fprintf(stderr,"Can't open /dev/tty\n");
+    exit(1);
+  }
   Term = newterm(NULL,Tty,Tty);
   set_term(Term);
 
@@ -702,7 +715,9 @@ int main(int argc,char *argv[]){
       display_output(Output_win,chan);
 
       if(Debug_win != NULL){
+	touchwin(Debug_win_outer);
 	touchwin(Debug_win); // since we're not redrawing it every cycle
+	wnoutrefresh(Debug_win_outer);
 	wnoutrefresh(Debug_win);
       }
       doupdate();      // Update the screen right before we pause

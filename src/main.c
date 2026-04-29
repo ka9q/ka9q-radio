@@ -40,7 +40,7 @@ char const *Serial;
 static void closedown(int);
 static void verbosity(int);
 
-#ifndef NDEBUG
+#if !defined(NDEBUG) && defined(__linux__)
 static void fpe_handler(int sig){
   (void)sig;
   fprintf(stderr,"SIGFPE: floating point exception\n");
@@ -61,9 +61,9 @@ int main(int argc,char *argv[]){
   App_path = argv[0];
 
   VERSION();
-#ifndef NDEBUG
+#if !defined(NDEBUG)
   fprintf(stderr,"Assertion checking enabled, execution will be slower\n");
-#if 0
+#if defined(__linux__)
   fprintf(stderr,"Floating point exception traps enabled\n");
   feclearexcept(FE_ALL_EXCEPT);
   feenableexcept(FE_INVALID|FE_DIVBYZERO);
