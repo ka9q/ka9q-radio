@@ -39,6 +39,7 @@ clean:
 	@true
 
 install-system: install
+	install -D -m 0775 $(DESTDIR)$(radioconfdir)
 	chown radio:radio $(DESTDIR)$(radioconfdir) $(DESTDIR)$(hfdllibdir) $(DESTDIR)$(statedir) \
 		$(DESTDIR)$(statedir)/ft8 $(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr $(DESTDIR)$(hfdllibdir) 
 
