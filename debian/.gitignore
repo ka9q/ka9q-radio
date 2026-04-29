@@ -1,0 +1,14 @@
+*.debhelper.log
+*.substvars
+ka9q-radio-airspy
+ka9q-radio-airspyhf
+ka9q-radio-bladerf
+ka9q-radio-funcube
+ka9q-radio-hackrf
+ka9q-radio-hydrasdr
+ka9q-radio-rtlsdr
+ka9q-radio-rx888
+ka9q-radio
+*.debhelper
+files
+tmp
