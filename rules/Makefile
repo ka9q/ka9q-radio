@@ -3,24 +3,24 @@
 # sub-Makefile for systemd service files
 # Copyright 2025, Phil Karn, KA9Q
 
+prefix        ?= /usr/local
+sysconfdir    ?= /etc
+udevdir	      ?= $(sysconfdir)/udev/rules.d
+
 UNAME_S := $(shell uname -s)
 
+.PHONY: clean all install install-system
+
 all:
-
+	@true
 clean:
+	@true
 
-install: install-$(UNAME_S)
+install-system: install	
 
-install-Linux:
-	rsync *.rules /etc/udev/rules.d
-	udevadm control --reload
+install:
+	install -d -m 0755 $(DESTDIR)$(udevdir)
+	install -m 0644 *.rules $(DESTDIR)$(udevdir)
 
-install-Darwin:
-	# TODO
-	@exit 0
 
-install-%:
-	@echo "Unsupported operating system: $*"
-	@exit 1
 
-.PHONY: clean all install install-Linux install-Darwin install-%

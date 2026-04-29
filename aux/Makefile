@@ -3,79 +3,67 @@
 # sub-make for ka9q aux files
 # Copyright 2025, Phil Karn, KA9Q
 
+prefix        ?= /usr/local
+exec_prefix   ?= $(prefix)
+bindir        ?= $(exec_prefix)/bin
+sbindir       ?= $(exec_prefix)/sbin
+libdir        ?= $(exec_prefix)/lib
+datadir       ?= $(prefix)/share
+sysconfdir    ?= /etc
+localstatedir ?= /var
+pkgdatadir    ?= $(datadir)/ka9q-radio
+pkglibdir     ?= $(libdir)/ka9q-radio
+statedir      ?= $(localstatedir)/lib/ka9q-radio
+radioconfdir  ?= $(sysconfdir)/radio
+avahidir        ?= $(sysconfdir)/avahi
+logrotatedir    ?= $(sysconfdir)/logrotate.d
+sysctldir       ?= $(sysconfdir)/sysctl.d
+modprobedir     ?= $(sysconfdir)/modprobe.d
+sysusersdir     ?= $(sysconfdir)/sysusers.d
+hfdllibdir	?= $(libdir)/hfdl
+crondir         ?= $(sysconfdir)/cron.d
+
 UNAME_S := $(shell uname -s)
 
-DAEMONDIR = /usr/local/sbin
-VARDIR = /var/lib/ka9q-radio
-BINDIR = /usr/local/bin
-DIRS = /etc/fftw /etc/radio /etc/avahi/services $(VARDIR) /var/lib/hfdl $(VARDIR)/ft8 $(VARDIR)/ft4 $(VARDIR)/wspr /var/log/acars
-SYSFILES = /etc/avahi/hosts /var/log/hfdl.log
 SCRIPTS = set_lo_multicast.sh
 LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate recordings.rotate
 BLACKLIST = airspy-blacklist.conf
 SYSCTL = 98-sockbuf.conf 50-multicast.conf
 
+.PHONY: clean all install install-system
+
 all:
+	@true
 
 clean:
+	@true
 
-install: install-$(UNAME_S)
+install-system: install
+	chown radio:radio $(DESTDIR)$(radioconfdir) $(DESTDIR)$(hfdllibdir) $(DESTDIR)$(statedir) \
+		$(DESTDIR)$(statedir)/ft8 $(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr $(DESTDIR)$(hfdllibdir) 
 
-install-Linux:
-	# Create radio group
-	/usr/sbin/adduser --quiet --system --group radio
+install:
+	# Setup ka9q-radio directories
+	install -d -m 0775 $(DESTDIR)$(radioconfdir) $(DESTDIR)$(hfdllibdir) $(DESTDIR)$(statedir) \
+		$(DESTDIR)$(statedir)/ft8 $(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr $(DESTDIR)$(hfdllibdir) 
+
+	install -d -m 0755 $(DESTDIR)$(sysusersdir) $(DESTDIR)$(sysctldir) $(DESTDIR)$(modprobedir) \
+		$(DESTDIR)$(logrotatedir) $(DESTDIR)$(sbindir) $(DESTDIR)$(crondir) $(DESTDIR)$(bindir)
+
+
 	# Setup init system
-	install -d -o root -g root -m 0755 /etc/sysusers.d /etc/tmpfiles.d
-	install -o root -g root -m 0644 radio.sysusers /etc/sysusers.d/radio.conf
-	install -o root -g root -m 0644 ka9q-radio.tmpfiles /etc/tmpfiles.d/ka9q-radio.conf
-	# Setup ka9q-radio directories
-	mkdir -p $(DIRS)
-	-chown -R radio:radio $(DIRS)
-	-chmod g+ws $(DIRS)
-	touch $(SYSFILES)
-	chgrp radio $(SYSFILES)
-	chmod g+w $(SYSFILES)
+	install -m 0644 radio.sysusers $(DESTDIR)$(sysusersdir)/radio.conf
 	# Setup kernel configuration
-	rsync $(SYSCTL) /etc/sysctl.d
-	sysctl -q -p $(SYSCTL)
-	rsync $(BLACKLIST) /etc/modprobe.d
+	install $(SYSCTL) $(DESTDIR)$(sysctldir)
+	install $(BLACKLIST) $(DESTDIR)$(modprobedir)
 	# Setup log rotation
-	rsync $(LOGROTATE_FILES) /etc/logrotate.d
-	chown root:root /etc/logrotate.d/*
-	chmod go-w /etc/logrotate.d/*
+	install -m 0644 $(LOGROTATE_FILES) $(DESTDIR)$(logrotatedir)
 	# Configure HFDL
-	rsync --ignore-existing systable.conf /var/lib/hfdl
-	rsync start-hfdl.sh $(DAEMONDIR)
-	rsync ka9q-cleanups /etc/cron.d/
+	install systable.conf $(DESTDIR)$(hfdllibdir)
+	install start-hfdl.sh $(DESTDIR)$(sbindir)
 	# Configure cron jobs
-	chown root:root /etc/cron.d/ka9q-cleanups
-	chmod 0644 /etc/cron.d/ka9q-cleanups
+	install -m 0644 ka9q-cleanups $(DESTDIR)$(crondir)
 	# Configure scripts
-	rsync $(SCRIPTS) $(BINDIR)
+	install $(SCRIPTS) $(DESTDIR)$(bindir)
 
-install-Darwin:
-	# Create radio group
-	sudo dscl . -create /Groups/radio PrimaryGroupID 492
-	# Setup init system (TBD)
-	# Setup ka9q-radio directories
-	mkdir -p $(DIRS)
-	-chgrp -R radio $(DIRS)
-	-chmod g+ws $(DIRS)
-	touch $(SYSFILES)
-	chgrp radio $(SYSFILES)
-	chmod g+w $(SYSFILES)
-	# Setup kernel configuration (TBD)
-	# Setup log rotation (TBD)
-	# Configure HFDL
-	rsync --ignore-existing systable.conf /var/lib/hfdl
-	rsync start-hfdl.sh $(DAEMONDIR)
-	rsync ka9q-cleanups /etc/cron.d/
-	# Configure cron jobs (TBD)
-	# Configure scripts
-	rsync $(SCRIPTS) $(BINDIR)
 
-install-%:
-	@echo "Unsupported operating system: $*"
-	@exit 1
-
-.PHONY: clean all install install-Linux install-Darwin install-%
