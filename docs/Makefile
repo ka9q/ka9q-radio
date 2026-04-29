@@ -1,7 +1,4 @@
-# -*- makefile -*-
-
-# dummy make for ka9q-radio docs
-# Copyright 2025, Phil Karn, KA9Q
+# Copyright 2026, Phil Karn, KA9Q
 
 .PHONY: clean all install
 
@@ -12,5 +9,6 @@ clean:
 	@true
 
 install:
-	@true
+	install -m 0644 monitor.1 control.1 $(DESTDIR)$(mandir)/man1
+	install -m 0644 radiod.8 $(DESTDIR)$(mandir)/man8
 

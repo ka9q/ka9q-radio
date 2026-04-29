@@ -10,6 +10,8 @@ etc/sysctl.d/*
 etc/modprobe.d/*
 usr/lib/hfdl/*
 etc/cron.d/*
-lib/udev/rules.d/*
-lib/systemd/system/*
+usr/lib/udev/rules.d/*
+usr/lib/systemd/system/*
 usr/lib/*
+usr/share/man/man1/*
+usr/share/man/man8/*

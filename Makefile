@@ -13,6 +13,7 @@ localstatedir ?= /var
 pkgdatadir    ?= $(datadir)/ka9q-radio
 pkglibdir     ?= $(libdir)/ka9q-radio
 statedir      ?= $(localstatedir)/lib/ka9q-radio
+mandir	      ?= $(prefix)/share/man
 PKG_CONFIG_PATH=
 LD_LIBRARY_PATH=
 

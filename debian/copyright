@@ -1,19 +1,18 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Source: <url://example.com>
+Source: https://github.com/ka9q/ka9q-radio
 Upstream-Name: ka9q-radio
-Upstream-Contact: <preferred name and address to reach the upstream project>
+Upstream-Contact: Phil Karn <karn@ka9q.net>
 
 Files:
  *
 Copyright:
- <years> <put author's name and email here>
- <years> <likewise for another author>
+2026 Phil Karn, KA9Q
 License: GPL-3.0+
 
 Files:
  debian/*
 Copyright:
- 2026 Phil Karn <karn@bart.ka9q.net>
+ 2026 Phil Karn <karn@ka9q.net>
 License: GPL-3.0+
 
 License: GPL-3.0+
