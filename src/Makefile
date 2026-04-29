@@ -49,9 +49,11 @@ ifeq ($(UNAME_S),Darwin)
 else
   LDLIBS += -lbsd -lrt
   SOFLAGS = -shared
+ifdef DEB_BUILD_ARCH
   CFLAGS   += $(shell dpkg-buildflags --get CFLAGS)
   CPPFLAGS += $(shell dpkg-buildflags --get CPPFLAGS)
   LDFLAGS  += $(shell dpkg-buildflags --get LDFLAGS)
+endif
 endif
 
 ifeq ($(BUILD),debug)
@@ -156,8 +158,6 @@ DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
 
 -include $(DEPS)
 
-
-
 # keep all .o files
 .SECONDARY:
 
@@ -230,7 +230,6 @@ radiod: $(RADIOD_OBJECTS)
 
 rdsd: rdsd.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
-
 
 rx888_boot: rx888_boot.o ezusb.o
 	$(CC) $(LDOPTS) -o $@ $^ -lusb-1.0 $(LDLIBS)
