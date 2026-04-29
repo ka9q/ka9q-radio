@@ -88,7 +88,7 @@ ifeq ($(ENABLE_AIRSPYHF),1)
 endif
 
 # BLADERF
-ifeq ($(ENABLE BLADERF),1)
+ifeq ($(ENABLE_BLADERF),1)
    CFILES += bladerf.c
    DYNAMIC_DRIVERS += bladerf.so
 endif
