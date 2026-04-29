@@ -45,7 +45,7 @@ install-system: install
 
 install:
 # Setup ka9q-radio directories
-	install -d -m 0775 $(DESTDIR)$(hfdllibdir) $(DESTDIR)$(hfdllibdir) 
+	install -d -m 0775 $(DESTDIR)$(hfdllibdir)
 	install -d -m 0755 $(DESTDIR)$(sysusersdir) $(DESTDIR)$(sysctldir) $(DESTDIR)$(modprobedir) \
 		$(DESTDIR)$(logrotatedir) $(DESTDIR)$(sbindir) $(DESTDIR)$(crondir) $(DESTDIR)$(bindir)
 
