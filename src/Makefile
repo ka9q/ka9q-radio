@@ -23,6 +23,10 @@ UNAME_S := $(shell uname -s)
 CPPFLAGS ?=
 LDFLAGS  ?=
 
+CFLAGS   += $(shell dpkg-buildflags --get CFLAGS)
+CPPFLAGS += $(shell dpkg-buildflags --get CPPFLAGS)
+LDFLAGS  += $(shell dpkg-buildflags --get LDFLAGS)
+
 LDLIBS = -lm -lpthread
 
 GIT_HASH := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
