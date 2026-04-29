@@ -2,7 +2,7 @@
 usr/bin/*
 usr/sbin/*
 usr/share/ka9q-radio/*
-usr/lib/ka9q-radio/*
+usr/lib/ka9q-radio/sig_gen.so
 etc/radio/*
 etc/sysusers.d/*
 etc/logrotate.d/*
