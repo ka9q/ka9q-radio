@@ -40,7 +40,7 @@ PLUGIN_FLAGS = \
 override_dh_auto_build:
 	@echo "MAKEFLAGS=$(MAKEFLAGS)"
 	@echo "DEB_BUILD_OPTIONS=$(DEB_BUILD_OPTIONS)"
-	$(MAKE) -j$(shell nproc) $(PLUGIN_FLAGS)
+	$(MAKE) -j$(shell nproc) $(PLUGIN_FLAGS) prefix=/usr systemdunitdir=/usr/lib/systemd/system
 
 #override_dh_auto_build:
 #	dh_auto_build -- $(PLUGIN_FLAGS)

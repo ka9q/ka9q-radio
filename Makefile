@@ -14,6 +14,10 @@ pkgdatadir    ?= $(datadir)/ka9q-radio
 pkglibdir     ?= $(libdir)/ka9q-radio
 statedir      ?= $(localstatedir)/lib/ka9q-radio
 mandir	      ?= $(prefix)/share/man
+
+export prefix exec_prefix bindir sbindir libdir datadir sysconfdir
+export localstatedir pkgdatadir pkglibdir statedir mandir
+
 PKG_CONFIG_PATH=
 LD_LIBRARY_PATH=
 
