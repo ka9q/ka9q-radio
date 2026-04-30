@@ -14,7 +14,7 @@ PermissionsStartOnly=true
 StandardOutput=append:/var/log/acars.log
 StandardError=append:/var/log/syslog
 UMask = 002
-ExecStart=/usr/local/bin/pcmrecord --raw -v --ssrc '\\$s' --exec "/usr/local/bin/acarsdec --sndfile=-,channels=1,subtype=2 --output full:file:path=/var/log/acars/\"$m\".log --output json:udp:host=feed.acars.io,port=5550" acars.local
+ExecStart=/usr/bin/pcmrecord --raw -v --ssrc '\\$s' --exec "/usr/bin/acarsdec --sndfile=-,channels=1,subtype=2 --output full:file:path=/var/log/acars/\"$m\".log --output json:udp:host=feed.acars.io,port=5550" acars.local
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
