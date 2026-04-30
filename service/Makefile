@@ -4,8 +4,10 @@
 
 systemdunitdir ?= /etc/systemd/system
 
-SERVICEFILES=acars aprsfeed cwd ft4-decode ft8-decode ft4-decode@ ft8-decode@ ft4-record ft8-record hfdl horusdemod packetd \
-	radiod@ recordings@ rx888_boot set_lo_multicast wspr-decoded
+SERVICEFILES=acars.service aprsfeed.service cwd.service ft4-decode.service ft8-decode.service \
+	ft4-decode@.service ft8-decode@.service ft4-record.service ft8-record.service \
+	hfdl.service horusdemod.service  packetd.service radiod@.service recordings@.service \
+	rx888_boot.service set_lo_multicast.service wspr-decoded.service
 
 
 .PHONY: clean all install install-system
@@ -14,16 +16,14 @@ all:
 	@true
 
 clean:
-	@true
+	rm $(SERVICEFILES)
 
 # install as ordinary files for now, don't have dpkg autostart them
-install:
+install-system: install
+
+install: $(SERVICEFILES)
 	install -d 0755 $(DESTDIR)$(systemdunitdir)
-	install -m 0644 *.service $(DESTDIR)$(systemdunitdir)
-
-install-system:
-	@true
-
+	install -m 0644 $(SERVICEFILES) $(DESTDIR)$(systemdunitdir)
 
 service/%.service: service/%.service.in
 	sed -e 's|@bindir@|$(bindir)|g' \
