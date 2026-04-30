@@ -3,6 +3,8 @@
 # Copyright 2026, Phil Karn, KA9Q
 
 systemdunitdir ?= /etc/systemd/system
+bindir         ?= /usr/local/bin
+sbindir        ?= /usr/local/sbin
 
 SERVICEFILES=acars.service aprsfeed.service cwd.service ft4-decode.service ft8-decode.service \
 	ft4-decode@.service ft8-decode@.service ft4-record.service ft8-record.service \
@@ -24,7 +26,7 @@ install: $(SERVICEFILES)
 	install -d 0755 $(DESTDIR)$(systemdunitdir)
 	install -m 0644 $(SERVICEFILES) $(DESTDIR)$(systemdunitdir)
 
-service/%.service: service/%.service.in
+%.service: %.service.in
 	sed -e 's|@bindir@|$(bindir)|g' \
 	    -e 's|@sbindir@|$(sbindir)|g' \
 	    $< > $@
