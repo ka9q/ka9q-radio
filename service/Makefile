@@ -16,7 +16,7 @@ all:
 	@true
 
 clean:
-	rm $(SERVICEFILES)
+	rm -f $(SERVICEFILES)
 
 # install as ordinary files for now, don't have dpkg autostart them
 install-system: install
