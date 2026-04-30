@@ -4,6 +4,10 @@
 
 systemdunitdir ?= /etc/systemd/system
 
+SERVICEFILES=acars aprsfeed cwd ft4-decode ft8-decode ft4-decode@ ft8-decode@ ft4-record ft8-record hfdl horusdemod packetd \
+	radiod@ recordings@ rx888_boot set_lo_multicast wspr-decoded
+
+
 .PHONY: clean all install install-system
 
 all:
@@ -20,3 +24,13 @@ install:
 install-system:
 	@true
 
+
+service/%.service: service/%.service.in
+	sed -e 's|@bindir@|$(bindir)|g' \
+	    -e 's|@sbindir@|$(sbindir)|g' \
+	    $< > $@
+
+show-service-paths:
+	@echo bindir=$(bindir)
+	@echo sbindir=$(sbindir)
+	@echo systemdunitdir=$(systemdunitdir)

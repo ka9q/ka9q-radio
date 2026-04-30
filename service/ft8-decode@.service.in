@@ -2,7 +2,7 @@
 # Phil Karn, KA9Q 12 Sept 2025
 
 [Unit]
-Description=ft8-decode
+Description=ft8-decode %i
 After=network-online.target
 Requires=network-online.target
 RequiresMountsFor=/var/lib/ka9q-radio/ft8
@@ -19,7 +19,7 @@ StateDirectoryMode=0775
 StandardOutput=append:/var/log/ft8.log
 StandardError=journal
 WorkingDirectory=/var/lib/ka9q-radio/ft8
-ExecStart=/usr/bin/decode_ft8 $DIRECTORY
+ExecStart=@bindir@/decode_ft8 $DIRECTORY
 Restart=always
 RestartSec=5
 TimeoutStopSec=10

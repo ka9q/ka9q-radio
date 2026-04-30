@@ -15,7 +15,7 @@ ExecStartPre=/usr/bin/touch /var/log/aprsfeed.log
 ExecStartPre=/usr/bin/chown radio /var/log/aprsfeed.log
 # set CALL and SERVER in /etc/radio/aprs.conf
 EnvironmentFile=/etc/radio/aprs.conf
-ExecStart=/usr/sbin/aprsfeed -I $AX25 -u $CALL -h $SERVER -f /var/log/aprsfeed.log
+ExecStart=@sbindir@/aprsfeed -I $AX25 -u $CALL -h $SERVER -f /var/log/aprsfeed.log
 Restart=always
 RestartSec=5
 TimeoutStopSec=5

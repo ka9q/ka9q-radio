@@ -3,21 +3,21 @@
 # Phil Karn, KA9Q 9 May 2025
 
 [Unit]
-Description=ft8-record
+Description=ft4-record
 After=network-online.target
 Requires=network-online.target
-RequiresMountsFor=/var/lib/ka9q-radio/ft8
+RequiresMountsFor=/var/lib/ka9q-radio/ft4
 
 [Service]
 Nice=0
 User=radio
 Group=radio
 Type=simple
-EnvironmentFile=/etc/radio/ft8-decode.conf
+EnvironmentFile=/etc/radio/ft4-decode.conf
 PermissionsStartOnly=true
 UMask = 002
-WorkingDirectory=/var/lib/ka9q-radio/ft8
-ExecStart=/usr/bin/pcmrecord -d $DIRECTORY -8 $MCAST
+WorkingDirectory=/var/lib/ka9q-radio/ft4
+ExecStart=@bindir@/pcmrecord -d $DIRECTORY -4 $MCAST
 Restart=always
 RestartSec=5
 TimeoutStopSec=10

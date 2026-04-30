@@ -3,7 +3,7 @@ Description=Enable multicast on loopback interface
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/set_lo_multicast
+ExecStart=@bindir@/set_lo_multicast
 Type=oneshot
 RemainAfterExit=true
 

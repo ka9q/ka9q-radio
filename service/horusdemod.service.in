@@ -11,10 +11,11 @@ Type=simple
 User=radio
 SupplementaryGroups=radio
 EnvironmentFile=/etc/radio/horus.conf
+#move this?
 WorkingDirectory=/home/radio/horusdemodlib
 CacheDirectory=horusdemod
 UMask=002
-ExecStart=/usr/bin/pcmspawn --pcm-in $STREAM /usr/sbin/start-ka9q-horus
+ExecStart=@bindir@/pcmspawn --pcm-in $STREAM @sbindir@/start-ka9q-horus
 Restart=always
 RestartSec=5
 TimeoutStopSec=5
