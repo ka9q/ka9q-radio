@@ -12,11 +12,10 @@ SERVICEFILES=acars.service aprsfeed.service cwd.service ft4-decode.service ft8-d
 
 .PHONY: clean all install install-system
 
-all:
-	@true
+all: $(SERVICEFILES)
 
 clean:
-	rm -f $(SERVICEFILES)
+	rm -f *.service
 
 # install as ordinary files for now, don't have dpkg autostart them
 install-system: install
