@@ -38,13 +38,19 @@ PLUGIN_FLAGS = \
 
 
 override_dh_auto_build:
-	dh_auto_build -- $(PLUGIN_FLAGS)
+	@echo "MAKEFLAGS=$(MAKEFLAGS)"
+	@echo "DEB_BUILD_OPTIONS=$(DEB_BUILD_OPTIONS)"
+	$(MAKE) -j$(shell nproc) $(PLUGIN_FLAGS)
+
+#override_dh_auto_build:
+#	dh_auto_build -- $(PLUGIN_FLAGS)
 
 override_dh_auto_install:
 	$(MAKE) $(PLUGIN_FLAGS) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr systemdunitdir=/usr/lib/systemd/system udevdir=/usr/lib/udev/rules.d
 
 override_dh_installsystemd:
-	dh_installsystemd --no-enable --no-start
+	dh_installsystemd --name=set_lo_multicast
+	dh_installsystemd --remaining-packages --no-enable --no-start
 
 %:
 	dh $@
