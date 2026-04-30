@@ -49,11 +49,6 @@ ifeq ($(UNAME_S),Darwin)
 else
   LDLIBS += -lbsd -lrt
   SOFLAGS = -shared
-ifdef DEB_BUILD_ARCH
-  CFLAGS   += $(shell dpkg-buildflags --get CFLAGS)
-  CPPFLAGS += $(shell dpkg-buildflags --get CPPFLAGS)
-  LDFLAGS  += $(shell dpkg-buildflags --get LDFLAGS)
-endif
 endif
 
 ifeq ($(BUILD),debug)
