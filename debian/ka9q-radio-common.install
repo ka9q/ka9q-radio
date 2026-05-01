@@ -1,2 +1,2 @@
-usr/binset_lo_multicast
+usr/bin/set_lo_multicast
 usr/lib/systemd/system/set_lo_multicast.service
