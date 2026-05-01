@@ -31,10 +31,6 @@
 #include "rx888.h"
 #include "ezusb.h"
 
-#include <stdatomic.h>
-
-
-
 static uint16_t const Vendor_id = 0x04b4;
 static uint16_t const Unloaded_product_id = 0x00f3;
 static uint16_t const Loaded_product_id = 0x00f1;

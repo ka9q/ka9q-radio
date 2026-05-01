@@ -49,7 +49,7 @@ int main(int argc,char *argv[]){
   while((c = getopt(argc,argv,"f:")) != -1){
     switch(c){
     case 'f':
-      firmware = optarg;
+      strncpy(firmware,optarg,strlen(optarg));
       break;
     default:
       fprintf(stderr,"usage: %s [-f bootimage]\n",App_path);

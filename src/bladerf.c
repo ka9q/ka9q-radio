@@ -11,7 +11,6 @@
 #endif
 #include <sysexits.h>
 
-#include "conf.h"
 #include "misc.h"
 #include "status.h"
 #include "radio.h"
