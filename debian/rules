@@ -45,6 +45,15 @@ override_dh_auto_build:
 #override_dh_auto_build:
 #	dh_auto_build -- $(PLUGIN_FLAGS)
 
+override_dh_install:
+	dh_install -pka9q-control
+	dh_install -pka9q-monitor
+	dh_install -pka9q-radio \
+		-Xusr/bin/control \
+		-Xusr/bin/monitor \
+		-Xusr/share/man/man1/control \
+		-Xusr/share/man/man1/monitor
+
 override_dh_auto_install:
 	$(MAKE) $(PLUGIN_FLAGS) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr systemdunitdir=/usr/lib/systemd/system udevdir=/usr/lib/udev/rules.d
 

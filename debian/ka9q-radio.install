@@ -13,5 +13,5 @@ usr/lib/hfdl/*
 etc/cron.d/*
 usr/lib/udev/rules.d/*
 usr/lib/systemd/system/*
-usr/share/man/man1/*
+usr/share/man/man1/* !usr/share/man/man1/control.1 !usr/share/man/man1/monitor.1
 usr/share/man/man8/*
