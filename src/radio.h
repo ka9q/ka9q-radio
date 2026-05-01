@@ -24,7 +24,6 @@
 #include "status.h"
 #include "filter.h"
 #include "iir.h"
-#include "conf.h"
 #include "window.h"
 
 

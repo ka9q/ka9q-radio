@@ -44,6 +44,13 @@
 #define DEFAULT_PRESET "am"
 #define GLOBAL "global"
 
+#ifndef PKGLIBDIR
+#define PKGLIBDIR "/usr/local/lib/ka9q-radio"
+#endif
+
+#ifndef STATEDIR
+#define STATEDIR "/var/lib/ka9q-radio"
+#endif
 
 static int Total_channels;
 static bool Global_use_dns;
@@ -312,12 +319,12 @@ int loadconfig(char const *file){
   Static_avahi = config_getboolean(Configtable,GLOBAL,"static",false);
   Affinity = config_getboolean(Configtable,GLOBAL,"affinity",false);
   {
-    char const *p = config_getstring(Configtable,GLOBAL,"wisdom-file",NULL);
-    if(p != NULL)
-      Wisdom_file = strdup(p);
+    static char default_wisdom_file[PATH_MAX];
+    snprintf(default_wisdom_file,sizeof default_wisdom_file, "%s/%s",STATEDIR,"wisdom");
+    Wisdom_file = config_getstring(Configtable,GLOBAL,"wisdom-file",default_wisdom_file);
 
     // Accept either keyword; "preset" is more descriptive than the old (but still accepted) "mode"
-    p = config_getstring(Configtable,GLOBAL,"mode-file","presets.conf");
+    char const *p = config_getstring(Configtable,GLOBAL,"mode-file","presets.conf");
     p = config_getstring(Configtable,GLOBAL,"presets-file",p);
     dist_path(Preset_file,sizeof(Preset_file),p);
     fprintf(stderr,"Loading presets file %s\n",Preset_file);
@@ -555,7 +562,7 @@ static int setup_hardware(char const *sname){
   {
     // Try to find it dynamically
     char defname[PATH_MAX];
-    snprintf(defname,sizeof(defname),"%s/%s.so",SODIR,device);
+    snprintf(defname,sizeof(defname),"%s/%s.so",PKGLIBDIR,device);
     char const *dlname = config_getstring(Configtable,device,"library",defname);
     if(dlname == NULL){
       fprintf(stderr,"No dynamic library specified for device %s\n",device);

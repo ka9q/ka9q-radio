@@ -16,10 +16,14 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <sys/file.h>
+#include <limits.h>
 
 #define System_wisdom_file "/etc/fftw/wisdomf"
-#define Wisdom_dir "/var/lib/ka9q-radio"
-#define Wisdom_file "/var/lib/ka9q-radio/wisdom"
+
+#ifndef STATEDIR
+#define STATEDIR "/var/lib/ka9q-radio"
+#endif
+#define WISDOM_FILE "wisdom"
 
 static int Verbose;
 static bool Force;
@@ -173,16 +177,18 @@ int main(int argc,char *argv[]){
       }
     }
     track_wisdom_length();
-    lr = fftwf_import_wisdom_from_filename(Wisdom_file);
+    char wisdom_file[PATH_MAX];
+    snprintf(wisdom_file,sizeof wisdom_file,"%s/%s",STATEDIR,WISDOM_FILE);
+    lr = fftwf_import_wisdom_from_filename(wisdom_file);
     if(Verbose > 1){
-      printf("fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
+      printf("fftwf_import_wisdom_from_filename(%s) %s\n",wisdom_file,lr ? "succeeded" : "failed");
       if(!lr){
-	if(access(Wisdom_file,R_OK) == -1){
-	  printf("%s not readable: %s\n",Wisdom_file,strerror(errno));
+	if(access(wisdom_file,R_OK) == -1){
+	  printf("%s not readable: %s\n",wisdom_file,strerror(errno));
 	}
       }
-      if(access(Wisdom_file,W_OK) == -1)
-	printf("Warning: %s not writeable, exports will fail: %s\n",Wisdom_file,strerror(errno));
+      if(access(wisdom_file,W_OK) == -1)
+	printf("Warning: %s not writeable, exports will fail: %s\n",wisdom_file,strerror(errno));
     }
     track_wisdom_length();
   }
@@ -310,7 +316,10 @@ static int save_plans(){
   int fd = -1;
 
   // Import or re-import wisdom and merge
-  if(asprintf(&lockfile,"%s.lock",Wisdom_file) <= 0){
+  char wisdom_file[PATH_MAX];
+  snprintf(wisdom_file,sizeof wisdom_file,"%s/%s",STATEDIR,WISDOM_FILE);
+
+  if(asprintf(&lockfile,"%s.lock",wisdom_file) <= 0){
     free(lockfile);
     return 0;
   }
@@ -320,12 +329,12 @@ static int save_plans(){
     printf("Can't acquire lock on %s\n",lockfile);
   else
     flock(lockfd,LOCK_EX);
-  bool reimport = fftwf_import_wisdom_from_filename(Wisdom_file);
+  bool reimport = fftwf_import_wisdom_from_filename(wisdom_file);
   if(Verbose > 1)
-    printf("fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,reimport ? "succeeded" : "failed");
+    printf("fftwf_import_wisdom_from_filename(%s) %s\n",wisdom_file,reimport ? "succeeded" : "failed");
   track_wisdom_length();
 
-  if(asprintf(&newtemp,"%s-XXXXXX",Wisdom_file) < 0)
+  if(asprintf(&newtemp,"%s-XXXXXX",wisdom_file) < 0)
     goto quit;
 
   wisdom = fftwf_export_wisdom_to_string();
@@ -350,7 +359,7 @@ static int save_plans(){
 
   // Copy user/group/mode from old version
   struct stat st;
-  if(stat(Wisdom_file,&st) == 0){
+  if(stat(wisdom_file,&st) == 0){
     int r = fchown(fd, st.st_uid, st.st_gid); // Best effort
     (void)r;
     fchmod(fd, st.st_mode);
@@ -363,13 +372,13 @@ static int save_plans(){
   fsync(fd);
   close(fd);
   fd = -1;
-  int dir = open(Wisdom_dir,O_DIRECTORY);
+  int dir = open(STATEDIR,O_DIRECTORY);
   fsync(dir);
   close(dir);
-  if(rename(newtemp,Wisdom_file) != 0)
-    printf("rename %s to %s failed: %s\n",newtemp,Wisdom_file,strerror(errno));
+  if(rename(newtemp,wisdom_file) != 0)
+    printf("rename %s to %s failed: %s\n",newtemp,wisdom_file,strerror(errno));
   else if(Verbose > 1)
-    printf("rename %s to %s succeeded\n",newtemp,Wisdom_file);
+    printf("rename %s to %s succeeded\n",newtemp,wisdom_file);
 
   if(Force)
     fftwf_forget_wisdom(); // start fresh for the next on the list

@@ -18,6 +18,15 @@ pkgdatadir    ?= $(datadir)/ka9q-radio
 pkglibdir     ?= $(libdir)/ka9q-radio
 statedir      ?= $(localstatedir)/lib/ka9q-radio
 
+# eg, /var/lib/ka9q-radio
+PATH_FLAGS += -DSTATEDIR=\"$(statedir)\"
+
+# eg, /usr/local/share/ka9q-radio, /usr/share/ka9q-radio
+PATH_FLAGS += -DPKGDATADIR=\"$(pkgdatadir)\"
+
+# eg, /usr/local/lib/ka9q-radio, /usr/lib/ka9q-radio
+PATH_FLAGS += -DPKGLIBDIR=\"$(pkglibdir)\"
+
 UNAME_S := $(shell uname -s)
 
 CPPFLAGS ?=
@@ -66,10 +75,10 @@ ARCHOPTS = -march=native
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
 COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -D_GNU_SOURCE=1 -Wextra -Wno-sign-conversion -Wno-int-conversion -MMD -MP
 COPTS += -fPIC
-CFLAGS += $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES) $(VERSION_FLAGS)
+CFLAGS += $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES) $(VERSION_FLAGS) $(PATH_FLAGS)
 DAEMONS = aprs aprsfeed cwd packetd radiod
 EXECS = ctcss control fft-gen jt-decoded metadump monitor pcmrecord powers tune wd-record
-LIBRADIO = ax25.o morse.o bandplan.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o sincospi.o sincospif.o window.o gauss.o
+LIBRADIO = ax25.o morse.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o sincospi.o sincospif.o window.o gauss.o
 DYNAMIC_DRIVERS = sig_gen.so
 RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o fcd.o hid-libusb.o libradio.a
 CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c filter.c fm.c funcube.c hid-libusb.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c setfilt.c show-pkt.c show-sig.c sig_gen.c spectrum.c status.c stereod.c tune.c wd-record.c wfm.c
@@ -169,7 +178,7 @@ aprs: aprs.o libradio.a
 aprsfeed: aprsfeed.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
-control: control.o libradio.a
+control: control.o bandplan.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -liniparser -lncursesw $(LDLIBS)
 
 ctcss: ctcss.o libradio.a

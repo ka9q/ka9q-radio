@@ -17,7 +17,6 @@
 #include <strings.h>
 #include <samplerate.h>
 
-#include "conf.h"
 #include "fcd.h"
 #include "misc.h"
 #include "config.h"

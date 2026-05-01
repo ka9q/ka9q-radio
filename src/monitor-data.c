@@ -25,7 +25,6 @@
 #include <poll.h>
 #include <stdatomic.h>
 
-#include "conf.h"
 #include "config.h"
 #include "misc.h"
 #include "multicast.h"

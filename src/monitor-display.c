@@ -25,7 +25,6 @@
 #include <regex.h>
 #include <ctype.h>
 
-#include "conf.h"
 #include "config.h"
 #include "misc.h"
 #include "multicast.h"
@@ -34,6 +33,8 @@
 #include "morse.h"
 #include "status.h"
 #include "monitor.h"
+
+#define ID "id.txt"
 
 bool Auto_sort = false;
 int Update_interval = 100;  // Default time in ms between display updates

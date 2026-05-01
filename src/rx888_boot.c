@@ -26,12 +26,23 @@
 #include "rx888.h"
 #include "ezusb.h"
 
+#define IMAGE_FILE "SDDC_FX3.img"
+
+#ifndef PKGDATADIR
+#define PKGDATADIR "/usr/local/share/ka9q-radio"
+#endif
+
+#ifndef STATEDIR
+#define STATEDIR "/var/lib/ka9q-radio"
+#endif
+
 char const *App_path;
-char const *Libdir = "/var/lib/ka9q-radio/";
 int Ezusb_verbose = 0; // used by ezusb.c
 
+
 int main(int argc,char *argv[]){
-  char const *firmware = "/usr/local/share/ka9q-radio/SDDC_FX3.img"; // default
+  char firmware[PATH_MAX];
+  snprintf(firmware,sizeof firmware,"%s/%s",PKGDATADIR,IMAGE_FILE);
   App_path = argv[0];
 
   int c;
@@ -146,7 +157,7 @@ int dist_path(char *path,int path_len,const char *fname){
   if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
     return 0;
 
-  snprintf(path,path_len,"%s/%s",Libdir,fname);
+  snprintf(path,path_len,"%s/%s",STATEDIR,fname);
   if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
     return 0;
   return -1;

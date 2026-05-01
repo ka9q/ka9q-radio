@@ -33,17 +33,21 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include "conf.h"
 #include "misc.h"
 #include "filter.h"
 #include "window.h"
 
-#define FFT_LOG_FILE "/var/lib/ka9q-radio/fft.log"
+#ifndef STATEDIR
+#define STATEDIR "/var/lib/ka9q-radio"
+#endif
+#define FFT_LOG_FILE "fft.log"
+
+const char *Wisdom_file; // Set in radio.c when reading config file
+
 
 //#define FILTER_DEBUG 1 // turn on lots of printfs in the window creation code
 
 // Settable from main
-char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
 char const *System_wisdom_file = "/etc/fftw/wisdomf"; // only valid for float version
 int N_worker_threads = 1;
 int N_internal_threads = 1; // Usually most efficient
@@ -211,9 +215,11 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   // of independent FFTs to execute at the same time
   if(!atomic_flag_test_and_set_explicit(&FFTW_init,memory_order_relaxed)){
     fprintf(stderr,"FFTW version: %s\n", fftwf_version);
-    FFT_log = fopen(FFT_LOG_FILE,"a");
+    char fft_file[PATH_MAX];
+    snprintf(fft_file,sizeof fft_file,"%s/%s",STATEDIR,FFT_LOG_FILE);
+    FFT_log = fopen(fft_file,"a");
     if(FFT_log == NULL)
-      fprintf(stderr,"Can't append to %s: %s\n",FFT_LOG_FILE,strerror(errno));
+      fprintf(stderr,"Can't append to %s: %s\n",fft_file,strerror(errno));
 
     fftwf_init_threads();
     bool sr = fftwf_import_system_wisdom();
@@ -223,7 +229,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
 	fprintf(stderr,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
       }
     }
-
     bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
     fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
     if(!lr){

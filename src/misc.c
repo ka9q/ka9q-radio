@@ -33,10 +33,13 @@
 #define NULL ((void *)0)
 #endif
 
-#include "conf.h"
 #include "misc.h"
 
-char const *Libdir = LIBDIR;
+#ifndef PKGDATADIR
+#define PKGDATADIR "/usr/local/share/ka9q-radio"
+#endif
+
+char const *Pkgdatadir = PKGDATADIR;
 
 // Return path to file which is part of the application distribution.
 // This allows to run the program either from build directory or from
@@ -57,7 +60,7 @@ int dist_path(char *path,int path_len,const char *fname){
   if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
     return 0;
 
-  snprintf(path,path_len,"%s/%s",Libdir,fname);
+  snprintf(path,path_len,"%s/%s",Pkgdatadir,fname);
   if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
     return 0;
 

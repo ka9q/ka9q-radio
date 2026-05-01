@@ -15,9 +15,10 @@
 #include <limits.h>
 #include <stdbool.h>
 
-#include "conf.h"
 #include "misc.h"
 #include "bandplan.h"
+
+#define BANDPLAN "bandplan.txt"
 
 char Bandplan_file[] = BANDPLAN;
 #define MAX_BANDPLANS 1000
