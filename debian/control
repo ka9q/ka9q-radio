@@ -30,7 +30,6 @@ Description: KA9Q multichannel SDR server
 Package: ka9q-radio-common
 Architecture: any
 Depends:
- ${shlibs:Depends},
  ${misc:Depends},
  systemd
 Description: common files for ka9q-radio
