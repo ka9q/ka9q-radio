@@ -1,0 +1,9 @@
+#!/usr/bin/dh-exec
+# debian/ka9q-radio.install
+usr/bin/ctcss
+usr/bin/jt-decoded
+usr/bin/metadump
+usr/bin/pcmrecord
+usr/bin/powers
+usr/bin/tune
+usr/bin/wd-record
