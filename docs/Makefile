@@ -3,7 +3,8 @@
 prefix	?= /usr/local
 mandir  ?= $(prefix)/share/man
 
-PAGES1 = aprs.1 control.1 cwd.1 fft-gen.1 jt-decoded.1 metadump.1 monitor.1 pcmrecord.1 ctcss.1 powers.1 tune.1 wd-record.1
+PAGES1 = aprs.1 control.1 cwd.1 fft-gen.1 jt-decoded.1 metadump.1 monitor.1 opussend.1 \
+	pcmsend.1 pcmrecord.1 ctcss.1 powers.1 tune.1 wd-record.1
 PAGES8 = radiod.8 aprsfeed.8 packetd.8 
 
 .PHONY: clean all install
