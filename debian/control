@@ -35,6 +35,17 @@ Depends:
 Description: common files for ka9q-radio
  Common files for ka9q-radio and ka9q-radio's user commands and daemons
 
+Package: ka9q-radio-hfdl
+Architecture: any
+Depends:
+ ${misc:Depends},
+ systemd
+Description: HFDL subsystem for ka9q-radio
+ HFDL (High Frequency Data Link) is a packet radio system used by commercial
+ airliners over oceans and remote areas. This package decodes all known
+ HFDL data channels. It requires manual installation of the dumphfdl and
+ libacars packages (not supplied as standard Debian packages)
+
 Package: ka9q-radio-packet
 Architecture: any
 Depends:
