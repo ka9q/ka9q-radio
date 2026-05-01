@@ -46,8 +46,8 @@ override_dh_auto_build:
 #	dh_auto_build -- $(PLUGIN_FLAGS)
 
 override_dh_install:
-	dh_install -pka9q-control
-	dh_install -pka9q-monitor
+	dh_install -pka9q-radio-control
+	dh_install -pka9q-radio-monitor
 	dh_install -pka9q-radio \
 		-Xusr/bin/control \
 		-Xusr/bin/monitor \
