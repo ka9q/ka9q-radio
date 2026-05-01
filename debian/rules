@@ -45,25 +45,6 @@ override_dh_auto_build:
 #override_dh_auto_build:
 #	dh_auto_build -- $(PLUGIN_FLAGS)
 
-override_dh_install:
-
-	dh_install -pka9q-radio-packet
-	dh_install -pka9q-radio-hfdl
-	dh_install -pka9q-radio-tools
-	dh_install -pka9q-radio-control
-	dh_install -pka9q-radio-monitor
-	dh_install -pka9q-radio-airspy
-	dh_install -pka9q-radio-airspyhf
-	dh_install -pka9q-radio-bladerf
-	dh_install -pka9q-radio-funcube
-	dh_install -pka9q-radio-hackrf
-	dh_install -pka9q-radio-hydrasdr
-	dh_install -pka9q-radio-rtlsdr
-	dh_install -pka9q-radio-rx888
-	dh_install -pka9q-radio
-	dh_install -pka9q-radio-common
-	dh_install --remaining-packages
-
 override_dh_auto_install:
 	$(MAKE) $(PLUGIN_FLAGS) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr systemdunitdir=/usr/lib/systemd/system udevdir=/usr/lib/udev/rules.d
 

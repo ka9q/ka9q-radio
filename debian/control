@@ -187,7 +187,12 @@ Depends:
  ka9q-radio-hackrf,
  ka9q-radio-hydrasdr,
  ka9q-radio-rtlsdr,
- ka9q-radio-rx888
+ ka9q-radio-rx888,
+ ka9q-radio-recordings,
+ ka9q-radio-packet,
+ ka9q-radio-hfdl,
+ ka9q-radio-horus,
+ ka9q-radio-ft
 Description: meta package for all components of ka9q-radio
  Brings in the radio daemon radiod, the command line tools, control monitor and the device plugins
 
