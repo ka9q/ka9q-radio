@@ -48,6 +48,7 @@ override_dh_auto_build:
 override_dh_install:
 
 	dh_install -pka9q-radio-packet
+	dh_install -pka9q-radio-hfdl
 	dh_install -pka9q-radio-tools
 	dh_install -pka9q-radio-control
 	dh_install -pka9q-radio-monitor
