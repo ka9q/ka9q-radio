@@ -1,5 +1,6 @@
+#!/usr/bin/dh-exec
 # debian/ka9q-radio.install
-usr/bin/*
+usr/bin/* usr/bin/ !usr/bin/control !usr/bin/monitor
 usr/sbin/*
 usr/share/ka9q-radio/*
 usr/lib/ka9q-radio/sig_gen.so
