@@ -49,7 +49,7 @@ int main(int argc,char *argv[]){
   while((c = getopt(argc,argv,"f:")) != -1){
     switch(c){
     case 'f':
-      strncpy(firmware,optarg,strlen(optarg));
+      strlcpy(firmware,optarg,strlen(optarg));
       break;
     default:
       fprintf(stderr,"usage: %s [-f bootimage]\n",App_path);
@@ -58,7 +58,7 @@ int main(int argc,char *argv[]){
     }
   }
   
-  if(firmware == NULL){
+  if(strlen(firmware) == 0){
     fprintf(stderr,"Firmware not loaded and not available\n");
     exit(EX_NOINPUT);
   }
