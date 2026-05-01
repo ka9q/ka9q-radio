@@ -1,0 +1,4 @@
+usr/lib/systemd/system/acars.service
+usr/lib/udev/rules.d/66-sdrplay.rules
+usr/lib/udev/rules.d/73-fobos-sdr.rules
+usr/lib/udev/rules.d/74-fobos-sdr-ka9q.rules
