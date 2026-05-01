@@ -62,7 +62,9 @@ override_dh_install:
 		-Xusr/bin/control \
 		-Xusr/bin/monitor \
 		-Xusr/share/man/man1/control \
-		-Xusr/share/man/man1/monitor
+		-Xusr/share/man/man1/monitor \
+		-Xusr/lib/systemd/system/set_lo_multicast.service \
+		-Xusr/bin/set_lo_multicast
 
 override_dh_auto_install:
 	$(MAKE) $(PLUGIN_FLAGS) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr systemdunitdir=/usr/lib/systemd/system udevdir=/usr/lib/udev/rules.d
