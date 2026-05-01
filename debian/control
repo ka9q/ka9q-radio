@@ -21,16 +21,27 @@ Architecture: any
 Depends:
  ${shlibs:Depends},
  ${misc:Depends},
+ ka9q-radio-common,
  libcap2-bin, systemd, udev
 Description: KA9Q multichannel SDR server
  Multichannel software-defined radio "spectrum server"
  with multicast control and data
  
+Package: ka9q-radio-common
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ systemd
+Description: common files for ka9q-radio
+ Common files for ka9q-radio and ka9q-radio's user commands and daemons
+
 Package: ka9q-radio-control
 Architecture: any
 Depends:
  ${shlibs:Depends},
- ${misc:Depends}
+ ${misc:Depends},
+ ka9q-radio-common
 Description: Control program for ka9q-radio
  Interactive channel control program for ka9q-radio; uses ncurses
  
@@ -38,10 +49,19 @@ Package: ka9q-radio-monitor
 Architecture: any
 Depends:
  ${shlibs:Depends},
- ${misc:Depends}
+ ${misc:Depends},
+ ka9q-radio-common
 Description: Multicast stream audio monitor for ka9q-radio
  Interactive multicast RTP stream monitor for ka9q-radio, uses ncurses,
  handles multiple channels, supports pcm, opus, u-law, a-law
+ 
+Package: ka9q-radio-tools
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends}
+Description: Command-line tools for ka9q-radio
+ Shell command line tools for interacting with ka9q-radio over the net
  
 Package: ka9q-radio-airspy
 Architecture: any
@@ -105,6 +125,7 @@ Description: RX-888 MkII device plugin for ka9q-radio
 # ka9q-radio plugin for some of the SDR Play SDR front ends. I discourage this device because
 # they keep their libraries proprietary, making support difficult or impossible. And there are
 # good alternatives.
+
 
 
 
