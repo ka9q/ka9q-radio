@@ -180,9 +180,7 @@ Depends:
  ka9q-radio-tools,
  ka9q-radio-airspy,
  ka9q-radio-airspyhf,
- ka9q-radio-airspy,
  ka9q-radio-bladerf,
- ka9q-radio-fobos,
  ka9q-radio-funcube,
  ka9q-radio-hackrf,
  ka9q-radio-hydrasdr,
@@ -194,8 +192,7 @@ Depends:
  ka9q-radio-horus,
  ka9q-radio-ft
 Description: meta package for all components of ka9q-radio
- Brings in the radio daemon radiod, the command line tools, control monitor and the device plugins
-
+ Brings in the radio daemon radiod, the command line tools, control monitor and the device plugins, and everything else
 
 
 
