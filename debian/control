@@ -54,6 +54,24 @@ Depends:
 Description: AX.25/aprs subsystem for ka9q-radio
  Provides AFSK AX.25 decoder, APRS extractor and feeder
  
+Package: ka9q-radio-recordings
+Architecture: any
+Depends:
+ ${misc:Depends},
+ systemd
+Description: recording subsystem for ka9q-radio
+ Provides some sample configurations for automatic recording of groups of audio
+ channels from ka9q-radio's radiod
+
+Package: ka9q-radio-horus
+Architecture: any
+Depends:
+ ${misc:Depends},
+ systemd
+Description: demodulation subsystem for horus balloon telemetry
+ Decode balloon telemetry in the Horus (VK5QI) format
+ requires horus_demod package to be manually installed
+
 Package: ka9q-radio-ft
 Architecture: any
 Depends:

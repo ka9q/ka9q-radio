@@ -1,0 +1,4 @@
+# ka9q-radio-horus.install
+etc/radio/horus.conf
+usr/bin/start-ka9q-horus
+usr/lib/systemd/system/horusdemod.service
