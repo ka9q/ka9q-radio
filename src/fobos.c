@@ -21,7 +21,6 @@ on a per-channel basis by selecting output filter type BEAM and calling set_filt
 #include <bsd/string.h>
 #endif
 
-#include "conf.h"
 #include "config.h"
 #include "misc.h"
 #include "radio.h"

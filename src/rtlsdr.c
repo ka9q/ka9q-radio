@@ -18,7 +18,6 @@
 #include <sysexits.h>
 #include <strings.h>
 
-#include "conf.h"
 #include "misc.h"
 #include "radio.h"
 #include "config.h"
