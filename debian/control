@@ -25,6 +25,23 @@ Description: KA9Q multichannel SDR server
  Multichannel software-defined radio "spectrum server"
  with multicast control and data
  
+Package: ka9q-radio-control
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends}
+Description: Control program for ka9q-radio
+ Interactive channel control program for ka9q-radio; uses ncurses
+ 
+Package: ka9q-radio-monitor
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends}
+Description: Multicast stream audio monitor for ka9q-radio
+ Interactive multicast RTP stream monitor for ka9q-radio, uses ncurses,
+ handles multiple channels, supports pcm, opus, u-law, a-law
+ 
 Package: ka9q-radio-airspy
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
