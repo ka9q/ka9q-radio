@@ -35,6 +35,22 @@ Depends:
 Description: common files for ka9q-radio
  Common files for ka9q-radio and ka9q-radio's user commands and daemons
 
+Package: ka9q-radio-packet
+Architecture: any
+Depends:
+ ${misc:Depends},
+ systemd
+Description: AX.25/aprs subsystem for ka9q-radio
+ Provides AFSK AX.25 decoder, APRS extractor and feeder
+ 
+Package: ka9q-radio-ft
+Architecture: any
+Depends:
+ ${misc:Depends},
+ systemd
+Description: FT4/FT8/WSPR skimmers for ka9q-radio
+ records and decodes FT4, FT8 and WSPR transmissions, logs in /var/log/ft[48].log, wspr.log
+ 
 Package: ka9q-radio-control
 Architecture: any
 Depends:

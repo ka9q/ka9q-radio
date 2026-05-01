@@ -1,0 +1,10 @@
+# ka9q-radio-packet.install
+usr/lib/systemd/system/packetd.service
+usr/lib/systemd/system/aprsfeed.service
+usr/sbin/aprs
+usr/sbin/aprsfeed
+usr/sbin/packetd
+usr/share/man/man8/aprsfeed.8
+usr/share/man/man8/packetd.8
+etc/radio/aprs.conf
+etc/radio/packetd.conf

@@ -46,7 +46,8 @@ override_dh_auto_build:
 #	dh_auto_build -- $(PLUGIN_FLAGS)
 
 override_dh_install:
-	dh_install -pka9q-radio-common
+
+	dh_install -pka9q-radio-packet
 	dh_install -pka9q-radio-tools
 	dh_install -pka9q-radio-control
 	dh_install -pka9q-radio-monitor
@@ -58,13 +59,9 @@ override_dh_install:
 	dh_install -pka9q-radio-hydrasdr
 	dh_install -pka9q-radio-rtlsdr
 	dh_install -pka9q-radio-rx888
-	dh_install -pka9q-radio \
-		-Xusr/bin/control \
-		-Xusr/bin/monitor \
-		-Xusr/share/man/man1/control \
-		-Xusr/share/man/man1/monitor \
-		-Xusr/lib/systemd/system/set_lo_multicast.service \
-		-Xusr/bin/set_lo_multicast
+	dh_install -pka9q-radio
+	dh_install -pka9q-radio-common
+	dh_install --remaining_packages
 
 override_dh_auto_install:
 	$(MAKE) $(PLUGIN_FLAGS) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr systemdunitdir=/usr/lib/systemd/system udevdir=/usr/lib/udev/rules.d

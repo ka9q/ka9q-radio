@@ -1,17 +1,9 @@
-#!/usr/bin/dh-exec
 # debian/ka9q-radio.install
-usr/bin/* usr/bin/ !usr/bin/control !usr/bin/monitor !usr/bin/set_lo_multicast
-usr/sbin/*
-usr/share/ka9q-radio/*
+usr/bin/fft-gen
+usr/sbin/radiod
 usr/lib/ka9q-radio/sig_gen.so
-etc/radio/*
+etc/radio/radiod@*
 etc/sysusers.d/*
-etc/logrotate.d/*
 etc/sysctl.d/*
-etc/modprobe.d/*
-usr/lib/hfdl/*
-etc/cron.d/*
-usr/lib/udev/rules.d/*
-usr/lib/systemd/system/* !usr/lib/systemd/system/set_lo_multicast.service
-usr/share/man/man1/* !usr/share/man/man1/control.1 !usr/share/man/man1/monitor.1
-usr/share/man/man8/*
+usr/lib/systemd/system/radiod@,service
+usr/share/man/man8/radiod.8

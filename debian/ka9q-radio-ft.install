@@ -1,0 +1,11 @@
+# ka9q-radio-ft.install - ft4/ft8 skimmer and reporter, requires ft8_lib
+usr/lib/systemd/system/ft4-decode.service
+usr/lib/systemd/system/ft4-decode@.service
+usr/lib/systemd/system/ft4-record.service
+usr/lib/systemd/system/ft8-decode.service
+usr/lib/systemd/system/ft8-decode@.service
+usr/lib/systemd/system/ft8-record.service
+usr/lib/systemd/system/wspr-decoded.service
+etc/radio/ft4-decode.conf
+etc/radio/ft8-decode.conf
+etc/radio/wspr-decode.conf
