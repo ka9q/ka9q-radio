@@ -77,7 +77,7 @@ COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -f
 COPTS += -fPIC
 CFLAGS += $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES) $(VERSION_FLAGS) $(PATH_FLAGS)
 DAEMONS = aprs aprsfeed cwd packetd radiod
-EXECS = ctcss control fft-gen jt-decoded metadump monitor pcmrecord powers tune wd-record
+EXECS = ctcss control fft-gen jt-decoded metadump monitor opussend pcmrecord pcmsend powers tune wd-record
 LIBRADIO = ax25.o morse.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o sincospi.o sincospif.o window.o gauss.o
 DYNAMIC_DRIVERS = sig_gen.so
 RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o fcd.o hid-libusb.o libradio.a
