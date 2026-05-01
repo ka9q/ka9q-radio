@@ -4,7 +4,7 @@
 #include <complex.h>
 #include <math.h>
 #include <pthread.h>
-#include <portaudio.h>
+//#include <portaudio.h>
 #include <errno.h>
 #include <iniparser/iniparser.h>
 #if defined(linux)

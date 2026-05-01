@@ -7,3 +7,5 @@ usr/bin/pcmrecord
 usr/bin/powers
 usr/bin/tune
 usr/bin/wd-record
+usr/bin/pcmsend
+usr/bin/opussend
