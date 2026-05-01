@@ -7,3 +7,4 @@ etc/sysusers.d/*
 etc/sysctl.d/*
 usr/lib/systemd/system/radiod@.service
 usr/share/man/man8/radiod.8
+usr/share/man/man1/fft-gen.1

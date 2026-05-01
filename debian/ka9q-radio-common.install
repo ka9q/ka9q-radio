@@ -1,3 +1,4 @@
 usr/bin/set_lo_multicast
 usr/lib/systemd/system/set_lo_multicast.service
 usr/share/ka9q-radio/presets.conf
+etc/cron.d/ka9q-cleanups

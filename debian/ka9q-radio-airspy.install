@@ -1,3 +1,5 @@
 # debian/ka9q-radio-airspy.install
 usr/lib/ka9q-radio/airspy.so
 etc/modprobe.d/airspy-blacklist.conf
+usr/lib/udev/rules.d/51-airspy.rules
+usr/lib/udev/rules.d/53-airspy-ka9q.rules
