@@ -35,11 +35,11 @@ jobs:
             libgnutls28-dev libgcrypt20-dev
 
             cd /tmp
-            git clone https://github.com/hydrasdr/rfone_host.git
-            cd rfone_host
+            git clone https://github.com/hydrasdr/hydrasdr-host.git
+            cd hydrasdr-host
             mkdir build
             cd build
-            cmake ..
+            cmake .. -DINSTALL_UDEV_RULES=ON
             make -j4
             sudo make install
       - name: Checkout code
