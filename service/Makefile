@@ -23,7 +23,7 @@ clean:
 install-system: install
 
 install: $(SERVICEFILES)
-	install -d 0755 $(DESTDIR)$(systemdunitdir)
+	install -d -m 0755 $(DESTDIR)$(systemdunitdir)
 	install -m 0644 $(SERVICEFILES) $(DESTDIR)$(systemdunitdir)
 
 %.service: %.service.in
