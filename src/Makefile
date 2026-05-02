@@ -136,7 +136,7 @@ endif
 ifeq ($(ENABLE_RX888),1)
    CFILES += rx888.c
    DYNAMIC_DRIVERS += rx888.so
-   EXECS += rx888_boot
+   DAEMONS += rx888_boot
 endif
 
 ifeq ($(ENABLE_SDRPLAY),1)
