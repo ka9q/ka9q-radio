@@ -32,10 +32,6 @@
 #define PKGDATADIR "/usr/local/share/ka9q-radio"
 #endif
 
-#ifndef STATEDIR
-#define STATEDIR "/var/lib/ka9q-radio"
-#endif
-
 char const *App_path;
 int Ezusb_verbose = 0; // used by ezusb.c
 
@@ -69,8 +65,7 @@ int main(int argc,char *argv[]){
     exit(EX_NOINPUT);
   }
   char full_firmware_file[PATH_MAX] = {0};
-  dist_path(full_firmware_file,sizeof(full_firmware_file),firmware);
-
+  dist_path(full_firmware_file, sizeof full_firmware_file, firmware);
   {
     int ret = libusb_init(NULL);
     if(ret != 0){
