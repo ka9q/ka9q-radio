@@ -46,10 +46,11 @@ int main(int argc,char *argv[]){
   App_path = argv[0];
 
   int c;
-  while((c = getopt(argc,argv,"f:")) != -1){
+  while((c = getopt(argc,argv,"f::")) != -1){
     switch(c){
     case 'f':
-      strlcpy(firmware,optarg,strlen(optarg));
+      if(optarg)
+	strlcpy(firmware,optarg,strlen(optarg));
       break;
     default:
       fprintf(stderr,"usage: %s [-f bootimage]\n",App_path);
