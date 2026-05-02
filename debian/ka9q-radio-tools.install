@@ -1,4 +1,3 @@
-#!/usr/bin/dh-exec
 # debian/ka9q-radio.install
 usr/bin/ctcss
 usr/bin/jt-decoded
