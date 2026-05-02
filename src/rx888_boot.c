@@ -49,8 +49,14 @@ int main(int argc,char *argv[]){
   while((c = getopt(argc,argv,"f::")) != -1){
     switch(c){
     case 'f':
-      if(optarg && *optarg != '\0')
-	strlcpy(firmware,optarg,strlen(optarg));
+      if(optarg != NULL){
+	// Strip leading blanks
+	char const *cp = optarg;
+	while(*cp == ' ')
+	  cp++;
+	if(*cp != '\0')
+	  strlcpy(firmware,cp,strlen(cp));
+      }
       break;
     default:
       fprintf(stderr,"usage: %s [-f bootimage]\n",App_path);
@@ -157,7 +163,7 @@ int dist_path(char *path,int path_len,const char *fname){
   if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
     return 0;
 
-  snprintf(path,path_len,"%s/%s",STATEDIR,fname);
+  snprintf(path,path_len,"%s/%s",PKGDATADIR,fname);
   if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
     return 0;
   return -1;
