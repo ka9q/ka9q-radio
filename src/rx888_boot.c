@@ -49,7 +49,7 @@ int main(int argc,char *argv[]){
   while((c = getopt(argc,argv,"f::")) != -1){
     switch(c){
     case 'f':
-      if(optarg)
+      if(optarg && *optarg != '\0')
 	strlcpy(firmware,optarg,strlen(optarg));
       break;
     default:
@@ -58,7 +58,6 @@ int main(int argc,char *argv[]){
       break;
     }
   }
-  
   if(strlen(firmware) == 0){
     fprintf(stderr,"Firmware not loaded and not available\n");
     exit(EX_NOINPUT);
