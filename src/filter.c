@@ -481,7 +481,7 @@ static void apply_notch_filters(struct notch_state *notches,float complex *outpu
   }
 }
 
-int64_t Min_fft_time = 0xffffffffffffffff;
+int64_t Min_fft_time = 0x7fffffffffffffff;
 int64_t Max_fft_time = 0;
 int64_t Avg_fft_time = 0;
 int64_t Mean_dev = 0;
@@ -562,7 +562,7 @@ void *run_fft(void *p){
       Min_fft_time = ns;
     int64_t dev =  ns - Avg_fft_time ;
     Avg_fft_time += ns >> 4; // alpha = 1/16
-    Mean_dev += dev >> 4;    // alpha = 1/16
+    Mean_dev += labs(dev) >> 4;    // alpha = 1/16
   }
   return NULL;
 }
