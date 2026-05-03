@@ -51,7 +51,7 @@ int main(int argc,char *argv[]){
 	while(*cp == ' ')
 	  cp++;
 	if(*cp != '\0')
-	  strlcpy(firmware,cp,strlen(cp));
+	  strlcpy(firmware,cp,sizeof firmware);
       }
       break;
     default:
