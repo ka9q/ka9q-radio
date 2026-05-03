@@ -499,8 +499,6 @@ void *run_fft(void *p){
   stick_core();
 
   while(true){
-
-
     // Get next job
     pthread_mutex_lock(&FFT.queue_mutex);
     while(FFT.job_queue == NULL)

@@ -90,7 +90,7 @@ static bool Message_shown;
 
 int default_prio(void){
 #ifdef __linux__
-  return 40;
+  return 0; // ordinary scheduling
 #else
   return 0;
 #endif
@@ -544,7 +544,7 @@ int64_t gps_time_ns(void){
   struct timex tx = {0};
   if (clock_gettime(CLOCK_TAI, &ts) == 0 && adjtimex(&tx) != -1 && tx.tai >= 10) {
     /* If CLOCK_TAI is supported, make sure it actually knows what the TAI-UTC offset is (it was never 0)
-       Strictly speaking this isn't TAI, which is defined from the epoch of 1 Jan 1958. 
+       Strictly speaking this isn't TAI, which is defined from the epoch of 1 Jan 1958.
        CLOCK_TAI counts seconds from the fictitious UNIX/POSIX epoch of 1 Jan 1970 00:00:00 UTC. (Fictitious because leap seconds
        didn't start until 1972, and POSIX doesn't count them anyway.)
        Since the system time is kept in pseudo-UTC, CLOCK_TAI returns system time plus the current TAI-UTC offset (+37 sec as of early 2026)
