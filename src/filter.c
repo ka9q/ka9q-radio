@@ -481,6 +481,11 @@ static void apply_notch_filters(struct notch_state *notches,float complex *outpu
   }
 }
 
+int64_t Min_fft_time = 0xffffffffffffffff;
+int64_t Max_fft_time = 0;
+int64_t Avg_fft_time = 0;
+int64_t Mean_dev = 0;
+
 // Worker thread(s) that actually execute FFTs
 // Used for input FFTs since they tend to be large and CPU-consuming
 // Lets the input thread process the next input block in parallel on another core
@@ -494,10 +499,15 @@ void *run_fft(void *p){
   stick_core();
 
   while(true){
+    struct timespec t0 = {0};
+
     // Get next job
     pthread_mutex_lock(&FFT.queue_mutex);
     while(FFT.job_queue == NULL)
       pthread_cond_wait(&FFT.queue_cond,&FFT.queue_mutex);
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+
+
     struct fft_job *job = FFT.job_queue;
     FFT.job_queue = job->next;
     pthread_mutex_unlock(&FFT.queue_mutex);
@@ -520,6 +530,10 @@ void *run_fft(void *p){
     if(job->fin->notches != NULL)
       apply_notch_filters(job->fin->notches,job->output);
 
+    // Stop timer before we block
+    struct timespec t1 = {0};
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+
     // Signal we're done with this job
     if(job->completion_mutex)
       pthread_mutex_lock(job->completion_mutex);
@@ -540,6 +554,17 @@ void *run_fft(void *p){
 
     if(terminate)
       break; // Terminate after this job
+
+    // Compute timing statistics
+    int64_t ns = t1.tv_nsec - t0.tv_nsec;
+    ns += 1000000000 * (t1.tv_sec - t0.tv_sec);
+    if(ns > Max_fft_time)
+      Max_fft_time = ns;
+    if(ns < Min_fft_time)
+      Min_fft_time = ns;
+    int64_t dev =  ns - Avg_fft_time ;
+    Avg_fft_time += ns >> 4; // alpha = 1/16
+    Mean_dev += dev >> 4;    // alpha = 1/16
   }
   return NULL;
 }

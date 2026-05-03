@@ -146,11 +146,19 @@ int main(int argc,char *argv[]){
   }
   fprintf(stderr,"%d total demodulators started\n",n);
   // Measure CPU usage
-  int sleep_period = 60;
+  int sleep_period = 10;
   struct timespec last_realtime = start_realtime;
   struct timespec last_cputime = {0};
   while(true){
     sleep(sleep_period);
+    if(Verbose){
+      extern int64_t Min_fft_time;
+      extern int64_t Max_fft_time;
+      extern int64_t Avg_fft_time;
+      extern int64_t Mean_dev;
+      fprintf(stderr,"FFT times: min %'lld ns, avg %'lld ns, max %'lld ns, mdev %'lld ns\n",
+	      Min_fft_time,Avg_fft_time,Max_fft_time,Mean_dev);
+    }
     if(Verbose){
       struct timespec new_realtime;
       clock_gettime(CLOCK_MONOTONIC,&new_realtime);
