@@ -1,5 +1,5 @@
 usr/lib/ka9q-radio/rx888.so
-usr/bin/rx888_boot
+usr/sbin/rx888_boot
 usr/share/ka9q-radio/120s_failure.img
 usr/share/ka9q-radio/120s_watchdog.img
 usr/share/ka9q-radio/20s_watchdog.img

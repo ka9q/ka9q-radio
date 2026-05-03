@@ -134,7 +134,7 @@ endif
 
 # RX 888 MkII
 ifeq ($(ENABLE_RX888),1)
-   CFILES += rx888.c
+   CFILES += rx888.c rx888_boot.c
    DYNAMIC_DRIVERS += rx888.so
    DAEMONS += rx888_boot
 endif
