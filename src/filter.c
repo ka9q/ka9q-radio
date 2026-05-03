@@ -499,18 +499,17 @@ void *run_fft(void *p){
   stick_core();
 
   while(true){
-    struct timespec t0 = {0};
+
 
     // Get next job
     pthread_mutex_lock(&FFT.queue_mutex);
     while(FFT.job_queue == NULL)
       pthread_cond_wait(&FFT.queue_cond,&FFT.queue_mutex);
-    clock_gettime(CLOCK_MONOTONIC, &t0); // start of measurement
-
     struct fft_job *job = FFT.job_queue;
     FFT.job_queue = job->next;
     pthread_mutex_unlock(&FFT.queue_mutex);
-
+    struct timespec t0 = {0};
+    clock_gettime(CLOCK_MONOTONIC, &t0); // start of measurement
     if(job->input != NULL && job->output != NULL && job->plan != NULL){
       switch(job->type){
       case COMPLEX:
