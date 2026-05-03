@@ -1,0 +1,5 @@
+#!/bin/sh
+bin=$(command -v ka9q-monitor 2>/dev/null || true)
+if [ -n "$bin" ]; then
+    setcap cap_net_admin+ep "$bin" || true
+fi
