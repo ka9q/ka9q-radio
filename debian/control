@@ -124,11 +124,11 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Blade RF device plugin for ka9q-radio
  ka9q-radio plugin for the Blade RF SDR front end
 
-#Package: ka9q-radio-fobos
-#Architecture: any
-#Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-#Description: Rigexpert Fobos device plugin for ka9q-radio
-# ka9q-radio plugin for the Rigexpert Fobos SDR front end
+Package: ka9q-radio-fobos
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Rigexpert Fobos device plugin for ka9q-radio
+ ka9q-radio plugin for the Rigexpert Fobos SDR front end
 
 Package: ka9q-radio-funcube
 Architecture: any
