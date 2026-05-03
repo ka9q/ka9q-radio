@@ -561,8 +561,8 @@ void *run_fft(void *p){
     if(ns < Min_fft_time)
       Min_fft_time = ns;
     int64_t dev =  ns - Avg_fft_time ;
-    Avg_fft_time += ns >> 4; // alpha = 1/16
-    Mean_dev += labs(dev) >> 4;    // alpha = 1/16
+    Avg_fft_time += dev >> 4; // alpha = 1/16
+    Mean_dev += (labs(dev) - Mean_div) >> 4;    // alpha = 1/16
   }
   return NULL;
 }
