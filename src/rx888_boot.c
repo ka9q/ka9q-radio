@@ -38,28 +38,17 @@ int Ezusb_verbose = 0; // used by ezusb.c
 
 int main(int argc,char *argv[]){
   char firmware[PATH_MAX];
-  snprintf(firmware,sizeof firmware,"%s/%s",PKGDATADIR,IMAGE_FILE);
+
   App_path = argv[0];
 
-  int c;
-  while((c = getopt(argc,argv,"f::")) != -1){
-    switch(c){
-    case 'f':
-      if(optarg != NULL){
-	// Strip leading blanks
-	char const *cp = optarg;
-	while(*cp == ' ')
-	  cp++;
-	if(*cp != '\0')
-	  strlcpy(firmware,cp,sizeof firmware);
-      }
-      break;
-    default:
-      fprintf(stderr,"usage: %s [-f bootimage]\n",App_path);
-      exit(EX_USAGE);
-      break;
-    }
-  }
+  if(argc > 1){
+    if(argv[1][0] == '/')
+      strlcpy(firmware,argv[1],sizeof firmware); // absolute
+    else // relative
+      snprintf(firmware,sizeof firmware,"%s/%s",PKGDATADIR,argv[1]);
+  } else
+    snprintf(firmware,sizeof firmware,"%s/%s",PKGDATADIR,IMAGE_FILE);
+
   if(strlen(firmware) == 0){
     fprintf(stderr,"Firmware not loaded and not available\n");
     exit(EX_NOINPUT);
