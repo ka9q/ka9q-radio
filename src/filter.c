@@ -505,8 +505,7 @@ void *run_fft(void *p){
     pthread_mutex_lock(&FFT.queue_mutex);
     while(FFT.job_queue == NULL)
       pthread_cond_wait(&FFT.queue_cond,&FFT.queue_mutex);
-    clock_gettime(CLOCK_MONOTONIC, &t0);
-
+    clock_gettime(CLOCK_MONOTONIC, &t0); // start of measurement
 
     struct fft_job *job = FFT.job_queue;
     FFT.job_queue = job->next;
@@ -556,8 +555,8 @@ void *run_fft(void *p){
       break; // Terminate after this job
 
     // Compute timing statistics
-    int64_t ns = t1.tv_nsec - t0.tv_nsec;
-    ns += 1000000000 * (t1.tv_sec - t0.tv_sec);
+    int64_t ns = t1.tv_nsec - t0.tv_nsec + 1000000000LL * (t1.tv_sec - t0.tv_sec);
+
     if(ns > Max_fft_time)
       Max_fft_time = ns;
     if(ns < Min_fft_time)
@@ -1219,4 +1218,3 @@ static void terminate_fft(struct filter_in *f){
   pthread_mutex_unlock(&FFT.queue_mutex);
 }
 #endif
-
