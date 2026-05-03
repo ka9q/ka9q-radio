@@ -157,7 +157,10 @@ int main(int argc,char *argv[]){
       extern int64_t Avg_fft_time;
       extern int64_t Mean_dev;
       fprintf(stderr,"FFT times: min %'lld ns, avg %'lld ns, max %'lld ns, mdev %'lld ns\n",
-	      Min_fft_time,Avg_fft_time,Max_fft_time,Mean_dev);
+	      (long long)Min_fft_time,
+	      (long long)Avg_fft_time,
+	      (long long)Max_fft_time,
+	      (long long)Mean_dev);
     }
     if(Verbose){
       struct timespec new_realtime;
