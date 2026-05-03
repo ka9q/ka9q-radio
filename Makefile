@@ -51,7 +51,7 @@ clean install install-system:
 		$(MAKE) -C $$d $@ DESTDIR=$(DESTDIR) || exit $$?; \
 	done
 
-install-system: userids install-system commands
+install-system: userids install commands
 
 userids:
 	getent group radio >/dev/null || groupadd --system radio
