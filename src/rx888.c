@@ -221,7 +221,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     reqsize = 32;
   }
   reset = config_getboolean(dictionary,section,"reset",false);
-  if(reset){
+  {
     int ret;
     if((ret = rx888_usb_init(sdr,firmware,queuedepth,reqsize)) != 0){
       fprintf(stderr,"rx888_usb_init() failed\n");
