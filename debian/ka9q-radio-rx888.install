@@ -9,3 +9,4 @@ usr/lib/systemd/system/rx888_boot.service
 usr/lib/udev/rules.d/70-rx888-boot.rules
 usr/lib/udev/rules.d/71-rx888.rules
 usr/lib/udev/rules.d/72-rx888-ka9q.rules
+etc/radio/rx888_bootfile.conf
