@@ -40,7 +40,7 @@ clean:
 
 install:
 # Setup ka9q-radio directories
-	install -D -m 0775 $(DESTDIR)$(radioconfdir)
+	install -d -m 0775 $(DESTDIR)$(radioconfdir)
 	install -d -m 0775 $(DESTDIR)$(hfdllibdir)
 	install -d -m 0755 $(DESTDIR)$(sysusersdir) $(DESTDIR)$(sysctldir) \
 	   $(DESTDIR)$(modprobedir) $(DESTDIR)$(logrotatedir) \
