@@ -21,7 +21,10 @@ LogsDirectoryMode=0775
 ReadWritePaths=/etc/fftw
 UMask=002
 ExecStart=@sbindir@/radiod -N %i /etc/radio/radiod@%i.conf
-Restart=on-failure
+# eventually it will be Restart=on-failure after udev-triggered
+# starting is implemented
+# things are also complicated by rx888s with watchdogs
+Restart=always
 RestartSec=5
 TimeoutStopSec=5
 SyslogIdentifier=radiod@%i
