@@ -5,6 +5,7 @@
 systemdunitdir ?= /etc/systemd/system
 bindir         ?= /usr/local/bin
 sbindir        ?= /usr/local/sbin
+recordingsdir  ?= /srv/ka9q-radio/recordings
 
 SERVICEFILES=acars.service aprsfeed.service cwd.service ft4-decode.service ft8-decode.service \
 	ft4-decode@.service ft8-decode@.service ft4-record.service ft8-record.service \
@@ -29,6 +30,7 @@ install: $(SERVICEFILES)
 %.service: %.service.in
 	sed -e 's|@bindir@|$(bindir)|g' \
 	    -e 's|@sbindir@|$(sbindir)|g' \
+	    -e 's|@recordings@|$(recordingsdir)|g' \
 	    $< > $@
 
 show-service-paths:
