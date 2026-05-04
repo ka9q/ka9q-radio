@@ -1,11 +1,13 @@
 [Unit]
 Description=Enable multicast on loopback interface
-After=network.target
+DefaultDependencies=no
+Before=network-pre.target
+Wants=network-pre.target
 
 [Service]
-ExecStart=@bindir@/set_lo_multicast
 Type=oneshot
-RemainAfterExit=true
+ExecStart=@bindir@/set_lo_multicast
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
