@@ -36,7 +36,7 @@ ENABLE_SDRPLAY  ?= 0
 
 export ENABLE_AIRSPY ENABLE_AIRSPYHF ENABLE_BLADERF ENABLE_FOBOS ENABLE_FUNCUBE ENABLE_HACKRF ENABLE_HYDRASDR
 export ENABLE_RTLSDR ENABLE_RX888 ENABLE_SDRPLAY
-
+export DEB_BUILD_ARCH
 
 SUBDIRS=src aux share service rules docs config
 .PHONY: clean all install $(SUBDIRS) install-system commands
@@ -46,19 +46,24 @@ all: $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -C $@
 
-clean install install-system:
+clean:
 	for d in $(SUBDIRS); do \
-		$(MAKE) -C $$d $@ DESTDIR=$(DESTDIR) || exit $$?; \
+		$(MAKE) -C $$d clean DESTDIR=$(DESTDIR) || exit $$?; \
 	done
 
-install-system: userids install commands
-
-userids:
+# only do system stuff when installing locally
+# dpkg-buildpackage does that when building a debian package
+install:
+ifndef DEB_BUILD_ARCH
 	getent group radio >/dev/null || groupadd --system radio
 	id radio >/dev/null 2>&1 || useradd --system --gid radio \
 		--home-dir /var/lib/ka9q-radio --no-create-home radio
-
-commands:
+endif
+	for d in $(SUBDIRS); do \
+		$(MAKE) -C $$d install DESTDIR=$(DESTDIR) || exit $$?; \
+	done
+ifndef DEB_BUILD_ARCH
 	systemctl daemon-reload
 	udevadm control --reload-rules
 	setcap cap_net_admin+ep $(bindir)/monitor
+endif

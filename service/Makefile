@@ -7,21 +7,18 @@ bindir         ?= /usr/local/bin
 sbindir        ?= /usr/local/sbin
 recordingsdir  ?= /srv/ka9q-radio/recordings
 
-SERVICEFILES=acars.service aprsfeed.service cwd.service ft4-decode.service ft8-decode.service \
-	ft4-decode@.service ft8-decode@.service ft4-record.service ft8-record.service \
-	hfdl.service horusdemod.service  packetd.service radiod@.service recordings@.service \
+SERVICEFILES=acars.service aprsfeed.service cwd.service ft4-decode.service \
+	ft8-decode.service ft4-decode@.service ft8-decode@.service \
+	ft4-record.service ft8-record.service hfdl.service horusdemod.service \
+	packetd.service radiod@.service recordings@.service \
 	rx888_boot.service set_lo_multicast.service wspr-decoded.service
 
-
-.PHONY: clean all install install-system
+.PHONY: clean all install
 
 all: $(SERVICEFILES)
 
 clean:
 	rm -f *.service
-
-# install as ordinary files for now, don't have dpkg autostart them
-install-system: install
 
 install: $(SERVICEFILES)
 	install -d -m 0755 $(DESTDIR)$(systemdunitdir)

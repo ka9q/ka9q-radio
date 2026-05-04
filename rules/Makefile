@@ -5,14 +5,12 @@ udevdir	      ?= /etc/udev/rules.d
 
 UNAME_S := $(shell uname -s)
 
-.PHONY: clean all install install-system
+.PHONY: clean all install
 
 all:
 	@true
 clean:
 	@true
-
-install-system: install	
 
 install:
 	install -d -m 0755 $(DESTDIR)$(udevdir)

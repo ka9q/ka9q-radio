@@ -30,7 +30,7 @@ LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate 
 BLACKLIST = airspy-blacklist.conf
 SYSCTL = 98-sockbuf.conf 50-multicast.conf
 
-.PHONY: clean all install install-system
+.PHONY: clean all install
 
 all:
 	@true
@@ -38,16 +38,13 @@ all:
 clean:
 	@true
 
-install-system: install
-	install -D -m 0775 $(DESTDIR)$(radioconfdir)
-	chown radio:radio $(DESTDIR)$(radioconfdir) $(DESTDIR)$(hfdllibdir) $(DESTDIR)$(statedir) \
-		$(DESTDIR)$(statedir)/ft8 $(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr $(DESTDIR)$(hfdllibdir) 
-
 install:
 # Setup ka9q-radio directories
+	install -D -m 0775 $(DESTDIR)$(radioconfdir)
 	install -d -m 0775 $(DESTDIR)$(hfdllibdir)
-	install -d -m 0755 $(DESTDIR)$(sysusersdir) $(DESTDIR)$(sysctldir) $(DESTDIR)$(modprobedir) \
-		$(DESTDIR)$(logrotatedir) $(DESTDIR)$(sbindir) $(DESTDIR)$(crondir) $(DESTDIR)$(bindir)
+	install -d -m 0755 $(DESTDIR)$(sysusersdir) $(DESTDIR)$(sysctldir) \
+	   $(DESTDIR)$(modprobedir) $(DESTDIR)$(logrotatedir) \
+	   $(DESTDIR)$(sbindir) $(DESTDIR)$(crondir) $(DESTDIR)$(bindir)
 
 # Setup init system
 	install -m 0644 radio.sysusers $(DESTDIR)$(sysusersdir)/radio.conf
@@ -63,5 +60,13 @@ install:
 	install -m 0644 ka9q-cleanups $(DESTDIR)$(crondir)
 # Configure scripts
 	install -m 0755 $(SCRIPTS) $(DESTDIR)$(bindir)
+
+# debian packaging handles this, so do it only on local installs
+ifndef DEB_BUILD_ARCH
+	chown radio:radio $(DESTDIR)$(radioconfdir) $(DESTDIR)$(hfdllibdir) \
+	$(DESTDIR)$(statedir) $(DESTDIR)$(statedir)/ft8 \
+	$(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr \
+	$(DESTDIR)$(hfdllibdir) 
+endif
 
 

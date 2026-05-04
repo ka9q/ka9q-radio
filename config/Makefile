@@ -5,7 +5,7 @@ radioconfdir  ?= $(sysconfdir)/radio
 
 UNAME_S := $(shell uname -s)
 
-.PHONY: clean all install install-system
+.PHONY: clean all install
 
 all:
 	@true
@@ -13,10 +13,13 @@ all:
 clean:
 	@true
 
-install-system: install
-	chown radio:radio $(DESTDIR)$(radioconfdir)
-
-install:
 # Setup sample config files
+# don't overwrite the user's files when locally installing
+install:
+ifndef DEB_BUILD_ARCH
 	install -d -m 0775 $(DESTDIR)$(radioconfdir)
-	rsync -a *.conf *.conf.d $(DESTDIR)$(radioconfdir)
+	rsync -a --ignore-existing *.conf *.conf.d $(DESTDIR)$(radioconfdir)
+	chown radio:radio $(DESTDIR)$(radioconfdir)
+else
+	@true
+endif
