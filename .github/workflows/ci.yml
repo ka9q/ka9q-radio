@@ -25,7 +25,7 @@ jobs:
             libairspy-dev \
             libairspyhf-dev \
             librtlsdr-dev \
-	    libbladerf-dev \
+            libbladerf-dev \
             libiniparser-dev \
             libavahi-client-dev \
             portaudio19-dev \
