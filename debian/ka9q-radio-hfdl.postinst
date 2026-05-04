@@ -1,0 +1,9 @@
+case "$1" in
+  configure)
+    addgroup --system radio || true
+    install -d -m 0775 -o radio -g radio /var/lib/hfdl
+    /usr/bin/set_lo_multicast || true
+    ;;
+esac
+
+#DEBHELPER#
