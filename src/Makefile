@@ -144,7 +144,7 @@ ifeq ($(ENABLE_SDRPLAY),1)
    DYNAMIC_DRIVERS += sdrplay.so
 endif
 
-.PHONY: clean all install doc dynamics
+.PHONY: clean all install install-system dynamics
 
 all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
@@ -154,6 +154,8 @@ install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 	install -m 0755 $(DYNAMIC_DRIVERS) $(DESTDIR)$(pkglibdir)
 	install -m 0755 $(DAEMONS) $(DESTDIR)$(sbindir)
 	install -m 0755 $(EXECS) $(DESTDIR)$(bindir)
+
+install-system: install
 
 clean:
 	rm -f *.o *.a *.d *.so $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
