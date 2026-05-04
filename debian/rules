@@ -49,7 +49,7 @@ override_dh_auto_install:
 	$(MAKE) $(PLUGIN_FLAGS) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr systemdunitdir=/usr/lib/systemd/system udevdir=/usr/lib/udev/rules.d
 
 override_dh_installsystemd:
-	dh_installsystemd --name=set_lo_multicast
+	dh_installsystemd --name=set_lo_multicast --no-start
 	dh_installsystemd --remaining-packages --no-enable --no-start
 
 %:

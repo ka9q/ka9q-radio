@@ -1,7 +1,6 @@
 case "$1" in
   configure)
-    deb-systemd-helper enable set_lo_multicast.service >/dev/null || true
-    deb-systemd-invoke start set_lo_multicast.service >/dev/null || true
+    /usr/bin/set_lo_multicast || true
     ;;
 esac
 
