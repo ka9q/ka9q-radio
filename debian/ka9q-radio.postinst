@@ -7,6 +7,7 @@ case "$1" in
 	if [ -n "$bin" ]; then
 	    setcap cap_net_admin+ep "$bin" || true
 	fi
+	systemd-tmpfiles --create /usr/lib/tmpfiles.d/ka9q-radio.conf || true
         ;;
 esac
 
