@@ -7,10 +7,10 @@ jobs:
   steps:
     - name: Add ka9q apt repository
       run: |
-        curl -fsSL http://homer.ka9q.net/ka9q-archive-keyring.asc | \
-          sudo tee /usr/share/keyrings/ka9q-archive-keyring.asc >/dev/null
+        curl -fsSL http://homer.ka9q.net/ka9q-radio.asc | \
+          sudo tee /usr/share/keyrings/ka9q-radio.asc >/dev/null
 
-        echo "deb [signed-by=/usr/share/keyrings/ka9q-archive-keyring.asc arch=amd64] http://homer.ka9q.net ka9q main" | \
+        echo "deb [signed-by=/usr/share/keyrings/ka9q-radio.asc arch=amd64] http://homer.ka9q.net ka9q main" | \
           sudo tee /etc/apt/sources.list.d/ka9q.list >/dev/null
 
         sudo apt-get update
