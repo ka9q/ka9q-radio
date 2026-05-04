@@ -1,4 +1,7 @@
-ubuntu-build:
+name: CI
+on: [push, pull_request, workflow_dispatch]
+jobs:
+ ubuntu-build:
   name: Package install test
   runs-on: ubuntu-latest
   steps:
