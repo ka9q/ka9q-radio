@@ -157,10 +157,11 @@ int main(int argc,char *argv[]){
     direction = FFTW_FORWARD;
   }
 
-  if(Verbose > 1)
+  if(Verbose)
     printf("FFTW version: %s\n", fftwf_version);
   fftwf_init_threads();
   fftwf_plan_with_nthreads(nthreads);
+  umask(02); // allow groups to write
 
   bool sr = false;
   bool lr = false;

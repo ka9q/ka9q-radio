@@ -25,7 +25,7 @@ Depends:
 Description: KA9Q multichannel SDR server
  Multichannel software-defined radio "spectrum server"
  with multicast control and data
- 
+
 Package: ka9q-radio-common
 Architecture: any
 Depends:
@@ -54,7 +54,7 @@ Depends:
  ka9q-radio-common
 Description: AX.25/aprs subsystem for ka9q-radio
  Provides AFSK AX.25 decoder, APRS extractor and feeder
- 
+
 Package: ka9q-radio-recordings
 Architecture: any
 Depends:
@@ -83,7 +83,7 @@ Depends:
  ka9q-radio-common
 Description: FT4/FT8/WSPR skimmers for ka9q-radio
  records and decodes FT4, FT8 and WSPR transmissions, logs in /var/log/ft[48].log, wspr.log
- 
+
 Package: ka9q-radio-control
 Architecture: any
 Depends:
@@ -92,7 +92,7 @@ Depends:
  ka9q-radio-common
 Description: Control program for ka9q-radio
  Interactive channel control program for ka9q-radio; uses ncurses
- 
+
 Package: ka9q-radio-monitor
 Architecture: any
 Depends:
@@ -102,7 +102,7 @@ Depends:
 Description: Multicast stream audio monitor for ka9q-radio
  Interactive multicast RTP stream monitor for ka9q-radio, uses ncurses,
  handles multiple channels, supports pcm, opus, u-law, a-law
- 
+
 Package: ka9q-radio-tools
 Architecture: any
 Depends:
@@ -111,13 +111,13 @@ Depends:
  ka9q-radio-common
 Description: Command-line tools for ka9q-radio
  Shell command line tools for interacting with ka9q-radio over the net
- 
+
 Package: ka9q-radio-airspy
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Airspy device plugin for ka9q-radio
  ka9q-radio plugin for the Airspy R2, Airspy Mini SDR front ends
-	     
+
 Package: ka9q-radio-airspyhf
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
@@ -153,7 +153,7 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
 Description: Hydra SDR One device plugin for ka9q-radio
  ka9q-radio plugin for the Hydra SDR One (can also use the airspy plugin)
- 
+
 Package: ka9q-radio-rtlsdr
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
@@ -197,6 +197,5 @@ Depends:
  ka9q-radio-rtlsdr,
  ka9q-radio-rx888,
  ka9q-radio-tools
-
 Description: meta package for all components of ka9q-radio
  Brings in the works: radiod, control, monitor, command line tools, device plugins
