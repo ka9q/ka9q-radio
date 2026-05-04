@@ -40,11 +40,12 @@ clean:
 
 install:
 # Setup ka9q-radio directories
-	install -d -m 0775 $(DESTDIR)$(radioconfdir)
+	install -d -m 0775 $(DESTDIR)$(radioconfdir) $(DESTDIR)$(statedir) $(DESTDIR)$(statedir)/ft8
+	install -d -m 0775 $(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr
 	install -d -m 0775 $(DESTDIR)$(hfdllibdir)
-	install -d -m 0755 $(DESTDIR)$(sysusersdir) $(DESTDIR)$(sysctldir) \
-	   $(DESTDIR)$(modprobedir) $(DESTDIR)$(logrotatedir) \
-	   $(DESTDIR)$(sbindir) $(DESTDIR)$(crondir) $(DESTDIR)$(bindir)
+	install -d -m 0755 $(DESTDIR)$(sysusersdir) $(DESTDIR)$(sysctldir)
+	install -d -m 0755 $(DESTDIR)$(modprobedir) $(DESTDIR)$(logrotatedir)
+	install -d -m 0755 $(DESTDIR)$(sbindir) $(DESTDIR)$(crondir) $(DESTDIR)$(bindir)
 
 # Setup init system
 	install -m 0644 radio.sysusers $(DESTDIR)$(sysusersdir)/radio.conf
