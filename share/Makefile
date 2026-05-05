@@ -34,7 +34,7 @@ purge:
 	    echo "Refusing to run purge directly. Use top-level make purge."; \
 	    exit 1; \
 	}
-	@if [ -n "$(DESTDIR)$(pkgdatadir)" ]; then \
+	if [ -n "$(DESTDIR)$(pkgdatadir)" ]; then \
 		rm -rf $(DESTDIR)$(pkgdatadir); \
 	fi
 

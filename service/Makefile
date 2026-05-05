@@ -25,7 +25,7 @@ purge:
 	    echo "Refusing to run purge directly. Use top-level make purge."; \
 	    exit 1; \
 	}
-	@if [ -n "$(DESTDIR)$(systemunitdir)" ]; then \
+	if [ -n "$(DESTDIR)$(systemunitdir)" ]; then \
 		cd $(DESTDIR)$(systemunitdir) && rm -f $(SERVICEFILES); \
 	fi
 

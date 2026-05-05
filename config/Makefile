@@ -15,7 +15,7 @@ clean:
 
 purge:
 	@test "$(CONFIRMED)" = "1" || { echo "Refusing to run purge directly. Use top-level make purge."; exit 1; }
-	@if [ -d "$(DESTDIR)$(radioconfdir)" ]; then \
+	if [ -d "$(DESTDIR)$(radioconfdir)" ]; then \
 		rm -rf $(DESTDIR)$(radioconfdir); \
 	fi
 

@@ -24,7 +24,7 @@ purge:
 	    echo "Refusing to run purge directly. Use top-level make purge."; \
 	    exit 1; \
 	}
-	@if [ -d "$(DESTDIR)$(udevdir)" ]; then \
+	if [ -d "$(DESTDIR)$(udevdir)" ]; then \
 		cd $(DESTDIR)$(udevdir) && rm -f $(RULES); \
 	fi
 

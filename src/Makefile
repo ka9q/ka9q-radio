@@ -162,13 +162,13 @@ purge:
 	    echo "Refusing to run purge directly. Use top-level make purge."; \
 	    exit 1; \
 	}
-	@if [ -n "$(DESTDIR)$(sbindir)" ]; then \
+	if [ -n "$(DESTDIR)$(sbindir)" ]; then \
 		cd $(DESTDIR)$(sbindir) && rm -f $(DAEMONS); \
 	fi
-	@if [ -n "$(DESTDIR)$(bindir)" ]; then \
+	if [ -n "$(DESTDIR)$(bindir)" ]; then \
 		cd $(DESTDIR)$(bindir) && rm -f $(EXECS); \
 	fi
-	@if [ -n "$(DESTDIR)$(pkglibdir)" ]; then \
+	if [ -n "$(DESTDIR)$(pkglibdir)" ]; then \
 		rm -rf $(DESTDIR)$(pkglibdir); \
 	fi
 

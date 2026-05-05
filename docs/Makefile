@@ -22,9 +22,9 @@ install:
 
 purge:
 	@test "$(CONFIRMED)" = "1" || { echo "Refusing to run purge directly. Use top-level make purge."; exit 1; }
-	@if [ -d "$(DESTDIR)$(mandir)/man1" ]; then \
+	if [ -d "$(DESTDIR)$(mandir)/man1" ]; then \
 		cd $(DESTDIR)$(mandir)/man1 && rm -f $(PAGES1); \
 	fi
-	@if [ -d "$(DESTDIR)$(mandir)/man8" ]; then \
+	if [ -d "$(DESTDIR)$(mandir)/man8" ]; then \
 		cd $(DESTDIR)$(mandir)/man8 && rm -f $(PAGES8); \
 	fi
