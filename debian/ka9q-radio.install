@@ -2,7 +2,8 @@
 usr/bin/fft-gen
 usr/sbin/radiod
 usr/lib/ka9q-radio/sig_gen.so
-etc/radio/*
+etc/radio/radiod@*conf
+etc/radio/radiod@*conf.d
 etc/sysusers.d/*
 etc/sysctl.d/*
 usr/lib/systemd/system/radiod@.service
