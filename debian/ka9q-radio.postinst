@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+	bin=$(command -v radiod 2>/dev/null || true)
+	if [ -n "$bin" ]; then
+	    setcap cap_net_admin+ep "$bin" || true
+	fi
+        ;;
+esac
+
+#DEBHELPER#
+

@@ -15,7 +15,6 @@
 #include <unistd.h>
 #include <strings.h>
 
-#include "conf.h"
 #include "misc.h"
 #include "multicast.h"
 #include "status.h"

@@ -1,0 +1,2 @@
+usr/lib/ka9q-radio/hydrasdr.so
+usr/lib/udev/rules.d/51-hydrasdr.rules

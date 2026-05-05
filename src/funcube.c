@@ -12,7 +12,6 @@
 #include <sysexits.h>
 #include <strings.h>
 
-#include "conf.h"
 #include "fcd.h"
 #include "misc.h"
 #include "config.h"

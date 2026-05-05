@@ -1,0 +1,4 @@
+usr/lib/ka9q-radio/funcube.so
+usr/lib/udev/rules.d/68-funcube-dongle-proplus.rules
+usr/lib/udev/rules.d/68-funcube-dongle.rules
+usr/lib/udev/rules.d/69-funcube-ka9q.rules

@@ -1,0 +1,5 @@
+# ka9q-radio-control.install
+usr/bin/control
+usr/share/man/man1/control.1
+usr/share/ka9q-radio/bandplan.txt
+usr/share/ka9q-radio/help.txt

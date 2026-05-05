@@ -1,0 +1,24 @@
+# debian/ka9q-radio.install
+usr/bin/ctcss
+usr/bin/jt-decoded
+usr/bin/metadump
+usr/bin/pcmrecord
+usr/bin/powers
+usr/bin/tune
+usr/bin/wd-record
+usr/bin/pcmsend
+usr/bin/opussend
+usr/share/ka9q-radio/ka9q_ctl.lua
+usr/share/ka9q-radio/ssrc-decimal.lua
+usr/share/man/man1/ctcss.1
+usr/share/man/man1/jt-decoded.1
+usr/share/man/man1/metadump.1
+usr/share/man/man1/pcmrecord.1
+usr/share/man/man1/powers.1
+usr/share/man/man1/tune.1
+usr/share/man/man1/wd-record.1
+usr/share/man/man1/pcmsend.1
+usr/share/man/man1/opussend.1
+
+
+

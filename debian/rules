@@ -1,0 +1,62 @@
+#!/usr/bin/make -f
+# See debhelper(7) (uncomment to enable).
+# Output every command that modifies files on the build system.
+#export DH_VERBOSE = 1
+
+
+# See FEATURE AREAS in dpkg-buildflags(1).
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# See ENVIRONMENT in dpkg-buildflags(1).
+# Package maintainers to append CFLAGS.
+#export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+# Package maintainers to append LDFLAGS.
+#export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+ENABLE_AIRSPY   ?= 1
+ENABLE_AIRSPYHF ?= 1
+ENABLE_BLADERF  ?= 1
+ENABLE_FOBOS    ?= 1
+ENABLE_FUNCUBE  ?= 1
+ENABLE_HACKRF   ?= 1
+ENABLE_HYDRASDR ?= 1
+ENABLE_RTLSDR   ?= 1
+ENABLE_RX888    ?= 1
+ENABLE_SDRPLAY  ?= 0
+
+PLUGIN_FLAGS = \
+	ENABLE_AIRSPY=$(ENABLE_AIRSPY) \
+	ENABLE_AIRSPYHF=$(ENABLE_AIRSPYHF) \
+	ENABLE_BLADERF=$(ENABLE_BLADERF) \
+	ENABLE_FOBOS=$(ENABLE_FOBOS) \
+	ENABLE_FUNCUBE=$(ENABLE_FUNCUBE) \
+	ENABLE_HACKRF=$(ENABLE_HACKRF) \
+	ENABLE_HYDRASDR=$(ENABLE_HYDRASDR) \
+	ENABLE_RTLSDR=$(ENABLE_RTLSDR) \
+	ENABLE_RX888=$(ENABLE_RX888) \
+	ENABLE_SDRPLAY=$(ENABLE_SDRPLAY)
+
+
+override_dh_auto_build:
+	@echo "MAKEFLAGS=$(MAKEFLAGS)"
+	@echo "DEB_BUILD_OPTIONS=$(DEB_BUILD_OPTIONS)"
+	$(MAKE) -j$(shell nproc) $(PLUGIN_FLAGS) prefix=/usr systemdunitdir=/usr/lib/systemd/system
+
+#override_dh_auto_build:
+#	dh_auto_build -- $(PLUGIN_FLAGS)
+
+override_dh_auto_install:
+	$(MAKE) $(PLUGIN_FLAGS) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr systemdunitdir=/usr/lib/systemd/system udevdir=/usr/lib/udev/rules.d
+
+override_dh_installsystemd:
+	dh_installsystemd --name=set_lo_multicast --no-start
+	dh_installsystemd --remaining-packages --no-enable --no-start
+
+%:
+	dh $@
+
+# dh_make generated override targets.
+# This is an example for Cmake (see <https://bugs.debian.org/641051>).
+#override_dh_auto_configure:
+#	dh_auto_configure -- \
+#	-DCMAKE_LIBRARY_PATH=$(DEB_HOST_MULTIARCH)

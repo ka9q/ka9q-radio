@@ -1,0 +1,23 @@
+# systemd unit to load firmware into rx888
+# April 2026 Phil Karn, KA9Q
+
+[Unit]
+Description=Rx888 firmware loader
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+User = radio
+Group = radio
+Type = oneshot
+PermissionsStartOnly=true
+UMask = 002
+EnvironmentFile=/etc/radio/rx888_bootfile.conf
+ExecStart=@sbindir@/rx888_boot ${FIRMWARE}
+Restart=no
+TimeoutStopSec=10
+SyslogIdentifier=rx888_boot
+
+[Install]
+WantedBy=multi-user.target
+

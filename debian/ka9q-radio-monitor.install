@@ -1,0 +1,11 @@
+# ka9q-radio-monitor.install
+usr/bin/monitor
+usr/share/man/man1/monitor.1
+usr/share/man/man1/cwd.1
+usr/share/ka9q-radio/monitor-help.txt
+usr/share/ka9q-radio/id.txt
+usr/sbin/cwd
+etc/radio/repeater.conf
+usr/lib/systemd/system/cwd.service
+
+

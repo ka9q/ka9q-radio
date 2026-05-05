@@ -1,0 +1,36 @@
+# systemd unit for radio receiver
+# Phil Karn, KA9Q, Sept 2025
+
+[Unit]
+Description=%i radio receiver
+Wants=network-online.target
+After=network-online.target
+CollectMode=inactive-or-failed
+
+[Service]
+User=radio
+Group=radio
+Type=simple
+Nice=-10
+SupplementaryGroups=plugdev radio users
+AmbientCapabilities=CAP_SYS_NICE CAP_NET_ADMIN
+StateDirectory=ka9q-radio
+StateDirectoryMode=0775
+LogsDirectory=ka9q-radio
+LogsDirectoryMode=0775
+ReadWritePaths=/etc/fftw
+UMask=002
+ExecStart=@sbindir@/radiod -N %i /etc/radio/radiod@%i.conf
+# eventually it will be Restart=on-failure after udev-triggered
+# starting is implemented
+# things are also complicated by rx888s with watchdogs
+Restart=always
+RestartSec=5
+TimeoutStopSec=5
+SyslogIdentifier=radiod@%i
+LogRateLimitBurst=500
+LogRateLimitIntervalSec=20
+RestartPreventExitStatus=66
+
+[Install]
+WantedBy=multi-user.target

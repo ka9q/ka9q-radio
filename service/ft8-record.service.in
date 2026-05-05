@@ -1,0 +1,28 @@
+# Systemd unit to record FT-4 into a spool directory
+# files are read by a separate ft4-decode daemon
+# Phil Karn, KA9Q 9 May 2025
+
+[Unit]
+Description=ft8-record
+After=network-online.target
+Requires=network-online.target
+RequiresMountsFor=/var/lib/ka9q-radio/ft8
+
+[Service]
+Nice=0
+User=radio
+Group=radio
+Type=simple
+EnvironmentFile=/etc/radio/ft8-decode.conf
+PermissionsStartOnly=true
+UMask = 002
+WorkingDirectory=/var/lib/ka9q-radio/ft8
+ExecStart=@bindir@/pcmrecord -d $DIRECTORY -8 $MCAST
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+LogRateLimitBurst=200
+LogRateLimitIntervalSec=20
+
+[Install]
+WantedBy=multi-user.target

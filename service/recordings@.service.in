@@ -1,0 +1,28 @@
+# Systemd unit to record receiver streams
+# Phil Karn, KA9Q May 2020
+
+[Unit]
+Description=%i recordings
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+Nice=-10
+User=radio
+Group=radio
+Type=simple
+PermissionsStartOnly=true
+StandardOutput=append:@recordings@/pcmrecord@%i.log
+StandardError=append:@recordings@/pcmrecord@%i.log
+EnvironmentFile=/etc/radio/recordings@%i.conf
+UMask = 002
+ExecStart=@bindir@/pcmrecord $ARGS
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+SyslogIdentifier=recordings@%i
+LogRateLimitBurst=200
+LogRateLimitIntervalSec=20
+
+[Install]
+WantedBy=multi-user.target

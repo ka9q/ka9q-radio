@@ -13,8 +13,10 @@ jt-decoded
 tune
 pcmrecord
 radiod
-pl
+ctcss
 control
 metadump
 packetd
 rx888_boot
+opussend
+pcmsend

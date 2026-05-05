@@ -26,34 +26,35 @@
 #include "rx888.h"
 #include "ezusb.h"
 
+#define IMAGE_FILE "SDDC_FX3.img"
+
+#ifndef PKGDATADIR
+#define PKGDATADIR "/usr/local/share/ka9q-radio"
+#endif
+
 char const *App_path;
-char const *Libdir = "/var/lib/ka9q-radio/";
 int Ezusb_verbose = 0; // used by ezusb.c
 
+
 int main(int argc,char *argv[]){
-  char const *firmware = "/usr/local/share/ka9q-radio/SDDC_FX3.img"; // default
+  char firmware[PATH_MAX];
+
   App_path = argv[0];
 
-  int c;
-  while((c = getopt(argc,argv,"f:")) != -1){
-    switch(c){
-    case 'f':
-      firmware = optarg;
-      break;
-    default:
-      fprintf(stderr,"usage: %s [-f bootimage]\n",App_path);
-      exit(EX_USAGE);
-      break;
-    }
-  }
-  
-  if(firmware == NULL){
+  if(argc > 1){
+    if(argv[1][0] == '/')
+      strlcpy(firmware,argv[1],sizeof firmware); // absolute
+    else // relative
+      snprintf(firmware,sizeof firmware,"%s/%s",PKGDATADIR,argv[1]);
+  } else
+    snprintf(firmware,sizeof firmware,"%s/%s",PKGDATADIR,IMAGE_FILE);
+
+  if(strlen(firmware) == 0){
     fprintf(stderr,"Firmware not loaded and not available\n");
     exit(EX_NOINPUT);
   }
   char full_firmware_file[PATH_MAX] = {0};
-  dist_path(full_firmware_file,sizeof(full_firmware_file),firmware);
-
+  dist_path(full_firmware_file, sizeof full_firmware_file, firmware);
   {
     int ret = libusb_init(NULL);
     if(ret != 0){
@@ -146,7 +147,7 @@ int dist_path(char *path,int path_len,const char *fname){
   if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
     return 0;
 
-  snprintf(path,path_len,"%s/%s",Libdir,fname);
+  snprintf(path,path_len,"%s/%s",PKGDATADIR,fname);
   if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
     return 0;
   return -1;

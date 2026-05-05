@@ -1,0 +1,12 @@
+usr/lib/ka9q-radio/rx888.so
+usr/sbin/rx888_boot
+usr/share/ka9q-radio/120s_failure.img
+usr/share/ka9q-radio/120s_watchdog.img
+usr/share/ka9q-radio/20s_watchdog.img
+usr/share/ka9q-radio/60s_watchdog.img
+usr/share/ka9q-radio/SDDC_FX3.img
+usr/lib/systemd/system/rx888_boot.service
+usr/lib/udev/rules.d/70-rx888-boot.rules
+usr/lib/udev/rules.d/71-rx888.rules
+usr/lib/udev/rules.d/72-rx888-ka9q.rules
+etc/radio/rx888_bootfile.conf

@@ -20,7 +20,6 @@
 #include <sysexits.h>
 #include <poll.h>
 
-#include "conf.h"
 #include "config.h"
 #include "misc.h"
 #include "multicast.h"

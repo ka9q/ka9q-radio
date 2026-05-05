@@ -1,0 +1,30 @@
+# Systemd unit to decode aircraft HF data link
+# Phil Karn, KA9Q May 2025
+# This is a new version that sets up one receiver for each band, all sending to a common multicast group (hfdl.local)
+# pcmrecord --exec then uses a helper script to launch dumphfdl with the appropriate channel frequency list
+# This service file causes a single instance of 'pcmrecord --exec' to execute a separate instance of dumphfdl for each band, and demux the SSRCs to them
+
+[Unit]
+Description=hfdl-decoder
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+User=radio
+Group=radio
+Type=simple
+EnvironmentFile=/etc/radio/hfdl.conf
+PermissionsStartOnly=true
+StandardOutput=append:/var/log/hfdl.log
+UMask = 002
+CPUSchedulingPolicy=batch
+RuntimeDirectory=hfdl
+ExecStart=@bindir@/pcmrecord --raw -v --exec "@sbindir@/start-hfdl \"$k\" \"$d\" \"$r\"" ${MCAST}
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+LogRateLimitBurst=200
+LogRateLimitIntervalSec=20
+
+[Install]
+WantedBy=multi-user.target

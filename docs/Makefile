@@ -1,16 +1,30 @@
-# -*- makefile -*-
+# Copyright 2026, Phil Karn, KA9Q
 
-# dummy make for ka9q-radio docs
-# Copyright 2025, Phil Karn, KA9Q
+prefix	?= /usr/local
+mandir  ?= $(prefix)/share/man
+
+PAGES1 = aprs.1 control.1 cwd.1 fft-gen.1 jt-decoded.1 metadump.1 monitor.1 opussend.1 \
+	pcmsend.1 pcmrecord.1 ctcss.1 powers.1 tune.1 wd-record.1
+PAGES8 = radiod.8 aprsfeed.8 packetd.8 
+
+.PHONY: clean all install purge
 
 all:
+	@true
 
 clean:
+	@true
 
 install:
+	install -d -m 0755 $(DESTDIR)$(mandir) $(DESTDIR)$(mandir)/man1 $(DESTDIR)$(mandir)/man8
+	install -m 0644 $(PAGES1) $(DESTDIR)$(mandir)/man1
+	install -m 0644 $(PAGES8) $(DESTDIR)$(mandir)/man8
 
-.PHONY: clean all install
-
-
-
-
+purge:
+	@test "$(CONFIRMED)" = "1" || { echo "Refusing to run purge directly. Use top-level make purge."; exit 1; }
+	if [ -d "$(DESTDIR)$(mandir)/man1" ]; then \
+		cd $(DESTDIR)$(mandir)/man1 && rm -f $(PAGES1); \
+	fi
+	if [ -d "$(DESTDIR)$(mandir)/man8" ]; then \
+		cd $(DESTDIR)$(mandir)/man8 && rm -f $(PAGES8); \
+	fi

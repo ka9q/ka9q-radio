@@ -1,0 +1,201 @@
+Source: ka9q-radio
+Section: hamradio
+Priority: optional
+Maintainer: Phil Karn <karn@ka9q.net>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13),
+ libairspy-dev,
+ libairspyhf-dev,
+ libbladerf-dev,
+ libhackrf-dev,
+ librtlsdr-dev
+Standards-Version: 4.7.2
+Homepage: http://www.ka9q.net
+Vcs-Browser: https://github.com/ka9q/ka9q-radio
+Vcs-Git: https://github.com/ka9q/ka9q-radio.git
+
+Package: ka9q-radio
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ ka9q-radio-common,
+ libcap2-bin, systemd, udev
+Description: KA9Q multichannel SDR server
+ Multichannel software-defined radio "spectrum server"
+ with multicast control and data
+
+Package: ka9q-radio-common
+Architecture: any
+Depends:
+ ${misc:Depends},
+ systemd
+Description: common files for ka9q-radio
+ Common files for ka9q-radio and ka9q-radio's user commands and daemons
+
+Package: ka9q-radio-hfdl
+Architecture: any
+Depends:
+ ${misc:Depends},
+ systemd,
+ ka9q-radio-common
+Description: HFDL subsystem for ka9q-radio
+ HFDL (High Frequency Data Link) is a packet radio system used by commercial
+ airliners over oceans and remote areas. This package decodes all known
+ HFDL data channels. It requires manual installation of the dumphfdl and
+ libacars packages (not supplied as standard Debian packages)
+
+Package: ka9q-radio-packet
+Architecture: any
+Depends:
+ ${misc:Depends},
+ systemd,
+ ka9q-radio-common
+Description: AX.25/aprs subsystem for ka9q-radio
+ Provides AFSK AX.25 decoder, APRS extractor and feeder
+
+Package: ka9q-radio-recordings
+Architecture: any
+Depends:
+ ${misc:Depends},
+ systemd,
+ ka9q-radio-common
+Description: recording subsystem for ka9q-radio
+ Provides some sample configurations for automatic recording of groups of audio
+ channels from ka9q-radio's radiod
+
+Package: ka9q-radio-horus
+Architecture: any
+Depends:
+ ${misc:Depends},
+ systemd,
+ ka9q-radio-common
+Description: demodulation subsystem for horus balloon telemetry
+ Decode balloon telemetry in the Horus (VK5QI) format
+ requires horus_demod package to be manually installed
+
+Package: ka9q-radio-ft
+Architecture: any
+Depends:
+ ${misc:Depends},
+ systemd,
+ ka9q-radio-common
+Description: FT4/FT8/WSPR skimmers for ka9q-radio
+ records and decodes FT4, FT8 and WSPR transmissions, logs in /var/log/ft[48].log, wspr.log
+
+Package: ka9q-radio-control
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ ka9q-radio-common
+Description: Control program for ka9q-radio
+ Interactive channel control program for ka9q-radio; uses ncurses
+
+Package: ka9q-radio-monitor
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ ka9q-radio-common
+Description: Multicast stream audio monitor for ka9q-radio
+ Interactive multicast RTP stream monitor for ka9q-radio, uses ncurses,
+ handles multiple channels, supports pcm, opus, u-law, a-law
+
+Package: ka9q-radio-tools
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ ka9q-radio-common
+Description: Command-line tools for ka9q-radio
+ Shell command line tools for interacting with ka9q-radio over the net
+
+Package: ka9q-radio-airspy
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Airspy device plugin for ka9q-radio
+ ka9q-radio plugin for the Airspy R2, Airspy Mini SDR front ends
+
+Package: ka9q-radio-airspyhf
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Airspy HF+ device plugin for ka9q-radio
+ ka9q-radio plugin for the Airspy HF+ SDR front end
+
+Package: ka9q-radio-bladerf
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Blade RF device plugin for ka9q-radio
+ ka9q-radio plugin for the Blade RF SDR front end
+
+Package: ka9q-radio-fobos
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Rigexpert Fobos device plugin for ka9q-radio
+ ka9q-radio plugin for the Rigexpert Fobos SDR front end
+
+Package: ka9q-radio-funcube
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Amsat UK Funcube Dongle Pro+ device plugin for ka9q-radio
+ ka9q-radio plugin for the old AMSAT UK Funcube Dongle Pro+ SDR front end
+
+Package: ka9q-radio-hackrf
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Hack RF device plugin for ka9q-radio
+ ka9q-radio plugin for the Hack RF SDR frontend
+
+Package: ka9q-radio-hydrasdr
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Hydra SDR One device plugin for ka9q-radio
+ ka9q-radio plugin for the Hydra SDR One (can also use the airspy plugin)
+
+Package: ka9q-radio-rtlsdr
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: Generic RTL-SDR device plugin for ka9q-radio
+ ka9q-radio plugin for generic RTL-SDR SDR front ends
+
+Package: ka9q-radio-rx888
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Description: RX-888 MkII device plugin for ka9q-radio
+ ka9q-radio plugin for the RX-888 MkII direct sampling HF-6m
+ SDR front end (no VHF/UHF support)
+
+#Package: ka9q-radio-sdrplay
+#Architecture: any
+#Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+#Description: SDRPlay device plugin for ka9q-radio
+# ka9q-radio plugin for some of the SDR Play SDR front ends. I discourage this device because
+# they keep their libraries proprietary, making support difficult or impossible. And there are
+# good alternatives.
+
+Package: ka9q-radio-full
+Architecture: any
+Depends:
+ ka9q-radio,
+ ka9q-radio-airspy,
+ ka9q-radio-airspyhf,
+ ka9q-radio-bladerf,
+ ka9q-radio-common,
+ ka9q-radio-control,
+ ka9q-radio-fobos,
+ ka9q-radio-ft,
+ ka9q-radio-funcube,
+ ka9q-radio-hackrf,
+ ka9q-radio-hfdl,
+ ka9q-radio-horus,
+ ka9q-radio-hydrasdr,
+ ka9q-radio-monitor,
+ ka9q-radio-packet,
+ ka9q-radio-recordings,
+ ka9q-radio-rtlsdr,
+ ka9q-radio-rx888,
+ ka9q-radio-tools
+Description: meta package for all components of ka9q-radio
+ Brings in the works: radiod, control, monitor, command line tools, device plugins

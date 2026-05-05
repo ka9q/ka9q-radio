@@ -1,0 +1,11 @@
+# debian/ka9q-radio.install
+usr/bin/fft-gen
+usr/sbin/radiod
+usr/lib/ka9q-radio/sig_gen.so
+etc/radio/radiod@*conf
+etc/radio/radiod@*conf.d
+etc/sysusers.d/*
+etc/sysctl.d/*
+usr/lib/systemd/system/radiod@.service
+usr/share/man/man8/radiod.8
+usr/share/man/man1/fft-gen.1

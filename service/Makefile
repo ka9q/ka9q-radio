@@ -1,25 +1,45 @@
 # -*- makefile -*-
 # sub-make for ka9q-radio systemd .service files
-# Copyright 2025, Phil Karn, KA9Q
+# Copyright 2026, Phil Karn, KA9Q
 
-UNAME_S := $(shell uname -s)
+systemdunitdir ?= /etc/systemd/system
+bindir         ?= /usr/local/bin
+sbindir        ?= /usr/local/sbin
+recordingsdir  ?= /srv/ka9q-radio/recordings
 
-all:
+SERVICEFILES=acars.service aprsfeed.service cwd.service ft4-decode.service \
+	ft8-decode.service ft4-decode@.service ft8-decode@.service \
+	ft4-record.service ft8-record.service hfdl.service horusdemod.service \
+	packetd.service radiod@.service recordings@.service \
+	rx888_boot.service set_lo_multicast.service wspr-decoded.service
+
+.PHONY: clean all install purge
+
+all: $(SERVICEFILES)
 
 clean:
+	rm -f *.service
 
-install: install-$(UNAME_S)
+purge:
+	@test "$(CONFIRMED)" = "1" || { \
+	    echo "Refusing to run purge directly. Use top-level make purge."; \
+	    exit 1; \
+	}
+	if [ -n "$(DESTDIR)$(systemunitdir)" ]; then \
+		cd $(DESTDIR)$(systemunitdir) && rm -f $(SERVICEFILES); \
+	fi
 
-install-Linux:
-	rsync --ignore-existing *.service /etc/systemd/system
-	systemctl daemon-reload
+install: $(SERVICEFILES)
+	install -d -m 0755 $(DESTDIR)$(systemdunitdir)
+	install -m 0644 $(SERVICEFILES) $(DESTDIR)$(systemdunitdir)
 
-install-Darwin:
-	# TODO
-	@exit 0
+%.service: %.service.in
+	sed -e 's|@bindir@|$(bindir)|g' \
+	    -e 's|@sbindir@|$(sbindir)|g' \
+	    -e 's|@recordings@|$(recordingsdir)|g' \
+	    $< > $@
 
-install-%:
-	@echo "Unsupported operating system: $*"
-	@exit 1
-
-.PHONY: clean all install install-Linux install-Darwin install-%
+show-service-paths:
+	@echo bindir=$(bindir)
+	@echo sbindir=$(sbindir)
+	@echo systemdunitdir=$(systemdunitdir)

@@ -1,0 +1,2 @@
+usr/lib/ka9q-radio/rtlsdr.so
+usr/lib/udev/rules.d/20-rtlsdr.rules

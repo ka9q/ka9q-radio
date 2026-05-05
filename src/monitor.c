@@ -26,7 +26,6 @@
 #include <stdatomic.h>
 #include <signal.h>
 
-#include "conf.h"
 #include "misc.h"
 #include "multicast.h"
 #include "radio.h"

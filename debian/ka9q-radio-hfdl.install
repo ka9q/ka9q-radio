@@ -1,0 +1,5 @@
+# ka9q-radio-hfdl.install
+usr/lib/systemd/system/hfdl.service
+etc/logrotate.d/hfdl.rotate
+usr/lib/hfdl/systable.conf
+usr/sbin/start-hfdl

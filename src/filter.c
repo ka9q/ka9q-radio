@@ -33,17 +33,21 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include "conf.h"
 #include "misc.h"
 #include "filter.h"
 #include "window.h"
 
-#define FFT_LOG_FILE "/var/lib/ka9q-radio/fft.log"
+#ifndef STATEDIR
+#define STATEDIR "/var/lib/ka9q-radio"
+#endif
+#define FFT_LOG_FILE "fft.log"
+
+const char *Wisdom_file; // Set in radio.c when reading config file
+
 
 //#define FILTER_DEBUG 1 // turn on lots of printfs in the window creation code
 
 // Settable from main
-char const *Wisdom_file = "/var/lib/ka9q-radio/wisdom";
 char const *System_wisdom_file = "/etc/fftw/wisdomf"; // only valid for float version
 int N_worker_threads = 1;
 int N_internal_threads = 1; // Usually most efficient
@@ -211,9 +215,11 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   // of independent FFTs to execute at the same time
   if(!atomic_flag_test_and_set_explicit(&FFTW_init,memory_order_relaxed)){
     fprintf(stderr,"FFTW version: %s\n", fftwf_version);
-    FFT_log = fopen(FFT_LOG_FILE,"a");
+    char fft_file[PATH_MAX];
+    snprintf(fft_file,sizeof fft_file,"%s/%s",STATEDIR,FFT_LOG_FILE);
+    FFT_log = fopen(fft_file,"a");
     if(FFT_log == NULL)
-      fprintf(stderr,"Can't append to %s: %s\n",FFT_LOG_FILE,strerror(errno));
+      fprintf(stderr,"Can't append to %s: %s\n",fft_file,strerror(errno));
 
     fftwf_init_threads();
     bool sr = fftwf_import_system_wisdom();
@@ -223,7 +229,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
 	fprintf(stderr,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
       }
     }
-
     bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
     fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
     if(!lr){
@@ -476,6 +481,11 @@ static void apply_notch_filters(struct notch_state *notches,float complex *outpu
   }
 }
 
+int64_t Min_fft_time = 0x7fffffffffffffff;
+int64_t Max_fft_time = 0;
+int64_t Avg_fft_time = 0;
+int64_t Mean_dev = 0;
+
 // Worker thread(s) that actually execute FFTs
 // Used for input FFTs since they tend to be large and CPU-consuming
 // Lets the input thread process the next input block in parallel on another core
@@ -496,7 +506,8 @@ void *run_fft(void *p){
     struct fft_job *job = FFT.job_queue;
     FFT.job_queue = job->next;
     pthread_mutex_unlock(&FFT.queue_mutex);
-
+    struct timespec t0 = {0};
+    clock_gettime(CLOCK_MONOTONIC, &t0); // start of measurement
     if(job->input != NULL && job->output != NULL && job->plan != NULL){
       switch(job->type){
       case COMPLEX:
@@ -514,6 +525,10 @@ void *run_fft(void *p){
 
     if(job->fin->notches != NULL)
       apply_notch_filters(job->fin->notches,job->output);
+
+    // Stop timer before we block
+    struct timespec t1 = {0};
+    clock_gettime(CLOCK_MONOTONIC, &t1);
 
     // Signal we're done with this job
     if(job->completion_mutex)
@@ -535,6 +550,17 @@ void *run_fft(void *p){
 
     if(terminate)
       break; // Terminate after this job
+
+    // Compute timing statistics
+    int64_t ns = t1.tv_nsec - t0.tv_nsec + 1000000000LL * (t1.tv_sec - t0.tv_sec);
+
+    if(ns > Max_fft_time)
+      Max_fft_time = ns;
+    if(ns < Min_fft_time)
+      Min_fft_time = ns;
+    int64_t dev =  ns - Avg_fft_time ;
+    Avg_fft_time += dev >> 4; // alpha = 1/16
+    Mean_dev += (labs(dev) - Mean_dev) >> 4;    // alpha = 1/16
   }
   return NULL;
 }
@@ -1189,4 +1215,3 @@ static void terminate_fft(struct filter_in *f){
   pthread_mutex_unlock(&FFT.queue_mutex);
 }
 #endif
-

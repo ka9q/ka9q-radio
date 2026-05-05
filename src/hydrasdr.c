@@ -15,7 +15,6 @@
 #include <unistd.h>
 #include <strings.h>
 
-#include "conf.h"
 #include "misc.h"
 #include "multicast.h"
 #include "status.h"
@@ -325,6 +324,24 @@ static void *hydrasdr_monitor(void *p){
   (void)ret;
   assert(ret == HYDRASDR_SUCCESS);
   fprintf(stderr,"hydrasdr running\n");
+#if 1  
+  {
+    hydrasdr_device_info_t info = {0};
+    hydrasdr_get_device_info(sdr->device, &info);
+
+  // Current streaming configuration
+  fprintf(stderr,"Effective rate: %u Hz\n", info.current_samplerate);
+  fprintf(stderr,"Hardware rate:  %u Hz\n", info.current_hw_samplerate);
+  fprintf(stderr,"Decimation:     %ux (%s mode)\n",
+	 info.current_decimation_factor,
+	 info.current_decimation_mode ? "High Definition" : "Low Bandwidth");
+  fprintf(stderr,"Bandwidth:      %u Hz (%s)\n",
+	 info.current_bandwidth,
+	 info.bandwidth_auto_selected ? "auto" : "manual");
+  fprintf(stderr,"Sample type:    %u\n", info.current_sample_type);
+  fprintf(stderr,"Packing:        %s\n", info.current_packing ? "12-bit" : "16-bit");
+  }
+#endif
   // Periodically poll status to ensure device hasn't reset
   while(true){
     sleep(1);
