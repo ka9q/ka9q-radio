@@ -25,7 +25,9 @@ install:
 	install -d -m 0775 $(DESTDIR)$(radioconfdir)
 ifndef DEB_BUILD_ARCH
 	rsync -a --ignore-existing *.conf *.conf.d $(DESTDIR)$(radioconfdir)
+ifeq ($(UNAME_S),Linux)
 	chown radio:radio $(DESTDIR)$(radioconfdir)
+endif
 else
 	rsync -a *.conf *.conf.d $(DESTDIR)$(radioconfdir)
 	@true

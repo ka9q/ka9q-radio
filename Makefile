@@ -15,6 +15,8 @@ pkglibdir     ?= $(libdir)/ka9q-radio
 statedir      ?= $(localstatedir)/lib/ka9q-radio
 mandir	      ?= $(prefix)/share/man
 
+UNAME_S := $(shell uname -s)
+
 export prefix exec_prefix bindir sbindir libdir datadir sysconfdir
 export localstatedir pkgdatadir pkglibdir statedir mandir
 
@@ -69,15 +71,18 @@ purge:
 # dpkg-buildpackage does that when building a debian package
 install:
 ifndef DEB_BUILD_ARCH
+ifeq ($(UNAME_S),Linux)
 	getent group radio >/dev/null || groupadd --system radio
-	id radio >/dev/null 2>&1 || useradd --system --gid radio \
-		--home-dir /var/lib/ka9q-radio --no-create-home radio
+	id radio >/dev/null 2>&1 || useradd --system --gid radio --home-dir /var/lib/ka9q-radio --no-create-home radio
+else
+	@echo "Skipping automatic id/group creation on non-Linux system"
 endif
 	for d in $(SUBDIRS); do \
 		$(MAKE) -C $$d install DESTDIR=$(DESTDIR) || exit $$?; \
 	done
-ifndef DEB_BUILD_ARCH
+ifeq ($(UNAME_S),Linux)
 	systemctl daemon-reload
 	udevadm control --reload-rules
 	setcap cap_net_admin+ep $(bindir)/monitor
+endif
 endif

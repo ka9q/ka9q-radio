@@ -76,8 +76,8 @@ install:
 # Configure scripts
 	install -m 0755 $(SCRIPTS) $(DESTDIR)$(bindir)
 
-# debian packaging handles this, so do it only on local installs
-ifndef DEB_BUILD_ARCH
+# debian packaging handles this, so do it only on local installs, and only on Linux
+ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
 	chown radio:radio $(DESTDIR)$(radioconfdir) $(DESTDIR)$(hfdllibdir) \
 	$(DESTDIR)$(statedir) $(DESTDIR)$(statedir)/ft8 \
 	$(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr \
