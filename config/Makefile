@@ -24,9 +24,9 @@ purge:
 install:
 	install -d -m 0775 $(DESTDIR)$(radioconfdir)
 ifndef DEB_BUILD_ARCH
-	rsync -a --ignore-existing *.conf *.conf.d $(DESTDIR)$(radioconfdir)
+	rsync -a --ignore-existing README *.conf *.conf.d $(DESTDIR)$(radioconfdir)
 	chown radio:radio $(DESTDIR)$(radioconfdir)
 else
-	rsync -a *.conf *.conf.d $(DESTDIR)$(radioconfdir)
+	rsync -a README *.conf *.conf.d $(DESTDIR)$(radioconfdir)
 	@true
 endif
