@@ -1,5 +1,9 @@
-ka9q-radio (1.0) UNRELEASED; urgency=medium
+ka9q-radio (1.0+nmu1) UNRELEASED; urgency=medium
 
+  [ Phil Karn ]
   * Initial release.
 
- -- Phil Karn <karn@ka9q.net>  Tue, 28 Apr 2026 10:36:52 -0700
+  [ Phil Karn ]
+  * test release
+
+ --  <karn@ka9q.net>  Tue, 05 May 2026 00:53:03 -0700
