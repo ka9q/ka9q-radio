@@ -144,21 +144,33 @@ ifeq ($(ENABLE_SDRPLAY),1)
    DYNAMIC_DRIVERS += sdrplay.so
 endif
 
-.PHONY: clean all install install-system dynamics
+.PHONY: clean all install dynamics purge
 
 all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
 install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
-	install -d -m 0755 $(DESTDIR)$(sbindir) $(DESTDIR)$(bindir) $(DESTDIR)$(pkglibdir) \
-		$(DESTDIR)$(sbindir) $(DESTDIR)$(bindir)
+	install -d -m 0755 $(DESTDIR)$(sbindir) $(DESTDIR)$(bindir) $(DESTDIR)$(pkglibdir)
 	install -m 0755 $(DYNAMIC_DRIVERS) $(DESTDIR)$(pkglibdir)
 	install -m 0755 $(DAEMONS) $(DESTDIR)$(sbindir)
 	install -m 0755 $(EXECS) $(DESTDIR)$(bindir)
 
-install-system: install
-
 clean:
 	rm -f *.o *.a *.d *.so $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
+
+purge:
+	@test "$(CONFIRMED)" = "1" || { \
+	    echo "Refusing to run purge directly. Use top-level make purge."; \
+	    exit 1; \
+	}
+	@if [ -n "$(DESTDIR)$(sbindir)" ]; then \
+		cd $(DESTDIR)$(sbindir) && rm -f $(DAEMONS); \
+	fi
+	@if [ -n "$(DESTDIR)$(bindir)" ]; then \
+		cd $(DESTDIR)$(bindir) && rm -f $(EXECS); \
+	fi
+	@if [ -n "$(DESTDIR)$(pkglibdir)" ]; then \
+		rm -rf $(DESTDIR)$(pkglibdir); \
+	fi
 
 DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
 

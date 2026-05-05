@@ -14,7 +14,7 @@ RX888=120s_failure.img 20s_watchdog.img	120s_watchdog.img 60s_watchdog.img \
 LUA=ssrc-decimal.lua ka9q_ctl.lua
 TEXT=bandplan.txt id.txt presets.conf help.txt monitor-help.txt
 
-.PHONY: clean all install
+.PHONY: clean all install purge
 
 all:
 	@:
@@ -28,4 +28,14 @@ install:
 ifndef DEB_BUILD_ARCH
 	chown radio:radio $(RX888) $(LUA) $(TEXT) $(DESTDIR)$(pkgdatadir)
 endif
+
+purge:
+	@test "$(CONFIRMED)" = "1" || { \
+	    echo "Refusing to run purge directly. Use top-level make purge."; \
+	    exit 1; \
+	}
+	@if [ -n "$(DESTDIR)$(pkgdatadir)" ]; then \
+		rm -rf $(DESTDIR)$(pkgdatadir); \
+	fi
+
 

@@ -30,13 +30,27 @@ LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate 
 BLACKLIST = airspy-blacklist.conf
 SYSCTL = 98-sockbuf.conf 50-multicast.conf
 
-.PHONY: clean all install
+.PHONY: clean all install purge
 
 all:
 	@true
 
 clean:
 	@true
+
+purge:
+	DESTDIR='$(DESTDIR)' \
+	radioconfdir='$(radioconfdir)' \
+	statedir='$(statedir)' \
+	hfdllibdir='$(hfdllibdir)' \
+	sysusersdir='$(sysusersdir)' \
+	logrotatedir='$(logrotatedir)' \
+	sbindir='$(sbindir)' \
+	crondir='$(crondir)' \
+	bindir='$(bindir)' \
+	LOGROTATE_FILES='$(LOGROTATE_FILES)' \
+	SCRIPTS='$(SCRIPTS)' \
+	./purge.sh
 
 install:
 # Setup ka9q-radio directories

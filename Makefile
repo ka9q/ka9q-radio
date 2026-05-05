@@ -39,7 +39,7 @@ export ENABLE_RTLSDR ENABLE_RX888 ENABLE_SDRPLAY
 export DEB_BUILD_ARCH
 
 SUBDIRS=src aux share service rules docs config
-.PHONY: clean all install $(SUBDIRS) install-system commands
+.PHONY: all clean install $(SUBDIRS) purge
 
 all: $(SUBDIRS)
 
@@ -49,6 +49,20 @@ $(SUBDIRS):
 clean:
 	for d in $(SUBDIRS); do \
 		$(MAKE) -C $$d clean DESTDIR=$(DESTDIR) || exit $$?; \
+	done
+
+purge:
+	@if [ "$(CONFIRMED)" != "1" ]; then \
+	    printf "This will delete installed ka9q-radio files (including configs). Continue? [y/N] "; \
+	    read ans; \
+	    case "$$ans" in \
+	        y|Y|yes|YES) ;; \
+	        *) echo "Aborted."; exit 1 ;; \
+	    esac; \
+	fi
+	@for d in $(SUBDIRS); do \
+	    echo $$d:; \
+	    $(MAKE) -C $$d purge CONFIRMED=1 || exit $$?; \
 	done
 
 # only do system stuff when installing locally

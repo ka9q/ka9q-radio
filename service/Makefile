@@ -13,12 +13,21 @@ SERVICEFILES=acars.service aprsfeed.service cwd.service ft4-decode.service \
 	packetd.service radiod@.service recordings@.service \
 	rx888_boot.service set_lo_multicast.service wspr-decoded.service
 
-.PHONY: clean all install
+.PHONY: clean all install purge
 
 all: $(SERVICEFILES)
 
 clean:
 	rm -f *.service
+
+purge:
+	@test "$(CONFIRMED)" = "1" || { \
+	    echo "Refusing to run purge directly. Use top-level make purge."; \
+	    exit 1; \
+	}
+	@if [ -n "$(DESTDIR)$(systemunitdir)" ]; then \
+		cd $(DESTDIR)$(systemunitdir) && rm -f $(SERVICEFILES); \
+	fi
 
 install: $(SERVICEFILES)
 	install -d -m 0755 $(DESTDIR)$(systemdunitdir)
