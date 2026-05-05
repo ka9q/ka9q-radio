@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+do_reload() {
+    systemctl daemon-reload || true
+}
+
+case "$1" in
+    configure|abort-upgrade|abort-remove|abort-deconfigure)
+	do_reload
+        ;;
+esac
+
+#DEBHELPER#
+

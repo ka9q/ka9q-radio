@@ -1,9 +1,10 @@
-ka9q-radio (1.0+nmu1) UNRELEASED; urgency=medium
+ka9q-radio (1.0+nmu2) UNRELEASED; urgency=medium
 
   [ Phil Karn ]
   * Initial release.
 
   [ Phil Karn ]
   * test release
+  * do systemctl daemon-reload for radiod and recordings (which are templates)
 
- --  <karn@ka9q.net>  Tue, 05 May 2026 00:53:03 -0700
+ -- Phil Karn <karn@ka9q.net>  Tue, 05 May 2026 01:41:00 -0700
