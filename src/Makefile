@@ -147,7 +147,7 @@ purge:
 		rm -rf $(DESTDIR)$(pkglibdir); \
 	fi
 
-rm DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
+DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
 
 -include $(DEPS)
 
