@@ -1,2 +1,4 @@
 usr/lib/ka9q-radio/airspyhf.so
 usr/lib/udev/rules.d/52-airspyhf.rules
+etc/radio/radiod@airspyhf-generic.conf
+etc/radio/radiod@airspyhf-ka9q.conf

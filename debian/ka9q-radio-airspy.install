@@ -3,3 +3,11 @@ usr/lib/ka9q-radio/airspy.so
 etc/modprobe.d/airspy-blacklist.conf
 usr/lib/udev/rules.d/51-airspy.rules
 usr/lib/udev/rules.d/53-airspy-ka9q.rules
+etc/radio/radiod@airspy-generic.conf
+etc/radio/radiod@airspy-kq6rs-70cm.conf
+etc/radio/radiod@ka9q-125cm.conf.d/*
+etc/radio/radiod@ka9q-2m.conf.d/*
+etc/radio/radiod@ka9q-70cm.conf.d/*
+etc/radio/radiod@nws.conf
+etc/radio/radiod@fm.conf
+

@@ -2,3 +2,7 @@
 etc/radio/horus.conf
 usr/bin/start-ka9q-horus
 usr/lib/systemd/system/horusdemod.service
+etc/radio/radiod@horus.conf
+etc/radio/radiod@airspy-autorx.conf
+etc/radio/radiod@airspy-sonde.conf
+etc/radio/radiod@airspy-toro-sonde.conf
