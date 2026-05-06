@@ -5,6 +5,8 @@
 # By default, builds release version
 # To build for debugging say "make BUILD=debug"
 
+.DEFAULT_GOAL := all
+
 BUILD ?= release
 prefix        ?= /usr/local
 exec_prefix   ?= $(prefix)
@@ -50,14 +52,37 @@ ARCHOPTS = -march=native
 COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -Wextra -Wno-sign-conversion -Wno-int-conversion -MMD -MP
 COPTS += -fPIC
 CFLAGS += $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
+
 DAEMONS = aprs aprsfeed cwd packetd radiod
 EXECS = ctcss control fft-gen jt-decoded metadump monitor opussend pcmrecord pcmsend powers tune wd-record
-LIBRADIO = ax25.o morse.o dump.o modes.o avahi.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o sincospi.o sincospif.o window.o gauss.o
-DYNAMIC_DRIVERS = sig_gen.so
-RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o fcd.o hid-libusb.o libradio.a
+
+## library elements
+LIBRADIO = misc.o multicast.o rtp.o config.o
+LIBDSP = filter.o iir.o window.o osc.o sincospi.o sincospif.o
+LIBSTATUS = status.o decode_status.o
+
+# radiod uses a lot of unique objects. It should probably move to its own directory
+RADIOD_OBJECTS = main.o audio.o avahi.o modes.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libdsp.a libstatus.a libradio.a
+
+## source files for dependency generation (see DEPS=)
 CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c filter.c fm.c funcube.c hid-libusb.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c setfilt.c show-pkt.c show-sig.c sig_gen.c spectrum.c status.c stereod.c tune.c wd-record.c wfm.c
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h status.h config_paths.h
 
+## hardware plug-in module enables
+# The software signal generator front end is build by default. Others are added by the ENABLE_* options below
+DYNAMIC_DRIVERS = sig_gen.so
+
+ifeq ($(ENABLE_ALL),1)
+	ENABLE_AIRSPY=1
+	ENABLE_AIRSPYHF=1
+	ENABLE_BLADERF=1
+	ENABLE_FOBOS=1
+	ENABLE_FUNCUBE=1
+	ENABLE_HACKRF=1
+	ENABLE_HYDRASDR=1
+	ENABLE_RTLSDR=1
+	ENABLE_RX888=1
+endif
 
 # AIRSPY R2, etc
 ifeq ($(ENABLE_AIRSPY),1)
@@ -120,17 +145,17 @@ ifeq ($(ENABLE_SDRPLAY),1)
 endif
 
 .PHONY: clean all install dynamics purge
-
 all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
-install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
+## other targets
+install: all
 	install -d -m 0755 $(DESTDIR)$(sbindir) $(DESTDIR)$(bindir) $(DESTDIR)$(pkglibdir)
 	install -m 0755 $(DYNAMIC_DRIVERS) $(DESTDIR)$(pkglibdir)
 	install -m 0755 $(DAEMONS) $(DESTDIR)$(sbindir)
 	install -m 0755 $(EXECS) $(DESTDIR)$(bindir)
 
 clean:
-	rm -f *.o *.a *.d *.so config_paths.h $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS) 
+	rm -f *.o *.a *.d *.so config_paths.h $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
 purge:
 	@test "$(CONFIRMED)" = "1" || { \
@@ -147,37 +172,75 @@ purge:
 		rm -rf $(DESTDIR)$(pkglibdir); \
 	fi
 
-DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
-
--include $(DEPS)
-
 # keep all .o files
 .SECONDARY:
 
 dynamics: $(DYNAMIC_DRIVERS)
 
-# Executables
+## Executables
+aprs: aprs.o ax25.o libdsp.a libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+
+aprsfeed: ax25.o aprsfeed.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+
+control: control.o bandplan.o modes.o avahi_browse.o libdsp.a libstatus.a libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -liniparser -lncursesw $(LDLIBS)
+
+ctcss: ctcss.o libdsp.a libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
+
+cwd: cwd.o morse.o libdsp.a libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 fft-gen: fft-gen.o
 	$(CC) $(LDOPTS) -o $@ $^  -lfftw3f_threads -lfftw3f  $(LDLIBS)
 
-aprs: aprs.o libradio.a
+jt-decoded: jt-decoded.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
-aprsfeed: aprsfeed.o libradio.a
+metadump: metadump.o dump.o libstatus.a libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
-control: control.o bandplan.o avahi_browse.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -liniparser -lncursesw $(LDLIBS)
+monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o morse.o libdsp.a libstatus.a libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio `pkg-config --silence-errors --libs alsa` -lsamplerate -liniparser  -lncursesw $(LDLIBS)
 
-ctcss: ctcss.o libradio.a
+opusd: opusd.o avahi.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lopus $(LDLIBS)
+
+opussend: opussend.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio $(LDLIBS)
+
+packetd: packetd.o ax25.o avahi.o libdsp.a libstatus.a libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
-cwd: cwd.o libradio.a
+pcmcat: pcmcat.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
-tune: tune.o libradio.a
+pcmspawn: pcmspawn.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+
+pcmrecord: pcmrecord.o attr.o libstatus.a libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg $(LDLIBS)
+
+pcmsend: pcmsend.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lportaudio $(LDLIBS)
+
+powers: powers.o dump.o libstatus.a libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+
+radiod: $(RADIOD_OBJECTS)
+	$(CC) -rdynamic $(LDOPTS) -o $@ $^ -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl $(LDLIBS)
+
+rdsd: rdsd.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
+
+rx888_boot: rx888_boot.o ezusb.o
+	$(CC) $(LDOPTS) -o $@ $^ -lusb-1.0 $(LDLIBS)
+
+# not made unless we're on a rpi
+set_xcvr: set_xcvr.o libradio.a
+	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser
 
 setfilt: setfilt.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
@@ -188,59 +251,17 @@ show-pkt: show-pkt.o libradio.a
 show-sig: show-sig.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lncursesw $(LDLIBS)
 
-metadump: metadump.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
-
-monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio `pkg-config --silence-errors --libs alsa` -lsamplerate -liniparser  -lncursesw $(LDLIBS)
-
-opusd: opusd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus $(LDLIBS)
-
-opussend: opussend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio $(LDLIBS)
-
-packetd: packetd.o libradio.a
+stereod: stereod.o avahi.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
-pcmcat: pcmcat.o libradio.a
+tune: tune.o libstatus.a libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
-pcmspawn: pcmspawn.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
-
-pcmrecord: pcmrecord.o libradio.a
+wd-record: wd-record.o libstatus.a attr.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg $(LDLIBS)
 
-pcmsend: pcmsend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lportaudio $(LDLIBS)
 
-powers: powers.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
-
-radiod: $(RADIOD_OBJECTS)
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^  -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl $(LDLIBS)
-
-rdsd: rdsd.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
-
-rx888_boot: rx888_boot.o ezusb.o
-	$(CC) $(LDOPTS) -o $@ $^ -lusb-1.0 $(LDLIBS)
-
-stereod: stereod.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
-
-jt-decoded: jt-decoded.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
-
-wd-record: wd-record.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg $(LDLIBS)
-
-# not made unless we're on a rpi
-set_xcvr: set_xcvr.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser
-
-# Dynamically loaded modules for SDR front ends
+## Dynamically loaded modules for SDR front ends
 funcube.so: funcube.o fcd.o hid-libusb.o
 	$(CC) $(SOFLAGS) -o $@ $^ -lportaudio
 
@@ -271,16 +292,27 @@ hackrf.so: hackrf.o
 bladerf.so: bladerf.o
 	$(CC) $(SOFLAGS) -o $@ $^ -lbladeRF
 
-sig_gen.so: sig_gen.o libradio.a
+sig_gen.so: sig_gen.o gauss.o libradio.a
 	$(CC) $(SOFLAGS) -o $@ $^ -lsamplerate
 
+# subroutines useful in more than one program
 # subroutines useful in more than one program
 libradio.a: $(LIBRADIO)
 	ar rv $@ $?
 	ranlib $@
 
+
+libdsp.a: $(LIBDSP)
+	ar rv $@ $?
+	ranlib $@
+
+libstatus.a: $(LIBSTATUS)
+	ar rv $@ $?
+	ranlib $@
+
+
 # handle quotes inside GIT summary messages, etc. Suggested by ChatGPT
-esc = sed 's/\\/\\\\/g; s/"/\\"/g'	
+esc = sed 's/\\/\\\\/g; s/"/\\"/g'
 config_paths.h: Makefile
 	echo "make $@"
 	@printf '#ifndef _CONFIG_PATHS_H\n' > $@
@@ -302,3 +334,6 @@ config_paths.h: Makefile
 
 %.o: %.c config_paths.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+
+DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
+-include $(DEPS)
