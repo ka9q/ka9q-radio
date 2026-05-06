@@ -1,4 +1,4 @@
-ka9q-radio (1.0+nmu4) UNRELEASED; urgency=medium
+ka9q-radio (1.0+nmu5) UNRELEASED; urgency=medium
 
   [ Phil Karn ]
   * Initial release.
@@ -8,5 +8,6 @@ ka9q-radio (1.0+nmu4) UNRELEASED; urgency=medium
   * do systemctl daemon-reload for radiod and recordings (which are templates)
   * src/Makefile cleanups, library restructuring
   * Add ka9q-ft8 (ft4/ft8 decoder based in ft8_lib) to ka9q-radio-full
+  * Move radiod conf files to specific plugin packages
 
- -- Phil Karn <karn@ka9q.net>  Wed, 06 May 2026 04:28:01 -0700
+ -- Phil Karn <karn@ka9q.net>  Wed, 06 May 2026 15:47:54 -0700
