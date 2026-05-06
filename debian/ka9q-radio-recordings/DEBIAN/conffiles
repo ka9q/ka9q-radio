@@ -1,9 +1,0 @@
-/etc/logrotate.d/recordings.rotate
-/etc/radio/recordings@aviation.conf
-/etc/radio/recordings@cactus.conf
-/etc/radio/recordings@darn.conf
-/etc/radio/recordings@fm.conf
-/etc/radio/recordings@papa.conf
-/etc/radio/recordings@pictures.conf
-/etc/radio/recordings@wins.conf
-/etc/radio/recordings@wwv.conf

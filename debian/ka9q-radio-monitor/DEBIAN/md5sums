@@ -1,9 +1,0 @@
-d29f27395a46f86f2b25a71a416bcae4  usr/bin/monitor
-04a36745d7e4efa11b4800df48a51af7  usr/lib/systemd/system/cwd.service
-9952f1887ae0cd5a2adf380d36107898  usr/sbin/cwd
-0bd72eb9a54adc199eb7cdd7707ea825  usr/share/doc/ka9q-radio-monitor/changelog.gz
-53f2f854420674e495431d25235c767d  usr/share/doc/ka9q-radio-monitor/copyright
-055e92dcb3d6da1ed3260ca90f7acfef  usr/share/ka9q-radio/id.txt
-92801e7267245dfbab843a4c9105f5d8  usr/share/ka9q-radio/monitor-help.txt
-702a632af12e4f4d93d4f4dfe534b95f  usr/share/man/man1/cwd.1.gz
-a2e631b889078bf88064b6041b58e8c5  usr/share/man/man1/monitor.1.gz

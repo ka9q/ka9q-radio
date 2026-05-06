@@ -1,3 +1,0 @@
-/etc/logrotate.d/aprsfeed.rotate
-/etc/radio/aprs.conf
-/etc/radio/packetd.conf

@@ -1,6 +1,0 @@
-/etc/logrotate.d/ft4.rotate
-/etc/logrotate.d/ft8.rotate
-/etc/logrotate.d/wspr.rotate
-/etc/radio/ft4-decode.conf
-/etc/radio/ft8-decode.conf
-/etc/radio/wspr-decode.conf
