@@ -1,0 +1,10 @@
+/var/log/aprsfeed.log
+{
+	rotate 10
+	weekly
+	missingok
+	notifempty
+	compress
+	delaycompress
+	copytruncate
+}

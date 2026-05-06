@@ -1,0 +1,6 @@
+bfb1c337dcd8415ab7dabb16e23be5f8  usr/lib/hfdl/systable.conf
+11372b9f579a84c574bb4b649db24d34  usr/lib/systemd/system/hfdl.service
+6eb3e5ada05372c20227ae9468264f2e  usr/lib/tmpfiles.d/ka9q-radio-hfdl.conf
+975c228dec4e98f927b7cb1179192852  usr/sbin/start-hfdl
+0bd72eb9a54adc199eb7cdd7707ea825  usr/share/doc/ka9q-radio-hfdl/changelog.gz
+53f2f854420674e495431d25235c767d  usr/share/doc/ka9q-radio-hfdl/copyright

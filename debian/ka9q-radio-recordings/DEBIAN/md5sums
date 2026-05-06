@@ -1,0 +1,4 @@
+7a032be20e496aa2a91a1c6c2c57a494  usr/lib/systemd/system/recordings@.service
+8d3aa09fd57d3a3343ed4bbe140879bd  usr/lib/tmpfiles.d/ka9q-radio-recordings.conf
+0bd72eb9a54adc199eb7cdd7707ea825  usr/share/doc/ka9q-radio-recordings/changelog.gz
+53f2f854420674e495431d25235c767d  usr/share/doc/ka9q-radio-recordings/copyright

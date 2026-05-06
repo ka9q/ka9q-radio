@@ -1,0 +1,12 @@
+Package: ka9q-radio-fobos
+Source: ka9q-radio
+Version: 1.0+nmu4
+Architecture: amd64
+Maintainer: Phil Karn <karn@ka9q.net>
+Installed-Size: 34
+Depends: libc6 (>= 2.38), libfobos0 (>= 2.4.1), ka9q-radio (= 1.0+nmu4)
+Section: hamradio
+Priority: optional
+Homepage: http://www.ka9q.net
+Description: Rigexpert Fobos device plugin for ka9q-radio
+ ka9q-radio plugin for the Rigexpert Fobos SDR front end

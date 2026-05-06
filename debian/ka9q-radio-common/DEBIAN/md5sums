@@ -1,0 +1,6 @@
+d2caee06e5b52a4a80d67bf91bcd33f0  usr/bin/set_lo_multicast
+40d4c777d105de0a3eaa9bb3055ef368  usr/lib/systemd/system/set_lo_multicast.service
+9a882dd51c224b76af32e4559feca589  usr/lib/tmpfiles.d/ka9q-radio-common.conf
+0bd72eb9a54adc199eb7cdd7707ea825  usr/share/doc/ka9q-radio-common/changelog.gz
+53f2f854420674e495431d25235c767d  usr/share/doc/ka9q-radio-common/copyright
+3b3709465b0be446e43903cab9c7a95d  usr/share/ka9q-radio/presets.conf

@@ -1,0 +1,10 @@
+/recordings/*.log
+{
+	su radio radio
+	rotate 30
+	daily
+	missingok
+	notifempty
+	compress
+	copytruncate
+}

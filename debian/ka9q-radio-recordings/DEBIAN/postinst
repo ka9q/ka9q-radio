@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+do_reload() {
+    systemctl daemon-reload || true
+}
+
+case "$1" in
+    configure|abort-upgrade|abort-remove|abort-deconfigure)
+	do_reload
+        ;;
+esac
+
+# Automatically added by dh_installtmpfiles/13.24.2
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -x "$(command -v systemd-tmpfiles)" ]; then
+		systemd-tmpfiles ${DPKG_ROOT:+--root="$DPKG_ROOT"} --create ka9q-radio-recordings.conf || true
+	fi
+fi
+# End automatically added section
+
+

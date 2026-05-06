@@ -1,0 +1,12 @@
+Package: ka9q-radio-packet
+Source: ka9q-radio
+Version: 1.0+nmu4
+Architecture: amd64
+Maintainer: Phil Karn <karn@ka9q.net>
+Installed-Size: 246
+Depends: systemd, ka9q-radio-common
+Section: hamradio
+Priority: optional
+Homepage: http://www.ka9q.net
+Description: AX.25/aprs subsystem for ka9q-radio
+ Provides AFSK AX.25 decoder, APRS extractor and feeder

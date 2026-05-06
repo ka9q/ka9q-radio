@@ -1,0 +1,20 @@
+/var/log/hfdl.log
+{
+	rotate 30
+	daily
+	missingok
+	notifempty
+	compress
+	delaycompress
+	copytruncate
+}
+/var/log/hfdl/*.log
+{
+	rotate 30
+	daily
+	missingok
+	notifempty
+	compress
+	delaycompress
+	copytruncate
+}

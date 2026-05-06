@@ -1,0 +1,36 @@
+case "$1" in
+  configure)
+    addgroup --system radio || true
+    install -d -m 0775 -o radio -g radio /etc/radio
+    install -d -m 0775 -o radio -g radio /var/lib/ka9q-radio
+    install -d -m 0775 -o radio -g radio /usr/share/ka9q-radio
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/ka9q-radio-common.conf || true
+    /usr/bin/set_lo_multicast || true
+    ;;
+esac
+
+# Automatically added by dh_installtmpfiles/13.24.2
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -x "$(command -v systemd-tmpfiles)" ]; then
+		systemd-tmpfiles ${DPKG_ROOT:+--root="$DPKG_ROOT"} --create ka9q-radio-common.conf || true
+	fi
+fi
+# End automatically added section
+# Automatically added by dh_installsystemd/13.24.2
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if deb-systemd-helper debian-installed 'set_lo_multicast.service'; then
+		# The following line should be removed in trixie or trixie+1
+		deb-systemd-helper unmask 'set_lo_multicast.service' >/dev/null || true
+
+		if deb-systemd-helper --quiet was-enabled 'set_lo_multicast.service'; then
+			# Create new symlinks, if any.
+			deb-systemd-helper enable 'set_lo_multicast.service' >/dev/null || true
+		fi
+	fi
+
+	# Update the statefile to add new symlinks (if any), which need to be cleaned
+	# up on purge. Also remove old symlinks.
+	deb-systemd-helper update-state 'set_lo_multicast.service' >/dev/null || true
+fi
+# End automatically added section
+

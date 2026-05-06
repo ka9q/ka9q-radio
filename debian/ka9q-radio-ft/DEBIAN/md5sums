@@ -1,0 +1,10 @@
+45afe25a169efbf1f181b6b41f754128  usr/lib/systemd/system/ft4-decode.service
+b76b374d58854669167c3750a738ad65  usr/lib/systemd/system/ft4-decode@.service
+67986073709ef4d07b1aa957da24c70a  usr/lib/systemd/system/ft4-record.service
+7c180d7a6baea1968bffd81ece8f948a  usr/lib/systemd/system/ft8-decode.service
+7639b42e09718b932d3009fadfff71a3  usr/lib/systemd/system/ft8-decode@.service
+720711d298d26000474e0c44f8bf66f7  usr/lib/systemd/system/ft8-record.service
+d791f663e528b9e5ce6b35c8295cbdbc  usr/lib/systemd/system/wspr-decoded.service
+8b847308a1ed319743deb42669b10cb9  usr/lib/tmpfiles.d/ka9q-radio-ft.conf
+0bd72eb9a54adc199eb7cdd7707ea825  usr/share/doc/ka9q-radio-ft/changelog.gz
+53f2f854420674e495431d25235c767d  usr/share/doc/ka9q-radio-ft/copyright

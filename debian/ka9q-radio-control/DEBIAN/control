@@ -1,0 +1,12 @@
+Package: ka9q-radio-control
+Source: ka9q-radio
+Version: 1.0+nmu4
+Architecture: amd64
+Maintainer: Phil Karn <karn@ka9q.net>
+Installed-Size: 141
+Depends: libbsd0 (>= 0.2.0), libc6 (>= 2.38), libiniparser4 (>= 4.0), libncursesw6 (>= 6), libtinfo6 (>= 6), ka9q-radio-common
+Section: hamradio
+Priority: optional
+Homepage: http://www.ka9q.net
+Description: Control program for ka9q-radio
+ Interactive channel control program for ka9q-radio; uses ncurses

@@ -1,0 +1,15 @@
+Package: ka9q-radio-hfdl
+Source: ka9q-radio
+Version: 1.0+nmu4
+Architecture: amd64
+Maintainer: Phil Karn <karn@ka9q.net>
+Installed-Size: 30
+Depends: systemd, ka9q-radio-common
+Section: hamradio
+Priority: optional
+Homepage: http://www.ka9q.net
+Description: HFDL subsystem for ka9q-radio
+ HFDL (High Frequency Data Link) is a packet radio system used by commercial
+ airliners over oceans and remote areas. This package decodes all known
+ HFDL data channels. It requires manual installation of the dumphfdl and
+ libacars packages (not supplied as standard Debian packages)

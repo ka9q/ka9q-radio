@@ -1,0 +1,12 @@
+Package: ka9q-radio-tools
+Source: ka9q-radio
+Version: 1.0+nmu4
+Architecture: amd64
+Maintainer: Phil Karn <karn@ka9q.net>
+Installed-Size: 691
+Depends: libbsd0 (>= 0.0), libc6 (>= 2.38), libfftw3-single3 (>= 3.3.10), libogg0 (>= 1.1.4~dfsg), libopus0 (>= 1.1), libportaudio2 (>= 19+svn20101113), ka9q-radio-common
+Section: hamradio
+Priority: optional
+Homepage: http://www.ka9q.net
+Description: Command-line tools for ka9q-radio
+ Shell command line tools for interacting with ka9q-radio over the net

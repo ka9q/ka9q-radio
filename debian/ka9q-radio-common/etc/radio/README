@@ -1,0 +1,9 @@
+This directory contains various configuration files for *radiod*,
+*opusd* and other daemons part of ka9q-radio.  They are installed into
+/etc/radio. However, the --ignore-existing flag is used with rsync so
+that existing config files will NOT be overwritten. Until I find a
+better way to manage local and upstream-managed config files, you will
+have to manually merge your own config files with those from the
+upstream (i.e. my) distribution.
+
+
