@@ -197,6 +197,8 @@ Depends:
  ka9q-radio-recordings,
  ka9q-radio-rtlsdr,
  ka9q-radio-rx888,
- ka9q-radio-tools
+ ka9q-radio-tools,
+ ka9q-ft8
 Description: meta package for all components of ka9q-radio
- Brings in the works: radiod, control, monitor, command line tools, device plugins
+ Brings in the works: radiod, control, monitor, command line tools, device plugins, ft8/4 decoder
+ 
