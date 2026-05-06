@@ -2,6 +2,7 @@
 // April 2022, Phil Karn, KA9Q
 // Copyright 2022-2023, Phil Karn, KA9Q
 
+#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <iniparser/iniparser.h>
 #include <stdlib.h>

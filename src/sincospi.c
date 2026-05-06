@@ -1,3 +1,10 @@
+// Implement sincos (sine + cosine) of an argument multiplied by pi
+// Dunno why this isn't more common in libraries, it often lets the
+// application avoid accumulated precision errors by using revolutions
+// rather than radians, especially in repeated complex multiplication
+// Copyright 2026 Phil Karn, KA9Q
+
+#define _GNU_SOURCE 1
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>

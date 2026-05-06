@@ -12,43 +12,17 @@ bindir        ?= $(exec_prefix)/bin
 sbindir       ?= $(exec_prefix)/sbin
 libdir        ?= $(exec_prefix)/lib
 datadir       ?= $(prefix)/share
-sysconfdir    ?= /etc
+confdir	      ?= /etc/radio
 localstatedir ?= /var
 pkgdatadir    ?= $(datadir)/ka9q-radio
 pkglibdir     ?= $(libdir)/ka9q-radio
 statedir      ?= $(localstatedir)/lib/ka9q-radio
 
-# eg, /var/lib/ka9q-radio
-PATH_FLAGS += -DSTATEDIR=\"$(statedir)\"
-
-# eg, /usr/local/share/ka9q-radio, /usr/share/ka9q-radio
-PATH_FLAGS += -DPKGDATADIR=\"$(pkgdatadir)\"
-
-# eg, /usr/local/lib/ka9q-radio, /usr/lib/ka9q-radio
-PATH_FLAGS += -DPKGLIBDIR=\"$(pkglibdir)\"
-
 UNAME_S := $(shell uname -s)
 
 CPPFLAGS ?=
 LDFLAGS  ?=
-
 LDLIBS = -lm -lpthread
-
-GIT_HASH := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
-GIT_TIME := $(shell git show -s --format=%ci 2>/dev/null || echo "unknown")
-GIT_BRANCH := $(shell git log --pretty=format:'%d' -n 1 2>/dev/null || echo "unknown")
-GIT_SUMMARY := $(shell git log -1 --format="%s" 2>/dev/null || echo "unknown")
-GIT_VERSION := $(shell git describe --always --dirty --tags 2>/dev/null || echo "unknown")
-GIT_REMOTE_URL := $(shell git remote get-url origin 2>/dev/null || echo "unknown")
-
-#VERSION_FLAGS = -DGIT_HASH='"$(GIT_HASH)"' \
-#                -DGIT_TIME='"$(GIT_TIME)"' \
-#                -DGIT_BRANCH='"$(GIT_BRANCH)"' \
-#                -DGIT_SUMMARY='"$(GIT_SUMMARY)"' \
-#                -DGIT_VERSION='"$(GIT_VERSION)"' \
-#                -DGIT_REMOTE_URL='"$(GIT_REMOTE_URL)"'
-
-VERSION_FLAGS   = -DGIT_HASH='"$(GIT_HASH)"' -DGIT_REMOTE_URL='"$(GIT_REMOTE_URL)"'
 
 ifeq ($(UNAME_S),Darwin)
   CPPFLAGS += -I/opt/local/include
@@ -73,16 +47,17 @@ endif
 
 ARCHOPTS = -march=native
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
-COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -D_GNU_SOURCE=1 -Wextra -Wno-sign-conversion -Wno-int-conversion -MMD -MP
+COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -Wextra -Wno-sign-conversion -Wno-int-conversion -MMD -MP
 COPTS += -fPIC
-CFLAGS += $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES) $(VERSION_FLAGS) $(PATH_FLAGS)
+CFLAGS += $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
 DAEMONS = aprs aprsfeed cwd packetd radiod
 EXECS = ctcss control fft-gen jt-decoded metadump monitor opussend pcmrecord pcmsend powers tune wd-record
-LIBRADIO = ax25.o morse.o dump.o modes.o avahi.o avahi_browse.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o sincospi.o sincospif.o window.o gauss.o
+LIBRADIO = ax25.o morse.o dump.o modes.o avahi.o attr.o filter.o iir.o decode_status.o status.o misc.o multicast.o rtp.o osc.o config.o sincospi.o sincospif.o window.o gauss.o
 DYNAMIC_DRIVERS = sig_gen.so
 RADIOD_OBJECTS = main.o audio.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o fcd.o hid-libusb.o libradio.a
 CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c filter.c fm.c funcube.c hid-libusb.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c setfilt.c show-pkt.c show-sig.c sig_gen.c spectrum.c status.c stereod.c tune.c wd-record.c wfm.c
-HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h status.h
+HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h status.h config_paths.h
+
 
 # AIRSPY R2, etc
 ifeq ($(ENABLE_AIRSPY),1)
@@ -155,7 +130,7 @@ install: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 	install -m 0755 $(EXECS) $(DESTDIR)$(bindir)
 
 clean:
-	rm -f *.o *.a *.d *.so $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
+	rm -f *.o *.a *.d *.so config_paths.h $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS) 
 
 purge:
 	@test "$(CONFIRMED)" = "1" || { \
@@ -172,7 +147,7 @@ purge:
 		rm -rf $(DESTDIR)$(pkglibdir); \
 	fi
 
-DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
+rm DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
 
 -include $(DEPS)
 
@@ -192,7 +167,7 @@ aprs: aprs.o libradio.a
 aprsfeed: aprsfeed.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
-control: control.o bandplan.o libradio.a
+control: control.o bandplan.o avahi_browse.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -liniparser -lncursesw $(LDLIBS)
 
 ctcss: ctcss.o libradio.a
@@ -304,5 +279,26 @@ libradio.a: $(LIBRADIO)
 	ar rv $@ $?
 	ranlib $@
 
+# handle quotes inside GIT summary messages, etc. Suggested by ChatGPT
+esc = sed 's/\\/\\\\/g; s/"/\\"/g'	
+config_paths.h: Makefile
+	echo "make $@"
+	@printf '#ifndef _CONFIG_PATHS_H\n' > $@
+	@printf '#define _CONFIG_PATHS_H 1\n' >> $@
+	@printf '#define CONFDIR "%s"\n' '$(confdir)' >> $@
+	@printf '#define STATEDIR "%s"\n' '$(statedir)' >> $@
+	@printf '#define PKGDATADIR "%s"\n' '$(pkgdatadir)' >> $@
+	@printf '#define PKGLIBDIR "%s"\n' '$(pkglibdir)' >> $@
+	@printf '#define GIT_HASH "%s"\n' "$$(git rev-parse HEAD | $(esc))" >> $@
+	@printf '#define GIT_TIME "%s"\n' "$$(git show -s --format=%ci | $(esc))" >> $@
+	@printf '#define GIT_BRANCH "%s"\n' "$$(git log --pretty=format:%d -n 1 | $(esc))" >> $@
+	@printf '#define GIT_SUMMARY "%s"\n' "$$(git log -1 --format=%s | $(esc))" >> $@
+	@printf '#define GIT_VERSION "%s"\n' "$$(git describe --always --dirty --tags | $(esc))" >> $@
+	@printf '#define GIT_REMOTE_URL "%s"\n' "$$(git remote get-url origin  | $(esc))" >> $@
+	@printf '#endif\n' >> $@
+
 %.so: %.o
 	$(CC) $(SOFLAGS) -o $@ $<
+
+%.o: %.c config_paths.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<

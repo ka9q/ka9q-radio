@@ -1,6 +1,9 @@
 // Import and export samples of various sizes with and without byte swapping
 // part of ka9q-radio
 // January 2026, Phil Karn, KA9Q
+#ifndef _IMPORT_H
+#define _IMPORT_H 1
+#define _GNU_SOURCE 1
 #include <stdint.h>
 #include <string.h>
 #include <float.h>
@@ -267,5 +270,6 @@ static inline uint8_t *export_f16_le(uint8_t *out,float const *in, size_t count)
 static inline uint8_t *export_f16_be(uint8_t *out,float const *in, size_t count){
   return export_f16_noswap(out, in, count);
 }
+#endif
 #endif
 #endif

@@ -41,6 +41,8 @@
 #include "status.h"
 #include "avahi.h"
 
+#include "config_paths.h"
+
 #define DEFAULT_PRESET "am"
 #define GLOBAL "global"
 

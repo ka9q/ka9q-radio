@@ -18,6 +18,8 @@
 #include <sys/file.h>
 #include <limits.h>
 
+#include "config_paths.h"
+
 #define System_wisdom_file "/etc/fftw/wisdomf"
 
 #ifndef STATEDIR

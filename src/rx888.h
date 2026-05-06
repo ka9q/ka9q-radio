@@ -1,6 +1,8 @@
 #ifndef RX888_H
 #define RX888_H
 
+#define DEFAULT_IMAGE_FILE "SDDC_FX3.img"
+
 // Copyright (c)  2021 Ruslan Migirov <trapi78@gmail.com>
 // Credit: https://github.com/rhgndf/rx888_stream
 

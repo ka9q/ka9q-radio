@@ -1,6 +1,6 @@
 // Various simple IIR filters
 // Copyright 2022-2024, Phil Karn, KA9Q
-
+#define _GNU_SOURCE 1
 #include "iir.h"
 #include <string.h>
 #include <assert.h>

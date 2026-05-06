@@ -27,6 +27,7 @@
  *
  ***************************************************************************/
 
+#define _GNU_SOURCE 1
 #define FCD
 #include <string.h>
 #if defined(linux)

@@ -1,6 +1,6 @@
 // read FFT bin energies from spectrum pseudo-demod and format similar to rtl_power - out of date
 // Copyright 2023 Phil Karn, KA9Q
-
+#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>

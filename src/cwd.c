@@ -2,6 +2,7 @@
 // Runs as daemon, reads from a named pipe, sends audio to a specified multicast group + RTP SSRC
 // Useful for IDs and other messages in repeater mode
 // Copyright Phil Karn, KA9Q, July 31, 2022 - 2023
+#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <wchar.h>
 #include <wctype.h>

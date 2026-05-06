@@ -207,7 +207,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
       sdr->serial = strtoll(p,NULL,16);
   }
   // Firmware file
-  char const *firmware = config_getstring(dictionary,section,"firmware","SDDC_FX3.img");
+  char const *firmware = config_getstring(dictionary,section,"firmware",DEFAULT_IMAGE_FILE);
   // Queue depth, default 16; 32 sometimes overflows
   int queuedepth = config_getint(dictionary,section,"queuedepth",16);
   if(queuedepth < 1 || queuedepth > 64) {

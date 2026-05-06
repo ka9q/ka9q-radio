@@ -25,8 +25,7 @@
 #include "radio.h"
 #include "rx888.h"
 #include "ezusb.h"
-
-#define IMAGE_FILE "SDDC_FX3.img"
+#include "config_paths.h"
 
 #ifndef PKGDATADIR
 #define PKGDATADIR "/usr/local/share/ka9q-radio"
@@ -47,7 +46,7 @@ int main(int argc,char *argv[]){
     else // relative
       snprintf(firmware,sizeof firmware,"%s/%s",PKGDATADIR,argv[1]);
   } else
-    snprintf(firmware,sizeof firmware,"%s/%s",PKGDATADIR,IMAGE_FILE);
+    snprintf(firmware,sizeof firmware,"%s/%s",PKGDATADIR,DEFAULT_IMAGE_FILE);
 
   if(strlen(firmware) == 0){
     fprintf(stderr,"Firmware not loaded and not available\n");

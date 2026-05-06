@@ -1,5 +1,6 @@
 // Real Time Control Protocol (RTCP) for ka9q-radio - very primitive and not yet complete or tested
 // Sep 2018-2023 Phil Karn, KA9Q
+#define _GNU_SOURCE 1
 #include <sys/types.h>
 #include <string.h>
 #include <stdint.h>

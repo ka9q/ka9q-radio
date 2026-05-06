@@ -24,6 +24,7 @@
 #endif
 #include <assert.h>
 #include <sys/types.h>
+#include "config_paths.h" // pick up GIT macros
 
 #if 0
 // Must be a macro so __FILE__ and __TIMESTAMP__ will substitute correctly

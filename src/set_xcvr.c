@@ -1,6 +1,7 @@
 // Control transmitter on FM transceiver daughter board on Raspberry Pi
 // Experimental FM repeater option in monitor.c
 // Copyright 2022-2023 Phil Karn, KA9Q
+#define _GNU_SOURCE 1
 #include <termios.h>
 #include <sys/types.h>
 #include <sys/stat.h>

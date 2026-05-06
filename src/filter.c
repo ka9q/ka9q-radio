@@ -36,6 +36,7 @@
 #include "misc.h"
 #include "filter.h"
 #include "window.h"
+#include "config_paths.h"
 
 #ifndef STATEDIR
 #define STATEDIR "/var/lib/ka9q-radio"

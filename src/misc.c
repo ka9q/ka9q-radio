@@ -34,12 +34,19 @@
 #endif
 
 #include "misc.h"
+#include "config_paths.h"
 
 #ifndef PKGDATADIR
 #define PKGDATADIR "/usr/local/share/ka9q-radio"
 #endif
 
+#ifndef CONFDIR
+#define CONFDIR "/etc/radio"
+#endif
+
 char const *Pkgdatadir = PKGDATADIR;
+char const *Confdir = CONFDIR;
+
 
 // Return path to file which is part of the application distribution.
 // This allows to run the program either from build directory or from
@@ -47,19 +54,18 @@ char const *Pkgdatadir = PKGDATADIR;
 int dist_path(char *path,int path_len,const char *fname){
   if(path == NULL)
     return -1;
-  char cwd[PATH_MAX];
-  struct stat st;
+  struct stat st = {0};
 
   if(fname[0] == '/') {
     strlcpy(path, fname, path_len);
     return 0;
   }
-
-  dirname(realpath(App_path,cwd));
-  snprintf(path,path_len,"%s/%s",cwd,fname);
+  // first look in /etc/radio for local override
+  snprintf(path,path_len,"%s/%s",Confdir,fname);
   if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
     return 0;
 
+  // Then look in packaged files /usr[/local]/share/ka9q-radio
   snprintf(path,path_len,"%s/%s",Pkgdatadir,fname);
   if(stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG)
     return 0;

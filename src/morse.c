@@ -1,5 +1,6 @@
 // Morse code generation
 // Copyright 2022-2023, Phil Karn, KA9Q
+#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <wchar.h>
 #include <wctype.h>
