@@ -1,3 +1,9 @@
+ka9q-radio (1.0.0-10) ka9q; urgency=medium
+
+  * Remove capabilities from radiod binary, let systemd do it
+  * fix call to prctl()
+ -- Phil Karn <karn@ka9q.net>  Thu, 07 May 2026 02:44:32 -0700
+
 ka9q-radio (1.0.0-9) ka9q; urgency=medium
   * Initial private release, git tag 1.0.0
 
