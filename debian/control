@@ -49,6 +49,7 @@ Description: HFDL subsystem for ka9q-radio
 Package: ka9q-radio-packet
 Architecture: any
 Depends:
+ ${shlibs:Depends},
  ${misc:Depends},
  systemd,
  ka9q-radio-common
@@ -116,72 +117,72 @@ Description: Command-line tools for ka9q-radio
 Package: ka9q-radio-airspy
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Breaks: ka9q-radio (<< ${binary:Version})
-Replaces: ka9q-radio (<< ${binary:Version})
+Breaks: ka9q-radio (<< 1.0.0-0)
+Replaces: ka9q-radio (<< 1.0.0-0)
 Description: Airspy device plugin for ka9q-radio
  ka9q-radio plugin for the Airspy R2, Airspy Mini SDR front ends
 
 Package: ka9q-radio-airspyhf
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Breaks: ka9q-radio (<< ${binary:Version})
-Replaces: ka9q-radio (<< ${binary:Version})
+Breaks: ka9q-radio (<< 1.0.0-0)
+Replaces: ka9q-radio (<< 1.0.0-0)
 Description: Airspy HF+ device plugin for ka9q-radio
  ka9q-radio plugin for the Airspy HF+ SDR front end
 
 Package: ka9q-radio-bladerf
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Breaks: ka9q-radio (<< ${binary:Version})
-Replaces: ka9q-radio (<< ${binary:Version})
+Breaks: ka9q-radio (<< 1.0.0-0)
+Replaces: ka9q-radio (<< 1.0.0-0)
 Description: Blade RF device plugin for ka9q-radio
  ka9q-radio plugin for the Blade RF SDR front end
 
 Package: ka9q-radio-fobos
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Breaks: ka9q-radio (<< ${binary:Version})
-Replaces: ka9q-radio (<< ${binary:Version})
+Breaks: ka9q-radio (<< 1.0.0-0)
+Replaces: ka9q-radio (<< 1.0.0-0)
 Description: Rigexpert Fobos device plugin for ka9q-radio
  ka9q-radio plugin for the Rigexpert Fobos SDR front end
 
 Package: ka9q-radio-funcube
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Breaks: ka9q-radio (<< ${binary:Version})
-Replaces: ka9q-radio (<< ${binary:Version})
+Breaks: ka9q-radio (<< 1.0.0-0)
+Replaces: ka9q-radio (<< 1.0.0-0)
 Description: Amsat UK Funcube Dongle Pro+ device plugin for ka9q-radio
  ka9q-radio plugin for the old AMSAT UK Funcube Dongle Pro+ SDR front end
 
 Package: ka9q-radio-hackrf
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Breaks: ka9q-radio (<< ${binary:Version})
-Replaces: ka9q-radio (<< ${binary:Version})
+Breaks: ka9q-radio (<< 1.0.0-0)
+Replaces: ka9q-radio (<< 1.0.0-0)
 Description: Hack RF device plugin for ka9q-radio
  ka9q-radio plugin for the Hack RF SDR frontend
 
 Package: ka9q-radio-hydrasdr
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Breaks: ka9q-radio (<< ${binary:Version})
-Replaces: ka9q-radio (<< ${binary:Version})
+Breaks: ka9q-radio (<< 1.0.0-0)
+Replaces: ka9q-radio (<< 1.0.0-0)
 Description: Hydra SDR One device plugin for ka9q-radio
  ka9q-radio plugin for the Hydra SDR One (can also use the airspy plugin)
 
 Package: ka9q-radio-rtlsdr
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Breaks: ka9q-radio (<< ${binary:Version})
-Replaces: ka9q-radio (<< ${binary:Version})
+Breaks: ka9q-radio (<< 1.0.0-0)
+Replaces: ka9q-radio (<< 1.0.0-0)
 Description: Generic RTL-SDR device plugin for ka9q-radio
  ka9q-radio plugin for generic RTL-SDR SDR front ends
 
 Package: ka9q-radio-rx888
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Breaks: ka9q-radio (<< ${binary:Version})
-Replaces: ka9q-radio (<< ${binary:Version})
+Breaks: ka9q-radio (<< 1.0.0-0)
+Replaces: ka9q-radio (<< 1.0.0-0)
 Description: RX-888 MkII device plugin for ka9q-radio
  ka9q-radio plugin for the RX-888 MkII direct sampling HF-6m
  SDR front end (no VHF/UHF support)
@@ -197,8 +198,8 @@ Description: RX-888 MkII device plugin for ka9q-radio
 Package: ka9q-radio-siggen
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
-Breaks: ka9q-radio (<< ${binary:Version})
-Replaces: ka9q-radio (<< ${binary:Version})
+Breaks: ka9q-radio (<< 1.0.0-0)
+Replaces: ka9q-radio (<< 1.0.0-0)
 Description: Synthetic signal generator device plugin for ka9q-radio
  ka9q-radio plugin that generates a synthetic receive stream, optionally with synthetic WWV
 

@@ -1,3 +1,10 @@
+ka9q-radio (1.0.0-13) ka9q; urgency=medium
+
+  * loosen breaks/replace rules
+  * get rid of some unused variable warnings
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 07 May 2026 03:48:08 -0700
+
 ka9q-radio (1.0.0-12) ka9q; urgency=medium
 
   * fix indentation on changelog entries - emacs screws it up
