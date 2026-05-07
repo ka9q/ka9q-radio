@@ -1,3 +1,30 @@
+ka9q-radio (1.0.0-13) ka9q; urgency=medium
+
+  * loosen breaks/replace rules
+  * get rid of some unused variable warnings
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 07 May 2026 03:48:08 -0700
+
+ka9q-radio (1.0.0-12) ka9q; urgency=medium
+
+  * fix indentation on changelog entries - emacs screws it up
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 07 May 2026 03:17:57 -0700
+
+ka9q-radio (1.0.0-11) ka9q; urgency=medium
+
+  * don't let systemd terminate radiod on an unplugged SDR just yet;
+    this will await udev-triggering. Revert to retrying
+    every 5 sec as long as the unit is enabled.
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 07 May 2026 03:12:40 -0700
+
+ka9q-radio (1.0.0-10) ka9q; urgency=medium
+
+  * Remove capabilities from radiod binary, let systemd do it
+  * fix call to prctl()
+ -- Phil Karn <karn@ka9q.net>  Thu, 07 May 2026 02:44:32 -0700
+
 ka9q-radio (1.0.0-9) ka9q; urgency=medium
   * Initial private release, git tag 1.0.0
 
