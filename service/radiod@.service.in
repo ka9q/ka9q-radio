@@ -13,6 +13,7 @@ Group=radio
 Type=simple
 Nice=-10
 SupplementaryGroups=plugdev radio users
+CapabilityBoundingSet=CAP_SYS_NICE CAP_NET_ADMIN
 AmbientCapabilities=CAP_SYS_NICE CAP_NET_ADMIN
 StateDirectory=ka9q-radio
 StateDirectoryMode=0775

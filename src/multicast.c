@@ -582,38 +582,39 @@ static int loopback_index(void){
   }
   Loopback_index = if_nametoindex(lop->ifa_name);
   assert(Loopback_index > 0);
-  if(lop->ifa_flags & IFF_MULTICAST){
-    freeifaddrs(ifap);
-    return Loopback_index; // Already set
-  }
-  // We need multicast enabled on the loopback interface
-  struct ifreq ifr = {
-    .ifr_flags = lop->ifa_flags | IFF_MULTICAST
-  };
-  strlcpy(ifr.ifr_name, Loopback_name, sizeof(ifr.ifr_name));
+  if(!(lop->ifa_flags & IFF_MULTICAST)){
+    // We need multicast enabled on the loopback interface
+    struct ifreq ifr = {
+      .ifr_flags = lop->ifa_flags | IFF_MULTICAST
+    };
+    strlcpy(ifr.ifr_name, Loopback_name, sizeof(ifr.ifr_name));
 
+    int fd = socket(AF_INET, SOCK_DGRAM, 0); // Same for IPv6?
+    int const r = ioctl(fd,  SIOCSIFFLAGS,  &ifr);
+    if(r < 0){
+      // Given how much we rely on multicast loopback, make this fatal
+      fprintf(stderr, "Can't enable multicast option on loopback interface %s: %s\n", ifr.ifr_name,strerror(errno));
+      fprintf(stderr, "Set manually (on Linux) with 'sudo ip link set dev %s multicast on' or 'sudo systemctl enable --now set_lo_multicast'\n",Loopback_name);
+      close(fd);
+      freeifaddrs(ifap);
+      exit(EX_NOPERM);
+    }
+    close(fd);
+    fprintf(stderr, "Multicast enabled on loopback interface %s\n", Loopback_name);
+  }
   freeifaddrs(ifap);
   ifap = NULL;
   lop = NULL;
-  int fd = socket(AF_INET, SOCK_DGRAM, 0); // Same for IPv6?
-  int const r = ioctl(fd,  SIOCSIFFLAGS,  &ifr);
-  if(r < 0){
-    // Given how much we rely on multicast loopback, make this fatal
-    fprintf(stderr, "Can't enable multicast option on loopback interface %s: %s\n", ifr.ifr_name,strerror(errno));
-    fprintf(stderr, "Set manually (on Linux) with 'sudo ip link set dev %s multicast on' or 'sudo systemctl start set_lo_multicast'\n",Loopback_name);
-    close(fd);
-    exit(EX_NOPERM);
-  }
-  close(fd);
-  fprintf(stderr, "Multicast enabled on loopback interface %s\n", Loopback_name);
+
 #if __linux__
   // This capability is set when radiod is run by systemd, drop it when we no longer need it
-  if (prctl(PR_CAP_AMBIENT_LOWER,  CAP_NET_ADMIN,  0,  0,  0) == 0)
+  if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_LOWER,  CAP_NET_ADMIN,  0,  0,  0) == 0){
     fprintf(stderr,"Dropped CAP_NET_ADMIN capability\n");
-  else
+  } else {
     fprintf(stderr,"Can't drop CAP_NET_ADMIN capability: %s\n",strerror(errno));
+  }
 #endif
-  return Loopback_index;
+  return Loopback_index; // Already set
 }
 
 // Join an existing socket to a multicast group without connecting it
