@@ -21,3 +21,4 @@ packetd
 rx888_boot
 opussend
 pcmsend
+set_xcvr
