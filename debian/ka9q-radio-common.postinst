@@ -1,6 +1,5 @@
 case "$1" in
   configure)
-    addgroup --system radio || true
     install -d -m 0775 -o radio -g radio /etc/radio
     install -d -m 0775 -o radio -g radio /var/lib/ka9q-radio
     install -d -m 0775 -o radio -g radio /usr/share/ka9q-radio

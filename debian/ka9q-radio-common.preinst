@@ -1,0 +1,7 @@
+case "$1" in
+  configure)
+    adduser --system --group radio || true
+    ;;
+esac
+
+#DEBHELPER#

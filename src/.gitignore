@@ -1,3 +1,4 @@
+config_paths.h
 *.o
 *.d
 *.a
