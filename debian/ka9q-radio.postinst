@@ -6,14 +6,7 @@ do_reload() {
 }
 
 case "$1" in
-    configure)
-	bin=$(command -v radiod 2>/dev/null || true)
-	if [ -n "$bin" ]; then
-	    setcap cap_net_admin+ep "$bin" || true
-	fi
-	do_reload
-	;;
-    abort-upgrade|abort-remove|abort-deconfigure)
+    configure|abort-upgrade|abort-remove|abort-deconfigure)
 	do_reload
         ;;
 esac

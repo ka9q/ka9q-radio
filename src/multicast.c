@@ -608,7 +608,7 @@ static int loopback_index(void){
 
 #if __linux__
   // This capability is set when radiod is run by systemd, drop it when we no longer need it
-  if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_LOWER,  CAP_NET_ADMIN,  0,  0,  0) == 0){
+  if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_LOWER,  CAP_NET_ADMIN,  0,  0) == 0){
     fprintf(stderr,"Dropped CAP_NET_ADMIN capability\n");
   } else {
     fprintf(stderr,"Can't drop CAP_NET_ADMIN capability: %s\n",strerror(errno));
