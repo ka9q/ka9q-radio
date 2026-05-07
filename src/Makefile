@@ -70,7 +70,7 @@ HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhi
 
 ## hardware plug-in module enables
 # The software signal generator front end is build by default. Others are added by the ENABLE_* options below
-DYNAMIC_DRIVERS = sig_gen.so
+DYNAMIC_DRIVERS = 
 
 ifeq ($(ENABLE_ALL),1)
 	ENABLE_AIRSPY=1
@@ -82,6 +82,7 @@ ifeq ($(ENABLE_ALL),1)
 	ENABLE_HYDRASDR=1
 	ENABLE_RTLSDR=1
 	ENABLE_RX888=1
+	ENABLE_SIG_GEN=1
 endif
 
 # AIRSPY R2, etc
@@ -142,6 +143,11 @@ endif
 ifeq ($(ENABLE_SDRPLAY),1)
    CFILES += sdrplay.c
    DYNAMIC_DRIVERS += sdrplay.so
+endif
+
+ifeq ($(ENABLE_SIG_GEN),1)
+   CFILES += sig_gen.c
+   DYNAMIC_DRIVERS += sig_gen.so
 endif
 
 .PHONY: clean all install dynamics purge
@@ -298,18 +304,13 @@ sig_gen.so: sig_gen.o gauss.o libradio.a
 # subroutines useful in more than one program
 # subroutines useful in more than one program
 libradio.a: $(LIBRADIO)
-	ar rv $@ $?
-	ranlib $@
-
+	ar rsv $@ $?
 
 libdsp.a: $(LIBDSP)
-	ar rv $@ $?
-	ranlib $@
+	ar rsv $@ $?
 
 libstatus.a: $(LIBSTATUS)
-	ar rv $@ $?
-	ranlib $@
-
+	ar rsv $@ $?
 
 # handle quotes inside GIT summary messages, etc. Suggested by ChatGPT
 esc = sed 's/\\/\\\\/g; s/"/\\"/g'

@@ -23,8 +23,12 @@ export localstatedir pkgdatadir pkglibdir statedir mandir
 PKG_CONFIG_PATH=
 LD_LIBRARY_PATH=
 
-# set those for which Debian packages are already available
-# 
+# set those for which Debian device library packages are available
+# on the build machine. Because support is compiled as .so plugins
+# device libraries do not need to be installed on the target system
+# if that device isn't going to be used. The .so files are broken out
+# into device-specific packages (eg, ka9q-radio-rx888) and the library
+# dependency is enforced when those packages are installed.
 ENABLE_AIRSPY   ?= 1
 ENABLE_AIRSPYHF ?= 1
 ENABLE_BLADERF  ?= 1
@@ -34,9 +38,10 @@ ENABLE_HACKRF   ?= 1
 ENABLE_HYDRASDR ?= 1
 ENABLE_RTLSDR   ?= 1
 ENABLE_RX888    ?= 1
-ENABLE_SDRPLAY  ?= 0
+ENABLE_SDRPLAY  ?= 0  # this is the really problematic one: proprietary API
 
-export ENABLE_AIRSPY ENABLE_AIRSPYHF ENABLE_BLADERF ENABLE_FOBOS ENABLE_FUNCUBE ENABLE_HACKRF ENABLE_HYDRASDR
+export ENABLE_AIRSPY ENABLE_AIRSPYHF ENABLE_BLADERF ENABLE_FOBOS
+export ENABLE_FUNCUBE ENABLE_HACKRF ENABLE_HYDRASDR
 export ENABLE_RTLSDR ENABLE_RX888 ENABLE_SDRPLAY
 export DEB_BUILD_ARCH
 
@@ -67,13 +72,8 @@ purge:
 	    $(MAKE) -C $$d purge CONFIRMED=1 || exit $$?; \
 	done
 
-# only do system stuff when installing locally under Linux
-# dpkg-buildpackage does that when building a debian package
+# the ka9q-radio-common package now creates the radio user and group
 install:
-ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
-	getent group radio >/dev/null || groupadd --system radio
-	id radio >/dev/null 2>&1 || useradd --system --gid radio --home-dir /var/lib/ka9q-radio --no-create-home radio
-endif
 	for d in $(SUBDIRS); do \
 		$(MAKE) -C $$d install DESTDIR=$(DESTDIR) || exit $$?; \
 	done
