@@ -564,7 +564,7 @@ int64_t gps_time_ns(void){
   }
 #endif
   // Need to add fallback code that consults an (updated) leap second table
-  if(!atomic_flag_test_and_set_explicit(&Leap_second_warning_logged,memory_order_relaxed)){
+  if(Verbose && !atomic_flag_test_and_set_explicit(&Leap_second_warning_logged,memory_order_relaxed)){
     // Log this message only once
     fprintf(stderr,"Warning: system doesn't know leap second count; using %d sec, which will break with the next leap second\n",GPS_UTC_OFFSET);
   }
