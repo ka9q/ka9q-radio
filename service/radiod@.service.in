@@ -31,7 +31,7 @@ TimeoutStopSec=5
 SyslogIdentifier=radiod@%i
 LogRateLimitBurst=500
 LogRateLimitIntervalSec=20
-RestartPreventExitStatus=66
+#RestartPreventExitStatus=66
 
 [Install]
 WantedBy=multi-user.target

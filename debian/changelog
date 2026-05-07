@@ -1,3 +1,11 @@
+ka9q-radio (1.0.0-11) ka9q; urgency=medium
+
+  * don't let systemd terminate radiod on an unplugged SDR just yet;
+	this will await udev-triggering. Revert to retrying
+	every 5 sec as long as the unit is enabled.
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 07 May 2026 03:12:40 -0700
+
 ka9q-radio (1.0.0-10) ka9q; urgency=medium
 
   * Remove capabilities from radiod binary, let systemd do it
