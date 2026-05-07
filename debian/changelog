@@ -1,13 +1,7 @@
-ka9q-radio (1.0+nmu5) UNRELEASED; urgency=medium
+ka9q-radio (1.0+nmu7) UNRELEASED; urgency=medium
 
-  [ Phil Karn ]
-  * Initial release.
+  * Move sig_gen.so to separate ka9q-radio-siggen package
+  * add breaks/replaces tags in debian/control to force simultaneous
+  * updates of ka9q-radio and plugins since a bunch of files have moved
 
-  [ Phil Karn ]
-  * test release
-  * do systemctl daemon-reload for radiod and recordings (which are templates)
-  * src/Makefile cleanups, library restructuring
-  * Add ka9q-ft8 (ft4/ft8 decoder based in ft8_lib) to ka9q-radio-full
-  * Move radiod conf files to specific plugin packages
-
- -- Phil Karn <karn@ka9q.net>  Wed, 06 May 2026 15:47:54 -0700
+ -- Phil Karn <karn@ka9q.net>  Wed, 06 May 2026 23:55:33 -0700
