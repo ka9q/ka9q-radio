@@ -698,7 +698,6 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
     if(wptr <= rptr){
       int late = rptr - wptr; // guaranteed zero or positive
       if(late * Channels >= BUFFERSIZE){
-	sp->drops++;
 	continue;      // all of it is late
       } else
 	start = late * Channels; // trim the front to keep it from backward wrapping and being played 1 buffer later
