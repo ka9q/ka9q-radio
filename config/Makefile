@@ -18,6 +18,4 @@ purge:
 
 install:
 	install -m 0664 *.conf $(DESTDIR)$(radioconfdir)
-	chown -R radio:radio $(DESTDIR)$(radioconfdir)
 	rsync -a examples $(DESTDIR)$(pkgdatadir)
-	chown -R radio:radio$ (DESTDIR)$(pkgdatadir)
