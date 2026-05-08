@@ -20,8 +20,9 @@ fi
 db_get ka9q-radio/frontend
 frontend="$RET"
 
-if ! dpkg-query -W -f='${Status}' "ka9q-radio-$frontend" 2>/dev/null |
-     grep -q '^install ok installed$'; then
+status=$(dpkg-query -W -f='${Status}' "ka9q-radio-$frontend" 2>/dev/null || true)
+
+if [ "$status" != "install ok installed" ]; then
     echo "Selected frontend package ka9q-radio-$frontend is not installed." >&2
     echo "Install it with: apt install ka9q-radio-$frontend, then re-run:" >&2
     echo "dpkg-reconfigure ka9q-radio" >&2

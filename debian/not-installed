@@ -2,7 +2,8 @@ usr/lib/systemd/system/acars.service
 usr/lib/udev/rules.d/66-sdrplay.rules
 usr/lib/udev/rules.d/73-fobos-sdr.rules
 usr/lib/udev/rules.d/74-fobos-sdr-ka9q.rules
-etc/radio/radiod@sdrplay-generic.conf
-etc/radio/radiod@sdrplay-iq.conf
-etc/radio/radiod@sdrplay-ka9q.conf
-etc/radio/radiod@sdrplay-wspr-20m.conf
+usr/share/ka9q-radio/examples/radiod@sdrplay-generic.conf
+usr/share/ka9q-radio/examples/radiod@sdrplay-iq.conf
+usr/share/ka9q-radio/examples/radiod@sdrplay-ka9q.conf
+usr/share/ka9q-radio/examples/radiod@sdrplay-wspr-20m.conf
+usr/share/ka9q-radio/examples/fragments

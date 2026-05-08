@@ -23,4 +23,5 @@ usr/share/ka9q-radio/examples/radiod@rx888-oe9ghv.conf
 usr/share/ka9q-radio/examples/radiod@rx888-wsprdaemon.conf
 usr/share/ka9q-radio/examples/radiod@rx888-wsprdaemon.conf.d
 usr/share/ka9q-radio/examples/radiod@vy0erc.conf.d
+usr/share/ka9q-radio/examples/radiod@ka9q-hf.conf.d
 

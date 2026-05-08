@@ -1,3 +1,11 @@
+ka9q-radio (1.0.0-21) ka9q; urgency=medium
+
+  * fix module installation test
+  * revise dependencies
+  * more twiddling with device dependencies
+
+ -- Phil Karn <karn@ka9q.net>  Fri, 08 May 2026 03:57:45 -0700
+
 ka9q-radio (1.0.0-18) ka9q; urgency=medium
 
   * let each radiod device module install its own examples
