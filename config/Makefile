@@ -1,7 +1,10 @@
 # sub-make for ka9q config files
 # Copyright 2026, Phil Karn, KA9Q
+prefix        ?= /usr/local
 sysconfdir    ?= /etc
 radioconfdir  ?= $(sysconfdir)/radio
+datadir       ?= $(prefix)/share
+pkgdatadir    ?= $(datadir)/ka9q-radio
 
 UNAME_S := $(shell uname -s)
 
@@ -10,25 +13,6 @@ UNAME_S := $(shell uname -s)
 all:
 	@true
 
-clean:
-	@true
-
 purge:
-	@test "$(CONFIRMED)" = "1" || { echo "Refusing to run purge directly. Use top-level make purge."; exit 1; }
-	if [ -d "$(DESTDIR)$(radioconfdir)" ]; then \
-		rm -rf $(DESTDIR)$(radioconfdir); \
-	fi
-
-# Setup sample config files
-# don't overwrite the user's files when locally installing
-install:
-	install -d -m 0775 $(DESTDIR)$(radioconfdir)
-ifndef DEB_BUILD_ARCH
-	rsync -a --ignore-existing README *.conf *.conf.d $(DESTDIR)$(radioconfdir)
-ifeq ($(UNAME_S),Linux)
-	chown radio:radio $(DESTDIR)$(radioconfdir)
-endif
-else
-	rsync -a README *.conf *.conf.d $(DESTDIR)$(radioconfdir)
-	@true
-endif
+	echo "not cleaning /etc/radio"
+	install -m 0664 *.conf *.conf.d $(DESTDIR)$(pkgdatadir)/examples

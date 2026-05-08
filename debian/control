@@ -205,15 +205,12 @@ Description: Synthetic signal generator device plugin for ka9q-radio
 
 Package: ka9q-radio-config-examples
 Architecture: any
-Depends:
- ${misc:Depends},
- ka9q-radio-common,
- ka9q-radio
-Description: Sample radiod config files fo ka9q-radio
+Depends: ${misc:Depends}, ka9q-radio-common, ka9q-radio
+Description: Sample radiod config files for ka9q-radio
  Sample configuration files for the radiod spectrum server in ka9q-radio. File names are of the forms:
- /etc/radio/radiod@instance.conf - flat file
- /etc/radio/radiod@instance.conf.d - directory with components
-
+ radiod@instance.conf - flat file
+ radiod@instance.conf.d - directory with components
+ examples are in /usr/share/ka9q-radio/examples; operational files go in /etc/radio
 
 Package: ka9q-radio-full
 Architecture: any
