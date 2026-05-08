@@ -15,4 +15,9 @@ all:
 
 purge:
 	echo "not cleaning /etc/radio"
-	install -m 0664 *.conf *.conf.d $(DESTDIR)$(pkgdatadir)/examples
+
+install:
+	install -m 0664 *.conf $(DESTDIR)$(radioconfdir)
+	chown -R radio:radio$ (DESTDIR)$(radioconfdir)
+	rsync -a examples $(DESTDIR)$(pkgdatadir)
+	chown -R radio:radio$ (DESTDIR)$(pkgdatadir)
