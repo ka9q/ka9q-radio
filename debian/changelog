@@ -1,3 +1,9 @@
+ka9q-radio (1.0.0-22) ka9q; urgency=medium
+
+  * set exec permissions and insert shebangs in helper scrips
+
+ -- Phil Karn <karn@ka9q.net>  Fri, 08 May 2026 04:18:35 -0700
+
 ka9q-radio (1.0.0-21) ka9q; urgency=medium
 
   * fix module installation test

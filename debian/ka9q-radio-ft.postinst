@@ -1,3 +1,4 @@
+#!/bin/sh
 case "$1" in
   configure)
     addgroup --system radio || true

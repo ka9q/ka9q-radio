@@ -1,3 +1,4 @@
+#!/bin/sh
 chown -R radio:radio /usr/share/ka9q-radio/examples
 echo "Example radiod config files are in /usr/share/ka9q-radio/examples"
 echo "Operational files go in /etc/radio"

@@ -1,3 +1,4 @@
+#!/bin/sh
 case "$1" in
   configure)
     install -d -m 0775 -o radio -g radio /etc/radio
