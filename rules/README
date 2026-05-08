@@ -1,2 +1,7 @@
 This directory contains rules for the Linux udev daemon, installed into /etc/udev/rules.d. They
 control the creation of device nodes for the various SDR front end devices.
+
+Eventually the udev system will automatically invoke instances of radiod, the ka9q-radio spectrum server,
+when a SDR front end device is plugged in. At the moment, each instance must be manually enabled with
+systemctl (eg, sudo systemctl enable --now radiod@instance) and it will continually restart every
+5 seconds until an appropriate SDR device is found.

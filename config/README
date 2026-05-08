@@ -1,9 +1,16 @@
-This directory contains various configuration files for *radiod*,
-*opusd* and other daemons part of ka9q-radio.  They are installed into
-/etc/radio. However, the --ignore-existing flag is used with rsync so
-that existing config files will NOT be overwritten. Until I find a
-better way to manage local and upstream-managed config files, you will
-have to manually merge your own config files with those from the
-upstream (i.e. my) distribution.
+This directory contains various configuration files for various
+elements of ka9q-radio.  They are installed into /etc/radio.
 
+Config files for radiod, the ka9q-radio spectrum server, have names of the form
 
+radiod@instance.conf
+or
+radiod@instance.conf.d
+
+The first is a plain text file; the second is a directory. The files in the directory
+will be concatenated in lexigraphical order and interpreted as though they were part of a
+single configuration file.
+
+Run dpkg-reconfigure ka9q-radio to invoke a debconf installer to walk you through the
+creation of a minimal radiod config file. It won't define any static receiver channels
+but it will be ready for use with applications that create channels dynamically.

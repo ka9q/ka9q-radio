@@ -37,6 +37,14 @@ PLUGIN_FLAGS = \
 	ENABLE_SDRPLAY=$(ENABLE_SDRPLAY)
 
 
+# suppress gratuitous warnings
+override_dh_shlibdeps:
+	tmp=$$(mktemp); \
+	if dh_shlibdeps >$$tmp 2>&1; then status=0; else status=$$?; fi; \
+	grep -v -E '^(dpkg-shlibdeps: warning: diversions involved - output may be incorrect| diversion by libc6 (from|to): /lib/ld-linux-.*)' $$tmp; \
+	rm -f $$tmp; \
+	exit $$status
+
 override_dh_auto_build:
 	@echo "MAKEFLAGS=$(MAKEFLAGS)"
 	@echo "DEB_BUILD_OPTIONS=$(DEB_BUILD_OPTIONS)"
