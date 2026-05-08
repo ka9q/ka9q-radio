@@ -49,7 +49,7 @@ case "$1" in
 
 	case "$frontend" in
 	    airspyhf|airspy|bladerf|fobos|funcube|hackrf|hydrasdr|rtlsdr|rx888|sig_gen)
-			  ;;
+	    ;;
 	    *)
 		echo "Unknown frontend: $frontend" >&2
 		exit 1
@@ -89,6 +89,8 @@ EOF
 	fi
 	;;
     *)
+	echo unknown action $1
+	exit 1
 	;;
 esac
 
