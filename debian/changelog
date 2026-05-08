@@ -1,3 +1,9 @@
+ka9q-radio (1.0.0-15) ka9q; urgency=medium
+
+  * add debconf scripts to generate a simple radiod config file
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 07 May 2026 20:52:12 -0700
+
 ka9q-radio (1.0.0-14) ka9q; urgency=medium
 
   * revert packet drop count in monitor
