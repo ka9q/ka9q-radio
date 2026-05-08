@@ -1,0 +1,32 @@
+Template: ka9q-radio/instance_name
+Type: string
+Default: placeholder
+Description: radiod instance name
+ Enter the radiod instance/configuration name.
+
+Template: ka9q-radio/frontend
+Type: select
+Choices: airspyhf, airspy, bladerf, fobos, funcube, hackrf, hydrasdr, rtlsdr, rx888, sig_gen
+Default: rx888
+Description: SDR front-end hardware type
+ Select the SDR front-end hardware this radiod instance should use.
+
+Template: ka9q-radio/description
+Type: string
+Default: placeholder
+Description: text description of antenna
+ Enter a short textual description of this radio.
+ Suggest antenna type @ callsign, eg, "g5rv @ ka9q"
+
+Template: ka9q-radio/status_channel
+Type: string
+Default: placeholder
+Description: Domain name of radiod control channel
+  Enter the domain name of the radiod radiod control/status multicast group
+
+Template: ka9q-radio/data_channel
+Type: string
+Default: placeholder
+Description: Domain name of default radiod output channel
+  Enter the domain name of the default radiod output multicast group
+
