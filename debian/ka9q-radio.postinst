@@ -3,29 +3,13 @@ set -e
 
 . /usr/share/debconf/confmodule
 
-configured=false
-
 do_reload() {
     systemctl daemon-reload || true
 }
 
-if [ -n "$2" ]; then
-    exit 0      # upgrade, skip configuration
-fi
-
-# any existing confs?
-if ls /etc/radio/radiod@*.conf >/dev/null 2>&1 ||
-   ls /etc/radio/*.conf >/dev/null 2>&1; then
-    configured=true
-fi
-# Enabled radiod instances?
-if command -v systemctl >/dev/null 2>&1; then
-    if systemctl list-unit-files 'radiod@*.service' 2>/dev/null |
-        awk '$2 == "enabled" { found=1 } END { exit !found }'
-    then
-        configured=true
-    fi
-fi
+#if [ -n "$2" ]; then
+#    exit 0      # upgrade, skip configuration
+#fi
 
 db_get ka9q-radio/configure_now
 if [ "$RET" = false ]; then
@@ -57,7 +41,7 @@ case "$1" in
 	esac
 	db_get ka9q-radio/instance_name
 	instance="$RET"
-	conf="/etc/radio/$instance.conf"
+	conf="/etc/radio/radiod@$instance.conf"
 
 	db_get ka9q-radio/description
 	description="$RET"

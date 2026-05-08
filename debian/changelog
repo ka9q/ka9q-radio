@@ -1,3 +1,9 @@
+ka9q-radio (1.0.0-16) ka9q; urgency=medium
+
+  * move radiod sample config files to new package, ka9q-radio-config-examples
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 07 May 2026 22:55:26 -0700
+
 ka9q-radio (1.0.0-15) ka9q; urgency=medium
 
   * add debconf scripts to generate a simple radiod config file

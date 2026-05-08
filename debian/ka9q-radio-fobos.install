@@ -1,4 +1,1 @@
 usr/lib/ka9q-radio/fobos.so
-etc/radio/radiod@fobos-generic.conf
-etc/radio/radiod@aviation.conf
-etc/radio/radiod@ka9q-fobos.conf.d/*

@@ -35,4 +35,3 @@ Type: boolean
 Default: true
 Description: Configure ka9q-radio now?
  Do you want to configure ka9q-radio interactively now?
- 

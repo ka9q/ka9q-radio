@@ -203,6 +203,18 @@ Replaces: ka9q-radio (<< 1.0.0-0)
 Description: Synthetic signal generator device plugin for ka9q-radio
  ka9q-radio plugin that generates a synthetic receive stream, optionally with synthetic WWV
 
+Package: ka9q-radio-config-examples
+Architecture: any
+Depends:
+ ${misc:Depends},
+ ka9q-radio-common,
+ ka9q-radio
+Description: Sample radiod config files fo ka9q-radio
+ Sample configuration files for the radiod spectrum server in ka9q-radio. File names are of the forms:
+ /etc/radio/radiod@instance.conf - flat file
+ /etc/radio/radiod@instance.conf.d - directory with components
+
+
 Package: ka9q-radio-full
 Architecture: any
 Depends:
@@ -226,6 +238,7 @@ Depends:
  ka9q-radio-rx888,
  ka9q-radio-siggen,
  ka9q-radio-tools,
+ ka9q-radio-config-examples,
  ka9q-ft8
 Description: meta package for all components of ka9q-radio
  Brings in the works: radiod, control, monitor, command line tools, device plugins, ft8/4 decoder,

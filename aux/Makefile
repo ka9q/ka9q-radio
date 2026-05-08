@@ -25,7 +25,7 @@ crondir         ?= $(sysconfdir)/cron.d
 
 UNAME_S := $(shell uname -s)
 
-SCRIPTS = set_lo_multicast start-ka9q-horus
+SCRIPTS = set_lo_multicast start-ka9q-horus ka9q-radio-setup
 LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate recordings.rotate
 BLACKLIST = airspy-blacklist.conf
 SYSCTL = 98-sockbuf.conf 50-multicast.conf

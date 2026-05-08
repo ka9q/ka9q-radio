@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+debconf-communicate ka9q-radio > /dev/null <<EOF
+FSET ka9q-radio/configure_now seen false
+FSET ka9q-radio/frontend seen false
+FSET ka9q-radio/instance_name seen false
+EOF
+
+dpkg-reconfigure -plow ka9q-radio
+
