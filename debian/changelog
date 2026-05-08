@@ -1,3 +1,9 @@
+ka9q-radio (1.0.0-17) ka9q; urgency=medium
+
+  * let ka9q-radio-recordings install their example files
+
+ -- Phil Karn <karn@ka9q.net>  Fri, 08 May 2026 01:17:07 -0700
+
 ka9q-radio (1.0.0-16) ka9q; urgency=medium
 
   * move radiod sample config files to new package, ka9q-radio-config-examples
