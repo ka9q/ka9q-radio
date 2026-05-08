@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+. /usr/share/debconf/confmodule
+
+case "$1" in
+  purge)
+    db_purge
+    ;;
+esac
