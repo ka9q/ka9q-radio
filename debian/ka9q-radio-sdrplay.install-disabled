@@ -1,1 +1,5 @@
 usr/lib/ka9q-radio/sdrplay.so
+usr/share/ka9q-radio/examples/radiod@sdrplay-generic.conf
+usr/share/ka9q-radio/examples/radiod@sdrplay-iq.conf
+usr/share/ka9q-radio/examples/radiod@sdrplay-ka9q.conf
+usr/share/ka9q-radio/examples/radiod@sdrplay-wspr-20m.conf

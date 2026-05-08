@@ -1,3 +1,10 @@
+ka9q-radio (1.0.0-18) ka9q; urgency=medium
+
+  * let each radiod device module install its own examples
+    in /usr/share/ka9q-radio/examples. Probably needs more cleanup.
+
+ -- Phil Karn <karn@ka9q.net>  Fri, 08 May 2026 02:12:37 -0700
+
 ka9q-radio (1.0.0-17) ka9q; urgency=medium
 
   * let ka9q-radio-recordings install their example files

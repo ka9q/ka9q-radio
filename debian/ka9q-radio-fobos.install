@@ -1,1 +1,3 @@
 usr/lib/ka9q-radio/fobos.so
+usr/share/ka9q-radio/examples/radiod@fobos-generic.conf
+usr/share/ka9q-radio/examples/radiod@aviation.conf

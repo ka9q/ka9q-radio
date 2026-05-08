@@ -10,5 +10,17 @@ usr/lib/udev/rules.d/70-rx888-boot.rules
 usr/lib/udev/rules.d/71-rx888.rules
 usr/lib/udev/rules.d/72-rx888-ka9q.rules
 etc/radio/rx888_bootfile.conf
-
+usr/share/ka9q-radio/examples/radiod@dp0gvn.conf.d
+usr/share/ka9q-radio/examples/radiod@kfs-nw.conf.d
+usr/share/ka9q-radio/examples/radiod@kfs-omni.conf.d
+usr/share/ka9q-radio/examples/radiod@kfs-se.conf.d
+usr/share/ka9q-radio/examples/radiod@kfs-sw.conf.d
+usr/share/ka9q-radio/examples/radiod@kph1.conf.d
+usr/share/ka9q-radio/examples/radiod@kph2.conf.d
+usr/share/ka9q-radio/examples/radiod@rx888-generic.conf
+usr/share/ka9q-radio/examples/radiod@rx888-oe9ghv2.conf
+usr/share/ka9q-radio/examples/radiod@rx888-oe9ghv.conf
+usr/share/ka9q-radio/examples/radiod@rx888-wsprdaemon.conf
+usr/share/ka9q-radio/examples/radiod@rx888-wsprdaemon.conf.d
+usr/share/ka9q-radio/examples/radiod@vy0erc.conf.d
 

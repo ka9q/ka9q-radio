@@ -3,4 +3,15 @@ usr/lib/ka9q-radio/airspy.so
 etc/modprobe.d/airspy-blacklist.conf
 usr/lib/udev/rules.d/51-airspy.rules
 usr/lib/udev/rules.d/53-airspy-ka9q.rules
+usr/share/ka9q-radio/examples/radiod@airspy-autorx.conf
+usr/share/ka9q-radio/examples/radiod@airspy-generic.conf
+usr/share/ka9q-radio/examples/radiod@airspy-kq6rs-70cm.conf
+usr/share/ka9q-radio/examples/radiod@airspy-sonde.conf
+usr/share/ka9q-radio/examples/radiod@airspy-toro-sonde.conf
+usr/share/ka9q-radio/examples/radiod@fm.conf
+usr/share/ka9q-radio/examples/radiod@horus.conf
+usr/share/ka9q-radio/examples/radiod@ka9q-2m.conf.d
+usr/share/ka9q-radio/examples/radiod@ka9q-70cm.conf.d
+usr/share/ka9q-radio/examples/radiod@ka9q-125cm.conf.d
+usr/share/ka9q-radio/examples/radiod@nws.conf
 

@@ -1781,7 +1781,11 @@ static void input_loop(){
           char buff[NAME_MAX+1];
           snprintf(buff,NAME_MAX,"/pcmrecord.bpsk-%u",getpid());
           sync_diags_fd = shm_open(buff,O_RDWR | O_CREAT | O_TRUNC,0600);
-          ftruncate(sync_diags_fd,sizeof(*sync_diags));
+          int r = ftruncate(sync_diags_fd,sizeof(*sync_diags));
+	  if(r != 0){
+	    fprintf(stderr,"ftruncate failed: %s\n",strerror(errno));
+	    exit(1);
+	  }
           sync_diags = mmap(NULL,sizeof(*sync_diags),PROT_READ | PROT_WRITE,MAP_SHARED,sync_diags_fd,0);
           if (((void*)-1) == sync_diags){
             fprintf(stderr,"Couldn't mmap diagnostic area!\n");
