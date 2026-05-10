@@ -153,16 +153,16 @@ int main(int argc,char *argv[]){
     }
   }
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
-  struct sockaddr sock;
+  struct sockaddr_storage sock;
   char iface[1024];
   iface[0] = '\0';
 
   if(Verbose)
     fprintf(stdout,"Resolving %s\n",Radio);
-  if(resolve_mcast(Radio,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),retries) == -1){
+  if(resolve_mcast(Radio,(struct sockaddr *)&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),retries) == -1){
     fprintf(stdout,"Can't resolve %s\n",Radio);
     exit(EX_UNAVAILABLE);
-  }    
+  }
   if(Source != NULL){
     Source_socket = calloc(1,sizeof(struct sockaddr_storage));
     assert(Source_socket != NULL);
@@ -172,11 +172,11 @@ int main(int argc,char *argv[]){
   if(Verbose){
     char result[1024];
     if(Source == NULL)
-      fprintf(stdout,"Listening to %s\n",formataddr(result,sizeof(result),&sock));
+      fprintf(stdout,"Listening to %s\n",formataddr(result,sizeof(result),(struct sockaddr *)&sock));
     else
-      fprintf(stdout,"Listening to %s only from %s\n",formataddr(result,sizeof(result),&sock),Source);
+      fprintf(stdout,"Listening to %s only from %s\n",formataddr(result,sizeof(result),(struct sockaddr *)&sock),Source);
   }
-  Status_sock = listen_mcast(Source_socket,&sock,iface);
+  Status_sock = listen_mcast(Source_socket,(struct sockaddr *)&sock,iface);
   if(Status_sock < 0){
     fprintf(stdout,"Can't set up multicast input\n");
     exit(EX_IOERR);
@@ -184,7 +184,7 @@ int main(int argc,char *argv[]){
   if(Verbose)
     fprintf(stdout,"Connecting\n");
 
-  Control_sock = output_mcast(&sock,iface,Mcast_ttl,Mcast_tos);
+  Control_sock = output_mcast((struct sockaddr *)&sock,iface,Mcast_ttl,Mcast_tos);
   if(Control_sock < 0){
     fprintf(stdout,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
     exit(EX_IOERR);
@@ -215,14 +215,15 @@ int main(int argc,char *argv[]){
     if(Verbose)
       fprintf(stdout,"Send poll\n");
 
+    socklen_t const slen = sock.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
 #if 0
-    if(sendto(Control_sock_lo,cmd_buffer, cmd_len, 0, &sock,sizeof(sock)) != (ssize_t)cmd_len
+    if(sendto(Control_sock_lo,cmd_buffer, cmd_len, 0, (struct sockaddr *)&sock, slen) != (ssize_t)cmd_len
        || (Mcast_ttl > 0 && send(Control_sock, cmd_buffer, cmd_len, 0) != cmd_len)){
       perror("command send");
       exit(1);
     }
 #else
-    if(sendto(Control_sock, cmd_buffer, cmd_len, 0, &sock,sizeof(sock)) != (ssize_t)cmd_len){
+    if(sendto(Control_sock, cmd_buffer, cmd_len, 0, (struct sockaddr *)&sock, slen) != (ssize_t)cmd_len){
       perror("command send");
       exit(1);
     }

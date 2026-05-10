@@ -31,7 +31,7 @@ int Verbose;
 char *Radio = NULL;
 char *Locale = "en_US.UTF-8";
 
-struct sockaddr Metadata_dest_socket;
+struct sockaddr_storage Metadata_dest_socket;
 
 int Status_sock = -1;
 int Control_sock = -1;
@@ -122,7 +122,9 @@ int main(int argc,char *argv[]){
     encode_float(&bp,HIGH_EDGE,high);
     encode_eol(&bp);
     int cmd_len = bp - buffer;
-    if(sendto(Control_sock, buffer, cmd_len, 0,&Metadata_dest_socket,sizeof Metadata_dest_socket) != cmd_len)
+    socklen_t slen = Metadata_dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+
+    if(sendto(Control_sock, buffer, cmd_len, 0, (struct sockaddr *)&Metadata_dest_socket, slen) != cmd_len)
       perror("command send");
   }
   // Read and process status

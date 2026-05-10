@@ -52,7 +52,7 @@ static char Locale[256] = "en_US.UTF-8";
 static char const *Presets_file = "presets.conf"; // make configurable!
 static dictionary *Pdict;
 struct frontend Frontend;
-struct sockaddr Metadata_source_socket;      // Source of metadata
+struct sockaddr_storage Metadata_source_socket;      // Source of metadata
 
 #define TABLE_SIZE (1000)
 int Mcast_ttl = DEFAULT_MCAST_TTL; // Should probably be settable from the command line
@@ -459,9 +459,9 @@ int main(int argc,char *argv[]){
     // flags set to only return supported addresses, how could any of them fail?
     memcpy(&Frontend.metadata_dest_socket,results->ai_addr,sizeof(Frontend.metadata_dest_socket));
     freeaddrinfo(results); results = NULL;
-    Status_fd = listen_mcast(NULL,&Frontend.metadata_dest_socket,table[entry].interface);
-    Output_fd = output_mcast(&Frontend.metadata_dest_socket,NULL,Mcast_ttl,IP_tos);
-    join_group(Output_fd,NULL,&Frontend.metadata_dest_socket,table[entry].interface);
+    Status_fd = listen_mcast(NULL,(struct sockaddr *)&Frontend.metadata_dest_socket,table[entry].interface);
+    Output_fd = output_mcast((struct sockaddr *)&Frontend.metadata_dest_socket,NULL,Mcast_ttl,IP_tos);
+    join_group(Output_fd,NULL,(struct sockaddr *)&Frontend.metadata_dest_socket,table[entry].interface);
   } else {
     // Use resolve_mcast to resolve a manually entered domain name, using default port and parsing possible interface
     char iface[1024] = {0}; // Multicast interface string
@@ -527,7 +527,7 @@ int main(int argc,char *argv[]){
 	continue;
 
       // What to do with the source addresses?
-      memcpy(&Metadata_source_socket,&source_socket,sizeof(Metadata_source_socket));
+      memcpy(&Metadata_source_socket,&source_socket,ssize);
       struct channel * const chan = calloc(1,sizeof(struct channel));
       assert(chan != NULL);
       init_demod(chan);
@@ -696,7 +696,10 @@ int main(int argc,char *argv[]){
       wprintw(Debug_win,"sent command len %ld\n",command_len);
       screen_update_needed = true; // show local change right away
 #endif
-      if(sendto(Output_fd, cmdbuffer, command_len, 0, &Frontend.metadata_dest_socket,sizeof Frontend.metadata_dest_socket) != command_len){
+      socklen_t const slen = Frontend.metadata_dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+
+      if(sendto(Output_fd, cmdbuffer, command_len, 0, (struct sockaddr *)&Frontend.metadata_dest_socket,
+		slen) != command_len){
 	wprintw(Debug_win,"command send error: %s\n",strerror(errno));
 	screen_update_needed = true; // show local change right away
       }
@@ -1997,7 +2000,9 @@ static int send_poll(int ssrc){
   encode_eol(&bp);
   assert(bp >= cmdbuffer);
   size_t const command_len = bp - cmdbuffer;
-  if(sendto(Output_fd, cmdbuffer, command_len, 0, &Frontend.metadata_dest_socket,sizeof Frontend.metadata_dest_socket) != (ssize_t)command_len)
+  socklen_t const slen = Frontend.metadata_dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+
+  if(sendto(Output_fd, cmdbuffer, command_len, 0, (struct sockaddr *)&Frontend.metadata_dest_socket,slen) != (ssize_t)command_len)
     return -1;
 
   return 0;

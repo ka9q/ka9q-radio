@@ -92,7 +92,7 @@ void *radio_status(void *arg){
 	  } else {
 	    chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	    decode_radio_commands(chan,buffer+1,length-1);
-	    send_radio_status(&chan->frontend->metadata_dest_socket,chan->frontend,chan); // Send status in response
+	    send_radio_status((struct sockaddr *)&chan->frontend->metadata_dest_socket,chan->frontend,chan); // Send status in response
 	    chan->status.global_timer = 0; // Just sent one
 	    start_demod(chan);
 	    if(Verbose)
@@ -118,7 +118,8 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
   //    and stream data is sent over the ttl==0 socket
   //    Then the status/data source ports may not match and the consume may think they're separate streams
   int const out_fd = (chan->output.ttl > 0) ? Output_fd : Output_fd0;
-  if(sendto(out_fd,packet,len,0,sock,sizeof(struct sockaddr)) < 0)
+  socklen_t const slen = sock->sa_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+  if(sendto(out_fd,packet,len,0,sock, slen) < 0)
     chan->output.errors++;
 
   return 0;

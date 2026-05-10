@@ -189,7 +189,8 @@ int send_output(struct channel * restrict const chan, float const * buffer, int 
 
     if(bytes > 0){ // Suppress Opus DTX frames (bytes == 0)
       int const outsock = chan->output.ttl != 0 ? Output_fd : Output_fd0;
-      ssize_t const r = sendto(outsock, &packet, bytes, 0, (struct sockaddr *)&chan->output.dest_socket, sizeof chan->output.dest_socket);
+      socklen_t const slen = chan->output.dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+      ssize_t const r = sendto(outsock, &packet, bytes, 0, (struct sockaddr *)&chan->output.dest_socket, slen);
       chan->output.rtp.bytes += bytes;
       chan->output.rtp.packets++;
       chan->output.rtp.seq++;

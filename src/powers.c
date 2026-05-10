@@ -19,8 +19,8 @@
 #include "multicast.h"
 #include "radio.h"
 
-struct sockaddr Metadata_dest_socket;      // Dest of metadata (typically multicast)
-struct sockaddr Metadata_source_socket;      // Source of metadata
+struct sockaddr_storage Metadata_dest_socket;      // Dest of metadata (typically multicast)
+struct sockaddr_storage Metadata_source_socket;      // Source of metadata
 int IP_tos;
 int Mcast_ttl = 1;
 const char *App_path;
@@ -170,7 +170,8 @@ int main(int argc,char *argv[]){
       fprintf(stderr,"Sent:");
       dump_metadata(stderr,buffer+1,command_len-1,details ? true : false);
     }
-    if(sendto(Ctl_fd, buffer, command_len, 0, &Metadata_dest_socket, sizeof Metadata_dest_socket) != command_len){
+    socklen_t const slen = Metadata_dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+    if(sendto(Ctl_fd, buffer, command_len, 0, (struct sockaddr *)&Metadata_dest_socket, slen) != command_len){
       perror("command send");
       usleep(10000); // 10 millisec
       goto again;

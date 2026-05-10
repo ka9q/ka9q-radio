@@ -258,7 +258,7 @@ int main(int argc,char * const argv[]){
     fprintf(stderr,"Must specify -R mcast_output_address\n");
     exit(EX_USAGE);
   }
-  struct sockaddr sock;
+  struct sockaddr_storage sock;
   char iface[1024] = {0};
   resolve_mcast(Mcast_output_address_text,&sock,DEFAULT_RTP_PORT,iface,sizeof iface,5);
   Output_fd = output_mcast(&sock,iface,Mcast_ttl,IP_tos);
@@ -324,7 +324,8 @@ int main(int argc,char * const argv[]){
     int size = opus_encode_float(Opus,opus_input,Opus_frame_size,dp,sizeof(buffer) - (dp - buffer));
     if(!Discontinuous || size > 2){
       dp += size;
-      sendto(Output_fd,buffer,dp - buffer,0,&sock,sizeof(sock));
+      socklen_t const slen = sock.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+      sendto(Output_fd,buffer,dp - buffer,0,(struct sockaddr *)&sock, slen);
       rtp_state_out.seq++; // Increment RTP sequence number only if packet is sent
       rtp_state_out.packets++;
       rtp_state_out.bytes += size;

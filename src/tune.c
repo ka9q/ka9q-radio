@@ -47,11 +47,11 @@ enum encoding Encoding = NO_ENCODING;
 double RFgain = INFINITY;
 double RFatten = INFINITY;
 int Agc_enable = -1;
-struct sockaddr Destination_socket;
+struct sockaddr_storage Destination_socket;
 int Buffer = -1;
 int Lifetime = 0;
 
-struct sockaddr Control_address;
+struct sockaddr_storage Control_address;
 int Status_sock = -1;
 int Control_sock = -1;
 char const *Source;
@@ -203,7 +203,7 @@ int main(int argc,char *argv[]){
     if(Verbose)
       fprintf(stdout,"Resolving %s\n",Radio);
     char iface[1024];
-    resolve_mcast(Radio,&Control_address,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
+    resolve_mcast(Radio,(struct sockaddr *)&Control_address,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     char const *ifc = (Iface != NULL) ? Iface : iface;
 
 
@@ -213,7 +213,7 @@ int main(int argc,char *argv[]){
       else
 	fprintf(stdout,"Listening to %s\n",Radio);
     }
-    Status_sock = listen_mcast(Source_socket,&Control_address,ifc);
+    Status_sock = listen_mcast(Source_socket,(struct sockaddr *)&Control_address,ifc);
 
     if(Status_sock == -1){
       fprintf(stdout,"Can't open Status_sock socket to radio control channel %s: %s\n",Radio,strerror(errno));
@@ -222,7 +222,7 @@ int main(int argc,char *argv[]){
     if(Verbose)
       fprintf(stdout,"Connecting\n");
 
-    Control_sock = output_mcast(&Control_address,ifc,Mcast_ttl,IP_tos);
+    Control_sock = output_mcast((struct sockaddr *)&Control_address,ifc,Mcast_ttl,IP_tos);
     if(Control_sock == -1){
       fprintf(stdout,"Can't open cmd socket to radio control channel %s: %s\n",Radio,strerror(errno));
       exit(EX_IOERR);
@@ -306,12 +306,13 @@ int main(int argc,char *argv[]){
       if(RFatten != INFINITY)
 	encode_float(&bp,RF_ATTEN,RFatten);
 
-      if(Destination_socket.sa_family != 0)
+      if(Destination_socket.ss_family != 0)
 	encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&Destination_socket);
 
       encode_eol(&bp);
       ssize_t cmd_len = bp - cmd_buffer;
-      if(sendto(Control_sock, cmd_buffer, cmd_len, 0,&Control_address,sizeof Control_address) != cmd_len)
+      socklen_t const slen = Control_address.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+      if(sendto(Control_sock, cmd_buffer, cmd_len, 0,(struct sockaddr *)&Control_address, slen))
 	perror("command send");
 
       last_command_time = gps_time_ns();

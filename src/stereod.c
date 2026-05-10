@@ -37,7 +37,7 @@ struct session {
   struct session *prev;       // Linked list pointers
   struct session *next;
 
-  struct sockaddr sender;
+  struct sockaddr_storage sender;
   char const *source;
 
   pthread_t thread;
@@ -114,12 +114,12 @@ struct option Options[] =
 
 char Optstring[] = "A:I:N:R:S:T:vp:";
 
-struct sockaddr Status_dest_address;
-struct sockaddr Status_input_source_address;
-struct sockaddr Local_status_source_address;
-struct sockaddr PCM_dest_address;
-struct sockaddr Stereo_source_address;
-struct sockaddr Stereo_dest_address;
+struct sockaddr_storage Status_dest_address;
+struct sockaddr_storage Status_input_source_address;
+struct sockaddr_storage Local_status_source_address;
+struct sockaddr_storage PCM_dest_address;
+struct sockaddr_storage Stereo_source_address;
+struct sockaddr_storage Stereo_dest_address;
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
@@ -516,7 +516,8 @@ void *decode(void *arg){
 	*wp++ = htons(scaleclip((float)right));
       }
       dp = (uint8_t *)wp;
-      if(sendto(Output_fd,&packet,dp - packet,0,&Stereo_dest_address,sizeof Stereo_dest_address) < 0){
+      socklen_t const slen = Stereo_dest_address.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+      if(sendto(Output_fd,&packet,dp - packet,0,(struct sockaddr *)&Stereo_dest_address, slen) < 0){
 	fprintf(stderr,"pcm send: %s, ending thread\n",strerror(errno));
 	break;
       }

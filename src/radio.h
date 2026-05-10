@@ -60,7 +60,7 @@ int demod_type_from_name(char const *name);
 */
 #define NSPURS 20 // Size of table of front end spurs - works on coherent only
 struct frontend {
-  struct sockaddr metadata_dest_socket; // Moved here from global to remove unnecessary dynamic linkages
+  struct sockaddr_storage metadata_dest_socket; // Moved here from global to remove unnecessary dynamic linkages
   // Stuff we maintain about our upstream source
   uint64_t samples;     // Count of raw I/Q samples received
   uint64_t overranges;  // Count of full scale A/D samples
@@ -270,8 +270,8 @@ struct channel {
     bool silent;       // last packet was suppressed (used to generate RTP mark bit)
     struct rtp_state rtp;
 
-    struct sockaddr source_socket;    // Source address of our data output
-    struct sockaddr dest_socket;      // Dest of our data output (typically multicast)
+    struct sockaddr_storage source_socket;    // Source address of our data output
+    struct sockaddr_storage dest_socket;      // Dest of our data output (typically multicast)
     char dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
 
     int channels;   // 1 = mono, 2 = stereo (settable)
@@ -311,7 +311,7 @@ struct channel {
     int output_timer;
     int output_interval;
     uint64_t packets_out;
-    struct sockaddr dest_socket; // Local status output; same IP as output.dest_socket but different port
+    struct sockaddr_storage dest_socket; // Local status output; same IP as output.dest_socket but different port
   } status;
 
 #define CQLEN 2
@@ -321,12 +321,12 @@ struct channel {
   } commands[CQLEN];
 
   struct {
-    struct sockaddr dest_socket;
+    struct sockaddr_storage dest_socket;
     pthread_t thread;
   } rtcp;
 
   struct {
-    struct sockaddr dest_socket;
+    struct sockaddr_storage dest_socket;
     pthread_t thread;
   } sap;
 
@@ -342,7 +342,7 @@ extern int Channel_idle_timeout;
 extern int Ctl_fd;     // File descriptor for receiving user commands
 extern int Output_fd,Output_fd0;
 extern int Output_fd_lo;
-extern struct sockaddr Metadata_dest_socket; // Socket for main metadata
+extern struct sockaddr_storage Metadata_dest_socket; // Socket for main metadata
 extern int Verbose;
 extern char const *Channel_keys[]; // Lists of valid keywords in config files
 extern double User_blocktime;

@@ -334,8 +334,8 @@ const char *App_path;
 static int Input_fd,Status_fd,Control_fd;
 static struct session *Sessions;
 int Mcast_ttl;
-struct sockaddr Metadata_dest_socket;
-struct sockaddr mcast_dest_sock;
+struct sockaddr_storage Metadata_dest_socket;
+struct sockaddr_storage mcast_dest_sock;
 static char const *Source;
 static struct sockaddr_storage *Source_socket; // Remains NULL if Source == NULL
 
@@ -837,7 +837,7 @@ static int wd_write(struct session * const sp,void *samples,int buffer_size,stru
 static FILE *udp_stats_file = 0;
 
 static bool grab_queue_stats(uint32_t *tx_queue_depth,uint32_t *rx_queue_depth,uint32_t *drops){
-  if (AF_INET != mcast_dest_sock.sa_family)
+  if (AF_INET != mcast_dest_sock.ss_family)
     return false;
 
   if (0 == udp_stats_file){
@@ -1621,10 +1621,10 @@ void extract_source(uint8_t const * const buffer,int length){
         /* fprintf(stderr,"radio mcast_group: %s\n",radio_mcast_group); */
 
         char iface[1024];
-        struct sockaddr Metadata_dest_socket;
+        struct sockaddr_storage Metadata_dest_socket;
 
-        resolve_mcast(radio_mcast_group,&Metadata_dest_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
-        Control_fd = connect_mcast(&Metadata_dest_socket,iface,1,48);
+        resolve_mcast(radio_mcast_group,(struct sockaddr *)&Metadata_dest_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
+        Control_fd = connect_mcast((struct sockaddr *)&Metadata_dest_socket,iface,1,48);
         /* if(Control_fd < 0){ */
         /*   fprintf(stderr,"Control connection failed!\n"); */
         /* } else { */

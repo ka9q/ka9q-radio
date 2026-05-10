@@ -99,12 +99,12 @@ static struct option Options[] =
 
 static char Optstring[] = "A:I:N:S:T:vp:";
 
-static struct sockaddr Status_dest_address;
-static struct sockaddr Status_input_source_address;
-static struct sockaddr Local_status_source_address;
-static struct sockaddr PCM_dest_address;
-static struct sockaddr Stereo_source_address;
-static struct sockaddr Stereo_dest_address;
+static struct sockaddr_storage Status_dest_address;
+static struct sockaddr_storage Status_input_source_address;
+static struct sockaddr_storage Local_status_source_address;
+static struct sockaddr_storage PCM_dest_address;
+static struct sockaddr_storage Stereo_source_address;
+static struct sockaddr_storage Stereo_dest_address;
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
@@ -153,18 +153,17 @@ int main(int argc,char * const argv[]){
   }
   if(Status){
     char iface[1024];
-    resolve_mcast(Status,&Status_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
-    Status_fd = listen_mcast(NULL, &Status_dest_address, iface);
+    resolve_mcast(Status,(struct sockaddr *)&Status_dest_address,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
+    Status_fd = listen_mcast(NULL, (struct sockaddr *)&Status_dest_address, iface);
     if(Status_fd == -1){
       fprintf(stderr,"Can't set up input on %s: %s\n",optarg,strerror(errno));
       ASSERT_UNLOCKED(&Audio_protect);
       pthread_mutex_destroy(&Audio_protect);
       exit(1);
     }
-    Status_fd = output_mcast(&Status_dest_address,iface,Mcast_ttl,IP_tos);
+    Status_fd = output_mcast((struct sockaddr *)&Status_dest_address,iface,Mcast_ttl,IP_tos);
     {
-      socklen_t len;
-      len = sizeof(Local_status_source_address);
+      socklen_t len = sizeof(Local_status_source_address);
       getsockname(Status_out_fd,(struct sockaddr *)&Local_status_source_address,&len);
     }
   }
@@ -506,7 +505,8 @@ void *decode(void *arg){
 	*wp++ = htons(scaleclip(cimagf(rds.output.c[n])));
       }
       dp = (uint8_t *)wp;
-      ssize_t const r = sendto(Output_fd,&packet,dp - packet,0,&Stereo_dest_address,sizeof(Stereo_dest_address));
+      socklen_t const slen = Stereo_dest_address.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+      ssize_t const r = sendto(Output_fd,&packet,dp - packet,0,(struct sockaddr *)&Stereo_dest_address, slen);
       Output_packets++;
       if(r <= 0){
 	perror("pcm send");

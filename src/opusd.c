@@ -49,7 +49,7 @@ struct session {
   struct session *next;
   int type;                 // input RTP type (10,11)
 
-  struct sockaddr sender;
+  struct sockaddr_storage sender;
   char const *source;
 
   pthread_t thread;
@@ -134,10 +134,10 @@ struct option Options[] =
 
 char const Optstring[] = "A:B:I:N:R:T:fo:vxp:V";
 
-struct sockaddr PCM_in_socket;
-struct sockaddr Metadata_in_socket;
-struct sockaddr Opus_out_socket;
-struct sockaddr Metadata_out_socket;
+struct sockaddr_storage PCM_in_socket;
+struct sockaddr_storage Metadata_in_socket;
+struct sockaddr_storage Opus_out_socket;
+struct sockaddr_storage Metadata_out_socket;
 
 int main(int argc,char * const argv[]){
   App_path = argv[0];
@@ -287,11 +287,12 @@ int main(int argc,char * const argv[]){
 
     if(fds[1].revents & POLLIN){
       // Simply copy status on output
-      struct sockaddr sender;
+      struct sockaddr_storage sender;
       socklen_t socksize = sizeof(sender);
       uint8_t buffer[PKTSIZE];
-      int size = recvfrom(Status_fd,buffer,sizeof buffer,0,&sender,&socksize);
-      if(sendto(Output_fd,buffer,size,0,&Metadata_out_socket,sizeof Metadata_out_socket) < 0)
+      int size = recvfrom(Status_fd,buffer,sizeof buffer,0, (struct sockaddr *)&sender,&socksize);
+      socklen_t const slen = Metadata_out_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+      if(sendto(Output_fd,buffer,size,0,(struct sockaddr *)&Metadata_out_socket, slen) < 0)
 	perror("status sendto");
 
     }
@@ -669,7 +670,8 @@ int send_samples(struct session * const sp){
 
     if(!Discontinuous || opus_output_bytes > 2){
       // ship it
-      if(sendto(Output_fd,output_buffer,packet_bytes_written,0,&Opus_out_socket,sizeof Opus_out_socket) < 0)
+      socklen_t const slen = Opus_out_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+      if(sendto(Output_fd,output_buffer,packet_bytes_written,0, (struct sockaddr *)&Opus_out_socket, slen) < 0)
 	return -1;
       Output_packets++; // all sessions
       sp->rtp_state_out.seq++; // Increment only if packet is sent

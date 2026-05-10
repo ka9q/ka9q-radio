@@ -475,9 +475,9 @@ int loadconfig(char const *file){
       exit(EX_NOHOST); // let systemd restart us
     }
   }
-  join_group(Output_fd,NULL,&Template.output.dest_socket,Iface); // Work around snooping switch problem
+  join_group(Output_fd,NULL,(struct sockaddr *)&Template.output.dest_socket,Iface); // Work around snooping switch problem
   // Secondary output socket with ttl = 0
-  Output_fd0 = output_mcast(&Template.output.dest_socket,Iface,0,IP_tos);
+  Output_fd0 = output_mcast((struct sockaddr *)&Template.output.dest_socket,Iface,0,IP_tos);
   if(Output_fd0 < 0){
     fprintf(stderr,"can't create output socket for TTL=0: %s\n",strerror(errno));
     exit(EX_NOHOST); // let systemd restart us
@@ -492,7 +492,9 @@ int loadconfig(char const *file){
 
   {
     uint32_t addr = 0;
-    if(!Global_use_dns || resolve_mcast(Metadata_dest_string,&Frontend.metadata_dest_socket,DEFAULT_STAT_PORT,NULL,0,2) != 0)
+    if(!Global_use_dns || resolve_mcast(Metadata_dest_string,
+					(struct sockaddr *)&Frontend.metadata_dest_socket,
+					DEFAULT_STAT_PORT,NULL,0,2) != 0)
       addr = make_maddr(Metadata_dest_string);
 
     struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
@@ -510,7 +512,7 @@ int loadconfig(char const *file){
     }
   }
   // either resolve_mcast() or avahi_start() has resolved the target DNS name into Frontend.metadata_dest_socket and inserted the port number
-  join_group(Output_fd,NULL,&Frontend.metadata_dest_socket,Iface);
+  join_group(Output_fd,NULL,(struct sockaddr *)&Frontend.metadata_dest_socket,Iface);
   // Same remote socket as status
   Ctl_fd = listen_mcast(NULL,&Frontend.metadata_dest_socket,Iface);
   if(Ctl_fd < 0){
@@ -779,7 +781,7 @@ static void *process_section(void *p){
   if(chan_template.output.ttl != 0){
     // Override global defaults
     iface = config_getstring(Configtable,sname,"iface",Iface);
-    join_group(Output_fd,NULL,&chan_template.output.dest_socket,iface);
+    join_group(Output_fd,NULL,(struct sockaddr *)&chan_template.output.dest_socket,iface);
   }
   // No need to also join group for status socket, since the IP addresses are the same
 
@@ -947,7 +949,7 @@ static void *process_section(void *p){
       char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
       resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
       if(chan_template.output.ttl != 0)
-	join_group(Output_fd,NULL,&chan->sap.dest_socket,iface);
+	join_group(Output_fd,NULL,(struct sockaddr *)&chan->sap.dest_socket,iface);
       pthread_create(&chan->sap.thread,NULL,sap_send,chan);
     }
     // RTCP Real Time Control Protocol daemon is optional
@@ -1282,7 +1284,8 @@ static void *rtcp_send(void *arg){
 
     dp = gen_sdes(dp,sizeof(buffer) - (dp-buffer),chan->output.rtp.ssrc,sdes,4);
 
-    if(sendto(Output_fd,buffer,dp-buffer,0,&chan->rtcp.dest_socket,sizeof(chan->rtcp.dest_socket)) < 0)
+    socklen_t const slen = chan->rtcp.dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+    if(sendto(Output_fd,buffer,dp-buffer,0,(struct sockaddr *)&chan->rtcp.dest_socket,slen) < 0)
       chan->output.errors++;
   done:;
     sleep(1);
@@ -1401,7 +1404,9 @@ static void *sap_send(void *p){
     space -= len;
 
     int const outsock = chan->output.ttl != 0 ? Output_fd : Output_fd0;
-      if(sendto(outsock,message,wp - message,0,&chan->sap.dest_socket,sizeof(chan->sap.dest_socket)) < 0)
+    socklen_t const slen = chan->sap.dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+    if(sendto(outsock,message,wp - message,0,(struct sockaddr *)&chan->sap.dest_socket,
+	      slen) < 0)
       chan->output.errors++;
     sleep(5);
   }
@@ -1544,21 +1549,21 @@ void response(struct channel *chan,bool response_needed){
   struct frontend const *frontend = chan->frontend;
 
   if(response_needed){
-    send_radio_status(&frontend->metadata_dest_socket,frontend,chan); // Send status in response
+    send_radio_status((struct sockaddr *)&frontend->metadata_dest_socket,frontend,chan); // Send status in response
     chan->status.global_timer = 0; // Just sent one
     // Also send to output stream
     // Only send spectrum on status channel, and only in response to poll
     if(chan->demod_type != SPECT_DEMOD && chan->demod_type != SPECT2_DEMOD){
-      send_radio_status(&chan->status.dest_socket,frontend,chan);
+      send_radio_status((struct sockaddr *)&chan->status.dest_socket,frontend,chan);
       chan->status.output_timer = chan->status.output_interval; // Reload
     }
   } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
     // Delayed status request, used mainly by all-channel polls to avoid big bursts
-    send_radio_status(&frontend->metadata_dest_socket,frontend,chan); // Send status in response
+    send_radio_status((struct sockaddr *)&frontend->metadata_dest_socket,frontend,chan); // Send status in response
     chan->status.global_timer = 0; // to make sure
   } else if(chan->status.output_interval != 0 && chan->status.output_timer > 0 && --chan->status.output_timer == 0){
     // Output stream status timer has expired; send status on output channel
-    send_radio_status(&chan->status.dest_socket,frontend,chan);
+    send_radio_status((struct sockaddr *)&chan->status.dest_socket,frontend,chan);
     if(!chan->output.silent)
       chan->status.output_timer = chan->status.output_interval; // Restart timer only if channel is active
   }

@@ -52,7 +52,6 @@ float Low_edge,High_edge;
 float IF_power;
 float Baseband_power;
 float Noise_density;
-float Demod_snr = NAN;
 float Headroom;
 float Gain;
 float Output_level;
@@ -236,9 +235,6 @@ void doscreen(void){
   mvprintw(row++,col,"S/N0           %*.1f dB Hz\n",data_indent,sn0);
   mvprintw(row++,col,"Bandwidth      %*.1f dB Hz\n",data_indent,bw);
   mvprintw(row++,col,"SNR            %*.1f dB\n",data_indent,snr);
-  if(!isnan(Demod_snr))
-    mvprintw(row++,col,"Demod SNR      %*.1f dB\n",data_indent,Demod_snr);
-
   mvprintw(row++,col,"Gain           %*.1f dB\n",data_indent,Gain);
   mvprintw(row++,col,"Output level   %*.1f dB\n",data_indent,Output_level);
   mvprintw(row++,col,"Headroom       %*.1f dB\n",data_indent,Headroom);
@@ -324,9 +320,6 @@ int decode_rtp_status(uint8_t const *buffer,int length){
       break;
     case NOISE_DENSITY:
       Noise_density = decode_float(cp,optlen);
-      break;
-    case DEMOD_SNR:
-      Demod_snr = decode_float(cp,optlen);
       break;
     case HEADROOM:
       Headroom = decode_float(cp,optlen);

@@ -156,7 +156,7 @@ all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 ## other targets
 install: all
 	install -d -m 0755 $(DESTDIR)$(sbindir) $(DESTDIR)$(bindir) $(DESTDIR)$(pkglibdir)
-	install -m 0755 $(DYNAMIC_DRIVERS) $(DESTDIR)$(pkglibdir)
+	if [ -n "$(DESTDIR)$(pkglibdir)" ]; then install -m 0755 $(DYNAMIC_DRIVERS) $(DESTDIR)$(pkglibdir); fi
 	install -m 0755 $(DAEMONS) $(DESTDIR)$(sbindir)
 	install -m 0755 $(EXECS) $(DESTDIR)$(bindir)
 
@@ -223,7 +223,7 @@ packetd: packetd.o ax25.o avahi.o libdsp.a libstatus.a libradio.a
 pcmcat: pcmcat.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
-pcmspawn: pcmspawn.o libradio.a
+pcmspawn: pcmspawn.o libstatus.a libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
 pcmrecord: pcmrecord.o attr.o libstatus.a libradio.a
@@ -238,7 +238,7 @@ powers: powers.o dump.o libstatus.a libradio.a
 radiod: $(RADIOD_OBJECTS)
 	$(CC) -rdynamic $(LDOPTS) -o $@ $^ -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl $(LDLIBS)
 
-rdsd: rdsd.o libradio.a
+rdsd: rdsd.o avahi.o libdsp.a libstatus.a libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 rx888_boot: rx888_boot.o ezusb.o
@@ -248,16 +248,16 @@ rx888_boot: rx888_boot.o ezusb.o
 set_xcvr: set_xcvr.o libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser
 
-setfilt: setfilt.o libradio.a
+setfilt: setfilt.o libstatus.a libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
 
-show-pkt: show-pkt.o libradio.a
+show-pkt: show-pkt.o libstatus.a libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lncursesw $(LDLIBS)
 
-show-sig: show-sig.o libradio.a
+show-sig: show-sig.o libstatus.a libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lncursesw $(LDLIBS)
 
-stereod: stereod.o avahi.o libradio.a
+stereod: stereod.o avahi.o libdsp.a libstatus.a libradio.a
 	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 tune: tune.o libstatus.a libradio.a

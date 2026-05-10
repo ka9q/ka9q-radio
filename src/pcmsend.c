@@ -173,8 +173,8 @@ int main(int argc,char * const argv[]){
 
 
   // Set up multicast transmit socket
-  struct sockaddr sock;
-  Output_fd = setup_mcast(NULL,NULL,Mcast_output_address_text,&sock,true,Mcast_ttl,IP_tos,0,0);
+  struct sockaddr_storage sock;
+  Output_fd = setup_mcast(NULL,NULL,Mcast_output_address_text,(struct sockaddr *)&sock,true,Mcast_ttl,IP_tos,0,0);
   if(Output_fd == -1){
     fprintf(stderr,"Can't set up output on %s: %s\n",Mcast_output_address_text,strerror(errno));
     exit(EX_IOERR);
@@ -235,7 +235,8 @@ int main(int argc,char * const argv[]){
       rptr &= (BUFFERSIZE-1);
     }
     dp += Channels * FRAMESIZE * sizeof(*samples);
-    sendto(Output_fd,buffer,dp - buffer,0,&sock, sizeof sock); // should probably check return code
+    socklen_t const slen = sock.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+    sendto(Output_fd,buffer,dp - buffer,0,(struct sockaddr *)&sock, slen); // should probably check return code
     rtp_state_out.packets++;
     rtp_state_out.bytes += Channels * FRAMESIZE * sizeof(int16_t);
     rtp_state_out.seq++;
