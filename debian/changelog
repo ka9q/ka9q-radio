@@ -1,3 +1,9 @@
+ka9q-radio (1.0.0-24) UNRELEASED; urgency=medium
+
+  * change sockaddr to sockaddr_storage in declarations
+
+ -- Phil Karn <karn@ka9q.net>  Sun, 10 May 2026 04:56:37 -0700
+
 ka9q-radio (1.0.0-23) ka9q; urgency=medium
 
   * have ka9q-radio-hfdl create /etc/radio/hfdl.conf to link to
