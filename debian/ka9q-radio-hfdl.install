@@ -3,3 +3,4 @@ usr/lib/systemd/system/hfdl.service
 etc/logrotate.d/hfdl.rotate
 usr/lib/hfdl/systable.conf
 usr/sbin/start-hfdl
+etc/radio/hfdl.conf
