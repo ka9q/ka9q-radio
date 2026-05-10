@@ -11,7 +11,7 @@ However, I'm interested in fixing any unnecessary non-portabilities.
 To build and install this package on Debian (including the Raspberry Pi), install the prerequisite packages:
 
 ```
-sudo apt install git avahi-utils build-essential make gcc libairspy-dev libairspyhf-dev libavahi-client-dev libbsd-dev libfftw3-dev libhackrf-dev libiniparser-dev libncurses5-dev libopus-dev librtlsdr-dev libusb-1.0-0-dev libusb-dev portaudio19-dev libasound2-dev uuid-dev rsync libogg-dev libsamplerate-dev libliquid-dev libncursesw5-dev libhackrf-dev libbladerf-dev
+sudo apt install git avahi-utils build-essential make gcc libairspy-dev libairspyhf-dev libavahi-client-dev libbsd-dev libfftw3-dev libhackrf-dev libiniparser-dev libncurses5-dev libopus-dev librtlsdr-dev libusb-1.0-0-dev libusb-dev portaudio19-dev libasound2-dev uuid-dev rsync libogg-dev libsamplerate-dev libliquid-dev libncursesw5-dev libhackrf-dev libbladerf-dev libhydrasdr-dev libfobos-dev
 ```
 
 (libliquid-dev isn't actually used yet, but it probably will be soon.)
@@ -21,6 +21,17 @@ And additionally on the Raspberry Pi:
 ```
 sudo apt install libpigpio-dev
 ```
+
+Two of the packages listed above (libfobos-dev and libhydrasdr-dev) are not yet in the standard Debian repositories.
+You can build them yourself from sources but I have built them myself as packages and placed them in my personal repository.
+To get them, do the following:
+
+cd /etc/apt/sources.list.d; sudo wget http://www.ka9q.net/debian/ka9q-sources.list__
+cd /usr/share/keyrings; sudo wget http://www.ka9q.net/debian/ka9q-radio.asc
+
+This adds my repository and its package signing key to your list of sources. This repository also contains
+prebuilt binary packages for ka9q-radio and its components, and this will soon become the preferred way to
+install them on production systems.
 
 Although not needed to build ka9q-radio, I find it useful to install the following:
 
