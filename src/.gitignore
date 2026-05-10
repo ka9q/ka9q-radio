@@ -24,3 +24,9 @@ pcmsend
 set_xcvr
 opusd
 setfilt
+pcmcat
+pcmspawn
+rdsd
+show-pkt
+show-sig
+stereod
