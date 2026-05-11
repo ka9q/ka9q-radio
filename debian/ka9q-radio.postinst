@@ -11,6 +11,11 @@ do_reload() {
 #    exit 0      # upgrade, skip configuration
 #fi
 
+if ls /etc/radio/radiod@*.conf >/dev/null 2>&1; then
+    echo "radiod config file(s) found in /etc/radio, setup prompts skipped"
+    exit 0
+fi
+
 db_get ka9q-radio/configure_now
 if [ "$RET" = false ]; then
     echo "Skipping configuration. Run: dpkg-reconfigure ka9q-radio"
