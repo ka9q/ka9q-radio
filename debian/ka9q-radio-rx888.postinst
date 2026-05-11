@@ -1,9 +1,9 @@
 #!/bin/sh
 case "$1" in
   configure)
-    addgroup --system radio || true
-    install -d -m 0775 -o radio -g radio /var/lib/hfdl
-    /usr/bin/set_lo_multicast || true
+    if command -v udevadm >/dev/null 2>&1; then
+	udevadm control --reload || true
+    fi
     if command -v systemctl >/dev/null 2>&1; then
         systemctl daemon-reload || true
     fi

@@ -1,0 +1,10 @@
+#!/bin/sh
+case "$1" in
+  configure)
+    if command -v udevadm >/dev/null 2>&1; then
+	udevadm control --reload || true
+    fi
+    ;;
+esac
+
+#DEBHELPER#

@@ -6,6 +6,9 @@ case "$1" in
     install -d -m 0775 -o radio -g radio /var/lib/ka9q-radio/ft4
     install -d -m 0775 -o radio -g radio /var/lib/ka9q-radio/wspr
     /usr/bin/set_lo_multicast || true
+    if command -v systemctl >/dev/null 2>&1; then
+	systemctl daemon-reload || true
+    fi
     ;;
 esac
 
