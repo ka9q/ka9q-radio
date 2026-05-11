@@ -1,3 +1,9 @@
+ka9q-radio (1.0.0-26) ka9q; urgency=medium
+
+  * Don't create a skeletal radiod config file if any already exist
+
+ -- Phil Karn <karn@ka9q.net>  Sun, 10 May 2026 21:09:19 -0700
+
 ka9q-radio (1.0.0-25) ka9q; urgency=medium
 
   * change sockaddr to sockaddr_storage in declarations
