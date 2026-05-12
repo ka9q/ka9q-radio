@@ -1,3 +1,9 @@
+ka9q-radio (1.0.0-29) ka9q; urgency=medium
+
+  * check for both /etc/radio/*.conf and /etc/radio/radio*.conf.d to bypass setup
+
+ -- Phil Karn <karn@ka9q.net>  Tue, 12 May 2026 16:45:23 -0700
+
 ka9q-radio (1.0.0-28) ka9q; urgency=medium
 
   * hydrasdr support all sample formats, use new gain API

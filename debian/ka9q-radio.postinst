@@ -11,8 +11,9 @@ do_reload() {
 #    exit 0      # upgrade, skip configuration
 #fi
 
-if ls /etc/radio/radiod@*.conf >/dev/null 2>&1; then
-    echo "radiod config file(s) found in /etc/radio, setup prompts skipped"
+set -- /etc/radio/radiod@*.conf /etc/radio/radiod@*.conf.d
+if [ -e "$1" ]; then
+    echo "radiod config file(s) found, setup prompts skipped"
     exit 0
 fi
 
