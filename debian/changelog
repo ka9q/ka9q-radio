@@ -1,3 +1,9 @@
+ka9q-radio (1.0.0-27) ka9q; urgency=medium
+
+  * restart systemd services after an upgrade 
+
+ -- Phil Karn <karn@ka9q.net>  Mon, 11 May 2026 00:27:44 -0700
+
 ka9q-radio (1.0.0-26) ka9q; urgency=medium
 
   * Don't create a skeletal radiod config file if any already exist
