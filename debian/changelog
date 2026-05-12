@@ -1,3 +1,9 @@
+ka9q-radio (1.0.0-28) ka9q; urgency=medium
+
+  * hydrasdr support all sample formats, use new gain API
+
+ -- Phil Karn <karn@ka9q.net>  Tue, 12 May 2026 15:22:07 -0700
+
 ka9q-radio (1.0.0-27) ka9q; urgency=medium
 
   * restart systemd services after an upgrade 
