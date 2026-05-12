@@ -648,7 +648,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	}
 	double complex s = CMPLX((double)x,(double)y);
 	*wptr++ = (float complex)(sdr->scale * s);
-	in_energy += s * s;
+	in_energy += cnrm(s);
       }
     }
     break;
@@ -659,7 +659,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
       for(int i=0; i < sampcount; i++){
 	double complex s = *up++;
 	*wptr++ = (float complex)(sdr->scale * s);
-	in_energy += s * s;
+	in_energy += cnrm(s);
       }
     }
     break;
@@ -712,7 +712,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	}
 	double complex s = CMPLX((double)x,(double)y);
 	*wptr++ = sdr->scale * s;
-	in_energy += s * s;
+	in_energy += cnrm(s);
       }
     }
     break;
@@ -731,7 +731,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	}
 	double complex s = CMPLX((double)x,(double)y);
 	*wptr++ = sdr->scale * s;
-	in_energy += s * s;
+	in_energy += cnrm(s);
       }
     }
     break;
@@ -739,7 +739,11 @@ static int rx_callback(hydrasdr_transfer *transfer){
     return -1; // Unsupported?
   }
   frontend->samples += sampcount;
-  write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
+  if(frontend->isreal)
+    write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
+  else
+    write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
+
   frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
   if(sdr->software_agc){
     // Integrate A/D energy over A/D averaging period

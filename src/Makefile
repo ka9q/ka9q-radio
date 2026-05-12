@@ -8,6 +8,7 @@
 .DEFAULT_GOAL := all
 
 BUILD ?= release
+ENABLE_ALL    ?= 1
 prefix        ?= /usr/local
 exec_prefix   ?= $(prefix)
 bindir        ?= $(exec_prefix)/bin
