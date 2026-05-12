@@ -160,19 +160,22 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
 	fprintf(stderr,"No HydraSDR devices found\n");
 	return -1;
       }
-      fprintf(stderr,"Discovered HydraSDR device serial%s:",n_serials > 1 ? "s" : "");
-      for(int i = 0; i < n_serials; i++){
-	fprintf(stderr," %llx",(long long)serials[i]);
+      if(n_serials > 1){
+	fprintf(stderr,"Discovered %d HydraSDR device serial%s:",n_serials,n_serials > 1 ? "s" : "");
+	for(int i = 0; i < n_serials; i++){
+	  fprintf(stderr," %llx",(long long)serials[i]);
+	}
+	fprintf(stderr,"\n");
       }
-      fprintf(stderr,"\n");
-      fprintf(stderr,"Selecting %llx; to select another, add 'serial = ' to config file\n",(long long)serials[0]);
       sdr->SN = serials[0];
     }
   }
   {
+    fprintf(stderr,"Selecting HydraSDR SN %llx: ",(long long)sdr->SN);
+
     int const ret = hydrasdr_open_sn(&sdr->device,sdr->SN);
     if(ret != HYDRASDR_SUCCESS){
-      fprintf(stderr,"hydrasdr_open(%llx) failed: %s\n",(long long)sdr->SN,hydrasdr_error_name(ret));
+      fprintf(stderr,"hydrasdr_open(SN %llx) failed: %s\n",(long long)sdr->SN,hydrasdr_error_name(ret));
       return -1;
     }
   }
@@ -183,8 +186,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       fprintf(stderr, "Cannot get HydraSDR information: %s\n", hydrasdr_error_name(ret));
       return -1;
     }
-    fprintf(stderr,"HydraSDR serial %llx, hw version %s, firmware %s\n",
-	    (long long unsigned)sdr->SN, info.board_name, info.firmware_version);
+    fprintf(stderr,"hw version %s, firmware %s\n", info.board_name, info.firmware_version);
 
     fprintf(stderr,"Supported sample types:");
     for (unsigned int i = 0; i < HYDRASDR_SAMPTYPES; i++) {
@@ -495,7 +497,7 @@ static void *hydrasdr_monitor(void *p){
   (void)ret;
   assert(ret == HYDRASDR_SUCCESS);
   fprintf(stderr,"hydrasdr running\n");
-#if 1
+#if 0
   {
     hydrasdr_device_info_t info = {0};
     hydrasdr_get_device_info(sdr->device, &info);
