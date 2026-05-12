@@ -44,6 +44,8 @@ struct sdrstate {
   bool software_agc;
   bool linearity; // Use linearity gain tables; default is sensitivity
   int gainstep; // HydraSDR gain table steps (0-21), higher numbers == higher gain
+  int mingainstep;
+  int maxgainstep;
   double agc_energy; // Integrated energy
   int agc_samples; // Samples represented in energy
   double high_threshold;
@@ -53,15 +55,6 @@ struct sdrstate {
   pthread_t cmd_thread;
   pthread_t monitor_thread;
 };
-
-// Taken from HydraSDR library driver source
-#define GAIN_COUNT (22)
-uint8_t hydrasdr_linearity_vga_gains[GAIN_COUNT] = {     13, 12, 11, 11, 11, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 9, 8, 7, 6, 5, 4 };
-uint8_t hydrasdr_linearity_mixer_gains[GAIN_COUNT] = {   12, 12, 11,  9,  8,  7,  6,  6,  5,  0,  0,  1,  0,  0,  2,  2, 1, 1, 1, 1, 0, 0 };
-uint8_t hydrasdr_linearity_lna_gains[GAIN_COUNT] = {     14, 14, 14, 13, 12, 10,  9,  9,  8,  9,  8,  6,  5,  3,  1,  0, 0, 0, 0, 0, 0, 0 };
-uint8_t hydrasdr_sensitivity_vga_gains[GAIN_COUNT] = {   13, 12, 11, 10,  9,  8,  7,  6,  5,  5,  5,  5,  5,  4,  4,  4, 4, 4, 4, 4, 4, 4 };
-uint8_t hydrasdr_sensitivity_mixer_gains[GAIN_COUNT] = { 12, 12, 12, 12, 11, 10, 10,  9,  9,  8,  7,  4,  4,  4,  3,  2, 2, 1, 0, 0, 0, 0 };
-uint8_t hydrasdr_sensitivity_lna_gains[GAIN_COUNT] = {   14, 14, 14, 14, 14, 14, 14, 14, 14, 13, 12, 12,  9,  9,  8,  7, 6, 5, 3, 2, 1, 0 };
 
 static const char *Sample_type_name[] = {
   "float32_iq",
@@ -298,14 +291,26 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     assert(ret == HYDRASDR_SUCCESS);
   }
   // Gain features
+  sdr->linearity = config_getboolean(Dictionary,section,"linearity",false);
+
   fprintf(stderr,"Gain features:");
   if (info.features & HYDRASDR_CAP_LINEARITY_GAIN) {
+    if(sdr->linearity){
+      sdr->mingainstep = info.linearity_gain.min_value;
+      sdr->maxgainstep = info.linearity_gain.max_value;
+      sdr->gainstep = info.linearity_gain.default_value;
+    }
     fprintf(stderr," linearity %u-%u %u,",
 	    info.linearity_gain.min_value,
 	    info.linearity_gain.max_value,
 	    info.linearity_gain.default_value);
   }
   if (info.features & HYDRASDR_CAP_SENSITIVITY_GAIN) {
+    if(!sdr->linearity){
+      sdr->mingainstep = info.sensitivity_gain.min_value;
+      sdr->maxgainstep = info.sensitivity_gain.max_value;
+      sdr->gainstep = info.sensitivity_gain.default_value;
+    }
     fprintf(stderr," sensitivity gain %u-%u %u,",
 	    info.sensitivity_gain.min_value,
 	    info.sensitivity_gain.max_value,
@@ -365,7 +370,6 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     frontend->max_IF = 0.47 * frontend->samprate;
     frontend->min_IF = -frontend->max_IF;
   }
-  sdr->gainstep = -1; // Force update first time
 
   // Hardware device settings
   bool lna_agc = false;
@@ -414,11 +418,11 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
   }
   int gainstep = config_getint(Dictionary,section,"gainstep",-1);
   if(gainstep >= 0){
-    if(gainstep > GAIN_COUNT-1)
-      gainstep = GAIN_COUNT-1;
+    if(gainstep > sdr->maxgainstep)
+      gainstep = sdr->maxgainstep;
     set_gain(sdr,gainstep); // Start AGC with max gain step
   } else if(sdr->software_agc){
-    gainstep = GAIN_COUNT-1;
+    gainstep = sdr->maxgainstep;
     set_gain(sdr,gainstep); // Start AGC with max gain step
   }
   frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
@@ -832,29 +836,29 @@ double hydrasdr_tune(struct frontend * const frontend,double const f){
 
 static void set_gain(struct sdrstate * const sdr,int gainstep){
   struct frontend * const frontend = sdr->frontend;
-  if(gainstep < 0)
-    gainstep = 0;
-  else if(gainstep >= GAIN_COUNT)
-    gainstep = GAIN_COUNT-1;
+  if(gainstep < sdr->mingainstep)
+    gainstep = sdr->mingainstep;
+  else if(gainstep > sdr->maxgainstep)
+    gainstep = sdr->maxgainstep;
 
   if(gainstep != sdr->gainstep){
     sdr->gainstep = gainstep;
-    int const tab = GAIN_COUNT - 1 - sdr->gainstep;
-    if(sdr->linearity){
-      int ret __attribute__((unused)) = HYDRASDR_SUCCESS; // Won't be used when asserts are disabled
-      ret = hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_LINEARITY, (uint8_t)sdr->gainstep);
-      assert(ret == HYDRASDR_SUCCESS);
-      frontend->if_gain = hydrasdr_linearity_vga_gains[tab];
-      frontend->mixer_gain = hydrasdr_linearity_mixer_gains[tab];
-      frontend->lna_gain = hydrasdr_linearity_lna_gains[tab];
-    } else {
-      int ret __attribute__((unused)) = HYDRASDR_SUCCESS; // Won't be used when asserts are disabled
-      ret = hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_SENSITIVITY, (uint8_t)sdr->gainstep);
-      assert(ret == HYDRASDR_SUCCESS);
-      frontend->if_gain = hydrasdr_sensitivity_vga_gains[tab];
-      frontend->mixer_gain = hydrasdr_sensitivity_mixer_gains[tab];
-      frontend->lna_gain = hydrasdr_sensitivity_lna_gains[tab];
-    }
+    int ret __attribute__((unused)) = HYDRASDR_SUCCESS; // Won't be used when asserts are disabled
+    ret = hydrasdr_set_gain(sdr->device,
+			    sdr->linearity ? HYDRASDR_GAIN_TYPE_LINEARITY : HYDRASDR_GAIN_TYPE_SENSITIVITY,
+			    (uint8_t)sdr->gainstep);
+    assert(ret == HYDRASDR_SUCCESS);
+    hydrasdr_gain_info_t info = {0};
+    ret = hydrasdr_get_gain(sdr->device, HYDRASDR_GAIN_TYPE_LNA, &info);
+    if(ret == HYDRASDR_SUCCESS)
+      frontend->lna_gain = info.value;
+    ret = hydrasdr_get_gain(sdr->device, HYDRASDR_GAIN_TYPE_MIXER, &info);
+    if(ret == HYDRASDR_SUCCESS)
+      frontend->mixer_gain = info.value;
+    ret = hydrasdr_get_gain(sdr->device, HYDRASDR_GAIN_TYPE_VGA, &info);
+    if(ret == HYDRASDR_SUCCESS)
+      frontend->if_gain = info.value;
+
     frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
     sdr->scale = scale_AD(frontend);
     if(Verbose)
