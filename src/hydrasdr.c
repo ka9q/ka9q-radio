@@ -192,20 +192,30 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
 	fprintf(stderr," %s", Sample_type_name[i]);
       }
     }
-    // Choose in descending preference order
+    // Choose in descending order of preference
+    // Packed raw mode is *by far* the most preferable; it minimizes both
+    // CPU load (no real->complex conversion, minimum USB bit rate), but
+    // as per Hydra this may not be supported in all future devices
+
+    // The INT16 modes are normalized to 16 bits (-32768 to +32767) regardless of device, but
+    // UINT16_REAL includes the A/D offset, which is device dependent
+    // and not indicated in the info table. The SDROne is 12 bits so we'll assume offset=2048,
+    // ie, values from 0 to 4095
+
+    // Floats are assumed normalized to -/+ 1
     if(info.sample_types & (1 << HYDRASDR_SAMPLE_RAW)){
       sdr->sample_type = HYDRASDR_SAMPLE_RAW; // most efficient
       frontend->bitspersample = 12;
-      } else if(info.sample_types & (1 << HYDRASDR_SAMPLE_UINT16_REAL)){
+    } else if(info.sample_types & (1 << HYDRASDR_SAMPLE_UINT16_REAL)){
       sdr->sample_type = HYDRASDR_SAMPLE_UINT16_REAL;
       frontend->bitspersample = 16;
-      } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_INT16_REAL)){
+    } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_INT16_REAL)){
       sdr->sample_type = HYDRASDR_SAMPLE_INT16_REAL;
       frontend->bitspersample = 16;
-      } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_FLOAT32_REAL)){
+    } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_FLOAT32_REAL)){
       sdr->sample_type = HYDRASDR_SAMPLE_FLOAT32_REAL;
       frontend->bitspersample = 1; // Floats are normalized
-      } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_INT16_IQ)){
+    } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_INT16_IQ)){
       sdr->sample_type = HYDRASDR_SAMPLE_INT16_IQ;
       frontend->bitspersample = 16;
     } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_FLOAT32_IQ)){
@@ -228,7 +238,6 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       return -1;
     }
     fprintf(stderr,"; choosing %s\n",Sample_type_name[sdr->sample_type]);
-
 
     ret = hydrasdr_set_packing(sdr->device, true);
     assert(ret == HYDRASDR_SUCCESS); // should handle failure
