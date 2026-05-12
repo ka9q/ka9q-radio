@@ -276,7 +276,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
   case HYDRASDR_SAMPLE_INT8_IQ:
   case HYDRASDR_SAMPLE_UINT8_IQ:
     frontend->isreal = false;
-    sdr->offset = frontend->samprate / 4;
+    sdr->offset = 0;
     break;
   case HYDRASDR_SAMPLE_FLOAT32_REAL:
   case HYDRASDR_SAMPLE_INT16_REAL:
@@ -286,7 +286,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
   case HYDRASDR_SAMPLE_UINT8_REAL:
   default:
     frontend->isreal = true;
-    sdr->offset = 0;
+    sdr->offset = +frontend->samprate / 4; // Positive for high-side injection (assumed)
     break;
   }
   fprintf(stderr,"Set sample rate %'lf Hz, offset %'lf Hz\n",frontend->samprate,sdr->offset);
