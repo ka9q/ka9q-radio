@@ -38,7 +38,7 @@ static int setup_opus(struct channel *chan);
 static int max_frames(struct channel *chan);
 
 // Send PCM output on stream; # of channels implicit in chan->output.channels
-int send_output(struct channel * restrict const chan, float const * buffer, int frames, bool const mute){
+int send_output(struct channel * restrict const chan, float const * restrict buffer, int frames, bool const mute){
   assert(chan != NULL);
   if(frames <= 0 || chan->output.channels == 0 || chan->output.samprate == 0)
     return 0;
