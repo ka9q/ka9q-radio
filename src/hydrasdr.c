@@ -29,6 +29,7 @@ extern char const *Description;
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
   struct hydrasdr_device *device;    // Opaque pointer
+  enum hydrasdr_sample_type sample_type;
 
   uint32_t sample_rates[20];
   uint64_t SN; // Serial number
@@ -61,6 +62,20 @@ uint8_t hydrasdr_linearity_lna_gains[GAIN_COUNT] = {     14, 14, 14, 13, 12, 10,
 uint8_t hydrasdr_sensitivity_vga_gains[GAIN_COUNT] = {   13, 12, 11, 10,  9,  8,  7,  6,  5,  5,  5,  5,  5,  4,  4,  4, 4, 4, 4, 4, 4, 4 };
 uint8_t hydrasdr_sensitivity_mixer_gains[GAIN_COUNT] = { 12, 12, 12, 12, 11, 10, 10,  9,  9,  8,  7,  4,  4,  4,  3,  2, 2, 1, 0, 0, 0, 0 };
 uint8_t hydrasdr_sensitivity_lna_gains[GAIN_COUNT] = {   14, 14, 14, 14, 14, 14, 14, 14, 14, 13, 12, 12,  9,  9,  8,  7, 6, 5, 3, 2, 1, 0 };
+
+static const char *Sample_type_name[] = {
+  "float32_iq",
+  "float32_real",
+  "int16_iq",
+  "int16_real",
+  "uint16_real",
+  "raw",
+  "int8_iq",
+  "uint8_iq",
+  "int8_real",
+  "uint8_real",
+};
+#define HYDRASDR_SAMPTYPES (sizeof Sample_type_name / sizeof Sample_type_name[0])
 
 
 static char const *Hydrasdr_keys[] = {
@@ -109,6 +124,23 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
   }
   config_validate_section(stderr,Dictionary,section,Hydrasdr_keys,NULL);
   {
+    hydrasdr_lib_version_t lib_ver;
+    hydrasdr_lib_version(&lib_ver);
+    // Check library version compatibility using HYDRASDR_MAKE_VERSION macro
+    uint32_t runtime_ver = HYDRASDR_MAKE_VERSION(lib_ver.major_version,
+					       lib_ver.minor_version,
+						 lib_ver.revision);
+    // Minimum library version required (uses HYDRASDR_MAKE_VERSION macro)
+#define MIN_LIB_VERSION HYDRASDR_MAKE_VERSION(1, 1, 0)
+    if (runtime_ver < MIN_LIB_VERSION) {
+      fprintf(stderr, "HydraSDR library version too old: need v1.1u.0+, got v%u.%u.%u\n",
+	      lib_ver.major_version, lib_ver.minor_version, lib_ver.revision);
+    } else {
+      fprintf(stderr, "HydraSDR library v%u.%u.%u\n",
+	       lib_ver.major_version, lib_ver.minor_version, lib_ver.revision);
+    }
+  }
+  {
     char const * const sn = config_getstring(Dictionary,section,"serial",NULL);
     if(sn != NULL){
       char *endptr = NULL;
@@ -125,10 +157,10 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
 
       n_serials = hydrasdr_list_devices(serials,n_serials); // Return actual number
       if(n_serials <= 0){
-	fprintf(stderr,"No hydrasdr devices found\n");
+	fprintf(stderr,"No HydraSDR devices found\n");
 	return -1;
       }
-      fprintf(stderr,"Discovered hydrasdr device serial%s:",n_serials > 1 ? "s" : "");
+      fprintf(stderr,"Discovered HydraSDR device serial%s:",n_serials > 1 ? "s" : "");
       for(int i = 0; i < n_serials; i++){
 	fprintf(stderr," %llx",(long long)serials[i]);
       }
@@ -144,28 +176,74 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       return -1;
     }
   }
+  hydrasdr_device_info_t info = {0};
   {
-    hydrasdr_lib_version_t version;
-    hydrasdr_lib_version(&version);
+    int ret = hydrasdr_get_device_info(sdr->device, &info);
+    if(ret != HYDRASDR_SUCCESS){
+      fprintf(stderr, "Cannot get HydraSDR information: %s\n", hydrasdr_error_name(ret));
+      return -1;
+    }
+    fprintf(stderr,"HydraSDR serial %llx, hw version %s, firmware %s\n",
+	    (long long unsigned)sdr->SN, info.board_name, info.firmware_version);
 
-    hydrasdr_device_info_t info;
-    hydrasdr_get_device_info(sdr->device, &info);
+    fprintf(stderr,"Supported sample types:");
+    for (unsigned int i = 0; i < HYDRASDR_SAMPTYPES; i++) {
+      if(info.sample_types & (1 << i)) {
+	fprintf(stderr," %s", Sample_type_name[i]);
+      }
+    }
+    // Choose in descending order of preference
+    // Packed raw mode is *by far* the most preferable; it minimizes both
+    // CPU load (no real->complex conversion, minimum USB bit rate), but
+    // as per Hydra this may not be supported in all future devices
 
+    // The INT16 modes are normalized to 16 bits (-32768 to +32767) regardless of device, but
+    // UINT16_REAL includes the A/D offset, which is device dependent
+    // and not indicated in the info table. The SDROne is 12 bits so we'll assume offset=2048,
+    // ie, values from 0 to 4095
 
-    fprintf(stderr,"HydraSDR serial %llx, hw version %s, firmware %s, library version %d.%d.%d\n",
-	    (long long unsigned)sdr->SN,
-	    info.board_name,
-	    info.firmware_version,
-	    version.major_version,version.minor_version,version.revision);
-  }
-  // Initialize hardware first
-  {
-    int ret __attribute__ ((unused));
-    ret = hydrasdr_set_packing(sdr->device,1);
-    assert(ret == HYDRASDR_SUCCESS);
+    // Floats are assumed normalized to -/+ 1
+    if(info.sample_types & (1 << HYDRASDR_SAMPLE_RAW)){
+      sdr->sample_type = HYDRASDR_SAMPLE_RAW; // most efficient
+      frontend->bitspersample = 12;
+    } else if(info.sample_types & (1 << HYDRASDR_SAMPLE_UINT16_REAL)){
+      sdr->sample_type = HYDRASDR_SAMPLE_UINT16_REAL;
+      frontend->bitspersample = 16;
+    } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_INT16_REAL)){
+      sdr->sample_type = HYDRASDR_SAMPLE_INT16_REAL;
+      frontend->bitspersample = 16;
+    } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_FLOAT32_REAL)){
+      sdr->sample_type = HYDRASDR_SAMPLE_FLOAT32_REAL;
+      frontend->bitspersample = 1; // Floats are normalized
+    } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_INT16_IQ)){
+      sdr->sample_type = HYDRASDR_SAMPLE_INT16_IQ;
+      frontend->bitspersample = 16;
+    } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_FLOAT32_IQ)){
+      sdr->sample_type = HYDRASDR_SAMPLE_FLOAT32_IQ;
+      frontend->bitspersample = 1;
+    } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_UINT8_REAL)){
+      sdr->sample_type = HYDRASDR_SAMPLE_UINT8_REAL;
+      frontend->bitspersample = 8;
+    } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_INT8_REAL)){
+      sdr->sample_type = HYDRASDR_SAMPLE_INT8_REAL;
+      frontend->bitspersample = 8;
+    } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_UINT8_IQ)){
+      sdr->sample_type = HYDRASDR_SAMPLE_UINT8_IQ;
+      frontend->bitspersample = 8;
+    } else if (info.sample_types & (1 << HYDRASDR_SAMPLE_INT8_IQ)){
+      sdr->sample_type = HYDRASDR_SAMPLE_INT8_IQ;
+      frontend->bitspersample = 8;
+    } else {
+      fprintf(stderr,"No supported sample formats\n");
+      return -1;
+    }
+    fprintf(stderr,"; choosing %s\n",Sample_type_name[sdr->sample_type]);
+
+    ret = hydrasdr_set_packing(sdr->device, true);
+    assert(ret == HYDRASDR_SUCCESS); // should handle failure
 
     // Set this now, as it affects the list of supported sample rates
-    ret = hydrasdr_set_sample_type(sdr->device,HYDRASDR_SAMPLE_RAW);
+    ret = hydrasdr_set_sample_type(sdr->device,sdr->sample_type);
     assert(ret == HYDRASDR_SUCCESS);
     // Get and list sample rates
     ret = hydrasdr_get_samplerates(sdr->device,sdr->sample_rates,0);
@@ -185,59 +263,152 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     }
     fprintf(stderr,"\n");
   }
+  frontend->samprate = sdr->sample_rates[0];  // Default to first (highest) sample rate on list
   {
-    frontend->samprate = sdr->sample_rates[0];  // Default to first (highest) sample rate on list
     char const *p = config_getstring(Dictionary,section,"samprate",NULL);
     if(p != NULL)
       frontend->samprate = parse_frequency(p,false);
   }
-  frontend->isreal = true;
-  frontend->bitspersample = 12;
-  sdr->offset = frontend->samprate/4;
-  sdr->converter = config_getdouble(Dictionary,section,"converter",0);
-  frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
-
+  // We already knew if an offset had to applied, but not how much until we knew the sample rate
+  switch(sdr->sample_type){
+  case HYDRASDR_SAMPLE_FLOAT32_IQ:
+  case HYDRASDR_SAMPLE_INT16_IQ:
+  case HYDRASDR_SAMPLE_INT8_IQ:
+  case HYDRASDR_SAMPLE_UINT8_IQ:
+    frontend->isreal = false;
+    sdr->offset = frontend->samprate / 4;
+    break;
+  case HYDRASDR_SAMPLE_FLOAT32_REAL:
+  case HYDRASDR_SAMPLE_INT16_REAL:
+  case HYDRASDR_SAMPLE_UINT16_REAL:
+  case HYDRASDR_SAMPLE_RAW:
+  case HYDRASDR_SAMPLE_INT8_REAL:
+  case HYDRASDR_SAMPLE_UINT8_REAL:
+  default:
+    frontend->isreal = true;
+    sdr->offset = 0;
+    break;
+  }
   fprintf(stderr,"Set sample rate %'lf Hz, offset %'lf Hz\n",frontend->samprate,sdr->offset);
   {
     int ret __attribute__ ((unused));
     ret = hydrasdr_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
     assert(ret == HYDRASDR_SUCCESS);
   }
-  frontend->max_IF = -600000;
-  frontend->min_IF = -0.47 * frontend->samprate;
+  // Gain features
+  fprintf(stderr,"Gain features:");
+  if (info.features & HYDRASDR_CAP_LINEARITY_GAIN) {
+    fprintf(stderr," linearity %u-%u %u,",
+	    info.linearity_gain.min_value,
+	    info.linearity_gain.max_value,
+	    info.linearity_gain.default_value);
+  }
+  if (info.features & HYDRASDR_CAP_SENSITIVITY_GAIN) {
+    fprintf(stderr," sensitivity gain %u-%u %u,",
+	    info.sensitivity_gain.min_value,
+	    info.sensitivity_gain.max_value,
+	    info.sensitivity_gain.default_value);
+  }
+  if (info.features & HYDRASDR_CAP_LNA_GAIN) {
+    fprintf(stderr," LNA gain %u-%u %u,",
+	    info.lna_gain.min_value,
+	    info.lna_gain.max_value,
+	    info.lna_gain.default_value);
+  }
+  if (info.features & HYDRASDR_CAP_RF_GAIN) {
+    fprintf(stderr," RF gain %u-%u %u,",
+	    info.rf_gain.min_value,
+	    info.rf_gain.max_value,
+	    info.rf_gain.default_value);
+  }
+  if (info.features & HYDRASDR_CAP_MIXER_GAIN) {
+    fprintf(stderr," Mixer %u-%u %u,",
+	    info.mixer_gain.min_value,
+	    info.mixer_gain.max_value,
+	    info.mixer_gain.default_value);
+  }
+  if (info.features & HYDRASDR_CAP_FILTER_GAIN) {
+    fprintf(stderr," Filter %u-%u %u,",
+	    info.filter_gain.min_value,
+	    info.filter_gain.max_value,
+	    info.filter_gain.default_value);
+  }
+  if (info.features & HYDRASDR_CAP_VGA_GAIN) {
+    fprintf(stderr," VGA gain %u-%u %u",
+	    info.vga_gain.min_value,
+	    info.vga_gain.max_value,
+	    info.vga_gain.default_value);
+  }
+  fputc('\n',stderr);
 
+  fprintf(stderr,"features:");
+  if (info.features & HYDRASDR_CAP_LNA_AGC)
+    fprintf(stderr," LNA_AGC");
+  if (info.features & HYDRASDR_CAP_MIXER_AGC)
+    fprintf(stderr," Mixer_AGC");
+  if (info.features & HYDRASDR_CAP_BIAS_TEE)
+    fprintf(stderr," Bias-T");
+  if (info.features & HYDRASDR_CAP_PACKING)
+    fprintf(stderr," sample_packing");
+  fputc('\n',stderr);
+
+  sdr->converter = config_getdouble(Dictionary,section,"converter",0);
+  frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);
+  // Set this from bandwidth info
+  if(frontend->isreal){
+    frontend->max_IF = -600000;
+    frontend->min_IF = -0.47 * frontend->samprate;
+  } else {
+    // Complex, symmetrical
+    frontend->max_IF = 0.47 * frontend->samprate;
+    frontend->min_IF = -frontend->max_IF;
+  }
   sdr->gainstep = -1; // Force update first time
 
   // Hardware device settings
+  bool lna_agc = false;
+  bool mixer_agc = false;
+  int lna_gain = 0;
+  int mixer_gain = 0;
+  int vga_gain = 0;
+
   sdr->linearity = config_getboolean(Dictionary,section,"linearity",false);
   sdr->software_agc = true; // On by default unless one of the hardware AGCs is turned on
-  bool const lna_agc = config_getboolean(Dictionary,section,"lna-agc",false); // default off
-  hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_LNA_AGC, (uint8_t)lna_agc);
-  if(lna_agc)
-    sdr->software_agc = false;
-
-  bool const mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",false); // default off
-  hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_MIXER_AGC, (uint8_t)mixer_agc);
-  if(mixer_agc)
-    sdr->software_agc = false;
-
-  int const lna_gain = config_getint(Dictionary,section,"lna-gain",-1);
-  if(lna_gain != -1){
-    frontend->lna_gain = lna_gain;
-    hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_LNA, (uint8_t)lna_gain);
-    sdr->software_agc = false;
+  if(info.features & HYDRASDR_CAP_LNA_AGC){
+    lna_agc = config_getboolean(Dictionary,section,"lna-agc",false);
+    hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_LNA_AGC, (uint8_t)lna_agc);
+    if(lna_agc)
+      sdr->software_agc = false;
   }
-  int const mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
-  if(mixer_gain != -1){
-    frontend->mixer_gain = mixer_gain;
-    hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_MIXER, (uint8_t)mixer_gain);
-    sdr->software_agc = false;
+  if(info.features & HYDRASDR_CAP_MIXER_AGC){
+    mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",false); // default off
+    hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_MIXER_AGC, (uint8_t)mixer_agc);
+    if(mixer_agc)
+      sdr->software_agc = false;
   }
-  int const vga_gain = config_getint(Dictionary,section,"vga-gain",-1);
-  if(vga_gain != -1){
-    frontend->if_gain = vga_gain;
-    hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_VGA, (uint8_t)vga_gain);
-    sdr->software_agc = false;
+  if (info.features & HYDRASDR_CAP_LNA_GAIN) {
+    lna_gain = config_getint(Dictionary,section,"lna-gain",-1);
+    if(lna_gain != -1){
+      frontend->lna_gain = lna_gain;
+      hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_LNA, (uint8_t)lna_gain);
+      sdr->software_agc = false;
+    }
+  }
+  if (info.features & HYDRASDR_CAP_MIXER_GAIN) {
+    mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
+    if(mixer_gain != -1){
+      frontend->mixer_gain = mixer_gain;
+      hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_MIXER, (uint8_t)mixer_gain);
+      sdr->software_agc = false;
+    }
+  }
+  if (info.features & HYDRASDR_CAP_VGA_GAIN) {
+    vga_gain = config_getint(Dictionary,section,"vga-gain",-1);
+    if(vga_gain != -1){
+      frontend->if_gain = vga_gain;
+      hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_VGA, (uint8_t)vga_gain);
+      sdr->software_agc = false;
+    }
   }
   int gainstep = config_getint(Dictionary,section,"gainstep",-1);
   if(gainstep >= 0){
@@ -253,14 +424,14 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
   // sign convention flipped to make units dBm/FS, ie, input power in dBm for full scale
 
   //  frontend->rf_level_cal = config_getdouble(Dictionary,section,"gaincal",-4.8); // I don't think it's actually calibrated
-  sdr->antenna_bias = config_getboolean(Dictionary,section,"bias",false);
-  {
+  if (info.features & HYDRASDR_CAP_BIAS_TEE){
+    sdr->antenna_bias = config_getboolean(Dictionary,section,"bias",false);
     int ret __attribute__ ((unused));
     ret = hydrasdr_set_rf_bias(sdr->device,sdr->antenna_bias);
     assert(ret == HYDRASDR_SUCCESS);
   }
   {
-    char const * const p = config_getstring(Dictionary,section,"description",Description ? Description : "hydrasdr");
+    char const * const p = config_getstring(Dictionary,section,"description",Description ? Description : "HydraSDR");
     if(p != NULL){
       strlcpy(frontend->description,p,sizeof(frontend->description));
       Description = p;
@@ -324,7 +495,7 @@ static void *hydrasdr_monitor(void *p){
   (void)ret;
   assert(ret == HYDRASDR_SUCCESS);
   fprintf(stderr,"hydrasdr running\n");
-#if 1  
+#if 1
   {
     hydrasdr_device_info_t info = {0};
     hydrasdr_get_device_info(sdr->device, &info);
@@ -374,38 +545,192 @@ static int rx_callback(hydrasdr_transfer *transfer){
   if(transfer->dropped_samples){
     fprintf(stderr,"dropped %'lld\n",(long long)transfer->dropped_samples);
   }
-  assert(transfer->sample_type == HYDRASDR_SAMPLE_RAW);
   int const sampcount = transfer->sample_count;
-  float * wptr = frontend->in.input_write_pointer.r;
-  uint32_t const *up = (uint32_t *)transfer->samples;
-  assert(wptr != NULL);
-  assert(up != NULL);
   double in_energy = 0;
-  // Libhydrasdr could do this for us, but this minimizes mem copies
-  // This could probably be vectorized someday
-  for(int i=0; i < sampcount; i+= 8){ // assumes multiple of 8
-    int s[8];
-    s[0] =  up[0] >> 20;
-    s[1] =  up[0] >> 8;
-    s[2] =  (up[0] << 4) | (up[1] >> 28);
-    s[3] =  up[1] >> 16;
-    s[4] =  up[1] >> 4;
-    s[5] =  (up[1] << 8) | (up[2] >> 24);
-    s[6] =  up[2] >> 12;
-    s[7] =  up[2];
-    for(int j=0; j < 8; j++){
-      int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
-      if(x == 2047 || x <= -2047){
-	frontend->overranges++;
-	frontend->samp_since_over = 0;
-      } else {
-	frontend->samp_since_over++;
+  switch(sdr->sample_type){
+  case HYDRASDR_SAMPLE_RAW:
+    {
+      // Libhydrasdr could do this for us, but this minimizes mem copies
+      // This could probably be vectorized someday
+      uint32_t const * restrict up = (uint32_t *)transfer->samples;
+      float * restrict wptr = frontend->in.input_write_pointer.r;
+      for(int i=0; i < sampcount; i+= 8){ // assumes multiple of 8
+	int s[8];
+	s[0] =  up[0] >> 20;
+	s[1] =  up[0] >> 8;
+	s[2] =  (up[0] << 4) | (up[1] >> 28);
+	s[3] =  up[1] >> 16;
+	s[4] =  up[1] >> 4;
+	s[5] =  (up[1] << 8) | (up[2] >> 24);
+	s[6] =  up[2] >> 12;
+	s[7] =  up[2];
+	for(int j=0; j < 8; j++){
+	  int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
+	  if(x == 2047 || x <= -2047){
+	    frontend->overranges++;
+	    frontend->samp_since_over = 0;
+	  } else {
+	    frontend->samp_since_over++;
+	  }
+	  wptr[j] = (float)(sdr->scale * x);
+	  in_energy += (double)x * x;
+	}
+	wptr += 8;
+	up += 3;
       }
-      wptr[j] = (float)(sdr->scale * x);
-      in_energy += (double)x * x;
     }
-    wptr += 8;
-    up += 3;
+    break;
+  case HYDRASDR_SAMPLE_UINT16_REAL:
+    {
+      // Not scaled from A/D width, which we're not given, so this isn't really a portable mode
+      uint16_t const * restrict up = (uint16_t *)transfer->samples;
+      float * restrict wptr = frontend->in.input_write_pointer.r;
+      for(int i=0; i < sampcount; i++){
+	int x = *up++; x -= 2048;
+	if(x >= 2047 || x <= -2048){
+	  frontend->overranges++;
+	  frontend->samp_since_over = 0;
+	} else {
+	  frontend->samp_since_over++;
+	}
+	*wptr++ = sdr->scale * x;
+	in_energy += (double)x * x;
+      }
+    }
+    break;
+  case HYDRASDR_SAMPLE_INT16_REAL:
+    {
+      int16_t const * restrict up = (int16_t *)transfer->samples;
+      float * restrict wptr = frontend->in.input_write_pointer.r;
+      for(int i=0; i < sampcount; i++){
+	int const x = *up++;
+	if(x >= 32767 || x <= -32768){
+	  frontend->overranges++;
+	  frontend->samp_since_over = 0;
+	} else {
+	  frontend->samp_since_over++;
+	}
+	*wptr++ = sdr->scale * x;
+	in_energy += (double)x * x;
+      }
+    }
+    break;
+  case HYDRASDR_SAMPLE_FLOAT32_REAL:
+    {
+      // Could be a memcpy except we need energy
+      float const * restrict up = (float *)transfer->samples;
+      float * restrict wptr = frontend->in.input_write_pointer.r;
+      for(int i=0; i < sampcount; i++){
+	float const x = *up++;
+	*wptr++ = sdr->scale * x;
+	in_energy += (double)x * x;
+      }
+    }
+    break;
+  case HYDRASDR_SAMPLE_INT16_IQ:
+    {
+      int16_t const * restrict up = (int16_t *)transfer->samples;
+      float complex * restrict wptr = frontend->in.input_write_pointer.c;
+      for(int i=0; i < sampcount; i++){
+	int const x = *up++;
+	int const y = *up++;
+	if(x >= 32767 || x <= -32768 || y >= 32767 || y <= -32768){
+	  frontend->overranges++;
+	  frontend->samp_since_over = 0;
+	} else {
+	  frontend->samp_since_over++;
+	}
+	double complex s = CMPLX((double)x,(double)y);
+	*wptr++ = (float complex)(sdr->scale * s);
+	in_energy += s * s;
+      }
+    }
+    break;
+  case HYDRASDR_SAMPLE_FLOAT32_IQ:
+    {
+      float complex const * restrict up = (float complex *)transfer->samples;
+      float complex * restrict wptr = frontend->in.input_write_pointer.c;
+      for(int i=0; i < sampcount; i++){
+	double complex s = *up++;
+	*wptr++ = (float complex)(sdr->scale * s);
+	in_energy += s * s;
+      }
+    }
+    break;
+  case HYDRASDR_SAMPLE_UINT8_REAL:
+    {
+      uint8_t const * restrict up = (uint8_t *)transfer->samples;
+      float * restrict wptr = frontend->in.input_write_pointer.r;
+      for(int i=0; i < sampcount; i++){
+	int x = *up++; x -= 128;
+	if(x >= 127 || x <= -128){
+	  frontend->overranges++;
+	  frontend->samp_since_over = 0;
+	} else {
+	  frontend->samp_since_over++;
+	}
+	*wptr++ = sdr->scale * x;
+	in_energy += (double)x * x;
+      }
+    }
+    break;
+  case HYDRASDR_SAMPLE_INT8_REAL:
+    {
+      int8_t const * restrict up = (int8_t *)transfer->samples;
+      float * restrict wptr = frontend->in.input_write_pointer.r;
+      for(int i=0; i < sampcount; i++){
+	int const x = *up++;
+	if(x >= 127 || x <= -128){
+	  frontend->overranges++;
+	  frontend->samp_since_over = 0;
+	} else {
+	  frontend->samp_since_over++;
+	}
+	*wptr++ = sdr->scale * x;
+	in_energy += (double)x * x;
+      }
+    }
+    break;
+  case HYDRASDR_SAMPLE_UINT8_IQ:
+    {
+      uint8_t * restrict up = (uint8_t *)transfer->samples;
+      float complex * restrict wptr = frontend->in.input_write_pointer.c;
+      for(int i=0; i < sampcount; i++){
+	int x = *up++; x -= 128;
+	int y = *up++; y -= 128;
+	if(x >= 127 || x <= -128 || y >= 127 || y <= -128){
+	  frontend->overranges++;
+	  frontend->samp_since_over = 0;
+	} else {
+	  frontend->samp_since_over++;
+	}
+	double complex s = CMPLX((double)x,(double)y);
+	*wptr++ = sdr->scale * s;
+	in_energy += s * s;
+      }
+    }
+    break;
+  case HYDRASDR_SAMPLE_INT8_IQ:
+    {
+      int8_t * restrict up = (int8_t *)transfer->samples;
+      float complex * restrict wptr = frontend->in.input_write_pointer.c;
+      for(int i=0; i < sampcount; i++){
+	int const x = *up++;
+	int const y = *up++;
+	if(x >= 127 || x <= -128 || y >= 127 || y <= -128){
+	  frontend->overranges++;
+	  frontend->samp_since_over = 0;
+	} else {
+	  frontend->samp_since_over++;
+	}
+	double complex s = CMPLX((double)x,(double)y);
+	*wptr++ = sdr->scale * s;
+	in_energy += s * s;
+      }
+    }
+    break;
+  default:
+    return -1; // Unsupported?
   }
   frontend->samples += sampcount;
   write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
