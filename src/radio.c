@@ -281,7 +281,7 @@ int loadconfig(char const *file){
 
   // Process [global] section applying to all demodulator blocks
   Description = config_getstring(Configtable,GLOBAL,"description",NULL);
-  Verbose = config_getint(Configtable,GLOBAL,"verbose",Verbose);
+  Verbose += config_getint(Configtable,GLOBAL,"verbose",0); // Add to the count of -v's on the command line
   {
     double bt = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",User_blocktime)); // Input value is in ms, internally in sec
     if (!isfinite(bt) || bt == 0.0)
