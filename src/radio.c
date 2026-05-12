@@ -604,12 +604,12 @@ static int setup_hardware(char const *sname){
     // No error checking on these, they're optional
     snprintf(symname,sizeof(symname),"%s_gain",device);
     Frontend.gain = dlsym(Dl_handle,symname);
-    if((error = dlerror()) != NULL){
+    if(Verbose && (error = dlerror()) != NULL){ // Not serious errors
       fprintf(stderr,"no %s_gain symbol: %s\n",device,error);
     }
     snprintf(symname,sizeof(symname),"%s_atten",device);
     Frontend.atten = dlsym(Dl_handle,symname);
-    if((error = dlerror()) != NULL){
+    if(Verbose && (error = dlerror()) != NULL){
       fprintf(stderr,"no %s_atten symbol: %s\n",device,error);
     }
   }
