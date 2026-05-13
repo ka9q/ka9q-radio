@@ -176,7 +176,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
   {
     int ret = hydrasdr_get_device_info(sdr->device, &info);
     if(ret != HYDRASDR_SUCCESS){
-      fprintf(stderr, "Cannot get HydraSDR information: %s\n", hydrasdr_error_name(ret));
+      fprintf(stderr, " cannot get HydraSDR information: %s\n", hydrasdr_error_name(ret));
       return -1;
     }
     fprintf(stderr,"hw version %s, firmware %s\n", info.board_name, info.firmware_version);
@@ -187,6 +187,21 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
 	fprintf(stderr," %s", Sample_type_name[i]);
       }
     }
+    fprintf(stderr,"hydra features:");
+    if (info.features & HYDRASDR_CAP_LNA_AGC)
+      fprintf(stderr," LNA_AGC");
+    if (info.features & HYDRASDR_CAP_MIXER_AGC)
+      fprintf(stderr," Mixer_AGC");
+    if (info.features & HYDRASDR_CAP_BIAS_TEE)
+      fprintf(stderr," Bias-T");
+    if (info.features & HYDRASDR_CAP_PACKING)
+      fprintf(stderr," sample_packing");
+    fputc('\n',stderr);
+
+    if(info.features & HYDRASDR_CAP_PACKING){
+      ret = hydrasdr_set_packing(sdr->device, true);
+      assert(ret == HYDRASDR_SUCCESS); // should handle failure
+    }
     // Choose in descending order of preference
     // Packed raw mode is *by far* the most preferable; it minimizes both
     // CPU load (no real->complex conversion, minimum USB bit rate), but
@@ -194,13 +209,26 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
 
     // The INT16 modes are normalized to 16 bits (-32768 to +32767) regardless of device, but
     // UINT16_REAL includes the A/D offset, which is device dependent
-    // and not indicated in the info table. The SDROne is 12 bits so we'll assume offset=2048,
-    // ie, values from 0 to 4095
+    // Version 1.1.2 of the library introduced 'current_adc_bits'; otherwise we'll assume 12 bits, offset 2048
 
     // Floats are assumed normalized to -/+ 1
-    if(info.sample_types & (1 << HYDRASDR_SAMPLE_RAW)){
+#if (HYDRASDR_VER_MAJOR > 1) || \
+    (HYDRASDR_VER_MAJOR == 1 && HYDRASDR_VER_MINOR > 1) || \
+    (HYDRASDR_VER_MAJOR == 1 && HYDRASDR_VER_MINOR == 1 && HYDRASDR_VER_REVISION >= 2)
+    if((info.features & HYDRASDR_CAP_PACKING)
+       && (info.sample_types & (1 << HYDRASDR_SAMPLE_RAW))
+       && info.current_adc_bits == 12){
       sdr->sample_type = HYDRASDR_SAMPLE_RAW; // most efficient
-      frontend->bitspersample = 12;
+      frontend->bitspersample = info.current_adc_bits;
+#else
+    // Library versions <= 1.1.1 don't tell us the width, but if packing is supported assume 12 bits
+    if(info.features & HYDRASDR_CAP_PACKING)
+      && (info.sample_types & (1 << HYDRASDR_SAMPLE_RAW))){
+      sdr->sample_type = HYDRASDR_SAMPLE_RAW; // most efficient
+      frontend->bitspersample = 12; // assume 12 bits
+#endif
+      // We'll fall through if packing is not supported or if adc bits != 12
+      // and probably use UINT16_REAL
     } else if(info.sample_types & (1 << HYDRASDR_SAMPLE_UINT16_REAL)){
       sdr->sample_type = HYDRASDR_SAMPLE_UINT16_REAL;
       frontend->bitspersample = 16;
@@ -232,10 +260,8 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       fprintf(stderr,"No supported sample formats\n");
       return -1;
     }
-    fprintf(stderr,"; choosing %s\n",Sample_type_name[sdr->sample_type]);
-
-    ret = hydrasdr_set_packing(sdr->device, true);
-    assert(ret == HYDRASDR_SUCCESS); // should handle failure
+    fprintf(stderr,"; choosing %s, A/D width %d bits\n",
+	    Sample_type_name[sdr->sample_type], frontend->bitspersample);
 
     // Set this now, as it affects the list of supported sample rates
     ret = hydrasdr_set_sample_type(sdr->device,sdr->sample_type);
@@ -346,17 +372,6 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
 	    info.vga_gain.max_value,
 	    info.vga_gain.default_value);
   }
-  fputc('\n',stderr);
-
-  fprintf(stderr,"features:");
-  if (info.features & HYDRASDR_CAP_LNA_AGC)
-    fprintf(stderr," LNA_AGC");
-  if (info.features & HYDRASDR_CAP_MIXER_AGC)
-    fprintf(stderr," Mixer_AGC");
-  if (info.features & HYDRASDR_CAP_BIAS_TEE)
-    fprintf(stderr," Bias-T");
-  if (info.features & HYDRASDR_CAP_PACKING)
-    fprintf(stderr," sample_packing");
   fputc('\n',stderr);
 
   sdr->converter = config_getdouble(Dictionary,section,"converter",0);
@@ -558,6 +573,9 @@ static int rx_callback(hydrasdr_transfer *transfer){
     {
       // Libhydrasdr could do this for us, but this minimizes mem copies
       // This could probably be vectorized someday
+      // Note: ad-hoc for 12 bits/sample.
+      // The Hydra API >= 1.1.2 provides the width explicitly, so we won't use this
+      // unless the width = 12 bits
       uint32_t const * restrict up = (uint32_t *)transfer->samples;
       float * restrict wptr = frontend->in.input_write_pointer.r;
       for(int i=0; i < sampcount; i+= 8){ // assumes multiple of 8
@@ -572,7 +590,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	s[7] =  up[2];
 	for(int j=0; j < 8; j++){
 	  int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
-	  if(x == 2047 || x <= -2047){
+	  if(x >= 2047 || x <= -2048){
 	    frontend->overranges++;
 	    frontend->samp_since_over = 0;
 	  } else {
@@ -588,12 +606,13 @@ static int rx_callback(hydrasdr_transfer *transfer){
     break;
   case HYDRASDR_SAMPLE_UINT16_REAL:
     {
-      // Not scaled from A/D width, which we're not given, so this isn't really a portable mode
       uint16_t const * restrict up = (uint16_t *)transfer->samples;
       float * restrict wptr = frontend->in.input_write_pointer.r;
+      // Offset is half the A/D width, eg, for 12 bits/sample, 2^12 = 4096 so offset = 2048
+      int offset = 1 << (frontend->bitspersample - 1);
       for(int i=0; i < sampcount; i++){
-	int x = *up++; x -= 2048;
-	if(x >= 2047 || x <= -2048){
+	int x = *up++; x -= offset;
+	if(x >= offset-1 || x <= -offset){
 	  frontend->overranges++;
 	  frontend->samp_since_over = 0;
 	} else {
