@@ -222,7 +222,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       frontend->bitspersample = info.current_adc_bits;
 #else
     // Library versions <= 1.1.1 don't tell us the width, but if packing is supported assume 12 bits
-    if(info.features & HYDRASDR_CAP_PACKING)
+    if((info.features & HYDRASDR_CAP_PACKING)
       && (info.sample_types & (1 << HYDRASDR_SAMPLE_RAW))){
       sdr->sample_type = HYDRASDR_SAMPLE_RAW; // most efficient
       frontend->bitspersample = 12; // assume 12 bits
