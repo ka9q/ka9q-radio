@@ -281,7 +281,6 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       if(sdr->sample_rates[n] < 1)
 	break;
     }
-    fprintf(stderr,"\n");
   }
   frontend->samprate = sdr->sample_rates[0];  // Default to first (highest) sample rate on list
   {
@@ -309,7 +308,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     sdr->offset = +frontend->samprate / 4; // Positive for high-side injection (assumed)
     break;
   }
-  fprintf(stderr,"Set HydraSDR sample rate %'lf Hz, offset %'lf Hz\n",frontend->samprate,sdr->offset);
+  fprintf(stderr,"; choosing %'.3lf Hz, offset %'.3lf Hz\n",frontend->samprate,sdr->offset);
   {
     int ret __attribute__ ((unused));
     ret = hydrasdr_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
@@ -328,7 +327,6 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       sdr->mingainstep = info.linearity_gain.min_value;
       sdr->maxgainstep = info.linearity_gain.max_value;
       sdr->gainstep = info.linearity_gain.default_value;
-      fprintf(stderr," (chosen)");
     }
     fputc(';', stderr);
   }
@@ -341,7 +339,6 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       sdr->mingainstep = info.sensitivity_gain.min_value;
       sdr->maxgainstep = info.sensitivity_gain.max_value;
       sdr->gainstep = info.sensitivity_gain.default_value;
-      fprintf(stderr," (chosen)");
     }
     fputc(';', stderr);
   }
@@ -461,8 +458,13 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       Description = p;
     }
   }
-  fprintf(stderr,"Software AGC %d; linearity %d, LNA AGC %d, Mix AGC %d, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %d\n",
-	  sdr->software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,gainstep,sdr->antenna_bias);
+  fprintf(stderr,"Software AGC %s, %s, LNA AGC %s, Mix AGC %s, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %s\n",
+	  sdr->software_agc ? "on" : "off",
+	  sdr->linearity ? "linearity" : "sensitivity",
+	  lna_agc ? "on" : "off",
+	  mixer_agc ? "on" : "off",
+	  frontend->lna_gain, frontend->mixer_gain, frontend->if_gain, gainstep,
+	  sdr->antenna_bias ? "on" : "off");
 
   if(sdr->software_agc){
     double const dh = config_getdouble(Dictionary,section,"agc-high-threshold",-10.0);
