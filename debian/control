@@ -42,27 +42,27 @@ Description: HFDL subsystem for ka9q-radio
 
 Package: ka9q-radio-packet
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, systemd, ka9q-radio-tools, ka9q-radio-common
+Depends: ${shlibs:Depends}, ${misc:Depends}, systemd, ka9q-radio-tools
 Description: AX.25/aprs subsystem for ka9q-radio
  Provides AFSK AX.25 decoder, APRS extractor and feeder
 
 Package: ka9q-radio-recordings
 Architecture: any
-Depends: ${misc:Depends}, systemd, ka9q-radio-tools, ka9q-radio-common
+Depends: ${misc:Depends}, systemd, ka9q-radio-tools
 Description: recording subsystem for ka9q-radio
  Provides some sample configurations for automatic recording of groups of audio
  channels from ka9q-radio's radiod
 
 Package: ka9q-radio-horus
 Architecture: any
-Depends: ${misc:Depends}, systemd, ka9q-radio-tools, ka9q-radio-common
+Depends: ${misc:Depends}, systemd, ka9q-radio-tools
 Description: demodulation subsystem for horus balloon telemetry
  Decode balloon telemetry in the Horus (VK5QI) format
- requires horus_demod package to be manually installed
+a requires horus_demod package to be manually installed
 
 Package: ka9q-radio-ft
 Architecture: any
-Depends: ${misc:Depends}, systemd, ka9q-ft8, ka9q-radio-tools, ka9q-radio-common
+Depends: ${misc:Depends}, systemd, ka9q-ft8, ka9q-radio-tools
 Description: FT4/FT8/WSPR skimmer daemons for ka9q-radio
  Records and decodes FT4, FT8 and WSPR transmissions, logs in /var/log/ft[48].log, wspr.log
 
@@ -81,13 +81,13 @@ Description: Multicast stream audio monitor for ka9q-radio
 
 Package: ka9q-radio-tools
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio-common
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Command-line tools for ka9q-radio
  Shell command line tools for interacting with ka9q-radio over the net
 
 Package: ka9q-radio-airspy
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: ka9q-radio (<< 1.0.0-19)
 Replaces: ka9q-radio (<< 1.0.0-19)
 Provides: ka9q-radio-frontend
@@ -96,7 +96,7 @@ Description: Airspy device plugin for ka9q-radio
 
 Package: ka9q-radio-airspyhf
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: ka9q-radio (<< 1.0.0-19)
 Replaces: ka9q-radio (<< 1.0.0-19)
 Provides: ka9q-radio-frontend
@@ -105,7 +105,7 @@ Description: Airspy HF+ device plugin for ka9q-radio
 
 Package: ka9q-radio-bladerf
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: ka9q-radio (<< 1.0.0-19)
 Replaces: ka9q-radio (<< 1.0.0-19)
 Provides: ka9q-radio-frontend
@@ -114,7 +114,7 @@ Description: Blade RF device plugin for ka9q-radio
 
 Package: ka9q-radio-fobos
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: ka9q-radio (<< 1.0.0-19)
 Replaces: ka9q-radio (<< 1.0.0-19)
 Provides: ka9q-radio-frontend
@@ -123,7 +123,7 @@ Description: Rigexpert Fobos device plugin for ka9q-radio
 
 Package: ka9q-radio-funcube
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: ka9q-radio (<< 1.0.0-19)
 Replaces: ka9q-radio (<< 1.0.0-19)
 Provides: ka9q-radio-frontend
@@ -132,7 +132,7 @@ Description: Amsat UK Funcube Dongle Pro+ device plugin for ka9q-radio
 
 Package: ka9q-radio-hackrf
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: ka9q-radio (<< 1.0.0-19)
 Replaces: ka9q-radio (<< 1.0.0-19)
 Provides: ka9q-radio-frontend
@@ -141,7 +141,7 @@ Description: Hack RF device plugin for ka9q-radio
 
 Package: ka9q-radio-hydrasdr
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: ka9q-radio (<< 1.0.0-19)
 Replaces: ka9q-radio (<< 1.0.0-19)
 Provides: ka9q-radio-frontend
@@ -150,7 +150,7 @@ Description: Hydra SDR One device plugin for ka9q-radio
 
 Package: ka9q-radio-rtlsdr
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: ka9q-radio (<< 1.0.0-19)
 Replaces: ka9q-radio (<< 1.0.0-19)
 Provides: ka9q-radio-frontend
@@ -159,7 +159,7 @@ Description: Generic RTL-SDR device plugin for ka9q-radio
 
 Package: ka9q-radio-rx888
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: ka9q-radio (<< 1.0.0-19)
 Replaces: ka9q-radio (<< 1.0.0-19)
 Provides: ka9q-radio-frontend
@@ -178,7 +178,7 @@ Description: RX-888 MkII device plugin for ka9q-radio
 
 Package: ka9q-radio-siggen
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: ka9q-radio (<< 1.0.0-19)
 Replaces: ka9q-radio (<< 1.0.0-19)
 Provides: ka9q-radio-frontend
