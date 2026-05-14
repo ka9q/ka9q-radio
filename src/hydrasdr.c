@@ -164,11 +164,11 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     }
   }
   {
-    fprintf(stderr,"Selecting HydraSDR SN %llx: ",(long long)sdr->SN);
+    fprintf(stderr,"Selecting HydraSDR SN %llx:",(long long)sdr->SN);
 
     int const ret = hydrasdr_open_sn(&sdr->device,sdr->SN);
     if(ret != HYDRASDR_SUCCESS){
-      fprintf(stderr,"hydrasdr_open(SN %llx) failed: %s\n",(long long)sdr->SN,hydrasdr_error_name(ret));
+      fprintf(stderr," hydrasdr_open failed: %s\n", hydrasdr_error_name(ret));
       return -1;
     }
   }
@@ -179,15 +179,8 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       fprintf(stderr, " cannot get HydraSDR information: %s\n", hydrasdr_error_name(ret));
       return -1;
     }
-    fprintf(stderr,"hw version %s, firmware %s\n", info.board_name, info.firmware_version);
+    fprintf(stderr," hw '%s'; firmware '%s'; features:", info.board_name, info.firmware_version);
 
-    fprintf(stderr,"Supported sample types:");
-    for (unsigned int i = 0; i < HYDRASDR_SAMPTYPES; i++) {
-      if(info.sample_types & (1 << i)) {
-	fprintf(stderr," %s", Sample_type_name[i]);
-      }
-    }
-    fprintf(stderr,"hydra features:");
     if (info.features & HYDRASDR_CAP_LNA_AGC)
       fprintf(stderr," LNA_AGC");
     if (info.features & HYDRASDR_CAP_MIXER_AGC)
@@ -198,6 +191,12 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       fprintf(stderr," sample_packing");
     fputc('\n',stderr);
 
+    fprintf(stderr,"Supported sample types:");
+    for (unsigned int i = 0; i < HYDRASDR_SAMPTYPES; i++) {
+      if(info.sample_types & (1 << i)) {
+	fprintf(stderr," %s", Sample_type_name[i]);
+      }
+    }
     if(info.features & HYDRASDR_CAP_PACKING){
       ret = hydrasdr_set_packing(sdr->device, true);
       assert(ret == HYDRASDR_SUCCESS); // should handle failure
@@ -257,7 +256,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       sdr->sample_type = HYDRASDR_SAMPLE_INT8_IQ;
       frontend->bitspersample = 8;
     } else {
-      fprintf(stderr,"No supported sample formats\n");
+      fprintf(stderr,"; no supported sample formats\n");
       return -1;
     }
     fprintf(stderr,"; choosing %s, A/D width %d bits\n",
@@ -271,10 +270,10 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     assert(ret == HYDRASDR_SUCCESS);
     int const number_sample_rates = sdr->sample_rates[0];
     if(number_sample_rates <= 0){
-      fprintf(stderr,"error, no valid sample rates!\n");
+     fprintf(stderr,"No valid HydraSDR sample rates!\n");
       return -1;
     }
-    fprintf(stderr,"%'d sample rate%s:",number_sample_rates,number_sample_rates > 1 ? "s":"");
+    fprintf(stderr,"HydraSDR has %'d sample rate%s:",number_sample_rates,number_sample_rates > 1 ? "s":"");
     ret = hydrasdr_get_samplerates(sdr->device,sdr->sample_rates,number_sample_rates);
     assert(ret == HYDRASDR_SUCCESS);
     for(int n = 0; n < number_sample_rates; n++){
@@ -310,7 +309,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     sdr->offset = +frontend->samprate / 4; // Positive for high-side injection (assumed)
     break;
   }
-  fprintf(stderr,"Set sample rate %'lf Hz, offset %'lf Hz\n",frontend->samprate,sdr->offset);
+  fprintf(stderr,"Set HydraSDR sample rate %'lf Hz, offset %'lf Hz\n",frontend->samprate,sdr->offset);
   {
     int ret __attribute__ ((unused));
     ret = hydrasdr_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
@@ -321,53 +320,57 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
 
   fprintf(stderr,"Gain features:");
   if (info.features & HYDRASDR_CAP_LINEARITY_GAIN) {
+    fprintf(stderr," linearity %u-%u (%u)",
+	    info.linearity_gain.min_value,
+	    info.linearity_gain.max_value,
+	    info.linearity_gain.default_value);
     if(sdr->linearity){
       sdr->mingainstep = info.linearity_gain.min_value;
       sdr->maxgainstep = info.linearity_gain.max_value;
       sdr->gainstep = info.linearity_gain.default_value;
+      fprintf(stderr," (chosen)");
     }
-    fprintf(stderr," linearity %u-%u %u,",
-	    info.linearity_gain.min_value,
-	    info.linearity_gain.max_value,
-	    info.linearity_gain.default_value);
+    fputc(';', stderr);
   }
   if (info.features & HYDRASDR_CAP_SENSITIVITY_GAIN) {
+    fprintf(stderr," sensitivity gain %u-%u (%u)",
+	    info.sensitivity_gain.min_value,
+	    info.sensitivity_gain.max_value,
+	    info.sensitivity_gain.default_value);
     if(!sdr->linearity){
       sdr->mingainstep = info.sensitivity_gain.min_value;
       sdr->maxgainstep = info.sensitivity_gain.max_value;
       sdr->gainstep = info.sensitivity_gain.default_value;
+      fprintf(stderr," (chosen)");
     }
-    fprintf(stderr," sensitivity gain %u-%u %u,",
-	    info.sensitivity_gain.min_value,
-	    info.sensitivity_gain.max_value,
-	    info.sensitivity_gain.default_value);
+    fputc(';', stderr);
   }
   if (info.features & HYDRASDR_CAP_LNA_GAIN) {
-    fprintf(stderr," LNA gain %u-%u %u,",
+    fprintf(stderr," LNA gain %u-%u (%u);",
 	    info.lna_gain.min_value,
 	    info.lna_gain.max_value,
 	    info.lna_gain.default_value);
   }
   if (info.features & HYDRASDR_CAP_RF_GAIN) {
-    fprintf(stderr," RF gain %u-%u %u,",
+    fprintf(stderr," RF gain %u-%u (%u);",
 	    info.rf_gain.min_value,
 	    info.rf_gain.max_value,
 	    info.rf_gain.default_value);
   }
   if (info.features & HYDRASDR_CAP_MIXER_GAIN) {
-    fprintf(stderr," Mixer %u-%u %u,",
+    fprintf(stderr," Mixer %u-%u (%u);",
 	    info.mixer_gain.min_value,
 	    info.mixer_gain.max_value,
 	    info.mixer_gain.default_value);
   }
   if (info.features & HYDRASDR_CAP_FILTER_GAIN) {
-    fprintf(stderr," Filter %u-%u %u,",
+    fprintf(stderr," Filter %u-%u (%u);",
 	    info.filter_gain.min_value,
 	    info.filter_gain.max_value,
 	    info.filter_gain.default_value);
   }
   if (info.features & HYDRASDR_CAP_VGA_GAIN) {
-    fprintf(stderr," VGA gain %u-%u %u",
+    fprintf(stderr," VGA gain %u-%u (%u);",
 	    info.vga_gain.min_value,
 	    info.vga_gain.max_value,
 	    info.vga_gain.default_value);
