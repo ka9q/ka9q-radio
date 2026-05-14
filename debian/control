@@ -58,7 +58,7 @@ Architecture: any
 Depends: ${misc:Depends}, systemd, ka9q-radio-tools
 Description: demodulation subsystem for horus balloon telemetry
  Decode balloon telemetry in the Horus (VK5QI) format
-a requires horus_demod package to be manually installed
+ requires horus_demod package to be manually installed
 
 Package: ka9q-radio-ft
 Architecture: any

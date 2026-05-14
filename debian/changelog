@@ -1,3 +1,16 @@
+ka9q-radio (1.0.2-1) ka9q; urgency=medium
+
+  * relax driver module dependencies; radiod depends on them but not vice versa
+
+ -- Phil Karn <karn@ka9q.net>  Wed, 13 May 2026 22:39:54 -0700
+
+ka9q-radio (1.0.2) ka9q; urgency=medium
+
+  * hydrasdr driver now uses libhydrasdr v1.1.2 features (ADC width)
+  * hydrasdr start log messages cleanup
+
+ -- Phil Karn <karn@ka9q.net>  Wed, 13 May 2026 22:13:26 -0700
+
 ka9q-radio (1.0.0-29) ka9q; urgency=medium
 
   * check for both /etc/radio/*.conf and /etc/radio/radio*.conf.d to bypass setup
