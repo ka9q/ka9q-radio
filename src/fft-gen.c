@@ -18,6 +18,7 @@
 #include <sys/file.h>
 #include <limits.h>
 
+#include "misc.h"
 #include "config_paths.h"
 
 #define System_wisdom_file "/etc/fftw/wisdomf"
@@ -27,7 +28,7 @@
 #endif
 #define WISDOM_FILE "wisdom"
 
-static int Verbose;
+int Verbose;
 static bool Force;
 
 static struct {
@@ -59,7 +60,7 @@ static int name_to_level(char const *name){
       return Levels[i].level;
   }
 }
-static int save_plans();
+static int save_plans(char const *wisdom_file);
 static size_t Wisdom_size;
 static uint64_t Wisdom_hash;
 
@@ -110,6 +111,8 @@ static struct option Options[] = {
 
 double FFTW_plan_timelimit = 0;
 int FFTW_planning_level = FFTW_PATIENT;
+
+bool Generic_wisdom_read = false;
 
 
 static int parse_and_run(char *s);
@@ -163,7 +166,6 @@ int main(int argc,char *argv[]){
     printf("FFTW version: %s\n", fftwf_version);
   fftwf_init_threads();
   fftwf_plan_with_nthreads(nthreads);
-  umask(02); // allow groups to write
 
   bool sr = false;
   bool lr = false;
@@ -185,11 +187,9 @@ int main(int argc,char *argv[]){
     lr = fftwf_import_wisdom_from_filename(wisdom_file);
     if(Verbose > 1){
       printf("fftwf_import_wisdom_from_filename(%s) %s\n",wisdom_file,lr ? "succeeded" : "failed");
-      if(!lr){
-	if(access(wisdom_file,R_OK) == -1){
+      Generic_wisdom_read = lr; // remember for when we write
+      if(!lr && access(wisdom_file,R_OK) == -1)
 	  printf("%s not readable: %s\n",wisdom_file,strerror(errno));
-	}
-      }
       if(access(wisdom_file,W_OK) == -1)
 	printf("Warning: %s not writeable, exports will fail: %s\n",wisdom_file,strerror(errno));
     }
@@ -305,39 +305,51 @@ static int parse_and_run(char *s){
   if(plan != NULL){
     fftwf_destroy_plan(plan);
     plan = NULL;
-    save_plans();
+    // Import or re-import wisdom and merge
+    char wisdom_file[PATH_MAX];
+    snprintf(wisdom_file,sizeof wisdom_file,"%s/%s",STATEDIR,WISDOM_FILE);
+    save_plans(wisdom_file);
   }
   track_wisdom_length();
   return 0;
 }
-static int save_plans(){
+static int save_plans(char const *wisdom_file){
   // Do all this carefully to avoid losing old (or new) wisdom
-  char *newtemp = NULL;
   char *lockfile = NULL;
+  char *newtemp = NULL;
   char *wisdom = NULL;
-  int lockfd = -1;
+  char *arch_wisdom_file = NULL;
   int fd = -1;
 
   // Import or re-import wisdom and merge
-  char wisdom_file[PATH_MAX];
-  snprintf(wisdom_file,sizeof wisdom_file,"%s/%s",STATEDIR,WISDOM_FILE);
-
   if(asprintf(&lockfile,"%s.lock",wisdom_file) <= 0){
     free(lockfile);
     return 0;
   }
-  lockfd = open(lockfile,O_CREAT|O_RDWR,0664);
+  int lockfd = open(lockfile,O_CREAT|O_RDWR,0664);
   fchmod(lockfd,0664); // I really do want rw-rw-r-- so the radio group can write it
   if(lockfd == -1)
     printf("Can't acquire lock on %s\n",lockfile);
   else
     flock(lockfd,LOCK_EX);
+  // First try importing from old generic file
   bool reimport = fftwf_import_wisdom_from_filename(wisdom_file);
   if(Verbose > 1)
     printf("fftwf_import_wisdom_from_filename(%s) %s\n",wisdom_file,reimport ? "succeeded" : "failed");
-  track_wisdom_length();
+  if(reimport)
+    track_wisdom_length();
 
-  if(asprintf(&newtemp,"%s-XXXXXX",wisdom_file) < 0)
+  // Now append "-[version]-threaded" and try again
+  int n = asprintf(&arch_wisdom_file, "%s-%s-threaded", wisdom_file, fftwf_version);
+  if(arch_wisdom_file == NULL || n < 0)
+    goto quit;
+  reimport = fftwf_import_wisdom_from_filename(arch_wisdom_file);
+  if(Verbose > 1)
+    printf("fftwf_import_wisdom_from_filename(%s) %s\n",arch_wisdom_file,reimport ? "succeeded" : "failed");
+  if(reimport)
+    track_wisdom_length();
+
+  if(asprintf(&newtemp,"%s-XXXXXX",arch_wisdom_file) < 0)
     goto quit;
 
   wisdom = fftwf_export_wisdom_to_string();
@@ -352,6 +364,7 @@ static int save_plans(){
     (void)r;
     goto quit;
   }
+  fchmod(fd,0664); // I really do want rw-rw-r-- so the radio group can write it
   if(write(fd,wisdom,newsize) != newsize){
     printf("Write of new wisdom file failed: %s\n",strerror(errno));
     goto quit;
@@ -362,7 +375,7 @@ static int save_plans(){
 
   // Copy user/group/mode from old version
   struct stat st;
-  if(stat(wisdom_file,&st) == 0){
+  if(stat(arch_wisdom_file,&st) == 0){
     int r = fchown(fd, st.st_uid, st.st_gid); // Best effort
     (void)r;
     fchmod(fd, st.st_mode);
@@ -378,10 +391,10 @@ static int save_plans(){
   int dir = open(STATEDIR,O_DIRECTORY);
   fsync(dir);
   close(dir);
-  if(rename(newtemp,wisdom_file) != 0)
-    printf("rename %s to %s failed: %s\n",newtemp,wisdom_file,strerror(errno));
+  if(rename(newtemp,arch_wisdom_file) != 0)
+    printf("rename %s to %s failed: %s\n",newtemp,arch_wisdom_file,strerror(errno));
   else if(Verbose > 1)
-    printf("rename %s to %s succeeded\n",newtemp,wisdom_file);
+    printf("rename %s to %s succeeded\n",newtemp,arch_wisdom_file);
 
   if(Force)
     fftwf_forget_wisdom(); // start fresh for the next on the list
@@ -396,8 +409,9 @@ static int save_plans(){
   }
   if(fd != -1)
     close(fd);
-  free(wisdom);
-  free(newtemp);
-  free(lockfile);
+  FREE(arch_wisdom_file);
+  FREE(wisdom);
+  FREE(newtemp);
+  FREE(lockfile);
   return 0;
 }

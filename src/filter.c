@@ -232,10 +232,16 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     }
     bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
     fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
-    if(!lr){
-      if(access(Wisdom_file,R_OK) == -1){
-	fprintf(stderr,"%s not readable: %s\n",Wisdom_file,strerror(errno));
-      }
+    if(!lr && access(Wisdom_file,R_OK) == -1){
+      fprintf(stderr,"%s not readable: %s\n",Wisdom_file,strerror(errno));
+    }
+    // Also try to read arch-specific wisdom file
+    char arch_wisdom_file[PATH_MAX];
+    snprintf(arch_wisdom_file, sizeof arch_wisdom_file, "%s-%s-threaded", Wisdom_file, fftwf_version);
+    lr = fftwf_import_wisdom_from_filename(arch_wisdom_file);
+    fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",arch_wisdom_file,lr ? "succeeded" : "failed");
+    if(!lr && access(arch_wisdom_file,R_OK) == -1){
+      fprintf(stderr,"%s not readable: %s\n",arch_wisdom_file,strerror(errno));
     }
     // Start FFT worker thread(s)
     pthread_mutex_init(&FFT.queue_mutex,NULL);

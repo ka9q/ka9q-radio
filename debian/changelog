@@ -1,3 +1,10 @@
+ka9q-radio (1.0.3) ka9q; urgency=medium
+
+  * fft-gen writes architecture-specific fftw3 wisdom files (wisdom-fftw-3.3.10-neon-threaded)
+  * fft-gen and filter read both generic and architecture-specific
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 14 May 2026 00:13:54 -0700
+
 ka9q-radio (1.0.2-2) ka9q; urgency=medium
 
   * fix ka9q-radio.postinst
