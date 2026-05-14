@@ -1,3 +1,9 @@
+ka9q-radio (1.0.2-2) ka9q; urgency=medium
+
+  * fix ka9q-radio.postinst
+
+ -- Phil Karn <karn@ka9q.net>  Wed, 13 May 2026 22:58:54 -0700
+
 ka9q-radio (1.0.2-1) ka9q; urgency=medium
 
   * relax driver module dependencies; radiod depends on them but not vice versa
@@ -25,7 +31,7 @@ ka9q-radio (1.0.0-28) ka9q; urgency=medium
 
 ka9q-radio (1.0.0-27) ka9q; urgency=medium
 
-  * restart systemd services after an upgrade 
+  * restart systemd services after an upgrade
 
  -- Phil Karn <karn@ka9q.net>  Mon, 11 May 2026 00:27:44 -0700
 
