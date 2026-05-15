@@ -6,9 +6,20 @@
 # To build for debugging say "make BUILD=debug"
 
 .DEFAULT_GOAL := all
-
 BUILD ?= release
-ENABLE_ALL    ?= 1
+ENABLE_ALL    ?= 0
+ifeq ($(ENABLE_ALL),1)
+	ENABLE_AIRSPY=1
+	ENABLE_AIRSPYHF=1
+	ENABLE_BLADERF=1
+	ENABLE_FOBOS=1
+	ENABLE_FUNCUBE=1
+	ENABLE_HACKRF=1
+	ENABLE_HYDRASDR=1
+	ENABLE_RTLSDR=1
+	ENABLE_RX888=1
+	ENABLE_SIG_GEN=1
+endif
 prefix        ?= /usr/local
 exec_prefix   ?= $(prefix)
 bindir        ?= $(exec_prefix)/bin
@@ -73,18 +84,6 @@ HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhi
 # The software signal generator front end is build by default. Others are added by the ENABLE_* options below
 DYNAMIC_DRIVERS = 
 
-ifeq ($(ENABLE_ALL),1)
-	ENABLE_AIRSPY=1
-	ENABLE_AIRSPYHF=1
-	ENABLE_BLADERF=1
-	ENABLE_FOBOS=1
-	ENABLE_FUNCUBE=1
-	ENABLE_HACKRF=1
-	ENABLE_HYDRASDR=1
-	ENABLE_RTLSDR=1
-	ENABLE_RX888=1
-	ENABLE_SIG_GEN=1
-endif
 
 # AIRSPY R2, etc
 ifeq ($(ENABLE_AIRSPY),1)
