@@ -36,8 +36,8 @@ static int hdlc_process(struct hdlc *hp,int bit);
 
 // Needs to be redone with common RTP receiver module
 struct session {
-  struct session *next; 
-  
+  struct session *next;
+
   struct rtp_state rtp_state_in;
   struct rtp_state rtp_state_out;
   int samprate;
@@ -103,7 +103,7 @@ static struct option Options[] =
 #endif
    {"tos", required_argument, NULL, 'p'},
    {"iptos", required_argument, NULL, 'p'},
-   {"ip-tos", required_argument, NULL, 'p'},    
+   {"ip-tos", required_argument, NULL, 'p'},
    {"version", required_argument, NULL, 'V'},
    {NULL, 0, NULL, 0},
   };
@@ -272,10 +272,10 @@ int main(int argc,char *argv[]){
 
       while(cp < &buffer[length]){
 	enum status_type const type = *cp++;
-	
+
 	if(type == EOL)
 	  break;
-	
+
 	unsigned int optlen = *cp++;
 	if(optlen & 0x80){
 	  // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
@@ -289,7 +289,7 @@ int main(int argc,char *argv[]){
 	}
 	if(cp + optlen > buffer + length)
 	  break;
-	
+
 	switch(type){
 	case EOL:
 	  goto done;
@@ -360,7 +360,7 @@ static void *input(void *arg){
       uint8_t const *dp = buffer;
       dp = ntoh_rtp(&rtp_hdr,dp);
       size -= dp - buffer;
-      
+
       if(rtp_hdr.pad){
 	// Remove padding
 	size -= dp[size-1];
@@ -368,11 +368,11 @@ static void *input(void *arg){
       }
       if(size < 0)
 	continue; // garbled RTP header?
-      
+
       // Should distinguish between these with different filter balances
       if(channels_from_pt(rtp_hdr.type) != 1)
 	continue; // Only mono PCM for now
-      
+
       struct session *sp = lookup_session(rtp_hdr.ssrc);
       if(sp == NULL){
 	// Not found
@@ -447,7 +447,7 @@ static struct session *create_session(uint32_t ssrc){
 
   if((sp = calloc(1,sizeof(*sp))) == NULL)
     return NULL; // Shouldn't happen on modern machines!
-  
+
   sp->rtp_state_in.ssrc = ssrc;
 
   // Put at head of bucket chain
@@ -461,14 +461,14 @@ static struct session *create_session(uint32_t ssrc){
 static int close_session(struct session *sp){
   if(sp == NULL)
     return -1;
-  
+
   // Remove from linked list
   struct session *se,*se_prev = NULL;
   for(se = Session; se && se != sp; se_prev = se,se = se->next)
     ;
   if(!se)
     return -1;
-  
+
   if(se == sp){
     if(se_prev)
       se_prev->next = sp->next;
@@ -502,11 +502,11 @@ static void *decode_task(void *arg){
   struct osc mark;
   memset(&mark,0,sizeof(mark));
   set_osc(&mark,-mark_tone/sp->samprate, 0.0);
-  
+
   struct osc space;
   memset(&space,0,sizeof(space));
-  set_osc(&space,-space_tone/sp->samprate, 0.0);  
-    
+  set_osc(&space,-space_tone/sp->samprate, 0.0);
+
   int samppbit = (int)(sp->samprate / Bitrate);
 
   // Tone integrators
@@ -560,11 +560,11 @@ static void *decode_task(void *arg){
 	double complex s = filter_out.output.c[n] * step_osc(&mark);
 	mark_accum += s;
 	mark_offset_accum += s;
-	
+
 	s = filter_out.output.c[n] * step_osc(&space);
 	space_accum += s;
 	space_offset_accum += s;
-	
+
 	if(++symphase == samppbit/2){
 	  // Finish offset integrator and reset
 	  mid_val = cnrm(mark_offset_accum) - twist * cnrm(space_offset_accum);
@@ -572,11 +572,11 @@ static void *decode_task(void *arg){
 	}
 	if(symphase < samppbit)
 	  continue;
-	
+
 	// Finished whole bit
 	double const cur_val = cnrm(mark_accum) - twist * cnrm(space_accum);
 	mark_accum = space_accum = 0;
-	
+
 	if(cur_val * last_val >= 0){ // cur_val and last_val have same sign; no transition
 	  // No transition == NRZI one
 	  symphase = 0;
@@ -609,7 +609,7 @@ static void *decode_task(void *arg){
 	    rtp_hdr.timestamp = sp->rtp_state_out.timestamp;
 	    sp->rtp_state_out.timestamp += bytes;
 	    rtp_hdr.ssrc = sp->rtp_state_out.ssrc;
-	    
+
 	    int const plen = bytes + 76 + 10; // Max RTP header is 76 bytes; allow a little slack
 	    uint8_t packet[plen],*dp;
 	    dp = packet;
@@ -637,7 +637,7 @@ static int hdlc_process(struct hdlc *hp,int bit){
 
   hp->last_bits <<= 1; // Note last_bits is big-endian, HDLC bytes are actually little-endian
   hp->last_bits |= bit;
-  
+
   if((hp->last_bits & 0xff) == 0x7e){
     // 01111110 - Flag
     int const bytes = (hp->frame_bits - 7) >> 3; // Don't count leading 7 bits of flag
@@ -654,7 +654,7 @@ static int hdlc_process(struct hdlc *hp,int bit){
   }
   if(!hp->flag_seen)
     return 0; // Nothing more to do until there's a flag
- 
+
   if((hp->last_bits & 0x7f) == 0x7f){
     // .1111111 - 7 consecutive 1's - abort
     hp->frame_bits = 0;
@@ -686,6 +686,3 @@ void printtime(FILE *fp){
   format_gpstime(result,sizeof(result),gps_time_ns());
   fputs(result,fp);
 }
-
-
-
