@@ -230,6 +230,12 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
 	fprintf(stderr,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
       }
     }
+    if(Wisdom_file == NULL){
+      // In case it's not set by the main program (eg, packetd)
+      static char default_wisdom_file[PATH_MAX];
+      snprintf(default_wisdom_file,sizeof default_wisdom_file, "%s/%s",STATEDIR,"wisdom");
+      Wisdom_file = default_wisdom_file;
+    }
     bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
     fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
     if(!lr && access(Wisdom_file,R_OK) == -1){
