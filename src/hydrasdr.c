@@ -79,6 +79,8 @@ static char const *Hydrasdr_keys[] = {
   "converter",
   "description",
   "device",
+  "filter-agc",
+  "filter-gain",
   "firmware",
   "frequency",
   "gainstep",
@@ -88,6 +90,8 @@ static char const *Hydrasdr_keys[] = {
   "lna-gain",
   "mixer-agc",
   "mixer-gain",
+  "rf-agc",
+  "rf-gain",
   "samprate",
   "serial",
   "vga-gain",
@@ -388,9 +392,13 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
 
   // Hardware device settings
   bool lna_agc = false;
+  bool rf_agc = false;
   bool mixer_agc = false;
+  bool filter_agc = false;
   int lna_gain = 0;
+  int rf_gain = 0;
   int mixer_gain = 0;
+  int filter_gain = 0;
   int vga_gain = 0;
 
   sdr->linearity = config_getboolean(Dictionary,section,"linearity",false);
@@ -401,10 +409,22 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     if(lna_agc)
       sdr->software_agc = false;
   }
+  if(info.features & HYDRASDR_CAP_RF_AGC){
+    rf_agc = config_getboolean(Dictionary,section,"rf-agc",false);
+    hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_RF_AGC, (uint8_t)rf_agc);
+    if(rf_agc)
+      sdr->software_agc = false;
+  }
   if(info.features & HYDRASDR_CAP_MIXER_AGC){
     mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",false); // default off
     hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_MIXER_AGC, (uint8_t)mixer_agc);
     if(mixer_agc)
+      sdr->software_agc = false;
+  }
+  if(info.features & HYDRASDR_CAP_FILTER_AGC){
+    filter_agc = config_getboolean(Dictionary,section,"filter-agc",false); // default off
+    hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_FILTER_AGC, (uint8_t)filter_agc);
+    if(filter_agc)
       sdr->software_agc = false;
   }
   if (info.features & HYDRASDR_CAP_LNA_GAIN) {
@@ -415,11 +435,27 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       sdr->software_agc = false;
     }
   }
+  if (info.features & HYDRASDR_CAP_RF_GAIN) {
+    rf_gain = config_getint(Dictionary,section,"rf-gain",-1);
+    if(rf_gain != -1){
+      frontend->rf_gain = rf_gain;
+      hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_LNA, (uint8_t)rf_gain);
+      sdr->software_agc = false;
+    }
+  }
   if (info.features & HYDRASDR_CAP_MIXER_GAIN) {
     mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
     if(mixer_gain != -1){
       frontend->mixer_gain = mixer_gain;
       hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_MIXER, (uint8_t)mixer_gain);
+      sdr->software_agc = false;
+    }
+  }
+  if (info.features & HYDRASDR_CAP_FILTER_GAIN) {
+    filter_gain = config_getint(Dictionary,section,"filter-gain",-1);
+    if(filter_gain != -1){
+      frontend->filter_gain = filter_gain;
+      hydrasdr_set_gain(sdr->device, HYDRASDR_GAIN_TYPE_FILTER, (uint8_t)filter_gain);
       sdr->software_agc = false;
     }
   }
@@ -458,6 +494,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
       Description = p;
     }
   }
+  // Flesh this out to include RF and filter
   fprintf(stderr,"Software AGC %s, %s, LNA AGC %s, Mix AGC %s, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %s\n",
 	  sdr->software_agc ? "on" : "off",
 	  sdr->linearity ? "linearity" : "sensitivity",

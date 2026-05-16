@@ -225,11 +225,9 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     fftwf_init_threads();
     bool sr = fftwf_import_system_wisdom();
     fprintf(stderr,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
-    if(!sr){
-      if(access(System_wisdom_file,R_OK) == -1){ // Would really like to use AT_EACCESS flag
-	fprintf(stderr,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
-      }
-    }
+    if(!sr && access(System_wisdom_file,R_OK) == -1) // Would really like to use AT_EACCESS flag
+      fprintf(stderr,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
+
     if(Wisdom_file == NULL){
       // In case it's not set by the main program (eg, packetd)
       static char default_wisdom_file[PATH_MAX];
@@ -238,17 +236,17 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     }
     bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
     fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
-    if(!lr && access(Wisdom_file,R_OK) == -1){
+    if(!lr && access(Wisdom_file,R_OK) == -1)
       fprintf(stderr,"%s not readable: %s\n",Wisdom_file,strerror(errno));
-    }
+
     // Also try to read arch-specific wisdom file
     char arch_wisdom_file[PATH_MAX];
     snprintf(arch_wisdom_file, sizeof arch_wisdom_file, "%s-%s-threaded", Wisdom_file, fftwf_version);
     lr = fftwf_import_wisdom_from_filename(arch_wisdom_file);
     fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",arch_wisdom_file,lr ? "succeeded" : "failed");
-    if(!lr && access(arch_wisdom_file,R_OK) == -1){
+    if(!lr && access(arch_wisdom_file,R_OK) == -1)
       fprintf(stderr,"%s not readable: %s\n",arch_wisdom_file,strerror(errno));
-    }
+
     // Start FFT worker thread(s)
     pthread_mutex_init(&FFT.queue_mutex,NULL);
     pthread_cond_init(&FFT.queue_cond,NULL);
