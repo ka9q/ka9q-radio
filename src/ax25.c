@@ -200,6 +200,9 @@ int ax25_parse(struct ax25_frame *out,uint8_t const *in,size_t len){
   }
   out->control = in[ctl_offs];
   out->type = in[ctl_offs+1];
+
+  if(len < ctl_offs + 4) // need ctl, type, and 2 CRC bytes minimum
+    return -1;
   out->info_len = len - (ctl_offs+2) - 2; // drop ctl/type before, crc after
 
   if(out->info_len > sizeof(out->information))
