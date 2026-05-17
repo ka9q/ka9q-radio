@@ -1,12 +1,24 @@
 #!/bin/sh
 case "$1" in
   configure)
-    install -d -m 0775 -o radio -g radio /etc/radio
-    install -d -m 0775 -o radio -g radio /var/lib/ka9q-radio
-    install -d -m 0775 -o radio -g radio /usr/share/ka9q-radio
-    systemd-tmpfiles --create /usr/lib/tmpfiles.d/ka9q-radio-common.conf || true
-    /usr/bin/set_lo_multicast || true
-    ;;
+      if ! getent group radio >/dev/null; then
+          addgroup --system radio
+      fi
+      if ! getent passwd radio >/dev/null; then
+          adduser --system \
+                  --ingroup radio \
+                  --home /var/lib/ka9q-radio \
+                  --no-create-home \
+                  --disabled-login \
+                  --disabled-password \
+                  --gecos "KA9Q radio service user" \
+                  radio
+      fi
+      install -d -m 0775 -o radio -g radio /var/lib/ka9q-radio
+      install -d -m 0775 -o radio -g radio /usr/share/ka9q-radio
+      systemd-tmpfiles --create /usr/lib/tmpfiles.d/ka9q-radio-common.conf || true
+      /usr/bin/set_lo_multicast || true
+      ;;
 esac
 
 #DEBHELPER#
