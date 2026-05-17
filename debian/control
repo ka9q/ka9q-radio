@@ -62,7 +62,7 @@ Description: demodulation subsystem for horus balloon telemetry
 
 Package: ka9q-radio-ft
 Architecture: any
-Depends: ${misc:Depends}, systemd, ka9q-ft8, ka9q-radio-tools
+Depends: ${misc:Depends}, systemd, ka9q-ft8, ka9q-radio-tools, ka9q-radio-common
 Description: FT4/FT8/WSPR skimmer daemons for ka9q-radio
  Records and decodes FT4, FT8 and WSPR transmissions, logs in /var/log/ft[48].log, wspr.log
 

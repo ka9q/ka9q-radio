@@ -1,7 +1,6 @@
 #!/bin/sh
 case "$1" in
   configure)
-    addgroup --system radio || true
     install -d -m 0775 -o radio -g radio /var/lib/ka9q-radio/ft8
     install -d -m 0775 -o radio -g radio /var/lib/ka9q-radio/ft4
     install -d -m 0775 -o radio -g radio /var/lib/ka9q-radio/wspr
