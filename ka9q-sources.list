@@ -1,0 +1,17 @@
+# Place this file in /etc/apt/sources.list.d/ka9q-sources.list after you uncomment only
+# the right combination of OS version and CPU for your system. Also place ka9q-radio.asc
+# in /usr/share/keyrings. Then run 'sudo apt update' to fetch the package list.
+
+# The current version of Debian Linux is 13.5, named Trixie. The previous version is 12, named Bookworm.
+# The latest major versions of Ubuntu Linux, from most recent to oldest, are: resolute, questing, noble, jammy
+
+# I've listed only those combinations of CPU and OS that I've personally encountered and for which I've generated packages.
+
+# amd64 (Intel/AMD x86)
+deb [signed-by=/usr/share/keyrings/ka9q-radio.asc arch=amd64] http://www.ka9q.net/debian trixie main
+#deb [signed-by=/usr/share/keyrings/ka9q-radio.asc arch=amd64] http://www.ka9q.net/debian noble main
+#deb [signed-by=/usr/share/keyrings/ka9q-radio.asc arch=amd64] http://www.ka9q.net/debian jammy main
+
+# arm64 (Raspberry Pi4/5 in 64-bit mode)
+#deb [signed-by=/usr/share/keyrings/ka9q-radio.asc arch=arm64] http://www.ka9q.net/debian trixie main
+#deb [signed-by=/usr/share/keyrings/ka9q-radio.asc arch=arm64] http://www.ka9q.net/debian bookworm main
