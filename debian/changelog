@@ -1,3 +1,9 @@
+ka9q-radio (1.0.10-1~trixie1) trixie; urgency=medium
+
+  * create user and group 'radio' in ka9q-radio-common postinst
+
+ -- Phil Karn <karn@ka9q.net>  Sun, 17 May 2026 15:21:17 -0700
+
 ka9q-radio (1.0.10~trixie1) trixie; urgency=medium
 
   * set fallback wisdom file path in filter.c for packetd, which wasn't setting it
