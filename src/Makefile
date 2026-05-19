@@ -77,8 +77,8 @@ LIBSTATUS = status.o decode_status.o
 RADIOD_OBJECTS = main.o audio.o avahi.o modes.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libdsp.a libstatus.a libradio.a
 
 ## source files for dependency generation (see DEPS=)
-CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c filter.c fm.c funcube.c hid-libusb.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c setfilt.c show-pkt.c show-sig.c sig_gen.c spectrum.c status.c stereod.c tune.c wd-record.c wfm.c
-HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h status.h config_paths.h
+CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c filter.c fm.c funcube.c hid-libusb.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c setfilt.c show-pkt.c show-sig.c si5351.c sig_gen.c spectrum.c status.c stereod.c tune.c wd-record.c wfm.c
+HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h si5351.h status.h config_paths.h
 
 ## hardware plug-in module enables
 # The software signal generator front end is build by default. Others are added by the ENABLE_* options below
@@ -271,7 +271,7 @@ wd-record: wd-record.o libstatus.a attr.o libradio.a
 funcube.so: funcube.o fcd.o hid-libusb.o
 	$(CC) $(SOFLAGS) -o $@ $^ -lportaudio
 
-rx888.so: rx888.o ezusb.o hid-libusb.o
+rx888.so: rx888.o si5351.o ezusb.o hid-libusb.o
 	$(CC) $(SOFLAGS) -o $@ $^ -lusb-1.0
 
 airspy.so: airspy.o
