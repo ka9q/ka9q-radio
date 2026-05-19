@@ -299,13 +299,10 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     if(p != NULL)
       samprate = llrint(parse_frequency(p,false));
   }
-  if(samprate < MIN_SAMPRATE){
-    fprintf(stderr,"Invalid sample rate %'lld, forcing %'lld\n",(long long)samprate,(long long)MIN_SAMPRATE);
-    samprate = MIN_SAMPRATE;
-  }
-  if(samprate > MAX_SAMPRATE){
-    fprintf(stderr,"Invalid sample rate %'lld, forcing %'lld\n",(long long)samprate,(long long)MAX_SAMPRATE);
-    samprate = MAX_SAMPRATE;
+  if(samprate < MIN_SAMPRATE || samprate > MAX_SAMPRATE){
+    fprintf(stderr,"Invalid sample rate %'lld, ",(long long)samprate);
+    samprate = samprate < MIN_SAMPRATE ? MIN_SAMPRATE : MAX_SAMPRATE; // must be one or the other
+    fprintf(stderr,"forcing %'lld\n",samprate);
   }
   sdr->reference = reference * (1 + calibrate);
   usleep(5000);
@@ -472,7 +469,6 @@ static void *proc_rx888(void *arg){
     // sdr->last_callback_time is set in rx_callback()
     int const maxtime = 5;
     if(gps_time_ns() > sdr->last_callback_time + maxtime * BILLION){
-      Stop_transfers = true;
       fprintf(stderr,"No rx888 data for %d seconds, quitting\n",maxtime);
       break;
     }
@@ -483,15 +479,19 @@ static void *proc_rx888(void *arg){
     if(ret != 0){
       // Apparent failure
       fprintf(stderr,"handle_events returned %d\n",ret);
-      Stop_transfers = true;
+      break;
     }
   } while (!Stop_transfers);
 
   rx888_stop_rx(sdr);
   rx888_close(sdr);
   // Can't do anything without the front end; quit entirely
-  fprintf(stderr,"rx888 has aborted, exiting radiod\n");
-  exit(EX_NOINPUT);
+  if(!Stop_transfers){
+    // We weren't told to stop, the hardware malfunctioned. Exit and let systemd retry us
+    fprintf(stderr,"rx888 has aborted, exiting radiod\n");
+    exit(EX_NOINPUT);
+  }
+  return NULL;
 }
 
 // Monitor power levels, record new watermarks, adjust AGC if enabled
@@ -1011,9 +1011,10 @@ static void rx888_stop_rx(struct sdrstate *sdr){
   while(sdr->xfers_in_progress != 0){
     if(Verbose)
       fprintf(stderr,"%d transfers are pending\n",sdr->xfers_in_progress);
-    struct timeval tv;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
+    struct timeval tv = {
+      .tv_sec = 1,
+      .tv_usec = 0
+    };
     long long stime = gps_time_ns();
     int const ret = libusb_handle_events_timeout_completed(NULL,&tv,NULL);
     if(ret != 0)
@@ -1027,7 +1028,6 @@ static void rx888_stop_rx(struct sdrstate *sdr){
     }
     usleep(100000);
   }
-
   fprintf(stderr,"Transfers completed\n");
   free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
   sdr->databuffers = NULL;
@@ -1101,6 +1101,7 @@ static int gain2val(double gain){
 }
 double rx888_tune(struct frontend *frontend,double freq){
 #if 1
+  // Placeholder until VHF/UHF code is written
   (void)frontend;
   (void)freq;
   return 0; // temp
