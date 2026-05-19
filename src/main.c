@@ -193,7 +193,7 @@ int main(int argc,char *argv[]){
 static void closedown(int a){
   char message[] = "Received signal, shutting down\n";
 
-  ssize_t r = write(1,message,strlen(message));
+  ssize_t r = write(2,message,strlen(message));
   (void)r; // shut up compiler
   Stop_transfers = true;
   sleep(1); // pause for threads to see it
