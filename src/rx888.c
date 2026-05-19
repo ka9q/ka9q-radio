@@ -29,6 +29,7 @@
 #include "config.h"
 #include "radio.h"
 #include "rx888.h"
+#include "si5351.h"
 #include "ezusb.h"
 
 static uint16_t const Vendor_id = 0x04b4;
