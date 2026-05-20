@@ -502,5 +502,5 @@ int main(int argc,char *argv[]){
 
 void usage(void){
   fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-D|--destination <destination name-or-address>] [-R|--samprate <sample_rate>] [-i|--iface <iface>] [-l|--locale LOCALE]  \
-[-f|--frequency <frequency>] [-L|--low <low-edge>] [-H|--high <high-edge>] [[-a|--agc] [-g|--gain <gain dB>]] [-m|--mode <mode>] [--rfgain <gain dB>] [--rfatten <atten dB>] [-o|--source <source-name-or-address>\n" ,App_path);
+[-f|--frequency <frequency>] [-L|--low <low-edge>] [-H|--high <high-edge>] [[-a|--agc] [-g|--gain <gain dB>]] [-m|--mode <mode>] [--rfgain <gain dB>] [--rfatten <atten dB>] [-o|--source <source-name-or-address> [-t|--lifetime <frames>\n" ,App_path);
 }
