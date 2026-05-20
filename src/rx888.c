@@ -303,7 +303,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   if(samprate < MIN_SAMPRATE || samprate > MAX_SAMPRATE){
     fprintf(stderr,"Invalid sample rate %'lld, ",(long long)samprate);
     samprate = samprate < MIN_SAMPRATE ? MIN_SAMPRATE : MAX_SAMPRATE; // must be one or the other
-    fprintf(stderr,"forcing %'lld\n",samprate);
+    fprintf(stderr,"forcing %'lld\n",(long long)samprate);
   }
   sdr->reference = reference * (1 + calibrate);
   usleep(5000);

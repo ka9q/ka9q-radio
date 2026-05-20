@@ -5,8 +5,10 @@
 // Integer/rational Si5351 divider solver (PLL + MultiSynth) with spur-aware scoring.
 // No floating-point search; continued fractions operate on exact rationals.
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 #include "si5351.h"
 
 static unsigned long long gcd_u64(unsigned long long a, unsigned long long b);
