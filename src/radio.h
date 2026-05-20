@@ -121,9 +121,10 @@ struct frontend {
   void *context;         // Stash hardware-dependent control block
   int (*setup)(struct frontend *,dictionary *,char const *); // Get front end ready to go
   int (*start)(struct frontend *);          // Start front end sampling
+  int (*stop)(struct frontend *);           // Stop front end, used when there are no channels. Optional for now.
   double (*tune)(struct frontend *,double); // Tune front end, return actual frequency
-  double (*gain)(struct frontend *,double);
-  double (*atten)(struct frontend *,double);
+  double (*gain)(struct frontend *,double); // optional
+  double (*atten)(struct frontend *,double);// optional
   struct filter_in in; // Input half of fast convolver, shared with all channels
   double spurs[NSPURS]; // List of frequency spurs to notch, in Hertz (testing)
 };
