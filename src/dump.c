@@ -476,6 +476,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case NOISE_BW:
       fprintf(fp,"bin noise bw %.1lf Hz",decode_float(cp,optlen));
       break;
+    case LIFETIME:
+      fprintf(fp,"lifetime %u frames",decode_int(cp,optlen));
+      break;
     default:
       fprintf(fp,"unknown type %d length %d",type,optlen);
       break;
