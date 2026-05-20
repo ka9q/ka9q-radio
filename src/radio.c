@@ -19,6 +19,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdatomic.h>
 
 #if defined(linux)
 #include <bsd/string.h>
@@ -84,7 +85,7 @@ static char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
 static struct channel Template; // Template for dynamically created channels
 static pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
-static int Active_channel_count; // Active channels
+static _Atomic int Active_channel_count = ATOMIC_VAR_INIT(0); // Active channels
 
 // List of valid config keys in [global] section, for error checking
 static char const *Global_keys[] = {
@@ -595,6 +596,11 @@ static int setup_hardware(char const *sname){
       dlclose(Dl_handle);
       return -1;
     }
+    snprintf(symname,sizeof(symname),"%s_stop",device);
+    Frontend.stop = dlsym(Dl_handle,symname);
+    if(Verbose && (error = dlerror()) != NULL)
+      fprintf(stderr,"no %s_stop symbol: %s\n",device,error);
+
     snprintf(symname,sizeof(symname),"%s_tune",device);
     Frontend.tune = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
@@ -604,16 +610,14 @@ static int setup_hardware(char const *sname){
     // No error checking on these, they're optional
     snprintf(symname,sizeof(symname),"%s_gain",device);
     Frontend.gain = dlsym(Dl_handle,symname);
-    if(Verbose && (error = dlerror()) != NULL){ // Not serious errors
+    if(Verbose && (error = dlerror()) != NULL) // Not serious errors
       fprintf(stderr,"no %s_gain symbol: %s\n",device,error);
-    }
+
     snprintf(symname,sizeof(symname),"%s_atten",device);
     Frontend.atten = dlsym(Dl_handle,symname);
-    if(Verbose && (error = dlerror()) != NULL){
+    if(Verbose && (error = dlerror()) != NULL)
       fprintf(stderr,"no %s_atten symbol: %s\n",device,error);
-    }
   }
-
   int r = (*Frontend.setup)(&Frontend,Configtable,sname);
   if(r != 0){
     fprintf(stderr,"device setup returned %d\n",r);
@@ -669,16 +673,7 @@ static int setup_hardware(char const *sname){
   }
   pthread_mutex_init(&Frontend.status_mutex,NULL);
   pthread_cond_init(&Frontend.status_cond,NULL);
-  if(Frontend.start){
-    int r = (*Frontend.start)(&Frontend);
-    if(r != 0)
-      fprintf(stderr,"Front end start returned %d\n",r);
-
-    return r;
-  } else {
-    fprintf(stderr,"No front end start routine?\n");
-    return -1;
-  }
+  return 0;
 }
 
 // called by loadconfig() to process one receiver section of a config file
@@ -1002,13 +997,20 @@ struct channel *create_chan(uint32_t ssrc){
     fprintf(stderr,"Warning: out of chan table space (%'d)\n",Active_channel_count);
     // Abort here? Or keep going?
   } else {
+    assert(Blocktime != 0);
     // Because the memcpy clobbers the ssrc, we must keep the lock held on Channel_list_mutex
     *chan = Template; // Template.inuse is already set
     chan->frontend = &Frontend; // Should be already set in template, but just be sure
     chan->output.rtp.ssrc = ssrc; // Stash it
-    Active_channel_count++;
-    assert(Blocktime != 0);
     chan->lifetime = 0; // unlimited by default
+    int c = atomic_fetch_add(&Active_channel_count,1);
+    if(c == 0){
+      // First channel created, start front end
+      assert(Frontend.start != NULL);
+      int r = (*Frontend.start)(&Frontend);
+      if(r != 0)
+	fprintf(stderr,"Front end start returned %d\n",r);
+    }
   }
   pthread_mutex_unlock(&Channel_list_mutex);
   return chan;
@@ -1105,7 +1107,11 @@ int close_chan(struct channel *chan){
   if(chan->inuse){
     // Should be set, but check just in case to avoid messing up Active_channel_count
     chan->inuse = false;
-    Active_channel_count--;
+    int c = atomic_fetch_sub(&Active_channel_count,1);
+    if(c == 1 && Frontend.stop){
+      // No more channels left
+      Frontend.stop(&Frontend);
+    }
   }
   pthread_mutex_unlock(&Channel_list_mutex);
   return 0;

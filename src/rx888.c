@@ -69,7 +69,6 @@ static double Power_smooth; // Arbitrary exponential smoothing factor for front 
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
-extern volatile bool Stop_transfers; // Flag to stop receive thread upcalls; defined in main.c
 extern char const *Description;
 extern int USB_busnum;
 extern int USB_devnum;
@@ -116,6 +115,7 @@ struct sdrstate {
   pthread_t proc_thread;
   pthread_t agc_thread;
   bool ms_int;
+  _Atomic bool running;
 };
 
 static _Thread_local bool reset = false;
@@ -413,11 +413,25 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 // Come back here after common stuff has been set up (filters, etc)
 int rx888_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  // Start processing A/D data
-  sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
-  pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
-  pthread_create(&sdr->agc_thread,NULL,agc_rx888,sdr);
-  fprintf(stderr,"rx888 running\n");
+  bool f = false;
+  if(atomic_compare_exchange_strong(&sdr->running,&f,true)){
+    // Start processing A/D data only if no already running
+    sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
+    pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
+    pthread_create(&sdr->agc_thread,NULL,agc_rx888,sdr);
+    fprintf(stderr,"rx888 running\n");
+  }
+  return 0;
+}
+
+int rx888_stop(struct frontend * const frontend){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  bool t = true;
+  if(atomic_compare_exchange_strong(&sdr->running,&t,false)){
+    pthread_join(sdr->proc_thread, NULL);
+    pthread_join(sdr->agc_thread, NULL);
+    fprintf(stderr,"rx888 stopped\n");
+  }
   return 0;
 }
 
@@ -482,12 +496,14 @@ static void *proc_rx888(void *arg){
       fprintf(stderr,"handle_events returned %d\n",ret);
       break;
     }
-  } while (!Stop_transfers);
+  } while (sdr->running);
 
   rx888_stop_rx(sdr);
-  rx888_close(sdr);
+#if 0
+  rx888_close(sdr); // In case we start again
+#endif
   // Can't do anything without the front end; quit entirely
-  if(!Stop_transfers){
+  if(sdr->running){
     // We weren't told to stop, the hardware malfunctioned. Exit and let systemd retry us
     fprintf(stderr,"rx888 has aborted, exiting radiod\n");
     exit(EX_NOINPUT);
@@ -502,7 +518,7 @@ static void *agc_rx888(void *arg){
   assert(sdr != NULL);
   pthread_setname("agc_rx888");
   struct frontend *frontend = sdr->frontend;
-  while(1){
+  while(sdr->running){
     sleep(AGC_INTERVAL);
     int64_t now = gps_time_ns();
     if(now >= sdr->last_count_time + 60 * BILLION){
@@ -572,7 +588,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
     if(Verbose > 1)
       fprintf(stderr,"Transfer %p callback status %s received %d bytes.\n",transfer,
 	      libusb_error_name(transfer->status), transfer->actual_length);
-    if(!Stop_transfers) {
+    if(sdr->running) {
       if(libusb_submit_transfer(transfer) == 0)
         sdr->xfers_in_progress++;
     }
@@ -626,7 +642,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
   // These blocks are kinda small, so exponentially smooth the power readings
   frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
   frontend->samples += sampcount; // Count original samples
-  if(!Stop_transfers) {
+  if(sdr->running) {
     if(libusb_submit_transfer(transfer) == 0)
       sdr->xfers_in_progress++;
   }
@@ -1030,10 +1046,11 @@ static void rx888_stop_rx(struct sdrstate *sdr){
     usleep(100000);
   }
   fprintf(stderr,"Transfers completed\n");
+#if 0 // don't deallocate in case we start again
   free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
   sdr->databuffers = NULL;
   sdr->transfers = NULL;
-
+#endif
   command_send(sdr->dev_handle,STOPFX3,0);
 }
 
