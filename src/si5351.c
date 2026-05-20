@@ -193,12 +193,12 @@ bool si5351_solve(unsigned long long fref_hz, unsigned long long fout_hz, si5351
 
 // Helpers to get packed register parameters:
 void si5351_get_pll_pvals(const si5351_solution_t *s, si5351_pvals_t *pll){
-  assert(pll != NULL);
   assert(s != NULL);
+  assert(pll != NULL);
   *pll = pack_abc(s->A, s->B, s->C);
 }
 void si5351_get_ms_pvals(const si5351_solution_t *s, si5351_pvals_t *ms){
-  assert(pll != NULL);
+  assert(s != NULL);
   assert(ms != NULL);
   *ms = pack_abc(s->D, s->E, s->F);
 }
