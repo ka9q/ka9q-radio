@@ -604,7 +604,7 @@ static void *hydrasdr_monitor(void *p){
   hydrasdr_stop_rx(sdr->device);
 #if 0 // we may restart it later
   hydrasdr_close(sdr->device);
-#end
+#endif
   return NULL;
 }
 
