@@ -575,7 +575,6 @@ static void *hydrasdr_monitor(void *p){
   int ret = hydrasdr_start_rx(sdr->device,rx_callback,sdr);
   (void)ret;
   assert(ret == HYDRASDR_SUCCESS);
-  fprintf(stderr,"hydrasdr running\n");
 #if 0
   {
     hydrasdr_device_info_t info = {0};
@@ -603,7 +602,9 @@ static void *hydrasdr_monitor(void *p){
   }
   fprintf(stderr,"Device is no longer streaming, exiting\n");
   hydrasdr_stop_rx(sdr->device);
+#if 0 // we may restart it later
   hydrasdr_close(sdr->device);
+#end
   return NULL;
 }
 
