@@ -10,6 +10,8 @@
 #include <bsd/string.h>
 #endif
 #include <sysexits.h>
+#include <stdatomic.h>
+#include <unistd.h>
 
 #include "misc.h"
 #include "status.h"
@@ -22,21 +24,28 @@ static const double Power_alpha = 0.05; // Arbitrary exponential smoothing facto
 extern char const *Description;
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
+enum state {
+  STOPPED,
+  STARTING,
+  STOPPING,
+  RUNNING
+};
 struct sdrstate
 {
-	struct frontend *frontend;  /* Avoid references to external globals */
-	struct bladerf	*dev;           /* Opaque pointer */
-	pthread_t	monitor_thread;
-	pthread_t	main_thread;
-	void		**buffers;      /* Transmit buffers */
-	size_t		num_buffers;    /* Number of buffers */
-	size_t		samples_per_buffer; /* Number of samples per buffer */
-	size_t		num_transfers;
-	unsigned int	idx_to_process;
-	unsigned int	idx_to_fill;
-	unsigned int	idx_to_submit;
-	pthread_mutex_t queue_mutex;
-	pthread_cond_t  queue_cond;
+  struct frontend *frontend;  /* Avoid references to external globals */
+  struct bladerf	*dev;           /* Opaque pointer */
+  pthread_t	monitor_thread;
+  pthread_t	main_thread;
+  void		**buffers;      /* Transmit buffers */
+  size_t		num_buffers;    /* Number of buffers */
+  size_t		samples_per_buffer; /* Number of samples per buffer */
+  size_t		num_transfers;
+  unsigned int	idx_to_process;
+  unsigned int	idx_to_fill;
+  unsigned int	idx_to_submit;
+  pthread_mutex_t queue_mutex;
+  pthread_cond_t  queue_cond;
+  _Atomic enum state state;
 };
 
 static char const *Bladerf_keys[] = {
@@ -242,7 +251,7 @@ static void *bladerf_main(void *p)
 	pthread_setname("bladerf-main");
 
 	realtime(2 + default_prio());
-	while (1) {
+	while (atomic_load(&sdr->state) == RUNNING) {
 		pthread_mutex_lock(&sdr->queue_mutex);
 		if (sdr->idx_to_process != sdr->idx_to_fill) {
 			pthread_mutex_unlock(&sdr->queue_mutex);
@@ -263,30 +272,55 @@ static void *bladerf_main(void *p)
 
 int bladerf_startup(struct frontend * const frontend)
 {
-	struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  while(1){
+    enum state s = STOPPED;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
+      break;
+    if(s == RUNNING)
+      return 0; // Already running
+    usleep(10000); // 10 ms
+  }
+  frontend->in.perform_inline = true;
+  sdr->num_buffers = 128;
+  sdr->num_transfers = 2;
+  sdr->idx_to_fill = 0;
+  sdr->idx_to_process = 0;
+  sdr->idx_to_submit = sdr->num_transfers - 1;
 
-	frontend->in.perform_inline = true;
-	sdr->num_buffers = 128;
-	sdr->num_transfers = 2;
-	sdr->idx_to_fill = 0;
-	sdr->idx_to_process = 0;
-	sdr->idx_to_submit = sdr->num_transfers - 1;
+  int k = frontend->in.ilen / 1024;
+  if (k*1024 != frontend->in.ilen)
+    k++;
+  sdr->samples_per_buffer = k*1024;
 
-	int k = frontend->in.ilen / 1024;
-	if (k*1024 != frontend->in.ilen)
-		k++;
-	sdr->samples_per_buffer = k*1024;
-
-	if (Verbose) {
-		fprintf(stderr,"ilen %d samples_per_buffer: %ld\n",
-			frontend->in.ilen,
-			sdr->samples_per_buffer);
-	}
-	pthread_create(&sdr->main_thread, NULL, bladerf_main, sdr);
-	pthread_create(&sdr->monitor_thread, NULL, bladerf_monitor, sdr);
-
-	return 0;
+  if (Verbose) {
+    fprintf(stderr,"ilen %d samples_per_buffer: %ld\n",
+	    frontend->in.ilen,
+	    sdr->samples_per_buffer);
+  }
+  pthread_create(&sdr->main_thread, NULL, bladerf_main, sdr);
+  pthread_create(&sdr->monitor_thread, NULL, bladerf_monitor, sdr);
+  atomic_store(&sdr->state,RUNNING);
+return 0;
 }
+
+int bladerf_stop(struct frontend * const frontend){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  while(1){
+    enum state s = RUNNING;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
+      break;
+    if(s == STOPPED)
+      return 0;
+    usleep(10000);
+  }
+  pthread_join(&sdr->main_thread, NULL);
+  pthread_join(&sdr->monitor_thread, NULL);
+  atomic_store(&sdr->state,STOPPED);
+  fprintf(stderr,"bladerf stopped\n");
+  return 0;
+}
+
 
 static void *stream_callback(struct bladerf *unused1,
 			     struct bladerf_stream *unused2,
@@ -357,11 +391,10 @@ static void *bladerf_monitor(void *p)
 				bladerf_strerror(status));
 		bladerf_deinit_stream(stream);
 		bladerf_close(sdr->dev);
-		goto out;
+		return NULL;
 	}
 
-	if (Verbose)
-		fprintf(stderr, "bladerf running\n");
+	fprintf(stderr, "bladerf running\n");
 
 	int readback = 0;
 	status = bladerf_get_gain(sdr->dev, BLADERF_MODULE_RX, &readback);
@@ -386,12 +419,14 @@ static void *bladerf_monitor(void *p)
 		fprintf(stderr, "Failed to enable module: %s\n",
 				bladerf_strerror(status));
 	}
-
-	bladerf_deinit_stream(stream);
-	bladerf_close(sdr->dev);
-	fprintf(stderr, "Device is no longer streaming, exiting\n");
-out:
-	exit(EX_NOINPUT); // Let systemd restart us
+	fprintf(stderr,"bladerf stopped\n");
+	if(atomic_load(&sdr->state) == RUNNING){
+	  // Exited because of error
+	  bladerf_deinit_stream(stream);
+	  bladerf_close(sdr->dev);
+	  fprintf(stderr, "Device is no longer streaming, exiting\n");
+	  exit(EX_NOINPUT); // Let systemd restart us
+	}
 	return NULL;
 }
 

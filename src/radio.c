@@ -58,7 +58,6 @@
 static int Total_channels;
 static bool Global_use_dns;
 static void *Dl_handle;
-static struct frontend Frontend;
 static int const DEFAULT_IP_TOS = 46 << 2; // Expedited Forwarding
 static double const DEFAULT_BLOCKTIME = .02; // 20 ms
 static char *Metadata_dest_string; // DNS name of default multicast group for status/commands
@@ -117,6 +116,8 @@ static char const *Global_keys[] = {
   "wisdom-file",
   NULL
 };
+
+struct frontend Frontend;
 
 // Remaining global variables are linked mostly from radio_status.c
 // Try to eliminate as many as possible
@@ -596,10 +597,10 @@ static int setup_hardware(char const *sname){
       dlclose(Dl_handle);
       return -1;
     }
-    snprintf(symname,sizeof(symname),"%s_stop",device);
-    Frontend.stop = dlsym(Dl_handle,symname);
+    snprintf(symname,sizeof(symname),"%s_shutdown",device);
+    Frontend.shutdown = dlsym(Dl_handle,symname);
     if(Verbose && (error = dlerror()) != NULL)
-      fprintf(stderr,"no %s_stop symbol: %s\n",device,error);
+      fprintf(stderr,"no %s_shutdown symbol: %s\n",device,error);
 
     snprintf(symname,sizeof(symname),"%s_tune",device);
     Frontend.tune = dlsym(Dl_handle,symname);
@@ -1108,9 +1109,9 @@ int close_chan(struct channel *chan){
     // Should be set, but check just in case to avoid messing up Active_channel_count
     chan->inuse = false;
     int c = atomic_fetch_sub(&Active_channel_count,1);
-    if(c == 1 && Frontend.stop){
+    if(c == 1 && Frontend.shutdown){
       // No more channels left
-      Frontend.stop(&Frontend);
+      Frontend.shutdown(&Frontend);
     }
   }
   pthread_mutex_unlock(&Channel_list_mutex);

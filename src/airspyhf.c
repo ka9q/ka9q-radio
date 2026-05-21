@@ -14,6 +14,7 @@
 #include <sysexits.h>
 #include <unistd.h>
 #include <strings.h>
+#include <stdatomic.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -46,6 +47,12 @@ static char const *Airspyhf_keys[] = {
 };
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
+enum state {
+  STOPPED,
+  STARTING,
+  STOPPING,
+  RUNNING
+};
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
   struct airspyhf_device *device;    // Opaque pointer
@@ -56,6 +63,7 @@ struct sdrstate {
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
+  _Atomic enum state state;
 };
 
 static double set_correct_freq(struct sdrstate *sdr,double freq);
@@ -211,8 +219,33 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
 }
 int airspyhf_startup(struct frontend *frontend){
   struct sdrstate *sdr = (struct sdrstate *)frontend->context;
+  while(1){
+    enum state s = STOPPED;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
+      break;
+    if(s == RUNNING)
+      return 0; // Already running
+    usleep(10000); // 10 ms
+  }
   sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
   pthread_create(&sdr->monitor_thread,NULL,airspyhf_monitor,sdr);
+  sdr->state = RUNNING;
+  fprintf(stderr,"airspyhf running\n");
+  return 0;
+}
+int airspyhf_shutdown(struct frontend * const frontend){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  while(1){
+    enum state s = RUNNING;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
+      break;
+    if(s == STOPPED)
+      return 0;
+    usleep(10000);
+  }
+  pthread_join(sdr->monitor_thread, NULL);
+  atomic_store(&sdr->state,STOPPED);
+  fprintf(stderr,"airspyhf stopped\n");
   return 0;
 }
 
@@ -227,8 +260,9 @@ static void *airspyhf_monitor(void *p){
   assert(ret == AIRSPYHF_SUCCESS);
   fprintf(stderr,"airspyhf running\n");
   // Periodically poll status to ensure device hasn't reset
-  while(true){
-    sleep(1);
+  enum state s;
+  while((s = atomic_load(&sdr->state)) == RUNNING){
+    usleep(100000); // 10 Hz
     if(!airspyhf_is_streaming(sdr->device))
       break; // Device seems to have bombed. Exit and let systemd restart us
   }
@@ -236,7 +270,9 @@ static void *airspyhf_monitor(void *p){
   // This can hang when the device locks up
   // This has been happening at KQ6RS
   //  airspyhf_close(sdr->device);
-  exit(EX_NOINPUT); // Let systemd restart us
+  if(s != STOPPED)
+    exit(EX_NOINPUT); // Let systemd restart us
+  return 0;
 }
 
 static bool Name_set = false;

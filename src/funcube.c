@@ -11,6 +11,8 @@
 #endif
 #include <sysexits.h>
 #include <strings.h>
+#include <unistd.h>
+#include <stdatomic.h>
 
 #include "fcd.h"
 #include "misc.h"
@@ -40,6 +42,12 @@ static bool Hold_open = false;
 
 extern char const *Description;
 
+enum state {
+  STOPPED,
+  STARTING,
+  STOPPING,
+  RUNNING
+};
 struct sdrstate {
   struct frontend *frontend;
 
@@ -65,6 +73,7 @@ struct sdrstate {
   int overflows;
 
   pthread_t proc_thread;
+  _Atomic enum state state;
 };
 
 static char const *Funcube_keys[] = {
@@ -210,7 +219,8 @@ static void *proc_funcube(void *arg){
 
   realtime(2 + default_prio());
 
-  while(true){
+  enum state state;
+  while((state = atomic_load(&sdr->state)) == RUNNING){
     // Read block of I/Q samples from A/D converter
     // The timer is necessary because portaudio will go into a tight loop if the device is unplugged
     struct itimerval itime;
@@ -218,13 +228,13 @@ static void *proc_funcube(void *arg){
     itime.it_value.tv_sec = 1; // 1 second should be more than enough
     if(setitimer(ITIMER_VIRTUAL,&itime,NULL) == -1){
       perror("setitimer start");
-      goto terminate;
+      return NULL;
     }
     int const r = Pa_ReadStream(sdr->Pa_Stream,sampbuf,Blocksize);
     memset(&itime,0,sizeof(itime));
     if(setitimer(ITIMER_VIRTUAL,&itime,NULL) == -1){
       perror("setitimer stop");
-      goto terminate;
+      return NULL;
     }
     if(r < 0){
       if(r == paInputOverflowed){
@@ -234,7 +244,7 @@ static void *proc_funcube(void *arg){
 	fprintf(stderr,"Pa_ReadStream: %s\n",Pa_GetErrorText(r));
       } else {
 	fprintf(stderr,"Pa_ReadStream: %s, exiting\n",Pa_GetErrorText(r));
-	goto terminate;
+	return NULL;
       }
     } else
       ConsecPaErrs = 0;
@@ -299,23 +309,49 @@ static void *proc_funcube(void *arg){
     if(sdr->agc)
       do_fcd_agc(sdr);
   }
- terminate:
-  Pa_Terminate();
-  exit(EX_NOINPUT); // Let systemd restart us
+  if(state == RUNNING){
+    // We're exiting because of a device error, not because we were stopped
+    Pa_Terminate();
+    exit(EX_NOINPUT); // Let systemd restart us
+  }
+  return NULL;
 }
 int funcube_startup(struct frontend *frontend){
   assert(frontend != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
-
+  while(1){
+    enum state s = STOPPED;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
+      break;
+    if(s == RUNNING)
+      return 0; // Already running
+    usleep(10000); // 10 ms
+  }
   // Start processing A/D data
   sdr->scale = scale_AD(frontend);
   pthread_create(&sdr->proc_thread,NULL,proc_funcube,sdr);
+  atomic_store(&sdr->state,RUNNING);
   fprintf(stderr,"funcube running\n");
   return 0;
 }
-
-
+int funcube_stop(struct frontend *frontend){
+  assert(frontend != NULL);
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  assert(sdr != NULL);
+  while(1){
+    enum state s = RUNNING;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
+      break;
+    if(s == STOPPED)
+      return 0; // Already stopped
+    usleep(10000); // 10 ms
+  }
+  pthread_join(sdr->proc_thread,NULL);
+  sdr->state = STOPPED;
+  fprintf(stderr,"funcube stopped\n");
+  return 0;
+}
 
 // Crude analog AGC just to keep signal roughly within A/D range
 // Executed only if -o option isn't specified; this allows manual control with, e.g., the fcdpp command

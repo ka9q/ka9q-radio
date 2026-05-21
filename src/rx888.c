@@ -1,4 +1,3 @@
-
 // linked-in module for rx888 Mk ii for ka9q-radio's radiod
 // Accept control commands from UDP socket
 //
@@ -76,6 +75,14 @@ extern char const *Serial;
 
 // Hardware-specific stuff.
 // Anything generic should be moved to 'struct frontend' under sdr in radio.h
+enum state {
+  STOPPED,
+  STARTING,
+  STOPPING,
+  RUNNING
+};
+
+
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
 
@@ -115,7 +122,7 @@ struct sdrstate {
   pthread_t proc_thread;
   pthread_t agc_thread;
   bool ms_int;
-  _Atomic bool running;
+  _Atomic enum state state;
 };
 
 static _Thread_local bool reset = false;
@@ -413,25 +420,37 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 // Come back here after common stuff has been set up (filters, etc)
 int rx888_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  bool f = false;
-  if(atomic_compare_exchange_strong(&sdr->running,&f,true)){
-    // Start processing A/D data only if no already running
-    sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
-    pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
-    pthread_create(&sdr->agc_thread,NULL,agc_rx888,sdr);
-    fprintf(stderr,"rx888 running\n");
+  while(1){
+    enum state s = STOPPED;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
+      break;
+    if(s == RUNNING)
+      return 0; // Already running
+    usleep(10000); // 10 ms
   }
+  // Start processing A/D data only if no already running
+  sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
+  pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
+  pthread_create(&sdr->agc_thread,NULL,agc_rx888,sdr);
+  atomic_store(&sdr->state,RUNNING);
+  fprintf(stderr,"rx888 running\n");
   return 0;
 }
 
-int rx888_stop(struct frontend * const frontend){
+int rx888_shutdown(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  bool t = true;
-  if(atomic_compare_exchange_strong(&sdr->running,&t,false)){
-    pthread_join(sdr->proc_thread, NULL);
-    pthread_join(sdr->agc_thread, NULL);
-    fprintf(stderr,"rx888 stopped\n");
+  while(1){
+    enum state s = RUNNING;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
+      break;
+    if(s == STOPPED)
+      return 0; // Already running
+    usleep(10000); // 10 ms
   }
+  pthread_join(sdr->proc_thread, NULL);
+  pthread_join(sdr->agc_thread, NULL);
+  atomic_store(&sdr->state,STOPPED);
+  fprintf(stderr,"rx888 stopped\n");
   return 0;
 }
 
@@ -496,14 +515,14 @@ static void *proc_rx888(void *arg){
       fprintf(stderr,"handle_events returned %d\n",ret);
       break;
     }
-  } while (sdr->running);
+  } while (sdr->state);
 
   rx888_stop_rx(sdr);
-#if 0
-  rx888_close(sdr); // In case we start again
+#if 0 // In case we start again
+  rx888_close(sdr);
 #endif
   // Can't do anything without the front end; quit entirely
-  if(sdr->running){
+  if(sdr->state){
     // We weren't told to stop, the hardware malfunctioned. Exit and let systemd retry us
     fprintf(stderr,"rx888 has aborted, exiting radiod\n");
     exit(EX_NOINPUT);
@@ -518,7 +537,7 @@ static void *agc_rx888(void *arg){
   assert(sdr != NULL);
   pthread_setname("agc_rx888");
   struct frontend *frontend = sdr->frontend;
-  while(sdr->running){
+  while(atomic_load(&sdr->state) == RUNNING){
     sleep(AGC_INTERVAL);
     int64_t now = gps_time_ns();
     if(now >= sdr->last_count_time + 60 * BILLION){
@@ -588,7 +607,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
     if(Verbose > 1)
       fprintf(stderr,"Transfer %p callback status %s received %d bytes.\n",transfer,
 	      libusb_error_name(transfer->status), transfer->actual_length);
-    if(sdr->running) {
+    if(atomic_load(&sdr->state) == RUNNING) {
       if(libusb_submit_transfer(transfer) == 0)
         sdr->xfers_in_progress++;
     }
@@ -642,7 +661,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
   // These blocks are kinda small, so exponentially smooth the power readings
   frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
   frontend->samples += sampcount; // Count original samples
-  if(sdr->running) {
+  if(atomic_load(&sdr->state) == RUNNING) {
     if(libusb_submit_transfer(transfer) == 0)
       sdr->xfers_in_progress++;
   }

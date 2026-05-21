@@ -29,7 +29,6 @@ char const *Config_file;
 const char *App_path;
 int Verbose;
 static char const *Locale = "en_US.UTF-8";
-volatile bool Stop_transfers = false; // Request to stop data transfers; how should this get set?
 char const *Name; // List of valid config keys in [global] section, for error checking
 // Passed by udev when it finds a USB device
 int USB_busnum = -1;
@@ -195,7 +194,9 @@ static void closedown(int a){
 
   ssize_t r = write(2,message,strlen(message));
   (void)r; // shut up compiler
-  Stop_transfers = true;
+  extern struct frontend Frontend;
+  if(Frontend.shutdown)
+    (*Frontend.shutdown)(&Frontend);
   sleep(1); // pause for threads to see it
   _exit(a == SIGTERM ? EX_OK : EX_SOFTWARE); // Success when terminated by systemd
 }

@@ -14,6 +14,7 @@
 #include <sysexits.h>
 #include <unistd.h>
 #include <strings.h>
+#include <stdatomic.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -26,6 +27,12 @@ extern int Verbose;
 extern char const *Description;
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
+enum state {
+  STOPPED,
+  STARTING,
+  STOPPING,
+  RUNNING
+};
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
   struct hydrasdr_device *device;    // Opaque pointer
@@ -54,6 +61,7 @@ struct sdrstate {
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
+  _Atomic enum state state;
 };
 
 static const char *Sample_type_name[] = {
@@ -525,25 +533,35 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
 }
 int hydrasdr_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  while(1){
+    enum state s = STOPPED;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
+      break;
+    if(s == RUNNING)
+      return 0; // Already running
+    usleep(10000); // 10 ms
+  }
+  // Only if we're not already running
   sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
-#if 0
-  // This should work, but it doesn't
-  // So we set it in the first callback
-  pthread_attr_t attr;
-  pthread_attr_init(&attr);
-  pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
-  pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
-
-  struct sched_param param = { 0 };
-  param.sched_priority = (sched_get_priority_max(SCHED_FIFO) + sched_get_priority_min(SCHED_FIFO)) / 2; // midway?
-
-  pthread_attr_setschedparam(&attr, &param);
-  pthread_create(&sdr->monitor_thread,&attr,hydrasdr_monitor,sdr);
-  pthread_attr_destroy(&attr);
-#else
   pthread_create(&sdr->monitor_thread,NULL,hydrasdr_monitor,sdr);
-#endif
-
+  atomic_store(&sdr->state,RUNNING);
+  fprintf(stderr,"hydrasdr started\n");
+  return 0;
+}
+int hydrasdr_shutdown(struct frontend * const frontend){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  while(1){
+    enum state s = RUNNING;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
+      break;
+    if(s == STOPPED)
+      return 0;
+    usleep(10000);
+  }
+  // Only if we're not already stopped
+  pthread_join(sdr->monitor_thread,NULL); // Wait for monitor thread to terminate
+  atomic_store(&sdr->state,STOPPED);
+  fprintf(stderr,"hydrasdr stopped\n");
   return 0;
 }
 
@@ -577,14 +595,16 @@ static void *hydrasdr_monitor(void *p){
   }
 #endif
   // Periodically poll status to ensure device hasn't reset
-  while(true){
-    sleep(1);
+  enum state s;
+  while((s = atomic_load(&sdr->state)) == RUNNING){
+    usleep(100000);
     if(!hydrasdr_is_streaming(sdr->device))
       break; // Device seems to have bombed. Exit and let systemd restart us
   }
   fprintf(stderr,"Device is no longer streaming, exiting\n");
+  hydrasdr_stop_rx(sdr->device);
   hydrasdr_close(sdr->device);
-  exit(EX_NOINPUT); // Let systemd restart us
+  return NULL;
 }
 
 

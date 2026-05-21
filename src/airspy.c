@@ -14,6 +14,7 @@
 #include <sysexits.h>
 #include <unistd.h>
 #include <strings.h>
+#include <stdatomic.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -28,6 +29,12 @@ extern char const *Serial;
 
 
 // Anything generic should be in 'struct frontend' section 'sdr' in radio.h
+enum state {
+  STOPPED,
+  STARTING,
+  STOPPING,
+  RUNNING
+};
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
   struct airspy_device *device;    // Opaque pointer
@@ -53,6 +60,7 @@ struct sdrstate {
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
+  _Atomic enum state state;
 };
 
 // Taken from Airspy library driver source
@@ -311,8 +319,35 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 }
 int airspy_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  while(1){
+    enum state s = STOPPED;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
+      break;
+    if(s == RUNNING)
+      return 0; // Already running
+    usleep(10000); // 10 ms
+  }
   sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
   pthread_create(&sdr->monitor_thread,NULL,airspy_monitor,sdr); // prio gets set in first callback
+  atomic_store(&sdr->state,RUNNING);
+  fprintf(stderr,"airspy running\n");
+  return 0;
+}
+
+int airspy_shutdown(struct frontend * const frontend){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  while(1){
+    enum state s = RUNNING;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
+      break;
+    if(s == STOPPED)
+      return 0;
+    usleep(10000);
+  }
+  pthread_join(sdr->cmd_thread,NULL);
+  pthread_join(sdr->monitor_thread,NULL);
+  atomic_store(&sdr->state,STOPPED);
+  fprintf(stderr,"airspy stopped\n");
   return 0;
 }
 
@@ -328,15 +363,22 @@ static void *airspy_monitor(void *p){
   assert(ret == AIRSPY_SUCCESS);
   fprintf(stderr,"airspy running\n");
   // Periodically poll status to ensure device hasn't reset
-  while(true){
-    sleep(1);
+  enum state s;
+  while((s = atomic_load(&sdr->state)) == RUNNING){
+    usleep(100000); // 10 hz
     if(!airspy_is_streaming(sdr->device))
       break; // Device seems to have bombed. Exit and let systemd restart us
   }
   fprintf(stderr,"Device is no longer streaming, exiting\n");
+  airspy_stop_rx(sdr->device);
+#if 0 // In case we start again
   airspy_close(sdr->device);
-  airspy_exit();
-  exit(EX_NOINPUT); // Let systemd restart us
+#endif
+  if(s != STOPPED){
+    fprintf(stderr,"airspy has aborted, exiting radiod\n");
+    exit(EX_NOINPUT); // Device stopped on its own, that's an error
+  }
+  return 0;
 }
 
 

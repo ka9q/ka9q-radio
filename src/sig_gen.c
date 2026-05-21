@@ -16,6 +16,8 @@
 #include <sysexits.h>
 #include <strings.h>
 #include <samplerate.h>
+#include <stdatomic.h>
+#include <unistd.h>
 
 #include "fcd.h"
 #include "misc.h"
@@ -46,6 +48,12 @@ static char const *Sig_gen_keys[] = {
   NULL
 };
 
+enum state {
+  STOPPED,
+  STARTING,
+  STOPPING,
+  RUNNING
+};
 struct sdrstate {
   struct frontend *frontend;
   double carrier; // Carrier frequency to generate
@@ -56,13 +64,13 @@ struct sdrstate {
   double scale;
 
   pthread_t proc_thread;
+  _Atomic enum state state;
 };
 
 // A larger blocksize makes more efficient use of each frame, but the receiver generally runs on
 // frames that match the Opus codec: 2.5, 5, 10, 20, 40, 60, 180, 100, 120 ms
 // So to minimize latency, make this a common denominator:
 // 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
-extern bool Stop_transfers;
 extern char const *Description;
 
 double complex complex_gaussian(double);
@@ -219,7 +227,8 @@ static void *proc_sig_gen(void *arg){
     fprintf(stderr,"src_callback_new: %s\n",src_strerror(error));
   assert(error == 0);
   assert(src_state != NULL);
-  while(!Stop_transfers){
+  enum state state;
+  while((state = atomic_load(&sdr->state)) == RUNNING){
     // How long since last call?
     int64_t now = gps_time_ns();
     int64_t interval = now - timesnap;
@@ -298,17 +307,42 @@ static void *proc_sig_gen(void *arg){
       nanosleep(&ts,NULL);
     }
   }
-  exit(EX_NOINPUT); // Can't get here
+  return NULL;
 }
 int sig_gen_startup(struct frontend *frontend){
   assert(frontend != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
-
+  while(1){
+    enum state s = STOPPED;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
+      break;
+    if(s == RUNNING)
+      return 0; // Already running
+    usleep(10000); // 10 ms
+  }
   // Start processing A/D data
   sdr->scale = scale_AD(frontend);
   pthread_create(&sdr->proc_thread,NULL,proc_sig_gen,sdr);
+  atomic_store(&sdr->state,RUNNING);
   fprintf(stderr,"signal generator running\n");
+  return 0;
+}
+int sig_gen_shutdown(struct frontend *frontend){
+  assert(frontend != NULL);
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  assert(sdr != NULL);
+  while(1){
+    enum state s = RUNNING;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
+      break;
+    if(s == STOPPED)
+      return 0; // Already stopped
+    usleep(10000); // 10 ms
+  }
+  pthread_join(sdr->proc_thread,NULL);
+  atomic_store(&sdr->state,STOPPED);
+  fprintf(stderr,"signal generator stopped\n");
   return 0;
 }
 

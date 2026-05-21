@@ -26,6 +26,7 @@ on a per-channel basis by selecting output filter type BEAM and calling set_filt
 #include "radio.h"
 #include <strings.h>
 #include <sysexits.h>
+#include <stdatomic.h>
 
 static double Power_alpha = 0.05; // Calculate this properly someday
 
@@ -51,6 +52,12 @@ extern char const *Description;
 
 struct fobos_dev_t *dev = NULL;
 
+enum state {
+  STOPPED,
+  STARTING,
+  STOPPING,
+  RUNNING
+};
 struct sdrstate {
   struct frontend *frontend;
   struct fobos_dev_t *dev;
@@ -63,6 +70,7 @@ struct sdrstate {
   unsigned int next_sample_num;
   double scale; // Scale samples for #bits and front end gain
   pthread_t monitor_thread;
+  _Atomic enum state state;
 };
 
 static void rx_callback(float *buf, uint32_t buf_length, void *ctx);
@@ -418,11 +426,37 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
 
 int fobos_startup(struct frontend *const frontend) {
   struct sdrstate *const sdr = (struct sdrstate *)frontend->context;
+  while(1){
+    enum state s = STOPPED;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
+      break;
+    if(s == RUNNING)
+      return 0; // Already running
+    usleep(10000); // 10 ms
+  }
   sdr->scale = scale_AD(frontend);
   pthread_create(&sdr->monitor_thread, NULL, fobos_monitor, sdr);
+  atomic_store(&sdr->state,RUNNING);
   fprintf(stderr, "fobos read thread running\n");
   return 0;
 }
+
+int fobos_shutdown(struct frontend *const frontend) {
+  struct sdrstate *const sdr = (struct sdrstate *)frontend->context;
+  while(1){
+    enum state s = RUNNING;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
+      break;
+    if(s == STOPPED)
+      return 0;
+    usleep(10000);
+  }
+  pthread_join(sdr->monitor_thread,NULL);
+  atomic_store(&sdr->state,STOPPED);
+  fprintf(stderr, "fobos read thread stopped\n");
+  return 0;
+}
+
 
 double fobos_tune(struct frontend *const frontend, double const freq) {
   struct sdrstate *const sdr = (struct sdrstate *)frontend->context;
