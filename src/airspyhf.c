@@ -270,7 +270,7 @@ static void *airspyhf_monitor(void *p){
   // This can hang when the device locks up
   // This has been happening at KQ6RS
   //  airspyhf_close(sdr->device);
-  if(s != STOPPED)
+  if(s == RUNNING)
     exit(EX_NOINPUT); // Let systemd restart us
   return 0;
 }

@@ -374,7 +374,7 @@ static void *airspy_monitor(void *p){
 #if 0 // In case we start again
   airspy_close(sdr->device);
 #endif
-  if(s != STOPPED){
+  if(s == RUNNING){
     fprintf(stderr,"airspy has aborted, exiting radiod\n");
     exit(EX_NOINPUT); // Device stopped on its own, that's an error
   }
