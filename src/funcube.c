@@ -348,7 +348,7 @@ int funcube_stop(struct frontend *frontend){
     usleep(10000); // 10 ms
   }
   pthread_join(sdr->proc_thread,NULL);
-  sdr->state = STOPPED;
+  atomic_store(&sdr->state,STOPPED);
   fprintf(stderr,"funcube stopped\n");
   return 0;
 }
