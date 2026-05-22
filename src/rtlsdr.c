@@ -258,15 +258,17 @@ int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *se
 
 
 static void *rtlsdr_read_thread(void *arg){
-  struct sdr *sdr = arg;
-  struct frontend *frontend = sdr->frontend;
+  struct sdr * const sdr = arg;
+  struct frontend * const frontend = sdr->frontend;
 
   realtime(2 + default_prio());
   stick_core();
   rtlsdr_reset_buffer(sdr->device);
-  rtlsdr_read_async(sdr->device,rx_callback,frontend,0,16*16384); // blocks
+  int r = rtlsdr_read_async(sdr->device,rx_callback,frontend,0,16*16384); // blocks
+  if(r == 0)
+    return NULL;
 
-  exit(EX_NOINPUT); // return from read_async is an abort?
+  exit(EX_NOINPUT); // non-neg return is a hardware failure?
   return NULL;
 }
 
@@ -288,11 +290,11 @@ int rtlsdr_startup(struct frontend * const frontend){
   return 0;
 }
 
-#if 0
+#if 1
 // Not sure how to do this because I don't have an explicit monitor or callback context thread with a loop
 // that can be conditioned on sdr->state
 int rtlsdr_shutdown(struct frontend * const frontend){
-  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  struct sdr * const sdr = (struct sdr *)frontend->context;
   while(true){
     enum state s = RUNNING;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
@@ -301,6 +303,8 @@ int rtlsdr_shutdown(struct frontend * const frontend){
       return 0;
     usleep(10000);
   }
+  rtlsdr_cancel_async(sdr->device);
+  pthread_join(sdr->read_thread,NULL);
   atomic_store(&sdr->state,STOPPED);
   fprintf(stderr,"rtlsdr stopped\n");
   return 0;
