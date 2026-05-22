@@ -1,4 +1,5 @@
 // ka9q-radio driver for Great Scott Gadgets Hack RF
+// Need to figure out how to detect a device failure during streaming
 #define _GNU_SOURCE 1 // allow bind/connect/recvfrom without casting sockaddr_in6
 #include <assert.h>
 #include <pthread.h>
@@ -251,7 +252,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
 int hackrf_startup(struct frontend * const frontend){
   assert(frontend != NULL);
   struct sdrstate *sdr = frontend->context;
-  while(1){
+  while(true){
     enum state s = STOPPED;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
       break;
@@ -273,7 +274,7 @@ int hackrf_startup(struct frontend * const frontend){
 int hackrf_shutdown(struct frontend * const frontend){
   assert(frontend != NULL);
   struct sdrstate *sdr = frontend->context;
-  while(1){
+  while(true){
     enum state s = RUNNING;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
       break;
@@ -289,7 +290,6 @@ int hackrf_shutdown(struct frontend * const frontend){
   fprintf(stderr,"Hackrf stopped\n");
   return 0;
 }
-
 
 static bool Name_set = false;
 
@@ -379,8 +379,8 @@ static void *hackrf_agc(void *arg){
   struct sdrstate *sdr = (struct sdrstate *)arg;
   struct frontend *frontend = sdr->frontend;
 
-  enum state state;
-  while((state = atomic_load(&sdr->state)) == RUNNING){
+  enum state s;
+  while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
     usleep(100000);
     double powerdB = power2dB(frontend->if_power*scale_ADpower2FS(frontend));
     int change;
@@ -481,7 +481,6 @@ double hackrf_tune(struct frontend * const frontend,double const frequency){
   (void)ret;
   frontend->frequency = frequency;
   return frequency;
-
 }
 
 #if 0

@@ -219,8 +219,8 @@ static void *proc_funcube(void *arg){
 
   realtime(2 + default_prio());
 
-  enum state state;
-  while((state = atomic_load(&sdr->state)) == RUNNING){
+  enum state s;
+  while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
     // Read block of I/Q samples from A/D converter
     // The timer is necessary because portaudio will go into a tight loop if the device is unplugged
     struct itimerval itime;
@@ -228,13 +228,13 @@ static void *proc_funcube(void *arg){
     itime.it_value.tv_sec = 1; // 1 second should be more than enough
     if(setitimer(ITIMER_VIRTUAL,&itime,NULL) == -1){
       perror("setitimer start");
-      return NULL;
+      break;
     }
     int const r = Pa_ReadStream(sdr->Pa_Stream,sampbuf,Blocksize);
     memset(&itime,0,sizeof(itime));
     if(setitimer(ITIMER_VIRTUAL,&itime,NULL) == -1){
       perror("setitimer stop");
-      return NULL;
+      break;
     }
     if(r < 0){
       if(r == paInputOverflowed){
@@ -244,7 +244,7 @@ static void *proc_funcube(void *arg){
 	fprintf(stderr,"Pa_ReadStream: %s\n",Pa_GetErrorText(r));
       } else {
 	fprintf(stderr,"Pa_ReadStream: %s, exiting\n",Pa_GetErrorText(r));
-	return NULL;
+	break;
       }
     } else
       ConsecPaErrs = 0;
@@ -309,9 +309,10 @@ static void *proc_funcube(void *arg){
     if(sdr->agc)
       do_fcd_agc(sdr);
   }
-  if(state == RUNNING){
+  if(s == RUNNING || s == STARTING){
     // We're exiting because of a device error, not because we were stopped
     Pa_Terminate();
+    fprintf(stderr,"funcube streaming failed, exiting\n");
     exit(EX_NOINPUT); // Let systemd restart us
   }
   return NULL;
@@ -320,7 +321,7 @@ int funcube_startup(struct frontend *frontend){
   assert(frontend != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
-  while(1){
+  while(true){
     enum state s = STOPPED;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
       break;
@@ -339,7 +340,7 @@ int funcube_stop(struct frontend *frontend){
   assert(frontend != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
-  while(1){
+  while(true){
     enum state s = RUNNING;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
       break;

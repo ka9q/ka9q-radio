@@ -17,6 +17,8 @@
 #include <iniparser/iniparser.h>
 #include <sysexits.h>
 #include <strings.h>
+#include <stdatomic.h>
+#include <unistd.h>
 
 #include "misc.h"
 #include "radio.h"
@@ -50,6 +52,12 @@ extern char const *App_path;
 extern int Verbose;
 extern char const *Description;
 
+enum state {
+  STOPPED,
+  STARTING,
+  STOPPING,
+  RUNNING
+};
 struct sdr {
   struct frontend *frontend;
   struct rtlsdr_dev *device;    // Opaque pointer
@@ -71,6 +79,7 @@ struct sdr {
   //  double DC;      // DC offset for real samples
 
   pthread_t read_thread;
+  _Atomic enum state state;
 };
 
 static char const *Rtlsdr_keys[] = {
@@ -264,12 +273,39 @@ static void *rtlsdr_read_thread(void *arg){
 
 int rtlsdr_startup(struct frontend * const frontend){
   struct sdr * const sdr = frontend->context;
+  while(true){
+    enum state s = STOPPED;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
+      break;
+    if(s == RUNNING)
+      return 0; // Already running
+    usleep(10000); // 10 ms
+  }
   sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
   pthread_create(&sdr->read_thread,NULL,rtlsdr_read_thread,sdr);
+  atomic_store(&sdr->state,RUNNING);
   fprintf(stderr,"rtlsdr thread running\n");
   return 0;
 }
 
+#if 0
+// Not sure how to do this because I don't have an explicit monitor or callback context thread with a loop
+// that can be conditioned on sdr->state
+int rtlsdr_shutdown(struct frontend * const frontend){
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  while(true){
+    enum state s = RUNNING;
+    if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
+      break;
+    if(s == STOPPED)
+      return 0;
+    usleep(10000);
+  }
+  atomic_store(&sdr->state,STOPPED);
+  fprintf(stderr,"rtlsdr stopped\n");
+  return 0;
+}
+#endif
 
 // Callback called with incoming receiver data from A/D
 static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){

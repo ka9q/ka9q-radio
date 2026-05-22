@@ -219,7 +219,7 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
 }
 int airspyhf_startup(struct frontend *frontend){
   struct sdrstate *sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = STOPPED;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
       break;
@@ -235,7 +235,7 @@ int airspyhf_startup(struct frontend *frontend){
 }
 int airspyhf_shutdown(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = RUNNING;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
       break;
@@ -258,20 +258,18 @@ static void *airspyhf_monitor(void *p){
   int ret __attribute__ ((unused));
   ret = airspyhf_start(sdr->device,rx_callback,sdr);
   assert(ret == AIRSPYHF_SUCCESS);
-  fprintf(stderr,"airspyhf running\n");
   // Periodically poll status to ensure device hasn't reset
   enum state s;
-  while((s = atomic_load(&sdr->state)) == RUNNING){
+  while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
     usleep(100000); // 10 Hz
-    if(!airspyhf_is_streaming(sdr->device))
-      break; // Device seems to have bombed. Exit and let systemd restart us
+    if(!airspyhf_is_streaming(sdr->device)){
+      airspyhf_stop(sdr->device);
+      airspyhf_close(sdr->device);
+      fprintf(stderr,"airspyhf is no longer streaming, exiting\n");
+      exit(EX_NOINPUT); // Let systemd restart us
+    }
   }
-  fprintf(stderr,"Device is no longer streaming, exiting\n");
-  // This can hang when the device locks up
-  // This has been happening at KQ6RS
-  //  airspyhf_close(sdr->device);
-  if(s == RUNNING)
-    exit(EX_NOINPUT); // Let systemd restart us
+  airspyhf_stop(sdr->device);
   return 0;
 }
 

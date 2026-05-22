@@ -227,8 +227,8 @@ static void *proc_sig_gen(void *arg){
     fprintf(stderr,"src_callback_new: %s\n",src_strerror(error));
   assert(error == 0);
   assert(src_state != NULL);
-  enum state state;
-  while((state = atomic_load(&sdr->state)) == RUNNING){
+  enum state s;
+  while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING ){
     // How long since last call?
     int64_t now = gps_time_ns();
     int64_t interval = now - timesnap;
@@ -307,13 +307,14 @@ static void *proc_sig_gen(void *arg){
       nanosleep(&ts,NULL);
     }
   }
+  // No error exits from this loop, so this must be a suspend operation
   return NULL;
 }
 int sig_gen_startup(struct frontend *frontend){
   assert(frontend != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
-  while(1){
+  while(true){
     enum state s = STOPPED;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
       break;
@@ -332,7 +333,7 @@ int sig_gen_shutdown(struct frontend *frontend){
   assert(frontend != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
-  while(1){
+  while(true){
     enum state s = RUNNING;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
       break;

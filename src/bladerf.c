@@ -273,7 +273,7 @@ static void *bladerf_main(void *p)
 int bladerf_startup(struct frontend * const frontend)
 {
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = STOPPED;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
       break;
@@ -306,7 +306,7 @@ return 0;
 
 int bladerf_stop(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = RUNNING;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
       break;
@@ -416,11 +416,12 @@ static void *bladerf_monitor(void *p)
 
 	status = bladerf_enable_module(sdr->dev, BLADERF_MODULE_RX, false);
 	if (status < 0) {
-		fprintf(stderr, "Failed to enable module: %s\n",
+		fprintf(stderr, "Failed to disable module: %s\n",
 				bladerf_strerror(status));
 	}
 	fprintf(stderr,"bladerf stopped\n");
-	if(atomic_load(&sdr->state) == RUNNING){
+	enum state s;
+	if((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
 	  // Exited because of error
 	  bladerf_deinit_stream(stream);
 	  bladerf_close(sdr->dev);

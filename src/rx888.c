@@ -420,7 +420,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 // Come back here after common stuff has been set up (filters, etc)
 int rx888_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = STOPPED;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
       break;
@@ -439,7 +439,7 @@ int rx888_startup(struct frontend * const frontend){
 
 int rx888_shutdown(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = RUNNING;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
       break;
@@ -491,7 +491,8 @@ static void *proc_rx888(void *arg){
     ret = rx888_start_rx(sdr,rx_callback);
     assert(ret == 0);
   }
-  do {
+  enum state s;
+  while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING) {
     if(usb_device_gone){
       // Device actually disappeared, exit immediately in case
       // it gets quickly plugged back in before 5 seconds
@@ -515,16 +516,13 @@ static void *proc_rx888(void *arg){
       fprintf(stderr,"handle_events returned %d\n",ret);
       break;
     }
-  } while (sdr->state);
-
+  }
   rx888_stop_rx(sdr);
-#if 0 // In case we start again
-  rx888_close(sdr);
-#endif
   // Can't do anything without the front end; quit entirely
-  if(sdr->state){
+  if(s != RUNNING && s != STARTING){
     // We weren't told to stop, the hardware malfunctioned. Exit and let systemd retry us
     fprintf(stderr,"rx888 has aborted, exiting radiod\n");
+    rx888_close(sdr);
     exit(EX_NOINPUT);
   }
   return NULL;
@@ -537,7 +535,8 @@ static void *agc_rx888(void *arg){
   assert(sdr != NULL);
   pthread_setname("agc_rx888");
   struct frontend *frontend = sdr->frontend;
-  while(atomic_load(&sdr->state) == RUNNING){
+  enum state s;
+  while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
     sleep(AGC_INTERVAL);
     int64_t now = gps_time_ns();
     if(now >= sdr->last_count_time + 60 * BILLION){
@@ -1065,16 +1064,14 @@ static void rx888_stop_rx(struct sdrstate *sdr){
     usleep(100000);
   }
   fprintf(stderr,"Transfers completed\n");
-#if 0 // don't deallocate in case we start again
-  free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
-  sdr->databuffers = NULL;
-  sdr->transfers = NULL;
-#endif
   command_send(sdr->dev_handle,STOPFX3,0);
 }
 
 static void rx888_close(struct sdrstate *sdr){
   assert(sdr != NULL);
+  free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
+  sdr->databuffers = NULL;
+  sdr->transfers = NULL;
 
   if(sdr->dev_handle)
     libusb_release_interface(sdr->dev_handle,0);

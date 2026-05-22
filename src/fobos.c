@@ -1,6 +1,6 @@
 /* Written by KC2DAC Dec 2024, adapted from existing KA9Q SDR handler programs
    Modified by Phil Karn KA9Q Feb 2024: approximate gain scaling, got direct sample mode working
-
+   Modified by Phil Karn May 2026: handle repeated stop/start
 In direct sample mode the two A/Ds are fed directly by the two HF inputs through fixed 20 dB gain
 amplifiers, so there is no manual or automatic gain control.
 
@@ -426,7 +426,7 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
 
 int fobos_startup(struct frontend *const frontend) {
   struct sdrstate *const sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = STOPPED;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
       break;
@@ -443,7 +443,7 @@ int fobos_startup(struct frontend *const frontend) {
 
 int fobos_shutdown(struct frontend *const frontend) {
   struct sdrstate *const sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = RUNNING;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
       break;

@@ -533,7 +533,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
 }
 int hydrasdr_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = STOPPED;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
       break;
@@ -550,7 +550,7 @@ int hydrasdr_startup(struct frontend * const frontend){
 }
 int hydrasdr_shutdown(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = RUNNING;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
       break;
@@ -595,16 +595,17 @@ static void *hydrasdr_monitor(void *p){
 #endif
   // Periodically poll status to ensure device hasn't reset
   enum state s;
-  while((s = atomic_load(&sdr->state)) == RUNNING){
+  while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
     usleep(100000);
     if(!hydrasdr_is_streaming(sdr->device))
       break; // Device seems to have bombed. Exit and let systemd restart us
   }
-  fprintf(stderr,"Device is no longer streaming, exiting\n");
   hydrasdr_stop_rx(sdr->device);
-#if 0 // we may restart it later
-  hydrasdr_close(sdr->device);
-#endif
+  if(s != RUNNING && s != STARTING){
+    fprintf(stderr,"Device is no longer streaming, exiting\n");
+    hydrasdr_close(sdr->device);
+    exit(EX_NOINPUT);
+  }
   return NULL;
 }
 

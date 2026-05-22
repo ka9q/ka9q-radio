@@ -319,7 +319,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 }
 int airspy_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = STOPPED;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STARTING))
       break;
@@ -336,7 +336,7 @@ int airspy_startup(struct frontend * const frontend){
 
 int airspy_shutdown(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  while(1){
+  while(true){
     enum state s = RUNNING;
     if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
       break;
@@ -364,20 +364,16 @@ static void *airspy_monitor(void *p){
   fprintf(stderr,"airspy running\n");
   // Periodically poll status to ensure device hasn't reset
   enum state s;
-  while((s = atomic_load(&sdr->state)) == RUNNING){
+  while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
     usleep(100000); // 10 hz
-    if(!airspy_is_streaming(sdr->device))
-      break; // Device seems to have bombed. Exit and let systemd restart us
+    if(!airspy_is_streaming(sdr->device)){
+      airspy_stop_rx(sdr->device);
+      airspy_close(sdr->device);
+      fprintf(stderr,"airspy has aborted, exiting radiod\n");
+      exit(EX_NOINPUT); // Device stopped on its own, that's an error
+    }
   }
-  fprintf(stderr,"Device is no longer streaming, exiting\n");
   airspy_stop_rx(sdr->device);
-#if 0 // In case we start again
-  airspy_close(sdr->device);
-#endif
-  if(s == RUNNING){
-    fprintf(stderr,"airspy has aborted, exiting radiod\n");
-    exit(EX_NOINPUT); // Device stopped on its own, that's an error
-  }
   return 0;
 }
 
