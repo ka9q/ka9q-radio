@@ -601,7 +601,7 @@ static void *hydrasdr_monitor(void *p){
       break; // Device seems to have bombed. Exit and let systemd restart us
   }
   hydrasdr_stop_rx(sdr->device);
-  if(s != RUNNING && s != STARTING){
+  if(s == RUNNING || s == STARTING){
     fprintf(stderr,"Device is no longer streaming, exiting\n");
     hydrasdr_close(sdr->device);
     exit(EX_NOINPUT);
