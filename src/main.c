@@ -143,7 +143,7 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"Can't load config file %s\n",Config_file);
     exit(EX_NOINPUT);
   }
-  fprintf(stderr,"%d total demodulators started\n",n);
+  fprintf(stderr,"%d static demodulators started\n",n);
   // Measure CPU usage
   int sleep_period = 10;
   struct timespec last_realtime = start_realtime;

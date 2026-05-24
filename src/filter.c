@@ -183,7 +183,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     return -1; // Unreasonably small - will segfault. Can happen if sample rate is garbled
 
   if(!goodchoice(N))
-    fprintf(stderr,"create_filter_input(L=%d, M=%d): N=%d is not an efficient blocksize for FFTW3\n",L,M,N);
+    fprintf(stderr,"create_filter_input(L=%'d  M=%'d): N=%'d is not an efficient blocksize for FFTW3\n",L,M,N);
 
   // It really should already be zeroed.
   // If not, it is probably being reused and the dynamically allocated storage in it may not have been freed
