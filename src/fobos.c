@@ -378,7 +378,6 @@ static void *fobos_monitor(void *p) {
   assert(sdr != NULL);
   pthread_setname("fobos-mon");
 
-  fprintf(stderr, "Starting asynchronous read\n");
   realtime(2 + default_prio());
   stick_core();
   int result = fobos_rx_read_async(sdr->dev, rx_callback, sdr, 16, 65536);
