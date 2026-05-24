@@ -20,6 +20,7 @@ ifeq ($(ENABLE_ALL),1)
 	ENABLE_RX888=1
 	ENABLE_SIG_GEN=1
 endif
+
 prefix        ?= /usr/local
 exec_prefix   ?= $(prefix)
 bindir        ?= $(exec_prefix)/bin
@@ -57,6 +58,10 @@ else
   LDLIBS += -lbsd -lrt
   SOFLAGS += -shared
 endif
+
+HAS_PIGPIO := $(shell \
+	echo '\#include <pigpio.h>' | \
+	$(CC) $(CPPFLAGS) -E - >/dev/null 2>&1 && echo 1)
 
 ifeq ($(BUILD),debug)
      DOPTS = -g
@@ -153,6 +158,11 @@ endif
 ifeq ($(ENABLE_SIG_GEN),1)
    CFILES += sig_gen.c
    DYNAMIC_DRIVERS += sig_gen.so
+endif
+
+ifeq ($(HAS_PIGPIO),1)
+   CFILES += set_xcvr.c
+   EXECS += set_xcvr
 endif
 
 .PHONY: clean all install dynamics purge
