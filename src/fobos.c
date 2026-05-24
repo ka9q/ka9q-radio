@@ -50,8 +50,6 @@ static char const *Fobos_keys[] = {
 extern int Verbose;
 extern char const *Description;
 
-struct fobos_dev_t *dev = NULL;
-
 enum state {
   STOPPED,
   STARTING,
@@ -76,7 +74,7 @@ struct sdrstate {
 static void rx_callback(float *buf, uint32_t buf_length, void *ctx);
 static void *fobos_monitor(void *p);
 
-int find_serial_position(const char *serials, const char *serialnumcfg) {
+static int find_serial_position(const char *serials, const char *serialnumcfg) {
   if (serialnumcfg == NULL) {
     return -1; // No serial number to search for
   }
@@ -104,19 +102,10 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
                 char const *const section) {
   assert(dictionary != NULL);
   config_validate_section(stderr, dictionary, section, Fobos_keys, NULL);
-  struct sdrstate *const sdr = calloc(1, sizeof(struct sdrstate));
-  // Cross-link generic and hardware-specific control structures
-  assert(sdr != NULL);
-  sdr->frontend = frontend;
-  frontend->context = sdr;
   frontend->isreal = false; // Make sure the right kind of filter gets created!
   // The Fobos apparently provides scaled float samples
   frontend->bitspersample = 1; // only used for gain scaling
   frontend->rf_agc = false; // On by default unless gain or atten is specified
-  sdr->scale = scale_AD(frontend);
-
-  sdr->buff_count = 0;
-  sdr->max_buff_count = 2048;
 
   // Read Config Files
   {
@@ -124,21 +113,6 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
     if (strcasecmp(device, "fobos") != 0)
       return -1; // Leave if not Fobos in the config
   }
-  sdr->device = -1;
-  {
-    char const *cp = config_getstring(dictionary, section, "description", Description ? Description : "fobos");
-    if(cp != NULL){
-      strlcpy(frontend->description,cp,sizeof(frontend->description));
-      Description = cp;
-    }
-  }
-  double requestsample =
-      config_getdouble(dictionary, section, "samprate", 8000000.0);
-  const char *serialnumcfg =
-      config_getstring(dictionary, section, "serial", NULL);
-  bool clk_sourcecfg = config_getboolean(dictionary, section, "clk_source", 0);
-  clk_sourcecfg = config_getboolean(dictionary, section, "ext_clock", clk_sourcecfg);
-
   // Get Fobos Library and Driver Version
   int result = 0;
   char lib_version[32];
@@ -151,7 +125,6 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
         "Unable to find Fobos Drivers. Please check libfobos is installed.\n");
     return -1;
   }
-
   // Look for connected Fobos Devices and fetch serial numbers
   char serialnumlist[256] = {0};
   int fobos_count = fobos_rx_list_devices(serialnumlist);
@@ -161,15 +134,14 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
   }
   fprintf(stderr, "Found %d Fobos SDR device(s)\n", fobos_count);
 
+  const char *serialnumcfg =
+      config_getstring(dictionary, section, "serial", NULL);
   // If the config specifies a serial number look for it in the list --
   // otherwise assume device 0
-  if (serialnumcfg == NULL) {
-    // Use the first device by default
-    sdr->device = 0;
-  } else {
-    int position = find_serial_position(serialnumlist, serialnumcfg);
+  int position = 0;
+  if (serialnumcfg != NULL) {
+    position = find_serial_position(serialnumlist, serialnumcfg);
     if (position >= 0) {
-      sdr->device = position;
     } else {
       fprintf(stderr,
               "Serial number '%s' not found in the list of connected Fobos "
@@ -178,156 +150,177 @@ int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
       return -1;
     }
   }
-
   // Open the SDR
-  result = fobos_rx_open(&dev, sdr->device);
+  struct sdrstate *const sdr = calloc(1, sizeof(struct sdrstate));
+  // Cross-link generic and hardware-specific control structures
+  assert(sdr != NULL);
+  sdr->frontend = frontend;
+  frontend->context = sdr;
+  sdr->scale = scale_AD(frontend);
+  sdr->buff_count = 0;
+  sdr->max_buff_count = 2048;
+  sdr->device = position;
+  result = fobos_rx_open(&sdr->dev, sdr->device);
   if (result != FOBOS_ERR_OK) {
     fprintf(stderr, "Could not open device: %d\n", sdr->device);
-    return -1;
-  } else {
-    char hw_revision[32];
-    char fw_version[32];
-    char manufacturer[32];
-    char product[32];
-    char serial[32];
-
-    result = fobos_rx_get_board_info(dev, hw_revision, fw_version, manufacturer,
-                                     product, serial);
-    if (result == FOBOS_ERR_OK) {
-      fprintf(stderr, "%s %s serial %s, hardware %s, lib %s, driver %s firmware %s\n",
-	      manufacturer,product,serial,hw_revision, lib_version,drv_version,fw_version);
-    } else {
-      fprintf(stderr, "Error fetching device info from fobos device: %d\n",
-              sdr->device);
-      return -1;
-    }
-
-    // Get Sample Rates offered by the Fobos
-    double *sampvalues = NULL;    // Pointer to hold sample rates
-    unsigned int samplecount = 0; // Initialize sample count
-
-    // First call to get the count of sample rates
-    result = fobos_rx_get_samplerates(dev, NULL, &samplecount);
-    if (result != FOBOS_ERR_OK) {
-      fprintf(stderr, "Error fetching sample rate count (error code: %d)\n",
-              result);
-      fobos_rx_close(dev); // Close the device before returning
-      return -1;
-    }
-
-    // Allocate memory for the sample rates array
-    sampvalues = (double *)malloc(samplecount * sizeof(double));
-    if (sampvalues == NULL) {
-      fprintf(stderr, "Error: Memory allocation failed for sample rates.\n");
-      fobos_rx_close(dev); // Close the device before returning
-      return -1;
-    }
-
-    // Second call to fetch the actual sample rates
-    result = fobos_rx_get_samplerates(dev, sampvalues, &samplecount);
-    if (result == FOBOS_ERR_OK) {
-      fprintf(stderr, "Supported Sample Rates for SDR #%d: ", sdr->device);
-      for (unsigned int i = 0; i < samplecount; i++) {
-        fprintf(stderr, " %'.0f", sampvalues[i]);
-      }
-      fprintf(stderr, "\n");
-    } else {
-      fprintf(stderr, "Error fetching sample rates (error code: %d)\n", result);
-      fobos_rx_close(dev);
-      return -1;
-    }
-    FREE(sampvalues);
-    // End of fetching sample rates here
-
-    // Set the Actual Sample Rate
-    double samprate_actual = 0.0;
-    result = fobos_rx_set_samplerate(dev, requestsample, &samprate_actual);
-    if (result == FOBOS_ERR_OK) {
-      frontend->samprate = samprate_actual;
-    } else {
-      fprintf(stderr, "Error setting sample rate %f\n", requestsample);
-      fobos_rx_close(dev);
-      return -1;
-    }
-    // Set Direct Sampling
-    sdr->direct_sampling = config_getboolean(dictionary, section, "direct_sampling", 0);
-    result = fobos_rx_set_direct_sampling(dev, sdr->direct_sampling);
-    if (result != FOBOS_ERR_OK) {
-      fprintf(stderr,
-              "fobos_rx_set_direct_sampling failed with error code: %d\n",
-              result);
-      return -1;
-    }
-    frontend->min_IF = -0.47 * frontend->samprate;
-    frontend->max_IF = 0.47 * frontend->samprate;
-
-    if(sdr->direct_sampling){
-      // With -40 dBm @ 15 MHz on B input and nothing on A input,
-      // A/D reads -42.2 dBm
-      // So level_cal = -0.8 dB gives (average) input of -43.0 dBm
-      // Note I flipped the sign convention on rf_level_cal to have units of dBm/FS
-      // ie, how many dBm on the input gives 0 dBFS
-      frontend->frequency = 0;
-      frontend->rf_gain = 0;
-      frontend->rf_atten = 0;
-      frontend->rf_level_cal = -0.8;
-    } else {
-      const char *frequencycfg =
-	config_getstring(dictionary, section, "frequency", "100m0");
-      // Set Frequency
-      double init_frequency = parse_frequency(frequencycfg, false);
-      double frequency_actual = 0.0;
-      // Wow, a library API that returns the *actual* tuner frequency. Bravo!
-      int result = fobos_rx_set_frequency(dev, init_frequency, &frequency_actual);
-      if (result != 0) {
-	fprintf(stderr, "fobos_rx_set_frequency failed with error code: %d\n",
-		result);
-	fobos_rx_close(dev);
-	return -1;
-      }
-      frontend->frequency = frequency_actual;
-
-      sdr->lna_gain = config_getint(dictionary, section, "lna_gain", 0);
-      sdr->vga_gain = config_getint(dictionary, section, "vga_gain", 0);
-
-      // These gains are not used in direct sample mode; the MAX2830 is bypassed
-      // Set LNA Gain 0..3
-      // MAX2830 datasheet, p21: 11 => max gain, 10 => -16 dB, 0X => -33 dB
-      result = fobos_rx_set_lna_gain(dev, sdr->lna_gain);
-      if (result != FOBOS_ERR_OK) {
-	fprintf(stderr, "fobos_rx_set_lna_gain failed with error code: %d\n",
-		result);
-	return -1;
-      }
-      // Get VGA Gain 0..31
-      // MAX2830 datasheet, p21: 2 dB steps, 0-62 dB
-      result = fobos_rx_set_vga_gain(dev, sdr->vga_gain);
-      if (result != FOBOS_ERR_OK) {
-	fprintf(stderr, "fobos_rx_set_vga_gain failed with error code: %d\n",
-		result);
-	return -1;
-      }
-      frontend->rf_gain = 2 * sdr->vga_gain + (sdr->lna_gain == 2 ? 16.0 : sdr->lna_gain == 3 ? 33.0 : 0);
-      frontend->rf_atten = 0;
-      frontend->rf_level_cal = -41; // very rough approximation, needs to be measured
-    }
-    // Set Clock Source
-    result = fobos_rx_set_clk_source(dev, clk_sourcecfg);
-    if (result != FOBOS_ERR_OK) {
-      fprintf(stderr, "fobos_rx_set_clk_source failed with error code: %d\n",
-              result);
-      return -1;
-    }
-    fprintf(stderr,"samprate %'lf Hz, tuner %'.3lf Hz, lna_gain %d (%d dB) vga_gain %d (%d dB)\n",
-	    frontend->samprate,
-	    frontend->frequency,
-	    sdr->lna_gain,
-	    sdr->lna_gain == 2 ? 33 : sdr->lna_gain == 1 ? 16 : 0,
-	    sdr->vga_gain,
-	    sdr->vga_gain * 2);
-    // SDR is open here
+    goto quit; // frees sdr, cleans up
   }
+  {
+    char const *cp = config_getstring(dictionary, section, "description", Description ? Description : "fobos");
+    if(cp != NULL){
+      strlcpy(frontend->description,cp,sizeof(frontend->description));
+      Description = cp;
+    }
+  }
+  char hw_revision[32];
+  char fw_version[32];
+  char manufacturer[32];
+  char product[32];
+  char serial[32];
+
+  result = fobos_rx_get_board_info(sdr->dev, hw_revision, fw_version, manufacturer,
+				   product, serial);
+  if (result == FOBOS_ERR_OK) {
+    fprintf(stderr, "%s %s serial %s, hardware %s, lib %s, driver %s firmware %s\n",
+	    manufacturer,product,serial,hw_revision, lib_version,drv_version,fw_version);
+  } else {
+    fprintf(stderr, "Error fetching device info from fobos device: %d\n",
+	    sdr->device);
+    goto quit;
+  }
+  // Get Sample Rates offered by the Fobos
+  double *sampvalues = NULL;    // Pointer to hold sample rates
+  unsigned int samplecount = 0; // Initialize sample count
+
+  // First call to get the count of sample rates
+  result = fobos_rx_get_samplerates(sdr->dev, NULL, &samplecount);
+  if (result != FOBOS_ERR_OK) {
+    fprintf(stderr, "Error fetching sample rate count (error code: %d)\n",
+	    result);
+    fobos_rx_close(sdr->dev); // Close the device before returning
+    goto quit;
+  }
+  // Allocate memory for the sample rates array
+  sampvalues = (double *)malloc(samplecount * sizeof(double));
+  if (sampvalues == NULL) {
+    fprintf(stderr, "Error: Memory allocation failed for sample rates.\n");
+    fobos_rx_close(sdr->dev); // Close the device before returning
+    goto quit;
+  }
+
+  // Second call to fetch the actual sample rates
+  result = fobos_rx_get_samplerates(sdr->dev, sampvalues, &samplecount);
+  if (result == FOBOS_ERR_OK) {
+    fprintf(stderr, "Supported Sample Rates for SDR #%d: ", sdr->device);
+    for (unsigned int i = 0; i < samplecount; i++) {
+      fprintf(stderr, " %'.0f", sampvalues[i]);
+    }
+    fprintf(stderr, "\n");
+  } else {
+    fprintf(stderr, "Error fetching sample rates (error code: %d)\n", result);
+    fobos_rx_close(sdr->dev);
+    goto quit;
+  }
+  FREE(sampvalues);
+  // End of fetching sample rates here
+  double requestsample =
+      config_getdouble(dictionary, section, "samprate", 8000000.0);
+  bool clk_sourcecfg = config_getboolean(dictionary, section, "clk_source", 0);
+  clk_sourcecfg = config_getboolean(dictionary, section, "ext_clock", clk_sourcecfg);
+
+  // Set the Actual Sample Rate
+  double samprate_actual = 0.0;
+  result = fobos_rx_set_samplerate(sdr->dev, requestsample, &samprate_actual);
+  if (result == FOBOS_ERR_OK) {
+    frontend->samprate = samprate_actual;
+  } else {
+    fprintf(stderr, "Error setting sample rate %f\n", requestsample);
+    fobos_rx_close(sdr->dev);
+    goto quit;
+  }
+  // Set Direct Sampling
+  sdr->direct_sampling = config_getboolean(dictionary, section, "direct_sampling", 0);
+  result = fobos_rx_set_direct_sampling(sdr->dev, sdr->direct_sampling);
+  if (result != FOBOS_ERR_OK) {
+    fprintf(stderr,
+	    "fobos_rx_set_direct_sampling failed with error code: %d\n",
+	    result);
+    goto quit;
+  }
+  frontend->min_IF = -0.47 * frontend->samprate;
+  frontend->max_IF = 0.47 * frontend->samprate;
+
+  if(sdr->direct_sampling){
+    // With -40 dBm @ 15 MHz on B input and nothing on A input,
+    // A/D reads -42.2 dBm
+    // So level_cal = -0.8 dB gives (average) input of -43.0 dBm
+    // Note I flipped the sign convention on rf_level_cal to have units of dBm/FS
+    // ie, how many dBm on the input gives 0 dBFS
+    frontend->frequency = 0;
+    frontend->rf_gain = 0;
+    frontend->rf_atten = 0;
+    frontend->rf_level_cal = -0.8;
+  } else {
+    const char *frequencycfg =
+      config_getstring(dictionary, section, "frequency", "100m0");
+    // Set Frequency
+    double init_frequency = parse_frequency(frequencycfg, false);
+    double frequency_actual = 0.0;
+    // Wow, a library API that returns the *actual* tuner frequency. Bravo!
+    int result = fobos_rx_set_frequency(sdr->dev, init_frequency, &frequency_actual);
+    if (result != 0) {
+      fprintf(stderr, "fobos_rx_set_frequency failed with error code: %d\n",
+	      result);
+      fobos_rx_close(sdr->dev);
+      goto quit;
+    }
+    frontend->frequency = frequency_actual;
+
+    sdr->lna_gain = config_getint(dictionary, section, "lna_gain", 0);
+    sdr->vga_gain = config_getint(dictionary, section, "vga_gain", 0);
+
+    // These gains are not used in direct sample mode; the MAX2830 is bypassed
+    // Set LNA Gain 0..3
+    // MAX2830 datasheet, p21: 11 => max gain, 10 => -16 dB, 0X => -33 dB
+    result = fobos_rx_set_lna_gain(sdr->dev, sdr->lna_gain);
+    if (result != FOBOS_ERR_OK) {
+      fprintf(stderr, "fobos_rx_set_lna_gain failed with error code: %d\n",
+	      result);
+      goto quit;
+    }
+    // Get VGA Gain 0..31
+    // MAX2830 datasheet, p21: 2 dB steps, 0-62 dB
+    result = fobos_rx_set_vga_gain(sdr->dev, sdr->vga_gain);
+    if (result != FOBOS_ERR_OK) {
+      fprintf(stderr, "fobos_rx_set_vga_gain failed with error code: %d\n",
+	      result);
+      goto quit;
+    }
+    frontend->rf_gain = 2 * sdr->vga_gain + (sdr->lna_gain == 2 ? 16.0 : sdr->lna_gain == 3 ? 33.0 : 0);
+    frontend->rf_atten = 0;
+    frontend->rf_level_cal = -41; // very rough approximation, needs to be measured
+  }
+  // Set Clock Source
+  result = fobos_rx_set_clk_source(sdr->dev, clk_sourcecfg);
+  if (result != FOBOS_ERR_OK) {
+    fprintf(stderr, "fobos_rx_set_clk_source failed with error code: %d\n",
+	    result);
+    goto quit;
+  }
+  fprintf(stderr,"samprate %'lf Hz, tuner %'.3lf Hz, lna_gain %d (%d dB) vga_gain %d (%d dB)\n",
+	  frontend->samprate,
+	  frontend->frequency,
+	  sdr->lna_gain,
+	  sdr->lna_gain == 2 ? 33 : sdr->lna_gain == 1 ? 16 : 0,
+	  sdr->vga_gain,
+	  sdr->vga_gain * 2);
+  // SDR is open here
   return 0;
+ quit:
+  free(sdr);
+  frontend->context = NULL;
+  return -1;
+
 } // End of Setup
 
 /* command to set analog gain. Turn off AGC if it was on
@@ -362,14 +355,16 @@ double fobos_gain(struct frontend * const frontend, double gain){
   frontend->rf_agc = false;
   frontend->rf_gain = gain;
 
-  int result = fobos_rx_set_lna_gain(dev, lna);
+  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+
+  int result = fobos_rx_set_lna_gain(sdr->dev, lna);
   if (result != FOBOS_ERR_OK) {
     fprintf(stderr, "fobos_rx_set_lna_gain failed with error code: %d\n",
 	    result);
   }
 
   // Set VGA Gain 0..31
-  result = fobos_rx_set_vga_gain(dev, (int)vgain);
+  result = fobos_rx_set_vga_gain(sdr->dev, (int)vgain);
   if (result != FOBOS_ERR_OK) {
     fprintf(stderr, "fobos_rx_set_vga_gain failed with error code: %d\n",
 	    result);
@@ -386,7 +381,7 @@ static void *fobos_monitor(void *p) {
   fprintf(stderr, "Starting asynchronous read\n");
   realtime(2 + default_prio());
   stick_core();
-  int result = fobos_rx_read_async(dev, rx_callback, sdr, 16, 65536);
+  int result = fobos_rx_read_async(sdr->dev, rx_callback, sdr, 16, 65536);
   if (result != 0) {
     fprintf(stderr, "fobos_rx_read_async failed with error code: %d\n", result);
     exit(EXIT_FAILURE); // Exit the thread due to an error
@@ -451,6 +446,7 @@ int fobos_shutdown(struct frontend *const frontend) {
       return 0;
     usleep(10000);
   }
+  fobos_rx_cancel_async(sdr->dev);
   pthread_join(sdr->monitor_thread,NULL);
   atomic_store(&sdr->state,STOPPED);
   fprintf(stderr, "fobos read thread stopped\n");
@@ -467,11 +463,11 @@ double fobos_tune(struct frontend *const frontend, double const freq) {
   if(Verbose)
     fprintf(stderr, "Trying to tune to: %f\n", freq);
   double frequency_actual = 0.0;
-  int result = fobos_rx_set_frequency(dev, freq, &frequency_actual);
+  int result = fobos_rx_set_frequency(sdr->dev, freq, &frequency_actual);
   if (result != 0) {
     fprintf(stderr, "fobos_rx_set_frequency failed with error code: %d\n",
             result);
-    fobos_rx_close(dev);
+    fobos_rx_close(sdr->dev);
     return frequency_actual;
   }
   frontend->frequency = frequency_actual;
