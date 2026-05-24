@@ -36,16 +36,26 @@ UNAME_S := $(shell uname -s)
 
 CPPFLAGS ?=
 LDFLAGS  ?=
-LDLIBS = -lm -lpthread
+INCLUDES ?=
+DOPTS    ?=
+SOFLAGS  ?=
+LDLIBS   ?=
+
+LDLIBS += -lm -lpthread
+
+ifdef SANITIZE
+     DOPTS += -fsanitize=address -fsanitize=undefined
+     LDFLAGS += -fsanitize=address -fsanitize=undefined
+endif
 
 ifeq ($(UNAME_S),Darwin)
-  CPPFLAGS += -I/opt/local/include
+  INCLUDES += -I/opt/local/include
   LDFLAGS  += -L/opt/local/lib
   LDLIBS += -lintl -liconv
-  SOFLAGS = -bundle -Wl,-undefined,dynamic_lookup
+  SOFLAGS += -bundle -Wl,-undefined,dynamic_lookup
 else
   LDLIBS += -lbsd -lrt
-  SOFLAGS = -shared
+  SOFLAGS += -shared
 endif
 
 ifeq ($(BUILD),debug)
@@ -54,10 +64,6 @@ else
      DOPTS = -DNDEBUG=1 -O3
 endif
 
-ifdef SANITIZE
-     DOPTS += -fsanitize=address -fsanitize=undefined
-     LDOPTS = -fsanitize=address -fsanitize=undefined
-endif
 
 ARCHOPTS = -march=native
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
@@ -83,7 +89,6 @@ HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhi
 ## hardware plug-in module enables
 # The software signal generator front end is build by default. Others are added by the ENABLE_* options below
 DYNAMIC_DRIVERS = 
-
 
 # AIRSPY R2, etc
 ifeq ($(ENABLE_AIRSPY),1)
@@ -185,121 +190,121 @@ dynamics: $(DYNAMIC_DRIVERS)
 
 ## Executables
 aprs: aprs.o ax25.o libdsp.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 aprsfeed: ax25.o aprsfeed.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 control: control.o bandplan.o modes.o avahi_browse.o libdsp.a libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -liniparser -lncursesw $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -liniparser -lncursesw $(LDLIBS)
 
 ctcss: ctcss.o libdsp.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 cwd: cwd.o morse.o libdsp.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 fft-gen: fft-gen.o
-	$(CC) $(LDOPTS) -o $@ $^  -lfftw3f_threads -lfftw3f  $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^  -lfftw3f_threads -lfftw3f  $(LDLIBS)
 
 jt-decoded: jt-decoded.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 metadump: metadump.o dump.o libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o morse.o libdsp.a libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio `pkg-config --silence-errors --libs alsa` -lsamplerate -liniparser  -lncursesw $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lopus -lportaudio `pkg-config --silence-errors --libs alsa` -lsamplerate -liniparser  -lncursesw $(LDLIBS)
 
 opusd: opusd.o avahi.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lopus $(LDLIBS)
 
 opussend: opussend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -lportaudio $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lopus -lportaudio $(LDLIBS)
 
 packetd: packetd.o ax25.o avahi.o libdsp.a libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 pcmcat: pcmcat.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 pcmspawn: pcmspawn.o libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 pcmrecord: pcmrecord.o attr.o libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lopus -logg $(LDLIBS)
 
 pcmsend: pcmsend.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lportaudio $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lportaudio $(LDLIBS)
 
 powers: powers.o dump.o libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 radiod: $(RADIOD_OBJECTS)
-	$(CC) -rdynamic $(LDOPTS) -o $@ $^ -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl $(LDLIBS)
+	$(CC) -rdynamic $(LDFLAGS) -o $@ $^ -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl $(LDLIBS)
 
 rdsd: rdsd.o avahi.o libdsp.a libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 rx888_boot: rx888_boot.o ezusb.o
-	$(CC) $(LDOPTS) -o $@ $^ -lusb-1.0 $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lusb-1.0 $(LDLIBS)
 
 # not made unless we're on a rpi
 set_xcvr: set_xcvr.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lpigpio -liniparser
+	$(CC) $(LDFLAGS) -o $@ $^ -lpigpio -liniparser $(LDLIBS)
 
 setfilt: setfilt.o libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 show-pkt: show-pkt.o libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lncursesw $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lncursesw $(LDLIBS)
 
 show-sig: show-sig.o libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lncursesw $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lncursesw $(LDLIBS)
 
 stereod: stereod.o avahi.o libdsp.a libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 tune: tune.o libstatus.a libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 wd-record: wd-record.o libstatus.a attr.o libradio.a
-	$(CC) $(LDOPTS) -o $@ $^ -lopus -logg $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lopus -logg $(LDLIBS)
 
 
 ## Dynamically loaded modules for SDR front ends
 funcube.so: funcube.o fcd.o hid-libusb.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lportaudio
+	$(CC) $(SOFLAGS) -o $@ $^ -lportaudio $(LDLIBS)
 
 rx888.so: rx888.o si5351.o ezusb.o hid-libusb.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lusb-1.0
+	$(CC) $(SOFLAGS) -o $@ $^ -lusb-1.0 $(LDLIBS)
 
 airspy.so: airspy.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lairspy
+	$(CC) $(SOFLAGS) -o $@ $^ -lairspy $(LDLIBS)
 
 airspyhf.so: airspyhf.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lairspyhf
+	$(CC) $(SOFLAGS) -o $@ $^ -lairspyhf $(LDLIBS)
 
 hydrasdr.so: hydrasdr.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lhydrasdr
+	$(CC) $(SOFLAGS) -o $@ $^ -lhydrasdr $(LDLIBS)
 
 rtlsdr.so: rtlsdr.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lrtlsdr
+	$(CC) $(SOFLAGS) -o $@ $^ -lrtlsdr $(LDLIBS)
 
 sdrplay.so: sdrplay.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lsdrplay_api
+	$(CC) $(SOFLAGS) -o $@ $^ -lsdrplay_api $(LDLIBS)
 
 fobos.so: fobos.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lfobos
+	$(CC) $(SOFLAGS) -o $@ $^ -lfobos $(LDLIBS)
 
 hackrf.so: hackrf.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lhackrf -lusb-1.0
+	$(CC) $(SOFLAGS) -o $@ $^ -lhackrf -lusb-1.0 $(LDLIBS)
 
 bladerf.so: bladerf.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lbladeRF
+	$(CC) $(SOFLAGS) -o $@ $^ -lbladeRF $(LDLIBS)
 
 sig_gen.so: sig_gen.o gauss.o libradio.a
-	$(CC) $(SOFLAGS) -o $@ $^ -lsamplerate
+	$(CC) $(SOFLAGS) -o $@ $^ -lsamplerate $(LDLIBS)
 
 # subroutines useful in more than one program
 # subroutines useful in more than one program
