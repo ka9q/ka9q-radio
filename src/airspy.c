@@ -361,7 +361,6 @@ static void *airspy_monitor(void *p){
   int ret = airspy_start_rx(sdr->device,rx_callback,sdr);
   (void)ret;
   assert(ret == AIRSPY_SUCCESS);
-  fprintf(stderr,"airspy running\n");
   // Periodically poll status to ensure device hasn't reset
   enum state s;
   while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
