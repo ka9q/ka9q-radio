@@ -40,8 +40,9 @@
 #else
 #define VERSION() { fprintf(stderr,"KA9Q Multichannel SDR %s\n",__FILE__); \
   fprintf(stderr,"Copyright 2026, Phil Karn, KA9Q. May be used under the terms of the GNU Public License\n"); \
-  fprintf(stderr,"   Repo: %s\n",GIT_REMOTE_URL); \
-  fprintf(stderr," Commit: %s\n",GIT_HASH); \
+  fprintf(stderr,"Git repository: %s\n",GIT_REMOTE_URL); \
+  fprintf(stderr,"Git branch: %s\n",GIT_BRANCH); \
+  fprintf(stderr,"Git commit hash: %s\n",GIT_HASH); \
 }
 #endif
 #define ASSERT_ZEROED(ptr, size) assert(memcmp(ptr, &(typeof(*(ptr))){0}, size) == 0)
