@@ -59,9 +59,7 @@ else
   SOFLAGS += -shared
 endif
 
-HAS_PIGPIO := $(shell \
-	echo '\#include <pigpio.h>' | \
-	$(CC) $(CPPFLAGS) -E - >/dev/null 2>&1 && echo 1)
+HAS_PIGPIO := $(shell printf '\043include <pigpio.h>\n' | $(CC) $(CPPFLAGS) -E - >/dev/null 2>&1 && echo 1)
 
 ifeq ($(BUILD),debug)
      DOPTS = -g
