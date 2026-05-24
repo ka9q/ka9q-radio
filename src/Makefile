@@ -156,7 +156,7 @@ all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 ## other targets
 install: all
 	install -d -m 0755 $(DESTDIR)$(sbindir) $(DESTDIR)$(bindir) $(DESTDIR)$(pkglibdir)
-	if [ -n "$(DESTDIR)$(pkglibdir)" ]; then install -m 0755 $(DYNAMIC_DRIVERS) $(DESTDIR)$(pkglibdir); fi
+	if [ -n "$(DYNAMIC_DRIVERS)" ]; then install -m 0755 $(DYNAMIC_DRIVERS) $(DESTDIR)$(pkglibdir); fi
 	install -m 0755 $(DAEMONS) $(DESTDIR)$(sbindir)
 	install -m 0755 $(EXECS) $(DESTDIR)$(bindir)
 
