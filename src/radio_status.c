@@ -130,8 +130,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
   bool restart_needed = false;
   bool new_filter_needed = false;
 
-  if(chan->lifetime != 0 && chan->lifetime < Channel_idle_timeout)
-    chan->lifetime = Channel_idle_timeout; // increase self-destruct timer to at least Channel_idle_timeout
+  chan->lifetime = chan->lifestart; // restart self-destruct timer
   chan->status.packets_in++;
 
   // First pass to execute any PRESET command first
@@ -642,7 +641,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case LIFETIME:
       {
 	int x = decode_int(cp,optlen);
-	chan->lifetime = x;
+	chan->lifestart = chan->lifetime = x;
       }
       break;
     default:

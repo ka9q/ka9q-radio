@@ -69,7 +69,7 @@ static int const DEFAULT_UPDATE = 25; // 2 Hz for 20 ms blocktime (50 Hz frame r
 static int Update = DEFAULT_UPDATE;
 static int const DEFAULT_FFTW_THREADS = 1;
 static int const DEFAULT_FFTW_INTERNAL_THREADS = 1;
-static int const DEFAULT_LIFETIME = 20; // 20 sec minimum each time a channel is polled
+static double const DEFAULT_LIFETIME = 0; // Infinite
 static int const DEFAULT_OVERLAP = 5;
 static double const Power_alpha = 0.10; // Noise estimation time smoothing factor, per block. Use double to reduce risk of slow denormals
 static double const NQ = 0.10; // look for energy in 10th quartile, hopefully contains only noise
@@ -99,6 +99,7 @@ static char const *Global_keys[] = {
   "fft-threads",
   "hardware",
   "iface",
+  "lifetime",
   "mode-file",
   "mode",
   "overlap",
@@ -135,7 +136,7 @@ int Ctl_fd = -1;     // File descriptor for receiving user commands
 
 // If a channel is tuned to 0 Hz and then not polled for this many seconds, destroy it
 // Must be computed at run time because it depends on the block time
-int Channel_idle_timeout;  //  = DEFAULT_LIFETIME / Blocktime;
+int Channel_idle_timeout;  //  = DEFAULT_LIFETIME / Blocktime; (frames)
 
 extern char const *Name;     // owned by main.c
 
@@ -291,7 +292,8 @@ int loadconfig(char const *file){
     else
       User_blocktime = bt;
   }
-  Channel_idle_timeout = lrint(DEFAULT_LIFETIME / User_blocktime); // 20 sec
+  double lifetime_sec = config_getdouble(Configtable, GLOBAL, "lifetime", DEFAULT_LIFETIME);
+  Channel_idle_timeout = lrint(lifetime_sec / User_blocktime);
   {
     int ol = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
     if (ol < 2)
@@ -405,7 +407,7 @@ int loadconfig(char const *file){
   set_defaults(&Template);
   Template.frontend = &Frontend;
   assert(Blocktime != 0);
-  Template.lifetime = 0; // unlimited by default
+  Template.lifestart = Template.lifetime = Channel_idle_timeout;
 
   // Set up default output stream file descriptor and socket
   // There can be multiple senders to an output stream, so let avahi suppress the duplicate addresses

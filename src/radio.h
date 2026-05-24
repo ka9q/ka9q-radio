@@ -145,6 +145,7 @@ struct channel {
   char name[100];
   struct frontend *frontend; // Linkage to avoid global use
 
+  int lifestart;         // Initial lifetime, frames
   int lifetime;          // Remaining lifetime, frames
   int prio;              // Realtime priority, if supported
   int64_t clocktime;     // Sender's clock time (ns since GPS epoch)
