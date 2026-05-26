@@ -1,3 +1,9 @@
+ka9q-radio (1.1.0-0-trixie1) trixie; urgency=medium
+
+  * stop A/D converter when no channels
+
+ -- Phil Karn <karn@ka9q.net>  Tue, 26 May 2026 15:35:08 -0700
+
 ka9q-radio (1.0.10-1~trixie1) trixie; urgency=medium
 
   * create user and group 'radio' in ka9q-radio-common postinst
