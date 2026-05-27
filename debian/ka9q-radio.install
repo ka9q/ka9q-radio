@@ -1,6 +1,5 @@
 # debian/ka9q-radio.install
 usr/bin/ka9q-radio-setup
-usr/bin/fft-gen
 usr/sbin/radiod
 etc/sysusers.d/*
 etc/sysctl.d/*
