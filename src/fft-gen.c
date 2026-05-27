@@ -304,6 +304,7 @@ static int save_wisdom(char const *wisdom_file){
     printf("Write of new wisdom file length %lu failed: %s\n",newsize,strerror(errno));
     close(fd);
     FREE(newtemp);
+    unlink(lockfile);
     close(lockfd);
     FREE(lockfile);
     return -1;
@@ -314,6 +315,7 @@ static int save_wisdom(char const *wisdom_file){
       printf("stat of new wisdom file %s failed: %s\n",newtemp,strerror(errno));
       close(fd);
       FREE(newtemp);
+      unlink(lockfile);
       close(lockfd);
       FREE(lockfile);
       return -1;
@@ -345,6 +347,7 @@ static int save_wisdom(char const *wisdom_file){
   if(rename(newtemp,Arch_wisdom_file) != 0){
     printf("rename %s to %s failed: %s\n",newtemp,Arch_wisdom_file,strerror(errno));
     FREE(newtemp);
+    unlink(lockfile);
     close(lockfd);
     FREE(lockfile);
     return -1;
@@ -356,6 +359,7 @@ static int save_wisdom(char const *wisdom_file){
     fftwf_forget_wisdom(); // start fresh for the next on the list
 
   FREE(newtemp);
+  unlink(lockfile);
   close(lockfd);
   FREE(lockfile);
   return 0;
