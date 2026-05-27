@@ -292,7 +292,7 @@ static int save_wisdom(char const *wisdom_file){
     return -1;
   }
   size_t newsize = strlen(wisdom);
-  if(newsize <= Wisdom_size || strncmp(wisdom,Wisdom_string,newsize) == 0){
+  if(newsize <= Wisdom_size || (Wisdom_string == NULL && strncmp(wisdom,Wisdom_string,newsize) == 0)){
     // no change
     FREE(wisdom);
     close(fd);
