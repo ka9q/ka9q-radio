@@ -33,11 +33,12 @@ static int name_to_level(char const *name);
 static void load_wisdom(void);
 static int save_wisdom(char const *wisdom_file);
 static void usage(void);
-static size_t track_wisdom_length(void);
+static int parse_and_run(char *s);
 
 static size_t Wisdom_size;
-static uint64_t Wisdom_hash;
+char *Wisdom_string;
 static bool Force;
+int Nthreads = 1;
 
 static struct {
   char const *name;
@@ -70,14 +71,11 @@ static struct option Options[] = {
 double FFTW_plan_timelimit = 0;
 int FFTW_planning_level = FFTW_PATIENT; // Default
 
-static int parse_and_run(char *s);
 
 // Experiment with incremental wisdom generation
 int main(int argc,char *argv[]){
-  int c;
-  int nthreads = 1;
-
   (void)name_to_level(""); // shut up compiler
+  int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
     case 'h':
@@ -103,7 +101,7 @@ int main(int argc,char *argv[]){
       FFTW_planning_level = FFTW_ESTIMATE;
       break;
     case 'T':
-      nthreads = atoi(optarg);
+      Nthreads = atoi(optarg);
       break;
     case 'f':
       Force = true;
@@ -113,11 +111,11 @@ int main(int argc,char *argv[]){
   if(Verbose)
     printf("FFTW version: %s\n", fftwf_version);
   fftwf_init_threads();
-  fftwf_plan_with_nthreads(nthreads);
+  fftwf_plan_with_nthreads(Nthreads);
 
   if(Verbose > 1){
     printf("nthreads = %d, level = %s",
-	   nthreads,
+	   Nthreads,
 	   level_to_name(FFTW_planning_level));
 
     if(FFTW_plan_timelimit !=0)
@@ -197,40 +195,44 @@ static int parse_and_run(char *s){
   else if(Verbose > 1)
     printf("Not loading wisdom\n");
 
-  fftwf_plan plan = NULL;
   if(FFTW_plan_timelimit != 0)
     fftwf_set_timelimit(FFTW_plan_timelimit);
 
   if(Verbose)
     printf("%s\n",s);
 
-  if(real && direction == FFTW_FORWARD){
-    float *in = fftwf_malloc(N * sizeof(float));
-    float complex *out = (float complex *)in;
-    if(!inplace)
-      out = fftwf_malloc(N * sizeof(float complex));
-    plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_planning_level | (!inplace ? FFTW_PRESERVE_INPUT : 0));
-    if((void *)out != (void *)in)
-      fftwf_free(out);
-    fftwf_free(in);
-  } else if(real && direction == FFTW_BACKWARD){
-    float complex *in = fftwf_malloc(N * sizeof(float complex));
-    float *out = (float *)in;
-    if(!inplace)
-      out = fftwf_malloc(N * sizeof(float));
-    plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_planning_level | (!inplace ? FFTW_PRESERVE_INPUT : 0));
-    if((void *)out != (void *)in)
-      fftwf_free(out);
-    fftwf_free(in);
-  } else {
+  fftwf_plan plan = NULL;
+  if(!real){
     // Complex
     float complex *in = fftwf_malloc(N * sizeof(float complex));
-    float complex *out = in;
-    if(!inplace)
-      out = fftwf_malloc(N * sizeof(float complex));
-    plan = fftwf_plan_dft_1d(N, in, out, direction, FFTW_planning_level | (!inplace ? FFTW_PRESERVE_INPUT : 0));
-    if((void *)out != (void *)in)
+    if(inplace){
+      plan = fftwf_plan_dft_1d(N, in, in, direction, FFTW_planning_level);
+    } else {
+      float complex *out = fftwf_malloc(N * sizeof(float complex));
+      plan = fftwf_plan_dft_1d(N, in, out, direction, FFTW_planning_level | FFTW_PRESERVE_INPUT);
       fftwf_free(out);
+    }
+    fftwf_free(in);
+  } else if(direction == FFTW_FORWARD){
+    float *in = fftwf_malloc(N * sizeof(float));
+    if(inplace){
+      plan = fftwf_plan_dft_r2c_1d(N, in, (float complex *)in, FFTW_planning_level);
+    } else {
+      float complex *out = fftwf_malloc(N * sizeof(float complex));
+      plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_planning_level | FFTW_PRESERVE_INPUT);
+      fftwf_free(out);
+    }
+    fftwf_free(in);
+  } else {
+    // FFTW_BACKWARD
+    float complex *in = fftwf_malloc(N * sizeof(float complex));
+    if(inplace){
+      plan = fftwf_plan_dft_c2r_1d(N, in, (float *)in, FFTW_planning_level);
+    } else {
+      float *out = fftwf_malloc(N * sizeof(float));
+      plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_planning_level | FFTW_PRESERVE_INPUT);
+      fftwf_free(out);
+    }
     fftwf_free(in);
   }
   if(plan != NULL){
@@ -239,7 +241,6 @@ static int parse_and_run(char *s){
     // Import or re-import wisdom and merge
     save_wisdom(Arch_wisdom_file);
   }
-  track_wisdom_length();
   return 0;
 }
 // Do all this carefully to avoid losing old (or new) wisdom
@@ -280,8 +281,6 @@ static int save_wisdom(char const *wisdom_file){
   bool reimport = fftwf_import_wisdom_from_filename(Arch_wisdom_file);
   if(Verbose > 1)
     printf("fftwf_import_wisdom_from_filename(%s) %s\n",Arch_wisdom_file,reimport ? "succeeded" : "failed");
-  if(reimport)
-    track_wisdom_length();
 
   char *wisdom = fftwf_export_wisdom_to_string();
   if(wisdom == NULL){
@@ -292,10 +291,22 @@ static int save_wisdom(char const *wisdom_file){
     FREE(newtemp);
     return -1;
   }
-  ssize_t newsize = strlen(wisdom);
+  size_t newsize = strlen(wisdom);
+  if(newsize <= Wisdom_size || strncmp(wisdom,Wisdom_string,newsize) == 0){
+    // no change
+    FREE(wisdom);
+    close(fd);
+    FREE(newtemp);
+    close(lockfd);
+    FREE(lockfile);
+    return 0;
+  }
+  FREE(Wisdom_string);
+  Wisdom_string = wisdom;
+  Wisdom_size = newsize;
 
-  if(write(fd,wisdom,newsize) != newsize){
-    printf("Write of new wisdom file failed: %s\n",strerror(errno));
+  if(write(fd,wisdom,newsize) != (ssize_t)newsize){
+    printf("Write of new wisdom file length %lu failed: %s\n",newsize,strerror(errno));
     FREE(wisdom);
     close(fd);
     FREE(newtemp);
@@ -363,26 +374,20 @@ static void load_wisdom(void){
     if(!r && access(SYSTEM_WISDOM_FILE,R_OK) == -1) // Would really like to use AT_EACCESS flag
       printf("system wisdom %s not readable: %s\n",SYSTEM_WISDOM_FILE,strerror(errno));
   }
-  track_wisdom_length();
   r = fftwf_import_wisdom_from_filename(GENERIC_WISDOM_FILE);
   if(Verbose > 1){
     printf("fftwf_import_wisdom_from_filename(%s) %s\n",GENERIC_WISDOM_FILE,r ? "succeeded" : "failed");
     if(!r && access(GENERIC_WISDOM_FILE,R_OK) == -1)
       printf("%s not readable: %s\n",GENERIC_WISDOM_FILE,strerror(errno));
   }
-  track_wisdom_length();
   r = fftwf_import_wisdom_from_filename(Arch_wisdom_file);
   if(Verbose > 1){
     printf("fftwf_import_wisdom_from_filename(%s) %s\n",Arch_wisdom_file,r ? "succeeded" : "failed");
     if(!r && access(Arch_wisdom_file,R_OK) == -1)
       printf("%s not readable: %s\n",Arch_wisdom_file,strerror(errno));
   }
-  track_wisdom_length();
-  if(access(Arch_wisdom_file,W_OK) == -1){
-    printf("Error: %s not writeable, exports will fail: %s\n",Arch_wisdom_file,strerror(errno));
-    exit(0); // Bomb before we waste a lot of CPU
-  }
 }
+
 static char const * level_to_name(int x){
   for(int i = 0;; i++){
     if(Levels[i].level == -1)
@@ -401,30 +406,8 @@ static int name_to_level(char const *name){
       return Levels[i].level;
   }
 }
-static size_t track_wisdom_length(void){
-  if(Verbose < 2)
-    return 0;
 
-  size_t length= 0;
-  char *wisdom = fftwf_export_wisdom_to_string();
-  if(wisdom != NULL)
-    length = strlen(wisdom);
-
-  uint64_t h = 0xcbf29ce484222325ULL;
-
-  for (size_t i = 0; i < length; ++i) {
-    h ^= (unsigned char)wisdom[i];
-    h *= 0x100000001b3ULL;
-  }
-  if(length != Wisdom_size || Wisdom_hash !=h){
-    printf("wisdom changed (grew %lu)\n",(unsigned long)(length - Wisdom_size));
-    Wisdom_size = length;
-    Wisdom_hash = h;
-  }
-  free(wisdom); wisdom = NULL;
-  return length;
-}
-static void usage(){
+static void usage(void){
   printf("fft-gen: creates and updates ffw3f wisdom for ka9q-radio\n");
   printf("usage: fft-gen [-h] [-v|--verbose [-v|--verbose]] [--timelimit|-t sec] [--threads|-T <n>] [--force|-f] [--patient|--measure|--estimate|--exhaustive|-x|-e|-m|-p] transform...\n");
   printf("  eg   fft-gen -v --exhaustive cob200 cob300 cob400 cob600 cob1200\n");
