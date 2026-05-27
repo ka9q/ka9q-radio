@@ -1,3 +1,9 @@
+ka9q-radio (1.1.1-0-trixie1) trixie; urgency=medium
+
+  * clean up fft-gen, move to ka9q-radio-common
+
+ -- Phil Karn <karn@ka9q.net>  Wed, 27 May 2026 16:25:18 -0700
+
 ka9q-radio (1.1.0-0-trixie1) trixie; urgency=medium
 
   * stop A/D converter when no channels
