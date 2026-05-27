@@ -26,7 +26,9 @@
 #ifndef STATEDIR
 #define STATEDIR "/var/lib/ka9q-radio"
 #endif
-#define WISDOM_FILE "wisdom"
+#define WISDOM_FILE STATEDIR "/wisdom"
+
+char *Arch_wisdom_file;
 
 int Verbose;
 static bool Force;
@@ -41,6 +43,7 @@ static struct {
   {"exhaustive", FFTW_EXHAUSTIVE},
   {NULL, -1},
 };
+
 
 static char const * level_to_name(int x){
   for(int i = 0;; i++){
@@ -60,6 +63,7 @@ static int name_to_level(char const *name){
       return Levels[i].level;
   }
 }
+static void load_wisdom(void);
 static int save_plans(char const *wisdom_file);
 static size_t Wisdom_size;
 static uint64_t Wisdom_hash;
@@ -93,8 +97,6 @@ void usage(){
   printf("  eg   fft-gen -v --exhaustive cob200 cob300 cob400 cob600 cob1200\n");
 }
 
-
-
 static char Optstring[] = "hepmxT:t:vf";
 static struct option Options[] = {
   {"help", no_argument, NULL, 'h'},
@@ -112,17 +114,12 @@ static struct option Options[] = {
 double FFTW_plan_timelimit = 0;
 int FFTW_planning_level = FFTW_PATIENT;
 
-bool Generic_wisdom_read = false;
-
-
 static int parse_and_run(char *s);
 
 // Experiment with incremental wisdom generation
 int main(int argc,char *argv[]){
   int c;
-  bool real = false;
   int nthreads = 1;
-  int direction = FFTW_FORWARD;
 
   (void)name_to_level(""); // shut up compiler
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
@@ -157,46 +154,10 @@ int main(int argc,char *argv[]){
       break;
     }
   }
-  if(Verbose && real && direction == FFTW_BACKWARD){
-    printf("direction ignored on real->complex transforms\n");
-    direction = FFTW_FORWARD;
-  }
-
   if(Verbose)
     printf("FFTW version: %s\n", fftwf_version);
   fftwf_init_threads();
   fftwf_plan_with_nthreads(nthreads);
-
-  bool sr = false;
-  bool lr = false;
-  if(Force){
-    if(Verbose > 1)
-      printf("Not loading wisdom\n");
-  } else {
-    sr = fftwf_import_system_wisdom();
-    if(Verbose > 1)
-      printf("fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
-    if(!sr && Verbose){
-      if(access(System_wisdom_file,R_OK) == -1){ // Would really like to use AT_EACCESS flag
-	printf("%s not readable: %s\n",System_wisdom_file,strerror(errno));
-      }
-    }
-    track_wisdom_length();
-    char wisdom_file[PATH_MAX];
-    snprintf(wisdom_file,sizeof wisdom_file,"%s/%s",STATEDIR,WISDOM_FILE);
-    lr = fftwf_import_wisdom_from_filename(wisdom_file);
-    if(Verbose > 1){
-      printf("fftwf_import_wisdom_from_filename(%s) %s\n",wisdom_file,lr ? "succeeded" : "failed");
-      Generic_wisdom_read = lr; // remember for when we write
-      if(!lr && access(wisdom_file,R_OK) == -1)
-	  printf("%s not readable: %s\n",wisdom_file,strerror(errno));
-      if(access(wisdom_file,W_OK) == -1)
-	printf("Warning: %s not writeable, exports will fail: %s\n",wisdom_file,strerror(errno));
-    }
-    track_wisdom_length();
-  }
-  if(Verbose > 1 && !sr && !lr)
-    printf("No wisdom read\n");
 
   if(Verbose > 1){
     printf("nthreads = %d, level = %s",
@@ -217,13 +178,15 @@ int main(int argc,char *argv[]){
     while(fgets(buffer,sizeof buffer,stdin) != NULL)
       parse_and_run(buffer);
   }
+  FREE(Arch_wisdom_file);
   exit(0);
 }
 static int parse_and_run(char *s){
-  char *cp = strchr(s,'\n');
-  if(cp)
-    *cp = '\0'; // chomp newline
-
+  {
+    char *cp = strchr(s,'\n');
+    if(cp)
+      *cp = '\0'; // chomp newline
+  }
   // Parse
   char a1,a2,a3;
   int a4;
@@ -231,7 +194,6 @@ static int parse_and_run(char *s){
     printf("Can't parse %s\n",s);
     return -1;
   }
-
   bool real = false;
   int direction = FFTW_FORWARD;
   int N = 1024;
@@ -265,13 +227,17 @@ static int parse_and_run(char *s){
     return -1;
   }
   N = a4;
-  if(Verbose)
-    printf("%s\n",s);
-
+  if(!Force)
+    load_wisdom();
+  else if(Verbose > 1)
+    printf("Not loading wisdom\n");
 
   fftwf_plan plan = NULL;
   if(FFTW_plan_timelimit != 0)
     fftwf_set_timelimit(FFTW_plan_timelimit);
+
+  if(Verbose)
+    printf("%s\n",s);
 
   if(real && direction == FFTW_FORWARD){
     float *in = fftwf_malloc(N * sizeof(float));
@@ -306,9 +272,7 @@ static int parse_and_run(char *s){
     fftwf_destroy_plan(plan);
     plan = NULL;
     // Import or re-import wisdom and merge
-    char wisdom_file[PATH_MAX];
-    snprintf(wisdom_file,sizeof wisdom_file,"%s/%s",STATEDIR,WISDOM_FILE);
-    save_plans(wisdom_file);
+    save_plans(Arch_wisdom_file);
   }
   track_wisdom_length();
   return 0;
@@ -318,7 +282,6 @@ static int save_plans(char const *wisdom_file){
   char *lockfile = NULL;
   char *newtemp = NULL;
   char *wisdom = NULL;
-  char *arch_wisdom_file = NULL;
   int fd = -1;
 
   // Import or re-import wisdom and merge
@@ -332,24 +295,15 @@ static int save_plans(char const *wisdom_file){
     printf("Can't acquire lock on %s\n",lockfile);
   else
     flock(lockfd,LOCK_EX);
-  // First try importing from old generic file
-  bool reimport = fftwf_import_wisdom_from_filename(wisdom_file);
+
+  // Try reimporting arch file again in case it was written to while we were planning
+  bool reimport = fftwf_import_wisdom_from_filename(Arch_wisdom_file);
   if(Verbose > 1)
-    printf("fftwf_import_wisdom_from_filename(%s) %s\n",wisdom_file,reimport ? "succeeded" : "failed");
+    printf("fftwf_import_wisdom_from_filename(%s) %s\n",Arch_wisdom_file,reimport ? "succeeded" : "failed");
   if(reimport)
     track_wisdom_length();
 
-  // Now append "-[version]-threaded" and try again
-  int n = asprintf(&arch_wisdom_file, "%s-%s-threaded", wisdom_file, fftwf_version);
-  if(arch_wisdom_file == NULL || n < 0)
-    goto quit;
-  reimport = fftwf_import_wisdom_from_filename(arch_wisdom_file);
-  if(Verbose > 1)
-    printf("fftwf_import_wisdom_from_filename(%s) %s\n",arch_wisdom_file,reimport ? "succeeded" : "failed");
-  if(reimport)
-    track_wisdom_length();
-
-  if(asprintf(&newtemp,"%s-XXXXXX",arch_wisdom_file) < 0)
+  if(asprintf(&newtemp,"%s-XXXXXX",Arch_wisdom_file) < 0)
     goto quit;
 
   wisdom = fftwf_export_wisdom_to_string();
@@ -375,7 +329,7 @@ static int save_plans(char const *wisdom_file){
 
   // Copy user/group/mode from old version
   struct stat st;
-  if(stat(arch_wisdom_file,&st) == 0){
+  if(stat(Arch_wisdom_file,&st) == 0){
     int r = fchown(fd, st.st_uid, st.st_gid); // Best effort
     (void)r;
     fchmod(fd, st.st_mode);
@@ -391,16 +345,15 @@ static int save_plans(char const *wisdom_file){
   int dir = open(STATEDIR,O_DIRECTORY);
   fsync(dir);
   close(dir);
-  if(rename(newtemp,arch_wisdom_file) != 0)
-    printf("rename %s to %s failed: %s\n",newtemp,arch_wisdom_file,strerror(errno));
+  if(rename(newtemp,Arch_wisdom_file) != 0)
+    printf("rename %s to %s failed: %s\n",newtemp,Arch_wisdom_file,strerror(errno));
   else if(Verbose > 1)
-    printf("rename %s to %s succeeded\n",newtemp,arch_wisdom_file);
+    printf("rename %s to %s succeeded\n",newtemp,Arch_wisdom_file);
 
   if(Force)
     fftwf_forget_wisdom(); // start fresh for the next on the list
 
   quit:
-
   if(lockfd != -1){
     flock(lockfd,LOCK_UN);
     close(lockfd);
@@ -409,9 +362,40 @@ static int save_plans(char const *wisdom_file){
   }
   if(fd != -1)
     close(fd);
-  FREE(arch_wisdom_file);
   FREE(wisdom);
   FREE(newtemp);
   FREE(lockfile);
   return 0;
+}
+static void load_wisdom(void){
+  bool r = fftwf_import_system_wisdom();
+  if(Verbose > 1){
+    printf("fftwf_import_system_wisdom() %s\n",r ? "succeeded" : "failed");
+    if(!r && access(System_wisdom_file,R_OK) == -1) // Would really like to use AT_EACCESS flag
+      printf("%s not readable: %s\n",System_wisdom_file,strerror(errno));
+  }
+  track_wisdom_length();
+  r = fftwf_import_wisdom_from_filename(WISDOM_FILE);
+  if(Verbose > 1){
+    printf("fftwf_import_wisdom_from_filename(%s) %s\n",WISDOM_FILE,r ? "succeeded" : "failed");
+    if(!r && access(WISDOM_FILE,R_OK) == -1)
+      printf("%s not readable: %s\n",WISDOM_FILE,strerror(errno));
+  }
+  track_wisdom_length();
+  int n = asprintf(&Arch_wisdom_file, "%s-%s-threaded", WISDOM_FILE, fftwf_version);
+  if(Arch_wisdom_file == NULL || n < 0){
+    printf("Can't construct arch wisdom file name\n");
+    FREE(Arch_wisdom_file);
+  }
+  r = fftwf_import_wisdom_from_filename(Arch_wisdom_file);
+  if(Verbose > 1){
+    printf("fftwf_import_wisdom_from_filename(%s) %s\n",Arch_wisdom_file,r ? "succeeded" : "failed");
+    if(!r && access(Arch_wisdom_file,R_OK) == -1)
+      printf("%s not readable: %s\n",Arch_wisdom_file,strerror(errno));
+  }
+  track_wisdom_length();
+  if(access(Arch_wisdom_file,W_OK) == -1){
+    printf("Warning: %s not writeable, exports will fail: %s\n",Arch_wisdom_file,strerror(errno));
+    exit(0);
+  }
 }
