@@ -245,23 +245,43 @@ static int parse_and_run(char *s){
 }
 // Do all this carefully to avoid losing old (or new) wisdom
 static int save_wisdom(char const *wisdom_file){
-  // Import or re-import wisdom and merge
+  // Try reimporting arch file again in case it was written to while we were planning
+  bool reimport = fftwf_import_wisdom_from_filename(Arch_wisdom_file);
+  if(Verbose > 1)
+    printf("fftwf_import_wisdom_from_filename(%s) %s\n",Arch_wisdom_file,reimport ? "succeeded" : "failed");
+
+  // Export the merged old+new wisdom
+  char *wisdom = fftwf_export_wisdom_to_string();
+  if(wisdom == NULL){
+    printf("fftwf_export_wisdom_to_string() returned NULL!\n");
+    return -1;
+  }
+  size_t newsize = strlen(wisdom);
+  if(newsize <= Wisdom_size || (Wisdom_string != NULL && strncmp(wisdom,Wisdom_string,newsize) == 0)){
+    // no change
+    FREE(wisdom);
+    return 0;
+  }
+  // Write new wisdom to temp file
   char *newtemp = NULL;
   if(asprintf(&newtemp,"%s-XXXXXX",Arch_wisdom_file) < 0){
+    printf("Can't create temporary wisdom file name: %s\n",strerror(errno));
     FREE(newtemp);
+    FREE(wisdom);
     return -1;
   }
   int fd = mkstemp(newtemp);
   if(fd == -1){
-    // Last ditch attempt to preserve the work: dump it to stdout and hope somebody sees it
     printf("Can't create temporary wisdom file %s: %s\n",newtemp,strerror(errno));
     FREE(newtemp);
+    FREE(wisdom);
     return -1;
   }
   fchmod(fd,0664); // I really do want rw-rw-r-- so the radio group can write it
   char *lockfile = NULL;
   if(asprintf(&lockfile,"%s.lock",wisdom_file) <= 0){
     close(fd);
+    FREE(wisdom);
     FREE(lockfile);
     FREE(newtemp);
     return -1;
@@ -271,50 +291,23 @@ static int save_wisdom(char const *wisdom_file){
   if(lockfd == -1){
     printf("Can't acquire lock on %s\n",lockfile);
     close(fd);
+    FREE(wisdom);
     FREE(lockfile);
     FREE(newtemp);
     return -1;
   }
   flock(lockfd,LOCK_EX);
-
-  // Try reimporting arch file again in case it was written to while we were planning
-  bool reimport = fftwf_import_wisdom_from_filename(Arch_wisdom_file);
-  if(Verbose > 1)
-    printf("fftwf_import_wisdom_from_filename(%s) %s\n",Arch_wisdom_file,reimport ? "succeeded" : "failed");
-
-  char *wisdom = fftwf_export_wisdom_to_string();
-  if(wisdom == NULL){
-    printf("fftwf_export_wisdom_to_string() returned NULL!\n");
-    close(lockfd);
-    close (fd);
-    FREE(lockfile);
-    FREE(newtemp);
-    return -1;
-  }
-  size_t newsize = strlen(wisdom);
-  if(newsize <= Wisdom_size || (Wisdom_string != NULL && strncmp(wisdom,Wisdom_string,newsize) == 0)){
-    // no change
-    FREE(wisdom);
-    close(fd);
-    FREE(newtemp);
-    close(lockfd);
-    FREE(lockfile);
-    return 0;
-  }
   FREE(Wisdom_string);
   Wisdom_string = wisdom;
   Wisdom_size = newsize;
-
-  if(write(fd,wisdom,newsize) != (ssize_t)newsize){
+  if(write(fd,Wisdom_string, Wisdom_size) != (ssize_t)Wisdom_size){
     printf("Write of new wisdom file length %lu failed: %s\n",newsize,strerror(errno));
-    FREE(wisdom);
     close(fd);
     FREE(newtemp);
     close(lockfd);
     FREE(lockfile);
     return -1;
   }
-  FREE(wisdom);
   {
     struct stat st = {0};
     if(fstat(fd,&st) != 0 || st.st_size <= 0){
