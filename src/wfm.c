@@ -76,14 +76,14 @@ int demod_wfm(void *arg){
   int squelch_state = 0; // Number of blocks for which squelch remains open
 
   // Composite signal 50 Hz - 15 kHz contains mono (L+R) signal
-  struct filter_in composite;
+  struct filter_in composite = {0}; // when debugging, must be zeroes
   create_filter_input(&composite,composite_L,composite_M,REAL);
   composite.perform_inline = true;  // don't use job queue
 
   assert(composite.ilen == chan->filter.out.olen);
 
   // Composite filters, decimate from 384 Khz to 48 KHz
-  struct filter_out mono;
+  struct filter_out mono = {0};
   create_filter_output(&mono,&composite,NULL,audio_L, REAL);
   set_filter(&mono,50.0/Audio_samprate, 15000.0/Audio_samprate, chan->filter.kaiser_beta);
 

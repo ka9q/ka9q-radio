@@ -383,7 +383,7 @@ void *decode(void *arg){
   int const audio_L = (L * Audio_samprate) / Composite_samprate;
 
   // Baseband signal 50 Hz - 15 kHz contains mono (L+R) signal
-  struct filter_in baseband;
+  struct filter_in baseband = {0};
   create_filter_input(&baseband,L,M,REAL);
 
   // Baseband filters, decimate from 384 Khz to 48 KHz
