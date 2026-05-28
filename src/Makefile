@@ -282,7 +282,7 @@ wd-record: wd-record.o libstatus.a attr.o libradio.a
 
 ## Dynamically loaded modules for SDR front ends
 funcube.so: funcube.o fcd.o hid-libusb.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lportaudio $(LDLIBS)
+	$(CC) $(SOFLAGS) -o $@ $^ -lportaudio -lusb-1.0 $(LDLIBS)
 
 rx888.so: rx888.o si5351.o ezusb.o hid-libusb.o
 	$(CC) $(SOFLAGS) -o $@ $^ -lusb-1.0 $(LDLIBS)
