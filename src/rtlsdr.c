@@ -286,7 +286,7 @@ int rtlsdr_startup(struct frontend * const frontend){
   sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
   pthread_create(&sdr->read_thread,NULL,rtlsdr_read_thread,sdr);
   atomic_store(&sdr->state,RUNNING);
-  fprintf(stderr,"rtlsdr thread running\n");
+  fprintf(stderr,"rtlsdr running\n");
   return 0;
 }
 
