@@ -32,12 +32,6 @@ static double const Power_tc = 1.0; // time constant (seconds) for computing smo
 static double const LowerEdge = -75000;
 static double const UpperEdge = +75000;
 
-// Variables set by command line options
-// A larger blocksize makes more efficient use of each frame, but the receiver generally runs on
-// frames that match the Opus codec: 2.5, 5, 10, 20, 40, 60, 80, 100, 120 ms
-// So to minimize latency, make this a common denominator:
-// 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
-static int Blocksize;
 static bool Hold_open = false;
 
 extern char const *Description;
@@ -77,7 +71,8 @@ struct sdrstate {
 };
 
 static char const *Funcube_keys[] = {
-  "bias"
+  "agc",
+  "bias",
   "calibrate",
   "description",
   "device",
@@ -127,6 +122,8 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
     fprintf(stderr,"fcdOpen(%d) failed\n",sdr->number);
     return -1;
   }
+  sdr->agc = config_getboolean(dictionary, section, "agc", true);
+
   sdr->bias_tee = config_getboolean(dictionary,section,"bias",false);
   fcdAppSetParam(sdr->phd,FCD_CMD_APP_SET_BIAS_TEE,&sdr->bias_tee,sizeof(sdr->bias_tee));
   int r;
@@ -184,15 +181,8 @@ int funcube_setup(struct frontend * const frontend, dictionary * const dictionar
     fprintf(stderr,"Pa_OpenStream error: %s\n",Pa_GetErrorText(r));
     goto done;
   }
-  r = Pa_StartStream(sdr->Pa_Stream);
-  if(r < 0){
-    fprintf(stderr,"Pa_StartStream error: %s\n",Pa_GetErrorText(r));
-    goto done;
-  }
-
   fprintf(stderr,"Funcube %d: software AGC %d, samprate %'lf, freq %'.3f Hz, bias %d, lna_gain %d, mixer gain %d, if_gain %d\n",
 	  sdr->number, sdr->agc, frontend->samprate, frontend->frequency, sdr->bias_tee, frontend->lna_gain, frontend->mixer_gain, frontend->if_gain);
-
  done:; // Also the abort target: close handle before returning
   if(!Hold_open && sdr->phd != NULL){
     fcdClose(sdr->phd);
@@ -213,12 +203,19 @@ static void *proc_funcube(void *arg){
   double secphi = 1;
   double tanphi = 0;
 
-  double const gainphase_alpha = Blocksize/(ADC_samprate * Power_tc);
+  int blocksize = Blocktime * ADC_samprate;
+
+  double const gainphase_alpha = blocksize/(ADC_samprate * Power_tc);
   int ConsecPaErrs = 0;
-  int16_t * sampbuf = malloc(2 * Blocksize * sizeof(*sampbuf)); // complex samples have two integers
+  int16_t * sampbuf = malloc(2 * blocksize * sizeof(*sampbuf)); // complex samples have two integers
 
   realtime(2 + default_prio());
 
+  int r = Pa_StartStream(sdr->Pa_Stream);
+  if(r < 0){
+    fprintf(stderr,"Pa_StartStream error: %s\n",Pa_GetErrorText(r));
+    return NULL;
+  }
   enum state s;
   while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
     // Read block of I/Q samples from A/D converter
@@ -230,7 +227,7 @@ static void *proc_funcube(void *arg){
       perror("setitimer start");
       break;
     }
-    int const r = Pa_ReadStream(sdr->Pa_Stream,sampbuf,Blocksize);
+    int const r = Pa_ReadStream(sdr->Pa_Stream,sampbuf,blocksize);
     memset(&itime,0,sizeof(itime));
     if(setitimer(ITIMER_VIRTUAL,&itime,NULL) == -1){
       perror("setitimer stop");
@@ -255,7 +252,7 @@ static void *proc_funcube(void *arg){
 
     float complex * wptr = frontend->in.input_write_pointer.c;
 
-    for(int i=0; i<Blocksize; i++){
+    for(int i=0; i<blocksize; i++){
       if(abs(sampbuf[2*i]) >= 32767){
 	frontend->overranges++;
 	frontend->samp_since_over = 0;
@@ -289,14 +286,14 @@ static void *proc_funcube(void *arg){
 
       wptr[i] = (float complex)(samp * sdr->scale);
     }
-    write_cfilter(&frontend->in,NULL,Blocksize); // Update write pointer, invoke FFT
-    frontend->samples += Blocksize;
+    write_cfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT
+    frontend->samples += blocksize;
     double const block_energy = i_energy + q_energy; // Normalize for complex pairs
-    frontend->if_power += Power_alpha * (block_energy / Blocksize - frontend->if_power); // Average A/D output power per channel
+    frontend->if_power += Power_alpha * (block_energy / blocksize - frontend->if_power); // Average A/D output power per channel
 
     // Update every block
     // estimates of DC offset, signal powers and phase error
-    sdr->DC += DC_alpha * (samp_sum - Blocksize*sdr->DC);
+    sdr->DC += DC_alpha * (samp_sum - blocksize*sdr->DC);
     if(block_energy > 0){ // Avoid divisions by 0, etc
       sdr->imbalance += gainphase_alpha * ((i_energy / q_energy) - sdr->imbalance);
       double const dpn = 2 * dotprod / block_energy;
@@ -315,6 +312,10 @@ static void *proc_funcube(void *arg){
     fprintf(stderr,"funcube streaming failed, exiting\n");
     exit(EX_NOINPUT); // Let systemd restart us
   }
+  r = Pa_StopStream(sdr->Pa_Stream);
+  if(r < 0)
+    fprintf(stderr,"Pa_StopStream error: %s\n",Pa_GetErrorText(r));
+
   return NULL;
 }
 int funcube_startup(struct frontend *frontend){
@@ -336,7 +337,7 @@ int funcube_startup(struct frontend *frontend){
   fprintf(stderr,"funcube running\n");
   return 0;
 }
-int funcube_stop(struct frontend *frontend){
+int funcube_shutdown(struct frontend *frontend){
   assert(frontend != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   assert(sdr != NULL);
@@ -355,7 +356,6 @@ int funcube_stop(struct frontend *frontend){
 }
 
 // Crude analog AGC just to keep signal roughly within A/D range
-// Executed only if -o option isn't specified; this allows manual control with, e.g., the fcdpp command
 static void do_fcd_agc(struct sdrstate *sdr){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
