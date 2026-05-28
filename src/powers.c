@@ -157,7 +157,7 @@ int main(int argc,char *argv[]){
     encode_int(&bp,COMMAND_TAG,tag);
     encode_int(&bp,DEMOD_TYPE,SPECT_DEMOD);
     if(frequency >= 0)
-      encode_float(&bp,RADIO_FREQUENCY,frequency); // 0 frequency means terminate
+      encode_double(&bp,RADIO_FREQUENCY,frequency); // 0 frequency means terminate
     if(bins > 0)
       encode_int(&bp,BIN_COUNT,bins);
     if(rbw > 0)
@@ -353,7 +353,7 @@ int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *r
       }
       break;
     case RESOLUTION_BW:
-      *rbw = decode_double(cp,optlen);
+      *rbw = decode_float(cp,optlen);
       break;
     case BIN_COUNT: // Do we check that this equals the length of the BIN_DATA tlv?
       l_ccount = decode_int(cp,optlen);
