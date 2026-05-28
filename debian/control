@@ -27,8 +27,9 @@ Description: KA9Q multichannel SDR server
 
 Package: ka9q-radio-common
 Architecture: any
-Depends: ${misc:Depends}, systemd,  ka9q-radio (<<1.1.1)
+Depends: ${misc:Depends}, systemd
 Replaces: ka9q-radio (<< 1.1.1)
+Breaks: ka9q-radio (<< 1.1.1)
 Description: common files for ka9q-radio
  Common files for ka9q-radio and ka9q-radio's user commands and daemons
 
