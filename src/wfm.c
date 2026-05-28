@@ -89,13 +89,13 @@ int demod_wfm(void *arg){
 
   // Narrow filter at 19 kHz for stereo pilot
   // FCC says +/- 2 Hz, with +/- 20 Hz protected (73.322)
-  struct filter_out pilot;
+  struct filter_out pilot = {0};
   create_filter_output(&pilot,&composite,NULL,audio_L, COMPLEX);
   set_filter(&pilot,-100./Audio_samprate, 100./Audio_samprate, chan->filter.kaiser_beta);
 
   // Stereo difference (L-R) information on DSBSC carrier at 38 kHz
   // Extends +/- 15 kHz around 38 kHz
-  struct filter_out lminusr;
+  struct filter_out lminusr = {0};
   create_filter_output(&lminusr,&composite,NULL,audio_L, COMPLEX);
   set_filter(&lminusr,-15000./Audio_samprate, 15000./Audio_samprate, chan->filter.kaiser_beta);
 
