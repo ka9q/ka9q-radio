@@ -260,7 +260,7 @@ struct session {
   bool session_errors_init;     // true once the session has run wd_check() at least once to set the next expected ts,seq
 
   float last_angle;
-  uint32_t last_edge;
+  uint64_t last_edge;
   uint32_t start_ts;
   int64_t start_timesnap;
   uint32_t start_sequence;
@@ -459,7 +459,7 @@ int main(int argc,char *argv[]){
       break;
     case 'V':
       VERSION();
-      fputs("wsprdaemon mode (-W): v0.15\n",stdout);
+      fputs("wsprdaemon mode (-W): v0.16\n",stdout);
       exit(EX_OK);
     case 'W':
       wd_mode = true;
@@ -1245,16 +1245,14 @@ static void bpsk_state_machine(struct session * const sp,struct sockaddr const *
       bool noisy = false;
 
       // if the pulse isn't +/- 5 samples from the expected position, modulo sample rate, call it noise
-      int32_t delta = (ts % sp->samprate) - (sp->last_edge % sp->samprate);
-      if (abs(delta) > 10)
-        noisy=true;
-
-      // or if the pulse is <99% of a second?
-      if ((ts - sp->last_edge) < ((sp->samprate * 99) / 100))
+      uint32_t p = (ts - (uint32_t)sp->last_edge) % sp->samprate;
+      uint32_t sample_error = (p > sp->samprate / 2) ? (sp->samprate - p) : p;
+      if (sample_error > 5)
         noisy = true;
 
-      /* if ((ts - sp->last_edge) > ((sp->samprate * 101) / 100)) */
-      /*   noisy = true; */
+      // or if the pulse is <99% of a second?
+      if ((ts - (uint32_t)sp->last_edge) < ((sp->samprate * 99) / 100))
+        noisy = true;
 
       if (noisy){
         ++pps_noise;
@@ -1315,7 +1313,12 @@ static void bpsk_state_machine(struct session * const sp,struct sockaddr const *
         }
       }
       fflush(0);
-      sp->last_edge=ts;
+
+      /* Expand last_edge to 64 bit so TS rollovers aren't an issue anymore */
+      uint32_t old_ts = (uint32_t)sp->last_edge;
+      if (ts < old_ts)
+        sp->last_edge += (UINT64_C(1) << 32);
+      sp->last_edge = (sp->last_edge & ~(uint64_t)UINT32_MAX) | ts;
     }
     sp->last_angle=angle;
   }
@@ -1324,7 +1327,7 @@ static void bpsk_state_machine(struct session * const sp,struct sockaddr const *
   if (59 == (now.tv_sec % 60)){
     static long int last_s = 0;
     if (now.tv_sec != last_s){
-      log_printf("SSRC %u PPS ok: %u PPS noise: %u consecutive ok: %u sync at TS %u last edge: %u",
+      log_printf("SSRC %u PPS ok: %u PPS noise: %u consecutive ok: %u sync at TS %u last edge: %lu",
                  sp->ssrc,
                  pps_ok,
                  pps_noise,
