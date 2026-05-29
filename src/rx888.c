@@ -95,7 +95,12 @@ struct sdrstate {
   unsigned int transfer_index; // Write index into the transfer_size array (unused)
   struct libusb_transfer **transfers; // List of transfer structures.
   unsigned char **databuffers;        // List of data buffers.
-  long long last_callback_time;
+  long long last_callback_time;       // ns timestamp of last *successful* bulk transfer carrying data
+
+  // Tiered mid-stream wedge recovery — see commit message for analysis.
+  // 0 = idle, 1 = Tier-1a fired (STOPFX3+STARTFX3), 2 = Tier-1b fired (RESETFX3)
+  int recovery_tier;
+  long long recovery_grace_until;     // ns; while in tier-1a, suppress further watchdog action until this time
 
   // USB transfer
   int xfers_in_progress;
@@ -501,11 +506,35 @@ static void *proc_rx888(void *arg){
    }
     // But also check for a silent hang with libusb_handle_events_timeout_completed()
     // Check more directly how long it's been since we last got data
-    // sdr->last_callback_time is set in rx_callback()
+    // sdr->last_callback_time is set in rx_callback() *only* on a successful, non-empty transfer.
     int const maxtime = 5;
-    if(gps_time_ns() > sdr->last_callback_time + maxtime * BILLION){
-      fprintf(stderr,"No rx888 data for %d seconds, quitting\n",maxtime);
-      break;
+    int64_t const now_ns = gps_time_ns();
+    if(now_ns > sdr->last_callback_time + maxtime * BILLION){
+      // Wedge detected. Escalate through FX3 vendor-command tiers before giving up.
+      // See ExtIO_sddc/SDDC_FX3/USBhandler.c for the firmware-side definitions.
+      // Tier-1a (STOPFX3+STARTFX3): resets the FX3 DMA channel + GPIF SW input, in-stream,
+      //                             ~0.5 s, no USB re-enumeration.
+      // Tier-1b (RESETFX3):         full FX3 soft reset; USB re-enumerates via bootloader +
+      //                             fxload; we must exit and let the supervisor restart us.
+      if(sdr->recovery_tier == 0) {
+        fprintf(stderr,"No rx888 data for %d seconds — Tier-1a (STOPFX3+STARTFX3)\n", maxtime);
+        command_send(sdr->dev_handle, STOPFX3, 0);
+        usleep(500000);   // 500 ms
+        command_send(sdr->dev_handle, STARTFX3, 0);
+        sdr->recovery_tier = 1;
+        sdr->recovery_grace_until = now_ns + 30LL * BILLION;   // 30 s for data to resume
+        sdr->last_callback_time = now_ns;                      // reset watchdog
+      } else if(sdr->recovery_tier == 1 && now_ns > sdr->recovery_grace_until) {
+        fprintf(stderr,"rx888 wedge persists after Tier-1a — Tier-1b (RESETFX3), exiting for supervisor restart\n");
+        command_send(sdr->dev_handle, RESETFX3, 0);
+        exit(EX_NOINPUT);
+      } else if(sdr->recovery_tier == 1) {
+        // Still in grace period — keep pumping libusb events and hope for data
+      } else {
+        // recovery_tier >= 2 — shouldn't be reachable since tier-1b exits, but be safe
+        fprintf(stderr,"No rx888 data for %d seconds, quitting\n", maxtime);
+        break;
+      }
     }
     struct timeval tv;
     tv.tv_sec = 1;
@@ -594,7 +623,9 @@ static void rx_callback(struct libusb_transfer * const transfer){
   int64_t const now = gps_time_ns();
 
   sdr->xfers_in_progress--;
-  sdr->last_callback_time = now;
+  // NB: last_callback_time is intentionally NOT updated here. It must be updated only when a
+  // transfer actually delivers data (see below), otherwise a wedged FX3 that returns endless
+  // failed/empty transfers keeps the watchdog timer fresh and proc_rx888() can never trip.
 
   if(transfer->status == LIBUSB_TRANSFER_NO_DEVICE){
     usb_device_gone = 1;
@@ -615,6 +646,20 @@ static void rx_callback(struct libusb_transfer * const transfer){
 
   // successful USB transfer
   int const size = transfer->actual_length;
+  if(size <= 0) {
+    // Completion without data is also a wedge symptom — don't refresh the watchdog.
+    if(atomic_load(&sdr->state) == RUNNING) {
+      if(libusb_submit_transfer(transfer) == 0)
+        sdr->xfers_in_progress++;
+    }
+    return;
+  }
+  sdr->last_callback_time = now;            // <-- moved: only refresh on real data
+  if(sdr->recovery_tier != 0) {
+    fprintf(stderr,"RX888 data flow restored after Tier-%d recovery\n", sdr->recovery_tier);
+    sdr->recovery_tier = 0;
+    sdr->recovery_grace_until = 0;
+  }
   sdr->success_count++;
 
   // Feed directly into FFT input buffer, accumulate energy
