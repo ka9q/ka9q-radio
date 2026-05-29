@@ -17,6 +17,7 @@ EnvironmentFile=/etc/radio/ft4-decode.conf
 PermissionsStartOnly=true
 UMask = 002
 StateDirectory=ka9q-radio/ft4
+StateDirectoryMode=0775
 WorkingDirectory=/var/lib/ka9q-radio/ft4
 ExecStart=@bindir@/pcmrecord -d $DIRECTORY -4 $MCAST
 Restart=always
