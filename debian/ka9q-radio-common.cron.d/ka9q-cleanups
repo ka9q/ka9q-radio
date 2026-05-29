@@ -1,2 +1,0 @@
-# delete any stale audio files for ft8, ft4 and wspr decoders
-10 * * * * radio   cd /var/lib/ka9q-radio; /usr/bin/find ft4 ft8 wspr -mmin +60 -delete > /dev/null 2>&1
