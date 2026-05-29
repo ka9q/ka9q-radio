@@ -18,6 +18,7 @@ StateDirectory=ka9q-radio/ft4
 StateDirectoryMode=0775
 StandardOutput=append:/var/log/ft8.log
 StandardError=journal
+StateDirectory=ka9q-radio/ft8
 WorkingDirectory=/var/lib/ka9q-radio/ft8
 ExecStart=@bindir@/decode_ft8 $DIRECTORY
 Restart=always

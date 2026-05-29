@@ -16,6 +16,7 @@ Type=simple
 EnvironmentFile=/etc/radio/ft8-decode.conf
 PermissionsStartOnly=true
 UMask = 002
+StateDirectory=ka9q-radio/ft8
 WorkingDirectory=/var/lib/ka9q-radio/ft8
 ExecStart=@bindir@/pcmrecord -d $DIRECTORY -8 $MCAST
 Restart=always
