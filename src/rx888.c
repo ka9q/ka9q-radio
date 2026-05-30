@@ -750,7 +750,8 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     fprintf(stderr,"Looking for rx888 at %d:%d\n",USB_busnum,USB_devnum);
 
   libusb_device *device = NULL;
-  dev_count = libusb_get_device_list(NULL,&device_list);
+  libusb_device **device_list;
+  ssize_t dev_count = libusb_get_device_list(NULL,&device_list);
   for(int i=0; i < dev_count; i++){
     device = device_list[i];
     if(device == NULL)
