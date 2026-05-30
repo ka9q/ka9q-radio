@@ -226,14 +226,12 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stderr,"Invalid request size %d, using 32\n",reqsize);
     reqsize = 32;
   }
-  // Firmware file
-  char const *firmware = config_getstring(dictionary,section,"firmware",DEFAULT_IMAGE_FILE);
-  if(firmware != NULL && strlen(firmware) > 0){
-    int ret;
-    if((ret = rx888_usb_init(sdr,firmware,queuedepth,reqsize)) != 0){
-      fprintf(stderr,"rx888_usb_init() failed\n");
-      return -1;
-    }
+  // Firmware file is now empty by default, rx888_boot has priority
+  char const *firmware = config_getstring(dictionary,section,"firmware","");
+  int ret;
+  if((ret = rx888_usb_init(sdr,firmware,queuedepth,reqsize)) != 0){
+    fprintf(stderr,"rx888_usb_init() failed\n");
+    return -1;
   }
   Reset = config_getboolean(dictionary,section,"reset",Reset);
   // GPIOs
