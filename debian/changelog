@@ -1,3 +1,11 @@
+ka9q-radio (1.1.5-0-trixie1) UNRELEASED; urgency=medium
+
+  * change default rx888 firmware image in rx888 plugin to W1EUJ_0.1.0_FX3.img
+    note: this is usually overridden by the standalone rx888_boot, which is configured by
+    /etc/radio/rx888_bootfile.conf (which also points to W1EUJ_0.1.0_FX3.img)
+
+ -- Phil Karn <karn@ka9q.net>  Sat, 30 May 2026 13:21:14 -0700
+
 ka9q-radio (1.1.4-0-trixie) trixie; urgency=medium
 
   * use rx888 firmware image W1EUJ_0.1.0_FX3.img
