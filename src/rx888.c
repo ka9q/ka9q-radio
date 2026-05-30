@@ -235,6 +235,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
       return -1;
     }
   }
+  Reset = config_getboolean(dictionary,section,"reset",Reset);
   // GPIOs
   sdr->gpios = 0;
   // Enable/disable dithering
@@ -839,7 +840,6 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   // Stop and reopen in case it was left running - KA9Q
   usleep(5000);
   command_send(sdr->dev_handle,STOPFX3,0);
-  Reset = config_getboolean(dictionary,section,"reset",Reset);
   if(Reset){
     int r = libusb_reset_device(sdr->dev_handle);
     if(r != 0){
