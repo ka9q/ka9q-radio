@@ -1,7 +1,8 @@
 #ifndef RX888_H
 #define RX888_H
 
-#define DEFAULT_IMAGE_FILE "W1EUJ_0.1.0_FX3.img"
+// Now null by default, loading is done by the rx888_boot service triggered by udev
+#define DEFAULT_IMAGE_FILE ((char *)NULL)
 
 // Copyright (c)  2021 Ruslan Migirov <trapi78@gmail.com>
 // Credit: https://github.com/rhgndf/rx888_stream

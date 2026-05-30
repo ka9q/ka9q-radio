@@ -125,7 +125,7 @@ struct sdrstate {
   _Atomic enum state state;
 };
 
-static _Thread_local bool reset = false;
+static _Thread_local bool Reset = false;
 
 static void rx_callback(struct libusb_transfer *transfer);
 static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize);
@@ -214,8 +214,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     if(p != NULL)
       sdr->serial = strtoll(p,NULL,16);
   }
-  // Firmware file
-  char const *firmware = config_getstring(dictionary,section,"firmware",DEFAULT_IMAGE_FILE);
   // Queue depth, default 16; 32 sometimes overflows
   int queuedepth = config_getint(dictionary,section,"queuedepth",16);
   if(queuedepth < 1 || queuedepth > 64) {
@@ -228,8 +226,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stderr,"Invalid request size %d, using 32\n",reqsize);
     reqsize = 32;
   }
-  reset = config_getboolean(dictionary,section,"reset",false);
-  {
+  // Firmware file
+  char const *firmware = config_getstring(dictionary,section,"firmware",DEFAULT_IMAGE_FILE);
+  if(firmware != NULL && strlen(firmware) > 0){
     int ret;
     if((ret = rx888_usb_init(sdr,firmware,queuedepth,reqsize)) != 0){
       fprintf(stderr,"rx888_usb_init() failed\n");
@@ -668,13 +667,6 @@ static void rx_callback(struct libusb_transfer * const transfer){
 }
 
 static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware,unsigned int const queuedepth,unsigned int const reqsize){
-  if(firmware == NULL){
-    fprintf(stderr,"Firmware not loaded and not available\n");
-    return -1;
-  }
-  char full_firmware_file[PATH_MAX] = {0};
-  dist_path(full_firmware_file,sizeof(full_firmware_file),firmware);
-
   {
     int ret = libusb_init(NULL);
     if(ret != 0){
@@ -683,65 +675,69 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       return -1;
     }
   }
-  // Search for unloaded rx888s (0x04b4:0x00f3) with the desired serial, or all such devices if no serial specified
-  // and load with firmware
-  // With the rx888 bootloader launched by udev, this section should never find anything
-  libusb_device **device_list;
-  ssize_t dev_count = libusb_get_device_list(NULL,&device_list);
-  for(ssize_t i=0; i < dev_count; i++){
-    libusb_device *device = device_list[i];
-    if(device == NULL)
-      break; // End of list
+  if(firmware != NULL && strlen(firmware) > 0){
+    // Search for unloaded rx888s (0x04b4:0x00f3) with the desired serial, or all such devices if no serial specified
+    // and load with firmware
+    // With the rx888 bootloader launched by udev, this section should never find anything
+    libusb_device **device_list;
+    ssize_t dev_count = libusb_get_device_list(NULL,&device_list);
+    for(ssize_t i=0; i < dev_count; i++){
+      libusb_device *device = device_list[i];
+      if(device == NULL)
+	break; // End of list
 
-    struct libusb_device_descriptor desc = {0};
-    int rc = libusb_get_device_descriptor(device,&desc);
-    if(rc != 0){
-      fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
-      continue;
-    }
-    if(desc.idVendor != Vendor_id || desc.idProduct != Unloaded_product_id)
-      continue;
-
-    fprintf(stderr,"found unloaded rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
-    libusb_device_handle *handle = NULL;
-    rc = libusb_open(device,&handle);
-    if(rc != 0 || handle == NULL){
-      fprintf(stderr,", libusb_open() failed: %s\n",libusb_strerror(rc));
-      continue;
-    }
-    if(desc.iManufacturer){
-      char manufacturer[100] = {0};
-      int ret = libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer));
-      if(ret > 0)
-	fprintf(stderr,", manufacturer '%s'",manufacturer);
-    }
-    if(desc.iProduct){
-      char product[100] = {0};
-      int ret = libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof(product));
-      if(ret > 0)
-	fprintf(stderr,", product '%s'",product);
-    }
-    char serial[100] = {0};
-    if(desc.iSerialNumber){
-      int ret = libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial));
-      if(ret > 0){
-	fprintf(stderr,", serial '%s'",serial);
+      struct libusb_device_descriptor desc = {0};
+      int rc = libusb_get_device_descriptor(device,&desc);
+      if(rc != 0){
+	fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
+	continue;
       }
+      if(desc.idVendor != Vendor_id || desc.idProduct != Unloaded_product_id)
+	continue;
+
+      fprintf(stderr,"found unloaded rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
+      libusb_device_handle *handle = NULL;
+      rc = libusb_open(device,&handle);
+      if(rc != 0 || handle == NULL){
+	fprintf(stderr,", libusb_open() failed: %s\n",libusb_strerror(rc));
+	continue;
+      }
+      if(desc.iManufacturer){
+	char manufacturer[100] = {0};
+	int ret = libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer));
+	if(ret > 0)
+	  fprintf(stderr,", manufacturer '%s'",manufacturer);
+      }
+      if(desc.iProduct){
+	char product[100] = {0};
+	int ret = libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof(product));
+	if(ret > 0)
+	  fprintf(stderr,", product '%s'",product);
+      }
+      char serial[100] = {0};
+      if(desc.iSerialNumber){
+	int ret = libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial));
+	if(ret > 0){
+	  fprintf(stderr,", serial '%s'",serial);
+	}
+      }
+      // The proper serial number doesn't appear until the device is loaded with firmware, so load all we find
+      char full_firmware_file[PATH_MAX] = {0};
+      dist_path(full_firmware_file,sizeof(full_firmware_file),firmware);
+      fprintf(stderr,", loading rx888 firmware file %s\n",full_firmware_file);
+      if(ezusb_load_ram(handle,full_firmware_file,FX_TYPE_FX3,IMG_TYPE_IMG,1) == 0){
+	fprintf(stderr,"rx888 loaded\n");
+	sleep(1); // how long should this be?
+      } else {
+	fprintf(stderr,"rx888 load failed for device %d.%d (logical)\n",
+		libusb_get_bus_number(device),libusb_get_device_address(device));
+      }
+      libusb_close(handle);
+      handle = NULL;
     }
-    // The proper serial number doesn't appear until the device is loaded with firmware, so load all we find
-    fprintf(stderr,", loading rx888 firmware file %s",full_firmware_file);
-    if(ezusb_load_ram(handle,full_firmware_file,FX_TYPE_FX3,IMG_TYPE_IMG,1) == 0){
-      fprintf(stderr,", done\n");
-      sleep(1); // how long should this be?
-    } else {
-      fprintf(stderr,", failed for device %d.%d (logical)\n",
-	      libusb_get_bus_number(device),libusb_get_device_address(device));
-    }
-    libusb_close(handle);
-    handle = NULL;
+    libusb_free_device_list(device_list,1);
+    device_list = NULL;
   }
-  libusb_free_device_list(device_list,1);
-  device_list = NULL;
 
   // Scan list again, looking for a loaded RX888 with the right numbers
   if(Serial != NULL){ // specified on command line, overrides config file
@@ -842,7 +838,8 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   // Stop and reopen in case it was left running - KA9Q
   usleep(5000);
   command_send(sdr->dev_handle,STOPFX3,0);
-  if(reset){
+  Reset = config_getboolean(dictionary,section,"reset",Reset);
+  if(Reset){
     int r = libusb_reset_device(sdr->dev_handle);
     if(r != 0){
       fprintf(stderr,"reset failed, %d\n",r);

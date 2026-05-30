@@ -111,12 +111,12 @@ int main(int argc,char *argv[]){
       }
     }
     // The proper serial number doesn't appear until the device is loaded with firmware, so load all we find
-    fprintf(stderr,", loading rx888 firmware file %s",full_firmware_file);
+    fprintf(stderr,", loading rx888 firmware file %s...\n",full_firmware_file);
     if(ezusb_load_ram(handle,full_firmware_file,FX_TYPE_FX3,IMG_TYPE_IMG,1) == 0){
-      fprintf(stderr,", done\n");
+      fprintf(stderr,"rx888 loaded\n");
       sleep(1); // how long should this be?
     } else {
-      fprintf(stderr,", failed for device %d.%d (logical)\n",
+      fprintf(stderr,"rx888 load failed for device %d.%d (logical)\n",
 	      libusb_get_bus_number(device),libusb_get_device_address(device));
     }
     libusb_close(handle);
