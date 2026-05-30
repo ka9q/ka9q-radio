@@ -10,7 +10,7 @@ pkgdatadir    ?= $(datadir)/ka9q-radio
 UNAME_S := $(shell uname -s)
 
 RX888=120s_failure.img 20s_watchdog.img	120s_watchdog.img 60s_watchdog.img \
-	SDDC_FX3.img
+	SDDC_FX3.img W1EUJ_0.1.0_FX3.img
 LUA=ssrc-decimal.lua ka9q_ctl.lua
 TEXT=bandplan.txt id.txt presets.conf help.txt monitor-help.txt
 
