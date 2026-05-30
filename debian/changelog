@@ -1,10 +1,18 @@
-ka9q-radio (1.1.5-0-trixie1) UNRELEASED; urgency=medium
+ka9q-radio (1.1.7-0-trixie1) trixie; urgency=medium
+
+  * make default rx888 firmware image in rx888 plugin "", which
+    bypasses radiod search for unloaded rx888s. Let rx888_boot handle them.
+    Note: may require removing firmware= entry in radiod config file
+
+ -- Phil Karn <karn@ka9q.net>  Sat, 30 May 2026 15:40:14 -0700
+
+ka9q-radio (1.1.5-0-trixie2) trixie; urgency=medium
 
   * change default rx888 firmware image in rx888 plugin to W1EUJ_0.1.0_FX3.img
     note: this is usually overridden by the standalone rx888_boot, which is configured by
     /etc/radio/rx888_bootfile.conf (which also points to W1EUJ_0.1.0_FX3.img)
 
- -- Phil Karn <karn@ka9q.net>  Sat, 30 May 2026 13:21:14 -0700
+ -- Phil Karn <karn@ka9q.net>  Sat, 30 May 2026 15:40:03 -0700
 
 ka9q-radio (1.1.4-0-trixie) trixie; urgency=medium
 
