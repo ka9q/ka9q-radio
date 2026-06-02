@@ -40,6 +40,8 @@ enum FX3Command {
   // WRITE: NONE
   RESETFX3 = 0xB1,
 
+  GETSTATS = 0xB3,
+
   // Set Argument, packet Index/Vaule contains the data
   // WRITE: (Additional Data)
   // INDEX: Argument_index

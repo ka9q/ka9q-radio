@@ -97,6 +97,8 @@ struct sdrstate {
   unsigned char **databuffers;        // List of data buffers.
   long long last_callback_time;
 
+  uint8_t fw_major,fw_minor;
+
   // USB transfer
   int xfers_in_progress;
   unsigned int queuedepth; // Number of requests to queue
@@ -861,6 +863,19 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       fprintf(stderr, "Error claiming USB interface\n");
       goto end;
     }
+  }
+  {
+    // Query firmware identity: [hw model, fw major, fw minor, req count]
+    unsigned char info[4];
+    int ret = control_recv(sdr->dev_handle, TESTFX3, 0, 0, info, sizeof(info));
+    if(ret < (int)sizeof(info)){
+      fprintf(stderr,"TESTFX3 firmware query failed\n");
+      goto end;
+    }
+    sdr->fw_major = info[1];
+    sdr->fw_minor = info[2];
+    fprintf(stderr,"RX888 hardware 0x%02x, firmware %u.%u\n",
+	    info[0],info[1],info[2]);
   }
   {
     // All this just to get sdr->pktsize?

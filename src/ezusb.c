@@ -924,3 +924,18 @@ int control_send_byte(struct libusb_device_handle *dev_handle,
 
   return 0;
 }
+// Receive a vendor control response (IN-direction mirror of control_send)
+int control_recv(struct libusb_device_handle *dev_handle, enum FX3Command cmd,
+                 uint16_t value, uint16_t index, unsigned char *data,
+                 uint16_t length) {
+  int ret;
+  ret = libusb_control_transfer(
+      dev_handle, LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_IN, cmd, value,
+      index, data, length, 0);
+  if (ret < 0) {
+    fprintf(stderr, "Could not recv control: 0x%X with value: 0x%X, index: 0x%X, length: %d. Error : %s.\n",
+            cmd, value, index, length, libusb_error_name(ret));
+    return -1;
+  }
+  return ret;  // bytes actually returned
+}

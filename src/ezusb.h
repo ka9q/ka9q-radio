@@ -120,6 +120,10 @@ int control_send_byte(struct libusb_device_handle *dev_handle,
                  enum FX3Command cmd,
                  uint16_t value, uint16_t index, uint8_t data);
 
+int control_recv(struct libusb_device_handle *dev_handle, enum FX3Command cmd,
+                 uint16_t value, uint16_t index, unsigned char *data,
+                 uint16_t length);
+
 #ifdef __cplusplus
 }
 #endif
