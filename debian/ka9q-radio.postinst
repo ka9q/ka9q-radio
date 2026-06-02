@@ -24,7 +24,6 @@ for d in /etc/radio/radiod@*.conf.d; do
 done
 
 if $found; then
-    echo "radiod config file(s) found, setup prompts skipped"
     exit 0
 fi
 
