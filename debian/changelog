@@ -1,4 +1,16 @@
-ka9q-radio (1.1.8-0-trixie1) trixie; urgency=medium
+ka9q-radio (1.1.8-2-noble1) noble; urgency=medium
+
+  * further fixes for config file tests
+
+ -- Phil Karn <karn@ka9q.net>  Tue, 02 Jun 2026 12:48:05 -0700
+
+ka9q-radio (1.1.8-1-noble1) noble; urgency=medium
+
+  * fix postinst test for existing radiod config files
+
+ -- Phil Karn <karn@ka9q.net>  Tue, 02 Jun 2026 12:29:20 -0700
+
+ka9q-radio (1.1.8-0-noble1) noble; urgency=medium
 
   * read and log rx888 firmware version at startup
 
