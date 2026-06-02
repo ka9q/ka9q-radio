@@ -19,7 +19,7 @@ for f in /etc/radio/radiod@*.conf; do
     [ -e "$f" ] && { found=true; break; }
 done
 
-for d in /etc/radiod@*.conf.d; do
+for d in /etc/radio/radiod@*.conf.d; do
     [ -d "$d" ] && { found=true; break; }
 done
 
