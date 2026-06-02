@@ -899,7 +899,7 @@ uint32_t ElfHashString(const char *s){
 }
 
 // FNV-1 hash (https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function)
-uint32_t fnv1hash(const uint8_t *s,unsigned long length){
+uint32_t fnv1hash(const uint8_t *s,size_t length){
   uint32_t hash = 0x811c9dc5;
   while(length-- > 0){
     hash *= 0x01000193;
