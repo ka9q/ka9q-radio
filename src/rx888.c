@@ -840,9 +840,8 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   command_send(sdr->dev_handle,STOPFX3,0);
   if(Reset){
     int r = libusb_reset_device(sdr->dev_handle);
-    if(r != 0){
+    if(r != 0)
       fprintf(stderr,"reset failed, %d\n",r);
-    }
   }
   {
     int ret = libusb_kernel_driver_active(sdr->dev_handle,0);
