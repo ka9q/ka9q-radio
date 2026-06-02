@@ -13,8 +13,17 @@ do_reload() {
 
 command="$1" # $1 is about to get smashed
 
-set -- /etc/radio/radiod@*.conf /etc/radio/radiod@*.conf.d
-if [ -e "$1" ]; then
+found=false
+
+for f in /etc/radio/radiod@*.conf; do
+    [ -e "$f" ] && { found=true; break; }
+done
+
+for d in /etc/radiod@*.conf.d; do
+    [ -d "$d" ] && { found=true; break; }
+done
+
+if $found; then
     echo "radiod config file(s) found, setup prompts skipped"
     exit 0
 fi
