@@ -189,8 +189,8 @@ double decode_double(uint8_t const *,int);
 struct sockaddr *decode_socket(void *,uint8_t const *,int);
 struct sockaddr *decode_local_socket(void *,uint8_t const *,int);
 char *decode_string(uint8_t const *,int);
-uint32_t get_ssrc(uint8_t const *buffer,unsigned long length);
-uint32_t get_tag(uint8_t const *buffer,unsigned long length);
+uint32_t get_ssrc(uint8_t const *buffer,size_t length);
+uint32_t get_tag(uint8_t const *buffer,size_t length);
 
 void dump_metadata(FILE *,uint8_t const *,size_t,bool);
 

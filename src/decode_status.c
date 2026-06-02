@@ -407,7 +407,7 @@ uint32_t get_ssrc(uint8_t const *buffer,size_t length){
   return 0;
 }
 // Extract command tag
-uint32_t get_tag(uint8_t const *buffer,unsigned long length){
+uint32_t get_tag(uint8_t const *buffer,size_t length){
   uint8_t const *cp = buffer;
 
   while(cp < buffer + length){
