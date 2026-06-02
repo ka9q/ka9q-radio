@@ -693,7 +693,7 @@ static void process_data(int fd){
   if(seqdiff < 0){
     // old, drop
     if(Verbose > 1)
-      fprintf(stderr,"ssrc %u drop old sequence %u timestamp %u bytes %ld\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
+      fprintf(stderr,"ssrc %u drop old sequence %u timestamp %u bytes %lld\n",rtp.ssrc,rtp.seq,rtp.timestamp,(long long)size);
     sp->rtp_state.dupes++;
     // But sender may have restarted so remember it
     sp->rtp_state.odd_seq = rtp.seq + 1;
@@ -706,10 +706,10 @@ static void process_data(int fd){
       fprintf(stderr,"ssrc %u flushing with drops\n",rtp.ssrc);
     send_queue(sp,true);
     if(Verbose > 1)
-      fprintf(stderr,"ssrc %u reset & queue sequence %u timestamp %u bytes %ld\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
+      fprintf(stderr,"ssrc %u reset & queue sequence %u timestamp %u bytes %lld\n",rtp.ssrc,rtp.seq,rtp.timestamp,(long long)size);
   }
   if(Verbose > 2)
-    fprintf(stderr,"ssrc %u queue sequence %u timestamp %u bytes %ld\n",rtp.ssrc,rtp.seq,rtp.timestamp,size);
+    fprintf(stderr,"ssrc %u queue sequence %u timestamp %u bytes %lld\n",rtp.ssrc,rtp.seq,rtp.timestamp,(long long)size);
 
   // put into circular queue
   sp->rtp_state.odd_seq_set = false;
@@ -1093,8 +1093,8 @@ static int send_wav_queue(struct session * const sp,bool flush){
     if(frames <= 0)
       break;
     if(Verbose > 2 || (Verbose > 1  && flush))
-      fprintf(stderr,"writing from rtp sequence %u, timestamp %u: bytes %ld frames %ld\n",
-	      sp->rtp_state.seq,sp->rtp_state.timestamp,framesize * frames,frames);
+      fprintf(stderr,"writing from rtp sequence %u, timestamp %u: bytes %lld frames %lld\n",
+	      sp->rtp_state.seq,sp->rtp_state.timestamp,(long long)framesize * frames,(long long)frames);
 
     fwrite(qp->data,framesize,frames,sp->fp);
     sp->rtp_state.timestamp += frames; // get ready for next

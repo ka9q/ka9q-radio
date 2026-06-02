@@ -407,11 +407,10 @@ static uint64_t reset_playout(struct session * const sp){
   if(sp->opus)
     opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
 
-  uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_acquire);
-  uint64_t wptr = rptr + sp->playout;
-  atomic_store_explicit(&sp->wptr,wptr,memory_order_release);
+  uint64_t const wptr = sp->playout + atomic_load_explicit(&Output_time,memory_order_relaxed);
   if(wptr > sp->wptr_highwater)
     sp->wptr_highwater = wptr;
+  atomic_store_explicit(&sp->wptr,wptr,memory_order_release);
   return wptr;
 }
 // Start output stream if it was off; reset idle timeout on output audio stream activity

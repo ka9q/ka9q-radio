@@ -1277,13 +1277,13 @@ static void bpsk_state_machine(struct session * const sp,struct sockaddr const *
       expected_start.tv_sec *= (time_t)(FileLengthLimit);
 
       if (pps_consecutive >= 1){
-        wd_log(1,"SSRC %u edge at ts %u, modulo samp_rate: %u, time delta: %.6f, now: %ld, next: %ld, cons: %u sync: %u\n",
+        wd_log(1,"SSRC %u edge at ts %u, modulo samp_rate: %u, time delta: %.6f, now: %lld, next: %lld, cons: %u sync: %u\n",
                sp->ssrc,
                ts,
                ts % sp->samprate,
                time_diff(now,expected_start),
-                 now.tv_sec,
-               expected_start.tv_sec,
+	       (long long)now.tv_sec,
+               (long long)expected_start.tv_sec,
                pps_consecutive,
                sync_start_ts);
       }
@@ -1303,13 +1303,13 @@ static void bpsk_state_machine(struct session * const sp,struct sockaddr const *
             sync_start_ts = ts + (sp->samprate * (expected_start.tv_sec - now.tv_sec));
             sync_start_ts += sync_pretrigger;
           }
-          wd_log(1,"SSRC %u sync start at next PPS (RTP ts %u)? Time delta: %.3f s, modulo samp_rate: %u, now: %ld, next: %ld\n",
+          wd_log(1,"SSRC %u sync start at next PPS (RTP ts %u)? Time delta: %.3f s, modulo samp_rate: %u, now: %lld, next: %lld\n",
                  sp->ssrc,
                  sync_start_ts,
                  time_diff(now,expected_start),
                  ts % sp->samprate,
-                 now.tv_sec,
-                 expected_start.tv_sec);
+                 (long long)now.tv_sec,
+                 (long long)expected_start.tv_sec);
         }
       }
       fflush(0);
@@ -1609,7 +1609,7 @@ void extract_source(uint8_t const * const buffer,int length){
         length_of_length--;
       }
     }
-    if(cp - buffer + optlen >= length)
+    if(cp + optlen >= buffer + length)
       break; // Invalid length
 
     switch(type){

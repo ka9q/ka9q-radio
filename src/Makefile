@@ -41,6 +41,8 @@ INCLUDES ?=
 DOPTS    ?=
 SOFLAGS  ?=
 LDLIBS   ?=
+CC ?= cc
+CFLAGS ?=
 
 LDLIBS += -lm -lpthread
 
@@ -58,6 +60,11 @@ else
   LDLIBS += -lbsd -lrt
   SOFLAGS += -shared
 endif
+
+IS_GCC_NOT_CLANG := $(shell \
+	$(CC) -dM -E - < /dev/null 2>/dev/null | \
+	awk '/__GNUC__/ { gcc=1 } /__clang__/ { clang=1 } END { if (gcc && !clang) print "yes" }')
+
 
 HAS_PIGPIO := $(shell printf '\043include <pigpio.h>\n' | $(CC) $(CPPFLAGS) -E - >/dev/null 2>&1 && echo 1)
 
@@ -324,6 +331,10 @@ libdsp.a: $(LIBDSP)
 
 libstatus.a: $(LIBSTATUS)
 	ar rsv $@ $?
+
+ifeq ($(IS_GCC_NOT_CLANG),yes)
+monitor-data.o: CFLAGS += -Wno-clobbered
+endif
 
 # handle quotes inside GIT summary messages, etc. Suggested by ChatGPT
 esc = sed 's/\\/\\\\/g; s/"/\\"/g'

@@ -301,7 +301,7 @@ static int save_wisdom(char const *wisdom_file){
   Wisdom_string = wisdom;
   Wisdom_size = newsize;
   if(write(fd,Wisdom_string, Wisdom_size) != (ssize_t)Wisdom_size){
-    printf("Write of new wisdom file length %lu failed: %s\n",newsize,strerror(errno));
+    printf("Write of new wisdom file length %lu failed: %s\n",(unsigned long)newsize,strerror(errno));
     close(fd);
     FREE(newtemp);
     unlink(lockfile);

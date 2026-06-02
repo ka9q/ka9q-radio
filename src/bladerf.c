@@ -294,9 +294,9 @@ int bladerf_startup(struct frontend * const frontend)
   sdr->samples_per_buffer = k*1024;
 
   if (Verbose) {
-    fprintf(stderr,"ilen %d samples_per_buffer: %ld\n",
+    fprintf(stderr,"ilen %d samples_per_buffer: %lld\n",
 	    frontend->in.ilen,
-	    sdr->samples_per_buffer);
+	    (long long)sdr->samples_per_buffer);
   }
   pthread_create(&sdr->main_thread, NULL, bladerf_main, sdr);
   pthread_create(&sdr->monitor_thread, NULL, bladerf_monitor, sdr);
@@ -341,7 +341,7 @@ static void *stream_callback(struct bladerf *unused1,
 		for (i=0;i<sdr->num_buffers;i++)
 			if (sdr->buffers[i] == samples)
 				break;
-		fprintf(stderr,"index mismatch %d %ld\n", sdr->idx_to_fill, i);
+		fprintf(stderr,"index mismatch %d %lld\n", sdr->idx_to_fill, (long long)i);
 	}
 
 	pthread_mutex_lock(&sdr->queue_mutex);

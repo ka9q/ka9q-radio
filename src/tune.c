@@ -343,7 +343,7 @@ int main(int argc,char *argv[]){
       exit(1);
     }
     if(Verbose)
-      fprintf(stdout,"Message received, %ld bytes, type %d\n",length,*cp);
+      fprintf(stdout,"Message received, %lld bytes, type %d\n",(long long)length,*cp);
 
     if(*cp++ != 0)
       continue; // ignore non-response; go back and receive again

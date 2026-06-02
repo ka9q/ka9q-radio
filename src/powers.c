@@ -219,7 +219,7 @@ int main(int argc,char *argv[]){
 
     size_t npower = extract_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&r_freq,&r_rbw,Ssrc,buffer+1,length-1);
     if(npower <= 0){
-      fprintf(stderr,"Invalid response, length %lu\n",npower);
+      fprintf(stderr,"Invalid response, length %llu\n",(long long unsigned)npower);
       usleep(10000); // 10 millisec
       continue; // Invalid for some reason; retry
     }
@@ -237,8 +237,8 @@ int main(int argc,char *argv[]){
     // npower even: emit N/2....N-1 0....N/2-1
     size_t const first_neg_bin = (npower + 1)/2; // round up, e.g., 64->32, 65 -> 33, 66 -> 33
     double base = r_freq - r_rbw * (npower/2); // integer truncation (round down), e.g., 64-> 32, 65 -> 32
-    printf(" %.0lf, %.0lf, %.0lf, %lu",
-	   base, base + r_rbw * (npower-1), r_rbw, npower);
+    printf(" %.0lf, %.0lf, %.0lf, %llu",
+	   base, base + r_rbw * (npower-1), r_rbw, (long long unsigned)npower);
 
     // Find lowest non-zero entry, use the same for zero power to avoid -infinity dB
     // Zero power in any bin is unlikely unless they're all zero, but handle it anyway
@@ -258,12 +258,12 @@ int main(int argc,char *argv[]){
       // Frequencies below center
       printf("\n");
       for(size_t i=first_neg_bin ; i < npower; i++){
-        printf("%lu %lf %.2lf\n",i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
+        printf("%llu %lf %.2lf\n",(long long unsigned)i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
         base += r_rbw;
       }
       // Frequencies above center
       for(size_t i=0; i < first_neg_bin; i++){
-        printf("%lu %lf %.2lf\n",i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
+        printf("%llu %lf %.2lf\n",(long long unsigned)i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
         base += r_rbw;
       }
     } else {
