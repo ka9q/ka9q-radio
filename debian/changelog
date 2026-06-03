@@ -1,3 +1,9 @@
+ka9q-radio (1.1.9-1-trixie1) trixie; urgency=medium
+
+  * remove unnecessary sleeps from rx888 driver
+
+ -- Phil Karn <karn@ka9q.net>  Wed, 03 Jun 2026 15:06:07 -0700
+
 ka9q-radio (1.1.8-2-noble1) noble; urgency=medium
 
   * further fixes for config file tests
