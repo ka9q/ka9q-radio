@@ -1,6 +1,9 @@
 #ifndef _SI5351_H
 #define _SI5351_H
 
+#include <stdint.h>
+#include <stdbool.h>
+
 #ifndef U128
 #define U128 __uint128_t
 #endif
