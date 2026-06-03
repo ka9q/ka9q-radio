@@ -148,8 +148,16 @@ static void *agc_rx888(void *arg);
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency);
 static double actual_freq(double frequency);
 #endif
-
-
+// Read one Si5351 register over I2C (reg# is silicon-defined → version-proof).
+static inline int si5351_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
+  return control_recv(sdr->dev_handle, I2CRFX3, SI5351_ADDR, reg, val, 1);
+}
+static inline int si5351_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
+  return control_send(sdr->dev_handle, I2CWFX3, SI5351_ADDR, reg, arg, len);
+}
+static inline int si5351_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
+  return control_send_byte(sdr->dev_handle, I2CWFX3, SI5351_ADDR, reg, arg);
+}
 
 #define N_USB_SPEEDS 6
 static char const *usb_speeds[N_USB_SPEEDS] = {
@@ -313,7 +321,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stderr,"forcing %'lld\n",(long long)samprate);
   }
   sdr->reference = reference * (1 + calibrate);
-  usleep(5000);
   samprate = rx888_set_samprate(sdr,sdr->reference,samprate); // Update to actual samprate, if different
   frontend->samprate = samprate;
 
@@ -333,16 +340,29 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     frontend->max_IF = -15000;
   }
   // start clock
-  control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
+  si5351_write_byte(sdr,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
   // power on clock 0
-
   uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
 
   // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer. It is in the original code, which sets it to 6.
   if(sdr->ms_int)
     clock_control |= SI5351_VALUE_MS_INT;
 
-  control_send_byte(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_CLK_BASE+0,clock_control);
+  si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+0,clock_control);
+
+  bool clock_ok = false;
+  for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
+    uint8_t status = 0xFF, clk0 = 0xFF;
+    si5351_read(sdr, 0,  &status);          // reg 0:  bit5 LOL_A
+    si5351_read(sdr, 16, &clk0);            // reg 16: bit7 CLK0_PDN
+    if((status & 0x20) == 0 && (clk0 & 0x80) == 0){
+      clock_ok = true;
+      break;
+    }
+    usleep(1000);
+  }
+  if(!clock_ok)
+    fprintf(stderr,"RX888 ADC clock not locked/running\n");
   {
     char const *p = config_getstring(dictionary,section,"description",Description ? Description : "rx888");
     if(p != NULL){
@@ -402,7 +422,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 #endif
   if(frontend->frequency == 0)
     rx888_set_hf_mode(sdr);
-  usleep(1000000); // 1s - see SDDC_FX3 firmware
 
   // Experimental spur notching, works on coherent spurs only
   // What generates 1/8, 2/8, 3/8? And probably 4/8 too, though that's the Nyquist freq
@@ -600,7 +619,6 @@ static void rx_callback(struct libusb_transfer * const transfer){
     usb_device_gone = 1;
     return;
   }
-
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
     if(Verbose > 1)
@@ -612,7 +630,6 @@ static void rx_callback(struct libusb_transfer * const transfer){
     }
     return;
   }
-
   // successful USB transfer
   int const size = transfer->actual_length;
   sdr->success_count++;
@@ -739,7 +756,6 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     libusb_free_device_list(device_list,1);
     device_list = NULL;
   }
-
   // Scan list again, looking for a loaded RX888 with the right numbers
   if(Serial != NULL){ // specified on command line, overrides config file
     // Specified on command line, convert and compare
@@ -838,7 +854,6 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     goto end;
   }
   // Stop and reopen in case it was left running - KA9Q
-  usleep(5000);
   command_send(sdr->dev_handle,STOPFX3,0);
   if(Reset){
     int r = libusb_reset_device(sdr->dev_handle);
@@ -944,7 +959,6 @@ static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,boo
   if(randomizer)
     sdr->gpios |= RANDO;
 
-  usleep(5000);
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
   sdr->dither = dither;
   sdr->randomizer = randomizer;
@@ -954,7 +968,6 @@ static void rx888_set_att(struct sdrstate *sdr,double att,bool vhf){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
   assert(frontend != NULL);
-  usleep(5000);
 
   frontend->rf_atten = att;
   sdr->scale = scale_AD(frontend);
@@ -971,7 +984,6 @@ static void rx888_set_gain(struct sdrstate *sdr,double gain,bool vhf){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
   assert(frontend != NULL);
-  usleep(5000);
 
   if(!vhf){
     int const arg = gain2val(gain);
@@ -985,9 +997,10 @@ static void rx888_set_gain(struct sdrstate *sdr,double gain,bool vhf){
 }
 
 static void rx888_set_hf_mode(struct sdrstate *sdr){
+#if 0 // not reimplemented yet in firmware
   command_send(sdr->dev_handle,TUNERSTDBY,0); // Stop Tuner
+#endif
   // switch to HF Antenna
-  usleep(5000);
   sdr->gpios &= ~VHF_EN;
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
 }
@@ -1004,7 +1017,6 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency){
     // disable HF by set max ATT
     rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
     // switch to VHF Antenna
-    usleep(5000);
     sdr->gpios |= VHF_EN;
     command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
 
@@ -1042,11 +1054,7 @@ static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
       sdr->xfers_in_progress++;
   }
 
-  usleep(5000);
   command_send(sdr->dev_handle,STARTFX3,0);
-  usleep(5000);
-  command_send(sdr->dev_handle,TUNERSTDBY,0);
-
   return 0;
 }
 
@@ -1071,7 +1079,6 @@ static void rx888_stop_rx(struct sdrstate *sdr){
       fprintf(stderr,"libusb_handle_events_timeout_completed() timed out while stopping rx888\n");
       break;
     }
-    usleep(100000);
   }
   fprintf(stderr,"Transfers completed\n");
   command_send(sdr->dev_handle,STOPFX3,0);
@@ -1202,7 +1209,7 @@ double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long 
     (pll.P2 & 0x0000ff00) >>  8,
     (pll.P2 & 0x000000ff) >>  0
   };
-  control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
+  si5351_write(sdr,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
 
   si5351_pvals_t ms = {0};
   si5351_get_ms_pvals(&best,&ms);
@@ -1227,6 +1234,6 @@ double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long 
     (ms.P2 & 0x0000ff00) >>  8,
     (ms.P2 & 0x000000ff) >>  0
   };
-  control_send(sdr->dev_handle,I2CWFX3,SI5351_ADDR,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
+  si5351_write(sdr,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
   return (double)best.fout_num / best.fout_den;
 }
