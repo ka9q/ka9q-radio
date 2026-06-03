@@ -41,6 +41,9 @@ static unsigned long long SI5351_DEN_MAX = 1048575u;
 //     picking E/F by approximating a target MS value derived from a target PLL freq.
 //  4) For each candidate MS, compute required PLL ratio X = r*Y and approximate its fractional part by B/C (C<=1,048,575).
 //  5) Score by absolute frequency error + preference rank.
+
+// Spec says output range is 8 kHz to 160 MHz, crystal is 25-27 MHz
+
 bool si5351_solve(unsigned long long fref_hz, unsigned long long fout_hz, si5351_solution_t *best)
 {
   if(!best || fref_hz == 0 || fout_hz == 0)
