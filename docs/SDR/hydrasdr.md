@@ -16,7 +16,7 @@ hardware = hydra
 status = hydra.local
 
 [funcube]
-device = rtlsdr
+device = hydrasdr
 description = "My HydraSDR"
 ```
 
