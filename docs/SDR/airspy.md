@@ -26,7 +26,7 @@ device = airspy
 description = "My Airspy SDR"
 ```
 
-You can also reference the [generic Airspy R2 config file](/config/radiod@airspy-generic.conf) or the [generic Airspy HF+ config file](/config/radiod@airspyhf-generic.conf).
+You can also reference the [generic Airspy R2 config file](/config/examples/radiod@airspy-generic.conf) or the [generic Airspy HF+ config file](/config/examples/radiod@airspyhf-generic.conf).
 
 Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits. (The Airspy R2 generates 240 Mb/s, but it's a USB 2.0 -- not 3.0 -- device so each will have to be on its own USB host controller.)
 
