@@ -22,7 +22,7 @@ device = hackrf
 description = "My HackRF"
 ```
 
-You can also reference the [generic config file](/config/radiod@hackrf-generic.conf).
+You can also reference the [generic config file](/config/examples/radiod@hackrf-generic.conf).
 
 Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits.
 
