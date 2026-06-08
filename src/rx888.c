@@ -63,8 +63,6 @@ static long long const MAX_FREQUENCY = 2000e6; // 2000 MHz
 static int const R828D_FREQ = 16000000;     // R820T reference frequency
 static int const R828D_IF_CARRIER = 4570000;
 #endif
-static _Atomic int usb_device_gone = 0;
-static double Power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
@@ -81,8 +79,6 @@ enum state {
   STOPPING,
   RUNNING
 };
-
-
 struct sdrstate {
   struct frontend *frontend;  // Avoid references to external globals
 
@@ -120,14 +116,16 @@ struct sdrstate {
   double scale;        // Scale samples for #bits and front end gain
   int undersample;     // Use undersample aliasing on baseband input for VHF/UHF. n = 1 => no undersampling
   double dc_offset;    // A/D offset, units, used only to adjust power reading. It just goes into the FFT DC bin
+  double power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
   pthread_t cmd_thread;
   pthread_t proc_thread;
   pthread_t agc_thread;
   bool ms_int;
   _Atomic enum state state;
+  bool reset;
+  _Atomic bool device_gone;
 };
 
-static _Thread_local bool Reset = false;
 
 static void rx_callback(struct libusb_transfer *transfer);
 static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize);
@@ -236,14 +234,15 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stderr,"Invalid request size %d, using 32\n",reqsize);
     reqsize = 32;
   }
-  // Firmware file is now empty by default, rx888_boot has priority
+  // Firmware file is now empty by default. We ignore unloaded devices and
+  // wait for rx888_boot to load one so it appears as 0xf1
   char const *firmware = config_getstring(dictionary,section,"firmware","");
   int ret;
   if((ret = rx888_usb_init(sdr,firmware,queuedepth,reqsize)) != 0){
     fprintf(stderr,"rx888_usb_init() failed\n");
     return -1;
   }
-  Reset = config_getboolean(dictionary,section,"reset",Reset);
+  sdr->reset = config_getboolean(dictionary,section,"reset",sdr->reset);
   // GPIOs
   sdr->gpios = 0;
   // Enable/disable dithering
@@ -329,8 +328,8 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stderr,"rx888 undersample must be >= 1, ignoring\n");
     sdr->undersample = 1;
   }
-  int mult = sdr->undersample / 2;
-  frontend->frequency = frontend->samprate * mult;
+  // note intentional integer truncation, ie undersample = 1 -> frequency = 0
+  frontend->frequency = frontend->samprate * sdr->undersample / 2;
   if(sdr->undersample & 1){
     // Somewhat arbitrary. See https://ka7oei.blogspot.com/2024/12/frequency-response-of-rx-888-sdr-at.html
     frontend->min_IF = 15000;
@@ -350,6 +349,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 
   si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+0,clock_control);
 
+  // Wait for sample clock PLL to lock
   bool clock_ok = false;
   for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
     uint8_t status = 0xFF, clk0 = 0xFF;
@@ -378,7 +378,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // Use double to avoid denormalized addition
   // value is 1 - exp(-blocktime/tc), but use expm1() function to save precision
 
-  Power_smooth = -expm1(-xfer_time/PTC);
+  sdr->power_smooth = -expm1(-xfer_time/PTC);
 
   fprintf(stderr,"RX888 AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dBm, dither %s, randomizer %s, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  frontend->rf_agc ? "on" : "off",
@@ -502,17 +502,14 @@ static void *proc_rx888(void *arg){
   realtime(2 + default_prio());
   stick_core();
   {
-    int64_t const now = gps_time_ns();
-    sdr->last_callback_time = now;
-    sdr->last_count_time = now;
-
+    sdr->last_count_time = sdr->last_callback_time = gps_time_ns();
     int ret __attribute__ ((unused));
     ret = rx888_start_rx(sdr,rx_callback);
     assert(ret == 0);
   }
   enum state s;
   while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING) {
-    if(usb_device_gone){
+    if(sdr->device_gone){
       // Device actually disappeared, exit immediately in case
       // it gets quickly plugged back in before 5 seconds
       fprintf(stderr,"RX888 device disappeared, exiting\n");
@@ -610,13 +607,11 @@ static void rx_callback(struct libusb_transfer * const transfer){
   assert(transfer != NULL);
   struct sdrstate * const restrict sdr = (struct sdrstate *)transfer->user_data;
   struct frontend * const restrict frontend = sdr->frontend;
-  int64_t const now = gps_time_ns();
 
   sdr->xfers_in_progress--;
-  sdr->last_callback_time = now;
 
   if(transfer->status == LIBUSB_TRANSFER_NO_DEVICE){
-    usb_device_gone = 1;
+    sdr->device_gone = true;
     return;
   }
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
@@ -675,12 +670,13 @@ static void rx_callback(struct libusb_transfer * const transfer){
   }
   sdr->dc_offset += DC_ALPHA * delta_sum;
   // These blocks are kinda small, so exponentially smooth the power readings
-  frontend->if_power += Power_smooth * (in_energy / sampcount - frontend->if_power);
+  frontend->if_power += sdr->power_smooth * (in_energy / sampcount - frontend->if_power);
   frontend->samples += sampcount; // Count original samples
   if(atomic_load(&sdr->state) == RUNNING) {
     if(libusb_submit_transfer(transfer) == 0)
       sdr->xfers_in_progress++;
   }
+  sdr->last_callback_time = gps_time_ns();  // Reset watchdog only after read has succeeded
   write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
 }
 
@@ -693,10 +689,13 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       return -1;
     }
   }
+  // If firmware file is not set (default), ignore unloaded rx888 devices, let rx888_boot get them
   if(firmware != NULL && strlen(firmware) > 0){
     // Search for unloaded rx888s (0x04b4:0x00f3) with the desired serial, or all such devices if no serial specified
     // and load with firmware
-    // With the rx888 bootloader launched by udev, this section should never find anything
+    // With the rx888 bootloader launched by udev, this section will usually not find anything
+    // but a race is possible at boot time when systemd starts both at the same time
+    // So it's recommended to let rx888_boot handle unloaded devices
     libusb_device **device_list;
     ssize_t dev_count = libusb_get_device_list(NULL,&device_list);
     for(ssize_t i=0; i < dev_count; i++){
@@ -855,7 +854,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   }
   // Stop and reopen in case it was left running - KA9Q
   command_send(sdr->dev_handle,STOPFX3,0);
-  if(Reset){
+  if(sdr->reset){
     int r = libusb_reset_device(sdr->dev_handle);
     if(r != 0)
       fprintf(stderr,"reset failed, %d\n",r);
@@ -885,12 +884,12 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     int ret = control_recv(sdr->dev_handle, TESTFX3, 0, 0, info, sizeof(info));
     if(ret < (int)sizeof(info)){
       fprintf(stderr,"TESTFX3 firmware query failed\n");
-      goto end;
+    } else {
+      sdr->fw_major = info[1];
+      sdr->fw_minor = info[2];
+      fprintf(stderr,"RX888 hardware 0x%02x, firmware %u.%u\n",
+	      info[0],info[1],info[2]);
     }
-    sdr->fw_major = info[1];
-    sdr->fw_minor = info[2];
-    fprintf(stderr,"RX888 hardware 0x%02x, firmware %u.%u\n",
-	    info[0],info[1],info[2]);
   }
   {
     // All this just to get sdr->pktsize?
@@ -1053,7 +1052,6 @@ static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
     if(rStatus == 0)
       sdr->xfers_in_progress++;
   }
-
   command_send(sdr->dev_handle,STARTFX3,0);
   return 0;
 }
@@ -1176,8 +1174,7 @@ double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long 
   assert(samprate != 0);
 
   si5351_solution_t best = {0};
-  bool result = si5351_solve(reference,samprate,&best);
-  if(!result){
+  if(!si5351_solve(reference,samprate,&best)){
     fprintf(stderr,"si5351_solve(%'lld, %'lld) failed\n", reference, samprate);
     return 0;
   }
