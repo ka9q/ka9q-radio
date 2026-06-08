@@ -22,7 +22,7 @@ device = funcube
 description = "My FUNcube SDR"
 ```
 
-You can also reference the [generic config file](/config/radiod@funcube-generic.conf).
+You can also reference the [generic config file](/config/examples/radiod@funcube-generic.conf).
 
 Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits.
 
