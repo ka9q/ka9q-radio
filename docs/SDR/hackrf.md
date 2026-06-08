@@ -30,7 +30,7 @@ The "description" parameter is advertised with mDNS (multicast DNS) service disc
 
 ### device (mandatory)
 
-In the example above, the `hardware` entry in the `[global]` section specifies the section containing SDR configuration information (in this example the name of the hardware section happens to be the same as the device type, but it is not essential.)
+In the example above, the `hardware` entry in the `[global]` section specifies the section containing SDR configuration information. In this example the name of the hardware section happens to be the same as the device type, but it is not essential.
 
 The `device` key is mandatory.
 
