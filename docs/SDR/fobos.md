@@ -54,7 +54,7 @@ device = fobos
 description = "My Fobos SDR"
 ```
 
-You can also reference the [generic config file](/config/radiod@fobos-generic.conf).
+You can also reference the [generic config file](/config/examples/radiod@fobos-generic.conf).
 
 Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits.
 
