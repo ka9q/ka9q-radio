@@ -20,7 +20,7 @@ device = hydrasdr
 description = "My HydraSDR"
 ```
 
-You can also reference the [generic config file](/config/radiod@hydra-generic.conf).
+You can also reference the [generic config file](/config/examples/radiod@hydra-generic.conf).
 
 Multiple instances of `radiod` can run on the same system, subject to your CPU and USB limits.
 
