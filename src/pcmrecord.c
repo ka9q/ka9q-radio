@@ -1573,7 +1573,7 @@ static int start_ogg_opus_stream(struct session *sp){
     int16_t gain;
     uint8_t map_family;
   } const opusHeader = {
-    .head = "OpusHead",
+    .head = {'O', 'p', 'u', 's', 'H', 'e', 'a', 'd' },
     .version = 1,
     // Some decoders get confused when the channel count or sample rate changes in a stream, so always say we're emitting 48kHz stereo.
     // Opus won't use more bits when the input is actually mono and/or at a lower rate
@@ -1745,21 +1745,21 @@ static int start_wav_stream(struct session *sp){
 
   // Construct and write .wav header, skipping size fields
   struct wav header = {
-    .ChunkID = "RIFF",
+    .ChunkID = {'R', 'I', 'F', 'F' },
     .ChunkSize = 0xffffffff, // Temporary
-    .Format = "WAVE",
-    .Subchunk1ID = "fmt ",
+    .Format = {'W', 'A', 'V', 'E' },
+    .Subchunk1ID = {'f', 'm', 't', ' '},
     .Subchunk1Size = 40,
     .NumChannels = (int16_t)sp->channels,
     .SampleRate = sp->samprate,
     .ExtensionChunkSize = 22,
-    .SubChunk2ID = "data",
+    .SubChunk2ID = {'d', 'a', 't', 'a'},
     .Subchunk2Size = 0xffffffff, // Temporary
     // appears to be needed for FP
-    .FactID = "fact",
+    .FactID = {'f', 'a', 'c', 't'},
     .FactSize = 4,
     .SamplesLength = 0xffffffff,
-    .AuxID = "auxi",
+    .AuxID = {'a', 'u', 'x', 'i' },
     .AuxSize = 164,
     .CenterFrequency = (int32_t)sp->chan.tune.freq,
     //  header.AuxUknown is zeroed
