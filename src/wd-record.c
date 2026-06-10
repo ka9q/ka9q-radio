@@ -60,11 +60,11 @@ Command-line options:
 #if defined(linux)
 #include <bsd/string.h>
 #include <byteswap.h>
+#include <bsd/stdlib.h>
 #else // bsd
 #define bswap_16(value) ((((value) & 0xff) << 8) | ((value) >> 8)) // hopefully gets optimized
 #endif
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <locale.h>
