@@ -19,7 +19,6 @@ StateDirectory=ka9q-radio
 StateDirectoryMode=0775
 LogsDirectory=ka9q-radio
 LogsDirectoryMode=0775
-ReadWritePaths=/etc/fftw
 UMask=002
 ExecStart=@sbindir@/radiod -N %i /etc/radio/radiod@%i.conf
 # eventually it will be Restart=on-failure after udev-triggered
