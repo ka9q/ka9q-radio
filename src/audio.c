@@ -60,17 +60,13 @@ int send_output(struct channel * restrict const chan, float const * restrict buf
       assert(fabsf(buffer[i]) < 100);
   }
 #endif
-
   if((chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP) && setup_opus(chan) != 0)
     return 0;
 
-  int max_frames_per_pkt = max_frames(chan); // depends on coding
-
-  useconds_t pacing = chan->output.pacing ? 1000 : 0; // fix it at a millisecond for now
-
+  int const max_frames_per_pkt = max_frames(chan); // depends on coding
+  useconds_t const pacing = chan->output.pacing ? 1000 : 0; // fix it at a millisecond for now
   int frames_sent = 0;
   int available_frames = chan->output.queue_length + frames;
-
   while(available_frames >= max_frames_per_pkt
 	|| (available_frames > 0 && chan->output.queue_age >= chan->output.maxdelay)){
     // We have enough data to send at least one full size packet OR we've run out of time and there's something to send
@@ -389,7 +385,7 @@ static int max_frames(struct channel *chan){
     break;
 #endif
   case OPUS:
-    max_frames_per_pkt = floor(chan->output.samprate * 0.12); // 120 ms is biggest Opus frame
+    max_frames_per_pkt = lrint(chan->output.samprate * 0.12); // 120 ms is biggest Opus frame regardless of channels
     break;
   case MULAW:
   case ALAW:
