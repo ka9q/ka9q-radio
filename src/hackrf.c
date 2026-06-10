@@ -356,7 +356,7 @@ static int rx_callback(hackrf_transfer *transfer){
 
   // Update every block
   // estimates of DC offset, signal powers and phase error
-  if(!isnan(samp_sum) && isfinite(samp_sum))
+  if(sampcount != 0)
     sdr->DC += DC_alpha * (samp_sum - sampcount*sdr->DC);
   double block_energy = 0.5 * (i_energy + q_energy); // Normalize for complex pairs
 
