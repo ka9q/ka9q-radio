@@ -7,6 +7,7 @@
 
 .DEFAULT_GOAL := all
 BUILD ?= release
+NATIVE ?= 0
 ENABLE_ALL    ?= 0
 ifeq ($(ENABLE_ALL),1)
 	ENABLE_AIRSPY=1
@@ -41,8 +42,8 @@ INCLUDES ?=
 DOPTS    ?=
 SOFLAGS  ?=
 LDLIBS   ?=
-CC ?= cc
-CFLAGS ?=
+CC       ?= cc
+CFLAGS   ?=
 
 LDLIBS += -lm -lpthread
 
@@ -74,8 +75,10 @@ else
      DOPTS = -DNDEBUG=1 -O3
 endif
 
-
+ifeq ($(NATIVE),1)
 ARCHOPTS = -march=native
+endif
+
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
 COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -Wextra -Wno-sign-conversion -Wno-int-conversion -MMD -MP
 COPTS += -fPIC
