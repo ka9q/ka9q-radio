@@ -34,6 +34,7 @@ int Fec_percent = 0;               // Use forward error correction percentage, 0
 
 static atomic_flag Opus_version_logged = ATOMIC_FLAG_INIT;
 
+static inline void sanity_check(float const *buf, int count);
 static int setup_opus(struct channel *chan);
 static int max_frames(struct channel *chan);
 
@@ -53,13 +54,7 @@ int send_output(struct channel * restrict const chan, float const * restrict buf
     chan->output.silent = true;
     return 0;
   }
-#if !defined(NDEBUG)
-  {
-    // Check audio samples for sanity
-    for(int i = 0; i < chan->output.channels * frames; i++)
-      assert(fabsf(buffer[i]) < 100);
-  }
-#endif
+  sanity_check(buffer,chan->output.channels * frames);
   if((chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP) && setup_opus(chan) != 0)
     return 0;
 
@@ -92,10 +87,15 @@ int send_output(struct channel * restrict const chan, float const * restrict buf
 	int copylen = max_frames_per_pkt - chan->output.queue_length;
 	if(copylen > frames)
 	  copylen = frames; // limit to what we have
+	assert(chan->output.queue != NULL);
+	sanity_check(chan->output.queue, chan->output.queue_length * chan->output.channels);
 	chan->output.queue = realloc(chan->output.queue, (chan->output.queue_length + copylen) * chan->output.channels * sizeof(float));
+	assert(chan->output.queue != NULL);
+	sanity_check(chan->output.queue, chan->output.queue_length * chan->output.channels);
 	memcpy(chan->output.queue + chan->output.channels * chan->output.queue_length,
 	       buffer, copylen * chan->output.channels * sizeof(float));
 	chan->output.queue_length += copylen;
+	sanity_check(chan->output.queue, chan->output.queue_length * chan->output.channels);
 	frames -= copylen;
 	buffer += copylen * chan->output.channels;
       }
@@ -151,13 +151,7 @@ int send_output(struct channel * restrict const chan, float const * restrict buf
 	// But this could conceivably fragment
 	assert(dp <= packet + sizeof packet);
 	opus_int32 const room = (opus_int32)(packet + sizeof packet - dp); // Max # bytes in compressed output buffer
-#if !defined(NDEBUG)
-	{
-	  // Check audio samples for sanity
-	  for(int i = 0; i < chan->output.channels * chunk; i++)
-	    assert(fabsf(buf[i]) < 100);
-	}
-#endif
+	sanity_check(buf,chan->output.channels * chunk);
 	int const r = opus_encode_float(chan->opus.encoder, buf, chunk, dp, room); // Max # bytes in compressed output buffer
 	if(r < 0)
 	  fprintf(stderr,"opus encode %d bytes fail %d: %s\n", chunk, r, opus_strerror(r));
@@ -185,10 +179,12 @@ int send_output(struct channel * restrict const chan, float const * restrict buf
       chan->output.queue_age = 0;
       chan->output.queue_length -= chunk;
       assert(chan->output.queue_length >= 0);
-      if(chan->output.queue_length > 0)
+      if(chan->output.queue_length > 0){
 	memmove(chan->output.queue,
 		chan->output.queue + chunk * chan->output.channels,
 		chan->output.queue_length * chan->output.channels * sizeof(float));
+	sanity_check(chan->output.queue, chan->output.queue_length * chan->output.channels);
+      }
     } else {
       // consumed from new data
       buffer += chunk * chan->output.channels;
@@ -225,11 +221,14 @@ int send_output(struct channel * restrict const chan, float const * restrict buf
  quit:
   // Any left that we must buffer?
   if(frames > 0){
+    assert(chan->output.queue != NULL || chan->output.queue_length == 0);
     chan->output.queue = realloc(chan->output.queue, (chan->output.queue_length + frames) * chan->output.channels * sizeof(float));
+    assert(chan->output.queue != NULL);
     memcpy(chan->output.queue + chan->output.channels * chan->output.queue_length,
 	   buffer,
 	   frames * chan->output.channels * sizeof(float));
     chan->output.queue_length += frames;
+    sanity_check(chan->output.queue, chan->output.queue_length * chan->output.channels);
   }
   if(chan->output.queue_length > 0)
     chan->output.queue_age++; // Timer runs whenever there's anything pending
@@ -394,3 +393,12 @@ static int max_frames(struct channel *chan){
   }
   return max_frames_per_pkt;
 }
+#if !defined(NDEBUG)
+static inline void sanity_check(float const *buf, int count){
+  // Check audio samples for sanity
+  for(int i = 0; i < count; i++)
+    assert(fabsf(buf[i]) < 100);
+}
+#else
+static inline void sanity_check(float const *buf, int count){ (void)buf; (void)count; }
+#endif

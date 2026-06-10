@@ -1105,6 +1105,8 @@ int close_chan(struct channel *chan){
     opus_encoder_destroy(chan->opus.encoder);
     chan->opus.encoder = NULL;
   }
+  FREE(chan->output.queue);
+  chan->output.queue_length = 0;
   pthread_mutex_unlock(&chan->status.lock);
   pthread_mutex_lock(&Channel_list_mutex);
   if(chan->inuse){

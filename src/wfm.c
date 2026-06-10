@@ -307,6 +307,7 @@ int demod_wfm(void *arg){
     fprintf(stderr,"%s exiting\n",chan->name);
 
   FREE(chan->output.queue);
+  chan->output.queue_length = 0;
   for(int i=0; i < CQLEN; i++){
     FREE(chan->commands[i].buffer);
     chan->commands[i].length = 0;

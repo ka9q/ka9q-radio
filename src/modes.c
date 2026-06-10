@@ -214,6 +214,8 @@ int set_defaults(struct channel *chan){
   chan->output.ttl = DEFAULT_TTL;
   chan->status.output_interval = DEFAULT_UPDATE;
   chan->output.maxdelay = 0;  // No output buffering
+  chan->output.queue = NULL;
+  chan->output.queue_length = 0;
 
   chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
   chan->output.encoding = S16BE;
