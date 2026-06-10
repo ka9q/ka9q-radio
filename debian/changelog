@@ -1,3 +1,9 @@
+ka9q-radio (2026.06.10-2-trixie1) trixie; urgency=medium
+
+  * harden audio output queuing, guard isfinite() with !isnan()
+
+ -- Phil Karn <karn@ka9q.net>  Wed, 10 Jun 2026 03:05:06 -0700
+
 ka9q-radio (2026.06.10-1-trixie1) trixie; urgency=medium
 
   * change to date-based version numbering; clean up string init in pcmrecord
