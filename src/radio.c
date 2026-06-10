@@ -1663,7 +1663,7 @@ double scale_AD(struct frontend const *frontend){
     analog_gain += frontend->rf_gain;
   if (!isnan(frontend->rf_atten) && isfinite(frontend->rf_atten))
     analog_gain -= frontend->rf_atten;
-  if(!isnan(frontend->rf_atten) && isfinite(frontend->rf_level_cal))
+  if(!isnan(frontend->rf_level_cal) && isfinite(frontend->rf_level_cal))
     analog_gain -= frontend->rf_level_cal; // new sign convention
   if(frontend->isreal)
     analog_gain -= 3.0;
