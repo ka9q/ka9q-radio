@@ -155,6 +155,13 @@ int send_output(struct channel * restrict const chan, float const * restrict buf
 	// But this could conceivably fragment
 	assert(dp <= packet + sizeof packet);
 	opus_int32 const room = (opus_int32)(packet + sizeof packet - dp); // Max # bytes in compressed output buffer
+#if !defined(NDEBUG)
+	{
+	  // Check audio samples for sanity
+	  for(int i = 0; i < chan->output.channels * chunk; i++)
+	    assert(fabsf(buf[i]) < 100);
+	}
+#endif
 	int const r = opus_encode_float(chan->opus.encoder, buf, chunk, dp, room); // Max # bytes in compressed output buffer
 	if(r < 0)
 	  fprintf(stderr,"opus encode %d bytes fail %d: %s\n", chunk, r, opus_strerror(r));
