@@ -53,6 +53,14 @@ int send_output(struct channel * restrict const chan, float const * restrict buf
     chan->output.silent = true;
     return 0;
   }
+#if !defined(NDEBUG)
+  {
+    // Check audio samples for sanity
+    for(int i = 0; i < chan->output.channels * frames; i++)
+      assert(fabsf(buffer[i]) < 100);
+  }
+#endif
+
   if((chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP) && setup_opus(chan) != 0)
     return 0;
 
