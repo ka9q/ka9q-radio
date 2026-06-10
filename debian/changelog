@@ -1,3 +1,9 @@
+ka9q-radio (2026.06.10-3-trixie1) trixie; urgency=medium
+
+  * turn off -march=native by default; re-enable with make NATIVE=1
+
+ -- Phil Karn <karn@ka9q.net>  Wed, 10 Jun 2026 16:32:27 -0700
+
 ka9q-radio (2026.06.10-2-trixie1) trixie; urgency=medium
 
   * harden audio output queuing, guard isfinite() with !isnan()
