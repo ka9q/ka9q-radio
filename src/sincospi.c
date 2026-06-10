@@ -24,7 +24,7 @@ static inline double mod2(double x) {
 __attribute__((weak))
 void sincospi(double x, double *s, double *c)
 {
-    if (!isfinite(x)) { *s = *c = NAN; return; }
+  if (isnan(x) || !isfinite(x)) { *s = *c = NAN; return; }
 
     // sin(pi*x), cos(pi*x) have period 2 in x
     double y = mod2(x);        // [0,2)

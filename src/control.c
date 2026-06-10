@@ -821,7 +821,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Squelch SNR: ",str,sizeof(str));
       double const x = strtod(str,&ptr);
-      if(ptr != str && isfinite(x)){
+      if(ptr != str && !isnan(x) && isfinite(x)){
 	encode_float(bpp,SQUELCH_OPEN,x);
 	encode_float(bpp,SQUELCH_CLOSE,x - 1); // Make this a separate command
       }
@@ -841,7 +841,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Hang time, s: ",str,sizeof(str));
       double const x = fabs(strtod(str,&ptr));
-      if(ptr != str && isfinite(x))
+      if(ptr != str && !isnan(x) && isfinite(x))
 	encode_float(bpp,AGC_HANGTIME,x);
     }
     break;
@@ -850,7 +850,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("PLL loop bandwidth, Hz: ",str,sizeof(str));
       double const x = fabs(strtod(str,&ptr));
-      if(ptr != str && isfinite(x))
+      if(ptr != str && !isnan(x) && isfinite(x))
 	encode_float(bpp,PLL_BW,x);
     }
     break;
@@ -859,7 +859,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("AGC threshold, dB: ",str,sizeof(str));
       double const x = strtod(str,&ptr);
-      if(ptr != str && isfinite(x))
+      if(ptr != str && !isnan(x) && isfinite(x))
 	encode_float(bpp,AGC_THRESHOLD,x);
     }
     break;
@@ -868,7 +868,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Recovery rate, dB/s: ",str,sizeof(str));
       double const x = fabs(strtod(str,&ptr));
-      if(ptr != str && isfinite(x))
+      if(ptr != str && !isnan(x) && isfinite(x))
 	encode_float(bpp,AGC_RECOVERY_RATE,x);
     }
     break;
@@ -877,7 +877,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Headroom, dB: ",str,sizeof(str));
       double const x = -fabs(strtod(str,&ptr));
-      if(ptr != str && isfinite(x))
+      if(ptr != str && !isnan(x) && isfinite(x))
 	encode_float(bpp,HEADROOM,x);
     }
     break;
@@ -886,7 +886,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("RF Gain, dB: ",str,sizeof(str));
       double const x = strtod(str,&ptr);
-      if(ptr != str && isfinite(x)){
+      if(ptr != str && !isnan(x) && isfinite(x)){
 	encode_float(bpp,RF_GAIN,x);
       }
     }
@@ -905,7 +905,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("RF Atten, dB: ",str,sizeof(str));
       double const x = fabs(strtod(str,&ptr));
-      if(ptr != str && isfinite(x)){
+      if(ptr != str && !isnan(x) && isfinite(x)){
 	encode_float(bpp,RF_ATTEN,x);
       }
     }
@@ -947,7 +947,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Gain, dB: ",str,sizeof(str));
       double const x = strtod(str,&ptr);
-      if(ptr != str && isfinite(x)){
+      if(ptr != str && !isnan(x) && isfinite(x)){
 	encode_float(bpp,GAIN,x);
 	encode_bool(bpp,AGC_ENABLE,false); // Also done implicitly in radiod
       }
@@ -958,7 +958,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Refresh rate (s): ",str,sizeof(str));
       double const x = fabs(strtod(str,&ptr));
-      if(ptr != str && isfinite(x))
+      if(ptr != str && !isnan(x) && isfinite(x))
 	Refresh_rate = x;
     }
     break;
@@ -986,7 +986,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       getentry("Carrier frequency: ",str,sizeof(str));
       if(strlen(str) > 0){
 	double const x = fabs(parse_frequency(str,true)); // Handles funky forms like 147m435
-	if(isfinite(x)){
+	if(!isnan(x) && isfinite(x)){
 	  chan->tune.freq = x;
 	  encode_double(bpp,RADIO_FREQUENCY,chan->tune.freq);
 	}
@@ -998,7 +998,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Spectrum analyzer shape param β/σ: ",str,sizeof(str));
       double const b = strtod(str,&ptr);
-      if(ptr != str && isfinite(b)){
+      if(ptr != str && !isnan(b) && isfinite(b)){
 	if(b < 0 || b >= 100){
 	  beep(); // beyond limits
 	} else {
@@ -1012,7 +1012,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Filter2 Kaiser window β: ",str,sizeof(str));
       double const b = strtod(str,&ptr);
-      if(ptr != str && isfinite(b)){
+      if(ptr != str && !isnan(b) && isfinite(b)){
 	if(b < 0 || b >= 100){
 	  beep(); // beyond limits
 	} else {
@@ -1040,7 +1040,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width],*ptr;
       getentry("Spectrum shape factor: ",str,sizeof(str));
       double const b = strtod(str,&ptr);
-      if(ptr != str && isfinite(b)){
+      if(ptr != str && !isnan(b) && isfinite(b)){
 	if(b < 0 || b >= 100){
 	  beep(); // beyond limits
 	} else {
@@ -1054,7 +1054,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
 	char str[Entry_width],*ptr;
 	getentry("Spectrum FFT overlap (0-1): ",str,sizeof(str));
 	double const b = strtod(str,&ptr);
-	if(ptr == str || !isfinite(b) || b < 0 || b >= 1)
+	if(ptr == str || isnan(b) || !isfinite(b) || b < 0 || b >= 1)
 	  break;
 	encode_float(bpp,SPECTRUM_OVERLAP,b);
       }
@@ -1368,7 +1368,7 @@ static void display_tuning(WINDOW *w,struct channel const *chan){
     wattron(w,A_UNDERLINE); // Underscore means the frequency is locked
   pprintw(w,row++,col,"Carrier","%'.3lf",chan->tune.freq); // RF carrier frequency
 
-  if(isfinite(Frontend.frequency)){
+  if(!isnan(Frontend.frequency) && isfinite(Frontend.frequency)){
     // second LO frequency is negative of IF, i.e., a signal at +48 kHz
     // needs a second LO frequency of -48 kHz to bring it to zero
     if(Frontend.lock)
@@ -1466,7 +1466,7 @@ static void display_filtering(WINDOW *w,struct channel const *chan){
   pprintw(w,row++,col,"Bin width","%'.3lf Hz",Frontend.samprate / N);
 
   double const beta = chan->filter.kaiser_beta;
-  if(isfinite(beta))
+  if(!isnan(beta) && isfinite(beta))
     pprintw(w,row++,col,"Kaiser β","%'.1lf   ",beta);
 
 #if 0 // Doesn't really give accurate results
@@ -1533,7 +1533,7 @@ static void display_sig(WINDOW *w,struct channel const *chan){
   gain_offset += fabs(Frontend.rf_atten);
   input_power -= Frontend.rf_gain;
   gain_offset -= Frontend.rf_gain;
-  if(isfinite(Frontend.rf_level_cal)){
+  if(!isnan(Frontend.rf_level_cal) && isfinite(Frontend.rf_level_cal)){
     input_power += Frontend.rf_level_cal;
     gain_offset += Frontend.rf_level_cal;
     pprintw(w, row++, col, "Input", "%+.1lf dBm ", input_power);
@@ -1553,9 +1553,10 @@ static void display_sig(WINDOW *w,struct channel const *chan){
 
   pprintw(w, row++, col, "A/D", "%.1lf dBFS", power2dB(Frontend.if_power));
   if(gain_offset != 0){
-    pprintw(w,row++,col,"Gain offset","%+.1lf %s ",gain_offset, isfinite(Frontend.rf_level_cal) ? "dBm" : "dB ");
+    pprintw(w,row++,col,"Gain offset","%+.1lf %s ",gain_offset,
+	    !isnan(Frontend.rf_level_cal) && isfinite(Frontend.rf_level_cal) ? "dBm" : "dB ");
   }
-  if(isfinite(chan->sig.bb_power))
+  if(!isnan(chan->sig.bb_power) && isfinite(chan->sig.bb_power))
     pprintw(w,row++,col,"Baseband","%+.1lf %4s",power2dB(chan->sig.bb_power),!isnan(Frontend.rf_level_cal) ? "dBm " : "dB  ");
   if(!isnan(chan->sig.n0)){
     if(!isnan(Frontend.rf_level_cal)){
@@ -1576,9 +1577,9 @@ static void display_sig(WINDOW *w,struct channel const *chan){
     pprintw(w,row++,col,"NBW","%.1lf dBHz",power2dB(Local.noise_bandwidth));
   if(!isnan(Local.snr))
     pprintw(w,row++,col,"S/N","%+.1lf dB  ",Local.snr);
-  if(isfinite(chan->output.gain) && chan->demod_type == LINEAR_DEMOD) // Only relevant in linear
+  if(!isnan(chan->output.gain) && isfinite(chan->output.gain) && chan->demod_type == LINEAR_DEMOD) // Only relevant in linear
     pprintw(w,row++,col,"Gain","%+.1lf dB  ",voltage2dB(chan->output.gain));
-  if(isfinite(chan->output.power))
+  if(!isnan(chan->output.power) && isfinite(chan->output.power))
     pprintw(w,row++,col,"Output","%+.1lf dBFS",power2dB(chan->output.power));
   box(w,0,0);
   mvwaddstr(w,0,1,"Signal");
@@ -1648,7 +1649,7 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
       pprintw(w,row++,col,"ΔT","%.1lf s ",Local.delta_t);
       pprintw(w,row++,col,"Δφ","%+.1lf °",Local.delta_phase);
       double dff = Local.delta_phase / (360 * Local.delta_t * chan->tune.freq);
-      if(isfinite(dff))
+      if(!isnan(dff) && isfinite(dff))
 	pprintw(w, row++, col, "μ Δf/f", "%+lg",dff);
 
       Local.pll_lock = chan->pll.lock;

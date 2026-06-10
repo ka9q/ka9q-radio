@@ -274,8 +274,8 @@ static void narrowband_poll(struct channel *chan){
 	fr = fft_n - i; // skip over excess FFT bins at edges
       assert(fr >= 0 && fr < fft_n);
       double const p = cnrm((double complex)fft_out[fr++]); // use double for improved accuracy when summing?
-      assert(isfinite(p));
-      if(isfinite(p))
+      assert(!isnan(p) && isfinite(p));
+      if(!isnan(p) && isfinite(p))
 	bin_data[i] += gain * p; // Don't pollute with infinities or NANs
     }
     // rp now points to *next* buffer, so move it back between 1 and 2 buffers depending on overlap
@@ -401,8 +401,8 @@ static void wideband_poll(struct channel *chan){
 	  binp -= bin_count; // crossed into negative output rang, Wrap input back to lowest frequency requested
 
 	double const p = cnrm(fft_out[binp]);
-	assert(isfinite(p));
-	if(isfinite(p))
+	assert(!isnan(p) && isfinite(p));
+	if(!isnan(p) && isfinite(p))
 	  bin_data[i] += gain * p;
       }
       input -= lrint(fft_n * (1. - chan->spectrum.overlap)); // move back fraction of a buffer
@@ -453,8 +453,8 @@ static void wideband_poll(struct channel *chan){
       do {
 	assert(binp >= 0 && binp < fft_n && i >= 0 && i < bin_count);
 	double const p = cnrm(fft_out[binp]);
-	assert(isfinite(p));
-	if(isfinite(p))
+	assert(!isnan(p) && isfinite(p));
+	if(!isnan(p) && isfinite(p))
 	  bin_data[i] += gain * p;
 
 	// Increment and wrap indices

@@ -296,7 +296,8 @@ static void *proc_sig_gen(void *arg){
     // to vary, causing the reported input level to bobble around the nominal value. Long refresh intervals with 'control'
     // will smooth this out, but it's annoying
 
-    frontend->if_power += Power_alpha * (in_energy / blocksize - frontend->if_power);
+    if(blocksize != 0 && !isnan(in_energy) && isfinite(in_energy))
+      frontend->if_power += Power_alpha * (in_energy / blocksize - frontend->if_power);
     // Get status timestamp from UNIX TOD clock
     // Request a half block sleep since this is only the minimum
     {

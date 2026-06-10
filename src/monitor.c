@@ -520,7 +520,7 @@ void *statproc(void *arg){
     // Lock and signal the queue so the data handler can atomically wait for the squelch to open
     decode_radio_status(&sp->frontend,&sp->chan,buffer+1,length-1);
     // chan.output.power is in dBFS so no signal is -Infinity
-    if(!isfinite(sp->chan.output.power))
+    if(isnan(sp->chan.output.power) || !isfinite(sp->chan.output.power))
       sp->squelch_open = false; // only turned off here; turned on in the data path
 
     // Cache payload-type/channel count/sample rate/encoding association for use by data thread

@@ -186,7 +186,7 @@ int demod_linear(void *arg){
     }
     // Apply frequency shift
     // Must be done after PLL, which operates only on DC
-    assert(isfinite(chan->tune.shift));
+    assert(!isnan(chan->tune.shift) && isfinite(chan->tune.shift));
     set_osc(&chan->shift,chan->tune.shift/chan->output.samprate,0);
     if(chan->shift.freq != 0){
       for(int n=0; n < N; n++)
@@ -262,7 +262,7 @@ int demod_linear(void *arg){
 	// if amplitude < headroom - threshold - 20 dB, increase gain 20 dB immediately?
 	gain_change = pow(chan->linear.recovery_rate, 1.0/chan->output.samprate);
       }
-      assert(gain_change != 0 && isfinite(gain_change));
+      assert(!isnan(gain_change) && isfinite(gain_change) && gain_change != 0);
     }
     // Final pass over signal block
     // Demodulate, apply gain changes, compute output energy

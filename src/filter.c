@@ -1099,7 +1099,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   // 3. The un-normalized forward FFT has an implicit power gain of N
   double const gain = (slave->master->in_type == REAL ? M_SQRT2 : 1.0)
     / (window_gain *  slave->master->points);
-  assert(gain != 0 && isfinite(gain));
+  assert(!isnan(gain) && isfinite(gain) && gain != 0);
   for(int i = 0; i < M; i++)
     impulse[i] *= gain; // Normalize for the window gain
 

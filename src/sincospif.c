@@ -23,7 +23,7 @@ static inline double mod2f(double x) {
 __attribute__((weak))
 void sincospif(float x, float *s, float *c)
 {
-    if (!isfinite(x)) { *s = *c = NAN; return; }
+  if (isnan(x) || !isfinite(x)) { *s = *c = NAN; return; }
 
     // sin(pi*x), cos(pi*x) have period 2 in x
     float y = mod2f(x);        // [0,2)

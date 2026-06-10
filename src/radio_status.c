@@ -254,7 +254,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case RADIO_FREQUENCY: // Hz
       {
 	double const f = fabs(decode_double(cp,optlen));
-	if(!isfinite(f))
+	if(isnan(f) || !isfinite(f))
 	  break;
 
 	if(Verbose > 1 && f != chan->tune.freq)
@@ -266,7 +266,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case FIRST_LO_FREQUENCY:
       {
 	double const f = decode_double(cp,optlen);
-	if(!isfinite(f) || f == 0)
+	if(isnan(f) || !isfinite(f) || f == 0)
 	  break;
 	set_first_LO(chan,fabs(f)); // Will ignore it if there's no change
       }
@@ -274,7 +274,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case SHIFT_FREQUENCY: // Hz
       {
 	double const f = decode_double(cp,optlen);
-	if(!isfinite(f))
+	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->tune.shift = f;
       }
@@ -282,7 +282,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case DOPPLER_FREQUENCY: // Hz
       {
 	double const f = decode_double(cp,optlen);
-	if(!isfinite(f))
+	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->tune.doppler = f;
       }
@@ -290,7 +290,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case DOPPLER_FREQUENCY_RATE: // Hz
       {
 	double const f = decode_double(cp,optlen);
-	if(!isfinite(f))
+	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->tune.doppler_rate = f;
       }
@@ -298,7 +298,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case LOW_EDGE: // Hz
       {
 	double const f = decode_float(cp,optlen);
-	if(!isfinite(f) || f == chan->filter.min_IF || f > chan->filter.max_IF)
+	if(isnan(f) || !isfinite(f) || f == chan->filter.min_IF || f > chan->filter.max_IF)
 	  break;
 	chan->filter.min_IF = max(f,-(double)chan->output.samprate/2);
 	new_filter_needed = true;
@@ -307,7 +307,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case HIGH_EDGE: // Hz
       {
 	double const f = decode_float(cp,optlen);
-	if(!isfinite(f) || f == chan->filter.max_IF || f < chan->filter.min_IF)
+	if(isnan(f) || !isfinite(f) || f == chan->filter.max_IF || f < chan->filter.min_IF)
 	  break;
 	chan->filter.max_IF = min(f,(double)chan->output.samprate/2);
 	new_filter_needed = true;
@@ -316,7 +316,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case KAISER_BETA: // dimensionless, always 0 or positive
         {
 	  double const f = fabs(decode_float(cp,optlen));
-	  if(!isfinite(f) || chan->filter.kaiser_beta == f)
+	  if(isnan(f) || !isfinite(f) || chan->filter.kaiser_beta == f)
 	    break;
 	  chan->filter.kaiser_beta = f;
 	  new_filter_needed = true;
@@ -325,7 +325,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case FILTER2_KAISER_BETA: // dimensionless, always 0 or positive
         {
 	  double const f = fabs(decode_float(cp,optlen));
-	  if(!isfinite(f) || chan->filter2.kaiser_beta == f)
+	  if(isnan(f) || !isfinite(f) || chan->filter2.kaiser_beta == f)
 	    break;
 	  chan->filter2.kaiser_beta = f;
 	  new_filter_needed = true;
@@ -358,7 +358,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case HEADROOM: // dB -> voltage, always negative dB
       {
 	double const f = decode_float(cp,optlen);
-	if(!isfinite(f))
+	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->output.headroom = dB2voltage(-fabs(f));
       }
@@ -369,7 +369,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case GAIN:
       {
 	double const f = decode_float(cp,optlen); // can be -, 0, +
-	if(!isfinite(f))
+	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->output.gain = dB2voltage(f); // -Inf = 0 gain is OK
 	chan->linear.agc = false; // Doesn't make sense to change gain and then have the AGC change it again
@@ -378,7 +378,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case AGC_HANGTIME: // seconds
       {
 	double const f = decode_float(cp,optlen);
-	if(!isfinite(f))
+	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->linear.hangtime = fabs(f);
       }
@@ -386,7 +386,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case AGC_RECOVERY_RATE: // dB/sec -> amplitude / block times, always positive
       {
 	double const f = decode_float(cp,optlen);
-	if(!isfinite(f))
+	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->linear.recovery_rate = dB2voltage(fabs(f));
       }
@@ -394,7 +394,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case AGC_THRESHOLD: // dB -> amplitude
       {
 	double const f = decode_float(cp,optlen);
-	if(!isfinite(f))
+	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->linear.threshold = dB2voltage(-fabs(f));
       }
@@ -405,7 +405,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case PLL_BW:
       {
 	double const f = decode_float(cp,optlen); // Always 0 or positive
-	if(!isfinite(f))
+	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->pll.loop_bw = fabs(f);
       }
@@ -443,7 +443,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case SQUELCH_OPEN:
       {
 	double const x = decode_float(cp,optlen);
-	if(!isfinite(x))
+	if(isnan(x) || !isfinite(x))
 	  break;
 	chan->squelch.open = dB2power(x);
       }
@@ -451,7 +451,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case SQUELCH_CLOSE:
       {
         double const x = decode_float(cp,optlen);
-	if(!isfinite(x))
+	if(isnan(x) || !isfinite(x))
 	  break;
 	chan->squelch.close = dB2power(x);
       }
@@ -459,7 +459,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case RESOLUTION_BW:
       {
 	double const x = fabs(decode_float(cp,optlen));
-	if(!isfinite(x) || x == chan->spectrum.rbw)
+	if(isnan(x) || !isfinite(x) || x == chan->spectrum.rbw)
 	  break;
 	if(Verbose > 1)
 	  fprintf(stderr,"%s bin bw %'.1lf -> %'.1lf Hz\n",chan->name,chan->spectrum.rbw,x);
@@ -479,7 +479,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case CROSSOVER:
       {
 	double const x = fabs(decode_float(cp,optlen));
-	if(!isfinite(x) || x == chan->spectrum.crossover)
+	if(isnan(x) || !isfinite(x) || x == chan->spectrum.crossover)
 	  break;
 	chan->spectrum.crossover = x;
       }
@@ -495,7 +495,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case SPECTRUM_SHAPE: // Kaiser or gaussian
       {
 	double const x = fabs(decode_float(cp,optlen)); // always positive
-	if(!isfinite(x) || x == chan->spectrum.shape)
+	if(isnan(x) || !isfinite(x) || x == chan->spectrum.shape)
 	  break;
 	chan->spectrum.shape = x;
       }
@@ -599,7 +599,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case RF_ATTEN:
       {
 	double x = decode_float(cp,optlen);
-	if(!isfinite(x) || chan->frontend->atten == NULL)
+	if(isnan(x) || !isfinite(x) || chan->frontend->atten == NULL)
 	  break;
 	(*chan->frontend->atten)(chan->frontend,x);
       }
@@ -607,7 +607,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned l
     case RF_GAIN:
       {
 	double x = decode_float(cp,optlen);
-	if(!isfinite(x) || chan->frontend->gain == NULL)
+	if(isnan(x) || !isfinite(x) || chan->frontend->gain == NULL)
 	  break;
 	(*chan->frontend->gain)(chan->frontend,x);
       }
@@ -690,11 +690,11 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   encode_int32(&bp,INPUT_SAMPRATE,(uint32_t)llrint(frontend->samprate)); // Already defined on the wire as integer Hz, shouldn't change now
   encode_bool(&bp,FE_ISREAL,frontend->isreal);
   encode_double(&bp,CALIBRATE,frontend->calibrate);
-  if(isfinite(frontend->rf_gain))
+  if(!isnan(frontend->rf_gain) && isfinite(frontend->rf_gain))
     encode_float(&bp,RF_GAIN,frontend->rf_gain);
-  if(isfinite(frontend->rf_atten))
+  if(!isnan(frontend->rf_atten) && isfinite(frontend->rf_atten))
     encode_float(&bp,RF_ATTEN,frontend->rf_atten);
-  if(isfinite(frontend->rf_level_cal))
+  if(!isnan(frontend->rf_level_cal) && isfinite(frontend->rf_level_cal))
     encode_float(&bp,RF_LEVEL_CAL,frontend->rf_level_cal); // not sent unless set
   encode_bool(&bp,RF_AGC,frontend->rf_agc);
   if(frontend->lna_gain != 0 || frontend->mixer_gain != 0 || frontend->if_gain != 0){
@@ -722,7 +722,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
   encode_int64(&bp,AD_OVER,frontend->overranges);
   if(frontend->overranges != 0)
     encode_int64(&bp,SAMPLES_SINCE_OVER,frontend->samp_since_over);
-  if(isfinite(chan->sig.n0) && chan->sig.n0 > 0)
+  if(!isnan(chan->sig.n0) && isfinite(chan->sig.n0) && chan->sig.n0 > 0)
     encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
 
   // Modulation mode
@@ -807,7 +807,8 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       uint8_t *bins = malloc(chan->spectrum.bin_count);
       if(bins == NULL){
 	fprintf(stderr,"malloc of spectrum data failed\n");
-      } else if(isfinite(chan->spectrum.base) && isfinite(chan->spectrum.step)){
+      } else if(!isnan(chan->spectrum.base) && isfinite(chan->spectrum.base)
+		&& !isnan(chan->spectrum.step) && isfinite(chan->spectrum.step)){
 	encode_float(&bp,SPECTRUM_BASE, chan->spectrum.base);
 	encode_float(&bp,SPECTRUM_STEP, chan->spectrum.step);
 	encode_byte_data(chan,bins);

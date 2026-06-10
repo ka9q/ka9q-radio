@@ -793,10 +793,10 @@ static void copy_to_stream(struct session *sp){
     if (sp->channels == 1)
       energy *= 2; // +3dB for mono because of 0 dBFS definition for mono being peak, not rms
 #if 0
-    if(isfinite(energy))
+    if(!isnan(energy) && isfinite(energy))
       sp->level += .1 * (energy - sp->level); // smooth
 #else
-    if(isfinite(energy))
+    if(!isnan(energy) && isfinite(energy))
       sp->level = energy;
 #endif
   }

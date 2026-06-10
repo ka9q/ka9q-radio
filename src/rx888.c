@@ -670,7 +670,8 @@ static void rx_callback(struct libusb_transfer * const transfer){
   }
   sdr->dc_offset += DC_ALPHA * delta_sum;
   // These blocks are kinda small, so exponentially smooth the power readings
-  frontend->if_power += sdr->power_smooth * (in_energy / sampcount - frontend->if_power);
+  if(sampcount != 0 && !isnan(in_energy) && isfinite(in_energy))
+    frontend->if_power += sdr->power_smooth * (in_energy / sampcount - frontend->if_power);
   frontend->samples += sampcount; // Count original samples
   if(atomic_load(&sdr->state) == RUNNING) {
     if(libusb_submit_transfer(transfer) == 0)

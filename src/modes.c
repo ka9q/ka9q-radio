@@ -224,7 +224,7 @@ int set_defaults(struct channel *chan){
   chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
   chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
   chan->output.channels = 1;
-  if(chan->output.gain <= 0 || !isfinite(chan->output.gain))
+  if(isnan(chan->output.gain) || !isfinite(chan->output.gain) || chan->output.gain <= 0)
      chan->output.gain = dB2voltage(DEFAULT_GAIN); // Set only if out of bounds
   chan->linear.dc_tau = DEFAULT_DC_TC; // primarily for removing AM carriers
   chan->output.pacing = false;

@@ -414,7 +414,7 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
 
-  if (isfinite(in_energy))
+  if (!isnan(in_energy) && isfinite(in_energy))
     frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
 }
 

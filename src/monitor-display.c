@@ -638,7 +638,7 @@ static void update_monitor_display(void){
     for(;i < LINES && session < NSESSIONS; i++,session++){
       struct session const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      if(!isfinite(sp->snr))
+      if(isnan(sp->snr) || !isfinite(sp->snr))
 	continue;
 
       snprintf(scratch[i],COLS,"%.1f",sp->snr);

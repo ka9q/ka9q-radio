@@ -287,7 +287,7 @@ int loadconfig(char const *file){
   Verbose += config_getint(Configtable,GLOBAL,"verbose",0); // Add to the count of -v's on the command line
   {
     double bt = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",User_blocktime)); // Input value is in ms, internally in sec
-    if (!isfinite(bt) || bt == 0.0)
+    if (isnan(bt) || !isfinite(bt) || bt == 0.0)
       fprintf(stderr, "Block time %lf invalid, default %lf used\n", bt, User_blocktime);
     else
       User_blocktime = bt;
@@ -1504,7 +1504,7 @@ int downconvert(struct channel *chan){
     // set fine tuning frequency & phase
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
     if(shift != chan->filter.bin_shift || remainder != chan->filter.remainder){ // Detect startup
-      assert(isfinite(chan->tune.doppler_rate));
+      assert(!isnan(chan->tune.doppler_rate) && isfinite(chan->tune.doppler_rate));
       set_osc(&chan->fine,-remainder/chan->output.samprate,chan->tune.doppler_rate/((double)chan->output.samprate * chan->output.samprate));
       chan->filter.remainder = remainder;
     }
@@ -1609,7 +1609,7 @@ int set_channel_filter(struct channel *chan){
     create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,blocksize, COMPLEX);
     chan->filter2.low = lower;
     chan->filter2.high = upper;
-    if(chan->filter2.kaiser_beta < 0 || !isfinite(chan->filter2.kaiser_beta))
+    if(isnan(chan->filter2.kaiser_beta) || chan->filter2.kaiser_beta < 0 || !isfinite(chan->filter2.kaiser_beta))
       chan->filter2.kaiser_beta = chan->filter.kaiser_beta;
     set_filter(&chan->filter2.out,
 	       lower/chan->output.samprate,
@@ -1659,11 +1659,11 @@ double scale_AD(struct frontend const *frontend){
   // net analog gain, dBm to dBFS, that we correct for to maintain unity gain, i.e., 0 dBm -> 0 dBFS
 
   double analog_gain = 0;
-  if(isfinite(frontend->rf_gain))
+  if(!isnan(frontend->rf_gain) && isfinite(frontend->rf_gain))
     analog_gain += frontend->rf_gain;
-  if (isfinite(frontend->rf_atten))
+  if (!isnan(frontend->rf_atten) && isfinite(frontend->rf_atten))
     analog_gain -= frontend->rf_atten;
-  if(isfinite(frontend->rf_level_cal))
+  if(!isnan(frontend->rf_atten) && isfinite(frontend->rf_level_cal))
     analog_gain -= frontend->rf_level_cal; // new sign convention
   if(frontend->isreal)
     analog_gain -= 3.0;

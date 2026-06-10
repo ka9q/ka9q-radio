@@ -1166,9 +1166,8 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
   }
   frontend->samples += sampcount;
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  if(isfinite(in_energy)){
+  if(sampcount != 0 && !isnan(in_energy) && isfinite(in_energy))
     frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
-  }
   return;
 }
 

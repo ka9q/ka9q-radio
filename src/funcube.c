@@ -289,7 +289,8 @@ static void *proc_funcube(void *arg){
     write_cfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT
     frontend->samples += blocksize;
     double const block_energy = i_energy + q_energy; // Normalize for complex pairs
-    frontend->if_power += Power_alpha * (block_energy / blocksize - frontend->if_power); // Average A/D output power per channel
+    if(!isnan(block_energy) && isfinite(block_energy))
+      frontend->if_power += Power_alpha * (block_energy / blocksize - frontend->if_power); // Average A/D output power per channel
 
     // Update every block
     // estimates of DC offset, signal powers and phase error

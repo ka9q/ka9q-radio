@@ -236,9 +236,8 @@ static void bladerf_process(struct frontend * const frontend,
 		wptr[i] = (float complex)samp;
 		sample += 2;
 	}
-
-	frontend->if_power += Power_alpha * (energy / num_samples -
-			frontend->if_power);
+	if(num_samples != 0 && !isnan(energy) && isfinite(energy))
+	  frontend->if_power += Power_alpha * (energy / num_samples - frontend->if_power);
 	frontend->samples += num_samples;
 
 	// Update write pointer, invoke FFT
