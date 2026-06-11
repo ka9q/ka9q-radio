@@ -184,6 +184,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: ka9q-radio (<< 1.0.0-19)
 Replaces: ka9q-radio (<< 1.0.0-19)
 Provides: ka9q-radio-frontend
+Suggests: wwvsim
 Description: Synthetic signal generator device plugin for ka9q-radio
  ka9q-radio plugin that generates a synthetic receive stream, optionally with synthetic WWV
 
