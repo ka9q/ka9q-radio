@@ -32,11 +32,15 @@ purge:
 install: $(SERVICEFILES)
 	install -d -m 0755 $(DESTDIR)$(systemdunitdir)
 	install -m 0644 $(SERVICEFILES) $(DESTDIR)$(systemdunitdir)
-	systemctl daemon-reload
+	if [ -z "$(DESTDIR)" ] && command -v systemctl >/dev/null; then \
+		systemctl daemon-reload; \
+	fi
 
 uninstall:
 	rm -f $(addprefix $(DESTDIR)$(systemdunitdir)/,$(SERVICEFILES))
-	systemctl daemon-reload
+	if [ -z "$(DESTDIR)" ] && command -v systemctl >/dev/null; then \
+		systemctl daemon-reload; \
+	fi
 
 %.service: %.service.in
 	sed -e 's|@bindir@|$(bindir)|g' \
