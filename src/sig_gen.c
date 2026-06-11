@@ -172,18 +172,44 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   return 0;
 }
 
-FILE *Source = NULL;
 #define MODBUFSIZE (960) // one frame time (20 ms) @ 48 kHz
-static float src_input_data[MODBUFSIZE];
-static long src_callback(void *cb_data,float **data){
-  int16_t inbuf[MODBUFSIZE]; // probably too big for the stack?
-  (void)cb_data;
-  int len = fread(inbuf, sizeof inbuf[0], MODBUFSIZE, Source);
-  src_short_to_float_array (inbuf,src_input_data,len);
-  *data = src_input_data;
+// For 30 MHz A/D and 48 kHz modulation, the ratio is x625, which is too great for one step in libsamplerate
+// so we do it in first steps. sqrt(625) = 25.
+#define FIRST_RATIO (25)
+#define MODBUFSIZE1 (MODBUFSIZE*FIRST_RATIO)
+
+struct input_state {
+  FILE *source;
+  SRC_STATE *primary_state;
+  SRC_STATE *secondary_state;
+  float primary_input_data[MODBUFSIZE]; // must be static since we return a pointer to it
+  float secondary_input_data[MODBUFSIZE1]; // must be static since we return a pointer to it
+} Input_state;
+
+static long input_callback(void *cb_data,float **data){
+  struct input_state *is = (struct input_state *)cb_data;
+  int16_t inbuf[MODBUFSIZE];
+  long len = fread(inbuf, sizeof inbuf[0], MODBUFSIZE, is->source);
+  src_short_to_float_array (inbuf,is->primary_input_data,len);
+  *data = is->primary_input_data;
   return len;
 }
 
+static long secondary_callback(void *cb_data, float **data){
+  struct input_state *is = (struct input_state *)cb_data;
+
+  long r = src_callback_read(is->primary_state, FIRST_RATIO, MODBUFSIZE1, is->secondary_input_data);
+  if(r == 0){
+    int err =  src_error(is->secondary_state);
+    if(err){
+      fprintf(stderr,"libsamplerate: %s\n",src_strerror(err));
+      *data = NULL;
+      return 0;
+    }
+  }
+  *data = is->secondary_input_data;
+  return r;
+}
 
 static void *proc_sig_gen(void *arg){
   pthread_setname("proc_siggen");
@@ -192,7 +218,6 @@ static void *proc_sig_gen(void *arg){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
-  int64_t timesnap = gps_time_ns();
   realtime(2 + default_prio());
 
   struct osc carrier = {0};
@@ -203,30 +228,46 @@ static void *proc_sig_gen(void *arg){
 
   rand_init();
 
+  struct input_state * const is = &Input_state;
+  int const mod_samprate = FULL_SAMPRATE; // Fixed for now
+  double upsample_ratio = 0;
+  float *dac_modulation = NULL;
+  long const output_size = lrint(1.5 * Blocktime * frontend->samprate); // allow extra for catchup
+
   if(sdr->modulation != CW && sdr->source != NULL){
-    Source = popen(sdr->source,"r");
-    if(Source == NULL)
+    is->source = popen(sdr->source,"r");
+    if(is->source == NULL)
       perror("popen");
   }
-  if(Source == NULL)
+  if(is->source == NULL){
     sdr->modulation = CW; // Turn it off
+  } else {
+    upsample_ratio = (double)frontend->samprate / (mod_samprate * FIRST_RATIO);
+    // Input buffer with modulation to sample rate converter
+    // Output buffer with modulation at virtual A/D rate
+    dac_modulation = malloc(output_size * sizeof *dac_modulation);
+    assert(dac_modulation != NULL);
 
-  int const mod_samprate = FULL_SAMPRATE; // Fixed for now
-  double const upsample_ratio = (double)frontend->samprate / mod_samprate;
+    // Set up sample rate converter for modulation
+    int error = 0;
+    is->primary_state = src_callback_new(input_callback,SRC_LINEAR, 1, &error,is);
+    if(error != 0){
+      fprintf(stderr,"src_callback_new: %s\n",src_strerror(error));
+      goto quit;
+    }
+    assert(error == 0);
 
-  // Input buffer with modulation to sample rate converter
-  long const output_size = lrint(Blocktime * frontend->samprate);
-  // Output buffer with modulation at virtual A/D rate
-  float * const dac_modulation = malloc(output_size * sizeof *dac_modulation);
+    assert(is->primary_state != NULL);
+    is->secondary_state = src_callback_new(secondary_callback,SRC_LINEAR, 1, &error, is);
+    if(error != 0){
+      fprintf(stderr,"src_callback_new: %s\n",src_strerror(error));
+      goto quit;
+    }
+    assert(error == 0);
+    assert(is->secondary_state != NULL);
+  }
+  int64_t timesnap = gps_time_ns() - lrint(Blocktime * BILLION); // one frame back
 
-  // Set up sample rate converter for modulation
-  int error = 0;
-  //  SRC_STATE * const src_state = src_callback_new(src_callback,SRC_SINC_FASTEST, 1, &error,NULL);
-  SRC_STATE * const src_state = src_callback_new(src_callback,SRC_LINEAR, 1, &error,NULL);
-  if(error != 0)
-    fprintf(stderr,"src_callback_new: %s\n",src_strerror(error));
-  assert(error == 0);
-  assert(src_state != NULL);
   enum state s;
   while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING ){
     // How long since last call?
@@ -238,7 +279,8 @@ static void *proc_sig_gen(void *arg){
     // or the sample rate converter buffer
     if(blocksize > output_size)
       blocksize = output_size;
-    timesnap = now;
+    interval = llrint((double)BILLION * blocksize / frontend->samprate); // adjust forward by the amount we're actually sending
+    timesnap += interval;
 
     double in_energy = 0;
     // Note lack of bandpass filtering on modulation - this creates alias images across the spectrum
@@ -257,7 +299,14 @@ static void *proc_sig_gen(void *arg){
 	}
       } else {
 	assert(blocksize <= output_size);
-	long r = src_callback_read(src_state, upsample_ratio, blocksize, dac_modulation);
+	long r = src_callback_read(is->secondary_state, upsample_ratio, blocksize, dac_modulation);
+	if(r == 0){
+	  int err =  src_error(is->secondary_state);
+	  if(err){
+	    fprintf(stderr,"libsamplerate: %s\n",src_strerror(err));
+	    break;
+	  }
+	}
 	assert(r <= blocksize);
 	blocksize = r;
 	for(long int i=0; i < blocksize; i++){
@@ -280,7 +329,14 @@ static void *proc_sig_gen(void *arg){
 	}
       } else {
 	assert(blocksize <= output_size);
-	long r = src_callback_read(src_state, upsample_ratio, blocksize, dac_modulation);
+	long r = src_callback_read(is->secondary_state, upsample_ratio, blocksize, dac_modulation);
+	if(r == 0){
+	  int err =  src_error(is->secondary_state);
+	  if(err){
+	    fprintf(stderr,"libsamplerate: %s\n",src_strerror(err));
+	    break;
+	  }
+	}
 	assert(r <= blocksize);
 	blocksize = r;
 	for(long i=0; i < blocksize; i++){
@@ -300,17 +356,21 @@ static void *proc_sig_gen(void *arg){
 
     if(blocksize != 0 && !isnan(in_energy) && isfinite(in_energy))
       frontend->if_power += Power_alpha * (in_energy / blocksize - frontend->if_power);
-    // Get status timestamp from UNIX TOD clock
-    // Request a half block sleep since this is only the minimum
     {
       struct timespec ts = {
 	.tv_sec = 0,
-	.tv_nsec = lrint(Blocktime * BILLION/2) // s -> ns
+	.tv_nsec = BILLION/200 // 1/4 frame time
       };
       nanosleep(&ts,NULL);
     }
   }
-  // No error exits from this loop, so this must be a suspend operation
+ quit:;
+  if(is->source)
+    fclose(is->source);
+  if(is->primary_state)
+    src_delete(is->primary_state);
+  if(is->secondary_state)
+    src_delete(is->secondary_state);
   return NULL;
 }
 int sig_gen_startup(struct frontend *frontend){
