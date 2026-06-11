@@ -83,7 +83,7 @@ ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
 	$(DESTDIR)$(hfdllibdir)
 endif
 
-uinstall:
+uninstall:
 	rm -f $(addprefix $(DESTDIR)$(bindir)/,$(SCRIPTS))
 	rm -f $(DESTDIR)$(crondir)/ka9q-cleanups
 	rm -f $(DESTDIR)$(sbindir)/start-hfdl
