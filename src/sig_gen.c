@@ -173,10 +173,10 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
 }
 
 FILE *Source = NULL;
-#define MODBUFSIZE (96000)
+#define MODBUFSIZE (960) // one frame time (20 ms) @ 48 kHz
 static float src_input_data[MODBUFSIZE];
-static int16_t inbuf[MODBUFSIZE];
 static long src_callback(void *cb_data,float **data){
+  int16_t inbuf[MODBUFSIZE]; // probably too big for the stack?
   (void)cb_data;
   int len = fread(inbuf, sizeof inbuf[0], MODBUFSIZE, Source);
   src_short_to_float_array (inbuf,src_input_data,len);
