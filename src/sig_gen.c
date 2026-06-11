@@ -82,7 +82,7 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   assert(dictionary != NULL);
   {
     char const * const device = config_getstring(dictionary,section,"device",section);
-    if(strcasecmp(device,"sig_gen") != 0)
+    if(strcasecmp(device,"sig_gen") != 0 && strcasecmp(device,"siggen") != 0)
       return -1; // Not for us
   }
   config_validate_section(stderr,dictionary,section,Sig_gen_keys,NULL);
@@ -256,8 +256,9 @@ static void *proc_sig_gen(void *arg){
 	  wptr[i] = samp * sdr->scale;
 	}
       } else {
+	assert(blocksize <= output_size);
 	long r = src_callback_read(src_state, upsample_ratio, blocksize, dac_modulation);
-	assert(r == blocksize);
+	assert(r <= blocksize);
 	blocksize = r;
 	for(long int i=0; i < blocksize; i++){
 	  double samp = (dc + dac_modulation[i]) * sdr->amplitude * creal(step_osc(&carrier)) + sdr->noise * real_gauss();
@@ -278,8 +279,9 @@ static void *proc_sig_gen(void *arg){
 	  wptr[i] = samp * sdr->scale;
 	}
       } else {
+	assert(blocksize <= output_size);
 	long r = src_callback_read(src_state, upsample_ratio, blocksize, dac_modulation);
-	assert(r == blocksize);
+	assert(r <= blocksize);
 	blocksize = r;
 	for(long i=0; i < blocksize; i++){
 	  double complex samp = (dc + dac_modulation[i]) * sdr->amplitude * step_osc(&carrier) + sdr->noise * real_gauss();
