@@ -94,7 +94,7 @@ void xoshiro256ss_jump(xoshiro256ss_state *st){
 void rand_init(void){
   if(Rand_init)
     return; // already done
-  
+
   xoshiro256ss_seed(&Rand_state,1);
   Rand_init = true;
 }
