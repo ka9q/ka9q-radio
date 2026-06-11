@@ -87,7 +87,7 @@ uninstall:
 	rm -f $(addprefix $(DESTDIR)$(bindir)/,$(SCRIPTS))
 	rm -f $(DESTDIR)$(crondir)/ka9q-cleanups
 	rm -f $(DESTDIR)$(sbindir)/start-hfdl
-	rm -f $(DESTDIR)$(hfdllibdir)/systeable.conf
+	rm -f $(DESTDIR)$(hfdllibdir)/systable.conf
 	-rmdir $(DESTDIR)$(hfdllibdir)
 	rm -f $(addprefix $(DESTDIR)$(logrotatedir)/,$(LOGROTATE_FILES))
 	rm -f $(addprefix $(DESTDIR)$(modprobedir)/,$(BLACKLIST))
