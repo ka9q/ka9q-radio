@@ -8,7 +8,7 @@ RULES = 20-rtlsdr.rules 51-airspy.rules 51-hydrasdr.rules 52-airspyhf.rules 53-a
 	68-funcube-dongle-proplus.rules 68-funcube-dongle.rules 69-funcube-ka9q.rules 70-rx888-boot.rules 71-rx888.rules \
 	72-rx888-ka9q.rules 73-fobos-sdr.rules 74-fobos-sdr-ka9q.rules
 
-.PHONY: clean all install purge
+.PHONY: clean all install uninstall purge
 
 all:
 	@true
@@ -18,6 +18,9 @@ clean:
 install:
 	install -d -m 0755 $(DESTDIR)$(udevdir)
 	install -m 0644 $(RULES) $(DESTDIR)$(udevdir)
+
+uninstall:
+	rm -f $(addprefix $(DESTDIR)$(udevdir)/,$(RULES))
 
 purge:
 	@test "$(CONFIRMED)" = "1" || { \

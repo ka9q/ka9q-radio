@@ -14,7 +14,7 @@ RX888=120s_failure.img 20s_watchdog.img	120s_watchdog.img 60s_watchdog.img \
 LUA=ssrc-decimal.lua ka9q_ctl.lua
 TEXT=bandplan.txt id.txt presets.conf help.txt monitor-help.txt
 
-.PHONY: clean all install purge
+.PHONY: clean all install uninstall purge
 
 all:
 	@:
@@ -28,6 +28,12 @@ install:
 ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
 	chown radio:radio $(RX888) $(LUA) $(TEXT) $(DESTDIR)$(pkgdatadir)
 endif
+
+uninstall:
+	rm -f $(addprefix $(DESTDIR)$(pkgdatadir)/,$(RX888))
+	rm -f $(addprefix $(DESTDIR)$(pkgdatadir)/,$(LUA))
+	rm -f $(addprefix $(DESTDIR)$(pkgdatadir)/,$(TEXT))
+	-rmdir $(DESTDIR)$(pkgdatadir) 2>/dev/null || true
 
 purge:
 	@test "$(CONFIRMED)" = "1" || { \

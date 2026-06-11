@@ -30,7 +30,7 @@ LOGROTATE_FILES = aprsfeed.rotate ft8.rotate ft4.rotate wspr.rotate hfdl.rotate 
 BLACKLIST = airspy-blacklist.conf
 SYSCTL = 98-sockbuf.conf 50-multicast.conf
 
-.PHONY: clean all install purge
+.PHONY: clean all install uninstall purge
 
 all:
 	@true
@@ -60,7 +60,6 @@ install:
 	install -d -m 0755 $(DESTDIR)$(sysusersdir) $(DESTDIR)$(sysctldir)
 	install -d -m 0755 $(DESTDIR)$(modprobedir) $(DESTDIR)$(logrotatedir)
 	install -d -m 0755 $(DESTDIR)$(sbindir) $(DESTDIR)$(crondir) $(DESTDIR)$(bindir)
-
 # Setup init system
 	install -m 0644 radio.sysusers $(DESTDIR)$(sysusersdir)/radio.conf
 # Setup kernel configuration
@@ -81,7 +80,17 @@ ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
 	chown radio:radio $(DESTDIR)$(radioconfdir) $(DESTDIR)$(hfdllibdir) \
 	$(DESTDIR)$(statedir) $(DESTDIR)$(statedir)/ft8 \
 	$(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr \
-	$(DESTDIR)$(hfdllibdir) 
+	$(DESTDIR)$(hfdllibdir)
 endif
 
-
+uinstall:
+	rm -f $(addprefix $(DESTDIR)$(bindir)/,$(SCRIPTS))
+	rm -f $(DESTDIR)$(crondir)/ka9q-cleanups
+	rm -f $(DESTDIR)$(sbindir)/start-hfdl
+	rm -f $(DESTDIR)$(hfdllibdir)/systeable.conf
+	-rmdir $(DESTDIR)$(hfdllibdir)
+	rm -f $(addprefix $(DESTDIR)$(logrotatedir)/,$(LOGROTATE_FILES))
+	rm -f $(addprefix $(DESTDIR)$(modprobedir)/,$(BLACKLIST))
+	rm -f $(addprefix $(DESTDIR)$(sysctldir)/,$(SYSCTL))
+	rm -f $(DESTDIR)$(sysusersdir)/radio.conf
+	@echo "not removing /var/lib/ka9q-radio/*"

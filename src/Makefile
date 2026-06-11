@@ -173,7 +173,7 @@ ifeq ($(HAS_PIGPIO),1)
    EXECS += set_xcvr
 endif
 
-.PHONY: clean all install dynamics purge
+.PHONY: clean all install uninstall dynamics purge
 all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
 ## other targets
@@ -185,6 +185,12 @@ install: all
 
 clean:
 	rm -f *.o *.a *.d *.so config_paths.h $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
+
+uninstall:
+	rm -f $(addprefix $(DESTDIR)$(sbindir)/,$(DAEMONS))
+	rm -f $(addprefix $(DESTDIR)$(bindir)/,$(EXECS))
+	rm -f $(addprefix $(DESTDIR)$(pkglibdir)/,$(DYNAMIC_DRIVERS))
+	-rmdir $(DESTDIR)$(pkglibdir) 2>/dev/null || true
 
 purge:
 	@test "$(CONFIRMED)" = "1" || { \

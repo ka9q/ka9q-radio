@@ -8,7 +8,7 @@ pkgdatadir    ?= $(datadir)/ka9q-radio
 
 UNAME_S := $(shell uname -s)
 
-.PHONY: clean all install purge
+.PHONY: clean all install uninstall purge
 
 all:
 	@true
@@ -19,3 +19,9 @@ purge:
 install:
 	install -m 0664 README *.conf $(DESTDIR)$(radioconfdir)
 	rsync -a examples $(DESTDIR)$(pkgdatadir)
+
+uninstall:
+	rm -rf $(DESTDIR)$(pkgdatadir)/examples
+	@echo "not removing /etc/radio/*"
+
+

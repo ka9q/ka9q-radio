@@ -13,7 +13,7 @@ SERVICEFILES=acars.service aprsfeed.service cwd.service ft4-decode.service \
 	packetd.service radiod@.service recordings@.service \
 	rx888_boot.service set_lo_multicast.service wspr-decoded.service
 
-.PHONY: clean all install purge
+.PHONY: clean all install uninstall purge
 
 all: $(SERVICEFILES)
 
@@ -32,6 +32,11 @@ purge:
 install: $(SERVICEFILES)
 	install -d -m 0755 $(DESTDIR)$(systemdunitdir)
 	install -m 0644 $(SERVICEFILES) $(DESTDIR)$(systemdunitdir)
+	systemctl daemon-reload
+
+uninstall:
+	rm -f $(addprefix $(DESTDIR)$(systemdunitdir)/,$(SERVICEFILES))
+	systemctl daemon-reload
 
 %.service: %.service.in
 	sed -e 's|@bindir@|$(bindir)|g' \

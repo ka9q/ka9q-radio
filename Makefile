@@ -47,7 +47,7 @@ export ENABLE_RTLSDR ENABLE_RX888 ENABLE_SDRPLAY ENABLE_SIG_GEN
 export DEB_BUILD_ARCH
 
 SUBDIRS=src aux share service rules docs config
-.PHONY: all clean install $(SUBDIRS) purge
+.PHONY: all clean install uninstall $(SUBDIRS) purge
 
 all: $(SUBDIRS)
 
@@ -83,3 +83,7 @@ ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
 	udevadm control --reload-rules
 	setcap cap_net_admin+ep $(bindir)/monitor
 endif
+
+uninstall:
+	for d in $(SUBDIRS); do $(MAKE) -C $$d uninstall; done
+
