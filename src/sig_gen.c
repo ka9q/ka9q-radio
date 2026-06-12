@@ -366,7 +366,7 @@ static void *proc_sig_gen(void *arg){
   }
  quit:;
   if(is->source)
-    fclose(is->source);
+    pclose(is->source);
   if(is->primary_state)
     src_delete(is->primary_state);
   if(is->secondary_state)
