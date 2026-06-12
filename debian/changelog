@@ -1,3 +1,9 @@
+ka9q-radio (2026.06.12-1-trixie1) trixie; urgency=medium
+
+  * use pclose to match popen in sig_gen.c
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 11 Jun 2026 19:21:14 -0700
+
 ka9q-radio (2026.06.11-1-trixie1) trixie; urgency=medium
 
   * sig_gen cleanups; systemctl and udevadm only on local installs
