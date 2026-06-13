@@ -78,11 +78,6 @@ install:
 	for d in $(SUBDIRS); do \
 		$(MAKE) -C $$d install DESTDIR=$(DESTDIR) || exit $$?; \
 	done
-ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
-	systemctl daemon-reload
-	udevadm control --reload-rules
-	setcap cap_net_admin+ep $(bindir)/monitor
-endif
 
 uninstall:
 	for d in $(SUBDIRS); do $(MAKE) -C $$d uninstall; done

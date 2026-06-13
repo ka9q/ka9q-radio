@@ -182,6 +182,9 @@ install: all
 	if [ -n "$(DYNAMIC_DRIVERS)" ]; then install -m 0755 $(DYNAMIC_DRIVERS) $(DESTDIR)$(pkglibdir); fi
 	install -m 0755 $(DAEMONS) $(DESTDIR)$(sbindir)
 	install -m 0755 $(EXECS) $(DESTDIR)$(bindir)
+ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
+	setcap cap_net_admin+ep $(bindir)/monitor
+endif
 
 clean:
 	rm -f *.o *.a *.d *.so config_paths.h $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)

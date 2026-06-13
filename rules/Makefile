@@ -18,13 +18,13 @@ clean:
 install:
 	install -d -m 0755 $(DESTDIR)$(udevdir)
 	install -m 0644 $(RULES) $(DESTDIR)$(udevdir)
-	if [ -z "$(DESTDIR)" ] && command -v systemctl >/dev/null; then \
+	if [ -z "$(DESTDIR)" ] && command -v udevadm >/dev/null; then \
 		udevadm control --reload; \
 	fi
 
 uninstall:
 	rm -f $(addprefix $(DESTDIR)$(udevdir)/,$(RULES))
-	if [ -z "$(DESTDIR)" ] && command -v systemctl >/dev/null; then \
+	if [ -z "$(DESTDIR)" ] && command -v udevadm >/dev/null; then \
 		udevadm control --reload; \
 	fi
 
