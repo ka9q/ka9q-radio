@@ -26,7 +26,6 @@
 
 static double Power_alpha = 0.01; // Calculate this properly someday
 
-
 enum modulation {
   CW = 0, // No modulation
   DSB, // AM without a carrier
@@ -62,20 +61,14 @@ struct sdrstate {
   enum modulation modulation;
   char *source;
   double scale;
-
   pthread_t proc_thread;
   _Atomic enum state state;
 };
 
-// A larger blocksize makes more efficient use of each frame, but the receiver generally runs on
-// frames that match the Opus codec: 2.5, 5, 10, 20, 40, 60, 180, 100, 120 ms
-// So to minimize latency, make this a common denominator:
-// 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
 extern char const *Description;
 
 double complex complex_gaussian(double);
 double real_gaussian(double);
-
 double sig_gen_tune(struct frontend * const frontend,double const freq);
 
 int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionary, char const * const section){
@@ -172,13 +165,17 @@ int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionar
   return 0;
 }
 
+// A larger blocksize makes more efficient use of each frame, but the receiver generally runs on
+// frames that match the Opus codec: 2.5, 5, 10, 20, 40, 60, 180, 100, 120 ms
+// So to minimize latency, make this a common denominator:
+// 240 samples @ 16 bit stereo = 960 bytes/packet; at 192 kHz, this is 1.25 ms (800 pkt/sec)
 #define MODBUFSIZE (960) // one frame time (20 ms) @ 48 kHz
 // For 30 MHz A/D and 48 kHz modulation, the ratio is x625, which is too great for one step in libsamplerate
 // so we do it in first steps. sqrt(625) = 25.
 #define FIRST_RATIO (25)
 #define MODBUFSIZE1 (MODBUFSIZE*FIRST_RATIO)
 
-struct input_state {
+static struct input_state {
   FILE *source;
   SRC_STATE *primary_state;
   SRC_STATE *secondary_state;
@@ -197,7 +194,6 @@ static long input_callback(void *cb_data,float **data){
 
 static long secondary_callback(void *cb_data, float **data){
   struct input_state *is = (struct input_state *)cb_data;
-
   long r = src_callback_read(is->primary_state, FIRST_RATIO, MODBUFSIZE1, is->secondary_input_data);
   if(r == 0){
     int err =  src_error(is->secondary_state);
@@ -301,7 +297,7 @@ static void *proc_sig_gen(void *arg){
 	assert(blocksize <= output_size);
 	long r = src_callback_read(is->secondary_state, upsample_ratio, blocksize, dac_modulation);
 	if(r == 0){
-	  int err =  src_error(is->secondary_state);
+	  int err = src_error(is->secondary_state);
 	  if(err){
 	    fprintf(stderr,"libsamplerate: %s\n",src_strerror(err));
 	    break;
@@ -331,7 +327,7 @@ static void *proc_sig_gen(void *arg){
 	assert(blocksize <= output_size);
 	long r = src_callback_read(is->secondary_state, upsample_ratio, blocksize, dac_modulation);
 	if(r == 0){
-	  int err =  src_error(is->secondary_state);
+	  int err = src_error(is->secondary_state);
 	  if(err){
 	    fprintf(stderr,"libsamplerate: %s\n",src_strerror(err));
 	    break;
