@@ -85,12 +85,16 @@ endif
 
 uninstall:
 	rm -f $(addprefix $(DESTDIR)$(bindir)/,$(SCRIPTS))
-	rm -f $(DESTDIR)$(crondir)/ka9q-cleanups
+	#rm -f $(DESTDIR)$(crondir)/ka9q-cleanups
+	@echo not removing $(DESTDIR)$(crondir)/ka9q-cleanups
 	rm -f $(DESTDIR)$(sbindir)/start-hfdl
 	rm -f $(DESTDIR)$(hfdllibdir)/systable.conf
 	-rmdir $(DESTDIR)$(hfdllibdir)
-	rm -f $(addprefix $(DESTDIR)$(logrotatedir)/,$(LOGROTATE_FILES))
-	rm -f $(addprefix $(DESTDIR)$(modprobedir)/,$(BLACKLIST))
-	rm -f $(addprefix $(DESTDIR)$(sysctldir)/,$(SYSCTL))
-	rm -f $(DESTDIR)$(sysusersdir)/radio.conf
-	@echo "not removing /var/lib/ka9q-radio/*"
+	#rm -f $(addprefix $(DESTDIR)$(logrotatedir)/,$(LOGROTATE_FILES))
+	@echo not removing $(addprefix $(DESTDIR)$(logrotatedir)/,$(LOGROTATE_FILES))
+	#rm -f $(addprefix $(DESTDIR)$(modprobedir)/,$(BLACKLIST))
+	@echo not removing  $(addprefix $(DESTDIR)$(modprobedir)/,$(BLACKLIST))
+	#rm -f $(addprefix $(DESTDIR)$(sysctldir)/,$(SYSCTL))
+	@echo not removing  $(addprefix $(DESTDIR)$(sysctldir)/,$(SYSCTL))
+	#rm -f $(DESTDIR)$(sysusersdir)/radio.conf
+	@echo not removing $(DESTDIR)$(sysusersdir)/radio.conf
