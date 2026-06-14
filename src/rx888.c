@@ -1144,8 +1144,29 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   // r14 (0xe) = 0x75: mixer agc threshold high = 7/15, low threshold = 5/15
   r820_write_byte(sdr, 14, (7<<4) | 5);
 
-  // r15 (0xf) = 0x68 = filter extension widest = off, clock out off, internal agc clock on, disable ring clock
+  // r15 (0xf) = 0x68: filter extension widest = off, clock out off, internal agc clock on, disable ring clock
   r820_write_byte(sdr, 15, (1<<5) | R820T_R15_CLK_OUT_ENB | R820T_R15_RING_CLK);
+
+  // r17 (0x11) = 0xbb: PLL analog LDO 2.0 V, charge-pump = auto
+  r820_write_byte(sdr, 17, (2 << 6) | (5 << 3) | R820T_R17_FIXED);
+
+  // r19 (0x13) = 0x31: VCO auto mode; low 6 bits are a VERSION TAG (ignored in auto)
+  r820_write_byte(sdr, 19, 49);
+
+  // r24 (0x18) = 0x48: ring oscillator OFF, nring = 8 (less than valid range 9-14)
+  r820_write_byte(sdr, 24, R820T_R24_FIXED | 8);
+
+  // r25 (0x19) = 0xec: RF tracking filter ON, poly-filter current = max, agc = agc_in
+  r820_write_byte(sdr, 25, R820T_R25_PWD_RFFILT | R820T_R25_POLFIL_CUR | R820T_R25_FIXED);
+
+  // r28 (0x1c) = 0x24: mixer power-detector TOP 3rd highest?
+  r820_write_byte(sdr, 28, (2 << 4) | R820T_R28_FIXED);
+
+  // r29 (0x1d) = 0xdd: LNA_TOP = PDET2_GAIN = 5
+  r820_write_byte(sdr, 29, R820T_R29_FIXED | (5 << 3) | 5);
+
+  // r31 (0x1f) = 0x40: LOOP THRU ATT enable, ring-osc power −5 dBaf
+  r820_write_byte(sdr, 31, R820T_R31_FIXED);
 }
 
 

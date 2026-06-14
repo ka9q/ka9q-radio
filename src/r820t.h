@@ -103,8 +103,7 @@
 #define R820T_R18_FIXED      (0)
 
 // R19
-#define R820T_R19_FIXED     (0)
-#define R820T_R19_VCOCTL    (1<<6)
+#define R820T_R19_VCOCTL    (1<<6) // vco manual mode
 // DAC for VCO: 0 -> min (1.75 GHz) 63 -> max (3.6 GHz)
 #define R820T_R19_VCO_DAC   (63)
 
