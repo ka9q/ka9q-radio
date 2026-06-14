@@ -29,6 +29,7 @@
 #include "radio.h"
 #include "rx888.h"
 #include "si5351.h"
+#include "r820t.h"
 #include "ezusb.h"
 
 static uint16_t const Vendor_id = 0x04b4;
@@ -56,11 +57,6 @@ static long long const DEFAULT_REFERENCE = 27e6;
 // Max allowable error on reference; 1e-4 = 100 ppm. Mainly to catch entry scaling errors
 static double const MAX_CALIBRATE = 1e-4;
 
-// Min and Max frequency for VHF/UHF tuner
-static long long const MIN_FREQUENCY = 50e6;   //  50 MHz ?
-static long long const MAX_FREQUENCY = 2000e6; // 2000 MHz
-static int const R828D_FREQ = 16000000;     // R820T reference frequency
-static int const R828D_IF_CARRIER = 4570000;
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
@@ -141,10 +137,11 @@ static double val2gain(int g);
 static int gain2val(double gain);
 static void *proc_rx888(void *arg);
 static void *agc_rx888(void *arg);
+
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency);
 // Read one Si5351 register over I2C (reg# is silicon-defined → version-proof).
 static inline int si5351_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
-  return control_recv(sdr->dev_handle, I2CRFX3, SI5351_ADDR + 1, reg, val, 1);
+  return control_recv(sdr->dev_handle, I2CRFX3, SI5351_ADDR, reg, val, 1);
 }
 static inline int si5351_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
   return control_send(sdr->dev_handle, I2CWFX3, SI5351_ADDR, reg, arg, len);
@@ -153,24 +150,6 @@ static inline int si5351_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t a
   return control_send_byte(sdr->dev_handle, I2CWFX3, SI5351_ADDR, reg, arg);
 }
 
-// R820T/R828 tuner stuff
-static inline uint8_t bitrev(uint8_t b){
-  b = ((b & 0xf0) >> 4) | ((b & 0x0f) << 4);
-  b = ((b & 0xcc) >> 2) | ((b & 0x33) << 2);  
-  b = ((b & 0xaa) >> 1) | ((b & 0x55) << 1);
-  return b;
-}
-
-static inline int r820_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
-  // Device returns reads LSB first, but writes MSB first (!)
-  return bitrev(control_recv(sdr->dev_handle, I2CRFX3, R820_ADDR, reg, val, 1));
-}
-static inline int r820_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
-  return control_send(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg, len);
-}
-static inline int r820_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
-  return control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
-}
 // set up tuner
 // stolen from github.com/rx888-firmware/tuner_r82xx_explained.md
 uint8_t R828d_shutdown[][2] = {
@@ -179,22 +158,22 @@ uint8_t R828d_shutdown[][2] = {
   { 0x07, 0x3a},
   { 0x08, 0x40},
   { 0x09, 0xc0},
-  { 0x0a, 0x36},  
-  { 0x0c, 0x35},  
+  { 0x0a, 0x36},
+  { 0x0c, 0x35},
   { 0x0f, 0x68},
   { 0x11, 0x03},
-  { 0x17, 0xf4},  
+  { 0x17, 0xf4},
   { 0x19, 0x0c},
 };
+#define N_R828d_shutdown (sizeof R828d_shutdown / (2 * sizeof(uint8_t)))
 
-
+// stolen from github.com/ringof/rx888-firmware/blob/claude/return-vhf-tuner/rx888_vhf.py
 uint8_t R828d_init[] = {
-    // stolen from github.com/ringof/rx888-firmware/blob/claude/return-vhf-tuner/rx888_vhf.py
-    0x80,0x13,0x70,0xC0,0x40,0xDB,0x6B,0xEB,0x53,0x75,0x68,0x6C,0xBB,
-    0x80,0x31,0x0F,0x00,0xC0,0x30,0x48,0xEC,0x60,0x00,0x24,0xDD,0x0E,0x40,
+    0x80,0x13,0x70,0xC0,0x40,0xDB,0x6B,0xEB,0x53,0x75,0x68,
+    0x6C,0xBB,0x80,0x31,0x0F,0x00,0xC0,0x30,0x48,0xEC,0x60,0x00,0x24,0xDD,0x0E,0x40,
 };
+//R828D tracking-filter bands: (LO_start_MHz, open_d, rf_mux_ploy, tf_c)
 uint8_t R828d_base = 5;
-  //R828D tracking-filter bands: (LO_start_MHz, open_d, rf_mux_ploy, tf_c)
 int Freq_ranges[][4] = {
     {  0,0x08,0x02,0xDF},{ 50,0x08,0x02,0xBE},{ 55,0x08,0x02,0x8B},{ 60,0x08,0x02,0x7B},
     { 65,0x08,0x02,0x69},{ 70,0x08,0x02,0x58},{ 75,0x00,0x02,0x44},{ 80,0x00,0x02,0x44},
@@ -202,11 +181,10 @@ int Freq_ranges[][4] = {
     {140,0x00,0x02,0x14},{180,0x00,0x02,0x13},{220,0x00,0x02,0x13},{250,0x00,0x02,0x11},
     {280,0x00,0x02,0x00},{310,0x00,0x41,0x00},{450,0x00,0x41,0x00},{588,0x00,0x40,0x00},
     {650,0x00,0x40,0x00},
-  };
-
-  // Bandwidth presets: (reg_0x0A_val, reg_0x0B_val, reg_0x1E_val, if_center_hz)
-  //  Wide presets from hardcoded top of set_bandwidth; narrow from IFi[] table
-  // (tuner_r82xx_explained.md §5). Keys are MHz (float for sub-MHz entries).
+};
+// Bandwidth presets: (reg_0x0A_val, reg_0x0B_val, reg_0x1E_val, if_center_hz)
+//  Wide presets from hardcoded top of set_bandwidth; narrow from IFi[] table
+// (tuner_r82xx_explained.md §5). Keys are MHz (float for sub-MHz entries).
 int Bw_presets[][4] = {
         {0x10, 0x0B, 0x60, 4570000},
         {0x10, 0x2A, 0x60, 4570000},
@@ -218,8 +196,6 @@ int Bw_presets[][4] = {
 	{0x0F, 0xE7, 0x00, 1925000},
   };
 double Bw_cycle[] = {8, 7, 6, 5, 3, 1.6, 0.6, 0.29};
-
-
 
 #define N_USB_SPEEDS 6
 static char const *usb_speeds[N_USB_SPEEDS] = {
@@ -1064,11 +1040,11 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
   sdr->gpios &= ~VHF_EN;
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
   // HF AGC? gain?
-  // Shut down Si5351 CLK1 (reference for tuner)
-
-  for(int i = 0; i < 11; i++)
+  // Shut down tuner
+  for(int i = 0; i < N_R828d_shutdown; i++)
     r820_write_byte(sdr, R828d_shutdown[i][0], R828d_shutdown[i][1]);
 
+  // Shut down Si5351 CLK1 (reference for tuner)
   uint8_t clock_control = SI5351_VALUE_CLK_PDN;
   si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+1,clock_control); // CLK1
 }
@@ -1077,9 +1053,6 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
 // change sample rate?
 static void rx888_set_vhf_mode(struct sdrstate *sdr){
   struct frontend const *frontend = sdr->frontend;
-
-  if(frontend->frequency != 0)
-   return; // already there
 
   // disable HF by set max ATT
   rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
