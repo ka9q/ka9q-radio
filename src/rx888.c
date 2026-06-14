@@ -166,7 +166,16 @@ static inline int r820_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
 static inline int r820_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
   return control_send(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg, len);
 }
+static uint8_t R820_shadow[32];
+
 static inline int r820_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
+  reg &= 0x1f;
+  R820_shadow[reg] = arg;
+  return control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
+}
+static inline int r820_write_byte_mask(struct sdrstate *sdr, uint8_t reg, uint8_t arg, uint8_t mask){
+  reg &= 0x1f;
+  R820_shadow[reg] = arg = (arg & mask) | (R820_shadow[reg] & ~mask);
   return control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
 }
 
@@ -184,15 +193,15 @@ int Freq_ranges[][4] = {
 //  Wide presets from hardcoded top of set_bandwidth; narrow from IFi[] table
 // (tuner_r82xx_explained.md §5). Keys are MHz (float for sub-MHz entries).
 int Bw_presets[][4] = {
-        {0x10, 0x0B, 0x60, 4570000},
-        {0x10, 0x2A, 0x60, 4570000},
-        {0x10, 0x6B, 0x00, 3570000},
-        {0x0B, 0x6B, 0x00, 3570000},
-        {0x04, 0x8F, 0x00, 2000000},
-	{0x0F, 0x8B, 0x00, 1900000},
-	{0x0F, 0xEA, 0x00, 1706000},
-	{0x0F, 0xE7, 0x00, 1925000},
-  };
+  {0x10, 0x0B, 0x60, 4570000}, // 8 MHz
+  {0x10, 0x2A, 0x60, 4570000}, // 7 MHz
+  {0x10, 0x6B, 0x00, 3570000}, // 6 MHz
+  {0x0B, 0x6B, 0x00, 3570000}, // 5 MHz
+  {0x04, 0x8F, 0x00, 2000000}, // 3 MHz
+  {0x0F, 0x8B, 0x00, 1900000}, // 1.6 MHz
+  {0x0F, 0xEA, 0x00, 1706000}, // 0.6 MHz
+  {0x0F, 0xE7, 0x00, 1925000}, // 0.29 MHz
+};
 double Bw_cycle[] = {8, 7, 6, 5, 3, 1.6, 0.6, 0.29};
 
 #define N_USB_SPEEDS 6
