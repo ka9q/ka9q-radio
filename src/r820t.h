@@ -13,7 +13,7 @@
 #define R820T_R5_PWD_LT   (1<<7)
 #define R820T_R5_PWD_LNA1 (1<<5)
 #define R820T_R5_LNA_GAIN_MODE (1<<4)
-#define R820T_R5_LNA_GAIN (0xf)
+#define R820T_R5_LNA_GAIN (15)
 
 // R6
 #define R820T_R6_PWD_PDET1 (1<<7)
@@ -27,7 +27,7 @@
 #define R820T_R7_PWD_MIX   (1<<6)
 #define R820T_R7_PW0_MIX   (1<<5)
 #define R820T_R7_MIXGAIN_MODE (1<<4)
-#define R820T_R7_MIX_GAIN (0xf)
+#define R820T_R7_MIX_GAIN (15)
 
 // R8
 #define R820T_R8_PWD_AMP   (1<<7)
@@ -36,7 +36,7 @@
 #define R820T_R8_IMR_G     (31)
 
 // R9
-#define R820T_R9_PWD_IFFILT (1<7)
+#define R820T_R9_PWD_IFFILT (1<<7)
 #define R820T_R9_PW1_IFFILT (1<<6)
 #define R820T_R9_I          (1<<5)
 #define R820T_R9_IMR_P      (31)
@@ -101,7 +101,6 @@
 #define R820T_R18_VCOC       (3<<5)
 #define R820T_R18_DITHER     (1<<4)
 #define R820T_R18_PW_SDM     (1<<3)
-#define R820T_R18_FIXED      (0)
 
 // R19
 #define R820T_R19_VCOCTL    (1<<6) // vco manual mode

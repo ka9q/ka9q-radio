@@ -169,12 +169,12 @@ static inline int r820_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, in
 static uint8_t R820_shadow[32];
 
 static inline int r820_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
-  reg &= 0x1f;
+  reg &= 31;
   R820_shadow[reg] = arg;
   return control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
 }
 static inline int r820_write_byte_mask(struct sdrstate *sdr, uint8_t reg, uint8_t arg, uint8_t mask){
-  reg &= 0x1f;
+  reg &= 31;
   R820_shadow[reg] = arg = (arg & mask) | (R820_shadow[reg] & ~mask);
   return control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
 }
@@ -1105,7 +1105,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   if(!clock_ok)
     fprintf(stderr,"RX888 tuner ref clock not locked/running\n");
   // set up tuner
-  uint8_t val;
+  uint8_t val = 0;
   r820_read(sdr, 0, &val);
   fprintf(stdout, "R820/828 chip ID 0x%x\n",val);
 
