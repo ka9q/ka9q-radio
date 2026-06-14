@@ -56,13 +56,11 @@ static long long const DEFAULT_REFERENCE = 27e6;
 // Max allowable error on reference; 1e-4 = 100 ppm. Mainly to catch entry scaling errors
 static double const MAX_CALIBRATE = 1e-4;
 
-#if 0
 // Min and Max frequency for VHF/UHF tuner
 static long long const MIN_FREQUENCY = 50e6;   //  50 MHz ?
 static long long const MAX_FREQUENCY = 2000e6; // 2000 MHz
 static int const R828D_FREQ = 16000000;     // R820T reference frequency
 static int const R828D_IF_CARRIER = 4570000;
-#endif
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
@@ -133,6 +131,7 @@ static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,boo
 static void rx888_set_att(struct sdrstate *sdr,double att,bool vhf);
 static void rx888_set_gain(struct sdrstate *sdr,double gain,bool vhf);
 static double rx888_set_samprate(struct sdrstate *sdr,long long reference,long long samprate);
+static double rx888_set_tuner_ref(struct sdrstate *sdr, bool *ms_int, long long const reference, long long const f);
 static void rx888_set_hf_mode(struct sdrstate *sdr);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate *sdr);
@@ -142,10 +141,7 @@ static double val2gain(int g);
 static int gain2val(double gain);
 static void *proc_rx888(void *arg);
 static void *agc_rx888(void *arg);
-#if 0
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency);
-static double actual_freq(double frequency);
-#endif
 // Read one Si5351 register over I2C (reg# is silicon-defined → version-proof).
 static inline int si5351_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
   return control_recv(sdr->dev_handle, I2CRFX3, SI5351_ADDR, reg, val, 1);
@@ -269,7 +265,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   } else {
     // Explicitly specified, turn off AGC
     if(att > 31.5)
-      att = 31.5;
+      att = 31.5; // Max attenuation is 31.5 dB
     frontend->rf_agc = false;
   }
   rx888_set_att(sdr,att,false);
@@ -353,9 +349,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   bool clock_ok = false;
   for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
     uint8_t status = 0xFF, clk0 = 0xFF;
-    si5351_read(sdr, 0,  &status);          // reg 0:  bit5 LOL_A
-    si5351_read(sdr, 16, &clk0);            // reg 16: bit7 CLK0_PDN
-    if((status & 0x20) == 0 && (clk0 & 0x80) == 0){
+    si5351_read(sdr, SI5351_REGISTER_STATUS,  &status);          // reg 0:  bit5 LOL_A
+    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+0, &clk0);            // reg 16: bit7 CLK0_PDN
+    if(!(status & SI5351_VALUE_LOL_A) && !(clk0 & SI5351_VALUE_CLK_PDN)){
       clock_ok = true;
       break;
     }
@@ -394,7 +390,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 	  sdr->reqsize * sdr->pktsize,
 	  xfer_time);
 
-#if 0
   // VHF-UHF tuning
   {
     char const *p = config_getstring(dictionary,section,"frequency",NULL);
@@ -417,9 +412,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
       }
     }
   }
-#else
-  frontend->frequency = 0;
-#endif
   if(frontend->frequency == 0)
     rx888_set_hf_mode(sdr);
 
@@ -1003,39 +995,84 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
   // switch to HF Antenna
   sdr->gpios &= ~VHF_EN;
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
+  // HF AGC? gain?
+  // Shut down Si5351 CLK1 (reference for tuner)
+  uint8_t clock_control = SI5351_VALUE_CLK_PDN;
+  si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+1,clock_control); // CLK1
 }
 
-#if 0
-// Pretty sure this is broken
+// Set VHF mode: enable ref clock to tuner, switch to VHF
+// change sample rate?
+static void rx888_set_vhf_mode(struct sdrstate *sdr){
+  struct frontend const *frontend = sdr->frontend;
+
+  if(frontend->frequency != 0)
+   return; // already there
+
+  // disable HF by set max ATT
+  rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
+  // switch to VHF Antenna
+  sdr->gpios |= VHF_EN;
+  command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
+
+  // high gain, 0db
+  uint8_t gain = 0x80 | 3;
+  argument_send(sdr->dev_handle,AD8340_VGA,gain);
+
+  // Configure Si5351 CLK1 output (R820T tuner reference input)
+  bool ms_int = false;
+  rx888_set_tuner_ref(sdr, &ms_int, sdr->reference, R828D_FREQ);
+  si5351_write_byte(sdr,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLB_RESET);
+  // power on CLK1, ref clock to R820T/R828T tuner
+  uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLB;
+  // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer.
+  if(ms_int)
+    clock_control |= SI5351_VALUE_MS_INT;
+
+  si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+1,clock_control); // turn on CLK1
+  // Wait for PLLB to lock
+  bool clock_ok = false;
+  for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
+    uint8_t status = 0xFF, clk1 = 0xFF;
+    si5351_read(sdr, SI5351_REGISTER_STATUS,  &status);          // reg 0:  bit6 LOL_B
+    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+1, &clk1);            // reg 17: bit7 CLK1_PDN
+    if(!(status & SI5351_VALUE_LOL_B) && !(clk1 & SI5351_VALUE_CLK_PDN)){
+      clock_ok = true;
+      break;
+    }
+    usleep(1000);
+  }
+    if(!clock_ok)
+      fprintf(stderr,"RX888 tuner ref clock not locked/running\n");
+}
+
+// Rewritten to directly configure SI5351 CLK1 as tuner ref clock, configure R820T tuner with frequency
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
   if(frequency == frontend->frequency)
-    return frequency;
+    return frequency; // also catches 0->0
 
-  if(frequency != 0.0){
-    // disable HF by set max ATT
-    rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
-    // switch to VHF Antenna
-    sdr->gpios |= VHF_EN;
-    command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
-
-    // high gain, 0db
-    uint8_t gain = 0x80 | 3;
-    argument_send(sdr->dev_handle,AD8340_VGA,gain);
-
-    // Enable Tuner reference clock
-    uint32_t ref = R828D_FREQ;
-    command_send(sdr->dev_handle,TUNERINIT,ref); // Initialize Tuner
-    command_send(sdr->dev_handle,TUNERTUNE,(uint64_t)frequency);
-  } else {
+  if(frequency == 0 && frontend->frequency != 0){
+    // Switching from VHF to HF
     rx888_set_hf_mode(sdr);
+    // Sample rate? gain? AGC?
+    frontend->frequency = 0;
+    return 0;
   }
-  frontend->frequency = frequency;
+  if(frequency < MIN_FREQUENCY || frequency > MAX_FREQUENCY)
+    return frontend->frequency; // invalid VHF frequency, ignore
+
+  if(frontend->frequency == 0)
+    rx888_set_vhf_mode(sdr);
+
+  uint32_t ref = R828D_FREQ;
+  command_send(sdr->dev_handle,TUNERINIT,ref); // Initialize Tuner
+  // Write code here to program tuner
+  command_send(sdr->dev_handle,TUNERTUNE,(uint64_t)frequency);
+  frontend->frequency = frequency; // put actual value here
   return frequency;
 }
-#endif
-
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
   assert(sdr != NULL);
   assert(callback != NULL);
@@ -1150,12 +1187,7 @@ static int gain2val(double gain){
   return g;
 }
 double rx888_tune(struct frontend *frontend,double freq){
-#if 1
   // Placeholder until VHF/UHF code is written
-  (void)frontend;
-  (void)freq;
-  return 0; // temp
-#else
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->lock || sdr->undersample != 1)
     return frontend->frequency;
@@ -1164,12 +1196,13 @@ double rx888_tune(struct frontend *frontend,double freq){
     rx888_set_hf_mode(sdr);
     return 0;
   } else {
-    return rx888_set_tuner_frequency(sdr,freq);
+    frontend->frequency = rx888_set_tuner_frequency(sdr,freq);
+    return frontend->frequency;
   }
-#endif
 }
 
-double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long long const samprate){
+// Set CLK0 output, the A/D sample clock
+static double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long long const samprate){
   assert(sdr != NULL);
   assert(reference != 0);
   assert(samprate != 0);
@@ -1190,7 +1223,7 @@ double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long 
     num = reference * best.B % best.C;
     denom = best.C;
     whole_hz += reference * best.A;
-    fprintf(stderr,"RX888 Si5351 PLL: vco = %'lld * (%'d + %'d/%'d) = %'lld",
+    fprintf(stderr,"RX888 Si5351 PLLA: vco = %'lld * (%'d + %'d/%'d) = %'lld",
 	  reference,
 	    best.A, best.B, best.C, whole_hz);
     if(num != 0)
@@ -1211,7 +1244,7 @@ double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long 
 
   si5351_pvals_t ms = {0};
   si5351_get_ms_pvals(&best,&ms);
-  fprintf(stderr,"RX888 Si5351 output divider: samprate = vco / (%'d*(%'d + %'d/%'d)) = %'lld",
+  fprintf(stderr,"RX888 Si5351 CLK0 output divider: samprate = vco / (%'d*(%'d + %'d/%'d)) = %'lld",
 	  best.R, best.D, best.E, best.F, best.fout_num);
   if(best.fout_den != 1){
     long long whole_hz = best.fout_num / best.fout_den;
@@ -1233,5 +1266,72 @@ double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long 
     (ms.P2 & 0x000000ff) >>  0
   };
   si5351_write(sdr,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
+  return (double)best.fout_num / best.fout_den;
+}
+// Set CLK1 output, the R820/828 tuner reference (usually 16 MHz)
+static double rx888_set_tuner_ref(struct sdrstate *sdr, bool *ms_int, long long const reference, long long const f){
+  assert(sdr != NULL);
+  assert(reference != 0);
+
+  si5351_solution_t best = {0};
+  *ms_int = false;
+  if(!si5351_solve(reference,f,&best)){
+    fprintf(stderr,"si5351_solve(%'lld, %'lld) failed\n", reference, f);
+    return 0;
+  }
+  if(best.E == 0)
+    *ms_int = true;
+
+  si5351_pvals_t pll = {0};
+  si5351_get_pll_pvals(&best,&pll);
+  {
+    long long whole_hz,num,denom;
+    whole_hz = reference * best.B / best.C;
+    num = reference * best.B % best.C;
+    denom = best.C;
+    whole_hz += reference * best.A;
+    fprintf(stderr,"RX888 Si5351 PLLB: vco = %'lld * (%'d + %'d/%'d) = %'lld",
+	  reference,
+	    best.A, best.B, best.C, whole_hz);
+    if(num != 0)
+      fprintf(stderr," + %'lld/%'lld", num, denom);
+  }
+  fprintf(stderr," Hz; P1=%d, P2=%d, P3=%d\n",pll.P1, pll.P2, pll.P3);
+  uint8_t data_clkin[] = {
+    (pll.P3 & 0x0000ff00) >>  8,
+    (pll.P3 & 0x000000ff) >>  0,
+    (pll.P1 & 0x00030000) >> 16,
+    (pll.P1 & 0x0000ff00) >>  8,
+    (pll.P1 & 0x000000ff) >>  0,
+    ((pll.P3 & 0x000f0000) >> 12) | ((pll.P2 & 0x000f0000) >> 16),
+    (pll.P2 & 0x0000ff00) >>  8,
+    (pll.P2 & 0x000000ff) >>  0
+  };
+  si5351_write(sdr,SI5351_REGISTER_MSNB_BASE,data_clkin,sizeof(data_clkin));
+
+  si5351_pvals_t ms = {0};
+  si5351_get_ms_pvals(&best,&ms);
+  fprintf(stderr,"RX888 Si5351 CLK1 output divider: tuner ref = vco / (%'d*(%'d + %'d/%'d)) = %'lld",
+	  best.R, best.D, best.E, best.F, best.fout_num);
+  if(best.fout_den != 1){
+    long long whole_hz = best.fout_num / best.fout_den;
+    long long num = best.fout_num % best.fout_den;
+    fprintf(stderr,"/%'lld = %'lld + %'lld/%'lld", best.fout_den, whole_hz, num, best.fout_den);
+  }
+  fprintf(stderr," Hz");
+  if(best.err_num != 0)
+    fprintf(stderr," (error = %'lld/%'lld)",(long long)best.err_num, best.fout_den);
+  fprintf(stderr,"; P1=%d, P2=%d, P3=%d\n", ms.P1, ms.P2, ms.P3);
+  uint8_t data_clkout[] = {
+    (ms.P3 & 0x0000ff00) >>  8,
+    (ms.P3 & 0x000000ff) >>  0,
+    (uint8_t)((__builtin_ctz(best.R) << 4) | ((ms.P1 & 0x00030000) >> 16)), // __builtin_ctz() is essentially log2(int) for powers of 2
+    (ms.P1 & 0x0000ff00) >>  8,
+    (ms.P1 & 0x000000ff) >>  0,
+    (uint8_t)(((ms.P3 & 0x000f0000) >> 12) | ((ms.P2 & 0x000f0000) >> 16)),
+    (ms.P2 & 0x0000ff00) >>  8,
+    (ms.P2 & 0x000000ff) >>  0
+  };
+  si5351_write(sdr,SI5351_REGISTER_MS1_BASE,data_clkout,sizeof(data_clkout));
   return (double)best.fout_num / best.fout_den;
 }

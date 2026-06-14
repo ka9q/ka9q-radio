@@ -149,6 +149,7 @@ static const double SI5351_MS_MIN_FREQ = 500000;
 
 
 enum SI5351Registers {
+  SI5351_REGISTER_STATUS       = 0,
   SI5351_REGISTER_PLL_SOURCE   = 15,
   SI5351_REGISTER_CLK_BASE     = 16,
   SI5351_REGISTER_MSNA_BASE    = 26,
@@ -170,5 +171,10 @@ enum SI5351CrystalLoadValues {
   SI5351_VALUE_MS_SRC_PLLA      = 0x00,
   SI5351_VALUE_MS_SRC_PLLB      = 0x20
 };
+
+#define SI5351_VALUE_LOL_A 0x20
+#define SI5351_VALUE_LOL_B 0x40
+#define SI5351_VALUE_CLK_PDN 0x80
+
 
 #endif
