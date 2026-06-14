@@ -4,14 +4,14 @@
 // R820T/R828 tuner stuff
 
 // Min and Max frequency for VHF/UHF tuner
-#define MIN_FREQUENCY  50000000LL   //  50 MHz
-#define MAX_FREQUENCY =2000000000LL // 2000 MHz
-#define R828D_FREQ  16000000     // R820T reference frequency
-#define R828D_IF_CARRIER 4570000 // center of IF 4.57 MHz (runs from about 0.6 - 9.4 MHz)
+#define MIN_FREQUENCY  (50000000LL)   //  50 MHz
+#define MAX_FREQUENCY (2000000000LL)  // 2000 MHz
+#define R828D_FREQ  (16000000)        // R820T reference frequency
+#define R828D_IF_CARRIER (4570000)    // center of IF 4.57 MHz (runs from about 0.6 - 9.4 MHz)
 
 // R5
-#define R820T_R5_PWD_LT (1<<7)
-#define R820T_R5_LNA1 (1<<5)
+#define R820T_R5_PWD_LT   (1<<7)
+#define R820T_R5_PWD_LNA1 (1<<5)
 #define R820T_R5_LNA_GAIN_MODE (1<<4)
 #define R820T_R5_LNA_GAIN (0xf)
 
@@ -109,22 +109,4 @@
 
 
 
-// Reads are bit reversed for some strange reason
-static inline uint8_t bitrev(uint8_t b){
-  b = ((b & 0xf0) >> 4) | ((b & 0x0f) << 4);
-  b = ((b & 0xcc) >> 2) | ((b & 0x33) << 2);
-  b = ((b & 0xaa) >> 1) | ((b & 0x55) << 1);
-  return b;
-}
-
-static inline int r820_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
-  // Device returns reads LSB first, but writes MSB first (!)
-  return bitrev(control_recv(sdr->dev_handle, I2CRFX3, R820_ADDR, reg, val, 1));
-}
-static inline int r820_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
-  return control_send(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg, len);
-}
-static inline int r820_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
-  return control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
-}
 #endif

@@ -1,4 +1,4 @@
->// linked-in module for rx888 Mk ii for ka9q-radio's radiod
+// linked-in module for rx888 Mk ii for ka9q-radio's radiod
 // Accept control commands from UDP socket
 //
 // Copyright (c)  2021 Ruslan Migirov <trapi78@gmail.com>
@@ -149,20 +149,38 @@ static inline int si5351_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, 
 static inline int si5351_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
   return control_send_byte(sdr->dev_handle, I2CWFX3, SI5351_ADDR, reg, arg);
 }
+// Reads are bit reversed for some strange reason
+static inline uint8_t bitrev(uint8_t b){
+  b = ((b & 0xf0) >> 4) | ((b & 0x0f) << 4);
+  b = ((b & 0xcc) >> 2) | ((b & 0x33) << 2);
+  b = ((b & 0xaa) >> 1) | ((b & 0x55) << 1);
+  return b;
+}
+
+static inline int r820_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
+  // Device returns reads LSB first, but writes MSB first (!)
+  return bitrev(control_recv(sdr->dev_handle, I2CRFX3, R820_ADDR, reg, val, 1));
+}
+static inline int r820_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
+  return control_send(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg, len);
+}
+static inline int r820_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
+  return control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
+}
 
 // set up tuner
 // stolen from github.com/rx888-firmware/tuner_r82xx_explained.md
 uint8_t R828d_shutdown[][2] = {
-  { 0x06, 0xb1},
-  { 0x05, 0xa0},
-  { 0x07, 0x3a},
-  { 0x08, 0x40},
-  { 0x09, 0xc0},
-  { 0x0a, 0x36},
-  { 0x0c, 0x35},
-  { 0x0f, 0x68},
-  { 0x11, 0x03},
-  { 0x17, 0xf4},
+  { 0x06, R820T_R6_PWD_PDET1 | R820T_R6_FILT_3DB | (R820T_R6_PW_LNA & 1) },
+  { 0x05, R820T_R5_PWD_LT | R820T_R5_PWD_LNA1 },
+  { 0x07, R820T_R7_PW0_MIX| R820T_R7_MIXGAIN_MODE | (10 & R820T_R7_MIX_GAIN) },
+  { 0x08, R820T_R8_PW0_AMP },
+  { 0x09, R820T_R9_PWD_IFFILT | R820T_R9_PW1_IFFILT },
+  { 0x0a, (R820T_R10_PW_FILT & (1 << 5)) | (R820T_R10_FILT_CODE & 6) },
+  { 0x0c, R820T_R12_VGA_MODE | (R820T_R12_VGA_CODE & 5) },
+  { 0x0f, (1 << 5) | (1<<4)},
+  { 0x11, 3},
+  { 0x17, (R820T_R23_PW_LDO_D & (3 << 4)) | (3<<4) | R820T_R23_OPEN_D },
   { 0x19, 0x0c},
 };
 #define N_R828d_shutdown (sizeof R828d_shutdown / (2 * sizeof(uint8_t)))
@@ -1041,7 +1059,7 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
   // HF AGC? gain?
   // Shut down tuner
-  for(int i = 0; i < N_R828d_shutdown; i++)
+  for(unsigned int i = 0; i < N_R828d_shutdown; i++)
     r820_write_byte(sdr, R828d_shutdown[i][0], R828d_shutdown[i][1]);
 
   // Shut down Si5351 CLK1 (reference for tuner)
@@ -1052,7 +1070,6 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
 // Set VHF mode: enable ref clock to tuner, switch to VHF
 // change sample rate?
 static void rx888_set_vhf_mode(struct sdrstate *sdr){
-  struct frontend const *frontend = sdr->frontend;
 
   // disable HF by set max ATT
   rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
