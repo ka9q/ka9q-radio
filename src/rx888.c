@@ -158,8 +158,10 @@ static inline uint8_t bitrev(uint8_t b){
 }
 
 static inline int r820_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
-  // Device returns reads LSB first, but writes MSB first (!)
-  return bitrev(control_recv(sdr->dev_handle, I2CRFX3, R820_ADDR, reg, val, 1));
+  // Device reads LSB first, but writes MSB first (!)
+  int r = control_recv(sdr->dev_handle, I2CRFX3, R820_ADDR, reg, val, 1);
+  *val = bitrev(*val);
+  return r;
 }
 static inline int r820_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
   return control_send(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg, len);
@@ -1107,11 +1109,15 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   if(!clock_ok)
     fprintf(stderr,"RX888 tuner ref clock not locked/running\n");
   // set up tuner
+  uint8_t val;
+  r820_read(sdr, 0, &val);
+  fprintf(stdout, "R820/828 chip ID 0x%x\n",val);
+
   // r5 = 0x80: loop-through OFF, LNA1 power on, LNA gain mode switch auto, LNA_GAIN = minimum
-  r820_write_byte(sdr,5, R820T_R5_PWD_LT);
+  r820_write_byte(sdr, 5, R820T_R5_PWD_LT);
 
   // r6 = 0x13: Power detector 1 on, power detector 3 off, filter gain 0 dB, LNA power max-3
-  r820_write_byte(sdr, 6, (1<<4) | (R820T_R6_PW_LNA & 3));
+  r820_write_byte(sdr, 6, R820T_R6_FIXED | (R820T_R6_PW_LNA & 3));
 
   // r7 = 0x70: Mixer on, mixer curent normal, mixer gain auto, mix gain minimum
   r820_write_byte(sdr, 7, R820T_R7_PWD_MIX | R820T_R7_PW0_MIX | R820T_R7_MIXGAIN_MODE);
@@ -1123,23 +1129,23 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   r820_write_byte(sdr, 9, R820T_R9_PW1_IFFILT);
 
   // r10 (0xa) = 0xdb: channel filter off, filter power 2nd lowest,
-  r820_write_byte(sdr, 0xa, R820T_R10_PWD_FILT | (R820T_R10_PW_FILT & (2 << 5)) | (1<<4)
+  r820_write_byte(sdr, 10, R820T_R10_PWD_FILT | (R820T_R10_PW_FILT & (2 << 5)) | R820T_R10_FIXED
 		  | (R820T_R10_FILT_CODE & 11));
 
   // r11 (0xb) = 0x6b: FLT_BW = narrowest, high pass filter corner 11
-  r820_write_byte(sdr, 0xb, R820T_R11_FILT_BW | (R820T_R11_HPF & 11));
+  r820_write_byte(sdr, 11, R820T_R11_FILT_BW | (R820T_R11_HPF & 11));
 
   // r12 (0xc) = 0xeb: VGA power on, VGA gain controlled by code 11
-  r820_write_byte(sdr, 0xc, (1 << 7) | R820T_R12_PWD_VGA | (1<<5) | (R820T_R12_VGA_CODE & 11));
+  r820_write_byte(sdr, 12, R820T_R12_SW_ADC | R820T_R12_PWD_VGA | R820T_R12_FIXED | (R820T_R12_VGA_CODE & 11));
 
   // r13 (0xd) = 0x53: LNA agc power detector high threshold = 5/15, low threshld = 3/15
-  r820_write_byte(sdr, 0xd, (5<<4) | 3);
+  r820_write_byte(sdr, 13, (5<<4) | 3);
 
   // r14 (0xe) = 0x75: mixer agc threshold high = 7/15, low threshold = 5/15
-  r820_write_byte(sdr, 0xe, (7<<4) | 5);
+  r820_write_byte(sdr, 14, (7<<4) | 5);
 
-  // r15 (0xf) = 0x68 = clock out off, internal agc clock on
-  r820_write_byte(sdr, 0xf, (1<<5) | R820T_R15_CLK_OUT_ENB | (1<<3));
+  // r15 (0xf) = 0x68 = filter extension widest = off, clock out off, internal agc clock on, disable ring clock
+  r820_write_byte(sdr, 15, (1<<5) | R820T_R15_CLK_OUT_ENB | R820T_R15_RING_CLK);
 }
 
 

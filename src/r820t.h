@@ -19,6 +19,8 @@
 #define R820T_R6_PWD_PDET1 (1<<7)
 #define R820T_R6_PWD_PDET3 (1<<6)
 #define R820T_R6_FILT_3DB  (1<<5)
+#define R820T_R6_FIXED     (1<<4)
+#define R820T_R6_CABLE2_IN (1<<3)
 #define R820T_R6_PW_LNA    (7)
 
 // R7
@@ -30,83 +32,141 @@
 // R8
 #define R820T_R8_PWD_AMP   (1<<7)
 #define R820T_R8_PW0_AMP   (1<<6)
-#define R820T_R8_IMR_G     (63)
+#define R820T_R8_I         (1<<5)
+#define R820T_R8_IMR_G     (31)
 
 // R9
 #define R820T_R9_PWD_IFFILT (1<7)
 #define R820T_R9_PW1_IFFILT (1<<6)
-#define R820T_R9_IMR_P      (63)
+#define R820T_R9_I          (1<<5)
+#define R820T_R9_IMR_P      (31)
 
 // R10
 #define R820T_R10_PWD_FILT  (1<<7)
 #define R820T_R10_PW_FILT   (3<<5)
+#define R820T_R10_FIXED     (1<<4)
 #define R820T_R10_FILT_CODE (15)
 
 // R11
 #define R820T_R11_FILT_BW   (3<<5)
+#define R820T_R11_CAL_TRIGGER (1<<4)
 #define R820T_R11_HPF       (15)
 
 // R12
+// VGA code: 0 = -12 dB, 15 = +40.5 dB, 3.5 dB/step
+#define R820T_R12_SW_ADC    (1<<7)
 #define R820T_R12_PWD_VGA   (1<<6)
+#define R820T_R12_FIXED     (1<<5)
 #define R820T_R12_VGA_MODE  (1<<4)
 #define R820T_R12_VGA_CODE  (15)
 
 // R13
+// 15 -> 1.94V, 0 -> 0.34V, 0.1V/step
 #define R820T_R13_LNA_VTHH  (15<<4)
 #define R820T_R13_LNA_VTHL  (15)
 
 // R14
+// 15 -> 1.94V, 0 -> 0.34V, 0.1V/step
 #define R820T_R14_MIX_VTH_H (15<<4)
 #define R820T_R14_MIX_VTH_L (15)
 
 // R15
+#define R820T_R15_FLT_EXT_WIDEST (1<<7)
 #define R820T_R15_CLK_OUT_ENB (1<<4)
+#define R820T_R15_RING_CLK    (1<<3) // ring clock for calibration I/Q balance
+#define R820T_R15_CALI_CLK    (1<<2)
 #define R820T_R15_CLK_AGC_ENB (1<<1)
+#define R820T_R15_GPIO        (1<<0)
 
 // R16
+// SEL_DIV = 000 -> mixer in = vco out/2
+// SEL_DIV = 101 -> mixer in = vco out/64 
 #define R820T_R16_SEL_DIV    (7<<5)
+// 1 - fref = xtal freq/2
 #define R820T_R16_REFDIV     (1<<4)
+#define R820T_R16_XTAL       (1<<3)
+#define R820T_R16_FIXED      (1<<2)
+// 00 = no cap, 01 = 10 pF, 10 = 20 pF, 11 = 30 pF
 #define R820T_R16_CAPX       (3)
 
 // R17
+// 00 = 0ff, 01 = 2.1V, 10 = 2.0V, 11 = 1.9V
 #define R820T_R17_PW_LDO_A   (3<<6)
+// 101: 0.2, 111: auto
+#define R820T_R17_CP_CUR     (7<<3)
+#define R820T_R17_FIXED      (3)
+
+// R18
+#define R820T_R18_VCOC       (3<<5)
+#define R820T_R18_DITHER     (1<<4)
+#define R820T_R18_PW_SDM     (1<<3)
+#define R820T_R18_FIXED      (0)
+
+// R19
+#define R820T_R19_FIXED     (0)
+#define R820T_R19_VCOCTL    (1<<6)
+// DAC for VCO: 0 -> min (1.75 GHz) 63 -> max (3.6 GHz)
+#define R820T_R19_VCO_DAC   (63)
 
 // R20
+// Nint = 4 * Ni2C + SI2C + 13
+// PLL divider Ndiv = (Nint + Nfra) * 2
 #define R820T_R20_SI2C       (3<<6)
 #define R820T_R20_NI2C       (63)
 
-// R21 pll fractional divider input
-// R22
+// R21 pll fractional divider input bits 8-1
+// R22 pll fractional divider input bits 16-9
 
 // R23
 #define R820T_R23_PW_LDO_D   (3<<6)
+#define R820T_R23_DIV_BUF_DUR (3<<4)
 #define R820T_R23_OPEN_D     (1<<3)
+#define R820T_R23_FIXED      (4)
+
+// R24
+#define R820T_R24_FIXED      (1 << 6)
+#define R820T_R24_RING_DIV   (1 << 5)
+#define R820T_R24_RING_PWR   (1 << 4)
+#define R820T_R24_N_RING     (15)
 
 // R25
 #define R820T_R25_PWD_RFFILT (1<<7)
+#define R820T_R25_POLFIL_CUR (3<<5)
 #define R820T_R25_SW_AGC     (1<<4)
+#define R820T_R25_FIXED      (3<<2)
+#define R820T_R25_RING_DIV   (3)
 
 // R26
 #define R820T_R26_RFMUX      (3<<6)
+#define R820T_R26_AGC_CLK    (3<<4)
 #define R820T_R26_PLL_AUTO_CLK (3<<2)
 #define R820T_R26_RFFILT     (3)
 
 // R27
+// 0000 -> highest corner, 1111 = lowest corner
 #define R820T_R27_TF_NCH     (3<<4)
 #define R820T_R27_TF_LP      (15)
 
 // R28
 #define R820T_R28_PDET3_GAIN (15<<4)
+#define R820T_R28_DISCG      (1<<3)
+#define R820T_R28_FROM_RING  (1<<1)
+#define R820T_R28_FIXED      (1<<2)
 
 // R29
+#define R820T_R29_FIXED      (3<<6)
 #define R820T_R29_PDET1_GAIN (7<<3)
 #define R820T_R29_PDET2_GAIN (7)
 
 // R30
-#define R820T_R30_PDET_CLK   (63)
+#define R820T_R30_SW_PDECT   (1<<7)
 #define R820T_R30_FILTER_EXT (1<<6)
+#define R820T_R30_PDET_CLK   (63)
 
-
+// R31
+#define R820T_R31_LT_ATT     (1<<7)
+#define R820T_R31_FIXED      (1<<6)
+#define R820T_R31_PW_RING    (3)
 
 
 #endif
