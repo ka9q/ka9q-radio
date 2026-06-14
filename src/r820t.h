@@ -72,6 +72,7 @@
 
 // R15
 #define R820T_R15_FLT_EXT_WIDEST (1<<7)
+#define R820T_R15_FIXED       (1<<5)
 #define R820T_R15_CLK_OUT_ENB (1<<4)
 #define R820T_R15_RING_CLK    (1<<3) // ring clock for calibration I/Q balance
 #define R820T_R15_CALI_CLK    (1<<2)
@@ -120,7 +121,7 @@
 #define R820T_R23_PW_LDO_D   (3<<6)
 #define R820T_R23_DIV_BUF_DUR (3<<4)
 #define R820T_R23_OPEN_D     (1<<3)
-#define R820T_R23_FIXED      (4)
+#define R820T_R23_FIXED      (1<<2)
 
 // R24
 #define R820T_R24_FIXED      (1 << 6)

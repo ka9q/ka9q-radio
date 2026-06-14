@@ -170,29 +170,7 @@ static inline int r820_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg
   return control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
 }
 
-// set up tuner
-// stolen from github.com/rx888-firmware/tuner_r82xx_explained.md
-uint8_t R828d_shutdown[][2] = {
-  { 0x06, R820T_R6_PWD_PDET1 | R820T_R6_FILT_3DB | (R820T_R6_PW_LNA & 1) },
-  { 0x05, R820T_R5_PWD_LT | R820T_R5_PWD_LNA1 },
-  { 0x07, R820T_R7_PW0_MIX| R820T_R7_MIXGAIN_MODE | (10 & R820T_R7_MIX_GAIN) },
-  { 0x08, R820T_R8_PW0_AMP },
-  { 0x09, R820T_R9_PWD_IFFILT | R820T_R9_PW1_IFFILT },
-  { 0x0a, (R820T_R10_PW_FILT & (1 << 5)) | (R820T_R10_FILT_CODE & 6) },
-  { 0x0c, R820T_R12_VGA_MODE | (R820T_R12_VGA_CODE & 5) },
-  { 0x0f, (1 << 5) | (1<<4)},
-  { 0x11, 3},
-  { 0x17, (R820T_R23_PW_LDO_D & (3 << 4)) | (3<<4) | R820T_R23_OPEN_D },
-  { 0x19, 0x0c},
-};
-#define N_R828d_shutdown (sizeof R828d_shutdown / (2 * sizeof(uint8_t)))
-
 // stolen from github.com/ringof/rx888-firmware/blob/claude/return-vhf-tuner/rx888_vhf.py
-uint8_t R828d_base = 5;
-uint8_t R828d_init[] = {
-    0x80,0x13,0x70,0xC0,0x40,0xDB,0x6B,0xEB,0x53,0x75,0x68,
-    0x6C,0xBB,0x80,0x31,0x0F,0x00,0xC0,0x30,0x48,0xEC,0x60,0x00,0x24,0xDD,0x0E,0x40,
-};
 //R828D tracking-filter bands: (LO_start_MHz, open_d, rf_mux_ploy, tf_c)
 int Freq_ranges[][4] = {
     {  0,0x08,0x02,0xDF},{ 50,0x08,0x02,0xBE},{ 55,0x08,0x02,0x8B},{ 60,0x08,0x02,0x7B},
@@ -1061,8 +1039,17 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
   // HF AGC? gain?
   // Shut down tuner
-  for(unsigned int i = 0; i < N_R828d_shutdown; i++)
-    r820_write_byte(sdr, R828d_shutdown[i][0], R828d_shutdown[i][1]);
+  r820_write_byte(sdr, 6, R820T_R6_PWD_PDET1 | R820T_R6_FILT_3DB | (R820T_R6_PW_LNA & 1));
+  r820_write_byte(sdr, 5, R820T_R5_PWD_LT | R820T_R5_PWD_LNA1);
+  r820_write_byte(sdr, 7, R820T_R7_PW0_MIX| R820T_R7_MIXGAIN_MODE | (10 & R820T_R7_MIX_GAIN));
+  r820_write_byte(sdr, 8, R820T_R8_PW0_AMP);
+  r820_write_byte(sdr, 9, R820T_R9_PWD_IFFILT | R820T_R9_PW1_IFFILT);
+  r820_write_byte(sdr, 10, (R820T_R10_PW_FILT & (1 << 5)) | (R820T_R10_FILT_CODE & 6));
+  r820_write_byte(sdr, 12, R820T_R12_VGA_MODE | (R820T_R12_VGA_CODE & 5));
+  r820_write_byte(sdr, 15, R820T_R15_FIXED | R820T_R15_CLK_OUT_ENB);
+  r820_write_byte(sdr, 17, R820T_R17_FIXED);
+  r820_write_byte(sdr, 23, R820T_R23_PW_LDO_D | R820T_R23_DIV_BUF_DUR | R820T_R23_FIXED);
+  r820_write_byte(sdr, 25, R820T_R25_FIXED);
 
   // Shut down Si5351 CLK1 (reference for tuner)
   uint8_t clock_control = SI5351_VALUE_CLK_PDN;
