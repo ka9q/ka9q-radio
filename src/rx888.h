@@ -139,6 +139,9 @@ enum GPIOPin {
     PGA_EN = OUTXI16,
 };
 
+static const uint8_t R820_ADDR = 0x34;
+
+
 static const uint8_t SI5351_ADDR = 0x60 << 1;
 static const double SI5351_MAX_VCO_FREQ = 900e6;
 static const double SI5351_MIN_VCO_FREQ = 600e6;
