@@ -163,9 +163,11 @@ static inline int r820_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
   *val = bitrev(*val);
   return r;
 }
+#if 0
 static inline int r820_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
   return control_send(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg, len);
 }
+#endif
 static uint8_t R820_shadow[32];
 
 static inline int r820_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
@@ -556,35 +558,33 @@ static void *proc_rx888(void *arg){
       // Device actually disappeared, exit immediately in case
       // it gets quickly plugged back in before 5 seconds
       fprintf(stderr,"RX888 device disappeared, exiting\n");
-      exit(EX_NOINPUT);
+      goto abort;
    }
     // But also check for a silent hang with libusb_handle_events_timeout_completed()
     // Check more directly how long it's been since we last got data
     // sdr->last_callback_time is set in rx_callback()
     int const maxtime = 5;
     if(gps_time_ns() > sdr->last_callback_time + maxtime * BILLION){
-      fprintf(stderr,"No rx888 data for %d seconds, quitting\n",maxtime);
-      break;
+      fprintf(stderr,"No RX888 data for %d seconds, quitting\n",maxtime);
+      goto abort;
     }
-    struct timeval tv;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
+    struct timeval tv = {
+      .tv_sec = 1,
+      .tv_usec = 0
+    };
     int const ret = libusb_handle_events_timeout_completed(NULL,&tv,NULL);
     if(ret != 0){
       // Apparent failure
-      fprintf(stderr,"handle_events returned %d\n",ret);
-      break;
+      fprintf(stderr,"RX888 libusb_handle_events returned %d\n",ret);
+      goto abort;
     }
   }
-  rx888_stop_rx(sdr);
-  // Can't do anything without the front end; quit entirely
-  if(s != RUNNING && s != STARTING){
-    // We weren't told to stop, the hardware malfunctioned. Exit and let systemd retry us
-    fprintf(stderr,"rx888 has aborted, exiting radiod\n");
-    rx888_close(sdr);
-    exit(EX_NOINPUT);
-  }
+  rx888_stop_rx(sdr); // we were told to stop (eg, no users), return gracefully
   return NULL;
+ abort:;
+  rx888_stop_rx(sdr);
+  rx888_close(sdr);
+  exit(EX_NOINPUT);
 }
 
 // Monitor power levels, record new watermarks, adjust AGC if enabled
@@ -662,7 +662,8 @@ static void rx_callback(struct libusb_transfer * const transfer){
     if(Verbose > 1)
       fprintf(stderr,"Transfer %p callback status %s received %d bytes.\n",transfer,
 	      libusb_error_name(transfer->status), transfer->actual_length);
-    if(atomic_load(&sdr->state) == RUNNING) {
+    int const s = atomic_load(&sdr->state);
+    if(s == STARTING || s == RUNNING) {
       if(libusb_submit_transfer(transfer) == 0)
         sdr->xfers_in_progress++;
     }
@@ -681,7 +682,9 @@ static void rx_callback(struct libusb_transfer * const transfer){
   if(sdr->randomizer){
     for(int i=0; i < sampcount; i++){
       int32_t s = samples[i];
-      s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
+      // Assumes arithmetic right shift of signed integers
+      // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
+      s ^= (s << 31) >> 30;
       if(abs(s) >= 32767){
 	frontend->overranges++;
 	frontend->samp_since_over = 0;
@@ -728,8 +731,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   {
     int ret = libusb_init(NULL);
     if(ret != 0){
-      fprintf(stderr,"Error initializing libusb: %s\n",
-	      libusb_error_name(ret));
+      fprintf(stderr,"Error initializing libusb: %s\n", libusb_strerror(ret));
       return -1;
     }
   }
@@ -748,9 +750,9 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
 	break; // End of list
 
       struct libusb_device_descriptor desc = {0};
-      int rc = libusb_get_device_descriptor(device,&desc);
-      if(rc != 0){
-	fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
+      int ret = libusb_get_device_descriptor(device,&desc);
+      if(ret != 0){
+	fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(ret));
 	continue;
       }
       if(desc.idVendor != Vendor_id || desc.idProduct != Unloaded_product_id)
@@ -758,29 +760,25 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
 
       fprintf(stderr,"found unloaded rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
       libusb_device_handle *handle = NULL;
-      rc = libusb_open(device,&handle);
-      if(rc != 0 || handle == NULL){
-	fprintf(stderr,", libusb_open() failed: %s\n",libusb_strerror(rc));
+      ret = libusb_open(device,&handle);
+      if(ret != 0 || handle == NULL){
+	fprintf(stderr,", libusb_open() failed: %s\n",libusb_strerror(ret));
 	continue;
       }
       if(desc.iManufacturer){
 	char manufacturer[100] = {0};
-	int ret = libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer));
-	if(ret > 0)
+	if(libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof manufacturer) > 0)
 	  fprintf(stderr,", manufacturer '%s'",manufacturer);
       }
       if(desc.iProduct){
 	char product[100] = {0};
-	int ret = libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof(product));
-	if(ret > 0)
+	if(libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof product) > 0)
 	  fprintf(stderr,", product '%s'",product);
       }
       char serial[100] = {0};
       if(desc.iSerialNumber){
-	int ret = libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial));
-	if(ret > 0){
+	if(libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof serial) > 0)
 	  fprintf(stderr,", serial '%s'",serial);
-	}
       }
       // The proper serial number doesn't appear until the device is loaded with firmware, so load all we find
       char full_firmware_file[PATH_MAX] = {0};
@@ -788,7 +786,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       fprintf(stderr,", loading rx888 firmware file %s\n",full_firmware_file);
       if(ezusb_load_ram(handle,full_firmware_file,FX_TYPE_FX3,IMG_TYPE_IMG,1) == 0){
 	fprintf(stderr,"rx888 loaded\n");
-	sleep(1); // how long should this be?
+	sleep(1); // how long should we wait for the unit to boot and reappear on the bus?
       } else {
 	fprintf(stderr,"rx888 load failed for device %d.%d (logical)\n",
 		libusb_get_bus_number(device),libusb_get_device_address(device));
@@ -818,9 +816,9 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       break; // End of list
 
     struct libusb_device_descriptor desc = {0};
-    int rc = libusb_get_device_descriptor(device,&desc);
-    if(rc != 0){
-      fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
+    int ret = libusb_get_device_descriptor(device,&desc);
+    if(ret != 0){
+      fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(ret));
       continue;
     }
     if(desc.idVendor != Vendor_id || desc.idProduct != Loaded_product_id)
@@ -828,29 +826,25 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
 
     fprintf(stderr,"found rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
     libusb_device_handle *handle = NULL;
-    rc = libusb_open(device,&handle);
-    if(rc != 0 || handle == NULL){
-      fprintf(stderr," libusb_open() failed: %s\n",libusb_strerror(rc));
+    ret = libusb_open(device,&handle);
+    if(ret != 0 || handle == NULL){
+      fprintf(stderr," libusb_open() failed: %s\n",libusb_strerror(ret));
       continue;
     }
     if(desc.iManufacturer){
       char manufacturer[100] = {0};
-      int ret = libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer));
-      if(ret > 0)
+      if(libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer)) > 0)
 	fprintf(stderr,", manufacturer '%s'",manufacturer);
     }
     if(desc.iProduct){
       char product[100] = {0};
-      int ret = libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof(product));
-      if(ret > 0)
+      if(libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof(product)) > 0)
 	fprintf(stderr,", product '%s'",product);
     }
     char serial[100] = {0};
     if(desc.iSerialNumber){
-      int ret = libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial));
-      if(ret > 0){
+      if(libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial)) > 0)
 	fprintf(stderr,", serial '%s'",serial);
-      }
     }
     enum libusb_speed usb_speed = libusb_get_device_speed(device);
     if(usb_speed < N_USB_SPEEDS)
@@ -894,23 +888,22 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   // If a device has been found, device and dev_handle will be non-NULL
   if(device == NULL || sdr->dev_handle == NULL){
     fprintf(stderr,"Error or device could not be found\n");
-    goto end;
+    goto quit;
   }
   // Stop and reopen in case it was left running - KA9Q
   command_send(sdr->dev_handle,STOPFX3,0);
   if(sdr->reset){
-    int r = libusb_reset_device(sdr->dev_handle);
-    if(r != 0)
-      fprintf(stderr,"reset failed, %d\n",r);
+    int ret = libusb_reset_device(sdr->dev_handle);
+    if(ret != 0)
+      fprintf(stderr,"reset failed, %s\n",libusb_strerror(ret));
   }
   {
     int ret = libusb_kernel_driver_active(sdr->dev_handle,0);
     if(ret != 0){
-      fprintf(stderr,"Kernel driver active. Trying to detach kernel driver\n");
-      ret = libusb_detach_kernel_driver(sdr->dev_handle,0);
-      if(ret != 0){
-	fprintf(stderr,"Could not detach kernel driver from an interface\n");
-	goto end;
+      fprintf(stderr,"Kernel driver active. Trying to detach kernel driver: %s\n",libusb_strerror(ret));
+      if((ret = libusb_detach_kernel_driver(sdr->dev_handle,0)) != 0) {
+	fprintf(stderr,"Could not detach kernel driver from an interface: %s\n",libusb_strerror(ret));
+	goto quit;
       }
     }
   }
@@ -918,8 +911,8 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   {
     int const ret = libusb_claim_interface(sdr->dev_handle, 0);
     if(ret != 0){
-      fprintf(stderr, "Error claiming USB interface\n");
-      goto end;
+      fprintf(stderr, "Error claiming USB interface: %s\n",libusb_strerror(ret));
+      goto quit;
     }
   }
   {
@@ -931,8 +924,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     } else {
       sdr->fw_major = info[1];
       sdr->fw_minor = info[2];
-      fprintf(stderr,"RX888 hardware 0x%02x, firmware %u.%u\n",
-	      info[0],info[1],info[2]);
+      fprintf(stderr,"RX888 hardware 0x%02x, firmware %u.%u\n", info[0], info[1], info[2]);
     }
   }
   {
@@ -943,10 +935,10 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     assert(endpointDesc != NULL);
 
     struct libusb_ss_endpoint_companion_descriptor *ep_comp = NULL;
-    int const rc = libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
-    if(rc != 0){
-      fprintf(stderr,"libusb_get_ss_endpoint_companion_descriptor returned: %s (%d)\n",libusb_error_name(rc),rc);
-      goto end;
+    int const ret = libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
+    if(ret != 0){
+      fprintf(stderr,"libusb_get_ss_endpoint_companion_descriptor failed: %s\n",libusb_error_name(ret));
+      goto quit;
     }
     assert(ep_comp != NULL);
     sdr->pktsize = endpointDesc->wMaxPacketSize * (ep_comp->bMaxBurst + 1);
@@ -955,24 +947,24 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   sdr->databuffers = (u_char **)calloc(queuedepth,sizeof(u_char *));
   if(sdr->databuffers == NULL){
     fprintf(stderr,"Failed to allocate data buffers\n");
-    goto end;
+    goto quit;
   }
   sdr->transfers = (struct libusb_transfer **)calloc(queuedepth,sizeof(struct libusb_transfer *));
   if(sdr->transfers == NULL){
     fprintf(stderr,"Failed to allocate transfer buffers\n");
-    goto end;
+    goto quit;
   }
   for(unsigned int i = 0; i < queuedepth; i++){
     sdr->databuffers[i] = (u_char *)malloc(reqsize * sdr->pktsize);
     if(sdr->databuffers[i] == NULL)
-      goto end;
+      goto quit;
     sdr->transfers[i] = libusb_alloc_transfer(0);
   }
   sdr->queuedepth = queuedepth;
   sdr->reqsize = reqsize;
   return 0;
 
-end:;
+ quit:
   free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
 
   FREE(sdr->transfers);
@@ -1040,9 +1032,6 @@ static void rx888_set_gain(struct sdrstate *sdr,double gain,bool vhf){
 }
 
 static void rx888_set_hf_mode(struct sdrstate *sdr){
-#if 0 // not reimplemented yet in firmware
-  command_send(sdr->dev_handle,TUNERSTDBY,0); // Stop Tuner
-#endif
   // switch to HF Antenna
   sdr->gpios &= ~VHF_EN;
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
@@ -1061,8 +1050,7 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
   r820_write_byte(sdr, 25, R820T_R25_FIXED);
 
   // Shut down Si5351 CLK1 (reference for tuner)
-  uint8_t clock_control = SI5351_VALUE_CLK_PDN;
-  si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+1,clock_control); // CLK1
+  si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+1, SI5351_VALUE_CLK_PDN); // CLK1
 }
 
 // Set VHF mode: enable ref clock to tuner, switch to VHF
@@ -1081,7 +1069,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
 
   // Configure Si5351 CLK1 output (R820T tuner reference input)
   bool ms_int = false;
-  rx888_set_tuner_ref(sdr, &ms_int, sdr->reference, R828D_FREQ);
+  rx888_set_tuner_ref(sdr, &ms_int, sdr->reference, R828D_REF);
   si5351_write_byte(sdr,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLB_RESET);
   // power on CLK1, ref clock to R820T/R828T tuner
   uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLB;
@@ -1167,31 +1155,79 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
 
 
 // Rewritten to directly configure SI5351 CLK1 as tuner ref clock, configure R820T tuner with frequency
-static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency){
+static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
-  if(frequency == frontend->frequency)
-    return frequency; // also catches 0->0
+  if(f == frontend->frequency)
+    return f; // also catches 0->0
 
-  if(frequency == 0 && frontend->frequency != 0){
+  if(f == 0){
     // Switching from VHF to HF
     rx888_set_hf_mode(sdr);
     // Sample rate? gain? AGC?
     frontend->frequency = 0;
     return 0;
   }
-  if(frequency < MIN_FREQUENCY || frequency > MAX_FREQUENCY)
+  if(f < MIN_FREQUENCY || f > MAX_FREQUENCY)
     return frontend->frequency; // invalid VHF frequency, ignore
 
   if(frontend->frequency == 0)
     rx888_set_vhf_mode(sdr);
 
-  uint32_t ref = R828D_FREQ;
-  command_send(sdr->dev_handle,TUNERINIT,ref); // Initialize Tuner
   // Write code here to program tuner
-  command_send(sdr->dev_handle,TUNERTUNE,(uint64_t)frequency);
-  frontend->frequency = frequency; // put actual value here
-  return frequency;
+  // adapted from https://github.com/ik1xpv/ExtIO_sddc/blob/master/SDDC_FX3/driver/tuner_r82xx.c
+  // Find nominal VCO freq
+  double vco;
+  int div_num;
+  for(div_num = 0; div_num < 5; div_num++){
+    vco = ldexp(f,div_num + 1);
+    if(R828D_VCO_MIN <= vco && vco <= R828D_VCO_MAX)
+      break;
+  }
+  if(div_num == 5)
+    return frontend->frequency; // out of range
+
+  int nint = (vco + (R828D_REF >> 16)) / (2 * R828D_REF);
+  int vco_fract = vco - 2 * R828D_REF * nint;
+  nint -= 13;
+  int ni = nint >> 2;
+  int si = nint - (ni << 2);
+  r820_write_byte_mask(sdr, 16, div_num << 5, R820T_R16_SEL_DIV);
+  int dither = 0x10;  // or 0?
+  r820_write_byte_mask(sdr, 18, dither, R820T_R18_DITHER|R820T_R18_PW_SDM);
+  r820_write_byte(sdr, 20, ni + (si << 6)); // approx vco
+  int sdm = 0;
+
+  if(vco_fract == 0) {
+    r820_write_byte_mask(sdr, 18, R820T_R18_PW_SDM,R820T_R18_PW_SDM); // disable fract pll
+  } else {
+    vco_fract += R828D_REF >> 16;
+    for(int n_sdm = 0; n_sdm < 16; n_sdm++){
+      int con_frac = R828D_REF >> n_sdm;
+      if(vco_fract >= con_frac){
+	sdm |= (0x8000 >> n_sdm);
+	vco_fract -= con_frac;
+	if(vco_fract == 0)
+	  break;
+      }
+    }
+    r820_write_byte(sdr, 21, sdm & 0xff);
+    r820_write_byte(sdr, 22, sdm >> 8);
+    r820_write_byte_mask(sdr, 18, 0, R820T_R18_PW_SDM); // enable frac pll
+  }
+  int i;
+  for(i=0; i < 50; i++){
+    uint8_t val;
+    r820_read(sdr, 2, &val);
+    if(val & 0x40) // vco locked?
+      break;
+    usleep(1000);
+  }
+  if(i == 50)
+    fprintf(stdout,"R820 PLL didn't lock\n");
+
+  frontend->frequency = ldexp(((nint << 16) + sdm) * 2*R828D_REF, -(div_num+17));
+  return frontend->frequency;
 }
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
   assert(sdr != NULL);
