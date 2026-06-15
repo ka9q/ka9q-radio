@@ -4,12 +4,13 @@
 // R820T/R828 tuner stuff
 
 // Min and Max frequency for VHF/UHF tuner
-#define MIN_FREQUENCY  (50000000UL)   //  50 MHz
-#define MAX_FREQUENCY (2000000000UL)  // 2000 MHz
-#define R828D_REF  (16000000)        // R820T reference frequency
-#define R828D_IF_CARRIER (4570000)    // center of IF 4.57 MHz (runs from about 0.6 - 9.4 MHz)
-#define R828D_VCO_MIN (1770000000UL)
-#define R828D_VCO_MAX (3900000000UL)
+#define MIN_FREQUENCY  (50.e6)   //  50 MHz
+#define MAX_FREQUENCY (2.e9)  // 2000 MHz
+#define R828D_REF  (16.e6)        // R820T reference frequency
+#define R828D_IF_CARRIER (4.57e6)    // center of IF 4.57 MHz (runs from about 0.6 - 9.4 MHz)
+#define R828D_VCO_MIN (1.77e9)
+#define R828D_VCO_MAX (3.9e9)
+//#define R828D_VCO_MAX (3.54e9) // seen elsewhere
 
 
 // R5

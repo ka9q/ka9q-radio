@@ -141,7 +141,7 @@ static void *agc_rx888(void *arg);
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency);
 // Read one Si5351 register over I2C (reg# is silicon-defined → version-proof).
 static inline int si5351_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
-  return control_recv(sdr->dev_handle, I2CRFX3, SI5351_ADDR, reg, val, 1);
+  return control_recv(sdr->dev_handle, I2CRFX3, SI5351_ADDR, reg, val, sizeof *val);
 }
 static inline int si5351_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
   return control_send(sdr->dev_handle, I2CWFX3, SI5351_ADDR, reg, arg, len);
@@ -159,7 +159,7 @@ static inline uint8_t bitrev(uint8_t b){
 
 static inline int r820_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
   // Device reads LSB first, but writes MSB first (!)
-  int r = control_recv(sdr->dev_handle, I2CRFX3, R820_ADDR, reg, val, 1);
+  int r = control_recv(sdr->dev_handle, I2CRFX3, R820_ADDR, reg, val, sizeof *val);
   *val = bitrev(*val);
   return r;
 }
@@ -378,7 +378,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     sdr->undersample = 1;
   }
   // note intentional integer truncation, ie undersample = 1 -> frequency = 0
-  frontend->frequency = frontend->samprate * sdr->undersample / 2;
+  frontend->frequency = frontend->samprate * (sdr->undersample / 2);
   if(sdr->undersample & 1){
     // Somewhat arbitrary. See https://ka7oei.blogspot.com/2024/12/frequency-response-of-rx-888-sdr-at.html
     frontend->min_IF = 15000;
@@ -1056,6 +1056,11 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
 // Set VHF mode: enable ref clock to tuner, switch to VHF
 // change sample rate?
 static void rx888_set_vhf_mode(struct sdrstate *sdr){
+  struct frontend *frontend = sdr->frontend;
+
+  frontend->min_IF = -15000;
+  frontend->max_IF = -NYQUIST * frontend->samprate;
+
 
   // disable HF by set max ATT
   rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
@@ -1187,11 +1192,10 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   if(div_num == 5)
     return frontend->frequency; // out of range
 
-  int nint = (vco + (R828D_REF >> 16)) / (2 * R828D_REF);
-  int vco_fract = vco - 2 * R828D_REF * nint;
-  nint -= 13;
-  int ni = nint >> 2;
-  int si = nint - (ni << 2);
+  int nint = (vco + (ldexp(R828D_REF,-16))) / (2 * R828D_REF);
+  int vco_fract = lrint(vco - 2 * R828D_REF * nint);
+  int ni = (nint-13) >> 2;
+  int si = nint - (ni << 2) - 13;
   r820_write_byte_mask(sdr, 16, div_num << 5, R820T_R16_SEL_DIV);
   int dither = 0x10;  // or 0?
   r820_write_byte_mask(sdr, 18, dither, R820T_R18_DITHER|R820T_R18_PW_SDM);
@@ -1201,9 +1205,9 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   if(vco_fract == 0) {
     r820_write_byte_mask(sdr, 18, R820T_R18_PW_SDM,R820T_R18_PW_SDM); // disable fract pll
   } else {
-    vco_fract += R828D_REF >> 16;
+    vco_fract += ldexp(R828D_REF,-16);
     for(int n_sdm = 0; n_sdm < 16; n_sdm++){
-      int con_frac = R828D_REF >> n_sdm;
+      int con_frac = ldexp(R828D_REF, -n_sdm);
       if(vco_fract >= con_frac){
 	sdm |= (0x8000 >> n_sdm);
 	vco_fract -= con_frac;
@@ -1217,15 +1221,16 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   }
   int i;
   for(i=0; i < 50; i++){
-    uint8_t val;
-    r820_read(sdr, 2, &val);
-    if(val & 0x40) // vco locked?
+    uint8_t val[4];
+    r820_read(sdr, 0, val);
+    if(val[2] & 0x40) // vco locked?
       break;
     usleep(1000);
   }
   if(i == 50)
     fprintf(stdout,"R820 PLL didn't lock\n");
 
+  fprintf(stderr,"nint = %d, sdm = %d, div_num = %d\n",nint, sdm, div_num);
   frontend->frequency = ldexp(((nint << 16) + sdm) * 2*R828D_REF, -(div_num+17));
   return frontend->frequency;
 }
