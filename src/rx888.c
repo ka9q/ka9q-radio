@@ -1095,7 +1095,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   // set up tuner
   uint8_t val = 0;
   r820_read(sdr, 0, &val);
-  fprintf(stdout, "R820/828 chip ID 0x%x\n",val);
+  fprintf(stderr, "R820/828 chip ID 0x%x\n",val);
 
   // r5 = 0x80: loop-through OFF, LNA1 power on, LNA gain mode switch auto, LNA_GAIN = minimum
   r820_write_byte(sdr, 5, R820T_R5_PWD_LT);
@@ -1343,7 +1343,6 @@ static int gain2val(double gain){
   return g;
 }
 double rx888_tune(struct frontend *frontend,double freq){
-  // Placeholder until VHF/UHF code is written
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->lock || sdr->undersample != 1)
     return frontend->frequency;
