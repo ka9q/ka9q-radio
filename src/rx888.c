@@ -842,6 +842,13 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   libusb_device *device = NULL;
   libusb_device **device_list;
   ssize_t dev_count = libusb_get_device_list(NULL,&device_list);
+  // Fallback for a stale/miscased configured serial: if the serial matches no
+  // device but exactly one rx888 is present, use it and log its real serial so
+  // the operator can fix the config.  Legacy-safe — never changes behaviour
+  // when the serial matches or is unset.
+  libusb_device_handle *fallback_handle = NULL;
+  uint64_t fallback_serial = 0;
+  int rx888_count = 0;
   for(int i=0; i < dev_count; i++){
     device = device_list[i];
     if(device == NULL)
@@ -892,6 +899,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       fprintf(stderr,": not at least SuperSpeed; is it plugged into a blue USB jack?\n");
       continue; // Keep looking, there just might be another
     }
+    rx888_count++; // a usable (SuperSpeed) rx888
     // Is this the droid we're looking for?
     uint64_t current_serialnum = strtoll(serial,NULL,16); // device serial
     uint8_t current_busnum = libusb_get_bus_number(device);
@@ -913,10 +921,29 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       sdr->dev_handle = handle;
       break;
     } else {
-      fprintf(stderr,"\n"); // Not selected; close and keep looking
-      libusb_close(handle);
+      // Doesn't match the configured serial — keep the first such device as a
+      // fallback in case the configured serial matches nothing (handled below).
+      fprintf(stderr,", does not match configured serial %016llx\n",(long long)sdr->serial);
+      if(fallback_handle == NULL){
+        fallback_handle = handle;
+        fallback_serial = current_serialnum;
+      } else
+        libusb_close(handle); // already hold a fallback candidate
       handle = NULL;
     }
+  }
+  // Configured serial matched nothing, but exactly one rx888 is present: use it
+  // (the config serial is likely stale or miscased) and tell the operator.
+  if(sdr->dev_handle == NULL && fallback_handle != NULL && rx888_count == 1){
+    fprintf(stderr,"rx888: configured serial %016llx not found; falling back to the only rx888 present (serial %016llx) — set 'serial = %016llx' in the config to silence this.\n",
+	    (long long)sdr->serial,(long long)fallback_serial,(long long)fallback_serial);
+    sdr->dev_handle = fallback_handle;
+    sdr->serial = fallback_serial;
+    fallback_handle = NULL;
+  }
+  if(fallback_handle != NULL){
+    libusb_close(fallback_handle); // unused (no match needed, or multiple rx888s present)
+    fallback_handle = NULL;
   }
   libusb_free_device_list(device_list,1);
   device_list = NULL;
