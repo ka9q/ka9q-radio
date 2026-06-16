@@ -1167,9 +1167,9 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   double exact_vco = 2 * f; // VCO if we could use an exact divider
   int div_num;      // output = VCO / (2<<div_num)
   for(div_num = 0; div_num <= 5; div_num++){
-    exact_vco *= 2;
     if(R828D_VCO_MIN <= exact_vco && exact_vco <= R828D_VCO_MAX)
       break;
+    exact_vco *= 2;
   }
   if(div_num > 5)
     return frontend->frequency; // out of range
