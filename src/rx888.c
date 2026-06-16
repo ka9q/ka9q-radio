@@ -1058,8 +1058,8 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
 static void rx888_set_vhf_mode(struct sdrstate *sdr){
   struct frontend *frontend = sdr->frontend;
 
-  frontend->min_IF = -15000;
-  frontend->max_IF = -NYQUIST * frontend->samprate;
+  frontend->min_IF = -NYQUIST * frontend->samprate;
+  frontend->max_IF = -15000;
 
   // disable HF by set max ATT
   rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
