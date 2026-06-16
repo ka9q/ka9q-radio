@@ -120,8 +120,7 @@
 #define R828D_R17_FIXED      (3)
 
 // R18
-//#define R828D_R18_VCOC       (3<<5)
-#define R828D_R18_VCOC       (7<<5) // is this really right?
+#define R828D_R18_VCOC       (7<<5) // VCO current
 #define R828D_R18_DITHER     (1<<4)
 #define R828D_R18_PW_SDM     (1<<3)
 

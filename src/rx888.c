@@ -1191,12 +1191,6 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   if(div_num == 5)
     return frontend->frequency; // out of range
 
-  double const vco_div = (R828D_REF + ldexp(vco,16)) / (2 * R828D_REF);
-  int const nint = floor(ldexp(vco_div,-16));
-  int const sdm = floor(vco_div - nint * 65536);
-  int const ni = (nint-13) >> 2;
-  int const si = nint - ((ni << 2) + 13);
-
   // Mystery code Returns 1 anyway
   uint8_t val;
   r820_read(sdr, 4, &val);
@@ -1208,10 +1202,15 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     div_num++;
 
   r820_write_byte(sdr, 16, div_num << 5); // also set REFDIV low (no divider on xtal), no capacitor
-  val = 0x10 | 0x80;  // or 0?
-  r820_write_byte_mask(sdr, 18, val, R828D_R18_DITHER|R828D_R18_PW_SDM);
+  val = R828D_R18_DITHER;  // disable dither
+  r820_write_byte_mask(sdr, 18, val, R828D_R18_DITHER|R828D_R18_PW_SDM); // also set other bits low
+  int const nint = (vco + ldexp(R828D_REF,-16)) / (2 * R828D_REF);
+  int const vco_frac = vco - 2 * R828D_REF * nint;
+  assert(vco_frac >= 0);
+  int const ni = (nint-13) >> 2;
+  int const si = nint - ((ni << 2) + 13);
   r820_write_byte(sdr, 20, ni + (si << 6)); // approx vco
-  if(sdm == 0) {
+  if(vco_fract == 0) {
     r820_write_byte_mask(sdr, 18, R828D_R18_PW_SDM,R828D_R18_PW_SDM); // disable fract pll
   } else {
     r820_write_byte(sdr, 21, sdm & 0xff);
@@ -1231,8 +1230,8 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   if(i == 50)
     fprintf(stdout,"R820 PLL didn't lock\n");
 
-  fprintf(stderr,"nint = %d, sdm = %d, div_num = %d\n",nint, sdm, div_num);
-  frontend->frequency = ldexp(((nint << 16) + sdm) * 2*R828D_REF, -(div_num+17));
+  fprintf(stderr,"nint = %d, vco_fract = %d, div_num = %d, ni = %d, si = %d\n", nint, vco_fract, div_num, ni, si);
+  frontend->frequency = ldexp(2 * R828D_REF * (nint + (double)vco_fract/65536.),-(div_num+1));
   return frontend->frequency;
 }
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
