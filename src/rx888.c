@@ -1073,7 +1073,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
 
   // Configure Si5351 CLK1 output (R828D tuner reference input)
   bool ms_int = false;
-  rx888_set_tuner_ref(sdr, &ms_int, sdr->reference, R828D_REF);
+  rx888_set_tuner_ref(sdr, &ms_int, (long long)sdr->reference, (long long)R828D_REF);
   si5351_write_byte(sdr,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLB_RESET);
   // power on CLK2, ref clock to R828D/R828T tuner
   uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLB;
@@ -1454,7 +1454,7 @@ static double rx888_set_tuner_ref(struct sdrstate *sdr, bool *ms_int, long long 
 
   si5351_solution_t best = {0};
   *ms_int = false;
-  if(!si5351_solve(reference,f,&best)){
+  if(!si5351_solve((long long)reference,(long long)f,&best)){
     fprintf(stderr,"si5351_solve(%'lld, %'lld) failed\n", reference, f);
     return 0;
   }
