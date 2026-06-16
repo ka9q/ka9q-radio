@@ -1045,7 +1045,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   uint8_t gain = 0x80 | 3;
   argument_send(sdr->dev_handle,AD8340_VGA,gain);
 
-  // Configure Si5351 CLK1 output (R828D tuner reference input)
+  // Configure Si5351 CLK2 output (R828D tuner reference input)
   rx888_set_tuner_ref(sdr, (long long)sdr->reference, (long long)R828D_REF);
   // set up tuner
   uint8_t val = 0;
@@ -1086,11 +1086,29 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   // r15 (0xf) = 0x68: filter extension widest = off, clock out off, internal agc clock on, disable ring clock
   r820_write_byte(sdr, 15, (1<<5) | R828D_R15_CLK_OUT_ENB | R828D_R15_RING_CLK);
 
+  // r16 (0x10) = 0x6c: SEL_DIV = 3, REFDIV=0, XTAL=1 ?
+  r820_write_byte(sdr, 16, (3<<5) | R828D_R16_XTAL | R828D_R16_FIXED);
+
   // r17 (0x11) = 0xbb: PLL analog LDO 2.0 V, charge-pump = auto
   r820_write_byte(sdr, 17, (2 << 6) | (5 << 3) | R828D_R17_FIXED);
 
+  // r18 (0x12) = 0x80: vco current = 4
+  r820_write_byte(sdr, 18, 4 << 5);
+
   // r19 (0x13) = 0x31: VCO auto mode; low 6 bits are a VERSION TAG (ignored in auto)
   r820_write_byte(sdr, 19, 49);
+
+  // r20 (0x14) = 0x0f: si = 0, ni = 15
+  r820_write_byte(sdr, 20, 0x0f);
+
+  // r21 (0x15) = 00
+  r820_write_byte(sdr, 21, 0);
+
+  // r22 (0x16) = 0xc0: high order divider fraction
+  r820_write_byte(sdr, 22, 0xc0);
+
+  // r23 (0x17) = 0x30: DIV_BUF_DUR = 3
+  r820_write_byte(sdr, 23, R828D_R23_DIV_BUF_DUR);
 
   // r24 (0x18) = 0x48: ring oscillator OFF, nring = 8 (less than valid range 9-14)
   r820_write_byte(sdr, 24, R828D_R24_FIXED | 8);
@@ -1098,11 +1116,20 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   // r25 (0x19) = 0xec: RF tracking filter ON, poly-filter current = max, agc = agc_in
   r820_write_byte(sdr, 25, R828D_R25_PWD_RFFILT | R828D_R25_POLFIL_CUR | R828D_R25_FIXED);
 
+  // r26 (0x1a) = 0x60: RFMUX = 1, AGC_CLK=1
+  r820_write_byte(sdr, 26, 0x60);
+
+  // r27 (0x1b) = 0
+  r820_write_byte(sdr, 26, 0);
+
   // r28 (0x1c) = 0x24: mixer power-detector TOP 3rd highest?
   r820_write_byte(sdr, 28, (2 << 4) | R828D_R28_FIXED);
 
   // r29 (0x1d) = 0xdd: LNA_TOP = PDET2_GAIN = 5
   r820_write_byte(sdr, 29, R828D_R29_FIXED | (5 << 3) | 5);
+
+  // r30 (0x1e) = 0x4a: FILTER_EXT = 1, PDET_CLK=10
+  r820_write_byte(sdr, 30, (1<<6) | 10);
 
   // r31 (0x1f) = 0x40: LOOP THRU ATT enable, ring-osc power −5 dBaf
   r820_write_byte(sdr, 31, R828D_R31_FIXED);
@@ -1142,14 +1169,13 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   if(div_num == 5)
     return frontend->frequency; // out of range
 
+  r820_write_byte_mask(sdr, 26, 0, R828D_R26_PLL_AUTO_CLK); // pll tune = 128k
+
   // Mystery code Returns 1 anyway
   uint8_t val;
   r820_read(sdr, 4, &val);
-  r820_write_byte_mask(sdr, 26, 0, R828D_R26_PLL_AUTO_CLK); // pll tune = 128k
-
-
   int vco_fine_tune = (val & R828D_R4_VCO_FINE_TUNE) >> 4;
-  //  fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
+  fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
   if(vco_fine_tune > 1)
     div_num--;
   else if(vco_fine_tune < 1)
@@ -1406,7 +1432,7 @@ static double rx888_set_samprate(struct sdrstate *sdr, long long const reference
   if(ms_int)
     clock_control |= SI5351_VALUE_MS_INT;
 
-  si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+0,clock_control);
+  si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+0, clock_control);
 
   // Wait for sample clock PLL to lock
   bool clock_ok = false;
@@ -1431,7 +1457,7 @@ static double rx888_set_tuner_ref(struct sdrstate *sdr, long long const referenc
 
   si5351_solution_t best = {0};
   bool ms_int = false;
-  if(!si5351_solve(reference,f,&best)){
+  if(!si5351_solve(reference, f, &best)){
     fprintf(stderr,"si5351_solve(%'lld, %'lld) failed\n", reference, f);
     return 0;
   }
@@ -1439,7 +1465,7 @@ static double rx888_set_tuner_ref(struct sdrstate *sdr, long long const referenc
     ms_int = true;
 
   si5351_pvals_t pll = {0};
-  si5351_get_pll_pvals(&best,&pll);
+  si5351_get_pll_pvals(&best, &pll);
   {
     long long whole_hz,num,denom;
     whole_hz = reference * best.B / best.C;
@@ -1463,10 +1489,9 @@ static double rx888_set_tuner_ref(struct sdrstate *sdr, long long const referenc
     (pll.P2 & 0x0000ff00) >>  8,
     (pll.P2 & 0x000000ff) >>  0
   };
-  si5351_write(sdr,SI5351_REGISTER_MSNB_BASE,data_clkin,sizeof(data_clkin));
-
+  si5351_write(sdr, SI5351_REGISTER_MSNB_BASE, data_clkin, sizeof data_clkin);
   si5351_pvals_t ms = {0};
-  si5351_get_ms_pvals(&best,&ms);
+  si5351_get_ms_pvals(&best, &ms);
   fprintf(stderr,"RX888 Si5351 CLK2 output divider: tuner ref = vco / (%'d*(%'d + %'d/%'d)) = %'lld",
 	  best.R, best.D, best.E, best.F, best.fout_num);
   if(best.fout_den != 1){
