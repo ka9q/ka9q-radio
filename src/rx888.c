@@ -1161,51 +1161,49 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   if(frontend->frequency == 0)
     rx888_set_vhf_mode(sdr);
 
-  // Write code here to program tuner
+  // code to program tuner pll
   // adapted from https://github.com/ik1xpv/ExtIO_sddc/blob/master/SDDC_FX3/driver/tuner_r82xx.c
   // Find nominal VCO freq
-  double vco;
-  int div_num;
-  for(div_num = 0; div_num < 5; div_num++){
-    vco = ldexp(f,div_num + 1);
-    if(R828D_VCO_MIN <= vco && vco <= R828D_VCO_MAX)
+  double exact_vco = 2 * f; // VCO if we could use an exact divider
+  int div_num;      // output = VCO / (2<<div_num)
+  for(div_num = 0; div_num <= 5; div_num++){
+    exact_vco *= 2;
+    if(R828D_VCO_MIN <= exact_vco && exact_vco <= R828D_VCO_MAX)
       break;
   }
-  if(div_num == 5)
+  if(div_num > 5)
     return frontend->frequency; // out of range
 
-  r820_write_byte_mask(sdr, 26, 0, R828D_R26_PLL_AUTO_CLK); // pll tune = 128k
+  r820_write_byte_mask(sdr, 26, 0, R828D_R26_PLL_AUTO_CLK); // pll tune (loop bw?) = 128k
   r820_write_byte_mask(sdr, 18, 4<<5, R828D_R18_VCOC); // vco current = 4 (100b)
-
-  // Mystery code Returns 1 anyway
-  uint8_t val;
-  r820_read(sdr, 4, &val);
-  int vco_fine_tune = (val & R828D_R4_VCO_FINE_TUNE) >> 4;
-  fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
-  if(vco_fine_tune > 1)
-    div_num--;
-  else if(vco_fine_tune < 1)
-    div_num++;
-
+  {
+    // Mystery code Returns 1 anyway
+    uint8_t val;
+    r820_read(sdr, 4, &val);
+    int vco_fine_tune = (val & R828D_R4_VCO_FINE_TUNE) >> 4;
+    fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
+    if(vco_fine_tune > 1)
+      div_num--;
+    else if(vco_fine_tune < 1)
+      div_num++;
+  }
   r820_write_byte(sdr, 16, div_num << 5); // also set REFDIV low (no divider on xtal), no capacitor
-  int const nint = floor((vco + ldexp(R828D_REF,-16)) / (2 * R828D_REF));
-  double const vco_frac = vco - 2 * R828D_REF * nint; // error in Hz between desired VCO and integer multiplier from 2*ref
+  int const nint = floor((exact_vco + ldexp(R828D_REF,-16)) / (2 * R828D_REF)); // integer portion of freq divisor
+  double const vco_frac = exact_vco - 2 * R828D_REF * nint; // error in Hz between desired VCO and integer multiplier from 2*ref
   assert(vco_frac >= 0);
   int const ni = (nint-13) >> 2;
   int const si = nint - ((ni << 2) + 13);
   r820_write_byte(sdr, 20, ni + (si << 6)); // approx vco
-  int const sdm = floor(ldexp(vco_frac / (2 * R828D_REF), 16)); // scale to a fraction of 16 bits
+  int const sdm = floor(ldexp(vco_frac / (2 * R828D_REF), 16)); // fractional divisor scaled to 16 bits
   assert(sdm >= 0 && sdm < 65536);
-
   if(sdm == 0) {
+    // Divisor is an exact integer, disable the fractional PLL probably to lower phase noise
     r820_write_byte_mask(sdr, 18, R828D_R18_PW_SDM, R828D_R18_PW_SDM); // disable fract pll
   } else {
     r820_write_byte(sdr, 21, sdm & 0xff);
     r820_write_byte(sdr, 22, sdm >> 8);
     r820_write_byte_mask(sdr, 18, 0, R828D_R18_PW_SDM); // enable frac pll (redundant?)
   }
-  usleep(5000); // time to settle
-
   int i;
   for(i=0; i < 50; i++){
     uint8_t val;
@@ -1227,9 +1225,9 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     if(i == 50)
       fprintf(stderr,"still didn't lock\n");
   }
-  r820_write_byte_mask(sdr, 26, 0x08, R828D_R26_PLL_AUTO_CLK);
+  r820_write_byte_mask(sdr, 26, 0x08, R828D_R26_PLL_AUTO_CLK); // Drop loop bandwidth?
 
-  double ff = ldexp(R828D_REF * (nint + (double)sdm/65536.),-div_num);
+  double ff = ldexp(R828D_REF * (nint + (double)sdm/65536.),-div_num); // Actual synth frequency (important to know)
   fprintf(stderr,"nint = %d, sdm = %d, div_num = %d, ni = %d, si = %d, f=%'lf\n", nint, sdm, div_num, ni, si, ff);
   frontend->frequency = ff;
   return frontend->frequency;
