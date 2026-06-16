@@ -114,7 +114,6 @@ struct sdrstate {
   pthread_t cmd_thread;
   pthread_t proc_thread;
   pthread_t agc_thread;
-  bool ms_int;
   _Atomic enum state state;
   bool reset;
   _Atomic bool device_gone;
@@ -127,7 +126,7 @@ static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,boo
 static void rx888_set_att(struct sdrstate *sdr,double att,bool vhf);
 static void rx888_set_gain(struct sdrstate *sdr,double gain,bool vhf);
 static double rx888_set_samprate(struct sdrstate *sdr,long long reference,long long samprate);
-static double rx888_set_tuner_ref(struct sdrstate *sdr, bool *ms_int, long long const reference, long long const f);
+static double rx888_set_tuner_ref(struct sdrstate *sdr, long long const reference, long long const f);
 static void rx888_set_hf_mode(struct sdrstate *sdr);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate *sdr);
@@ -387,31 +386,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     frontend->min_IF = -NYQUIST * samprate;
     frontend->max_IF = -15000;
   }
-  // start clock
-  si5351_write_byte(sdr,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
-  // power on clock 0
-  uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
-
-  // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer. It is in the original code, which sets it to 6.
-  if(sdr->ms_int)
-    clock_control |= SI5351_VALUE_MS_INT;
-
-  si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+0,clock_control);
-
-  // Wait for sample clock PLL to lock
-  bool clock_ok = false;
-  for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
-    uint8_t status = 0xFF, clk0 = 0xFF;
-    si5351_read(sdr, SI5351_REGISTER_STATUS,  &status);          // reg 0:  bit5 LOL_A
-    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+0, &clk0);            // reg 16: bit7 CLK0_PDN
-    if(!(status & SI5351_VALUE_LOL_A) && !(clk0 & SI5351_VALUE_CLK_PDN)){
-      clock_ok = true;
-      break;
-    }
-    usleep(1000);
-  }
-  if(!clock_ok)
-    fprintf(stderr,"RX888 ADC clock not locked/running\n");
   {
     char const *p = config_getstring(dictionary,section,"description",Description ? Description : "rx888");
     if(p != NULL){
@@ -1072,30 +1046,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   argument_send(sdr->dev_handle,AD8340_VGA,gain);
 
   // Configure Si5351 CLK1 output (R828D tuner reference input)
-  bool ms_int = false;
-  rx888_set_tuner_ref(sdr, &ms_int, (long long)sdr->reference, (long long)R828D_REF);
-  si5351_write_byte(sdr,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLB_RESET);
-  // power on CLK2, ref clock to R828D/R828T tuner
-  uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLB;
-  // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer.
-  if(ms_int)
-    clock_control |= SI5351_VALUE_MS_INT;
-
-  si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+2,clock_control); // turn on CLK2
-  // Wait for PLLB to lock
-  bool clock_ok = false;
-  for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
-    uint8_t status = 0xFF, clk1 = 0xFF;
-    si5351_read(sdr, SI5351_REGISTER_STATUS,  &status);          // reg 0:  bit6 LOL_B
-    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+2, &clk1);         // reg 18: bit7 CLK2_PDN
-    if(!(status & SI5351_VALUE_LOL_B) && !(clk1 & SI5351_VALUE_CLK_PDN)){
-      clock_ok = true;
-      break;
-    }
-    usleep(1000);
-  }
-  if(!clock_ok)
-    fprintf(stderr,"RX888 tuner ref clock not locked/running\n");
+  rx888_set_tuner_ref(sdr, (long long)sdr->reference, (long long)R828D_REF);
   // set up tuner
   uint8_t val = 0;
   r820_read(sdr, 0, &val);
@@ -1391,8 +1342,9 @@ static double rx888_set_samprate(struct sdrstate *sdr, long long const reference
     fprintf(stderr,"si5351_solve(%'lld, %'lld) failed\n", reference, samprate);
     return 0;
   }
+  bool ms_int = false;
   if(best.E == 0)
-    sdr->ms_int = true;
+    ms_int = true;
 
   si5351_pvals_t pll = {0};
   si5351_get_pll_pvals(&best,&pll);
@@ -1419,7 +1371,7 @@ static double rx888_set_samprate(struct sdrstate *sdr, long long const reference
     (pll.P2 & 0x0000ff00) >>  8,
     (pll.P2 & 0x000000ff) >>  0
   };
-  si5351_write(sdr,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
+  si5351_write(sdr, SI5351_REGISTER_MSNA_BASE, data_clkin, sizeof data_clkin);
 
   si5351_pvals_t ms = {0};
   si5351_get_ms_pvals(&best,&ms);
@@ -1444,22 +1396,47 @@ static double rx888_set_samprate(struct sdrstate *sdr, long long const reference
     (ms.P2 & 0x0000ff00) >>  8,
     (ms.P2 & 0x000000ff) >>  0
   };
-  si5351_write(sdr,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
+  si5351_write(sdr, SI5351_REGISTER_MS0_BASE, data_clkout, sizeof data_clkout);
+  // start clock
+  si5351_write_byte(sdr, SI5351_REGISTER_PLL_RESET, SI5351_VALUE_PLLA_RESET);
+  // power on clock 0
+  uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
+
+  // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer. It is in the original code, which sets it to 6.
+  if(ms_int)
+    clock_control |= SI5351_VALUE_MS_INT;
+
+  si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+0,clock_control);
+
+  // Wait for sample clock PLL to lock
+  bool clock_ok = false;
+  for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
+    uint8_t status = 0xFF, clk0 = 0xFF;
+    si5351_read(sdr, SI5351_REGISTER_STATUS,  &status);          // reg 0:  bit5 LOL_A
+    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+0, &clk0);            // reg 16: bit7 CLK0_PDN
+    if(!(status & SI5351_VALUE_LOL_A) && !(clk0 & SI5351_VALUE_CLK_PDN)){
+      clock_ok = true;
+      break;
+    }
+    usleep(1000);
+  }
+  if(!clock_ok)
+    fprintf(stderr,"RX888 ADC clock not locked/running\n");
   return (double)best.fout_num / best.fout_den;
 }
 // Set CLK1 output, the R828D tuner reference (usually 16 MHz)
-static double rx888_set_tuner_ref(struct sdrstate *sdr, bool *ms_int, long long const reference, long long const f){
+static double rx888_set_tuner_ref(struct sdrstate *sdr, long long const reference, long long const f){
   assert(sdr != NULL);
   assert(reference != 0);
 
   si5351_solution_t best = {0};
-  *ms_int = false;
-  if(!si5351_solve((long long)reference,(long long)f,&best)){
+  bool ms_int = false;
+  if(!si5351_solve(reference,f,&best)){
     fprintf(stderr,"si5351_solve(%'lld, %'lld) failed\n", reference, f);
     return 0;
   }
   if(best.E == 0)
-    *ms_int = true;
+    ms_int = true;
 
   si5351_pvals_t pll = {0};
   si5351_get_pll_pvals(&best,&pll);
@@ -1511,6 +1488,29 @@ static double rx888_set_tuner_ref(struct sdrstate *sdr, bool *ms_int, long long 
     (ms.P2 & 0x0000ff00) >>  8,
     (ms.P2 & 0x000000ff) >>  0
   };
-  si5351_write(sdr,SI5351_REGISTER_MS2_BASE,data_clkout,sizeof(data_clkout));
+  si5351_write(sdr, SI5351_REGISTER_MS2_BASE, data_clkout, sizeof data_clkout);
+  si5351_write_byte(sdr, SI5351_REGISTER_PLL_RESET, SI5351_VALUE_PLLB_RESET);
+  // power on CLK2, ref clock to R828D/R828T tuner
+  uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLB;
+  // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer.
+  if(ms_int)
+    clock_control |= SI5351_VALUE_MS_INT;
+
+  si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+2, clock_control); // turn on CLK2
+  // Wait for PLLB to lock
+  bool clock_ok = false;
+  for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
+    uint8_t status = 0xFF, clk1 = 0xFF;
+    si5351_read(sdr, SI5351_REGISTER_STATUS,  &status);          // reg 0:  bit6 LOL_B
+    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+2, &clk1);         // reg 18: bit7 CLK2_PDN
+    if(!(status & SI5351_VALUE_LOL_B) && !(clk1 & SI5351_VALUE_CLK_PDN)){
+      clock_ok = true;
+      break;
+    }
+    usleep(1000);
+  }
+  if(!clock_ok)
+    fprintf(stderr,"RX888 tuner ref clock not locked/running\n");
+
   return (double)best.fout_num / best.fout_den;
 }
