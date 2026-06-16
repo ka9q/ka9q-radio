@@ -101,7 +101,7 @@
 #define R828D_R15_CLK_AGC_ENB (1<<1)
 #define R828D_R15_GPIO        (1<<0)
 
-// R16
+// R16 0x10
 // SEL_DIV = 000 -> mixer in = vco out/2
 // SEL_DIV = 101 -> mixer in = vco out/64
 #define R828D_R16_SEL_DIV    (7<<5)
@@ -120,7 +120,8 @@
 #define R828D_R17_FIXED      (3)
 
 // R18
-#define R828D_R18_VCOC       (3<<5)
+//#define R828D_R18_VCOC       (3<<5)
+#define R828D_R18_VCOC       (7<<5) // is this really right?
 #define R828D_R18_DITHER     (1<<4)
 #define R828D_R18_PW_SDM     (1<<3)
 
