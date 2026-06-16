@@ -120,6 +120,7 @@ struct sdrstate {
 };
 
 static uint8_t R828D_shadow[32];
+static uint8_t R828D_status[5]; // status registers 0-4 are apparently distinct from write registers 0-4, which would have to be write-only
 
 static void rx_callback(struct libusb_transfer *transfer);
 static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize);
@@ -163,7 +164,7 @@ static inline int r828_status(struct sdrstate *sdr){
   int r = control_recv(sdr->dev_handle, I2CRFX3, R828D_ADDR, 0, buf, sizeof buf);
   assert(r == 5);
   for(int i=0; i<r; i++)
-    R828D_shadow[i] = bitrev(buf[i]);
+    R828D_status[i] = bitrev(buf[i]);
   return r;
 }
 static inline int r828_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
@@ -1065,7 +1066,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   rx888_set_tuner_ref(sdr, (long long)sdr->reference, (long long)R828D_REF);
   // set up tuner
   r828_status(sdr);
-  fprintf(stderr, "R820/828 chip ID 0x%x\n",R828D_shadow[0]);
+  fprintf(stderr, "R820/828 chip ID 0x%x\n",R828D_status[0]);
 
   // r5 = 0x80: loop-through OFF, LNA1 power on, LNA gain mode switch auto, LNA_GAIN = minimum
   r828_write_byte(sdr, 5, R828D_R5_PWD_LT);
@@ -1189,7 +1190,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   {
     // Mystery code Returns 1 anyway
     r828_status(sdr);
-    uint8_t val = R828D_shadow[4];
+    uint8_t val = R828D_status[4];
     int vco_fine_tune = (val & R828D_R4_VCO_FINE_TUNE) >> 4;
     fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
     if(vco_fine_tune > 1)
@@ -1216,7 +1217,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   int i;
   for(i=0; i < 50; i++){
     r828_status(sdr);
-    uint8_t val = R828D_shadow[2];
+    uint8_t val = R828D_status[2];
     if(val & R828D_R2_VCO_INDICATOR) // vco locked?
       break;
     usleep(1000);
@@ -1226,7 +1227,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     r828_write_byte_mask(sdr, 18, 0x60, R828D_R18_VCOC); // increase current
     for(i=0; i < 50; i++){
       r828_status(sdr);
-      uint8_t val = R828D_shadow[2];
+      uint8_t val = R828D_status[2];
       if(val & R828D_R2_VCO_INDICATOR) // vco locked?
 	break;
       usleep(1000);
