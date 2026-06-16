@@ -29,7 +29,7 @@
 #include "radio.h"
 #include "rx888.h"
 #include "si5351.h"
-#include "r820t.h"
+#include "r828d.h"
 #include "ezusb.h"
 
 static uint16_t const Vendor_id = 0x04b4;
@@ -1037,17 +1037,17 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
   // HF AGC? gain?
   // Shut down tuner
-  r820_write_byte(sdr, 6, R820T_R6_PWD_PDET1 | R820T_R6_FILT_3DB | (R820T_R6_PW_LNA & 1));
-  r820_write_byte(sdr, 5, R820T_R5_PWD_LT | R820T_R5_PWD_LNA1);
-  r820_write_byte(sdr, 7, R820T_R7_PW0_MIX| R820T_R7_MIXGAIN_MODE | (10 & R820T_R7_MIX_GAIN));
-  r820_write_byte(sdr, 8, R820T_R8_PW0_AMP);
-  r820_write_byte(sdr, 9, R820T_R9_PWD_IFFILT | R820T_R9_PW1_IFFILT);
-  r820_write_byte(sdr, 10, (R820T_R10_PW_FILT & (1 << 5)) | (R820T_R10_FILT_CODE & 6));
-  r820_write_byte(sdr, 12, R820T_R12_VGA_MODE | (R820T_R12_VGA_CODE & 5));
-  r820_write_byte(sdr, 15, R820T_R15_FIXED | R820T_R15_CLK_OUT_ENB);
-  r820_write_byte(sdr, 17, R820T_R17_FIXED);
-  r820_write_byte(sdr, 23, R820T_R23_PW_LDO_D | R820T_R23_DIV_BUF_DUR | R820T_R23_FIXED);
-  r820_write_byte(sdr, 25, R820T_R25_FIXED);
+  r820_write_byte(sdr, 6, R828D_R6_PWD_PDET1 | R828D_R6_FILT_3DB | (R828D_R6_PW_LNA & 1));
+  r820_write_byte(sdr, 5, R828D_R5_PWD_LT | R828D_R5_PWD_LNA1);
+  r820_write_byte(sdr, 7, R828D_R7_PW0_MIX| R828D_R7_MIXGAIN_MODE | (10 & R828D_R7_MIX_GAIN));
+  r820_write_byte(sdr, 8, R828D_R8_PW0_AMP);
+  r820_write_byte(sdr, 9, R828D_R9_PWD_IFFILT | R828D_R9_PW1_IFFILT);
+  r820_write_byte(sdr, 10, (R828D_R10_PW_FILT & (1 << 5)) | (R828D_R10_FILT_CODE & 6));
+  r820_write_byte(sdr, 12, R828D_R12_VGA_MODE | (R828D_R12_VGA_CODE & 5));
+  r820_write_byte(sdr, 15, R828D_R15_FIXED | R828D_R15_CLK_OUT_ENB);
+  r820_write_byte(sdr, 17, R828D_R17_FIXED);
+  r820_write_byte(sdr, 23, R828D_R23_PW_LDO_D | R828D_R23_DIV_BUF_DUR | R828D_R23_FIXED);
+  r820_write_byte(sdr, 25, R828D_R25_FIXED);
 
   // Shut down Si5351 CLK1 (reference for tuner)
   si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+1, SI5351_VALUE_CLK_PDN); // CLK1
@@ -1072,11 +1072,11 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   uint8_t gain = 0x80 | 3;
   argument_send(sdr->dev_handle,AD8340_VGA,gain);
 
-  // Configure Si5351 CLK1 output (R820T tuner reference input)
+  // Configure Si5351 CLK1 output (R828D tuner reference input)
   bool ms_int = false;
   rx888_set_tuner_ref(sdr, &ms_int, sdr->reference, R828D_REF);
   si5351_write_byte(sdr,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLB_RESET);
-  // power on CLK1, ref clock to R820T/R828T tuner
+  // power on CLK1, ref clock to R828D/R828T tuner
   uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLB;
   // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer.
   if(ms_int)
@@ -1103,29 +1103,29 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   fprintf(stderr, "R820/828 chip ID 0x%x\n",val);
 
   // r5 = 0x80: loop-through OFF, LNA1 power on, LNA gain mode switch auto, LNA_GAIN = minimum
-  r820_write_byte(sdr, 5, R820T_R5_PWD_LT);
+  r820_write_byte(sdr, 5, R828D_R5_PWD_LT);
 
   // r6 = 0x13: Power detector 1 on, power detector 3 off, filter gain 0 dB, LNA power max-3
-  r820_write_byte(sdr, 6, R820T_R6_FIXED | (R820T_R6_PW_LNA & 3));
+  r820_write_byte(sdr, 6, R828D_R6_FIXED | (R828D_R6_PW_LNA & 3));
 
   // r7 = 0x70: Mixer on, mixer curent normal, mixer gain auto, mix gain minimum
-  r820_write_byte(sdr, 7, R820T_R7_PWD_MIX | R820T_R7_PW0_MIX | R820T_R7_MIXGAIN_MODE);
+  r820_write_byte(sdr, 7, R828D_R7_PWD_MIX | R828D_R7_PW0_MIX | R828D_R7_MIXGAIN_MODE);
 
   // r8 = 0xc0: mixer buffer power on, mixer buffer current low, image gain min
-  r820_write_byte(sdr, 8, R820T_R8_PWD_AMP | R820T_R8_PW0_AMP);
+  r820_write_byte(sdr, 8, R828D_R8_PWD_AMP | R828D_R8_PW0_AMP);
 
   // r9 = 0x40: IF filter power on, if filter current low, image phase min
-  r820_write_byte(sdr, 9, R820T_R9_PW1_IFFILT);
+  r820_write_byte(sdr, 9, R828D_R9_PW1_IFFILT);
 
   // r10 (0xa) = 0xdb: channel filter off, filter power 2nd lowest,
-  r820_write_byte(sdr, 10, R820T_R10_PWD_FILT | (R820T_R10_PW_FILT & (2 << 5)) | R820T_R10_FIXED
-		  | (R820T_R10_FILT_CODE & 11));
+  r820_write_byte(sdr, 10, R828D_R10_PWD_FILT | (R828D_R10_PW_FILT & (2 << 5)) | R828D_R10_FIXED
+		  | (R828D_R10_FILT_CODE & 11));
 
   // r11 (0xb) = 0x6b: FLT_BW = narrowest, high pass filter corner 11
-  r820_write_byte(sdr, 11, R820T_R11_FILT_BW | (R820T_R11_HPF & 11));
+  r820_write_byte(sdr, 11, R828D_R11_FILT_BW | (R828D_R11_HPF & 11));
 
   // r12 (0xc) = 0xeb: VGA power on, VGA gain controlled by code 11
-  r820_write_byte(sdr, 12, R820T_R12_SW_ADC | R820T_R12_PWD_VGA | R820T_R12_FIXED | (R820T_R12_VGA_CODE & 11));
+  r820_write_byte(sdr, 12, R828D_R12_SW_ADC | R828D_R12_PWD_VGA | R828D_R12_FIXED | (R828D_R12_VGA_CODE & 11));
 
   // r13 (0xd) = 0x53: LNA agc power detector high threshold = 5/15, low threshld = 3/15
   r820_write_byte(sdr, 13, (5<<4) | 3);
@@ -1134,32 +1134,32 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   r820_write_byte(sdr, 14, (7<<4) | 5);
 
   // r15 (0xf) = 0x68: filter extension widest = off, clock out off, internal agc clock on, disable ring clock
-  r820_write_byte(sdr, 15, (1<<5) | R820T_R15_CLK_OUT_ENB | R820T_R15_RING_CLK);
+  r820_write_byte(sdr, 15, (1<<5) | R828D_R15_CLK_OUT_ENB | R828D_R15_RING_CLK);
 
   // r17 (0x11) = 0xbb: PLL analog LDO 2.0 V, charge-pump = auto
-  r820_write_byte(sdr, 17, (2 << 6) | (5 << 3) | R820T_R17_FIXED);
+  r820_write_byte(sdr, 17, (2 << 6) | (5 << 3) | R828D_R17_FIXED);
 
   // r19 (0x13) = 0x31: VCO auto mode; low 6 bits are a VERSION TAG (ignored in auto)
   r820_write_byte(sdr, 19, 49);
 
   // r24 (0x18) = 0x48: ring oscillator OFF, nring = 8 (less than valid range 9-14)
-  r820_write_byte(sdr, 24, R820T_R24_FIXED | 8);
+  r820_write_byte(sdr, 24, R828D_R24_FIXED | 8);
 
   // r25 (0x19) = 0xec: RF tracking filter ON, poly-filter current = max, agc = agc_in
-  r820_write_byte(sdr, 25, R820T_R25_PWD_RFFILT | R820T_R25_POLFIL_CUR | R820T_R25_FIXED);
+  r820_write_byte(sdr, 25, R828D_R25_PWD_RFFILT | R828D_R25_POLFIL_CUR | R828D_R25_FIXED);
 
   // r28 (0x1c) = 0x24: mixer power-detector TOP 3rd highest?
-  r820_write_byte(sdr, 28, (2 << 4) | R820T_R28_FIXED);
+  r820_write_byte(sdr, 28, (2 << 4) | R828D_R28_FIXED);
 
   // r29 (0x1d) = 0xdd: LNA_TOP = PDET2_GAIN = 5
-  r820_write_byte(sdr, 29, R820T_R29_FIXED | (5 << 3) | 5);
+  r820_write_byte(sdr, 29, R828D_R29_FIXED | (5 << 3) | 5);
 
   // r31 (0x1f) = 0x40: LOOP THRU ATT enable, ring-osc power −5 dBaf
-  r820_write_byte(sdr, 31, R820T_R31_FIXED);
+  r820_write_byte(sdr, 31, R828D_R31_FIXED);
 }
 
 
-// Rewritten to directly configure SI5351 CLK1 as tuner ref clock, configure R820T tuner with frequency
+// Rewritten to directly configure SI5351 CLK1 as tuner ref clock, configure R828D tuner with frequency
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
@@ -1192,32 +1192,21 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   if(div_num == 5)
     return frontend->frequency; // out of range
 
-  int nint = (vco + (ldexp(R828D_REF,-16))) / (2 * R828D_REF);
-  int vco_fract = lrint(vco - 2 * R828D_REF * nint);
-  int ni = (nint-13) >> 2;
-  int si = nint - (ni << 2) - 13;
-  r820_write_byte_mask(sdr, 16, div_num << 5, R820T_R16_SEL_DIV);
+  double const vco_div = (R828D_REF + ldexp(vco,16)) / (2 * R828D_REF);
+  int const nint = floor(ldexp(vco_div,-16));
+  int const sdm = floor(vco_div - nint * 65536);
+  int const ni = (nint-13) >> 2;
+  int const si = nint - ((ni << 2) + 13);
+  r820_write_byte_mask(sdr, 16, div_num << 5, R828D_R16_SEL_DIV);
   int dither = 0x10;  // or 0?
-  r820_write_byte_mask(sdr, 18, dither, R820T_R18_DITHER|R820T_R18_PW_SDM);
+  r820_write_byte_mask(sdr, 18, dither, R828D_R18_DITHER|R828D_R18_PW_SDM);
   r820_write_byte(sdr, 20, ni + (si << 6)); // approx vco
-  int sdm = 0;
-
-  if(vco_fract == 0) {
-    r820_write_byte_mask(sdr, 18, R820T_R18_PW_SDM,R820T_R18_PW_SDM); // disable fract pll
+  if(sdm == 0) {
+    r820_write_byte_mask(sdr, 18, R828D_R18_PW_SDM,R828D_R18_PW_SDM); // disable fract pll
   } else {
-    vco_fract += ldexp(R828D_REF,-16);
-    for(int n_sdm = 0; n_sdm < 16; n_sdm++){
-      int con_frac = ldexp(R828D_REF, -n_sdm);
-      if(vco_fract >= con_frac){
-	sdm |= (0x8000 >> n_sdm);
-	vco_fract -= con_frac;
-	if(vco_fract == 0)
-	  break;
-      }
-    }
     r820_write_byte(sdr, 21, sdm & 0xff);
     r820_write_byte(sdr, 22, sdm >> 8);
-    r820_write_byte_mask(sdr, 18, 0, R820T_R18_PW_SDM); // enable frac pll
+    r820_write_byte_mask(sdr, 18, 0, R828D_R18_PW_SDM); // enable frac pll
   }
   int i;
   for(i=0; i < 50; i++){
