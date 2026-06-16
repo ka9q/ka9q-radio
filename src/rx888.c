@@ -1227,7 +1227,8 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   }
   r820_write_byte_mask(sdr, 26, 0x08, R828D_R26_PLL_AUTO_CLK); // Drop loop bandwidth?
 
-  double ff = ldexp(R828D_REF * (nint + (double)sdm/65536.),-div_num); // Actual synth frequency (important to know)
+  double actual_vco = 2 * R828D_REF * (nint + ldexp((double)sdm,-16));
+  double ff = ldexp(actual_vco, -(div_num+1)); // Actual synth frequency (important to know)
   fprintf(stderr,"nint = %d, sdm = %d, div_num = %d, ni = %d, si = %d, f=%'lf\n", nint, sdm, div_num, ni, si, ff);
   frontend->frequency = ff;
   return frontend->frequency;
