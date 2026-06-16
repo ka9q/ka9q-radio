@@ -1232,8 +1232,13 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
 	break;
       usleep(1000);
     }
-    if(i == 50)
-      fprintf(stderr,"still didn't lock\n");
+    if(i == 50){
+      fprintf(stderr,"still didn't lock, regs =\n");
+      for(int j=0; j < 5; j++)
+	fprintf(stderr," %0x",R828D_status[j]);
+      fprintf(stderr,"\n");
+    }
+
   }
   r828_write_byte_mask(sdr, 26, 0x08, R828D_R26_PLL_AUTO_CLK); // Drop loop bandwidth?
 
