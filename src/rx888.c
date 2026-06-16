@@ -1099,7 +1099,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
     0x0e, 	//Reg 0x1e
     0x40	//Reg 0x1f
   };
-  for(int i=5; i < 32; i)
+  for(int i=5; i < 32; i++)
     r828_write_byte(sdr,i,r82xx_init_array[i-5]);
 
 #else
