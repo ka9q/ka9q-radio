@@ -160,9 +160,9 @@ static inline uint8_t bitrev(uint8_t b){
 // hack test to read first 5 bytes (status registers)
 static inline int r828_status(struct sdrstate *sdr){
   uint8_t buf[5];
-  int r = control_recv(sdr->dev_handle, I2CRFX3, R828D_ADDR, 0, buf, 5);
+  int r = control_recv(sdr->dev_handle, I2CRFX3, R828D_ADDR, 0, buf, sizeof buf);
   assert(r == 5);
-  for(int i=0; i<5; i++)
+  for(int i=0; i<r; i++)
     R828D_shadow[i] = bitrev(buf[i]);
   return r;
 }
@@ -1198,14 +1198,13 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
       div_num++;
   }
   r828_write_byte(sdr, 16, div_num << 5); // also set REFDIV low (no divider on xtal), no capacitor
-  int const nint = floor((exact_vco + ldexp(R828D_REF,-16)) / (2 * R828D_REF)); // integer portion of freq divisor
-  double const vco_frac = exact_vco - 2 * R828D_REF * nint; // error in Hz between desired VCO and integer multiplier from 2*ref
-  assert(vco_frac >= 0);
+  double const vco_div = 0.5 + 65536 * exact_vco / (2 * R828D_REF);
+  int const nint = floor(vco_div / 65536);
+  int const sdm = floor(vco_div - nint * 65536);
+  assert(nint >= 13 && sdm >= 0 && sdm < 65536);
   int const ni = (nint-13) >> 2;
   int const si = nint - ((ni << 2) + 13);
   r828_write_byte(sdr, 20, ni + (si << 6)); // encoded integer divisor
-  int const sdm = floor(ldexp(vco_frac / (2 * R828D_REF), 16)); // fractional divisor scaled to 16 bits
-  assert(sdm >= 0 && sdm < 65536);
   if(sdm == 0) {
     // Divisor is an exact integer, disable the fractional PLL probably to lower phase noise
     r828_write_byte_mask(sdr, 18, R828D_R18_PW_SDM, R828D_R18_PW_SDM); // disable fract pll
