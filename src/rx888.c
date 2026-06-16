@@ -1204,13 +1204,16 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   r820_write_byte(sdr, 16, div_num << 5); // also set REFDIV low (no divider on xtal), no capacitor
   val = R828D_R18_DITHER;  // disable dither
   r820_write_byte_mask(sdr, 18, val, R828D_R18_DITHER|R828D_R18_PW_SDM); // also set other bits low
-  int const nint = (vco + ldexp(R828D_REF,-16)) / (2 * R828D_REF);
-  int const vco_frac = vco - 2 * R828D_REF * nint;
+  int const nint = floor((vco + ldexp(R828D_REF,-16)) / (2 * R828D_REF));
+  double const vco_frac = vco - 2 * R828D_REF * nint; // error in Hz between desired VCO and integer multiplier from 2*ref
   assert(vco_frac >= 0);
   int const ni = (nint-13) >> 2;
   int const si = nint - ((ni << 2) + 13);
   r820_write_byte(sdr, 20, ni + (si << 6)); // approx vco
-  if(vco_fract == 0) {
+  int const sdm = floor(ldexp(vco_frac / (2 * R828D_REF), 16)); // scale to a fraction of 16 bits
+  assert(sdm >= 0 && sdm < 65536);
+
+  if(sdm == 0) {
     r820_write_byte_mask(sdr, 18, R828D_R18_PW_SDM,R828D_R18_PW_SDM); // disable fract pll
   } else {
     r820_write_byte(sdr, 21, sdm & 0xff);
