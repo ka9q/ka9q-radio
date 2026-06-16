@@ -338,10 +338,17 @@ static void setup_windows(void){
   }
 }
 
-// Comparison for sorting by SSRC
+// Comparison for sorting by frequency (Hz) ascending, with SSRC as tiebreaker
 static int chan_compare(void const *a,void const *b){
   struct channel const *da = *(struct channel **)a;
   struct channel const *db = *(struct channel **)b;
+  if(da->tune.freq < db->tune.freq){
+    return -1;
+  }
+  if(da->tune.freq > db->tune.freq){
+    return +1;
+  }
+  // Same frequency; fall back to SSRC for a stable, deterministic order
   if(da->output.rtp.ssrc < db->output.rtp.ssrc){
     return -1;
   }
