@@ -119,6 +119,7 @@ struct sdrstate {
   _Atomic bool device_gone;
 };
 
+static uint8_t R828D_shadow[32];
 
 static void rx_callback(struct libusb_transfer *transfer);
 static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize);
@@ -156,7 +157,7 @@ static inline uint8_t bitrev(uint8_t b){
   return b;
 }
 
-`static inline int r828_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
+static inline int r828_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
   // Device reads LSB first, but writes MSB first (!)
   reg &= 31;
   int r = control_recv(sdr->dev_handle, I2CRFX3, R828D_ADDR, reg, val, sizeof *val);
@@ -170,7 +171,6 @@ static inline int r828_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, in
   return control_send(sdr->dev_handle, I2CWFX3, R828D_ADDR, reg, arg, len);
 }
 #endif
-static uint8_t R828D_shadow[32];
 
 static inline int r828_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
   reg &= 31;
