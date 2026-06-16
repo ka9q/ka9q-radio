@@ -1197,7 +1197,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     else if(vco_fine_tune < 1)
       div_num++;
   }
-  r828_write_byte(sdr, 16, div_num << 5); // also set REFDIV low (no divider on xtal), no capacitor
+  r828_write_byte(sdr, 16, div_num << 5 | R828D_R16_FIXED); // also set REFDIV low (no divider on xtal), no capacitor
   double const vco_div = 0.5 + 65536 * exact_vco / (2 * R828D_REF);
   int const nint = floor(vco_div / 65536);
   int const sdm = floor(vco_div - nint * 65536);
@@ -1222,7 +1222,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     usleep(1000);
   }
   if(i == 50){
-    fprintf(stdout,"R820 PLL didn't lock\n");
+    fprintf(stdout,"R828D PLL didn't lock\n");
     r828_write_byte_mask(sdr, 18, 0x60, R828D_R18_VCOC); // increase current
     for(i=0; i < 50; i++){
       r828_status(sdr);
