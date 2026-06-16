@@ -159,6 +159,7 @@ static inline uint8_t bitrev(uint8_t b){
 static inline int r820_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
   // Device reads LSB first, but writes MSB first (!)
   int r = control_recv(sdr->dev_handle, I2CRFX3, R820_ADDR, reg, val, sizeof *val);
+  assert(r == 1);
   *val = bitrev(*val);
   return r;
 }
@@ -1204,9 +1205,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   int i;
   for(i=0; i < 50; i++){
     uint8_t val;
-    int r = r820_read(sdr, 2, &val);
-    if(r != 0)
-      fprintf(stderr,"r820_read returned %d\n",r);
+    r820_read(sdr, 2, &val);
     if(val & R828D_R2_VCO_INDICATOR) // vco locked?
       break;
     usleep(1000);
