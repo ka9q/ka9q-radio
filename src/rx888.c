@@ -1197,7 +1197,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   int const ni = (nint-13) >> 2;
   int const si = nint - ((ni << 2) + 13);
 
-  // Mystery code -- relieve loop stress? Returns 1 anyway
+  // Mystery code Returns 1 anyway
   uint8_t val;
   r820_read(sdr, 4, &val);
   int vco_fine_tune = (val & R828D_R4_VCO_FINE_TUNE) >> 4;
@@ -1207,7 +1207,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   else if(vco_fine_tune < 1)
     div_num++;
 
-  r820_write_byte_mask(sdr, 16, div_num << 5, R828D_R16_SEL_DIV);
+  r820_write_byte(sdr, 16, div_num << 5; // also set REFDIV low (no divider on xtal), no capacitor
   val = 0x10 | 0x80;  // or 0?
   r820_write_byte_mask(sdr, 18, val, R828D_R18_DITHER|R828D_R18_PW_SDM);
   r820_write_byte(sdr, 20, ni + (si << 6)); // approx vco
