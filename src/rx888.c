@@ -1202,7 +1202,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   r820_read(sdr, 4, &val);
   int vco_fine_tune = (val & R828D_R4_VCO_FINE_TUNE) >> 4;
   fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
-  if(vco_fine_tine > 1)
+  if(vco_fine_tune > 1)
     div_num--;
   else if(vco_fine_tune < 1)
     div_num++;
