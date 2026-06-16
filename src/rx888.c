@@ -156,31 +156,33 @@ static inline uint8_t bitrev(uint8_t b){
   return b;
 }
 
-static inline int r820_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
+`static inline int r828_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
   // Device reads LSB first, but writes MSB first (!)
-  int r = control_recv(sdr->dev_handle, I2CRFX3, R820_ADDR, reg, val, sizeof *val);
+  reg &= 31;
+  int r = control_recv(sdr->dev_handle, I2CRFX3, R828D_ADDR, reg, val, sizeof *val);
   assert(r == 1);
   *val = bitrev(*val);
+  R828D_shadow[reg] = *val;
   return r;
 }
 #if 0
-static inline int r820_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
-  return control_send(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg, len);
+static inline int r828_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
+  return control_send(sdr->dev_handle, I2CWFX3, R828D_ADDR, reg, arg, len);
 }
 #endif
-static uint8_t R820_shadow[32];
+static uint8_t R828D_shadow[32];
 
-static inline int r820_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
+static inline int r828_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
   reg &= 31;
-  R820_shadow[reg] = arg;
-  int r = control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
+  R828D_shadow[reg] = arg;
+  int r = control_send_byte(sdr->dev_handle, I2CWFX3, R828D_ADDR, reg, arg);
   assert(r == 0);
   return r;
 }
-static inline int r820_write_byte_mask(struct sdrstate *sdr, uint8_t reg, uint8_t arg, uint8_t mask){
+static inline int r828_write_byte_mask(struct sdrstate *sdr, uint8_t reg, uint8_t arg, uint8_t mask){
   reg &= 31;
-  R820_shadow[reg] = arg = (arg & mask) | (R820_shadow[reg] & ~mask);
-  int r = control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
+  R828D_shadow[reg] = arg = (arg & mask) | (R828D_shadow[reg] & ~mask);
+  int r = control_send_byte(sdr->dev_handle, I2CWFX3, R828D_ADDR, reg, arg);
   assert(r == 0);
   return r;
 }
@@ -1016,17 +1018,17 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
   // HF AGC? gain?
   // Shut down tuner
-  r820_write_byte(sdr, 6, R828D_R6_PWD_PDET1 | R828D_R6_FILT_3DB | (R828D_R6_PW_LNA & 1));
-  r820_write_byte(sdr, 5, R828D_R5_PWD_LT | R828D_R5_PWD_LNA1);
-  r820_write_byte(sdr, 7, R828D_R7_PW0_MIX| R828D_R7_MIXGAIN_MODE | (10 & R828D_R7_MIX_GAIN));
-  r820_write_byte(sdr, 8, R828D_R8_PW0_AMP);
-  r820_write_byte(sdr, 9, R828D_R9_PWD_IFFILT | R828D_R9_PW1_IFFILT);
-  r820_write_byte(sdr, 10, (R828D_R10_PW_FILT & (1 << 5)) | (R828D_R10_FILT_CODE & 6));
-  r820_write_byte(sdr, 12, R828D_R12_VGA_MODE | (R828D_R12_VGA_CODE & 5));
-  r820_write_byte(sdr, 15, R828D_R15_FIXED | R828D_R15_CLK_OUT_ENB);
-  r820_write_byte(sdr, 17, R828D_R17_FIXED);
-  r820_write_byte(sdr, 23, R828D_R23_PW_LDO_D | R828D_R23_DIV_BUF_DUR | R828D_R23_FIXED);
-  r820_write_byte(sdr, 25, R828D_R25_FIXED);
+  r828_write_byte(sdr, 6, R828D_R6_PWD_PDET1 | R828D_R6_FILT_3DB | (R828D_R6_PW_LNA & 1));
+  r828_write_byte(sdr, 5, R828D_R5_PWD_LT | R828D_R5_PWD_LNA1);
+  r828_write_byte(sdr, 7, R828D_R7_PW0_MIX| R828D_R7_MIXGAIN_MODE | (10 & R828D_R7_MIX_GAIN));
+  r828_write_byte(sdr, 8, R828D_R8_PW0_AMP);
+  r828_write_byte(sdr, 9, R828D_R9_PWD_IFFILT | R828D_R9_PW1_IFFILT);
+  r828_write_byte(sdr, 10, (R828D_R10_PW_FILT & (1 << 5)) | (R828D_R10_FILT_CODE & 6));
+  r828_write_byte(sdr, 12, R828D_R12_VGA_MODE | (R828D_R12_VGA_CODE & 5));
+  r828_write_byte(sdr, 15, R828D_R15_FIXED | R828D_R15_CLK_OUT_ENB);
+  r828_write_byte(sdr, 17, R828D_R17_FIXED);
+  r828_write_byte(sdr, 23, R828D_R23_PW_LDO_D | R828D_R23_DIV_BUF_DUR | R828D_R23_FIXED);
+  r828_write_byte(sdr, 25, R828D_R25_FIXED);
 
   // Shut down Si5351 CLK2 (reference for tuner)
   si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+2, SI5351_VALUE_CLK_PDN); // CLK1
@@ -1054,90 +1056,90 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   rx888_set_tuner_ref(sdr, (long long)sdr->reference, (long long)R828D_REF);
   // set up tuner
   uint8_t val = 0;
-  r820_read(sdr, 0, &val);
+  r828_read(sdr, 0, &val);
   fprintf(stderr, "R820/828 chip ID 0x%x\n",val);
 
   // r5 = 0x80: loop-through OFF, LNA1 power on, LNA gain mode switch auto, LNA_GAIN = minimum
-  r820_write_byte(sdr, 5, R828D_R5_PWD_LT);
+  r828_write_byte(sdr, 5, R828D_R5_PWD_LT);
 
   // r6 = 0x13: Power detector 1 on, power detector 3 off, filter gain 0 dB, LNA power max-3
-  r820_write_byte(sdr, 6, R828D_R6_FIXED | (R828D_R6_PW_LNA & 3));
+  r828_write_byte(sdr, 6, R828D_R6_FIXED | (R828D_R6_PW_LNA & 3));
 
   // r7 = 0x70: Mixer on, mixer curent normal, mixer gain auto, mix gain minimum
-  r820_write_byte(sdr, 7, R828D_R7_PWD_MIX | R828D_R7_PW0_MIX | R828D_R7_MIXGAIN_MODE);
+  r828_write_byte(sdr, 7, R828D_R7_PWD_MIX | R828D_R7_PW0_MIX | R828D_R7_MIXGAIN_MODE);
 
   // r8 = 0xc0: mixer buffer power on, mixer buffer current low, image gain min
-  r820_write_byte(sdr, 8, R828D_R8_PWD_AMP | R828D_R8_PW0_AMP);
+  r828_write_byte(sdr, 8, R828D_R8_PWD_AMP | R828D_R8_PW0_AMP);
 
   // r9 = 0x40: IF filter power on, if filter current low, image phase min
-  r820_write_byte(sdr, 9, R828D_R9_PW1_IFFILT);
+  r828_write_byte(sdr, 9, R828D_R9_PW1_IFFILT);
 
   // r10 (0xa) = 0xdb: channel filter off, filter power 2nd lowest,
-  r820_write_byte(sdr, 10, R828D_R10_PWD_FILT | (R828D_R10_PW_FILT & (2 << 5)) | R828D_R10_FIXED
+  r828_write_byte(sdr, 10, R828D_R10_PWD_FILT | (R828D_R10_PW_FILT & (2 << 5)) | R828D_R10_FIXED
 		  | (R828D_R10_FILT_CODE & 11));
 
   // r11 (0xb) = 0x6b: FLT_BW = narrowest, high pass filter corner 11
-  r820_write_byte(sdr, 11, R828D_R11_FILT_BW | (R828D_R11_HPF & 11));
+  r828_write_byte(sdr, 11, R828D_R11_FILT_BW | (R828D_R11_HPF & 11));
 
   // r12 (0xc) = 0xeb: VGA power on, VGA gain controlled by code 11
-  r820_write_byte(sdr, 12, R828D_R12_SW_ADC | R828D_R12_PWD_VGA | R828D_R12_FIXED | (R828D_R12_VGA_CODE & 11));
+  r828_write_byte(sdr, 12, R828D_R12_SW_ADC | R828D_R12_PWD_VGA | R828D_R12_FIXED | (R828D_R12_VGA_CODE & 11));
 
   // r13 (0xd) = 0x53: LNA agc power detector high threshold = 5/15, low threshld = 3/15
-  r820_write_byte(sdr, 13, (5<<4) | 3);
+  r828_write_byte(sdr, 13, (5<<4) | 3);
 
   // r14 (0xe) = 0x75: mixer agc threshold high = 7/15, low threshold = 5/15
-  r820_write_byte(sdr, 14, (7<<4) | 5);
+  r828_write_byte(sdr, 14, (7<<4) | 5);
 
   // r15 (0xf) = 0x68: filter extension widest = off, clock out off, internal agc clock on, disable ring clock
-  r820_write_byte(sdr, 15, (1<<5) | R828D_R15_CLK_OUT_ENB | R828D_R15_RING_CLK);
+  r828_write_byte(sdr, 15, (1<<5) | R828D_R15_CLK_OUT_ENB | R828D_R15_RING_CLK);
 
   // r16 (0x10) = 0x6c: SEL_DIV = 3, REFDIV=0, XTAL=1 ?
-  r820_write_byte(sdr, 16, (3<<5) | R828D_R16_XTAL | R828D_R16_FIXED);
+  r828_write_byte(sdr, 16, (3<<5) | R828D_R16_XTAL | R828D_R16_FIXED);
 
   // r17 (0x11) = 0xbb: PLL analog LDO 2.0 V, charge-pump = auto
-  r820_write_byte(sdr, 17, (2 << 6) | (5 << 3) | R828D_R17_FIXED);
+  r828_write_byte(sdr, 17, (2 << 6) | (5 << 3) | R828D_R17_FIXED);
 
   // r18 (0x12) = 0x80: vco current = 4
-  r820_write_byte(sdr, 18, 4 << 5);
+  r828_write_byte(sdr, 18, 4 << 5);
 
   // r19 (0x13) = 0x31: VCO auto mode; low 6 bits are a VERSION TAG (ignored in auto)
-  r820_write_byte(sdr, 19, 49);
+  r828_write_byte(sdr, 19, 49);
 
   // r20 (0x14) = 0x0f: si = 0, ni = 15
-  r820_write_byte(sdr, 20, 0x0f);
+  r828_write_byte(sdr, 20, 0x0f);
 
   // r21 (0x15) = 00
-  r820_write_byte(sdr, 21, 0);
+  r828_write_byte(sdr, 21, 0);
 
   // r22 (0x16) = 0xc0: high order divider fraction
-  r820_write_byte(sdr, 22, 0xc0);
+  r828_write_byte(sdr, 22, 0xc0);
 
   // r23 (0x17) = 0x30: DIV_BUF_DUR = 3
-  r820_write_byte(sdr, 23, R828D_R23_DIV_BUF_DUR);
+  r828_write_byte(sdr, 23, R828D_R23_DIV_BUF_DUR);
 
   // r24 (0x18) = 0x48: ring oscillator OFF, nring = 8 (less than valid range 9-14)
-  r820_write_byte(sdr, 24, R828D_R24_FIXED | 8);
+  r828_write_byte(sdr, 24, R828D_R24_FIXED | 8);
 
   // r25 (0x19) = 0xec: RF tracking filter ON, poly-filter current = max, agc = agc_in
-  r820_write_byte(sdr, 25, R828D_R25_PWD_RFFILT | R828D_R25_POLFIL_CUR | R828D_R25_FIXED);
+  r828_write_byte(sdr, 25, R828D_R25_PWD_RFFILT | R828D_R25_POLFIL_CUR | R828D_R25_FIXED);
 
   // r26 (0x1a) = 0x60: RFMUX = 1, AGC_CLK=1
-  r820_write_byte(sdr, 26, 0x60);
+  r828_write_byte(sdr, 26, 0x60);
 
   // r27 (0x1b) = 0
-  r820_write_byte(sdr, 27, 0);
+  r828_write_byte(sdr, 27, 0);
 
   // r28 (0x1c) = 0x24: mixer power-detector TOP 3rd highest?
-  r820_write_byte(sdr, 28, (2 << 4) | R828D_R28_FIXED);
+  r828_write_byte(sdr, 28, (2 << 4) | R828D_R28_FIXED);
 
   // r29 (0x1d) = 0xdd: LNA_TOP = PDET2_GAIN = 5
-  r820_write_byte(sdr, 29, R828D_R29_FIXED | (5 << 3) | 5);
+  r828_write_byte(sdr, 29, R828D_R29_FIXED | (5 << 3) | 5);
 
   // r30 (0x1e) = 0x4a: FILTER_EXT = 1, PDET_CLK=10
-  r820_write_byte(sdr, 30, (1<<6) | 10);
+  r828_write_byte(sdr, 30, (1<<6) | 10);
 
   // r31 (0x1f) = 0x40: LOOP THRU ATT enable, ring-osc power −5 dBaf
-  r820_write_byte(sdr, 31, R828D_R31_FIXED);
+  r828_write_byte(sdr, 31, R828D_R31_FIXED);
 }
 
 
@@ -1174,12 +1176,12 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   if(div_num > 5)
     return frontend->frequency; // out of range
 
-  r820_write_byte_mask(sdr, 26, 0, R828D_R26_PLL_AUTO_CLK); // pll tune (loop bw?) = 128k
-  r820_write_byte_mask(sdr, 18, 4<<5, R828D_R18_VCOC); // vco current = 4 (100b)
+  r828_write_byte_mask(sdr, 26, 0, R828D_R26_PLL_AUTO_CLK); // pll tune (loop bw?) = 128k
+  r828_write_byte_mask(sdr, 18, 4<<5, R828D_R18_VCOC); // vco current = 4 (100b)
   {
     // Mystery code Returns 1 anyway
-    uint8_t val;
-    r820_read(sdr, 4, &val);
+    uint8_t val = 0;
+    r828_read(sdr, 4, &val);
     int vco_fine_tune = (val & R828D_R4_VCO_FINE_TUNE) >> 4;
     fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
     if(vco_fine_tune > 1)
@@ -1187,37 +1189,37 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     else if(vco_fine_tune < 1)
       div_num++;
   }
-  r820_write_byte(sdr, 16, div_num << 5); // also set REFDIV low (no divider on xtal), no capacitor
+  r828_write_byte(sdr, 16, div_num << 5); // also set REFDIV low (no divider on xtal), no capacitor
   int const nint = floor((exact_vco + ldexp(R828D_REF,-16)) / (2 * R828D_REF)); // integer portion of freq divisor
   double const vco_frac = exact_vco - 2 * R828D_REF * nint; // error in Hz between desired VCO and integer multiplier from 2*ref
   assert(vco_frac >= 0);
   int const ni = (nint-13) >> 2;
   int const si = nint - ((ni << 2) + 13);
-  r820_write_byte(sdr, 20, ni + (si << 6)); // approx vco
+  r828_write_byte(sdr, 20, ni + (si << 6)); // encoded integer divisor
   int const sdm = floor(ldexp(vco_frac / (2 * R828D_REF), 16)); // fractional divisor scaled to 16 bits
   assert(sdm >= 0 && sdm < 65536);
   if(sdm == 0) {
     // Divisor is an exact integer, disable the fractional PLL probably to lower phase noise
-    r820_write_byte_mask(sdr, 18, R828D_R18_PW_SDM, R828D_R18_PW_SDM); // disable fract pll
+    r828_write_byte_mask(sdr, 18, R828D_R18_PW_SDM, R828D_R18_PW_SDM); // disable fract pll
   } else {
-    r820_write_byte(sdr, 21, sdm & 0xff);
-    r820_write_byte(sdr, 22, sdm >> 8);
-    r820_write_byte_mask(sdr, 18, 0, R828D_R18_PW_SDM); // enable frac pll (redundant?)
+    r828_write_byte(sdr, 21, sdm & 0xff);
+    r828_write_byte(sdr, 22, sdm >> 8);
+    r828_write_byte_mask(sdr, 18, 0, R828D_R18_PW_SDM); // enable frac pll (redundant?)
   }
   int i;
   for(i=0; i < 50; i++){
-    uint8_t val;
-    r820_read(sdr, 2, &val);
+    uint8_t val = 0;
+    r828_read(sdr, 2, &val);
     if(val & R828D_R2_VCO_INDICATOR) // vco locked?
       break;
     usleep(1000);
   }
   if(i == 50){
     fprintf(stdout,"R820 PLL didn't lock\n");
-    r820_write_byte_mask(sdr, 18, 0x60, R828D_R18_VCOC); // increase current
+    r828_write_byte_mask(sdr, 18, 0x60, R828D_R18_VCOC); // increase current
     for(i=0; i < 50; i++){
-      uint8_t val;
-      r820_read(sdr, 2, &val);
+      uint8_t val = 0;
+      r828_read(sdr, 2, &val);
       if(val & R828D_R2_VCO_INDICATOR) // vco locked?
 	break;
       usleep(1000);
@@ -1225,7 +1227,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     if(i == 50)
       fprintf(stderr,"still didn't lock\n");
   }
-  r820_write_byte_mask(sdr, 26, 0x08, R828D_R26_PLL_AUTO_CLK); // Drop loop bandwidth?
+  r828_write_byte_mask(sdr, 26, 0x08, R828D_R26_PLL_AUTO_CLK); // Drop loop bandwidth?
 
   double actual_vco = 2 * R828D_REF * (nint + ldexp((double)sdm,-16));
   double ff = ldexp(actual_vco, -(div_num+1)); // Actual synth frequency (important to know)
@@ -1361,6 +1363,8 @@ double rx888_tune(struct frontend *frontend,double freq){
 }
 
 // Set CLK0 output, the A/D sample clock
+// R15 is reset to 0, so the CLKIN divider is 1 (between 10-40 MHz)
+// Both PLLs are taking their reference from the crystal (actually the external ref)
 static double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long long const samprate){
   assert(sdr != NULL);
   assert(reference != 0);
