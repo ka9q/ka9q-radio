@@ -1170,6 +1170,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     return frontend->frequency; // out of range
 
   r820_write_byte_mask(sdr, 26, 0, R828D_R26_PLL_AUTO_CLK); // pll tune = 128k
+  r820_write_byte_mask(sdr, 18, 4<<5, R828D_R18_VCOC); // vco current = 4 (100b)
 
   // Mystery code Returns 1 anyway
   uint8_t val;
@@ -1182,8 +1183,6 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     div_num++;
 
   r820_write_byte(sdr, 16, div_num << 5); // also set REFDIV low (no divider on xtal), no capacitor
-  val = R828D_R18_DITHER;  // disable dither, enable fractional divisor
-  r820_write_byte_mask(sdr, 18, val, R828D_R18_DITHER|R828D_R18_PW_SDM); // also set other bits low
   int const nint = floor((vco + ldexp(R828D_REF,-16)) / (2 * R828D_REF));
   double const vco_frac = vco - 2 * R828D_REF * nint; // error in Hz between desired VCO and integer multiplier from 2*ref
   assert(vco_frac >= 0);
@@ -1200,7 +1199,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     r820_write_byte(sdr, 22, sdm >> 8);
     r820_write_byte_mask(sdr, 18, 0, R828D_R18_PW_SDM); // enable frac pll (redundant?)
   }
-  usleep(5000);
+  usleep(5000); // time to settle
 
   int i;
   for(i=0; i < 50; i++){
