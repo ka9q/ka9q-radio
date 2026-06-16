@@ -1059,6 +1059,9 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   r828_read(sdr, 0, &val);
   fprintf(stderr, "R820/828 chip ID 0x%x\n",val);
 
+  for(int i=1;i<5;i++)
+    r828_read(sdr,0,&val);
+
   // r5 = 0x80: loop-through OFF, LNA1 power on, LNA gain mode switch auto, LNA_GAIN = minimum
   r828_write_byte(sdr, 5, R828D_R5_PWD_LT);
 
