@@ -173,12 +173,16 @@ static uint8_t R820_shadow[32];
 static inline int r820_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
   reg &= 31;
   R820_shadow[reg] = arg;
-  return control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
+  int r = control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
+  assert(r == 0);
+  return r;
 }
 static inline int r820_write_byte_mask(struct sdrstate *sdr, uint8_t reg, uint8_t arg, uint8_t mask){
   reg &= 31;
   R820_shadow[reg] = arg = (arg & mask) | (R820_shadow[reg] & ~mask);
-  return control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
+  int r = control_send_byte(sdr->dev_handle, I2CWFX3, R820_ADDR, reg, arg);
+  assert(r == 0);
+  return r;
 }
 
 // stolen from github.com/ringof/rx888-firmware/blob/claude/return-vhf-tuner/rx888_vhf.py
