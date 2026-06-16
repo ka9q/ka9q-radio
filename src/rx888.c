@@ -1494,6 +1494,7 @@ static double rx888_set_samprate(struct sdrstate *sdr, long long const reference
   si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+0, clock_control);
 
   // Ensure clk0 output is not disabled
+  uint8_t enb;
   si5351_read(sdr, SI5351_REGISTER_OUTPUT_CTL,&enb);
   enb &= ~(1<<0);
   si5351_write_byte(sdr, SI5351_REGISTER_OUTPUT_CTL,enb);
