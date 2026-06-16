@@ -1261,7 +1261,8 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   }
   if(i == 50){
     fprintf(stdout,"R828D PLL didn't lock\n");
-    r828_write_byte_mask(sdr, 18, 0x60, R828D_R18_VCOC); // increase current
+    //    r828_write_byte_mask(sdr, 18, 0x60, R828D_R18_VCOC); // increase current
+    r828_write_byte_mask(sdr, 18, 0x00, R828D_R18_VCOC); // increase current to max
     for(i=0; i < 50; i++){
       r828_status(sdr);
       uint8_t val = R828D_status[2];
