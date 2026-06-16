@@ -1207,7 +1207,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   else if(vco_fine_tune < 1)
     div_num++;
 
-  r820_write_byte(sdr, 16, div_num << 5; // also set REFDIV low (no divider on xtal), no capacitor
+  r820_write_byte(sdr, 16, div_num << 5); // also set REFDIV low (no divider on xtal), no capacitor
   val = 0x10 | 0x80;  // or 0?
   r820_write_byte_mask(sdr, 18, val, R828D_R18_DITHER|R828D_R18_PW_SDM);
   r820_write_byte(sdr, 20, ni + (si << 6)); // approx vco
