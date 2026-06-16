@@ -1120,7 +1120,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   r820_write_byte(sdr, 26, 0x60);
 
   // r27 (0x1b) = 0
-  r820_write_byte(sdr, 26, 0);
+  r820_write_byte(sdr, 27, 0);
 
   // r28 (0x1c) = 0x24: mixer power-detector TOP 3rd highest?
   r820_write_byte(sdr, 28, (2 << 4) | R828D_R28_FIXED);
