@@ -1194,15 +1194,18 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   // Mystery code Returns 1 anyway
   uint8_t val;
   r820_read(sdr, 4, &val);
+  r820_write_byte_mask(sdr, 26, 0, R828D_R26_PLL_AUTO_CLK); // pll tune = 128k
+
+
   int vco_fine_tune = (val & R828D_R4_VCO_FINE_TUNE) >> 4;
-  fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
+  //  fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
   if(vco_fine_tune > 1)
     div_num--;
   else if(vco_fine_tune < 1)
     div_num++;
 
   r820_write_byte(sdr, 16, div_num << 5); // also set REFDIV low (no divider on xtal), no capacitor
-  val = R828D_R18_DITHER;  // disable dither
+  val = R828D_R18_DITHER;  // disable dither, enable fractional divisor
   r820_write_byte_mask(sdr, 18, val, R828D_R18_DITHER|R828D_R18_PW_SDM); // also set other bits low
   int const nint = floor((vco + ldexp(R828D_REF,-16)) / (2 * R828D_REF));
   double const vco_frac = vco - 2 * R828D_REF * nint; // error in Hz between desired VCO and integer multiplier from 2*ref
@@ -1218,7 +1221,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   } else {
     r820_write_byte(sdr, 21, sdm & 0xff);
     r820_write_byte(sdr, 22, sdm >> 8);
-    r820_write_byte_mask(sdr, 18, 0, R828D_R18_PW_SDM); // enable frac pll
+    r820_write_byte_mask(sdr, 18, 0, R828D_R18_PW_SDM); // enable frac pll (redundant?)
   }
   usleep(5000);
 
@@ -1230,11 +1233,22 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
       break;
     usleep(1000);
   }
-  if(i == 50)
+  if(i == 50){
     fprintf(stdout,"R820 PLL didn't lock\n");
+    r820_write_byte_mask(sdr, 18, 0x60, R828D_R18_VCOC); // increase current
+    for(i=0; i < 50; i++){
+      uint8_t val;
+      r820_read(sdr, 2, &val);
+      if(val & R828D_R2_VCO_INDICATOR) // vco locked?
+	break;
+      usleep(1000);
+    }
+    if(i == 50)
+      fprintf(stderr,"still didn't lock\n");
+  }
 
-  double ff = ldexp(2 * R828D_REF * (nint + (double)sdm/65536.),-(div_num+1));
-  fprintf(stderr,"nint = %d, sdm = %d, div_num = %d, ni = %d, si = %d, f=%lf\n", nint, sdm, div_num, ni, si, ff);
+  double ff = ldexp(R828D_REF * (nint + (double)sdm/65536.),-div_num);
+  fprintf(stderr,"nint = %d, sdm = %d, div_num = %d, ni = %d, si = %d, f=%'lf\n", nint, sdm, div_num, ni, si, ff);
   frontend->frequency = ff;
   return frontend->frequency;
 }
