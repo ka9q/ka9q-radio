@@ -1233,8 +1233,8 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   if(i == 50)
     fprintf(stdout,"R820 PLL didn't lock\n");
 
-  fprintf(stderr,"nint = %d, vco_fract = %d, div_num = %d, ni = %d, si = %d\n", nint, vco_fract, div_num, ni, si);
-  frontend->frequency = ldexp(2 * R828D_REF * (nint + (double)vco_fract/65536.),-(div_num+1));
+  fprintf(stderr,"nint = %d, sdm = %d, div_num = %d, ni = %d, si = %d\n", nint, sdm, div_num, ni, si);
+  frontend->frequency = ldexp(2 * R828D_REF * (nint + (double)sdm/65536.),-(div_num+1));
   return frontend->frequency;
 }
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
