@@ -1087,7 +1087,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
     uint8_t status = 0xFF, clk1 = 0xFF;
     si5351_read(sdr, SI5351_REGISTER_STATUS,  &status);          // reg 0:  bit6 LOL_B
-    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+2, &clk1);            // reg 17: bit7 CLK2_PDN
+    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+2, &clk1);         // reg 18: bit7 CLK2_PDN
     if(!(status & SI5351_VALUE_LOL_B) && !(clk1 & SI5351_VALUE_CLK_PDN)){
       clock_ok = true;
       break;
@@ -1196,6 +1196,17 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   int const sdm = floor(vco_div - nint * 65536);
   int const ni = (nint-13) >> 2;
   int const si = nint - ((ni << 2) + 13);
+
+  // Mystery code -- relieve loop stress?
+  uint8_t val;
+  r820_read(sdr, 4, &val);
+  int vco_fine_tune = (val & R828D_R4_VCO_FINE_TUNE) >> 4;
+  fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
+  if(vco_fine_tine > 1)
+    div_num--;
+  else if(vco_fine_tune < 1)
+    div_num++;
+
   r820_write_byte_mask(sdr, 16, div_num << 5, R828D_R16_SEL_DIV);
   int dither = 0x10;  // or 0?
   r820_write_byte_mask(sdr, 18, dither, R828D_R18_DITHER|R828D_R18_PW_SDM);
@@ -1211,9 +1222,9 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
 
   int i;
   for(i=0; i < 50; i++){
-    uint8_t val[4];
-    r820_read(sdr, 0, val);
-    if(val[2] & 0x40) // vco locked?
+    uint8_t val;
+    r820_read(sdr, 2, &val);
+    if(val & R828D_R2_VCO_INDICATOR) // vco locked?
       break;
     usleep(1000);
   }

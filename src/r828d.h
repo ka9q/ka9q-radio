@@ -11,6 +11,26 @@
 #define R828D_VCO_MIN (1.77e9)
 #define R828D_VCO_MAX (2*R828D_VCO_MIN)
 
+// R0
+#define R828D_R0_CHIP_ID (0xff)
+
+// R1
+#define R828D_R1_FIXED (2<<6)
+#define R828D_R1_ADC   (63)
+
+// R2
+#define R828D_R2_FIXED (1<<7)
+#define R828D_R2_VCO_INDICATOR (1<<6)
+#define R828D_R2_ADC   (63)
+
+// R3
+#define R828D_R3_RF_INDICATOR (15<<4) // mixer gain
+#define R828D_R3_LNA_GAIN (15)
+
+// R4
+#define R828D_R4_VCO_FINE_TUNE (3<<4)
+#define R828D_R4_FIL_CAL_CODE (15)
+
 // R5
 #define R828D_R5_PWD_LT   (1<<7)
 #define R828D_R5_PWD_LNA1 (1<<5)
