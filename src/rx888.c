@@ -1246,6 +1246,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     if(i == 50)
       fprintf(stderr,"still didn't lock\n");
   }
+  r820_write_byte_mask(sdr, 26, 0x08, R828D_R26_PLL_AUTO_CLK);
 
   double ff = ldexp(R828D_REF * (nint + (double)sdm/65536.),-div_num);
   fprintf(stderr,"nint = %d, sdm = %d, div_num = %d, ni = %d, si = %d, f=%'lf\n", nint, sdm, div_num, ni, si, ff);
