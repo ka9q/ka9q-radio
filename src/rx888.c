@@ -1235,7 +1235,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     else if(vco_fine_tune < 1)
       div_num++;
   }
-  r828_write_byte(sdr, 16, div_num << 5 | R828D_R16_XTAL | R828D_R16_FIXED); // also set REFDIV low (no divider on xtal), no capacitor
+  r828_write_byte(sdr, 16, div_num << 5 | R828D_R16_FIXED); // also set REFDIV low (no divider on xtal), no capacitor
   double const vco_div = 0.5 + 65536 * exact_vco / (2 * R828D_REF);
   int const nint = floor(vco_div / 65536);
   int const sdm = floor(vco_div - nint * 65536);
@@ -1480,6 +1480,8 @@ static double rx888_set_samprate(struct sdrstate *sdr, long long const reference
     (ms.P2 & 0x000000ff) >>  0
   };
   si5351_write(sdr, SI5351_REGISTER_MS0_BASE, data_clkout, sizeof data_clkout);
+  // clkin input divide by 1, both PLLs sourced from Xtal (is there any other choice?)
+  si5351_write_byte(sdr, SI5351_REGISTER_PLL_SOURCE, 0);
   // start clock
   si5351_write_byte(sdr, SI5351_REGISTER_PLL_RESET, SI5351_VALUE_PLLA_RESET);
   // power on clock 0
@@ -1490,6 +1492,13 @@ static double rx888_set_samprate(struct sdrstate *sdr, long long const reference
     clock_control |= SI5351_VALUE_MS_INT;
 
   si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+0, clock_control);
+
+  // Ensure clk0 output is not disabled
+  si5351_read(sdr, SI5351_REGISTER_OUTPUT_CTL,&enb);
+  enb &= ~(1<<0);
+  si5351_write_byte(sdr, SI5351_REGISTER_OUTPUT_CTL,enb);
+  si5351_write_byte(sdr, SI5351_REGISTER_OUTPUT_MASK, 0); // disable OEB pin (doesn't exist anyway)
+
 
   // Wait for sample clock PLL to lock
   bool clock_ok = false;
@@ -1571,6 +1580,9 @@ static double rx888_set_tuner_ref(struct sdrstate *sdr, long long const referenc
     (ms.P2 & 0x000000ff) >>  0
   };
   si5351_write(sdr, SI5351_REGISTER_MS2_BASE, data_clkout, sizeof data_clkout);
+  // clkin input divide by 1, both PLLs sourced from Xtal (is there any other choice?)
+  si5351_write_byte(sdr, SI5351_REGISTER_PLL_SOURCE, 0);
+
   si5351_write_byte(sdr, SI5351_REGISTER_PLL_RESET, SI5351_VALUE_PLLB_RESET);
   // power on CLK2, ref clock to R828D/R828T tuner
   uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLB;
@@ -1579,6 +1591,13 @@ static double rx888_set_tuner_ref(struct sdrstate *sdr, long long const referenc
     clock_control |= SI5351_VALUE_MS_INT;
 
   si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+2, clock_control); // turn on CLK2
+  // Ensure clk2 output is not disabled
+  si5351_read(sdr, SI5351_REGISTER_OUTPUT_CTL,&enb);
+  enb &= ~(1<<2);
+  si5351_write_byte(sdr, SI5351_REGISTER_OUTPUT_CTL,enb);
+  si5351_write_byte(sdr, SI5351_REGISTER_OUTPUT_MASK, 0); // disable OEB pin (doesn't exist anyway)
+
+
   // Wait for PLLB to lock
   bool clock_ok = false;
   for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
