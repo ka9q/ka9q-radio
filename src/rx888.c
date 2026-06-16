@@ -157,6 +157,15 @@ static inline uint8_t bitrev(uint8_t b){
   return b;
 }
 
+// hack test to read first 5 bytes (status registers)
+static inline int r828_status(struct sdrstate *sdr){
+  uint8_t buf[5];
+  int r = control_recv(sdr->dev_handle, I2CRFX3, R828D_ADDR, 0, buf, 5);
+  assert(r == 5);
+  for(int i=0; i<5; i++)
+    R828D_shadow[i] = bitrev(buf[i]);
+  return r;
+}
 static inline int r828_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
   // Device reads LSB first, but writes MSB first (!)
   reg &= 31;
@@ -1055,12 +1064,8 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   // Configure Si5351 CLK2 output (R828D tuner reference input)
   rx888_set_tuner_ref(sdr, (long long)sdr->reference, (long long)R828D_REF);
   // set up tuner
-  uint8_t val = 0;
-  r828_read(sdr, 0, &val);
-  fprintf(stderr, "R820/828 chip ID 0x%x\n",val);
-
-  for(int i=1;i<5;i++)
-    r828_read(sdr,0,&val);
+  r828_status(sdr);
+  fprintf(stderr, "R820/828 chip ID 0x%x\n",R828D_shadow[0]);
 
   // r5 = 0x80: loop-through OFF, LNA1 power on, LNA gain mode switch auto, LNA_GAIN = minimum
   r828_write_byte(sdr, 5, R828D_R5_PWD_LT);
@@ -1183,8 +1188,8 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   r828_write_byte_mask(sdr, 18, 4<<5, R828D_R18_VCOC); // vco current = 4 (100b)
   {
     // Mystery code Returns 1 anyway
-    uint8_t val = 0;
-    r828_read(sdr, 4, &val);
+    r828_status(sdr);
+    uint8_t val = R828D_shadow[4];
     int vco_fine_tune = (val & R828D_R4_VCO_FINE_TUNE) >> 4;
     fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
     if(vco_fine_tune > 1)
@@ -1211,8 +1216,8 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   }
   int i;
   for(i=0; i < 50; i++){
-    uint8_t val = 0;
-    r828_read(sdr, 2, &val);
+    r828_status(sdr);
+    uint8_t val = R828D_shadow[2];
     if(val & R828D_R2_VCO_INDICATOR) // vco locked?
       break;
     usleep(1000);
@@ -1221,8 +1226,8 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     fprintf(stdout,"R820 PLL didn't lock\n");
     r828_write_byte_mask(sdr, 18, 0x60, R828D_R18_VCOC); // increase current
     for(i=0; i < 50; i++){
-      uint8_t val = 0;
-      r828_read(sdr, 2, &val);
+      r828_status(sdr);
+      uint8_t val = R828D_shadow[2];
       if(val & R828D_R2_VCO_INDICATOR) // vco locked?
 	break;
       usleep(1000);
