@@ -1193,7 +1193,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   assert(sdm >= 0 && sdm < 65536);
 
   if(sdm == 0) {
-    r820_write_byte_mask(sdr, 18, R828D_R18_PW_SDM,R828D_R18_PW_SDM); // disable fract pll
+    r820_write_byte_mask(sdr, 18, R828D_R18_PW_SDM, R828D_R18_PW_SDM); // disable fract pll
   } else {
     r820_write_byte(sdr, 21, sdm & 0xff);
     r820_write_byte(sdr, 22, sdm >> 8);
@@ -1204,7 +1204,9 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   int i;
   for(i=0; i < 50; i++){
     uint8_t val;
-    r820_read(sdr, 2, &val);
+    int r = r820_read(sdr, 2, &val);
+    if(r != 0)
+      fprintf(stderr,"r820_read returned %d\n",r);
     if(val & R828D_R2_VCO_INDICATOR) // vco locked?
       break;
     usleep(1000);
