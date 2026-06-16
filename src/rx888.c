@@ -1592,6 +1592,7 @@ static double rx888_set_tuner_ref(struct sdrstate *sdr, long long const referenc
 
   si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+2, clock_control); // turn on CLK2
   // Ensure clk2 output is not disabled
+  uint8_t enb;
   si5351_read(sdr, SI5351_REGISTER_OUTPUT_CTL,&enb);
   enb &= ~(1<<2);
   si5351_write_byte(sdr, SI5351_REGISTER_OUTPUT_CTL,enb);
