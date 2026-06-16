@@ -1049,8 +1049,8 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
   r820_write_byte(sdr, 23, R828D_R23_PW_LDO_D | R828D_R23_DIV_BUF_DUR | R828D_R23_FIXED);
   r820_write_byte(sdr, 25, R828D_R25_FIXED);
 
-  // Shut down Si5351 CLK1 (reference for tuner)
-  si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+1, SI5351_VALUE_CLK_PDN); // CLK1
+  // Shut down Si5351 CLK2 (reference for tuner)
+  si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+2, SI5351_VALUE_CLK_PDN); // CLK1
 }
 
 // Set VHF mode: enable ref clock to tuner, switch to VHF
@@ -1087,7 +1087,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
     uint8_t status = 0xFF, clk1 = 0xFF;
     si5351_read(sdr, SI5351_REGISTER_STATUS,  &status);          // reg 0:  bit6 LOL_B
-    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+2, &clk1);            // reg 17: bit7 CLK1_PDN
+    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+2, &clk1);            // reg 17: bit7 CLK2_PDN
     if(!(status & SI5351_VALUE_LOL_B) && !(clk1 & SI5351_VALUE_CLK_PDN)){
       clock_ok = true;
       break;
@@ -1207,6 +1207,8 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
     r820_write_byte(sdr, 22, sdm >> 8);
     r820_write_byte_mask(sdr, 18, 0, R828D_R18_PW_SDM); // enable frac pll
   }
+  usleep(5000);
+
   int i;
   for(i=0; i < 50; i++){
     uint8_t val[4];
@@ -1416,7 +1418,7 @@ static double rx888_set_samprate(struct sdrstate *sdr, long long const reference
   si5351_write(sdr,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
   return (double)best.fout_num / best.fout_den;
 }
-// Set CLK1 output, the R820/828 tuner reference (usually 16 MHz)
+// Set CLK1 output, the R828D tuner reference (usually 16 MHz)
 static double rx888_set_tuner_ref(struct sdrstate *sdr, bool *ms_int, long long const reference, long long const f){
   assert(sdr != NULL);
   assert(reference != 0);
