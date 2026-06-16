@@ -1068,6 +1068,42 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   r828_status(sdr);
   fprintf(stderr, "R820/828 chip ID 0x%x\n",R828D_status[0]);
 
+#if 1
+  /* Those initial values start from REG_SHADOW_START */
+  static uint8_t r82xx_init_array[] = {
+    0x80,	//Reg 0x05
+    0x12, 	//Reg 0x06
+    0x70,	//Reg 0x07
+    0xc0, 	//Reg 0x08
+    0x40, 	//Reg 0x09
+    0xdb, 	//Reg 0x0a
+    0x6b,	//Reg 0x0b
+    0xf0, 	//Reg 0x0c
+    0x53, 	//Reg 0x0d
+    0x53, 	//Reg 0x0e
+    0x68,	//Reg 0x0f
+    0x64, 	//Reg 0x10
+    0xbb, 	//Reg 0x11
+    0x80, 	//Reg 0x12
+    0x00,	//Reg 0x13
+    0x0f, 	//Reg 0x14
+    0x00, 	//Reg 0x15
+    0xc0, 	//Reg 0x16
+    0x30,	//Reg 0x17
+    0x48, 	//Reg 0x18
+    0xec, 	//Reg 0x19
+    0x60, 	//Reg 0x1a
+    0x00,	//Reg 0x1b
+    0x24,	//Reg 0x1c
+    0xdd, 	//Reg 0x1d
+    0x0e, 	//Reg 0x1e
+    0x40	//Reg 0x1f
+  };
+  for(int i=5; i < 32; i)
+    r828_write_byte(sdr,i,r82xx_init_array[i-5]);
+
+#else
+
   // r5 = 0x80: loop-through OFF, LNA1 power on, LNA gain mode switch auto, LNA_GAIN = minimum
   r828_write_byte(sdr, 5, R828D_R5_PWD_LT);
 
@@ -1149,6 +1185,7 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
 
   // r31 (0x1f) = 0x40: LOOP THRU ATT enable, ring-osc power −5 dBaf
   r828_write_byte(sdr, 31, R828D_R31_FIXED);
+#endif
 }
 
 
@@ -1233,7 +1270,7 @@ static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
       usleep(1000);
     }
     if(i == 50){
-      fprintf(stderr,"still didn't lock, regs =\n");
+      fprintf(stderr,"still didn't lock, regs =");
       for(int j=0; j < 5; j++)
 	fprintf(stderr," %0x",R828D_status[j]);
       fprintf(stderr,"\n");
