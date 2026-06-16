@@ -1061,7 +1061,6 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   frontend->min_IF = -15000;
   frontend->max_IF = -NYQUIST * frontend->samprate;
 
-
   // disable HF by set max ATT
   rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
   // switch to VHF Antenna
@@ -1076,19 +1075,19 @@ static void rx888_set_vhf_mode(struct sdrstate *sdr){
   bool ms_int = false;
   rx888_set_tuner_ref(sdr, &ms_int, sdr->reference, R828D_REF);
   si5351_write_byte(sdr,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLB_RESET);
-  // power on CLK1, ref clock to R828D/R828T tuner
+  // power on CLK2, ref clock to R828D/R828T tuner
   uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLB;
   // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer.
   if(ms_int)
     clock_control |= SI5351_VALUE_MS_INT;
 
-  si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+1,clock_control); // turn on CLK1
+  si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+2,clock_control); // turn on CLK2
   // Wait for PLLB to lock
   bool clock_ok = false;
   for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
     uint8_t status = 0xFF, clk1 = 0xFF;
     si5351_read(sdr, SI5351_REGISTER_STATUS,  &status);          // reg 0:  bit6 LOL_B
-    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+1, &clk1);            // reg 17: bit7 CLK1_PDN
+    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+2, &clk1);            // reg 17: bit7 CLK1_PDN
     if(!(status & SI5351_VALUE_LOL_B) && !(clk1 & SI5351_VALUE_CLK_PDN)){
       clock_ok = true;
       break;
@@ -1460,7 +1459,7 @@ static double rx888_set_tuner_ref(struct sdrstate *sdr, bool *ms_int, long long 
 
   si5351_pvals_t ms = {0};
   si5351_get_ms_pvals(&best,&ms);
-  fprintf(stderr,"RX888 Si5351 CLK1 output divider: tuner ref = vco / (%'d*(%'d + %'d/%'d)) = %'lld",
+  fprintf(stderr,"RX888 Si5351 CLK2 output divider: tuner ref = vco / (%'d*(%'d + %'d/%'d)) = %'lld",
 	  best.R, best.D, best.E, best.F, best.fout_num);
   if(best.fout_den != 1){
     long long whole_hz = best.fout_num / best.fout_den;
@@ -1481,6 +1480,6 @@ static double rx888_set_tuner_ref(struct sdrstate *sdr, bool *ms_int, long long 
     (ms.P2 & 0x0000ff00) >>  8,
     (ms.P2 & 0x000000ff) >>  0
   };
-  si5351_write(sdr,SI5351_REGISTER_MS1_BASE,data_clkout,sizeof(data_clkout));
+  si5351_write(sdr,SI5351_REGISTER_MS2_BASE,data_clkout,sizeof(data_clkout));
   return (double)best.fout_num / best.fout_den;
 }
