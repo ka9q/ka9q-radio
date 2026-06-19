@@ -186,10 +186,6 @@ int main(int argc,char * const argv[]){
     getsockname(Output_fd,(struct sockaddr *)&Stereo_source_address,&len);
   }
 
-  fftwf_init_threads();
-  fftwf_make_planner_thread_safe();
-  fftwf_plan_with_nthreads(1);
-
   // Set up multicast
   if(Input_fd == -1 && Status_fd == -1){
     fprintf(stderr,"Must specify either --status-in or --pcm-in\n");
