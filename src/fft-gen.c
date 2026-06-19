@@ -38,7 +38,7 @@ static int parse_and_run(char *s);
 static size_t Wisdom_size;
 char *Wisdom_string;
 static bool Force;
-int Nthreads = 1;
+int N_internal_threads = 1;
 
 static struct {
   char const *name;
@@ -101,7 +101,7 @@ int main(int argc,char *argv[]){
       FFTW_planning_level = FFTW_ESTIMATE;
       break;
     case 'T':
-      Nthreads = atoi(optarg);
+      N_internal_threads = atoi(optarg);
       break;
     case 'f':
       Force = true;
@@ -110,12 +110,14 @@ int main(int argc,char *argv[]){
   }
   if(Verbose)
     printf("FFTW version: %s\n", fftwf_version);
-  fftwf_init_threads();
-  fftwf_plan_with_nthreads(Nthreads);
+  if(N_internal_threads > 0){
+    fftwf_init_threads();
+    fftwf_plan_with_nthreads(N_internal_threads);
+  }
 
   if(Verbose > 1){
     printf("nthreads = %d, level = %s",
-	   Nthreads,
+	   N_internal_threads,
 	   level_to_name(FFTW_planning_level));
 
     if(FFTW_plan_timelimit !=0)
@@ -123,7 +125,8 @@ int main(int argc,char *argv[]){
     else
       printf(", no time limit\n");
   }
-  int n = asprintf(&Arch_wisdom_file, "%s-%s-threaded", GENERIC_WISDOM_FILE, fftwf_version);
+  int n = asprintf(&Arch_wisdom_file, "%s-%s%s", GENERIC_WISDOM_FILE, fftwf_version, N_internal_threads > 0 ? "-threaded" : "");
+
   if(Arch_wisdom_file == NULL || n < 0){
     printf("Can't construct arch wisdom file name\n");
     goto bomb;

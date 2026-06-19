@@ -99,7 +99,8 @@ static inline int modulo(int x,int const m){
 fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction){
   bool notify = false;
   pthread_mutex_lock(&FFTW_planning_mutex);
-  fftwf_plan_with_nthreads(N_internal_threads);
+  if(N_internal_threads > 0)
+    fftwf_plan_with_nthreads(N_internal_threads);
   fftwf_plan plan = fftwf_plan_dft_1d(N, in, out, direction, FFTW_WISDOM_ONLY|FFTW_planning_level);
   if(plan == NULL){
     notify = true;
@@ -119,7 +120,8 @@ fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direct
 fftwf_plan plan_r2c(int N, float *in, float complex *out){
   bool notify = false;
   pthread_mutex_lock(&FFTW_planning_mutex);
-  fftwf_plan_with_nthreads(N_internal_threads);
+  if(N_internal_threads > 0)
+    fftwf_plan_with_nthreads(N_internal_threads);
   fftwf_plan plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_WISDOM_ONLY|FFTW_planning_level);
   if(plan == NULL){
     notify = true;
@@ -139,7 +141,8 @@ fftwf_plan plan_r2c(int N, float *in, float complex *out){
 fftwf_plan plan_c2r(int N, float complex *in, float *out){
   bool notify = false;
   pthread_mutex_lock(&FFTW_planning_mutex);
-  fftwf_plan_with_nthreads(N_internal_threads);
+  if(N_internal_threads > 0)
+    fftwf_plan_with_nthreads(N_internal_threads);
   fftwf_plan plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_WISDOM_ONLY|FFTW_planning_level);
   if(plan == NULL){
     notify = true;
@@ -222,7 +225,8 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     if(FFT_log == NULL)
       fprintf(stderr,"Can't append to %s: %s\n",fft_file,strerror(errno));
 
-    fftwf_init_threads();
+    if(N_internal_threads > 0)
+      fftwf_init_threads();
     bool sr = fftwf_import_system_wisdom();
     fprintf(stderr,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
     if(!sr && access(System_wisdom_file,R_OK) == -1) // Would really like to use AT_EACCESS flag
@@ -241,7 +245,8 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
 
     // Also try to read arch-specific wisdom file
     char arch_wisdom_file[PATH_MAX];
-    snprintf(arch_wisdom_file, sizeof arch_wisdom_file, "%s-%s-threaded", Wisdom_file, fftwf_version);
+    snprintf(arch_wisdom_file, sizeof arch_wisdom_file, "%s-%s%s", Wisdom_file, fftwf_version,
+	     N_internal_threads > 0 ? "-threaded" : "");
     lr = fftwf_import_wisdom_from_filename(arch_wisdom_file);
     fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",arch_wisdom_file,lr ? "succeeded" : "failed");
     if(!lr && access(arch_wisdom_file,R_OK) == -1)

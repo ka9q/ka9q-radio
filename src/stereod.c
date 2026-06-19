@@ -209,10 +209,6 @@ int main(int argc,char * const argv[]){
     getsockname(Output_fd,(struct sockaddr *)&Stereo_source_address,&len);
   }
 
-  fftwf_init_threads();
-  fftwf_make_planner_thread_safe();
-  fftwf_plan_with_nthreads(1);
-
   // Initialize de-emphasis with 75 microseconds
   Deemph_gain = 4; // Check this later empirically
   Deemph_rate = exp(-1.0 / (Deemph_tc * Audio_samprate));
