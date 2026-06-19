@@ -120,7 +120,8 @@ fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direct
 fftwf_plan plan_r2c(int N, float *in, float complex *out){
   bool notify = false;
   pthread_mutex_lock(&FFTW_planning_mutex);
-  fftwf_plan_with_nthreads(N_internal_threads);
+  if(N_internal_threads > 0)
+    fftwf_plan_with_nthreads(N_internal_threads);
   fftwf_plan plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_WISDOM_ONLY|FFTW_planning_level);
   if(plan == NULL){
     notify = true;
@@ -140,7 +141,8 @@ fftwf_plan plan_r2c(int N, float *in, float complex *out){
 fftwf_plan plan_c2r(int N, float complex *in, float *out){
   bool notify = false;
   pthread_mutex_lock(&FFTW_planning_mutex);
-  fftwf_plan_with_nthreads(N_internal_threads);
+  if(N_internal_threads > 0)
+    fftwf_plan_with_nthreads(N_internal_threads);
   fftwf_plan plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_WISDOM_ONLY|FFTW_planning_level);
   if(plan == NULL){
     notify = true;
