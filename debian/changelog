@@ -1,3 +1,9 @@
+ka9q-radio (2026.06.19-2-trixie1) trixie; urgency=medium
+
+  * Build on the right git branch this time...
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 18 Jun 2026 23:47:43 -0700
+
 ka9q-radio (2026.06.19-1-trixie1) trixie; urgency=medium
 
   * fft-internal-threads=0 will non-threaded FFTW
