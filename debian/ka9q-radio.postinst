@@ -1,11 +1,17 @@
 #!/bin/sh
 set -e
 
-. /usr/share/debconf/confmodule
+case "$1" in
+    configure|abort-upgrade|abort-deconfigure|abort-remove)
+        if [ -d /run/systemd/system ]; then
+            systemctl --system daemon-reload >/dev/null || true
+        fi
+        ;;
+esac
 
-do_reload() {
-    systemctl daemon-reload || true
-}
+#DEBHELPER#
+
+. /usr/share/debconf/confmodule
 
 #if [ -n "$2" ]; then
 #    exit 0      # upgrade, skip configuration
@@ -95,7 +101,7 @@ EOF
 	;;
 esac
 
-do_reload
+systemctl daemon-reload || true
 systemctl enable "radiod@$instance.service" || true
 systemctl restart "radiod@$instance.service" || true
 

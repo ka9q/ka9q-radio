@@ -7,3 +7,9 @@ case "$1" in
     db_purge
     ;;
 esac
+
+#DEBHELPER#
+
+if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+    systemctl --system daemon-reload >/dev/null || true
+fi
