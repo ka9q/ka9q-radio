@@ -1,4 +1,10 @@
-ka9q-radio (2026.06.24-2-trixie1) trixie; urgency=medium
+ka9q-radio (2026.06.24-3-forky1) forky; urgency=medium
+
+  * kick systemctl daemon-reload when reinstalling radiod
+
+ -- Phil Karn <karn@ka9q.net>  Wed, 24 Jun 2026 05:25:51 -0700
+
+ka9q-radio (2026.06.24-2-forky1) forky; urgency=medium
 
   * emit status messages 4/frame time (vs 2) in response to poll to ssrc 0xffffffff
 
