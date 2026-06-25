@@ -621,6 +621,9 @@ static int loopback_index(void){
 // Join an existing socket to a multicast group without connecting it
 // Since many channels may send to the same multicast group, the joins can often fail with harmless "address already in use" messages
 // Note: only the IP address is significant, the port number is ignored
+// If iface == NULL, join the default interface or loopback if ttl==0
+// If iface == "all", join every loopback-capable interface
+// otherwise, join specified interface
 int join_group(int fd, struct sockaddr const * const source, struct sockaddr const * const group,  char const * const iface){
   if(fd == -1 || group == NULL){
     errno = EINVAL;
@@ -661,21 +664,69 @@ int join_group(int fd, struct sockaddr const * const source, struct sockaddr con
   // get_interface_index_for_destination() returns -1 for some errors
   // So always check for returns!
   int if_index = 0;
-  if(iface != NULL && strlen(iface) > 0)
-    if_index = if_nametoindex(iface);
-  else
+  bool join_one = false;
+  if(iface == NULL || strlen(iface) == 0){
+    // Join on default interface
     if_index = get_interface_index_for_destination(group);
-
-  req.gr_interface = (if_index <= 0) ? loopback_index() : if_index; // fall back to loopback
-  if(setsockopt(fd, level, MCAST_JOIN_GROUP, &req, sizeof req) < 0){
-    if(errno != EADDRINUSE) // not a fatal error, happens routinely
-      fprintf(stderr,"setsockopt(%d, %s, MCAST_JOIN_GROUP, %s iface=%s) failed: %s\n",
-	      fd, level == IPPROTO_IP ? "IPPROTO_IP" : "IPPROTO_IPV6",
-	      formatsock(group,false), iface,
-	      strerror(errno));
-    return -1;
+    join_one = true;
+  } else if(strcasecmp(iface,"all") != 0){
+    if_index = if_nametoindex(iface);
+    join_one = true;
   }
-  return 0;
+  if(join_one){
+    req.gr_interface = (if_index <= 0) ? loopback_index() : if_index; // fall back to loopback
+    if(setsockopt(fd, level, MCAST_JOIN_GROUP, &req, sizeof req) < 0){
+      if(errno != EADDRINUSE) // not a fatal error, happens routinely
+	fprintf(stderr,"setsockopt(%d, %s, MCAST_JOIN_GROUP, %s iface=%s) failed: %s\n",
+		fd, level == IPPROTO_IP ? "IPPROTO_IP" : "IPPROTO_IPV6",
+		formatsock(group,false), iface,
+		strerror(errno));
+      return -1;
+    }
+    return 0;
+  }
+  // iface == "all", join all mcast-capable interfaces
+  struct ifaddrs *ifa = NULL;
+  if (getifaddrs(&ifa) != 0)
+    return -1;
+  int success = 0;
+  for(struct ifaddrs const *p = ifa; p != NULL; p = p->ifa_next) {
+    if(p->ifa_addr == NULL
+       || !(p->ifa_flags & IFF_MULTICAST)
+       || !(p->ifa_flags & IFF_UP))
+      continue;
+
+    switch(p->ifa_addr->sa_family){
+    case AF_INET:
+      {
+	req.gr_interface = if_nametoindex(p->ifa_name);
+	if(setsockopt(fd, level, MCAST_JOIN_GROUP, &req, sizeof req) < 0){
+	  if(errno != EADDRINUSE) // not a fatal error, happens routinely
+	    fprintf(stderr,"setsockopt(%d, %s, MCAST_JOIN_GROUP, %s iface=%s) failed: %s\n",
+		    fd, level == IPPROTO_IP ? "IPPROTO_IP" : "IPPROTO_IPV6",
+		    formatsock(group,false), iface, strerror(errno));
+	} else
+	  success++;
+      }
+      break;
+    case AF_INET6:
+      {
+	req.gr_interface = if_nametoindex(p->ifa_name);
+	if(setsockopt(fd, level, MCAST_JOIN_GROUP, &req, sizeof req) < 0){
+	  if(errno != EADDRINUSE) // not a fatal error, happens routinely
+	    fprintf(stderr,"setsockopt(%d, %s, MCAST_JOIN_GROUP, %s iface=%s) failed: %s\n",
+		    fd, level == IPPROTO_IP ? "IPPROTO_IP" : "IPPROTO_IPV6",
+		    formatsock(group,false), iface, strerror(errno));
+	} else
+	  success++;
+      }
+      break;
+    default:
+      break;
+    }
+  }
+  freeifaddrs(ifa);
+  return success > 0 ? 0 : -1; // at least one join succeeded
 }
 
 // Join a socket to a source specific multicast group on specified iface,  or default if NULL
