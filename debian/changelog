@@ -1,4 +1,10 @@
-ka9q-radio (2026.06.24-3-forky1) forky; urgency=medium
+ka9q-radio (2026.06.25-1-trixie1) trixie; urgency=medium
+
+  * remove CHU frequencies from radiod config examples
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 25 Jun 2026 00:22:02 +0200
+
+ka9q-radio (2026.06.24-3-trixie1) trixie; urgency=medium
 
   * kick systemctl daemon-reload when reinstalling radiod
 
