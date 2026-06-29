@@ -13,9 +13,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
-#include <iniparser/iniparser.h>
+#include "compat_iniparser.h"
 #include <dlfcn.h>
-#include <opus/opus.h>
+#include "compat_opus.h"
 
 #include "config.h"
 #include "multicast.h"

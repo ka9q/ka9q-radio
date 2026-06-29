@@ -1,0 +1,29 @@
+name: CI
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  ubuntu-build:
+    name: Ubuntu CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Configure build environment
+        run: |
+          sudo ./scripts/setup.sh
+      - name: Run CMake build
+        run: |
+          ./scripts/build.sh
+  macos-build:
+    name: MacOS CI
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Configure build environment
+        run: |
+          ./scripts/setup.sh
+      - name: Run CMake build
+        run: |
+          ./scripts/build.sh

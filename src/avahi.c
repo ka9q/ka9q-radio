@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <arpa/inet.h>
+#include "compat_net.h"
 #include <string.h>
 #include <errno.h>
 #include <sys/file.h>

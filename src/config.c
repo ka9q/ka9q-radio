@@ -4,7 +4,7 @@
 
 #define _GNU_SOURCE 1
 #include <stdio.h>
-#include <iniparser/iniparser.h>
+#include "compat_iniparser.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>

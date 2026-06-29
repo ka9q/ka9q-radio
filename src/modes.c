@@ -14,7 +14,7 @@
 #endif
 #include <string.h>
 #include <ctype.h>
-#include <iniparser/iniparser.h>
+#include "compat_iniparser.h"
 #include <pthread.h>
 
 #include "misc.h"
