@@ -88,6 +88,7 @@ struct frontend {
   double rf_level_cal;      // adjust to make 0 dBm give 0 dBFS: when zero, 0dBm gives "rf_gain_cal" dBFS
   bool direct_conversion; // Try to avoid DC spike if set
   bool isreal;            // Use real->complex FFT (otherwise complex->complex)
+  bool inverted;          // Real front end with high-side (inverting) LO or even Nyquist zone: digital frequency axis runs opposite to RF
   int bitspersample;      // 1, 8, 12 or 16
   bool lock;              // Tuning is locked; clients cannot change
 

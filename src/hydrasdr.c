@@ -392,6 +392,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
   if(frontend->isreal){
     frontend->max_IF = -600000;
     frontend->min_IF = -0.47 * frontend->samprate;
+    frontend->inverted = true; // High-side injection inverts the spectrum
   } else {
     // Complex, symmetrical
     frontend->max_IF = 0.47 * frontend->samprate;

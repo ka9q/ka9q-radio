@@ -237,6 +237,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   }
   frontend->max_IF = -600000;
   frontend->min_IF = -0.47 * frontend->samprate;
+  frontend->inverted = true; // High-side LO inverts the spectrum
 
   sdr->gainstep = -1; // Force update first time
 

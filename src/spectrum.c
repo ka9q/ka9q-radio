@@ -402,8 +402,11 @@ static void wideband_poll(struct channel *chan){
 
 	double const p = cnrm(fft_out[binp]);
 	assert(!isnan(p) && isfinite(p));
-	if(!isnan(p) && isfinite(p))
-	  bin_data[i] += gain * p;
+	if(!isnan(p) && isfinite(p)){
+	  // Inverting LO / even Nyquist zone: reflect freq axis about DC so output reads in RF order
+	  int const oi = frontend->inverted ? (bin_count - i) % bin_count : i;
+	  bin_data[oi] += gain * p;
+	}
       }
       input -= lrint(fft_n * (1. - chan->spectrum.overlap)); // move back fraction of a buffer
       if(input < (float *)frontend->in.input_buffer)

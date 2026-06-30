@@ -331,12 +331,16 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // note intentional integer truncation, ie undersample = 1 -> frequency = 0
   frontend->frequency = frontend->samprate * sdr->undersample / 2;
   if(sdr->undersample & 1){
+    // Odd Nyquist zone: upright spectrum
     // Somewhat arbitrary. See https://ka7oei.blogspot.com/2024/12/frequency-response-of-rx-888-sdr-at.html
     frontend->min_IF = 15000;
     frontend->max_IF = NYQUIST * samprate;
+    frontend->inverted = false;
   } else {
+    // Even Nyquist zone (e.g. VHF/UHF undersampling): spectrum is inverted
     frontend->min_IF = -NYQUIST * samprate;
     frontend->max_IF = -15000;
+    frontend->inverted = true;
   }
   // start clock
   si5351_write_byte(sdr,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
