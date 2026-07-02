@@ -338,10 +338,65 @@ static void setup_windows(void){
   }
 }
 
-// Comparison for sorting by SSRC
+// Total ordering of two multicast output destinations (sockaddr_storage).
+// Compares address family, then the meaningful address bytes (sin_addr /
+// sin6_addr only, never uninitialized padding), then the port in host order.
+// Equal destinations always compare equal, so this is deterministic and
+// consistent with address_match()/getportnumber() in multicast.c.
+static int dest_compare(struct sockaddr_storage const *sa,struct sockaddr_storage const *sb){
+  struct sockaddr const *s1 = (struct sockaddr const *)sa;
+  struct sockaddr const *s2 = (struct sockaddr const *)sb;
+  if(s1->sa_family != s2->sa_family)
+    return s1->sa_family < s2->sa_family ? -1 : +1;
+
+  int r = 0;
+  switch(s1->sa_family){
+  case AF_INET:
+    r = memcmp(&((struct sockaddr_in const *)s1)->sin_addr,
+	       &((struct sockaddr_in const *)s2)->sin_addr,
+	       sizeof(struct in_addr));
+    break;
+  case AF_INET6:
+    r = memcmp(&((struct sockaddr_in6 const *)s1)->sin6_addr,
+	       &((struct sockaddr_in6 const *)s2)->sin6_addr,
+	       sizeof(struct in6_addr));
+    break;
+  default:
+    r = 0; // Unknown/unset family: addresses considered equal, fall through to port
+    break;
+  }
+  if(r != 0)
+    return r < 0 ? -1 : +1;
+
+  // Same address; order by port (host byte order)
+  int const p1 = getportnumber(s1);
+  int const p2 = getportnumber(s2);
+  if(p1 < p2)
+    return -1;
+  if(p1 > p2)
+    return +1;
+  return 0;
+}
+
+// Comparison for sorting the channel list by multicast output destination
+// (so channels group by output stream, e.g. all of wspr-pcm together), then
+// by frequency (Hz) ascending within a group, with SSRC as a stable tiebreaker
 static int chan_compare(void const *a,void const *b){
   struct channel const *da = *(struct channel **)a;
   struct channel const *db = *(struct channel **)b;
+  // Primary: multicast output destination
+  int const dr = dest_compare(&da->output.dest_socket,&db->output.dest_socket);
+  if(dr != 0){
+    return dr;
+  }
+  // Secondary: frequency ascending
+  if(da->tune.freq < db->tune.freq){
+    return -1;
+  }
+  if(da->tune.freq > db->tune.freq){
+    return +1;
+  }
+  // Final stable tiebreaker: SSRC
   if(da->output.rtp.ssrc < db->output.rtp.ssrc){
     return -1;
   }
