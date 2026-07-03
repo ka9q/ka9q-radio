@@ -8,7 +8,7 @@ VHF/UHF band (i.e., several hundred) with plenty of real time left
 over.
 
 A mid-range x86 can handle the RX888 MkII at full sample rate
-(129.6 MHz), receiving multiple channels sumultaneously on all
+(129.6 MHz), receiving multiple channels simultaneously on all
 LF/MF/HF ham bands (or anything else) plus 6 meters.
 
 A Raspberry Pi 5 can handle the RX888 MkII at half sample rate (64.8
@@ -99,7 +99,7 @@ requirement is that the impulse response of the channel
 filters be shorter than the (configurable) overlap interval in the forward
 FFT.
 
-Updated 2 Feb 2025  
+Updated 27 June 2026 
 Phil Karn, KA9Q  
 karn@ka9q.net
 
