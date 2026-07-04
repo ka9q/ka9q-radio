@@ -1,3 +1,9 @@
+ka9q-radio (2026.07.04-1-trixie1) trixie; urgency=medium
+
+  * guard against filter creation with zero length output (caused looping)
+
+ -- Phil Karn <karn@ka9q.net>  Sat, 04 Jul 2026 11:53:02 -0700
+
 ka9q-radio (2026.06.25-2-trixie1) trixie; urgency=medium
 
   * appending ',all' to multicast addresses/names joins every mcast capable interface
