@@ -389,8 +389,8 @@ int demod_spectrum(void *);
 int send_output(struct channel * restrict ,const float * ,int,bool);
 int send_radio_status(struct sockaddr const *,struct frontend const *, struct channel *);
 int reset_radio_status(struct channel *chan);
-bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned long length);
-int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,size_t length);
+bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
+int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,int length);
 int flush_output(struct channel *chan,bool marker,bool complete);
 
 

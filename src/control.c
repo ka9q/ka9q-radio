@@ -523,7 +523,7 @@ int main(int argc,char *argv[]){
       if(length == -1 && errno == EAGAIN)
 	break; // Timeout; we're done
       // Ignore our own command packets
-      if(length < 2 || (enum pkt_type)buffer[0] != STATUS)
+      if(length < 3 || (enum pkt_type)buffer[0] != STATUS)
 	continue;
 
       // What to do with the source addresses?
@@ -652,7 +652,7 @@ int main(int argc,char *argv[]){
       socklen_t ssize = sizeof(source_socket);
       length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&source_socket,&ssize); // should not block
       // Ignore our own command packets and responses to other SSIDs
-      if(length < 2 || (enum pkt_type)buffer[0] != STATUS || !for_us(buffer+1,length-1,Ssrc))
+      if(length < 3 || (enum pkt_type)buffer[0] != STATUS || !for_us(buffer+1,length-1,Ssrc))
 	continue; // Can include a timeout
 
       // Process only if it's a response to our SSRC

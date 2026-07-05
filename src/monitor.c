@@ -499,7 +499,10 @@ void *statproc(void *arg){
     struct sockaddr_storage sender;
     socklen_t socksize = sizeof(sender);
     ssize_t length = recvfrom(status_fd,buffer,PKTSIZE,0,(struct sockaddr *)&sender,&socksize);
-    if(buffer[0] != STATUS) // not status, ignore
+    if(length < 0)
+      fprintf(stderr,"recvfrom status: %s\n",strerror(errno));
+
+    if(length < 3 || buffer[0] != STATUS) // not status, ignore
       continue;
 
     // Extract just the SSRC to see if the session exists

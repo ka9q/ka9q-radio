@@ -43,7 +43,11 @@ void *radio_status(void *arg){
     // Command from user
     uint8_t buffer[PKTSIZE];
     ssize_t const length = recv(Ctl_fd,buffer,sizeof(buffer),0);
-    if(length <= 0 || (enum pkt_type)buffer[0] != CMD)
+    if(length < 0){
+      fprintf(stderr,"recv status: %s\n",strerror(errno));
+      continue; // Should we exit?
+    }
+    if(length < 3 || (enum pkt_type)buffer[0] != CMD)
       continue; // short packet, or a response; ignore
 
     // for a specific ssrc?
@@ -126,7 +130,10 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
 }
 
 // Return TRUE if a restart is needed, false otherwise
-bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,unsigned long length){
+bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length){
+  if(length < 2)
+    return false;
+
   bool restart_needed = false;
   bool new_filter_needed = false;
 
