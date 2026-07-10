@@ -1,3 +1,9 @@
+ka9q-radio (2026.07.10-1-trixie1) trixie; urgency=medium
+
+  * add to channel option keyword list, sort
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 09 Jul 2026 22:47:05 -0700
+
 ka9q-radio (2026.07.05-1-trixie1) trixie; urgency=medium
 
   * tighten guards on status packet processing
