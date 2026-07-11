@@ -256,7 +256,7 @@ int set_defaults(struct channel *chan){
   chan->filter2.low = DEFAULT_LOW;
   chan->filter2.high = DEFAULT_HIGH;
   chan->filter2.kaiser_beta = DEFAULT_KAISER_BETA;
-  chan->filter2.isb = false;
+  chan->filter2.out.isb = false;
 
   chan->squelch.open = dB2power(DEFAULT_SQUELCH_OPEN);
   chan->squelch.close = dB2power(DEFAULT_SQUELCH_CLOSE);
@@ -398,7 +398,7 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
   if(chan->pll.square)
     chan->pll.enable = true; // Square implies PLL
 
-  chan->filter2.isb = config_getboolean(table,sname,"conj",chan->filter2.isb);
+  chan->filter2.out.isb = config_getboolean(table,sname,"conj",chan->filter2.out.isb);
   chan->pll.loop_bw = config_getdouble(table,sname,"pll-bw",chan->pll.loop_bw);
   chan->linear.agc = config_getboolean(table,sname,"agc",chan->linear.agc);
   chan->fm.threshold = config_getboolean(table,sname,"extend",chan->fm.threshold); // FM threshold extension

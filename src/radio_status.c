@@ -352,11 +352,30 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       break;
     case INDEPENDENT_SIDEBAND:
       {
-	bool i = decode_bool(cp,optlen); // will reimplement someday
-	if(i == chan->filter2.isb)
-	  break;
-	chan->filter2.isb = i;
-	new_filter_needed = true;
+	bool const isb = decode_bool(cp,optlen);
+	if(chan->demod_type != LINEAR_DEMOD)
+	  break; // Only valid in linear
+
+	chan->filter2.out.isb = isb;
+	if(!isb)
+	  break; // Being turned off
+	// Being turned on
+	if(chan->output.channels != 2){
+	  // Force to stereo output
+	  int pt = pt_from_info(chan->output.samprate, 2, chan->output.encoding);
+	  if(pt == -1){
+	    fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
+		    chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	    break; // ignore the request
+	  }
+	  chan->output.channels = 2;
+	  chan->output.rtp.type = pt;
+	}
+	if(chan->filter2.blocking == 0){
+	  // Force filter 2 on if it was off
+	  chan->filter2.blocking = 1; // will leave it on if isb is turned off, oh well
+	  new_filter_needed = true;
+	}
       }
       break;
     case THRESH_EXTEND:
@@ -767,7 +786,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,struct 
       encode_float(&bp,AGC_THRESHOLD,voltage2dB(chan->linear.threshold)); // amplitude -> dB
       encode_float(&bp,AGC_RECOVERY_RATE,voltage2dB(chan->linear.recovery_rate)); // amplitude/ -> dB/sec
     }
-    encode_bool(&bp,INDEPENDENT_SIDEBAND,chan->filter2.isb);
+    encode_bool(&bp,INDEPENDENT_SIDEBAND,chan->filter2.out.isb);
     encode_float(&bp,GAIN,voltage2dB(chan->output.gain));
     break;
   case FM_DEMOD:

@@ -148,7 +148,7 @@ fftwf_plan plan_c2r(int N, float complex *in, float *out){
 // create_filter_input() parameters, shared by all slaves:
 // L = input data blocksize
 // M = impulse response duration
-// in_type = REAL, COMPLEX or BEAM
+// in_type = REAL, COMPLEX
 // Set up input (master) half of filter
 int create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type){
   assert(master != NULL);
@@ -239,7 +239,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     assert(false); // shouldn't happen
     realtime(old_prio);
     return -1;
-  case BEAM:
   case COMPLEX:
     master->in_type = COMPLEX;
     master->input_buffer_size = round_to_page(ND * N * sizeof(float complex));
@@ -285,7 +284,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
      Must be SIMD-aligned (e.g., allocated with fftw_alloc) and will be freed by delete_filter()
 
     len = number of time domain points in output = Ls
-    out_type = REAL, COMPLEX, CROSS_CONJ (COMPLEX with special processing for ISB) or SPECTRUM (dummy for spectrum analyzer)
+    out_type = REAL, COMPLEX, or SPECTRUM (dummy for spectrum analyzer)
 
     All demodulators currently require COMPLEX output because a complex exponential is applied to the time domain
     output for fine frequency tuning
@@ -319,19 +318,15 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
 #endif
   // Share all but output fft bins, response, output and output type
   slave->master = master;
-  if(out_type == BEAM && master->in_type == REAL)
-    out_type = COMPLEX; // BEAM only valid for complex input
   slave->out_type = out_type;
   // N / L = Total FFT points / time domain points
   int const N = master->ilen + master->impulse_length - 1;
   int const L = master->ilen;
   slave->response = response;
   pthread_mutex_init(&slave->response_mutex,NULL);
+  set_filter_weights(slave,1.0,0.0); // defaults select A input only, can be changed by set_filter_weights(). Used only when beam == true
   switch(slave->out_type){
   default:
-  case BEAM:
-    set_filter_weights(slave,1.0,0.0); // defaults select A input only, can be changed by set_filter_weights().
-    /* fall through */
   case COMPLEX: // note fall-through
     {
       int q = (int)((long)len * N / L);
@@ -545,7 +540,6 @@ int execute_filter_input(struct filter_in * const f){
     float complex * const output = f->fdomain[jobnum % ND];
     switch(f->in_type){
     default:
-    case BEAM:
     case COMPLEX:
       {
 	float complex *input = f->input_read_pointer.c;
@@ -609,7 +603,6 @@ int execute_filter_input(struct filter_in * const f){
   // the usual size of a cache line. For complex->complex transforms, L has to be divisible by 4.
   switch(f->in_type){
   default:
-  case BEAM:
   case COMPLEX:
     job->input = f->input_read_pointer.c;
     job->input_dropsize = f->ilen * sizeof(float complex);
@@ -734,74 +727,43 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       goto done;
     }
     // The actual work is here
-    do {
-      assert(rp >= 0 && rp < m_bins);
-      assert(wp >=0 && wp < s_bins);
-      s_fdomain[wp] = m_fdomain[rp] * s_response[wp];
-      if(++rp == m_bins)
-	rp = 0; // Master wrapped to DC
-      if(++wp == s_bins)
-	wp = 0; // Slave wrapped to DC
-    } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
-    // Zero any remaining output. Rarely needed.
-    while(wp != (s_bins+1)/2){
-      assert(wp >=0 && wp < s_bins);
-      s_fdomain[wp++] = 0;
-      if(wp == s_bins)
-	wp = 0; // Wrap to DC
-    }
-  } else if(master->in_type == COMPLEX && slave->out_type == BEAM){
-    // Generalized form of COMPLEX-COMPLEX that can beamform with antennas on I&Q inputs
-    // or just select one or the other
-    // Uses complex weights alpha and beta
-    // Useful for Fobos in independent input mode
-    int wp = (s_bins+1)/2; // most negative output bin
-    int rp = shift - s_bins/2; // Start index in master, unwrapped = shift - # output bins
-    // Starting below master, zero output until we're in range. Rarely needed.
-    while(rp < -(m_bins+1)/2){
-      assert(wp >=0 && wp < s_bins);
-      s_fdomain[wp] = 0;
-      rp++;
-      if(++wp == (s_bins+1)/2) // exhausted output buffer
-	goto done;
-      if(wp == s_bins)
-	wp = 0; // Wrap to DC
-    }
-    if(rp < 0)
-      rp += m_bins; // Starts in negative region of master
-    if(rp < 0 || rp >= m_bins){
-      // Shift is out of range
-      // Zero any remaining output
+    if(slave->beam){
+      // Generalized form of COMPLEX-COMPLEX that can beamform with antennas on I&Q inputs
+      // or just select one or the other
+      // Uses complex weights alpha and beta
+      // Useful for Fobos in independent input mode
+      do {
+	assert(rp >= 0 && rp < m_bins);
+	assert(wp >=0 && wp < s_bins);
+	// rp is unlikely to pass through zero or nyquist in this mode, but handle it anyway?
+	if(rp == 0 || rp == m_bins/2)
+	  s_fdomain[wp] = (float complex)(__real__(m_fdomain[rp]) * slave->alpha * s_response[wp]
+					  + __imag__(m_fdomain[rp]) * slave->beta * s_response[wp]);
+	else
+	  s_fdomain[wp] = (float complex)((slave->alpha * m_fdomain[rp] + slave->beta * conjf(m_fdomain[m_bins - rp]))
+					  * s_response[wp]);
+	if(++rp == m_bins)
+	  rp = 0; // Master wrapped to DC
+	if(++wp == s_bins)
+	  wp = 0; // Slave wrapped to DC
+      } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
+    } else { // !beam
+      do {
+	assert(rp >= 0 && rp < m_bins);
+	assert(wp >=0 && wp < s_bins);
+	s_fdomain[wp] = m_fdomain[rp] * s_response[wp];
+	if(++rp == m_bins)
+	  rp = 0; // Master wrapped to DC
+	if(++wp == s_bins)
+	  wp = 0; // Slave wrapped to DC
+      } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
+      // Zero any remaining output. Rarely needed.
       while(wp != (s_bins+1)/2){
 	assert(wp >=0 && wp < s_bins);
 	s_fdomain[wp++] = 0;
 	if(wp == s_bins)
 	  wp = 0; // Wrap to DC
       }
-      goto done;
-    }
-    // The actual work is here
-    do {
-      assert(rp >= 0 && rp < m_bins);
-      assert(wp >=0 && wp < s_bins);
-      // rp is unlikely to pass through zero or nyquist in this mode, but handle it anyway?
-      if(rp == 0 || rp == m_bins/2)
-	s_fdomain[wp] = (float complex)(__real__(m_fdomain[rp]) * slave->alpha * s_response[wp]
-					     + __imag__(m_fdomain[rp]) * slave->beta * s_response[wp]);
-      else
-	s_fdomain[wp] = (float complex)((slave->alpha * m_fdomain[rp] + slave->beta * conjf(m_fdomain[m_bins - rp]))
-					     * s_response[wp]);
-      if(++rp == m_bins)
-	rp = 0; // Master wrapped to DC
-      if(++wp == s_bins)
-	wp = 0; // Slave wrapped to DC
-    } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
-    // Zero any remaining output. Rarely needed.
-    while(wp != (s_bins+1)/2){
-      assert(wp >=0 && wp < s_bins);
-      s_fdomain[wp++] = 0;
-      if(wp == s_bins)
-	wp = 0; // Wrap to DC
     }
   } else if(master->in_type == COMPLEX && slave->out_type == REAL){
     // Complex -> real UNTESTED! not used in ka9q-radio at present
@@ -904,6 +866,21 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     } // end of inverted spectrum
   }
  done:;
+  if(slave->isb && slave->out_type == COMPLEX){
+    // Unpack LSB and USB to I and Q
+    // Needs a notch around DC to avoid ripple - need to add this
+    assert(malloc_usable_size(s_fdomain) >= s_bins * sizeof(*s_fdomain));
+    for(int p=1,dn=s_bins-1; p < s_bins/2; p++,dn--){
+      assert(p >= 0 && p < s_bins);
+      assert(dn >= 0 && dn < s_bins);
+      float complex const pos = s_fdomain[p];
+      float complex const neg = s_fdomain[dn];
+
+      s_fdomain[p]  = pos + conjf(neg);
+      s_fdomain[dn] = neg - conjf(pos);
+    }
+    s_fdomain[0] = 0; // Must be a null at DC
+  }
   // Zero out Nyquist bin
   s_fdomain[(s_bins+1)/2] = 0; // ?necessary?
   pthread_mutex_unlock(&slave->response_mutex); // release response[]

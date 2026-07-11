@@ -207,7 +207,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       channel->output.channels = decode_int(cp,optlen);
       break;
     case INDEPENDENT_SIDEBAND:
-      channel->filter2.isb = decode_bool(cp,optlen);
+      channel->filter2.out.isb = decode_bool(cp,optlen);
       break;
     case THRESH_EXTEND:
       channel->fm.threshold = decode_bool(cp,optlen);

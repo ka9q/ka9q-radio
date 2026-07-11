@@ -182,7 +182,6 @@ struct channel {
     double low;
     double high;
     double kaiser_beta;
-    bool isb;
     int blocking;       // Ratio of output to input blocksize; 0 = filter2 disabled
   } filter2;
 

@@ -1593,6 +1593,7 @@ int set_channel_filter(struct channel *chan){
 	    chan->name, lower, upper,
 	    chan->output.samprate, chan->filter.kaiser_beta);
 
+  bool old_isb = chan->filter2.out.isb; // Copy old state of ISB flag
   delete_filter_output(&chan->filter2.out);
   delete_filter_input(&chan->filter2.in);
   if(chan->filter2.blocking > 0){
@@ -1609,6 +1610,7 @@ int set_channel_filter(struct channel *chan){
     create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX);
     chan->filter2.in.perform_inline = true;
     create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,blocksize, COMPLEX);
+    chan->filter2.out.isb = old_isb;
     chan->filter2.low = lower;
     chan->filter2.high = upper;
     if(isnan(chan->filter2.kaiser_beta) || chan->filter2.kaiser_beta < 0 || !isfinite(chan->filter2.kaiser_beta))
