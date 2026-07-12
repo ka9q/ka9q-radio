@@ -69,7 +69,7 @@ Description: FT4/FT8/WSPR skimmer daemons for ka9q-radio
 
 Package: ka9q-radio-control
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio-common
+Depends: ${shlibs:Depends}, ${misc:Depends}, ka9q-radio-common, avahi-utils
 Description: Control program for ka9q-radio
  Interactive channel control program for ka9q-radio; uses ncurses
 
