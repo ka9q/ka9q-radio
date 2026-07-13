@@ -24,6 +24,7 @@ ka9q-radio-rx888
 ka9q-radio-siggen
 ka9q-radio
 ka9q-radio-tools
+ka9q-radio-repeater
 *.debhelper
 files
 tmp
