@@ -1,3 +1,9 @@
+ka9q-radio (2026.07.13-1-trixie1) trixie; urgency=medium
+
+  * create ka9q-radio-repeater package, only supported on arm64
+
+ -- Phil Karn <karn@ka9q.net>  Mon, 13 Jul 2026 02:08:56 -0700
+
 ka9q-radio (2026.07.10-1-trixie1) trixie; urgency=medium
 
   * add to channel option keyword list, sort
