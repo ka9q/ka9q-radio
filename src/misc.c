@@ -209,14 +209,18 @@ void stick_core(void){
   if(fp != NULL){
     char corelist[128] = {0};
     if(fgets(corelist,sizeof corelist,fp) != NULL){
+      // thread_siblings_list may be comma-separated ("0,1") or a range
+      // ("0-1"); parse both so SMT siblings aren't dropped (strtol stops at '-').
       char *string = corelist;
-      while(1){
-	char *ptr = NULL;
-	if((ptr = strsep(&string,",")) == NULL)
-	  break;
-	cpu = strtol(ptr,NULL,0);
-	CPU_SET(cpu,&cpuset);
-	fprintf(stderr," %d",cpu);
+      char *ptr = NULL;
+      while((ptr = strsep(&string,",")) != NULL){
+	char *dash = strchr(ptr,'-');
+	int lo = (int)strtol(ptr,NULL,0);
+	int hi = dash ? (int)strtol(dash+1,NULL,0) : lo;
+	for(int c = lo; c <= hi && c < CPU_SETSIZE; c++){
+	  CPU_SET(c,&cpuset);
+	  fprintf(stderr," %d",c);
+	}
       }
     }
     fclose(fp);
