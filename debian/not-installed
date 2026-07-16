@@ -7,3 +7,8 @@ usr/share/ka9q-radio/examples/radiod@sdrplay-iq.conf
 usr/share/ka9q-radio/examples/radiod@sdrplay-ka9q.conf
 usr/share/ka9q-radio/examples/radiod@sdrplay-wspr-20m.conf
 usr/share/ka9q-radio/examples/fragments
+[!arm64] usr/bin/set_xcvr
+[!arm64] usr/share/man/man1/cwd.1
+[!arm64] usr/sbin/cwd
+[!arm64] etc/radio/repeater.conf
+[!arm64] usr/lib/systemd/system/cwd.service

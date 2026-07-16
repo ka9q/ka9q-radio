@@ -4,10 +4,7 @@
 // Optional output decimation by integer factor
 // Complex input and transfer functions, complex or real output
 // Copyright 2017-2023, Phil Karn, KA9Q, karn@ka9q.net
-
 //#define LIQUID 1 // Experimental use of parks-mcclellan in filter generation
-
-#define MYNEW 1
 #define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
@@ -24,7 +21,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdatomic.h>
-
 #if LIQUID
 // Otherwise generates a bazillion warnings
 #pragma GCC diagnostic push
@@ -32,7 +28,6 @@
 #include <liquid/liquid.h>
 #pragma GCC diagnostic pop
 #endif
-
 #include "misc.h"
 #include "filter.h"
 #include "window.h"
@@ -42,12 +37,8 @@
 #define STATEDIR "/var/lib/ka9q-radio"
 #endif
 #define FFT_LOG_FILE "fft.log"
-
 const char *Wisdom_file; // Set in radio.c when reading config file
-
-
 //#define FILTER_DEBUG 1 // turn on lots of printfs in the window creation code
-
 // Settable from main
 char const *System_wisdom_file = "/etc/fftw/wisdomf"; // only valid for float version
 int N_worker_threads = 1;
@@ -55,14 +46,10 @@ int N_internal_threads = 1; // Usually most efficient
 // Desired FFTW planning level
 // If wisdom at this level is not present for some filter, the filter parameters are appended to FFT_LOG_FILE for offline wisdom generation
 int FFTW_planning_level = FFTW_PATIENT;
-
 static FILE *FFT_log;
-
-
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
 pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
 static atomic_flag FFTW_init = ATOMIC_FLAG_INIT;
-
 // FFT job descriptor
 struct fft_job {
   struct fft_job *next;
@@ -78,9 +65,7 @@ struct fft_job {
   unsigned int *completion_jobnum;   // Written with jobnum when complete
   bool terminate; // set to tell fft thread to quit
 };
-
 static struct fft_job *FFT_free_list; // List of spare job descriptors
-
 #define NTHREADS_MAX 20  // More than I'll ever need
 static struct {
   pthread_mutex_t queue_mutex; // protects job_queue
@@ -88,13 +73,10 @@ static struct {
   struct fft_job *job_queue;
   pthread_t thread[NTHREADS_MAX];  // Worker threads
 } FFT;
-
 static inline int modulo(int x,int const m){
   x = x < 0 ? x + m : x;
   return x > m ? x - m : x;
 }
-
-
 // in MAY be the same as out, meaning a in-place transform.
 fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction){
   bool notify = false;
@@ -159,35 +141,28 @@ fftwf_plan plan_c2r(int N, float complex *in, float *out){
   }
   return plan;
 }
-
-
 // Create fast convolution filters
 // The filters are now in two parts, filter_in (the master) and filter_out (the slave)
 // Filter_in holds the original time-domain input and its frequency domain version
 // Filter_out holds the frequency response and decimation information for one of several output filters that can share the same input
-
 // create_filter_input() parameters, shared by all slaves:
 // L = input data blocksize
 // M = impulse response duration
-// in_type = REAL, COMPLEX or BEAM
-
+// in_type = REAL, COMPLEX
 // Set up input (master) half of filter
 int create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type){
   assert(master != NULL);
   assert(master != (void *)-1);
   if(master == NULL)
     return -1;
-
   assert(L > 0);
   assert(M > 0);
   int const N = L + M - 1;
   int const bins = (in_type == COMPLEX) ? N : (N/2 + 1);
-  if(bins < 1)
+  if(bins < 2)
     return -1; // Unreasonably small - will segfault. Can happen if sample rate is garbled
-
   if(!goodchoice(N))
     fprintf(stderr,"create_filter_input(L=%'d  M=%'d): N=%'d is not an efficient blocksize for FFTW3\n",L,M,N);
-
   // It really should already be zeroed.
   // If not, it is probably being reused and the dynamically allocated storage in it may not have been freed
 #ifdef NDEBUG
@@ -195,25 +170,19 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
 #else
   ASSERT_ZEROED(master,sizeof *master);
 #endif
-
   master->points = N;
   // If there are no worker threads, do it inline
   master->perform_inline = (N_worker_threads == 0);
-
   for(int i=0; i < ND; i++){
     master->fdomain[i] = lmalloc(sizeof(float complex) * bins);
     master->completed_jobs[i] = (unsigned int)-1; // So startup won't drop any blocks
   }
-
   master->bins = bins;
-
   master->ilen = L;
   master->impulse_length = M;
   pthread_mutex_init(&master->filter_mutex,NULL);
   pthread_cond_init(&master->filter_cond,NULL);
-
   int old_prio = norealtime();
-
   // FFTW itself always runs with a single thread since multithreading didn't seem to do much good
   // But we have a set of worker threads operating on a job queue to allow a controlled number
   // of independent FFTs to execute at the same time
@@ -270,7 +239,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     assert(false); // shouldn't happen
     realtime(old_prio);
     return -1;
-  case BEAM:
   case COMPLEX:
     master->in_type = COMPLEX;
     master->input_buffer_size = round_to_page(ND * N * sizeof(float complex));
@@ -296,7 +264,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     break;
   }
   realtime(old_prio);
-
   return 0;
 }
 /* create an instance of an output filter stage attached to some common master stage
@@ -317,7 +284,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
      Must be SIMD-aligned (e.g., allocated with fftw_alloc) and will be freed by delete_filter()
 
     len = number of time domain points in output = Ls
-    out_type = REAL, COMPLEX, CROSS_CONJ (COMPLEX with special processing for ISB) or SPECTRUM (dummy for spectrum analyzer)
+    out_type = REAL, COMPLEX, or SPECTRUM (dummy for spectrum analyzer)
 
     All demodulators currently require COMPLEX output because a complex exponential is applied to the time domain
     output for fine frequency tuning
@@ -336,13 +303,12 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
   assert(master != NULL);
   if(master == NULL)
     return -1;
-
   assert(slave != NULL);
   if(slave == NULL)
     return -1;
-
   assert(out_type == SPECTRUM || len > 0);
-
+  if(out_type != SPECTRUM && len == 0)
+    return -1;
   // Should already be zeroed
   // If not, it is probably being reused and the dynamically allocated storage in it may not have been freed
 #ifdef NDEBUG
@@ -352,22 +318,15 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
 #endif
   // Share all but output fft bins, response, output and output type
   slave->master = master;
-  if(out_type == BEAM && master->in_type == REAL)
-    out_type = COMPLEX; // BEAM only valid for complex input
-
   slave->out_type = out_type;
   // N / L = Total FFT points / time domain points
   int const N = master->ilen + master->impulse_length - 1;
   int const L = master->ilen;
-
   slave->response = response;
   pthread_mutex_init(&slave->response_mutex,NULL);
-
+  set_filter_weights(slave,1.0,0.0); // defaults select A input only, can be changed by set_filter_weights(). Used only when beam == true
   switch(slave->out_type){
   default:
-  case BEAM:
-    set_filter_weights(slave,1.0,0.0); // defaults select A input only, can be changed by set_filter_weights().
-    /* fall through */
   case COMPLEX: // note fall-through
     {
       int q = (int)((long)len * N / L);
@@ -435,8 +394,6 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
 // Assist with choosing good blocksizes for FFTW3
 static const int small_primes[6] = {2, 3, 5, 7, 11, 13};
 static long factor_small_primes(long n, int exponents[6]);
-
-
 /**
  * Factor n into the primes 2,3,5,7,11,13.
  * exponents[] should be an array of length 6, each slot will hold
@@ -448,6 +405,8 @@ static long factor_small_primes(long n, int exponents[6]);
  *     be factored into those primes.
  */
 static long factor_small_primes(long n, int exponents[6]){
+  if(n <= 0)
+    return 0; // avoid looping if n == 0
   // Divide out each prime in turn
   for (int i = 0; i < 6; i++) {
     exponents[i] = 0;
@@ -458,19 +417,16 @@ static long factor_small_primes(long n, int exponents[6]){
   }
   return n;  // The remainder is what's left
 }
-
 // Is this a good blocksize for FFTW3?
 // Any number of factors of 2, 3, 5, 7 plus one of either 11 or 13
 bool goodchoice(long n){
   int exponents[6];
-
   long r = factor_small_primes(n,exponents);
   if(r != 1 || (exponents[4] + exponents[5] > 1))
     return false;
   else
     return true;
 }
-
 int ceil_pow2(uint32_t x) {
   if (x <= 1) return 1;
   x--;
@@ -481,13 +437,11 @@ int ceil_pow2(uint32_t x) {
   x |= x >> 16;
   return x + 1;
 }
-
 // Apply notch filters in the frequency domain to the output of a forward FFT
 // When a list exists, DC is implicitly at the end
 static void apply_notch_filters(struct notch_state *notches,float complex *output){
   if(notches == NULL || output == NULL)
     return;
-
   while(true){
     notches->state += notches->alpha * (output[notches->bin] - notches->state);
     output[notches->bin] -= notches->state;
@@ -510,10 +464,8 @@ void *run_fft(void *p){
   pthread_detach(pthread_self());
   pthread_setname("fft");
   (void)p; // Unused
-
   realtime(1 + default_prio()); // one notch above channels, but below input thread
   stick_core();
-
   while(true){
     // Get next job
     pthread_mutex_lock(&FFT.queue_mutex);
@@ -538,14 +490,11 @@ void *run_fft(void *p){
     }
     drop_cache(job->input,job->input_dropsize);
     // Apply notches, if any
-
     if(job->fin->notches != NULL)
       apply_notch_filters(job->fin->notches,job->output);
-
     // Stop timer before we block
     struct timespec t1 = {0};
     clock_gettime(CLOCK_MONOTONIC, &t1);
-
     // Signal we're done with this job
     if(job->completion_mutex)
       pthread_mutex_lock(job->completion_mutex);
@@ -556,7 +505,6 @@ void *run_fft(void *p){
     if(job->completion_mutex)
       pthread_mutex_unlock(job->completion_mutex);
     // Do NOT destroy job->completion_cond and completion_mutex here, they continue to exist
-
     bool const terminate = job->terminate; // Don't use job pointer after free
     // Put descriptor on free pool
     pthread_mutex_lock(&FFT.queue_mutex);
@@ -580,21 +528,18 @@ void *run_fft(void *p){
   }
   return NULL;
 }
-
 // Execute the input side of a filter:
 // We use the FFTW3 functions that specify the input and output arrays
 int execute_filter_input(struct filter_in * const f){
   assert(f != NULL);
   if(f == NULL)
     return -1;
-
   if(f->perform_inline){
     // Just execute it here
     int jobnum = f->next_jobnum++;
     float complex * const output = f->fdomain[jobnum % ND];
     switch(f->in_type){
     default:
-    case BEAM:
     case COMPLEX:
       {
 	float complex *input = f->input_read_pointer.c;
@@ -617,7 +562,6 @@ int execute_filter_input(struct filter_in * const f){
     // Apply notches, if any
     if(f->notches != NULL)
       apply_notch_filters(f->notches,output);
-
     // Signal we're done with this job
     pthread_mutex_lock(&f->filter_mutex);
     f->samples_by_job[jobnum % ND] = f->sample_index;
@@ -627,7 +571,6 @@ int execute_filter_input(struct filter_in * const f){
     f->sample_index += f->ilen;
     return 0;
   }
-
   // set up a job for the FFT worker threads and enqueue it
   // Take one off the pool, if available
   pthread_mutex_lock(&FFT.queue_mutex);
@@ -637,10 +580,8 @@ int execute_filter_input(struct filter_in * const f){
     job->next = NULL;
   }
   pthread_mutex_unlock(&FFT.queue_mutex);
-
   if(job == NULL)
     job = calloc(1,sizeof(struct fft_job)); // Otherwise create a new one
-
   // A descriptor from the free list won't be blank, but we set everything below
   assert(job != NULL);
   job->fin = f;
@@ -654,7 +595,6 @@ int execute_filter_input(struct filter_in * const f){
   f->samples_by_job[job->jobnum % ND] = f->sample_index;
   f->sample_index += f->ilen;
   job->terminate = false;
-
   // Set up the job and next input buffer
   // We're assuming that the time-domain pointers we're passing to the FFT are always aligned the same
   // as we increment the FFT pointer by f->ilen (L) modulo the mirror buffer size.
@@ -663,7 +603,6 @@ int execute_filter_input(struct filter_in * const f){
   // the usual size of a cache line. For complex->complex transforms, L has to be divisible by 4.
   switch(f->in_type){
   default:
-  case BEAM:
   case COMPLEX:
     job->input = f->input_read_pointer.c;
     job->input_dropsize = f->ilen * sizeof(float complex);
@@ -678,24 +617,19 @@ int execute_filter_input(struct filter_in * const f){
     break;
   }
   assert(job->input != NULL); // Should already be allocated in create_filter_input, or in our last call
-
   // Append job to worker queue, wake FFT worker thread
   struct fft_job *jp_prev = NULL;
   pthread_mutex_lock(&FFT.queue_mutex);
   for(struct fft_job *jp = FFT.job_queue; jp != NULL; jp = jp->next)
     jp_prev = jp;
-
   if(jp_prev)
     jp_prev->next = job;
   else
     FFT.job_queue = job; // Head of list
-
   pthread_cond_signal(&FFT.queue_cond); // Alert only one FFT worker
   pthread_mutex_unlock(&FFT.queue_mutex);
-
   return 0;
 }
-
 /* Execute the output side of a filter:
    1 - wait for a forward FFT job to complete
    frequency domain data is in a circular queue ND buffers deep to tolerate scheduling jitter
@@ -711,23 +645,19 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   assert(slave != NULL);
   if(slave == NULL)
     return -1;
-
   // We do have to modify the master's data structure, notably mutex locks
   // So the dereferenced pointer can't be const
   struct filter_in * restrict const master = slave->master;
   assert(master != NULL);
   if(master == NULL)
     return -1;
-
   assert(slave->out_type == SPECTRUM || (slave->rev_plan != NULL && slave->bins > 0));
   assert(slave->out_type != NONE);
   assert(master->in_type != NONE);
   assert(master->fdomain != NULL);
   assert(master->bins > 0);
-
   // DC and positive frequencies up to nyquist frequency are same for all types
   assert(slave->out_type == SPECTRUM || malloc_usable_size(slave->fdomain) >= slave->bins * sizeof(*slave->fdomain));
-
   // Wait for new block of output data
   pthread_mutex_lock(&master->filter_mutex);
   int blocks_behind = (int)(master->completed_jobs[slave->next_jobnum % ND] - slave->next_jobnum);
@@ -749,19 +679,15 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
   slave->next_jobnum = master->completed_jobs[slave->next_jobnum % ND] + 1;
   pthread_mutex_unlock(&master->filter_mutex);
-
   assert(m_fdomain != NULL); // Should always be master frequency data
-
   // In spectrum mode we'll read directly from the input queue. Don't forget the 3dB scale when the input is real
   slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
-
-  if(slave->fdomain == NULL || slave->response == NULL)
-    return 0;
-
   float complex * restrict const s_fdomain = slave->fdomain;
   float complex const * restrict const s_response = slave->response;
   int const s_bins = slave->bins;
   int const m_bins = master->bins;
+  if(slave->fdomain == NULL || slave->response == NULL || m_bins == 0 || s_bins == 0)
+    return 0;
 
   /* Multiply the requested frequency segment by the frequency response
      Although frequency domain data is always complex, this is complicated because
@@ -775,10 +701,8 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   pthread_mutex_lock(&slave->response_mutex); // Don't let it change while we're using it
   if(master->in_type == COMPLEX && slave->out_type == COMPLEX){
     // Complex -> complex (e.g., fobos (in VHF/UHF mode), funcube, airspyhf, sdrplay)
-
     int wp = (s_bins+1)/2; // most negative output bin
     int rp = shift - s_bins/2; // Start index in master, unwrapped = shift - # output bins
-
     // Starting below master, zero output until we're in range. Rarely needed.
     while(rp < -(m_bins+1)/2){
       assert(wp >=0 && wp < s_bins);
@@ -791,7 +715,6 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     }
     if(rp < 0)
       rp += m_bins; // Starts in negative region of master
-
     if(rp < 0 || rp >= m_bins){
       // Shift is out of range
       // Zero any remaining output
@@ -804,82 +727,45 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       goto done;
     }
     // The actual work is here
-    do {
-      assert(rp >= 0 && rp < m_bins);
-      assert(wp >=0 && wp < s_bins);
-      s_fdomain[wp] = m_fdomain[rp] * s_response[wp];
-      if(++rp == m_bins)
-	rp = 0; // Master wrapped to DC
-      if(++wp == s_bins)
-	wp = 0; // Slave wrapped to DC
-    } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
-
-    // Zero any remaining output. Rarely needed.
-    while(wp != (s_bins+1)/2){
-      assert(wp >=0 && wp < s_bins);
-      s_fdomain[wp++] = 0;
-      if(wp == s_bins)
-	wp = 0; // Wrap to DC
-    }
-  } else if(master->in_type == COMPLEX && slave->out_type == BEAM){
-    // Generalized form of COMPLEX-COMPLEX that can beamform with antennas on I&Q inputs
-    // or just select one or the other
-    // Uses complex weights alpha and beta
-    // Useful for Fobos in independent input mode
-
-    int wp = (s_bins+1)/2; // most negative output bin
-    int rp = shift - s_bins/2; // Start index in master, unwrapped = shift - # output bins
-
-    // Starting below master, zero output until we're in range. Rarely needed.
-    while(rp < -(m_bins+1)/2){
-      assert(wp >=0 && wp < s_bins);
-      s_fdomain[wp] = 0;
-      rp++;
-      if(++wp == (s_bins+1)/2) // exhausted output buffer
-	goto done;
-      if(wp == s_bins)
-	wp = 0; // Wrap to DC
-    }
-    if(rp < 0)
-      rp += m_bins; // Starts in negative region of master
-
-    if(rp < 0 || rp >= m_bins){
-      // Shift is out of range
-      // Zero any remaining output
+    if(slave->beam){
+      // Generalized form of COMPLEX-COMPLEX that can beamform with antennas on I&Q inputs
+      // or just select one or the other
+      // Uses complex weights alpha and beta
+      // Useful for Fobos in independent input mode
+      do {
+	assert(rp >= 0 && rp < m_bins);
+	assert(wp >=0 && wp < s_bins);
+	// rp is unlikely to pass through zero or nyquist in this mode, but handle it anyway?
+	if(rp == 0 || rp == m_bins/2)
+	  s_fdomain[wp] = (float complex)(__real__(m_fdomain[rp]) * slave->alpha * s_response[wp]
+					  + __imag__(m_fdomain[rp]) * slave->beta * s_response[wp]);
+	else
+	  s_fdomain[wp] = (float complex)((slave->alpha * m_fdomain[rp] + slave->beta * conjf(m_fdomain[m_bins - rp]))
+					  * s_response[wp]);
+	if(++rp == m_bins)
+	  rp = 0; // Master wrapped to DC
+	if(++wp == s_bins)
+	  wp = 0; // Slave wrapped to DC
+      } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
+    } else { // !beam
+      do {
+	assert(rp >= 0 && rp < m_bins);
+	assert(wp >=0 && wp < s_bins);
+	s_fdomain[wp] = m_fdomain[rp] * s_response[wp];
+	if(++rp == m_bins)
+	  rp = 0; // Master wrapped to DC
+	if(++wp == s_bins)
+	  wp = 0; // Slave wrapped to DC
+      } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
+      // Zero any remaining output. Rarely needed.
       while(wp != (s_bins+1)/2){
 	assert(wp >=0 && wp < s_bins);
 	s_fdomain[wp++] = 0;
 	if(wp == s_bins)
 	  wp = 0; // Wrap to DC
       }
-      goto done;
-    }
-    // The actual work is here
-    do {
-      assert(rp >= 0 && rp < m_bins);
-      assert(wp >=0 && wp < s_bins);
-      // rp is unlikely to pass through zero or nyquist in this mode, but handle it anyway?
-      if(rp == 0 || rp == m_bins/2)
-	s_fdomain[wp] = (float complex)(__real__(m_fdomain[rp]) * slave->alpha * s_response[wp]
-					     + __imag__(m_fdomain[rp]) * slave->beta * s_response[wp]);
-      else
-	s_fdomain[wp] = (float complex)((slave->alpha * m_fdomain[rp] + slave->beta * conjf(m_fdomain[m_bins - rp]))
-					     * s_response[wp]);
-      if(++rp == m_bins)
-	rp = 0; // Master wrapped to DC
-      if(++wp == s_bins)
-	wp = 0; // Slave wrapped to DC
-    } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
-
-    // Zero any remaining output. Rarely needed.
-    while(wp != (s_bins+1)/2){
-      assert(wp >=0 && wp < s_bins);
-      s_fdomain[wp++] = 0;
-      if(wp == s_bins)
-	wp = 0; // Wrap to DC
     }
   } else if(master->in_type == COMPLEX && slave->out_type == REAL){
-
     // Complex -> real UNTESTED! not used in ka9q-radio at present
     for(int si=0; si < s_bins; si++){
       int const mi = si + shift;
@@ -899,12 +785,11 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     /* Real->complex (e.g., rx888, fobos (direct sample mode), airspy R2)
        This can be tricky. We treat the input as complex with Hermitian symmetry (both positive and negative spectra)
        If shift >= 0, the input spectrum is positive and right-side up (e.g., rx888, fobos direct sampling)
-       If shift < 0, the input spectrum is negative and inverted (e.g., Airspy R2)
+       If shift < 0, the input spectrum is negative and inverted (e.g., Airspy R2, Hydra SDR)
        Don't cross input DC as this doesn't seem useful; just blank the output
        For real inputs, set_filter scales +3dB to account for the half energy in the implicit negative spectrum
     */
     int wp = (s_bins+1)/2; // most negative output bin
-
     if(shift >= 0){
       // Right side up
       int rp = shift - s_bins/2; // Start index in master, unwrapped = shift - # output bins
@@ -981,11 +866,24 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     } // end of inverted spectrum
   }
  done:;
+  if(slave->isb && slave->out_type == COMPLEX){
+    // Unpack LSB and USB to I and Q
+    // Needs a notch around DC to avoid ripple - need to add this
+    assert(malloc_usable_size(s_fdomain) >= s_bins * sizeof(*s_fdomain));
+    for(int p=1,dn=s_bins-1; p < s_bins/2; p++,dn--){
+      assert(p >= 0 && p < s_bins);
+      assert(dn >= 0 && dn < s_bins);
+      float complex const pos = s_fdomain[p];
+      float complex const neg = s_fdomain[dn];
+
+      s_fdomain[p]  = pos + conjf(neg);
+      s_fdomain[dn] = neg - conjf(pos);
+    }
+    s_fdomain[0] = 0; // Must be a null at DC
+  }
   // Zero out Nyquist bin
   s_fdomain[(s_bins+1)/2] = 0; // ?necessary?
-
   pthread_mutex_unlock(&slave->response_mutex); // release response[]
-
   // And finally back to the time domain
   fftwf_execute(slave->rev_plan); // Note: c2r version destroys m_fdomain[], but it's not used again anyway
   // Drop the cache in the first M-1 points of the time domain buffer that we'll discard
@@ -1003,12 +901,9 @@ int set_filter_weights(struct filter_out *out,double complex i_weight, double co
   out->beta = 0.5 * i_weight + I * q_weight;
   return 0;
 }
-
-
 int delete_filter_input(struct filter_in * master){
   if(master == NULL)
     return -1;
-
   ASSERT_UNLOCKED(&master->filter_mutex);
   pthread_mutex_destroy(&master->filter_mutex);
   pthread_cond_destroy(&master->filter_cond);
@@ -1016,17 +911,14 @@ int delete_filter_input(struct filter_in * master){
     fftwf_destroy_plan(master->fwd_plan);
   master->fwd_plan = NULL;
   mirror_free(&master->input_buffer,master->input_buffer_size); // Don't use free() !
-
   for(int i=0; i < ND; i++)
     FREE(master->fdomain[i]);
   memset(master,0,sizeof(*master)); // Wipe it all
   return 0;
-
 }
 int delete_filter_output(struct filter_out *slave){
   if(slave == NULL)
     return -1;
-
   ASSERT_UNLOCKED(&slave->response_mutex);
   pthread_mutex_destroy(&slave->response_mutex);
   if(slave->rev_plan != NULL)
@@ -1040,9 +932,6 @@ int delete_filter_output(struct filter_out *slave){
   memset(slave,0,sizeof(*slave)); // Wipe it all
   return 0;
 }
-
-
-
 /* Set up a filter with a specified complex bandpass response
    Uses a Kaiser-windowed sinc function - new as of March 2025
    This can occasionally be called with slave == NULL at startup, so don't abort
@@ -1052,7 +941,6 @@ int delete_filter_output(struct filter_out *slave){
 int set_filter(struct filter_out * const slave,double low,double high,double const kaiser_beta){
   if(slave == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta) || slave->master == NULL)
     return -1;
-
   if(slave->out_type == REAL){
     // Filter edges crossing DC not allowed for real output
     low = fabs(low);
@@ -1067,20 +955,16 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   // Limit filter range to Nyquist rate
   low = low < -0.5 ? -0.5 : low > +0.5 ? +0.5 : low;
   high = high < -0.5 ? -0.5 : high > +0.5 ? +0.5 : high;
-
-
   // Total number of time domain points
   int const N = slave->points;
   int const L = slave->olen;
   int const M = N - L + 1; // Length of impulse response in time domain
-
   // Real lowpass filter with cutoff = 1/2 bandwidth
   double const bw2 = (high == low) ? .0001 : fabs(high - low)/2;
   double const center = (high + low)/2;
 #if FILTER_DEBUG
   fprintf(stderr,"filter %p low %lf high %lf, center %lf bw/2 %lf kaiser %lf\n",slave,low,high,center,bw2,kaiser_beta);
 #endif
-
   float kaiser_window[M];
   make_kaiserf(kaiser_window,M,kaiser_beta);
   normalize_windowf(kaiser_window,M); // probably unnecessary, is normalized below
@@ -1093,7 +977,6 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
     double r = kaiser_window[i] * 2 * bw2 * sinc(2 * bw2 * n);
     window_gain += r;
     impulse[i] = (float complex)(cispi(2 * center * n) * r);
-
 #if FILTER_DEBUG
     fprintf(stderr,"impulse[%d] = %g + j%g\n",i,crealf(impulse[i]),cimagf(impulse[i]));
 #endif
@@ -1107,15 +990,12 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   assert(!isnan(gain) && isfinite(gain) && gain != 0);
   for(int i = 0; i < M; i++)
     impulse[i] *= gain; // Normalize for the window gain
-
   float complex * const response = lmalloc(N * sizeof(float complex));
   assert(response != NULL);
   fftwf_plan fwd_filter_plan = plan_complex(N,response,response,FFTW_FORWARD);
-
   memcpy(response,impulse,M * sizeof *response);
   memset(response+M,0,(N-M) * sizeof *response);
   fftwf_execute(fwd_filter_plan);
-
 #if FILTER_DEBUG
   {
     for(int i=0; i < N; i++)
@@ -1130,17 +1010,14 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   free(tmp);
   return 0;
 }
-
 int write_cfilter(struct filter_in *f, float complex const *buffer,int size){
   if(f == NULL)
     return -1;
   if(sizeof(*buffer) * (f->wcnt + size) >= f->input_buffer_size)
     return -1; // Write is so large it wrapped the input buffer. Should handle this more cleanly
-
   // Even though writes can now wrap past the primary copy of the input buffer, their start should always be in it
   assert((void *)(f->input_write_pointer.c) >= f->input_buffer);
   assert((void *)(f->input_write_pointer.c) < f->input_buffer + f->input_buffer_size);
-
   if(buffer != NULL)
     memcpy(f->input_write_pointer.c, buffer, size * sizeof(*buffer));
   f->input_write_pointer.c += size;
@@ -1154,17 +1031,14 @@ int write_cfilter(struct filter_in *f, float complex const *buffer,int size){
   }
   return executed;
 }
-
 int write_rfilter(struct filter_in *f, float const *buffer,int size){
   if(f == NULL)
     return -1;
   if(sizeof(*buffer) * (f->wcnt + size) >= f->input_buffer_size)
     return -1; // Write is so large it wrapped the input buffer. Should handle this more cleanly
-
   // Even though writes can now wrap past the primary copy of the input buffer, their start should always be in it
   assert((void *)(f->input_write_pointer.r) >= f->input_buffer);
   assert((void *)(f->input_write_pointer.r) < f->input_buffer + f->input_buffer_size);
-
   if(buffer != NULL)
     memcpy(f->input_write_pointer.r, buffer, size * sizeof(*buffer));
   f->input_write_pointer.r += size;
@@ -1178,12 +1052,10 @@ int write_rfilter(struct filter_in *f, float const *buffer,int size){
   }
   return executed;
 };
-
 // Suggest running fftwf-wisdom to generate some FFTW3 wisdom
 void suggest(int size,int dir,int clex){
   FILE *out;
   out = FFT_log ? FFT_log : stderr;
-
   fprintf(out,"%co%c%d\n",
 	  clex == COMPLEX ? 'c' : 'r',
 	  dir == FFTW_FORWARD ? 'f' : 'b',
@@ -1199,15 +1071,12 @@ long gcd(long a,long b){
   }
   return a;
 }
-
-
 long lcm(long a, long b){
   if(a <= 0 || b <= 0)
     return 0;
   long g = gcd(a,b);
   return (a/g) * b;
 }
-
 #if 0
 // Miscellaneous, alternate and experimental code, currently unused
 // Send terminate job to FFT thread
@@ -1221,12 +1090,10 @@ static void terminate_fft(struct filter_in *f){
   struct fft_job *jp_prev = NULL;
   for(struct fft_job *jp = FFT.job_queue; jp != NULL; jp = jp->next)
     jp_prev = jp;
-
   if(jp_prev)
     jp_prev->next = job;
   else
     FFT.job_queue = job; // Head of list
-
   pthread_cond_broadcast(&FFT.queue_cond); // Alert FFT thread
   pthread_mutex_unlock(&FFT.queue_mutex);
 }

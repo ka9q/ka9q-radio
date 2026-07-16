@@ -462,10 +462,12 @@ static void process_status(int fd){
   struct sockaddr sender;
   socklen_t socksize = sizeof(sender);
   ssize_t const length = recvfrom(fd, buffer, sizeof buffer, 0, &sender,&socksize);
-  if(length <= 0){    // ??
+  if(length < 0){    // ??
     perror("recvfrom");
     return; // Some sort of error
   }
+  if(length < 3 || buffer[0] != STATUS)
+    return;
 #if 0
   if(Source){
     // Backstop for kernel source filtering, which doesn't always work (e.g., on loopback)
@@ -478,8 +480,6 @@ static void process_status(int fd){
     }
   }
 #endif
-  if(buffer[0] != STATUS)
-    return;
   // Extract just the SSRC to see if the session exists
   // NB! Assumes same IP source address *and UDP source port* for status and data
   // This is only true for recent versions of radiod, after the switch to unconnected output sockets

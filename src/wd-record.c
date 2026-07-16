@@ -1705,47 +1705,34 @@ static void input_loop(){
     pfd[1].fd = Status_fd;
     pfd[1].events = pfd[0].events = POLLIN;
     pfd[1].revents = pfd[0].revents = 0;
-
     int const n = poll(pfd,sizeof(pfd)/sizeof(pfd[0]),1000); // Wait 1 sec max so we can scan active session list
     if(n < 0)
       break; // error of some kind - should we exit or retry?
-
     if(pfd[1].revents & (POLLIN|POLLPRI)){
       // Process status packet
       uint8_t buffer[PKTSIZE];
       socklen_t socksize = sizeof(sender);
       int length = recvfrom(Status_fd,buffer,sizeof(buffer),0,&sender,&socksize);
-      if(length <= 0){    // ??
-	perror("recvfrom");
+      if(length < 0){    // ??
+	fprintf(stderr,"recvfrom status: %s\n",strerror(errno));
 	goto statdone; // Some sort of error
       }
-      if(buffer[0] != STATUS)
+      if(length < 3 || buffer[0] != STATUS)
 	goto statdone;
       // Extract just the SSRC to see if the session exists
       // NB! Assumes same IP source address *and UDP source port* for status and data
       // This is only true for recent versions of radiod, after the switch to unconnected output sockets
       // But older versions don't send status on the output channel anyway, so no problem
-      struct channel chan;
-      memset(&chan,0,sizeof(chan));
-      struct frontend frontend;
-      memset(&frontend,0,sizeof(frontend));
+      struct channel chan = {0};
+      struct frontend frontend = {0};
       decode_radio_status(&frontend,&chan,buffer+1,length-1);
-
-      if (NULL == radio_mcast_group){
+      if (NULL == radio_mcast_group)
         extract_source(buffer+1,length-1);
-      }
-
-      if ((sync_ssrc) && (chan.output.rtp.ssrc == sync_ssrc)){
-        // status packet for the BPSK sync channel, so calc SNR stats
-        gen_locals(&chan);
-      }
-
-
+      if ((sync_ssrc) && (chan.output.rtp.ssrc == sync_ssrc))
+        gen_locals(&chan);        // status packet for the BPSK sync channel, so calc SNR stats
       if(Ssrc != 0 && chan.output.rtp.ssrc != Ssrc)
 	goto statdone; // Unwanted session, but still clear any data packets
-
       check_stream_skew(chan.clocktime);
-
       // Look for existing session
       // Everything must match, or we create a different session & file
       struct session *sp;

@@ -37,13 +37,13 @@ int demod_linear(void *arg){
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   int const blocksize = lrint(chan->output.samprate * Blocktime);
-  int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,
-				    chan->filter.beam ? BEAM : COMPLEX);
+  int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
     return -1;
   }
-  if(chan->filter.beam)
+  chan->filter.out.beam = chan->filter.beam;
+  if(chan->filter.out.beam)
     set_filter_weights(&chan->filter.out,chan->filter.a_weight,chan->filter.b_weight);
 
   set_channel_filter(chan);
