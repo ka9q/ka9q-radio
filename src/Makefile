@@ -183,7 +183,7 @@ install: all
 	install -m 0755 $(DAEMONS) $(DESTDIR)$(sbindir)
 	install -m 0755 $(EXECS) $(DESTDIR)$(bindir)
 ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
-	setcap cap_net_admin+ep $(bindir)/monitor
+	setcap cap_net_admin+ep $(DESTDIR)$(bindir)/monitor
 endif
 
 clean:

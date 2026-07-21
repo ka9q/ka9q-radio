@@ -931,9 +931,8 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
 
 end:;
   free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
-
-  FREE(sdr->transfers);
-  FREE(sdr->databuffers);
+  sdr->databuffers = NULL;
+  sdr->transfers = NULL;
 
   if(sdr->dev_handle != NULL)
     libusb_release_interface(sdr->dev_handle,0);
