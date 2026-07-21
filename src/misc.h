@@ -82,7 +82,6 @@ static float const SCALE16 = 1.f/INT16_MAX;
 static float const SCALE12 = 1.f/2048.;
 static float const SCALE8 = 1.f/INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
 
-
 #define FULL_SAMPRATE (48000)
 
 int default_prio(void);
@@ -91,6 +90,35 @@ int norealtime(void);
 void stick_core(void);
 // Custom version of malloc that aligns to a cache line
 void *lmalloc(size_t size);
+
+typedef struct {
+  int64_t num;
+  uint64_t den;   // always > 0
+} rational_64;
+
+// Euclidean greatest common divisor algorithm
+static inline uint64_t gcd_u64(uint64_t a, uint64_t b){
+  while(b){
+    uint64_t t = a % b;
+    a = b;
+    b = t;
+  }
+  return a;
+}
+static inline rational_64 rational_reduce_64(rational_64 x){
+  if(x.den == 0)
+    return x; // Invalid
+
+  uint64_t num = llabs(x.num);
+  uint64_t den = x.den;
+  uint64_t g = gcd_u64(num,den);
+  num /= g;
+  den /= g;
+  rational_64 result = { (int64_t)num,den};
+  if(x.num < 0)
+    result.num = -result.num;
+  return result;
+}
 
 // I *hate* this sort of pointless, stupid, gratuitous incompatibility that
 // makes a lot of code impossible to read and debug
@@ -187,14 +215,11 @@ void sincospif(float x, float *s, float *c);
 #define cis(x) csincos(x)
 #define cispi(x) csincospi(x)
 
-
 static inline double sinc(double x){
   if(x == 0)
     return 1;
   return sin(M_PI * x) / (M_PI * x);
 }
-
-
 extern const char *App_path;
 extern int Verbose;
 extern char const *Months[12];
@@ -207,6 +232,7 @@ char *format_utctime(char *result,int len,int64_t t);
 char *format_utctime_iso8601(char *result,int len,int64_t t);
 char *ftime(char *result,int size,int64_t t);
 void normalize_time(struct timespec *x);
+rational_64 parse_frequency_rational(char const *s,bool heuristics);
 double parse_frequency(char const *,bool);
 uint32_t nextfastfft(uint32_t n);
 ssize_t pipefill(int,void *,size_t);

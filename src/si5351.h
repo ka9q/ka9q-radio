@@ -18,14 +18,9 @@ typedef struct {
   // Output R divider (power of two: 1,2,4,...,128)
   unsigned R;
 
-  // Achieved frequency as rational: f_ref * (A+B/C)/(D+E/F) / R
-  // represented as num/den in Hz
-  unsigned long long fout_num;
-  unsigned long long fout_den;
-
   // Scoring
-  U128 err_num;        // |fout - target| expressed as numerator over common denom
-  uint8_t prefer_rank; // lower is better
+  long double err_num;
+  int prefer_rank; // lower is better
 } si5351_solution_t;
 // ----------------- Si5351 packing -----------------
 // For a+b/c, compute P1,P2,P3 per AN619 style formulas:
@@ -37,7 +32,7 @@ typedef struct {
   unsigned P1, P2, P3;
 } si5351_pvals_t;
 
-bool si5351_solve(unsigned long long fref_hz, unsigned long long fout_hz, si5351_solution_t *best);
+bool si5351_solve(rational_64 fref, double fout, si5351_solution_t *best);
 void si5351_get_pll_pvals(const si5351_solution_t *s, si5351_pvals_t *pll);
 void si5351_get_ms_pvals(const si5351_solution_t *s, si5351_pvals_t *ms);
 

@@ -276,7 +276,6 @@ int set_defaults(struct channel *chan){
   if(r != 0){
     fprintf(stderr,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
 	    Blocktime,chan->output.samprate,r);
-    assert(false);
   }
   chan->spectrum.overlap = DEFAULT_FFT_OVERLAP;
   chan->spectrum.fft_avg = DEFAULT_FFT_AVG;

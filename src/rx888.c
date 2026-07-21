@@ -22,6 +22,7 @@
 #include <strings.h>
 #include <assert.h>
 #include <stdatomic.h>
+#include <inttypes.h>
 
 #include "misc.h"
 #include "status.h"
@@ -35,9 +36,9 @@ static uint16_t const Vendor_id = 0x04b4;
 static uint16_t const Unloaded_product_id = 0x00f3;
 static uint16_t const Loaded_product_id = 0x00f1;
 
-static int64_t const MIN_SAMPRATE =      1000000; // 1 MHz, in ltc2208 spec
-static int64_t const MAX_SAMPRATE =    130000000; // 130 MHz, in ltc2208 spec
-static int64_t const DEFAULT_SAMPRATE = 64800000; // Synthesizes cleanly from 27 MHz reference
+static double const MIN_SAMPRATE =      1e6; // 1 MHz, in ltc2208 spec
+static double const MAX_SAMPRATE =    130e6; // 130 MHz, in ltc2208 spec
+static double const DEFAULT_SAMPRATE = 64.8e6; // Synthesizes cleanly from 27 MHz reference
 static double const NYQUIST = 0.47;  // Upper end of usable bandwidth, relative to 1/2 sample rate
 static double const AGC_UPPER_LIMIT = -15.0;   // Reduce RF gain if A/D level exceeds this in dBFS
 static double const AGC_LOWER_LIMIT = -26.0;   // Increase RF gain if level is below this in dBFS
@@ -50,11 +51,8 @@ static double const DEFAULT_GAINCAL = +1.4;
 static double const DC_ALPHA = 4e-7;
 
 // Reference frequency for Si5351 clock generator
-static long long const MIN_REFERENCE = 10e6;  //  10 MHz
-static long long const MAX_REFERENCE = 100e6; // 100 MHz
-static long long const DEFAULT_REFERENCE = 27e6;
+static double const DEFAULT_REFERENCE = 27e6;
 // Max allowable error on reference; 1e-4 = 100 ppm. Mainly to catch entry scaling errors
-static double const MAX_CALIBRATE = 1e-4;
 
 #if 0
 // Min and Max frequency for VHF/UHF tuner
@@ -106,7 +104,7 @@ struct sdrstate {
   double high_threshold;
   double low_threshold;
 
-  long long reference;
+  rational_64 reference;
   bool randomizer;
   bool dither;
   uint32_t gpios;
@@ -132,7 +130,7 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
 static void rx888_set_att(struct sdrstate *sdr,double att,bool vhf);
 static void rx888_set_gain(struct sdrstate *sdr,double gain,bool vhf);
-static double rx888_set_samprate(struct sdrstate *sdr,long long reference,long long samprate);
+static double rx888_set_samprate(struct sdrstate *sdr,double samprate);
 static void rx888_set_hf_mode(struct sdrstate *sdr);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate *sdr);
@@ -172,7 +170,6 @@ static char const *Rx888_keys[] = {
   "agc-low-threshold",
   "att", // synonym for atten
   "atten", // fixed attenuator gain, dB. Either -10 or +10 is interprepted as 10 dB of attenuation
-  "calibrate", // Set to zero when an external GPSDO or Rb/Cs reference is used
   "description",
   "device",
   "dither",  // Dither A/D LSB, not very useful with noisy antenna signals
@@ -293,34 +290,25 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   }
   rx888_set_gain(sdr,gain,false);
 
-  long long reference = DEFAULT_REFERENCE;
+  rational_64 reference = { .num = DEFAULT_REFERENCE, .den = 1};
   {
     char const *p = config_getstring(dictionary,section,"reference",NULL);
     if(p != NULL)
-      reference = llrint(parse_frequency(p,false));
+      reference = parse_frequency_rational(p,false);
   }
-  if(reference < MIN_REFERENCE || reference > MAX_REFERENCE){
-    fprintf(stderr,"Invalid reference frequency %'lld, forcing %'lld\n", reference, DEFAULT_REFERENCE);
-    reference = DEFAULT_REFERENCE;
-  }
-  double calibrate = config_getdouble(dictionary,section,"calibrate",0);
-  if(fabsl(calibrate) >= MAX_CALIBRATE){
-    fprintf(stderr,"Unreasonable frequency calibration %.3g, setting to 0\n",calibrate);
-    calibrate = 0;
-  }
-  int64_t samprate = DEFAULT_SAMPRATE;
+  double samprate = DEFAULT_SAMPRATE;
   {
     char const *p = config_getstring(dictionary,section,"samprate",NULL);
     if(p != NULL)
-      samprate = llrint(parse_frequency(p,false));
+      samprate = parse_frequency(p,false);
   }
   if(samprate < MIN_SAMPRATE || samprate > MAX_SAMPRATE){
-    fprintf(stderr,"Invalid sample rate %'lld, ",(long long)samprate);
+    fprintf(stderr,"Invalid sample rate %'lf ",samprate);
     samprate = samprate < MIN_SAMPRATE ? MIN_SAMPRATE : MAX_SAMPRATE; // must be one or the other
-    fprintf(stderr,"forcing %'lld\n",(long long)samprate);
+    fprintf(stderr,"forcing %'lf\n",samprate);
   }
-  sdr->reference = reference * (1 + calibrate);
-  samprate = rx888_set_samprate(sdr,sdr->reference,samprate); // Update to actual samprate, if different
+  sdr->reference = reference;
+  samprate = rx888_set_samprate(sdr,samprate); // Update to actual samprate, if different
   frontend->samprate = samprate;
 
   sdr->undersample = config_getint(dictionary,section,"undersample",1);
@@ -426,13 +414,14 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // Experimental spur notching, works on coherent spurs only
   // What generates 1/8, 2/8, 3/8? And probably 4/8 too, though that's the Nyquist freq
   // and we don't use it
-  frontend->spurs[0] = sdr->reference; // reference clock
+  double ref = (double)sdr->reference.num / (double)sdr->reference.den; // reference clock
+  frontend->spurs[0] = ref;
   frontend->spurs[1] = samprate / 8;
   frontend->spurs[2] = samprate / 4;  // 2/8
   frontend->spurs[3] = (3 * samprate) / 8;
-  frontend->spurs[4] = 2 * sdr->reference;
-  if(samprate - 3 * sdr->reference > 0)
-    frontend->spurs[5] = samprate - 3 * sdr->reference; // 3rd harmonic of reference aliased back down
+  frontend->spurs[4] = 2 * ref;
+  if(samprate - 3 * ref > 0)
+    frontend->spurs[5] = samprate - 3 * ref; // 3rd harmonic of reference aliased back down
   return 0;
 }
 
@@ -1169,14 +1158,13 @@ double rx888_tune(struct frontend *frontend,double freq){
 #endif
 }
 
-double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long long const samprate){
+static double rx888_set_samprate(struct sdrstate *sdr, double const samprate){
   assert(sdr != NULL);
-  assert(reference != 0);
-  assert(samprate != 0);
+  assert(samprate > 0);
 
   si5351_solution_t best = {0};
-  if(!si5351_solve(reference,samprate,&best)){
-    fprintf(stderr,"si5351_solve(%'lld, %'lld) failed\n", reference, samprate);
+  if(!si5351_solve(sdr->reference,samprate,&best)){
+    fprintf(stderr,"si5351_solve(%'ld/%'ld, %'lf) failed\n", sdr->reference.num, sdr->reference.den, samprate);
     return 0;
   }
   if(best.E == 0)
@@ -1184,19 +1172,12 @@ double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long 
 
   si5351_pvals_t pll = {0};
   si5351_get_pll_pvals(&best,&pll);
-  {
-    long long whole_hz,num,denom;
-    whole_hz = reference * best.B / best.C;
-    num = reference * best.B % best.C;
-    denom = best.C;
-    whole_hz += reference * best.A;
-    fprintf(stderr,"RX888 Si5351 PLL: vco = %'lld * (%'d + %'d/%'d) = %'lld",
-	  reference,
-	    best.A, best.B, best.C, whole_hz);
-    if(num != 0)
-      fprintf(stderr," + %'lld/%'lld", num, denom);
-  }
-  fprintf(stderr," Hz; P1=%d, P2=%d, P3=%d\n",pll.P1, pll.P2, pll.P3);
+  // doubles ref and vco are for display only
+  double const ref = (double)sdr->reference.num / (double)sdr->reference.den;
+  double const vco = ref * (best.A + (double)best.B / best.C);
+  fprintf(stderr,"RX888 Si5351 PLL: vco = %'lf * (%'u + %'u/%'u) = %'lf Hz;",
+	  ref, best.A, best.B, best.C, vco);
+  fprintf(stderr," P1=%u, P2=%u, P3=%u\n",pll.P1, pll.P2, pll.P3);
   uint8_t data_clkin[] = {
     (pll.P3 & 0x0000ff00) >>  8,
     (pll.P3 & 0x000000ff) >>  0,
@@ -1211,17 +1192,11 @@ double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long 
 
   si5351_pvals_t ms = {0};
   si5351_get_ms_pvals(&best,&ms);
-  fprintf(stderr,"RX888 Si5351 output divider: samprate = vco / (%'d*(%'d + %'d/%'d)) = %'lld",
-	  best.R, best.D, best.E, best.F, best.fout_num);
-  if(best.fout_den != 1){
-    long long whole_hz = best.fout_num / best.fout_den;
-    long long num = best.fout_num % best.fout_den;
-    fprintf(stderr,"/%'lld = %'lld + %'lld/%'lld", best.fout_den, whole_hz, num, best.fout_den);
-  }
-  fprintf(stderr," Hz");
-  if(best.err_num != 0)
-    fprintf(stderr," (error = %'lld/%'lld)",(long long)best.err_num, best.fout_den);
-  fprintf(stderr,"; P1=%d, P2=%d, P3=%d\n", ms.P1, ms.P2, ms.P3);
+  // fout is for display only
+  double const fout = vco / (best.R * (best.D + best.E/best.F));
+  fprintf(stderr,"RX888 Si5351 output divider: samprate = vco / (%'u*(%'u + %'u/%'u)) = %'lf Hz",
+	  best.R, best.D, best.E, best.F, fout);
+  fprintf(stderr,"; P1=%u, P2=%u, P3=%u\n", ms.P1, ms.P2, ms.P3);
   uint8_t data_clkout[] = {
     (ms.P3 & 0x0000ff00) >>  8,
     (ms.P3 & 0x000000ff) >>  0,
@@ -1233,5 +1208,5 @@ double rx888_set_samprate(struct sdrstate *sdr, long long const reference, long 
     (ms.P2 & 0x000000ff) >>  0
   };
   si5351_write(sdr,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
-  return (double)best.fout_num / best.fout_den;
+  return fout;
 }
