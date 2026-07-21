@@ -27,3 +27,39 @@ old
 Temporary Items
 work
 stash
+
+# build products
+*.o
+*.a
+*.so
+*.d
+src/config_paths.h
+
+# built binaries (src/Makefile DAEMONS + EXECS + old/obsolete targets)
+src/aprs
+src/aprsfeed
+src/control
+src/ctcss
+src/cwd
+src/fft-gen
+src/jt-decoded
+src/metadump
+src/monitor
+src/opusd
+src/opussend
+src/packetd
+src/pcmcat
+src/pcmrecord
+src/pcmsend
+src/pcmspawn
+src/powers
+src/radiod
+src/rdsd
+src/rx888_boot
+src/setfilt
+src/set_xcvr
+src/show-pkt
+src/show-sig
+src/stereod
+src/tune
+src/wd-record
