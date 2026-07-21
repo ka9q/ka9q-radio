@@ -601,25 +601,35 @@ static int setup_hardware(char const *sname){
     }
     snprintf(symname,sizeof(symname),"%s_shutdown",device);
     Frontend.shutdown = dlsym(Dl_handle,symname);
-    if(Verbose && (error = dlerror()) != NULL)
-      fprintf(stderr,"no %s_shutdown symbol: %s\n",device,error);
+    if((error = dlerror()) != NULL){
+      Frontend.shutdown = NULL;
+      if(Verbose)
+	fprintf(stderr,"no %s_shutdown symbol: %s\n",device,error);
+    }
 
     snprintf(symname,sizeof(symname),"%s_tune",device);
     Frontend.tune = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
       // Not fatal, but no tuning possible
+      Frontend.tune = NULL;
       fprintf(stderr,"warning: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
     }
     // No error checking on these, they're optional
     snprintf(symname,sizeof(symname),"%s_gain",device);
     Frontend.gain = dlsym(Dl_handle,symname);
-    if(Verbose && (error = dlerror()) != NULL) // Not serious errors
-      fprintf(stderr,"no %s_gain symbol: %s\n",device,error);
+    if((error = dlerror()) != NULL){
+      Frontend.gain = NULL;
+      if(Verbose) // Not serious errors
+	fprintf(stderr,"no %s_gain symbol: %s\n",device,error);
+    }
 
     snprintf(symname,sizeof(symname),"%s_atten",device);
     Frontend.atten = dlsym(Dl_handle,symname);
-    if(Verbose && (error = dlerror()) != NULL)
-      fprintf(stderr,"no %s_atten symbol: %s\n",device,error);
+    if((error = dlerror()) != NULL){
+      Frontend.atten = NULL;
+      if(Verbose)
+	fprintf(stderr,"no %s_atten symbol: %s\n",device,error);
+    }
   }
   int r = (*Frontend.setup)(&Frontend,Configtable,sname);
   if(r != 0){
