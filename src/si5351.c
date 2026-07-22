@@ -24,15 +24,10 @@ static void compute_ratio(unsigned A,unsigned B,unsigned C,
 static int preference_rank(unsigned D,unsigned E,unsigned F, unsigned C);
 static si5351_pvals_t pack_abc(unsigned a, unsigned b, unsigned c);
 
-
 static uint64_t const SI5351_DEN_MAX = 1048575u;
 static unsigned const MIN_VCO = 600000000;
 static unsigned const MAX_VCO = 900000000;
 
-
-static double factual(double fref, unsigned A, unsigned B, unsigned C, unsigned D, unsigned E, unsigned F, unsigned R){
-  return fref * (A + (double)B/C) / (R * (D + (double)E/F));
-}
 // Solve for one output: given fref and desired fout, return best solution.
 // Strategy:
 //  1) Reduce r = fout/fref to P/Q exactly.
@@ -100,6 +95,12 @@ bool si5351_solve(double fref, double fout, si5351_solution_t *best){
 	assert(c64 <= SI5351_DEN_MAX);
 	B = (unsigned)b64;
 	C = (unsigned)c64;
+	if(B == 1 && C == 1){
+	  B = 0;
+	  A++;
+	  if(A > 90)
+	    goto done;
+	}
       }
       assert(pll_is_legal(A, B, C));
       if(!pll_is_legal(A, B, C) || !pll_freq_in_range(fref, A, B, C))
@@ -112,9 +113,8 @@ bool si5351_solve(double fref, double fout, si5351_solution_t *best){
       // Select best: smallest err, then pref
       if(err < best->err_num || (err == best->err_num && pref < best->prefer_rank)){
 #if TEST
-	  double fact = factual(fref, A, B, C, D, E, F, R);
 	  fprintf(stderr,"factual = %'lf, pref %d, fn %'llu fd %'llu err = %Le\n",
-		  fact, pref,
+		  fref * (double)fn / (double)fd, pref,
 		  (unsigned long long)fn, (unsigned long long)fd,
 		  err);
 #endif
@@ -164,7 +164,7 @@ bool si5351_solve(double fref, double fout, si5351_solution_t *best){
 	// Compute required PLL ratio X = r * Y = (P/Q)*((D*F+E)/F)
 	U128 const Xn = (U128)P * (D * F + E);
 	U128 Xd = (U128)Q * F;
-	unsigned const A = Xn / Xd;
+	unsigned A = Xn / Xd;
 	if(A > 90 || fref * A > MAX_VCO)
 	  goto done; // Already too high, no point in continuing
 	if(A < 15 || fref * (A + 1) < MIN_VCO)
@@ -182,6 +182,12 @@ bool si5351_solve(double fref, double fout, si5351_solution_t *best){
 	  assert(c64 <= SI5351_DEN_MAX);
 	  B = (unsigned)b64;
 	  C = (unsigned)c64;
+	  if(B == 1 && C == 1){
+	    B = 0;
+	    A++;
+	    if(A > 90)
+	      goto done;
+	  }
 	}
 	assert(pll_is_legal(A, B, C));
 	if(!pll_is_legal(A, B, C) || !pll_freq_in_range(fref, A, B, C))
@@ -192,9 +198,8 @@ bool si5351_solve(double fref, double fout, si5351_solution_t *best){
 	int pref = preference_rank(D,E,F,C);
 	if(err < best->err_num || (err == best->err_num && pref < best->prefer_rank)){
 #if TEST
-	  double fact = factual(fref, A, B, C, D, E, F, R);
 	  fprintf(stderr,"factual = %'lf, pref %d, fn %'llu fd %'llu err = %Le\n",
-		  fact, pref,
+		  fref * (double)fn / (double)fd, pref,
 		  (unsigned long long)fn, (unsigned long long)fd,
 		  err);
 #endif
