@@ -271,12 +271,10 @@ int set_defaults(struct channel *chan){
   chan->pll.square = false;
   chan->pll.loop_bw = DEFAULT_PLL_BW;
 
-
   double r = remainder(Blocktime * chan->output.samprate,1.0);
-  if(r != 0){
+  if(r != 0)
     fprintf(stderr,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
 	    Blocktime,chan->output.samprate,r);
-  }
   chan->spectrum.overlap = DEFAULT_FFT_OVERLAP;
   chan->spectrum.fft_avg = DEFAULT_FFT_AVG;
   chan->spectrum.window_type = DEFAULT_WINDOW_TYPE;
@@ -291,7 +289,6 @@ int set_defaults(struct channel *chan){
   chan->tp1 = chan->tp2 = NAN;
   return 0;
 }
-
 // Set selected section of specified config file into current chan structure
 // Caller must (re) initialize pre-demod filter and (re)start demodulator thread
 int loadpreset(struct channel *chan,dictionary const *table,char const *sname){

@@ -640,8 +640,8 @@ static int setup_hardware(char const *sname){
   assert(Frontend.L != 0);
   int const N = Frontend.M + Frontend.L - 1;
   Blocktime = Frontend.L / Frontend.samprate; // True value, must be set early, many things depend on it
-  if(fabs(Blocktime - User_blocktime) > 1e-6)
-    fprintf(stderr,"Warning: requested block time %lf changed to %lf for integral block size %d at sample rate %lf Hz\n",
+  if(fabs(Blocktime / User_blocktime - 1) > 1e-15)
+    fprintf(stderr,"Warning: requested block time %lg changed to %lg for integral block size %d at sample rate %lf Hz\n",
 	    User_blocktime,Blocktime,Frontend.L,Frontend.samprate);
 
   fprintf(stderr,"Block time %.3lf ms, block samples L=%'d, overlap %d (%.1lf%%) M-1=%'d samples, forward FFT size N=%'u %s\n",
