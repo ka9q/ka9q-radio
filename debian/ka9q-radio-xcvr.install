@@ -1,5 +1,0 @@
-# ka9q-radio-repeater.install
-usr/bin/set_xcvr
-etc/radio/repeater.conf
-usr/lib/systemd/system/cwd.service
-
