@@ -104,7 +104,7 @@ struct sdrstate {
   double high_threshold;
   double low_threshold;
 
-  rational_64 reference;
+  double reference;
   bool randomizer;
   bool dither;
   uint32_t gpios;
@@ -290,11 +290,11 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   }
   rx888_set_gain(sdr,gain,false);
 
-  rational_64 reference = { .num = DEFAULT_REFERENCE, .den = 1};
+  double reference = DEFAULT_REFERENCE;
   {
     char const *p = config_getstring(dictionary,section,"reference",NULL);
     if(p != NULL)
-      reference = parse_frequency_rational(p,false);
+      reference = parse_frequency(p,false);
   }
   double samprate = DEFAULT_SAMPRATE;
   {
@@ -414,14 +414,13 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // Experimental spur notching, works on coherent spurs only
   // What generates 1/8, 2/8, 3/8? And probably 4/8 too, though that's the Nyquist freq
   // and we don't use it
-  double ref = (double)sdr->reference.num / (double)sdr->reference.den; // reference clock
-  frontend->spurs[0] = ref;
+  frontend->spurs[0] = sdr->reference;
   frontend->spurs[1] = samprate / 8;
   frontend->spurs[2] = samprate / 4;  // 2/8
   frontend->spurs[3] = (3 * samprate) / 8;
-  frontend->spurs[4] = 2 * ref;
-  if(samprate - 3 * ref > 0)
-    frontend->spurs[5] = samprate - 3 * ref; // 3rd harmonic of reference aliased back down
+  frontend->spurs[4] = 2 * sdr->reference;
+  if(samprate - 3 * 2 * sdr->reference > 0)
+    frontend->spurs[5] = samprate - 3 * sdr->reference; // 3rd harmonic of reference aliased back down
   return 0;
 }
 
@@ -1160,11 +1159,11 @@ double rx888_tune(struct frontend *frontend,double freq){
 
 static double rx888_set_samprate(struct sdrstate *sdr, double const samprate){
   assert(sdr != NULL);
-  assert(samprate > 0);
+  assert(isfinite(samprate) && samprate > 0);
 
   si5351_solution_t best = {0};
   if(!si5351_solve(sdr->reference,samprate,&best)){
-    fprintf(stderr,"si5351_solve(%'ld/%'ld, %'lf) failed\n", sdr->reference.num, sdr->reference.den, samprate);
+    fprintf(stderr,"si5351_solve(reference=%'lf, samprate=%'lf) failed\n", sdr->reference, samprate);
     return 0;
   }
   if(best.E == 0)
@@ -1173,10 +1172,9 @@ static double rx888_set_samprate(struct sdrstate *sdr, double const samprate){
   si5351_pvals_t pll = {0};
   si5351_get_pll_pvals(&best,&pll);
   // doubles ref and vco are for display only
-  double const ref = (double)sdr->reference.num / (double)sdr->reference.den;
-  double const vco = ref * (best.A + (double)best.B / best.C);
+  double const vco = sdr->reference * (best.A + (double)best.B / best.C);
   fprintf(stderr,"RX888 Si5351 PLL: vco = %'lf * (%'u + %'u/%'u) = %'lf Hz;",
-	  ref, best.A, best.B, best.C, vco);
+	  sdr->reference, best.A, best.B, best.C, vco);
   fprintf(stderr," P1=%u, P2=%u, P3=%u\n",pll.P1, pll.P2, pll.P3);
   uint8_t data_clkin[] = {
     (pll.P3 & 0x0000ff00) >>  8,

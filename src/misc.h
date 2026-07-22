@@ -95,11 +95,21 @@ typedef struct {
   int64_t num;
   uint64_t den;   // always > 0
 } rational_64;
+typedef __uint128_t U128;
+typedef __int128_t  I128;
 
 // Euclidean greatest common divisor algorithm
 static inline uint64_t gcd_u64(uint64_t a, uint64_t b){
   while(b){
     uint64_t t = a % b;
+    a = b;
+    b = t;
+  }
+  return a;
+}
+static inline U128 gcd_u128(U128 a, U128 b){
+  while(b){
+    U128 t = a % b;
     a = b;
     b = t;
   }
@@ -395,6 +405,8 @@ uint64_t xoshiro256ss_next(xoshiro256ss_state *st);
 void xoshiro256ss_jump(xoshiro256ss_state *st);
 void rand_init(void);
 double real_gauss(void);
+double uniform_rv(void);
+
 static inline double complex complex_gauss(void){
   double r = real_gauss();
   double i = real_gauss();

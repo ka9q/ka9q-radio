@@ -32,7 +32,7 @@ typedef struct {
   unsigned P1, P2, P3;
 } si5351_pvals_t;
 
-bool si5351_solve(rational_64 fref, double fout, si5351_solution_t *best);
+bool si5351_solve(double fref, double fout, si5351_solution_t *best);
 void si5351_get_pll_pvals(const si5351_solution_t *s, si5351_pvals_t *pll);
 void si5351_get_ms_pvals(const si5351_solution_t *s, si5351_pvals_t *ms);
 
