@@ -33,9 +33,9 @@ static unsigned const MAX_VCO = 900000000;
 static double factual(double fref, unsigned A, unsigned B, unsigned C, unsigned D, unsigned E, unsigned F, unsigned R){
   return fref * (A + (double)B/C) / (R * (D + (double)E/F));
 }
-// Solve for one output: given fref_uhz and desired fout (uHz), return best solution.
+// Solve for one output: given fref and desired fout, return best solution.
 // Strategy:
-//  1) Reduce r = fout_uhz/fref_uhz to P/Q exactly.
+//  1) Reduce r = fout/fref to P/Q exactly.
 //  2) Enumerate R divider (1..128 power-of-two).
 //  3) Try integer MS modes first (4,6,8), then fractional MS (D=8..2048),
 //     picking E/F by approximating a target MS value derived from a target PLL freq.
