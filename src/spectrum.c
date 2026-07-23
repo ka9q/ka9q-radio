@@ -393,7 +393,7 @@ static void wideband_poll(struct channel *chan){
 
       // Spectrum is always right side up
       // Start with DC + positive frequencies, then wrap to negative
-      int binp = abs(shift);
+      int binp = fft_n/2 + shift; // what if fft_n is odd?
       assert(binp >= 0);
       for(int i=0;i < bin_count && binp < fft_n/2+1 ; i++,binp++){
 	if(i == bin_count/2)
