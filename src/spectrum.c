@@ -391,7 +391,7 @@ static void wideband_poll(struct channel *chan){
       }
       fftwf_execute_dft_r2c(plan,fft_in,fft_out);
 
-      // Spectrum is always right side up so shift is never negative
+      // Spectrum is always right side up
       // Start with DC + positive frequencies, then wrap to negative
       int binp = abs(shift);
       assert(binp >= 0);

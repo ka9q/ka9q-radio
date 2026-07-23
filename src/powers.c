@@ -156,6 +156,7 @@ int main(int argc,char *argv[]){
     uint32_t tag = (uint32_t)random();
     encode_int(&bp,COMMAND_TAG,tag);
     encode_int(&bp,DEMOD_TYPE,SPECT_DEMOD);
+    encode_int(&bp,LIFETIME,interval * 2 * 50); // twice the polling interval
     if(frequency >= 0)
       encode_double(&bp,RADIO_FREQUENCY,frequency); // 0 frequency means terminate
     if(bins > 0)
