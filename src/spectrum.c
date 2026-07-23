@@ -350,7 +350,7 @@ static void wideband_poll(struct channel *chan){
   // Asynchronously read newest data from input buffer
   // Look back two FFT blocks from the most recent write pointer to allow room for overlapping windows
   // scale fft bin shift down to size of analysis FFT, which is smaller than the input FFT
-  int shift = (int)(chan->filter.bin_shift * (int64_t)fft_n / master->points);
+  int const shift = (int)(chan->filter.bin_shift * (int64_t)fft_n / master->points);
 
   // scale each bin value for our FFT
   // squared because the we're scaling the output of complex norm, not the input bin values
@@ -388,13 +388,12 @@ static void wideband_poll(struct channel *chan){
 	}
 	if(fft_n & 1)
 	  fft_in[fft_n-1] = 0;
-	shift = -shift; // make positive
       }
       fftwf_execute_dft_r2c(plan,fft_in,fft_out);
 
       // Spectrum is always right side up so shift is never negative
       // Start with DC + positive frequencies, then wrap to negative
-      int binp = shift;
+      int binp = abs(shift);
       assert(binp >= 0);
       for(int i=0;i < bin_count && binp < fft_n/2+1 ; i++,binp++){
 	if(i == bin_count/2)
