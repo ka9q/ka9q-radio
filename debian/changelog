@@ -1,3 +1,15 @@
+ka9q-radio (2026.07.23-2-trixie1) trixie; urgency=medium
+
+  * powers.c: set channel lifetime to twice the poll interval
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 23 Jul 2026 02:02:12 -0700
+
+ka9q-radio (2026.07.23-1-trixie1) trixie; urgency=medium
+
+  * fix longstanding bug causing spectral inversion with high-side LO front ends
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 23 Jul 2026 01:29:57 -0700
+
 ka9q-radio (2026.07.22-1-trixie1) trixie; urgency=medium
 
   * redo si5351 solver to work with floating point references and outputs
