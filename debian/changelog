@@ -1,3 +1,9 @@
+ka9q-radio (2026.07.23-4-trixie1) trixie; urgency=medium
+
+  * adjust spectrum starting point only if inverted
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 23 Jul 2026 12:21:16 -0700
+
 ka9q-radio (2026.07.23-3-trixie1) trixie; urgency=medium
 
   * apply nyquist shift to inverted spectrum...
