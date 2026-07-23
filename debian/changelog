@@ -1,3 +1,9 @@
+ka9q-radio (2026.07.23-3-trixie1) trixie; urgency=medium
+
+  * apply nyquist shift to inverted spectrum...
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 23 Jul 2026 03:37:49 -0700
+
 ka9q-radio (2026.07.23-2-trixie1) trixie; urgency=medium
 
   * powers.c: set channel lifetime to twice the poll interval
