@@ -30,7 +30,6 @@ LockPersonality=yes
 RestrictSUIDSGID=yes
 RestrictNamespaces=yes
 RestrictRealtime=no
-#RestrictAddressFamilies=AF_INET AF_INET6
 ExecStart=@sbindir@/radiod -N %i /etc/radio/radiod@%i.conf
 # eventually it will be Restart=on-failure after udev-triggered
 # starting is implemented
