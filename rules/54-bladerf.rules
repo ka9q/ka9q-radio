@@ -1,0 +1,15 @@
+# Nuand BladeRF USB permissions
+# Grants plugdev group access via uaccess so radiod (member of
+# plugdev) can open the device without root. Analogous to
+# 51-airspy.rules and 71-rx888.rules. For host-specific autostart
+# (SYSTEMD_WANTS to a radiod@<instance>.service), add a
+# 55-bladerf-ka9q.rules that matches on the serial number.
+
+# BladeRF (original)
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2cf0", ATTR{idProduct}=="5246", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# BladeRF 2.0 micro
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2cf0", ATTR{idProduct}=="5250", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# Older Nuand (pre-Nuand vendor ID assignment)
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6066", MODE="0660", GROUP="plugdev", TAG+="uaccess"
