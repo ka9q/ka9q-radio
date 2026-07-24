@@ -73,9 +73,11 @@ static struct {
   struct fft_job *job_queue;
   pthread_t thread[NTHREADS_MAX];  // Worker threads
 } FFT;
+// Bin-wrap helper: returns x mod m in [0, m).
+// Robust for any int x (not just x in (-m, m]).
 static inline int modulo(int x,int const m){
-  x = x < 0 ? x + m : x;
-  return x > m ? x - m : x;
+  int const r = x % m;
+  return r < 0 ? r + m : r;
 }
 // in MAY be the same as out, meaning a in-place transform.
 fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction){

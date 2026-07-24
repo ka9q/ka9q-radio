@@ -54,13 +54,6 @@ static double const DC_ALPHA = 4e-7;
 static double const DEFAULT_REFERENCE = 27e6;
 // Max allowable error on reference; 1e-4 = 100 ppm. Mainly to catch entry scaling errors
 
-#if 0
-// Min and Max frequency for VHF/UHF tuner
-static long long const MIN_FREQUENCY = 50e6;   //  50 MHz ?
-static long long const MAX_FREQUENCY = 2000e6; // 2000 MHz
-static int const R828D_FREQ = 16000000;     // R820T reference frequency
-static int const R828D_IF_CARRIER = 4570000;
-#endif
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
@@ -140,10 +133,6 @@ static double val2gain(int g);
 static int gain2val(double gain);
 static void *proc_rx888(void *arg);
 static void *agc_rx888(void *arg);
-#if 0
-static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency);
-static double actual_freq(double frequency);
-#endif
 // Read one Si5351 register over I2C (reg# is silicon-defined → version-proof).
 static inline int si5351_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
   return control_recv(sdr->dev_handle, I2CRFX3, SI5351_ADDR, reg, val, 1);
@@ -382,32 +371,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 	  sdr->reqsize * sdr->pktsize,
 	  xfer_time);
 
-#if 0
-  // VHF-UHF tuning
-  {
-    char const *p = config_getstring(dictionary,section,"frequency",NULL);
-    if(p != NULL){
-      if(sdr->undersample > 1){
-	fprintf(stderr,"frequency = ignored in undersample mode\n");
-      } else {
-	double frequency = parse_frequency(p,false);
-	if(frequency < MIN_FREQUENCY || frequency > MAX_FREQUENCY){
-	  fprintf(stderr,"Invalid VHF/UHF frequency %'lf, ignoring\n",frequency);
-	} else {
-	  // VHF/UHF mode
-	  double actual_frequency = rx888_set_tuner_frequency(sdr,frequency);
-	  fprintf(stderr,"Actual VHF/UHF tuner frequency %'lf\n",actual_frequency);
-	  frontend->frequency = actual_frequency;
-	  rx888_set_att(sdr,att,true);
-	  rx888_set_gain(sdr,gain,true);
-	  frontend->lock = true;
-	}
-      }
-    }
-  }
-#else
+  // VHF/UHF tuner support was removed pending a firmware rewrite; the
+  // driver operates in HF-only mode.
   frontend->frequency = 0;
-#endif
   if(frontend->frequency == 0)
     rx888_set_hf_mode(sdr);
 
@@ -919,9 +885,8 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
 
 end:;
   free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
-
-  FREE(sdr->transfers);
-  FREE(sdr->databuffers);
+  sdr->databuffers = NULL;
+  sdr->transfers = NULL;
 
   if(sdr->dev_handle != NULL)
     libusb_release_interface(sdr->dev_handle,0);
@@ -992,37 +957,6 @@ static void rx888_set_hf_mode(struct sdrstate *sdr){
   sdr->gpios &= ~VHF_EN;
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
 }
-
-#if 0
-// Pretty sure this is broken
-static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency){
-  assert(sdr != NULL);
-  struct frontend *frontend = sdr->frontend;
-  if(frequency == frontend->frequency)
-    return frequency;
-
-  if(frequency != 0.0){
-    // disable HF by set max ATT
-    rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
-    // switch to VHF Antenna
-    sdr->gpios |= VHF_EN;
-    command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
-
-    // high gain, 0db
-    uint8_t gain = 0x80 | 3;
-    argument_send(sdr->dev_handle,AD8340_VGA,gain);
-
-    // Enable Tuner reference clock
-    uint32_t ref = R828D_FREQ;
-    command_send(sdr->dev_handle,TUNERINIT,ref); // Initialize Tuner
-    command_send(sdr->dev_handle,TUNERTUNE,(uint64_t)frequency);
-  } else {
-    rx888_set_hf_mode(sdr);
-  }
-  frontend->frequency = frequency;
-  return frequency;
-}
-#endif
 
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
   assert(sdr != NULL);
@@ -1138,23 +1072,10 @@ static int gain2val(double gain){
   return g;
 }
 double rx888_tune(struct frontend *frontend,double freq){
-#if 1
   // Placeholder until VHF/UHF code is written
   (void)frontend;
   (void)freq;
-  return 0; // temp
-#else
-  struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-  if(frontend->lock || sdr->undersample != 1)
-    return frontend->frequency;
-  if(freq == 0.0){
-    frontend->frequency = 0;
-    rx888_set_hf_mode(sdr);
-    return 0;
-  } else {
-    return rx888_set_tuner_frequency(sdr,freq);
-  }
-#endif
+  return 0;
 }
 
 static double rx888_set_samprate(struct sdrstate *sdr, double const samprate){

@@ -20,6 +20,23 @@ StateDirectoryMode=0775
 LogsDirectory=ka9q-radio
 LogsDirectoryMode=0775
 UMask=002
+# Sandboxing. Conservative set: no new privileges, private /tmp,
+# read-only /usr and /etc (StateDirectory and LogsDirectory are
+# bind-mounted writeable), no visibility of /home, restrict
+# personalities, kernel-tunables writes, module loading, cgroup
+# manipulation, namespaces, realtime scheduling, and setuid.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 ExecStart=@sbindir@/radiod -N %i /etc/radio/radiod@%i.conf
 # eventually it will be Restart=on-failure after udev-triggered
 # starting is implemented

@@ -413,7 +413,6 @@ int main(int argc,char *argv[]){
   // Graceful signal catch
   signal(SIGPIPE,closedown); // Should catch the --exec or --stdout receiving process terminating
   signal(SIGINT,closedown);
-  signal(SIGKILL,closedown);
   signal(SIGQUIT,closedown);
   signal(SIGTERM,closedown);
 
@@ -1147,7 +1146,9 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	      sp->chan.preset);
     return 0;
   } else if(Command != NULL){
-    // Substitute parameters as specified
+    // Substitute parameters as specified. Substituted values are wrapped in
+    // single quotes so that shell metacharacters (e.g., in a rogue radiod
+    // description via $d) are treated as literal text, not shell syntax.
     sp->can_seek = false; // Can't seek on a pipe
     sp->exit_after_close = false; // Runs forever, closing individual pipes on timeout
     sp->filename[0] = '\0';
@@ -1158,39 +1159,57 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     while((a = strsep(&cp,"$")) != NULL){
       strlcat(sp->filename,a,sizeof(sp->filename));
       if(cp != NULL && strlen(cp) > 0){
-	char temp[256];
+	char raw[256];
+	bool quote = true;   // wrap substituted value in single quotes
+	raw[0] = '\0';
 	switch(*cp++){
 	case '$':
-	  snprintf(temp,sizeof(temp),"$");
+	  strlcpy(raw,"$",sizeof(raw));
+	  quote = false; // literal '$'
 	  break;
 	case 'd':
-	  snprintf(temp,sizeof(temp),"%s",sp->frontend.description);
+	  snprintf(raw,sizeof(raw),"%s",sp->frontend.description);
 	  break;
 	case 'h':
-	  snprintf(temp,sizeof(temp),"%.1lf",sp->chan.tune.freq);
+	  snprintf(raw,sizeof(raw),"%.1lf",sp->chan.tune.freq);
 	  break;
 	case 'k':
-	  snprintf(temp,sizeof(temp),"%.4lf",sp->chan.tune.freq/1000.);
+	  snprintf(raw,sizeof(raw),"%.4lf",sp->chan.tune.freq/1000.);
 	  break;
 	case 'm':
-	  snprintf(temp,sizeof(temp),"%.7lf",sp->chan.tune.freq/1000000.);
+	  snprintf(raw,sizeof(raw),"%.7lf",sp->chan.tune.freq/1000000.);
 	  break;
 	case 'c':
-	  snprintf(temp,sizeof(temp),"%d",sp->channels);
+	  snprintf(raw,sizeof(raw),"%d",sp->channels);
 	  break;
 	case 'r':
-	  snprintf(temp,sizeof(temp),"%d",sp->chan.output.samprate); // rx sample rate even for Opus
+	  snprintf(raw,sizeof(raw),"%d",sp->chan.output.samprate); // rx sample rate even for Opus
 	  break;
 	case 's':
-	  snprintf(temp,sizeof(temp),"%u",sp->ssrc);
+	  snprintf(raw,sizeof(raw),"%u",sp->ssrc);
 	  break;
 	case 'f':
-	  snprintf(temp,sizeof temp, "%s", encoding_string(sp->encoding));
+	  snprintf(raw,sizeof raw, "%s", encoding_string(sp->encoding));
 	  break;
 	default:
 	  break;
 	}
-	size_t r = strlcat(sp->filename,temp,sizeof(sp->filename));
+	size_t r;
+	if(!quote){
+	  r = strlcat(sp->filename,raw,sizeof(sp->filename));
+	} else {
+	  // Shell-quote: 'raw' with any embedded ' replaced by '\''
+	  r = strlcat(sp->filename,"'",sizeof(sp->filename));
+	  for(char const *q = raw; *q != '\0' && r < sizeof(sp->filename); q++){
+	    if(*q == '\''){
+	      r = strlcat(sp->filename,"'\\''",sizeof(sp->filename));
+	    } else {
+	      char one[2] = { *q, '\0' };
+	      r = strlcat(sp->filename,one,sizeof(sp->filename));
+	    }
+	  }
+	  r = strlcat(sp->filename,"'",sizeof(sp->filename));
+	}
 	if(r >= sizeof sp->filename){
 	  fprintf(stderr,"filename overflow\n");
 	  return -1;

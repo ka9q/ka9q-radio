@@ -168,7 +168,8 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
       {
 	struct channel old = *chan; // Copy old to detect changes
 	char *p = decode_string(cp,optlen);
-	strlcpy(chan->preset,p,sizeof(chan->preset));
+	if(p != NULL)
+	  strlcpy(chan->preset,p,sizeof(chan->preset));
 	FREE(p); // decode_string now allocs memory
 	if(Verbose > 1)
 	  fprintf(stderr,"%s loadpreset(%s)\n",chan->name,chan->preset);

@@ -313,8 +313,8 @@ int bladerf_stop(struct frontend * const frontend){
       return 0;
     usleep(10000);
   }
-  pthread_join(&sdr->main_thread, NULL);
-  pthread_join(&sdr->monitor_thread, NULL);
+  pthread_join(sdr->main_thread, NULL);
+  pthread_join(sdr->monitor_thread, NULL);
   atomic_store(&sdr->state,STOPPED);
   fprintf(stderr,"bladerf stopped\n");
   return 0;

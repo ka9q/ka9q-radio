@@ -379,11 +379,12 @@ char *formataddr(char *result, int size, void const *sock){
 // Convert binary sockaddr structure to printable host:port string
 // cache result, as getnameinfo can be very slow when it doesn't get a reverse DNS hit
 
-// Needs locks to be made thread safe.
-// Unfortunately, getnameinfo() can be very slow (the whole reason we need a cache!)
-// so we let go of the lock while it executes. That might cause duplicate entries
-// if two callers look up the same unresolved name at the same time, but that doesn't
-// seem likely to cause a problem?
+// Bounded LRU: MRU at head, evict from tail once size hits INVERSE_CACHE_MAX.
+// getnameinfo() runs with the lock dropped since it can be very slow; on
+// re-acquire we re-scan to avoid inserting a duplicate if another thread
+// resolved the same address in the meantime.
+
+#define INVERSE_CACHE_MAX 4096
 
 struct inverse_cache {
   struct inverse_cache *next;
@@ -392,9 +393,44 @@ struct inverse_cache {
   char hostport [2*NI_MAXHOST+NI_MAXSERV+5];
 };
 
-static struct inverse_cache *Inverse_cache_table; // Head of cache linked list
+static struct inverse_cache *Inverse_cache_head;
+static struct inverse_cache *Inverse_cache_tail;
+static size_t Inverse_cache_count;
 
 static pthread_mutex_t Formatsock_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// Find matching entry (lock must be held). NULL if not present.
+static struct inverse_cache *inverse_cache_find(struct sockaddr const *sa){
+  for(struct inverse_cache *ic = Inverse_cache_head; ic != NULL; ic = ic->next){
+    if(address_match(&ic->sock, sa) && getportnumber(&ic->sock) == getportnumber(sa))
+      return ic;
+  }
+  return NULL;
+}
+
+// Unlink an entry from the LRU list (lock must be held).
+static void inverse_cache_unlink(struct inverse_cache *ic){
+  if(ic->prev != NULL)
+    ic->prev->next = ic->next;
+  else
+    Inverse_cache_head = ic->next;
+  if(ic->next != NULL)
+    ic->next->prev = ic->prev;
+  else
+    Inverse_cache_tail = ic->prev;
+  ic->prev = ic->next = NULL;
+}
+
+// Push at head (lock must be held).
+static void inverse_cache_push_head(struct inverse_cache *ic){
+  ic->prev = NULL;
+  ic->next = Inverse_cache_head;
+  if(Inverse_cache_head != NULL)
+    Inverse_cache_head->prev = ic;
+  else
+    Inverse_cache_tail = ic;
+  Inverse_cache_head = ic;
+}
 
 // We actually take a sockaddr *, but can also accept a sockaddr_in *, sockaddr_in6 * and sockaddr_storage *
 // so to make it easier for callers we just take a void * and avoid pointer casts that impair readability
@@ -417,24 +453,14 @@ char const *formatsock(void const *s,bool full){
     return NULL;
   }
   pthread_mutex_lock(&Formatsock_mutex);
-  for(struct inverse_cache *ic = Inverse_cache_table; ic != NULL; ic = ic->next){
-    if(address_match(&ic->sock, sa) && getportnumber(&ic->sock) == getportnumber(sa)){
-      if(ic->prev == NULL){
-	pthread_mutex_unlock(&Formatsock_mutex);
-	return ic->hostport; // Already at top of list
-      }
-      // move to top of list so it'll be faster to find if we look for it again soon
-      ic->prev->next = ic->next;
-      if(ic->next)
-	ic->next->prev = ic->prev;
-
-      ic->next = Inverse_cache_table;
-      ic->next->prev = ic;
-      ic->prev = NULL;
-      Inverse_cache_table = ic;
-      pthread_mutex_unlock(&Formatsock_mutex);
-      return ic->hostport;
+  struct inverse_cache *hit = inverse_cache_find(sa);
+  if(hit != NULL){
+    if(hit != Inverse_cache_head){
+      inverse_cache_unlink(hit);
+      inverse_cache_push_head(hit);
     }
+    pthread_mutex_unlock(&Formatsock_mutex);
+    return hit->hostport;
   }
   pthread_mutex_unlock(&Formatsock_mutex); // Let go of the lock, this will take a while
   // Not in list yet
@@ -461,12 +487,27 @@ char const *formatsock(void const *s,bool full){
   assert(slen < sizeof(ic->sock));
   memcpy(&ic->sock, sa, slen);
 
-  // Put at head of table
   pthread_mutex_lock(&Formatsock_mutex);
-  ic->next = Inverse_cache_table;
-  if(ic->next)
-    ic->next->prev = ic;
-  Inverse_cache_table = ic;
+  // Another thread may have inserted the same entry while we dropped the lock.
+  hit = inverse_cache_find(sa);
+  if(hit != NULL){
+    if(hit != Inverse_cache_head){
+      inverse_cache_unlink(hit);
+      inverse_cache_push_head(hit);
+    }
+    pthread_mutex_unlock(&Formatsock_mutex);
+    free(ic);
+    return hit->hostport;
+  }
+  // Enforce size bound by evicting the least-recently-used entry.
+  if(Inverse_cache_count >= INVERSE_CACHE_MAX && Inverse_cache_tail != NULL){
+    struct inverse_cache *evict = Inverse_cache_tail;
+    inverse_cache_unlink(evict);
+    Inverse_cache_count--;
+    free(evict);
+  }
+  inverse_cache_push_head(ic);
+  Inverse_cache_count++;
   pthread_mutex_unlock(&Formatsock_mutex);
   return ic->hostport;
 }

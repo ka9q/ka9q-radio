@@ -80,7 +80,7 @@ ARCHOPTS = -march=native
 endif
 
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
-COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -Wextra -Wno-sign-conversion -Wno-int-conversion -MMD -MP
+COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -Wextra -MMD -MP
 COPTS += -fPIC
 CFLAGS += $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
 
@@ -96,7 +96,11 @@ LIBSTATUS = status.o decode_status.o
 RADIOD_OBJECTS = main.o audio.o avahi.o modes.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libdsp.a libstatus.a libradio.a
 
 ## source files for dependency generation (see DEPS=)
-CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c filter.c fm.c funcube.c hid-libusb.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c setfilt.c show-pkt.c show-sig.c si5351.c sig_gen.c spectrum.c status.c stereod.c tune.c wd-record.c wfm.c
+# List every .c file in the tree so `-include $(DEPS)` picks up
+# header-change rebuild dependencies even for optional drivers
+# (bladerf, fobos, hackrf, hydrasdr, sdrplay, ...) whose targets
+# are gated by ENABLE_*.
+CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c bladerf.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c fft-gen.c filter.c fm.c fobos.c funcube.c gauss.c hackrf.c hid-libusb.c hydrasdr.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c rx888_boot.c sdrplay.c set_xcvr.c setfilt.c show-pkt.c show-sig.c si5351.c sig_gen.c spectrum.c status.c stereod.c sincospi.c sincospif.c tune.c wd-record.c wfm.c window.c
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h si5351.h status.h config_paths.h
 
 ## hardware plug-in module enables
@@ -105,71 +109,59 @@ DYNAMIC_DRIVERS =
 
 # AIRSPY R2, etc
 ifeq ($(ENABLE_AIRSPY),1)
-   CFILES += airspy.c
    DYNAMIC_DRIVERS += airspy.so
 endif
 
 # AIRSPY HF+
 ifeq ($(ENABLE_AIRSPYHF),1)
-   CFILES += airspyhf.c
    DYNAMIC_DRIVERS += airspyhf.so
 endif
 
 # BLADERF
 ifeq ($(ENABLE_BLADERF),1)
-   CFILES += bladerf.c
    DYNAMIC_DRIVERS += bladerf.so
 endif
 
 # Rigexpert Fobos SDR
 ifeq ($(ENABLE_FOBOS),1)
-   CFILES += fobos.c
    DYNAMIC_DRIVERS += fobos.so
 endif
 
 # Old AMSAT-UK Funcube dongle (my first SDR!)
 ifeq ($(ENABLE_FUNCUBE),1)
-   CFILES += funcube.c
    DYNAMIC_DRIVERS += funcube.so
 endif
 
 # HACK RF
 ifeq ($(ENABLE_HACKRF),1)
-   CFILES += hackrf.c
    DYNAMIC_DRIVERS += hackrf.so
 endif
 
 # HydraSDR One
 ifeq ($(ENABLE_HYDRASDR),1)
-   CFILES += hydrasdr.c
    DYNAMIC_DRIVERS += hydrasdr.so
 endif
 
 # cheap RTLSDR dongles
 ifeq ($(ENABLE_RTLSDR),1)
-   CFILES += rtlsdr.c
    DYNAMIC_DRIVERS += rtlsdr.so
 endif
 
 # RX 888 MkII
 ifeq ($(ENABLE_RX888),1)
-   CFILES += rx888.c rx888_boot.c
    DYNAMIC_DRIVERS += rx888.so
    DAEMONS += rx888_boot
 endif
 
 ifeq ($(ENABLE_SDRPLAY),1)
-   CFILES += sdrplay.c
    DYNAMIC_DRIVERS += sdrplay.so
 endif
 
 ifeq ($(ENABLE_SIG_GEN),1)
-   CFILES += sig_gen.c
    DYNAMIC_DRIVERS += sig_gen.so
 endif
 
 ifeq ($(HAS_PIGPIO),1)
-   CFILES += set_xcvr.c
    EXECS += set_xcvr
 endif
 
