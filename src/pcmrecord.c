@@ -63,7 +63,7 @@ Command-line options:
 #include <inttypes.h>
 #include <ogg/ogg.h>
 #include <sys/file.h>
-
+#include <ctype.h>
 #include "misc.h"
 #include "attr.h"
 #include "multicast.h"
@@ -229,6 +229,7 @@ static int end_wav_stream(struct session *sp);
 static int send_wav_queue(struct session * const sp,bool flush);
 static int send_opus_queue(struct session * const sp,bool flush);
 static int send_queue(struct session * const sp,bool flush);
+static void sanitize_string(char *cp);
 
 static struct option Options[] = {
   {"ft8", no_argument, NULL, '8'}, // synonym for --jt --lengthlimit 15
@@ -1163,7 +1164,12 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	  snprintf(temp,sizeof(temp),"$");
 	  break;
 	case 'd':
-	  snprintf(temp,sizeof(temp),"%s",sp->frontend.description);
+	  {
+	    char *sanity = strdup(sp->frontend.description);
+	    sanitize_string(sanity);
+	    snprintf(temp,sizeof(temp),"'%s'",sanity);
+	    FREE(sanity);
+	  }
 	  break;
 	case 'h':
 	  snprintf(temp,sizeof(temp),"%.1lf",sp->chan.tune.freq);
@@ -1867,4 +1873,11 @@ static int end_wav_stream(struct session *sp){
   if(fwrite(&header,sizeof(header),1,sp->fp) != 1)
     return -1;
   return 0;
+}
+static void sanitize_string(char *cp){
+  for(; *cp != '\0'; cp++){
+    unsigned char const c = *cp;
+    if(!(isalnum(c) || c == ' ' || c == '_' || c == '-' || c == '.' || c == '@' || c == '+' || c == ',' || c == ':' || c == '/'))
+       *cp = '_';
+  }
 }
