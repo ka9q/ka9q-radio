@@ -22,7 +22,7 @@ LogsDirectoryMode=0775
 UMask=002
 NoNewPrivileges=yes
 PrivateTmp=yes
-ProtectHome=yes
+#ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
@@ -30,7 +30,7 @@ LockPersonality=yes
 RestrictSUIDSGID=yes
 RestrictNamespaces=yes
 RestrictRealtime=no
-RestrictAddressFamilies=AF_INET AF_INET6
+#RestrictAddressFamilies=AF_INET AF_INET6
 ExecStart=@sbindir@/radiod -N %i /etc/radio/radiod@%i.conf
 # eventually it will be Restart=on-failure after udev-triggered
 # starting is implemented
