@@ -43,6 +43,7 @@ static struct  option Options[] = {
   {"frequency", required_argument, NULL, 'f'},
   {"help", no_argument, NULL, 'h'},
   {"interval", required_argument, NULL, 'i'},
+  {"overlap", required_argument, NULL, 'O'},
   {"ssrc", required_argument, NULL, 's'},
   {"timeout", required_argument, NULL, 'T'},
   {"verbose", no_argument, NULL, 'v'},
@@ -57,7 +58,7 @@ static struct  option Options[] = {
 int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *rbw,int32_t const ssrc,uint8_t const * const buffer,size_t length);
 
 void help(){
-  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width rbw] [-b|--bins bins] [-a|--average n] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
+  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width rbw] [-b|--bins bins] [-a|--average n] [-O|--overlap (0 to 1.0)] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
   exit(1);
 }
 
@@ -70,33 +71,38 @@ int main(int argc,char *argv[]){
   int average = 1;
   double rbw = 0;
   double crossover = -1;
+  double overlap = 0;
   {
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
+      case 'O':
+	overlap = fabs(strtod(optarg,NULL));
+	overlap = overlap > 1.0 ? 1.0 : overlap;
+	break;
       case 'a':
-	average = atoi(optarg);
+	average = abs(atoi(optarg));
 	break;
       case 'b':
-	bins = atoi(optarg);
+	bins = abs(atoi(optarg));
 	break;
       case 'c':
-	count = atoi(optarg);
+	count = abs(atoi(optarg));
 	break;
       case 'C':
-	crossover = strtod(optarg,NULL);
+	crossover = fabs(strtod(optarg,NULL));
 	break;
       case 'd':
 	details = true;
 	break;
       case 'f':
-	frequency = parse_frequency(optarg,true);
+	frequency = fabs(parse_frequency(optarg,true));
 	break;
       case 'h':
 	help();
 	break;
       case 'i':
-	interval = strtod(optarg,NULL);
+	interval = fabs(strtod(optarg,NULL));
 	break;
       case 's':
 	Ssrc = atoi(optarg); // Send to specific SSRC
@@ -108,7 +114,7 @@ int main(int argc,char *argv[]){
 	Verbose++;
 	break;
       case 'w':
-	rbw = strtod(optarg,NULL);
+	rbw = fabs(strtod(optarg,NULL));
 	break;
       case 'V':
 	VERSION();
@@ -171,6 +177,7 @@ int main(int argc,char *argv[]){
     if(crossover >= 0)
       encode_float(&bp,CROSSOVER,crossover);
     encode_int(&bp,SPECTRUM_AVG,average);
+    encode_float(&bp,SPECTRUM_OVERLAP,overlap);
     encode_eol(&bp);
     ssize_t const command_len = bp - buffer;
     if(Verbose > 1){
