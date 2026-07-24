@@ -34,8 +34,9 @@ bool details;   // Output bin, frequency, power, newline
 char const *Source;
 struct sockaddr_storage *Source_socket;
 
-static char const Optstring[] = "b:c:C:df:hi:o:s:t:T:vw:V";
+static char const Optstring[] = "a:b:c:C:df:hi:o:s:t:T:vw:V";
 static struct  option Options[] = {
+  {"average", required_argument, NULL, 'a'},
   {"bins", required_argument, NULL, 'b'},
   {"count", required_argument, NULL, 'c'},
   {"details", no_argument, NULL, 'd'},
@@ -56,7 +57,7 @@ static struct  option Options[] = {
 int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *rbw,int32_t const ssrc,uint8_t const * const buffer,size_t length);
 
 void help(){
-  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width rbw] [-b|--bins bins] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
+  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width rbw] [-b|--bins bins] [-a|--average n] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
   exit(1);
 }
 
@@ -66,12 +67,16 @@ int main(int argc,char *argv[]){
   double interval = 5; // Period between updates, sec
   double frequency = -1;
   int bins = 0;
+  int average = 1;
   double rbw = 0;
   double crossover = -1;
   {
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
+      case 'a':
+	average = atoi(optarg);
+	break;
       case 'b':
 	bins = atoi(optarg);
 	break;
@@ -165,6 +170,7 @@ int main(int argc,char *argv[]){
       encode_float(&bp,RESOLUTION_BW,rbw);
     if(crossover >= 0)
       encode_float(&bp,CROSSOVER,crossover);
+    encode_int(&bp,SPECTRUM_AVG,average);
     encode_eol(&bp);
     ssize_t const command_len = bp - buffer;
     if(Verbose > 1){
