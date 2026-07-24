@@ -205,8 +205,10 @@ size_t encode_vector(uint8_t **bp,enum status_type type,float const *array,size_
 // OTOH, the caller doesn't have to figure out a buffer size anymore
 char *decode_string(uint8_t const *cp,int optlen){
   char *result = malloc(optlen+1);
-  if(result != NULL)
-    memcpy(result,cp,optlen);
+  assert(result != NULL);
+  if(result == NULL)
+    return NULL;
+  memcpy(result,cp,optlen);
   result[optlen] = '\0'; // force null termination
   return result;
 }
