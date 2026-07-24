@@ -20,6 +20,15 @@ StateDirectoryMode=0775
 LogsDirectory=ka9q-radio
 LogsDirectoryMode=0775
 UMask=002
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=no
 ExecStart=@sbindir@/radiod -N %i /etc/radio/radiod@%i.conf
 # eventually it will be Restart=on-failure after udev-triggered
 # starting is implemented
