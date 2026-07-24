@@ -218,6 +218,7 @@ int demod_linear(void *arg){
 	// Divide into 2 ms slices. Hopefully divides evenly (it does for the usual sampling rates and block times)
 	// Should handle fractions if that ever happens
 	int samples_per_slice = lrint(N * .002 / Blocktime);
+	samples_per_slice = samples_per_slice < 1 ? 1 : samples_per_slice; // guard in case of a large Blocktime
 	int n = 0;
 	while(n + samples_per_slice < N){ // ignore any fragment at end
 	  double energy = 0;
