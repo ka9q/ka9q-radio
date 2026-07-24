@@ -47,7 +47,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       {
 	char *str = decode_string(cp,optlen);
 	if(str != NULL)
-	  strlcpy(frontend->description,str,sizeof(frontend->description)); // should enforce null termination
+	  strlcpy(frontend->description,str,sizeof(frontend->description));
 	FREE(str);
       }
       break;
@@ -309,7 +309,7 @@ int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_
       {
 	char *p = decode_string(cp,optlen);
 	if(p != NULL)
-	  strlcpy(channel->preset,p,sizeof(channel->preset)); // should enforce null termination
+	  strlcpy(channel->preset,p,sizeof(channel->preset));
 	FREE(p);
       }
       break;
