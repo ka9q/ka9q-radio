@@ -1167,7 +1167,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	  {
 	    char *sanity = strdup(sp->frontend.description);
 	    sanitize_string(sanity);
-	    snprintf(temp,sizeof(temp),"'%s'",sanity);
+	    snprintf(temp,sizeof(temp),"%s",sanity);
 	    FREE(sanity);
 	  }
 	  break;
