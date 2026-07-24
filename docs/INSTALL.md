@@ -26,8 +26,11 @@ Two of the packages listed above (libfobos-dev and libhydrasdr-dev) are not yet 
 You can build them yourself from sources but I have built them myself as packages and placed them in my personal repository.
 To get them, do the following:
 
-cd /etc/apt/sources.list.d; sudo wget http://www.ka9q.net/debian/ka9q-sources.list__
+```
+cd /etc/apt/sources.list.d; sudo wget http://www.ka9q.net/debian/ka9q-sources.list
 cd /usr/share/keyrings; sudo wget http://www.ka9q.net/debian/ka9q-radio.asc
+sudo apt update
+```
 
 This adds my repository and its package signing key to your list of sources. This repository also contains
 prebuilt binary packages for ka9q-radio and its components, and this will soon become the preferred way to
