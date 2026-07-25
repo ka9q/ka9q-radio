@@ -1,11 +1,12 @@
-#ifndef _AVAHI_H
-#include <avahi-client/client.h>
-#include <avahi-client/publish.h>
-#include <avahi-common/alternative.h>
-#include <avahi-common/simple-watch.h>
-#include <avahi-common/malloc.h>
-#include <avahi-common/error.h>
-#include <avahi-common/timeval.h>
+#ifndef AVAHI_H
+#define AVAHI_H 1
+
+// Provider-neutral service-discovery interface.
+// Implemented by avahi.c/avahi_browse.c (Linux, via avahi-* CLI tools) or by
+// mdns.c (dns_sd.h / Bonjour API, portable to macOS and FreeBSD). The build
+// system selects exactly one implementation; consumers include only this header.
+
+#include <stdbool.h>
 
 extern bool Static_avahi;
 
@@ -27,5 +28,5 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
 void avahi_free_service_table(struct service_tab *table,int tabsize);
 
 int avahi_start(char const *service_name,char const *service_type,int service_port,char const *dns_name,int base_address,char const *description);
-#define AVAHI_H 1
+
 #endif
