@@ -62,6 +62,32 @@ else
   SOFLAGS += -shared
 endif
 
+# Service-discovery backend selection.
+# Linux uses the avahi-* CLI tools (avahi.c publish + avahi_browse.c browse);
+# other platforms use the portable dns_sd.h (Bonjour/mDNSResponder) backend
+# (mdns.c provides both). Override the auto choice with MDNS_BACKEND=avahi|dns_sd.
+MDNS_BACKEND ?= auto
+ifeq ($(MDNS_BACKEND),auto)
+  ifeq ($(UNAME_S),Linux)
+    MDNS_BACKEND = avahi
+  else
+    MDNS_BACKEND = dns_sd
+  endif
+endif
+
+ifeq ($(MDNS_BACKEND),dns_sd)
+  AVAHI_PUBLISH_OBJ = mdns.o
+  AVAHI_BROWSE_OBJ  = mdns.o
+  # dns_sd is in libSystem on macOS; FreeBSD (and a forced Linux/avahi-compat
+  # build) link it explicitly.
+  ifneq ($(UNAME_S),Darwin)
+    LDLIBS += -ldns_sd
+  endif
+else
+  AVAHI_PUBLISH_OBJ = avahi.o
+  AVAHI_BROWSE_OBJ  = avahi_browse.o
+endif
+
 IS_GCC_NOT_CLANG := $(shell \
 	$(CC) -dM -E - < /dev/null 2>/dev/null | \
 	awk '/__GNUC__/ { gcc=1 } /__clang__/ { clang=1 } END { if (gcc && !clang) print "yes" }')
@@ -93,14 +119,14 @@ LIBDSP = filter.o iir.o window.o osc.o sincospi.o sincospif.o
 LIBSTATUS = status.o decode_status.o
 
 # radiod uses a lot of unique objects. It should probably move to its own directory
-RADIOD_OBJECTS = main.o audio.o avahi.o modes.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libdsp.a libstatus.a libradio.a
+RADIOD_OBJECTS = main.o audio.o $(AVAHI_PUBLISH_OBJ) modes.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libdsp.a libstatus.a libradio.a
 
 ## source files for dependency generation (see DEPS=)
 # List every .c file in the tree so `-include $(DEPS)` picks up
 # header-change rebuild dependencies even for optional drivers
 # (bladerf, fobos, hackrf, hydrasdr, sdrplay, ...) whose targets
 # are gated by ENABLE_*.
-CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c bladerf.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c fft-gen.c filter.c fm.c fobos.c funcube.c gauss.c hackrf.c hid-libusb.c hydrasdr.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c rx888_boot.c sdrplay.c set_xcvr.c setfilt.c show-pkt.c show-sig.c si5351.c sig_gen.c spectrum.c status.c stereod.c sincospi.c sincospif.c tune.c wd-record.c wfm.c window.c
+CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c mdns.c ax25.c bandplan.c bladerf.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c fft-gen.c filter.c fm.c fobos.c funcube.c gauss.c hackrf.c hid-libusb.c hydrasdr.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c rx888_boot.c sdrplay.c set_xcvr.c setfilt.c show-pkt.c show-sig.c si5351.c sig_gen.c spectrum.c status.c stereod.c sincospi.c sincospif.c tune.c wd-record.c wfm.c window.c
 
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h si5351.h status.h config_paths.h
 
@@ -215,7 +241,7 @@ aprs: aprs.o ax25.o libdsp.a libradio.a
 aprsfeed: ax25.o aprsfeed.o libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-control: control.o bandplan.o modes.o avahi_browse.o libdsp.a libstatus.a libradio.a
+control: control.o bandplan.o modes.o $(AVAHI_BROWSE_OBJ) libdsp.a libstatus.a libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ -liniparser -lncursesw $(LDLIBS)
 
 ctcss: ctcss.o libdsp.a libradio.a
@@ -236,13 +262,13 @@ metadump: metadump.o dump.o libstatus.a libradio.a
 monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o morse.o libdsp.a libstatus.a libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ -lopus -lportaudio `pkg-config --silence-errors --libs alsa` -lsamplerate -liniparser  -lncursesw $(LDLIBS)
 
-opusd: opusd.o avahi.o libradio.a
+opusd: opusd.o $(AVAHI_PUBLISH_OBJ) libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ -lopus $(LDLIBS)
 
 opussend: opussend.o libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ -lopus -lportaudio $(LDLIBS)
 
-packetd: packetd.o ax25.o avahi.o libdsp.a libstatus.a libradio.a
+packetd: packetd.o ax25.o $(AVAHI_PUBLISH_OBJ) libdsp.a libstatus.a libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 pcmcat: pcmcat.o libradio.a
@@ -263,7 +289,7 @@ powers: powers.o dump.o libstatus.a libradio.a
 radiod: $(RADIOD_OBJECTS)
 	$(CC) -rdynamic $(LDFLAGS) -o $@ $^ -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl $(LDLIBS)
 
-rdsd: rdsd.o avahi.o libdsp.a libstatus.a libradio.a
+rdsd: rdsd.o $(AVAHI_PUBLISH_OBJ) libdsp.a libstatus.a libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 rx888_boot: rx888_boot.o ezusb.o
@@ -282,7 +308,7 @@ show-pkt: show-pkt.o libstatus.a libradio.a
 show-sig: show-sig.o libstatus.a libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ -lncursesw $(LDLIBS)
 
-stereod: stereod.o avahi.o libdsp.a libstatus.a libradio.a
+stereod: stereod.o $(AVAHI_PUBLISH_OBJ) libdsp.a libstatus.a libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 tune: tune.o libstatus.a libradio.a
