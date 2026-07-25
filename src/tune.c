@@ -312,7 +312,7 @@ int main(int argc,char *argv[]){
       encode_eol(&bp);
       ssize_t cmd_len = bp - cmd_buffer;
       socklen_t const slen = Control_address.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-      if(sendto(Control_sock, cmd_buffer, cmd_len, 0,(struct sockaddr *)&Control_address, slen))
+      if(sendto(Control_sock, cmd_buffer, cmd_len, 0,(struct sockaddr *)&Control_address, slen) == -1)
 	perror("command send");
 
       last_command_time = gps_time_ns();
