@@ -413,7 +413,6 @@ static void wideband_poll(struct channel *chan){
   } else {
     // Complex front end (frontend->isreal == false)
     // Find starting points to read in input A/D stream
-    // UNTESTED
     float complex const * restrict input = frontend->in.input_write_pointer.c - fft_n; // 1 buffer back
     input += (input < (float complex *)frontend->in.input_buffer) ? frontend->in.input_buffer_size / sizeof *input : 0; // backward wrap
     float complex * restrict fft_in = fftwf_alloc_complex(fft_n);
@@ -429,40 +428,24 @@ static void wideband_poll(struct channel *chan){
 
       fftwf_execute_dft(plan,fft_in,fft_out);
 
-      // Copy requested bins to user, starting with requested frequency
-      int binp;
-      int i = 0;
-
-      if(shift >= 0){
-	// Starts in positive spectrum
-	if(shift >= fft_n/2) // starts past end of spectrum, nothing to return
-	  goto done;
-	binp = shift;
-      } else {
-	// shift < 0, starts in negative spectrum
-	if(-shift >= fft_n)
-	  goto done; // Nothing overlaps, quit
-	if(-shift >= fft_n/2){ // before start of input spectrum
-	  i = -shift - fft_n/2;
-	  binp = fft_n/2; // start input at lowest negative frequency
-	} else {
-	  binp = fft_n + shift;
-	}
-      }
-      do {
-	assert(binp >= 0 && binp < fft_n && i >= 0 && i < bin_count);
+      /* Copy requested bins to user. Input and output are both in FFT order:
+	 bins 0 ... n/2-1 are DC and the positive frequencies, bins n/2 ... n-1 are the
+	 negative frequencies, most negative first. So output bin i sits at signed offset
+	 'offset' from the requested center frequency, which is itself at signed input bin
+	 'shift' from the front end's center frequency.
+	 Bins falling outside the front end's coverage are left at zero. */
+      for(int i=0; i < bin_count; i++){
+	int const offset = i < bin_count/2 ? i : i - bin_count; // signed output frequency, bins
+	int const b = shift + offset;                           // signed input frequency, bins
+	if(b < -fft_n/2 || b >= (fft_n+1)/2)
+	  continue; // Outside the front end passband
+	int const binp = b >= 0 ? b : b + fft_n; // back to FFT order
+	assert(binp >= 0 && binp < fft_n);
 	double const p = cnrm(fft_out[binp]);
 	assert(!isnan(p) && isfinite(p));
 	if(!isnan(p) && isfinite(p))
 	  bin_data[i] += gain * p;
-
-	// Increment and wrap indices
-	if(++i == bin_count)
-	  i = 0; // wrap to DC
-	if(++binp == fft_n)
-	  binp = 0; // wrap to DC
-      } while(i != bin_count/2 && binp != fft_n/2); // upper ends of positive frequncies
-    done:;
+      }
 
       // Back to previous buffer
       input -= lrint(fft_n * (1. - chan->spectrum.overlap));
