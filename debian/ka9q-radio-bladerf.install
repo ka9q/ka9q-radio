@@ -1,1 +1,2 @@
 usr/lib/ka9q-radio/bladerf.so
+usr/lib/udev/rules.d/54-bladerf.rules

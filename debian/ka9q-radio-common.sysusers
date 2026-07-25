@@ -1,0 +1,2 @@
+# debian/ka9q-radio-common.sysusers
+u radio - "KA9Q radio daemon" /nonexistent /usr/sbin/nologin

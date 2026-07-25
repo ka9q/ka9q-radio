@@ -49,6 +49,15 @@ struct sdrstate {
   double scale;
   enum sdrplay_status device_status;
 
+  // Poor-man's AGC: on power overload, step the LNA state up to shed gain; once
+  // overloads stop, step it back down toward the configured floor. At most one
+  // step (either direction) per overload_gr_interval seconds. Disabled (<= 0)
+  // unless the "overload-gr-interval" config key is set.
+  double overload_gr_interval;
+  int overload_lna_floor;        // configured LNA state; recovery never goes below this
+  int64_t overload_last_step;    // gps_time_ns() of last up/down step, 0 = never
+  int64_t overload_detected_time; // gps_time_ns() of current overload, -1 = not overloaded
+
   // Statistics and other auxiliary data
   uint64_t events;
   unsigned int next_sample_num;
@@ -131,6 +140,8 @@ static int set_dc_offset_iq_imbalance_correction(struct sdrstate *sdr,int const 
 static int set_bulk_transfer_mode(struct sdrstate *sdr,int const transfer_mode_bulk);
 static int set_notch_filters(struct sdrstate *sdr,bool const rf_notch,bool const dab_notch,bool const am_notch);
 static void *sdrplay_monitor(void *p);
+static void overload_servo_tick(struct sdrstate *sdr);
+static bool overload_step_lna(struct sdrstate *sdr,int delta,char const *why);
 static int set_biasT(struct sdrstate *sdr,bool const biasT);
 static int start_rx(struct sdrstate *sdr,sdrplay_api_StreamCallback_t rx_callback,sdrplay_api_EventCallback_t event_callback);
 static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *params,unsigned int numSamples,unsigned int reset,void *cbContext);
@@ -162,6 +173,7 @@ static char const *Sdrplay_keys[] = {
   "iq-imbalance-corr",
   "library",
   "lna-state",
+  "overload-gr-interval",
   "rf-att",
   "rf-gr",
   "rf-notch",
@@ -261,6 +273,12 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
       return -1;
     }
 
+    // Poor-man's AGC interval (seconds) for stepping the LNA state on overload.
+    // If unset (<= 0), the gain is never adjusted in response to overloads.
+    sdr->overload_gr_interval = config_getdouble(Dictionary,section,"overload-gr-interval",-1);
+    sdr->overload_last_step = 0;
+    sdr->overload_detected_time = -1; // not overloaded
+
     int const lna_state = config_getint(Dictionary,section,"lna-state",-1);
     int const rf_att = config_getint(Dictionary,section,"rf-att",-1);
     int const rf_gr = config_getint(Dictionary,section,"rf-gr",-1);
@@ -271,6 +289,8 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
       return -1;
     }
     frontend->rf_atten = get_rf_atten(sdr,rfgr_frequency);
+    // Recovery floor for the overload servo is whatever LNA state the config selected
+    sdr->overload_lna_floor = sdr->rx_channel_params->tunerParams.gain.LNAstate;
 
     int const if_att = config_getint(Dictionary,section,"if-att",-1);
     int const if_gr = config_getint(Dictionary,section,"if-gr",-1);
@@ -360,6 +380,7 @@ static void *sdrplay_monitor(void *p){
   uint64_t prev_samples = 0;
   while(true){
     sleep(1);
+    overload_servo_tick(sdr); // poor-man's AGC: keep reducing while overloaded, else recover
     uint64_t curr_samples = frontend->samples;
     if(!(curr_samples > prev_samples))
       break; // Device seems to have bombed. Exit and let systemd restart us
@@ -368,6 +389,60 @@ static void *sdrplay_monitor(void *p){
   fprintf(stderr,"Device is no longer streaming, exiting\n");
   close_sdrplay(sdr);
   exit(1); // Let systemd restart us
+}
+
+// Apply a single-notch change to the LNA state and push it to the device.
+// delta is +1 (reduce gain, on overload) or -1 (recover gain). Caller is
+// responsible for bounds-checking the resulting state. Updates rf_atten/scale
+// and stamps overload_last_step on success; reverts and returns false on failure.
+static bool overload_step_lna(struct sdrstate *sdr,int delta,char const *why){
+  int const lna_state = sdr->rx_channel_params->tunerParams.gain.LNAstate;
+  int const new_state = lna_state + delta;
+  sdr->rx_channel_params->tunerParams.gain.LNAstate = (uint8_t)new_state;
+  sdrplay_api_ErrT const err = sdrplay_api_Update(sdr->device.dev,sdr->device.tuner,sdrplay_api_Update_Tuner_Gr,sdrplay_api_Update_Ext1_None);
+  if(err != sdrplay_api_Success){
+    fprintf(stderr,"sdrplay_api_Update(Tuner_Gr) failed: %s\n",sdrplay_api_GetErrorString(err));
+    sdr->rx_channel_params->tunerParams.gain.LNAstate = (uint8_t)lna_state; // revert on failure
+    return false;
+  }
+  int64_t const now = gps_time_ns();
+  sdr->overload_last_step = now;
+  sdr->frontend->rf_atten = get_rf_atten(sdr,sdr->frontend->frequency);
+  sdr->scale = scale_AD(sdr->frontend);
+  char ts[1024];
+  format_gpstime(ts,sizeof(ts),now);
+  fprintf(stderr,"%s - overload servo: LNA state %d -> %d (%s)\n",ts,lna_state,new_state,why);
+  return true;
+}
+
+// Poor-man's AGC tick, called once per second from sdrplay_monitor().
+// While an overload is still active, keep reducing gain (incrementing the LNA
+// state) until the overload clears or the LNA state hits the band maximum -- no
+// interval applies to reductions. Once no overload is active, step the LNA state
+// back down toward the configured floor, one step per overload_gr_interval
+// seconds. No-op unless the servo is enabled.
+static void overload_servo_tick(struct sdrstate *sdr){
+  if(sdr->overload_gr_interval <= 0)
+    return; // servo disabled
+
+  int const lna_state = sdr->rx_channel_params->tunerParams.gain.LNAstate;
+
+  if(sdr->overload_detected_time >= 0){
+    // Still overloaded: keep shedding gain until it clears or we run out of states
+    int lna_state_count = 0;
+    (void)get_lna_states(sdr,sdr->frontend->frequency,&lna_state_count);
+    if(lna_state + 1 < lna_state_count)
+      overload_step_lna(sdr,+1,"overload persists");
+    return;
+  }
+
+  // No overload active: recover gain toward the configured floor, paced by interval
+  if(lna_state <= sdr->overload_lna_floor)
+    return; // already back at (or below) the configured floor
+  int64_t const interval_ns = (int64_t)(sdr->overload_gr_interval * 1e9);
+  if(gps_time_ns() - sdr->overload_last_step < interval_ns)
+    return; // not time for the next recovery step yet
+  overload_step_lna(sdr,-1,"recovery");
 }
 
 double sdrplay_tune(struct frontend * const frontend,double const f){
@@ -1179,8 +1254,6 @@ static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT t
   char event_timestamp_formatted[1024];
   sdrplay_api_ErrT err;
 
-  static int64_t power_overload_detected = -1;
-
   switch(eventId){
   case sdrplay_api_GainChange:
 #if 0
@@ -1194,17 +1267,31 @@ static void event_callback(sdrplay_api_EventT eventId,sdrplay_api_TunerSelectT t
     format_gpstime(event_timestamp_formatted,sizeof(event_timestamp_formatted),event_timestamp);
     switch(params->powerOverloadParams.powerOverloadChangeType){
     case sdrplay_api_Overload_Detected:
-      power_overload_detected = event_timestamp;
+      sdr->overload_detected_time = event_timestamp;
       fprintf(stderr,"%s - overload detected\n",event_timestamp_formatted);
+      // Poor-man's AGC: step the LNA state up to shed gain immediately on the
+      // first overload (fast attack, no interval). If the overload persists,
+      // overload_servo_tick() keeps incrementing once per second until it clears
+      // or the LNA state reaches the band maximum. overload_gr_interval applies
+      // only to recovery. Disabled unless configured.
+      if(sdr->overload_gr_interval > 0){
+        int lna_state_count = 0;
+        (void)get_lna_states(sdr,sdr->frontend->frequency,&lna_state_count);
+        int const lna_state = sdr->rx_channel_params->tunerParams.gain.LNAstate;
+        if(lna_state + 1 < lna_state_count)
+          overload_step_lna(sdr,+1,"overload");
+        else
+          fprintf(stderr,"%s - overload servo: LNA state already at maximum (%d)\n",event_timestamp_formatted,lna_state);
+      }
       break;
     case sdrplay_api_Overload_Corrected:
-      if(power_overload_detected >= 0){
+      if(sdr->overload_detected_time >= 0){
         fprintf(stderr,"%s - overload corrected - duration=%lldns\n",
-		event_timestamp_formatted, (long long)event_timestamp - power_overload_detected);
+		event_timestamp_formatted, (long long)event_timestamp - sdr->overload_detected_time);
       } else {
         fprintf(stderr,"%s - overload corrected\n",event_timestamp_formatted);
       }
-      power_overload_detected = -1;
+      sdr->overload_detected_time = -1; // no longer overloaded; recovery may begin
       break;
     }
     // send ack back for overload events
