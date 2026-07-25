@@ -75,6 +75,14 @@ purge:
 
 # the ka9q-radio-common package now creates the radio user and group
 install:
+	if [ -z "$(DESTDIR)" ]; then \
+		if ! getent group radio >/dev/null; then \
+		  addgroup --system radio; \
+		fi \
+		if ! getent passwd radio >/dev/null; then \
+		  adduser --system --ingroup radio --home /nonexistent --no-create-home --disabled-login --gecos "KA9Q radio daemon" radio; \
+		fi
+	fi
 	for d in $(SUBDIRS); do \
 		$(MAKE) -C $$d install DESTDIR=$(DESTDIR) || exit $$?; \
 	done
