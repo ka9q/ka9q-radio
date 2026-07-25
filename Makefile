@@ -81,7 +81,7 @@ install:
 		fi \
 		if ! getent passwd radio >/dev/null; then \
 		  adduser --system --ingroup radio --home /nonexistent --no-create-home --disabled-login --gecos "KA9Q radio daemon" radio; \
-		fi
+		fi \
 	fi
 	for d in $(SUBDIRS); do \
 		$(MAKE) -C $$d install DESTDIR=$(DESTDIR) || exit $$?; \
