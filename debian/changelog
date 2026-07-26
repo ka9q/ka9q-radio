@@ -1,3 +1,12 @@
+ka9q-radio (2026.07.25-1-trixie1) trixie; urgency=medium
+
+  * create radio user and group, apply a bunch of PRs
+  * see git commit 267a10e15349277e3b590c4b48099e267d5e9f28
+  * Claude code review from N4HY (incomplete) - many small fixes and hardening
+  * add blade-rf udev rules
+
+ -- Phil Karn <karn@ka9q.net>  Fri, 24 Jul 2026 19:29:30 -0700
+
 ka9q-radio (2026.07.24-1-trixie1) trixie; urgency=medium
 
   * Add -O/--overlap and -a/--average options to powers.c
