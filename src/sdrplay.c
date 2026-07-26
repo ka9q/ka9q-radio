@@ -1101,9 +1101,9 @@ static int set_if_gain(struct sdrstate *sdr,int const if_att,int const if_gr,int
   } else if(if_agc_rate == 0){  // use AGC scheme
     sdr->rx_channel_params->ctrlParams.agc.enable = sdrplay_api_AGC_CTRL_EN;
     sdr->rx_channel_params->ctrlParams.agc.setPoint_dBfs = if_agc_setPoint_dBfs;
-    sdr->rx_channel_params->ctrlParams.agc.attack_ms = (uint8_t)if_agc_attack_ms;
-    sdr->rx_channel_params->ctrlParams.agc.decay_ms = (uint8_t)if_agc_decay_ms;
-    sdr->rx_channel_params->ctrlParams.agc.decay_delay_ms = (uint8_t)if_agc_decay_delay_ms;
+    sdr->rx_channel_params->ctrlParams.agc.attack_ms = if_agc_attack_ms;
+    sdr->rx_channel_params->ctrlParams.agc.decay_ms = if_agc_decay_ms;
+    sdr->rx_channel_params->ctrlParams.agc.decay_delay_ms = if_agc_decay_delay_ms;
     sdr->rx_channel_params->ctrlParams.agc.decay_threshold_dB = (uint8_t)if_agc_decay_threshold_dB;
   }
 
