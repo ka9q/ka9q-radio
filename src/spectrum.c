@@ -428,12 +428,44 @@ static void wideband_poll(struct channel *chan){
 
       fftwf_execute_dft(plan,fft_in,fft_out);
 
+#if 0 // another KA9Q fix attempt
+      int i = bin_count/2; // most negative output bin
+      int binp = shift - bin_count/2; // most negative input bin needed
+      if(binp > fft_n/2)
+	break; // Already past upper end of input
+      if(binp < 0)
+	binp += fft_n; // starts in negative input frequencies
+
+      if(binp < 0){
+	// below lowest input frequency. Skip a bit, brother
+	i -= binp;
+	binp = 0;
+	if(i >= bin_count)
+	  i -= bin_count; // crossed into positive output range
+	if(i >= bin_count)
+	  break; // still too high
+      }
+      do {
+	assert(binp >=0 && binp < fft_n);
+	assert(i >= 0 && i < bin_count);
+	double const p = cnrm(fft_out[binp]);
+	assert(!isnan(p) && isfinite(p));
+	if(!isnan(p) && isfinite(p)) // Don't pollute integrator with bad data
+	  bin_data[i] += gain * p;
+	if(++binp == fft_n)
+	  binp = 0; // wrap round to DC
+	if(++i == bin_count)
+	  i = 0;    // wrap to DC
+      } while (binp != fft_n/2 && i != bin_count/2);
+#else  // KE5GDB
       /* Copy requested bins to user. Input and output are both in FFT order:
 	 bins 0 ... n/2-1 are DC and the positive frequencies, bins n/2 ... n-1 are the
 	 negative frequencies, most negative first. So output bin i sits at signed offset
 	 'offset' from the requested center frequency, which is itself at signed input bin
 	 'shift' from the front end's center frequency.
-	 Bins falling outside the front end's coverage are left at zero. */
+	 Bins falling outside the front end's coverage are left at zero.
+	 (fixed by KE5GDB)
+      */
       for(int i=0; i < bin_count; i++){
 	int const offset = i < bin_count/2 ? i : i - bin_count; // signed output frequency, bins
 	int const b = shift + offset;                           // signed input frequency, bins
@@ -446,7 +478,7 @@ static void wideband_poll(struct channel *chan){
 	if(!isnan(p) && isfinite(p))
 	  bin_data[i] += gain * p;
       }
-
+#endif
       // Back to previous buffer
       input -= lrint(fft_n * (1. - chan->spectrum.overlap));
       if(input < (float complex *)frontend->in.input_buffer)
