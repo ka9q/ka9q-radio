@@ -237,21 +237,22 @@ static void narrowband_poll(struct channel *chan){
   // Most recent data from receive ring buffer
   float complex const * restrict const ring = chan->spectrum.ring;
   int const ring_size = chan->spectrum.ring_size;
-
   int const fft_n = chan->spectrum.fft_n;
   assert(fft_n > 0); // should be set by narrowband_setup()
-
-  int rp = chan->spectrum.ring_idx - fft_n;
-  if(rp < 0)
-    rp += ring_size;
-
   float complex * restrict fft_in = fftwf_alloc_complex(fft_n);
   assert(fft_in != NULL);
   float complex * restrict fft_out = fftwf_alloc_complex(fft_n);
   assert(fft_out != NULL);
 
-  int fft_avg = chan->spectrum.fft_avg;
-  fft_avg = fft_avg <= 0 ? 1 : fft_avg; // force it valid
+  // This check actually isn't necessary because ring_size is calculated from fft_avg assuming no overlap
+  assert(chan->spectrum.fft_avg >= 1);
+  double const avg_limit = floor(1 + (( ring_size / fft_n) - 1) / (1-chan->spectrum.overlap));
+  assert(chan->spectrum.fft_avg <= avg_limit);  // so the assertion shouldn't fail
+  int const fft_avg = chan->spectrum.fft_avg > avg_limit ? lrint(avg_limit) : chan->spectrum.fft_avg;
+  int rp = chan->spectrum.ring_idx - lrint(fft_n * (1 + (fft_avg - 1)*(1-chan->spectrum.overlap)));
+  if(rp < 0)
+    rp += ring_size;
+  assert(rp >= 0); // with limit, shouldn't wrap more than once
 
   // scale each bin value for our FFT
   // squared because the we're scaling the output of complex norm, not the input bin values
@@ -278,9 +279,8 @@ static void narrowband_poll(struct channel *chan){
       if(!isnan(p) && isfinite(p))
 	bin_data[i] += gain * p; // Don't pollute with infinities or NANs
     }
-    // rp now points to *next* buffer, so move it back between 1 and 2 buffers depending on overlap
-    rp -= lrint(fft_n * (2. - chan->spectrum.overlap));
-
+    // rp now points to *next* buffer, so move it back if there's overlap
+    rp -= lrint(fft_n * chan->spectrum.overlap);
     if(rp < 0)
       rp += ring_size;
   }
@@ -355,15 +355,19 @@ static void wideband_poll(struct channel *chan){
   // scale each bin value for our FFT
   // squared because the we're scaling the output of complex norm, not the input bin values
   // we only see one side of the spectrum for real inputs
-  int const fft_avg = chan->spectrum.fft_avg <= 0 ? 1 : chan->spectrum.fft_avg; // force it valid
+  // Limit averaging to the data on hand
 
   if(frontend->isreal){
     // Point into raw SDR A/D input ring buffer
     // We're reading from a mirrored buffer so it will automatically wrap back to the beginning
     // as long as it doesn't go past twice the buffer length
-    float const *input = frontend->in.input_write_pointer.r - fft_n; // 1 FFT buffer back
-    if(input < (float *)frontend->in.input_buffer)
-      input += frontend->in.input_buffer_size / sizeof *input; // wrap backward
+    // Limit averaging to amount on hand
+    double const avg_limit = floor(1 + ((frontend->in.input_buffer_size / (sizeof (float) * fft_n)) - 1) / (1-chan->spectrum.overlap));
+    assert(chan->spectrum.fft_avg >= 1);
+    int const fft_avg = chan->spectrum.fft_avg > avg_limit ? lrint(avg_limit) : chan->spectrum.fft_avg;
+    float const *input = frontend->in.input_write_pointer.r - lrint(fft_n * (1 + (fft_avg - 1)*(1-chan->spectrum.overlap)));
+    while(input < (float *)frontend->in.input_buffer)
+      input += frontend->in.input_buffer_size / sizeof *input; // bring it back into the buffer
 
     float * restrict fft_in = fftwf_alloc_real(fft_n);
     assert(fft_in != NULL);
@@ -404,15 +408,20 @@ static void wideband_poll(struct channel *chan){
 	if(!isnan(p) && isfinite(p))
 	  bin_data[i] += gain * p;
       }
-      input -= lrint(fft_n * (1. - chan->spectrum.overlap)); // move back fraction of a buffer
-      if(input < (float *)frontend->in.input_buffer)
-	input += frontend->in.input_buffer_size / sizeof *input; // wrap backward
+      input += lrint(fft_n * (1. - chan->spectrum.overlap)); // move forward fraction of a buffer
+      if(input > (float *)frontend->in.input_buffer + frontend->in.input_buffer_size / sizeof *input)
+	input -= frontend->in.input_buffer_size / sizeof *input;
     }
     fftwf_free(fft_in);
     fftwf_free(fft_out);
   } else {
     // Complex front end (frontend->isreal == false)
     // Find starting points to read in input A/D stream
+    // Limit averaging to amount on hand
+    double const avg_limit = floor(1 + ((frontend->in.input_buffer_size / (sizeof (float complex) * fft_n)) - 1) / (1-chan->spectrum.overlap));
+    assert(chan->spectrum.fft_avg >= 1);
+    int const fft_avg = chan->spectrum.fft_avg > avg_limit ? lrint(avg_limit) : chan->spectrum.fft_avg;
+
     float complex const * restrict input = frontend->in.input_write_pointer.c - fft_n; // 1 buffer back
     input += (input < (float complex *)frontend->in.input_buffer) ? frontend->in.input_buffer_size / sizeof *input : 0; // backward wrap
     float complex * restrict fft_in = fftwf_alloc_complex(fft_n);
