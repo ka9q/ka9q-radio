@@ -554,7 +554,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     case SPECTRUM_OVERLAP:
       {
 	double x = decode_float(cp, optlen);
-        if (x < 0 || x > 1)
+        if (x < 0 || x >= 1)
           break;
 	chan->spectrum.overlap = x;
       }
