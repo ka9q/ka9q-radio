@@ -1,3 +1,10 @@
+ka9q-radio (2026.07.27-1-trixie1) trixie; urgency=medium
+
+  * perform spectral averaging in forward direction
+  * limit wideband spectral averaging to A/D data on hand
+
+ -- Phil Karn <karn@ka9q.net>  Sun, 26 Jul 2026 22:58:23 -0700
+
 ka9q-radio (2026.07.25-1-trixie1) trixie; urgency=medium
 
   * create radio user and group, apply a bunch of PRs
