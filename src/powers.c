@@ -55,7 +55,7 @@ static struct  option Options[] = {
 };
 
 
-int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *rbw,int32_t const ssrc,uint8_t const * const buffer,size_t length);
+int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *rbw,int *avg,int32_t const ssrc,uint8_t const * const buffer,size_t length);
 
 void help(){
   fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width rbw] [-b|--bins bins] [-a|--average n] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
@@ -137,15 +137,14 @@ int main(int argc,char *argv[]){
       Ssrc = 12345678; // unlikely
   }
   bool const wideband = rbw > crossover ? true : false;
-  double averaging_time = average / rbw; // forget overlap for now
-  double piece_average = average;
+  double averaging_time = average / rbw; // total time span required; forget overlap for now
+  int piece_average = average;
   int pieces = 1;
   if(wideband && averaging_time > 0.08){
     // Wideband averaging is limited to A/D data in the ring buffer, usually 80 ms. Parameterize this?
-    piece_average = 0.08;
-    pieces = ceil(averaging_time/piece_average);
+    piece_average = (int)floor(0.08 * rbw);
+    pieces = average/piece_average;
   }
-
   resolve_mcast(Target,&Metadata_dest_socket,DEFAULT_STAT_PORT,Iface,sizeof(Iface),0);
   if(Verbose)
     fprintf(stderr,"Resolved %s -> %s\n",Target,formatsock(&Metadata_dest_socket,false));
@@ -174,10 +173,13 @@ int main(int argc,char *argv[]){
     uint64_t time;
     double r_freq;
     double r_rbw;
+    int r_avg;
     size_t npower = 0;
+    int tot_avg =0;
 
     memset(powers,0,sizeof powers); // Reset for a new averaging
-    for(int piece = 0; piece < pieces; piece++){
+    while(tot_avg < average){
+      // Iterate however many times are needed to get the averaging we need
       uint8_t buffer[PKTSIZE];
       uint8_t *bp = buffer;
       *bp++ = 1; // Command
@@ -195,7 +197,7 @@ int main(int argc,char *argv[]){
 	encode_float(&bp,RESOLUTION_BW,rbw);
       if(crossover >= 0)
 	encode_float(&bp,CROSSOVER,crossover);
-      encode_int(&bp,SPECTRUM_AVG,piece_average);
+      encode_int(&bp,SPECTRUM_AVG,average);
       encode_float(&bp,SPECTRUM_OVERLAP,overlap);
       encode_eol(&bp);
       ssize_t const command_len = bp - buffer;
@@ -247,7 +249,7 @@ int main(int argc,char *argv[]){
 	dump_metadata(stderr,buffer+1,length-1,Details);
       }
       float power_tmp[PKTSIZE / sizeof(float)]; // floats in a max size IP packet
-      npower = extract_powers(power_tmp,sizeof powers / sizeof powers[0], &time,&r_freq,&r_rbw,Ssrc,buffer+1,length-1);
+      npower = extract_powers(power_tmp,sizeof powers / sizeof powers[0], &time,&r_freq,&r_rbw,&r_avg,Ssrc,buffer+1,length-1);
       if(npower <= 0){
 	usleep(10000); // 10 millisec
 	continue; // probably doesn't contain bin data yet
@@ -257,8 +259,10 @@ int main(int argc,char *argv[]){
 	if(!isnan(p) && isfinite(p))
 	  powers[i] += p;
       }
-      // Pause until 80 ms after previous send
-      int64_t timeout = send_time + 80000000 - gps_time_ns();
+      tot_avg += r_avg; // Number of FFTs actually averaged
+
+      // Wait for fresh A/D data
+      int64_t timeout = send_time - gps_time_ns() + BILLION * (int64_t)r_avg / rbw;
       if(timeout > 0)
 	usleep(timeout/1000);
     again:;
@@ -322,6 +326,7 @@ int main(int argc,char *argv[]){
     if(--count == 0)
       break;
 
+
     // need to add randomized wait and avoidance of poll if response elicited by other poller (eg., control) comes in first
     // And if we decide to use those responses (currently blocked by command tag check)
     usleep((useconds_t)(interval * 1e6));
@@ -331,7 +336,7 @@ int main(int argc,char *argv[]){
 
 // Decode only those status fields relevant to spectrum measurement
 // Return number of bins
-int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *rbw,int32_t const ssrc,uint8_t const * const buffer,size_t length){
+int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *rbw,int32_t *avg,int32_t const ssrc,uint8_t const * const buffer,size_t length){
 #if 0  // use later
   double l_lo1 = 0,l_lo2 = 0;
 #endif
@@ -401,6 +406,9 @@ int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *r
       break;
     case BIN_COUNT: // Do we check that this equals the length of the BIN_DATA tlv?
       l_ccount = decode_int(cp,optlen);
+      break;
+    case SPECTRUM_AVG:
+      *avg = decode_int(cp,optlen);
       break;
     default:
       break;

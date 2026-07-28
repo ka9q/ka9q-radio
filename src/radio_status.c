@@ -534,6 +534,13 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 	  x = 1; // Minimum 1
 	if(x == chan->spectrum.fft_avg)
 	  break;
+	if(chan->spectrum.rbw > chan->spectrum.crossover && chan->spectrum.fft_n > 0){
+	  // Clip to amount available in the A/D ring buffer
+	  // Also limited in spectrum.c - belt and suspenders for now
+	  int limit = (int)floor(1 + ((chan->frontend->in.input_buffer_size / (sizeof (float) * chan->spectrum.fft_n)) - 1) / (1-chan->spectrum.overlap));
+	  if(x > limit)
+	    x = limit;
+	}
 	chan->spectrum.fft_avg = x;
       }
       break;

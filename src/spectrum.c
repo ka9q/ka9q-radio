@@ -348,7 +348,6 @@ static void wideband_poll(struct channel *chan){
   assert(window != NULL);
 
   // Asynchronously read newest data from input buffer
-  // Look back two FFT blocks from the most recent write pointer to allow room for overlapping windows
   // scale fft bin shift down to size of analysis FFT, which is smaller than the input FFT
   int const shift = (int)(chan->filter.bin_shift * (int64_t)fft_n / master->points);
 
@@ -361,20 +360,22 @@ static void wideband_poll(struct channel *chan){
     // Point into raw SDR A/D input ring buffer
     // We're reading from a mirrored buffer so it will automatically wrap back to the beginning
     // as long as it doesn't go past twice the buffer length
-    // Limit averaging to amount on hand
+    // Limit averaging to amount on hand. also done in radio_status.c, belt and suspenders for now
     double const avg_limit = floor(1 + ((frontend->in.input_buffer_size / (sizeof (float) * fft_n)) - 1) / (1-chan->spectrum.overlap));
-    assert(chan->spectrum.fft_avg >= 1);
-    int const fft_avg = chan->spectrum.fft_avg > avg_limit ? lrint(avg_limit) : chan->spectrum.fft_avg;
-    float const *input = frontend->in.input_write_pointer.r - lrint(fft_n * (1 + (fft_avg - 1)*(1-chan->spectrum.overlap)));
+    if((double)chan->spectrum.fft_avg > avg_limit)
+      chan->spectrum.fft_avg = (int)avg_limit;
+    int const fft_avg = chan->spectrum.fft_avg;
+    assert(fft_avg >= 1);
+    int const adjust = lrint(fft_n * (1 + (fft_avg - 1)*(1-chan->spectrum.overlap)));
+    chan->filter.out.sample_index = frontend->samples - adjust; // since it's not done by a filter output route
+    float const *input = frontend->in.input_write_pointer.r - adjust;
     while(input < (float *)frontend->in.input_buffer)
       input += frontend->in.input_buffer_size / sizeof *input; // bring it back into the buffer
-
     float * restrict fft_in = fftwf_alloc_real(fft_n);
     assert(fft_in != NULL);
     float complex * restrict fft_out = fftwf_alloc_complex(fft_n/2 + 1); // r2c has only the positive frequencies
     assert(fft_out != NULL);
     double const gain = 2./(double)((int64_t)fft_avg * fft_n * fft_n); // +3dB to include the virtual conjugate spectrum
-
     for(int iter=0; iter < fft_avg; iter++){
       // Copy and window raw A/D
       if(shift >= 0){
@@ -419,17 +420,20 @@ static void wideband_poll(struct channel *chan){
     // Find starting points to read in input A/D stream
     // Limit averaging to amount on hand
     double const avg_limit = floor(1 + ((frontend->in.input_buffer_size / (sizeof (float complex) * fft_n)) - 1) / (1-chan->spectrum.overlap));
-    assert(chan->spectrum.fft_avg >= 1);
-    int const fft_avg = chan->spectrum.fft_avg > avg_limit ? lrint(avg_limit) : chan->spectrum.fft_avg;
-
-    float complex const * restrict input = frontend->in.input_write_pointer.c - fft_n; // 1 buffer back
+    if((double)chan->spectrum.fft_avg > avg_limit)
+      chan->spectrum.fft_avg = (int)avg_limit;
+    int const fft_avg = chan->spectrum.fft_avg;
+    assert(fft_avg >= 1);
+    int const adjust = lrint(fft_n * (1 + (fft_avg - 1)*(1-chan->spectrum.overlap)));
+    chan->filter.out.sample_index = frontend->samples - adjust; // since it's not done by a filter output route
+    float complex const * restrict input = frontend->in.input_write_pointer.c - adjust;
+    chan->filter.out.sample_index = frontend->samples; // since it's not done by a filter output route
     input += (input < (float complex *)frontend->in.input_buffer) ? frontend->in.input_buffer_size / sizeof *input : 0; // backward wrap
     float complex * restrict fft_in = fftwf_alloc_complex(fft_n);
     assert(fft_in != NULL);
     float complex * restrict fft_out = fftwf_alloc_complex(fft_n);
     assert(fft_out != NULL);
     double const gain = 1./(double)((int64_t)fft_avg * fft_n * fft_n); // check this
-
     for(int iter=0; iter < fft_avg; iter++){
       // Copy and window raw A/D
       for(int i=0; i < fft_n; i++)

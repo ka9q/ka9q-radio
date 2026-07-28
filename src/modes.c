@@ -70,7 +70,7 @@ static double const DEFAULT_CROSSOVER = 200;   // About where the two spectral a
 static double const DEFAULT_SPECTRUM_KAISER_BETA = 7.0; // Default for spectral analysis window
 static enum window_type const DEFAULT_WINDOW_TYPE = KAISER_WINDOW;
 static int    const DEFAULT_FFT_AVG = 10;      // number of FFTs averaged per spectrum display
-static double const DEFAULT_FFT_OVERLAP = 0.5;
+static double const DEFAULT_FFT_OVERLAP = 0;
 
 // Opus encoder defaults
 static int  const DEFAULT_OPUS_APPLICATION = OPUS_APPLICATION_AUDIO;
