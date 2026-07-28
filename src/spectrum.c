@@ -9,6 +9,7 @@
 #include <math.h>
 #include <complex.h>
 #include <fftw3.h>
+#include <unistd.h>
 #include "misc.h"
 #include "iir.h"
 #include "filter.h"
@@ -80,10 +81,15 @@ int demod_spectrum(void *arg){
       }
     }
     pthread_mutex_unlock(&chan->status.lock);
-
     // Must handle possible parameter changes from decode_radio_commands() BEFORE executing the downconverter,
     // which will act immediately on those changes. Otherwise segfaults occur when crossing between wideband and narrowband
     // modes because things are not properly set up for the poll when it comes
+    if(chan->spectrum.bin_count < 1 || chan->spectrum.rbw == 0){
+      // can't do anything yet; wait for another command
+      useconds_t s = 1e6 * Blocktime;
+      usleep(s);
+      continue;
+    }
     if((chan->spectrum.rbw > chan->spectrum.crossover) != (rbw > crossover)) // note nested booleans
       chan->spectrum.fft_n = -1; // force setup
 

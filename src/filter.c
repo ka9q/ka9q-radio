@@ -647,8 +647,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   // We do have to modify the master's data structure, notably mutex locks
   // So the dereferenced pointer can't be const
   struct filter_in * restrict const master = slave->master;
-  assert(master != NULL);
-  if(master == NULL)
+  if(master == NULL) // Not an assert, can happen transiently
     return -1;
   assert(slave->out_type == SPECTRUM || (slave->rev_plan != NULL && slave->bins > 0));
   assert(slave->out_type != NONE);
