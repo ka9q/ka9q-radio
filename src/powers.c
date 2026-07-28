@@ -30,7 +30,7 @@ uint32_t Ssrc;
 char Iface[1024]; // Multicast interface to talk to front end
 int Status_fd = -1;
 int64_t Timeout = BILLION; // Retransmission timeout
-bool details;   // Output bin, frequency, power, newline
+bool Details;   // Output bin, frequency, power, newline
 char const *Source;
 struct sockaddr_storage *Source_socket;
 
@@ -58,7 +58,7 @@ static struct  option Options[] = {
 int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *rbw,int32_t const ssrc,uint8_t const * const buffer,size_t length);
 
 void help(){
-  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width rbw] [-b|--bins bins] [-a|--average n] [-O|--overlap (0 to 1.0)] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
+  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width rbw] [-b|--bins bins] [-a|--average n] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
   exit(1);
 }
 
@@ -70,16 +70,14 @@ int main(int argc,char *argv[]){
   int bins = 0;
   int average = 1;
   double rbw = 0;
-  double crossover = -1;
+  // The default, but specify it explicitly. If rbw > crossover, use wideband mode. If rbw <= crossover, use narrowband
+  // this affects how averaging is done
+  double crossover = 200;
   double overlap = 0;
   {
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
-      case 'O':
-	overlap = fabs(strtod(optarg,NULL));
-	overlap = overlap > 1.0 ? 1.0 : overlap;
-	break;
       case 'a':
 	average = abs(atoi(optarg));
 	break;
@@ -93,7 +91,7 @@ int main(int argc,char *argv[]){
 	crossover = fabs(strtod(optarg,NULL));
 	break;
       case 'd':
-	details = true;
+	Details = true;
 	break;
       case 'f':
 	frequency = fabs(parse_frequency(optarg,true));
@@ -133,6 +131,21 @@ int main(int argc,char *argv[]){
     help();
 
   Target = argv[optind];
+  if(Ssrc == 0){
+    Ssrc = random() & 0xffffffff;
+    if(Ssrc == 0 || Ssrc == 0xffffffff) // reserved
+      Ssrc = 12345678; // unlikely
+  }
+  bool const wideband = rbw > crossover ? true : false;
+  double averaging_time = average / rbw; // forget overlap for now
+  double piece_average = average;
+  int pieces = 1;
+  if(wideband && averaging_time > 0.08){
+    // Wideband averaging is limited to A/D data in the ring buffer, usually 80 ms. Parameterize this?
+    piece_average = 0.08;
+    pieces = ceil(averaging_time/piece_average);
+  }
+
   resolve_mcast(Target,&Metadata_dest_socket,DEFAULT_STAT_PORT,Iface,sizeof(Iface),0);
   if(Verbose)
     fprintf(stderr,"Resolved %s -> %s\n",Target,formatsock(&Metadata_dest_socket,false));
@@ -144,7 +157,6 @@ int main(int argc,char *argv[]){
       fprintf(stdout,"Resolving source %s\n",Source);
     resolve_mcast(Source,Source_socket,0,NULL,0,0);
   }
-
   Status_fd = listen_mcast(Source_socket,&Metadata_dest_socket,Iface);
   if(Status_fd == -1){
     fprintf(stderr,"Can't listen to mcast status %s\n",Target);
@@ -155,88 +167,107 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"connect to mcast control failed: %s\n",strerror(errno));
     exit(1);
   }
-
   // Send command to set up the channel?? Or do in a separate command? We'd like to reuse the same demod & ssrc,
   // which is hard to do in one command, as we'd have to stash the ssrc somewhere.
   while(true){
-    uint8_t buffer[PKTSIZE];
-    uint8_t *bp = buffer;
-    *bp++ = 1; // Command
-
-    encode_int(&bp,OUTPUT_SSRC,Ssrc);
-    uint32_t tag = (uint32_t)random();
-    encode_int(&bp,COMMAND_TAG,tag);
-    encode_int(&bp,DEMOD_TYPE,SPECT_DEMOD);
-    encode_int(&bp,LIFETIME,interval * 2 * 50); // twice the polling interval
-    if(frequency >= 0)
-      encode_double(&bp,RADIO_FREQUENCY,frequency); // 0 frequency means terminate
-    if(bins > 0)
-      encode_int(&bp,BIN_COUNT,bins);
-    if(rbw > 0)
-      encode_float(&bp,RESOLUTION_BW,rbw);
-    if(crossover >= 0)
-      encode_float(&bp,CROSSOVER,crossover);
-    encode_int(&bp,SPECTRUM_AVG,average);
-    encode_float(&bp,SPECTRUM_OVERLAP,overlap);
-    encode_eol(&bp);
-    ssize_t const command_len = bp - buffer;
-    if(Verbose > 1){
-      fprintf(stderr,"Sent:");
-      dump_metadata(stderr,buffer+1,command_len-1,details ? true : false);
-    }
-    socklen_t const slen = Metadata_dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-    if(sendto(Ctl_fd, buffer, command_len, 0, (struct sockaddr *)&Metadata_dest_socket, slen) != command_len){
-      perror("command send");
-      usleep(10000); // 10 millisec
-      goto again;
-    }
-    // The deadline starts at 1 sec after a command
-    int64_t deadline = gps_time_ns() + Timeout;
-    ssize_t length = 0;
-    do {
-      // Wait for a reply to our query
-      // ignore all packets on group without changing deadline
-      fd_set fdset;
-      FD_ZERO(&fdset);
-      FD_SET(Status_fd,&fdset);
-      int n = Status_fd + 1;
-      int64_t timeout = deadline - gps_time_ns();
-      // Immediate poll if timeout is negative
-      if(timeout < 0)
-	timeout = 0;
-      struct timespec ts;
-      ns2ts(&ts,timeout);
-      n = pselect(n,&fdset,NULL,NULL,&ts,NULL);
-      if(n <= 0 && timeout == 0){
-	usleep(10000); // rate limit, just in case
-	goto again;
-      }
-      if(!FD_ISSET(Status_fd,&fdset))
-	continue;
-      // Read message on the multicast group
-      socklen_t ssize = sizeof(Metadata_source_socket);
-      length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_socket,&ssize);
-
-      // Ignore invalid packets, non-status packets, packets re other SSRCs and packets not in response to our polls
-      // Should we insist on the same command tag, or accept any "recent" status packet, e.g., triggered by the control program?
-      // This is needed because an initial delay in joining multicast groups produces a burst of buffered responses; investigate this
-    } while(length < 2 || (enum pkt_type)buffer[0] != STATUS || Ssrc != get_ssrc(buffer+1,length-1) || tag != get_tag(buffer+1,length-1));
-
-    if(Verbose > 1){
-      fprintf(stderr,"Received:");
-      dump_metadata(stderr,buffer+1,length-1,details ? true : false);
-    }
     float powers[PKTSIZE / sizeof(float)]; // floats in a max size IP packet
     uint64_t time;
     double r_freq;
     double r_rbw;
+    size_t npower = 0;
 
-    size_t npower = extract_powers(powers,sizeof(powers) / sizeof (powers[0]), &time,&r_freq,&r_rbw,Ssrc,buffer+1,length-1);
-    if(npower <= 0){
-      fprintf(stderr,"Invalid response, length %llu\n",(long long unsigned)npower);
-      usleep(10000); // 10 millisec
-      continue; // Invalid for some reason; retry
+    memset(powers,0,sizeof powers); // Reset for a new averaging
+    for(int piece = 0; piece < pieces; piece++){
+      uint8_t buffer[PKTSIZE];
+      uint8_t *bp = buffer;
+      *bp++ = 1; // Command
+
+      encode_int(&bp,OUTPUT_SSRC,Ssrc);
+      uint32_t tag = (uint32_t)random();
+      encode_int(&bp,COMMAND_TAG,tag);
+      encode_int(&bp,DEMOD_TYPE,SPECT_DEMOD);
+      encode_int(&bp,LIFETIME,interval * 2 * 50); // twice the polling interval
+      if(frequency >= 0)
+	encode_double(&bp,RADIO_FREQUENCY,frequency); // 0 frequency means terminate
+      if(bins > 0)
+	encode_int(&bp,BIN_COUNT,bins);
+      if(rbw > 0)
+	encode_float(&bp,RESOLUTION_BW,rbw);
+      if(crossover >= 0)
+	encode_float(&bp,CROSSOVER,crossover);
+      encode_int(&bp,SPECTRUM_AVG,piece_average);
+      encode_float(&bp,SPECTRUM_OVERLAP,overlap);
+      encode_eol(&bp);
+      ssize_t const command_len = bp - buffer;
+      if(Verbose > 1){
+	fprintf(stderr,"Sent:");
+	dump_metadata(stderr,buffer+1,command_len-1,Details);
+      }
+      socklen_t const slen = Metadata_dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+      if(sendto(Ctl_fd, buffer, command_len, 0, (struct sockaddr *)&Metadata_dest_socket, slen) != command_len){
+	perror("command send");
+	usleep(10000); // 10 millisec
+	goto again;
+      }
+      // The deadline starts at 1 sec after a command
+      int64_t send_time = gps_time_ns();
+      int64_t deadline = send_time + Timeout;
+
+      ssize_t length = 0;
+      do {
+	// Wait for a reply to our query
+	// ignore all other packets on group without changing deadline
+	fd_set fdset;
+	FD_ZERO(&fdset);
+	FD_SET(Status_fd,&fdset);
+	int n = Status_fd + 1;
+	int64_t timeout = deadline - gps_time_ns();
+	// Immediate poll if timeout is negative
+	if(timeout < 0)
+	  timeout = 0;
+	struct timespec ts;
+	ns2ts(&ts,timeout);
+	n = pselect(n,&fdset,NULL,NULL,&ts,NULL);
+	if(n <= 0 && timeout == 0)
+	  goto again; // no response before timeout
+	if(!FD_ISSET(Status_fd,&fdset))
+	  continue; // Keep listening until we get a packet
+
+	// Read message on the multicast group
+	socklen_t ssize = sizeof(Metadata_source_socket);
+	length = recvfrom(Status_fd,buffer,sizeof(buffer),0,(struct sockaddr *)&Metadata_source_socket,&ssize);
+
+	// Ignore invalid packets, non-status packets, packets re other SSRCs and packets not in response to our polls
+	// Should we insist on the same command tag, or accept any "recent" status packet, e.g., triggered by the control program?
+	// This is needed because an initial delay in joining multicast groups produces a burst of buffered responses; investigate this
+      } while(length < 2 || (enum pkt_type)buffer[0] != STATUS || Ssrc != get_ssrc(buffer+1,length-1) || tag != get_tag(buffer+1,length-1));
+
+      if(Verbose > 1){
+	fprintf(stderr,"Received:");
+	dump_metadata(stderr,buffer+1,length-1,Details);
+      }
+      float power_tmp[PKTSIZE / sizeof(float)]; // floats in a max size IP packet
+      npower = extract_powers(power_tmp,sizeof powers / sizeof powers[0], &time,&r_freq,&r_rbw,Ssrc,buffer+1,length-1);
+      if(npower <= 0){
+	usleep(10000); // 10 millisec
+	continue; // probably doesn't contain bin data yet
+      }
+      for(unsigned i=0; i < npower; i++){
+	float p = power_tmp[i];
+	if(!isnan(p) && isfinite(p))
+	  powers[i] += p;
+      }
+      // Pause until 80 ms after previous send
+      int64_t timeout = send_time + 80000000 - gps_time_ns();
+      if(timeout > 0)
+	usleep(timeout/1000);
+    again:;
     }
+    // Normalize
+    float scale = 1.f / pieces;
+    for(unsigned i=0; i < npower; i++)
+      powers[i] *= scale;
+
     // Note from VK5QI:
     // the output format from that utility matches that produced by rtl_power, which is:
     //2022-04-02, 16:24:55, 400050181, 401524819, 450.13, 296, -52.95, -53.27, -53.26, -53.24, -53.40, <many more points here>
@@ -268,24 +299,24 @@ int main(int argc,char *argv[]){
     }
     double const min_db = lowest != INFINITY ? power2dB(lowest) : 0;
 
-    if (details){
+    if (Details){
       // Frequencies below center
       printf("\n");
       for(size_t i=first_neg_bin ; i < npower; i++){
-        printf("%llu %lf %.2lf\n",(long long unsigned)i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
-        base += r_rbw;
+	printf("%llu %lf %.2lf\n",(long long unsigned)i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
+	base += r_rbw;
       }
       // Frequencies above center
       for(size_t i=0; i < first_neg_bin; i++){
-        printf("%llu %lf %.2lf\n",(long long unsigned)i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
-        base += r_rbw;
+	printf("%llu %lf %.2lf\n",(long long unsigned)i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
+	base += r_rbw;
       }
     } else {
       for(size_t i= first_neg_bin; i < npower; i++)
-        printf(", %.2lf",(powers[i] == 0) ? min_db : power2dB(powers[i]));
+	printf(", %.2lf",(powers[i] == 0) ? min_db : power2dB(powers[i]));
       // Frequencies above center
       for(size_t i=0; i < first_neg_bin; i++)
-        printf(", %.2lf",(powers[i] == 0) ? min_db : power2dB(powers[i]));
+	printf(", %.2lf",(powers[i] == 0) ? min_db : power2dB(powers[i]));
     }
     printf("\n");
     if(--count == 0)
@@ -294,7 +325,6 @@ int main(int argc,char *argv[]){
     // need to add randomized wait and avoidance of poll if response elicited by other poller (eg., control) comes in first
     // And if we decide to use those responses (currently blocked by command tag check)
     usleep((useconds_t)(interval * 1e6));
-  again:;
   }
   exit(0);
 }
