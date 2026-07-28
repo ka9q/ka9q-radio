@@ -551,65 +551,72 @@ void encode_byte_data(struct channel const *chan, uint8_t *buffer){
 // Generate normalized sampling window
 // the generation functions are symmetric so lengthen them by one point to make them periodic
 static void generate_window(struct channel *chan){
-  FREE(chan->spectrum.window);
+  assert(chan != NULL);
+  if(chan->spectrum.fft_n == 0)
+    return; // can't do anything until we know the size
 
-  chan->spectrum.window = malloc((1 + chan->spectrum.fft_n) * sizeof *chan->spectrum.window);
+  int const fft_n = chan->spectrum.fft_n;
+  FREE(chan->spectrum.window);
+  chan->spectrum.window = malloc((1 + fft_n) * sizeof *chan->spectrum.window);
   assert(chan->spectrum.window != NULL);
   switch(chan->spectrum.window_type){
   default:
   case KAISER_WINDOW: // If β == 0, same as rectangular
-    make_kaiserf(chan->spectrum.window,chan->spectrum.fft_n+1,chan->spectrum.shape);
+    make_kaiserf(chan->spectrum.window,fft_n+1,chan->spectrum.shape);
     break;
   case RECT_WINDOW:
-    for(int i=0; i < chan->spectrum.fft_n; i++)
+    for(int i=0; i < fft_n; i++)
       chan->spectrum.window[i] = 1;
     break;
   case BLACKMAN_WINDOW:
-    for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = blackman_window(i,chan->spectrum.fft_n+1);
+    for(int i=0; i < fft_n; i++)
+      chan->spectrum.window[i] = blackman_window(i,fft_n+1);
     break;
   case EXACT_BLACKMAN_WINDOW:
-    for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = exact_blackman_window(i,chan->spectrum.fft_n+1);
+    for(int i=0; i < fft_n; i++)
+      chan->spectrum.window[i] = exact_blackman_window(i,fft_n+1);
     break;
   case BLACKMAN_HARRIS_WINDOW:
-    for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = blackman_harris_window(i,chan->spectrum.fft_n+1);
+    for(int i=0; i < fft_n; i++)
+      chan->spectrum.window[i] = blackman_harris_window(i,fft_n+1);
     break;
   case GAUSSIAN_WINDOW:
     // Reuse kaiser β as σ parameter
     // note σ = 0 is a pathological value for gaussian, it's an impulse with infinite sidelobes
-    gaussian_window_alpha(chan->spectrum.window, chan->spectrum.fft_n+1,chan->spectrum.shape, false); // we normalize them all below
+    gaussian_window_alpha(chan->spectrum.window, fft_n+1,chan->spectrum.shape, false); // we normalize them all below
     break;
   case HANN_WINDOW:
-    for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = hann_window(i,chan->spectrum.fft_n+1);
+    for(int i=0; i < fft_n; i++)
+      chan->spectrum.window[i] = hann_window(i,fft_n+1);
     break;
   case HAMMING_WINDOW:
-    for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = hamming_window(i,chan->spectrum.fft_n+1);
+    for(int i=0; i < fft_n; i++)
+      chan->spectrum.window[i] = hamming_window(i,fft_n+1);
     break;
   case HP5FT_WINDOW:
-    for(int i=0; i < chan->spectrum.fft_n; i++)
-      chan->spectrum.window[i] = hp5ft_window(i,chan->spectrum.fft_n+1);
+    for(int i=0; i < fft_n; i++)
+      chan->spectrum.window[i] = hp5ft_window(i,fft_n+1);
     break;
   }
-  normalize_windowf(chan->spectrum.window,chan->spectrum.fft_n);
+  normalize_windowf(chan->spectrum.window,fft_n);
 
   // Compute noise bandwidth of each bin in bins
   chan->spectrum.noise_bw = 0;
-  for(int i=0; i < chan->spectrum.fft_n; i++)
+  for(int i=0; i < fft_n; i++)
     chan->spectrum.noise_bw += (double)chan->spectrum.window[i] * chan->spectrum.window[i];
 
   // Scale to the actual bin bandwidth
   // This also has to be divided by the square of the sum of the window values, but that's already normalized to 1
-  chan->spectrum.noise_bw *= chan->spectrum.rbw / chan->spectrum.fft_n;
+  chan->spectrum.noise_bw *= chan->spectrum.rbw / fft_n;
 }
 
+// Direct Wideband mode. Setup FFT to work on raw A/D input
+// What can we do about unfriendly sizes? Anything?
 static void setup_wideband(struct channel *chan){
-  // Direct Wideband mode. Setup FFT to work on raw A/D input
-  // What can we do about unfriendly sizes? Anything?
-  chan->spectrum.fft_n = lrint(chan->frontend->samprate / chan->spectrum.rbw);
+  assert(chan != NULL);
+  if(chan->frontend->samprate == 0 || chan->spectrum.rbw <= 0)
+    return; // avoid divide by zero
+  chan->spectrum.fft_n = lrint(chan->frontend->samprate / chan->spectrum.rbw); // should limit to a sane value
   chan->output.samprate = 0; // Not meaningful
   chan->output.channels = 0;
   if(Verbose > 1)
@@ -629,17 +636,25 @@ static void setup_wideband(struct channel *chan){
   else
     setup_complex_fft(chan);
 }
-
+// Set up narrow band (downconvert) mode
 static void setup_narrowband(struct channel *chan){
-  // Set up narrow band (downconvert) mode
-  double const blockrate = 1. / Blocktime; // Typically 50 Hz
+  assert(chan != NULL);
+  if(Blocktime == 0)
+    return; // avoid divide by zero
+  if(chan->spectrum.rbw <= 0 || chan->spectrum.bin_count < 1)
+    return; // Can't do anything yet
 
   int const L = chan->frontend->L;
   int const M = chan->frontend->M;
   int const N = L + M - 1;
-
-  double const margin = 400; // Allow 400 Hz for filter skirts at edge of I/Q receiver - calculate this
+  if(N == 0)
+    return; // avoid divide by zero (can this happen with -1?
+  double const blockrate = 1. / Blocktime; // Typically 50 Hz
   unsigned long const samprate_base = lcm(lrint(blockrate),lrint(L*blockrate/N)); // Samprate must be allowed by receiver
+  assert(samprate_base != 0);
+  if(samprate_base == 0)
+    return;
+  double const margin = 400; // Allow 400 Hz for filter skirts at edge of I/Q receiver - calculate this
   chan->spectrum.fft_n = lrint(chan->spectrum.bin_count + margin / chan->spectrum.rbw); // Minimum for search to avoid receiver filter skirt
   // This (int) cast should be cleaned up
   while(chan->spectrum.fft_n < 65536 && (!goodchoice(chan->spectrum.fft_n) || lrint(chan->spectrum.fft_n * chan->spectrum.rbw) % samprate_base != 0))
@@ -649,25 +664,25 @@ static void setup_narrowband(struct channel *chan){
   if(Verbose > 1)
     fprintf(stderr,"%s narrow spectrum: center %'.3lf Hz bin count %u, rbw %.1lf Hz, samprate %u Hz fft size %u\n",
 	    chan->name,chan->tune.freq,chan->spectrum.bin_count,chan->spectrum.rbw,chan->output.samprate,chan->spectrum.fft_n);
-
-  int blocklen = lrint(chan->output.samprate/blockrate);
-
+  int blocklen = lrint(chan->output.samprate * Blocktime);
   // Set up downconverter
   delete_filter_output(&chan->filter.out);
   int r = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocklen,COMPLEX);
   (void)r;
   assert(r == 0);
-
   chan->filter.max_IF = (double)(chan->output.samprate - margin)/2;
   chan->filter.min_IF = -chan->filter.max_IF;
   chan->filter2.blocking = 0; // Not used in this mode, make sure it's 0
   set_filter(&chan->filter.out,chan->filter.min_IF,chan->filter.max_IF,chan->filter.kaiser_beta);
   chan->filter.remainder = NAN; // Force init of downconverter
   chan->filter.bin_shift = 1010101010; // Unlikely - but a kludge, force init of phase rotator
-
   setup_complex_fft(chan);
 }
+// Wideband mode with real front end
 static void setup_real_fft(struct channel *chan){
+  assert(chan != NULL);
+  if(chan->spectrum.fft_n < 1)
+    return; // Can't do it yet
   if(chan->spectrum.plan != NULL)
     fftwf_destroy_plan(chan->spectrum.plan);
   float *in = fftwf_alloc_real(chan->spectrum.fft_n);
@@ -679,11 +694,13 @@ static void setup_real_fft(struct channel *chan){
   fftwf_free(out);
   assert(chan->spectrum.plan != NULL);
 }
+// Wideband mode with complex front end, or narrowband mode with either front end
 static void setup_complex_fft(struct channel *chan){
-  // Wideband mode with complex front end, or narrowband mode with either front end
+  assert(chan != NULL);
+  if(chan->spectrum.fft_n < 1)
+    return; // Can't do anything yet
   if(chan->spectrum.plan != NULL)
     fftwf_destroy_plan(chan->spectrum.plan);
-
   float complex *in = fftwf_alloc_complex(chan->spectrum.fft_n);
   assert(in != NULL);
   float complex *out = fftwf_alloc_complex(chan->spectrum.fft_n);
@@ -694,11 +711,12 @@ static void setup_complex_fft(struct channel *chan){
   assert(chan->spectrum.plan != NULL);
 }
 
-
 #if RICE
 // Experiment with rice coding of delta values in bin data
 static void rice(struct channel *chan){
   assert(chan != NULL);
+  if(chan->spectrum.step == 0 || chan->spectrum.bin_count)
+    return;
 
   // make vector of quantized measurements
   int const bin_count = chan->spectrum.bin_count;
@@ -713,7 +731,6 @@ static void rice(struct channel *chan){
     if(wbin == bin_count)
       wbin = 0;  // Continuing through dc and positive frequencies
   }
-
   int best_k = -1;
   int best_bits = 8 * bin_count;
   bool delta = false;
