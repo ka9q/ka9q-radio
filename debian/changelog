@@ -1,3 +1,11 @@
+ka9q-radio (2026.07.28-1-trixie1) trixie; urgency=medium
+
+  * commit d7763b755ac76e1509babf6265ec14c1367696ed
+  * improve powers.c for long integrations
+  * harden spectrum demod against bad params
+
+ -- Phil Karn <karn@ka9q.net>  Mon, 27 Jul 2026 22:30:20 -0700
+
 ka9q-radio (2026.07.27-1-trixie1) trixie; urgency=medium
 
   * perform spectral averaging in forward direction
