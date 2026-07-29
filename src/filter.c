@@ -994,6 +994,8 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   memcpy(response,impulse,M * sizeof *response);
   memset(response+M,0,(N-M) * sizeof *response);
   fftwf_execute(fwd_filter_plan);
+  fftwf_destroy_plan(fwd_filter_plan);
+  fwd_filter_plan = NULL;
 #if FILTER_DEBUG
   {
     for(int i=0; i < N; i++)
