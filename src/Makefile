@@ -70,9 +70,9 @@ IS_GCC_NOT_CLANG := $(shell \
 HAS_PIGPIO := $(shell printf '\043include <pigpio.h>\n' | $(CC) $(CPPFLAGS) -E - >/dev/null 2>&1 && echo 1)
 
 ifeq ($(BUILD),debug)
-     DOPTS = -g
+     DOPTS += -g
 else
-     DOPTS = -DNDEBUG=1 -O3
+     DOPTS += -DNDEBUG=1 -O3
 endif
 
 ifeq ($(NATIVE),1)
