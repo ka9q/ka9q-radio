@@ -111,7 +111,9 @@ DNSServiceBrowse ─► DNSServiceResolve ─► DNSServiceGetAddrInfo ─► ro
 It services the connection socket with `select()` under a bounded time budget
 (exiting early once results stop arriving), collects completed rows into the
 caller's `struct service_tab`, and applies the same sort + de-dupe-by-name
-policy as the `avahi` backend. Each row's strings are packed into a single
+policy as the `avahi` backend, with one addition: where duplicates of an
+instance differ by interface, a non-loopback one is kept (see section 5). Each
+row's strings are packed into a single
 `->buffer` allocation, so `avahi_free_service_table()` frees a row with one
 `free()` regardless of backend.
 
@@ -157,6 +159,16 @@ No binary links both, so the substitution is clean.
   publish mode (writing `/etc/avahi/hosts` and `/etc/avahi/services`) is specific
   to Avahi on Linux; the `dns_sd` backend always registers services live. The
   global remains defined so consumers link unchanged.
+
+- **Browse results prefer a non-loopback interface.** mDNSResponder reports a
+  locally published service on every interface it is visible on, so browsing for
+  a `radiod` running on the same host yields the same instance more than once —
+  typically once on `lo0` and once on the real interface. `control` passes the
+  surviving row's `->interface` straight to `listen_mcast()`/`join_group()`, so a
+  loopback row there would silently isolate it from the network. The de-dupe
+  therefore keeps a non-loopback row when the duplicates differ. This is rarely
+  visible on the `avahi` backend, where `avahi-daemon` does not normally browse
+  loopback.
 
 - **Name resolution is backend-independent.** Role 1 uses `getaddrinfo()`, so
   the `.local` name behavior documented in `docs/NETWORK-NOTES.md` is the same

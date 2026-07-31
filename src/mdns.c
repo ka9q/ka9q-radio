@@ -29,6 +29,7 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 #include <net/if.h>
+#include <ifaddrs.h>
 #include <sys/select.h>
 #include "avahi.h"
 
@@ -355,6 +356,25 @@ static void browse_cb(DNSServiceRef sdRef,DNSServiceFlags flags,uint32_t ifindex
 		    serviceName,regtype,replyDomain,resolve_cb,c);
 }
 
+// True if 'name' is a loopback interface. Used to break ties when the same
+// instance is reported on more than one interface; see avahi_browse().
+static bool iface_is_loopback(char const *name){
+  if(name == NULL || *name == '\0')
+    return false;
+  struct ifaddrs *ifa = NULL;
+  if(getifaddrs(&ifa) != 0)
+    return false;
+  bool loopback = false;
+  for(struct ifaddrs *p = ifa; p != NULL; p = p->ifa_next){
+    if(p->ifa_name != NULL && strcmp(p->ifa_name,name) == 0){
+      loopback = (p->ifa_flags & IFF_LOOPBACK) != 0;
+      break;
+    }
+  }
+  freeifaddrs(ifa);
+  return loopback;
+}
+
 // Sort by instance name; NULLs to the end (matches avahi_browse.c).
 static int table_compare(void const *a,void const *b){
   struct service_tab const *t1 = a;
@@ -423,16 +443,29 @@ int avahi_browse(struct service_tab *table,int tabsize,char const *service_name)
   free(st.ctxs);
 
   // Sort and remove duplicate instance names (same policy as avahi_browse.c).
+  // mDNSResponder reports a locally published service on every interface it is
+  // visible on, including loopback, so the same instance routinely arrives more
+  // than once. control(1) passes the surviving row's ->interface straight to
+  // listen_mcast()/join_group(), where a loopback interface would silently cut
+  // it off from the network -- so when duplicates differ, keep a non-loopback
+  // one rather than whichever qsort happened to leave first.
   qsort(table,st.count,sizeof table[0],table_compare);
   int dupes = 0;
   for(int i = 0; i < st.count; i++){
     if(table[i].buffer == NULL || table[i].name == NULL)
       continue;
+    bool keep_is_loopback = iface_is_loopback(table[i].interface);
     for(int j = i+1; j < st.count; j++){
       if(table[j].buffer == NULL || table[j].name == NULL)
 	continue;
       if(strcmp(table[i].name,table[j].name) != 0)
 	break;
+      if(keep_is_loopback && !iface_is_loopback(table[j].interface)){
+	struct service_tab const tmp = table[i];   // promote the better row, discard the loopback one
+	table[i] = table[j];
+	table[j] = tmp;
+	keep_is_loopback = false;
+      }
       free(table[j].buffer);
       memset(&table[j],0,sizeof table[j]);
       dupes++;
