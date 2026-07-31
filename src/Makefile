@@ -65,13 +65,17 @@ endif
 # Service-discovery backend selection.
 # Linux uses the avahi-* CLI tools (avahi.c publish + avahi_browse.c browse);
 # other platforms use the portable dns_sd.h (Bonjour/mDNSResponder) backend
-# (mdns.c provides both). Override the auto choice with MDNS_BACKEND=avahi|dns_sd.
+# (mdns.c provides both). Override the auto choice with
+# MDNS_BACKEND=auto|avahi|dns_sd.
+# 'override' is required: a command-line MDNS_BACKEND= otherwise wins over these
+# assignments, so an explicit MDNS_BACKEND=auto would survive unresolved and
+# silently select the avahi backend even on platforms that have no avahi-* tools.
 MDNS_BACKEND ?= auto
 ifeq ($(MDNS_BACKEND),auto)
   ifeq ($(UNAME_S),Linux)
-    MDNS_BACKEND = avahi
+    override MDNS_BACKEND = avahi
   else
-    MDNS_BACKEND = dns_sd
+    override MDNS_BACKEND = dns_sd
   endif
 endif
 
@@ -83,9 +87,11 @@ ifeq ($(MDNS_BACKEND),dns_sd)
   ifneq ($(UNAME_S),Darwin)
     LDLIBS += -ldns_sd
   endif
-else
+else ifeq ($(MDNS_BACKEND),avahi)
   AVAHI_PUBLISH_OBJ = avahi.o
   AVAHI_BROWSE_OBJ  = avahi_browse.o
+else
+  $(error unknown MDNS_BACKEND '$(MDNS_BACKEND)'; expected one of: auto avahi dns_sd)
 endif
 
 IS_GCC_NOT_CLANG := $(shell \
