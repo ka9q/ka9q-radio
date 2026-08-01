@@ -1,3 +1,10 @@
+ka9q-radio (2026.07.30-2-trixie1) trixie; urgency=medium
+
+  * commit 504572e1505d0e9a7f4d86c9f536e20ac12f593a
+  * AI6VN patches to control channel sorting, affinity peer cpu core lists
+
+ -- Phil Karn <karn@ka9q.net>  Thu, 30 Jul 2026 00:52:13 -0700
+
 ka9q-radio (2026.07.30-1-trixie1) trixie; urgency=medium
 
   * commit 6e16e2612e8d27301ad3f5615676124060652e65
