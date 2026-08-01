@@ -85,7 +85,7 @@ int main(int argc,char *argv[]){
 	bins = abs(atoi(optarg));
 	break;
       case 'c':
-	count = abs(atoi(optarg));
+	count = atoi(optarg);
 	break;
       case 'C':
 	crossover = fabs(strtod(optarg,NULL));
