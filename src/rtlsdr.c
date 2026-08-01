@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <iniparser/iniparser.h>
 #include <sysexits.h>
+#include <string.h>
 #include <strings.h>
 #include <stdatomic.h>
 #include <unistd.h>

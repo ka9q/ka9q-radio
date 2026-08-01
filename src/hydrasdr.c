@@ -8,6 +8,7 @@
 #include <libhydrasdr/hydrasdr.h>
 #include <errno.h>
 #include <iniparser/iniparser.h>
+#include <string.h>
 #if defined(linux)
 #include <bsd/string.h>
 #endif
