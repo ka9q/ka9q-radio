@@ -31,7 +31,6 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <pwd.h>
-#include <uuid/uuid.h>
 #include <fcntl.h>
 #include <sysexits.h>
 #include <ctype.h>
