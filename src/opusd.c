@@ -261,7 +261,6 @@ int main(int argc,char * const argv[]){
   // Graceful signal catch
   signal(SIGPIPE,closedown);
   signal(SIGINT,closedown);
-  signal(SIGKILL,closedown);
   signal(SIGQUIT,closedown);
   signal(SIGTERM,closedown);
   signal(SIGPIPE,SIG_IGN);
