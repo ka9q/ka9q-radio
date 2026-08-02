@@ -957,6 +957,8 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   int const N = slave->points;
   int const L = slave->olen;
   int const M = N - L + 1; // Length of impulse response in time domain
+  if(M < 2)
+    return -1; // bogus
   // Real lowpass filter with cutoff = 1/2 bandwidth
   double const bw2 = (high == low) ? .0001 : fabs(high - low)/2;
   double const center = (high + low)/2;
@@ -968,15 +970,18 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   normalize_windowf(kaiser_window,M); // probably unnecessary, is normalized below
 
   // Form complex impulse response by generating kaiser-windowed sinc pulse and shifting to desired center freq
-  float complex impulse[M];
+  float complex * const response = lmalloc(N * sizeof *response);
+  assert(response != NULL);
+  fftwf_plan fwd_filter_plan = plan_complex(N,response,response,FFTW_FORWARD);
+  memset(response, 0, N * sizeof *response);
   double window_gain = 0;
-  for(int i = 0; i < M; i++){
+  for(int i = 0; i < M; i++){ // build windowed sinc in first M points of N
     double n = i - (double)(M-1)/2;
     double r = kaiser_window[i] * 2 * bw2 * sinc(2 * bw2 * n);
     window_gain += r;
-    impulse[i] = (float complex)(cispi(2 * center * n) * r);
+    response[i] = (float complex)(cispi(2 * center * n) * r);
 #if FILTER_DEBUG
-    fprintf(stderr,"impulse[%d] = %g + j%g\n",i,crealf(impulse[i]),cimagf(impulse[i]));
+    fprintf(stderr,"response[%d] = %g + j%g\n",i,crealf(response[i]),cimagf(response[i]));
 #endif
   }
   // gain corrections:
@@ -987,12 +992,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
     / (window_gain *  slave->master->points);
   assert(!isnan(gain) && isfinite(gain) && gain != 0);
   for(int i = 0; i < M; i++)
-    impulse[i] *= gain; // Normalize for the window gain
-  float complex * const response = lmalloc(N * sizeof(float complex));
-  assert(response != NULL);
-  fftwf_plan fwd_filter_plan = plan_complex(N,response,response,FFTW_FORWARD);
-  memcpy(response,impulse,M * sizeof *response);
-  memset(response+M,0,(N-M) * sizeof *response);
+    response[i] *= gain; // Normalize for the window gain
   fftwf_execute(fwd_filter_plan);
   fftwf_destroy_plan(fwd_filter_plan);
   fwd_filter_plan = NULL;
@@ -1004,10 +1004,10 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
 #endif
   // Hot swap with existing response, if any, using mutual exclusion
   pthread_mutex_lock(&slave->response_mutex);
-  float complex * const tmp = slave->response;
+  float complex * tmp = slave->response;
   slave->response = response;
   pthread_mutex_unlock(&slave->response_mutex);
-  free(tmp);
+  FREE(tmp);
   return 0;
 }
 int write_cfilter(struct filter_in *f, float complex const *buffer,int size){
