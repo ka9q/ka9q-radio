@@ -294,37 +294,37 @@ wd-record: wd-record.o libstatus.a attr.o libradio.a
 
 ## Dynamically loaded modules for SDR front ends
 funcube.so: funcube.o fcd.o hid-libusb.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lportaudio -lusb-1.0 $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lportaudio -lusb-1.0 $(LDLIBS)
 
 rx888.so: rx888.o si5351.o ezusb.o hid-libusb.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lusb-1.0 $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lusb-1.0 $(LDLIBS)
 
 airspy.so: airspy.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lairspy $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lairspy $(LDLIBS)
 
 airspyhf.so: airspyhf.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lairspyhf $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lairspyhf $(LDLIBS)
 
 hydrasdr.so: hydrasdr.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lhydrasdr $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lhydrasdr $(LDLIBS)
 
 rtlsdr.so: rtlsdr.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lrtlsdr $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lrtlsdr $(LDLIBS)
 
 sdrplay.so: sdrplay.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lsdrplay_api $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lsdrplay_api $(LDLIBS)
 
 fobos.so: fobos.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lfobos $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lfobos $(LDLIBS)
 
 hackrf.so: hackrf.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lhackrf -lusb-1.0 $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lhackrf -lusb-1.0 $(LDLIBS)
 
 bladerf.so: bladerf.o
-	$(CC) $(SOFLAGS) -o $@ $^ -lbladeRF $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lbladeRF $(LDLIBS)
 
 sig_gen.so: sig_gen.o gauss.o libradio.a
-	$(CC) $(SOFLAGS) -o $@ $^ -lsamplerate $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lsamplerate $(LDLIBS)
 
 # subroutines useful in more than one program
 # subroutines useful in more than one program
@@ -360,7 +360,7 @@ config_paths.h: Makefile
 	@printf '#endif\n' >> $@
 
 %.so: %.o
-	$(CC) $(SOFLAGS) -o $@ $<
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $<
 
 %.o: %.c config_paths.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
