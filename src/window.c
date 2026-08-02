@@ -187,7 +187,7 @@ static double const kaiser(int const n,int const M, double const beta){
 // More efficient than repeatedly calling kaiser(n,M,beta)
 int make_kaiser(double * const window,int const M,double const beta){
   assert(window != NULL);
-  if(window == NULL)
+  if(window == NULL || M < 2)
     return -1;
 
   // Precompute unchanging partial values
@@ -217,7 +217,7 @@ int make_kaiser(double * const window,int const M,double const beta){
 // More efficient than repeatedly calling kaiser(n,M,beta)
 int make_kaiserf(float * const window,int const M,double const beta){
   assert(window != NULL);
-  if(window == NULL)
+  if(window == NULL || M < 2)
     return -1;
 
   // Precompute unchanging partial values
@@ -245,6 +245,8 @@ int normalize_windowf(float * const window, int const M){
   double window_gain = 0;
   for(int n = 0; n < M; n++)
     window_gain += window[n];
+  if(window_gain == 0 || !isfinite(window_gain))
+    return -1;
   window_gain = M / window_gain;
   for(int i = 0; i < M; i++)
     window[i] *= (float)window_gain;

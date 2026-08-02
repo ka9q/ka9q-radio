@@ -5,7 +5,7 @@ Maintainer: Phil Karn <karn@ka9q.net>
 Rules-Requires-Root: no
 Build-Depends: make, gcc, debhelper-compat (= 13),
  libbsd-dev, libfftw3-dev, libopus-dev, libiniparser-dev,
- libavahi-client-dev, libncurses-dev, libusb-1.0-0-dev,
+ libncurses-dev, libusb-1.0-0-dev,
  portaudio19-dev, libsamplerate-dev, libogg-dev, libairspy-dev,
  libairspyhf-dev, libbladerf-dev, libfobos-dev, libhackrf-dev,
  libhydrasdr-dev, librtlsdr-dev

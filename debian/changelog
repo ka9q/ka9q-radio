@@ -1,3 +1,10 @@
+ka9q-radio (2026.08.02-1-trixie1) trixie; urgency=medium
+
+  * commit ca620bcfbd77bd91d7823c7b6891f004737472a1
+  * tighten set_filter()
+
+ -- Phil Karn <karn@ka9q.net>  Sun, 02 Aug 2026 14:31:24 -0700
+
 ka9q-radio (2026.08.01-1-trixie1) trixie; urgency=medium
 
   * commit 641647ac55e3d7955df1e7291e97a99632fb9c97
