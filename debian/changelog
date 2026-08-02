@@ -1,3 +1,10 @@
+ka9q-radio (2026.08.02-2-trixie1) trixie; urgency=medium
+
+  * commit 1a974c18abb75480fa4c7eda6a62009beda28044
+  * misc include and library dependency fixes from techn0mad
+
+ -- Phil Karn <karn@ka9q.net>  Sun, 02 Aug 2026 15:57:09 -0700
+
 ka9q-radio (2026.08.02-1-trixie1) trixie; urgency=medium
 
   * commit ca620bcfbd77bd91d7823c7b6891f004737472a1
