@@ -15,6 +15,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <iniparser/iniparser.h>
+#include <string.h>
+#include <strings.h>
 #if defined(linux)
 #include <bsd/string.h>
 #endif

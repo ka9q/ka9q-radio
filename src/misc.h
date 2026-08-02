@@ -19,6 +19,7 @@
 #include <stdlib.h> // for ldiv(), free()
 #include <stdbool.h>
 #include <sys/errno.h>
+#include <string.h>
 #ifdef __linux__
 #include <bsd/string.h>
 #endif
