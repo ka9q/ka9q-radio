@@ -1,3 +1,2 @@
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="60a1", SYMLINK+="airspy-%k", MODE="660", GROUP="plugdev", TAG+="uaccess"
 ##SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="1d50",ATTR{idProduct}=="60a1",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
-
