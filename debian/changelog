@@ -1,3 +1,10 @@
+ka9q-radio (2026.08.03-2-trixie2) trixie; urgency=medium
+
+  * commit 9effb7e1263c989474f99ae9255da4154ffa0f92
+  * shuffle some directory creations
+
+ -- Phil Karn <karn@ka9q.net>  Mon, 03 Aug 2026 15:24:06 -0700
+
 ka9q-radio (2026.08.03-2-trixie1) trixie; urgency=medium
 
   * commit f3209417051d892eeb30b9f124348da3b1ddf35f
