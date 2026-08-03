@@ -3,4 +3,3 @@
 ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f3", \
 GROUP="radio", MODE="0660", TAG+="systemd", \
 ENV{SYSTEMD_WANTS}+="rx888_boot.service"
-

@@ -1,8 +1,3 @@
 # 00F3 is the nominal unprogrammed device, 00F1 is the nominal programmed device. But Cypress forums say that
 
 SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTRS{idVendor}=="04b4",ATTRS{idProduct}=="00f1",MODE:="0666",GROUP="plugdev", TAG+="uaccess"
-
-# This line enables launching radiod on device connection.
-# It is disabled by default to avoid breaking existing installations using the manually enabled radiod@.service
-# 3 Aug 2026 Phil Karn, KA9Q
-##SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="04b4",ATTR{idProduct}=="00f1",TAG+="systemd",ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$attr{serial}.service"

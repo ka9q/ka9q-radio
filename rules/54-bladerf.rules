@@ -13,8 +13,3 @@ ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2cf0", ATTR{idProduct}=="5250"
 
 # Older Nuand (pre-Nuand vendor ID assignment)
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6066", MODE="0660", GROUP="plugdev", TAG+="uaccess"
-
-# launch ka9q-radio radiod (disabled by default)
-##SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="2cf0",ATTR{idProduct}=="5246",TAG+="systemd",ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$attr{serial}.service"
-##SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="2cf0",ATTR{idProduct}=="5250",TAG+="systemd",ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$attr{serial}.service"
-##SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="1d50",ATTR{idProduct}=="6066",TAG+="systemd",ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$attr{serial}.service"

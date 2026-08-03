@@ -3,4 +3,3 @@ SUBSYSTEMS=="usb", ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="fb56", GROUP:="us
 
 # Udev rule for the Funcube Dongle to be used with HIDAPI/hidraw
 # KERNEL=="hidraw*", ATTRS{busnum}=="1", ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="fb56", GROUP:="users", MODE="0660", SYMLINK+="FCD"
-

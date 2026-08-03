@@ -19,7 +19,3 @@
 
 # original Fobos SDR
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="132e", MODE="0660", TAG+="uaccess", GROUP="radio"
-
-
-# launch ka9q-radio radiod - disabled by default
-##SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="16d0",ATTR{idProduct}=="132e",TAG+="systemd",ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$attr{serial}.service"
