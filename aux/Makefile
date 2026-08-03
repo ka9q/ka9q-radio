@@ -88,6 +88,7 @@ uninstall:
 	#rm -f $(DESTDIR)$(crondir)/ka9q-cleanups
 	@echo not removing $(DESTDIR)$(crondir)/ka9q-cleanups
 	rm -f $(DESTDIR)$(sbindir)/start-hfdl
+	rm -f $(DESTDIR)$(sbindir)/start-ka9q-radio
 	rm -f $(DESTDIR)$(hfdllibdir)/systable.conf
 	-rmdir $(DESTDIR)$(hfdllibdir)
 	#rm -f $(addprefix $(DESTDIR)$(logrotatedir)/,$(LOGROTATE_FILES))
