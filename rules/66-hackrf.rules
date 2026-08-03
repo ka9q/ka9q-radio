@@ -3,3 +3,6 @@
 # Limited to one unit for now
 # Phil Karn, KA9Q, Aug 2018
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6089", ENV{SYSTEMD_WANTS}="hackrf0.service", TAG+="systemd"
+
+# launch ka9q-radio radiod - disabled by default
+##SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="1d50",ATTR{idProduct}=="6089",TAG+="systemd",ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$attr{serial}.service"
