@@ -1,3 +1,10 @@
+ka9q-radio (2026.08.03-2-trixie1) trixie; rgency=medium
+
+  * commit f3209417051d892eeb30b9f124348da3b1ddf35f
+  * have airspyhf read serial number from radiod command line
+
+ -- Phil Karn <karn@ka9q.net>  Mon, 03 Aug 2026 15:07:25 -0700
+
 ka9q-radio (2026.08.03-1-trixie2) trixie; urgency=medium
 
   * move some udev files between packages
