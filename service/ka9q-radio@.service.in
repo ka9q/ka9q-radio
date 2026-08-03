@@ -1,0 +1,37 @@
+# New method of starting radiod from udev
+# Phil Karn 3 Aug 2026
+[Unit]
+Description=KA9Q radio for SDR device %I
+Wants=network-online.target
+StartLimitIntervalSec=30
+StartLimitBurst=3
+
+[Service]
+User=radio
+Group=radio
+Type=simple
+Nice=-10
+SupplementaryGroups=plugdev radio users
+CapabilityBoundingSet=CAP_SYS_NICE CAP_NET_ADMIN
+AmbientCapabilities=CAP_SYS_NICE CAP_NET_ADMIN
+StateDirectory=ka9q-radio
+StateDirectoryMode=0775
+LogsDirectory=ka9q-radio
+LogsDirectoryMode=0775
+UMask=002
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=no
+ExecStart=@sbindir@/start-ka9q-radio %i
+Restart=on-failure
+RestartSec=2
+
+[Install]
+# Intentionally empty: udev activates instances.

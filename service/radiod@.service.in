@@ -1,4 +1,5 @@
 # systemd unit for radio receiver
+# this is the OLD method involving a manually enabled service unit for each device
 # Phil Karn, KA9Q, Sept 2025
 
 [Unit]

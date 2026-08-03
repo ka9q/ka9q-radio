@@ -1,0 +1,33 @@
+#!/bin/sh
+# Helper script for launching ka9q-radio radiod daemon when a SDR is plugged in
+# 3 Aug 2026 Phil Karn
+set -eu
+
+identity=$1
+
+vendor=${identity%%-*}
+remainder=${identity#*-}
+product=${remainder%%-*}
+serial=${remainder#*-}
+
+radiod='/usr/sbin/radiod'
+device_config_dir='/etc/radio/devices'
+default_config_dir='/usr/share/ka9q-radio/defaults'
+
+specific="$device_config_dir/$vendor-$product-$serial.conf"
+generic="$device_config_dir/$vendor-$product.conf"
+packaged="$default_config_dir/$vendor-$product.conf"
+
+if [ -r "$specific" ]; then
+    config=$specific
+elif [ -r "$generic" ]; then
+    config=$generic
+elif [ -r "$packaged" ]; then
+    config=$packaged
+else
+    echo "ka9q-radio-start: no configuration for $vendor:$product serial $serial" >&2
+    exit 1
+fi
+
+echo "start-ka9q-radio: $vendor:$product serial=$serial config=$config"
+exec "$radiod" "$config"
