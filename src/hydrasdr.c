@@ -153,9 +153,12 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     if(Serial != NULL && strlen(Serial) > 0){
       fprintf(stderr,"Serial '%s' specified on command line\n",Serial);
       sn = Serial;
-      char const *prefix = "HYDRASDR SN:";
-      if(strncmp(sn,prefix,strlen(prefix)) == 0)
-	sn += strlen(prefix);
+      char const *prefix0 = "HYDRASDR SN:";
+      char const *prefix1 = "HYDRASDR_SN:";
+      if(strncmp(sn,prefix0,strlen(prefix0)) == 0)
+	sn += strlen(prefix0);
+      else if(strncmp(sn,prefix1,strlen(prefix1)) == 0)
+	sn += strlen(prefix1);
       char *endptr = NULL;
       sdr->SN = strtoull(sn,&endptr,16);
       if(endptr == NULL || *endptr != '\0')
