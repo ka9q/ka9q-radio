@@ -24,6 +24,6 @@ ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1fc9", ATTR{idProduct}=="000c"
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1fc9", ATTR{idProduct}=="000c", SYMLINK+="nxp-dfu-%k", MODE="0664", GROUP="users", TAG+="uaccess"
 
 # launch ka9q-radio radiod (disabled by default) - note conflicts with airspy R2, which uses the same vendor/product code!
-##SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="1d50",ATTR{idProduct}=="60a1",TAG+="systemd",ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$attr{serial}.service"
+##SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="1d50",ATTR{idProduct}=="60a1",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
 # native hydrasdr vendor/product code (distinct from Airspy R2)
 ##SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="38af",ATTR{idProduct}=="0001",TAG+="systemd",ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$attr{serial}.service"
