@@ -1,3 +1,10 @@
+ka9q-radio (2026.08.03-1-trixie1) trixie; urgency=medium
+
+  * commit 796810e64cce91164a113173ab4851c09a5850d1
+  * udev-driven radiod loading
+
+ -- Phil Karn <karn@ka9q.net>  Mon, 03 Aug 2026 14:09:16 -0700
+
 ka9q-radio (2026.08.02-2-trixie1) trixie; urgency=medium
 
   * commit 1a974c18abb75480fa4c7eda6a62009beda28044
