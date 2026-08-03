@@ -30,4 +30,5 @@ else
 fi
 
 echo "start-ka9q-radio: $vendor:$product serial=$serial config=$config"
+echo "exec $radiod -s $serial $config"
 exec "$radiod" -s "$serial" "$config"
