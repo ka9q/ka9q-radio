@@ -32,11 +32,10 @@ SYSCTL = 98-sockbuf.conf 50-multicast.conf
 
 .PHONY: clean all install uninstall purge
 
-all:
-	@true
+all:	start-ka9q-radio
 
 clean:
-	@true
+	rm -f start-ka9q-radio
 
 purge:
 	DESTDIR='$(DESTDIR)' \
@@ -74,6 +73,7 @@ install:
 	install -m 0644 ka9q-cleanups $(DESTDIR)$(crondir)
 # Configure scripts
 	install -m 0755 $(SCRIPTS) $(DESTDIR)$(bindir)
+	install -m 0755 start-ka9q-radio $(DESTDIR)$(sbindir)
 
 # debian packaging handles this, so do it only on local installs, and only on Linux
 ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
@@ -98,3 +98,9 @@ uninstall:
 	@echo not removing  $(addprefix $(DESTDIR)$(sysctldir)/,$(SYSCTL))
 	#rm -f $(DESTDIR)$(sysusersdir)/radio.conf
 	@echo not removing $(DESTDIR)$(sysusersdir)/radio.conf
+
+start-ka9q-radio: start-ka9q-radio.in
+	sed -e 's|@radioconfdir@|$(radioconfdir)|g' \
+	    -e 's|@sbindir@|$(sbindir)|g' \
+	    -e 's|@pkgdatadir@|$(pkgdatadir)|g' \
+	    $< > $@
