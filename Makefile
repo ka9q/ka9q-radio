@@ -14,11 +14,12 @@ pkgdatadir    ?= $(datadir)/ka9q-radio
 pkglibdir     ?= $(libdir)/ka9q-radio
 statedir      ?= $(localstatedir)/lib/ka9q-radio
 mandir	      ?= $(prefix)/share/man
+udevdir       ?= $(sysconfdir)/udev/rules.d
 
 UNAME_S := $(shell uname -s)
 
 export prefix exec_prefix bindir sbindir libdir datadir sysconfdir
-export localstatedir pkgdatadir pkglibdir statedir mandir
+export localstatedir pkgdatadir pkglibdir statedir mandir udevdir
 
 PKG_CONFIG_PATH=
 LD_LIBRARY_PATH=
