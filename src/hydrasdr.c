@@ -147,17 +147,29 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionar
     }
   }
   {
-    char const * const sn = config_getstring(Dictionary,section,"serial",NULL);
-    if(sn != NULL){
+    sdr->SN = 0;
+    extern char const *Serial; // Defined in main.c, set from -s on command line
+    char *sn = NULL;
+    if(Serial != NULL && strlen(Serial) > 0){
+      fprintf(stderr,"Serial '%s' specified on command line\n",Serial);
+      sn = Serial;
+      char const *prefix = "HYDRASDR SN:";
+      if(strcmp(sn,prefix,strlen(prefix)) == 0)
+	sn += strlen(prefix);
       char *endptr = NULL;
-      sdr->SN = 0;
       sdr->SN = strtoull(sn,&endptr,16);
-      if(endptr == NULL || *endptr != '\0'){
+      if(endptr == NULL || *endptr != '\0')
 	fprintf(stderr,"Invalid serial number %s in section %s\n",sn,section);
-	return -1;
-      }
-    } else {
-      // Serial number not specified, enumerate and pick one
+    }
+    // If not successfully set from command line, use keyword in config file, if any
+    if(sdr->SN == 0 && (sn = config_getstring(Dictionary,section,"serial",NULL)) != NULL){
+      char *endptr = NULL;
+      sdr->SN = strtoull(sn,&endptr,16);
+      if(endptr == NULL || *endptr != '\0')
+	fprintf(stderr,"Invalid serial number %s in section %s\n",sn,section);
+    }
+    // If it still hasn't been set, enumerate and pick one
+    if(sdr->SN == 0){
       int n_serials = 100; // ridiculously large
       uint64_t serials[n_serials];
 
