@@ -1,2 +1,5 @@
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="03eb", ATTR{idProduct}=="800c", SYMLINK+="airspyhf-%k", MODE="660", GROUP="plugdev", TAG+="uaccess"
 
+## udev driven radiod launch disabled by default to avoid breaking existing manual configurations
+##SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="03eb",ATTR{idProduct}=="800c",TAG+="systemd",ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$attr{serial}.service"
+
