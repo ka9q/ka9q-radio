@@ -10,7 +10,7 @@ recordingsdir  ?= /srv/ka9q-radio/recordings
 SERVICEFILES=acars.service aprsfeed.service cwd.service ft4-decode.service \
 	ft8-decode.service ft4-decode@.service ft8-decode@.service \
 	ft4-record.service ft8-record.service hfdl.service horusdemod.service \
-	packetd.service radiod@.service recordings@.service \
+	ka9q-radio@.service packetd.service radiod@.service recordings@.service \
 	rx888_boot.service set_lo_multicast.service wspr-decoded.service
 
 .PHONY: clean all install uninstall purge
