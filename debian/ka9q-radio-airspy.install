@@ -3,6 +3,8 @@ usr/lib/ka9q-radio/airspy.so
 etc/modprobe.d/airspy-blacklist.conf
 usr/lib/udev/rules.d/51-airspy.rules
 usr/lib/udev/rules.d/53-airspy-ka9q.rules
+usr/share/ka9q-radio/defaults/airspy.conf
+usr/share/ka9q-radio/defaults/1d50-60a1.conf
 usr/share/ka9q-radio/examples/radiod@airspy-autorx.conf
 usr/share/ka9q-radio/examples/radiod@airspy-generic.conf
 usr/share/ka9q-radio/examples/radiod@airspy-kq6rs-70cm.conf

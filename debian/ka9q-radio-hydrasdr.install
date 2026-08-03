@@ -1,2 +1,4 @@
 usr/lib/ka9q-radio/hydrasdr.so
 usr/lib/udev/rules.d/51-hydrasdr.rules
+usr/share/ka9q-radio/defaults/hydrasdr.note
+usr/share/ka9q-radio/defaults/hydrasdr.conf
