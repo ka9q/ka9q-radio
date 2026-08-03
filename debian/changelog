@@ -1,3 +1,9 @@
+ka9q-radio (2026.08.03-1-trixie2) trixie; urgency=medium
+
+  * move some udev files between packages
+
+ -- Phil Karn <karn@ka9q.net>  Mon, 03 Aug 2026 14:46:21 -0700
+
 ka9q-radio (2026.08.03-1-trixie1) trixie; urgency=medium
 
   * commit 796810e64cce91164a113173ab4851c09a5850d1
