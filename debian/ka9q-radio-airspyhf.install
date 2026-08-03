@@ -1,4 +1,6 @@
 usr/lib/ka9q-radio/airspyhf.so
 usr/lib/udev/rules.d/52-airspyhf.rules
+usr/share/ka9q-radio/defaults/airspyhf.conf
+usr/share/ka9q-radio/defaults/03eb-800c.conf
 usr/share/ka9q-radio/examples/radiod@airspyhf-generic.conf
 usr/share/ka9q-radio/examples/radiod@airspyhf-ka9q.conf
