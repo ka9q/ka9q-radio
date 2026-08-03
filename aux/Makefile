@@ -51,7 +51,7 @@ purge:
 	SCRIPTS='$(SCRIPTS)' \
 	./purge.sh
 
-install:
+install: all
 # Setup ka9q-radio directories
 	install -d -m 0775 $(DESTDIR)$(radioconfdir) $(DESTDIR)$(statedir) $(DESTDIR)$(statedir)/ft8
 	install -d -m 0775 $(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr
