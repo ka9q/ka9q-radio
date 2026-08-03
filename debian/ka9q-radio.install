@@ -4,10 +4,9 @@ usr/sbin/radiod
 usr/sbin/start-ka9q-radio
 etc/sysusers.d/*
 etc/sysctl.d/*
-etc/udev/rules.d/90-ka9q-radio-autostart.rules
+usr/lib/udev/rules.d/90-ka9q-radio-autostart.rules
 usr/lib/systemd/system/radiod@.service
 usr/lib/systemd/system/ka9q-radio@.service
 usr/share/ka9q-radio/defaults
 usr/share/man/man8/radiod.8
 usr/share/man/man1/fft-gen.1
-etc/udev/rules.d/
