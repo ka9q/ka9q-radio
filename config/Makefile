@@ -18,10 +18,10 @@ purge:
 
 install:
 	install -m 0664 README *.conf $(DESTDIR)$(radioconfdir)
-	rsync -a examples $(DESTDIR)$(pkgdatadir)
+	rsync -a examples defaults $(DESTDIR)$(pkgdatadir)
 
 uninstall:
-	rm -rf $(DESTDIR)$(pkgdatadir)/examples
+	rm -rf $(DESTDIR)$(pkgdatadir)/examples $(DESTDIR)$(pkgdatadir)/defaults
 	@echo "not removing /etc/radio/*"
 
 
