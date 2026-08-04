@@ -1,4 +1,4 @@
 usr/lib/ka9q-radio/hackrf.so
 usr/share/ka9q-radio/defaults/1d50-6089-0000000000000000645061de25368a13.conf
 usr/share/ka9q-radio/defaults/1d50-6089.conf
-
+usr/share/ka9q-radio/defaults/hackrf.conf
