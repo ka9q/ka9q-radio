@@ -1,5 +1,0 @@
-The Hydra SDR One has the same USB vendor and product IDs as the Airspy R2, which it clones.
-If you have a Hydra and prefer to invoke the hydrasdr driver, do this:
-
-ln -s -f hydrasdr.conf 1d50-60a1.conf
-

@@ -1,0 +1,89 @@
+DO NOT EDIT THIS DIRECTORY! Make any local changes to /etc/radio/devices.
+
+This directory contains simple default config files for most of the
+SDR devices supported by ka9q-radio when udev autoloading is enabled.
+
+udev autoloading is enabled by creating the file
+
+/etc/radio/enable-udev-autostart
+
+(the contents are unimportant). When enabled, and a supported SDR is
+plugged in USB, udev will launch the helper script
+
+/usr/sbin/start-ka9q-radio
+(/usr/local/sbin/start-ka9q-radio on locally built systems).
+
+'start-ka9q-radio' will search the directories /etc/radio/devices
+and /usr/share/ka9q-radio/defaults (/usr/local/share/ka9q-radio/defaults on locally built systems)for file names of the form:
+
+vvvv-dddd-ssss.conf
+or
+vvvv-dddd.conf
+
+where:
+
+'vvvv' is the USB Vendor ID in lower case hex
+'dddd' is the USB Device ID in lower case hex
+'-ssss' is an *optional* serial number string
+
+This should be a symbolic link to a radiod config file in 'ini' format.
+The start-ka9q-radio script then invokes radiod with the serial number (if specified)
+and the name of the config file.
+
+Example: when an unloaded RX888 MkII is first connected, it identifies
+as USB ID 04b4:00F3. Udev invokes a dedicated daemon,
+/usr/sbin/rx888_boot, which loads the device with firmware and resets
+it. It then drops off the USB and reappears as a USB Super Speed (5
+Gb/s) device with ID 04b4:00f1.
+
+Assume the RX888 serial number is 000908270a582911.  start-ka9q-radio
+will first look for 04b4-00f1-000908270a582911.conf in
+/etc/radio/devices or /usr/share/ka9q-radio/defaults, in that
+order. If not found in either location, start-ka9q-radio looks in both
+directories for a generic configuration (no serial number), ie,
+04b4-00f1.conf.
+
+Note that the three fields in the config file name are separated with
+dashes (-), not colons (:).
+
+The serial number field in the file name must exactly match the serial number string
+reported by the device, except in lower case. Some examples here show
+the various serial number formats.
+
+start-ka9q-radio then invokes the ka9q-radio radiod daemon with this
+file name (and the serial number, if present).
+
+This directory contains simple configuration files for most of the
+devices supported by radiod. To override these defaults, create your
+own customized configurations and place them in
+
+/etc/radio/devices
+
+and not in this directory. Symbolic links may point outside the
+directory. For example:
+
+$ ls -l /etc/radio/devices
+total 0
+lrwxrwxrwx 1 root root 24 Aug  3 20:13 04b4-00f1-000908270a582911.conf -> ../radiod@ka9q-hf.conf.d
+$
+
+This reuses an existing configuration for my own RX888 already in
+/etc/radio. The target may be either a plain file ending in ".conf" or
+a directory ending in ".conf.d". In the latter case, all files ending
+with ".conf" in the directory are concatenated and used as though it
+were a single .conf file.
+
+I have tested the config files for the RX888 MkII, Airspy R2,
+AirspyHF+, RigExpert Fobos and HydraSDR One. I own a AMSAT UK Funcube
+dongle and the Hack RF One, but I haven't used them in a while. I also
+own two SDRPlay units, but I don't really support them because their
+closed API and driver library makes the SDRPlay very difficult to
+support properly in an open source package like ka9q-radio.
+
+Note about the HydraSDR One: this is a clone of the Airspy R2, and most of the
+early units (at least) use same vendor and product IDs (1d50:60a1). Separate
+drivers are provided in ka9q-radio (airspy.so and hydrasdr.so). Their
+serial number strings can distinguish the two because they include the
+product name, but a generic configuration (ie, 1d50-60a1.conf) can
+only point to one driver, which in this directory is the airspy. You may override
+this with your own entries in /etc/radio/devices.
