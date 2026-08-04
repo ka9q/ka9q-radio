@@ -24,4 +24,9 @@ SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="04b4",ATTR{idProduc
 # Rigexpert fobos
 SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="16d0",ATTR{idProduct}=="132e",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
 
+# RTL-SDR (there are many IDs)
+# realtek RTL2832U
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="0bda",ATTR{idProduct}=="2832",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
+
+
 LABEL="ka9q_radio_end"
