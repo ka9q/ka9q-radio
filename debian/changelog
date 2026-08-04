@@ -1,3 +1,10 @@
+ka9q-radio (2026.08.03-4-trixie1) trixie; urgency=medium
+
+  * commit cf051d5fafc6110c8a358bceeaf2b19ec70bd56b
+  * allow lower case serial numbers in airspy
+
+ -- Phil Karn <karn@ka9q.net>  Mon, 03 Aug 2026 18:36:01 -0700
+
 ka9q-radio (2026.08.03-3-trixie1) trixie; urgency=medium
 
   * commit 3364339470975be2784d6a75e89500548b63219b
