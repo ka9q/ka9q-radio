@@ -4,3 +4,4 @@ usr/share/ka9q-radio/defaults/airspyhf.conf
 usr/share/ka9q-radio/defaults/03eb-800c.conf
 usr/share/ka9q-radio/examples/radiod@airspyhf-generic.conf
 usr/share/ka9q-radio/examples/radiod@airspyhf-ka9q.conf
+usr/share/ka9q-radio/defaults/03eb-800c-airspyhf_sn:3652d65d4acb39f8.conf
