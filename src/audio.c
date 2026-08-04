@@ -216,8 +216,10 @@ int send_output(struct channel * restrict const chan, float const * restrict buf
 	    TempSendFailure = true;
 	  }
 	} else {
-	  fprintf(stderr,"audio send failure: %s\n",strerror(errno));
-	  abort(); // Probably more serious, like the loss of an interface or route; restart from systemd
+	  if(!TempSendFailure){
+	    fprintf(stderr,"audio send failure: %s (any additional messages suppressed)\n",strerror(errno));
+	    TempSendFailure = true;
+	  }
 	}
       }
       if(chan->output.pacing && available_frames > 0)
