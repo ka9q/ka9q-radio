@@ -1,3 +1,10 @@
+ka9q-radio (2026.08.03-5-trixie1) trixie; urgency=medium
+
+  * commit 89b9592fab4765dac7dc702cf974782b438116a6
+  * don't make audio output network errors fatal, just log once
+
+ -- Phil Karn <karn@ka9q.net>  Mon, 03 Aug 2026 19:07:16 -0700
+
 ka9q-radio (2026.08.03-4-trixie1) trixie; urgency=medium
 
   * commit cf051d5fafc6110c8a358bceeaf2b19ec70bd56b
