@@ -1,3 +1,10 @@
+ka9q-radio (2026.08.03-5-trixie2) trixie; urgency=medium
+
+  * commit 1a6d3fe464d72831449e004862ae22b892648bf1
+  * debian cleanups, more radiod udev launch examples
+
+ -- Phil Karn <karn@ka9q.net>  Mon, 03 Aug 2026 22:14:03 -0700
+
 ka9q-radio (2026.08.03-5-trixie1) trixie; urgency=medium
 
   * commit 89b9592fab4765dac7dc702cf974782b438116a6
