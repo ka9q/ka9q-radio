@@ -4,4 +4,5 @@ usr/share/ka9q-radio/examples/radiod@aviation.conf
 usr/share/ka9q-radio/examples/radiod@ka9q-fobos.conf.d
 usr/share/ka9q-radio/defaults/fobos.conf
 usr/share/ka9q-radio/defaults/16d0-132e.conf
+usr/share/ka9q-radio/defaults/16d0-132e-a1d610000207.conf
 

@@ -1,3 +1,6 @@
 usr/lib/ka9q-radio/hydrasdr.so
 usr/lib/udev/rules.d/51-hydrasdr.rules
 usr/share/ka9q-radio/defaults/hydrasdr.conf
+usr/share/ka9q-radio/defaults/1d50-60a1-hydrasdr_sn:36b463dc31514fc7.conf
+usr/share/ka9q-radio/defaults/38af-0001-hydrasdr_sn:36b463dc31514fc7.conf
+usr/share/ka9q-radio/defaults/38af-0001.conf
