@@ -3,7 +3,8 @@
 # 3 Aug 2026 Phil Karn
 set -eu
 
-identity=$1
+# force to lower case
+identity=$(printf '%s' "$1"| LC_ALL=C tr '[:upper:]' '[:lower:]' )
 
 vendor=${identity%%-*}
 remainder=${identity#*-}
