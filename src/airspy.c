@@ -129,27 +129,27 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   {
     // Determine the serial number we'll look for
     sdr->SN = 0;
-    if(Serial != NULL){
-      // Specified on command line
-      long long serial_number_arg = 0;
-      if(sscanf(Serial,"AIRSPY_SN:%llx",&serial_number_arg) != 1){
-	fprintf(stderr,"Invalid serial number argument %s\n",Serial);
-      } else {
-	sdr->SN = serial_number_arg;
-      }
+    extern char const *Serial; // Defined in main.c, set from -s on command line
+    char const *sn = NULL;
+    if(Serial != NULL && strlen(Serial) > 0){
+      fprintf(stderr,"Serial '%s' specified on command line\n",Serial);
+      sn = Serial;
+      char const *colon = strchr(sn,':');
+      if(colon != NULL)
+	sn = colon+1;
+      char *endptr = NULL;
+      sdr->SN = strtoull(sn,&endptr,16);
+      if(endptr == NULL || *endptr != '\0')
+	fprintf(stderr,"Invalid serial number %s in section %s\n",sn,section);
     }
-    if(sdr->SN == 0){
-      // examine only if not already given on command line
-      char const * const sn = config_getstring(Dictionary,section,"serial",NULL);
-      if(sn != NULL){
-	char *endptr = NULL;
-	sdr->SN = strtoull(sn,&endptr,16);
-	if(endptr == NULL || *endptr != '\0'){
-	  fprintf(stderr,"Invalid serial number %s in section %s\n",sn,section);
-	  return -1;
-	}
-      }
+    // If not successfully set from command line, use keyword in config file, if any
+    if(sdr->SN == 0 && (sn = config_getstring(Dictionary,section,"serial",NULL)) != NULL){
+      char *endptr = NULL;
+      sdr->SN = strtoull(sn,&endptr,16);
+      if(endptr == NULL || *endptr != '\0')
+	fprintf(stderr,"Invalid serial number %s in section %s\n",sn,section);
     }
+    // If it still hasn't been set, enumerate and pick one    
     if(sdr->SN == 0){
       // Specific serial number not specified, enumerate and pick the first one
       int n_serials = 100; // ridiculously large
