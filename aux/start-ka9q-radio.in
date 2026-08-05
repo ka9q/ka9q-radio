@@ -6,10 +6,36 @@ set -eu
 # force to lower case
 identity=$(printf '%s' "$1"| LC_ALL=C tr '[:upper:]' '[:lower:]' )
 
-vendor=${identity%%-*}
-remainder=${identity#*-}
-product=${remainder%%-*}
-serial=${remainder#*-}
+# Extract required vendor.
+case "$identity" in
+    *-*)
+        vendor=${identity%%-*}
+        remainder=${identity#*-}
+        ;;
+    *)
+        echo "start-ka9q-radio: invalid device identity: $identity" >&2
+        exit 2
+        ;;
+esac
+
+# Extract required product and optional serial.
+# the serial may contain embedded '-'
+case "$remainder" in
+    *-*)
+        product=${remainder%%-*}
+        serial=${remainder#*-}
+        ;;
+    *)
+        product=$remainder
+        serial=
+        ;;
+esac
+
+if [ -z "$vendor" ] || [ -z "$product" ]; then
+    echo "start-ka9q-radio: invalid device identity: $identity" >&2
+    exit 2
+fi
+
 
 radiod='@sbindir@/radiod'
 device_config_dir='@radioconfdir@/devices'
@@ -30,6 +56,10 @@ else
     exit 1
 fi
 
-echo "start-ka9q-radio: $vendor:$product serial=$serial config=$config"
-echo "exec $radiod -s$serial -- $config"
-exec "$radiod" -s"$serial" -- "$config"
+if [ -n "$serial" ]; then
+    echo "exec $radiod -s$serial -- $config"
+    exec "$radiod" -s"$serial" -- "$config"
+else
+    echo "exec $radiod $config"
+    exec "$radiod" "$config"
+fi

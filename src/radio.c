@@ -1039,7 +1039,7 @@ static void *demod_thread(void *p){
   // Repeatedly invoke appropriate demodulator
   // When a demod exits, the appropriate one is restarted,
   // which can be the same one if demod_type hasn't changed
-  // A demod can terminate completely by setting an invalid demod_type and exiting
+  // A demod can terminate completely by setting an invalid demod_type and returning
   // Eg, downconvert() does this when a channel lifetime counts down to 0
   int status = 0;
   while(status == 0){ // A demod returns non-zero to signal a fatal error, don't restart
