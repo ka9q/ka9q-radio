@@ -25,7 +25,6 @@ int demod_fm(void *arg){
   assert(Blocktime != 0);
   assert(chan->frontend != NULL);
 
-  pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   int const samprate = chan->output.samprate; // Doesn't change, keep local copy
   int const blocksize = lrint(samprate * Blocktime);
@@ -369,6 +368,5 @@ int demod_fm(void *arg){
   }
   delete_filter_output(&chan->filter.out);
   chan->baseband = NULL;
-  pthread_mutex_destroy(&chan->status.lock);
   return 0; // Normal exit
 }

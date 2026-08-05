@@ -31,7 +31,6 @@ int demod_wfm(void *arg){
 
   assert(Blocktime != 0);
   assert(chan->frontend != NULL);
-  pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   // This is not the downconverter samprate, but the audio output samprate so as not to confuse consumers
   chan->output.samprate = (int)Audio_samprate;
@@ -320,6 +319,5 @@ int demod_wfm(void *arg){
   delete_filter_output(&pilot);
   delete_filter_output(&chan->filter.out); // we don't use filter2
   chan->baseband = NULL;
-  pthread_mutex_destroy(&chan->status.lock);
   return 0;
 }

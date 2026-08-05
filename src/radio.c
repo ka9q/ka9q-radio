@@ -1040,6 +1040,7 @@ static void *demod_thread(void *p){
   // When a demod exits, the appropriate one is restarted,
   // which can be the same one if demod_type hasn't changed
   // A demod can terminate completely by setting an invalid demod_type and exiting
+  // Eg, downconvert() does this when a channel lifetime counts down to 0
   int status = 0;
   while(status == 0){ // A demod returns non-zero to signal a fatal error, don't restart
     snprintf(chan->name, sizeof chan->name, "%s %u", demod_name_from_type(chan->demod_type), chan->output.rtp.ssrc);
@@ -1066,7 +1067,9 @@ static void *demod_thread(void *p){
       break;
     }
   }
+  // The channels should already clean up after themselves, but just in case...
   close_chan(chan);
+  pthread_mutex_destroy(&chan->status.lock);
   return NULL;
 }
 
@@ -1081,17 +1084,19 @@ int start_demod(struct channel * chan){
 	    chan->output.rtp.ssrc, chan->output.dest_string, demod_name_from_type(chan->demod_type),
 	    chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
   }
+  // Make sure it's initialized in case a command arrives before the thread has had a chance to start
+  pthread_mutex_init(&chan->status.lock,NULL);
   pthread_create(&chan->demod_thread,NULL,demod_thread,chan);
   return 0;
 }
 
 // Called by a demodulator to clean up its own resources
+// Some of this stuff should already be cleaned up, but make sure
 int close_chan(struct channel *chan){
   if(chan == NULL)
     return -1;
 
   pthread_t nullthread = {0};
-
   if(chan->rtcp.thread != nullthread){
     pthread_cancel(chan->rtcp.thread);
     pthread_join(chan->rtcp.thread,NULL);
@@ -1100,7 +1105,6 @@ int close_chan(struct channel *chan){
     pthread_cancel(chan->sap.thread);
     pthread_join(chan->sap.thread,NULL);
   }
-
   pthread_mutex_lock(&chan->status.lock);
   for(int i=0; i < CQLEN; i++){
     FREE(chan->commands[i].buffer);

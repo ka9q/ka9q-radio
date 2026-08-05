@@ -37,7 +37,6 @@ int demod_spectrum(void *arg){
   if(chan == NULL)
     return -1;
 
-  pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   chan->status.output_interval = 0; // No automatic status updates
   chan->status.output_timer = 0; // No automatic status updates
@@ -210,7 +209,6 @@ int demod_spectrum(void *arg){
   FREE(chan->spectrum.bin_data);
   FREE(chan->spectrum.ring);
   chan->spectrum.ring_size = 0;
-  pthread_mutex_destroy(&chan->status.lock);
   return 0;
 }
 

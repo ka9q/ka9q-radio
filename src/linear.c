@@ -34,7 +34,6 @@ int demod_linear(void *arg){
   assert(frontend != NULL);
   assert(Blocktime != 0);
 
-  pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
   int const blocksize = lrint(chan->output.samprate * Blocktime);
   int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,COMPLEX);
@@ -418,6 +417,5 @@ int demod_linear(void *arg){
   delete_filter_output(&chan->filter2.out);
   delete_filter_input(&chan->filter2.in);
   chan->baseband = NULL;
-  pthread_mutex_destroy(&chan->status.lock);
   return 0;
 }
