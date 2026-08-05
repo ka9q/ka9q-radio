@@ -1,2 +1,5 @@
 usr/lib/ka9q-radio/rtlsdr.so
 usr/lib/udev/rules.d/20-rtlsdr.rules
+usr/share/ka9q-radio/defaults/0bda-2832.conf
+usr/share/ka9q-radio/defaults/rtlsdr.conf
+
