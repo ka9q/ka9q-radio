@@ -33,7 +33,7 @@ int demod_fm(void *arg){
   int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize, COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
-    return -1;
+    goto quit;
   }
   chan->filter.out.beam = chan->filter.beam;
   if(chan->filter.out.beam)
@@ -352,6 +352,7 @@ int demod_fm(void *arg){
       break; // no valid output stream; terminate!
 
   } while(true);
+ quit:;
   if(Verbose > 1)
     fprintf(stderr,"%s exiting\n",chan->name);
 
@@ -368,5 +369,6 @@ int demod_fm(void *arg){
   }
   delete_filter_output(&chan->filter.out);
   chan->baseband = NULL;
+  pthread_mutex_destroy(&chan->status.lock);
   return 0; // Normal exit
 }

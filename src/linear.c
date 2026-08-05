@@ -40,7 +40,7 @@ int demod_linear(void *arg){
   int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
-    return -1;
+    goto quit;
   }
   chan->filter.out.beam = chan->filter.beam;
   if(chan->filter.out.beam)
@@ -399,7 +399,7 @@ int demod_linear(void *arg){
       break; // No output stream!
 
   } while(true);
-
+ quit:;
   // clean up
   if(Verbose > 1)
     fprintf(stderr,"%s exiting\n",chan->name);
@@ -418,5 +418,6 @@ int demod_linear(void *arg){
   delete_filter_output(&chan->filter2.out);
   delete_filter_input(&chan->filter2.in);
   chan->baseband = NULL;
+  pthread_mutex_destroy(&chan->status.lock);
   return 0;
 }

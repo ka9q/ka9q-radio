@@ -56,7 +56,7 @@ int demod_wfm(void *arg){
   int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,composite_L, COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
-    return -1;
+    goto quit;
   }
   chan->filter.out.beam = chan->filter.beam;
   if(chan->filter.out.beam)
@@ -232,7 +232,7 @@ int demod_wfm(void *arg){
 	if(pt == -1){
 	  fprintf(stderr,"%s can't allocate payload type for samprate %'d, channels %d, encoding %d\n",
 		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
-	  return -1;
+	  goto quit;
 	}
 	chan->output.rtp.type = pt;
       }
@@ -271,7 +271,7 @@ int demod_wfm(void *arg){
 	if(pt == -1){
 	  fprintf(stderr,"%s can't allocate payload type for samprate %'d, channels %d, encoding %d\n",
 		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
-	  return -1;
+	  goto quit;
 	}
 	chan->output.rtp.type = pt;
       }
@@ -320,5 +320,6 @@ int demod_wfm(void *arg){
   delete_filter_output(&pilot);
   delete_filter_output(&chan->filter.out); // we don't use filter2
   chan->baseband = NULL;
+  pthread_mutex_destroy(&chan->status.lock);
   return 0;
 }

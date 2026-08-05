@@ -210,6 +210,7 @@ int demod_spectrum(void *arg){
   FREE(chan->spectrum.bin_data);
   FREE(chan->spectrum.ring);
   chan->spectrum.ring_size = 0;
+  pthread_mutex_destroy(&chan->status.lock);
   return 0;
 }
 
