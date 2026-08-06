@@ -187,7 +187,7 @@ static double const kaiser(int const n,int const M, double const beta){
 // More efficient than repeatedly calling kaiser(n,M,beta)
 int make_kaiser(double * const window,int const M,double const beta){
   assert(window != NULL);
-  if(window == NULL || M < 2)
+  if(window == NULL || M < 2 || isnan(beta) || isinf(beta))
     return -1;
 
   // Precompute unchanging partial values
@@ -217,7 +217,7 @@ int make_kaiser(double * const window,int const M,double const beta){
 // More efficient than repeatedly calling kaiser(n,M,beta)
 int make_kaiserf(float * const window,int const M,double const beta){
   assert(window != NULL);
-  if(window == NULL || M < 2)
+  if(window == NULL || M < 2 || isnan(beta) || isinf(beta))
     return -1;
 
   // Precompute unchanging partial values
