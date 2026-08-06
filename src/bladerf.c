@@ -238,7 +238,7 @@ static void bladerf_process(struct frontend * const frontend,
 		wptr[i] = (float complex)samp;
 		sample += 2;
 	}
-	if(num_samples != 0 && !isnan(energy) && isfinite(energy))
+	if(num_samples != 0 && isfinite(energy))
 	  frontend->if_power += Power_alpha * (energy / num_samples - frontend->if_power);
 	frontend->samples += num_samples;
 
