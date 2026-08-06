@@ -680,13 +680,15 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   assert(m_fdomain != NULL); // Should always be master frequency data
   // In spectrum mode we'll read directly from the input queue. Don't forget the 3dB scale when the input is real
   slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
+  pthread_mutex_lock(&slave->response_mutex); // Don't let it change while we're using it
   float complex * restrict const s_fdomain = slave->fdomain;
   float complex const * restrict const s_response = slave->response;
   int const s_bins = slave->bins;
   int const m_bins = master->bins;
-  if(slave->fdomain == NULL || slave->response == NULL || m_bins == 0 || s_bins == 0)
+  if(s_fdomain == NULL || s_response == NULL || m_bins == 0 || s_bins == 0){
+    pthread_mutex_unlock(&slave->response_mutex);
     return 0;
-
+  }
   /* Multiply the requested frequency segment by the frequency response
      Although frequency domain data is always complex, this is complicated because
      we have to handle the four combinations of the filter input and output time domain data
@@ -696,7 +698,6 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
      (even for SSB) because of the fine tuning frequency shift after conversion
      back to the time domain. So while real output is supported it is not well tested.
   */
-  pthread_mutex_lock(&slave->response_mutex); // Don't let it change while we're using it
   if(master->in_type == COMPLEX && slave->out_type == COMPLEX){
     // Complex -> complex (e.g., fobos (in VHF/UHF mode), funcube, airspyhf, sdrplay)
     int wp = (s_bins+1)/2; // most negative output bin
