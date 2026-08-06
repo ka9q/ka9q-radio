@@ -48,7 +48,7 @@ int N_internal_threads = 1; // Usually most efficient
 int FFTW_planning_level = FFTW_PATIENT;
 static FILE *FFT_log;
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
-pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
 static atomic_flag FFTW_init = ATOMIC_FLAG_INIT;
 // FFT job descriptor
 struct fft_job {
@@ -65,14 +65,18 @@ struct fft_job {
   unsigned int *completion_jobnum;   // Written with jobnum when complete
   bool terminate; // set to tell fft thread to quit
 };
-static struct fft_job *FFT_free_list; // List of spare job descriptors
 #define NTHREADS_MAX 20  // More than I'll ever need
-static struct {
+struct fft {
   pthread_mutex_t queue_mutex; // protects job_queue
   pthread_cond_t queue_cond;   // signaled when job put on job_queue
   struct fft_job *job_queue;
   pthread_t thread[NTHREADS_MAX];  // Worker threads
-} FFT;
+};
+
+static struct fft FFT = {
+  .queue_mutex = PTHREAD_MUTEX_INITIALIZER,
+  .queue_cond = PTHREAD_COND_INITIALIZER
+};
 static inline int modulo(int x,int const m){
   return x < 0 ? x + m : x >= m ? x - m : x;
 }
@@ -174,7 +178,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   master->perform_inline = (N_worker_threads == 0);
   for(int i=0; i < ND; i++){
     master->fdomain[i] = lmalloc(sizeof(float complex) * bins);
-    master->completed_jobs[i] = (unsigned int)-1; // So startup won't drop any blocks
+    master->completed_jobs[i] = UINT_MAX; // So startup won't drop any blocks
   }
   master->bins = bins;
   master->ilen = L;
@@ -221,8 +225,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
       fprintf(stderr,"%s not readable: %s\n",arch_wisdom_file,strerror(errno));
 
     // Start FFT worker thread(s)
-    pthread_mutex_init(&FFT.queue_mutex,NULL);
-    pthread_cond_init(&FFT.queue_cond,NULL);
     if(N_worker_threads > NTHREADS_MAX){
       fprintf(stderr,"fft-threads=%d too high, limiting to %d\n",N_worker_threads,NTHREADS_MAX);
       N_worker_threads = NTHREADS_MAX;
@@ -465,7 +467,8 @@ void *run_fft(void *p){
   (void)p; // Unused
   realtime(1 + default_prio()); // one notch above channels, but below input thread
   stick_core();
-  while(true){
+  bool terminate = false;
+  do {
     // Get next job
     pthread_mutex_lock(&FFT.queue_mutex);
     while(FFT.job_queue == NULL)
@@ -497,22 +500,23 @@ void *run_fft(void *p){
     // Signal we're done with this job
     if(job->completion_mutex)
       pthread_mutex_lock(job->completion_mutex);
-    if(job->completion_jobnum)
-      *job->completion_jobnum = job->jobnum;
-    if(job->completion_cond)
-      pthread_cond_broadcast(job->completion_cond);
-    if(job->completion_mutex)
-      pthread_mutex_unlock(job->completion_mutex);
-    // Do NOT destroy job->completion_cond and completion_mutex here, they continue to exist
-    bool const terminate = job->terminate; // Don't use job pointer after free
-    // Put descriptor on free pool
-    pthread_mutex_lock(&FFT.queue_mutex);
-    job->next = FFT_free_list;
-    FFT_free_list = job;
-    pthread_mutex_unlock(&FFT.queue_mutex);
 
-    if(terminate)
-      break; // Terminate after this job
+    if(job->completion_jobnum){
+      *job->completion_jobnum = job->jobnum;
+      job->completion_jobnum = NULL;
+    }
+    // Do NOT destroy job->completion_cond and completion_mutex here, they continue to exist
+    // Just null the copies of their addresses
+    if(job->completion_cond){
+      pthread_cond_broadcast(job->completion_cond);
+      job->completion_cond = NULL;
+    }
+    if(job->completion_mutex){
+      pthread_mutex_unlock(job->completion_mutex);
+      job->completion_mutex = NULL;
+    }
+    terminate = job->terminate; // Don't use job pointer after free
+    FREE(job);
 
     // Compute timing statistics
     int64_t ns = t1.tv_nsec - t0.tv_nsec + 1000000000LL * (t1.tv_sec - t0.tv_sec);
@@ -524,7 +528,7 @@ void *run_fft(void *p){
     int64_t dev =  ns - Avg_fft_time ;
     Avg_fft_time += dev >> 4; // alpha = 1/16
     Mean_dev += (llabs(dev) - Mean_dev) >> 4;    // alpha = 1/16
-  }
+  } while (!terminate);
   return NULL;
 }
 // Execute the input side of a filter:
@@ -545,7 +549,7 @@ int execute_filter_input(struct filter_in * const f){
 	f->input_read_pointer.c += f->ilen;
 	mirror_wrap((void *)&f->input_read_pointer.c,f->input_buffer,f->input_buffer_size);
 	fftwf_execute_dft(f->fwd_plan,input,output);
-	drop_cache(input,f->ilen * sizeof(float complex));
+	drop_cache(input,f->ilen * sizeof *input);
       }
       break;
     case REAL:
@@ -554,7 +558,7 @@ int execute_filter_input(struct filter_in * const f){
 	f->input_read_pointer.r += f->ilen;
 	mirror_wrap((void *)&f->input_read_pointer.r,f->input_buffer,f->input_buffer_size);
 	fftwf_execute_dft_r2c(f->fwd_plan,input,output);
-	drop_cache(input,f->ilen * sizeof(float));
+	drop_cache(input,f->ilen * sizeof *input);
       }
       break;
     }
@@ -570,17 +574,7 @@ int execute_filter_input(struct filter_in * const f){
     f->sample_index += f->ilen;
     return 0;
   }
-  // set up a job for the FFT worker threads and enqueue it
-  // Take one off the pool, if available
-  pthread_mutex_lock(&FFT.queue_mutex);
-  struct fft_job *job = FFT_free_list;
-  if(job != NULL){
-    FFT_free_list = job->next;
-    job->next = NULL;
-  }
-  pthread_mutex_unlock(&FFT.queue_mutex);
-  if(job == NULL)
-    job = calloc(1,sizeof(struct fft_job)); // Otherwise create a new one
+  struct fft_job *job = calloc(1,sizeof(struct fft_job)); // Otherwise create a new one
   // A descriptor from the free list won't be blank, but we set everything below
   assert(job != NULL);
   job->fin = f;
@@ -991,7 +985,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   // 3. The un-normalized forward FFT has an implicit power gain of N
   double const gain = (slave->master->in_type == REAL ? M_SQRT2 : 1.0)
     / (window_gain *  slave->master->points);
-  assert(!isnan(gain) && isfinite(gain) && gain != 0);
+  assert(isfinite(gain) && gain != 0);
   for(int i = 0; i < M; i++)
     response[i] *= gain; // Normalize for the window gain
   fftwf_execute(fwd_filter_plan);
@@ -1014,13 +1008,13 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
 int write_cfilter(struct filter_in *f, float complex const *buffer,int size){
   if(f == NULL)
     return -1;
-  if(sizeof(*buffer) * (f->wcnt + size) >= f->input_buffer_size)
+  if((f->wcnt + size) * sizeof *buffer >= f->input_buffer_size)
     return -1; // Write is so large it wrapped the input buffer. Should handle this more cleanly
   // Even though writes can now wrap past the primary copy of the input buffer, their start should always be in it
   assert((void *)(f->input_write_pointer.c) >= f->input_buffer);
   assert((void *)(f->input_write_pointer.c) < f->input_buffer + f->input_buffer_size);
   if(buffer != NULL)
-    memcpy(f->input_write_pointer.c, buffer, size * sizeof(*buffer));
+    memcpy(f->input_write_pointer.c, buffer, size * sizeof *buffer);
   f->input_write_pointer.c += size;
   mirror_wrap((void *)&f->input_write_pointer.c, f->input_buffer, f->input_buffer_size);
   f->wcnt += size;
@@ -1035,13 +1029,13 @@ int write_cfilter(struct filter_in *f, float complex const *buffer,int size){
 int write_rfilter(struct filter_in *f, float const *buffer,int size){
   if(f == NULL)
     return -1;
-  if(sizeof(*buffer) * (f->wcnt + size) >= f->input_buffer_size)
+  if((f->wcnt + size) * sizeof *buffer >= f->input_buffer_size)
     return -1; // Write is so large it wrapped the input buffer. Should handle this more cleanly
   // Even though writes can now wrap past the primary copy of the input buffer, their start should always be in it
   assert((void *)(f->input_write_pointer.r) >= f->input_buffer);
   assert((void *)(f->input_write_pointer.r) < f->input_buffer + f->input_buffer_size);
   if(buffer != NULL)
-    memcpy(f->input_write_pointer.r, buffer, size * sizeof(*buffer));
+    memcpy(f->input_write_pointer.r, buffer, size * sizeof *buffer);
   f->input_write_pointer.r += size;
   mirror_wrap((void *)&f->input_write_pointer.r, f->input_buffer, f->input_buffer_size);
   f->wcnt += size;
@@ -1087,8 +1081,8 @@ static void terminate_fft(struct filter_in *f){
   assert(job != NULL);
   job->terminate = true;
   // Append job to queue, wake FFT thread
-  pthread_mutex_lock(&FFT.queue_mutex);
   struct fft_job *jp_prev = NULL;
+  pthread_mutex_lock(&FFT.queue_mutex);
   for(struct fft_job *jp = FFT.job_queue; jp != NULL; jp = jp->next)
     jp_prev = jp;
   if(jp_prev)
