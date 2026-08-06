@@ -167,7 +167,7 @@ int demod_wfm(void *arg){
     for(int n=0; n < composite_L; n++){
       // Although deviation can be zero, argf() is defined as returning 0, not NAN
       double const np = M_1_PI * cargf(buffer[n]); // -1 to +1
-      assert(!isnan(np) && isfinite(np));
+      assert(isfinite(np));
       double const x = np - phase_memory;
       phase_memory = np;
       composite.input_write_pointer.r[n] = x > 1 ? x - 2 : x < -1 ? x + 2 : x; // reduce difference to -1 to +1
@@ -246,8 +246,8 @@ int demod_wfm(void *arg){
 	double complex subc_phasor = pilot.output.c[n]; // 19 kHz pilot
 	subc_phasor = (subc_phasor * subc_phasor) / cnrm(subc_phasor); // square to 38 kHz and normalize
 	double const subc_info = 2.0f * __imag__ (conj(subc_phasor) * lminusr.output.c[n]); // Carrier is in quadrature
-	assert(!isnan(subc_info));
-	assert(!isnan(mono.output.r[n]));
+	assert(isfinite(subc_info));
+	assert(isfinite(mono.output.r[n]));
 	// demultiplex: 2L = (L+R) + (L-R); 2R = (L+R) - (L-R)
 	// L+R = mono.output.r[n]; L-R = subc_info
 	// real(s) = L, imag(s) = R

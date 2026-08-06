@@ -338,7 +338,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
     wptr[i] = (float complex)(sdr->scale * samp);
   }
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  if(sampcount != 0 && !isnan(energy) && isfinite(energy))
+  if(sampcount != 0 && isfinite(energy))
     frontend->if_power += Power_smooth * (energy / sampcount - frontend->if_power);
   frontend->samples += sampcount;
 }

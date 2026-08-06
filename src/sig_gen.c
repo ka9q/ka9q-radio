@@ -351,7 +351,7 @@ static void *proc_sig_gen(void *arg){
     // to vary, causing the reported input level to bobble around the nominal value. Long refresh intervals with 'control'
     // will smooth this out, but it's annoying
 
-    if(blocksize != 0 && !isnan(in_energy) && isfinite(in_energy))
+    if(blocksize != 0 && isfinite(in_energy))
       frontend->if_power += Power_alpha * (in_energy / blocksize - frontend->if_power);
     {
       struct timespec ts = {

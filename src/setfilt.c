@@ -168,7 +168,7 @@ int main(int argc,char *argv[]){
       }
       cp += optlen;
     }
-    if(isnan(low) || isnan(high))
+    if(!isfinite(low) || !isfinite(high))
       continue; // Didn't get what we wanted
     // If we sent a command, wait for its acknowledgement
     // Otherwise, just display the current frequency
