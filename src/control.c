@@ -82,7 +82,7 @@ static struct {
   double delta_phase;
 } Local;
 
-static int send_poll(int ssrc);
+static int send_poll(uint32_t ssrc);
 static int pprintw(WINDOW *w,int y, int x, char const *prefix, char const *fmt, ...);
 
 static WINDOW *Tuning_win,*Sig_win,*Filtering_win,*Demodulator_win,
@@ -2045,14 +2045,14 @@ static int pprintw(WINDOW *w,int y, int x, char const *label, char const *fmt,..
   return 0;
 }
 // Send empty poll command on specified descriptor
-static int send_poll(int ssrc){
+static int send_poll(uint32_t ssrc){
   uint8_t cmdbuffer[PKTSIZE];
   uint8_t *bp = cmdbuffer;
   *bp++ = 1; // Command
 
   uint32_t tag = (uint32_t)random();
-  encode_int(&bp,OUTPUT_SSRC,ssrc); // poll specific SSRC, or request ssrc list with ssrc = 0
-  encode_int(&bp,COMMAND_TAG,tag);
+  encode_int32(&bp,OUTPUT_SSRC,ssrc); // poll specific SSRC, or request ssrc list with ssrc = 0
+  encode_int32(&bp,COMMAND_TAG,tag);
   encode_eol(&bp);
   assert(bp >= cmdbuffer);
   size_t const command_len = bp - cmdbuffer;
