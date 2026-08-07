@@ -837,6 +837,8 @@ static int setup_ipv6_loopback(int fd){
 // into the same Ethernet multicast MAC addresses as the 224.0.0.0/8 multicast control block
 // that is not snooped by switches
 uint32_t make_maddr(char const *arg){
+  if(arg == NULL || strlen(arg) == 0)
+    return 0;
   //  uint32_t addr = (239U << 24) | (ElfHashString(arg) & 0xffffff); // poor performance when last byte is always the same (.)
   uint32_t addr = (239U << 24) | (fnv1hash((uint8_t *)arg, strlen(arg)) & 0xffffff);
   // avoid 239.0.0.0/24 and 239.128.0.0/24 since they map to the same
