@@ -26,7 +26,7 @@ int avahi_publish_address(char const *dns_name,char const *ip_address_string);
 int avahi_publish_service(char const *service_name, char const *service_type, char const *dns_name,int service_port, char const *description, int pid);
 static void sanitize_filename(char *name);
 
-int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,int address,char const *description){
+int avahi_start(char const *service_name,char const *service_type,int const service_port,char const *dns_name,uint32_t address,char const *description){
   int pid = getpid(); // Advertise the parent's pid, not the child's
   if(Static_avahi){
     // Just put in /etc/avahi/services
