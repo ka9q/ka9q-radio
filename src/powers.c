@@ -256,7 +256,7 @@ int main(int argc,char *argv[]){
       }
       for(unsigned i=0; i < npower; i++){
 	float p = power_tmp[i];
-	if(!isnan(p) && isfinite(p))
+	if(isfinite(p))
 	  powers[i] += p;
       }
       tot_avg += r_avg; // Number of FFTs actually averaged

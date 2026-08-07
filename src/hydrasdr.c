@@ -115,7 +115,7 @@ static void *hydrasdr_monitor(void *p);
 static double true_freq(uint64_t freq);
 static void set_gain(struct sdrstate *sdr,int gainstep);
 
-int hydrasdr_setup(struct frontend * const frontend,dictionary * const Dictionary,char const * const section){
+int hydrasdr_setup(struct frontend * const frontend,dictionary const * const Dictionary,char const * const section){
   assert(Dictionary != NULL);
 
   struct sdrstate * const sdr = calloc(1,sizeof(struct sdrstate));
@@ -840,7 +840,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
   else
     write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
 
-  if(sampcount != 0 && !isnan(in_energy) && isfinite(in_energy))
+  if(sampcount != 0 && isfinite(in_energy))
     frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
   if(sdr->software_agc){
     // Integrate A/D energy over A/D averaging period

@@ -67,7 +67,7 @@ static double set_correct_freq(struct sdrstate *sdr, double freq);
 static void * bladerf_monitor(void *p);
 
 int bladerf_setup(struct frontend * const frontend,
-		  dictionary * const Dictionary, char const * const section)
+		  dictionary const * const Dictionary, char const * const section)
 {
 	char const *p;
 	bladerf_channel ch = BLADERF_MODULE_RX;
@@ -238,7 +238,7 @@ static void bladerf_process(struct frontend * const frontend,
 		wptr[i] = (float complex)samp;
 		sample += 2;
 	}
-	if(num_samples != 0 && !isnan(energy) && isfinite(energy))
+	if(num_samples != 0 && isfinite(energy))
 	  frontend->if_power += Power_alpha * (energy / num_samples - frontend->if_power);
 	frontend->samples += num_samples;
 

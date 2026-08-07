@@ -318,7 +318,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   }
   frontend->samples += sampcount;
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  if(sampcount != 0 && !isnan(in_energy) && isfinite(in_energy)){
+  if(sampcount != 0 && isfinite(in_energy)){
     frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
   }
   return 0;

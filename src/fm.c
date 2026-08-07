@@ -48,9 +48,9 @@ int demod_fm(void *arg){
 
   double complex phase_memory = 0;
   chan->output.channels = 1; // Only mono for now
-  if(isnan(chan->squelch.open) || chan->squelch.open == 0)
+  if(!isfinite(chan->squelch.open) || chan->squelch.open == 0)
     chan->squelch.open = 6.3;  // open above ~ +8 dB
-  if(isnan(chan->squelch.close) || chan->squelch.close == 0)
+  if(!isfinite(chan->squelch.close) || chan->squelch.close == 0)
     chan->squelch.close = 4; // close below ~ +6 dB
 
   chan->fm.devmax = 5000.; // nominal peak deviation Hz

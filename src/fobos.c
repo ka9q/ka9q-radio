@@ -99,7 +99,7 @@ static int find_serial_position(const char *serials, const char *serialnumcfg) {
 }
 
 ///////////////////////////////////////////////////////////
-int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
+int fobos_setup(struct frontend *const frontend, dictionary const * const dictionary,
                 char const *const section) {
   assert(dictionary != NULL);
   config_validate_section(stderr, dictionary, section, Fobos_keys, NULL);
@@ -415,7 +415,7 @@ static void rx_callback(float *buf, uint32_t len, void *ctx) {
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
 
-  if (!isnan(in_energy) && isfinite(in_energy))
+  if (isfinite(in_energy))
     frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
 }
 

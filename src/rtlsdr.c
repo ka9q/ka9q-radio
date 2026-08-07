@@ -106,7 +106,7 @@ static void rx_callback(uint8_t *buf,uint32_t len, void *ctx);
 static double true_freq(uint64_t freq);
 
 
-int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *section){
+int rtlsdr_setup(struct frontend *frontend,dictionary const * const dictionary,char const *section){
   assert(dictionary != NULL);
 
   struct sdr * const sdr = (struct sdr *)calloc(1,sizeof(struct sdr));
@@ -338,7 +338,7 @@ static void rx_callback(uint8_t * const buf, uint32_t len, void * const ctx){
     wptr[i] = (float complex)(sdr->scale * samp);
   }
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  if(sampcount != 0 && !isnan(energy) && isfinite(energy))
+  if(sampcount != 0 && isfinite(energy))
     frontend->if_power += Power_smooth * (energy / sampcount - frontend->if_power);
   frontend->samples += sampcount;
 }
