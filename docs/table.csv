@@ -1,0 +1,103 @@
+type,name,object_type,access,description
+0,EOL,,,
+1,COMMAND_TAG,,,Echoes tag from requester
+2,CMD_CNT,,R/O,Count of input commands
+3,GPS_TIME,int64,,Nanoseconds since GPS epoch (remember to update the leap second tables!)
+4,DESCRIPTION,string,,Free form text describing source
+5,STATUS_DEST_SOCKET,socket,,
+6,SETOPTS,,R/W,
+7,CLEAROPTS,,R/W,
+8,RTP_TIMESNAP,int64,,"snapshot of current real-time-protocol timestamp, for linking RTP timestamps to clock time via GPS_TIME"
+9,BIN_BYTE_DATA,bytes,,Vector of 1-byte spectrum analyzer data
+10,INPUT_SAMPRATE,,R/O,Nominal sample rate (integer)
+11,SPECTRUM_BASE,,R/O,"base level of 1-byte analyzer data, dB"
+12,SPECTRUM_AVG,,R/O,Number of FFTs averaged into each spectrum response
+13,INPUT_SAMPLES,,R/O,
+14,WINDOW_TYPE,,R/O,
+15,NOISE_BW,,R/O,
+16,OUTPUT_DATA_SOURCE_SOCKET,socket,,
+17,OUTPUT_DATA_DEST_SOCKET,socket,,
+18,OUTPUT_SSRC,,, 
+19,OUTPUT_TTL,,,
+20,OUTPUT_SAMPRATE,,,
+21,OUTPUT_METADATA_PACKETS,,R/O,
+22,OUTPUT_DATA_PACKETS,,R/O,
+23,OUTPUT_ERRORS,,R/O,
+24,CALIBRATE,,R/W,
+25,LNA_GAIN,float,R/W,"Hardware-specific analog gains"
+26,MIXER_GAIN,float,R/W,
+27,IF_GAIN,float,R/W,
+28,DC_I_OFFSET,float,R/W,
+29,DC_Q_OFFSET,float,R/W,
+30,IQ_IMBALANCE,float,R/W,
+31,IQ_PHASE,float,R/W,
+32,DIRECT_CONVERSION,,R/O,Boolean indicating SDR is direct conversion -- should avoid DC
+33,RADIO_FREQUENCY,int64,R/W,
+34,FIRST_LO_FREQUENCY,int64,R/W,
+35,SECOND_LO_FREQUENCY,int64,R/W,
+36,SHIFT_FREQUENCY,int64,R/W,
+37,DOPPLER_FREQUENCY,int64,R/W,
+38,DOPPLER_FREQUENCY_RATE,int64,R/W,
+39,LOW_EDGE,,R/W,
+40,HIGH_EDGE,,R/W,
+41,IF_POWER,,R/O,
+42,BASEBAND_POWER,,R/O,
+43,NOISE_DENSITY,,R/O,
+44,DEMOD_TYPE,,R/W,"0 = linear (default), 1 = FM, 2 = WFM/Stereo, 3 = spectrum"
+45,OUTPUT_CHANNELS,,R/W,"1 or 2 in Linear and WFM, 1 in FM"
+46,INDEPENDENT_SIDEBAND,,R/W,Linear only
+47,PLL_ENABLE,,R/W,
+48,PLL_LOCK,,R/W,Linear PLL
+49,PLL_SQUARE,,R/W,Linear PLL
+50,PLL_PHASE,,R/W,Linear PLL
+51,PLL_BW,,R/W,PLL loop bandwidth
+52,ENVELOPE,,R/W,Envelope detection in linear mode
+53,SNR_SQUELCH,,R/W,"Enable SNR squelch, all modes"
+54,DEMOD_SAMPRATE,,R/O,
+55,DEMOD_SAMPLES,,R/O,
+56,DEMOD_CNT,,R/O,
+57,DEMOD_DELAY,,R/O,
+58,DEMOD_RSSI,,R/O,
+59,DEMOD_SNR,,R/O,
+60,DEMOD_NOISE_DENSITY,,R/O,
+61,DEMOD_PEAK,,R/O,
+62,DEMOD_OVERRANGES,,R/O,# of samples since last A/D overrange
+63,DEMOD_GROUP,,R/O,
+64,OPUS_ENABLE,,R/W,
+65,OPUS_BITRATE,int,R/W,Opus encoder target bitrate
+66,OPUS_COMPLEXITY,int,R/W,Opus encoder complexity
+67,OPUS_DTX,int,R/W,Opus encoder discontinuous transmission enable/disable
+68,OPUS_APPLICATION,int,R/W,Opus encoder application voice/audio/etc
+69,OPUS_BANDWIDTH,int,R/W,Opus encoder audio bandwidth limita
+70,OPUS_FEC,int,R/W,"Opus encoder forward error correction loss rate, %"
+71,SPECTRUM_STEP,int,R/W,"size of byte spectrum data level step, dB"
+72,OUTPUT_STATUS_SOCKET,socket,,
+73,OUTPUT_MCAST,socket,,
+74,OUTPUT_IFNAME,string,,
+75,OUTPUT_MTU,int,,
+76,OUTPUT_RTP_DELAY,int,,
+77,OUTPUT_RTP_SEQ,int,,
+78,OUTPUT_RTP_TS,int,,
+79,OUTPUT_RTP_SSRC,int,,
+80,OUTPUT_RTP_CLOCK,int,,
+81,OUTPUT_RTP_SAMPRATE,int,,
+82,OUTPUT_RTP_CNT,int,,
+83,OUTPUT_RTP_LOST,int,,
+84,OUTPUT_RTP_DUP,int,,
+85,OUTPUT_RTP_OOO,int,,
+86,OUTPUT_RTP_JITTER,float,,
+87,OUTPUT_RTP_DELAY_AVG,float,,
+88,OUTPUT_RTP_DELAY_MAX,float,,
+89,OUTPUT_RTP_DELAY_MIN,float,,
+90,OUTPUT_RTP_DELAY_VAR,float,,
+91,OUTPUT_RTP_DELAY_SDEV,float,,
+92,OUTPUT_RTP_DELAY_MEDIAN,float,,
+93,OUTPUT_RTP_DELAY_95PCT,float,,
+94,OUTPUT_RTP_DELAY_99PCT,float,,
+95,OUTPUT_RTP_DELAY_999PCT,float,,
+96,OUTPUT_RTP_DELAY_9999PCT,float,,
+97,OUTPUT_OVER,int,,
+98,OUTPUT_UNDER,int,,
+99,OUTPUT_OVERRANGES,int,,Count of A/D overrange
+100,PLL_WRAPS,int,,Count of PLL wraps (phase slips)
+101,SNR,float,,

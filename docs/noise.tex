@@ -1,0 +1,70 @@
+\section*{Statistical Notes: Why Minimum-of-Averages is Biased and Quantile Methods Are Not}
+
+\subsection*{Old Method: Minimum of Long-Term Averages}
+
+\begin{itemize}
+\item Each bin had a long-term averaged power estimate (low variance due to smoothing).
+\item The noise power per bin followed a Gamma distribution (not exponential anymore).
+\item The minimum of these bins was selected as the noise estimate.
+\end{itemize}
+
+\subsubsection*{Why This is Biased}
+
+\begin{itemize}
+\item The minimum of random variables is always biased low.
+\item The more bins you have, the lower the expected minimum.
+\item Smoothing reduces variance but does not remove bias.
+\end{itemize}
+
+\textbf{Result:}
+\begin{itemize}
+\item Stable but biased.
+\item Slow to respond to real noise changes.
+\item Statistically unpredictable bias.
+\end{itemize}
+
+\subsection*{New Method: Quantile + Correction Factor}
+
+\begin{itemize}
+\item Use q-th quantile of bin powers, or average of bins below threshold.
+\item Correct the estimate using known formulas from the exponential CDF.
+\end{itemize}
+
+\subsubsection*{Why This is Unbiased}
+
+\begin{itemize}
+\item Exponential distribution has exact relationship between quantile and mean:
+
+\[
+\mu = \frac{p_q}{-\ln(1 - q)}
+\]
+
+\item Averaging multiple low-end bins is correctable using a mathematically defined correction factor.
+\end{itemize}
+
+\textbf{Result:}
+\begin{itemize}
+\item Statistically unbiased (after correction).
+\item Low variance when averaging multiple bins.
+\item Fast response and mathematically sound.
+\end{itemize}
+
+\subsection*{Summary Table}
+
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+Method & Bias & Variance & Speed & Mathematical Foundation \\
+\hline
+Min of smoothed bins & Biased low & Low, unpredictable & Very slow & Poor \\
+Quantile (single bin) & Unbiased (corrected) & Higher & Fast & Exact \\
+Quantile + average of low bins & Unbiased (corrected) & Low & Fast & Exact \\
+\hline
+\end{tabular}
+
+\subsection*{Final Conclusion}
+
+\begin{itemize}
+\item Minimum of long-term averages looks smooth but hides systematic bias and reacts slowly.
+\item Quantile-based estimators, properly corrected, are unbiased, tunable, fast, and mathematically sound.
+\item Ideal for SDR, AGC, and real-time adaptive systems.
+\end{itemize}

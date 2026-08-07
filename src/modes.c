@@ -33,6 +33,7 @@ struct demodtab Demodtab[] = {
 static int    const DEFAULT_TTL = 0;                // Don't blast cheap switches and access points unless the user says so
 static enum demod_type const DEFAULT_DEMOD = LINEAR_DEMOD;
 static int    const DEFAULT_LINEAR_SAMPRATE = 12000;
+static double const DEFAULT_LIFETIME = 0; // Infinite
 
 // Channel filter
 static double const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
@@ -204,11 +205,15 @@ char const *demod_name_from_type(enum demod_type type){
 // Set reasonable defaults before reading preset or config tables
 // Note frontend entry must be set in radio.c since Frontend global is static
 int set_defaults(struct channel *chan){
+  assert(chan != NULL);
   if(chan == NULL)
     return -1;
 
-  chan->inuse = true;
+  chan->frontend = &Frontend;
+  chan->advertise = true;
   strlcpy(chan->name, "new chan", sizeof chan->name);
+  assert(Blocktime > 0);
+  chan->lifestart = chan->lifetime = DEFAULT_LIFETIME / Blocktime;
   chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
   chan->demod_type = DEFAULT_DEMOD;
   chan->linear.env = false;
@@ -228,7 +233,7 @@ int set_defaults(struct channel *chan){
   chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
   chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
   chan->output.channels = 1;
-  if(isnan(chan->output.gain) || !isfinite(chan->output.gain) || chan->output.gain <= 0)
+  if(!isfinite(chan->output.gain) || chan->output.gain <= 0)
      chan->output.gain = dB2voltage(DEFAULT_GAIN); // Set only if out of bounds
   chan->linear.dc_tau = DEFAULT_DC_TC; // primarily for removing AM carriers
   chan->output.pacing = false;
@@ -302,6 +307,10 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
       chan->demod_type = x;
     snprintf(chan->name, sizeof chan->name, "%s %u", demod_name, chan->output.rtp.ssrc);
   }
+  chan->use_dns = config_getboolean(table, sname, "dns", chan->use_dns);
+  chan->advertise = config_getboolean(table,sname,"advertise",chan->advertise);
+  double lifetime = config_getdouble(table,sname,"lifetime",chan->lifetime * Blocktime);
+  chan->lifestart = chan->lifetime = lifetime / Blocktime;
   {
     char const *p = config_getstring(table,sname,"samprate",NULL);
     if(p != NULL){
@@ -517,9 +526,39 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     chan->filter.a_weight = a_amp * csincospi(a_phase / 180.);
     chan->filter.b_weight = b_amp * csincospi(b_phase / 180.);
   }
+  char const *data = config_getstring(table,sname,"data",chan->output.dest_string);
+  strlcpy(chan->output.dest_string,data,sizeof chan->output.dest_string);
+
+  if(!chan->use_dns || resolve_mcast(chan->output.dest_string, &chan->output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0){
+    // Not using DNS, or DNS resolution failed: create a IPv4 multicast address from a hash of the name
+    struct sockaddr_in *sin = (struct sockaddr_in *)&chan->output.dest_socket;
+    uint32_t addr = make_maddr(chan->output.dest_string);
+    sin->sin_family = AF_INET;
+    sin->sin_addr.s_addr = htonl(addr);
+    sin->sin_port = htons(DEFAULT_RTP_PORT);
+  }
+  // --> Should ensure the channel data stream is distinct from the radiod status port !!
+  // Status sent to same data stream group, different port
+  memcpy(&chan->status.dest_socket, &chan->output.dest_socket, sizeof chan->status.dest_socket);
+  struct sockaddr const *sa = (struct sockaddr *)&chan->status.dest_socket;
+  switch(sa->sa_family){
+  case AF_INET:
+    {
+      struct sockaddr_in *sin = (struct sockaddr_in *)&chan->status.dest_socket;
+      sin->sin_port = htons(DEFAULT_STAT_PORT);
+    }
+    break;
+  case AF_INET6:
+    {
+      struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&chan->status.dest_socket;
+      sin->sin6_port = htons(DEFAULT_STAT_PORT);
+      // should support avahi advertising of IPv6
+    }
+  default:
+    break;
+  }
   return 0;
 }
-
 // force an output sample rate to a multiple of the FFT block rate times the number of
 // new blocks in each FFT interval.
 // For the default block time of 20 ms and overlap of 1/5, this is (1/20 ms)*(5-1) = 50 Hz*4 = 200 Hz

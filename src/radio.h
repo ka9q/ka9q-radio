@@ -115,11 +115,9 @@ struct frontend {
   pthread_mutex_t status_mutex;
   pthread_cond_t status_cond;     // Signalled whenever status changes
 
-
-
   // Entry points for local front end driver
   void *context;         // Stash hardware-dependent control block
-  int (*setup)(struct frontend *,dictionary *,char const *); // Get front end ready to go
+  int (*setup)(struct frontend *,dictionary const *,char const *); // Get front end ready to go
   int (*start)(struct frontend *);          // Start front end sampling
   int (*shutdown)(struct frontend *);           // Stop front end, used when there are no channels. Optional for now.
   double (*tune)(struct frontend *,double); // Tune front end, return actual frequency
@@ -141,8 +139,15 @@ Be careful with memcpy(): there are a few pointers (spectrum.bin_data, status.co
 If you use these in shadow copies you must malloc these arrays yourself.
 */
 struct channel {
-  bool inuse;
+  enum {
+    CHANNEL_IDLE = 0,
+    CHANNEL_STARTING,
+    CHANNEL_RUNNING,
+    CHANNEL_STOPPING
+  } state;
   char name[100];
+  bool advertise;         // Enable avahi advertising of services
+  bool use_dns;
   struct frontend *frontend; // Linkage to avoid global use
 
   int lifestart;         // Initial lifetime, frames
@@ -340,7 +345,9 @@ struct channel {
 };
 
 
+extern struct frontend Frontend;
 extern struct channel Channel_list[];
+extern struct channel Template;
 #define Nchannels 2000
 extern int Channel_idle_timeout;
 extern int Ctl_fd;     // File descriptor for receiving user commands
@@ -352,11 +359,13 @@ extern char const *Channel_keys[]; // Lists of valid keywords in config files
 extern double User_blocktime;
 extern double Blocktime;
 extern struct string_table opus_application[];
+extern pthread_mutex_t Channel_list_mutex;
+extern dictionary const *Preset_table;   // Table of presets, usually in /usr/local/share/ka9q-radio/presets.conf, never closed so can be const
+
 
 // Channel configuration, initialization & manipulation
 int loadconfig(char const *file);
-struct channel *create_chan(uint32_t ssrc);
-struct channel *lookup_chan(uint32_t ssrc);
+struct channel *lookup_or_create_chan(uint32_t ssrc,struct channel const *chan);
 int close_chan(struct channel *);
 int set_defaults(struct channel *chan);
 int loadpreset(struct channel *chan,dictionary const *table,char const *preset);

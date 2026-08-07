@@ -1,0 +1,26 @@
+block accumulation, double precision, alpha = 4e-7
+total 94.4% proc_rx888 17.1%, A/D -68.4 dBFS, gain -19.1 dB
+
+single precision
+proc_rx888 22.4% A/D -68.3 dBFS, gain = -19.1 dB
+
+code removed, single precision
+proc_rx888 17.5%, A/D -38.3 dBFS, gain = -19.1 dB
+
+single precision *except* for updating dc_offset
+proc_rx888 ~19%, total 98% A/D -68.4 dBFS, gain -19.1 dB
+
+
+Interesting pskreporter sites
+VK5ARG (VK5QI et al Adelaide remote)
+KD7EFG (Clint et al Northern Utah remote)
+
+VY0ERC
+DP0GVN
+KFS/OMNI
+KFS/SE
+KFS/NW, KFS/SW - poorly performing
+KPH1
+KPH2
+
+

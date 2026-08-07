@@ -1,0 +1,42 @@
+\section*{Robust Noise Floor Estimation from FFT Bin Powers}
+
+Given FFT bin powers \( P_k \sim \text{Exp}(\mu) \), the goal is to estimate the mean noise power \( \mu \) in the presence of signal contamination, without temporal averaging.
+
+\subsection*{1. Quantile-Based Estimator}
+
+Let \( p_q \) be the \( q \)-th quantile of the bin powers. Then the unbiased estimate is:
+
+\[
+\mu = \frac{p_q}{- \ln(1 - q)}
+\]
+
+\subsection*{2. Average of Lowest Fraction \( q \)}
+
+Let \( \bar{P}_{\text{lowest } q} \) be the average of the lowest \( q \cdot N \) sorted bin powers:
+
+\[
+\mu = \bar{P}_{\text{lowest } q} \cdot \frac{1}{1 - q + q \ln(1 - q)}
+\]
+
+\subsection*{3. Average of Bins Below a Threshold}
+
+Let \( p_q \) be the \( q \)-th quantile, and define a threshold \( T \cdot p_q \). Let \( z = T \cdot (-\ln(1 - q)) \). Then the expected mean of bins below this threshold is:
+
+\[
+\mu = \bar{P}_{\text{subset}} \cdot \frac{1}{1 - \frac{z e^{-z}}{1 - e^{-z}}}
+\]
+
+\subsection*{FFT Power Normalization}
+
+For an FFT of length \( N \) with window \( w[n] \), the bin power should be normalized as:
+
+\[
+P_k = \frac{|X_k|^2}{N \cdot \sum_{n=0}^{N-1} w[n]^2}
+\]
+
+\subsection*{Notes}
+\begin{itemize}
+  \item All quantile and average computations must be done in the \textbf{linear power domain}, not dB.
+  \item These formulas assume bins are independent or that enough are unaffected by signal.
+  \item For rectangular windows and noise-only input, quantile-based estimates remain valid.
+\end{itemize}
