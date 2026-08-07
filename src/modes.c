@@ -208,7 +208,7 @@ int set_defaults(struct channel *chan){
     return -1;
 
   chan->inuse = true;
-  snprintf(chan->name, sizeof chan->name, "new chan");
+  strlcpy(chan->name, "new chan", sizeof chan->name);
   chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
   chan->demod_type = DEFAULT_DEMOD;
   chan->linear.env = false;
