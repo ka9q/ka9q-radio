@@ -629,6 +629,8 @@ static void *agc_rx888(void *arg){
 	sdr->message_posted = (fabs(error) > 0.01);
       }
     }
+    if(frontend->if_power == 0)
+      continue; // avoid -Inf dB
     double scaled_new_power = frontend->if_power * scale_ADpower2FS(frontend);
     double new_dBFS = power2dB(scaled_new_power);
 
