@@ -99,7 +99,7 @@ static int find_serial_position(const char *serials, const char *serialnumcfg) {
 }
 
 ///////////////////////////////////////////////////////////
-int fobos_setup(struct frontend *const frontend, dictionary *const dictionary,
+int fobos_setup(struct frontend *const frontend, dictionary const * const dictionary,
                 char const *const section) {
   assert(dictionary != NULL);
   config_validate_section(stderr, dictionary, section, Fobos_keys, NULL);

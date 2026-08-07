@@ -67,7 +67,7 @@ static double set_correct_freq(struct sdrstate *sdr, double freq);
 static void * bladerf_monitor(void *p);
 
 int bladerf_setup(struct frontend * const frontend,
-		  dictionary * const Dictionary, char const * const section)
+		  dictionary const * const Dictionary, char const * const section)
 {
 	char const *p;
 	bladerf_channel ch = BLADERF_MODULE_RX;

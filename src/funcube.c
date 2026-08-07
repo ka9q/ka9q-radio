@@ -88,7 +88,7 @@ static void do_fcd_agc(struct sdrstate *);
 static double fcd_actual(unsigned int);
 double funcube_tune(struct frontend * const frontend,double const freq);
 
-int funcube_setup(struct frontend * const frontend, dictionary * const dictionary, char const * const section){
+int funcube_setup(struct frontend * const frontend, dictionary const * const dictionary, char const * const section){
   assert(dictionary != NULL);
   {
     char const * const device = config_getstring(dictionary,section,"device",section);

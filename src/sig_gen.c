@@ -72,7 +72,7 @@ double complex complex_gaussian(double);
 double real_gaussian(double);
 double sig_gen_tune(struct frontend * const frontend,double const freq);
 
-int sig_gen_setup(struct frontend * const frontend, dictionary * const dictionary, char const * const section){
+int sig_gen_setup(struct frontend * const frontend, dictionary const * const dictionary, char const * const section){
   assert(dictionary != NULL);
   {
     char const * const device = config_getstring(dictionary,section,"device",section);

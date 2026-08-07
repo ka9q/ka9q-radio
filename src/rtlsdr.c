@@ -106,7 +106,7 @@ static void rx_callback(uint8_t *buf,uint32_t len, void *ctx);
 static double true_freq(uint64_t freq);
 
 
-int rtlsdr_setup(struct frontend *frontend,dictionary *dictionary,char const *section){
+int rtlsdr_setup(struct frontend *frontend,dictionary const * const dictionary,char const *section){
   assert(dictionary != NULL);
 
   struct sdr * const sdr = (struct sdr *)calloc(1,sizeof(struct sdr));
