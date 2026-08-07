@@ -50,7 +50,7 @@ static int const DEFAULT_MCAST_TTL = 1; // LAN only, no routers
 static double Refresh_rate = 0.25;
 static char Locale[256] = "en_US.UTF-8";
 static char const *Presets_file = "presets.conf"; // make configurable!
-static dictionary *Pdict;
+dictionary const *Preset_table;
 struct frontend Frontend;
 struct sockaddr_storage Metadata_source_socket;      // Source of metadata
 
@@ -546,8 +546,8 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"Could not find mode file %s\n", Presets_file);
     exit(EX_NOINPUT);
   }
-  Pdict = iniparser_load(presetsfile_path);
-  if(Pdict == NULL){
+  Preset_table = iniparser_load(presetsfile_path);
+  if(Preset_table == NULL){
     fprintf(stdout,"Can't load mode file %s\n",presetsfile_path);
     exit(EX_NOINPUT);
   }
@@ -1023,10 +1023,10 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
       char str[Entry_width];
       char prompt[1024];
       snprintf(prompt,sizeof(prompt),"Mode/Preset [ ");
-      int const nsec = iniparser_getnsec(Pdict);
+      int const nsec = iniparser_getnsec(Preset_table);
 
       for(int i=0;i < nsec;i++){
-	strlcat(prompt,iniparser_getsecname(Pdict,i),sizeof(prompt));
+	strlcat(prompt,iniparser_getsecname(Preset_table,i),sizeof(prompt));
 	strlcat(prompt," ",sizeof(prompt));
       }
       strlcat(prompt,"]: ",sizeof(prompt));
@@ -1258,8 +1258,8 @@ static void process_mouse(struct channel *chan,uint8_t **bpp){
     } else if(Presets_win && wmouse_trafo(Presets_win,&my,&mx,false)){
       // In the presets window?
       my--;
-      if(my >= 0 && my < iniparser_getnsec(Pdict)){
-	char const *preset = iniparser_getsecname(Pdict,my);
+      if(my >= 0 && my < iniparser_getnsec(Preset_table)){
+	char const *preset = iniparser_getsecname(Preset_table,my);
 	encode_string(bpp,PRESET,preset,strlen(preset));
       }
 
@@ -1980,10 +1980,10 @@ static void display_presets(WINDOW *w,struct channel const *chan){
   // Can be selected with mouse
   int row = 1;
   int col = 1;
-  int npresets = iniparser_getnsec(Pdict);
+  int npresets = iniparser_getnsec(Preset_table);
 
   for(int i=0;i<npresets;i++){
-    char const * const cp = iniparser_getsecname(Pdict,i);
+    char const * const cp = iniparser_getsecname(Preset_table,i);
     if(strncasecmp(cp,chan->preset,sizeof(chan->preset)) == 0)
       wattron(w,A_UNDERLINE);
     else
