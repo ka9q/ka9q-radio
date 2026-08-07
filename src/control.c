@@ -562,7 +562,7 @@ int main(int argc,char *argv[]){
     // though any that disappear from radiod will remain on the list (not a big deal here)
     // The search exits after either a 100 ms timeout waiting for any incoming message OR 1 sec with no new channels seen
     // The second test is important when monitoring a status channel busy with 'control' polls or ka9q-web spectrum data
-    send_poll(0xffffffff);
+    send_poll(0xffffffffU);
     // Read responses
     int const chan_max = 1024;
     if(channels == NULL)
