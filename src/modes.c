@@ -418,7 +418,8 @@ int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
     if(cp){
       double const tc = strtod(cp,NULL) * 1e-6;
       unsigned int samprate = (chan->demod_type == WFM_DEMOD) ? FULL_SAMPRATE : chan->output.samprate;
-      chan->fm.rate = -expm1(-1.0 / (tc * samprate));
+      if(tc != 0)
+	chan->fm.rate = -expm1(-1.0 / (tc * samprate));
     }
   }
   {
