@@ -997,10 +997,8 @@ static int close_chan(struct channel *chan){
   }
   FREE(chan->output.queue);
   chan->output.queue_length = 0;
-  err = pthread_mutex_unlock(&chan->status.lock);
-  assert(err == 0);
-  err = pthread_mutex_destroy(&chan->status.lock);
-  assert(err == 0);
+  pthread_mutex_unlock(&chan->status.lock);
+  pthread_mutex_destroy(&chan->status.lock);
   chan->state = CHANNEL_IDLE;
   int c = atomic_fetch_sub(&Active_channel_count,1);
   if(c == 1 && Frontend.shutdown){
