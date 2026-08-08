@@ -967,6 +967,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   // Form complex impulse response by generating kaiser-windowed sinc pulse and shifting to desired center freq
   float complex * const response = lmalloc(N * sizeof *response);
   assert(response != NULL);
+  assert(((uintptr_t)response & 63u) == 0);
   fftwf_plan fwd_filter_plan = plan_complex(N,response,response,FFTW_FORWARD);
   memset(response, 0, N * sizeof *response);
   double window_gain = 0;
@@ -988,6 +989,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   assert(isfinite(gain) && gain != 0);
   for(int i = 0; i < M; i++)
     response[i] *= gain; // Normalize for the window gain
+  assert(((uintptr_t)response & 63u) == 0);
   fftwf_execute(fwd_filter_plan);
   fftwf_destroy_plan(fwd_filter_plan);
   fwd_filter_plan = NULL;
