@@ -1,0 +1,107 @@
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:20:00 +0000
+Subject: [PATCH 03/10] Fix missing NULL checks in filter allocations
+
+Multiple allocation sites in filter.c use lmalloc/calloc without
+checking for NULL returns. Since lmalloc() now properly returns NULL
+on failure (after patch 01/10), we must check all call sites.
+
+This patch adds NULL checks and proper error handling for:
+- create_filter_input() line 180
+- create_filter_output() lines 341, 342, 365, 367
+- execute_filter_input() line 577
+- set_filter() line 968
+
+Bug: Critical - NULL pointer dereference
+Risk: Immediate crash on memory allocation failure
+---
+ src/filter.c | 48 ++++++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 44 insertions(+), 4 deletions(-)
+
+diff --git a/src/filter.c b/src/filter.c
+index 1234567..abcdef0 100644
+--- a/src/filter.c
++++ b/src/filter.c
+@@ -177,7 +177,13 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum
+   // If there are no worker threads, do it inline
+   master->perform_inline = (N_worker_threads == 0);
+   for(int i=0; i < ND; i++){
+-    master->fdomain[i] = lmalloc(sizeof(float complex) * bins);
++    master->fdomain[i] = lmalloc(sizeof(float complex) * bins);
++    if(master->fdomain[i] == NULL){
++      fprintf(stderr,"create_filter_input: lmalloc fdomain[%d] failed: %s\n", i, strerror(errno));
++      for(int j = 0; j < i; j++)
++        FREE(master->fdomain[j]);
++      return -1;
++    }
+     master->completed_jobs[i] = UINT_MAX; // So startup won't drop any blocks
+   }
+   master->bins = bins;
+@@ -338,8 +344,16 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,fl
+       slave->olen = len;
+       slave->points = q; // Total number of FFT points including overlap
+       slave->bins = q;
+-      slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
+-      slave->output_buffer.c = lmalloc(sizeof(float complex) * slave->bins);
++      slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
++      if(slave->fdomain == NULL){
++        fprintf(stderr,"create_filter_output: lmalloc fdomain failed: %s\n", strerror(errno));
++        return -1;
++      }
++      slave->output_buffer.c = lmalloc(sizeof(float complex) * slave->bins);
++      if(slave->output_buffer.c == NULL){
++        fprintf(stderr,"create_filter_output: lmalloc output_buffer.c failed: %s\n", strerror(errno));
++        FREE(slave->fdomain);
++        return -1;
++      }
+       assert(slave->output_buffer.c != NULL);
+       slave->output_buffer.r = NULL; // catch erroneous references
+       slave->output.c = slave->output_buffer.c + slave->bins - len;
+@@ -362,8 +376,16 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,fl
+       slave->olen = len;
+       slave->points = q;
+       slave->bins = slave->points / 2 + 1;
+-      slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
++      slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
++      if(slave->fdomain == NULL){
++        fprintf(stderr,"create_filter_output: lmalloc fdomain (REAL) failed: %s\n", strerror(errno));
++        return -1;
++      }
+       assert(slave->fdomain != NULL);
+-      slave->output_buffer.r = lmalloc(sizeof(float) * slave->points);
++      slave->output_buffer.r = lmalloc(sizeof(float) * slave->points);
++      if(slave->output_buffer.r == NULL){
++        fprintf(stderr,"create_filter_output: lmalloc output_buffer.r failed: %s\n", strerror(errno));
++        FREE(slave->fdomain);
++        return -1;
++      }
+       assert(slave->output_buffer.r != NULL);
+       slave->output_buffer.c = NULL;
+@@ -574,7 +596,11 @@ int execute_filter_input(struct filter_in * const f){
+     f->sample_index += f->ilen;
+     return 0;
+   }
+-  struct fft_job *job = calloc(1,sizeof(struct fft_job)); // Otherwise create a new one
++  struct fft_job *job = calloc(1,sizeof(struct fft_job));
++  if(job == NULL){
++    fprintf(stderr,"execute_filter_input: calloc job failed: %s\n", strerror(errno));
++    return -1;
++  }
+   // A descriptor from the free list won't be blank, but we set everything below
+   assert(job != NULL);
+   job->fin = f;
+@@ -965,7 +991,11 @@ int set_filter(struct filter_out * const slave,double low,double high,double co
+
+   // Form complex impulse response by generating kaiser-windowed sinc pulse and shifting to desired center freq
+   float complex * const response = lmalloc(N * sizeof *response);
+-  assert(response != NULL);
++  if(response == NULL){
++    fprintf(stderr,"set_filter: lmalloc response failed: %s\n", strerror(errno));
++    return -1;
++  }
++
+   fftwf_plan fwd_filter_plan = plan_complex(N,response,response,FFTW_FORWARD);
+   memset(response, 0, N * sizeof *response);
+   double window_gain = 0;
+--
+2.40.0

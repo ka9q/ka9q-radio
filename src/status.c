@@ -105,18 +105,21 @@ int encode_float(uint8_t **buf,enum status_type type,double x){
   if(isnan(x))
     return 0; // Never encode a NAN
 
-  union result r;
-  r.f = (float)x;
-  return encode_int32(buf,type,r.l);
+  float f = (float)x;
+  uint32_t r;
+  // Use memcpy to avoid strict aliasing violation
+  memcpy(&r, &f, sizeof(float));
+  return encode_int32(buf,type,r);
 }
 
 int encode_double(uint8_t **buf,enum status_type type,double x){
   if(isnan(x))
     return 0; // Never encode a NAN
 
-  union result r;
-  r.d = x;
-  return encode_int64(buf,type,r.ll);
+  uint64_t r;
+  // Use memcpy to avoid strict aliasing violation
+  memcpy(&r, &x, sizeof(double));
+  return encode_int64(buf,type,r);
 }
 
 // Encode byte string without byte swapping
@@ -181,17 +184,16 @@ size_t encode_vector(uint8_t **bp,enum status_type type,float const *array,size_
   }
   // Encode the individual array elements
   // Right now they're DC....maxpositive maxnegative...minnegative
-  for(size_t i=0;i < size;i++){
+  for(size_t i=0; i < size; i++){
     // Swap but don't bother compressing leading zeroes for now
-    union {
-      uint32_t i;
-      float f;
-    } foo;
-    foo.f = array[i];
-    *cp++ = (uint8_t)(foo.i >> 24);
-    *cp++ = (uint8_t)(foo.i >> 16);
-    *cp++ = (uint8_t)(foo.i >> 8);
-    *cp++ = (uint8_t)foo.i;
+    uint32_t foo;
+    // Use memcpy to avoid strict aliasing violation
+    memcpy(&foo, &array[i], sizeof(float));
+
+    *cp++ = (uint8_t)(foo >> 24);
+    *cp++ = (uint8_t)(foo >> 16);
+    *cp++ = (uint8_t)(foo >> 8);
+    *cp++ = (uint8_t)foo;
   }
   *bp = cp;
   return cp - orig_bp;

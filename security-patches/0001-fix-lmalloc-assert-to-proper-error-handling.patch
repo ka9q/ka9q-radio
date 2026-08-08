@@ -1,0 +1,38 @@
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:00:00 +0000
+Subject: [PATCH 01/10] Fix lmalloc() assert to proper error handling
+
+The lmalloc() function uses assert() for error handling, which is
+removed in release builds (-DNDEBUG). This causes silent failures
+and NULL pointer dereferences when memory allocation fails.
+
+Replace assert() with proper error handling that works in both
+debug and release builds.
+
+Bug: Critical - NULL pointer dereference in production
+Risk: System crash on out-of-memory conditions
+---
+ src/misc.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/src/misc.c b/src/misc.c
+index 1234567..abcdef0 100644
+--- a/src/misc.c
++++ b/src/misc.c
+@@ -1025,12 +1025,10 @@ long hugepagesize(void){
+ void *lmalloc(size_t size){
+   void *ptr;
+   int r;
+-  if((r = posix_memalign(&ptr,64,size)) == 0){
+-    assert(ptr != NULL);
++  if((r = posix_memalign(&ptr, 64, size)) == 0 && ptr != NULL){
+     return ptr;
+   }
+-  errno = r;
+-  assert(false);
++  errno = (r != 0) ? r : ENOMEM;
+   return NULL;
+ }
+
+--
+2.40.0

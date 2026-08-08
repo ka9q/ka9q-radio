@@ -661,11 +661,11 @@ static int setup_hardware(char const *sname){
   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
   // Create list of frequency spurs in filter input (experimental)
   Frontend.in.notches = calloc(NSPURS+1,sizeof (struct notch_state));
-  struct notch_state *notch = Frontend.in.notches;
-  if(notch == NULL){
+  if(Frontend.in.notches == NULL){
     fprintf(stderr,"calloc failed in notch filter setup\n");
-    // Will probably crash later, but try to keep going
+    fprintf(stderr,"Continuing without spur notch filtering (experimental feature)\n");
   } else {
+    struct notch_state *notch = Frontend.in.notches;
     // Initialize spur list. MUST leave last entry zeroed as sentinel; also doubles as 0 Hz (DC) suppression
     for(int i = 0; i < NSPURS; i++){
       int shift;
@@ -942,6 +942,22 @@ static void *process_section(void *p){
     // Be careful with shallow copies like this; although the pointers in the channel structure are still NULL
     // the ssrc and inuse fields are active and must be cleaned up. Are there any others...?
     *chan = chan_template;
+
+    // NULL out all dynamically allocated pointers to prevent double-free
+    // These will be allocated when actually needed
+    chan->baseband = NULL;
+    chan->spectrum.bin_data = NULL;
+    chan->spectrum.window = NULL;
+    chan->spectrum.ring = NULL;
+    chan->spectrum.plan = NULL;
+    chan->output.queue = NULL;
+    for(int i = 0; i < CQLEN; i++){
+      chan->commands[i].buffer = NULL;
+      chan->commands[i].length = 0;
+    }
+    chan->filter.out.response = NULL;
+    chan->filter2.out.response = NULL;
+
     chan->output.rtp.ssrc = ssrc; // restore after template copy
     snprintf(chan->name, sizeof chan->name, "%s %u", demod_name_from_type(chan->demod_type), chan->output.rtp.ssrc);
     chan->fm.tone_freq = freq_table[i].tone;
@@ -1010,6 +1026,22 @@ struct channel *create_chan(uint32_t ssrc){
     assert(Blocktime != 0);
     // Because the memcpy clobbers the ssrc, we must keep the lock held on Channel_list_mutex
     *chan = Template; // Template.inuse is already set
+
+    // NULL out all dynamically allocated pointers to prevent double-free
+    // These will be allocated when actually needed
+    chan->baseband = NULL;
+    chan->spectrum.bin_data = NULL;
+    chan->spectrum.window = NULL;
+    chan->spectrum.ring = NULL;
+    chan->spectrum.plan = NULL;
+    chan->output.queue = NULL;
+    for(int i = 0; i < CQLEN; i++){
+      chan->commands[i].buffer = NULL;
+      chan->commands[i].length = 0;
+    }
+    chan->filter.out.response = NULL;
+    chan->filter2.out.response = NULL;
+
     chan->frontend = &Frontend; // Should be already set in template, but just be sure
     chan->output.rtp.ssrc = ssrc; // Stash it
     chan->lifetime = 0; // unlimited by default

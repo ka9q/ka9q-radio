@@ -439,6 +439,10 @@ char const *formatsock(void const *s,bool full){
   pthread_mutex_unlock(&Formatsock_mutex); // Let go of the lock, this will take a while
   // Not in list yet
   struct inverse_cache * const ic = (struct inverse_cache *)calloc(1, sizeof(*ic));
+  if(ic == NULL){
+    fprintf(stderr,"formatsock: calloc failed: %s\n", strerror(errno));
+    return "(allocation failed)";
+  }
   assert(ic != NULL); // Malloc failures are rare
   char host[NI_MAXHOST] = {0}, port[NI_MAXSERV] = {0}, hostname[NI_MAXHOST] = {0};
   getnameinfo(sa, slen,

@@ -1,0 +1,40 @@
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:50:00 +0000
+Subject: [PATCH 06/10] Fix file descriptor leak in mirror_alloc() on error
+
+In mirror_alloc(), if the third mmap() call fails (line 1133), the
+function sets base to NULL but does not close the file descriptor
+before returning. This leads to FD exhaustion over time.
+
+The same pattern exists in mirror_alloc_huge() at line 1084.
+
+Bug: High - File descriptor leak
+Risk: Process can run out of FDs, causing "too many open files" errors
+---
+ src/misc.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/misc.c b/src/misc.c
+index 1234567..abcdef0 100644
+--- a/src/misc.c
++++ b/src/misc.c
+@@ -1081,6 +1081,7 @@ static void *mirror_alloc_huge(size_t size){
+   uint8_t *mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_HUGETLB|MAP_FIXED|MAP_SHARED, fd, 0);
+   if(mirror != base + size){
+     perror("mirror_alloc_huge 3rd mmap");
++    close(fd); // Don't leak FD on failure
+     munmap(base,size * 2);
+     base = NULL;
+   }
+@@ -1132,7 +1133,7 @@ void *mirror_alloc(size_t size){
+   uint8_t *mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
+   if(mirror != base + size){
+     perror("mirror_alloc 3rd mmap");
++    close(fd); // Don't leak FD on failure
+     munmap(base,size * 2);
+     base = NULL;
+   }
+-  close(fd); // No longer needed after all memory maps are in place
+   return base;
+--
+2.40.0

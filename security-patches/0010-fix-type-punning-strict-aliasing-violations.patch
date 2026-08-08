@@ -1,0 +1,73 @@
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 13:30:00 +0000
+Subject: [PATCH 10/10] Fix type punning strict aliasing violations
+
+The encode_vector() and encode_float() functions use union type
+punning to reinterpret float values as integers for byte-swapping.
+While this is common practice, it violates strict aliasing rules
+and is implementation-defined behavior in C.
+
+This patch replaces union punning with memcpy(), which is the
+standard-compliant way to perform type punning and is optimized
+to the same code by modern compilers.
+
+Bug: Medium - Undefined behavior with strict aliasing
+Risk: Compiler optimizations may break code, portability issues
+---
+ src/filter.c | 11 +++++------
+ src/status.c | 10 ++++------
+ 2 files changed, 9 insertions(+), 12 deletions(-)
+
+diff --git a/src/filter.c b/src/filter.c
+index 1234567..abcdef0 100644
+--- a/src/filter.c
++++ b/src/filter.c
+@@ -182,13 +182,12 @@ size_t encode_vector(uint8_t **bp,enum status_type type,float const *array,siz
+   }
+   // Encode the individual array elements
+   // Right now they're DC....maxpositive maxnegative...minnegative
+-  for(size_t i=0;i < size;i++){
++  for(size_t i = 0; i < size; i++){
+     // Swap but don't bother compressing leading zeroes for now
+-    union {
+-      uint32_t i;
+-      float f;
+-    } foo;
+-    foo.f = array[i];
++    uint32_t foo;
++    // Use memcpy to avoid strict aliasing violation
++    memcpy(&foo, &array[i], sizeof(float));
++
+     *cp++ = (uint8_t)(foo.i >> 24);
+     *cp++ = (uint8_t)(foo.i >> 16);
+     *cp++ = (uint8_t)(foo.i >> 8);
+diff --git a/src/status.c b/src/status.c
+index 1234567..abcdef0 100644
+--- a/src/status.c
++++ b/src/status.c
+@@ -103,9 +103,8 @@ int encode_int(uint8_t **buf,enum status_type type,int x){
+ int encode_float(uint8_t **buf,enum status_type type,double x){
+   if(isnan(x))
+     return 0; // Never encode a NAN
+-
+-  union result r;
+-  r.f = (float)x;
++  float f = (float)x;
++  uint32_t r;
++  memcpy(&r, &f, sizeof(float));
+   return encode_int32(buf,type,r.l);
+ }
+
+@@ -113,9 +112,8 @@ int encode_float(uint8_t **buf,enum status_type type,double x){
+ int encode_double(uint8_t **buf,enum status_type type,double x){
+   if(isnan(x))
+     return 0; // Never encode a NAN
+-
+-  union result r;
+-  r.d = x;
++  uint64_t r;
++  memcpy(&r, &x, sizeof(double));
+   return encode_int64(buf,type,r.ll);
+ }
+--
+2.40.0

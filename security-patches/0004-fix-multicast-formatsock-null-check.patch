@@ -1,0 +1,36 @@
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:30:00 +0000
+Subject: [PATCH 04/10] Fix missing NULL check in multicast formatsock()
+
+The formatsock() function allocates memory with calloc() but uses
+assert() instead of proper NULL checking. The comment "Malloc failures
+are rare" is a dangerous assumption that can lead to crashes in
+production.
+
+This patch adds proper NULL checking and error handling.
+
+Bug: Critical - NULL pointer dereference
+Risk: Crash when memory is exhausted
+---
+ src/multicast.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/multicast.c b/src/multicast.c
+index 1234567..abcdef0 100644
+--- a/src/multicast.c
++++ b/src/multicast.c
+@@ -438,7 +438,11 @@ char const *formatsock(void const *s,bool full){
+   }
+   pthread_mutex_unlock(&Formatsock_mutex); // Let go of the lock, this will take a while
+   // Not in list yet
+-  struct inverse_cache * const ic = (struct inverse_cache *)calloc(1, sizeof(*ic));
++  struct inverse_cache * const ic = (struct inverse_cache *)calloc(1, sizeof(*ic));
++  if(ic == NULL){
++    fprintf(stderr,"formatsock: calloc failed: %s\n", strerror(errno));
++    return "(allocation failed)";
++  }
+   assert(ic != NULL); // Malloc failures are rare
+   char host[NI_MAXHOST] = {0}, port[NI_MAXSERV] = {0}, hostname[NI_MAXHOST] = {0};
+   getnameinfo(sa, slen,
+--
+2.40.0

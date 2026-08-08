@@ -1,0 +1,38 @@
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:40:00 +0000
+Subject: [PATCH 05/10] Fix missing NULL check in hid-libusb new_hid_device()
+
+The new_hid_device() function allocates a HID device structure with
+calloc() but only uses assert() for error checking. This is removed
+in release builds, leading to NULL pointer dereference.
+
+This patch adds proper NULL checking and cleanup on failure.
+
+Bug: Critical - NULL pointer dereference
+Risk: Crash when opening USB HID devices with low memory
+---
+ src/hid-libusb.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/hid-libusb.c b/src/hid-libusb.c
+index 1234567..abcdef0 100644
+--- a/src/hid-libusb.c
++++ b/src/hid-libusb.c
+@@ -131,8 +131,13 @@ static int return_data(hid_device *dev, unsigned char *data, size_t length);
+
+ static hid_device *new_hid_device(void)
+ {
+-	hid_device *dev = calloc(1, sizeof(hid_device));
+-	assert(dev != NULL);
++	hid_device *dev = calloc(1, sizeof(hid_device));
++	if(dev == NULL){
++		LOG("new_hid_device: calloc failed\n");
++		return NULL;
++	}
++
++	// Initialize synchronization primitives
+ 	dev->blocking = 1;
+
+ 	pthread_mutex_init(&dev->mutex, NULL);
+--
+2.40.0

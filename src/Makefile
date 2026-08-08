@@ -53,8 +53,29 @@ ifdef SANITIZE
 endif
 
 ifeq ($(UNAME_S),Darwin)
-  INCLUDES += -I/opt/local/include
-  LDFLAGS  += -L/opt/local/lib
+  # Auto-detect Homebrew or MacPorts
+  HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null)
+  ifneq ($(HOMEBREW_PREFIX),)
+    # Homebrew detected
+    INCLUDES += -I$(HOMEBREW_PREFIX)/include
+    LDFLAGS  += -L$(HOMEBREW_PREFIX)/lib
+    # gettext is keg-only in Homebrew, add explicit paths
+    GETTEXT_PREFIX := $(shell brew --prefix gettext 2>/dev/null)
+    ifneq ($(GETTEXT_PREFIX),)
+      INCLUDES += -I$(GETTEXT_PREFIX)/include
+      LDFLAGS  += -L$(GETTEXT_PREFIX)/lib
+    endif
+    # ncurses is keg-only in Homebrew, add explicit paths
+    NCURSES_PREFIX := $(shell brew --prefix ncurses 2>/dev/null)
+    ifneq ($(NCURSES_PREFIX),)
+      INCLUDES += -I$(NCURSES_PREFIX)/include
+      LDFLAGS  += -L$(NCURSES_PREFIX)/lib
+    endif
+  else
+    # Fallback to MacPorts
+    INCLUDES += -I/opt/local/include
+    LDFLAGS  += -L/opt/local/lib
+  endif
   LDLIBS += -lintl -liconv
   SOFLAGS += -bundle -Wl,-undefined,dynamic_lookup
 else
@@ -80,7 +101,13 @@ ARCHOPTS = -march=native
 endif
 
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
-COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -Wextra -MMD -MP
+COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP
+
+# -fcx-limited-range is GCC-only, not supported by Clang
+ifeq ($(IS_GCC_NOT_CLANG),yes)
+COPTS += -fcx-limited-range
+endif
+
 COPTS += -fPIC
 CFLAGS += $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
 

@@ -1025,12 +1025,10 @@ size_t round_to_hugepage(size_t size){
 void *lmalloc(size_t size){
   void *ptr;
   int r;
-  if((r = posix_memalign(&ptr,64,size)) == 0){
-    assert(ptr != NULL);
+  if((r = posix_memalign(&ptr, 64, size)) == 0 && ptr != NULL){
     return ptr;
   }
-  errno = r;
-  assert(false);
+  errno = (r != 0) ? r : ENOMEM;
   return NULL;
 }
 
