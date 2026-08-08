@@ -180,8 +180,13 @@ int main(int argc,char * const argv[]){
     DAC_samprate = config_getint(Configtable,Audio,"samprate",DAC_samprate);
     Channels = config_getint(Configtable,Audio,"channels",Channels);
     char const *audiodev = config_getstring(Configtable,Audio,"device",NULL);
-    if(audiodev)
+    if(audiodev){
       Audiodev = strdup(audiodev);
+      if(Audiodev == NULL){
+        fprintf(stderr,"strdup(audiodev) failed: %s\n", strerror(errno));
+        exit(EX_OSERR);
+      }
+    }
     // Add validity checking
 
 #if __linux__
@@ -190,6 +195,10 @@ int main(int argc,char * const argv[]){
 
     Gain = config_getdouble(Configtable,Audio,"gain",Gain);
     Cwid = strdup(config_getstring(Configtable,Repeater,"id","NOCALL"));
+    if(Cwid == NULL){
+      fprintf(stderr,"strdup(Cwid) failed: %s\n", strerror(errno));
+      exit(EX_OSERR);
+    }
     // 600 sec is 10 minutes, max ID interval per FCC 97.119(a)
     int const period = config_getint(Configtable,Repeater,"period",600);
     int pperiod = config_getint(Configtable,Repeater,"pperiod",period/2);
@@ -212,18 +221,38 @@ int main(int argc,char * const argv[]){
     Verbose = config_getboolean(Configtable,Display,"verbose",Verbose);
     char const *txon = config_getstring(Configtable,Radio,"txon",NULL);
     char const *txoff = config_getstring(Configtable,Radio,"txoff",NULL);
-    if(txon)
+    if(txon){
       Tx_on = strdup(txon);
-    if(txoff)
+      if(Tx_on == NULL){
+        fprintf(stderr,"strdup(Tx_on) failed: %s\n", strerror(errno));
+        exit(EX_OSERR);
+      }
+    }
+    if(txoff){
       Tx_off = strdup(txoff);
+      if(Tx_off == NULL){
+        fprintf(stderr,"strdup(Tx_off) failed: %s\n", strerror(errno));
+        exit(EX_OSERR);
+      }
+    }
 
     char const *init = config_getstring(Configtable,Radio,"init",NULL);
-    if(init)
+    if(init){
       Init = strdup(init);
+      if(Init == NULL){
+        fprintf(stderr,"strdup(Init) failed: %s\n", strerror(errno));
+        exit(EX_OSERR);
+      }
+    }
 
     char const *input = config_getstring(Configtable,Audio,"input",NULL);
-    if(input)
+    if(input){
       Mcast_address_text[Nfds++] = strdup(input);
+      if(Mcast_address_text[Nfds-1] == NULL){
+        fprintf(stderr,"strdup(input) failed: %s\n", strerror(errno));
+        exit(EX_OSERR);
+      }
+    }
     iniparser_freedict(Configtable);
     Configtable = NULL;
   }

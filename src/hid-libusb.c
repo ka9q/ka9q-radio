@@ -132,7 +132,12 @@ static int return_data(hid_device *dev, unsigned char *data, size_t length);
 static hid_device *new_hid_device(void)
 {
 	hid_device *dev = calloc(1, sizeof(hid_device));
-	assert(dev != NULL);
+	if(dev == NULL){
+		LOG("new_hid_device: calloc failed\n");
+		return NULL;
+	}
+
+	// Initialize synchronization primitives
 	dev->blocking = 1;
 
 	pthread_mutex_init(&dev->mutex, NULL);
