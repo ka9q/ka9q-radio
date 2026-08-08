@@ -1007,7 +1007,7 @@ static int close_chan(struct channel *chan){
   chan->output.queue_length = 0;
   pthread_mutex_unlock(&chan->status.lock);
   int err = pthread_mutex_destroy(&chan->status.lock);
-  (void);
+  (void)err;
   assert(err == 0);
   pthread_mutex_lock(&Channel_list_mutex);
   chan->state = CHANNEL_IDLE;
