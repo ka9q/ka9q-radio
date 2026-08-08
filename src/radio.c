@@ -877,7 +877,7 @@ struct channel *lookup_or_create_chan(uint32_t ssrc,struct channel const *templa
 	first_unused = i; // Note first unused entry in case we need it
       continue;
     }
-    if(chan->state == CHANNEL_ACTIVE && chan->output.rtp.ssrc == ssrc){
+    if(chan->state == CHANNEL_RUNNING && chan->output.rtp.ssrc == ssrc){
       // Found existing channel
       pthread_mutex_lock(&chan->status.lock);
       pthread_mutex_unlock(&Channel_list_mutex);
@@ -975,7 +975,7 @@ static int close_chan(struct channel *chan){
     return -1;
 
   pthread_mutex_lock(&Channel_list_mutex);
-  assert(chan->state == CHANNEL_ACTIVE);
+  assert(chan->state == CHANNEL_RUNNING);
   chan->state = CHANNEL_STOPPING;
   pthread_mutex_unlock(&Channel_list_mutex);
 
