@@ -827,16 +827,18 @@ static void *process_section(void *arg){
       fprintf(stderr,"Can't allocate requested ssrc in range %u-%u\n",ssrc-max_collisions,ssrc);
       continue;
     }
-    if(chan->state == CHANNEL_RUNNING){
+    if(chan->state != CHANNEL_STARTING){
       pthread_mutex_unlock(&chan->status.lock);
-      continue; // Already created
+      continue; // Already created?
     }
     // Set channel-specific fields
     snprintf(chan->name, sizeof chan->name, "%s %u", demod_name_from_type(chan->demod_type), chan->output.rtp.ssrc);
     chan->fm.tone_freq = freq_table[i].tone;
     set_freq(chan,freq_table[i].f);
-    chan->state = CHANNEL_RUNNING;
     pthread_mutex_unlock(&chan->status.lock);
+    pthread_mutex_lock(&Channel_list_mutex);
+    chan->state = CHANNEL_RUNNING;
+    pthread_mutex_unlock(&Channel_list_mutex);
     start_demod(chan);
     Total_channels++;
     section_chans++;
@@ -875,7 +877,7 @@ struct channel *lookup_or_create_chan(uint32_t ssrc,struct channel const *templa
 	first_unused = i; // Note first unused entry in case we need it
       continue;
     }
-    if(chan->output.rtp.ssrc == ssrc){
+    if(chan->state == CHANNEL_ACTIVE && chan->output.rtp.ssrc == ssrc){
       // Found existing channel
       pthread_mutex_lock(&chan->status.lock);
       pthread_mutex_unlock(&Channel_list_mutex);
@@ -972,10 +974,12 @@ static int close_chan(struct channel *chan){
   if(chan == NULL || chan->state == CHANNEL_IDLE)
     return -1;
 
-  pthread_mutex_lock(&Channel_list_mutex); // protect inuse flag and status lock
-  pthread_mutex_lock(&chan->status.lock);
+  pthread_mutex_lock(&Channel_list_mutex);
+  assert(chan->state == CHANNEL_ACTIVE);
   chan->state = CHANNEL_STOPPING;
+  pthread_mutex_unlock(&Channel_list_mutex);
 
+  // Change these to use boolean flags
   pthread_t nullthread = {0};
   if(chan->rtcp.thread != nullthread){
     pthread_cancel(chan->rtcp.thread);
@@ -985,6 +989,10 @@ static int close_chan(struct channel *chan){
     pthread_cancel(chan->sap.thread);
     pthread_join(chan->sap.thread,NULL);
   }
+  pthread_mutex_lock(&Channel_list_mutex);
+  pthread_mutex_lock(&chan->status.lock);
+  pthread_mutex_unlock(&Channel_list_mutex);
+
   for(int i=0; i < CQLEN; i++){
     FREE(chan->commands[i].buffer);
     chan->commands[i].length = 0;
@@ -998,7 +1006,10 @@ static int close_chan(struct channel *chan){
   FREE(chan->output.queue);
   chan->output.queue_length = 0;
   pthread_mutex_unlock(&chan->status.lock);
-  pthread_mutex_destroy(&chan->status.lock);
+  int err = pthread_mutex_destroy(&chan->status.lock);
+  (void);
+  assert(err == 0);
+  pthread_mutex_lock(&Channel_list_mutex);
   chan->state = CHANNEL_IDLE;
   int c = atomic_fetch_sub(&Active_channel_count,1);
   if(c == 1 && Frontend.shutdown){
@@ -1117,6 +1128,7 @@ int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, d
 }
 
 // RTP control protocol sender task
+// this thread is joined during shutdown with the channel lock held, so this cannot hold it
 static void *rtcp_send(void *arg){
   struct channel *chan = (struct channel *)arg;
   if(chan == NULL)

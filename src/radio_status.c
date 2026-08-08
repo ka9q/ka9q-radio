@@ -81,13 +81,17 @@ void *radio_status(void *arg){
 	// We have the lock on chan->status.lock
 	switch(chan->state){
 	default:
+	  pthread_mutex_unlock(&chan->status.lock); // can't happen
 	  break;
 	case CHANNEL_STARTING:
 	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	  decode_radio_commands(chan,buffer+1,length-1);
 	  send_radio_status((struct sockaddr *)&chan->frontend->metadata_dest_socket,chan->frontend,chan); // Send status in response
 	  chan->status.global_timer = 0; // Just sent one
+	  pthread_mutex_unlock(&chan->status.lock); // release lock set by lookup_chan(), let demod run
+	  pthread_mutex_lock(&Channel_list_mutex);
 	  chan->state = CHANNEL_RUNNING;
+	  pthread_mutex_unlock(&Channel_list_mutex);
 	  start_demod(chan);
 	  if(Verbose)
 	    fprintf(stderr,"%u dynamically started\n",ssrc); // chan->name not set yet
@@ -105,9 +109,9 @@ void *radio_status(void *arg){
 	      break;
 	    }
 	  }
+	  pthread_mutex_unlock(&chan->status.lock); // release lock set by lookup_chan(), let demod run
 	  break;
 	} // send switch(chan->state)
-	pthread_mutex_unlock(&chan->status.lock); // release lock set by lookup_chan(), let demod run
       }
     } // end of switch(ssrc)
   } // end of while(true)
