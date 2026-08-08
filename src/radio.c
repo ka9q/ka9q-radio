@@ -89,7 +89,7 @@ struct frontend Frontend = {
 struct channel Template;
 pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
-static _Atomic int Active_channel_count = ATOMIC_VAR_INIT(0); // Active channels
+static _Atomic int Active_channel_count = ATOMIC_VAR_INIT(0); // doesn't really need to be atomic
 
 // List of valid config keys in [global] section, for error checking
 static char const *Global_keys[] = {
