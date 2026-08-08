@@ -16,6 +16,7 @@
 #include <iniparser/iniparser.h>
 #include <dlfcn.h>
 #include <opus/opus.h>
+#include <stdatomic.h>
 
 #include "config.h"
 #include "multicast.h"
@@ -139,7 +140,7 @@ Be careful with memcpy(): there are a few pointers (spectrum.bin_data, status.co
 If you use these in shadow copies you must malloc these arrays yourself.
 */
 struct channel {
-  enum {
+  _Atomic enum {
     CHANNEL_IDLE = 0,
     CHANNEL_STARTING,
     CHANNEL_RUNNING,
@@ -343,6 +344,7 @@ struct channel {
   uint64_t options;
   double tp1,tp2; // Spare test points that can be read on the status channel
 };
+typedef struct channel chan_t;
 
 
 extern struct frontend Frontend;
@@ -366,7 +368,6 @@ extern dictionary const *Preset_table;   // Table of presets, usually in /usr/lo
 // Channel configuration, initialization & manipulation
 int loadconfig(char const *file);
 struct channel *lookup_or_create_chan(uint32_t ssrc,struct channel const *chan);
-int close_chan(struct channel *);
 int set_defaults(struct channel *chan);
 int loadpreset(struct channel *chan,dictionary const *table,char const *preset);
 int start_demod(struct channel * restrict chan);

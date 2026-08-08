@@ -144,6 +144,8 @@ static int setup_hardware(char const *sname);
 static void *process_section(void *p);
 static void *sap_send(void *p);
 static void *rtcp_send(void *p);
+static int close_chan(struct channel *chan);
+
 // Table of frequencies to start
 struct ftab {
   double f;
@@ -506,6 +508,7 @@ static int setup_hardware(char const *sname){
       return -1;
     }
     fprintf(stderr,"Dynamically loading %s hardware driver from %s\n",device,dlname);
+    // Do not close - must remain open for symbols to be valid
     Dl_handle = dlopen(dlname,RTLD_GLOBAL|RTLD_NOW);
     if(Dl_handle == NULL){
       char *error = dlerror();
@@ -860,7 +863,7 @@ static void *process_section(void *arg){
 // Atomically find chan by ssrc, or create and initialize if it doesn't already exist
 // ! LOCKS the channel status !
 struct channel *lookup_or_create_chan(uint32_t ssrc,struct channel const *template){
-  if(ssrc == 0xffffffff)
+  if(ssrc == 0xffffffffu)
     return NULL; // reserved
 
   pthread_mutex_lock(&Channel_list_mutex); // protect state
@@ -947,7 +950,6 @@ static void *demod_thread(void *p){
   close_chan(chan);
   return NULL;
 }
-
 // start demod thread on already-initialized chan structure
 int start_demod(struct channel * chan){
   assert(chan != NULL);
@@ -965,15 +967,13 @@ int start_demod(struct channel * chan){
 
 // Called by a demodulator to clean up its own resources
 // Some of this stuff should already be cleaned up, but make sure
-int close_chan(struct channel *chan){
+static int close_chan(struct channel *chan){
   assert(chan != NULL && chan->state != CHANNEL_IDLE);
   if(chan == NULL || chan->state == CHANNEL_IDLE)
     return -1;
 
   pthread_mutex_lock(&Channel_list_mutex); // protect inuse flag and status lock
-  int err = pthread_mutex_trylock(&chan->status.lock);
-  (void)err;
-  assert(err == 0);
+  pthread_mutex_lock(&chan->status.lock);
   chan->state = CHANNEL_STOPPING;
 
   pthread_t nullthread = {0};
@@ -985,7 +985,6 @@ int close_chan(struct channel *chan){
     pthread_cancel(chan->sap.thread);
     pthread_join(chan->sap.thread,NULL);
   }
-  pthread_mutex_lock(&chan->status.lock);
   for(int i=0; i < CQLEN; i++){
     FREE(chan->commands[i].buffer);
     chan->commands[i].length = 0;
