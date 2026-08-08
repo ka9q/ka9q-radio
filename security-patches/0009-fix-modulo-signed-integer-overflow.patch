@@ -1,0 +1,41 @@
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 13:20:00 +0000
+Subject: [PATCH 09/10] Fix signed integer overflow in modulo() function
+
+The modulo() function at line 80 in filter.c has undefined behavior
+when x < -m. The expression (x + m) can still be negative, leading
+to incorrect results and potential undefined behavior with signed
+integer overflow.
+
+This patch fixes the modulo function to handle all cases correctly
+using a proper mathematical modulo operation.
+
+Bug: Medium - Undefined behavior with signed integers
+Risk: Incorrect frequency bin calculations, potential crashes
+---
+ src/filter.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/filter.c b/src/filter.c
+index 1234567..abcdef0 100644
+--- a/src/filter.c
++++ b/src/filter.c
+@@ -77,9 +77,14 @@ static struct fft FFT = {
+   .queue_mutex = PTHREAD_MUTEX_INITIALIZER,
+   .queue_cond = PTHREAD_COND_INITIALIZER
+ };
++
++// Proper mathematical modulo that handles negative numbers correctly
+ static inline int modulo(int x,int const m){
+-  return x < 0 ? x + m : x >= m ? x - m : x;
++  int r = x % m;
++  if(r < 0)
++    r += m;
++  return r;
+ }
++
+ // in MAY be the same as out, meaning a in-place transform.
+ fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction){
+   bool notify = false;
+--
+2.40.0

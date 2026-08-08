@@ -1,0 +1,90 @@
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 13:10:00 +0000
+Subject: [PATCH 08/10] Fix missing NULL checks for strdup in monitor.c
+
+Multiple strdup() calls in monitor.c configuration loading do not
+check for NULL returns. This can lead to NULL pointer dereferences
+when memory is low during initialization.
+
+This patch adds NULL checks for all strdup() calls and provides
+graceful degradation with error messages.
+
+Bug: High - NULL pointer dereference during initialization
+Risk: Crash on startup with low memory conditions
+---
+ src/monitor.c | 30 ++++++++++++++++++++++++++++--
+ 1 file changed, 28 insertions(+), 2 deletions(-)
+
+diff --git a/src/monitor.c b/src/monitor.c
+index 1234567..abcdef0 100644
+--- a/src/monitor.c
++++ b/src/monitor.c
+@@ -181,7 +181,11 @@ int main(int argc,char *argv[]){
+     Channels = config_getint(Configtable,Audio,"channels",Channels);
+     char const *audiodev = config_getstring(Configtable,Audio,"device",NULL);
+     if(audiodev)
+-      Audiodev = strdup(audiodev);
++      Audiodev = strdup(audiodev);
++      if(Audiodev == NULL){
++        fprintf(stderr,"strdup(audiodev) failed: %s\n", strerror(errno));
++        exit(EX_OSERR);
++      }
++    }
+     // Add validity checking
+
+ #if __linux__
+@@ -189,7 +193,11 @@ int main(int argc,char *argv[]){
+ #endif
+
+     Gain = config_getdouble(Configtable,Audio,"gain",Gain);
+-    Cwid = strdup(config_getstring(Configtable,Repeater,"id","NOCALL"));
++    Cwid = strdup(config_getstring(Configtable,Repeater,"id","NOCALL"));
++    if(Cwid == NULL){
++      fprintf(stderr,"strdup(Cwid) failed: %s\n", strerror(errno));
++      exit(EX_OSERR);
++    }
+     // 600 sec is 10 minutes, max ID interval per FCC 97.119(a)
+     int const period = config_getint(Configtable,Repeater,"period",600);
+     int pperiod = config_getint(Configtable,Repeater,"pperiod",period/2);
+@@ -213,13 +221,31 @@ int main(int argc,char *argv[]){
+     char const *txon = config_getstring(Configtable,Radio,"txon",NULL);
+     char const *txoff = config_getstring(Configtable,Radio,"txoff",NULL);
+     if(txon)
+-      Tx_on = strdup(txon);
++      Tx_on = strdup(txon);
++      if(Tx_on == NULL){
++        fprintf(stderr,"strdup(Tx_on) failed: %s\n", strerror(errno));
++        exit(EX_OSERR);
++      }
++    }
+     if(txoff)
+-      Tx_off = strdup(txoff);
++      Tx_off = strdup(txoff);
++      if(Tx_off == NULL){
++        fprintf(stderr,"strdup(Tx_off) failed: %s\n", strerror(errno));
++        exit(EX_OSERR);
++      }
++    }
+
+     char const *init = config_getstring(Configtable,Radio,"init",NULL);
+     if(init)
+-      Init = strdup(init);
++      Init = strdup(init);
++      if(Init == NULL){
++        fprintf(stderr,"strdup(Init) failed: %s\n", strerror(errno));
++        exit(EX_OSERR);
++      }
++    }
+
+     char const *input = config_getstring(Configtable,Audio,"input",NULL);
+     if(input)
+-      Mcast_address_text[Nfds++] = strdup(input);
++      Mcast_address_text[Nfds++] = strdup(input);
++      if(Mcast_address_text[Nfds-1] == NULL){
++        fprintf(stderr,"strdup(input) failed: %s\n", strerror(errno));
++        exit(EX_OSERR);
++      }
++    }
+     iniparser_freedict(Configtable);
+--
+2.40.0

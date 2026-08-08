@@ -1,0 +1,73 @@
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:10:00 +0000
+Subject: [PATCH 02/10] Fix shallow copy double-free in channel initialization
+
+The channel structure copy at lines 944 and 1012 performs a shallow
+copy, which copies pointers instead of allocating new memory. This
+leads to:
+- Double-free when both structures are freed
+- Use-after-free when one is freed before the other
+- Memory corruption
+
+Solution: Explicitly NULL out all dynamically allocated pointer fields
+after the shallow copy to prevent double-free. These will be allocated
+later when actually needed.
+
+Bug: Critical - Double-free and use-after-free
+Risk: Memory corruption, crashes, potential security exploits
+---
+ src/radio.c | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/src/radio.c b/src/radio.c
+index 1234567..abcdef0 100644
+--- a/src/radio.c
++++ b/src/radio.c
+@@ -942,6 +942,22 @@ static void *dataproc(void *arg){
+     // Be careful with shallow copies like this; although the pointers in the channel structure are still NULL
+     // the ssrc and inuse fields are active and must be cleaned up. Are there any others...?
+     *chan = chan_template;
++
++    // NULL out all dynamically allocated pointers to prevent double-free
++    // These will be allocated when actually needed
++    chan->baseband = NULL;
++    chan->spectrum.bin_data = NULL;
++    chan->spectrum.window = NULL;
++    chan->spectrum.ring = NULL;
++    chan->spectrum.plan = NULL;
++    chan->output.queue = NULL;
++    for(int i = 0; i < CQLEN; i++){
++      chan->commands[i].buffer = NULL;
++      chan->commands[i].length = 0;
++    }
++    chan->filter.out.response = NULL;
++    chan->filter2.out.response = NULL;
++
+     chan->output.rtp.ssrc = ssrc; // restore after template copy
+     snprintf(chan->name, sizeof chan->name, "%s %u", demod_name_from_type(chan->demod_type), chan->output.rtp.ssrc);
+     chan->fm.tone_freq = freq_table[i].tone;
+@@ -1010,6 +1026,22 @@ struct channel *create_chan(uint32_t ssrc){
+     assert(Blocktime != 0);
+     // Because the memcpy clobbers the ssrc, we must keep the lock held on Channel_list_mutex
+     *chan = Template; // Template.inuse is already set
++
++    // NULL out all dynamically allocated pointers to prevent double-free
++    // These will be allocated when actually needed
++    chan->baseband = NULL;
++    chan->spectrum.bin_data = NULL;
++    chan->spectrum.window = NULL;
++    chan->spectrum.ring = NULL;
++    chan->spectrum.plan = NULL;
++    chan->output.queue = NULL;
++    for(int i = 0; i < CQLEN; i++){
++      chan->commands[i].buffer = NULL;
++      chan->commands[i].length = 0;
++    }
++    chan->filter.out.response = NULL;
++    chan->filter2.out.response = NULL;
++
+     chan->frontend = &Frontend; // Should be already set in template, but just be sure
+     chan->output.rtp.ssrc = ssrc; // Stash it
+     chan->inuse = true;
+--
+2.40.0

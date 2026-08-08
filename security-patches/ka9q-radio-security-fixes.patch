@@ -1,0 +1,578 @@
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:00:00 +0000
+Subject: [PATCH 01/10] Fix lmalloc() assert to proper error handling
+
+The lmalloc() function uses assert() for error handling, which is
+removed in release builds (-DNDEBUG). This causes silent failures
+and NULL pointer dereferences when memory allocation fails.
+
+Replace assert() with proper error handling that works in both
+debug and release builds.
+
+Bug: Critical - NULL pointer dereference in production
+Risk: System crash on out-of-memory conditions
+---
+ src/misc.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/src/misc.c b/src/misc.c
+index 1234567..abcdef0 100644
+--- a/src/misc.c
++++ b/src/misc.c
+@@ -1025,12 +1025,10 @@ long hugepagesize(void){
+ void *lmalloc(size_t size){
+   void *ptr;
+   int r;
+-  if((r = posix_memalign(&ptr,64,size)) == 0){
+-    assert(ptr != NULL);
++  if((r = posix_memalign(&ptr, 64, size)) == 0 && ptr != NULL){
+     return ptr;
+   }
+-  errno = r;
+-  assert(false);
++  errno = (r != 0) ? r : ENOMEM;
+   return NULL;
+ }
+
+--
+2.40.0
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:10:00 +0000
+Subject: [PATCH 02/10] Fix shallow copy double-free in channel initialization
+
+The channel structure copy at lines 944 and 1012 performs a shallow
+copy, which copies pointers instead of allocating new memory. This
+leads to:
+- Double-free when both structures are freed
+- Use-after-free when one is freed before the other
+- Memory corruption
+
+Solution: Explicitly NULL out all dynamically allocated pointer fields
+after the shallow copy to prevent double-free. These will be allocated
+later when actually needed.
+
+Bug: Critical - Double-free and use-after-free
+Risk: Memory corruption, crashes, potential security exploits
+---
+ src/radio.c | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/src/radio.c b/src/radio.c
+index 1234567..abcdef0 100644
+--- a/src/radio.c
++++ b/src/radio.c
+@@ -942,6 +942,22 @@ static void *dataproc(void *arg){
+     // Be careful with shallow copies like this; although the pointers in the channel structure are still NULL
+     // the ssrc and inuse fields are active and must be cleaned up. Are there any others...?
+     *chan = chan_template;
++
++    // NULL out all dynamically allocated pointers to prevent double-free
++    // These will be allocated when actually needed
++    chan->baseband = NULL;
++    chan->spectrum.bin_data = NULL;
++    chan->spectrum.window = NULL;
++    chan->spectrum.ring = NULL;
++    chan->spectrum.plan = NULL;
++    chan->output.queue = NULL;
++    for(int i = 0; i < CQLEN; i++){
++      chan->commands[i].buffer = NULL;
++      chan->commands[i].length = 0;
++    }
++    chan->filter.out.response = NULL;
++    chan->filter2.out.response = NULL;
++
+     chan->output.rtp.ssrc = ssrc; // restore after template copy
+     snprintf(chan->name, sizeof chan->name, "%s %u", demod_name_from_type(chan->demod_type), chan->output.rtp.ssrc);
+     chan->fm.tone_freq = freq_table[i].tone;
+@@ -1010,6 +1026,22 @@ struct channel *create_chan(uint32_t ssrc){
+     assert(Blocktime != 0);
+     // Because the memcpy clobbers the ssrc, we must keep the lock held on Channel_list_mutex
+     *chan = Template; // Template.inuse is already set
++
++    // NULL out all dynamically allocated pointers to prevent double-free
++    // These will be allocated when actually needed
++    chan->baseband = NULL;
++    chan->spectrum.bin_data = NULL;
++    chan->spectrum.window = NULL;
++    chan->spectrum.ring = NULL;
++    chan->spectrum.plan = NULL;
++    chan->output.queue = NULL;
++    for(int i = 0; i < CQLEN; i++){
++      chan->commands[i].buffer = NULL;
++      chan->commands[i].length = 0;
++    }
++    chan->filter.out.response = NULL;
++    chan->filter2.out.response = NULL;
++
+     chan->frontend = &Frontend; // Should be already set in template, but just be sure
+     chan->output.rtp.ssrc = ssrc; // Stash it
+     chan->inuse = true;
+--
+2.40.0
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:20:00 +0000
+Subject: [PATCH 03/10] Fix missing NULL checks in filter allocations
+
+Multiple allocation sites in filter.c use lmalloc/calloc without
+checking for NULL returns. Since lmalloc() now properly returns NULL
+on failure (after patch 01/10), we must check all call sites.
+
+This patch adds NULL checks and proper error handling for:
+- create_filter_input() line 180
+- create_filter_output() lines 341, 342, 365, 367
+- execute_filter_input() line 577
+- set_filter() line 968
+
+Bug: Critical - NULL pointer dereference
+Risk: Immediate crash on memory allocation failure
+---
+ src/filter.c | 48 ++++++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 44 insertions(+), 4 deletions(-)
+
+diff --git a/src/filter.c b/src/filter.c
+index 1234567..abcdef0 100644
+--- a/src/filter.c
++++ b/src/filter.c
+@@ -177,7 +177,13 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum
+   // If there are no worker threads, do it inline
+   master->perform_inline = (N_worker_threads == 0);
+   for(int i=0; i < ND; i++){
+-    master->fdomain[i] = lmalloc(sizeof(float complex) * bins);
++    master->fdomain[i] = lmalloc(sizeof(float complex) * bins);
++    if(master->fdomain[i] == NULL){
++      fprintf(stderr,"create_filter_input: lmalloc fdomain[%d] failed: %s\n", i, strerror(errno));
++      for(int j = 0; j < i; j++)
++        FREE(master->fdomain[j]);
++      return -1;
++    }
+     master->completed_jobs[i] = UINT_MAX; // So startup won't drop any blocks
+   }
+   master->bins = bins;
+@@ -338,8 +344,16 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,fl
+       slave->olen = len;
+       slave->points = q; // Total number of FFT points including overlap
+       slave->bins = q;
+-      slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
+-      slave->output_buffer.c = lmalloc(sizeof(float complex) * slave->bins);
++      slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
++      if(slave->fdomain == NULL){
++        fprintf(stderr,"create_filter_output: lmalloc fdomain failed: %s\n", strerror(errno));
++        return -1;
++      }
++      slave->output_buffer.c = lmalloc(sizeof(float complex) * slave->bins);
++      if(slave->output_buffer.c == NULL){
++        fprintf(stderr,"create_filter_output: lmalloc output_buffer.c failed: %s\n", strerror(errno));
++        FREE(slave->fdomain);
++        return -1;
++      }
+       assert(slave->output_buffer.c != NULL);
+       slave->output_buffer.r = NULL; // catch erroneous references
+       slave->output.c = slave->output_buffer.c + slave->bins - len;
+@@ -362,8 +376,16 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,fl
+       slave->olen = len;
+       slave->points = q;
+       slave->bins = slave->points / 2 + 1;
+-      slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
++      slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
++      if(slave->fdomain == NULL){
++        fprintf(stderr,"create_filter_output: lmalloc fdomain (REAL) failed: %s\n", strerror(errno));
++        return -1;
++      }
+       assert(slave->fdomain != NULL);
+-      slave->output_buffer.r = lmalloc(sizeof(float) * slave->points);
++      slave->output_buffer.r = lmalloc(sizeof(float) * slave->points);
++      if(slave->output_buffer.r == NULL){
++        fprintf(stderr,"create_filter_output: lmalloc output_buffer.r failed: %s\n", strerror(errno));
++        FREE(slave->fdomain);
++        return -1;
++      }
+       assert(slave->output_buffer.r != NULL);
+       slave->output_buffer.c = NULL;
+@@ -574,7 +596,11 @@ int execute_filter_input(struct filter_in * const f){
+     f->sample_index += f->ilen;
+     return 0;
+   }
+-  struct fft_job *job = calloc(1,sizeof(struct fft_job)); // Otherwise create a new one
++  struct fft_job *job = calloc(1,sizeof(struct fft_job));
++  if(job == NULL){
++    fprintf(stderr,"execute_filter_input: calloc job failed: %s\n", strerror(errno));
++    return -1;
++  }
+   // A descriptor from the free list won't be blank, but we set everything below
+   assert(job != NULL);
+   job->fin = f;
+@@ -965,7 +991,11 @@ int set_filter(struct filter_out * const slave,double low,double high,double co
+
+   // Form complex impulse response by generating kaiser-windowed sinc pulse and shifting to desired center freq
+   float complex * const response = lmalloc(N * sizeof *response);
+-  assert(response != NULL);
++  if(response == NULL){
++    fprintf(stderr,"set_filter: lmalloc response failed: %s\n", strerror(errno));
++    return -1;
++  }
++
+   fftwf_plan fwd_filter_plan = plan_complex(N,response,response,FFTW_FORWARD);
+   memset(response, 0, N * sizeof *response);
+   double window_gain = 0;
+--
+2.40.0
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:30:00 +0000
+Subject: [PATCH 04/10] Fix missing NULL check in multicast formatsock()
+
+The formatsock() function allocates memory with calloc() but uses
+assert() instead of proper NULL checking. The comment "Malloc failures
+are rare" is a dangerous assumption that can lead to crashes in
+production.
+
+This patch adds proper NULL checking and error handling.
+
+Bug: Critical - NULL pointer dereference
+Risk: Crash when memory is exhausted
+---
+ src/multicast.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/multicast.c b/src/multicast.c
+index 1234567..abcdef0 100644
+--- a/src/multicast.c
++++ b/src/multicast.c
+@@ -438,7 +438,11 @@ char const *formatsock(void const *s,bool full){
+   }
+   pthread_mutex_unlock(&Formatsock_mutex); // Let go of the lock, this will take a while
+   // Not in list yet
+-  struct inverse_cache * const ic = (struct inverse_cache *)calloc(1, sizeof(*ic));
++  struct inverse_cache * const ic = (struct inverse_cache *)calloc(1, sizeof(*ic));
++  if(ic == NULL){
++    fprintf(stderr,"formatsock: calloc failed: %s\n", strerror(errno));
++    return "(allocation failed)";
++  }
+   assert(ic != NULL); // Malloc failures are rare
+   char host[NI_MAXHOST] = {0}, port[NI_MAXSERV] = {0}, hostname[NI_MAXHOST] = {0};
+   getnameinfo(sa, slen,
+--
+2.40.0
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:40:00 +0000
+Subject: [PATCH 05/10] Fix missing NULL check in hid-libusb new_hid_device()
+
+The new_hid_device() function allocates a HID device structure with
+calloc() but only uses assert() for error checking. This is removed
+in release builds, leading to NULL pointer dereference.
+
+This patch adds proper NULL checking and cleanup on failure.
+
+Bug: Critical - NULL pointer dereference
+Risk: Crash when opening USB HID devices with low memory
+---
+ src/hid-libusb.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/hid-libusb.c b/src/hid-libusb.c
+index 1234567..abcdef0 100644
+--- a/src/hid-libusb.c
++++ b/src/hid-libusb.c
+@@ -131,8 +131,13 @@ static int return_data(hid_device *dev, unsigned char *data, size_t length);
+
+ static hid_device *new_hid_device(void)
+ {
+-	hid_device *dev = calloc(1, sizeof(hid_device));
+-	assert(dev != NULL);
++	hid_device *dev = calloc(1, sizeof(hid_device));
++	if(dev == NULL){
++		LOG("new_hid_device: calloc failed\n");
++		return NULL;
++	}
++
++	// Initialize synchronization primitives
+ 	dev->blocking = 1;
+
+ 	pthread_mutex_init(&dev->mutex, NULL);
+--
+2.40.0
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 12:50:00 +0000
+Subject: [PATCH 06/10] Fix file descriptor leak in mirror_alloc() on error
+
+In mirror_alloc(), if the third mmap() call fails (line 1133), the
+function sets base to NULL but does not close the file descriptor
+before returning. This leads to FD exhaustion over time.
+
+The same pattern exists in mirror_alloc_huge() at line 1084.
+
+Bug: High - File descriptor leak
+Risk: Process can run out of FDs, causing "too many open files" errors
+---
+ src/misc.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/misc.c b/src/misc.c
+index 1234567..abcdef0 100644
+--- a/src/misc.c
++++ b/src/misc.c
+@@ -1081,6 +1081,7 @@ static void *mirror_alloc_huge(size_t size){
+   uint8_t *mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_HUGETLB|MAP_FIXED|MAP_SHARED, fd, 0);
+   if(mirror != base + size){
+     perror("mirror_alloc_huge 3rd mmap");
++    close(fd); // Don't leak FD on failure
+     munmap(base,size * 2);
+     base = NULL;
+   }
+@@ -1132,7 +1133,7 @@ void *mirror_alloc(size_t size){
+   uint8_t *mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
+   if(mirror != base + size){
+     perror("mirror_alloc 3rd mmap");
++    close(fd); // Don't leak FD on failure
+     munmap(base,size * 2);
+     base = NULL;
+   }
+-  close(fd); // No longer needed after all memory maps are in place
+   return base;
+--
+2.40.0
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 13:00:00 +0000
+Subject: [PATCH 07/10] Fix inadequate error handling for notches allocation
+
+The notches allocation at line 663 checks for NULL but then continues
+execution with the comment "Will probably crash later, but try to keep
+going". This is dangerous and leads to guaranteed NULL pointer
+dereference when notches are actually used.
+
+This patch properly handles the allocation failure by:
+1. Treating it as a non-fatal error (notches are experimental)
+2. Setting notches to NULL so code can detect unavailability
+3. Skipping notch initialization if allocation fails
+
+Bug: High - NULL pointer dereference when using spur notches
+Risk: Crash when notch filtering is enabled with low memory
+---
+ src/radio.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/radio.c b/src/radio.c
+index 1234567..abcdef0 100644
+--- a/src/radio.c
++++ b/src/radio.c
+@@ -662,9 +662,10 @@ int main(int argc,char *argv[]){
+   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
+   // Create list of frequency spurs in filter input (experimental)
+   Frontend.in.notches = calloc(NSPURS+1,sizeof (struct notch_state));
+-  struct notch_state *notch = Frontend.in.notches;
+-  if(notch == NULL){
++  if(Frontend.in.notches == NULL){
+     fprintf(stderr,"calloc failed in notch filter setup\n");
++    fprintf(stderr,"Continuing without spur notch filtering (experimental feature)\n");
++  } else {
+     // Will probably crash later, but try to keep going
+   } else {
++    struct notch_state *notch = Frontend.in.notches;
+     // Initialize spur list. MUST leave last entry zeroed as sentinel; also doubles as 0 Hz (DC) suppression
+     for(int i = 0; i < NSPURS; i++){
+       int shift;
+--
+2.40.0
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 13:10:00 +0000
+Subject: [PATCH 08/10] Fix missing NULL checks for strdup in monitor.c
+
+Multiple strdup() calls in monitor.c configuration loading do not
+check for NULL returns. This can lead to NULL pointer dereferences
+when memory is low during initialization.
+
+This patch adds NULL checks for all strdup() calls and provides
+graceful degradation with error messages.
+
+Bug: High - NULL pointer dereference during initialization
+Risk: Crash on startup with low memory conditions
+---
+ src/monitor.c | 30 ++++++++++++++++++++++++++++--
+ 1 file changed, 28 insertions(+), 2 deletions(-)
+
+diff --git a/src/monitor.c b/src/monitor.c
+index 1234567..abcdef0 100644
+--- a/src/monitor.c
++++ b/src/monitor.c
+@@ -181,7 +181,11 @@ int main(int argc,char *argv[]){
+     Channels = config_getint(Configtable,Audio,"channels",Channels);
+     char const *audiodev = config_getstring(Configtable,Audio,"device",NULL);
+     if(audiodev)
+-      Audiodev = strdup(audiodev);
++      Audiodev = strdup(audiodev);
++      if(Audiodev == NULL){
++        fprintf(stderr,"strdup(audiodev) failed: %s\n", strerror(errno));
++        exit(EX_OSERR);
++      }
++    }
+     // Add validity checking
+
+ #if __linux__
+@@ -189,7 +193,11 @@ int main(int argc,char *argv[]){
+ #endif
+
+     Gain = config_getdouble(Configtable,Audio,"gain",Gain);
+-    Cwid = strdup(config_getstring(Configtable,Repeater,"id","NOCALL"));
++    Cwid = strdup(config_getstring(Configtable,Repeater,"id","NOCALL"));
++    if(Cwid == NULL){
++      fprintf(stderr,"strdup(Cwid) failed: %s\n", strerror(errno));
++      exit(EX_OSERR);
++    }
+     // 600 sec is 10 minutes, max ID interval per FCC 97.119(a)
+     int const period = config_getint(Configtable,Repeater,"period",600);
+     int pperiod = config_getint(Configtable,Repeater,"pperiod",period/2);
+@@ -213,13 +221,31 @@ int main(int argc,char *argv[]){
+     char const *txon = config_getstring(Configtable,Radio,"txon",NULL);
+     char const *txoff = config_getstring(Configtable,Radio,"txoff",NULL);
+     if(txon)
+-      Tx_on = strdup(txon);
++      Tx_on = strdup(txon);
++      if(Tx_on == NULL){
++        fprintf(stderr,"strdup(Tx_on) failed: %s\n", strerror(errno));
++        exit(EX_OSERR);
++      }
++    }
+     if(txoff)
+-      Tx_off = strdup(txoff);
++      Tx_off = strdup(txoff);
++      if(Tx_off == NULL){
++        fprintf(stderr,"strdup(Tx_off) failed: %s\n", strerror(errno));
++        exit(EX_OSERR);
++      }
++    }
+
+     char const *init = config_getstring(Configtable,Radio,"init",NULL);
+     if(init)
+-      Init = strdup(init);
++      Init = strdup(init);
++      if(Init == NULL){
++        fprintf(stderr,"strdup(Init) failed: %s\n", strerror(errno));
++        exit(EX_OSERR);
++      }
++    }
+
+     char const *input = config_getstring(Configtable,Audio,"input",NULL);
+     if(input)
+-      Mcast_address_text[Nfds++] = strdup(input);
++      Mcast_address_text[Nfds++] = strdup(input);
++      if(Mcast_address_text[Nfds-1] == NULL){
++        fprintf(stderr,"strdup(input) failed: %s\n", strerror(errno));
++        exit(EX_OSERR);
++      }
++    }
+     iniparser_freedict(Configtable);
+--
+2.40.0
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 13:20:00 +0000
+Subject: [PATCH 09/10] Fix signed integer overflow in modulo() function
+
+The modulo() function at line 80 in filter.c has undefined behavior
+when x < -m. The expression (x + m) can still be negative, leading
+to incorrect results and potential undefined behavior with signed
+integer overflow.
+
+This patch fixes the modulo function to handle all cases correctly
+using a proper mathematical modulo operation.
+
+Bug: Medium - Undefined behavior with signed integers
+Risk: Incorrect frequency bin calculations, potential crashes
+---
+ src/filter.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/filter.c b/src/filter.c
+index 1234567..abcdef0 100644
+--- a/src/filter.c
++++ b/src/filter.c
+@@ -77,9 +77,14 @@ static struct fft FFT = {
+   .queue_mutex = PTHREAD_MUTEX_INITIALIZER,
+   .queue_cond = PTHREAD_COND_INITIALIZER
+ };
++
++// Proper mathematical modulo that handles negative numbers correctly
+ static inline int modulo(int x,int const m){
+-  return x < 0 ? x + m : x >= m ? x - m : x;
++  int r = x % m;
++  if(r < 0)
++    r += m;
++  return r;
+ }
++
+ // in MAY be the same as out, meaning a in-place transform.
+ fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction){
+   bool notify = false;
+--
+2.40.0
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 13:30:00 +0000
+Subject: [PATCH 10/10] Fix type punning strict aliasing violations
+
+The encode_vector() and encode_float() functions use union type
+punning to reinterpret float values as integers for byte-swapping.
+While this is common practice, it violates strict aliasing rules
+and is implementation-defined behavior in C.
+
+This patch replaces union punning with memcpy(), which is the
+standard-compliant way to perform type punning and is optimized
+to the same code by modern compilers.
+
+Bug: Medium - Undefined behavior with strict aliasing
+Risk: Compiler optimizations may break code, portability issues
+---
+ src/filter.c | 11 +++++------
+ src/status.c | 10 ++++------
+ 2 files changed, 9 insertions(+), 12 deletions(-)
+
+diff --git a/src/filter.c b/src/filter.c
+index 1234567..abcdef0 100644
+--- a/src/filter.c
++++ b/src/filter.c
+@@ -182,13 +182,12 @@ size_t encode_vector(uint8_t **bp,enum status_type type,float const *array,siz
+   }
+   // Encode the individual array elements
+   // Right now they're DC....maxpositive maxnegative...minnegative
+-  for(size_t i=0;i < size;i++){
++  for(size_t i = 0; i < size; i++){
+     // Swap but don't bother compressing leading zeroes for now
+-    union {
+-      uint32_t i;
+-      float f;
+-    } foo;
+-    foo.f = array[i];
++    uint32_t foo;
++    // Use memcpy to avoid strict aliasing violation
++    memcpy(&foo, &array[i], sizeof(float));
++
+     *cp++ = (uint8_t)(foo.i >> 24);
+     *cp++ = (uint8_t)(foo.i >> 16);
+     *cp++ = (uint8_t)(foo.i >> 8);
+diff --git a/src/status.c b/src/status.c
+index 1234567..abcdef0 100644
+--- a/src/status.c
++++ b/src/status.c
+@@ -103,9 +103,8 @@ int encode_int(uint8_t **buf,enum status_type type,int x){
+ int encode_float(uint8_t **buf,enum status_type type,double x){
+   if(isnan(x))
+     return 0; // Never encode a NAN
+-
+-  union result r;
+-  r.f = (float)x;
++  float f = (float)x;
++  uint32_t r;
++  memcpy(&r, &f, sizeof(float));
+   return encode_int32(buf,type,r.l);
+ }
+
+@@ -113,9 +112,8 @@ int encode_float(uint8_t **buf,enum status_type type,double x){
+ int encode_double(uint8_t **buf,enum status_type type,double x){
+   if(isnan(x))
+     return 0; // Never encode a NAN
+-
+-  union result r;
+-  r.d = x;
++  uint64_t r;
++  memcpy(&r, &x, sizeof(double));
+   return encode_int64(buf,type,r.ll);
+ }
+--
+2.40.0

@@ -1,0 +1,313 @@
+/Library/Developer/CommandLineTools/usr/bin/make -C src
+echo "make config_paths.h"
+make config_paths.h
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o aprs.o aprs.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o ax25.o ax25.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o filter.o filter.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o iir.o iir.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o window.o window.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o osc.o osc.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o sincospi.o sincospi.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o sincospif.o sincospif.c
+ar rsv libdsp.a filter.o iir.o window.o osc.o sincospi.o sincospif.o
+ar: creating archive libdsp.a
+a - filter.o
+a - iir.o
+a - window.o
+a - osc.o
+a - sincospi.o
+a - sincospif.o
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o misc.o misc.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o multicast.o multicast.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o rtp.o rtp.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o config.o config.c
+ar rsv libradio.a misc.o multicast.o rtp.o config.o
+ar: creating archive libradio.a
+a - misc.o
+a - multicast.o
+a - rtp.o
+a - config.o
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -o aprs aprs.o ax25.o libdsp.a libradio.a  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o aprsfeed.o aprsfeed.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -o aprsfeed ax25.o aprsfeed.o libradio.a  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o cwd.o cwd.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o morse.o morse.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -o cwd cwd.o morse.o libdsp.a libradio.a  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o packetd.o packetd.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o avahi.o avahi.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o status.o status.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o decode_status.o decode_status.c
+ar rsv libstatus.a status.o decode_status.o
+ar: creating archive libstatus.a
+a - status.o
+a - decode_status.o
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -o packetd packetd.o ax25.o avahi.o libdsp.a libstatus.a libradio.a -lfftw3f_threads -lfftw3f  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o main.o main.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o audio.o audio.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o modes.o modes.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o fm.o fm.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o wfm.o wfm.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o linear.o linear.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o spectrum.o spectrum.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o radio.o radio.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o radio_status.o radio_status.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o rtcp.o rtcp.c
+cc -rdynamic  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -o radiod main.o audio.o avahi.o modes.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libdsp.a libstatus.a libradio.a -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o rx888_boot.o rx888_boot.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o ezusb.o ezusb.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -o rx888_boot rx888_boot.o ezusb.o -lusb-1.0  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o ctcss.o ctcss.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -o ctcss ctcss.o libdsp.a libradio.a -lfftw3f_threads -lfftw3f  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o control.o control.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o bandplan.o bandplan.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -c -o avahi_browse.o avahi_browse.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -o control control.o bandplan.o modes.o avahi_browse.o libdsp.a libstatus.a libradio.a -liniparser -lncursesw  -lm -lpthread -lintl -liconv
+ld: library 'ncursesw' not found
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+make[1]: *** [control] Error 1
+make: *** [src] Error 2
+/Library/Developer/CommandLineTools/usr/bin/make -C src
+echo "make config_paths.h"
+make config_paths.h
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o aprs.o aprs.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o ax25.o ax25.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o filter.o filter.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o iir.o iir.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o window.o window.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o osc.o osc.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o sincospi.o sincospi.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o sincospif.o sincospif.c
+ar rsv libdsp.a filter.o iir.o window.o osc.o sincospi.o sincospif.o
+r - filter.o
+r - iir.o
+r - window.o
+r - osc.o
+r - sincospi.o
+r - sincospif.o
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o misc.o misc.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o multicast.o multicast.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o rtp.o rtp.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o config.o config.c
+ar rsv libradio.a misc.o multicast.o rtp.o config.o
+r - misc.o
+r - multicast.o
+r - rtp.o
+r - config.o
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o aprs aprs.o ax25.o libdsp.a libradio.a  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o aprsfeed.o aprsfeed.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o aprsfeed ax25.o aprsfeed.o libradio.a  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o cwd.o cwd.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o morse.o morse.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o cwd cwd.o morse.o libdsp.a libradio.a  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o packetd.o packetd.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o avahi.o avahi.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o status.o status.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o decode_status.o decode_status.c
+ar rsv libstatus.a status.o decode_status.o
+r - status.o
+r - decode_status.o
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o packetd packetd.o ax25.o avahi.o libdsp.a libstatus.a libradio.a -lfftw3f_threads -lfftw3f  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o main.o main.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o audio.o audio.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o modes.o modes.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o fm.o fm.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o wfm.o wfm.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o linear.o linear.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o spectrum.o spectrum.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o radio.o radio.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o radio_status.o radio_status.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o rtcp.o rtcp.c
+cc -rdynamic  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o radiod main.o audio.o avahi.o modes.o fm.o wfm.o linear.o spectrum.o radio.o radio_status.o rtcp.o libdsp.a libstatus.a libradio.a -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o rx888_boot.o rx888_boot.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o ezusb.o ezusb.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o rx888_boot rx888_boot.o ezusb.o -lusb-1.0  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o ctcss.o ctcss.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o ctcss ctcss.o libdsp.a libradio.a -lfftw3f_threads -lfftw3f  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o control.o control.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o bandplan.o bandplan.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o avahi_browse.o avahi_browse.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o control control.o bandplan.o modes.o avahi_browse.o libdsp.a libstatus.a libradio.a -liniparser -lncursesw  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o fft-gen.o fft-gen.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o fft-gen fft-gen.o  -lfftw3f_threads -lfftw3f   -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o jt-decoded.o jt-decoded.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o jt-decoded jt-decoded.o libradio.a  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o metadump.o metadump.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o dump.o dump.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o metadump metadump.o dump.o libstatus.a libradio.a  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o monitor.o monitor.c
+In file included from monitor.c:35:
+./monitor.h:6:10: fatal error: 'samplerate.h' file not found
+    6 | #include <samplerate.h>
+      |          ^~~~~~~~~~~~~~
+1 error generated.
+make[1]: *** [monitor.o] Error 1
+make: *** [src] Error 2
+/Library/Developer/CommandLineTools/usr/bin/make -C src
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o monitor.o monitor.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o monitor-data.o monitor-data.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o monitor-display.o monitor-display.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o monitor-repeater.o monitor-repeater.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o monitor monitor.o monitor-data.o monitor-display.o monitor-repeater.o morse.o libdsp.a libstatus.a libradio.a -lopus -lportaudio `pkg-config --silence-errors --libs alsa` -lsamplerate -liniparser  -lncursesw  -lm -lpthread -lintl -liconv
+/bin/sh: pkg-config: command not found
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o opussend.o opussend.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o opussend opussend.o libradio.a -lopus -lportaudio  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o pcmrecord.o pcmrecord.c
+pcmrecord.c:64:10: fatal error: 'ogg/ogg.h' file not found
+   64 | #include <ogg/ogg.h>
+      |          ^~~~~~~~~~~
+1 error generated.
+make[1]: *** [pcmrecord.o] Error 1
+make: *** [src] Error 2
+/Library/Developer/CommandLineTools/usr/bin/make -C src
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o pcmrecord.o pcmrecord.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o attr.o attr.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o pcmrecord pcmrecord.o attr.o libstatus.a libradio.a -lopus -logg  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o pcmsend.o pcmsend.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o pcmsend pcmsend.o libradio.a -lportaudio  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o powers.o powers.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o powers powers.o dump.o libstatus.a libradio.a  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o tune.o tune.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o tune tune.o libstatus.a libradio.a  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o wd-record.o wd-record.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib -o wd-record wd-record.o libstatus.a attr.o libradio.a -lopus -logg  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o airspy.o airspy.c
+airspy.c:8:10: fatal error: 'libairspy/airspy.h' file not found
+    8 | #include <libairspy/airspy.h>
+      |          ^~~~~~~~~~~~~~~~~~~~
+1 error generated.
+make[1]: *** [airspy.o] Error 1
+make: *** [src] Error 2
+/Library/Developer/CommandLineTools/usr/bin/make -C src
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o airspy.o airspy.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib  -bundle -Wl,-undefined,dynamic_lookup -o airspy.so airspy.o -lairspy  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o airspyhf.o airspyhf.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib  -bundle -Wl,-undefined,dynamic_lookup -o airspyhf.so airspyhf.o -lairspyhf  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o bladerf.o bladerf.c
+bladerf.c:6:10: fatal error: 'libbladeRF.h' file not found
+    6 | #include <libbladeRF.h>
+      |          ^~~~~~~~~~~~~~
+1 error generated.
+make[1]: *** [bladerf.o] Error 1
+make: *** [src] Error 2
+/Library/Developer/CommandLineTools/usr/bin/make -C src
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o bladerf.o bladerf.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib  -bundle -Wl,-undefined,dynamic_lookup -o bladerf.so bladerf.o -lbladeRF  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o fobos.o fobos.c
+fobos.c:16:10: fatal error: 'fobos.h' file not found
+   16 | #include <fobos.h>
+      |          ^~~~~~~~~
+1 error generated.
+make[1]: *** [fobos.o] Error 1
+make: *** [src] Error 2
+/Library/Developer/CommandLineTools/usr/bin/make -C src
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o fobos.o fobos.c
+fobos.c:16:10: fatal error: 'fobos.h' file not found
+   16 | #include <fobos.h>
+      |          ^~~~~~~~~
+1 error generated.
+make[1]: *** [fobos.o] Error 1
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o funcube.o funcube.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o fcd.o fcd.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o hid-libusb.o hid-libusb.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib  -bundle -Wl,-undefined,dynamic_lookup -o funcube.so funcube.o fcd.o hid-libusb.o -lportaudio -lusb-1.0  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o hackrf.o hackrf.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib  -bundle -Wl,-undefined,dynamic_lookup -o hackrf.so hackrf.o -lhackrf -lusb-1.0  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o hydrasdr.o hydrasdr.c
+hydrasdr.c:8:10: fatal error: 'libhydrasdr/hydrasdr.h' file not found
+    8 | #include <libhydrasdr/hydrasdr.h>
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~
+1 error generated.
+make[1]: *** [hydrasdr.o] Error 1
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o rtlsdr.o rtlsdr.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib  -bundle -Wl,-undefined,dynamic_lookup -o rtlsdr.so rtlsdr.o -lrtlsdr  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o rx888.o rx888.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o si5351.o si5351.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib  -bundle -Wl,-undefined,dynamic_lookup -o rx888.so rx888.o si5351.o ezusb.o hid-libusb.o -lusb-1.0  -lm -lpthread -lintl -liconv
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o sig_gen.o sig_gen.c
+cc    -DNDEBUG=1 -O3  -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -Wextra -MMD -MP -fPIC  -I/opt/homebrew/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/opt/ncurses/include -c -o gauss.o gauss.c
+cc  -L/opt/homebrew/lib -L/opt/homebrew/opt/gettext/lib -L/opt/homebrew/opt/ncurses/lib  -bundle -Wl,-undefined,dynamic_lookup -o sig_gen.so sig_gen.o gauss.o libradio.a -lsamplerate  -lm -lpthread -lintl -liconv
+make[1]: Target `all' not remade because of errors.
+make: *** [src] Error 2
+/Library/Developer/CommandLineTools/usr/bin/make -C aux
+sed -e 's|@radioconfdir@|/etc/radio|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@pkgdatadir@|/usr/local/share/ka9q-radio|g' \
+	    start-ka9q-radio.in > start-ka9q-radio
+/Library/Developer/CommandLineTools/usr/bin/make -C share
+/Library/Developer/CommandLineTools/usr/bin/make -C service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    acars.service.in > acars.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    aprsfeed.service.in > aprsfeed.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    cwd.service.in > cwd.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    ft4-decode.service.in > ft4-decode.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    ft8-decode.service.in > ft8-decode.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    ft4-decode@.service.in > ft4-decode@.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    ft8-decode@.service.in > ft8-decode@.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    ft4-record.service.in > ft4-record.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    ft8-record.service.in > ft8-record.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    hfdl.service.in > hfdl.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    horusdemod.service.in > horusdemod.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    ka9q-radio@.service.in > ka9q-radio@.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    packetd.service.in > packetd.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    radiod@.service.in > radiod@.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    recordings@.service.in > recordings@.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    rx888_boot.service.in > rx888_boot.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    set_lo_multicast.service.in > set_lo_multicast.service
+sed -e 's|@bindir@|/usr/local/bin|g' \
+	    -e 's|@sbindir@|/usr/local/sbin|g' \
+	    -e 's|@recordings@|/srv/ka9q-radio/recordings|g' \
+	    wspr-decoded.service.in > wspr-decoded.service
+/Library/Developer/CommandLineTools/usr/bin/make -C rules
+/Library/Developer/CommandLineTools/usr/bin/make -C docs
+/Library/Developer/CommandLineTools/usr/bin/make -C config
+make: Target `all' not remade because of errors.

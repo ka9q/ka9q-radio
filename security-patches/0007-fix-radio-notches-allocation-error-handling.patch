@@ -1,0 +1,42 @@
+From: Security Audit <audit@ka9q-radio.local>
+Date: Fri, 8 Aug 2026 13:00:00 +0000
+Subject: [PATCH 07/10] Fix inadequate error handling for notches allocation
+
+The notches allocation at line 663 checks for NULL but then continues
+execution with the comment "Will probably crash later, but try to keep
+going". This is dangerous and leads to guaranteed NULL pointer
+dereference when notches are actually used.
+
+This patch properly handles the allocation failure by:
+1. Treating it as a non-fatal error (notches are experimental)
+2. Setting notches to NULL so code can detect unavailability
+3. Skipping notch initialization if allocation fails
+
+Bug: High - NULL pointer dereference when using spur notches
+Risk: Crash when notch filtering is enabled with low memory
+---
+ src/radio.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/radio.c b/src/radio.c
+index 1234567..abcdef0 100644
+--- a/src/radio.c
++++ b/src/radio.c
+@@ -662,9 +662,10 @@ int main(int argc,char *argv[]){
+   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
+   // Create list of frequency spurs in filter input (experimental)
+   Frontend.in.notches = calloc(NSPURS+1,sizeof (struct notch_state));
+-  struct notch_state *notch = Frontend.in.notches;
+-  if(notch == NULL){
++  if(Frontend.in.notches == NULL){
+     fprintf(stderr,"calloc failed in notch filter setup\n");
++    fprintf(stderr,"Continuing without spur notch filtering (experimental feature)\n");
++  } else {
+     // Will probably crash later, but try to keep going
+   } else {
++    struct notch_state *notch = Frontend.in.notches;
+     // Initialize spur list. MUST leave last entry zeroed as sentinel; also doubles as 0 Hz (DC) suppression
+     for(int i = 0; i < NSPURS; i++){
+       int shift;
+--
+2.40.0
