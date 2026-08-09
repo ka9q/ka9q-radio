@@ -336,7 +336,7 @@ int loadconfig(char const *file){
     p = config_getstring(Configtable,GLOBAL,"presets-file",p);
     dist_path(Preset_file,sizeof(Preset_file),p);
     fprintf(stderr,"Loading presets file %s\n",Preset_file);
-    Preset_table = iniparser_load(Preset_file); // Kept open for duration of program
+    Preset_table = iniparser_load(Preset_file); // Kept open for duration of program, otherwise pointers are invalidated
     config_validate(stderr,Preset_table,Channel_keys,NULL);
     if(Preset_table == NULL){
       fprintf(stderr,"Can't load preset file %s\n",Preset_file);
@@ -638,7 +638,7 @@ static void *process_section(void *arg){
   // 3. the [global] section: a preset (if any) modified by global settings
   // 4. compiled-in defaults to keep things from blowing up
   struct channel chan_template = Template; // compiled defaults + [global] settings
-  char const * p = config_getstring(Configtable,sname,"preset","am"); // Hopefully "am" is defined in presets.conf
+  char const * p = config_getstring(Configtable,sname,"preset",NULL); // no default here so we'll pick up the global default in Template
   char const * preset = config_getstring(Configtable,sname,"mode",p); // Must be specified to create a dynamic channel
   if(preset != NULL){
     if(loadpreset(&chan_template,Preset_table,preset) != 0)
