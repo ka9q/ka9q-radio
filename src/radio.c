@@ -1404,7 +1404,8 @@ int downconvert(struct channel *chan){
 
     // set fine tuning frequency & phase
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
-    if(shift != chan->filter.bin_shift || remainder != chan->filter.remainder){ // Detect startup
+    // The isnan() test is admittedly redundant since the next comparison will be true
+    if(shift != chan->filter.bin_shift || isnan(chan->filter.remainder) || remainder != chan->filter.remainder){ // Detect startup
       assert(!isnan(chan->tune.doppler_rate) && isfinite(chan->tune.doppler_rate));
       set_osc(&chan->fine,-remainder/chan->output.samprate,chan->tune.doppler_rate/((double)chan->output.samprate * chan->output.samprate));
       chan->filter.remainder = remainder;
