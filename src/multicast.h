@@ -3,6 +3,7 @@
 
 #ifndef _MULTICAST_H
 #define _MULTICAST_H 1
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/socket.h>

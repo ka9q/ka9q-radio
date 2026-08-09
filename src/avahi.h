@@ -5,6 +5,7 @@
 // implement this interface by running the avahi-* command line tools, so no
 // Avahi type or symbol appears in either the interface or the implementation.
 #include <stdbool.h> // for Static_avahi
+#include <stdint.h>
 
 extern bool Static_avahi;
 

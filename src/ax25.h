@@ -5,6 +5,7 @@
 #define _AX25_H 1
 
 #include <stdio.h>
+#include <stdint.h>
 
 // AX.25 frame, broken down
 #define MAX_DIGI 10

@@ -4,12 +4,14 @@
 #ifndef _IMPORT_H
 #define _IMPORT_H 1
 #define _GNU_SOURCE 1
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 #include <float.h>
 #include <limits.h>
 #include <float.h>
 #include <limits.h>
+#include <math.h>
 #include "rtp.h"
 
 _Static_assert(sizeof(float) == 4, "float must be 32-bit");

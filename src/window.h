@@ -1,6 +1,9 @@
 #ifndef _WINDOW_H
 #define _WINDOW_H 1
 
+#include <stddef.h>
+#include <stdbool.h>
+
 // Window functions
 int make_kaiser(double * const window,int const M,double const beta);
 int make_kaiserf(float * const window,int const M,double const beta);

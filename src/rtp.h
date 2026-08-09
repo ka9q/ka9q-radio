@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #define DEFAULT_MCAST_PORT ((uint16_t)5004)
 #define DEFAULT_RTP_PORT ((uint16_t)5004)

@@ -6,6 +6,8 @@
 // Copyright (c)  2021 Ruslan Migirov <trapi78@gmail.com>
 // Credit: https://github.com/rhgndf/rx888_stream
 
+#include <stdint.h>
+
 enum FX3Command {
   // Start GPII engine and stream the data from ADC
   // WRITE: UINT32
