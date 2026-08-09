@@ -89,8 +89,6 @@ int default_prio(void);
 void realtime(int prio);
 int norealtime(void);
 void stick_core(void);
-// Custom version of malloc that aligns to a cache line
-void *lmalloc(size_t size);
 
 typedef struct {
   int64_t num;

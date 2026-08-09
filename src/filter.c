@@ -77,6 +77,9 @@ static struct fft FFT = {
   .queue_mutex = PTHREAD_MUTEX_INITIALIZER,
   .queue_cond = PTHREAD_COND_INITIALIZER
 };
+// Custom version of malloc that aligns to a cache line
+static void *lmalloc(size_t size);
+
 static inline int modulo(int x,int const m){
   return x < 0 ? x + m : x >= m ? x - m : x;
 }
@@ -178,6 +181,11 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   master->perform_inline = (N_worker_threads == 0);
   for(int i=0; i < ND; i++){
     master->fdomain[i] = lmalloc(sizeof(float complex) * bins);
+    if(master->fdomain[i] == NULL){
+      for(int j=0; j < i; j++)
+	FREE(master->fdomain[j]);
+      return -1;
+    }
     master->completed_jobs[i] = UINT_MAX; // So startup won't drop any blocks
   }
   master->bins = bins;
@@ -339,8 +347,15 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
       slave->points = q; // Total number of FFT points including overlap
       slave->bins = q;
       slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
+      assert(slave->fdomain != NULL);
+      if(slave->fdomain == NULL)
+	return -1;
       slave->output_buffer.c = lmalloc(sizeof(float complex) * slave->bins);
       assert(slave->output_buffer.c != NULL);
+      if(slave->output_buffer.c == NULL){
+	FREE(slave->fdomain);
+	return -1;
+      }
       slave->output_buffer.r = NULL; // catch erroneous references
       slave->output.c = slave->output_buffer.c + slave->bins - len;
       int old_prio = norealtime(); // Could this cause a priority inversion?
@@ -364,8 +379,14 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
       slave->bins = slave->points / 2 + 1;
       slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
       assert(slave->fdomain != NULL);
+      if(slave->fdomain == NULL)
+	return -1;
       slave->output_buffer.r = lmalloc(sizeof(float) * slave->points);
       assert(slave->output_buffer.r != NULL);
+      if(slave->output_buffer.r == NULL){
+	FREE(slave->fdomain);
+	return -1;
+      }
       slave->output_buffer.c = NULL;
       slave->output.r = slave->output_buffer.r + slave->points - len;
       int old_prio = norealtime();
@@ -577,6 +598,8 @@ int execute_filter_input(struct filter_in * const f){
   struct fft_job *job = calloc(1,sizeof(struct fft_job)); // Otherwise create a new one
   // A descriptor from the free list won't be blank, but we set everything below
   assert(job != NULL);
+  if(job == NULL)
+    return -1;
   job->fin = f;
   job->jobnum = f->next_jobnum++; // Can wrap, hence jobnum is unsigned
   job->output = f->fdomain[job->jobnum % ND];
@@ -968,7 +991,10 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   float complex * const response = lmalloc(N * sizeof *response);
   assert(response != NULL);
   assert(((uintptr_t)response & 63u) == 0);
+  if(response == NULL)
+    return -1;
   fftwf_plan fwd_filter_plan = plan_complex(N,response,response,FFTW_FORWARD);
+  assert(fwd_filter_plan != NULL);
   memset(response, 0, N * sizeof *response);
   double window_gain = 0;
   for(int i = 0; i < M; i++){ // build windowed sinc in first M points of N
@@ -1073,6 +1099,21 @@ long lcm(long a, long b){
     return 0;
   long g = gcd(a,b);
   return (a/g) * b;
+}
+// Custom version of malloc that aligns to a cache line
+// This is 64 bytes on most modern machines, including the x86 and the ARM 2711 (Pi 4)
+// This is stricter than a float complex or double complex, which is required by fftwf/fftw
+static void *lmalloc(size_t size){
+  void *ptr = NULL;
+  int r;
+  if((r = posix_memalign(&ptr,64,size)) == 0){
+    assert(ptr != NULL); // should not return NULL if r == 0
+    return ptr;
+  }
+  errno = r;
+  assert(false);
+  fprintf(stderr,"lmalloc(%llu) failed!\n",(unsigned long long)size);
+  return NULL;
 }
 #if 0
 // Miscellaneous, alternate and experimental code, currently unused
