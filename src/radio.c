@@ -85,7 +85,7 @@ struct frontend Frontend = {
   .status_cond = PTHREAD_COND_INITIALIZER,
 };
 
- // Template for dynamically created channels
+ // Template containing compiled-in defaults and global parameters
 struct channel Template;
 pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -1073,8 +1073,8 @@ double set_freq(struct channel * const chan,double const f){
 // chan->first_LO is NOT updated here!
 // It is set by incoming status frames so this will take time
 double set_first_LO(struct channel const * const chan,double const first_LO){
-  assert(chan != NULL);
-  if(chan == NULL)
+  assert(chan != NULL && !isnan(first_LO) && isfinite(first_LO));
+  if(chan == NULL || isnan(first_LO) || !isfinite(first_LO))
     return NAN;
 
   double const current_lo1 = Frontend.frequency;
@@ -1108,22 +1108,21 @@ double set_first_LO(struct channel const * const chan,double const first_LO){
  an integer quotient and a double remainder, e.g, +/- 20 Hz
 */
 int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, double freq){
+  assert(!isnan(samprate) && !isnan(freq) && N > 0);
   double const hzperbin = samprate / N;
 
-#if 0
-  // Round to multiples of V (not needed anymore)
-  int const V = N / (M-1);
-  int const r = V * lrint((freq/hzperbin) / V);
-#else
+  // It used to be necessary to round the shift to multiples of V, but I worked out how to
+  // step the phase between frames
+  //  int const V = N / (M-1);
+  //  int const r = V * lrint((freq/hzperbin) / V);
   (void)M;
   int const r = lrint(freq/hzperbin);
-#endif
 
   if(shift)
     *shift = r;
 
   if(remainder)
-    *remainder = freq - (r * hzperbin);
+    *remainder = fma(-(double)r, hzperbin, freq);
 
   // Check if there's no overlap in the range we want
   // Intentionally allow real input to go both ways, for front ends with high and low side injection
