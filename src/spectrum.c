@@ -115,11 +115,9 @@ int demod_spectrum(void *arg){
       window_type = chan->spectrum.window_type;
     }
     // End of parameter checking and (re)initialization
-    if(restart_needed)
+    int r;
+    if(restart_needed || (r = downconvert(chan)) == -1)
       break; // restart or terminate
-    int r = downconvert(chan);
-    if(r == -1)
-      break; // restart needed
     else if(r == 1)
       continue; // channel inactive; poll for commands
 
@@ -191,6 +189,8 @@ int demod_spectrum(void *arg){
     window_type = chan->spectrum.window_type;
     shape = chan->spectrum.shape;
   } while(true);
+  response(chan,response_needed); // in case one is pending as we're restarting
+
  quit:;
   if(Verbose > 1)
     fprintf(stderr,"%s exiting\n",chan->name);

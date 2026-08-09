@@ -93,11 +93,9 @@ int demod_fm(void *arg){
       }
     }
     pthread_mutex_unlock(&chan->status.lock);
-    if(restart_needed)
+    int r;
+    if(restart_needed || (r = downconvert(chan)) == -1)
       break; // restart or terminate
-    int r = downconvert(chan);
-    if(r == -1)
-      break; // restart needed
     else if(r == 1)
       continue; // channel inactive; poll for commands
 
@@ -351,6 +349,7 @@ int demod_fm(void *arg){
       break; // no valid output stream; terminate!
 
   } while(true);
+  response(chan,response_needed); // in case one is pending as we're restarting
  quit:;
   if(Verbose > 1)
     fprintf(stderr,"%s exiting\n",chan->name);
