@@ -11,6 +11,10 @@
 #include <pthread.h>
 #include <complex.h>
 #include <math.h>
+#include <opus/opus.h>
+#include <portaudio.h>
+#include <assert.h>
+#include "radio.h"
 
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 #define BUFFERSIZE (1<<17)    // about 2.73 sec at 48 kHz - must be power of 2 times page size (4k)!
