@@ -283,6 +283,7 @@ int loadconfig(char const *file){
   }
   // Process [global] section entries common to all demodulator blocks
   config_validate_section(stderr,Configtable,GLOBAL,Global_keys,Channel_keys);
+  // Description can also be set in hardware section, which will ovewrite this
   Description = config_getstring(Configtable,GLOBAL,"description",Name);
   strlcpy(Frontend.description,Description,sizeof Frontend.description);
   Verbose += config_getint(Configtable,GLOBAL,"verbose",0); // Add to the count of -v's on the command line
@@ -368,22 +369,14 @@ int loadconfig(char const *file){
   }
   // If enabled, look quickly (2 tries max) to see if the status group name is already in the DNS
   // Otherwise
-  struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
   if(!use_dns || resolve_mcast(Metadata_dest_string,(struct sockaddr *)&Frontend.metadata_dest_socket,
 		      DEFAULT_STAT_PORT,NULL,0,2) != 0){
     // Generate an IPv4 address by hashing the name
+    struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
     uint32_t addr = make_maddr(Metadata_dest_string);
     sin->sin_family = AF_INET;
     sin->sin_addr.s_addr = htonl(addr);
     sin->sin_port = htons(DEFAULT_STAT_PORT);
-  }
-  if(advertise && sin->sin_family == AF_INET){ // fix this to handle IPv6 too
-    uint32_t addr = ntohl(sin->sin_addr.s_addr);
-    // If dns name already exists in the DNS, advertise the service record but not an address record
-    char ttlmsg[128];
-    snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",ttl);
-    avahi_start(Description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
-		Metadata_dest_string,addr,ttlmsg);
   }
   // Set up two output sockets for ttl != 0 and ttl == 0
   /* The ttl in the [global] section is used for any dynamic
@@ -428,6 +421,19 @@ int loadconfig(char const *file){
     if(sect == nsect){
       fprintf(stderr,"no hardware section [%s] found, please create it\n",hardware);
       exit(EX_USAGE);
+    }
+  }
+  // Wait until hardware section has been parsed in case it sets Description
+  if(advertise){
+    // fix this to handle IPv6 too!
+    struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
+    if(sin->sin_family == AF_INET){
+      uint32_t addr = ntohl(sin->sin_addr.s_addr);
+      // If dns name already exists in the DNS, advertise the service record but not an address record
+      char ttlmsg[128];
+      snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",ttl);
+      avahi_start(Description,"_ka9q-ctl._udp",DEFAULT_STAT_PORT,
+		  Metadata_dest_string,addr,ttlmsg);
     }
   }
   assert(Blocktime != 0);
