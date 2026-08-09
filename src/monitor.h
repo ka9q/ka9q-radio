@@ -4,7 +4,13 @@
 #define _GNU_SOURCE 1
 #include <stdatomic.h>
 #include <samplerate.h>
-
+#include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <sys/socket.h>
+#include <pthread.h>
+#include <complex.h>
+#include <math.h>
 
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 #define BUFFERSIZE (1<<17)    // about 2.73 sec at 48 kHz - must be power of 2 times page size (4k)!
