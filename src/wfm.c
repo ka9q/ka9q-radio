@@ -1,7 +1,6 @@
 // Wideband FM demodulation
 // Copyright 2020-2025, Phil Karn, KA9Q
 // Still needs some work, e.g., cascaded filter restructuring
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
 #include <string.h>

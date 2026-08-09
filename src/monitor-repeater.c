@@ -1,4 +1,5 @@
-#define _GNU_SOURCE 1
+// Section of the 'monitor' program that implements a proof-of-concept multichannel input repeater
+// Copyright 2026 Phil Karn, KA9Q
 #include <assert.h>
 #include <errno.h>
 #include <pthread.h>

@@ -3,7 +3,6 @@
 // to a stereo signal @ 48 kHz
 // Part of ka9q-radio. This is a standalone daemon, an alternative to the (very similar) built-in decoder
 // Copyright 2020-2023 Phil Karn, KA9Q
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
 #include <complex.h>

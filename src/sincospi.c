@@ -4,7 +4,6 @@
 // rather than radians, especially in repeated complex multiplication
 // Copyright 2026 Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>

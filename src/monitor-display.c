@@ -2,7 +2,6 @@
 // Moved out of monitor.c when it was getting way too big
 // Copyright Aug 2024 Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
 #include <pthread.h>

@@ -1,7 +1,6 @@
 // Data structures and macros for the ka9q-radio 'monitor' RTP audio stream player
 #ifndef _MONITOR_H
 #define _MONITOR_H 1
-#define _GNU_SOURCE 1
 #include <stdatomic.h>
 #include <samplerate.h>
 #include <stddef.h>

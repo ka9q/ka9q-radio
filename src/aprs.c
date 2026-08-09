@@ -4,7 +4,6 @@
 // Should get station location from a GPS receiver
 // Copyright 2018-2023, Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
 #include <stdio.h>

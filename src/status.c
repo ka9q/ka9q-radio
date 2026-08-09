@@ -1,7 +1,5 @@
 // Low-level encode/decode routines for TLV status packets from/to ka9q-radio's radiod
 // Copyright 2020-2023 Phil Karn, KA9Q
-
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <string.h>
 #if defined(linux)

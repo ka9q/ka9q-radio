@@ -1,6 +1,5 @@
 // ka9q-radio driver for Great Scott Gadgets Hack RF
 // Need to figure out how to detect a device failure during streaming
-#define _GNU_SOURCE 1 // allow bind/connect/recvfrom without casting sockaddr_in6
 #include <assert.h>
 #include <pthread.h>
 #include <string.h>

@@ -4,7 +4,6 @@
 // March 2024, Phil Karn KA9Q
 // Jan 2025 - option to publish through static additions to avahi daemon files /etc/avahi/hosts, /etc/avahi/services
 //            note - does not remove such entries yet!
-#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

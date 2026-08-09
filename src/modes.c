@@ -1,7 +1,6 @@
 // Load and search ka9q-radio preset definition table in presets.conf
 // Copyright 2018-2023, Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1  // Avoid warnings when including dsp.h
 #include <assert.h>
 #include <errno.h>
 #include <math.h>

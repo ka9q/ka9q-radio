@@ -10,7 +10,6 @@
 // Makes better use of multicore CPUs under heavy load (like encoding the entire 2m band at once)
 // Copyright Jan 2018-2023 Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
 #include <math.h>

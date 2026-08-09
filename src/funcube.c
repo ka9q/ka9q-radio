@@ -1,6 +1,5 @@
 // funcube driver module linked into radiod
 // Copyright July 2023, Phil Karn,  KA9Q
-#define _GNU_SOURCE 1
 
 #include <pthread.h>
 #include <portaudio.h>

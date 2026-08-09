@@ -4,7 +4,6 @@
 #ifndef _OSC_H
 #define _OSC_H 1
 
-#define _GNU_SOURCE 1
 #include <pthread.h>
 #include <complex.h>
 #include <math.h>

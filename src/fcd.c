@@ -2,16 +2,16 @@
 // KA9Q version of fcd.c
 /***************************************************************************
  *  This file is part of Qthid.
- * 
+ *
  *  Copyright (C) 2010  Howard Long, G6LVB
  *  CopyRight (C) 2011  Alexandru Csete, OZ9AEC
  *                      Mario Lorenz, DL5MLO
- * 
+ *
  *  Modified in (non-compatible) way by Phil Karn, KA9Q Aug 2016
  *  to use handles on each call so that multiple FCDs can be used on a single system
  *  at once without repeating the search every time you do an operation.
  *  Also handles both FCD Pro+ and older Pro at the same time
- *  
+ *
  *  Qthid is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
@@ -27,7 +27,6 @@
  *
  ***************************************************************************/
 
-#define _GNU_SOURCE 1
 #define FCD
 #include <string.h>
 #if defined(linux)
@@ -97,20 +96,20 @@ hid_device *fcdOpen(char *sound_name,int size,int which){
     char s[PATH_MAX];
     FILE *fp = NULL;
     int u1,u2,r;
-    
+
     if(strncmp(dp->d_name,"card",4) != 0)
       continue; // ignore directory entries not starting with "card"
-    
+
     snprintf(s,sizeof(s),"/proc/asound/%s/usbbus",dp->d_name);
     if((fp = fopen(s,"r")) == NULL){
       continue;
-    }    
+    }
     // Contains one line of the form "001/007" (bus 1, device 7)
     r = fscanf(fp,"%u/%u",&u1,&u2);
     fclose(fp);
     if(r != 2 || u1 != usb1 || u2 != usb2)
       continue; // Not the droids we're looking for
-    
+
     // The A/D is device 0 on this card, so form the ALSA name
     // with the prefix "hw:", then the card number (minus "card"), then ",0",
     // e.g., "hw:1,0" if it's card1.
@@ -118,7 +117,7 @@ hid_device *fcdOpen(char *sound_name,int size,int which){
     snprintf(sound_name,size,"hw:%s,0",&dp->d_name[4]);
     break;
   }
-  closedir(dir);  
+  closedir(dir);
   return phd;
 }
 
@@ -433,7 +432,7 @@ FCD_MODE_ENUM fcdAppSetFreq(hid_device *phd,int nFreq)
       cnt = hid_read_timeout(phd, aucBufIn, 65, 1000);
       if(cnt != 0)
 	break;
-    }      
+    }
     if(i == 10)
       return FCD_MODE_NONE; // Failed after 10 tries
     if (aucBufIn[0]==FCD_CMD_APP_SET_FREQ_HZ && aucBufIn[1]==1)
@@ -746,4 +745,3 @@ FCD_MODE_ENUM fcdAppGetParam(hid_device *phd,uint8_t u8Cmd, uint8_t *pu8Data, ui
     /* Response did not contain the expected bytes */
     return FCD_MODE_BL;
 }
-

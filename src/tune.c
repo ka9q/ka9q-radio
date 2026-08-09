@@ -1,7 +1,5 @@
 // Interactive program to tune radiod in ka9q-radio
 // Copyright 2023 Phil Karn, KA9Q
-
-#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <assert.h>
 

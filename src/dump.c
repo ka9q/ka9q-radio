@@ -1,7 +1,6 @@
 // Decode status packets from radiod into something human readable
 // Copyright 2017-2023 Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdio.h>
 #include <math.h>

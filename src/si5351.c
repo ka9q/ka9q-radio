@@ -1,6 +1,5 @@
 // Routines for programming the dividers in the ubiquitous Si5351 clock generator chip
-
-#define _GNU_SOURCE 1
+// Copyright 2026 Phil Karn KA9Q
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>

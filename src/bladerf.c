@@ -1,7 +1,5 @@
 // Front end driver for bladeRF
 // Copyright 2023, Andriy Skulysh
-
-#define _GNU_SOURCE 1
 #include <pthread.h>
 #include <libbladeRF.h>
 #include <errno.h>

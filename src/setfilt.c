@@ -1,8 +1,6 @@
 // Obsolete - use 'tune' program
 // Interactive program to set predetection filters
 // Copyright 2023 Phil Karn, KA9Q
-
-#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>

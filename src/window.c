@@ -1,6 +1,5 @@
 // Various window functions for Fourier analysis, filter design, etc
-// Jan 2026 Phil Karn, KA9Q
-#define _GNU_SOURCE 1
+// Copyright Jan 2026 Phil Karn, KA9Q
 #include <unistd.h>
 #include <math.h>
 #include <stdbool.h>

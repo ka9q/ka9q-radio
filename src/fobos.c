@@ -10,7 +10,6 @@ stream centered on the tuner LO.
 In direct sample mode you can also treat the inputs as complex, or select or combine them
 on a per-channel basis by selecting output filter type BEAM and calling set_filter_weights() in filter.c
 */
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
 #include <fobos.h>

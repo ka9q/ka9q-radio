@@ -1,7 +1,5 @@
 // Real Time Protocol support routines and tables for ka9q-radio
 // Copyright 2026 Phil Karn, KA9Q
-
-#define _GNU_SOURCE 1
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>

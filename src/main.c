@@ -1,7 +1,6 @@
 // Core of KA9Q radiod
 // downconvert, filter, demodulate, multicast output
 // Copyright 2017-2025, Phil Karn, KA9Q, karn@ka9q.net
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>

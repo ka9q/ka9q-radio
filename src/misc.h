@@ -3,14 +3,6 @@
 #ifndef _MISC_H
 #define _MISC_H 1
 
-// Note: files that include <math.h> before us must define _GNU_SOURCE prior to including math.h
-// or Linux will generate warnings about a lack of declarations for sincos and sincosf.
-// Apparently they are defined in math.h only when _GNU_SOURCE is defined.
-// Our re-defining _GNU_SOURCE and re-including math.h doesn't help if it has already been included
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE 1
-#endif
-
 #include <pthread.h>
 #include <stdint.h>
 #include <limits.h>

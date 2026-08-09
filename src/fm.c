@@ -1,6 +1,5 @@
 // FM demodulation and squelch for ka9q-radio
 // Copyright 2018-2025, Phil Karn, KA9Q
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
 #include <string.h>

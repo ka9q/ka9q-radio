@@ -2,7 +2,6 @@
 // Copyright 2023, Phil Karn, KA9Q
 
 #undef DEBUG_AGC
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
 #include <libairspyhf/airspyhf.h>

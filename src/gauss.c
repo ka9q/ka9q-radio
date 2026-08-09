@@ -1,4 +1,5 @@
-#define _GNU_SOURCE 1
+// Routines for generating gaussian-distributed random variables, ie, white noise
+// Copyright 2026 Phil Karn KA9Q
 #include <stdint.h>
 #include <stdbool.h>
 #include "misc.h"

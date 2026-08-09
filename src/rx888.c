@@ -8,8 +8,6 @@
 
 // VHF tuner support by K4VZ July 2024
 // Note: VHF tuner does not work yet -- KA9Q, 17 Aug 2024
-
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
 #include <libusb-1.0/libusb.h>

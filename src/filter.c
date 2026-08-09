@@ -5,7 +5,6 @@
 // Complex input and transfer functions, complex or real output
 // Copyright 2017-2023, Phil Karn, KA9Q, karn@ka9q.net
 //#define LIQUID 1 // Experimental use of parks-mcclellan in filter generation
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>

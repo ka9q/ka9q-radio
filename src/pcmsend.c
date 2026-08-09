@@ -2,7 +2,6 @@
 // Copyright April 2018 Phil Karn, KA9Q
 // NEEDS REWRITING to generate status stream
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
 #include <locale.h>
@@ -58,7 +57,7 @@ void closedown(int);
 // Convert unsigned number modulo buffersize to a signed 2's complement
 static inline int signmod(unsigned int const a){
   int y = a & (BUFFERSIZE-1);
-  
+
   if(y >= BUFFERSIZE/2)
     y -= BUFFERSIZE;
   assert(y >= -BUFFERSIZE/2 && y < BUFFERSIZE/2);
@@ -150,7 +149,7 @@ int main(int argc,char * const argv[]){
   inputParameters.device = inDevNum;
   inputParameters.sampleFormat = paFloat32;
   inputParameters.suggestedLatency = (double)FRAMESIZE / Samprate;
-  
+
   PaStream *Pa_Stream;          // Portaudio stream handle
   r = Pa_OpenStream(&Pa_Stream,
 		    &inputParameters,
@@ -162,7 +161,7 @@ int main(int argc,char * const argv[]){
 		    NULL);
 
   if(r != paNoError){
-    fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));      
+    fprintf(stderr,"Portaudio error: %s\n",Pa_GetErrorText(r));
     exit(EX_IOERR);
   }
   r = Pa_StartStream(Pa_Stream);
@@ -259,7 +258,7 @@ static int pa_callback(const void *inputBuffer, void *outputBuffer,
 
   float *in = (float *)inputBuffer;
   assert(in != NULL);
-    
+
   int count = Channels*framesPerBuffer;
 
   while(count--){
@@ -271,7 +270,7 @@ static int pa_callback(const void *inputBuffer, void *outputBuffer,
 }
 void cleanup(void){
   Pa_Terminate();
-  
+
   if(Output_fd != -1)
     close(Output_fd);
   Output_fd = -1;
@@ -282,5 +281,3 @@ void closedown(int s){
   fprintf(stderr,"signal %d\n",s);
   exit(EX_OK);
 }
-
-

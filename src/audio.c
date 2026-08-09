@@ -2,7 +2,6 @@
 // Handles linear 16-bit PCM, mono and stereo
 // Copyright 2017-2024 Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdio.h>
 #include <unistd.h>

@@ -1,10 +1,6 @@
 // Miscellaneous low-level routines for ka9q-radio
 // Copyright 2018, Phil Karn, KA9Q
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE 1
-#endif
-
 #include <math.h>
 #include <assert.h>
 #include <stdio.h>

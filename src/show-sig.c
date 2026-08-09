@@ -1,8 +1,6 @@
 // Display radiod signal levels -- OBSOLETE
 // Copyright 2021 Phil Karn, KA9Q
 // Adapted from show-pkt.c
-
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>

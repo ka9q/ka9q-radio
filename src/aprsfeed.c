@@ -1,7 +1,6 @@
 // Process AX.25 frames containing APRS data, feed to APRS2 network
 // Copyright 2018-2023, Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -49,7 +48,7 @@ int main(int argc,char *argv[]){
   // The sooner we do this, the fewer options there are for abuse
   if(seteuid(getuid()) != 0)
     fprintf(stderr,"seteuid: %s\n",strerror(errno));
-  
+
   setlocale(LC_ALL,getenv("LANG"));
   setlinebuf(stdout);
 

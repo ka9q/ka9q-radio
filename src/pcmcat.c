@@ -5,7 +5,6 @@
 // Revised Aug 2023 to more cleanly handle sender restarts
 // Copyright 2023 Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -28,7 +27,7 @@
 struct pcmstream {
   uint32_t ssrc;            // RTP Sending Source ID
   int type;                 // RTP type (10,11,20)
-  
+
   struct sockaddr sender;
   char const *source;
   int framesize;            // Bytes per timestamp increment
@@ -132,7 +131,7 @@ int main(int argc,char *argv[]){
     if(Pcmstream.ssrc == 0){
       // First packet on stream, initialize
       init(&Pcmstream,&rtp,&sender);
-      
+
       if(!Quiet){
 	fprintf(stderr,"New session from %u@%s, payload type %d\n",
 		Pcmstream.ssrc,
@@ -226,9 +225,8 @@ static int init(struct pcmstream *pc,struct rtp_header const *rtp,struct sockadd
     else
       Byteswap = false;
   }
-  
+
   memcpy(&pc->sender,sender,sizeof(pc->sender)); // Remember sender
   pc->source = formatsock(&pc->sender,false);
   return 0;
 }
-

@@ -11,7 +11,6 @@
 #define DEFAULT_PLL_DAMPING (M_SQRT1_2); // PLL loop damping factor; 1/sqrt(2) is "critical" damping
 #define DEFAULT_PLL_LOCKTIME (.5);  // time, sec PLL stays above/below threshold SNR to lock/unlock
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <complex.h>
 #include <math.h>

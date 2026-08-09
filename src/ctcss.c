@@ -1,7 +1,6 @@
 // ka9q-radio PL tone decoder
 // Reads multicast PCM audio (mono only right now)
 // Copyright Jan 2019 Phil Karn, KA9Q
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
 #include <complex.h>

@@ -3,7 +3,6 @@
 // 29 July 2017 Phil Karn
 // Copyright 2017-2023  Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>

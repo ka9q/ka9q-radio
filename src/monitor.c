@@ -1,7 +1,6 @@
 // Listen to multicast group(s), send audio to local sound device via portaudio
 // Copyright 2018-2023 Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
 #include <pthread.h>

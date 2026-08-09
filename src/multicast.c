@@ -1,8 +1,6 @@
 // Multicast socket and network utility routines for ka9q-radio
 // Copyright 2018-2025 Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
-
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>

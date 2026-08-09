@@ -1,4 +1,5 @@
-#define _GNU_SOURCE 1
+// Generate random variables
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <fcntl.h>

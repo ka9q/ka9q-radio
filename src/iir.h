@@ -2,7 +2,6 @@
 // Copyright 2022-2023, Phil Karn, KA9Q
 #ifndef _IIR_H
 #define _IIR_H 1
-#define _GNU_SOURCE 1
 #include <complex.h>
 #include <math.h>
 #include <stdlib.h>

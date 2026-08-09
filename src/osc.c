@@ -1,7 +1,6 @@
 // General purpose oscillator (complex quadrature and PLL) subroutines for ka9q-radio
 // Cpoyright 2022-2023, Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>

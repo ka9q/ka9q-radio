@@ -52,7 +52,6 @@ Command-line options:
 //  - Cleanup from previous "wspr-decoded" version (e.g. remove unneeded variables/code)
 //
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>

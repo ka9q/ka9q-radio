@@ -3,7 +3,6 @@
 // January 2026, Phil Karn, KA9Q
 #ifndef _IMPORT_H
 #define _IMPORT_H 1
-#define _GNU_SOURCE 1
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>

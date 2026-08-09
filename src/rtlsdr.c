@@ -9,7 +9,6 @@
  * @endverbatim
 **/
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
 #include <rtl-sdr.h>

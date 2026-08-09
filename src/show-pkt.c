@@ -1,8 +1,6 @@
 // Display RTP statistics
 // Adapted from control.c
 // Copyright 2021 Phil Karn, KA9Q
-
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>

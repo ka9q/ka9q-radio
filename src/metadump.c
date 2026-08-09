@@ -1,7 +1,6 @@
 // Utility to trace ka9q-radio multicast SDR metadata
 // Copyright 2018-2023 Phil Karn, KA9Q
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdio.h>
 #include <unistd.h>

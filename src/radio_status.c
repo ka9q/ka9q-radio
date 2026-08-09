@@ -1,9 +1,6 @@
 // Generate UDP status messages from radiod, accept incoming commands to radiod in same format
 // Copyright 2023-2025 Phil Karn, KA9Q
-
-#define _GNU_SOURCE 1
 #include <assert.h>
-
 #include <stdint.h>
 #include <unistd.h>
 #include <limits.h>

@@ -3,7 +3,6 @@
 // Copyright 2018, Phil Karn, KA9Q
 // NEEDS TO BE REWRITTEN to use channel status stream to get sample rate and format
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <errno.h>
 #include <pthread.h>

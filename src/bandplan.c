@@ -3,7 +3,6 @@
 // This information is displayed in the 'Info' window by the 'radio' program
 // Fairly primitive, needs to be revised with a more general database
 // Copyright 2018-2023, Phil Karn, KA9Q
-#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

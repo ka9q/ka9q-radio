@@ -5,7 +5,6 @@
 // Copyright 2017-2024 Phil Karn, KA9Q
 // Major revisions fall 2020, 2023 (really continuous revisions!)
 
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdlib.h>
 #include <stdarg.h>

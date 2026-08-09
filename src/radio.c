@@ -3,7 +3,6 @@
 // set up and start hardware and convolver
 // Also provides entry points for channel creation and control for commands processed in radio_status.c
 // Copyright 2018-2025, Phil Karn, KA9Q
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <complex.h>
 #include <errno.h>

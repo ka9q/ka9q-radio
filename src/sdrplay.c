@@ -7,8 +7,6 @@
 // Automatic tuning by ka9q-radio is unreliable. Often needs manual jiggling if not set to needed frequency in config file at startup
 // Input levels are uncalibrated
 // The opaque sdrplay "server" needed to support this thing burns as much time as ka9q-radio!
-
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
 #include <sdrplay_api.h>

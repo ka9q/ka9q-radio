@@ -1,7 +1,6 @@
 //#define SPECTRUM_DEBUG 1
 // Spectral analysis service for ka9q-radio's radiod
 // Copyright 2023-2026, Phil Karn, KA9Q
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <pthread.h>
 #include <string.h>

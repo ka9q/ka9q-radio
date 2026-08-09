@@ -1,6 +1,5 @@
 // AX.25 frame header decoding (this takes me wayyyyy back)
 // Copyright 2018, Phil Karn, KA9Q
-#define _GNU_SOURCE 1
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,7 +13,7 @@
 // return pointer to string of form "KA9Q-11" in user-provided buffer which must be at least 10 bytes long
 char *get_callsign(char *result,uint8_t const *in){
   char callsign[7],c;
-  
+
   memset(callsign,0,sizeof(callsign));
   for(int i=0;i<6;i++){
     c = in[i] >> 1;
@@ -26,7 +25,7 @@ char *get_callsign(char *result,uint8_t const *in){
   if(ssid != 0)
     snprintf(result,10,"%s-%d",callsign,ssid);
   else
-    snprintf(result,10,"%s",callsign);    
+    snprintf(result,10,"%s",callsign);
   return result;
 }
 
@@ -49,7 +48,7 @@ int dump_frame(FILE *stream,uint8_t *frame,size_t bytes){
     // Scan digipeater list; have any repeated it?
     for(int i=0;i<8;i++){
       int digi_ssid = frame[20 + 7*i];
-      
+
       digipeaters++;
       if(digi_ssid & 0x80){
 	// Yes, passed this one, keep looking
@@ -72,9 +71,9 @@ int dump_frame(FILE *stream,uint8_t *frame,size_t bytes){
   int ssid = (frame[13] >> 1) & 0xf; // SSID
   if(ssid > 0)
     fprintf(stream,"-%d",ssid);
-  
+
   fprintf(stream," -> ");
-  
+
   // List digipeaters
 
   if(!(frame[13] & 0x1)){
@@ -84,7 +83,7 @@ int dump_frame(FILE *stream,uint8_t *frame,size_t bytes){
 	char c = (frame[14 + 7*i + k] >> 1) & 0x7f;
 	if(c == ' ')
 	  break;
-	
+
 	if(this_transmitter == 2+i)
 	  fputc(toupper(c),stream);
 	else
@@ -139,7 +138,7 @@ int dump_frame(FILE *stream,uint8_t *frame,size_t bytes){
 // return 1 if good, 0 otherwise
 int crc_good(uint8_t *frame,size_t length){
   unsigned int const crc_poly = 0x8408;
-	
+
   uint16_t crc = 0xffff;
   while(length-- > 0){
     uint8_t byte = *frame++;
@@ -196,7 +195,7 @@ int ax25_parse(struct ax25_frame *out,uint8_t const *in,size_t len){
     if(in[7*(2+i)+6] & 0x80)
       out->digipeaters[i].h = 1;
     else
-      out->digipeaters[i].h = 0;      
+      out->digipeaters[i].h = 0;
   }
   out->control = in[ctl_offs];
   out->type = in[ctl_offs+1];

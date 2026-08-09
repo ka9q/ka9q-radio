@@ -2,8 +2,7 @@
 // Invoked by udev when it sees device 00f3 (FX3 in DFU boot mode)
 // Loading the firmware and starting it will cause the device to detatch from the USB and reappear as device 00f1
 // with the true serial number. udevd can then invoke radiod with the proper instance name
-// Phil Karn April 2026
-#define _GNU_SOURCE 1
+// Copyright Phil Karn KA9Q April 2026
 #include <assert.h>
 #include <pthread.h>
 #include <libusb-1.0/libusb.h>
