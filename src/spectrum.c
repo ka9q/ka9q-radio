@@ -202,10 +202,6 @@ int demod_spectrum(void *arg){
     fftwf_destroy_plan(chan->spectrum.plan);
   chan->spectrum.plan = NULL;
   FREE(chan->spectrum.window);
-  for(int i=0; i < CQLEN; i++){
-    FREE(chan->commands[i].buffer);
-    chan->commands[i].length = 0;
-  }
   FREE(chan->spectrum.bin_data);
   FREE(chan->spectrum.ring);
   chan->spectrum.ring_size = 0;

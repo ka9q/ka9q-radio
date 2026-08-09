@@ -973,7 +973,7 @@ int start_demod(struct channel * chan){
   return 0;
 }
 
-// Called by a demodulator to clean up its own resources
+// Clean up a terminating demodulator thread
 // Some of this stuff should already be cleaned up, but make sure
 static int close_chan(struct channel *chan){
   assert(chan != NULL && chan->state != CHANNEL_IDLE);
@@ -999,6 +999,7 @@ static int close_chan(struct channel *chan){
   pthread_mutex_lock(&chan->status.lock);
   pthread_mutex_unlock(&Channel_list_mutex);
 
+  // no longer flushed during individual demod exit
   for(int i=0; i < CQLEN; i++){
     FREE(chan->commands[i].buffer);
     chan->commands[i].length = 0;

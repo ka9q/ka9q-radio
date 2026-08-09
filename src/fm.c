@@ -357,10 +357,6 @@ int demod_fm(void *arg){
   // clean up
   FREE(chan->output.queue);
   chan->output.queue_length = 0;
-  for(int i=0; i < CQLEN; i++){
-    FREE(chan->commands[i].buffer);
-    chan->commands[i].length = 0;
-  }
   if(chan->opus.encoder != NULL){
     opus_encoder_destroy(chan->opus.encoder);
     chan->opus.encoder = NULL;
