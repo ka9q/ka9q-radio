@@ -1,3 +1,10 @@
+ka9q-radio (2026.08.10-1-trixie1) trixie; urgency=medium
+
+  * commit ed4098d579367f5b3c4828a68e6875ecdae1eb60
+    major rewrites of starting up and channel creation/deletion
+
+ -- Phil Karn <karn@ka9q.net>  Mon, 10 Aug 2026 01:10:19 -0700
+
 ka9q-radio (2026.08.06-1-trixie1) trixie; urgency=medium
 
   * commit e1d675e6d8afb50ec4781702f7eeb72ca2f91d31
