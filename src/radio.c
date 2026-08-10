@@ -85,7 +85,7 @@ struct frontend Frontend = {
 };
 
  // Template containing compiled-in defaults and global parameters
-struct channel Template;
+chan_t Template;
 pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
 static _Atomic int Active_channel_count = ATOMIC_VAR_INIT(0); // doesn't really need to be atomic
@@ -126,7 +126,7 @@ static char const *Global_keys[] = {
 
 // Remaining global variables are linked mostly from radio_status.c
 // Try to eliminate as many as possible
-struct channel Channel_list[Nchannels];
+chan_t Channel_list[Nchannels];
 double Blocktime = 0;      // Actual blocktime to give integral blocksize at input sample rate. Starts uninitialized
 double User_blocktime = DEFAULT_BLOCKTIME; // User's requested blocktime
 char const *Description; // Set either in [global] or [hardware]
@@ -138,12 +138,12 @@ int Output_fd0 = -1; // Unconnected socket used for local loopback when ttl = 0
 int Ctl_fd = -1;     // File descriptor for receiving user commands
 
 extern char const *Name;     // owned by main.c
-static double estimate_noise(struct channel *chan,int shift);// Noise estimator tuning
+static double estimate_noise(chan_t *chan,int shift);// Noise estimator tuning
 static int setup_hardware(char const *sname);
 static void *process_section(void *p);
 static void *sap_send(void *p);
 static void *rtcp_send(void *p);
-static int close_chan(struct channel *chan);
+static int close_chan(chan_t *chan);
 
 // Table of frequencies to start
 struct ftab {
@@ -636,7 +636,7 @@ static void *process_section(void *arg){
   // 2. a preset in this section, if specified
   // 3. the [global] section: a preset (if any) modified by global settings
   // 4. compiled-in defaults to keep things from blowing up
-  struct channel chan_template = Template; // compiled defaults + [global] settings
+  chan_t chan_template = Template; // compiled defaults + [global] settings
   char const * p = config_getstring(Configtable,sname,"preset",NULL); // no default here so we'll pick up the global default in Template
   char const * preset = config_getstring(Configtable,sname,"mode",p); // Must be specified to create a dynamic channel
   if(preset != NULL){
@@ -820,7 +820,7 @@ static void *process_section(void *arg){
 
     uint32_t ssrc = lrint(freq_table[i].f / 1000.0); // Kilohertz
 
-    struct channel *chan = NULL;
+    chan_t *chan = NULL;
     // Try to create it, incrementing in case of collision
     int const max_collisions = 100;
     for(int i=0; i < max_collisions; i++,ssrc++){
@@ -869,14 +869,14 @@ static void *process_section(void *arg){
 }
 // Atomically find chan by ssrc, or create and initialize if it doesn't already exist
 // ! LOCKS the channel status !
-struct channel *lookup_or_create_chan(uint32_t ssrc,struct channel const *template){
+chan_t *lookup_or_create_chan(uint32_t ssrc,chan_t const *template){
   if(ssrc == 0xffffffffu)
     return NULL; // reserved
 
   pthread_mutex_lock(&Channel_list_mutex); // protect state
   int first_unused = -1;
   for(int i=0; i < Nchannels; i++){
-    struct channel *chan = &Channel_list[i];
+    chan_t *chan = &Channel_list[i];
     if(chan->state == CHANNEL_IDLE){
       if(first_unused == -1)
 	first_unused = i; // Note first unused entry in case we need it
@@ -896,7 +896,7 @@ struct channel *lookup_or_create_chan(uint32_t ssrc,struct channel const *templa
     return NULL;
   }
   // Use first unused entry
-  struct channel *chan = &Channel_list[first_unused];
+  chan_t *chan = &Channel_list[first_unused];
   assert(chan->state == CHANNEL_IDLE);
   memcpy(chan,template,sizeof *chan);
   chan->output.rtp.ssrc = ssrc;
@@ -916,7 +916,7 @@ struct channel *lookup_or_create_chan(uint32_t ssrc,struct channel const *templa
 }
 static void *demod_thread(void *p){
   assert(p != NULL);
-  struct channel *chan = (struct channel *)p;
+  chan_t *chan = (chan_t *)p;
   if(chan == NULL)
     return NULL;
 
@@ -958,7 +958,7 @@ static void *demod_thread(void *p){
   return NULL;
 }
 // start demod thread on already-initialized chan structure
-int start_demod(struct channel * chan){
+int start_demod(chan_t * chan){
   assert(chan != NULL);
   if(chan == NULL)
     return -1;
@@ -974,7 +974,7 @@ int start_demod(struct channel * chan){
 
 // Clean up a terminating demodulator thread
 // Some of this stuff should already be cleaned up, but make sure
-static int close_chan(struct channel *chan){
+static int close_chan(chan_t *chan){
   assert(chan != NULL && chan->state != CHANNEL_IDLE);
   if(chan == NULL || chan->state == CHANNEL_IDLE)
     return -1;
@@ -1030,7 +1030,7 @@ static int close_chan(struct channel *chan){
 // The new IF is computed here only to determine if the front end needs retuning
 // The second LO frequency is actually set when the new front end frequency is
 // received back from the front end metadata
-double set_freq(struct channel * const chan,double const f){
+double set_freq(chan_t * const chan,double const f){
   assert(chan != NULL);
   if(chan == NULL)
     return NAN;
@@ -1071,7 +1071,7 @@ double set_freq(struct channel * const chan,double const f){
 // Note: single precision floating point is not accurate enough at VHF and above
 // chan->first_LO is NOT updated here!
 // It is set by incoming status frames so this will take time
-double set_first_LO(struct channel const * const chan,double const first_LO){
+double set_first_LO(chan_t const * const chan,double const first_LO){
   assert(chan != NULL && !isnan(first_LO) && isfinite(first_LO));
   if(chan == NULL || isnan(first_LO) || !isfinite(first_LO))
     return NAN;
@@ -1135,7 +1135,7 @@ int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, d
 // RTP control protocol sender task
 // this thread is joined during shutdown with the channel lock held, so this cannot hold it
 static void *rtcp_send(void *arg){
-  struct channel *chan = (struct channel *)arg;
+  chan_t *chan = (chan_t *)arg;
   if(chan == NULL)
     pthread_exit(NULL);
 
@@ -1213,7 +1213,7 @@ static void *rtcp_send(void *arg){
    Will probably work better with Opus streams from the opus transcoder, since they're always 48000 Hz stereo; no switching midstream
 */
 static void *sap_send(void *p){
-  struct channel *chan = (struct channel *)p;
+  chan_t *chan = (chan_t *)p;
   assert(chan != NULL);
   if(chan == NULL)
     return NULL;
@@ -1341,7 +1341,7 @@ static void *sap_send(void *p){
 // 10. Run fine tuning, compute average power
 
 // Baseband samples placed in chan->filter.out->output.c
-int downconvert(struct channel *chan){
+int downconvert(chan_t *chan){
   assert(chan != NULL);
   if(chan == NULL)
     return -1;
@@ -1454,7 +1454,7 @@ int downconvert(struct channel *chan){
   }
   return 0; // Should not actually be reached
 }
-void response(struct channel *chan,bool response_needed){
+void response(chan_t *chan,bool response_needed){
   assert(chan != NULL);
   if(chan == NULL)
     return;
@@ -1488,7 +1488,7 @@ void response(struct channel *chan,bool response_needed){
 
 
 
-int set_channel_filter(struct channel *chan){
+int set_channel_filter(chan_t *chan){
   // Limit to Nyquist rate
   double lower = max(chan->filter.min_IF, -(double)chan->output.samprate/2);
   double upper = min(chan->filter.max_IF, (double)chan->output.samprate/2);
@@ -1712,7 +1712,7 @@ static double quantile(double *array, int n, double p) {
 // However, the distribution is skewed, so you have to compensate for this when computing means from partial averages
 // ChatGPT helped me work out the math; its reasoning is summarized in docs/noise.md
 // I'm using its method 3 (average of bins below a threshold)
-static double estimate_noise(struct channel *chan,int shift){
+static double estimate_noise(chan_t *chan,int shift){
   assert(chan != NULL);
   if(chan == NULL)
     return NAN;

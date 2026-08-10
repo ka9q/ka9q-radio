@@ -16,7 +16,7 @@
 
 // FM demodulator thread
 int demod_fm(void *arg){
-  struct channel * const chan = arg;
+  chan_t * const chan = arg;
   assert(chan != NULL);
   if(chan == NULL)
     return -1;

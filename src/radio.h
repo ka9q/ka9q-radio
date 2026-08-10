@@ -348,8 +348,8 @@ typedef struct channel chan_t;
 
 
 extern struct frontend Frontend;
-extern struct channel Channel_list[];
-extern struct channel Template;
+extern chan_t Channel_list[];
+extern chan_t Template;
 #define Nchannels 2000
 extern int Channel_idle_timeout;
 extern int Ctl_fd;     // File descriptor for receiving user commands
@@ -367,19 +367,19 @@ extern dictionary const *Preset_table;   // Table of presets, usually in /usr/lo
 
 // Channel configuration, initialization & manipulation
 int loadconfig(char const *file);
-struct channel *lookup_or_create_chan(uint32_t ssrc,struct channel const *chan);
-int set_defaults(struct channel *chan);
-int loadpreset(struct channel *chan,dictionary const *table,char const *preset);
-int start_demod(struct channel * restrict chan);
-double set_freq(struct channel * restrict ,double);
-double set_first_LO(struct channel const * restrict, double);
-void encode_byte_data(struct channel const *chan,uint8_t *buffer);
+chan_t *lookup_or_create_chan(uint32_t ssrc,chan_t const *chan);
+int set_defaults(chan_t *chan);
+int loadpreset(chan_t *chan,dictionary const *table,char const *preset);
+int start_demod(chan_t * restrict chan);
+double set_freq(chan_t * restrict ,double);
+double set_first_LO(chan_t const * restrict, double);
+void encode_byte_data(chan_t const *chan,uint8_t *buffer);
 
 // Routines common to the internals of all channel demods
 int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, double freq);
-int downconvert(struct channel *chan);
-int set_channel_filter(struct channel *chan);
-void response(struct channel *chan,bool response_needed);
+int downconvert(chan_t *chan);
+int set_channel_filter(chan_t *chan);
+void response(chan_t *chan,bool response_needed);
 
 // extract front end scaling factors (depends on width of A/D sample)
 double scale_voltage_out2FS(struct frontend *frontend);
@@ -395,12 +395,12 @@ int demod_linear(void *);
 int demod_spectrum(void *);
 
 // Control and status
-int send_output(struct channel * restrict ,const float * ,int,bool);
-int send_radio_status(struct sockaddr const *,struct frontend const *, struct channel *);
-int reset_radio_status(struct channel *chan);
-bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length);
-int decode_radio_status(struct frontend *frontend,struct channel *channel,uint8_t const *buffer,int length);
-int flush_output(struct channel *chan,bool marker,bool complete);
+int send_output(chan_t * restrict ,const float * ,int,bool);
+int send_radio_status(struct sockaddr const *,struct frontend const *, chan_t *);
+int reset_radio_status(chan_t *chan);
+bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length);
+int decode_radio_status(struct frontend *frontend,chan_t *channel,uint8_t const *buffer,int length);
+int flush_output(chan_t *chan,bool marker,bool complete);
 
 
 unsigned int round_samprate(unsigned int x);

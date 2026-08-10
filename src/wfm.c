@@ -24,7 +24,7 @@ static int const Composite_samprate = 8 * FULL_SAMPRATE;
 // FM demodulator thread
 int demod_wfm(void *arg){
   assert(arg != NULL);
-  struct channel * chan = arg;
+  chan_t * chan = arg;
   if(chan == NULL)
     return -1;
 

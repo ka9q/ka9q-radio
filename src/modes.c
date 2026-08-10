@@ -203,7 +203,7 @@ char const *demod_name_from_type(enum demod_type type){
 
 // Set reasonable defaults before reading preset or config tables
 // Note frontend entry must be set in radio.c since Frontend global is static
-int set_defaults(struct channel *chan){
+int set_defaults(chan_t *chan){
   assert(chan != NULL);
   if(chan == NULL)
     return -1;
@@ -295,7 +295,7 @@ int set_defaults(struct channel *chan){
 }
 // Set selected section of specified config file into current chan structure
 // Caller must (re) initialize pre-demod filter and (re)start demodulator thread
-int loadpreset(struct channel *chan,dictionary const *table,char const *sname){
+int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   if(chan == NULL || table == NULL || sname == NULL || strlen(sname) == 0)
     return -1;
 

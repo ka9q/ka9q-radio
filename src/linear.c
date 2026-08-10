@@ -24,7 +24,7 @@
 #include "radio.h"
 
 int demod_linear(void *arg){
-  struct channel * const chan = arg;
+  chan_t * const chan = arg;
   assert(chan != NULL);
   if(chan == NULL)
     return -1; // in case asserts are off

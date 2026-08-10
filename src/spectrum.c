@@ -18,20 +18,20 @@
 //#define SPECTRUM_CLIP 1
 //#define FIXED_STEP  1
 
-static void generate_window(struct channel *);
-static void setup_real_fft(struct channel *);
-static void setup_complex_fft(struct channel *);
-static void setup_wideband(struct channel *);
-static void setup_narrowband(struct channel *);
-static void narrowband_poll(struct channel *);
-static void wideband_poll(struct channel *);
+static void generate_window(chan_t *);
+static void setup_real_fft(chan_t *);
+static void setup_complex_fft(chan_t *);
+static void setup_wideband(chan_t *);
+static void setup_narrowband(chan_t *);
+static void narrowband_poll(chan_t *);
+static void wideband_poll(chan_t *);
 #if RICE
-static void rice(struct channel *);
+static void rice(chan_t *);
 #endif
 
 // Spectrum analysis thread
 int demod_spectrum(void *arg){
-  struct channel * const chan = arg;
+  chan_t * const chan = arg;
   assert(chan != NULL);
   if(chan == NULL)
     return -1;
@@ -207,7 +207,7 @@ int demod_spectrum(void *arg){
   return 0;
 }
 
-static void narrowband_poll(struct channel *chan){
+static void narrowband_poll(chan_t *chan){
   // Narrowband mode poll
 
   if(chan->spectrum.ring == NULL)
@@ -309,7 +309,7 @@ static void narrowband_poll(struct channel *chan){
   }
 }
 
-static void wideband_poll(struct channel *chan){
+static void wideband_poll(chan_t *chan){
   if(chan == NULL)
     return;
 
@@ -528,7 +528,7 @@ static void wideband_poll(struct channel *chan){
 // Fill a buffer with compact frequency bin data, 1 byte each
 // Each unsigned byte in the output gives the bin power above 'base' decibels, in steps of 'step' dB
 // Unlike the regular float32 format, these bins run uniformly from lowest frequency to highest frequency
-void encode_byte_data(struct channel const *chan, uint8_t *buffer){
+void encode_byte_data(chan_t const *chan, uint8_t *buffer){
   assert(chan != NULL && buffer != NULL);
 
   int const bin_count = chan->spectrum.bin_count;
@@ -549,7 +549,7 @@ void encode_byte_data(struct channel const *chan, uint8_t *buffer){
 }
 // Generate normalized sampling window
 // the generation functions are symmetric so lengthen them by one point to make them periodic
-static void generate_window(struct channel *chan){
+static void generate_window(chan_t *chan){
   assert(chan != NULL);
   if(chan->spectrum.fft_n == 0)
     return; // can't do anything until we know the size
@@ -611,7 +611,7 @@ static void generate_window(struct channel *chan){
 
 // Direct Wideband mode. Setup FFT to work on raw A/D input
 // What can we do about unfriendly sizes? Anything?
-static void setup_wideband(struct channel *chan){
+static void setup_wideband(chan_t *chan){
   assert(chan != NULL);
   if(chan->frontend->samprate == 0 || chan->spectrum.rbw <= 0)
     return; // avoid divide by zero
@@ -636,7 +636,7 @@ static void setup_wideband(struct channel *chan){
     setup_complex_fft(chan);
 }
 // Set up narrow band (downconvert) mode
-static void setup_narrowband(struct channel *chan){
+static void setup_narrowband(chan_t *chan){
   assert(chan != NULL);
   if(Blocktime == 0)
     return; // avoid divide by zero
@@ -678,7 +678,7 @@ static void setup_narrowband(struct channel *chan){
   setup_complex_fft(chan);
 }
 // Wideband mode with real front end
-static void setup_real_fft(struct channel *chan){
+static void setup_real_fft(chan_t *chan){
   assert(chan != NULL);
   if(chan->spectrum.fft_n < 1)
     return; // Can't do it yet
@@ -694,7 +694,7 @@ static void setup_real_fft(struct channel *chan){
   assert(chan->spectrum.plan != NULL);
 }
 // Wideband mode with complex front end, or narrowband mode with either front end
-static void setup_complex_fft(struct channel *chan){
+static void setup_complex_fft(chan_t *chan){
   assert(chan != NULL);
   if(chan->spectrum.fft_n < 1)
     return; // Can't do anything yet
@@ -712,7 +712,7 @@ static void setup_complex_fft(struct channel *chan){
 
 #if RICE
 // Experiment with rice coding of delta values in bin data
-static void rice(struct channel *chan){
+static void rice(chan_t *chan){
   assert(chan != NULL);
   if(chan->spectrum.step == 0 || chan->spectrum.bin_count)
     return;

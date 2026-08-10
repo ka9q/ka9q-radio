@@ -28,7 +28,7 @@
 #include "multicast.h"
 #include "status.h"
 
-static unsigned long encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, unsigned long len);
+static unsigned long encode_radio_status(struct frontend const *frontend,chan_t *chan,uint8_t *packet, unsigned long len);
 
 // Radio status reception and transmission thread
 void *radio_status(void *arg){
@@ -56,7 +56,7 @@ void *radio_status(void *arg){
       // Ask all threads to dump their status in a staggered manner
       pthread_mutex_lock(&Channel_list_mutex); // protect status entries
       for(int i=0; i < Nchannels; i++){
-	struct channel * const chan = &Channel_list[i];
+	chan_t * const chan = &Channel_list[i];
 	if(chan->state == CHANNEL_RUNNING){
 	  pthread_mutex_lock(&chan->status.lock);   // nested locks -- any chance of a deadlock or priority inversion here?
 	  if(chan->output.rtp.ssrc != 0xffffffffu && chan->output.rtp.ssrc != 0)
@@ -69,7 +69,7 @@ void *radio_status(void *arg){
     default:
       {
 	// find or create specific chan instance
-	struct channel * const chan = lookup_or_create_chan(ssrc,&Template);
+	chan_t * const chan = lookup_or_create_chan(ssrc,&Template);
 	if(chan == NULL){
 	  // Only happens when we can't create
 	  fprintf(stderr,"Dynamic create of ssrc %'u failed; is 'data =' set in [global]?\n",ssrc);
@@ -115,7 +115,7 @@ void *radio_status(void *arg){
   return NULL;
 }
 
-int send_radio_status(struct sockaddr const *sock,struct frontend const *frontend,struct channel *chan){
+int send_radio_status(struct sockaddr const *sock,struct frontend const *frontend,chan_t *chan){
   uint8_t packet[PKTSIZE];
   chan->status.packets_out++;
   unsigned long const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
@@ -135,7 +135,7 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
 }
 
 // Return TRUE if a restart is needed, false otherwise
-bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length){
+bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
   if(length < 2)
     return false;
 
@@ -171,7 +171,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
     switch(type){
     case PRESET: // This should be processed before any other options, regardless of order in packet
       {
-	struct channel old = *chan; // Copy old to detect changes
+	chan_t old = *chan; // Copy old to detect changes
 	char *p = decode_string(cp,optlen);
 	if(p != NULL)
 	  strlcpy(chan->preset,p,sizeof(chan->preset));
@@ -708,7 +708,7 @@ bool decode_radio_commands(struct channel *chan,uint8_t const *buffer,int length
 // Encode contents of frontend and chan structures as command or status packet
 // packet argument must be long enough!!
 // Convert values from internal to engineering units
-static unsigned long encode_radio_status(struct frontend const *frontend,struct channel *chan,uint8_t *packet, unsigned long len){
+static unsigned long encode_radio_status(struct frontend const *frontend,chan_t *chan,uint8_t *packet, unsigned long len){
   memset(packet,0,len);
   uint8_t *bp = packet;
 

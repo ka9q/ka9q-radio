@@ -111,7 +111,7 @@ struct session {
   struct iir iir_left;       // State for PL removal filter
   struct iir iir_right;
   double notch_tone;
-  struct channel chan;       // Partial copy of radiod's channel structure, filled in by status protocol
+  chan_t chan;       // Partial copy of radiod's channel structure, filled in by status protocol
   struct frontend frontend;  // Partial copy of radiod's front end structure, ditto
 };
 

@@ -202,7 +202,7 @@ static void decode_task_cleanup(void *arg){
   sp->src_state_mono = NULL;
 
   // Just in case anything was allocated for these arrays
-  struct channel * const chan = &sp->chan;
+  chan_t * const chan = &sp->chan;
   FREE(chan->spectrum.bin_data);
   for(int i=0; i < CQLEN; i++){
     FREE(chan->commands[i].buffer);

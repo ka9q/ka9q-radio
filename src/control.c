@@ -88,22 +88,22 @@ static WINDOW *Tuning_win,*Sig_win,*Filtering_win,*Demodulator_win,
   *Options_win,*Presets_win,*Debug_win,*Debug_win_outer,*Input_win,
   *Output_win;
 
-static void display_tuning(WINDOW *tuning,struct channel const *chan);
-static void display_info(WINDOW *w,int row,int col,struct channel const *chan);
-static void display_filtering(WINDOW *filtering,struct channel const *chan);
-static void display_sig(WINDOW *sig,struct channel const *chan);
-static void display_demodulator(WINDOW *demodulator,struct channel const *chan);
-static void display_options(WINDOW *options,struct channel const *chan);
-static void display_presets(WINDOW *modes,struct channel const *chan);
-static void display_input(WINDOW *input,struct channel const *chan);
-static void display_output(WINDOW *output,struct channel const *chan);
-static int process_keyboard(struct channel *,uint8_t **bpp,int c);
-static void process_mouse(struct channel *chan,uint8_t **bpp);
+static void display_tuning(WINDOW *tuning,chan_t const *chan);
+static void display_info(WINDOW *w,int row,int col,chan_t const *chan);
+static void display_filtering(WINDOW *filtering,chan_t const *chan);
+static void display_sig(WINDOW *sig,chan_t const *chan);
+static void display_demodulator(WINDOW *demodulator,chan_t const *chan);
+static void display_options(WINDOW *options,chan_t const *chan);
+static void display_presets(WINDOW *modes,chan_t const *chan);
+static void display_input(WINDOW *input,chan_t const *chan);
+static void display_output(WINDOW *output,chan_t const *chan);
+static int process_keyboard(chan_t *,uint8_t **bpp,int c);
+static void process_mouse(chan_t *chan,uint8_t **bpp);
 static bool for_us(uint8_t const *buffer,size_t length,uint32_t ssrc);
-static int init_demod(struct channel *chan);
+static int init_demod(chan_t *chan);
 
 // Fill in set of locally generated variables from channel structure
-static void gen_locals(struct channel *chan){
+static void gen_locals(chan_t *chan){
   Local.noise_bandwidth = fabs(chan->filter.max_IF - chan->filter.min_IF);
   Local.sig_power = chan->sig.bb_power - Local.noise_bandwidth * chan->sig.n0; // signal power only (no noise)
   if(Local.sig_power < 0)
@@ -198,7 +198,7 @@ static void display_cleanup(void){
 static bool Frequency_lock;
 
 // Adjust the selected item up or down one step
-static void adjust_item(struct channel *chan,uint8_t **bpp,int direction){
+static void adjust_item(chan_t *chan,uint8_t **bpp,int direction){
   double tunestep = pow(10., (double)Control.step);
 
   if(!direction)
@@ -242,10 +242,10 @@ static void adjust_item(struct channel *chan,uint8_t **bpp,int direction){
 }
 
 // It seems better to just use the Griffin application to turn knob events into keystrokes or mouse events
-static void adjust_up(struct channel *chan,uint8_t **bpp){
+static void adjust_up(chan_t *chan,uint8_t **bpp){
   adjust_item(chan,bpp,1);
 }
-static void adjust_down(struct channel *chan,uint8_t **bpp){
+static void adjust_down(chan_t *chan,uint8_t **bpp){
   adjust_item(chan,bpp,0);
 }
 static void toggle_lock(void){
@@ -381,8 +381,8 @@ static int dest_compare(struct sockaddr_storage const *sa,struct sockaddr_storag
 // (so channels group by output stream, e.g. all of wspr-pcm together), then
 // by frequency (Hz) ascending within a group, with SSRC as a stable tiebreaker
 static int chan_compare(void const *a,void const *b){
-  struct channel const *da = *(struct channel **)a;
-  struct channel const *db = *(struct channel **)b;
+  chan_t const *da = *(chan_t **)a;
+  chan_t const *db = *(chan_t **)b;
   // Primary: multicast output destination
   int const dr = dest_compare(&da->output.dest_socket,&db->output.dest_socket);
   if(dr != 0){
@@ -552,7 +552,7 @@ int main(int argc,char *argv[]){
   }
   atexit(display_cleanup);
 
-  struct channel **channels = NULL;
+  chan_t **channels = NULL;
   int chan_count = 0;
   while(Ssrc == 0){
     // No channel specified; poll radiod for a list, sort and let user choose
@@ -565,7 +565,7 @@ int main(int argc,char *argv[]){
     // Read responses
     int const chan_max = 1024;
     if(channels == NULL)
-      channels = (struct channel **)calloc(chan_max,sizeof(struct channel *));
+      channels = (chan_t **)calloc(chan_max,sizeof(chan_t *));
 
     assert(channels != NULL);
     int64_t last_new_entry = gps_time_ns();
@@ -582,7 +582,7 @@ int main(int argc,char *argv[]){
 
       // What to do with the source addresses?
       memcpy(&Metadata_source_socket,&source_socket,ssize);
-      struct channel * const chan = calloc(1,sizeof(struct channel));
+      chan_t * const chan = calloc(1,sizeof(chan_t));
       assert(chan != NULL);
       init_demod(chan);
       decode_radio_status(&Frontend,chan,buffer+1,length-1);
@@ -608,7 +608,7 @@ int main(int argc,char *argv[]){
     fprintf(stdout,"%13s %9s %10s %13s %5s %s\n","SSRC","preset","samprate","freq, Hz","SNR","output channel");
     uint32_t last_ssrc = 0;
     for(int i=0; i < chan_count;i++){
-      struct channel *chan = channels[i];
+      chan_t *chan = channels[i];
       if(chan == NULL || chan->output.rtp.ssrc == last_ssrc) // Skip dupes
 	continue;
 
@@ -641,8 +641,8 @@ int main(int argc,char *argv[]){
   }
   FREE(channels);
 
-  struct channel Channel;
-  struct channel *chan = &Channel;
+  chan_t Channel;
+  chan_t *chan = &Channel;
   init_demod(chan);
 
   // Set up display subwindows
@@ -795,7 +795,7 @@ int main(int argc,char *argv[]){
 
 #define Entry_width (15)
 
-static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
+static int process_keyboard(chan_t *chan,uint8_t **bpp,int c){
   // Look for keyboard and mouse events
 
   switch(c){
@@ -1222,7 +1222,7 @@ static int process_keyboard(struct channel *chan,uint8_t **bpp,int c){
   return 0;
 }
 
-static void process_mouse(struct channel *chan,uint8_t **bpp){
+static void process_mouse(chan_t *chan,uint8_t **bpp){
   // Process mouse events
   // Need to handle the wheel as equivalent to up/down arrows
   MEVENT mouse_event;
@@ -1348,7 +1348,7 @@ static void process_mouse(struct channel *chan,uint8_t **bpp){
 }
 
 // Initialize a new, unused channel instance where fields might be non-zero
-static int init_demod(struct channel *chan){
+static int init_demod(chan_t *chan){
   if(chan == NULL)
     return -1;
   memset(chan,0,sizeof(*chan));
@@ -1408,7 +1408,7 @@ static bool for_us(uint8_t const *buffer,size_t length,uint32_t ssrc){
 }
 
 
-static void display_tuning(WINDOW *w,struct channel const *chan){
+static void display_tuning(WINDOW *w,chan_t const *chan){
   // Tuning control window - these can be adjusted by the user
   // using the keyboard or tuning knob, so be careful with formatting
   if(w == NULL)
@@ -1481,7 +1481,7 @@ static void display_tuning(WINDOW *w,struct channel const *chan){
 }
 
 // Imbed in tuning window
-static void display_info(WINDOW *w,int row,int col,struct channel const *chan){
+static void display_info(WINDOW *w,int row,int col,chan_t const *chan){
   if(w == NULL)
     return;
 
@@ -1496,7 +1496,7 @@ static void display_info(WINDOW *w,int row,int col,struct channel const *chan){
     mvwaddstr(w,row++,col,bp_high->description);
   }
 }
-static void display_filtering(WINDOW *w,struct channel const *chan){
+static void display_filtering(WINDOW *w,chan_t const *chan){
   if(w == NULL)
     return;
 
@@ -1562,7 +1562,7 @@ static void display_filtering(WINDOW *w,struct channel const *chan){
   wnoutrefresh(w);
 }
 // Signal data window
-static void display_sig(WINDOW *w,struct channel const *chan){
+static void display_sig(WINDOW *w,chan_t const *chan){
   if(w == NULL)
     return;
 
@@ -1639,7 +1639,7 @@ static void display_sig(WINDOW *w,struct channel const *chan){
   mvwaddstr(w,0,1,"Signal");
   wnoutrefresh(w);
 }
-static void display_demodulator(WINDOW *w,struct channel const *chan){
+static void display_demodulator(WINDOW *w,chan_t const *chan){
   if(w == NULL)
     return;
 
@@ -1776,7 +1776,7 @@ static void display_demodulator(WINDOW *w,struct channel const *chan){
   wnoutrefresh(w);
 }
 
-static void display_input(WINDOW *w,struct channel const *chan){
+static void display_input(WINDOW *w,chan_t const *chan){
   if(w == NULL)
     return;
 
@@ -1810,7 +1810,7 @@ static void display_input(WINDOW *w,struct channel const *chan){
   wnoutrefresh(w);
 }
 
-static void display_output(WINDOW *w,struct channel const *chan){
+static void display_output(WINDOW *w,chan_t const *chan){
   if(w == NULL)
     return;
 
@@ -1849,7 +1849,7 @@ static void display_output(WINDOW *w,struct channel const *chan){
   wnoutrefresh(w);
 }
 
-static void display_options(WINDOW *w,struct channel const *chan){
+static void display_options(WINDOW *w,chan_t const *chan){
   if(w == NULL)
     return;
 
@@ -1971,7 +1971,7 @@ static void display_options(WINDOW *w,struct channel const *chan){
   wnoutrefresh(w);
 }
 
-static void display_presets(WINDOW *w,struct channel const *chan){
+static void display_presets(WINDOW *w,chan_t const *chan){
   if(w == NULL)
     return;
 

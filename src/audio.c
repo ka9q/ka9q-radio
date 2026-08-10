@@ -34,11 +34,11 @@ int Fec_percent = 0;               // Use forward error correction percentage, 0
 static atomic_flag Opus_version_logged = ATOMIC_FLAG_INIT;
 
 static inline void sanity_check(float const *buf, int count);
-static int setup_opus(struct channel *chan);
-static int max_frames(struct channel *chan);
+static int setup_opus(chan_t *chan);
+static int max_frames(chan_t *chan);
 
 // Send PCM output on stream; # of channels implicit in chan->output.channels
-int send_output(struct channel * restrict const chan, float const * restrict buffer, int frames, bool const mute){
+int send_output(chan_t * restrict const chan, float const * restrict buffer, int frames, bool const mute){
   assert(chan != NULL);
   if(frames <= 0 || chan->output.channels == 0 || chan->output.samprate == 0)
     return 0;
@@ -243,7 +243,7 @@ int send_output(struct channel * restrict const chan, float const * restrict buf
   return frames_sent;
 }
 
-static int setup_opus(struct channel *chan){
+static int setup_opus(chan_t *chan){
   if(chan->opus.encoder != NULL){
     // There doesn't seem to be any way to read back the channel count, so we save that explicitly
     // If the sample rate changes we'll get restarted anyway, so this test isn't really needed. But do it anyway.
@@ -369,7 +369,7 @@ static int setup_opus(struct channel *chan){
   }
   return 0;
 }
-static int max_frames(struct channel *chan){
+static int max_frames(chan_t *chan){
   // The PCM modes are limited by the Ethenet MTU
   // Opus is essentially unlimited as it should never fill an ethernet (?)
   int max_frames_per_pkt = 0;
