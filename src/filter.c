@@ -80,7 +80,18 @@ static struct fft FFT = {
 static void *lmalloc(size_t size);
 
 static inline int modulo(int x,int const m){
-  return x < 0 ? x + m : x >= m ? x - m : x;
+  if((unsigned)x < (unsigned)m) // Catch both x >= m and x < 0
+    return x;  // already normalized; most common case
+
+  if(x >= m){
+    x -= m;
+    if(x < m)
+      return x; // one cycle high; next most common case
+  } else if(x >= -m){
+    return x + m; // or one cycle low, also common
+  }
+  x %= m;
+  return x < 0 ? x + m : x;
 }
 // in MAY be the same as out, meaning a in-place transform.
 fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction){
