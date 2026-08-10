@@ -15,14 +15,6 @@
 #include "status.h"
 #include "radio.h"
 
-union result {
-  uint64_t ll;
-  uint32_t l;
-  float f;
-  double d;
-};
-
-
 // Encode 64-bit integer, big endian, leading zeroes suppressed
 // The nice thing about big-endian encoding with suppressed leading zeroes
 // is that all (unsigned) integer types can be easily encoded
@@ -103,18 +95,19 @@ int encode_float(uint8_t **buf,enum status_type type,double x){
   if(isnan(x))
     return 0; // Never encode a NAN
 
-  union result r;
-  r.f = (float)x;
-  return encode_int32(buf,type,r.l);
+  float xx = (float)x;
+  uint32_t r;
+  memcpy(&r,&xx,sizeof r);
+  return encode_int32(buf,type,r);
 }
 
 int encode_double(uint8_t **buf,enum status_type type,double x){
   if(isnan(x))
     return 0; // Never encode a NAN
 
-  union result r;
-  r.d = x;
-  return encode_int64(buf,type,r.ll);
+  uint64_t r;
+  memcpy(&r,&x,sizeof r);
+  return encode_int64(buf,type,r);
 }
 
 // Encode byte string without byte swapping
@@ -180,16 +173,13 @@ size_t encode_vector(uint8_t **bp,enum status_type type,float const *array,size_
   // Encode the individual array elements
   // Right now they're DC....maxpositive maxnegative...minnegative
   for(size_t i=0;i < size;i++){
-    // Swap but don't bother compressing leading zeroes for now
-    union {
-      uint32_t i;
-      float f;
-    } foo;
-    foo.f = array[i];
-    *cp++ = (uint8_t)(foo.i >> 24);
-    *cp++ = (uint8_t)(foo.i >> 16);
-    *cp++ = (uint8_t)(foo.i >> 8);
-    *cp++ = (uint8_t)foo.i;
+    // Byte Swap but don't bother compressing leading zeroes for now
+    uint32_t foo;
+    memcpy(&foo,&array[i],sizeof foo);
+    *cp++ = (uint8_t)(foo >> 24);
+    *cp++ = (uint8_t)(foo >> 16);
+    *cp++ = (uint8_t)(foo >> 8);
+    *cp++ = (uint8_t)foo;
   }
   *bp = cp;
   return cp - orig_bp;
@@ -258,9 +248,10 @@ double decode_float(uint8_t const *cp,int len){
   if(len > (int)sizeof(float))
     return decode_double(cp,len); // seems safe, just in case it's really a double
 
-  union result r;
-  r.ll = decode_int64(cp,len);
-  return r.f;
+  uint32_t r = decode_int64(cp,len);
+  float f;
+  memcpy(&f, &r, sizeof f);
+  return (double)f;
 }
 
 // No float can masquerade as a double except as a very small positive denormal
@@ -270,9 +261,10 @@ double decode_double(uint8_t const *cp,int len){
   if(len == 0)
     return 0;
 
-  union result r;
-  r.ll = decode_int64(cp,len);
-  return r.d;
+  uint64_t r = decode_int64(cp,len);
+  double f;
+  memcpy(&f, &r, sizeof f);
+  return f;
 }
 
 // The Linux/UNIX socket data structures are a real mess...
