@@ -1121,8 +1121,8 @@ static void *lmalloc(size_t size){
     return ptr;
   }
   errno = r;
-  assert(false);
   fprintf(stderr,"lmalloc(%llu) failed!\n",(unsigned long long)size);
+  assert(false);
   return NULL;
 }
 #if 0

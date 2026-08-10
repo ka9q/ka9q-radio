@@ -53,13 +53,35 @@ ifdef SANITIZE
 endif
 
 ifeq ($(UNAME_S),Darwin)
-  INCLUDES += -I/opt/local/include
-  LDFLAGS  += -L/opt/local/lib
-  LDLIBS += -lintl -liconv
-  SOFLAGS += -bundle -Wl,-undefined,dynamic_lookup
+	# Auto-detect Homebrew or MacPorts
+	HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null)
+	ifneq ($(HOMEBREW_PREFIX),)
+		# Homebrew detected
+		INCLUDES += -I$(HOMEBREW_PREFIX)/include
+		LDFLAGS  += -L$(HOMEBREW_PREFIX)/lib
+		# gettext is keg-only in Homebrew, add explicit paths
+		GETTEXT_PREFIX := $(shell brew --prefix gettext 2>/dev/null)
+		ifneq ($(GETTEXT_PREFIX),)
+			INCLUDES += -I$(GETTEXT_PREFIX)/include
+			LDFLAGS  += -L$(GETTEXT_PREFIX)/lib
+		endif
+		# ncurses is keg-only in Homebrew, add explicit paths
+		NCURSES_PREFIX := $(shell brew --prefix ncurses 2>/dev/null)
+		ifneq ($(NCURSES_PREFIX),)
+			INCLUDES += -I$(NCURSES_PREFIX)/include
+			LDFLAGS  += -L$(NCURSES_PREFIX)/lib
+		endif
+	else
+		 # Fallback to MacPorts
+		INCLUDES += -I/opt/local/include
+		LDFLAGS  += -L/opt/local/lib
+	endif
+	LDLIBS += -lintl -liconv
+	SOFLAGS += -bundle -Wl,-undefined,dynamic_lookup
 else
-  LDLIBS += -lbsd -lrt
-  SOFLAGS += -shared
+	# linux
+	LDLIBS += -lbsd -lrt
+	SOFLAGS += -shared
 endif
 
 IS_GCC_NOT_CLANG := $(shell \
@@ -80,8 +102,12 @@ ARCHOPTS = -march=native
 endif
 
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
-COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -fcx-limited-range -freciprocal-math -fno-trapping-math -ffp-contract=fast -Wextra -MMD -MP
-COPTS += -fPIC -D_GNU_SOURCE=1
+COPTS = -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -freciprocal-math -fno-trapping-math -ffp-contract=fast -Wextra -MMD -MP -fPIC
+# -fcx-limited-range is supposedly unsupported in clang, but I don't have that problem
+ifeq ($(IS_GCC_NOT_CLANG),yes)
+COPTS += -fcx-limited-range -D_GNU_SOURCE=1
+endif
+
 CFLAGS += $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
 
 DAEMONS = aprs aprsfeed cwd packetd radiod
@@ -106,7 +132,7 @@ HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h ezusb.h fcd.h fcdhi
 
 ## hardware plug-in module enables
 # The software signal generator front end is build by default. Others are added by the ENABLE_* options below
-DYNAMIC_DRIVERS = 
+DYNAMIC_DRIVERS =
 
 # AIRSPY R2, etc
 ifeq ($(ENABLE_AIRSPY),1)
