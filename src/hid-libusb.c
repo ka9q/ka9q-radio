@@ -129,6 +129,8 @@ static hid_device *new_hid_device(void)
 {
 	hid_device *dev = calloc(1, sizeof(hid_device));
 	assert(dev != NULL);
+	if(dev == NULL)
+	  return NULL;
 	dev->blocking = 1;
 
 	pthread_mutex_init(&dev->mutex, NULL);

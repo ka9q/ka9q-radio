@@ -438,6 +438,8 @@ char const *formatsock(void const *s,bool full){
   // Not in list yet
   struct inverse_cache * const ic = (struct inverse_cache *)calloc(1, sizeof(*ic));
   assert(ic != NULL); // Malloc failures are rare
+  if(ic == NULL)
+    return NULL;
   char host[NI_MAXHOST] = {0}, port[NI_MAXSERV] = {0}, hostname[NI_MAXHOST] = {0};
   getnameinfo(sa, slen,
 	      host, NI_MAXHOST,

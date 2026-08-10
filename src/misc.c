@@ -1112,8 +1112,9 @@ void *mirror_alloc(size_t size){
   uint8_t *mirror = mmap(base + size,size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
   if(mirror != base + size){
     perror("mirror_alloc 3rd mmap");
+    close(fd);
     munmap(base,size * 2);
-    base = NULL;
+    return NULL;
   }
   close(fd); // No longer needed after all memory maps are in place
   return base;
@@ -1136,7 +1137,6 @@ void *mirror_alloc(size_t size){
     close(fd);
     return NULL;
   }
-
   // Reserve virtual space for buffer + mirror
   uint8_t *base = mmap(NULL,size * 2, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0); // Retry normal
   if(base == MAP_FAILED){
@@ -1156,7 +1156,8 @@ void *mirror_alloc(size_t size){
   if(mirror != base + size){
     perror("mirror_alloc second mmap");
     munmap(base,size * 2);
-    base = NULL;
+    close(fd);
+    return NULL;
   }
   close(fd); // No longer needed after all memory maps are in place
   return base;

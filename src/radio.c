@@ -602,22 +602,21 @@ static int setup_hardware(char const *sname){
   struct notch_state *notch = Frontend.in.notches;
   if(notch == NULL){
     fprintf(stderr,"calloc failed in notch filter setup\n");
-    // Will probably crash later, but try to keep going
-  } else {
-    // Initialize spur list. MUST leave last entry zeroed as sentinel; also doubles as 0 Hz (DC) suppression
-    for(int i = 0; i < NSPURS; i++){
-      int shift;
-      double remainder; // Offset from bin center, Hz, e.g, -20 to +20. Or is it -25 to +25?
-      int r = compute_tuning(N,Frontend.M,Frontend.samprate,&shift,&remainder,Frontend.spurs[i]);
-      if(r != 0)
-	break;
-      notch->state = 0;
-      notch->bin = abs(shift);
-      notch->alpha = .01; //  About 10 sec. Arbitrary, make adaptive.
-      if(shift == 0) // DC is implicitly last
-	break;
-      notch++;
-    }
+    return 0;
+  }
+  // Initialize spur list. MUST leave last entry zeroed as sentinel; also doubles as 0 Hz (DC) suppression
+  for(int i = 0; i < NSPURS; i++){
+    int shift;
+    double remainder; // Offset from bin center, Hz, e.g, -20 to +20. Or is it -25 to +25?
+    int r = compute_tuning(N,Frontend.M,Frontend.samprate,&shift,&remainder,Frontend.spurs[i]);
+    if(r != 0)
+      break;
+    notch->state = 0;
+    notch->bin = abs(shift);
+    notch->alpha = .01; //  About 10 sec. Arbitrary, make adaptive.
+    if(shift == 0) // DC is implicitly last
+      break;
+    notch++;
   }
   return 0;
 }
