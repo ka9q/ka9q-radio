@@ -180,7 +180,7 @@ int main(int argc,char * const argv[]){
     Channels = config_getint(Configtable,Audio,"channels",Channels);
     char const *audiodev = config_getstring(Configtable,Audio,"device",NULL);
     if(audiodev)
-      Audiodev = strdup(audiodev);
+      Audiodev = strdup(audiodev); // if this fails (unlikely) use the default
     // Add validity checking
 
 #if __linux__
