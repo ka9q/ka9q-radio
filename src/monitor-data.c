@@ -46,17 +46,17 @@ double PL_tones[] = {
     237.1, 241.8, 245.5, 250.3, 254.1
 };
 static double make_position(int x);
-static void init_pl(struct session *sp);
-static int run_pl(struct session *sp);
-static void apply_notch(struct session *sp);
-static int conceal(struct session *sp,int gap);
-static int decode_rtp_data(struct session *sp,struct packet const *pkt);
-static void copy_to_stream(struct session *sp);
-static int upsample(struct session *sp);
-static uint64_t reset_playout(struct session *sp);
+static void init_pl(sess_t *sp);
+static int run_pl(sess_t *sp);
+static void apply_notch(sess_t *sp);
+static int conceal(sess_t *sp,int gap);
+static int decode_rtp_data(sess_t *sp,struct packet const *pkt);
+static void copy_to_stream(sess_t *sp);
+static int upsample(sess_t *sp);
+static uint64_t reset_playout(sess_t *sp);
 static void *decode_task(void *arg);
 static int calculate_deadline(struct timespec *deadline,int64_t timeout);
-static int calculate_tight_deadline(struct timespec *deadline,struct session *sp);
+static int calculate_tight_deadline(struct timespec *deadline,sess_t *sp);
 
 // Receive from data multicast streams, multiplex to decoder threads
 void *dataproc(void *arg){
@@ -117,7 +117,7 @@ void *dataproc(void *arg){
 
     kick_output(); // Ensure output thread is running
     // Find appropriate session; create new one if necessary
-    struct session *sp = lookup_or_create_session(&sender,pkt->rtp.ssrc);
+    sess_t *sp = lookup_or_create_session(&sender,pkt->rtp.ssrc);
     if(!sp){
       fprintf(stderr,"No room!!\n");
       continue;
@@ -177,7 +177,7 @@ void *dataproc(void *arg){
   return NULL;
 }
 static void decode_task_cleanup(void *arg){
-  struct session *sp = (struct session *)arg;
+  sess_t *sp = (sess_t *)arg;
   assert(sp);
 
   atomic_store_explicit(&sp->inuse,false,memory_order_release);
@@ -220,7 +220,7 @@ static void decode_task_cleanup(void *arg){
 // Per-session thread to decode incoming RTP packets
 // Not needed for PCM, but Opus can be slow
 static void *decode_task(void *arg){
-  struct session * const sp = (struct session *)arg;
+  sess_t * const sp = (sess_t *)arg;
   assert(sp);
   {
     char name[100];
@@ -401,7 +401,7 @@ static void *decode_task(void *arg){
 
 // Reset playout buffer
 // also reset Opus decoder, if present
-static uint64_t reset_playout(struct session * const sp){
+static uint64_t reset_playout(sess_t * const sp){
   sp->resets++;
   if(sp->opus)
     opus_decoder_ctl(sp->opus,OPUS_RESET_STATE); // Reset decoder
@@ -466,7 +466,7 @@ static double make_position(int x){
 // Decode opus or just convert PCM
 // Returns number of bytes written into bounce buffer, which may be 0
 // caller may then free packet
-static int decode_rtp_data(struct session *sp,struct packet const *pkt){
+static int decode_rtp_data(sess_t *sp,struct packet const *pkt){
   assert(sp != NULL && pkt != NULL);
   if(sp == NULL || pkt == NULL)
     return 0;
@@ -616,7 +616,7 @@ static int decode_rtp_data(struct session *sp,struct packet const *pkt){
 // Called when there isn't an in-sequence packet to be processed
 // Takes length to be concealed at DAC samprate, must br legal opus
 // returns length of generated plc
-static int conceal(struct session *sp,int gap){
+static int conceal(sess_t *sp,int gap){
   assert(sp != NULL);
   if(sp == NULL)
     return 0;
@@ -635,7 +635,7 @@ static int conceal(struct session *sp,int gap){
   return frame_count; // how much we moved, even if not opus
 }
 
-static int run_pl(struct session *sp){
+static int run_pl(sess_t *sp){
   assert(sp != NULL);
   if(sp == NULL)
     return -1;
@@ -689,7 +689,7 @@ static int run_pl(struct session *sp){
   return 0;
 } // End of PL tone decoding
 
-static void init_pl(struct session *sp){
+static void init_pl(sess_t *sp){
   assert(sp != NULL);
   if(sp == NULL)
     return;
@@ -699,7 +699,7 @@ static void init_pl(struct session *sp){
     init_goertzel(&sp->tone_detector[j],PL_tones[j]/(double)sp->samprate);
   sp->notch_tone = 0;
 }
-static void apply_notch(struct session *sp){
+static void apply_notch(sess_t *sp){
   assert(sp != NULL);
   if(sp == NULL)
     return;
@@ -719,7 +719,7 @@ static void apply_notch(struct session *sp){
   }
 }
 // Upsample to DAC rate if necessary
-static int upsample(struct session * const sp){
+static int upsample(sess_t * const sp){
   assert(sp != NULL && sp->samprate != 0 && sp->channels != 0);
   if(sp == NULL || sp->samprate == 0 || sp->channels == 0)
     return -1;
@@ -771,7 +771,7 @@ static int upsample(struct session * const sp){
 
 // Copy from bounce buffer to streaming output buffer read by Portaudio callback
 // ASSUMES sp->bounce has DAC_samprate
-static void copy_to_stream(struct session *sp){
+static void copy_to_stream(sess_t *sp){
   assert(sp != NULL);
   if(sp == NULL)
     return;
@@ -913,7 +913,7 @@ static int calculate_deadline(struct timespec *deadline,int64_t timeout){
   return 0;
 }
 // calculate deadline for when active queue will dry up
-static int calculate_tight_deadline(struct timespec *deadline,struct session *sp){
+static int calculate_tight_deadline(struct timespec *deadline,sess_t *sp){
   int64_t frames = qlen(sp);
   if(frames <= 0)
     return calculate_deadline(deadline,0); // from now
@@ -921,7 +921,7 @@ static int calculate_tight_deadline(struct timespec *deadline,struct session *sp
   return calculate_deadline(deadline,BILLION * frames / DAC_samprate);
 }
 // Frames @ DAC rate still to be played out
-int64_t qlen(struct session const *sp){
+int64_t qlen(sess_t const *sp){
   uint64_t const rptr = atomic_load_explicit(&Output_time,memory_order_acquire); // the callback writes it
   uint64_t const wptr = atomic_load_explicit(&sp->wptr,memory_order_relaxed); // only we write it
   if(rptr == 0 || wptr == 0)

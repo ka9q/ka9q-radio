@@ -62,7 +62,7 @@ static int Sessions_per_screen = 0;
 static int Current = 0;
 static bool help = false;
 
-struct session *Sess_ptr[NSESSIONS];
+sess_t *Sess_ptr[NSESSIONS];
 
 // Versions of ncurses routines that truncate at EOL
 // Remaining problem: if I use the last column, the position will still
@@ -196,8 +196,8 @@ void *display(void *arg){
 }
 // sort callback for sort_session_active() for comparing sessions by most recently active (or currently longest active)
 static int scompare(void const *a, void const *b){
-  struct session const * const s1 = *(struct session **)a;
-  struct session const * const s2 = *(struct session **)b;
+  sess_t const * const s1 = *(sess_t **)a;
+  sess_t const * const s2 = *(sess_t **)b;
 
   if(s1 == s2) // same session compares equal (shouldn't happen)
     return 0;
@@ -230,8 +230,8 @@ static int scompare(void const *a, void const *b){
 
 // sort callback for sort_session() for comparing sessions by total time
 static int tcompare(void const *a, void const *b){
-  struct session const * const s1 = *(struct session **)a;
-  struct session const * const s2 = *(struct session **)b;
+  sess_t const * const s1 = *(sess_t **)a;
+  sess_t const * const s2 = *(sess_t **)b;
 
   if(s1 == s2) // same session compares equal (shouldn't happen)
     return 0;
@@ -262,7 +262,7 @@ static int defragment_session(void){
 
     if(j == NSESSIONS)
       break;
-    struct session *save = Sess_ptr[i];
+    sess_t *save = Sess_ptr[i];
     Sess_ptr[i] = Sess_ptr[j];
     Sess_ptr[j] = save;
   }
@@ -524,7 +524,7 @@ static void update_monitor_display(void){
     int i = 0;
     snprintf(scratch[i++],COLS,"dB");
     for(; i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
@@ -543,7 +543,7 @@ static void update_monitor_display(void){
     int i = 0;
     snprintf(scratch[i++],COLS,"pan");
     for(; i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
@@ -562,7 +562,7 @@ static void update_monitor_display(void){
     int i = 0;
     snprintf(scratch[i++],COLS,"ssrc");
     for(; i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
@@ -581,7 +581,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"tone");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->notch_enable && sp->notch_tone != 0)
 	snprintf(scratch[i],COLS,"%.1f%c",sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
@@ -599,7 +599,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"freq");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
 
       snprintf(scratch[i],COLS,"%'.0lf",sp->chan.tune.freq);
@@ -617,7 +617,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"mode");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
 
       snprintf(scratch[i],COLS,"%s",sp->chan.preset);
@@ -635,7 +635,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"snr");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(!isfinite(sp->snr))
 	continue;
@@ -657,7 +657,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"id");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
 
       if(strlen(sp->id) > 0){
@@ -679,7 +679,7 @@ static void update_monitor_display(void){
     int i = 0;
     snprintf(scratch[i++],COLS,"tot");
     for(; i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
@@ -699,7 +699,7 @@ static void update_monitor_display(void){
     int i = 0;
     snprintf(scratch[i++],COLS,"cur");
     for(; i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
@@ -720,7 +720,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"level");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->level <= 1e-10) // -100 dB
 	continue;
@@ -740,7 +740,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"queue");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(qlen(sp) <= 0)
 	continue; // blank inactive sessions
@@ -760,7 +760,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"type");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       snprintf(scratch[i],COLS,"%s",encoding_string(sp->pt_table[sp->type].encoding));
     }
@@ -778,7 +778,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"ms");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->samprate == 0)
 	continue;
@@ -799,7 +799,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"%s","ch");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->pt_table[sp->type].encoding == OPUS
 	 || sp->pt_table[sp->type].encoding == OPUS_VOIP)
@@ -821,7 +821,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"bw");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->samprate == 0)
 	continue;
@@ -840,7 +840,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"pt");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->samprate == 0)
 	continue;
@@ -860,7 +860,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"rate");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       snprintf(scratch[i],COLS,"%.*f", sp->datarate < 1e5 ? 1 : 0, .001 * sp->datarate); // decimal only if < 1000
     }
@@ -877,7 +877,7 @@ static void update_monitor_display(void){
     int i = 0;
     snprintf(scratch[i++],COLS,"Delay");
     for(; i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
@@ -908,7 +908,7 @@ static void update_monitor_display(void){
     int i = 0;
     snprintf(scratch[i++],COLS,"T0");
     for(; i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp))
 	break;
 
@@ -932,7 +932,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"pkt");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       snprintf(scratch[i],COLS,"%llu",(unsigned long long)sp->packets);
     }
@@ -951,7 +951,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"rst");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->resets > 0){
 	enable = true;
@@ -975,7 +975,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"drp");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->drops > 0){
 	enable = true;
@@ -999,7 +999,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"late");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->lates > 0){
 	enable = true;
@@ -1023,7 +1023,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"early");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->earlies > 0){
 	enable = true;
@@ -1047,7 +1047,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"resq");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->reseqs > 0){
 	enable = true;
@@ -1071,7 +1071,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"plc");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       if(sp->plcs > 0){
 	enable = true;
@@ -1094,7 +1094,7 @@ static void update_monitor_display(void){
 
     snprintf(scratch[i++],COLS,"sockets");
     for(;i < LINES && session < NSESSIONS; i++,session++){
-      struct session const *sp = Sess_ptr[session];
+      sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
       snprintf(scratch[i],COLS,"%s -> %s",formatsock(&sp->sender,true),sp->dest);
     }
@@ -1111,7 +1111,7 @@ static void update_monitor_display(void){
   short pair = 0;
   attr_get(&attrs, &pair, NULL);
   for(int session = First_session; session < NSESSIONS && row < LINES; session++,row++){
-    struct session const *sp = Sess_ptr[session];
+    sess_t const *sp = Sess_ptr[session];
     if(!inuse(sp))
       break;
 
@@ -1235,7 +1235,7 @@ static void process_keyboard(void){
   switch(c){
   case 'U': // Unmute all sessions, resetting any that were muted
     for(int i = 0; i < NSESSIONS; i++){
-      struct session *sp = Sess_ptr[i];
+      sess_t *sp = Sess_ptr[i];
       if(inuse(sp) && muted(sp)){
 	sp->restart = true; // restart playout
 	sp->muted = false;
@@ -1244,7 +1244,7 @@ static void process_keyboard(void){
     break;
   case 'M': // Mute all sessions
     for(int i = 0; i < NSESSIONS; i++){
-      struct session *sp = Sess_ptr[i];
+      sess_t *sp = Sess_ptr[i];
       if(inuse(sp))
 	atomic_store_explicit(&sp->muted,true,memory_order_release);
     }
@@ -1252,7 +1252,7 @@ static void process_keyboard(void){
   case 'N':
     Notch = true;
     for(int i=0; i < NSESSIONS; i++){
-      struct session *sp = Sess_ptr[i];
+      sess_t *sp = Sess_ptr[i];
       if(inuse(sp)){
 	sp->notch_enable = true;
       }
@@ -1260,7 +1260,7 @@ static void process_keyboard(void){
     break;
   case 'R': // Reset all sessions
     for(int i=0; i < NSESSIONS;i++){
-      struct session *sp = Sess_ptr[i];
+      sess_t *sp = Sess_ptr[i];
       if(inuse(sp))
 	sp->restart = true;
     }
@@ -1268,7 +1268,7 @@ static void process_keyboard(void){
   case 'F':
     Notch = false;
     for(int i=0; i < NSESSIONS; i++){
-      struct session *sp = Sess_ptr[i];
+      sess_t *sp = Sess_ptr[i];
       if(inuse(sp))
 	sp->notch_enable = false;
     }
@@ -1286,7 +1286,7 @@ static void process_keyboard(void){
   // Do this last
   serviced = true;
 
-  struct session *sp = Sess_ptr[Current];
+  sess_t *sp = Sess_ptr[Current];
   if(!inuse(sp)){
     // Current index not valid
     beep();

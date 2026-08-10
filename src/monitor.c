@@ -102,9 +102,9 @@ int64_t Start_time;
 PaTime Start_pa_time;
 _Atomic PaTime Last_callback_time;
 int64_t Last_error_time;
-struct session Sessions[NSESSIONS];
+sess_t Sessions[NSESSIONS];
 _Atomic bool Terminate;
-struct session * _Atomic Best_session; // Session with highest SNR
+sess_t * _Atomic Best_session; // Session with highest SNR
 void *output_thread(void *p);
 struct sockaddr_in *Source_socket;
 int Callback_blocksize = 960; // 960 samples = 20 ms @ 48k
@@ -448,13 +448,13 @@ int main(int argc,char * const argv[]){
 }
 
 // Sets global Best_session if we have the highest SNR
-void vote(struct session *sp){
+void vote(sess_t *sp){
   assert(sp != NULL);
   if(!inuse(sp) || muted(sp))
     return;
 
   pthread_mutex_lock(&Sess_mutex);
-  struct session *best = atomic_load_explicit(&Best_session,memory_order_acquire);
+  sess_t *best = atomic_load_explicit(&Best_session,memory_order_acquire);
   if(best == NULL || !inuse(best) || muted(best)){
     atomic_store_explicit(&Best_session,sp,memory_order_release); // they abdicated; grab the throne
     pthread_mutex_unlock(&Sess_mutex);
@@ -509,7 +509,7 @@ void *statproc(void *arg){
     // This is only true for recent versions of radiod, after the switch to unconnected output sockets
     // But older versions don't send status on the output channel anyway, so no problem
     uint32_t ssrc = get_ssrc(buffer+1,length-1);
-    struct session *sp = lookup_or_create_session(&sender,ssrc);
+    sess_t *sp = lookup_or_create_session(&sender,ssrc);
     if(!sp){
       fprintf(stderr,"No room!!\n");
       continue;
@@ -558,11 +558,11 @@ void *statproc(void *arg){
 // Executes atomically
 int Session_creates = 0;
 
-struct session *lookup_or_create_session(struct sockaddr_storage const *sender,const uint32_t ssrc){
+sess_t *lookup_or_create_session(struct sockaddr_storage const *sender,const uint32_t ssrc){
   int first_idle = -1;
   pthread_mutex_lock(&Sess_mutex);
   for(int i = 0; i < NSESSIONS; i++){
-    struct session * const sp = Sessions + i;
+    sess_t * const sp = Sessions + i;
     if(!inuse(sp)){
       if(first_idle == -1)
 	first_idle = i; // in case we need to create it
@@ -580,8 +580,8 @@ struct session *lookup_or_create_session(struct sockaddr_storage const *sender,c
   if(first_idle == -1)
     return NULL;
 
-  struct session * const sp = Sessions + first_idle;
-  memset(sp,0,sizeof(struct session));
+  sess_t * const sp = Sessions + first_idle;
+  memset(sp,0,sizeof(sess_t));
 
   Session_creates++;
   atomic_init(&sp->terminate,false);
@@ -597,7 +597,7 @@ struct session *lookup_or_create_session(struct sockaddr_storage const *sender,c
   return sp; // caller will set sp->inuse
 }
 
-int close_session(struct session *sp){
+int close_session(sess_t *sp){
   assert(sp != NULL);
   if(sp == NULL)
     return -1;
@@ -683,7 +683,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   // If voting, look only at the leader.
   // Otherwise scan the whole list, summing all active sessions
   // finally a real use for do {} while();
-  struct session *sp = Voting ?
+  sess_t *sp = Voting ?
     atomic_load_explicit(&Best_session,memory_order_acquire) : Sessions;
 
   do {
@@ -758,7 +758,7 @@ void *output_thread(void *p){
     memset(out_buffer, 0, samples * sizeof *out_buffer);
     uint64_t rptr = atomic_load_explicit(&Output_time,memory_order_relaxed);
     for(int i=0; i < NSESSIONS; i++){
-      struct session *sp = Sessions + i;
+      sess_t *sp = Sessions + i;
       if(!inuse(sp) || muted(sp) || sp->buffer == NULL)
 	continue;
 

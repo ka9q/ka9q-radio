@@ -114,7 +114,7 @@ struct session {
   chan_t chan;       // Partial copy of radiod's channel structure, filled in by status protocol
   struct frontend frontend;  // Partial copy of radiod's front end structure, ditto
 };
-
+typedef struct session sess_t;
 
 // Names of config file sections
 extern char const *Radio;
@@ -192,37 +192,37 @@ extern uint64_t Waits;
 
 extern _Atomic bool Terminate;
 extern bool Voting;
-extern struct session * _Atomic Best_session; // Session with highest SNR
+extern sess_t * _Atomic Best_session; // Session with highest SNR
 extern struct sockaddr_storage Metadata_dest_socket;
 extern char const *Pipe;
 extern struct sockaddr_in *Source_socket;
 
-extern struct session Sessions[NSESSIONS];
+extern sess_t Sessions[NSESSIONS];
 
 void load_id(void);
 void cleanup(void);
 void *display(void *);
 
-struct session *lookup_or_create_session(struct sockaddr_storage const *,uint32_t);
-int close_session(struct session *);
+sess_t *lookup_or_create_session(struct sockaddr_storage const *,uint32_t);
+int close_session(sess_t *);
 int pa_callback(void const *,void *,unsigned long,PaStreamCallbackTimeInfo const *,PaStreamCallbackFlags,void *);
 void *dataproc(void *arg);
 void *statproc(void *arg);
 void *repeater_ctl(void *arg);
 char const *lookupid(double freq,double tone);
 bool kick_output();
-void vote(struct session *sp);
-int64_t qlen(struct session const *sp);
+void vote(sess_t *sp);
+int64_t qlen(sess_t const *sp);
 
-static inline bool inuse(struct session const *sp){
+static inline bool inuse(sess_t const *sp){
   assert(sp != NULL);
   return atomic_load_explicit(&sp->inuse,memory_order_acquire);
 }
-static inline bool muted(struct session const *sp){
+static inline bool muted(sess_t const *sp){
   assert(sp != NULL);
   return atomic_load_explicit(&sp->muted,memory_order_acquire);
 }
-static inline bool terminated(struct session const *sp){
+static inline bool terminated(sess_t const *sp){
   assert(sp != NULL);
   return atomic_load_explicit(&sp->terminate,memory_order_relaxed) || atomic_load_explicit(&Terminate,memory_order_relaxed);
 }
