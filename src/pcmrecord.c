@@ -1414,8 +1414,9 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     // Leave the temp file(s), the spool reader will clean it out if it's an old fragment
     fd = open("/dev/null",O_RDWR|O_NONBLOCK);
     if(fd == -1){
-      // Something is seriously wrong
+      // Something is very seriously wrong
       fprintf(stderr,"Can't open /dev/null: %s\n",strerror(errno));
+      exit(EX_CANTCREAT);
       return -1;
     }
     strlcpy(sp->filename,"/dev/null",sizeof sp->filename);
