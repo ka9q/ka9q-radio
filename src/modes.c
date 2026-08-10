@@ -213,6 +213,8 @@ int set_defaults(chan_t *chan){
   strlcpy(chan->name, "new chan", sizeof chan->name);
   assert(Blocktime > 0);
   chan->lifestart = chan->lifetime = DEFAULT_LIFETIME / Blocktime;
+  memset(&chan->commands, 0, sizeof chan->commands);
+
   chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
   chan->demod_type = DEFAULT_DEMOD;
   chan->linear.env = false;
@@ -222,6 +224,7 @@ int set_defaults(chan_t *chan){
   chan->output.maxdelay = 0;  // No output buffering
   chan->output.queue = NULL;
   chan->output.queue_length = 0;
+  chan->opus.encoder = NULL;
 
   chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
   chan->output.encoding = S16BE;
@@ -254,6 +257,7 @@ int set_defaults(chan_t *chan){
   chan->filter.max_IF = DEFAULT_HIGH;
   chan->filter.remainder = NAN;      // Important to force downconvert() to call set_osc() on first call
   chan->filter.bin_shift = -1000999; // Force initialization here too
+  chan->filter.out.response = NULL;
 
   // Post-detection audio filter
   chan->filter2.blocking = 0;        // Off by default
@@ -261,7 +265,8 @@ int set_defaults(chan_t *chan){
   chan->filter2.high = DEFAULT_HIGH;
   chan->filter2.kaiser_beta = DEFAULT_KAISER_BETA;
   chan->filter2.out.isb = false;
-
+  chan->filter2.out.response = NULL;
+  chan->baseband = NULL;
   chan->squelch.open = dB2power(DEFAULT_SQUELCH_OPEN);
   chan->squelch.close = dB2power(DEFAULT_SQUELCH_CLOSE);
   chan->squelch.tail = DEFAULT_SQUELCH_TAIL;
@@ -289,7 +294,7 @@ int set_defaults(chan_t *chan){
   chan->spectrum.bin_data = NULL;
   chan->spectrum.base = -150; // dB == value 0
   chan->spectrum.step = 0.5;  // dB/step
-
+  memset(&chan->demod_thread, 0, sizeof chan->demod_thread);
   chan->tp1 = chan->tp2 = NAN;
   return 0;
 }
