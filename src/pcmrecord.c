@@ -1405,6 +1405,8 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     if(fd != -1) // If too long, open will fail with ENAMETOOLONG
       break;
     fprintf(stderr,"create %s failed: %s\n",tempfile,strerror(errno));
+    if(errno == ENOSPC)
+      exit(EX_CANTCREAT); // don't fill up syslog with error messages and make it worse
   }
   if(fd == -1){
     fprintf(stderr,"Giving up creating temp file, redirecting to /dev/null\n");
