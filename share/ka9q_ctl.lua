@@ -301,10 +301,11 @@ local TLV_KIND = {
 
 local DEMOD = {
   [0] = "Linear",
-  "FM",
-  "WFM",
-  "Spectrum",
-  "Spectrum v2"
+  "fm",
+  "wfm",
+  "spectrum",
+  "spectrum v2",
+  "idle"
 }
 
 local ENCODING = {
