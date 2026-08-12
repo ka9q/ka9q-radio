@@ -88,7 +88,7 @@ struct frontend Frontend = {
 chan_t Template;
 pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
-static _Atomic int Active_channel_count = ATOMIC_VAR_INIT(0); // doesn't really need to be atomic
+static int Active_channel_count = 0;
 
 // List of valid config keys in [global] section, for error checking
 static char const *Global_keys[] = {
@@ -666,15 +666,6 @@ static void *process_section(void *arg){
   // Now also used for per-channel status/control, with different port number
   chan_template.status.dest_socket = chan_template.output.dest_socket;
   setport(&chan_template.status.dest_socket,DEFAULT_STAT_PORT);
-  {
-    int pt = pt_from_info(chan_template.output.samprate,chan_template.output.channels,chan_template.output.encoding);
-    if(pt == -1){
-      fprintf(stderr,"channel template: can't allocate payload type for samprate %'d, channels %d, encoding %d\n",
-	      chan_template.output.samprate,chan_template.output.channels,chan_template.output.encoding); // make sure it's initialized
-      return NULL;
-    }
-    chan_template.output.rtp.type = pt;
-  }
   char const *iface = NULL;
   if(chan_template.output.ttl != 0){
     // Override global defaults
@@ -902,7 +893,7 @@ chan_t *lookup_or_create_chan(uint32_t ssrc,chan_t const *template){
   chan->state = CHANNEL_STARTING;
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
-  int c = atomic_fetch_add(&Active_channel_count,1);
+  int c = Active_channel_count++;
   if(c == 0){
     // First channel created, start front end
     assert(Frontend.start != NULL);
@@ -927,11 +918,12 @@ static void *demod_thread(void *p){
   // A demod can terminate completely by setting an invalid demod_type and returning
   // Eg, downconvert() does this when a channel lifetime counts down to 0
   int status = 0;
-  while(status == 0){ // A demod returns non-zero to signal a fatal error, don't restart
+  do {
     snprintf(chan->name, sizeof chan->name, "%s %u", demod_name_from_type(chan->demod_type), chan->output.rtp.ssrc);
     pthread_setname(chan->name);
+
     if(Verbose > 1)
-      fprintf(stderr,"%s freq %'.3lf Hz starting\n",chan->name,chan->tune.freq);
+      fprintf(stderr,"%s starting\n",chan->name);
 
     switch(chan->demod_type){
     case LINEAR_DEMOD:
@@ -947,12 +939,17 @@ static void *demod_thread(void *p){
     case SPECT2_DEMOD: // Same task, output is formatted differently
       status = demod_spectrum(p);
       break;
+    case IDLE_DEMOD:
+      status = demod_idle(p);
+      break;
     default:
       status = -1; // Unknown demod, quit
       break;
     }
-  }
+  } while(chan->demod_type != INVALID_DEMOD && status == 0);
   // The channels should already clean up after themselves, but just in case...
+  if(Verbose > 1)
+    fprintf(stderr,"chan %u exiting\n",chan->output.rtp.ssrc);
   close_chan(chan);
   return NULL;
 }
@@ -970,7 +967,48 @@ int start_demod(chan_t * chan){
   pthread_create(&chan->demod_thread,NULL,demod_thread,chan);
   return 0;
 }
+// Idle demod, only processes commands
+int demod_idle(void *arg){
+  chan_t * const chan = arg;
+  assert(chan != NULL);
+  if(chan == NULL)
+    return -1; // in case asserts are off
 
+  do {
+    // We don't call downconvert() so we must decrement the lifetime ourselves
+    // and sleep a block time every iteration
+    if(chan->lifetime > 0 && --chan->lifetime <= 0){
+      // channel timed out
+      chan->demod_type = INVALID_DEMOD;  // No demodulator
+      if(Verbose > 1)
+	fprintf(stderr,"%s timeout\n",chan->name);
+      break;
+    }
+    bool restart_needed = false;
+    bool response_needed = false;
+    pthread_mutex_lock(&chan->status.lock);
+    // Look on the command queue and grab just one atomically
+    for(int i=0;i < CQLEN; i++){
+      if(chan->commands[i].buffer != NULL){
+	restart_needed = decode_radio_commands(chan,chan->commands[i].buffer,
+					       chan->commands[i].length);
+	FREE(chan->commands[i].buffer);
+	chan->commands[i].length = 0;
+	response_needed = true;
+	break;
+      }
+    }
+    pthread_mutex_unlock(&chan->status.lock);
+    response(chan,response_needed);
+    if(restart_needed)
+      break; // restart or terminate
+    useconds_t const s = lrint(1e6 * Blocktime);
+    usleep(s);
+  } while(true);
+  if(Verbose > 1)
+    fprintf(stderr,"%s returning\n",chan->name);
+  return chan->demod_type == INVALID_DEMOD ? -1 : 0;
+}
 // Clean up a terminating demodulator thread
 // Some of this stuff should already be cleaned up, but make sure
 static int close_chan(chan_t *chan){
@@ -1016,7 +1054,7 @@ static int close_chan(chan_t *chan){
   assert(err == 0);
   pthread_mutex_lock(&Channel_list_mutex);
   chan->state = CHANNEL_IDLE;
-  int c = atomic_fetch_sub(&Active_channel_count,1);
+  int c = Active_channel_count--;
   if(c == 1 && Frontend.shutdown){
     // No more channels left
     Frontend.shutdown(&Frontend);
@@ -1356,9 +1394,9 @@ int downconvert(chan_t *chan){
     // But at least it will eventually go away
     if(chan->lifetime > 0 && --chan->lifetime <= 0){
       // channel timed out
-      chan->demod_type = -1;  // No demodulator
+      chan->demod_type = INVALID_DEMOD;  // No demodulator
       if(Verbose > 1)
-	fprintf(stderr,"%s terminate needed\n",chan->name);
+	fprintf(stderr,"%s timeout\n",chan->name);
       return -1; // terminate needed
     }
     // To save CPU time when the front end is completely tuned away from us, block (with timeout) until the front
@@ -1493,7 +1531,7 @@ int set_channel_filter(chan_t *chan){
   double upper = min(chan->filter.max_IF, (double)chan->output.samprate/2);
 
   if(Verbose > 1)
-    fprintf(stderr,"chan %s new filter: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
+    fprintf(stderr,"%s new filter: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
 	    chan->name, lower, upper,
 	    chan->output.samprate, chan->filter.kaiser_beta);
 

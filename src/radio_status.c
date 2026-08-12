@@ -81,20 +81,15 @@ void *radio_status(void *arg){
 	  pthread_mutex_unlock(&chan->status.lock); // can't happen
 	  break;
 	case CHANNEL_STARTING:
-	  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
-	  decode_radio_commands(chan,buffer+1,length-1);
-	  send_radio_status((struct sockaddr *)&chan->frontend->metadata_dest_socket,chan->frontend,chan); // Send status in response
-	  chan->status.global_timer = 0; // Just sent one
-	  pthread_mutex_unlock(&chan->status.lock); // release lock set by lookup_chan(), let demod run
 	  pthread_mutex_lock(&Channel_list_mutex);
 	  chan->state = CHANNEL_RUNNING;
 	  pthread_mutex_unlock(&Channel_list_mutex);
 	  start_demod(chan);
 	  if(Verbose)
-	    fprintf(stderr,"%u dynamically started\n",ssrc); // chan->name not set yet
-	  break;
-	case CHANNEL_RUNNING:
-	  // Channel already exists; queue the command for it to execute
+	    fprintf(stderr,"%s dynamically started\n",chan->name);
+	  [[fallthrough]];
+	case CHANNEL_RUNNING: /* fall through */
+	  // queue the command for it to execute
 	  for(int i=0; i < CQLEN; i++){
 	    if(chan->commands[i].buffer == NULL){
 	      uint8_t *cmd = malloc(length-1);
@@ -128,8 +123,11 @@ int send_radio_status(struct sockaddr const *sock,struct frontend const *fronten
   //    Then the status/data source ports may not match and the consume may think they're separate streams
   int const out_fd = (chan->output.ttl > 0) ? Output_fd : Output_fd0;
   socklen_t const slen = sock->sa_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-  if(sendto(out_fd,packet,len,0,sock, slen) < 0)
+  if(sendto(out_fd,packet,len,0,sock, slen) < 0){
+    if(Verbose)
+      fprintf(stderr,"%s: error sending status: %s\n",chan->name,strerror(errno));
     chan->output.errors++;
+  }
 
   return 0;
 }
@@ -182,12 +180,6 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	  if(Verbose)
 	    fprintf(stderr,"%s loadpreset(%s) failed!\n",chan->name,chan->preset);
 	  break;
-	}
-	if(chan->filter.min_IF > chan->filter.max_IF){
-	  // Swap to ensure min <= max
-	  double const tmp = chan->filter.min_IF;
-	  chan->filter.min_IF = chan->filter.max_IF;
-	  chan->filter.max_IF = tmp;
 	}
 	if(old.tune.shift != chan->tune.shift)
 	  set_freq(chan,chan->tune.freq + chan->tune.shift - old.tune.shift);
@@ -693,7 +685,7 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 
   if(restart_needed){
     if(Verbose > 1)
-      fprintf(stderr,"%s restarting\n",chan->name);
+      fprintf(stderr,"%s restart needed\n",chan->name);
     return true; // A new filter will also be needed but the demod will set that up
   }
   if(new_filter_needed){
