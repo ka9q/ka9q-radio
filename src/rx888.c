@@ -1270,8 +1270,8 @@ static double rx888_set_samprate(struct sdrstate *sdr, double const samprate){
 
   si5351_pvals_t ms = {0};
   si5351_get_ms_pvals(&best,&ms);
-  // fout is for display only
-  double const fout = vco / (best.R * (best.D + best.E/best.F));
+  // Calculate actual output sample rate
+  double const fout = vco / (best.R * (best.D + (double)best.E / best.F));
   fprintf(stderr,"RX888 Si5351 output divider: samprate = vco / (%'u*(%'u + %'u/%'u)) = %'lf Hz",
 	  best.R, best.D, best.E, best.F, fout);
   fprintf(stderr,"; P1=%u, P2=%u, P3=%u\n", ms.P1, ms.P2, ms.P3);
