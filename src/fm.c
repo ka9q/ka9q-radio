@@ -351,7 +351,7 @@ int demod_fm(void *arg){
   response(chan,response_needed); // in case one is pending as we're restarting
  quit:;
   if(Verbose > 1)
-    fprintf(stderr,"%s exiting\n",chan->name);
+    fprintf(stderr,"%s returning\n",chan->name);
 
   // clean up
   FREE(chan->output.queue);
@@ -362,5 +362,5 @@ int demod_fm(void *arg){
   }
   delete_filter_output(&chan->filter.out);
   chan->baseband = NULL;
-  return 0; // Normal exit
+  return chan->demod_type == INVALID_DEMOD ? -1 : 0;
 }

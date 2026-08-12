@@ -192,7 +192,7 @@ int demod_spectrum(void *arg){
 
  quit:;
   if(Verbose > 1)
-    fprintf(stderr,"%s exiting\n",chan->name);
+    fprintf(stderr,"%s returning\n",chan->name);
 
   chan->spectrum.fft_n = 0;
   delete_filter_output(&chan->filter.out);
@@ -204,7 +204,7 @@ int demod_spectrum(void *arg){
   FREE(chan->spectrum.bin_data);
   FREE(chan->spectrum.ring);
   chan->spectrum.ring_size = 0;
-  return 0;
+  return chan->demod_type == INVALID_DEMOD ? -1 : 0;
 }
 
 static void narrowband_poll(chan_t *chan){

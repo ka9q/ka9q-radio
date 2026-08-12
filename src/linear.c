@@ -400,7 +400,7 @@ int demod_linear(void *arg){
  quit:;
   // clean up
   if(Verbose > 1)
-    fprintf(stderr,"%s exiting\n",chan->name);
+    fprintf(stderr,"%s returning\n",chan->name);
 
   FREE(chan->output.queue);
   chan->output.queue_length = 0;
@@ -412,5 +412,5 @@ int demod_linear(void *arg){
   delete_filter_output(&chan->filter2.out);
   delete_filter_input(&chan->filter2.in);
   chan->baseband = NULL;
-  return 0;
+  return chan->demod_type == INVALID_DEMOD ? -1 : 0;
 }
