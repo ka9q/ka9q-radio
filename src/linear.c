@@ -2,12 +2,6 @@
 // Handles USB/IQ/CW/etc, all modes but FM
 // Copyright May 2022-2023 Phil Karn, KA9Q
 
-#define DEFAULT_SHIFT (0.0)          // Post detection frequency shift, Hz
-#define DEFAULT_HEADROOM (-10.0)     // Target average output level, dBFS
-#define DEFAULT_HANGTIME (1.1)       // AGC gain hang time, sec
-#define DEFAULT_RECOVERY_RATE (20.0)  // AGC recovery rate after hang expiration, dB/s
-#define DEFAULT_GAIN (0.)           // Linear gain, dB
-#define DEFAULT_THRESHOLD (-15.0)     // AGC threshold, dB (noise will be at HEADROOM + THRESHOLD)
 #define DEFAULT_PLL_DAMPING (M_SQRT1_2); // PLL loop damping factor; 1/sqrt(2) is "critical" damping
 #define DEFAULT_PLL_LOCKTIME (.5);  // time, sec PLL stays above/below threshold SNR to lock/unlock
 
