@@ -287,7 +287,7 @@ int loadconfig(char const *file){
   strlcpy(Frontend.description,Description,sizeof Frontend.description);
   Verbose += config_getint(Configtable,GLOBAL,"verbose",0); // Add to the count of -v's on the command line
   {
-    double bt = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",User_blocktime)); // Input value is in ms, internally in sec
+    double bt = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",User_blocktime)); // seconds
     if (isnan(bt) || !isfinite(bt) || bt == 0.0)
       fprintf(stderr, "Block time %lf invalid, default %lf used\n", bt, User_blocktime);
     else
