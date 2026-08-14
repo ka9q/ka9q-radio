@@ -511,6 +511,30 @@ static void process_status(int fd){
     sp->prev = NULL;
     Sessions = sp;
   }
+  if(sp == NULL && Catmode){
+    // stdout mode follows one logical SSRC, not one sender socket tuple.
+    // radiod may restart and resume the same restored SSRC from a new UDP
+    // source port. Rebind the existing stdout session so its stale pre-restart
+    // tuple cannot later hit the idle timeout and terminate an active stream.
+    for(sp = Sessions;sp != NULL;sp=sp->next){
+      if(sp->ssrc == chan.output.rtp.ssrc)
+        break;
+    }
+    if(sp != NULL){
+      if(Verbose)
+        fprintf(stderr,"ssrc %u sender changed %s -> %s; continuing stdout session\n",
+                sp->ssrc,formatsock(&sp->sender,false),formatsock(&sender,false));
+      // Discard any packets/resequencing state belonging to the old RTP
+      // incarnation. stdout itself remains open and attached to this session.
+      for(int i=0;i < RESEQ;i++){
+        FREE(sp->reseq[i].data);
+        sp->reseq[i].size = 0;
+        sp->reseq[i].inuse = false;
+      }
+      memset(&sp->rtp_state,0,sizeof(sp->rtp_state));
+      memset(&sp->last_active,0,sizeof(sp->last_active));
+    }
+  }
   if(sp == NULL){
     // Create session and initialize
     sp = calloc(1,sizeof(*sp));
