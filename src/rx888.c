@@ -32,6 +32,13 @@
 #include "si5351.h"
 #include "ezusb.h"
 
+// Uncomment this to cause proc_rx888 to use regular caching writes to the FFT input ring buffer
+// the default uses non-temporal writes that bypass cache because the 20ms FFT working sets are too big
+// at high sample rates to fit in typical L3 caches and they get evicted before the FFT can read them
+// Worse, the cached stores push out the FFT's working set, slowing it down
+// But you might experiment with this on CPUs with very large caches
+//#define CACHED_STORE 1
+
 static uint16_t const Vendor_id = 0x04b4;
 static uint16_t const Unloaded_product_id = 0x00f3;
 static uint16_t const Loaded_product_id = 0x00f1;
@@ -713,10 +720,15 @@ static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, in
     __m256 const hi = _mm256_mul_ps(_mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(hi16)),vscale);
 
     // write one complete 64-byte cache line (16 samples)
+#ifdef CACHED_STORE // cached version
+    _mm256_store_ps(wptr + i, lo);
+    _mm256_store_ps(wptr + i + 8, hi);
+#else
     // non-temporal store (bypass the cache) because it's not going to stick around anyway until the FFT reads it
     // up to 20 ms from now
     _mm256_stream_ps(wptr + i, lo);
     _mm256_stream_ps(wptr + i + 8, hi);
+#endif
   }
   // must precede publication of the new write pointer
   _mm_sfence();
