@@ -21,6 +21,7 @@
 #include <strings.h>
 #include <assert.h>
 #include <stdatomic.h>
+#include <stdint.h>
 #include <inttypes.h>
 
 #include "misc.h"
@@ -45,9 +46,6 @@ static int const AGC_INTERVAL = 1;           // Seconds between runs of AGC loop
 static double const START_GAIN = 10.0;         // Initial VGA gain, dB
 static double const PTC  = 0.1; // 100 ms time constant for computing Power_smooth
 static double const DEFAULT_GAINCAL = +1.4;
-// smoothing alpha to block DC. Don't make too large (too quick) because the corrections are applied once per
-// (256K) block to minimize loss of precision, and the lag can cause instability
-static double const DC_ALPHA = 4e-7;
 
 // Reference frequency for Si5351 clock generator
 static double const DEFAULT_REFERENCE = 27e6;
@@ -660,10 +658,92 @@ static void *agc_rx888(void *arg){
   }
   return NULL;
 }
+#if defined(__x86_64__)
+#include <immintrin.h>
 
+// AVX2 vector version
+// Horizontal sum of four uint64_t in 256 bits
+__attribute__((target("avx2")))
+static inline uint64_t hsum_u64x4(__m256i x){
+    __m128i lo = _mm256_castsi256_si128(x);
+    __m128i hi = _mm256_extracti128_si256(x, 1);
+    __m128i sum = _mm_add_epi64(lo, hi);
+
+    return (uint64_t)_mm_cvtsi128_si64(sum) +
+           (uint64_t)_mm_extract_epi64(sum, 1);
+}
+__attribute__((target("avx2")))
+static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, int sampcount, float scale, uint64_t *energy, bool randomize){
+  assert(((uintptr_t)wptr & 31) == 0);
+  assert((sampcount & 15) == 0);
+
+  __m256i energy0 = _mm256_setzero_si256();
+  __m256i energy1 = _mm256_setzero_si256();
+  __m256 const vscale = _mm256_set1_ps(scale);
+  __m256i const upper = _mm256_set1_epi16(32766);
+  __m256i const lower = _mm256_set1_epi16(-32766);
+  uint64_t clip_count = 0;
+
+  for(int i = 0; i < sampcount; i += 16){
+    __m256i x16 =  _mm256_loadu_si256((__m256i const *)(samples + i)); // load 16 int16_t samples
+    if(randomize){
+      // derandomize ADC 2208 samples: if lsb == 1, flip all other bits
+      __m256i mask = _mm256_slli_epi16(x16, 15);
+      mask = _mm256_srai_epi16(mask, 14);
+      x16 = _mm256_xor_si256(x16, mask);
+    }
+    // Compute energy: sums of squares, in two halves
+    __m256i const pair_energy = _mm256_madd_epi16(x16, x16); // combines pairs, produces 8 int32_t
+    __m128i const energy_lo = _mm256_castsi256_si128(pair_energy);           // lower 4 int32_t
+    __m128i const energy_hi = _mm256_extracti128_si256(pair_energy, 1);      // upper 4 int32_t
+    energy0 = _mm256_add_epi64(energy0,_mm256_cvtepu32_epi64(energy_lo));    // unsigned extend to 4 uint64_t in 256bit vector
+    energy1 = _mm256_add_epi64(energy1,_mm256_cvtepu32_epi64(energy_hi));    // unsigned extend to 4 uint64_t in 256bit vector
+
+    // Check for overranges: samples > 32766 or < -32766
+    __m256i const high =  _mm256_cmpgt_epi16(x16, upper);   // groups of 16 0's or 1s for each comparison
+    __m256i const low =   _mm256_cmpgt_epi16(lower, x16);
+    __m256i const clipped =  _mm256_or_si256(high, low);    // 0xffff if either limit
+    uint32_t const mask = (uint32_t)_mm256_movemask_epi8(clipped); // Extract two bits (0x11) from each group of 16, pack into 32 bits
+    clip_count += (unsigned)__builtin_popcount(mask) / 2; // because each 0xffff in clipped produces 2 bits
+
+    // convert to int32_t, convert to float, scale (in two groups of 8 samples each)
+    __m128i const lo16 = _mm256_castsi256_si128(x16);
+    __m128i const hi16 = _mm256_extracti128_si256(x16, 1);
+    __m256 const lo = _mm256_mul_ps(_mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(lo16)),vscale);
+    __m256 const hi = _mm256_mul_ps(_mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(hi16)),vscale);
+
+    // write one complete 64-byte cache line (16 samples)
+    // non-temporal store (bypass the cache) because it's not going to stick around anyway until the FFT reads it
+    // up to 20 ms from now
+    _mm256_stream_ps(wptr + i, lo);
+    _mm256_stream_ps(wptr + i + 8, hi);
+  }
+  // must precede publication of the new write pointer
+  _mm_sfence();
+  *energy += hsum_u64x4(energy0) + hsum_u64x4(energy1);
+  return clip_count;
+}
+#endif
+// Portable C version
+static int convert(float *restrict wptr,int16_t const *restrict samples, int sampcount, float scale, uint64_t *energy, bool randomize){
+  int clip_count = 0;
+
+  for(int i = 0; i < sampcount; i ++){
+    int16_t x = samples[i];
+    if(randomize)
+      x ^= (x << 15) >> 14;
+    *energy += (int32_t)x * x;
+    if(x > 32766 || x < -32766)
+      clip_count++;
+
+    wptr[i] = (float)x * scale;
+  }
+  return clip_count;
+}
 
 // Callback called with incoming receiver data from A/D
-static void rx_callback(struct libusb_transfer * const transfer){
+//static void rx_callback(struct libusb_transfer * const transfer){
+void rx_callback(struct libusb_transfer * const transfer){
   assert(transfer != NULL);
   struct sdrstate * const restrict sdr = (struct sdrstate *)transfer->user_data;
   struct frontend * const restrict frontend = sdr->frontend;
@@ -673,7 +753,7 @@ static void rx_callback(struct libusb_transfer * const transfer){
   if(transfer->status == LIBUSB_TRANSFER_NO_DEVICE){
     sdr->device_gone = true;
     return;
-  }
+   }
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
     if(Verbose > 1)
@@ -690,48 +770,28 @@ static void rx_callback(struct libusb_transfer * const transfer){
   sdr->success_count++;
 
   // Feed directly into FFT input buffer, accumulate energy
-  double in_energy = 0; // A/D energy accumulator
+  uint64_t in_energy = 0; // A/D energy accumulator
   int16_t const * const restrict samples = (int16_t *)transfer->buffer;
   float * const restrict wptr = frontend->in.input_write_pointer.r;
   int const sampcount = size / sizeof(int16_t);
-  double delta_sum = 0;
-  if(sdr->randomizer){
-    for(int i=0; i < sampcount; i++){
-      int32_t s = samples[i];
-      s ^= (s << 31) >> 30; // Put LSB in sign bit, then shift back by one less bit to make ..ffffe or 0
-      if(abs(s) >= 32767){
-	frontend->overranges++;
-	frontend->samp_since_over = 0;
-      } else {
-	frontend->samp_since_over++;
-      }
-      // Remove DC offset
-      // Use double precision to avoid denormals
-      double const e  = s - sdr->dc_offset;
-      delta_sum += e;
-      in_energy += e * e;
-      wptr[i] = (float)(e * sdr->scale);
-    }
-  } else {
-    for(int i=0; i < sampcount; i++){
-      if(abs(samples[i]) >= 32767){
-	frontend->overranges++;
-	frontend->samp_since_over = 0;
-      } else {
-	frontend->samp_since_over++;
-      }
-      // Remove DC offset
-      // Use double precision to avoid denormals
-      double const s = samples[i] - sdr->dc_offset;
-      delta_sum += s;
-      in_energy += s * s;
-      wptr[i] = (float)(s * sdr->scale);
-    }
-  }
-  sdr->dc_offset += DC_ALPHA * delta_sum;
+  float const scale = (float)sdr->scale;
+  int overloads;
+#if defined(__x86_64__)
+  if(__builtin_cpu_supports("avx2") &&  __builtin_cpu_supports("popcnt"))
+    overloads = convert_avx2(wptr,samples,sampcount,scale,&in_energy,sdr->randomizer);
+  else
+#endif
+    overloads = convert(wptr,samples,sampcount,scale,&in_energy,sdr->randomizer);
+  if(overloads){
+    frontend->overranges += overloads;
+    frontend->samp_since_over = 0;
+  } else
+    frontend->samp_since_over += sampcount;
+
   // These blocks are kinda small, so exponentially smooth the power readings
-  if(sampcount != 0 && isfinite(in_energy))
-    frontend->if_power += sdr->power_smooth * (in_energy / sampcount - frontend->if_power);
+  if(sampcount != 0)
+    frontend->if_power += sdr->power_smooth * ((double)in_energy / sampcount - frontend->if_power);
+
   frontend->samples += sampcount; // Count original samples
   if(atomic_load(&sdr->state) == RUNNING) {
     if(libusb_submit_transfer(transfer) == 0)
