@@ -1551,7 +1551,7 @@ int set_channel_filter(chan_t *chan){
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
     create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX);
     chan->filter2.in.perform_inline = true;
-    create_filter_output(&chan->filter2.out,&chan->filter2.in,NULL,blocksize, COMPLEX);
+    create_filter_output(&chan->filter2.out,&chan->filter2.in,blocksize, COMPLEX);
     chan->filter2.out.isb = old_isb;
     chan->filter2.low = lower;
     chan->filter2.high = upper;

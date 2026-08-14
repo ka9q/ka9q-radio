@@ -397,12 +397,12 @@ void *decode(void *arg){
 
   // Narrow filter at 19 kHz for stereo pilot
   struct filter_out pilot;
-  create_filter_output(&pilot,&baseband,NULL,audio_L, COMPLEX);
+  create_filter_output(&pilot,&baseband,audio_L, COMPLEX);
   set_filter(&pilot,-100./Out_samprate, 100./Out_samprate, Kaiser_beta);
 
   // RDS info at 57 kHz = 19 kHz * 3
   struct filter_out rds;
-  create_filter_output(&rds,&baseband,NULL,audio_L, COMPLEX);
+  create_filter_output(&rds,&baseband,audio_L, COMPLEX);
   set_filter(&rds,-2000./Out_samprate, 2000./Out_samprate, Kaiser_beta);
 
   // Assume the remainder is zero, as it is for clean sample rates @ 200 Hz multiples
