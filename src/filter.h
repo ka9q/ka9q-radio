@@ -87,6 +87,7 @@ struct filter_out {
   fftwf_plan rev_plan;               // IFFT (frequency -> time)
   unsigned next_jobnum;
   unsigned block_drops;          // Lost frequency domain blocks, e.g., from late scheduling of slave thread
+  unsigned blocks_skipped;       // Blocks discarded by the LAST execute_filter_output() call, for output timestamp compensation
   int rcnt;                 // Samples read from output buffer
   uint64_t sample_index;     // input sample index at start of buffer
   bool beam;                 // Use complex weights alpha and beta

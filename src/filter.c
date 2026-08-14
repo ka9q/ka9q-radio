@@ -659,6 +659,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   assert(slave->out_type == SPECTRUM || malloc_usable_size(slave->fdomain) >= slave->bins * sizeof(*slave->fdomain));
   // Wait for new block of output data
   pthread_mutex_lock(&master->filter_mutex);
+  unsigned const jobnum_at_entry = slave->next_jobnum; // to account for EVERY block we skip below
   int blocks_behind = (int)(master->completed_jobs[slave->next_jobnum % ND] - slave->next_jobnum);
   if(blocks_behind >= ND){
     // We've fallen too far behind. skip ahead to the oldest block still available
@@ -667,7 +668,6 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       if((int)(master->completed_jobs[i] - nextblock) < 0) // modular comparison
 	nextblock = master->completed_jobs[i];
     }
-    slave->block_drops += nextblock - slave->next_jobnum;
     slave->next_jobnum = nextblock;
   }
   while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
@@ -677,6 +677,15 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   // in case we just waited so long that the buffer wrapped, resynch
   slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
   slave->next_jobnum = master->completed_jobs[slave->next_jobnum % ND] + 1;
+  /* Account for every block skipped in this call, from BOTH paths: the
+     explicit "fallen too far behind" branch above AND the resynch on the
+     line above, which silently jumps ahead whenever the master refilled
+     our slot while we waited.  Normal progress is exactly one block, so
+     anything beyond that is discarded input the caller never sees.  The
+     caller must advance its output timestamp by this much or its RTP
+     timeline silently re-dates every sample that follows. */
+  slave->blocks_skipped = (slave->next_jobnum - jobnum_at_entry) - 1;
+  slave->block_drops += slave->blocks_skipped;
   pthread_mutex_unlock(&master->filter_mutex);
   assert(m_fdomain != NULL); // Should always be master frequency data
   // In spectrum mode we'll read directly from the input queue. Don't forget the 3dB scale when the input is real

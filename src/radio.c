@@ -1430,6 +1430,21 @@ int downconvert(chan_t *chan){
 
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
 
+    /* If the filter discarded input blocks because this thread missed its
+       deadline, that time really elapsed -- it just produced no samples.
+       RTP timestamps count frames EMITTED, so unless we advance the output
+       timestamp by the discarded duration the stream stays numerically
+       contiguous while silently re-dating every following sample, and the
+       published (GPS_TIME, RTP_TIMESNAP) pair drifts by the lost time.
+       send_output() with a NULL buffer is the existing "keep timestamps and
+       mute state moving" path (see the squelch-closed case in linear.c); it
+       also sets chan->output.silent so the next packet carries the RTP
+       marker bit flagging the discontinuity to receivers. */
+    if(chan->filter.out.blocks_skipped > 0 && chan->filter.out.olen > 0){
+      send_output(chan, NULL, chan->filter.out.blocks_skipped * chan->filter.out.olen, true);
+      chan->filter.out.blocks_skipped = 0;
+    }
+
     if(chan->filter.out.output.c == NULL){
       chan->filter.bin_shift = shift; // Needed by spectrum.c in wideband mode
       chan->baseband = NULL;
