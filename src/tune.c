@@ -262,9 +262,9 @@ int main(int argc,char *argv[]){
       uint8_t *bp = cmd_buffer;
       *bp++ = 1; // Generate command packet
       sent_tag = arc4random();
-      encode_int(&bp,COMMAND_TAG,sent_tag);
-      encode_int(&bp,OUTPUT_SSRC,Ssrc);
-      encode_int(&bp,LIFETIME,Lifetime);
+      encode_int32(&bp,COMMAND_TAG,sent_tag);
+      encode_int32(&bp,OUTPUT_SSRC,Ssrc);
+      encode_int32(&bp,LIFETIME,Lifetime);
 
       if(Mode != NULL)
 	encode_string(&bp,PRESET,Mode,strlen(Mode));

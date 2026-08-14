@@ -2,12 +2,6 @@
 // Handles USB/IQ/CW/etc, all modes but FM
 // Copyright May 2022-2023 Phil Karn, KA9Q
 
-#define DEFAULT_SHIFT (0.0)          // Post detection frequency shift, Hz
-#define DEFAULT_HEADROOM (-10.0)     // Target average output level, dBFS
-#define DEFAULT_HANGTIME (1.1)       // AGC gain hang time, sec
-#define DEFAULT_RECOVERY_RATE (20.0)  // AGC recovery rate after hang expiration, dB/s
-#define DEFAULT_GAIN (0.)           // Linear gain, dB
-#define DEFAULT_THRESHOLD (-15.0)     // AGC threshold, dB (noise will be at HEADROOM + THRESHOLD)
 #define DEFAULT_PLL_DAMPING (M_SQRT1_2); // PLL loop damping factor; 1/sqrt(2) is "critical" damping
 #define DEFAULT_PLL_LOCKTIME (.5);  // time, sec PLL stays above/below threshold SNR to lock/unlock
 
@@ -35,7 +29,7 @@ int demod_linear(void *arg){
 
   pthread_mutex_lock(&chan->status.lock);
   int const blocksize = lrint(chan->output.samprate * Blocktime);
-  int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize,COMPLEX);
+  int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize,COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
     goto quit;
@@ -400,7 +394,7 @@ int demod_linear(void *arg){
  quit:;
   // clean up
   if(Verbose > 1)
-    fprintf(stderr,"%s exiting\n",chan->name);
+    fprintf(stderr,"%s returning\n",chan->name);
 
   FREE(chan->output.queue);
   chan->output.queue_length = 0;
@@ -412,5 +406,5 @@ int demod_linear(void *arg){
   delete_filter_output(&chan->filter2.out);
   delete_filter_input(&chan->filter2.in);
   chan->baseband = NULL;
-  return 0;
+  return chan->demod_type == INVALID_DEMOD ? -1 : 0;
 }

@@ -33,11 +33,13 @@
    @brief The four demodulator types
  */
 enum demod_type {
+  INVALID_DEMOD = -1,   // used as sentinel
   LINEAR_DEMOD = 0,     // Linear demodulation, i.e., everything else: SSB, CW, DSB, CAM, IQ
   FM_DEMOD,             // Frequency/phase demodulation
   WFM_DEMOD,            // wideband frequency modulation (broadcast stereo)
   SPECT_DEMOD,          // Spectrum analysis pseudo-demod
   SPECT2_DEMOD,         // spectrum v2: 8-bit log bins, low-to-high order
+  IDLE_DEMOD,           // placeholder that just processes commands
   N_DEMOD,              // Dummy equal to number of valid entries
 };
 
@@ -389,6 +391,7 @@ double scale_ADpower2FS(struct frontend const *frontend);
 void *radio_status(void *);
 
 // Demodulator thread entry points
+int demod_idle(void *);
 int demod_fm(void *);
 int demod_wfm(void *);
 int demod_linear(void *);

@@ -22,15 +22,16 @@
 #include "window.h"
 
 struct demodtab Demodtab[] = {
-      {LINEAR_DEMOD,   "Linear"}, // Coherent demodulation of AM, DSB, BPSK; calibration on WWV/WWVH/CHU carrier
-      {FM_DEMOD,       "FM",   }, // NBFM and noncoherent PM
-      {WFM_DEMOD,      "WFM",  }, // NBFM and noncoherent PM
-      {SPECT_DEMOD,    "Spectrum", }, // Spectrum analysis
-      {SPECT2_DEMOD,   "Spectrum2", },
+      {LINEAR_DEMOD,   "linear"}, // Coherent demodulation of AM, DSB, BPSK; calibration on WWV/WWVH/CHU carrier
+      {FM_DEMOD,       "fm",   }, // NBFM and noncoherent PM
+      {WFM_DEMOD,      "wfm",  }, // NBFM and noncoherent PM
+      {SPECT_DEMOD,    "spectrum", }, // Spectrum analysis
+      {SPECT2_DEMOD,   "spectrum2", },
+      {IDLE_DEMOD,     "idle", },
 };
 
 static int    const DEFAULT_TTL = 0;                // Don't blast cheap switches and access points unless the user says so
-static enum demod_type const DEFAULT_DEMOD = LINEAR_DEMOD;
+static enum demod_type const DEFAULT_DEMOD = IDLE_DEMOD;
 static int    const DEFAULT_LINEAR_SAMPRATE = 12000;
 static double const DEFAULT_LIFETIME = 0; // Infinite
 
@@ -204,41 +205,44 @@ char const *demod_name_from_type(enum demod_type type){
 // Set reasonable defaults before reading preset or config tables
 // Note frontend entry must be set in radio.c since Frontend global is static
 int set_defaults(chan_t *chan){
-  assert(chan != NULL);
-  if(chan == NULL)
+  assert(chan != NULL && Blocktime > 0);
+  if(chan == NULL || Blocktime == 0)
     return -1;
 
   chan->frontend = &Frontend;
   chan->advertise = true;
   strlcpy(chan->name, "new chan", sizeof chan->name);
-  assert(Blocktime > 0);
   chan->lifestart = chan->lifetime = DEFAULT_LIFETIME / Blocktime;
-  memset(&chan->commands, 0, sizeof chan->commands);
-
-  chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
   chan->demod_type = DEFAULT_DEMOD;
-  chan->linear.env = false;
   chan->prio = default_prio();
-  chan->output.ttl = DEFAULT_TTL;
+
   chan->status.output_interval = DEFAULT_UPDATE;
+
+  chan->output.gain = dB2voltage(DEFAULT_GAIN);
+  chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
+  chan->output.ttl = DEFAULT_TTL;
+  chan->output.pacing = false;
   chan->output.maxdelay = 0;  // No output buffering
   chan->output.queue = NULL;
   chan->output.queue_length = 0;
-  chan->opus.encoder = NULL;
-
+  chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
   chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
   chan->output.encoding = S16BE;
+  chan->output.channels = 1;
+  {
+    double r = remainder(Blocktime * chan->output.samprate,1.0);
+    if(r != 0)
+      fprintf(stderr,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
+	      Blocktime,chan->output.samprate,r);
+  }
+  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 
+  chan->linear.env = false;
   chan->linear.agc = true;
   chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE);
   chan->linear.hangtime = DEFAULT_HANGTIME;
   chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
-  chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
-  chan->output.channels = 1;
-  if(!isfinite(chan->output.gain) || chan->output.gain <= 0)
-     chan->output.gain = dB2voltage(DEFAULT_GAIN); // Set only if out of bounds
   chan->linear.dc_tau = DEFAULT_DC_TC; // primarily for removing AM carriers
-  chan->output.pacing = false;
 
   chan->opus.signal = DEFAULT_OPUS_SIGNAL;
   chan->opus.application = DEFAULT_OPUS_APPLICATION;
@@ -257,7 +261,6 @@ int set_defaults(chan_t *chan){
   chan->filter.max_IF = DEFAULT_HIGH;
   chan->filter.remainder = NAN;      // Important to force downconvert() to call set_osc() on first call
   chan->filter.bin_shift = -1000999; // Force initialization here too
-  chan->filter.out.response = NULL;
 
   // Post-detection audio filter
   chan->filter2.blocking = 0;        // Off by default
@@ -265,8 +268,7 @@ int set_defaults(chan_t *chan){
   chan->filter2.high = DEFAULT_HIGH;
   chan->filter2.kaiser_beta = DEFAULT_KAISER_BETA;
   chan->filter2.out.isb = false;
-  chan->filter2.out.response = NULL;
-  chan->baseband = NULL;
+
   chan->squelch.open = dB2power(DEFAULT_SQUELCH_OPEN);
   chan->squelch.close = dB2power(DEFAULT_SQUELCH_CLOSE);
   chan->squelch.tail = DEFAULT_SQUELCH_TAIL;
@@ -280,10 +282,6 @@ int set_defaults(chan_t *chan){
   chan->pll.square = false;
   chan->pll.loop_bw = DEFAULT_PLL_BW;
 
-  double r = remainder(Blocktime * chan->output.samprate,1.0);
-  if(r != 0)
-    fprintf(stderr,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
-	    Blocktime,chan->output.samprate,r);
   chan->spectrum.overlap = DEFAULT_FFT_OVERLAP;
   chan->spectrum.fft_avg = DEFAULT_FFT_AVG;
   chan->spectrum.window_type = DEFAULT_WINDOW_TYPE;
@@ -294,13 +292,14 @@ int set_defaults(chan_t *chan){
   chan->spectrum.bin_data = NULL;
   chan->spectrum.base = -150; // dB == value 0
   chan->spectrum.step = 0.5;  // dB/step
-  memset(&chan->demod_thread, 0, sizeof chan->demod_thread);
+
   chan->tp1 = chan->tp2 = NAN;
   return 0;
 }
 // Set selected section of specified config file into current chan structure
 // Caller must (re) initialize pre-demod filter and (re)start demodulator thread
 int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
+  assert(chan != NULL && table != NULL && sname != NULL && strlen(sname) > 0);
   if(chan == NULL || table == NULL || sname == NULL || strlen(sname) == 0)
     return -1;
 
@@ -318,21 +317,36 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   {
     char const *p = config_getstring(table,sname,"samprate",NULL);
     if(p != NULL){
-      int s = lrint(parse_frequency(p,false));
-      if(s != 0)
+      int s = labs(lrint(parse_frequency(p,false)));
+      if(s > 0)
 	chan->output.samprate = round_samprate(s);
     }
   }
-  // This test can't fail since round_samprate() forces it to a minimium of the blockrate; not sure what is ideal here
-  if(chan->output.samprate == 0)
-    chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Make sure it gets set to *something*, even if wrong (e.g. for FM)
+  assert(chan->output.samprate > 0); // should have been set at least by default
   chan->output.channels = config_getint(table,sname,"channels",chan->output.channels);
   if(config_getboolean(table,sname,"mono",false))
     chan->output.channels = 1;
   if(config_getboolean(table,sname,"stereo",false))
     chan->output.channels = 2;
+  {
+    char const *cp = config_getstring(table,sname,"encoding",NULL);
+    if(cp){
+      int e = parse_encoding(cp);
+      if(e != NO_ENCODING)
+	chan->output.encoding = e;
+      else
+	fprintf(stderr,"%s: invalid encoding %s\n",chan->name,cp);
+    }
+  }
+  {
+    // We have what we need to assign a RTP payload type
+    int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+    if(pt == -1)
+      fprintf(stderr,"loadpreset(%s): can't allocate payload type for samprate %'d, channels %d, encoding %d\n",
+	      sname,chan->output.samprate,chan->output.channels,chan->output.encoding);
+    chan->output.rtp.type = pt;
+  }
   chan->filter.kaiser_beta = config_getdouble(table,sname,"kaiser-beta",chan->filter.kaiser_beta);
-
   // Pre-detection filter limits
   {
     char const *low = config_getstring(table,sname,"low",NULL);
@@ -445,16 +459,6 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   }
   chan->output.pacing = config_getboolean(table,sname,"pacing",chan->output.pacing);
   {
-    char const *cp = config_getstring(table,sname,"encoding",NULL);
-    if(cp){
-      int e = parse_encoding(cp);
-      if(e != NO_ENCODING)
-	chan->output.encoding = e;
-      else
-	fprintf(stderr,"%s: invalid encoding %s\n",chan->name,cp);
-    }
-  }
-  {
     int bitrate = abs(config_getint(table,sname,"bitrate",chan->opus.bitrate));
     bitrate = abs(config_getint(table,sname,"opus-bitrate",bitrate));
     if(bitrate > 510000)
@@ -531,9 +535,10 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     chan->filter.a_weight = a_amp * csincospi(a_phase / 180.);
     chan->filter.b_weight = b_amp * csincospi(b_phase / 180.);
   }
-  char const *data = config_getstring(table,sname,"data",chan->output.dest_string);
-  strlcpy(chan->output.dest_string,data,sizeof chan->output.dest_string);
-
+  {
+    char const *data = config_getstring(table,sname,"data",chan->output.dest_string);
+    strlcpy(chan->output.dest_string,data,sizeof chan->output.dest_string);
+  }
   if(!chan->use_dns || resolve_mcast(chan->output.dest_string, &chan->output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0){
     // Not using DNS, or DNS resolution failed: create a IPv4 multicast address from a hash of the name
     struct sockaddr_in *sin = (struct sockaddr_in *)&chan->output.dest_socket;

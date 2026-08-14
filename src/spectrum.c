@@ -192,7 +192,7 @@ int demod_spectrum(void *arg){
 
  quit:;
   if(Verbose > 1)
-    fprintf(stderr,"%s exiting\n",chan->name);
+    fprintf(stderr,"%s returning\n",chan->name);
 
   chan->spectrum.fft_n = 0;
   delete_filter_output(&chan->filter.out);
@@ -204,7 +204,7 @@ int demod_spectrum(void *arg){
   FREE(chan->spectrum.bin_data);
   FREE(chan->spectrum.ring);
   chan->spectrum.ring_size = 0;
-  return 0;
+  return chan->demod_type == INVALID_DEMOD ? -1 : 0;
 }
 
 static void narrowband_poll(chan_t *chan){
@@ -626,7 +626,7 @@ static void setup_wideband(chan_t *chan){
   chan->spectrum.ring_size = 0;
   // Dummy just so downconvert() will block on each frame
   delete_filter_output(&chan->filter.out);
-  int r = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,0,SPECTRUM);
+  int r = create_filter_output(&chan->filter.out,&chan->frontend->in,0,SPECTRUM);
   assert(r == 0);
   (void)r;
   // Wideband mode with real front end; use real->complex FFT
@@ -666,7 +666,7 @@ static void setup_narrowband(chan_t *chan){
   int blocklen = lrint(chan->output.samprate * Blocktime);
   // Set up downconverter
   delete_filter_output(&chan->filter.out);
-  int r = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocklen,COMPLEX);
+  int r = create_filter_output(&chan->filter.out,&chan->frontend->in,blocklen,COMPLEX);
   (void)r;
   assert(r == 0);
   chan->filter.max_IF = (double)(chan->output.samprate - margin)/2;

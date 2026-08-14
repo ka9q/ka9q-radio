@@ -383,20 +383,20 @@ void *decode(void *arg){
 
   // Baseband filters, decimate from 384 Khz to 48 KHz
   struct filter_out mono;
-  create_filter_output(&mono,&baseband,NULL,audio_L, REAL);
+  create_filter_output(&mono,&baseband,audio_L, REAL);
   // 50 Hz to 15 kHz
   set_filter(&mono,50.0/Audio_samprate, 15000.0/Audio_samprate, Kaiser_beta);
 
   // Narrow filter at 19 kHz for stereo pilot
   struct filter_out pilot;
-  create_filter_output(&pilot,&baseband,NULL,audio_L, COMPLEX);
+  create_filter_output(&pilot,&baseband,audio_L, COMPLEX);
   // FCC says +/- 2 Hz, with +/- 20 Hz protected (73.322)
   set_filter(&pilot,-100./Audio_samprate, 100./Audio_samprate, Kaiser_beta);
 
   // Stereo difference (L-R) information on DSBSC carrier at 38 kHz
   // Extends +/- 15 kHz around 38 kHz
   struct filter_out stereo;
-  create_filter_output(&stereo,&baseband,NULL,audio_L, COMPLEX);
+  create_filter_output(&stereo,&baseband,audio_L, COMPLEX);
   set_filter(&stereo,-15000./Audio_samprate, 15000./Audio_samprate, Kaiser_beta);
 
   // Assume the remainder is zero, as it is for clean sample rates @ 200 Hz multiples

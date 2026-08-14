@@ -51,7 +51,7 @@ int demod_wfm(void *arg){
     goto quit; // Front end sample rate is too low - should probably fix filter to allow interpolation
 
   delete_filter_output(&chan->filter.out);
-  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,composite_L, COMPLEX);
+  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,composite_L, COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
     goto quit;
@@ -80,19 +80,19 @@ int demod_wfm(void *arg){
 
   // Composite filters, decimate from 384 Khz to 48 KHz
   struct filter_out mono = {0};
-  create_filter_output(&mono,&composite,NULL,audio_L, REAL);
+  create_filter_output(&mono,&composite,audio_L, REAL);
   set_filter(&mono,50.0/Audio_samprate, 15000.0/Audio_samprate, chan->filter.kaiser_beta);
 
   // Narrow filter at 19 kHz for stereo pilot
   // FCC says +/- 2 Hz, with +/- 20 Hz protected (73.322)
   struct filter_out pilot = {0};
-  create_filter_output(&pilot,&composite,NULL,audio_L, COMPLEX);
+  create_filter_output(&pilot,&composite,audio_L, COMPLEX);
   set_filter(&pilot,-100./Audio_samprate, 100./Audio_samprate, chan->filter.kaiser_beta);
 
   // Stereo difference (L-R) information on DSBSC carrier at 38 kHz
   // Extends +/- 15 kHz around 38 kHz
   struct filter_out lminusr = {0};
-  create_filter_output(&lminusr,&composite,NULL,audio_L, COMPLEX);
+  create_filter_output(&lminusr,&composite,audio_L, COMPLEX);
   set_filter(&lminusr,-15000./Audio_samprate, 15000./Audio_samprate, chan->filter.kaiser_beta);
 
   // The asserts should be valid for clean sample rates multiples of 200 Hz
@@ -300,7 +300,7 @@ int demod_wfm(void *arg){
  quit:;
   // clean up
   if(Verbose > 1)
-    fprintf(stderr,"%s exiting\n",chan->name);
+    fprintf(stderr,"%s returning\n",chan->name);
 
   FREE(chan->output.queue);
   chan->output.queue_length = 0;
@@ -314,5 +314,5 @@ int demod_wfm(void *arg){
   delete_filter_output(&pilot);
   delete_filter_output(&chan->filter.out); // we don't use filter2
   chan->baseband = NULL;
-  return 0;
+  return chan->demod_type == INVALID_DEMOD ? -1 : 0;
 }

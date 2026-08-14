@@ -28,7 +28,7 @@ int demod_fm(void *arg){
   int const samprate = chan->output.samprate; // Doesn't change, keep local copy
   int const blocksize = lrint(samprate * Blocktime);
 
-  int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,NULL,blocksize, COMPLEX);
+  int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize, COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
     goto quit;
@@ -351,7 +351,7 @@ int demod_fm(void *arg){
   response(chan,response_needed); // in case one is pending as we're restarting
  quit:;
   if(Verbose > 1)
-    fprintf(stderr,"%s exiting\n",chan->name);
+    fprintf(stderr,"%s returning\n",chan->name);
 
   // clean up
   FREE(chan->output.queue);
@@ -362,5 +362,5 @@ int demod_fm(void *arg){
   }
   delete_filter_output(&chan->filter.out);
   chan->baseband = NULL;
-  return 0; // Normal exit
+  return chan->demod_type == INVALID_DEMOD ? -1 : 0;
 }

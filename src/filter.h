@@ -91,10 +91,11 @@ struct filter_out {
   uint64_t sample_index;     // input sample index at start of buffer
   bool beam;                 // Use complex weights alpha and beta
   bool isb;                  // Unpack LSB and USB -> I and Q
+  bool init;                 // response_mutex has been initialized
 };
 
 int create_filter_input(struct filter_in *,int const L,int const M, enum filtertype const in_type);
-int create_filter_output(struct filter_out * restrict slave,struct filter_in * restrict master,float complex * restrict response,int olen, enum filtertype out_type);
+int create_filter_output(struct filter_out * restrict slave,struct filter_in * restrict master,int olen, enum filtertype out_type);
 int execute_filter_input(struct filter_in *);
 int execute_filter_output(struct filter_out * ,int);
 int delete_filter_input(struct filter_in *);

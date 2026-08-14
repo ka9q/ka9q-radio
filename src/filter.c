@@ -93,6 +93,9 @@ static inline int modulo(int x,int const m){
   x %= m;
   return x < 0 ? x + m : x;
 }
+static void fft_init(void);
+
+
 // in MAY be the same as out, meaning a in-place transform.
 fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction){
   bool notify = false;
@@ -203,53 +206,9 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   master->impulse_length = M;
   pthread_mutex_init(&master->filter_mutex,NULL);
   pthread_cond_init(&master->filter_cond,NULL);
+
   int old_prio = norealtime();
-  // FFTW itself always runs with a single thread since multithreading didn't seem to do much good
-  // But we have a set of worker threads operating on a job queue to allow a controlled number
-  // of independent FFTs to execute at the same time
-  if(!atomic_flag_test_and_set_explicit(&FFTW_init,memory_order_relaxed)){
-    fprintf(stderr,"FFTW version: %s\n", fftwf_version);
-    char fft_file[PATH_MAX];
-    snprintf(fft_file,sizeof fft_file,"%s/%s",STATEDIR,FFT_LOG_FILE);
-    FFT_log = fopen(fft_file,"a");
-    if(FFT_log == NULL)
-      fprintf(stderr,"Can't append to %s: %s\n",fft_file,strerror(errno));
-
-    if(N_internal_threads > 0)
-      fftwf_init_threads();
-    bool sr = fftwf_import_system_wisdom();
-    fprintf(stderr,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
-    if(!sr && access(System_wisdom_file,R_OK) == -1) // Would really like to use AT_EACCESS flag
-      fprintf(stderr,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
-
-    if(Wisdom_file == NULL){
-      // In case it's not set by the main program (eg, packetd)
-      static char default_wisdom_file[PATH_MAX];
-      snprintf(default_wisdom_file,sizeof default_wisdom_file, "%s/%s",STATEDIR,"wisdom");
-      Wisdom_file = default_wisdom_file;
-    }
-    bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
-    fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
-    if(!lr && access(Wisdom_file,R_OK) == -1)
-      fprintf(stderr,"%s not readable: %s\n",Wisdom_file,strerror(errno));
-
-    // Also try to read arch-specific wisdom file
-    char arch_wisdom_file[PATH_MAX];
-    snprintf(arch_wisdom_file, sizeof arch_wisdom_file, "%s-%s%s", Wisdom_file, fftwf_version,
-	     N_internal_threads > 0 ? "-threaded" : "");
-    lr = fftwf_import_wisdom_from_filename(arch_wisdom_file);
-    fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",arch_wisdom_file,lr ? "succeeded" : "failed");
-    if(!lr && access(arch_wisdom_file,R_OK) == -1)
-      fprintf(stderr,"%s not readable: %s\n",arch_wisdom_file,strerror(errno));
-
-    // Start FFT worker thread(s)
-    if(N_worker_threads > NTHREADS_MAX){
-      fprintf(stderr,"fft-threads=%d too high, limiting to %d\n",N_worker_threads,NTHREADS_MAX);
-      N_worker_threads = NTHREADS_MAX;
-    }
-    for(int i=0;i < N_worker_threads;i++)
-      pthread_create(&FFT.thread[i],NULL,run_fft,NULL);
-  }
+  fft_init();
   switch(in_type){
   case SPECTRUM:
     realtime(old_prio);
@@ -263,23 +222,27 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->input_buffer_size = round_to_page(ND * N * sizeof(float complex));
     // Allocate input_buffer_size bytes immediately followed by its mirror
     master->input_buffer = mirror_alloc(master->input_buffer_size);
+    assert(master->input_buffer != NULL);
     memset(master->input_buffer,0,master->input_buffer_size);
     master->input_read_pointer.c = master->input_buffer;              // FFT starts reading here
     master->input_write_pointer.c = master->input_read_pointer.c + (M-1); // start writing here
     master->input_read_pointer.r = NULL;
     master->input_write_pointer.r = NULL;
     master->fwd_plan = plan_complex(N,master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD);
+    assert(master->fwd_plan != NULL);
     break;
   case REAL:
     master->in_type = REAL;
     master->input_buffer_size = round_to_page(ND * N * sizeof(float));
     master->input_buffer = mirror_alloc(master->input_buffer_size);
+    assert(master->input_buffer != NULL);
     memset(master->input_buffer,0,master->input_buffer_size);
     master->input_read_pointer.r = master->input_buffer;
     master->input_write_pointer.r = master->input_read_pointer.r + (M-1); // start writing here
     master->input_read_pointer.c = NULL;
     master->input_write_pointer.c = NULL;
     master->fwd_plan = plan_r2c(N,master->input_read_pointer.r, master->fdomain[0]);
+    assert(master->fwd_plan != NULL);
     break;
   }
   realtime(old_prio);
@@ -294,68 +257,77 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
    I.e., Nm / Ns = Rm / Rs = Lm / Ls = (Mm - 1) / (Ms - 1), where M-1 is the filter 'order' (one less than the # of FIR taps)
 
    master = pointer to associated shared master (input) filter
-   response = complex frequency response; may be NULL here and set later with set_filter()
-     This is set in the slave and can be different (indeed, this is the reason to have multiple slaves)
+   slave->response is the complex frequency response; it is set later with set_filter()
      This is always complex, even if the input and/or output are real in the time domain
      However the length is shorter for real output because the complex spectrum is symmetrical around DC
      response array length = Ns = Ls + Ms - 1 when output is complex
                            = Ns/2 + 1 = (Ls + Ms - 1)/2+1 when output is real
-     Must be SIMD-aligned (e.g., allocated with fftw_alloc) and will be freed by delete_filter()
+     Must be SIMD-aligned and will be freed by delete_filter()
 
-    len = number of time domain points in output = Ls
-    out_type = REAL, COMPLEX, or SPECTRUM (dummy for spectrum analyzer)
+   len = number of time domain points in output = Ls
+   out_type = REAL, COMPLEX, or SPECTRUM (dummy for spectrum analyzer)
 
-    All demodulators currently require COMPLEX output because a complex exponential is applied to the time domain
-    output for fine frequency tuning
-    Before fine tuning was added, SSB(CW) could (and did) use the REAL mode since the imaginary component is unneeded
-    and the c2r IFFT is faster
+   All demodulators currently require COMPLEX output because a complex exponential is applied to the time domain
+   output for fine frequency tuning
+   Before fine tuning was added, SSB(CW) could (and did) use the REAL mode since the imaginary component is unneeded
+   and the c2r IFFT is faster
 
-    Baseband FM audio filtering for de-emphasis and PL separation can use REAL output because there's no baseband fine tuning
+   Baseband FM audio filtering for de-emphasis and PL separation can use REAL output because there's no baseband fine tuning
 
-    If you provide your own filter response, ensure that it drops to nil well below the Nyquist rate
-    to prevent aliasing. Remember that decimation reduces the Nyquist rate by the decimation ratio.
-    The set_filter() function uses Kaiser windowing for this purpose
-
-    An output filter must not be used after its master is deleted, a segfault will occur
+   An output filter must not be used after its master is deleted, a segfault will occur
 */
-int create_filter_output(struct filter_out *slave,struct filter_in * master,float complex * const response,int len, enum filtertype out_type){
-  assert(master != NULL);
-  if(master == NULL)
+int create_filter_output(struct filter_out *slave,struct filter_in * master,int len, enum filtertype out_type){
+  assert(master != NULL && slave != NULL && (out_type == SPECTRUM || len > 0));
+  if(master == NULL || slave == NULL || (out_type != SPECTRUM && len <= 0))
     return -1;
-  assert(slave != NULL);
-  if(slave == NULL)
-    return -1;
-  assert(out_type == SPECTRUM || len > 0);
-  if(out_type != SPECTRUM && len == 0)
-    return -1;
-  // Should already be zeroed
-  // If not, it is probably being reused and the dynamically allocated storage in it may not have been freed
-#ifdef NDEBUG
-  memset(slave,0,sizeof *slave); // make sure it's clean
-#else
-  ASSERT_ZEROED(slave,sizeof *slave);
-#endif
-  // Share all but output fft bins, response, output and output type
-  slave->master = master;
-  slave->out_type = out_type;
+
+  if(slave->master == master && slave->olen == len && slave->out_type == out_type && slave->init)
+    goto done; // nothing changed
+
+  if(out_type == SPECTRUM)
+    len = 0;
   // N / L = Total FFT points / time domain points
   int const N = master->ilen + master->impulse_length - 1;
   int const L = master->ilen;
-  slave->response = response;
-  pthread_mutex_init(&slave->response_mutex,NULL);
+  slave->olen = len;
+  slave->points = (int)((long)len * N / L);
+  if(((long)len * N % L) != 0){
+    fprintf(stderr,"Invalid filter output length %d (fft size %d) for input N=%d, L=%d\n",len,slave->points,N,L);
+    return -1;
+  }
+  if(!slave->init){
+    pthread_mutex_init(&slave->response_mutex,NULL);
+    slave->init = true;
+    // First time through all allocations should be empty
+    assert(slave->response == NULL);
+    assert(slave->fdomain == NULL);
+    assert(slave->rev_plan == NULL);
+    assert(slave->output_buffer.c == NULL);
+    assert(slave->output_buffer.r == NULL);
+  } else {
+    // Free old buffers and plan, we'll need new ones
+    pthread_mutex_lock(&slave->response_mutex);
+    FREE(slave->response);
+    pthread_mutex_unlock(&slave->response_mutex);
+    FREE(slave->fdomain);
+    if(slave->rev_plan){
+      fftwf_destroy_plan(slave->rev_plan);
+      slave->rev_plan = NULL;
+    }
+    FREE(slave->output_buffer.c);
+    FREE(slave->output_buffer.r);
+    slave->output.r = NULL;
+    slave->output.c = NULL;
+  }
+  // Share all but output fft bins, response, output and output type
+  slave->master = master;
+  slave->out_type = out_type;
   set_filter_weights(slave,1.0,0.0); // defaults select A input only, can be changed by set_filter_weights(). Used only when beam == true
   switch(slave->out_type){
   default:
   case COMPLEX: // note fall-through
     {
-      int q = (int)((long)len * N / L);
-      if(((long)len * N % L) != 0){
-	fprintf(stderr,"Invalid filter output length %d (fft size %d) for input N=%d, L=%d\n",len,q,N,L);
-	return -1;
-      }
-      slave->olen = len;
-      slave->points = q; // Total number of FFT points including overlap
-      slave->bins = q;
+      slave->bins = slave->points;
       slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
       assert(slave->fdomain != NULL);
       if(slave->fdomain == NULL)
@@ -366,11 +338,15 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
 	FREE(slave->fdomain);
 	return -1;
       }
-      slave->output_buffer.r = NULL; // catch erroneous references
       slave->output.c = slave->output_buffer.c + slave->bins - len;
       int old_prio = norealtime(); // Could this cause a priority inversion?
       slave->rev_plan = plan_complex(slave->points,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD);
       realtime(old_prio);
+      if(slave->rev_plan == NULL){
+	FREE(slave->output_buffer.c);
+	FREE(slave->fdomain);
+	return -1;
+      }
     }
     break;
   case SPECTRUM: // Like complex, but no IFFT or output time domain buffer
@@ -379,13 +355,6 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
     break;
   case REAL:
     {
-      int q = (int)((long)len * N / L);
-      if(((long)len * N % L) != 0){
-	fprintf(stderr,"Invalid filter output length %d (fft size %d) for input N=%d, L=%d\n",len,q,N,L);
-	return -1;
-      }
-      slave->olen = len;
-      slave->points = q;
       slave->bins = slave->points / 2 + 1;
       slave->fdomain = lmalloc(sizeof(float complex) * slave->bins);
       assert(slave->fdomain != NULL);
@@ -397,15 +366,19 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
 	FREE(slave->fdomain);
 	return -1;
       }
-      slave->output_buffer.c = NULL;
       slave->output.r = slave->output_buffer.r + slave->points - len;
       int old_prio = norealtime();
       slave->rev_plan = plan_c2r(slave->points,slave->fdomain,slave->output_buffer.r);
       realtime(old_prio);
+      if(slave->rev_plan == NULL){
+	FREE(slave->output_buffer.r);
+	FREE(slave->fdomain);
+	return -1;
+      }
     }
     break;
   }
-  if(slave->out_type != SPECTRUM && !goodchoice(slave->points)){
+  if(slave->points != 0 && !goodchoice(slave->points)){
     int const ell = slave->olen;
     int const overlap = slave->points / (slave->points - ell);
     int const step = overlap;
@@ -420,6 +393,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,floa
       }
     }
   }
+ done:;
   slave->next_jobnum = master->next_jobnum;
   return 0;
 }
@@ -963,7 +937,11 @@ int delete_filter_output(struct filter_out *slave){
    This can occasionally be called with slave == NULL at startup, so don't abort
    NB: 'low' and 'high' are *fractional* frequencies relative to the output sample rate, i.e., -0.5 < f < +0.5
    If invoked on a demod that hasn't run yet, slave->master will be NULL so check for that and quit;
-   the filter should get set up when it actually starts (thanks N5TNL for bug report) */
+   the filter should get set up when it actually starts (thanks N5TNL for bug report)
+   If you provide your own filter response, ensure that it drops to nil well below the Nyquist rate
+   to prevent aliasing. Remember that decimation reduces the Nyquist rate by the decimation ratio.
+    The set_filter() function uses Kaiser windowing for this purpose
+*/
 int set_filter(struct filter_out * const slave,double low,double high,double const kaiser_beta){
   if(slave == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta) || slave->master == NULL)
     return -1;
@@ -1042,6 +1020,53 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   pthread_mutex_unlock(&slave->response_mutex);
   FREE(tmp);
   return 0;
+}
+// One-time setup of FFT: import wisdom, start worker threads
+static void fft_init(void){
+  if(atomic_flag_test_and_set_explicit(&FFTW_init,memory_order_relaxed))
+    return;
+
+  fprintf(stderr,"FFTW version: %s\n", fftwf_version);
+  char fft_file[PATH_MAX];
+  snprintf(fft_file,sizeof fft_file,"%s/%s",STATEDIR,FFT_LOG_FILE);
+  FFT_log = fopen(fft_file,"a");
+  if(FFT_log == NULL)
+    fprintf(stderr,"Can't append to %s: %s\n",fft_file,strerror(errno));
+
+  if(N_internal_threads > 0)
+    fftwf_init_threads();
+  bool sr = fftwf_import_system_wisdom();
+  fprintf(stderr,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
+  if(!sr && access(System_wisdom_file,R_OK) == -1) // Would really like to use AT_EACCESS flag
+    fprintf(stderr,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
+
+  if(Wisdom_file == NULL){
+    // In case it's not set by the main program (eg, packetd)
+    static char default_wisdom_file[PATH_MAX];
+    snprintf(default_wisdom_file,sizeof default_wisdom_file, "%s/%s",STATEDIR,"wisdom");
+    Wisdom_file = default_wisdom_file;
+  }
+  bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
+  fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
+  if(!lr && access(Wisdom_file,R_OK) == -1)
+    fprintf(stderr,"%s not readable: %s\n",Wisdom_file,strerror(errno));
+
+  // Also try to read arch-specific wisdom file
+  char arch_wisdom_file[PATH_MAX];
+  snprintf(arch_wisdom_file, sizeof arch_wisdom_file, "%s-%s%s", Wisdom_file, fftwf_version,
+	   N_internal_threads > 0 ? "-threaded" : "");
+  lr = fftwf_import_wisdom_from_filename(arch_wisdom_file);
+  fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",arch_wisdom_file,lr ? "succeeded" : "failed");
+  if(!lr && access(arch_wisdom_file,R_OK) == -1)
+    fprintf(stderr,"%s not readable: %s\n",arch_wisdom_file,strerror(errno));
+
+  // Start FFT worker thread(s)
+  if(N_worker_threads > NTHREADS_MAX){
+    fprintf(stderr,"fft-threads=%d too high, limiting to %d\n",N_worker_threads,NTHREADS_MAX);
+    N_worker_threads = NTHREADS_MAX;
+  }
+  for(int i=0;i < N_worker_threads;i++)
+    pthread_create(&FFT.thread[i],NULL,run_fft,NULL);
 }
 int write_cfilter(struct filter_in *f, float complex const *buffer,int size){
   if(f == NULL)
