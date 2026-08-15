@@ -160,6 +160,19 @@ fftwf_plan plan_c2r(int N, float complex *in, float *out){
   }
   return plan;
 }
+// FFTW only guarantees thread-safe execution of existing plans. Plan creation
+// and destruction must be serialized by the application. Use the same mutex for
+// both sides of the plan lifecycle so one demod cannot destroy FFTW planner state
+// while another demod is creating or destroying a plan.
+void destroy_plan(fftwf_plan *plan){
+  if(plan == NULL || *plan == NULL)
+    return;
+  pthread_mutex_lock(&FFTW_planning_mutex);
+  fftwf_destroy_plan(*plan);
+  pthread_mutex_unlock(&FFTW_planning_mutex);
+  *plan = NULL;
+}
+
 // Create fast convolution filters
 // The filters are now in two parts, filter_in (the master) and filter_out (the slave)
 // Filter_in holds the original time-domain input and its frequency domain version
@@ -310,10 +323,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,int 
     FREE(slave->response);
     pthread_mutex_unlock(&slave->response_mutex);
     FREE(slave->fdomain);
-    if(slave->rev_plan){
-      fftwf_destroy_plan(slave->rev_plan);
-      slave->rev_plan = NULL;
-    }
+    destroy_plan(&slave->rev_plan);
     FREE(slave->output_buffer.c);
     FREE(slave->output_buffer.r);
     slave->output.r = NULL;
@@ -910,9 +920,7 @@ int delete_filter_input(struct filter_in * master){
   ASSERT_UNLOCKED(&master->filter_mutex);
   pthread_mutex_destroy(&master->filter_mutex);
   pthread_cond_destroy(&master->filter_cond);
-  if(master->fwd_plan != NULL)
-    fftwf_destroy_plan(master->fwd_plan);
-  master->fwd_plan = NULL;
+  destroy_plan(&master->fwd_plan);
   mirror_free(&master->input_buffer,master->input_buffer_size); // Don't use free() !
   for(int i=0; i < ND; i++)
     FREE(master->fdomain[i]);
@@ -924,9 +932,7 @@ int delete_filter_output(struct filter_out *slave){
     return -1;
   ASSERT_UNLOCKED(&slave->response_mutex);
   pthread_mutex_destroy(&slave->response_mutex);
-  if(slave->rev_plan != NULL)
-    fftwf_destroy_plan(slave->rev_plan);
-  slave->rev_plan = NULL;
+  destroy_plan(&slave->rev_plan);
   // Only one will be non-null but it doesn't hurt to free both
   FREE(slave->output_buffer.c);
   FREE(slave->output_buffer.r);
@@ -1008,8 +1014,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
     response[i] *= gain; // Normalize for the window gain
   assert(((uintptr_t)response & 63u) == 0);
   fftwf_execute(fwd_filter_plan);
-  fftwf_destroy_plan(fwd_filter_plan);
-  fwd_filter_plan = NULL;
+  destroy_plan(&fwd_filter_plan);
 #if FILTER_DEBUG
   {
     for(int i=0; i < N; i++)

@@ -197,9 +197,7 @@ int demod_spectrum(void *arg){
   chan->spectrum.fft_n = 0;
   delete_filter_output(&chan->filter.out);
   chan->baseband = NULL;
-  if(chan->spectrum.plan)
-    fftwf_destroy_plan(chan->spectrum.plan);
-  chan->spectrum.plan = NULL;
+  destroy_plan(&chan->spectrum.plan);
   FREE(chan->spectrum.window);
   FREE(chan->spectrum.bin_data);
   FREE(chan->spectrum.ring);
@@ -682,8 +680,7 @@ static void setup_real_fft(chan_t *chan){
   assert(chan != NULL);
   if(chan->spectrum.fft_n < 1)
     return; // Can't do it yet
-  if(chan->spectrum.plan != NULL)
-    fftwf_destroy_plan(chan->spectrum.plan);
+  destroy_plan(&chan->spectrum.plan);
   float *in = fftwf_alloc_real(chan->spectrum.fft_n);
   assert(in != NULL);
   float complex *out = fftwf_alloc_complex(chan->spectrum.fft_n/2+1); // N/2 + 1 output points for real->complex
@@ -698,8 +695,7 @@ static void setup_complex_fft(chan_t *chan){
   assert(chan != NULL);
   if(chan->spectrum.fft_n < 1)
     return; // Can't do anything yet
-  if(chan->spectrum.plan != NULL)
-    fftwf_destroy_plan(chan->spectrum.plan);
+  destroy_plan(&chan->spectrum.plan);
   float complex *in = fftwf_alloc_complex(chan->spectrum.fft_n);
   assert(in != NULL);
   float complex *out = fftwf_alloc_complex(chan->spectrum.fft_n);
