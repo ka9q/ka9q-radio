@@ -27,6 +27,7 @@ Command-line options:
  --locale <locale>: Set locale. Default is $LANG
  --mintime|--minfiletime|-m: minimum file duration, in sec. Files shorter than this are deleted when closed
  --raw|-r: Don't emit .WAV header for PCM files; ignored with Opus (Ogg is needed to delimit frames in a stream)
+ --reacquire: With --stdout, continue following the selected SSRC if its RTP sender/session changes
  --subdirectories|--subdirs|-s': Create subdirectories when writing files: ssrc/year/month/day/filename
  --timeout|-t <seconds>: Close file after idle period (default 20 sec)
  --verbose|-v: Increase verbosity level
@@ -193,6 +194,7 @@ static bool Subdirs; // Place recordings in subdirectories by SSID
 static char const *Locale;
 static uint32_t Ssrc; // SSRC, when manually specified
 static bool Catmode = false; // sending one channel to standard output
+static bool Reacquire = false; // In stdout mode, follow selected SSRC across sender/session changes
 static bool Flushmode = false; // Flush ogg packets after each write; also fflush unless writing to file
 static const char *Command = NULL;
 static bool Jtmode = false;
@@ -230,6 +232,10 @@ static int send_opus_queue(struct session * const sp,bool flush);
 static int send_queue(struct session * const sp,bool flush);
 static void sanitize_string(char *cp);
 
+enum {
+  OPT_REACQUIRE = 256,
+};
+
 static struct option Options[] = {
   {"ft8", no_argument, NULL, '8'}, // synonym for --jt --lengthlimit 15
   {"ft4", no_argument, NULL, '4'}, // synonym for --jt --lengthlimit 7.5
@@ -247,6 +253,7 @@ static struct option Options[] = {
   {"prefix-source", no_argument, NULL, 'p' }, // Prefix file names with source socket
   {"reset", no_argument, NULL, 'R'},  // Detect clock skew and reset
   {"raw", no_argument, NULL, 'r' },
+  {"reacquire", no_argument, NULL, OPT_REACQUIRE},
   {"subdirectories", no_argument, NULL, 's'},
   {"subdirs", no_argument, NULL, 's'},
   {"timeout", required_argument, NULL, 't'},
@@ -325,6 +332,9 @@ int main(int argc,char *argv[]){
     case 'r':
       Raw = true;
       break;
+    case OPT_REACQUIRE:
+      Reacquire = true;
+      break;
     case 'S':
       if(optarg){
 	char *ptr = NULL;
@@ -359,7 +369,7 @@ int main(int argc,char *argv[]){
       VERSION();
       exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-c|--catmode|--stdout] [-r|--raw] [-e|--exec command] [-f|--flush] [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-j|--jt] [-v] [-m sec] [-x|--max_length max_file_time, no sync, oneshot] [-o|--source <source-name-or-address>] PCM_multicast_address\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-c|--catmode|--stdout] [--reacquire] [-r|--raw] [-e|--exec command] [-f|--flush] [-s] [-d directory] [-l locale] [-L maxtime] [-t timeout] [-j|--jt] [-v] [-m sec] [-x|--max_length max_file_time, no sync, oneshot] [-o|--source <source-name-or-address>] PCM_multicast_address\n",argv[0]);
       exit(EX_USAGE);
       break;
     }
@@ -375,6 +385,10 @@ int main(int argc,char *argv[]){
   if(Catmode && Command != NULL){
     fprintf(stderr,"--exec supersedes --stdout\n");
     Catmode = false;
+  }
+  if(Reacquire && !Catmode){
+    fprintf(stderr,"--reacquire requires --stdout\n");
+    exit(EX_USAGE);
   }
   if((Catmode || Command != NULL) && (Subdirs || Jtmode || Max_length != 0 || Padding)){
     fprintf(stderr,"--stdout and --exec supersede --subdirs, --jtmode, --max-length, --length and --pad\n");
@@ -510,6 +524,30 @@ static void process_status(int fd){
     sp->next = Sessions;
     sp->prev = NULL;
     Sessions = sp;
+  }
+  if(sp == NULL && Catmode && Reacquire){
+    // With --reacquire, stdout mode follows one logical SSRC, not one sender socket tuple.
+    // radiod may restart and resume the same restored SSRC from a new UDP
+    // source port. Rebind the existing stdout session so its stale pre-restart
+    // tuple cannot later hit the idle timeout and terminate an active stream.
+    for(sp = Sessions;sp != NULL;sp=sp->next){
+      if(sp->ssrc == chan.output.rtp.ssrc)
+        break;
+    }
+    if(sp != NULL){
+      if(Verbose)
+        fprintf(stderr,"ssrc %u sender changed %s -> %s; continuing stdout session\n",
+                sp->ssrc,formatsock(&sp->sender,false),formatsock(&sender,false));
+      // Discard any packets/resequencing state belonging to the old RTP
+      // incarnation. stdout itself remains open and attached to this session.
+      for(int i=0;i < RESEQ;i++){
+        FREE(sp->reseq[i].data);
+        sp->reseq[i].size = 0;
+        sp->reseq[i].inuse = false;
+      }
+      memset(&sp->rtp_state,0,sizeof(sp->rtp_state));
+      memset(&sp->last_active,0,sizeof(sp->last_active));
+    }
   }
   if(sp == NULL){
     // Create session and initialize
