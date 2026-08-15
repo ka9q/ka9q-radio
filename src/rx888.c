@@ -410,6 +410,16 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 	  sdr->reqsize * sdr->pktsize,
 	  xfer_time);
 
+#if defined(__x86_64__)
+#ifdef CACHED_STORE
+  if(__builtin_cpu_supports("avx2") &&  __builtin_cpu_supports("popcnt"))
+    fprintf(stderr,"RX888 using avx2 vectorized callback with regular stores\n");
+#else
+  if(__builtin_cpu_supports("avx2") &&  __builtin_cpu_supports("popcnt"))
+    fprintf(stderr,"RX888 using avx2 vectorized callback with non-temporal stores\n");
+#endif
+#endif
+
 #if 0
   // VHF-UHF tuning
   {
