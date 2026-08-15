@@ -16,6 +16,10 @@ This program reads one or more RTP streams from a multicast group and either wri
 
 > write one stream to stdout, default false. If --ssrc is not specified, selects the first one found and ignores the rest.
 
+**--reacquire**
+
+> with --stdout, continue following the selected SSRC if its RTP sender/session changes. If --ssrc was not specified, the SSRC first selected by --stdout is used.
+
 **-d, --directory**
 
 > directory root in which to write files.
