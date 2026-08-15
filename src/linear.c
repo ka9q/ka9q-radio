@@ -58,8 +58,15 @@ int demod_linear(void *arg){
   pthread_mutex_unlock(&chan->status.lock);
   realtime(chan->prio);
   do {
-    response(chan,response_needed);
-    response_needed = false;
+    // The initial status response must not advertise an RTP_TIMESNAP before
+    // the RTP timestamp has been tied to the frontend block/job timeline.
+    // pcmrecord uses GPS_TIME + RTP_TIMESNAP to timestamp new recordings; an
+    // early response with the zero-initialized RTP timestamp can therefore
+    // produce a bogus filename time when the first RTP packet arrives.
+    if(first_run || frontend->L == 0){
+      response(chan,response_needed);
+      response_needed = false;
+    }
     pthread_mutex_lock(&chan->status.lock);
     // Look on the command queue and grab just one atomically
     for(int i=0;i < CQLEN; i++){
@@ -92,6 +99,11 @@ int demod_linear(void *arg){
       if(Verbose > 0)
 	fprintf(stderr,"%s starting at FFT jobum %u, preset RTP TS to %u\n",chan->name,first_block,chan->output.rtp.timestamp);
       first_run = true;
+
+      // Now that RTP_TIMESNAP is valid, send the initial response that was
+      // deliberately deferred at the top of the loop.
+      response(chan,response_needed);
+      response_needed = false;
     }
 
     // First pass over sample block.
