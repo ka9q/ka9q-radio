@@ -57,7 +57,7 @@ int demod_spectrum(void *arg){
   int timeout = 0;
 
   // Main loop
-  do {
+  while(!restart_needed){
     response(chan,response_needed);
     response_needed = false;
 
@@ -184,7 +184,7 @@ int demod_spectrum(void *arg){
     crossover = chan->spectrum.crossover;
     window_type = chan->spectrum.window_type;
     shape = chan->spectrum.shape;
-  } while(true);
+  }
   response(chan,response_needed); // in case one is pending as we're restarting
 
  quit:;
