@@ -242,7 +242,7 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	  break;
 	if(chan->output.encoding == OPUS && !legal_opus_samprate(new_sample_rate))
 	  break; // ignore illegal Opus sample rates (eventually will use sample rate converter)
-	int pt = pt_from_info(new_sample_rate,chan->output.channels, chan->output.encoding);
+	int const pt = pt_from_info(new_sample_rate,chan->output.channels, chan->output.encoding);
 	if(pt == -1){
 	  fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
 		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding);
