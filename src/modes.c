@@ -57,12 +57,12 @@ static double const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
 static int    const DEFAULT_SQUELCH_TAIL = 1;     // close on frame *after* going below threshold, may let partial frame noise through
 static int    const DEFAULT_UPDATE = 25;         // 2 Hz for a 20 ms frame time
 static int    const DEFAULT_NBFM_SAMPRATE = 24000;
-static double const DEFAULT_NBFM_TC = 530.5;      // Time constant for NBFM emphasis (300 Hz corner)
+static double const DEFAULT_NBFM_TC = 530.5e-6;      // Time constant for NBFM emphasis (300 Hz corner)
 static double const DEFAULT_NBFM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
 
 // We assume NBFM if FM will be used
 #if 0
-static double const DEFAULT_WFM_TC = 75.0;        // Time constant for FM broadcast (North America/Korea standard)
+static double const DEFAULT_WFM_TC = 75.0e-6;        // Time constant for FM broadcast (North America/Korea standard)
 static double const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
 #endif
 
