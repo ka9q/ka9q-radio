@@ -23,16 +23,22 @@ int demod_linear(void *arg){
   if(chan == NULL)
     return -1; // in case asserts are off
 
-  struct frontend const * const frontend = chan->frontend;
-  assert(frontend != NULL);
   assert(Blocktime != 0);
-
+  assert(chan->frontend != NULL);
   pthread_mutex_lock(&chan->status.lock);
   int const blocksize = lrint(chan->output.samprate * Blocktime);
   int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize,COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
     goto quit;
+  }
+  {
+    // Tie the RTP timestamps to radiod uptime
+    // ie, reference RTP timestamp 0 to the first radiod block
+    uint32_t const first_block = chan->filter.out.next_jobnum - 1; // radiod starts with jobnum 0
+    chan->output.rtp.timestamp = (uint32_t)lrint(first_block * Blocktime * chan->output.samprate);
+    if(Verbose > 0)
+      fprintf(stderr,"%s starting at FFT jobum %u, preset RTP TS to %u\n",chan->name,first_block,chan->output.rtp.timestamp);
   }
   chan->filter.out.beam = chan->filter.beam;
   if(chan->filter.out.beam)
@@ -49,8 +55,7 @@ int demod_linear(void *arg){
   init_pll(&chan->pll.pll);
   double am_dc = 0; // Carrier removal filter, removes squelch opening thump in aviation AM
 
-  bool first_run = false;
-  bool response_needed = true;
+  bool response_needed = false;
   bool restart_needed = false;
   int squelch_state = (!chan->pll.enable && !chan->squelch.snr_enable) ? chan->squelch.tail + 4 : 0;
   bool squelch_open = true; // memory for squelch hysteresis, starts open
@@ -82,18 +87,6 @@ int demod_linear(void *arg){
     // r == 0 is normal return
     int const N = chan->sampcount; // Number of raw samples in filter output buffer
     float complex * restrict const buffer = chan->baseband; // Working buffer
-
-    if (!first_run && frontend->L != 0){
-      // Tie the RTP timestamps to radiod uptime
-      // ie, reference RTP timestamp 0 to the first radiod block
-      double const block_rate = frontend->samprate / frontend->L; // eg Fs 126 MHz * 20 ms = 2,520,000 samples
-      uint32_t const first_block = chan->filter.out.next_jobnum - 1; // radiod starts with jobnum 0
-      chan->output.rtp.timestamp = (int32_t)(first_block * (chan->output.samprate / block_rate));
-      if(Verbose > 0)
-	fprintf(stderr,"%s starting at FFT jobum %u, preset RTP TS to %u\n",chan->name,first_block,chan->output.rtp.timestamp);
-      first_run = true;
-    }
-
     // First pass over sample block.
     // Run the PLL (if enabled)
     // Apply post-downconversion shift (if enabled, e.g. for CW)

@@ -50,7 +50,7 @@ int demod_spectrum(void *arg){
     chan->spectrum.fft_avg = 1;     // force legal
 
   bool restart_needed = false;
-  bool response_needed = true;
+  bool response_needed = false;
   // Watch for parameter changes and do them in the loop so we don't have to force a restart
   enum window_type window_type = -1; // force generation on first loop
   double rbw = -1;

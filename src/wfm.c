@@ -56,6 +56,14 @@ int demod_wfm(void *arg){
     pthread_mutex_unlock(&chan->status.lock);
     goto quit;
   }
+  {
+    // Tie the RTP timestamps to radiod uptime
+    // ie, reference RTP timestamp 0 to the first radiod block
+    uint32_t const first_block = chan->filter.out.next_jobnum - 1; // radiod starts with jobnum 0
+    chan->output.rtp.timestamp = (uint32_t)lrint(first_block * Blocktime * chan->output.samprate);
+    if(Verbose > 0)
+      fprintf(stderr,"%s starting at FFT jobum %u, preset RTP TS to %u\n",chan->name,first_block,chan->output.rtp.timestamp);
+  }
   chan->filter.out.beam = chan->filter.beam;
   if(chan->filter.out.beam)
     set_filter_weights(&chan->filter.out,chan->filter.a_weight,chan->filter.b_weight);
@@ -109,7 +117,7 @@ int demod_wfm(void *arg){
 
   double complex stereo_deemph = 0;
   double mono_deemph = 0;
-  bool response_needed = true;
+  bool response_needed = false;
   bool restart_needed = false;
   pthread_mutex_unlock(&chan->status.lock);
 

@@ -23,15 +23,21 @@ int demod_fm(void *arg){
 
   assert(Blocktime != 0);
   assert(chan->frontend != NULL);
-
   pthread_mutex_lock(&chan->status.lock);
   int const samprate = chan->output.samprate; // Doesn't change, keep local copy
   int const blocksize = lrint(samprate * Blocktime);
-
   int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize, COMPLEX);
   if(status != 0){
     pthread_mutex_unlock(&chan->status.lock);
     goto quit;
+  }
+  {
+    // Tie the RTP timestamps to radiod uptime
+    // ie, reference RTP timestamp 0 to the first radiod block
+    uint32_t const first_block = chan->filter.out.next_jobnum - 1; // radiod starts with jobnum 0
+    chan->output.rtp.timestamp = (uint32_t)lrint(first_block * Blocktime * chan->output.samprate);
+    if(Verbose > 0)
+      fprintf(stderr,"%s starting at FFT jobum %u, preset RTP TS to %u\n",chan->name,first_block,chan->output.rtp.timestamp);
   }
   chan->filter.out.beam = chan->filter.beam;
   if(chan->filter.out.beam)
@@ -70,7 +76,7 @@ int demod_fm(void *arg){
   double old_pl_phase = 0;
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
   chan->output.gain = (2 * chan->output.headroom *  samprate) / fabs(chan->filter.min_IF - chan->filter.max_IF);
-  bool response_needed = true;
+  bool response_needed = false;
   bool restart_needed = false;
   pthread_mutex_unlock(&chan->status.lock);
   realtime(chan->prio);
