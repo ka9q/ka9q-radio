@@ -187,25 +187,23 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   assert(master != (void *)-1);
   if(master == NULL)
     return -1;
+  if(master->init && master->ilen == L && master->impulse_length == M && in_type == master->in_type)
+    return 0; // nothing changed
+
   assert(L > 0);
   assert(M > 0);
   int const N = L + M - 1;
   int const bins = (in_type == COMPLEX) ? N : (N/2 + 1);
   if(bins < 2)
     return -1; // Unreasonably small - will segfault. Can happen if sample rate is garbled
+
   if(!goodchoice(N))
     fprintf(stderr,"create_filter_input(L=%'d  M=%'d): N=%'d is not an efficient blocksize for FFTW3\n",L,M,N);
-  // It really should already be zeroed.
-  // If not, it is probably being reused and the dynamically allocated storage in it may not have been freed
-#ifdef NDEBUG
-  memset(master,0,sizeof *master); // make sure it's clean, even if it causes a memory leak
-#else
-  ASSERT_ZEROED(master,sizeof *master);
-#endif
   master->points = N;
   // If there are no worker threads, do it inline
   master->perform_inline = (N_worker_threads == 0);
   for(int i=0; i < ND; i++){
+    FREE(master->fdomain[i]);
     master->fdomain[i] = lmalloc(sizeof(float complex) * bins);
     if(master->fdomain[i] == NULL){
       for(int j=0; j < i; j++)
@@ -217,9 +215,11 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   master->bins = bins;
   master->ilen = L;
   master->impulse_length = M;
-  pthread_mutex_init(&master->filter_mutex,NULL);
-  pthread_cond_init(&master->filter_cond,NULL);
-
+  if(!master->init){
+    pthread_mutex_init(&master->filter_mutex,NULL);
+    pthread_cond_init(&master->filter_cond,NULL);
+    master->init = true;
+  }
   int old_prio = norealtime();
   fft_init();
   switch(in_type){
@@ -234,6 +234,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->in_type = COMPLEX;
     master->input_buffer_size = round_to_page(ND * N * sizeof(float complex));
     // Allocate input_buffer_size bytes immediately followed by its mirror
+    mirror_free(&master->input_buffer, master->input_buffer_size); // no op if input_buffer is already NULL
     master->input_buffer = mirror_alloc(master->input_buffer_size);
     assert(master->input_buffer != NULL);
     memset(master->input_buffer,0,master->input_buffer_size);
@@ -241,12 +242,14 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->input_write_pointer.c = master->input_read_pointer.c + (M-1); // start writing here
     master->input_read_pointer.r = NULL;
     master->input_write_pointer.r = NULL;
+    destroy_plan(&master->fwd_plan);
     master->fwd_plan = plan_complex(N,master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD);
     assert(master->fwd_plan != NULL);
     break;
   case REAL:
     master->in_type = REAL;
     master->input_buffer_size = round_to_page(ND * N * sizeof(float));
+    mirror_free(&master->input_buffer, master->input_buffer_size);
     master->input_buffer = mirror_alloc(master->input_buffer_size);
     assert(master->input_buffer != NULL);
     memset(master->input_buffer,0,master->input_buffer_size);
@@ -254,6 +257,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->input_write_pointer.r = master->input_read_pointer.r + (M-1); // start writing here
     master->input_read_pointer.c = NULL;
     master->input_write_pointer.c = NULL;
+    destroy_plan(&master->fwd_plan);
     master->fwd_plan = plan_r2c(N,master->input_read_pointer.r, master->fdomain[0]);
     assert(master->fwd_plan != NULL);
     break;
@@ -931,7 +935,8 @@ int delete_filter_output(struct filter_out *slave){
   if(slave == NULL)
     return -1;
   ASSERT_UNLOCKED(&slave->response_mutex);
-  pthread_mutex_destroy(&slave->response_mutex);
+  if(slave->init)
+    pthread_mutex_destroy(&slave->response_mutex);
   destroy_plan(&slave->rev_plan);
   // Only one will be non-null but it doesn't hurt to free both
   FREE(slave->output_buffer.c);

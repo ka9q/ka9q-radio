@@ -69,6 +69,7 @@ struct filter_in {
   bool perform_inline;       // Perform FFT inline, don't use worker threads (better for small FFTs)
   uint64_t sample_index;     // input sample index at start of buffer
   uint64_t samples_by_job[ND];
+  bool init;
 };
 
 struct filter_out {
