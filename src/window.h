@@ -18,6 +18,7 @@ double hamming_window(int n,int N);
 double hp5ft_window(int n, int N);
 
 enum window_type {
+  INVALID_WINDOW = -1,
   KAISER_WINDOW,
   RECT_WINDOW, // essentially kaiser with beta = 0
   BLACKMAN_WINDOW,

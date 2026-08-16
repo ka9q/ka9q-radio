@@ -36,23 +36,20 @@ int demod_spectrum(void *arg){
   if(chan == NULL)
     return -1;
 
-  pthread_mutex_lock(&chan->status.lock);
-  chan->status.output_interval = 0; // No automatic status updates
-  chan->status.output_timer = 0; // No automatic status updates
-  chan->output.silent = true; // we don't send anything there
-  pthread_mutex_unlock(&chan->status.lock);
-
   // Parameters set by system input side
   assert(Blocktime != 0);
   int const prio = chan->prio >= 10 ? chan->prio - 10 : 0; // don't let it go negative
   realtime(prio); // Drop below demods
+  chan->status.output_interval = 0; // No automatic status updates
+  chan->status.output_timer = 0; // No automatic status updates
+  chan->output.silent = true; // we don't send anything there
   if(chan->spectrum.fft_avg <= 0)
     chan->spectrum.fft_avg = 1;     // force legal
 
   bool restart_needed = false;
   bool response_needed = false;
   // Watch for parameter changes and do them in the loop so we don't have to force a restart
-  enum window_type window_type = -1; // force generation on first loop
+  enum window_type window_type = INVALID_WINDOW; // force generation on first loop
   double rbw = -1;
   int bin_count = -1;
   int crossover = -1;
