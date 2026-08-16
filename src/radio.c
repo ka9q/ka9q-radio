@@ -925,6 +925,29 @@ static void *demod_thread(void *p){
     if(Verbose > 1)
       fprintf(stderr,"%s starting\n",chan->name);
 
+    assert(Blocktime != 0);
+    assert(chan->frontend != NULL);
+    int const blocksize = lrint(chan->output.samprate * Blocktime);
+    int const s = create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize,COMPLEX);
+    if(s != 0){
+      status = INVALID_DEMOD;
+      break;
+    }
+    {
+      // Tie the RTP timestamps to radiod uptime
+      // ie, reference RTP timestamp 0 to the first radiod block
+      uint32_t const first_block = chan->filter.out.next_jobnum - 1; // radiod starts with jobnum 0
+      chan->output.rtp.timestamp = (uint32_t)lrint(first_block * Blocktime * chan->output.samprate);
+      if(Verbose > 0)
+	fprintf(stderr,"%s starting at FFT jobum %u, preset RTP TS to %u\n",chan->name,first_block,chan->output.rtp.timestamp);
+    }
+    chan->filter.out.beam = chan->filter.beam;
+    if(chan->filter.out.beam)
+      set_filter_weights(&chan->filter.out,chan->filter.a_weight,chan->filter.b_weight);
+
+    chan->filter.remainder = NAN;   // Force re-init of fine downconversion osc
+    set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
+
     switch(chan->demod_type){
     case LINEAR_DEMOD:
       status = demod_linear(p);
@@ -946,6 +969,18 @@ static void *demod_thread(void *p){
       status = -1; // Unknown demod, quit
       break;
     }
+    if(Verbose > 1)
+      fprintf(stderr,"%s returning\n",chan->name);
+
+    // clean up
+    FREE(chan->output.queue);
+    chan->output.queue_length = 0;
+    if(chan->opus.encoder != NULL){
+      opus_encoder_destroy(chan->opus.encoder);
+      chan->opus.encoder = NULL;
+    }
+    delete_filter_output(&chan->filter.out);
+    chan->baseband = NULL;
   } while(chan->demod_type != INVALID_DEMOD && status == 0);
   // The channels should already clean up after themselves, but just in case...
   if(Verbose > 1)

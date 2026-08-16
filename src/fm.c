@@ -21,35 +21,9 @@ int demod_fm(void *arg){
   if(chan == NULL)
     return -1;
 
-  assert(Blocktime != 0);
-  assert(chan->frontend != NULL);
-  pthread_mutex_lock(&chan->status.lock);
   int const samprate = chan->output.samprate; // Doesn't change, keep local copy
-  int const blocksize = lrint(samprate * Blocktime);
-  int const status = create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize, COMPLEX);
-  if(status != 0){
-    pthread_mutex_unlock(&chan->status.lock);
-    goto quit;
-  }
-  {
-    // Tie the RTP timestamps to radiod uptime
-    // ie, reference RTP timestamp 0 to the first radiod block
-    uint32_t const first_block = chan->filter.out.next_jobnum - 1; // radiod starts with jobnum 0
-    chan->output.rtp.timestamp = (uint32_t)lrint(first_block * Blocktime * chan->output.samprate);
-    if(Verbose > 0)
-      fprintf(stderr,"%s starting at FFT jobum %u, preset RTP TS to %u\n",chan->name,first_block,chan->output.rtp.timestamp);
-  }
-  chan->filter.out.beam = chan->filter.beam;
-  if(chan->filter.out.beam)
-    set_filter_weights(&chan->filter.out,chan->filter.a_weight,chan->filter.b_weight);
-
-  set_filter(&chan->filter.out,
-	     chan->filter.min_IF/samprate,
-	     chan->filter.max_IF/samprate,
-	     chan->filter.kaiser_beta);
-
-  chan->filter.remainder = NAN;   // Force init of fine downconversion oscillator
-  set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
+  // Set main filter
+  set_channel_filter(chan);
 
   double complex phase_memory = 0;
   chan->output.channels = 1; // Only mono for now
@@ -69,6 +43,8 @@ int demod_fm(void *arg){
     // Set up PL tone squelch
     init_goertzel(&tone_detect,chan->fm.tone_freq/samprate);
   }
+  double const alpha = -expm1(-Blocktime / 1.0);
+  assert(isfinite(alpha) && alpha > 0.0 && alpha <= 1.0);
   double deemph_state = 0;
   int squelch_state = 0; // Number of blocks for which squelch remains open
   int const pl_integrate_samples = (int)(samprate * 0.24); // 240 milliseconds (spec is < 250 ms). 12 blocks @ 24 kHz
@@ -78,10 +54,9 @@ int demod_fm(void *arg){
   chan->output.gain = (2 * chan->output.headroom *  samprate) / fabs(chan->filter.min_IF - chan->filter.max_IF);
   bool response_needed = false;
   bool restart_needed = false;
-  pthread_mutex_unlock(&chan->status.lock);
   realtime(chan->prio);
 
-  do {
+  while(!restart_needed){
     response(chan,response_needed);
     response_needed = false;
 
@@ -120,8 +95,8 @@ int demod_fm(void *arg){
 
     double avg_amp = 0;
     double amplitudes[N];
-    double noise = chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF); // noise power estimate
-    double beta = 0.5; // threshold extension factor
+    double const noise = chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF); // noise power estimate
+    double const beta = 0.5; // threshold extension factor
 
     // Simple SNR estimate: Power/(N0 * Bandwidth) - 1
     double const snr = noise == 0 ? INFINITY : (chan->sig.bb_power / noise) - 1.0;
@@ -208,7 +183,7 @@ int demod_fm(void *arg){
 	    phase = copysign(chan->fm.devmax/samprate, phase);
 
 	  // Weight by IF amplitude
-	  double p = cnrm(buffer[n]);
+	  double p = cnrmf(buffer[n]);
 	  if(p > 0){
 	    p /= (p + beta * noise);
 	    phase *= p;
@@ -234,7 +209,7 @@ int demod_fm(void *arg){
 	    phase = copysign(chan->fm.devmax/samprate, phase);
 
 	  // Weight by IF amplitude
-	  double p1 = cnrm(buffer[n]);
+	  double p1 = cnrmf(buffer[n]);
 	  if(p1 > 0)
 	    p1 /= (p1 + beta * noise);
 	  phase *= p0 * p1;
@@ -247,6 +222,7 @@ int demod_fm(void *arg){
     }
     if(squelch_state == squelch_state_max){
       // Squelch fully open; look at deviation peaks
+      // clamp these values when squelch is closing
       double peak_positive_deviation = 0;
       double peak_negative_deviation = 0;   // peak neg deviation
       double frequency_offset = 0;      // Average frequency
@@ -259,10 +235,7 @@ int demod_fm(void *arg){
 	  peak_negative_deviation = baseband[n];
       }
       frequency_offset *= samprate * 0.5 / N;  // scale to Hz
-      // Update frequency offset and peak deviation, with smoothing to attenuate PL tones
-      // alpha = blocktime in millisec is an approximation to a 1 sec time constant assuming blocktime << 1 sec
-      // exact value would be 1 - exp(-blocktime/tc) = -expm1(-blockime/tc)
-      double const alpha = 1 * Blocktime;
+      // Update smoothed frequency offset and peak deviation
       chan->sig.foffset += alpha * (frequency_offset - chan->sig.foffset);
 
       // Remove frequency offset from deviation peaks and scale to full cycles
@@ -271,60 +244,59 @@ int demod_fm(void *arg){
       peak_positive_deviation -= chan->sig.foffset;
       peak_negative_deviation -= chan->sig.foffset;
       chan->fm.pdeviation = max(peak_positive_deviation,-peak_negative_deviation);
-
-      // remove DC before tone squelch; energy measurement responds to DC
-      if(chan->fm.rate != 0){
-	// Remove DC
-	float const dc = (float)(2 * chan->sig.foffset / samprate);
-	for(int n=0; n < N; n++)
-	  baseband[n] -= dc;
+    }
+    // in PM (not flat FM) remove DC before tone squelch; energy measurement responds to DC
+    if(chan->fm.rate != 0){
+      float const dc = (float)(2 * chan->sig.foffset / samprate);
+      for(int n=0; n < N; n++){
+	baseband[n] -= dc;
       }
-      if(chan->fm.tone_freq != 0){
-	// PL/CTCSS tone squelch
-	// use samples after DC removal but before de-emphasis and gain scaling
-	for(int n=0; n < N; n++){
-	  update_goertzel(&tone_detect,baseband[n]); // input is -1 to +1
-	  double const y = applyIIR(&lpf,baseband[n]); // should be unity gain in passband
-	  lpf_energy += y*y;
-	  if(chan->options & (1LL<0)){
-	    // Test option: let's hear the LPF output
-	    baseband[n] = (float)y;
-	  }
-	  pl_sample_count++;
-	  if(pl_sample_count >= pl_integrate_samples){
-	    // Peak deviation of PL tone in Hz
-	    double complex const c = output_goertzel(&tone_detect); // gain of N/2 scales half cycles per sample to full cycles per interval
-	    double const g = cabs(c) / pl_sample_count; // peak PL tone deviation in Hz per sample
-	    chan->fm.tone_deviation = samprate * g; // peak PL tone deviation in Hz
-	    // Compute phase jump between integration periods as a fine frequency error indication
-	    double const p = carg(c) / (2*M_PI); // +/- 0.5 rev
-	    double iptr = 0;
-	    // Update previous phase by the number of intervening PL tone cycles
-	    old_pl_phase += chan->fm.tone_freq * pl_sample_count / samprate;
-	    double np = 2 * modf(p - old_pl_phase,&iptr); // see how much it's jumped, scale to +/-1 *half* rev
-	    old_pl_phase = p;
-	    np = np < -1 ? np + 2 : np > 1 ? np - 2 : np; // and bring to principal range, -1 to +1 half cycle per interval: 0.5 Hz / .24 sec = 2 Hz
-	    assert(np >= -1.0 && np <= 1.0);
+    }
+    if(chan->fm.tone_freq != 0){
+      // PL/CTCSS tone squelch
+      // use samples after DC removal but before de-emphasis and gain scaling
+      for(int n=0; n < N; n++){
+	update_goertzel(&tone_detect,baseband[n]); // input is -1 to +1
+	double const y = applyIIR(&lpf,baseband[n]); // should be unity gain in passband
+	lpf_energy += y*y;
+	if(chan->options & (1LL<0)){
+	  // Test option: let's hear the LPF output
+	  baseband[n] = (float)y;
+	}
+	pl_sample_count++;
+	if(pl_sample_count >= pl_integrate_samples){
+	  // Peak deviation of PL tone in Hz
+	  double complex const c = output_goertzel(&tone_detect); // gain of N/2 scales half cycles per sample to full cycles per interval
+	  double const g = cabs(c) / pl_sample_count; // peak PL tone deviation in Hz per sample
+	  chan->fm.tone_deviation = samprate * g; // peak PL tone deviation in Hz
+	  // Compute phase jump between integration periods as a fine frequency error indication
+	  double const p = carg(c) / (2*M_PI); // +/- 0.5 rev
+	  double iptr = 0;
+	  // Update previous phase by the number of intervening PL tone cycles
+	  old_pl_phase += chan->fm.tone_freq * pl_sample_count / samprate;
+	  double np = 2 * modf(p - old_pl_phase,&iptr); // see how much it's jumped, scale to +/-1 *half* rev
+	  old_pl_phase = p;
+	  np = np < -1 ? np + 2 : np > 1 ? np - 2 : np; // and bring to principal range, -1 to +1 half cycle per interval: 0.5 Hz / .24 sec = 2 Hz
+	  assert(np >= -1.0 && np <= 1.0);
 
-	    lpf_energy /= pl_sample_count; // filter output average energy per sample, range 0 to +1 half-rev^2 per sample
-	    if(chan->options & (1LL<1)){
-	      // Experimental, needs a new 300 Hz audio LPF before it is ready. Otherwise lots of low frequency voice can falsely gate it off
-	      // Scale g*g to half revs per sample^2, same as lpf_energy
-	      tone_mute = (2*g*g / lpf_energy) < 0.25; // boolean result: if tone -6 dB to LPF total, mute.
-	    } else {
-	      // Use old tone mute threshold
-	      tone_mute = chan->fm.tone_deviation < 250	|| fabs(np) > .10; // note boolean result. ~0.2 Hz offset
-	    }
-	    reset_goertzel(&tone_detect);
-	    lpf_energy = 0;
-	    pl_sample_count = 0;
+	  lpf_energy /= pl_sample_count; // filter output average energy per sample, range 0 to +1 half-rev^2 per sample
+	  if(chan->options & (1LL<1)){
+	    // Experimental, needs a new 300 Hz audio LPF before it is ready. Otherwise lots of low frequency voice can falsely gate it off
+	    // Scale g*g to half revs per sample^2, same as lpf_energy
+	    tone_mute = (2*g*g / lpf_energy) < 0.25; // boolean result: if tone -6 dB to LPF total, mute.
+	  } else {
+	    // Use old tone mute threshold
+	    tone_mute = chan->fm.tone_deviation < 250	|| fabs(np) > .10; // note boolean result. ~0.2 Hz offset
 	  }
+	  reset_goertzel(&tone_detect);
+	  lpf_energy = 0;
+	  pl_sample_count = 0;
 	}
-	if(tone_mute){
-	  chan->output.power = 0;
-	  send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
-	  continue;
-	}
+      }
+      if(tone_mute){
+	chan->output.power = 0;
+	send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
+	continue;
       }
     }
     if(chan->fm.rate != 0){
@@ -348,25 +320,12 @@ int demod_fm(void *arg){
       double const s = gain * baseband[n];
       output_energy += s * s;
       baseband[n] = (float)s;
+      assert(fabsf(baseband[n]) < 100); // sanity
     }
     chan->output.power = output_energy / N;
     if(send_output(chan,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
-
-  } while(true);
-  response(chan,response_needed); // in case one is pending as we're restarting
- quit:;
-  if(Verbose > 1)
-    fprintf(stderr,"%s returning\n",chan->name);
-
-  // clean up
-  FREE(chan->output.queue);
-  chan->output.queue_length = 0;
-  if(chan->opus.encoder != NULL){
-    opus_encoder_destroy(chan->opus.encoder);
-    chan->opus.encoder = NULL;
   }
-  delete_filter_output(&chan->filter.out);
-  chan->baseband = NULL;
+  response(chan,response_needed); // in case one is pending as we're restarting
   return chan->demod_type == INVALID_DEMOD ? -1 : 0;
 }

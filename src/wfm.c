@@ -24,21 +24,16 @@ static int const Composite_samprate = 8 * FULL_SAMPRATE;
 // FM demodulator thread
 int demod_wfm(void *arg){
   assert(arg != NULL);
-  chan_t * chan = arg;
+  chan_t * const chan = arg;
   if(chan == NULL)
     return -1;
 
   assert(Blocktime != 0);
-  assert(chan->frontend != NULL);
-  pthread_mutex_lock(&chan->status.lock);
   // This is not the downconverter samprate, but the audio output samprate so as not to confuse consumers
   chan->output.samprate = (int)Audio_samprate;
-
   if(chan->output.channels == 0)
     chan->output.channels = 2; // Default to stereo
-
   chan->fm.stereo_enable = (chan->output.channels == 2); // note boolean assignment
-
   chan->squelch.snr_enable = true; // implicitly on
   // Make these blocksizes depend on front end sample rate and blocksize
   int const composite_L = lrint(Composite_samprate * Blocktime); // Intermediate sample rate
@@ -50,31 +45,10 @@ int demod_wfm(void *arg){
   if(composite_L < audio_L)
     goto quit; // Front end sample rate is too low - should probably fix filter to allow interpolation
 
-  delete_filter_output(&chan->filter.out);
-  int status = create_filter_output(&chan->filter.out,&chan->frontend->in,composite_L, COMPLEX);
-  if(status != 0){
-    pthread_mutex_unlock(&chan->status.lock);
-    goto quit;
-  }
-  {
-    // Tie the RTP timestamps to radiod uptime
-    // ie, reference RTP timestamp 0 to the first radiod block
-    uint32_t const first_block = chan->filter.out.next_jobnum - 1; // radiod starts with jobnum 0
-    chan->output.rtp.timestamp = (uint32_t)lrint(first_block * Blocktime * chan->output.samprate);
-    if(Verbose > 0)
-      fprintf(stderr,"%s starting at FFT jobum %u, preset RTP TS to %u\n",chan->name,first_block,chan->output.rtp.timestamp);
-  }
-  chan->filter.out.beam = chan->filter.beam;
-  if(chan->filter.out.beam)
-    set_filter_weights(&chan->filter.out,chan->filter.a_weight,chan->filter.b_weight);
-
   set_filter(&chan->filter.out,
 	     chan->filter.min_IF/Composite_samprate,
 	     chan->filter.max_IF/Composite_samprate,
 	     chan->filter.kaiser_beta);
-
-  chan->filter.remainder = NAN; // Force re-init of fine oscillator
-  set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
 
   double phase_memory = 0;  // Demodulator input phase memory
   int squelch_state = 0; // Number of blocks for which squelch remains open
@@ -85,7 +59,6 @@ int demod_wfm(void *arg){
   composite.perform_inline = true;  // don't use job queue
 
   assert(composite.ilen == chan->filter.out.olen);
-
   // Composite filters, decimate from 384 Khz to 48 KHz
   struct filter_out mono = {0};
   create_filter_output(&mono,&composite,audio_L, REAL);
@@ -105,25 +78,23 @@ int demod_wfm(void *arg){
 
   // The asserts should be valid for clean sample rates multiples of 200 Hz
   // If not, then a mop-up oscillator has to be provided
-  int pilot_shift;
-  double pilot_remainder;
+  int pilot_shift = 1;
+  double pilot_remainder = 1; // force assertion fail if compute_tuning fails
   compute_tuning(composite_N,composite_M,Composite_samprate,&pilot_shift,&pilot_remainder,19000.);
   assert((pilot_shift % 4) == 0 && pilot_remainder == 0);
 
-  int subc_shift;
-  double subc_remainder;
+  int subc_shift = 1;
+  double subc_remainder = 1;
   compute_tuning(composite_N,composite_M,Composite_samprate,&subc_shift,&subc_remainder,38000.);
   assert((subc_shift % 4) == 0 && subc_remainder == 0);
 
+  double const alpha = -expm1(-Blocktime * 1.0); // 1 sec time constant smoother
   double complex stereo_deemph = 0;
   double mono_deemph = 0;
   bool response_needed = false;
   bool restart_needed = false;
-  pthread_mutex_unlock(&chan->status.lock);
-
   realtime(chan->prio);
-
-  do {
+  while(!restart_needed){
     response(chan,response_needed);
     response_needed = false;
 
@@ -153,8 +124,7 @@ int demod_wfm(void *arg){
 
     // Hysteresis
     int const squelch_state_max = chan->squelch.tail + 1;
-    if(chan->fm.snr >= chan->squelch.open
-       || (squelch_state > 0 && snr >= chan->squelch.close))
+    if(chan->fm.snr >= chan->squelch.open || (squelch_state > 0 && snr >= chan->squelch.close))
       // Squelch is fully open
       // tail timing is in blocks (usually 10 or 20 ms each)
       squelch_state = squelch_state_max;
@@ -168,7 +138,7 @@ int demod_wfm(void *arg){
       continue;
     }
     // Actual FM demodulation
-    float complex * restrict buffer = chan->filter.out.output.c; // Working buffer
+    float complex const * restrict const buffer = chan->filter.out.output.c; // Working buffer
     for(int n=0; n < composite_L; n++){
       // Although deviation can be zero, argf() is defined as returning 0, not NAN
       double const np = M_1_PI * cargf(buffer[n]); // -1 to +1
@@ -191,10 +161,7 @@ int demod_wfm(void *arg){
 	  peak_negative_deviation = composite.input_write_pointer.r[n];
       }
       frequency_offset *= Composite_samprate * 0.5 / composite_L;  // scale to Hz
-      // Update frequency offset and peak deviation, with smoothing to attenuate PL tones
-      // alpha = blocktime in millisec is an approximation to a 1 sec time constant assuming blocktime << 1 sec
-      // exact value would be 1 - exp(-blocktime/tc)
-      double const alpha = 1.0 * Blocktime;
+      // Update frequency offset and peak deviation, with smoothing
       chan->sig.foffset += alpha * (frequency_offset - chan->sig.foffset);
 
       // Remove frequency offset from deviation peaks and scale to full cycles
@@ -232,10 +199,10 @@ int demod_wfm(void *arg){
       // Stereo multiplex processing
       if(chan->output.channels != 2){
 	chan->output.channels = 2;
-	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	int pt = pt_from_info(Audio_samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	if(pt == -1){
 	  fprintf(stderr,"%s can't allocate payload type for samprate %'d, channels %d, encoding %d\n",
-		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+		  chan->name,Audio_samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	  goto quit;
 	}
 	chan->output.rtp.type = pt;
@@ -271,10 +238,10 @@ int demod_wfm(void *arg){
       // Mono processing
       if(chan->output.channels != 1){
 	chan->output.channels = 1;
-	int pt = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	int const pt = pt_from_info(Audio_samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	if(pt == -1){
 	  fprintf(stderr,"%s can't allocate payload type for samprate %'d, channels %d, encoding %d\n",
-		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+		  chan->name,Audio_samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	  goto quit;
 	}
 	chan->output.rtp.type = pt;
@@ -302,25 +269,14 @@ int demod_wfm(void *arg){
       if(send_output(chan,mono.output.r,audio_L,false) < 0)
 	break; // No output stream! Terminate
     }
-  } while(true);
+  }
   response(chan,response_needed); // in case one is pending as we're restarting
 
  quit:;
-  // clean up
-  if(Verbose > 1)
-    fprintf(stderr,"%s returning\n",chan->name);
-
-  FREE(chan->output.queue);
-  chan->output.queue_length = 0;
-  if(chan->opus.encoder != NULL){
-    opus_encoder_destroy(chan->opus.encoder);
-    chan->opus.encoder = NULL;
-  }
+  // filters unique to us
   delete_filter_input(&composite);
   delete_filter_output(&mono);
   delete_filter_output(&lminusr);
   delete_filter_output(&pilot);
-  delete_filter_output(&chan->filter.out); // we don't use filter2
-  chan->baseband = NULL;
   return chan->demod_type == INVALID_DEMOD ? -1 : 0;
 }
