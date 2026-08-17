@@ -243,8 +243,8 @@ int demod_linear(void *arg){
 	  output_power += s*s;
 
 	  // Estimate and remove carrier (DC)
-	  if(chan->linear.dc_tau != 0){
-	    am_dc += chan->linear.dc_tau * (s - am_dc);
+	  if(chan->linear.dc_alpha != 0){
+	    am_dc += chan->linear.dc_alpha * (s - am_dc);
 	    s -= am_dc;
 	  }
 	  samples[n] = (float)s;
@@ -276,8 +276,8 @@ int demod_linear(void *arg){
 	  output_power += cnrm(s);
 
 	  // Estimate and remove DC
-	  if(chan->linear.dc_tau != 0){
-	    am_dc += chan->linear.dc_tau * (__imag__ s - am_dc);
+	  if(chan->linear.dc_alpha != 0){
+	    am_dc += chan->linear.dc_alpha * (__imag__ s - am_dc);
 	    __imag__ s -= am_dc;
 	  }
 	  buffer[n] = (float complex)s;

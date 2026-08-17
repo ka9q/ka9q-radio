@@ -47,7 +47,7 @@ int demod_fm(void *arg){
   assert(isfinite(alpha) && alpha > 0.0 && alpha <= 1.0);
   double deemph_state = 0;
   int squelch_state = 0; // Number of blocks for which squelch remains open
-  int const pl_integrate_samples = (int)(samprate * 0.24); // 240 milliseconds (spec is < 250 ms). 12 blocks @ 24 kHz
+  int const pl_integrate_samples = (int)lrint(samprate * 0.24); // 240 milliseconds (spec is < 250 ms). 12 blocks @ 24 kHz
   int pl_sample_count = 0;
   double old_pl_phase = 0;
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
@@ -101,6 +101,7 @@ int demod_fm(void *arg){
     // Simple SNR estimate: Power/(N0 * Bandwidth) - 1
     double const snr = noise == 0 ? INFINITY : (chan->sig.bb_power / noise) - 1.0;
     if(chan->squelch.snr_enable || (squelch_state <= 0 && snr < chan->squelch.close)){ // Save the trouble if the signal just isn't there
+
       chan->fm.snr = snr;
     } else {
       // variance estimation. first get average amplitude (lots of square roots)

@@ -56,17 +56,18 @@ static double const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec befor
 static double const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
 static int    const DEFAULT_SQUELCH_TAIL = 1;     // close on frame *after* going below threshold, may let partial frame noise through
 static int    const DEFAULT_UPDATE = 25;         // 2 Hz for a 20 ms frame time
+
+// FM de-emphasis
 static int    const DEFAULT_NBFM_SAMPRATE = 24000;
 static double const DEFAULT_NBFM_TC = 530.5e-6;      // Time constant for NBFM emphasis (300 Hz corner)
 static double const DEFAULT_NBFM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
 
-// We assume NBFM if FM will be used
-#if 0
-static double const DEFAULT_WFM_TC = 75.0e-6;        // Time constant for FM broadcast (North America/Korea standard)
+// For FM broadcasting North and South America and South Korea use 75 μs; the rest of the world uses 50 μs
+static int    const DEFAULT_WFM_SAMPRATE = 48000;
+static double const DEFAULT_WFM_TC = 75.0e-6;        // Time constant for FM broadcast (America/Korea standard)
 static double const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
-#endif
 
-static int    const DEFAULT_DC_TC = 0;         // Time constant for AM carrier removal, default off
+static double const DEFAULT_DC_CUT = 0;         // high pass cutoff for AM carrier removal, default 0 (off)
 static double const DEFAULT_CROSSOVER = 200;   // About where the two spectral analysis algorithms use equal CPU
 static double const DEFAULT_SPECTRUM_KAISER_BETA = 7.0; // Default for spectral analysis window
 static enum window_type const DEFAULT_WINDOW_TYPE = KAISER_WINDOW;
@@ -242,7 +243,8 @@ int set_defaults(chan_t *chan){
   chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE);
   chan->linear.hangtime = DEFAULT_HANGTIME;
   chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
-  chan->linear.dc_tau = DEFAULT_DC_TC; // primarily for removing AM carriers
+  chan->linear.dc_alpha = DEFAULT_DC_CUT == 0 ? 0.0 : -expm1(-2.0 * M_PI * DEFAULT_DC_CUT/chan->output.samprate);
+  assert(isfinite(chan->linear.dc_alpha) && chan->linear.dc_alpha >= 0 && chan->linear.dc_alpha <= 1);
 
   chan->opus.signal = DEFAULT_OPUS_SIGNAL;
   chan->opus.application = DEFAULT_OPUS_APPLICATION;
@@ -274,10 +276,21 @@ int set_defaults(chan_t *chan){
   chan->squelch.tail = DEFAULT_SQUELCH_TAIL;
   chan->squelch.snr_enable = DEFAULT_SNR_SQUELCH;
 
-  // elements shared with WFM demod, which uses different values
-  chan->fm.rate = -expm1(-1.0 / (DEFAULT_NBFM_TC * DEFAULT_NBFM_SAMPRATE));
-  chan->fm.gain = DEFAULT_NBFM_DEEMPH_GAIN;
-
+  // elements depend on FM type
+  switch(chan->demod_type){
+  case FM_DEMOD:
+    chan->fm.rate = -expm1(-1.0 / (DEFAULT_NBFM_TC * DEFAULT_NBFM_SAMPRATE));
+    assert(isfinite(chan->fm.rate) && chan->fm.rate > 0 && chan->fm.rate < 1);
+    chan->fm.gain = DEFAULT_NBFM_DEEMPH_GAIN;
+    break;
+  case WFM_DEMOD:
+    chan->fm.rate = -expm1(-1.0 / (DEFAULT_WFM_TC * DEFAULT_WFM_SAMPRATE));
+    assert(isfinite(chan->fm.rate) && chan->fm.rate > 0 && chan->fm.rate < 1);
+    chan->fm.gain = DEFAULT_WFM_DEEMPH_GAIN;
+    break;
+  default:
+    break;
+  }
   chan->pll.enable = false;
   chan->pll.square = false;
   chan->pll.loop_bw = DEFAULT_PLL_BW;
@@ -429,8 +442,8 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   chan->squelch.snr_enable = config_getboolean(table,sname,"snr-squelch",chan->squelch.snr_enable);
   double cutoff = config_getdouble(table,sname,"dc-cut",-987);
   if(cutoff != -987)
-    chan->linear.dc_tau = -expm1(-2.0 * M_PI * cutoff/(chan->output.samprate));
-
+    chan->linear.dc_alpha = -expm1(-2.0 * M_PI * cutoff/chan->output.samprate);
+  assert(isfinite(chan->linear.dc_alpha) && chan->linear.dc_alpha >= 0 && chan->linear.dc_alpha <= 1);
   {
     char const *cp = config_getstring(table,sname,"deemph-tc",NULL);
     if(cp){

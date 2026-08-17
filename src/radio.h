@@ -206,7 +206,7 @@ struct channel {
     double recovery_rate; // AGC recovery rate, amplitude ratio/sample  (settable)
     double threshold;     // AGC threshold above noise, amplitude ratio
     int hangcount;       // AGC hang timer before gain recovery starts (samples)
-    double dc_tau;     // alpha for simple IIR carrier (DC) removal
+    double dc_alpha;     // alpha for simple IIR carrier (DC) removal
   } linear;
 
   struct {
