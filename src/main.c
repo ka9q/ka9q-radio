@@ -69,6 +69,8 @@ int main(int argc,char *argv[]){
 #endif
 #endif
 
+  enable_ftz_daz(); // avoid denormal floats, they can slow down DSP
+
   setlinebuf(stderr);
 
   struct timespec start_realtime;

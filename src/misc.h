@@ -62,6 +62,9 @@ static inline void ASSERT_UNLOCKED(pthread_mutex_t *mutex){
   #endif
 #endif
 
+void enable_ftz_daz(void);
+void disable_ftz_daz(void);
+
 #define DEGPRA (180./M_PI)
 #define RAPDEG (M_PI/180.)
 #define TAI_GPS_OFFSET (19) // TAI is always and forever 19 seconds ahead of GPS
