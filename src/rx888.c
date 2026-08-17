@@ -741,7 +741,9 @@ static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, in
 #endif
   }
   // must precede publication of the new write pointer
+#ifndef CACHED_STORE
   _mm_sfence();
+#endif
   *energy += hsum_u64x4(energy0) + hsum_u64x4(energy1);
   return clip_count;
 }
