@@ -1,3 +1,10 @@
+ka9q-radio (2026.08.18-2-trixie1) trixie; urgency=medium
+
+  * commit e92205f9aa0305fe3206ecbd51c0fc5d8d24734a
+  * udev serial number fix
+
+ -- Phil Karn <karn@ka9q.net>  Tue, 18 Aug 2026 01:19:29 -0700
+
 ka9q-radio (2026.08.18-1-trixie1) trixie; urgency=medium
 
   * commit e5f790dd494a492fc298dfe93dd1a4fd3a0c9450
