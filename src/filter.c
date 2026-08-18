@@ -220,6 +220,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     pthread_cond_init(&master->filter_cond,NULL);
     master->init = true;
   }
+  master->owner = pthread_self();
   int old_prio = norealtime();
   fft_init();
   switch(in_type){
@@ -519,6 +520,7 @@ void *run_fft(void *p){
     // Signal we're done with this job
     if(job->completion_mutex)
       pthread_mutex_lock(job->completion_mutex);
+    job->fin->owner = pthread_self();
 
     if(job->completion_jobnum){
       *job->completion_jobnum = job->jobnum;
@@ -558,7 +560,7 @@ int execute_filter_input(struct filter_in * const f){
     return -1;
   if(f->perform_inline){
     // Just execute it here
-    int jobnum = f->next_jobnum++;
+    int jobnum = f->next_jobnum;
     float complex * const output = f->fdomain[jobnum % ND];
     switch(f->in_type){
     default:
@@ -586,6 +588,8 @@ int execute_filter_input(struct filter_in * const f){
       apply_notch_filters(f->notches,output);
     // Signal we're done with this job
     pthread_mutex_lock(&f->filter_mutex);
+    f->owner = pthread_self();
+    f->next_jobnum++;
     f->samples_by_job[jobnum % ND] = f->sample_index;
     f->completed_jobs[jobnum % ND] = jobnum;
     pthread_cond_broadcast(&f->filter_cond);
@@ -672,29 +676,35 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   // DC and positive frequencies up to nyquist frequency are same for all types
   assert(slave->out_type == SPECTRUM || malloc_usable_size(slave->fdomain) >= slave->bins * sizeof(*slave->fdomain));
 
-  // Wait for output data
+  float complex const * restrict m_fdomain = NULL;
   pthread_mutex_lock(&master->filter_mutex);
-  while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
-    pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
+  if(master->owner != pthread_self()){
+    // Wait for output data
+    while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
+      pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
 
-  // can have values 0, ND, 2*ND, ...
-  int blocks_behind = (int)(master->completed_jobs[slave->next_jobnum % ND] - slave->next_jobnum);
-  if(blocks_behind >= ND){
-    // the fft writer has lapped the ring buffer. Return a block of zeros and count a drop
-    pthread_mutex_unlock(&master->filter_mutex);
-    slave->block_drops++;
+    // can have values 0, ND, 2*ND, ...
+    int blocks_behind = (int)(master->completed_jobs[slave->next_jobnum % ND] - slave->next_jobnum);
+    if(blocks_behind >= ND){
+      // the fft writer has lapped the ring buffer. Return a block of zeros and count a drop
+      pthread_mutex_unlock(&master->filter_mutex);
+      slave->block_drops++;
+      slave->next_jobnum++;
+      if(slave->output_buffer.r != NULL)
+	memset(slave->output_buffer.r, 0, slave->points * sizeof *slave->output_buffer.r);
+      if(slave->output_buffer.c != NULL)
+	memset(slave->output_buffer.c, 0, slave->points * sizeof *slave->output_buffer.c);
+      return 0;
+    }
+    // We don't modify the master's output data, we create our own
+    m_fdomain = master->fdomain[slave->next_jobnum % ND];
+    // in case we just waited so long that the buffer wrapped, resynch
+    slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
     slave->next_jobnum++;
-    if(slave->output_buffer.r != NULL)
-      memset(slave->output_buffer.r, 0, slave->points * sizeof *slave->output_buffer.r);
-    if(slave->output_buffer.c != NULL)
-      memset(slave->output_buffer.c, 0, slave->points * sizeof *slave->output_buffer.c);
-    return 0;
+  } else {
+    // Written by this same thread, just grab the last one completed without waiting
+    m_fdomain = master->fdomain[(master->next_jobnum - 1) % ND];
   }
-  // We don't modify the master's output data, we create our own
-  float complex const * restrict const m_fdomain = master->fdomain[slave->next_jobnum % ND];
-  // in case we just waited so long that the buffer wrapped, resynch
-  slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
-  slave->next_jobnum++;
   pthread_mutex_unlock(&master->filter_mutex);
   assert(m_fdomain != NULL); // Should always be master frequency data
   // In spectrum mode we'll read directly from the input queue. Don't forget the 3dB scale when the input is real

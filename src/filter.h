@@ -70,6 +70,7 @@ struct filter_in {
   uint64_t sample_index;     // input sample index at start of buffer
   uint64_t samples_by_job[ND];
   bool init;
+  pthread_t owner;           // thread ID of writer to this filter, disables waits when read in same thread
 };
 
 struct filter_out {
