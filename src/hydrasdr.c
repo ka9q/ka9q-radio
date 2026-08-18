@@ -22,6 +22,7 @@
 #include "status.h"
 #include "radio.h"
 #include "config.h"
+#include "airspy.h"
 
 // Non-temporal (cache-bypassing) stores don't seem to help with the Airspy/Hydra because the FFTs are smaller
 #define CACHED_STORE 1
@@ -655,10 +656,10 @@ static int rx_callback(hydrasdr_transfer *transfer){
       int over;
 #if defined(__x86_64__)
       if(__builtin_cpu_supports("avx2") &&  __builtin_cpu_supports("popcnt"))
-	over = convert_avx2(wptr,up,sampcount,(float)sdr->scale,&in_energy);
+	over = airspy_unpack_avx2(wptr,up,sampcount,(float)sdr->scale,&in_energy);
       else
 #endif
-	over = convert(wptr,up,sampcount,(float)sdr->scale,&in_energy);
+	over = airspy_unpack(wptr,up,sampcount,(float)sdr->scale,&in_energy);
       if(over){
 	frontend->overranges += over;
 	frontend->samp_since_over = 0;

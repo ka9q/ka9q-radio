@@ -407,10 +407,10 @@ static int rx_callback(airspy_transfer *transfer){
   int over;
 #if defined(__x86_64__)
   if(__builtin_cpu_supports("avx2") &&  __builtin_cpu_supports("popcnt"))
-    over = convert_avx2(wptr,up,sampcount,(float)sdr->scale,&in_energy);
+    over = airspy_unpack_avx2(wptr,up,sampcount,(float)sdr->scale,&in_energy);
   else
 #endif
-    over = convert(wptr,up,sampcount,(float)sdr->scale,&in_energy);
+    over = airspy_unpack(wptr,up,sampcount,(float)sdr->scale,&in_energy);
   if(over){
     frontend->overranges += over;
     frontend->samp_since_over = 0;
