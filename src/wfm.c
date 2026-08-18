@@ -192,6 +192,7 @@ int demod_wfm(void *arg){
 	subc_amp += cnrmf(pilot.output.c[n]);
 
       subc_amp /= audio_L;
+      chan->tp1 = subc_amp;
       if(subc_amp > 1e-6) // empirical constant, test this some more
 	pilot_present = true;
     }

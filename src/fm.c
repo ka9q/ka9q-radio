@@ -214,7 +214,7 @@ int demod_fm(void *arg){
 	  if(p1 > 0)
 	    p1 /= (p1 + beta * noise);
 	  phase *= p0 * p1;
-	  chan->tp1 = p0 * p1;
+	  //	  chan->tp1 = p0 * p1;
 	  p0 = p1;
 	}
 	baseband[n] = phase;
