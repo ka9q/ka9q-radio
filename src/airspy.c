@@ -4,6 +4,7 @@
 #undef DEBUG_AGC
 #include <assert.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <libairspy/airspy.h>
 #include <errno.h>
 #include <iniparser/iniparser.h>
@@ -21,6 +22,8 @@
 #include "status.h"
 #include "radio.h"
 #include "config.h"
+#include "airspy.h"
+
 
 // Global variables set by config file options
 extern int Verbose;
@@ -96,7 +99,7 @@ static char const *Airspy_keys[] = {
 NULL
 };
 
-
+static bool Name_set = false;
 static double Power_alpha = 0.05; // Calculate this properly someday
 static double set_correct_freq(struct sdrstate *sdr,double freq);
 static int rx_callback(airspy_transfer *transfer);
@@ -148,7 +151,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
       if(endptr == NULL || *endptr != '\0')
 	fprintf(stderr,"Invalid serial number %s in section %s\n",sn,section);
     }
-    // If it still hasn't been set, enumerate and pick one    
+    // If it still hasn't been set, enumerate and pick one
     if(sdr->SN == 0){
       // Specific serial number not specified, enumerate and pick the first one
       int n_serials = 100; // ridiculously large
@@ -376,9 +379,6 @@ static void *airspy_monitor(void *p){
   return 0;
 }
 
-
-static bool Name_set = false;
-// Callback called with incoming receiver data from A/D
 static int rx_callback(airspy_transfer *transfer){
   assert(transfer != NULL);
   struct sdrstate * const sdr = (struct sdrstate *)transfer->ctx;
@@ -394,46 +394,33 @@ static int rx_callback(airspy_transfer *transfer){
     Name_set = true;
     realtime(2 + default_prio());
   }
-  if(transfer->dropped_samples){
+  if(transfer->dropped_samples)
     fprintf(stderr,"dropped %'lld\n",(long long)transfer->dropped_samples);
-  }
+
   assert(transfer->sample_type == AIRSPY_SAMPLE_RAW);
   int const sampcount = transfer->sample_count;
   float * wptr = frontend->in.input_write_pointer.r;
   uint32_t const *up = (uint32_t *)transfer->samples;
   assert(wptr != NULL);
   assert(up != NULL);
-  double in_energy = 0;
-  // Libairspy could do this for us, but this minimizes mem copies
-  // This could probably be vectorized someday
-  for(int i=0; i < sampcount; i+= 8){ // assumes multiple of 8
-    int s[8];
-    s[0] =  up[0] >> 20;
-    s[1] =  up[0] >> 8;
-    s[2] =  (up[0] << 4) | (up[1] >> 28);
-    s[3] =  up[1] >> 16;
-    s[4] =  up[1] >> 4;
-    s[5] =  (up[1] << 8) | (up[2] >> 24);
-    s[6] =  up[2] >> 12;
-    s[7] =  up[2];
-    for(int j=0; j < 8; j++){
-      int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
-      if(x == 2047 || x <= -2047){
-	frontend->overranges++;
-	frontend->samp_since_over = 0;
-      } else {
-	frontend->samp_since_over++;
-      }
-      wptr[j] = (float)(sdr->scale * x);
-      in_energy += (double)x * x;
-    }
-    wptr += 8;
-    up += 3;
-  }
+  uint64_t in_energy = 0;
+  int over;
+#if defined(__x86_64__)
+  if(__builtin_cpu_supports("avx2") &&  __builtin_cpu_supports("popcnt"))
+    over = convert_avx2(wptr,up,sampcount,(float)sdr->scale,&in_energy);
+  else
+#endif
+    over = convert(wptr,up,sampcount,(float)sdr->scale,&in_energy);
+  if(over){
+    frontend->overranges += over;
+    frontend->samp_since_over = 0;
+  } else
+    frontend->samp_since_over += sampcount;
+
   frontend->samples += sampcount;
   write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
-  if(sampcount != 0 && isfinite(in_energy))
-    frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
+  if(sampcount != 0)
+    frontend->if_power += Power_alpha * ((double)in_energy / sampcount - frontend->if_power);
   if(sdr->software_agc){
     // Integrate A/D energy over A/D averaging period
     sdr->agc_energy += in_energy;

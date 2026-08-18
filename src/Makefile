@@ -325,13 +325,13 @@ funcube.so: funcube.o fcd.o hid-libusb.o
 rx888.so: rx888.o si5351.o ezusb.o hid-libusb.o
 	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lusb-1.0 $(LDLIBS)
 
-airspy.so: airspy.o
+airspy.so: airspy.o airspy-unpack.o
 	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lairspy $(LDLIBS)
 
 airspyhf.so: airspyhf.o
 	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lairspyhf $(LDLIBS)
 
-hydrasdr.so: hydrasdr.o
+hydrasdr.so: hydrasdr.o aispy airspy-unpack.o
 	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lhydrasdr $(LDLIBS)
 
 rtlsdr.so: rtlsdr.o

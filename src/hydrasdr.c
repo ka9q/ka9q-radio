@@ -4,6 +4,7 @@
 #undef DEBUG_AGC
 #include <assert.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <libhydrasdr/hydrasdr.h>
 #include <errno.h>
 #include <iniparser/iniparser.h>
@@ -21,6 +22,9 @@
 #include "status.h"
 #include "radio.h"
 #include "config.h"
+
+// Non-temporal (cache-bypassing) stores don't seem to help with the Airspy/Hydra because the FFTs are smaller
+#define CACHED_STORE 1
 
 // Global variables set by config file options
 extern int Verbose;
@@ -106,7 +110,7 @@ static char const *Hydrasdr_keys[] = {
 NULL
 };
 
-
+static bool Name_set = false;
 static double Power_alpha = 0.05; // Calculate this properly someday
 static double set_correct_freq(struct sdrstate *sdr,double freq);
 static int rx_callback(hydrasdr_transfer *transfer);
@@ -621,8 +625,6 @@ static void *hydrasdr_monitor(void *p){
   return NULL;
 }
 
-
-static bool Name_set = false;
 // Callback called with incoming receiver data from A/D
 static int rx_callback(hydrasdr_transfer *transfer){
   assert(transfer != NULL);
@@ -643,41 +645,25 @@ static int rx_callback(hydrasdr_transfer *transfer){
     fprintf(stderr,"dropped %'lld\n",(long long)transfer->dropped_samples);
   }
   int const sampcount = transfer->sample_count;
-  double in_energy = 0;
+  uint64_t in_energy = 0;
+  double energy = 0;
   switch(sdr->sample_type){
   case HYDRASDR_SAMPLE_RAW:
     {
-      // Libhydrasdr could do this for us, but this minimizes mem copies
-      // This could probably be vectorized someday
-      // Note: ad-hoc for 12 bits/sample.
-      // The Hydra API >= 1.1.2 provides the width explicitly, so we won't use this
-      // unless the width = 12 bits
-      uint32_t const * restrict up = (uint32_t *)transfer->samples;
       float * restrict wptr = frontend->in.input_write_pointer.r;
-      for(int i=0; i < sampcount; i+= 8){ // assumes multiple of 8
-	int s[8];
-	s[0] =  up[0] >> 20;
-	s[1] =  up[0] >> 8;
-	s[2] =  (up[0] << 4) | (up[1] >> 28);
-	s[3] =  up[1] >> 16;
-	s[4] =  up[1] >> 4;
-	s[5] =  (up[1] << 8) | (up[2] >> 24);
-	s[6] =  up[2] >> 12;
-	s[7] =  up[2];
-	for(int j=0; j < 8; j++){
-	  int const x = (s[j] & 0xfff) - 2048; // mask not actually necessary for s[0]
-	  if(x >= 2047 || x <= -2048){
-	    frontend->overranges++;
-	    frontend->samp_since_over = 0;
-	  } else {
-	    frontend->samp_since_over++;
-	  }
-	  wptr[j] = (float)(sdr->scale * x);
-	  in_energy += (double)x * x;
-	}
-	wptr += 8;
-	up += 3;
-      }
+      uint32_t const * restrict up = (uint32_t *)transfer->samples;
+      int over;
+#if defined(__x86_64__)
+      if(__builtin_cpu_supports("avx2") &&  __builtin_cpu_supports("popcnt"))
+	over = convert_avx2(wptr,up,sampcount,(float)sdr->scale,&in_energy);
+      else
+#endif
+	over = convert(wptr,up,sampcount,(float)sdr->scale,&in_energy);
+      if(over){
+	frontend->overranges += over;
+	frontend->samp_since_over = 0;
+      } else
+	frontend->samp_since_over += sampcount;
     }
     break;
   case HYDRASDR_SAMPLE_UINT16_REAL:
@@ -695,7 +681,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	  frontend->samp_since_over++;
 	}
 	*wptr++ = sdr->scale * x;
-	in_energy += (double)x * x;
+	in_energy += (int64_t)x * x;
       }
     }
     break;
@@ -712,7 +698,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	  frontend->samp_since_over++;
 	}
 	*wptr++ = sdr->scale * x;
-	in_energy += (double)x * x;
+	in_energy += (int64_t)x * x;
       }
     }
     break;
@@ -724,7 +710,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
       for(int i=0; i < sampcount; i++){
 	float const x = *up++;
 	*wptr++ = sdr->scale * x;
-	in_energy += (double)x * x;
+	energy += x * x;
       }
     }
     break;
@@ -743,7 +729,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	}
 	double complex s = CMPLX((double)x,(double)y);
 	*wptr++ = (float complex)(sdr->scale * s);
-	in_energy += cnrm(s);
+	in_energy += x * x + y * y;
       }
     }
     break;
@@ -754,7 +740,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
       for(int i=0; i < sampcount; i++){
 	double complex s = *up++;
 	*wptr++ = (float complex)(sdr->scale * s);
-	in_energy += cnrm(s);
+	energy += cnrm(s);
       }
     }
     break;
@@ -771,7 +757,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	  frontend->samp_since_over++;
 	}
 	*wptr++ = sdr->scale * x;
-	in_energy += (double)x * x;
+	in_energy += (int64_t)x * x;
       }
     }
     break;
@@ -788,7 +774,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	  frontend->samp_since_over++;
 	}
 	*wptr++ = sdr->scale * x;
-	in_energy += (double)x * x;
+	in_energy += (int64_t)x * x;
       }
     }
     break;
@@ -807,7 +793,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	}
 	double complex s = CMPLX((double)x,(double)y);
 	*wptr++ = sdr->scale * s;
-	in_energy += cnrm(s);
+	in_energy += x * x + y * y;
       }
     }
     break;
@@ -826,7 +812,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
 	}
 	double complex s = CMPLX((double)x,(double)y);
 	*wptr++ = sdr->scale * s;
-	in_energy += cnrm(s);
+	in_energy += x * x + y * y;
       }
     }
     break;
@@ -839,11 +825,15 @@ static int rx_callback(hydrasdr_transfer *transfer){
   else
     write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
 
-  if(sampcount != 0 && isfinite(in_energy))
-    frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
+  if(sampcount != 0){
+    if(in_energy != 0)
+      energy = (double)in_energy; // energy was accumulated as integer, otherwise as double for floating formats
+    if(isfinite(energy))
+       frontend->if_power += Power_alpha * (energy / sampcount - frontend->if_power);
+  }
   if(sdr->software_agc){
     // Integrate A/D energy over A/D averaging period
-    sdr->agc_energy += in_energy;
+    sdr->agc_energy += energy;
     sdr->agc_samples += sampcount;
     if(sdr->agc_samples >= frontend->samprate/10){ // Time to re-evaluate after 100 ms
       double avg_agc_power = scale_ADpower2FS(frontend) * sdr->agc_energy / sdr->agc_samples;
