@@ -331,7 +331,7 @@ airspy.so: airspy.o airspy-unpack.o
 airspyhf.so: airspyhf.o
 	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lairspyhf $(LDLIBS)
 
-hydrasdr.so: hydrasdr.o aispy airspy-unpack.o
+hydrasdr.so: hydrasdr.o airspy-unpack.o
 	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lhydrasdr $(LDLIBS)
 
 rtlsdr.so: rtlsdr.o
