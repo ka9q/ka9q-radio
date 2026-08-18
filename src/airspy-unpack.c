@@ -1,9 +1,13 @@
+// Helper routines for Airspy R2/Hydra SDR 12-bit packed format
+// 8 12-bit A/D samples (offset +2048) are packed in 3 32-bit words
+// AVX2 and C versions
+// Copyright Phil Karn, KA9Q, 2026
+
 #include <stdint.h>
 #include <assert.h>
 #include "airspy.h"
 #if defined(__x86_64__)
-// Vectorized version for AVX2 - identical to airspy.c
-// Savings aren't as dramatic as for rx888, saves maybe 2%
+// AVX2 savings aren't as dramatic as for rx888, saves maybe 2%
 // Non-temporal stores don't help because the FFTs are only 500K points and inputs remain in cache
 #define CACHED_STORE 1
 
@@ -11,10 +15,11 @@
 
 __attribute__((target("avx2")))
 int airspy_unpack_avx2(float *restrict wptr, uint32_t const *restrict up,
-				   int sampcount, float samp_scale, uint64_t *energy){
+				   int sampcount, float scale, uint64_t *energy){
   assert(wptr != NULL);
   assert(up != NULL);
   assert(sampcount > 0 && (sampcount & 7) == 0);
+  assert((up & 0xf) == 0);
 
   int i = 0;
   const __m256i src_index = _mm256_setr_epi32(0, 0, 1, 1, 1, 2, 2, 2);
@@ -25,7 +30,7 @@ int airspy_unpack_avx2(float *restrict wptr, uint32_t const *restrict up,
   const __m256i midpoint = _mm256_set1_epi32(2048);
   const __m256i positive_clip = _mm256_set1_epi32(2047);
   const __m256i negative_compare = _mm256_set1_epi32(-2046);
-  const __m256 scale = _mm256_set1_ps(samp_scale);
+  const __m256 vscale = _mm256_set1_ps(scale);
 
   __m256i energy_even = _mm256_setzero_si256();
   __m256i energy_odd = _mm256_setzero_si256();
@@ -57,7 +62,7 @@ int airspy_unpack_avx2(float *restrict wptr, uint32_t const *restrict up,
     __m256i odd = _mm256_srli_epi64(x, 32);
     energy_odd = _mm256_add_epi64(energy_odd, _mm256_mul_epi32(odd, odd));
 
-    __m256 output = _mm256_mul_ps(_mm256_cvtepi32_ps(x), scale);
+    __m256 output = _mm256_mul_ps(_mm256_cvtepi32_ps(x), vscale);
 #ifdef CACHED_STORE // cached version makes fft faster because it's smaller
     _mm256_storeu_ps(wptr, output);
 #else
@@ -86,8 +91,8 @@ int airspy_unpack_avx2(float *restrict wptr, uint32_t const *restrict up,
       int const x = (int)(s[j] & 0xfff) - 2048;
       if (x == 2047 || x <= -2047)
 	over++;
-      wptr[j] = samp_scale * (float)x;
-      *energy += (uint64_t)((int64_t)x * x);
+      wptr[j] = scale * (float)x;
+      *energy += (uint64_t) ((int64_t)x * x);
     }
   }
 #ifndef CACHED_STORE
@@ -115,7 +120,7 @@ int airspy_unpack(float *restrict wptr, uint32_t const *restrict up,
       if(x == 2047 || x <= -2047)
 	over++;
       wptr[j] = (float)(scale * x);
-      *energy += (int64_t)x * x;
+      *energy += (uint64_t) ((int64_t)x * x);
     }
     wptr += 8;
     up += 3;
