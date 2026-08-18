@@ -927,7 +927,11 @@ static void *demod_thread(void *p){
 
     assert(Blocktime != 0);
     assert(chan->frontend != NULL);
-    int const blocksize = lrint(chan->output.samprate * Blocktime);
+    int blocksize;
+    if(chan->demod_type == WFM_DEMOD)
+      blocksize = lrint(384000. *  Blocktime);
+    else
+      blocksize = lrint(chan->output.samprate * Blocktime);
     int const s = create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize,COMPLEX);
     if(s != 0){
       status = INVALID_DEMOD;
