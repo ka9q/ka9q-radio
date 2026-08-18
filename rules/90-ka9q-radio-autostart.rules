@@ -2,33 +2,33 @@
 TEST!="/etc/radio/enable-udev-autostart", GOTO="ka9q_radio_end"
 
 # airspy/hydrasdr
-SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="1d50",ATTR{idProduct}=="60a1",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="1d50",ATTR{idProduct}=="60a1",TAG+="systemd",ENV{ID_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_SERIAL_SHORT}.service"
 
 # native hydrasdr
-SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="38af",ATTR{idProduct}=="0001",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="38af",ATTR{idProduct}=="0001",TAG+="systemd",ENV{ID_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_SERIAL_SHORT}.service"
 
 # airspyhf
-SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="03eb",ATTR{idProduct}=="800c",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="03eb",ATTR{idProduct}=="800c",TAG+="systemd",ENV{ID_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_SERIAL_SHORT}.service"
 
 # blade RF
-SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="2cf0",ATTR{idProduct}=="5246",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
-SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="2cf0",ATTR{idProduct}=="5250",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
-SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="1d50",ATTR{idProduct}=="6066",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="2cf0",ATTR{idProduct}=="5246",TAG+="systemd",ENV{ID_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_SERIAL_SHORT}.service"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="2cf0",ATTR{idProduct}=="5250",TAG+="systemd",ENV{ID_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_SERIAL_SHORT}.service"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="1d50",ATTR{idProduct}=="6066",TAG+="systemd",ENV{ID_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_SERIAL_SHORT}.service"
 
 # hack rf
-SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="1d50",ATTR{idProduct}=="6089",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="1d50",ATTR{idProduct}=="6089",TAG+="systemd",ENV{ID_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_SERIAL_SHORT}.service"
 
 # rx888
-SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="04b4",ATTR{idProduct}=="00f1",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="04b4",ATTR{idProduct}=="00f1",TAG+="systemd",ENV{ID_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_SERIAL_SHORT}.service"
 
 # Rigexpert fobos
-SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="16d0",ATTR{idProduct}=="132e",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="16d0",ATTR{idProduct}=="132e",TAG+="systemd",ENV{ID_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_SERIAL_SHORT}.service"
 
 # RTL-SDR (there are many IDs)
 # realtek RTL2832U
-SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="0bda",ATTR{idProduct}=="2832",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="0bda",ATTR{idProduct}=="2832",TAG+="systemd",ENV{ID_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_SERIAL_SHORT}.service"
 
 # AMSAT UK Funcube dongle pro+
-SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="04d8",ATTR{idProduct}=="fb31",TAG+="systemd",ENV{ID_USB_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_USB_SERIAL_SHORT}.service"
+SUBSYSTEM=="usb",ENV{DEVTYPE}=="usb_device",ATTR{idVendor}=="04d8",ATTR{idProduct}=="fb31",TAG+="systemd",ENV{ID_SERIAL_SHORT}!="", ENV{SYSTEMD_WANTS}+="ka9q-radio@$attr{idVendor}-$attr{idProduct}-$env{ID_SERIAL_SHORT}.service"
 
 LABEL="ka9q_radio_end"
