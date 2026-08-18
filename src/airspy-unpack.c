@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <assert.h>
 #include "airspy.h"
 #if defined(__x86_64__)
 // Vectorized version for AVX2 - identical to airspy.c
