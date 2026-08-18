@@ -676,9 +676,11 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   // DC and positive frequencies up to nyquist frequency are same for all types
   assert(slave->out_type == SPECTRUM || malloc_usable_size(slave->fdomain) >= slave->bins * sizeof(*slave->fdomain));
 
-  float complex const * restrict m_fdomain = NULL;
   pthread_mutex_lock(&master->filter_mutex);
-  if(master->owner != pthread_self()){
+  if(master->owner == pthread_self()){
+    // If master was written by this same thread, don't wait; just grab the latest
+    slave->next_jobnum = master->next_jobnum - 1;
+  } else {
     // Wait for output data
     while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
       pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
@@ -696,15 +698,11 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
 	memset(slave->output_buffer.c, 0, slave->points * sizeof *slave->output_buffer.c);
       return 0;
     }
-    // We don't modify the master's output data, we create our own
-    m_fdomain = master->fdomain[slave->next_jobnum % ND];
-    // in case we just waited so long that the buffer wrapped, resynch
-    slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
-    slave->next_jobnum++;
-  } else {
-    // Written by this same thread, just grab the last one completed without waiting
-    m_fdomain = master->fdomain[(master->next_jobnum - 1) % ND];
   }
+  // We don't modify the master's output data, we create our own
+  float complex const * restrict const m_fdomain = master->fdomain[slave->next_jobnum % ND];
+  slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
+  slave->next_jobnum++;
   pthread_mutex_unlock(&master->filter_mutex);
   assert(m_fdomain != NULL); // Should always be master frequency data
   // In spectrum mode we'll read directly from the input queue. Don't forget the 3dB scale when the input is real

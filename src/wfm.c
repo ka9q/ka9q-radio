@@ -31,10 +31,21 @@ int demod_wfm(void *arg){
   assert(Blocktime != 0);
   // This is not the downconverter samprate, but the audio output samprate so as not to confuse consumers
   chan->output.samprate = (int)Audio_samprate;
+  {
+    // Channel filter bandwidth is not the output sample rate
+    int const blocksize = lrint(Composite_samprate * Blocktime);
+    if(create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize,COMPLEX) != 0){
+      chan->demod_type = INVALID_DEMOD;
+      return -1;
+    }
+  }
   if(chan->output.channels == 0)
     chan->output.channels = 2; // Default to stereo
   chan->fm.stereo_enable = (chan->output.channels == 2); // note boolean assignment
   chan->squelch.snr_enable = true; // implicitly on
+
+
+
   // Make these blocksizes depend on front end sample rate and blocksize
   int const composite_L = lrint(Composite_samprate * Blocktime); // Intermediate sample rate
   int const composite_M = composite_L + 1; // 2:1 overlap (50%)

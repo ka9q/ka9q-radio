@@ -22,6 +22,13 @@ int demod_fm(void *arg){
     return -1;
 
   int const samprate = chan->output.samprate; // Doesn't change, keep local copy
+  {
+    int const blocksize = lrint(samprate * Blocktime);
+    if(create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize,COMPLEX) != 0){
+      chan->demod_type = INVALID_DEMOD;
+      return -1;
+    }
+  }
   // Set main filter
   set_channel_filter(chan);
 

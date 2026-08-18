@@ -24,6 +24,13 @@ int demod_linear(void *arg){
     return -1; // in case asserts are off
 
   int const samprate = chan->output.samprate; // Doesn't change, keep local copy
+  {
+    int const blocksize = lrint(chan->output.samprate * Blocktime);
+    if(create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize,COMPLEX) != 0){
+      chan->demod_type = INVALID_DEMOD;
+      return -1;
+    }
+  }
   set_channel_filter(chan);
   // Coherent mode parameters
   double const damping = DEFAULT_PLL_DAMPING;
