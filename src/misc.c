@@ -91,11 +91,14 @@ ssize_t pipefill(int const fd,void *buffer,size_t const cnt){
 
 // Set realtime priority (if possible)
 static int Base_prio;
-static bool Message_shown;
+#if defined(__linux__)
+static atomic_flag Sched_message_shown = ATOMIC_FLAG_INIT;
+#endif
+static atomic_flag Nice_message_shown = ATOMIC_FLAG_INIT;
 
 int default_prio(void){
 #ifdef __linux__
-  return 0; // ordinary scheduling
+  return 1; // real time prio 1
 #else
   return 0;
 #endif
@@ -116,9 +119,9 @@ void realtime(int prio){
   {
     char name[25];
     int err = errno;
-    if(!Message_shown && pthread_getname_np(pthread_self(),name,sizeof(name)) == 0){
-      Message_shown = true;
-      fprintf(stderr,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
+    if(pthread_getname_np(pthread_self(),name,sizeof(name)) == 0){
+      if(!atomic_flag_test_and_set_explicit(&Sched_message_shown,memory_order_relaxed))
+	fprintf(stderr,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
     }
   }
 #endif
@@ -131,9 +134,9 @@ void realtime(int prio){
     int err = errno;
     char name[25];
     memset(name,0,sizeof(name));
-    if(!Message_shown && pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
-      Message_shown = true;
-      fprintf(stderr,"%s: setpriority failed, %s (%d)\n",name,strerror(err),err);
+    if(pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
+      if(!atomic_flag_test_and_set_explicit(&Nice_message_shown,memory_order_relaxed))
+	fprintf(stderr,"%s: setpriority failed, %s (%d)\n",name,strerror(err),err);
     }
   }
 }
@@ -157,9 +160,9 @@ int norealtime(void){
   {
     int err = errno; // in case getname changes it
     char name[25] = {0};
-    if(!Message_shown && pthread_getname_np(pthread_self(),name,sizeof(name)) == 0){
-      Message_shown = true;
-      fprintf(stderr,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
+    if(pthread_getname_np(pthread_self(),name,sizeof(name)) == 0){
+      if(!atomic_flag_test_and_set_explicit(&Sched_message_shown,memory_order_relaxed))
+	fprintf(stderr,"%s: sched_setscheduler failed, %s (%d)\n",name,strerror(err),err);
     }
   }
 #endif
@@ -173,13 +176,11 @@ int norealtime(void){
   if(prio == 0)
     return prio; // Successfully returned to normal niceness
   // Can it really fail when we're lowering?
-  if(!Message_shown){
-    int err = errno;
-    char name[25] = {0};
-    if(pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
-      Message_shown = true;
+  int err = errno;
+  char name[25] = {0};
+  if(pthread_getname_np(pthread_self(),name,sizeof(name)-1) == 0){
+    if(!atomic_flag_test_and_set_explicit(&Nice_message_shown,memory_order_relaxed))
       fprintf(stderr,"%s: setpriority failed to lower, %s (%d)\n",name,strerror(err),err);
-    }
   }
   return prio;  // Don't really know our state
 }
