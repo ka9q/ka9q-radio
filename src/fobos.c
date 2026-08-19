@@ -28,7 +28,8 @@ on a per-channel basis by selecting output filter type BEAM and calling set_filt
 #include <sysexits.h>
 #include <stdatomic.h>
 
-static double Power_alpha = 0.05; // Calculate this properly someday
+static double Power_alpha; // compute during first callback
+static bool Name_set = false;
 
 // hf_input has been removed, use i-weight and q-weight in individual channels
 static char const *Fobos_keys[] = {
@@ -71,7 +72,7 @@ struct sdrstate {
   _Atomic enum state state;
 };
 
-static void rx_callback(float *buf, uint32_t buf_length, void *ctx);
+static void rx_callback(float * restrict buf, unsigned buf_length, void * restrict ctx);
 static void *fobos_monitor(void *p);
 
 static int find_serial_position(const char *serials, const char *serialnumcfg) {
@@ -388,33 +389,37 @@ static void *fobos_monitor(void *p) {
   return NULL; // Return NULL when the thread exits cleanly
 }
 
-static bool Name_set = false;
-static void rx_callback(float *buf, uint32_t len, void *ctx) {
+
+static void rx_callback(float * restrict buf, unsigned len, void *ctx) {
   struct sdrstate * const sdr = (struct sdrstate *)ctx;
   assert(sdr != NULL);
-  struct frontend * const frontend = sdr->frontend;
+  struct frontend * restrict frontend = sdr->frontend;
   assert(frontend != NULL);
-
+  assert(len != 0);
   if (!Name_set) {
     pthread_setname("fobos-cb");
     Name_set = true;
   }
-
-  double in_energy = 0;
-  int const sampcount = len;
-  assert(len % 2 == 0);    // Ensure len is a valid even number (interleaved I/Q samples)
-  float complex *const wptr = frontend->in.input_write_pointer.c;
+  if(Power_alpha == 0){
+    // Intialize smoothing parameter for power estimation to give 20 ms time constant
+    Power_alpha = -expm1(-(double)len/ (Blocktime * frontend->samprate));
+    assert(Power_alpha >= 0 && Power_alpha <= 1);
+  }
+  float in_energy = 0;
+  int const sampcount = len; // count of complex samples
+  // Cast to real float to help vectorization; complex values are always IQIQ...
+  float * const restrict wptr = (float *)frontend->in.input_write_pointer.c;
   assert(wptr != NULL);
 
-  for (int i = 0; i < sampcount; i++) {
-    double complex const samp = CMPLX(buf[2*i],buf[2*i+1]);
-    in_energy += cnrm(samp);       // Calculate energy of the sample
-    wptr[i] = (float complex)(samp * sdr->scale);    // Store sample in write pointer buffer
+  for (int i = 0; i < sampcount*2; i++) { // twice as many real samples as complex
+    float const samp = buf[i];
+    in_energy += samp * samp;       // Calculate energy of the sample
+    wptr[i] = samp * (float)sdr->scale;    // Store sample in write pointer buffer
   }
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
 
-  if (isfinite(in_energy))
+  if (sampcount != 0 && isfinite(in_energy))
     frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
 }
 
