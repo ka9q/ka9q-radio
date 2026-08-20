@@ -915,7 +915,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       sdr->serial = current_serialnum;
       break;
     } else if(sdr->serial == current_serialnum){
-      fprintf(stderr,", selected by line serial number\n");
+      fprintf(stderr,", selected by cmd line serial number\n");
       funlockfile(stderr);
       sdr->dev_handle = handle;
       break;
