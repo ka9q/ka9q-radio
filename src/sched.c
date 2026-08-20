@@ -1,3 +1,6 @@
+// Scheduler-related routines
+// enable/disable realtime scheduling, cpu affinity (Linux only)
+
 #include <sched.h>
 #include <stdatomic.h>
 #include <pthread.h>
@@ -108,13 +111,16 @@ int norealtime(void){
   return prio;  // Don't really know our state
 }
 
-// Stay on this CPU core
 bool Affinity = false;
+
+#ifndef __linux__
+void stick_core(void){}
+#else // Affinity is Linux only, Affinity setting is ignored otherwise
 void stick_core(void){
   if(!Affinity)
     return;
 
-#if __linux__ // Not supported on macos, etc
+  // Stay on this CPU core
   char name[25] = {0};
   pthread_t self = pthread_self();
   if(pthread_getname_np(self,name,sizeof(name)-1) != 0)
@@ -158,9 +164,7 @@ void stick_core(void){
   } else {
     fprintf(stderr,"\n");
   }
-#endif
 }
-#ifdef __linux__
 #include <limits.h>
 #include <sched.h>
 #include <dirent.h>
@@ -280,7 +284,7 @@ static int get_thread_siblings(int cpu, cpu_set_t *siblings_out) {
 }
 
 // Example: build an array mapping each cpu -> its sibling mask.
-int build_sibling_map(cpu_set_t *map, int map_len) {
+static int build_sibling_map(cpu_set_t *map, int map_len) {
   int cpus[CPU_SETSIZE];
   int n = enumerate_online_cpus(cpus, CPU_SETSIZE);
   if (n < 0) return -1;
@@ -349,7 +353,7 @@ static int vec_push(core_group_vec_t *cv, const core_group_t *g) {
 
 // Build physical-core groups constrained to the process' allowed cpuset.
 // Each group is (thread_siblings_list(cpu) ∩ allowed).
-int build_core_groups(core_group_vec_t *out_groups, cpu_set_t *out_allowed) {
+static int build_core_groups(core_group_vec_t *out_groups, cpu_set_t *out_allowed) {
   memset(out_groups, 0, sizeof(*out_groups));
   CPU_ZERO(out_allowed);
 
@@ -397,10 +401,10 @@ int build_core_groups(core_group_vec_t *out_groups, cpu_set_t *out_allowed) {
 }
 
 // Set affinity for current thread.
-int set_this_thread_affinity(const cpu_set_t *mask) {
+static int set_this_thread_affinity(const cpu_set_t *mask) {
   return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), mask);
 }
-ssize_t pick_fft_group(const core_group_vec_t *g) {
+static ssize_t pick_fft_group(const core_group_vec_t *g) {
   if (g->n == 0) return -1;
   size_t best = 0;
   for (size_t i = 1; i < g->n; i++) {
@@ -409,7 +413,7 @@ ssize_t pick_fft_group(const core_group_vec_t *g) {
   }
   return (ssize_t)best;
 }
-size_t map_channel_to_group(size_t chan_id, size_t n_groups, size_t fft_index) {
+static size_t map_channel_to_group(size_t chan_id, size_t n_groups, size_t fft_index) {
   // Map into groups excluding fft_index.
   size_t usable = (n_groups > 0) ? (n_groups - 1) : 0;
   if (usable == 0) return fft_index; // degenerate
@@ -419,26 +423,23 @@ size_t map_channel_to_group(size_t chan_id, size_t n_groups, size_t fft_index) {
   return k;
 }
 
-#if 0
-cpu_set_t allowed;
-core_group_vec_t groups;
-if (build_core_groups(&groups, &allowed) != 0) { /* handle */ }
+// cpu_set_t allowed;
+//  core_group_vec_t groups;
+//  if (build_core_groups(&groups, &allowed) != 0) { /* handle */ }
 
-ssize_t fft_i = pick_fft_group(&groups);
-if (fft_i >= 0) {
-  // Pin FFT thread to BOTH SMT siblings of its core
-  set_this_thread_affinity(&groups.v[fft_i].cpus);
-}
+//ssize_t fft_i = pick_fft_group(&groups);
+//if (fft_i >= 0) {
+// Pin FFT thread to BOTH SMT siblings of its core
+//  set_this_thread_affinity(&groups.v[fft_i].cpus);
+// }
 
-size_t gi = map_channel_to_group(channel_id, groups.n, (size_t)fft_i);
+//size_t gi = map_channel_to_group(channel_id, groups.n, (size_t)fft_i);
 
 // Option 1: allow SMT siblings (recommended if threads are short)
-set_this_thread_affinity(&groups.v[gi].cpus);
+//set_this_thread_affinity(&groups.v[gi].cpus);
 
 // Option 2: avoid SMT, pick only rep_cpu
 // cpu_set_t one; CPU_ZERO(&one); CPU_SET(groups.v[gi].rep_cpu, &one);
 // set_this_thread_affinity(&one);
-
-#endif
 
 #endif
