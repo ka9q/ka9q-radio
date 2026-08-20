@@ -160,7 +160,7 @@ void stick_core(void){
     fprintf(stderr," %d",cpu);
   }
   fprintf(stderr,")\n");
-  flockfile(stderr);
+  funlockfile(stderr);
 
   if (sched_setaffinity(0, sizeof(cpuset), &cpuset) == -1) {
     fprintf(stderr," failed: %s\n",strerror(errno));
