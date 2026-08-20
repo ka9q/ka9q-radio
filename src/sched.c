@@ -1,6 +1,6 @@
 // Scheduler-related routines
 // enable/disable realtime scheduling, cpu affinity (Linux only)
-
+// copyright 2026 Phil Karn KA9Q
 #include <sched.h>
 #include <stdatomic.h>
 #include <pthread.h>
@@ -42,7 +42,7 @@ void realtime(int prio){
   struct sched_param param = {0};
 
   param.sched_priority = prio;
-  if(sched_setscheduler(0,SCHED_FIFO|SCHED_RESET_ON_FORK,&param) == 0)
+  if(sched_setscheduler(0,SCHED_FIFO,&param) == 0)
     return; // Successfully set realtime
   {
     char name[25];

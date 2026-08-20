@@ -597,7 +597,7 @@ static void *hydrasdr_monitor(void *p){
   struct sdrstate * const sdr = (struct sdrstate *)p;
   assert(sdr != NULL);
   pthread_setname("hydrasdr-mon");
-  realtime(2 + default_prio()); // Doesn't seem to work
+  realtime(2 + default_prio());
   stick_core();
 
   int ret = hydrasdr_start_rx(sdr->device,rx_callback,sdr);
@@ -651,7 +651,7 @@ static int rx_callback(hydrasdr_transfer *transfer){
   if(!Name_set){
     pthread_setname("hydrasdr-cb");
     Name_set = true;
-    realtime(2 + default_prio());
+    //    realtime(2 + default_prio()); no longer necessary
   }
   if(transfer->dropped_samples){
     fprintf(stderr,"dropped %'lld\n",(long long)transfer->dropped_samples);
