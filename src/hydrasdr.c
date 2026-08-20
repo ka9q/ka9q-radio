@@ -184,21 +184,25 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary const * const Dic
 	return -1;
       }
       if(n_serials > 1){
+	flockfile(stderr);
 	fprintf(stderr,"Discovered %d HydraSDR device serial%s:",n_serials,n_serials > 1 ? "s" : "");
 	for(int i = 0; i < n_serials; i++){
 	  fprintf(stderr," %llx",(long long)serials[i]);
 	}
 	fprintf(stderr,"\n");
+	funlockfile(stderr);
       }
       sdr->SN = serials[0];
     }
   }
   {
+    flockfile(stderr);
     fprintf(stderr,"Selecting HydraSDR SN %llx:",(long long)sdr->SN);
 
     int const ret = hydrasdr_open_sn(&sdr->device,sdr->SN);
     if(ret != HYDRASDR_SUCCESS){
       fprintf(stderr," hydrasdr_open failed: %s\n", hydrasdr_error_name(ret));
+      funlockfile(stderr);
       return -1;
     }
   }
@@ -207,6 +211,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary const * const Dic
     int ret = hydrasdr_get_device_info(sdr->device, &info);
     if(ret != HYDRASDR_SUCCESS){
       fprintf(stderr, " cannot get HydraSDR information: %s\n", hydrasdr_error_name(ret));
+      funlockfile(stderr);
       return -1;
     }
     fprintf(stderr," hw '%s'; firmware '%s'; features:", info.board_name, info.firmware_version);
@@ -220,7 +225,6 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary const * const Dic
     if (info.features & HYDRASDR_CAP_PACKING)
       fprintf(stderr," sample_packing");
     fputc('\n',stderr);
-
     fprintf(stderr,"Supported sample types:");
     for (unsigned int i = 0; i < HYDRASDR_SAMPTYPES; i++) {
       if(info.sample_types & (1 << i)) {
@@ -287,10 +291,12 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary const * const Dic
       frontend->bitspersample = 8;
     } else {
       fprintf(stderr,"; no supported sample formats\n");
+      funlockfile(stderr);
       return -1;
     }
     fprintf(stderr,"; choosing %s, A/D width %d bits\n",
 	    Sample_type_name[sdr->sample_type], frontend->bitspersample);
+    funlockfile(stderr);
 
     // Set this now, as it affects the list of supported sample rates
     ret = hydrasdr_set_sample_type(sdr->device,sdr->sample_type);
@@ -303,6 +309,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary const * const Dic
      fprintf(stderr,"No valid HydraSDR sample rates!\n");
       return -1;
     }
+    flockfile(stderr);
     fprintf(stderr,"HydraSDR has %'d sample rate%s:",number_sample_rates,number_sample_rates > 1 ? "s":"");
     ret = hydrasdr_get_samplerates(sdr->device,sdr->sample_rates,number_sample_rates);
     assert(ret == HYDRASDR_SUCCESS);
@@ -339,6 +346,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary const * const Dic
     break;
   }
   fprintf(stderr,"; choosing %'.3lf Hz, offset %'.3lf Hz\n",frontend->samprate,sdr->offset);
+  funlockfile(stderr);
   {
     int ret __attribute__ ((unused));
     ret = hydrasdr_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
@@ -347,6 +355,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary const * const Dic
   // Gain features
   sdr->linearity = config_getboolean(Dictionary,section,"linearity",false);
 
+  flockfile(stderr);
   fprintf(stderr,"Gain features:");
   if (info.features & HYDRASDR_CAP_LINEARITY_GAIN) {
     fprintf(stderr," linearity %u-%u (%u)",
@@ -403,6 +412,7 @@ int hydrasdr_setup(struct frontend * const frontend,dictionary const * const Dic
 	    info.vga_gain.default_value);
   }
   fputc('\n',stderr);
+  funlockfile(stderr);
 
   sdr->converter = config_getdouble(Dictionary,section,"converter",0);
   frontend->calibrate = config_getdouble(Dictionary,section,"calibrate",0);

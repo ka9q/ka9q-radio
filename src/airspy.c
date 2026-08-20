@@ -163,11 +163,13 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 	fprintf(stderr,"No airspy devices found\n");
 	return -1;
       }
+      flockfile(stderr);
       fprintf(stderr,"Discovered airspy device serial%s:",n_serials > 1 ? "s" : "");
       for(int i = 0; i < n_serials; i++){
 	fprintf(stderr," %llx",(long long)serials[i]);
       }
       fprintf(stderr,"\n");
+      funlockfile(stderr);
       fprintf(stderr,"Selecting %llx by default; to select another, add -snn to command line or 'serial = ' to config file\n",(long long)serials[0]);
       sdr->SN = serials[0];
     }
@@ -210,6 +212,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
       fprintf(stderr,"error, no valid sample rates!\n");
       return -1;
     }
+    flockfile(stderr);
     fprintf(stderr,"%'d sample rate%s:",number_sample_rates,number_sample_rates > 1 ? "s":"");
     ret = airspy_get_samplerates(sdr->device,sdr->sample_rates,number_sample_rates);
     assert(ret == AIRSPY_SUCCESS);
@@ -219,6 +222,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 	break;
     }
     fprintf(stderr,"\n");
+    funlockfile(stderr);
   }
   {
     frontend->samprate = sdr->sample_rates[0];  // Default to first (highest) sample rate on list

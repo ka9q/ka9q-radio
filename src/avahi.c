@@ -56,7 +56,7 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
 #pragma GCC diagnostic pop
 
 #if 1
-      fprintf(stderr,"%s %s %s %s %s %s %s %s %s %s: ",
+      fprintf(stderr,"%s %s %s %s %s %s %s %s %s %s\n",
 	      "avahi-publish-service", "avahi-publish-service", "--no-fail", host_string, service_name, service_type, port_string, description, pid_string, hostname);
 #endif
       execlp("avahi-publish-service", "avahi-publish-service", "--no-fail", host_string, service_name, service_type, port_string, description, pid_string, source_string, NULL);
