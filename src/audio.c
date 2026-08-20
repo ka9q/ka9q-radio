@@ -210,13 +210,14 @@ int send_output(chan_t * restrict const chan, float const * restrict buffer, int
 	chan->output.errors++;
 	if(errno == EAGAIN){
 	  if(!TempSendFailure){
-	    fprintf(stderr,"Temporary send failure, suggest increased buffering (see sysctl net.core.wmem_max, net.core.wmem_default\n");
+	    fprintf(stderr,"%s Temporary send failure, suggest increased buffering (see sysctl net.core.wmem_max, net.core.wmem_default\n",
+		    chan->name);
 	    fprintf(stderr,"Additional messages suppressed\n");
 	    TempSendFailure = true;
 	  }
 	} else {
 	  if(!TempSendFailure){
-	    fprintf(stderr,"audio send failure: %s (any additional messages suppressed)\n",strerror(errno));
+	    fprintf(stderr,"%s audio send failure: %s (any additional messages suppressed)\n",chan->name,strerror(errno));
 	    TempSendFailure = true;
 	  }
 	}
