@@ -159,14 +159,13 @@ void stick_core(void){
   } else {
     fprintf(stderr," %d",cpu);
   }
-  fprintf(stderr,")\n");
-  funlockfile(stderr);
-
+  fprintf(stderr,")");
   if (sched_setaffinity(0, sizeof(cpuset), &cpuset) == -1) {
     fprintf(stderr," failed: %s\n",strerror(errno));
   } else {
     fprintf(stderr,"\n");
   }
+  funlockfile(stderr);
 }
 // Extra stuff written by ChatGPT that might prove useful someday
 #if 0
