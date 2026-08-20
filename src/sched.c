@@ -131,6 +131,7 @@ void stick_core(void){
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(cpu,&cpuset);
+  flockfile(stderr); // don't let this line get broken up
   fprintf(stderr,"%s sched_setaffinity(pid=%u,cores=",name,(unsigned int)self);
   // Any hyperthreading siblings?
   char sysname[PATH_MAX] = {0};
@@ -159,6 +160,7 @@ void stick_core(void){
     fprintf(stderr," %d",cpu);
   }
   fprintf(stderr,")\n");
+  flockfile(stderr);
 
   if (sched_setaffinity(0, sizeof(cpuset), &cpuset) == -1) {
     fprintf(stderr," failed: %s\n",strerror(errno));

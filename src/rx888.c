@@ -863,11 +863,13 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     if(desc.idVendor != Vendor_id || desc.idProduct != Loaded_product_id)
       continue;
 
+    flockfile(stderr);
     fprintf(stderr,"found rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
     libusb_device_handle *handle = NULL;
     rc = libusb_open(device,&handle);
     if(rc != 0 || handle == NULL){
       fprintf(stderr," libusb_open() failed: %s\n",libusb_strerror(rc));
+      funlockfile(stderr);
       continue;
     }
     if(desc.iManufacturer){
@@ -897,6 +899,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
 
     if(usb_speed < LIBUSB_SPEED_SUPER){
       fprintf(stderr,": not at least SuperSpeed; is it plugged into a blue USB jack?\n");
+      funlockfile(stderr);
       continue; // Keep looking, there just might be another
     }
     // Is this the droid we're looking for?
@@ -907,20 +910,24 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     if(sdr->serial == 0 && USB_busnum == -1 && USB_devnum == -1){
       // No particular unit specified, so take it
       fprintf(stderr,", selected by default\n");
+      funlockfile(stderr);
       sdr->dev_handle = handle;
       sdr->serial = current_serialnum;
       break;
     } else if(sdr->serial == current_serialnum){
       fprintf(stderr,", selected by line serial number\n");
+      funlockfile(stderr);
       sdr->dev_handle = handle;
       break;
     } else if(current_busnum == USB_busnum && current_devnum == USB_devnum){
       fprintf(stderr,", selected by USB device ID\n");
+      funlockfile(stderr);
       sdr->serial = current_serialnum;
       sdr->dev_handle = handle;
       break;
     } else {
       fprintf(stderr,"\n"); // Not selected; close and keep looking
+      funlockfile(stderr);
       libusb_close(handle);
       handle = NULL;
     }
@@ -1060,11 +1067,13 @@ static void load_rx888s(char const *firmware){
     if(desc.idVendor != Vendor_id || desc.idProduct != Unloaded_product_id)
       continue;
 
+    flockfile(stderr);
     fprintf(stderr,"found unloaded rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
     libusb_device_handle *handle = NULL;
     rc = libusb_open(device,&handle);
     if(rc != 0 || handle == NULL){
       fprintf(stderr,", libusb_open() failed: %s\n",libusb_strerror(rc));
+      funlockfile(stderr);
       continue;
     }
     if(desc.iManufacturer){
@@ -1090,6 +1099,7 @@ static void load_rx888s(char const *firmware){
     char full_firmware_file[PATH_MAX] = {0};
     dist_path(full_firmware_file,sizeof(full_firmware_file),firmware);
     fprintf(stderr,", loading rx888 firmware file %s\n",full_firmware_file);
+    funlockfile(stderr);
     if(ezusb_load_ram(handle,full_firmware_file,FX_TYPE_FX3,IMG_TYPE_IMG,1) == 0){
       fprintf(stderr,"rx888 loaded\n");
       sleep(1); // how long should this be?
@@ -1338,6 +1348,7 @@ static double rx888_set_samprate(struct sdrstate *sdr, double const samprate){
   si5351_get_pll_pvals(&best,&pll);
   // doubles ref and vco are for display only
   double const vco = sdr->reference * (best.A + (double)best.B / best.C);
+  flockfile(stderr);
   fprintf(stderr,"RX888 Si5351 PLL: vco = %'lf * (%'u + %'u/%'u) = %'lf Hz;",
 	  sdr->reference, best.A, best.B, best.C, vco);
   fprintf(stderr," P1=%u, P2=%u, P3=%u\n",pll.P1, pll.P2, pll.P3);
@@ -1360,6 +1371,7 @@ static double rx888_set_samprate(struct sdrstate *sdr, double const samprate){
   fprintf(stderr,"RX888 Si5351 output divider: samprate = vco / (%'u*(%'u + %'u/%'u)) = %'lf Hz",
 	  best.R, best.D, best.E, best.F, fout);
   fprintf(stderr,"; P1=%u, P2=%u, P3=%u\n", ms.P1, ms.P2, ms.P3);
+  funlockfile(stderr);
   uint8_t data_clkout[] = {
     (ms.P3 & 0x0000ff00) >>  8,
     (ms.P3 & 0x000000ff) >>  0,
