@@ -27,7 +27,7 @@
 #define BYTES_PER_PKT 1440 // 3 frames of 16-bit LPCM @ 12 kHz, a common value
 
 bool GetSockOptFailed = false;     // Have we issued this log message yet?
-bool TempSendFailure = false;
+static atomic_flag TempSendFailure = ATOMIC_FLAG_INIT;
 
 int Fec_percent = 0;               // Use forward error correction percentage, 0-100
 
@@ -209,16 +209,14 @@ int send_output(chan_t * restrict const chan, float const * restrict buffer, int
       if(r < 0){
 	chan->output.errors++;
 	if(errno == EAGAIN){
-	  if(!TempSendFailure){
+	  if(!atomic_flag_test_and_set_explicit(&TempSendFailure,memory_order_relaxed)){
 	    fprintf(stderr,"%s Temporary send failure, suggest increased buffering (see sysctl net.core.wmem_max, net.core.wmem_default\n",
 		    chan->name);
 	    fprintf(stderr,"Additional messages suppressed\n");
-	    TempSendFailure = true;
 	  }
 	} else {
-	  if(!TempSendFailure){
+	  if(!atomic_flag_test_and_set_explicit(&TempSendFailure,memory_order_relaxed)){
 	    fprintf(stderr,"%s audio send failure: %s (any additional messages suppressed)\n",chan->name,strerror(errno));
-	    TempSendFailure = true;
 	  }
 	}
       }
