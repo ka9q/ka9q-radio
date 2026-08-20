@@ -22,6 +22,7 @@ static atomic_flag Sched_message_shown = ATOMIC_FLAG_INIT;
 #endif
 static atomic_flag Nice_message_shown = ATOMIC_FLAG_INIT;
 
+// Default real-time priority for a channel thread
 int default_prio(void){
 #ifdef __linux__
   return 1; // real time prio 1
@@ -30,8 +31,9 @@ int default_prio(void){
 #endif
 }
 
-
-
+// Run at real time priority, if possible
+// On Linux this uses the real time scheduler
+// If that doesn't work (possibly due to lack of permissions) or isn't available, try nice (which also requires permissions)
 void realtime(int prio){
   if(prio == 0)
     return;
@@ -69,7 +71,6 @@ void realtime(int prio){
 
 // Drop back to normal priority, to avoid blocking a core when doing something time-consuming, like a FFT plan
 // Return true if we had previously been running at realtime, false otherwise
-
 int norealtime(void){
 #ifdef __linux__
   if(sched_getscheduler(0) == SCHED_OTHER)
