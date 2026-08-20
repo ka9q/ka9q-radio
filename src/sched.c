@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <limits.h>
+#include <ctype.h>
+#include <stdlib.h>
 #include "sched.h"
 
 // Set realtime priority (if possible)
