@@ -23,6 +23,7 @@
 #include "radio.h"
 #include "config.h"
 #include "airspy.h"
+#include "sched.h"
 
 // Non-temporal (cache-bypassing) stores don't seem to help with the Airspy/Hydra because the FFTs are smaller
 #define CACHED_STORE 1

@@ -20,6 +20,7 @@
 #include "radio.h"
 #include "config.h"
 #include "window.h"
+#include "sched.h"
 
 struct demodtab Demodtab[] = {
       {LINEAR_DEMOD,   "linear"}, // Coherent demodulation of AM, DSB, BPSK; calibration on WWV/WWVH/CHU carrier

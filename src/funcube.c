@@ -18,6 +18,7 @@
 #include "misc.h"
 #include "config.h"
 #include "radio.h"
+#include "sched.h"
 
 // constants, some of which you might want to tweak
 static double const AGC_upper = -15;

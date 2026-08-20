@@ -24,6 +24,7 @@
 #include "status.h"
 #include "radio.h"
 #include "config.h"
+#include "sched.h"
 
 // Global variables set by config file options
 extern int Verbose;

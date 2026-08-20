@@ -17,6 +17,7 @@
 #include "status.h"
 #include "radio.h"
 #include "config.h"
+#include "sched.h"
 
 extern int Verbose;
 

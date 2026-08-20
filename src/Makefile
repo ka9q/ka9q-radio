@@ -114,7 +114,7 @@ DAEMONS = aprs aprsfeed cwd packetd radiod
 EXECS = ctcss control fft-gen jt-decoded metadump monitor opussend pcmrecord pcmsend powers tune wd-record
 
 ## library elements
-LIBRADIO = misc.o multicast.o rtp.o config.o
+LIBRADIO = misc.o multicast.o rtp.o config.o sched.o
 LIBDSP = filter.o iir.o window.o osc.o sincospi.o sincospif.o
 LIBSTATUS = status.o decode_status.o
 

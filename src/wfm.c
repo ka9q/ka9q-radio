@@ -13,6 +13,7 @@
 #include "iir.h"
 #include "radio.h"
 #include "status.h"
+#include "sched.h"
 
 // Forced sample rates; config file values are ignored for now
 // The audio output sample rate can probably eventually be made configurable,

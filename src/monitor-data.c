@@ -33,6 +33,7 @@
 #include "status.h"
 #include "monitor.h"
 #include "import.h"
+#include "sched.h"
 
 int Position; // auto-position streams
 

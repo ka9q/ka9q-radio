@@ -28,6 +28,7 @@
 #pragma GCC diagnostic pop
 #endif
 #include "misc.h"
+#include "sched.h"
 #include "filter.h"
 #include "window.h"
 #include "config_paths.h"

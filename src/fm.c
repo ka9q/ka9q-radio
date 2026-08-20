@@ -11,6 +11,7 @@
 #include "iir.h"
 #include "filter.h"
 #include "radio.h"
+#include "sched.h"
 
 #define M_1_PI2 (0.5/M_PI) // 1/(2pi)
 

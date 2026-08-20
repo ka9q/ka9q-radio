@@ -32,6 +32,7 @@
 #include "morse.h"
 #include "status.h"
 #include "monitor.h"
+#include "sched.h"
 
 // Could be (obscure) config file parameters
 static double const Latency = 0.02; // chunk size for audio output callback

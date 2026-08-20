@@ -24,6 +24,7 @@
 #include "radio.h"
 #include "misc.h"
 #include "config.h"
+#include "sched.h"
 
 // Configurable parameters
 // decibel limits for power

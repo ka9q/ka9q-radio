@@ -80,11 +80,6 @@ static float const SCALE8 = 1.f/INT8_MAX;  // Scale signed 8-bit int to float in
 
 #define FULL_SAMPRATE (48000)
 
-int default_prio(void);
-void realtime(int prio);
-int norealtime(void);
-void stick_core(void);
-
 typedef struct {
   int64_t num;
   uint64_t den;   // always > 0

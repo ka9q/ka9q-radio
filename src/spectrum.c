@@ -13,6 +13,7 @@
 #include "filter.h"
 #include "radio.h"
 #include "window.h"
+#include "sched.h"
 
 //#define RICE 1
 //#define SPECTRUM_CLIP 1

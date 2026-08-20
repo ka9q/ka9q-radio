@@ -23,6 +23,7 @@
 #include "misc.h"
 #include "config.h"
 #include "radio.h"
+#include "sched.h"
 
 static double Power_alpha = 0.01; // Calculate this properly someday
 

@@ -31,6 +31,7 @@
 #include "rx888.h"
 #include "si5351.h"
 #include "ezusb.h"
+#include "sched.h"
 
 // Uncomment this to cause proc_rx888 to use regular caching writes to the FFT input ring buffer
 // the default uses non-temporal writes that bypass cache because the 20ms FFT working sets are too big

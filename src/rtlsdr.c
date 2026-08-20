@@ -23,6 +23,7 @@
 #include "misc.h"
 #include "radio.h"
 #include "config.h"
+#include "sched.h"
 
 // Define USE_NEW_LIBRTLSDR to use my version of librtlsdr with rtlsdr_get_freq()
 // that corrects for synthesizer fractional-N residuals. If not defined, we do the correction

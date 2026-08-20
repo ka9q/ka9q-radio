@@ -20,13 +20,15 @@ on a per-channel basis by selecting output filter type BEAM and calling set_filt
 #if defined(linux)
 #include <bsd/string.h>
 #endif
+#include <strings.h>
+#include <sysexits.h>
+#include <stdatomic.h>
 
 #include "config.h"
 #include "misc.h"
 #include "radio.h"
-#include <strings.h>
-#include <sysexits.h>
-#include <stdatomic.h>
+#include "sched.h"
+
 
 static double Power_alpha; // compute during first callback
 static bool Name_set = false;

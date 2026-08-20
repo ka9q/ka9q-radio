@@ -23,6 +23,7 @@
 #include "radio.h"
 #include "config.h"
 #include "airspy.h"
+#include "sched.h"
 
 
 // Global variables set by config file options

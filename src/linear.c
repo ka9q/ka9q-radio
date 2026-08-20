@@ -16,6 +16,7 @@
 #include "misc.h"
 #include "filter.h"
 #include "radio.h"
+#include "sched.h"
 
 int demod_linear(void *arg){
   chan_t * const chan = arg;
