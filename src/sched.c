@@ -165,8 +165,8 @@ void stick_core(void){
     fprintf(stderr,"\n");
   }
 }
-#include <limits.h>
-#include <sched.h>
+// Extra stuff written by ChatGPT that might prove useful someday
+#if 0
 #include <dirent.h>
 
 #ifndef CPU_SETSIZE
@@ -282,22 +282,6 @@ static int get_thread_siblings(int cpu, cpu_set_t *siblings_out) {
   }
   return 0;
 }
-
-// Example: build an array mapping each cpu -> its sibling mask.
-static int build_sibling_map(cpu_set_t *map, int map_len) {
-  int cpus[CPU_SETSIZE];
-  int n = enumerate_online_cpus(cpus, CPU_SETSIZE);
-  if (n < 0) return -1;
-
-  for (int i = 0; i < n && i < CPU_SETSIZE; i++) {
-    int cpu = cpus[i];
-    if (cpu < map_len) {
-      if (get_thread_siblings(cpu, &map[cpu]) < 0) return -1;
-    }
-  }
-  return 0;
-}
-
 // Helpers
 static int cpu_first(const cpu_set_t *s) {
   for (int i = 0; i < CPU_SETSIZE; i++)
@@ -324,6 +308,7 @@ static bool cpu_equal(const cpu_set_t *a, const cpu_set_t *b) {
   return true;
 }
 
+
 typedef struct {
   cpu_set_t cpus;   // allowed logical CPUs for this physical core (often 2 CPUs)
   int rep_cpu;      // representative CPU (lowest) inside cpus
@@ -348,6 +333,21 @@ static int vec_push(core_group_vec_t *cv, const core_group_t *g) {
     cv->cap = newcap;
   }
   cv->v[cv->n++] = *g;
+  return 0;
+}
+
+// Example: build an array mapping each cpu -> its sibling mask.
+static int build_sibling_map(cpu_set_t *map, int map_len) {
+  int cpus[CPU_SETSIZE];
+  int n = enumerate_online_cpus(cpus, CPU_SETSIZE);
+  if (n < 0) return -1;
+
+  for (int i = 0; i < n && i < CPU_SETSIZE; i++) {
+    int cpu = cpus[i];
+    if (cpu < map_len) {
+      if (get_thread_siblings(cpu, &map[cpu]) < 0) return -1;
+    }
+  }
   return 0;
 }
 
@@ -422,24 +422,25 @@ static size_t map_channel_to_group(size_t chan_id, size_t n_groups, size_t fft_i
   if (k >= (size_t)fft_index) k++;
   return k;
 }
-
-// cpu_set_t allowed;
-//  core_group_vec_t groups;
-//  if (build_core_groups(&groups, &allowed) != 0) { /* handle */ }
-
-//ssize_t fft_i = pick_fft_group(&groups);
-//if (fft_i >= 0) {
-// Pin FFT thread to BOTH SMT siblings of its core
-//  set_this_thread_affinity(&groups.v[fft_i].cpus);
-// }
-
-//size_t gi = map_channel_to_group(channel_id, groups.n, (size_t)fft_i);
-
-// Option 1: allow SMT siblings (recommended if threads are short)
-//set_this_thread_affinity(&groups.v[gi].cpus);
-
-// Option 2: avoid SMT, pick only rep_cpu
-// cpu_set_t one; CPU_ZERO(&one); CPU_SET(groups.v[gi].rep_cpu, &one);
-// set_this_thread_affinity(&one);
-
 #endif
+#endif
+/* sample usage
+   cpu_set_t allowed;
+   core_group_vec_t groups;
+   if (build_core_groups(&groups, &allowed) != 0) { handle }
+
+   ssize_t fft_i = pick_fft_group(&groups);
+   if (fft_i >= 0) {
+   // Pin FFT thread to BOTH SMT siblings of its core
+   set_this_thread_affinity(&groups.v[fft_i].cpus);
+   }
+
+   size_t gi = map_channel_to_group(channel_id, groups.n, (size_t)fft_i);
+
+   // Option 1: allow SMT siblings (recommended if threads are short)
+   set_this_thread_affinity(&groups.v[gi].cpus);
+
+   // Option 2: avoid SMT, pick only rep_cpu
+   cpu_set_t one; CPU_ZERO(&one); CPU_SET(groups.v[gi].rep_cpu, &one);
+   set_this_thread_affinity(&one);
+*/
