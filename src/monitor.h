@@ -16,7 +16,7 @@
 #include "radio.h"
 
 #define MAX_MCAST 20          // Maximum number of multicast addresses
-#define BUFFERSIZE (1<<17)    // about 2.73 sec at 48 kHz - must be power of 2 times page size (4k)!
+#define BUFFERSIZE (1<<18)    // about 2.73 sec at 48 kHz - must be power of 2 times page size (4k)!
 #define NSESSIONS 1000
 
 #define N_tones 55
