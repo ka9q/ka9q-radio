@@ -19,7 +19,7 @@ int airspy_unpack_avx2(float *restrict wptr, uint32_t const *restrict up,
   assert(wptr != NULL);
   assert(up != NULL);
   assert(sampcount > 0 && (sampcount & 7) == 0);
-  assert((up & 0xf) == 0);
+  assert(((uintptr_t)up & 0xf) == 0);
 
   int i = 0;
   const __m256i src_index = _mm256_setr_epi32(0, 0, 1, 1, 1, 2, 2, 2);
