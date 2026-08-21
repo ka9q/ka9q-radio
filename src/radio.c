@@ -1512,10 +1512,12 @@ int downconvert(chan_t *chan){
       chan->baseband = chan->filter2.out.output.c;
       chan->sampcount = chan->filter2.out.olen;
     }
-    double energy = 0;
-    for(int n=0; n < chan->sampcount; n++)
-      energy += cnrmf(chan->baseband[n]);
-    chan->sig.bb_power = energy / chan->sampcount;
+    if(chan->sampcount != 0){
+      double energy = 0;
+      for(int n=0; n < chan->sampcount; n++)
+	energy += cnrmf(chan->baseband[n]);
+      chan->sig.bb_power = energy / chan->sampcount;
+    }
     return 0;
   }
   return 0; // Should not actually be reached
@@ -1560,9 +1562,9 @@ int set_channel_filter(chan_t *chan){
   double upper = min(chan->filter.max_IF, (double)chan->output.samprate/2);
 
   if(Verbose > 1)
-    fprintf(stderr,"%s new filter: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f\n",
+    fprintf(stderr,"%s new filter: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f, filter2 %d\n",
 	    chan->name, lower, upper,
-	    chan->output.samprate, chan->filter.kaiser_beta);
+	    chan->output.samprate, chan->filter.kaiser_beta,chan->filter2.blocking);
 
   bool old_isb = chan->filter2.out.isb; // Copy old state of ISB flag
   delete_filter_output(&chan->filter2.out);
@@ -1570,13 +1572,13 @@ int set_channel_filter(chan_t *chan){
   if(chan->filter2.blocking > 0){
     assert(Blocktime != 0);
     int const blocksize = lrint(chan->filter2.blocking * chan->output.samprate * Blocktime);
-    double const binsize = (1.0 / Blocktime) * ((double)(Overlap - 1) / Overlap);
+    double const binsize = (double)(Overlap - 1) / (Blocktime * Overlap);
     double const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
 
     int n = round2(2 * blocksize); // Overlap >= 50%
     int order = n - blocksize;
     if(Verbose > 1)
-      fprintf(stderr,"%s filter2 create: L = %d, M = %d, N = %d\n",chan->name,blocksize,order+1,n);
+      fprintf(stderr,"%s filter2 create: L = %d, M = %d, N = %d, isb %d\n",chan->name,blocksize,order+1,n,old_isb);
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
     create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX);
     chan->filter2.in.perform_inline = true;
