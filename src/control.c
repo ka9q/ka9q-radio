@@ -1310,7 +1310,7 @@ static void process_mouse(chan_t *chan,uint8_t **bpp){
 	  encode_bool(bpp,ENVELOPE,true);
 	  encode_int(bpp,OUTPUT_CHANNELS,2);
 	  break;
- 	case 3:
+	case 3:
 	  encode_bool(bpp,ENVELOPE,false);
 	  encode_int(bpp,OUTPUT_CHANNELS,1);
 	  break;
@@ -1340,6 +1340,12 @@ static void process_mouse(chan_t *chan,uint8_t **bpp){
 	  break;
 	case 11:
 	  encode_int(bpp,SNR_SQUELCH,true);
+	  break;
+	case 12:
+	  encode_int(bpp,INDEPENDENT_SIDEBAND,false);
+	  break;
+	case 13:
+	  encode_int(bpp,INDEPENDENT_SIDEBAND,true);
 	  break;
 	}
       }
@@ -1962,6 +1968,14 @@ static void display_options(WINDOW *w,chan_t const *chan){
     mvwaddstr(w,row++,col,"SNR Sq On");
     wattroff(w,A_UNDERLINE);
 
+    if(!chan->filter2.out.isb)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"ISB Off");
+    wattroff(w,A_UNDERLINE);
+    if(chan->filter2.out.isb)
+      wattron(w,A_UNDERLINE);
+    mvwaddstr(w,row++,col,"ISB On");
+    wattroff(w,A_UNDERLINE);
     break;
   default:
     break;
