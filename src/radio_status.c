@@ -137,9 +137,7 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
   if(length < 2)
     return false;
 
-  bool restart_needed = false;
-  bool new_filter_needed = false;
-
+  chan_t old = *chan; // Copy old to detect changes at end of parsing
   chan->lifetime = chan->lifestart; // restart self-destruct timer
   chan->status.packets_in++;
 
@@ -169,7 +167,6 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
     switch(type){
     case PRESET: // This should be processed before any other options, regardless of order in packet
       {
-	chan_t old = *chan; // Copy old to detect changes
 	char *p = decode_string(cp,optlen);
 	if(p != NULL)
 	  strlcpy(chan->preset,p,sizeof(chan->preset));
@@ -180,22 +177,6 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	  if(Verbose)
 	    fprintf(stderr,"%s loadpreset(%s) failed!\n",chan->name,chan->preset);
 	  break;
-	}
-	if(old.tune.shift != chan->tune.shift)
-	  set_freq(chan,chan->tune.freq + chan->tune.shift - old.tune.shift);
-	if(chan->filter.min_IF != old.filter.min_IF || chan->filter.max_IF != old.filter.max_IF || chan->filter.kaiser_beta != old.filter.kaiser_beta)
-	  new_filter_needed = true;
-
-	if(chan->demod_type != old.demod_type){
-	  if(Verbose > 1)
-	    fprintf(stderr,"%s demod change %s (%u) -> %s (%u)\n",chan->name,
-		  demod_name_from_type(old.demod_type),old.demod_type,demod_name_from_type(chan->demod_type),chan->demod_type);
-
-	  restart_needed = true; // chan changed, ask for a restart
-	} if(chan->output.samprate != old.output.samprate){
-	  if(Verbose > 1)
-	    fprintf(stderr,"%s samp rate change %'u -> %'u\n",chan->name,old.output.samprate,chan->output.samprate);
-	  restart_needed = true; // chan changed, ask for a restart
 	}
       }
       break;
@@ -242,18 +223,10 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	  break;
 	if(chan->output.encoding == OPUS && !legal_opus_samprate(new_sample_rate))
 	  break; // ignore illegal Opus sample rates (eventually will use sample rate converter)
-	int const pt = pt_from_info(new_sample_rate,chan->output.channels, chan->output.encoding);
-	if(pt == -1){
-	  fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
-		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding);
-	  break; // refuse to change
-	}
-	chan->output.rtp.type = pt;
 	if(Verbose)
 	  fprintf(stderr,"%s change samprate %'u -> %'u\n",chan->name,chan->output.samprate,new_sample_rate);
 
 	chan->output.samprate = new_sample_rate;
-	restart_needed = true;
       }
       break;
     case RADIO_FREQUENCY: // Hz
@@ -282,6 +255,8 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->tune.shift = f;
+	if(old.tune.shift != chan->tune.shift)
+	  set_freq(chan,chan->tune.freq + chan->tune.shift - old.tune.shift);
       }
       break;
     case DOPPLER_FREQUENCY: // Hz
@@ -306,7 +281,6 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	if(isnan(f) || !isfinite(f) || f == chan->filter.min_IF || f > chan->filter.max_IF)
 	  break;
 	chan->filter.min_IF = max(f,-(double)chan->output.samprate/2);
-	new_filter_needed = true;
       }
       break;
     case HIGH_EDGE: // Hz
@@ -315,7 +289,6 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	if(isnan(f) || !isfinite(f) || f == chan->filter.max_IF || f < chan->filter.min_IF)
 	  break;
 	chan->filter.max_IF = min(f,(double)chan->output.samprate/2);
-	new_filter_needed = true;
       }
       break;
     case KAISER_BETA: // dimensionless, always 0 or positive
@@ -324,7 +297,6 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	  if(isnan(f) || !isfinite(f) || chan->filter.kaiser_beta == f)
 	    break;
 	  chan->filter.kaiser_beta = f;
-	  new_filter_needed = true;
 	}
       break;
     case FILTER2_KAISER_BETA: // dimensionless, always 0 or positive
@@ -333,7 +305,6 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	  if(isnan(f) || !isfinite(f) || chan->filter2.kaiser_beta == f)
 	    break;
 	  chan->filter2.kaiser_beta = f;
-	  new_filter_needed = true;
 	}
       break;
     case DEMOD_TYPE:
@@ -345,7 +316,6 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	  fprintf(stderr,"%s demod change %s (%u) -> %s (%u)\n",chan->name,
 		  demod_name_from_type(chan->demod_type),chan->demod_type,demod_name_from_type(i),i);
 	chan->demod_type = i;
-	restart_needed = true;
       }
       break;
     case INDEPENDENT_SIDEBAND:
@@ -353,27 +323,7 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	bool const isb = decode_bool(cp,optlen);
 	if(chan->demod_type != LINEAR_DEMOD)
 	  break; // Only valid in linear
-
 	chan->filter2.out.isb = isb;
-	if(!isb)
-	  break; // Being turned off
-	// Being turned on
-	if(chan->output.channels != 2){
-	  // Force to stereo output
-	  int pt = pt_from_info(chan->output.samprate, 2, chan->output.encoding);
-	  if(pt == -1){
-	    fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
-		    chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
-	    break; // ignore the request
-	  }
-	  chan->output.channels = 2;
-	  chan->output.rtp.type = pt;
-	}
-	if(chan->filter2.blocking == 0){
-	  // Force filter 2 on if it was off
-	  chan->filter2.blocking = 1; // will leave it on if isb is turned off, oh well
-	  new_filter_needed = true;
-	}
       }
       break;
     case THRESH_EXTEND:
@@ -449,19 +399,11 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	if(i != 1 && i != 2)
 	  break; // invalid
 
+	chan->output.channels = i;
 	if(chan->demod_type == WFM_DEMOD){
 	  // Requesting 2 channels enables FM stereo; requesting 1 disables FM stereo
 	  chan->fm.stereo_enable = (i == 2); // note boolean assignment
-	} else if(i == chan->output.channels)
-	  break;
-	int pt = pt_from_info(chan->output.samprate,i, chan->output.encoding);
-	if(pt == -1){
-	  fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
-		  chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
-	  break; // ignore the request
 	}
-	chan->output.rtp.type = pt;
-	chan->output.channels = i;
       }
       break;
     case SQUELCH_OPEN:
@@ -575,21 +517,8 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	// Opus can handle only a certain set of sample rates, and it operates at 48K internally
 	int samprate = chan->output.samprate;
 	if(encoding == OPUS && !legal_opus_samprate(samprate))
-	    samprate = OPUS_SAMPRATE; // force sample rate to 48K for Opus
-
-	int pt = pt_from_info(samprate,chan->output.channels,encoding);
-	if(pt == -1){
-	  fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
-		  chan->name,samprate,chan->output.channels,encoding); // make sure it's initialized
-	  break; // Simply refuse to change
-	}
-	chan->output.rtp.type = pt;
+	    chan->output.samprate = OPUS_SAMPRATE; // force sample rate to 48K for Opus
 	chan->output.encoding = encoding;
-	if(samprate != chan->output.samprate){
-	  // Sample rate changed for Opus
-	  chan->output.samprate = samprate;
-	  restart_needed = true;
-	}
       }
       break;
     case OPUS_BIT_RATE:
@@ -657,7 +586,6 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	if(i >10 || i < 0 || i == chan->filter2.blocking)
 	  break;
 	chan->filter2.blocking = i;
-	new_filter_needed = true;
       }
       break;
     case OUTPUT_DATA_DEST_SOCKET:
@@ -683,17 +611,69 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
   if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
     memset(chan->preset,0,sizeof(chan->preset)); // No presets in this mode
 
+  // Look for changes that require a channel restart
+  bool restart_needed = false;
+  if(chan->output.samprate != old.output.samprate){
+    if(Verbose > 1)
+      fprintf(stderr,"%s samp rate change %'u -> %'u\n",chan->name,old.output.samprate,chan->output.samprate);
+    restart_needed = true;
+  }
+  if(chan->demod_type != old.demod_type){
+    if(Verbose > 1)
+      fprintf(stderr,"%s demod change %s (%u) -> %s (%u)\n",chan->name,
+	      demod_name_from_type(old.demod_type),old.demod_type,demod_name_from_type(chan->demod_type),chan->demod_type);
+
+    restart_needed = true; // chan changed, ask for a restart
+  }
   if(restart_needed){
     if(Verbose > 1)
       fprintf(stderr,"%s restart needed\n",chan->name);
     return true; // A new filter will also be needed but the demod will set that up
   }
-  if(new_filter_needed){
+
+  // Look for changes that require resetting filters
+  bool new_filters_needed = false;
+  if(chan->filter.min_IF != old.filter.min_IF || chan->filter.max_IF != old.filter.max_IF || chan->filter.kaiser_beta != old.filter.kaiser_beta)
+    new_filters_needed = true;
+  if(chan->filter2.out.isb && !old.filter2.out.isb){
+    // ISB being turned on
+    if(old.output.channels != 2){
+      // Force to stereo output
+      chan->output.channels = 2;
+    }
+    if(chan->filter2.blocking == 0)
+      // Force filter 2 on if it was off
+      chan->filter2.blocking = 1; // will leave it on if isb is turned off, oh well
+  }
+  if(chan->filter2.blocking != old.filter2.blocking)
+    new_filters_needed = true;
+  if(chan->filter.min_IF != old.filter.min_IF || chan->filter.max_IF != old.filter.max_IF || chan->filter.kaiser_beta != old.filter.kaiser_beta
+     || chan->filter2.kaiser_beta != old.filter2.kaiser_beta)
+    new_filters_needed = true;
+
+  if(new_filters_needed){
     set_channel_filter(chan);
     // Retune if necessary to accommodate edge of passband
     // but only if a change was commanded, to prevent a tuning war
     set_freq(chan,chan->tune.freq);
     chan->filter.remainder = NAN; // Force re-init of fine oscillator
+  }
+  // Look for changes requiring a new RTP payload type
+  bool new_pt_needed = false;
+  if(chan->output.samprate != old.output.samprate || chan->output.channels != old.output.channels || chan->output.encoding != old.output.encoding)
+    new_pt_needed = true;
+
+  if(new_pt_needed){
+    int const pt = pt_from_info(chan->output.samprate,chan->output.channels, chan->output.encoding);
+    if(pt == -1){
+      fprintf(stderr,"%s can't allocate payload type for samprate %'u, channels %u, encoding %u\n",
+	      chan->name,chan->output.samprate,chan->output.channels,chan->output.encoding);
+      // Keep old settings?
+      chan->output.samprate = old.output.samprate;
+      chan->output.channels = old.output.channels;
+      chan->output.encoding = old.output.encoding;
+    } else
+      chan->output.rtp.type = pt;
   }
   return false;
 }
@@ -802,7 +782,8 @@ static unsigned long encode_radio_status(struct frontend const *frontend,chan_t 
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
-    encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
+    if(chan->fm.rate > 0)
+      encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     encode_bool(&bp,PLL_ENABLE,chan->pll.enable); // bool
@@ -812,7 +793,8 @@ static unsigned long encode_radio_status(struct frontend const *frontend,chan_t 
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
-    encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * FULL_SAMPRATE)); // ad-hoc
+    if(chan->fm.rate > 0)
+      encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * FULL_SAMPRATE)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     break;
