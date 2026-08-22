@@ -448,10 +448,14 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   {
     char const *cp = config_getstring(table,sname,"deemph-tc",NULL);
     if(cp){
-      double const tc = strtod(cp,NULL) * 1e-6;
-      unsigned int samprate = (chan->demod_type == WFM_DEMOD) ? FULL_SAMPRATE : chan->output.samprate;
-      if(tc != 0)
+      double const tc = fabs(strtod(cp,NULL) * 1e-6);
+      if(tc == 0)
+	chan->fm.rate = 0;
+      else {
+	double const samprate = (chan->demod_type == WFM_DEMOD) ? FULL_SAMPRATE : chan->output.samprate;
 	chan->fm.rate = -expm1(-1.0 / (tc * samprate));
+	assert(isfinite(chan->fm.rate) && chan->fm.rate >= 0 && chan->fm.rate <= 1);
+      }
     }
   }
   {
@@ -527,7 +531,7 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
       chan->output.maxdelay = maxdelay;
   }
   {
-    int blocking = config_getint(table,sname,"filter2",chan->filter2.blocking);
+    int blocking = abs(config_getint(table,sname,"filter2",chan->filter2.blocking));
     if(blocking > 10)
       fprintf(stderr,"%s: filter2 blocking %u out of range\n",chan->name,blocking);
     else
@@ -538,7 +542,7 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     fprintf(stderr,"%s: prio %d too high; max %d\n",chan->name,chan->prio,default_prio());
     chan->prio = default_prio();
   }
-  chan->output.ttl = config_getint(table,sname,"ttl",chan->output.ttl);
+  chan->output.ttl = abs(config_getint(table,sname,"ttl",chan->output.ttl));
 
   chan->filter.beam = config_getboolean(table,sname,"beam",false);
   if(chan->filter.beam){
@@ -583,23 +587,21 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   }
   return 0;
 }
-// force an output sample rate to a multiple of the FFT block rate times the number of
-// new blocks in each FFT interval.
-// For the default block time of 20 ms and overlap of 1/5, this is (1/20 ms)*(5-1) = 50 Hz*4 = 200 Hz
+// The output sample rate must at least be a multiple of the FFT block rate (usually 50 Hz)
+// because there must be an integral number of samples in each frame.
+
+// Moreover since only 4/5 of the samples are output (for an overlap of 1/5), the output sample rate must be
+// a multiple of 4 samples per frame, or 200 Hz for a 50 Hz (20 ms) frame rate.
+
+// But odd multiples of 200 Hz give odd IFFT sizes, which are hairy - no Nyquist bin, unequal numbers
+// of positive and negative frequencies, etc. So we restrict the output sample rate to even multiples of 400 Hz.
+
 // Should we limit the sample rate? In principle it could be greater than the input sample rate,
 // and the filter should just interpolate. But there should be practical limits
 
 // Should sample rates be integers when the block rate could in principle not be?
 // Usually Blocktime = 20.0000 ms (50.00000 Hz), which avoids the problem
 unsigned int round_samprate(unsigned int x){
-  if(x < 400)
-    return 400; // quick patch 2 Jan 2026 - 200 Hz puts the linear demod in a tight loop, reason unknown
-
-  // For reasons yet not understood, only even multiples of 200 Hz seem to work
-  double const baserate = (1. / Blocktime) * (Overlap - 1);
-
-  if(x < baserate)
-    return lrint(baserate); // Output one (two) iFFT bin minimum, i.e., blockrate (*2)
-
+  double const baserate = (2.0 / Blocktime) * (Overlap - 1);
   return lrint(baserate * round((double)x / baserate)); // Nearest multiple of (2*) block rate * (Overlap - 1)
 }
