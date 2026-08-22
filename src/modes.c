@@ -591,7 +591,8 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
 // because there must be an integral number of samples in each frame.
 
 // Moreover since only 4/5 of the samples are output (for an overlap of 1/5), the output sample rate must be
-// a multiple of 4 samples per frame, or 200 Hz for a 50 Hz (20 ms) frame rate.
+// a multiple of 4 samples per frame, or 200 Hz for a 50 Hz (20 ms) frame rate. Equivalently it must also
+// be a multiple of the FFT bin spacing (40 Hz).
 
 // But odd multiples of 200 Hz give odd IFFT sizes, which are hairy - no Nyquist bin, unequal numbers
 // of positive and negative frequencies, etc. So we restrict the output sample rate to even multiples of 400 Hz.
