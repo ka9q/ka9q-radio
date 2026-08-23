@@ -533,12 +533,8 @@ void encode_byte_data(chan_t const *chan, uint8_t *buffer){
   int wbin = bin_count/2; // nyquist freq is most negative
   for(int i=0; i < bin_count; i++){
     double x = scale * (power2dB(chan->spectrum.bin_data[wbin++]) - chan->spectrum.base);
-    if(x < 0)
-      x = 0;
-    else if(x > 255)
-      x = 255;
-
-    buffer[i] = (uint8_t)llrint(x);
+    x = x < 0 ? 0 : x > 255 ? 255 : x;
+    buffer[i] = (uint8_t)lrint(x);
     if(wbin == bin_count)
       wbin = 0;  // Continuing through dc and positive frequencies
   }
