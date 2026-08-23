@@ -215,14 +215,15 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
     case OUTPUT_SAMPRATE:
       // Restart the demodulator to recalculate filters, etc
       {
+	if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
+	  break; // Output samprate is automatically calculated, if used at all
+
 	int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
-	if(new_sample_rate == 0)
-	  break;
+	if(new_sample_rate == 0 || new_sample_rate == chan->output.samprate)
+	  break; // invalid or no change
 	// If using Opus, ignore unsupported sample rates
-	if(new_sample_rate == chan->output.samprate)
-	  break;
 	if(chan->output.encoding == OPUS && !legal_opus_samprate(new_sample_rate))
-	  break; // ignore illegal Opus sample rates (eventually will use sample rate converter)
+	  break;
 	if(Verbose)
 	  fprintf(stderr,"%s change samprate %'u -> %'u\n",chan->name,chan->output.samprate,new_sample_rate);
 
