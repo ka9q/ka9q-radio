@@ -145,23 +145,12 @@ void *dataproc(void *arg){
     struct packet *qe = NULL;
 
     int qlen = 0;
-    const int maxq = 100; // 2 seconds
     pthread_mutex_lock(&sp->qmutex);
     for(qe = sp->queue;
-	qe != NULL && qlen < maxq && pkt->rtp.seq >= qe->rtp.seq;
+	qe != NULL && pkt->rtp.seq >= qe->rtp.seq;
 	q_prev = qe,qe = qe->next,qlen++)
       ;
 
-    if(qlen >= maxq){
-      // Queue has gotten out of control, blow it away. Seems to happen when a macos laptop is asleep
-      struct packet *qnext;
-      for(qe = sp->queue; qe != NULL; qe = qnext){
-	qnext = qe->next;
-	FREE(qe);
-      }
-      q_prev = NULL;
-      // queue now empty, can put new packet at head
-    }
     if(qe)
       sp->reseqs++;   // Not the last on the list
     pkt->next = qe;
@@ -258,12 +247,9 @@ static void *decode_task(void *arg){
       enum encoding encoding = sp->pt_table[sp->type].encoding;
       sp->plc_enable = (encoding == OPUS || encoding == OPUS_VOIP);
     }
-    if(sp->plc_enable){
-      // If we can send PLCs, sleep until the last millisecond to do them
-      // compute max wait time for a new packet or a squelch state change
-      calculate_tight_deadline(&deadline,sp);
-    } else
-      calculate_deadline(&deadline,10*BILLION);
+    // sleep until the last millisecond to do them
+    // compute max wait time for a new packet or a squelch state change
+    calculate_tight_deadline(&deadline,sp);
 
     assert(pkt == NULL); // watch for leaks
 
@@ -283,16 +269,14 @@ static void *decode_task(void *arg){
 	rc &= 0xff;
 	assert(rc == 0 || rc == ETIMEDOUT); // shouldn't fail for any other reason
       } while(rc != ETIMEDOUT);
-      if(rc == ETIMEDOUT)
-	Wait_timeout++;
-      else
-	Wait_successful++;
-
       if(pkt != NULL)
 	sp->queue = pkt->next; // before we release the lock
       pthread_mutex_unlock(&sp->qmutex); // no longer examining queue
 
-      if(rc == 0){
+      if(rc == ETIMEDOUT)
+	Wait_timeout++;
+      else {
+	Wait_successful++;
 	// poison the deadline to try to force an error if I reuse it by mistake
 	deadline.tv_sec = -1;
 	deadline.tv_nsec = 2 * BILLION;
