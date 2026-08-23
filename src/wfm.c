@@ -20,7 +20,8 @@
 // but the composite sample rate needs to handle the bandwidth
 
 static int const Audio_samprate = FULL_SAMPRATE;
-static int const Composite_samprate = 8 * FULL_SAMPRATE;
+//static int const Composite_samprate = 8 * FULL_SAMPRATE;
+static int const Composite_samprate = 256000; // lower to reduce CPU while keeping good margin on 200 kHz channel
 
 // FM demodulator thread
 int demod_wfm(void *arg){
@@ -44,8 +45,6 @@ int demod_wfm(void *arg){
     chan->output.channels = 2; // Default to stereo
   chan->fm.stereo_enable = (chan->output.channels == 2); // note boolean assignment
   chan->squelch.snr_enable = true; // implicitly on
-
-
 
   // Make these blocksizes depend on front end sample rate and blocksize
   int const composite_L = lrint(Composite_samprate * Blocktime); // Intermediate sample rate
