@@ -39,6 +39,7 @@
 #include "filter.h"
 #include "status.h"
 #include "avahi.h"
+#include "sched.h"
 #include "defaults.h"
 
 #include "config_paths.h"
@@ -875,7 +876,9 @@ chan_t *lookup_or_create_chan(uint32_t ssrc,chan_t const *template){
   if(c == 0){
     // First channel created, start front end
     assert(Frontend.start != NULL);
+    realtime(2 + DEFAULT_PRIO);
     int r = (*Frontend.start)(&Frontend);
+    norealtime();
     if(r != 0)
       fprintf(stderr,"Front end start returned %d\n",r);
   }

@@ -527,7 +527,6 @@ static void *proc_rx888(void *arg){
   assert(sdr != NULL);
   pthread_setname("proc_rx888");
 
-  realtime(2 + DEFAULT_PRIO);
   stick_core();
   {
     sdr->last_count_time = sdr->last_callback_time = gps_time_ns();
