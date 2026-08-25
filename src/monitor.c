@@ -370,7 +370,7 @@ int main(int argc,char * const argv[]){
 
     char *nextp = NULL;
     long d;
-    int numDevices = Pa_GetDeviceCount();
+    int const numDevices = Pa_GetDeviceCount();
     if(Audiodev == NULL || strlen(Audiodev) == 0){
       // not specified; use default
       inDevNum = Pa_GetDefaultOutputDevice();
@@ -412,9 +412,6 @@ int main(int argc,char * const argv[]){
       exit(EX_IOERR);
     }
   }  // !Network (use Portaudio)
-
-
-
   if(Repeater_tail != 0)
     pthread_create(&Repeater_thread,NULL,repeater_ctl,NULL); // Repeater mode active
 
@@ -422,7 +419,6 @@ int main(int argc,char * const argv[]){
     Source_socket = calloc(1,sizeof(struct sockaddr_storage));
     resolve_mcast(Source,Source_socket,0,NULL,0,0);
   }
-
   // Spawn one thread per address
   // All have to succeed in resolving their targets or we'll exit
   // This allows a restart when started automatically from systemd before avahi is fully running
@@ -481,13 +477,10 @@ void *statproc(void *arg){
     pthread_setname(name);
   }
 
-  int status_fd;
-  {
-    char iface[1024];
-    struct sockaddr sock;
-    resolve_mcast(mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
-    status_fd = listen_mcast(Source_socket,&sock,iface);
-  }
+  struct sockaddr sock = {0};
+  char iface[1024] = {0};
+  resolve_mcast(mcast_address_text,&sock,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
+  int const status_fd = listen_mcast(Source_socket,&sock,iface);
   if(status_fd == -1)
     pthread_exit(NULL);
 
@@ -508,7 +501,7 @@ void *statproc(void *arg){
     // NB! Assumes same IP source address *and UDP source port* for status and data
     // This is only true for recent versions of radiod, after the switch to unconnected output sockets
     // But older versions don't send status on the output channel anyway, so no problem
-    uint32_t ssrc = get_ssrc(buffer+1,length-1);
+    uint32_t const ssrc = get_ssrc(buffer+1,length-1);
     sess_t *sp = lookup_or_create_session(&sender,ssrc);
     if(!sp){
       fprintf(stderr,"No room!!\n");
@@ -582,13 +575,10 @@ sess_t *lookup_or_create_session(struct sockaddr_storage const *sender,const uin
 
   sess_t * const sp = Sessions + first_idle;
   memset(sp,0,sizeof(sess_t));
-
   Session_creates++;
   atomic_init(&sp->terminate,false);
   sp->ssrc = ssrc;
-
   memcpy(sp->pt_table,PT_table,sizeof sp->pt_table);
-
   memcpy(&sp->sender,sender,sizeof(sp->sender));
   pthread_cond_init(&sp->qcond,NULL);
   pthread_mutex_init(&sp->qmutex,NULL);
@@ -611,7 +601,6 @@ int close_session(sess_t *sp){
   pthread_mutex_lock(&sp->qmutex);
   pthread_cond_broadcast(&sp->qcond);   // Try to get its attention
   pthread_mutex_unlock(&sp->qmutex); // Done modifying session table
-
   // Thread now cleans itself up
   return 0;
 }
@@ -646,7 +635,6 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
   (void)inputBuffer; // Unused
   (void)statusFlags;
   (void)userData;
-
 
   if(!outputBuffer)
     return paAbort; // can this happen??
