@@ -18,6 +18,7 @@
 #include "radio.h"
 #include "config.h"
 #include "sched.h"
+#include "defaults.h"
 
 extern int Verbose;
 
@@ -250,7 +251,7 @@ static void *bladerf_main(void *p)
 	struct sdrstate * const sdr = (struct sdrstate *)p;
 	pthread_setname("bladerf-main");
 
-	realtime(2 + default_prio());
+	realtime(2 + DEFAULT_PRIO);
 	while (atomic_load(&sdr->state) == RUNNING) {
 		pthread_mutex_lock(&sdr->queue_mutex);
 		if (sdr->idx_to_process != sdr->idx_to_fill) {

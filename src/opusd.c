@@ -41,6 +41,7 @@
 #include "iir.h"
 #include "avahi.h"
 #include "sched.h"
+#include "defaults.h"
 
 #define BUFFERSIZE 16384  // Big enough for 120 ms @ 48 kHz stereo (11,520 16-bit samples)
 
@@ -265,7 +266,7 @@ int main(int argc,char * const argv[]){
   signal(SIGTERM,closedown);
   signal(SIGPIPE,SIG_IGN);
 
-  realtime(default_prio());
+  realtime(DEFAULT_PRIO);
 
   // Loop forever processing and dispatching incoming PCM and status packets
 

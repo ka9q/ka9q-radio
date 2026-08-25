@@ -24,7 +24,7 @@
 #include "config.h"
 #include "airspy.h"
 #include "sched.h"
-
+#include "defaults.h"
 
 // Global variables set by config file options
 extern int Verbose;
@@ -364,7 +364,7 @@ static void *airspy_monitor(void *p){
   assert(sdr != NULL);
   pthread_setname("airspy-mon");
   // I've removed the SCHED_RESET_ON_FORK flag in realtime(), now this correctly sets both this thread and the callback
-  realtime(2 + default_prio());
+  realtime(2 + DEFAULT_PRIO);
   stick_core();
 
   int ret = airspy_start_rx(sdr->device,rx_callback,sdr);

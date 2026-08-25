@@ -28,6 +28,7 @@ on a per-channel basis by selecting output filter type BEAM and calling set_filt
 #include "misc.h"
 #include "radio.h"
 #include "sched.h"
+#include "defaults.h"
 
 
 static double Power_alpha; // compute during first callback
@@ -381,7 +382,7 @@ static void *fobos_monitor(void *p) {
   assert(sdr != NULL);
   pthread_setname("fobos-mon");
 
-  realtime(2 + default_prio());
+  realtime(2 + DEFAULT_PRIO);
   stick_core();
   int result = fobos_rx_read_async(sdr->dev, rx_callback, sdr, 16, 65536);
   if (result != 0) {

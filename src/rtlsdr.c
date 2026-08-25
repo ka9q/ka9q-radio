@@ -24,6 +24,7 @@
 #include "radio.h"
 #include "config.h"
 #include "sched.h"
+#include "defaults.h"
 
 // Define USE_NEW_LIBRTLSDR to use my version of librtlsdr with rtlsdr_get_freq()
 // that corrects for synthesizer fractional-N residuals. If not defined, we do the correction
@@ -262,7 +263,7 @@ static void *rtlsdr_read_thread(void *arg){
   struct sdr * const sdr = arg;
   struct frontend * const frontend = sdr->frontend;
 
-  realtime(2 + default_prio());
+  realtime(2 + DEFAULT_PRIO);
   stick_core();
   rtlsdr_reset_buffer(sdr->device);
   int r = rtlsdr_read_async(sdr->device,rx_callback,frontend,0,16*16384); // blocks

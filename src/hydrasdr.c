@@ -24,6 +24,7 @@
 #include "config.h"
 #include "airspy.h"
 #include "sched.h"
+#include "defaults.h"
 
 // Non-temporal (cache-bypassing) stores don't seem to help with the Airspy/Hydra because the FFTs are smaller
 #define CACHED_STORE 1
@@ -597,7 +598,7 @@ static void *hydrasdr_monitor(void *p){
   struct sdrstate * const sdr = (struct sdrstate *)p;
   assert(sdr != NULL);
   pthread_setname("hydrasdr-mon");
-  realtime(2 + default_prio());
+  realtime(2 + DEFAULT_PRIO);
   stick_core();
 
   int ret = hydrasdr_start_rx(sdr->device,rx_callback,sdr);

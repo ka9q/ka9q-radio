@@ -24,6 +24,7 @@
 #include "config.h"
 #include "radio.h"
 #include "sched.h"
+#include "defaults.h"
 
 static double Power_alpha = 0.01; // Calculate this properly someday
 
@@ -215,7 +216,7 @@ static void *proc_sig_gen(void *arg){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
-  realtime(2 + default_prio());
+  realtime(2 + DEFAULT_PRIO);
 
   struct osc carrier = {0};
   if(frontend->isreal)

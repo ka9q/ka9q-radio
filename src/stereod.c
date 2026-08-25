@@ -30,6 +30,7 @@
 #include "iir.h"
 #include "avahi.h"
 #include "sched.h"
+#include "defaults.h"
 
 #define BUFFERSIZE 16384  // Tune this
 
@@ -215,7 +216,7 @@ int main(int argc,char * const argv[]){
 
   signal(SIGPIPE,SIG_IGN);
 
-  realtime(default_prio());
+  realtime(DEFAULT_PRIO);
 
   // Set up to receive PCM in RTP/UDP/IP
   // Process incoming RTP packets, demux to per-SSRC thread

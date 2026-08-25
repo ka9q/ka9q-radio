@@ -25,6 +25,7 @@
 #include "radio.h"
 #include "config.h"
 #include "sched.h"
+#include "defaults.h"
 
 // Global variables set by config file options
 extern int Verbose;
@@ -371,7 +372,7 @@ static void *sdrplay_monitor(void *p){
   assert(frontend != NULL);
   pthread_setname("sdrplay-mon");
 
-  realtime(2 + default_prio());
+  realtime(2 + DEFAULT_PRIO);
   stick_core();
   int ret __attribute__ ((unused));
   ret = start_rx(sdr,rx_callback,event_callback);
