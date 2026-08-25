@@ -363,8 +363,6 @@ static void *airspy_monitor(void *p){
   struct sdrstate * const sdr = (struct sdrstate *)p;
   assert(sdr != NULL);
   pthread_setname("airspy-mon");
-  // I've removed the SCHED_RESET_ON_FORK flag in realtime(), now this correctly sets both this thread and the callback
-  realtime(2 + DEFAULT_PRIO);
   stick_core();
 
   int ret = airspy_start_rx(sdr->device,rx_callback,sdr);
@@ -398,7 +396,6 @@ static int rx_callback(airspy_transfer *transfer){
   if(!Name_set){
     pthread_setname("airspy-cb");
     Name_set = true;
-    //    realtime(2 + DEFAULT_PRIO); no longer necessary
   }
   if(transfer->dropped_samples)
     fprintf(stderr,"dropped %'lld\n",(long long)transfer->dropped_samples);

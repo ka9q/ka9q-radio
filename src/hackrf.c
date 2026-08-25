@@ -303,7 +303,6 @@ static int rx_callback(hackrf_transfer *transfer){
   if(!Name_set){
     pthread_setname("hackrf-cb");
     Name_set = true;
-    realtime(2 + DEFAULT_PRIO);
     stick_core();
   }
   int remain = transfer->valid_length; // Count of individual samples; divide by 2 to get complex samples

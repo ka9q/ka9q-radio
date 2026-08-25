@@ -211,8 +211,6 @@ static void *proc_funcube(void *arg){
   int ConsecPaErrs = 0;
   int16_t * sampbuf = malloc(2 * blocksize * sizeof(*sampbuf)); // complex samples have two integers
 
-  realtime(2 + DEFAULT_PRIO);
-
   int r = Pa_StartStream(sdr->Pa_Stream);
   if(r < 0){
     fprintf(stderr,"Pa_StartStream error: %s\n",Pa_GetErrorText(r));

@@ -372,7 +372,6 @@ static void *sdrplay_monitor(void *p){
   assert(frontend != NULL);
   pthread_setname("sdrplay-mon");
 
-  realtime(2 + DEFAULT_PRIO);
   stick_core();
   int ret __attribute__ ((unused));
   ret = start_rx(sdr,rx_callback,event_callback);
@@ -1219,7 +1218,6 @@ static void rx_callback(int16_t *xi,int16_t *xq,sdrplay_api_StreamCbParamsT *par
   if(!Name_set){
     pthread_setname("sdrplay-cb");
     Name_set = true;
-    realtime(2 + DEFAULT_PRIO); // do this once
   }
 
   if(sdr->next_sample_num && params->firstSampleNum != sdr->next_sample_num){

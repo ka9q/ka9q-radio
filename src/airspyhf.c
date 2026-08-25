@@ -269,7 +269,6 @@ static void *airspyhf_monitor(void *p){
   assert(sdr != NULL);
   pthread_setname("airspyhf-mon");
 
-  realtime(2 + DEFAULT_PRIO);
   int ret __attribute__ ((unused));
   ret = airspyhf_start(sdr->device,rx_callback,sdr);
   assert(ret == AIRSPYHF_SUCCESS);
@@ -300,7 +299,6 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   if(!Name_set){
     pthread_setname("airspyhf-cb");
     Name_set = true;
-    realtime(2 + DEFAULT_PRIO);    // See discussion in airspy.c
     stick_core();
   }
   if(transfer->dropped_samples){

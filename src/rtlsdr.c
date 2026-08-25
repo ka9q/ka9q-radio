@@ -263,7 +263,6 @@ static void *rtlsdr_read_thread(void *arg){
   struct sdr * const sdr = arg;
   struct frontend * const frontend = sdr->frontend;
 
-  realtime(2 + DEFAULT_PRIO);
   stick_core();
   rtlsdr_reset_buffer(sdr->device);
   int r = rtlsdr_read_async(sdr->device,rx_callback,frontend,0,16*16384); // blocks

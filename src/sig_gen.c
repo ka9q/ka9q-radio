@@ -216,8 +216,6 @@ static void *proc_sig_gen(void *arg){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
-  realtime(2 + DEFAULT_PRIO);
-
   struct osc carrier = {0};
   if(frontend->isreal)
     set_osc(&carrier,sdr->carrier / frontend->samprate,0.0); // No sweep just yet

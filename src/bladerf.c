@@ -251,7 +251,6 @@ static void *bladerf_main(void *p)
 	struct sdrstate * const sdr = (struct sdrstate *)p;
 	pthread_setname("bladerf-main");
 
-	realtime(2 + DEFAULT_PRIO);
 	while (atomic_load(&sdr->state) == RUNNING) {
 		pthread_mutex_lock(&sdr->queue_mutex);
 		if (sdr->idx_to_process != sdr->idx_to_fill) {
@@ -372,7 +371,6 @@ static void *bladerf_monitor(void *p)
 	struct bladerf_stream *stream;
 
 	pthread_setname("bladerf-mon");
-	realtime(2 + DEFAULT_PRIO);
 
 	int status = bladerf_init_stream(
 			&stream,
