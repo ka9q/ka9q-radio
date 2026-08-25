@@ -44,7 +44,6 @@ void realtime(int prio){
     }
   }
 #endif
-  (void)prio;
   // As backup, decrease our niceness by 10
   Base_prio = getpriority(PRIO_PROCESS,0);
   errno = 0; // setpriority can return -1
