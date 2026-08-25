@@ -473,7 +473,7 @@ static void update_monitor_display(void){
 
     printwt("%s playout %.0lf ms latency %5.1lf ms D/A %'.1lf Hz",
 	    opus_get_version_string(),1000*Playout,1000*Portaudio_delay,rate);
-    printwt(" (%+4.0lf ppm)",1e6 * (rate / DAC_samprate - 1));
+    printwt(" %+5.0lf ppm",1e6 * (rate / DAC_samprate - 1));
     // Time since last packet drop on any channel
     printwt(" EFS %'.1lf",(1e-9*(gps_time_ns() - Last_error_time)));
     //    int64_t total = atomic_load(&Output_total);
@@ -485,7 +485,7 @@ static void update_monitor_display(void){
     extern int Session_creates;
     printwt(" sessions %d",Session_creates);
     printwt("\n");
-    printwt("Waits %llu Wait timeouts %llu successful %llu\n",Waits,Wait_timeout,Wait_successful);
+    printwt("Waits %llu Wait timeouts %llu\n",Waits,Wait_timeout);
   }
   getyx(stdscr,row,col);
   if(col != 0){

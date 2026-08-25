@@ -110,7 +110,6 @@ void *output_thread(void *p);
 struct sockaddr_in *Source_socket;
 int Callback_blocksize = 960; // 960 samples = 20 ms @ 48k
 uint64_t Wait_timeout;
-uint64_t Wait_successful;
 uint64_t Waits;
 
 static char Optstring[] = "CI:P:LR:Sb:c:f:g:o:p:qr:su:vnV";
